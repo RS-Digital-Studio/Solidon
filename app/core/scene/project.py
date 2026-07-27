@@ -1,0 +1,260 @@
+"""The project container (Bauplan §16.1).
+
+::
+
+    projekt.p3d           (ZIP)
+      project.json        # stack, parameters, fits, transactions
+      sources/            # embedded source meshes
+      report.json         # last report
+      thumb.png           # preview for file dialogs
+
+Three rules the container enforces rather than assumes:
+
+* **No absolute paths** (§32). A project travels between machines and people;
+  a path out of the container is refused on write and on read.
+* **Checksums on every source**, verified while loading (§16.1).
+* **Written atomically.** A crash during save must not cost the file that was
+  there before — which is also why the autosave container (§38) sits next to it.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import hashlib
+import json
+import os
+import zipfile
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Final
+
+from app.branding import APP_VERSION, PROJECT_SUFFIX
+from app.core.errors import ValidationError
+from app.core.log import get_logger
+from app.core.paths import ensure_dir, user_data_dir
+from app.core.scene.migrations import FORMAT_VERSION, migrate
+from app.core.scene.serialise import (
+    document_from_data,
+    document_to_data,
+    report_from_data,
+    report_to_data,
+)
+from app.core.types import Document, Report, SourceId
+from app.i18n import _
+
+_log = get_logger(__name__)
+
+PROJECT_ENTRY: Final = "project.json"
+REPORT_ENTRY: Final = "report.json"
+THUMBNAIL_ENTRY: Final = "thumb.png"
+SOURCE_FOLDER: Final = "sources"
+AUTOSAVE_SUFFIX: Final = ".autosave"
+
+
+@dataclass(slots=True)
+class Project:
+    """What a ``.p3d`` file holds."""
+
+    document: Document
+    sources: dict[SourceId, bytes] = field(default_factory=dict)
+    """Payload of the embedded sources, keyed like ``document.sources``."""
+    report: Report = field(default_factory=Report)
+    thumbnail: bytes | None = None
+
+
+def new_project(printer: str = "", material: str = "") -> Project:
+    """An empty project at the current format version."""
+    return Project(
+        document=Document(
+            format_version=FORMAT_VERSION,
+            app_version=APP_VERSION,
+            printer=printer,
+            material=material,
+        )
+    )
+
+
+def checksum(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def embedded_source_path(filename: str) -> str:
+    """Where an embedded source lives inside the container — always relative."""
+    return f"{SOURCE_FOLDER}/{Path(filename).name}"
+
+
+def _check_relative(path: str, where: str) -> None:
+    candidate = Path(path)
+    if candidate.is_absolute() or ".." in candidate.parts or path.startswith(("/", "\\")):
+        raise ValidationError(
+            field=where,
+            detail=_("In Projektdateien stehen keine absoluten Pfade."),
+            constraint="absolute_path",
+            values={"path": path},
+        )
+
+
+# --- Writing -------------------------------------------------------------------
+
+
+def save(project: Project, path: Path) -> Path:
+    """Write the container, atomically. Returns the path written."""
+    document = project.document
+    document.format_version = FORMAT_VERSION
+    document.app_version = APP_VERSION
+
+    for source_id, source in list(document.sources.items()):
+        _check_relative(source.path, f"sources.{source_id}.path")
+        if not source.embedded:
+            continue
+        payload = project.sources.get(source_id)
+        if payload is None:
+            raise ValidationError(
+                field=f"sources.{source_id}",
+                detail=_("Eine eingebettete Quelle hat keinen Inhalt."),
+                constraint="missing_payload",
+                values={"source": source_id},
+            )
+        # The checksum is part of the document, so saving fills it in (§16.1).
+        document.sources[source_id] = dataclasses.replace(source, sha256=checksum(payload))
+
+    ensure_dir(path.parent)
+    temporary = path.with_name(path.name + ".part")
+    with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        container.writestr(
+            PROJECT_ENTRY,
+            json.dumps(document_to_data(document), indent=2, ensure_ascii=False),
+        )
+        for source_id, source in document.sources.items():
+            if source.embedded:
+                container.writestr(source.path, project.sources[source_id])
+        container.writestr(
+            REPORT_ENTRY, json.dumps(report_to_data(project.report), indent=2, ensure_ascii=False)
+        )
+        if project.thumbnail is not None:
+            container.writestr(THUMBNAIL_ENTRY, project.thumbnail)
+    os.replace(temporary, path)
+    _log.info("saved project %s", path.name)
+    return path
+
+
+# --- Reading -------------------------------------------------------------------
+
+
+def load(path: Path) -> Project:
+    """Read a container, migrating and verifying on the way (§16.2)."""
+    if not path.is_file():
+        raise ValidationError(
+            field="path",
+            detail=_("Diese Projektdatei gibt es nicht."),
+            constraint="missing_file",
+            values={"path": path.name},
+        )
+    try:
+        with zipfile.ZipFile(path) as container:
+            names = set(container.namelist())
+            if PROJECT_ENTRY not in names:
+                raise ValidationError(
+                    field="container",
+                    detail=_("Der Datei fehlt der Projektinhalt."),
+                    constraint="not_a_project",
+                    values={"path": path.name},
+                )
+            for name in names:
+                _check_relative(name, "container")
+
+            data = migrate(json.loads(container.read(PROJECT_ENTRY)))
+            document = document_from_data(data)
+
+            payloads: dict[SourceId, bytes] = {}
+            for source_id, source in document.sources.items():
+                if not source.embedded:
+                    continue
+                if source.path not in names:
+                    raise ValidationError(
+                        field=f"sources.{source_id}",
+                        detail=_("Eine eingebettete Quelle fehlt im Container."),
+                        constraint="missing_payload",
+                        values={"source": source_id, "path": source.path},
+                    )
+                payload = container.read(source.path)
+                if source.sha256 and checksum(payload) != source.sha256:
+                    raise ValidationError(
+                        field=f"sources.{source_id}",
+                        detail=_("Eine Quelle stimmt nicht mit ihrer Prüfsumme überein."),
+                        constraint="checksum",
+                        values={"source": source_id},
+                    )
+                payloads[source_id] = payload
+
+            report = (
+                report_from_data(json.loads(container.read(REPORT_ENTRY)))
+                if REPORT_ENTRY in names
+                else Report()
+            )
+            thumbnail = container.read(THUMBNAIL_ENTRY) if THUMBNAIL_ENTRY in names else None
+    except zipfile.BadZipFile as problem:
+        raise ValidationError(
+            field="container",
+            detail=_("Die Datei lässt sich nicht öffnen; sie ist beschädigt."),
+            constraint="damaged",
+            values={"path": path.name},
+        ) from problem
+    except json.JSONDecodeError as problem:
+        raise ValidationError(
+            field="container",
+            detail=_("Der Projektinhalt ist beschädigt."),
+            constraint="damaged",
+            values={"path": path.name},
+        ) from problem
+
+    _log.info("opened project %s", path.name)
+    return Project(document=document, sources=payloads, report=report, thumbnail=thumbnail)
+
+
+# --- Autosave and crash recovery (§38) ------------------------------------------
+
+
+def autosave_path(path: Path | None) -> Path:
+    """Next to the project, or in the user directory while it has no name yet."""
+    if path is None:
+        return (
+            ensure_dir(user_data_dir() / "recovery") / f"unsaved{PROJECT_SUFFIX}{AUTOSAVE_SUFFIX}"
+        )
+    return path.with_name(path.name + AUTOSAVE_SUFFIX)
+
+
+def write_autosave(project: Project, path: Path | None) -> Path:
+    return save(project, autosave_path(path))
+
+
+def find_recovery(path: Path | None) -> Path | None:
+    """An autosave that outlived its project is what gets offered on next start."""
+    candidate = autosave_path(path)
+    if not candidate.is_file():
+        return None
+    if path is not None and path.is_file() and candidate.stat().st_mtime <= path.stat().st_mtime:
+        return None
+    return candidate
+
+
+def clear_autosave(path: Path | None) -> None:
+    """After a successful save there is nothing left to recover."""
+    candidate = autosave_path(path)
+    if candidate.is_file():
+        candidate.unlink()
+
+
+def recovery_candidates() -> tuple[Path, ...]:
+    """Autosaves of projects that never had a name."""
+    folder = user_data_dir() / "recovery"
+    if not folder.is_dir():
+        return ()
+    return tuple(sorted(folder.glob(f"*{AUTOSAVE_SUFFIX}")))
+
+
+def project_data(path: Path) -> dict[str, Any]:
+    """The raw ``project.json`` of a container — for diagnostics and migration tests."""
+    with zipfile.ZipFile(path) as container:
+        result: dict[str, Any] = json.loads(container.read(PROJECT_ENTRY))
+        return result

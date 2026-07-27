@@ -521,6 +521,8 @@ class Source:
     kind: SourceKind
     path: str
     sha256: str
+    embedded: bool = True
+    """Embedded is the default for passing a project on (§16.1); linked stays relative."""
     ingest: IngestInfo = IngestInfo()
     origin: SourceOrigin | None = None
 
