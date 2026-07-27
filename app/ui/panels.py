@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDoubleSpinBox,
@@ -30,9 +31,10 @@ from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
 from app.core.units import format_length
 from app.i18n import tr
+from app.ui.palette import SEVERITY_ENCODING
 
-#: Marker per severity. Never colour alone (§19.1).
-SEVERITY_MARKER = {"info": "·", "warning": "!", "error": "×"}
+#: Marker per severity, taken from the shared encoding — colour is never alone (§19.1).
+SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items()}
 
 
 class ObjectTree(QWidget):
@@ -206,6 +208,7 @@ class ReportPanel(QWidget):
             counts[finding.severity] += 1
             item = QListWidgetItem(f"{SEVERITY_MARKER[finding.severity]}  {finding.message}")
             item.setData(Qt.ItemDataRole.UserRole, finding)
+            item.setForeground(QColor(SEVERITY_ENCODING[finding.severity].colour))
             if finding.values:
                 item.setToolTip(
                     ", ".join(f"{key}: {value}" for key, value in finding.values.items())

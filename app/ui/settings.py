@@ -28,6 +28,8 @@ class UiSettings:
     recent: list[str] = field(default_factory=list)
     navigation: str = "slicer"
     theme: str = "dark"
+    diff_palette: str = "blue_orange"
+    """Colours of the difference view (§19.1). Red/green is available, not default."""
     display_unit: str = "mm"
     """Shown unit (§19.3). The core stays on millimetres either way."""
     language: str = SOURCE_LANGUAGE
