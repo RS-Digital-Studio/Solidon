@@ -25,11 +25,6 @@ from app.ui.settings import UiSettings
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
-@pytest.fixture(scope="session")
-def qt_app() -> QApplication:
-    return QApplication.instance() or QApplication([])
-
-
 @pytest.fixture
 def session(qt_app: QApplication) -> Session:
     return Session()

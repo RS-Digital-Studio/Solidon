@@ -65,6 +65,14 @@ class FakeMesh:
         return self.slots
 
 
+@pytest.fixture(scope="session")
+def qt_app() -> object:
+    """One QApplication for the whole run — widgets crash without it."""
+    from PySide6.QtWidgets import QApplication
+
+    return QApplication.instance() or QApplication([])
+
+
 @pytest.fixture
 def mesh() -> FakeMesh:
     return FakeMesh()

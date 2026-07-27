@@ -133,6 +133,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.stack)
 
         self.object_tree.selectionChanged.connect(self._on_selection)
+        self.object_tree.operationRequested.connect(self.run_operation)
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
         self.right.setVisible(self.settings.right_panel_visible)
 

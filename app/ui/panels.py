@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDoubleSpinBox,
@@ -18,12 +18,14 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
+from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
 from app.core.units import format_length
@@ -37,6 +39,8 @@ class ObjectTree(QWidget):
     """Objects of the scene with their origin and size (§18.8)."""
 
     selectionChanged = Signal(object)
+    operationRequested = Signal(object)
+    """An operation picked from the context menu — carries its ``OperationSpec``."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -47,6 +51,8 @@ class ObjectTree(QWidget):
         self.tree.setRootIsDecorated(False)
         self.tree.itemSelectionChanged.connect(self._on_selection)
         self.tree.setAcceptDrops(True)
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._on_context_menu)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -82,6 +88,22 @@ class ObjectTree(QWidget):
 
     def _on_selection(self) -> None:
         self.selectionChanged.emit(self.selected())
+
+    def operations_for_object(self) -> tuple[Any, ...]:
+        """Operations that work on a selected object — the shortest way from seeing
+        to doing (§2.6). The feature context menu over ``applies_to`` follows in P3."""
+        return tuple(spec for spec in REGISTRY.all() if spec.consumes == 1)
+
+    def _on_context_menu(self, position: QPoint) -> None:
+        if self.selected() is None:
+            return
+        menu = QMenu(self)
+        for spec in self.operations_for_object():
+            action = menu.addAction(str(spec.title))
+            action.triggered.connect(
+                lambda _checked=False, entry=spec: self.operationRequested.emit(entry)
+            )
+        menu.exec(self.tree.viewport().mapToGlobal(position))
 
 
 class ParameterPanel(QWidget):
