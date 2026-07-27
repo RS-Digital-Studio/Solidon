@@ -218,6 +218,7 @@ _JSON_TYPE: dict[ParamKind, str] = {
     "object": "string",
     "feature": "string",
     "part": "string",
+    "source": "string",
 }
 
 

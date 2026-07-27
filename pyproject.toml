@@ -15,6 +15,9 @@ dependencies = []
 # Geometry kernels and mesh IO. Licence check runs against Bauplan §36.
 geom = [
   "numpy>=1.26",
+  # trimesh needs a graph engine for watertightness and components; scipy also
+  # brings the assignment solver the feature matching in §21.2 will use.
+  "scipy>=1.13",
   "trimesh>=4.4",
   "manifold3d>=2.5",
 ]
@@ -72,3 +75,8 @@ ignore_missing_imports = true
 # Platform branches are unreachable on every platform except one — that is the point.
 module = ["app.core.paths"]
 warn_unreachable = false
+
+[[tool.mypy.overrides]]
+# trimesh ships only partial annotations; calls into it cannot be typed from here.
+module = ["app.core.geom.*", "app.core.ingest.*"]
+disallow_untyped_calls = false

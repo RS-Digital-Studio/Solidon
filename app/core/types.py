@@ -393,7 +393,7 @@ class BaseParams:
         return {name: getattr(self, name) for name in (spec.name for spec in self.spec())}
 
 
-ParamKind = Literal["float", "int", "bool", "str", "enum", "object", "feature", "part"]
+ParamKind = Literal["float", "int", "bool", "str", "enum", "object", "feature", "part", "source"]
 ParamPlacement = Literal["front", "advanced"]
 """Front side or ``More settings`` — the graded depth from §2.4."""
 
@@ -416,6 +416,21 @@ class ParamSpec:
     doc: TranslatableText | str | None = None
 
 
+@runtime_checkable
+class SourceAccess(Protocol):
+    """Read access to the sources of the project (§16.1).
+
+    An addition to the contract in §9, and a deliberate one: the ``load``
+    operation has to read a file, and putting bytes into the operation
+    parameters would drag geometry into the stack. Access stays read-only and
+    goes through the context like everything else.
+    """
+
+    def read(self, source_id: SourceId) -> bytes: ...
+
+    def describe(self, source_id: SourceId) -> Source: ...
+
+
 @dataclass(slots=True)
 class OpContext:
     """Everything an operation may see and use. Nothing global, no dialogs."""
@@ -430,6 +445,7 @@ class OpContext:
     progress: ProgressFn
     ask: AskFn
     cancelled: CancelToken
+    sources: SourceAccess | None = None
 
 
 @dataclass(frozen=True, slots=True)
