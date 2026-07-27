@@ -67,7 +67,7 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [ ] Übersetzungsgerüst, deutsche und englische Fassung
 
 ### CLI
-- [ ] Befehle aus dem Register, `ask` als Abfrage, `progress` als Zeile
+- [x] Befehle aus dem Register, `ask` als Abfrage, `progress` als Zeile
 
 ### Abschluss P0
 - [ ] Lizenzprüfung gegen Freigabeliste (§36)
