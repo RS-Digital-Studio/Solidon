@@ -21,9 +21,9 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Protokollierung nach §33.2
 
 ### Register
-- [ ] `@register_op` mit allen Feldern aus §10
-- [ ] Erzeugung: Menü, Kontextmenü, Palette, CLI, Tool-Schema, Doku
-- [ ] Registerkonsistenztest (§35)
+- [x] `@register_op` mit allen Feldern aus §10
+- [x] Erzeugung: Menü, Kontextmenü, Palette, CLI, Tool-Schema, Doku
+- [x] Registerkonsistenztest (§35)
 
 ### Szene und Auswertung
 - [ ] `Scene`, `SceneObject`, `Parameter`, `Fit`, `Transaction`
@@ -35,9 +35,9 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [ ] Cache über Op-Hash, RAM-Grenze, Plattencache
 
 ### Parameter
-- [ ] Ausdrucksgrammatik und eigener Auswerter — **kein `eval`** (§13, §32)
-- [ ] Zyklenerkennung
-- [ ] Test: alles außerhalb der Grammatik wird abgelehnt
+- [x] Ausdrucksgrammatik und eigener Auswerter — **kein `eval`** (§13, §32)
+- [x] Zyklenerkennung
+- [x] Test: alles außerhalb der Grammatik wird abgelehnt
 
 ### Projektdatei
 - [ ] Container `.p3d` nach §16.1
