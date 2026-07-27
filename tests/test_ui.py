@@ -179,6 +179,23 @@ def test_a_dialog_is_generated_from_the_parameter_schema(qt_app: QApplication) -
     assert values["weld"] is True
 
 
+def test_the_about_dialog_carries_the_licence_information(qt_app: QApplication) -> None:
+    """§36: licence notices belong in the about dialog."""
+    from PySide6.QtWidgets import QLabel, QTextBrowser
+
+    from app.ui.dialogs import AboutDialog
+
+    dialog = AboutDialog()
+    texts = " ".join(label.text() for label in dialog.findChildren(QLabel))
+    assert "Formwerk" in texts
+    assert "RS Digital" in texts
+    assert "MIT" in texts, "the parts library exception is named"
+
+    listing = dialog.findChild(QTextBrowser)
+    assert listing is not None
+    assert "PySide6" in listing.toMarkdown()
+
+
 def test_advanced_parameters_sit_behind_the_fold(qt_app: QApplication) -> None:
     """§2.4: the front side holds what people actually change."""
     from PySide6.QtWidgets import QGroupBox

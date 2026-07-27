@@ -38,7 +38,7 @@ from app.core.registry import REGISTRY, OperationSpec, menu_tree
 from app.core.scene import EvaluationResult, OperationDraft
 from app.core.scene.project import find_recovery
 from app.i18n import tr
-from app.ui.dialogs import AskDialog, confirm_discard, show_error
+from app.ui.dialogs import AboutDialog, AskDialog, confirm_discard, show_error
 from app.ui.op_dialog import OperationDialog
 from app.ui.panels import (
     ChatPlaceholder,
@@ -217,6 +217,9 @@ class MainWindow(QMainWindow):
                 lambda checked=False, key=scheme: self.action_navigation(key),
             )
 
+        help_menu = self.menuBar().addMenu(tr("Hilfe"))
+        self._add_action(help_menu, tr("Über Formwerk"), None, self.action_about)
+
         toolbar = QToolBar(tr("Werkzeuge"), self)
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
@@ -317,6 +320,9 @@ class MainWindow(QMainWindow):
         self.right.setVisible(visible)
         self.settings.right_panel_visible = visible
         save_settings(self.settings)
+
+    def action_about(self) -> None:
+        AboutDialog(self).exec()
 
     def action_navigation(self, scheme: str) -> None:
         self.viewport.set_navigation(scheme)  # type: ignore[arg-type]

@@ -14,12 +14,18 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QMessageBox,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
 
+from app.branding import APP_NAME, APP_VERSION, COPYRIGHT
 from app.core.errors import Action, AppError
+from app.core.knowledge import licences
+from app.core.log import get_logger
 from app.i18n import tr
+
+_log = get_logger(__name__)
 
 
 class AskDialog(QDialog):
@@ -73,6 +79,54 @@ def show_error(error: AppError, parent: QWidget | None = None) -> Action | None:
 
     box.exec()
     return buttons.get(box.clickedButton())
+
+
+class AboutDialog(QDialog):
+    """Version, rights holder and the third party licences (§36, §37.2)."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(tr("Über"))
+        self.setMinimumSize(520, 460)
+
+        heading = QLabel(f"{APP_NAME} {APP_VERSION}", self)
+        heading.setStyleSheet("font-size: 20px; font-weight: 600;")
+
+        rights = QLabel(f"{COPYRIGHT}. {tr('Alle Rechte vorbehalten.')}", self)
+        rights.setWordWrap(True)
+
+        exceptions = QLabel(
+            tr(
+                "Bausteinbibliothek und Referenzkorpus stehen unter der MIT-Lizenz, "
+                "weil ihr Inhalt in den Ergebnissen der Nutzer landet."
+            ),
+            self,
+        )
+        exceptions.setWordWrap(True)
+
+        third_party = QTextBrowser(self)
+        third_party.setMarkdown(_third_party_text())
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        buttons.rejected.connect(self.reject)
+        buttons.accepted.connect(self.accept)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(heading)
+        layout.addWidget(rights)
+        layout.addWidget(exceptions)
+        layout.addWidget(QLabel(tr("Fremde Bestandteile"), self))
+        layout.addWidget(third_party, stretch=1)
+        layout.addWidget(buttons)
+
+
+def _third_party_text() -> str:
+    """The dependency table, read at the moment it is shown."""
+    try:
+        return licences.notices()
+    except Exception as problem:  # pragma: no cover - metadata is machine specific
+        _log.warning("could not build the licence list: %s", problem)
+        return tr("Die Liste der Fremdbestandteile ließ sich nicht lesen.")
 
 
 def confirm_discard(count: int, parent: QWidget | None = None) -> bool:

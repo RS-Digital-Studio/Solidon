@@ -4,6 +4,7 @@
   "Abgeschnittene Schritte verwerfen?": "Discard the cut off steps?",
   "Agent": "Agent",
   "Alle Operationen auflisten": "List all operations",
+  "Alle Rechte vorbehalten.": "All rights reserved.",
   "Anderes Druckerprofil wählen": "Choose a different printer profile",
   "Ansicht": "View",
   "Auf das Bett setzen": "Place on the bed",
@@ -12,6 +13,7 @@
   "Ausgeführt": "Done",
   "Auswahl": "Selection",
   "Auswählen": "Choose",
+  "Bausteinbibliothek und Referenzkorpus stehen unter der MIT-Lizenz, weil ihr Inhalt in den Ergebnissen der Nutzer landet.": "The part library and the reference corpus are MIT licensed, because their content ends up in the users own results.",
   "Bearbeiten": "Edit",
   "Beenden": "Quit",
   "Beschriftung": "Lettering",
@@ -53,6 +55,7 @@
   "Die Geometrie ließ die Operation nicht zu.": "The geometry did not allow the operation.",
   "Die Kette hält an — siehe Prüfbericht.": "The chain stopped — see the report.",
   "Die Kette hält bei Operation {op} an.": "The chain stops at operation {op}.",
+  "Die Liste der Fremdbestandteile ließ sich nicht lesen.": "The list of third party components could not be read.",
   "Die Operation erwartet eine andere Anzahl an Objekten.": "The operation expects a different number of objects.",
   "Die Operation liefert eine andere Anzahl an Objekten als zuvor.": "The operation returns a different number of objects than before.",
   "Die Operation verweist auf ein Objekt, das es nicht gibt.": "The operation refers to an object that does not exist.",
@@ -108,6 +111,7 @@
   "Fehler": "errors",
   "Fehlerbericht erstellen": "Create an error report",
   "Format": "Format",
+  "Fremde Bestandteile": "Third party components",
   "Für diese Dateiversion fehlt der Umstellungsschritt.": "The migration step for this file version is missing.",
   "Für dieses Projekt gibt es noch keinen Dateinamen.": "This project does not have a file name yet.",
   "Geladen": "Loaded",
@@ -118,6 +122,7 @@
   "Hier wird eine Zahl, ein Parameter oder eine Klammer erwartet.": "A number, a parameter or a bracket is expected here.",
   "Hier wird eine ganze Zahl erwartet.": "A whole number is expected here.",
   "Hier wird ja oder nein erwartet.": "Yes or no is expected here.",
+  "Hilfe": "Help",
   "Hinten": "Back",
   "Hinweis": "notes",
   "Im Programm ist ein unerwarteter Fehler aufgetreten.": "An unexpected error occurred in the application.",
@@ -210,5 +215,7 @@
   "kalibriert": "calibrated",
   "offen": "open",
   "Öffnen": "Open",
-  "Öffnen …": "Open …"
+  "Öffnen …": "Open …",
+  "Über": "About",
+  "Über Formwerk": "About Formwerk"
 }
