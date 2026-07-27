@@ -1,0 +1,101 @@
+"""Every surface text is translatable, and the catalogs are complete (§4.1, §37.2)."""
+
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+
+import pytest
+
+import app
+from app.i18n import SOURCE_LANGUAGE, SUPPORTED_LANGUAGES, TranslatableText, set_language
+from app.i18n.catalog import install_language, read_catalog
+from app.i18n.extract import message_ids
+
+PACKAGE_DIR = Path(app.__file__).parent
+UI_DIR = PACKAGE_DIR / "ui"
+
+#: Qt calls that put a text in front of the user.
+DISPLAY_CALLS = frozenset(
+    {
+        "setText",
+        "setWindowTitle",
+        "setToolTip",
+        "setStatusTip",
+        "setPlaceholderText",
+        "addTab",
+        "addItem",
+        "addItems",
+        "setSuffix",
+        "setPrefix",
+    }
+)
+
+#: Static message box calls. Only counted on QMessageBox — ``log.warning`` is not a dialog.
+BOX_CALLS = frozenset({"information", "question", "warning", "critical"})
+
+#: Widgets that take their label as the first argument.
+LABELLED_WIDGETS = frozenset(
+    {"QLabel", "QPushButton", "QAction", "QGroupBox", "QCheckBox", "QToolBar", "QListWidgetItem"}
+)
+
+
+@pytest.mark.parametrize(
+    "language", [entry for entry in SUPPORTED_LANGUAGES if entry != SOURCE_LANGUAGE]
+)
+def test_every_text_is_translated(language: str) -> None:
+    catalog = read_catalog(language)
+    ids = message_ids()
+
+    missing = sorted(key for key in ids if not catalog.get(key))
+    assert not missing, f"{language}: no translation for\n" + "\n".join(missing)
+
+    orphaned = sorted(key for key in catalog if key not in ids)
+    assert not orphaned, f"{language}: no longer used\n" + "\n".join(orphaned)
+
+
+def test_the_catalog_actually_switches_the_language() -> None:
+    install_language("en")
+    text = TranslatableText("Abbrechen")
+    assert text.translate("en") == "Cancel"
+    assert text.translate("de") == "Abbrechen"
+
+    set_language("en")
+    try:
+        assert str(text) == "Cancel"
+    finally:
+        set_language(SOURCE_LANGUAGE)
+
+
+def surface_files() -> list[Path]:
+    return sorted(UI_DIR.rglob("*.py"))
+
+
+@pytest.mark.parametrize("path", surface_files(), ids=lambda path: path.name)
+def test_no_hard_wired_text_in_the_surface(path: Path) -> None:
+    """AGENTS.md rule 20: everything the user reads goes through tr()."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    offenders: list[str] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = ""
+        owner = ""
+        if isinstance(node.func, ast.Attribute):
+            name = node.func.attr
+            if isinstance(node.func.value, ast.Name):
+                owner = node.func.value.id
+        elif isinstance(node.func, ast.Name):
+            name = node.func.id
+        is_box = name in BOX_CALLS and owner == "QMessageBox"
+        if not is_box and name not in DISPLAY_CALLS and name not in LABELLED_WIDGETS:
+            continue
+        for argument in node.args:
+            if not isinstance(argument, ast.Constant) or not isinstance(argument.value, str):
+                continue
+            # Style sheets and empty strings are not texts anyone reads.
+            if argument.value.strip() and not argument.value.startswith(("#", "font", "QFrame")):
+                offenders.append(f"{path.name}:{argument.lineno} {argument.value!r}")
+
+    assert not offenders, "text that never reaches tr():\n" + "\n".join(offenders)
