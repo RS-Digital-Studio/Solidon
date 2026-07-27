@@ -1,0 +1,184 @@
+# Starting set of printer profiles (Bauplan §38).
+#
+# A data table, maintained like the standard parts table (§24.2): figures taken
+# from freely available manufacturer specifications, never copied from standards
+# documents. Nobody should have to type build volumes on first start; own
+# profiles are derived from these.
+#
+# All lengths in millimetres. extrusion_width defaults to nozzle * 1.05.
+
+[generic-220]
+title = "Allgemeiner FDM-Drucker 220 mm"
+vendor = ""
+build_volume = [220.0, 220.0, 250.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 100
+nozzle_temperature_max = 260
+
+[centauri-carbon-2]
+title = "Elegoo Centauri Carbon 2"
+vendor = "Elegoo"
+build_volume = [256.0, 256.0, 256.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = true
+bed_temperature_max = 110
+nozzle_temperature_max = 350
+
+[elegoo-neptune-4]
+title = "Elegoo Neptune 4"
+vendor = "Elegoo"
+build_volume = [225.0, 225.0, 265.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 110
+nozzle_temperature_max = 300
+
+[elegoo-neptune-4-plus]
+title = "Elegoo Neptune 4 Plus"
+vendor = "Elegoo"
+build_volume = [320.0, 320.0, 385.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 110
+nozzle_temperature_max = 300
+
+[bambu-a1]
+title = "Bambu Lab A1"
+vendor = "Bambu Lab"
+build_volume = [256.0, 256.0, 256.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 100
+nozzle_temperature_max = 300
+
+[bambu-a1-mini]
+title = "Bambu Lab A1 mini"
+vendor = "Bambu Lab"
+build_volume = [180.0, 180.0, 180.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 80
+nozzle_temperature_max = 300
+
+[bambu-p1s]
+title = "Bambu Lab P1S"
+vendor = "Bambu Lab"
+build_volume = [256.0, 256.0, 256.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = true
+bed_temperature_max = 100
+nozzle_temperature_max = 300
+
+[bambu-x1c]
+title = "Bambu Lab X1 Carbon"
+vendor = "Bambu Lab"
+build_volume = [256.0, 256.0, 256.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = true
+bed_temperature_max = 110
+nozzle_temperature_max = 300
+
+[prusa-mk4s]
+title = "Prusa MK4S"
+vendor = "Prusa Research"
+build_volume = [250.0, 210.0, 220.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.45
+enclosed = false
+bed_temperature_max = 120
+nozzle_temperature_max = 300
+
+[prusa-mini]
+title = "Prusa MINI+"
+vendor = "Prusa Research"
+build_volume = [180.0, 180.0, 180.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.45
+enclosed = false
+bed_temperature_max = 100
+nozzle_temperature_max = 280
+
+[prusa-xl]
+title = "Prusa XL"
+vendor = "Prusa Research"
+build_volume = [360.0, 360.0, 360.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.45
+enclosed = false
+bed_temperature_max = 120
+nozzle_temperature_max = 290
+
+[creality-k1]
+title = "Creality K1"
+vendor = "Creality"
+build_volume = [220.0, 220.0, 250.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = true
+bed_temperature_max = 100
+nozzle_temperature_max = 300
+
+[creality-k1-max]
+title = "Creality K1 Max"
+vendor = "Creality"
+build_volume = [300.0, 300.0, 300.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = true
+bed_temperature_max = 100
+nozzle_temperature_max = 300
+
+[creality-ender3-v3]
+title = "Creality Ender-3 V3"
+vendor = "Creality"
+build_volume = [220.0, 220.0, 250.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 100
+nozzle_temperature_max = 300
+
+[anycubic-kobra-2]
+title = "Anycubic Kobra 2"
+vendor = "Anycubic"
+build_volume = [220.0, 220.0, 250.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 110
+nozzle_temperature_max = 260
+
+[sovol-sv06]
+title = "Sovol SV06"
+vendor = "Sovol"
+build_volume = [220.0, 220.0, 250.0]
+nozzle_diameter = 0.4
+layer_height = 0.2
+extrusion_width = 0.42
+enclosed = false
+bed_temperature_max = 100
+nozzle_temperature_max = 300

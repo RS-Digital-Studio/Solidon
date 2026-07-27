@@ -1,0 +1,66 @@
+# Starting set of material profiles (Bauplan §38, §28.3).
+#
+# These are starting points, not measurements: `calibrated = false` everywhere.
+# The calibration run (§28.3) writes measured values back into the material
+# profile, and because tolerances in the stack are references ("auto:petg", §12),
+# every existing project recomputes with the calibrated numbers.
+#
+# clearance         sliding fit gap in mm
+# press             interference for a press fit in mm (negative = oversize)
+# hole_compensation added to the nominal diameter, FDM prints holes tight
+# elephant_foot     first layer spread to compensate
+# shrinkage         relative, 0.004 = 0.4 %
+
+[pla]
+title = "PLA"
+clearance = 0.20
+press = -0.05
+hole_compensation = 0.15
+elephant_foot = 0.15
+shrinkage = 0.002
+calibrated = false
+
+[petg]
+title = "PETG"
+clearance = 0.25
+press = -0.05
+hole_compensation = 0.20
+elephant_foot = 0.20
+shrinkage = 0.004
+calibrated = false
+
+[petg-cf]
+title = "PETG-CF"
+clearance = 0.25
+press = -0.05
+hole_compensation = 0.20
+elephant_foot = 0.15
+shrinkage = 0.003
+calibrated = false
+
+[asa]
+title = "ASA"
+clearance = 0.25
+press = -0.06
+hole_compensation = 0.20
+elephant_foot = 0.15
+shrinkage = 0.006
+calibrated = false
+
+[abs]
+title = "ABS"
+clearance = 0.25
+press = -0.06
+hole_compensation = 0.20
+elephant_foot = 0.15
+shrinkage = 0.007
+calibrated = false
+
+[tpu-95a]
+title = "TPU 95A"
+clearance = 0.35
+press = -0.10
+hole_compensation = 0.30
+elephant_foot = 0.25
+shrinkage = 0.002
+calibrated = false
