@@ -91,7 +91,10 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       Fang auf Punkte und Kanten, Wandstärke über eigenen Raycast, Bemaßungen
       bleiben stehen; **Durchmesser über Feature** braucht die Feature-Erkennung
       und kommt mit P3
-- [ ] Gizmo und Snapping — jede Manipulation erzeugt eine Op (§18.10)
+- [x] Gizmo und Snapping — jede Manipulation erzeugt eine Op (§18.10); die
+      Transformations-Ops aus P2 sind dafür vorgezogen, ein Zug wird zerlegt
+      und als **eine Transaktion** eingetragen. Fang auf Fläche und Bohrungsachse
+      folgt mit der Feature-Erkennung in P3
 - [ ] Paletten und Alternativkodierung, Test auf Farbunabhängigkeit (§19.1)
 - [x] Tastaturnavigation, Befehlspalette (§19.2)
 - [x] Helles und dunkles Thema, HiDPI (§19.3)
