@@ -47,13 +47,15 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Autosave und Absturzwiederherstellung (§38)
 
 ### Eingangsstufe
-- [ ] Op `load` mit den sechs Schritten aus §17.1
-- [ ] Einheitenheuristik mit Rückfrage über `ctx.ask`
-- [ ] Import-Obergrenzen mit klarer Meldung (§32)
+- [x] Op `load` mit den sechs Schritten aus §17.1
+- [x] Einheitenheuristik mit Rückfrage über `ctx.ask`
+- [x] Import-Obergrenzen mit klarer Meldung (§32)
 
 ### Testkorpus
-- [ ] `tests/data/` nach §34 anlegen, `README.md` mit Erwartungswerten
-- [ ] Alle Dateien selbst erzeugt oder frei lizenziert
+- [~] `tests/data/` nach §34 anlegen, `README.md` mit Erwartungswerten — sechs
+      Meshes und eine Projektdatei stehen; die übrigen brauchen Bausteine aus
+      P2/P3 und sind in der README namentlich vermerkt
+- [x] Alle Dateien selbst erzeugt oder frei lizenziert (`make_corpus.py`)
 
 ### Oberfläche
 - [ ] Grundfenster nach §2.5, drei Zonen, rechter Bereich ausblendbar
