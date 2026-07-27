@@ -41,12 +41,18 @@ python tests/data/make_corpus.py
 | `meshes/cube_clean.stl` | Würfel 20 mm, in Millimeter gespeichert | 12 Dreiecke, roh 36 Punkte, nach dem Verschweißen 8 Punkte und wasserdicht, Volumen 8000 mm³; Einheit **eindeutig mm**, keine Rückfrage | `test_ingest.py` |
 | `meshes/bracket_inch.stl` | Platte 4 × 2 × 0,25 **Zoll** | Einheit **mehrdeutig** (cm/in) → Rückfrage; mit `in` → 101,6 × 50,8 × 6,35 mm | `test_ingest.py` |
 | `meshes/plate_cm.stl` | Platte 8 × 5 × 0,5 **Zentimeter** | Einheit **mehrdeutig** (cm/in) → Rückfrage; mit `cm` → 80 × 50 × 5 mm | `test_ingest.py` |
+| `meshes/plate_holes.stl` | Platte 80 × 50 × 8 mm mit vier Bohrungen Ø 5,2 mm | Schnitt bleibt geschlossen trotz Löchern; ab P3 Feature-Erkennung | `test_section.py` |
+| `meshes/plate_holes_twin.stl` | Platte mit zwei gleichen Bohrungen 8 mm auseinander | ab P3: wird als **mehrdeutig** gemeldet statt geraten (§21.2) | noch offen |
 | `meshes/degenerate.stl` | Würfel plus Nullflächen-Dreieck, Nadel und Dublette | 15 Dreiecke roh, nach der Eingangsstufe weniger; Befund `ingest.degenerate_removed` | `test_ingest.py` |
 | `meshes/broken_open.stl` | Würfel ohne drei Dreiecke | nicht wasserdicht, Befund `ingest.not_watertight` (Warnung) | `test_ingest.py` |
 | `meshes/two_components.stl` | Würfel plus winziges Bruchstück daneben | zwei Komponenten, Befunde `ingest.multiple_components` und `ingest.small_components`; **nichts wird gelöscht** | `test_ingest.py` |
 
+`meshes/dense_1m.stl` (1,31 Mio. Dreiecke, Leistungsmessung nach §31) wird
+**nicht eingecheckt** — 60 MB im Repository wären unverhältnismäßig. Der
+Leistungstest erzeugt sie beim ersten Lauf; die Messwerte landen in
+`tests/.performance.json` und bleiben lokal, weil sie von der Maschine abhängen.
+
 Noch offen aus §34 — sie brauchen Bausteine aus späteren Phasen:
-`plate_holes.stl` und `plate_holes_twin.stl` (Feature-Erkennung, P3),
 `broken_selfint.stl` (Rückfallkette, P2), `oversized.stl` (Auto Split, P10),
-`island_tower.stl` (Schichtanalyse, P3), `dense_1m.stl` (Leistungsmessung),
-`colored.3mf` (Attributerhalt, P9), `assembly_fit.p3d` (Passungsprüfung, P3).
+`island_tower.stl` (Schichtanalyse, P3), `colored.3mf` (Attributerhalt, P9),
+`assembly_fit.p3d` (Passungsprüfung, P3).

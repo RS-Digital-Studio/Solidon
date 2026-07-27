@@ -40,6 +40,28 @@ def plate_cm() -> None:
     write(trimesh.creation.box(extents=(8.0, 5.0, 0.5)), "plate_cm.stl")
 
 
+def plate_holes() -> None:
+    """A plate with four bores of known size — feature detection and measuring."""
+    plate = trimesh.creation.box(extents=(80.0, 50.0, 8.0))
+    drills = []
+    for x, y in ((-25.0, -15.0), (25.0, -15.0), (-25.0, 15.0), (25.0, 15.0)):
+        drill = trimesh.creation.cylinder(radius=2.6, height=40.0, sections=48)
+        drill.apply_translation((x, y, 0.0))
+        drills.append(drill)
+    write(trimesh.boolean.difference([plate, *drills]), "plate_holes.stl")
+
+
+def plate_holes_twin() -> None:
+    """Two identical bores close together — the ambiguity case for §21.2."""
+    plate = trimesh.creation.box(extents=(60.0, 30.0, 8.0))
+    drills = []
+    for x in (-4.0, 4.0):
+        drill = trimesh.creation.cylinder(radius=2.6, height=40.0, sections=48)
+        drill.apply_translation((x, 0.0, 0.0))
+        drills.append(drill)
+    write(trimesh.boolean.difference([plate, *drills]), "plate_holes_twin.stl")
+
+
 def degenerate() -> None:
     """A cube plus a zero-area triangle, a needle and a duplicate face."""
     box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
@@ -71,6 +93,16 @@ def broken_open() -> None:
     )
 
 
+def dense_1m() -> None:
+    """About a million triangles — the yardstick for the performance budget (§31).
+
+    A subdivided sphere rather than noise: it stays watertight, so the boolean
+    and slicing measurements have something legitimate to work on.
+    """
+    sphere = trimesh.creation.icosphere(subdivisions=8, radius=40.0)
+    write(sphere, "dense_1m.stl")
+
+
 def two_components() -> None:
     """A cube with a tiny stray fragment next to it — reported, never deleted."""
     box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
@@ -83,6 +115,9 @@ if __name__ == "__main__":
     cube_clean()
     bracket_inch()
     plate_cm()
+    plate_holes()
+    plate_holes_twin()
     degenerate()
     broken_open()
     two_components()
+    dense_1m()

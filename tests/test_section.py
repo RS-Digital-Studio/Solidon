@@ -73,6 +73,16 @@ def test_a_free_plane_works_like_an_axis_plane() -> None:
     assert section_volume(body, free) == pytest.approx(4000.0, rel=1e-6)
 
 
+def test_a_plate_with_holes_is_capped_around_the_holes() -> None:
+    """The case that decides it: the cut face has an outline and four holes in it."""
+    plate = solid("plate_holes.stl")
+    result = cut(plate, SectionPlane.along("z", 0.0))
+
+    assert result.capped
+    assert result.mesh.is_watertight
+    assert result.mesh.volume == pytest.approx(plate.volume / 2.0, rel=1e-3)
+
+
 def test_an_open_model_is_cut_but_reported_as_uncapped() -> None:
     """An open body cannot be capped honestly — so it is not faked (§18.2)."""
     body = normalise(read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm").mesh

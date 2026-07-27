@@ -22,6 +22,10 @@ geom = [
   "manifold3d>=2.5",
   # Polygon work behind the capped section cut (§18.2). BSD-3, bundles GEOS (LGPL).
   "shapely>=2.0",
+  # Contour hierarchy for the same cut: without these two a cut through a plate
+  # with a hole cannot be closed. BSD-3 and MIT.
+  "networkx>=3.0",
+  "rtree>=1.2",
 ]
 # Desktop shell. PySide6 is LGPL and must stay dynamically linked (§36).
 ui = [

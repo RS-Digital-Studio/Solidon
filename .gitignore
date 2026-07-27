@@ -17,6 +17,12 @@ venv/
 .coverage
 htmlcov/
 
+# --- Messdaten ----------------------------------------------------------------
+# Das Millionen-Dreieck-Modell waere 60 MB im Repository; make_corpus.py erzeugt
+# es bei Bedarf, die Messwerte sind ohnehin maschinenabhaengig (Bauplan §31).
+/tests/data/meshes/dense_1m.stl
+/tests/.performance.json
+
 # --- Laufzeitdaten -----------------------------------------------------------
 *.log
 /out/
