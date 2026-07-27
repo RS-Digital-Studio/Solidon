@@ -57,6 +57,7 @@ from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.start_screen import StartScreen, accepted_path
 from app.ui.theme import apply_theme
+from app.ui.transform_bar import TransformBar
 from app.ui.viewport import Viewport
 
 _log = get_logger(__name__)
@@ -115,6 +116,10 @@ class MainWindow(QMainWindow):
         self.measure_bar = MeasureBar(self)
         self.measure_bar.modeChanged.connect(self.viewport.set_measure_mode)
         self.measure_bar.clearRequested.connect(self.viewport.clear_measurements)
+        self.transform_bar = TransformBar(self)
+        self.transform_bar.gizmoToggled.connect(self.viewport.set_gizmo)
+        self.transform_bar.snappingChanged.connect(self.viewport.set_snapping)
+        self.viewport.transformDragged.connect(self._on_transform_dragged)
 
         middle = QWidget(self)
         middle_layout = QVBoxLayout(middle)
@@ -123,6 +128,7 @@ class MainWindow(QMainWindow):
         middle_layout.addWidget(self.viewport, stretch=1)
         middle_layout.addWidget(self.section_bar)
         middle_layout.addWidget(self.measure_bar)
+        middle_layout.addWidget(self.transform_bar)
 
         self.report = ReportPanel(self)
         self.chat = ChatPlaceholder(self)
@@ -398,6 +404,37 @@ class MainWindow(QMainWindow):
         name = palette.chosen()
         if name:
             self.run_operation(REGISTRY.get(name))
+
+    def _on_transform_dragged(self, steps: Any) -> None:
+        """One drag, one transaction — undone in a single step (§18.11, §15.5)."""
+        selected = self.object_tree.selected()
+        if selected is None:
+            return
+        drafts: list[OperationDraft] = []
+        if steps.moves:
+            drafts.append(
+                OperationDraft(
+                    op="translate_object",
+                    inputs=(selected,),
+                    params={"dx": steps.offset[0], "dy": steps.offset[1], "dz": steps.offset[2]},
+                )
+            )
+        if steps.turns:
+            drafts.append(
+                OperationDraft(
+                    op="rotate_object",
+                    inputs=(selected,),
+                    params={"axis": steps.axis, "angle": steps.angle},
+                )
+            )
+        if steps.resizes:
+            drafts.append(
+                OperationDraft(
+                    op="scale_object", inputs=(selected,), params={"factor": steps.scale}
+                )
+            )
+        if drafts:
+            self.session.apply(tr("Direkt bewegt"), drafts)
 
     def _on_measurement(self, measurement: Any) -> None:
         self.measure_bar.show_measurement(

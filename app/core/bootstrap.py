@@ -14,6 +14,7 @@ from typing import Final
 _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.scene.ops",
     "app.core.ingest.ops",
+    "app.core.geom.ops",
 )
 
 _loaded = False

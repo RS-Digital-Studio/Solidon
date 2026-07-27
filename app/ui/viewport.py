@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from app.branding import ENVIRONMENT_PREFIX
 from app.core.geom.measure import Measurement, MeasurementList, distance, snap, wall_thickness
 from app.core.geom.section import SectionPlane, cut
+from app.core.geom.transform import TransformSteps, decompose_transform, snap_to_step
 from app.core.log import get_logger
 from app.core.scene import EvaluationResult
 from app.core.types import ObjectId, Profile, Vec3
@@ -94,6 +95,8 @@ class Viewport(QWidget):
 
     measurementTaken = Signal(object)
     """A finished measurement — carries a ``Measurement``."""
+    transformDragged = Signal(object)
+    """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -118,6 +121,9 @@ class Viewport(QWidget):
         self._pending_point: Vec3 | None = None
         self.measurements = MeasurementList()
         self._measure_actors: list[Any] = []
+        self._gizmo: Any | None = None
+        self._grid_step = 1.0
+        self._angle_step = 15.0
 
         if not _available():
             self._layout.addWidget(
@@ -419,6 +425,47 @@ class Viewport(QWidget):
                     )
                 )
         self.plotter.render()
+
+    # --- direct manipulation (§18.11) -------------------------------------------
+
+    def set_snapping(self, grid_step: float, angle_step: float) -> None:
+        """Grid and angle snapping for the gizmo."""
+        self._grid_step = grid_step
+        self._angle_step = angle_step
+
+    def set_gizmo(self, active: bool) -> None:
+        """Attach the gizmo to the selected object, or take it away."""
+        if self.plotter is None:
+            return
+        if self._gizmo is not None:
+            self._gizmo.Off()
+            self._gizmo = None
+        if not active or self._selected is None:
+            return
+        actor = self._actors.get(self._selected)
+        if actor is None:
+            return
+        self._gizmo = self.plotter.add_affine_transform_widget(
+            actor, release_callback=self._on_gizmo_released
+        )
+
+    def _on_gizmo_released(self, matrix: Any) -> None:
+        """A drag ends as operations, not as a matrix (§18.11, §2.1)."""
+        import numpy as np
+
+        steps = decompose_transform(np.asarray(matrix, dtype=float))
+        snapped = TransformSteps(
+            offset=(
+                snap_to_step(steps.offset[0], self._grid_step),
+                snap_to_step(steps.offset[1], self._grid_step),
+                snap_to_step(steps.offset[2], self._grid_step),
+            ),
+            axis=steps.axis,
+            angle=snap_to_step(steps.angle, self._angle_step),
+            scale=steps.scale,
+        )
+        if snapped.moves or snapped.turns or snapped.resizes:
+            self.transformDragged.emit(snapped)
 
     def reset_camera(self) -> None:
         if self.plotter is not None:

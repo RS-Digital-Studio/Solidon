@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 import trimesh
 
-from app.core.errors import ValidationError
+from app.core.errors import GeometryError, ValidationError
 from app.core.types import BoundingBox, Mesh
 from app.i18n import _
 
@@ -107,6 +107,21 @@ class MeshData:
         """Binary STL, for export and for handing over to a slicer (§29)."""
         result: bytes = trimesh.exchange.stl.export_stl(self.raw)
         return result
+
+
+def as_mesh_data(mesh: Mesh) -> MeshData:
+    """The concrete mesh behind the protocol.
+
+    Operations declare ``Mesh`` because that is the contract (§9), but the
+    triangle work needs the kernel. Once the B-Rep core arrives (§30) this is
+    where a body of the wrong kind is turned away with a clear message.
+    """
+    if not isinstance(mesh, MeshData):
+        raise GeometryError(
+            _("Diese Operation arbeitet nur auf Netzen."),
+            detail=_("Das Objekt liegt in einer anderen Darstellung vor."),
+        )
+    return mesh
 
 
 def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
