@@ -43,6 +43,7 @@ manifold3d = { licence = "Apache-2.0", note = "kernel of the part library" }
 trimesh = { licence = "MIT", note = "mesh IO and repair" }
 numpy = { licence = "BSD-3-Clause" }
 scipy = { licence = "BSD-3-Clause", note = "graph engine and assignment solver" }
+shapely = { licence = "BSD-3-Clause", note = "polygons for the capped section cut; bundles GEOS (LGPL-2.1)" }
 PySide6 = { licence = "LGPL-3.0", note = "dynamically linked, §36" }
 PySide6-Essentials = { licence = "LGPL-3.0" }
 PySide6-Addons = { licence = "LGPL-3.0" }
