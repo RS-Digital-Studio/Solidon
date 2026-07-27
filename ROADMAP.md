@@ -26,13 +26,14 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Registerkonsistenztest (§35)
 
 ### Szene und Auswertung
-- [ ] `Scene`, `SceneObject`, `Parameter`, `Fit`, `Transaction`
-- [ ] Op-DAG mit `in`/`out`, lineare Darstellung
-- [ ] Auswertung als reine Funktion (§15.1), Test: zweimal = identisch
-- [ ] Objektzahländerung hält an statt zu raten (§15.2)
-- [ ] Undo/Redo auf Transaktionsebene (§15.5)
-- [ ] Abbruch ohne halb angewandte Ops (§15.6)
-- [ ] Cache über Op-Hash, RAM-Grenze, Plattencache
+- [x] `Scene`, `SceneObject`, `Parameter`, `Fit`, `Transaction`
+- [x] Op-DAG mit `in`/`out`, lineare Darstellung
+- [x] Auswertung als reine Funktion (§15.1), Test: zweimal = identisch
+- [x] Objektzahländerung hält an statt zu raten (§15.2)
+- [x] Undo/Redo auf Transaktionsebene (§15.5)
+- [x] Abbruch ohne halb angewandte Ops (§15.6)
+- [x] Cache über Op-Hash, RAM-Grenze, Plattencache — der Mesh-Codec des
+      Plattencaches kommt mit dem Geometriekern (P2)
 
 ### Parameter
 - [x] Ausdrucksgrammatik und eigener Auswerter — **kein `eval`** (§13, §32)
