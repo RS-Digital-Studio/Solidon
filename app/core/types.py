@@ -406,6 +406,8 @@ class ParamSpec:
     kind: ParamKind
     title: TranslatableText | str
     default: Any = None
+    required: bool = False
+    """True when there is no default and the caller has to supply a value."""
     unit: str | None = None
     minimum: float | None = None
     maximum: float | None = None

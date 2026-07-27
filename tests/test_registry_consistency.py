@@ -1,0 +1,80 @@
+"""Registry consistency over the operations the application really ships (§35).
+
+Every operation appears in every surface, carries a schema, translated texts and
+a test; shortcuts are unique; non-deterministic operations use a seed.
+
+While the catalogue is still being filled these checks pass over few operations —
+they bite the moment one is added incompletely.
+"""
+
+from __future__ import annotations
+
+import inspect
+from pathlib import Path
+
+import pytest
+
+from app.core.registry import (
+    CATEGORIES,
+    FEATURE_KINDS,
+    REGISTRY,
+    OperationSpec,
+    cli_commands,
+    documentation,
+    menu_tree,
+    palette_entries,
+    tool_schemas,
+)
+
+TESTS_DIR = Path(__file__).parent
+
+
+def registered() -> list[OperationSpec]:
+    return list(REGISTRY.all())
+
+
+def ids(spec: OperationSpec) -> str:
+    return spec.name
+
+
+@pytest.mark.parametrize("spec", registered(), ids=ids)
+def test_operation_is_completely_declared(spec: OperationSpec) -> None:
+    assert str(spec.title).strip(), f"{spec.name} has no title"
+    assert str(spec.doc).strip(), f"{spec.name} has no documentation text"
+    assert spec.category in CATEGORIES
+    assert all(kind in FEATURE_KINDS for kind in spec.applies_to)
+    assert spec.params.spec() is not None
+
+
+@pytest.mark.parametrize("spec", registered(), ids=ids)
+def test_non_deterministic_operations_use_a_seed(spec: OperationSpec) -> None:
+    if spec.deterministic:
+        return
+    source = inspect.getsource(spec.fn)
+    assert "seed" in source, f"{spec.name} is marked non-deterministic but never reads ctx.seed"
+
+
+@pytest.mark.parametrize("spec", registered(), ids=ids)
+def test_every_operation_has_a_test(spec: OperationSpec) -> None:
+    """A new operation without a test is not finished (AGENTS.md, checklist)."""
+    mentions = [
+        path.name
+        for path in TESTS_DIR.rglob("test_*.py")
+        if path.name != Path(__file__).name and spec.name in path.read_text(encoding="utf-8")
+    ]
+    assert mentions, f"no test mentions {spec.name}"
+
+
+def test_shortcuts_are_unique() -> None:
+    shortcuts = [spec.shortcut.casefold() for spec in registered() if spec.shortcut]
+    assert len(shortcuts) == len(set(shortcuts))
+
+
+def test_every_operation_reaches_every_surface() -> None:
+    names = {spec.name for spec in registered()}
+    assert {spec.name for section in menu_tree() for spec in section.entries} == names
+    assert {entry.name for entry in palette_entries()} == names
+    assert {command.name for command in cli_commands()} == names
+    assert {schema["name"] for schema in tool_schemas()} == names
+    text = documentation()
+    assert all(f"`{name}`" in text for name in names)
