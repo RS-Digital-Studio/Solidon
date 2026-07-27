@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from app.branding import APP_NAME, APP_VERSION, PROJECT_SUFFIX
+from app.branding import APP_NAME, APP_VERSION, DISTRIBUTION_NAME, PROJECT_SUFFIX
 from app.core.bootstrap import load_operations
 from app.core.errors import AppError, OperationCancelled
 from app.core.geom.mesh import read_mesh
@@ -280,7 +280,7 @@ def command_undo(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="p3d",
+        prog=DISTRIBUTION_NAME,
         description=f"{APP_NAME} {APP_VERSION}",
     )
     parser.add_argument("--debug", action="store_true", help=tr("Ausführliches Protokoll"))

@@ -18,6 +18,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any, Final
 
+from app.branding import DISTRIBUTION_NAME
 from app.core.log import get_logger
 
 _log = get_logger(__name__)
@@ -113,7 +114,7 @@ def requirements_of(distribution: metadata.Distribution) -> set[str]:
 
 def _direct_requirements(extras: Iterable[str]) -> set[str]:
     """Our own dependencies, including the runtime extras."""
-    own = metadata.distribution("3d-agent")
+    own = metadata.distribution(DISTRIBUTION_NAME)
     wanted = {normalise(entry) for entry in extras}
     names: set[str] = set()
     for requirement in own.requires or ():

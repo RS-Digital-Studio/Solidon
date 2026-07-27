@@ -15,6 +15,7 @@ from typing import Any, Literal, cast
 
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
+from app.branding import ENVIRONMENT_PREFIX
 from app.core.log import get_logger
 from app.core.scene import EvaluationResult
 from app.core.types import ObjectId, Profile
@@ -42,7 +43,7 @@ BED_COLOUR = "#5a6472"
 
 
 #: Switch for machines and test runs without a usable OpenGL context.
-HEADLESS_VARIABLE = "P3D_NO_VIEWPORT"
+HEADLESS_VARIABLE = f"{ENVIRONMENT_PREFIX}_NO_VIEWPORT"
 
 
 def _available() -> bool:

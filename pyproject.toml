@@ -3,12 +3,12 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-# Placeholder name until the product name is decided (Bauplan §37.1).
-name = "3d-agent"
+name = "formwerk"
 version = "0.0.1"
-description = "Desktop application for building, generating and editing printable 3D models"
+description = "Desktop application for building, generating and editing printable models"
 requires-python = ">=3.11"
-license = { text = "UNLICENSED" }
+license = { file = "LICENSE" }
+authors = [{ name = "RS Digital" }]
 dependencies = []
 
 [project.optional-dependencies]
@@ -36,13 +36,15 @@ dev = [
 ]
 
 [project.scripts]
-p3d = "app.cli.main:main"
+formwerk = "app.cli.main:main"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
 
 [tool.setuptools.package-data]
 "app.core.knowledge" = ["data/*.toml"]
+"app.core.knowledge.parts" = ["LICENSE"]
+"app.i18n" = ["locales/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

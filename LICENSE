@@ -1,0 +1,63 @@
+Formwerk — Lizenzbestimmungen
+=============================
+
+Copyright (c) 2026 RS Digital. Alle Rechte vorbehalten.
+
+Diese Software und ihr Quelltext sind urheberrechtlich geschützt. Ohne
+vorherige schriftliche Zustimmung von RS Digital ist es nicht gestattet, sie
+ganz oder in Teilen zu kopieren, zu verändern, zu übersetzen, zu verbreiten,
+öffentlich zugänglich zu machen, zu unterlizenzieren oder zu verkaufen.
+
+Erlaubt bleibt, was das Urheberrecht zwingend gestattet — insbesondere die
+Nutzung durch rechtmäßige Erwerber im vertraglich vereinbarten Umfang.
+
+Ausnahmen
+---------
+
+Zwei Teile dieses Repositorys stehen ausdrücklich unter der MIT-Lizenz, weil
+ihr Inhalt in den Ergebnissen der Nutzer landet:
+
+* die Bausteinbibliothek in `app/core/knowledge/parts/` — siehe die dortige
+  Datei `LICENSE`;
+* der Referenzkorpus in `tests/data/` — siehe die dortige Datei `LICENSE`.
+
+Fremde Bestandteile
+-------------------
+
+Die verwendeten Fremdbibliotheken stehen unter ihren eigenen Lizenzen; die
+Übersicht führt `THIRD-PARTY-NOTICES.md`. Insbesondere wird PySide6 (LGPL-3.0)
+dynamisch gebunden und unverändert weitergegeben. OpenSCAD und Slicer stehen
+unter der GPL und werden ausschließlich als extern installierte Programme
+aufgerufen, niemals mitgeliefert.
+
+Keine Gewährleistung
+--------------------
+
+Die Software wird ohne jede Gewährleistung bereitgestellt, soweit gesetzlich
+zulässig. RS Digital haftet nicht für Schäden, die aus der Nutzung entstehen —
+insbesondere nicht für Materialkosten, Druckzeit oder Folgeschäden fehlerhafter
+Modelle.
+
+
+English summary
+===============
+
+Copyright (c) 2026 RS Digital. All rights reserved.
+
+This software and its source code are proprietary. Copying, modifying,
+translating, distributing, publishing, sublicensing or selling it, in whole or
+in part, requires prior written permission from RS Digital, except where
+mandatory law provides otherwise.
+
+Two parts of this repository are licensed under the MIT licence instead,
+because their content ends up in the users' own results: the part library in
+`app/core/knowledge/parts/` and the reference corpus in `tests/data/`. Each
+carries its own LICENSE file.
+
+Third-party components keep their own licences; see `THIRD-PARTY-NOTICES.md`.
+PySide6 (LGPL-3.0) is linked dynamically and shipped unmodified. OpenSCAD and
+slicers are GPL software and are only ever invoked as separately installed
+programs.
+
+The software is provided without warranty of any kind, to the extent permitted
+by law.
