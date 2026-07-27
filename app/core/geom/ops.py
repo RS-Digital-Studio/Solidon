@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
+from app.core.geom.boolean import BooleanKind, boolean
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.repair import repair
 from app.core.geom.transform import (
@@ -178,6 +179,64 @@ def repair_object(ctx: OpContext) -> OpResult:
         outputs=[dataclasses.replace(source, mesh=result.mesh)],
         findings=result.findings,
     )
+
+
+@op_params
+class BooleanParams(BaseParams):
+    pass
+
+
+def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult:
+    """Two bodies in, one out — with the fallback chain behind it (§17.2)."""
+    first, second = (as_mesh_data(entry.mesh) for entry in ctx.inputs[:2])
+    outcome = boolean(kind, [first, second], quality=ctx.quality, seed=seed)
+    return OpResult(
+        outputs=[dataclasses.replace(ctx.inputs[0], mesh=outcome.mesh)],
+        solver=outcome.solver,
+        findings=outcome.findings,
+    )
+
+
+@register_op(
+    name="union_objects",
+    title=_("Vereinigen"),
+    category="boolean",
+    params=BooleanParams,
+    consumes=2,
+    produces=1,
+    deterministic=False,
+    doc=_("Verschmilzt zwei Objekte zu einem."),
+)
+def union_objects(ctx: OpContext) -> OpResult:
+    return _boolean_op(ctx, "union", ctx.seed)
+
+
+@register_op(
+    name="subtract_objects",
+    title=_("Abziehen"),
+    category="boolean",
+    params=BooleanParams,
+    consumes=2,
+    produces=1,
+    deterministic=False,
+    doc=_("Zieht das zweite Objekt vom ersten ab."),
+)
+def subtract_objects(ctx: OpContext) -> OpResult:
+    return _boolean_op(ctx, "difference", ctx.seed)
+
+
+@register_op(
+    name="intersect_objects",
+    title=_("Schnittmenge"),
+    category="boolean",
+    params=BooleanParams,
+    consumes=2,
+    produces=1,
+    deterministic=False,
+    doc=_("Behält nur, was beide Objekte gemeinsam haben."),
+)
+def intersect_objects(ctx: OpContext) -> OpResult:
+    return _boolean_op(ctx, "intersection", ctx.seed)
 
 
 @op_params

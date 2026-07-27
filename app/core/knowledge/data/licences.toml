@@ -46,6 +46,10 @@ scipy = { licence = "BSD-3-Clause", note = "graph engine and assignment solver" 
 shapely = { licence = "BSD-3-Clause", note = "polygons for the capped section cut; bundles GEOS (LGPL-2.1)" }
 networkx = { licence = "BSD-3-Clause", note = "contour hierarchy when closing a cut face" }
 rtree = { licence = "MIT", note = "spatial index for the same hierarchy; libspatialindex is MIT" }
+scikit-image = { licence = "BSD-3-Clause", note = "marching cubes for the voxel fallback stage" }
+lazy_loader = { licence = "BSD-3-Clause", note = "brought in by scikit-image" }
+imageio = { licence = "BSD-2-Clause", note = "brought in by scikit-image" }
+tifffile = { licence = "BSD-3-Clause", note = "brought in by scikit-image" }
 PySide6 = { licence = "LGPL-3.0", note = "dynamically linked, §36" }
 PySide6-Essentials = { licence = "LGPL-3.0" }
 PySide6-Addons = { licence = "LGPL-3.0" }

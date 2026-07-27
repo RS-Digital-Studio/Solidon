@@ -47,6 +47,7 @@ from app.core.types import (
     Report,
     Scene,
     SceneObject,
+    SolverInfo,
     SourceAccess,
 )
 from app.i18n import _
@@ -62,6 +63,9 @@ class EvaluationResult:
     completed: tuple[OpId, ...] = ()
     stopped_at: OpId | None = None
     object_hashes: Mapping[ObjectId, str] = field(default_factory=dict)
+    solvers: Mapping[OpId, SolverInfo] = field(default_factory=dict)
+    """Which fallback stage carried which operation (§17.2). The caller writes
+    these back into the stack, so the same file recomputes the same way."""
 
     @property
     def complete(self) -> bool:
@@ -103,6 +107,7 @@ def evaluate(
     findings: list[Finding] = []
     completed: list[OpId] = []
     pending: list[tuple[str, CachedResult]] = []
+    solvers: dict[OpId, SolverInfo] = {}
     stopped_at: OpId | None = None
 
     for position, operation in enumerate(operations):
@@ -189,6 +194,8 @@ def evaluate(
             )
             for entry in result.findings
         )
+        if result.solver is not None:
+            solvers[operation.id] = result.solver
         completed.append(operation.id)
         if cached is None:
             pending.append((key, result))
@@ -214,6 +221,7 @@ def evaluate(
         completed=tuple(completed),
         stopped_at=stopped_at,
         object_hashes=hashes,
+        solvers=solvers,
     )
 
 

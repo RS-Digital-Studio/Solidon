@@ -275,6 +275,9 @@ class Session(QObject):
 
     def _on_finished(self, result: Any) -> None:
         self.last_result = result
+        # §17.2: keep the fallback stage that carried each operation, so the file
+        # recomputes the same way tomorrow.
+        self.history.record_solvers(result.solvers)
         self.sceneChanged.emit(result)
 
     def _on_failed(self, error: Any) -> None:

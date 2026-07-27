@@ -26,6 +26,8 @@ geom = [
   # with a hole cannot be closed. BSD-3 and MIT.
   "networkx>=3.0",
   "rtree>=1.2",
+  # Marching cubes for the voxel stage of the boolean fallback chain (§17.2). BSD-3.
+  "scikit-image>=0.24",
 ]
 # Desktop shell. PySide6 is LGPL and must stay dynamically linked (§36).
 ui = [

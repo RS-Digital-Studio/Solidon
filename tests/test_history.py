@@ -189,16 +189,23 @@ def test_the_declared_object_count_is_enforced(history: History) -> None:
     assert caught.value.constraint == "consumes"
 
 
-def test_a_random_operation_needs_a_stored_seed(history: History) -> None:
+def test_a_random_operation_always_ends_up_with_a_stored_seed(history: History) -> None:
+    """§11.3: what matters is that the seed is kept, not who thought of it."""
     object_id = create(history)
-    with pytest.raises(ValidationError) as caught:
-        history.apply(_("Verteilen"), [OperationDraft(op="scatter", inputs=(object_id,))])
-    assert caught.value.constraint == "seed"
+    history.apply(_("Verteilen"), [OperationDraft(op="scatter", inputs=(object_id,))])
+    drawn = history.operations[-1].seed
+    assert drawn is not None, "a randomised operation never runs without a stored seed"
 
     history.apply(
         _("Verteilen"), [OperationDraft(op="scatter", inputs=(object_id,), seed=20260727)]
     )
-    assert history.operations[-1].seed == 20260727
+    assert history.operations[-1].seed == 20260727, "a given seed is kept as it is"
+
+
+def test_a_deterministic_operation_gets_no_seed(history: History) -> None:
+    object_id = create(history)
+    history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=(object_id,))])
+    assert history.operations[-1].seed is None
 
 
 def test_unknown_parameters_and_broken_expressions_are_caught_early(history: History) -> None:

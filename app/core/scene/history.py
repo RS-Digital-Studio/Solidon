@@ -14,8 +14,10 @@ which is what :attr:`History.discardable` is for.
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import re
+import secrets
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
@@ -152,13 +154,12 @@ class History:
                 constraint="consumes",
                 values={"op": draft.op, "expected": spec.consumes, "given": len(draft.inputs)},
             )
-        if draft.seed is None and spec.requires_seed:
-            raise ValidationError(
-                field="seed",
-                detail=_("Diese Operation braucht einen gespeicherten Startwert."),
-                constraint="seed",
-                values={"op": draft.op},
-            )
+        # §11.3: a randomised procedure carries a stored seed. Where the caller
+        # did not bring one, one is drawn here — what matters is that it is kept,
+        # not who thought of it.
+        seed = draft.seed
+        if seed is None and spec.requires_seed:
+            seed = secrets.randbelow(2**31)
 
         outputs = draft.outputs if draft.outputs is not None else self._outputs_for(spec, draft)
         return Operation(
@@ -167,8 +168,22 @@ class History:
             inputs=tuple(draft.inputs),
             outputs=tuple(outputs),
             params=dict(draft.params),
-            seed=draft.seed,
+            seed=seed,
         )
+
+    def record_solvers(self, solvers: Mapping[OpId, Any]) -> None:
+        """Write the fallback stage that carried each operation into the stack (§17.2).
+
+        Evaluation is a pure function and does not touch the document; this is
+        where its findings about solver stages are kept, so reopening the file
+        recomputes the same way.
+        """
+        if not solvers:
+            return
+        for index, entry in enumerate(self.document.ops):
+            solver = solvers.get(entry.id)
+            if solver is not None and entry.solver != solver:
+                self.document.ops[index] = dataclasses.replace(entry, solver=solver)
 
     def _outputs_for(self, spec: Any, draft: OperationDraft) -> tuple[ObjectId, ...]:
         """Same count in and out means the objects stay themselves; otherwise new ids."""
