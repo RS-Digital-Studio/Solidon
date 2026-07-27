@@ -1,0 +1,54 @@
+# Dependency licence policy (Bauplan §36).
+#
+# Every dependency is checked against this file; a package with a licence that is
+# not cleared here fails the check. New dependency = entry here first
+# (AGENTS.md rule 22, checklist "neue Abhängigkeit").
+#
+# The decisive rule: no GPL. PySide6 is LGPL and may be shipped with a closed
+# application as long as it stays dynamically linked. OpenSCAD and the slicers
+# are GPL and are therefore only ever called as installed external programs,
+# never bundled.
+
+[policy]
+# Licence identifiers that are fine. Matched case-insensitively as substrings.
+allowed = [
+  "MIT",
+  "BSD",
+  "Apache",
+  "ISC",
+  "Python Software Foundation",
+  "PSF",
+  "MPL",
+  "Mozilla",
+  "Boost",
+  "Zlib",
+  "CC0",
+  "Unlicense",
+  "LGPL",
+  "Historical Permission Notice",
+  "HPND",
+]
+
+# Licence identifiers that end the discussion. Checked before `allowed`, so
+# "LGPL" wins over "GPL" only because it is matched as a whole word first.
+forbidden = ["GPL-2", "GPL-3", "GPLv2", "GPLv3", "AGPL", "General Public License"]
+
+# Packages that must never be installed, whatever their metadata says (§36).
+banned_packages = ["pymeshlab", "PyQt5", "PyQt6", "PyQt5-Qt5", "PyQt6-Qt6"]
+
+# Distributions whose metadata does not name a licence machine-readably.
+# Checked by hand, source noted, so the check does not become a rubber stamp.
+[known]
+manifold3d = { licence = "Apache-2.0", note = "kernel of the part library" }
+trimesh = { licence = "MIT", note = "mesh IO and repair" }
+numpy = { licence = "BSD-3-Clause" }
+scipy = { licence = "BSD-3-Clause", note = "graph engine and assignment solver" }
+PySide6 = { licence = "LGPL-3.0", note = "dynamically linked, §36" }
+PySide6-Essentials = { licence = "LGPL-3.0" }
+PySide6-Addons = { licence = "LGPL-3.0" }
+shiboken6 = { licence = "LGPL-3.0" }
+pyvista = { licence = "MIT" }
+pyvistaqt = { licence = "MIT" }
+vtk = { licence = "BSD-3-Clause" }
+matplotlib = { licence = "PSF-based", note = "matplotlib licence, BSD-compatible" }
+pillow = { licence = "MIT-CMU", note = "HPND, permissive" }
