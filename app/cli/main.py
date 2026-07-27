@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -44,13 +45,34 @@ _PARAM_TYPES: dict[str, Any] = {"float": float, "int": int, "str": str, "enum": 
 # --- context implementations ----------------------------------------------------
 
 
-def terminal_progress(fraction: float, text: str) -> None:
-    """One line that overwrites itself; silent below the noticeable threshold (§2.8)."""
-    if not text:
-        sys.stderr.write("\r" + " " * 60 + "\r")
-        return
-    sys.stderr.write(f"\r{fraction * 100:3.0f}%  {text[:50]:<50}")
-    sys.stderr.flush()
+class TerminalProgress:
+    """One line that overwrites itself, and nothing at all below 0.2 s (§2.8).
+
+    Short runs stay quiet: a flicker of progress for something that took a tenth
+    of a second is noise, not feedback.
+    """
+
+    def __init__(self, delay: float = 0.2) -> None:
+        self.delay = delay
+        self.started: float | None = None
+        self.shown = False
+
+    def __call__(self, fraction: float, text: str) -> None:
+        now = time.monotonic()
+        if self.started is None:
+            self.started = now
+        if not text:
+            if self.shown:
+                sys.stderr.write("\r" + " " * 60 + "\r")
+                sys.stderr.flush()
+                self.shown = False
+            self.started = None
+            return
+        if now - self.started < self.delay:
+            return
+        sys.stderr.write(f"\r{fraction * 100:3.0f}%  {text[:50]:<50}")
+        sys.stderr.flush()
+        self.shown = True
 
 
 def terminal_ask(question: str, choices: list[str]) -> str:
@@ -84,7 +106,7 @@ def run_evaluation(project: Project, path: Path, quiet: bool = False) -> Any:
     return evaluate(
         project.document,
         profile_of(project),
-        progress=(lambda fraction, text: None) if quiet else terminal_progress,
+        progress=(lambda fraction, text: None) if quiet else TerminalProgress(),
         ask=terminal_ask,
         sources=ProjectSources(project, base_dir=path.parent),
     )
