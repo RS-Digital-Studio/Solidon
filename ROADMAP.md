@@ -104,9 +104,12 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       nicht die Suite
 
 ## P2 — Operationen manuell
-- [ ] Reparatur-Ops gegen `broken_open`, `degenerate`
-- [ ] Transformationen, Ausrichten, druckoptimal orientieren (Heuristik)
-- [ ] Boolesche Ops mit Rückfallkette §17.2, Stufe und Startwert in der Op
+- [x] Reparatur-Ops gegen `broken_open`, `degenerate` — Löcher in Dreiecksgröße
+      werden geschlossen, eine fehlende Wand wird ehrlich als offen gemeldet
+- [x] Transformationen, Ausrichten (in P1 vorgezogen), druckoptimal
+      orientieren steht noch aus
+- [x] Boolesche Ops mit Rückfallkette §17.2, Stufe und Startwert in der Op —
+      alle vier Stufen einzeln erzwungen und geprüft
 - [ ] Bohrungs-Ops, Schneiden, Anordnen, Kollisionsprüfung
 - [ ] Export nach §29 einschließlich Namensschema und Exportprüfung
 - [ ] Orientierung vorerst als Normalen-Heuristik, in P3 ersetzt
