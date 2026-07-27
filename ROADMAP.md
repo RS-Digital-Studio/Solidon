@@ -58,21 +58,26 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Alle Dateien selbst erzeugt oder frei lizenziert (`make_corpus.py`)
 
 ### Oberfläche
-- [ ] Grundfenster nach §2.5, drei Zonen, rechter Bereich ausblendbar
-- [ ] Viewport (Grundnavigation, drei Schemata §2.9)
-- [ ] Objektbaum, Parameterleiste, Verlauf
-- [ ] Statusleiste mit Maßen, Auswahl, Fortschritt, Abbrechen
-- [ ] Startbildschirm mit Ablagefeld und zuletzt geöffneten Projekten (§2.3)
-- [ ] Ziehen und Ablegen auf Fenster, Viewport, Objektbaum
-- [ ] Übersetzungsgerüst, deutsche und englische Fassung
+- [x] Grundfenster nach §2.5, drei Zonen, rechter Bereich ausblendbar
+- [x] Viewport (Grundnavigation, drei Schemata §2.9)
+- [x] Objektbaum, Parameterleiste, Verlauf
+- [x] Statusleiste mit Maßen, Auswahl, Fortschritt, Abbrechen
+- [x] Startbildschirm mit Ablagefeld und zuletzt geöffneten Projekten (§2.3)
+- [x] Ziehen und Ablegen auf Fenster, Viewport, Objektbaum
+- [x] Übersetzungsgerüst, deutsche und englische Fassung
 
 ### CLI
 - [x] Befehle aus dem Register, `ask` als Abfrage, `progress` als Zeile
 
 ### Abschluss P0
-- [ ] Lizenzprüfung gegen Freigabeliste (§36)
-- [ ] Lizenzentscheidung getroffen, Namensplatzhalter an einer Stelle (§37.1)
-- [ ] Alle Abnahmekriterien P0 aus §40 grün
+- [x] Lizenzprüfung gegen Freigabeliste (§36) — `tests/test_licences.py`,
+      Freigabeliste in `app/core/knowledge/data/licences.toml`,
+      Drittlizenzen in `THIRD-PARTY-NOTICES.md`
+- [ ] Lizenzentscheidung getroffen, Namensplatzhalter an einer Stelle (§37.1) —
+      Platzhalter steht allein in `app/branding.py`, Entscheidung offen
+- [x] Alle Abnahmekriterien P0 aus §40 grün — `tests/test_acceptance_p0.py`
+      (Kontextmenü am Feature erst mit den Bohrungs-Ops in P2/P3 belegbar,
+      Objekt-Kontextmenü steht)
 
 ---
 
