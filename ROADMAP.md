@@ -73,8 +73,9 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Lizenzprüfung gegen Freigabeliste (§36) — `tests/test_licences.py`,
       Freigabeliste in `app/core/knowledge/data/licences.toml`,
       Drittlizenzen in `THIRD-PARTY-NOTICES.md`
-- [ ] Lizenzentscheidung getroffen, Namensplatzhalter an einer Stelle (§37.1) —
-      Platzhalter steht allein in `app/branding.py`, Entscheidung offen
+- [x] Lizenzentscheidung getroffen, Name entschieden (§37.1) — **Formwerk**,
+      proprietär (RS Digital, 2026), Bausteinbibliothek und Testkorpus MIT;
+      alles Namensbezogene steht in `app/branding.py`
 - [x] Alle Abnahmekriterien P0 aus §40 grün — `tests/test_acceptance_p0.py`
       (Kontextmenü am Feature erst mit den Bohrungs-Ops in P2/P3 belegbar,
       Objekt-Kontextmenü steht)
