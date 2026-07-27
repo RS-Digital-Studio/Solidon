@@ -41,10 +41,10 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Test: alles außerhalb der Grammatik wird abgelehnt
 
 ### Projektdatei
-- [ ] Container `.p3d` nach §16.1
-- [ ] `format_version`, Migrationsgerüst, erste Beispieldatei
-- [ ] Prüfsummen, keine absoluten Pfade
-- [ ] Autosave und Absturzwiederherstellung (§38)
+- [x] Container `.p3d` nach §16.1
+- [x] `format_version`, Migrationsgerüst, erste Beispieldatei
+- [x] Prüfsummen, keine absoluten Pfade
+- [x] Autosave und Absturzwiederherstellung (§38)
 
 ### Eingangsstufe
 - [ ] Op `load` mit den sechs Schritten aus §17.1
