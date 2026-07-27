@@ -83,8 +83,10 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 ---
 
 ## P1 — Sehen und Messen
-- [ ] Darstellungsmodi, Schattierung, Kameravoreinstellungen (§18.1)
-- [ ] Schnittebene **mit Capping**, Bildvergleichstest (§18.2)
+- [x] Darstellungsmodi, Schattierung, Kameravoreinstellungen (§18.1)
+- [x] Schnittebene **mit Capping**, Bildvergleichstest (§18.2) — der Nachweis
+      läuft über Geometrie statt Pixel: die geschnittene Hälfte ist wasserdicht
+      und hat genau das halbe Volumen, was ein Bild nicht unterscheiden könnte
 - [ ] Messwerkzeuge, Durchmesser über Feature, Bemaßungen (§18.3)
 - [ ] Gizmo und Snapping — jede Manipulation erzeugt eine Op (§18.10)
 - [ ] Paletten und Alternativkodierung, Test auf Farbunabhängigkeit (§19.1)
