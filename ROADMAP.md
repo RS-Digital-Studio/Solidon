@@ -95,10 +95,13 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       Transformations-Ops aus P2 sind dafür vorgezogen, ein Zug wird zerlegt
       und als **eine Transaktion** eingetragen. Fang auf Fläche und Bohrungsachse
       folgt mit der Feature-Erkennung in P3
-- [ ] Paletten und Alternativkodierung, Test auf Farbunabhängigkeit (§19.1)
+- [x] Paletten und Alternativkodierung, Test auf Farbunabhängigkeit (§19.1)
 - [x] Tastaturnavigation, Befehlspalette (§19.2)
 - [x] Helles und dunkles Thema, HiDPI (§19.3)
-- [ ] Leistungsziele Viewport (§31)
+- [x] Leistungsziele Viewport (§31) — `tests/test_performance.py` misst gegen
+      die absoluten Ziele und gegen den letzten Lauf auf derselben Maschine
+      (Regressionsschwelle 25 %); die Bildrate im Viewport selbst misst VTK,
+      nicht die Suite
 
 ## P2 — Operationen manuell
 - [ ] Reparatur-Ops gegen `broken_open`, `degenerate`
