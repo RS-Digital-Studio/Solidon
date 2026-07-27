@@ -17,6 +17,7 @@ from typing import Any
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent, QKeySequence
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QLabel,
     QMainWindow,
@@ -38,6 +39,7 @@ from app.core.registry import REGISTRY, OperationSpec, menu_tree
 from app.core.scene import EvaluationResult, OperationDraft
 from app.core.scene.project import find_recovery
 from app.i18n import tr
+from app.ui.command_palette import CommandPalette
 from app.ui.dialogs import AboutDialog, AskDialog, confirm_discard, show_error
 from app.ui.op_dialog import OperationDialog
 from app.ui.panels import (
@@ -50,10 +52,11 @@ from app.ui.panels import (
     collapsible,
     describe_selection,
 )
-from app.ui.section_bar import SectionBar
+from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.start_screen import StartScreen, accepted_path
+from app.ui.theme import apply_theme
 from app.ui.viewport import Viewport
 
 _log = get_logger(__name__)
@@ -106,8 +109,12 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(collapsible(tr("Verlauf"), self.history_panel), stretch=1)
 
         self.viewport = Viewport(self)
+        self.viewport.measurementTaken.connect(self._on_measurement)
         self.section_bar = SectionBar(self)
         self.section_bar.sectionChanged.connect(self._on_section)
+        self.measure_bar = MeasureBar(self)
+        self.measure_bar.modeChanged.connect(self.viewport.set_measure_mode)
+        self.measure_bar.clearRequested.connect(self.viewport.clear_measurements)
 
         middle = QWidget(self)
         middle_layout = QVBoxLayout(middle)
@@ -115,6 +122,7 @@ class MainWindow(QMainWindow):
         middle_layout.setSpacing(0)
         middle_layout.addWidget(self.viewport, stretch=1)
         middle_layout.addWidget(self.section_bar)
+        middle_layout.addWidget(self.measure_bar)
 
         self.report = ReportPanel(self)
         self.chat = ChatPlaceholder(self)
@@ -180,6 +188,10 @@ class MainWindow(QMainWindow):
         self._add_action(file_menu, tr("Beenden"), QKeySequence.StandardKey.Quit, self.close)
 
         edit_menu = self.menuBar().addMenu(tr("Bearbeiten"))
+        self._add_action(
+            edit_menu, tr("Befehlspalette …"), "Ctrl+Shift+P", self.action_command_palette
+        )
+        edit_menu.addSeparator()
         self.undo_action = self._add_action(
             edit_menu, tr("Rückgängig"), QKeySequence.StandardKey.Undo, self.action_undo
         )
@@ -238,17 +250,25 @@ class MainWindow(QMainWindow):
                 lambda checked=False, key=projection: self.viewport.set_projection(key),
             )
         view_menu.addSeparator()
-        for name, label in (
-            ("iso", tr("Isometrisch")),
-            ("front", tr("Vorne")),
-            ("back", tr("Hinten")),
-            ("left", tr("Links")),
-            ("right", tr("Rechts")),
-            ("top", tr("Oben")),
-            ("bottom", tr("Unten")),
+        for name, label, shortcut in (
+            ("iso", tr("Isometrisch"), "Ctrl+0"),
+            ("front", tr("Vorne"), "Ctrl+1"),
+            ("back", tr("Hinten"), "Ctrl+2"),
+            ("left", tr("Links"), "Ctrl+3"),
+            ("right", tr("Rechts"), "Ctrl+4"),
+            ("top", tr("Oben"), "Ctrl+5"),
+            ("bottom", tr("Unten"), "Ctrl+6"),
         ):
             self._add_action(
-                view_menu, label, None, lambda checked=False, key=name: self.viewport.view_from(key)
+                view_menu,
+                label,
+                shortcut,
+                lambda checked=False, key=name: self.viewport.view_from(key),
+            )
+        view_menu.addSeparator()
+        for theme, label in (("dark", tr("Dunkles Thema")), ("light", tr("Helles Thema"))):
+            self._add_action(
+                view_menu, label, None, lambda checked=False, key=theme: self.action_theme(key)
             )
         view_menu.addSeparator()
         for scheme, label in (
@@ -370,9 +390,31 @@ class MainWindow(QMainWindow):
     def action_about(self) -> None:
         AboutDialog(self).exec()
 
+    def action_command_palette(self) -> None:
+        """One key, everything from the registry — and the shortcuts get learned (§2.6)."""
+        palette = CommandPalette(parent=self)
+        if palette.exec() != CommandPalette.DialogCode.Accepted:
+            return
+        name = palette.chosen()
+        if name:
+            self.run_operation(REGISTRY.get(name))
+
+    def _on_measurement(self, measurement: Any) -> None:
+        self.measure_bar.show_measurement(
+            measurement.kind, measurement.value, len(self.viewport.measurements)
+        )
+
     def _on_section(self, plane: object, thickness: object) -> None:
         self.viewport.set_section(plane, thickness)  # type: ignore[arg-type]
         self.section_bar.show_capping_state(self.viewport.section_uncapped)
+
+    def action_theme(self, theme: str) -> None:
+        application = QApplication.instance()
+        if application is not None:
+            apply_theme(application, theme)  # type: ignore[arg-type]
+        self.viewport.set_theme(theme)
+        self.settings.theme = theme
+        save_settings(self.settings)
 
     def action_navigation(self, scheme: str) -> None:
         self.viewport.set_navigation(scheme)  # type: ignore[arg-type]

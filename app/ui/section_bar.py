@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSlider,
     QWidget,
 )
@@ -25,6 +26,42 @@ from app.i18n import tr
 
 #: The slider works in tenths of a millimetre; EPS_DISPLAY is finer than any drag.
 STEPS_PER_MM = 10
+
+
+class MeasureBar(QWidget):
+    """Which measuring tool is active, and the way to clear dimensions (§18.3)."""
+
+    modeChanged = Signal(str)
+    clearRequested = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+
+        self.mode = QComboBox(self)
+        self.mode.addItem(tr("Nicht messen"), userData="off")
+        self.mode.addItem(tr("Abstand messen"), userData="distance")
+        self.mode.addItem(tr("Wandstärke messen"), userData="thickness")
+        self.mode.currentIndexChanged.connect(
+            lambda _index: self.modeChanged.emit(self.mode.currentData())
+        )
+
+        self.readout = QLabel("", self)
+        clear = QPushButton(tr("Bemaßungen löschen"), self)
+        clear.clicked.connect(self.clearRequested)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 2, 6, 2)
+        layout.addWidget(self.mode)
+        layout.addWidget(self.readout, stretch=1)
+        layout.addWidget(clear)
+
+    def show_measurement(self, kind: str, value: float, count: int) -> None:
+        name = {
+            "distance": tr("Abstand"),
+            "thickness": tr("Wandstärke"),
+            "angle": tr("Winkel"),
+        }.get(kind, kind)
+        self.readout.setText(f"{name}: {format_length(value)}   ({count})")
 
 
 class SectionBar(QWidget):

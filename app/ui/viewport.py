@@ -13,14 +13,17 @@ from __future__ import annotations
 import os
 from typing import Any, Literal, cast
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from app.branding import ENVIRONMENT_PREFIX
+from app.core.geom.measure import Measurement, MeasurementList, distance, snap, wall_thickness
 from app.core.geom.section import SectionPlane, cut
 from app.core.log import get_logger
 from app.core.scene import EvaluationResult
-from app.core.types import ObjectId, Profile
+from app.core.types import ObjectId, Profile, Vec3
 from app.i18n import tr
+from app.ui.theme import viewport_colours
 
 _log = get_logger(__name__)
 
@@ -81,8 +84,16 @@ def _available() -> bool:
     return True
 
 
+MeasureMode = Literal["off", "distance", "thickness"]
+
+MEASURE_COLOUR = "#f0a54a"
+
+
 class Viewport(QWidget):
     """The 3D view, or a plain hint when VTK is not available."""
+
+    measurementTaken = Signal(object)
+    """A finished measurement — carries a ``Measurement``."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -101,6 +112,12 @@ class Viewport(QWidget):
         self._result: EvaluationResult | None = None
         self._uncapped = False
         """True when a cut could not be closed because the body is open (§18.2)."""
+        self._object_colour = OBJECT_COLOUR
+        self._bed_colour = BED_COLOUR
+        self._measure_mode: MeasureMode = "off"
+        self._pending_point: Vec3 | None = None
+        self.measurements = MeasurementList()
+        self._measure_actors: list[Any] = []
 
         if not _available():
             self._layout.addWidget(
@@ -113,8 +130,8 @@ class Viewport(QWidget):
         # Typed as Any: pyvista wraps its plotter methods, so annotations do not survive.
         self.plotter = cast(Any, QtInteractor(self))
         self._layout.addWidget(self.plotter.interactor)
-        self.plotter.set_background("#20242b", top="#2c323c")
         self.plotter.add_axes()
+        self.set_theme("dark")
         self.set_navigation("slicer")
 
     # --- scene ------------------------------------------------------------------
@@ -149,7 +166,7 @@ class Viewport(QWidget):
             surface = pv.PolyData(np.asarray(raw.vertices, dtype=float), faces)
             actor = self.plotter.add_mesh(
                 surface,
-                color=OBJECT_COLOUR,
+                color=self._object_colour,
                 smooth_shading=self._shading == "smooth",
                 backface_params={"color": BACKFACE_COLOUR},
                 name=f"object:{object_id}",
@@ -179,7 +196,7 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
         for identifier, actor in self._actors.items():
-            actor.prop.color = SELECTED_COLOUR if identifier == object_id else OBJECT_COLOUR
+            actor.prop.color = SELECTED_COLOUR if identifier == object_id else self._object_colour
         self.plotter.render()
 
     def show_build_volume(self, profile: Profile) -> None:
@@ -203,14 +220,19 @@ class Viewport(QWidget):
         )
         self._frame_actors.append(
             self.plotter.add_mesh(
-                bed, color=BED_COLOUR, style="wireframe", opacity=0.35, name="bed", render=False
+                bed,
+                color=self._bed_colour,
+                style="wireframe",
+                opacity=0.35,
+                name="bed",
+                render=False,
             )
         )
         box = pv.Box(bounds=(-width / 2, width / 2, -depth / 2, depth / 2, 0.0, height))
         self._frame_actors.append(
             self.plotter.add_mesh(
                 box,
-                color=BED_COLOUR,
+                color=self._bed_colour,
                 style="wireframe",
                 opacity=0.5,
                 name="build_volume",
@@ -218,6 +240,18 @@ class Viewport(QWidget):
             )
         )
         self.plotter.render()
+
+    # --- theme (§19.3) ----------------------------------------------------------
+
+    def set_theme(self, theme: str) -> None:
+        """Background, body and bed colours follow the application theme."""
+        colours = viewport_colours(theme)  # type: ignore[arg-type]
+        self._object_colour = colours["object"]
+        self._bed_colour = colours["bed"]
+        if self.plotter is None:
+            return
+        self.plotter.set_background(colours["bottom"], top=colours["top"])
+        self.show_scene(self._result)
 
     # --- display (§18.1) --------------------------------------------------------
 
@@ -277,6 +311,114 @@ class Viewport(QWidget):
             lows.append(min(bounds.minimum))
             highs.append(max(bounds.maximum))
         return (min(lows), max(highs))
+
+    # --- measuring (§18.3) ------------------------------------------------------
+
+    def set_measure_mode(self, mode: MeasureMode) -> None:
+        """Point to point, wall thickness, or off. Clicks snap before they count."""
+        self._measure_mode = mode
+        self._pending_point = None
+        if self.plotter is None:
+            return
+        if mode == "off":
+            self.plotter.disable_picking()
+            return
+        self.plotter.enable_point_picking(
+            callback=self._on_picked,
+            show_message=False,
+            show_point=False,
+            left_clicking=True,
+            picker="point",
+        )
+
+    @property
+    def measure_mode(self) -> MeasureMode:
+        return self._measure_mode
+
+    def clear_measurements(self) -> None:
+        """Dimensions stay until they are deleted — this is the deleting (§18.3)."""
+        self.measurements.clear()
+        self._pending_point = None
+        self._redraw_measurements()
+
+    def _on_picked(self, point: Any) -> None:
+        picked = (float(point[0]), float(point[1]), float(point[2]))
+        mesh = self._nearest_mesh(picked)
+        if mesh is None:
+            return
+        snapped = snap(mesh, picked)
+
+        if self._measure_mode == "thickness":
+            thickness = wall_thickness(mesh, snapped.point)
+            if thickness is not None:
+                self._add(Measurement(kind="thickness", value=thickness, points=(snapped.point,)))
+            return
+
+        if self._pending_point is None:
+            self._pending_point = snapped.point
+            return
+        self._add(
+            Measurement(
+                kind="distance",
+                value=distance(self._pending_point, snapped.point),
+                points=(self._pending_point, snapped.point),
+            )
+        )
+        self._pending_point = None
+
+    def _add(self, measurement: Measurement) -> None:
+        self.measurements.add(measurement)
+        self._redraw_measurements()
+        self.measurementTaken.emit(measurement)
+
+    def _nearest_mesh(self, point: Vec3) -> Any:
+        """The object a click belongs to — the one whose bounds it is closest to."""
+        if self._result is None:
+            return None
+        best: Any = None
+        best_offset = float("inf")
+        for entry in self._result.scene.objects.values():
+            centre = entry.mesh.bounds.centre
+            offset = sum((a - b) ** 2 for a, b in zip(centre, point, strict=True))
+            if offset < best_offset:
+                best_offset = offset
+                best = entry.mesh
+        return best
+
+    def _redraw_measurements(self) -> None:
+        if self.plotter is None:
+            return
+        for actor in self._measure_actors:
+            self.plotter.remove_actor(actor, render=False)
+        self._measure_actors.clear()
+
+        import numpy as np
+
+        for index, entry in enumerate(self.measurements.entries):
+            if len(entry.points) == 2:
+                line = np.array([entry.points[0], entry.points[1]], dtype=float)
+                self._measure_actors.append(
+                    self.plotter.add_lines(
+                        line, color=MEASURE_COLOUR, width=2, name=f"measure:{index}"
+                    )
+                )
+            label = f"{entry.shown:g} {'mm' if entry.kind != 'angle' else 'grad'}"
+            anchor = np.array([entry.points[-1]], dtype=float) if entry.points else None
+            if anchor is not None:
+                self._measure_actors.append(
+                    self.plotter.add_point_labels(
+                        anchor,
+                        [label],
+                        text_color=MEASURE_COLOUR,
+                        font_size=12,
+                        show_points=True,
+                        point_color=MEASURE_COLOUR,
+                        point_size=8,
+                        name=f"measure_label:{index}",
+                        render=False,
+                    )
+                )
+        self.plotter.render()
 
     def reset_camera(self) -> None:
         if self.plotter is not None:

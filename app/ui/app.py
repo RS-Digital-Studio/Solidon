@@ -18,12 +18,14 @@ from app.i18n.catalog import install_language
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import load_settings
+from app.ui.theme import apply_theme, enable_hidpi
 
 _log = get_logger(__name__)
 
 
 def build_application(argv: list[str] | None = None) -> tuple[QApplication, MainWindow]:
     """Assemble application and window without starting the event loop."""
+    enable_hidpi()
     application = QApplication.instance() or QApplication(argv or sys.argv)
     application.setApplicationName(APP_NAME)
     application.setApplicationVersion(APP_VERSION)
@@ -33,9 +35,12 @@ def build_application(argv: list[str] | None = None) -> tuple[QApplication, Main
     install_language(settings.language)
     set_language(settings.language)
 
+    apply_theme(application, settings.theme)  # type: ignore[arg-type]
+
     session = Session()
     window = MainWindow(session, settings)
     window.viewport.set_navigation(settings.navigation)  # type: ignore[arg-type]
+    window.viewport.set_theme(settings.theme)
     return application, window  # type: ignore[return-value]
 
 
