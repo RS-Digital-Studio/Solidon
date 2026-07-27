@@ -11,6 +11,7 @@ import dataclasses
 from typing import cast
 
 from app.core.geom.mesh import as_mesh_data
+from app.core.geom.repair import repair
 from app.core.geom.transform import (
     AXIS_VECTORS,
     Anchor,
@@ -127,6 +128,56 @@ def scale_object(ctx: OpContext) -> OpResult:
     pivot = anchor_point(as_mesh_data(source.mesh), cast(Anchor, params.about))
     scaled = apply(as_mesh_data(source.mesh), scaling(factors, pivot))
     return OpResult(outputs=[dataclasses.replace(source, mesh=scaled)])
+
+
+@op_params
+class RepairParams(BaseParams):
+    fill_holes: bool = param(
+        title=_("Offene Stellen schließen"),
+        default=True,
+        doc=_("Schließt kleine Löcher. Fehlende Wände kann das nicht ersetzen."),
+    )
+    weld: bool = param(title=_("Punkte verschweißen"), default=True, placement="advanced")
+    degenerate: bool = param(
+        title=_("Entartete Dreiecke entfernen"), default=True, placement="advanced"
+    )
+    normals: bool = param(title=_("Normalen vereinheitlichen"), default=True, placement="advanced")
+    small_components: bool = param(
+        title=_("Kleinstteile löschen"),
+        default=False,
+        placement="advanced",
+        doc=_("Standardmäßig aus: gelöscht wird nur, was ausdrücklich gelöscht werden soll."),
+    )
+    self_intersections: bool = param(
+        title=_("Selbstdurchdringungen auflösen"), default=False, placement="advanced"
+    )
+
+
+@register_op(
+    name="repair",
+    title=_("Reparieren"),
+    category="repair",
+    params=RepairParams,
+    consumes=1,
+    produces=1,
+    doc=_("Schließt Löcher, entfernt entartete Dreiecke und richtet die Flächen aus."),
+)
+def repair_object(ctx: OpContext) -> OpResult:
+    params = cast(RepairParams, ctx.params)
+    source = ctx.inputs[0]
+    result = repair(
+        as_mesh_data(source.mesh),
+        weld=params.weld,
+        degenerate=params.degenerate,
+        normals=params.normals,
+        holes=params.fill_holes,
+        small_components=params.small_components,
+        self_intersections=params.self_intersections,
+    )
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=result.mesh)],
+        findings=result.findings,
+    )
 
 
 @op_params
