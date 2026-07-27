@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# Placeholder name until the product name is decided (Bauplan §37.1).
+name = "3d-agent"
+version = "0.0.1"
+description = "Desktop application for building, generating and editing printable 3D models"
+requires-python = ">=3.11"
+license = { text = "UNLICENSED" }
+dependencies = []
+
+[project.optional-dependencies]
+# Geometry kernels and mesh IO. Licence check runs against Bauplan §36.
+geom = [
+  "numpy>=1.26",
+  "trimesh>=4.4",
+  "manifold3d>=2.5",
+]
+# Desktop shell. PySide6 is LGPL and must stay dynamically linked (§36).
+ui = [
+  "PySide6>=6.7",
+  "pyvista>=0.44",
+]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+
+[project.scripts]
+p3d = "app.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.core.knowledge" = ["data/*.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error"]
+markers = [
+  "performance: measures against the budget in Bauplan §31",
+  "slow: takes noticeably longer than a unit test",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Bauplan §33.1 fixes the exception names. OutOfBuildVolume and OperationCancelled
+# are part of the contract, not a style choice.
+"app/core/errors.py" = ["N818"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["app"]
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["trimesh.*", "manifold3d.*", "pyvista.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Platform branches are unreachable on every platform except one — that is the point.
+module = ["app.core.paths"]
+warn_unreachable = false
