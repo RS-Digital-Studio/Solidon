@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import importlib
 import pkgutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -35,11 +36,26 @@ def test_every_core_module_imports() -> None:
         importlib.import_module(name)
 
 
-def test_no_qt_in_sys_modules_after_importing_core() -> None:
-    for name in core_modules():
-        importlib.import_module(name)
-    loaded = {module for module in sys.modules if module.split(".")[0] in FORBIDDEN_ROOTS}
-    assert not loaded, f"core pulled in a surface dependency: {sorted(loaded)}"
+def test_importing_core_pulls_in_no_surface_dependency() -> None:
+    """Run in a fresh process: in this one the surface tests have already imported Qt."""
+    script = (
+        "import importlib, pkgutil, sys\n"
+        "import app.core\n"
+        "for info in pkgutil.walk_packages(app.core.__path__, prefix='app.core.'):\n"
+        "    importlib.import_module(info.name)\n"
+        f"forbidden = {FORBIDDEN_ROOTS!r}\n"
+        "loaded = sorted(m for m in sys.modules if m.split('.')[0] in forbidden)\n"
+        "print(','.join(loaded))\n"
+    )
+    finished = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=Path(app.core.__file__).parents[2],
+        check=False,
+    )
+    assert finished.returncode == 0, finished.stderr
+    assert not finished.stdout.strip(), f"core pulled in a surface dependency: {finished.stdout}"
 
 
 def test_core_sources_never_reference_the_surface() -> None:

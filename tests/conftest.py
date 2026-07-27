@@ -7,10 +7,14 @@ the evaluation — and it keeps these tests honest about what they check.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 import pytest
+
+# Surface tests need a Qt platform that works without a screen.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from app.core.knowledge import profiles
 from app.core.types import BoundingBox, Document, Profile, SceneObject
