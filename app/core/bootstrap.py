@@ -11,7 +11,10 @@ from __future__ import annotations
 import importlib
 from typing import Final
 
-_OPERATION_MODULES: Final[tuple[str, ...]] = ("app.core.scene.ops",)
+_OPERATION_MODULES: Final[tuple[str, ...]] = (
+    "app.core.scene.ops",
+    "app.core.ingest.ops",
+)
 
 _loaded = False
 

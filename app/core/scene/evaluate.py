@@ -47,6 +47,7 @@ from app.core.types import (
     Report,
     Scene,
     SceneObject,
+    SourceAccess,
 )
 from app.i18n import _
 
@@ -86,6 +87,7 @@ def evaluate(
     cancelled: CancelToken | None = None,
     cache: ResultCache | None = None,
     registry: Registry | None = None,
+    sources: SourceAccess | None = None,
 ) -> EvaluationResult:
     """Compute the scene the document describes."""
     source = registry or REGISTRY
@@ -151,6 +153,7 @@ def evaluate(
                 progress=progress,
                 ask=ask,
                 cancelled=token,
+                sources=sources,
             )
             try:
                 produced = spec.fn(context)

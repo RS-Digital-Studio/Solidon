@@ -39,7 +39,7 @@ from app.core.scene.serialise import (
     report_from_data,
     report_to_data,
 )
-from app.core.types import Document, Report, SourceId
+from app.core.types import Document, Report, Source, SourceId
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -60,6 +60,60 @@ class Project:
     """Payload of the embedded sources, keyed like ``document.sources``."""
     report: Report = field(default_factory=Report)
     thumbnail: bytes | None = None
+
+
+@dataclass(slots=True)
+class ProjectSources:
+    """Read-only access to the sources of one project, for the ``load`` operation.
+
+    Embedded sources come out of the container, linked ones from a path relative
+    to the project folder — never an absolute one (§32).
+    """
+
+    project: Project
+    base_dir: Path | None = None
+
+    def describe(self, source_id: SourceId) -> Source:
+        source = self.project.document.sources.get(source_id)
+        if source is None:
+            raise ValidationError(
+                field="source",
+                detail=_("Diese Quelle gibt es im Projekt nicht."),
+                constraint="unknown_source",
+                values={"source": source_id},
+            )
+        return source
+
+    def read(self, source_id: SourceId) -> bytes:
+        source = self.describe(source_id)
+        if source.embedded:
+            payload = self.project.sources.get(source_id)
+            if payload is None:
+                raise ValidationError(
+                    field="source",
+                    detail=_("Der Inhalt dieser Quelle fehlt im Projekt."),
+                    constraint="missing_payload",
+                    values={"source": source_id},
+                )
+            return payload
+
+        _check_relative(source.path, "source.path")
+        if self.base_dir is None:
+            raise ValidationError(
+                field="source",
+                detail=_("Verknüpfte Quellen brauchen einen gespeicherten Projektordner."),
+                constraint="no_base_dir",
+                values={"source": source_id},
+            )
+        linked = self.base_dir / source.path
+        if not linked.is_file():
+            raise ValidationError(
+                field="source",
+                detail=_("Die verknüpfte Datei wurde nicht gefunden."),
+                constraint="missing_link",
+                values={"source": source_id, "path": source.path},
+            )
+        return linked.read_bytes()
 
 
 def new_project(printer: str = "", material: str = "") -> Project:
