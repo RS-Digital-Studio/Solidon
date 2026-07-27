@@ -37,6 +37,9 @@ python -m venv .venv
 | `.venv/Scripts/python.exe -m app.i18n.extract` | Übersetzungskataloge abgleichen |
 | `.venv/Scripts/python.exe tests/data/make_corpus.py` | Referenzkorpus erzeugen |
 
+Zum Starten per Doppelklick liegt unter `tools/start-formwerk.cmd` eine
+Verknüpfung; die gebaute Installationsdatei entsteht in Phase P8 (§37.2).
+
 Ohne funktionierendes OpenGL startet die Anwendung ohne 3D-Ansicht; erzwingen
 lässt sich das mit `FORMWERK_NO_VIEWPORT=1`.
 

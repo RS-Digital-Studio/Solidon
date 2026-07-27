@@ -50,6 +50,7 @@ from app.ui.panels import (
     collapsible,
     describe_selection,
 )
+from app.ui.section_bar import SectionBar
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.start_screen import StartScreen, accepted_path
@@ -105,6 +106,16 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(collapsible(tr("Verlauf"), self.history_panel), stretch=1)
 
         self.viewport = Viewport(self)
+        self.section_bar = SectionBar(self)
+        self.section_bar.sectionChanged.connect(self._on_section)
+
+        middle = QWidget(self)
+        middle_layout = QVBoxLayout(middle)
+        middle_layout.setContentsMargins(0, 0, 0, 0)
+        middle_layout.setSpacing(0)
+        middle_layout.addWidget(self.viewport, stretch=1)
+        middle_layout.addWidget(self.section_bar)
+
         self.report = ReportPanel(self)
         self.chat = ChatPlaceholder(self)
 
@@ -114,7 +125,7 @@ class MainWindow(QMainWindow):
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self.splitter.addWidget(left)
-        self.splitter.addWidget(self.viewport)
+        self.splitter.addWidget(middle)
         self.splitter.addWidget(self.right)
         self.splitter.setStretchFactor(0, 0)
         self.splitter.setStretchFactor(1, 1)
@@ -191,6 +202,41 @@ class MainWindow(QMainWindow):
 
         view_menu = self.menuBar().addMenu(tr("Ansicht"))
         self._add_action(view_menu, tr("Rechten Bereich zeigen"), "F9", self.action_toggle_right)
+        view_menu.addSeparator()
+
+        for mode, label, shortcut in (
+            ("solid", tr("Massiv"), "1"),
+            ("solid_edges", tr("Massiv mit Kanten"), "2"),
+            ("wireframe", tr("Drahtgitter"), "3"),
+            ("transparent", tr("Transparent"), "4"),
+        ):
+            self._add_action(
+                view_menu,
+                label,
+                shortcut,
+                lambda checked=False, key=mode: self.viewport.set_display_mode(key),
+            )
+        view_menu.addSeparator()
+        for shading, label in (
+            ("flat", tr("Flache Schattierung")),
+            ("smooth", tr("Weiche Schattierung")),
+        ):
+            self._add_action(
+                view_menu,
+                label,
+                None,
+                lambda checked=False, key=shading: self.viewport.set_shading(key),
+            )
+        for projection, label, shortcut in (
+            ("perspective", tr("Perspektivisch"), "5"),
+            ("orthographic", tr("Orthografisch"), "6"),
+        ):
+            self._add_action(
+                view_menu,
+                label,
+                shortcut,
+                lambda checked=False, key=projection: self.viewport.set_projection(key),
+            )
         view_menu.addSeparator()
         for name, label in (
             ("iso", tr("Isometrisch")),
@@ -324,6 +370,10 @@ class MainWindow(QMainWindow):
     def action_about(self) -> None:
         AboutDialog(self).exec()
 
+    def _on_section(self, plane: object, thickness: object) -> None:
+        self.viewport.set_section(plane, thickness)  # type: ignore[arg-type]
+        self.section_bar.show_capping_state(self.viewport.section_uncapped)
+
     def action_navigation(self, scheme: str) -> None:
         self.viewport.set_navigation(scheme)  # type: ignore[arg-type]
         self.settings.navigation = scheme
@@ -363,6 +413,9 @@ class MainWindow(QMainWindow):
         self.report.show_result(result)
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_scene(result)
+        low, high = self.viewport.section_range()
+        self.section_bar.set_range(low, high)
+        self.section_bar.show_capping_state(self.viewport.section_uncapped)
         self.history_panel.show_document(self.session.project.document, result.stopped_at)
         if result.stopped_at is not None:
             # §15.3: the last complete state stays visible, the status bar says why.

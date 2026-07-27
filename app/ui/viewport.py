@@ -16,6 +16,7 @@ from typing import Any, Literal, cast
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from app.branding import ENVIRONMENT_PREFIX
+from app.core.geom.section import SectionPlane, cut
 from app.core.log import get_logger
 from app.core.scene import EvaluationResult
 from app.core.types import ObjectId, Profile
@@ -24,6 +25,21 @@ from app.i18n import tr
 _log = get_logger(__name__)
 
 NavigationScheme = Literal["slicer", "cad", "blender"]
+
+DisplayMode = Literal["solid", "solid_edges", "wireframe", "transparent"]
+"""How a body is drawn (§18.1)."""
+
+Shading = Literal["flat", "smooth"]
+Projection = Literal["perspective", "orthographic"]
+"""Orthographic is mandatory for measuring (§18.1)."""
+
+#: Display modes as pyvista arguments: style, edges, opacity.
+DISPLAY_MODES: dict[DisplayMode, dict[str, Any]] = {
+    "solid": {"style": "surface", "show_edges": False, "opacity": 1.0},
+    "solid_edges": {"style": "surface", "show_edges": True, "opacity": 1.0},
+    "wireframe": {"style": "wireframe", "show_edges": False, "opacity": 1.0},
+    "transparent": {"style": "surface", "show_edges": False, "opacity": 0.45},
+}
 
 #: Camera presets (§18.1). Position direction and up vector.
 VIEW_DIRECTIONS: dict[str, tuple[tuple[float, float, float], tuple[float, float, float]]] = {
@@ -77,6 +93,14 @@ class Viewport(QWidget):
         self._frame_actors: list[Any] = []
         self._selected: ObjectId | None = None
         self._scheme: NavigationScheme = "slicer"
+        self._mode: DisplayMode = "solid"
+        self._shading: Shading = "flat"
+        self._projection: Projection = "perspective"
+        self._section: SectionPlane | None = None
+        self._slice_thickness: float | None = None
+        self._result: EvaluationResult | None = None
+        self._uncapped = False
+        """True when a cut could not be closed because the body is open (§18.2)."""
 
         if not _available():
             self._layout.addWidget(
@@ -97,11 +121,13 @@ class Viewport(QWidget):
 
     def show_scene(self, result: EvaluationResult | None) -> None:
         """Rebuild the view from the last complete evaluation (§15.3)."""
+        self._result = result
         if self.plotter is None:
             return
         for actor in self._actors.values():
             self.plotter.remove_actor(actor, render=False)
         self._actors.clear()
+        self._uncapped = False
         if result is None:
             self.plotter.render()
             return
@@ -109,11 +135,13 @@ class Viewport(QWidget):
         import numpy as np
         import pyvista as pv
 
+        style = DISPLAY_MODES[self._mode]
         for object_id, entry in result.scene.objects.items():
             if not entry.visible:
                 continue
-            raw = getattr(entry.mesh, "raw", None)
-            if raw is None:
+            mesh = self._sectioned(entry.mesh)
+            raw = getattr(mesh, "raw", None)
+            if raw is None or not len(raw.faces):
                 continue
             faces = np.hstack(
                 [np.full((len(raw.faces), 1), 3, dtype=np.int64), np.asarray(raw.faces)]
@@ -122,15 +150,28 @@ class Viewport(QWidget):
             actor = self.plotter.add_mesh(
                 surface,
                 color=OBJECT_COLOUR,
-                smooth_shading=False,
+                smooth_shading=self._shading == "smooth",
                 backface_params={"color": BACKFACE_COLOUR},
                 name=f"object:{object_id}",
                 render=False,
+                **style,
             )
             self._actors[object_id] = actor
 
         self.select(self._selected)
         self.plotter.render()
+
+    def _sectioned(self, mesh: Any) -> Any:
+        """Apply the section plane. Cutting is geometry, so the core does it (§18.2)."""
+        if self._section is None:
+            return mesh
+        second = None
+        if self._slice_thickness is not None:
+            offset = self._section.position - self._slice_thickness
+            second = SectionPlane(normal=self._section.normal, position=offset).flipped()
+        result = cut(mesh, self._section, second)
+        self._uncapped = self._uncapped or not result.capped
+        return result.mesh
 
     def select(self, object_id: ObjectId | None) -> None:
         """Highlight one object — colour plus the status bar, never colour alone (§19.1)."""
@@ -177,6 +218,65 @@ class Viewport(QWidget):
             )
         )
         self.plotter.render()
+
+    # --- display (§18.1) --------------------------------------------------------
+
+    def set_display_mode(self, mode: DisplayMode) -> None:
+        """Solid, solid with edges, wireframe or transparent."""
+        self._mode = mode
+        self.show_scene(self._result)
+
+    def set_shading(self, shading: Shading) -> None:
+        self._shading = shading
+        self.show_scene(self._result)
+
+    def set_projection(self, projection: Projection) -> None:
+        """Orthographic is what makes measured lengths trustworthy (§18.1)."""
+        self._projection = projection
+        if self.plotter is None:
+            return
+        if projection == "orthographic":
+            self.plotter.enable_parallel_projection()
+        else:
+            self.plotter.disable_parallel_projection()
+        self.plotter.render()
+
+    @property
+    def display_mode(self) -> DisplayMode:
+        return self._mode
+
+    @property
+    def projection(self) -> Projection:
+        return self._projection
+
+    # --- section plane (§18.2) --------------------------------------------------
+
+    def set_section(self, plane: SectionPlane | None, thickness: float | None = None) -> None:
+        """Cut the view. ``thickness`` turns the cut into a slice."""
+        self._section = plane
+        self._slice_thickness = thickness
+        self.show_scene(self._result)
+
+    @property
+    def section(self) -> SectionPlane | None:
+        return self._section
+
+    @property
+    def section_uncapped(self) -> bool:
+        """True when an open body kept the cut face open — reported, not faked."""
+        return self._uncapped
+
+    def section_range(self) -> tuple[float, float]:
+        """Sensible travel for the section slider: the extent of the scene."""
+        if self._result is None or not self._result.scene.objects:
+            return (-100.0, 100.0)
+        lows: list[float] = []
+        highs: list[float] = []
+        for entry in self._result.scene.objects.values():
+            bounds = entry.mesh.bounds
+            lows.append(min(bounds.minimum))
+            highs.append(max(bounds.maximum))
+        return (min(lows), max(highs))
 
     def reset_camera(self) -> None:
         if self.plotter is not None:
