@@ -87,11 +87,14 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Schnittebene **mit Capping**, Bildvergleichstest (§18.2) — der Nachweis
       läuft über Geometrie statt Pixel: die geschnittene Hälfte ist wasserdicht
       und hat genau das halbe Volumen, was ein Bild nicht unterscheiden könnte
-- [ ] Messwerkzeuge, Durchmesser über Feature, Bemaßungen (§18.3)
+- [~] Messwerkzeuge, Durchmesser über Feature, Bemaßungen (§18.3) — Abstand mit
+      Fang auf Punkte und Kanten, Wandstärke über eigenen Raycast, Bemaßungen
+      bleiben stehen; **Durchmesser über Feature** braucht die Feature-Erkennung
+      und kommt mit P3
 - [ ] Gizmo und Snapping — jede Manipulation erzeugt eine Op (§18.10)
 - [ ] Paletten und Alternativkodierung, Test auf Farbunabhängigkeit (§19.1)
-- [ ] Tastaturnavigation, Befehlspalette (§19.2)
-- [ ] Helles und dunkles Thema, HiDPI (§19.3)
+- [x] Tastaturnavigation, Befehlspalette (§19.2)
+- [x] Helles und dunkles Thema, HiDPI (§19.3)
 - [ ] Leistungsziele Viewport (§31)
 
 ## P2 — Operationen manuell
