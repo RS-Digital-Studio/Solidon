@@ -33,7 +33,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
-from app.core.errors import AppError
+from app.core import updates
+from app.core.errors import AppError, InternalError
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import calibration
 from app.core.knowledge.parts.ops import op_name as part_op_name
@@ -46,6 +47,7 @@ from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.types import Finding, ObjectId
 from app.i18n import tr
+from app.ui import first_run
 from app.ui.analysis_bar import AnalysisBar, LayerBar
 from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
@@ -69,6 +71,7 @@ from app.ui.panels import (
     collapsible,
     describe_selection,
 )
+from app.ui.report_dialog import ErrorReportDialog
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
@@ -332,6 +335,9 @@ class MainWindow(QMainWindow):
             )
 
         help_menu = self.menuBar().addMenu(tr("Hilfe"))
+        self._add_action(help_menu, tr("Erste Schritte …"), None, self.action_first_run)
+        self._add_action(help_menu, tr("Fehlerbericht erstellen …"), None, self.action_report)
+        help_menu.addSeparator()
         self._add_action(help_menu, tr("Über Formwerk"), None, self.action_about)
 
         toolbar = QToolBar(tr("Werkzeuge"), self)
@@ -488,6 +494,15 @@ class MainWindow(QMainWindow):
         name = catalog.chosen()
         if name:
             self.run_operation(REGISTRY.get(part_op_name(name)))
+
+    def action_report(self) -> None:
+        """§37.2: a report can be made without anything having gone wrong."""
+        dialog = ErrorReportDialog(
+            summary=tr("Vom Nutzer angelegter Bericht."),
+            project=self.session.path,
+            parent=self,
+        )
+        dialog.exec()
 
     def action_calibrate(self) -> None:
         """§28.3: measured values into the material profile, and everything follows."""
@@ -816,6 +831,10 @@ class MainWindow(QMainWindow):
             request.reply(None)
 
     def _on_error(self, error: AppError) -> None:
+        """§33.1: a mistake by the user looks different from a fault in the program."""
+        if isinstance(error, InternalError):
+            self.report_error(error)
+            return
         show_error(error, self)
 
     def _on_selection(self, object_id: str | None) -> None:
@@ -840,6 +859,52 @@ class MainWindow(QMainWindow):
             return
         parameters[name] = dataclasses.replace(parameters[name], value=value)
         self.session.evaluate_async()
+
+    # --- start ------------------------------------------------------------------
+
+    def start(self) -> None:
+        """What happens once the window is really on screen (§38).
+
+        Deliberately not in the constructor: the first run opens a modal dialog,
+        and a window that does that while it is being built cannot be built by
+        anything that is not a person — a test, a screenshot tool, a second
+        window.
+        """
+        if first_run.should_run(self.settings):
+            self.action_first_run()
+        if self.settings.check_for_updates:
+            self._check_for_updates()
+
+    def action_first_run(self) -> None:
+        """§38: language, printer, material, external programs. Skippable."""
+        dialog = first_run.FirstRunDialog(self.settings, self)
+        dialog.importRequested.connect(self.action_import)
+        if dialog.exec() == first_run.FirstRunDialog.DialogCode.Accepted:
+            dialog.apply_to(self.settings)
+        else:
+            # Skipping counts as done: asking again next time would be nagging.
+            self.settings.first_run_done = True
+        save_settings(self.settings)
+
+    def _check_for_updates(self) -> None:
+        """§37.2: a notice with a link. Nothing is downloaded, nothing replaced."""
+        release = updates.check()
+        if release is None or not release.newer_than():
+            return
+        self.status_message.setText(
+            f"{tr('Neue Fassung verfügbar')}: {release.version} — {release.url}"
+        )
+
+    def report_error(self, error: BaseException, summary: str = "") -> None:
+        """§33.1: a program fault gets a report offer, not a suggestion."""
+        dialog = ErrorReportDialog(
+            summary=summary or tr("Im Programm ist ein unerwarteter Fehler aufgetreten."),
+            detail=str(error),
+            error=error,
+            project=self.session.path,
+            parent=self,
+        )
+        dialog.exec()
 
     # --- window -----------------------------------------------------------------
 

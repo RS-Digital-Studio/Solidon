@@ -27,6 +27,12 @@ _BACKUP_COUNT: Final = 5
 _configured = False
 
 
+def log_path(directory: Path | None = None) -> Path:
+    """Where the log file is. Read by the error report, and by nothing else —
+    the file never leaves the machine on its own (§33.2)."""
+    return (directory or user_log_dir()) / _LOG_FILE
+
+
 class _OpFormatter(logging.Formatter):
     """Appends the op number where one is known — the anchor for later reading."""
 

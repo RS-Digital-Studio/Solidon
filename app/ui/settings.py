@@ -37,6 +37,8 @@ class UiSettings:
     printer: str = ""
     material: str = ""
     first_run_done: bool = False
+    check_for_updates: bool = False
+    """§37.2: a notice, never an automatic update — and off until it is switched on."""
 
     def remember(self, path: Path) -> None:
         text = str(path)

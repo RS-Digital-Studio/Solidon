@@ -49,6 +49,9 @@ def main(argv: list[str] | None = None) -> int:
     load_operations()
     application, window = build_application(argv)
     window.show()
+    # The first run and the update notice belong after the window is visible
+    # (§38) — and only here, where a person is actually looking at it.
+    window.start()
     _log.info("%s %s started", APP_NAME, APP_VERSION)
     return int(application.exec())
 
