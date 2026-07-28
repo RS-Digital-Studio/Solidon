@@ -43,6 +43,29 @@ Verknüpfung; die gebaute Installationsdatei entsteht in Phase P8 (§37.2).
 Ohne funktionierendes OpenGL startet die Anwendung ohne 3D-Ansicht; erzwingen
 lässt sich das mit `FORMWERK_NO_VIEWPORT=1`.
 
+## Sprachmodell für den Chat
+
+Der Chat braucht ein Modell; alles andere in Formwerk kommt ohne aus. Der
+Schlüssel wird über **Bearbeiten → Zugang zum Sprachmodell** im Schlüsselbund
+des Systems abgelegt und reist nie mit der Projektdatei mit. Auf einem
+Bauserver geht auch die Umgebungsvariable `FORMWERK_LLM_KEY`.
+
+| Weg | Voraussetzung | Anmerkung |
+|---|---|---|
+| Eigener Schlüssel | Zugang beim Anbieter | Vorgabe, beste Werkzeugtreue |
+| Lokal über Ollama | `ollama serve` auf Port 11434 | kein Schlüssel nötig |
+
+Für den lokalen Weg braucht es ein Modell, das Werkzeugaufrufe zuverlässig
+beherrscht — kleine Modelle scheitern daran reproduzierbar (§27). Bewährt haben
+sich `qwen2.5-coder:14b` und größer; alles unter 7B ist für die Op-Aufrufe
+erfahrungsgemäß zu wenig.
+
+Wie gut ein Modell mit den Referenzanfragen zurechtkommt, misst
+
+```
+.venv/Scripts/python.exe tools/run_agent_suite.py --backend ollama
+```
+
 ## Lizenz
 
 Formwerk ist proprietär — Copyright (c) 2026 RS Digital, alle Rechte

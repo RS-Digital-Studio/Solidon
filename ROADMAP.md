@@ -158,13 +158,25 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       Wandstärke (8 s statt 3 s, und im Vordergrund statt im Hintergrund)
 
 ## P4 — Agent auf Säule C
-- [ ] `LLMBackend`, Schlüssel im Schlüsselbund, lokal über Ollama
-- [ ] Kontextaufbau nach §26.1
-- [ ] Werkzeuge nach §26.2 einschließlich `ask_user` und `find_part`
-- [ ] Vorschlag = eine Transaktion, Differenzansicht, Übernahme
-- [ ] Chat-Transaktions-Kopplung (§26.3), verworfene Beiträge ausgegraut
-- [ ] Herkunftsvermerke (§26.4)
-- [ ] Agenten-Suite mit 15 Anfragen zu Säule C, davon 3 mehrdeutig
+- [x] `LLMBackend`, Schlüssel im Schlüsselbund, lokal über Ollama — kein
+      Hersteller-SDK, der Transport ist austauschbar, deshalb läuft die ganze
+      Schicht in der Suite ohne Netz
+- [x] Kontextaufbau nach §26.1
+- [x] Werkzeuge nach §26.2 einschließlich `ask_user` und `find_part` — die Ops
+      kommen aus dem Register, `find_part` antwortet bis P5 ehrlich, dass die
+      Bibliothek leer ist
+- [x] Vorschlag = eine Transaktion, Differenzansicht, Übernahme
+- [x] Chat-Transaktions-Kopplung (§26.3), verworfene Beiträge ausgegraut
+- [x] Herkunftsvermerke (§26.4)
+- [x] Agenten-Suite mit 15 Anfragen zu Säule C, davon 3 mehrdeutig —
+      `tests/agent_cases.py`. Ohne Modell prüft die Suite, was die Schicht
+      garantiert (Kontext, eine Transaktion, Rückfrage kommt an, Schemaprüfung
+      vor der Rechnung); die Quote gegen ein echtes Modell misst
+      `tools/run_agent_suite.py` und braucht einen Schlüssel
+- [x] Regelsammlung §39 als Daten mit Version und Änderungsverlauf; jede
+      Transaktion hält die Version fest
+- [x] Dateiformat 2: der Chat liegt im Projekt, mit Umstellungsschritt und
+      Beispieldatei je Version
 
 ## P5 — Bausteinbibliothek
 - [ ] `@register_part`, `PartFn`, `PartResult`

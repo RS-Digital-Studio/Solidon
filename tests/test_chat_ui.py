@@ -178,6 +178,40 @@ def test_discarding_keeps_the_conversation(window: MainWindow) -> None:
     assert window.viewport.difference is None
 
 
+def test_the_key_dialog_never_shows_a_stored_key(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§27: the key lives in the keychain. A dialog that echoed it back would
+    put it on the screen, into a screenshot, into a bug report."""
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+
+    assert dialog.field.text() == "", "nothing stored is ever put back into the field"
+    assert dialog.field.echoMode() == dialog.field.EchoMode.Password
+
+
+def test_the_key_dialog_names_the_state(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    monkeypatch.delenv(keys.ENVIRONMENT_VARIABLE, raising=False)
+    monkeypatch.delenv(f"{keys.ENVIRONMENT_VARIABLE}_ANTHROPIC", raising=False)
+
+    dialog = KeyDialog()
+    text = " ".join(label.text() for label in dialog.findChildren(QLabel))
+
+    assert "kein Schlüssel" in text
+    assert "Schlüsselbund" in text
+
+
 def test_the_summary_names_what_would_change(qt_app: QApplication) -> None:
     from app.core.agent.proposal import Proposal
     from app.core.geom.difference import Difference, SceneDifference

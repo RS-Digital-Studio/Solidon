@@ -46,7 +46,7 @@ from app.i18n import tr
 from app.ui.analysis_bar import AnalysisBar, LayerBar
 from app.ui.chat import ChatPanel
 from app.ui.command_palette import CommandPalette
-from app.ui.dialogs import AboutDialog, AskDialog, confirm_discard, show_error
+from app.ui.dialogs import AboutDialog, AskDialog, KeyDialog, confirm_discard, show_error
 from app.ui.labels import feature_label
 from app.ui.op_dialog import OperationDialog
 from app.ui.panels import (
@@ -223,6 +223,7 @@ class MainWindow(QMainWindow):
         self._add_action(
             edit_menu, tr("Befehlspalette …"), "Ctrl+Shift+P", self.action_command_palette
         )
+        self._add_action(edit_menu, tr("Zugang zum Sprachmodell …"), None, self.action_llm_key)
         edit_menu.addSeparator()
         self.undo_action = self._add_action(
             edit_menu, tr("Rückgängig"), QKeySequence.StandardKey.Undo, self.action_undo
@@ -427,6 +428,16 @@ class MainWindow(QMainWindow):
 
     def action_about(self) -> None:
         AboutDialog(self).exec()
+
+    def action_llm_key(self) -> None:
+        """§27: the user's own key, into the keychain, and the chat wakes up."""
+        if KeyDialog(parent=self).exec() != KeyDialog.DialogCode.Accepted:
+            return
+        self.session.set_agent_backend(None)
+        backend = self.session.agent_backend
+        self.chat.set_available(
+            backend is not None, f"{backend.id}:{backend.model}" if backend else ""
+        )
 
     def action_command_palette(self) -> None:
         """One key, everything from the registry — and the shortcuts get learned (§2.6)."""

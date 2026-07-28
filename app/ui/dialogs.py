@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QLabel,
+    QLineEdit,
     QListWidget,
     QMessageBox,
     QTextBrowser,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME, APP_VERSION, COPYRIGHT
+from app.core.backends import keys
 from app.core.errors import Action, AppError
 from app.core.knowledge import licences
 from app.core.log import get_logger
@@ -57,6 +59,80 @@ class AskDialog(QDialog):
     def chosen(self) -> str | None:
         item = self.list.currentItem()
         return item.text() if item is not None else None
+
+
+class KeyDialog(QDialog):
+    """Where the user puts their own key (Bauplan §27).
+
+    The key goes into the system keychain and nowhere else — not into the
+    settings, not into the project. The field is a password field, and the
+    dialog never shows a stored key back: it says whether one is there.
+    """
+
+    def __init__(self, account: str = "anthropic", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.account = account
+        self.setWindowTitle(tr("Zugang zum Sprachmodell"))
+        self.setMinimumWidth(420)
+
+        state = {
+            "keychain": tr("Ein Schlüssel liegt im Schlüsselbund."),
+            "environment": tr("Ein Schlüssel kommt aus der Umgebung."),
+            "none": tr("Es ist kein Schlüssel hinterlegt."),
+        }[keys.source(account)]
+
+        explanation = QLabel(
+            f"{state}\n\n"
+            + tr(
+                "Der Schlüssel wird im Schlüsselbund des Systems abgelegt und reist "
+                "nicht mit der Projektdatei mit. Ohne Schlüssel bleibt alles außer "
+                "dem Chat nutzbar."
+            ),
+            self,
+        )
+        explanation.setWordWrap(True)
+
+        self.field = QLineEdit(self)
+        self.field.setEchoMode(QLineEdit.EchoMode.Password)
+        self.field.setPlaceholderText(tr("Schlüssel einfügen"))
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
+        )
+        self.forget_button = buttons.addButton(
+            tr("Löschen"), QDialogButtonBox.ButtonRole.DestructiveRole
+        )
+        self.forget_button.clicked.connect(self._forget)
+        buttons.accepted.connect(self._save)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(explanation)
+        layout.addWidget(self.field)
+        layout.addWidget(buttons)
+
+    def _save(self) -> None:
+        key = self.field.text().strip()
+        if not key:
+            self.reject()
+            return
+        if not keys.store(self.account, key):
+            QMessageBox.information(
+                self,
+                tr("Zugang zum Sprachmodell"),
+                tr(
+                    "Auf diesem Rechner gibt es keinen Schlüsselbund. "
+                    "Der Schlüssel kann über die Umgebungsvariable übergeben werden."
+                ),
+            )
+            self.reject()
+            return
+        self.accept()
+
+    def _forget(self) -> None:
+        keys.forget(self.account)
+        self.field.clear()
+        self.accept()
 
 
 def show_error(error: AppError, parent: QWidget | None = None) -> Action | None:
