@@ -112,5 +112,6 @@ module = [
   "app.core.export.*",
   "app.core.perceive.*",
   "app.core.slice.*",
+  "app.core.knowledge.parts.*",
 ]
 disallow_untyped_calls = false

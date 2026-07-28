@@ -282,15 +282,31 @@ def _with_features(
         )
         return entry
 
+    # Features a part brought with it are not detected again — they were named
+    # when they were built (§24.1), and re-detecting would rename a bore that
+    # already has a name. They travel with the body like everything else.
+    generated = {
+        name: feature
+        for name, feature in entry.features.items()
+        if feature.provenance == "generated"
+    }
+    if generated and transform is not None:
+        generated = moved_features(generated, transform)
+
     detected = detect(mesh)
     if not previous:
-        return dataclasses.replace(entry, features=detected)
+        return dataclasses.replace(entry, features={**detected, **generated})
 
     # A turned body looks like a different body to a comparison of positions. The
     # operation knows what it turned, so the old features are carried along
     # first and only then compared (§21.2).
     if transform is not None:
         previous = moved_features(previous, transform)
+    previous = {
+        name: feature
+        for name, feature in previous.items()
+        if getattr(feature, "provenance", "detected") != "generated"
+    }
 
     centre = mesh.bounds.centre
     matched = match(previous, detected, centre, mesh.bounds.diagonal)
@@ -324,7 +340,7 @@ def _with_features(
             )
         )
 
-    return dataclasses.replace(entry, features=apply_mapping(detected, matched))
+    return dataclasses.replace(entry, features={**apply_mapping(detected, matched), **generated})
 
 
 def _evaluated_parameters(

@@ -1,0 +1,306 @@
+# Normteiltabelle (Bauplan §24.2).
+#
+# "Loch für M4-Einpressmutter" muss ein Nachschlagewert sein, kein Ratespiel.
+# Deshalb liegen die Maße als Daten hier und nicht im Code: ein korrigierter
+# Wert braucht kein Release, und die Herkunft steht daneben.
+#
+# Rechtliches (§24.2): Maßangaben als Zahlen sind frei verwendbar, Normtexte
+# und Normtabellen nicht. Die Werte hier sind aus frei zugänglichen
+# Herstellerangaben und den üblichen Katalogmaßen zusammengetragen, es ist
+# kein Normblatt abgeschrieben. Wo Hersteller sich unterscheiden, steht der
+# gebräuchlichste Wert und in `note` woher er kommt.
+#
+# Alle Maße in Millimetern.
+
+version = "1"
+
+# --- Metrische Schrauben --------------------------------------------------------
+# nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
+# tap: Kernloch für Gewindeschneiden · head: Kopfdurchmesser Zylinderkopf (ISO 4762)
+# head_height: Kopfhöhe · countersink: Kopfdurchmesser Senkkopf (ISO 10642)
+# hex: Schlüsselweite Innensechskant · pitch: Regelsteigung
+
+[[screws]]
+size = "M2"
+nominal = 2.0
+clearance = 2.4
+tap = 1.6
+head = 3.8
+head_height = 2.0
+countersink = 4.0
+hex = 1.5
+pitch = 0.4
+
+[[screws]]
+size = "M2.5"
+nominal = 2.5
+clearance = 2.9
+tap = 2.05
+head = 4.5
+head_height = 2.5
+countersink = 5.0
+hex = 2.0
+pitch = 0.45
+
+[[screws]]
+size = "M3"
+nominal = 3.0
+clearance = 3.4
+tap = 2.5
+head = 5.5
+head_height = 3.0
+countersink = 6.0
+hex = 2.5
+pitch = 0.5
+
+[[screws]]
+size = "M4"
+nominal = 4.0
+clearance = 4.5
+tap = 3.3
+head = 7.0
+head_height = 4.0
+countersink = 8.0
+hex = 3.0
+pitch = 0.7
+
+[[screws]]
+size = "M5"
+nominal = 5.0
+clearance = 5.5
+tap = 4.2
+head = 8.5
+head_height = 5.0
+countersink = 10.0
+hex = 4.0
+pitch = 0.8
+
+[[screws]]
+size = "M6"
+nominal = 6.0
+clearance = 6.6
+tap = 5.0
+head = 10.0
+head_height = 6.0
+countersink = 12.0
+hex = 5.0
+pitch = 1.0
+
+[[screws]]
+size = "M8"
+nominal = 8.0
+clearance = 9.0
+tap = 6.8
+head = 13.0
+head_height = 8.0
+countersink = 16.0
+hex = 6.0
+pitch = 1.25
+
+# --- Sechskantmuttern -----------------------------------------------------------
+# width: Schlüsselweite · height: Höhe (Regelmutter)
+
+[[nuts]]
+size = "M2"
+width = 4.0
+height = 1.6
+
+[[nuts]]
+size = "M2.5"
+width = 5.0
+height = 2.0
+
+[[nuts]]
+size = "M3"
+width = 5.5
+height = 2.4
+
+[[nuts]]
+size = "M4"
+width = 7.0
+height = 3.2
+
+[[nuts]]
+size = "M5"
+width = 8.0
+height = 4.0
+
+[[nuts]]
+size = "M6"
+width = 10.0
+height = 5.0
+
+[[nuts]]
+size = "M8"
+width = 13.0
+height = 6.5
+
+# --- Unterlegscheiben -----------------------------------------------------------
+
+[[washers]]
+size = "M3"
+inner = 3.2
+outer = 7.0
+thickness = 0.5
+
+[[washers]]
+size = "M4"
+inner = 4.3
+outer = 9.0
+thickness = 0.8
+
+[[washers]]
+size = "M5"
+inner = 5.3
+outer = 10.0
+thickness = 1.0
+
+[[washers]]
+size = "M6"
+inner = 6.4
+outer = 12.0
+thickness = 1.6
+
+# --- Heat-Set-Einpressbuchsen ---------------------------------------------------
+# Maße nach den gängigen Katalogangaben (Ruthex, CNC Kitchen). Das Loch wird
+# etwas enger als der Außendurchmesser gebohrt, damit sich Material verdrängt.
+
+[[inserts]]
+size = "M2"
+outer = 3.2
+length = 4.0
+hole = 3.2
+note = "Ruthex M2"
+
+[[inserts]]
+size = "M2.5"
+outer = 3.6
+length = 5.0
+hole = 3.6
+note = "Ruthex M2.5"
+
+[[inserts]]
+size = "M3"
+outer = 4.0
+length = 5.7
+hole = 4.0
+note = "Ruthex M3"
+
+[[inserts]]
+size = "M4"
+outer = 5.6
+length = 8.1
+hole = 5.6
+note = "Ruthex M4"
+
+[[inserts]]
+size = "M5"
+outer = 6.4
+length = 9.5
+hole = 6.4
+note = "Ruthex M5"
+
+[[inserts]]
+size = "M6"
+outer = 8.0
+length = 12.7
+hole = 8.0
+note = "Ruthex M6"
+
+# --- Neodym-Magnete -------------------------------------------------------------
+
+[[magnets]]
+size = "6x3"
+diameter = 6.0
+height = 3.0
+
+[[magnets]]
+size = "8x3"
+diameter = 8.0
+height = 3.0
+
+[[magnets]]
+size = "10x3"
+diameter = 10.0
+height = 3.0
+
+[[magnets]]
+size = "12x2"
+diameter = 12.0
+height = 2.0
+
+[[magnets]]
+size = "20x3"
+diameter = 20.0
+height = 3.0
+
+# --- Rillenkugellager -----------------------------------------------------------
+
+[[bearings]]
+size = "608"
+inner = 8.0
+outer = 22.0
+width = 7.0
+
+[[bearings]]
+size = "623"
+inner = 3.0
+outer = 10.0
+width = 4.0
+
+[[bearings]]
+size = "625"
+inner = 5.0
+outer = 16.0
+width = 5.0
+
+[[bearings]]
+size = "6800"
+inner = 10.0
+outer = 19.0
+width = 5.0
+
+# --- Aluprofil-Nutmaße ----------------------------------------------------------
+# slot: Nutbreite außen · core: Kerndurchmesser der Nut · screw: passende Schraube
+
+[[profiles]]
+size = "2020"
+slot = 6.0
+core = 10.6
+screw = "M5"
+
+[[profiles]]
+size = "3030"
+slot = 8.0
+core = 12.5
+screw = "M6"
+
+[[profiles]]
+size = "4040"
+slot = 8.0
+core = 12.5
+screw = "M8"
+
+# --- Schläuche und Rohre --------------------------------------------------------
+
+[[tubes]]
+size = "ptfe-4x2"
+outer = 4.0
+inner = 2.0
+note = "Bowdenschlauch 1,75 mm"
+
+[[tubes]]
+size = "ptfe-6x3"
+outer = 6.0
+inner = 3.0
+
+[[tubes]]
+size = "cable-5"
+outer = 5.0
+inner = 0.0
+note = "Rundkabel, Durchführung"
+
+[[tubes]]
+size = "cable-7"
+outer = 7.0
+inner = 0.0

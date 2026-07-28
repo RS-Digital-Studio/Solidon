@@ -28,6 +28,7 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
     "transform": _("Transformation"),
     "boolean": _("Boolesch"),
     "holes": _("Bohrungen"),
+    "parts": _("Bausteine"),
     "prepare": _("Druckvorbereitung"),
     "import": _("Import"),
     "export": _("Export"),

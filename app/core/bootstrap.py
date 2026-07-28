@@ -18,6 +18,11 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.geom.prepare_ops",
 )
 
+#: The part library declares no operations itself — one is generated per part
+#: (§24.1). Importing the package fills the part registry, the call after it
+#: turns every entry into an operation.
+_PART_MODULE: Final = "app.core.knowledge.parts"
+
 _loaded = False
 
 
@@ -28,4 +33,6 @@ def load_operations() -> None:
         return
     for name in _OPERATION_MODULES:
         importlib.import_module(name)
+    importlib.import_module(_PART_MODULE)
+    importlib.import_module(f"{_PART_MODULE}.ops").register_all()
     _loaded = True

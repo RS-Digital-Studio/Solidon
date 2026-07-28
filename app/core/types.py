@@ -400,6 +400,18 @@ class BaseParams:
         """Parameter schema of this set. Filled in by the registry."""
         return getattr(cls, "__param_spec__", ())
 
+    @classmethod
+    def fields(cls) -> tuple[Any, ...]:
+        """The dataclass fields, for code that builds a set out of another one.
+
+        The part operations do exactly that (§24.1): a part's parameters plus a
+        placement become one schema, and rebuilding it needs the declarations,
+        not just the derived spec.
+        """
+        import dataclasses
+
+        return tuple(dataclasses.fields(cls))  # type: ignore[arg-type]
+
     def as_dict(self) -> dict[str, Any]:
         """Serialisable form, as stored in the op stack."""
         return {name: getattr(self, name) for name in (spec.name for spec in self.spec())}
