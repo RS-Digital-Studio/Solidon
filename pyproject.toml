@@ -37,6 +37,9 @@ ui = [
   "pyvista>=0.44",
   "pyvistaqt>=0.11",
 ]
+# The agent needs a place for the user's own key (§27). Without this extra the
+# application works; only the chat stays switched off.
+agent = ["keyring>=25.0"]
 dev = [
   "pytest>=8.0",
   "ruff>=0.6",
@@ -77,6 +80,8 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 "app/core/errors.py" = ["N818"]
 # MapTooLarge is a control-flow signal inside the maps, not a reported error.
 "app/core/perceive/maps.py" = ["N818"]
+# BackendUnavailable reads as a state, and it is one — §33.1 fixes the names.
+"app/core/backends/llm.py" = ["N818"]
 # Qt signals are camelCase by convention, and "20 × 20 mm" is how a dimension is
 # written in German — both are deliberate in the surface.
 "app/ui/*" = ["N815", "RUF001"]

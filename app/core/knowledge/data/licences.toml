@@ -60,3 +60,12 @@ pyvistaqt = { licence = "MIT" }
 vtk = { licence = "BSD-3-Clause" }
 matplotlib = { licence = "PSF-based", note = "matplotlib licence, BSD-compatible" }
 pillow = { licence = "MIT-CMU", note = "HPND, permissive" }
+# The agent keeps the user's own key in the system keychain (§27). Everything
+# below comes with `keyring`; all MIT except pywin32-ctypes, which is BSD-3.
+keyring = { licence = "MIT", note = "system keychain for the LLM key" }
+"jaraco.classes" = { licence = "MIT", note = "brought in by keyring" }
+"jaraco.context" = { licence = "MIT", note = "brought in by keyring" }
+"jaraco.functools" = { licence = "MIT", note = "brought in by keyring" }
+more-itertools = { licence = "MIT", note = "brought in by keyring" }
+pywin32-ctypes = { licence = "BSD-3-Clause", note = "Windows credential store behind keyring" }
+"backports.tarfile" = { licence = "MIT", note = "brought in by keyring" }

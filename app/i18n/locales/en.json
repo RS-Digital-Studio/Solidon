@@ -55,6 +55,7 @@
   "Das Objekt ist nicht geschlossen — der Slicer wird raten müssen.": "The object is not closed - the slicer will have to guess.",
   "Das Objekt liegt in einer anderen Darstellung vor.": "The object is held in a different representation.",
   "Das Objekt passt nicht in den Bauraum.": "The object does not fit the build volume.",
+  "Das Sprachmodell hat nicht geantwortet.": "The language model did not answer.",
   "Das Ziel muss ein Merkmal eines Objekts benennen.": "The target has to name a feature of an object.",
   "Das hat so nicht funktioniert": "That did not work",
   "Datei": "File",

@@ -22,7 +22,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Current version of ``project.json``.
-FORMAT_VERSION: Final = 1
+FORMAT_VERSION: Final = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,8 +34,19 @@ class Step:
     apply: Callable[[dict[str, Any]], dict[str, Any]]
 
 
-#: All known steps, oldest first. Empty until the format changes for the first time.
-MIGRATIONS: Final[tuple[Step, ...]] = ()
+def _add_chat(data: dict[str, Any]) -> dict[str, Any]:
+    """1 → 2: the conversation moved into the project (§26.3).
+
+    A file from before the agent simply has no conversation, and an empty list
+    says exactly that. Nothing else changes, which is why this step is its own
+    function and stays one forever.
+    """
+    data.setdefault("chat", [])
+    return data
+
+
+#: All known steps, oldest first.
+MIGRATIONS: Final[tuple[Step, ...]] = (Step(from_version=1, to_version=2, apply=_add_chat),)
 
 
 def migrate(

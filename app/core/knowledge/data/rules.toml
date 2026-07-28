@@ -1,0 +1,105 @@
+# Die Regelsammlung (Bauplan §39).
+#
+# Laut Plan das eigentliche Produkt, also wird sie wie eines behandelt: mit
+# Version, mit Änderungsverlauf, und mit dem Suite-Ergebnis vor und nach jeder
+# Änderung. Verschlechtert sich die Quote, wird die Regel zurückgenommen oder
+# umformuliert — nicht dazugeschrieben.
+#
+# Der Systemprompt nennt die Version, jede Transaktion hält sie fest (§26.4).
+# So lässt sich später sagen, unter welcher Regel eine Op entstanden ist.
+#
+# Was sich als Baustein fassen lässt, gehört nicht hierher, sondern in die
+# Bibliothek (§24): eine eingehaltene Regel ist besser als eine beschriebene.
+
+version = "1"
+
+[[rules]]
+id = "min_wall"
+title = "Mindestwandstärke"
+text = """
+Keine Wand dünner als zwei Extrusionsbreiten. Der Wert steht im Druckerprofil
+und wird nie als Zahl in die Op geschrieben."""
+applies_to = ["geometry"]
+
+[[rules]]
+id = "chamfer_over_overhang"
+title = "Fasen statt Überhängen"
+text = """
+Über 45 Grad Überhang eine Fase setzen statt Stützen in Kauf zu nehmen. Die
+Schichtanalyse sagt, wo der Überhang liegt."""
+applies_to = ["geometry"]
+
+[[rules]]
+id = "tolerance_from_profile"
+title = "Toleranzen aus dem Materialprofil"
+text = """
+Passungen als Passungspaar anlegen und die Toleranz als auto:<material>
+angeben. Eine feste Zahl überlebt keine Kalibrierung."""
+applies_to = ["fits"]
+
+[[rules]]
+id = "parameters_not_numbers"
+title = "Hauptmaße als Parameter"
+text = """
+Jede Abmessung, die der Nutzer später ändern könnte, wird ein Projektparameter
+mit sprechendem Namen. Streuzahlen in Ops sind eine Sackgasse."""
+applies_to = ["parameters"]
+
+[[rules]]
+id = "boolean_overlap"
+title = "Überlappung bei Booleschen Ops"
+text = """
+Bei Vereinigung und Differenz immer 0,01 mm Überlappung vorsehen. Koinzidente
+Flächen sind die häufigste Ursache für kaputte Ergebnisse."""
+applies_to = ["geometry"]
+
+[[rules]]
+id = "holes_oversize"
+title = "Löcher größer als Nennmaß"
+text = """
+FDM druckt Löcher enger als geplant. Die Bohrung um den Kompensationswert aus
+dem Materialprofil vergrößern, nicht um eine geratene Zahl."""
+applies_to = ["geometry"]
+
+[[rules]]
+id = "elephant_foot"
+title = "Erste Schicht"
+text = """
+Den Elefantenfuß aus dem Materialprofil einkalkulieren, wenn die erste Schicht
+maßhaltig sein muss."""
+applies_to = ["geometry"]
+
+[[rules]]
+id = "scad_fn"
+title = "OpenSCAD-Auflösung"
+text = """
+Bei OpenSCAD $fn zentral setzen. Pro Objekt gesetzt explodieren die
+Renderzeiten."""
+applies_to = ["openscad"]
+
+[[rules]]
+id = "parts_first"
+title = "Bausteine vor Primitiven"
+text = """
+Erst in der Bausteinbibliothek suchen, dann selbst konstruieren. Ein Baustein
+bringt seine Merkmale, seine Grenzen und seine Tests mit."""
+applies_to = ["approach"]
+
+[[rules]]
+id = "ask_over_guess"
+title = "Fragen vor Raten"
+text = """
+Bei mehrdeutigen Anfragen ask_user benutzen. Eine Rückfrage kostet einen Klick,
+eine falsche Annahme kostet einen Druck."""
+applies_to = ["approach"]
+
+# --- Änderungsverlauf ------------------------------------------------------------
+#
+# Jede Änderung mit Datum, Anlass und Suite-Ergebnis vorher/nachher (§39).
+
+[[changes]]
+version = "1"
+date = "2026-07-28"
+reason = "Erste Fassung, übernommen aus dem Bauplan §39."
+suite_before = ""
+suite_after = ""

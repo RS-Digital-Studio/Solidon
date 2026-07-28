@@ -309,6 +309,29 @@ def test_the_checked_in_example_still_opens() -> None:
     assert project.document.parameters["half"].expression == "=@width/2"
     assert project.document.fits[0].tolerance == "auto:petg"
     assert project.sources["src_1"] == MESH_PAYLOAD
+    assert [entry.role for entry in project.document.chat] == ["user", "agent"]
+    assert project.document.chat[1].transaction_id, "§26.3: a turn names what it changed"
+
+
+def test_every_older_example_migrates_to_today() -> None:
+    """§16.2 keeps one example per version, and each one has to arrive here."""
+    examples = sorted((Path(__file__).parent / "data" / "projects").glob("example_v*.p3d"))
+
+    assert len(examples) >= FORMAT_VERSION, "one checked-in file per format version"
+    for path in examples:
+        project = load(path)
+        assert project.document.format_version == FORMAT_VERSION, path.name
+        assert [entry.op for entry in project.document.ops] == [
+            "rename_object",
+            "duplicate_object",
+        ], path.name
+
+
+def test_a_file_from_before_the_agent_gets_an_empty_conversation() -> None:
+    """1 → 2: no chat is not a broken file, it is a file from before the chat."""
+    project = load(Path(__file__).parent / "data" / "projects" / "example_v1.p3d")
+
+    assert project.document.chat == []
 
 
 def _rewrite_project_entry(path: Path, data: dict[str, object]) -> None:

@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.types import (
+    ChatEntry,
     Document,
     FeatureRef,
     Finding,
@@ -191,6 +192,29 @@ def transaction_from_data(data: dict[str, Any]) -> Transaction:
     )
 
 
+def chat_to_data(entry: ChatEntry) -> dict[str, Any]:
+    """§26.3: the turn and the transaction it produced belong together."""
+    return _without_none(
+        {
+            "id": entry.id,
+            "role": entry.role,
+            "text": entry.text,
+            "transaction": entry.transaction_id,
+            "origin": origin_to_data(entry.origin) if entry.origin is not None else None,
+        }
+    )
+
+
+def chat_from_data(data: dict[str, Any]) -> ChatEntry:
+    return ChatEntry(
+        id=str(data["id"]),
+        role=data.get("role", "user"),
+        text=str(data.get("text", "")),
+        transaction_id=data.get("transaction"),
+        origin=origin_from_data(data["origin"]) if data.get("origin") else None,
+    )
+
+
 def solver_to_data(solver: SolverInfo) -> dict[str, Any]:
     return _without_none(
         {
@@ -301,6 +325,7 @@ def document_to_data(document: Document) -> dict[str, Any]:
         "fits": [fit_to_data(entry) for entry in document.fits],
         "transactions": [transaction_to_data(entry) for entry in document.transactions],
         "ops": [operation_to_data(entry) for entry in document.ops],
+        "chat": [chat_to_data(entry) for entry in document.chat],
     }
 
 
@@ -324,4 +349,5 @@ def document_from_data(data: dict[str, Any]) -> Document:
         fits=[fit_from_data(entry) for entry in data.get("fits", ())],
         transactions=[transaction_from_data(entry) for entry in data.get("transactions", ())],
         ops=[operation_from_data(entry) for entry in data.get("ops", ())],
+        chat=[chat_from_data(entry) for entry in data.get("chat", ())],
     )

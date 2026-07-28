@@ -56,6 +56,9 @@ Quality = Literal["draft", "fine"]
 FitKind = Literal["clearance", "press", "thread", "flush"]
 Severity = Literal["info", "warning", "error"]
 Authorship = Literal["user", "agent"]
+
+ChatRole = Literal["user", "agent"]
+"""Who spoke. The same two as ``Authorship``, named for the conversation (§26.3)."""
 SourceKind = Literal["import", "generated", "part"]
 
 SolverStage = Literal["direct", "welded", "jittered", "voxel"]
@@ -525,6 +528,26 @@ class Transaction:
 
 
 @dataclass(frozen=True, slots=True)
+class ChatEntry:
+    """One turn of the conversation, tied to what it changed (§26.3).
+
+    The coupling is the point: an entry names the transaction it produced, and
+    when that transaction is taken back the entry counts as discarded. Without
+    it the agent argues after every undo with a state that no longer exists.
+
+    Whether an entry is discarded is not stored — it follows from whether its
+    transaction is still in the document, so a redo brings it back by itself.
+    """
+
+    id: str
+    role: ChatRole
+    text: str
+    transaction_id: TransactionId | None = None
+    origin: Origin | None = None
+    """Filled for agent turns: model, prompt and rule version, temperature (§26.4)."""
+
+
+@dataclass(frozen=True, slots=True)
 class SourceOrigin:
     """Where an imported model came from, and under which licence (§16.3)."""
 
@@ -579,6 +602,10 @@ class Document:
     fits: list[Fit] = field(default_factory=list)
     transactions: list[Transaction] = field(default_factory=list)
     ops: list[Operation] = field(default_factory=list)
+    chat: list[ChatEntry] = field(default_factory=list)
+    """The conversation that led to this stack (§26.3). Saved with the project:
+    a container is a bug report (§16.2), and half a bug report is one without
+    the sentence that caused the operation."""
 
 
 # --- Layer analysis (§22) ------------------------------------------------------
