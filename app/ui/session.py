@@ -23,7 +23,9 @@ from app.core.agent import apply as agent_apply
 from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import LLMBackend, first_available
+from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import AppError, OperationCancelled
+from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
@@ -290,6 +292,18 @@ class Session(QObject):
             tr("Modell laden"),
             [OperationDraft(op="load", params={"source": source_id, "unit": unit})],
         )
+
+    def add_generated(self, result: GeneratedMesh) -> str:
+        """Way 3: embed a generated body, load it, repair it (§2.2).
+
+        The two transactions are made in the core; all that happens here is
+        redrawing afterwards, exactly like an import.
+        """
+        generation = generate_into(self.project, result)
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+        return generation.object_id
 
     def undo(self) -> None:
         if self.history.undo() is not None:

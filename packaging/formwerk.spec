@@ -18,6 +18,7 @@ ROOT = Path(SPECPATH).resolve().parent
 datas = [
     (str(ROOT / "app" / "core" / "knowledge" / "data"), "app/core/knowledge/data"),
     (str(ROOT / "app" / "core" / "knowledge" / "parts" / "LICENSE"), "app/core/knowledge/parts"),
+    (str(ROOT / "app" / "core" / "backends" / "data"), "app/core/backends/data"),
     (str(ROOT / "app" / "i18n" / "locales"), "app/i18n/locales"),
     (str(ROOT / "app" / "examples"), "app/examples"),
     (str(ROOT / "LICENSE"), "."),

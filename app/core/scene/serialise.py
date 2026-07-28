@@ -110,6 +110,8 @@ def source_to_data(source: Source) -> dict[str, Any]:
                 "author": source.origin.author,
                 "license": source.origin.licence,
                 "retrieved": source.origin.retrieved,
+                "prompt": source.origin.prompt,
+                "seed": source.origin.seed,
             }
         )
     return data
@@ -138,6 +140,8 @@ def source_from_data(source_id: str, data: dict[str, Any]) -> Source:
                 author=origin.get("author"),
                 licence=origin.get("license"),
                 retrieved=origin.get("retrieved"),
+                prompt=origin.get("prompt"),
+                seed=(None if origin.get("seed") is None else int(origin["seed"])),
             )
             if origin
             else None

@@ -119,6 +119,33 @@ Wie gut ein Modell mit den Referenzanfragen zurechtkommt, misst
 .venv/Scripts/python.exe tools/run_agent_suite.py --backend ollama
 ```
 
+## Modelle erzeugen (Weg 3)
+
+**Datei → Modell erzeugen** spricht lokal mit einem laufenden ComfyUI auf Port
+8188. Läuft keines, bleibt der Eintrag ausgegraut und sagt warum; alles andere
+in Formwerk funktioniert weiter.
+
+Was zurückkommt, wird als Quelle ins Projekt eingebettet und danach im Stack
+geladen und repariert — zwei Schritte, beide sichtbar, beide zurücknehmbar.
+Prompt und Startwert stehen in der Quelle, damit die Datei sagt, woher die
+Geometrie stammt.
+
+Welche Knoten benutzt werden, steht in `app/core/backends/data/text_to_mesh.json`
+und `image_to_mesh.json`. Die mitgelieferten Abläufe gehen von Hunyuan3D aus;
+mit einem anderen Generator wird die Datei ersetzt, nicht der Quelltext.
+
+## Farbe und Materialslots
+
+Jedes Dreieck trägt einen Slot, jedes Objekt eine Liste von Materialslots (§20).
+Zugewiesen wird über **Farbe → Slot zuweisen**, oder aus der Textur eines
+erzeugten Modells über **Farbe → Farben in Slots umrechnen** — k-Means auf die
+Anzahl eingelegter Filamente, mit gespeichertem Startwert, damit dieselbe Datei
+dasselbe Ergebnis liefert. Das ist nie so fein wie die Bildschirmdarstellung.
+
+Die Zuweisung überlebt Boolesche Operationen einschließlich der Voxelstufe. Beim
+Export nach `3MF` wird daraus je Slot eine Materialgruppe; `STL` kennt keine
+Farbe und verliert sie folgerichtig.
+
 ## Lizenz
 
 Formwerk ist proprietär — Copyright (c) 2026 RS Digital, alle Rechte

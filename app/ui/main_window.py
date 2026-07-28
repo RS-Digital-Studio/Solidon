@@ -18,6 +18,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QLabel,
     QMainWindow,
@@ -60,6 +61,7 @@ from app.ui.dialogs import (
     confirm_discard,
     show_error,
 )
+from app.ui.generate_dialog import GenerateDialog
 from app.ui.labels import feature_label
 from app.ui.op_dialog import OperationDialog
 from app.ui.panels import (
@@ -231,6 +233,7 @@ class MainWindow(QMainWindow):
         )
         file_menu.addSeparator()
         self._add_action(file_menu, tr("Modell einfügen …"), "Ctrl+I", self.action_import)
+        self._add_action(file_menu, tr("Modell erzeugen …"), "Ctrl+G", self.action_generate)
         self._add_action(file_menu, tr("Bausteinkatalog …"), "Ctrl+K", self.action_catalog)
         self._add_action(file_menu, tr("G-Code gegenprüfen …"), None, self.action_check_gcode)
         file_menu.addSeparator()
@@ -434,6 +437,13 @@ class MainWindow(QMainWindow):
         name, _filter = QFileDialog.getOpenFileName(self, tr("Modell einfügen"), "", MODEL_FILTER)
         if name:
             self.session.import_model(Path(name))
+
+    def action_generate(self) -> None:
+        """Way 3 (§2.2): a sentence or a picture becomes a body in the scene."""
+        dialog = GenerateDialog(parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or dialog.result_mesh is None:
+            return
+        self.session.add_generated(dialog.result_mesh)
 
     def action_undo(self) -> None:
         self.session.undo()

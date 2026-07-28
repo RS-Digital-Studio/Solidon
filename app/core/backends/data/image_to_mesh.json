@@ -1,0 +1,34 @@
+{
+  "1": {
+    "class_type": "Hy3DModelLoader",
+    "inputs": {
+      "model": "hunyuan3d-dit-v2-mini-turbo",
+      "attention_mode": "sdpa"
+    }
+  },
+  "2": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "{image}",
+      "upload": "image"
+    }
+  },
+  "3": {
+    "class_type": "Hy3DGenerateMesh",
+    "inputs": {
+      "pipeline": ["1", 0],
+      "image": ["2", 0],
+      "seed": "{seed}",
+      "steps": 30,
+      "guidance_scale": 5.0
+    }
+  },
+  "4": {
+    "class_type": "Hy3DExportMesh",
+    "inputs": {
+      "trimesh": ["3", 0],
+      "filename_prefix": "formwerk/image",
+      "file_format": "glb"
+    }
+  }
+}

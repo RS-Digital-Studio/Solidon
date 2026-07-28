@@ -568,6 +568,10 @@ class SourceOrigin:
     author: str | None = None
     licence: str | None = None
     retrieved: str | None = None
+    prompt: str | None = None
+    """What was asked for, when the source was generated (§27, pillar B)."""
+    seed: int | None = None
+    """The starting value that generation ran with (§11.3)."""
 
 
 @dataclass(frozen=True, slots=True)

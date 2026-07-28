@@ -22,7 +22,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Current version of ``project.json``.
-FORMAT_VERSION: Final = 2
+FORMAT_VERSION: Final = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,8 +45,25 @@ def _add_chat(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _mark_generated_sources(data: dict[str, Any]) -> dict[str, Any]:
+    """2 → 3: a source carries how it was generated (§27, pillar B).
+
+    Sources from before pillar B were all imported or built from parts, so the
+    two new fields are empty for every one of them. What the step really does
+    is state that on the way in, rather than leaving a file that looks like it
+    lost its prompt somewhere.
+    """
+    for source in data.get("sources", {}).values():
+        if source.get("type") == "generated":
+            source.setdefault("origin", {}).setdefault("prompt", "")
+    return data
+
+
 #: All known steps, oldest first.
-MIGRATIONS: Final[tuple[Step, ...]] = (Step(from_version=1, to_version=2, apply=_add_chat),)
+MIGRATIONS: Final[tuple[Step, ...]] = (
+    Step(from_version=1, to_version=2, apply=_add_chat),
+    Step(from_version=2, to_version=3, apply=_mark_generated_sources),
+)
 
 
 def migrate(

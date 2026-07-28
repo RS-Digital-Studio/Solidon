@@ -1,0 +1,214 @@
+"""Way 3 from §2.2, end to end (Bauplan §40 for P9).
+
+    Text oder Bild → Mesh → Reparaturkette läuft automatisch → Prüfbericht →
+    gegebenenfalls teilen und verstiften → exportieren.
+
+Splitting and pinning is P10; everything before it is here. The generator is
+scripted, and what it hands over is deliberately the kind of mesh a real one
+delivers: open, with a stray fragment, and coloured in more shades than any
+printer has filaments.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+import pytest
+import trimesh
+
+from app.core.backends.mesh import ScriptedMeshBackend
+from app.core.export import threemf
+from app.core.export.writer import plan_export, write_plan
+from app.core.generate import from_image, from_text
+from app.core.geom.attributes import used_slots
+from app.core.scene import History, OperationDraft, evaluate
+from app.core.scene.project import Project, ProjectSources, load, new_project, save
+from app.core.types import Profile
+
+MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+@pytest.fixture
+def project() -> Project:
+    return new_project("centauri-carbon-2", "petg")
+
+
+def generated_body() -> bytes:
+    """What a generator really delivers: an open shell plus a loose crumb.
+
+    PLY, because it keeps the per-face colours a generated model comes with —
+    and those colours are what §20 has to turn into filaments.
+    """
+    shell = trimesh.load(MESHES / "broken_open.stl", process=False)
+    crumb = trimesh.creation.box(extents=(0.4, 0.4, 0.4))
+    crumb.apply_translation([40.0, 40.0, 0.0])
+    body = trimesh.util.concatenate([shell, crumb])
+
+    middle = body.triangles_center[:, 0]
+    shades = np.linspace(0, 1, len(body.faces))
+    colours = np.zeros((len(body.faces), 4), dtype=np.uint8)
+    colours[:, 3] = 255
+    colours[:, 0] = (255 * (middle > middle.mean())).astype(np.uint8)
+    colours[:, 2] = (255 * (middle <= middle.mean())).astype(np.uint8)
+    # A little noise on the green channel: a render keeps those apart, a printer
+    # does not, and the quantisation has to be the one that says so.
+    colours[:, 1] = (40 * shades).astype(np.uint8)
+    body.visual.face_colors = colours
+    return bytes(trimesh.exchange.export.export_mesh(body, None, file_type="ply"))
+
+
+def backend() -> ScriptedMeshBackend:
+    return ScriptedMeshBackend(fallback=generated_body(), suffix=".ply")
+
+
+def evaluated(project: Project, profile: Profile):
+    return evaluate(project.document, profile, sources=ProjectSources(project))
+
+
+def test_a_description_becomes_a_body_in_the_scene(project: Project, profile: Profile) -> None:
+    result = from_text(project, backend(), "eine kleine Figur", seed=7)
+
+    scene = evaluated(project, profile)
+
+    assert scene.complete
+    assert result.object_id in scene.scene.objects
+    assert scene.scene.objects[result.object_id].mesh.triangle_count > 0
+
+
+def test_the_generated_file_is_a_source_and_not_an_operation(project: Project) -> None:
+    """§11.3: a generator is not a function, so the bytes are what is kept."""
+    result = from_text(project, backend(), "eine kleine Figur", seed=7)
+
+    source = project.document.sources[result.source_id]
+    assert source.kind == "generated"
+    assert source.origin is not None
+    assert source.origin.prompt == "eine kleine Figur"
+    assert source.origin.seed == 7
+    assert source.origin.author == "scripted"
+    assert project.sources[result.source_id] == result.result.payload
+    assert [entry.op for entry in project.document.ops] == ["load", "repair"]
+
+
+def test_the_repair_chain_runs_without_being_asked(project: Project, profile: Profile) -> None:
+    """§2.2: „Reparaturkette läuft automatisch“ — and it is visible in the report."""
+    from_text(project, backend(), "eine kleine Figur", seed=7)
+
+    scene = evaluated(project, profile)
+
+    codes = {finding.code for finding in scene.scene.report.findings}
+    assert any(code.startswith("repair.") for code in codes), codes
+    assert "repair.components_removed" in codes, "the loose crumb is gone"
+
+
+def test_the_repair_is_one_step_that_can_be_taken_back(project: Project, profile: Profile) -> None:
+    """It runs automatically, which is not the same as being unavoidable."""
+    from_text(project, backend(), "eine kleine Figur", seed=7)
+    with_repair = evaluated(project, profile)
+    object_id = next(iter(with_repair.scene.objects))
+    repaired = with_repair.scene.objects[object_id].mesh.triangle_count
+
+    History(project.document).undo()
+    without = evaluated(project, profile)
+
+    assert without.complete
+    assert without.scene.objects[object_id].mesh.triangle_count > repaired
+
+
+def test_a_picture_takes_the_same_way(project: Project, profile: Profile) -> None:
+    result = from_image(project, backend(), b"\x89PNG not really", seed=2)
+
+    scene = evaluated(project, profile)
+
+    assert scene.complete
+    assert result.object_id in scene.scene.objects
+    assert project.document.sources[result.source_id].origin.seed == 2
+
+
+def test_the_colours_become_filaments_and_reach_the_3mf(
+    project: Project, profile: Profile, tmp_path: Path
+) -> None:
+    """The whole of §20 on a generated body: texture in, colour groups out."""
+    result = from_text(project, backend(), "eine kleine Figur", seed=7)
+    History(project.document).apply(
+        "Farben",
+        [
+            OperationDraft(
+                op="slots_from_texture",
+                inputs=(result.object_id,),
+                params={"filaments": 2},
+                seed=1,
+            )
+        ],
+    )
+
+    scene = evaluated(project, profile)
+    entry = scene.scene.objects[result.object_id]
+
+    assert scene.complete
+    assert used_slots(entry.mesh) == (0, 1), "hundreds of shades onto two filaments"
+    assert len(entry.material_slots) == 2
+
+    plan = plan_export([entry], project_name="Figur", profile=profile, export_format="3mf")
+    written = write_plan(plan, tmp_path, "3mf")
+
+    groups = threemf.read(written[0].read_bytes(), entry.mesh.triangle_count)
+    assert groups is not None
+    assert len(groups.materials) == 2
+    assert set(groups.slots) == {0, 1}
+
+
+def test_the_same_seed_gives_the_same_filaments(
+    project: Project, profile: Profile, tmp_path: Path
+) -> None:
+    """§20: the quantisation is reproducible, or the file stops describing the part.
+
+    Reproducible across a save, which is the case that matters: the seed the
+    history handed out has to come back out of the file (§11.3).
+    """
+    result = from_text(project, backend(), "eine kleine Figur", seed=7)
+    History(project.document).apply(
+        "Farben",
+        [
+            OperationDraft(
+                op="slots_from_texture", inputs=(result.object_id,), params={"filaments": 3}
+            )
+        ],
+    )
+    first = evaluated(project, profile).scene.objects[result.object_id].mesh.slots
+    save(project, tmp_path / "figur.p3d")
+
+    reopened = load(tmp_path / "figur.p3d")
+    second = evaluated(reopened, profile).scene.objects[result.object_id].mesh.slots
+
+    assert project.document.ops[-1].seed is not None, "a randomised step carries its seed"
+    assert first == second
+
+
+def test_the_project_survives_being_saved_and_opened(
+    project: Project, profile: Profile, tmp_path: Path
+) -> None:
+    """Way 3 ends in a file like every other way — with its provenance intact."""
+    result = from_text(project, backend(), "eine kleine Figur", seed=7)
+    save(project, tmp_path / "figur.p3d")
+
+    reopened = load(tmp_path / "figur.p3d")
+    scene = evaluated(reopened, profile)
+
+    assert scene.complete
+    source = reopened.document.sources[result.source_id]
+    assert source.origin is not None
+    assert (source.origin.prompt, source.origin.seed) == ("eine kleine Figur", 7)
+
+
+def test_the_way_ends_in_a_file(project: Project, profile: Profile, tmp_path: Path) -> None:
+    result = from_text(project, backend(), "eine kleine Figur", seed=7)
+    scene = evaluated(project, profile)
+
+    plan = plan_export(
+        [scene.scene.objects[result.object_id]], project_name="Figur", profile=profile
+    )
+    written = write_plan(plan, tmp_path)
+
+    assert written[0].exists()
+    assert written[0].name.endswith(".stl")

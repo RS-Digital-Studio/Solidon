@@ -250,11 +250,31 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       aus, bis ihn jemand einschaltet
 
 ## P9 — Säule B und Farbe
-- [ ] `MeshBackend`, ComfyUI lokal
-- [ ] Reparaturkette für generierte Meshes
-- [ ] Materialslots, Attributerhalt über Boolesche Ops und Voxelstufe
-- [ ] Textur → Slots mit Startwert, 3MF-Export mit Farbgruppen
-- [ ] **Weg 3 aus §2.2 als Ende-zu-Ende-Test**
+- [x] `MeshBackend`, ComfyUI lokal
+- [x] Reparaturkette für generierte Meshes
+- [x] Materialslots, Attributerhalt über Boolesche Ops und Voxelstufe
+- [x] Textur → Slots mit Startwert, 3MF-Export mit Farbgruppen
+- [x] **Weg 3 aus §2.2 als Ende-zu-Ende-Test**
+
+Anmerkungen zu P9:
+
+* **Erzeugtes wird Quelle, nicht Operation.** Ein Generator ist keine Funktion —
+  dieselbe Anfrage liefert nach einem Modellwechsel etwas anderes. Die Bytes
+  liegen deshalb im Projekt wie eine gezogene Datei, und der Stack darüber ist
+  der gewöhnliche (`load`, dann `repair`). Prompt und Startwert stehen in der
+  Quelle; dafür ist das Dateiformat auf 3 gestiegen.
+* **Die Reparaturkette steht im Stack**, nicht im Backend. Sie läuft ohne
+  Nachfrage, ist aber ein eigener Schritt — sichtbar im Bericht und
+  zurücknehmbar.
+* **Beim Schnitt gibt nur her, wer bleibt.** Bei einer Differenz überträgt der
+  abgezogene Körper seine Farbe nicht: die Bohrungswand ist eine neue Fläche,
+  keine Haut des Bohrers.
+* **Die eigene 3MF-Hälfte.** trimesh liest 3MF-Geometrie, gibt aber ein
+  einheitliches Grau zurück — Schreiben *und* Lesen der Materialgruppen liegen
+  darum in `app/core/export/threemf.py`.
+* Die mitgelieferten ComfyUI-Arbeitsabläufe (`app/core/backends/data/*.json`)
+  sind ein Startpunkt für Hunyuan3D. Wer andere Knoten installiert hat, ersetzt
+  die Datei — Quelltext ist dafür nicht nötig.
 
 ## P10 — Auto Split mit Verstiftung
 - [ ] Trennebene über die Schichtanalyse suchen (§22.3), dann konvexe Zerlegung

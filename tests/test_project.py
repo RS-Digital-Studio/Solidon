@@ -24,6 +24,7 @@ from app.core.scene.project import (
     write_autosave,
 )
 from app.core.types import (
+    ChatEntry,
     FeatureRef,
     Finding,
     Fit,
@@ -75,6 +76,22 @@ def build_example_project() -> Project:
         ),
     )
     project.sources["src_1"] = MESH_PAYLOAD
+    # A generated source too, so the checked-in file really carries what
+    # pillar B writes into it (§27): the prompt and the starting value.
+    document.sources["src_2"] = Source(
+        id="src_2",
+        kind="generated",
+        path="sources/figur.ply",
+        sha256="",
+        origin=SourceOrigin(
+            title="Kleine Figur",
+            author="comfyui",
+            prompt="eine kleine Figur",
+            seed=7,
+            retrieved="2026-07-27",
+        ),
+    )
+    project.sources["src_2"] = MESH_PAYLOAD
     document.fits.append(
         Fit(
             name="stift_1",
@@ -93,10 +110,23 @@ def build_example_project() -> Project:
         )
     )
     history = History(document)
-    history.apply(
+    agent = Origin(by="agent", model="test", prompt_version="1", rules_version="7")
+    transaction = history.apply(
         _("Duplizieren"),
         [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"name": "=@width"})],
-        origin=Origin(by="agent", model="test", prompt_version="1", rules_version="7"),
+        origin=agent,
+    )
+    # The conversation belongs to the file since version 2, and an agent turn
+    # names the transaction it produced (§26.3).
+    document.chat.append(ChatEntry(id="c1", role="user", text="Bitte duplizieren."))
+    document.chat.append(
+        ChatEntry(
+            id="c2",
+            role="agent",
+            text="Erledigt.",
+            transaction_id=transaction.id,
+            origin=agent,
+        )
     )
     project.report = Report(
         (Finding(code="ingest.welded", severity="info", message="Verschweißt.", op_id=1),)
@@ -312,6 +342,10 @@ def test_the_checked_in_example_still_opens() -> None:
     assert [entry.role for entry in project.document.chat] == ["user", "agent"]
     assert project.document.chat[1].transaction_id, "§26.3: a turn names what it changed"
 
+    generated = project.document.sources["src_2"].origin
+    assert generated is not None
+    assert (generated.prompt, generated.seed) == ("eine kleine Figur", 7)
+
 
 def test_every_older_example_migrates_to_today() -> None:
     """§16.2 keeps one example per version, and each one has to arrive here."""
@@ -332,6 +366,17 @@ def test_a_file_from_before_the_agent_gets_an_empty_conversation() -> None:
     project = load(Path(__file__).parent / "data" / "projects" / "example_v1.p3d")
 
     assert project.document.chat == []
+
+
+def test_a_file_from_before_pillar_b_has_no_generated_sources() -> None:
+    """2 → 3: nothing was generated back then, so nothing carries a prompt."""
+    project = load(Path(__file__).parent / "data" / "projects" / "example_v2.p3d")
+
+    assert all(entry.kind != "generated" for entry in project.document.sources.values())
+    assert all(
+        entry.origin is None or entry.origin.prompt is None
+        for entry in project.document.sources.values()
+    )
 
 
 def _rewrite_project_entry(path: Path, data: dict[str, object]) -> None:
