@@ -24,7 +24,15 @@ from typing import Any, Final, Protocol
 
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_cache_dir
-from app.core.types import Feature, Finding, MaterialSlot, Mesh, SceneObject, SolverInfo
+from app.core.types import (
+    Feature,
+    Finding,
+    MaterialSlot,
+    Mesh,
+    SceneObject,
+    SolverInfo,
+    Transform,
+)
 
 _log = get_logger(__name__)
 
@@ -42,6 +50,9 @@ class CachedResult:
     objects: tuple[SceneObject, ...]
     findings: tuple[Finding, ...] = ()
     solver: SolverInfo | None = None
+    transform: Transform | None = None
+    """Kept with the result: a cached operation has to report the same motion it
+    reported the first time, or the identifiers would only survive a cold run."""
 
     @property
     def cost(self) -> int:

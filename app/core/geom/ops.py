@@ -8,10 +8,10 @@ undoable like everything else.
 from __future__ import annotations
 
 import dataclasses
-from typing import cast
+from typing import Any, cast
 
 from app.core.errors import Action, AppError
-from app.core.geom.align import align
+from app.core.geom.align import align_matrix
 from app.core.geom.boolean import BooleanKind, boolean
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.repair import repair
@@ -27,11 +27,17 @@ from app.core.geom.transform import (
     translation,
 )
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, FeatureRef, OpContext, OpResult
+from app.core.types import BaseParams, FeatureRef, OpContext, OpResult, Transform
 from app.i18n import _
 
 _AXES = tuple(AXIS_VECTORS)
 _ANCHORS = ("centre", "origin", "bed")
+
+
+def as_transform(matrix: Any) -> Transform:
+    """A matrix as plain numbers, so it survives the cache and the file (§21.2)."""
+    rows = [tuple(float(value) for value in row) for row in matrix]
+    return cast(Transform, tuple(rows))
 
 
 @op_params
@@ -54,8 +60,11 @@ class TranslateParams(BaseParams):
 def translate_object(ctx: OpContext) -> OpResult:
     params = cast(TranslateParams, ctx.params)
     source = ctx.inputs[0]
-    moved = apply(as_mesh_data(source.mesh), translation((params.dx, params.dy, params.dz)))
-    return OpResult(outputs=[dataclasses.replace(source, mesh=moved)])
+    matrix = translation((params.dx, params.dy, params.dz))
+    moved = apply(as_mesh_data(source.mesh), matrix)
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=moved)], transform=as_transform(matrix)
+    )
 
 
 @op_params
@@ -87,10 +96,11 @@ def rotate_object(ctx: OpContext) -> OpResult:
     params = cast(RotateParams, ctx.params)
     source = ctx.inputs[0]
     pivot = anchor_point(as_mesh_data(source.mesh), cast(Anchor, params.about))
-    turned = apply(
-        as_mesh_data(source.mesh), rotation(cast(Axis, params.axis), params.angle, pivot)
+    matrix = rotation(cast(Axis, params.axis), params.angle, pivot)
+    turned = apply(as_mesh_data(source.mesh), matrix)
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=turned)], transform=as_transform(matrix)
     )
-    return OpResult(outputs=[dataclasses.replace(source, mesh=turned)])
 
 
 @op_params
@@ -129,8 +139,11 @@ def scale_object(ctx: OpContext) -> OpResult:
         params.fz or params.factor,
     )
     pivot = anchor_point(as_mesh_data(source.mesh), cast(Anchor, params.about))
-    scaled = apply(as_mesh_data(source.mesh), scaling(factors, pivot))
-    return OpResult(outputs=[dataclasses.replace(source, mesh=scaled)])
+    matrix = scaling(factors, pivot)
+    scaled = apply(as_mesh_data(source.mesh), matrix)
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=scaled)], transform=as_transform(matrix)
+    )
 
 
 @op_params
@@ -257,8 +270,11 @@ class PlaceOnBedParams(BaseParams):
 )
 def place_object_on_bed(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
+    mesh = as_mesh_data(source.mesh)
+    matrix = translation((0.0, 0.0, -mesh.bounds.minimum[2]))
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=place_on_bed(as_mesh_data(source.mesh)))]
+        outputs=[dataclasses.replace(source, mesh=place_on_bed(mesh))],
+        transform=as_transform(matrix),
     )
 
 
@@ -321,5 +337,8 @@ def align_to_feature(ctx: OpContext) -> OpResult:
             ),
         )
 
-    aligned = align(as_mesh_data(source.mesh), moving, wanted, flip=params.flip)
-    return OpResult(outputs=[dataclasses.replace(source, mesh=aligned)])
+    matrix = align_matrix(moving, wanted, flip=params.flip)
+    aligned = apply(as_mesh_data(source.mesh), matrix)
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=aligned)], transform=as_transform(matrix)
+    )

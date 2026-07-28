@@ -72,6 +72,15 @@ Vec3 = tuple[float, float, float]
 Point2 = tuple[float, float]
 Ring = tuple[Point2, ...]
 
+Transform = tuple[
+    tuple[float, float, float, float],
+    tuple[float, float, float, float],
+    tuple[float, float, float, float],
+    tuple[float, float, float, float],
+]
+"""A 4x4 matrix as plain numbers, row by row. Kept as tuples rather than as an
+array so it travels through the cache and the project file unchanged."""
+
 
 @dataclass(frozen=True, slots=True)
 class BoundingBox:
@@ -465,6 +474,14 @@ class OpResult:
     outputs: list[SceneObject]
     solver: SolverInfo | None = None
     findings: list[Finding] = field(default_factory=list)
+    transform: Transform | None = None
+    """The rigid motion this operation applied, if it was one.
+
+    Only transform operations fill this in, and only they can: an operation
+    knows what it did to the body, while the feature matching afterwards would
+    have to guess it back out of the result (§21.2). With the matrix in hand the
+    old identifiers survive a rotation; without it a turned plate looks like a
+    different plate."""
 
 
 OpFn = Callable[[OpContext], OpResult]

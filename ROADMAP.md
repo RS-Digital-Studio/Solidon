@@ -118,7 +118,10 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 
 ## P3 — Wahrnehmung und Schichtanalyse
 - [x] Feature-Erkennung (§21.1) gegen `plate_holes`
-- [x] Provenienz-IDs und Zuordnung, `plate_holes_twin` als mehrdeutig
+- [x] Provenienz-IDs und Zuordnung, `plate_holes_twin` als mehrdeutig — die
+      Transformations-Ops melden ihre Bewegung (`OpResult.transform`), die
+      Zuordnung nimmt die alten Merkmale erst mit und vergleicht dann; ohne das
+      verlor jede Drehung alle Namen. Nachweis: zehn Ops hintereinander
 - [x] Verwaisungsdialog über `ctx.ask`, Prüfung beim Öffnen — `core/scene/orphans.py`
       prüft beim Öffnen jeden Merkmalsverweis einmal, schreibt die Antwort in die
       Datei und fragt sie darum nicht bei jedem Lauf erneut
@@ -144,6 +147,15 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Schichtenvorschau im Viewport (§18.10), ehrlich beschriftet
 - [x] Herkunft jeder Kennzahl ausweisen (`internal`), nie mit G-Code vermischt —
       Legende und Prüfbericht weisen sie aus
+- [~] Leistungsziele §31 für die Schichtanalyse — **nicht erreicht**, gemessen in
+      `tests/test_performance.py`. Der Schnitt läuft jetzt über eine
+      Dreiecks-Einsortierung nach Höhe statt Ebene für Ebene über das ganze Netz
+      (7,6 s → 2,3 s bei 328 000 Dreiecken), das Ziel sind 300 ms bei 200 000.
+      Es fehlt rund das Fünffache; die Zeit steckt in den Shapely-Aufrufen
+      (Erosion für die Minimalbreite, Polygonaufbau) und ist ohne kompilierten
+      Kern nicht zu holen. Gleiches Bild bei der Orientierungssuche (32 s statt
+      20 s, weil sie nichts anderes tut als schneiden) und bei der Karte
+      Wandstärke (8 s statt 3 s, und im Vordergrund statt im Hintergrund)
 
 ## P4 — Agent auf Säule C
 - [ ] `LLMBackend`, Schlüssel im Schlüsselbund, lokal über Ollama

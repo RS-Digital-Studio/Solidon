@@ -206,6 +206,18 @@ def test_the_diameter_of_a_bore_reaches_the_status_bar(window: MainWindow) -> No
     assert "Ø" in window.measurements.text()
 
 
+def test_a_click_in_the_view_finds_the_feature_under_it(window: MainWindow) -> None:
+    """§40 for P3: a click has to deliver the right feature id, not a near miss."""
+    select_plate(window)
+    window.viewport.show_scene(window.session.last_result)
+    window.viewport.select("obj_1")
+    entry = window.session.last_result.scene.objects["obj_1"]
+    centre = entry.features["hole_3"].params["centre"]
+
+    picked = window.viewport._feature_at((centre[0] + 0.4, centre[1] - 0.3, centre[2]))
+    assert picked == "hole_3"
+
+
 def test_the_label_names_the_feature_and_its_size(window: MainWindow) -> None:
     entry = window.session.last_result.scene.objects["obj_1"]
     label = feature_label("hole_1", entry.features["hole_1"])

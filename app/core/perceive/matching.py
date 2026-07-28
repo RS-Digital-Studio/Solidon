@@ -25,7 +25,7 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from app.core.log import get_logger
-from app.core.types import Feature, FeatureId, Vec3
+from app.core.types import Feature, FeatureId, Transform, Vec3
 from app.core.units import EPS_GEOM
 
 _log = get_logger(__name__)
@@ -193,3 +193,40 @@ def question_for(old_id: FeatureId, candidates: tuple[FeatureId, ...]) -> tuple[
         tr("Welches Merkmal entspricht {name}?").replace("{name}", old_id),
         [*candidates, tr("Verwerfen")],
     )
+
+
+def moved_features(
+    features: dict[FeatureId, Feature], transform: Transform
+) -> dict[FeatureId, Feature]:
+    """Carry features along a rigid motion the operation reported (§21.2).
+
+    Only the parts that live in space are touched: the point a feature sits at
+    and the direction it points in. A diameter does not move, and an area is not
+    a place. Without this a rotation would orphan every feature on the body —
+    not because it disappeared, but because it is somewhere else now.
+    """
+    matrix = np.asarray(transform, dtype=float)
+    turn = matrix[:3, :3]
+    moved: dict[FeatureId, Feature] = {}
+    for identifier, feature in features.items():
+        params = dict(feature.params)
+        for key in ("centre", "position"):
+            if key in params:
+                point = np.asarray(params[key], dtype=float)
+                carried = matrix @ np.array([*point, 1.0])
+                params[key] = (float(carried[0]), float(carried[1]), float(carried[2]))
+        for key in ("axis", "normal"):
+            if key in params:
+                direction = turn @ np.asarray(params[key], dtype=float)
+                length = float(np.linalg.norm(direction))
+                if length > EPS_GEOM:
+                    direction = direction / length
+                params[key] = (float(direction[0]), float(direction[1]), float(direction[2]))
+        moved[identifier] = Feature(
+            id=feature.id,
+            kind=feature.kind,
+            provenance=feature.provenance,
+            params=params,
+            face_indices=feature.face_indices,
+        )
+    return moved

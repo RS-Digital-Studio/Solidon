@@ -28,7 +28,7 @@ from app.core.errors import AmbiguityError, AppError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.perceive.features import detect
-from app.core.perceive.matching import apply_mapping, match, question_for
+from app.core.perceive.matching import apply_mapping, match, moved_features, question_for
 from app.core.registry import REGISTRY, Registry, validate
 from app.core.scene import expressions
 from app.core.scene.cache import CachedResult, ResultCache
@@ -53,6 +53,7 @@ from app.core.types import (
     SceneObject,
     SolverInfo,
     SourceAccess,
+    Transform,
 )
 from app.i18n import _
 
@@ -152,7 +153,9 @@ def evaluate(
         cached = cache.get(key) if cache is not None else None
 
         if cached is not None:
-            result = CachedResult(objects=cached.objects, findings=cached.findings)
+            result = CachedResult(
+                objects=cached.objects, findings=cached.findings, transform=cached.transform
+            )
         else:
             context = OpContext(
                 scene=Scene(
@@ -182,6 +185,7 @@ def evaluate(
                 objects=tuple(produced.outputs),
                 findings=tuple(produced.findings),
                 solver=produced.solver,
+                transform=produced.transform,
             )
 
         if len(result.objects) != len(operation.outputs):
@@ -197,7 +201,12 @@ def evaluate(
             object_id = operation.outputs[index]
             placed = dataclasses.replace(produced_object, id=object_id, created_by=operation.id)
             objects[object_id] = _with_features(
-                placed, previous_features.get(object_id, {}), operation, ask, findings
+                placed,
+                previous_features.get(object_id, {}),
+                operation,
+                ask,
+                findings,
+                result.transform,
             )
             hashes[object_id] = object_hash(key, index)
 
@@ -248,6 +257,7 @@ def _with_features(
     operation: Operation,
     ask: Any,
     findings: list[Finding],
+    transform: Transform | None = None,
 ) -> SceneObject:
     """Detect features again and keep the old identifiers where they still fit.
 
@@ -275,6 +285,12 @@ def _with_features(
     detected = detect(mesh)
     if not previous:
         return dataclasses.replace(entry, features=detected)
+
+    # A turned body looks like a different body to a comparison of positions. The
+    # operation knows what it turned, so the old features are carried along
+    # first and only then compared (§21.2).
+    if transform is not None:
+        previous = moved_features(previous, transform)
 
     centre = mesh.bounds.centre
     matched = match(previous, detected, centre, mesh.bounds.diagonal)
