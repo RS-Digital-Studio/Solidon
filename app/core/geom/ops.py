@@ -10,6 +10,8 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
+from app.core.errors import Action, AppError
+from app.core.geom.align import align
 from app.core.geom.boolean import BooleanKind, boolean
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.repair import repair
@@ -25,7 +27,7 @@ from app.core.geom.transform import (
     translation,
 )
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, OpContext, OpResult
+from app.core.types import BaseParams, FeatureRef, OpContext, OpResult
 from app.i18n import _
 
 _AXES = tuple(AXIS_VECTORS)
@@ -258,3 +260,66 @@ def place_object_on_bed(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=place_on_bed(as_mesh_data(source.mesh)))]
     )
+
+
+@op_params
+class AlignParams(BaseParams):
+    feature: str = param(
+        title=_("Merkmal"),
+        default="",
+        doc=_("Bohrung oder Fläche am bewegten Objekt, zum Beispiel hole_1."),
+    )
+    target: str = param(
+        title=_("Ziel"),
+        default="",
+        doc=_("Merkmal, auf das ausgerichtet wird, als obj_2:hole_1."),
+    )
+    flip: bool = param(
+        title=_("Umgekehrt herum"),
+        default=False,
+        placement="advanced",
+        doc=_("Dreht das Ergebnis um 180 Grad, wenn die andere Seite gemeint war."),
+    )
+
+
+@register_op(
+    name="align_to_feature",
+    title=_("An Merkmal ausrichten"),
+    category="transform",
+    params=AlignParams,
+    consumes=1,
+    produces=1,
+    applies_to=["hole", "face"],
+    doc=_("Bringt eine Bohrungsachse oder eine Fläche mit einer zweiten zur Deckung."),
+)
+def align_to_feature(ctx: OpContext) -> OpResult:
+    """Snapping as an operation (§18.11): the file says what was lined up with what."""
+    params = cast(AlignParams, ctx.params)
+    source = ctx.inputs[0]
+    reference = FeatureRef.parse(params.target) if ":" in params.target else None
+    if reference is None:
+        raise AppError(
+            _("Das Ziel muss ein Merkmal eines Objekts benennen."),
+            detail=f"malformed target {params.target!r}",
+            values={"target": params.target},
+            suggestions=(
+                Action(id="write_target", label=_("Schreiben Sie das Ziel als obj_2:hole_1.")),
+            ),
+        )
+
+    moving = source.features.get(params.feature)
+    other = ctx.scene.objects.get(reference.object_id)
+    wanted = other.features.get(reference.feature_id) if other is not None else None
+    if moving is None or wanted is None:
+        missing = params.feature if moving is None else params.target
+        raise AppError(
+            _("Dieses Merkmal gibt es nicht."),
+            detail=f"unknown feature {missing!r}",
+            values={"feature": missing},
+            suggestions=(
+                Action(id="pick_feature", label=_("Wählen Sie das Merkmal im Objektbaum aus.")),
+            ),
+        )
+
+    aligned = align(as_mesh_data(source.mesh), moving, wanted, flip=params.flip)
+    return OpResult(outputs=[dataclasses.replace(source, mesh=aligned)])

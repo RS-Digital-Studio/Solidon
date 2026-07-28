@@ -56,13 +56,16 @@ def test_operations_are_visible_in_every_surface(qt_app: object) -> None:
     assert {command.name for command in cli_commands()} == names
     assert {schema["name"] for schema in tool_schemas()} == names
 
-    # The object context menu offers every operation that works on one object;
-    # the feature context menu over applies_to gets its entries in P2/P3.
+    # The object context menu offers every operation that works on one object,
+    # the feature context menu everything declared for that kind (§10, §18.5).
     from app.ui.panels import ObjectTree
 
     offered = {spec.name for spec in ObjectTree.operations_for_object(None)}  # type: ignore[arg-type]
     assert offered == {spec.name for spec in REGISTRY.all() if spec.consumes == 1}
-    assert context_menu("hole") == ()
+    assert {spec.name for spec in context_menu("hole")} == {
+        spec.name for spec in REGISTRY.all() if "hole" in spec.applies_to
+    }
+    assert context_menu("hole"), "with the feature detection the bore menu is filled"
 
 
 def test_saving_and_loading_keeps_the_stack_bit_identical(tmp_path: Path) -> None:

@@ -1,0 +1,248 @@
+"""Controls for the analysis maps and the layer preview (Bauplan §18.4, §18.10).
+
+Two bars, one idea: look at the body through a filter that answers one question.
+Which map is showing is always visible, and so is what its colours mean — §18.4
+asks for a legend and a numeric range on every map, and §19.1 forbids colour as
+the only carrier, so the legend spells out the numbers next to the swatches.
+
+The layer preview is labelled "Schichtanalyse", never "Vorschau": it shows
+geometry, not tool paths, and calling it a preview would promise something the
+external slicer delivers (§18.10, §22.5).
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QSlider,
+    QWidget,
+)
+
+from app.core.perceive.maps import AnalysisMap, MapKind
+from app.core.types import SliceResult
+from app.core.units import format_length
+from app.i18n import tr
+from app.ui.palette import VIRIDIS, map_colour
+from app.ui.panels import origin_label
+
+#: Order of the maps in the selector, matching the table in §18.4.
+MAP_ORDER: tuple[MapKind, ...] = (
+    "wall",
+    "overhang",
+    "defects",
+    "curvature",
+    "features",
+    "fits",
+    "support",
+)
+
+#: How many swatches the continuous legend shows.
+LEGEND_STEPS = 5
+
+
+class MapLegend(QWidget):
+    """Swatches with their numbers — the legend §18.4 asks for on every map."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(6)
+        self.note = QLabel("", self)
+        self.note.setWordWrap(True)
+        self.entries: list[tuple[str, str]] = []
+        """Label and colour of every swatch, kept for the test and the tooltip."""
+
+    def show_map(self, analysis: AnalysisMap | None) -> None:
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None and widget is not self.note:
+                widget.deleteLater()
+        self.entries = []
+        if analysis is None:
+            self.note.setText("")
+            return
+
+        for label, colour in _legend_entries(analysis):
+            self.entries.append((label, colour))
+            swatch = QLabel(label, self)
+            swatch.setStyleSheet(
+                f"background: {colour}; color: {_readable_on(colour)}; padding: 1px 5px;"
+            )
+            self._layout.addWidget(swatch)
+
+        # §22.5: where a number comes from belongs next to the number.
+        parts = [f"{tr('Herkunft')}: {origin_label(analysis.source)}"]
+        if analysis.resolution is not None:
+            parts.append(f"{tr('Raster')} {format_length(analysis.resolution)}")
+        if analysis.note is not None:
+            parts.append(str(analysis.note))
+        if analysis.unknown_count:
+            parts.append(f"{analysis.unknown_count} × {tr('nicht bestimmbar')}")
+        self.note.setText(" · ".join(parts))
+        self._layout.addWidget(self.note, stretch=1)
+
+
+def _legend_entries(analysis: AnalysisMap) -> list[tuple[str, str]]:
+    """Labels and colours: named levels where there are any, a ramp otherwise."""
+    if analysis.categories:
+        count = len(analysis.categories)
+        return [
+            (name, map_colour(index / max(count - 1, 1)))
+            for index, name in enumerate(analysis.categories)
+        ]
+
+    low, high = analysis.low, analysis.high
+    if high <= low:
+        high = low + 1.0
+    entries: list[tuple[str, str]] = []
+    for step in range(LEGEND_STEPS):
+        fraction = step / (LEGEND_STEPS - 1)
+        value = low + (high - low) * fraction
+        text = format_length(value) if analysis.unit == "mm" else f"{value:.0f} {analysis.unit}"
+        entries.append((text, map_colour(fraction, VIRIDIS)))
+    return entries
+
+
+def _readable_on(colour: str) -> str:
+    """Black or white text, whichever stays legible on the swatch (§19.3)."""
+    from app.ui.theme import relative_luminance
+
+    return "#101418" if relative_luminance(colour) > 0.35 else "#f2f4f7"
+
+
+class AnalysisBar(QWidget):
+    """Which map is showing, plus its legend (§18.4)."""
+
+    mapChanged = Signal(object)
+    """The chosen ``MapKind``, or None for no map."""
+    overlayToggled = Signal(bool)
+    """Whether the feature overlay is showing (§18.5)."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+
+        self.selector = QComboBox(self)
+        self.selector.addItem(tr("Keine Karte"), userData=None)
+        for kind, label in (
+            ("wall", tr("Wandstärke")),
+            ("overhang", tr("Überhang")),
+            ("defects", tr("Netzfehler")),
+            ("curvature", tr("Krümmung")),
+            ("features", tr("Feature-Zuordnung")),
+            ("fits", tr("Passungen")),
+            ("support", tr("Stützbedarf")),
+        ):
+            self.selector.addItem(label, userData=kind)
+        self.selector.currentIndexChanged.connect(
+            lambda _index: self.mapChanged.emit(self.selector.currentData())
+        )
+
+        self.overlay = QCheckBox(tr("Merkmale zeigen"), self)
+        self.overlay.toggled.connect(self.overlayToggled)
+
+        self.legend = MapLegend(self)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 2, 6, 2)
+        layout.addWidget(self.selector)
+        layout.addWidget(self.overlay)
+        layout.addWidget(self.legend, stretch=1)
+
+    def chosen(self) -> MapKind | None:
+        value: MapKind | None = self.selector.currentData()
+        return value
+
+    def show_map(self, kind: MapKind | None) -> None:
+        """Switch the selector without emitting — used when a warning picks a map."""
+        index = self.selector.findData(kind)
+        if index >= 0 and index != self.selector.currentIndex():
+            blocked = self.selector.blockSignals(True)
+            self.selector.setCurrentIndex(index)
+            self.selector.blockSignals(blocked)
+
+    def show_legend(self, analysis: AnalysisMap | None) -> None:
+        self.legend.show_map(analysis)
+
+    def show_problem(self, message: str) -> None:
+        """A map that could not be built says so instead of showing nothing."""
+        self.legend.show_map(None)
+        self.legend.note.setText(message)
+
+
+class LayerBar(QWidget):
+    """Scrub through the height of the body (§18.10).
+
+    Deliberately named after what it is: an analysis of layers, not a preview of
+    what the printer will do.
+    """
+
+    layerChanged = Signal(int)
+    """Index of the chosen layer, or -1 when the preview is off."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+
+        self.active = QComboBox(self)
+        self.active.addItem(tr("Keine Schichtanalyse"), userData=False)
+        self.active.addItem(tr("Schichtanalyse"), userData=True)
+        self.active.currentIndexChanged.connect(lambda _index: self._emit())
+
+        self.slider = QSlider(Qt.Orientation.Horizontal, self)
+        self.slider.setMinimum(0)
+        self.slider.setMaximum(0)
+        self.slider.valueChanged.connect(lambda _value: self._emit())
+
+        self.readout = QLabel("", self)
+        self.readout.setMinimumWidth(220)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 2, 6, 2)
+        layout.addWidget(self.active)
+        layout.addWidget(self.slider, stretch=1)
+        layout.addWidget(self.readout)
+        self._result: SliceResult | None = None
+        self._update_enabled()
+
+    def show_result(self, result: SliceResult | None) -> None:
+        self._result = result
+        count = len(result.layers) if result else 0
+        self.slider.setMaximum(max(count - 1, 0))
+        self.slider.setValue(0)
+        self._show_readout()
+
+    def enabled(self) -> bool:
+        return bool(self.active.currentData())
+
+    def index(self) -> int:
+        return self.slider.value() if self.enabled() else -1
+
+    def _update_enabled(self) -> None:
+        self.slider.setEnabled(self.enabled())
+
+    def _emit(self) -> None:
+        self._update_enabled()
+        self._show_readout()
+        self.layerChanged.emit(self.index())
+
+    def _show_readout(self) -> None:
+        result = self._result
+        if result is None or not result.layers or not self.enabled():
+            self.readout.setText("")
+            return
+        layer = result.layers[min(self.slider.value(), len(result.layers) - 1)]
+        parts = [
+            f"{tr('Schicht')} {self.slider.value() + 1}/{len(result.layers)}",
+            f"z {format_length(layer.z)}",
+            f"{layer.area:.0f} mm²",
+        ]
+        if layer.islands:
+            parts.append(f"{len(layer.islands)} × {tr('Insel')}")
+        if layer.overhang_area > 0.0:
+            parts.append(f"{tr('Überhang')} {layer.overhang_area:.0f} mm²")
+        self.readout.setText(" · ".join(parts))

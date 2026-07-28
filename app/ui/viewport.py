@@ -21,9 +21,12 @@ from app.core.geom.measure import Measurement, MeasurementList, distance, snap, 
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import TransformSteps, decompose_transform, snap_to_step
 from app.core.log import get_logger
+from app.core.perceive.maps import AnalysisMap
 from app.core.scene import EvaluationResult
-from app.core.types import ObjectId, Profile, Vec3
+from app.core.types import Feature, FeatureId, LayerInfo, ObjectId, Profile, Vec3
 from app.i18n import tr
+from app.ui.labels import feature_label
+from app.ui.palette import VIRIDIS
 from app.ui.theme import viewport_colours
 
 _log = get_logger(__name__)
@@ -89,6 +92,13 @@ MeasureMode = Literal["off", "distance", "thickness"]
 
 MEASURE_COLOUR = "#f0a54a"
 
+#: Layer analysis (§18.10): contour, island, unsupported region.
+LAYER_COLOUR = "#7fb2e5"
+ISLAND_COLOUR = "#e0a33c"
+OVERHANG_COLOUR = "#d05a5a"
+
+FEATURE_LABEL_COLOUR = "#cfe3f5"
+
 
 class Viewport(QWidget):
     """The 3D view, or a plain hint when VTK is not available."""
@@ -97,6 +107,8 @@ class Viewport(QWidget):
     """A finished measurement — carries a ``Measurement``."""
     transformDragged = Signal(object)
     """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
+    featurePicked = Signal(str)
+    """A feature clicked in the view — carries its id (§18.5)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -124,6 +136,13 @@ class Viewport(QWidget):
         self._gizmo: Any | None = None
         self._grid_step = 1.0
         self._angle_step = 15.0
+        self._map: AnalysisMap | None = None
+        self._map_object: ObjectId | None = None
+        self._feature_overlay = False
+        self._feature_actors: list[Any] = []
+        self._selected_feature: FeatureId | None = None
+        self._layer_actors: list[Any] = []
+        self._layer: LayerInfo | None = None
 
         if not _available():
             self._layout.addWidget(
@@ -170,6 +189,17 @@ class Viewport(QWidget):
                 [np.full((len(raw.faces), 1), 3, dtype=np.int64), np.asarray(raw.faces)]
             ).ravel()
             surface = pv.PolyData(np.asarray(raw.vertices, dtype=float), faces)
+            scalars = self._scalars_for(object_id, len(raw.faces))
+            extra: dict[str, Any] = {}
+            if scalars is not None and self._map is not None:
+                surface.cell_data[str(self._map.kind)] = scalars
+                extra = {
+                    "scalars": str(self._map.kind),
+                    "cmap": list(VIRIDIS),
+                    "clim": (self._map.low, max(self._map.high, self._map.low + 1e-6)),
+                    "show_scalar_bar": False,
+                    "nan_color": "#4a4f57",
+                }
             actor = self.plotter.add_mesh(
                 surface,
                 color=self._object_colour,
@@ -178,11 +208,29 @@ class Viewport(QWidget):
                 name=f"object:{object_id}",
                 render=False,
                 **style,
+                **extra,
             )
             self._actors[object_id] = actor
 
         self.select(self._selected)
+        self._redraw_features()
+        self._redraw_layer()
         self.plotter.render()
+
+    def _scalars_for(self, object_id: ObjectId, faces: int) -> Any:
+        """Map values for this body, if there are any that still fit it.
+
+        A section cut changes the triangle count, so the map no longer lines up
+        with the geometry on screen. Showing it anyway would colour the wrong
+        triangles — the map steps aside until the cut is gone.
+        """
+        if self._map is None or self._map_object != object_id:
+            return None
+        if len(self._map.values) != faces:
+            return None
+        import numpy as np
+
+        return np.asarray(self._map.values, dtype=float)
 
     def _sectioned(self, mesh: Any) -> Any:
         """Apply the section plane. Cutting is geometry, so the core does it (§18.2)."""
@@ -202,6 +250,10 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
         for identifier, actor in self._actors.items():
+            if self._map is not None and identifier == self._map_object:
+                # A map owns the colour of its body; the selection shows in the
+                # object tree and the status bar instead (§19.1).
+                continue
             actor.prop.color = SELECTED_COLOUR if identifier == object_id else self._object_colour
         self.plotter.render()
 
@@ -327,7 +379,9 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
         if mode == "off":
+            # Measuring hands the clicks back to the feature overlay, if it is on.
             self.plotter.disable_picking()
+            self.set_feature_overlay(self._feature_overlay)
             return
         self.plotter.enable_point_picking(
             callback=self._on_picked,
@@ -349,6 +403,14 @@ class Viewport(QWidget):
 
     def _on_picked(self, point: Any) -> None:
         picked = (float(point[0]), float(point[1]), float(point[2]))
+        if self._measure_mode == "off":
+            # Not measuring: a click is meant for the feature under it (§18.5).
+            feature_id = self._feature_at(picked)
+            if feature_id is not None:
+                self.select_feature(feature_id)
+                self.featurePicked.emit(feature_id)
+            return
+
         mesh = self._nearest_mesh(picked)
         if mesh is None:
             return
@@ -425,6 +487,182 @@ class Viewport(QWidget):
                     )
                 )
         self.plotter.render()
+
+    # --- analysis maps (§18.4) --------------------------------------------------
+
+    def set_analysis_map(self, analysis: AnalysisMap | None, object_id: ObjectId | None) -> None:
+        """Paint one body by the numbers of a map, or take the map away."""
+        self._map = analysis
+        self._map_object = object_id if analysis is not None else None
+        self.show_scene(self._result)
+
+    @property
+    def analysis_map(self) -> AnalysisMap | None:
+        return self._map
+
+    def fly_to(self, point: Vec3, distance_factor: float = 3.0) -> None:
+        """Move the camera onto a spot without changing the viewing direction (§18.4).
+
+        Turning the model as well would cost the orientation the user just built
+        up; coming closer along the current line of sight keeps it.
+        """
+        if self.plotter is None:
+            return
+        import numpy as np
+
+        camera = self.plotter.camera
+        position = np.asarray(camera.position, dtype=float)
+        focus = np.asarray(camera.focal_point, dtype=float)
+        direction = position - focus
+        length = float(np.linalg.norm(direction))
+        if length <= 1e-9:
+            direction = np.array([1.0, -1.0, 0.8])
+            length = float(np.linalg.norm(direction))
+        reach = max(self._scene_size() / distance_factor, 1.0)
+        target = np.asarray(point, dtype=float)
+        camera.focal_point = tuple(target)
+        camera.position = tuple(target + direction / length * reach)
+        self.plotter.render()
+
+    def _scene_size(self) -> float:
+        if self._result is None or not self._result.scene.objects:
+            return 50.0
+        return max(
+            float(max(entry.mesh.bounds.size)) for entry in self._result.scene.objects.values()
+        )
+
+    # --- feature overlay (§18.5) ------------------------------------------------
+
+    def set_feature_overlay(self, active: bool) -> None:
+        """Labels on the recognised features, and clicking to select them.
+
+        §18.5 calls this the most important single function: the user does not
+        have to know that a bore is called ``hole_3``, they point at it.
+        """
+        self._feature_overlay = active
+        if self.plotter is None:
+            return
+        if active and self._measure_mode == "off":
+            self.plotter.enable_point_picking(
+                callback=self._on_picked,
+                show_message=False,
+                show_point=False,
+                left_clicking=True,
+                picker="point",
+            )
+        elif not active and self._measure_mode == "off":
+            self.plotter.disable_picking()
+        self._redraw_features()
+        self.plotter.render()
+
+    def select_feature(self, feature_id: FeatureId | None) -> None:
+        self._selected_feature = feature_id
+        self._redraw_features()
+        if self.plotter is not None:
+            self.plotter.render()
+
+    @property
+    def selected_feature(self) -> FeatureId | None:
+        return self._selected_feature
+
+    def _features_of_selection(self) -> dict[FeatureId, Feature]:
+        if self._result is None or self._selected is None:
+            return {}
+        entry = self._result.scene.objects.get(self._selected)
+        return dict(entry.features) if entry is not None else {}
+
+    def _redraw_features(self) -> None:
+        if self.plotter is None:
+            return
+        for actor in self._feature_actors:
+            self.plotter.remove_actor(actor, render=False)
+        self._feature_actors.clear()
+        if not self._feature_overlay:
+            return
+
+        import numpy as np
+
+        points: list[list[float]] = []
+        labels: list[str] = []
+        for feature_id, feature in self._features_of_selection().items():
+            centre = feature.params.get("centre")
+            if centre is None:
+                continue
+            points.append([float(value) for value in centre])
+            labels.append(feature_label(feature_id, feature))
+        if not points:
+            return
+
+        self._feature_actors.append(
+            self.plotter.add_point_labels(
+                np.asarray(points, dtype=float),
+                labels,
+                text_color=FEATURE_LABEL_COLOUR,
+                font_size=11,
+                show_points=True,
+                point_color=MEASURE_COLOUR,
+                point_size=10,
+                name="features",
+                render=False,
+            )
+        )
+
+    def _feature_at(self, point: Vec3) -> FeatureId | None:
+        """The feature nearest a click — pointing beats typing a name (§18.5)."""
+        import numpy as np
+
+        target = np.asarray(point, dtype=float)
+        best: FeatureId | None = None
+        best_offset = float("inf")
+        for feature_id, feature in self._features_of_selection().items():
+            centre = feature.params.get("centre")
+            if centre is None:
+                continue
+            offset = float(np.linalg.norm(np.asarray(centre, dtype=float) - target))
+            if offset < best_offset:
+                best_offset = offset
+                best = feature_id
+        return best
+
+    # --- layer analysis (§18.10) ------------------------------------------------
+
+    def set_layer(self, layer: LayerInfo | None) -> None:
+        """Show the contours of one layer. Geometry, not tool paths (§18.10)."""
+        self._layer = layer
+        self._redraw_layer()
+        if self.plotter is not None:
+            self.plotter.render()
+
+    def _redraw_layer(self) -> None:
+        if self.plotter is None:
+            return
+        for actor in self._layer_actors:
+            self.plotter.remove_actor(actor, render=False)
+        self._layer_actors.clear()
+        layer = self._layer
+        if layer is None:
+            return
+
+        for index, polygon in enumerate(layer.contours):
+            self._add_ring(polygon.outline, layer.z, LAYER_COLOUR, f"layer:{index}")
+            for hole_index, ring in enumerate(polygon.holes):
+                self._add_ring(ring, layer.z, LAYER_COLOUR, f"layer:{index}:{hole_index}")
+        for index, polygon in enumerate(layer.islands):
+            self._add_ring(polygon.outline, layer.z, ISLAND_COLOUR, f"island:{index}", width=3)
+        for index, polygon in enumerate(layer.overhangs):
+            self._add_ring(polygon.outline, layer.z, OVERHANG_COLOUR, f"overhang:{index}", width=3)
+
+    def _add_ring(self, ring: Any, z: float, colour: str, name: str, width: int = 2) -> None:
+        if self.plotter is None or len(ring) < 2:
+            return
+        import numpy as np
+
+        points = np.array([[float(x), float(y), z] for x, y in ring], dtype=float)
+        # add_lines wants point pairs; a closed ring is every point twice but the ends.
+        segments = np.repeat(points, 2, axis=0)[1:-1]
+        self._layer_actors.append(
+            self.plotter.add_lines(segments, color=colour, width=width, name=name)
+        )
 
     # --- direct manipulation (§18.11) -------------------------------------------
 

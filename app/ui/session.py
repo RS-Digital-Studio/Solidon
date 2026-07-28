@@ -22,7 +22,14 @@ from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
 from app.core.errors import AppError, OperationCancelled
 from app.core.knowledge import profiles
 from app.core.log import get_logger
-from app.core.scene import CancelSignal, EvaluationResult, History, OperationDraft, ResultCache
+from app.core.scene import (
+    CancelSignal,
+    EvaluationResult,
+    History,
+    OperationDraft,
+    ResultCache,
+    orphans,
+)
 from app.core.scene.evaluate import evaluate
 from app.core.scene.project import (
     Project,
@@ -33,7 +40,7 @@ from app.core.scene.project import (
     save,
     write_autosave,
 )
-from app.core.types import Origin, Profile, Quality, Source
+from app.core.types import Finding, Origin, Profile, Quality, Report, Source
 from app.i18n import TranslatableText, tr
 
 _log = get_logger(__name__)
@@ -71,22 +78,34 @@ class _EvaluationWorker(QThread):
     def run(self) -> None:
         session = self._session
         try:
-            result = evaluate(
-                session.project.document,
-                session.profile,
-                quality=session.quality,
-                progress=session.report_progress,
-                ask=session.ask_from_worker,
-                cancelled=session.cancel_signal,
-                cache=session.cache,
-                sources=ProjectSources(session.project, base_dir=session.base_dir),
-            )
+            result = session.run_evaluation()
+            if session.pending_orphan_check and result.complete:
+                # §21.3: every feature reference of an opened file is checked once,
+                # here in the worker where asking may block without freezing the
+                # window. A rewritten reference means the scene has to be built
+                # again — with the answer in it, not around it.
+                session.pending_orphan_check = False
+                check = orphans.check(
+                    session.project.document, result.scene, session.ask_from_worker
+                )
+                if check.changed:
+                    result = session.run_evaluation()
+                result = _with_findings(result, check.findings)
         except OperationCancelled:
             self.cancelled.emit()
         except AppError as error:
             self.failedWith.emit(error)
         else:
             self.finishedWith.emit(result)
+
+
+def _with_findings(result: EvaluationResult, extra: list[Finding]) -> EvaluationResult:
+    """Carry the check's findings into the report the window shows."""
+    if not extra:
+        return result
+    scene = result.scene
+    scene.report = Report((*scene.report.findings, *extra))
+    return result
 
 
 class Session(QObject):
@@ -113,6 +132,8 @@ class Session(QObject):
         self.quality: Quality = "draft"
         """Draft while iterating; the export and the final report switch to fine (§31)."""
         self.last_result: EvaluationResult | None = None
+        self.pending_orphan_check = False
+        """Set when a file was opened: §21.3 checks its references once, not always."""
         self._worker: _EvaluationWorker | None = None
         self._rerun_pending = False
         self._dirty = False
@@ -150,6 +171,7 @@ class Session(QObject):
 
     def open_project(self, path: Path) -> None:
         self.project = load(path)
+        self.pending_orphan_check = True
         self._reset_for(path)
 
     def save_project(self, path: Path | None = None) -> Path:
@@ -237,19 +259,23 @@ class Session(QObject):
         self._worker = worker
         worker.start()
 
-    def evaluate_now(self) -> EvaluationResult:
-        """Synchronous pass, for the command line, tests and export (§31, fine)."""
-        self.cancel_signal.reset()
-        result = evaluate(
+    def run_evaluation(self, quality: Quality | None = None) -> EvaluationResult:
+        """One pass with everything the core needs. No signals, no state."""
+        return evaluate(
             self.project.document,
             self.profile,
-            quality="fine",
+            quality=quality or self.quality,
             progress=self.report_progress,
             ask=self.ask_from_worker,
             cancelled=self.cancel_signal,
             cache=self.cache,
             sources=ProjectSources(self.project, base_dir=self.base_dir),
         )
+
+    def evaluate_now(self) -> EvaluationResult:
+        """Synchronous pass, for the command line, tests and export (§31, fine)."""
+        self.cancel_signal.reset()
+        result = self.run_evaluation("fine")
         self.last_result = result
         self.sceneChanged.emit(result)
         return result

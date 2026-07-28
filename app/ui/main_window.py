@@ -34,13 +34,19 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core.errors import AppError
+from app.core.geom.mesh import as_mesh_data
 from app.core.log import get_logger
+from app.core.perceive import maps
 from app.core.registry import REGISTRY, OperationSpec, menu_tree
 from app.core.scene import EvaluationResult, OperationDraft
 from app.core.scene.project import find_recovery
+from app.core.slice.analysis import slice_body
+from app.core.types import Finding, ObjectId
 from app.i18n import tr
+from app.ui.analysis_bar import AnalysisBar, LayerBar
 from app.ui.command_palette import CommandPalette
 from app.ui.dialogs import AboutDialog, AskDialog, confirm_discard, show_error
+from app.ui.labels import feature_label
 from app.ui.op_dialog import OperationDialog
 from app.ui.panels import (
     ChatPlaceholder,
@@ -80,6 +86,10 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
         self.setWindowTitle(APP_NAME)
         self.resize(1280, 820)
+        self._map_cache: dict[tuple[str, str, int], Any] = {}
+        """Only the last map is kept: they are cheap to rebuild and large to hold."""
+        self._slice_cache: Any = None
+        self._slice_key: tuple[str, int] | None = None
 
         self._build_central()
         self._build_status_bar()
@@ -120,6 +130,13 @@ class MainWindow(QMainWindow):
         self.transform_bar.gizmoToggled.connect(self.viewport.set_gizmo)
         self.transform_bar.snappingChanged.connect(self.viewport.set_snapping)
         self.viewport.transformDragged.connect(self._on_transform_dragged)
+        self.viewport.featurePicked.connect(self._on_feature_picked)
+
+        self.analysis_bar = AnalysisBar(self)
+        self.analysis_bar.mapChanged.connect(self._on_map_changed)
+        self.analysis_bar.overlayToggled.connect(self.viewport.set_feature_overlay)
+        self.layer_bar = LayerBar(self)
+        self.layer_bar.layerChanged.connect(self._on_layer_changed)
 
         middle = QWidget(self)
         middle_layout = QVBoxLayout(middle)
@@ -129,8 +146,11 @@ class MainWindow(QMainWindow):
         middle_layout.addWidget(self.section_bar)
         middle_layout.addWidget(self.measure_bar)
         middle_layout.addWidget(self.transform_bar)
+        middle_layout.addWidget(self.analysis_bar)
+        middle_layout.addWidget(self.layer_bar)
 
         self.report = ReportPanel(self)
+        self.report.findingActivated.connect(self._on_finding_activated)
         self.chat = ChatPlaceholder(self)
 
         self.right = QTabWidget(self)
@@ -158,6 +178,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.stack)
 
         self.object_tree.selectionChanged.connect(self._on_selection)
+        self.object_tree.featureSelected.connect(self._on_feature_selected)
         self.object_tree.operationRequested.connect(self.run_operation)
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
         self.right.setVisible(self.settings.right_panel_visible)
@@ -441,6 +462,122 @@ class MainWindow(QMainWindow):
             measurement.kind, measurement.value, len(self.viewport.measurements)
         )
 
+    # --- analysis maps and layers (§18.4, §18.10) -------------------------------
+
+    def _on_map_changed(self, kind: Any) -> None:
+        """Build the chosen map for the selected object and hand it to the view."""
+        object_id = self.object_tree.selected()
+        if kind is None or object_id is None:
+            self.viewport.set_analysis_map(None, None)
+            self.analysis_bar.show_legend(None)
+            if kind is not None:
+                self.analysis_bar.show_problem(tr("Wählen Sie zuerst ein Objekt im Objektbaum."))
+            return
+
+        analysis = self._analysis_map(kind, object_id)
+        self.viewport.set_analysis_map(analysis, object_id if analysis else None)
+        self.analysis_bar.show_legend(analysis)
+
+    def _analysis_map(self, kind: maps.MapKind, object_id: ObjectId) -> Any:
+        """Cached per object and kind — the same map is not computed twice."""
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result else None
+        if entry is None:
+            return None
+        key = (object_id, kind, entry.mesh.triangle_count)
+        if key in self._map_cache:
+            return self._map_cache[key]
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            analysis = maps.build(
+                kind, entry, profile=self.session.profile, scene=result.scene if result else None
+            )
+        except maps.MapTooLarge:
+            # §31: a map that would take minutes says no instead of freezing.
+            self.analysis_bar.show_problem(tr("Für eine Analysekarte ist dieses Modell zu groß."))
+            return None
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        self._map_cache = {key: analysis}
+        return analysis
+
+    def _on_layer_changed(self, index: int) -> None:
+        """Scrub through the layer analysis (§18.10) — geometry, not tool paths."""
+        object_id = self.object_tree.selected()
+        if index < 0 or object_id is None:
+            self.viewport.set_layer(None)
+            return
+        result = self._slice_of(object_id)
+        if result is None or not result.layers:
+            self.viewport.set_layer(None)
+            return
+        self.viewport.set_layer(result.layers[min(index, len(result.layers) - 1)])
+
+    def _slice_of(self, object_id: ObjectId) -> Any:
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result else None
+        if entry is None:
+            return None
+        key = (object_id, entry.mesh.triangle_count)
+        if key != self._slice_key:
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                self._slice_cache = slice_body(
+                    as_mesh_data(entry.mesh), self.session.profile.printer.layer_height
+                )
+            finally:
+                QApplication.restoreOverrideCursor()
+            self._slice_key = key
+            self.layer_bar.show_result(self._slice_cache)
+        return self._slice_cache
+
+    def _on_finding_activated(self, finding: Finding) -> None:
+        """Click a warning, see the place: the shortest way from problem to spot (§18.4)."""
+        object_id = finding.object_id or self.object_tree.selected()
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result and object_id else None
+        if entry is None:
+            return
+
+        kind = maps.map_for(finding)
+        if kind is not None:
+            self.analysis_bar.show_map(kind)
+            analysis = self._analysis_map(kind, entry.id)
+            self.viewport.set_analysis_map(analysis, entry.id if analysis else None)
+            self.analysis_bar.show_legend(analysis)
+            target = maps.location_of(entry, finding)
+            if target is None and analysis is not None:
+                target = maps.focus_point(entry, analysis)
+        else:
+            target = maps.location_of(entry, finding)
+
+        if target is not None:
+            self.viewport.fly_to(target)
+
+    def _on_feature_picked(self, feature_id: str) -> None:
+        """A click in the view selects the feature in the tree as well (§18.5)."""
+        object_id = self.object_tree.selected()
+        if object_id is not None:
+            self.object_tree.select_feature(object_id, feature_id)
+
+    def _on_feature_selected(self, feature_id: str | None) -> None:
+        """The selected feature, in the view and in the status bar.
+
+        This is where §18.3 gets its "Durchmesser über Feature": the bore is
+        picked, not measured — its diameter comes from the fit that found it.
+        """
+        self.viewport.select_feature(feature_id)
+        if feature_id is None:
+            return
+        result = self.session.last_result
+        object_id = self.object_tree.selected()
+        entry = result.scene.objects.get(object_id) if result and object_id else None
+        feature = entry.features.get(feature_id) if entry is not None else None
+        if entry is not None and feature is not None:
+            self.measurements.setText(f"{entry.name} · {feature_label(feature_id, feature)}")
+
     def _on_section(self, plane: object, thickness: object) -> None:
         self.viewport.set_section(plane, thickness)  # type: ignore[arg-type]
         self.section_bar.show_capping_state(self.viewport.section_uncapped)
@@ -488,6 +625,13 @@ class MainWindow(QMainWindow):
     # --- session replies --------------------------------------------------------
 
     def _on_scene(self, result: EvaluationResult) -> None:
+        # New geometry means every map and every slice is out of date.
+        self._map_cache.clear()
+        self._slice_key = None
+        self.layer_bar.show_result(None)
+        self.viewport.set_analysis_map(None, None)
+        self.viewport.set_layer(None)
+        self.analysis_bar.show_legend(None)
         self.object_tree.show_scene(result)
         self.report.show_result(result)
         self.viewport.show_build_volume(self.session.profile)
@@ -533,6 +677,10 @@ class MainWindow(QMainWindow):
 
     def _on_selection(self, object_id: str | None) -> None:
         self.viewport.select(object_id)
+        # The map and the layer analysis belong to one body; another body needs
+        # its own, so they follow the selection instead of lingering.
+        self._on_map_changed(self.analysis_bar.chosen())
+        self._on_layer_changed(self.layer_bar.index())
         described = describe_selection(self.session.last_result, object_id)
         if described is None:
             self.measurements.clear_selection()

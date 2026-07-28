@@ -77,8 +77,7 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       proprietär (RS Digital, 2026), Bausteinbibliothek und Testkorpus MIT;
       alles Namensbezogene steht in `app/branding.py`
 - [x] Alle Abnahmekriterien P0 aus §40 grün — `tests/test_acceptance_p0.py`
-      (Kontextmenü am Feature erst mit den Bohrungs-Ops in P2/P3 belegbar,
-      Objekt-Kontextmenü steht)
+      (das Kontextmenü am Merkmal ist mit P3 belegt, Objekt-Kontextmenü steht)
 
 ---
 
@@ -87,14 +86,14 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Schnittebene **mit Capping**, Bildvergleichstest (§18.2) — der Nachweis
       läuft über Geometrie statt Pixel: die geschnittene Hälfte ist wasserdicht
       und hat genau das halbe Volumen, was ein Bild nicht unterscheiden könnte
-- [~] Messwerkzeuge, Durchmesser über Feature, Bemaßungen (§18.3) — Abstand mit
+- [x] Messwerkzeuge, Durchmesser über Feature, Bemaßungen (§18.3) — Abstand mit
       Fang auf Punkte und Kanten, Wandstärke über eigenen Raycast, Bemaßungen
-      bleiben stehen; **Durchmesser über Feature** braucht die Feature-Erkennung
-      und kommt mit P3
+      bleiben stehen; der **Durchmesser** wird mit P3 nicht gemessen, sondern am
+      ausgewählten Merkmal abgelesen und in der Statusleiste gezeigt
 - [x] Gizmo und Snapping — jede Manipulation erzeugt eine Op (§18.10); die
       Transformations-Ops aus P2 sind dafür vorgezogen, ein Zug wird zerlegt
       und als **eine Transaktion** eingetragen. Fang auf Fläche und Bohrungsachse
-      folgt mit der Feature-Erkennung in P3
+      kam mit P3 als Op `align_to_feature` (`core/geom/align.py`)
 - [x] Paletten und Alternativkodierung, Test auf Farbunabhängigkeit (§19.1)
 - [x] Tastaturnavigation, Befehlspalette (§19.2)
 - [x] Helles und dunkles Thema, HiDPI (§19.3)
@@ -118,13 +117,19 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] **Weg 1 aus §2.2 als Ende-zu-Ende-Test** — `tests/test_way_one.py`
 
 ## P3 — Wahrnehmung und Schichtanalyse
-- [ ] Feature-Erkennung (§21.1) gegen `plate_holes`
-- [ ] Provenienz-IDs und Zuordnung, `plate_holes_twin` als mehrdeutig
-- [ ] Verwaisungsdialog über `ctx.ask`, Prüfung beim Öffnen
-- [ ] Steckbrief (§23)
-- [ ] Analysekarten (§18.4), Klick auf Warnung fährt die Kamera hin
-- [ ] Feature-Overlay mit Kontextmenü (`applies_to`)
-- [ ] Passungen anlegen und prüfen (§14)
+- [x] Feature-Erkennung (§21.1) gegen `plate_holes`
+- [x] Provenienz-IDs und Zuordnung, `plate_holes_twin` als mehrdeutig
+- [x] Verwaisungsdialog über `ctx.ask`, Prüfung beim Öffnen — `core/scene/orphans.py`
+      prüft beim Öffnen jeden Merkmalsverweis einmal, schreibt die Antwort in die
+      Datei und fragt sie darum nicht bei jedem Lauf erneut
+- [x] Steckbrief (§23)
+- [x] Analysekarten (§18.4), Klick auf Warnung fährt die Kamera hin — sieben Karten
+      in `core/perceive/maps.py`, Legende mit Zahlenbereich und Herkunft
+- [x] Feature-Overlay mit Kontextmenü (`applies_to`) — Beschriftungen im Viewport,
+      Merkmale als Kinder im Objektbaum, Kontextmenü aus dem Register. Das
+      Hervorheben beim Überfahren braucht echte Mauszeiger-Ereignisse und fehlt
+      noch; Anklicken und Auswählen stehen
+- [x] Passungen anlegen und prüfen (§14)
 
 ### Schichtanalyse (§22)
 - [x] `core/slice`: Ebene-Mesh-Schnitt, Konturverkettung — mit Shapely statt
@@ -133,9 +138,12 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Test gegen analytisch bekannte Körper (Würfel, Zylinder, Kegel) auf 1 %
 - [x] `island_tower.stl` wird erkannt
 - [x] Orientierungssuche über hunderte Kandidaten, mit Startwert, abbrechbar
-- [ ] Analysekarten Überhang und Stützbedarf auf echte Werte umstellen
-- [ ] Schichtenvorschau im Viewport (§18.10), ehrlich beschriftet
-- [ ] Herkunft jeder Kennzahl ausweisen (`internal`), nie mit G-Code vermischen
+- [x] Analysekarten Überhang und Stützbedarf auf echte Werte umstellen — der
+      Stützbedarf entscheidet über die Schichtanalyse, nicht über eine
+      Normalenregel; die Säulenhöhe kommt aus demselben Raster wie die Wandstärke
+- [x] Schichtenvorschau im Viewport (§18.10), ehrlich beschriftet
+- [x] Herkunft jeder Kennzahl ausweisen (`internal`), nie mit G-Code vermischt —
+      Legende und Prüfbericht weisen sie aus
 
 ## P4 — Agent auf Säule C
 - [ ] `LLMBackend`, Schlüssel im Schlüsselbund, lokal über Ollama

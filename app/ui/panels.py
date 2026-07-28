@@ -31,16 +31,24 @@ from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
 from app.core.units import format_length
 from app.i18n import tr
+from app.ui.labels import feature_label
 from app.ui.palette import SEVERITY_ENCODING
 
 #: Marker per severity, taken from the shared encoding — colour is never alone (§19.1).
 SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items()}
 
 
+def origin_label(source: str) -> str:
+    """Estimated here or measured from G-code — never mixed up (§22.5)."""
+    return tr("intern geschätzt") if source == "internal" else tr("aus G-Code")
+
+
 class ObjectTree(QWidget):
-    """Objects of the scene with their origin and size (§18.8)."""
+    """Objects of the scene with their features, origin and size (§18.8, §18.5)."""
 
     selectionChanged = Signal(object)
+    featureSelected = Signal(object)
+    """A feature picked in the tree — carries its id, or None."""
     operationRequested = Signal(object)
     """An operation picked from the context menu — carries its ``OperationSpec``."""
 
@@ -50,7 +58,7 @@ class ObjectTree(QWidget):
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels([tr("Objekt"), tr("Maße")])
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.tree.setRootIsDecorated(False)
+        self.tree.setRootIsDecorated(True)
         self.tree.itemSelectionChanged.connect(self._on_selection)
         self.tree.setAcceptDrops(True)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -61,6 +69,8 @@ class ObjectTree(QWidget):
         layout.addWidget(self.tree)
 
     def show_scene(self, result: EvaluationResult | None) -> None:
+        selected_object = self.selected()
+        selected_feature = self.selected_feature()
         self.tree.clear()
         if result is None:
             return
@@ -78,8 +88,36 @@ class ObjectTree(QWidget):
                 0,
                 f"{object_id} · {entry.mesh.triangle_count} {tr('Dreiecke')} · {state}",
             )
+            for feature_id, feature in entry.features.items():
+                child = QTreeWidgetItem([feature_label(feature_id, feature), feature.kind])
+                child.setData(0, Qt.ItemDataRole.UserRole, object_id)
+                child.setData(1, Qt.ItemDataRole.UserRole, feature_id)
+                child.setToolTip(0, f"{feature_id} · {feature.provenance}")
+                item.addChild(child)
             self.tree.addTopLevelItem(item)
+            item.setExpanded(object_id == selected_object)
         self.tree.resizeColumnToContents(0)
+        self._restore(selected_object, selected_feature)
+
+    def _restore(self, object_id: ObjectId | None, feature_id: str | None) -> None:
+        """Keep the selection across a re-evaluation — losing it costs the user
+        the place they were working at."""
+        if object_id is None:
+            return
+        for index in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(index)
+            if item is None or item.data(0, Qt.ItemDataRole.UserRole) != object_id:
+                continue
+            if feature_id is None:
+                item.setSelected(True)
+                return
+            for child_index in range(item.childCount()):
+                child = item.child(child_index)
+                if child is not None and child.data(1, Qt.ItemDataRole.UserRole) == feature_id:
+                    child.setSelected(True)
+                    return
+            item.setSelected(True)
+            return
 
     def selected(self) -> ObjectId | None:
         items = self.tree.selectedItems()
@@ -88,19 +126,46 @@ class ObjectTree(QWidget):
         value: ObjectId | None = items[0].data(0, Qt.ItemDataRole.UserRole)
         return value
 
+    def selected_feature(self) -> str | None:
+        items = self.tree.selectedItems()
+        if not items:
+            return None
+        value: str | None = items[0].data(1, Qt.ItemDataRole.UserRole)
+        return value
+
+    def select_feature(self, object_id: ObjectId, feature_id: str) -> None:
+        """Follow a click in the viewport — the two views show one selection (§18.5)."""
+        self.tree.clearSelection()
+        self._restore(object_id, feature_id)
+
     def _on_selection(self) -> None:
         self.selectionChanged.emit(self.selected())
+        self.featureSelected.emit(self.selected_feature())
 
     def operations_for_object(self) -> tuple[Any, ...]:
         """Operations that work on a selected object — the shortest way from seeing
-        to doing (§2.6). The feature context menu over ``applies_to`` follows in P3."""
+        to doing (§2.6)."""
         return tuple(spec for spec in REGISTRY.all() if spec.consumes == 1)
+
+    def operations_for_feature(self, kind: str) -> tuple[Any, ...]:
+        """What a bore or a face offers, straight out of ``applies_to`` (§10, §18.5)."""
+        return REGISTRY.for_feature(kind)
+
+    def _feature_kind(self) -> str | None:
+        items = self.tree.selectedItems()
+        if not items or self.selected_feature() is None:
+            return None
+        return items[0].text(1)
 
     def _on_context_menu(self, position: QPoint) -> None:
         if self.selected() is None:
             return
+        kind = self._feature_kind()
+        entries = self.operations_for_feature(kind) if kind else self.operations_for_object()
+        if not entries:
+            return
         menu = QMenu(self)
-        for spec in self.operations_for_object():
+        for spec in entries:
             action = menu.addAction(str(spec.title))
             action.triggered.connect(
                 lambda _checked=False, entry=spec: self.operationRequested.emit(entry)
@@ -209,10 +274,11 @@ class ReportPanel(QWidget):
             item = QListWidgetItem(f"{SEVERITY_MARKER[finding.severity]}  {finding.message}")
             item.setData(Qt.ItemDataRole.UserRole, finding)
             item.setForeground(QColor(SEVERITY_ENCODING[finding.severity].colour))
-            if finding.values:
-                item.setToolTip(
-                    ", ".join(f"{key}: {value}" for key, value in finding.values.items())
-                )
+            # §22.5: where a number comes from is part of the finding, never left
+            # to the reader to assume — an estimate is not a measurement.
+            details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]
+            details.extend(f"{key}: {value}" for key, value in finding.values.items())
+            item.setToolTip(" · ".join(details))
             self.list.addItem(item)
         self.summary.setText(
             f"{counts['error']} × {tr('Fehler')} · "

@@ -577,6 +577,12 @@ class LayerInfo:
     overhang_area: float
     islands: tuple[Polygon, ...]
     min_width: float
+    overhangs: tuple[Polygon, ...] = ()
+    """*Where* the unsupported area of this layer lies, not only how much of it.
+
+    Kept because the support map (§18.4) and the layer preview (§18.10) have to
+    point at the spot, and recomputing it from the contours would be the same
+    work twice."""
 
 
 @dataclass(frozen=True, slots=True)

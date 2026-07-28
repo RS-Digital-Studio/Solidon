@@ -52,6 +52,8 @@ class LayerMetrics:
     min_width: float
     bridge_width: float
     contour_count: int
+    overhang: ShapelyPolygon | None = None
+    """The unsupported region itself — the support map needs the place, not the number."""
 
 
 def slice_body(mesh: MeshData, layer_height: float = 0.2) -> SliceResult:
@@ -74,7 +76,7 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2) -> SliceResult:
     # Half a layer above the bottom: the first cut has to hit material.
     heights = np.arange(low + layer_height / 2.0, high, layer_height)
     for z in heights:
-        shape = _cross_section(mesh, float(z))
+        shape = cross_section(mesh, float(z))
         if shape is None or shape.is_empty:
             previous = None
             continue
@@ -92,6 +94,9 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2) -> SliceResult:
                 if metrics.island_area <= EPS_GEOM
                 else _to_polygons(_islands(shape, previous)),
                 min_width=metrics.min_width,
+                overhangs=()
+                if metrics.overhang is None or metrics.overhang.is_empty
+                else _to_polygons(metrics.overhang),
             )
         )
         previous = shape
@@ -104,8 +109,12 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2) -> SliceResult:
     )
 
 
-def _cross_section(mesh: MeshData, z: float) -> ShapelyPolygon | None:
-    """One plane through the mesh, as a polygon with holes (§22.1)."""
+def cross_section(mesh: MeshData, z: float) -> ShapelyPolygon | None:
+    """One plane through the mesh, as a polygon with holes (§22.1).
+
+    Public because the analysis maps raster the body out of these sections
+    (§18.4) — the same cut, used twice.
+    """
     section = mesh.raw.section(plane_origin=[0.0, 0.0, z], plane_normal=[0.0, 0.0, 1.0])
     if section is None:
         return None
@@ -131,6 +140,7 @@ def _measure(
     layer_height: float = 0.2,
 ) -> LayerMetrics:
     area = float(shape.area)
+    region: ShapelyPolygon | None = None
     if on_plate:
         # Resting on the build plate is the one kind of support that is free.
         overhang = 0.0
@@ -138,10 +148,12 @@ def _measure(
     elif previous is None or previous.is_empty:
         overhang = area
         islands = area
+        region = shape
     else:
         reach = max(layer_height * OVERHANG_ANGLE_FACTOR, OVERHANG_MARGIN)
         supported = previous.buffer(reach)
-        overhang = float(shape.difference(supported).area)
+        region = shape.difference(supported)
+        overhang = float(region.area)
         islands = float(_islands(shape, previous).area)
 
     return LayerMetrics(
@@ -152,6 +164,7 @@ def _measure(
         min_width=minimum_width(shape),
         bridge_width=_bridge_width(shape, previous),
         contour_count=_contour_count(shape),
+        overhang=region,
     )
 
 
@@ -210,8 +223,10 @@ def _to_polygons(shape: ShapelyPolygon) -> tuple[Polygon, ...]:
                 tuple((float(x), float(y)) for x, y in ring.coords) for ring in part.interiors
             ),
         )
+        # A difference can hand back lines where two areas only touch. They carry
+        # no area, so they are not contours — dropping them keeps the type honest.
         for part in parts
-        if not part.is_empty
+        if not part.is_empty and part.geom_type == "Polygon"
     )
 
 

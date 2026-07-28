@@ -1,0 +1,317 @@
+"""Analysis maps (Bauplan §18.4).
+
+Every map is checked against a body whose answer is known beforehand — a plate
+is 8 mm thick, a cube has no overhang, a cone lying on its side has plenty.
+"""
+
+from __future__ import annotations
+
+import math
+from pathlib import Path
+
+import pytest
+import trimesh
+
+from app.core.geom.measure import wall_thickness
+from app.core.geom.mesh import MeshData, read_mesh
+from app.core.geom.transform import apply, place_on_bed, rotation
+from app.core.ingest.loader import normalise
+from app.core.perceive import maps
+from app.core.perceive.features import detect
+from app.core.types import (
+    Feature,
+    FeatureRef,
+    Finding,
+    Fit,
+    Profile,
+    Report,
+    Scene,
+    SceneObject,
+)
+
+MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+def plate() -> MeshData:
+    """80 × 50 × 8 mm with four bores."""
+    return place_on_bed(
+        normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    )
+
+
+def cube() -> MeshData:
+    return normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
+
+
+def object_with(mesh: MeshData) -> SceneObject:
+    return SceneObject(id="obj_1", name="Prüfkörper", mesh=mesh, features=detect(mesh))
+
+
+# --- wall thickness -------------------------------------------------------------
+
+
+def test_the_wall_map_measures_the_plate(profile: Profile) -> None:
+    entry = object_with(plate())
+    analysis = maps.build("wall", entry, profile=profile)
+
+    assert len(analysis.values) == entry.mesh.triangle_count
+    assert analysis.unit == "mm"
+    assert analysis.resolution is not None, "a sampled number says how fine it was sampled"
+    # Measured on the large face: 8 mm of material below it. The tolerance is one
+    # grid step, because that is what the raster can tell apart.
+    for index in entry.features["face_1"].face_indices:
+        assert analysis.values[index] == pytest.approx(8.0, abs=analysis.resolution)
+
+
+def test_the_wall_map_marks_what_is_too_thin(profile: Profile) -> None:
+    """§39: two extrusion widths are the floor, and the map says where it is undercut."""
+    thin = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 0.5)))
+    analysis = maps.build("wall", object_with(thin), profile=profile)
+
+    assert analysis.threshold == pytest.approx(profile.minimum_wall_thickness)
+    assert analysis.highlighted, "half a millimetre is below two extrusion widths"
+
+
+def test_an_open_body_says_it_cannot_say() -> None:
+    """Half a box has no inside — and no thickness. Zero would be a lie."""
+    open_body = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    open_body.raw.faces = open_body.raw.faces[:6]
+    analysis = maps.wall_thickness_map(open_body)
+
+    assert analysis.unknown_count > 0
+    assert all(not math.isnan(value) for value in analysis.known)
+
+
+def test_the_map_agrees_with_the_measuring_tool() -> None:
+    """§18.3 and §18.4 have to give the same answer, or one of them is lying."""
+    body = plate()
+    analysis = maps.wall_thickness_map(body)
+    assert analysis.resolution is not None
+
+    centres = body.raw.triangles_center
+    for index in (0, 5, 11):
+        point = (float(centres[index][0]), float(centres[index][1]), float(centres[index][2]))
+        measured = wall_thickness(body, point, direction=tuple(-body.raw.face_normals[index]))
+        if measured is None or math.isnan(analysis.values[index]):
+            continue
+        assert analysis.values[index] == pytest.approx(measured, abs=2.0 * analysis.resolution)
+
+
+def test_a_thick_block_is_thick_everywhere() -> None:
+    block = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    analysis = maps.wall_thickness_map(block)
+
+    assert analysis.resolution is not None
+    assert min(analysis.known) == pytest.approx(20.0, abs=2.0 * analysis.resolution)
+
+
+# --- overhang -------------------------------------------------------------------
+
+
+def test_a_cube_has_no_overhang_worth_the_name() -> None:
+    analysis = maps.overhang_map(cube())
+
+    assert analysis.unit == "grad"
+    # The underside faces straight down, everything else stands vertical.
+    assert set(round(value) for value in analysis.values) <= {0, 90}
+    assert analysis.threshold == 45.0
+
+
+def test_a_tilted_face_is_measured_not_guessed() -> None:
+    """Turned by 30 degrees, the underside stands at 60 and one side at 30."""
+    tilted = apply(cube(), rotation("x", 30.0))
+    analysis = maps.overhang_map(tilted)
+
+    assert max(analysis.values) == pytest.approx(60.0, abs=0.5)
+    assert any(value == pytest.approx(30.0, abs=0.5) for value in analysis.values)
+
+
+def test_steep_faces_are_the_ones_highlighted() -> None:
+    cone = MeshData.of(trimesh.creation.cone(radius=20.0, height=10.0, sections=32))
+    analysis = maps.overhang_map(apply(cone, rotation("x", 180.0)))
+
+    assert analysis.highlighted, "a cone on its base overhangs at 63 degrees"
+    for index in analysis.highlighted:
+        assert analysis.values[index] > 45.0
+
+
+# --- mesh defects ---------------------------------------------------------------
+
+
+def test_the_defect_map_finds_the_open_edges() -> None:
+    broken = normalise(read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm").mesh
+    analysis = maps.defect_map(broken)
+
+    assert analysis.highlighted, "the missing wall leaves open edges behind"
+    assert analysis.categories[1] == "offene Kante"
+
+
+def test_a_clean_body_has_a_clean_map() -> None:
+    analysis = maps.defect_map(cube())
+
+    assert analysis.highlighted == ()
+    assert set(analysis.values) == {0.0}
+
+
+# --- curvature ------------------------------------------------------------------
+
+
+def test_the_curvature_map_shows_the_edges() -> None:
+    analysis = maps.curvature_map(cube())
+
+    assert analysis.high == pytest.approx(90.0, abs=1.0), "a cube edge is a right angle"
+
+
+# --- features and fits ----------------------------------------------------------
+
+
+def test_every_feature_gets_its_own_level() -> None:
+    """§18.4: "verstehen, was die KI sieht" — one colour per feature."""
+    entry = object_with(plate())
+    analysis = maps.build("features", entry)
+
+    assert analysis.categories[0].startswith("ohne")
+    assert "hole_1" in analysis.categories
+    hole = entry.features["hole_1"]
+    level = analysis.categories.index("hole_1")
+    assert all(analysis.values[index] == float(level) for index in hole.face_indices)
+
+
+def test_the_fit_map_marks_the_violated_pair(profile: Profile) -> None:
+    entry = object_with(plate())
+    scene = Scene(objects={"obj_1": entry}, profile=profile)
+    scene.fits.append(
+        Fit(
+            name="stift_1",
+            a=FeatureRef("obj_1", "hole_1"),
+            b=FeatureRef("obj_2", "pin_1"),
+            kind="clearance",
+        )
+    )
+    scene.report = Report(
+        (
+            Finding(
+                code="fit.violated",
+                severity="warning",
+                message="zu eng",
+                object_id="obj_1",
+                feature_ids=("hole_1",),
+            ),
+        )
+    )
+    analysis = maps.build("fits", entry, scene=scene)
+
+    assert analysis.highlighted, "the violated fit is the thing to look at"
+    assert analysis.categories[2] == "Passung verletzt"
+    assert maps.fits_of(scene, "obj_1")
+
+
+def test_without_fits_the_map_stays_empty(profile: Profile) -> None:
+    entry = object_with(plate())
+    scene = Scene(objects={"obj_1": entry}, profile=profile)
+
+    assert set(maps.build("fits", entry, scene=scene).values) == {0.0}
+
+
+# --- support --------------------------------------------------------------------
+
+
+def test_the_support_map_comes_from_the_layer_analysis(profile: Profile) -> None:
+    """§18.4: the judgement is the slicer's, not a normal-vector rule of thumb."""
+    analysis = maps.build("support", object_with(_table()), profile=profile)
+
+    assert analysis.highlighted, "the overhanging arm rests on nothing"
+    assert max(analysis.values) == pytest.approx(20.0, abs=0.5), "that is how tall it grows"
+    assert analysis.source == "internal"
+    assert analysis.note is not None, "an estimate has to say that it is one (§22.5)"
+
+
+def _table() -> MeshData:
+    """A post on the plate with an arm on top that reaches out over nothing."""
+    post = trimesh.creation.box(extents=(10.0, 10.0, 20.0))
+    post.apply_translation([0.0, 0.0, 10.0])
+    arm = trimesh.creation.box(extents=(40.0, 10.0, 4.0))
+    arm.apply_translation([0.0, 0.0, 22.0])
+    return MeshData.of(trimesh.boolean.union([post, arm]))
+
+
+def test_a_body_on_the_plate_needs_nothing(profile: Profile) -> None:
+    analysis = maps.build("support", object_with(plate()), profile=profile)
+
+    assert analysis.highlighted == ()
+
+
+# --- the way from warning to place ----------------------------------------------
+
+
+def test_a_finding_picks_its_map() -> None:
+    assert maps.map_for(Finding(code="fit.violated", severity="warning", message="x")) == "fits"
+    assert maps.map_for(Finding(code="repair.still_open", severity="warning", message="x")) == (
+        "defects"
+    )
+    assert maps.map_for(Finding(code="orient.heuristic", severity="info", message="x")) == (
+        "overhang"
+    )
+    assert maps.map_for(Finding(code="etwas.anderes", severity="info", message="x")) is None
+
+
+def test_the_camera_target_is_the_centre_of_what_is_marked(profile: Profile) -> None:
+    entry = object_with(plate())
+    analysis = maps.build("wall", entry, profile=profile)
+    assert maps.focus_point(entry, analysis) is None, "nothing marked, nowhere to fly"
+
+    hole = entry.features["hole_1"]
+    marked = maps.AnalysisMap(
+        kind="wall",
+        title="x",
+        values=analysis.values,
+        unit="mm",
+        low=0.0,
+        high=1.0,
+        highlighted=hole.face_indices,
+    )
+    point = maps.focus_point(entry, marked)
+    assert point is not None
+    assert point[0] == pytest.approx(hole.params["centre"][0], abs=0.5)
+
+
+def test_a_finding_without_a_place_falls_back_to_its_features() -> None:
+    entry = object_with(plate())
+    finding = Finding(code="fit.violated", severity="warning", message="x", feature_ids=("hole_2",))
+
+    point = maps.location_of(entry, finding)
+    assert point is not None
+    assert point[0] == pytest.approx(entry.features["hole_2"].params["centre"][0], abs=0.5)
+
+
+def test_a_finding_that_points_nowhere_stays_that_way() -> None:
+    entry = object_with(cube())
+    assert maps.location_of(entry, Finding(code="x", severity="info", message="y")) is None
+
+
+# --- limits ---------------------------------------------------------------------
+
+
+def test_a_huge_body_is_refused_rather_than_ground_through(profile: Profile) -> None:
+    """§31: a map that takes minutes is worse than one that says no."""
+    dense = MeshData.of(trimesh.creation.icosphere(subdivisions=3))
+    entry = SceneObject(id="obj_1", name="x", mesh=dense, features={})
+    limit = maps.MAP_LIMIT_TRIANGLES
+    try:
+        maps.MAP_LIMIT_TRIANGLES = 10
+        with pytest.raises(maps.MapTooLarge):
+            maps.build("wall", entry, profile=profile)
+    finally:
+        maps.MAP_LIMIT_TRIANGLES = limit
+
+
+def test_features_without_faces_do_not_fall_over() -> None:
+    entry = SceneObject(
+        id="obj_1",
+        name="x",
+        mesh=cube(),
+        features={"loop": Feature(id="loop", kind="edge_loop", provenance="detected", params={})},
+    )
+    analysis = maps.build("features", entry)
+
+    assert set(analysis.values) == {0.0}

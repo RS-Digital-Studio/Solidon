@@ -75,12 +75,14 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 # Bauplan §33.1 fixes the exception names. OutOfBuildVolume and OperationCancelled
 # are part of the contract, not a style choice.
 "app/core/errors.py" = ["N818"]
+# MapTooLarge is a control-flow signal inside the maps, not a reported error.
+"app/core/perceive/maps.py" = ["N818"]
 # Qt signals are camelCase by convention, and "20 × 20 mm" is how a dimension is
 # written in German — both are deliberate in the surface.
 "app/ui/*" = ["N815", "RUF001"]
 # The digest is read by people and by the model; "20 × 20 mm" is the right sign.
 "app/core/perceive/digest.py" = ["RUF001"]
-"tests/*" = ["RUF001"]
+"tests/*" = ["RUF001", "RUF002"]
 
 [tool.mypy]
 python_version = "3.11"
