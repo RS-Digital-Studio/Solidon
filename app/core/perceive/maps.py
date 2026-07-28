@@ -26,7 +26,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.slice.analysis import cross_section, slice_body
+from app.core.slice.analysis import cross_sections, slice_body
 from app.core.types import (
     Feature,
     FeatureId,
@@ -194,8 +194,10 @@ def solid_field(mesh: MeshData, pitch: float | None = None) -> SolidField:
 
     grid_x, grid_y = np.meshgrid(axes[0], axes[1], indexing="ij")
     flat_x, flat_y = grid_x.ravel(), grid_y.ravel()
-    for index, z in enumerate(axes[2]):
-        shape = cross_section(mesh, float(z))
+    # Every height in one pass. Cutting layer by layer walked all the triangles
+    # once per layer — three hundred layers of a body with three hundred
+    # thousand triangles is where the wall map spent most of its time.
+    for index, shape in enumerate(cross_sections(mesh, axes[2])):
         if shape is None or shape.is_empty:
             continue
         inside = shapely.contains_xy(shape, flat_x, flat_y)

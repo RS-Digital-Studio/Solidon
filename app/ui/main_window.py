@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -93,6 +93,33 @@ MODEL_FILTER = "Modelle (*.stl *.3mf *.obj *.glb *.gltf *.ply *.off *.step *.stp
 GCODE_FILTER = "G-Code (*.gcode *.gco *.g *.nc)"
 
 
+class _MapWorker(QThread):
+    """One analysis map, off the interface thread (§18.9).
+
+    Seconds on a large body — long enough that a window computing it in the
+    event loop stops repainting, which reads as a crash rather than as work.
+    """
+
+    done = Signal(object)
+    tooLarge = Signal()
+
+    def __init__(self, kind: Any, entry: Any, profile: Any, scene: Any) -> None:
+        super().__init__()
+        self._kind = kind
+        self._entry = entry
+        self._profile = profile
+        self._scene = scene
+
+    def run(self) -> None:
+        try:
+            self.done.emit(
+                maps.build(self._kind, self._entry, profile=self._profile, scene=self._scene)
+            )
+        except maps.MapTooLarge:
+            # §31: a map that would take minutes says no instead of freezing.
+            self.tooLarge.emit()
+
+
 def inputs_for(
     spec: OperationSpec, objects: list[ObjectId], selected: ObjectId | None
 ) -> tuple[ObjectId, ...]:
@@ -120,6 +147,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_NAME)
         self.resize(1280, 820)
         self._map_cache: dict[tuple[str, str, int], Any] = {}
+        self._map_worker: Any = None
+        """The map being computed (§18.9). A newer request replaces it."""
         """Only the last map is kept: they are cheap to rebuild and large to hold."""
         self._slice_cache: Any = None
         self._slice_key: tuple[str, int] | None = None
@@ -650,34 +679,47 @@ class MainWindow(QMainWindow):
                 self.analysis_bar.show_problem(tr("Wählen Sie zuerst ein Objekt im Objektbaum."))
             return
 
-        analysis = self._analysis_map(kind, object_id)
-        self.viewport.set_analysis_map(analysis, object_id if analysis else None)
-        self.analysis_bar.show_legend(analysis)
+        self._analysis_map(kind, object_id)
 
-    def _analysis_map(self, kind: maps.MapKind, object_id: ObjectId) -> Any:
-        """Cached per object and kind — the same map is not computed twice."""
+    def _analysis_map(self, kind: maps.MapKind, object_id: ObjectId) -> None:
+        """§18.9: computed in the background, cached per object and kind.
+
+        Seconds on a large body, and a window that stops answering for that long
+        looks broken. A newer request replaces a waiting one — nobody wants the
+        map they clicked away from.
+        """
         result = self.session.last_result
         entry = result.scene.objects.get(object_id) if result else None
         if entry is None:
-            return None
+            return
+
         key = (object_id, kind, entry.mesh.triangle_count)
         if key in self._map_cache:
-            return self._map_cache[key]
+            self._show_map(self._map_cache[key], object_id)
+            return
 
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            analysis = maps.build(
-                kind, entry, profile=self.session.profile, scene=result.scene if result else None
+        self.analysis_bar.show_problem(tr("Die Analysekarte wird berechnet …"))
+        worker = _MapWorker(kind, entry, self.session.profile, result.scene if result else None)
+        worker.done.connect(
+            lambda analysis, key=key, object_id=object_id: self._map_ready(analysis, key, object_id)
+        )
+        worker.tooLarge.connect(
+            lambda: self.analysis_bar.show_problem(
+                tr("Für eine Analysekarte ist dieses Modell zu groß.")
             )
-        except maps.MapTooLarge:
-            # §31: a map that would take minutes says no instead of freezing.
-            self.analysis_bar.show_problem(tr("Für eine Analysekarte ist dieses Modell zu groß."))
-            return None
-        finally:
-            QApplication.restoreOverrideCursor()
+        )
+        worker.finished.connect(lambda: setattr(self, "_map_worker", None))
+        self._map_worker = worker
+        worker.start()
 
+    def _map_ready(self, analysis: Any, key: tuple[Any, ...], object_id: ObjectId) -> None:
         self._map_cache = {key: analysis}
-        return analysis
+        if self.analysis_bar.chosen() == key[1] and self.object_tree.selected() == object_id:
+            self._show_map(analysis, object_id)
+
+    def _show_map(self, analysis: Any, object_id: ObjectId) -> None:
+        self.viewport.set_analysis_map(analysis, object_id if analysis else None)
+        self.analysis_bar.show_legend(analysis)
 
     def _on_layer_changed(self, index: int) -> None:
         """Scrub through the layer analysis (§18.10) — geometry, not tool paths."""
@@ -720,12 +762,14 @@ class MainWindow(QMainWindow):
         kind = maps.map_for(finding)
         if kind is not None:
             self.analysis_bar.show_map(kind)
-            analysis = self._analysis_map(kind, entry.id)
-            self.viewport.set_analysis_map(analysis, entry.id if analysis else None)
-            self.analysis_bar.show_legend(analysis)
+            self._analysis_map(kind, entry.id)
+            # The camera goes to the place the finding names. Where the finding
+            # has no place of its own, the map has one — but the map may still
+            # be computing (§18.9), and the view is not held up for it.
             target = maps.location_of(entry, finding)
-            if target is None and analysis is not None:
-                target = maps.focus_point(entry, analysis)
+            if target is None:
+                cached = self._map_cache.get((entry.id, kind, entry.mesh.triangle_count))
+                target = maps.focus_point(entry, cached) if cached is not None else None
         else:
             target = maps.location_of(entry, finding)
 
@@ -1016,6 +1060,11 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name
         self.session.cancel()
         self.session.wait_for_idle(2000)
+        worker = self._map_worker
+        if worker is not None and worker.isRunning():
+            # A map nobody will see any more, but a thread that outlives its
+            # window takes the process down with it.
+            worker.wait(2000)
         if self.session.modified:
             self.session.autosave()
         save_settings(self.settings)

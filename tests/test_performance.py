@@ -120,37 +120,41 @@ def test_feature_detection_on_two_hundred_thousand_triangles() -> None:
 def test_the_layer_analysis_stays_under_the_budget() -> None:
     """§31 asks for 300 ms at 200 000 triangles and 0.2 mm.
 
-    Not reached: this body has 328 000 triangles and takes around 2.3 seconds,
-    so about 1.4 for the size §31 names. Where the time goes is measured, not
-    guessed — roughly a third in the erosion behind the minimum structure width,
-    a third in building the polygons, the rest spread over the set operations.
-    Closing the gap needs a compiled kernel, not another Python idea. The bound
-    below is what the current implementation holds, and the regression check
-    above catches any slide backwards.
+    Not reached, but closer than it was: this body has 328 000 triangles and
+    takes around 1.7 seconds, so about one second for the size §31 names. The
+    erosion behind the minimum structure width used to be the largest single
+    item; it now stops once a layer is thicker than anything §22.2 warns about
+    (``WIDTH_INTERESTING``), which took a third off. What is left is building
+    the polygons and the set operations, and closing that gap needs a compiled
+    kernel rather than another Python idea. The bound below is what the current
+    implementation holds; the recorded figure catches any slide backwards.
     """
     mesh = medium_mesh()
     taken = measure("slice_medium", lambda: slice_body(mesh, 0.2))
-    assert taken < 5.0
+    assert taken < 4.0
 
 
 def test_the_wall_thickness_map_stays_under_the_bound() -> None:
     """§31 names three seconds for this map, in the background.
 
-    Not reached either: around 8 seconds on this body, and it runs in the
-    foreground with a wait cursor. The walk through the raster is one lookup per
-    triangle and step, and at 328 000 triangles that is 57 million of them.
+    Reached, after two changes. The raster used to be cut layer by layer, which
+    walked all 328 000 triangles once per layer — three hundred times over. It
+    is now one pass over all heights, which took the map from eight seconds to
+    three. And it runs in a thread with a note in the bar (§18.9) instead of in
+    the foreground behind a wait cursor.
     """
     mesh = medium_mesh()
     taken = measure("map_wall_medium", lambda: wall_thickness_map(mesh))
-    assert taken < 20.0
+    assert taken < 8.0
 
 
 def test_the_orientation_search_over_two_hundred_candidates() -> None:
-    """§31: under 20 seconds, interruptible. Around 32 here, and every second of
-    it is the layer analysis above — the search itself only calls it."""
+    """§31: under 20 seconds, interruptible. Around 16 here, and it got there by
+    not doing work nobody reads: the search takes one number out of every slice,
+    so it asks for ``detail="support"`` and the structure widths are left out."""
     mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
     taken = measure("orient_200", lambda: search(mesh, count=200, layer_height=0.4))
-    assert taken < 60.0
+    assert taken < 20.0, "the §31 target, and it holds"
 
 
 def test_scrubbing_through_the_layers_is_free() -> None:

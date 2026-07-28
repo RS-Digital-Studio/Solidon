@@ -107,7 +107,9 @@ def sample_directions(count: int, seed: int | None = None) -> list[Vec3]:
 def judge(mesh: MeshData, direction: Vec3, layer_height: float) -> Candidate:
     """Turn the body so ``direction`` points down, then slice and count."""
     turned = place_on_bed(apply(mesh, _rotation_to_down(direction)))
-    result = slice_body(turned, layer_height)
+    # §28.2: the search reads one number out of this. Measuring structure
+    # widths on a body that is about to be turned again is work nobody looks at.
+    result = slice_body(turned, layer_height, detail="support")
     return Candidate(
         direction=direction,
         support_volume=result.support_volume,

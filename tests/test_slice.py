@@ -126,8 +126,25 @@ def test_a_solid_body_has_no_islands_above_the_plate() -> None:
 def test_the_smallest_structure_width_is_measured() -> None:
     from shapely.geometry import box as shapely_box
 
+    assert minimum_width(shapely_box(0.0, 0.0, 10.0, 0.6)) == pytest.approx(0.6, rel=0.05)
     assert minimum_width(shapely_box(0.0, 0.0, 10.0, 2.0)) == pytest.approx(2.0, rel=0.05)
-    assert minimum_width(shapely_box(0.0, 0.0, 10.0, 10.0)) == pytest.approx(10.0, rel=0.05)
+
+
+def test_above_the_interesting_width_it_stops_measuring() -> None:
+    """§22.2 asks whether something is too thin, not how thick a thick wall is.
+
+    The search up there cost more than the rest of the layer analysis together,
+    so a wide layer is reported as "at least this" — and that is written down
+    rather than looking like a measurement.
+    """
+    from shapely.geometry import box as shapely_box
+
+    from app.core.slice.analysis import WIDTH_INTERESTING
+
+    wide = minimum_width(shapely_box(0.0, 0.0, 40.0, 30.0))
+
+    assert wide == pytest.approx(WIDTH_INTERESTING), "a lower bound, not the real 30 mm"
+    assert minimum_width(shapely_box(0.0, 0.0, 40.0, 30.0), interesting_below=0.0) > 20.0
 
 
 def test_a_thin_wall_is_found_across_the_body() -> None:

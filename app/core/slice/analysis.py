@@ -17,7 +17,7 @@ things, and the report says which is which.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import shapely
@@ -47,6 +47,15 @@ WIDTH_STEPS = 6
 #: millimetre is a tenth of what the finest nozzle can put down.
 WIDTH_SIMPLIFY = 0.01
 
+#: Above this width a structure is simply "thick" and is not measured further.
+#: Two millimetres is five nozzle diameters — no warning in §22.2 looks above it,
+#: and the search for an exact value up there cost more than everything else.
+WIDTH_INTERESTING = 2.0
+
+Detail = Literal["full", "support"]
+"""How much of a layer is measured. ``support`` leaves out everything the
+orientation search does not read (§28.2)."""
+
 
 @dataclass(frozen=True, slots=True)
 class LayerMetrics:
@@ -63,8 +72,14 @@ class LayerMetrics:
     """The unsupported region itself — the support map needs the place, not the number."""
 
 
-def slice_body(mesh: MeshData, layer_height: float = 0.2) -> SliceResult:
-    """Cut the body into layers and measure each one (§22.1, §22.2)."""
+def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full") -> SliceResult:
+    """Cut the body into layers and measure each one (§22.1, §22.2).
+
+    ``detail="support"`` measures only what support needs: overhangs, islands
+    and the areas. The orientation search calls this two hundred times and
+    reads exactly one number out of it (§28.2) — computing structure widths for
+    a body that is about to be turned again is work nobody looks at.
+    """
     if layer_height <= EPS_GEOM:
         raise ValueError("layer height has to be positive")
 
@@ -87,7 +102,7 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2) -> SliceResult:
             previous = None
             continue
 
-        metrics = _measure(shape, previous, on_plate, layer_height)
+        metrics = _measure(shape, previous, on_plate, layer_height, detail)
         on_plate = False
         support += metrics.overhang_area * layer_height
         layers.append(
@@ -269,6 +284,7 @@ def _measure(
     previous: ShapelyPolygon | None,
     on_plate: bool = False,
     layer_height: float = 0.2,
+    detail: Detail = "full",
 ) -> LayerMetrics:
     area = float(shape.area)
     region: ShapelyPolygon | None = None
@@ -286,6 +302,19 @@ def _measure(
         region = shape.difference(supported)
         overhang = float(region.area)
         islands = float(_islands(shape, previous).area)
+
+    if detail == "support":
+        # Everything below is about the printed structure, not about support.
+        return LayerMetrics(
+            z=0.0,
+            area=area,
+            overhang_area=overhang,
+            island_area=islands,
+            min_width=0.0,
+            bridge_width=0.0,
+            contour_count=0,
+            overhang=region,
+        )
 
     return LayerMetrics(
         z=0.0,
@@ -308,16 +337,19 @@ def _islands(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> ShapelyP
     return unary_union(floating) if floating else ShapelyPolygon()
 
 
-def minimum_width(shape: ShapelyPolygon) -> float:
+def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERESTING) -> float:
     """Smallest structure width, found by eroding until nothing is left.
 
     Checkable against the nozzle diameter, which is what it is for (§22.2).
 
-    Two liberties are taken for speed, and both stay far below what a printer
-    can resolve: the contour is simplified by a hundredth of a millimetre first,
-    and the erosion uses mitred corners instead of rounded ones. A layer of a
-    detailed model brings thousands of points, and eroding those eight times
-    over cost more than the whole rest of the analysis together.
+    Three liberties are taken for speed, and none of them changes an answer
+    anybody acts on. The contour is simplified by a hundredth of a millimetre
+    first and the erosion uses mitred corners instead of rounded ones — both
+    stay far below what a printer can resolve. And a layer that survives one
+    erosion by half of ``interesting_below`` is reported as exactly that width
+    and not measured further: whether a wall is four millimetres or nine is not
+    a question the report asks, and the search for it cost more than the rest of
+    the analysis together.
     """
     if shape.is_empty or shape.length <= EPS_GEOM:
         return 0.0
@@ -328,7 +360,17 @@ def minimum_width(shape: ShapelyPolygon) -> float:
     # fit — for a disc and for a square it is exactly the inscribed one. Starting
     # there instead of at the diagonal keeps every probe small, and a small
     # erosion on a simplified contour is what makes this affordable at all.
-    low, high = 0.0, 2.0 * float(shape.area) / float(shape.length)
+    high = 2.0 * float(shape.area) / float(shape.length)
+    if interesting_below > 0.0:
+        if high <= interesting_below / 2.0:
+            # Cannot be thicker than this anyway; measure it properly.
+            pass
+        elif not coarse.buffer(-interesting_below / 2.0, quad_segs=1, join_style="mitre").is_empty:
+            return float(interesting_below)
+        else:
+            high = min(high, interesting_below / 2.0)
+
+    low = 0.0
     for _step in range(WIDTH_STEPS):
         middle = (low + high) / 2.0
         if coarse.buffer(-middle, quad_segs=1, join_style="mitre").is_empty:
@@ -391,6 +433,12 @@ def island_layers(result: SliceResult) -> tuple[float, ...]:
 
 
 def narrowest(result: SliceResult) -> float:
-    """The thinnest structure anywhere in the body."""
+    """The thinnest structure anywhere in the body.
+
+    Exact below :data:`WIDTH_INTERESTING`, which is where the question is asked
+    (§22.2). A body whose thinnest place is thicker than that reports exactly
+    that limit — "at least two millimetres", not a measurement. Anything showing
+    this number has to say so.
+    """
     widths = [layer.min_width for layer in result.layers if layer.min_width > EPS_GEOM]
     return min(widths) if widths else 0.0

@@ -133,6 +133,7 @@
   "Derselbe Startwert liefert dasselbe Modell, solange das Modell dasselbe bleibt.": "The same starting value gives the same model, as long as the model stays the same.",
   "Details anzeigen": "Show details",
   "Die 3D-Ansicht steht auf diesem Rechner nicht zur Verfügung.": "The 3D view is not available on this machine.",
+  "Die Analysekarte wird berechnet …": "The analysis map is being computed …",
   "Die Angabe ist nicht eindeutig.": "That is not unambiguous.",
   "Die Ausrichtung der Flächen wurde korrigiert.": "The face orientation was corrected.",
   "Die Auswertung hält bei dieser Operation an.": "The evaluation stops at this operation.",

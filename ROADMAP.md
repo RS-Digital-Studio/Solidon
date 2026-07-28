@@ -306,6 +306,37 @@ Anmerkungen zu P10:
 * Die Explosionsansicht verschiebt nur Punkte auf dem Weg in die Anzeige. Was
   der Stack sagt und was exportiert wird, bleibt unberührt.
 
+## Leistung (§31) — Stand nach der Durchsicht
+
+Gemessen auf einer Kugel mit 328 000 Dreiecken (§31 nennt seine Ziele für
+200 000), Werte in `tests/.performance.json`:
+
+| Messung | §31 | vorher | jetzt |
+|---|---|---|---|
+| Schichtanalyse, 0,2 mm | 300 ms | 2,35 s | **1,73 s** |
+| Wandstärkenkarte | 3 s, im Hintergrund | 8,18 s, im Vordergrund | **3,08 s, im Hintergrund** |
+| Orientierungssuche, 200 Lagen | 20 s | 32,2 s | **16,5 s** |
+| Feature-Erkennung | 1 s | 0,44 s | 0,44 s |
+| Auswertung aus dem Cache | 1 s | 0,3 ms | 0,3 ms |
+
+Drei Änderungen, alle vom selben Muster: **nicht rechnen, was niemand liest.**
+
+* Die Wandkarte hat ihr Raster Schicht für Schicht geschnitten und dabei alle
+  328 000 Dreiecke dreihundertmal durchlaufen. Jetzt ein Durchgang über alle
+  Höhen — von 8,2 s auf 3,1 s, und damit im Ziel.
+* Die Orientierungssuche liest aus jeder Schicht genau eine Zahl. Sie fragt
+  jetzt `detail="support"` an, und die Strukturbreiten entfallen: 32 s → 16,5 s,
+  ebenfalls im Ziel.
+* Die Suche nach der kleinsten Strukturbreite hört auf, sobald eine Schicht
+  dicker ist als alles, wovor §22.2 warnt. Ob eine Wand vier oder neun
+  Millimeter hat, fragt kein Bericht — die Suche danach kostete mehr als der
+  Rest der Schichtanalyse zusammen.
+
+Offen bleibt die Schichtanalyse selbst: 1,7 s statt 300 ms. Was übrig ist, sind
+Polygonaufbau und Mengenoperationen in GEOS; das zu schließen braucht einen
+kompilierten Kern, keine weitere Python-Idee. Der Wert ist festgehalten, damit
+ein Rückschritt auffällt.
+
 ## P11 — Gehosteter Backend
 - [–] **Bewusst nicht gebaut.** §27 knüpft diese Phase an nachweisbare
   Nachfrage; die gibt es nicht. Ein Dienst ohne Nutzer wäre Arbeit auf Vorrat,

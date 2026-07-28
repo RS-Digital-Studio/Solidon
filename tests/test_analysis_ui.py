@@ -40,6 +40,14 @@ def select_plate(window: MainWindow) -> None:
     item.setSelected(True)
 
 
+def wait_for_map(window: MainWindow) -> None:
+    """§18.9: maps are built in the background, so the test waits like the window."""
+    worker = window._map_worker
+    if worker is not None:
+        worker.wait(20_000)
+    QApplication.processEvents()
+
+
 # --- the map selector -----------------------------------------------------------
 
 
@@ -55,6 +63,7 @@ def test_every_map_of_the_table_is_offered(qt_app: QApplication) -> None:
 def test_choosing_a_map_paints_the_body(window: MainWindow) -> None:
     select_plate(window)
     window.analysis_bar.selector.setCurrentIndex(window.analysis_bar.selector.findData("overhang"))
+    wait_for_map(window)
 
     analysis = window.viewport.analysis_map
     assert analysis is not None
@@ -150,6 +159,7 @@ def test_clicking_a_warning_switches_the_map_and_moves_the_camera(window: MainWi
         feature_ids=("hole_1",),
     )
     window._on_finding_activated(finding)
+    wait_for_map(window)
 
     assert window.analysis_bar.chosen() == "fits"
     analysis = window.viewport.analysis_map
