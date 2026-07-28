@@ -35,9 +35,27 @@ hiddenimports = [
     *collect_submodules("app.core.knowledge.parts"),
     *collect_submodules("app.core.scene"),
     *collect_submodules("app.core.ingest"),
+    *collect_submodules("app.core.brep"),
     "vtkmodules.all",
     "vtkmodules.util.data_model",
     "vtkmodules.util.execution_model",
+    # The optional kernels are imported inside functions so the application
+    # starts without them (§30, §22.3). PyInstaller only sees imports at module
+    # level, so they are named here — a packaged build cannot install them
+    # afterwards, and one that silently lacks fillets is worse than a large one.
+    "OCP.BRepPrimAPI",
+    "OCP.BRepFilletAPI",
+    "OCP.BRepAlgoAPI",
+    "OCP.BRepBuilderAPI",
+    "OCP.BRepAdaptor",
+    "OCP.BRepGProp",
+    "OCP.BRepMesh",
+    "OCP.STEPControl",
+    "OCP.Interface",
+    "OCP.IFSelect",
+    "OCP.GeomAbs",
+    "OCP.Message",
+    "vhacdx",
 ]
 
 analysis = Analysis(

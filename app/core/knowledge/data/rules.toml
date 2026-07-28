@@ -11,7 +11,7 @@
 # Was sich als Baustein fassen lässt, gehört nicht hierher, sondern in die
 # Bibliothek (§24): eine eingehaltene Regel ist besser als eine beschriebene.
 
-version = "1"
+version = "2"
 
 [[rules]]
 id = "min_wall"
@@ -86,6 +86,16 @@ bringt seine Merkmale, seine Grenzen und seine Tests mit."""
 applies_to = ["approach"]
 
 [[rules]]
+id = "exact_before_script"
+title = "Eigener Kern vor OpenSCAD"
+text = """
+Was der B-Rep-Kern kann, wird nicht als OpenSCAD-Quelltext geschrieben: exakte
+Quader und Zylinder, präzise Boolesche Operationen, Fasen und Verrundungen. Das
+Ergebnis ist genauer, bleibt im Verlauf änderbar und braucht kein installiertes
+Programm. OpenSCAD bleibt für Formen, für die es weder Baustein noch Kern gibt."""
+applies_to = ["approach"]
+
+[[rules]]
 id = "ask_over_guess"
 title = "Fragen vor Raten"
 text = """
@@ -103,3 +113,13 @@ date = "2026-07-28"
 reason = "Erste Fassung, übernommen aus dem Bauplan §39."
 suite_before = ""
 suite_after = ""
+
+[[changes]]
+version = "2"
+date = "2026-07-28"
+reason = """
+Regel exact_before_script ergänzt: seit P12 gibt es einen B-Rep-Kern, und was
+der kann, muss nicht als OpenSCAD-Quelltext an einen Unterprozess gehen —
+genauer, im Verlauf änderbar, ohne installiertes Programm."""
+suite_before = "15/15"
+suite_after = "15/15"

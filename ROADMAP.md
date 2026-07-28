@@ -306,6 +306,38 @@ Anmerkungen zu P10:
 * Die Explosionsansicht verschiebt nur Punkte auf dem Weg in die Anzeige. Was
   der Stack sagt und was exportiert wird, bleibt unberührt.
 
+## Durchsicht nach P12 — was noch offen ist
+
+**Behoben in dieser Runde**
+
+* Anordnen und Kollisionsprüfung liefen auf einer leeren Eingabeliste — sie
+  sind `consumes=0, produces=VARIABLE`, bekamen von der Oberfläche aber keine
+  Objekte. Die Regel steht jetzt einmal im Register (`takes_whole_scene`).
+* Die Suite las die echten Nutzerverzeichnisse. Ein kalibriertes Material auf
+  dem Entwicklerrechner änderte, was die Tests sehen — und ein Testlauf ließ
+  Kalibrierungen im Profilordner zurück.
+* Der Signierschritt der CI hätte nie ausgelöst: `env` einer Schrittdefinition
+  ist in deren eigenem `if` nicht lesbar. Jetzt auf Job-Ebene.
+* Die CI installierte kein `brep` — die B-Rep-Tests hätten sich dort still
+  übersprungen und der Kern wäre nie geprüft worden.
+* Die Paketierung sah OCP und V-HACD nicht: beide werden absichtlich erst in
+  der Funktion importiert, und PyInstaller liest nur Importe auf Modulebene.
+  Ein gebautes Paket hätte stillschweigend keine Verrundungen gehabt.
+
+**Bewusst offen**
+
+* **Schichtanalyse 1,7 s statt 300 ms** (§31). Was übrig ist, sind Polygonaufbau
+  und Mengenoperationen in GEOS. Das braucht einen kompilierten Kern; der Wert
+  ist festgehalten, ein Rückschritt fällt auf.
+* **CI nie gelaufen.** Es gibt kein Remote — die Datei ist geprüft (YAML
+  geparst, Bedingungen nachgerechnet), aber nicht ausgeführt. Beim ersten Push
+  auf einen Server ist damit zu rechnen, dass Kleinigkeiten auftauchen.
+* **Keine Website** (§37.3). Marketing, kein Programmteil; kommt, wenn es
+  etwas zu veröffentlichen gibt.
+* **Der Slicer bleibt außen** (§22.5, §28). Ein eigener G-Code-Generator wäre
+  fünfzehn Jahre fremde Arbeit schlechter nachgebaut; die Schichtanalyse sucht
+  und bewertet, die Druckdatei kommt weiter aus dem Slicer.
+
 ## Leistung (§31) — Stand nach der Durchsicht
 
 Gemessen auf einer Kugel mit 328 000 Dreiecken (§31 nennt seine Ziele für

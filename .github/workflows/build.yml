@@ -33,7 +33,9 @@ jobs:
           cache: pip
 
       - name: Abhängigkeiten
-        run: python -m pip install -e ".[dev,geom,ui,agent]"
+        # With `brep`, or the second kernel would never be exercised: its tests
+        # skip themselves when OpenCASCADE is absent (§30).
+        run: python -m pip install -e ".[dev,geom,ui,agent,brep]"
 
       - name: Stil und Typen
         run: |
@@ -56,6 +58,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
+    env:
+      # At job level on purpose: a step cannot read the `secrets` context in its
+      # own `if`, and reading its own `env` there does not work either. This is
+      # the one place the condition below can see.
+      SIGN_CERTIFICATE: ${{ secrets.SIGN_CERTIFICATE }}
+      SIGN_PASSWORD: ${{ secrets.SIGN_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -65,7 +73,7 @@ jobs:
 
       - name: Abhängigkeiten
         run: |
-          python -m pip install -e ".[geom,ui,agent]"
+          python -m pip install -e ".[geom,ui,agent,brep]"
           python -m pip install pyinstaller
 
       - name: Beispielprojekte erzeugen
@@ -78,9 +86,6 @@ jobs:
 
       - name: Signieren (Windows)
         if: runner.os == 'Windows' && env.SIGN_CERTIFICATE != ''
-        env:
-          SIGN_CERTIFICATE: ${{ secrets.SIGN_CERTIFICATE }}
-          SIGN_PASSWORD: ${{ secrets.SIGN_PASSWORD }}
         shell: pwsh
         run: |
           $bytes = [Convert]::FromBase64String($env:SIGN_CERTIFICATE)
