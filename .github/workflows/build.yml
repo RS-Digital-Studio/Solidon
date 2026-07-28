@@ -1,0 +1,96 @@
+# Automatic builds for every target platform (Bauplan §37.2).
+#
+# Two jobs, and the order matters: the suite runs first, on every platform, and
+# only what is green gets packaged. An installer built from a red suite is worse
+# than no installer.
+#
+# Signing needs a certificate that is not in this repository. The step is here
+# and skips itself when the secret is missing, so a fork builds an unsigned
+# folder instead of failing.
+
+name: Bauen
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  suite:
+    name: Suite (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Abhängigkeiten
+        run: python -m pip install -e ".[dev,geom,ui,agent]"
+
+      - name: Stil und Typen
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
+          python -m mypy
+
+      - name: Tests
+        # Offscreen: the runners have no screen, and the viewport says so
+        # instead of taking the process with it.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q
+
+  package:
+    name: Paket (${{ matrix.os }})
+    needs: suite
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Abhängigkeiten
+        run: |
+          python -m pip install -e ".[geom,ui,agent]"
+          python -m pip install pyinstaller
+
+      - name: Beispielprojekte erzeugen
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tools/make_examples.py
+
+      - name: Bauen
+        run: pyinstaller packaging/formwerk.spec --noconfirm
+
+      - name: Signieren (Windows)
+        if: runner.os == 'Windows' && env.SIGN_CERTIFICATE != ''
+        env:
+          SIGN_CERTIFICATE: ${{ secrets.SIGN_CERTIFICATE }}
+          SIGN_PASSWORD: ${{ secrets.SIGN_PASSWORD }}
+        shell: pwsh
+        run: |
+          $bytes = [Convert]::FromBase64String($env:SIGN_CERTIFICATE)
+          $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, $bytes)
+          & signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 `
+            /tr http://timestamp.digicert.com /td SHA256 `
+            "dist/Formwerk/Formwerk.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formwerk-${{ matrix.os }}
+          path: dist/Formwerk

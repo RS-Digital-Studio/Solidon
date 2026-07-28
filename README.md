@@ -10,6 +10,40 @@ bleibt alles außer dem Chat benutzbar.
 
 Projektdateien tragen die Endung `.p3d`.
 
+## Was Formwerk nicht ist
+
+Damit niemand das Falsche erwartet:
+
+* **Kein CAD-Ersatz.** Es gibt keine Skizzen, keine Zwangsbedingungen, keine
+  Historie aus parametrischen Features im Sinne von Fusion oder SolidWorks.
+  Formwerk arbeitet auf Netzen; Verrundungen und Fasen auf beliebigen Kanten
+  bleiben deshalb hart, bis der B-Rep-Kern kommt (§30).
+* **Keine Passungen aus erzeugten Meshes.** Was ein Bildmodell erzeugt, ist eine
+  Oberfläche, keine Konstruktion. Bohrungen und Passungen entstehen danach als
+  eigene Operationen — nicht dadurch, dass man das erzeugte Netz vermisst.
+* **Kein Slicer.** Die eingebaute Schichtanalyse sucht und bewertet; die
+  Druckdatei kommt weiter aus dem Slicer. Beide Zahlenwelten bleiben getrennt
+  ausgewiesen (§22.5).
+* **Keine Cloud.** Kein Konto, keine Telemetrie, keine Projektablage im Netz.
+  Ein Sprachmodell wird nur gefragt, wenn ein Schlüssel hinterlegt ist.
+
+**Support** läuft über einen Kanal: die Issues dieses Repositories. Ein
+Fehlerbericht entsteht im Programm unter *Hilfe → Fehlerbericht erstellen* und
+bleibt so lange auf dem Rechner, bis jemand ihn selbst anhängt.
+
+---
+
+## Die drei Wege
+
+Beim Start liegen drei Beispielprojekte bereit — sie sind gleichzeitig
+Dokumentation und Abnahmeprüfung (§37.2):
+
+| Projekt | Weg |
+|---|---|
+| `weg1-halterung-anpassen.p3d` | fremdes Modell einlesen, reparieren, bohren |
+| `weg2-halter-konstruieren.p3d` | aus Parametern und Bausteinen neu konstruieren |
+| `weg3-generiert-aufbereiten.p3d` | erzeugtes Mesh durch die Reparaturkette |
+
 ---
 
 ## Unterlagen
@@ -36,9 +70,28 @@ python -m venv .venv
 | `.venv/Scripts/python.exe -m app.cli.main ops` | Operationen auflisten |
 | `.venv/Scripts/python.exe -m app.i18n.extract` | Übersetzungskataloge abgleichen |
 | `.venv/Scripts/python.exe tests/data/make_corpus.py` | Referenzkorpus erzeugen |
+| `.venv/Scripts/python.exe tools/make_examples.py` | Beispielprojekte erzeugen |
+| `.venv/Scripts/python.exe tools/run_agent_suite.py` | Agenten-Suite gegen ein echtes Modell |
 
 Zum Starten per Doppelklick liegt unter `tools/start-formwerk.cmd` eine
-Verknüpfung; die gebaute Installationsdatei entsteht in Phase P8 (§37.2).
+Verknüpfung.
+
+## Paketieren
+
+```
+.venv/Scripts/python.exe -m pip install pyinstaller
+.venv/Scripts/pyinstaller.exe packaging/formwerk.spec --noconfirm
+```
+
+Ergebnis ist ein Ordner unter `dist/Formwerk`. Die Bauläufe für Windows und
+Linux stehen in `.github/workflows/build.yml`; sie laufen erst, wenn die Suite
+auf allen drei Plattformen grün ist. Die Windows-Signierung braucht ein
+Zertifikat als Repository-Secret — ohne das entsteht ein unsigniertes Paket
+statt eines Fehlers.
+
+OpenSCAD, Slicer, Ollama und ComfyUI werden **nicht** mitgeliefert, sondern
+konfiguriert (§36, §38). Beim ersten Start zeigt die Anwendung, welche davon
+gefunden wurden; Pflicht ist keines.
 
 Ohne funktionierendes OpenGL startet die Anwendung ohne 3D-Ansicht; erzwingen
 lässt sich das mit `FORMWERK_NO_VIEWPORT=1`.

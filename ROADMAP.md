@@ -227,13 +227,27 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       mit den neuen Werten
 
 ## P8 — Erste Veröffentlichung
-- [ ] Name entschieden, überall durchgezogen
-- [ ] CI-Bauläufe, Signierung Windows, AppImage/Flatpak
-- [ ] Erstinbetriebnahme (§38)
-- [ ] Fehlerberichtsdialog mit Container-Anhang
-- [ ] Drei Beispielprojekte = die drei Hauptwege
-- [ ] Doku, Website, Lizenzhinweise
-- [ ] Update-Hinweis beim Start
+- [x] Name entschieden, überall durchgezogen — alles Namensbezogene steht in
+      `app/branding.py`
+- [~] CI-Bauläufe, Signierung Windows, AppImage/Flatpak — `.github/workflows/`
+      baut Windows und Linux, erst nachdem die Suite auf allen drei Plattformen
+      grün ist; die Signierung überspringt sich ohne Zertifikat. **Ungeprüft**,
+      weil dieses Repository noch nicht auf einem CI-Dienst liegt; AppImage und
+      Flatpak fehlen, das Linux-Paket ist bisher der PyInstaller-Ordner
+- [x] Erstinbetriebnahme (§38) — Sprache, Drucker, Material, externe Programme;
+      überspringbar, nachholbar, endet beim ersten Import
+- [x] Fehlerberichtsdialog mit Container-Anhang — legt einen Ordner an,
+      verschickt nichts, und sagt beim Anhängen der Projektdatei, dass die
+      Geometrie mitreist
+- [x] Drei Beispielprojekte = die drei Hauptwege — erzeugt von
+      `tools/make_examples.py`, geprüft von `tests/test_examples.py`, sichtbar
+      auf dem Startbildschirm
+- [~] Doku, Website, Lizenzhinweise — README mit Erwartungsmanagement, den drei
+      Wegen, Paketierung und einem Supportkanal; Lizenzhinweise vollständig.
+      **Eine Website gibt es nicht**, und die Adresse in `core/updates.py` ist
+      bisher ein Platzhalter
+- [x] Update-Hinweis beim Start — fragt eine Versionsdatei, lädt nichts, und ist
+      aus, bis ihn jemand einschaltet
 
 ## P9 — Säule B und Farbe
 - [ ] `MeshBackend`, ComfyUI lokal

@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
+from app.core import examples
 from app.core.geom.mesh import READABLE_SUFFIXES
 from app.i18n import tr
 
@@ -92,6 +93,13 @@ class StartScreen(QWidget):
         self.recent_list = QListWidget(self)
         self.recent_list.itemActivated.connect(self._on_recent)
 
+        # §37.2: the three example projects are start screen content, not a
+        # folder someone has to find.
+        self.examples_list = QListWidget(self)
+        self.examples_list.itemActivated.connect(self._on_recent)
+        self.examples_list.setMaximumHeight(96)
+        self.show_examples()
+
         new_button = QPushButton(tr("Neues Projekt"), self)
         new_button.clicked.connect(self.newRequested)
         open_button = QPushButton(tr("Projekt öffnen …"), self)
@@ -111,6 +119,8 @@ class StartScreen(QWidget):
         layout.addWidget(title)
         layout.addWidget(drop)
         layout.addLayout(buttons)
+        layout.addWidget(QLabel(tr("Die drei Wege"), self))
+        layout.addWidget(self.examples_list)
         layout.addWidget(QLabel(tr("Zuletzt geöffnet"), self))
         layout.addWidget(self.recent_list, stretch=1)
 
@@ -126,6 +136,16 @@ class StartScreen(QWidget):
             item.setData(Qt.ItemDataRole.UserRole, str(path))
             item.setToolTip(str(path))
             self.recent_list.addItem(item)
+
+    def show_examples(self) -> None:
+        """The three ways from §2.2, as far as they are installed."""
+        self.examples_list.clear()
+        for path in examples.paths():
+            entry = examples.by_path(path)
+            item = QListWidgetItem(str(entry.title) if entry else path.stem)
+            item.setData(Qt.ItemDataRole.UserRole, str(path))
+            item.setToolTip(str(entry.doc) if entry else str(path))
+            self.examples_list.addItem(item)
 
     def _on_recent(self, item: QListWidgetItem) -> None:
         stored = item.data(Qt.ItemDataRole.UserRole)

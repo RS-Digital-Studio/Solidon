@@ -58,6 +58,9 @@ include = ["app*"]
 "app.core.knowledge" = ["data/*.toml"]
 "app.core.knowledge.parts" = ["LICENSE"]
 "app.i18n" = ["locales/*.json"]
+# The three example projects are shipped: documentation, acceptance test and
+# start screen content at once (§37.2).
+"app" = ["examples/*.p3d"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
