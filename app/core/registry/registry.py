@@ -20,6 +20,13 @@ from app.i18n import TranslatableText, _
 FEATURE_KINDS: Final[tuple[str, ...]] = get_args(FeatureKind)
 
 #: Categories from the operation catalogue (§25). They order the menu.
+#: The catalogue of §25, in the order it appears in the menu. Four of these hold
+#: no operations and are not going to: parameters and fits live in the document
+#: and are changed by their panels and by the agent (§13, §14); export and the
+#: variant generator are flows that run *around* an evaluation rather than
+#: inside one — a variant set re-evaluates the whole stack, which an operation
+#: within that evaluation cannot do (§15.1). Empty categories never reach a
+#: menu, so they cost nothing but this paragraph.
 CATEGORIES: Final[dict[str, TranslatableText]] = {
     "scene": _("Szene"),
     "parameters": _("Parameter"),
