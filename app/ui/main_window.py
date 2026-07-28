@@ -92,6 +92,20 @@ MODEL_FILTER = "Modelle (*.stl *.3mf *.obj *.glb *.gltf *.ply *.off *.step *.stp
 GCODE_FILTER = "G-Code (*.gcode *.gco *.g *.nc)"
 
 
+def inputs_for(
+    spec: OperationSpec, objects: list[ObjectId], selected: ObjectId | None
+) -> tuple[ObjectId, ...]:
+    """Which objects an operation is applied to (§10, §25).
+
+    Its own function, not two lines inside the menu handler: the rule is the
+    same for the command line and the agent, and an operation that works on the
+    whole scene but is handed nothing runs on nothing and looks broken.
+    """
+    if spec.takes_whole_scene:
+        return tuple(objects)
+    return (selected,) if spec.consumes and selected else ()
+
+
 class MainWindow(QMainWindow):
     """Window, menus and the wiring between session and panels."""
 
@@ -811,13 +825,22 @@ class MainWindow(QMainWindow):
             )
             return
 
+        if spec.takes_whole_scene and not objects:
+            QMessageBox.information(self, str(spec.title), tr("Die Szene ist leer."))
+            return
+
         dialog = OperationDialog(spec, objects, self)
         if dialog.exec() != OperationDialog.DialogCode.Accepted:
             return
-        inputs = (selected,) if spec.consumes and selected else ()
         self.session.apply(
             spec.title,
-            [OperationDraft(op=spec.name, inputs=inputs, params=dialog.values())],
+            [
+                OperationDraft(
+                    op=spec.name,
+                    inputs=inputs_for(spec, objects, selected),
+                    params=dialog.values(),
+                )
+            ],
         )
 
     # --- session replies --------------------------------------------------------

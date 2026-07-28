@@ -236,6 +236,10 @@ class AgentSession:
 
         arguments = dict(call.arguments)
         inputs = tuple(str(entry) for entry in arguments.pop(OBJECTS_FIELD, ()) or ())
+        if spec.takes_whole_scene and not inputs:
+            # Arranging works on everything (§25). Making the model list every
+            # object would be a chance to forget one, and the scene knows them.
+            inputs = tuple(scene.objects)
         try:
             # P4 acceptance: schema-valid before anything is computed.
             validate(spec.params, arguments)

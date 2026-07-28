@@ -71,6 +71,17 @@ class OperationSpec:
         """Randomised procedures carry a stored seed (§11.3)."""
         return not self.deterministic
 
+    @property
+    def takes_whole_scene(self) -> bool:
+        """Does this operation work on every object at once?
+
+        Arranging and the collision check do: they take no particular object
+        and hand back all of them. Every surface has to pass the whole scene in
+        — an operation of this kind with no inputs runs on nothing and looks
+        broken, which is exactly how it looked before this property existed.
+        """
+        return self.consumes == 0 and self.produces == VARIABLE
+
 
 class Registry:
     """Holds the declarations. One default instance; tests build their own."""

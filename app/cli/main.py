@@ -248,10 +248,16 @@ def command_run(args: argparse.Namespace) -> int:
         for entry in spec.params.spec()
         if getattr(args, entry.name, None) is not None
     }
+    inputs = tuple(args.on or ())
+    if spec.takes_whole_scene and not inputs:
+        # Arranging and the collision check work on the whole scene (§25);
+        # without ``--on`` they would otherwise run on nothing.
+        inputs = tuple(run_evaluation(project, path, quiet=True).scene.objects)
+
     history = History(project.document)
     history.apply(
         spec.title,
-        [OperationDraft(op=spec.name, inputs=tuple(args.on or ()), params=params, seed=args.seed)],
+        [OperationDraft(op=spec.name, inputs=inputs, params=params, seed=args.seed)],
     )
     result = run_evaluation(project, path)
     print_report(result)
