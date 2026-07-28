@@ -39,6 +39,9 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 
+#: ``produces=VARIABLE``: as many objects out as went in.
+VARIABLE: Final = -1
+
 
 @dataclass(frozen=True, slots=True)
 class OperationSpec:
@@ -51,7 +54,10 @@ class OperationSpec:
     fn: OpFn
     reversible: bool = True
     consumes: int = 1
+    """How many objects the operation takes. Zero means any number."""
     produces: int = 1
+    """How many it returns. ``VARIABLE`` means as many as it took — for
+    operations like arranging, which change every object and create none."""
     applies_to: tuple[str, ...] = ()
     """Feature kinds this operation offers itself for — drives the context menu."""
     touches_features: bool = False
@@ -103,7 +109,7 @@ class Registry:
                 detail=f"{spec.name!r} applies to unknown feature kinds {unknown}",
                 values={"op": spec.name, "known": list(FEATURE_KINDS)},
             )
-        if spec.consumes < 0 or spec.produces < 0:
+        if spec.consumes < 0 or spec.produces < VARIABLE:
             raise InternalError(
                 detail=f"{spec.name!r} declares a negative object count",
                 values={"op": spec.name},

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 from app.core.errors import ValidationError
-from app.core.registry import REGISTRY, Registry
+from app.core.registry import REGISTRY, VARIABLE, Registry
 from app.core.scene import expressions
 from app.core.types import Document, ObjectId, Operation, OpId, Origin, Transaction
 from app.i18n import TranslatableText, _
@@ -187,7 +187,7 @@ class History:
 
     def _outputs_for(self, spec: Any, draft: OperationDraft) -> tuple[ObjectId, ...]:
         """Same count in and out means the objects stay themselves; otherwise new ids."""
-        if spec.produces == spec.consumes and draft.inputs:
+        if spec.produces == VARIABLE or (spec.produces == spec.consumes and draft.inputs):
             return tuple(draft.inputs)
         return tuple(f"obj_{next(self._next_object)}" for _ in range(spec.produces))
 

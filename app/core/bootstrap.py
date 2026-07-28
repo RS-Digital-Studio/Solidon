@@ -15,6 +15,7 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.scene.ops",
     "app.core.ingest.ops",
     "app.core.geom.ops",
+    "app.core.geom.prepare_ops",
 )
 
 _loaded = False
