@@ -86,7 +86,7 @@ strict = true
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["trimesh.*", "manifold3d.*", "pyvista.*"]
+module = ["trimesh.*", "manifold3d.*", "pyvista.*", "scipy.*", "skimage.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -96,5 +96,5 @@ warn_unreachable = false
 
 [[tool.mypy.overrides]]
 # trimesh ships only partial annotations; calls into it cannot be typed from here.
-module = ["app.core.geom.*", "app.core.ingest.*", "app.core.export.*"]
+module = ["app.core.geom.*", "app.core.ingest.*", "app.core.export.*", "app.core.perceive.*"]
 disallow_untyped_calls = false
