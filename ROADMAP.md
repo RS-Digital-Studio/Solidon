@@ -106,15 +106,16 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 ## P2 — Operationen manuell
 - [x] Reparatur-Ops gegen `broken_open`, `degenerate` — Löcher in Dreiecksgröße
       werden geschlossen, eine fehlende Wand wird ehrlich als offen gemeldet
-- [x] Transformationen, Ausrichten (in P1 vorgezogen), druckoptimal
-      orientieren steht noch aus
+- [x] Transformationen, Ausrichten (in P1 vorgezogen), druckoptimal orientieren
+      als Normalen-Heuristik — der Befund weist sie als solche aus
 - [x] Boolesche Ops mit Rückfallkette §17.2, Stufe und Startwert in der Op —
       alle vier Stufen einzeln erzwungen und geprüft
-- [ ] Bohrungs-Ops, Schneiden, Anordnen, Kollisionsprüfung
-- [ ] Export nach §29 einschließlich Namensschema und Exportprüfung
-- [ ] Orientierung vorerst als Normalen-Heuristik, in P3 ersetzt
-- [ ] Fehlerdarstellung als Vorschlag (§2.7) für alle Geometriefehler
-- [ ] **Weg 1 aus §2.2 als Ende-zu-Ende-Test**
+- [x] Bohrungs-Ops, Schneiden, Anordnen, Kollisionsprüfung
+- [x] Export nach §29 einschließlich Namensschema und Exportprüfung
+- [x] Orientierung vorerst als Normalen-Heuristik, in P3 ersetzt
+- [x] Fehlerdarstellung als Vorschlag (§2.7) für alle Geometriefehler — jede
+      Ausnahme trägt Vorschläge, die Oberfläche zeigt sie als Knöpfe
+- [x] **Weg 1 aus §2.2 als Ende-zu-Ende-Test** — `tests/test_way_one.py`
 
 ## P3 — Wahrnehmung und Schichtanalyse
 - [ ] Feature-Erkennung (§21.1) gegen `plate_holes`
