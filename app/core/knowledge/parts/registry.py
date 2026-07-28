@@ -26,6 +26,34 @@ from app.i18n import TranslatableText, _
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 
+#: Shortest word the search takes seriously.
+MIN_SEARCH_WORD: Final = 4
+
+#: Words that appear in almost every description and therefore say nothing.
+STOP_WORDS: Final[frozenset[str]] = frozenset(
+    {
+        "auch",
+        "eine",
+        "einen",
+        "einem",
+        "eines",
+        "damit",
+        "dass",
+        "durch",
+        "haben",
+        "kann",
+        "nach",
+        "nicht",
+        "oder",
+        "sich",
+        "sind",
+        "über",
+        "wenn",
+        "wird",
+        "zwei",
+    }
+)
+
 #: Groups of the catalogue (§24.3). They order what the user sees.
 GROUPS: Final[dict[str, TranslatableText]] = {
     "fasteners": _("Verbindungen"),
@@ -133,8 +161,17 @@ class PartRegistry:
     def search(self, text: str) -> tuple[PartSpec, ...]:
         """What ``find_part`` answers with (§26.2). Plain word matching — a part
         library of a few dozen entries needs no index, and a wrong hit from a
-        clever ranking would be worse than an honest miss."""
-        words = [word for word in re.split(r"\W+", text.casefold()) if len(word) > 2]
+        clever ranking would be worse than an honest miss.
+
+        Short and common words are dropped: "eine Mutter mit Gewinde" would
+        otherwise match every part whose description contains "mit", and a
+        library that answers everything is as useless as one that answers
+        nothing."""
+        words = [
+            word
+            for word in re.split(r"\W+", text.casefold())
+            if len(word) >= MIN_SEARCH_WORD and word not in STOP_WORDS
+        ]
         if not words:
             return ()
         found = []

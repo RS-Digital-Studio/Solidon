@@ -323,8 +323,13 @@ def _from(severity: str) -> set[str]:
 def _find_part(description: str) -> str:
     """§26.2: look in the library before building geometry by hand.
 
-    The library itself is P5. Until it has parts this answers that it is empty —
-    which is the truth and keeps the habit in place, rather than leaving the
-    tool out and teaching the model to build everything itself.
+    The answer names the operation, not just the part: what the model does with
+    a find is call it, and a name it has to guess at is a name it gets wrong.
     """
-    return tr("Die Bausteinbibliothek ist noch leer.")
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts.ops import op_name
+
+    found = PARTS.search(description)
+    if not found:
+        return tr("Dazu gibt es keinen Baustein.")
+    return "\n".join(f"{op_name(spec.name)}: {spec.title} — {spec.doc}" for spec in found[:6])

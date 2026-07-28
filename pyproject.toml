@@ -82,6 +82,8 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 "app/core/perceive/maps.py" = ["N818"]
 # BackendUnavailable reads as a state, and it is one — §33.1 fixes the names.
 "app/core/backends/llm.py" = ["N818"]
+# UnsafeSource and ScadUnavailable read as states too, and both are AppErrors.
+"app/core/backends/openscad.py" = ["N818"]
 # Qt signals are camelCase by convention, and "20 × 20 mm" is how a dimension is
 # written in German — both are deliberate in the surface.
 "app/ui/*" = ["N815", "RUF001"]

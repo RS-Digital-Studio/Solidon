@@ -32,7 +32,7 @@ from app.core.knowledge import profiles
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import Source
-from tests.agent_cases import CASES, Case
+from tests.agent_cases import ALL_CASES, Case
 
 MESHES = Path(__file__).resolve().parent.parent / "tests" / "data" / "meshes"
 
@@ -79,7 +79,8 @@ def project_with_plate() -> Project:
 
 
 def run_case(case: Case, backend: LLMBackend) -> Outcome:
-    project = project_with_plate()
+    # Pillar A starts on an empty project, pillar C on the plate (§2.2).
+    project = new_project("centauri-carbon-2", "petg") if case.empty_scene else project_with_plate()
     outcome = Outcome(case=case)
 
     def answer(question: str, options: list[str]) -> str:
@@ -120,6 +121,9 @@ def main() -> int:
     parser.add_argument("--backend", default="", choices=["", "anthropic", "ollama"])
     parser.add_argument("--model", default="")
     parser.add_argument("--only", default="", help="Nur einen Fall laufen lassen")
+    parser.add_argument(
+        "--pillar", default="", choices=["", "A", "C"], help="Nur eine Säule laufen lassen"
+    )
     arguments = parser.parse_args()
 
     backend = pick(arguments.backend, arguments.model)
@@ -127,7 +131,12 @@ def main() -> int:
         print("Kein Sprachmodell erreichbar. Schlüssel hinterlegen oder Ollama starten.")
         return 2
 
-    cases = [case for case in CASES if not arguments.only or case.id == arguments.only]
+    cases = [
+        case
+        for case in ALL_CASES
+        if (not arguments.only or case.id == arguments.only)
+        and (not arguments.pillar or case.pillar == arguments.pillar)
+    ]
     print(f"{backend.id}:{backend.model} — {len(cases)} Anfragen\n")
 
     outcomes = []
@@ -146,6 +155,20 @@ def main() -> int:
     print(f"gut beantwortet: {good}/{len(outcomes)}")
     if ambiguous:
         print(f"bei Mehrdeutigkeit gefragt: {asked}/{len(ambiguous)} (Ziel {TARGET_ASKED:.0%})")
+
+    # §35 for pillar A: was a part used instead of own geometry, and did the
+    # main dimensions become parameters?
+    building = [entry for entry in outcomes if entry.case.expects_part]
+    if building:
+        used_parts = sum(
+            1 for entry in building if any(name.startswith("insert_") for name in entry.operations)
+        )
+        print(f"Baustein statt eigener Geometrie: {used_parts}/{len(building)}")
+    wanted_parameters = [entry for entry in outcomes if entry.case.expects_parameter]
+    if wanted_parameters:
+        made = sum(1 for entry in wanted_parameters if entry.parameters)
+        print(f"Hauptmaße als Parameter: {made}/{len(wanted_parameters)}")
+
     print(f"Schritte im Mittel: {sum(e.steps for e in outcomes) / max(len(outcomes), 1):.1f}")
     return 0 if good == len(outcomes) else 1
 

@@ -32,6 +32,12 @@ class Case:
     selection: tuple[str, str] | None = None
     note: str = ""
     forbids_ops: tuple[str, ...] = field(default_factory=tuple)
+    pillar: str = "C"
+    """C — adapting a foreign model. A — building something new (§2.2)."""
+    empty_scene: bool = False
+    """Pillar A starts on an empty project, pillar C on the plate."""
+    expects_part: bool = False
+    """§35: is an existing part used instead of own geometry?"""
 
 
 #: Way 1 of §2.2, on the plate with four bores from the corpus.
@@ -121,11 +127,141 @@ CASES: tuple[Case, ...] = (
     ),
 )
 
-AMBIGUOUS = tuple(case for case in CASES if case.ambiguous)
+#: Way 2 of §2.2 — building something new, on an empty project. What is measured
+#: here is what §35 asks about pillar A: is a part used instead of own geometry,
+#: and do the main dimensions become parameters.
+CASES_A: tuple[Case, ...] = (
+    Case(
+        id="bracket",
+        request="Bau einen Halter, 60 mm breit, 40 mm tief, 6 mm stark, mit zwei M4-Löchern.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("create_box", "insert_screw_hole", "insert_screw_hole"),
+        expects_parameter=True,
+        expects_part=True,
+    ),
+    Case(
+        id="magnet_lid",
+        request="Ein Deckel mit vier Magnettaschen für 8x3-Magnete.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("create_box", "insert_magnet_pocket"),
+        expects_part=True,
+    ),
+    Case(
+        id="wall_holder",
+        request="Ein Wandhalter für einen Router, 30 mm breit.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("insert_wall_mount",),
+        expects_part=True,
+        note="The part exists — building the plate by hand would be the wrong answer.",
+    ),
+    Case(
+        id="cable_exit",
+        request="Eine Kabeldurchführung mit Zugentlastung in eine 3 mm starke Wand.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("create_box", "insert_cable_gland"),
+        expects_part=True,
+    ),
+    Case(
+        id="threaded_stud",
+        request="Ein M6-Gewindezapfen, 12 mm lang.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("insert_printed_thread",),
+        expects_part=True,
+    ),
+    Case(
+        id="nut_plate",
+        request="Eine Platte mit einer Mutternfalle für M4 von der Seite.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("create_box", "insert_nut_trap"),
+        expects_part=True,
+    ),
+    Case(
+        id="spacer",
+        request="Eine Distanzhülse, 12 mm hoch, für eine M3-Schraube.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("create_cylinder", "insert_screw_hole"),
+        expects_part=True,
+    ),
+    Case(
+        id="hinge",
+        request="Ein Filmscharnier für einen Deckel, 30 mm breit.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("insert_living_hinge",),
+        expects_part=True,
+    ),
+    Case(
+        id="snap_box",
+        request="Ein Schnappverschluss für eine Box.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("insert_snap_fit",),
+        expects_part=True,
+    ),
+    Case(
+        id="keyhole_back",
+        request="Eine Schlüsselloch-Aufhängung auf der Rückseite.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("create_box", "insert_keyhole"),
+        expects_part=True,
+    ),
+    Case(
+        id="stiffen",
+        request="Versteife die Wand mit einer Rippe.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("create_box", "insert_rib"),
+        expects_part=True,
+    ),
+    Case(
+        id="dowels",
+        request="Setz Passstifte, damit die beiden Hälften zueinander finden.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("create_box", "insert_dowel"),
+        expects_part=True,
+    ),
+    Case(
+        id="inserts",
+        request="Vier Einpressbuchsen M3 in die Ecken.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("create_box", "insert_heatset_m4"),
+        expects_part=True,
+    ),
+    Case(
+        id="parameterise",
+        request="Mach die Breite und die Höhe zu Projektparametern.",
+        pillar="A",
+        empty_scene=True,
+        expects_parameter=True,
+        note="§39: main dimensions are parameters, not scattered numbers.",
+    ),
+    Case(
+        id="free_shape",
+        request="Ein Trichter mit 40 mm oben und 10 mm unten.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("create_from_scad",),
+        note="No part fits — this is what the fallback level is for (§24.1).",
+    ),
+)
+
+ALL_CASES: tuple[Case, ...] = (*CASES, *CASES_A)
+
+AMBIGUOUS = tuple(case for case in ALL_CASES if case.ambiguous)
 
 
 def by_id(identifier: str) -> Case:
-    for case in CASES:
+    for case in ALL_CASES:
         if case.id == identifier:
             return case
     raise KeyError(identifier)

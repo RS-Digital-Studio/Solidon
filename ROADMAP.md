@@ -196,10 +196,18 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       alle dreizehn gegen manifold3d durch
 
 ## P6 — Säule A
-- [ ] Agent erzeugt Op-Listen aus Bausteinen und Parametern
-- [ ] OpenSCAD als Rückfallebene mit Quelltextprüfung (§32)
-- [ ] Messung: Bausteinnutzung, Parameternutzung
-- [ ] **Weg 2 aus §2.2 als Ende-zu-Ende-Test**
+- [x] Agent erzeugt Op-Listen aus Bausteinen und Parametern — dazu die
+      Primitive aus §25 (`create_box`, `create_cylinder`, `create_sphere`),
+      ohne die eine leere Szene keinen Anfang hat, und `at_feature`, um einen
+      Baustein an ein erkanntes Merkmal zu setzen
+- [x] OpenSCAD als Rückfallebene mit Quelltextprüfung (§32) — `include`, `use`,
+      `import` und `surface` nur relativ und unterhalb des Arbeitsordners,
+      eigener Ordner je Lauf, Zeitlimit, getrimmte Umgebung. Der Nachweis ist,
+      dass abgewiesener Quelltext **keinen Prozess startet**
+- [x] Messung: Bausteinnutzung, Parameternutzung — fünfzehn Anfragen zu Säule A
+      in `tests/agent_cases.py`, damit dreißig insgesamt (§35); die Quote gegen
+      ein echtes Modell zählt `tools/run_agent_suite.py --pillar A`
+- [x] **Weg 2 aus §2.2 als Ende-zu-Ende-Test** — `tests/test_way_two.py`
 
 ## P7 — Slicer-Rückkopplung und Kalibrierung
 - [ ] G-Code auswerten (§28.1) als Gegenprobe zur internen Schätzung

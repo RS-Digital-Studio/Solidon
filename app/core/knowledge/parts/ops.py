@@ -21,13 +21,23 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
+from app.core.errors import Action, AppError
 from app.core.geom.boolean import BooleanKind, boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.transform import rotation, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
 from app.core.log import get_logger
 from app.core.registry import Registry, op_params, param, register_op
-from app.core.types import BaseParams, Feature, OpContext, OpResult, PartResult, Profile
+from app.core.types import (
+    BaseParams,
+    Feature,
+    OpContext,
+    OpResult,
+    PartResult,
+    Profile,
+    SceneObject,
+    Vec3,
+)
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -62,6 +72,18 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
             minimum=-360.0,
             maximum=360.0,
             placement="advanced",
+        ),
+    ),
+    (
+        "at_feature",
+        "str",
+        param(
+            title=_("An Merkmal"),
+            default="",
+            doc=_(
+                "Name eines erkannten Merkmals, zum Beispiel hole_1. Dann zählt "
+                "dessen Ort, und die Position darüber wird als Versatz gerechnet."
+            ),
         ),
     ),
 )
@@ -146,13 +168,14 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     values = _part_values(spec, ctx.params, ctx.profile)
     produced = spec.fn(spec.params(**values))
 
-    placed = _place(as_mesh_data(produced.mesh), ctx.params)
+    anchor = _anchor(source, ctx.params)
+    placed = _place(as_mesh_data(produced.mesh), ctx.params, anchor)
     body = as_mesh_data(source.mesh)
     kind: BooleanKind = "difference" if spec.subtractive else "union"
     outcome = boolean(kind, [body, placed], quality=ctx.quality)
 
     features = dict(source.features)
-    features.update(_placed_features(produced, spec, ctx.params))
+    features.update(_placed_features(produced, spec, ctx.params, anchor))
 
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features=features)],
@@ -172,7 +195,33 @@ def _part_values(spec: PartSpec, params: Any, profile: Profile | None) -> dict[s
     return values
 
 
-def _place(mesh: MeshData, params: Any) -> MeshData:
+def _anchor(source: SceneObject, params: Any) -> Vec3:
+    """Where the part goes: at a named feature, or at the origin (§25).
+
+    §25 asks for "put a part at a recognised feature". The name is enough for
+    that — it is the same name the user clicked and the agent spoke about
+    (§18.5), and a feature that is not there says so instead of landing the part
+    somewhere plausible.
+    """
+    name = str(getattr(params, "at_feature", "") or "")
+    if not name:
+        return (0.0, 0.0, 0.0)
+
+    feature = source.features.get(name)
+    if feature is None:
+        raise AppError(
+            _("Dieses Merkmal gibt es an diesem Objekt nicht."),
+            detail=f"unknown feature {name!r}",
+            values={"feature": name, "known": ", ".join(sorted(source.features))},
+            suggestions=(
+                Action(id="pick_feature", label=_("Wählen Sie das Merkmal im Objektbaum aus.")),
+            ),
+        )
+    centre = feature.params.get("centre", (0.0, 0.0, 0.0))
+    return (float(centre[0]), float(centre[1]), float(centre[2]))
+
+
+def _place(mesh: MeshData, params: Any, anchor: Vec3 = (0.0, 0.0, 0.0)) -> MeshData:
     from app.core.geom.transform import apply
 
     axis = getattr(params, "axis", "z")
@@ -184,14 +233,16 @@ def _place(mesh: MeshData, params: Any) -> MeshData:
     if angle:
         body = apply(body, rotation(axis, angle))  # type: ignore[arg-type]
     offset = (
-        float(getattr(params, "x", 0.0)),
-        float(getattr(params, "y", 0.0)),
-        float(getattr(params, "z", 0.0)),
+        float(getattr(params, "x", 0.0)) + anchor[0],
+        float(getattr(params, "y", 0.0)) + anchor[1],
+        float(getattr(params, "z", 0.0)) + anchor[2],
     )
     return apply(body, translation(offset))
 
 
-def _placed_features(produced: PartResult, spec: PartSpec, params: Any) -> dict[str, Feature]:
+def _placed_features(
+    produced: PartResult, spec: PartSpec, params: Any, anchor: Vec3 = (0.0, 0.0, 0.0)
+) -> dict[str, Feature]:
     """The part's features, moved with it and named so they cannot collide.
 
     ``bore_1`` of the third inserted part would otherwise overwrite the first
@@ -200,7 +251,7 @@ def _placed_features(produced: PartResult, spec: PartSpec, params: Any) -> dict[
     """
     from app.core.perceive.matching import moved_features
 
-    matrix = _matrix(params)
+    matrix = _matrix(params, anchor)
     moved = moved_features(dict(produced.features), matrix)
     return {
         f"{spec.name}_{name}": dataclasses.replace(feature, id=f"{spec.name}_{name}")
@@ -208,7 +259,7 @@ def _placed_features(produced: PartResult, spec: PartSpec, params: Any) -> dict[
     }
 
 
-def _matrix(params: Any) -> Any:
+def _matrix(params: Any, anchor: Vec3 = (0.0, 0.0, 0.0)) -> Any:
     import numpy as np
 
     from app.core.geom.ops import as_transform
@@ -223,9 +274,9 @@ def _matrix(params: Any) -> Any:
     matrix = (
         translation(
             (
-                float(getattr(params, "x", 0.0)),
-                float(getattr(params, "y", 0.0)),
-                float(getattr(params, "z", 0.0)),
+                float(getattr(params, "x", 0.0)) + anchor[0],
+                float(getattr(params, "y", 0.0)) + anchor[1],
+                float(getattr(params, "z", 0.0)) + anchor[2],
             )
         )
         @ matrix

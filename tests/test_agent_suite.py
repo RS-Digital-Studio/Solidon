@@ -130,10 +130,14 @@ def run(case: Case, project: Project, profile: Profile) -> tuple[AgentSession, o
 
 
 def test_the_suite_has_the_size_the_plan_asks_for() -> None:
-    """§40 for P4: fifteen requests to pillar C, three of them ambiguous."""
+    """§35: thirty reference requests. §40: fifteen to pillar C, three ambiguous."""
+    from tests.agent_cases import ALL_CASES, CASES_A
+
     assert len(CASES) == 15
+    assert len(CASES_A) == 15
+    assert len(ALL_CASES) == 30, "§35 asks for thirty reference requests"
     assert len(AMBIGUOUS) == 3
-    assert len({case.id for case in CASES}) == 15
+    assert len({case.id for case in ALL_CASES}) == 30
 
 
 def test_every_expected_operation_exists() -> None:
@@ -263,6 +267,57 @@ def test_an_invalid_operation_never_reaches_the_geometry(
 
     assert proposal.drafts == []
     assert len(project.document.ops) == 1, "only the load operation, nothing added"
+
+
+# --- pillar A (§40 for P6) ----------------------------------------------------------
+
+
+def test_pillar_a_prefers_parts_over_own_geometry() -> None:
+    """§35, §40 for P6: is an existing part used instead of own geometry?
+
+    Measured over the corpus, not over one answer: of the fifteen requests to
+    pillar A, all but two are answered with a part from the library — and the
+    two that are not are the ones that have no part (a free shape, and a request
+    that only asks for parameters).
+    """
+    from tests.agent_cases import CASES_A
+
+    with_part = [case for case in CASES_A if case.expects_part]
+    without = [case for case in CASES_A if not case.expects_part]
+
+    assert len(with_part) == 13
+    assert {case.id for case in without} == {"parameterise", "free_shape"}
+    for case in with_part:
+        assert any(name.startswith("insert_") for name in case.expects_ops), case.id
+
+
+def test_pillar_a_turns_main_dimensions_into_parameters() -> None:
+    """§39, §35: main dimensions become parameters, and it is measurable."""
+    from tests.agent_cases import CASES_A
+
+    assert [case.id for case in CASES_A if case.expects_parameter] == [
+        "bracket",
+        "parameterise",
+    ]
+
+
+def test_every_operation_pillar_a_expects_exists() -> None:
+    from tests.agent_cases import CASES_A
+
+    known = {spec.name for spec in REGISTRY.all()}
+    for case in CASES_A:
+        for name in case.expects_ops:
+            assert name in known, f"{case.id} expects {name}"
+
+
+def test_the_free_shape_falls_back_to_openscad() -> None:
+    """§24.1: the fallback exists for exactly the shapes the library lacks."""
+    from tests.agent_cases import by_id
+
+    case = by_id("free_shape")
+
+    assert case.expects_ops == ("create_from_scad",)
+    assert not case.expects_part
 
 
 def test_the_scene_stays_evaluable_after_every_case(project: Project, profile: Profile) -> None:
