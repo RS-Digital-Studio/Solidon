@@ -229,6 +229,7 @@
   "Dieses Materialprofil ist nicht bekannt.": "This material profile is not known.",
   "Dieses Merkmal gibt es an diesem Objekt nicht.": "This object has no such feature.",
   "Dieses Merkmal gibt es nicht.": "This feature does not exist.",
+  "Dieses Modell ist sehr fein vernetzt. Analysekarten und Merkmalserkennung lehnen ab; „Netz → Dezimieren“ hilft.": "This model is very finely meshed. Analysis maps and feature detection turn it away; “Mesh → Decimate” helps.",
   "Dieses Objekt ist nicht mehr geschlossen.": "This object is no longer closed.",
   "Dieses Objekt passt bereits auf das Bett.": "This object already fits on the plate.",
   "Dieses Objekt trägt keine Farbinformation.": "This object carries no colour information.",

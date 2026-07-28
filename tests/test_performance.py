@@ -120,18 +120,19 @@ def test_feature_detection_on_two_hundred_thousand_triangles() -> None:
 def test_the_layer_analysis_stays_under_the_budget() -> None:
     """§31 asks for 300 ms at 200 000 triangles and 0.2 mm.
 
-    Not reached, but closer than it was: this body has 328 000 triangles and
-    takes around 1.7 seconds, so about one second for the size §31 names. The
-    erosion behind the minimum structure width used to be the largest single
-    item; it now stops once a layer is thicker than anything §22.2 warns about
-    (``WIDTH_INTERESTING``), which took a third off. What is left is building
-    the polygons and the set operations, and closing that gap needs a compiled
-    kernel rather than another Python idea. The bound below is what the current
-    implementation holds; the recorded figure catches any slide backwards.
+    This body has 328 000 triangles and takes about 1.05 seconds — so roughly
+    650 ms at the size §31 names, from 2.35 seconds at the start. Two changes
+    got it there: the width search stops once a layer is thicker than anything
+    §22.2 warns about, and the measuring runs on as many threads as the machine
+    has, because GEOS lets go of the interpreter lock while it works.
+
+    What is left is building the polygons, and that one does *not* parallelise
+    — the measurement is in ``cross_sections``. Closing the rest needs a
+    compiled kernel rather than another Python idea.
     """
     mesh = medium_mesh()
     taken = measure("slice_medium", lambda: slice_body(mesh, 0.2))
-    assert taken < 4.0
+    assert taken < 2.5
 
 
 def test_the_wall_thickness_map_stays_under_the_bound() -> None:

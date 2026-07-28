@@ -396,20 +396,76 @@ def check_build_volume(
 
 
 def check_collisions(meshes: list[MeshData], clearance: float = 0.0) -> list[Finding]:
-    """Overlapping bounding boxes — cheap, and enough to warn about (§18.6)."""
+    """Do two bodies really overlap (§18.6)?
+
+    Two stages, because the cheap answer is wrong often enough to matter. Boxes
+    first: they rule out almost every pair for nothing. What survives that gets
+    asked properly — two parts that hook into each other have overlapping boxes
+    and touch nowhere, and a report that calls those a collision is a report
+    people learn to ignore.
+
+    Where the exact answer cannot be had — an open body has no inside — the box
+    stands, and the finding says which of the two it is.
+    """
     findings: list[Finding] = []
     for first in range(len(meshes)):
         for second in range(first + 1, len(meshes)):
-            if _boxes_overlap(meshes[first].bounds, meshes[second].bounds, clearance):
-                findings.append(
-                    Finding(
-                        code="arrange.collision",
-                        severity="warning",
-                        message=_("Zwei Objekte überschneiden sich."),
-                        values={"a": first, "b": second},
-                    )
+            if not _boxes_overlap(meshes[first].bounds, meshes[second].bounds, clearance):
+                continue
+
+            exact = _really_overlap(meshes[first], meshes[second], clearance)
+            if exact is False:
+                # Boxes overlap, bodies do not touch. That is an assembly, not
+                # a problem, and saying so for every pair of a product would be
+                # the noise that makes a report unreadable.
+                continue
+            findings.append(
+                Finding(
+                    code="arrange.collision",
+                    severity="warning",
+                    message=_("Zwei Objekte überschneiden sich."),
+                    values={
+                        "a": first,
+                        "b": second,
+                        "checked": "exact" if exact is not None else "box",
+                    },
                 )
+            )
     return findings
+
+
+def _really_overlap(first: MeshData, second: MeshData, clearance: float) -> bool | None:
+    """Do the bodies share volume, or come closer than ``clearance``?
+
+    ``None`` when that cannot be decided — an open body has no inside, and
+    guessing one would turn a warning into a lie.
+
+    The kernel is asked directly rather than through the fallback chain of
+    §17.2. That chain treats an empty result as a failure and tries the next
+    stage, which is right for a difference somebody wanted and wrong here: an
+    empty intersection is not a failure, it is the answer.
+    """
+    if not (first.is_watertight and second.is_watertight):
+        return None
+
+    try:
+        shared = trimesh.boolean.intersection([first.raw, second.raw])
+    except Exception:  # a kernel that cannot answer has not said "no"
+        return None
+
+    if shared is not None and len(shared.faces) and abs(shared.volume) > EPS_GEOM:
+        return True
+    if clearance <= EPS_GEOM:
+        return False
+
+    # Apart, but perhaps not far enough. Measured from the surface, which is
+    # what a spacing on the plate means.
+    try:
+        query = trimesh.proximity.ProximityQuery(first.raw)
+        _closest, distance, _face = query.on_surface(np.asarray(second.raw.vertices, dtype=float))
+    except Exception:
+        return False
+    return bool(len(distance)) and float(np.min(distance)) < clearance
 
 
 def _boxes_overlap(first: BoundingBox, second: BoundingBox, clearance: float) -> bool:

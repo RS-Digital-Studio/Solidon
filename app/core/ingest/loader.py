@@ -35,6 +35,13 @@ _log = get_logger(__name__)
 MAX_TRIANGLES: Final = 20_000_000
 MAX_FILE_BYTES: Final = 512 * 1024 * 1024
 
+#: Above this the input stage says something. Not a limit — the one above is
+#: an order of magnitude higher — but the size where the analysis stops being
+#: able to help: the maps refuse at 120 000 and the feature detection at
+#: 200 000 (§31). A community model of two million triangles is a normal thing
+#: to be handed, and it should say what it is rather than just be slow.
+HEAVY_TRIANGLES: Final = 500_000
+
 #: What a printable part usually measures across, in millimetres.
 PLAUSIBLE_MIN_MM: Final = 10.0
 PLAUSIBLE_MAX_MM: Final = 300.0
@@ -199,6 +206,23 @@ def normalise(
     if place_on_bed and len(body.faces):
         progress(0.9, str(_("Auf das Bett setzen")))
         body.apply_translation((0.0, 0.0, -float(body.bounds[0][2])))
+
+    if len(body.faces) > HEAVY_TRIANGLES:
+        # §31: far past what the analysis can serve. Not refused — the limit for
+        # that is an order of magnitude higher (§17.1) — but said out loud, with
+        # the way out, because a model this size makes every later step slow and
+        # the maps refuse themselves anyway.
+        findings.append(
+            Finding(
+                code="ingest.very_large",
+                severity="warning",
+                message=_(
+                    "Dieses Modell ist sehr fein vernetzt. Analysekarten und "
+                    "Merkmalserkennung lehnen ab; „Netz → Dezimieren“ hilft."
+                ),
+                values={"triangles": len(body.faces), "comfortable": HEAVY_TRIANGLES},
+            )
+        )
 
     if not body.is_watertight and len(body.faces):
         findings.append(

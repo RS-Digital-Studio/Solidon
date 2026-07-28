@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.geom.mesh import read_mesh
+from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.prepare import (
     BOOLEAN_OVERLAP,
     arrange_on_bed,
@@ -163,6 +163,61 @@ def test_a_clearance_makes_the_check_stricter() -> None:
 
     assert not check_collisions(bodies)
     assert check_collisions(bodies, clearance=10.0), "closer than the clearance counts"
+
+
+def bracket() -> MeshData:
+    """A block with a slot through it — the shape whose box lies about it."""
+    import trimesh
+
+    outer = trimesh.creation.box(extents=(30.0, 20.0, 30.0))
+    outer.apply_translation((0.0, 0.0, 15.0))
+    slot = trimesh.creation.box(extents=(20.0, 22.0, 10.0))
+    slot.apply_translation((5.0, 0.0, 15.0))
+    return MeshData.of(trimesh.boolean.difference([outer, slot]))
+
+
+def bar(height: float) -> MeshData:
+    import trimesh
+
+    body = trimesh.creation.box(extents=(14.0, 14.0, height))
+    body.apply_translation((6.0, 0.0, 15.0))
+    return MeshData.of(body)
+
+
+def test_a_part_sitting_inside_a_slot_is_not_a_collision() -> None:
+    """§18.6: the boxes overlap and the bodies never touch.
+
+    This is the case that makes people stop reading a report — every assembly
+    that hooks together has it, and calling all of them collisions is the same
+    as reporting nothing.
+    """
+    assert not check_collisions([bracket(), bar(6.0)])
+
+
+def test_a_part_that_really_sits_in_the_material_is_one() -> None:
+    findings = check_collisions([bracket(), bar(14.0)])
+
+    assert [entry.code for entry in findings] == ["arrange.collision"]
+    assert findings[0].severity == "warning"
+    assert findings[0].values["checked"] == "exact"
+
+
+def test_too_close_counts_as_a_collision_when_a_clearance_is_asked_for() -> None:
+    """Measured from the surface — a spacing on the plate means exactly that."""
+    assert not check_collisions([bracket(), bar(9.0)], clearance=0.2), "half a millimetre apart"
+    assert check_collisions([bracket(), bar(9.8)], clearance=0.5), "a tenth apart, half asked for"
+
+
+def test_an_open_body_falls_back_to_the_box_and_says_so() -> None:
+    """An open body has no inside; guessing one would turn a warning into a lie."""
+    import trimesh
+
+    broken = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    broken.update_faces([True] * (len(broken.faces) - 2) + [False, False])
+
+    findings = check_collisions([MeshData.of(broken), cube()])
+
+    assert findings and findings[0].values["checked"] == "box"
 
 
 # --- as operations --------------------------------------------------------------

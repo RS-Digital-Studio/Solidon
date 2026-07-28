@@ -306,6 +306,28 @@ Anmerkungen zu P10:
 * Die Explosionsansicht verschiebt nur Punkte auf dem Weg in die Anzeige. Was
   der Stack sagt und was exportiert wird, bleibt unberührt.
 
+## Gegen echte Modelle geprüft
+
+68 Modelle aus einem privaten Druckordner (106 MB, STL und 3MF, von der
+Torschloss-Adapterkappe bis zur Community-Katze mit 13,4 Millionen Dreiecken)
+durch die ganze Kette. `tools/run_model_suite.py` macht denselben Lauf mit
+einem Bericht statt Zusicherungen; `tests/test_real_models.py` hält die Funde
+fest und überspringt sich, wo der Ordner fehlt.
+
+**Alle 68 laufen durch.** Drei Dinge kamen trotzdem heraus:
+
+* Ein Modell mit 13,4 Millionen Dreiecken brauchte 100 Sekunden und **sagte
+  nichts dazu**. Es wird nicht abgelehnt — die Grenze dafür liegt bei 20
+  Millionen — aber ab 500 000 sagt die Eingangsstufe jetzt, dass Analysekarten
+  und Merkmalserkennung ab hier ablehnen und dass Dezimieren hilft.
+* Sechs von 68 sind nicht geschlossen. Das ist bei Community-Modellen normal
+  und wird korrekt gemeldet.
+* Die Kollisionsprüfung verglich nur Hüllquader. Ein Stab, der frei in einer
+  Nut steht, war damit eine Kollision — bei jeder Baugruppe, die ineinander
+  greift. Jetzt zweistufig: Boxen als Vorfilter, danach der Kern. Ein leerer
+  Schnitt ist dabei die Antwort, nicht der Fehlschlag, den die Rückfallkette
+  daraus macht.
+
 ## Durchsicht nach P12 — was noch offen ist
 
 **Vollständigkeit gegen §25.** Der Abgleich der Kategorienliste mit dem
@@ -358,13 +380,14 @@ Gemessen auf einer Kugel mit 328 000 Dreiecken (§31 nennt seine Ziele für
 
 | Messung | §31 | vorher | jetzt |
 |---|---|---|---|
-| Schichtanalyse, 0,2 mm | 300 ms | 2,35 s | **1,73 s** |
+| Schichtanalyse, 0,2 mm | 300 ms | 2,35 s | **1,05 s** |
 | Wandstärkenkarte | 3 s, im Hintergrund | 8,18 s, im Vordergrund | **3,08 s, im Hintergrund** |
 | Orientierungssuche, 200 Lagen | 20 s | 32,2 s | **16,5 s** |
 | Feature-Erkennung | 1 s | 0,44 s | 0,44 s |
 | Auswertung aus dem Cache | 1 s | 0,3 ms | 0,3 ms |
 
-Drei Änderungen, alle vom selben Muster: **nicht rechnen, was niemand liest.**
+Vier Änderungen. Drei nach dem Muster **nicht rechnen, was niemand liest**, eine
+nach **das Vorhandene benutzen**:
 
 * Die Wandkarte hat ihr Raster Schicht für Schicht geschnitten und dabei alle
   328 000 Dreiecke dreihundertmal durchlaufen. Jetzt ein Durchgang über alle
@@ -377,10 +400,18 @@ Drei Änderungen, alle vom selben Muster: **nicht rechnen, was niemand liest.**
   Millimeter hat, fragt kein Bericht — die Suche danach kostete mehr als der
   Rest der Schichtanalyse zusammen.
 
-Offen bleibt die Schichtanalyse selbst: 1,7 s statt 300 ms. Was übrig ist, sind
-Polygonaufbau und Mengenoperationen in GEOS; das zu schließen braucht einen
-kompilierten Kern, keine weitere Python-Idee. Der Wert ist festgehalten, damit
-ein Rückschritt auffällt.
+* **GEOS gibt die GIL frei.** Das Messen der Schichten läuft jetzt auf so vielen
+  Threads, wie die Maschine hat: 1,73 s → 1,05 s. Gemessen, nicht vermutet —
+  0,81 s auf einem Thread gegen 0,15 s auf acht.
+
+Dieselbe Idee auf den Polygonaufbau angewandt war **langsamer** (0,758 s gegen
+0,714 s): einzelne Polygone zu bauen hält die GIL, anders als die vektorisierten
+Prädikate beim Messen. Die Änderung ist wieder draußen, die Messung steht als
+Kommentar an der Stelle — damit sie niemand nochmal versucht.
+
+Offen bleibt die Schichtanalyse selbst: 1,05 s statt 300 ms, also rund 650 ms
+für die Größe, die §31 nennt. Was übrig ist, ist der Polygonaufbau in GEOS; das
+zu schließen braucht einen kompilierten Kern, keine weitere Python-Idee.
 
 ## P11 — Gehosteter Backend
 - [–] **Bewusst nicht gebaut.** §27 knüpft diese Phase an nachweisbare
