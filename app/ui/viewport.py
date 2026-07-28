@@ -24,6 +24,7 @@ from app.core.log import get_logger
 from app.core.perceive.maps import AnalysisMap
 from app.core.scene import EvaluationResult
 from app.core.types import Feature, FeatureId, LayerInfo, ObjectId, Profile, Vec3
+from app.core.units import EPS_GEOM
 from app.i18n import tr
 from app.ui.labels import feature_label
 from app.ui.palette import DIFF_PALETTES, VIRIDIS, DiffPalette
@@ -147,6 +148,8 @@ class Viewport(QWidget):
         self._difference_actors: list[Any] = []
         self._diff_palette: DiffPalette = "blue_orange"
         self._ghost: EvaluationResult | None = None
+        self._explosion = 0.0
+        """§18.8: how far split parts are drawn apart. Display only, never geometry."""
 
         if not _available():
             self._layout.addWidget(
@@ -192,7 +195,8 @@ class Viewport(QWidget):
             faces = np.hstack(
                 [np.full((len(raw.faces), 1), 3, dtype=np.int64), np.asarray(raw.faces)]
             ).ravel()
-            surface = pv.PolyData(np.asarray(raw.vertices, dtype=float), faces)
+            points = np.asarray(raw.vertices, dtype=float) + self._exploded(entry, result)
+            surface = pv.PolyData(points, faces)
             scalars = self._scalars_for(object_id, len(raw.faces))
             extra: dict[str, Any] = {}
             if scalars is not None and self._map is not None:
@@ -220,6 +224,38 @@ class Viewport(QWidget):
         self._redraw_features()
         self._redraw_layer()
         self.plotter.render()
+
+    def set_explosion(self, factor: float) -> None:
+        """Draw the parts apart, for looking at a split (§18.8).
+
+        Nothing is moved: the offset is added to the points on the way into the
+        view and never reaches the mesh. A part that is exploded is still where
+        the stack says it is, and the export says so too.
+        """
+        self._explosion = max(0.0, factor)
+        self.show_scene(self._result)
+
+    def _exploded(self, entry: Any, result: EvaluationResult) -> Any:
+        """How far this body is drawn from where it sits, outward from the middle."""
+        import numpy as np
+
+        if self._explosion <= 0.0 or len(result.scene.objects) < 2:
+            return np.zeros(3)
+
+        centres = [
+            np.asarray(other.mesh.bounds.centre, dtype=float)
+            for other in result.scene.objects.values()
+            if getattr(other.mesh, "raw", None) is not None
+        ]
+        if len(centres) < 2:
+            return np.zeros(3)
+
+        middle = np.mean(centres, axis=0)
+        away = np.asarray(entry.mesh.bounds.centre, dtype=float) - middle
+        length = float(np.linalg.norm(away))
+        if length <= EPS_GEOM:
+            return np.zeros(3)
+        return away / length * length * self._explosion
 
     def _scalars_for(self, object_id: ObjectId, faces: int) -> Any:
         """Map values for this body, if there are any that still fit it.

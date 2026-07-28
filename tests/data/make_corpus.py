@@ -122,6 +122,22 @@ def dense_1m() -> None:
     write(sphere, "dense_1m.stl")
 
 
+def oversized() -> None:
+    """Longer than any plate — the auto split has to make this printable (§25).
+
+    Not a plain bar: two thick ends joined by a slimmer middle, so the parting
+    plane has something to find. A body of constant section would let any cut
+    win and would prove nothing about the search.
+    """
+    left = trimesh.creation.box(extents=(120.0, 80.0, 40.0))
+    left.apply_translation((-140.0, 0.0, 20.0))
+    right = trimesh.creation.box(extents=(120.0, 80.0, 40.0))
+    right.apply_translation((140.0, 0.0, 20.0))
+    middle = trimesh.creation.box(extents=(170.0, 40.0, 30.0))
+    middle.apply_translation((0.0, 0.0, 20.0))
+    write(trimesh.boolean.union([left, middle, right]), "oversized.stl")
+
+
 def two_components() -> None:
     """A cube with a tiny stray fragment next to it — reported, never deleted."""
     box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
@@ -140,4 +156,5 @@ if __name__ == "__main__":
     broken_open()
     two_components()
     island_tower()
+    oversized()
     dense_1m()

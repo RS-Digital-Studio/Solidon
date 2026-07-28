@@ -277,11 +277,34 @@ Anmerkungen zu P9:
   die Datei — Quelltext ist dafür nicht nötig.
 
 ## P10 — Auto Split mit Verstiftung
-- [ ] Trennebene über die Schichtanalyse suchen (§22.3), dann konvexe Zerlegung
-- [ ] Schnittflächen verschließen, Slots übertragen
-- [ ] Passstifte mit kalibriertem Spiel, Passungspaare automatisch
-- [ ] Anordnen und Explosionsansicht
-- [ ] `oversized.stl` ohne Eingriff druckbar zerlegt
+- [x] Trennebene über die Schichtanalyse suchen (§22.3), dann konvexe Zerlegung
+- [x] Schnittflächen verschließen, Slots übertragen
+- [x] Passstifte mit kalibriertem Spiel, Passungspaare automatisch
+- [x] Anordnen und Explosionsansicht
+- [x] `oversized.stl` ohne Eingriff druckbar zerlegt
+
+Anmerkungen zu P10:
+
+* **Was eine Trennebene gut macht, ist nicht ihre Größe.** Bewertet werden drei
+  Dinge: eine Kontur statt fünf dünner Brücken, ein prismatischer Verlauf (der
+  Querschnitt ändert sich über einen Millimeter kaum) und Ausgewogenheit. Die
+  Konturzahl wiegt am schwersten — eine Naht, die in mehrere Stege zerfällt,
+  ist schlimmer als jede Unwucht.
+* **Die konvexe Zerlegung liefert einen Hinweis, kein Ergebnis.** Ihre Hüllen
+  nähern den Körper an; ein aus Näherungen zusammengeklebtes Teil wäre ein
+  genähertes Teil. Übernommen wird nur die *Position*, geschnitten wird exakt
+  mit einer Ebene. Sie wird erst gefragt, wenn keine der abgetasteten Ebenen
+  überzeugt.
+* **Ein Fund unterwegs:** `_plane_segments` in der Schichtanalyse rechnete den
+  Layer-Index aus `heights[1] - heights[0]` — richtig für gleichmäßige
+  Schichten, still falsch für die ungleichmäßigen Höhen der Ebenensuche. Jetzt
+  über `searchsorted`; die Schichtanalyse ist der Sonderfall.
+* **Auto Split ist ein Ablauf, kein einzelner Op.** Pro Schnitt eine
+  `split_pinned`-Operation, damit jede Trennebene eine Zahl bleibt, die man
+  danach ändern kann. Die Passungspaare entstehen im Ablauf, weil Passungen im
+  Dokument leben und die Auswertung eine reine Funktion bleibt (§15.1).
+* Die Explosionsansicht verschiebt nur Punkte auf dem Weg in die Anzeige. Was
+  der Stack sagt und was exportiert wird, bleibt unberührt.
 
 ## P11 — Gehosteter Backend
 - [ ] nur bei nachweisbarer Nachfrage, Umfang nach §27

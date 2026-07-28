@@ -48,6 +48,7 @@ networkx = { licence = "BSD-3-Clause", note = "contour hierarchy when closing a 
 rtree = { licence = "MIT", note = "spatial index for the same hierarchy; libspatialindex is MIT" }
 scikit-image = { licence = "BSD-3-Clause", note = "marching cubes for the voxel fallback stage" }
 lxml = { licence = "BSD-3-Clause", note = "XML writer behind the 3MF export" }
+vhacdx = { licence = "BSD-3-Clause", note = "V-HACD hint for the parting plane (§22.3); optional, upstream github.com/kmammou/v-hacd is BSD-3" }
 lazy_loader = { licence = "BSD-3-Clause", note = "brought in by scikit-image" }
 imageio = { licence = "BSD-2-Clause", note = "brought in by scikit-image" }
 tifffile = { licence = "BSD-3-Clause", note = "brought in by scikit-image" }

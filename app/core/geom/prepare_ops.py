@@ -10,8 +10,11 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
+from app.core.errors import ValidationError
+from app.core.geom.autosplit import Candidate
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.orient import orient_for_print
+from app.core.geom.pins import PIN_COUNT, PIN_MAX, PinnedPair, add_pins, plan_pins
 from app.core.geom.prepare import (
     arrange_on_bed,
     check_build_volume,
@@ -114,6 +117,105 @@ def split_plane(ctx: OpContext) -> OpResult:
             dataclasses.replace(source, mesh=second, name=f"{source.name} B", features={}),
         ],
         findings=findings,
+    )
+
+
+@op_params
+class SplitPinnedParams(BaseParams):
+    axis: str = param(title=_("Achse"), default="z", choices=_AXES)
+    position: float = param(title=_("Position"), default=0.0, unit="mm")
+    pins: int = param(
+        title=_("Passstifte"),
+        default=PIN_COUNT,
+        minimum=0,
+        maximum=6,
+        doc=_("Null heißt: nur schneiden. Zwei halten die Hälften gegen Verdrehen."),
+    )
+    diameter: float = param(
+        title=_("Stiftdurchmesser"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=PIN_MAX,
+        placement="advanced",
+        doc=_("Null heißt: aus der Schnittfläche ableiten."),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1.0,
+        placement="advanced",
+        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+    )
+
+
+@register_op(
+    name="split_pinned",
+    title=_("Teilen und verstiften"),
+    category="prepare",
+    params=SplitPinnedParams,
+    consumes=1,
+    produces=2,
+    doc=_(
+        "Teilt ein Objekt an einer Ebene und setzt Passstifte in die Schnittfläche. "
+        "Das Spiel kommt aus dem Materialprofil."
+    ),
+)
+def split_pinned(ctx: OpContext) -> OpResult:
+    """§25: the cut and the pins in one step, because they belong together.
+
+    A seam without pins is a seam somebody has to align by hand while the glue
+    grabs; a pin without a seam is nothing. Both in one operation also means one
+    undo takes the whole thing back.
+    """
+    params = cast(SplitPinnedParams, ctx.params)
+    source = ctx.inputs[0]
+    mesh = as_mesh_data(source.mesh)
+    candidate = Candidate(
+        axis=cast(Axis, params.axis),
+        position=params.position,
+        area=0.0,
+        contours=1,
+        score=0.0,
+    )
+
+    first, second, findings = split_at_plane(mesh, candidate.plane)
+    if not (first.triangle_count and second.triangle_count):
+        raise ValidationError(
+            field="position",
+            detail=_("Diese Ebene teilt das Objekt nicht."),
+            value=params.position,
+            constraint="no_split",
+        )
+
+    plan = plan_pins(mesh, candidate, count=params.pins) if params.pins else None
+    if plan is not None and params.diameter:
+        plan = dataclasses.replace(plan, diameter=params.diameter)
+
+    pair = (
+        add_pins(first, second, plan, ctx.profile, play=params.play or None)
+        if plan is not None and ctx.profile is not None
+        else PinnedPair(first=first, second=second)
+    )
+
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=pair.first,
+                name=f"{source.name} A",
+                features={**source.features, **pair.pin_features},
+            ),
+            dataclasses.replace(
+                source,
+                mesh=pair.second,
+                name=f"{source.name} B",
+                features=dict(pair.bore_features),
+            ),
+        ],
+        findings=[*findings, *pair.findings],
     )
 
 

@@ -61,6 +61,7 @@ from app.ui.dialogs import (
     confirm_discard,
     show_error,
 )
+from app.ui.explode_bar import ExplodeBar
 from app.ui.generate_dialog import GenerateDialog
 from app.ui.labels import feature_label
 from app.ui.op_dialog import OperationDialog
@@ -156,6 +157,8 @@ class MainWindow(QMainWindow):
         self.analysis_bar.overlayToggled.connect(self.viewport.set_feature_overlay)
         self.layer_bar = LayerBar(self)
         self.layer_bar.layerChanged.connect(self._on_layer_changed)
+        self.explode_bar = ExplodeBar(self)
+        self.explode_bar.factorChanged.connect(self.viewport.set_explosion)
 
         middle = QWidget(self)
         middle_layout = QVBoxLayout(middle)
@@ -167,6 +170,7 @@ class MainWindow(QMainWindow):
         middle_layout.addWidget(self.transform_bar)
         middle_layout.addWidget(self.analysis_bar)
         middle_layout.addWidget(self.layer_bar)
+        middle_layout.addWidget(self.explode_bar)
 
         self.report = ReportPanel(self)
         self.report.findingActivated.connect(self._on_finding_activated)
@@ -243,6 +247,7 @@ class MainWindow(QMainWindow):
         self._add_action(
             edit_menu, tr("Befehlspalette …"), "Ctrl+Shift+P", self.action_command_palette
         )
+        self._add_action(edit_menu, tr("Automatisch teilen …"), None, self.action_auto_split)
         self._add_action(edit_menu, tr("Material kalibrieren …"), None, self.action_calibrate)
         self._add_action(edit_menu, tr("Zugang zum Sprachmodell …"), None, self.action_llm_key)
         edit_menu.addSeparator()
@@ -444,6 +449,32 @@ class MainWindow(QMainWindow):
         if dialog.exec() != QDialog.DialogCode.Accepted or dialog.result_mesh is None:
             return
         self.session.add_generated(dialog.result_mesh)
+
+    def action_auto_split(self) -> None:
+        """§25: divide the selected part until it fits, and pin the seams (§14)."""
+        object_id = self.object_tree.selected()
+        if not object_id:
+            QMessageBox.information(
+                self, tr("Automatisch teilen"), tr("Bitte zuerst ein Objekt auswählen.")
+            )
+            return
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            applied = self.session.auto_split(object_id)
+        except AppError as error:
+            show_error(error, self)
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        self.report.add_findings(applied.findings)
+        if applied.transaction is None:
+            self.status_message.setText(tr("Dieses Objekt passt bereits auf das Bett."))
+            return
+        self.status_message.setText(
+            f"{tr('Geteilt')}: {len(applied.object_ids)} · {len(applied.fits)} {tr('Passungen')}"
+        )
 
     def action_undo(self) -> None:
         self.session.undo()
@@ -800,6 +831,7 @@ class MainWindow(QMainWindow):
         self.viewport.set_layer(None)
         self.analysis_bar.show_legend(None)
         self.object_tree.show_scene(result)
+        self.explode_bar.show_for(len(result.scene.objects))
         self.report.show_result(result)
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_scene(result)

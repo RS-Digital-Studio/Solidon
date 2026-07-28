@@ -134,6 +134,23 @@ Welche Knoten benutzt werden, steht in `app/core/backends/data/text_to_mesh.json
 und `image_to_mesh.json`. Die mitgelieferten Abläufe gehen von Hunyuan3D aus;
 mit einem anderen Generator wird die Datei ersetzt, nicht der Quelltext.
 
+## Zu groß für das Bett (Auto Split)
+
+**Bearbeiten → Automatisch teilen** schneidet ein Objekt, bis jedes Stück auf
+die Platte passt. Die Trennebene wird gesucht, nicht geraten: über dieselbe
+Schichtanalyse wie die Orientierungssuche, und bewertet wird eine Kontur statt
+mehrerer dünner Brücken, ein prismatischer Verlauf und die Ausgewogenheit.
+
+In jede Schnittfläche kommen zwei Passstifte — Durchmesser aus der Fläche, Spiel
+aus dem kalibrierten Materialprofil — und zu jedem Stift entsteht ein
+Passungspaar, das bei jeder Auswertung geprüft wird. Jeder Schnitt ist eine
+eigene Operation: die Position bleibt eine Zahl, die man nachträglich ändern
+kann, und ein Undo nimmt einen Schnitt zurück.
+
+Der Schieberegler **Explosionsansicht** unter der Ansicht zieht die Teile zum
+Ansehen auseinander. Er verschiebt nichts — Stack und Export bleiben, wie sie
+sind.
+
 ## Farbe und Materialslots
 
 Jedes Dreieck trägt einen Slot, jedes Objekt eine Liste von Materialslots (§20).

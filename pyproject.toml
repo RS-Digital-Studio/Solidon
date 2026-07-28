@@ -30,6 +30,9 @@ geom = [
   "scikit-image>=0.24",
   # 3MF is the format slicers prefer, and it needs an XML writer (§29). BSD-3.
   "lxml>=5.0",
+  # V-HACD tells the auto split where a body comes apart by itself (§22.3).
+  # Optional at runtime: without it the plane search answers on its own. BSD-3.
+  "vhacdx>=0.0.8",
 ]
 # Desktop shell. PySide6 is LGPL and must stay dynamically linked (§36).
 ui = [

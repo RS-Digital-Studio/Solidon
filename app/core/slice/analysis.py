@@ -160,15 +160,17 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any]:
     """Where every triangle crosses every plane it reaches.
 
     Returns the segments as ``(n, 2, 2)`` points in XY and the layer each one
-    belongs to.
+    belongs to. ``heights`` has to be ascending; the spacing may be anything.
     """
     triangles = np.asarray(mesh.raw.triangles, dtype=float)
-    step = float(heights[1] - heights[0]) if len(heights) > 1 else 1.0
-    base = float(heights[0])
 
     vertical = triangles[:, :, 2]
-    first = np.ceil((vertical.min(axis=1) - base) / step - EPS_GEOM).astype(np.int64)
-    last = np.floor((vertical.max(axis=1) - base) / step + EPS_GEOM).astype(np.int64)
+    # Which planes a triangle reaches, looked up rather than computed from a
+    # spacing: the layer analysis asks for evenly spaced heights, the parting
+    # plane search (§22.3) does not, and arithmetic on an assumed step gives
+    # that second caller silently empty layers.
+    first = np.searchsorted(heights, vertical.min(axis=1) - EPS_GEOM, side="left")
+    last = np.searchsorted(heights, vertical.max(axis=1) + EPS_GEOM, side="right") - 1
     np.clip(first, 0, len(heights) - 1, out=first)
     np.clip(last, 0, len(heights) - 1, out=last)
     counts = np.maximum(last - first + 1, 0)

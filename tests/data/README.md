@@ -46,6 +46,7 @@ python tests/data/make_corpus.py
 | `meshes/degenerate.stl` | Würfel plus Nullflächen-Dreieck, Nadel und Dublette | 15 Dreiecke roh, nach der Eingangsstufe weniger; Befund `ingest.degenerate_removed` | `test_ingest.py` |
 | `meshes/broken_open.stl` | Würfel ohne drei Dreiecke | nicht wasserdicht, Befund `ingest.not_watertight` (Warnung) | `test_ingest.py` |
 | `meshes/two_components.stl` | Würfel plus winziges Bruchstück daneben | zwei Komponenten, Befunde `ingest.multiple_components` und `ingest.small_components`; **nichts wird gelöscht** | `test_ingest.py` |
+| `meshes/oversized.stl` | 400 × 80 × 40 mm: zwei dicke Enden, schlanke Mitte | passt auf keinen Bauraum; der Auto Split findet die Trennebene in der Mitte (Querschnitt 1200 mm², eine Kontur) und macht daraus zwei wasserdichte Teile | `test_autosplit.py` |
 
 `meshes/dense_1m.stl` (1,31 Mio. Dreiecke, Leistungsmessung nach §31) wird
 **nicht eingecheckt** — 60 MB im Repository wären unverhältnismäßig. Der
@@ -53,6 +54,5 @@ Leistungstest erzeugt sie beim ersten Lauf; die Messwerte landen in
 `tests/.performance.json` und bleiben lokal, weil sie von der Maschine abhängen.
 
 Noch offen aus §34 — sie brauchen Bausteine aus späteren Phasen:
-`broken_selfint.stl` (Rückfallkette, P2), `oversized.stl` (Auto Split, P10),
-`island_tower.stl` (Schichtanalyse, P3), `colored.3mf` (Attributerhalt, P9),
-`assembly_fit.p3d` (Passungsprüfung, P3).
+`broken_selfint.stl` (Rückfallkette, P2), `island_tower.stl` (Schichtanalyse, P3),
+`colored.3mf` (Attributerhalt, P9), `assembly_fit.p3d` (Passungsprüfung, P3).

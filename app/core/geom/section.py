@@ -84,7 +84,22 @@ def cut(mesh: MeshData, plane: SectionPlane, second: SectionPlane | None = None)
         if not len(body.faces):
             return SectionResult(mesh=mesh.replacing(trimesh.Trimesh()), capped=capped)
 
-    return SectionResult(mesh=mesh.replacing(body), capped=capped)
+    return SectionResult(mesh=_keeping_slots(mesh, body), capped=capped)
+
+
+def _keeping_slots(mesh: MeshData, body: trimesh.Trimesh) -> MeshData:
+    """§20: a cut is a boolean against a half space, and it keeps the slots.
+
+    The cut face itself belongs to no old surface and takes the default slot —
+    the same rule as a bore wall, and for the same reason: it is new material
+    on show, not a piece of anything that was there before.
+    """
+    from app.core.geom.attributes import transfer
+
+    result = mesh.replacing(body)
+    if not mesh.slots or result.slots:
+        return result
+    return transfer(result, [mesh])
 
 
 def _apply(body: trimesh.Trimesh, plane: SectionPlane) -> tuple[trimesh.Trimesh, bool]:

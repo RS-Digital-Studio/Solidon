@@ -24,9 +24,10 @@ from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import LLMBackend, first_available
 from app.core.backends.mesh import GeneratedMesh
-from app.core.errors import AppError, OperationCancelled
+from app.core.errors import AppError, InternalError, OperationCancelled
 from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
+from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
 from app.core.log import get_logger
@@ -48,6 +49,7 @@ from app.core.scene.project import (
     save,
     write_autosave,
 )
+from app.core.split import SplitApplied, apply_split
 from app.core.types import Finding, Origin, Profile, Quality, Report, Source
 from app.i18n import TranslatableText, tr
 
@@ -304,6 +306,31 @@ class Session(QObject):
         self.projectChanged.emit()
         self.evaluate_async()
         return generation.object_id
+
+    def auto_split(self, object_id: str) -> SplitApplied:
+        """§25: cut a part until it fits, with pins and fit pairs (§14).
+
+        The search needs the evaluated body, so this waits for the last run
+        instead of guessing from the stack — a split of a stale mesh would put
+        the parting plane where the part no longer is.
+        """
+        self.wait_for_idle()
+        result = self.last_result
+        entry = result.scene.objects.get(object_id) if result is not None else None
+        if entry is None:
+            raise InternalError(
+                detail="auto split was asked for an object that is not in the scene",
+                values={"object": object_id},
+            )
+
+        applied = apply_split(
+            self.project.document, as_mesh_data(entry.mesh), object_id, self.profile
+        )
+        if applied.transaction is not None:
+            self._dirty = True
+            self.projectChanged.emit()
+            self.evaluate_async()
+        return applied
 
     def undo(self) -> None:
         if self.history.undo() is not None:
