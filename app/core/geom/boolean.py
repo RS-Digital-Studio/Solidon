@@ -24,6 +24,7 @@ import numpy as np
 import trimesh
 
 from app.core.errors import BooleanFailedError
+from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
 from app.core.log import get_logger
@@ -63,8 +64,14 @@ def boolean(
     quality: Quality = "fine",
     seed: int | None = None,
     stages: tuple[SolverStage, ...] | None = None,
+    cut_slot: int = DEFAULT_CUT_SLOT,
 ) -> BooleanOutcome:
-    """Run a boolean operation, falling back stage by stage until one holds."""
+    """Run a boolean operation, falling back stage by stage until one holds.
+
+    ``cut_slot`` is what a newly cut face gets (§20): by default the slot of the
+    body being cut, so a hole through a two-coloured part does not paint its
+    wall in whatever the cutter happened to be.
+    """
     if len(meshes) < 2:
         raise ValueError("a boolean operation needs at least two bodies")
 
@@ -82,7 +89,7 @@ def boolean(
             _log.info("boolean stage %s produced nothing usable", stage)
             continue
         return BooleanOutcome(
-            mesh=result,
+            mesh=_keep_slots(result, meshes, kind, stage, cut_slot),
             solver=SolverInfo(
                 strategy=stage,
                 attempted=tuple(attempted),
@@ -96,6 +103,37 @@ def boolean(
         attempted=tuple(attempted),
         seed=seed,
     )
+
+
+def _keep_slots(
+    result: MeshData,
+    sources: list[MeshData],
+    kind: BooleanKind,
+    stage: SolverStage,
+    cut_slot: int,
+) -> MeshData:
+    """§20: the slot assignment survives the operation.
+
+    Kept as it is only where the kernel really handed the triangles through
+    unchanged. After the voxel stage that is never the case — the meshing was
+    replaced — so there the transfer always runs.
+
+    Only the bodies that are still *in* the result hand their colour over. In a
+    difference the tool is gone, and the bore wall it left behind is a new
+    surface, not a piece of the drill — otherwise a hole through a red part
+    would come out in whatever colour the cutter happened to have.
+    """
+    if stage != "voxel" and len(result.slots) == len(result.raw.faces) and result.slots:
+        return result
+    tolerance = None
+    if stage == "voxel":
+        # The staircase of the grid is half a voxel deep everywhere; measured
+        # more tightly than that, the body would lose its colour to its own
+        # tessellation rather than to the operation.
+        diagonal = max(mesh.bounds.diagonal for mesh in sources)
+        tolerance = max(diagonal * VOXEL_PITCH_RELATIVE, 0.05) * 1.5
+    carriers = sources[:1] if kind == "difference" else sources
+    return transfer(result, carriers, cut_slot=cut_slot, tolerance=tolerance)
 
 
 def _run_stage(

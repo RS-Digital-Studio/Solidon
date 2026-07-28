@@ -17,6 +17,7 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.geom.ops",
     "app.core.geom.prepare_ops",
     "app.core.geom.primitive_ops",
+    "app.core.geom.colour_ops",
 )
 
 #: The part library declares no operations itself — one is generated per part

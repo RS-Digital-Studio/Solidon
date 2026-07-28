@@ -20,10 +20,11 @@ from typing import Literal
 import trimesh
 
 from app.core.errors import ValidationError
+from app.core.export import threemf
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import check_build_volume
 from app.core.log import get_logger
-from app.core.types import Finding, Profile, SceneObject, Source
+from app.core.types import Finding, MaterialSlot, Profile, SceneObject, Source
 from app.core.units import format_length
 from app.i18n import _, tr
 
@@ -69,6 +70,9 @@ class ExportEntry:
     object_id: str
     filename: str
     mesh: MeshData
+    slots: tuple[MaterialSlot, ...] = ()
+    """The material slots of the object — 3MF carries them as colour groups (§20)."""
+    name: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +122,8 @@ def plan_export(
             )
             + suffix,
             mesh=as_mesh_data(entry.mesh),
+            slots=tuple(entry.material_slots),
+            name=entry.name,
         )
         for index, entry in enumerate(objects, start=1)
     )
@@ -190,16 +196,27 @@ def write_plan(
     written: list[Path] = []
     for entry in plan.entries:
         target = directory / entry.filename
-        target.write_bytes(export_bytes(entry.mesh, export_format))
+        target.write_bytes(export_bytes(entry.mesh, export_format, list(entry.slots), entry.name))
         written.append(target)
     _log.info("exported %d file(s) to %s", len(written), directory)
     return written
 
 
-def export_bytes(mesh: MeshData, export_format: ExportFormat = "stl") -> bytes:
-    """One body in one format."""
+def export_bytes(
+    mesh: MeshData,
+    export_format: ExportFormat = "stl",
+    slots: list[MaterialSlot] | None = None,
+    name: str = "",
+) -> bytes:
+    """One body in one format.
+
+    3MF is written here rather than by trimesh: it is the one format that
+    carries the material groups of §20, and trimesh does not write them.
+    """
     if export_format == "stl":
         return mesh.to_stl()
+    if export_format == "3mf":
+        return threemf.write(mesh, slots, name)
     data = trimesh.exchange.export.export_mesh(mesh.raw, None, file_type=export_format)
     return data if isinstance(data, bytes) else str(data).encode("utf-8")
 

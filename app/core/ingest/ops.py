@@ -11,10 +11,11 @@ from pathlib import Path
 from typing import cast
 
 from app.core.errors import InternalError, ValidationError
-from app.core.geom.mesh import read_mesh
+from app.core.export import threemf
+from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import IngestResult, check_limits, detect_unit, normalise
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, OpContext, OpResult, SceneObject
+from app.core.types import BaseParams, MaterialSlot, OpContext, OpResult, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import _
 
@@ -82,8 +83,11 @@ def load(ctx: OpContext) -> OpResult:
     payload = ctx.sources.read(params.source)
     check_limits(len(payload), 0)
 
-    mesh = read_mesh(payload, Path(source.path).suffix)
+    suffix = Path(source.path).suffix
+    mesh = read_mesh(payload, suffix)
     check_limits(len(payload), mesh.triangle_count)
+
+    mesh, slots = _colour_groups(payload, suffix, mesh)
 
     unit = _unit_for(ctx, params, mesh.bounds.diagonal)
     result: IngestResult = normalise(
@@ -98,9 +102,25 @@ def load(ctx: OpContext) -> OpResult:
 
     name = params.name or Path(source.path).stem
     return OpResult(
-        outputs=[SceneObject(id="", name=name, mesh=result.mesh)],
+        outputs=[SceneObject(id="", name=name, mesh=result.mesh, material_slots=slots)],
         findings=list(result.findings),
     )
+
+
+def _colour_groups(
+    payload: bytes, suffix: str, mesh: MeshData
+) -> tuple[MeshData, list[MaterialSlot]]:
+    """§20, import side: 3MF carries a slot per triangle, and it is kept.
+
+    Everything else keeps the behaviour it had — STL has no colour, and a
+    texture becomes slots when the user asks for it, not on the way in.
+    """
+    if suffix.lower() != ".3mf":
+        return mesh, []
+    groups = threemf.read(payload, mesh.triangle_count)
+    if groups is None:
+        return mesh, []
+    return MeshData(raw=mesh.raw, slots=groups.slots), list(groups.materials)
 
 
 def _unit_for(ctx: OpContext, params: LoadParams, diagonal: float) -> LengthUnit:
