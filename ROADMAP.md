@@ -308,6 +308,19 @@ Anmerkungen zu P10:
 
 ## Durchsicht nach P12 — was noch offen ist
 
+**Vollständigkeit gegen §25.** Der Abgleich der Kategorienliste mit dem
+Register hat neun Operationen aufgedeckt, die der Plan nennt und die es nicht
+gab — die Kategorien „Netz" und „Beschriftung" waren leer, und der
+Variantengenerator war gebaut, getestet und von keiner Oberfläche erreichbar.
+Alle neun sind jetzt da: Spiegeln, Dezimieren, Glätten, Neu vernetzen,
+Aushöhlen mit Entlüftung, Elefantenfuß ausgleichen, Senken, Bohrung
+verschließen, Text aufbringen, Zeichnung extrudieren (SVG und DXF) — dazu der
+Weg zum Variantengenerator.
+
+Das ist zugleich die Antwort auf „je mehr in der App statt außen": Beschriftung
+und Umriss-Extrusion sind die zwei häufigsten Gründe, ein zweites Programm zu
+öffnen. Beide brauchen jetzt keines mehr.
+
 **Behoben in dieser Runde**
 
 * Anordnen und Kollisionsprüfung liefen auf einer leeren Eingabeliste — sie

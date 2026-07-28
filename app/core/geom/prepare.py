@@ -93,6 +93,83 @@ def drill(
     )
 
 
+def countersink(
+    mesh: MeshData,
+    *,
+    position: Vec3,
+    axis: Axis,
+    diameter: float,
+    angle: float = 90.0,
+    quality: Quality = "fine",
+) -> BoreResult:
+    """Break the mouth of a bore with a cone, so a screw head sits flush (§25).
+
+    The angle is the full angle of the head — 90 degrees for a metric
+    countersunk screw. What is cut is the cone that head describes, which is
+    why the depth follows from the diameter rather than being asked for.
+    """
+    depth = diameter / 2.0 / math.tan(math.radians(angle / 2.0))
+    cone = trimesh.creation.cone(radius=diameter / 2.0, height=depth, sections=BORE_SECTIONS)
+    # The cone comes out standing on its base with the point up. A countersink
+    # is the other way round: widest at the face, narrowing into the material.
+    # Turned over it runs from zero downwards, which is exactly that — and it
+    # is lifted by the overlap so the two faces do not coincide (§39).
+    cone.apply_transform(trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]))
+    cone.apply_translation([0.0, 0.0, BOOLEAN_OVERLAP])
+    cone.apply_transform(_axis_alignment(axis))
+    cone.apply_translation(np.asarray(position, dtype=float))
+
+    outcome = boolean("difference", [mesh, MeshData.of(cone)], quality=quality)
+    return BoreResult(
+        mesh=outcome.mesh,
+        solver=outcome.solver,
+        diameter=diameter,
+        findings=list(outcome.findings),
+    )
+
+
+def plug(
+    mesh: MeshData,
+    *,
+    position: Vec3,
+    axis: Axis,
+    diameter: float,
+    depth: float = 0.0,
+    quality: Quality = "fine",
+) -> BoreResult:
+    """Fill a bore back in (§25, "verschließen").
+
+    Slightly larger than the hole it fills, because a plug the exact size of the
+    bore meets it in a coincident face — the one thing that reliably breaks a
+    boolean (§39, ``boolean_overlap``).
+    """
+    height = depth if depth > EPS_GEOM else _through_length(mesh, axis)
+    cylinder = trimesh.creation.cylinder(
+        radius=diameter / 2.0 + BOOLEAN_OVERLAP, height=height, sections=BORE_SECTIONS
+    )
+    cylinder.apply_transform(_axis_alignment(axis))
+    cylinder.apply_translation(np.asarray(position, dtype=float))
+
+    # Intersect first: the plug must not grow out of the body it fills.
+    inner = boolean("intersection", [mesh.replacing(cylinder), _shell(mesh)], quality=quality)
+    outcome = boolean("union", [mesh, inner.mesh], quality=quality)
+    return BoreResult(
+        mesh=outcome.mesh,
+        solver=outcome.solver,
+        diameter=diameter,
+        findings=list(outcome.findings),
+    )
+
+
+def _shell(mesh: MeshData) -> MeshData:
+    """The body as a solid to clip against — the convex hull is close enough.
+
+    A plug is cut back to the outside of the part, and for that the hull is the
+    right shape: it never reaches inside a cavity, so a plug can never fill one.
+    """
+    return mesh.replacing(mesh.raw.convex_hull)
+
+
 def _through_length(mesh: MeshData, axis: Axis) -> float:
     """Long enough to pass through the whole body along that axis."""
     size = mesh.bounds.size
@@ -129,6 +206,72 @@ def split_at_plane(mesh: MeshData, plane: SectionPlane) -> tuple[MeshData, MeshD
 #: past this many, whoever is printing wants a second project rather than a
 #: list nobody can keep track of.
 MAX_PLATES = 12
+
+
+def compensate_elephant_foot(
+    mesh: MeshData, profile: Profile, height: float = 0.6, amount: float | None = None
+) -> tuple[MeshData, list[Finding]]:
+    """Pull the first layers in by what the first layer spreads out (§25, §28.3).
+
+    The value comes from the material profile, never from a guess (rule 7): a
+    calibration measures it, and a part built before that calibration gets it
+    when the profile changes.
+
+    A straight step, not a taper — which is exactly what a slicer's "elephant
+    foot compensation" does too. A taper would need a loft, and the mesh kernel
+    has none; the B-Rep kernel could do it exactly (§30) and does not have to,
+    because the printed result is the same.
+    """
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    from app.core.slice.analysis import cross_section
+
+    value = profile.material.elephant_foot if amount is None else amount
+    if value <= EPS_GEOM:
+        return mesh, []
+
+    bottom = float(mesh.bounds.minimum[2])
+    section = cross_section(mesh, bottom + height / 2.0)
+    if section is None or section.is_empty:
+        return mesh, []
+
+    pulled = section.buffer(-value)
+    if pulled.is_empty:
+        return mesh, [
+            Finding(
+                code="prepare.foot_too_small",
+                severity="warning",
+                message=_("Die Aufstandsfläche ist zu klein, um sie noch einzuziehen."),
+                values={"amount_mm": round(value, 3)},
+            )
+        ]
+
+    # What has to go: the ring between the real outline and the pulled-in one,
+    # over the height of the first layers.
+    ring = section.difference(pulled)
+    if ring.is_empty:
+        return mesh, []
+    parts = [
+        trimesh.creation.extrude_polygon(entry, height=height + BOOLEAN_OVERLAP)
+        for entry in getattr(ring, "geoms", [ring])
+        if isinstance(entry, ShapelyPolygon) and entry.area > EPS_GEOM
+    ]
+    if not parts:
+        return mesh, []
+
+    collar = trimesh.util.concatenate(parts)
+    collar.apply_translation([0.0, 0.0, bottom - BOOLEAN_OVERLAP / 2.0])
+    outcome = boolean("difference", [mesh, mesh.replacing(collar)])
+    findings = list(outcome.findings)
+    findings.append(
+        Finding(
+            code="prepare.elephant_foot",
+            severity="info",
+            message=_("Die ersten Schichten wurden um den Elefantenfuß eingezogen."),
+            values={"amount_mm": round(value, 3), "height_mm": round(height, 2)},
+        )
+    )
+    return outcome.mesh, findings
 
 
 @dataclass(frozen=True, slots=True)

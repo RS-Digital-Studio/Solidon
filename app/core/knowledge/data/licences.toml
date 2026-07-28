@@ -49,6 +49,8 @@ rtree = { licence = "MIT", note = "spatial index for the same hierarchy; libspat
 scikit-image = { licence = "BSD-3-Clause", note = "marching cubes for the voxel fallback stage" }
 lxml = { licence = "BSD-3-Clause", note = "XML writer behind the 3MF export" }
 vhacdx = { licence = "BSD-3-Clause", note = "V-HACD hint for the parting plane (§22.3); optional, upstream github.com/kmammou/v-hacd is BSD-3" }
+fast-simplification = { licence = "MIT", note = "quadric decimation for generated meshes (§25)" }
+"svg.path" = { licence = "MIT", note = "SVG path parsing behind the drawing import (§25)" }
 # The second construction kernel (§30). The Python binding is Apache-2.0;
 # OpenCASCADE itself is LGPL-2.1 with the OCCT linking exception and is used as
 # a dynamically linked library, exactly like PySide6 (§36).

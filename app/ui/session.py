@@ -29,6 +29,7 @@ from app.core.errors import AppError, InternalError, OperationCancelled
 from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
+from app.core.ingest.outline import is_outline
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
 from app.core.log import get_logger
@@ -300,6 +301,14 @@ class Session(QObject):
             self.apply(
                 tr("STEP laden"),
                 [OperationDraft(op="load_step", params={"source": source_id})],
+            )
+            return
+        if is_outline(path.suffix):
+            # A flat drawing has no unit question either — it has no third
+            # dimension until somebody says how thick it should be (§25).
+            self.apply(
+                tr("Zeichnung extrudieren"),
+                [OperationDraft(op="load_outline", params={"source": source_id})],
             )
             return
         self.apply(

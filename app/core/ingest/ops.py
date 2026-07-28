@@ -13,9 +13,10 @@ from typing import cast
 from app.core.errors import InternalError, ValidationError
 from app.core.export import threemf
 from app.core.geom.mesh import MeshData, read_mesh
+from app.core.ingest import outline
 from app.core.ingest.loader import IngestResult, check_limits, detect_unit, normalise
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, MaterialSlot, OpContext, OpResult, SceneObject
+from app.core.types import BaseParams, Finding, MaterialSlot, OpContext, OpResult, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import _
 
@@ -104,6 +105,69 @@ def load(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=[SceneObject(id="", name=name, mesh=result.mesh, material_slots=slots)],
         findings=list(result.findings),
+    )
+
+
+@op_params
+class LoadOutlineParams(BaseParams):
+    source: str = param(
+        title=_("Quelle"),
+        kind="source",
+        doc=_("Die eingebettete SVG- oder DXF-Datei im Projekt."),
+    )
+    height: float = param(title=_("Höhe"), default=3.0, unit="mm", minimum=0.1, maximum=500.0)
+    width: float = param(
+        title=_("Breite"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1000.0,
+        doc=_("Auf diese Breite skalieren. Null nimmt die Zahlen der Datei als Millimeter."),
+    )
+    name: str = param(title=_("Name"), default="", placement="advanced")
+
+
+@register_op(
+    name="load_outline",
+    title=_("Zeichnung extrudieren"),
+    category="import",
+    params=LoadOutlineParams,
+    consumes=0,
+    produces=1,
+    doc=_(
+        "Liest eine SVG- oder DXF-Zeichnung und gibt ihr eine Höhe. Innenliegende "
+        "Konturen werden zu Löchern."
+    ),
+)
+def load_outline(ctx: OpContext) -> OpResult:
+    """§25: two dimensions plus a thickness, without a detour through Blender."""
+    params = cast(LoadOutlineParams, ctx.params)
+    if ctx.sources is None:
+        raise InternalError(
+            detail="load_outline was called without access to the project sources",
+            values={"source": params.source},
+        )
+
+    source = ctx.sources.describe(params.source)
+    payload = ctx.sources.read(params.source)
+    check_limits(len(payload), 0)
+
+    result = outline.extrude(payload, Path(source.path).suffix, params.height, params.width)
+    name = params.name or Path(source.path).stem
+    return OpResult(
+        outputs=[SceneObject(id="", name=name, mesh=result.mesh)],
+        findings=[
+            Finding(
+                code="ingest.extruded",
+                severity="info",
+                message=_("Aus der Zeichnung wurde ein Körper."),
+                values={
+                    "contours": result.contours,
+                    "drawn_width": round(result.width, 2),
+                    "height_mm": round(params.height, 2),
+                },
+            )
+        ],
     )
 
 

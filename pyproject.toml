@@ -33,6 +33,10 @@ geom = [
   # V-HACD tells the auto split where a body comes apart by itself (§22.3).
   # Optional at runtime: without it the plane search answers on its own. BSD-3.
   "vhacdx>=0.0.8",
+  # Decimation for generated meshes (§25, "Netz"). MIT.
+  "fast-simplification>=0.1.9",
+  # SVG paths behind the drawing import (§25). MIT; DXF trimesh reads itself.
+  "svg.path>=6.3",
 ]
 # Desktop shell. PySide6 is LGPL and must stay dynamically linked (§36).
 ui = [

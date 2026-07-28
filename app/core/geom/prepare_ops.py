@@ -10,8 +10,9 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
-from app.core.errors import ValidationError
+from app.core.errors import InternalError, ValidationError
 from app.core.geom.autosplit import Candidate
+from app.core.geom.hollow import VENT_DIAMETER, hollow
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.orient import orient_for_print
 from app.core.geom.pins import PIN_COUNT, PIN_MAX, PinnedPair, add_pins, plan_pins
@@ -20,7 +21,10 @@ from app.core.geom.prepare import (
     arrange_on_bed,
     check_build_volume,
     check_collisions,
+    compensate_elephant_foot,
+    countersink,
     drill,
+    plug,
     split_at_plane,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
@@ -119,6 +123,203 @@ def split_plane(ctx: OpContext) -> OpResult:
         ],
         findings=findings,
     )
+
+
+@op_params
+class CountersinkParams(BaseParams):
+    diameter: float = param(
+        title=_("Kopfdurchmesser"), default=8.4, unit="mm", minimum=0.5, maximum=100.0
+    )
+    angle: float = param(
+        title=_("Winkel"),
+        default=90.0,
+        unit="grad",
+        minimum=30.0,
+        maximum=170.0,
+        doc=_("Voller Kopfwinkel — 90 Grad bei metrischen Senkschrauben."),
+    )
+    x: float = param(title=_("Position X"), default=0.0, unit="mm")
+    y: float = param(title=_("Position Y"), default=0.0, unit="mm")
+    z: float = param(title=_("Position Z"), default=0.0, unit="mm")
+    axis: str = param(title=_("Achse"), default="z", choices=_AXES)
+
+
+@register_op(
+    name="countersink_hole",
+    title=_("Senken"),
+    category="holes",
+    params=CountersinkParams,
+    consumes=1,
+    produces=1,
+    applies_to=["hole"],
+    doc=_("Senkt die Mündung einer Bohrung an, damit ein Schraubenkopf bündig sitzt."),
+)
+def countersink_hole(ctx: OpContext) -> OpResult:
+    params = cast(CountersinkParams, ctx.params)
+    source = ctx.inputs[0]
+    result = countersink(
+        as_mesh_data(source.mesh),
+        position=(params.x, params.y, params.z),
+        axis=cast(Axis, params.axis),
+        diameter=params.diameter,
+        angle=params.angle,
+        quality=ctx.quality,
+    )
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=result.mesh)],
+        solver=result.solver,
+        findings=result.findings,
+    )
+
+
+@op_params
+class PlugParams(BaseParams):
+    diameter: float = param(
+        title=_("Durchmesser"), default=5.0, unit="mm", minimum=0.2, maximum=200.0
+    )
+    x: float = param(title=_("Position X"), default=0.0, unit="mm")
+    y: float = param(title=_("Position Y"), default=0.0, unit="mm")
+    z: float = param(title=_("Position Z"), default=0.0, unit="mm")
+    axis: str = param(title=_("Achse"), default="z", choices=_AXES)
+    depth: float = param(
+        title=_("Tiefe"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1000.0,
+        placement="advanced",
+        doc=_("Null füllt durch das ganze Teil."),
+    )
+
+
+@register_op(
+    name="plug_hole",
+    title=_("Bohrung verschließen"),
+    category="holes",
+    params=PlugParams,
+    consumes=1,
+    produces=1,
+    applies_to=["hole"],
+    doc=_("Füllt eine Bohrung wieder auf — etwa wenn ein fremdes Teil eine zu viel hat."),
+)
+def plug_hole(ctx: OpContext) -> OpResult:
+    params = cast(PlugParams, ctx.params)
+    source = ctx.inputs[0]
+    result = plug(
+        as_mesh_data(source.mesh),
+        position=(params.x, params.y, params.z),
+        axis=cast(Axis, params.axis),
+        diameter=params.diameter,
+        depth=params.depth,
+        quality=ctx.quality,
+    )
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=result.mesh, features={})],
+        solver=result.solver,
+        findings=result.findings,
+    )
+
+
+@op_params
+class HollowParams(BaseParams):
+    wall: float = param(
+        title=_("Wandstärke"),
+        default=2.0,
+        unit="mm",
+        minimum=0.4,
+        maximum=50.0,
+        doc=_("Was stehen bleibt. Zwei Extrusionsbreiten sind das Minimum (§39)."),
+    )
+    vents: int = param(
+        title=_("Entlüftungen"),
+        default=1,
+        minimum=0,
+        maximum=6,
+        doc=_("Null heißt geschlossener Hohlraum — beim FDM-Druck drückt der die Decke hoch."),
+    )
+    vent_diameter: float = param(
+        title=_("Entlüftungsdurchmesser"),
+        default=VENT_DIAMETER,
+        unit="mm",
+        minimum=1.0,
+        maximum=20.0,
+        placement="advanced",
+    )
+
+
+@register_op(
+    name="hollow_object",
+    title=_("Aushöhlen"),
+    category="prepare",
+    params=HollowParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Höhlt ein Objekt aus und setzt Entlüftungen. Spart Material und Zeit; "
+        "die Wandstärke stimmt im Rahmen des Rasters."
+    ),
+)
+def hollow_object(ctx: OpContext) -> OpResult:
+    params = cast(HollowParams, ctx.params)
+    source = ctx.inputs[0]
+    result = hollow(
+        as_mesh_data(source.mesh),
+        params.wall,
+        vents=params.vents,
+        vent_diameter=params.vent_diameter,
+    )
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=result.mesh, features={})],
+        findings=result.findings,
+    )
+
+
+@op_params
+class ElephantFootParams(BaseParams):
+    height: float = param(
+        title=_("Höhe"),
+        default=0.6,
+        unit="mm",
+        minimum=0.1,
+        maximum=5.0,
+        doc=_("Über wie viel Höhe eingezogen wird — etwa die ersten drei Schichten."),
+    )
+    amount: float = param(
+        title=_("Betrag"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        placement="advanced",
+        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+    )
+
+
+@register_op(
+    name="compensate_first_layer",
+    title=_("Elefantenfuß ausgleichen"),
+    category="prepare",
+    params=ElephantFootParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Zieht die ersten Schichten um den Betrag ein, um den sie beim Drucken "
+        "breitlaufen. Der Wert kommt aus dem Materialprofil."
+    ),
+)
+def compensate_first_layer(ctx: OpContext) -> OpResult:
+    params = cast(ElephantFootParams, ctx.params)
+    source = ctx.inputs[0]
+    if ctx.profile is None:
+        raise InternalError(detail="the elephant foot compensation needs a profile")
+
+    mesh, findings = compensate_elephant_foot(
+        as_mesh_data(source.mesh),
+        ctx.profile,
+        height=params.height,
+        amount=params.amount or None,
+    )
+    return OpResult(outputs=[dataclasses.replace(source, mesh=mesh)], findings=findings)
 
 
 @op_params

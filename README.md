@@ -143,6 +143,32 @@ Welche Knoten benutzt werden, steht in `app/core/backends/data/text_to_mesh.json
 und `image_to_mesh.json`. Die mitgelieferten Abläufe gehen von Hunyuan3D aus;
 mit einem anderen Generator wird die Datei ersetzt, nicht der Quelltext.
 
+## Was ohne zweites Programm geht
+
+Der Grundsatz: was Formwerk selbst kann, wird nicht ausgelagert. Externe
+Programme bleiben für das, wo sie wirklich besser sind.
+
+| Aufgabe | In Formwerk | Sonst üblich |
+|---|---|---|
+| Text und Logo auf einer Fläche | **Beschriftung → Text aufbringen** | OpenSCAD, Blender |
+| Logo oder Umriss als Körper | **Import → Zeichnung extrudieren** (SVG, DXF) | Inkscape + Blender |
+| Fasen und Verrundungen | **Boolesch → Verrunden / Fase** (exakt, §30) | CAD-Programm |
+| Erzeugtes Netz brauchbar machen | **Netz → Dezimieren, Glätten, Neu vernetzen** | MeshLab |
+| Material sparen | **Druckvorbereitung → Aushöhlen** mit Entlüftung | Slicer-Infill oder Handarbeit |
+| Linkes und rechtes Teil | **Transformation → Spiegeln** | zweite Konstruktion |
+| Erste Schicht maßhaltig | **Elefantenfuß ausgleichen** aus dem Materialprofil | Slicer-Einstellung, projektfern |
+| Toleranz messen statt raten | **Varianten erzeugen** (§28.3) | mehrere Exporte von Hand |
+
+Der Text kommt als Schriftumriss, nicht als Bild — die Kanten bleiben in jeder
+Größe sauber, und DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich
+aussieht. Beim Extrudieren einer Zeichnung werden innenliegende Konturen zu
+Löchern.
+
+Draußen bleibt, was draußen besser ist: der **Slicer** schreibt die Druckdatei
+(§22.5), das **Sprachmodell** und **ComfyUI** laufen, wo sie hingehören, und
+**OpenSCAD** ist die Rückfallebene für Formen, für die es weder Baustein noch
+Kern gibt.
+
 ## Exakte Körper (B-Rep) und STEP
 
 Neben dem Netz-Kern steht ein zweiter mit echten Kanten (§30). Er kommt ins

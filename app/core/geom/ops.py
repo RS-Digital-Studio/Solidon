@@ -147,6 +147,58 @@ def scale_object(ctx: OpContext) -> OpResult:
 
 
 @op_params
+class MirrorParams(BaseParams):
+    axis: str = param(
+        title=_("Achse"),
+        default="x",
+        choices=_AXES,
+        doc=_("Die Achse, an der gespiegelt wird — die andere Hand desselben Teils."),
+    )
+    about: str = param(
+        title=_("Bezugspunkt"), default="centre", choices=_ANCHORS, placement="advanced"
+    )
+
+
+@register_op(
+    name="mirror_object",
+    title=_("Spiegeln"),
+    category="transform",
+    params=MirrorParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Spiegelt ein Objekt an einer Achse. Für das Gegenstück eines Teils — "
+        "linke und rechte Halterung aus derselben Konstruktion."
+    ),
+)
+def mirror_object(ctx: OpContext) -> OpResult:
+    """§25: a mirror is a scale by minus one about one axis.
+
+    A reflection turns every triangle inside out, and a body with inverted
+    normals is one every later operation gets wrong. The kernel turns the
+    winding back for a matrix with a negative determinant — the test measures
+    the volume afterwards, because "it is handled somewhere" is not a promise.
+
+    The features are dropped: a bore called ``hole_1`` on the right-hand part is
+    not the same bore on the left-hand one, and re-detection names them anew
+    (§21.2).
+    """
+    params = cast(MirrorParams, ctx.params)
+    source = ctx.inputs[0]
+    mesh = as_mesh_data(source.mesh)
+
+    factors = [1.0, 1.0, 1.0]
+    factors["xyz".index(params.axis)] = -1.0
+    pivot = anchor_point(mesh, cast(Anchor, params.about))
+    matrix = scaling((factors[0], factors[1], factors[2]), pivot)
+
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=apply(mesh, matrix), features={})],
+        transform=as_transform(matrix),
+    )
+
+
+@op_params
 class RepairParams(BaseParams):
     fill_holes: bool = param(
         title=_("Offene Stellen schließen"),

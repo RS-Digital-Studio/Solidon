@@ -82,6 +82,7 @@ from app.ui.settings import UiSettings, save_settings
 from app.ui.start_screen import StartScreen, accepted_path
 from app.ui.theme import apply_theme
 from app.ui.transform_bar import TransformBar
+from app.ui.variants_dialog import VariantsDialog
 from app.ui.viewport import Viewport
 
 _log = get_logger(__name__)
@@ -89,7 +90,7 @@ _log = get_logger(__name__)
 AUTOSAVE_INTERVAL_MS = 120_000
 
 PROJECT_FILTER = f"{APP_NAME} ({'*' + PROJECT_SUFFIX})"
-MODEL_FILTER = "Modelle (*.stl *.3mf *.obj *.glb *.gltf *.ply *.off *.step *.stp)"
+MODEL_FILTER = "Modelle (*.stl *.3mf *.obj *.glb *.gltf *.ply *.off *.step *.stp *.svg *.dxf)"
 GCODE_FILTER = "G-Code (*.gcode *.gco *.g *.nc)"
 
 
@@ -294,6 +295,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(edit_menu, tr("Automatisch teilen …"), None, self.action_auto_split)
         self._add_action(edit_menu, tr("Material kalibrieren …"), None, self.action_calibrate)
+        self._add_action(edit_menu, tr("Varianten erzeugen …"), None, self.action_variants)
         self._add_action(edit_menu, tr("Zugang zum Sprachmodell …"), None, self.action_llm_key)
         edit_menu.addSeparator()
         self.undo_action = self._add_action(
@@ -533,6 +535,10 @@ class MainWindow(QMainWindow):
         self.right.setVisible(visible)
         self.settings.right_panel_visible = visible
         save_settings(self.settings)
+
+    def action_variants(self) -> None:
+        """§28.3: the same stack with one number stepped, side by side on a plate."""
+        VariantsDialog(self.session, self).exec()
 
     def action_install_extras(self) -> None:
         """§36: what is missing, what it is for, and a button that fetches it."""
