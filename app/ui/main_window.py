@@ -63,6 +63,7 @@ from app.ui.dialogs import (
 )
 from app.ui.explode_bar import ExplodeBar
 from app.ui.generate_dialog import GenerateDialog
+from app.ui.install_dialog import InstallDialog
 from app.ui.labels import feature_label
 from app.ui.op_dialog import OperationDialog
 from app.ui.panels import (
@@ -358,6 +359,7 @@ class MainWindow(QMainWindow):
             )
 
         help_menu = self.menuBar().addMenu(tr("Hilfe"))
+        self._add_action(help_menu, tr("Zusätzliche Programme …"), None, self.action_install_extras)
         self._add_action(help_menu, tr("Erste Schritte …"), None, self.action_first_run)
         self._add_action(help_menu, tr("Fehlerbericht erstellen …"), None, self.action_report)
         help_menu.addSeparator()
@@ -502,6 +504,10 @@ class MainWindow(QMainWindow):
         self.right.setVisible(visible)
         self.settings.right_panel_visible = visible
         save_settings(self.settings)
+
+    def action_install_extras(self) -> None:
+        """§36: what is missing, what it is for, and a button that fetches it."""
+        InstallDialog(self).exec()
 
     def action_about(self) -> None:
         AboutDialog(self).exec()

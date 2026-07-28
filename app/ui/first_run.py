@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME
-from app.core import tools
+from app.core import install, tools
 from app.core.knowledge import profiles
 from app.i18n import SUPPORTED_LANGUAGES, tr
 from app.ui.settings import UiSettings
@@ -79,6 +79,11 @@ class FirstRunDialog(QDialog):
         self.tools.setWordWrap(True)
         self.tools.setTextFormat(Qt.TextFormat.PlainText)
 
+        self.install_button = QPushButton(
+            f"{tr('Fehlendes installieren …')}  ·  {_missing_text()}", self
+        )
+        self.install_button.clicked.connect(self._install)
+
         self.open_button = QPushButton(tr("Modell öffnen …"), self)
         self.open_button.clicked.connect(self._open)
 
@@ -93,6 +98,7 @@ class FirstRunDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(QLabel(tr("Externe Programme — keines davon ist Pflicht:"), self))
         layout.addWidget(self.tools)
+        layout.addWidget(self.install_button)
         layout.addWidget(self.open_button)
         layout.addWidget(buttons)
 
@@ -106,6 +112,14 @@ class FirstRunDialog(QDialog):
         settings.first_run_done = True
         return settings
 
+    def _install(self) -> None:
+        """§36: what is missing can be fetched from here, rather than from a README."""
+        from app.ui.install_dialog import InstallDialog
+
+        InstallDialog(self).exec()
+        self.tools.setText(_tool_text())
+        self.install_button.setText(f"{tr('Fehlendes installieren …')}  ·  {_missing_text()}")
+
     def _open(self) -> None:
         """§2.3: the first five minutes end at the first import, not at "done"."""
         self.apply_to(self.settings)
@@ -117,6 +131,14 @@ def _select(box: QComboBox, identifier: str) -> None:
     index = box.findData(identifier)
     if index >= 0:
         box.setCurrentIndex(index)
+
+
+def _missing_text() -> str:
+    """A line about what is not there — shown next to the button that fetches it."""
+    absent = install.missing()
+    if not absent:
+        return tr("Alles Zusätzliche ist vorhanden.")
+    return f"{tr('Nicht gefunden')}: " + ", ".join(str(entry.title) for entry in absent)
 
 
 def _tool_text() -> str:

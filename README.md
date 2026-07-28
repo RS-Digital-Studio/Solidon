@@ -93,6 +93,15 @@ OpenSCAD, Slicer, Ollama und ComfyUI werden **nicht** mitgeliefert, sondern
 konfiguriert (§36, §38). Beim ersten Start zeigt die Anwendung, welche davon
 gefunden wurden; Pflicht ist keines.
 
+Unter **Hilfe → Zusätzliche Programme** steht dieselbe Liste mit einem Knopf
+daneben. Python-Pakete (B-Rep-Kern, V-HACD, Schlüsselbund) holt Formwerk über
+`pip` in die eigene Umgebung, Programme über `winget`. Drei Regeln gelten dabei:
+die Paketnamen stehen als Konstanten im Quelltext und kommen nie von außen,
+installiert wird nur aus den offiziellen Quellen, und nichts läuft ungefragt —
+gedrückt wird der Knopf von einem Menschen. Wo es von dort nicht geht (gebaute
+Anwendung ohne `pip`, System ohne `winget`), steht die Begründung und die
+offizielle Seite daneben.
+
 Ohne funktionierendes OpenGL startet die Anwendung ohne 3D-Ansicht; erzwingen
 lässt sich das mit `FORMWERK_NO_VIEWPORT=1`.
 
