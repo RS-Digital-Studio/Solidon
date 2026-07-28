@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import pytest
@@ -218,9 +219,12 @@ def test_the_local_backend_speaks_the_same_language() -> None:
 
 
 def test_a_local_server_that_is_not_running_is_not_available() -> None:
-    backend = OllamaBackend(transport=Recorder(BackendUnavailable(detail="connection refused")))
+    """Asked with a socket, so a closed port costs milliseconds, not seconds."""
+    backend = OllamaBackend(url="http://localhost:1/api/chat", transport=Recorder({}))
 
+    started = time.perf_counter()
     assert not backend.available
+    assert time.perf_counter() - started < 2.0
 
 
 def test_without_any_backend_there_is_no_chat() -> None:

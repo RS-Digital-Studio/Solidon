@@ -1,0 +1,530 @@
+"""The agent layer: context, tools, proposal (Bauplan §26).
+
+Everything runs against the scripted backend, so what is measured here is the
+harness and not the weather: does the context carry what §26.1 lists, is a
+proposal exactly one transaction, does an undo take it back completely, and is
+every operation schema-checked before anything is computed.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from app.core.agent import apply as agent_apply
+from app.core.agent import checks, context, tools
+from app.core.agent.prompt import PROMPT_VERSION
+from app.core.agent.session import AgentSession
+from app.core.backends.llm import Reply, ToolCall
+from app.core.backends.scripted import ScriptedBackend
+from app.core.knowledge import rules
+from app.core.scene import History, OperationDraft, evaluate
+from app.core.scene.project import Project, ProjectSources, new_project
+from app.core.types import ChatEntry, Document, Profile, Scene, Source
+
+MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+@pytest.fixture
+def project() -> Project:
+    """A project with one plate on the stack — the starting point of way 1."""
+    made = new_project("centauri-carbon-2", "petg")
+    made.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    made.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+    History(made.document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    return made
+
+
+def scene_of(project: Project, profile: Profile) -> Scene:
+    return evaluate(project.document, profile, sources=ProjectSources(project)).scene
+
+
+def session(
+    project: Project, profile: Profile, answers: list[Reply], **extra: object
+) -> AgentSession:
+    return AgentSession(
+        backend=ScriptedBackend(answers=list(answers)),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+        **extra,  # type: ignore[arg-type]
+    )
+
+
+# --- context (§26.1) --------------------------------------------------------------
+
+
+def test_the_context_carries_scene_report_and_rules(project: Project, profile: Profile) -> None:
+    scene = scene_of(project, profile)
+    messages = context.build_messages("Mach das Loch größer", project.document, scene)
+
+    system = messages[0].content
+    world = messages[1].content
+
+    assert "Formwerk" in system
+    assert f"Version {rules.version()}" in system, "§26.4: the prompt names the rule version"
+    assert "Mindestwandstärke" in system
+    assert "hole_1" in world, "the digest travels along (§23)"
+    assert "obj_1" in world
+    assert messages[-1].content == "Mach das Loch größer"
+
+
+def test_the_selection_reaches_the_agent(project: Project, profile: Profile) -> None:
+    """§26.1: without the selection "make that hole bigger" points at nothing."""
+    scene = scene_of(project, profile)
+    messages = context.build_messages(
+        "größer", project.document, scene, selection=("obj_1", "hole_2")
+    )
+
+    assert "hole_2" in messages[1].content
+
+
+def test_the_report_travels_with_its_codes(project: Project, profile: Profile) -> None:
+    scene = scene_of(project, profile)
+    text = context.report_text(scene.report)
+
+    if scene.report.findings:
+        assert "ingest." in text or "orient." in text or ":" in text
+
+
+def test_discarded_turns_travel_as_discarded(project: Project, profile: Profile) -> None:
+    """§26.3: after an undo the agent must not argue with what is gone."""
+    document = project.document
+    document.chat.append(ChatEntry(id="c1", role="user", text="Bohr ein Loch"))
+    document.chat.append(ChatEntry(id="c2", role="agent", text="Erledigt", transaction_id="t99"))
+
+    turns = context.conversation(document.chat, document)
+
+    assert turns[0].content == "Bohr ein Loch"
+    assert "verworfen" in turns[1].content
+    assert "Erledigt" not in turns[1].content
+    assert context.is_discarded(document.chat[1], document)
+
+
+def test_a_turn_of_an_active_transaction_stays(project: Project, profile: Profile) -> None:
+    document = project.document
+    active = document.transactions[0].id
+    document.chat.append(ChatEntry(id="c1", role="agent", text="Geladen", transaction_id=active))
+
+    assert not context.is_discarded(document.chat[0], document)
+    assert context.conversation(document.chat, document)[0].content == "Geladen"
+
+
+# --- tools (§26.2) ----------------------------------------------------------------
+
+
+def test_every_operation_is_a_tool() -> None:
+    from app.core.registry import REGISTRY
+
+    names = tools.names()
+
+    for spec in REGISTRY.all():
+        assert spec.name in names
+    for extra in tools.EXTRA_TOOLS:
+        assert extra in names
+
+
+def test_an_operation_tool_asks_which_objects() -> None:
+    schema = next(entry for entry in tools.operation_tools() if entry["name"] == "drill_hole")
+
+    assert tools.OBJECTS_FIELD in schema["input_schema"]["properties"]
+    assert tools.OBJECTS_FIELD in schema["input_schema"]["required"]
+
+
+def test_a_tool_without_inputs_asks_for_none() -> None:
+    schema = next(entry for entry in tools.operation_tools() if entry["name"] == "load")
+
+    assert tools.OBJECTS_FIELD not in schema["input_schema"]["properties"]
+
+
+def test_ask_user_is_offered_first_of_the_extras() -> None:
+    """§26.2: asking is a duty, so it is not buried at the end of the list."""
+    extras = [entry["name"] for entry in tools.extra_tools()]
+
+    assert extras[0] == tools.ASK_USER
+
+
+# --- the run (§26.5) ---------------------------------------------------------------
+
+
+def test_a_proposal_collects_operations_without_touching_the_document(
+    project: Project, profile: Profile
+) -> None:
+    before = len(project.document.ops)
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="translate_object",
+                        arguments={"objects": ["obj_1"], "dx": 5.0},
+                    ),
+                )
+            ),
+            Reply(text="Ich habe die Platte um 5 mm verschoben."),
+        ],
+    )
+
+    proposal = agent.propose("Schieb die Platte 5 mm nach rechts")
+
+    assert [draft.op for draft in proposal.drafts] == ["translate_object"]
+    assert len(project.document.ops) == before, "the document stays untouched until accepted"
+    assert proposal.answer.startswith("Ich habe")
+    assert proposal.origin.by == "agent"
+    assert proposal.origin.prompt_version == PROMPT_VERSION
+    assert proposal.origin.rules_version == rules.version()
+
+
+def test_an_invalid_call_comes_back_as_a_message(project: Project, profile: Profile) -> None:
+    """P4 acceptance: schema-valid before anything is computed."""
+    backend = ScriptedBackend(
+        answers=[
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="translate_object",
+                        arguments={"objects": ["obj_1"], "dx": "weit"},
+                    ),
+                )
+            ),
+            Reply(text="Ich korrigiere das."),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Schieb das mal")
+
+    assert proposal.drafts == [], "an invalid call never becomes an operation"
+    answer = [entry for entry in backend.seen[-1] if entry.role == "tool"][-1]
+    assert "Ungültige" in answer.content
+
+
+def test_an_operation_that_stops_the_chain_is_dropped(project: Project, profile: Profile) -> None:
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="translate_object",
+                        arguments={"objects": ["obj_9"], "dx": 5.0},
+                    ),
+                )
+            ),
+            Reply(text="Das Objekt gibt es nicht."),
+        ],
+    )
+
+    proposal = agent.propose("Schieb obj_9")
+
+    assert proposal.drafts == []
+
+
+def test_the_check_after_every_operation_reaches_the_model(
+    project: Project, profile: Profile
+) -> None:
+    """§26.5: the finding goes back into the context."""
+    backend = ScriptedBackend(
+        answers=[
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="scale_object",
+                        arguments={"objects": ["obj_1"], "factor": 0.02},
+                    ),
+                )
+            ),
+            Reply(text="fertig"),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Mach es winzig")
+
+    codes = {finding.code for finding in proposal.findings}
+    assert "agent.volume_jumped" in codes
+    tool_answer = [entry for entry in backend.seen[-1] if entry.role == "tool"][-1]
+    assert "agent.volume_jumped" in tool_answer.content
+
+
+def test_asking_reaches_the_surface(project: Project, profile: Profile) -> None:
+    """§26.2, Leitprinzip 6: ambiguity asks instead of guessing."""
+    asked: list[tuple[str, list[str]]] = []
+
+    def answer(question: str, options: list[str]) -> str:
+        asked.append((question, options))
+        return options[0] if options else "hole_1"
+
+    agent = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        ToolCall(
+                            id="1",
+                            name="ask_user",
+                            arguments={
+                                "question": "Welche Bohrung?",
+                                "options": ["hole_1", "hole_2"],
+                            },
+                        ),
+                    )
+                ),
+                Reply(text="Ich nehme hole_1."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+        ask=answer,
+    )
+
+    proposal = agent.propose("Mach das Loch größer")
+
+    assert asked and asked[0][0] == "Welche Bohrung?"
+    assert proposal.asked
+    assert proposal.questions[0].answer == "hole_1"
+
+
+def test_the_step_limit_is_hard(project: Project, profile: Profile) -> None:
+    """§26.5: a model going in circles stops, and the proposal says why."""
+    calls = [
+        Reply(tool_calls=(ToolCall(id=str(index), name="read_report", arguments={}),))
+        for index in range(20)
+    ]
+    agent = session(project, profile, calls, max_steps=3)
+
+    proposal = agent.propose("Lies den Bericht")
+
+    assert proposal.steps == 3
+    assert proposal.stopped == "steps"
+
+
+def test_parameters_are_offered_as_parameters(project: Project, profile: Profile) -> None:
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="add_parameter",
+                        arguments={"name": "breite", "value": 84.0, "unit": "mm"},
+                    ),
+                )
+            ),
+            Reply(text="Parameter angelegt."),
+        ],
+    )
+
+    proposal = agent.propose("Leg die Breite als Parameter an")
+
+    assert proposal.parameters["breite"].value == 84.0
+    assert "breite" not in project.document.parameters, "not before it is accepted"
+
+
+def test_a_fit_takes_its_tolerance_from_the_material(project: Project, profile: Profile) -> None:
+    """AGENTS.md rule 7: never a fixed number."""
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="add_fit",
+                        arguments={
+                            "name": "stift",
+                            "a": "obj_1:hole_1",
+                            "b": "obj_1:hole_2",
+                            "kind": "clearance",
+                        },
+                    ),
+                )
+            ),
+            Reply(text="Passung angelegt."),
+        ],
+    )
+
+    proposal = agent.propose("Leg eine Passung an")
+
+    assert proposal.fits[0].tolerance == "auto:petg"
+
+
+# --- accepting and taking back (§26.3, §26.5) ------------------------------------
+
+
+def test_a_proposal_becomes_exactly_one_transaction(project: Project, profile: Profile) -> None:
+    """AGENTS.md rule 16 and the P4 acceptance criterion."""
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="translate_object",
+                        arguments={"objects": ["obj_1"], "dx": 5.0},
+                    ),
+                    ToolCall(
+                        id="2",
+                        name="rotate_object",
+                        arguments={"objects": ["obj_1"], "axis": "z", "angle": 10.0},
+                    ),
+                )
+            ),
+            Reply(text="Verschoben und gedreht."),
+        ],
+    )
+    proposal = agent.propose("Schieb und dreh")
+    history = History(project.document)
+    before = len(project.document.transactions)
+
+    transaction = agent_apply.accept(proposal, history)
+
+    assert transaction is not None
+    assert len(project.document.transactions) == before + 1
+    assert len(transaction.ops) == 2
+    assert transaction.origin.by == "agent"
+    assert transaction.origin.model.startswith("scripted")
+
+
+def test_one_undo_takes_the_whole_proposal_back(project: Project, profile: Profile) -> None:
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="translate_object",
+                        arguments={"objects": ["obj_1"], "dx": 5.0},
+                    ),
+                    ToolCall(
+                        id="2",
+                        name="add_parameter",
+                        arguments={"name": "breite", "value": 84.0},
+                    ),
+                )
+            ),
+            Reply(text="fertig"),
+        ],
+    )
+    proposal = agent.propose("Mach beides")
+    history = History(project.document)
+    ops_before = len(project.document.ops)
+
+    transaction = agent_apply.accept(proposal, history)
+    assert "breite" in project.document.parameters
+
+    agent_apply.undo(proposal, history, transaction.id if transaction else None)
+
+    assert len(project.document.ops) == ops_before
+    assert "breite" not in project.document.parameters, "a parameter is part of the proposal too"
+
+
+def test_after_an_undo_the_turn_counts_as_discarded(project: Project, profile: Profile) -> None:
+    """§26.3: the coupling is what keeps the next context honest."""
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="translate_object",
+                        arguments={"objects": ["obj_1"], "dx": 5.0},
+                    ),
+                )
+            ),
+            Reply(text="Verschoben."),
+        ],
+    )
+    proposal = agent.propose("Schieb")
+    history = History(project.document)
+    transaction = agent_apply.accept(proposal, history)
+
+    entry = project.document.chat[-1]
+    assert entry.transaction_id == (transaction.id if transaction else None)
+    assert not context.is_discarded(entry, project.document)
+
+    agent_apply.undo(proposal, history, transaction.id if transaction else None)
+
+    assert context.is_discarded(entry, project.document)
+
+
+def test_a_discarded_proposal_keeps_the_conversation(project: Project, profile: Profile) -> None:
+    agent = session(project, profile, [Reply(text="Ich würde nichts ändern.")])
+    proposal = agent.propose("Was meinst du?")
+
+    agent_apply.discard(proposal, project.document)
+
+    assert [entry.role for entry in project.document.chat] == ["user", "agent"]
+    assert project.document.chat[-1].transaction_id is None
+    assert proposal.empty
+
+
+def test_the_origin_records_the_conditions(project: Project, profile: Profile) -> None:
+    """§26.4: model, prompt version, rule version, temperature."""
+    agent = session(project, profile, [Reply(text="ja")])
+    proposal = agent.propose("Hallo")
+
+    origin = proposal.origin
+    assert origin.model and origin.prompt_version and origin.rules_version
+    assert origin.temperature == 0.0
+
+
+# --- the checks -------------------------------------------------------------------
+
+
+def test_the_check_notices_an_open_body(project: Project, profile: Profile) -> None:
+    document = Document(format_version=2, app_version="0.0.1")
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/broken_open.stl", sha256=""
+    )
+    broken = new_project("centauri-carbon-2", "petg")
+    broken.document = document
+    broken.sources["src_1"] = (MESHES / "broken_open.stl").read_bytes()
+    History(document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(broken))
+    findings = checks.check(result)
+
+    assert "agent.not_watertight" in {finding.code for finding in findings}
+
+
+def test_a_clean_result_has_nothing_to_report(project: Project, profile: Profile) -> None:
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    findings = checks.check(result)
+
+    assert "agent.not_watertight" not in {finding.code for finding in findings}
+    assert checks.as_lines([]) == "Prüfung ohne Befund."

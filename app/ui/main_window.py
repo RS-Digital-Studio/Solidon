@@ -44,12 +44,12 @@ from app.core.slice.analysis import slice_body
 from app.core.types import Finding, ObjectId
 from app.i18n import tr
 from app.ui.analysis_bar import AnalysisBar, LayerBar
+from app.ui.chat import ChatPanel
 from app.ui.command_palette import CommandPalette
 from app.ui.dialogs import AboutDialog, AskDialog, confirm_discard, show_error
 from app.ui.labels import feature_label
 from app.ui.op_dialog import OperationDialog
 from app.ui.panels import (
-    ChatPlaceholder,
     HistoryPanel,
     MeasurementLabel,
     ObjectTree,
@@ -90,6 +90,8 @@ class MainWindow(QMainWindow):
         """Only the last map is kept: they are cheap to rebuild and large to hold."""
         self._slice_cache: Any = None
         self._slice_key: tuple[str, int] | None = None
+        self._proposal: Any = None
+        """The agent turn waiting for a decision (§26.5)."""
 
         self._build_central()
         self._build_status_bar()
@@ -151,7 +153,10 @@ class MainWindow(QMainWindow):
 
         self.report = ReportPanel(self)
         self.report.findingActivated.connect(self._on_finding_activated)
-        self.chat = ChatPlaceholder(self)
+        self.chat = ChatPanel(self)
+        self.chat.requestSent.connect(self._on_request_sent)
+        self.chat.accepted.connect(self._on_proposal_accepted)
+        self.chat.discarded.connect(self._on_proposal_discarded)
 
         self.right = QTabWidget(self)
         self.right.addTab(self.report, tr("Prüfbericht"))
@@ -345,6 +350,12 @@ class MainWindow(QMainWindow):
         self.session.busyChanged.connect(self._on_busy)
         self.session.askRequested.connect(self._on_ask)
         self.session.failed.connect(self._on_error)
+        self.session.proposalReady.connect(self._on_proposal)
+        self.session.agentBusyChanged.connect(self._on_agent_busy)
+        backend = self.session.agent_backend
+        self.chat.set_available(
+            backend is not None, f"{backend.id}:{backend.model}" if backend else ""
+        )
 
     # --- actions ----------------------------------------------------------------
 
@@ -556,6 +567,49 @@ class MainWindow(QMainWindow):
         if target is not None:
             self.viewport.fly_to(target)
 
+    # --- the agent (§26) --------------------------------------------------------
+
+    def _on_request_sent(self, request: str) -> None:
+        """One turn. The selection travels along, or "that hole" means nothing (§26.1)."""
+        selected = self.object_tree.selected()
+        feature = self.object_tree.selected_feature()
+        selection = (selected, feature or "") if selected else None
+        self.session.propose_async(request, selection)
+
+    def _on_agent_busy(self, busy: bool) -> None:
+        self.chat.set_busy(busy)
+        self.status_message.setText(tr("Der Agent denkt nach.") if busy else "")
+
+    def _on_proposal(self, preview: Any) -> None:
+        """A proposal arrived: show what it would change, then let the user decide."""
+        self._proposal = preview
+        self.chat.show_proposal(preview)
+        if preview.difference is not None:
+            self.viewport.show_difference(preview.difference)
+        self._focus_chat()
+
+    def _on_proposal_accepted(self) -> None:
+        if self._proposal is None:
+            return
+        self.session.accept_proposal(self._proposal)
+        self._clear_proposal()
+
+    def _on_proposal_discarded(self) -> None:
+        if self._proposal is None:
+            return
+        self.session.discard_proposal(self._proposal)
+        self._clear_proposal()
+
+    def _clear_proposal(self) -> None:
+        self._proposal = None
+        self.chat.show_proposal(None)
+        self.viewport.show_difference(None)
+        self.chat.show_document(self.session.project.document)
+
+    def _focus_chat(self) -> None:
+        if self.right.isVisible():
+            self.right.setCurrentWidget(self.chat)
+
     def _on_feature_picked(self, feature_id: str) -> None:
         """A click in the view selects the feature in the tree as well (§18.5)."""
         object_id = self.object_tree.selected()
@@ -651,6 +705,7 @@ class MainWindow(QMainWindow):
         document = self.session.project.document
         self.parameters.show_document(document)
         self.history_panel.show_document(document)
+        self.chat.show_document(document)
         self.setWindowTitle(f"{self.session.title} — {APP_NAME}")
 
     def _on_progress(self, fraction: float, text: str) -> None:

@@ -26,7 +26,7 @@ from app.core.scene import EvaluationResult
 from app.core.types import Feature, FeatureId, LayerInfo, ObjectId, Profile, Vec3
 from app.i18n import tr
 from app.ui.labels import feature_label
-from app.ui.palette import VIRIDIS
+from app.ui.palette import DIFF_PALETTES, VIRIDIS, DiffPalette
 from app.ui.theme import viewport_colours
 
 _log = get_logger(__name__)
@@ -143,6 +143,10 @@ class Viewport(QWidget):
         self._selected_feature: FeatureId | None = None
         self._layer_actors: list[Any] = []
         self._layer: LayerInfo | None = None
+        self._difference: Any | None = None
+        self._difference_actors: list[Any] = []
+        self._diff_palette: DiffPalette = "blue_orange"
+        self._ghost: EvaluationResult | None = None
 
         if not _available():
             self._layout.addWidget(
@@ -623,6 +627,65 @@ class Viewport(QWidget):
                 best_offset = offset
                 best = feature_id
         return best
+
+    # --- difference view (§18.7) ------------------------------------------------
+
+    def show_difference(
+        self, difference: Any | None, ghost: EvaluationResult | None = None
+    ) -> None:
+        """Added and removed volume, with the previous state as a ghost.
+
+        Colours come from the palette (§19.1) and are never the only carrier:
+        added and removed also differ in transparency and in the legend of the
+        chat panel, so the view stays readable without colour vision.
+        """
+        self._difference = difference
+        self._ghost = ghost
+        self._redraw_difference()
+        if self.plotter is not None:
+            self.plotter.render()
+
+    @property
+    def difference(self) -> Any | None:
+        return self._difference
+
+    def _redraw_difference(self) -> None:
+        if self.plotter is None:
+            return
+        for actor in self._difference_actors:
+            self.plotter.remove_actor(actor, render=False)
+        self._difference_actors.clear()
+        if self._difference is None:
+            return
+
+        colours = DIFF_PALETTES[self._diff_palette]
+        for entry in self._difference.entries.values():
+            self._add_body(entry.added, colours.added.colour, f"added:{entry.object_id}", 0.85)
+            self._add_body(
+                entry.removed, colours.removed.colour, f"removed:{entry.object_id}", 0.45
+            )
+
+    def _add_body(self, mesh: Any, colour: str, name: str, opacity: float) -> None:
+        if self.plotter is None or mesh is None or not len(mesh.raw.faces):
+            return
+        import numpy as np
+        import pyvista as pv
+
+        raw = mesh.raw
+        faces = np.hstack(
+            [np.full((len(raw.faces), 1), 3, dtype=np.int64), np.asarray(raw.faces)]
+        ).ravel()
+        surface = pv.PolyData(np.asarray(raw.vertices, dtype=float), faces)
+        self._difference_actors.append(
+            self.plotter.add_mesh(surface, color=colour, opacity=opacity, name=name, render=False)
+        )
+
+    def set_difference_palette(self, palette: DiffPalette) -> None:
+        """Blue/orange, red/green or greyscale — the choice from §19.1."""
+        self._diff_palette = palette
+        self._redraw_difference()
+        if self.plotter is not None:
+            self.plotter.render()
 
     # --- layer analysis (§18.10) ------------------------------------------------
 

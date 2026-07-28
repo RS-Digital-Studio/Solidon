@@ -36,6 +36,10 @@ Role = Literal["system", "user", "assistant", "tool"]
 #: How long a single request may take before it is given up on.
 TIMEOUT_SECONDS = 120.0
 
+#: How long the check "is a local model running" may take. It happens while the
+#: window is being built, so it has to be over before anyone notices.
+PROBE_SECONDS = 0.25
+
 
 @dataclass(frozen=True, slots=True)
 class ToolCall:
@@ -213,7 +217,7 @@ def _as_anthropic_tool(schema: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": schema["name"],
         "description": schema.get("description", ""),
-        "input_schema": schema.get("parameters", {"type": "object", "properties": {}}),
+        "input_schema": schema.get("input_schema", {"type": "object", "properties": {}}),
     }
 
 
@@ -265,14 +269,24 @@ class OllamaBackend:
 
     @property
     def available(self) -> bool:
-        """A local server answers or it does not; there is no key to check."""
+        """Is a server listening?
+
+        Asked with a socket rather than with a request: the answer is needed
+        while a window is being built, and an HTTP call to a closed port costs
+        seconds on some machines — long enough to be felt on every start.
+        """
+        import socket
+        from urllib.parse import urlparse
+
+        address = urlparse(self.url)
         try:
-            self.transport(
-                self.url.replace("/api/chat", "/api/tags"), {}, {}
-            )  # a GET would do, but one path is enough
-        except AppError:
+            with socket.create_connection(
+                (address.hostname or "localhost", address.port or 11434),
+                timeout=PROBE_SECONDS,
+            ):
+                return True
+        except OSError:
             return False
-        return True
 
     def complete(
         self,
@@ -288,7 +302,17 @@ class OllamaBackend:
             "messages": [_as_ollama(entry) for entry in messages],
         }
         if tools:
-            payload["tools"] = [{"type": "function", "function": entry} for entry in tools]
+            payload["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": entry["name"],
+                        "description": entry.get("description", ""),
+                        "parameters": entry.get("input_schema", {"type": "object"}),
+                    },
+                }
+                for entry in tools
+            ]
 
         answer = self.transport(self.url, {}, payload)
         return _from_ollama(answer, self.model)

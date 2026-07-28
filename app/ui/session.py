@@ -19,7 +19,12 @@ from typing import Any
 
 from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
 
+from app.core.agent import apply as agent_apply
+from app.core.agent.proposal import Proposal
+from app.core.agent.session import AgentSession
+from app.core.backends.llm import LLMBackend, first_available
 from app.core.errors import AppError, OperationCancelled
+from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.knowledge import profiles
 from app.core.log import get_logger
 from app.core.scene import (
@@ -99,6 +104,47 @@ class _EvaluationWorker(QThread):
             self.finishedWith.emit(result)
 
 
+@dataclass(slots=True)
+class ProposalPreview:
+    """A proposal plus what it would look like (§26.5, §18.7).
+
+    The scene and the difference are computed in the worker, not in the window:
+    a difference is two boolean operations per body, and doing that on the GUI
+    thread would freeze the very view it is meant to explain.
+    """
+
+    proposal: Proposal
+    scene: Any = None
+    difference: SceneDifference | None = None
+
+    @property
+    def changes_geometry(self) -> bool:
+        return bool(self.proposal.drafts)
+
+
+class _AgentWorker(QThread):
+    """One turn of the agent, off the GUI thread (§26.5)."""
+
+    finishedWith = Signal(object)
+    failedWith = Signal(object)
+
+    def __init__(self, session: Session, request: str) -> None:
+        super().__init__()
+        self._session = session
+        self._request = request
+
+    def run(self) -> None:
+        session = self._session
+        try:
+            preview = session.run_proposal(self._request)
+        except OperationCancelled:
+            self.failedWith.emit(AppError(tr("Der Vorschlag wurde abgebrochen.")))
+        except AppError as error:
+            self.failedWith.emit(error)
+        else:
+            self.finishedWith.emit(preview)
+
+
 def _with_findings(result: EvaluationResult, extra: list[Finding]) -> EvaluationResult:
     """Carry the check's findings into the report the window shows."""
     if not extra:
@@ -117,6 +163,9 @@ class Session(QObject):
     busyChanged = Signal(bool)
     askRequested = Signal(object)
     """A question for the user — carries an ``AskRequest``."""
+    proposalReady = Signal(object)
+    """An agent turn finished — carries a ``ProposalPreview`` (§26.5)."""
+    agentBusyChanged = Signal(bool)
     projectChanged = Signal()
     """Stack, path or title changed; panels reload from the document."""
     failed = Signal(object)
@@ -135,6 +184,10 @@ class Session(QObject):
         self.pending_orphan_check = False
         """Set when a file was opened: §21.3 checks its references once, not always."""
         self._worker: _EvaluationWorker | None = None
+        self._agent: _AgentWorker | None = None
+        self._backend: LLMBackend | None = None
+        self._selection: tuple[str, str] | None = None
+        self._accepted: dict[str, str | None] = {}
         self._rerun_pending = False
         self._dirty = False
 
@@ -283,6 +336,87 @@ class Session(QObject):
     def cancel(self) -> None:
         self.cancel_signal.cancel()
 
+    # --- the agent (§26) --------------------------------------------------------
+
+    @property
+    def agent_backend(self) -> LLMBackend | None:
+        """The model the chat uses, or None — then the chat is off (§27)."""
+        if self._backend is None:
+            self._backend = first_available()
+        return self._backend
+
+    def set_agent_backend(self, backend: LLMBackend | None) -> None:
+        """Choose the model by hand — the settings dialog and the suite use this."""
+        self._backend = backend
+
+    def propose_async(self, request: str, selection: tuple[str, str] | None = None) -> None:
+        """Ask the agent. The answer arrives as ``proposalReady``."""
+        backend = self.agent_backend
+        if backend is None:
+            self.failed.emit(AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell.")))
+            return
+        if self._agent is not None and self._agent.isRunning():
+            return
+        self._selection = selection
+        self.agentBusyChanged.emit(True)
+        worker = _AgentWorker(self, request)
+        worker.finishedWith.connect(self._on_proposal)
+        worker.failedWith.connect(self._on_failed)
+        worker.finished.connect(self._on_agent_done)
+        self._agent = worker
+        worker.start()
+
+    def run_proposal(self, request: str) -> ProposalPreview:
+        """One agent turn plus its preview. Runs in the worker (§26.5)."""
+        backend = self.agent_backend
+        if backend is None:  # pragma: no cover - guarded before the worker starts
+            raise AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell."))
+
+        agent = AgentSession(
+            backend=backend,
+            document=self.project.document,
+            profile=self.profile,
+            sources=ProjectSources(self.project, base_dir=self.base_dir),
+            ask=self.ask_from_worker,
+            selection=self._selection,
+        )
+        proposal = agent.propose(request)
+        preview = ProposalPreview(proposal=proposal)
+        if proposal.drafts:
+            preview.scene, preview.difference = self._preview_of(proposal)
+        return preview
+
+    def _preview_of(self, proposal: Proposal) -> tuple[Any, SceneDifference | None]:
+        """What the scene would look like — computed on a copy, in draft quality."""
+        import copy
+
+        before = self.last_result.scene if self.last_result else None
+        working = copy.deepcopy(self.project.document)
+        History(working).apply(tr("Vorschau"), proposal.drafts, origin=proposal.origin)
+        result = evaluate(
+            working,
+            self.profile,
+            quality="draft",
+            sources=ProjectSources(self.project, base_dir=self.base_dir),
+            ask=self.ask_from_worker,
+        )
+        difference = compare_scenes(before, result.scene) if before is not None else None
+        return result.scene, difference
+
+    def accept_proposal(self, preview: ProposalPreview) -> None:
+        """Put the proposal into the document as one transaction (§26.5)."""
+        transaction = agent_apply.accept(preview.proposal, self.history)
+        self._accepted[preview.proposal.request] = transaction.id if transaction else None
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+
+    def discard_proposal(self, preview: ProposalPreview) -> None:
+        """Throw it away — the conversation keeps both turns (§26.3)."""
+        agent_apply.discard(preview.proposal, self.project.document)
+        self._dirty = True
+        self.projectChanged.emit()
+
     # --- context callbacks ------------------------------------------------------
 
     def report_progress(self, fraction: float, text: str) -> None:
@@ -312,6 +446,13 @@ class Session(QObject):
 
     def _on_cancelled(self) -> None:
         _log.info("evaluation cancelled")
+
+    def _on_proposal(self, preview: Any) -> None:
+        self.proposalReady.emit(preview)
+
+    def _on_agent_done(self) -> None:
+        self.agentBusyChanged.emit(False)
+        self._agent = None
 
     def _on_thread_done(self) -> None:
         self.busyChanged.emit(False)
