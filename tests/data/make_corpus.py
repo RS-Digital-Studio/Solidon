@@ -93,6 +93,25 @@ def broken_open() -> None:
     )
 
 
+def island_tower() -> None:
+    """A block that starts in mid-air (Bauplan §34, §22.2).
+
+    A column, a second block floating beside it, and a bridge joining the two
+    further up. The floating block has no connection downwards when it begins —
+    that is an island, and it needs support whatever the orientation.
+    """
+    column = trimesh.creation.box(extents=(10.0, 10.0, 30.0))
+    column.apply_translation((0.0, 0.0, 15.0))
+
+    floating = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    floating.apply_translation((20.0, 0.0, 25.0))
+
+    bridge = trimesh.creation.box(extents=(30.0, 10.0, 5.0))
+    bridge.apply_translation((10.0, 0.0, 27.5))
+
+    write(trimesh.boolean.union([column, floating, bridge]), "island_tower.stl")
+
+
 def dense_1m() -> None:
     """About a million triangles — the yardstick for the performance budget (§31).
 
@@ -120,4 +139,5 @@ if __name__ == "__main__":
     degenerate()
     broken_open()
     two_components()
+    island_tower()
     dense_1m()

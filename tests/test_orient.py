@@ -94,13 +94,43 @@ def test_orienting_runs_as_an_operation(document: Document, profile: Profile) ->
             )
         ],
     )
-    history.apply(_("Ausrichten"), [OperationDraft(op="orient_for_print", inputs=("obj_1",))])
+    history.apply(
+        _("Ausrichten"),
+        [OperationDraft(op="orient_for_print", inputs=("obj_1",), params={"thorough": False})],
+    )
 
     result = evaluate(document, profile, sources=ProjectSources(project))
 
     assert result.complete
     assert result.scene.objects["obj_1"].mesh.bounds.size[2] < 20.0
     assert "orient.heuristic" in {finding.code for finding in result.scene.report.findings}
+
+
+def test_the_thorough_orientation_uses_the_layer_analysis(
+    document: Document, profile: Profile
+) -> None:
+    """Default is thorough: hundreds of positions judged by real support volume."""
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+
+    history = History(document)
+    history.apply(
+        _("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    history.apply(
+        _("Ausrichten"),
+        [OperationDraft(op="orient_for_print", inputs=("obj_1",), params={"candidates": 24})],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    assert "orient.searched" in {finding.code for finding in result.scene.report.findings}
+    assert history.operations[-1].seed is not None, "the sampling carries its seed (§11.3)"
 
 
 def test_the_orientation_operation_is_registered() -> None:

@@ -22,6 +22,7 @@ from app.core.geom.prepare import (
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
 from app.core.geom.transform import Axis
 from app.core.registry import VARIABLE, op_params, param, register_op
+from app.core.slice.orientation import DEFAULT_CANDIDATES, search
 from app.core.types import BaseParams, OpContext, OpResult
 from app.i18n import _
 
@@ -118,7 +119,21 @@ def split_plane(ctx: OpContext) -> OpResult:
 
 @op_params
 class OrientParams(BaseParams):
-    pass
+    thorough: bool = param(
+        title=_("Gründlich suchen"),
+        default=True,
+        doc=_(
+            "Rechnet hunderte Lagen mit der Schichtanalyse durch. "
+            "Aus heißt: schnelle Heuristik über die Flächen."
+        ),
+    )
+    candidates: int = param(
+        title=_("Kandidaten"),
+        default=DEFAULT_CANDIDATES,
+        minimum=8,
+        maximum=2000,
+        placement="advanced",
+    )
 
 
 @register_op(
@@ -128,10 +143,28 @@ class OrientParams(BaseParams):
     params=OrientParams,
     consumes=1,
     produces=1,
-    doc=_("Dreht das Objekt auf eine flache Auflage — vorerst über eine Heuristik."),
+    deterministic=False,
+    doc=_("Sucht die Lage mit dem geringsten Stützbedarf."),
 )
 def orient_for_print_op(ctx: OpContext) -> OpResult:
-    result = orient_for_print(as_mesh_data(ctx.inputs[0].mesh))
+    """Thorough means the layer analysis judges; otherwise the P2 heuristic does."""
+    params = cast(OrientParams, ctx.params)
+    mesh = as_mesh_data(ctx.inputs[0].mesh)
+
+    if params.thorough:
+        found = search(
+            mesh,
+            count=params.candidates,
+            seed=ctx.seed,
+            progress=ctx.progress,
+            cancelled=ctx.cancelled,
+        )
+        return OpResult(
+            outputs=[dataclasses.replace(ctx.inputs[0], mesh=found.mesh)],
+            findings=found.findings,
+        )
+
+    result = orient_for_print(mesh)
     return OpResult(
         outputs=[dataclasses.replace(ctx.inputs[0], mesh=result.mesh)],
         findings=result.findings,

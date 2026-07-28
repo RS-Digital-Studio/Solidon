@@ -127,11 +127,12 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [ ] Passungen anlegen und prüfen (§14)
 
 ### Schichtanalyse (§22)
-- [ ] `core/slice`: Ebene-Mesh-Schnitt, Konturverkettung, Clipper2
-- [ ] Kennzahlen je Schicht: Fläche, Überhang, Inseln, Brückenweite, Minimalbreite
-- [ ] Test gegen analytisch bekannte Körper (Würfel, Zylinder, Kegel) auf 1 %
-- [ ] `island_tower.stl` wird erkannt
-- [ ] Orientierungssuche über hunderte Kandidaten, mit Startwert, abbrechbar
+- [x] `core/slice`: Ebene-Mesh-Schnitt, Konturverkettung — mit Shapely statt
+      Clipper2, gleiche Aufgabe, schon in der Freigabeliste
+- [x] Kennzahlen je Schicht: Fläche, Überhang, Inseln, Brückenweite, Minimalbreite
+- [x] Test gegen analytisch bekannte Körper (Würfel, Zylinder, Kegel) auf 1 %
+- [x] `island_tower.stl` wird erkannt
+- [x] Orientierungssuche über hunderte Kandidaten, mit Startwert, abbrechbar
 - [ ] Analysekarten Überhang und Stützbedarf auf echte Werte umstellen
 - [ ] Schichtenvorschau im Viewport (§18.10), ehrlich beschriftet
 - [ ] Herkunft jeder Kennzahl ausweisen (`internal`), nie mit G-Code vermischen
