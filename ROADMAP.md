@@ -210,11 +210,21 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] **Weg 2 aus §2.2 als Ende-zu-Ende-Test** — `tests/test_way_two.py`
 
 ## P7 — Slicer-Rückkopplung und Kalibrierung
-- [ ] G-Code auswerten (§28.1) als Gegenprobe zur internen Schätzung
-- [ ] Abweichung über 15 % erscheint als Befund im Prüfbericht
-- [ ] Herkunft der Kennzahlen im Bericht ausgewiesen (intern / G-Code)
-- [ ] Toleranz-Testkörper und Varianten-Generator (§28.3)
-- [ ] Materialprofile kalibrierbar, Durchschlag auf bestehende Projekte
+- [x] G-Code auswerten (§28.1) als Gegenprobe zur internen Schätzung — Druckzeit,
+      Material, Schichtzahl und das **gemessene** Stützvolumen aus den
+      Typ-Kommentaren und der E-Achse. Was nicht in der Datei steht, bleibt
+      unbekannt statt null
+- [x] Abweichung über 15 % erscheint als Befund im Prüfbericht — und die
+      Schätzung wird dabei nicht ersetzt, beide bleiben stehen (§28.2)
+- [x] Herkunft der Kennzahlen im Bericht ausgewiesen (intern / G-Code)
+- [x] Toleranz-Testkörper und Varianten-Generator (§28.3) — Passungsleiter,
+      Wandstärkenleiter und Überhangfächer als Bausteine mit eigener Gruppe;
+      der Varianten-Generator dreht einen Projektparameter durch und ordnet die
+      Ausführungen an, ohne den Stapel anzufassen
+- [x] Materialprofile kalibrierbar, Durchschlag auf bestehende Projekte — die
+      Werte landen im Nutzerprofil, die mitgelieferten Startwerte bleiben
+      unberührt, und weil Toleranzen Verweise sind, rechnen alte Projekte danach
+      mit den neuen Werten
 
 ## P8 — Erste Veröffentlichung
 - [ ] Name entschieden, überall durchgezogen

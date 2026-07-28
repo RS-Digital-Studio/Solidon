@@ -61,8 +61,16 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
 
 
 def test_the_library_has_the_first_set_from_the_plan() -> None:
-    """§24.1 names thirteen parts for the first release."""
-    assert len(PARTS.all()) == 13
+    """§24.1 names thirteen parts for the first release.
+
+    The calibration bodies from §28.3 are parts too, but they are not part of
+    that set — they are tools for the printer, not for the model, and they have
+    their own group in the catalogue.
+    """
+    building = [spec for spec in PARTS.all() if spec.group != "calibration"]
+
+    assert len(building) == 13
+    assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
 def test_every_part_is_completely_declared() -> None:

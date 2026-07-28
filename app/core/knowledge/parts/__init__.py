@@ -12,7 +12,13 @@ directory are loaded separately and on purpose (§24.5) — they are not part of
 the application, only of the library on one machine.
 """
 
-from app.core.knowledge.parts import fasteners, mechanics, mounting, structure  # noqa: F401
+from app.core.knowledge.parts import (  # noqa: F401
+    fasteners,
+    mechanics,
+    mounting,
+    structure,
+    testbodies,
+)
 from app.core.knowledge.parts.registry import (
     GROUPS,
     LIBRARY_VERSION,

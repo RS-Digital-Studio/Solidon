@@ -35,12 +35,14 @@ from PySide6.QtWidgets import (
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core.errors import AppError
 from app.core.geom.mesh import as_mesh_data
+from app.core.knowledge import calibration
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
 from app.core.registry import REGISTRY, OperationSpec, menu_tree
 from app.core.scene import EvaluationResult, OperationDraft
 from app.core.scene.project import find_recovery
+from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.types import Finding, ObjectId
 from app.i18n import tr
@@ -48,7 +50,14 @@ from app.ui.analysis_bar import AnalysisBar, LayerBar
 from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
 from app.ui.command_palette import CommandPalette
-from app.ui.dialogs import AboutDialog, AskDialog, KeyDialog, confirm_discard, show_error
+from app.ui.dialogs import (
+    AboutDialog,
+    AskDialog,
+    CalibrationDialog,
+    KeyDialog,
+    confirm_discard,
+    show_error,
+)
 from app.ui.labels import feature_label
 from app.ui.op_dialog import OperationDialog
 from app.ui.panels import (
@@ -74,6 +83,7 @@ AUTOSAVE_INTERVAL_MS = 120_000
 
 PROJECT_FILTER = f"{APP_NAME} ({'*' + PROJECT_SUFFIX})"
 MODEL_FILTER = "Modelle (*.stl *.3mf *.obj *.glb *.gltf *.ply *.off)"
+GCODE_FILTER = "G-Code (*.gcode *.gco *.g *.nc)"
 
 
 class MainWindow(QMainWindow):
@@ -219,6 +229,7 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         self._add_action(file_menu, tr("Modell einfügen …"), "Ctrl+I", self.action_import)
         self._add_action(file_menu, tr("Bausteinkatalog …"), "Ctrl+K", self.action_catalog)
+        self._add_action(file_menu, tr("G-Code gegenprüfen …"), None, self.action_check_gcode)
         file_menu.addSeparator()
         self._add_action(file_menu, tr("Beenden"), QKeySequence.StandardKey.Quit, self.close)
 
@@ -226,6 +237,7 @@ class MainWindow(QMainWindow):
         self._add_action(
             edit_menu, tr("Befehlspalette …"), "Ctrl+Shift+P", self.action_command_palette
         )
+        self._add_action(edit_menu, tr("Material kalibrieren …"), None, self.action_calibrate)
         self._add_action(edit_menu, tr("Zugang zum Sprachmodell …"), None, self.action_llm_key)
         edit_menu.addSeparator()
         self.undo_action = self._add_action(
@@ -432,6 +444,42 @@ class MainWindow(QMainWindow):
     def action_about(self) -> None:
         AboutDialog(self).exec()
 
+    def action_check_gcode(self) -> None:
+        """§28.1: read a sliced file back and hold it against the estimate.
+
+        The measured numbers land in the report marked as measured; the internal
+        estimate stays where it was. Nothing is silently replaced (§22.5).
+        """
+        name, _filter = QFileDialog.getOpenFileName(
+            self, tr("G-Code gegenprüfen"), "", GCODE_FILTER
+        )
+        if not name:
+            return
+
+        metrics = gcode.parse(Path(name).read_text(encoding="utf-8", errors="replace"))
+        findings = gcode.findings_for(metrics)
+
+        object_id = self.object_tree.selected()
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result and object_id else None
+        if entry is not None and metrics.support_mm3 is not None:
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                estimate = slice_body(
+                    as_mesh_data(entry.mesh), self.session.profile.printer.layer_height
+                )
+            finally:
+                QApplication.restoreOverrideCursor()
+            findings.extend(
+                gcode.compare(estimate.support_volume, metrics.support_mm3, "support").findings
+            )
+
+        self.report.add_findings(findings)
+        self._focus_report()
+        self.status_message.setText(
+            f"{tr('G-Code gelesen')}: {metrics.slicer or tr('unbekannter Slicer')}"
+        )
+
     def action_catalog(self) -> None:
         """§24.3: the library one can see. Choosing a part runs its operation."""
         catalog = PartCatalog(self)
@@ -440,6 +488,23 @@ class MainWindow(QMainWindow):
         name = catalog.chosen()
         if name:
             self.run_operation(REGISTRY.get(part_op_name(name)))
+
+    def action_calibrate(self) -> None:
+        """§28.3: measured values into the material profile, and everything follows."""
+        material = self.session.project.document.material or self.session.profile.material.id
+        dialog = CalibrationDialog(material, self)
+        if dialog.exec() != CalibrationDialog.DialogCode.Accepted:
+            return
+        try:
+            calibrated = calibration.apply(dialog.measured())
+        except AppError as error:
+            show_error(error, self)
+            return
+        self.status_message.setText(
+            f"{tr('Kalibriert')}: {calibrated.id} · {tr('Spiel')} {calibrated.clearance:.2f} mm"
+        )
+        # Tolerances are references (§12), so the scene has to be built again.
+        self.session.evaluate_async()
 
     def action_llm_key(self) -> None:
         """§27: the user's own key, into the keychain, and the chat wakes up."""

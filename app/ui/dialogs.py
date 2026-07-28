@@ -11,6 +11,8 @@ from typing import Any
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
+    QFormLayout,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -23,7 +25,7 @@ from PySide6.QtWidgets import (
 from app.branding import APP_NAME, APP_VERSION, COPYRIGHT
 from app.core.backends import keys
 from app.core.errors import Action, AppError
-from app.core.knowledge import licences
+from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.i18n import tr
 
@@ -59,6 +61,70 @@ class AskDialog(QDialog):
     def chosen(self) -> str | None:
         item = self.list.currentItem()
         return item.text() if item is not None else None
+
+
+class CalibrationDialog(QDialog):
+    """Entering measured values (Bauplan §28.3).
+
+    Step two of the three: print the test body, measure it, and the numbers go
+    in here. They land in the material profile, not in a model — and because
+    tolerances in the stack are references (§12), every existing project follows
+    afterwards. The dialog says that, because it is the part that surprises
+    people.
+    """
+
+    def __init__(self, material: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.material = material
+        self.setWindowTitle(tr("Material kalibrieren"))
+        self.setMinimumWidth(420)
+
+        current = profiles.material(material)
+        state = tr("kalibriert") if current.calibrated else tr("Startwert")
+        explanation = QLabel(
+            f"{material} — {state}\n\n"
+            + tr(
+                "Gemessene Werte gehören ins Materialprofil, nicht ins Modell. "
+                "Alle bestehenden Projekte rechnen danach mit den neuen Werten."
+            ),
+            self,
+        )
+        explanation.setWordWrap(True)
+
+        self.editors: dict[str, QDoubleSpinBox] = {}
+        form = QFormLayout()
+        for name, title in (
+            ("clearance", tr("Spiel für Schiebesitz")),
+            ("press", tr("Übermaß für Presssitz")),
+            ("hole_compensation", tr("Lochkorrektur")),
+            ("elephant_foot", tr("Elefantenfuß")),
+            ("shrinkage", tr("Schwindung")),
+        ):
+            editor = QDoubleSpinBox(self)
+            editor.setDecimals(3)
+            editor.setRange(-1.0, 5.0)
+            editor.setSingleStep(0.01)
+            editor.setSuffix(" mm" if name != "shrinkage" else "")
+            editor.setValue(float(getattr(current, name)))
+            self.editors[name] = editor
+            form.addRow(title, editor)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(explanation)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+    def measured(self) -> calibration.Calibration:
+        """What was entered, as a calibration ready to apply."""
+        return calibration.from_measurements(
+            self.material, **{name: editor.value() for name, editor in self.editors.items()}
+        )
 
 
 class KeyDialog(QDialog):

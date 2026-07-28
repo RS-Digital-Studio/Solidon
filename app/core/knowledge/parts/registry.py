@@ -62,6 +62,7 @@ GROUPS: Final[dict[str, TranslatableText]] = {
     "mounting": _("Befestigung"),
     "structure": _("Struktur"),
     "routing": _("Kabel und Schläuche"),
+    "calibration": _("Kalibrierung"),
 }
 
 

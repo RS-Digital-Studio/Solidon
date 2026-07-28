@@ -6,6 +6,8 @@ from app.core.scene.evaluate import EvaluationResult, evaluate
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.migrations import FORMAT_VERSION
 from app.core.scene.project import Project, new_project
+from app.core.scene.variants import VariantSet
+from app.core.scene.variants import build as build_variants
 
 __all__ = [
     "FORMAT_VERSION",
@@ -19,6 +21,8 @@ __all__ = [
     "OperationDraft",
     "Project",
     "ResultCache",
+    "VariantSet",
+    "build_variants",
     "evaluate",
     "new_project",
 ]

@@ -286,6 +286,19 @@ class ReportPanel(QWidget):
             f"{counts['info']} × {tr('Hinweis')}"
         )
 
+    def add_findings(self, findings: list[Finding]) -> None:
+        """Append findings that did not come from the evaluation — the G-code
+        cross-check for instance (§28.2). They keep their own origin (§22.5)."""
+        for finding in findings:
+            item = QListWidgetItem(f"{SEVERITY_MARKER[finding.severity]}  {finding.message}")
+            item.setData(Qt.ItemDataRole.UserRole, finding)
+            item.setForeground(QColor(SEVERITY_ENCODING[finding.severity].colour))
+            details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]
+            details.extend(f"{key}: {value}" for key, value in finding.values.items())
+            item.setToolTip(" · ".join(details))
+            self.list.addItem(item)
+        self.list.scrollToBottom()
+
     def worst_severity(self, result: EvaluationResult | None) -> str | None:
         if result is None:
             return None
