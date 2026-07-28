@@ -118,9 +118,7 @@ def test_the_thorough_orientation_uses_the_layer_analysis(
     project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
 
     history = History(document)
-    history.apply(
-        _("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
-    )
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
     history.apply(
         _("Ausrichten"),
         [OperationDraft(op="orient_for_print", inputs=("obj_1",), params={"candidates": 24})],

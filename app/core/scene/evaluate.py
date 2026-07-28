@@ -25,11 +25,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.errors import AmbiguityError, AppError
+from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
+from app.core.perceive.features import detect
+from app.core.perceive.matching import apply_mapping, match, question_for
 from app.core.registry import REGISTRY, Registry, validate
 from app.core.scene import expressions
 from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
+from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import object_hash, operation_hash
 from app.core.types import (
     CancelToken,
@@ -53,6 +57,11 @@ from app.core.types import (
 from app.i18n import _
 
 _log = get_logger(__name__)
+
+#: Above this the detection is skipped and says so. §31 puts the target at one
+#: second for 200 000 triangles; running it on a million after every operation
+#: would cost more than it is worth.
+FEATURE_LIMIT_TRIANGLES = 200_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +139,9 @@ def evaluate(
             break
 
         inputs = [objects[entry] for entry in operation.inputs]
+        # Kept before the operation runs: the identifiers the new features have
+        # to be matched onto afterwards (§21.2).
+        previous_features = {entry.id: dict(entry.features) for entry in inputs}
         key = operation_hash(
             operation,
             resolved,
@@ -183,8 +195,9 @@ def evaluate(
 
         for index, produced_object in enumerate(result.objects):
             object_id = operation.outputs[index]
-            objects[object_id] = dataclasses.replace(
-                produced_object, id=object_id, created_by=operation.id
+            placed = dataclasses.replace(produced_object, id=object_id, created_by=operation.id)
+            objects[object_id] = _with_features(
+                placed, previous_features.get(object_id, {}), operation, ask, findings
             )
             hashes[object_id] = object_hash(key, index)
 
@@ -214,6 +227,10 @@ def evaluate(
         profile=profile,
         report=Report(tuple(findings)),
     )
+    # §14: fits are checked on every evaluation, never only when someone asks.
+    if stopped_at is None and scene.fits:
+        findings.extend(check_fits(scene, profile))
+        scene = dataclasses.replace(scene, report=Report(tuple(findings)))
     if stopped_at is not None:
         _log.warning("evaluation stopped at op %s", stopped_at)
     return EvaluationResult(
@@ -223,6 +240,75 @@ def evaluate(
         object_hashes=hashes,
         solvers=solvers,
     )
+
+
+def _with_features(
+    entry: SceneObject,
+    previous: dict[str, Any],
+    operation: Operation,
+    ask: Any,
+    findings: list[Finding],
+) -> SceneObject:
+    """Detect features again and keep the old identifiers where they still fit.
+
+    §21.2: the detection runs after every operation, otherwise ``hole_3`` in
+    step five is a different hole than in step four. Where the match is
+    ambiguous the user decides (§21.3) — the one thing that is never done here
+    is guessing.
+    """
+    mesh = entry.mesh
+    if not isinstance(mesh, MeshData):
+        return entry
+    if mesh.triangle_count > FEATURE_LIMIT_TRIANGLES:
+        findings.append(
+            Finding(
+                code="perceive.too_large",
+                severity="info",
+                message=_("Für die Merkmalserkennung ist dieses Modell zu groß."),
+                object_id=entry.id,
+                op_id=operation.id,
+                values={"triangles": mesh.triangle_count, "limit": FEATURE_LIMIT_TRIANGLES},
+            )
+        )
+        return entry
+
+    detected = detect(mesh)
+    if not previous:
+        return dataclasses.replace(entry, features=detected)
+
+    centre = mesh.bounds.centre
+    matched = match(previous, detected, centre, mesh.bounds.diagonal)
+
+    for old_id, candidates in matched.ambiguous.items():
+        question, choices = question_for(old_id, candidates)
+        chosen = ask(question, choices)
+        if chosen in candidates:
+            matched.mapping[old_id] = chosen
+        else:
+            findings.append(
+                Finding(
+                    code="perceive.discarded",
+                    severity="info",
+                    message=_("Ein Merkmal wurde verworfen, weil es nicht zuzuordnen war."),
+                    object_id=entry.id,
+                    op_id=operation.id,
+                    values={"feature": old_id},
+                )
+            )
+
+    for old_id in matched.orphaned:
+        findings.append(
+            Finding(
+                code="perceive.orphaned",
+                severity="warning",
+                message=_("Ein Merkmal hat keinen Nachfolger mehr."),
+                object_id=entry.id,
+                op_id=operation.id,
+                values={"feature": old_id},
+            )
+        )
+
+    return dataclasses.replace(entry, features=apply_mapping(detected, matched))
 
 
 def _evaluated_parameters(

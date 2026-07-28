@@ -78,6 +78,9 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 # Qt signals are camelCase by convention, and "20 × 20 mm" is how a dimension is
 # written in German — both are deliberate in the surface.
 "app/ui/*" = ["N815", "RUF001"]
+# The digest is read by people and by the model; "20 × 20 mm" is the right sign.
+"app/core/perceive/digest.py" = ["RUF001"]
+"tests/*" = ["RUF001"]
 
 [tool.mypy]
 python_version = "3.11"
