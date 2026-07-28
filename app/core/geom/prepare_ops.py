@@ -11,6 +11,7 @@ import dataclasses
 from typing import cast
 
 from app.core.geom.mesh import as_mesh_data
+from app.core.geom.orient import orient_for_print
 from app.core.geom.prepare import (
     arrange_on_bed,
     check_build_volume,
@@ -112,6 +113,28 @@ def split_plane(ctx: OpContext) -> OpResult:
             dataclasses.replace(source, mesh=second, name=f"{source.name} B", features={}),
         ],
         findings=findings,
+    )
+
+
+@op_params
+class OrientParams(BaseParams):
+    pass
+
+
+@register_op(
+    name="orient_for_print",
+    title=_("Druckoptimal ausrichten"),
+    category="transform",
+    params=OrientParams,
+    consumes=1,
+    produces=1,
+    doc=_("Dreht das Objekt auf eine flache Auflage — vorerst über eine Heuristik."),
+)
+def orient_for_print_op(ctx: OpContext) -> OpResult:
+    result = orient_for_print(as_mesh_data(ctx.inputs[0].mesh))
+    return OpResult(
+        outputs=[dataclasses.replace(ctx.inputs[0], mesh=result.mesh)],
+        findings=result.findings,
     )
 
 

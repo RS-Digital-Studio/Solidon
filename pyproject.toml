@@ -28,6 +28,8 @@ geom = [
   "rtree>=1.2",
   # Marching cubes for the voxel stage of the boolean fallback chain (§17.2). BSD-3.
   "scikit-image>=0.24",
+  # 3MF is the format slicers prefer, and it needs an XML writer (§29). BSD-3.
+  "lxml>=5.0",
 ]
 # Desktop shell. PySide6 is LGPL and must stay dynamically linked (§36).
 ui = [
@@ -94,5 +96,5 @@ warn_unreachable = false
 
 [[tool.mypy.overrides]]
 # trimesh ships only partial annotations; calls into it cannot be typed from here.
-module = ["app.core.geom.*", "app.core.ingest.*"]
+module = ["app.core.geom.*", "app.core.ingest.*", "app.core.export.*"]
 disallow_untyped_calls = false
