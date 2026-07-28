@@ -18,6 +18,10 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.geom.prepare_ops",
     "app.core.geom.primitive_ops",
     "app.core.geom.colour_ops",
+    # §30: the second kernel declares its operations like every other module.
+    # They refuse to run without OpenCASCADE, but they are always in the menu —
+    # an entry that says why it is greyed out beats one that is not there.
+    "app.core.brep.ops",
 )
 
 #: The part library declares no operations itself — one is generated per part

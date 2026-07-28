@@ -88,7 +88,7 @@ _log = get_logger(__name__)
 AUTOSAVE_INTERVAL_MS = 120_000
 
 PROJECT_FILTER = f"{APP_NAME} ({'*' + PROJECT_SUFFIX})"
-MODEL_FILTER = "Modelle (*.stl *.3mf *.obj *.glb *.gltf *.ply *.off)"
+MODEL_FILTER = "Modelle (*.stl *.3mf *.obj *.glb *.gltf *.ply *.off *.step *.stp)"
 GCODE_FILTER = "G-Code (*.gcode *.gco *.g *.nc)"
 
 

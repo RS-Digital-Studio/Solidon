@@ -307,8 +307,45 @@ Anmerkungen zu P10:
   der Stack sagt und was exportiert wird, bleibt unberührt.
 
 ## P11 — Gehosteter Backend
-- [ ] nur bei nachweisbarer Nachfrage, Umfang nach §27
+- [–] **Bewusst nicht gebaut.** §27 knüpft diese Phase an nachweisbare
+  Nachfrage; die gibt es nicht. Ein Dienst ohne Nutzer wäre Arbeit auf Vorrat,
+  dazu ein Server, eine Abrechnung und eine Datenschutzzusage, die alle
+  gepflegt werden müssten.
+
+Was stattdessen sichergestellt ist: Die Schnittstelle steht schon so, dass ein
+gehosteter Dienst sie ohne Änderung erfüllen könnte. `MeshBackend` kennt genau
+`text_to_mesh` und `image_to_mesh` (§27) — kein Nutzercode, keine Dateipfade,
+kein Zustand. Dass eine zweite Umsetzung daneben passt, ist keine Behauptung:
+`ScriptedMeshBackend` ist genau das und trägt die ganze Weg-3-Abnahme.
+
+Der Auslöser für diese Phase wäre: Nutzer, die erzeugen wollen und keine
+Grafikkarte dafür haben, und die das auch sagen. Dann nach §27 — Text oder Bild
+rein, Mesh raus, Eingaben nach Auslieferung löschen, Serverstandort EU.
 
 ## P12 — B-Rep-Kern
-- [ ] Zweiter Kern, `kind` im Objekt, Übergang B-Rep → Mesh
-- [ ] Fasen und Verrundungen, STEP rundreisefähig
+- [x] Zweiter Kern, `kind` im Objekt, Übergang B-Rep → Mesh
+- [x] Fasen und Verrundungen, STEP rundreisefähig
+
+Anmerkungen zu P12:
+
+* **Ein `Solid` erfüllt dasselbe `Mesh`-Protokoll wie alles andere.** Ansicht,
+  Prüfbericht, Schichtanalyse und Export arbeiten damit unverändert weiter.
+  Wo der Kern es exakt weiß, antwortet er aber exakt: Volumen und Fläche kommen
+  aus OpenCASCADE, nicht aus den Dreiecken — bei einer Verrundung ist der
+  Unterschied nicht akademisch.
+* **`kind` folgt dem Körper, nicht der Behauptung.** Die Auswertung setzt es
+  nach jeder Operation aus dem tatsächlichen Objekt. Eine Netz-Operation auf
+  einem exakten Körper bekommt die Vernetzung und liefert ein Netz zurück —
+  und der Objektbaum sagt das dann auch.
+* **Der Rückweg besteht nicht, aber ein Undo schon.** Die Umwandlung ist eine
+  Operation im Stack; sie zurückzunehmen holt den exakten Körper zurück, weil
+  neu gerechnet und nicht geflickt wird.
+* **Merkmale kommen aus der Topologie**, nicht aus Clustern und Zylinderfits
+  (§30). Eine Zylinderfläche wird nur dann als Bohrung gemeldet, wenn sie eine
+  volle Umdrehung beschreibt — eine Verrundung ist auch ein Zylinder.
+* **Kein Rückfallketten-Ersatz.** Die Kette aus §17.2 gibt es, weil Netze sich
+  darüber uneinig sind, was innen ist. Zwei B-Rep-Körper sind das nicht; hier
+  ist ein Fehlschlag ein echter Fehler und kein Anlass für einen gröberen
+  Versuch.
+* OpenCASCADE ist optional (`pip install -e ".[brep]"`). Ohne den Kern sagen
+  die betroffenen Operationen das in einem Satz, alles andere bleibt unberührt.

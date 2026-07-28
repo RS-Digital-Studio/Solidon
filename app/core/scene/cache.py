@@ -240,7 +240,11 @@ class DiskCache:
                     }
                 )
             (folder / "objects.json").write_text(json.dumps({"objects": entries}), encoding="utf-8")
-        except OSError as problem:
+        except (OSError, TypeError) as problem:
+            # TypeError means a body the codec cannot store — a B-Rep result
+            # (§30). Those are recomputed rather than cached: the cache exists
+            # for expensive boolean work on large meshes, and a fillet on an
+            # exact body is milliseconds.
             _log.warning("could not write cache entry %s: %s", key, problem)
             shutil.rmtree(folder, ignore_errors=True)
             return

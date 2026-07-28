@@ -24,6 +24,7 @@ from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import LLMBackend, first_available
 from app.core.backends.mesh import GeneratedMesh
+from app.core.brep import step as brep_step
 from app.core.errors import AppError, InternalError, OperationCancelled
 from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
@@ -283,13 +284,24 @@ class Session(QObject):
         self.evaluate_async()
 
     def import_model(self, path: Path, unit: str = "auto") -> None:
-        """Embed a file and put a ``load`` operation on the stack (§17.1)."""
+        """Embed a file and put the matching load operation on the stack (§17.1).
+
+        STEP takes the other kernel and carries its own unit, so it neither
+        needs the unit question nor the mesh input stage (§30, §11.1).
+        """
         document = self.project.document
         source_id = f"src_{len(document.sources) + 1}"
         document.sources[source_id] = Source(
             id=source_id, kind="import", path=embedded_source_path(path.name), sha256=""
         )
         self.project.sources[source_id] = path.read_bytes()
+
+        if brep_step.is_step(path.suffix):
+            self.apply(
+                tr("STEP laden"),
+                [OperationDraft(op="load_step", params={"source": source_id})],
+            )
+            return
         self.apply(
             tr("Modell laden"),
             [OperationDraft(op="load", params={"source": source_id, "unit": unit})],

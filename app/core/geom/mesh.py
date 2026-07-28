@@ -116,12 +116,20 @@ def as_mesh_data(mesh: Mesh) -> MeshData:
     triangle work needs the kernel. Once the B-Rep core arrives (§30) this is
     where a body of the wrong kind is turned away with a clear message.
     """
-    if not isinstance(mesh, MeshData):
-        raise GeometryError(
-            _("Diese Operation arbeitet nur auf Netzen."),
-            detail=_("Das Objekt liegt in einer anderen Darstellung vor."),
-        )
-    return mesh
+    if isinstance(mesh, MeshData):
+        return mesh
+    # §30: the way from B-Rep to mesh is open at any time, so a mesh operation
+    # on an exact body works — on its tessellation, and the object comes out
+    # marked as a mesh afterwards, because that is what it now is.
+    converted = getattr(mesh, "to_mesh", None)
+    if callable(converted):
+        result = converted()
+        if isinstance(result, MeshData):
+            return result
+    raise GeometryError(
+        _("Diese Operation arbeitet nur auf Netzen."),
+        detail=_("Das Objekt liegt in einer anderen Darstellung vor."),
+    )
 
 
 def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:

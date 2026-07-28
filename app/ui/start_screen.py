@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import examples
+from app.core.brep.step import SUFFIXES as STEP_SUFFIXES
 from app.core.geom.mesh import READABLE_SUFFIXES
 from app.i18n import tr
 
@@ -70,7 +71,9 @@ def accepted_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
         if not url.isLocalFile():
             continue
         path = Path(url.toLocalFile())
-        if path.suffix.lower() in (*READABLE_SUFFIXES, PROJECT_SUFFIX):
+        # STEP is read by the other kernel and is therefore not among the mesh
+        # suffixes — dropping one has to work all the same (§30).
+        if path.suffix.lower() in (*READABLE_SUFFIXES, *STEP_SUFFIXES, PROJECT_SUFFIX):
             return path
     return None
 

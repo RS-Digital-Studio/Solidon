@@ -43,6 +43,13 @@ ui = [
 # The agent needs a place for the user's own key (§27). Without this extra the
 # application works; only the chat stays switched off.
 agent = ["keyring>=25.0"]
+# The second construction kernel (§30): real edges, and therefore exact fillets,
+# chamfers and STEP. Optional — without it those operations say so in one
+# sentence and everything else is untouched. The binding is Apache-2.0, the
+# kernel underneath LGPL-2.1 with the OCCT linking exception, so it is used as a
+# dynamically linked library like PySide6 (§36). "novtk" because pyvista already
+# brings VTK; two copies in one process are one too many.
+brep = ["cadquery-ocp-novtk>=7.8"]
 dev = [
   "pytest>=8.0",
   "ruff>=0.6",
@@ -95,6 +102,11 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 "app/core/backends/openscad.py" = ["N818"]
 # GenerationFailed says what happened, which is what the user reads (§33.1).
 "app/core/backends/mesh.py" = ["N818"]
+# BRepUnavailable is a state like the two above, and §33.1 fixes the names.
+"app/core/brep/kernel.py" = ["N818"]
+# The suite has to redirect the user directories before anything reads them,
+# so those two imports come after the environment is set (§38).
+"tests/conftest.py" = ["E402"]
 # Qt signals are camelCase by convention, and "20 × 20 mm" is how a dimension is
 # written in German — both are deliberate in the surface.
 "app/ui/*" = ["N815", "RUF001"]
@@ -109,7 +121,16 @@ strict = true
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["trimesh.*", "manifold3d.*", "pyvista.*", "scipy.*", "skimage.*", "shapely.*"]
+module = [
+  "trimesh.*",
+  "manifold3d.*",
+  "pyvista.*",
+  "scipy.*",
+  "skimage.*",
+  "shapely.*",
+  # The OpenCASCADE binding is a compiled extension without stubs (§30).
+  "OCP.*",
+]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -126,5 +147,7 @@ module = [
   "app.core.perceive.*",
   "app.core.slice.*",
   "app.core.knowledge.parts.*",
+  # The same for OpenCASCADE: an unstubbed extension module (§30).
+  "app.core.brep.*",
 ]
 disallow_untyped_calls = false

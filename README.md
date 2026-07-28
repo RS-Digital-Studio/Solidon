@@ -134,6 +134,29 @@ Welche Knoten benutzt werden, steht in `app/core/backends/data/text_to_mesh.json
 und `image_to_mesh.json`. Die mitgelieferten Abläufe gehen von Hunyuan3D aus;
 mit einem anderen Generator wird die Datei ersetzt, nicht der Quelltext.
 
+## Exakte Körper (B-Rep) und STEP
+
+Neben dem Netz-Kern steht ein zweiter mit echten Kanten (§30). Er kommt ins
+Spiel, wenn eine STEP-Datei geladen wird oder ein exakter Quader bzw. Zylinder
+angelegt wird — und er ist die Voraussetzung für **Verrunden** und **Fase
+anbringen**: auf einem Netz wäre beides die Näherung einer Näherung.
+
+Der Objektbaum kennzeichnet exakte Körper. **In ein Netz umwandeln** geht
+jederzeit, der Rückweg nicht — ein Netz hat seine Kanten verloren. Der Schritt
+steht aber im Verlauf, ein Undo holt den exakten Körper also zurück.
+
+Exportiert wird ein solcher Körper als `STEP` mit Flächen und Kanten; STL und
+3MF bleiben für alles, was auf den Drucker soll.
+
+Der Kern ist optional:
+
+```bash
+.venv/Scripts/python.exe -m pip install -e ".[brep]"
+```
+
+Ohne ihn sagen die betroffenen Operationen das in einem Satz, und alles andere
+in Formwerk funktioniert unverändert.
+
 ## Zu groß für das Bett (Auto Split)
 
 **Bearbeiten → Automatisch teilen** schneidet ein Objekt, bis jedes Stück auf

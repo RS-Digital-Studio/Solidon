@@ -160,6 +160,28 @@ class Mesh(Protocol):
         """Material slot index per triangle (§20). Empty means everything on slot 0."""
 
 
+@runtime_checkable
+class BRepBody(Protocol):
+    """A body that still knows its faces and edges (§30).
+
+    Declared here rather than in the B-Rep package so the rest of the core can
+    tell the two kinds apart without importing OpenCASCADE — which is optional,
+    and which ``core`` must stay importable without.
+    """
+
+    @property
+    def shape(self) -> Any:
+        """The kernel's own object. Nothing outside the B-Rep package reads it."""
+
+    def to_mesh(self) -> Any:
+        """The one-way door of §30: triangles from the exact body."""
+
+
+def kind_of(mesh: Mesh) -> ObjectKind:
+    """Which kind of body this is. One rule, one place — the object tree shows it."""
+    return "brep" if isinstance(mesh, BRepBody) else "mesh"
+
+
 # --- Features and objects ------------------------------------------------------
 
 

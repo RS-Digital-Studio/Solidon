@@ -24,13 +24,13 @@ from app.core.export import threemf
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import check_build_volume
 from app.core.log import get_logger
-from app.core.types import Finding, MaterialSlot, Profile, SceneObject, Source
+from app.core.types import BRepBody, Finding, MaterialSlot, Mesh, Profile, SceneObject, Source
 from app.core.units import format_length
 from app.i18n import _, tr
 
 _log = get_logger(__name__)
 
-ExportFormat = Literal["stl", "3mf", "obj", "ply"]
+ExportFormat = Literal["stl", "3mf", "obj", "ply", "step"]
 
 #: What each format is written as. STL stays binary — ASCII would be five times
 #: the size for the same triangles.
@@ -39,6 +39,10 @@ FORMAT_SUFFIX: dict[ExportFormat, str] = {
     "3mf": ".3mf",
     "obj": ".obj",
     "ply": ".ply",
+    # §30: only a B-Rep object has anything to put in a STEP file. A mesh
+    # exported as STEP would be a STEP file full of triangles — legal, and a
+    # lie about what it contains.
+    "step": ".step",
 }
 
 #: Default naming scheme (§29). ``{index}`` and ``{count}`` only appear when
@@ -73,6 +77,9 @@ class ExportEntry:
     slots: tuple[MaterialSlot, ...] = ()
     """The material slots of the object — 3MF carries them as colour groups (§20)."""
     name: str = ""
+    body: Mesh | None = None
+    """The object as it is in the scene. STEP needs the exact body, not the
+    triangles it was tessellated into (§30)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +131,7 @@ def plan_export(
             mesh=as_mesh_data(entry.mesh),
             slots=tuple(entry.material_slots),
             name=entry.name,
+            body=entry.mesh,
         )
         for index, entry in enumerate(objects, start=1)
     )
@@ -196,7 +204,9 @@ def write_plan(
     written: list[Path] = []
     for entry in plan.entries:
         target = directory / entry.filename
-        target.write_bytes(export_bytes(entry.mesh, export_format, list(entry.slots), entry.name))
+        target.write_bytes(
+            export_bytes(entry.mesh, export_format, list(entry.slots), entry.name, entry.body)
+        )
         written.append(target)
     _log.info("exported %d file(s) to %s", len(written), directory)
     return written
@@ -207,18 +217,37 @@ def export_bytes(
     export_format: ExportFormat = "stl",
     slots: list[MaterialSlot] | None = None,
     name: str = "",
+    body: Mesh | None = None,
 ) -> bytes:
     """One body in one format.
 
     3MF is written here rather than by trimesh: it is the one format that
-    carries the material groups of §20, and trimesh does not write them.
+    carries the material groups of §20, and trimesh does not write them. STEP
+    is written from the exact body, and only exists when there is one (§30).
     """
+    if export_format == "step":
+        return _step_bytes(body)
     if export_format == "stl":
         return mesh.to_stl()
     if export_format == "3mf":
         return threemf.write(mesh, slots, name)
     data = trimesh.exchange.export.export_mesh(mesh.raw, None, file_type=export_format)
     return data if isinstance(data, bytes) else str(data).encode("utf-8")
+
+
+def _step_bytes(body: Mesh | None) -> bytes:
+    """STEP of an exact body — and a clear no when there is none (§30)."""
+    from app.core.brep import step as brep_step
+
+    if body is None or not isinstance(body, BRepBody):
+        raise ValidationError(
+            field="format",
+            detail=_(
+                "STEP hält Flächen und Kanten fest. Ein Netz hat keine — dafür bleiben STL und 3MF."
+            ),
+            constraint="needs_brep",
+        )
+    return brep_step.write(body)  # type: ignore[arg-type]
 
 
 def describe_plan(plan: ExportPlan) -> str:

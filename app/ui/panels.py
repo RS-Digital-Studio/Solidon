@@ -84,10 +84,16 @@ class ObjectTree(QWidget):
             )
             item.setData(0, Qt.ItemDataRole.UserRole, object_id)
             state = tr("geschlossen") if entry.mesh.is_watertight else tr("offen")
+            # §30: which kind of body this is belongs in the tree, because it
+            # decides what can still be done with it — and the way from B-Rep
+            # to mesh is one-way.
+            kind = tr("exakt") if entry.kind == "brep" else tr("Netz")
             item.setToolTip(
                 0,
-                f"{object_id} · {entry.mesh.triangle_count} {tr('Dreiecke')} · {state}",
+                f"{object_id} · {kind} · {entry.mesh.triangle_count} {tr('Dreiecke')} · {state}",
             )
+            if entry.kind == "brep":
+                item.setText(0, f"{entry.name}  ·  {kind}")
             for feature_id, feature in entry.features.items():
                 child = QTreeWidgetItem([feature_label(feature_id, feature), feature.kind])
                 child.setData(0, Qt.ItemDataRole.UserRole, object_id)

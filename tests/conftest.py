@@ -8,6 +8,7 @@ the evaluation — and it keeps these tests honest about what they check.
 from __future__ import annotations
 
 import os
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -15,6 +16,14 @@ import pytest
 
 # Surface tests need a Qt platform that works without a screen.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+# The suite must not read or write the user's own data (§38). Without this a
+# calibrated material on the developer's machine changes what the tests see —
+# and worse, a test run leaves calibrations behind in their profile folder.
+# Set before anything imports `app.core.paths`, because that reads these.
+_ISOLATED = tempfile.mkdtemp(prefix="formwerk-tests-")
+for _variable in ("APPDATA", "LOCALAPPDATA", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+    os.environ[_variable] = _ISOLATED
 
 from app.core.knowledge import profiles
 from app.core.types import BoundingBox, Document, Profile, SceneObject

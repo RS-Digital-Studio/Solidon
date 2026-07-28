@@ -54,6 +54,7 @@ from app.core.types import (
     SolverInfo,
     SourceAccess,
     Transform,
+    kind_of,
 )
 from app.i18n import _
 
@@ -199,7 +200,15 @@ def evaluate(
 
         for index, produced_object in enumerate(result.objects):
             object_id = operation.outputs[index]
-            placed = dataclasses.replace(produced_object, id=object_id, created_by=operation.id)
+            # §30: whether a body is a mesh or a B-Rep follows from the body,
+            # not from what the operation claimed. A mesh operation on an exact
+            # part hands back triangles, and the object tree has to say so.
+            placed = dataclasses.replace(
+                produced_object,
+                id=object_id,
+                created_by=operation.id,
+                kind=kind_of(produced_object.mesh),
+            )
             objects[object_id] = _with_features(
                 placed,
                 previous_features.get(object_id, {}),
