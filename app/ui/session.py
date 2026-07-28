@@ -26,6 +26,7 @@ from app.core.backends.llm import LLMBackend, first_available
 from app.core.errors import AppError, OperationCancelled
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.knowledge import profiles
+from app.core.knowledge.parts import check as part_check
 from app.core.log import get_logger
 from app.core.scene import (
     CancelSignal,
@@ -84,6 +85,11 @@ class _EvaluationWorker(QThread):
         session = self._session
         try:
             result = session.run_evaluation()
+            if session.pending_part_check:
+                # §24.4: what the library changed since this file was saved is
+                # said once, when it is opened, not on every evaluation.
+                session.pending_part_check = False
+                result = _with_findings(result, part_check.check(session.project.document))
             if session.pending_orphan_check and result.complete:
                 # §21.3: every feature reference of an opened file is checked once,
                 # here in the worker where asking may block without freezing the
@@ -183,6 +189,8 @@ class Session(QObject):
         self.last_result: EvaluationResult | None = None
         self.pending_orphan_check = False
         """Set when a file was opened: §21.3 checks its references once, not always."""
+        self.pending_part_check = False
+        """The same for the part library (§24.4): once on opening, not on every run."""
         self._worker: _EvaluationWorker | None = None
         self._agent: _AgentWorker | None = None
         self._backend: LLMBackend | None = None
@@ -225,6 +233,7 @@ class Session(QObject):
     def open_project(self, path: Path) -> None:
         self.project = load(path)
         self.pending_orphan_check = True
+        self.pending_part_check = True
         self._reset_for(path)
 
     def save_project(self, path: Path | None = None) -> Path:

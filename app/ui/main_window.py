@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core.errors import AppError
 from app.core.geom.mesh import as_mesh_data
+from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
 from app.core.registry import REGISTRY, OperationSpec, menu_tree
@@ -44,6 +45,7 @@ from app.core.slice.analysis import slice_body
 from app.core.types import Finding, ObjectId
 from app.i18n import tr
 from app.ui.analysis_bar import AnalysisBar, LayerBar
+from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
 from app.ui.command_palette import CommandPalette
 from app.ui.dialogs import AboutDialog, AskDialog, KeyDialog, confirm_discard, show_error
@@ -216,6 +218,7 @@ class MainWindow(QMainWindow):
         )
         file_menu.addSeparator()
         self._add_action(file_menu, tr("Modell einfügen …"), "Ctrl+I", self.action_import)
+        self._add_action(file_menu, tr("Bausteinkatalog …"), "Ctrl+K", self.action_catalog)
         file_menu.addSeparator()
         self._add_action(file_menu, tr("Beenden"), QKeySequence.StandardKey.Quit, self.close)
 
@@ -428,6 +431,15 @@ class MainWindow(QMainWindow):
 
     def action_about(self) -> None:
         AboutDialog(self).exec()
+
+    def action_catalog(self) -> None:
+        """§24.3: the library one can see. Choosing a part runs its operation."""
+        catalog = PartCatalog(self)
+        if catalog.exec() != PartCatalog.DialogCode.Accepted:
+            return
+        name = catalog.chosen()
+        if name:
+            self.run_operation(REGISTRY.get(part_op_name(name)))
 
     def action_llm_key(self) -> None:
         """§27: the user's own key, into the keychain, and the chat wakes up."""

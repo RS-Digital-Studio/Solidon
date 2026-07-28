@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 from app.core.errors import InternalError
 from app.core.types import BaseParams, PartFn
@@ -148,6 +148,14 @@ class PartRegistry:
         """Every part with its own version — the comparison §24.4 runs on."""
         return {spec.name: spec.version for spec in self.all()}
 
+    def mark_source(self, name: str, source: str) -> PartSpec:
+        """Record where a part came from — the catalogue marks own ones (§24.5)."""
+        import dataclasses
+
+        spec = dataclasses.replace(self.get(name), source=source)
+        self._parts[name] = spec
+        return spec
+
     def clear(self) -> None:
         self._parts.clear()
 
@@ -209,6 +217,47 @@ def changed_since(before: dict[str, str], registry: PartRegistry | None = None) 
         name
         for name, version in sorted(before.items())
         if name in current and current[name] != version
+    )
+
+
+def changed_since_library(
+    version: str, used: Iterable[str], registry: PartRegistry | None = None
+) -> tuple[str, ...]:
+    """Used parts that changed since a project was computed (§24.4).
+
+    A project file records the library version, not a version per part — so the
+    comparison runs over the change logs: whoever has an entry newer than that
+    version has moved, and only the parts the project actually used are worth
+    a word.
+    """
+    source = registry or PARTS
+    since = _as_number(version)
+    return tuple(
+        name
+        for name in sorted(set(used))
+        if source.has(name)
+        and any(_as_number(change.version) > since for change in source.get(name).changes)
+    )
+
+
+def _as_number(version: str) -> int:
+    try:
+        return int(version)
+    except ValueError:
+        return 0
+
+
+def used_parts(operations: Iterable[Any]) -> tuple[str, ...]:
+    """Which parts a stack uses, read off the operation names (§24.4)."""
+    prefix = "insert_"
+    return tuple(
+        sorted(
+            {
+                str(entry.op)[len(prefix) :]
+                for entry in operations
+                if str(entry.op).startswith(prefix)
+            }
+        )
     )
 
 

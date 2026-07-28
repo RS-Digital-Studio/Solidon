@@ -179,16 +179,21 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       Beispieldatei je Version
 
 ## P5 — Bausteinbibliothek
-- [ ] `@register_part`, `PartFn`, `PartResult`
-- [ ] Normteiltabelle als Daten, nicht im Code
-- [ ] Dreizehn Bausteine (§24.1) mit Parameterbereichstests
-- [ ] `to_scad()` je Baustein
-- [ ] Katalog mit automatisch gerenderten Vorschaubildern (§24.3)
-- [ ] `parts_version` in der Projektdatei, Änderungsverlauf je Baustein (§24.4)
-- [ ] Beim Öffnen: geänderte benutzte Bausteine namentlich melden
-- [ ] Eigene Bausteine aus dem Nutzerordner (§24.5), im Katalog gekennzeichnet
-- [ ] Test: eigener Baustein reist nicht mit der Projektdatei
-- [ ] Nachweis: kein Kernpfad benötigt OpenSCAD
+- [x] `@register_part`, `PartFn`, `PartResult` — dazu Version und
+      Änderungsverlauf je Baustein, und die Angabe, ob er Material wegnimmt
+- [x] Normteiltabelle als Daten, nicht im Code — `data/standards.toml`
+- [x] Dreizehn Bausteine (§24.1) mit Parameterbereichstests — der Test läuft
+      über das Register, ein neuer Baustein ist ab der Deklaration abgedeckt
+- [x] `to_scad()` je Baustein — als Ausgabeformat, ehrlich beschriftet: die
+      Werte stehen zum Nachlesen darin, der Körper ist das exakte Netz
+- [x] Katalog mit automatisch gerenderten Vorschaubildern (§24.3) — als SVG aus
+      dem Baustein selbst, ohne 3D-Kontext und ohne neue Abhängigkeit
+- [x] `parts_version` in der Projektdatei, Änderungsverlauf je Baustein (§24.4)
+- [x] Beim Öffnen: geänderte benutzte Bausteine namentlich melden
+- [x] Eigene Bausteine aus dem Nutzerordner (§24.5), im Katalog gekennzeichnet
+- [x] Test: eigener Baustein reist nicht mit der Projektdatei
+- [x] Nachweis: kein Kernpfad benötigt OpenSCAD — `tests/test_parts.py` baut
+      alle dreizehn gegen manifold3d durch
 
 ## P6 — Säule A
 - [ ] Agent erzeugt Op-Listen aus Bausteinen und Parametern

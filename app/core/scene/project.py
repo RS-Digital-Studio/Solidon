@@ -30,6 +30,7 @@ from typing import Any, Final
 
 from app.branding import APP_VERSION, PROJECT_SUFFIX
 from app.core.errors import ValidationError
+from app.core.knowledge.parts.registry import LIBRARY_VERSION
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_data_dir
 from app.core.scene.migrations import FORMAT_VERSION, migrate
@@ -156,6 +157,8 @@ def save(project: Project, path: Path) -> Path:
     document = project.document
     document.format_version = FORMAT_VERSION
     document.app_version = APP_VERSION
+    # §24.4: the state of the part library belongs to the way this was computed.
+    document.parts_version = LIBRARY_VERSION
 
     for source_id, source in list(document.sources.items()):
         _check_relative(source.path, f"sources.{source_id}.path")
