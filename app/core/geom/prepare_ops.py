@@ -16,6 +16,7 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.geom.orient import orient_for_print
 from app.core.geom.pins import PIN_COUNT, PIN_MAX, PinnedPair, add_pins, plan_pins
 from app.core.geom.prepare import (
+    MAX_PLATES,
     arrange_on_bed,
     check_build_volume,
     check_collisions,
@@ -276,6 +277,13 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
 @op_params
 class ArrangeParams(BaseParams):
     spacing: float = param(title=_("Abstand"), default=5.0, unit="mm", minimum=0.0, maximum=100.0)
+    plates: int = param(
+        title=_("Druckplatten"),
+        default=1,
+        minimum=1,
+        maximum=MAX_PLATES,
+        doc=_("Passt nicht alles auf eine Platte, wandert der Rest auf die nächste."),
+    )
 
 
 @register_op(
@@ -290,12 +298,21 @@ class ArrangeParams(BaseParams):
 def arrange_bed(ctx: OpContext) -> OpResult:
     params = cast(ArrangeParams, ctx.params)
     meshes = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
-    arranged, findings = arrange_on_bed(meshes, ctx.profile, params.spacing)
-    findings.extend(check_collisions(arranged))
+    result = arrange_on_bed(meshes, ctx.profile, params.spacing, params.plates)
+    findings = list(result.findings)
+
+    # Collisions are checked per plate: two parts at the same spot on different
+    # plates never meet.
+    for plate in range(result.plate_count):
+        on_plate = [
+            mesh for mesh, entry in zip(result.meshes, result.plates, strict=True) if entry == plate
+        ]
+        findings.extend(check_collisions(on_plate))
+
     return OpResult(
         outputs=[
-            dataclasses.replace(entry, mesh=mesh)
-            for entry, mesh in zip(ctx.inputs, arranged, strict=True)
+            dataclasses.replace(entry, mesh=mesh, plate=plate)
+            for entry, mesh, plate in zip(ctx.inputs, result.meshes, result.plates, strict=True)
         ],
         findings=findings,
     )

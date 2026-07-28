@@ -50,6 +50,10 @@ FORMAT_SUFFIX: dict[ExportFormat, str] = {
 DEFAULT_SCHEME = "{project}_{object}_{index}von{count}"
 SINGLE_SCHEME = "{project}_{object}"
 
+#: With more than one build plate the plate goes into the name (§25). Whoever
+#: takes the files to the printer needs to know which ones belong together.
+PLATE_SCHEME = "{project}_platte{plate}_{object}_{index}von{count}"
+
 _UNSAFE = re.compile(r"[^\w\-. ]+", re.UNICODE)
 
 
@@ -80,6 +84,8 @@ class ExportEntry:
     body: Mesh | None = None
     """The object as it is in the scene. STEP needs the exact body, not the
     triangles it was tessellated into (§30)."""
+    plate: int = 0
+    """Which build plate this file belongs to (§25)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +119,13 @@ def plan_export(
         )
 
     count = len(objects)
-    pattern = scheme or (DEFAULT_SCHEME if count > 1 else SINGLE_SCHEME)
+    plates = len({entry.plate for entry in objects})
+    if scheme is not None:
+        pattern = scheme
+    elif plates > 1:
+        pattern = PLATE_SCHEME
+    else:
+        pattern = DEFAULT_SCHEME if count > 1 else SINGLE_SCHEME
     suffix = FORMAT_SUFFIX[export_format]
 
     entries = tuple(
@@ -125,6 +137,7 @@ def plan_export(
                     object=safe_name(entry.name),
                     index=index,
                     count=count,
+                    plate=entry.plate + 1,
                 )
             )
             + suffix,
@@ -132,6 +145,7 @@ def plan_export(
             slots=tuple(entry.material_slots),
             name=entry.name,
             body=entry.mesh,
+            plate=entry.plate,
         )
         for index, entry in enumerate(objects, start=1)
     )
@@ -168,7 +182,7 @@ def check_before_export(
                 )
             )
 
-    findings.extend(check_build_volume(meshes, profile))
+    findings.extend(check_build_volume(meshes, profile, [entry.plate for entry in objects]))
     findings.extend(_licence_findings(sources))
     return findings
 

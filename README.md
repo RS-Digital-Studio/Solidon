@@ -157,6 +157,18 @@ Der Kern ist optional:
 Ohne ihn sagen die betroffenen Operationen das in einem Satz, und alles andere
 in Formwerk funktioniert unverändert.
 
+## Mehr Teile als auf eine Platte passen
+
+**Auf dem Bett anordnen** legt die Objekte nebeneinander und beginnt eine neue
+Druckplatte, sobald die aktuelle voll ist — wie viele Platten erlaubt sind,
+steht im Dialog. Was auch dann nicht passt, wird nicht weggelassen, sondern
+gemeldet: eine Platte mehr würde helfen.
+
+Jede Platte wird für sich geprüft — Bauraum und Kollisionen. Zwei Teile an
+derselben Stelle auf verschiedenen Platten begegnen sich nie. Beim Export trägt
+jede Datei ihre Platte im Namen (`projekt_platte2_teil_3von7.stl`), und der
+Schieberegler unter der Ansicht schaltet zwischen den Platten um.
+
 ## Zu groß für das Bett (Auto Split)
 
 **Bearbeiten → Automatisch teilen** schneidet ein Objekt, bis jedes Stück auf

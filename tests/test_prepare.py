@@ -125,16 +125,17 @@ def test_splitting_a_plate_with_holes_stays_closed() -> None:
 
 def test_arranging_puts_the_bodies_on_the_plate(profile: Profile) -> None:
     bodies = [cube(), apply(cube(), translation((200.0, 200.0, 50.0)))]
-    arranged, findings = arrange_on_bed(bodies, profile, spacing=5.0)
+    result = arrange_on_bed(bodies, profile, spacing=5.0)
 
-    for body in arranged:
+    for body in result.meshes:
         assert body.bounds.minimum[2] == pytest.approx(0.0), "everything sits on the bed"
-    assert not check_collisions(arranged), "arranged bodies do not overlap"
-    assert not findings, "everything fits on a 256 mm plate"
+    assert not check_collisions(result.meshes), "arranged bodies do not overlap"
+    assert not result.findings, "everything fits on a 256 mm plate"
+    assert result.plates == [0, 0], "one plate is enough for two cubes"
 
 
 def test_arranging_keeps_the_spacing(profile: Profile) -> None:
-    arranged, _findings = arrange_on_bed([cube(), cube()], profile, spacing=8.0)
+    arranged = arrange_on_bed([cube(), cube()], profile, spacing=8.0).meshes
 
     gap = arranged[1].bounds.minimum[0] - arranged[0].bounds.maximum[0]
     assert gap == pytest.approx(8.0, abs=1e-6)

@@ -173,6 +173,7 @@ class MainWindow(QMainWindow):
         self.layer_bar.layerChanged.connect(self._on_layer_changed)
         self.explode_bar = ExplodeBar(self)
         self.explode_bar.factorChanged.connect(self.viewport.set_explosion)
+        self.explode_bar.plateChanged.connect(self.viewport.set_plate)
 
         middle = QWidget(self)
         middle_layout = QVBoxLayout(middle)
@@ -854,7 +855,8 @@ class MainWindow(QMainWindow):
         self.viewport.set_layer(None)
         self.analysis_bar.show_legend(None)
         self.object_tree.show_scene(result)
-        self.explode_bar.show_for(len(result.scene.objects))
+        plates = {entry.plate for entry in result.scene.objects.values()}
+        self.explode_bar.show_for(len(result.scene.objects), max(plates, default=0) + 1)
         self.report.show_result(result)
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_scene(result)

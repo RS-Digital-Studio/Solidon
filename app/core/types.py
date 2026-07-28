@@ -217,6 +217,9 @@ class SceneObject:
     kind: ObjectKind = "mesh"
     features: dict[FeatureId, Feature] = field(default_factory=dict)
     material_slots: list[MaterialSlot] = field(default_factory=list)
+    plate: int = 0
+    """Which build plate this object sits on. Set by arranging; a scene with
+    more parts than fit on one plate is normal, not an error (§25)."""
     created_by: OpId = 0
     visible: bool = True
 

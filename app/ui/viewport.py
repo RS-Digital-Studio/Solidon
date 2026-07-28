@@ -150,6 +150,8 @@ class Viewport(QWidget):
         self._ghost: EvaluationResult | None = None
         self._explosion = 0.0
         """§18.8: how far split parts are drawn apart. Display only, never geometry."""
+        self._plate = -1
+        """Which build plate is shown; -1 is all of them (§25)."""
 
         if not _available():
             self._layout.addWidget(
@@ -188,6 +190,8 @@ class Viewport(QWidget):
         for object_id, entry in result.scene.objects.items():
             if not entry.visible:
                 continue
+            if self._plate >= 0 and entry.plate != self._plate:
+                continue
             mesh = self._sectioned(entry.mesh)
             raw = getattr(mesh, "raw", None)
             if raw is None or not len(raw.faces):
@@ -224,6 +228,15 @@ class Viewport(QWidget):
         self._redraw_features()
         self._redraw_layer()
         self.plotter.render()
+
+    def set_plate(self, plate: int) -> None:
+        """Show one build plate, or all of them (§25).
+
+        A filter on the picture, not on the scene: the objects of the other
+        plates are still there, still exported and still in the report.
+        """
+        self._plate = plate
+        self.show_scene(self._result)
 
     def set_explosion(self, factor: float) -> None:
         """Draw the parts apart, for looking at a split (§18.8).

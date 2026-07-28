@@ -14,7 +14,8 @@ otherwise be forgotten:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import trimesh
@@ -124,18 +125,44 @@ def split_at_plane(mesh: MeshData, plane: SectionPlane) -> tuple[MeshData, MeshD
     return first.mesh, second.mesh, findings
 
 
+#: How many build plates one scene may be spread over. Not a technical limit —
+#: past this many, whoever is printing wants a second project rather than a
+#: list nobody can keep track of.
+MAX_PLATES = 12
+
+
+@dataclass(frozen=True, slots=True)
+class Arrangement:
+    """Where the bodies ended up, and on which plate."""
+
+    meshes: list[MeshData]
+    plates: list[int]
+    findings: list[Finding] = field(default_factory=list)
+
+    @property
+    def plate_count(self) -> int:
+        return max(self.plates, default=0) + 1 if self.plates else 0
+
+
 def arrange_on_bed(
-    meshes: list[MeshData], profile: Profile, spacing: float = 5.0
-) -> tuple[list[MeshData], list[Finding]]:
+    meshes: list[MeshData], profile: Profile, spacing: float = 5.0, plates: int = 1
+) -> Arrangement:
     """Lay the bodies out on the plate in a row, then wrap into rows (§25).
 
     Deliberately simple: a shelf packing that anyone can predict beats a clever
     one that moves parts around for reasons nobody can see.
+
+    What does not fit goes on the next plate — up to ``plates`` of them. More
+    parts than plates is not an error to hide: the last plate takes the rest and
+    the report says it is overfull, because a part silently left out of an
+    arrangement is a part that never gets printed.
     """
     width, depth, _height = profile.printer.build_volume
     arranged: list[MeshData] = []
+    assigned: list[int] = []
     findings: list[Finding] = []
 
+    plate = 0
     cursor_x = -width / 2.0 + spacing
     cursor_y = -depth / 2.0 + spacing
     row_depth = 0.0
@@ -145,6 +172,11 @@ def arrange_on_bed(
         if cursor_x + size[0] > width / 2.0 - spacing:
             cursor_x = -width / 2.0 + spacing
             cursor_y += row_depth + spacing
+            row_depth = 0.0
+        if cursor_y + size[1] > depth / 2.0 - spacing and plate + 1 < plates:
+            plate += 1
+            cursor_x = -width / 2.0 + spacing
+            cursor_y = -depth / 2.0 + spacing
             row_depth = 0.0
 
         target = (
@@ -156,16 +188,39 @@ def arrange_on_bed(
         body = mesh.raw.copy()
         body.apply_transform(translation((offset[0], offset[1], offset[2])))
         arranged.append(mesh.replacing(body))
+        assigned.append(plate)
 
         cursor_x += size[0] + spacing
         row_depth = max(row_depth, size[1])
 
-    findings.extend(check_build_volume(arranged, profile))
-    return arranged, findings
+    findings.extend(check_build_volume(arranged, profile, assigned))
+    if plate + 1 >= plates and _overfull(arranged, assigned, profile):
+        findings.append(
+            Finding(
+                code="arrange.needs_more_plates",
+                severity="warning",
+                message=_("Auf so viele Platten passt das nicht — eine mehr würde helfen."),
+                values={"plates": plates},
+            )
+        )
+    return Arrangement(meshes=arranged, plates=assigned, findings=findings)
 
 
-def check_build_volume(meshes: list[MeshData], profile: Profile) -> list[Finding]:
-    """What sticks out of the build volume is reported, never quietly scaled."""
+def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile) -> bool:
+    """Does anything on the last plate stick out of it?"""
+    last = max(plates, default=0)
+    on_last = [mesh for mesh, plate in zip(meshes, plates, strict=True) if plate == last]
+    return bool(check_build_volume(on_last, profile))
+
+
+def check_build_volume(
+    meshes: list[MeshData], profile: Profile, plates: list[int] | None = None
+) -> list[Finding]:
+    """What sticks out of the build volume is reported, never quietly scaled.
+
+    Checked per plate: two objects at the same place on different plates are
+    not a problem, and neither is a plate that is full while the next is empty.
+    """
     width, depth, height = profile.printer.build_volume
     allowed = BoundingBox((-width / 2.0, -depth / 2.0, 0.0), (width / 2.0, depth / 2.0, height))
     findings: list[Finding] = []
@@ -180,12 +235,18 @@ def check_build_volume(meshes: list[MeshData], profile: Profile) -> list[Finding
             if low < limit_low - EPS_GEOM or high > limit_high + EPS_GEOM
         ]
         if outside:
+            values: dict[str, Any] = {
+                "object": index,
+                "axes": ", ".join("xyz"[axis] for axis in outside),
+            }
+            if plates is not None and index < len(plates):
+                values["plate"] = plates[index] + 1
             findings.append(
                 Finding(
                     code="arrange.out_of_build_volume",
                     severity="warning",
                     message=_("Ein Objekt steht über den Bauraum hinaus."),
-                    values={"object": index, "axes": ", ".join("xyz"[axis] for axis in outside)},
+                    values=values,
                 )
             )
     return findings

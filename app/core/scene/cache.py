@@ -207,6 +207,7 @@ class DiskCache:
                     material_slots=[_slot_from_data(slot) for slot in entry["material_slots"]],
                     created_by=entry["created_by"],
                     visible=entry["visible"],
+                    plate=entry.get("plate", 0),
                 )
                 for entry in data["objects"]
             )
@@ -237,6 +238,7 @@ class DiskCache:
                         "material_slots": [_slot_to_data(slot) for slot in entry.material_slots],
                         "created_by": entry.created_by,
                         "visible": entry.visible,
+                        "plate": entry.plate,
                     }
                 )
             (folder / "objects.json").write_text(json.dumps({"objects": entries}), encoding="utf-8")
