@@ -22,12 +22,13 @@ import numpy as np
 import trimesh
 
 from app.core.errors import ValidationError
+from app.core.geom.attributes import with_slot
 from app.core.geom.boolean import BooleanKind, boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.transform import apply, rotation, translation
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, OpContext, OpResult, Vec3
+from app.core.types import BaseParams, MaterialSlot, OpContext, OpResult, SceneObject, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -46,6 +47,9 @@ OVERLAP = 0.05
 
 #: Below this the letters are thinner than a nozzle and print as a smear.
 MIN_SIZE = 3.0
+
+#: How many filaments a slot number may name (§20, same as the colour ops).
+MAX_SLOTS = 8
 
 
 def outlines(text: str, size: float, font: str = FONTS[0]) -> list[Any]:
@@ -125,6 +129,16 @@ class LabelParams(BaseParams):
         choices=("raised", "engraved"),
         doc=_("Erhaben druckt sich besser, vertieft bleibt beim Schleifen erhalten."),
     )
+    slot: int = param(
+        title=_("Materialslot"),
+        default=0,
+        minimum=0,
+        maximum=MAX_SLOTS - 1,
+        doc=_(
+            "Legt die Schrift in einen eigenen Slot — der 3MF-Export macht daraus "
+            "den Farbwechsel, ohne zweite Datei."
+        ),
+    )
     font: str = param(title=_("Schrift"), default=FONTS[0], choices=FONTS, placement="advanced")
     x: float = param(title=_("Position X"), default=0.0, unit="mm")
     y: float = param(title=_("Position Y"), default=0.0, unit="mm")
@@ -198,12 +212,93 @@ def label_text(ctx: OpContext) -> OpResult:
     placed = place(
         body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz), params.angle
     )
+    body_mesh = as_mesh_data(source.mesh)
+    slots = list(source.material_slots)
+    if params.slot and mode == "raised":
+        # §20: the letters carry a slot of their own into the union, and the
+        # attribute transfer of the boolean brings it out the other side. That
+        # is what turns a two-colour label into one file instead of two.
+        placed = with_slot(placed, params.slot)
+        if not body_mesh.slots:
+            body_mesh = with_slot(body_mesh, 0)
+        slots = _with_slot_named(slots, params.slot)
+
     kind: BooleanKind = "union" if mode == "raised" else "difference"
-    outcome = boolean(kind, [as_mesh_data(source.mesh), placed], quality=ctx.quality)
+    outcome = boolean(kind, [body_mesh, placed], quality=ctx.quality, cut_slot=0)
 
     _log.info("labelled with %r, %s", params.text, mode)
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
+        outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={}, material_slots=slots)],
         solver=outcome.solver,
         findings=outcome.findings,
     )
+
+
+@op_params
+class LabelBodyParams(BaseParams):
+    text: str = param(title=_("Text"), default="", doc=_("Was der Körper sagen soll."))
+    size: float = param(
+        title=_("Schriftgröße"), default=8.0, unit="mm", minimum=MIN_SIZE, maximum=200.0
+    )
+    depth: float = param(title=_("Dicke"), default=0.6, unit="mm", minimum=0.1, maximum=50.0)
+    font: str = param(title=_("Schrift"), default=FONTS[0], choices=FONTS, placement="advanced")
+    x: float = param(title=_("Position X"), default=0.0, unit="mm")
+    y: float = param(title=_("Position Y"), default=0.0, unit="mm")
+    z: float = param(title=_("Position Z"), default=0.0, unit="mm")
+    name: str = param(title=_("Name"), default="", placement="advanced")
+
+
+@register_op(
+    name="create_label",
+    title=_("Schriftzug als Körper"),
+    category="label",
+    params=LabelBodyParams,
+    consumes=0,
+    produces=1,
+    doc=_(
+        "Legt einen Schriftzug als eigenes Objekt an — für den Zweifarbendruck "
+        "mit zwei Dateien und für Buchstaben, die aufgeklebt werden."
+    ),
+)
+def create_label(ctx: OpContext) -> OpResult:
+    """§25: the same outlines, standing on their own instead of on a part.
+
+    Two colours can be had either way: this one as a second file for a printer
+    that changes filament by hand, and ``label_text`` with a slot for a machine
+    that reads the groups out of a 3MF (§20). Which is better depends on the
+    printer, so both are here.
+    """
+    params = cast(LabelBodyParams, ctx.params)
+    if not params.text.strip():
+        raise ValidationError(
+            field="text",
+            detail=_("Ohne Text gibt es nichts anzulegen."),
+            constraint="empty",
+        )
+
+    shapes = outlines(params.text, params.size, params.font)
+    body = label_solid(shapes, params.depth) if shapes else None
+    if body is None:
+        raise ValidationError(
+            field="text",
+            detail=_("Aus diesem Text ließ sich keine Form bilden."),
+            value=params.text,
+            constraint="no_outline",
+        )
+
+    middle = body.bounds.centre
+    placed = apply(
+        body,
+        translation((params.x - middle[0], params.y - middle[1], params.z)),
+    )
+    return OpResult(
+        outputs=[SceneObject(id="", name=params.name or params.text.strip()[:20], mesh=placed)]
+    )
+
+
+def _with_slot_named(slots: list[MaterialSlot], index: int) -> list[MaterialSlot]:
+    """Add the slot the lettering goes into, keeping one that is already named."""
+    known = {entry.index: entry for entry in slots}
+    known.setdefault(0, MaterialSlot(index=0, name=str(_("Körper"))))
+    known.setdefault(index, MaterialSlot(index=index, name=str(_("Schrift"))))
+    return [known[key] for key in sorted(known)]

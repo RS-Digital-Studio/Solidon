@@ -10,8 +10,11 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
+import trimesh
+
 from app.core.errors import InternalError, ValidationError
 from app.core.geom.autosplit import Candidate
+from app.core.geom.boolean import boolean
 from app.core.geom.hollow import VENT_DIAMETER, hollow
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.orient import orient_for_print
@@ -28,10 +31,11 @@ from app.core.geom.prepare import (
     split_at_plane,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
-from app.core.geom.transform import Axis
+from app.core.geom.transform import Axis, place_on_bed
 from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
-from app.core.types import BaseParams, OpContext, OpResult
+from app.core.types import BaseParams, Finding, OpContext, OpResult
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _AXES = tuple(AXIS_NORMALS)
@@ -320,6 +324,96 @@ def compensate_first_layer(ctx: OpContext) -> OpResult:
         amount=params.amount or None,
     )
     return OpResult(outputs=[dataclasses.replace(source, mesh=mesh)], findings=findings)
+
+
+@op_params
+class TestPieceParams(BaseParams):
+    size: float = param(
+        title=_("Kantenlänge"),
+        default=20.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=200.0,
+        doc=_("Wie groß der Ausschnitt wird. Groß genug, dass die Passung Material hat."),
+    )
+    x: float = param(title=_("Position X"), default=0.0, unit="mm")
+    y: float = param(title=_("Position Y"), default=0.0, unit="mm")
+    z: float = param(title=_("Position Z"), default=0.0, unit="mm")
+    on_bed: bool = param(
+        title=_("Auf das Bett setzen"),
+        default=True,
+        doc=_("Legt das Prüfstück flach hin, damit es ohne Stützen druckt."),
+    )
+
+
+@register_op(
+    name="test_piece",
+    title=_("Prüfstück erzeugen"),
+    category="prepare",
+    params=TestPieceParams,
+    consumes=1,
+    produces=1,
+    applies_to=["hole", "pin", "face"],
+    doc=_(
+        "Schneidet einen Würfel um eine Stelle heraus, um sie zu drucken und "
+        "auszuprobieren — zwei Minuten statt zwei Stunden."
+    ),
+)
+def test_piece(ctx: OpContext) -> OpResult:
+    """§28.3, aus der Praxis: eine Passung prüft man am Ausschnitt, nicht am Teil.
+
+    The cut is an intersection with a cube, so what comes out is the real
+    geometry with the real tolerances — not a rebuilt approximation of it. A
+    piece that prints differently from the part it stands for would be worse
+    than no test at all.
+    """
+    params = cast(TestPieceParams, ctx.params)
+    source = ctx.inputs[0]
+    mesh = as_mesh_data(source.mesh)
+
+    window = trimesh.creation.box(extents=(params.size, params.size, params.size))
+    window.apply_translation((params.x, params.y, params.z))
+    # A window over empty space is an answer, not a failed operation: without
+    # ``allow_empty`` the chain would try three more stages and then raise, and
+    # the user would read about the voxel solver instead of about the hole they
+    # aimed at.
+    outcome = boolean(
+        "intersection", [mesh, mesh.replacing(window)], quality=ctx.quality, allow_empty=True
+    )
+
+    piece = outcome.mesh
+    if not piece.triangle_count or abs(piece.volume) <= EPS_GEOM:
+        raise ValidationError(
+            field="size",
+            detail=_("An dieser Stelle ist kein Material — der Ausschnitt bleibt leer."),
+            constraint="empty",
+            values={"size_mm": round(params.size, 2)},
+        )
+    if params.on_bed:
+        piece = place_on_bed(piece)
+
+    share = abs(piece.volume) / max(abs(mesh.volume), EPS_GEOM)
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=piece,
+                name=f"{source.name} {_('Prüfstück').translate()}",
+                features={},
+            )
+        ],
+        solver=outcome.solver,
+        findings=[
+            *outcome.findings,
+            Finding(
+                code="prepare.test_piece",
+                severity="info",
+                message=_("Ein Ausschnitt zum Ausprobieren — die Maße sind die des Teils."),
+                object_id=source.id,
+                values={"share_percent": round(share * 100.0, 1), "size_mm": params.size},
+            ),
+        ],
+    )
 
 
 @op_params

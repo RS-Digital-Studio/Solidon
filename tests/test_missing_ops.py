@@ -262,6 +262,109 @@ def test_a_label_without_text_is_a_user_error(profile: Profile) -> None:
     assert problem.value.field == "text"
 
 
+def test_lettering_can_carry_its_own_slot(profile: Profile) -> None:
+    """§20: two colours in one file instead of two files.
+
+    The letters go into the union already wearing their slot, and the attribute
+    transfer of the boolean brings it out the other side (P9). What the printer
+    reads is a 3MF with two groups.
+    """
+    from app.core.geom.attributes import counts, used_slots
+
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 4.0))
+    plate.apply_translation((0.0, 0.0, 2.0))
+    entry = SceneObject(id="obj_1", name="Deckel", mesh=MeshData.of(plate))
+
+    result = run("label_text", entry, profile, text="RS", size=10.0, z=4.0, slot=1)
+
+    output = result.outputs[0]
+    assert used_slots(output.mesh) == (0, 1)
+    assert counts(output.mesh)[1] > 0, "the letters are in the second slot"
+    assert [(slot.index, str(slot.name)) for slot in output.material_slots] == [
+        (0, "Körper"),
+        (1, "Schrift"),
+    ]
+
+
+def test_without_a_slot_the_lettering_stays_one_colour(profile: Profile) -> None:
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 4.0))
+    plate.apply_translation((0.0, 0.0, 2.0))
+    entry = SceneObject(id="obj_1", name="Deckel", mesh=MeshData.of(plate))
+
+    result = run("label_text", entry, profile, text="RS", size=10.0, z=4.0)
+
+    assert not result.outputs[0].mesh.slots
+
+
+def test_a_label_can_be_a_body_of_its_own(profile: Profile) -> None:
+    """The other way to two colours: a second file for a printer without an AMS."""
+    result = run("create_label", None, profile, text="RS", size=10.0, depth=2.0)
+
+    body = result.outputs[0]
+    assert body.name == "RS"
+    assert body.mesh.bounds.size[2] == pytest.approx(2.0)
+    assert body.mesh.triangle_count > 0
+
+
+def test_an_empty_label_body_is_a_user_error(profile: Profile) -> None:
+    with pytest.raises(ValidationError) as problem:
+        run("create_label", None, profile, text="  ", size=10.0)
+
+    assert problem.value.field == "text"
+
+
+# --- the test piece -------------------------------------------------------------
+
+
+def drilled_plate() -> MeshData:
+    plate = trimesh.creation.box(extents=(80.0, 50.0, 8.0))
+    plate.apply_translation((0.0, 0.0, 4.0))
+    drill = trimesh.creation.cylinder(radius=3.0, height=40.0)
+    drill.apply_translation((25.0, 15.0, 0.0))
+    return MeshData.of(trimesh.boolean.difference([plate, drill]))
+
+
+def test_a_test_piece_is_a_cut_out_of_the_real_part(profile: Profile) -> None:
+    """A piece that prints differently from the part would be worse than none."""
+    body = drilled_plate()
+    entry = SceneObject(id="obj_1", name="Halterung", mesh=body)
+
+    result = run("test_piece", entry, profile, size=20.0, x=25.0, y=15.0, z=4.0)
+
+    piece = result.outputs[0].mesh
+    assert piece.bounds.size[0] == pytest.approx(20.0)
+    assert piece.bounds.size[2] == pytest.approx(8.0), "the plate is thinner than the window"
+    assert piece.is_watertight
+    assert piece.volume < body.volume * 0.15, "a tenth of the print time"
+
+
+def test_the_test_piece_lands_on_the_bed(profile: Profile) -> None:
+    entry = SceneObject(id="obj_1", name="Halterung", mesh=drilled_plate())
+
+    result = run("test_piece", entry, profile, size=20.0, x=25.0, y=15.0, z=4.0, on_bed=True)
+
+    assert result.outputs[0].mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_the_bore_is_still_in_the_piece(profile: Profile) -> None:
+    """Otherwise it is a cube, and a cube proves nothing about a fit."""
+    entry = SceneObject(id="obj_1", name="Halterung", mesh=drilled_plate())
+
+    result = run("test_piece", entry, profile, size=20.0, x=25.0, y=15.0, z=4.0)
+
+    solid = 20.0 * 20.0 * 8.0
+    assert result.outputs[0].mesh.volume < solid * 0.98, "a hole is missing from it"
+
+
+def test_a_window_over_thin_air_is_a_user_error(profile: Profile) -> None:
+    entry = SceneObject(id="obj_1", name="Halterung", mesh=drilled_plate())
+
+    with pytest.raises(ValidationError) as problem:
+        run("test_piece", entry, profile, size=10.0, x=500.0, y=0.0, z=0.0)
+
+    assert problem.value.constraint == "empty"
+
+
 # --- drawings -------------------------------------------------------------------
 
 

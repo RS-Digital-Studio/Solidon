@@ -158,11 +158,23 @@ Programme bleiben für das, wo sie wirklich besser sind.
 | Linkes und rechtes Teil | **Transformation → Spiegeln** | zweite Konstruktion |
 | Erste Schicht maßhaltig | **Elefantenfuß ausgleichen** aus dem Materialprofil | Slicer-Einstellung, projektfern |
 | Toleranz messen statt raten | **Varianten erzeugen** (§28.3) | mehrere Exporte von Hand |
+| Eine Passung prüfen, ohne das Teil zu drucken | **Druckvorbereitung → Prüfstück erzeugen** | von Hand nachmodellieren |
+| Zweifarbige Beschriftung | **Text aufbringen** mit Materialslot, oder **Schriftzug als Körper** | zwei Konstruktionen |
 
 Der Text kommt als Schriftumriss, nicht als Bild — die Kanten bleiben in jeder
 Größe sauber, und DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich
 aussieht. Beim Extrudieren einer Zeichnung werden innenliegende Konturen zu
 Löchern.
+
+Zweifarbig geht auf beiden Wegen, weil beide Drucker existieren: **Text
+aufbringen** mit einem Materialslot legt die Schrift in eine eigene Gruppe, die
+der 3MF-Export als Farbwechsel schreibt — eine Datei. **Schriftzug als Körper**
+macht die Buchstaben zum eigenen Objekt, für den Drucker, an dem von Hand
+gewechselt wird, und für Lettern zum Aufkleben.
+
+Das **Prüfstück** schneidet einen Würfel um eine Stelle heraus, statt sie
+nachzubauen: was gedruckt wird, ist die echte Geometrie mit der echten Toleranz.
+Zwei Minuten statt zwei Stunden, und das Ergebnis gilt für das Teil.
 
 Draußen bleibt, was draußen besser ist: der **Slicer** schreibt die Druckdatei
 (§22.5), das **Sprachmodell** und **ComfyUI** laufen, wo sie hingehören, und
