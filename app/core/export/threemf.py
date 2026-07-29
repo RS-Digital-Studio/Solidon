@@ -19,8 +19,9 @@ that points into such a file to the *whole file* instead of to the one object it
 names, so a file with seventeen parts in one object file came out seventeen times
 over, every body stacked on a copy of itself. Measured on the model corpus: a
 nozzle of two bodies and 290 120 triangles arrived as four bodies and 580 240,
-with twice the volume and a report that called it open. That is not a speed
-problem, so it is not fixed with a faster parser but with the right one.
+with twice the volume — and so twice the material estimate and twice the print
+time. That is not a speed problem, so it is not fixed with a faster parser but
+with the right one.
 
 Written by hand rather than with a library because there is no library that
 does only this — and a 3MF writer that does everything else too would be a

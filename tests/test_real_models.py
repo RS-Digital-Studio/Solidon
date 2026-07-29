@@ -124,8 +124,10 @@ def test_a_nozzle_of_two_bodies_is_not_read_as_four() -> None:
     """The measured regression: every body arrived once per component.
 
     290 120 triangles came in as 580 240, two bodies as four, and the volume as
-    104,11 cm³ where the file says 52,05. The report then called a sound file
-    open, because a body lying exactly on a copy of itself is not a solid.
+    104,11 cm³ where the file says 52,05 — twice the material and twice the print
+    time. Watertightness is not affected, which was worth measuring rather than
+    assuming: two coincident copies are each closed on their own, so a sound file
+    stays sound. This one is reported open because one of its two real bodies is.
     """
     parts = threemf.read_objects(find("Pool-Fountain_Nozzle_horizontal.3mf").read_bytes())
 

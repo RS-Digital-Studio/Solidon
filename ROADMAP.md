@@ -619,9 +619,14 @@ eine Objekt, das sie nennt. Nachgemessen:
 
 Kein Tempoproblem, sondern ein falsches Ergebnis: die Düse hat zwei Körper
 (21,68 und 30,37 cm³), gelesen wurden vier — jeder deckungsgleich verdoppelt.
-Volumen 104,11 statt 52,05 cm³, Materialschätzung und Druckzeit doppelt, und der
-Prüfbericht nannte eine einwandfreie Datei „nicht geschlossen", weil ein Körper
-auf einer Kopie von sich kein Festkörper ist.
+Volumen 104,11 statt 52,05 cm³, und damit Materialschätzung und Druckzeit
+doppelt.
+
+*Nachgemessen und dabei eine eigene Behauptung zurückgenommen:* die
+Wasserdichtheit ist davon **nicht** betroffen. Zwei deckungsgleiche, aber nicht
+verschweißte Kopien sind je für sich geschlossen, also bleibt die Datei dicht.
+Dass die Düse als „nicht geschlossen" gemeldet wird, liegt an einem ihrer beiden
+echten Körper — vorher wie nachher richtig.
 
 Jetzt liest ein eigener Geometrieleser das Format — im 3MF-Modul, wo das übrige
 3MF-Wissen schon steht. Dieselbe Katze: 787 836 Dreiecke in **2,6 s** statt
