@@ -583,3 +583,15 @@ der Platte, zwei Hälften eines Schnitts — der Durchschnitt ist ein flaches,
 geschlossenes Blatt ohne Inhalt, und trimesh teilt beim Schwerpunkt durch dessen
 Null. `boolean.shared_volume` beantwortet das einmal für alle, und die
 Kollisionsprüfung benutzt es.
+
+**Und ein zweiter Fall, den der erste Fix freigelegt hat.** Wo vorher früh
+`None` zurückkam, werden jetzt Polygone gebaut — und drei Modelle des Korpus
+haben eine Tasche, die genau bis an die Außenwand reicht. Das Loch trifft die
+Außenkontur in einem Punkt, GEOS baut das Polygon klaglos und wirft bei der
+nächsten Operation darüber eine `TopologyException` mit einer Koordinate und
+sonst nichts. Geheilt wird jetzt dort, wo es entsteht (`buffer(0)`, weil eine
+Fläche gesucht ist). Der Korpus läuft wieder **68 von 68** durch.
+
+Die Prüfung im heißen Pfad kostet nichts Nennenswertes: Schichtanalyse 1076 ms
+gegen 1062 ms, Wandkarte 3331 gegen 3226 — für Zahlen, die vorher für jeden
+hohlen Körper gar nicht erst entstanden sind.
