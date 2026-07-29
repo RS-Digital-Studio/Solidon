@@ -346,10 +346,25 @@ def _polygon_from(points: Any) -> ShapelyPolygon | None:
             for other, others in enumerate(inside)
             if len(others) == len(containers) + 1 and index in others
         ]
-        solids.append(ShapelyPolygon(shells[index].exterior, holes))
+        solids.append(_repaired(ShapelyPolygon(shells[index].exterior, holes)))
     if not solids:
         return None
     return unary_union(solids)
+
+
+def _repaired(shape: ShapelyPolygon) -> ShapelyPolygon:
+    """A ring and its hole may touch, and then the polygon is invalid.
+
+    Real models do that: a pocket that reaches exactly to the outer wall leaves
+    a hole whose boundary meets the shell in one point. GEOS builds the polygon
+    without complaint and throws on the next operation over it — so it is
+    repaired here rather than three call levels further on, where the message
+    would name a coordinate and nothing else.
+
+    ``buffer(0)`` is the repair because the answer wanted is an area: it drops
+    the degenerate seam and keeps the material.
+    """
+    return shape if shape.is_valid else shape.buffer(0)
 
 
 def _measure(

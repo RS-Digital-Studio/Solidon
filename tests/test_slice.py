@@ -234,3 +234,24 @@ def test_a_centred_bore_is_a_hole_not_a_disappearance() -> None:
 
     assert section is not None
     assert section.area == pytest.approx(1600.0 - math.pi * 25.0, rel=0.02)
+
+
+def test_a_hole_touching_its_own_wall_does_not_stop_the_slicer() -> None:
+    """A pocket that reaches exactly to the outer wall.
+
+    The hole then meets the shell in a point, the polygon is invalid, and GEOS
+    throws on the next operation over it — not here, but three levels up with a
+    coordinate and no name. Three models of the corpus do exactly this.
+    """
+    plate = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    pocket = trimesh.creation.box(extents=(20.0, 20.0, 6.0))
+    # Its right face sits exactly on the plate's right face.
+    pocket.apply_translation((10.0, 0.0, 7.0))
+    body = MeshData.of(trimesh.boolean.difference([plate, pocket]))
+
+    section = cross_section(body, 6.0)
+
+    assert section is not None
+    assert section.is_valid, "a section that cannot be measured is worse than none"
+    assert section.area == pytest.approx(1600.0 - 20.0 * 20.0, rel=TOLERANCE)
