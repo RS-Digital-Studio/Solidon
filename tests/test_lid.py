@@ -7,6 +7,7 @@ it fits is that lid and housing share no volume at all.
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -203,3 +204,110 @@ def test_a_small_compartment_still_gets_a_collar(profile: Profile) -> None:
 
     assert result.findings[0].values["cavities"] == 2
     assert shared_volume(result.outputs[0].mesh.raw, body) < 1e-6
+
+
+# --- the turning lid ------------------------------------------------------------
+
+
+def jar(radius: float = 20.0, wall: float = 3.0, height: float = 60.0) -> SceneObject:
+    """A round tin, open at the top: the shape a screw lid belongs on."""
+    outer = trimesh.creation.cylinder(radius=radius, height=height, sections=96)
+    outer.apply_translation((0.0, 0.0, height / 2.0))
+    inner = trimesh.creation.cylinder(radius=radius - wall, height=height - wall, sections=96)
+    inner.apply_translation((0.0, 0.0, height / 2.0 + wall / 2.0 + 0.1))
+    return SceneObject(
+        id="obj_1", name="Dose", mesh=MeshData.of(trimesh.boolean.difference([outer, inner]))
+    )
+
+
+def make_screw_lid(entry: SceneObject, profile: Profile, **params: object):
+    spec = REGISTRY.get("screw_lid")
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def radii(body: MeshData, low: float, high: float) -> tuple[float, float]:
+    """Smallest and largest distance from the axis inside a band of height."""
+    points = np.asarray(body.raw.vertices)
+    inside = points[(points[:, 2] > low) & (points[:, 2] < high)]
+    lengths = np.linalg.norm(inside[:, :2], axis=1)
+    lengths = lengths[lengths > 1e-9]
+    return float(lengths.min()), float(lengths.max())
+
+
+def test_the_neck_and_the_lid_are_one_thread(profile: Profile) -> None:
+    """The measurement that decides it: does the lid grip, or does it slide off?
+
+    The lid is cut from the core diameter plus the clearance, so its material
+    reaches into the valley of the neck. Cut from the major diameter instead —
+    the mistake the part library's nut made — it would be a sleeve.
+    """
+    result = make_screw_lid(jar(), profile, height=8.0, pitch=3.0)
+    neck, lid = result.outputs[0].mesh, result.outputs[1].mesh
+
+    neck_core, neck_crest = radii(neck, 60.5, 67.5)
+    lid_core, lid_crest = radii(lid, 1.0, 8.0)
+
+    assert lid_core > neck_core, "the lid has to reach into the valley of the neck"
+    assert lid_crest > neck_crest, "and clear its crest"
+    gap = profiles.material("petg").clearance
+    assert lid_crest - neck_crest == pytest.approx(gap / 2.0, abs=0.02)
+
+
+def test_both_halves_come_out_closed(profile: Profile) -> None:
+    result = make_screw_lid(jar(), profile, height=8.0, pitch=3.0)
+
+    assert result.outputs[0].mesh.is_watertight, "the tin with its neck"
+    assert result.outputs[1].mesh.is_watertight, "and the lid"
+
+
+def test_the_neck_keeps_the_diameter_of_the_opening(profile: Profile) -> None:
+    """A neck wider than the tin is a lid that overhangs the wall it sits on."""
+    result = make_screw_lid(jar(radius=20.0), profile, height=8.0, pitch=3.0)
+
+    assert result.findings[0].values["neck_mm"] == pytest.approx(40.0, abs=0.5)
+    assert result.outputs[0].mesh.bounds.size[0] == pytest.approx(40.0, abs=0.1)
+
+
+def test_the_lid_stands_on_its_open_end(profile: Profile) -> None:
+    """§25: printed the other way up a cap needs support in its own thread."""
+    lid = make_screw_lid(jar(), profile, height=8.0, pitch=3.0).outputs[1].mesh
+
+    assert lid.bounds.minimum[2] == pytest.approx(0.0, abs=0.01)
+
+
+def test_the_skirt_is_taller_than_the_neck(profile: Profile) -> None:
+    """Otherwise the lid comes to rest on the end of the thread, not on the rim."""
+    result = make_screw_lid(jar(), profile, height=8.0, pitch=3.0, thickness=2.4)
+    lid = result.outputs[1].mesh
+
+    assert lid.bounds.size[2] > 8.0 + 2.4
+
+
+def test_a_thin_wall_cannot_carry_a_coarse_thread(profile: Profile) -> None:
+    """Two ridge depths of 5 mm pitch do not fit into a wall of 1,5."""
+    with pytest.raises(ValidationError) as problem:
+        make_screw_lid(jar(radius=20.0, wall=1.5), profile, height=8.0, pitch=5.0)
+
+    assert problem.value.constraint == "too_coarse"
+
+
+def test_a_softer_material_gets_more_play(profile: Profile) -> None:
+    """§12: the clearance of the thread is the material's, like every other."""
+    stiff = make_screw_lid(jar(), profile, pitch=3.0).findings[0].values["clearance_mm"]
+    soft_jar = jar()
+    soft_jar.material = "tpu-95a"
+    soft = make_screw_lid(soft_jar, profile, pitch=3.0).findings[0].values["clearance_mm"]
+
+    assert soft > stiff

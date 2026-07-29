@@ -15,6 +15,7 @@ the calibration.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any, cast
 
 import trimesh
@@ -22,6 +23,8 @@ import trimesh
 from app.core.errors import ValidationError
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.prepare import BOOLEAN_OVERLAP
+from app.core.knowledge.parts.shapes import RIDGE_SHARE, thread_body
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -238,3 +241,233 @@ def create_lid(ctx: OpContext) -> OpResult:
             )
         ],
     )
+
+
+# --- the turning lid ------------------------------------------------------------
+
+#: Pitch of a printed coarse thread. Coarse on purpose: a jar lid is turned by
+#: hand and half a turn should close it, while a fine ridge is one the nozzle
+#: rounds away until nothing grips.
+DEFAULT_PITCH = 3.0
+
+#: How much taller the lid's threaded skirt is than the neck, so the lid comes
+#: to rest on the rim and not on the end of the thread.
+SKIRT_RELIEF = 0.6
+
+#: Sections around a turned body. Coarser than this and a "round" neck is a
+#: polygon the lid catches on.
+NECK_SECTIONS = 96
+
+
+def neck_diameters(outline: Any, cavities: list[Any]) -> tuple[float, float]:
+    """Outer and bore diameter of a neck that fits this opening.
+
+    Both come from the narrower side, not from a fitted circle: on a round
+    opening that *is* the diameter, and on a rectangular one it is the largest
+    round neck the wall can still carry. A circle through the corners of a
+    square would stand out over its sides.
+    """
+    left, bottom, right, top = outline.bounds
+    widest = max(cavities, key=lambda ring: ring.area)
+    inner_left, inner_bottom, inner_right, inner_top = widest.bounds
+    return (
+        float(min(right - left, top - bottom)),
+        float(min(inner_right - inner_left, inner_top - inner_bottom)),
+    )
+
+
+def _pipe(outer: float, inner: float, height: float, z: float) -> MeshData:
+    """A ring of material standing on ``z``, open all the way through."""
+    shell = trimesh.creation.cylinder(radius=outer / 2.0, height=height, sections=NECK_SECTIONS)
+    shell.apply_translation((0.0, 0.0, z + height / 2.0))
+    if inner <= EPS_GEOM:
+        return MeshData.of(shell)
+    bore = trimesh.creation.cylinder(
+        radius=inner / 2.0, height=height + 2.0 * BOOLEAN_OVERLAP, sections=NECK_SECTIONS
+    )
+    bore.apply_translation((0.0, 0.0, z + height / 2.0))
+    return boolean("difference", [MeshData.of(shell), MeshData.of(bore)], quality="fine").mesh
+
+
+def _lifted(body: MeshData, z: float) -> MeshData:
+    raised = body.raw.copy()
+    raised.apply_translation((0.0, 0.0, z))
+    return body.replacing(raised)
+
+
+@op_params
+class ScrewLidParams(BaseParams):
+    height: float = param(
+        title=_("Gewindehöhe"),
+        default=8.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=100.0,
+        doc=_("Wie hoch der Gewindehals wird. Zwei Umdrehungen halten, drei sitzen fest."),
+    )
+    pitch: float = param(
+        title=_("Steigung"),
+        default=DEFAULT_PITCH,
+        unit="mm",
+        minimum=1.0,
+        maximum=10.0,
+        doc=_("Grob, damit der Drucker sie auflöst und eine halbe Drehung schließt."),
+    )
+    thickness: float = param(
+        title=_("Deckelstärke"), default=2.4, unit="mm", minimum=0.8, maximum=50.0
+    )
+    wall: float = param(
+        title=_("Wandstärke des Deckels"), default=2.4, unit="mm", minimum=0.8, maximum=20.0
+    )
+    neck: float = param(
+        title=_("Halsdurchmesser"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=400.0,
+        placement="advanced",
+        doc=_("Null nimmt die schmalere Seite der Öffnung."),
+    )
+    z: float = param(
+        title=_("Höhe der Öffnung"),
+        default=0.0,
+        unit="mm",
+        doc=_("Null nimmt die Oberkante des Körpers."),
+    )
+    clearance: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        placement="advanced",
+        doc=_("Null heißt: der Wert aus dem Materialprofil."),
+    )
+
+
+@register_op(
+    name="screw_lid",
+    title=_("Drehdeckel erzeugen"),
+    category="parts",
+    params=ScrewLidParams,
+    consumes=1,
+    produces=2,
+    applies_to=["face"],
+    doc=_(
+        "Setzt einen Gewindehals auf die Öffnung und erzeugt den passenden "
+        "Schraubdeckel. Beide Gewinde kommen aus derselben Steigung, das Spiel "
+        "aus dem Materialprofil."
+    ),
+)
+def screw_lid(ctx: OpContext) -> OpResult:
+    """§25: der Zwilling des eingeschobenen Deckels.
+
+    Two pairs in the model corpus are exactly this and nothing else:
+    ``gewuerzbehaelter_body`` beside ``deckel_dreh``, and ``kartuschen_kaefig``
+    beside ``kartuschen_deckel``. The part library has a thread, but only in the
+    metric screw sizes M2 to M8 — a jar neck of forty millimetres with a coarse
+    pitch was out of its reach entirely.
+
+    Both halves come out of one operation because they are one decision. A neck
+    cut to one pitch and a lid to another is not two mistakes; it is the one
+    mistake that is easiest to make when the halves are made apart.
+    """
+    params = cast(ScrewLidParams, ctx.params)
+    source = ctx.inputs[0]
+    mesh = as_mesh_data(source.mesh)
+
+    top = float(mesh.bounds.maximum[2])
+    z = params.z or top
+    outline, cavities = opening(mesh, z - BELOW_RIM)
+
+    clearance = params.clearance
+    if not clearance:
+        if ctx.profile is None:
+            raise ValidationError(
+                field="clearance",
+                detail=_("Ohne Profil muss das Spiel angegeben werden."),
+                constraint="no_profile",
+            )
+        clearance = for_object(ctx.profile, source).material.clearance
+
+    major, bore = neck_diameters(outline, cavities)
+    if params.neck:
+        major = params.neck
+
+    ridge = params.pitch * RIDGE_SHARE
+    core = major - 2.0 * ridge
+
+    if core - bore <= EPS_GEOM:
+        raise ValidationError(
+            field="pitch",
+            detail=_("Die Wand ist für diese Steigung zu dünn — das Gewinde hätte keinen Kern."),
+            constraint="too_coarse",
+            values={"neck_mm": round(major, 2), "bore_mm": round(bore, 2)},
+        )
+
+    # The core carries the ridge, so it is two ridge depths narrower than the
+    # thread is wide: unioned onto a neck of the full diameter the ridge would
+    # sit inside the material and change nothing at all.
+    neck = _pipe(core, bore, params.height, z)
+    turns = _lifted(thread_body(major, params.pitch, params.height), z)
+    threaded = boolean("union", [mesh, neck], quality=ctx.quality).mesh
+    threaded = boolean("union", [threaded, turns], quality=ctx.quality).mesh
+
+    lid = _screw_cap(major, params, clearance)
+
+    _log.info("screw lid: neck %.2f, pitch %.2f, clearance %.2f", major, params.pitch, clearance)
+    return OpResult(
+        outputs=[
+            dataclasses.replace(source, mesh=threaded, features={}),
+            SceneObject(
+                id="",
+                name=f"{source.name} {_('Drehdeckel').translate()}",
+                mesh=lid,
+                material=source.material,
+            ),
+        ],
+        findings=[
+            Finding(
+                code="parts.screw_lid",
+                severity="info",
+                message=_("Gewindehals und Deckel erzeugt — beide mit derselben Steigung."),
+                values={
+                    "neck_mm": round(major, 2),
+                    "pitch_mm": round(params.pitch, 2),
+                    "clearance_mm": round(clearance, 3),
+                },
+            )
+        ],
+    )
+
+
+def _screw_cap(major: float, params: ScrewLidParams, clearance: float) -> MeshData:
+    """The lid: a cap whose inside carries the counterpart of the neck thread.
+
+    Cut from the *core* diameter plus the clearance, not from the major one.
+    That is the whole difference between a lid and a sleeve: bored to the major
+    diameter nothing is left standing for the ridge of the neck to hold, and the
+    lid slides straight off. The same rule as the nut of the part library, and
+    for the same reason.
+
+    The open end stands on Z = 0, so it prints without a support anywhere.
+    """
+    skirt = params.height + SKIRT_RELIEF
+    inside = major - 2.0 * params.pitch * RIDGE_SHARE + clearance
+    outer = major + 2.0 * clearance + 2.0 * params.wall
+
+    body = trimesh.creation.cylinder(
+        radius=outer / 2.0, height=skirt + params.thickness, sections=NECK_SECTIONS
+    )
+    body.apply_translation((0.0, 0.0, (skirt + params.thickness) / 2.0))
+
+    # The two shapes a threaded hole is cut with: the bore at the core, and the
+    # groove reaching out of it to the major diameter.
+    hollow = trimesh.creation.cylinder(
+        radius=inside / 2.0, height=skirt + BOOLEAN_OVERLAP, sections=NECK_SECTIONS
+    )
+    hollow.apply_translation((0.0, 0.0, (skirt + BOOLEAN_OVERLAP) / 2.0 - BOOLEAN_OVERLAP))
+    groove = thread_body(inside, params.pitch, skirt, internal=True)
+
+    cutter = boolean("union", [MeshData.of(hollow), groove], quality="fine").mesh
+    return boolean("difference", [MeshData.of(body), cutter], quality="fine").mesh

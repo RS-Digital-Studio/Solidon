@@ -595,3 +595,80 @@ Fläche gesucht ist). Der Korpus läuft wieder **68 von 68** durch.
 Die Prüfung im heißen Pfad kostet nichts Nennenswertes: Schichtanalyse 1076 ms
 gegen 1062 ms, Wandkarte 3331 gegen 3226 — für Zahlen, die vorher für jeden
 hohlen Körper gar nicht erst entstanden sind.
+
+## Aus der Struktur des Modellordners
+
+Die Runde vorher kam aus den Modellen. Diese kommt aus den *Dateinamen und
+Ordnern*: `Versuch 1` neben `Versuch 2`, `Clippy_Filament-Clip_x10`,
+`Wasserfall_1_Koerper` bis `_4_TPU-Liner`, `deckel_dreh` neben
+`gewuerzbehaelter_body`. Was jemand in einen Dateinamen schreibt, ist das, wofür
+das Programm keinen Platz hat.
+
+### 3MF wurde falsch gelesen
+
+22 der 3MF im Ordner nutzen die Produktions-Erweiterung: die Objekte liegen in
+eigenen Dateien unter `3D/Objects/`, das Build verweist über Komponenten darauf.
+trimesh löst eine solche Komponente auf die **ganze Datei** auf statt auf das
+eine Objekt, das sie nennt. Nachgemessen:
+
+| Datei | Dreiecke echt | gelesen | Faktor |
+|---|---|---|---|
+| Pool-Fountain_Nozzle_horizontal | 290 120 | 580 240 | 2,0 |
+| Scraper_with_Magnets | 53 800 | 107 600 | 2,0 |
+| Cat_Phone_Stand_Kawaii | 787 836 | 13 393 212 | **17,0** |
+
+Kein Tempoproblem, sondern ein falsches Ergebnis: die Düse hat zwei Körper
+(21,68 und 30,37 cm³), gelesen wurden vier — jeder deckungsgleich verdoppelt.
+Volumen 104,11 statt 52,05 cm³, Materialschätzung und Druckzeit doppelt, und der
+Prüfbericht nannte eine einwandfreie Datei „nicht geschlossen", weil ein Körper
+auf einer Kopie von sich kein Festkörper ist.
+
+Jetzt liest ein eigener Geometrieleser das Format — im 3MF-Modul, wo das übrige
+3MF-Wissen schon steht. Dieselbe Katze: 787 836 Dreiecke in **2,6 s** statt
+13,4 Millionen in 44,8 s.
+
+### Ein 3MF ist eine Baugruppe
+
+Auch richtig gelesen verschmolz alles zu einem Körper. `Wasserfall_.3mf` sind
+vier Teile — Körper, Deckel, Tülle, TPU-Liner —, `Taschentuchbox` sind 21. Genau
+die Aufteilung, die das Material pro Körper und die Platte pro Teil braucht. Die
+Namen holt der Leser aus `Metadata/model_settings.config`, weil das die einzige
+Stelle ist, an der sie stehen; Farbgruppen liest er je Körper, wo der alte Leser
+aufgab, sobald eine Datei mehr als einen enthielt.
+
+Zwei Folgeänderungen: `takes_whole_scene` wird deklariert statt aus
+`(consumes=0, produces=VARIABLE)` geschlossen, und `OperationDraft.produces`
+sagt dem Stapel, wie viele Objekte eine Datei mitbringt — er vergibt die IDs,
+bevor die Datei gelesen ist.
+
+### Stückzahl
+
+„x10" im Dateinamen ist eine Zahl, die keiner mehr ändern kann. „Objekt
+duplizieren" hat jetzt eine Anzahl bis hundert: ein Schritt mit einer Zahl statt
+neun gleicher Schritte im Stapel. Eine Operation sagt dazu im Register, in
+welchem Parameter ihre Ausgabezahl steht (`produces_from`); ein Ausdruck (§13)
+geht dort nicht, weil die IDs vor der Auflösung vergeben werden, und wird mit
+genau diesem Satz abgelehnt.
+
+### Drehdeckel — und das Gewinde, das nicht griff
+
+`deckel_dreh` neben `gewuerzbehaelter_body`, `kartuschen_deckel` neben
+`kartuschen_kaefig`: Schraubdeckel. Der Gewinde-Baustein kann nur M2 bis M8, ein
+Glashals mit 40 mm und grober Steigung war unerreichbar. `screw_lid` setzt den
+Hals auf die Öffnung und macht den Deckel dazu — beide aus einer Operation, weil
+sie eine Entscheidung sind.
+
+**Dabei kam heraus, dass das Gewindepaar der Bausteinbibliothek nie gegriffen
+hat.** Die Mutter wurde auf den Außendurchmesser gebohrt statt auf den Kern:
+damit bleibt nichts stehen, woran der Kamm der Schraube sich hält. Gemessen an
+M6: Schraubenkamm r = 2,925, Mutterbohrung beginnt bei r = 3,075 — 150 µm Luft,
+die Schraube fällt durch. Jede Hälfte war für sich richtig, wasserdicht und
+maßhaltig; nur das Paar war es nicht, und getestet wurde jede Hälfte für sich.
+
+Jetzt wird das Innengewinde vom Kern plus Spiel geschnitten. M6 nachgemessen:
+Schraube 2,375–2,925, Mutter 2,525–3,075 — 0,15 mm auf beiden Flanken, genau das
+Spiel aus dem Parameter. Der Drehdeckel rechnet nach derselben Regel: Hals
+18,34–20,00, Deckel 18,465–20,125. Die 0,55 der Rippentiefe heißt jetzt
+`RIDGE_SHARE` und steht an einer Stelle, weil drei Rechnungen sich darauf
+verlassen — und zwei davon, die verschiedene Zahlen benutzen, sind ein Paar, das
+nicht zusammenpasst, ohne dass es einer der beiden Hälften anzusehen ist.
