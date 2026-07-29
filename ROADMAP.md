@@ -477,3 +477,42 @@ Anmerkungen zu P12:
   Versuch.
 * OpenCASCADE ist optional (`pip install -e ".[brep]"`). Ohne den Kern sagen
   die betroffenen Operationen das in einem Satz, alles andere bleibt unberührt.
+
+## Aus dem Modellordner abgeleitet
+
+Nicht aus dem Plan, sondern aus dem, was 68 echte Modelle zeigen. Zwei Dinge
+kamen vor, für die man bisher aus Formwerk heraus musste:
+
+* **Prüfstück erzeugen** (`test_piece`). Ein Würfel um die Stelle, die man
+  ausprobieren will, herausgeschnitten — nicht nachgebaut. Ausgeschnitten
+  bleibt es die echte Geometrie mit der echten Toleranz; nachgebaut wäre es
+  eine zweite Konstruktion, die anders druckt als das Teil, für das sie steht.
+  Gemessen an einer gebohrten Platte: 20 × 20 × 8 mm, 2975 von 31 775 mm³,
+  geschlossen, auf dem Bett.
+* **Beschriftung in zwei Farben, auf beiden Wegen.** `label_text` bekam einen
+  Materialslot — die Buchstaben tragen ihn in die Vereinigung, der
+  Attributübergang aus P9 bringt ihn heraus, und der 3MF-Export macht daraus
+  den Farbwechsel in *einer* Datei. Daneben `create_label`, das den Schriftzug
+  als eigenes Objekt anlegt: für den Drucker, an dem von Hand gewechselt wird,
+  und für Lettern zum Aufkleben. Welcher Weg besser ist, entscheidet der
+  Drucker, also gibt es beide.
+
+**Dabei aufgefallen — zwei Fehler, die still waren**
+
+* **Die Rückfallkette hielt „nichts" für „gescheitert".** Für eine Differenz,
+  die jemand wollte, ist ein leeres Ergebnis der Hinweis, dass der Kern
+  aufgegeben hat, und die nächste Stufe ist richtig. Für einen Schnitt kann es
+  die Antwort sein: die Körper treffen sich nicht. Das Prüfstück über einer
+  Bohrung war damit kein Nutzerhinweis, sondern eine `BooleanFailedError` nach
+  vier Stufen. `boolean(..., allow_empty=True)` sagt es jetzt einmal; die
+  Stelle in der Kollisionsprüfung, die den Kern deshalb direkt fragt, hatte
+  denselben Grund.
+* **Die konvexe Zerlegung lief nie.** Der Aufruf übergab ein `randomizeSeed`,
+  das dieses V-HACD nicht kennt; der `TypeError` wurde als „Modul fehlt"
+  gelesen, die Funktion gab eine leere Liste zurück, und der Test übersprang
+  sich mit „optionale Abhängigkeit". Damit war der Hinweispfad der
+  Trennebenensuche seit P10 tot — hinter einer grünen Suite. Der Aufruf stimmt
+  jetzt (das L zerfällt in vier Stücke), der Test überspringt sich nicht mehr,
+  und weil dieses V-HACD keinen Zufallsregler hat und nachgemessen
+  deterministisch ist, ist die `seed`-Kette durch sechs Signaturen ersatzlos
+  weg statt weiter mitgeschleppt.

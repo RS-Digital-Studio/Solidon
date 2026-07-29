@@ -22,12 +22,12 @@ from app.core.generate import from_text
 from app.core.knowledge import profiles
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project, save
-from app.core.types import Parameter, Source
+from app.core.types import Parameter, Source, SourceKind
 
 CORPUS = Path(__file__).resolve().parent.parent / "tests" / "data" / "meshes"
 
 
-def with_source(project: Project, name: str, mesh: str, kind: str = "import") -> None:
+def with_source(project: Project, name: str, mesh: str, kind: SourceKind = "import") -> None:
     project.document.sources[name] = Source(id=name, kind=kind, path=f"sources/{mesh}", sha256="")
     project.sources[name] = (CORPUS / mesh).read_bytes()
 
