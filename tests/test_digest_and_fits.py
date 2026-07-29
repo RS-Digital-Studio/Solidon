@@ -363,3 +363,16 @@ def test_the_digest_names_a_body_that_is_not_in_the_project_material(profile: Pr
     next(iter(scene.objects.values())).material = "tpu-95a"
 
     assert "tpu-95a" in digest(scene)
+
+
+def test_the_digest_says_where_a_feature_is(profile: Profile) -> None:
+    """§26.1: the agent sees only this text.
+
+    Diameter and axis without a position is a description nobody can act on:
+    "put a part at hole_1" works from the name, "drill beside it" does not. The
+    surface has known the position since a feature can be clicked (§18.5).
+    """
+    text = digest(plate_scene(profile))
+
+    assert "bei (" in text
+    assert "-25, -15" in text or "-25, 15" in text, "the bores of plate_holes sit at ±25/±15"

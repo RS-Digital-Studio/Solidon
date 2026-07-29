@@ -20,7 +20,7 @@ if TYPE_CHECKING:  # the 3MF module needs MeshData, so the import can only go on
 import numpy as np
 import trimesh
 
-from app.core.errors import GeometryError, ValidationError
+from app.core.errors import PROGRAMMING_ERRORS, GeometryError, ValidationError
 from app.core.types import BoundingBox, Mesh
 from app.i18n import _
 
@@ -177,6 +177,8 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
         loaded: Any = trimesh.load(
             io.BytesIO(payload), file_type=normalised.lstrip("."), process=False, force="mesh"
         )
+    except PROGRAMMING_ERRORS:
+        raise
     except Exception as problem:  # trimesh raises a wide range of parser errors
         raise ValidationError(
             field="file",

@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import trimesh
 
+from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.mesh import MeshData, face_components
 from app.core.log import get_logger
 from app.core.types import Finding
@@ -105,6 +106,8 @@ def resolve_self_intersections(mesh: MeshData) -> tuple[MeshData, bool]:
     """
     try:
         rebuilt = trimesh.boolean.union([mesh.raw, mesh.raw])
+    except PROGRAMMING_ERRORS:
+        raise
     except Exception as problem:  # pragma: no cover - kernel specific
         _log.warning("could not resolve self-intersections: %s", problem)
         return mesh, False

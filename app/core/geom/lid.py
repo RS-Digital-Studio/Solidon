@@ -28,7 +28,7 @@ from app.core.knowledge.parts.shapes import RIDGE_SHARE, thread_body
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.scene.placement import is_upright
+from app.core.scene.placement import faces_up
 from app.core.slice.analysis import cross_section
 from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
 from app.core.units import EPS_GEOM
@@ -107,9 +107,11 @@ def plane_of(source: SceneObject, name: str, stated: float) -> float:
     what somebody clicked. Both are in the file, so the answer does not depend on
     what happens to be selected when the project is opened again (§11).
 
-    A face that does not lie flat is refused rather than read as a height. Its
-    centre has a Z like any other point, and taken as an opening height it would
-    put the lid through the middle of the part.
+    A face that does not look upward is refused rather than read as a height.
+    Any face has a centre with a Z in it, and the ceiling of a cavity has one
+    that lies inside the part — taken as an opening height it put the lid into
+    the middle of the box, at 26,9 of 30 millimetres, and nothing further down
+    noticed because a cut below that plane does meet the wall.
     """
     if not name:
         return stated or float(source.mesh.bounds.maximum[2])
@@ -131,10 +133,10 @@ def plane_of(source: SceneObject, name: str, stated: float) -> float:
             constraint="not_a_face",
             values={"kind": feature.kind},
         )
-    if not is_upright(feature):
+    if not faces_up(feature):
         raise ValidationError(
             field="at_feature",
-            detail=_("Diese Fläche liegt nicht waagerecht — eine Öffnung für einen Deckel schon."),
+            detail=_("Diese Fläche zeigt nicht nach oben — eine Öffnung für einen Deckel schon."),
             value=name,
             constraint="not_upright",
         )
@@ -197,6 +199,7 @@ class LidParams(BaseParams):
     )
     at_feature: str = param(
         title=_("An Fläche"),
+        kind="feature",
         default="",
         doc=_(
             "Name einer erkannten Fläche, etwa face_1 — dann liegt die Öffnung in "
@@ -381,6 +384,7 @@ class ScrewLidParams(BaseParams):
     )
     at_feature: str = param(
         title=_("An Fläche"),
+        kind="feature",
         default="",
         doc=_(
             "Name einer erkannten Fläche, etwa face_1 — dann liegt die Öffnung in "

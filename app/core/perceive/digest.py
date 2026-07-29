@@ -81,23 +81,43 @@ def _object_lines(object_id: ObjectId, entry: SceneObject) -> list[str]:
 
 
 def _feature_line(feature_id: str, feature: Feature) -> str:
+    """One feature, with where it is.
+
+    The position was missing here, and it made the digest a description the agent
+    could not act on: it read the diameter and the axis of a bore and had nothing
+    to say where the bore was. For "put a part at hole_1" the name suffices, and
+    for "drill beside it" it does not. The surface has known the position since it
+    can be clicked (§18.5) — the agent sees only this text (§26.1).
+    """
     params = feature.params
+    at = _place(params.get("centre"))
     if feature.kind == "hole":
         axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
         through = tr("Durchgang") if params.get("through") else tr("Sackloch")
         return (
             f"{feature_id}  Ø {format_length(float(params.get('diameter', 0.0)))}, "
-            f"{tr('Achse')} {axis}, {through}"
+            f"{tr('Achse')} {axis}, {through}{at}"
         )
     if feature.kind == "face":
         normal = _axis_name(params.get("normal", (0.0, 0.0, 1.0)))
         return (
             f"{feature_id}  {tr('planar')} {float(params.get('area', 0.0)):.0f} mm², "
-            f"{tr('Normale')} {normal}"
+            f"{tr('Normale')} {normal}{at}"
         )
     if feature.kind == "edge_loop":
         return f"{feature_id}  {params.get('open_edges', 0)} {tr('offene Kanten')}"
-    return f"{feature_id}  {feature.kind}"
+    return f"{feature_id}  {feature.kind}{at}"
+
+
+def _place(centre: object) -> str:
+    """``, bei (25, -15, 8)`` — or nothing, for a feature that has no place."""
+    if not isinstance(centre, list | tuple) or len(centre) != 3:
+        return ""
+    try:
+        numbers = ", ".join(f"{float(value):g}" for value in centre)
+    except (TypeError, ValueError):
+        return ""
+    return f", {tr('bei')} ({numbers})"
 
 
 def _axis_name(vector: tuple[float, float, float]) -> str:

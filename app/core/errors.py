@@ -14,7 +14,7 @@ opens the error report, ``ExternalToolError`` points at the setting.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Final
 
 from app.core.types import ObjectId, OpId, SolverStage, Vec3
 from app.i18n import TranslatableText, _
@@ -280,3 +280,29 @@ class InternalError(AppError):
         "Im Programm ist ein unerwarteter Fehler aufgetreten."
     )
     default_suggestions: ClassVar[tuple[Action, ...]] = (REPORT_ERROR, SHOW_DETAILS, CANCEL)
+
+
+#: Exception types that mean the *code* is wrong, not the world.
+#:
+#: A kernel that cannot solve a boolean, a module that is not installed, a
+#: network that is down: those are answers, and the places that expect them
+#: catch broadly and carry on. The cost of catching broadly is that a wrong call
+#: looks exactly the same — and that is not a theory. The convex decomposition of
+#: §22.3 passed a parameter this V-HACD does not have; the ``TypeError`` landed
+#: in a handler meant for "the module is optional", the function returned an
+#: empty list, its test skipped itself for the same reason, and the hint path of
+#: the parting plane search was dead for two phases behind a green suite.
+#:
+#: So every handler that wraps a call whose arguments come from here lets these
+#: three through::
+#:
+#:     try:
+#:         ...
+#:     except PROGRAMMING_ERRORS:
+#:         raise
+#:     except Exception as problem:
+#:         ...
+#:
+#: Not a style rule: it is the difference between a bug that shows up on the
+#: first run and one that shows up two phases later.
+PROGRAMMING_ERRORS: Final = (TypeError, AttributeError, NameError)

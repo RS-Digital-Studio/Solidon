@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.log import get_logger
+from app.core.registry import REGISTRY, Registry
 from app.core.types import Document, Feature, FeatureRef, Finding, Scene
 from app.i18n import _, tr
 
@@ -33,8 +34,12 @@ class Reference:
     """One place in the document that names a feature."""
 
     where: str
-    """``fit:stift_1:a`` — enough to write the answer back."""
+    """``fit:stift_1:a`` or ``op:7:at_feature`` — enough to write the answer back."""
     ref: FeatureRef
+
+    @property
+    def kind(self) -> str:
+        return self.where.split(":")[0]
 
     @property
     def fit_name(self) -> str:
@@ -43,6 +48,19 @@ class Reference:
     @property
     def side(self) -> str:
         return self.where.split(":")[2]
+
+    @property
+    def op_id(self) -> int:
+        return int(self.where.split(":")[1])
+
+    @property
+    def field(self) -> str:
+        return self.where.split(":")[2]
+
+    @property
+    def title(self) -> str:
+        """What to call this reference in a question or a finding."""
+        return self.fit_name if self.kind == "fit" else f"{tr('Operation')} {self.op_id}"
 
 
 @dataclass(slots=True)
@@ -58,24 +76,58 @@ class CheckResult:
         return bool(self.rewritten or self.removed)
 
 
-def references(document: Document) -> list[Reference]:
+def references(document: Document, registry: Registry | None = None) -> list[Reference]:
     """Every feature reference the document holds.
 
-    Today that is the fits (§14). Operations carry coordinates, not feature ids;
-    when one of them starts to reference a feature it is listed here too, and the
-    check works unchanged.
+    The fits (§14), and the operations that name a feature. This function used to
+    say "operations carry coordinates, not feature ids; when one of them starts to
+    reference a feature it is listed here too" — and it had been wrong since the
+    part library arrived: every inserted part carries ``at_feature``, eighteen
+    operations declare one, and none of them was ever checked. A file whose
+    ``hole_1`` was gone did not get §21.3's question; it stopped at that operation
+    with an error, one phase after the phase that promised otherwise.
+
+    Which parameters count is declared, not guessed from the name: ``kind
+    ="feature"`` was in the parameter contract from the start and had no user.
     """
     found: list[Reference] = []
     for fit in document.fits:
         found.append(Reference(f"fit:{fit.name}:a", fit.a))
         found.append(Reference(f"fit:{fit.name}:b", fit.b))
+
+    source = registry or REGISTRY
+    for operation in document.ops:
+        for field_name in _feature_fields(source, operation.op):
+            named = str(operation.params.get(field_name) or "")
+            if not named or not operation.inputs:
+                continue
+            # The feature belongs to the object the operation works on.
+            found.append(
+                Reference(f"op:{operation.id}:{field_name}", FeatureRef(operation.inputs[0], named))
+            )
     return found
 
 
-def check(document: Document, scene: Scene, ask: Any) -> CheckResult:
+def _feature_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
+    """Parameters of this operation that name a feature, from the declaration.
+
+    Asked rather than caught: an operation this build does not know — a file from
+    a newer version, a plugin that is not loaded — has references nobody here can
+    resolve, and that is not this check's to report.
+    """
+    if not registry.has(op_name):
+        return ()
+    return tuple(
+        entry.name for entry in registry.get(op_name).params.spec() if entry.kind == "feature"
+    )
+
+
+def check(
+    document: Document, scene: Scene, ask: Any, registry: Registry | None = None
+) -> CheckResult:
     """Resolve every reference once, asking where the answer is not obvious (§21.3)."""
     result = CheckResult()
-    for reference in references(document):
+    for reference in references(document, registry):
         if _resolves(scene, reference.ref):
             continue
         candidates = _candidates(scene, reference.ref)
@@ -92,7 +144,7 @@ def check(document: Document, scene: Scene, ask: Any) -> CheckResult:
         else:
             _remove(document, reference)
             result.removed += 1
-            result.findings.append(_lost(reference, reference.fit_name))
+            result.findings.append(_lost(reference, reference.title))
     if result.changed:
         _log.info("orphan check rewrote %d and removed %d", result.rewritten, result.removed)
     return result
@@ -134,7 +186,10 @@ def question_for(reference: Reference, candidates: Sequence[str]) -> tuple[str, 
 
 
 def _rewrite(document: Document, reference: Reference, feature_id: str) -> None:
-    """Point the fit at the chosen feature — the answer is given once, not daily."""
+    """Point the reference at the chosen feature — answered once, not daily."""
+    if reference.kind == "op":
+        _set_param(document, reference, feature_id)
+        return
     for index, fit in enumerate(document.fits):
         if fit.name != reference.fit_name:
             continue
@@ -148,7 +203,27 @@ def _rewrite(document: Document, reference: Reference, feature_id: str) -> None:
 
 
 def _remove(document: Document, reference: Reference) -> None:
+    """Drop what cannot be resolved — a fit goes, an operation only loses the name.
+
+    An operation is a step somebody took, and deleting it because one of its
+    parameters lost its target would take the geometry with it. Cleared, the
+    operation falls back to its own numbers — for a part that is the origin, for
+    a lid the top edge — and the finding says so, so nobody is surprised by a
+    step that quietly moved.
+    """
+    if reference.kind == "op":
+        _set_param(document, reference, "")
+        return
     document.fits[:] = [fit for fit in document.fits if fit.name != reference.fit_name]
+
+
+def _set_param(document: Document, reference: Reference, value: str) -> None:
+    for index, operation in enumerate(document.ops):
+        if operation.id == reference.op_id:
+            params = dict(operation.params)
+            params[reference.field] = value
+            document.ops[index] = dataclasses.replace(operation, params=params)
+            return
 
 
 def _rewritten_finding(reference: Reference, feature_id: str) -> Finding:
@@ -158,7 +233,7 @@ def _rewritten_finding(reference: Reference, feature_id: str) -> Finding:
         message=_("Ein Verweis wurde auf ein anderes Merkmal umgeschrieben."),
         object_id=reference.ref.object_id,
         feature_ids=(feature_id,),
-        values={"from": reference.ref.feature_id, "to": feature_id, "fit": reference.fit_name},
+        values={"from": reference.ref.feature_id, "to": feature_id, "where": reference.title},
     )
 
 
@@ -169,7 +244,7 @@ def _lost(reference: Reference, removed_fit: str | None) -> Finding:
         message=_("Ein Verweis zeigt auf ein Merkmal, das es nicht mehr gibt."),
         object_id=reference.ref.object_id,
         feature_ids=(reference.ref.feature_id,),
-        values={"reference": str(reference.ref), "fit": reference.fit_name},
+        values={"reference": str(reference.ref), "where": reference.title},
     )
 
 

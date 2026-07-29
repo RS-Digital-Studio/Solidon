@@ -12,7 +12,7 @@ import pytest
 import trimesh
 
 from app.core.errors import BooleanFailedError
-from app.core.geom.boolean import DRAFT_CHAIN, FULL_CHAIN, boolean
+from app.core.geom.boolean import DRAFT_CHAIN, FULL_CHAIN, boolean, shared_volume
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 
@@ -213,3 +213,35 @@ def test_intersect_objects_runs_as_an_operation(document, profile) -> None:
     result = evaluate(document, profile, sources=ProjectSources(project))
     assert result.complete
     assert result.scene.objects["obj_3"].mesh.volume == pytest.approx(4000.0, rel=1e-6)
+
+
+# --- a wrong call is not an answer (§33.1) --------------------------------------
+
+
+def test_a_wrong_call_into_the_kernel_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The lesson of the convex decomposition, held down where it can be.
+
+    Handlers around a kernel catch broadly, because a kernel fails in kernel-ways
+    and that is an answer. A TypeError is not: it means the call is wrong, and
+    swallowing it turns a bug into an empty result. The decomposition of §22.3
+    did exactly that for two phases, behind a green suite.
+    """
+
+    def wrong(*_args: object, **_kwargs: object) -> None:
+        raise TypeError("intersection(): incompatible function arguments")
+
+    monkeypatch.setattr(trimesh.boolean, "intersection", wrong)
+
+    with pytest.raises(TypeError):
+        shared_volume(solid().raw, solid().raw)
+
+
+def test_a_kernel_that_gives_up_is_still_an_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The other half of the rule: what the handler is actually for stays caught."""
+
+    def gave_up(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("manifold: could not solve")
+
+    monkeypatch.setattr(trimesh.boolean, "intersection", gave_up)
+
+    assert shared_volume(solid().raw, solid().raw) == 0.0

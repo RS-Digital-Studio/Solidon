@@ -6,9 +6,12 @@ selectable in the tree and in the view, and the dialog that opened next knew
 nothing about it. Anybody wanting a bore in the face they had just clicked typed
 its coordinates in by hand, off the analysis card.
 
-This is where the two meet, and in the core rather than in the window: the same
-rule has to hold on the command line and for the agent, and a rule that lives in
-a dialog holds only there.
+This is where the two meet, and in the core rather than in the window because it
+is a rule about geometry and parameters, not about widgets — testable without Qt,
+and available to any surface that grows a selection later. Today the window is
+the only caller: the command line has no selection, and the agent works from the
+digest (§26.1), which is why the position of every feature is written into that
+digest rather than derived here a second time.
 
 Nothing here changes the document. The values become ordinary parameters of the
 operation, so the stack stays a pure function of what is written in it (§11) —
@@ -87,10 +90,22 @@ def dominant_axis(direction: Vec3) -> str | None:
     return "xyz"[best] if shares[best] >= AXIS_CLARITY else None
 
 
-def is_upright(feature: Feature) -> bool:
-    """Does this face lie flat — the condition for anything that closes it."""
+def faces_up(feature: Feature) -> bool:
+    """Does this face lie flat and look upward?
+
+    Not merely flat, which is what this asked before and was too generous: the
+    ceiling of a cavity is flat too, and it points down. Chosen as the height of
+    an opening it built a lid inside the box, at 26,9 of 30 millimetres, without
+    a word — because a cut below that plane does meet the wall, so nothing looked
+    wrong to any of the steps that followed.
+
+    Everything that closes an opening reaches downward from it: the plate sits on
+    the rim and the collar goes into the cavity. A face looking down would need
+    all of that mirrored, and building it on the guess that somebody meant that
+    is worse than saying which face is wanted.
+    """
     normal = _vector(feature.params.get("normal"))
-    return normal is not None and dominant_axis(normal) == "z"
+    return normal is not None and dominant_axis(normal) == "z" and normal[2] > 0.0
 
 
 def _allows(spec: OperationSpec, name: str, value: str) -> bool:

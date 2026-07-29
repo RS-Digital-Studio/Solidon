@@ -22,7 +22,7 @@ from dataclasses import dataclass
 
 import trimesh
 
-from app.core.errors import ValidationError
+from app.core.errors import PROGRAMMING_ERRORS, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.units import EPS_GEOM
@@ -66,6 +66,8 @@ def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> O
 
     try:
         path = trimesh.load_path(io.BytesIO(payload), file_type=suffix.lower().lstrip("."))
+    except PROGRAMMING_ERRORS:
+        raise
     except Exception as problem:  # every parser fails in its own way
         raise ValidationError(
             field="file",

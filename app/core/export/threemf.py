@@ -71,8 +71,14 @@ _EMPTY = MeshData.of(trimesh.Trimesh())
 DEFAULT_COLOUR = (0.72, 0.72, 0.72)
 
 #: How deep a component may reference other components. The format allows a
-#: tree; a cycle in it would allow an infinite one, and a file that nests this
-#: far is broken rather than clever.
+#: tree, and a file that nests this far is broken rather than clever.
+#:
+#: A depth limit alone is not enough against a cycle, which was worth measuring:
+#: two objects referencing each other with two components each have 2^32 paths
+#: through them, all of them 32 deep and none of them repeated — so the limit
+#: holds and the import never returns. Five hundred bytes of file. What actually
+#: stops it is refusing to enter an object that is already on the way there
+#: (§32: a limit says something, it does not hang).
 MAX_DEPTH = 32
 
 
@@ -317,10 +323,14 @@ def _parts_of(
     titles: dict[str, str],
     inherited: str,
     depth: int,
+    seen: frozenset[tuple[str, str]] = frozenset(),
 ) -> list[_Leaf]:
     """The meshes one object contributes, with the transforms above it applied."""
     if depth > MAX_DEPTH:
         _log.warning("3MF component nesting deeper than %d — stopped", MAX_DEPTH)
+        return []
+    if (path, identifier) in seen:
+        _log.warning("3MF object %s in %s refers back to itself — stopped", identifier, path)
         return []
 
     entry = catalog.get(path, {}).get(identifier)
@@ -367,6 +377,7 @@ def _parts_of(
                 titles,
                 name,
                 depth + 1,
+                seen | {(path, identifier)},
             )
         )
     return found

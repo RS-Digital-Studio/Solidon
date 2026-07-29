@@ -15,7 +15,7 @@ import pytest
 
 from app.core.bootstrap import load_operations
 from app.core.registry import REGISTRY
-from app.core.scene.placement import dominant_axis, is_upright, values_for
+from app.core.scene.placement import dominant_axis, faces_up, values_for
 from app.core.types import Feature
 
 load_operations()
@@ -125,8 +125,14 @@ def test_the_dominant_axis_needs_to_be_dominant() -> None:
     assert dominant_axis((0.0, 0.0, 0.0)) is None
 
 
-def test_only_a_flat_face_is_upright() -> None:
-    assert is_upright(face(normal=(0.0, 0.0, 1.0)))
-    assert is_upright(face(normal=(0.0, 0.0, -1.0))), "a floor is flat too"
-    assert not is_upright(face(normal=(1.0, 0.0, 0.0)))
-    assert not is_upright(hole())
+def test_only_a_face_looking_up_counts_as_an_opening() -> None:
+    """Flat is not enough — the ceiling of a cavity is flat and points down.
+
+    Chosen as the height of an opening it built a lid inside the box, at 26,9 of
+    30 millimetres, and nothing downstream noticed: a cut below that plane does
+    meet the wall.
+    """
+    assert faces_up(face(normal=(0.0, 0.0, 1.0)))
+    assert not faces_up(face(normal=(0.0, 0.0, -1.0))), "a ceiling is flat too"
+    assert not faces_up(face(normal=(1.0, 0.0, 0.0)))
+    assert not faces_up(hole())

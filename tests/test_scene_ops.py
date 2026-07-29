@@ -333,3 +333,45 @@ def test_an_operation_that_is_not_there_says_so(document: Document, registry: Re
 
     with pytest.raises(ValidationError):
         history.change_params(99, {"name": "x"})
+
+
+def test_a_count_outside_the_range_never_reaches_the_document(
+    document: Document, registry: Registry
+) -> None:
+    """The review's find: the ids are handed out before the range is checked.
+
+    Five million was five million ids in the document in a second, and the
+    declared limit of a hundred came too late to stop it — validation runs where
+    the scene is computed, and by then the stack has already written them down.
+    """
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+
+    with pytest.raises(ValidationError) as problem:
+        history.apply(
+            _("Vervielfachen"),
+            [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 5_000_000})],
+        )
+
+    assert problem.value.constraint == "range"
+    assert len(document.ops) == 1, "and nothing was written"
+
+
+def test_the_declared_maximum_is_the_limit(document: Document, registry: Registry) -> None:
+    """One truth: the number in the declaration, not a second one in the stack."""
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    highest = next(
+        entry.maximum
+        for entry in REGISTRY.get("duplicate_object").params.spec()
+        if entry.name == "count"
+    )
+
+    history.apply(
+        _("Vervielfachen"),
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": int(highest)})],
+    )
+    assert len(history.operation(2).outputs) == int(highest)
+
+    with pytest.raises(ValidationError):
+        history.change_params(2, {"count": int(highest) + 1})

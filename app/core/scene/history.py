@@ -185,8 +185,15 @@ class History:
         """Write the fallback stage that carried each operation into the stack (§17.2).
 
         Evaluation is a pure function and does not touch the document; this is
-        where its findings about solver stages are kept, so reopening the file
-        recomputes the same way.
+        where its findings about solver stages are kept.
+
+        A record, not an instruction: the evaluation never reads it back. What
+        makes a reopened file recompute the same way is that the chain is
+        deterministic given the same inputs and the stored seed (§11.3) — this
+        entry is what lets the report say afterwards what the numbers are worth,
+        and it is overwritten whenever a run reaches another stage. Which is also
+        why a changed parameter needs nothing done to it here: the next run
+        writes the stage its own geometry reached.
         """
         if not solvers:
             return
@@ -276,11 +283,14 @@ class History:
         has to be calculated would mean the stack could not say how many
         objects a step makes — so it is refused with that sentence rather than
         guessed at.
+
+        And checked against the range the parameter declares, here rather than
+        only where the scene is computed. The ids are handed out before that:
+        a count of five million was five million ids in the document in a
+        second, and the declared limit of a hundred came too late to stop it.
         """
-        value = draft.params.get(
-            field_name,
-            next((entry.default for entry in spec.params.spec() if entry.name == field_name), 1),
-        )
+        declared = next((entry for entry in spec.params.spec() if entry.name == field_name), None)
+        value = draft.params.get(field_name, declared.default if declared else 1)
         if expressions.is_expression(value):
             raise ValidationError(
                 field=field_name,
@@ -289,7 +299,7 @@ class History:
                 values={"op": spec.name, "value": str(value)},
             )
         try:
-            return max(int(value), 1)
+            count = int(value)
         except (TypeError, ValueError) as problem:
             raise ValidationError(
                 field=field_name,
@@ -297,6 +307,18 @@ class History:
                 constraint="not_a_number",
                 values={"op": spec.name, "value": str(value)},
             ) from problem
+
+        low = int(declared.minimum) if declared and declared.minimum is not None else 1
+        high = int(declared.maximum) if declared and declared.maximum is not None else None
+        if count < low or (high is not None and count > high):
+            raise ValidationError(
+                field=field_name,
+                detail=_("Diese Stückzahl liegt außerhalb des erlaubten Bereichs."),
+                value=count,
+                constraint="range",
+                values={"op": spec.name, "minimum": low, "maximum": high},
+            )
+        return max(count, 1)
 
     def _check_params(self, op_name: str, specs: Iterable[Any], params: Mapping[str, Any]) -> None:
         """Names and expression syntax. Values are checked once resolved (§13)."""

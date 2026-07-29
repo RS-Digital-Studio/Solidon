@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import trimesh
 
+from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
@@ -168,6 +169,8 @@ def _vent(
         )
         try:
             drilled = boolean("difference", [drilled, tool]).mesh
+        except PROGRAMMING_ERRORS:
+            raise
         except Exception as problem:  # a vent that cannot be cut is not fatal
             _log.info("vent at %s failed: %s", spot, problem)
             continue

@@ -728,3 +728,55 @@ zweiten Fall wäre eine zweite Stelle, an der ein Parameter fehlen kann.
 lebendes `MainWindow` etwas fehlschlagen lässt, hängt — das Fenster antwortet auf
 `session.failed` mit einem modalen Meldungsfenster. Steht jetzt im Kopf der
 Testdatei.
+
+## Tiefes Review
+
+Geleitet von den Mustern, die diese Sitzung dreimal gezeigt hat: eine
+Fehlerbehandlung, die einen echten Fehler als erwarteten Sonderfall verbucht;
+ein Test, der den Pfad nie betritt; ein Paar, dessen Hälften einzeln stimmen;
+eine Behauptung im Kommentar, die keiner nachgemessen hat. Fünf Funde.
+
+**Ein zyklisches 3MF hängte die Anwendung auf.** Die Tiefengrenze bremst jeden
+*Pfad* bei 32 — bei zwei Komponenten je Objekt sind das 2³² Pfade, alle 32 tief
+und keiner wiederholt. Eine Datei von 500 Byte, und der Import kommt nie zurück.
+Was hilft, ist ein Objekt nicht zu betreten, das auf dem Weg dorthin schon liegt:
+0,001 s statt unendlich (§32 — eine Grenze sagt etwas, sie hängt nicht).
+
+**Der Planer vergab 5 Millionen Objekt-IDs in 1,1 Sekunden.** Die Stückzahl
+deklariert `maximum=100`, geprüft wird das aber erst, wo die Szene gerechnet
+wird — und der Stapel vergibt die IDs vorher. Jetzt prüft er gegen dieselbe
+Deklaration, also gegen eine Wahrheit statt gegen zwei.
+
+**Eine nach unten zeigende Fläche war eine Öffnung.** „Waagerecht" war zu
+großzügig: die Innendecke eines Hohlraums ist auch waagerecht. Als Öffnungshöhe
+gewählt baute sie einen Deckel *im* Kasten, bei 26,9 von 30 mm, und keiner der
+Schritte danach merkte etwas — ein Schnitt unter dieser Ebene trifft die Wand.
+`faces_up` verlangt jetzt, dass sie nach oben zeigt.
+
+**Die Fehlerbehandlung, die den V-HACD-Fehler verschluckt hat, hatte neun
+Geschwister.** `PROGRAMMING_ERRORS` in `core/errors.py` benennt die drei Typen,
+die heißen „der Code ist falsch", und neun Handler lassen sie durch, statt sie
+als Umgebungsfehler zu verbuchen. Zwei Tests halten beide Hälften der Regel:
+ein `TypeError` kommt durch, ein `RuntimeError` bleibt gefangen.
+
+**Die Verwaisungsprüfung hat ihren eigenen Fall vorhergesagt.** Im Kommentar von
+`references` stand: „Operations carry coordinates, not feature ids; when one of
+them starts to reference a feature it is listed here too." Seit P5 tun sie es —
+jeder eingesetzte Baustein trägt `at_feature`, achtzehn Operationen deklarieren
+eine, und keine wurde je geprüft. Eine Datei, deren `hole_1` weg war, bekam
+nicht die Frage aus §21.3, sondern blieb an der Operation mit einem Fehler
+stehen. Welche Parameter zählen, ist jetzt deklariert (`kind="feature"` stand
+seit P0 im Vertrag und hatte keinen Nutzer); wird ein Verweis fallen gelassen,
+verliert die Operation nur den Namen und nicht ihre Geometrie.
+
+**Zwei eigene Behauptungen zurückgenommen:** `values_for` liegt nicht im Kern,
+„weil CLI und Agent dieselbe Regel brauchen" — sie benutzen es nicht. Es liegt
+dort, weil es eine Regel über Geometrie und Parameter ist, prüfbar ohne Qt; der
+Agent arbeitet aus dem Steckbrief, und **deshalb steht die Position jedes
+Merkmals jetzt darin**. Vorher nannte der Steckbrief Durchmesser und Achse einer
+Bohrung und nicht, wo sie ist — für „setze ein Teil an hole_1" reicht der Name,
+für „bohre daneben" nicht. Und `record_solvers` behauptete, die notierte
+Rückfallstufe lasse eine Datei gleich rechnen; die Auswertung liest sie nie —
+gleich rechnet sie, weil die Kette deterministisch ist.
+
+Korpus danach: **68 von 68**, 1681 Tests grün.

@@ -17,6 +17,7 @@ from app.core.geom import lid as lid_module
 from app.core.geom.boolean import shared_volume
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import profiles
+from app.core.perceive.features import detect
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, Profile, Scene, SceneObject
@@ -311,3 +312,48 @@ def test_a_softer_material_gets_more_play(profile: Profile) -> None:
     soft = make_screw_lid(soft_jar, profile, pitch=3.0).findings[0].values["clearance_mm"]
 
     assert soft > stiff
+
+
+def test_the_ceiling_of_a_cavity_is_not_an_opening(profile: Profile) -> None:
+    """The review's find: flat was not enough, it has to look up.
+
+    A box open at the bottom has an interior ceiling — flat, pointing down, with
+    a centre at 26,9 of 30 mm. Chosen as the opening it built a lid inside the
+    box and no step complained, because a cut below that plane does meet a wall.
+    """
+    outer = trimesh.creation.box(extents=(60.0, 40.0, 30.0))
+    outer.apply_translation((0.0, 0.0, 15.0))
+    inner = trimesh.creation.box(extents=(54.0, 34.0, 27.0))
+    inner.apply_translation((0.0, 0.0, 13.4))
+    body = MeshData.of(trimesh.boolean.difference([outer, inner]))
+    features = detect(body)
+    ceiling = next(
+        entry
+        for entry in features.values()
+        if entry.kind == "face"
+        and entry.params["normal"][2] < -0.9
+        and entry.params["centre"][2] > 1
+    )
+    entry = SceneObject(id="obj_1", name="Kasten", mesh=body, features=features)
+
+    with pytest.raises(ValidationError) as problem:
+        make_lid(entry, profile, collar=4.0, at_feature=ceiling.id)
+
+    assert problem.value.constraint == "not_upright"
+
+
+def test_a_chosen_rim_decides_the_height(profile: Profile) -> None:
+    """And the other way round: the face that was clicked is the one that counts."""
+    entry = housing()
+    entry.features = detect(entry.mesh)
+    rim = next(
+        feature
+        for feature in entry.features.values()
+        if feature.kind == "face"
+        and feature.params["normal"][2] > 0.9
+        and feature.params["centre"][2] == pytest.approx(OUTER[2])
+    )
+
+    result = make_lid(entry, profile, collar=4.0, at_feature=rim.id)
+
+    assert result.findings[0].values["z_mm"] == pytest.approx(OUTER[2])

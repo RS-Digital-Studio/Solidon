@@ -20,6 +20,7 @@ from typing import Any
 import numpy as np
 import trimesh
 
+from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.boolean import boolean, shared_volume
 from app.core.geom.mesh import MeshData
 from app.core.geom.section import SectionPlane, cut
@@ -457,7 +458,9 @@ def _really_overlap(first: MeshData, second: MeshData, clearance: float) -> bool
     try:
         query = trimesh.proximity.ProximityQuery(first.raw)
         _closest, distance, _face = query.on_surface(np.asarray(second.raw.vertices, dtype=float))
-    except Exception:
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception:  # a proximity query on a broken body fails in its own ways
         return False
     return bool(len(distance)) and float(np.min(distance)) < clearance
 

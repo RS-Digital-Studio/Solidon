@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.core.brep.kernel import Solid, require
-from app.core.errors import GeometryError
+from app.core.errors import PROGRAMMING_ERRORS, GeometryError
 from app.core.log import get_logger
 from app.core.types import Vec3
 from app.core.units import EPS_GEOM
@@ -168,6 +168,8 @@ def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> So
             )
         shape = builder.Shape()
     except GeometryError:
+        raise
+    except PROGRAMMING_ERRORS:
         raise
     except Exception as problem:  # OpenCASCADE raises its own exception types
         raise GeometryError(

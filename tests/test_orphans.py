@@ -6,14 +6,17 @@ from pathlib import Path
 
 import pytest
 
+from app.core.bootstrap import load_operations
 from app.core.errors import AmbiguityError
 from app.core.geom.mesh import read_mesh
 from app.core.ingest.loader import normalise
 from app.core.perceive.features import detect
 from app.core.scene import orphans
-from app.core.types import Document, FeatureRef, Fit, Profile, Scene, SceneObject
+from app.core.types import Document, FeatureRef, Fit, Operation, Profile, Scene, SceneObject
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+
+load_operations()
 
 
 @pytest.fixture
@@ -157,3 +160,64 @@ def test_the_candidates_can_be_shown_highlighted(scene: Scene) -> None:
     found = orphans.candidates_of(scene, FeatureRef("obj_1", "hole_9"))
 
     assert found and all(feature.kind == "hole" for feature in found.values())
+
+
+# --- operations name features too, and never were checked -----------------------
+
+
+def document_with_op(named: str, op: str = "insert_heatset_m4") -> Document:
+    """A document whose one operation points at a feature by name."""
+    document = Document(format_version=1, app_version="0.0.1")
+    document.ops.append(
+        Operation(id=1, op=op, inputs=("obj_1",), outputs=("obj_1",), params={"at_feature": named})
+    )
+    return document
+
+
+def test_an_operation_that_names_a_feature_is_a_reference() -> None:
+    """The gap this closes: eighteen operations declare one and none was listed.
+
+    ``references`` said "operations carry coordinates, not feature ids" — and it
+    had been wrong since the part library arrived. A file whose hole was gone did
+    not get §21.3's question; it stopped at that operation with an error.
+    """
+    found = orphans.references(document_with_op("hole_1"))
+
+    assert [entry.where for entry in found] == ["op:1:at_feature"]
+    assert found[0].ref == FeatureRef("obj_1", "hole_1")
+
+
+def test_an_empty_reference_is_not_a_reference() -> None:
+    """Most operations leave it empty, and an empty name points nowhere."""
+    assert orphans.references(document_with_op("")) == []
+
+
+def test_a_lost_reference_of_an_operation_is_put_to_the_user(scene: Scene) -> None:
+    document = document_with_op("hole_9")
+    answers: list[str] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        answers.append(question)
+        return "hole_2"
+
+    result = orphans.check(document, scene, answer)
+
+    assert answers, "the question was asked"
+    assert result.rewritten == 1
+    assert document.ops[0].params["at_feature"] == "hole_2", "and the answer is in the file"
+
+
+def test_dropping_it_clears_the_name_and_keeps_the_step(scene: Scene) -> None:
+    """An operation is a step somebody took — deleting it would take the geometry."""
+    document = document_with_op("hole_9")
+
+    result = orphans.check(document, scene, lambda question, choices: orphans.REMOVE_CHOICE)
+
+    assert result.removed == 1
+    assert len(document.ops) == 1, "the step stays"
+    assert document.ops[0].params["at_feature"] == "", "only the name is gone"
+
+
+def test_an_operation_the_registry_does_not_know_is_skipped() -> None:
+    """A file from a newer version, or a plugin that is not loaded."""
+    assert orphans.references(document_with_op("hole_1", op="op_from_the_future")) == []

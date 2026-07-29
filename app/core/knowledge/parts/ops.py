@@ -79,6 +79,7 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
         "str",
         param(
             title=_("An Merkmal"),
+            kind="feature",
             default="",
             doc=_(
                 "Name eines erkannten Merkmals, zum Beispiel hole_1. Dann zählt "

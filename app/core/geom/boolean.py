@@ -23,7 +23,7 @@ from typing import Literal
 import numpy as np
 import trimesh
 
-from app.core.errors import BooleanFailedError
+from app.core.errors import PROGRAMMING_ERRORS, BooleanFailedError
 from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
@@ -259,6 +259,8 @@ def shared_volume(first: trimesh.Trimesh, second: trimesh.Trimesh) -> float:
     """
     try:
         shared = trimesh.boolean.intersection([first, second])
+    except PROGRAMMING_ERRORS:
+        raise
     except Exception:  # kernels fail in kernel-specific ways
         return 0.0
     if shared is None or not len(shared.faces):

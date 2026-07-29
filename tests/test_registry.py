@@ -6,6 +6,8 @@ import pytest
 
 from app.core.errors import InternalError
 from app.core.registry import (
+    REGISTRY,
+    VARIABLE,
     OperationSpec,
     Registry,
     cli_commands,
@@ -207,3 +209,53 @@ def test_unknown_operation_is_an_internal_error(registry: Registry) -> None:
     with pytest.raises(InternalError):
         registry.get("nothing_like_this")
     assert not registry.has("nothing_like_this")
+
+
+# --- the declarations of the real registry have to agree with each other ---------
+
+
+def test_no_declaration_of_the_real_registry_contradicts_itself() -> None:
+    """§10: the declaration is the single source, so it may not say two things.
+
+    Three fields arrived that can disagree with each other, and a disagreement
+    between them is not visible in any one of them: an output count that names a
+    parameter the operation does not have, a count without a variable output, or
+    an operation that takes the whole scene *and* one particular object.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    for spec in REGISTRY.all():
+        names = {entry.name for entry in spec.params.spec()}
+        if spec.produces_from:
+            assert spec.produces == VARIABLE, f"{spec.name}: a stated count needs a variable output"
+            assert spec.produces_from in names, f"{spec.name}: names {spec.produces_from}"
+        if spec.whole_scene:
+            assert not spec.consumes, f"{spec.name}: the whole scene is not one object"
+            assert spec.produces == VARIABLE, f"{spec.name}: hands them all back"
+
+
+def test_a_feature_parameter_is_declared_as_one() -> None:
+    """§21.3 checks the references it is told about — by kind, not by name.
+
+    Eighteen operations name a feature, and before they said so the orphan check
+    walked past every one of them.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    named = {
+        (spec.name, entry.name)
+        for spec in REGISTRY.all()
+        for entry in spec.params.spec()
+        if entry.name == "at_feature"
+    }
+    declared = {
+        (spec.name, entry.name)
+        for spec in REGISTRY.all()
+        for entry in spec.params.spec()
+        if entry.kind == "feature"
+    }
+
+    assert named, "otherwise this test proves nothing"
+    assert named == declared, "a parameter that names a feature declares kind='feature'"

@@ -28,6 +28,7 @@ from typing import Any
 import numpy as np
 import trimesh
 
+from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.mesh import MeshData
 from app.core.geom.section import AXIS_NORMALS, Axis, SectionPlane
 from app.core.log import get_logger
@@ -375,6 +376,8 @@ def convex_parts(mesh: MeshData, *, limit: int = 8) -> list[MeshData]:
     """
     try:
         raw = mesh.raw.convex_decomposition(maxConvexHulls=limit)
+    except PROGRAMMING_ERRORS:
+        raise
     except Exception as problem:  # the module is optional, and V-HACD is C++
         _log.info("convex decomposition unavailable: %s", problem)
         return []

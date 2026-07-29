@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
@@ -128,6 +129,8 @@ def _cut(
 ) -> tuple[MeshData, SolverInfo] | None:
     try:
         outcome = boolean("difference", [keep, subtract], quality=quality)
+    except PROGRAMMING_ERRORS:
+        raise
     except Exception as problem:  # kernels fail in kernel-specific ways
         _log.info("difference could not be computed: %s", problem)
         return None
