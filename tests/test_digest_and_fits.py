@@ -175,6 +175,88 @@ def test_the_tolerance_follows_the_material(profile: Profile) -> None:
     assert fit_check.check(scene, tpu), "the same geometry is wrong for a softer material"
 
 
+def two_faces(offset: float, normal_b: tuple[float, float, float], profile: Profile) -> Scene:
+    """Two faces that are meant to sit in one plane, and one that is offset."""
+    lower = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"area": 100.0, "centre": (0.0, 0.0, 10.0), "normal": (0.0, 0.0, 1.0)},
+    )
+    upper = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"area": 100.0, "centre": (0.0, 0.0, 10.0 + offset), "normal": normal_b},
+    )
+    return Scene(
+        objects={
+            "obj_1": SceneObject(
+                id="obj_1", name="Kiste", mesh=_dummy(), features={"face_1": lower}
+            ),
+            "obj_2": SceneObject(
+                id="obj_2", name="Deckel", mesh=_dummy(), features={"face_1": upper}
+            ),
+        },
+        profile=profile,
+    )
+
+
+def flush_fit() -> Fit:
+    return Fit(
+        name="deckel",
+        a=FeatureRef("obj_1", "face_1"),
+        b=FeatureRef("obj_2", "face_1"),
+        kind="flush",
+        tolerance="auto:",
+    )
+
+
+def test_two_faces_in_one_plane_say_nothing(profile: Profile) -> None:
+    """§14: ``flush`` was accepted and never checked — a fit kind as a stage prop."""
+    scene = two_faces(0.0, (0.0, 0.0, -1.0), profile)
+    scene.fits.append(flush_fit())
+
+    assert fit_check.check(scene, profile) == []
+
+
+def test_a_lid_that_sits_proud_is_reported(profile: Profile) -> None:
+    scene = two_faces(0.3, (0.0, 0.0, -1.0), profile)
+    scene.fits.append(flush_fit())
+
+    findings = fit_check.check(scene, profile)
+
+    assert findings and findings[0].code == "fit.violated"
+    assert findings[0].values["actual"].startswith("0.3")
+
+
+def test_faces_at_an_angle_are_a_different_mistake(profile: Profile) -> None:
+    """Two planes meeting at a corner have no distance worth reporting."""
+    scene = two_faces(0.0, (1.0, 0.0, 0.0), profile)
+    scene.fits.append(flush_fit())
+
+    findings = fit_check.check(scene, profile)
+
+    assert findings and "parallel" in str(findings[0].message)
+
+
+def test_a_flush_fit_needs_two_faces(profile: Profile) -> None:
+    scene = pin_and_hole(5.25, 5.0, profile)
+    scene.fits.append(
+        Fit(
+            name="falsch",
+            a=FeatureRef("obj_1", "hole_1"),
+            b=FeatureRef("obj_2", "pin_1"),
+            kind="flush",
+            tolerance="auto:",
+        )
+    )
+
+    findings = fit_check.check(scene, profile)
+
+    assert findings and findings[0].code == "fit.not_measurable"
+
+
 def test_a_fit_pointing_at_nothing_is_an_error(profile: Profile) -> None:
     scene = pin_and_hole(5.25, 5.0, profile)
     scene.fits.append(

@@ -328,6 +328,27 @@ fest und überspringt sich, wo der Ordner fehlt.
   Schnitt ist dabei die Antwort, nicht der Fehlschlag, den die Rückfallkette
   daraus macht.
 
+## Referenzkorpus und Passungen vervollständigt
+
+Der Korpus aus §34 ist jetzt komplett: `broken_selfint.stl` (zwei Würfel, die
+sich durchdringen), `colored.3mf` (zwei Materialgruppen, mit der eigenen
+3MF-Hälfte geschrieben) und `assembly_fit.p3d` (Platte, Deckel, Passungspaar).
+Beim letzten sind die Zahlen die Lehre: 6 mm Bohrung wird 6,2 wegen der
+Kompensation, PETG will 0,25 Spiel, also ist der Stift 5,95 — und in einem
+anderen Material meldet sich die Passung von selbst.
+
+Dabei kam heraus, dass **`flush` als Passungsart nie geprüft wurde**: angenommen,
+abgespeichert und stillschweigend übersprungen. Jetzt wird der Abstand der
+zweiten Fläche von der Ebene der ersten gemessen — die Zahl, die man mit einem
+Haarlineal über die Baugruppe findet. Zwei Flächen, die nicht parallel stehen,
+sind ein anderer Fehler und werden als solcher gemeldet.
+
+**Zur Paketgröße:** 749 MB im Ordner, **255 MB gepackt** — das ist die Zahl, die
+jemand herunterlädt, und sie liegt im Rahmen vergleichbarer Anwendungen. VTK von
+Hand zu beschneiden würde davon vielleicht 50 MB sparen und dafür Abstürze in
+selten benutzten Pfaden riskieren, die erst beim Nutzer auffallen. Bewusst
+gelassen.
+
 ## Durchsicht nach P12 — was noch offen ist
 
 **Vollständigkeit gegen §25.** Der Abgleich der Kategorienliste mit dem

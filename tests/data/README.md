@@ -46,6 +46,9 @@ python tests/data/make_corpus.py
 | `meshes/degenerate.stl` | Würfel plus Nullflächen-Dreieck, Nadel und Dublette | 15 Dreiecke roh, nach der Eingangsstufe weniger; Befund `ingest.degenerate_removed` | `test_ingest.py` |
 | `meshes/broken_open.stl` | Würfel ohne drei Dreiecke | nicht wasserdicht, Befund `ingest.not_watertight` (Warnung) | `test_ingest.py` |
 | `meshes/two_components.stl` | Würfel plus winziges Bruchstück daneben | zwei Komponenten, Befunde `ingest.multiple_components` und `ingest.small_components`; **nichts wird gelöscht** | `test_ingest.py` |
+| `meshes/broken_selfint.stl` | zwei Würfel, die sich durchdringen, ohne verschnitten zu sein | 24 Dreiecke; die Rückfallkette löst es derzeit schon auf Stufe 1 — die Datei hält fest, dass das so bleibt | `test_corpus.py` |
+| `meshes/colored.3mf` | zwei Würfel in Slot 1 und 2, mit der eigenen 3MF-Hälfte geschrieben | zwei Materialgruppen „Rot" und „Schwarz", je Dreieck zugeordnet; Rundweg durch `threemf.read` | `test_corpus.py` |
+| `projects/assembly_fit.p3d` | Platte mit 6-mm-Bohrung, Deckel mit 5,95-mm-Stift, dazu ein Passungspaar `auto:petg` | mit PETG hält die Passung, mit einem anderen Material meldet sie sich — die Bohrung folgt dem Druckmaterial, die Toleranz dem, was im Paar steht | `test_corpus.py` |
 | `meshes/oversized.stl` | 400 × 80 × 40 mm: zwei dicke Enden, schlanke Mitte | passt auf keinen Bauraum; der Auto Split findet die Trennebene in der Mitte (Querschnitt 1200 mm², eine Kontur) und macht daraus zwei wasserdichte Teile | `test_autosplit.py` |
 
 `meshes/dense_1m.stl` (1,31 Mio. Dreiecke, Leistungsmessung nach §31) wird
@@ -53,6 +56,6 @@ python tests/data/make_corpus.py
 Leistungstest erzeugt sie beim ersten Lauf; die Messwerte landen in
 `tests/.performance.json` und bleiben lokal, weil sie von der Maschine abhängen.
 
-Noch offen aus §34 — sie brauchen Bausteine aus späteren Phasen:
-`broken_selfint.stl` (Rückfallkette, P2), `island_tower.stl` (Schichtanalyse, P3),
-`colored.3mf` (Attributerhalt, P9), `assembly_fit.p3d` (Passungsprüfung, P3).
+Damit ist der Korpus aus §34 vollständig, bis auf `legacy_v1.p3d` — die
+Altformate liegen unter `projects/example_v1.p3d` und `example_v2.p3d` und
+werden von `test_project.py` durch die Migrationskette geschickt.

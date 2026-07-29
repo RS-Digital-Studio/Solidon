@@ -22,6 +22,11 @@ _log = get_logger(__name__)
 #: How far the actual gap may differ from the profile value before it is a finding.
 FIT_TOLERANCE = EPS_DISPLAY * 5
 
+#: How parallel two faces have to be to be worth measuring a flush fit on.
+#: 0.99 is about eight degrees — past that they are not the same plane, they
+#: are two planes meeting at a corner.
+FLUSH_PARALLEL = 0.99
+
 
 def resolve(scene: Scene, reference: FeatureRef) -> Feature | None:
     """The feature a fit points at, or None when it is gone."""
@@ -58,7 +63,7 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
         ]
 
     if fit.kind == "flush":
-        return []
+        return _check_flush(fit, first, second)
 
     hole, pin = _sort_by_kind(first, second)
     hole_diameter = diameter_of(hole)
@@ -90,6 +95,74 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
             },
         )
     ]
+
+
+def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
+    """Two faces that are meant to sit in one plane (§14).
+
+    Measured as the distance of the second face's centre from the first face's
+    plane. That is the number somebody would put a straightedge across the
+    assembly to find, and it is the one that decides whether a lid sits proud.
+
+    A pair of faces that are not parallel is a different mistake and gets said
+    so: two planes at an angle have no distance worth reporting.
+    """
+    if first.kind != "face" or second.kind != "face":
+        return [
+            Finding(
+                code="fit.not_measurable",
+                severity="warning",
+                message=_("Eine bündige Passung braucht zwei Flächen."),
+                values={"fit": fit.name, "a": first.kind, "b": second.kind},
+            )
+        ]
+
+    normal = _vector(first.params.get("normal"))
+    other = _vector(second.params.get("normal"))
+    centre = _vector(first.params.get("centre"))
+    against = _vector(second.params.get("centre"))
+    if normal is None or other is None or centre is None or against is None:
+        return [
+            Finding(
+                code="fit.not_measurable",
+                severity="warning",
+                message=_("Diese Passung lässt sich nicht messen — es fehlt eine Fläche."),
+                values={"fit": fit.name},
+            )
+        ]
+
+    alignment = abs(sum(a * b for a, b in zip(normal, other, strict=True)))
+    if alignment < FLUSH_PARALLEL:
+        return [
+            Finding(
+                code="fit.violated",
+                severity="warning",
+                message=_("Die beiden Flächen stehen nicht parallel — bündig können sie nicht."),
+                values={"fit": fit.name, "alignment": round(alignment, 3)},
+            )
+        ]
+
+    offset = abs(sum((b - a) * n for a, b, n in zip(centre, against, normal, strict=True)))
+    if offset <= FIT_TOLERANCE:
+        return []
+    return [
+        Finding(
+            code="fit.violated",
+            severity="warning",
+            message=_("Die beiden Flächen sitzen nicht bündig."),
+            values={"fit": fit.name, "actual": format_length(offset), "expected": "0 mm"},
+        )
+    ]
+
+
+def _vector(value: object) -> tuple[float, float, float] | None:
+    """A three-component parameter, or None when it is not one."""
+    if not isinstance(value, list | tuple) or len(value) != 3:
+        return None
+    try:
+        return (float(value[0]), float(value[1]), float(value[2]))
+    except (TypeError, ValueError):
+        return None
 
 
 def _sort_by_kind(first: Feature, second: Feature) -> tuple[Feature, Feature]:
