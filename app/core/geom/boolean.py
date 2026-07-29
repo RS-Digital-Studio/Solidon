@@ -65,12 +65,20 @@ def boolean(
     seed: int | None = None,
     stages: tuple[SolverStage, ...] | None = None,
     cut_slot: int = DEFAULT_CUT_SLOT,
+    allow_empty: bool = False,
 ) -> BooleanOutcome:
     """Run a boolean operation, falling back stage by stage until one holds.
 
     ``cut_slot`` is what a newly cut face gets (§20): by default the slot of the
     body being cut, so a hole through a two-coloured part does not paint its
     wall in whatever the cutter happened to be.
+
+    ``allow_empty`` says that nothing is an answer. For a difference somebody
+    asked for, an empty result means the kernel gave up and the next stage
+    should try — that is what the chain is for. For an intersection it can mean
+    the two bodies simply do not meet, and running three more stages to hear
+    the same thing again turns a fact into an exception the caller has to
+    unpick.
     """
     if len(meshes) < 2:
         raise ValueError("a boolean operation needs at least two bodies")
@@ -85,11 +93,15 @@ def boolean(
         except Exception as problem:  # kernels fail in kernel-specific ways
             _log.info("boolean stage %s failed: %s", stage, problem)
             continue
-        if result is None or not _plausible(result):
+        if result is None or not _plausible(result, allow_empty):
             _log.info("boolean stage %s produced nothing usable", stage)
             continue
         return BooleanOutcome(
-            mesh=_keep_slots(result, meshes, kind, stage, cut_slot),
+            # Nothing has no faces to colour, and the transfer would look for
+            # the nearest surface of a body that has none.
+            mesh=result
+            if result.triangle_count == 0
+            else _keep_slots(result, meshes, kind, stage, cut_slot),
             solver=SolverInfo(
                 strategy=stage,
                 attempted=tuple(attempted),
@@ -157,8 +169,11 @@ def _kernel(kind: BooleanKind, bodies: list[trimesh.Trimesh], like: MeshData) ->
         "intersection": trimesh.boolean.intersection,
     }[kind]
     result = operation(bodies)
-    if result is None or not len(result.faces):
+    if result is None:
         return None
+    # An empty body is handed on rather than swallowed here: whether nothing is
+    # an answer or a failure is _plausible's decision, and it is the only place
+    # that knows what the caller asked for.
     return like.replacing(result)
 
 
@@ -201,7 +216,9 @@ def _voxel(kind: BooleanKind, meshes: list[MeshData]) -> MeshData | None:
             combined = combined & other
 
     if not combined.any():
-        return None
+        # Empty, and marching cubes has nothing to walk over. Same as the
+        # kernel stages: the empty body goes on, _plausible judges it.
+        return meshes[0].replacing(trimesh.Trimesh())
     body = trimesh.voxel.ops.matrix_to_marching_cubes(matrix=combined, pitch=pitch)
     # matrix_to_marching_cubes puts cell (0,0,0) at the origin; shift onto the raster.
     body.apply_translation(low)
@@ -230,8 +247,13 @@ def _rasterise(
     return target
 
 
-def _plausible(mesh: MeshData) -> bool:
-    """A result has to have volume; an empty or inside-out body is not an answer."""
+def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:
+    """A result has to have volume; an empty or inside-out body is not an answer.
+
+    Unless the caller says otherwise — see ``allow_empty`` in :func:`boolean`.
+    """
+    if allow_empty and mesh.triangle_count == 0:
+        return True
     return mesh.triangle_count > 0 and abs(mesh.volume) > EPS_GEOM
 
 
