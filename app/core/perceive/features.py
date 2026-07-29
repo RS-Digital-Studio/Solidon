@@ -38,6 +38,11 @@ MIN_PATCH_FACES = 6
 #: Faces smaller than this share of the largest one are not reported separately.
 MIN_FACE_SHARE = 0.02
 
+#: …unless they are made of at least this many coplanar triangles. A cylinder
+#: cap comes out of the kernel as one triangle per segment, so counting them is
+#: what tells a small flat face apart from a slice of a curved one.
+MIN_FLAT_FACES = 8
+
 
 @dataclass(frozen=True, slots=True)
 class CylinderFit:
@@ -57,9 +62,18 @@ class CylinderFit:
 
 
 def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
-    """Everything this module can recognise, with stable names."""
+    """Everything this module can recognise, with stable names.
+
+    Bores and pins share their search (see :func:`_cylinders`), so asking for
+    both costs what asking for one used to.
+    """
     found: dict[FeatureId, Feature] = {}
-    for feature in [*detect_holes(mesh), *detect_faces(mesh), *detect_edge_loops(mesh)]:
+    for feature in [
+        *detect_holes(mesh),
+        *detect_pins(mesh),
+        *detect_faces(mesh),
+        *detect_edge_loops(mesh),
+    ]:
         found[feature.id] = feature
     _log.info("detected %d features", len(found))
     return found
@@ -68,8 +82,14 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
 # --- bores ----------------------------------------------------------------------
 
 
-def detect_holes(mesh: MeshData) -> list[Feature]:
-    """Cylindrical patches whose normals point inwards (§21.1)."""
+def _cylinders(mesh: MeshData) -> list[tuple[CylinderFit, list[int]]]:
+    """Every cylindrical patch of the body, fitted once.
+
+    Bores and pins are the same search read two ways, and the search is the
+    expensive half: on a body of a million triangles the facets and the
+    connected patches cost seconds. Doing it twice doubled the detection time
+    for nothing, so it happens here and both callers filter the result.
+    """
     body = mesh.raw
     if not len(body.faces):
         return []
@@ -86,11 +106,18 @@ def detect_holes(mesh: MeshData) -> list[Feature]:
         if len(patch) < MIN_PATCH_FACES:
             continue
         fit = fit_cylinder(body, patch)
-        if fit is not None and fit.good and fit.inward:
+        if fit is not None and fit.good:
             found.append((fit, patch))
 
     # Sorted by position, so the numbering is reproducible for the same body.
     found.sort(key=lambda entry: (round(entry[0].centre[0], 3), round(entry[0].centre[1], 3)))
+    return found
+
+
+def detect_holes(mesh: MeshData) -> list[Feature]:
+    """Cylindrical patches whose normals point inwards (§21.1)."""
+    body = mesh.raw
+    found = [entry for entry in _cylinders(mesh) if entry[0].inward]
     return [
         Feature(
             id=f"hole_{number}",
@@ -110,8 +137,44 @@ def detect_holes(mesh: MeshData) -> list[Feature]:
     ]
 
 
+def detect_pins(mesh: MeshData) -> list[Feature]:
+    """Cylindrical patches whose normals point outwards (§21.1).
+
+    The same fit as a bore, read the other way round. It is worth having for
+    one reason: a pin is what a bore is paired with (§14), and a fit needs both
+    ends. Auto split names the pins it makes itself — this is for the part that
+    came from somewhere else.
+    """
+    body = mesh.raw
+    found = [entry for entry in _cylinders(mesh) if not entry[0].inward]
+    return [
+        Feature(
+            id=f"pin_{number}",
+            kind="pin",
+            provenance="detected",
+            params={
+                "diameter": round(fit.radius * 2.0, 4),
+                "axis": fit.axis,
+                "centre": fit.centre,
+                "depth": round(_patch_extent(body, patch, fit.axis), 4),
+                "residual": round(fit.residual, 4),
+            },
+            face_indices=tuple(patch),
+        )
+        for number, (fit, patch) in enumerate(found, start=1)
+    ]
+
+
 def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
-    """Triangles that belong to a flat patch big enough to be a face of its own."""
+    """Triangles that belong to a flat patch big enough to be a face of its own.
+
+    Two ways to qualify, and the second one is not decoration. Area alone is
+    measured against the largest face of the body, and on a plate with a pin on
+    it the pin's top face is under two percent of the plate — so it counted as
+    curved, joined the pin's wall, and the cylinder fit over wall-plus-cap came
+    out as nothing at all. A patch of many coplanar triangles is a face whatever
+    its size next to the rest of the part.
+    """
     facets = list(body.facets)
     if not facets:
         return set()
@@ -120,7 +183,7 @@ def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
     return {
         int(index)
         for facet, area in zip(facets, areas, strict=True)
-        if area >= limit
+        if area >= limit or len(facet) >= MIN_FLAT_FACES
         for index in facet
     }
 

@@ -19,6 +19,7 @@ from app.core.perceive.features import (
     detect_edge_loops,
     detect_faces,
     detect_holes,
+    detect_pins,
     fit_cylinder,
 )
 
@@ -141,6 +142,53 @@ def test_detection_names_everything_it_found() -> None:
     assert "face" in kinds
     assert all(feature.provenance == "detected" for feature in features.values())
     assert all(identifier == feature.id for identifier, feature in features.items())
+
+
+def plate_with_pin() -> MeshData:
+    """A plate with a 6 mm pin standing on it — the counterpart of a bore."""
+    base = trimesh.creation.box(extents=(40.0, 40.0, 8.0))
+    base.apply_translation((0.0, 0.0, 4.0))
+    pin = trimesh.creation.cylinder(radius=3.0, height=12.0, sections=48)
+    pin.apply_translation((0.0, 0.0, 12.0))
+    return MeshData.of(trimesh.boolean.union([base, pin]))
+
+
+def test_a_pin_is_recognised_as_one() -> None:
+    """§14 needs both ends of a fit; a bore alone is half of it."""
+    found = detect_pins(plate_with_pin())
+
+    assert len(found) == 1
+    assert found[0].id == "pin_1"
+    assert found[0].kind == "pin"
+    assert found[0].params["diameter"] == pytest.approx(6.0, abs=0.02)
+    assert found[0].params["axis"][2] == pytest.approx(1.0, abs=0.01)
+
+
+def test_a_pin_on_a_plate_is_not_reported_as_a_bore() -> None:
+    assert detect_holes(plate_with_pin()) == []
+
+
+def test_a_bore_is_not_reported_as_a_pin() -> None:
+    assert detect_pins(plate()) == []
+
+
+def test_a_small_flat_face_is_not_swallowed_by_the_curve_next_to_it() -> None:
+    """The bug behind the pin: a cap of many coplanar triangles is a face.
+
+    Judged only by area against the largest face of the body, a 6 mm pin's top
+    is under two percent of a 40 mm plate — it counted as curved, joined the
+    wall, and the cylinder fit over cap-plus-wall found nothing at all.
+    """
+    from app.core.perceive.features import _large_facet_faces
+
+    body = plate_with_pin().raw
+    planar = _large_facet_faces(body)
+
+    top = max(
+        (facet for facet in body.facets if len(facet) >= 8),
+        key=lambda facet: len(facet),
+    )
+    assert set(int(index) for index in top) <= planar
 
 
 def test_components_are_counted() -> None:
