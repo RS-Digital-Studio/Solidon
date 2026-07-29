@@ -37,9 +37,12 @@ _log = get_logger(__name__)
 #: millimetre down it is safely in the material.
 BELOW_RIM = 0.1
 
-#: A cavity smaller than this is a screw hole, a vent or a print artefact —
-#: not something anybody wants a lid collar in.
-MIN_CAVITY = 25.0
+#: Below this a cavity is a bore, not an opening — 100 mm² is a hole of eleven
+#: millimetres, and nobody puts a lid collar into a screw hole. Above it every
+#: ring counts, including a small compartment next to a large one: a slot of
+#: twelve millimetres square takes a collar perfectly well, and measuring
+#: cavities against each other rather than against a size would throw it away.
+MIN_CAVITY = 100.0
 
 #: How far the collar is pulled in beyond the clearance, so the lid does not
 #: sit on the collar instead of on the rim.

@@ -162,3 +162,44 @@ def test_the_lid_carries_the_material_of_the_body_it_closes(profile: Profile) ->
     result = make_lid(housing("tpu-95a"), profile, collar=4.0)
 
     assert result.outputs[0].material == "tpu-95a"
+
+
+def test_a_screw_post_bore_is_not_a_compartment(profile: Profile) -> None:
+    """The real neighbour of an opening: M3 holes in the corner posts.
+
+    Eight square millimetres against eighteen hundred — a collar in one would be
+    a pin in the screw's way. The absolute limit settles it without measuring
+    the cavities against each other, which would throw away a small compartment
+    that a collar fits perfectly well.
+    """
+    body = housing().mesh.raw.copy()
+    posts = []
+    for x in (-26.0, 26.0):
+        for y in (-16.0, 16.0):
+            bore = trimesh.creation.cylinder(radius=1.6, height=40.0, sections=32)
+            bore.apply_translation((x, y, 20.0))
+            posts.append(bore)
+    entry = SceneObject(
+        id="obj_1", name="Gehäuse", mesh=MeshData.of(trimesh.boolean.difference([body, *posts]))
+    )
+
+    result = make_lid(entry, profile, thickness=2.0, collar=3.0)
+
+    assert result.findings[0].values["cavities"] == 1, "the box, not the four bores"
+
+
+def test_a_small_compartment_still_gets_a_collar(profile: Profile) -> None:
+    """A pen slot of 12 x 12 next to a compartment fifteen times its size."""
+    outer = trimesh.creation.box(extents=(80.0, 40.0, 20.0))
+    outer.apply_translation((0.0, 0.0, 10.0))
+    big = trimesh.creation.box(extents=(50.0, 34.0, 18.0))
+    big.apply_translation((-12.0, 0.0, 11.0))
+    small = trimesh.creation.box(extents=(12.0, 12.0, 18.0))
+    small.apply_translation((25.0, 0.0, 11.0))
+    body = trimesh.boolean.difference([outer, big, small])
+    entry = SceneObject(id="obj_1", name="Kasten", mesh=MeshData.of(body))
+
+    result = make_lid(entry, profile, thickness=2.0, collar=3.0)
+
+    assert result.findings[0].values["cavities"] == 2
+    assert shared_volume(result.outputs[0].mesh.raw, body) < 1e-6
