@@ -194,6 +194,11 @@ class History:
 
     def _outputs_for(self, spec: Any, draft: OperationDraft) -> tuple[ObjectId, ...]:
         """Same count in and out means the objects stay themselves; otherwise new ids."""
+        if spec.produces == VARIABLE and spec.produces_from:
+            return tuple(
+                f"obj_{next(self._next_object)}"
+                for _ in range(self._stated(spec, draft, spec.produces_from))
+            )
         if spec.produces == VARIABLE and not draft.inputs:
             # Takes nothing and makes an unknown number: only the caller can
             # know how many, and one is the honest default for a plain file.
@@ -201,6 +206,36 @@ class History:
         if spec.produces == VARIABLE or (spec.produces == spec.consumes and draft.inputs):
             return tuple(draft.inputs)
         return tuple(f"obj_{next(self._next_object)}" for _ in range(spec.produces))
+
+    def _stated(self, spec: Any, draft: OperationDraft, field_name: str) -> int:
+        """The output count an operation wrote into one of its parameters.
+
+        A plain number, because the ids are handed out here and an expression
+        (§13) is only resolved when the scene is computed. A count that first
+        has to be calculated would mean the stack could not say how many
+        objects a step makes — so it is refused with that sentence rather than
+        guessed at.
+        """
+        value = draft.params.get(
+            field_name,
+            next((entry.default for entry in spec.params.spec() if entry.name == field_name), 1),
+        )
+        if expressions.is_expression(value):
+            raise ValidationError(
+                field=field_name,
+                detail=_("Eine Stückzahl muss eine Zahl sein, kein Ausdruck."),
+                constraint="not_a_number",
+                values={"op": spec.name, "value": str(value)},
+            )
+        try:
+            return max(int(value), 1)
+        except (TypeError, ValueError) as problem:
+            raise ValidationError(
+                field=field_name,
+                detail=_("Eine Stückzahl muss eine Zahl sein, kein Ausdruck."),
+                constraint="not_a_number",
+                values={"op": spec.name, "value": str(value)},
+            ) from problem
 
     def _check_params(self, op_name: str, specs: Iterable[Any], params: Mapping[str, Any]) -> None:
         """Names and expression syntax. Values are checked once resolved (§13)."""

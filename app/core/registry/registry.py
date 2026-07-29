@@ -70,6 +70,13 @@ class OperationSpec:
     """Feature kinds this operation offers itself for — drives the context menu."""
     whole_scene: bool = False
     """Works on every object at once — see :attr:`takes_whole_scene`."""
+    produces_from: str | None = None
+    """The parameter that says how many objects come out, for a variable count.
+
+    The stack hands out object ids before anything runs (§11), so an operation
+    that makes a number of bodies has to say where that number is written down.
+    Duplicating names its ``count``; everything else leaves this empty and the
+    count follows from :attr:`produces`."""
     touches_features: bool = False
     deterministic: bool = True
     shortcut: str | None = None
@@ -199,6 +206,7 @@ def register_op(
     produces: int = 1,
     applies_to: Iterable[str] = (),
     whole_scene: bool = False,
+    produces_from: str | None = None,
     touches_features: bool = False,
     deterministic: bool = True,
     shortcut: str | None = None,
@@ -220,6 +228,7 @@ def register_op(
                 produces=produces,
                 applies_to=tuple(applies_to),
                 whole_scene=whole_scene,
+                produces_from=produces_from,
                 touches_features=touches_features,
                 deterministic=deterministic,
                 shortcut=shortcut,

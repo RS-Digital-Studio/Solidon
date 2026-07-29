@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.registry import REGISTRY, Registry, op_params, param, register_op
+from app.core.errors import ValidationError
+from app.core.registry import REGISTRY, VARIABLE, Registry, op_params, param, register_op
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.types import BaseParams, Document, OpContext, OpResult, Profile, SceneObject
 from app.i18n import _
@@ -52,7 +53,9 @@ def test_rename_object_is_registered_completely() -> None:
 def test_duplicate_object_is_registered_completely() -> None:
     spec = REGISTRY.get("duplicate_object")
     assert spec.category == "scene"
-    assert (spec.consumes, spec.produces) == (1, 2)
+    assert spec.consumes == 1
+    assert spec.produces == VARIABLE, "how many depends on the count that was asked for"
+    assert spec.produces_from == "count", "and the stack has to know where that is written"
     assert spec.shortcut == "Ctrl+D"
     assert str(spec.doc)
 
@@ -130,3 +133,83 @@ def test_undo_takes_the_rename_back(
 
     result = evaluate(document, profile, registry=registry)
     assert result.scene.objects["obj_1"].name == "Halterung"
+
+
+# --- a quantity belongs in the stack, not in the file name ----------------------
+
+
+def test_ten_of_a_part_is_one_operation(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """§25: "Clippy_Filament-Clip_x10" is a quantity nobody can change any more.
+
+    Here it is a number in one step of the stack — ten objects out of one
+    operation, instead of nine duplications nobody can read afterwards.
+    """
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(
+        _("Vervielfachen"),
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 10})],
+    )
+
+    result = evaluate(document, profile, registry=registry)
+
+    assert len(result.scene.objects) == 10
+    assert len({entry.name for entry in result.scene.objects.values()}) == 10, "ten names, not one"
+
+
+def test_another_count_is_one_step_back_and_forward(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Six instead of three: undo, apply again — the ids are handed out afresh.
+
+    There is no editing of an operation's parameters in place yet, and it would
+    have to re-plan the outputs when the count changes, which is exactly what
+    applying again does.
+    """
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(
+        _("Vervielfachen"),
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 3})],
+    )
+    assert len(evaluate(document, profile, registry=registry).scene.objects) == 3
+
+    history.undo()
+    history.apply(
+        _("Vervielfachen"),
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 6})],
+    )
+
+    assert len(evaluate(document, profile, registry=registry).scene.objects) == 6
+
+
+def test_a_count_of_one_leaves_it_at_one(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Not an error: a duplicate of one is the object, and the stack may say so."""
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(
+        _("Vervielfachen"),
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 1})],
+    )
+
+    assert len(evaluate(document, profile, registry=registry).scene.objects) == 1
+
+
+def test_a_count_that_has_to_be_calculated_is_refused(
+    document: Document, registry: Registry
+) -> None:
+    """§13: the ids are handed out before an expression is resolved."""
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+
+    with pytest.raises(ValidationError) as problem:
+        history.apply(
+            _("Vervielfachen"),
+            [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": "=@n"})],
+        )
+
+    assert problem.value.constraint == "not_a_number"
