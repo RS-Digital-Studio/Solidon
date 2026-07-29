@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from app.core.export import threemf
 from app.core.geom.mesh import read_mesh
 from app.core.ingest.loader import HEAVY_TRIANGLES, normalise
 from app.core.perceive.features import detect
@@ -97,3 +98,56 @@ def test_feature_detection_survives_a_real_part() -> None:
     found = detect(mesh)
 
     assert isinstance(found, dict)
+
+
+# --- a slicer 3MF is an assembly, and it was read many times over ---------------
+
+
+def test_the_pool_waterfall_arrives_as_its_four_parts() -> None:
+    """The project this feature came from: housing, lid, spout, TPU liner.
+
+    Welded into one body the liner cannot get its own material (§12) and no part
+    can go on its own plate (§25) — the division is the point of the file.
+    """
+    parts = threemf.read_objects(find("Wasserfall_.3mf").read_bytes())
+
+    assert [part.name for part in parts] == [
+        "Wasserfall_1_Koerper",
+        "Wasserfall_2_Deckel",
+        "Wasserfall_3_Tuelle",
+        "Wasserfall_4_TPU-Liner",
+    ]
+    assert all(part.mesh.is_watertight for part in parts)
+
+
+def test_a_nozzle_of_two_bodies_is_not_read_as_four() -> None:
+    """The measured regression: every body arrived once per component.
+
+    290 120 triangles came in as 580 240, two bodies as four, and the volume as
+    104,11 cm³ where the file says 52,05. The report then called a sound file
+    open, because a body lying exactly on a copy of itself is not a solid.
+    """
+    parts = threemf.read_objects(find("Pool-Fountain_Nozzle_horizontal.3mf").read_bytes())
+
+    assert len(parts) == 2
+    assert sum(part.mesh.triangle_count for part in parts) == 290_120
+    assert sum(abs(part.mesh.volume) for part in parts) / 1000.0 == pytest.approx(52.05, abs=0.05)
+
+
+def test_seventeen_parts_in_one_object_file_stay_seventeen() -> None:
+    """The worst case of the corpus: 787 836 triangles read as 13 393 212.
+
+    Seventeen components, all pointing into one external model file, each of
+    them resolved to the whole file — seventeen times everything.
+    """
+    parts = threemf.read_objects(find("Cat_Phone_Stand_Kawaii_material.3mf").read_bytes())
+
+    assert len(parts) == 17
+    assert sum(part.mesh.triangle_count for part in parts) == 787_836
+
+
+def test_the_count_is_right_before_the_geometry_is_read() -> None:
+    """§11: the stack hands out ids first, so the count may not be a guess."""
+    for name in ("Wasserfall_.3mf", "Gewürz.3mf", "Taschentuchbox_material.3mf"):
+        payload = find(name).read_bytes()
+        assert threemf.count_objects(payload) == len(threemf.read_objects(payload)), name

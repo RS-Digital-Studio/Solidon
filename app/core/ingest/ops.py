@@ -7,6 +7,8 @@ with a different unit is therefore a parameter change, not a fresh import.
 
 from __future__ import annotations
 
+import dataclasses
+from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
@@ -15,7 +17,7 @@ from app.core.export import threemf
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest import outline
 from app.core.ingest.loader import IngestResult, check_limits, detect_unit, normalise
-from app.core.registry import op_params, param, register_op
+from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.types import BaseParams, Finding, MaterialSlot, OpContext, OpResult, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import _
@@ -69,8 +71,11 @@ class LoadParams(BaseParams):
     category="import",
     params=LoadParams,
     consumes=0,
-    produces=1,
-    doc=_("Liest eine Modelldatei, rechnet sie in Millimeter um und bereinigt sie."),
+    produces=VARIABLE,
+    doc=_(
+        "Liest eine Modelldatei, rechnet sie in Millimeter um und bereinigt sie. "
+        "Eine 3MF-Baugruppe kommt als mehrere Objekte an, nicht als ein Klumpen."
+    ),
 )
 def load(ctx: OpContext) -> OpResult:
     params = cast(LoadParams, ctx.params)
@@ -85,27 +90,62 @@ def load(ctx: OpContext) -> OpResult:
     check_limits(len(payload), 0)
 
     suffix = Path(source.path).suffix
-    mesh = read_mesh(payload, suffix)
-    check_limits(len(payload), mesh.triangle_count)
+    stem = Path(source.path).stem
+    parts = threemf.read_objects(payload) if suffix.lower() == ".3mf" else []
+    if not parts:
+        mesh = read_mesh(payload, suffix)
+        mesh, slots = _colour_groups(payload, suffix, mesh)
+        parts = [threemf.Part(name=params.name or stem, mesh=mesh, slots=tuple(slots))]
+    elif params.name and len(parts) == 1:
+        parts = [dataclasses.replace(parts[0], name=params.name)]
 
-    mesh, slots = _colour_groups(payload, suffix, mesh)
+    check_limits(len(payload), sum(part.mesh.triangle_count for part in parts))
 
-    unit = _unit_for(ctx, params, mesh.bounds.diagonal)
-    result: IngestResult = normalise(
-        mesh,
-        unit,
-        weld=params.weld,
-        remove_degenerate=params.remove_degenerate,
-        unify_normals=params.unify_normals,
-        place_on_bed=params.place_on_bed,
-        progress=ctx.progress,
-    )
+    # One unit for the whole file. Deciding per body would let two parts of one
+    # assembly come out at different scales, and the question §17.1 asks the
+    # user is about the file, not about each body in it.
+    unit = _unit_for(ctx, params, max(part.mesh.bounds.diagonal for part in parts))
 
-    name = params.name or Path(source.path).stem
-    return OpResult(
-        outputs=[SceneObject(id="", name=name, mesh=result.mesh, material_slots=slots)],
-        findings=list(result.findings),
-    )
+    outputs: list[SceneObject] = []
+    findings: list[Finding] = []
+    for index, part in enumerate(parts):
+        ctx.progress(index / len(parts), str(_("Modell laden")))
+        result: IngestResult = normalise(
+            part.mesh,
+            unit,
+            weld=params.weld,
+            remove_degenerate=params.remove_degenerate,
+            unify_normals=params.unify_normals,
+            # An assembly is placed the way the file placed it: dropping every
+            # body onto Z = 0 on its own would take a lid off its housing and
+            # pile the parts on top of each other.
+            place_on_bed=params.place_on_bed and len(parts) == 1,
+            progress=ctx.progress,
+        )
+        outputs.append(
+            SceneObject(id="", name=part.name, mesh=result.mesh, material_slots=list(part.slots))
+        )
+        findings.extend(
+            _named(result.findings, part.name) if len(parts) > 1 else list(result.findings)
+        )
+
+    if len(parts) > 1:
+        findings.append(
+            Finding(
+                code="load.assembly",
+                severity="info",
+                message=_("Die Datei enthält mehrere Körper — sie kommen als eigene Objekte an."),
+                values={"parts": len(parts), "file": stem},
+            )
+        )
+    return OpResult(outputs=outputs, findings=findings)
+
+
+def _named(findings: Sequence[Finding], name: str) -> list[Finding]:
+    """Say which body of an assembly a finding is about."""
+    return [
+        dataclasses.replace(entry, values={**entry.values, "object": name}) for entry in findings
+    ]
 
 
 @op_params

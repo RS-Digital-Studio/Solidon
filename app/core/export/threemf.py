@@ -12,6 +12,16 @@ Reading them back is here too, and for the same reason: trimesh parses the
 geometry of a 3MF but hands back a uniform grey. A file exported from here and
 opened again would lose exactly the thing this module was written for.
 
+The geometry is read here as well now, and that was not the plan. A 3MF from a
+slicer keeps its objects in separate files under ``3D/Objects/`` and references
+them from the build — the production extension. trimesh resolves a component
+that points into such a file to the *whole file* instead of to the one object it
+names, so a file with seventeen parts in one object file came out seventeen times
+over, every body stacked on a copy of itself. Measured on the model corpus: a
+nozzle of two bodies and 290 120 triangles arrived as four bodies and 580 240,
+with twice the volume and a report that called it open. That is not a speed
+problem, so it is not fixed with a faster parser but with the right one.
+
 Written by hand rather than with a library because there is no library that
 does only this — and a 3MF writer that does everything else too would be a
 dependency for fifteen lines.
@@ -19,26 +29,50 @@ dependency for fifteen lines.
 
 from __future__ import annotations
 
+import dataclasses
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from io import BytesIO
 from xml.etree import ElementTree as ET
+
+import numpy as np
+import trimesh
 
 from app.branding import APP_NAME, APP_VERSION
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import MaterialSlot
+from app.i18n import _
 
 _log = get_logger(__name__)
 
 CORE_NAMESPACE = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+PRODUCTION_NAMESPACE = "http://schemas.microsoft.com/3dmanufacturing/production/2015/06"
 RELATIONSHIP_NAMESPACE = "http://schemas.openxmlformats.org/package/2006/relationships"
 MODEL_RELATIONSHIP = "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"
 
 MODEL_PATH = "3D/3dmodel.model"
 
+#: Where a slicer writes the names of the parts. Not part of the format — the
+#: standard has a ``name`` attribute and these files leave it empty — but it is
+#: the only place "Wasserfall_4_TPU-Liner" is written down, and a scene of
+#: bodies called "object 7" is a scene nobody can work in. Read if present,
+#: shrugged off if not.
+SETTINGS_PATH = "Metadata/model_settings.config"
+
+#: Suffixes a slicer leaves in a part name because the part came from a file.
+NAME_SUFFIXES = (".stl", ".3mf", ".obj", ".step", ".stp")
+
+#: Stand-in for counting, where only the names matter.
+_EMPTY = MeshData.of(trimesh.Trimesh())
+
 #: Colour a slot gets that has none. Grey, so nobody mistakes it for a choice.
 DEFAULT_COLOUR = (0.72, 0.72, 0.72)
+
+#: How deep a component may reference other components. The format allows a
+#: tree; a cycle in it would allow an infinite one, and a file that nests this
+#: far is broken rather than clever.
+MAX_DEPTH = 32
 
 
 def write(mesh: MeshData, slots: list[MaterialSlot] | None = None, name: str = "") -> bytes:
@@ -116,6 +150,319 @@ def read(payload: bytes, faces: int) -> Groups | None:
             if position < len(names)
         ),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class Part:
+    """One body of a 3MF build, with the place the file put it."""
+
+    name: str
+    mesh: MeshData
+    slots: tuple[MaterialSlot, ...] = field(default_factory=tuple)
+
+
+def read_objects(payload: bytes) -> list[Part]:
+    """Every body the build places, each where the file puts it.
+
+    An empty list means this is not a 3MF that can be read — the caller falls
+    back to the general loader rather than being handed an exception for a file
+    that another reader may well manage.
+
+    One body per leaf mesh, not one per build item. A slicer packs an assembly
+    as one item made of components, and those components *are* the separate
+    parts: housing, lid, spout, liner. Handing them over as a single welded body
+    would throw away exactly the division that makes them printable one at a
+    time — and it is the division the project needs anyway, for its own material
+    per body (§12) and its own plate (§25).
+    """
+    parts: list[Part] = []
+    for leaf in _leaves(payload):
+        body = _mesh_from(leaf.node)
+        if body is None:
+            continue
+        moved = body.raw.copy()
+        moved.apply_transform(leaf.transform)
+
+        groups = _groups_of(leaf.node, leaf.palette)
+        mesh = (
+            MeshData(raw=moved, slots=groups.slots) if groups is not None else body.replacing(moved)
+        )
+        parts.append(
+            Part(name=leaf.name, mesh=mesh, slots=tuple(groups.materials) if groups else ())
+        )
+
+    _log.info("read %d part(s) from a 3MF build", len(parts))
+    return _numbered(parts)
+
+
+def count_objects(payload: bytes) -> int:
+    """How many bodies :func:`read_objects` would hand back.
+
+    The stack hands out object ids before anything is computed (§11), so the
+    count has to be known before the geometry is. It walks the same tree without
+    turning a single triangle into a number — the coordinates are what costs, not
+    finding out that they are there.
+    """
+    return len(_numbered([Part(name=leaf.name, mesh=_EMPTY) for leaf in _leaves(payload)]))
+
+
+@dataclass(frozen=True, slots=True)
+class _Leaf:
+    """One mesh the build reaches, and everything known about it on the way."""
+
+    name: str
+    node: ET.Element
+    transform: np.ndarray
+    palette: dict[str, list[tuple[str, tuple[float, float, float]]]]
+
+
+def _leaves(payload: bytes) -> list[_Leaf]:
+    """Walk the build and collect every mesh it reaches, in order."""
+    try:
+        with zipfile.ZipFile(BytesIO(payload)) as container:
+            names = set(container.namelist())
+            if MODEL_PATH not in names:
+                return []
+            models = {MODEL_PATH: ET.fromstring(container.read(MODEL_PATH))}
+            for entry in sorted(names):
+                if entry.startswith("3D/Objects/") and entry.endswith(".model"):
+                    models[entry] = ET.fromstring(container.read(entry))
+            titles = _titles(container.read(SETTINGS_PATH)) if SETTINGS_PATH in names else {}
+    except (KeyError, zipfile.BadZipFile, ET.ParseError) as problem:
+        _log.info("3MF could not be read as an assembly: %s", problem)
+        return []
+
+    catalog = {path: _objects_in(model) for path, model in models.items()}
+    materials = {path: _materials_in(model) for path, model in models.items()}
+
+    found: list[_Leaf] = []
+    for item in models[MODEL_PATH].findall(f"{{{CORE_NAMESPACE}}}build/{{{CORE_NAMESPACE}}}item"):
+        identifier = item.get("objectid")
+        if identifier is None:
+            continue
+        found.extend(
+            _parts_of(
+                identifier,
+                _inside(item.get(f"{{{PRODUCTION_NAMESPACE}}}path")),
+                _matrix(item.get("transform")),
+                catalog,
+                materials,
+                titles,
+                item.get("name") or titles.get(identifier, ""),
+                0,
+            )
+        )
+    return found
+
+
+def _numbered(parts: list[Part]) -> list[Part]:
+    """Tell apart bodies that came out with the same name.
+
+    Seventeen parts of one object file share whatever the object was called, and
+    an object tree with seventeen identical entries is a list, not a tree.
+    """
+    seen: dict[str, int] = {}
+    result: list[Part] = []
+    counts = {part.name: 0 for part in parts}
+    for part in parts:
+        counts[part.name] += 1
+    for part in parts:
+        if counts[part.name] == 1:
+            result.append(part)
+            continue
+        seen[part.name] = seen.get(part.name, 0) + 1
+        result.append(dataclasses.replace(part, name=f"{part.name} {seen[part.name]}"))
+    return result
+
+
+def _titles(payload: bytes) -> dict[str, str]:
+    """Names the slicer wrote down, by object and by part id.
+
+    A part id is what a component names, so the leaf gets the name of the file
+    it once was — which is the name somebody chose.
+    """
+    try:
+        config = ET.fromstring(payload)
+    except ET.ParseError:
+        return {}
+
+    found: dict[str, str] = {}
+    for node in [*config.findall(".//object"), *config.findall(".//part")]:
+        identifier = node.get("id")
+        if identifier is None:
+            continue
+        for entry in node.findall("metadata"):
+            if entry.get("key") == "name" and entry.get("value"):
+                found[identifier] = _without_suffix(str(entry.get("value")))
+                break
+    return found
+
+
+def _without_suffix(name: str) -> str:
+    """``Wasserfall_4_TPU-Liner.stl`` is a part called Wasserfall_4_TPU-Liner."""
+    lowered = name.lower()
+    for suffix in NAME_SUFFIXES:
+        if lowered.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
+def _parts_of(
+    identifier: str,
+    path: str,
+    transform: np.ndarray,
+    catalog: dict[str, dict[str, ET.Element]],
+    materials: dict[str, dict[str, list[tuple[str, tuple[float, float, float]]]]],
+    titles: dict[str, str],
+    inherited: str,
+    depth: int,
+) -> list[_Leaf]:
+    """The meshes one object contributes, with the transforms above it applied."""
+    if depth > MAX_DEPTH:
+        _log.warning("3MF component nesting deeper than %d — stopped", MAX_DEPTH)
+        return []
+
+    entry = catalog.get(path, {}).get(identifier)
+    if entry is None:
+        # A component that names an object nobody wrote down. Silently dropping
+        # the whole file over it would be worse than dropping the one body.
+        _log.info("3MF references object %s in %s, which is not there", identifier, path)
+        return []
+
+    name = (
+        entry.get("name")
+        or titles.get(identifier)
+        or inherited
+        or f"{_('Körper').translate()} {identifier}"
+    )
+    mesh_node = entry.find(f"{{{CORE_NAMESPACE}}}mesh")
+    if mesh_node is not None:
+        return [
+            _Leaf(
+                name=name,
+                node=mesh_node,
+                transform=transform,
+                palette=materials.get(path, {}),
+            )
+        ]
+
+    found: list[_Leaf] = []
+    for component in entry.findall(f"{{{CORE_NAMESPACE}}}components/{{{CORE_NAMESPACE}}}component"):
+        child = component.get("objectid")
+        if child is None:
+            continue
+        # The path of a component is where *its* object lives. Without this line
+        # every component of an external file resolves to the whole file, which
+        # is the multiplication this reader exists for.
+        stated = component.get(f"{{{PRODUCTION_NAMESPACE}}}path")
+        child_path = _inside(stated) if stated else path
+        found.extend(
+            _parts_of(
+                child,
+                child_path,
+                transform @ _matrix(component.get("transform")),
+                catalog,
+                materials,
+                titles,
+                name,
+                depth + 1,
+            )
+        )
+    return found
+
+
+def _inside(path: str | None) -> str:
+    """A part path as the container spells it.
+
+    The format writes them absolute — ``/3D/Objects/lid.model`` — and a ZIP has
+    no root, so the leading slash has to go or every lookup misses.
+    """
+    return (path or MODEL_PATH).lstrip("/")
+
+
+def _objects_in(model: ET.Element) -> dict[str, ET.Element]:
+    """Every object of one model file, by id."""
+    found: dict[str, ET.Element] = {}
+    for entry in model.findall(f".//{{{CORE_NAMESPACE}}}object"):
+        identifier = entry.get("id")
+        if identifier is not None:
+            found[identifier] = entry
+    return found
+
+
+def _mesh_from(node: ET.Element) -> MeshData | None:
+    """The triangles of one ``mesh`` node."""
+    vertices = node.find(f"{{{CORE_NAMESPACE}}}vertices")
+    triangles = node.find(f"{{{CORE_NAMESPACE}}}triangles")
+    if vertices is None or triangles is None or not len(triangles):
+        return None
+    try:
+        points = np.array(
+            [(entry.get("x"), entry.get("y"), entry.get("z")) for entry in vertices],
+            dtype=np.float64,
+        )
+        faces = np.array(
+            [(entry.get("v1"), entry.get("v2"), entry.get("v3")) for entry in triangles],
+            dtype=np.int64,
+        )
+    except (TypeError, ValueError) as problem:
+        _log.info("3MF mesh has unreadable coordinates: %s", problem)
+        return None
+    if not len(points) or not len(faces) or int(faces.max()) >= len(points):
+        return None
+    return MeshData.of(trimesh.Trimesh(vertices=points, faces=faces, process=False))
+
+
+def _groups_of(
+    node: ET.Element, materials: dict[str, list[tuple[str, tuple[float, float, float]]]]
+) -> Groups | None:
+    """The colour groups of one mesh — its own, not the file's (§20).
+
+    Per mesh rather than per file, which is what the older reader could not do:
+    it gave up as soon as a 3MF held more than one body, so a two-colour
+    assembly lost every colour it had.
+    """
+    if not materials:
+        return None
+    group, names = next(iter(materials.items()))
+    triangles = node.findall(f"{{{CORE_NAMESPACE}}}triangles/{{{CORE_NAMESPACE}}}triangle")
+    if not triangles:
+        return None
+
+    default = 0
+    assignment = tuple(
+        int(entry.get("p1") or default) if (entry.get("pid") or group) == group else default
+        for entry in triangles
+    )
+    used = sorted(set(assignment))
+    if len(used) < 2:
+        return None  # one material for the whole body is not a group worth keeping
+    order = {position: index for index, position in enumerate(used)}
+    return Groups(
+        slots=tuple(order[entry] for entry in assignment),
+        materials=tuple(
+            MaterialSlot(index=index, name=names[position][0], colour=names[position][1])
+            for index, position in enumerate(used)
+            if position < len(names)
+        ),
+    )
+
+
+def _matrix(text: str | None) -> np.ndarray:
+    """A 3MF transform — twelve numbers, column-major 4x3 — as a 4x4 matrix."""
+    if not text:
+        return np.eye(4)
+    parts = text.replace(",", " ").split()
+    if len(parts) != 12:
+        return np.eye(4)
+    try:
+        values = [float(entry) for entry in parts]
+    except ValueError:
+        return np.eye(4)
+    matrix = np.eye(4)
+    matrix[:3, :3] = np.array(values[:9], dtype=float).reshape(3, 3).T
+    matrix[:3, 3] = values[9:]
+    return matrix
 
 
 def _materials_in(model: ET.Element) -> dict[str, list[tuple[str, tuple[float, float, float]]]]:

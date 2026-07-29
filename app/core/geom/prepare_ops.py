@@ -646,6 +646,7 @@ class ArrangeParams(BaseParams):
     params=ArrangeParams,
     consumes=0,
     produces=VARIABLE,
+    whole_scene=True,
     doc=_("Legt alle Objekte nebeneinander auf das Druckbett."),
 )
 def arrange_bed(ctx: OpContext) -> OpResult:
@@ -685,6 +686,7 @@ class CollisionParams(BaseParams):
     params=CollisionParams,
     consumes=0,
     produces=VARIABLE,
+    whole_scene=True,
     doc=_("Meldet Überschneidungen und was über den Bauraum hinaussteht."),
 )
 def check_collisions_op(ctx: OpContext) -> OpResult:

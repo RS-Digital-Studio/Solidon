@@ -43,6 +43,13 @@ class OperationDraft:
     params: Mapping[str, Any] = field(default_factory=dict)
     outputs: tuple[ObjectId, ...] | None = None
     """Usually derived: same count in and out keeps the ids, otherwise new ones."""
+    produces: int | None = None
+    """How many objects a variable-output operation that takes none will make.
+
+    Loading an assembly is the case: how many bodies come out is written in the
+    file, and the stack hands out ids before the file is read (§11). So the
+    caller who knows says so — for everything else the count follows from the
+    declaration and this stays ``None``."""
     seed: int | None = None
 
 
@@ -187,6 +194,10 @@ class History:
 
     def _outputs_for(self, spec: Any, draft: OperationDraft) -> tuple[ObjectId, ...]:
         """Same count in and out means the objects stay themselves; otherwise new ids."""
+        if spec.produces == VARIABLE and not draft.inputs:
+            # Takes nothing and makes an unknown number: only the caller can
+            # know how many, and one is the honest default for a plain file.
+            return tuple(f"obj_{next(self._next_object)}" for _ in range(draft.produces or 1))
         if spec.produces == VARIABLE or (spec.produces == spec.consumes and draft.inputs):
             return tuple(draft.inputs)
         return tuple(f"obj_{next(self._next_object)}" for _ in range(spec.produces))

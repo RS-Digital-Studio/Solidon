@@ -68,6 +68,8 @@ class OperationSpec:
     operations like arranging, which change every object and create none."""
     applies_to: tuple[str, ...] = ()
     """Feature kinds this operation offers itself for — drives the context menu."""
+    whole_scene: bool = False
+    """Works on every object at once — see :attr:`takes_whole_scene`."""
     touches_features: bool = False
     deterministic: bool = True
     shortcut: str | None = None
@@ -86,8 +88,13 @@ class OperationSpec:
         and hand back all of them. Every surface has to pass the whole scene in
         — an operation of this kind with no inputs runs on nothing and looks
         broken, which is exactly how it looked before this property existed.
+
+        Declared rather than worked out from ``consumes == 0 and produces ==
+        VARIABLE``, which is what it used to be: loading an assembly also takes
+        no object and returns any number of them, and it wants the scene passed
+        in about as much as it wants the weather.
         """
-        return self.consumes == 0 and self.produces == VARIABLE
+        return self.whole_scene
 
 
 class Registry:
@@ -191,6 +198,7 @@ def register_op(
     consumes: int = 1,
     produces: int = 1,
     applies_to: Iterable[str] = (),
+    whole_scene: bool = False,
     touches_features: bool = False,
     deterministic: bool = True,
     shortcut: str | None = None,
@@ -211,6 +219,7 @@ def register_op(
                 consumes=consumes,
                 produces=produces,
                 applies_to=tuple(applies_to),
+                whole_scene=whole_scene,
                 touches_features=touches_features,
                 deterministic=deterministic,
                 shortcut=shortcut,

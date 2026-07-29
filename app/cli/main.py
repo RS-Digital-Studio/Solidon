@@ -21,6 +21,7 @@ from typing import Any
 from app.branding import APP_NAME, APP_VERSION, DISTRIBUTION_NAME, PROJECT_SUFFIX
 from app.core.bootstrap import load_operations
 from app.core.errors import AppError, OperationCancelled
+from app.core.export import threemf
 from app.core.geom.mesh import read_mesh
 from app.core.ingest.loader import detect_unit
 from app.core.knowledge import profiles
@@ -211,10 +212,17 @@ def command_import(args: argparse.Namespace) -> int:
     )
     project.sources[source_id] = payload
 
+    # Same as the window does: a 3MF assembly needs its body count before the
+    # stack hands out ids (§11).
+    parts = threemf.count_objects(payload) if incoming.suffix.lower() == ".3mf" else 1
     history = History(project.document)
     history.apply(
         tr("Modell laden"),
-        [OperationDraft(op="load", params={"source": source_id, "unit": unit})],
+        [
+            OperationDraft(
+                op="load", params={"source": source_id, "unit": unit}, produces=max(parts, 1)
+            )
+        ],
     )
     result = run_evaluation(project, path)
     print_report(result)

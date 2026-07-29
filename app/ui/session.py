@@ -26,6 +26,7 @@ from app.core.backends.llm import LLMBackend, first_available
 from app.core.backends.mesh import GeneratedMesh
 from app.core.brep import step as brep_step
 from app.core.errors import AppError, InternalError, OperationCancelled
+from app.core.export import threemf
 from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
@@ -297,6 +298,7 @@ class Session(QObject):
         )
         self.project.sources[source_id] = path.read_bytes()
 
+        is_3mf = path.suffix.lower() == ".3mf"
         if brep_step.is_step(path.suffix):
             self.apply(
                 tr("STEP laden"),
@@ -311,9 +313,20 @@ class Session(QObject):
                 [OperationDraft(op="load_outline", params={"source": source_id})],
             )
             return
+        # How many bodies the file holds is decided here, not in the operation:
+        # the stack hands out object ids before anything runs (§11), and for a
+        # 3MF assembly the count is in the file. Counted without reading a single
+        # coordinate — see threemf.count_objects.
+        parts = threemf.count_objects(self.project.sources[source_id]) if is_3mf else 1
         self.apply(
             tr("Modell laden"),
-            [OperationDraft(op="load", params={"source": source_id, "unit": unit})],
+            [
+                OperationDraft(
+                    op="load",
+                    params={"source": source_id, "unit": unit},
+                    produces=max(parts, 1),
+                )
+            ],
         )
 
     def add_generated(self, result: GeneratedMesh) -> str:
