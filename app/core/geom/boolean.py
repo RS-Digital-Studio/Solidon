@@ -247,6 +247,28 @@ def _rasterise(
     return target
 
 
+def shared_volume(first: trimesh.Trimesh, second: trimesh.Trimesh) -> float:
+    """How much volume two bodies have in common — a touch counts as none.
+
+    Bodies that only meet at a surface — a lid on its rim, a part on the plate,
+    two halves of a split — intersect to a flat shell. That shell is closed, so
+    it calls itself watertight, but it has no extent in one direction. Asking
+    trimesh for its volume computes zero and then divides the centre of mass by
+    it, which is a warning about a number nobody wanted: touching is not
+    sharing volume, and the bounding box says so before any integral runs.
+    """
+    try:
+        shared = trimesh.boolean.intersection([first, second])
+    except Exception:  # kernels fail in kernel-specific ways
+        return 0.0
+    if shared is None or not len(shared.faces):
+        return 0.0
+    extent = shared.bounds[1] - shared.bounds[0]
+    if float(np.min(extent)) <= EPS_GEOM:
+        return 0.0
+    return abs(float(shared.volume))
+
+
 def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:
     """A result has to have volume; an empty or inside-out body is not an answer.
 

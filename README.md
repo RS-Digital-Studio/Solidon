@@ -160,6 +160,8 @@ Programme bleiben für das, wo sie wirklich besser sind.
 | Toleranz messen statt raten | **Varianten erzeugen** (§28.3) | mehrere Exporte von Hand |
 | Eine Passung prüfen, ohne das Teil zu drucken | **Druckvorbereitung → Prüfstück erzeugen** | von Hand nachmodellieren |
 | Zweifarbige Beschriftung | **Text aufbringen** mit Materialslot, oder **Schriftzug als Körper** | zwei Konstruktionen |
+| Deckel zu einer vorhandenen Schachtel | **Bausteine → Deckel erzeugen** | Hohlraum abmessen und neu zeichnen |
+| Dichtung aus TPU im PETG-Gehäuse | **Druckvorbereitung → Material festlegen** | zwei Projekte |
 
 Der Text kommt als Schriftumriss, nicht als Bild — die Kanten bleiben in jeder
 Größe sauber, und DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich
@@ -175,6 +177,17 @@ gewechselt wird, und für Lettern zum Aufkleben.
 Das **Prüfstück** schneidet einen Würfel um eine Stelle heraus, statt sie
 nachzubauen: was gedruckt wird, ist die echte Geometrie mit der echten Toleranz.
 Zwei Minuten statt zwei Stunden, und das Ergebnis gilt für das Teil.
+
+Der **Deckel** wird aus der Öffnung geschnitten, nicht abgemessen: ein Schnitt
+durch die Wand liefert Außenkontur und Hohlraum, der Kragen ist der Hohlraum
+minus dem Spiel aus dem Materialprofil. Damit entscheidet dieselbe Zahl über den
+Deckel wie über jede andere Passung — und wer sein Material kalibriert (§28.3),
+verbessert damit auch Deckel, die vorher entstanden sind.
+
+**Eine Szene darf mehrere Materialien haben.** Eine TPU-Dichtung in einem
+PETG-Gehäuse schwindet anders, will mehr Spiel und quetscht die erste Schicht
+weiter breit. Mit *Material festlegen* bekommt der einzelne Körper sein eigenes
+Profil, und Toleranzen, Elefantenfuß und Passungsprüfung rechnen damit.
 
 Draußen bleibt, was draußen besser ist: der **Slicer** schreibt die Druckdatei
 (§22.5), das **Sprachmodell** und **ComfyUI** laufen, wo sie hingehören, und

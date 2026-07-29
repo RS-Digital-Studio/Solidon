@@ -545,3 +545,41 @@ Was daran hängt:
   übereinstimmendes nicht, sonst steht es an jedem Körper und niemand liest es.
 * **Cache.** Das Material steht im Objekt-Eintrag; ohne das käme nach einem
   Neustart der Körper mit dem alten Material zurück.
+
+## Deckel aus der Öffnung — und ein Fehler, der darunter lag
+
+Die vierte Funktion aus dem Modellordner: eine Schachtel ist da, ein Deckel
+fehlt. Von Hand heißt das den Hohlraum abmessen, ihn eine Kleinigkeit kleiner
+neu zeichnen und am Drucker erfahren, um wie viel die Kleinigkeit falsch war.
+
+`create_lid` misst nicht, es schneidet: ein Querschnitt durch die Wand an der
+Öffnung gibt die Außenkontur und den Hohlraum darin, die Platte ist die gefüllte
+Außenkontur, der Kragen der Hohlraum minus dem Spiel aus dem Materialprofil
+(§12). Damit entscheidet über den Deckel dieselbe Zahl wie über jede andere
+Passung, und eine Kalibrierung nach §28.3 erreicht auch Deckel, die vorher
+entstanden sind. Ein geteilter Kasten bekommt einen Kragen je Fach — das ist,
+was den Deckel am Verdrehen hindert.
+
+Nachgemessen an einem Gehäuse 60 × 40 × 30 mit 3 mm Wand: Kragen 53,10 × 33,10
+(Hohlraum 54 × 34 minus zweimal 0,45), Deckel geschlossen, gemeinsames Volumen
+mit dem Gehäuse **0,0 mm³** — er geht hinein.
+
+**Der Fehler darunter.** Der erste Versuch bekam an jeder Höhe „hier schneidet
+nichts". Der Grund lag nicht im Deckel, sondern in der Schichtanalyse: beim
+Verschachteln der Ringe wurde gefragt, ob ein Punkt der *Außenkontur* eines
+Teils in einem anderen liegt. Bei einer Schachtel ist die Außenkontur das äußere
+Rechteck, und dessen Mitte liegt im Hohlraum — Wand und Hohlraum erklärten sich
+gegenseitig zum Loch, beide kamen ungerade heraus, und ein Schnitt, den man
+sehen kann, kam als `None` zurück.
+
+Betroffen war **jede Schicht jedes hohlen Körpers**, und damit Wandkarte,
+Überhänge und Stützvolumen. Der vorhandene Korpus hat es verdeckt, weil seine
+Bohrungen außermittig sitzen: eine mittige Bohrung in einer Platte reicht schon.
+Gefragt wird jetzt nach einem Punkt des Teils selbst, nicht seiner Hülle; drei
+Tests halten den Fall fest.
+
+**Dazu:** eine Berührung ist keine Überschneidung. Deckel auf dem Rand, Teil auf
+der Platte, zwei Hälften eines Schnitts — der Durchschnitt ist ein flaches,
+geschlossenes Blatt ohne Inhalt, und trimesh teilt beim Schwerpunkt durch dessen
+Null. `boolean.shared_volume` beantwortet das einmal für alle, und die
+Kollisionsprüfung benutzt es.

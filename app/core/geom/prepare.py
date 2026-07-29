@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 import trimesh
 
-from app.core.geom.boolean import boolean
+from app.core.geom.boolean import boolean, shared_volume
 from app.core.geom.mesh import MeshData
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
@@ -440,20 +440,14 @@ def _really_overlap(first: MeshData, second: MeshData, clearance: float) -> bool
     ``None`` when that cannot be decided — an open body has no inside, and
     guessing one would turn a warning into a lie.
 
-    The kernel is asked directly rather than through the fallback chain of
-    §17.2. That chain treats an empty result as a failure and tries the next
-    stage, which is right for a difference somebody wanted and wrong here: an
-    empty intersection is not a failure, it is the answer.
+    :func:`shared_volume` asks the kernel directly rather than going through the
+    fallback chain of §17.2, and counts a mere touch as nothing — two parts that
+    stand next to each other on the plate are not in each other's way.
     """
     if not (first.is_watertight and second.is_watertight):
         return None
 
-    try:
-        shared = trimesh.boolean.intersection([first.raw, second.raw])
-    except Exception:  # a kernel that cannot answer has not said "no"
-        return None
-
-    if shared is not None and len(shared.faces) and abs(shared.volume) > EPS_GEOM:
+    if shared_volume(first.raw, second.raw) > EPS_GEOM:
         return True
     if clearance <= EPS_GEOM:
         return False
