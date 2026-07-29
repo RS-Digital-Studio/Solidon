@@ -164,6 +164,8 @@ Programme bleiben für das, wo sie wirklich besser sind.
 | Schraubdeckel für ein Glas oder eine Dose | **Bausteine → Drehdeckel erzeugen** | Gewindepaar von Hand konstruieren |
 | Zehn Stück auf die Platte | **Objekt duplizieren** mit Anzahl | zehnmal kopieren, Stückzahl im Dateinamen |
 | 3MF-Baugruppe aus dem Slicer öffnen | **Import** — die Teile kommen einzeln an | pro Teil eine STL exportieren |
+| Etwas an eine angeklickte Fläche setzen | **Fläche wählen, Operation aufrufen** — Ort und Achse sind eingetragen | Koordinaten ablesen und eintippen |
+| Eine Bohrung zwei Millimeter versetzen | **Doppelklick auf den Schritt im Verlauf** | zurücknehmen und neu bohren |
 | Dichtung aus TPU im PETG-Gehäuse | **Druckvorbereitung → Material festlegen** | zwei Projekte |
 
 Der Text kommt als Schriftumriss, nicht als Bild — die Kanten bleiben in jeder

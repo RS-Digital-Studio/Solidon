@@ -285,6 +285,17 @@ class Session(QObject):
         self.projectChanged.emit()
         self.evaluate_async()
 
+    def change_params(self, op_id: int, params: dict[str, Any]) -> None:
+        """Other parameters for an operation already in the stack (§15.4)."""
+        try:
+            self.history.change_params(op_id, params)
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+
     def import_model(self, path: Path, unit: str = "auto") -> None:
         """Embed a file and put the matching load operation on the stack (§17.1).
 

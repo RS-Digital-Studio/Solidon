@@ -159,14 +159,14 @@ def test_ten_of_a_part_is_one_operation(
     assert len({entry.name for entry in result.scene.objects.values()}) == 10, "ten names, not one"
 
 
-def test_another_count_is_one_step_back_and_forward(
+def test_another_count_is_also_one_step_back_and_forward(
     document: Document, profile: Profile, registry: Registry
 ) -> None:
-    """Six instead of three: undo, apply again — the ids are handed out afresh.
+    """Six instead of three, the long way round: undo and apply again.
 
-    There is no editing of an operation's parameters in place yet, and it would
-    have to re-plan the outputs when the count changes, which is exactly what
-    applying again does.
+    ``change_params`` is the short way and does the same thing where nothing
+    depends on the objects. This path stays tested because it is the one that
+    still works when something does.
     """
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
@@ -213,3 +213,123 @@ def test_a_count_that_has_to_be_calculated_is_refused(
         )
 
     assert problem.value.constraint == "not_a_number"
+
+
+# --- an operation of the stack can be corrected (§15.4) -------------------------
+
+
+def test_a_parameter_can_be_changed_afterwards(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """What makes the stack a stack: a name two letters different is not a step
+    to take back and do again."""
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(
+        _("Umbenennen"),
+        [OperationDraft(op="rename_object", inputs=("obj_1",), params={"name": "Deckel"})],
+    )
+
+    history.change_params(2, {"name": "Deckel A"})
+
+    result = evaluate(document, profile, registry=registry)
+    assert result.complete
+    assert result.scene.objects["obj_1"].name == "Deckel A"
+
+
+def test_only_the_named_parameters_change(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Everything not mentioned keeps its value — a dialog may send one field."""
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(
+        _("Vervielfachen"),
+        [
+            OperationDraft(
+                op="duplicate_object", inputs=("obj_1",), params={"count": 3, "name": "Klemme"}
+            )
+        ],
+    )
+
+    history.change_params(2, {"count": 3})
+
+    assert history.operation(2).params["name"] == "Klemme"
+
+
+def test_an_unknown_parameter_is_refused(document: Document, registry: Registry) -> None:
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+
+    with pytest.raises(ValidationError) as problem:
+        history.change_params(1, {"gibtesnicht": 1})
+
+    assert problem.value.constraint == "unknown"
+
+
+def test_the_count_may_change_while_nothing_uses_the_objects(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Ten instead of three, on the last step of the stack: new ids, no harm."""
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(
+        _("Vervielfachen"),
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 3})],
+    )
+
+    history.change_params(2, {"count": 10})
+
+    assert len(evaluate(document, profile, registry=registry).scene.objects) == 10
+
+
+def test_a_count_that_later_steps_depend_on_is_not_changed_silently(
+    document: Document, registry: Registry
+) -> None:
+    """The ids of the new bodies are not the old ones.
+
+    A later operation would point at objects that no longer exist, and an error
+    at the far end of the stack about a number changed at the near end is one
+    nobody connects back to what they did.
+    """
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(
+        _("Vervielfachen"),
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 2})],
+    )
+    later = history.operation(2).outputs[-1]
+    history.apply(
+        _("Umbenennen"),
+        [OperationDraft(op="rename_object", inputs=(later,), params={"name": "Zweites"})],
+    )
+
+    with pytest.raises(ValidationError) as problem:
+        history.change_params(2, {"count": 5})
+
+    assert problem.value.constraint == "count_in_use"
+
+
+def test_changing_a_parameter_discards_what_was_undone(
+    document: Document, registry: Registry
+) -> None:
+    """§15.4: there are no branches, and a redo onto a changed stack would be one."""
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(
+        _("Umbenennen"),
+        [OperationDraft(op="rename_object", inputs=("obj_1",), params={"name": "Deckel"})],
+    )
+    history.undo()
+    assert history.can_redo
+
+    history.change_params(1, {"name": "Grundplatte"})
+
+    assert not history.can_redo
+
+
+def test_an_operation_that_is_not_there_says_so(document: Document, registry: Registry) -> None:
+    history = History(document, registry)
+
+    with pytest.raises(ValidationError):
+        history.change_params(99, {"name": "x"})

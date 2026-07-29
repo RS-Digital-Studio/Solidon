@@ -42,7 +42,7 @@ from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
 from app.core.registry import REGISTRY, OperationSpec, menu_tree
-from app.core.scene import EvaluationResult, OperationDraft
+from app.core.scene import EvaluationResult, OperationDraft, values_for
 from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
@@ -176,6 +176,7 @@ class MainWindow(QMainWindow):
         self.object_tree = ObjectTree(self)
         self.parameters = ParameterPanel(self)
         self.history_panel = HistoryPanel(self)
+        self.history_panel.operationActivated.connect(self.edit_operation)
 
         left = QWidget(self)
         left_layout = QVBoxLayout(left)
@@ -904,7 +905,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, str(spec.title), tr("Die Szene ist leer."))
             return
 
-        dialog = OperationDialog(spec, objects, self)
+        dialog = OperationDialog(spec, objects, self, values=self._from_selection(spec, selected))
         if dialog.exec() != OperationDialog.DialogCode.Accepted:
             return
         self.session.apply(
@@ -917,6 +918,44 @@ class MainWindow(QMainWindow):
                 )
             ],
         )
+
+    def edit_operation(self, op_id: int) -> None:
+        """Open an operation of the stack again and give it other numbers (§15.4).
+
+        The same generated dialog, on the values that are in the file. Before
+        this the only way to a bore two millimetres to the left was to undo and
+        drill again — which is a step to take back, and a position is not.
+        """
+        try:
+            entry = self.session.history.operation(op_id)
+            spec = REGISTRY.get(entry.op)
+        except AppError as error:
+            self.session.failed.emit(error)
+            return
+
+        result = self.session.last_result
+        objects = list(result.scene.objects) if result else []
+        dialog = OperationDialog(spec, objects, self, values=entry.params)
+        dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
+        if dialog.exec() != OperationDialog.DialogCode.Accepted:
+            return
+        self.session.change_params(op_id, dialog.values())
+
+    def _from_selection(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
+        """What the clicked feature says about where this operation goes (§18.5).
+
+        Without this the selection in tree and view was for looking at: the
+        dialog opened on its defaults, and whoever wanted a bore in the face they
+        had just clicked read its coordinates off the analysis card and typed
+        them in.
+        """
+        feature_id = self.object_tree.selected_feature()
+        result = self.session.last_result
+        if not feature_id or selected is None or result is None:
+            return {}
+        entry = result.scene.objects.get(selected)
+        feature = entry.features.get(feature_id) if entry else None
+        return dict(values_for(spec, feature)) if feature is not None else {}
 
     # --- session replies --------------------------------------------------------
 

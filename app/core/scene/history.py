@@ -23,10 +23,13 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 from app.core.errors import ValidationError
+from app.core.log import get_logger
 from app.core.registry import REGISTRY, VARIABLE, Registry
 from app.core.scene import expressions
 from app.core.types import Document, ObjectId, Operation, OpId, Origin, Transaction
 from app.i18n import TranslatableText, _
+
+_log = get_logger(__name__)
 
 _OBJECT_PATTERN = re.compile(r"^obj_(\d+)$")
 
@@ -191,6 +194,64 @@ class History:
             solver = solvers.get(entry.id)
             if solver is not None and entry.solver != solver:
                 self.document.ops[index] = dataclasses.replace(entry, solver=solver)
+
+    def change_params(self, op_id: OpId, params: Mapping[str, Any]) -> Operation:
+        """Give an operation of the stack other parameters (§15.4, §11).
+
+        This is what makes the stack a stack rather than a list of things that
+        happened: a bore two millimetres to the left is the same operation with
+        another number, not a step to take back and do again. The recomputation
+        follows from the hash — only the branch below the changed operation is
+        computed anew, the rest comes out of the cache (§15).
+
+        Undone transactions are dropped, exactly as applying something new does:
+        there are no branches (§15.4), and a redo onto a changed stack would be
+        a branch by another name.
+
+        What is refused is a change that alters *how many* objects the operation
+        makes while a later one still uses them. The ids of the new outputs are
+        not the old ones, so those later operations would point at bodies that no
+        longer exist — and an error at the far end of the stack, about a number
+        somebody changed at the near end, is the kind of error nobody connects
+        back to what they did.
+        """
+        entry = self.operation(op_id)
+        spec = self._registry.get(entry.op)
+        self._check_params(spec.name, spec.params.spec(), params)
+
+        merged = {**entry.params, **params}
+        draft = OperationDraft(op=entry.op, inputs=entry.inputs, params=merged)
+        outputs = self._outputs_for(spec, draft) if spec.produces_from else entry.outputs
+        if len(outputs) != len(entry.outputs):
+            used = self._later_users(op_id, entry.outputs)
+            if used:
+                raise ValidationError(
+                    field=spec.produces_from or "params",
+                    detail=_(
+                        "Diese Änderung ändert die Anzahl der Objekte, und spätere "
+                        "Operationen arbeiten damit. Dafür die Operation zurücknehmen "
+                        "und neu anwenden."
+                    ),
+                    constraint="count_in_use",
+                    values={"op": entry.op, "used_by": sorted(used)},
+                )
+        else:
+            outputs = entry.outputs
+
+        self._forget_undone()
+        changed = dataclasses.replace(entry, params=dict(merged), outputs=tuple(outputs))
+        self.document.ops[self.document.ops.index(entry)] = changed
+        _log.info("changed parameters of op %s (%s)", op_id, entry.op)
+        return changed
+
+    def _later_users(self, op_id: OpId, objects: tuple[ObjectId, ...]) -> set[OpId]:
+        """Operations after this one that take one of its outputs."""
+        wanted = set(objects)
+        return {
+            entry.id
+            for entry in self.document.ops
+            if entry.id > op_id and wanted.intersection(entry.inputs)
+        }
 
     def _outputs_for(self, spec: Any, draft: OperationDraft) -> tuple[ObjectId, ...]:
         """Same count in and out means the objects stay themselves; otherwise new ids."""

@@ -230,17 +230,29 @@ class ParameterPanel(QWidget):
 
 
 class HistoryPanel(QWidget):
-    """Transactions, newest last. The unit of undo (§15.5)."""
+    """Transactions, newest last. The unit of undo (§15.5).
+
+    A transaction is one row, because that is what an undo takes back. Its
+    operations get a row of their own where there is more than one of them —
+    an agent proposal, a split into four — so that every step of the stack can
+    be opened and corrected, not only the ones that came alone (§15.4).
+    """
+
+    operationActivated = Signal(int)
+    """An operation was double-clicked — carries its id, for editing (§15.4)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.list = QListWidget(self)
+        self.list.itemDoubleClicked.connect(self._on_activated)
+        self.list.setToolTip(tr("Doppelklick öffnet die Operation und ihre Parameter."))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.list)
 
     def show_document(self, document: Document, stopped_at: int | None = None) -> None:
         self.list.clear()
+        titles = {entry.id: entry.op for entry in document.ops}
         for transaction in document.transactions:
             by = tr("Agent") if transaction.origin.by == "agent" else tr("Nutzer")
             item = QListWidgetItem(f"{transaction.title}  ({by})")
@@ -251,8 +263,21 @@ class HistoryPanel(QWidget):
                 f"{transaction.id} · {tr('Ops')} "
                 + ", ".join(str(entry) for entry in transaction.ops)
             )
+            if len(transaction.ops) == 1:
+                item.setData(Qt.ItemDataRole.UserRole, transaction.ops[0])
             self.list.addItem(item)
+
+            if len(transaction.ops) > 1:
+                for op_id in transaction.ops:
+                    child = QListWidgetItem(f"    {op_id}  {titles.get(op_id, '')}")
+                    child.setData(Qt.ItemDataRole.UserRole, op_id)
+                    self.list.addItem(child)
         self.list.scrollToBottom()
+
+    def _on_activated(self, item: QListWidgetItem) -> None:
+        op_id = item.data(Qt.ItemDataRole.UserRole)
+        if op_id is not None:
+            self.operationActivated.emit(int(op_id))
 
 
 class ReportPanel(QWidget):

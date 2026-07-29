@@ -28,6 +28,7 @@ from app.core.knowledge.parts.shapes import RIDGE_SHARE, thread_body
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
+from app.core.scene.placement import is_upright
 from app.core.slice.analysis import cross_section
 from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
 from app.core.units import EPS_GEOM
@@ -98,6 +99,49 @@ def _holes_of(part: Any) -> list[Any]:
     return [ShapelyPolygon(ring) for ring in getattr(part, "interiors", [])]
 
 
+def plane_of(source: SceneObject, name: str, stated: float) -> float:
+    """The height the opening is at: from the chosen face, or from the number.
+
+    A face wins over the number because it is the more specific of the two — the
+    number defaults to the top of the body, which is a guess, while a face is
+    what somebody clicked. Both are in the file, so the answer does not depend on
+    what happens to be selected when the project is opened again (§11).
+
+    A face that does not lie flat is refused rather than read as a height. Its
+    centre has a Z like any other point, and taken as an opening height it would
+    put the lid through the middle of the part.
+    """
+    if not name:
+        return stated or float(source.mesh.bounds.maximum[2])
+
+    feature = source.features.get(name)
+    if feature is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Dieses Merkmal gibt es an diesem Objekt nicht."),
+            value=name,
+            constraint="unknown_feature",
+            values={"known": ", ".join(sorted(source.features))},
+        )
+    if feature.kind != "face":
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Ein Deckel braucht eine Fläche, kein anderes Merkmal."),
+            value=name,
+            constraint="not_a_face",
+            values={"kind": feature.kind},
+        )
+    if not is_upright(feature):
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Diese Fläche liegt nicht waagerecht — eine Öffnung für einen Deckel schon."),
+            value=name,
+            constraint="not_upright",
+        )
+    centre = feature.params.get("centre") or (0.0, 0.0, 0.0)
+    return float(centre[2])
+
+
 def build(
     outline: Any,
     cavities: list[Any],
@@ -151,11 +195,19 @@ class LidParams(BaseParams):
         maximum=100.0,
         doc=_("Wie weit der Kragen in die Öffnung reicht. Null heißt: flacher Deckel ohne Kragen."),
     )
+    at_feature: str = param(
+        title=_("An Fläche"),
+        default="",
+        doc=_(
+            "Name einer erkannten Fläche, etwa face_1 — dann liegt die Öffnung in "
+            "deren Ebene. Wird beim Anklicken im Fenster eingetragen."
+        ),
+    )
     z: float = param(
         title=_("Höhe der Öffnung"),
         default=0.0,
         unit="mm",
-        doc=_("Null nimmt die Oberkante des Körpers."),
+        doc=_("Null nimmt die Oberkante des Körpers. Eine gewählte Fläche geht vor."),
     )
     clearance: float = param(
         title=_("Spiel"),
@@ -195,8 +247,7 @@ def create_lid(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
 
-    top = float(mesh.bounds.maximum[2])
-    z = params.z or top
+    z = plane_of(source, params.at_feature, params.z)
     outline, cavities = opening(mesh, z - BELOW_RIM)
 
     clearance = params.clearance
@@ -328,11 +379,19 @@ class ScrewLidParams(BaseParams):
         placement="advanced",
         doc=_("Null nimmt die schmalere Seite der Öffnung."),
     )
+    at_feature: str = param(
+        title=_("An Fläche"),
+        default="",
+        doc=_(
+            "Name einer erkannten Fläche, etwa face_1 — dann liegt die Öffnung in "
+            "deren Ebene. Wird beim Anklicken im Fenster eingetragen."
+        ),
+    )
     z: float = param(
         title=_("Höhe der Öffnung"),
         default=0.0,
         unit="mm",
-        doc=_("Null nimmt die Oberkante des Körpers."),
+        doc=_("Null nimmt die Oberkante des Körpers. Eine gewählte Fläche geht vor."),
     )
     clearance: float = param(
         title=_("Spiel"),
@@ -376,8 +435,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
 
-    top = float(mesh.bounds.maximum[2])
-    z = params.z or top
+    z = plane_of(source, params.at_feature, params.z)
     outline, cavities = opening(mesh, z - BELOW_RIM)
 
     clearance = params.clearance

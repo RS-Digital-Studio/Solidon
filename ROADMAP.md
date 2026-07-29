@@ -677,3 +677,54 @@ Spiel aus dem Parameter. Der Drehdeckel rechnet nach derselben Regel: Hals
 `RIDGE_SHARE` und steht an einer Stelle, weil drei Rechnungen sich darauf
 verlassen — und zwei davon, die verschiedene Zahlen benutzen, sind ein Paar, das
 nicht zusammenpasst, ohne dass es einer der beiden Hälften anzusehen ist.
+
+## Auswahl, Ort und Änderbarkeit
+
+Aus einer Frage entstanden: „kann man einzelne Flächen auswählen und dort eine
+Operation ansetzen, oder wie fügt man Operationen zu einem Objekt hinzu?" Beim
+Nachsehen war die Antwort unbefriedigend — das Fundament stand, aber drei Drähte
+waren nicht angeschlossen.
+
+**Der Klick kam nie am Dialog an.** Merkmale werden seit P3 erkannt, stehen im
+Objektbaum und sind im Fenster anklickbar; `applies_to` sagt, welche Operation
+sich für welches Merkmal anbietet. Der Dialog danach öffnete trotzdem mit
+Vorgabewerten. Wer in die gerade angeklickte Fläche bohren wollte, las deren
+Koordinaten von der Analysekarte ab und tippte sie ein.
+
+`scene.placement.values_for` ist die Verbindung, und sie liegt im Kern, weil die
+Regel auf der Kommandozeile und für den Agenten dieselbe sein muss. Was ein
+Merkmal beiträgt, ist der Ort und die Richtung — **nicht die Größe**: eine Senkung
+nimmt den Kopfdurchmesser der Schraube, nicht den der Bohrung, auf der sie sitzt,
+und eine hilfsbereit eingetragene 5,2 wäre dort eine falsche Zahl, die aussieht
+wie eine gemessene. Eine Fläche, die schräg steht, nennt keine Achse: ein
+gerundeter Wert, von dem niemand erfährt, ist schlimmer als keiner.
+
+**Die Deckel-Ops nahmen die Fläche nicht.** Sie deklarierten `applies_to=["face"]`
+und rechneten mit der Oberkante — eine seitliche Fläche auswählen und einen
+Drehdeckel erzeugen arbeitete trotzdem oben. Jetzt haben sie einen Parameter
+`An Fläche`; die Auswahl trägt ihn ein, und die Operation liest die Fläche selbst,
+damit sie prüfen kann: eine, die nicht waagerecht liegt, wird zurückgewiesen
+statt als Höhe gelesen zu werden.
+
+**Eine Operation war nicht änderbar.** Nur Projekt-Parameter (§13) ließen sich
+drehen; die Zahlen einer Operation nicht. Eine Bohrung zwei Millimeter zu
+versetzen hieß: zurücknehmen und neu bohren. `History.change_params` macht daraus
+eine Änderung — Doppelklick auf den Schritt im Verlauf öffnet denselben
+erzeugten Dialog auf den Werten, die in der Datei stehen. Neu gerechnet wird nur
+der Zweig darunter, der Rest kommt aus dem Cache (§15).
+
+Zwei Dinge daran sind bewusst eng: zurückgenommene Transaktionen fallen weg wie
+beim Anwenden, weil es keine Zweige gibt (§15.4). Und eine Änderung, die die
+*Anzahl* der Objekte ändert, während spätere Schritte damit arbeiten, wird
+abgelehnt — die IDs der neuen Körper sind nicht die alten, und ein Fehler am
+Ende des Stapels über eine Zahl am Anfang ist einer, den niemand mit dem
+verbindet, was er getan hat.
+
+Der Dialog kennt jetzt Startwerte, und dieselbe Zeile trägt beides: den Klick auf
+eine Fläche und das erneute Öffnen einer Operation. Ein zweiter Dialog für den
+zweiten Fall wäre eine zweite Stelle, an der ein Parameter fehlen kann.
+
+*Nebenbei zum dritten Mal in die gleiche Falle getreten:* ein Test, der ein
+lebendes `MainWindow` etwas fehlschlagen lässt, hängt — das Fenster antwortet auf
+`session.failed` mit einem modalen Meldungsfenster. Steht jetzt im Kopf der
+Testdatei.
