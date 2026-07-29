@@ -66,6 +66,7 @@ from app.ui.generate_dialog import GenerateDialog
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import feature_label
 from app.ui.op_dialog import OperationDialog
+from app.ui.paint_bar import PaintBar
 from app.ui.panels import (
     HistoryPanel,
     MeasurementLabel,
@@ -205,6 +206,9 @@ class MainWindow(QMainWindow):
         self.explode_bar = ExplodeBar(self)
         self.explode_bar.factorChanged.connect(self.viewport.set_explosion)
         self.explode_bar.plateChanged.connect(self.viewport.set_plate)
+        self.paint_bar = PaintBar(self)
+        self.paint_bar.paintingToggled.connect(self.viewport.set_painting)
+        self.viewport.paintRequested.connect(self._on_paint)
 
         middle = QWidget(self)
         middle_layout = QVBoxLayout(middle)
@@ -217,6 +221,7 @@ class MainWindow(QMainWindow):
         middle_layout.addWidget(self.analysis_bar)
         middle_layout.addWidget(self.layer_bar)
         middle_layout.addWidget(self.explode_bar)
+        middle_layout.addWidget(self.paint_bar)
 
         self.report = ReportPanel(self)
         self.report.findingActivated.connect(self._on_finding_activated)
@@ -824,6 +829,19 @@ class MainWindow(QMainWindow):
     def _focus_chat(self) -> None:
         if self.right.isVisible():
             self.right.setCurrentWidget(self.chat)
+
+    def _on_paint(self, point: Any) -> None:
+        """§20: one click, one operation — so one undo takes one stroke back."""
+        object_id = self.object_tree.selected()
+        if not object_id:
+            self.status_message.setText(tr("Bitte zuerst ein Objekt auswählen."))
+            return
+
+        params = {**self.paint_bar.values(), "x": point[0], "y": point[1], "z": point[2]}
+        self.session.apply(
+            tr("Bemalen"),
+            [OperationDraft(op="paint_slot", inputs=(object_id,), params=params)],
+        )
 
     def _on_feature_picked(self, feature_id: str) -> None:
         """A click in the view selects the feature in the tree as well (§18.5)."""

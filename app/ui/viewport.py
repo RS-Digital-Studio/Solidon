@@ -109,6 +109,9 @@ class Viewport(QWidget):
     transformDragged = Signal(object)
     """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
     featurePicked = Signal(str)
+    paintRequested = Signal(object)
+    """A point on the surface to paint at (§20). The window turns it into an
+    operation — the view never changes geometry itself."""
     """A feature clicked in the view — carries its id (§18.5)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -152,6 +155,8 @@ class Viewport(QWidget):
         """§18.8: how far split parts are drawn apart. Display only, never geometry."""
         self._plate = -1
         """Which build plate is shown; -1 is all of them (§25)."""
+        self._painting = False
+        """§20: clicks are brush strokes while this is on."""
 
         if not _available():
             self._layout.addWidget(
@@ -454,8 +459,34 @@ class Viewport(QWidget):
         self._pending_point = None
         self._redraw_measurements()
 
+    def set_painting(self, active: bool) -> None:
+        """Turn clicks into brush strokes (§20).
+
+        The same picking the measuring uses; what changes is who gets the point.
+        A separate mode rather than a modifier key: painting the model when
+        somebody meant to turn it is the kind of surprise an undo fixes and
+        trust does not survive.
+        """
+        self._painting = active
+        if self.plotter is None:
+            return
+        if not active:
+            self.plotter.disable_picking()
+            self.set_feature_overlay(self._feature_overlay)
+            return
+        self.plotter.enable_point_picking(
+            callback=self._on_picked,
+            show_message=False,
+            show_point=False,
+            left_clicking=True,
+            picker="point",
+        )
+
     def _on_picked(self, point: Any) -> None:
         picked = (float(point[0]), float(point[1]), float(point[2]))
+        if self._painting:
+            self.paintRequested.emit(picked)
+            return
         if self._measure_mode == "off":
             # Not measuring: a click is meant for the feature under it (§18.5).
             feature_id = self._feature_at(picked)

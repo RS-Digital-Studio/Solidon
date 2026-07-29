@@ -229,6 +229,12 @@ erzeugten Modells über **Farbe → Farben in Slots umrechnen** — k-Means auf 
 Anzahl eingelegter Filamente, mit gespeichertem Startwert, damit dieselbe Datei
 dasselbe Ergebnis liefert. Das ist nie so fein wie die Bildschirmdarstellung.
 
+**Bemalen** ist die dritte Möglichkeit: Leiste einschalten, Slot und Radius
+wählen, ins Modell klicken. Der Pinsel läuft über die Oberfläche und hält an
+Kanten an, statt um die Ecke zu malen — die Oberseite eines Deckels wird bemalt,
+die Seitenwand nicht, ohne dass jemand eine Grenze zieht. Jeder Klick ist eine
+Operation, also nimmt ein Undo einen Strich zurück.
+
 Die Zuweisung überlebt Boolesche Operationen einschließlich der Voxelstufe. Beim
 Export nach `3MF` wird daraus je Slot eine Materialgruppe; `STL` kennt keine
 Farbe und verliert sie folgerichtig.

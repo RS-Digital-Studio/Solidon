@@ -18,6 +18,7 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.geom.prepare_ops",
     "app.core.geom.primitive_ops",
     "app.core.geom.colour_ops",
+    "app.core.geom.paint",
     "app.core.geom.mesh_ops",
     "app.core.geom.label_ops",
     # §30: the second kernel declares its operations like every other module.
