@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # the 3MF module needs MeshData, so the import can only go one way
+    from app.core.export.threemf import Part
 
 import numpy as np
 import trimesh
@@ -159,6 +162,17 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
             constraint="unsupported_format",
             values={"suffix": suffix, "known": list(READABLE_SUFFIXES)},
         )
+    if normalised == ".3mf":
+        # Not through trimesh: it resolves a component that points into an
+        # external object file to the whole file instead of to the object it
+        # names, and hands back every body once per component. Imported here
+        # rather than at the top because the 3MF module needs MeshData.
+        from app.core.export import threemf
+
+        parts = threemf.read_objects(payload)
+        if parts:
+            return _joined(parts)
+
     try:
         loaded: Any = trimesh.load(
             io.BytesIO(payload), file_type=normalised.lstrip("."), process=False, force="mesh"
@@ -181,6 +195,20 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
             values={"suffix": suffix},
         )
     return MeshData.of(loaded)
+
+
+def _joined(parts: list[Part]) -> MeshData:
+    """The bodies of a 3MF as the one body this function promises.
+
+    Whoever wants them apart asks :func:`app.core.export.threemf.read_objects`;
+    here they are welded, because that is what a single return value can be. The
+    slots come along only from a file with one body: every part numbers its own
+    slots from zero, and merging those numberings without a shared palette would
+    put the wrong filament on half the triangles (§20).
+    """
+    if len(parts) == 1:
+        return parts[0].mesh
+    return MeshData.of(trimesh.util.concatenate([part.mesh.raw for part in parts]))
 
 
 class MeshCodec:
