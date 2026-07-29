@@ -271,15 +271,33 @@ class ThreadParams(BaseParams):
     changes=[FIRST_RELEASE],
 )
 def printed_thread(raw: BaseParams) -> PartResult:
+    """A thread, and its counterpart measured so the two actually engage.
+
+    Both are described by the same two numbers — the major diameter and the
+    pitch — and built from opposite ends of the ridge:
+
+    * outside, the core is two ridge depths under the major diameter and the
+      helix reaches out to it;
+    * inside, the *cutter* starts at that same core diameter and the helix
+      reaches out to the major diameter. Cut from the core rather than from the
+      major diameter, which is the difference between a nut and a smooth hole:
+      a bore at the major diameter leaves nothing standing that the ridge of a
+      screw could hold on to, and the screw drops straight through. Measured on
+      M6: a screw of 5,85 major reaches r = 2,925, and a hole bored to 6,15
+      begins at r = 3,075 — a hundred and fifty micrometres of air.
+    """
     params = cast(ThreadParams, raw)
     screw = standards.screw(params.size)
-    diameter = screw.nominal + (params.play if params.internal else -params.play)
+    depth = screw.pitch * shapes.RIDGE_SHARE
+    if params.internal:
+        # The cutter: core plus play, with the groove reaching out from there.
+        diameter = screw.nominal - 2.0 * depth + params.play
+        core = shapes.cylinder(diameter, params.length)
+    else:
+        diameter = screw.nominal - params.play
+        core = shapes.cylinder(diameter - 2.0 * depth, params.length)
 
     ridge = shapes.thread_body(diameter, screw.pitch, params.length, internal=params.internal)
-    core = shapes.cylinder(
-        diameter if params.internal else diameter - 2.0 * screw.pitch * 0.55,
-        params.length,
-    )
     body = union(core, ridge)
     # The helix ends a little above the nominal length; cut it back so the part
     # is exactly as long as it says it is.

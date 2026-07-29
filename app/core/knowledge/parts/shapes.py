@@ -22,6 +22,13 @@ from app.core.types import Vec3
 #: enough that a part stays a few thousand triangles (§31).
 SEGMENTS = 48
 
+#: How far the ridge of a thread stands out of its core, as a share of the
+#: pitch. Named because three places have to agree on it: the ridge built here,
+#: the core the screw carries it on, and the diameter the nut is cut from. Two
+#: of the three using a different number is a pair that does not screw
+#: together, and it is not visible in either half on its own.
+RIDGE_SHARE = 0.55
+
 #: How far a subtracted shape reaches past the surface it cuts through. The
 #: rule set asks for it (§39): coincident faces are the classic way to break a
 #: boolean operation.
@@ -135,7 +142,7 @@ def thread_body(
     """
     steps = max(round(height / pitch), 1) * segments
     if depth is None:
-        depth = pitch * 0.55
+        depth = pitch * RIDGE_SHARE
     radius = diameter / 2.0
     inner = radius + depth if internal else radius - depth
 
@@ -152,7 +159,7 @@ def thread_body(
             [
                 root + up * level,
                 crest + up * (level + pitch * 0.25),
-                crest + up * (level + pitch * 0.55),
+                crest + up * (level + pitch * RIDGE_SHARE),
                 root + up * (level + pitch * 0.8),
             ]
         )
