@@ -115,19 +115,42 @@ def test_the_search_stops_instead_of_cutting_forever(profile: Profile) -> None:
     assert "split.too_many_parts" in {finding.code for finding in outcome.findings}
 
 
-def test_convex_parts_are_reproducible_or_absent(profile: Profile) -> None:
-    """§11.3: randomised, so the same seed gives the same pieces."""
+def test_convex_parts_take_an_l_apart(profile: Profile) -> None:
+    """§22.3: the decomposition finds where an L comes apart by itself.
+
+    This test used to skip itself when the answer was empty, and the answer was
+    always empty: the call passed a ``randomizeSeed`` that this V-HACD does not
+    have, the TypeError was read as "module missing", and the whole hint path
+    of the plane search was dead behind a green suite. So: no skip. If V-HACD
+    is installed it has to deliver, and the corner of the L is what it must
+    find.
+    """
     shape = trimesh.boolean.union(
         [
             trimesh.creation.box(extents=(60.0, 20.0, 20.0)),
             trimesh.creation.box(extents=(20.0, 20.0, 60.0)).apply_translation([20.0, 0.0, 40.0]),
         ]
     )
-    first = autosplit.convex_parts(MeshData.of(shape), seed=1)
-    second = autosplit.convex_parts(MeshData.of(shape), seed=1)
+    parts = autosplit.convex_parts(MeshData.of(shape))
 
-    if not first:
-        pytest.skip("V-HACD is an optional dependency")
+    assert len(parts) >= 2, "an L is not convex"
+    assert sum(abs(part.volume) for part in parts) == pytest.approx(abs(shape.volume), rel=0.05)
+    assert [abs(part.volume) for part in parts] == sorted(
+        (abs(part.volume) for part in parts), reverse=True
+    ), "largest first, as documented"
+
+
+def test_convex_parts_are_reproducible(profile: Profile) -> None:
+    """§11.3: the same body gives the same pieces, without a seed to store."""
+    shape = trimesh.boolean.union(
+        [
+            trimesh.creation.box(extents=(60.0, 20.0, 20.0)),
+            trimesh.creation.box(extents=(20.0, 20.0, 60.0)).apply_translation([20.0, 0.0, 40.0]),
+        ]
+    )
+    first = autosplit.convex_parts(MeshData.of(shape))
+    second = autosplit.convex_parts(MeshData.of(shape))
+
     assert len(first) == len(second)
     assert [round(part.volume, 3) for part in first] == [round(part.volume, 3) for part in second]
 

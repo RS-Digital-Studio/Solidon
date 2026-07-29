@@ -131,7 +131,6 @@ def split_to_fit(
     *,
     max_parts: int = MAX_PARTS,
     samples: int = SAMPLES,
-    seed: int | None = None,
 ) -> SplitOutcome:
     """Cut until every piece fits, or until it is clear that cutting will not do it.
 
@@ -149,7 +148,7 @@ def split_to_fit(
             return outcome
 
         part = outcome.parts[index]
-        candidate = find_plane(part, profile, samples=samples, seed=seed)
+        candidate = find_plane(part, profile, samples=samples)
         if candidate is None:
             outcome.findings.append(
                 Finding(
@@ -203,7 +202,6 @@ def find_plane(
     profile: Profile,
     *,
     samples: int = SAMPLES,
-    seed: int | None = None,
 ) -> Candidate | None:
     """The best parting plane for this body, or ``None`` when none helps.
 
@@ -223,7 +221,7 @@ def find_plane(
 
     # Nothing convincing among the sampled planes: ask the decomposition where
     # the body comes apart by itself, and judge that position by the same rules.
-    hinted = _from_decomposition(mesh, axis, window, seed)
+    hinted = _from_decomposition(mesh, axis, window)
     if hinted is not None and (best is None or hinted.score < best.score):
         return hinted
     return best
@@ -342,16 +340,16 @@ def _cut_in_two(mesh: MeshData, candidate: Candidate) -> tuple[MeshData | None, 
 
 
 def _from_decomposition(
-    mesh: MeshData, axis: Axis, window: tuple[float, float], seed: int | None
+    mesh: MeshData, axis: Axis, window: tuple[float, float]
 ) -> Candidate | None:
     """Ask where the body naturally comes apart, and judge cutting there.
 
     The convex decomposition is a hint, not the result: its hulls approximate
     the body, and a part glued together from approximations is an approximate
     part. What is taken from it is one number — the position where two of its
-    pieces meet along the axis being cut (§11.3, the seed is stored).
+    pieces meet along the axis being cut.
     """
-    pieces = convex_parts(mesh, seed=seed)
+    pieces = convex_parts(mesh)
     if len(pieces) < 2:
         return None
 
@@ -367,15 +365,16 @@ def _from_decomposition(
     return min(usable, key=lambda entry: entry.score) if usable else None
 
 
-def convex_parts(mesh: MeshData, *, seed: int | None = None, limit: int = 8) -> list[MeshData]:
+def convex_parts(mesh: MeshData, *, limit: int = 8) -> list[MeshData]:
     """Convex pieces of the body, largest first — empty when V-HACD is missing.
 
-    Randomised, so the seed is stored with the operation like everywhere else
-    (§11.3). Without the module the answer is an empty list and the caller says
-    so; it is an optional dependency and never a crash.
+    No seed: this V-HACD offers no randomisation knob and returns the same
+    hulls for the same body, which is what §11.3 wants of it. Without the
+    module the answer is an empty list and the caller says so; it is an
+    optional dependency and never a crash.
     """
     try:
-        raw = mesh.raw.convex_decomposition(maxConvexHulls=limit, randomizeSeed=bool(seed))
+        raw = mesh.raw.convex_decomposition(maxConvexHulls=limit)
     except Exception as problem:  # the module is optional, and V-HACD is C++
         _log.info("convex decomposition unavailable: %s", problem)
         return []

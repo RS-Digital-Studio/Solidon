@@ -63,7 +63,6 @@ def plan_split(
     profile: Profile,
     *,
     pins: int = PIN_COUNT,
-    seed: int | None = None,
 ) -> SplitPlan:
     """Search for the cuts and turn them into operations.
 
@@ -71,7 +70,7 @@ def plan_split(
     those out. What is known is the *order*, and that is enough: the input of
     the next cut is one of the two pieces the previous one made.
     """
-    outcome = split_to_fit(mesh, profile, seed=seed)
+    outcome = split_to_fit(mesh, profile)
     drafts = [
         OperationDraft(
             op="split_pinned",
@@ -90,10 +89,9 @@ def apply_split(
     profile: Profile,
     *,
     pins: int = PIN_COUNT,
-    seed: int | None = None,
 ) -> SplitApplied:
     """Cut until it fits, and record every seam as a fit pair (§14)."""
-    plan = plan_split(mesh, object_id, profile, pins=pins, seed=seed)
+    plan = plan_split(mesh, object_id, profile, pins=pins)
     if not plan.drafts:
         return SplitApplied(object_ids=[object_id], findings=list(plan.outcome.findings))
 
