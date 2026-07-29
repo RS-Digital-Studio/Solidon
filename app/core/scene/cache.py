@@ -205,6 +205,7 @@ class DiskCache:
                         key_: _feature_from_data(value) for key_, value in entry["features"].items()
                     },
                     material_slots=[_slot_from_data(slot) for slot in entry["material_slots"]],
+                    material=entry.get("material"),
                     created_by=entry["created_by"],
                     visible=entry["visible"],
                     plate=entry.get("plate", 0),
@@ -236,6 +237,7 @@ class DiskCache:
                             key_: _feature_to_data(value) for key_, value in entry.features.items()
                         },
                         "material_slots": [_slot_to_data(slot) for slot in entry.material_slots],
+                        "material": entry.material,
                         "created_by": entry.created_by,
                         "visible": entry.visible,
                         "plate": entry.plate,

@@ -435,3 +435,50 @@ def test_every_category_of_the_plan_has_something_in_it() -> None:
     filled = {spec.category for spec in REGISTRY.all()}
     for category in ("transform", "mesh", "prepare", "holes", "label", "import", "colour"):
         assert category in filled, category
+
+
+# --- one scene, more than one material (§12) ------------------------------------
+
+
+def test_a_body_can_be_given_its_own_material(profile: Profile) -> None:
+    entry = SceneObject(id="obj_1", name="Dichtung", mesh=block())
+
+    result = run("set_material", entry, profile, material="tpu-95a")
+
+    assert result.outputs[0].material == "tpu-95a"
+    assert result.findings and result.findings[0].code == "prepare.material"
+
+
+def test_an_empty_material_puts_the_body_back_on_the_project(profile: Profile) -> None:
+    entry = SceneObject(id="obj_1", name="Dichtung", mesh=block(), material="tpu-95a")
+
+    result = run("set_material", entry, profile, material="")
+
+    assert result.outputs[0].material is None
+    assert result.findings == [], "back to normal is not worth a line in the report"
+
+
+def test_an_unknown_material_says_which_ones_there_are(profile: Profile) -> None:
+    entry = SceneObject(id="obj_1", name="Dichtung", mesh=block())
+
+    with pytest.raises(ValidationError) as problem:
+        run("set_material", entry, profile, material="gummiband")
+
+    assert "petg" in problem.value.values["known"]
+
+
+def test_the_elephant_foot_follows_the_body_not_the_project(profile: Profile) -> None:
+    """§12: TPU squashes 0,25 mm into its first layer, PETG 0,2.
+
+    Computed with the project material a TPU seal comes out 0,05 mm too wide
+    all the way round — on a seal that is the difference between sealing and
+    not.
+    """
+    plain = run("compensate_first_layer", SceneObject(id="obj_1", name="A", mesh=block()), profile)
+    soft = run(
+        "compensate_first_layer",
+        SceneObject(id="obj_1", name="B", mesh=block(), material="tpu-95a"),
+        profile,
+    )
+
+    assert soft.outputs[0].mesh.volume < plain.outputs[0].mesh.volume, "TPU is pulled in further"

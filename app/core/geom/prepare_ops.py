@@ -32,6 +32,7 @@ from app.core.geom.prepare import (
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
 from app.core.geom.transform import Axis, place_on_bed
+from app.core.knowledge.profiles import for_object, material
 from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
 from app.core.types import BaseParams, Finding, OpContext, OpResult
@@ -319,11 +320,67 @@ def compensate_first_layer(ctx: OpContext) -> OpResult:
 
     mesh, findings = compensate_elephant_foot(
         as_mesh_data(source.mesh),
-        ctx.profile,
+        # The squish is the material's, and this body may not be in the
+        # project's (§12) — a TPU seal spreads further than the PETG around it.
+        for_object(ctx.profile, source),
         height=params.height,
         amount=params.amount or None,
     )
     return OpResult(outputs=[dataclasses.replace(source, mesh=mesh)], findings=findings)
+
+
+@op_params
+class MaterialParams(BaseParams):
+    material: str = param(
+        title=_("Material"),
+        default="",
+        doc=_("Kennung eines Materialprofils, etwa „tpu-95a“. Leer heißt: das des Projekts."),
+    )
+
+
+@register_op(
+    name="set_material",
+    title=_("Material festlegen"),
+    category="prepare",
+    params=MaterialParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Gibt diesem Körper ein eigenes Material. Toleranzen, Schwund und "
+        "Elefantenfuß werden dann damit gerechnet und nicht mit dem des Projekts."
+    ),
+)
+def set_material(ctx: OpContext) -> OpResult:
+    """§12: one scene, more than one material.
+
+    A housing in PETG with a seal in TPU is one project and two materials.
+    Without this the seal's clearance, its shrinkage and its first layer are
+    computed from the housing's material — numbers that are not approximate but
+    wrong, and wrong in the direction that scraps a print.
+
+    The identifier is checked here rather than offered as a fixed list: the
+    known materials include the user's own profiles, and those appear after
+    this module was imported.
+    """
+    params = cast(MaterialParams, ctx.params)
+    source = ctx.inputs[0]
+    chosen = params.material.strip()
+    if chosen:
+        material(chosen)  # raises with the list of known ones when it is not
+
+    return OpResult(
+        outputs=[dataclasses.replace(source, material=chosen or None)],
+        findings=[
+            Finding(
+                code="prepare.material",
+                severity="info",
+                message=_("Dieser Körper wird in einem eigenen Material gerechnet."),
+                values={"object": source.name, "material": chosen or "-"},
+            )
+        ]
+        if chosen
+        else [],
+    )
 
 
 @op_params
@@ -491,7 +548,8 @@ def split_pinned(ctx: OpContext) -> OpResult:
         plan = dataclasses.replace(plan, diameter=params.diameter)
 
     pair = (
-        add_pins(first, second, plan, ctx.profile, play=params.play or None)
+        # Both halves come out of this one body, so the play is its material's.
+        add_pins(first, second, plan, for_object(ctx.profile, source), play=params.play or None)
         if plan is not None and ctx.profile is not None
         else PinnedPair(first=first, second=second)
     )

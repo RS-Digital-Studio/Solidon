@@ -88,12 +88,17 @@ class ObjectTree(QWidget):
             # decides what can still be done with it — and the way from B-Rep
             # to mesh is one-way.
             kind = tr("exakt") if entry.kind == "brep" else tr("Netz")
-            item.setToolTip(
-                0,
-                f"{object_id} · {kind} · {entry.mesh.triangle_count} {tr('Dreiecke')} · {state}",
-            )
+            tip = f"{object_id} · {kind} · {entry.mesh.triangle_count} {tr('Dreiecke')} · {state}"
+            if entry.material:
+                tip += f" · {entry.material}"
+            item.setToolTip(0, tip)
             if entry.kind == "brep":
                 item.setText(0, f"{entry.name}  ·  {kind}")
+            if entry.material:
+                # §12: a body that is not in the project's material has to say
+                # so where the parts are listed — otherwise the only place the
+                # difference shows up is a fit that suddenly wants another gap.
+                item.setText(1, f"{item.text(1)}  ·  {entry.material}")
             for feature_id, feature in entry.features.items():
                 child = QTreeWidgetItem([feature_label(feature_id, feature), feature.kind])
                 child.setData(0, Qt.ItemDataRole.UserRole, object_id)

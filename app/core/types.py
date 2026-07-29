@@ -217,6 +217,13 @@ class SceneObject:
     kind: ObjectKind = "mesh"
     features: dict[FeatureId, Feature] = field(default_factory=dict)
     material_slots: list[MaterialSlot] = field(default_factory=list)
+    material: str | None = None
+    """Which material this body is printed in — ``None`` means the project's.
+
+    A scene is not one material. A TPU seal in a PETG housing shrinks
+    differently, wants a different clearance and squashes its first layer
+    differently; computing it with the project material gives a number that is
+    wrong rather than approximate (§12, §38)."""
     plate: int = 0
     """Which build plate this object sits on. Set by arranging; a scene with
     more parts than fit on one plate is normal, not an error (§25)."""

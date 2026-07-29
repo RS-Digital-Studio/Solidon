@@ -25,6 +25,7 @@ from app.core.types import (
     MaterialProfile,
     PrinterProfile,
     Profile,
+    SceneObject,
     Tolerance,
 )
 from app.i18n import _
@@ -160,6 +161,19 @@ def material(identifier: str) -> MaterialProfile:
 def make_profile(printer_id: str = DEFAULT_PRINTER, material_id: str = DEFAULT_MATERIAL) -> Profile:
     """The pair a scene is computed for."""
     return Profile(printer=printer(printer_id), material=material(material_id))
+
+
+def for_object(profile: Profile, entry: SceneObject | None) -> Profile:
+    """The profile this one body is printed with (§12).
+
+    Same printer, the body's own material where it has one. Everything that
+    computes a length from the material — clearance, shrinkage, elephant foot —
+    goes through here rather than reading ``profile.material``, so a seal made
+    of TPU is not calculated as if it were the housing around it.
+    """
+    if entry is None or entry.material is None or entry.material == profile.material.id:
+        return profile
+    return Profile(printer=profile.printer, material=material(entry.material))
 
 
 #: Which material figure a fit kind reads (§14). Documented here, not scattered.

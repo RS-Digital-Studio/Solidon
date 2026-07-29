@@ -516,3 +516,32 @@ kamen vor, für die man bisher aus Formwerk heraus musste:
   und weil dieses V-HACD keinen Zufallsregler hat und nachgemessen
   deterministisch ist, ist die `seed`-Kette durch sechs Signaturen ersatzlos
   weg statt weiter mitgeschleppt.
+
+## Eine Szene ist nicht ein Material
+
+Der dritte Fund aus dem Modellordner, und der einzige, bei dem bisher etwas
+**falsch** gerechnet wurde statt nur zu fehlen: Baugruppen mit einer TPU-
+Dichtung in einem PETG-Gehäuse. Toleranz, Schwund und Elefantenfuß kamen für
+beide Körper aus dem Projektmaterial.
+
+`SceneObject.material` trägt das jetzt am Körper, `profiles.for_object` löst es
+auf, und `set_material` setzt es als Operation im Stack — damit gilt §11 weiter:
+kein verstecktes Attribut, rücknehmbar, im Projekt gespeichert.
+
+Was daran hängt:
+
+* **Passungen.** `auto:` heißt „das, worin das hier gedruckt wird", und das sind
+  bei zwei Körpern zwei Antworten. Wo sie sich unterscheiden, gewinnt der
+  größere Wert — bei Spiel der weitere Spalt, bei Presssitz die *kleinere*
+  Pressung, weil die Werte negativ sind. Eine Regel für beides, und beide Male
+  die, deren Fehlschlag ein brauchbares Teil übrig lässt: was lose sitzt, kann
+  man kleben; ein Gehäuse, das beim Fügen gerissen ist, ist Ausschuss. Ein
+  ausgeschriebenes `auto:petg` bleibt, was dasteht — das hat jemand mit Absicht
+  hingeschrieben.
+* **Elefantenfuß.** TPU quetscht 0,25 mm breit, PETG 0,2. Auf einer Dichtung
+  ist das der Unterschied zwischen dichten und nicht dichten.
+* **Passstifte** nehmen das Spiel des geteilten Körpers, nicht das des Projekts.
+* **Steckbrief und Objektbaum** nennen ein abweichendes Material; ein
+  übereinstimmendes nicht, sonst steht es an jedem Körper und niemand liest es.
+* **Cache.** Das Material steht im Objekt-Eintrag; ohne das käme nach einem
+  Neustart der Körper mit dem alten Material zurück.

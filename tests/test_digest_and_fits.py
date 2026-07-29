@@ -278,3 +278,88 @@ def test_fits_can_be_added_and_removed() -> None:
 
     entries = fit_check.remove(entries, "stift_1")
     assert entries == []
+
+
+# --- a scene is not one material (§12) ------------------------------------------
+
+
+def test_a_softer_body_gets_its_own_clearance(profile: Profile) -> None:
+    """The case the model folder showed: a TPU seal in a PETG housing.
+
+    Computed with the project material the gap is 0,25 — the number for PETG.
+    The seal is TPU and wants 0,35, and the difference is not academic: at
+    0,25 the assembly is a press fit nobody asked for.
+    """
+    scene = pin_and_hole(5.0 + profiles.material("tpu-95a").clearance, 5.0, profile)
+    scene.fits.append(clearance_fit())
+    assert fit_check.check(scene, profile), "with one material this gap is too loose"
+
+    scene.objects["obj_2"].material = "tpu-95a"
+
+    assert fit_check.check(scene, profile) == []
+
+
+def test_the_finding_names_both_materials(profile: Profile) -> None:
+    scene = pin_and_hole(5.0, 5.0, profile)
+    scene.objects["obj_2"].material = "tpu-95a"
+    scene.fits.append(clearance_fit())
+
+    findings = fit_check.check(scene, profile)
+
+    assert findings and findings[0].values["materials"] == "petg, tpu-95a"
+
+
+def test_one_material_is_not_worth_mentioning(profile: Profile) -> None:
+    """Noise in a report is what makes the report unread."""
+    scene = pin_and_hole(5.0, 5.0, profile)
+    scene.fits.append(clearance_fit())
+
+    findings = fit_check.check(scene, profile)
+
+    assert findings and "materials" not in findings[0].values
+
+
+def test_a_named_material_stays_what_it_says(profile: Profile) -> None:
+    """`auto:petg` was written down on purpose and no body overrules it (§12)."""
+    scene = pin_and_hole(5.0 + profiles.material("petg").clearance, 5.0, profile)
+    scene.objects["obj_2"].material = "tpu-95a"
+    scene.fits.append(
+        Fit(
+            name="stift_1",
+            a=FeatureRef("obj_1", "hole_1"),
+            b=FeatureRef("obj_2", "pin_1"),
+            kind="clearance",
+            tolerance="auto:petg",
+        )
+    )
+
+    assert fit_check.check(scene, profile) == []
+
+
+def test_a_press_fit_takes_the_gentler_number(profile: Profile) -> None:
+    """Negative values: the larger one is the smaller interference.
+
+    PETG presses with -0,05 and TPU with -0,10. Pressing a TPU pin into a PETG
+    hole with the TPU figure means 0,1 mm of oversize in a body that does not
+    give — the housing splits. -0,05 holds and survives.
+    """
+    scene = pin_and_hole(5.0, 5.05, profile)
+    scene.objects["obj_2"].material = "tpu-95a"
+    scene.fits.append(
+        Fit(
+            name="press_1",
+            a=FeatureRef("obj_1", "hole_1"),
+            b=FeatureRef("obj_2", "pin_1"),
+            kind="press",
+            tolerance="auto:",
+        )
+    )
+
+    assert fit_check.check(scene, profile) == []
+
+
+def test_the_digest_names_a_body_that_is_not_in_the_project_material(profile: Profile) -> None:
+    scene = plate_scene(profile)
+    next(iter(scene.objects.values())).material = "tpu-95a"
+
+    assert "tpu-95a" in digest(scene)

@@ -69,6 +69,10 @@ def _object_lines(object_id: ObjectId, entry: SceneObject) -> list[str]:
     ]
     if on_bed:
         facts.append(on_bed)
+    if entry.material:
+        # Only when it differs from the project's — the scene line already says
+        # that one, and repeating it on every body would be noise (§26.1).
+        facts.append(entry.material)
 
     lines = [f'{object_id}  "{entry.name}"  ' + ", ".join(facts)]
     for feature_id, feature in entry.features.items():

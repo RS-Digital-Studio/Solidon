@@ -11,9 +11,18 @@ projects that were built before it.
 
 from __future__ import annotations
 
-from app.core.knowledge.profiles import resolve_tolerance
+from app.core.knowledge.profiles import for_object, resolve_tolerance
 from app.core.log import get_logger
-from app.core.types import Feature, FeatureRef, Finding, Fit, FitKind, Profile, Scene
+from app.core.types import (
+    AUTO_TOLERANCE_PREFIX,
+    Feature,
+    FeatureRef,
+    Finding,
+    Fit,
+    FitKind,
+    Profile,
+    Scene,
+)
 from app.core.units import EPS_DISPLAY, format_length
 from app.i18n import _
 
@@ -78,7 +87,10 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
             )
         ]
 
-    wanted = resolve_tolerance(fit.tolerance, fit.kind, profile)
+    # Which of the two references the hole came from: _sort_by_kind may have
+    # swapped them, and "hole_1" is only unique within its own object.
+    hole_ref, pin_ref = (fit.a, fit.b) if hole is first else (fit.b, fit.a)
+    wanted, materials = _wanted(scene, fit, hole_ref, pin_ref, profile)
     actual = hole_diameter - pin_diameter
     if abs(actual - wanted) <= FIT_TOLERANCE:
         return []
@@ -92,9 +104,46 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
                 "fit": fit.name,
                 "actual": format_length(actual),
                 "expected": format_length(wanted),
+                **({"materials": materials} if materials else {}),
             },
         )
     ]
+
+
+def _wanted(
+    scene: Scene, fit: Fit, hole: FeatureRef, pin: FeatureRef, profile: Profile
+) -> tuple[float, str]:
+    """The gap this fit is meant to have, in the materials it is made of (§12).
+
+    A named reference (``auto:petg``) stays what it says — somebody wrote that
+    material down on purpose. The bare ``auto:`` means "whatever this is
+    printed in", and that is not necessarily one thing: a TPU seal in a PETG
+    housing has two answers.
+
+    Where they differ the larger value wins, and that is one rule for both
+    kinds rather than two. A clearance is positive, so the larger one is the
+    wider gap: it goes together. A press is negative, so the larger one is the
+    *smaller* interference: it does not split the part it is pressed into. Both
+    times the choice is the one whose failure leaves a usable part — a joint
+    that sits loose can be glued, a housing that cracked on assembly is scrap.
+
+    A thread is a property of the hole and reads only its material.
+    """
+    if not isinstance(fit.tolerance, str) or fit.tolerance != AUTO_TOLERANCE_PREFIX:
+        return resolve_tolerance(fit.tolerance, fit.kind, profile), ""
+
+    both = [_profile_of(scene, hole, profile), _profile_of(scene, pin, profile)]
+    if fit.kind == "thread":
+        both = both[:1]
+    chosen = max(resolve_tolerance(fit.tolerance, fit.kind, entry) for entry in both)
+
+    names = {entry.material.id for entry in both}
+    return chosen, ", ".join(sorted(names)) if len(names) > 1 else ""
+
+
+def _profile_of(scene: Scene, reference: FeatureRef, profile: Profile) -> Profile:
+    """The profile of the body a fit reference points at."""
+    return for_object(profile, scene.objects.get(reference.object_id))
 
 
 def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
