@@ -317,16 +317,23 @@ def _polygon_from(points: Any) -> ShapelyPolygon | None:
     if len(parts) == 1:
         return parts[0]
 
-    # Only the outlines count for the nesting. GEOS hands back the bore of a
-    # plate twice — once as the hole of the plate and once as a disc of its own —
-    # and comparing the full shapes would let the disc look like an area outside
-    # the plate rather than inside it.
+    # Only the outlines count as containers. GEOS hands back the bore of a plate
+    # twice — once as the hole of the plate and once as a disc of its own — and
+    # asking whether the disc lies in the *plate* would answer no, because in
+    # the plate the bore is a hole.
+    #
+    # What is asked, on the other hand, has to be a point of the part itself,
+    # not of its outline: for a box the outline is the outer rectangle, and its
+    # middle lies in the cavity. Taken from there, the wall and the cavity each
+    # declare the other to be their hole, both come out odd, and a section that
+    # is plainly there comes back as nothing at all.
     shells = [ShapelyPolygon(part.exterior) for part in parts]
+    points = [part.representative_point() for part in parts]
     inside = [
         [
             other
             for other in range(len(shells))
-            if other != index and shells[other].contains(shells[index].representative_point())
+            if other != index and shells[other].contains(points[index])
         ]
         for index in range(len(shells))
     ]

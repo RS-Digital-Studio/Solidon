@@ -16,6 +16,7 @@ from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.transform import place_on_bed
 from app.core.ingest.loader import normalise
 from app.core.slice.analysis import (
+    cross_section,
     island_layers,
     minimum_width,
     narrowest,
@@ -181,3 +182,55 @@ def test_an_empty_body_slices_to_nothing() -> None:
 def test_a_layer_height_of_zero_is_refused() -> None:
     with pytest.raises(ValueError):
         slice_body(on_bed(trimesh.creation.box(extents=(10.0, 10.0, 10.0))), 0.0)
+
+
+# --- a section that has a hole in the middle of it ------------------------------
+
+
+def hollow_box() -> MeshData:
+    """A box open at the top: 60 × 40 × 30 outside, 3 mm walls, 1,5 mm floor."""
+    outer = trimesh.creation.box(extents=(60.0, 40.0, 30.0))
+    outer.apply_translation((0.0, 0.0, 15.0))
+    inner = trimesh.creation.box(extents=(54.0, 34.0, 27.0))
+    inner.apply_translation((0.0, 0.0, 16.5))
+    return MeshData.of(trimesh.boolean.difference([outer, inner]))
+
+
+def test_a_wall_ring_is_a_section_and_not_nothing() -> None:
+    """The regression: a centred cavity made the whole section disappear.
+
+    The nesting asked whether a piece lies inside another by taking a point of
+    its *outline*. For a box that outline is the outer rectangle and its middle
+    is in the cavity — so wall and cavity each declared the other to be their
+    hole, both counted as holes, and a section that is plainly there came back
+    as ``None``. Every layer of every hollow body was affected; the existing
+    corpus hid it because its bores sit off centre.
+    """
+    box = hollow_box()
+
+    for z in (5.0, 15.0, 29.9):
+        section = cross_section(box, z)
+        assert section is not None, f"the wall at z={z} is material"
+        assert section.area == pytest.approx(60.0 * 40.0 - 54.0 * 34.0, rel=TOLERANCE)
+        assert len(section.interiors) == 1, "the cavity is the hole of the ring"
+
+
+def test_a_solid_layer_stays_solid() -> None:
+    """Below the cavity the same body is a full rectangle — no hole invented."""
+    section = cross_section(hollow_box(), 1.0)
+
+    assert section is not None
+    assert section.area == pytest.approx(2400.0, rel=TOLERANCE)
+    assert not section.interiors
+
+
+def test_a_centred_bore_is_a_hole_not_a_disappearance() -> None:
+    """The same mistake in its smallest form: one plate, one bore, in the middle."""
+    plate = trimesh.creation.box(extents=(40.0, 40.0, 8.0))
+    bore = trimesh.creation.cylinder(radius=5.0, height=20.0, sections=128)
+    body = MeshData.of(trimesh.boolean.difference([plate, bore]))
+
+    section = cross_section(body, 0.0)
+
+    assert section is not None
+    assert section.area == pytest.approx(1600.0 - math.pi * 25.0, rel=0.02)
