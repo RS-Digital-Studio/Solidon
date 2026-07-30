@@ -5,8 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import trimesh
 
-from app.core.geom.mesh import read_mesh
+from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.repair import (
     fill_holes,
     merge_vertices,
@@ -14,6 +15,7 @@ from app.core.geom.repair import (
     remove_degenerate_faces,
     remove_small_components,
     repair,
+    stitch_t_junctions,
     unify_normals,
 )
 from app.core.registry import REGISTRY
@@ -155,3 +157,79 @@ def test_the_repair_operation_is_registered_completely() -> None:
     assert (spec.consumes, spec.produces) == (1, 1)
     front = [entry.name for entry in spec.params.spec() if entry.placement == "front"]
     assert front == ["fill_holes"], "§2.4: the front side holds what people actually change"
+
+
+# --- a vertex on an edge is not a hole (§25) ------------------------------------
+
+
+def t_junction() -> MeshData:
+    """A box whose top face has a vertex sitting on one of its edges.
+
+    The defect a real download brings: an Eiffel tower of 312 000 triangles had
+    exactly one, three open edges over three collinear points. The neighbouring
+    face was split at that point when it was built and the face on the other side
+    was never told.
+    """
+    body = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    vertices = [list(map(float, point)) for point in body.vertices]
+    faces = [list(map(int, face)) for face in body.faces]
+
+    # Take one face and split its longest edge at the midpoint — only on that
+    # side. The neighbour keeps the undivided edge, and the gap between them is
+    # a triangle with three collinear corners.
+    victim = faces.pop()
+    first, second, third = victim
+    middle = len(vertices)
+    vertices.append([(vertices[first][axis] + vertices[second][axis]) / 2.0 for axis in range(3)])
+    faces.extend([[first, middle, third], [middle, second, third]])
+    return MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+
+
+def test_a_vertex_on_an_edge_is_stitched() -> None:
+    broken = t_junction()
+    assert not broken.is_watertight, "otherwise this test proves nothing"
+
+    fixed, seams = stitch_t_junctions(broken)
+
+    assert seams == 1
+    assert fixed.is_watertight
+    assert fixed.volume == pytest.approx(broken.volume, abs=1e-9), "the surface does not move"
+    assert fixed.triangle_count == broken.triangle_count + 1, "one face became two"
+
+
+def test_the_hole_filler_alone_cannot_do_it() -> None:
+    """Why this exists: a triangle over three collinear points has no area.
+
+    ``trimesh.repair.fill_holes`` declines, and rightly so — closing a body with
+    a face that is not there is not closing it.
+    """
+    body = t_junction().raw.copy()
+
+    trimesh.repair.fill_holes(body)
+
+    assert not body.is_watertight
+
+
+def test_a_stitched_body_has_no_zero_area_faces() -> None:
+    """The other way to "close" it, and the reason that way is wrong."""
+    fixed, _seams = stitch_t_junctions(t_junction())
+
+    assert not (fixed.raw.area_faces < 1e-12).any()
+
+
+def test_a_sound_body_is_left_alone() -> None:
+    sound = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+
+    fixed, seams = stitch_t_junctions(sound)
+
+    assert seams == 0
+    assert fixed is sound
+
+
+def test_repair_reports_the_seam_separately_from_a_hole() -> None:
+    """A seam and a hole are different defects and get different sentences."""
+    outcome = repair(t_junction(), holes=True)
+
+    codes = [finding.code for finding in outcome.findings]
+    assert "repair.t_junctions" in codes
+    assert outcome.mesh.is_watertight

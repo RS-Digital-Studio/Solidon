@@ -60,13 +60,22 @@ _UNSAFE = re.compile(r"[^\w\-. ]+", re.UNICODE)
 def safe_name(text: str, fallback: str = "teil") -> str:
     """File-system-safe without becoming unrecognisable.
 
-    Umlauts are transliterated rather than dropped: ``Gehäuse`` becomes
-    ``Gehaeuse``, not ``Gehuse``.
+    German umlauts are transliterated rather than dropped: ``Gehäuse`` becomes
+    ``Gehaeuse``, not ``Gehuse``. That is a deliberate convention for German file
+    names, and it used to be followed by forcing the whole name through ASCII —
+    which is where "unrecognisable" started rather than stopped: a downloaded
+    ``埃菲尔铁塔18cm`` came out as ``18cm``, and a ``Соединитель`` as ``teil``.
+    A file name is not the place to decide which alphabets exist.
+
+    What is actually unsafe is a short list — path separators, colons, the
+    characters Windows reserves — and :data:`_UNSAFE` already keeps to it: ``\\w``
+    under ``re.UNICODE`` covers every script. So the name survives, and ``Boîtier``
+    keeps its accent as well.
     """
     replacements = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"}
     for character, replacement in replacements.items():
         text = text.replace(character, replacement)
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    text = unicodedata.normalize("NFC", text)
     text = _UNSAFE.sub("", text).strip().replace(" ", "_")
     return text or fallback
 

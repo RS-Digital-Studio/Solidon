@@ -20,8 +20,9 @@ from typing import Any
 
 from app.branding import APP_NAME, APP_VERSION, DISTRIBUTION_NAME, PROJECT_SUFFIX
 from app.core.bootstrap import load_operations
-from app.core.errors import AppError, OperationCancelled
+from app.core.errors import AppError, OperationCancelled, ValidationError
 from app.core.export import threemf
+from app.core.export.writer import plan_export, write_plan
 from app.core.geom.mesh import read_mesh
 from app.core.ingest.loader import detect_unit
 from app.core.knowledge import profiles
@@ -113,11 +114,15 @@ def run_evaluation(project: Project, path: Path, quiet: bool = False) -> Any:
     )
 
 
-def print_report(result: Any) -> None:
-    for finding in result.scene.report.findings:
+def print_findings(findings: Any) -> None:
+    for finding in findings:
         # Never colour alone (§19.1) — on a terminal the marker carries the meaning.
         marker = {"info": "-", "warning": "!", "error": "X"}[finding.severity]
         print(f"  {marker} {finding.message}")
+
+
+def print_report(result: Any) -> None:
+    print_findings(result.scene.report.findings)
     if result.stopped_at is not None:
         print(tr("Die Kette hält bei Operation {op} an.").replace("{op}", str(result.stopped_at)))
 
@@ -289,6 +294,45 @@ def command_undo(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_export(args: argparse.Namespace) -> int:
+    """Write the scene out as printable files (§29).
+
+    The command line could load a model, repair it and describe it, and then had
+    no way to hand the result back — the writer existed and nothing reached it.
+    A repair that cannot leave the project is a repair nobody can print.
+    """
+    path = Path(args.path)
+    project = open_project(path)
+    result = run_evaluation(project, path, quiet=True)
+
+    wanted = list(args.on or result.scene.objects)
+    unknown = [entry for entry in wanted if entry not in result.scene.objects]
+    if unknown:
+        raise ValidationError(
+            field="on",
+            detail=tr("Dieses Objekt gibt es in der Szene nicht."),
+            constraint="unknown_object",
+            values={"requested": ", ".join(unknown), "known": ", ".join(result.scene.objects)},
+        )
+
+    plan = plan_export(
+        [result.scene.objects[entry] for entry in wanted],
+        project_name=path.stem,
+        profile=profile_of(project),
+        export_format=args.export_format,
+        scheme=args.scheme,
+        sources=project.document.sources,
+    )
+    # The check speaks before the files exist, so a warning is a warning about
+    # what is being written and not about what was written (§29).
+    print_findings(plan.findings)
+
+    written = write_plan(plan, Path(args.directory), args.export_format)
+    for target in written:
+        print(f"{tr('Geschrieben')}: {target}")
+    return 0
+
+
 # --- argument parsing -----------------------------------------------------------
 
 
@@ -329,6 +373,14 @@ def build_parser() -> argparse.ArgumentParser:
     undo.add_argument("path")
     undo.set_defaults(handler=command_undo)
 
+    export = commands.add_parser("export", help=tr("Objekte als Druckdatei schreiben"))
+    export.add_argument("path")
+    export.add_argument("directory", nargs="?", default=".")
+    export.add_argument("--format", dest="export_format", default="stl", choices=("stl", "3mf"))
+    export.add_argument("--on", nargs="*", default=None, help=tr("Objekte, z. B. obj_1"))
+    export.add_argument("--scheme", default=None, help=tr("Namensschema, siehe §29"))
+    export.set_defaults(handler=command_export)
+
     run = commands.add_parser("run", help=tr("Eine Operation ausführen"))
     run_commands = run.add_subparsers(dest="op", required=True)
     for command in cli_commands():
@@ -359,7 +411,28 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _speak_utf8() -> None:
+    """Let the console take every name a file can have.
+
+    A Windows console encodes to cp1252, and ``print`` on a name outside it
+    raises rather than writing something. That is not a corner case: the first
+    real model handed to this command line was called ``埃菲尔铁塔18cm.stl``, the
+    import ran through, and the run ended in an encoding traceback on the line
+    that reports success. German umlauts survive cp1252, which is why nothing
+    here noticed for a whole phase.
+
+    ``backslashreplace`` rather than plain UTF-8: a console that cannot show the
+    characters then prints their escapes instead of failing, and the name stays
+    recognisable either way.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _speak_utf8()
     load_operations()
     parser = build_parser()
     args = parser.parse_args(argv)

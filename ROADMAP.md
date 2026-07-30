@@ -780,3 +780,40 @@ Rückfallstufe lasse eine Datei gleich rechnen; die Auswertung liest sie nie —
 gleich rechnet sie, weil die Kette deterministisch ist.
 
 Korpus danach: **68 von 68**, 1681 Tests grün.
+
+## Ein echtes Modell als Prüfstein
+
+Ein heruntergeladener Eiffelturm, 15,6 MB, 312 970 Dreiecke, Ordner und Datei
+chinesisch benannt. Vier Funde, jeder davon von der Datei selbst gestellt.
+
+**Die CLI stürzte am Dateinamen ab.** `print` auf einer Windows-Konsole encodiert
+nach cp1252, und `埃菲尔铁塔18cm.stl` gibt es dort nicht — der Import lief durch
+und der Lauf endete im `UnicodeEncodeError` auf der Zeile, die den Erfolg meldet.
+Deutsche Umlaute überleben cp1252, deshalb ist das eine ganze Phase lang niemandem
+aufgefallen. Jetzt sprechen beide Ströme UTF-8 mit `backslashreplace`.
+
+**Der Export verstümmelte den Namen.** `safe_name` schickte den ganzen Namen durch
+ASCII: aus `埃菲尔铁塔18cm` wurde `18cm`, aus `Соединитель` wurde `teil`. Unsicher
+ist eine kurze Liste — Pfadtrenner, Doppelpunkt, was Windows reserviert —, und der
+reguläre Ausdruck hielt sich mit `\w` unter `re.UNICODE` längst daran. Die
+ASCII-Zeile war es, die zerstörte. `Boîtier` behält jetzt auch seinen Zirkumflex.
+
+**Die Kommandozeile konnte gar nicht exportieren.** Laden, reparieren,
+beschreiben — und das Ergebnis blieb im Projekt. Der Schreiber aus §29 stand seit
+P2 und war von außen nicht erreichbar. `formwerk export` gibt es jetzt, mit
+Objektauswahl, Namensschema und der Vorabprüfung vor dem ersten Byte.
+
+**Und die Undichtigkeit war keine.** Der Turm hatte genau drei offene Kanten über
+drei Punkte — kollinear bis auf die letzte Stelle, 3,853 + 1,927 = 5,780. Kein
+Loch, sondern eine **T-Verbindung**: die lange Kante wurde beim Bauen der
+Nachbarfläche geteilt und die Fläche auf der anderen Seite nie informiert.
+`trimesh.repair.fill_holes` lehnt das zu Recht ab — ein Dreieck über drei
+kollineare Punkte hat keine Fläche. `stitch_t_junctions` gibt stattdessen der
+anderen Fläche den fehlenden Punkt: eine Fläche wird zu zweien, keine Geometrie
+bewegt sich, das Volumen bleibt auf vier Stellen gleich. Ergebnis am Modell:
+14 Teile → 2, Randkanten 12 → 0, wasserdicht.
+
+Befund zum Modell selbst: 0 Inseln, keine Schicht unter Düsenbreite, längste
+freie Spanne 8,33 mm bei z=69,1 — die Zusage „ohne Stützen" hält. Die zwölf
+gelöschten Teile waren Splitter mit Volumen null; das dreizehnte, eine
+freistehende Spitze von 3,3 × 3,3 × 25,2 mm, ist absichtlich da und blieb.

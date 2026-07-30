@@ -157,3 +157,21 @@ def test_every_format_writes_something_readable(export_format: str, profile: Pro
     if export_format in ("stl", "obj", "ply", "3mf"):
         suffix = f".{export_format}"
         assert read_mesh(data, suffix).triangle_count == 12
+
+
+def test_a_name_keeps_its_alphabet() -> None:
+    """§29: safe, not stripped of everything that is not English.
+
+    The export used to force the whole name through ASCII: a downloaded
+    ``埃菲尔铁塔18cm`` came out as ``18cm`` and a ``Соединитель`` as ``teil``.
+    """
+    assert safe_name("埃菲尔铁塔18cm") == "埃菲尔铁塔18cm"
+    assert safe_name("Соединитель") == "Соединитель"
+    assert safe_name("Boîtier") == "Boîtier", "a French accent is not a hazard either"
+
+
+def test_what_is_actually_unsafe_still_goes() -> None:
+    """The part that was always right: separators and reserved punctuation."""
+    assert safe_name(r"a/b\c") == "abc"
+    assert safe_name('Teil: "gross" <1>') == "Teil_gross_1"
+    assert safe_name("*?|") == "teil", "and nothing left over is still the fallback"

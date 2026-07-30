@@ -68,11 +68,115 @@ def unify_normals(mesh: MeshData) -> tuple[MeshData, bool]:
     return mesh.replacing(body), abs(float(body.volume) - before) > EPS_GEOM
 
 
+#: How far a point may sit off an edge and still count as lying on it. A T-junction
+#: comes from an exact split in the source CAD, so the deviation is arithmetic
+#: noise rather than a gap.
+ON_EDGE_TOLERANCE = 1e-4
+
+#: Above this many open edges a body is not a model with a defect but a model in
+#: pieces, and pairing every boundary vertex with every boundary edge stops being
+#: the right way to spend a minute.
+MAX_STITCH_EDGES = 4096
+
+
+def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
+    """Close gaps where a vertex sits on an edge that does not know about it.
+
+    The defect the hole filler cannot touch, and the one a real download brings.
+    An Eiffel tower of 312 000 triangles had exactly one: three open edges over
+    three points at ``y=117,63, z=42,5`` and x of 100,910, 104,763 and 106,690 —
+    3,853 + 1,927 = 5,780, collinear to the last digit. Not a hole, a **T-junction**:
+    the long edge was split by a vertex when the neighbouring face was built, and
+    the face on the other side was never told. ``trimesh.repair.fill_holes``
+    declines it, and rightly so — a triangle over three collinear points has no
+    area, and closing a body with a face that is not there is not closing it.
+
+    What actually fits is to give the other face the vertex it is missing: the
+    face on the long edge is split in two at the point sitting on it. No new
+    geometry, no moved surface, and the two new triangles have the area the old
+    one had.
+
+    Returns the body and how many faces were split.
+    """
+    body = mesh.raw.copy()
+    boundary = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
+    if not len(boundary) or len(boundary) > MAX_STITCH_EDGES:
+        return mesh, 0
+
+    edges = body.edges_sorted[boundary]
+    points = np.asarray(body.vertices, dtype=float)
+    candidates = np.unique(edges)
+
+    # Which face carries which boundary edge: edges_sorted runs three per face,
+    # in face order, so the row index divided by three is the face.
+    owner = {tuple(edges[index]): int(boundary[index] // 3) for index in range(len(edges))}
+
+    splits: dict[int, list[tuple[int, int, int]]] = {}
+    for edge, face_index in owner.items():
+        start, end = points[edge[0]], points[edge[1]]
+        for vertex in candidates:
+            if vertex in edge:
+                continue
+            if _lies_on(points[vertex], start, end):
+                splits.setdefault(face_index, []).append((edge[0], edge[1], int(vertex)))
+                break
+
+    if not splits:
+        return mesh, 0
+
+    faces = [list(map(int, face)) for face in body.faces]
+    kept = np.ones(len(faces), dtype=bool)
+    added: list[list[int]] = []
+    for face_index, cuts in splits.items():
+        first, second, vertex = cuts[0]
+        face = faces[face_index]
+        third = next((entry for entry in face if entry not in (first, second)), None)
+        if third is None:
+            continue
+        # Keep the direction the face was wound in, so the two halves face the
+        # same way the whole did.
+        position = face.index(first)
+        forward = face[(position + 1) % 3] == second
+        head, tail = (first, second) if forward else (second, first)
+        kept[face_index] = False
+        added.extend([[head, vertex, third], [vertex, tail, third]])
+
+    if not added:
+        return mesh, 0
+
+    rebuilt = np.vstack([np.asarray(body.faces)[kept], np.asarray(added, dtype=np.int64)])
+    stitched = trimesh.Trimesh(vertices=body.vertices, faces=rebuilt, process=False)
+    _log.info("stitched %d T-junction(s)", len(added) // 2)
+    return mesh.replacing(stitched), len(added) // 2
+
+
+def _lies_on(point: np.ndarray, start: np.ndarray, end: np.ndarray) -> bool:
+    """Is this point on the segment, between its ends rather than beyond them?"""
+    along = end - start
+    length = float(np.linalg.norm(along))
+    if length <= EPS_GEOM:
+        return False
+    offset = point - start
+    travelled = float(np.dot(offset, along)) / (length * length)
+    if not (ON_EDGE_TOLERANCE < travelled < 1.0 - ON_EDGE_TOLERANCE):
+        return False
+    distance = float(np.linalg.norm(offset - travelled * along))
+    return distance <= ON_EDGE_TOLERANCE * max(length, 1.0)
+
+
 def fill_holes(mesh: MeshData) -> tuple[MeshData, bool]:
-    """Close open edges. Small holes only — trimesh cannot bridge a missing wall."""
+    """Close open edges. Small holes only — trimesh cannot bridge a missing wall.
+
+    The stitch runs first: a T-junction looks like a hole and is not one, and the
+    filler leaves it exactly as it found it (see :func:`stitch_t_junctions`).
+    """
     body = mesh.raw.copy()
     if body.is_watertight:
         return mesh, False
+    stitched, _seams = stitch_t_junctions(mesh.replacing(body))
+    body = stitched.raw.copy()
+    if body.is_watertight:
+        return mesh.replacing(body), True
     trimesh.repair.fill_holes(body)
     return mesh.replacing(body), bool(body.is_watertight)
 
@@ -181,6 +285,22 @@ def repair(
             )
 
     if holes:
+        # Said separately, because it is a different defect with a different
+        # answer: a seam is a face that was missing a vertex, a hole is a face
+        # that was missing. Somebody reading the report can tell whether their
+        # model had a gap in it or only a bookkeeping error.
+        result.mesh, seams = stitch_t_junctions(result.mesh)
+        if seams:
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.t_junctions",
+                    severity="info",
+                    message=_("Kanten mit einem Punkt darauf wurden vernäht."),
+                    values={"seams": seams},
+                )
+            )
+
         result.mesh, closed = fill_holes(result.mesh)
         if closed:
             result.changed = True
