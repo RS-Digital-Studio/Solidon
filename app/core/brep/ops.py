@@ -26,13 +26,42 @@ from app.i18n import _
 
 _CHOICES = edit.EDGE_CHOICES
 
+#: Dieselbe Auswahl bei Verrundung und Fase — deshalb steht der Satz einmal hier.
+_CHOICE_DOC = _("Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten oder alle.")
+
 
 @op_params
 class BrepBoxParams(BaseParams):
-    width: float = param(title=_("Breite"), default=40.0, unit="mm", minimum=0.1, maximum=1000.0)
-    depth: float = param(title=_("Tiefe"), default=30.0, unit="mm", minimum=0.1, maximum=1000.0)
-    height: float = param(title=_("Höhe"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0)
-    name: str = param(title=_("Name"), default="", placement="advanced")
+    width: float = param(
+        title=_("Breite"),
+        default=40.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Ausdehnung in X."),
+    )
+    depth: float = param(
+        title=_("Tiefe"),
+        default=30.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Ausdehnung in Y."),
+    )
+    height: float = param(
+        title=_("Höhe"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Ausdehnung in Z, also nach oben."),
+    )
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+    )
 
 
 @register_op(
@@ -57,10 +86,27 @@ def create_brep_box(ctx: OpContext) -> OpResult:
 @op_params
 class BrepCylinderParams(BaseParams):
     diameter: float = param(
-        title=_("Durchmesser"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0
+        title=_("Durchmesser"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Außendurchmesser. Als exakter Körper ist er wirklich rund, nicht vieleckig."),
     )
-    height: float = param(title=_("Höhe"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0)
-    name: str = param(title=_("Name"), default="", placement="advanced")
+    height: float = param(
+        title=_("Höhe"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Höhe nach oben, von der Standfläche aus."),
+    )
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+    )
 
 
 @register_op(
@@ -137,7 +183,17 @@ def load_step(ctx: OpContext) -> OpResult:
 
 @op_params
 class FilletParams(BaseParams):
-    radius: float = param(title=_("Radius"), default=2.0, unit="mm", minimum=0.01, maximum=100.0)
+    radius: float = param(
+        title=_("Radius"),
+        default=2.0,
+        unit="mm",
+        minimum=0.01,
+        maximum=100.0,
+        doc=_(
+            "Radius der Verrundung. Größer als das dünnste angrenzende Material "
+            "geht nicht — dann hat der Kern keinen Platz mehr."
+        ),
+    )
     edges: str = param(
         title=_("Kanten"),
         default="vertical",
@@ -167,8 +223,20 @@ def fillet_edges(ctx: OpContext) -> OpResult:
 
 @op_params
 class ChamferParams(BaseParams):
-    distance: float = param(title=_("Breite"), default=1.0, unit="mm", minimum=0.01, maximum=100.0)
-    edges: str = param(title=_("Kanten"), default="vertical", choices=_CHOICES)
+    distance: float = param(
+        title=_("Breite"),
+        default=1.0,
+        unit="mm",
+        minimum=0.01,
+        maximum=100.0,
+        doc=_("Wie weit die Fase die Kante zurücknimmt, auf jeder der beiden Flächen."),
+    )
+    edges: str = param(
+        title=_("Kanten"),
+        default="vertical",
+        choices=_CHOICES,
+        doc=_CHOICE_DOC,
+    )
 
 
 @register_op(

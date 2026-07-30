@@ -41,6 +41,19 @@ Placement = Literal["raised", "engraved"]
 #: computer and not on the next is a project that opens differently.
 FONTS: tuple[str, ...] = ("DejaVu Sans", "DejaVu Serif", "DejaVu Sans Mono")
 
+#: Erklärungen, die beide Beschriftungs-Operationen teilen.
+_WHERE = _(
+    "Wo die Schrift sitzt. Eine angeklickte Fläche trägt Ort und Richtung selbst ein."
+)
+_WHERE_MORE = _("Weitere Achse des Orts — siehe Position X.")
+_FACING = _(
+    "Richtung, in die die Schrift zeigt. Aus einer angeklickten Fläche kommt sie "
+    "von selbst; von Hand ist 0/0/1 nach oben."
+)
+_FACING_MORE = _("Weitere Achse der Richtung — siehe Normale X.")
+_SIZE = _("Höhe der Großbuchstaben. Unter drei Millimetern verliert der Druck die Form.")
+_FONT = _("DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich aussieht.")
+
 #: How much a raised label reaches into the body, and an engraved one past its
 #: floor. Without this the two faces are coincident and the boolean fails (§39).
 OVERLAP = 0.05
@@ -113,7 +126,12 @@ class LabelParams(BaseParams):
         doc=_("Was daraufstehen soll. Leer heißt: nichts zu tun."),
     )
     size: float = param(
-        title=_("Schriftgröße"), default=8.0, unit="mm", minimum=MIN_SIZE, maximum=200.0
+        title=_("Schriftgröße"),
+        default=8.0,
+        unit="mm",
+        minimum=MIN_SIZE,
+        maximum=200.0,
+        doc=_SIZE,
     )
     depth: float = param(
         title=_("Tiefe"),
@@ -139,13 +157,25 @@ class LabelParams(BaseParams):
             "den Farbwechsel, ohne zweite Datei."
         ),
     )
-    font: str = param(title=_("Schrift"), default=FONTS[0], choices=FONTS, placement="advanced")
-    x: float = param(title=_("Position X"), default=0.0, unit="mm")
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm")
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm")
-    nx: float = param(title=_("Normale X"), default=0.0, placement="advanced")
-    ny: float = param(title=_("Normale Y"), default=0.0, placement="advanced")
-    nz: float = param(title=_("Normale Z"), default=1.0, placement="advanced")
+    font: str = param(
+        title=_("Schrift"),
+        default=FONTS[0],
+        choices=FONTS,
+        placement="advanced",
+        doc=_("DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich aussieht."),
+    )
+    x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE)
+    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_MORE)
+    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_MORE)
+    nx: float = param(
+        title=_("Normale X"), default=0.0, placement="advanced", doc=_FACING
+    )
+    ny: float = param(
+        title=_("Normale Y"), default=0.0, placement="advanced", doc=_FACING_MORE
+    )
+    nz: float = param(
+        title=_("Normale Z"), default=1.0, placement="advanced", doc=_FACING_MORE
+    )
     angle: float = param(
         title=_("Drehung"),
         default=0.0,
@@ -153,6 +183,7 @@ class LabelParams(BaseParams):
         minimum=-360.0,
         maximum=360.0,
         placement="advanced",
+        doc=_("Dreht die Schrift in der Fläche, auf der sie liegt."),
     )
 
 
@@ -238,14 +269,37 @@ def label_text(ctx: OpContext) -> OpResult:
 class LabelBodyParams(BaseParams):
     text: str = param(title=_("Text"), default="", doc=_("Was der Körper sagen soll."))
     size: float = param(
-        title=_("Schriftgröße"), default=8.0, unit="mm", minimum=MIN_SIZE, maximum=200.0
+        title=_("Schriftgröße"),
+        default=8.0,
+        unit="mm",
+        minimum=MIN_SIZE,
+        maximum=200.0,
+        doc=_SIZE,
     )
-    depth: float = param(title=_("Dicke"), default=0.6, unit="mm", minimum=0.1, maximum=50.0)
-    font: str = param(title=_("Schrift"), default=FONTS[0], choices=FONTS, placement="advanced")
-    x: float = param(title=_("Position X"), default=0.0, unit="mm")
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm")
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm")
-    name: str = param(title=_("Name"), default="", placement="advanced")
+    depth: float = param(
+        title=_("Dicke"),
+        default=0.6,
+        unit="mm",
+        minimum=0.1,
+        maximum=50.0,
+        doc=_("Wie dick die Buchstaben werden. Zum Aufkleben reichen wenige Zehntel."),
+    )
+    font: str = param(
+        title=_("Schrift"),
+        default=FONTS[0],
+        choices=FONTS,
+        placement="advanced",
+        doc=_FONT,
+    )
+    x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE)
+    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_MORE)
+    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_MORE)
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+    )
 
 
 @register_op(

@@ -1,0 +1,58 @@
+---
+paths:
+  - "app/core/**/*.py"
+---
+
+# Regeln für den Kern
+
+Der Kern ist der Teil, der ohne Fenster funktioniert. Alles hier gilt
+zusätzlich zu `AGENTS.md`.
+
+## Grenze nach oben
+
+- **Kein `PySide6`, kein Qt, kein `print`, kein `input`.**
+  `tests/test_core_isolation.py` importiert `app.core` ohne installiertes Qt.
+- Kommunikation nach außen ausschließlich über den `OpContext`:
+  `ctx.progress`, `ctx.ask`, `ctx.cancelled`, `ctx.quality`, `ctx.seed`.
+  Keine globalen Objekte, kein Logger, der etwas anzeigt, kein Dialog.
+- **Fragen statt raten** (Regel 21): Mehrdeutigkeit geht über `ctx.ask`.
+  Der Kern entscheidet nicht für den Nutzer.
+
+## Zahlen
+
+- Millimeter und `float` (doppelte Genauigkeit). Gerundet wird in der Anzeige,
+  nie im Kern.
+- Kein `==` auf Fließkomma. Toleranzen kommen aus dem Materialprofil
+  (`auto:<material>`), nicht als Zahl in den Code.
+- Jede randomisierte Prozedur nimmt `ctx.seed` und trägt `deterministic=False`.
+  Ohne beides ist sie falsch, auch wenn sie funktioniert.
+
+## Fehler
+
+Jede Ausnahme erbt von `AppError` und trägt `suggestions: list[Action]` —
+anklickbare Handlungen, keine Prosa. Ein Fehler endet nie mit
+„fehlgeschlagen", sondern nennt: was nicht ging, warum, was jetzt möglich ist
+(§2.7, §33.1).
+
+Die Hierarchie unterscheidet Bedienfehler von Programmfehlern:
+`UserError` (korrigierbar), `GeometryError` (mit Vorschlag),
+`ExternalToolError` (Hinweis auf die Einstellung), `InternalError`
+(Fehlerbericht). Ein Programmfehler darf nie wie ein Bedienfehler aussehen —
+und umgekehrt. `tests/test_errors.py` prüft, dass jede Ausnahme einen
+Vorschlag trägt.
+
+Ins Protokoll gehen Kennzahlen, nie Geometriedaten. Das Protokoll verlässt den
+Rechner nur, wenn der Nutzer es selbst anhängt (§33.2) — alles andere wäre die
+verbotene Telemetrie.
+
+## Auswertung
+
+`OpContext.scene` ist nur lesend. Ops erzeugen Objekte, sie ändern keine.
+Zweimal auswerten muss identisch sein; ändert sich die Objektzahl, hält die
+Auswertung an, statt still weiterzurechnen.
+
+## Pfade
+
+Keine absoluten Pfade in Projektdateien. Nutzerverzeichnisse kommen aus
+`app.core.paths` — die Suite biegt sie um, damit ein Testlauf nichts im Profil
+des Entwicklers hinterlässt (§38).

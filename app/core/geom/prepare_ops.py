@@ -41,16 +41,37 @@ from app.i18n import _
 
 _AXES = tuple(AXIS_NORMALS)
 
+#: Erklärungen, die für jede Bohrung dieselben sind. Einmal geschrieben, damit
+#: dieselbe Zahl nicht an drei Stellen unterschiedlich erklärt wird.
+_WHERE_X = _(
+    "Mitte der Bohrung im Koordinatensystem des Objekts. Eine angeklickte "
+    "Fläche trägt die drei Werte selbst ein."
+)
+_WHERE_Y = _("Zweite Achse der Position — siehe Position X.")
+_WHERE_Z = _("Dritte Achse der Position — siehe Position X.")
+_ALONG = _(
+    "Richtung, in die gebohrt wird. Z ist senkrecht von oben, X und Y bohren "
+    "durch eine Seitenwand."
+)
+
 
 @op_params
 class DrillParams(BaseParams):
     diameter: float = param(
-        title=_("Durchmesser"), default=5.0, unit="mm", minimum=0.2, maximum=200.0
+        title=_("Durchmesser"),
+        default=5.0,
+        unit="mm",
+        minimum=0.2,
+        maximum=200.0,
+        doc=_(
+            "Nenndurchmesser der Bohrung. Für eine Schraube gibt es *Schraubenloch* "
+            "in den Bausteinen — dort kommen die Maße aus der Normteiltabelle."
+        ),
     )
-    x: float = param(title=_("Position X"), default=0.0, unit="mm")
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm")
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm")
-    axis: str = param(title=_("Achse"), default="z", choices=_AXES)
+    x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE_X)
+    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y)
+    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z)
+    axis: str = param(title=_("Achse"), default="z", choices=_AXES, doc=_ALONG)
     depth: float = param(
         title=_("Tiefe"),
         default=0.0,
@@ -103,8 +124,21 @@ def drill_hole(ctx: OpContext) -> OpResult:
 
 @op_params
 class SplitPlaneParams(BaseParams):
-    axis: str = param(title=_("Achse"), default="z", choices=_AXES)
-    position: float = param(title=_("Position"), default=0.0, unit="mm")
+    axis: str = param(
+        title=_("Achse"),
+        default="z",
+        choices=_AXES,
+        doc=_("Senkrecht zu welcher Achse geschnitten wird. Z legt einen waagerechten Schnitt."),
+    )
+    position: float = param(
+        title=_("Position"),
+        default=0.0,
+        unit="mm",
+        doc=_(
+            "Wo die Schnittebene liegt, auf dieser Achse gemessen. Die Zahl bleibt "
+            "änderbar: ein Doppelklick auf den Schritt verschiebt den Schnitt."
+        ),
+    )
 
 
 @register_op(
@@ -133,7 +167,15 @@ def split_plane(ctx: OpContext) -> OpResult:
 @op_params
 class CountersinkParams(BaseParams):
     diameter: float = param(
-        title=_("Kopfdurchmesser"), default=8.4, unit="mm", minimum=0.5, maximum=100.0
+        title=_("Kopfdurchmesser"),
+        default=8.4,
+        unit="mm",
+        minimum=0.5,
+        maximum=100.0,
+        doc=_(
+            "Durchmesser des Schraubenkopfes, nicht der Bohrung darunter. Eine "
+            "angeklickte Bohrung trägt ihn deshalb bewusst nicht ein."
+        ),
     )
     angle: float = param(
         title=_("Winkel"),
@@ -143,10 +185,10 @@ class CountersinkParams(BaseParams):
         maximum=170.0,
         doc=_("Voller Kopfwinkel — 90 Grad bei metrischen Senkschrauben."),
     )
-    x: float = param(title=_("Position X"), default=0.0, unit="mm")
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm")
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm")
-    axis: str = param(title=_("Achse"), default="z", choices=_AXES)
+    x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE_X)
+    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y)
+    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z)
+    axis: str = param(title=_("Achse"), default="z", choices=_AXES, doc=_ALONG)
 
 
 @register_op(
@@ -180,12 +222,17 @@ def countersink_hole(ctx: OpContext) -> OpResult:
 @op_params
 class PlugParams(BaseParams):
     diameter: float = param(
-        title=_("Durchmesser"), default=5.0, unit="mm", minimum=0.2, maximum=200.0
+        title=_("Durchmesser"),
+        default=5.0,
+        unit="mm",
+        minimum=0.2,
+        maximum=200.0,
+        doc=_("Durchmesser der Bohrung, die zugemacht wird — etwas mehr schadet nicht."),
     )
-    x: float = param(title=_("Position X"), default=0.0, unit="mm")
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm")
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm")
-    axis: str = param(title=_("Achse"), default="z", choices=_AXES)
+    x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE_X)
+    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y)
+    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z)
+    axis: str = param(title=_("Achse"), default="z", choices=_AXES, doc=_ALONG)
     depth: float = param(
         title=_("Tiefe"),
         default=0.0,
@@ -249,6 +296,7 @@ class HollowParams(BaseParams):
         minimum=1.0,
         maximum=20.0,
         placement="advanced",
+        doc=_("Weite der Öffnungen. Groß genug, dass nicht verbrauchtes Material herauskommt."),
     )
 
 
@@ -393,9 +441,14 @@ class TestPieceParams(BaseParams):
         maximum=200.0,
         doc=_("Wie groß der Ausschnitt wird. Groß genug, dass die Passung Material hat."),
     )
-    x: float = param(title=_("Position X"), default=0.0, unit="mm")
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm")
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm")
+    x: float = param(
+        title=_("Position X"),
+        default=0.0,
+        unit="mm",
+        doc=_("Mitte des Ausschnitts — die Stelle, um die es geht."),
+    )
+    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y)
+    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z)
     on_bed: bool = param(
         title=_("Auf das Bett setzen"),
         default=True,
@@ -475,8 +528,21 @@ def test_piece(ctx: OpContext) -> OpResult:
 
 @op_params
 class SplitPinnedParams(BaseParams):
-    axis: str = param(title=_("Achse"), default="z", choices=_AXES)
-    position: float = param(title=_("Position"), default=0.0, unit="mm")
+    axis: str = param(
+        title=_("Achse"),
+        default="z",
+        choices=_AXES,
+        doc=_("Senkrecht zu welcher Achse geschnitten wird. Z legt einen waagerechten Schnitt."),
+    )
+    position: float = param(
+        title=_("Position"),
+        default=0.0,
+        unit="mm",
+        doc=_(
+            "Wo die Schnittebene liegt, auf dieser Achse gemessen. Die Zahl bleibt "
+            "änderbar: ein Doppelklick auf den Schritt verschiebt den Schnitt."
+        ),
+    )
     pins: int = param(
         title=_("Passstifte"),
         default=PIN_COUNT,
@@ -589,6 +655,10 @@ class OrientParams(BaseParams):
         minimum=8,
         maximum=2000,
         placement="advanced",
+        doc=_(
+            "Wie viele Lagen durchgerechnet werden. Mehr findet feinere "
+            "Verbesserungen und dauert entsprechend länger."
+        ),
     )
 
 
@@ -629,7 +699,17 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
 
 @op_params
 class ArrangeParams(BaseParams):
-    spacing: float = param(title=_("Abstand"), default=5.0, unit="mm", minimum=0.0, maximum=100.0)
+    spacing: float = param(
+        title=_("Abstand"),
+        default=5.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=100.0,
+        doc=_(
+            "Luft zwischen den Teilen. Genug, dass ein Elefantenfuß zwei Teile "
+            "nicht am Rand zusammenwachsen lässt."
+        ),
+    )
     plates: int = param(
         title=_("Druckplatten"),
         default=1,
@@ -675,7 +755,15 @@ def arrange_bed(ctx: OpContext) -> OpResult:
 @op_params
 class CollisionParams(BaseParams):
     clearance: float = param(
-        title=_("Mindestabstand"), default=0.0, unit="mm", minimum=0.0, maximum=50.0
+        title=_("Mindestabstand"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=50.0,
+        doc=_(
+            "Ab wann zwei Teile als zu nah gelten. Null meldet nur echte "
+            "Überschneidungen; ein Wert darüber meldet auch knappe Stellen."
+        ),
     )
 
 

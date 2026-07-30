@@ -28,9 +28,30 @@ _ANCHORS = ("centre", "corner")
 
 @op_params
 class BoxParams(BaseParams):
-    width: float = param(title=_("Breite"), default=40.0, unit="mm", minimum=0.1, maximum=1000.0)
-    depth: float = param(title=_("Tiefe"), default=30.0, unit="mm", minimum=0.1, maximum=1000.0)
-    height: float = param(title=_("Höhe"), default=10.0, unit="mm", minimum=0.1, maximum=1000.0)
+    width: float = param(
+        title=_("Breite"),
+        default=40.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Ausdehnung in X. Darf ein Ausdruck sein, etwa =breite*2."),
+    )
+    depth: float = param(
+        title=_("Tiefe"),
+        default=30.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Ausdehnung in Y."),
+    )
+    height: float = param(
+        title=_("Höhe"),
+        default=10.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Ausdehnung in Z, also nach oben."),
+    )
     anchor: str = param(
         title=_("Bezugspunkt"),
         default="centre",
@@ -38,7 +59,12 @@ class BoxParams(BaseParams):
         placement="advanced",
         doc=_("Mittig auf dem Ursprung oder mit der Ecke darauf."),
     )
-    name: str = param(title=_("Name"), default="", placement="advanced")
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+    )
 
 
 @register_op(
@@ -61,9 +87,21 @@ def create_box(ctx: OpContext) -> OpResult:
 @op_params
 class CylinderParams(BaseParams):
     diameter: float = param(
-        title=_("Durchmesser"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0
+        title=_("Durchmesser"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Außendurchmesser. Der Zylinder steht auf Z = 0."),
     )
-    height: float = param(title=_("Höhe"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0)
+    height: float = param(
+        title=_("Höhe"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Höhe nach oben, von der Standfläche aus."),
+    )
     segments: int = param(
         title=_("Segmente"),
         default=SEGMENTS,
@@ -72,7 +110,12 @@ class CylinderParams(BaseParams):
         placement="advanced",
         doc=_("Mehr Segmente heißt runder und langsamer."),
     )
-    name: str = param(title=_("Name"), default="", placement="advanced")
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+    )
 
 
 @register_op(
@@ -93,12 +136,27 @@ def create_cylinder(ctx: OpContext) -> OpResult:
 @op_params
 class SphereParams(BaseParams):
     diameter: float = param(
-        title=_("Durchmesser"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0
+        title=_("Durchmesser"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_("Außendurchmesser. Die Kugel sitzt auf Z = 0 auf."),
     )
     segments: int = param(
-        title=_("Segmente"), default=32, minimum=8, maximum=128, placement="advanced"
+        title=_("Segmente"),
+        default=32,
+        minimum=8,
+        maximum=128,
+        placement="advanced",
+        doc=_("Mehr Segmente heißt runder und langsamer."),
     )
-    name: str = param(title=_("Name"), default="", placement="advanced")
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+    )
 
 
 @register_op(
@@ -129,7 +187,12 @@ class ScadParams(BaseParams):
         default="",
         doc=_("OpenSCAD-Quelltext. Wird vor dem Lauf geprüft (§32)."),
     )
-    name: str = param(title=_("Name"), default="", placement="advanced")
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+    )
 
 
 @register_op(

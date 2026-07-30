@@ -187,7 +187,12 @@ def build(
 @op_params
 class LidParams(BaseParams):
     thickness: float = param(
-        title=_("Deckelstärke"), default=2.4, unit="mm", minimum=0.4, maximum=50.0
+        title=_("Deckelstärke"),
+        default=2.4,
+        unit="mm",
+        minimum=0.4,
+        maximum=50.0,
+        doc=_("Wie dick die Deckelplatte wird — der Kragen darunter kommt aus dem Hohlraum."),
     )
     collar: float = param(
         title=_("Kragentiefe"),
@@ -221,7 +226,12 @@ class LidParams(BaseParams):
         placement="advanced",
         doc=_("Null heißt: der Wert aus dem Materialprofil."),
     )
-    name: str = param(title=_("Name"), default="", placement="advanced")
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+    )
 
 
 @register_op(
@@ -368,10 +378,23 @@ class ScrewLidParams(BaseParams):
         doc=_("Grob, damit der Drucker sie auflöst und eine halbe Drehung schließt."),
     )
     thickness: float = param(
-        title=_("Deckelstärke"), default=2.4, unit="mm", minimum=0.8, maximum=50.0
+        title=_("Deckelstärke"),
+        default=2.4,
+        unit="mm",
+        minimum=0.8,
+        maximum=50.0,
+        doc=_("Dicke der Deckelplatte über dem Gewinde."),
     )
     wall: float = param(
-        title=_("Wandstärke des Deckels"), default=2.4, unit="mm", minimum=0.8, maximum=20.0
+        title=_("Wandstärke des Deckels"),
+        default=2.4,
+        unit="mm",
+        minimum=0.8,
+        maximum=20.0,
+        doc=_(
+            "Dicke des Rands, der das Gewinde trägt. Zu dünn reißt beim Aufschrauben "
+            "entlang der Schichten auf."
+        ),
     )
     neck: float = param(
         title=_("Halsdurchmesser"),

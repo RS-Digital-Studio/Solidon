@@ -42,9 +42,24 @@ def as_transform(matrix: Any) -> Transform:
 
 @op_params
 class TranslateParams(BaseParams):
-    dx: float = param(title=_("Verschiebung X"), default=0.0, unit="mm")
-    dy: float = param(title=_("Verschiebung Y"), default=0.0, unit="mm")
-    dz: float = param(title=_("Verschiebung Z"), default=0.0, unit="mm")
+    dx: float = param(
+        title=_("Verschiebung X"),
+        default=0.0,
+        unit="mm",
+        doc=_("Um wie viel verschoben wird, nicht wohin. Positiv geht nach rechts."),
+    )
+    dy: float = param(
+        title=_("Verschiebung Y"),
+        default=0.0,
+        unit="mm",
+        doc=_("Positiv geht nach hinten."),
+    )
+    dz: float = param(
+        title=_("Verschiebung Z"),
+        default=0.0,
+        unit="mm",
+        doc=_("Positiv geht nach oben. Zum Aufsetzen gibt es *Auf das Bett setzen*."),
+    )
 
 
 @register_op(
@@ -69,9 +84,19 @@ def translate_object(ctx: OpContext) -> OpResult:
 
 @op_params
 class RotateParams(BaseParams):
-    axis: str = param(title=_("Achse"), default="z", choices=_AXES)
+    axis: str = param(
+        title=_("Achse"),
+        default="z",
+        choices=_AXES,
+        doc=_("Um welche Achse gedreht wird. Z dreht auf dem Bett, X und Y kippen."),
+    )
     angle: float = param(
-        title=_("Winkel"), default=90.0, unit="grad", minimum=-360.0, maximum=360.0
+        title=_("Winkel"),
+        default=90.0,
+        unit="grad",
+        minimum=-360.0,
+        maximum=360.0,
+        doc=_("Drehwinkel gegen den Uhrzeigersinn, von der Achsspitze aus gesehen."),
     )
     about: str = param(
         title=_("Drehpunkt"),
@@ -112,11 +137,36 @@ class ScaleParams(BaseParams):
         maximum=100.0,
         doc=_("Gleichmäßige Skalierung. Achsweise Werte stehen hinten."),
     )
-    fx: float = param(title=_("Faktor X"), default=0.0, minimum=0.0, placement="advanced")
-    fy: float = param(title=_("Faktor Y"), default=0.0, minimum=0.0, placement="advanced")
-    fz: float = param(title=_("Faktor Z"), default=0.0, minimum=0.0, placement="advanced")
+    fx: float = param(
+        title=_("Faktor X"),
+        default=0.0,
+        minimum=0.0,
+        placement="advanced",
+        doc=_("Nur diese Achse. Null heißt: der gleichmäßige Faktor oben gilt."),
+    )
+    fy: float = param(
+        title=_("Faktor Y"),
+        default=0.0,
+        minimum=0.0,
+        placement="advanced",
+        doc=_("Null heißt: der gleichmäßige Faktor oben gilt."),
+    )
+    fz: float = param(
+        title=_("Faktor Z"),
+        default=0.0,
+        minimum=0.0,
+        placement="advanced",
+        doc=_(
+            "Null heißt: der gleichmäßige Faktor oben gilt. Achsweise Skalierung "
+            "verzerrt Bohrungen — sie werden oval."
+        ),
+    )
     about: str = param(
-        title=_("Bezugspunkt"), default="centre", choices=_ANCHORS, placement="advanced"
+        title=_("Bezugspunkt"),
+        default="centre",
+        choices=_ANCHORS,
+        placement="advanced",
+        doc=_("Der Punkt, der stehen bleibt: Schwerpunkt, Nullpunkt oder Aufstandsfläche."),
     )
 
 
@@ -155,7 +205,11 @@ class MirrorParams(BaseParams):
         doc=_("Die Achse, an der gespiegelt wird — die andere Hand desselben Teils."),
     )
     about: str = param(
-        title=_("Bezugspunkt"), default="centre", choices=_ANCHORS, placement="advanced"
+        title=_("Bezugspunkt"),
+        default="centre",
+        choices=_ANCHORS,
+        placement="advanced",
+        doc=_("Wo die Spiegelebene liegt: Schwerpunkt, Nullpunkt oder Aufstandsfläche."),
     )
 
 
@@ -205,11 +259,27 @@ class RepairParams(BaseParams):
         default=True,
         doc=_("Schließt kleine Löcher. Fehlende Wände kann das nicht ersetzen."),
     )
-    weld: bool = param(title=_("Punkte verschweißen"), default=True, placement="advanced")
-    degenerate: bool = param(
-        title=_("Entartete Dreiecke entfernen"), default=True, placement="advanced"
+    weld: bool = param(
+        title=_("Punkte verschweißen"),
+        default=True,
+        placement="advanced",
+        doc=_(
+            "Führt Punkte zusammen, die praktisch aufeinanderliegen. Der häufigste "
+            "Grund dafür, dass ein Netz aus mehreren Teilen zu bestehen scheint."
+        ),
     )
-    normals: bool = param(title=_("Normalen vereinheitlichen"), default=True, placement="advanced")
+    degenerate: bool = param(
+        title=_("Entartete Dreiecke entfernen"),
+        default=True,
+        placement="advanced",
+        doc=_("Dreiecke ohne Fläche. Sie stören jede spätere Rechnung und tragen nichts."),
+    )
+    normals: bool = param(
+        title=_("Normalen vereinheitlichen"),
+        default=True,
+        placement="advanced",
+        doc=_("Richtet aus, wo außen ist. Ohne das erscheinen Flächen dunkel oder verschwinden."),
+    )
     small_components: bool = param(
         title=_("Kleinstteile löschen"),
         default=False,
@@ -217,7 +287,13 @@ class RepairParams(BaseParams):
         doc=_("Standardmäßig aus: gelöscht wird nur, was ausdrücklich gelöscht werden soll."),
     )
     self_intersections: bool = param(
-        title=_("Selbstdurchdringungen auflösen"), default=False, placement="advanced"
+        title=_("Selbstdurchdringungen auflösen"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Rechnet Flächen neu, die sich gegenseitig durchdringen. Hilft bei "
+            "erzeugten Netzen und kostet Genauigkeit — deshalb aus, bis es gebraucht wird."
+        ),
     )
 
 

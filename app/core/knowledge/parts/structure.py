@@ -32,8 +32,22 @@ RIB_SHARE = 0.66
 
 @op_params
 class RibParams(BaseParams):
-    length: float = param(title=_("Länge"), default=20.0, unit="mm", minimum=2.0, maximum=300.0)
-    height: float = param(title=_("Höhe"), default=10.0, unit="mm", minimum=1.0, maximum=200.0)
+    length: float = param(
+        title=_("Länge"),
+        default=20.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=300.0,
+        doc=_("Wie weit die Rippe an der Wand entlangläuft."),
+    )
+    height: float = param(
+        title=_("Höhe"),
+        default=10.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=200.0,
+        doc=_("Wie weit sie von der Wand absteht. Das ist es, was die Steifigkeit bringt."),
+    )
     wall: float = param(
         title=_("Wandstärke"),
         default=2.0,
@@ -96,8 +110,20 @@ def rib(raw: BaseParams) -> PartResult:
 
 @op_params
 class CableGlandParams(BaseParams):
-    size: str = param(title=_("Kabel"), default="cable-5", choices=_TUBES)
-    wall: float = param(title=_("Wandstärke"), default=3.0, unit="mm", minimum=1.0, maximum=30.0)
+    size: str = param(
+        title=_("Kabel"),
+        default="cable-5",
+        choices=_TUBES,
+        doc=_("Außendurchmesser des Kabels — die Zahl, die auf dem Mantel steht."),
+    )
+    wall: float = param(
+        title=_("Wandstärke"),
+        default=3.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=30.0,
+        doc=_("Dicke der Wand, durch die die Durchführung geht."),
+    )
     play: float = param(
         title=_("Spiel"),
         default=0.0,

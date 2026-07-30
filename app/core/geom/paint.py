@@ -117,10 +117,32 @@ class PaintParams(BaseParams):
         maximum=MAX_SLOTS - 1,
         doc=_("In welchen Materialslot der Pinsel malt."),
     )
-    radius: float = param(title=_("Radius"), default=10.0, unit="mm", minimum=0.1, maximum=500.0)
-    x: float = param(title=_("Position X"), default=0.0, unit="mm")
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm")
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm")
+    radius: float = param(
+        title=_("Radius"),
+        default=10.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=500.0,
+        doc=_("Wie weit der Strich um den Klickpunkt herum reicht."),
+    )
+    x: float = param(
+        title=_("Position X"),
+        default=0.0,
+        unit="mm",
+        doc=_("Wo geklickt wurde. Beim Malen trägt der Klick die drei Werte selbst ein."),
+    )
+    y: float = param(
+        title=_("Position Y"),
+        default=0.0,
+        unit="mm",
+        doc=_("Zweite Achse des Klickpunkts."),
+    )
+    z: float = param(
+        title=_("Position Z"),
+        default=0.0,
+        unit="mm",
+        doc=_("Dritte Achse des Klickpunkts."),
+    )
     edge_angle: float = param(
         title=_("Kantenwinkel"),
         default=EDGE_ANGLE,
@@ -130,7 +152,12 @@ class PaintParams(BaseParams):
         placement="advanced",
         doc=_("Ab diesem Winkel hält der Pinsel an. 180 Grad heißt: über alles hinweg."),
     )
-    name: str = param(title=_("Bezeichnung"), default="", placement="advanced")
+    name: str = param(
+        title=_("Bezeichnung"),
+        default="",
+        placement="advanced",
+        doc=_("Name des Slots, etwa das Filament. Erscheint im 3MF beim Farbwechsel."),
+    )
 
 
 @register_op(

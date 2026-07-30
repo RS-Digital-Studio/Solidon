@@ -37,9 +37,25 @@ FIRST_RELEASE = PartChange(
 
 @op_params
 class ScrewHoleParams(BaseParams):
-    size: str = param(title=_("Größe"), default="M3", choices=_SCREWS)
-    depth: float = param(title=_("Tiefe"), default=10.0, unit="mm", minimum=1.0, maximum=200.0)
-    countersink: bool = param(title=_("Senkung"), default=True)
+    size: str = param(
+        title=_("Größe"),
+        default="M3",
+        choices=_SCREWS,
+        doc=_("Gewindegröße der Schraube. Alle Maße kommen aus der Normteiltabelle."),
+    )
+    depth: float = param(
+        title=_("Tiefe"),
+        default=10.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=200.0,
+        doc=_("Wie tief gebohrt wird. Mehr als die Wandstärke ergibt ein Durchgangsloch."),
+    )
+    countersink: bool = param(
+        title=_("Senkung"),
+        default=True,
+        doc=_("90-Grad-Senkung für einen Senkkopf. Aus für Zylinderkopf und Linsenkopf."),
+    )
     head_room: float = param(
         title=_("Kopffreiheit"),
         default=0.0,
@@ -102,7 +118,12 @@ def screw_hole(raw: BaseParams) -> PartResult:
 
 @op_params
 class HeatsetParams(BaseParams):
-    size: str = param(title=_("Größe"), default="M3", choices=_INSERTS)
+    size: str = param(
+        title=_("Größe"),
+        default="M3",
+        choices=_INSERTS,
+        doc=_("Gewinde der Buchse. Der Bohrungsdurchmesser dazu kommt aus der Normteiltabelle."),
+    )
     lead_in: bool = param(
         title=_("Einführfase"),
         default=True,
@@ -160,7 +181,12 @@ def heatset_insert(raw: BaseParams) -> PartResult:
 
 @op_params
 class NutTrapParams(BaseParams):
-    size: str = param(title=_("Größe"), default="M3", choices=_NUTS)
+    size: str = param(
+        title=_("Größe"),
+        default="M3",
+        choices=_NUTS,
+        doc=_("Gewinde der Mutter. Schlüsselweite und Höhe kommen aus der Normteiltabelle."),
+    )
     direction: str = param(
         title=_("Richtung"),
         default="side",
@@ -184,7 +210,11 @@ class NutTrapParams(BaseParams):
         placement="advanced",
         doc=_("Zuschlag auf die Schlüsselweite."),
     )
-    screw_hole: bool = param(title=_("Schraubenloch mitschneiden"), default=True)
+    screw_hole: bool = param(
+        title=_("Schraubenloch mitschneiden"),
+        default=True,
+        doc=_("Schneidet zusätzlich das Durchgangsloch für die Schraube durch das Teil."),
+    )
 
 
 @register_part(
@@ -239,8 +269,23 @@ def nut_trap(raw: BaseParams) -> PartResult:
 
 @op_params
 class ThreadParams(BaseParams):
-    size: str = param(title=_("Größe"), default="M6", choices=_SCREWS)
-    length: float = param(title=_("Länge"), default=12.0, unit="mm", minimum=2.0, maximum=200.0)
+    size: str = param(
+        title=_("Größe"),
+        default="M6",
+        choices=_SCREWS,
+        doc=_(
+            "Nenndurchmesser und Steigung. Das Profil ist druckbar abgeflacht, "
+            "kein ISO-Profil — das löst ein Drucker ohnehin nicht auf."
+        ),
+    )
+    length: float = param(
+        title=_("Länge"),
+        default=12.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=200.0,
+        doc=_("Länge des Gewindes, nicht des Bolzens."),
+    )
     internal: bool = param(
         title=_("Innengewinde"),
         default=False,

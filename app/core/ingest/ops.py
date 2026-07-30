@@ -52,16 +52,22 @@ class LoadParams(BaseParams):
         title=_("Punkte verschweißen"),
         default=True,
         placement="advanced",
+        doc=_(
+            "Führt Punkte zusammen, die praktisch aufeinanderliegen — der häufigste "
+            "Grund, warum ein STL aus lauter Einzelteilen zu bestehen scheint."
+        ),
     )
     remove_degenerate: bool = param(
         title=_("Entartete Dreiecke entfernen"),
         default=True,
         placement="advanced",
+        doc=_("Dreiecke ohne Fläche. Sie stören jede spätere Rechnung und tragen nichts."),
     )
     unify_normals: bool = param(
         title=_("Normalen vereinheitlichen"),
         default=True,
         placement="advanced",
+        doc=_("Richtet aus, wo außen ist. Ohne das erscheinen Flächen dunkel oder fehlen."),
     )
 
 
@@ -155,7 +161,14 @@ class LoadOutlineParams(BaseParams):
         kind="source",
         doc=_("Die eingebettete SVG- oder DXF-Datei im Projekt."),
     )
-    height: float = param(title=_("Höhe"), default=3.0, unit="mm", minimum=0.1, maximum=500.0)
+    height: float = param(
+        title=_("Höhe"),
+        default=3.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=500.0,
+        doc=_("Wie weit die Zeichnung in die Höhe gezogen wird."),
+    )
     width: float = param(
         title=_("Breite"),
         default=0.0,
@@ -164,7 +177,12 @@ class LoadOutlineParams(BaseParams):
         maximum=1000.0,
         doc=_("Auf diese Breite skalieren. Null nimmt die Zahlen der Datei als Millimeter."),
     )
-    name: str = param(title=_("Name"), default="", placement="advanced")
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=_("Wie das Objekt im Baum heißt. Leer übernimmt den Dateinamen."),
+    )
 
 
 @register_op(

@@ -47,6 +47,23 @@ def test_operation_is_completely_declared(spec: OperationSpec) -> None:
 
 
 @pytest.mark.parametrize("spec", registered(), ids=ids)
+def test_every_parameter_says_what_it_does(spec: OperationSpec) -> None:
+    """Ein Titel ist eine Beschriftung, keine Erklärung (§2.4).
+
+    „Spiel [mm]" über einem Zahlenfeld sagt nicht, wovon dieses Spiel abgezogen
+    wird und was passiert, wenn es null ist. Der Satz dahinter wird zum Tooltip
+    im Dialog und zur Spalte *Bedeutung* im Handbuch — beide leer zu lassen ist
+    die stille Art, eine Operation unbenutzbar zu machen.
+    """
+    for entry in spec.params.spec():
+        text = str(entry.doc or "")
+        assert text.strip(), f"{spec.name}.{entry.name} has no help text"
+        assert text.strip() != str(entry.title).strip(), (
+            f"{spec.name}.{entry.name} only repeats its title"
+        )
+
+
+@pytest.mark.parametrize("spec", registered(), ids=ids)
 def test_non_deterministic_operations_use_a_seed(spec: OperationSpec) -> None:
     if spec.deterministic:
         return

@@ -44,14 +44,47 @@ LABEL_DEPTH = 0.4
 @op_params
 class FitLadderParams(BaseParams):
     diameter: float = param(
-        title=_("Nenndurchmesser"), default=6.0, unit="mm", minimum=2.0, maximum=30.0
+        title=_("Nenndurchmesser"),
+        default=6.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=30.0,
+        doc=_(
+            "Durchmesser von Zapfen und Bohrung. Am besten der, den das Teil "
+            "später wirklich benutzt — Spiel verhält sich nicht über alle Größen gleich."
+        ),
     )
-    steps: int = param(title=_("Stufen"), default=4, minimum=2, maximum=8)
+    steps: int = param(
+        title=_("Stufen"),
+        default=4,
+        minimum=2,
+        maximum=8,
+        doc=_("Wie viele Paare gedruckt werden. Vier reichen meistens, um den Wert einzugrenzen."),
+    )
     first: float = param(
-        title=_("Kleinstes Spiel"), default=0.10, unit="mm", minimum=0.0, maximum=1.0
+        title=_("Kleinstes Spiel"),
+        default=0.10,
+        unit="mm",
+        minimum=0.0,
+        maximum=1.0,
+        doc=_("Womit die Leiter anfängt. Die erste Stufe darf ruhig zu stramm sein."),
     )
-    step: float = param(title=_("Schrittweite"), default=0.05, unit="mm", minimum=0.01, maximum=0.5)
-    height: float = param(title=_("Höhe"), default=8.0, unit="mm", minimum=2.0, maximum=40.0)
+    step: float = param(
+        title=_("Schrittweite"),
+        default=0.05,
+        unit="mm",
+        minimum=0.01,
+        maximum=0.5,
+        doc=_("Um wie viel das Spiel von Stufe zu Stufe wächst."),
+    )
+    height: float = param(
+        title=_("Höhe"),
+        default=8.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=40.0,
+        doc=_("Höhe der Zapfen. Höher heißt länger drucken, aber ehrlicher fügen."),
+    )
 
 
 @register_part(
@@ -112,11 +145,39 @@ def fit_ladder(raw: BaseParams) -> PartResult:
 @op_params
 class WallLadderParams(BaseParams):
     extrusion: float = param(
-        title=_("Extrusionsbreite"), default=0.42, unit="mm", minimum=0.2, maximum=1.2
+        title=_("Extrusionsbreite"),
+        default=0.42,
+        unit="mm",
+        minimum=0.2,
+        maximum=1.2,
+        doc=_(
+            "Wie breit dieser Drucker eine Bahn legt — meist etwas mehr als der "
+            "Düsendurchmesser. Jede Stufe der Leiter ist eine Bahn dicker als die davor."
+        ),
     )
-    steps: int = param(title=_("Stufen"), default=6, minimum=2, maximum=10)
-    height: float = param(title=_("Höhe"), default=15.0, unit="mm", minimum=3.0, maximum=60.0)
-    length: float = param(title=_("Länge"), default=25.0, unit="mm", minimum=5.0, maximum=120.0)
+    steps: int = param(
+        title=_("Stufen"),
+        default=6,
+        minimum=2,
+        maximum=10,
+        doc=_("Wie viele Wände nebeneinander stehen, jede eine Extrusionsbreite dicker."),
+    )
+    height: float = param(
+        title=_("Höhe"),
+        default=15.0,
+        unit="mm",
+        minimum=3.0,
+        maximum=60.0,
+        doc=_("Höhe der Wände. Hoch genug, dass eine zu dünne Wand auch wirklich umfällt."),
+    )
+    length: float = param(
+        title=_("Länge"),
+        default=25.0,
+        unit="mm",
+        minimum=5.0,
+        maximum=120.0,
+        doc=_("Länge jeder Wand."),
+    )
 
 
 @register_part(
@@ -155,14 +216,42 @@ def wall_ladder(raw: BaseParams) -> PartResult:
 @op_params
 class OverhangFanParams(BaseParams):
     first: float = param(
-        title=_("Kleinster Winkel"), default=20.0, unit="grad", minimum=5.0, maximum=80.0
+        title=_("Kleinster Winkel"),
+        default=20.0,
+        unit="grad",
+        minimum=5.0,
+        maximum=80.0,
+        doc=_("Die steilste Fläche, gemessen gegen die Senkrechte. Kleiner heißt steiler."),
     )
     step: float = param(
-        title=_("Schrittweite"), default=10.0, unit="grad", minimum=2.0, maximum=30.0
+        title=_("Schrittweite"),
+        default=10.0,
+        unit="grad",
+        minimum=2.0,
+        maximum=30.0,
+        doc=_("Um wie viel Grad jede Fläche flacher wird als die vorige."),
     )
-    steps: int = param(title=_("Stufen"), default=6, minimum=2, maximum=10)
-    width: float = param(title=_("Breite je Stufe"), default=8.0, unit="mm", minimum=2.0)
-    length: float = param(title=_("Auskraglänge"), default=15.0, unit="mm", minimum=3.0)
+    steps: int = param(
+        title=_("Stufen"),
+        default=6,
+        minimum=2,
+        maximum=10,
+        doc=_("Wie viele Winkel geprüft werden."),
+    )
+    width: float = param(
+        title=_("Breite je Stufe"),
+        default=8.0,
+        unit="mm",
+        minimum=2.0,
+        doc=_("Breite einer einzelnen Fläche. Schmaler spart Zeit, breiter zeigt mehr."),
+    )
+    length: float = param(
+        title=_("Auskraglänge"),
+        default=15.0,
+        unit="mm",
+        minimum=3.0,
+        doc=_("Wie weit jede Fläche frei hinaussteht. Zu kurz verzeiht der Drucker alles."),
+    )
 
 
 @register_part(

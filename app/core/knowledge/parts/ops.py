@@ -46,11 +46,44 @@ _log = get_logger(__name__)
 #: "take it from the material profile" (§28.3).
 PLAY_FIELD = "play"
 
-#: Placement parameters every part operation gains on top of its own.
+#: Ortsangaben, die jede Baustein-Operation zusätzlich zu ihren eigenen bekommt.
+#: Die Erklärungen stehen hier und nicht bei den achtzehn Bausteinen: dieselbe
+#: Zahl bedeutet überall dasselbe, und einmal geschrieben kann sie nicht an
+#: siebzehn Stellen anders lauten.
 _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
-    ("x", "float", param(title=_("Position X"), default=0.0, unit="mm")),
-    ("y", "float", param(title=_("Position Y"), default=0.0, unit="mm")),
-    ("z", "float", param(title=_("Position Z"), default=0.0, unit="mm")),
+    (
+        "x",
+        "float",
+        param(
+            title=_("Position X"),
+            default=0.0,
+            unit="mm",
+            doc=_(
+                "Wo der Baustein sitzt, gemessen im Koordinatensystem des Objekts. "
+                "Eine angeklickte Fläche trägt den Wert selbst ein."
+            ),
+        ),
+    ),
+    (
+        "y",
+        "float",
+        param(
+            title=_("Position Y"),
+            default=0.0,
+            unit="mm",
+            doc=_("Zweite Achse der Position — siehe Position X."),
+        ),
+    ),
+    (
+        "z",
+        "float",
+        param(
+            title=_("Position Z"),
+            default=0.0,
+            unit="mm",
+            doc=_("Höhe über der Grundfläche des Objekts."),
+        ),
+    ),
     (
         "axis",
         "str",
@@ -72,6 +105,11 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
             minimum=-360.0,
             maximum=360.0,
             placement="advanced",
+            doc=_(
+                "Dreht den Baustein um seine eigene Achse. Wichtig bei allem, was "
+                "nicht rund ist — eine Mutternfalle muss zur Wand passen, durch die "
+                "die Mutter eingeschoben wird."
+            ),
         ),
     ),
     (

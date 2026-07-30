@@ -27,7 +27,12 @@ _SCREWS = standards.screw_sizes()
 
 @op_params
 class MagnetPocketParams(BaseParams):
-    size: str = param(title=_("Magnet"), default="8x3", choices=_MAGNETS)
+    size: str = param(
+        title=_("Magnet"),
+        default="8x3",
+        choices=_MAGNETS,
+        doc=_("Durchmesser mal Höhe des Rundmagneten, wie er im Handel heißt."),
+    )
     play: float = param(
         title=_("Spiel"),
         default=0.0,
@@ -97,12 +102,36 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
 
 @op_params
 class WallMountParams(BaseParams):
-    width: float = param(title=_("Breite"), default=30.0, unit="mm", minimum=8.0, maximum=300.0)
-    height: float = param(title=_("Höhe"), default=25.0, unit="mm", minimum=8.0, maximum=300.0)
-    thickness: float = param(
-        title=_("Wandstärke"), default=3.0, unit="mm", minimum=1.0, maximum=20.0
+    width: float = param(
+        title=_("Breite"),
+        default=30.0,
+        unit="mm",
+        minimum=8.0,
+        maximum=300.0,
+        doc=_("Breite der Rückplatte, die an die Wand kommt."),
     )
-    size: str = param(title=_("Schraube"), default="M4", choices=_SCREWS)
+    height: float = param(
+        title=_("Höhe"),
+        default=25.0,
+        unit="mm",
+        minimum=8.0,
+        maximum=300.0,
+        doc=_("Höhe der Rückplatte. Die Auflage steht davon nach vorn ab."),
+    )
+    thickness: float = param(
+        title=_("Wandstärke"),
+        default=3.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=20.0,
+        doc=_("Dicke von Rückplatte und Auflage. Unter zwei Millimetern biegt sich der Halter."),
+    )
+    size: str = param(
+        title=_("Schraube"),
+        default="M4",
+        choices=_SCREWS,
+        doc=_("Wofür die Löcher sind. Es sind Durchgangslöcher aus der Normteiltabelle."),
+    )
     holes: int = param(
         title=_("Löcher"), default=2, minimum=1, maximum=6, doc=_("Über die Breite verteilt.")
     )
@@ -165,7 +194,15 @@ def wall_mount(raw: BaseParams) -> PartResult:
 
 @op_params
 class KeyholeParams(BaseParams):
-    size: str = param(title=_("Schraube"), default="M4", choices=_SCREWS)
+    size: str = param(
+        title=_("Schraube"),
+        default="M4",
+        choices=_SCREWS,
+        doc=_(
+            "Die Schraube in der Wand. Ihr Kopf geht durch das runde Ende, ihr "
+            "Schaft hält im Schlitz."
+        ),
+    )
     drop: float = param(
         title=_("Einhängeweg"),
         default=8.0,
@@ -174,7 +211,14 @@ class KeyholeParams(BaseParams):
         maximum=60.0,
         doc=_("Wie weit das Teil nach dem Einhängen absinkt."),
     )
-    depth: float = param(title=_("Tiefe"), default=4.0, unit="mm", minimum=1.0, maximum=40.0)
+    depth: float = param(
+        title=_("Tiefe"),
+        default=4.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=40.0,
+        doc=_("Wie tief die Aussparung ins Material geht."),
+    )
     head_room: float = param(
         title=_("Kopftiefe"),
         default=2.5,

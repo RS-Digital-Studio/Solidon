@@ -31,10 +31,41 @@ SNAP_RATIO = 10.0
 
 @op_params
 class SnapFitParams(BaseParams):
-    width: float = param(title=_("Breite"), default=8.0, unit="mm", minimum=2.0, maximum=60.0)
-    length: float = param(title=_("Länge"), default=16.0, unit="mm", minimum=4.0, maximum=120.0)
-    thickness: float = param(title=_("Armstärke"), default=1.6, unit="mm", minimum=0.6, maximum=8.0)
-    hook: float = param(title=_("Hakenüberstand"), default=1.2, unit="mm", minimum=0.2, maximum=6.0)
+    width: float = param(
+        title=_("Breite"),
+        default=8.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=60.0,
+        doc=_("Breite des Arms. Breiter hält mehr aus und federt weniger weit."),
+    )
+    length: float = param(
+        title=_("Länge"),
+        default=16.0,
+        unit="mm",
+        minimum=4.0,
+        maximum=120.0,
+        doc=_(
+            "Länge des Arms. Mindestens das Zehnfache der Armstärke — kürzer bricht "
+            "er, statt zu federn."
+        ),
+    )
+    thickness: float = param(
+        title=_("Armstärke"),
+        default=1.6,
+        unit="mm",
+        minimum=0.6,
+        maximum=8.0,
+        doc=_("Dicke des Arms. Sie bestimmt die Federkraft stärker als alles andere."),
+    )
+    hook: float = param(
+        title=_("Hakenüberstand"),
+        default=1.2,
+        unit="mm",
+        minimum=0.2,
+        maximum=6.0,
+        doc=_("Wie weit der Haken vorsteht — also wie viel Weg beim Einrasten zurückgelegt wird."),
+    )
     lead_angle: float = param(
         title=_("Anlaufwinkel"),
         default=35.0,
@@ -85,9 +116,30 @@ def snap_fit(raw: BaseParams) -> PartResult:
 class LatchParams(BaseParams):
     # The lower bounds are what a nozzle can still lay down. A latch of two
     # tenths of a millimetre is a number, not a part (§24.3).
-    width: float = param(title=_("Breite"), default=6.0, unit="mm", minimum=2.0, maximum=60.0)
-    depth: float = param(title=_("Überstand"), default=1.0, unit="mm", minimum=0.4, maximum=6.0)
-    height: float = param(title=_("Höhe"), default=3.0, unit="mm", minimum=1.0, maximum=30.0)
+    width: float = param(
+        title=_("Breite"),
+        default=6.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=60.0,
+        doc=_("Breite der Nase entlang der Kante."),
+    )
+    depth: float = param(
+        title=_("Überstand"),
+        default=1.0,
+        unit="mm",
+        minimum=0.4,
+        maximum=6.0,
+        doc=_("Wie weit die Nase vorsteht. Das ist der Weg, den das Gegenstück aufbiegen muss."),
+    )
+    height: float = param(
+        title=_("Höhe"),
+        default=3.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=30.0,
+        doc=_("Höhe der Nase. Die Anlaufschräge sitzt oben, die gerade Haltefläche unten."),
+    )
     negative: bool = param(
         title=_("Als Aussparung"),
         default=False,
@@ -137,10 +189,29 @@ def latch(raw: BaseParams) -> PartResult:
 
 @op_params
 class HingeParams(BaseParams):
-    width: float = param(title=_("Breite"), default=30.0, unit="mm", minimum=5.0, maximum=300.0)
-    leaf: float = param(title=_("Flügellänge"), default=15.0, unit="mm", minimum=3.0, maximum=200.0)
+    width: float = param(
+        title=_("Breite"),
+        default=30.0,
+        unit="mm",
+        minimum=5.0,
+        maximum=300.0,
+        doc=_("Länge der Scharnierachse — so breit wird der Deckel, der daran hängt."),
+    )
+    leaf: float = param(
+        title=_("Flügellänge"),
+        default=15.0,
+        unit="mm",
+        minimum=3.0,
+        maximum=200.0,
+        doc=_("Wie weit jeder der beiden Flügel vom Scharnier weg reicht."),
+    )
     thickness: float = param(
-        title=_("Materialstärke"), default=2.0, unit="mm", minimum=0.8, maximum=10.0
+        title=_("Materialstärke"),
+        default=2.0,
+        unit="mm",
+        minimum=0.8,
+        maximum=10.0,
+        doc=_("Dicke der beiden Flügel — nicht der dünnen Stelle dazwischen."),
     )
     film: float = param(
         title=_("Scharnierstärke"),
@@ -150,7 +221,17 @@ class HingeParams(BaseParams):
         maximum=1.2,
         doc=_("Dünnste Stelle. Unter 0,3 mm reißt PLA, PETG hält mehr aus."),
     )
-    gap: float = param(title=_("Scharnierbreite"), default=1.5, unit="mm", minimum=0.5, maximum=8.0)
+    gap: float = param(
+        title=_("Scharnierbreite"),
+        default=1.5,
+        unit="mm",
+        minimum=0.5,
+        maximum=8.0,
+        doc=_(
+            "Breite der dünnen Stelle. Zu schmal knickt an einer Linie und bricht, "
+            "zu breit lässt den Deckel schlackern."
+        ),
+    )
 
 
 @register_part(
@@ -183,9 +264,24 @@ def living_hinge(raw: BaseParams) -> PartResult:
 @op_params
 class DowelParams(BaseParams):
     diameter: float = param(
-        title=_("Durchmesser"), default=4.0, unit="mm", minimum=1.0, maximum=30.0
+        title=_("Durchmesser"),
+        default=4.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=30.0,
+        doc=_(
+            "Nenndurchmesser. Stift und Bohrung tragen denselben Wert — das Spiel "
+            "dazwischen kommt aus dem Materialprofil."
+        ),
     )
-    length: float = param(title=_("Länge"), default=8.0, unit="mm", minimum=1.0, maximum=100.0)
+    length: float = param(
+        title=_("Länge"),
+        default=8.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=100.0,
+        doc=_("Wie weit der Stift heraussteht, beziehungsweise wie tief die Bohrung geht."),
+    )
     kind: str = param(
         title=_("Art"),
         default="pin",
