@@ -181,7 +181,10 @@ def abschluss() -> None:
             "Stop",
             f"Seit der letzten Änderung ({gezeigt}) lief die Suite nicht. "
             "Die Arbeitsweise dieses Projekts verlangt sie nach jedem Schritt: "
-            ".venv\\Scripts\\python.exe -m pytest -q — oder /pruefen für alle vier Läufe.",
+            ".venv\\Scripts\\python.exe -m pytest -q — oder /pruefen für alle vier Läufe. "
+            "Der Hook sieht nur den Zeitstempel, nicht den Urheber: stammt die Änderung "
+            "aus einer parallel laufenden Sitzung, gehört sie nicht dir. Dann weder "
+            "prüfen noch anfassen, sondern es beim Berichten erwähnen.",
         )
 
 
