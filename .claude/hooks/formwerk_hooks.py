@@ -35,6 +35,7 @@ VENV_PYTHON = WURZEL / ".venv" / "Scripts" / "python.exe"
 if not VENV_PYTHON.exists():  # Linux und macOS, falls das Projekt dort läuft
     VENV_PYTHON = WURZEL / ".venv" / "bin" / "python"
 MARKE = WURZEL / ".claude" / ".state" / "letzter-testlauf"
+ERINNERT = WURZEL / ".claude" / ".state" / "letzte-erinnerung"
 
 # Regeln, die sich am Text einer Datei erkennen lassen. Alles andere prüfen die
 # Tests — ein Hook, der raten muss, meldet lieber nichts.
@@ -176,6 +177,18 @@ def abschluss() -> None:
             break
 
     if juenger:
+        # Zweimal derselbe Hinweis ist keiner mehr: er wird überlesen und kostet
+        # nur Kontext. Also nur melden, wenn sich etwas geändert hat — bei
+        # fremder Arbeit im Baum feuert der Hook sonst bei jedem Zug erneut.
+        stand = "|".join(sorted(juenger))
+        try:
+            if ERINNERT.exists() and ERINNERT.read_text(encoding="utf-8") == stand:
+                return
+            ERINNERT.parent.mkdir(parents=True, exist_ok=True)
+            ERINNERT.write_text(stand, encoding="utf-8")
+        except OSError:
+            pass
+
         gezeigt = ", ".join(juenger[:3]) + (" und weitere" if len(juenger) > 3 else "")
         melden(
             "Stop",
