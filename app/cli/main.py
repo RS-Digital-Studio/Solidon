@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from app.branding import APP_NAME, APP_VERSION, DISTRIBUTION_NAME, PROJECT_SUFFIX
+from app.core import manual
 from app.core.bootstrap import load_operations
 from app.core.errors import AppError, OperationCancelled, ValidationError
 from app.core.export import threemf
@@ -139,7 +140,12 @@ def command_ops(args: argparse.Namespace) -> int:
 
 
 def command_docs(args: argparse.Namespace) -> int:
-    print(documentation(), end="")
+    """Die Referenz, mit ``--manual`` das ganze Handbuch.
+
+    Derselbe Text, den das Fenster zeigt: eine zweite Fassung wäre eine, die
+    irgendwann etwas anderes sagt.
+    """
+    print(manual.as_markdown() if getattr(args, "manual", False) else documentation(), end="")
     return 0
 
 
@@ -348,6 +354,11 @@ def build_parser() -> argparse.ArgumentParser:
     listing.set_defaults(handler=command_ops)
 
     docs = commands.add_parser("docs", help=tr("Erzeugte Referenz ausgeben"))
+    docs.add_argument(
+        "--manual",
+        action="store_true",
+        help=tr("Das ganze Handbuch, nicht nur die Referenz"),
+    )
     docs.set_defaults(handler=command_docs)
 
     profile_list = commands.add_parser("profiles", help=tr("Drucker- und Materialprofile"))

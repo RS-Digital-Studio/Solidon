@@ -65,6 +65,7 @@ from app.ui.explode_bar import ExplodeBar
 from app.ui.generate_dialog import GenerateDialog
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import feature_label
+from app.ui.manual_window import ManualWindow
 from app.ui.op_dialog import OperationDialog
 from app.ui.paint_bar import PaintBar
 from app.ui.panels import (
@@ -156,6 +157,8 @@ class MainWindow(QMainWindow):
         self._slice_key: tuple[str, int] | None = None
         self._proposal: Any = None
         """The agent turn waiting for a decision (§26.5)."""
+        self._manual: ManualWindow | None = None
+        """Das Handbuchfenster, einmal gebaut und danach wiederverwendet."""
 
         self._build_central()
         self._build_status_bar()
@@ -279,89 +282,229 @@ class MainWindow(QMainWindow):
 
     def _build_menus(self) -> None:
         file_menu = self.menuBar().addMenu(tr("Datei"))
-        self._add_action(file_menu, tr("Neu"), QKeySequence.StandardKey.New, self.action_new)
-        self._add_action(file_menu, tr("Öffnen …"), QKeySequence.StandardKey.Open, self.action_open)
+        file_menu.setToolTipsVisible(True)
         self._add_action(
-            file_menu, tr("Speichern"), QKeySequence.StandardKey.Save, self.action_save
+            file_menu,
+            tr("Neu"),
+            QKeySequence.StandardKey.New,
+            self.action_new,
+            tr("Ein leeres Projekt anlegen — Drucker und Material kommen aus den Einstellungen."),
         )
         self._add_action(
-            file_menu, tr("Speichern unter …"), QKeySequence.StandardKey.SaveAs, self.action_save_as
+            file_menu,
+            tr("Öffnen …"),
+            QKeySequence.StandardKey.Open,
+            self.action_open,
+            tr("Ein gespeichertes Projekt öffnen (.p3d)."),
+        )
+        self._add_action(
+            file_menu,
+            tr("Speichern"),
+            QKeySequence.StandardKey.Save,
+            self.action_save,
+            tr("Projekt mit Geometrie, Verlauf und Parametern in eine Datei schreiben."),
+        )
+        self._add_action(
+            file_menu,
+            tr("Speichern unter …"),
+            QKeySequence.StandardKey.SaveAs,
+            self.action_save_as,
+            tr("Das Projekt unter einem anderen Namen ablegen."),
         )
         file_menu.addSeparator()
-        self._add_action(file_menu, tr("Modell einfügen …"), "Ctrl+I", self.action_import)
-        self._add_action(file_menu, tr("Modell erzeugen …"), "Ctrl+G", self.action_generate)
-        self._add_action(file_menu, tr("Bausteinkatalog …"), "Ctrl+K", self.action_catalog)
-        self._add_action(file_menu, tr("G-Code gegenprüfen …"), None, self.action_check_gcode)
+        self._add_action(
+            file_menu,
+            tr("Modell einfügen …"),
+            "Ctrl+I",
+            self.action_import,
+            tr("Eine Modelldatei laden (STL, 3MF, OBJ, STEP). Eine Baugruppe kommt einzeln an."),
+        )
+        self._add_action(
+            file_menu,
+            tr("Modell erzeugen …"),
+            "Ctrl+G",
+            self.action_generate,
+            tr("Aus Text oder Bild ein Mesh erzeugen lassen — braucht ein laufendes ComfyUI."),
+        )
+        self._add_action(
+            file_menu,
+            tr("Bausteinkatalog …"),
+            "Ctrl+K",
+            self.action_catalog,
+            tr("Alle Bausteine durchsehen: Mutternfalle, Rastnase, Scharnier und die anderen."),
+        )
+        self._add_action(
+            file_menu,
+            tr("G-Code gegenprüfen …"),
+            None,
+            self.action_check_gcode,
+            tr("Eine Datei aus dem Slicer lesen und ihre Zahlen neben die eigenen stellen."),
+        )
         file_menu.addSeparator()
-        self._add_action(file_menu, tr("Beenden"), QKeySequence.StandardKey.Quit, self.close)
+        self._add_action(
+            file_menu,
+            tr("Beenden"),
+            QKeySequence.StandardKey.Quit,
+            self.close,
+            tr("Formwerk schließen. Ungesichertes wird vorher erfragt."),
+        )
 
         edit_menu = self.menuBar().addMenu(tr("Bearbeiten"))
+        edit_menu.setToolTipsVisible(True)
         self._add_action(
-            edit_menu, tr("Befehlspalette …"), "Ctrl+Shift+P", self.action_command_palette
+            edit_menu,
+            tr("Befehlspalette …"),
+            "Ctrl+Shift+P",
+            self.action_command_palette,
+            tr("Jede Operation über ihren Namen finden, ohne durch die Menüs zu gehen."),
         )
-        self._add_action(edit_menu, tr("Automatisch teilen …"), None, self.action_auto_split)
-        self._add_action(edit_menu, tr("Material kalibrieren …"), None, self.action_calibrate)
-        self._add_action(edit_menu, tr("Varianten erzeugen …"), None, self.action_variants)
-        self._add_action(edit_menu, tr("Zugang zum Sprachmodell …"), None, self.action_llm_key)
+        self._add_action(
+            edit_menu,
+            tr("Automatisch teilen …"),
+            None,
+            self.action_auto_split,
+            tr("Ein zu großes Teil zerschneiden, bis jedes Stück auf die Platte passt — "
+               "mit Passstiften in jeder Schnittfläche."),
+        )
+        self._add_action(
+            edit_menu,
+            tr("Material kalibrieren …"),
+            None,
+            self.action_calibrate,
+            tr("Das gemessene Spiel eintragen. Es gilt danach für jede Passung, "
+               "auch in älteren Projekten."),
+        )
+        self._add_action(
+            edit_menu,
+            tr("Varianten erzeugen …"),
+            None,
+            self.action_variants,
+            tr("Dasselbe Teil mehrfach mit gestaffelten Werten exportieren, "
+               "statt von Hand zu ändern."),
+        )
+        self._add_action(
+            edit_menu,
+            tr("Zugang zum Sprachmodell …"),
+            None,
+            self.action_llm_key,
+            tr("Schlüssel für den Chat hinterlegen. Er landet im Schlüsselbund, "
+               "nie in der Projektdatei."),
+        )
         edit_menu.addSeparator()
         self.undo_action = self._add_action(
-            edit_menu, tr("Rückgängig"), QKeySequence.StandardKey.Undo, self.action_undo
+            edit_menu,
+            tr("Rückgängig"),
+            QKeySequence.StandardKey.Undo,
+            self.action_undo,
+            tr("Den letzten Schritt zurücknehmen — auch einen Vorschlag des Chats, ganz."),
         )
         self.redo_action = self._add_action(
-            edit_menu, tr("Wiederholen"), QKeySequence.StandardKey.Redo, self.action_redo
+            edit_menu,
+            tr("Wiederholen"),
+            QKeySequence.StandardKey.Redo,
+            self.action_redo,
+            tr("Einen zurückgenommenen Schritt wieder anwenden."),
         )
 
-        # Everything below comes from the registry (§10).
+        # Alles darunter kommt aus dem Register (§10). Der Hinweis ist die
+        # Beschreibung der Operation und steht deshalb an beiden Stellen: in der
+        # Statusleiste beim Durchgehen und als Tooltip beim Zögern.
         for section in menu_tree():
             menu = self.menuBar().addMenu(str(section.title))
+            menu.setToolTipsVisible(True)
             for spec in section.entries:
                 action = QAction(str(spec.title), self)
                 if spec.shortcut:
                     action.setShortcut(QKeySequence(spec.shortcut))
                 action.setStatusTip(str(spec.doc))
+                action.setToolTip(str(spec.doc))
                 action.triggered.connect(
                     lambda _checked=False, entry=spec: self.run_operation(entry)
                 )
                 menu.addAction(action)
 
         view_menu = self.menuBar().addMenu(tr("Ansicht"))
-        self._add_action(view_menu, tr("Rechten Bereich zeigen"), "F9", self.action_toggle_right)
+        view_menu.setToolTipsVisible(True)
+        self._add_action(
+            view_menu,
+            tr("Rechten Bereich zeigen"),
+            "F9",
+            self.action_toggle_right,
+            tr("Verlauf, Parameter und Chat ein- oder ausblenden."),
+        )
         view_menu.addSeparator()
 
-        for mode, label, shortcut in (
-            ("solid", tr("Massiv"), "1"),
-            ("solid_edges", tr("Massiv mit Kanten"), "2"),
-            ("wireframe", tr("Drahtgitter"), "3"),
-            ("transparent", tr("Transparent"), "4"),
+        for mode, label, shortcut, hint in (
+            ("solid", tr("Massiv"), "1", tr("Die Oberfläche, wie sie gedruckt wird.")),
+            (
+                "solid_edges",
+                tr("Massiv mit Kanten"),
+                "2",
+                tr("Dazu die Dreieckskanten — zeigt, wie fein das Netz ist."),
+            ),
+            (
+                "wireframe",
+                tr("Drahtgitter"),
+                "3",
+                tr("Nur die Kanten. Lässt durch das Teil hindurchsehen."),
+            ),
+            (
+                "transparent",
+                tr("Transparent"),
+                "4",
+                tr("Durchscheinend — für Hohlräume und Teile, die ineinandergreifen."),
+            ),
         ):
             self._add_action(
                 view_menu,
                 label,
                 shortcut,
                 lambda checked=False, key=mode: self.viewport.set_display_mode(key),
+                hint,
             )
         view_menu.addSeparator()
-        for shading, label in (
-            ("flat", tr("Flache Schattierung")),
-            ("smooth", tr("Weiche Schattierung")),
+        for shading, label, hint in (
+            (
+                "flat",
+                tr("Flache Schattierung"),
+                tr("Jedes Dreieck für sich — die wahre Form, Facetten inklusive."),
+            ),
+            (
+                "smooth",
+                tr("Weiche Schattierung"),
+                tr("Über die Kanten hinweg gemittelt. Schöner, aber beschönigend."),
+            ),
         ):
             self._add_action(
                 view_menu,
                 label,
                 None,
                 lambda checked=False, key=shading: self.viewport.set_shading(key),
+                hint,
             )
-        for projection, label, shortcut in (
-            ("perspective", tr("Perspektivisch"), "5"),
-            ("orthographic", tr("Orthografisch"), "6"),
+        for projection, label, shortcut, hint in (
+            (
+                "perspective",
+                tr("Perspektivisch"),
+                "5",
+                tr("Wie das Auge sieht: Fernes wird kleiner."),
+            ),
+            (
+                "orthographic",
+                tr("Orthografisch"),
+                "6",
+                tr("Ohne Fluchtpunkt — gleich lange Kanten sehen gleich lang aus. Zum Messen."),
+            ),
         ):
             self._add_action(
                 view_menu,
                 label,
                 shortcut,
                 lambda checked=False, key=projection: self.viewport.set_projection(key),
+                hint,
             )
         view_menu.addSeparator()
+        standpoint = tr("Kamera auf diesen Standpunkt setzen.")
         for name, label, shortcut in (
             ("iso", tr("Isometrisch"), "Ctrl+0"),
             ("front", tr("Vorne"), "Ctrl+1"),
@@ -376,31 +519,77 @@ class MainWindow(QMainWindow):
                 label,
                 shortcut,
                 lambda checked=False, key=name: self.viewport.view_from(key),
+                standpoint,
             )
         view_menu.addSeparator()
-        for theme, label in (("dark", tr("Dunkles Thema")), ("light", tr("Helles Thema"))):
+        for theme, label, hint in (
+            ("dark", tr("Dunkles Thema"), tr("Helle Geometrie auf dunklem Grund.")),
+            ("light", tr("Helles Thema"), tr("Dunkle Geometrie auf hellem Grund.")),
+        ):
             self._add_action(
-                view_menu, label, None, lambda checked=False, key=theme: self.action_theme(key)
+                view_menu,
+                label,
+                None,
+                lambda checked=False, key=theme: self.action_theme(key),
+                hint,
             )
         view_menu.addSeparator()
-        for scheme, label in (
-            ("slicer", tr("Navigation: Slicer")),
-            ("cad", tr("Navigation: CAD")),
-            ("blender", tr("Navigation: Blender")),
+        for scheme, label, hint in (
+            (
+                "slicer",
+                tr("Navigation: Slicer"),
+                tr("Maustasten wie in einem Slicer — links drehen, rechts schieben."),
+            ),
+            ("cad", tr("Navigation: CAD"), tr("Wie in einem CAD-Programm: Mittlere Taste dreht.")),
+            ("blender", tr("Navigation: Blender"), tr("Wie in Blender.")),
         ):
             self._add_action(
                 view_menu,
                 label,
                 None,
                 lambda checked=False, key=scheme: self.action_navigation(key),
+                hint,
             )
 
         help_menu = self.menuBar().addMenu(tr("Hilfe"))
-        self._add_action(help_menu, tr("Zusätzliche Programme …"), None, self.action_install_extras)
-        self._add_action(help_menu, tr("Erste Schritte …"), None, self.action_first_run)
-        self._add_action(help_menu, tr("Fehlerbericht erstellen …"), None, self.action_report)
+        help_menu.setToolTipsVisible(True)
+        self._add_action(
+            help_menu,
+            tr("Handbuch …"),
+            QKeySequence.StandardKey.HelpContents,
+            self.action_manual,
+            tr("Jede Operation mit ihren Werten, nach Bereichen sortiert."),
+        )
         help_menu.addSeparator()
-        self._add_action(help_menu, tr("Über Formwerk"), None, self.action_about)
+        self._add_action(
+            help_menu,
+            tr("Zusätzliche Programme …"),
+            None,
+            self.action_install_extras,
+            tr("Was Formwerk außerdem benutzen kann, wo es liegt und wie es dazukommt."),
+        )
+        self._add_action(
+            help_menu,
+            tr("Erste Schritte …"),
+            None,
+            self.action_first_run,
+            tr("Sprache, Drucker, Material und die externen Programme noch einmal einstellen."),
+        )
+        self._add_action(
+            help_menu,
+            tr("Fehlerbericht erstellen …"),
+            None,
+            self.action_report,
+            tr("Einen Ordner mit Protokoll und Umgebung anlegen. Verschickt wird nichts."),
+        )
+        help_menu.addSeparator()
+        self._add_action(
+            help_menu,
+            tr("Über Formwerk"),
+            None,
+            self.action_about,
+            tr("Version, Rechteinhaber und die verwendeten Fremdbibliotheken."),
+        )
 
         toolbar = QToolBar(tr("Werkzeuge"), self)
         toolbar.setMovable(False)
@@ -415,7 +604,16 @@ class MainWindow(QMainWindow):
             action.triggered.connect(slot)
             toolbar.addAction(action)
 
-    def _add_action(self, menu: Any, label: str, shortcut: Any, slot: Any) -> QAction:
+    def _add_action(
+        self, menu: Any, label: str, shortcut: Any, slot: Any, hint: str = ""
+    ) -> QAction:
+        """Ein Menüeintrag mit dem Satz, der sagt, was er tut.
+
+        Der Hinweis steht an zwei Stellen, weil ihn zwei Arten von Leuten
+        suchen: in der Statusleiste, wo er beim Durchgehen mitläuft, und als
+        Tooltip, wo er beim Zögern erscheint. Ohne beides ist ein Menü mit
+        vierzehn Einträgen eine Liste von Vermutungen.
+        """
         action = QAction(label, self)
         if shortcut is not None:
             action.setShortcut(
@@ -423,6 +621,9 @@ class MainWindow(QMainWindow):
                 if isinstance(shortcut, QKeySequence.StandardKey)
                 else QKeySequence(shortcut)
             )
+        if hint:
+            action.setStatusTip(hint)
+            action.setToolTip(hint)
         action.triggered.connect(slot)
         menu.addAction(action)
         return action
@@ -549,6 +750,22 @@ class MainWindow(QMainWindow):
     def action_install_extras(self) -> None:
         """§36: what is missing, what it is for, and a button that fetches it."""
         InstallDialog(self).exec()
+
+    def action_manual(self) -> None:
+        """Das Handbuch — ein Fenster, kein Dialog.
+
+        Es bleibt offen, während gearbeitet wird; ein Handbuch, das man zum
+        Weiterarbeiten schließen muss, wird kein zweites Mal geöffnet. Und es
+        wird wiederverwendet, damit nicht bei jedem Aufruf eines mehr auf dem
+        Bildschirm steht.
+        """
+        window = self._manual
+        if window is None:
+            window = ManualWindow(self)
+            self._manual = window
+        window.show()
+        window.raise_()
+        window.activateWindow()
 
     def action_about(self) -> None:
         AboutDialog(self).exec()

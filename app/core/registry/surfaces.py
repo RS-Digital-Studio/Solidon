@@ -126,11 +126,18 @@ def tool_schemas(registry: Registry | None = None) -> tuple[dict[str, Any], ...]
     )
 
 
-def documentation(registry: Registry | None = None) -> str:
-    """The reference section of the documentation, generated, never hand-written."""
+def documentation(registry: Registry | None = None, category: str = "") -> str:
+    """Der Referenzteil der Dokumentation — erzeugt, nie von Hand geschrieben.
+
+    Mit ``category`` nur ein Bereich. Das Handbuchfenster zeigt eine Kategorie
+    je Seite und liest denselben Text, den die Kommandozeile ausgibt: eine
+    zweite Quelle wäre eine, die veraltet.
+    """
     lines: list[str] = []
-    for category, entries in (registry or REGISTRY).by_category().items():
-        lines.append(f"## {CATEGORIES[category]}")
+    for name, entries in (registry or REGISTRY).by_category().items():
+        if category and name != category:
+            continue
+        lines.append(f"## {CATEGORIES[name]}")
         lines.append("")
         for spec in entries:
             lines.append(f"### {spec.title} (`{spec.name}`)")
