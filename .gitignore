@@ -27,3 +27,9 @@ htmlcov/
 *.log
 /out/
 /.cache/
+
+# --- Claude Code -------------------------------------------------------------
+# Die Konfiguration unter .claude/ gehört ins Repository, ihr Laufzeitzustand
+# nicht: die Marke, wann die Suite zuletzt lief, ist Sache dieser Maschine.
+/.claude/.state/
+/.claude/settings.local.json
