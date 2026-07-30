@@ -1,22 +1,33 @@
-"""What is missing, and a button that fetches it (Bauplan §36, §38).
+"""Was fehlt, und ein Knopf, der es holt (Bauplan §36, §38).
 
-One row per thing Formwerk can use, with what it is for and whether it is
-there. Where it can be installed from here, the row has a button; where it
-cannot, it has the reason and the official page.
+Eine Zeile je Sache, die Formwerk benutzen kann, mit dem Zweck und dem
+Zustand. Wo sich etwas von hier installieren lässt, hat die Zeile einen Knopf;
+wo nicht, den Grund und die offizielle Seite.
 
-Nothing installs itself. The list is shown on the first run and can be opened
-again from the help menu — installing is somebody pressing a button, which is
-the whole difference between a helpful application and one that helps itself.
+Nichts installiert sich selbst. Die Liste wird bei der Erstinbetriebnahme
+gezeigt und lässt sich aus dem Hilfe-Menü wieder öffnen — installiert wird,
+wenn jemand einen Knopf drückt, und das ist der ganze Unterschied zwischen
+einer hilfreichen Anwendung und einer, die sich selbst hilft.
+
+**Die Zeile sagt auch, wo etwas liegt.** „Vorhanden" ohne Pfad ist eine
+Behauptung; mit Pfad ist es eine Angabe, die jemand nachsehen kann. Und wo
+nichts gefunden wurde, steht der Weg daneben, der immer funktioniert: den Ort
+selbst angeben. Eine portable Installation auf einem zweiten Laufwerk findet
+kein Suchverfahren der Welt, und daran soll niemand hängenbleiben.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QProgressBar,
     QPushButton,
@@ -24,13 +35,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import install
+from app.core import install, tools
 from app.core.log import get_logger
 from app.i18n import tr
 
 _log = get_logger(__name__)
 
-#: Markers, so the state reads without colour as well (§19.1).
+#: Markierungen, damit der Zustand auch ohne Farbe lesbar ist (§19.1).
 PRESENT = "+"
 ABSENT = "-"
 
@@ -50,35 +61,52 @@ class _Worker(QThread):
 
 
 class _Row(QWidget):
-    """One requirement: state, what it is for, and what can be done about it."""
+    """Eine Anforderung: Zustand, Zweck, Fundort und was sich tun lässt."""
 
     startRequested = Signal(object)
 
     def __init__(self, requirement: install.Requirement, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.requirement = requirement
+        self.tool = tools.by_id(requirement.id)
         self.state = QLabel(self)
         self.state.setFixedWidth(16)
 
         title = QLabel(f"{requirement.title} — {requirement.what_for}", self)
         title.setWordWrap(True)
 
+        #: Wo es liegt, oder der Satz, der sagt, was als Nächstes hilft.
+        self.where = QLabel(self)
+        self.where.setWordWrap(True)
+        self.where.setEnabled(False)
+        self.where.setTextFormat(Qt.TextFormat.PlainText)
+
         self.action = QPushButton(tr("Installieren"), self)
         self.action.clicked.connect(lambda: self.startRequested.emit(requirement))
+        self.locate = QPushButton(tr("Ort angeben …"), self)
+        self.locate.clicked.connect(self._choose_location)
+        self.locate.setVisible(self.tool is not None)
         self.page = QPushButton(tr("Seite öffnen"), self)
         self.page.clicked.connect(self._open_page)
         self.page.setVisible(bool(requirement.url))
 
-        layout = QHBoxLayout(self)
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        head.addWidget(self.state)
+        head.addWidget(title, stretch=1)
+        head.addWidget(self.action)
+        head.addWidget(self.locate)
+        head.addWidget(self.page)
+
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.state)
-        layout.addWidget(title, stretch=1)
-        layout.addWidget(self.action)
-        layout.addWidget(self.page)
+        layout.setSpacing(2)
+        layout.addLayout(head)
+        layout.addWidget(self.where)
         self.refresh()
 
     def refresh(self) -> None:
-        """Read the state again — after an install, and when the dialog opens."""
+        """Den Zustand neu lesen — nach einer Installation und beim Öffnen."""
         here = install.present(self.requirement)
         self.state.setText(PRESENT if here else ABSENT)
         self.action.setVisible(not here)
@@ -86,14 +114,60 @@ class _Row(QWidget):
         if not here and not install.installable(self.requirement):
             self.action.setToolTip(str(install.why_not(self.requirement)))
             self.action.setVisible(True)
+        self.where.setText(self._where_text())
         self.setToolTip(self._explanation(here))
 
+    def _where_text(self) -> str:
+        """Der Fundort, wenn es einen gibt — sonst der Satz, der weiterhilft."""
+        if self.tool is None:
+            return ""
+        state = tools.state_of(self.tool)
+        if state.path is not None:
+            return str(state.path)
+        if state.available and self.tool.address():
+            return self.tool.address()
+        return str(state.explain())
+
     def _explanation(self, here: bool) -> str:
+        if self.tool is not None:
+            return str(tools.state_of(self.tool).explain())
         if here:
             return tr("Vorhanden")
         if install.installable(self.requirement):
             return tr("Kann von hier installiert werden.")
         return str(install.why_not(self.requirement))
+
+    def _choose_location(self) -> None:
+        """Den Ort selbst angeben: eine Datei bei Programmen, eine Adresse bei Diensten."""
+        if self.tool is None:
+            return
+        if self.tool.kind == "service":
+            self._choose_address()
+        else:
+            self._choose_file()
+        self.refresh()
+
+    def _choose_address(self) -> None:
+        address, accepted = QInputDialog.getText(
+            self,
+            str(self.tool.title) if self.tool else "",
+            tr("Adresse, unter der es erreichbar ist:"),
+            text=self.tool.address() if self.tool else "",
+        )
+        if accepted and self.tool is not None:
+            tools.set_location(self.tool.id, address.strip())
+
+    def _choose_file(self) -> None:
+        assert self.tool is not None
+        current = self.tool.path()
+        chosen, _filter = QFileDialog.getOpenFileName(
+            self,
+            tr("Programm auswählen"),
+            str(current.parent) if current is not None else "",
+            tr("Programme (*.exe);;Alle Dateien (*)"),
+        )
+        if chosen:
+            tools.set_location(self.tool.id, str(Path(chosen)))
 
     def _open_page(self) -> None:
         QDesktopServices.openUrl(QUrl(self.requirement.url))

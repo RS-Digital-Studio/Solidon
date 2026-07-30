@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
@@ -143,11 +142,16 @@ def available() -> bool:
 
 
 def executable() -> str | None:
-    for name in EXECUTABLES:
-        found = shutil.which(name)
-        if found:
-            return found
-    return None
+    """Wo OpenSCAD liegt.
+
+    Über :mod:`app.core.discover` und nicht über den PATH allein: sonst sagt
+    der Dialog „gefunden" und die Operation danach „nicht installiert", weil
+    beide verschieden gesucht haben.
+    """
+    from app.core import discover
+
+    found = discover.find_program("openscad", EXECUTABLES)
+    return str(found) if found is not None else None
 
 
 @dataclass(slots=True)

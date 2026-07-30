@@ -25,8 +25,31 @@ _ISOLATED = tempfile.mkdtemp(prefix="formwerk-tests-")
 for _variable in ("APPDATA", "LOCALAPPDATA", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
     os.environ[_variable] = _ISOLATED
 
+from app.core import discover
 from app.core.knowledge import profiles
 from app.core.types import BoundingBox, Document, Profile, SceneObject
+
+
+@pytest.fixture(autouse=True)
+def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Suite fragt nicht die Maschine, auf der sie läuft (§38).
+
+    Dieselbe Begründung wie bei den Nutzerverzeichnissen oben: ein
+    Entwicklerrechner mit installiertem OpenSCAD sieht sonst etwas anderes als
+    ein Bauserver ohne, und ein Test, dessen Ergebnis davon abhängt, prüft
+    nicht, was er zu prüfen vorgibt. Was ausdrücklich gesetzt wurde, gilt
+    weiter — daran hängen die Tests, die einen Fund brauchen.
+    """
+
+    def only_what_was_set(tool_id: str, names: object) -> object:
+        chosen = discover.remembered(tool_id)
+        from pathlib import Path
+
+        path = Path(chosen) if chosen else None
+        return path if path is not None and path.is_file() else None
+
+    monkeypatch.setattr(discover, "find_program", only_what_was_set)
+    discover.forget_cache()
 
 
 @dataclass(frozen=True, slots=True)

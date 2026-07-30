@@ -63,6 +63,18 @@ def _silent(fraction: float, text: str) -> None:
     del fraction, text
 
 
+def _configured_url() -> str:
+    """Die eingetragene ComfyUI-Adresse, sonst die auf dieser Maschine.
+
+    Der Import steht hier und nicht oben, weil :mod:`app.core.discover` die
+    Nutzerkonfiguration liest — das gehört in den Aufruf und nicht in den
+    Modulimport, damit eine Testumgebung sie noch umlenken kann.
+    """
+    from app.core import discover
+
+    return discover.service_url("comfyui", DEFAULT_COMFY_URL)
+
+
 @dataclass(frozen=True, slots=True)
 class GeneratedMesh:
     """A generated body, as it came, plus where it came from (§11.3).
@@ -152,7 +164,10 @@ class ComfyBackend:
     this (§27).
     """
 
-    url: str = DEFAULT_COMFY_URL
+    # Die Adresse ist nicht fest: wer ComfyUI auf einem zweiten Rechner oder
+    # auf einem anderen Port betreibt, trägt sie einmal ein (§38). Ohne
+    # Eintrag bleibt es bei dieser Maschine.
+    url: str = field(default_factory=lambda: _configured_url())
     transport: Fetch = fetch
     poll_seconds: float = POLL_SECONDS
     timeout_seconds: float = TIMEOUT_SECONDS

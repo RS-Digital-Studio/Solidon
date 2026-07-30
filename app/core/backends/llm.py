@@ -253,6 +253,17 @@ DEFAULT_OLLAMA_MODEL = "qwen2.5-coder:14b"
 OLLAMA_URL = "http://localhost:11434/api/chat"
 
 
+def _configured_ollama_url() -> str:
+    """Die eingetragene Ollama-Adresse, sonst die auf dieser Maschine.
+
+    Der Import steht im Aufruf: :mod:`app.core.discover` liest die
+    Nutzerkonfiguration, und eine Testumgebung lenkt die noch um.
+    """
+    from app.core import discover
+
+    return discover.service_url("ollama", OLLAMA_URL)
+
+
 @dataclass(slots=True)
 class OllamaBackend:
     """A local model. §27: tool calling needs a big enough model — small ones
@@ -260,7 +271,9 @@ class OllamaBackend:
     not in a hopeful default."""
 
     model: str = DEFAULT_OLLAMA_MODEL
-    url: str = OLLAMA_URL
+    # Wie bei ComfyUI: die Adresse darf woanders hinzeigen, wenn das Modell auf
+    # einem zweiten Rechner läuft (§38).
+    url: str = field(default_factory=lambda: _configured_ollama_url())
     transport: Transport = post_json
 
     @property

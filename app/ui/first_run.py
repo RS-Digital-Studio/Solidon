@@ -142,11 +142,18 @@ def _missing_text() -> str:
 
 
 def _tool_text() -> str:
-    """What is installed and what each one would be for (§38)."""
+    """Was installiert ist und wofür es gut wäre (§38).
+
+    Statt „nicht gefunden" steht hier der Satz, der sagt, was weiterhilft: ein
+    Dienst muss laufen, ein Programm an ungewöhnlicher Stelle wird angegeben.
+    Beides führt zu derselben Liste unter *Hilfe → Zusätzliche Programme*.
+    """
     lines = []
     for state in tools.survey():
         marker = FOUND if state.available else MISSING
-        where = str(state.path) if state.path else tr("nicht gefunden")
+        where = str(state.path) if state.path else state.tool.address()
+        if not state.available:
+            where = str(state.explain())
         lines.append(f"{marker} {state.tool.title}: {where}\n   {state.tool.what_for}")
     return "\n".join(lines)
 

@@ -39,6 +39,66 @@ def test_a_missing_tool_is_not_an_error() -> None:
     assert missing.path() is None
 
 
+def test_a_service_is_asked_on_its_port_not_looked_for_on_the_disk() -> None:
+    """ComfyUI kann portabel in ``D:\\AI`` liegen — dort findet es keine Suche.
+
+    Formwerk startet es ohnehin nie, es redet über HTTP mit ihm. Die Frage ist
+    also, ob etwas antwortet, und nicht, ob eine Datei existiert.
+    """
+    service = tools.ExternalTool(
+        id="x", title="X", what_for="y", kind="service", url="http://127.0.0.1:9"
+    )
+
+    assert not service.available
+    assert not service.running()
+
+
+def test_a_service_that_answers_is_available() -> None:
+    import socket
+
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        port = server.getsockname()[1]
+        service = tools.ExternalTool(
+            id="x", title="X", what_for="y", kind="service", url=f"http://127.0.0.1:{port}"
+        )
+
+        assert service.available
+
+
+def test_installed_but_not_running_is_its_own_answer() -> None:
+    """Der Satz dazwischen ist der, den jemand lesen muss, um weiterzukommen."""
+    service = tools.ExternalTool(
+        id="x", title="X", what_for="y", kind="service", url="http://127.0.0.1:9"
+    )
+    state = tools.ToolState(tool=service, path=Path("ollama.exe"), running=False)
+
+    assert state.installed
+    assert not state.available
+    assert "läuft" in str(state.explain())
+
+
+def test_every_state_explains_what_helps_next() -> None:
+    """§33.1: kein Zustand ohne einen Satz, der sagt, was als Nächstes geht."""
+    for state in tools.survey():
+        assert str(state.explain()).strip(), state.tool.id
+
+
+def test_a_tool_can_be_pointed_at_by_hand(tmp_path: Path) -> None:
+    """Der Weg, der immer geht — sonst ist eine ungewöhnliche Installation eine Sackgasse."""
+    program = tmp_path / "elegoo-slicer.exe"
+    program.write_text("")
+    tools.set_location("slicer", str(program))
+
+    slicer = tools.by_id("slicer")
+    assert slicer is not None
+    assert slicer.path() == program
+
+    tools.set_location("slicer", "")
+    assert slicer.path() is None
+
+
 # --- the first run (§38) --------------------------------------------------------------
 
 

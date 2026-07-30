@@ -31,7 +31,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final, Literal
 
-from app.core import tools
+from app.core import discover, tools
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
 
@@ -106,7 +106,11 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
     ),
     Requirement(
         id="slicer",
-        title="OrcaSlicer",
+        # Nicht „OrcaSlicer": erkannt wird jeder der üblichen Slicer, und wer
+        # ElegooSlicer oder PrusaSlicer benutzt, soll hier nicht lesen, ihm
+        # fehle ein Programm. Installiert wird OrcaSlicer, weil eine Vorgabe
+        # sein muss — dranstehen tut das am Knopf.
+        title=_("Slicer"),
         what_for=_("Für die Druckdatei und die Gegenprobe aus dem G-Code."),
         kind="program",
         package="SoftFever.OrcaSlicer",
@@ -142,7 +146,12 @@ class InstallResult:
 
 
 def present(requirement: Requirement) -> bool:
-    """Is it already there? Packages are imported, programs looked up on the path."""
+    """Ist es schon da?
+
+    Pakete werden importiert, Programme gesucht. Bei einem Dienst zählt hier
+    „auf dem Rechner" und nicht „läuft gerade" — sonst böte diese Liste an, ein
+    ComfyUI ein zweites Mal zu installieren, das nur nicht gestartet ist.
+    """
     if requirement.kind == "package":
         if not requirement.module:
             return False
@@ -152,10 +161,19 @@ def present(requirement: Requirement) -> bool:
             return False
         return True
 
-    for tool in tools.TOOLS:
-        if tool.id == requirement.id:
-            return tool.available
-    return False
+    tool = tools.by_id(requirement.id)
+    return tools.state_of(tool).installed if tool is not None else False
+
+
+def location_of(requirement: Requirement) -> str:
+    """Wo es liegt oder unter welcher Adresse es erreichbar ist — für die Zeile daneben."""
+    tool = tools.by_id(requirement.id)
+    if tool is None:
+        return ""
+    found = tool.path()
+    if found is not None:
+        return str(found)
+    return tool.address()
 
 
 def missing() -> list[Requirement]:
@@ -219,6 +237,11 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
     output = (finished.stdout or "") + (finished.stderr or "")
     for line in output.splitlines()[-20:]:
         progress(line)
+
+    # Die Suche merkt sich, was sie nicht gefunden hat. Nach einer Installation
+    # ist diese Antwort veraltet — sonst bliebe das gerade Installierte bis zum
+    # nächsten Start unsichtbar.
+    discover.forget_cache()
 
     done = finished.returncode == 0 and present(requirement)
     if finished.returncode == 0 and not done:

@@ -139,7 +139,7 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # Platform branches are unreachable on every platform except one — that is the point.
-module = ["app.core.paths"]
+module = ["app.core.paths", "app.core.discover"]
 warn_unreachable = false
 
 [[tool.mypy.overrides]]
