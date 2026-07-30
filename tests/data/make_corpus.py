@@ -268,6 +268,58 @@ def two_components() -> None:
     write(trimesh.util.concatenate([box, fragment]), "two_components.stl")
 
 
+def generated_figure() -> None:
+    """Was ein Bildmodell abliefert — und was daran zu reparieren ist (§34, Weg 3).
+
+    ``broken_open.stl`` fehlt eine ganze Wand; die *kann* keine Reparatur
+    schließen, und das ist dort der Punkt. Für Weg 3 braucht es das andere
+    Bild: die Fehler, die ein Generator wirklich macht, und die alle behebbar
+    sind.
+
+    Drei davon stecken hier drin, jeder aus einem anderen Grund:
+
+    * **einzelne fehlende Dreiecke.** Marching Cubes über ein Dichtefeld lässt
+      Zellen aus, in denen sich der Schwellwert nicht entscheiden konnte. Auf
+      einem feinen Netz ist jedes davon ein Loch in Dreiecksgröße — genau der
+      Fall, den die Kette schließt.
+    * **verdrehte Normalen.** Ein Teil der Dreiecke zeigt nach innen, weil das
+      Feld an der Stelle das Vorzeichen wechselt.
+    * **ein loser Splitter.** Ein Fetzen ohne Volumen, der irgendwo neben dem
+      Körper schwebt.
+
+    Die Form selbst ist organisch — drei verschmolzene Kugeln, wie ein
+    Generator sie liefert, und nicht der Quader, den niemand erzeugen lassen
+    würde.
+    """
+    body = trimesh.creation.icosphere(subdivisions=3, radius=10.0)
+    head = trimesh.creation.icosphere(subdivisions=3, radius=6.0)
+    head.apply_translation((0.0, 0.0, 12.0))
+    arm = trimesh.creation.icosphere(subdivisions=3, radius=4.0)
+    arm.apply_translation((9.0, 0.0, 4.0))
+    figure = trimesh.boolean.union([body, head, arm])
+
+    faces = figure.faces.copy()
+    # Fünf einzelne Löcher, weit auseinander, damit keine zwei zu einer Wand
+    # zusammenwachsen. Der Startwert ist fest: dieselbe Datei soll bei jedem
+    # Lauf dieselbe sein (AGENTS.md Regel 9).
+    rng = np.random.default_rng(20260731)
+    missing = rng.choice(len(faces), size=5, replace=False)
+    faces = np.delete(faces, missing, axis=0)
+
+    # Ein Fünftel der Dreiecke zeigt nach innen.
+    flipped = rng.choice(len(faces), size=len(faces) // 5, replace=False)
+    faces[flipped] = faces[flipped][:, ::-1]
+
+    broken = trimesh.Trimesh(vertices=figure.vertices, faces=faces, process=False)
+
+    splinter = trimesh.Trimesh(
+        vertices=np.array([[18.0, 0.0, 0.0], [18.4, 0.0, 0.0], [18.2, 0.3, 0.2]]),
+        faces=np.array([[0, 1, 2]]),
+        process=False,
+    )
+    write(trimesh.util.concatenate([broken, splinter]), "generated_figure.stl")
+
+
 if __name__ == "__main__":
     cube_clean()
     bracket_inch()
@@ -277,6 +329,7 @@ if __name__ == "__main__":
     degenerate()
     broken_open()
     two_components()
+    generated_figure()
     broken_selfint()
     colored_3mf()
     island_tower()

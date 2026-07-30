@@ -107,15 +107,21 @@ def way_two() -> Project:
 
 
 def way_three() -> Project:
-    """Preparing a generated mesh: repair chain, then on the bed (§2.2).
+    """Ein erzeugtes Netz aufbereiten: Reparaturkette, dann auf das Bett (§2.2).
 
-    The way is the real one — the same two transactions a generation makes,
-    with the prompt and the starting value in the source (§27). Only the
-    generator is scripted: an example project that needs a graphics card to be
-    built is no example.
+    Der Weg ist der echte — dieselben zwei Transaktionen, die eine Erzeugung
+    macht, mit Prompt und Startwert in der Quelle (§27). Nur der Generator ist
+    geskriptet: ein Beispielprojekt, für dessen Bau eine Grafikkarte nötig ist,
+    ist kein Beispiel.
+
+    Das Netz ist ``generated_figure.stl`` und nicht ``broken_open.stl``. Dem
+    zweiten fehlt eine ganze Wand — das kann keine Reparatur schließen, und ein
+    Beispiel, das nach der Reparatur immer noch „nicht geschlossen" meldet,
+    führt vor, dass es nicht funktioniert. Die Figur bringt die Fehler mit, die
+    ein Generator wirklich macht, und danach ist sie zu.
     """
     project = new_project("centauri-carbon-2", "petg")
-    backend = ScriptedMeshBackend(fallback=(CORPUS / "broken_open.stl").read_bytes())
+    backend = ScriptedMeshBackend(fallback=(CORPUS / "generated_figure.stl").read_bytes())
     generation = from_text(project, backend, "eine kleine Figur", seed=7)
 
     History(project.document).apply(

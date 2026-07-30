@@ -144,6 +144,79 @@ def test_detection_names_everything_it_found() -> None:
     assert all(identifier == feature.id for identifier, feature in features.items())
 
 
+# --- was kein Merkmal ist ---------------------------------------------------------
+
+
+def generated_body() -> MeshData:
+    """Ein erzeugtes Netz, wie ein Bildmodell es liefert (siehe tests/data/README)."""
+    return normalise(
+        read_mesh((MESHES / "generated_figure.stl").read_bytes(), ".stl"), "mm"
+    ).mesh
+
+
+def test_a_generated_mesh_does_not_drown_in_faces() -> None:
+    """Der Fund, aus dem ``MIN_FACE_AREA`` entstand.
+
+    Der relative Anteil an der größten Fläche filtert nur bei einem
+    konstruierten Teil. Auf einem gleichmäßig facettierten Netz ist jede Facette
+    „mindestens zwei Prozent der größten", und die Kugel meldete 180 Flächen.
+    Danach war jede Zuordnung mehrdeutig und die Auswertung hielt bei jeder
+    Operation an (§21.3) — Weg 3 kam nach der Reparatur nicht weiter.
+    """
+    features = detect(generated_body())
+
+    faces = [entry for entry in features.values() if entry.kind == "face"]
+    assert not faces, f"{len(faces)} Flächen auf einem organischen Netz"
+
+
+def test_a_scratch_is_not_a_bore() -> None:
+    """Eine Düse legt 0,4 mm breite Bahnen — 0,05 mm hat kein Werkzeug gemacht."""
+    holes = detect_holes(generated_body())
+
+    assert all(entry.params["diameter"] >= 0.5 for entry in holes)
+
+
+def test_the_faces_of_a_real_part_survive_the_limit() -> None:
+    """Die Grenze darf nur das treffen, was sie treffen soll."""
+    faces = detect_faces(plate())
+
+    assert len(faces) == 6, "eine Platte hat sechs Seiten, und alle sind Flächen"
+
+
+def test_a_face_keeps_its_centre_when_it_gets_a_hole() -> None:
+    """Der Mittelpunkt gehört der Form, nicht der Vernetzung.
+
+    Als Mittel über die Dreiecksschwerpunkte wanderte er zum Loch, weil dort
+    viele kleine Dreiecke entstehen: bei einem 60 × 40er Deckel um 16,8 mm.
+    Die Zuordnung (§21.2) hielt die Oberseite danach für eine andere Fläche und
+    meldete die alte als verwaist — vier Warnungen im Beispielprojekt, ohne
+    dass jemand etwas falsch gemacht hätte.
+    """
+    from app.core.geom.prepare import drill
+    from app.core.knowledge import profiles
+
+    box = trimesh.creation.box(extents=(60.0, 40.0, 6.0))
+    box.apply_translation((0.0, 0.0, 3.0))
+    plain = MeshData.of(box)
+    drilled = drill(
+        plain,
+        position=(-20.0, 0.0, 6.0),
+        axis="z",
+        diameter=4.5,
+        depth=0.0,
+        profile=profiles.make_profile("centauri-carbon-2", "petg"),
+    ).mesh
+
+    def top_of(mesh: MeshData) -> tuple[float, ...]:
+        top = max(detect_faces(mesh), key=lambda face: face.params["centre"][2])
+        return tuple(top.params["centre"])
+
+    before, after = top_of(plain), top_of(drilled)
+
+    moved = sum((a - b) ** 2 for a, b in zip(before, after, strict=True)) ** 0.5
+    assert moved < 1.0, f"der Mittelpunkt wanderte um {moved:.1f} mm"
+
+
 def plate_with_pin() -> MeshData:
     """A plate with a 6 mm pin standing on it — the counterpart of a bore."""
     base = trimesh.creation.box(extents=(40.0, 40.0, 8.0))

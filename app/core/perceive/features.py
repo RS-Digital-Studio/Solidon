@@ -38,6 +38,27 @@ MIN_PATCH_FACES = 6
 #: Faces smaller than this share of the largest one are not reported separately.
 MIN_FACE_SHARE = 0.02
 
+#: …und unter dieser absoluten Größe erst recht nicht, egal wie groß der Rest ist.
+#:
+#: Der relative Anteil allein hilft nur bei einem konstruierten Teil, wo eine
+#: Fläche gegen eine viel größere antritt. Auf einem erzeugten Netz sind alle
+#: Facetten gleich groß, also ist jede „mindestens zwei Prozent der größten" —
+#: eine Kugel aus 3 400 Dreiecken meldete daraufhin 180 Flächen. Danach war
+#: jede Zuordnung mehrdeutig, und die Auswertung hielt bei jeder Operation an
+#: (§21.3), womit Weg 3 nach der Reparatur nicht weiterkam.
+#:
+#: Zwei mal zwei Millimeter ist die kleinste Fläche, an der jemand etwas
+#: ansetzt: darunter passt weder ein Schraubenkopf noch ein lesbarer Buchstabe.
+MIN_FACE_AREA = 4.0
+
+#: Zylinder unter diesem Durchmesser sind keine Bohrungen, sondern Artefakte.
+#:
+#: Eine Düse legt 0,4 mm breite Bahnen; ein Loch von 0,05 mm hat kein Werkzeug
+#: gemacht und keines wird je hineinpassen. Auf einem erzeugten Netz entstehen
+#: solche Zylinderfits an jeder Stelle, an der ein paar Dreiecke zufällig um
+#: eine Achse herumstehen.
+MIN_HOLE_DIAMETER = 0.5
+
 #: …unless they are made of at least this many coplanar triangles. A cylinder
 #: cap comes out of the kernel as one triangle per segment, so counting them is
 #: what tells a small flat face apart from a slice of a curved one.
@@ -117,7 +138,11 @@ def _cylinders(mesh: MeshData) -> list[tuple[CylinderFit, list[int]]]:
 def detect_holes(mesh: MeshData) -> list[Feature]:
     """Cylindrical patches whose normals point inwards (§21.1)."""
     body = mesh.raw
-    found = [entry for entry in _cylinders(mesh) if entry[0].inward]
+    found = [
+        entry
+        for entry in _cylinders(mesh)
+        if entry[0].inward and entry[0].radius * 2.0 >= MIN_HOLE_DIAMETER
+    ]
     return [
         Feature(
             id=f"hole_{number}",
@@ -304,14 +329,27 @@ def detect_faces(mesh: MeshData) -> list[Feature]:
     entries = [
         (facet, area)
         for facet, area in zip(facets, areas, strict=True)
-        if area >= largest * MIN_FACE_SHARE
+        if area >= largest * MIN_FACE_SHARE and area >= MIN_FACE_AREA
     ]
     entries.sort(key=lambda entry: -entry[1])
 
     features: list[Feature] = []
     for number, (facet, area) in enumerate(entries, start=1):
         normal = np.asarray(body.face_normals[facet[0]], dtype=float)
-        centre = np.asarray(body.triangles_center[facet], dtype=float).mean(axis=0)
+        # Flächengewichtet, nicht als Mittel über die Dreiecke: sonst hängt der
+        # Mittelpunkt an der Vernetzung statt an der Form. Eine Bohrung in eine
+        # Platte lässt rund um sich viele kleine Dreiecke entstehen, und der
+        # ungewichtete Mittelwert wandert daraufhin zum Loch — bei einem
+        # 60-auf-40-Deckel um 16,8 mm. Die Zuordnung (§21.2) hielt die Fläche
+        # danach für eine andere und meldete die alte als verwaist.
+        weights = np.asarray(body.area_faces[facet], dtype=float)
+        points = np.asarray(body.triangles_center[facet], dtype=float)
+        total = float(weights.sum())
+        centre = (
+            (points * weights[:, None]).sum(axis=0) / total
+            if total > EPS_GEOM
+            else points.mean(axis=0)
+        )
         features.append(
             Feature(
                 id=f"face_{number}",

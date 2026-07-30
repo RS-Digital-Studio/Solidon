@@ -338,11 +338,20 @@ def _with_features(
             )
 
     for old_id in matched.orphaned:
+        # Ein verschwundener Defekt ist kein Verlust, sondern das Ziel. Eine
+        # offene Kante, die nach dem Reparieren nicht mehr da ist, als Warnung
+        # zu melden, sagt dem Nutzer das Gegenteil von dem, was passiert ist —
+        # und lässt jeden Weg-3-Bericht wie ein Fehlschlag aussehen.
+        defect = getattr(previous.get(old_id), "kind", "") == "edge_loop"
         findings.append(
             Finding(
-                code="perceive.orphaned",
-                severity="warning",
-                message=_("Ein Merkmal hat keinen Nachfolger mehr."),
+                code="perceive.mended" if defect else "perceive.orphaned",
+                severity="info" if defect else "warning",
+                message=(
+                    _("Eine offene Stelle ist geschlossen und damit fort.")
+                    if defect
+                    else _("Ein Merkmal hat keinen Nachfolger mehr.")
+                ),
                 object_id=entry.id,
                 op_id=operation.id,
                 values={"feature": old_id},
