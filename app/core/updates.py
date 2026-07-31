@@ -1,13 +1,13 @@
-"""The update notice (Bauplan §37.2).
+"""Der Update-Hinweis (Bauplan §37.2).
 
-A notice, not an automatic update: the application asks a version file and
-points at the download page. It never downloads anything, never runs anything,
-and never replaces itself — a program that updates itself is a program that can
-break itself while nobody is watching.
+Ein Hinweis, kein automatisches Update: die Anwendung fragt eine Versionsdatei
+und zeigt auf die Download-Seite. Sie lädt nie etwas herunter, führt nie etwas
+aus und ersetzt sich nie selbst — ein Programm, das sich selbst aktualisiert,
+ist eines, das sich kaputtmachen kann, während niemand hinsieht.
 
-The check is off unless someone switches it on. It is one request to one
-address, and asking is the only thing it does, but it is still a request that
-leaves the machine — so it is a decision, not a default.
+Die Prüfung ist aus, bis jemand sie einschaltet. Es ist eine Anfrage an eine
+Adresse, und Fragen ist alles, was sie tut — aber es bleibt eine Anfrage, die
+den Rechner verlässt. Also ist sie eine Entscheidung, keine Vorgabe.
 """
 
 from __future__ import annotations
@@ -22,16 +22,17 @@ from app.core.log import get_logger
 
 _log = get_logger(__name__)
 
-#: Where the version file lives. One address, one JSON object.
+#: Wo die Versionsdatei liegt. Eine Adresse, ein JSON-Objekt.
 VERSION_URL: Final = "https://formwerk.rsdigital.de/version.json"
 
-#: How long the check may take. It happens at start; nobody waits for it.
+#: Wie lange die Prüfung dauern darf. Sie läuft beim Start; niemand wartet
+#: auf sie.
 TIMEOUT_SECONDS: Final = 4.0
 
 
 @dataclass(frozen=True, slots=True)
 class Release:
-    """What the version file says."""
+    """Was die Versionsdatei sagt."""
 
     version: str
     url: str = ""
@@ -50,14 +51,14 @@ def _as_tuple(version: str) -> tuple[int, ...]:
 
 
 def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | None:
-    """Ask once. Any problem means "no answer", never an error dialog.
+    """Fragt einmal. Jedes Problem heißt „keine Antwort", nie ein Fehlerdialog.
 
-    An update notice that interrupts the start because a server was down would
-    be worse than no notice at all.
+    Ein Update-Hinweis, der den Start unterbricht, weil ein Server nicht
+    erreichbar war, wäre schlimmer als gar keiner.
     """
     try:
         payload = (fetch or _get)(url, {}, {})
-    except Exception as problem:  # a network fails in many ways, none of them ours
+    except Exception as problem:  # ein Netz scheitert auf viele Arten, keine davon ist unsere
         _log.info("update check did not answer: %s", problem)
         return None
 

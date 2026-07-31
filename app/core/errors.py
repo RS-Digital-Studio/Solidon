@@ -1,14 +1,15 @@
-"""Exception hierarchy (Bauplan §33.1).
+"""Die Ausnahmen-Hierarchie (Bauplan §33.1).
 
-An error never ends with "failed". It states, in this order: what did not work,
-why, and what is possible now — as clickable actions, not prose (§2.7).
+Ein Fehler endet nie mit „fehlgeschlagen". Er nennt, in dieser Reihenfolge:
+was nicht ging, warum, und was jetzt möglich ist — als anklickbare Handlungen,
+nicht als Prosa (§2.7).
 
-Therefore every exception carries ``suggestions``. An exception without a
-suggestion is unfinished, and ``tests/test_errors.py`` says so.
+Darum trägt jede Ausnahme ``suggestions``. Eine Ausnahme ohne Vorschlag ist
+unfertig, und ``tests/test_errors.py`` sagt das auch.
 
-A programming error must never look like a user error, and the other way round:
-``UserError`` and ``GeometryError`` are shown as a suggestion, ``InternalError``
-opens the error report, ``ExternalToolError`` points at the setting.
+Ein Programmierfehler darf nie wie ein Bedienfehler aussehen, und umgekehrt:
+``UserError`` und ``GeometryError`` erscheinen als Vorschlag, ``InternalError``
+öffnet den Fehlerbericht, ``ExternalToolError`` zeigt auf die Einstellung.
 """
 
 from __future__ import annotations
@@ -19,12 +20,12 @@ from typing import Any, ClassVar, Final
 from app.core.types import ObjectId, OpId, SolverStage, Vec3
 from app.i18n import TranslatableText, _
 
-# --- Actions -------------------------------------------------------------------
+# --- Handlungen ------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class Action:
-    """A clickable way out. ``id`` is what a surface binds its handler to."""
+    """Ein anklickbarer Ausweg. An ``id`` bindet eine Oberfläche ihren Handler."""
 
     id: str
     label: TranslatableText | str
@@ -47,20 +48,21 @@ REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True
 
 
 class OperationCancelled(Exception):
-    """The user cancelled. Not an error, and never shown as one (§15.6)."""
+    """Der Nutzer hat abgebrochen. Kein Fehler, und nie als einer
+    gezeigt (§15.6)."""
 
 
 def _with_values(kwargs: dict[str, Any], **extra: Any) -> dict[str, Any]:
-    """Merge the values a subclass knows with whatever the caller passed."""
+    """Vereint die Werte, die eine Unterklasse kennt, mit denen des Aufrufers."""
     kwargs["values"] = {**extra, **(kwargs.pop("values", None) or {})}
     return kwargs
 
 
-# --- Base ----------------------------------------------------------------------
+# --- Basis ---------------------------------------------------------------------
 
 
 class AppError(Exception):
-    """Base of every reportable error: title, cause, suggestions."""
+    """Die Basis jedes meldbaren Fehlers: Titel, Ursache, Vorschläge."""
 
     default_title: ClassVar[TranslatableText] = _("Der Vorgang ist nicht durchgelaufen.")
     default_suggestions: ClassVar[tuple[Action, ...]] = (CANCEL,)
@@ -84,7 +86,8 @@ class AppError(Exception):
         super().__init__(str(self.title))
 
     def as_dict(self) -> dict[str, Any]:
-        """Serialisable form for log, report and error container (§16.2, §33.2)."""
+        """Serialisierbare Form für Protokoll, Prüfbericht und
+        Fehlercontainer (§16.2, §33.2)."""
         return {
             "type": type(self).__name__,
             "title": str(self.title),
@@ -96,7 +99,7 @@ class AppError(Exception):
         }
 
 
-# --- User errors: the input was not allowed — correctable ----------------------
+# --- Bedienfehler: die Eingabe war so nicht zulässig — korrigierbar ------------
 
 
 class UserError(AppError):
@@ -105,7 +108,7 @@ class UserError(AppError):
 
 
 class ValidationError(UserError):
-    """A parameter violated its schema (§10)."""
+    """Ein Parameter hat sein Schema verletzt (§10)."""
 
     default_title: ClassVar[TranslatableText] = _(
         "Ein Wert liegt außerhalb des zulässigen Bereichs."
@@ -153,7 +156,7 @@ class SketchConflictError(UserError):
 
 
 class AmbiguityError(UserError):
-    """Several candidates fit — ask instead of guessing (Leitprinzip 6)."""
+    """Mehrere Kandidaten passen — fragen statt raten (Leitprinzip 6)."""
 
     default_title: ClassVar[TranslatableText] = _("Die Angabe ist nicht eindeutig.")
     default_suggestions: ClassVar[tuple[Action, ...]] = (CHOOSE, CANCEL)
@@ -174,7 +177,8 @@ class AmbiguityError(UserError):
 
 
 class UnitUnknownError(UserError):
-    """STL carries no unit and the heuristic was not sure enough (§17.1)."""
+    """STL trägt keine Einheit, und die Heuristik war sich nicht sicher
+    genug (§17.1)."""
 
     default_title: ClassVar[TranslatableText] = _(
         "Die Einheit der Datei ließ sich nicht bestimmen."
@@ -194,7 +198,7 @@ class UnitUnknownError(UserError):
         )
 
 
-# --- Geometry errors: the geometry did not allow it — with a suggestion --------
+# --- Geometriefehler: die Geometrie ließ es nicht zu — mit Vorschlag -----------
 
 
 class GeometryError(AppError):
@@ -203,7 +207,8 @@ class GeometryError(AppError):
 
 
 class NotManifoldError(GeometryError):
-    """Open edges or non-manifold geometry where a solid was needed."""
+    """Offene Kanten oder nicht-mannigfaltige Geometrie, wo ein Volumenkörper
+    gebraucht wurde."""
 
     default_title: ClassVar[TranslatableText] = _("Das Modell ist an mehreren Stellen offen.")
 
@@ -221,7 +226,7 @@ class NotManifoldError(GeometryError):
 
 
 class BooleanFailedError(GeometryError):
-    """The fallback chain ran out of stages (§17.2)."""
+    """Der Rückfallkette sind die Stufen ausgegangen (§17.2)."""
 
     default_title: ClassVar[TranslatableText] = _(
         "Die boolesche Operation ist auf allen Stufen gescheitert."
@@ -249,7 +254,7 @@ class BooleanFailedError(GeometryError):
 
 
 class OutOfBuildVolume(GeometryError):
-    """The object does not fit the configured build volume (§18.6)."""
+    """Das Objekt passt nicht in den eingestellten Bauraum (§18.6)."""
 
     default_title: ClassVar[TranslatableText] = _("Das Objekt passt nicht in den Bauraum.")
     default_suggestions: ClassVar[tuple[Action, ...]] = (
@@ -274,11 +279,12 @@ class OutOfBuildVolume(GeometryError):
         self.printer = printer
 
 
-# --- External tools ------------------------------------------------------------
+# --- Externe Programme -----------------------------------------------------------
 
 
 class ExternalToolError(AppError):
-    """OpenSCAD, slicer, ComfyUI or an LLM did not answer as expected (§27, §28)."""
+    """OpenSCAD, Slicer, ComfyUI oder ein LLM hat nicht wie erwartet
+    geantwortet (§27, §28)."""
 
     default_title: ClassVar[TranslatableText] = _("Ein externes Programm hat nicht geantwortet.")
     default_suggestions: ClassVar[tuple[Action, ...]] = (OPEN_SETTINGS, RETRY, CANCEL)
@@ -296,11 +302,12 @@ class ExternalToolError(AppError):
         self.exit_code = exit_code
 
 
-# --- Internal ------------------------------------------------------------------
+# --- Intern --------------------------------------------------------------------
 
 
 class InternalError(AppError):
-    """A programming error. Offer the report, do not blame the user (§33.1)."""
+    """Ein Programmierfehler. Den Bericht anbieten, nicht dem Nutzer die
+    Schuld geben (§33.1)."""
 
     default_title: ClassVar[TranslatableText] = _(
         "Im Programm ist ein unerwarteter Fehler aufgetreten."
@@ -308,19 +315,20 @@ class InternalError(AppError):
     default_suggestions: ClassVar[tuple[Action, ...]] = (REPORT_ERROR, SHOW_DETAILS, CANCEL)
 
 
-#: Exception types that mean the *code* is wrong, not the world.
+#: Ausnahmearten, die bedeuten: der *Code* ist falsch, nicht die Welt.
 #:
-#: A kernel that cannot solve a boolean, a module that is not installed, a
-#: network that is down: those are answers, and the places that expect them
-#: catch broadly and carry on. The cost of catching broadly is that a wrong call
-#: looks exactly the same — and that is not a theory. The convex decomposition of
-#: §22.3 passed a parameter this V-HACD does not have; the ``TypeError`` landed
-#: in a handler meant for "the module is optional", the function returned an
-#: empty list, its test skipped itself for the same reason, and the hint path of
-#: the parting plane search was dead for two phases behind a green suite.
+#: Ein Kern, der eine Boolesche Op nicht löst, ein Modul, das nicht installiert
+#: ist, ein Netz, das nicht antwortet: das sind Antworten, und die Stellen, die
+#: sie erwarten, fangen breit und machen weiter. Der Preis des breiten Fangens
+#: ist, dass ein falscher Aufruf genauso aussieht — und das ist keine Theorie.
+#: Die konvexe Zerlegung aus §22.3 übergab einen Parameter, den dieses V-HACD
+#: nicht hat; der ``TypeError`` landete in einem Handler für „das Modul ist
+#: optional", die Funktion gab eine leere Liste zurück, ihr Test übersprang
+#: sich aus demselben Grund, und der Hinweispfad der Trennebenensuche war zwei
+#: Phasen lang tot — hinter einer grünen Suite.
 #:
-#: So every handler that wraps a call whose arguments come from here lets these
-#: three through::
+#: Darum lässt jeder Handler, der einen Aufruf mit Argumenten von hier
+#: umschließt, diese drei durch::
 #:
 #:     try:
 #:         ...
@@ -329,6 +337,6 @@ class InternalError(AppError):
 #:     except Exception as problem:
 #:         ...
 #:
-#: Not a style rule: it is the difference between a bug that shows up on the
-#: first run and one that shows up two phases later.
+#: Keine Stilregel: es ist der Unterschied zwischen einem Fehler, der beim
+#: ersten Lauf auffällt, und einem, der zwei Phasen später auffällt.
 PROGRAMMING_ERRORS: Final = (TypeError, AttributeError, NameError)

@@ -1,14 +1,16 @@
-"""Auto split as a transaction (Bauplan §25, §14, §22.3).
+"""Auto Split als Transaktion (Bauplan §25, §14, §22.3).
 
-The search decides *where* to cut; this decides *what goes on the stack*. One
-``split_pinned`` operation per cut, in the order the search made them — so
-every parting plane stays a number somebody can change afterwards, and one undo
-takes the whole split back.
+Die Suche entscheidet, *wo* geschnitten wird; hier entscheidet sich, *was auf
+den Stapel kommt*. Eine ``split_pinned``-Operation je Schnitt, in der
+Reihenfolge, in der die Suche sie gemacht hat — so bleibt jede Trennebene eine
+Zahl, die jemand nachträglich ändern kann, und ein Undo nimmt die ganze
+Teilung zurück.
 
-The fit pairs are made here too, and that is the reason this is not simply the
-operation itself: fits live in the document (§14), evaluation is a pure
-function and does not write to it (§15.1). Auto split is where pin and bore
-meet, so it is where the pairs belong — §14 says as much.
+Die Passungspaare entstehen auch hier, und das ist der Grund, warum das nicht
+einfach die Operation selbst ist: Passungen leben im Dokument (§14), die
+Auswertung ist eine reine Funktion und schreibt nicht hinein (§15.1). Auto
+Split ist die Stelle, an der Stift und Bohrung sich treffen, also gehören die
+Paare hierher — §14 sagt genau das.
 """
 
 from __future__ import annotations
@@ -37,7 +39,7 @@ _log = get_logger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class SplitPlan:
-    """What auto split would do, before anything is applied."""
+    """Was Auto Split tun würde, bevor irgendetwas angewandt ist."""
 
     drafts: tuple[OperationDraft, ...]
     outcome: SplitOutcome
@@ -49,7 +51,7 @@ class SplitPlan:
 
 @dataclass(slots=True)
 class SplitApplied:
-    """What it did: the pieces, the fit pairs, and what is worth reporting."""
+    """Was es getan hat: die Stücke, die Passungspaare, und was zu melden ist."""
 
     object_ids: list[ObjectId]
     fits: list[Fit] = field(default_factory=list)
@@ -64,11 +66,12 @@ def plan_split(
     *,
     pins: int = PIN_COUNT,
 ) -> SplitPlan:
-    """Search for the cuts and turn them into operations.
+    """Sucht die Schnitte und macht Operationen daraus.
 
-    The object ids the cuts apply to are not known yet — the history hands
-    those out. What is known is the *order*, and that is enough: the input of
-    the next cut is one of the two pieces the previous one made.
+    Die Objekt-IDs, auf die die Schnitte wirken, sind noch nicht bekannt — die
+    vergibt der Verlauf. Bekannt ist die *Reihenfolge*, und die genügt: die
+    Eingabe des nächsten Schnitts ist eines der zwei Stücke, die der vorige
+    gemacht hat.
     """
     outcome = split_to_fit(mesh, profile)
     drafts = [
@@ -90,7 +93,7 @@ def apply_split(
     *,
     pins: int = PIN_COUNT,
 ) -> SplitApplied:
-    """Cut until it fits, and record every seam as a fit pair (§14)."""
+    """Schneidet, bis es passt, und hält jede Naht als Passungspaar fest (§14)."""
     plan = plan_split(mesh, object_id, profile, pins=pins)
     if not plan.drafts:
         return SplitApplied(object_ids=[object_id], findings=list(plan.outcome.findings))
@@ -125,11 +128,12 @@ def apply_split(
 def _pairs(
     first: ObjectId, second: ObjectId, pins: int, profile: Profile, made_so_far: int
 ) -> list[Fit]:
-    """One pair per pin: the pin on one half, the bore on the other.
+    """Ein Paar je Stift: der Stift auf der einen Hälfte, die Bohrung auf der
+    anderen.
 
-    The tolerance is a reference into the material profile, never the number
-    itself (AGENTS.md rule 7) — a calibration afterwards has to reach a part
-    that was split before it.
+    Die Toleranz ist ein Verweis ins Materialprofil, nie die Zahl selbst
+    (AGENTS.md Regel 7) — eine Kalibrierung danach muss ein Teil erreichen,
+    das vor ihr geteilt wurde.
     """
     return [
         Fit(

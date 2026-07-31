@@ -1,17 +1,18 @@
-"""The three example projects (Bauplan §37.2, §2.2).
+"""Die drei Beispielprojekte (Bauplan §37.2, §2.2).
 
-"Documentation, acceptance test and start screen content at the same time." So
-they are not a folder of files someone once exported — they are built from the
-same operations everything else uses, by :mod:`tools.make_examples`, and the
-suite opens and computes all three.
+„Dokumentation, Abnahmetest und Startbildschirm-Inhalt zugleich." Sie sind
+also kein Ordner mit Dateien, die jemand irgendwann exportiert hat — sie
+entstehen aus denselben Operationen wie alles andere, gebaut von
+:mod:`tools.make_examples`, und die Suite öffnet und rechnet alle drei.
 
-One per way from §2.2:
+Eines je Weg aus §2.2:
 
-* **Weg 1** — adapting a foreign model: import, repair, put it on the bed, drill.
-* **Weg 2** — building new: parameters, a body, parts from the library.
-* **Weg 3** — generating: a mesh from outside goes through the repair chain and
-  is split. The generator itself is P9; the example carries a finished mesh, and
-  says so rather than pretending it produced one.
+* **Weg 1** — fremdes Modell anpassen: einlesen, reparieren, aufs Bett,
+  bohren.
+* **Weg 2** — neu bauen: Parameter, ein Körper, Bausteine aus der Bibliothek.
+* **Weg 3** — erzeugen: ein Mesh von außen läuft durch die Reparaturkette und
+  wird geteilt. Der Generator selbst ist P9; das Beispiel bringt ein fertiges
+  Mesh mit und sagt das, statt so zu tun, als hätte es eines erzeugt.
 """
 
 from __future__ import annotations
@@ -23,13 +24,13 @@ from typing import Final
 from app.branding import PROJECT_SUFFIX
 from app.i18n import TranslatableText, _
 
-#: Where the examples live in the installation.
+#: Wo die Beispiele in der Installation liegen.
 EXAMPLES_DIRNAME: Final = "examples"
 
 
 @dataclass(frozen=True, slots=True)
 class Example:
-    """One example project, as the start screen shows it."""
+    """Ein Beispielprojekt, wie der Startbildschirm es zeigt."""
 
     id: str
     title: TranslatableText | str
@@ -112,12 +113,13 @@ EXAMPLES: Final[tuple[Example, ...]] = (
 
 
 def directory() -> Path:
-    """Where the shipped examples are. Next to the package, not in the user's data."""
+    """Wo die mitgelieferten Beispiele liegen. Neben dem Paket, nicht in den
+    Nutzerdaten."""
     return Path(__file__).resolve().parent.parent / EXAMPLES_DIRNAME
 
 
 def paths() -> tuple[Path, ...]:
-    """The examples that are actually there — a missing one is not an error."""
+    """Die Beispiele, die wirklich da sind — ein fehlendes ist kein Fehler."""
     folder = directory()
     return tuple(
         folder / example.filename for example in EXAMPLES if (folder / example.filename).is_file()

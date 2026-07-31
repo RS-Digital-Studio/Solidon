@@ -1,13 +1,14 @@
-"""Local logging (Bauplan §33.2).
+"""Lokales Protokoll (Bauplan §33.2).
 
-A rotating file in the user directory, nothing else. The line to the forbidden
-telemetry is sharp: the log leaves this machine only when the user attaches it to
-an error report themselves.
+Eine rotierende Datei im Nutzerverzeichnis, sonst nichts. Die Linie zur
+verbotenen Telemetrie ist scharf: das Protokoll verlässt diesen Rechner nur,
+wenn der Nutzer es selbst an einen Fehlerbericht anhängt.
 
-Levels: ``debug`` only when the switch is set, ``info`` for op runs and file
-access, ``warning`` for fallback stages and findings, ``error`` for exceptions.
+Stufen: ``debug`` nur mit gesetztem Schalter, ``info`` für Op-Läufe und
+Dateizugriffe, ``warning`` für Rückfallstufen und Befunde, ``error`` für
+Ausnahmen.
 
-No geometry in the log — metrics only.
+Keine Geometrie im Protokoll — nur Kennzahlen.
 """
 
 from __future__ import annotations
@@ -28,13 +29,14 @@ _configured = False
 
 
 def log_path(directory: Path | None = None) -> Path:
-    """Where the log file is. Read by the error report, and by nothing else —
-    the file never leaves the machine on its own (§33.2)."""
+    """Wo die Protokolldatei liegt. Liest der Fehlerbericht, und sonst
+    niemand — von allein verlässt die Datei den Rechner nie (§33.2)."""
     return (directory or user_log_dir()) / _LOG_FILE
 
 
 class _OpFormatter(logging.Formatter):
-    """Appends the op number where one is known — the anchor for later reading."""
+    """Hängt die Op-Nummer an, wo eine bekannt ist — der Anker fürs spätere
+    Lesen."""
 
     def format(self, record: logging.LogRecord) -> str:
         text = super().format(record)
@@ -43,7 +45,7 @@ class _OpFormatter(logging.Formatter):
 
 
 def configure(debug: bool = False, directory: Path | None = None, to_console: bool = True) -> Path:
-    """Set up the rotating file log once and return the file path."""
+    """Richtet das rotierende Dateiprotokoll einmal ein und gibt den Pfad zurück."""
     global _configured
     target = ensure_dir(directory or user_log_dir()) / _LOG_FILE
     logger = logging.getLogger(ROOT_LOGGER)
@@ -73,7 +75,7 @@ def configure(debug: bool = False, directory: Path | None = None, to_console: bo
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Logger for a module, always below the application root."""
+    """Logger für ein Modul, immer unterhalb der Anwendungswurzel."""
     if name == ROOT_LOGGER or name.startswith(f"{ROOT_LOGGER}."):
         return logging.getLogger(name)
     return logging.getLogger(f"{ROOT_LOGGER}.{name}")

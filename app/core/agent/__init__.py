@@ -1,8 +1,9 @@
-"""Agent layer: context assembly, tools, transaction coupling (§26).
+"""Die Agentenschicht: Kontextaufbau, Werkzeuge, Transaktionskopplung (§26).
 
-The agent is not a chat bot with a 3D program attached. It works with exactly
-the operations the user has, sees exactly what the user sees, and everything it
-does arrives as one transaction that a single undo takes back.
+Der Agent ist kein Chatbot mit angehängtem 3D-Programm. Er arbeitet mit genau
+den Operationen, die der Nutzer hat, sieht genau, was der Nutzer sieht, und
+alles, was er tut, kommt als eine Transaktion an, die ein einziges Undo
+zurücknimmt.
 """
 
 from app.core.agent.apply import accept, discard, record, undo

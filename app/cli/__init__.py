@@ -1,1 +1,1 @@
-"""Command line entry point on top of the core (§10, ROADMAP P0)."""
+"""Kommandozeilen-Einstieg oben auf dem Kern (§10, ROADMAP P0)."""

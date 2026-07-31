@@ -1,1 +1,1 @@
-"""Interchangeable LLM and mesh backends behind one interface each (§27)."""
+"""Austauschbare LLM- und Mesh-Backends hinter je einer Schnittstelle (§27)."""

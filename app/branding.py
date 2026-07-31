@@ -1,33 +1,33 @@
-"""Product identity in exactly one place (Bauplan §37.1).
+"""Die Produktidentität an genau einer Stelle (Bauplan §37.1).
 
-Everything that needs the name reads it from here, so a rename stays a one-line
-change — including the distribution name and the environment variables.
+Alles, was den Namen braucht, liest ihn hier — eine Umbenennung bleibt so eine
+Ein-Zeilen-Änderung, samt Distributionsname und Umgebungsvariablen.
 """
 
 from __future__ import annotations
 
 from typing import Final
 
-#: Product name. Decided 2026-07-27.
+#: Produktname. Entschieden am 27.07.2026.
 APP_NAME: Final = "Formwerk"
 
-#: Distribution name on PyPI and in the package metadata.
+#: Distributionsname auf PyPI und in den Paket-Metadaten.
 DISTRIBUTION_NAME: Final = "formwerk"
 
-#: Rights holder, as it appears in LICENSE and the about dialog.
+#: Rechteinhaber, wie er in LICENSE und im Über-Dialog steht.
 APP_VENDOR: Final = "RS Digital"
 
-#: Reverse-domain identifier for keyring entries and platform integration.
+#: Reverse-Domain-Kennung für Schlüsselbund-Einträge und Plattform-Integration.
 APP_ID: Final = "de.rsdigital.formwerk"
 
-#: Prefix for environment variables that belong to this application.
+#: Präfix der Umgebungsvariablen, die zu dieser Anwendung gehören.
 ENVIRONMENT_PREFIX: Final = "FORMWERK"
 
-#: Project container extension (Bauplan §16.1).
+#: Endung des Projektcontainers (Bauplan §16.1).
 PROJECT_SUFFIX: Final = ".p3d"
 
-#: Application version, mirrored into every project file as ``app_version``.
+#: Anwendungsversion, gespiegelt in jede Projektdatei als ``app_version``.
 APP_VERSION: Final = "0.0.1"
 
-#: Copyright line for LICENSE, about dialog and installers.
+#: Copyright-Zeile für LICENSE, Über-Dialog und Installer.
 COPYRIGHT: Final = f"Copyright (c) 2026 {APP_VENDOR}"

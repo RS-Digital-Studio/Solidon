@@ -1,4 +1,5 @@
-"""Operation registry (Bauplan §10): the single declaration every surface reads."""
+"""Das Register der Operationen (Bauplan §10): die eine Deklaration, die jede
+Oberfläche liest."""
 
 from app.core.registry.params import json_schema, op_params, param, validate
 from app.core.registry.registry import (

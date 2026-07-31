@@ -1,1 +1,2 @@
-"""Feature detection, analysis maps and the scene digest (§21, §18.4, §23)."""
+"""Merkmalserkennung, Analysekarten und der Steckbrief der Szene (§21,
+§18.4, §23)."""

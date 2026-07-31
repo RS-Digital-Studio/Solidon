@@ -1,7 +1,8 @@
-"""Where user data lives (Bauplan §38).
+"""Wo Nutzerdaten liegen (Bauplan §38).
 
-Everything the application writes stays on this machine: profiles, log, cache,
-own parts. Resolved without an extra dependency so the licence list stays short.
+Alles, was die Anwendung schreibt, bleibt auf diesem Rechner: Profile,
+Protokoll, Cache, eigene Bausteine. Ohne Zusatzabhängigkeit aufgelöst, damit
+die Lizenzliste kurz bleibt.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ def _windows_base(variable: str, fallback: str) -> Path:
 
 
 def user_data_dir() -> Path:
-    """Profiles, own parts, recovery containers."""
+    """Profile, eigene Bausteine, Wiederherstellungs-Container."""
     if sys.platform == "win32":
         return _windows_base("LOCALAPPDATA", "AppData/Local")
     if sys.platform == "darwin":
@@ -29,7 +30,8 @@ def user_data_dir() -> Path:
 
 
 def user_config_dir() -> Path:
-    """Settings the user changed. Credentials go to the system keyring instead."""
+    """Einstellungen, die der Nutzer geändert hat. Zugangsdaten gehen
+    stattdessen in den System-Schlüsselbund."""
     if sys.platform == "win32":
         return _windows_base("APPDATA", "AppData/Roaming")
     if sys.platform == "darwin":
@@ -39,7 +41,7 @@ def user_config_dir() -> Path:
 
 
 def user_cache_dir() -> Path:
-    """Disk cache over the op hash (§38). Safe to delete at any time."""
+    """Platten-Cache über den Op-Hash (§38). Darf jederzeit gelöscht werden."""
     if sys.platform == "win32":
         return _windows_base("LOCALAPPDATA", "AppData/Local") / "cache"
     if sys.platform == "darwin":
@@ -49,24 +51,25 @@ def user_cache_dir() -> Path:
 
 
 def user_log_dir() -> Path:
-    """Rotating local log (§33.2). Never sent anywhere."""
+    """Rotierendes lokales Protokoll (§33.2). Wird nie irgendwohin gesendet."""
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Logs" / APP_NAME
     return user_data_dir() / "logs"
 
 
 def user_parts_dir() -> Path:
-    """Own parts (§24.5). Executable code comes from here or the installation —
-    never from an opened project file."""
+    """Eigene Bausteine (§24.5). Ausführbarer Code kommt von hier oder aus der
+    Installation — nie aus einer geöffneten Projektdatei."""
     return user_data_dir() / "parts"
 
 
 def user_profiles_dir() -> Path:
-    """Printer and material profiles derived from the shipped starting set (§38)."""
+    """Drucker- und Materialprofile, abgeleitet vom mitgelieferten
+    Startbestand (§38)."""
     return user_config_dir() / "profiles"
 
 
 def ensure_dir(path: Path) -> Path:
-    """Create a directory including parents and return it."""
+    """Legt ein Verzeichnis samt Eltern an und gibt es zurück."""
     path.mkdir(parents=True, exist_ok=True)
     return path

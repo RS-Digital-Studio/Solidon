@@ -1,9 +1,10 @@
-"""Headless core: everything that computes, nothing that renders.
+"""Der kopflose Kern: alles, was rechnet, nichts, was zeichnet.
 
-Hard rule (Bauplan §8, AGENTS.md rule 1): no Qt below ``app.ui``. This package
-must stay importable on a machine without Qt installed; ``tests/test_core_isolation.py``
-enforces it.
+Harte Regel (Bauplan §8, AGENTS.md Regel 1): kein Qt unterhalb von ``app.ui``.
+Dieses Paket muss auf einem Rechner ohne installiertes Qt importierbar
+bleiben; ``tests/test_core_isolation.py`` erzwingt das.
 
-Communication with the outside world happens through ``OpContext`` only:
-``ctx.progress``, ``ctx.ask``, ``ctx.cancelled``. No global objects, no dialogs.
+Kommunikation nach außen läuft ausschließlich über den ``OpContext``:
+``ctx.progress``, ``ctx.ask``, ``ctx.cancelled``. Keine globalen Objekte,
+keine Dialoge.
 """

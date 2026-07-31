@@ -1,11 +1,11 @@
-"""Translation without Qt.
+"""Übersetzung ohne Qt.
 
-Operations, parts and errors are declared at import time, long before a language
-is chosen, so ``_()`` must not translate eagerly. It returns a lazy
-:class:`TranslatableText` that resolves when the text is actually displayed
-(Bauplan §4.1, AGENTS.md rule 20).
+Operationen, Bausteine und Fehler werden beim Import deklariert, lange bevor
+eine Sprache gewählt ist — ``_()`` darf also nicht sofort übersetzen. Es gibt
+einen trägen :class:`TranslatableText` zurück, der sich erst auflöst, wenn der
+Text wirklich angezeigt wird (Bauplan §4.1, AGENTS.md Regel 20).
 
-The core produces translatable texts; only the surface resolves them.
+Der Kern erzeugt übersetzbare Texte; auflösen tut sie nur die Oberfläche.
 """
 
 from __future__ import annotations
@@ -13,7 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-#: Languages the application ships with. German is the source language.
+#: Sprachen, mit denen die Anwendung ausgeliefert wird. Deutsch ist die
+#: Quellsprache.
 SOURCE_LANGUAGE: Final = "de"
 SUPPORTED_LANGUAGES: Final = ("de", "en")
 
@@ -23,17 +24,18 @@ _language: str = SOURCE_LANGUAGE
 
 @dataclass(frozen=True, slots=True)
 class TranslatableText:
-    """A text that carries its own translation key.
+    """Ein Text, der seinen Übersetzungsschlüssel selbst trägt.
 
-    Comparison and hashing use the message id, so registry consistency checks can
-    treat these like strings without resolving them.
+    Vergleich und Hashing laufen über die Message-ID — die
+    Registerkonsistenz-Prüfungen können diese Texte so wie Zeichenketten
+    behandeln, ohne sie aufzulösen.
     """
 
     msgid: str
     context: str | None = None
 
     def translate(self, language: str | None = None) -> str:
-        """Resolve against the active catalog, falling back to the message id."""
+        """Löst gegen den aktiven Katalog auf; Rückfall ist die Message-ID."""
         catalog = _catalogs.get(language or _language, {})
         return catalog.get(self._key(), self.msgid)
 
@@ -45,17 +47,20 @@ class TranslatableText:
 
 
 def _(msgid: str, context: str | None = None) -> TranslatableText:
-    """Mark a text for translation. The canonical name in declarations."""
+    """Markiert einen Text zur Übersetzung. Der kanonische Name in
+    Deklarationen."""
     return TranslatableText(msgid, context)
 
 
 def tr(msgid: str, context: str | None = None) -> str:
-    """Translate immediately. For surfaces that need a plain string right now."""
+    """Übersetzt sofort. Für Oberflächen, die jetzt eine nackte Zeichenkette
+    brauchen."""
     return TranslatableText(msgid, context).translate()
 
 
 def set_language(language: str) -> None:
-    """Switch the active language. Unknown languages fall back to the message id."""
+    """Wechselt die aktive Sprache. Unbekannte fallen auf die Message-ID
+    zurück."""
     global _language
     _language = language
 
@@ -65,10 +70,10 @@ def get_language() -> str:
 
 
 def install_catalog(language: str, catalog: dict[str, str]) -> None:
-    """Register (or extend) the catalog for one language."""
+    """Registriert (oder erweitert) den Katalog einer Sprache."""
     _catalogs.setdefault(language, {}).update(catalog)
 
 
 def known_languages() -> tuple[str, ...]:
-    """Languages that have a catalog installed, plus the source language."""
+    """Sprachen mit installiertem Katalog, plus die Quellsprache."""
     return tuple(dict.fromkeys((SOURCE_LANGUAGE, *sorted(_catalogs))))

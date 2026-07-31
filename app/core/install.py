@@ -1,25 +1,26 @@
-"""Installing what is missing, from inside the application (Bauplan §36, §38).
+"""Fehlendes installieren, aus der Anwendung heraus (Bauplan §36, §38).
 
-Formwerk ships without OpenSCAD, without a slicer and without a B-Rep kernel —
-for licence reasons in the first two cases and for size in the rest (§36). That
-is a good decision and a bad experience: somebody who wants a fillet should not
-have to read a README to find out which package to install.
+Formwerk kommt ohne OpenSCAD, ohne Slicer und ohne B-Rep-Kern — bei den ersten
+beiden aus Lizenzgründen, beim Rest wegen der Größe (§36). Das ist eine gute
+Entscheidung und eine schlechte Erfahrung: wer eine Verrundung will, soll kein
+README lesen müssen, um herauszufinden, welches Paket zu installieren ist.
 
-So this lists what is missing and installs it, and it does that under three
-rules that are not negotiable:
+Also zählt dieses Modul auf, was fehlt, und installiert es — unter drei
+Regeln, die nicht verhandelbar sind:
 
-* **The names are constants in this file.** Nothing that arrives from a model,
-  a project file or a web page is ever passed to an installer.
-* **Only official sources.** Python packages from the index the interpreter is
-  already configured for, programs through the system's own package manager.
-  Formwerk downloads no installers of its own.
-* **Never unasked.** The list is shown, the button is pressed by a person. An
-  application that installs software because it thinks it needs it has taken a
-  decision that was not its to take.
+* **Die Namen sind Konstanten in dieser Datei.** Nichts, was aus einem Modell,
+  einer Projektdatei oder einer Webseite ankommt, wird je an einen Installer
+  übergeben.
+* **Nur offizielle Quellen.** Python-Pakete aus dem Index, für den der
+  Interpreter ohnehin eingerichtet ist, Programme über die Paketverwaltung des
+  Systems. Formwerk lädt keine eigenen Installer herunter.
+* **Nie ungefragt.** Die Liste wird gezeigt, den Knopf drückt ein Mensch. Eine
+  Anwendung, die Software installiert, weil sie glaubt, sie zu brauchen, hat
+  eine Entscheidung getroffen, die nicht ihre war.
 
-Where an install is impossible — a packaged build has no pip, a machine without
-winget has no package manager — the answer is the download page and a sentence
-saying why, not a silent failure.
+Wo eine Installation unmöglich ist — eine paketierte Anwendung hat kein pip,
+ein Rechner ohne winget keine Paketverwaltung — ist die Antwort die
+Download-Seite und ein Satz, der sagt warum. Kein stilles Scheitern.
 """
 
 from __future__ import annotations
@@ -39,8 +40,9 @@ _log = get_logger(__name__)
 
 Kind = Literal["package", "program"]
 
-#: How long an install may take before it is given up on. Package managers
-#: download; a minute is not enough and an hour helps nobody.
+#: Wie lange eine Installation dauern darf, bevor sie aufgegeben wird.
+#: Paketverwaltungen laden herunter; eine Minute reicht nicht, und eine
+#: Stunde hilft niemandem.
 TIMEOUT_SECONDS = 900.0
 
 ProgressFn = Callable[[str], None]
@@ -52,22 +54,22 @@ def _silent(line: str) -> None:
 
 @dataclass(frozen=True, slots=True)
 class Requirement:
-    """One thing Formwerk can use, and how it gets onto the machine."""
+    """Eine Sache, die Formwerk benutzen kann, und wie sie auf den Rechner kommt."""
 
     id: str
     title: TranslatableText | str
     what_for: TranslatableText | str
     kind: Kind
     package: str = ""
-    """Distribution name for pip, or the winget identifier for a program."""
+    """Distributionsname für pip, oder die winget-Kennung eines Programms."""
     module: str = ""
-    """What to import to find out whether it is there. Packages only."""
+    """Was importiert wird, um festzustellen, ob es da ist. Nur bei Paketen."""
     url: str = ""
-    """The official page, for when installing from here is not possible."""
+    """Die offizielle Seite, für wenn Installieren von hier nicht geht."""
 
 
-#: Everything the application can install. Names are fixed here on purpose —
-#: see the module docstring.
+#: Alles, was die Anwendung installieren kann. Die Namen stehen mit Absicht
+#: fest hier — siehe Modul-Docstring.
 REQUIREMENTS: Final[tuple[Requirement, ...]] = (
     Requirement(
         id="brep",
@@ -137,7 +139,8 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
 
 @dataclass(frozen=True, slots=True)
 class InstallResult:
-    """What happened. ``output`` is the tail of what the installer said."""
+    """Was passiert ist. ``output`` ist das Ende dessen, was der Installer
+    gesagt hat."""
 
     requirement: Requirement
     installed: bool
@@ -157,7 +160,7 @@ def present(requirement: Requirement) -> bool:
             return False
         try:
             __import__(requirement.module)
-        except Exception:  # a compiled extension fails in more ways than ImportError
+        except Exception:  # eine kompilierte Erweiterung scheitert vielfältiger als ImportError
             return False
         return True
 
@@ -177,22 +180,23 @@ def location_of(requirement: Requirement) -> str:
 
 
 def missing() -> list[Requirement]:
-    """Everything that is not on this machine. Missing is normal, not an error."""
+    """Alles, was auf diesem Rechner fehlt. Fehlen ist normal, kein Fehler."""
     return [entry for entry in REQUIREMENTS if not present(entry)]
 
 
 def packaged() -> bool:
-    """Is this the built application? Then there is no pip to install with."""
+    """Ist das die gebaute Anwendung? Dann gibt es kein pip zum Installieren."""
     return bool(getattr(sys, "frozen", False))
 
 
 def winget() -> str | None:
-    """The system package manager, if this system has the one we can drive."""
+    """Die System-Paketverwaltung, wenn dieses System die hat, die wir
+    ansteuern können."""
     return shutil.which("winget")
 
 
 def installable(requirement: Requirement) -> bool:
-    """Can this be installed from here at all?"""
+    """Lässt sich das von hier aus überhaupt installieren?"""
     if not requirement.package:
         return False
     if requirement.kind == "package":
@@ -201,7 +205,7 @@ def installable(requirement: Requirement) -> bool:
 
 
 def why_not(requirement: Requirement) -> TranslatableText | str:
-    """The sentence that goes with a button that cannot be pressed (§33.1)."""
+    """Der Satz neben einem Knopf, der sich nicht drücken lässt (§33.1)."""
     if not requirement.package:
         return _("Dieses Programm wird von Hand installiert — die Seite steht daneben.")
     if requirement.kind == "package" and packaged():
@@ -213,7 +217,8 @@ def why_not(requirement: Requirement) -> TranslatableText | str:
 
 
 def install(requirement: Requirement, progress: ProgressFn = _silent) -> InstallResult:
-    """Install one thing. Called from a button, never on its own (see above)."""
+    """Installiert eine Sache. Von einem Knopf aufgerufen, nie von allein
+    (siehe oben)."""
     if present(requirement):
         return InstallResult(requirement=requirement, installed=True)
     if not installable(requirement):
@@ -223,7 +228,7 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
     _log.info("installing %s", requirement.id)
     progress(" ".join(command))
     try:
-        # The command is built from the constants above and from nothing else.
+        # Der Befehl entsteht aus den Konstanten oben und aus sonst nichts.
         finished = subprocess.run(
             command,
             capture_output=True,
@@ -245,8 +250,8 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
 
     done = finished.returncode == 0 and present(requirement)
     if finished.returncode == 0 and not done:
-        # winget reports success and the program lands somewhere the current
-        # process does not see yet; a restart finds it.
+        # winget meldet Erfolg, und das Programm landet an einer Stelle, die
+        # der laufende Prozess noch nicht sieht; ein Neustart findet es.
         return InstallResult(
             requirement=requirement,
             installed=False,
@@ -258,7 +263,7 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
 
 
 def _command(requirement: Requirement) -> list[str]:
-    """The exact command line. Built from the constants in this file only."""
+    """Die genaue Befehlszeile. Gebaut allein aus den Konstanten dieser Datei."""
     if requirement.kind == "package":
         return [sys.executable, "-m", "pip", "install", "--upgrade", requirement.package]
     manager = winget() or "winget"

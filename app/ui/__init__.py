@@ -1,1 +1,2 @@
-"""PySide6 surface. May use ``app.core``; the reverse direction is forbidden (§8)."""
+"""PySide6-Oberfläche. Darf ``app.core`` benutzen; die Gegenrichtung ist
+verboten (§8)."""

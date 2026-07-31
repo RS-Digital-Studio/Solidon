@@ -1,10 +1,12 @@
-"""Loading language catalogs (Bauplan §4.1, §37.2).
+"""Das Laden der Sprachkataloge (Bauplan §4.1, §37.2).
 
-German is the source language: its texts are the message ids, so ``de`` needs no
-catalog. Every other language is a JSON file mapping message id to translation.
+Deutsch ist die Quellsprache: ihre Texte sind die Message-IDs, ``de`` braucht
+also keinen Katalog. Jede andere Sprache ist eine JSON-Datei von Message-ID
+auf Übersetzung.
 
-An empty translation means "not translated yet" — ``tests/test_translations.py``
-fails on those, which is the check §37.2 asks for.
+Eine leere Übersetzung heißt „noch nicht übersetzt" —
+``tests/test_translations.py`` schlägt darauf an, und genau diese Prüfung
+verlangt §37.2.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ def catalog_path(language: str) -> Path:
 
 
 def read_catalog(language: str) -> dict[str, str]:
-    """Read one catalog file; missing files simply have no entries."""
+    """Liest eine Katalogdatei; fehlende Dateien haben schlicht keine Einträge."""
     path = catalog_path(language)
     if not path.is_file():
         return {}
@@ -44,7 +46,7 @@ def write_catalog(language: str, entries: dict[str, str]) -> Path:
 
 
 def install_language(language: str) -> None:
-    """Make one language available for translation."""
+    """Stellt eine Sprache für die Übersetzung bereit."""
     if language == SOURCE_LANGUAGE:
         return
     if language not in SUPPORTED_LANGUAGES:

@@ -1,1 +1,2 @@
-"""Input normalisation (§17.1). Every loaded file walks the same six steps."""
+"""Eingangs-Normalisierung (§17.1). Jede geladene Datei geht dieselben sechs
+Schritte."""

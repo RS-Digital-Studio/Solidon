@@ -1,18 +1,18 @@
-"""Core contracts (Bauplan §9).
+"""Die Verträge des Kerns (Bauplan §9).
 
-Every module aligns with the signatures below; they are fixed before any
-implementation exists. Four rules follow from them:
+Jedes Modul richtet sich nach den Signaturen hier; sie stehen fest, bevor eine
+Umsetzung existiert. Vier Regeln folgen aus ihnen:
 
-1. ``OpContext.scene`` is read-only. An operation creates new objects, it never
-   changes existing ones — that is Leitprinzip 2 anchored in the type layer.
-2. Every operation reports ``findings`` instead of logging. The core decides what
-   ends up in the report and the digest.
-3. ``progress``, ``ask`` and ``cancelled`` are part of the contract, not access to
-   global objects — the technical safeguard of the core/surface separation.
-4. ``quality`` is passed through. Every operation serves both levels, if need be
-   by treating them the same.
+1. ``OpContext.scene`` ist nur lesend. Eine Operation erzeugt neue Objekte, sie
+   ändert nie bestehende — Leitprinzip 2, verankert in der Typebene.
+2. Jede Operation meldet ``findings`` statt zu protokollieren. Der Kern
+   entscheidet, was in Prüfbericht und Steckbrief landet.
+3. ``progress``, ``ask`` und ``cancelled`` sind Teil des Vertrags, kein Zugriff
+   auf globale Objekte — die technische Absicherung der Kern-Oberflächen-Trennung.
+4. ``quality`` wird durchgereicht. Jede Operation bedient beide Stufen, notfalls
+   indem sie beide gleich behandelt.
 
-This module holds contracts only: no geometry, no IO, no third-party imports.
+Dieses Modul enthält nur Verträge: keine Geometrie, kein IO, keine Fremdimporte.
 """
 
 from __future__ import annotations
@@ -24,30 +24,31 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from app.i18n import TranslatableText
 
-# --- Identifiers ---------------------------------------------------------------
+# --- Bezeichner ----------------------------------------------------------------
 
 ObjectId = str
-"""``obj_2`` — stable within one document."""
+"""``obj_2`` — stabil innerhalb eines Dokuments."""
 
 FeatureId = str
-"""``hole_3`` (detected) or ``op4.pin_1`` (generated, §21.2)."""
+"""``hole_3`` (erkannt) oder ``op4.pin_1`` (erzeugt, §21.2)."""
 
 OpId = int
-"""Position-independent number of an operation in the stack."""
+"""Positionsunabhängige Nummer einer Operation im Stapel."""
 
 TransactionId = str
-"""``t2`` — the unit undo, diff view and chat history refer to (§15.5)."""
+"""``t2`` — die Einheit, auf die sich Undo, Differenzansicht und Chatverlauf
+beziehen (§15.5)."""
 
 SourceId = str
-"""``src_1`` — an imported or generated mesh in the project container."""
+"""``src_1`` — ein importiertes oder erzeugtes Netz im Projektcontainer."""
 
 ParameterName = str
-"""Name of a project parameter, referenced as ``@name`` in expressions (§13)."""
+"""Name eines Projektparameters, in Ausdrücken als ``@name`` gelesen (§13)."""
 
 Millimetres = float
-"""Every length in the core. Always (§11.1)."""
+"""Jede Länge im Kern. Immer (§11.1)."""
 
-# --- Enumerations --------------------------------------------------------------
+# --- Aufzählungen --------------------------------------------------------------
 
 FeatureKind = Literal["hole", "face", "edge_loop", "pin", "thread"]
 Provenance = Literal["detected", "generated"]
@@ -58,18 +59,19 @@ Severity = Literal["info", "warning", "error"]
 Authorship = Literal["user", "agent"]
 
 ChatRole = Literal["user", "agent"]
-"""Who spoke. The same two as ``Authorship``, named for the conversation (§26.3)."""
+"""Wer gesprochen hat. Dieselben zwei wie ``Authorship``, benannt fürs
+Gespräch (§26.3)."""
 SourceKind = Literal["import", "generated", "part"]
 
 SolverStage = Literal["direct", "welded", "jittered", "voxel"]
-"""Stages of the boolean fallback chain (§17.2), in order."""
+"""Die Stufen der Booleschen Rückfallkette (§17.2), in ihrer Reihenfolge."""
 
 SOLVER_CHAIN: tuple[SolverStage, ...] = ("direct", "welded", "jittered", "voxel")
 
 MetricSource = Literal["internal", "gcode"]
-"""Where a print metric comes from. Never mixed (§22.5)."""
+"""Woher eine Druckkennzahl stammt. Wird nie vermischt (§22.5)."""
 
-# --- Geometry primitives -------------------------------------------------------
+# --- Geometrische Grundtypen ---------------------------------------------------
 
 Vec3 = tuple[float, float, float]
 Point2 = tuple[float, float]
@@ -81,13 +83,13 @@ Transform = tuple[
     tuple[float, float, float, float],
     tuple[float, float, float, float],
 ]
-"""A 4x4 matrix as plain numbers, row by row. Kept as tuples rather than as an
-array so it travels through the cache and the project file unchanged."""
+"""Eine 4x4-Matrix als nackte Zahlen, Zeile für Zeile. Als Tupel statt als
+Array gehalten, damit sie unverändert durch Cache und Projektdatei reist."""
 
 
 @dataclass(frozen=True, slots=True)
 class BoundingBox:
-    """Axis-aligned bounds in millimetres."""
+    """Achsparalleler Hüllquader in Millimetern."""
 
     minimum: Vec3
     maximum: Vec3
@@ -110,14 +112,15 @@ class BoundingBox:
 
     @property
     def diagonal(self) -> float:
-        """Model size behind the relative tolerance ``EPS_MATCH`` (§11.2)."""
+        """Die Modellgröße hinter der relativen Toleranz ``EPS_MATCH`` (§11.2)."""
         width, depth, height = self.size
         return math.sqrt(width * width + depth * depth + height * height)
 
 
 @dataclass(frozen=True, slots=True)
 class Polygon:
-    """A closed contour with optional holes, used by the layer analysis (§22)."""
+    """Eine geschlossene Kontur mit optionalen Löchern, benutzt von der
+    Schichtanalyse (§22)."""
 
     outline: Ring
     holes: tuple[Ring, ...] = ()
@@ -125,10 +128,10 @@ class Polygon:
 
 @runtime_checkable
 class Mesh(Protocol):
-    """Hull around the geometry kernel (``manifold3d`` / ``trimesh``).
+    """Die Hülle um den Geometriekern (``manifold3d`` / ``trimesh``).
 
-    The rest of the core talks to this protocol, never to a kernel directly, so
-    the kernel stays exchangeable and ``core`` stays importable without it.
+    Der Rest des Kerns spricht mit diesem Protokoll, nie direkt mit einem
+    Kern — so bleibt der Kern austauschbar und ``core`` ohne ihn importierbar.
     """
 
     @property
@@ -142,64 +145,66 @@ class Mesh(Protocol):
 
     @property
     def volume(self) -> float:
-        """Signed volume in mm³; meaningless unless watertight."""
+        """Vorzeichenbehaftetes Volumen in mm³; ohne Wasserdichtheit bedeutungslos."""
 
     @property
     def area(self) -> float:
-        """Surface area in mm²."""
+        """Oberfläche in mm²."""
 
     @property
     def is_watertight(self) -> bool: ...
 
     @property
     def component_count(self) -> int:
-        """Connected components — small ones are reported, never dropped (§17.1)."""
+        """Zusammenhängende Komponenten — kleine werden gemeldet, nie
+        verworfen (§17.1)."""
 
     @property
     def slot_indices(self) -> Sequence[int]:
-        """Material slot index per triangle (§20). Empty means everything on slot 0."""
+        """Materialslot-Index je Dreieck (§20). Leer heißt: alles auf Slot 0."""
 
 
 @runtime_checkable
 class BRepBody(Protocol):
-    """A body that still knows its faces and edges (§30).
+    """Ein Körper, der seine Flächen und Kanten noch kennt (§30).
 
-    Declared here rather than in the B-Rep package so the rest of the core can
-    tell the two kinds apart without importing OpenCASCADE — which is optional,
-    and which ``core`` must stay importable without.
+    Hier statt im B-Rep-Paket deklariert, damit der Rest des Kerns die beiden
+    Sorten unterscheiden kann, ohne OpenCASCADE zu importieren — das ist
+    optional, und ``core`` muss ohne es importierbar bleiben.
     """
 
     @property
     def shape(self) -> Any:
-        """The kernel's own object. Nothing outside the B-Rep package reads it."""
+        """Das kerneigene Objekt. Außerhalb des B-Rep-Pakets liest es niemand."""
 
     def to_mesh(self) -> Any:
-        """The one-way door of §30: triangles from the exact body."""
+        """Die Einbahntür aus §30: Dreiecke aus dem exakten Körper."""
 
 
 def kind_of(mesh: Mesh) -> ObjectKind:
-    """Which kind of body this is. One rule, one place — the object tree shows it."""
+    """Welche Sorte Körper das ist. Eine Regel, ein Ort — der Objektbaum zeigt es."""
     return "brep" if isinstance(mesh, BRepBody) else "mesh"
 
 
-# --- Features and objects ------------------------------------------------------
+# --- Merkmale und Objekte ------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class Feature:
-    """A recognised hole, face or edge — the vocabulary shared by mouse and agent."""
+    """Ein erkanntes Loch, eine Fläche, eine Kante — das gemeinsame Vokabular
+    von Maus und Agent."""
 
     id: FeatureId
     kind: FeatureKind
     provenance: Provenance
     params: Mapping[str, Any]
-    """Diameter, axis, depth, area … in millimetres."""
+    """Durchmesser, Achse, Tiefe, Fläche … in Millimetern."""
     face_indices: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class MaterialSlot:
-    """One filament slot of an object (§20)."""
+    """Ein Filamentslot eines Objekts (§20)."""
 
     index: int
     name: str
@@ -209,7 +214,7 @@ class MaterialSlot:
 
 @dataclass(slots=True)
 class SceneObject:
-    """One body in the scene."""
+    """Ein Körper in der Szene."""
 
     id: ObjectId
     name: str
@@ -218,28 +223,30 @@ class SceneObject:
     features: dict[FeatureId, Feature] = field(default_factory=dict)
     material_slots: list[MaterialSlot] = field(default_factory=list)
     material: str | None = None
-    """Which material this body is printed in — ``None`` means the project's.
+    """In welchem Material dieser Körper gedruckt wird — ``None`` heißt: im
+    Projektmaterial.
 
-    A scene is not one material. A TPU seal in a PETG housing shrinks
-    differently, wants a different clearance and squashes its first layer
-    differently; computing it with the project material gives a number that is
-    wrong rather than approximate (§12, §38)."""
+    Eine Szene ist nicht ein Material. Eine TPU-Dichtung im PETG-Gehäuse
+    schrumpft anders, will ein anderes Spiel und quetscht ihre erste Schicht
+    anders; sie mit dem Projektmaterial zu rechnen liefert eine Zahl, die
+    falsch ist statt ungefähr (§12, §38)."""
     plate: int = 0
-    """Which build plate this object sits on. Set by arranging; a scene with
-    more parts than fit on one plate is normal, not an error (§25)."""
+    """Auf welcher Druckplatte dieses Objekt liegt. Gesetzt vom Anordnen; eine
+    Szene mit mehr Teilen, als auf eine Platte passen, ist normal, kein
+    Fehler (§25)."""
     created_by: OpId = 0
     visible: bool = True
 
 
-# --- Parameters, fits, profiles ------------------------------------------------
+# --- Parameter, Passungen, Profile ---------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class Parameter:
-    """A named project dimension (§13).
+    """Ein benanntes Projektmaß (§13).
 
-    Either a plain value or an expression over other parameters. Expressions run
-    through the own evaluator, never through ``eval`` (§13, §32).
+    Entweder ein nackter Wert oder ein Ausdruck über andere Parameter.
+    Ausdrücke laufen durch den eigenen Auswerter, nie durch ``eval`` (§13, §32).
     """
 
     name: ParameterName
@@ -253,7 +260,8 @@ class Parameter:
 
 @dataclass(frozen=True, slots=True)
 class FeatureRef:
-    """Reference to a feature of a specific object, written ``obj_2:op5.pin_1``."""
+    """Verweis auf ein Merkmal eines bestimmten Objekts, geschrieben
+    ``obj_2:op5.pin_1``."""
 
     object_id: ObjectId
     feature_id: FeatureId
@@ -270,10 +278,11 @@ class FeatureRef:
 
 
 Tolerance = float | str
-"""A number in millimetres, or ``auto:<material>`` pointing into the profile (§12).
+"""Eine Zahl in Millimetern, oder ``auto:<material>`` als Verweis ins
+Profil (§12).
 
-Rule 7 in AGENTS.md: tolerances are references, not literals — that is what makes
-calibration (§28.3) reach existing projects.
+Regel 7 in AGENTS.md: Toleranzen sind Verweise, keine Literale — genau das
+lässt die Kalibrierung (§28.3) bestehende Projekte erreichen.
 """
 
 AUTO_TOLERANCE_PREFIX = "auto:"
@@ -281,7 +290,7 @@ AUTO_TOLERANCE_PREFIX = "auto:"
 
 @dataclass(frozen=True, slots=True)
 class Fit:
-    """A named relation between two features (§14)."""
+    """Eine benannte Beziehung zwischen zwei Merkmalen (§14)."""
 
     name: str
     a: FeatureRef
@@ -292,7 +301,7 @@ class Fit:
 
 @dataclass(frozen=True, slots=True)
 class PrinterProfile:
-    """Build volume and nozzle data. Never hard-coded (§38)."""
+    """Bauraum und Düsendaten. Nie fest im Code (§38)."""
 
     id: str
     title: str
@@ -301,7 +310,8 @@ class PrinterProfile:
     layer_height: float = 0.2
     extrusion_width: float = 0.42
     enclosed: bool = False
-    """Closed chamber — decides whether ASA and ABS are sensible at all."""
+    """Geschlossener Bauraum — entscheidet, ob ASA und ABS überhaupt
+    sinnvoll sind."""
     bed_temperature_max: int = 100
     nozzle_temperature_max: int = 260
     vendor: str = ""
@@ -309,50 +319,53 @@ class PrinterProfile:
 
 @dataclass(frozen=True, slots=True)
 class MaterialProfile:
-    """Material behaviour and the tolerances calibration writes back into (§28.3)."""
+    """Materialverhalten und die Toleranzen, in die die Kalibrierung
+    zurückschreibt (§28.3)."""
 
     id: str
     title: str
     clearance: float
-    """Sliding fit gap in mm."""
+    """Spiel einer Gleitpassung in mm."""
     press: float
-    """Interference for a press fit in mm (negative means oversize)."""
+    """Übermaß einer Presspassung in mm (negativ heißt Übergröße)."""
     hole_compensation: float
-    """FDM prints holes tight — add this to the nominal diameter."""
+    """FDM druckt Löcher zu eng — dieser Wert kommt auf den Nenndurchmesser."""
     elephant_foot: float
-    """First layer spread to compensate for."""
+    """Die Breite, um die die erste Schicht auseinanderläuft."""
     shrinkage: float = 0.0
-    """Relative shrinkage, 0.004 = 0.4 %."""
+    """Relativer Schrumpf, 0.004 = 0,4 %."""
     calibrated: bool = False
-    """False means the values are the shipped starting point, not measured."""
+    """False heißt: die Werte sind der mitgelieferte Startpunkt, nicht gemessen."""
 
 
 @dataclass(frozen=True, slots=True)
 class Profile:
-    """The printer and material a scene is computed for."""
+    """Drucker und Material, für die eine Szene gerechnet wird."""
 
     printer: PrinterProfile
     material: MaterialProfile
 
     @property
     def minimum_wall_thickness(self) -> float:
-        """Two extrusion widths, never less — first rule of the rule set (§39)."""
+        """Zwei Extrusionsbreiten, nie weniger — die erste Regel der
+        Regelsammlung (§39)."""
         return 2.0 * self.printer.extrusion_width
 
 
-# --- Findings and report -------------------------------------------------------
+# --- Befunde und Prüfbericht ---------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class Finding:
-    """One entry of the report (§17.3).
+    """Ein Eintrag des Prüfberichts (§17.3).
 
-    Operations return findings instead of logging, so the core decides what
-    reaches report, digest and status bar.
+    Operationen geben Befunde zurück statt zu protokollieren — der Kern
+    entscheidet, was Prüfbericht, Steckbrief und Statusleiste erreicht.
     """
 
     code: str
-    """Stable identifier such as ``ingest.small_components`` — testable, translatable."""
+    """Stabiler Bezeichner wie ``ingest.small_components`` — testbar,
+    übersetzbar."""
     severity: Severity
     message: TranslatableText | str
     object_id: ObjectId | None = None
@@ -360,13 +373,13 @@ class Finding:
     feature_ids: tuple[FeatureId, ...] = ()
     values: Mapping[str, float | str] = field(default_factory=dict)
     location: Vec3 | None = None
-    """Where to fly the camera when the warning is clicked (§18.4)."""
+    """Wohin die Kamera fliegt, wenn die Warnung angeklickt wird (§18.4)."""
     source: MetricSource = "internal"
 
 
 @dataclass(frozen=True, slots=True)
 class Report:
-    """Findings from ingest, operations and checks (§17.3)."""
+    """Befunde aus Einlesen, Operationen und Prüfungen (§17.3)."""
 
     findings: tuple[Finding, ...] = ()
 
@@ -383,12 +396,13 @@ class Report:
         return Report(findings=(*self.findings, *findings))
 
 
-# --- Scene ---------------------------------------------------------------------
+# --- Szene ---------------------------------------------------------------------
 
 
 @dataclass(slots=True)
 class Scene:
-    """The evaluated state: the result of stack + sources + parameters + profiles."""
+    """Der ausgewertete Zustand: das Ergebnis aus Stapel + Quellen +
+    Parametern + Profilen."""
 
     objects: dict[ObjectId, SceneObject] = field(default_factory=dict)
     parameters: dict[ParameterName, Parameter] = field(default_factory=dict)
@@ -397,55 +411,57 @@ class Scene:
     report: Report = field(default_factory=Report)
 
 
-# --- Operation context ---------------------------------------------------------
+# --- Operationskontext ----------------------------------------------------------
 
 ProgressFn = Callable[[float, str], None]
-"""``(fraction, text) -> None``. Reported often enough to stay honest (§2.8)."""
+"""``(fraction, text) -> None``. Oft genug gemeldet, um ehrlich zu
+bleiben (§2.8)."""
 
 AskFn = Callable[[str, list[str]], str]
-"""``(question, choices) -> chosen``. The only way the core asks (Leitprinzip 6)."""
+"""``(question, choices) -> chosen``. Der einzige Weg, auf dem der Kern
+fragt (Leitprinzip 6)."""
 
 
 @runtime_checkable
 class CancelToken(Protocol):
-    """Cooperative cancellation. Long operations poll it (§15.6)."""
+    """Kooperativer Abbruch. Lange Operationen fragen ihn regelmäßig ab (§15.6)."""
 
     @property
     def is_cancelled(self) -> bool: ...
 
     def raise_if_cancelled(self) -> None:
-        """Raise ``OperationCancelled`` if cancellation was requested."""
+        """Wirft ``OperationCancelled``, wenn der Abbruch verlangt wurde."""
 
 
 class BaseParams:
-    """Base of every validated parameter set of an operation (§10).
+    """Die Basis jedes validierten Parametersatzes einer Operation (§10).
 
-    The schema — bounds, units, defaults and front/advanced placement (§2.4) — is
-    derived once from the declaration and validates dialog, command line and
-    agent call alike.
+    Das Schema — Grenzen, Einheiten, Vorgaben und die Vorderseiten-Zuordnung
+    aus §2.4 — wird einmal aus der Deklaration abgeleitet und validiert Dialog,
+    Kommandozeile und Agentenaufruf gleichermaßen.
     """
 
     __slots__ = ()
 
     @classmethod
     def spec(cls) -> tuple[ParamSpec, ...]:
-        """Parameter schema of this set. Filled in by the registry."""
+        """Das Parameterschema dieses Satzes. Trägt das Register ein."""
         return getattr(cls, "__param_spec__", ())
 
     @classmethod
     def fields(cls) -> tuple[Any, ...]:
-        """The dataclass fields, for code that builds a set out of another one.
+        """Die Dataclass-Felder, für Code, der einen Satz aus einem anderen baut.
 
-        The part operations do exactly that (§24.1): a part's parameters plus a
-        placement become one schema, and rebuilding it needs the declarations,
-        not just the derived spec.
+        Die Baustein-Operationen tun genau das (§24.1): die Parameter eines
+        Bausteins plus eine Platzierung werden ein Schema, und der Neuaufbau
+        braucht die Deklarationen, nicht nur das abgeleitete Schema.
         """
         import dataclasses
 
         return tuple(dataclasses.fields(cls))  # type: ignore[arg-type]
 
     def as_dict(self) -> dict[str, Any]:
-        """Serialisable form, as stored in the op stack."""
+        """Serialisierbare Form, wie sie im Op-Stapel liegt."""
         return {name: getattr(self, name) for name in (spec.name for spec in self.spec())}
 
 
@@ -456,19 +472,20 @@ ParamKind = Literal[
 den Skizzeneditor; bis er da ist, zeigt der Dialog ein Textfeld. Der Agent
 bekommt diesen Parameter nicht: Grundformen statt roher Punktlisten (§26)."""
 ParamPlacement = Literal["front", "advanced"]
-"""Front side or ``More settings`` — the graded depth from §2.4."""
+"""Vorderseite oder „Weitere Einstellungen" — die gestufte Tiefe aus §2.4."""
 
 
 @dataclass(frozen=True, slots=True)
 class ParamSpec:
-    """One entry of a parameter schema."""
+    """Ein Eintrag eines Parameterschemas."""
 
     name: str
     kind: ParamKind
     title: TranslatableText | str
     default: Any = None
     required: bool = False
-    """True when there is no default and the caller has to supply a value."""
+    """True, wenn es keine Vorgabe gibt und der Aufrufer einen Wert
+    liefern muss."""
     unit: str | None = None
     minimum: float | None = None
     maximum: float | None = None
@@ -479,12 +496,12 @@ class ParamSpec:
 
 @runtime_checkable
 class SourceAccess(Protocol):
-    """Read access to the sources of the project (§16.1).
+    """Lesezugriff auf die Quellen des Projekts (§16.1).
 
-    An addition to the contract in §9, and a deliberate one: the ``load``
-    operation has to read a file, and putting bytes into the operation
-    parameters would drag geometry into the stack. Access stays read-only and
-    goes through the context like everything else.
+    Eine bewusste Ergänzung zum Vertrag aus §9: die ``load``-Operation muss
+    eine Datei lesen, und Bytes in den Operationsparametern würden Geometrie
+    in den Stapel ziehen. Der Zugriff bleibt lesend und läuft über den
+    Kontext wie alles andere.
     """
 
     def read(self, source_id: SourceId) -> bytes: ...
@@ -494,10 +511,11 @@ class SourceAccess(Protocol):
 
 @dataclass(slots=True)
 class OpContext:
-    """Everything an operation may see and use. Nothing global, no dialogs."""
+    """Alles, was eine Operation sehen und benutzen darf. Nichts Globales,
+    keine Dialoge."""
 
     scene: Scene
-    """Read-only. Operations create objects, they do not change them."""
+    """Nur lesend. Operationen erzeugen Objekte, sie ändern keine."""
     inputs: list[SceneObject]
     params: BaseParams
     profile: Profile
@@ -511,7 +529,7 @@ class OpContext:
 
 @dataclass(frozen=True, slots=True)
 class SolverInfo:
-    """Which fallback stage solved a boolean operation (§17.2)."""
+    """Welche Rückfallstufe eine Boolesche Operation gelöst hat (§17.2)."""
 
     strategy: SolverStage
     attempted: tuple[SolverStage, ...] = ()
@@ -521,30 +539,31 @@ class SolverInfo:
 
 @dataclass(slots=True)
 class OpResult:
-    """What an operation returns. Never a mutated input."""
+    """Was eine Operation zurückgibt. Nie eine veränderte Eingabe."""
 
     outputs: list[SceneObject]
     solver: SolverInfo | None = None
     findings: list[Finding] = field(default_factory=list)
     transform: Transform | None = None
-    """The rigid motion this operation applied, if it was one.
+    """Die starre Bewegung, die diese Operation ausgeführt hat — wenn sie
+    eine war.
 
-    Only transform operations fill this in, and only they can: an operation
-    knows what it did to the body, while the feature matching afterwards would
-    have to guess it back out of the result (§21.2). With the matrix in hand the
-    old identifiers survive a rotation; without it a turned plate looks like a
-    different plate."""
+    Nur Transformations-Operationen füllen das Feld, und nur sie können es:
+    die Operation weiß, was sie mit dem Körper getan hat, während die
+    Merkmalszuordnung danach es aus dem Ergebnis zurückraten müsste (§21.2).
+    Mit der Matrix überleben die alten Bezeichner eine Drehung; ohne sie
+    sieht eine gedrehte Platte aus wie eine andere Platte."""
 
 
 OpFn = Callable[[OpContext], OpResult]
 
 
-# --- Stack, transactions, document ---------------------------------------------
+# --- Stapel, Transaktionen, Dokument ---------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class Origin:
-    """Who created a transaction, and under which conditions (§26.4)."""
+    """Wer eine Transaktion erzeugt hat, und unter welchen Bedingungen (§26.4)."""
 
     by: Authorship
     model: str | None = None
@@ -555,7 +574,7 @@ class Origin:
 
 @dataclass(frozen=True, slots=True)
 class Operation:
-    """One entry of the stack (§12). ``inputs``/``outputs`` form the DAG."""
+    """Ein Eintrag des Stapels (§12). ``inputs``/``outputs`` bilden den DAG."""
 
     id: OpId
     op: str
@@ -568,7 +587,7 @@ class Operation:
 
 @dataclass(frozen=True, slots=True)
 class Transaction:
-    """A group of operations that undo together (§15.5)."""
+    """Eine Gruppe von Operationen, die gemeinsam zurückgenommen wird (§15.5)."""
 
     id: TransactionId
     title: TranslatableText | str
@@ -578,14 +597,16 @@ class Transaction:
 
 @dataclass(frozen=True, slots=True)
 class ChatEntry:
-    """One turn of the conversation, tied to what it changed (§26.3).
+    """Ein Gesprächsbeitrag, gekoppelt an das, was er geändert hat (§26.3).
 
-    The coupling is the point: an entry names the transaction it produced, and
-    when that transaction is taken back the entry counts as discarded. Without
-    it the agent argues after every undo with a state that no longer exists.
+    Die Kopplung ist der Punkt: ein Beitrag nennt die Transaktion, die er
+    erzeugt hat, und wird sie zurückgenommen, gilt der Beitrag als verworfen.
+    Ohne das argumentiert der Agent nach jedem Undo mit einem Zustand, den es
+    nicht mehr gibt.
 
-    Whether an entry is discarded is not stored — it follows from whether its
-    transaction is still in the document, so a redo brings it back by itself.
+    Ob ein Beitrag verworfen ist, wird nicht gespeichert — es folgt daraus, ob
+    seine Transaktion noch im Dokument steht; ein Redo holt ihn so von selbst
+    zurück.
     """
 
     id: str
@@ -593,12 +614,13 @@ class ChatEntry:
     text: str
     transaction_id: TransactionId | None = None
     origin: Origin | None = None
-    """Filled for agent turns: model, prompt and rule version, temperature (§26.4)."""
+    """Gefüllt bei Agentenbeiträgen: Modell, Prompt- und Regelversion,
+    Temperatur (§26.4)."""
 
 
 @dataclass(frozen=True, slots=True)
 class SourceOrigin:
-    """Where an imported model came from, and under which licence (§16.3)."""
+    """Woher ein importiertes Modell kam, und unter welcher Lizenz (§16.3)."""
 
     url: str | None = None
     title: str | None = None
@@ -606,14 +628,14 @@ class SourceOrigin:
     licence: str | None = None
     retrieved: str | None = None
     prompt: str | None = None
-    """What was asked for, when the source was generated (§27, pillar B)."""
+    """Wonach gefragt wurde, als die Quelle erzeugt wurde (§27, Säule B)."""
     seed: int | None = None
-    """The starting value that generation ran with (§11.3)."""
+    """Der Startwert, mit dem die Erzeugung lief (§11.3)."""
 
 
 @dataclass(frozen=True, slots=True)
 class IngestInfo:
-    """What the input stage did to a source (§17.1)."""
+    """Was die Eingangsstufe mit einer Quelle getan hat (§17.1)."""
 
     unit: str = "mm"
     scale: float = 1.0
@@ -624,24 +646,27 @@ class IngestInfo:
 
 @dataclass(frozen=True, slots=True)
 class Source:
-    """An embedded or linked input mesh. Paths are always relative (§32)."""
+    """Ein eingebettetes oder verknüpftes Eingangsnetz. Pfade sind immer
+    relativ (§32)."""
 
     id: SourceId
     kind: SourceKind
     path: str
     sha256: str
     embedded: bool = True
-    """Embedded is the default for passing a project on (§16.1); linked stays relative."""
+    """Eingebettet ist die Vorgabe fürs Weitergeben eines Projekts (§16.1);
+    verknüpft bleibt relativ."""
     ingest: IngestInfo = IngestInfo()
     origin: SourceOrigin | None = None
 
 
 @dataclass(slots=True)
 class Document:
-    """The saved project: stack, parameters, fits, transactions, sources (§12).
+    """Das gespeicherte Projekt: Stapel, Parameter, Passungen, Transaktionen,
+    Quellen (§12).
 
-    The scene is what evaluating this document produces — the document is the
-    truth, the scene is the result.
+    Die Szene ist, was die Auswertung dieses Dokuments erzeugt — das Dokument
+    ist die Wahrheit, die Szene das Ergebnis.
     """
 
     format_version: int
@@ -656,17 +681,17 @@ class Document:
     transactions: list[Transaction] = field(default_factory=list)
     ops: list[Operation] = field(default_factory=list)
     chat: list[ChatEntry] = field(default_factory=list)
-    """The conversation that led to this stack (§26.3). Saved with the project:
-    a container is a bug report (§16.2), and half a bug report is one without
-    the sentence that caused the operation."""
+    """Das Gespräch, das zu diesem Stapel geführt hat (§26.3). Mit dem Projekt
+    gespeichert: ein Container ist ein Fehlerbericht (§16.2), und ein halber
+    Fehlerbericht ist einer ohne den Satz, der die Operation ausgelöst hat."""
 
 
-# --- Layer analysis (§22) ------------------------------------------------------
+# --- Schichtanalyse (§22) ------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class LayerInfo:
-    """Metrics of one slicing plane."""
+    """Kennzahlen einer Schnittebene."""
 
     z: float
     contours: tuple[Polygon, ...]
@@ -675,16 +700,17 @@ class LayerInfo:
     islands: tuple[Polygon, ...]
     min_width: float
     overhangs: tuple[Polygon, ...] = ()
-    """*Where* the unsupported area of this layer lies, not only how much of it.
+    """*Wo* die ungestützte Fläche dieser Schicht liegt, nicht nur wie viel.
 
-    Kept because the support map (§18.4) and the layer preview (§18.10) have to
-    point at the spot, and recomputing it from the contours would be the same
-    work twice."""
+    Aufgehoben, weil Stützkarte (§18.4) und Schichtvorschau (§18.10) auf die
+    Stelle zeigen müssen — sie aus den Konturen neu zu rechnen wäre dieselbe
+    Arbeit zweimal."""
 
 
 @dataclass(frozen=True, slots=True)
 class SliceResult:
-    """Result of the analysis slicer. Its numbers are never mixed with G-code (§22.5)."""
+    """Ergebnis des Analyse-Schneiders. Seine Zahlen werden nie mit G-Code
+    vermischt (§22.5)."""
 
     layers: tuple[LayerInfo, ...]
     support_volume: float
@@ -760,12 +786,13 @@ class SolvedSketch:
     max_residual: float
 
 
-# --- Further fixed contracts ---------------------------------------------------
+# --- Weitere feste Verträge ------------------------------------------------------
 
 
 @dataclass(slots=True)
 class PartResult:
-    """What a part returns: geometry plus named provenance features (§24.1)."""
+    """Was ein Baustein zurückgibt: Geometrie plus benannte
+    Provenienz-Merkmale (§24.1)."""
 
     mesh: Mesh
     features: dict[FeatureId, Feature] = field(default_factory=dict)
@@ -776,9 +803,9 @@ PartFn = Callable[[BaseParams], PartResult]
 
 
 class MeshBackend(Protocol):
-    """Mesh generation, local or hosted — same call either way (§27).
+    """Mesh-Erzeugung, lokal oder gehostet — derselbe Aufruf so oder so (§27).
 
-    Knows text and image only: no user code, no file paths, no state.
+    Kennt nur Text und Bild: kein Nutzercode, keine Dateipfade, kein Zustand.
     """
 
     def text_to_mesh(self, prompt: str, seed: int | None = None) -> Mesh: ...
@@ -787,7 +814,7 @@ class MeshBackend(Protocol):
 
 
 class LLMBackend(Protocol):
-    """Cloud or local model behind one interface (§27)."""
+    """Cloud- oder lokales Modell hinter einer Schnittstelle (§27)."""
 
     @property
     def name(self) -> str: ...
@@ -802,7 +829,8 @@ class LLMBackend(Protocol):
 
 
 class Migration(Protocol):
-    """One step of the format migration chain (§16.2). Steps are never merged."""
+    """Ein Schritt der Format-Migrationskette (§16.2). Schritte werden nie
+    zusammengefasst."""
 
     @property
     def from_version(self) -> int: ...

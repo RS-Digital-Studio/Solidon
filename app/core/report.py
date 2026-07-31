@@ -1,13 +1,13 @@
-"""Error reports (Bauplan §37.2, §33.3).
+"""Fehlerberichte (Bauplan §37.2, §33.3).
 
-No telemetry. Nothing leaves this machine unless the user sends it themselves —
-that is the whole difference between a report and the thing the plan forbids.
+Keine Telemetrie. Nichts verlässt diesen Rechner, außer der Nutzer sendet es
+selbst — das ist der ganze Unterschied zwischen einem Bericht und dem, was der
+Bauplan verbietet.
 
-What the dialog offers is a folder with three things: the error text, the
-version data, and on request the project container. The container reproduces
-the error exactly, including seeds and fallback stages (§16.2) — and it
-contains the geometry, which is why the offer says so plainly rather than
-quietly attaching it.
+Was der Dialog anbietet, ist ein Ordner mit drei Dingen: dem Fehlertext, den
+Versionsdaten und auf Wunsch dem Projektcontainer. Der Container reproduziert
+den Fehler exakt, samt Startwerten und Rückfallstufen (§16.2) — und er enthält
+die Geometrie, weshalb das Angebot es klar sagt, statt sie still anzuhängen.
 """
 
 from __future__ import annotations
@@ -25,18 +25,18 @@ from app.i18n import get_language, tr
 
 _log = get_logger(__name__)
 
-#: Where a report is put together. Next to the projects, not in a temp folder —
-#: the user has to be able to find it again.
+#: Wo ein Bericht zusammengestellt wird. Neben den Projekten, nicht in einem
+#: Temp-Ordner — der Nutzer muss ihn wiederfinden können.
 REPORT_DIRNAME = "reports"
 
-#: How much of the log travels along. The last few hundred lines carry the run
-#: that failed; the rest is yesterday.
+#: Wie viel Protokoll mitreist. Die letzten paar hundert Zeilen tragen den
+#: Lauf, der scheiterte; der Rest ist gestern.
 LOG_LINES = 400
 
 
 @dataclass(slots=True)
 class ErrorReport:
-    """One report, before it is written anywhere."""
+    """Ein Bericht, bevor er irgendwohin geschrieben wird."""
 
     summary: str
     detail: str = ""
@@ -47,19 +47,20 @@ class ErrorReport:
 
     @property
     def contains_geometry(self) -> bool:
-        """§37.2: the offer has to say that the model travels along."""
+        """§37.2: das Angebot muss sagen, dass das Modell mitreist."""
         return self.include_project
 
 
 def environment() -> dict[str, str]:
-    """Version data — what a report needs to be reproducible at all."""
+    """Versionsdaten — was ein Bericht braucht, um überhaupt reproduzierbar
+    zu sein."""
     import importlib.metadata as metadata
 
     versions: dict[str, str] = {}
     for name in ("trimesh", "manifold3d", "numpy", "scipy", "shapely", "PySide6"):
         try:
             versions[name] = metadata.version(name)
-        except metadata.PackageNotFoundError:  # pragma: no cover - depends on the install
+        except metadata.PackageNotFoundError:  # pragma: no cover - hängt an der Installation
             versions[name] = "-"
 
     return {
@@ -72,7 +73,7 @@ def environment() -> dict[str, str]:
 
 
 def as_text(report: ErrorReport) -> str:
-    """The report as one readable text — the part that goes into an email."""
+    """Der Bericht als ein lesbarer Text — der Teil, der in eine E-Mail geht."""
     lines = [
         f"{APP_NAME} {APP_VERSION} — {tr('Fehlerbericht')}",
         datetime.now(UTC).isoformat(timespec="seconds"),
@@ -92,10 +93,10 @@ def as_text(report: ErrorReport) -> str:
 
 
 def write(report: ErrorReport, project: Path | None = None, directory: Path | None = None) -> Path:
-    """Put the report together in a folder and return it.
+    """Stellt den Bericht in einem Ordner zusammen und gibt ihn zurück.
 
-    Nothing is sent. The folder is opened for the user, and what happens next is
-    their decision (§37.2).
+    Gesendet wird nichts. Der Ordner wird dem Nutzer geöffnet, und was dann
+    passiert, ist seine Entscheidung (§37.2).
     """
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     target = (directory or user_data_dir() / REPORT_DIRNAME) / f"bericht-{stamp}"
@@ -114,8 +115,8 @@ def write(report: ErrorReport, project: Path | None = None, directory: Path | No
 
 
 def _copy_log(target: Path) -> None:
-    """The tail of the log. It never left the machine before, and it only does
-    now because someone attached it themselves (§33.2)."""
+    """Das Ende des Protokolls. Es hat den Rechner nie zuvor verlassen, und
+    jetzt nur, weil jemand es selbst angehängt hat (§33.2)."""
     source = log_path()
     if not source.is_file():
         return

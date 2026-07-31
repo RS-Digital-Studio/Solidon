@@ -1,1 +1,1 @@
-"""Layer analysis (§22). Metrics and contours, deliberately not a G-code slicer."""
+"""Schichtanalyse (§22). Kennzahlen und Konturen, bewusst kein G-Code-Slicer."""

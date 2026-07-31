@@ -1,8 +1,9 @@
-"""Collect translatable texts from the sources (Bauplan §37.2).
+"""Übersetzbare Texte aus den Quellen einsammeln (Bauplan §37.2).
 
-Every ``_("…")`` and ``tr("…")`` in the code is a message id. This script gathers
-them and updates the catalog files: new ids appear with an empty translation,
-disappeared ids are dropped, existing translations stay untouched.
+Jedes ``_("…")`` und ``tr("…")`` im Code ist eine Message-ID. Dieses Skript
+sammelt sie und zieht die Katalogdateien nach: neue IDs erscheinen mit leerer
+Übersetzung, verschwundene fliegen raus, bestehende Übersetzungen bleiben
+unangetastet.
 
     python -m app.i18n.extract
 """
@@ -20,7 +21,7 @@ PACKAGE_DIR = Path(__file__).parent.parent
 
 
 def message_ids(paths: list[Path] | None = None) -> set[str]:
-    """Every literal passed to a translation marker."""
+    """Jedes Literal, das an einen Übersetzungsmarker übergeben wird."""
     found: set[str] = set()
     for path in paths or sorted(PACKAGE_DIR.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -36,7 +37,7 @@ def message_ids(paths: list[Path] | None = None) -> set[str]:
 
 
 def update_catalogs() -> dict[str, tuple[int, int]]:
-    """Bring every catalog in line with the sources. Returns (total, missing)."""
+    """Bringt jeden Katalog auf den Stand der Quellen. Liefert (gesamt, offen)."""
     ids = message_ids()
     report: dict[str, tuple[int, int]] = {}
     for language in SUPPORTED_LANGUAGES:

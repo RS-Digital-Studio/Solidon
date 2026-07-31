@@ -1,11 +1,12 @@
-"""Numbers, units and the three named tolerances (Bauplan §11).
+"""Zahlen, Einheiten und die drei benannten Toleranzen (Bauplan §11).
 
-The core computes in millimetres and double precision, always. A different
-display unit is a surface concern and never reaches the core; conversion happens
-exactly twice: on import (§17.1) and on display.
+Der Kern rechnet in Millimetern und doppelter Genauigkeit, immer. Eine andere
+Anzeigeeinheit ist Sache der Oberfläche und erreicht den Kern nie; umgerechnet
+wird genau zweimal: beim Import (§17.1) und bei der Anzeige.
 
-Floating point values are never compared with ``==`` (AGENTS.md rule 6) — use
-:func:`is_close`, :func:`is_zero`, :func:`is_greater` or :func:`is_less`.
+Fließkommawerte werden nie mit ``==`` verglichen (AGENTS.md Regel 6) — dafür
+gibt es :func:`is_close`, :func:`is_zero`, :func:`is_greater` und
+:func:`is_less`.
 """
 
 from __future__ import annotations
@@ -13,25 +14,27 @@ from __future__ import annotations
 import math
 from typing import Final, Literal
 
-# --- The three named tolerances (§11.2) --------------------------------------
+# --- Die drei benannten Toleranzen (§11.2) -------------------------------------
 
-#: Coincident points, zero-area faces, welding. Absolute, for manufacturing.
+#: Zusammenfallende Punkte, Null-Flächen, Verschweißen. Absolut, fürs Fertigen.
 EPS_GEOM: Final[float] = 1e-6
 
-#: Rounding for dimensions, digest and reports. Absolute, for display.
+#: Rundung für Maße, Steckbrief und Berichte. Absolut, für die Anzeige.
 EPS_DISPLAY: Final[float] = 0.01
 
-#: Feature comparison. Relative to the model diagonal — see :func:`match_tolerance`.
+#: Merkmalsvergleich. Relativ zur Modelldiagonale — siehe :func:`match_tolerance`.
 EPS_MATCH_RELATIVE: Final[float] = 0.005
 
-#: Lower bound for the derived match tolerance, so tiny models stay comparable.
+#: Untergrenze der abgeleiteten Vergleichstoleranz, damit winzige Modelle
+#: vergleichbar bleiben.
 EPS_MATCH_MINIMUM: Final[float] = EPS_DISPLAY
 
-# --- Units ---------------------------------------------------------------------
+# --- Einheiten -------------------------------------------------------------------
 
 LengthUnit = Literal["mm", "cm", "m", "in"]
 
-#: Scale factor into millimetres. STL carries no unit, hence the heuristic in §17.1.
+#: Skalierungsfaktor nach Millimetern. STL trägt keine Einheit, daher die
+#: Heuristik in §17.1.
 UNIT_TO_MM: Final[dict[LengthUnit, float]] = {
     "mm": 1.0,
     "cm": 10.0,
@@ -39,28 +42,29 @@ UNIT_TO_MM: Final[dict[LengthUnit, float]] = {
     "in": 25.4,
 }
 
-#: Decimal places per unit, chosen so the shown precision matches EPS_DISPLAY.
+#: Nachkommastellen je Einheit, so gewählt, dass die gezeigte Genauigkeit
+#: EPS_DISPLAY entspricht.
 _UNIT_DECIMALS: Final[dict[LengthUnit, int]] = {"mm": 2, "cm": 3, "m": 5, "in": 4}
 
-#: Units offered in the surface (§19.3). The core stays on millimetres.
+#: Einheiten, die die Oberfläche anbietet (§19.3). Der Kern bleibt bei Millimetern.
 DISPLAY_UNITS: Final[tuple[LengthUnit, ...]] = ("mm", "in")
 
 
 def to_mm(value: float, unit: LengthUnit) -> float:
-    """Convert an incoming length into the core unit."""
+    """Rechnet eine ankommende Länge in die Kerneinheit um."""
     return value * UNIT_TO_MM[unit]
 
 
 def from_mm(value_mm: float, unit: LengthUnit) -> float:
-    """Convert a core length into a display unit."""
+    """Rechnet eine Kernlänge in eine Anzeigeeinheit um."""
     return value_mm / UNIT_TO_MM[unit]
 
 
-# --- Comparison ----------------------------------------------------------------
+# --- Vergleich -------------------------------------------------------------------
 
 
 def is_close(a: float, b: float, eps: float = EPS_GEOM) -> bool:
-    """True if two lengths are the same within ``eps``."""
+    """True, wenn zwei Längen innerhalb von ``eps`` gleich sind."""
     return abs(a - b) <= eps
 
 
@@ -69,7 +73,7 @@ def is_zero(value: float, eps: float = EPS_GEOM) -> bool:
 
 
 def is_greater(a: float, b: float, eps: float = EPS_GEOM) -> bool:
-    """True if ``a`` is larger than ``b`` by more than ``eps``."""
+    """True, wenn ``a`` um mehr als ``eps`` größer ist als ``b``."""
     return a - b > eps
 
 
@@ -83,30 +87,33 @@ def clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(maximum, value))
 
 
-# --- Derived tolerances --------------------------------------------------------
+# --- Abgeleitete Toleranzen ------------------------------------------------------
 
 
 def match_tolerance(diagonal_mm: float) -> float:
-    """Feature matching threshold for a model of this size (§21.2).
+    """Die Vergleichsschwelle der Merkmalszuordnung für ein Modell dieser
+    Größe (§21.2).
 
-    Relative for comparisons, absolute for manufacturing — that is the rule of
-    thumb behind the three tolerances.
+    Relativ fürs Vergleichen, absolut fürs Fertigen — das ist die Faustregel
+    hinter den drei Toleranzen.
     """
     return max(EPS_MATCH_MINIMUM, abs(diagonal_mm) * EPS_MATCH_RELATIVE)
 
 
 def weld_tolerance(diagonal_mm: float) -> float:
-    """Vertex welding distance, scaled to the model size (§17.1 step 2)."""
+    """Der Verschweißabstand für Eckpunkte, skaliert mit der
+    Modellgröße (§17.1 Schritt 2)."""
     return max(EPS_GEOM, abs(diagonal_mm) * 1e-6)
 
 
-# --- Display -------------------------------------------------------------------
+# --- Anzeige -------------------------------------------------------------------
 
 
 def quantize(value: float, step: float = EPS_DISPLAY) -> float:
-    """Round to a multiple of ``step``, half away from zero.
+    """Rundet auf ein Vielfaches von ``step``, halbe weg von null.
 
-    Used for display only. Rounded values never flow back into geometry (§11.2).
+    Nur für die Anzeige. Gerundete Werte fließen nie in Geometrie
+    zurück (§11.2).
     """
     if step <= 0.0:
         raise ValueError("step must be positive")
@@ -115,15 +122,15 @@ def quantize(value: float, step: float = EPS_DISPLAY) -> float:
 
 
 def round_display(value_mm: float) -> float:
-    """Round a millimetre value to display precision."""
+    """Rundet einen Millimeterwert auf Anzeigegenauigkeit."""
     return quantize(value_mm, EPS_DISPLAY)
 
 
 def format_length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = True) -> str:
-    """Format a core length for display in the requested unit.
+    """Formatiert eine Kernlänge für die Anzeige in der gewünschten Einheit.
 
-    The decimal separator stays a point here; localisation happens in the
-    surface, not in the core.
+    Das Dezimaltrennzeichen bleibt hier ein Punkt; lokalisiert wird in der
+    Oberfläche, nicht im Kern.
     """
     decimals = _UNIT_DECIMALS[unit]
     converted = from_mm(value_mm, unit)

@@ -1,9 +1,9 @@
-"""Filling the registry (Bauplan §10).
+"""Das Füllen des Registers (Bauplan §10).
 
-Operations register themselves when their module is imported. That import
-happens here, explicitly and in one place, instead of as a side effect of
-importing some package — a surface that forgets it would otherwise show an
-incomplete menu with no error anywhere.
+Operationen registrieren sich, wenn ihr Modul importiert wird. Dieser Import
+passiert hier, ausdrücklich und an einer Stelle, statt als Nebenwirkung
+irgendeines Paketimports — eine Oberfläche, die ihn vergisst, zeigte sonst ein
+unvollständiges Menü, ohne dass irgendwo ein Fehler stünde.
 """
 
 from __future__ import annotations
@@ -22,24 +22,26 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.geom.mesh_ops",
     "app.core.geom.label_ops",
     "app.core.geom.lid",
-    # §30: the second kernel declares its operations like every other module.
-    # They refuse to run without OpenCASCADE, but they are always in the menu —
-    # an entry that says why it is greyed out beats one that is not there.
+    # §30: der zweite Kern deklariert seine Operationen wie jedes andere Modul.
+    # Ohne OpenCASCADE verweigern sie den Lauf, aber im Menü stehen sie immer —
+    # ein Eintrag, der sagt, warum er ausgegraut ist, schlägt einen, den es
+    # nicht gibt.
     "app.core.brep.ops",
     # §30.1: die Skizzen-Operationen — Grundformen über den Solver in den Kern.
     "app.core.sketch.ops",
 )
 
-#: The part library declares no operations itself — one is generated per part
-#: (§24.1). Importing the package fills the part registry, the call after it
-#: turns every entry into an operation.
+#: Die Bausteinbibliothek deklariert selbst keine Operationen — je Baustein
+#: wird eine erzeugt (§24.1). Der Paketimport füllt das Bausteinregister, der
+#: Aufruf danach macht aus jedem Eintrag eine Operation.
 _PART_MODULE: Final = "app.core.knowledge.parts"
 
 _loaded = False
 
 
 def load_operations() -> None:
-    """Import every module that declares operations. Safe to call repeatedly."""
+    """Importiert jedes Modul, das Operationen deklariert. Mehrfacher Aufruf
+    ist unschädlich."""
     global _loaded
     if _loaded:
         return

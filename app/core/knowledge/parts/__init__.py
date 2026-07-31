@@ -1,15 +1,17 @@
-"""The part library (Bauplan §24).
+"""Die Bausteinbibliothek (Bauplan §24).
 
-Licensed under MIT, unlike the rest of the application (see the LICENSE file in
-this directory). The reason is in §36: the geometry these parts produce ends up
-in the users' own models, so nothing here may raise a licence question for them.
+Anders als der Rest der Anwendung unter MIT lizenziert (siehe die
+LICENSE-Datei in diesem Verzeichnis). Der Grund steht in §36: die Geometrie,
+die diese Bausteine erzeugen, landet in den eigenen Modellen der Nutzer —
+nichts hier darf für sie eine Lizenzfrage aufwerfen.
 
-Parts are built against ``manifold3d``, not OpenSCAD, so ``insert_part`` depends
-on no external installation and stays testable.
+Bausteine sind gegen ``manifold3d`` gebaut, nicht gegen OpenSCAD —
+``insert_part`` hängt so an keiner externen Installation und bleibt testbar.
 
-Importing this package registers the shipped parts. Own parts from the user
-directory are loaded separately and on purpose (§24.5) — they are not part of
-the application, only of the library on one machine.
+Der Import dieses Pakets registriert die mitgelieferten Bausteine. Eigene
+Bausteine aus dem Nutzerverzeichnis werden getrennt und mit Absicht geladen
+(§24.5) — sie sind nicht Teil der Anwendung, nur der Bibliothek auf einem
+Rechner.
 """
 
 from app.core.knowledge.parts import (  # noqa: F401

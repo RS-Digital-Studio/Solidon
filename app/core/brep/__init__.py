@@ -1,14 +1,14 @@
-"""The second construction kernel (Bauplan §30).
+"""Der zweite Konstruktionskern (Bauplan §30).
 
-Boundary representation next to the mesh kernel, not instead of it. What it
-buys is what a mesh cannot give: real edges, and therefore fillets and chamfers
-that are round rather than faceted, precise booleans without tessellation
-artefacts, and STEP in and out.
+Boundary Representation neben dem Mesh-Kern, nicht an seiner Stelle. Was er
+einbringt, ist, was ein Netz nicht geben kann: echte Kanten, und damit Fasen
+und Verrundungen, die rund sind statt facettiert, präzise Boolesche Ops ohne
+Tessellations-Artefakte, und STEP hinein wie hinaus.
 
-The way from B-Rep to mesh is open at any time; the way back is not, and the
-object tree says so (§30). That is not a shortcoming to hide — a mesh has lost
-the edges it was made from, and pretending otherwise would produce a body whose
-"exact" fillet is a polygon.
+Der Weg von B-Rep zu Mesh steht jederzeit offen; der Rückweg nicht, und der
+Objektbaum sagt das auch (§30). Das ist kein Mangel, den man versteckt — ein
+Netz hat die Kanten verloren, aus denen es gebaut wurde, und das Gegenteil zu
+behaupten ergäbe einen Körper, dessen „exakte" Verrundung ein Vieleck ist.
 """
 
 from __future__ import annotations

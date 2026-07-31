@@ -1,5 +1,5 @@
-"""Application root package.
+"""Das Wurzelpaket der Anwendung.
 
-Layering rule (Bauplan §8): ``app.core`` never imports from ``app.ui``.
-``app.ui`` and ``app.cli`` are entry points on top of the core.
+Schichtenregel (Bauplan §8): ``app.core`` importiert nie aus ``app.ui``.
+``app.ui`` und ``app.cli`` sind Einstiege oben auf dem Kern.
 """

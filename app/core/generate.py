@@ -1,20 +1,21 @@
-"""Way 3: text or image to a body in the scene (Bauplan §2.2, §27).
+"""Weg 3: Text oder Bild zu einem Körper in der Szene (Bauplan §2.2, §27).
 
     Text oder Bild → Mesh → Reparaturkette läuft automatisch → Prüfbericht
 
-Two things about how that is built are worth stating, because both were
-decisions and not the obvious route.
+Zwei Dinge am Aufbau sind es wert, festgehalten zu werden, denn beide waren
+Entscheidungen und nicht der naheliegende Weg.
 
-**The generated file becomes a source, not an operation.** A generator is not a
-function: the same prompt with the same seed gives something else after a model
-update. An operation that called it would make every project unreproducible
-(§11.3). So the bytes are embedded in the project like a dragged-in file, and
-the stack that follows is the ordinary one.
+**Die erzeugte Datei wird eine Quelle, keine Operation.** Ein Generator ist
+keine Funktion: derselbe Prompt mit demselben Startwert liefert nach einem
+Modell-Update etwas anderes. Eine Operation, die ihn aufriefe, machte jedes
+Projekt unreproduzierbar (§11.3). Also werden die Bytes wie eine
+hineingezogene Datei ins Projekt eingebettet, und der Stapel danach ist der
+gewöhnliche.
 
-**The repair chain is on the stack, not baked into the body.** Way 3 says it
-runs automatically, and it does — but as its own step, so the report can say
-what it changed, and so it can be taken back when it took away something that
-was meant to be there (§11.1).
+**Die Reparaturkette liegt auf dem Stapel, nicht im Körper eingebacken.**
+Weg 3 sagt, sie läuft automatisch, und das tut sie — aber als eigener Schritt,
+damit der Bericht sagen kann, was sie geändert hat, und damit sie zurückgeht,
+wenn sie etwas weggenommen hat, das gemeint war (§11.1).
 """
 
 from __future__ import annotations
@@ -31,10 +32,11 @@ from app.i18n import _, tr
 
 _log = get_logger(__name__)
 
-#: The repair chain for a generated body (§25). Everything is on, including the
-#: two steps the import stage leaves off: a generated mesh brings stray
-#: fragments and self-intersections as standard, and unlike a part somebody
-#: modelled there is no intent in them worth preserving.
+#: Die Reparaturkette für einen erzeugten Körper (§25). Alles ist an, auch die
+#: zwei Schritte, die die Importstufe weglässt: ein erzeugtes Netz bringt lose
+#: Fragmente und Selbstdurchdringungen serienmäßig mit, und anders als bei
+#: einem Teil, das jemand modelliert hat, steckt darin keine Absicht, die es
+#: zu bewahren lohnte.
 GENERATED_REPAIR: dict[str, bool] = {
     "weld": True,
     "degenerate": True,
@@ -51,7 +53,7 @@ def _silent(fraction: float, text: str) -> None:
 
 @dataclass(frozen=True, slots=True)
 class Generation:
-    """What way 3 produced: the source, the object, and how it got there."""
+    """Was Weg 3 erzeugt hat: die Quelle, das Objekt, und wie es dahin kam."""
 
     source_id: SourceId
     object_id: ObjectId
@@ -68,7 +70,7 @@ def from_text(
     name: str = "",
     progress: ProgressFn = _silent,
 ) -> Generation:
-    """Generate a body from a description and put it into the project."""
+    """Erzeugt einen Körper aus einer Beschreibung und legt ihn ins Projekt."""
     result = backend.text_to_mesh(prompt, seed=seed, progress=progress)
     return into_project(project, result, name or prompt)
 
@@ -82,16 +84,18 @@ def from_image(
     name: str = "",
     progress: ProgressFn = _silent,
 ) -> Generation:
-    """Generate a body from a picture and put it into the project."""
+    """Erzeugt einen Körper aus einem Bild und legt ihn ins Projekt."""
     result = backend.image_to_mesh(image, seed=seed, progress=progress)
     return into_project(project, result, name or str(_("Aus Bild")))
 
 
 def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Generation:
-    """Embed the file, load it, repair it — two steps in the history, both undoable.
+    """Datei einbetten, laden, reparieren — zwei Schritte im Verlauf, beide
+    rücknehmbar.
 
-    Separate from the two calls above so a surface that already has a result —
-    because it ran the generator on its own thread — takes the same way in.
+    Getrennt von den zwei Aufrufen darüber, damit eine Oberfläche, die schon
+    ein Ergebnis hat — weil sie den Generator auf ihrem eigenen Thread laufen
+    ließ — denselben Weg hinein nimmt.
     """
     name = name or result.prompt or str(_("Aus Bild"))
     document = project.document
@@ -114,8 +118,9 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     project.sources[source_id] = result.payload
 
     history = History(document)
-    # The user pressed generate, so the transaction is theirs (§26.4). Which
-    # generator it was belongs to the source, where it stays readable.
+    # Der Nutzer hat Erzeugen gedrückt, also gehört die Transaktion ihm
+    # (§26.4). Welcher Generator es war, gehört zur Quelle — dort bleibt es
+    # lesbar.
     origin = Origin(by="user")
     loading = history.apply(
         tr("Modell erzeugen"),
@@ -144,6 +149,7 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
 
 
 def _short(name: str) -> str:
-    """A prompt is a sentence; an object name is not. First few words, no more."""
+    """Ein Prompt ist ein Satz; ein Objektname nicht. Die ersten paar Wörter,
+    mehr nicht."""
     words = name.strip().split()
     return " ".join(words[:5]) if words else str(_("Erzeugt"))
