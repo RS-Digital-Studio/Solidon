@@ -27,18 +27,17 @@ Bei Widerspruch gilt der Bauplan. Eine Aussage ohne §-Beleg ist eine Vermutung.
 
 ## Sprache — die wichtigste Falle
 
-Dieses Projekt dreht meine globale Vorgabe für den Code um:
+Die Sprachregelung steht verbindlich in `AGENTS.md`; hier die Kurzform:
 
-- **Code, Docstrings, Kommentare: Englisch.** `tests/test_language_rules.py`
-  lehnt deutsche Stämme in Bezeichnern ab. Ein deutscher Docstring in `app/`
-  fällt nicht auf, ist aber trotzdem falsch.
+- **Bezeichner, Dateinamen, Modulnamen: Englisch.**
+  `tests/test_language_rules.py` lehnt deutsche Stämme in Bezeichnern ab.
+- **Docstrings und Kommentare: Deutsch** — seit „Doku nachziehen" (b2e6e28).
+  Bestand ist vielfach noch englisch; übersetzt wird, was ohnehin angefasst
+  wird, nie eine Runde nur dafür.
 - **Oberflächentexte: über `tr()`**, deutsch und englisch in
   `app/i18n/locales/`. Keine feste Zeichenkette in der Oberfläche.
 - **Doku, Bauplan, Roadmap, Commit-Meldungen: Deutsch**, mit echten Umlauten.
 - **Gespräch mit Robert: Deutsch.**
-
-<!-- Die Tabelle in AGENTS.md nennt Commits englisch, die gelebte Praxis ist
-     deutsch (alle bisherigen Commits). Hier steht die gelebte Praxis. -->
 
 Commit-Meldungen dieses Projekts sind eine Aussage, kein Etikett: „Hohle
 Querschnitte kamen als nichts zurück", nicht „fix: section". Diesen Ton halten.
