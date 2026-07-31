@@ -240,7 +240,7 @@ class LidParams(BaseParams):
     category="parts",
     params=LidParams,
     consumes=1,
-    produces=1,
+    produces=2,
     applies_to=["face"],
     doc=_(
         "Erzeugt zu einer Öffnung einen passenden Deckel mit Kragen. Der Hohlraum "
@@ -283,14 +283,19 @@ def create_lid(ctx: OpContext) -> OpResult:
     )
 
     _log.info("lid over %d cavities at z=%.2f, clearance %.2f", len(cavities), z, clearance)
+    # Das Gehäuse bleibt der erste Ausgang: eine Op mit consumes=1 ersetzt im
+    # Stapel ihre Eingabe durch ihre Ausgaben — mit nur dem Deckel als Ausgang
+    # fraß „Deckel erzeugen" das Gehäuse. Die Op-Tests riefen die Funktion
+    # direkt auf und sahen es nie; der Ende-zu-Ende-Weg von P13 sah es sofort.
     return OpResult(
         outputs=[
+            source,
             SceneObject(
                 id="",
                 name=params.name or f"{source.name} {_('Deckel').translate()}",
                 mesh=body,
                 material=source.material,
-            )
+            ),
         ],
         findings=[
             Finding(

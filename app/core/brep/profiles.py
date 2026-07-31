@@ -223,13 +223,20 @@ def draft_vertical(solid: Solid, angle_deg: float) -> Solid:
 
 
 def bounds(solid: Solid) -> tuple[float, float, float, float, float, float]:
-    """Der Hüllquader eines Körpers: xmin, ymin, zmin, xmax, ymax, zmax."""
+    """Der Hüllquader eines Körpers: xmin, ymin, zmin, xmax, ymax, zmax.
+
+    Über ``AddOptimal`` ohne Vernetzung und ohne Formtoleranz: das einfache
+    ``Add`` — und auch ``AddOptimal`` in der Vorgabe — liest die gespeicherte
+    Vernetzung mitsamt ihrem Durchhang. Ein Körper, den die Auswertung fürs
+    Hashing vernetzt hatte, wurde damit ringsum ein Hundertstel größer, die
+    Oberseite lag über jeder echten Fläche, und eine Tasche entsprechend
+    flacher. Exakt aus der Geometrie gerechnet kostet es hier nichts."""
     require()
     from OCP.Bnd import Bnd_Box
     from OCP.BRepBndLib import BRepBndLib
 
     box = Bnd_Box()
-    BRepBndLib.Add_s(solid.shape, box)
+    BRepBndLib.AddOptimal_s(solid.shape, box, False, False)
     xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
     return (xmin, ymin, zmin, xmax, ymax, zmax)
 
@@ -261,12 +268,7 @@ def _points(segment: Any) -> list[Point2]:
 
 
 def _top_faces(solid: Solid) -> list[Any]:
-    from OCP.Bnd import Bnd_Box
-    from OCP.BRepBndLib import BRepBndLib
-
-    box = Bnd_Box()
-    BRepBndLib.Add_s(solid.shape, box)
-    _, _, _, _, _, top = box.Get()
+    _, _, _, _, _, top = bounds(solid)
     found = []
     for face, normal, centre in _planar_faces(solid):
         if normal[2] > 0.9 and abs(centre[2] - top) <= 1e-4:

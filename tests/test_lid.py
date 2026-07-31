@@ -59,7 +59,7 @@ def make_lid(entry: SceneObject, profile: Profile, **params: object):
 def test_the_lid_covers_the_opening(profile: Profile) -> None:
     """A lid with a hole in it is not a lid — the section's own hole is filled."""
     result = make_lid(housing(), profile, thickness=2.4, collar=4.0)
-    body = result.outputs[0].mesh
+    body = result.outputs[1].mesh
 
     plate = OUTER[0] * OUTER[1] * 2.4
     assert body.bounds.size[0] == pytest.approx(OUTER[0])
@@ -71,7 +71,7 @@ def test_the_lid_covers_the_opening(profile: Profile) -> None:
 def test_the_collar_is_the_cavity_less_the_clearance(profile: Profile) -> None:
     """§12: the number comes from the material profile, not from the file."""
     result = make_lid(housing(), profile, thickness=2.4, collar=4.0)
-    body = result.outputs[0].mesh.raw
+    body = result.outputs[1].mesh.raw
 
     gap = profiles.material("petg").clearance + lid_module.COLLAR_RELIEF
     collar = body.slice_plane([0.0, 0.0, 29.0], [0.0, 0.0, -1.0])
@@ -84,14 +84,14 @@ def test_the_collar_is_the_cavity_less_the_clearance(profile: Profile) -> None:
 def test_the_lid_really_goes_in(profile: Profile) -> None:
     """The one measurement that matters: lid and housing share no volume."""
     entry = housing()
-    body = make_lid(entry, profile, thickness=2.4, collar=4.0).outputs[0].mesh
+    body = make_lid(entry, profile, thickness=2.4, collar=4.0).outputs[1].mesh
 
     assert shared_volume(body.raw, entry.mesh.raw) < 1e-6
 
 
 def test_the_lid_sits_on_the_rim(profile: Profile) -> None:
     result = make_lid(housing(), profile, thickness=2.4, collar=4.0)
-    body = result.outputs[0].mesh
+    body = result.outputs[1].mesh
 
     assert body.bounds.minimum[2] == pytest.approx(OUTER[2] - 4.0), "the collar reaches down"
     assert body.bounds.maximum[2] == pytest.approx(OUTER[2] + 2.4), "the plate sits on top"
@@ -108,7 +108,7 @@ def test_a_softer_lid_gets_more_room(profile: Profile) -> None:
 
 def test_a_lid_without_a_collar_is_a_plate(profile: Profile) -> None:
     result = make_lid(housing(), profile, thickness=2.4, collar=0.0)
-    body = result.outputs[0].mesh
+    body = result.outputs[1].mesh
 
     assert body.volume == pytest.approx(OUTER[0] * OUTER[1] * 2.4, rel=0.001)
     assert body.bounds.minimum[2] == pytest.approx(OUTER[2])
@@ -155,7 +155,7 @@ def test_two_compartments_get_two_collars(profile: Profile) -> None:
     result = make_lid(entry, profile, thickness=2.0, collar=3.0)
 
     assert result.findings[0].values["cavities"] == 2
-    lid_body = result.outputs[0].mesh
+    lid_body = result.outputs[1].mesh
     assert lid_body.is_watertight
     assert shared_volume(lid_body.raw, body) < 1e-6
 
@@ -163,7 +163,7 @@ def test_two_compartments_get_two_collars(profile: Profile) -> None:
 def test_the_lid_carries_the_material_of_the_body_it_closes(profile: Profile) -> None:
     result = make_lid(housing("tpu-95a"), profile, collar=4.0)
 
-    assert result.outputs[0].material == "tpu-95a"
+    assert result.outputs[1].material == "tpu-95a"
 
 
 def test_a_screw_post_bore_is_not_a_compartment(profile: Profile) -> None:
@@ -204,7 +204,7 @@ def test_a_small_compartment_still_gets_a_collar(profile: Profile) -> None:
     result = make_lid(entry, profile, thickness=2.0, collar=3.0)
 
     assert result.findings[0].values["cavities"] == 2
-    assert shared_volume(result.outputs[0].mesh.raw, body) < 1e-6
+    assert shared_volume(result.outputs[1].mesh.raw, body) < 1e-6
 
 
 # --- the turning lid ------------------------------------------------------------
