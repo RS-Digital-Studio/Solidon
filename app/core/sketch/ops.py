@@ -24,6 +24,7 @@ from app.core.errors import ValidationError
 from app.core.registry import op_params, param, register_op
 from app.core.sketch import shapes
 from app.core.sketch.profile import Profile, profile_of, shifted
+from app.core.sketch.serialize import sketch_from_text
 from app.core.sketch.solver import solve_sketch
 from app.core.types import BaseParams, OpContext, OpResult, SceneObject
 from app.i18n import _
@@ -37,6 +38,9 @@ _WIDTH_DOC = _("Breite in Y. Beim Kreis und beim Vieleck ohne Wirkung.")
 _SHAPE_DOC = _("Rechteck, Langloch, Kreis oder Vieleck — die Maße stehen darunter.")
 _CORNERS_DOC = _("Zahl der Ecken, nur beim Vieleck.")
 _NAME_DOC = _("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen.")
+_SKETCH_DOC = _(
+    "Eine gezeichnete Skizze anstelle der Grundform. Leer heißt: die Grundform oben gilt."
+)
 
 
 def _sketch_profile(shape: str, length: float, width: float, corners: int) -> Profile:
@@ -57,6 +61,24 @@ def _sketch_profile(shape: str, length: float, width: float, corners: int) -> Pr
             constraint="unknown_shape",
         )
     return profile_of(solve_sketch(sketch))
+
+
+def _drawn_profile(ctx: OpContext, sketch_text: str) -> Profile:
+    """Der Umriss der gezeichneten Skizze, gelöst gegen die Projektparameter.
+
+    Ein Maß wie ``=@breite/2`` rechnet hier mit denselben Werten wie überall
+    (§13, §30.1)."""
+    values = {name: entry.value for name, entry in ctx.scene.parameters.items()}
+    return profile_of(solve_sketch(sketch_from_text(sketch_text), values))
+
+
+def _profile_for(
+    ctx: OpContext, sketch_text: str, shape: str, length: float, width: float, corners: int
+) -> Profile:
+    """Gezeichnete Skizze, wenn eine da ist — sonst die Grundform."""
+    if sketch_text:
+        return _drawn_profile(ctx, sketch_text)
+    return _sketch_profile(shape, length, width, corners)
 
 
 def _created(name: str, fallback: str, solid: Solid) -> SceneObject:
@@ -106,6 +128,9 @@ class SketchExtrudeParams(BaseParams):
         doc=_CORNERS_DOC,
     )
     name: str = param(title=_("Name"), default="", placement="advanced", doc=_NAME_DOC)
+    sketch: str = param(
+        title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
+    )
 
 
 @register_op(
@@ -124,7 +149,9 @@ class SketchExtrudeParams(BaseParams):
 def sketch_extrude(ctx: OpContext) -> OpResult:
     params = cast(SketchExtrudeParams, ctx.params)
     require()
-    profile = _sketch_profile(params.shape, params.length, params.width, params.corners)
+    profile = _profile_for(
+        ctx, params.sketch, params.shape, params.length, params.width, params.corners
+    )
     solid = profiles.extrude(profile, params.height)
     return OpResult(outputs=[_created(params.name, str(_("Grundform")), solid)])
 
@@ -189,6 +216,9 @@ class SketchPocketParams(BaseParams):
         placement="advanced",
         doc=_CORNERS_DOC,
     )
+    sketch: str = param(
+        title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
+    )
 
 
 @register_op(
@@ -209,7 +239,7 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
     params = cast(SketchPocketParams, ctx.params)
     source, body = _brep_input(ctx)
     profile = shifted(
-        _sketch_profile(params.shape, params.length, params.width, params.corners),
+        _profile_for(ctx, params.sketch, params.shape, params.length, params.width, params.corners),
         params.x,
         params.y,
     )
@@ -279,6 +309,17 @@ class SketchRevolveParams(BaseParams):
         placement="advanced",
         doc=_CORNERS_DOC,
     )
+    sketch: str = param(
+        title=_("Skizze"),
+        default="",
+        kind="sketch",
+        placement="advanced",
+        doc=_(
+            "Eine gezeichnete Skizze als Querschnitt, benutzt wie gezeichnet: "
+            "x ist der Abstand von der Achse, y die Höhe — der Abstand oben "
+            "gilt dann nicht."
+        ),
+    )
 
 
 @register_op(
@@ -296,9 +337,13 @@ class SketchRevolveParams(BaseParams):
 def sketch_revolve(ctx: OpContext) -> OpResult:
     params = cast(SketchRevolveParams, ctx.params)
     require()
-    profile = _sketch_profile(params.shape, params.length, params.width, params.corners)
-    rise = params.length / 2.0 if params.shape in ("circle", "polygon") else params.width / 2.0
-    placed = shifted(profile, params.offset + params.length / 2.0, rise)
+    if params.sketch:
+        # Wie gezeichnet: die Skizze kennt ihren Abstand zur Achse selbst.
+        placed = _drawn_profile(ctx, params.sketch)
+    else:
+        profile = _sketch_profile(params.shape, params.length, params.width, params.corners)
+        rise = params.length / 2.0 if params.shape in ("circle", "polygon") else params.width / 2.0
+        placed = shifted(profile, params.offset + params.length / 2.0, rise)
     solid = profiles.revolve(placed, params.angle)
     return OpResult(outputs=[_created(params.name, str(_("Rotationskörper")), solid)])
 
@@ -342,6 +387,9 @@ class SketchSweepParams(BaseParams):
         placement="advanced",
         doc=_CORNERS_DOC,
     )
+    sketch: str = param(
+        title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
+    )
 
 
 @register_op(
@@ -359,7 +407,9 @@ class SketchSweepParams(BaseParams):
 def sketch_sweep(ctx: OpContext) -> OpResult:
     params = cast(SketchSweepParams, ctx.params)
     require()
-    profile = _sketch_profile(params.shape, params.length, params.width, params.corners)
+    profile = _profile_for(
+        ctx, params.sketch, params.shape, params.length, params.width, params.corners
+    )
     solid = profiles.sweep_arc(profile, params.bend_radius, params.bend_angle)
     return OpResult(outputs=[_created(params.name, str(_("Bogen")), solid)])
 

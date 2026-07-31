@@ -911,10 +911,21 @@ laufen parallel und stehen weiter oben unter „Bewusst offen".
       exakte Gewindebolzen als echter helikaler Sweep — erst kürzen, dann
       vereinigen, sonst scheitert die Boolesche Stufe; Fase und Verrundung
       ziehen in die neue Kategorie Formgebung um
+- [x] Die gezeichnete Skizze reist als Parameterwert (`kind="sketch"`,
+      JSON-Text in `core/sketch/serialize.py`) und ersetzt in
+      `sketch_extrude`, `sketch_pocket`, `sketch_revolve` und `sketch_sweep`
+      die Grundform — §15 gilt unverändert: kein verstecktes Attribut,
+      Bearbeiten ist `change_params`. Der Text wird gelesen wie jede fremde
+      Eingabe (auch `true` und `NaN` sind keine Koordinaten), und der
+      Cache-Schlüssel der Auswertung kennt die Projektparameter, die ein
+      Maßausdruck im Text liest — sonst überlebte der alte Körper die
+      Parameteränderung im Cache
 - [ ] Grafischer Skizzeneditor im Viewport (Ebene aus Fläche, Zeichnen,
       Bedingungen), offscreen testbar — **der letzte offene Baustein von
       P13**; bis dahin sind die Grundformen über Dialog, CLI und Agent der
-      Weg (Ausgabestufe eins aus §30.1, für sich abnahmefähig)
+      Weg (Ausgabestufe eins aus §30.1, für sich abnahmefähig); die
+      Parameterstrecke dafür liegt bereit (`kind="sketch"`, der Dialog
+      zeigt bis dahin das Textfeld)
 - [x] Agenten-Suite von 30 auf 33 Fälle: Sechseck-Sockel, Deckel mit Tasche,
       Handlauf-Bogen — und der Trichter dreht sich um: was den
       OpenSCAD-Rückfall brauchte, kann `sketch_loft` jetzt im Haus. Die

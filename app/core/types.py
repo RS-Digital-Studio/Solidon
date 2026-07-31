@@ -449,7 +449,11 @@ class BaseParams:
         return {name: getattr(self, name) for name in (spec.name for spec in self.spec())}
 
 
-ParamKind = Literal["float", "int", "bool", "str", "enum", "object", "feature", "part", "source"]
+ParamKind = Literal[
+    "float", "int", "bool", "str", "enum", "object", "feature", "part", "source", "sketch"
+]
+"""``sketch`` trägt eine gezeichnete Skizze als JSON-Text (§30.1) — der Dialog
+öffnet dafür den Skizzeneditor statt eines Eingabefelds."""
 ParamPlacement = Literal["front", "advanced"]
 """Front side or ``More settings`` — the graded depth from §2.4."""
 

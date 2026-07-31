@@ -15,17 +15,36 @@ import pytest
 from app.core.brep.kernel import Solid, available
 from app.core.errors import ValidationError
 from app.core.registry import REGISTRY
+from app.core.scene import ResultCache, evaluate
 from app.core.scene.cancel import NeverCancelled
-from app.core.types import OpContext, OpResult, Scene, SceneObject
+from app.core.sketch.serialize import sketch_to_text
+from app.core.types import (
+    Document,
+    OpContext,
+    Operation,
+    OpResult,
+    Parameter,
+    Profile,
+    Scene,
+    SceneObject,
+    Sketch,
+    SketchElement,
+)
+from tests.test_sketch import rectangle
 
 pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
 
-def run(op: str, entry: SceneObject | None = None, **params: object) -> OpResult:
+def run(
+    op: str,
+    entry: SceneObject | None = None,
+    parameters: dict[str, Parameter] | None = None,
+    **params: object,
+) -> OpResult:
     spec = REGISTRY.get(op)
     return spec.fn(
         OpContext(
-            scene=Scene(objects={entry.id: entry} if entry else {}),
+            scene=Scene(objects={entry.id: entry} if entry else {}, parameters=parameters or {}),
             inputs=[entry] if entry else [],
             params=spec.params(**params),
             profile=None,
@@ -143,6 +162,88 @@ def test_a_loft_between_rectangles_is_a_frustum() -> None:
     lower, upper = 800.0, 200.0
     expected = 10.0 / 3.0 * (lower + upper + math.sqrt(lower * upper))
     assert body.volume == pytest.approx(expected, rel=1e-6)
+
+
+# --- Gezeichnete Skizze als Parameter (§30.1) -----------------------------------
+
+
+def drawn_text(width_value: str = "@width", height_value: str = "@height") -> str:
+    """Das verzogene Rechteck aus test_sketch, als Parametertext einer Op."""
+    return sketch_to_text(rectangle(width_value, height_value))
+
+
+def scene_parameters(**values: float) -> dict[str, Parameter]:
+    return {name: Parameter(name=name, value=value) for name, value in values.items()}
+
+
+def test_a_drawn_sketch_beats_the_base_shape_and_reads_the_parameters() -> None:
+    """§30.1: die gezeichnete Skizze ersetzt die Grundform, und ihre Maße lesen
+    die Projektparameter der Szene — dieselben Werte wie überall (§13). Die
+    absurde Grundform daneben stellt sicher, dass wirklich die Skizze rechnet."""
+    result = run(
+        "sketch_extrude",
+        parameters=scene_parameters(width=30.0, height=12.0),
+        shape="circle",
+        length=999.0,
+        height=4.0,
+        sketch=drawn_text(),
+    )
+    assert solid_of(result).volume == pytest.approx(30.0 * 12.0 * 4.0, rel=1e-9)
+
+
+def test_a_drawn_sketch_revolves_as_drawn() -> None:
+    """Bei der Rotation gilt die Skizze wie gezeichnet: x ist der Abstand von
+    der Achse, der Abstand-Parameter greift nicht — sonst verschöbe er einen
+    Querschnitt, der seinen Ort schon kennt."""
+    text = sketch_to_text(
+        Sketch(
+            plane="plane:xz",
+            elements=(
+                SketchElement("line", ((10.0, 0.0), (15.0, 0.0))),
+                SketchElement("line", ((15.0, 0.0), (15.0, 8.0))),
+                SketchElement("line", ((15.0, 8.0), (10.0, 8.0))),
+                SketchElement("line", ((10.0, 8.0), (10.0, 0.0))),
+            ),
+        )
+    )
+    body = solid_of(run("sketch_revolve", offset=999.0, sketch=text))
+    assert body.volume == pytest.approx(math.pi * (15.0**2 - 10.0**2) * 8.0, rel=1e-9)
+
+
+def test_a_damaged_sketch_text_is_a_correctable_error() -> None:
+    with pytest.raises(ValidationError):
+        run("sketch_extrude", sketch="{kaputt")
+
+
+def _document_with(width: float) -> Document:
+    return Document(
+        format_version=1,
+        app_version="0.0.1",
+        parameters=scene_parameters(width=width, height=12.0),
+        ops=[
+            Operation(
+                id=1,
+                op="sketch_extrude",
+                outputs=("obj_1",),
+                params={"sketch": drawn_text(), "height": 4.0},
+            )
+        ],
+    )
+
+
+def test_a_parameter_change_reaches_a_cached_sketch(profile: Profile) -> None:
+    """§15: der Cache-Schlüssel deckt alles, wovon das Ergebnis abhängt — auch
+    die Werte, die ein Maßausdruck im Skizzentext liest. Ohne sie überlebte
+    der alte Körper die Parameteränderung im Cache."""
+    cache = ResultCache()
+    first = evaluate(_document_with(30.0), profile, cache=cache)
+    assert first.complete
+
+    changed = evaluate(_document_with(20.0), profile, cache=cache)
+    assert changed.complete
+    body = changed.scene.objects["obj_1"].mesh
+    assert isinstance(body, Solid)
+    assert body.volume == pytest.approx(20.0 * 12.0 * 4.0, rel=1e-9)
 
 
 # --- Formgebung auf fertigen Körpern --------------------------------------------

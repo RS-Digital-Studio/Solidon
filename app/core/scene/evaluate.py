@@ -35,7 +35,9 @@ from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import object_hash, operation_hash
+from app.core.sketch.serialize import sketch_parameter_references
 from app.core.types import (
+    BaseParams,
     BoundingBox,
     CancelToken,
     Document,
@@ -151,7 +153,7 @@ def evaluate(
         previous_bounds = {entry.id: entry.mesh.bounds for entry in inputs}
         key = operation_hash(
             operation,
-            resolved,
+            _with_sketch_context(spec.params, resolved, values),
             [hashes[entry] for entry in operation.inputs],
             profile,
             quality,
@@ -422,6 +424,32 @@ def _with_features(
         )
 
     return dataclasses.replace(entry, features={**apply_mapping(detected, matched), **generated})
+
+
+def _with_sketch_context(
+    params_class: type[BaseParams],
+    resolved: Mapping[str, Any],
+    values: Mapping[ParameterName, float],
+) -> Mapping[str, Any]:
+    """Der Parametersatz für den Cache-Schlüssel, ergänzt um das, was ein
+    Skizzentext von außen liest.
+
+    Maßausdrücke einer gezeichneten Skizze (§30.1) stehen im JSON-Text der Op
+    und sind für ``resolve_params`` unsichtbar. Der Schlüssel deckt aber alles,
+    wovon das Ergebnis abhängt (§15) — also gehören die Werte der gelesenen
+    Projektparameter hinein, sonst überlebt ein Ergebnis die Änderung des
+    Parameters, aus dem es gerechnet wurde."""
+    context: dict[str, Any] = {}
+    for spec in params_class.spec():
+        if spec.kind != "sketch":
+            continue
+        text = resolved.get(spec.name)
+        if not isinstance(text, str) or not text:
+            continue
+        for name in sorted(sketch_parameter_references(text)):
+            if name in values:
+                context[f"@{name}"] = values[name]
+    return {**resolved, **context} if context else resolved
 
 
 def _evaluated_parameters(
