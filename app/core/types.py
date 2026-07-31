@@ -708,9 +708,10 @@ class SketchElement:
     """Ein Element einer Skizze. ``points`` trägt je nach ``kind``:
 
     ``point`` einen Punkt, ``line`` Anfang und Ende, ``circle`` Mittelpunkt und
-    einen Punkt auf dem Rand, ``arc`` Mittelpunkt, Anfang und Ende. Damit sind
-    alle Freiheitsgrade Punktkoordinaten, und der Solver kennt genau eine
-    Sorte Variable."""
+    einen Punkt auf dem Rand, ``arc`` Mittelpunkt, Anfang und Ende — der Bogen
+    läuft **gegen den Uhrzeigersinn** von Anfang nach Ende. Damit sind alle
+    Freiheitsgrade Punktkoordinaten, und der Solver kennt genau eine Sorte
+    Variable."""
 
     kind: SketchElementKind
     points: tuple[Point2, ...]

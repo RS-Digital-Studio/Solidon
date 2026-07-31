@@ -34,6 +34,8 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
     "repair": _("Reparatur"),
     "transform": _("Transformation"),
     "boolean": _("Boolesch"),
+    "sketch": _("Skizze"),
+    "shaping": _("Formgebung"),
     "holes": _("Bohrungen"),
     "parts": _("Bausteine"),
     "prepare": _("Druckvorbereitung"),

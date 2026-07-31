@@ -26,6 +26,8 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     # They refuse to run without OpenCASCADE, but they are always in the menu —
     # an entry that says why it is greyed out beats one that is not there.
     "app.core.brep.ops",
+    # §30.1: die Skizzen-Operationen — Grundformen über den Solver in den Kern.
+    "app.core.sketch.ops",
 )
 
 #: The part library declares no operations itself — one is generated per part

@@ -5,9 +5,10 @@ command line and the agent from one place (§10). What is different is that they
 refuse to run without the kernel — with one sentence, not with an import trace
 (§36).
 
-The category is "Netz" for the conversion and "Boolesch" for the shaping, on
-purpose: somebody looking for a fillet looks where the other shaping operations
-are, not under a kernel name they never chose.
+Die Kategorie heißt „Formgebung", nicht nach dem Kern: wer eine Verrundung
+sucht, sucht sie neben Fase, Schale und Formschräge — nicht unter einem
+Kernel-Namen, den er nie gewählt hat. Nur die Umwandlung wohnt unter „Netz",
+weil sie dort endet.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import dataclasses
 from pathlib import Path
 from typing import cast
 
-from app.core.brep import edit, step
+from app.core.brep import edit, profiles, step
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
 from app.core.errors import InternalError, ValidationError
@@ -205,7 +206,7 @@ class FilletParams(BaseParams):
 @register_op(
     name="fillet_edges",
     title=_("Verrunden"),
-    category="boolean",
+    category="shaping",
     params=FilletParams,
     consumes=1,
     produces=1,
@@ -242,7 +243,7 @@ class ChamferParams(BaseParams):
 @register_op(
     name="chamfer_edges",
     title=_("Fase anbringen"),
-    category="boolean",
+    category="shaping",
     params=ChamferParams,
     consumes=1,
     produces=1,
@@ -252,6 +253,75 @@ def chamfer_edges(ctx: OpContext) -> OpResult:
     params = cast(ChamferParams, ctx.params)
     source, body = _brep_input(ctx)
     solid = edit.chamfer(body, params.distance, cast(edit.EdgeChoice, params.edges))
+    return OpResult(outputs=[_replaced(source, solid)])
+
+
+@op_params
+class ShellParams(BaseParams):
+    wall: float = param(
+        title=_("Wandstärke"),
+        default=2.0,
+        unit="mm",
+        minimum=0.2,
+        maximum=50.0,
+        doc=_(
+            "Wie dick die stehenbleibende Wand wird. Mehr als der halbe "
+            "Körper geht nicht — dann bleibt innen nichts zum Aushöhlen."
+        ),
+    )
+
+
+@register_op(
+    name="shell_exact",
+    title=_("Exakt aushöhlen"),
+    category="shaping",
+    params=ShellParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Höhlt einen B-Rep-Körper mit exakter Wandstärke aus und lässt die "
+        "Oberseite offen — ein Kasten aus einem Quader, in einem Schritt. Für "
+        "geschlossenes Aushöhlen mit Entlüftung gibt es die Netz-Operation."
+    ),
+)
+def shell_exact(ctx: OpContext) -> OpResult:
+    params = cast(ShellParams, ctx.params)
+    source, body = _brep_input(ctx)
+    solid = profiles.shell_open_top(body, params.wall)
+    return OpResult(outputs=[_replaced(source, solid)])
+
+
+@op_params
+class DraftParams(BaseParams):
+    angle: float = param(
+        title=_("Winkel"),
+        default=2.0,
+        unit="°",
+        minimum=0.1,
+        maximum=30.0,
+        doc=_(
+            "Um wie viel Grad die senkrechten Flächen angestellt werden. Die "
+            "Standfläche behält ihr Maß, nach oben wird der Körper schmaler."
+        ),
+    )
+
+
+@register_op(
+    name="draft_faces",
+    title=_("Formschräge anstellen"),
+    category="shaping",
+    params=DraftParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Stellt alle senkrechten Flächen eines B-Rep-Körpers um einen Winkel "
+        "an — zum Entformen, oder damit ein Stapelbehälter sich stapeln lässt."
+    ),
+)
+def draft_faces(ctx: OpContext) -> OpResult:
+    params = cast(DraftParams, ctx.params)
+    source, body = _brep_input(ctx)
+    solid = profiles.draft_vertical(body, params.angle)
     return OpResult(outputs=[_replaced(source, solid)])
 
 
@@ -331,6 +401,8 @@ __all__ = [
     "chamfer_edges",
     "create_brep_box",
     "create_brep_cylinder",
+    "draft_faces",
     "fillet_edges",
     "load_step",
+    "shell_exact",
 ]
