@@ -463,10 +463,19 @@ class SketchElement:
 
 @dataclass(frozen=True)
 class SketchConstraint:
-    kind: Literal["distance", "coincident", "horizontal", "vertical",
-                  "parallel", "perpendicular", "tangent", "symmetric", "fixed"]
-    targets: tuple[int, ...]  # Indizes in elements
-    value: str = ""           # Maß als Ausdruck der Grammatik (§13), kein eval
+    kind: Literal[
+        "distance",
+        "coincident",
+        "horizontal",
+        "vertical",
+        "parallel",
+        "perpendicular",
+        "tangent",
+        "symmetric",
+        "fixed",
+    ]
+    targets: tuple[int, ...]  # Punktindizes über die flache Punktliste der Skizze
+    value: str = ""  # Maß als Ausdruck der Grammatik (§13), kein eval
 
 
 @dataclass(frozen=True)

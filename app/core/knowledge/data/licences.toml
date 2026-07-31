@@ -42,7 +42,7 @@ banned_packages = ["pymeshlab", "PyQt5", "PyQt6", "PyQt5-Qt5", "PyQt6-Qt6"]
 manifold3d = { licence = "Apache-2.0", note = "kernel of the part library" }
 trimesh = { licence = "MIT", note = "mesh IO and repair" }
 numpy = { licence = "BSD-3-Clause" }
-scipy = { licence = "BSD-3-Clause", note = "graph engine and assignment solver" }
+scipy = { licence = "BSD-3-Clause", note = "graph engine, assignment solver and the 2D sketch solver (§30.1)" }
 shapely = { licence = "BSD-3-Clause", note = "polygons for the capped section cut; bundles GEOS (LGPL-2.1)" }
 networkx = { licence = "BSD-3-Clause", note = "contour hierarchy when closing a cut face" }
 rtree = { licence = "MIT", note = "spatial index for the same hierarchy; libspatialindex is MIT" }

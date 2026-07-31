@@ -126,6 +126,32 @@ class ValidationError(UserError):
         self.constraint = constraint
 
 
+class SketchConflictError(UserError):
+    """Zwei Bedingungen einer Skizze vertragen sich nicht (§30.1).
+
+    Überbestimmt oder widersprüchlich — beides hält an und nennt das Paar,
+    damit der nächste Klick es lösen kann (Regel 17). ``first`` und ``second``
+    sind Indizes in ``sketch.constraints``."""
+
+    default_title: ClassVar[TranslatableText] = _("Zwei Bedingungen widersprechen sich.")
+
+    def __init__(
+        self,
+        first: int = 0,
+        second: int = 0,
+        detail: TranslatableText | str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(detail=detail, **_with_values(kwargs, first=first, second=second))
+        self.first = first
+        self.second = second
+        self.suggestions = (
+            Action(f"remove_constraint:{first}", _("Erste Bedingung entfernen"), primary=True),
+            Action(f"remove_constraint:{second}", _("Zweite Bedingung entfernen")),
+            CANCEL,
+        )
+
+
 class AmbiguityError(UserError):
     """Several candidates fit — ask instead of guessing (Leitprinzip 6)."""
 

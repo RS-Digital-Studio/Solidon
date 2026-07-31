@@ -883,15 +883,20 @@ bleibt bewusst außen (§22.5), OpenSCAD bleibt Rückfallebene. Die
 Veröffentlichungsreste aus P8 (Remote/CI, Zertifikat, Vertrieb, Betatest)
 laufen parallel und stehen weiter oben unter „Bewusst offen".
 
-- [ ] Lizenzprüfung der Solver-Wege: eigener scipy-Solver gegen
-      CadQuery/build123d (Regel 22, §36) — SolveSpace und py-slvs sind GPL
-      und aus dem Rennen
-- [ ] `core/sketch`: Datenmodell nach den Verträgen in §9 (Ebene, Elemente,
-      Bedingungen), ohne Qt
-- [ ] 2D-Solver: deterministisch; unterbestimmt meldet Freiheitsgrade als
-      Befund, überbestimmt nennt das kollidierende Paar (Regel 17)
-- [ ] Maße als Ausdrücke der Parametergrammatik (§13) — Projektparameter in
-      Skizzenmaßen, kein `eval`
+- [x] Lizenzprüfung der Solver-Wege — kürzer als gedacht: scipy ist seit dem
+      `geom`-Extra deklariert und steht mit BSD-3 in der Freigabeliste; der
+      eigene Solver braucht **keine neue Abhängigkeit**. CadQuery/build123d
+      damit gegenstandslos; SolveSpace und py-slvs waren GPL und nie im Rennen
+- [x] `core/sketch`: Datenmodell als Verträge in `core/types.py` (§9) —
+      alle Freiheitsgrade sind Punktkoordinaten, `targets` sind Punktindizes
+      über die flache Punktliste; ohne Qt
+- [x] 2D-Solver (`core/sketch/solver.py`): deterministisch, ohne Zufall;
+      unterbestimmt zählt Freiheitsgrade im Ergebnis, überbestimmt und
+      widersprüchlich werfen `SketchConflictError` mit benanntem Paar —
+      Duplikate findet die Ranganalyse, Widersprüche der Restfehler
+- [x] Maße als Ausdrücke der Parametergrammatik (§13) — `@width` und
+      `=@width/2 + 5` laufen durch denselben Auswerter wie überall, kein
+      `eval`; alles außerhalb der Grammatik wird abgelehnt
 - [ ] Grundformen (Rechteck, Langloch, Kreisbild, Vieleck) über Dialog, CLI
       und Agent — der Agent nie über rohe Punktlisten (Leitprinzip 5)
 - [ ] Ops `sketch_extrude`, `sketch_pocket`, `sketch_revolve`,
@@ -903,7 +908,14 @@ laufen parallel und stehen weiter oben unter „Bewusst offen".
 - [ ] Agenten-Suite um Skizzenanfragen erweitern, Quote vorher und nachher
 - [ ] Ende-zu-Ende: Referenzteil (Gehäuse mit Deckel) ohne Fremd-CAD von
       leerer Szene bis Export
-- [ ] Leistungsziel §31: 200 Bedingungen unter 100 ms
+- [x] Leistungsziel §31: 200 Bedingungen unter 100 ms — **90 ms** Ende zu
+      Ende, gemessen in `test_performance.py`. Zwei Entscheidungen tragen
+      den Wert: jede Bedingung bringt ihre **analytische Ableitung** mit
+      (numerische Differenzen kosten eine Auswertung je Variable), und der
+      Trust-Region-Schritt läuft über `lsmr` statt einer dichten SVD je
+      Iteration (700 ms → 90 ms, nachgemessen). Nebeneffekt: die exakte
+      Jacobimatrix macht die Ranganalyse verlässlich, an der die Erkennung
+      überbestimmter Skizzen hängt
 
 ## Website
 

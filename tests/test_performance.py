@@ -117,6 +117,30 @@ def test_feature_detection_on_two_hundred_thousand_triangles() -> None:
     assert taken < 10.0, "the target is one second; ten catches an order of magnitude"
 
 
+def test_the_sketch_solver_meets_its_budget() -> None:
+    """§31: 200 Bedingungen unter 100 ms.
+
+    Eine Kette aus hundert Maschen — hundert Linien, deren Enden aufeinander
+    liegen, jede mit einem Maß, ein Anker. Gemessen wird der ganze Weg durch
+    ``solve_sketch`` einschließlich Validierung und Ranganalyse; die
+    analytischen Ableitungen und der ``lsmr``-Unterlöser sind genau die zwei
+    Entscheidungen, die diesen Wert tragen (700 ms mit dichter SVD)."""
+    from app.core.sketch import solve_sketch
+    from app.core.types import Sketch, SketchConstraint, SketchElement
+
+    elements = tuple(
+        SketchElement("line", ((i * 10.0, 0.3), (i * 10.0 + 9.5, -0.2))) for i in range(100)
+    )
+    constraints = (
+        *(SketchConstraint("coincident", (2 * i + 1, 2 * i + 2)) for i in range(99)),
+        *(SketchConstraint("distance", (2 * i, 2 * i + 1), "10") for i in range(100)),
+        SketchConstraint("fixed", (0,)),
+    )
+    sketch = Sketch(plane="plane:xy", elements=elements, constraints=constraints)
+    taken = measure("sketch_solve_200", lambda: solve_sketch(sketch))
+    assert taken < 1.0, "das Ziel ist ein Zehntel; eine Sekunde fängt die Größenordnung"
+
+
 def test_the_layer_analysis_stays_under_the_budget() -> None:
     """§31 asks for 300 ms at 200 000 triangles and 0.2 mm.
 

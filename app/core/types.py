@@ -687,6 +687,73 @@ class SliceResult:
     source: MetricSource = "internal"
 
 
+# --- Skizzen (§30.1) -----------------------------------------------------------
+
+SketchElementKind = Literal["point", "line", "arc", "circle"]
+SketchConstraintKind = Literal[
+    "distance",
+    "coincident",
+    "horizontal",
+    "vertical",
+    "parallel",
+    "perpendicular",
+    "tangent",
+    "symmetric",
+    "fixed",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class SketchElement:
+    """Ein Element einer Skizze. ``points`` trägt je nach ``kind``:
+
+    ``point`` einen Punkt, ``line`` Anfang und Ende, ``circle`` Mittelpunkt und
+    einen Punkt auf dem Rand, ``arc`` Mittelpunkt, Anfang und Ende. Damit sind
+    alle Freiheitsgrade Punktkoordinaten, und der Solver kennt genau eine
+    Sorte Variable."""
+
+    kind: SketchElementKind
+    points: tuple[Point2, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SketchConstraint:
+    """Eine Zwangsbedingung. ``targets`` sind Punktindizes über die flache
+    Punktliste der Skizze — Elemente der Reihe nach, Punkte je Element der
+    Reihe nach. ``value`` ist ein Ausdruck der Parametergrammatik (§13) und
+    darf Projektparameter lesen; nur ein Maß (``distance``) trägt einen."""
+
+    kind: SketchConstraintKind
+    targets: tuple[int, ...]
+    value: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Sketch:
+    """Eine 2D-Skizze auf einer Ebene (§30.1).
+
+    ``plane`` ist ``plane:xy``, ``plane:xz``, ``plane:yz`` oder
+    ``feature:<id>`` für eine erkannte planare Fläche."""
+
+    plane: str
+    elements: tuple[SketchElement, ...]
+    constraints: tuple[SketchConstraint, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SolvedSketch:
+    """Das Ergebnis des Solvers: dieselben Elemente mit gelösten Koordinaten.
+
+    ``free_dof`` zählt die verbleibenden Freiheitsgrade — unterbestimmt ist
+    kein Fehler, sondern ein Befund (§30.1). ``max_residual`` ist der größte
+    verbliebene Restfehler; läge er über der Toleranz, hätte der Solver
+    angehalten statt zu liefern."""
+
+    elements: tuple[SketchElement, ...]
+    free_dof: int
+    max_residual: float
+
+
 # --- Further fixed contracts ---------------------------------------------------
 
 

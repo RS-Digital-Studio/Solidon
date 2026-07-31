@@ -1,0 +1,278 @@
+"""Der Skizzen-Solver (Bauplan §30.1): deterministisch, Freiheitsgrade als
+Zahl, Konflikte mit benanntem Paar, Maße über die Parametergrammatik."""
+
+from __future__ import annotations
+
+import math
+
+import pytest
+
+from app.core.errors import AppError, SketchConflictError, ValidationError
+from app.core.sketch import solve_sketch
+from app.core.types import Sketch, SketchConstraint, SketchElement
+
+# Ein Rechteck aus vier Linien, absichtlich leicht verzogen: die Koinzidenzen
+# ziehen die Ecken zusammen, die Maße kommen aus Projektparametern.
+# Flache Punktindizes: unten (0,1), rechts (2,3), oben (4,5), links (6,7).
+
+
+def rectangle(width_value: str = "@width", height_value: str = "@height") -> Sketch:
+    return Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.3, -0.2), (39.5, 0.4))),
+            SketchElement("line", ((40.2, 0.1), (39.8, 19.7))),
+            SketchElement("line", ((40.1, 20.3), (0.2, 19.8))),
+            SketchElement("line", ((-0.3, 20.1), (0.1, 0.2))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (1, 2)),
+            SketchConstraint("coincident", (3, 4)),
+            SketchConstraint("coincident", (5, 6)),
+            SketchConstraint("coincident", (7, 0)),
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("vertical", (2, 3)),
+            SketchConstraint("horizontal", (4, 5)),
+            SketchConstraint("vertical", (6, 7)),
+            SketchConstraint("distance", (0, 1), width_value),
+            SketchConstraint("distance", (2, 3), height_value),
+        ),
+    )
+
+
+PARAMS = {"width": 40.0, "height": 20.0}
+
+
+def span(a: tuple[float, float], b: tuple[float, float]) -> float:
+    return math.hypot(b[0] - a[0], b[1] - a[1])
+
+
+def test_rectangle_solves_to_its_parameters() -> None:
+    solved = solve_sketch(rectangle(), PARAMS)
+    bottom = solved.elements[0]
+    right = solved.elements[1]
+    assert math.isclose(span(*bottom.points), 40.0, abs_tol=1e-6)
+    assert math.isclose(span(*right.points), 20.0, abs_tol=1e-6)
+    assert solved.max_residual <= 1e-6
+    # Die Ecken sitzen aufeinander.
+    assert math.isclose(span(bottom.points[1], right.points[0]), 0.0, abs_tol=1e-6)
+
+
+def test_underdetermined_reports_degrees_of_freedom() -> None:
+    # Nichts hält das Rechteck fest: es kann in der Ebene verschoben werden.
+    solved = solve_sketch(rectangle(), PARAMS)
+    assert solved.free_dof == 2
+
+
+def test_fixed_corner_removes_the_last_freedom() -> None:
+    sketch = rectangle()
+    pinned = Sketch(
+        plane=sketch.plane,
+        elements=sketch.elements,
+        constraints=(*sketch.constraints, SketchConstraint("fixed", (0,))),
+    )
+    solved = solve_sketch(pinned, PARAMS)
+    assert solved.free_dof == 0
+    # Der Anker heftet an die Eingangskoordinate der Ecke.
+    assert math.isclose(solved.elements[0].points[0][0], 0.3, abs_tol=1e-6)
+    assert math.isclose(solved.elements[0].points[0][1], -0.2, abs_tol=1e-6)
+
+
+def test_same_input_solves_to_the_same_output() -> None:
+    first = solve_sketch(rectangle(), PARAMS)
+    second = solve_sketch(rectangle(), PARAMS)
+    assert first == second
+
+
+def test_a_dimension_takes_an_expression() -> None:
+    solved = solve_sketch(rectangle(width_value="=@width/2 + 5"), PARAMS)
+    assert math.isclose(span(*solved.elements[0].points), 25.0, abs_tol=1e-6)
+
+
+def test_everything_outside_the_grammar_is_rejected() -> None:
+    with pytest.raises(AppError):
+        solve_sketch(rectangle(width_value="__import__('os').getcwd()"), PARAMS)
+
+
+def test_conflicting_dimensions_name_the_pair() -> None:
+    sketch = rectangle()
+    conflicted = Sketch(
+        plane=sketch.plane,
+        elements=sketch.elements,
+        constraints=(*sketch.constraints, SketchConstraint("distance", (0, 1), "50")),
+    )
+    with pytest.raises(SketchConflictError) as caught:
+        solve_sketch(conflicted, PARAMS)
+    pair = {caught.value.first, caught.value.second}
+    # Die beiden Maße auf derselben Strecke: 40 gegen 50.
+    assert pair == {8, 10}
+    assert caught.value.suggestions
+
+
+def test_a_redundant_constraint_names_the_pair() -> None:
+    sketch = rectangle()
+    doubled = Sketch(
+        plane=sketch.plane,
+        elements=sketch.elements,
+        constraints=(*sketch.constraints, SketchConstraint("horizontal", (0, 1))),
+    )
+    with pytest.raises(SketchConflictError) as caught:
+        solve_sketch(doubled, PARAMS)
+    assert {caught.value.first, caught.value.second} == {4, 10}
+
+
+def test_circle_radius_is_a_distance() -> None:
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("circle", ((0.0, 0.0), (3.0, 0.0))),),
+        constraints=(SketchConstraint("distance", (0, 1), "@r"),),
+    )
+    solved = solve_sketch(sketch, {"r": 5.0})
+    assert math.isclose(span(*solved.elements[0].points), 5.0, abs_tol=1e-6)
+    assert solved.free_dof == 3
+
+
+def test_arc_legs_end_up_equally_long() -> None:
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("arc", ((0.0, 0.0), (4.0, 0.0), (0.0, 5.0))),),
+    )
+    solved = solve_sketch(sketch)
+    centre, start, end = solved.elements[0].points
+    assert math.isclose(span(centre, start), span(centre, end), abs_tol=1e-6)
+
+
+def test_perpendicular_and_parallel_hold() -> None:
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 1.0))),
+            SketchElement("line", ((0.0, 5.0), (10.0, 4.0))),
+        ),
+        constraints=(
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("parallel", (0, 1, 2, 3)),
+        ),
+    )
+    solved = solve_sketch(sketch)
+    first, second = solved.elements
+    assert math.isclose(first.points[0][1], first.points[1][1], abs_tol=1e-6)
+    assert math.isclose(second.points[0][1], second.points[1][1], abs_tol=1e-6)
+
+
+def test_wrong_target_count_is_rejected() -> None:
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),),
+        constraints=(SketchConstraint("distance", (0,), "10"),),
+    )
+    with pytest.raises(ValidationError):
+        solve_sketch(sketch)
+
+
+def test_a_target_outside_the_sketch_is_rejected() -> None:
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),),
+        constraints=(SketchConstraint("horizontal", (0, 7)),),
+    )
+    with pytest.raises(ValidationError):
+        solve_sketch(sketch)
+
+
+def test_a_dimension_without_a_value_is_rejected() -> None:
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),),
+        constraints=(SketchConstraint("distance", (0, 1)),),
+    )
+    with pytest.raises(ValidationError):
+        solve_sketch(sketch)
+
+
+def test_a_value_on_a_non_dimension_is_rejected() -> None:
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),),
+        constraints=(SketchConstraint("horizontal", (0, 1), "10"),),
+    )
+    with pytest.raises(ValidationError):
+        solve_sketch(sketch)
+
+
+def test_a_zero_radius_circle_is_rejected() -> None:
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("circle", ((0.0, 0.0), (0.0, 0.0))),),
+    )
+    with pytest.raises(ValidationError):
+        solve_sketch(sketch)
+
+
+def test_an_empty_sketch_answers_quietly() -> None:
+    solved = solve_sketch(Sketch(plane="plane:xy", elements=()))
+    assert solved.elements == ()
+    assert solved.free_dof == 0
+
+
+def test_every_analytic_gradient_matches_central_differences() -> None:
+    """Die Ranganalyse und das Budget aus §31 stehen auf den analytischen
+    Ableitungen — eine falsche wäre ein stiller Fehler, der nur langsam
+    konvergiert. Hier steht jede Bedingungsart einmal in allgemeiner Lage
+    gegen zentrale Differenzen."""
+    import numpy as np
+
+    from app.core.sketch import solver
+
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.1, 0.2), (10.3, 1.7))),
+            SketchElement("line", ((1.5, 6.2), (11.8, 8.9))),
+            SketchElement("circle", ((4.4, 12.1), (7.9, 13.6))),
+            SketchElement("arc", ((20.2, 3.3), (24.9, 4.1), (21.0, 7.6))),
+            SketchElement("point", ((15.5, 15.5),)),
+        ),
+        constraints=(
+            SketchConstraint("distance", (0, 1), "10"),
+            SketchConstraint("coincident", (1, 2)),
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("vertical", (2, 3)),
+            SketchConstraint("parallel", (0, 1, 2, 3)),
+            SketchConstraint("perpendicular", (0, 1, 2, 3)),
+            SketchConstraint("tangent", (0, 1, 4, 5)),
+            SketchConstraint("symmetric", (9, 3, 0, 1)),
+            SketchConstraint("fixed", (9,)),
+        ),
+    )
+    equations, anchors = solver._build_equations(sketch, {})
+    pts = anchors.copy()
+    total_rows = sum(equation.rows for equation in equations)
+
+    analytic = np.zeros((total_rows, pts.shape[0], 2))
+    begin = 0
+    for equation in equations:
+        equation.grad(pts, analytic[begin : begin + equation.rows])
+        begin += equation.rows
+    analytic_flat = analytic.reshape(total_rows, pts.size)
+
+    def stacked(flat: np.ndarray) -> np.ndarray:
+        shaped = flat.reshape(-1, 2)
+        rows: list[float] = []
+        for equation in equations:
+            rows.extend(equation.fn(shaped))
+        return np.asarray(rows)
+
+    step = 1e-7
+    flat = pts.reshape(-1).copy()
+    numeric = np.zeros_like(analytic_flat)
+    for column in range(flat.size):
+        forward = flat.copy()
+        backward = flat.copy()
+        forward[column] += step
+        backward[column] -= step
+        numeric[:, column] = (stacked(forward) - stacked(backward)) / (2.0 * step)
+
+    assert np.allclose(analytic_flat, numeric, atol=1e-5), (
+        f"größte Abweichung: {float(np.max(np.abs(analytic_flat - numeric))):.2e}"
+    )
