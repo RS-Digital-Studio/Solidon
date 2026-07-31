@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formwerk — design, generate and edit printable 3D models</title>
+<meta name="description" content="Formwerk is a desktop application for 3D printing: design, generate and edit printable models — local, no account, no subscription. Geometry is computed by code, never by the language model.">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/en/">Form<span>werk</span></a>
+    <nav class="lang"><a href="/">Deutsch</a></nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <div class="hero">
+      <h1>Describe the part. Get an accurate, printable model.</h1>
+      <p class="lead">Formwerk is a desktop application for designing,
+      generating and editing printable 3D models — local, no account, no
+      subscription. An AI agent drives the same tools as the menus;
+      geometry is computed by code, never by the language model.</p>
+
+      <div class="download">
+        <strong>Version 1.0 ships in 2026</strong>
+        <p>For Windows and Linux. This page will be the download address —
+        if you want an early look, reach out via the address in the
+        legal notice.</p>
+      </div>
+    </div>
+
+    <section id="ways">
+      <h2>Three ways to a part</h2>
+      <div class="ways">
+        <div class="way">
+          <span class="tag">Way 1 — Edit</span>
+          <h3>Change a downloaded model</h3>
+          <p>Drop the file, read the inspection report, click a face or a
+          hole — then say in the chat what it should become, or pick from
+          the context menu. Compare before/after, apply, export.</p>
+        </div>
+        <div class="way">
+          <span class="tag">Way 2 — Design</span>
+          <h3>Build new, with dimensions</h3>
+          <p>Describe what you need. The agent creates parameters and
+          places proven building blocks — threads, heat-set inserts,
+          hinges. Turn the numbers, the model follows instantly.</p>
+        </div>
+        <div class="way">
+          <span class="tag">Way 3 — Generate</span>
+          <h3>From text or image</h3>
+          <p>A generated mesh runs through the repair chain automatically,
+          gets an inspection report and is split and pinned when needed —
+          until it sits printable on the plate.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <h2>What's inside</h2>
+      <ul class="features">
+        <li><b>Non-destructive history.</b> Every step stays editable,
+        every number can be changed later — nothing gets overwritten.</li>
+        <li><b>Layer analysis before slicing.</b> Overhangs, islands,
+        support volume and wall thickness before the slicer makes them
+        expensive.</li>
+        <li><b>Fits and tolerances.</b> Clearance, press fit, flush — from
+        calibratable material profiles instead of rules of thumb.</li>
+        <li><b>Part library with standard parts.</b> Screw holes, nut
+        pockets, threads, magnet pockets — tested across their whole
+        parameter range.</li>
+        <li><b>Too big for the bed? Auto split.</b> Sectioning with
+        alignment pins and automatically created fits.</li>
+        <li><b>Exact edges.</b> B-rep kernel for chamfers, fillets and
+        round-trip STEP.</li>
+        <li><b>Two colours without a second program.</b> Labels raised,
+        recessed, or as a colour change in a single 3MF file.</li>
+        <li><b>AI local or with your own key.</b> Ollama on your own
+        machine or an API key — and without either, everything except the
+        chat keeps working.</li>
+      </ul>
+    </section>
+
+    <section id="honest">
+      <h2>What Formwerk is not</h2>
+      <div class="honest">
+        Better said up front:
+        <ul>
+          <li><b>Not a slicer.</b> Formwerk analyses and prepares; the
+          print file still comes from your slicer — Formwerk hands over
+          directly and reads its G-code back as a cross-check.</li>
+          <li><b>Not cloud CAD.</b> No accounts, no storage on someone
+          else's server, no telemetry. Projects are files on your
+          machine.</li>
+          <li><b>No dimensional guarantees from generated meshes.</b>
+          What comes from text or images is made printable — accurate
+          design happens on ways 1 and 2.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="requirements">
+      <h2>System requirements</h2>
+      <table class="req">
+        <tr><td>Operating system</td><td>Windows 10/11 (64 bit) or Linux</td></tr>
+        <tr><td>Disk space</td><td>about 750 MB installed, download about 255 MB</td></tr>
+        <tr><td>Optional</td><td>Ollama or an API key for the chat,
+        OpenSCAD, a slicer, ComfyUI for generating — all of them are found
+        or configured, none of them required</td></tr>
+      </table>
+    </section>
+
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    © 2026 RS Digital ·
+    <a href="/impressum.html">Legal notice</a> ·
+    <a href="/datenschutz.html">Privacy</a> ·
+    <a href="/">Deutsch</a>
+  </div>
+</footer>
+
+</body>
+</html>

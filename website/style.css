@@ -1,0 +1,220 @@
+/* Formwerk — statische Website. Keine externen Ressourcen, kein JavaScript. */
+
+:root {
+  --bg: #f7f6f3;
+  --fg: #1c1b1a;
+  --muted: #5f5b55;
+  --accent: #a4551e;
+  --card: #ffffff;
+  --line: #e0ddd7;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171614;
+    --fg: #ece9e4;
+    --muted: #a39e96;
+    --accent: #e08b4e;
+    --card: #201e1b;
+    --line: #35322d;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  line-height: 1.6;
+  font-size: 1.05rem;
+}
+
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+header.site {
+  border-bottom: 1px solid var(--line);
+  padding: 1rem 0;
+}
+
+header.site .wrap {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.brand span { color: var(--accent); }
+
+nav.lang a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+nav.lang a:hover { color: var(--accent); }
+
+.hero {
+  padding: 4rem 0 3rem;
+}
+
+.hero h1 {
+  font-size: clamp(1.9rem, 4.5vw, 3rem);
+  line-height: 1.15;
+  margin: 0 0 1rem;
+  max-width: 40rem;
+}
+
+.hero p.lead {
+  font-size: 1.2rem;
+  color: var(--muted);
+  max-width: 38rem;
+  margin: 0 0 2rem;
+}
+
+.download {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  max-width: 34rem;
+}
+
+.download strong { font-size: 1.1rem; }
+
+.download p { margin: 0.5rem 0 0; color: var(--muted); }
+
+section {
+  padding: 2.5rem 0;
+  border-top: 1px solid var(--line);
+}
+
+section h2 {
+  font-size: 1.6rem;
+  margin: 0 0 1.5rem;
+}
+
+.ways {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1.25rem;
+}
+
+.way {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.way h3 { margin: 0 0 0.5rem; font-size: 1.1rem; }
+
+.way .tag {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.35rem;
+}
+
+.way p { margin: 0; color: var(--muted); font-size: 0.98rem; }
+
+ul.features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: 0.75rem 2rem;
+}
+
+ul.features li {
+  padding-left: 1.4rem;
+  position: relative;
+}
+
+ul.features li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+ul.features b { display: inline; }
+
+.honest {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 0.5rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.honest ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
+
+.honest li { margin: 0.3rem 0; }
+
+table.req {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 40rem;
+}
+
+table.req td {
+  padding: 0.5rem 1rem 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+table.req td:first-child {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+footer.site {
+  border-top: 1px solid var(--line);
+  padding: 2rem 0 3rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+footer.site a { color: var(--muted); }
+
+footer.site a:hover { color: var(--accent); }
+
+main.legal { padding: 3rem 0; max-width: 44rem; }
+
+main.legal h1 { font-size: 1.8rem; }
+
+.draft {
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 2rem;
+}
+
+a { color: var(--accent); }

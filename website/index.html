@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formwerk — druckbare 3D-Modelle konstruieren, generieren und bearbeiten</title>
+<meta name="description" content="Formwerk ist eine Desktop-Anwendung für den 3D-Druck: Modelle konstruieren, generieren und bearbeiten — lokal, ohne Konto, ohne Abo. Die Geometrie rechnet Code, nie das Sprachmodell.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/">Form<span>werk</span></a>
+    <nav class="lang"><a href="/en/">English</a></nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <div class="hero">
+      <h1>Beschreibe das Teil. Bekomme ein maßhaltiges, druckbares Modell.</h1>
+      <p class="lead">Formwerk ist eine Desktop-Anwendung zum Konstruieren,
+      Generieren und Bearbeiten druckbarer 3D-Modelle — lokal, ohne Konto,
+      ohne Abo. Ein KI-Agent bedient dieselben Werkzeuge wie die Menüs;
+      die Geometrie rechnet Code, nie das Sprachmodell.</p>
+
+      <div class="download">
+        <strong>Version 1.0 erscheint 2026</strong>
+        <p>Für Windows und Linux. Diese Seite ist dann auch die
+        Download-Adresse — wer früher hineinschauen will, meldet sich unter
+        der Adresse im Impressum.</p>
+      </div>
+    </div>
+
+    <section id="wege">
+      <h2>Drei Wege zum Teil</h2>
+      <div class="ways">
+        <div class="way">
+          <span class="tag">Weg 1 — Anpassen</span>
+          <h3>Fremdes Modell ändern</h3>
+          <p>Datei ablegen, Prüfbericht lesen, Fläche oder Bohrung anklicken —
+          dann im Chat sagen, was werden soll, oder aus dem Kontextmenü
+          wählen. Vorher/Nachher ansehen, übernehmen, exportieren.</p>
+        </div>
+        <div class="way">
+          <span class="tag">Weg 2 — Konstruieren</span>
+          <h3>Neu bauen mit Maßen</h3>
+          <p>Beschreiben, was gebraucht wird. Der Agent legt Parameter an und
+          setzt geprüfte Bausteine — Gewinde, Einpressbuchsen, Scharniere.
+          An den Zahlen drehen, das Modell folgt sofort.</p>
+        </div>
+        <div class="way">
+          <span class="tag">Weg 3 — Generieren</span>
+          <h3>Aus Text oder Bild</h3>
+          <p>Ein generiertes Mesh durchläuft automatisch die Reparaturkette,
+          bekommt einen Prüfbericht und wird bei Bedarf geteilt und
+          verstiftet — bis es druckbar auf der Platte liegt.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="funktionen">
+      <h2>Was drinsteckt</h2>
+      <ul class="features">
+        <li><b>Non-destruktiver Verlauf.</b> Jeder Schritt bleibt änderbar,
+        jede Zahl nachträglich drehbar — nichts wird überschrieben.</li>
+        <li><b>Schichtanalyse vor dem Slicen.</b> Überhänge, Inseln,
+        Stützvolumen und Wandstärken, bevor der Slicer sie teuer macht.</li>
+        <li><b>Passungen und Toleranzen.</b> Spiel, Presssitz, bündig — aus
+        kalibrierbaren Materialprofilen statt aus Erfahrungswerten.</li>
+        <li><b>Bausteinbibliothek mit Normteilen.</b> Schraubenlöcher,
+        Mutternfallen, Gewinde, Magnettaschen — geprüft über den ganzen
+        Parameterbereich.</li>
+        <li><b>Zu groß fürs Bett? Auto-Split.</b> Zerlegen mit Passstiften
+        und automatisch angelegten Passungen.</li>
+        <li><b>Exakte Kanten.</b> B-Rep-Kern für Fasen, Verrundungen und
+        rundreisefähiges STEP.</li>
+        <li><b>Zwei Farben ohne zweites Programm.</b> Beschriftung erhaben,
+        vertieft oder als Farbwechsel in einer 3MF-Datei.</li>
+        <li><b>KI lokal oder mit eigenem Schlüssel.</b> Ollama auf dem
+        eigenen Rechner oder ein API-Schlüssel — und ohne beides läuft
+        alles außer dem Chat.</li>
+      </ul>
+    </section>
+
+    <section id="ehrlich">
+      <h2>Was Formwerk nicht ist</h2>
+      <div class="honest">
+        Lieber vorher gesagt als nachher bereut:
+        <ul>
+          <li><b>Kein Slicer.</b> Formwerk analysiert und bereitet vor; die
+          Druckdatei erzeugt weiterhin dein Slicer — an den übergibt
+          Formwerk direkt und liest seinen G-Code zur Gegenprobe zurück.</li>
+          <li><b>Kein Cloud-CAD.</b> Keine Konten, keine Ablage im Netz,
+          keine Telemetrie. Projekte sind Dateien auf deinem Rechner.</li>
+          <li><b>Keine Maßgarantie aus generierten Meshes.</b> Was aus Text
+          oder Bild entsteht, wird druckbar gemacht — maßhaltig konstruiert
+          wird über Wege 1 und 2.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="voraussetzungen">
+      <h2>Systemvoraussetzungen</h2>
+      <table class="req">
+        <tr><td>Betriebssystem</td><td>Windows 10/11 (64 Bit) oder Linux</td></tr>
+        <tr><td>Speicherplatz</td><td>rund 750 MB installiert, Download rund 255 MB</td></tr>
+        <tr><td>Optional</td><td>Ollama oder ein API-Schlüssel für den Chat,
+        OpenSCAD, ein Slicer, ComfyUI für das Generieren — alles wird
+        gefunden oder angegeben, nichts davon ist Pflicht</td></tr>
+      </table>
+    </section>
+
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    © 2026 RS Digital ·
+    <a href="/impressum.html">Impressum</a> ·
+    <a href="/datenschutz.html">Datenschutz</a> ·
+    <a href="/en/">English</a>
+  </div>
+</footer>
+
+</body>
+</html>
