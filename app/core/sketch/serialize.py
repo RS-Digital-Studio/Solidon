@@ -68,15 +68,17 @@ def sketch_to_text(sketch: Sketch) -> str:
 def sketch_from_text(text: str) -> Sketch:
     """Liest eine Skizze aus dem Parametertext — streng, mit Sätzen statt Tracebacks."""
     try:
+        # RecursionError: json verschachtelt rekursiv — ein bösartig tiefer
+        # Text wäre sonst ein Traceback statt einer Meldung (Regel 17).
         payload = json.loads(text)
-    except json.JSONDecodeError as problem:
+    except (json.JSONDecodeError, RecursionError) as problem:
         raise _damaged(_("Der Skizzentext ist kein gültiges JSON.")) from problem
     if not isinstance(payload, dict):
         raise _damaged(_("Die Skizze hat nicht den erwarteten Aufbau."), field="payload")
 
     plane = payload.get("plane", "plane:xy")
-    if not isinstance(plane, str):
-        raise _damaged(_("Die Ebene der Skizze muss ein Text sein."))
+    if not isinstance(plane, str) or not _known_plane(plane):
+        raise _damaged(_("Diese Ebene gibt es nicht."), plane=plane)
 
     elements: list[SketchElement] = []
     for index, entry in enumerate(_listed(payload.get("elements", []), "elements")):
@@ -138,13 +140,24 @@ def sketch_parameter_references(text: str) -> frozenset[str]:
     return frozenset(found)
 
 
+def _known_plane(plane: str) -> bool:
+    """``plane:xy``, ``plane:xz``, ``plane:yz`` oder ``feature:<id>`` (§30.1)."""
+    if plane in ("plane:xy", "plane:xz", "plane:yz"):
+        return True
+    prefix, separator, feature_id = plane.partition(":")
+    return prefix == "feature" and bool(separator) and bool(feature_id)
+
+
 def _finite(value: Any) -> bool:
     """Eine echte, endliche Zahl — ``True`` und ``NaN`` sind keine Koordinaten."""
-    return (
-        isinstance(value, int | float)
-        and not isinstance(value, bool)
-        and math.isfinite(float(value))
-    )
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except OverflowError:
+        # Eine Ganzzahl jenseits des double-Bereichs — JSON lässt sie durch,
+        # ``float`` nicht mehr.
+        return False
 
 
 def _listed(value: Any, field: str) -> list[dict[str, Any]]:

@@ -919,13 +919,19 @@ laufen parallel und stehen weiter oben unter „Bewusst offen".
       Eingabe (auch `true` und `NaN` sind keine Koordinaten), und der
       Cache-Schlüssel der Auswertung kennt die Projektparameter, die ein
       Maßausdruck im Text liest — sonst überlebte der alte Körper die
-      Parameteränderung im Cache
+      Parameteränderung im Cache. Der Agent bekommt den Parameter nicht
+      (§26: Grundformen statt roher Punktlisten) — das Tool-Schema bietet
+      ihn nicht an, und die Sitzung lehnt ihn auch geraten ab
 - [ ] Grafischer Skizzeneditor im Viewport (Ebene aus Fläche, Zeichnen,
       Bedingungen), offscreen testbar — **der letzte offene Baustein von
       P13**; bis dahin sind die Grundformen über Dialog, CLI und Agent der
       Weg (Ausgabestufe eins aus §30.1, für sich abnahmefähig); die
       Parameterstrecke dafür liegt bereit (`kind="sketch"`, der Dialog
-      zeigt bis dahin das Textfeld)
+      zeigt bis dahin das Textfeld). Offen dabei: ob eine unterbestimmte
+      gezeichnete Skizze an der Op einen Befund erzeugt — §30.1 legt es
+      nahe, aber jede Skizze ohne `fixed`-Bedingung hätte ihn (freie
+      Lage), und ein Hinweis, der immer erscheint, wäre keiner; im Editor
+      ist die Anzeige der Freiheitsgrade ohnehin live
 - [x] Agenten-Suite von 30 auf 33 Fälle: Sechseck-Sockel, Deckel mit Tasche,
       Handlauf-Bogen — und der Trichter dreht sich um: was den
       OpenSCAD-Rückfall brauchte, kann `sketch_loft` jetzt im Haus. Die

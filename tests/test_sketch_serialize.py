@@ -16,6 +16,7 @@ from app.core.sketch.serialize import (
     sketch_parameter_references,
     sketch_to_text,
 )
+from app.core.types import Sketch
 from tests.test_sketch import rectangle
 
 
@@ -35,12 +36,34 @@ def test_an_unreadable_text_has_no_references() -> None:
     assert sketch_parameter_references("{kaputt") == frozenset()
 
 
+def test_a_feature_plane_travels() -> None:
+    """§30.1: neben den drei Hauptebenen ist eine erkannte Fläche eine Ebene."""
+    sketch = Sketch(plane="feature:top_1", elements=(), constraints=())
+    assert sketch_from_text(sketch_to_text(sketch)).plane == "feature:top_1"
+
+
+def test_a_number_beyond_double_is_not_a_coordinate() -> None:
+    """JSON kennt beliebig lange Ganzzahlen, ``float`` nicht — das darf eine
+    Meldung sein, kein OverflowError."""
+    huge = "1" + "0" * 400
+    with pytest.raises(ValidationError):
+        sketch_from_text(f'{{"elements": [{{"kind": "point", "points": [[{huge}, 0]]}}]}}')
+
+
+def test_a_maliciously_deep_text_is_a_sentence_not_a_recursion_error() -> None:
+    """Regel 17: auch der Stapelüberlauf des JSON-Parsers wird eine Meldung."""
+    with pytest.raises(ValidationError):
+        sketch_from_text("[" * 100_000)
+
+
 @pytest.mark.parametrize(
     "text",
     [
         "{kaputt",
         "[]",
         '{"plane": 3, "elements": []}',
+        '{"plane": "plane:zz", "elements": []}',
+        '{"plane": "feature:", "elements": []}',
         '{"elements": [{"kind": "hexagon", "points": [[0, 0]]}]}',
         '{"elements": [{"kind": "line"}]}',
         '{"elements": [{"kind": "line", "points": [[0, 0], [true, 1]]}]}',

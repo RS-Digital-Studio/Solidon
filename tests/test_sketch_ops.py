@@ -210,6 +210,23 @@ def test_a_drawn_sketch_revolves_as_drawn() -> None:
     assert body.volume == pytest.approx(math.pi * (15.0**2 - 10.0**2) * 8.0, rel=1e-9)
 
 
+def test_a_drawn_sketch_cuts_a_pocket_where_x_and_y_say() -> None:
+    """Die Skizze ersetzt nur die Grundform — alles andere gilt weiter:
+    x und y verschieben auch den gezeichneten Umriss."""
+    result = run(
+        "sketch_pocket",
+        brep_box(),
+        parameters=scene_parameters(width=10.0, height=8.0),
+        shape="circle",
+        length=999.0,
+        depth=5.0,
+        x=-5.0,
+        y=-4.0,
+        sketch=drawn_text(),
+    )
+    assert solid_of(result).volume == pytest.approx(24000.0 - 10.0 * 8.0 * 5.0, rel=1e-9)
+
+
 def test_a_damaged_sketch_text_is_a_correctable_error() -> None:
     with pytest.raises(ValidationError):
         run("sketch_extrude", sketch="{kaputt")

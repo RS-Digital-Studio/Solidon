@@ -228,6 +228,11 @@ def json_schema(params_class: type[BaseParams]) -> dict[str, Any]:
     properties: dict[str, Any] = {}
     required: list[str] = []
     for spec in params_class.spec():
+        if spec.kind == "sketch":
+            # §26, Leitprinzip 5: der Agent erzeugt Skizzen ausschließlich über
+            # benannte Grundformen und Maße, nie über rohe Punktlisten — den
+            # Skizzentext bekommt er gar nicht erst angeboten.
+            continue
         entry: dict[str, Any] = {"type": _JSON_TYPE[spec.kind]}
         description = str(spec.doc) if spec.doc is not None else str(spec.title)
         if spec.unit:

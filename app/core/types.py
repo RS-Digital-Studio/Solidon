@@ -452,8 +452,9 @@ class BaseParams:
 ParamKind = Literal[
     "float", "int", "bool", "str", "enum", "object", "feature", "part", "source", "sketch"
 ]
-"""``sketch`` trägt eine gezeichnete Skizze als JSON-Text (§30.1) — der Dialog
-öffnet dafür den Skizzeneditor statt eines Eingabefelds."""
+"""``sketch`` trägt eine gezeichnete Skizze als JSON-Text (§30.1) — gedacht für
+den Skizzeneditor; bis er da ist, zeigt der Dialog ein Textfeld. Der Agent
+bekommt diesen Parameter nicht: Grundformen statt roher Punktlisten (§26)."""
 ParamPlacement = Literal["front", "advanced"]
 """Front side or ``More settings`` — the graded depth from §2.4."""
 

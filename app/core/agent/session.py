@@ -240,6 +240,16 @@ class AgentSession:
             # Arranging works on everything (§25). Making the model list every
             # object would be a chance to forget one, and the scene knows them.
             inputs = tuple(scene.objects)
+        if any(
+            entry.kind == "sketch" and arguments.get(entry.name) for entry in spec.params.spec()
+        ):
+            # §26, Leitprinzip 5: Skizzen entstehen beim Nutzer, nie als rohe
+            # Punktliste aus dem Modell. Das Schema bietet den Parameter nicht
+            # an — und hier wird er auch abgelehnt, wenn das Modell ihn rät.
+            return (
+                tr("Skizzen zeichnet der Nutzer selbst — benutze die Grundformen und Maße."),
+                scene,
+            )
         try:
             # P4 acceptance: schema-valid before anything is computed.
             validate(spec.params, arguments)

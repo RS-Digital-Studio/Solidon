@@ -149,6 +149,16 @@ def test_ask_user_is_offered_first_of_the_extras() -> None:
     assert extras[0] == tools.ASK_USER
 
 
+def test_a_sketch_parameter_is_not_offered_to_the_model() -> None:
+    """§26, Leitprinzip 5: der Agent erzeugt Skizzen über benannte Grundformen,
+    nie über rohe Punktlisten — der Skizzentext steht nicht im Tool-Schema."""
+    schema = next(entry for entry in tools.operation_tools() if entry["name"] == "sketch_extrude")
+    properties = schema["input_schema"]["properties"]
+
+    assert "sketch" not in properties
+    assert "shape" in properties, "die Grundformen bleiben der Weg"
+
+
 # --- the run (§26.5) ---------------------------------------------------------------
 
 
@@ -211,6 +221,37 @@ def test_an_invalid_call_comes_back_as_a_message(project: Project, profile: Prof
     assert proposal.drafts == [], "an invalid call never becomes an operation"
     answer = [entry for entry in backend.seen[-1] if entry.role == "tool"][-1]
     assert "Ungültige" in answer.content
+
+
+def test_a_drawn_sketch_from_the_model_is_rejected(project: Project, profile: Profile) -> None:
+    """§26, Leitprinzip 5: rät das Modell den Skizzentext trotzdem, lehnt die
+    Sitzung ihn ab — das Schema nicht anzubieten allein wäre eine Bitte."""
+    backend = ScriptedBackend(
+        answers=[
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="sketch_extrude",
+                        arguments={"sketch": '{"elements": []}', "height": 5.0},
+                    ),
+                )
+            ),
+            Reply(text="Dann nehme ich die Grundform."),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Extrudier meine Skizze")
+
+    assert proposal.drafts == [], "ein geratener Skizzentext wird nie eine Operation"
+    answer = [entry for entry in backend.seen[-1] if entry.role == "tool"][-1]
+    assert "Grundformen" in answer.content
 
 
 def test_an_operation_that_stops_the_chain_is_dropped(project: Project, profile: Profile) -> None:
