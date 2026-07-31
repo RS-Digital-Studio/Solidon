@@ -817,3 +817,56 @@ Befund zum Modell selbst: 0 Inseln, keine Schicht unter Düsenbreite, längste
 freie Spanne 8,33 mm bei z=69,1 — die Zusage „ohne Stützen" hält. Die zwölf
 gelöschten Teile waren Splitter mit Volumen null; das dreizehnte, eine
 freistehende Spitze von 3,3 × 3,3 × 25,2 mm, ist absichtlich da und blieb.
+
+## Aus der Frage nach der Veröffentlichung
+
+Der Anlass war keine technische: „wie weit sind wir weg, was fehlt, ist es gut
+genug." Die Antwort auf die letzte Frage war das Problem — die Suite war grün,
+und trotzdem war das, was ein Fremder als Erstes sieht, nicht vorführbar.
+
+**Die Zusatzprogramme waren da und wurden nicht gefunden.** `shutil.which`
+kennt nur den PATH, und Windows-Installationsprogramme tragen dort nichts ein:
+OpenSCAD unter `C:\Program Files\OpenSCAD` und ein installierter Slicer galten
+als fehlend, mit dem Angebot, sie ein zweites Mal zu installieren. Gesucht wird
+jetzt an vier Stellen, und Dienste werden gefragt statt gesucht — ComfyUI
+startet Formwerk ohnehin nie, es redet über HTTP mit ihm. Wo alles das nichts
+findet, gibt es den Weg, der immer geht: den Ort selbst angeben.
+
+**201 von 325 Parametern hatten keinen Hilfetext.** Ein Zahlenfeld mit einer
+Beschriftung darüber ist keine Erklärung. Alle 325 tragen jetzt einen Satz, und
+wo möglich sagt er, was passiert, wenn man die Zahl falsch wählt. Ein Test im
+Registerkonsistenzlauf hält das fest — auch gegen Texte, die nur den Titel
+wiederholen.
+
+**Es gab kein Handbuch.** Jetzt achtzehn Seiten, die Referenz davon erzeugt.
+
+**Die Beispiele zeigten acht von zweiundsechzig Operationen** — und führten
+dabei zwei Dinge vor, die nicht stimmten: vier Warnungen ohne Anlass und eine
+Reparatur, die nicht reparierte. Jetzt sieben Projekte, und beim Bauen kamen
+vier Fehler heraus, die jede Auswertung betreffen:
+
+* Der **Mittelpunkt einer Fläche** war das Mittel über die Dreiecksschwerpunkte
+  und hing damit an der Vernetzung. Eine Bohrung zog ihn um 16,8 mm zum Loch,
+  und die Zuordnung hielt die Fläche danach für eine andere.
+* Auf einem erzeugten Netz galten **181 Facetten als Flächen**, weil der Anteil
+  an der größten Fläche nur bei einem konstruierten Teil filtert. Danach war
+  jede Zuordnung mehrdeutig und die Auswertung hielt an — Weg 3 kam nach der
+  Reparatur nicht weiter.
+* **Mehrdeutig war jeder Kandidat, der überhaupt in Frage kam**: die Marge stand
+  als `max(bester * 1,25, Annahmeschwelle)` da und war damit wirkungslos.
+* **`match()` bekam nie sein `old_centre`.** Der Parameter steht seit P3 in der
+  Signatur. Ohne ihn verlor *Auf dem Bett anordnen* jedes Merkmal jedes Objekts.
+
+Dazu zwei Meldungen, die das Gegenteil dessen sagten, was passiert war: eine
+geschlossene offene Kante als Warnung, und acht verwaiste Merkmale für ein
+Prüfstück, das absichtlich 22 mm aus einem 70er Gehäuse schneidet.
+
+**Bewusst offen, weil es niemand von hier aus erledigen kann**
+
+* **Kein Remote, keine CI.** Die Datei ist geprüft, nie gelaufen.
+* **Keine Website**, und die Adresse in `core/updates.py` ist ein Platzhalter.
+* **Kein Zertifikat**, also SmartScreen beim ersten Start.
+* **Kein Vertriebsweg** — kein Lizenzschlüssel, keine Testphase, kein
+  Zahlungsanbieter, keine Rechtstexte.
+* **Kein einziger fremder Nutzer.** 1797 Tests sagen, dass der Code tut, was
+  gemeint war. Sie sagen nichts darüber, ob jemand anders die App bedienen kann.

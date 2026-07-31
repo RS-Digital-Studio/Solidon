@@ -35,14 +35,29 @@ bleibt so lange auf dem Rechner, bis jemand ihn selbst anhängt.
 
 ## Die drei Wege
 
-Beim Start liegen drei Beispielprojekte bereit — sie sind gleichzeitig
-Dokumentation und Abnahmeprüfung (§37.2):
+Beim Start liegen sieben Beispielprojekte bereit — sie sind gleichzeitig
+Dokumentation und Abnahmeprüfung (§37.2). Die ersten drei beantworten „wie
+fange ich an", die übrigen „was kann das eigentlich":
 
-| Projekt | Weg |
+| Projekt | Inhalt |
 |---|---|
 | `weg1-halterung-anpassen.p3d` | fremdes Modell einlesen, reparieren, bohren |
 | `weg2-halter-konstruieren.p3d` | aus Parametern und Bausteinen neu konstruieren |
 | `weg3-generiert-aufbereiten.p3d` | erzeugtes Mesh durch die Reparaturkette |
+| `gehaeuse-mit-bausteinen.p3d` | Mutternfalle, Heat-Set-Buchse, Kabeldurchführung, Prüfstück |
+| `schild-zweifarbig.p3d` | Schrift im Materialslot und Lettern als eigener Körper |
+| `drucker-kalibrieren.p3d` | Toleranzleiter, Wandstärkenleiter, Überhangfächer |
+| `aushoehlen-und-teilen.p3d` | teilen, verstiften, aushöhlen, anordnen |
+
+## Hilfe im Programm
+
+**Hilfe → Handbuch** (F1) öffnet achtzehn Seiten: sieben geschriebene über
+Verlauf, Parameter, Toleranzen und den Chat, elf erzeugte mit jeder Operation,
+jedem Wert und jedem Bereich. Die zweite Hälfte kommt aus demselben Register
+wie die Menüs — sie kann nicht veralten. Gesucht wird über den Text, nicht nur
+über die Überschriften.
+
+Auf der Kommandozeile gibt `formwerk docs --manual` denselben Text aus.
 
 ---
 
