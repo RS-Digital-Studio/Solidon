@@ -69,6 +69,45 @@ EXAMPLES: Final[tuple[Example, ...]] = (
             "selbst kommt später; hier liegt das fertige Mesh bei."
         ),
     ),
+    # Die vier darunter sind keine vierten, fünften und sechsten Wege — sie
+    # zeigen, was auf den drei Wegen an Werkzeug bereitliegt. Die drei oben
+    # beantworten „wie fange ich an", diese „was kann das eigentlich".
+    Example(
+        id="gehaeuse-mit-bausteinen",
+        title=_("Bausteine — Muttern, Buchsen, Kabel"),
+        way="",
+        doc=_(
+            "Ein Gehäuseboden mit Mutternfalle, Heat-Set-Buchse, Schraubenloch und "
+            "Kabeldurchführung. Vier Klicks statt vier halber Stunden."
+        ),
+    ),
+    Example(
+        id="schild-zweifarbig",
+        title=_("Beschriftung — zweifarbig und aufhängbar"),
+        way="",
+        doc=_(
+            "Ein Schild mit Schrift in einem eigenen Materialslot: der 3MF-Export "
+            "macht daraus den Farbwechsel. Dazu eine Schlüsselloch-Aufhängung."
+        ),
+    ),
+    Example(
+        id="drucker-kalibrieren",
+        title=_("Kalibrieren — einmal drucken, dann stimmt es"),
+        way="",
+        doc=_(
+            "Toleranzleiter, Wandstärkenleiter und Überhangfächer auf einer Platte. "
+            "Die gemessenen Werte gehören danach ins Materialprofil."
+        ),
+    ),
+    Example(
+        id="aushoehlen-und-teilen",
+        title=_("Druckvorbereitung — aushöhlen, teilen, anordnen"),
+        way="",
+        doc=_(
+            "Material sparen, das Teil an einer Ebene mit Passstiften trennen und "
+            "beide Hälften auf das Bett legen."
+        ),
+    ),
 )
 
 

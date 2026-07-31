@@ -36,8 +36,10 @@ from app.core.scene.cancel import NeverCancelled
 from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import object_hash, operation_hash
 from app.core.types import (
+    BoundingBox,
     CancelToken,
     Document,
+    Feature,
     Finding,
     ObjectId,
     OpContext,
@@ -56,6 +58,7 @@ from app.core.types import (
     Transform,
     kind_of,
 )
+from app.core.units import EPS_DISPLAY
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -144,6 +147,8 @@ def evaluate(
         # Kept before the operation runs: the identifiers the new features have
         # to be matched onto afterwards (§21.2).
         previous_features = {entry.id: dict(entry.features) for entry in inputs}
+        # Dazu der Hüllquader, in dem sie gemessen wurden — siehe _with_features.
+        previous_bounds = {entry.id: entry.mesh.bounds for entry in inputs}
         key = operation_hash(
             operation,
             resolved,
@@ -216,6 +221,7 @@ def evaluate(
                 ask,
                 findings,
                 result.transform,
+                previous_bounds.get(object_id),
             )
             hashes[object_id] = object_hash(key, index)
 
@@ -260,6 +266,34 @@ def evaluate(
     )
 
 
+def _same_size(first: BoundingBox, second: BoundingBox) -> bool:
+    """Gleich groß? Dann hat die Operation den Körper bewegt und nicht umgebaut.
+
+    Die Schwelle ist dieselbe, mit der überall gemessen wird: ein Zehntel
+    Millimeter ist unter allem, was ein Drucker auflöst, und über allem, was
+    beim Neurechnen an Rundung entsteht.
+    """
+    return all(abs(a - b) <= EPS_DISPLAY for a, b in zip(first.size, second.size, strict=True))
+
+
+def _outside(feature: Feature | None, bounds: BoundingBox, moved: bool) -> bool:
+    """Lag dieses Merkmal außerhalb dessen, was übrig geblieben ist?
+
+    Nur zu fragen, wenn der Körper nicht bewegt wurde — sonst wären nach einer
+    Verschiebung alle Merkmale „draußen". Die Toleranz ist eine Anzeigestelle:
+    ein Merkmal genau auf der Schnittkante zählt noch als drinnen.
+    """
+    if feature is None or moved:
+        return False
+    position = feature.params.get("centre")
+    if not isinstance(position, tuple | list) or len(position) != 3:
+        return False
+    return any(
+        value < low - EPS_DISPLAY or value > high + EPS_DISPLAY
+        for value, low, high in zip(position, bounds.minimum, bounds.maximum, strict=True)
+    )
+
+
 def _with_features(
     entry: SceneObject,
     previous: dict[str, Any],
@@ -267,6 +301,7 @@ def _with_features(
     ask: Any,
     findings: list[Finding],
     transform: Transform | None = None,
+    previous_bounds: BoundingBox | None = None,
 ) -> SceneObject:
     """Detect features again and keep the old identifiers where they still fit.
 
@@ -318,7 +353,26 @@ def _with_features(
     }
 
     centre = mesh.bounds.centre
-    matched = match(previous, detected, centre, mesh.bounds.diagonal)
+    # In welchem Bezugspunkt die alten Merkmale gelesen werden, hängt daran, was
+    # die Operation getan hat — und es gibt genau zwei Fälle.
+    #
+    # **Verschoben.** Der Hüllquader ist gleich groß und liegt woanders. Dann
+    # ist jedes Merkmal mitgewandert, und beide Seiten werden in ihrem eigenen
+    # Bezugspunkt gelesen. *Auf dem Bett anordnen* ist das: es schiebt jedes
+    # Objekt einzeln und kann darum keine gemeinsame Transformation nachreichen.
+    #
+    # **Umgebaut.** Der Körper hat eine andere Ausdehnung, weil etwas dazukam
+    # oder wegging. Dann steht er im Raum, wo er stand, und beide Seiten werden
+    # in *demselben* Bezugspunkt gelesen. Der eigene wäre hier falsch: ein
+    # aufgesetzter Baustein hebt den Schwerpunkt, und die Grundfläche, die sich
+    # nie bewegt hat, läge auf einmal sieben Millimeter tiefer als vorher.
+    moved = (
+        transform is None
+        and previous_bounds is not None
+        and _same_size(previous_bounds, mesh.bounds)
+    )
+    old_centre = previous_bounds.centre if moved and previous_bounds is not None else centre
+    matched = match(previous, detected, centre, mesh.bounds.diagonal, old_centre=old_centre)
 
     for old_id, candidates in matched.ambiguous.items():
         question, choices = question_for(old_id, candidates)
@@ -338,11 +392,20 @@ def _with_features(
             )
 
     for old_id in matched.orphaned:
+        old_feature = previous.get(old_id)
+        # Was außerhalb des neuen Körpers liegt, ist nicht verlorengegangen —
+        # es wurde weggeschnitten, und zwar von jemandem, der genau das wollte.
+        # Ein Prüfstück schneidet 22 mm aus einem 70er Gehäuse: acht Merkmale
+        # bleiben draußen, und acht Warnungen darüber sind acht Warnungen über
+        # eine gelungene Operation.
+        if _outside(old_feature, mesh.bounds, moved):
+            continue
+
         # Ein verschwundener Defekt ist kein Verlust, sondern das Ziel. Eine
         # offene Kante, die nach dem Reparieren nicht mehr da ist, als Warnung
         # zu melden, sagt dem Nutzer das Gegenteil von dem, was passiert ist —
         # und lässt jeden Weg-3-Bericht wie ein Fehlschlag aussehen.
-        defect = getattr(previous.get(old_id), "kind", "") == "edge_loop"
+        defect = getattr(old_feature, "kind", "") == "edge_loop"
         findings.append(
             Finding(
                 code="perceive.mended" if defect else "perceive.orphaned",

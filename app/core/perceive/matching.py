@@ -34,6 +34,15 @@ _log = get_logger(__name__)
 #: ambiguous, relative to the best cost.
 AMBIGUITY_MARGIN = 0.25
 
+#: …und absolut, für den Fall, dass der beste Treffer fast nichts kostet.
+#:
+#: Ohne den Boden wäre bei einem Treffer mit Kosten null nur ein Rivale mit
+#: exakt null mehrdeutig — zwei Kandidaten, die beide praktisch auf der Stelle
+#: liegen, würden nach der letzten Nachkommastelle entschieden. Mit ihm gilt:
+#: wer weniger als fünf Prozent der Annahmeschwelle vom Besten entfernt ist,
+#: ist nicht zu unterscheiden.
+AMBIGUITY_FLOOR = 0.05
+
 #: Tolerances, one per part of the feature vector. Each part is divided by its
 #: own tolerance, so a cost of 1.0 means "as far off as we still accept" no
 #: matter which part it came from.
@@ -142,11 +151,18 @@ def match(
             result.orphaned = (*result.orphaned, old_id)
             continue
 
+        # Ein Rivale ist einer, der *ähnlich gut* passt — nicht jeder, der
+        # überhaupt in Frage kommt. Mit ``max(…, threshold)`` war jeder
+        # Kandidat unter der Annahmeschwelle ein Rivale, auch wenn der beste
+        # Treffer null kostete und er selbst fast eins: eine Mutternfalle mit
+        # Tasche und Bohrung übereinander machte jede Auswertung des Gehäuses
+        # zur Rückfrage. Der Boden hält den Fall offen, dass zwei Kandidaten
+        # beide fast nichts kosten und wirklich nicht zu unterscheiden sind.
+        limit = best * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
         rivals = [
             new_ids[other]
             for other in range(len(new_ids))
-            if other != column
-            and float(matrix[row, other]) <= max(best * (1 + AMBIGUITY_MARGIN), threshold)
+            if other != column and float(matrix[row, other]) <= limit
         ]
         if rivals:
             # §21.3: several dense candidates — stop and ask instead of guessing.

@@ -12,18 +12,45 @@ import pytest
 
 from app.core import examples
 from app.core.knowledge import profiles
+from app.core.registry import REGISTRY
 from app.core.scene import evaluate
 from app.core.scene.project import ProjectSources, load
 from app.core.types import Profile
 
 
 def test_there_is_one_example_per_way() -> None:
-    """§2.2 has three ways, and §37.2 wants exactly those three as examples."""
-    assert [entry.way for entry in examples.EXAMPLES] == ["1", "2", "3"]
-    assert len({entry.id for entry in examples.EXAMPLES}) == 3
+    """§2.2 hat drei Wege, und §37.2 will genau die drei als Beispiele.
+
+    Die weiteren Projekte sind keine vierten Wege — sie zeigen, was auf den
+    dreien an Werkzeug bereitliegt. Die drei müssen aber da sein und vorn
+    stehen: sie beantworten „wie fange ich an", und das ist die erste Frage.
+    """
+    ways = [entry.way for entry in examples.EXAMPLES if entry.way]
+
+    assert ways == ["1", "2", "3"]
+    assert len({entry.id for entry in examples.EXAMPLES}) == len(examples.EXAMPLES)
     for entry in examples.EXAMPLES:
         assert str(entry.title).strip()
         assert str(entry.doc).strip()
+
+
+def test_the_examples_reach_most_of_the_catalogue() -> None:
+    """Drei Beispiele zeigten acht von zweiundsechzig Operationen (§25).
+
+    Das ist genug, um die Wege zu erklären, und zu wenig, um das Werkzeug zu
+    zeigen: die Bausteinbibliothek, die Beschriftung und die Kalibrierung waren
+    in keinem davon zu sehen. Die Zahl hier ist kein Selbstzweck — sie hält
+    fest, dass ein neuer Bereich auch ein Beispiel bekommt.
+    """
+    used: set[str] = set()
+    for entry in examples.EXAMPLES:
+        project = load(examples.directory() / entry.filename)
+        used.update(operation.op for operation in project.document.ops)
+
+    categories = {REGISTRY.get(name).category for name in used if REGISTRY.has(name)}
+
+    assert len(used) >= 20, f"nur {len(used)} Operationen in allen Beispielen"
+    assert {"parts", "label", "prepare", "holes", "repair", "import"} <= categories
 
 
 def test_all_three_are_installed() -> None:

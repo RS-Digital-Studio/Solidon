@@ -102,11 +102,12 @@ class StartScreen(QWidget):
         self.recent_list = QListWidget(self)
         self.recent_list.itemActivated.connect(self._on_recent)
 
-        # §37.2: the three example projects are start screen content, not a
-        # folder someone has to find.
+        # §37.2: die Beispielprojekte sind Inhalt des Startbildschirms und kein
+        # Ordner, den jemand suchen muss. Die Höhe richtet sich nach ihrer Zahl —
+        # eine feste Höhe für drei versteckte die vier, die danach dazukamen,
+        # hinter einer Bildlaufleiste.
         self.examples_list = QListWidget(self)
         self.examples_list.itemActivated.connect(self._on_recent)
-        self.examples_list.setMaximumHeight(96)
         self.show_examples()
 
         new_button = QPushButton(tr("Neues Projekt"), self)
@@ -128,7 +129,7 @@ class StartScreen(QWidget):
         layout.addWidget(title)
         layout.addWidget(drop)
         layout.addLayout(buttons)
-        layout.addWidget(QLabel(tr("Die drei Wege"), self))
+        layout.addWidget(QLabel(tr("Beispiele — die drei Wege und was darauf bereitliegt"), self))
         layout.addWidget(self.examples_list)
         layout.addWidget(QLabel(tr("Zuletzt geöffnet"), self))
         layout.addWidget(self.recent_list, stretch=1)
@@ -147,7 +148,7 @@ class StartScreen(QWidget):
             self.recent_list.addItem(item)
 
     def show_examples(self) -> None:
-        """The three ways from §2.2, as far as they are installed."""
+        """Die Beispielprojekte, soweit sie installiert sind."""
         self.examples_list.clear()
         for path in examples.paths():
             entry = examples.by_path(path)
@@ -155,6 +156,10 @@ class StartScreen(QWidget):
             item.setData(Qt.ItemDataRole.UserRole, str(path))
             item.setToolTip(str(entry.doc) if entry else str(path))
             self.examples_list.addItem(item)
+
+        rows = max(self.examples_list.count(), 1)
+        height = self.examples_list.sizeHintForRow(0) if self.examples_list.count() else 22
+        self.examples_list.setMaximumHeight(rows * max(height, 18) + 8)
 
     def _on_recent(self, item: QListWidgetItem) -> None:
         stored = item.data(Qt.ItemDataRole.UserRole)
