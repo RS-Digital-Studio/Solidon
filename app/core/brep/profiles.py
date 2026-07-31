@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Final
 
 from app.core.brep.kernel import Solid, require
 from app.core.errors import PROGRAMMING_ERRORS, GeometryError, ValidationError
@@ -220,6 +220,101 @@ def draft_vertical(solid: Solid, angle_deg: float) -> Solid:
     return _finished(
         builder, _("Die Formschräge lässt sich an diesen Flächen nicht anlegen."), solid
     )
+
+
+#: Gewindetiefe je Steigung: 5H/8 des scharfen Dreiecksprofils (metrisches ISO).
+_THREAD_DEPTH_SHARE: Final = 0.6134
+
+#: Halbe Fußbreite des Gewindegangs je Steigung — schmaler als der halbe Gang,
+#: damit zwischen zwei Umläufen Grund bleibt.
+_THREAD_FOOT_SHARE: Final = 0.375
+
+
+def threaded_rod(major: float, pitch: float, length: float) -> Solid:
+    """Ein Bolzen mit exaktem Außengewinde: Kern plus helikaler Gang.
+
+    Der Gang ist ein echter Sweep entlang der Helix, kein Netz — damit trägt
+    ihn der STEP-Export, und eine Differenz mit Spiel ergibt das Innengewinde.
+    Gebaut wird mit Überstand und dann auf Länge geschnitten: der Anschnitt
+    einer Helix ist sonst eine offene Kante. Erst kürzen, dann vereinigen —
+    die umgekehrte Reihenfolge lässt die Boolesche Stufe scheitern,
+    nachgemessen."""
+    require()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
+    from OCP.BRepLib import BRepLib
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipeShell
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.Geom import Geom_CylindricalSurface
+    from OCP.Geom2d import Geom2d_Line
+    from OCP.gp import gp_Ax2d, gp_Ax3, gp_Dir2d, gp_Pnt, gp_Pnt2d
+
+    ridge = _THREAD_DEPTH_SHARE * pitch
+    core_radius = major / 2.0 - ridge
+    if core_radius <= EPS_GEOM:
+        raise ValidationError(
+            "pitch",
+            _("Die Steigung ist für diesen Durchmesser zu groß — es bliebe kein Kern."),
+            value=pitch,
+            constraint="no_core",
+        )
+    if length <= 2.0 * pitch:
+        raise ValidationError(
+            "length",
+            _("Ein Gewinde braucht mindestens zwei Gänge Länge."),
+            value=length,
+            constraint="too_short",
+        )
+
+    turns = length / pitch + 2.0
+    surface = Geom_CylindricalSurface(gp_Ax3(), core_radius)
+    line = Geom2d_Line(gp_Ax2d(gp_Pnt2d(0.0, -pitch), gp_Dir2d(2.0 * math.pi, pitch)))
+    span = math.hypot(2.0 * math.pi, pitch) * turns
+    helix = BRepBuilderAPI_MakeEdge(line, surface, 0.0, span).Edge()
+    BRepLib.BuildCurves3d_s(helix)
+    spine = BRepBuilderAPI_MakeWire(helix).Wire()
+
+    # Dreiecksprofil am Helixstart, Fuß leicht in den Kern versenkt, Spitze
+    # radial nach außen.
+    half = pitch * _THREAD_FOOT_SHARE
+    seat = core_radius - 0.1
+    profile = BRepBuilderAPI_MakeWire(
+        BRepBuilderAPI_MakeEdge(
+            gp_Pnt(seat, 0.0, -pitch - half), gp_Pnt(seat, 0.0, -pitch + half)
+        ).Edge(),
+        BRepBuilderAPI_MakeEdge(
+            gp_Pnt(seat, 0.0, -pitch + half), gp_Pnt(core_radius + ridge, 0.0, -pitch)
+        ).Edge(),
+        BRepBuilderAPI_MakeEdge(
+            gp_Pnt(core_radius + ridge, 0.0, -pitch), gp_Pnt(seat, 0.0, -pitch - half)
+        ).Edge(),
+    ).Wire()
+
+    pipe = BRepOffsetAPI_MakePipeShell(spine)
+    pipe.SetMode(True)
+    pipe.Add(profile)
+    _finished(pipe, _("Aus dieser Steigung entsteht kein Gewindegang."))
+    try:
+        pipe.MakeSolid()
+        ridge_solid = Solid(pipe.Shape())
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
+        raise GeometryError(detail=_("Aus dieser Steigung entsteht kein Gewindegang.")) from problem
+
+    slab = Solid(BRepPrimAPI_MakeCylinder(major / 2.0 + 1.0, length).Shape())
+    trimmed = _fuzzy_boolean("intersection", ridge_solid, slab)
+    core = Solid(BRepPrimAPI_MakeCylinder(core_radius, length).Shape())
+    return _fuzzy_boolean("union", core, trimmed)
+
+
+def _fuzzy_boolean(kind: str, first: Solid, second: Solid) -> Solid:
+    """Boolesch mit kleiner Fuzzy-Toleranz — der helikale Gang braucht sie."""
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Fuse
+
+    maker = BRepAlgoAPI_Fuse if kind == "union" else BRepAlgoAPI_Common
+    operation = maker(first.shape, second.shape)
+    operation.SetFuzzyValue(EPS_GEOM)
+    return _finished(operation, _("Die Boolesche Operation ist fehlgeschlagen."))
 
 
 def bounds(solid: Solid) -> tuple[float, float, float, float, float, float]:

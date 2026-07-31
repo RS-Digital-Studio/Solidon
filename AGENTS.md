@@ -207,7 +207,7 @@ Dialoge.
 | Leistung | Zielwerte Bauplan §31, Regressionsschwelle 25 % |
 | Lizenzen | Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die drei Wege aus Bauplan §2.2 Ende zu Ende |
-| Agenten-Suite | 30 Referenzanfragen |
+| Agenten-Suite | 33 Referenzanfragen |
 
 ---
 

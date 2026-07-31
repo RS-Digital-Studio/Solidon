@@ -897,17 +897,35 @@ laufen parallel und stehen weiter oben unter „Bewusst offen".
 - [x] Maße als Ausdrücke der Parametergrammatik (§13) — `@width` und
       `=@width/2 + 5` laufen durch denselben Auswerter wie überall, kein
       `eval`; alles außerhalb der Grammatik wird abgelehnt
-- [ ] Grundformen (Rechteck, Langloch, Kreisbild, Vieleck) über Dialog, CLI
-      und Agent — der Agent nie über rohe Punktlisten (Leitprinzip 5)
-- [ ] Ops `sketch_extrude`, `sketch_pocket`, `sketch_revolve`,
-      `sketch_sweep` gegen den B-Rep-Kern, volle Checkliste aus AGENTS.md
-- [ ] Formgebungs-Ops: Formschräge, exakte Schale, Sweep, Loft, exaktes
-      Gewinde — je mit Geometrietest gegen den Korpus
+- [x] Grundformen (`core/sketch/shapes.py`): Rechteck, Langloch, Kreis,
+      Vieleck als Skizzen mit Bedingungen, nie als rohe Punktlisten — und der
+      eigene Solver hat das eigene Langloch abgelehnt: der erste
+      Bedingungssatz war in der symmetrischen Lage linear abhängig. Die
+      Disziplin gilt auch für die eigenen Formen
+- [x] Sechs Skizzen-Ops gegen den B-Rep-Kern (`sketch_extrude`,
+      `sketch_pocket` mit Flächen-Klick und durchgehend, `sketch_revolve`,
+      `sketch_sweep`, `sketch_loft`) — der Umriss reist als exakte Kurve
+      (`core/sketch/profile.py`, `core/brep/profiles.py`); jede Op steht
+      gegen eine geschlossene Formel: der Torus trifft Pappus, der Kreis Pi
+- [x] Formgebungs-Ops: exakte Schale (oben offen), Formschräge und der
+      exakte Gewindebolzen als echter helikaler Sweep — erst kürzen, dann
+      vereinigen, sonst scheitert die Boolesche Stufe; Fase und Verrundung
+      ziehen in die neue Kategorie Formgebung um
 - [ ] Grafischer Skizzeneditor im Viewport (Ebene aus Fläche, Zeichnen,
-      Bedingungen), offscreen testbar
-- [ ] Agenten-Suite um Skizzenanfragen erweitern, Quote vorher und nachher
-- [ ] Ende-zu-Ende: Referenzteil (Gehäuse mit Deckel) ohne Fremd-CAD von
-      leerer Szene bis Export
+      Bedingungen), offscreen testbar — **der letzte offene Baustein von
+      P13**; bis dahin sind die Grundformen über Dialog, CLI und Agent der
+      Weg (Ausgabestufe eins aus §30.1, für sich abnahmefähig)
+- [x] Agenten-Suite von 30 auf 33 Fälle: Sechseck-Sockel, Deckel mit Tasche,
+      Handlauf-Bogen — und der Trichter dreht sich um: was den
+      OpenSCAD-Rückfall brauchte, kann `sketch_loft` jetzt im Haus. Die
+      Quote gegen ein echtes Modell misst weiter `tools/run_agent_suite.py`
+      (kostet Geld, läuft auf Zuruf)
+- [x] Ende-zu-Ende: Gehäuse mit passendem Deckel von leerer Szene bis 3MF
+      (`tests/test_sketch_end_to_end.py`) — und der Weg fand zwei stille
+      Fehler: `create_lid` fraß im Stapel das Gehäuse (die Op-Tests riefen
+      die Funktion immer direkt auf), und die Hüllquader von OpenCASCADE
+      schlagen die gespeicherte Vernetzung mitsamt Durchhang auf — die
+      Schale fand auf einem gehashten Körper keine Oberseite mehr
 - [x] Leistungsziel §31: 200 Bedingungen unter 100 ms — **90 ms** Ende zu
       Ende, gemessen in `test_performance.py`. Zwei Entscheidungen tragen
       den Wert: jede Bedingung bringt ihre **analytische Ableitung** mit

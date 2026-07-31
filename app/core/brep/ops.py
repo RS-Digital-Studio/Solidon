@@ -326,6 +326,63 @@ def draft_faces(ctx: OpContext) -> OpResult:
 
 
 @op_params
+class ThreadParams(BaseParams):
+    diameter: float = param(
+        title=_("Nenndurchmesser"),
+        default=10.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=100.0,
+        doc=_("Außendurchmesser über die Gewindespitzen — das Maß, das M10 meint."),
+    )
+    pitch: float = param(
+        title=_("Steigung"),
+        default=1.5,
+        unit="mm",
+        minimum=0.25,
+        maximum=8.0,
+        doc=_(
+            "Höhenzuwachs je Umdrehung. Grob gedruckte Gewinde wollen eine "
+            "grobe Steigung — unter einem Millimeter druckt kaum ein Drucker sauber."
+        ),
+    )
+    length: float = param(
+        title=_("Länge"),
+        default=12.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=500.0,
+        doc=_("Gewindelänge von Z = 0 nach oben, mindestens zwei Gänge."),
+    )
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+    )
+
+
+@register_op(
+    name="thread_exact",
+    title=_("Exakten Gewindebolzen erzeugen"),
+    category="shaping",
+    params=ThreadParams,
+    consumes=0,
+    produces=1,
+    doc=_(
+        "Ein Bolzen mit echtem helikalem Außengewinde — als exakter Körper, "
+        "den der STEP-Export trägt. Mit Spiel vergrößert und von einem Körper "
+        "abgezogen wird daraus das Innengewinde."
+    ),
+)
+def thread_exact(ctx: OpContext) -> OpResult:
+    params = cast(ThreadParams, ctx.params)
+    require()
+    solid = profiles.threaded_rod(params.diameter, params.pitch, params.length)
+    return OpResult(outputs=[_object(params.name or str(_("Gewindebolzen")), solid)])
+
+
+@op_params
 class ToMeshParams(BaseParams):
     deflection: float = param(
         title=_("Feinheit"),
@@ -405,4 +462,5 @@ __all__ = [
     "fillet_edges",
     "load_step",
     "shell_exact",
+    "thread_exact",
 ]

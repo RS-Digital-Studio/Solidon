@@ -154,6 +154,30 @@ def test_the_exact_shell_leaves_exactly_the_wall(  # shell_exact
     assert solid_of(result).volume == pytest.approx(24000.0 - 34.0 * 24.0 * 17.0, rel=1e-9)
 
 
+def test_the_exact_thread_is_a_core_plus_a_helical_ridge() -> None:
+    """thread_exact: der Gang ist ein echter Sweep, und sein Volumen folgt dem
+    verallgemeinerten Pappus — Querschnitt mal Schwerpunktweg der Helix. Die
+    Enden werden auf Länge geschnitten und der Fuß sitzt im Kern, darum ist
+    die Schranke bewusst weich; die harten Schranken sind die zwei Zylinder."""
+    major, pitch, length = 10.0, 1.5, 12.0
+    body = solid_of(run("thread_exact", diameter=major, pitch=pitch, length=length))
+
+    ridge = 0.6134 * pitch
+    core_radius = major / 2.0 - ridge
+    core = math.pi * core_radius**2 * length
+    outer = math.pi * (major / 2.0) ** 2 * length
+    assert core < body.volume < outer
+
+    helix = (length / pitch) * math.hypot(2.0 * math.pi * core_radius, pitch)
+    gang = (pitch * 0.375) * ridge * helix
+    assert body.volume - core == pytest.approx(gang, rel=0.2)
+
+
+def test_the_thread_pitch_needs_a_core() -> None:
+    with pytest.raises(ValidationError):
+        run("thread_exact", diameter=3.0, pitch=3.0, length=12.0)
+
+
 def test_the_draft_angle_matches_the_closed_form() -> None:
     """draft_faces: ein Quader mit angestellten Seiten ist ein Integral, das
     man von Hand rechnen kann — V = WDH − (W+D)H²·tanα + 4/3·H³·tan²α."""

@@ -130,14 +130,15 @@ def run(case: Case, project: Project, profile: Profile) -> tuple[AgentSession, o
 
 
 def test_the_suite_has_the_size_the_plan_asks_for() -> None:
-    """§35: thirty reference requests. §40: fifteen to pillar C, three ambiguous."""
+    """§35: 33 Referenzanfragen — 15 zu Säule C, 18 zu Säule A seit den
+    Skizzenfällen aus P13. §40 zu P4: drei davon mehrdeutig."""
     from tests.agent_cases import ALL_CASES, CASES_A
 
     assert len(CASES) == 15
-    assert len(CASES_A) == 15
-    assert len(ALL_CASES) == 30, "§35 asks for thirty reference requests"
+    assert len(CASES_A) == 18
+    assert len(ALL_CASES) == 33, "§35 nennt 33 Referenzanfragen"
     assert len(AMBIGUOUS) == 3
-    assert len({case.id for case in ALL_CASES}) == 30
+    assert len({case.id for case in ALL_CASES}) == 33
 
 
 def test_every_expected_operation_exists() -> None:
@@ -273,20 +274,25 @@ def test_an_invalid_operation_never_reaches_the_geometry(
 
 
 def test_pillar_a_prefers_parts_over_own_geometry() -> None:
-    """§35, §40 for P6: is an existing part used instead of own geometry?
+    """§35, §40 zu P6: wird ein Baustein benutzt statt eigener Geometrie?
 
-    Measured over the corpus, not over one answer: of the fifteen requests to
-    pillar A, all but two are answered with a part from the library — and the
-    two that are not are the ones that have no part (a free shape, and a request
-    that only asks for parameters).
-    """
+    Gemessen über den Korpus, nicht über eine Antwort: dreizehn der achtzehn
+    Anfragen zu Säule A beantwortet ein Baustein aus der Bibliothek. Die fünf
+    ohne sind die, für die es keinen gibt: eine reine Parameterfrage und vier
+    Formen, die seit P13 die Skizzen-Ops bauen (§30.1)."""
     from tests.agent_cases import CASES_A
 
     with_part = [case for case in CASES_A if case.expects_part]
     without = [case for case in CASES_A if not case.expects_part]
 
     assert len(with_part) == 13
-    assert {case.id for case in without} == {"parameterise", "free_shape"}
+    assert {case.id for case in without} == {
+        "parameterise",
+        "free_shape",
+        "hex_base",
+        "pocket_plate",
+        "handrail_bend",
+    }
     for case in with_part:
         assert any(name.startswith("insert_") for name in case.expects_ops), case.id
 
@@ -310,13 +316,18 @@ def test_every_operation_pillar_a_expects_exists() -> None:
             assert name in known, f"{case.id} expects {name}"
 
 
-def test_the_free_shape_falls_back_to_openscad() -> None:
-    """§24.1: the fallback exists for exactly the shapes the library lacks."""
+def test_the_free_shape_no_longer_needs_the_fallback() -> None:
+    """Der Trichter war der Vorzeigefall des OpenSCAD-Rückfalls (§24.1).
+
+    Seit P13 spannt ``sketch_loft`` ihn im Haus auf (§30.1) — die gute Antwort
+    benutzt die eigene Operation, und der Rückfall wäre jetzt die falsche
+    Wahl. Genau diese Umkehr hält der Fall fest."""
     from tests.agent_cases import by_id
 
     case = by_id("free_shape")
 
-    assert case.expects_ops == ("create_from_scad",)
+    assert case.expects_ops == ("sketch_loft",)
+    assert case.forbids_ops == ("create_from_scad",)
     assert not case.expects_part
 
 

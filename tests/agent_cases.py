@@ -250,8 +250,36 @@ CASES_A: tuple[Case, ...] = (
         request="Ein Trichter mit 40 mm oben und 10 mm unten.",
         pillar="A",
         empty_scene=True,
-        expects_ops=("create_from_scad",),
-        note="No part fits — this is what the fallback level is for (§24.1).",
+        expects_ops=("sketch_loft",),
+        forbids_ops=("create_from_scad",),
+        note=(
+            "Bis P13 war das der Fall für den OpenSCAD-Rückfall — jetzt kann "
+            "sketch_loft ihn im Haus, und der Rückfall wäre die falsche Wahl (§30.1)."
+        ),
+    ),
+    Case(
+        id="hex_base",
+        request="Ein sechseckiger Sockel, 30 mm über die Ecken, 8 mm hoch.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("sketch_extrude",),
+        note="§30.1: Grundform über die Skizze, nie über rohe Punktlisten.",
+    ),
+    Case(
+        id="pocket_plate",
+        request="Ein Deckel 60 x 60 x 4 mm mit einer rechteckigen Tasche 40 x 40, 2 mm tief.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("sketch_extrude", "sketch_pocket"),
+        note="Aufziehen und Tasche schneiden — der Weg für flache Frästeile (§30.1).",
+    ),
+    Case(
+        id="handrail_bend",
+        request="Ein runder Handlauf-Bogen: 12 mm dick, Bogenradius 60, 90 Grad.",
+        pillar="A",
+        empty_scene=True,
+        expects_ops=("sketch_sweep",),
+        note="Entlang eines Bogens führen — vor P13 ging das nur außerhalb (§30.1).",
     ),
 )
 

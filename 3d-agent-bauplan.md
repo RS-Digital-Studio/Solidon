@@ -1499,7 +1499,7 @@ Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 | Leistung | Zielwerte §31, Regressionsschwelle 25 % |
 | Lizenzen | installierte Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die drei Wege aus §2.2 laufen als Ende-zu-Ende-Test |
-| Agenten-Suite | 30 Referenzanfragen |
+| Agenten-Suite | 33 Referenzanfragen |
 
 Die Agenten-Suite misst zusätzlich: Wird ein vorhandener Baustein statt eigener
 Geometrie benutzt? Werden Hauptabmessungen zu Parametern? Wird bei
