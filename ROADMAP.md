@@ -870,3 +870,46 @@ Prüfstück, das absichtlich 22 mm aus einem 70er Gehäuse schneidet.
   Zahlungsanbieter, keine Rechtstexte.
 * **Kein einziger fremder Nutzer.** 1797 Tests sagen, dass der Code tut, was
   gemeint war. Sie sagen nichts darüber, ob jemand anders die App bedienen kann.
+
+---
+
+## P13 — Skizzen und tiefere Konstruktion
+
+Beschlossen am 31.07.2026, Bauplan v10 (§30.1, §40): **die Veröffentlichung
+wartet auf diese Phase** — der Launch führt die Skizzen als Kernargument. Das
+Ziel dahinter: so wenig Fremdprogramme wie möglich; das fremde CAD vor dem
+Import ist der größte verbliebene Grund, Formwerk zu verlassen. Der Slicer
+bleibt bewusst außen (§22.5), OpenSCAD bleibt Rückfallebene. Die
+Veröffentlichungsreste aus P8 (Remote/CI, Zertifikat, Vertrieb, Betatest)
+laufen parallel und stehen weiter oben unter „Bewusst offen".
+
+- [ ] Lizenzprüfung der Solver-Wege: eigener scipy-Solver gegen
+      CadQuery/build123d (Regel 22, §36) — SolveSpace und py-slvs sind GPL
+      und aus dem Rennen
+- [ ] `core/sketch`: Datenmodell nach den Verträgen in §9 (Ebene, Elemente,
+      Bedingungen), ohne Qt
+- [ ] 2D-Solver: deterministisch; unterbestimmt meldet Freiheitsgrade als
+      Befund, überbestimmt nennt das kollidierende Paar (Regel 17)
+- [ ] Maße als Ausdrücke der Parametergrammatik (§13) — Projektparameter in
+      Skizzenmaßen, kein `eval`
+- [ ] Grundformen (Rechteck, Langloch, Kreisbild, Vieleck) über Dialog, CLI
+      und Agent — der Agent nie über rohe Punktlisten (Leitprinzip 5)
+- [ ] Ops `sketch_extrude`, `sketch_pocket`, `sketch_revolve`,
+      `sketch_sweep` gegen den B-Rep-Kern, volle Checkliste aus AGENTS.md
+- [ ] Formgebungs-Ops: Formschräge, exakte Schale, Sweep, Loft, exaktes
+      Gewinde — je mit Geometrietest gegen den Korpus
+- [ ] Grafischer Skizzeneditor im Viewport (Ebene aus Fläche, Zeichnen,
+      Bedingungen), offscreen testbar
+- [ ] Agenten-Suite um Skizzenanfragen erweitern, Quote vorher und nachher
+- [ ] Ende-zu-Ende: Referenzteil (Gehäuse mit Deckel) ohne Fremd-CAD von
+      leerer Szene bis Export
+- [ ] Leistungsziel §31: 200 Bedingungen unter 100 ms
+
+## Website
+
+Entschieden am 31.07.2026: statische Seite auf dem rsdigital.de-Webspace,
+Subdomain `formwerk.rsdigital.de` — dort liegen auch die `version.json`
+(§37.2, `core/updates.py`) und der Installer. Die Quelldateien liegen in
+`website/`, die Schrittliste für DNS und Upload in `website/README.md`.
+Impressum und Datenschutz sind Entwürfe und vor der Veröffentlichung zu
+prüfen.

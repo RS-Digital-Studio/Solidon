@@ -1,4 +1,4 @@
-# 3D-Agent — Bauplan v9
+# 3D-Agent — Bauplan v10
 
 Desktop-Anwendung zum **Konstruieren, Generieren und Bearbeiten** druckbarer
 3D-Modelle. Non-destruktiver Operationsstack über einer Szene mit mehreren
@@ -45,25 +45,20 @@ Schritt
 
 ---
 
-## 0. Änderungen gegenüber v8
+## 0. Änderungen gegenüber v9
 
-**Eigener Analyse-Slicer (§22)** — die größte Erweiterung. Nicht für G-Code,
-sondern für Kennzahlen: Schichten schneiden, Überhänge, Inseln und
-Stützvolumen berechnen. Damit werden Orientierungssuche und Trennebenensuche
-von „drei Kandidaten extern slicen" zu „hunderte Kandidaten intern
-durchrechnen" — ein Fähigkeitssprung, keine Bequemlichkeit. Der externe Slicer
-bleibt für die Druckdatei zuständig (§28).
+**Skizzen mit Zwangsbedingungen (§30.1, P13)** — aus dem Nebensatz in §30 wird
+eine eigene Phase. Der Anlass ist eine Produktentscheidung: so wenig
+Fremdprogramme wie möglich, und das fremde CAD **vor** dem Import ist der
+größte verbliebene Grund, ein zweites Programm zu öffnen. Dazu kommen die
+Formgebungs-Operationen auf dem B-Rep-Kern (Formschräge, exakte Schale, Sweep,
+Loft, exaktes Gewinde), ein Leistungsziel für den Solver (§31) und die
+Verträge in §9. Der Slicer bleibt außen (§22.5), OpenSCAD bleibt Rückfallebene
+— an der Nicht-bauen-Liste ändert sich nichts.
 
-**Bausteine versioniert (§24.4)** — ein echtes Loch: Das Projekt hielt die
-Bibliotheksversionen fest, aber nicht den Stand der Bausteine. Eine spätere
-Korrektur an `heatset_m4` hätte alte Projekte still anders gerechnet — genau
-der Fall, den Leitprinzip 4 ausschließt.
-
-**Eigene Bausteine im Nutzerordner (§24.5)** — dieselbe Registrierung aus einem
-Nutzerverzeichnis. Kein Plugin-System: sie reisen nie in Projektdateien mit.
-
-**Startsatz Druckerprofile (§38)** — damit beim ersten Start niemand
-Bauraummaße abtippt.
+**Die erste Veröffentlichung wartet auf P13** (Entscheidung vom 31.07.2026):
+der Launch führt die Skizzen als Kernargument. Die Veröffentlichungsreste aus
+P8 (Zertifikat, Vertrieb, Website, Betatest) laufen parallel weiter.
 
 ## 1. Leitprinzipien
 
@@ -457,6 +452,34 @@ class SliceResult:
     support_volume: float
     first_layer_area: float
     source: Literal["internal", "gcode"]  # nie vermischen (§22.5)
+
+
+# ---- Skizzen (§30.1) -------------------------------------------------
+@dataclass(frozen=True)
+class SketchElement:
+    kind: Literal["line", "arc", "circle", "point"]
+    points: tuple[tuple[float, float], ...]  # Bedeutung je kind
+
+
+@dataclass(frozen=True)
+class SketchConstraint:
+    kind: Literal["distance", "coincident", "horizontal", "vertical",
+                  "parallel", "perpendicular", "tangent", "symmetric", "fixed"]
+    targets: tuple[int, ...]  # Indizes in elements
+    value: str = ""           # Maß als Ausdruck der Grammatik (§13), kein eval
+
+
+@dataclass(frozen=True)
+class Sketch:
+    plane: str  # "plane:xy" | "plane:xz" | "plane:yz" | "feature:<id>"
+    elements: tuple[SketchElement, ...]
+    constraints: tuple[SketchConstraint, ...]
+
+
+def solve_sketch(sketch: Sketch, params: "ParameterValues") -> "SolvedSketch":
+    """Deterministisch, ohne Zufall. Unterbestimmt meldet die Freiheitsgrade
+    als Befund; überbestimmt oder widersprüchlich hält an und nennt das
+    kollidierende Bedingungspaar (Regel 17)."""
 ```
 
 **Vier Regeln, die aus diesen Verträgen folgen:**
@@ -1108,6 +1131,13 @@ skalieren, auf Bett ausrichten, druckoptimal orientieren
 Primitive einfügen; **Baustein an ein erkanntes Feature setzen** (§24);
 OpenSCAD-Teil anheften (optional)
 
+**Skizze** (§30.1, B-Rep) — Grundform anlegen (Rechteck, Langloch, Kreisbild,
+Vieleck), Skizze extrudieren, rotieren, als Tasche schneiden, entlang Pfad
+führen
+
+**Formgebung** (B-Rep) — Fase, Verrundung; Formschräge, exakte Schale, Sweep,
+Loft, exaktes Gewinde (§30.1)
+
 **Bohrungen** — aufbohren, verschließen, senken, um Materialtoleranz korrigieren
 
 **Druckvorbereitung** — aushöhlen mit Entlüftung, an Ebene schneiden,
@@ -1276,6 +1306,45 @@ Rückweg nicht — im Objektbaum sichtbar machen.
 Für die Feature-Erkennung ein Sprung: Bei B-Rep-Objekten entfallen Clustern und
 ID-Problem weitgehend, weil Flächen und Kanten benannte Entitäten sind.
 
+### 30.1 Skizzen mit Zwangsbedingungen
+
+Der Grund für diese Stufe ist eine Produktentscheidung: **so wenig
+Fremdprogramme wie möglich.** Das fremde CAD vor dem Import ist der größte
+verbliebene Anlass, Formwerk zu verlassen — mit Skizzen entsteht ein
+Druckteil von der ersten Linie bis zum Export im selben Programm.
+
+- **Eine Skizze ist ein Datenmodell im Kern** (Verträge in §9): Ebene aus
+  einer Hauptebene oder einer angeklickten planaren Fläche, Elemente (Linie,
+  Bogen, Kreis, Punkt), Bedingungen (Maß, Koinzidenz, horizontal, vertikal,
+  parallel, senkrecht, tangential, symmetrisch, fest). Kein Qt darunter.
+- **Die Skizze lebt als Parameterwert der Operation, die sie verbraucht**
+  (`sketch_extrude`, `sketch_pocket`, `sketch_revolve`, `sketch_sweep`).
+  Bearbeiten heißt `change_params` auf dem Schritt im Verlauf — dieselbe
+  Regel wie für jede andere Zahl (§15). Es entsteht kein zweiter
+  Dokumentbegriff neben dem Stack.
+- **Maßbedingungen sind Ausdrücke der Parametergrammatik (§13).** Ein
+  Skizzenmaß darf einen Projektparameter benutzen; eine Parameteränderung
+  rechnet die Skizze und den Zweig darunter neu. Kein `eval` (Regel 10).
+- **Der Solver ist ein eigener numerischer 2D-Solver auf scipy**:
+  deterministisch, ohne Zufall. Unterbestimmt meldet die verbleibenden
+  Freiheitsgrade als Befund; überbestimmt oder widersprüchlich hält an und
+  nennt das kollidierende Bedingungspaar — nie nur „fehlgeschlagen"
+  (Regel 17). SolveSpace und py-slvs sind GPL und ausgeschlossen (Regel 15);
+  CadQuery oder build123d kommen nur in Frage, wenn die Lizenzprüfung ihrer
+  Solver-Abhängigkeiten besteht, und dann als Ersatz des eigenen Solvers,
+  nie als zweiter daneben.
+- **Der Agent erzeugt Skizzen ausschließlich über benannte Grundformen**
+  (Rechteck, Langloch, Kreisbild, Vieleck) und Maße — nie über rohe
+  Punktlisten (Leitprinzip 5).
+- **Zwei Ausgabestufen.** Stufe eins: die Grundformen über Dialog, CLI und
+  Agent — voll parametrisch, ohne Grafikeditor. Stufe zwei: der grafische
+  Editor im Viewport (Ebene anklicken, zeichnen, Bedingungen über
+  Werkzeugleiste und Kontextmenü), offscreen testbar. Stufe eins ist für
+  sich vollständig und abnahmefähig.
+- **Die Skizzen-Ops rechnen gegen den B-Rep-Kern.** Ohne installiertes
+  `brep` sagen sie das in einem Satz; alles andere bleibt benutzbar
+  (bestehendes Muster aus P12).
+
 ---
 
 ## 31. Leistungsbudget
@@ -1292,6 +1361,7 @@ Gemessen auf dem Referenzkorpus (§34), als Teil der Suite protokolliert.
 | Projekt öffnen aus Plattencache | unter 1 s |
 | Parameteränderung → sichtbares Ergebnis | unter 2 s, nur betroffene Zweige |
 | Schichtanalyse, 200 000 Dreiecke, 0,2 mm | unter 300 ms |
+| Skizzen-Solver, 200 Bedingungen | unter 100 ms |
 | Orientierungssuche, 200 Kandidaten | unter 20 s, abbrechbar |
 | Anwendungsstart bis bedienbar | unter 3 s |
 
@@ -1645,6 +1715,25 @@ angelegt und geprüft · `oversized.stl` wird ohne Eingriff druckbar zerlegt.
 ### P12 — B-Rep-Kern
 *Fertig, wenn:* Verrundung an einer Referenzkante geometrisch exakt · STEP
 rundreisefähig · Kennzeichnung Mesh/B-Rep korrekt.
+
+### P13 — Skizzen und tiefere Konstruktion
+*Module:* `core/sketch` (Datenmodell, Solver), `core/brep`
+(Formgebungs-Ops), `ui/sketch` (Editor)
+
+*Fertig, wenn:* der Solver bei gleichem Modell die gleiche Lösung liefert ·
+widersprüchliche Bedingungen nennen das kollidierende Paar statt
+„fehlgeschlagen" · ein Skizzenmaß rechnet mit einem Projektparameter und die
+Änderung schlägt durch · die Grundformen sind über Dialog, CLI und Agent ohne
+Grafikeditor benutzbar · der Agent erzeugt nachweislich keine rohen
+Punktlisten · ein Referenzteil (Gehäuse mit passendem Deckel) entsteht von
+leerer Szene bis Export ohne Fremd-CAD, als Ende-zu-Ende-Test · Formschräge,
+exakte Schale, Sweep, Loft und exaktes Gewinde mit Geometrietest gegen den
+Korpus · Skizzen-Solver im Leistungsziel (§31) · ohne `brep` bleibt alles
+andere benutzbar.
+
+Die erste Veröffentlichung wartet auf diese Phase (Entscheidung vom
+31.07.2026): der Launch führt die Skizzen als Kernargument. Die
+Veröffentlichungsreste aus P8 laufen parallel.
 
 ---
 
