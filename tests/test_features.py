@@ -149,9 +149,7 @@ def test_detection_names_everything_it_found() -> None:
 
 def generated_body() -> MeshData:
     """Ein erzeugtes Netz, wie ein Bildmodell es liefert (siehe tests/data/README)."""
-    return normalise(
-        read_mesh((MESHES / "generated_figure.stl").read_bytes(), ".stl"), "mm"
-    ).mesh
+    return normalise(read_mesh((MESHES / "generated_figure.stl").read_bytes(), ".stl"), "mm").mesh
 
 
 def test_a_generated_mesh_does_not_drown_in_faces() -> None:

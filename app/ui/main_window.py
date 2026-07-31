@@ -363,32 +363,40 @@ class MainWindow(QMainWindow):
             tr("Automatisch teilen …"),
             None,
             self.action_auto_split,
-            tr("Ein zu großes Teil zerschneiden, bis jedes Stück auf die Platte passt — "
-               "mit Passstiften in jeder Schnittfläche."),
+            tr(
+                "Ein zu großes Teil zerschneiden, bis jedes Stück auf die Platte passt — "
+                "mit Passstiften in jeder Schnittfläche."
+            ),
         )
         self._add_action(
             edit_menu,
             tr("Material kalibrieren …"),
             None,
             self.action_calibrate,
-            tr("Das gemessene Spiel eintragen. Es gilt danach für jede Passung, "
-               "auch in älteren Projekten."),
+            tr(
+                "Das gemessene Spiel eintragen. Es gilt danach für jede Passung, "
+                "auch in älteren Projekten."
+            ),
         )
         self._add_action(
             edit_menu,
             tr("Varianten erzeugen …"),
             None,
             self.action_variants,
-            tr("Dasselbe Teil mehrfach mit gestaffelten Werten exportieren, "
-               "statt von Hand zu ändern."),
+            tr(
+                "Dasselbe Teil mehrfach mit gestaffelten Werten exportieren, "
+                "statt von Hand zu ändern."
+            ),
         )
         self._add_action(
             edit_menu,
             tr("Zugang zum Sprachmodell …"),
             None,
             self.action_llm_key,
-            tr("Schlüssel für den Chat hinterlegen. Er landet im Schlüsselbund, "
-               "nie in der Projektdatei."),
+            tr(
+                "Schlüssel für den Chat hinterlegen. Er landet im Schlüsselbund, "
+                "nie in der Projektdatei."
+            ),
         )
         edit_menu.addSeparator()
         self.undo_action = self._add_action(

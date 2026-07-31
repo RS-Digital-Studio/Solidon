@@ -167,8 +167,7 @@ class ToolState:
                 "Rechner, kann seine Adresse hier eingetragen werden."
             )
         return _(
-            "Nicht gefunden. Wer es an einer ungewöhnlichen Stelle hat, "
-            "kann sie hier angeben."
+            "Nicht gefunden. Wer es an einer ungewöhnlichen Stelle hat, kann sie hier angeben."
         )
 
 

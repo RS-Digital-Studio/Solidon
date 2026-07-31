@@ -42,9 +42,7 @@ Placement = Literal["raised", "engraved"]
 FONTS: tuple[str, ...] = ("DejaVu Sans", "DejaVu Serif", "DejaVu Sans Mono")
 
 #: Erklärungen, die beide Beschriftungs-Operationen teilen.
-_WHERE = _(
-    "Wo die Schrift sitzt. Eine angeklickte Fläche trägt Ort und Richtung selbst ein."
-)
+_WHERE = _("Wo die Schrift sitzt. Eine angeklickte Fläche trägt Ort und Richtung selbst ein.")
 _WHERE_MORE = _("Weitere Achse des Orts — siehe Position X.")
 _FACING = _(
     "Richtung, in die die Schrift zeigt. Aus einer angeklickten Fläche kommt sie "
@@ -167,15 +165,9 @@ class LabelParams(BaseParams):
     x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE)
     y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_MORE)
     z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_MORE)
-    nx: float = param(
-        title=_("Normale X"), default=0.0, placement="advanced", doc=_FACING
-    )
-    ny: float = param(
-        title=_("Normale Y"), default=0.0, placement="advanced", doc=_FACING_MORE
-    )
-    nz: float = param(
-        title=_("Normale Z"), default=1.0, placement="advanced", doc=_FACING_MORE
-    )
+    nx: float = param(title=_("Normale X"), default=0.0, placement="advanced", doc=_FACING)
+    ny: float = param(title=_("Normale Y"), default=0.0, placement="advanced", doc=_FACING_MORE)
+    nz: float = param(title=_("Normale Z"), default=1.0, placement="advanced", doc=_FACING_MORE)
     angle: float = param(
         title=_("Drehung"),
         default=0.0,

@@ -50,8 +50,7 @@ _WHERE_X = _(
 _WHERE_Y = _("Zweite Achse der Position — siehe Position X.")
 _WHERE_Z = _("Dritte Achse der Position — siehe Position X.")
 _ALONG = _(
-    "Richtung, in die gebohrt wird. Z ist senkrecht von oben, X und Y bohren "
-    "durch eine Seitenwand."
+    "Richtung, in die gebohrt wird. Z ist senkrecht von oben, X und Y bohren durch eine Seitenwand."
 )
 
 
