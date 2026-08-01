@@ -1,9 +1,9 @@
-"""Scene operations (Bauplan §25, category "Szene").
+"""Szenen-Operationen (Bauplan §25, Kategorie „Szene").
 
-These touch no geometry: they name, copy and arrange what is already there. They
-still go through the registry and the stack like every other operation, because
-"no geometry change outside an operation" (AGENTS.md rule 2) is only credible if
-the cheap cases follow it too.
+Sie fassen keine Geometrie an: sie benennen, kopieren und ordnen, was schon da
+ist. Trotzdem laufen sie über Register und Stapel wie jede andere Operation —
+„keine Geometrieänderung außerhalb einer Op" (AGENTS.md Regel 2) ist nur
+glaubwürdig, wenn auch die billigen Fälle sich daran halten.
 """
 
 from __future__ import annotations
@@ -37,9 +37,10 @@ def rename_object(ctx: OpContext) -> OpResult:
     return OpResult(outputs=[dataclasses.replace(source, name=params.name)])
 
 
-#: How many of one part may stand in a scene. A plate of ten clips is an
-#: ordinary job; a hundred is already a stress test of the arranging, and a
-#: number above it is a typing mistake, not an order.
+#: Wie viele Exemplare eines Teils in einer Szene stehen dürfen. Eine Platte
+#: mit zehn Clips ist ein gewöhnlicher Auftrag; hundert sind schon ein
+#: Belastungstest fürs Anordnen, und eine Zahl darüber ist ein Tippfehler,
+#: keine Bestellung.
 MAX_COPIES = 100
 
 
@@ -99,10 +100,11 @@ def duplicate_object(ctx: OpContext) -> OpResult:
 
 
 def _copy_name(original: str, chosen: str, index: int, count: int) -> str:
-    """Names that stay apart without becoming a riddle.
+    """Namen, die auseinanderbleiben, ohne ein Rätsel zu werden.
 
-    One copy is "part (copy)", as it always was. Several are numbered, because
-    ten objects called "part (copy)" are a list of one thing ten times over.
+    Eine Kopie heißt „Teil (Kopie)", wie eh und je. Mehrere werden nummeriert,
+    denn zehn Objekte namens „Teil (Kopie)" sind eine Liste aus einem Ding,
+    zehnmal.
     """
     base = chosen or f"{original} ({tr('Kopie')})"
     return base if count <= 2 else f"{base} {index - 1}"

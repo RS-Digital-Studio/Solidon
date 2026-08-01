@@ -1,8 +1,9 @@
-"""Parameter expressions with an own grammar (Bauplan §13, §32).
+"""Parameterausdrücke mit eigener Grammatik (Bauplan §13, §32).
 
-Project files travel between people, so a foreign file must never execute
-anything. That rules out ``eval`` — also a guarded one. Instead: a tokeniser and
-a recursive-descent parser over a grammar small enough to read in one go.
+Projektdateien wandern zwischen Leuten, also darf eine fremde Datei nie etwas
+ausführen. Das schließt ``eval`` aus — auch ein abgesichertes. Stattdessen:
+ein Tokenisierer und ein rekursiver Abstiegsparser über einer Grammatik, die
+sich in einem Zug lesen lässt.
 
     expression := term (("+" | "-") term)*
     term       := factor (("*" | "/") factor)*
@@ -10,11 +11,13 @@ a recursive-descent parser over a grammar small enough to read in one go.
     primary    := NUMBER | "@" NAME | FUNCTION "(" arguments ")" | "(" expression ")"
     arguments  := expression ("," expression)*
 
-Functions: ``min``, ``max``, ``round``, ``abs``. Everything else is rejected —
-names without ``@``, attribute access, calls, powers, comparisons, bit
-operations. What the grammar does not contain cannot happen.
+Funktionen: ``min``, ``max``, ``round``, ``abs``. Alles andere wird
+abgelehnt — Namen ohne ``@``, Attributzugriffe, Aufrufe, Potenzen,
+Vergleiche, Bit-Operationen. Was die Grammatik nicht enthält, kann nicht
+passieren.
 
-Written as ``"=@width/2 - @wall"`` or, for a plain reference, ``"@width"``.
+Geschrieben als ``"=@width/2 - @wall"`` oder, für den nackten Verweis,
+``"@width"``.
 """
 
 from __future__ import annotations
@@ -37,7 +40,7 @@ _NAME_PATTERN: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _NUMBER_PATTERN: Final = re.compile(r"\d+(\.\d+)?")
 
 _FUNCTIONS: Final[dict[str, tuple[int, int, Callable[..., float]]]] = {
-    # name: (minimum arguments, maximum arguments, implementation)
+    # Name: (Mindest-Argumente, Höchst-Argumente, Umsetzung)
     "min": (2, 8, min),
     "max": (2, 8, max),
     "abs": (1, 1, abs),
@@ -46,11 +49,12 @@ _FUNCTIONS: Final[dict[str, tuple[int, int, Callable[..., float]]]] = {
 
 
 def is_expression(text: object) -> TypeGuard[str]:
-    """True for a value that has to be evaluated rather than taken as a number."""
+    """True für einen Wert, der ausgewertet werden muss, statt als Zahl
+    genommen zu werden."""
     return isinstance(text, str) and text.startswith((EXPRESSION_PREFIX, REFERENCE_PREFIX))
 
 
-# --- Tokenising ----------------------------------------------------------------
+# --- Tokenisieren ----------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +123,8 @@ def _tokenise(source: str) -> list[_Token]:
 
 
 class _Parser:
-    """Recursive descent. Parses and evaluates in one pass — the tree is not needed."""
+    """Rekursiver Abstieg. Parst und wertet in einem Durchgang — der Baum wird
+    nicht gebraucht."""
 
     def __init__(self, source: str, values: Mapping[str, float] | None) -> None:
         self.source = source
@@ -260,7 +265,7 @@ def _body(text: str) -> str:
 
 
 def evaluate(text: str, values: Mapping[str, float]) -> float:
-    """Evaluate an expression against the current parameter values."""
+    """Wertet einen Ausdruck gegen die aktuellen Parameterwerte aus."""
     result = _Parser(_body(text), values).run()
     if not math.isfinite(result):
         raise _fail(str(_("Das Ergebnis ist keine gültige Zahl.")), text, 0)
@@ -268,22 +273,23 @@ def evaluate(text: str, values: Mapping[str, float]) -> float:
 
 
 def references(text: str) -> frozenset[str]:
-    """Parameters an expression reads. Also the syntax check (§13)."""
+    """Die Parameter, die ein Ausdruck liest. Zugleich die Syntaxprüfung (§13)."""
     parser = _Parser(_body(text), None)
     parser.run()
     return frozenset(parser.references)
 
 
 def check(text: str) -> None:
-    """Reject anything outside the grammar. Raises, or returns quietly."""
+    """Lehnt alles außerhalb der Grammatik ab. Wirft — oder kehrt still zurück."""
     references(text)
 
 
-# --- Parameter resolution ------------------------------------------------------
+# --- Parameterauflösung ----------------------------------------------------------
 
 
 def dependencies(parameters: Mapping[ParameterName, Parameter]) -> dict[ParameterName, set[str]]:
-    """Which parameter reads which — the graph the cycle check runs on."""
+    """Welcher Parameter welchen liest — der Graph, auf dem die Zyklusprüfung
+    läuft."""
     graph: dict[ParameterName, set[str]] = {}
     for name, parameter in parameters.items():
         expression = parameter.expression
@@ -292,7 +298,8 @@ def dependencies(parameters: Mapping[ParameterName, Parameter]) -> dict[Paramete
 
 
 def resolution_order(parameters: Mapping[ParameterName, Parameter]) -> list[ParameterName]:
-    """Order in which parameters can be evaluated. Cycles are rejected (§13)."""
+    """Die Reihenfolge, in der sich die Parameter auswerten lassen. Zyklen
+    werden abgelehnt (§13)."""
     graph = dependencies(parameters)
     unknown = {
         reference for reads in graph.values() for reference in reads if reference not in parameters
@@ -334,7 +341,7 @@ def resolution_order(parameters: Mapping[ParameterName, Parameter]) -> list[Para
 
 
 def resolve(parameters: Mapping[ParameterName, Parameter]) -> dict[ParameterName, float]:
-    """Evaluate all parameters in dependency order."""
+    """Wertet alle Parameter in Abhängigkeitsreihenfolge aus."""
     values: dict[ParameterName, float] = {}
     for name in resolution_order(parameters):
         parameter = parameters[name]
@@ -345,17 +352,19 @@ def resolve(parameters: Mapping[ParameterName, Parameter]) -> dict[ParameterName
 
 
 def resolve_value(value: object, values: Mapping[str, float]) -> object:
-    """Resolve one operation parameter: expressions become numbers, the rest passes."""
+    """Löst einen Operationsparameter auf: Ausdrücke werden Zahlen, der Rest
+    geht durch."""
     return evaluate(value, values) if is_expression(value) else value
 
 
 def resolve_params(params: Mapping[str, object], values: Mapping[str, float]) -> dict[str, object]:
-    """Resolve a whole stored parameter set before validation (§10, §13)."""
+    """Löst einen ganzen gespeicherten Parametersatz vor der
+    Validierung auf (§10, §13)."""
     return {name: resolve_value(entry, values) for name, entry in params.items()}
 
 
 def used_parameters(params: Iterable[object]) -> frozenset[str]:
-    """Which project parameters a stored parameter set depends on."""
+    """Von welchen Projektparametern ein gespeicherter Parametersatz abhängt."""
     found: set[str] = set()
     for entry in params:
         if is_expression(entry):

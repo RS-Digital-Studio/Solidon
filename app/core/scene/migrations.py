@@ -1,12 +1,13 @@
-"""Format versions and the migration chain (Bauplan §16.2).
+"""Formatversionen und die Migrationskette (Bauplan §16.2).
 
-Same version: load. Older: run the chain. Newer: decline in a friendly way
-instead of loading half of it — a file from a newer release may contain
-operations this one does not know.
+Gleiche Version: laden. Älter: die Kette läuft. Neuer: freundlich ablehnen,
+statt die Hälfte zu laden — eine Datei aus einem neueren Release kann
+Operationen enthalten, die dieses nicht kennt.
 
-Migration steps are never merged together (AGENTS.md, checklist "Dateiformat
-ändern"): each one keeps its own function, its own test and its own checked-in
-example file, so a chain from the very first version keeps working.
+Migrationsschritte werden nie zusammengefasst (AGENTS.md, Checkliste
+„Dateiformat ändern"): jeder behält seine eigene Funktion, seinen eigenen
+Test und seine eigene eingecheckte Beispieldatei — so funktioniert die Kette
+von der allerersten Version an weiter.
 """
 
 from __future__ import annotations
@@ -21,13 +22,13 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Current version of ``project.json``.
+#: Aktuelle Version von ``project.json``.
 FORMAT_VERSION: Final = 3
 
 
 @dataclass(frozen=True, slots=True)
 class Step:
-    """One step of the chain, from one version to the next."""
+    """Ein Schritt der Kette, von einer Version zur nächsten."""
 
     from_version: int
     to_version: int
@@ -35,23 +36,24 @@ class Step:
 
 
 def _add_chat(data: dict[str, Any]) -> dict[str, Any]:
-    """1 → 2: the conversation moved into the project (§26.3).
+    """1 → 2: das Gespräch zog ins Projekt (§26.3).
 
-    A file from before the agent simply has no conversation, and an empty list
-    says exactly that. Nothing else changes, which is why this step is its own
-    function and stays one forever.
+    Eine Datei aus der Zeit vor dem Agenten hat schlicht kein Gespräch, und
+    eine leere Liste sagt genau das. Sonst ändert sich nichts — darum ist
+    dieser Schritt eine eigene Funktion und bleibt für immer eine.
     """
     data.setdefault("chat", [])
     return data
 
 
 def _mark_generated_sources(data: dict[str, Any]) -> dict[str, Any]:
-    """2 → 3: a source carries how it was generated (§27, pillar B).
+    """2 → 3: eine Quelle trägt, wie sie erzeugt wurde (§27, Säule B).
 
-    Sources from before pillar B were all imported or built from parts, so the
-    two new fields are empty for every one of them. What the step really does
-    is state that on the way in, rather than leaving a file that looks like it
-    lost its prompt somewhere.
+    Quellen aus der Zeit vor Säule B waren alle importiert oder aus Bausteinen
+    gebaut, die zwei neuen Felder sind für jede von ihnen leer. Was der
+    Schritt wirklich tut: das beim Hereinkommen festhalten — statt eine Datei
+    zu hinterlassen, die aussieht, als hätte sie irgendwo ihren Prompt
+    verloren.
     """
     for source in data.get("sources", {}).values():
         if source.get("type") == "generated":
@@ -59,7 +61,7 @@ def _mark_generated_sources(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-#: All known steps, oldest first.
+#: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
     Step(from_version=2, to_version=3, apply=_mark_generated_sources),
@@ -71,7 +73,7 @@ def migrate(
     target: int = FORMAT_VERSION,
     steps: Sequence[Step] = MIGRATIONS,
 ) -> dict[str, Any]:
-    """Bring a document up to ``target``, or say why that is not possible."""
+    """Hebt ein Dokument auf ``target`` — oder sagt, warum das nicht geht."""
     version = int(data.get("format_version", 0))
     if version == target:
         return data

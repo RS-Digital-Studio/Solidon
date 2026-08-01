@@ -1,12 +1,13 @@
-"""Fits between features (Bauplan §14).
+"""Passungen zwischen Merkmalen (Bauplan §14).
 
-Objects are otherwise independent, and a mistake only shows up at assembly —
-when the pin does not go into the hole and the print is already made. A fit ties
-two features together and is checked on every evaluation.
+Objekte sind sonst unabhängig, und ein Fehler zeigt sich erst beim
+Zusammenbau — wenn der Stift nicht ins Loch geht und der Druck schon gemacht
+ist. Eine Passung bindet zwei Merkmale aneinander und wird bei jeder
+Auswertung geprüft.
 
-The tolerance is a reference into the material profile, never a number in the
-file (§12, AGENTS.md rule 7). That is what makes calibration (§28.3) reach
-projects that were built before it.
+Die Toleranz ist ein Verweis ins Materialprofil, nie eine Zahl in der
+Datei (§12, AGENTS.md Regel 7). Genau das lässt die Kalibrierung (§28.3)
+Projekte erreichen, die vor ihr gebaut wurden.
 """
 
 from __future__ import annotations
@@ -28,17 +29,18 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: How far the actual gap may differ from the profile value before it is a finding.
+#: Wie weit das tatsächliche Spiel vom Profilwert abweichen darf, bevor es ein
+#: Befund wird.
 FIT_TOLERANCE = EPS_DISPLAY * 5
 
-#: How parallel two faces have to be to be worth measuring a flush fit on.
-#: 0.99 is about eight degrees — past that they are not the same plane, they
-#: are two planes meeting at a corner.
+#: Wie parallel zwei Flächen stehen müssen, damit sich eine bündige Passung
+#: überhaupt messen lässt. 0.99 sind etwa acht Grad — darüber sind es nicht
+#: dieselbe Ebene, sondern zwei Ebenen, die sich an einer Ecke treffen.
 FLUSH_PARALLEL = 0.99
 
 
 def resolve(scene: Scene, reference: FeatureRef) -> Feature | None:
-    """The feature a fit points at, or None when it is gone."""
+    """Das Merkmal, auf das eine Passung zeigt — oder None, wenn es fort ist."""
     entry = scene.objects.get(reference.object_id)
     if entry is None:
         return None
@@ -51,7 +53,7 @@ def diameter_of(feature: Feature) -> float | None:
 
 
 def check(scene: Scene, profile: Profile) -> list[Finding]:
-    """Check every fit in the scene. Violations are never silent (§14)."""
+    """Prüft jede Passung der Szene. Verletzungen sind nie still (§14)."""
     findings: list[Finding] = []
     for fit in scene.fits:
         findings.extend(_check_one(scene, fit, profile))
@@ -87,8 +89,8 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
             )
         ]
 
-    # Which of the two references the hole came from: _sort_by_kind may have
-    # swapped them, and "hole_1" is only unique within its own object.
+    # Aus welchem der zwei Verweise das Loch kam: _sort_by_kind kann sie
+    # getauscht haben, und „hole_1" ist nur im eigenen Objekt eindeutig.
     hole_ref, pin_ref = (fit.a, fit.b) if hole is first else (fit.b, fit.a)
     wanted, materials = _wanted(scene, fit, hole_ref, pin_ref, profile)
     actual = hole_diameter - pin_diameter
@@ -113,21 +115,24 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
 def _wanted(
     scene: Scene, fit: Fit, hole: FeatureRef, pin: FeatureRef, profile: Profile
 ) -> tuple[float, str]:
-    """The gap this fit is meant to have, in the materials it is made of (§12).
+    """Das Spiel, das diese Passung haben soll, in den Materialien, aus denen
+    sie besteht (§12).
 
-    A named reference (``auto:petg``) stays what it says — somebody wrote that
-    material down on purpose. The bare ``auto:`` means "whatever this is
-    printed in", and that is not necessarily one thing: a TPU seal in a PETG
-    housing has two answers.
+    Ein benannter Verweis (``auto:petg``) bleibt, was er sagt — dieses
+    Material hat jemand mit Absicht hingeschrieben. Das nackte ``auto:``
+    heißt „worin das eben gedruckt wird", und das ist nicht unbedingt eines:
+    eine TPU-Dichtung im PETG-Gehäuse hat zwei Antworten.
 
-    Where they differ the larger value wins, and that is one rule for both
-    kinds rather than two. A clearance is positive, so the larger one is the
-    wider gap: it goes together. A press is negative, so the larger one is the
-    *smaller* interference: it does not split the part it is pressed into. Both
-    times the choice is the one whose failure leaves a usable part — a joint
-    that sits loose can be glued, a housing that cracked on assembly is scrap.
+    Wo sie sich unterscheiden, gewinnt der größere Wert — eine Regel für beide
+    Arten statt zwei. Ein Spiel ist positiv, der größere Wert also der
+    weitere Spalt: es geht zusammen. Ein Pressmaß ist negativ, der größere
+    Wert also das *kleinere* Übermaß: es sprengt das Teil nicht, in das
+    gepresst wird. Beide Male fällt die Wahl auf die Seite, deren Scheitern
+    ein brauchbares Teil übrig lässt — eine Verbindung, die locker sitzt,
+    kann man kleben; ein Gehäuse, das beim Zusammenbau gerissen ist, ist
+    Ausschuss.
 
-    A thread is a property of the hole and reads only its material.
+    Ein Gewinde ist eine Eigenschaft des Lochs und liest nur dessen Material.
     """
     if not isinstance(fit.tolerance, str) or fit.tolerance != AUTO_TOLERANCE_PREFIX:
         return resolve_tolerance(fit.tolerance, fit.kind, profile), ""
@@ -142,19 +147,20 @@ def _wanted(
 
 
 def _profile_of(scene: Scene, reference: FeatureRef, profile: Profile) -> Profile:
-    """The profile of the body a fit reference points at."""
+    """Das Profil des Körpers, auf den ein Passungsverweis zeigt."""
     return for_object(profile, scene.objects.get(reference.object_id))
 
 
 def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
-    """Two faces that are meant to sit in one plane (§14).
+    """Zwei Flächen, die in einer Ebene sitzen sollen (§14).
 
-    Measured as the distance of the second face's centre from the first face's
-    plane. That is the number somebody would put a straightedge across the
-    assembly to find, and it is the one that decides whether a lid sits proud.
+    Gemessen als Abstand des Mittelpunkts der zweiten Fläche von der Ebene der
+    ersten. Das ist die Zahl, für die jemand ein Haarlineal über den
+    Zusammenbau legen würde, und sie entscheidet, ob ein Deckel übersteht.
 
-    A pair of faces that are not parallel is a different mistake and gets said
-    so: two planes at an angle have no distance worth reporting.
+    Ein Flächenpaar, das nicht parallel steht, ist ein anderer Fehler und
+    bekommt das gesagt: zwei Ebenen im Winkel haben keinen Abstand, der sich
+    zu melden lohnt.
     """
     if first.kind != "face" or second.kind != "face":
         return [
@@ -205,7 +211,7 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
 
 
 def _vector(value: object) -> tuple[float, float, float] | None:
-    """A three-component parameter, or None when it is not one."""
+    """Ein dreikomponentiger Parameter, oder None, wenn er keiner ist."""
     if not isinstance(value, list | tuple) or len(value) != 3:
         return None
     try:
@@ -215,12 +221,13 @@ def _vector(value: object) -> tuple[float, float, float] | None:
 
 
 def _sort_by_kind(first: Feature, second: Feature) -> tuple[Feature, Feature]:
-    """The hole first, the pin second — whichever way round they were written."""
+    """Das Loch zuerst, der Stift danach — egal, wie herum sie geschrieben
+    wurden."""
     if first.kind == "hole":
         return first, second
     if second.kind == "hole":
         return second, first
-    # Neither is a hole: the larger diameter plays the part.
+    # Keines ist ein Loch: der größere Durchmesser übernimmt die Rolle.
     return (
         (first, second)
         if (diameter_of(first) or 0.0) >= (diameter_of(second) or 0.0)
@@ -235,7 +242,8 @@ def _message_for(kind: FitKind, actual: float, wanted: float) -> str:
 
 
 def add(scene_fits: list[Fit], fit: Fit) -> list[Fit]:
-    """Add a pair, replacing one of the same name (§25, agent tool ``add_fit``)."""
+    """Fügt ein Paar an; ein gleichnamiges wird ersetzt (§25, Agentenwerkzeug
+    ``add_fit``)."""
     kept = [entry for entry in scene_fits if entry.name != fit.name]
     kept.append(fit)
     _log.info("fit %s: %s to %s", fit.name, fit.a, fit.b)

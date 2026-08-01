@@ -1,9 +1,10 @@
-"""Cooperative cancellation (Bauplan §15.6, §2.8).
+"""Kooperativer Abbruch (Bauplan §15.6, §2.8).
 
-Anything that computes runs in a worker thread with progress and a cancel
-button. A cancelled run leaves the stack on the last fully computed state —
-there are no half applied operations, so the token is polled between operations
-and inside long ones, never enforced from outside.
+Alles, was rechnet, läuft in einem Arbeits-Thread mit Fortschritt und
+Abbrechen-Knopf. Ein abgebrochener Lauf lässt den Stapel auf dem letzten
+vollständig gerechneten Stand — halb angewandte Operationen gibt es nicht,
+also wird das Token zwischen Operationen und in langen abgefragt, nie von
+außen erzwungen.
 """
 
 from __future__ import annotations
@@ -14,7 +15,8 @@ from app.core.errors import OperationCancelled
 
 
 class CancelSignal:
-    """The token an operation polls, and the switch the surface flips."""
+    """Das Token, das eine Operation abfragt, und der Schalter, den die
+    Oberfläche umlegt."""
 
     def __init__(self) -> None:
         self._event = threading.Event()
@@ -35,7 +37,7 @@ class CancelSignal:
 
 
 class NeverCancelled:
-    """For command line runs and tests: nothing ever cancels."""
+    """Für Kommandozeilen-Läufe und Tests: hier bricht nie jemand ab."""
 
     @property
     def is_cancelled(self) -> bool:

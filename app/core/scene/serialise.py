@@ -1,11 +1,13 @@
-"""Document to data and back (Bauplan §12).
+"""Dokument zu Daten und zurück (Bauplan §12).
 
-The keys written here are the file format. They are English, they are stable,
-and they match the example in §12 — including ``in``/``out``, which are Python
-keywords and therefore called ``inputs``/``outputs`` in the code.
+Die Schlüssel, die hier geschrieben werden, sind das Dateiformat. Sie sind
+englisch, sie sind stabil, und sie entsprechen dem Beispiel in §12 —
+einschließlich ``in``/``out``, die als Python-Schlüsselwörter im Code
+``inputs``/``outputs`` heißen.
 
-Two indirections survive the round trip untouched, because that is the point of
-them: ``auto:<material>`` for tolerances and ``=@name`` for parameters (§13).
+Zwei Indirektionen überstehen die runde Reise unangetastet, denn genau das
+ist ihr Zweck: ``auto:<material>`` für Toleranzen und ``=@name`` für
+Parameter (§13).
 """
 
 from __future__ import annotations
@@ -177,8 +179,9 @@ def origin_from_data(data: dict[str, Any] | None) -> Origin:
 
 
 def transaction_to_data(transaction: Transaction) -> dict[str, Any]:
-    """The title is stored as the text the user saw, not as a translation key:
-    a history entry is a record of what happened, and the user may rename it."""
+    """Der Titel wird als der Text gespeichert, den der Nutzer sah, nicht als
+    Übersetzungsschlüssel: ein Verlaufseintrag ist ein Protokoll dessen, was
+    passiert ist, und der Nutzer darf ihn umbenennen."""
     return {
         "id": transaction.id,
         "title": str(transaction.title),
@@ -197,7 +200,8 @@ def transaction_from_data(data: dict[str, Any]) -> Transaction:
 
 
 def chat_to_data(entry: ChatEntry) -> dict[str, Any]:
-    """§26.3: the turn and the transaction it produced belong together."""
+    """§26.3: der Beitrag und die Transaktion, die er erzeugt hat, gehören
+    zusammen."""
     return _without_none(
         {
             "id": entry.id,

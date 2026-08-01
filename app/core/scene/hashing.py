@@ -1,12 +1,14 @@
-"""Stable hashes for the evaluation cache (Bauplan §15, §38).
+"""Stabile Hashes für den Auswertungs-Cache (Bauplan §15, §38).
 
-The hash of an operation covers everything its result depends on: the operation
-itself, its resolved parameters, the hashes of its inputs, profile, quality
-level and seed. Two consequences fall out of that:
+Der Hash einer Operation deckt alles, wovon ihr Ergebnis abhängt: die
+Operation selbst, ihre aufgelösten Parameter, die Hashes ihrer Eingaben,
+Profil, Qualitätsstufe und Startwert. Daraus fallen zwei Folgen:
 
-* changing one parameter only invalidates the branch below it — the rest comes
-  from the cache, which is what keeps a parameter change under two seconds (§31);
-* the hash is stable across processes, so it can name a file in the disk cache.
+* eine Parameteränderung entwertet nur den Zweig darunter — der Rest kommt aus
+  dem Cache, und genau das hält eine Parameteränderung unter zwei
+  Sekunden (§31);
+* der Hash ist über Prozesse hinweg stabil und kann darum eine Datei im
+  Platten-Cache benennen.
 """
 
 from __future__ import annotations
@@ -20,9 +22,10 @@ from app.core.types import Operation, Profile, Quality
 
 
 def _canonical(value: Any) -> Any:
-    """Turn a value into something json can write down the same way every time."""
+    """Macht aus einem Wert etwas, das json jedes Mal gleich hinschreibt."""
     if isinstance(value, float):
-        # repr keeps full double precision; rounding here would merge distinct runs.
+        # repr behält die volle doppelte Genauigkeit; Rundung hier würde
+        # verschiedene Läufe zusammenwerfen.
         return ["f", repr(value)]
     if isinstance(value, Mapping):
         return {str(key): _canonical(value[key]) for key in sorted(value, key=str)}
@@ -34,13 +37,14 @@ def _canonical(value: Any) -> Any:
 
 
 def digest(*parts: Any) -> str:
-    """A short, stable hash over anything json can represent."""
+    """Ein kurzer, stabiler Hash über alles, was json darstellen kann."""
     text = json.dumps([_canonical(part) for part in parts], sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
 
 
 def profile_key(profile: Profile) -> str:
-    """What of a profile can change a result: tolerances and nozzle geometry."""
+    """Was an einem Profil ein Ergebnis ändern kann: Toleranzen und
+    Düsengeometrie."""
     printer = profile.printer
     material = profile.material
     return digest(
@@ -65,7 +69,7 @@ def operation_hash(
     profile: Profile,
     quality: Quality,
 ) -> str:
-    """Identity of one computed result."""
+    """Die Identität eines gerechneten Ergebnisses."""
     return digest(
         operation.op,
         params,
@@ -77,10 +81,11 @@ def operation_hash(
 
 
 def object_hash(operation_key: str, position: int) -> str:
-    """Identity of one output object of an operation."""
+    """Die Identität eines Ausgabeobjekts einer Operation."""
     return digest(operation_key, position)
 
 
 def source_hash(sha256: str) -> str:
-    """Identity of an imported mesh — its checksum is already stable (§16.1)."""
+    """Die Identität eines importierten Netzes — seine Prüfsumme ist schon
+    stabil (§16.1)."""
     return digest("source", sha256)

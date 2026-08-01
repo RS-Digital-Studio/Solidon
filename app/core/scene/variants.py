@@ -1,17 +1,17 @@
-"""The variant generator (Bauplan §28.3, §25 category "Varianten").
+"""Der Variantengenerator (Bauplan §28.3, §25 Kategorie „Varianten").
 
-The same operation chain with one parameter stepped through, in one go: four
-runs with 0.10 / 0.15 / 0.20 / 0.25 mm of play, labelled and arranged. One
-print, and afterwards the value is settled.
+Dieselbe Operationskette mit einem durchgestuften Parameter, in einem Zug:
+vier Läufe mit 0,10 / 0,15 / 0,20 / 0,25 mm Spiel, beschriftet und
+angeordnet. Ein Druck, und danach ist der Wert entschieden.
 
-"With project parameters this is one call, not a special function" — and that
-is exactly how it is built. Nothing here knows anything about fits or play; it
-turns a number that is already a parameter (§13) and evaluates the same stack
-again.
+„Mit Projektparametern ist das ein Aufruf, keine Sonderfunktion" — und genau
+so ist es gebaut. Nichts hier weiß etwas über Passungen oder Spiel; es dreht
+an einer Zahl, die schon ein Parameter ist (§13), und wertet denselben Stapel
+noch einmal aus.
 
-The variants are deliberately **not** a step on the stack. They are a print run,
-not a modelling step: what comes back is a scene to export, and the project is
-left exactly as it was.
+Die Varianten sind mit Absicht **kein** Schritt auf dem Stapel. Sie sind ein
+Druckauftrag, kein Konstruktionsschritt: zurück kommt eine Szene zum
+Exportieren, und das Projekt bleibt exakt, wie es war.
 """
 
 from __future__ import annotations
@@ -40,17 +40,17 @@ from app.i18n import _, tr
 
 _log = get_logger(__name__)
 
-#: Gap between two variants on the plate, in millimetres.
+#: Abstand zwischen zwei Varianten auf der Platte, in Millimetern.
 DEFAULT_GAP = 8.0
 
-#: More than this is not a calibration print any more, it is a plate full of
-#: guesses (§28.3 names four).
+#: Mehr als das ist kein Kalibrierdruck mehr, sondern eine Platte voller
+#: Vermutungen (§28.3 nennt vier).
 MAX_VARIANTS = 12
 
 
 @dataclass(slots=True)
 class Variant:
-    """One run with one value."""
+    """Ein Lauf mit einem Wert."""
 
     value: float
     objects: dict[ObjectId, SceneObject] = field(default_factory=dict)
@@ -60,7 +60,7 @@ class Variant:
 
 @dataclass(slots=True)
 class VariantSet:
-    """Everything the generator produced, ready to export."""
+    """Alles, was der Generator erzeugt hat, bereit zum Export."""
 
     parameter: str
     variants: list[Variant] = field(default_factory=list)
@@ -71,7 +71,7 @@ class VariantSet:
         return bool(self.variants) and all(entry.complete for entry in self.variants)
 
     def scene(self, profile: Profile) -> Scene:
-        """The whole run as one scene — arranged, named after their values."""
+        """Der ganze Lauf als eine Szene — angeordnet, benannt nach den Werten."""
         objects: dict[ObjectId, SceneObject] = {}
         for entry in self.variants:
             objects.update(entry.objects)
@@ -90,7 +90,7 @@ def build(
     quality: Quality = "draft",
     sources: SourceAccess | None = None,
 ) -> VariantSet:
-    """Evaluate the same stack ``count`` times with a stepped parameter."""
+    """Wertet denselben Stapel ``count``-mal mit gestuftem Parameter aus."""
     if parameter not in document.parameters:
         raise ValidationError(
             field="parameter",
@@ -147,7 +147,8 @@ def _place(
     offset: float,
     gap: float,
 ) -> float:
-    """Move one run out of the way of the previous one and name it after its value."""
+    """Rückt einen Lauf aus dem Weg des vorigen und benennt ihn nach seinem
+    Wert."""
     width = 0.0
     for object_id, entry in scene.objects.items():
         mesh = as_mesh_data(entry.mesh)
@@ -162,5 +163,6 @@ def _place(
 
 
 def values(first: float, step: float, count: int) -> tuple[float, ...]:
-    """The values a run would use — for the dialog and for the label."""
+    """Die Werte, die ein Lauf benutzen würde — für den Dialog und die
+    Beschriftung."""
     return tuple(round(first + step * index, 4) for index in range(count))

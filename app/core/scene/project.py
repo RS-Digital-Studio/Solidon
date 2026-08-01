@@ -1,20 +1,22 @@
-"""The project container (Bauplan §16.1).
+"""Der Projektcontainer (Bauplan §16.1).
 
 ::
 
     projekt.p3d           (ZIP)
-      project.json        # stack, parameters, fits, transactions
-      sources/            # embedded source meshes
-      report.json         # last report
-      thumb.png           # preview for file dialogs
+      project.json        # Stapel, Parameter, Passungen, Transaktionen
+      sources/            # eingebettete Quellnetze
+      report.json         # letzter Prüfbericht
+      thumb.png           # Vorschau für Dateidialoge
 
-Three rules the container enforces rather than assumes:
+Drei Regeln, die der Container erzwingt statt annimmt:
 
-* **No absolute paths** (§32). A project travels between machines and people;
-  a path out of the container is refused on write and on read.
-* **Checksums on every source**, verified while loading (§16.1).
-* **Written atomically.** A crash during save must not cost the file that was
-  there before — which is also why the autosave container (§38) sits next to it.
+* **Keine absoluten Pfade** (§32). Ein Projekt reist zwischen Rechnern und
+  Leuten; ein Pfad aus dem Container hinaus wird beim Schreiben wie beim
+  Lesen abgelehnt.
+* **Prüfsummen auf jeder Quelle**, verifiziert beim Laden (§16.1).
+* **Atomar geschrieben.** Ein Absturz beim Speichern darf nicht die Datei
+  kosten, die vorher da war — darum liegt auch der Autosave-Container (§38)
+  daneben.
 """
 
 from __future__ import annotations
@@ -54,21 +56,22 @@ AUTOSAVE_SUFFIX: Final = ".autosave"
 
 @dataclass(slots=True)
 class Project:
-    """What a ``.p3d`` file holds."""
+    """Was eine ``.p3d``-Datei hält."""
 
     document: Document
     sources: dict[SourceId, bytes] = field(default_factory=dict)
-    """Payload of the embedded sources, keyed like ``document.sources``."""
+    """Inhalt der eingebetteten Quellen, gleich geschlüsselt wie
+    ``document.sources``."""
     report: Report = field(default_factory=Report)
     thumbnail: bytes | None = None
 
 
 @dataclass(slots=True)
 class ProjectSources:
-    """Read-only access to the sources of one project, for the ``load`` operation.
+    """Lesezugriff auf die Quellen eines Projekts, für die ``load``-Operation.
 
-    Embedded sources come out of the container, linked ones from a path relative
-    to the project folder — never an absolute one (§32).
+    Eingebettete Quellen kommen aus dem Container, verknüpfte über einen Pfad
+    relativ zum Projektordner — nie über einen absoluten (§32).
     """
 
     project: Project
@@ -118,7 +121,7 @@ class ProjectSources:
 
 
 def new_project(printer: str = "", material: str = "") -> Project:
-    """An empty project at the current format version."""
+    """Ein leeres Projekt auf der aktuellen Formatversion."""
     return Project(
         document=Document(
             format_version=FORMAT_VERSION,
@@ -134,7 +137,7 @@ def checksum(payload: bytes) -> str:
 
 
 def embedded_source_path(filename: str) -> str:
-    """Where an embedded source lives inside the container — always relative."""
+    """Wo eine eingebettete Quelle im Container liegt — immer relativ."""
     return f"{SOURCE_FOLDER}/{Path(filename).name}"
 
 
@@ -149,15 +152,16 @@ def _check_relative(path: str, where: str) -> None:
         )
 
 
-# --- Writing -------------------------------------------------------------------
+# --- Schreiben -------------------------------------------------------------------
 
 
 def save(project: Project, path: Path) -> Path:
-    """Write the container, atomically. Returns the path written."""
+    """Schreibt den Container, atomar. Gibt den geschriebenen Pfad zurück."""
     document = project.document
     document.format_version = FORMAT_VERSION
     document.app_version = APP_VERSION
-    # §24.4: the state of the part library belongs to the way this was computed.
+    # §24.4: der Stand der Bausteinbibliothek gehört zu der Art, wie das
+    # gerechnet wurde.
     document.parts_version = LIBRARY_VERSION
 
     for source_id, source in list(document.sources.items()):
@@ -172,7 +176,8 @@ def save(project: Project, path: Path) -> Path:
                 constraint="missing_payload",
                 values={"source": source_id},
             )
-        # The checksum is part of the document, so saving fills it in (§16.1).
+        # Die Prüfsumme ist Teil des Dokuments, also füllt das Speichern sie
+        # ein (§16.1).
         document.sources[source_id] = dataclasses.replace(source, sha256=checksum(payload))
 
     ensure_dir(path.parent)
@@ -195,11 +200,11 @@ def save(project: Project, path: Path) -> Path:
     return path
 
 
-# --- Reading -------------------------------------------------------------------
+# --- Lesen ---------------------------------------------------------------------
 
 
 def load(path: Path) -> Project:
-    """Read a container, migrating and verifying on the way (§16.2)."""
+    """Liest einen Container — migriert und verifiziert unterwegs (§16.2)."""
     if not path.is_file():
         raise ValidationError(
             field="path",
@@ -269,11 +274,12 @@ def load(path: Path) -> Project:
     return Project(document=document, sources=payloads, report=report, thumbnail=thumbnail)
 
 
-# --- Autosave and crash recovery (§38) ------------------------------------------
+# --- Autosave und Absturz-Wiederherstellung (§38) --------------------------------
 
 
 def autosave_path(path: Path | None) -> Path:
-    """Next to the project, or in the user directory while it has no name yet."""
+    """Neben dem Projekt — oder im Nutzerverzeichnis, solange es noch keinen
+    Namen hat."""
     if path is None:
         return (
             ensure_dir(user_data_dir() / "recovery") / f"unsaved{PROJECT_SUFFIX}{AUTOSAVE_SUFFIX}"
@@ -286,7 +292,8 @@ def write_autosave(project: Project, path: Path | None) -> Path:
 
 
 def find_recovery(path: Path | None) -> Path | None:
-    """An autosave that outlived its project is what gets offered on next start."""
+    """Ein Autosave, das sein Projekt überlebt hat, wird beim nächsten Start
+    angeboten."""
     candidate = autosave_path(path)
     if not candidate.is_file():
         return None
@@ -296,14 +303,14 @@ def find_recovery(path: Path | None) -> Path | None:
 
 
 def clear_autosave(path: Path | None) -> None:
-    """After a successful save there is nothing left to recover."""
+    """Nach einem erfolgreichen Speichern gibt es nichts mehr wiederherzustellen."""
     candidate = autosave_path(path)
     if candidate.is_file():
         candidate.unlink()
 
 
 def recovery_candidates() -> tuple[Path, ...]:
-    """Autosaves of projects that never had a name."""
+    """Autosaves von Projekten, die nie einen Namen hatten."""
     folder = user_data_dir() / "recovery"
     if not folder.is_dir():
         return ()
@@ -311,7 +318,8 @@ def recovery_candidates() -> tuple[Path, ...]:
 
 
 def project_data(path: Path) -> dict[str, Any]:
-    """The raw ``project.json`` of a container — for diagnostics and migration tests."""
+    """Das rohe ``project.json`` eines Containers — für Diagnose und
+    Migrationstests."""
     with zipfile.ZipFile(path) as container:
         result: dict[str, Any] = json.loads(container.read(PROJECT_ENTRY))
         return result

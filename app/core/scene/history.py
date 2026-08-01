@@ -1,15 +1,16 @@
-"""Stack, transactions and undo (Bauplan §12, §15.4, §15.5).
+"""Stapel, Transaktionen und Undo (Bauplan §12, §15.4, §15.5).
 
-Operations form a DAG through ``in``/``out`` and stay linearly presentable: the
-order of the operation numbers is the order of the history panel.
+Operationen bilden über ``in``/``out`` einen DAG und bleiben linear
+darstellbar: die Reihenfolge der Op-Nummern ist die Reihenfolge des
+Verlaufspanels.
 
-The unit of undo is the transaction, not the operation — an agent proposal is
-exactly one transaction (AGENTS.md rule 16), so one undo takes back what the
-agent suggested in one go.
+Die Einheit des Undo ist die Transaktion, nicht die Operation — ein
+Agentenvorschlag ist genau eine Transaktion (AGENTS.md Regel 16), ein Undo
+nimmt also in einem Zug zurück, was der Agent vorgeschlagen hat.
 
-There are no branches (§15.4). Applying something after an undo discards the cut
-off transactions; the surface asks first as soon as more than one is affected,
-which is what :attr:`History.discardable` is for.
+Verzweigungen gibt es nicht (§15.4). Wer nach einem Undo etwas anwendet,
+verwirft die abgeschnittenen Transaktionen; die Oberfläche fragt vorher, sobald
+mehr als eine betroffen ist — dafür gibt es :attr:`History.discardable`.
 """
 
 from __future__ import annotations
@@ -33,31 +34,35 @@ _log = get_logger(__name__)
 
 _OBJECT_PATTERN = re.compile(r"^obj_(\d+)$")
 
-#: Default authorship. Manual operations are single transactions by the user (§15.5).
+#: Vorgegebene Urheberschaft. Manuelle Operationen sind einzelne Transaktionen
+#: des Nutzers (§15.5).
 USER_ORIGIN: Final[Origin] = Origin(by="user")
 
 
 @dataclass(frozen=True, slots=True)
 class OperationDraft:
-    """An operation about to enter the stack. Numbers are handed out by the history."""
+    """Eine Operation kurz vor dem Stapel. Die Nummern vergibt der Verlauf.
+
+    ``outputs`` ist meist abgeleitet: gleiche Anzahl rein wie raus behält die
+    IDs, sonst gibt es neue."""
 
     op: str
     inputs: tuple[ObjectId, ...] = ()
     params: Mapping[str, Any] = field(default_factory=dict)
     outputs: tuple[ObjectId, ...] | None = None
-    """Usually derived: same count in and out keeps the ids, otherwise new ones."""
     produces: int | None = None
-    """How many objects a variable-output operation that takes none will make.
+    """Wie viele Objekte eine Operation mit variabler Ausgabe ohne Eingaben
+    erzeugen wird.
 
-    Loading an assembly is the case: how many bodies come out is written in the
-    file, and the stack hands out ids before the file is read (§11). So the
-    caller who knows says so — for everything else the count follows from the
-    declaration and this stays ``None``."""
+    Der Fall ist das Laden einer Baugruppe: wie viele Körper herauskommen,
+    steht in der Datei, und der Stapel vergibt IDs, bevor die Datei gelesen
+    ist (§11). Also sagt es der Aufrufer, der es weiß — für alles andere folgt
+    die Anzahl aus der Deklaration, und hier bleibt ``None``."""
     seed: int | None = None
 
 
 class History:
-    """Holds a document and the way through it."""
+    """Hält ein Dokument und den Weg hindurch."""
 
     def __init__(self, document: Document, registry: Registry | None = None) -> None:
         self.document = document
@@ -68,11 +73,11 @@ class History:
         self._next_object = itertools.count(self._highest_object_index() + 1)
         self._next_transaction = itertools.count(len(document.transactions) + 1)
 
-    # --- reading ---------------------------------------------------------------
+    # --- Lesen -----------------------------------------------------------------
 
     @property
     def operations(self) -> tuple[Operation, ...]:
-        """The active stack in operation order — the linear view of the DAG."""
+        """Der aktive Stapel in Op-Reihenfolge — die lineare Sicht auf den DAG."""
         return tuple(sorted(self.document.ops, key=lambda entry: entry.id))
 
     @property
@@ -89,7 +94,7 @@ class History:
 
     @property
     def discardable(self) -> int:
-        """Transactions the next change would throw away (§15.4)."""
+        """Transaktionen, die die nächste Änderung wegwerfen würde (§15.4)."""
         return len(self._undone)
 
     def operation(self, op_id: OpId) -> Operation:
@@ -108,7 +113,7 @@ class History:
                 return transaction
         return None
 
-    # --- writing ---------------------------------------------------------------
+    # --- Schreiben -------------------------------------------------------------
 
     def apply(
         self,
@@ -116,10 +121,10 @@ class History:
         drafts: Sequence[OperationDraft],
         origin: Origin = USER_ORIGIN,
     ) -> Transaction:
-        """Add operations as one transaction and return it.
+        """Fügt Operationen als eine Transaktion an und gibt sie zurück.
 
-        Everything is checked before anything is written, so a rejected call
-        leaves the document exactly as it was.
+        Geprüft wird alles, bevor irgendetwas geschrieben ist — ein
+        abgelehnter Aufruf lässt das Dokument exakt, wie es war.
         """
         if not drafts:
             raise ValidationError(
@@ -164,9 +169,10 @@ class History:
                 constraint="consumes",
                 values={"op": draft.op, "expected": spec.consumes, "given": len(draft.inputs)},
             )
-        # §11.3: a randomised procedure carries a stored seed. Where the caller
-        # did not bring one, one is drawn here — what matters is that it is kept,
-        # not who thought of it.
+        # §11.3: eine randomisierte Prozedur führt einen gespeicherten
+        # Startwert. Wo der Aufrufer keinen mitbringt, wird hier einer gezogen —
+        # entscheidend ist, dass er aufgehoben wird, nicht, wer ihn sich
+        # ausgedacht hat.
         seed = draft.seed
         if seed is None and spec.requires_seed:
             seed = secrets.randbelow(2**31)
@@ -182,18 +188,20 @@ class History:
         )
 
     def record_solvers(self, solvers: Mapping[OpId, Any]) -> None:
-        """Write the fallback stage that carried each operation into the stack (§17.2).
+        """Schreibt die Rückfallstufe, die jede Operation getragen hat, in den
+        Stapel (§17.2).
 
-        Evaluation is a pure function and does not touch the document; this is
-        where its findings about solver stages are kept.
+        Die Auswertung ist eine reine Funktion und fasst das Dokument nicht an;
+        hier werden ihre Befunde über die Solverstufen aufgehoben.
 
-        A record, not an instruction: the evaluation never reads it back. What
-        makes a reopened file recompute the same way is that the chain is
-        deterministic given the same inputs and the stored seed (§11.3) — this
-        entry is what lets the report say afterwards what the numbers are worth,
-        and it is overwritten whenever a run reaches another stage. Which is also
-        why a changed parameter needs nothing done to it here: the next run
-        writes the stage its own geometry reached.
+        Ein Vermerk, keine Anweisung: die Auswertung liest ihn nie zurück. Dass
+        eine wieder geöffnete Datei gleich rechnet, liegt daran, dass die Kette
+        bei gleichen Eingaben und gespeichertem Startwert deterministisch ist
+        (§11.3) — dieser Eintrag lässt den Bericht hinterher sagen, was die
+        Zahlen wert sind, und wird überschrieben, sobald ein Lauf eine andere
+        Stufe erreicht. Darum braucht ein geänderter Parameter hier auch
+        nichts: der nächste Lauf schreibt die Stufe, die seine eigene
+        Geometrie erreicht hat.
         """
         if not solvers:
             return
@@ -203,24 +211,25 @@ class History:
                 self.document.ops[index] = dataclasses.replace(entry, solver=solver)
 
     def change_params(self, op_id: OpId, params: Mapping[str, Any]) -> Operation:
-        """Give an operation of the stack other parameters (§15.4, §11).
+        """Gibt einer Operation des Stapels andere Parameter (§15.4, §11).
 
-        This is what makes the stack a stack rather than a list of things that
-        happened: a bore two millimetres to the left is the same operation with
-        another number, not a step to take back and do again. The recomputation
-        follows from the hash — only the branch below the changed operation is
-        computed anew, the rest comes out of the cache (§15).
+        Genau das macht den Stapel zum Stapel statt zu einer Liste von Dingen,
+        die passiert sind: eine Bohrung zwei Millimeter weiter links ist
+        dieselbe Operation mit einer anderen Zahl, kein Schritt zum
+        Zurücknehmen und Neu-Tun. Das Neurechnen folgt aus dem Hash — nur der
+        Zweig unter der geänderten Operation wird neu gerechnet, der Rest
+        kommt aus dem Cache (§15).
 
-        Undone transactions are dropped, exactly as applying something new does:
-        there are no branches (§15.4), and a redo onto a changed stack would be
-        a branch by another name.
+        Zurückgenommene Transaktionen fliegen raus, genau wie beim Anwenden von
+        etwas Neuem: Verzweigungen gibt es nicht (§15.4), und ein Redo auf
+        einen geänderten Stapel wäre eine Verzweigung unter anderem Namen.
 
-        What is refused is a change that alters *how many* objects the operation
-        makes while a later one still uses them. The ids of the new outputs are
-        not the old ones, so those later operations would point at bodies that no
-        longer exist — and an error at the far end of the stack, about a number
-        somebody changed at the near end, is the kind of error nobody connects
-        back to what they did.
+        Abgelehnt wird eine Änderung, die ändert, *wie viele* Objekte die
+        Operation erzeugt, solange eine spätere sie noch benutzt. Die IDs der
+        neuen Ausgaben sind nicht die alten — die späteren Operationen zeigten
+        auf Körper, die es nicht mehr gibt. Und ein Fehler am fernen Ende des
+        Stapels, über eine Zahl, die jemand am nahen Ende geändert hat, ist die
+        Sorte Fehler, die niemand mit dem verbindet, was er getan hat.
         """
         entry = self.operation(op_id)
         spec = self._registry.get(entry.op)
@@ -252,7 +261,7 @@ class History:
         return changed
 
     def _later_users(self, op_id: OpId, objects: tuple[ObjectId, ...]) -> set[OpId]:
-        """Operations after this one that take one of its outputs."""
+        """Operationen nach dieser, die eine ihrer Ausgaben nehmen."""
         wanted = set(objects)
         return {
             entry.id
@@ -261,33 +270,36 @@ class History:
         }
 
     def _outputs_for(self, spec: Any, draft: OperationDraft) -> tuple[ObjectId, ...]:
-        """Same count in and out means the objects stay themselves; otherwise new ids."""
+        """Gleiche Anzahl rein wie raus heißt: die Objekte bleiben sie selbst;
+        sonst neue IDs."""
         if spec.produces == VARIABLE and spec.produces_from:
             return tuple(
                 f"obj_{next(self._next_object)}"
                 for _ in range(self._stated(spec, draft, spec.produces_from))
             )
         if spec.produces == VARIABLE and not draft.inputs:
-            # Takes nothing and makes an unknown number: only the caller can
-            # know how many, and one is the honest default for a plain file.
+            # Nimmt nichts und macht eine unbekannte Anzahl: wie viele, kann
+            # nur der Aufrufer wissen, und eins ist die ehrliche Vorgabe für
+            # eine schlichte Datei.
             return tuple(f"obj_{next(self._next_object)}" for _ in range(draft.produces or 1))
         if spec.produces == VARIABLE or (spec.produces == spec.consumes and draft.inputs):
             return tuple(draft.inputs)
         return tuple(f"obj_{next(self._next_object)}" for _ in range(spec.produces))
 
     def _stated(self, spec: Any, draft: OperationDraft, field_name: str) -> int:
-        """The output count an operation wrote into one of its parameters.
+        """Die Ausgabezahl, die eine Operation in einen ihrer Parameter
+        geschrieben hat.
 
-        A plain number, because the ids are handed out here and an expression
-        (§13) is only resolved when the scene is computed. A count that first
-        has to be calculated would mean the stack could not say how many
-        objects a step makes — so it is refused with that sentence rather than
-        guessed at.
+        Eine nackte Zahl, denn die IDs werden hier vergeben, und ein Ausdruck
+        (§13) löst sich erst beim Rechnen der Szene auf. Eine Anzahl, die erst
+        berechnet werden müsste, hieße: der Stapel kann nicht sagen, wie viele
+        Objekte ein Schritt macht — also wird sie mit genau diesem Satz
+        abgelehnt statt geraten.
 
-        And checked against the range the parameter declares, here rather than
-        only where the scene is computed. The ids are handed out before that:
-        a count of five million was five million ids in the document in a
-        second, and the declared limit of a hundred came too late to stop it.
+        Und gegen den deklarierten Bereich geprüft, hier und nicht erst beim
+        Rechnen der Szene. Die IDs werden vorher vergeben: eine Stückzahl von
+        fünf Millionen war in einer Sekunde fünf Millionen IDs im Dokument,
+        und die deklarierte Grenze von hundert kam zu spät, um das zu stoppen.
         """
         declared = next((entry for entry in spec.params.spec() if entry.name == field_name), None)
         value = draft.params.get(field_name, declared.default if declared else 1)
@@ -321,7 +333,8 @@ class History:
         return max(count, 1)
 
     def _check_params(self, op_name: str, specs: Iterable[Any], params: Mapping[str, Any]) -> None:
-        """Names and expression syntax. Values are checked once resolved (§13)."""
+        """Namen und Ausdruckssyntax. Werte werden nach dem Auflösen
+        geprüft (§13)."""
         known = {entry.name for entry in specs}
         unknown = sorted(set(params) - known)
         if unknown:
@@ -335,10 +348,10 @@ class History:
             if expressions.is_expression(value):
                 expressions.check(value)
 
-    # --- undo and redo ---------------------------------------------------------
+    # --- Undo und Redo ---------------------------------------------------------
 
     def undo(self) -> Transaction | None:
-        """Take back the last transaction as a whole (§15.5)."""
+        """Nimmt die letzte Transaktion als Ganzes zurück (§15.5)."""
         if not self.document.transactions:
             return None
         transaction = self.document.transactions.pop()
@@ -368,7 +381,7 @@ class History:
                 self._undone_ops.pop(op_id, None)
         self._undone.clear()
 
-    # --- identifiers -----------------------------------------------------------
+    # --- Bezeichner ------------------------------------------------------------
 
     def _known_objects(self) -> set[ObjectId]:
         known: set[ObjectId] = set()

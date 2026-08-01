@@ -1,16 +1,17 @@
-"""Result cache over the operation hash (Bauplan §15, §38).
+"""Der Ergebnis-Cache über dem Operations-Hash (Bauplan §15, §38).
 
-Two levels. In memory, a least-recently-used store bounded by triangle count,
-because that is what actually fills the machine. On disk, the same results keyed
-by the same hash, so reopening a project does not recompute the whole stack
-(§31: under a second from the disk cache).
+Zwei Ebenen. Im Speicher ein LRU-Ablage, begrenzt über die Dreieckszahl —
+denn die ist es, die den Rechner wirklich füllt. Auf der Platte dieselben
+Ergebnisse unter demselben Hash, damit das Wiederöffnen eines Projekts nicht
+den ganzen Stapel neu rechnet (§31: unter einer Sekunde aus dem
+Platten-Cache).
 
-The cache is written only after a complete run (§15.6) — a cancelled run must
-not leave half a stack behind.
+Geschrieben wird der Cache nur nach einem vollständigen Lauf (§15.6) — ein
+abgebrochener darf keinen halben Stapel hinterlassen.
 
-Serialising a mesh needs the geometry kernel, which the core does not import.
-The disk level therefore takes a :class:`MeshCodec` from outside; without one it
-stays switched off and only the memory level is used.
+Ein Netz zu serialisieren braucht den Geometriekern, den der Kern nicht
+importiert. Die Plattenebene nimmt darum einen :class:`MeshCodec` von außen;
+ohne ihn bleibt sie abgeschaltet, und es gibt nur die Speicherebene.
 """
 
 from __future__ import annotations
@@ -36,32 +37,34 @@ from app.core.types import (
 
 _log = get_logger(__name__)
 
-#: Rough upper bound in memory. A million triangles is the viewport target (§31).
+#: Grobe Obergrenze im Speicher. Eine Million Dreiecke ist das
+#: Viewport-Ziel (§31).
 DEFAULT_TRIANGLE_BUDGET: Final = 20_000_000
 
-#: Upper bound of the disk cache; the oldest entries go first.
+#: Obergrenze des Platten-Caches; die ältesten Einträge gehen zuerst.
 DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
 class CachedResult:
-    """What an operation produced, ready to be handed out again."""
+    """Was eine Operation erzeugt hat, bereit zum erneuten Herausgeben."""
 
     objects: tuple[SceneObject, ...]
     findings: tuple[Finding, ...] = ()
     solver: SolverInfo | None = None
     transform: Transform | None = None
-    """Kept with the result: a cached operation has to report the same motion it
-    reported the first time, or the identifiers would only survive a cold run."""
+    """Beim Ergebnis aufgehoben: eine Operation aus dem Cache muss dieselbe
+    Bewegung melden wie beim ersten Mal, sonst überlebten die Bezeichner nur
+    einen kalten Lauf."""
 
     @property
     def cost(self) -> int:
-        """Triangles held by this entry — the measure the budget counts in."""
+        """Dreiecke dieses Eintrags — das Maß, in dem das Budget zählt."""
         return sum(entry.mesh.triangle_count for entry in self.objects)
 
 
 class MeshCodec(Protocol):
-    """Turns a mesh into bytes and back. Supplied by the geometry layer."""
+    """Macht aus einem Netz Bytes und zurück. Liefert die Geometrieschicht."""
 
     @property
     def suffix(self) -> str: ...
@@ -80,7 +83,7 @@ class CacheStatistics:
 
 
 class ResultCache:
-    """Memory level, optionally backed by a disk level."""
+    """Die Speicherebene, wahlweise mit Plattenebene dahinter."""
 
     def __init__(
         self,
@@ -135,7 +138,7 @@ class ResultCache:
         return len(self._entries)
 
 
-# --- Disk level ----------------------------------------------------------------
+# --- Plattenebene ----------------------------------------------------------------
 
 
 def _feature_to_data(feature: Feature) -> dict[str, Any]:
@@ -179,7 +182,7 @@ def _slot_from_data(data: dict[str, Any]) -> MaterialSlot:
 
 @dataclass(slots=True)
 class DiskCache:
-    """Results on disk, named by the operation hash (§38)."""
+    """Ergebnisse auf der Platte, benannt nach dem Operations-Hash (§38)."""
 
     codec: MeshCodec
     directory: Path = field(default_factory=user_cache_dir)
@@ -213,7 +216,8 @@ class DiskCache:
                 for entry in data["objects"]
             )
         except (OSError, KeyError, ValueError) as problem:
-            # A damaged cache entry is never fatal: drop it and recompute.
+            # Ein beschädigter Cache-Eintrag ist nie fatal: verwerfen und
+            # neu rechnen.
             _log.warning("dropping unreadable cache entry %s: %s", key, problem)
             shutil.rmtree(folder, ignore_errors=True)
             return None
@@ -245,10 +249,11 @@ class DiskCache:
                 )
             (folder / "objects.json").write_text(json.dumps({"objects": entries}), encoding="utf-8")
         except (OSError, TypeError) as problem:
-            # TypeError means a body the codec cannot store — a B-Rep result
-            # (§30). Those are recomputed rather than cached: the cache exists
-            # for expensive boolean work on large meshes, and a fillet on an
-            # exact body is milliseconds.
+            # TypeError heißt: ein Körper, den der Codec nicht ablegen kann —
+            # ein B-Rep-Ergebnis (§30). Die werden neu gerechnet statt
+            # gecacht: den Cache gibt es für teure Boolesche Arbeit auf großen
+            # Netzen, und eine Verrundung auf einem exakten Körper sind
+            # Millisekunden.
             _log.warning("could not write cache entry %s: %s", key, problem)
             shutil.rmtree(folder, ignore_errors=True)
             return
@@ -260,7 +265,7 @@ class DiskCache:
         return sum(path.stat().st_size for path in self.directory.rglob("*") if path.is_file())
 
     def trim(self) -> None:
-        """Drop the least recently used entries until the budget is met."""
+        """Wirft die am längsten unbenutzten Einträge, bis das Budget stimmt."""
         if self.size_bytes() <= self.budget_bytes:
             return
         folders = sorted(

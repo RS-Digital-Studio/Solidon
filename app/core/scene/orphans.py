@@ -1,14 +1,15 @@
-"""Feature references that lost their feature (Bauplan §21.3).
+"""Merkmalsverweise, die ihr Merkmal verloren haben (Bauplan §21.3).
 
-Identifiers are stable while a session runs (§21.2), but a project file outlives
-the session it was made in: the mesh was replaced, the operation before it was
-edited, the parts library changed. Then a fit points at ``hole_3`` and there is
-no ``hole_3`` any more.
+Bezeichner sind stabil, solange eine Sitzung läuft (§21.2) — aber eine
+Projektdatei überlebt die Sitzung, in der sie entstand: das Netz wurde
+ersetzt, die Operation davor bearbeitet, die Bausteinbibliothek geändert. Dann
+zeigt eine Passung auf ``hole_3``, und ein ``hole_3`` gibt es nicht mehr.
 
-The rule is the same one the whole application follows: **do not guess**. Every
-reference in an opened file is checked once, and what cannot be resolved is put
-to the user with the candidates in hand. Their answer is written back into the
-document, so the question is asked once and not on every evaluation.
+Die Regel ist dieselbe, der die ganze Anwendung folgt: **nicht raten**. Jeder
+Verweis einer geöffneten Datei wird einmal geprüft, und was sich nicht
+auflösen lässt, wird dem Nutzer vorgelegt, die Kandidaten gleich dabei. Seine
+Antwort wird ins Dokument zurückgeschrieben — die Frage kommt einmal, nicht
+bei jeder Auswertung.
 """
 
 from __future__ import annotations
@@ -25,16 +26,17 @@ from app.i18n import _, tr
 
 _log = get_logger(__name__)
 
-#: Answer that drops the fit instead of pointing it somewhere else.
+#: Die Antwort, die die Passung streicht, statt sie woandershin zu zeigen.
 REMOVE_CHOICE = "-"
 
 
 @dataclass(slots=True)
 class Reference:
-    """One place in the document that names a feature."""
+    """Eine Stelle im Dokument, die ein Merkmal benennt."""
 
     where: str
-    """``fit:stift_1:a`` or ``op:7:at_feature`` — enough to write the answer back."""
+    """``fit:stift_1:a`` oder ``op:7:at_feature`` — genug, um die Antwort
+    zurückzuschreiben."""
     ref: FeatureRef
 
     @property
@@ -59,13 +61,13 @@ class Reference:
 
     @property
     def title(self) -> str:
-        """What to call this reference in a question or a finding."""
+        """Wie dieser Verweis in einer Frage oder einem Befund heißt."""
         return self.fit_name if self.kind == "fit" else f"{tr('Operation')} {self.op_id}"
 
 
 @dataclass(slots=True)
 class CheckResult:
-    """What the check found and what it changed."""
+    """Was die Prüfung gefunden und was sie geändert hat."""
 
     findings: list[Finding] = field(default_factory=list)
     rewritten: int = 0
@@ -77,18 +79,21 @@ class CheckResult:
 
 
 def references(document: Document, registry: Registry | None = None) -> list[Reference]:
-    """Every feature reference the document holds.
+    """Jeder Merkmalsverweis, den das Dokument hält.
 
-    The fits (§14), and the operations that name a feature. This function used to
-    say "operations carry coordinates, not feature ids; when one of them starts to
-    reference a feature it is listed here too" — and it had been wrong since the
-    part library arrived: every inserted part carries ``at_feature``, eighteen
-    operations declare one, and none of them was ever checked. A file whose
-    ``hole_1`` was gone did not get §21.3's question; it stopped at that operation
-    with an error, one phase after the phase that promised otherwise.
+    Die Passungen (§14), und die Operationen, die ein Merkmal benennen. Diese
+    Funktion sagte früher: „Operationen tragen Koordinaten, keine Merkmal-IDs;
+    sobald eine von ihnen ein Merkmal referenziert, wird sie hier
+    mitaufgezählt" — und das war falsch, seit es die Bausteinbibliothek gibt:
+    jeder eingefügte Baustein trägt ``at_feature``, achtzehn Operationen
+    deklarieren eines, und keine davon wurde je geprüft. Eine Datei, deren
+    ``hole_1`` fort war, bekam nicht die Frage aus §21.3; sie hielt an dieser
+    Operation mit einem Fehler an — eine Phase nach der Phase, die das
+    Gegenteil versprochen hatte.
 
-    Which parameters count is declared, not guessed from the name: ``kind
-    ="feature"`` was in the parameter contract from the start and had no user.
+    Welche Parameter zählen, ist deklariert, nicht am Namen geraten:
+    ``kind="feature"`` stand von Anfang an im Parametervertrag und hatte
+    keinen Nutzer.
     """
     found: list[Reference] = []
     for fit in document.fits:
@@ -101,7 +106,7 @@ def references(document: Document, registry: Registry | None = None) -> list[Ref
             named = str(operation.params.get(field_name) or "")
             if not named or not operation.inputs:
                 continue
-            # The feature belongs to the object the operation works on.
+            # Das Merkmal gehört zu dem Objekt, auf dem die Operation arbeitet.
             found.append(
                 Reference(f"op:{operation.id}:{field_name}", FeatureRef(operation.inputs[0], named))
             )
@@ -109,11 +114,13 @@ def references(document: Document, registry: Registry | None = None) -> list[Ref
 
 
 def _feature_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
-    """Parameters of this operation that name a feature, from the declaration.
+    """Parameter dieser Operation, die ein Merkmal benennen — aus der
+    Deklaration.
 
-    Asked rather than caught: an operation this build does not know — a file from
-    a newer version, a plugin that is not loaded — has references nobody here can
-    resolve, and that is not this check's to report.
+    Gefragt statt gefangen: eine Operation, die dieser Stand nicht kennt —
+    eine Datei aus einer neueren Version, ein nicht geladenes Plugin — hat
+    Verweise, die hier niemand auflösen kann, und die zu melden ist nicht
+    Sache dieser Prüfung.
     """
     if not registry.has(op_name):
         return ()
@@ -125,7 +132,8 @@ def _feature_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
 def check(
     document: Document, scene: Scene, ask: Any, registry: Registry | None = None
 ) -> CheckResult:
-    """Resolve every reference once, asking where the answer is not obvious (§21.3)."""
+    """Löst jeden Verweis einmal auf und fragt, wo die Antwort nicht
+    offensichtlich ist (§21.3)."""
     result = CheckResult()
     for reference in references(document, registry):
         if _resolves(scene, reference.ref):
@@ -156,7 +164,7 @@ def _resolves(scene: Scene, reference: FeatureRef) -> bool:
 
 
 def _candidates(scene: Scene, reference: FeatureRef) -> list[str]:
-    """Features of the same kind on the same object — the plausible successors."""
+    """Merkmale gleicher Art am selben Objekt — die plausiblen Nachfolger."""
     entry = scene.objects.get(reference.object_id)
     if entry is None:
         return []
@@ -169,7 +177,7 @@ def _candidates(scene: Scene, reference: FeatureRef) -> list[str]:
 
 
 def _kind_of(feature_id: str) -> str | None:
-    """``hole_3`` names a hole. The prefix is the naming rule from §21.1."""
+    """``hole_3`` benennt ein Loch. Das Präfix ist die Namensregel aus §21.1."""
     for kind in ("hole", "face", "edge_loop", "pin", "slot", "thread"):
         if feature_id.startswith(f"{kind}_"):
             return kind
@@ -177,7 +185,8 @@ def _kind_of(feature_id: str) -> str | None:
 
 
 def question_for(reference: Reference, candidates: Sequence[str]) -> tuple[str, list[str]]:
-    """The question and its answers, with dropping the fit as the last resort."""
+    """Die Frage und ihre Antworten; die Passung zu streichen ist der letzte
+    Ausweg."""
     question = (
         f"{tr('Dieser Verweis zeigt ins Leere:')} {reference.ref}. "
         f"{tr('Welches Merkmal ist gemeint?')}"
@@ -186,7 +195,8 @@ def question_for(reference: Reference, candidates: Sequence[str]) -> tuple[str, 
 
 
 def _rewrite(document: Document, reference: Reference, feature_id: str) -> None:
-    """Point the reference at the chosen feature — answered once, not daily."""
+    """Zeigt den Verweis auf das gewählte Merkmal — einmal beantwortet, nicht
+    täglich."""
     if reference.kind == "op":
         _set_param(document, reference, feature_id)
         return
@@ -203,13 +213,14 @@ def _rewrite(document: Document, reference: Reference, feature_id: str) -> None:
 
 
 def _remove(document: Document, reference: Reference) -> None:
-    """Drop what cannot be resolved — a fit goes, an operation only loses the name.
+    """Streicht, was sich nicht auflösen lässt — eine Passung geht, eine
+    Operation verliert nur den Namen.
 
-    An operation is a step somebody took, and deleting it because one of its
-    parameters lost its target would take the geometry with it. Cleared, the
-    operation falls back to its own numbers — for a part that is the origin, for
-    a lid the top edge — and the finding says so, so nobody is surprised by a
-    step that quietly moved.
+    Eine Operation ist ein Schritt, den jemand getan hat — sie zu löschen,
+    weil einer ihrer Parameter sein Ziel verlor, nähme die Geometrie mit.
+    Geleert fällt die Operation auf ihre eigenen Zahlen zurück — bei einem
+    Baustein der Ursprung, bei einem Deckel die Oberkante — und der Befund
+    sagt es, damit niemanden ein Schritt überrascht, der still umgezogen ist.
     """
     if reference.kind == "op":
         _set_param(document, reference, "")
@@ -249,7 +260,7 @@ def _lost(reference: Reference, removed_fit: str | None) -> Finding:
 
 
 def candidates_of(scene: Scene, reference: FeatureRef) -> dict[str, Feature]:
-    """The candidate features themselves — the surface highlights them (§21.3)."""
+    """Die Kandidaten-Merkmale selbst — die Oberfläche hebt sie hervor (§21.3)."""
     entry = scene.objects.get(reference.object_id)
     if entry is None:
         return {}

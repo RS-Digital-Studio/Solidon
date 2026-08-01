@@ -1,24 +1,26 @@
-"""What a clicked feature means for an operation's parameters (Bauplan §18.5, §25).
+"""Was ein angeklicktes Merkmal für die Parameter einer Operation
+bedeutet (Bauplan §18.5, §25).
 
-§25 asks for "put a part at a recognised feature". Recognising them was P3 and
-placing them was P5 — but the two were never joined up: the feature was
-selectable in the tree and in the view, and the dialog that opened next knew
-nothing about it. Anybody wanting a bore in the face they had just clicked typed
-its coordinates in by hand, off the analysis card.
+§25 verlangt „einen Baustein an ein erkanntes Merkmal setzen". Erkennen war
+P3, Setzen war P5 — aber verbunden wurden die zwei nie: das Merkmal war im
+Baum und in der Ansicht wählbar, und der Dialog, der sich als Nächstes
+öffnete, wusste nichts davon. Wer eine Bohrung in der eben angeklickten
+Fläche wollte, tippte ihre Koordinaten von Hand ab, von der Analysekarte.
 
-This is where the two meet, and in the core rather than in the window because it
-is a rule about geometry and parameters, not about widgets — testable without Qt,
-and available to any surface that grows a selection later. Today the window is
-the only caller: the command line has no selection, and the agent works from the
-digest (§26.1), which is why the position of every feature is written into that
-digest rather than derived here a second time.
+Hier treffen sich die zwei — und zwar im Kern statt im Fenster, weil es eine
+Regel über Geometrie und Parameter ist, nicht über Widgets: testbar ohne Qt,
+und verfügbar für jede Oberfläche, der später eine Auswahl wächst. Heute ist
+das Fenster der einzige Aufrufer: die Kommandozeile hat keine Auswahl, und
+der Agent arbeitet vom Steckbrief (§26.1) — darum steht die Position jedes
+Merkmals in diesem Steckbrief, statt hier ein zweites Mal hergeleitet zu
+werden.
 
-Nothing here changes the document. The values become ordinary parameters of the
-operation, so the stack stays a pure function of what is written in it (§11) —
-a selection is a state of the surface and has no business in a project file.
-Which is also why an operation that wants to *check* the feature takes its name
-as a parameter instead: ``at_feature`` is in the file, and the operation looks it
-up whenever the scene is computed.
+Nichts hier ändert das Dokument. Die Werte werden gewöhnliche Parameter der
+Operation, der Stapel bleibt also eine reine Funktion dessen, was in ihm
+steht (§11) — eine Auswahl ist ein Zustand der Oberfläche und hat in einer
+Projektdatei nichts verloren. Darum nimmt eine Operation, die das Merkmal
+*prüfen* will, stattdessen seinen Namen als Parameter: ``at_feature`` steht
+in der Datei, und die Operation schlägt es bei jedem Rechnen der Szene nach.
 """
 
 from __future__ import annotations
@@ -31,30 +33,30 @@ from app.core.types import Feature, Vec3
 
 _log = get_logger(__name__)
 
-#: The parameter a part uses to name the feature it belongs at. Where an
-#: operation has it, that is the whole answer: the position beside it counts as
-#: an offset from the feature, so it stays at zero.
+#: Der Parameter, mit dem ein Baustein das Merkmal benennt, an das er gehört.
+#: Wo eine Operation ihn hat, ist das die ganze Antwort: die Position daneben
+#: zählt als Versatz vom Merkmal und bleibt auf null.
 FEATURE_FIELD = "at_feature"
 
-#: Position, in the order the parameters are named everywhere.
+#: Die Position, in der Reihenfolge, in der die Parameter überall heißen.
 POSITION = ("x", "y", "z")
 
-#: A free direction, for the operations that take one (§25, lettering).
+#: Eine freie Richtung, für die Operationen, die eine nehmen (§25, Beschriftung).
 NORMAL = ("nx", "ny", "nz")
 
-#: How dominant one component has to be before the direction counts as an axis.
-#: Below this the feature stands at an angle, and naming an axis for it would be
-#: a rounding somebody has to notice afterwards.
+#: Wie dominant eine Komponente sein muss, bevor die Richtung als Achse zählt.
+#: Darunter steht das Merkmal schräg, und ihm eine Achse zu nennen wäre eine
+#: Rundung, die jemand hinterher bemerken muss.
 AXIS_CLARITY = 0.9
 
 
 def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
-    """The parameters this feature suggests for this operation.
+    """Die Parameter, die dieses Merkmal für diese Operation vorschlägt.
 
-    Only what the feature says for certain: where it is and which way it looks.
-    Not its size — a countersink takes the diameter of the screw head, not of
-    the bore it sits on, and a helpfully filled-in 5,2 there would be a wrong
-    number that looks like a measured one.
+    Nur, was das Merkmal sicher sagt: wo es ist und wohin es schaut. Nicht
+    seine Größe — eine Senkung nimmt den Durchmesser des Schraubenkopfs, nicht
+    den der Bohrung, auf der sie sitzt, und eine hilfsbereit eingetragene 5,2
+    wäre dort eine falsche Zahl, die wie eine gemessene aussieht.
     """
     names = {entry.name for entry in spec.params.spec()}
     if FEATURE_FIELD in names:
@@ -81,7 +83,8 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
 
 
 def dominant_axis(direction: Vec3) -> str | None:
-    """``x``, ``y`` or ``z`` when the direction really is one, else ``None``."""
+    """``x``, ``y`` oder ``z``, wenn die Richtung wirklich eine ist —
+    sonst ``None``."""
     length = sum(value * value for value in direction) ** 0.5
     if length <= 0.0:
         return None
@@ -91,25 +94,27 @@ def dominant_axis(direction: Vec3) -> str | None:
 
 
 def faces_up(feature: Feature) -> bool:
-    """Does this face lie flat and look upward?
+    """Liegt diese Fläche flach und schaut nach oben?
 
-    Not merely flat, which is what this asked before and was too generous: the
-    ceiling of a cavity is flat too, and it points down. Chosen as the height of
-    an opening it built a lid inside the box, at 26,9 of 30 millimetres, without
-    a word — because a cut below that plane does meet the wall, so nothing looked
-    wrong to any of the steps that followed.
+    Nicht bloß flach — das hat diese Funktion früher gefragt, und es war zu
+    großzügig: die Decke eines Hohlraums ist auch flach, und sie zeigt nach
+    unten. Als Höhe einer Öffnung gewählt, baute sie einen Deckel ins Innere
+    der Box, auf 26,9 von 30 Millimetern, ohne ein Wort — denn ein Schnitt
+    unterhalb dieser Ebene trifft ja die Wand, also sah für keinen der
+    folgenden Schritte etwas falsch aus.
 
-    Everything that closes an opening reaches downward from it: the plate sits on
-    the rim and the collar goes into the cavity. A face looking down would need
-    all of that mirrored, and building it on the guess that somebody meant that
-    is worse than saying which face is wanted.
+    Alles, was eine Öffnung verschließt, greift von ihr nach unten: die
+    Platte sitzt auf dem Rand, der Kragen geht in den Hohlraum. Eine Fläche,
+    die nach unten schaut, bräuchte all das gespiegelt — und das auf die
+    Vermutung zu bauen, dass jemand das meinte, ist schlechter, als zu sagen,
+    welche Fläche gewollt ist.
     """
     normal = _vector(feature.params.get("normal"))
     return normal is not None and dominant_axis(normal) == "z" and normal[2] > 0.0
 
 
 def _allows(spec: OperationSpec, name: str, value: str) -> bool:
-    """Is this one of the choices the parameter offers?"""
+    """Ist das eine der Auswahlmöglichkeiten, die der Parameter anbietet?"""
     for entry in spec.params.spec():
         if entry.name == name:
             return not entry.choices or value in entry.choices

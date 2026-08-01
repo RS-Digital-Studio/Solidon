@@ -1,20 +1,20 @@
-"""Evaluation as a pure function (Bauplan §15.1).
+"""Die Auswertung als reine Funktion (Bauplan §15.1).
 
-``stack + sources + parameters + profiles + seeds → scene``. No hidden state, no
-side effects: evaluating twice gives the same thing twice, which is what makes
-Leitprinzip 4 checkable rather than aspirational.
+``Stapel + Quellen + Parameter + Profile + Startwerte → Szene``. Kein
+versteckter Zustand, keine Nebenwirkungen: zweimal auswerten liefert zweimal
+dasselbe — das macht Leitprinzip 4 prüfbar statt bloß gewollt.
 
-Three behaviours are deliberate:
+Drei Verhaltensweisen sind Absicht:
 
-* **The chain stops instead of guessing** (§15.2). If an operation returns a
-  different number of objects than the stack declares, or refers to an object
-  that no longer exists, evaluation halts at that operation and says so. Nothing
-  moves up automatically.
-* **A cancelled run leaves nothing half applied** (§15.6). The cache is written
-  after a complete pass, not during one.
-* **The last fully computed state stays valid** (§15.3). This function hands
-  back what it reached plus ``stopped_at``; the caller keeps showing the previous
-  scene, so the viewport is never empty.
+* **Die Kette hält an, statt zu raten** (§15.2). Liefert eine Operation eine
+  andere Objektzahl, als der Stapel deklariert, oder verweist sie auf ein
+  Objekt, das es nicht mehr gibt, hält die Auswertung an dieser Operation an
+  und sagt es. Nichts rückt von allein nach.
+* **Ein abgebrochener Lauf lässt nichts halb angewandt zurück** (§15.6). Der
+  Cache wird nach einem vollständigen Durchlauf geschrieben, nicht währenddessen.
+* **Der letzte vollständig gerechnete Zustand bleibt gültig** (§15.3). Diese
+  Funktion gibt zurück, was sie erreicht hat, plus ``stopped_at``; der Aufrufer
+  zeigt weiter die vorige Szene — der Viewport ist nie leer.
 """
 
 from __future__ import annotations
@@ -65,23 +65,24 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Above this the detection is skipped and says so. §31 puts the target at one
-#: second for 200 000 triangles; running it on a million after every operation
-#: would cost more than it is worth.
+#: Darüber wird die Erkennung übersprungen — und sagt es. §31 setzt das Ziel
+#: bei einer Sekunde für 200 000 Dreiecke; sie nach jeder Operation auf einer
+#: Million laufen zu lassen, kostete mehr, als es wert ist.
 FEATURE_LIMIT_TRIANGLES = 200_000
 
 
 @dataclass(frozen=True, slots=True)
 class EvaluationResult:
-    """What one pass produced, and where it stopped if it did."""
+    """Was ein Durchlauf erzeugt hat, und wo er anhielt, falls er es tat."""
 
     scene: Scene
     completed: tuple[OpId, ...] = ()
     stopped_at: OpId | None = None
     object_hashes: Mapping[ObjectId, str] = field(default_factory=dict)
     solvers: Mapping[OpId, SolverInfo] = field(default_factory=dict)
-    """Which fallback stage carried which operation (§17.2). The caller writes
-    these back into the stack, so the same file recomputes the same way."""
+    """Welche Rückfallstufe welche Operation getragen hat (§17.2). Der
+    Aufrufer schreibt sie zurück in den Stapel, damit dieselbe Datei gleich
+    nachrechnet."""
 
     @property
     def complete(self) -> bool:
@@ -93,7 +94,8 @@ def _silent_progress(fraction: float, text: str) -> None:
 
 
 def _refuse_to_guess(question: str, choices: list[str]) -> str:
-    """Default for ``ask``: without someone to ask, ambiguity is an error, not a guess."""
+    """Vorgabe für ``ask``: ohne jemanden zum Fragen ist Mehrdeutigkeit ein
+    Fehler, kein Ratespiel."""
     raise AmbiguityError(question, candidates=tuple(choices))
 
 
@@ -109,7 +111,7 @@ def evaluate(
     registry: Registry | None = None,
     sources: SourceAccess | None = None,
 ) -> EvaluationResult:
-    """Compute the scene the document describes."""
+    """Rechnet die Szene, die das Dokument beschreibt."""
     source = registry or REGISTRY
     token = cancelled or NeverCancelled()
     operations = sorted(document.ops, key=lambda entry: entry.id)
@@ -146,8 +148,8 @@ def evaluate(
             break
 
         inputs = [objects[entry] for entry in operation.inputs]
-        # Kept before the operation runs: the identifiers the new features have
-        # to be matched onto afterwards (§21.2).
+        # Festgehalten, bevor die Operation läuft: die Bezeichner, auf die die
+        # neuen Merkmale danach abgebildet werden müssen (§21.2).
         previous_features = {entry.id: dict(entry.features) for entry in inputs}
         # Dazu der Hüllquader, in dem sie gemessen wurden — siehe _with_features.
         previous_bounds = {entry.id: entry.mesh.bounds for entry in inputs}
@@ -207,9 +209,10 @@ def evaluate(
 
         for index, produced_object in enumerate(result.objects):
             object_id = operation.outputs[index]
-            # §30: whether a body is a mesh or a B-Rep follows from the body,
-            # not from what the operation claimed. A mesh operation on an exact
-            # part hands back triangles, and the object tree has to say so.
+            # §30: ob ein Körper Mesh oder B-Rep ist, folgt aus dem Körper,
+            # nicht aus dem, was die Operation behauptet hat. Eine Mesh-Op auf
+            # einem exakten Teil gibt Dreiecke zurück, und der Objektbaum muss
+            # das sagen.
             placed = dataclasses.replace(
                 produced_object,
                 id=object_id,
@@ -241,7 +244,7 @@ def evaluate(
 
     progress(1.0, "")
 
-    # Only a complete pass may write the cache (§15.6).
+    # Nur ein vollständiger Durchlauf darf den Cache schreiben (§15.6).
     if cache is not None and stopped_at is None:
         for key, result in pending:
             cache.put(key, result)
@@ -253,7 +256,7 @@ def evaluate(
         profile=profile,
         report=Report(tuple(findings)),
     )
-    # §14: fits are checked on every evaluation, never only when someone asks.
+    # §14: Passungen werden bei jeder Auswertung geprüft, nie nur auf Nachfrage.
     if stopped_at is None and scene.fits:
         findings.extend(check_fits(scene, profile))
         scene = dataclasses.replace(scene, report=Report(tuple(findings)))
@@ -305,12 +308,13 @@ def _with_features(
     transform: Transform | None = None,
     previous_bounds: BoundingBox | None = None,
 ) -> SceneObject:
-    """Detect features again and keep the old identifiers where they still fit.
+    """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
+    passen.
 
-    §21.2: the detection runs after every operation, otherwise ``hole_3`` in
-    step five is a different hole than in step four. Where the match is
-    ambiguous the user decides (§21.3) — the one thing that is never done here
-    is guessing.
+    §21.2: die Erkennung läuft nach jeder Operation, sonst ist ``hole_3`` in
+    Schritt fünf ein anderes Loch als in Schritt vier. Wo die Zuordnung
+    mehrdeutig ist, entscheidet der Nutzer (§21.3) — das eine, was hier nie
+    passiert, ist Raten.
     """
     mesh = entry.mesh
     if not isinstance(mesh, MeshData):
@@ -328,9 +332,10 @@ def _with_features(
         )
         return entry
 
-    # Features a part brought with it are not detected again — they were named
-    # when they were built (§24.1), and re-detecting would rename a bore that
-    # already has a name. They travel with the body like everything else.
+    # Merkmale, die ein Baustein mitgebracht hat, werden nicht neu erkannt —
+    # sie wurden beim Bauen benannt (§24.1), und eine Neuerkennung benennte
+    # eine Bohrung um, die schon einen Namen hat. Sie reisen mit dem Körper
+    # wie alles andere.
     generated = {
         name: feature
         for name, feature in entry.features.items()
@@ -343,9 +348,9 @@ def _with_features(
     if not previous:
         return dataclasses.replace(entry, features={**detected, **generated})
 
-    # A turned body looks like a different body to a comparison of positions. The
-    # operation knows what it turned, so the old features are carried along
-    # first and only then compared (§21.2).
+    # Ein gedrehter Körper sieht für einen Positionsvergleich aus wie ein
+    # anderer Körper. Die Operation weiß, was sie gedreht hat — also werden die
+    # alten Merkmale erst mitgenommen und dann verglichen (§21.2).
     if transform is not None:
         previous = moved_features(previous, transform)
     previous = {
@@ -455,7 +460,7 @@ def _with_sketch_context(
 def _evaluated_parameters(
     declared: Mapping[ParameterName, Parameter], values: Mapping[ParameterName, float]
 ) -> dict[ParameterName, Parameter]:
-    """Parameters as the scene sees them: expressions replaced by their result."""
+    """Parameter, wie die Szene sie sieht: Ausdrücke ersetzt durch ihr Ergebnis."""
     return {
         name: dataclasses.replace(parameter, value=values[name])
         for name, parameter in declared.items()
@@ -478,7 +483,8 @@ def _missing_inputs(
 
 
 def _object_count_finding(operation: Operation, produced: int) -> Finding:
-    """§15.2: a changed object count stops the chain — the user decides, not the code."""
+    """§15.2: eine geänderte Objektzahl hält die Kette an — es entscheidet der
+    Nutzer, nicht der Code."""
     return Finding(
         code="evaluate.object_count",
         severity="error",
@@ -499,5 +505,5 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
 
 
 def evaluated_object_ids(result: EvaluationResult) -> Sequence[ObjectId]:
-    """Objects the scene ended up with, in insertion order."""
+    """Die Objekte, bei denen die Szene gelandet ist, in Einfügereihenfolge."""
     return tuple(result.scene.objects)
