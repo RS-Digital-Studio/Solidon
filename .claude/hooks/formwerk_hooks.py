@@ -88,8 +88,9 @@ def sitzungsstart() -> None:
         "SessionStart",
         "Projekt Formwerk: Python 3.11 mit PySide6, kein Avalonia und kein MVVM — "
         "die Stack-Angaben der globalen Konfiguration gelten hier nicht. "
-        "Code, Docstrings und Kommentare auf Englisch; Doku, Commits und Gespräch "
-        "auf Deutsch mit echten Umlauten. Der Kern (app/core) bleibt ohne Qt. "
+        "Bezeichner, Dateinamen und Modulnamen auf Englisch; Docstrings, Kommentare, "
+        "Doku, Commits und Gespräch auf Deutsch mit echten Umlauten. "
+        "Der Kern (app/core) bleibt ohne Qt. "
         "Nach jedem Schritt läuft die Suite — /pruefen. Vor dem Commit /regelcheck. "
         "Die 22 harten Regeln stehen in AGENTS.md, das Sollverhalten im Bauplan.",
     )
