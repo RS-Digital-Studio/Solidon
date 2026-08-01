@@ -1,4 +1,6 @@
-"""The command line reads the same registry as every other surface (§10)."""
+"""Die Kommandozeile liest dasselbe Register wie jede andere
+Oberfläche (§10).
+"""
 
 from __future__ import annotations
 
@@ -76,7 +78,7 @@ def test_an_ambiguous_unit_is_asked_once_and_then_stored(
     project = load(path)
     assert project.document.ops[0].params["unit"] == "in"
 
-    # A second evaluation must not ask again.
+    # Eine zweite Auswertung darf nicht noch einmal fragen.
     monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("asked twice"))
     assert main(["info", str(path)]) == 0
     assert "101.6" in capsys.readouterr().out

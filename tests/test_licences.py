@@ -31,7 +31,9 @@ def test_the_banned_packages_are_not_installed() -> None:
 
 
 def test_a_gpl_package_would_be_caught() -> None:
-    """A guard for the check itself — otherwise a green run proves nothing."""
+    """Ein Wächter für die Prüfung selbst — sonst bewiese ein grüner Lauf
+    nichts.
+    """
     policy = licences.load_policy()
     text = "GPL-3.0-or-later".lower()
     assert any(entry.lower() in text for entry in policy.forbidden)

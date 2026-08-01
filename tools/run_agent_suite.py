@@ -38,7 +38,7 @@ from tests.agent_cases import ALL_CASES, Case
 
 MESHES = Path(__file__).resolve().parent.parent / "tests" / "data" / "meshes"
 
-#: What §40 expects of a run against a real model.
+#: Was §40 von einem Lauf gegen ein echtes Modell erwartet.
 TARGET_ASKED = 1.0
 """Jede mehrdeutige Anfrage muss fragen. Das hier ist keine Quote, das ist eine Regel."""
 TARGET_VALID = 0.95
@@ -81,7 +81,7 @@ def project_with_plate() -> Project:
 
 
 def run_case(case: Case, backend: LLMBackend) -> Outcome:
-    # Pillar A starts on an empty project, pillar C on the plate (§2.2).
+    # Säule A beginnt auf einem leeren Projekt, Säule C auf der Platte (§2.2).
     project = new_project("centauri-carbon-2", "petg") if case.empty_scene else project_with_plate()
     outcome = Outcome(case=case)
 

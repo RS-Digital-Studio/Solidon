@@ -1,8 +1,9 @@
-"""Installing what is missing, from inside the application (§36, §38).
+"""Fehlendes installieren, aus der Anwendung heraus (§36, §38).
 
-The interesting part of this file is what it forbids. An installer that can be
-told what to fetch is a way to run arbitrary software on somebody's machine, so
-the names live in the source and nothing else ever reaches a command line.
+Der interessante Teil dieser Datei ist, was sie verbietet. Ein Installer, dem
+sich sagen lässt, was er holen soll, ist ein Weg, beliebige Software auf
+jemandes Rechner auszuführen — die Namen leben also im Quelltext, und nichts
+sonst erreicht je eine Befehlszeile.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ def by_id(identifier: str) -> install.Requirement:
     return next(entry for entry in install.REQUIREMENTS if entry.id == identifier)
 
 
-# --- what is where --------------------------------------------------------------
+# --- Was wo ist -------------------------------------------------------------------
 
 
 def test_a_package_that_is_here_is_found() -> None:
@@ -51,7 +52,7 @@ def test_every_requirement_says_what_it_is_for_and_where_it_comes_from() -> None
 
 
 def test_a_package_is_installed_into_this_interpreter() -> None:
-    """Never a bare "pip": which environment that would be is anybody's guess."""
+    """Nie ein nacktes „pip": welche Umgebung das wäre, kann jeder raten."""
     import sys
 
     command = install._command(by_id("vhacd"))
@@ -69,7 +70,9 @@ def test_a_program_goes_through_the_system_package_manager() -> None:
 
 
 def test_the_names_come_from_this_file_and_nowhere_else() -> None:
-    """The rule that makes this feature safe — kept as a test, not as a comment."""
+    """Die Regel, die dieses Feature sicher macht — als Test gehalten, nicht
+    als Kommentar.
+    """
     known = {entry.package for entry in install.REQUIREMENTS if entry.package}
 
     for entry in install.REQUIREMENTS:
@@ -80,7 +83,7 @@ def test_the_names_come_from_this_file_and_nowhere_else() -> None:
         assert set(command) & known == {entry.package}, entry.id
 
 
-# --- when it cannot be done -----------------------------------------------------
+# --- Wenn es nicht geht -----------------------------------------------------------
 
 
 def test_a_packaged_build_says_why_it_cannot(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -155,7 +158,7 @@ def test_a_row_that_cannot_install_explains_itself(qt_app: QApplication) -> None
 
 
 def test_nothing_starts_by_itself(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The whole point of §36: an application does not install software unasked."""
+    """Der ganze Sinn von §36: eine Anwendung installiert nichts ungefragt."""
     ran: list[object] = []
     monkeypatch.setattr(install.subprocess, "run", lambda *a, **k: ran.append(a))
 

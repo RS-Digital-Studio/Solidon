@@ -1,4 +1,6 @@
-"""Every surface text is translatable, and the catalogs are complete (§4.1, §37.2)."""
+"""Jeder Oberflächentext ist übersetzbar, und die Kataloge sind
+vollständig (§4.1, §37.2).
+"""
 
 from __future__ import annotations
 
@@ -15,7 +17,7 @@ from app.i18n.extract import message_ids
 PACKAGE_DIR = Path(app.__file__).parent
 UI_DIR = PACKAGE_DIR / "ui"
 
-#: Qt calls that put a text in front of the user.
+#: Qt-Aufrufe, die einen Text vor den Nutzer bringen.
 DISPLAY_CALLS = frozenset(
     {
         "setText",
@@ -31,10 +33,11 @@ DISPLAY_CALLS = frozenset(
     }
 )
 
-#: Static message box calls. Only counted on QMessageBox — ``log.warning`` is not a dialog.
+#: Statische Meldungsfenster-Aufrufe. Nur an QMessageBox gezählt —
+#: ``log.warning`` ist kein Dialog.
 BOX_CALLS = frozenset({"information", "question", "warning", "critical"})
 
-#: Widgets that take their label as the first argument.
+#: Widgets, die ihre Beschriftung als erstes Argument nehmen.
 LABELLED_WIDGETS = frozenset(
     {"QLabel", "QPushButton", "QAction", "QGroupBox", "QCheckBox", "QToolBar", "QListWidgetItem"}
 )
@@ -94,7 +97,7 @@ def test_no_hard_wired_text_in_the_surface(path: Path) -> None:
         for argument in node.args:
             if not isinstance(argument, ast.Constant) or not isinstance(argument.value, str):
                 continue
-            # Style sheets and empty strings are not texts anyone reads.
+            # Stilvorlagen und leere Zeichenketten sind keine Texte, die jemand liest.
             if argument.value.strip() and not argument.value.startswith(("#", "font", "QFrame")):
                 offenders.append(f"{path.name}:{argument.lineno} {argument.value!r}")
 

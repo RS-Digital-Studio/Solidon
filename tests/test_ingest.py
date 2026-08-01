@@ -1,4 +1,6 @@
-"""The input stage: six steps, a unit question, and hard import limits (§17.1, §32)."""
+"""Die Eingangsstufe: sechs Schritte, eine Einheitenfrage, und harte
+Importgrenzen (§17.1, §32).
+"""
 
 from __future__ import annotations
 
@@ -54,8 +56,10 @@ def test_an_empty_model_offers_every_unit() -> None:
 
 
 def test_a_clean_cube_reads_as_twelve_triangles() -> None:
-    """Reading is only reading: STL repeats every vertex, so the raw mesh is not
-    yet watertight — that is exactly what step 2 of the input stage is for."""
+    """Lesen ist nur Lesen: STL wiederholt jeden Eckpunkt, das rohe Netz ist
+    also noch nicht wasserdicht — und genau dafür gibt es Schritt 2 der
+    Eingangsstufe.
+    """
     mesh = mesh_of("cube_clean.stl")
     assert mesh.triangle_count == 12
     assert mesh.vertex_count == 36
@@ -206,7 +210,7 @@ def test_load_asks_when_the_unit_is_ambiguous(profile: Profile) -> None:
 
 
 def test_the_answer_can_be_stored_in_the_operation(profile: Profile) -> None:
-    """Storing the unit is what makes the question a one-off (§17.1)."""
+    """Die Einheit zu speichern macht aus der Frage eine einmalige (§17.1)."""
     project = project_with("plate_cm.stl")
     history = History(project.document)
     history.apply(

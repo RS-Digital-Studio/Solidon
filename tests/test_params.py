@@ -1,4 +1,6 @@
-"""One schema validates dialog, command line and agent call (Bauplan §10)."""
+"""Ein Schema validiert Dialog, Kommandozeile und Agentenaufruf (Bauplan
+§10).
+"""
 
 from __future__ import annotations
 

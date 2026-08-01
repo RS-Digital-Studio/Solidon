@@ -32,10 +32,12 @@ MODELS = Path("F:/3D Druck/3D Drucker")
 
 pytestmark = pytest.mark.skipif(not MODELS.is_dir(), reason="the model folder is not here")
 
-#: Small, closed, and nothing special — the shape most prints actually are.
+#: Klein, geschlossen und nichts Besonderes — die Form, die die meisten
+#: Drucke wirklich haben.
 PLAIN = "Getraenkehalter_Pool_ThreeSixty.stl"
 
-#: A million triangles in forty-one pieces, as it came off a community site.
+#: Eine Million Dreiecke in einundvierzig Stücken, wie sie von einer
+#: Community-Seite kam.
 HEAVY = "Cat_Toys_V2.3mf"
 
 
@@ -104,7 +106,7 @@ def test_feature_detection_survives_a_real_part() -> None:
     assert isinstance(found, dict)
 
 
-# --- a slicer 3MF is an assembly, and it was read many times over ---------------
+# --- Eine Slicer-3MF ist eine Baugruppe, und sie wurde vielfach gelesen ---------
 
 
 def test_the_pool_waterfall_arrives_as_its_four_parts() -> None:
@@ -136,10 +138,11 @@ def test_a_nozzle_of_two_bodies_is_not_read_as_four() -> None:
 
 
 def test_seventeen_parts_in_one_object_file_stay_seventeen() -> None:
-    """The worst case of the corpus: 787 836 triangles read as 13 393 212.
+    """Der schlimmste Fall des Korpus: 787 836 Dreiecke als 13 393 212
+    gelesen.
 
-    Seventeen components, all pointing into one external model file, each of
-    them resolved to the whole file — seventeen times everything.
+    Siebzehn Komponenten, alle in eine externe Modelldatei zeigend, jede von
+    ihnen zur ganzen Datei aufgelöst — siebzehnmal alles.
     """
     parts = threemf.read_objects(find("Cat_Phone_Stand_Kawaii_material.3mf").read_bytes())
 
@@ -148,7 +151,9 @@ def test_seventeen_parts_in_one_object_file_stay_seventeen() -> None:
 
 
 def test_the_count_is_right_before_the_geometry_is_read() -> None:
-    """§11: the stack hands out ids first, so the count may not be a guess."""
+    """§11: der Stapel vergibt zuerst die IDs, die Anzahl darf also keine
+    Vermutung sein.
+    """
     for name in ("Wasserfall_.3mf", "Gewürz.3mf", "Taschentuchbox_material.3mf"):
         payload = find(name).read_bytes()
         assert threemf.count_objects(payload) == len(threemf.read_objects(payload)), name

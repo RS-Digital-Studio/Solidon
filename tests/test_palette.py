@@ -1,7 +1,8 @@
-"""Colour never carries meaning alone (Bauplan §19.1).
+"""Farbe trägt nie allein Bedeutung (Bauplan §19.1).
 
-This is the accessibility check §40 asks for in P1: whatever a colour says, a
-pattern and a symbol say it too — and the map ramp keeps its order in greyscale.
+Das ist die Barrierefreiheits-Prüfung, die §40 in P1 verlangt: was auch immer
+eine Farbe sagt, ein Muster und ein Symbol sagen es auch — und die Kartenrampe
+behält ihre Ordnung in Graustufen.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ def test_added_and_removed_differ_in_more_than_colour(name: str) -> None:
 
 @pytest.mark.parametrize("name", list(DIFF_PALETTES))
 def test_added_and_removed_also_differ_in_brightness(name: str) -> None:
-    """Even in pure greyscale the two have to stay apart."""
+    """Auch in reinen Graustufen müssen die zwei auseinanderbleiben."""
     palette = DIFF_PALETTES[name]  # type: ignore[index]
     difference = abs(
         relative_luminance(palette.added.colour) - relative_luminance(palette.removed.colour)
@@ -40,8 +41,9 @@ def test_added_and_removed_also_differ_in_brightness(name: str) -> None:
 
 
 def test_the_default_is_blue_and_orange_not_red_and_green() -> None:
-    """§19.1: red and green would be the worst possible pair for the most
-    important view in the application."""
+    """§19.1: Rot und Grün wären das denkbar schlechteste Paar für die
+    wichtigste Ansicht der Anwendung.
+    """
     default = DIFF_PALETTES["blue_orange"]
     assert default.added.colour.lower() != default.removed.colour.lower()
     assert "red_green" in DIFF_PALETTES, "still available for those who prefer it"
@@ -56,7 +58,9 @@ def test_severity_markers_are_readable_without_colour() -> None:
 
 
 def test_the_map_ramp_rises_in_luminance() -> None:
-    """§19.1: perceptually uniform, no rainbow — a rainbow invents edges."""
+    """§19.1: wahrnehmungsgleich, kein Regenbogen — ein Regenbogen erfindet
+    Kanten.
+    """
     assert is_monotonic(VIRIDIS)
     assert not is_monotonic(("#ff0000", "#00ff00", "#0000ff")), "the check would catch a rainbow"
 

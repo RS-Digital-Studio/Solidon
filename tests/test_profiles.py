@@ -1,4 +1,6 @@
-"""The shipped starting set is complete and usable (Bauplan §38, §28.3)."""
+"""Der mitgelieferte Startbestand ist vollständig und benutzbar (Bauplan
+§38, §28.3).
+"""
 
 from __future__ import annotations
 

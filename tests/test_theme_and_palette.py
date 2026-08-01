@@ -1,4 +1,4 @@
-"""Theme contrast and the command palette (Bauplan §19.2, §19.3)."""
+"""Themenkontrast und die Befehlspalette (Bauplan §19.2, §19.3)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ MINIMUM_CONTRAST = 4.5
 
 @pytest.mark.parametrize("theme", list(THEMES))
 def test_text_has_enough_contrast_in_both_themes(theme: str) -> None:
-    """§19.3: sufficient contrast in the light and the dark theme."""
+    """§19.3: ausreichender Kontrast im hellen und im dunklen Thema."""
     colours = THEMES[theme]  # type: ignore[index]
     assert contrast_ratio(colours["text"], colours["window"]) >= MINIMUM_CONTRAST
     assert contrast_ratio(colours["text"], colours["base"]) >= MINIMUM_CONTRAST
@@ -62,7 +62,7 @@ def test_the_palette_lists_every_operation(qt_app: object) -> None:
 
 
 def test_the_palette_shows_the_shortcut_so_it_gets_learned(qt_app: object) -> None:
-    """§2.6: the shortcut stands next to the entry — that is how it is learned."""
+    """§2.6: das Kürzel steht neben dem Eintrag — so lernt es sich."""
     palette = CommandPalette()
     labels = [palette.list.item(index).text() for index in range(palette.list.count())]
     assert any("F2" in label for label in labels), "rename_object carries F2"

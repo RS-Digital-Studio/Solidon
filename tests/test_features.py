@@ -1,7 +1,7 @@
-"""Feature detection against a plate whose dimensions are known (§21.1, §40).
+"""Merkmalserkennung gegen eine Platte mit bekannten Maßen (§21.1, §40).
 
-plate_holes.stl is 80 x 50 x 8 mm with four bores of 5.2 mm — so every number
-the detection produces can be checked instead of admired.
+plate_holes.stl ist 80 x 50 x 8 mm mit vier Bohrungen zu 5,2 mm — jede Zahl,
+die die Erkennung erzeugt, lässt sich also prüfen statt bewundern.
 """
 
 from __future__ import annotations
@@ -78,9 +78,11 @@ def test_a_cube_has_no_bores() -> None:
 
 
 def test_a_pin_is_not_reported_as_a_bore() -> None:
-    """The normals decide: pointing at the axis is a bore, away from it is a pin."""
+    """Die Normalen entscheiden: zur Achse zeigend ist eine Bohrung, von ihr
+    weg ein Stift.
+    """
     pin = MeshData.of(trimesh.creation.cylinder(radius=4.0, height=20.0, sections=48))
-    # Only the shell, without the two end caps — those are faces, not cylinder.
+    # Nur die Hülle, ohne die zwei Endkappen — die sind Flächen, kein Zylinder.
     shell = [
         index for index, normal in enumerate(pin.raw.face_normals) if abs(float(normal[2])) < 0.5
     ]
@@ -216,7 +218,7 @@ def test_a_face_keeps_its_centre_when_it_gets_a_hole() -> None:
 
 
 def plate_with_pin() -> MeshData:
-    """A plate with a 6 mm pin standing on it — the counterpart of a bore."""
+    """Eine Platte mit einem 6-mm-Stift darauf — das Gegenstück einer Bohrung."""
     base = trimesh.creation.box(extents=(40.0, 40.0, 8.0))
     base.apply_translation((0.0, 0.0, 4.0))
     pin = trimesh.creation.cylinder(radius=3.0, height=12.0, sections=48)
@@ -225,7 +227,9 @@ def plate_with_pin() -> MeshData:
 
 
 def test_a_pin_is_recognised_as_one() -> None:
-    """§14 needs both ends of a fit; a bore alone is half of it."""
+    """§14 braucht beide Enden einer Passung; eine Bohrung allein ist die
+    Hälfte.
+    """
     found = detect_pins(plate_with_pin())
 
     assert len(found) == 1
@@ -244,11 +248,13 @@ def test_a_bore_is_not_reported_as_a_pin() -> None:
 
 
 def test_a_small_flat_face_is_not_swallowed_by_the_curve_next_to_it() -> None:
-    """The bug behind the pin: a cap of many coplanar triangles is a face.
+    """Der Fehler hinter dem Stift: ein Deckel aus vielen koplanaren Dreiecken
+    ist eine Fläche.
 
-    Judged only by area against the largest face of the body, a 6 mm pin's top
-    is under two percent of a 40 mm plate — it counted as curved, joined the
-    wall, and the cylinder fit over cap-plus-wall found nothing at all.
+    Nur nach Fläche gegen die größte Fläche des Körpers beurteilt, ist die
+    Oberseite eines 6-mm-Stifts unter zwei Prozent einer 40-mm-Platte — sie
+    zählte als gekrümmt, schloss sich der Wand an, und die Zylinder-Einpassung
+    über Deckel-plus-Wand fand gar nichts.
     """
     from app.core.perceive.features import _large_facet_faces
 

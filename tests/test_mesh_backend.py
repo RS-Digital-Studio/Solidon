@@ -1,8 +1,8 @@
-"""The mesh backends of §27, with no graphics card in sight.
+"""Die Mesh-Backends aus §27, ohne eine Grafikkarte in Sicht.
 
-Everything ComfyUI does over HTTP is three requests, and all three go through
-one replaceable function — so the whole way, including the polling and the
-placeholders in the workflow, can be played through here.
+Alles, was ComfyUI über HTTP tut, sind drei Anfragen, und alle drei gehen durch
+eine austauschbare Funktion — der ganze Weg lässt sich hier also durchspielen,
+samt dem Nachfragen und den Platzhaltern im Workflow.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def stl(name: str = "cube_clean.stl") -> bytes:
 
 
 class Comfy:
-    """A ComfyUI that answers from a script instead of from a graphics card."""
+    """Ein ComfyUI, das aus einem Skript antwortet statt von einer Grafikkarte."""
 
     def __init__(self, *, ready_after: int = 1, payload: bytes | None = None) -> None:
         self.ready_after = ready_after
@@ -70,7 +70,9 @@ def test_a_prompt_goes_through_the_shipped_workflow() -> None:
 
 
 def test_the_placeholders_arrive_with_their_type() -> None:
-    """ComfyUI checks the type of every input — a seed as text is rejected."""
+    """ComfyUI prüft den Typ jedes Eingangs — ein Startwert als Text wird
+    abgelehnt.
+    """
     server = Comfy()
 
     backend(server).text_to_mesh("ein Halter", seed=17)

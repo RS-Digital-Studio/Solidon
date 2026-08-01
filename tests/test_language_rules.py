@@ -1,8 +1,8 @@
-"""Identifiers stay English (Bauplan §4.1, AGENTS.md).
+"""Bezeichner bleiben englisch (Bauplan §4.1, AGENTS.md).
 
-Without this check a mixture like ``bausteinRegistry`` or ``wall_staerke`` grows
-in on its own. Only identifiers are inspected — string literals carry the German
-surface texts and are supposed to be German.
+Ohne diese Prüfung wächst eine Mischung wie ``bausteinRegistry`` oder
+``wall_staerke`` von selbst herein. Angesehen werden nur Bezeichner —
+Zeichenketten tragen die deutschen Oberflächentexte und sollen deutsch sein.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import app
 
 PACKAGE_DIR = Path(app.__file__).parent
 
-#: German words that must never be a segment of an identifier.
+#: Deutsche Wörter, die nie ein Abschnitt eines Bezeichners sein dürfen.
 GERMAN_WORDS = frozenset(
     {
         "abstand",
@@ -58,7 +58,8 @@ GERMAN_WORDS = frozenset(
     }
 )
 
-#: German stems that are unambiguous enough to be searched inside identifiers.
+#: Deutsche Stämme, die eindeutig genug sind, um innerhalb von Bezeichnern
+#: gesucht zu werden.
 GERMAN_STEMS = (
     "aenderung",
     "auswahl",
@@ -138,7 +139,7 @@ def test_module_names_are_english() -> None:
 
 
 def test_the_check_would_catch_a_violation() -> None:
-    """A guard that fails loudly if the word lists ever get emptied."""
+    """Ein Wächter, der laut scheitert, falls die Wortlisten je geleert werden."""
     assert offences_in("wall_staerke")
     assert offences_in("baustein_registry")
     assert offences_in("hoehe")

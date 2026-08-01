@@ -1,4 +1,4 @@
-"""The orientation search over the layer analysis (Bauplan §22.3, §40)."""
+"""Die Orientierungssuche über der Schichtanalyse (Bauplan §22.3, §40)."""
 
 from __future__ import annotations
 
@@ -35,7 +35,9 @@ def test_the_sampling_covers_the_sphere() -> None:
 
 
 def test_the_seed_decides_the_sampling() -> None:
-    """§11.3: without the stored seed the same file would not search the same way."""
+    """§11.3: ohne den gespeicherten Startwert suchte dieselbe Datei nicht
+    gleich.
+    """
     assert sample_directions(50, seed=7) == sample_directions(50, seed=7)
     assert sample_directions(50, seed=7) != sample_directions(50, seed=8)
 
@@ -49,7 +51,9 @@ def test_a_tilted_plate_is_laid_down_again() -> None:
 
 
 def test_the_search_beats_the_heuristic_where_it_counts() -> None:
-    """§40: the search over 200 candidates finds less support than the P2 heuristic."""
+    """§40: die Suche über 200 Kandidaten findet weniger Stützen als die
+    P2-Heuristik.
+    """
     body = corpus("island_tower.stl")
 
     heuristic = orient_for_print(body).mesh
@@ -83,7 +87,9 @@ def test_judging_one_direction_reports_the_real_numbers() -> None:
 
 
 def test_the_search_can_be_cancelled() -> None:
-    """§2.8: hundreds of candidates take seconds, so nothing may block."""
+    """§2.8: hunderte Kandidaten brauchen Sekunden, es darf also nichts
+    blockieren.
+    """
     signal = CancelSignal()
     signal.cancel()
 

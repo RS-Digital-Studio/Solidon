@@ -1,4 +1,4 @@
-"""The rule set as a product of its own (Bauplan §39)."""
+"""Die Regelsammlung als eigenes Produkt (Bauplan §39)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ from app.core.knowledge import rules
 
 
 def test_the_rules_of_the_plan_are_all_there() -> None:
-    """§39 lists eight rules; they are data here, not prose in a prompt."""
+    """§39 zählt acht Regeln auf; hier sind sie Daten, keine Prosa in einem
+    Prompt.
+    """
     loaded = rules.load()
     titles = " ".join(rule.title for rule in loaded.rules)
 
@@ -29,7 +31,9 @@ def test_every_rule_carries_a_version_and_a_text() -> None:
 
 
 def test_the_version_is_what_a_transaction_records() -> None:
-    """§26.4: without this it cannot be said later under which rule an op arose."""
+    """§26.4: ohne das lässt sich später nicht sagen, unter welcher Regel eine
+    Op entstand.
+    """
     assert rules.version() == rules.load().version
 
 

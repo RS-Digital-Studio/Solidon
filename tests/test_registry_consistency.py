@@ -1,10 +1,12 @@
-"""Registry consistency over the operations the application really ships (§35).
+"""Registerkonsistenz über die Operationen, die die Anwendung wirklich
+ausliefert (§35).
 
-Every operation appears in every surface, carries a schema, translated texts and
-a test; shortcuts are unique; non-deterministic operations use a seed.
+Jede Operation erscheint in jeder Oberfläche, trägt ein Schema, übersetzte Texte
+und einen Test; Kürzel sind eindeutig; nicht-deterministische Operationen
+benutzen einen Startwert.
 
-While the catalogue is still being filled these checks pass over few operations —
-they bite the moment one is added incompletely.
+Solange der Katalog noch gefüllt wird, laufen diese Prüfungen über wenige
+Operationen — sie beißen in dem Moment, in dem eine unvollständig hinzukommt.
 """
 
 from __future__ import annotations
@@ -73,7 +75,7 @@ def test_non_deterministic_operations_use_a_seed(spec: OperationSpec) -> None:
 
 @pytest.mark.parametrize("spec", registered(), ids=ids)
 def test_every_operation_has_a_test(spec: OperationSpec) -> None:
-    """A new operation without a test is not finished (AGENTS.md, checklist)."""
+    """Eine neue Operation ohne Test ist nicht fertig (AGENTS.md, Checkliste)."""
     mentions = [
         path.name
         for path in TESTS_DIR.rglob("test_*.py")

@@ -1,4 +1,6 @@
-"""Millimetres, double precision, and never a bare ``==`` (Bauplan §11)."""
+"""Millimeter, doppelte Genauigkeit, und nie ein nacktes ``==`` (Bauplan
+§11).
+"""
 
 from __future__ import annotations
 
@@ -53,7 +55,7 @@ def test_clamp_keeps_the_range() -> None:
 
 def test_match_tolerance_scales_with_the_model() -> None:
     assert match_tolerance(1000.0) == pytest.approx(5.0)
-    # Small models never fall below the display tolerance.
+    # Kleine Modelle fallen nie unter die Anzeigetoleranz.
     assert match_tolerance(0.1) == pytest.approx(EPS_DISPLAY)
 
 

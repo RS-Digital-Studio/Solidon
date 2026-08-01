@@ -1,9 +1,9 @@
-"""The three example projects (Bauplan §37.2, §40 for P8).
+"""Die drei Beispielprojekte (Bauplan §37.2, §40 für P8).
 
-"The three example projects open and compute without errors" — that is the
-acceptance criterion, and this is it. They are documentation and acceptance test
-at the same time, so a change that breaks one of them fails here rather than in
-front of a new user.
+„Die drei Beispielprojekte öffnen und rechnen fehlerfrei" — das ist das
+Abnahmekriterium, und das hier ist es. Sie sind Dokumentation und Abnahmetest
+zugleich, eine Änderung, die eines von ihnen bricht, scheitert also hier statt
+vor einem neuen Nutzer.
 """
 
 from __future__ import annotations
@@ -80,7 +80,9 @@ def test_an_example_opens_and_computes(example: examples.Example, profile: Profi
 
 
 def test_the_second_way_really_uses_parameters() -> None:
-    """§2.2 way 2: turn a number, the model follows — so there have to be numbers."""
+    """§2.2 Weg 2: an einer Zahl drehen, das Modell folgt — es muss also
+    Zahlen geben.
+    """
     project = load(examples.directory() / "weg2-halter-konstruieren.p3d")
 
     assert set(project.document.parameters) >= {"breite", "tiefe", "staerke"}
@@ -93,7 +95,9 @@ def test_the_second_way_really_uses_parameters() -> None:
 
 
 def test_the_second_way_uses_the_library() -> None:
-    """§39: parts before primitives — the example shows it rather than saying it."""
+    """§39: Bausteine vor Primitiven — das Beispiel zeigt es, statt es zu
+    sagen.
+    """
     project = load(examples.directory() / "weg2-halter-konstruieren.p3d")
     names = [entry.op for entry in project.document.ops]
 
@@ -102,7 +106,9 @@ def test_the_second_way_uses_the_library() -> None:
 
 
 def test_the_third_way_says_where_its_geometry_came_from() -> None:
-    """§16.3: a generated mesh is marked as generated, not as drawn."""
+    """§16.3: ein erzeugtes Netz ist als erzeugt markiert, nicht als
+    gezeichnet.
+    """
     project = load(examples.directory() / "weg3-generiert-aufbereiten.p3d")
 
     kinds = {source.kind for source in project.document.sources.values()}
@@ -110,7 +116,7 @@ def test_the_third_way_says_where_its_geometry_came_from() -> None:
 
 
 def test_turning_a_parameter_changes_the_second_example(profile: Profile) -> None:
-    """The promise of way 2, checked on the example that demonstrates it."""
+    """Das Versprechen von Weg 2, geprüft am Beispiel, das es vorführt."""
     import dataclasses
 
     project = load(examples.directory() / "weg2-halter-konstruieren.p3d")

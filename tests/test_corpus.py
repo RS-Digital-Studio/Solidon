@@ -1,9 +1,9 @@
-"""The three corpus files that were missing (Bauplan §34).
+"""Die drei Korpusdateien, die fehlten (Bauplan §34).
 
-Each of them exists to make one promise checkable that was previously only
-written down: that the fallback chain still copes with a self-intersection,
-that a 3MF written here can be read here with its colours, and that a fit pair
-notices when the ground under it moves.
+Jede von ihnen existiert, um ein Versprechen prüfbar zu machen, das vorher nur
+hingeschrieben war: dass die Rückfallkette mit einer Selbstdurchdringung noch
+zurechtkommt, dass eine hier geschriebene 3MF hier mit ihren Farben gelesen
+wird, und dass ein Passungspaar bemerkt, wenn sich der Boden unter ihm bewegt.
 """
 
 from __future__ import annotations
@@ -33,11 +33,11 @@ def body(name: str) -> MeshData:
 
 
 def test_a_self_intersecting_body_still_goes_through_a_boolean() -> None:
-    """§17.2: the chain exists for exactly this shape.
+    """§17.2: für genau diese Form gibt es die Kette.
 
-    That the kernel currently solves it at the first stage is the finding, not
-    a problem — and it is worth holding on to, because the day it stops is the
-    day stages three and four earn their keep.
+    Dass der Kern sie derzeit auf der ersten Stufe löst, ist der Befund, kein
+    Problem — und es lohnt, ihn festzuhalten: der Tag, an dem er damit
+    aufhört, ist der Tag, an dem die Stufen drei und vier sich verdienen.
     """
     import trimesh
 
@@ -52,7 +52,7 @@ def test_a_self_intersecting_body_still_goes_through_a_boolean() -> None:
 
 
 def test_the_two_blocks_really_do_pass_through_each_other() -> None:
-    """Otherwise the file would be an ordinary union and prove nothing."""
+    """Sonst wäre die Datei eine gewöhnliche Vereinigung und bewiese nichts."""
     mesh = body("broken_selfint.stl")
 
     assert mesh.triangle_count == 24, "two boxes, untouched by a boolean"
@@ -75,7 +75,9 @@ def test_the_coloured_file_comes_back_with_its_groups() -> None:
 
 
 def test_both_colours_carry_real_area() -> None:
-    """A group covering three triangles would pass the check above and mean nothing."""
+    """Eine Gruppe über drei Dreiecken bestünde die Prüfung darüber und hieße
+    nichts.
+    """
     payload = (MESHES / "colored.3mf").read_bytes()
     mesh = read_mesh(payload, ".3mf")
     groups = threemf.read(payload, mesh.triangle_count)
@@ -93,7 +95,9 @@ def project():
 
 
 def test_the_assembly_holds_with_the_material_it_was_built_for(profile: Profile) -> None:
-    """6 mm nominal becomes a 6.2 mm bore, the pin is 5.95 — that is 0.25 of play."""
+    """6 mm nominal werden eine 6,2-mm-Bohrung, der Stift ist 5,95 — das sind
+    0,25 Spiel.
+    """
     opened = project()
 
     result = evaluate(opened.document, profile, sources=ProjectSources(opened))
@@ -105,11 +109,12 @@ def test_the_assembly_holds_with_the_material_it_was_built_for(profile: Profile)
 
 
 def test_the_fit_notices_when_the_ground_moves() -> None:
-    """§14: the check runs on every evaluation, not once when it was written.
+    """§14: die Prüfung läuft bei jeder Auswertung, nicht einmal beim
+    Hinschreiben.
 
-    Printed in another material the bore comes out differently — the tolerance
-    stays what the pair says it is, and the difference is reported rather than
-    quietly accepted.
+    In einem anderen Material gedruckt kommt die Bohrung anders heraus — die
+    Toleranz bleibt, was das Paar sagt, und der Unterschied wird gemeldet statt
+    still hingenommen.
     """
     opened = project()
     other = profiles.make_profile("centauri-carbon-2", "pla")

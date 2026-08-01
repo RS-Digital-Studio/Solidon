@@ -36,7 +36,7 @@ class ScatterParams(BaseParams):
 
 @pytest.fixture
 def registry() -> Registry:
-    """A registry of its own, so tests never depend on load order."""
+    """Ein eigenes Register, damit Tests nie von der Ladereihenfolge abhängen."""
     own = Registry()
 
     @register_op(
@@ -80,7 +80,7 @@ def test_declaration_lands_in_the_registry(registry: Registry) -> None:
 
 
 def test_every_operation_reaches_every_surface(registry: Registry) -> None:
-    """The table in §10: one declaration, six outputs."""
+    """Die Tabelle aus §10: eine Deklaration, sechs Ausgaben."""
     names = {spec.name for spec in registry.all()}
 
     in_menu = {spec.name for section in menu_tree(registry) for spec in section.entries}
@@ -211,16 +211,18 @@ def test_unknown_operation_is_an_internal_error(registry: Registry) -> None:
     assert not registry.has("nothing_like_this")
 
 
-# --- the declarations of the real registry have to agree with each other ---------
+# --- Die Deklarationen des echten Registers müssen zueinander passen -------------
 
 
 def test_no_declaration_of_the_real_registry_contradicts_itself() -> None:
-    """§10: the declaration is the single source, so it may not say two things.
+    """§10: die Deklaration ist die eine Quelle, sie darf also nicht zwei Dinge
+    sagen.
 
-    Three fields arrived that can disagree with each other, and a disagreement
-    between them is not visible in any one of them: an output count that names a
-    parameter the operation does not have, a count without a variable output, or
-    an operation that takes the whole scene *and* one particular object.
+    Drei Felder kamen hinzu, die einander widersprechen können, und ein
+    Widerspruch zwischen ihnen ist in keinem einzelnen von ihnen zu sehen: eine
+    Ausgabezahl, die einen Parameter benennt, den die Operation nicht hat, eine
+    Anzahl ohne variable Ausgabe, oder eine Operation, die die ganze Szene
+    nimmt *und* ein bestimmtes Objekt.
     """
     from app.core.bootstrap import load_operations
 
@@ -236,10 +238,11 @@ def test_no_declaration_of_the_real_registry_contradicts_itself() -> None:
 
 
 def test_a_feature_parameter_is_declared_as_one() -> None:
-    """§21.3 checks the references it is told about — by kind, not by name.
+    """§21.3 prüft die Verweise, von denen ihm erzählt wird — nach Art, nicht
+    nach Namen.
 
-    Eighteen operations name a feature, and before they said so the orphan check
-    walked past every one of them.
+    Achtzehn Operationen benennen ein Merkmal, und bevor sie das sagten, lief
+    die Verwaisten-Prüfung an jeder einzelnen vorbei.
     """
     from app.core.bootstrap import load_operations
 

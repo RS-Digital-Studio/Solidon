@@ -1,9 +1,9 @@
-"""Operations that work on the whole scene (Bauplan §25, §10).
+"""Operationen, die auf der ganzen Szene arbeiten (Bauplan §25, §10).
 
-Arranging and the collision check take no particular object and hand back all
-of them. Whoever builds the transaction has to say so — a menu entry that runs
-on an empty input list changes nothing and looks broken, which is exactly what
-it did before this test existed.
+Anordnen und die Kollisionsprüfung nehmen kein bestimmtes Objekt und geben alle
+zurück. Wer die Transaktion baut, muss das sagen — ein Menüeintrag, der auf
+einer leeren Eingabeliste läuft, ändert nichts und sieht kaputt aus, und genau
+das tat er, bevor es diesen Test gab.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def test_an_ordinary_operation_does_not(name: str) -> None:
 
 
 def two_objects(project: Project) -> None:
-    """Two cubes on top of each other — arranging has to move them apart."""
+    """Zwei Würfel übereinander — das Anordnen muss sie auseinanderbringen."""
     payload = (MESHES / "cube_clean.stl").read_bytes()
     for index in (1, 2):
         source_id = f"src_{index}"
@@ -51,7 +51,9 @@ def two_objects(project: Project) -> None:
 
 
 def test_arranging_without_inputs_changes_nothing(profile: Profile) -> None:
-    """The bug this file is about — kept as a test so it cannot come back."""
+    """Der Fehler, um den es in dieser Datei geht — als Test gehalten, damit er
+    nicht zurückkommen kann.
+    """
     project = new_project("centauri-carbon-2", "petg")
     two_objects(project)
     before = evaluate(project.document, profile, sources=ProjectSources(project))
@@ -82,7 +84,7 @@ def test_arranging_with_the_scene_moves_the_objects_apart(profile: Profile) -> N
 
 
 def test_the_window_hands_the_whole_scene_in() -> None:
-    """§10: one declaration, and every surface reads the same thing off it."""
+    """§10: eine Deklaration, und jede Oberfläche liest dasselbe daraus ab."""
     from app.ui.main_window import inputs_for
 
     objects = ["obj_1", "obj_2", "obj_3"]
@@ -94,7 +96,7 @@ def test_the_window_hands_the_whole_scene_in() -> None:
 
 
 def test_orienting_turns_the_body(profile: Profile) -> None:
-    """The other half of the report: orienting does change something."""
+    """Die andere Hälfte des Berichts: das Orientieren ändert sehr wohl etwas."""
     plate = trimesh.creation.box(extents=(60.0, 40.0, 4.0))
     plate.apply_transform(trimesh.transformations.rotation_matrix(0.6, [1.0, 0.0, 0.0]))
     entry = MeshData.of(plate)

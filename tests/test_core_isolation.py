@@ -1,8 +1,8 @@
-"""No Qt below ``app.ui`` (AGENTS.md rule 1, Bauplan §8).
+"""Kein Qt unterhalb von ``app.ui`` (AGENTS.md Regel 1, Bauplan §8).
 
-Two checks, because either one alone is too weak: importing every core module and
-looking at what ended up in ``sys.modules`` catches runtime imports, reading the
-sources catches lazy ones inside functions.
+Zwei Prüfungen, denn jede allein ist zu schwach: jedes Kernmodul zu importieren
+und nachzusehen, was in ``sys.modules`` gelandet ist, fängt Laufzeit-Importe;
+die Quellen zu lesen fängt die trägen in Funktionen.
 """
 
 from __future__ import annotations
@@ -37,7 +37,9 @@ def test_every_core_module_imports() -> None:
 
 
 def test_importing_core_pulls_in_no_surface_dependency() -> None:
-    """Run in a fresh process: in this one the surface tests have already imported Qt."""
+    """In einem frischen Prozess ausgeführt: in diesem hier haben die
+    Oberflächentests Qt längst importiert.
+    """
     script = (
         "import importlib, pkgutil, sys\n"
         "import app.core\n"

@@ -1,7 +1,9 @@
-"""Every exception carries at least one suggested action (Bauplan §33.1, §2.7).
+"""Jede Ausnahme trägt mindestens einen Handlungsvorschlag (Bauplan §33.1,
+§2.7).
 
-An error that ends with "failed" is unfinished. The check walks the whole
-hierarchy, so a new exception class cannot slip through without one.
+Ein Fehler, der mit „fehlgeschlagen" endet, ist unfertig. Die Prüfung läuft die
+ganze Hierarchie ab — eine neue Ausnahmeklasse kann also nicht ohne einen
+durchrutschen.
 """
 
 from __future__ import annotations
