@@ -96,6 +96,9 @@ class StartScreen(QWidget):
     fileDropped = Signal(Path)
     forgetRequested = Signal(Path)
     """Ein Eintrag soll aus der Liste verschwinden — die Datei bleibt."""
+    manualRequested = Signal()
+    """Das Handbuch soll aufgehen — hier, wo es gebraucht wird, nicht erst
+    im Hilfemenü eines Fensters, das ein neuer Nutzer noch nie gesehen hat."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -127,10 +130,19 @@ class StartScreen(QWidget):
         drop = DropArea(self)
         drop.fileDropped.connect(self.fileDropped)
 
+        # Die ersten fünfzehn Minuten stehen im Handbuch — aber der Weg
+        # dorthin führte über das Hilfemenü des Hauptfensters, das beim ersten
+        # Start noch niemand gesehen hat. Der Verweis gehört hierher.
+        self.manual_button = QPushButton(tr("Handbuch — die ersten fünfzehn Minuten"), self)
+        self.manual_button.setFlat(True)
+        self.manual_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.manual_button.clicked.connect(self.manualRequested)
+
         buttons = QHBoxLayout()
         buttons.addWidget(new_button)
         buttons.addWidget(open_button)
         buttons.addStretch(1)
+        buttons.addWidget(self.manual_button)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(48, 48, 48, 48)

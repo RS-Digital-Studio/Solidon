@@ -415,6 +415,7 @@ class MainWindow(QMainWindow):
         self.start_screen.openRequested.connect(self.open_path)
         self.start_screen.fileDropped.connect(self.open_path)
         self.start_screen.forgetRequested.connect(self._forget_recent)
+        self.start_screen.manualRequested.connect(self.action_manual)
 
         self.stack = QStackedWidget(self)
         self.stack.addWidget(self.start_screen)

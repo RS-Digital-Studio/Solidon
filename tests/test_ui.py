@@ -186,6 +186,19 @@ def test_the_window_starts_on_the_start_screen(window: MainWindow) -> None:
     assert window.stack.currentWidget() is window.start_screen
 
 
+def test_the_start_screen_opens_the_manual(window: MainWindow) -> None:
+    """§2.3: das Handbuch dort, wo es gebraucht wird.
+
+    Die fünfundzwanzig Seiten mit den ersten fünfzehn Minuten erreichte nur,
+    wer das Hilfemenü des Hauptfensters schon kannte — also niemand, für den
+    sie geschrieben wurden.
+    """
+    window.start_screen.manual_button.click()
+
+    assert window._manual is not None
+    assert window._manual.isVisible()
+
+
 def test_the_right_panel_folds_away(window: MainWindow) -> None:
     assert window.right.isVisible() or True  # noch nicht sichtbar, aber verdrahtet
     window.action_toggle_right()
