@@ -70,6 +70,27 @@ def test_the_catalog_actually_switches_the_language() -> None:
         set_language(SOURCE_LANGUAGE)
 
 
+def test_qt_standard_buttons_speak_the_application_language(qt_app: object) -> None:
+    """Qt beschriftet OK/Abbrechen/Schließen selbst — ohne geladenen
+    qtbase-Katalog stand dort „Cancel", mitten im deutschen Programm.
+
+    Geprüft am echten Artefakt: einer QDialogButtonBox, nicht am Katalog.
+    """
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.ui.app import install_qt_translations
+
+    translator = install_qt_translations(qt_app, "de")  # type: ignore[arg-type]
+    assert translator is not None, "PySide6 liefert qtbase_de.qm mit — Laden darf nicht scheitern"
+    try:
+        box = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
+        cancel = box.button(QDialogButtonBox.StandardButton.Cancel)
+        assert cancel is not None
+        assert cancel.text().replace("&", "") == "Abbrechen"
+    finally:
+        qt_app.removeTranslator(translator)  # type: ignore[attr-defined]
+
+
 def surface_files() -> list[Path]:
     return sorted(UI_DIR.rglob("*.py"))
 

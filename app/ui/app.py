@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 
+from PySide6.QtCore import QCoreApplication, QLibraryInfo, QLocale, QTranslator
 from PySide6.QtWidgets import QApplication
 
 from app.branding import APP_ID, APP_NAME, APP_VERSION
@@ -24,6 +25,23 @@ from app.ui.theme import apply_theme, enable_hidpi
 _log = get_logger(__name__)
 
 
+def install_qt_translations(application: QCoreApplication, language: str) -> QTranslator | None:
+    """Bringt Qt selbst die Anwendungssprache bei.
+
+    Die Standardknöpfe (OK, Abbrechen, Schließen) beschriftet Qt aus seinem
+    eigenen Katalog. Ohne ihn stand auf jedem zweiten Dialog „Cancel" — und
+    der Sprachtest sah es nicht, weil es keine eigene Zeichenkette ist
+    (Regel 20 dem Geist nach, nicht dem Buchstaben).
+    """
+    translator = QTranslator(application)
+    directory = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
+    if not translator.load(QLocale(language), "qtbase", "_", directory):
+        _log.warning("no qtbase translation for %s in %s", language, directory)
+        return None
+    application.installTranslator(translator)
+    return translator
+
+
 def build_application(argv: list[str] | None = None) -> tuple[QApplication, MainWindow]:
     """Baut Anwendung und Fenster zusammen, ohne die Ereignisschleife zu
     starten.
@@ -37,6 +55,7 @@ def build_application(argv: list[str] | None = None) -> tuple[QApplication, Main
     settings = load_settings()
     install_language(settings.language)
     set_language(settings.language)
+    install_qt_translations(application, settings.language)
 
     apply_theme(application, settings.theme)  # type: ignore[arg-type]
 
