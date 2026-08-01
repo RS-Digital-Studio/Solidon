@@ -28,6 +28,12 @@ htmlcov/
 /out/
 /.cache/
 
+# --- Erzeugte Auslieferungsdateien --------------------------------------------
+# Das Handbuch-PDF entsteht aus `tools/make_manual.py` und wiegt je Sprache gut
+# ein Megabyte. Was sich aus dem Quelltext erzeugen lässt, gehört nicht in die
+# Versionsgeschichte — die Website-Dateien schon, die werden hochgeladen.
+/Releases/
+
 # --- Claude Code -------------------------------------------------------------
 # Die Konfiguration unter .claude/ gehört ins Repository, ihr Laufzeitzustand
 # nicht: die Marke, wann die Suite zuletzt lief, ist Sache dieser Maschine.

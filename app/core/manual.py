@@ -22,6 +22,7 @@ die Kommandozeile kann ihn genauso ausgeben wie das Fenster.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final
 
@@ -513,6 +514,31 @@ def as_markdown(registry: Registry | None = None, *, with_figures: bool = False)
         body = str(page.body) if with_figures else without_figures(str(page.body))
         parts.append(body if page.generated else f"## {page.title}\n\n{body}")
     return "\n\n".join(parts).rstrip() + "\n"
+
+
+def as_html(
+    registry: Registry | None = None,
+    *,
+    figure_source: Callable[[str], str] | None = None,
+) -> str:
+    """Das ganze Handbuch als HTML-Rumpf — für die Website und für das PDF.
+
+    ``figure_source`` sagt, unter welcher Adresse eine Abbildung zu finden ist;
+    wer nichts liefert, bekommt an ihrer Stelle den Alt-Text. Wo die Datei
+    liegt, entscheidet damit der Aufrufer und nicht der Kern — hier soll keine
+    Ablagestruktur festgeschrieben werden.
+    """
+    from app.core import figures
+    from app.core.markup import to_html
+
+    def resolve(key: str) -> tuple[str, str, str] | None:
+        figure = figures.find(key)
+        if figure is None:
+            return None
+        source = figure_source(key) if figure_source else ""
+        return source, str(figure.alt), str(figure.caption)
+
+    return to_html(as_markdown(registry, with_figures=True), resolve)
 
 
 def without_figures(body: str) -> str:
