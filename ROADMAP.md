@@ -262,16 +262,22 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] **Nur die gewählte Plattenhaftung bekommt Maße** — Skirt, Brim und Raft
       sind Maße ihrer Art, keine Schalter. Vorher lief unter jedem Teil ein
       Raft mit, auch bei eingestelltem Skirt
-- [ ] Farbgruppen aus der Szene an den Slicer durchreichen — `filament.colour`
-      ist eine Farbe, die 3MF-Materialslots sind mehrere (§20). Für
-      Mehrfarbdruck fehlt die Zuordnung Slot → Extruder
-- [ ] 3MF als Baugruppe **schreiben** — `threemf.write` kann ein Mesh, nicht
-      mehrere. Solange das fehlt, gehen mehrere Objekte als einzelne Dateien
-      an den Slicer, und die Anordnung macht er statt Formwerk (§20, §29)
-- [ ] Prusa- und Cura-Adapter gegen die echten Programme prüfen — die
-      Zuordnung steht, verifiziert ist bisher nur die Orca-Familie
-      (ElegooSlicer 1.5.2.2). Bei Orca hat erst der echte Lauf drei Fehler
-      gezeigt, die keine Dokumentation nennt
+- [x] **3MF als Baugruppe schreiben** (§20, §29) — `threemf.write_assembly`
+      legt mehrere Körper in eine Datei, ein `object` je Teil. Der Slicer
+      bekommt damit einen Druckauftrag statt einer Handvoll Teile, über deren
+      Zusammengehörigkeit er selbst entscheiden müsste
+- [x] **Farbgruppen als Extruderzuordnung** (§20) — `merge_slots` legt die
+      Materialslots aller Teile über Name und Farbe zusammen; die Reihenfolge
+      des Ergebnisses ist die Extruderbelegung. Ohne das fragte der Slicer
+      nach drei Filamenten für einen einfarbigen Druck aus drei Teilen
+- [x] **Gegenprobe statt einmaliger Prüfung** (§28.2) — `handover.verify`
+      liest die Konfigurationskommentare der erzeugten Datei und meldet, was
+      der Slicer anders übernommen hat. Damit prüft sich jeder Slicer selbst,
+      auch einer, den beim Bauen der Tabelle niemand vorliegen hatte
+- [ ] Prusa- und Cura-Adapter am echten Programm laufen lassen — die
+      Zuordnung steht und die Gegenprobe würde Abweichungen melden, aber
+      gelaufen ist bisher nur die Orca-Familie (ElegooSlicer 1.5.2.2). Was
+      die Gegenprobe nicht sieht: einen Aufruf, der gar nicht erst startet
 
 ## P8 — Erste Veröffentlichung
 - [x] Name entschieden, überall durchgezogen — alles Namensbezogene steht in

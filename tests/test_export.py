@@ -7,11 +7,13 @@ from pathlib import Path
 import pytest
 
 from app.core.errors import ValidationError
+from app.core.export import threemf
 from app.core.export.writer import (
     check_before_export,
     export_bytes,
     plan_export,
     safe_name,
+    write_assembly,
     write_plan,
 )
 from app.core.geom.mesh import read_mesh
@@ -182,3 +184,60 @@ def test_what_is_actually_unsafe_still_goes() -> None:
     assert safe_name(r"a/b\c") == "abc"
     assert safe_name('Teil: "gross" <1>') == "Teil_gross_1"
     assert safe_name("*?|") == "teil", "and nothing left over is still the fallback"
+
+
+# --- Baugruppe: alles einer Platte in eine Datei (§20, §29) -------------------------
+
+
+def test_an_assembly_is_one_file_for_every_object(tmp_path: Path, profile: Profile) -> None:
+    """Der Unterschied zu ``write_plan`` ist nicht das Format, sondern die Zahl
+    der Dateien: der Slicer bekommt einen Druckauftrag statt einer Handvoll
+    Teile, über deren Zusammengehörigkeit er selbst entscheiden müsste."""
+    objects = [scene_object("obj_1", "Deckel"), scene_object("obj_2", "Boden")]
+
+    written, _findings = write_assembly(objects, tmp_path, project_name="Gehäuse", profile=profile)
+
+    assert written.suffix == ".3mf"
+    assert len(list(tmp_path.glob("*.3mf"))) == 1
+    assert threemf.count_objects(written.read_bytes()) == 2
+
+
+def test_the_assembly_carries_the_object_names(tmp_path: Path, profile: Profile) -> None:
+    objects = [scene_object("obj_1", "Deckel"), scene_object("obj_2", "Boden")]
+
+    written, _findings = write_assembly(objects, tmp_path, project_name="x", profile=profile)
+
+    assert [part.name for part in threemf.read_objects(written.read_bytes())] == [
+        "Deckel",
+        "Boden",
+    ]
+
+
+def test_only_the_named_plate_goes_into_the_file(tmp_path: Path, profile: Profile) -> None:
+    """Mehr Teile, als auf eine Platte passen, ist normal (§25) — aber eine
+    Druckdatei ist eine Platte."""
+    erste = scene_object("obj_1", "Vorne")
+    zweite = scene_object("obj_2", "Naechste")
+    zweite.plate = 1
+    objects = [erste, zweite]
+
+    written, _findings = write_assembly(
+        objects, tmp_path, project_name="x", profile=profile, plate=0
+    )
+
+    assert threemf.count_objects(written.read_bytes()) == 1
+
+
+def test_an_empty_plate_says_so(tmp_path: Path, profile: Profile) -> None:
+    with pytest.raises(ValidationError):
+        write_assembly([scene_object()], tmp_path, project_name="x", profile=profile, plate=7)
+
+
+def test_the_assembly_reports_before_writing(tmp_path: Path, profile: Profile) -> None:
+    """§29: die Prüfung vor dem Export berichtet, sie blockiert nicht."""
+    objects = [scene_object("obj_1", "Teil", mesh=body("broken_open.stl"))]
+
+    written, findings = write_assembly(objects, tmp_path, project_name="x", profile=profile)
+
+    assert written.is_file(), "geschrieben wird trotzdem"
+    assert findings, "aber der Befund steht dabei"

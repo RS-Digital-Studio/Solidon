@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import dataclasses
 import zipfile
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from io import BytesIO
 from xml.etree import ElementTree as ET
@@ -101,6 +102,67 @@ def write(mesh: MeshData, slots: list[MaterialSlot] | None = None, name: str = "
         container.writestr("_rels/.rels", _relationships())
         container.writestr(MODEL_PATH, model)
     _log.info("wrote 3MF with %d material(s)", len(entries))
+    return buffer.getvalue()
+
+
+@dataclass(frozen=True, slots=True)
+class AssemblyPart:
+    """Ein Teil einer Baugruppe, für :func:`write_assembly` (§20, §29)."""
+
+    mesh: MeshData
+    name: str = ""
+    slots: tuple[MaterialSlot, ...] = ()
+
+
+def merge_slots(parts: Sequence[AssemblyPart]) -> list[MaterialSlot]:
+    """Eine Materialliste über alle Teile — das ist die Extruderzuordnung
+    (§20).
+
+    Ein Slot ist ein Filament, kein Objektmerkmal: zwei Teile in derselben
+    Farbe sollen aus derselben Düse kommen und nicht aus zweien. Zusammengelegt
+    wird deshalb über Name und Farbe, und die Reihenfolge des Ergebnisses ist
+    die Reihenfolge der Extruder.
+
+    Ohne diese Zusammenlegung bekäme eine Baugruppe aus drei einfarbigen Teilen
+    drei Materialien — und der Slicer fragte nach drei Filamenten für einen
+    einfarbigen Druck.
+    """
+    merged: list[MaterialSlot] = []
+    seen: dict[tuple[str, tuple[float, float, float] | None], int] = {}
+    for part in parts:
+        for slot in part.slots or (MaterialSlot(index=0, name=""),):
+            key = (slot.name, slot.colour)
+            if key in seen:
+                continue
+            seen[key] = len(merged)
+            merged.append(dataclasses.replace(slot, index=len(merged)))
+    return merged
+
+
+def write_assembly(parts: Sequence[AssemblyPart], name: str = "") -> bytes:
+    """Mehrere Körper als eine 3MF-Baugruppe (§20, §29).
+
+    Das ist der Unterschied zwischen „eine Datei je Teil" und „ein
+    Druckauftrag": ein Slicer, der eine Baugruppe bekommt, ordnet sie als
+    Ganzes an und schreibt eine Druckdatei. Bekommt er einzelne Dateien,
+    entscheidet er über die Zusammengehörigkeit selbst — und was Formwerk über
+    die Platte weiß, ist verloren.
+
+    Die Materialien sind über alle Teile zusammengelegt (:func:`merge_slots`),
+    denn genau diese Liste liest der Slicer als seine Extruderbelegung.
+    """
+    if not parts:
+        raise ValueError("an assembly needs at least one part")
+
+    materials = merge_slots(parts)
+    model = _assembly_xml(parts, materials, name)
+
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        container.writestr("[Content_Types].xml", _content_types())
+        container.writestr("_rels/.rels", _relationships())
+        container.writestr(MODEL_PATH, model)
+    _log.info("wrote 3MF assembly: %d part(s), %d material(s)", len(parts), len(materials))
     return buffer.getvalue()
 
 
@@ -542,6 +604,92 @@ def _slots_for(mesh: MeshData, slots: list[MaterialSlot] | None) -> list[Materia
     ]
 
 
+def _write_geometry(
+    parent: ET.Element,
+    mesh: MeshData,
+    group_id: str,
+    order: dict[int, int],
+) -> None:
+    """Ecken und Dreiecke eines Körpers, mit ihrer Materialzuordnung.
+
+    Eine Stelle für beide Wege: eine Baugruppe schreibt dieselben Dreiecke wie
+    ein einzelner Körper, nur mehrfach. Zwei Fassungen davon wären zwei Orte,
+    an denen sich eine Materialzuordnung verlieren kann.
+    """
+    geometry = ET.SubElement(parent, "mesh")
+    vertices = ET.SubElement(geometry, "vertices")
+    for point in mesh.raw.vertices:
+        ET.SubElement(
+            vertices,
+            "vertex",
+            {"x": f"{point[0]:.5f}", "y": f"{point[1]:.5f}", "z": f"{point[2]:.5f}"},
+        )
+
+    triangles = ET.SubElement(geometry, "triangles")
+    assignment = mesh.slots or ((0,) * len(mesh.raw.faces))
+    for face, slot in zip(mesh.raw.faces, assignment, strict=True):
+        ET.SubElement(
+            triangles,
+            "triangle",
+            {
+                "v1": str(int(face[0])),
+                "v2": str(int(face[1])),
+                "v3": str(int(face[2])),
+                "pid": group_id,
+                "p1": str(order.get(int(slot), 0)),
+            },
+        )
+
+
+def _assembly_xml(parts: Sequence[AssemblyPart], materials: list[MaterialSlot], name: str) -> bytes:
+    """Das Modell-XML einer Baugruppe: ein ``object`` je Teil, ein ``item`` je
+    Teil im Build.
+    """
+    root = ET.Element(
+        "model",
+        {"unit": "millimeter", "xml:lang": "de-DE", "xmlns": CORE_NAMESPACE},
+    )
+    ET.SubElement(root, "metadata", {"name": "Application"}).text = f"{APP_NAME} {APP_VERSION}"
+    if name:
+        ET.SubElement(root, "metadata", {"name": "Title"}).text = name
+
+    resources = ET.SubElement(root, "resources")
+    group_id = "1"
+    group = ET.SubElement(resources, "basematerials", {"id": group_id})
+    for entry in materials:
+        ET.SubElement(
+            group,
+            "base",
+            {"name": entry.name or f"Slot {entry.index}", "displaycolor": _colour(entry)},
+        )
+
+    # Wohin ein objekteigener Slot in der gemeinsamen Liste zeigt. Ohne diese
+    # Übersetzung trüge Teil zwei die Farben von Teil eins.
+    positions = {(entry.name, entry.colour): index for index, entry in enumerate(materials)}
+
+    build = ET.SubElement(root, "build")
+    for number, part in enumerate(parts, start=2):
+        order = {
+            slot.index: positions.get((slot.name, slot.colour), 0)
+            for slot in part.slots or (MaterialSlot(index=0, name=""),)
+        }
+        body = ET.SubElement(
+            resources,
+            "object",
+            {
+                "id": str(number),
+                "type": "model",
+                "pid": group_id,
+                "pindex": "0",
+                **({"name": part.name} if part.name else {}),
+            },
+        )
+        _write_geometry(body, part.mesh, group_id, order)
+        ET.SubElement(build, "item", {"objectid": str(number)})
+
+    return b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(ET.tostring(root, encoding="utf-8"))
+
+
 def _model_xml(mesh: MeshData, slots: list[MaterialSlot], name: str) -> bytes:
     root = ET.Element(
         "model",
@@ -572,29 +720,7 @@ def _model_xml(mesh: MeshData, slots: list[MaterialSlot], name: str) -> bytes:
         "object",
         {"id": "2", "type": "model", "pid": group_id, "pindex": "0"},
     )
-    geometry = ET.SubElement(body, "mesh")
-    vertices = ET.SubElement(geometry, "vertices")
-    for point in mesh.raw.vertices:
-        ET.SubElement(
-            vertices,
-            "vertex",
-            {"x": f"{point[0]:.5f}", "y": f"{point[1]:.5f}", "z": f"{point[2]:.5f}"},
-        )
-
-    triangles = ET.SubElement(geometry, "triangles")
-    assignment = mesh.slots or ((0,) * len(mesh.raw.faces))
-    for face, slot in zip(mesh.raw.faces, assignment, strict=True):
-        ET.SubElement(
-            triangles,
-            "triangle",
-            {
-                "v1": str(int(face[0])),
-                "v2": str(int(face[1])),
-                "v3": str(int(face[2])),
-                "pid": group_id,
-                "p1": str(order.get(int(slot), 0)),
-            },
-        )
+    _write_geometry(body, mesh, group_id, order)
 
     build = ET.SubElement(root, "build")
     ET.SubElement(build, "item", {"objectid": "2"})

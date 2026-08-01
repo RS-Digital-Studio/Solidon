@@ -19,10 +19,11 @@ kein fremder Quelltext läuft, sondern ein Programm auf eine Datei zeigt.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import tempfile
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
@@ -343,7 +344,12 @@ def slice_model(
                 ),
             )
 
-        metrics = gcode.parse(produced.read_text(encoding="utf-8", errors="replace"))
+        payload = produced.read_text(encoding="utf-8", errors="replace")
+        metrics = gcode.parse(payload)
+        # Die Gegenprobe: hat der Slicer übernommen, was ihm geschrieben wurde?
+        # Das ist die einzige Auskunft, die von ihm selbst kommt statt aus einer
+        # Dokumentation, die für die installierte Fassung gelten mag oder nicht.
+        ignored = verify(payload, as_mapping(settings, setup.flavour))
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
             # erreichen können, also wandert sie neben das Modell.
@@ -351,7 +357,7 @@ def slice_model(
             kept.write_bytes(produced.read_bytes())
             produced = kept
 
-    findings = gcode.findings_for(metrics)
+    findings = [*ignored, *gcode.findings_for(metrics)]
     findings.append(
         Finding(
             code="slicer.handover",
@@ -369,6 +375,94 @@ def slice_model(
         findings=findings,
         seconds=time.perf_counter() - started,
     )
+
+
+#: Wie ein Slicer seine Konfiguration in die Datei schreibt. Alle drei
+#: Familien tun es, in leicht verschiedener Schreibweise.
+_SETTING_LINE = re.compile(r"^;\s*(?P<key>[a-z_0-9]+)\s*=\s*(?P<value>.*?)\s*$", re.IGNORECASE)
+
+#: Schlüssel, deren Wert der Slicer bewusst umrechnet oder ergänzt — eine
+#: Abweichung dort ist keine. ``filament_colour`` etwa wird zu einer Liste,
+#: weil ein Drucker mehrere Filamente führen kann.
+_RECOMPUTED: Final = frozenset(
+    {
+        "filament_colour",
+        "filament_diameter",
+        "filament_density",
+        "filament_cost",
+        "filament_max_volumetric_speed",
+        "nozzle_diameter",
+        "bed_shape",
+        "first_layer_speed",
+        "brim_type",
+        "wall_sequence",
+        "support_type",
+    }
+)
+
+
+def verify(text: str, written: Mapping[str, str]) -> list[Finding]:
+    """Kam an, was Formwerk geschrieben hat? (§28.2)
+
+    Die Slicer schreiben ihre wirksame Konfiguration als Kommentare in die
+    Druckdatei. Das ist die einzige Auskunft darüber, ob eine Zuordnung
+    stimmt — und sie kommt von dem Programm selbst, nicht aus einer
+    Dokumentation, die für die installierte Fassung womöglich nicht gilt.
+
+    Damit prüft sich jeder Slicer selbst, auch einer, den beim Bauen der
+    Tabelle niemand vorliegen hatte. Gemeldet wird nur, was **nachweislich**
+    abweicht: ein Schlüssel, den die Datei gar nicht nennt, sagt nichts —
+    kein Slicer schreibt alles.
+    """
+    found: dict[str, str] = {}
+    for line in text.splitlines():
+        match = _SETTING_LINE.match(line.strip())
+        if match is not None:
+            found.setdefault(match.group("key").casefold(), match.group("value"))
+
+    ignored: list[str] = []
+    for key, wanted in written.items():
+        if key in _RECOMPUTED:
+            continue
+        actual = found.get(key.casefold())
+        if actual is None or _same(actual, wanted):
+            continue
+        ignored.append(f"{key}: {wanted} → {actual}")
+
+    if not ignored:
+        return []
+    _log.warning("slicer ignored %d setting(s): %s", len(ignored), "; ".join(ignored[:5]))
+    return [
+        Finding(
+            code="slicer.setting_ignored",
+            severity="warning",
+            message=_(
+                "Der Slicer hat Einstellungen anders übernommen, als Formwerk sie geschrieben hat."
+            ),
+            values={"count": len(ignored), "settings": "; ".join(sorted(ignored)[:10])},
+            source="gcode",
+        )
+    ]
+
+
+def _same(actual: str, wanted: str) -> str | bool:
+    """Ob zwei Werte dasselbe meinen.
+
+    Verglichen wird nachsichtig: ``0.2`` und ``0.20``, ``15%`` und ``15``,
+    und eine Liste aus einem Element gegen dieses Element. Sonst meldete die
+    Gegenprobe Unterschiede, die keine sind, und würde nach dem dritten Mal
+    weggesehen.
+    """
+    left, right = actual.strip().strip("%"), wanted.strip().strip("%")
+    if left == right:
+        return True
+    left = left.strip("[]").split(",")[0].strip().strip("\"'")
+    if left == right:
+        return True
+    try:
+        return abs(float(left) - float(right)) < 1e-6
+    except ValueError:
+        return False
 
 
 def _tail(*streams: bytes, limit: int = 800) -> str:

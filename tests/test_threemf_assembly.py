@@ -249,3 +249,63 @@ def test_our_own_single_body_export_reads_back_as_one_part() -> None:
 
     assert len(parts) == 1
     assert parts[0].mesh.volume == pytest.approx(1000.0)
+
+
+# --- Schreiben: mehrere Körper als eine Baugruppe (§20, §29) ------------------------
+
+
+def _part(size: tuple[float, float, float], name: str, *slots: threemf.MaterialSlot):
+    body = MeshData.of(trimesh.creation.box(size))
+    return threemf.AssemblyPart(mesh=body, name=name, slots=slots)
+
+
+def test_an_assembly_keeps_every_part() -> None:
+    """Eine Datei je Teil und eine Datei mit allen Teilen sind nicht dasselbe:
+    der Slicer ordnet nur im zweiten Fall als Ganzes an."""
+    payload = threemf.write_assembly(
+        [_part((10, 10, 10), "Deckel"), _part((20, 5, 5), "Boden")], "Gehäuse"
+    )
+
+    parts = threemf.read_objects(payload)
+
+    assert [entry.name for entry in parts] == ["Deckel", "Boden"]
+    assert threemf.count_objects(payload) == 2
+
+
+def test_the_same_colour_becomes_the_same_extruder() -> None:
+    """§20: ein Slot ist ein Filament, kein Objektmerkmal. Ohne Zusammenlegung
+    fragte der Slicer nach drei Filamenten für einen einfarbigen Druck."""
+    rot = threemf.MaterialSlot(index=0, name="Rot", colour=(1.0, 0.0, 0.0))
+    blau = threemf.MaterialSlot(index=1, name="Blau", colour=(0.0, 0.0, 1.0))
+
+    merged = threemf.merge_slots([_part((10, 10, 10), "A", rot, blau), _part((5, 5, 5), "B", rot)])
+
+    assert [entry.name for entry in merged] == ["Rot", "Blau"]
+    assert [entry.index for entry in merged] == [0, 1], "der Index ist die Extrudernummer"
+
+
+def test_a_parts_own_slot_numbers_do_not_leak() -> None:
+    """Teil zwei zählt seine Slots ab null wie Teil eins. Ohne Übersetzung in
+    die gemeinsame Liste trüge es die Farben von Teil eins."""
+    nur_blau = threemf.MaterialSlot(index=0, name="Blau", colour=(0.0, 0.0, 1.0))
+    rot = threemf.MaterialSlot(index=0, name="Rot", colour=(1.0, 0.0, 0.0))
+
+    payload = threemf.write_assembly(
+        [_part((10, 10, 10), "A", rot), _part((5, 5, 5), "B", nur_blau)]
+    )
+
+    text = zipfile.ZipFile(BytesIO(payload)).read(threemf.MODEL_PATH).decode("utf-8")
+    assert text.count("<base ") == 2, "zwei Farben, nicht eine und nicht drei"
+    assert "Rot" in text and "Blau" in text
+
+
+def test_an_assembly_without_parts_is_refused() -> None:
+    with pytest.raises(ValueError):
+        threemf.write_assembly([])
+
+
+def test_a_single_part_assembly_is_just_an_assembly_of_one() -> None:
+    """Kein Sonderweg: derselbe Code, ein Eintrag."""
+    payload = threemf.write_assembly([_part((10, 10, 10), "Allein")])
+
+    assert threemf.count_objects(payload) == 1

@@ -238,6 +238,51 @@ def write_plan(
     return written
 
 
+def write_assembly(
+    objects: list[SceneObject],
+    directory: Path,
+    *,
+    project_name: str,
+    profile: Profile,
+    plate: int | None = None,
+    sources: dict[str, Source] | None = None,
+) -> tuple[Path, list[Finding]]:
+    """Alles auf einer Platte in *eine* 3MF-Datei (§20, §29).
+
+    Der Unterschied zu :func:`write_plan` ist nicht das Format, sondern die
+    Zahl der Dateien: ein Slicer, der eine Baugruppe bekommt, ordnet sie als
+    Ganzes an und schreibt eine Druckdatei. Bekommt er fünf Dateien,
+    entscheidet er über ihre Zusammengehörigkeit selbst — und was Formwerk
+    über die Platte weiß, ist verloren.
+
+    ``plate`` schränkt auf eine Druckplatte ein; ohne Angabe geht alles hinein,
+    was übergeben wurde.
+    """
+    chosen = objects if plate is None else [entry for entry in objects if entry.plate == plate]
+    if not chosen:
+        raise ValidationError(
+            field="objects",
+            detail=_("Auf dieser Platte liegt nichts."),
+            values={"plate": plate},
+            constraint="empty",
+        )
+
+    findings = check_before_export(chosen, profile, sources or {})
+    parts = [
+        threemf.AssemblyPart(
+            mesh=as_mesh_data(entry.mesh),
+            name=entry.name,
+            slots=tuple(entry.material_slots),
+        )
+        for entry in chosen
+    ]
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / (safe_name(project_name, "projekt") + ".3mf")
+    target.write_bytes(threemf.write_assembly(parts, project_name))
+    _log.info("exported %d object(s) as one assembly to %s", len(parts), target.name)
+    return target, findings
+
+
 def export_bytes(
     mesh: MeshData,
     export_format: ExportFormat = "stl",

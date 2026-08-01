@@ -108,6 +108,35 @@ nicht in die Anwendungskonfiguration: sie beschreiben das Teil, nicht den
 Rechner. Slicer-Pfad und Profilwahl bleiben dagegen bei der Anwendung — ein
 Projekt wird auch auf einem Rechner geöffnet, wo ein anderer Slicer liegt.
 
+## Eine Platte ist eine Datei
+
+Was zusammen gedruckt wird, geht als **eine 3MF-Baugruppe** hinaus
+(`threemf.write_assembly`), nicht als eine Datei je Objekt. Der Unterschied
+ist nicht das Format: ein Slicer, der eine Baugruppe bekommt, ordnet sie als
+Ganzes an und schreibt eine Druckdatei. Bekommt er fünf Dateien, entscheidet
+er über ihre Zusammengehörigkeit selbst, und was Formwerk über die Platte
+weiß, ist verloren.
+
+Die Materialslots werden dabei über **alle** Teile zusammengelegt
+(`merge_slots`), über Name und Farbe. Ein Slot ist ein Filament, kein
+Objektmerkmal — zwei Teile in derselben Farbe kommen aus derselben Düse. Die
+Reihenfolge der zusammengelegten Liste *ist* die Extruderbelegung.
+
+## Die Gegenprobe ersetzt die Dokumentation
+
+`handover.verify` liest die Konfigurationskommentare der erzeugten Druckdatei
+und meldet, was der Slicer anders übernommen hat, als Formwerk es schrieb.
+Das ist die einzige Auskunft, die vom Programm selbst kommt statt aus einer
+Beschreibung, die für die installierte Fassung gelten mag oder nicht — und
+damit prüft sich auch ein Slicer, den beim Bauen der Tabelle niemand vorliegen
+hatte.
+
+Gemeldet wird nur, was **nachweislich** abweicht. Ein Schlüssel, den die Datei
+nicht nennt, sagt nichts: kein Slicer schreibt alles, und eine Gegenprobe, die
+bei jedem Lauf zwanzig Fehler meldet, wird nach dem dritten Mal übersehen.
+Verglichen wird nachsichtig — `0.2` gegen `0.20`, `15%` gegen `15`, eine Liste
+aus einem Element gegen dieses Element.
+
 ## Was die Analyse liefert
 
 Überhangfläche je Schicht, Stützvolumen, Querschnittsverlauf, **Inseln**

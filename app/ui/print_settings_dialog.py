@@ -52,11 +52,18 @@ from app.core import discover, tools
 from app.core.errors import AppError
 from app.core.export import handover, slicer_profiles
 from app.core.export.slicer_keys import SlicerFlavour
-from app.core.export.writer import plan_export, write_plan
+from app.core.export.writer import write_assembly
 from app.core.knowledge import print_settings
 from app.core.log import get_logger
 from app.core.slice import advise
-from app.core.types import BoundingBox, PrintSettings, Profile, SettingAdvice, SliceResult
+from app.core.types import (
+    BoundingBox,
+    Finding,
+    PrintSettings,
+    Profile,
+    SettingAdvice,
+    SliceResult,
+)
 from app.i18n import tr
 from app.ui.dialogs import show_error
 from app.ui.session import Session
@@ -672,6 +679,9 @@ class PrintSettingsDialog(QDialog):
         self._profiles: list[slicer_profiles.SlicerProfile] = []
         self._temporary: TemporaryDirectory[str] | None = None
         self._gcode: Path | None = None
+        self._pending_findings: list[Finding] = []
+        """Was die Prüfung vor dem Schreiben fand (§29). Sie berichtet, sie
+        blockiert nicht — also reist sie mit dem Ergebnis in den Prüfbericht."""
         # Was das Projekt mitbringt, gilt: eine Dichtung aus TPU bleibt eine
         # Dichtung aus TPU, auch wenn dazwischen anderes gedruckt wurde (§29).
         # Erst ohne eigene Einstellungen wird aus Stufe, Material und Drucker
@@ -1146,22 +1156,32 @@ class PrintSettingsDialog(QDialog):
         self._temporary = TemporaryDirectory(prefix="formwerk-handover-")
         folder = Path(self._temporary.name)
         name = self.session.path.stem if self.session.path else "formwerk"
-        # 3MF und nicht STL: es trägt alle Objekte samt Anordnung und
-        # Farbgruppen in *einer* Datei (§20, §29). Mit STL bekäme der Slicer
-        # eine Datei je Objekt, und geslicet würde still nur die erste.
-        plan = plan_export(
-            objects, project_name=name, profile=self.session.profile, export_format="3mf"
-        )
-        written = write_plan(plan, folder)
-        if not written:
-            self.state.setText(tr("Der Export hat keine Datei erzeugt."))
+        # Eine Baugruppe und nicht eine Datei je Objekt: der Slicer bekommt
+        # damit einen Druckauftrag statt einer Handvoll Teile, über deren
+        # Zusammengehörigkeit er selbst entscheiden müsste (§20, §29).
+        plates = sorted({entry.plate for entry in objects})
+        try:
+            written, findings = write_assembly(
+                objects,
+                folder,
+                project_name=name,
+                profile=self.session.profile,
+                plate=plates[0],
+            )
+        except AppError as problem:
+            show_error(problem, self)
             return
+        if len(plates) > 1:
+            # Mehr Teile als auf eine Platte passen ist normal (§25) — aber
+            # nichts, was still zur Hälfte geslicet werden darf.
+            self.state.setText(tr("Diese Szene braucht mehrere Platten; geslicet wird die erste."))
+        self._pending_findings = findings
 
         self.slice_button.setEnabled(False)
         self.progress.setVisible(True)
         self.state.setText(tr("Der Slicer rechnet …"))
 
-        worker = _SliceWorker(written, self.settings, self.session.profile, setup)
+        worker = _SliceWorker([written], self.settings, self.session.profile, setup)
         worker.done.connect(self._sliced)
         worker.failed.connect(self._slice_failed)
         worker.finished.connect(self._slice_finished)
@@ -1184,6 +1204,8 @@ class PrintSettingsDialog(QDialog):
         # und nichts, was auf einen Drucker geht.
         self._gcode = outcome.gcode_path
         self.save_button.setEnabled(True)
+        outcome.findings = [*self._pending_findings, *outcome.findings]
+        self._pending_findings = []
         self.sliced.emit(outcome)
         _log.info("sliced with %s in %.1f s", metrics.slicer, outcome.seconds)
 
