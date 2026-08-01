@@ -1,13 +1,13 @@
-"""Reading a 3MF as the assembly it is (§17.1, §29, §40).
+"""Eine 3MF als die Baugruppe lesen, die sie ist (§17.1, §29, §40).
 
-A slicer keeps its objects in separate files under ``3D/Objects/`` and
-references them from the build. Two things went wrong with that before this
-reader existed, and both are held down here: a component was resolved to the
-whole file it points into instead of to the one object it names, and the parts
-were welded into a single body on the way in.
+Ein Slicer hält seine Objekte in getrennten Dateien unter ``3D/Objects/`` und
+verweist aus dem Build darauf. Zwei Dinge gingen damit schief, bevor es diesen
+Leser gab, und beide werden hier festgehalten: eine Komponente wurde zur ganzen
+Datei aufgelöst, in die sie zeigt, statt zu dem einen Objekt, das sie benennt —
+und die Teile wurden auf dem Weg hinein zu einem einzigen Körper verschweißt.
 
-The containers are built in the test rather than kept as fixtures, so the
-structure that matters is visible in the file that checks it.
+Die Container werden im Test gebaut statt als Fixtures gehalten, damit die
+Struktur, auf die es ankommt, in der Datei sichtbar ist, die sie prüft.
 """
 
 from __future__ import annotations
@@ -51,11 +51,12 @@ def production_container(
     transforms: dict[str, str] | None = None,
     missing: str | None = None,
 ) -> bytes:
-    """A 3MF the way a slicer writes one: geometry outside, components inside.
+    """Eine 3MF, wie ein Slicer sie schreibt: Geometrie außen, Komponenten
+    innen.
 
-    ``one_file`` puts every object into a single external model — the case that
-    used to multiply, because a component resolved to the file rather than to
-    the object it names.
+    ``one_file`` legt jedes Objekt in ein einziges externes Modell — der Fall,
+    der früher vervielfachte, weil eine Komponente zur Datei aufgelöst wurde
+    statt zu dem Objekt, das sie benennt.
     """
     if one_file:
         externals = {"3D/Objects/parts.model": objects_file(bodies)}
@@ -118,10 +119,12 @@ def cube(size: float, at: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> trime
 
 
 def test_three_objects_in_one_file_come_back_three_times_not_nine() -> None:
-    """The bug: every component resolved to the whole file it points into.
+    """Der Fehler: jede Komponente löste sich zur ganzen Datei auf, in die sie
+    zeigt.
 
-    Measured on the corpus before the fix — a nozzle of two bodies and 290 120
-    triangles arrived as four bodies and 580 240, with twice the volume.
+    Am Korpus vor der Behebung gemessen — eine Düse aus zwei Körpern und
+    290 120 Dreiecken kam als vier Körper und 580 240 an, mit doppeltem
+    Volumen.
     """
     payload = production_container(
         {"1": cube(10.0), "2": cube(20.0, (40.0, 0.0, 0.0)), "3": cube(30.0, (0.0, 40.0, 0.0))}
@@ -135,7 +138,9 @@ def test_three_objects_in_one_file_come_back_three_times_not_nine() -> None:
 
 
 def test_one_file_per_object_reads_the_same_way() -> None:
-    """The other layout a slicer writes. Same answer, or the reader is guessing."""
+    """Das andere Layout, das ein Slicer schreibt. Dieselbe Antwort, oder der
+    Leser rät.
+    """
     bodies = {"1": cube(10.0), "2": cube(20.0, (40.0, 0.0, 0.0))}
 
     single = threemf.read_objects(production_container(bodies, one_file=True))
@@ -147,7 +152,7 @@ def test_one_file_per_object_reads_the_same_way() -> None:
 
 
 def test_the_count_matches_what_is_read() -> None:
-    """The stack asks for the count before the geometry exists (§11)."""
+    """Der Stapel fragt nach der Anzahl, bevor es die Geometrie gibt (§11)."""
     payload = production_container({"1": cube(10.0), "2": cube(20.0), "3": cube(30.0)})
 
     assert threemf.count_objects(payload) == len(threemf.read_objects(payload)) == 3
@@ -157,7 +162,9 @@ def test_the_count_matches_what_is_read() -> None:
 
 
 def test_a_body_arrives_where_the_build_put_it() -> None:
-    """Without the transform the parts of an assembly all sit at the origin."""
+    """Ohne die Transformation sitzen die Teile einer Baugruppe alle im
+    Ursprung.
+    """
     payload = production_container(
         {"1": cube(10.0)}, transforms={"1": "1 0 0 0 1 0 0 0 1 100 50 25"}
     )
@@ -172,9 +179,11 @@ def test_a_body_arrives_where_the_build_put_it() -> None:
 
 
 def test_a_rotation_in_the_transform_is_applied() -> None:
-    """A 3MF matrix is column-major; read row-major a rotation comes out mirrored."""
+    """Eine 3MF-Matrix ist spaltenweise; zeilenweise gelesen kommt eine
+    Drehung gespiegelt heraus.
+    """
     plate = trimesh.creation.box(extents=(30.0, 10.0, 4.0))
-    # Ninety degrees about Z: the long side has to end up along Y.
+    # Neunzig Grad um Z: die lange Seite muss entlang Y landen.
     payload = production_container({"1": plate}, transforms={"1": "0 1 0 -1 0 0 0 0 1 0 0 0"})
 
     size = threemf.read_objects(payload)[0].mesh.bounds.size
@@ -187,7 +196,9 @@ def test_a_rotation_in_the_transform_is_applied() -> None:
 
 
 def test_the_parts_are_called_what_the_slicer_called_them() -> None:
-    """The standard leaves ``name`` empty; the slicer writes it beside the model."""
+    """Der Standard lässt ``name`` leer; der Slicer schreibt ihn neben das
+    Modell.
+    """
     payload = production_container(
         {"1": cube(10.0), "2": cube(20.0)},
         names={"1": "Wasserfall_1_Koerper.stl", "2": "Wasserfall_2_Deckel.stl"},
@@ -212,7 +223,7 @@ def test_a_file_without_names_still_names_its_bodies() -> None:
     assert parts[0].name, "an object without a name is not an object without a name"
 
 
-# --- what is not a readable assembly --------------------------------------------
+# --- Was keine lesbare Baugruppe ist --------------------------------------------
 
 
 def test_something_that_is_not_a_3mf_is_not_read() -> None:
@@ -221,7 +232,7 @@ def test_something_that_is_not_a_3mf_is_not_read() -> None:
 
 
 def test_a_component_pointing_at_nothing_drops_that_body_only() -> None:
-    """One broken reference does not cost the other three parts."""
+    """Ein kaputter Verweis kostet nicht die anderen drei Teile."""
     parts = threemf.read_objects(
         production_container({"1": cube(10.0), "2": cube(20.0)}, missing="2")
     )
@@ -231,7 +242,7 @@ def test_a_component_pointing_at_nothing_drops_that_body_only() -> None:
 
 
 def test_our_own_single_body_export_reads_back_as_one_part() -> None:
-    """§29 round trip: what this module writes, it reads."""
+    """§29, runde Reise: was dieses Modul schreibt, liest es auch."""
     body = MeshData.of(cube(10.0))
 
     parts = threemf.read_objects(threemf.write(body, name="Klotz"))

@@ -1,13 +1,15 @@
-"""Performance budget (Bauplan §31).
+"""Das Leistungsbudget (Bauplan §31).
 
-Two kinds of check, because either alone is misleading. The absolute targets from
-§31 say whether the application is fast enough at all. The comparison with the
-previous run on this machine catches a regression that stays inside the target —
-"a quarter slower" is a defect, not noise.
+Zwei Arten von Prüfung, denn jede allein führt in die Irre. Die absoluten Ziele
+aus §31 sagen, ob die Anwendung überhaupt schnell genug ist. Der Vergleich mit
+dem vorigen Lauf auf dieser Maschine fängt eine Verschlechterung ab, die
+innerhalb des Ziels bleibt — „ein Viertel langsamer" ist ein Fehler, kein
+Rauschen.
 
-Measurements are machine dependent, so the baseline is local (``.performance.json``,
-not checked in). The absolute targets are generous where a test machine may be
-slower than a workstation; they still fail on an order-of-magnitude mistake.
+Messungen hängen von der Maschine ab, die Vergleichsbasis ist also lokal
+(``.performance.json``, nicht eingecheckt). Die absoluten Ziele sind großzügig,
+wo eine Testmaschine langsamer sein darf als eine Workstation; bei einem Fehler
+um eine Größenordnung schlagen sie trotzdem an.
 """
 
 from __future__ import annotations
@@ -38,12 +40,14 @@ pytestmark = pytest.mark.performance
 MESHES = Path(__file__).parent / "data" / "meshes"
 BASELINE = Path(__file__).parent / ".performance.json"
 
-#: How much slower than the last run on this machine counts as a defect (§31).
+#: Wie viel langsamer als der letzte Lauf auf dieser Maschine als Fehler gilt (§31).
 REGRESSION_LIMIT = 1.25
 
 
 def dense_mesh() -> MeshData:
-    """The million triangle body. Built on first use; it is too big to check in."""
+    """Der Millionen-Dreieck-Körper. Beim ersten Gebrauch gebaut; er ist zu
+    groß zum Einchecken.
+    """
     path = MESHES / "dense_1m.stl"
     if not path.is_file():
         import trimesh
@@ -54,7 +58,9 @@ def dense_mesh() -> MeshData:
 
 
 def measure(name: str, work: Callable[[], Any]) -> float:
-    """Run once, record the seconds, compare with the previous run."""
+    """Einmal laufen lassen, die Sekunden festhalten, mit dem vorigen Lauf
+    vergleichen.
+    """
     started = time.perf_counter()
     work()
     taken = time.perf_counter() - started
@@ -78,7 +84,7 @@ def measure(name: str, work: Callable[[], Any]) -> float:
 
 
 def test_reading_a_million_triangles(profile: Profile) -> None:
-    """Not in §31 by name, but the gate to everything else."""
+    """Nicht namentlich in §31, aber das Tor zu allem anderen."""
     taken = measure("read_dense", dense_mesh)
     assert taken < 30.0
 
@@ -90,7 +96,7 @@ def test_the_input_stage_on_a_million_triangles() -> None:
 
 
 def test_the_section_cut_stays_interactive() -> None:
-    """§18.2: the plane is dragged, so the cut has to keep up."""
+    """§18.2: die Ebene wird gezogen, der Schnitt muss also mithalten."""
     mesh = normalise(read_mesh((MESHES / "two_components.stl").read_bytes(), ".stl"), "mm").mesh
     taken = measure("section_small", lambda: cut(mesh, SectionPlane.along("z", 0.0)))
     assert taken < 1.0
@@ -103,7 +109,7 @@ def test_wall_thickness_answers_quickly() -> None:
 
 
 def medium_mesh() -> MeshData:
-    """Around 200 000 triangles — the size every §31 target is stated for."""
+    """Rund 200 000 Dreiecke — die Größe, für die jedes §31-Ziel angegeben ist."""
     import trimesh
 
     sphere = trimesh.creation.icosphere(subdivisions=7, radius=40.0)
@@ -111,7 +117,9 @@ def medium_mesh() -> MeshData:
 
 
 def test_feature_detection_on_two_hundred_thousand_triangles() -> None:
-    """§31: under one second. A sphere has no bores, and finding that out is the work."""
+    """§31: unter einer Sekunde. Eine Kugel hat keine Bohrungen, und das
+    herauszufinden ist die Arbeit.
+    """
     mesh = medium_mesh()
     taken = measure("detect_medium", lambda: detect(mesh))
     assert taken < 10.0, "the target is one second; ten catches an order of magnitude"
@@ -142,17 +150,18 @@ def test_the_sketch_solver_meets_its_budget() -> None:
 
 
 def test_the_layer_analysis_stays_under_the_budget() -> None:
-    """§31 asks for 300 ms at 200 000 triangles and 0.2 mm.
+    """§31 verlangt 300 ms bei 200 000 Dreiecken und 0,2 mm.
 
-    This body has 328 000 triangles and takes about 1.05 seconds — so roughly
-    650 ms at the size §31 names, from 2.35 seconds at the start. Two changes
-    got it there: the width search stops once a layer is thicker than anything
-    §22.2 warns about, and the measuring runs on as many threads as the machine
-    has, because GEOS lets go of the interpreter lock while it works.
+    Dieser Körper hat 328 000 Dreiecke und braucht etwa 1,05 Sekunden — also
+    grob 650 ms bei der Größe, die §31 nennt, von 2,35 Sekunden am Anfang. Zwei
+    Änderungen haben ihn dorthin gebracht: die Breitensuche hört auf, sobald
+    eine Schicht dicker ist als alles, wovor §22.2 warnt, und das Messen läuft
+    auf so vielen Threads, wie die Maschine hat, denn GEOS gibt den
+    Interpreter-Lock frei, während es arbeitet.
 
-    What is left is building the polygons, and that one does *not* parallelise
-    — the measurement is in ``cross_sections``. Closing the rest needs a
-    compiled kernel rather than another Python idea.
+    Übrig bleibt das Bauen der Polygone, und das parallelisiert *nicht* — die
+    Messung steht in ``cross_sections``. Den Rest zu schließen braucht einen
+    kompilierten Kern, keine weitere Python-Idee.
     """
     mesh = medium_mesh()
     taken = measure("slice_medium", lambda: slice_body(mesh, 0.2))
@@ -160,13 +169,14 @@ def test_the_layer_analysis_stays_under_the_budget() -> None:
 
 
 def test_the_wall_thickness_map_stays_under_the_bound() -> None:
-    """§31 names three seconds for this map, in the background.
+    """§31 nennt drei Sekunden für diese Karte, im Hintergrund.
 
-    Reached, after two changes. The raster used to be cut layer by layer, which
-    walked all 328 000 triangles once per layer — three hundred times over. It
-    is now one pass over all heights, which took the map from eight seconds to
-    three. And it runs in a thread with a note in the bar (§18.9) instead of in
-    the foreground behind a wait cursor.
+    Erreicht, nach zwei Änderungen. Das Raster wurde früher Schicht für Schicht
+    geschnitten, was alle 328 000 Dreiecke einmal je Schicht ablief —
+    dreihundertmal. Es ist jetzt ein Durchgang über alle Höhen, und das brachte
+    die Karte von acht Sekunden auf drei. Und sie läuft in einem Thread mit
+    einem Hinweis in der Leiste (§18.9) statt im Vordergrund hinter einem
+    Wartezeiger.
     """
     mesh = medium_mesh()
     taken = measure("map_wall_medium", lambda: wall_thickness_map(mesh))
@@ -174,16 +184,20 @@ def test_the_wall_thickness_map_stays_under_the_bound() -> None:
 
 
 def test_the_orientation_search_over_two_hundred_candidates() -> None:
-    """§31: under 20 seconds, interruptible. Around 16 here, and it got there by
-    not doing work nobody reads: the search takes one number out of every slice,
-    so it asks for ``detail="support"`` and the structure widths are left out."""
+    """§31: unter 20 Sekunden, unterbrechbar. Hier etwa 16, und dorthin kam
+    sie, indem sie Arbeit unterlässt, die niemand liest: die Suche nimmt eine
+    Zahl aus jedem Schnitt, fragt also nach ``detail="support"``, und die
+    Strukturbreiten bleiben weg.
+    """
     mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
     taken = measure("orient_200", lambda: search(mesh, count=200, layer_height=0.4))
     assert taken < 20.0, "the §31 target, and it holds"
 
 
 def test_scrubbing_through_the_layers_is_free() -> None:
-    """§18.10: the analysis is computed once, so scrubbing is only drawing."""
+    """§18.10: die Analyse wird einmal gerechnet, das Durchfahren ist also nur
+    Zeichnen.
+    """
     mesh = normalise(read_mesh((MESHES / "island_tower.stl").read_bytes(), ".stl"), "mm").mesh
     result = slice_body(mesh, 0.2)
 
@@ -196,7 +210,9 @@ def test_scrubbing_through_the_layers_is_free() -> None:
 
 
 def test_reevaluating_from_the_cache_is_quick(profile: Profile) -> None:
-    """§31: opening a project from the disk cache stays under a second."""
+    """§31: ein Projekt aus dem Platten-Cache zu öffnen bleibt unter einer
+    Sekunde.
+    """
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source(
         id="src_1", kind="import", path="sources/cube_clean.stl", sha256=""

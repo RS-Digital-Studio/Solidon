@@ -1,7 +1,8 @@
-"""Analysis maps (Bauplan §18.4).
+"""Analysekarten (Bauplan §18.4).
 
-Every map is checked against a body whose answer is known beforehand — a plate
-is 8 mm thick, a cube has no overhang, a cone lying on its side has plenty.
+Jede Karte wird gegen einen Körper geprüft, dessen Antwort vorher feststeht —
+eine Platte ist 8 mm dick, ein Würfel hat keinen Überhang, ein Kegel auf der
+Seite reichlich.
 """
 
 from __future__ import annotations
@@ -57,14 +58,16 @@ def test_the_wall_map_measures_the_plate(profile: Profile) -> None:
     assert len(analysis.values) == entry.mesh.triangle_count
     assert analysis.unit == "mm"
     assert analysis.resolution is not None, "a sampled number says how fine it was sampled"
-    # Measured on the large face: 8 mm of material below it. The tolerance is one
-    # grid step, because that is what the raster can tell apart.
+    # An der großen Fläche gemessen: 8 mm Material darunter. Die Toleranz ist ein
+    # Rasterschritt, denn das ist, was das Raster unterscheiden kann.
     for index in entry.features["face_1"].face_indices:
         assert analysis.values[index] == pytest.approx(8.0, abs=analysis.resolution)
 
 
 def test_the_wall_map_marks_what_is_too_thin(profile: Profile) -> None:
-    """§39: two extrusion widths are the floor, and the map says where it is undercut."""
+    """§39: zwei Extrusionsbreiten sind der Boden, und die Karte sagt, wo er
+    unterschritten wird.
+    """
     thin = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 0.5)))
     analysis = maps.build("wall", object_with(thin), profile=profile)
 
@@ -73,7 +76,7 @@ def test_the_wall_map_marks_what_is_too_thin(profile: Profile) -> None:
 
 
 def test_an_open_body_says_it_cannot_say() -> None:
-    """Half a box has no inside — and no thickness. Zero would be a lie."""
+    """Eine halbe Box hat kein Innen — und keine Dicke. Null wäre eine Lüge."""
     open_body = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
     open_body.raw.faces = open_body.raw.faces[:6]
     analysis = maps.wall_thickness_map(open_body)
@@ -83,7 +86,9 @@ def test_an_open_body_says_it_cannot_say() -> None:
 
 
 def test_the_map_agrees_with_the_measuring_tool() -> None:
-    """§18.3 and §18.4 have to give the same answer, or one of them is lying."""
+    """§18.3 und §18.4 müssen dieselbe Antwort geben, sonst lügt eine von
+    beiden.
+    """
     body = plate()
     analysis = maps.wall_thickness_map(body)
     assert analysis.resolution is not None
@@ -118,7 +123,7 @@ def test_a_cube_has_no_overhang_worth_the_name() -> None:
 
 
 def test_a_tilted_face_is_measured_not_guessed() -> None:
-    """Turned by 30 degrees, the underside stands at 60 and one side at 30."""
+    """Um 30 Grad gedreht steht die Unterseite auf 60 und eine Seite auf 30."""
     tilted = apply(cube(), rotation("x", 30.0))
     analysis = maps.overhang_map(tilted)
 
@@ -217,7 +222,9 @@ def test_without_fits_the_map_stays_empty(profile: Profile) -> None:
 
 
 def test_the_support_map_comes_from_the_layer_analysis(profile: Profile) -> None:
-    """§18.4: the judgement is the slicer's, not a normal-vector rule of thumb."""
+    """§18.4: das Urteil gehört dem Schneider, keiner Faustregel über
+    Normalenvektoren.
+    """
     analysis = maps.build("support", object_with(_table()), profile=profile)
 
     assert analysis.highlighted, "the overhanging arm rests on nothing"
@@ -227,7 +234,9 @@ def test_the_support_map_comes_from_the_layer_analysis(profile: Profile) -> None
 
 
 def _table() -> MeshData:
-    """A post on the plate with an arm on top that reaches out over nothing."""
+    """Eine Säule auf der Platte mit einem Arm darauf, der über nichts
+    hinausreicht.
+    """
     post = trimesh.creation.box(extents=(10.0, 10.0, 20.0))
     post.apply_translation([0.0, 0.0, 10.0])
     arm = trimesh.creation.box(extents=(40.0, 10.0, 4.0))
@@ -241,7 +250,7 @@ def test_a_body_on_the_plate_needs_nothing(profile: Profile) -> None:
     assert analysis.highlighted == ()
 
 
-# --- the way from warning to place ----------------------------------------------
+# --- Der Weg von der Warnung zur Stelle -----------------------------------------
 
 
 def test_a_finding_picks_its_map() -> None:
@@ -293,7 +302,9 @@ def test_a_finding_that_points_nowhere_stays_that_way() -> None:
 
 
 def test_a_huge_body_is_refused_rather_than_ground_through(profile: Profile) -> None:
-    """§31: a map that takes minutes is worse than one that says no."""
+    """§31: eine Karte, die Minuten braucht, ist schlechter als eine, die Nein
+    sagt.
+    """
     dense = MeshData.of(trimesh.creation.icosphere(subdivisions=3))
     entry = SceneObject(id="obj_1", name="x", mesh=dense, features={})
     limit = maps.MAP_LIMIT_TRIANGLES

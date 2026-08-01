@@ -1,7 +1,8 @@
-"""The analysis slicer against bodies whose numbers are known (§22, §40).
+"""Der Analyse-Schneider gegen Körper mit bekannten Zahlen (§22, §40).
 
-A cube, a cylinder and a cone have cross-sections anyone can work out with a
-pencil — so the slicer can be held to one percent instead of to a feeling.
+Ein Würfel, ein Zylinder und ein Kegel haben Querschnitte, die sich mit einem
+Bleistift ausrechnen lassen — der Schneider lässt sich also auf ein Prozent
+festnageln statt auf ein Gefühl.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from app.core.slice.analysis import (
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
-#: What §40 asks for: area and support volume within one percent.
+#: Was §40 verlangt: Fläche und Stützvolumen auf ein Prozent genau.
 TOLERANCE = 0.01
 
 
@@ -60,7 +61,9 @@ def test_a_cylinder_matches_pi_r_squared() -> None:
 
 
 def test_a_cone_narrows_the_way_geometry_says() -> None:
-    """Point up: the radius shrinks linearly, so the area shrinks quadratically."""
+    """Spitze nach oben: der Radius schrumpft linear, die Fläche also
+    quadratisch.
+    """
     body = trimesh.creation.cone(radius=10.0, height=20.0, sections=256)
     result = slice_body(on_bed(body), 0.5)
 
@@ -70,7 +73,9 @@ def test_a_cone_narrows_the_way_geometry_says() -> None:
 
 
 def test_a_straight_body_needs_no_support() -> None:
-    """The first layer rests on the plate, everything above on the layer below."""
+    """Die erste Schicht liegt auf der Platte, alles darüber auf der Schicht
+    darunter.
+    """
     result = slice_body(on_bed(trimesh.creation.box(extents=(20.0, 20.0, 20.0))), 0.2)
 
     assert total_overhang(result) == pytest.approx(0.0, abs=1.0)
@@ -78,7 +83,7 @@ def test_a_straight_body_needs_no_support() -> None:
 
 
 def test_a_shallow_cone_needs_no_support_even_on_its_tip() -> None:
-    """A wall at 27 degrees prints itself — the 45 degree rule from §39."""
+    """Eine Wand mit 27 Grad druckt sich selbst — die 45-Grad-Regel aus §39."""
     body = trimesh.creation.cone(radius=10.0, height=20.0, sections=128)
     body.apply_transform(trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]))
 
@@ -86,7 +91,7 @@ def test_a_shallow_cone_needs_no_support_even_on_its_tip() -> None:
 
 
 def test_a_steep_cone_on_its_tip_costs_support() -> None:
-    """A wall at 63 degrees does not — and the difference is what §22 is for."""
+    """Eine Wand mit 63 Grad nicht — und für diesen Unterschied gibt es §22."""
     steep = trimesh.creation.cone(radius=20.0, height=10.0, sections=128)
     steep.apply_transform(trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]))
     upright = trimesh.creation.cone(radius=20.0, height=10.0, sections=128)
@@ -107,8 +112,8 @@ def test_the_island_tower_is_recognised() -> None:
     heights = island_layers(result)
 
     assert heights, "the floating block starts in mid-air and has to be found"
-    # The block spans 20 to 30 mm; the bridge only reaches it at 25 mm, so it
-    # hangs free for five millimetres.
+    # Der Block spannt von 20 bis 30 mm; die Brücke erreicht ihn erst bei 25 mm,
+    # sie hängt also fünf Millimeter frei.
     assert min(heights) == pytest.approx(20.0, abs=1.0)
     assert max(heights) < 26.0, "from the bridge upwards it is carried"
     assert result.support_volume > 0.0
@@ -132,11 +137,11 @@ def test_the_smallest_structure_width_is_measured() -> None:
 
 
 def test_above_the_interesting_width_it_stops_measuring() -> None:
-    """§22.2 asks whether something is too thin, not how thick a thick wall is.
+    """§22.2 fragt, ob etwas zu dünn ist, nicht wie dick eine dicke Wand ist.
 
-    The search up there cost more than the rest of the layer analysis together,
-    so a wide layer is reported as "at least this" — and that is written down
-    rather than looking like a measurement.
+    Die Suche dort oben kostete mehr als der Rest der Schichtanalyse zusammen —
+    eine breite Schicht wird also als „mindestens das" gemeldet, und das steht
+    da, statt wie eine Messung auszusehen.
     """
     from shapely.geometry import box as shapely_box
 
@@ -159,7 +164,7 @@ def test_a_thin_wall_is_found_across_the_body() -> None:
 
 
 def test_every_figure_is_marked_as_internal() -> None:
-    """§22.5: never mixed with a figure measured from G-code."""
+    """§22.5: nie mit einer aus G-Code gemessenen Größe vermischt."""
     result = slice_body(on_bed(trimesh.creation.box(extents=(10.0, 10.0, 10.0))), 0.5)
     assert result.source == "internal"
 
@@ -184,11 +189,11 @@ def test_a_layer_height_of_zero_is_refused() -> None:
         slice_body(on_bed(trimesh.creation.box(extents=(10.0, 10.0, 10.0))), 0.0)
 
 
-# --- a section that has a hole in the middle of it ------------------------------
+# --- Ein Schnitt mit einem Loch mitten darin ------------------------------------
 
 
 def hollow_box() -> MeshData:
-    """A box open at the top: 60 × 40 × 30 outside, 3 mm walls, 1,5 mm floor."""
+    """Eine oben offene Box: 60 × 40 × 30 außen, 3 mm Wände, 1,5 mm Boden."""
     outer = trimesh.creation.box(extents=(60.0, 40.0, 30.0))
     outer.apply_translation((0.0, 0.0, 15.0))
     inner = trimesh.creation.box(extents=(54.0, 34.0, 27.0))
@@ -197,14 +202,16 @@ def hollow_box() -> MeshData:
 
 
 def test_a_wall_ring_is_a_section_and_not_nothing() -> None:
-    """The regression: a centred cavity made the whole section disappear.
+    """Die Regression: ein zentrierter Hohlraum ließ den ganzen Schnitt
+    verschwinden.
 
-    The nesting asked whether a piece lies inside another by taking a point of
-    its *outline*. For a box that outline is the outer rectangle and its middle
-    is in the cavity — so wall and cavity each declared the other to be their
-    hole, both counted as holes, and a section that is plainly there came back
-    as ``None``. Every layer of every hollow body was affected; the existing
-    corpus hid it because its bores sit off centre.
+    Die Verschachtelung fragte, ob ein Stück in einem anderen liegt, indem sie
+    einen Punkt seiner *Außenlinie* nahm. Bei einer Box ist diese Außenlinie
+    das äußere Rechteck, und dessen Mitte liegt im Hohlraum — Wand und Hohlraum
+    erklärten einander also zum jeweiligen Loch, beide zählten als Loch, und
+    ein Schnitt, den es offensichtlich gibt, kam als ``None`` zurück. Jede
+    Schicht jedes hohlen Körpers war betroffen; der bestehende Korpus verbarg
+    es, weil seine Bohrungen außermittig sitzen.
     """
     box = hollow_box()
 
@@ -216,7 +223,9 @@ def test_a_wall_ring_is_a_section_and_not_nothing() -> None:
 
 
 def test_a_solid_layer_stays_solid() -> None:
-    """Below the cavity the same body is a full rectangle — no hole invented."""
+    """Unter dem Hohlraum ist derselbe Körper ein volles Rechteck — kein Loch
+    erfunden.
+    """
     section = cross_section(hollow_box(), 1.0)
 
     assert section is not None
@@ -225,7 +234,9 @@ def test_a_solid_layer_stays_solid() -> None:
 
 
 def test_a_centred_bore_is_a_hole_not_a_disappearance() -> None:
-    """The same mistake in its smallest form: one plate, one bore, in the middle."""
+    """Derselbe Fehler in seiner kleinsten Form: eine Platte, eine Bohrung, in
+    der Mitte.
+    """
     plate = trimesh.creation.box(extents=(40.0, 40.0, 8.0))
     bore = trimesh.creation.cylinder(radius=5.0, height=20.0, sections=128)
     body = MeshData.of(trimesh.boolean.difference([plate, bore]))
@@ -237,16 +248,17 @@ def test_a_centred_bore_is_a_hole_not_a_disappearance() -> None:
 
 
 def test_a_hole_touching_its_own_wall_does_not_stop_the_slicer() -> None:
-    """A pocket that reaches exactly to the outer wall.
+    """Eine Tasche, die exakt bis an die Außenwand reicht.
 
-    The hole then meets the shell in a point, the polygon is invalid, and GEOS
-    throws on the next operation over it — not here, but three levels up with a
-    coordinate and no name. Three models of the corpus do exactly this.
+    Das Loch trifft die Hülle dann in einem Punkt, das Polygon ist ungültig,
+    und GEOS wirft bei der nächsten Operation darüber — nicht hier, sondern
+    drei Ebenen höher, mit einer Koordinate und ohne Namen. Drei Modelle des
+    Korpus tun genau das.
     """
     plate = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
     plate.apply_translation((0.0, 0.0, 5.0))
     pocket = trimesh.creation.box(extents=(20.0, 20.0, 6.0))
-    # Its right face sits exactly on the plate's right face.
+    # Ihre rechte Fläche sitzt exakt auf der rechten Fläche der Platte.
     pocket.apply_translation((10.0, 0.0, 7.0))
     body = MeshData.of(trimesh.boolean.difference([plate, pocket]))
 

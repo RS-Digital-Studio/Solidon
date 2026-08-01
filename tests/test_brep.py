@@ -1,9 +1,9 @@
-"""The second construction kernel (Bauplan §30; §40 for P12).
+"""Der zweite Konstruktionskern (Bauplan §30; §40 für P12).
 
-Three sentences decide this phase: a fillet on a reference edge geometrically
-exact, STEP able to make the round trip, and the mesh/B-Rep marking correct.
-Each of them is measured against a number that can be worked out by hand, not
-against a picture.
+Drei Sätze entscheiden diese Phase: eine Verrundung an einer Referenzkante
+geometrisch exakt, STEP fähig zur runden Reise, und die Mesh/B-Rep-Markierung
+richtig. Jeder davon wird gegen eine Zahl gemessen, die sich von Hand
+nachrechnen lässt, nicht gegen ein Bild.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def test_the_body_answers_from_the_kernel_not_from_the_triangles() -> None:
 
 
 def test_a_fillet_on_a_reference_edge_is_geometrically_exact() -> None:
-    """§40 for P12. Four uprights rounded by r: the arithmetic is closed form."""
+    """§40 für P12. Vier Stehende mit r gerundet: die Rechnung ist geschlossen."""
     radius = 3.0
 
     rounded = edit.fillet(block(), radius, "vertical")
@@ -67,7 +67,7 @@ def test_a_chamfer_takes_off_exactly_its_triangle() -> None:
 
 
 def test_a_precise_boolean_needs_no_fallback_chain() -> None:
-    """§30: two exact bodies do not disagree about what is inside."""
+    """§30: zwei exakte Körper sind sich nicht uneinig, was innen ist."""
     drilled = edit.boolean(
         "difference", [block(), edit.moved(edit.cylinder(8.0, 40.0), (0.0, 0.0, -5.0))]
     )
@@ -100,7 +100,7 @@ def test_the_named_selections_pick_what_they_say() -> None:
     assert all(entry.middle[2] == pytest.approx(0.0) for entry in edit.choose(solid, "bottom"))
 
 
-# --- the way to the mesh --------------------------------------------------------
+# --- Der Weg zum Netz -----------------------------------------------------------
 
 
 def test_the_tessellation_is_closed_and_keeps_the_volume() -> None:
@@ -122,7 +122,7 @@ def test_a_finer_setting_gives_more_triangles_and_less_error() -> None:
 
 
 def test_a_mesh_operation_gets_the_tessellation(profile: Profile) -> None:
-    """§30: the way to the mesh is open at any time."""
+    """§30: der Weg zum Netz steht jederzeit offen."""
     solid = block()
 
     converted = as_mesh_data(solid)
@@ -137,7 +137,9 @@ def test_the_marking_follows_the_body_not_the_claim() -> None:
 
 
 def test_a_solid_satisfies_the_mesh_protocol() -> None:
-    """That is what lets the viewport and the report work on it unchanged (§9)."""
+    """Genau das lässt Viewport und Prüfbericht unverändert mit ihm
+    arbeiten (§9).
+    """
     assert isinstance(block(), Mesh)
 
 
@@ -145,7 +147,7 @@ def test_a_solid_satisfies_the_mesh_protocol() -> None:
 
 
 def test_step_makes_the_round_trip() -> None:
-    """§40 for P12: back as the same body, not as the same picture."""
+    """§40 für P12: zurück als derselbe Körper, nicht als dasselbe Bild."""
     solid = edit.fillet(block(), 3.0, "vertical")
 
     again = step.read(step.write(solid))
@@ -169,7 +171,9 @@ def test_step_knows_its_own_suffixes() -> None:
 
 
 def test_a_bore_is_read_off_the_topology_rather_than_fitted() -> None:
-    """§30: no clustering, no cylinder fit — a cylindrical face says its radius."""
+    """§30: kein Gruppieren, keine Zylindereinpassung — eine zylindrische
+    Fläche nennt ihren Radius.
+    """
     drilled = edit.boolean(
         "difference", [block(), edit.moved(edit.cylinder(8.0, 40.0), (0.0, 0.0, -5.0))]
     )
@@ -183,7 +187,9 @@ def test_a_bore_is_read_off_the_topology_rather_than_fitted() -> None:
 
 
 def test_a_rounded_corner_is_not_reported_as_a_hole() -> None:
-    """A fillet is a cylinder too — calling it a bore would put a screw in a wall."""
+    """Eine Verrundung ist auch ein Zylinder — sie eine Bohrung zu nennen
+    setzte eine Schraube in eine Wand.
+    """
     rounded = edit.fillet(block(), 3.0, "vertical")
 
     found = features_of(rounded)
@@ -261,7 +267,9 @@ def test_a_mesh_body_is_turned_away_with_a_sentence(profile: Profile) -> None:
 
 
 def test_brep_to_mesh_is_a_step_in_the_stack(profile: Profile) -> None:
-    """§30: one way — and undoable, because it is an operation like any other."""
+    """§30: eine Richtung — und rücknehmbar, weil es eine Operation ist wie
+    jede andere.
+    """
     entry = SceneObject(id="obj_1", name="Block", mesh=block(), kind="brep")
 
     result = run("brep_to_mesh", entry, profile, deflection=0.05)
@@ -296,7 +304,7 @@ def test_a_step_file_becomes_a_scene_object(profile: Profile, tmp_path: Path) ->
 def test_the_stack_carries_a_body_through_fillet_and_conversion(
     profile: Profile,
 ) -> None:
-    """Marking correct at every step — the third P12 criterion (§40)."""
+    """Markierung an jedem Schritt richtig — das dritte P12-Kriterium (§40)."""
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
     history.apply(

@@ -1,17 +1,19 @@
-"""Against models somebody actually printed (Bauplan §34, §35).
+"""Gegen Modelle, die jemand wirklich gedruckt hat (Bauplan §34, §35).
 
-The reference corpus is built to hit one thing each and stays small. What it
-cannot bring is the shape nobody thinks to construct: a community model with a
-million triangles in forty-one pieces, a 3MF exported by a slicer, a scan.
+Der Referenzkorpus ist gebaut, um je eine Sache zu treffen, und bleibt klein.
+Was er nicht mitbringen kann, ist die Form, auf die niemand kommt, wenn er
+konstruiert: ein Community-Modell mit einer Million Dreiecken in einundvierzig
+Stücken, eine von einem Slicer exportierte 3MF, ein Scan.
 
-The folder is not part of the repository, so these tests skip themselves when
-it is not there. That is deliberate — a suite that fails on a machine without
-somebody's private model folder would be a suite people stop running.
+Der Ordner ist nicht Teil des Repositorys, diese Tests überspringen sich also,
+wenn es ihn nicht gibt. Das ist Absicht — eine Suite, die auf einer Maschine
+ohne jemandes privaten Modellordner scheitert, wäre eine Suite, die Leute
+aufhören zu benutzen.
 
     python tools/run_model_suite.py "F:/3D Druck/3D Drucker"
 
-is the same walk with a report instead of assertions; this file keeps the
-handful of findings that came out of it.
+ist derselbe Durchlauf mit einem Bericht statt Zusicherungen; diese Datei hält
+die Handvoll Funde fest, die dabei herauskamen.
 """
 
 from __future__ import annotations
@@ -59,11 +61,13 @@ def test_a_plain_printed_part_goes_through_without_a_complaint() -> None:
 
 
 def test_a_very_fine_model_is_told_it_is_one() -> None:
-    """The finding this corpus produced: a million triangles used to be silent.
+    """Der Fund, den dieser Korpus erbrachte: eine Million Dreiecke war früher
+    still.
 
-    Not refused — the limit for that is twenty million (§17.1). But every map
-    and the feature detection turn a model this size away, so being handed one
-    and saying nothing left people waiting for something that was never coming.
+    Nicht abgelehnt — die Grenze dafür sind zwanzig Millionen (§17.1). Aber
+    jede Karte und die Merkmalserkennung weisen ein Modell dieser Größe ab —
+    eines gereicht zu bekommen und nichts zu sagen ließ Leute also auf etwas
+    warten, das nie kam.
     """
     result = load(HEAVY)
 
@@ -74,7 +78,7 @@ def test_a_very_fine_model_is_told_it_is_one() -> None:
 
 
 def test_a_model_in_many_pieces_keeps_all_of_them() -> None:
-    """§17.1: small components are reported, never dropped."""
+    """§17.1: kleine Komponenten werden gemeldet, nie verworfen."""
     result = load(HEAVY)
 
     assert result.info.components > 1
@@ -92,7 +96,7 @@ def test_the_layer_analysis_holds_on_a_real_part() -> None:
 
 
 def test_feature_detection_survives_a_real_part() -> None:
-    """It may find nothing — what it must not do is fall over."""
+    """Sie darf nichts finden — was sie nicht darf, ist umfallen."""
     mesh = load(PLAIN).mesh
 
     found = detect(mesh)
@@ -104,10 +108,12 @@ def test_feature_detection_survives_a_real_part() -> None:
 
 
 def test_the_pool_waterfall_arrives_as_its_four_parts() -> None:
-    """The project this feature came from: housing, lid, spout, TPU liner.
+    """Das Projekt, aus dem dieses Feature kam: Gehäuse, Deckel, Tülle,
+    TPU-Liner.
 
-    Welded into one body the liner cannot get its own material (§12) and no part
-    can go on its own plate (§25) — the division is the point of the file.
+    Zu einem Körper verschweißt kann der Liner sein eigenes Material nicht
+    bekommen (§12), und kein Teil kann auf seine eigene Platte (§25) — die
+    Teilung ist der Sinn der Datei.
     """
     parts = threemf.read_objects(find("Wasserfall_.3mf").read_bytes())
 
@@ -121,14 +127,7 @@ def test_the_pool_waterfall_arrives_as_its_four_parts() -> None:
 
 
 def test_a_nozzle_of_two_bodies_is_not_read_as_four() -> None:
-    """The measured regression: every body arrived once per component.
-
-    290 120 triangles came in as 580 240, two bodies as four, and the volume as
-    104,11 cm³ where the file says 52,05 — twice the material and twice the print
-    time. Watertightness is not affected, which was worth measuring rather than
-    assuming: two coincident copies are each closed on their own, so a sound file
-    stays sound. This one is reported open because one of its two real bodies is.
-    """
+    """Die gemessene Regression: jeder Körper kam einmal je Komponente an."""
     parts = threemf.read_objects(find("Pool-Fountain_Nozzle_horizontal.3mf").read_bytes())
 
     assert len(parts) == 2

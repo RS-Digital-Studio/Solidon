@@ -1,8 +1,9 @@
-"""Builds the reference corpus (Bauplan §34).
+"""Baut den Referenzkorpus (Bauplan §34).
 
-Everything here is generated, never downloaded: the corpus is published with the
-application, so it must be free of foreign licences. Run this script only when a
-file has to change, and note the expected figures in ``README.md``.
+Alles hier wird erzeugt, nie heruntergeladen: der Korpus wird mit der Anwendung
+veröffentlicht, er muss also frei von fremden Lizenzen sein. Dieses Skript nur
+laufen lassen, wenn eine Datei sich ändern muss, und die erwarteten Kennzahlen
+in ``README.md`` notieren.
 
     python tests/data/make_corpus.py
 """
@@ -31,7 +32,9 @@ def cube_clean() -> None:
 
 
 def bracket_inch() -> None:
-    """A plate stored in inches — 4 x 2 x 0.25 in, so the unit is ambiguous."""
+    """Eine in Zoll gespeicherte Platte — 4 x 2 x 0,25 in, die Einheit ist
+    also mehrdeutig.
+    """
     write(trimesh.creation.box(extents=(4.0, 2.0, 0.25)), "bracket_inch.stl")
 
 
@@ -41,7 +44,9 @@ def plate_cm() -> None:
 
 
 def plate_holes() -> None:
-    """A plate with four bores of known size — feature detection and measuring."""
+    """Eine Platte mit vier Bohrungen bekannter Größe — Merkmalserkennung und
+    Messen.
+    """
     plate = trimesh.creation.box(extents=(80.0, 50.0, 8.0))
     drills = []
     for x, y in ((-25.0, -15.0), (25.0, -15.0), (-25.0, 15.0), (25.0, 15.0)):
@@ -52,7 +57,9 @@ def plate_holes() -> None:
 
 
 def plate_holes_twin() -> None:
-    """Two identical bores close together — the ambiguity case for §21.2."""
+    """Zwei gleiche Bohrungen dicht beieinander — der Mehrdeutigkeitsfall für
+    §21.2.
+    """
     plate = trimesh.creation.box(extents=(60.0, 30.0, 8.0))
     drills = []
     for x in (-4.0, 4.0):
@@ -63,7 +70,9 @@ def plate_holes_twin() -> None:
 
 
 def degenerate() -> None:
-    """A cube plus a zero-area triangle, a needle and a duplicate face."""
+    """Ein Würfel plus ein Null-Flächen-Dreieck, eine Nadel und eine doppelte
+    Fläche.
+    """
     box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
     vertices = np.vstack(
         [
@@ -85,7 +94,9 @@ def degenerate() -> None:
 
 
 def broken_open() -> None:
-    """A cube missing three triangles — three open places for the repair chain."""
+    """Ein Würfel, dem drei Dreiecke fehlen — drei offene Stellen für die
+    Reparaturkette.
+    """
     box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
     write(
         trimesh.Trimesh(vertices=box.vertices, faces=box.faces[:-3], process=False),
@@ -94,12 +105,14 @@ def broken_open() -> None:
 
 
 def broken_selfint() -> None:
-    """Two blocks pushed into each other, joined without being cut (§34).
+    """Zwei ineinandergeschobene Blöcke, verbunden ohne geschnitten zu
+    sein (§34).
 
-    Not a boolean union — that would resolve exactly what this file is for.
-    The two skins pass straight through one another, which is the case the
-    fallback chain of §17.2 has stages three and four for: a kernel cannot say
-    what is inside a body that is inside itself.
+    Keine Boolesche Vereinigung — die löste genau das auf, wofür es diese Datei
+    gibt. Die zwei Häute laufen glatt durcheinander hindurch, und das ist der
+    Fall, für den die Rückfallkette aus §17.2 ihre Stufen drei und vier hat:
+    ein Kern kann nicht sagen, was in einem Körper innen ist, der in sich selbst
+    liegt.
     """
     first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
     second = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
@@ -108,12 +121,7 @@ def broken_selfint() -> None:
 
 
 def colored_3mf() -> None:
-    """Two colours in one 3MF, per triangle (§34, §20).
-
-    Written by the application's own writer, because that is the file the
-    import has to be able to read back — a 3MF from somewhere else would test
-    somebody else's writer.
-    """
+    """Zwei Farben in einer 3MF, je Dreieck (§34, §20)."""
     import sys
 
     sys.path.insert(0, str(HERE.parent.parent))
@@ -143,18 +151,19 @@ def colored_3mf() -> None:
 
 
 def assembly_fit() -> None:
-    """Two parts and the fit between them (§34, §14).
+    """Zwei Teile und die Passung zwischen ihnen (§34, §14).
 
-    A plate with a bore and a pin that goes into it, tied together by a fit
-    pair with a tolerance reference rather than a number. What this file is for
-    is the check on every evaluation: change the material and the pair has to
-    notice.
+    Eine Platte mit einer Bohrung und ein Stift, der hineingeht, aneinander
+    gebunden durch ein Passungspaar mit einem Toleranzverweis statt einer Zahl.
+    Wofür es diese Datei gibt, ist die Prüfung bei jeder Auswertung: das
+    Material ändern, und das Paar muss es bemerken.
 
-    The numbers are not arbitrary and are worth following once. The bore is
-    drilled at 6 mm nominal and comes out at 6.2, because FDM prints holes
-    tight and the material profile says so (``hole_compensation``). PETG wants
-    0.25 mm of play for a sliding fit, so the pin is 5.95 — and the fit holds
-    exactly as long as those two profile values stay what they are.
+    Die Zahlen sind nicht beliebig und lohnen, einmal nachvollzogen zu werden.
+    Die Bohrung wird mit 6 mm nominal gebohrt und kommt mit 6,2 heraus, denn
+    FDM druckt Löcher zu eng, und das Materialprofil sagt das
+    (``hole_compensation``). PETG will 0,25 mm Spiel für eine Gleitpassung, der
+    Stift ist also 5,95 — und die Passung hält genau so lange, wie diese zwei
+    Profilwerte bleiben, was sie sind.
     """
     import sys
 
@@ -216,11 +225,12 @@ def assembly_fit() -> None:
 
 
 def island_tower() -> None:
-    """A block that starts in mid-air (Bauplan §34, §22.2).
+    """Ein Block, der in der Luft beginnt (Bauplan §34, §22.2).
 
-    A column, a second block floating beside it, and a bridge joining the two
-    further up. The floating block has no connection downwards when it begins —
-    that is an island, and it needs support whatever the orientation.
+    Eine Säule, ein zweiter Block, der daneben schwebt, und eine Brücke, die
+    die zwei weiter oben verbindet. Der schwebende Block hat keine Verbindung
+    nach unten, wenn er beginnt — das ist eine Insel, und sie braucht Stützen,
+    in welcher Lage auch immer.
     """
     column = trimesh.creation.box(extents=(10.0, 10.0, 30.0))
     column.apply_translation((0.0, 0.0, 15.0))
@@ -235,21 +245,23 @@ def island_tower() -> None:
 
 
 def dense_1m() -> None:
-    """About a million triangles — the yardstick for the performance budget (§31).
+    """Etwa eine Million Dreiecke — der Maßstab für das
+    Leistungsbudget (§31).
 
-    A subdivided sphere rather than noise: it stays watertight, so the boolean
-    and slicing measurements have something legitimate to work on.
+    Eine unterteilte Kugel statt Rauschen: sie bleibt wasserdicht, die
+    Booleschen und die Schnittmessungen haben also etwas Rechtmäßiges zu tun.
     """
     sphere = trimesh.creation.icosphere(subdivisions=8, radius=40.0)
     write(sphere, "dense_1m.stl")
 
 
 def oversized() -> None:
-    """Longer than any plate — the auto split has to make this printable (§25).
+    """Länger als jede Platte — Auto Split muss das druckbar machen (§25).
 
-    Not a plain bar: two thick ends joined by a slimmer middle, so the parting
-    plane has something to find. A body of constant section would let any cut
-    win and would prove nothing about the search.
+    Kein schlichter Balken: zwei dicke Enden, verbunden durch eine schlankere
+    Mitte, damit die Trennebene etwas zu finden hat. Ein Körper mit
+    gleichbleibendem Querschnitt ließe jeden Schnitt gewinnen und bewiese
+    nichts über die Suche.
     """
     left = trimesh.creation.box(extents=(120.0, 80.0, 40.0))
     left.apply_translation((-140.0, 0.0, 20.0))
@@ -261,7 +273,9 @@ def oversized() -> None:
 
 
 def two_components() -> None:
-    """A cube with a tiny stray fragment next to it — reported, never deleted."""
+    """Ein Würfel mit einem winzigen losen Fragment daneben — gemeldet, nie
+    gelöscht.
+    """
     box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
     fragment = trimesh.creation.box(extents=(0.2, 0.2, 0.2))
     fragment.apply_translation((40.0, 0.0, 0.0))
