@@ -45,6 +45,8 @@ class ChatPanel(QWidget):
     requestSent = Signal(str)
     accepted = Signal()
     discarded = Signal()
+    setupRequested = Signal()
+    """Der Benutzer will den fehlenden Zugang einrichten (§2.7)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -55,6 +57,12 @@ class ChatPanel(QWidget):
 
         self.hint = QLabel("", self)
         self.hint.setWordWrap(True)
+        # §2.7: ein Hinweis, der nur feststellt, was fehlt, lässt den
+        # Benutzer stehen. Der Knopf daneben führt dorthin, wo es behoben
+        # wird — sichtbar nur, solange etwas zu beheben ist.
+        self.setup = QPushButton(tr("Zugang einrichten …"), self)
+        self.setup.clicked.connect(self.setupRequested)
+        self.setup.setVisible(False)
 
         self.input = QLineEdit(self)
         self.input.setPlaceholderText(tr("Was soll geändert werden?"))
@@ -90,6 +98,7 @@ class ChatPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.addWidget(self.hint)
+        layout.addWidget(self.setup)
         layout.addWidget(self.turns, stretch=1)
         layout.addWidget(self.decision)
         layout.addLayout(entry_row)
@@ -113,6 +122,7 @@ class ChatPanel(QWidget):
                 "Alles andere funktioniert ohne."
             )
         )
+        self.setup.setVisible(not available)
         self._update_enabled()
 
     def set_busy(self, busy: bool) -> None:

@@ -18,6 +18,21 @@ from typing import Final
 SOURCE_LANGUAGE: Final = "de"
 SUPPORTED_LANGUAGES: Final = ("de", "en")
 
+#: Wie eine Sprache heißt — **in sich selbst**, nicht übersetzt. Wer die
+#: Anwendung in einer Sprache vorfindet, die er nicht liest, sucht in der
+#: Auswahl nach dem Wort, das er kennt: „Deutsch" steht auch in der englischen
+#: Oberfläche als „Deutsch" da. Aus demselben Grund steht hier kein ``_()``.
+LANGUAGE_NAMES: Final[dict[str, str]] = {
+    "de": "Deutsch",
+    "en": "English",
+}
+
+
+def language_name(language: str) -> str:
+    """Der anzeigbare Name einer Sprache. Rückfall ist ihr Kürzel."""
+    return LANGUAGE_NAMES.get(language, language)
+
+
 _catalogs: dict[str, dict[str, str]] = {}
 _language: str = SOURCE_LANGUAGE
 

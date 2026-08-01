@@ -279,6 +279,7 @@ class MainWindow(QMainWindow):
         self.chat.requestSent.connect(self._on_request_sent)
         self.chat.accepted.connect(self._on_proposal_accepted)
         self.chat.discarded.connect(self._on_proposal_discarded)
+        self.chat.setupRequested.connect(self.action_install_extras)
 
         self.right = QTabWidget(self)
         self.right.addTab(self.report, tr("Prüfbericht"))

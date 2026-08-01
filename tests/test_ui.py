@@ -296,3 +296,28 @@ def test_every_tool_button_carries_a_label(qt_app: QApplication) -> None:
     assert len(titles) == 7
     for key, title in titles.items():
         assert title.strip(), key
+
+
+def test_the_language_picker_shows_names_not_codes(qt_app: QApplication) -> None:
+    """„de" war die allererste Angabe, die ein neuer Benutzer zu sehen bekam."""
+    from app.ui.first_run import FirstRunDialog
+
+    dialog = FirstRunDialog(UiSettings())
+    shown = [dialog.language.itemText(row) for row in range(dialog.language.count())]
+
+    assert "Deutsch" in shown
+    assert "English" in shown
+    assert "de" not in shown
+
+
+def test_the_chat_hint_offers_a_way_out(qt_app: QApplication) -> None:
+    """§2.7: ein Hinweis, der nur feststellt, lässt den Benutzer stehen."""
+    from app.ui.chat import ChatPanel
+
+    panel = ChatPanel()
+
+    panel.set_available(False)
+    assert panel.setup.isVisibleTo(panel), "ohne Zugang führt ein Knopf dorthin"
+
+    panel.set_available(True, backend="ollama")
+    assert not panel.setup.isVisibleTo(panel), "mit Zugang gibt es nichts einzurichten"

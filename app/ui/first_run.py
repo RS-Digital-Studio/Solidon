@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 from app.branding import APP_NAME
 from app.core import install, tools
 from app.core.knowledge import profiles
-from app.i18n import SUPPORTED_LANGUAGES, tr
+from app.i18n import SUPPORTED_LANGUAGES, language_name, tr
 from app.ui.settings import UiSettings
 
 #: Ein Zeichen je Zustand, damit sich die Liste auch ohne Farbe
@@ -58,9 +58,11 @@ class FirstRunDialog(QDialog):
         greeting.setWordWrap(True)
 
         self.language = QComboBox(self)
+        # Der Name, nicht das Kürzel: „de" stand hier als allererste Angabe, die
+        # ein neuer Benutzer zu sehen bekam.
         for entry in SUPPORTED_LANGUAGES:
-            self.language.addItem(entry, entry)
-        self.language.setCurrentText(settings.language)
+            self.language.addItem(language_name(entry), entry)
+        self.language.setCurrentIndex(self.language.findData(settings.language))
 
         self.printer = QComboBox(self)
         for identifier, printer in sorted(profiles.printer_profiles().items()):
