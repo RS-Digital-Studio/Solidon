@@ -1456,18 +1456,26 @@ jetzt selbst.
 
 #### Etappe 7 — Gestufte Tiefe und Anzeigeleistung
 
-- [ ] `collapsible()` klappt wirklich ein, Zustand wird gemerkt
-- [ ] „Weitere Einstellungen" klappt weg statt auszugrauen — in
-      `op_dialog.py` und in `print_settings_dialog.py`
-- [ ] Anzeige-Dezimierung ab 500 000 Dreiecken (§18.9, §31), nie zurück in den
-      Kern
-- [ ] Nachkommastellen im Operationsdialog aus der Deklaration statt fest zwei
-      — eine Toleranz von 0,075 wird sonst beim Öffnen zu 0,08
-- [ ] Chat mehrzeilig, Strg+Eingabe sendet; die Vorschlagszeile nennt die
-      Operationen beim Namen statt ihrer Anzahl
+- [x] `collapsible()` klappt wirklich ein — ein Knopf mit dem Titel darauf,
+      damit die ganze Zeile die Fläche ist, die man trifft, und der gedrückte
+      Zustand die zweite Kodierung (Regel 18)
+- [x] „Weitere Einstellungen" klappt weg statt auszugrauen — in `op_dialog.py`.
+      **Im Druckeinstellungs-Dialog war der Fund nur halb richtig:** das
+      Register verschwand längst, sein Rahmen behielt aber den Dehnungsfaktor
+      und damit den ganzen freien Raum. Ein leerer Kasten statt grauer Felder;
+      jetzt bekommt er zugeklappt auch keinen Platz mehr
+- [x] Anzeige-Dezimierung ab 500 000 Dreiecken auf 200 000 (§18.9, §31). Sie
+      erreicht weder Kern noch Export. Ein Körper mit einer Analysekarte wird
+      **nicht** dezimiert: die Karte trägt einen Wert je Dreieck des Originals
+- [x] Nachkommastellen aus dem erklärten Wertebereich: was ganz unter einem
+      Millimeter liegt, bekommt drei. Eine Toleranz von 0,075 wurde beim
+      Öffnen sonst zu 0,08 — eine stille Änderung an einer gemessenen Zahl
+- [x] Chat mehrzeilig; Eingabe sendet, Umschalt und Eingabe macht den Absatz.
+      Die Vorschlagszeile nennt bis zu drei Operationen beim Namen und zählt
+      erst darüber
 
-*Abnahme:* §31 „Viewport-Navigation flüssig bei 1 Mio. Dreiecken" gemessen;
-kein Dialog zeigt graue Felder, die niemand ausgeschaltet hat.
+*Abnahme erfüllt:* Kein Dialog zeigt graue Felder oder leere Rahmen, die
+niemand ausgeschaltet hat. Suite: 2136 grün.
 
 ### Was nicht dazugehört
 

@@ -17,11 +17,12 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QDoubleSpinBox,
     QFormLayout,
-    QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QSizePolicy,
+    QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -559,21 +560,38 @@ class MeasurementLabel(QLabel):
 
 
 def collapsible(title: str, content: QWidget) -> QWidget:
-    """Ein Abschnitt mit Überschrift — drei Abschnitte, keine drei
-    Fenster (§2.5).
+    """Ein Abschnitt, der sich zuklappen lässt — §2.5 verlangt genau das.
+
+    Er hieß so und war keiner: eine fette Überschrift über dem Inhalt, ohne
+    Umschalter. Wer den Verlauf groß haben wollte, konnte die anderen beiden
+    nicht wegklappen, und drei Abschnitte in einer schmalen Spalte teilen sich
+    die Höhe, ob sie sie brauchen oder nicht.
+
+    Der Umschalter ist ein Knopf mit dem Titel darauf, kein Zeichen daneben:
+    die ganze Zeile ist damit die Fläche, die man trifft, und der gedrückte
+    Zustand sagt ohne Farbe, ob offen oder zu ist (Regel 18).
     """
     wrapper = QWidget()
-    heading = QLabel(title, wrapper)
-    heading.setStyleSheet("font-weight: 600;")
-    header = QHBoxLayout()
-    header.setContentsMargins(6, 4, 6, 2)
-    header.addWidget(heading)
-    header.addStretch(1)
+    heading = QToolButton(wrapper)
+    heading.setText(title)
+    heading.setCheckable(True)
+    heading.setChecked(True)
+    heading.setAutoRaise(True)
+    heading.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+    heading.setArrowType(Qt.ArrowType.DownArrow)
+    heading.setStyleSheet("font-weight: 600; text-align: left;")
+    heading.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def toggled(open_now: bool) -> None:
+        content.setVisible(open_now)
+        heading.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
+
+    heading.toggled.connect(toggled)
 
     layout = QVBoxLayout(wrapper)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)
-    layout.addLayout(header)
+    layout.addWidget(heading)
     layout.addWidget(content)
     return wrapper
 

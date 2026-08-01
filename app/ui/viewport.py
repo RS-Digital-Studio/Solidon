@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from app.branding import ENVIRONMENT_PREFIX
 from app.core.geom.measure import Measurement, MeasurementList, distance, snap, wall_thickness
+from app.core.geom.mesh_ops import decimate
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import TransformSteps, decompose_transform, snap_to_step
 from app.core.log import get_logger
@@ -100,6 +101,14 @@ OVERHANG_COLOUR = "#d05a5a"
 
 FEATURE_LABEL_COLOUR = "#cfe3f5"
 
+#: Ab wann für die Anzeige dezimiert wird (§18.9, Schwelle aus §31). Darunter
+#: kostet die Vereinfachung mehr, als sie beim Zeichnen einspart.
+DISPLAY_DECIMATION_ABOVE = 500_000
+
+#: Worauf. Genug, dass eine Fläche noch eine Fläche ist, wenig genug, dass ein
+#: Zug am Schnittschieber nicht durch eine Million Dreiecke geht.
+DISPLAY_DECIMATION_TARGET = 200_000
+
 
 class Viewport(QWidget):
     """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn VTK fehlt."""
@@ -160,6 +169,9 @@ class Viewport(QWidget):
         self._hidden: frozenset[ObjectId] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansicht, nicht Szene — die
         Körper werden weiter gerechnet, geprüft und exportiert."""
+        self._display_cache: dict[tuple[ObjectId, int], Any] = {}
+        """§18.9: die dezimierte Fassung des zuletzt gezeigten Körpers. Sie
+        fließt nie in den Kern zurück."""
 
         if not _available():
             self._layout.addWidget(
@@ -201,7 +213,7 @@ class Viewport(QWidget):
                 continue
             if self._plate >= 0 and entry.plate != self._plate:
                 continue
-            mesh = self._sectioned(entry.mesh)
+            mesh = self._sectioned(self._for_display(object_id, entry.mesh))
             raw = getattr(mesh, "raw", None)
             if raw is None or not len(raw.faces):
                 continue
@@ -311,6 +323,31 @@ class Viewport(QWidget):
         import numpy as np
 
         return np.asarray(self._map.values, dtype=float)
+
+    def _for_display(self, object_id: ObjectId, mesh: Any) -> Any:
+        """Eine für die Anzeige dezimierte Fassung ab der Schwelle aus §31.
+
+        §18.9 verlangt sie, und es gab sie nicht: der Viewport zeichnete immer
+        das volle Netz, und jeder Zug am Schnittschieber schnitt durch eine
+        Million Dreiecke. Das Original bleibt unangetastet — was hier entsteht,
+        erreicht weder Kern noch Export, sondern nur den Bildschirm.
+
+        Eine Karte bekommt ihre Werte je Dreieck des *Originals*; für sie wird
+        deshalb nicht dezimiert, sonst passt die Länge nicht mehr (§18.4).
+        """
+        if mesh.triangle_count <= DISPLAY_DECIMATION_ABOVE:
+            return mesh
+        if self._map is not None and self._map_object == object_id:
+            return mesh
+
+        key = (object_id, mesh.triangle_count)
+        found = self._display_cache.get(key)
+        if found is None:
+            found = decimate(mesh, DISPLAY_DECIMATION_TARGET)
+            # Nur die zuletzt gezeigten behalten: ein dezimiertes Netz ist
+            # billig zu bauen und teuer zu halten.
+            self._display_cache = {key: found}
+        return found
 
     def _sectioned(self, mesh: Any) -> Any:
         """Wendet die Schnittebene an. Schneiden ist Geometrie, also tut es der

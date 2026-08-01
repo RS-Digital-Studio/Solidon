@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -25,10 +26,10 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
-    QGroupBox,
     QLabel,
     QLineEdit,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -36,6 +37,24 @@ from PySide6.QtWidgets import (
 from app.core.registry import OperationSpec
 from app.core.types import ParamSpec
 from app.i18n import tr
+
+#: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
+#: von 0,075 mm wurde bei zwei Nachkommastellen beim Öffnen des Dialogs zu 0,08
+#: — eine stille Änderung an einer Zahl, die jemand gemessen hat.
+_FINE_BELOW = 1.0
+
+
+def _decimals_for(entry: ParamSpec) -> int:
+    """Wie fein ein Feld sein muss, damit sein Wertebereich hineinpasst (§11.2).
+
+    Zwei Stellen genügen für Längen und Winkel; Toleranzen und Spiele leben
+    unter einem Millimeter, und dort ist die zweite Stelle die letzte, die noch
+    etwas unterscheidet.
+    """
+    bounds = [abs(value) for value in (entry.minimum, entry.maximum) if value]
+    if bounds and max(bounds) <= _FINE_BELOW:
+        return 3
+    return 2
 
 
 class OperationDialog(QDialog):
@@ -86,11 +105,30 @@ class OperationDialog(QDialog):
         layout.addLayout(front)
 
         if advanced.rowCount():
-            box = QGroupBox(tr("Weitere Einstellungen"), self)
-            box.setCheckable(True)
-            box.setChecked(False)
-            box.setLayout(advanced)
-            layout.addWidget(box)
+            # Eine ankreuzbare Gruppe graut ihre Felder aus, statt sie
+            # wegzuklappen — die gestufte Tiefe aus §2.4 war damit gedacht und
+            # nicht gebaut: die hinteren Werte standen weiter da, nur grau, und
+            # das Häkchen las sich wie ein Schalter, der etwas bewirkt.
+            inner = QWidget(self)
+            inner.setLayout(advanced)
+            inner.setVisible(False)
+            self.advanced = QToolButton(self)
+            self.advanced.setText(tr("Weitere Einstellungen"))
+            self.advanced.setCheckable(True)
+            self.advanced.setAutoRaise(True)
+            self.advanced.setArrowType(Qt.ArrowType.RightArrow)
+            self.advanced.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+
+            def unfold(open_now: bool, inner: QWidget = inner) -> None:
+                inner.setVisible(open_now)
+                self.advanced.setArrowType(
+                    Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow
+                )
+                self.adjustSize()
+
+            self.advanced.toggled.connect(unfold)
+            layout.addWidget(self.advanced)
+            layout.addWidget(inner)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -119,7 +157,7 @@ class OperationDialog(QDialog):
             return spin
         if entry.kind == "float":
             number = QDoubleSpinBox(self)
-            number.setDecimals(2)
+            number.setDecimals(_decimals_for(entry))
             number.setMinimum(entry.minimum if entry.minimum is not None else -1_000_000.0)
             number.setMaximum(entry.maximum if entry.maximum is not None else 1_000_000.0)
             if start is not None:

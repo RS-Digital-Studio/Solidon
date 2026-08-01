@@ -129,7 +129,7 @@ def test_a_proposal_waits_for_a_decision(window: MainWindow) -> None:
     )
     ops_before = len(window.session.project.document.ops)
 
-    window.chat.input.setText("Schieb die Platte 5 mm")
+    window.chat.input.setPlainText("Schieb die Platte 5 mm")
     window.chat._send()
     window.session.wait_for_idle()
     qt_app_process(window)
@@ -153,7 +153,7 @@ def test_accepting_makes_it_one_transaction(window: MainWindow) -> None:
     )
     transactions_before = len(window.session.project.document.transactions)
 
-    window.chat.input.setText("Schieb")
+    window.chat.input.setPlainText("Schieb")
     window.chat._send()
     qt_app_process(window)
     window.chat.accepted.emit()
@@ -169,7 +169,7 @@ def test_accepting_makes_it_one_transaction(window: MainWindow) -> None:
 def test_discarding_keeps_the_conversation(window: MainWindow) -> None:
     scripted(window, Reply(text="Ich würde nichts ändern."))
 
-    window.chat.input.setText("Was meinst du?")
+    window.chat.input.setPlainText("Was meinst du?")
     window.chat._send()
     qt_app_process(window)
     window.chat.discarded.emit()

@@ -798,8 +798,22 @@ class PrintSettingsDialog(QDialog):
             self.tabs.addTab(area, group_title(group))
         outer.addWidget(self.tabs)
         self.tabs.setVisible(False)
-        box.toggled.connect(self.tabs.setVisible)
+        box.toggled.connect(self._unfold_tabs)
         return box
+
+    def _unfold_tabs(self, open_now: bool) -> None:
+        """Zugeklappt bekommt die Gruppe auch keinen Platz mehr.
+
+        Das Register verschwand schon vorher; sein Rahmen behielt aber den
+        Dehnungsfaktor und damit den ganzen freien Raum des Dialogs — ein
+        leerer Kasten, in dem nichts stand.
+        """
+        self.tabs.setVisible(open_now)
+        layout = self.layout()
+        box = self.tabs.parentWidget()
+        if isinstance(layout, QVBoxLayout) and box is not None:
+            layout.setStretch(layout.indexOf(box), 1 if open_now else 0)
+        self.adjustSize()
 
     def _build_slicer(self) -> QWidget:
         """Auf welche Profile des Slicers Formwerk seine Werte legt (§29).

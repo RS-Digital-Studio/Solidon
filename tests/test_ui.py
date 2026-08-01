@@ -252,14 +252,39 @@ def test_the_about_dialog_carries_the_licence_information(qt_app: QApplication) 
 
 
 def test_advanced_parameters_sit_behind_the_fold(qt_app: QApplication) -> None:
-    """§2.4: die Vorderseite hält, was Leute wirklich ändern."""
-    from PySide6.QtWidgets import QGroupBox
+    """§2.4: die Vorderseite hält, was Leute wirklich ändern.
 
+    Und der hintere Teil ist wirklich weg, nicht nur grau: eine ankreuzbare
+    Gruppe graut ihre Felder aus und lässt sie stehen — die gestufte Tiefe war
+    damit gedacht und nicht gebaut.
+    """
     dialog = OperationDialog(REGISTRY.get("load"), [])
-    groups = dialog.findChildren(QGroupBox)
 
-    assert groups, "load has advanced parameters, so there is a fold"
-    assert not groups[0].isChecked(), "the fold starts closed"
+    assert hasattr(dialog, "advanced"), "load hat hintere Parameter, also gibt es die Klappe"
+    assert not dialog.advanced.isChecked(), "sie beginnt zugeklappt"
+
+    hidden = [
+        editor
+        for name, editor in dialog._editors.items()
+        if next(entry.placement for entry in dialog.spec.params.spec() if entry.name == name)
+        == "advanced"
+    ]
+    assert hidden, "diese Operation hat welche"
+    assert all(not editor.isVisibleTo(dialog) for editor in hidden), "zugeklappt heißt unsichtbar"
+
+
+def test_a_tolerance_keeps_its_third_decimal(qt_app: QApplication) -> None:
+    """Zwei Nachkommastellen machten aus 0,075 beim Öffnen eine 0,08 — eine
+    stille Änderung an einer Zahl, die jemand gemessen hat (§11.2)."""
+    from app.ui.op_dialog import _decimals_for
+
+    fine = next(
+        entry
+        for spec in REGISTRY.all()
+        for entry in spec.params.spec()
+        if entry.kind == "float" and entry.maximum is not None and 0 < entry.maximum <= 1.0
+    )
+    assert _decimals_for(fine) == 3
 
 
 def test_the_report_summary_counts_findings_from_both_directions(

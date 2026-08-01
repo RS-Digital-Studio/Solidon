@@ -15,14 +15,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -64,9 +64,15 @@ class ChatPanel(QWidget):
         self.setup.clicked.connect(self.setupRequested)
         self.setup.setVisible(False)
 
-        self.input = QLineEdit(self)
+        # Mehrzeilig: „Halter, 60 auf 40, zwei M4-Löcher im Abstand von 45,
+        # Wandstärke 3" ist die Art Anfrage, für die der Chat da ist, und in
+        # einer Zeile sieht man davon ein Drittel. Die Eingabetaste sendet
+        # weiter — Umschalt und Eingabe macht den Absatz (§26.3).
+        self.input = QPlainTextEdit(self)
         self.input.setPlaceholderText(tr("Was soll geändert werden?"))
-        self.input.returnPressed.connect(self._send)
+        self.input.setTabChangesFocus(True)
+        self.input.setFixedHeight(self.input.fontMetrics().lineSpacing() * 3 + 12)
+        self.input.installEventFilter(self)
         self.send = QPushButton(tr("Senden"), self)
         self.send.clicked.connect(self._send)
 
@@ -163,8 +169,23 @@ class ChatPanel(QWidget):
 
     # --- input ------------------------------------------------------------------
 
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
+        """Eingabe sendet, Umschalt und Eingabe macht einen Absatz.
+
+        Die verbreitete Aufteilung in jedem Chatfenster — und die einzige, bei
+        der ein mehrzeiliges Feld nicht heißt, dass man zum Senden zur Maus
+        greift.
+        """
+        if watched is self.input and event.type() == QEvent.Type.KeyPress:
+            enter = event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            if enter and not event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                self._send()
+                return True
+        handled: bool = super().eventFilter(watched, event)
+        return handled
+
     def _send(self) -> None:
-        text = self.input.text().strip()
+        text = self.input.toPlainText().strip()
         if not text:
             return
         self.input.clear()
@@ -190,14 +211,32 @@ def _item(entry: ChatEntry, discarded: bool) -> QListWidgetItem:
     return item
 
 
+#: Wie viele Namen die Zusammenfassung aufzählt, bevor sie zählt.
+NAMED_AT_MOST = 3
+
+
+def _named(entries: list[Any], word: str) -> str:
+    """Die Namen der Einträge, oder ihre Anzahl, wenn es zu viele werden."""
+    if len(entries) > NAMED_AT_MOST:
+        return f"{len(entries)} × {word}"
+    names = [getattr(entry, "op", None) or str(entry) for entry in entries]
+    return f"{word}: " + ", ".join(names)
+
+
 def describe(preview: Any) -> str:
-    """Was der Vorschlag täte, in einer lesbaren Zeile."""
+    """Was der Vorschlag täte, in einer lesbaren Zeile.
+
+    Mit Namen, nicht nur mit Zahlen: eine Zeile, die „zwei Operationen" meldet,
+    verlangt vom Nutzer, über etwas zu entscheiden, das er nicht gelesen hat.
+    Ab vier Schritten wird gezählt — dann ist die Aufzählung länger als die
+    Zeile und der Verlauf daneben die bessere Quelle.
+    """
     proposal = preview.proposal
     parts: list[str] = []
     if proposal.drafts:
-        parts.append(f"{len(proposal.drafts)} × {tr('Operation')}")
+        parts.append(_named(proposal.drafts, tr("Operation")))
     if proposal.parameters:
-        parts.append(f"{len(proposal.parameters)} × {tr('Parameter')}")
+        parts.append(_named(list(proposal.parameters), tr("Parameter")))
     if proposal.fits:
         parts.append(f"{len(proposal.fits)} × {tr('Passung')}")
     if proposal.undo_of:
