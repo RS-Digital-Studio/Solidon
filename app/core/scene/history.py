@@ -476,10 +476,20 @@ class History:
     # --- Bezeichner ------------------------------------------------------------
 
     def _known_objects(self) -> set[ObjectId]:
-        known: set[ObjectId] = set()
-        for entry in self.document.ops:
-            known.update(entry.outputs)
-        return known
+        """Die Objekte, die am Ende des Stapels noch leben.
+
+        Nicht jede je vergebene Nummer: was eine Vereinigung oder ein
+        Entfernen verbraucht und nicht wieder ausgibt, ist weg. Dieselbe
+        Rechnung führt die Auswertung, und sie hier zu wiederholen ist der
+        Unterschied zwischen einer Operation, die beim Anlegen abgelehnt wird,
+        und einem Fehler am fernen Ende der Kette über etwas, das jemand am
+        nahen Ende getan hat (§15.2).
+        """
+        living: set[ObjectId] = set()
+        for entry in self.operations:
+            living.difference_update(set(entry.inputs) - set(entry.outputs))
+            living.update(entry.outputs)
+        return living
 
     def _highest_op_id(self) -> OpId:
         return max((entry.id for entry in self.document.ops), default=0)

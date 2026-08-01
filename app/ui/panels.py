@@ -8,6 +8,7 @@ Regel 2).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from PySide6.QtCore import QPoint, Qt, Signal
@@ -46,6 +47,24 @@ def origin_label(source: str) -> str:
     return tr("intern geschätzt") if source == "internal" else tr("aus G-Code")
 
 
+def _origin_text(created_by: int | None, document: Document | None) -> str:
+    """Aus welcher Operation und Transaktion ein Körper stammt (§18.8).
+
+    Die Transaktion ist die Einheit, die der Verlauf zeigt und die ein Undo
+    nimmt (§15.5) — sie zu nennen verbindet den Körper im Baum mit der Zeile
+    im Verlauf. Fehlt das Dokument, bleibt die Operationsnummer.
+    """
+    if created_by is None:
+        return ""
+    text = f"{tr('aus Operation')} {created_by}"
+    if document is None:
+        return text
+    for transaction in document.transactions:
+        if created_by in transaction.ops:
+            return f"{text} · {transaction.title}"
+    return text
+
+
 class ObjectTree(QWidget):
     """Objekte der Szene mit ihren Merkmalen, Herkunft und Größe (§18.8,
     §18.5).
@@ -56,14 +75,29 @@ class ObjectTree(QWidget):
     """A feature picked in the tree — carries its id, or None."""
     operationRequested = Signal(object)
     """An operation picked from the context menu — carries its ``OperationSpec``."""
+    visibilityRequested = Signal(object, bool)
+    """Ein- oder ausblenden (§18.8) — trägt die Kennungen und den Wunsch."""
+    isolateRequested = Signal(object)
+    """Nur diese zeigen — trägt die Kennungen. Ein zweiter Aufruf hebt es auf."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.tree = QTreeWidget(self)
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels([tr("Objekt"), tr("Maße")])
-        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        # §25: Vereinigen, Abziehen und Schnittmenge nehmen zwei Körper. Mit
+        # Einfachauswahl war keine davon über das Menü ausführbar — die
+        # Operation bekam einen Eingang, wo sie zwei erwartet, und lehnte ab.
+        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.setRootIsDecorated(True)
+        self._order: list[ObjectId] = []
+        """Die Reihenfolge, in der angeklickt wurde. „A minus B" ist nicht „B
+        minus A", und die Reihenfolge im Baum weiß davon nichts."""
+        self._hidden: frozenset[ObjectId] = frozenset()
+        self._result: EvaluationResult | None = None
+        self._document: Document | None = None
+        """Das Zuletzt-Gezeigte, damit sich der Baum ohne neue Auswertung
+        neu zeichnen kann — beim Ausblenden ändert sich nur die Anzeige."""
         self.tree.itemSelectionChanged.connect(self._on_selection)
         self.tree.setAcceptDrops(True)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -73,9 +107,18 @@ class ObjectTree(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.tree)
 
-    def show_scene(self, result: EvaluationResult | None) -> None:
-        selected_object = self.selected()
+    def set_hidden(self, hidden: frozenset[ObjectId]) -> None:
+        """Welche Körper gerade nicht gezeichnet werden — nur zum Anzeigen."""
+        if hidden == self._hidden:
+            return
+        self._hidden = hidden
+        self.show_scene(self._result, self._document)
+
+    def show_scene(self, result: EvaluationResult | None, document: Document | None = None) -> None:
+        selected = self.selected_objects()
         selected_feature = self.selected_feature()
+        self._result = result
+        self._document = document
         self.tree.clear()
         if result is None:
             return
@@ -96,9 +139,21 @@ class ObjectTree(QWidget):
             tip = f"{object_id} · {kind} · {entry.mesh.triangle_count} {tr('Dreiecke')} · {state}"
             if entry.material:
                 tip += f" · {entry.material}"
+            # §18.8: woher der Körper kommt. Ohne das ist ein Baum mit sieben
+            # Teilen aus einer Teilung eine Liste ohne Vorgeschichte — und die
+            # Frage „welcher Schritt hat das gemacht" nur durch Ausprobieren zu
+            # beantworten.
+            origin = _origin_text(entry.created_by, document)
+            if origin:
+                tip += f" · {origin}"
             item.setToolTip(0, tip)
             if entry.kind == "brep":
                 item.setText(0, f"{entry.name}  ·  {kind}")
+            if object_id in self._hidden:
+                # Zeichen und Wort: eine ausgegraute Zeile allein wäre Farbe als
+                # einzige Kodierung (Regel 18).
+                item.setIcon(0, icon("hidden", self.tree))
+                item.setText(0, f"{item.text(0)}  ·  {tr('ausgeblendet')}")
             if entry.material:
                 # §12: ein Körper, der nicht im Material des Projekts ist, muss das
                 # dort sagen, wo die Teile aufgezählt werden — sonst zeigt sich
@@ -112,30 +167,35 @@ class ObjectTree(QWidget):
                 child.setToolTip(0, f"{feature_id} · {feature.provenance}")
                 item.addChild(child)
             self.tree.addTopLevelItem(item)
-            item.setExpanded(object_id == selected_object)
+            item.setExpanded(object_id in selected)
         self.tree.resizeColumnToContents(0)
-        self._restore(selected_object, selected_feature)
+        self._restore(selected, selected_feature)
 
-    def _restore(self, object_id: ObjectId | None, feature_id: str | None) -> None:
+    def _restore(self, objects: Sequence[ObjectId], feature_id: str | None) -> None:
         """Behält die Auswahl über eine Neuauswertung hinweg — sie zu verlieren
         kostet den Nutzer die Stelle, an der er gearbeitet hat.
+
+        Das Merkmal gilt nur, wenn genau ein Körper gewählt war; bei mehreren
+        gibt es keines, auf das es sich beziehen könnte.
         """
-        if object_id is None:
+        if not objects:
             return
+        wanted = set(objects)
+        self._order = list(objects)
         for index in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(index)
-            if item is None or item.data(0, Qt.ItemDataRole.UserRole) != object_id:
+            if item is None or item.data(0, Qt.ItemDataRole.UserRole) not in wanted:
                 continue
-            if feature_id is None:
-                item.setSelected(True)
-                return
-            for child_index in range(item.childCount()):
-                child = item.child(child_index)
-                if child is not None and child.data(1, Qt.ItemDataRole.UserRole) == feature_id:
-                    child.setSelected(True)
-                    return
+            if feature_id is not None and len(wanted) == 1:
+                for child_index in range(item.childCount()):
+                    child = item.child(child_index)
+                    if child is not None and child.data(1, Qt.ItemDataRole.UserRole) == feature_id:
+                        child.setSelected(True)
+                        break
+                else:
+                    item.setSelected(True)
+                continue
             item.setSelected(True)
-            return
 
     def selected(self) -> ObjectId | None:
         items = self.tree.selectedItems()
@@ -144,9 +204,27 @@ class ObjectTree(QWidget):
         value: ObjectId | None = items[0].data(0, Qt.ItemDataRole.UserRole)
         return value
 
+    def selected_objects(self) -> tuple[ObjectId, ...]:
+        """Die gewählten Körper in der Reihenfolge, in der sie angeklickt
+        wurden.
+
+        Ein angeklicktes Merkmal zählt für seinen Körper: wer eine Bohrung
+        markiert und dann etwas mit dem Teil tut, meint das Teil.
+        """
+        chosen = {
+            object_id
+            for item in self.tree.selectedItems()
+            if (object_id := item.data(0, Qt.ItemDataRole.UserRole)) is not None
+        }
+        ordered = [object_id for object_id in self._order if object_id in chosen]
+        ordered.extend(sorted(chosen.difference(ordered)))
+        return tuple(ordered)
+
     def selected_feature(self) -> str | None:
         items = self.tree.selectedItems()
-        if not items:
+        if len(items) != 1:
+            # Bei mehreren Zeilen ist „das gewählte Merkmal" keine Frage mit
+            # einer Antwort — dann gilt keines als gewählt.
             return None
         value: str | None = items[0].data(1, Qt.ItemDataRole.UserRole)
         return value
@@ -156,11 +234,27 @@ class ObjectTree(QWidget):
         Auswahl (§18.5).
         """
         self.tree.clearSelection()
-        self._restore(object_id, feature_id)
+        self._restore((object_id,), feature_id)
 
     def _on_selection(self) -> None:
+        self._remember_order()
         self.selectionChanged.emit(self.selected())
         self.featureSelected.emit(self.selected_feature())
+
+    def _remember_order(self) -> None:
+        """Führt mit, in welcher Reihenfolge angeklickt wurde.
+
+        Qt gibt die Auswahl in Baumreihenfolge zurück, und die sagt nichts
+        darüber, was zuerst gemeint war. Abgewähltes fällt heraus, Neues kommt
+        hinten dazu.
+        """
+        current = {
+            object_id
+            for item in self.tree.selectedItems()
+            if (object_id := item.data(0, Qt.ItemDataRole.UserRole)) is not None
+        }
+        self._order = [object_id for object_id in self._order if object_id in current]
+        self._order.extend(sorted(current.difference(self._order)))
 
     def operations_for_object(self) -> tuple[Any, ...]:
         """Operationen, die auf einem gewählten Objekt arbeiten — der kürzeste
@@ -181,19 +275,43 @@ class ObjectTree(QWidget):
         return items[0].text(1)
 
     def _on_context_menu(self, position: QPoint) -> None:
-        if self.selected() is None:
+        chosen = self.selected_objects()
+        if not chosen:
             return
+
+        menu = QMenu(self)
+        self._add_visibility(menu, chosen)
+
         kind = self._feature_kind()
         entries = self.operations_for_feature(kind) if kind else self.operations_for_object()
-        if not entries:
-            return
-        menu = QMenu(self)
-        for spec in entries:
-            action = menu.addAction(str(spec.title))
-            action.triggered.connect(
-                lambda _checked=False, entry=spec: self.operationRequested.emit(entry)
-            )
+        if entries:
+            menu.addSeparator()
+            for spec in entries:
+                action = menu.addAction(str(spec.title))
+                action.triggered.connect(
+                    lambda _checked=False, entry=spec: self.operationRequested.emit(entry)
+                )
         menu.exec(self.tree.viewport().mapToGlobal(position))
+
+    def _add_visibility(self, menu: QMenu, chosen: tuple[ObjectId, ...]) -> None:
+        """Ein- und ausblenden und isolieren (§18.8).
+
+        Keine Operationen: eine Ansichtsentscheidung gehört nicht in den
+        Verlauf, sonst steht dort bald mehr Hin und Her als Arbeit. Zurück
+        kommt sie über denselben Eintrag, nicht über ein Undo.
+        """
+        wants_hiding = any(object_id not in self._hidden for object_id in chosen)
+        label = tr("Ausblenden") if wants_hiding else tr("Einblenden")
+        hide = menu.addAction(label)
+        hide.triggered.connect(
+            lambda _checked=False: self.visibilityRequested.emit(chosen, not wants_hiding)
+        )
+
+        isolated = self._hidden and all(object_id not in self._hidden for object_id in chosen)
+        isolate = menu.addAction(
+            tr("Alles andere ausblenden") if not isolated else tr("Alle zeigen")
+        )
+        isolate.triggered.connect(lambda _checked=False: self.isolateRequested.emit(chosen))
 
 
 class ParameterPanel(QWidget):

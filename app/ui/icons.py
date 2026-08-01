@@ -100,6 +100,15 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M5 13.5 8.5 17l-3 2.5-2-2z" />'
         '<path d="M14 6.5 17.5 10" />'
     ),
+    # Ein durchgestrichenes Auge für einen Körper, der da ist und nicht
+    # gezeichnet wird. Das Wort „ausgeblendet" steht daneben (Regel 18) — das
+    # Zeichen unterscheidet die Zeile auf einen Blick, es trägt sie nicht.
+    "hidden": (
+        '<path d="M3 12s3.6-6 9-6c1.4 0 2.7.4 3.8 1" />'
+        '<path d="M19.4 9.1c.9.9 1.6 1.9 1.6 2.9 0 0-3.6 6-9 6-1.5 0-2.8-.5-4-1.1" />'
+        '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />'
+        '<path d="M4 20 20 4" />'
+    ),
 }
 
 

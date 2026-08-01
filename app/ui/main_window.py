@@ -11,6 +11,7 @@ Kommandozeile, sobald sie deklariert ist (§10).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -128,7 +129,7 @@ class _MapWorker(QThread):
 
 
 def inputs_for(
-    spec: OperationSpec, objects: list[ObjectId], selected: ObjectId | None
+    spec: OperationSpec, objects: list[ObjectId], selected: Sequence[ObjectId]
 ) -> tuple[ObjectId, ...]:
     """Auf welche Objekte eine Operation angewandt wird (§10, §25).
 
@@ -136,10 +137,27 @@ def inputs_for(
     dieselbe für Kommandozeile und Agent, und eine Operation, die auf der
     ganzen Szene arbeitet und nichts bekommt, läuft auf nichts und sieht kaputt
     aus.
+
+    ``selected`` ist die Auswahl in Klickreihenfolge. Eine Operation nimmt so
+    viele davon, wie sie deklariert — vorher nahm sie immer genau eines, und
+    damit war keine der drei Booleschen über das Menü ausführbar: sie
+    erwarten zwei und bekamen eines.
     """
     if spec.takes_whole_scene:
         return tuple(objects)
-    return (selected,) if spec.consumes and selected else ()
+    return tuple(selected[: spec.consumes]) if spec.consumes else ()
+
+
+def _needs_objects(count: int) -> str:
+    """Der Satz, der sagt, wie viele Körper fehlen — nicht nur, dass welche
+    fehlen.
+
+    „Wählen Sie zuerst ein Objekt" half bei einer Vereinigung nicht weiter:
+    eines war ja gewählt. Sie braucht zwei, und das steht jetzt da.
+    """
+    if count <= 1:
+        return tr("Wählen Sie zuerst ein Objekt im Objektbaum.")
+    return tr("Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.")
 
 
 class MainWindow(QMainWindow):
@@ -164,6 +182,9 @@ class MainWindow(QMainWindow):
         """The agent turn waiting for a decision (§26.5)."""
         self._manual: ManualWindow | None = None
         """Das Handbuchfenster, einmal gebaut und danach wiederverwendet."""
+        self._hidden: frozenset[str] = frozenset()
+        """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
+        Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
 
         self._build_central()
         self._build_status_bar()
@@ -317,6 +338,8 @@ class MainWindow(QMainWindow):
         self.object_tree.selectionChanged.connect(self._on_selection)
         self.object_tree.featureSelected.connect(self._on_feature_selected)
         self.object_tree.operationRequested.connect(self.run_operation)
+        self.object_tree.visibilityRequested.connect(self._on_visibility)
+        self.object_tree.isolateRequested.connect(self._on_isolate)
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
         self.right.setVisible(self.settings.right_panel_visible)
 
@@ -1202,6 +1225,28 @@ class MainWindow(QMainWindow):
             [OperationDraft(op="paint_slot", inputs=(object_id,), params=params)],
         )
 
+    # --- Sichtbarkeit (§18.8) ---------------------------------------------------
+
+    def _on_visibility(self, objects: Any, visible: bool) -> None:
+        """Ein- oder ausblenden. Ansicht, nicht Szene — der Körper bleibt in
+        der Auswertung, im Prüfbericht und im Export.
+        """
+        chosen = set(objects)
+        self._apply_hidden(self._hidden - chosen if visible else self._hidden | chosen)
+
+    def _on_isolate(self, objects: Any) -> None:
+        """Alles andere ausblenden — und derselbe Eintrag holt es zurück (§18.8)."""
+        chosen = set(objects)
+        result = self.session.last_result
+        everything = set(result.scene.objects) if result else set()
+        self._apply_hidden(frozenset() if self._hidden else frozenset(everything - chosen))
+
+    def _apply_hidden(self, hidden: frozenset[str]) -> None:
+        self._hidden = hidden
+        self.viewport.set_hidden(hidden)
+        self.object_tree.set_hidden(hidden)
+        self.status_message.setText(f"{len(hidden)} × {tr('ausgeblendet')}" if hidden else "")
+
     def _on_feature_picked(self, feature_id: str) -> None:
         """Ein Klick in der Ansicht wählt das Merkmal auch im Baum aus (§18.5)."""
         object_id = self.object_tree.selected()
@@ -1248,29 +1293,36 @@ class MainWindow(QMainWindow):
 
         result = self.session.last_result
         objects = list(result.scene.objects) if result else []
-        selected = self.object_tree.selected()
-        if spec.consumes and not selected:
-            QMessageBox.information(
-                self,
-                str(spec.title),
-                tr("Wählen Sie zuerst ein Objekt im Objektbaum."),
-            )
+        chosen = self.object_tree.selected_objects()
+        if spec.consumes and len(chosen) < spec.consumes:
+            QMessageBox.information(self, str(spec.title), _needs_objects(spec.consumes))
             return
 
         if spec.takes_whole_scene and not objects:
             QMessageBox.information(self, str(spec.title), tr("Die Szene ist leer."))
             return
 
-        dialog = OperationDialog(spec, objects, self, values=self._from_selection(spec, selected))
-        if dialog.exec() != OperationDialog.DialogCode.Accepted:
-            return
+        values = self._from_selection(spec, chosen[0] if chosen else None)
+        params: dict[str, Any] = dict(values)
+        if spec.params.spec():
+            dialog = OperationDialog(
+                spec, self._object_names(), self, values=values, sources=self._source_names()
+            )
+            if dialog.exec() != OperationDialog.DialogCode.Accepted:
+                return
+            params = dialog.values()
+        # Ohne Parameter gibt es nichts zu fragen, und ein Fenster mit nur „OK"
+        # wäre die Bestätigung vor einer rücknehmbaren Handlung, die Regel 19
+        # verbietet. Entfernen, Vereinigen, Abziehen — alle laufen sofort, und
+        # alle nimmt ein Undo zurück.
+
         self.session.apply(
             spec.title,
             [
                 OperationDraft(
                     op=spec.name,
-                    inputs=inputs_for(spec, objects, selected),
-                    params=dialog.values(),
+                    inputs=inputs_for(spec, objects, chosen),
+                    params=params,
                 )
             ],
         )
@@ -1291,13 +1343,35 @@ class MainWindow(QMainWindow):
             self.session.failed.emit(error)
             return
 
-        result = self.session.last_result
-        objects = list(result.scene.objects) if result else []
-        dialog = OperationDialog(spec, objects, self, values=entry.params)
+        dialog = OperationDialog(
+            spec,
+            self._object_names(),
+            self,
+            values=entry.params,
+            sources=self._source_names(),
+        )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
         if dialog.exec() != OperationDialog.DialogCode.Accepted:
             return
         self.session.change_params(op_id, dialog.values())
+
+    def _object_names(self) -> dict[str, str]:
+        """Kennung auf Name, wie die Dialoge die Szene sehen.
+
+        Der Baum zeigt Namen, das Dokument führt Kennungen — ein Aufklappmenü
+        voller „obj_7" verlangt vom Nutzer, die Übersetzung selbst zu machen.
+        """
+        result = self.session.last_result
+        if result is None:
+            return {}
+        return {object_id: entry.name for object_id, entry in result.scene.objects.items()}
+
+    def _source_names(self) -> dict[str, str]:
+        """Kennung auf Dateiname, für die Quellenwähler (§16.3)."""
+        return {
+            source_id: Path(source.path).name or source_id
+            for source_id, source in self.session.project.document.sources.items()
+        }
 
     def _from_selection(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
         """Was das angeklickte Merkmal darüber sagt, wohin diese Operation
@@ -1326,7 +1400,13 @@ class MainWindow(QMainWindow):
         self.viewport.set_analysis_map(None, None)
         self.viewport.set_layer(None)
         self.analysis_bar.show_legend(None)
-        self.object_tree.show_scene(result)
+        # Ausgeblendetes, das die Szene nicht mehr enthält, wird vergessen —
+        # sonst blendet eine wiederhergestellte Nummer später etwas aus, das
+        # niemand versteckt hat.
+        self._hidden &= set(result.scene.objects)
+        self.viewport.set_hidden(self._hidden)
+        self.object_tree.set_hidden(self._hidden)
+        self.object_tree.show_scene(result, self.session.project.document)
         plates = {entry.plate for entry in result.scene.objects.values()}
         self.explode_bar.show_for(len(result.scene.objects), max(plates, default=0) + 1)
         self.report.show_result(result)

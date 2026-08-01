@@ -41,7 +41,7 @@ def registry() -> Registry:
             outputs=[SceneObject(id="", name=ctx.params.name, mesh=FakeMesh())]  # type: ignore[attr-defined,arg-type]
         )
 
-    for name in ("rename_object", "duplicate_object"):
+    for name in ("rename_object", "duplicate_object", "delete_object"):
         own.register(REGISTRY.get(name))
     return own
 
@@ -392,3 +392,64 @@ def test_the_declared_maximum_is_the_limit(document: Document, registry: Registr
 
     with pytest.raises(ValidationError):
         history.change_params(2, {"count": int(highest) + 1})
+
+
+# --- Entfernen (§25) ------------------------------------------------------------
+
+
+def test_delete_object_is_registered_completely() -> None:
+    spec = REGISTRY.get("delete_object")
+    assert spec.category == "scene"
+    assert (spec.consumes, spec.produces) == (1, 0), "nimmt eines, gibt keines zurück"
+    assert spec.shortcut == "Del"
+    assert str(spec.doc)
+
+
+def test_deleting_takes_the_object_out_of_the_scene(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Eine Operation ohne Ausgabe: die Auswertung räumt jeden Eingang weg, der
+    nicht wieder herauskommt.
+    """
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    assert set(evaluate(document, profile, registry=registry).scene.objects) == {"obj_1", "obj_2"}
+
+    history.apply(_("Entfernen"), [OperationDraft(op="delete_object", inputs=("obj_1",))])
+    result = evaluate(document, profile, registry=registry)
+
+    assert set(result.scene.objects) == {"obj_2"}
+    assert result.complete, "das Entfernen ist kein Abbruch"
+    assert history.operation(3).outputs == ()
+
+
+def test_an_undo_brings_the_object_back(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Der Grund, warum Entfernen eine Operation ist und kein Löschen."""
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Entfernen"), [OperationDraft(op="delete_object", inputs=("obj_1",))])
+    assert evaluate(document, profile, registry=registry).scene.objects == {}
+
+    history.undo()
+    assert set(evaluate(document, profile, registry=registry).scene.objects) == {"obj_1"}
+
+
+def test_a_later_operation_on_a_deleted_object_is_refused(
+    document: Document, registry: Registry
+) -> None:
+    """Der Körper ist keine Ausgabe mehr, also kennt der Stapel ihn nicht — und
+    sagt das beim Anlegen, nicht erst am fernen Ende der Kette.
+    """
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Entfernen"), [OperationDraft(op="delete_object", inputs=("obj_1",))])
+
+    with pytest.raises(ValidationError) as problem:
+        history.apply(
+            _("Umbenennen"),
+            [OperationDraft(op="rename_object", inputs=("obj_1",), params={"name": "Deckel"})],
+        )
+    assert problem.value.constraint == "unknown_object"

@@ -15,7 +15,7 @@ Fall wäre ein zweiter Ort, an dem sich ein Parameter vergessen lässt.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from PySide6.QtWidgets import (
@@ -44,9 +44,10 @@ class OperationDialog(QDialog):
     def __init__(
         self,
         spec: OperationSpec,
-        objects: list[str],
+        objects: Mapping[str, str] | Sequence[str],
         parent: QWidget | None = None,
         values: Mapping[str, Any] | None = None,
+        sources: Mapping[str, str] | None = None,
     ) -> None:
         super().__init__(parent)
         self.spec = spec
@@ -54,11 +55,18 @@ class OperationDialog(QDialog):
         self.setMinimumWidth(380)
         self._editors: dict[str, QWidget] = {}
         given = dict(values or {})
+        # Der Dialog spricht in Namen, das Dokument in Kennungen. Wer nur eine
+        # Liste übergibt, bekommt die Kennungen zu sehen.
+        names = dict(objects) if isinstance(objects, Mapping) else {key: key for key in objects}
+        # Quellen sind keine Objekte. Sie standen hier trotzdem in derselben
+        # Liste — wer „Modell laden" im Verlauf wieder öffnete, bekam eine
+        # Auswahl aus Körpern angeboten, wo eine Datei gemeint war.
+        self._sources = dict(sources or {})
 
         front = QFormLayout()
         advanced = QFormLayout()
         for entry in spec.params.spec():
-            editor = self._editor_for(entry, objects, given.get(entry.name))
+            editor = self._editor_for(entry, names, given.get(entry.name))
             self._editors[entry.name] = editor
             label = f"{entry.title}"
             if entry.unit:
@@ -91,7 +99,9 @@ class OperationDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def _editor_for(self, entry: ParamSpec, objects: list[str], given: Any = None) -> QWidget:
+    def _editor_for(
+        self, entry: ParamSpec, objects: Mapping[str, str], given: Any = None
+    ) -> QWidget:
         """Ein Editor. ``given`` schlägt die Vorgabe des Schemas, wo es gesetzt
         ist.
         """
@@ -122,11 +132,23 @@ class OperationDialog(QDialog):
                 combo.setCurrentText(str(start))
             return combo
         if entry.kind in ("object", "source"):
+            # Der Name steht da, die Kennung reist mit. Ein frei beschreibbares
+            # Feld war hier ein Weg, „obj_12" falsch zu tippen — und der Baum
+            # nebenan zeigt ohnehin Namen, keine Nummern.
+            choices = self._sources if entry.kind == "source" else objects
             combo = QComboBox(self)
-            combo.addItems(objects)
-            combo.setEditable(True)
+            for identifier, name in choices.items():
+                combo.addItem(name, identifier)
             if start:
-                combo.setCurrentText(str(start))
+                index = combo.findData(str(start))
+                if index < 0:
+                    # Ein Wert, den die Liste nicht kennt, wird gezeigt statt
+                    # ersetzt: eine Datei aus einem Projekt, dessen Quellen
+                    # hier gerade nicht vorliegen, darf nicht stillschweigend
+                    # zu einer anderen werden.
+                    combo.addItem(str(start), str(start))
+                    index = combo.count() - 1
+                combo.setCurrentIndex(index)
             return combo
         line = QLineEdit(self)
         if start:
@@ -145,7 +167,10 @@ class OperationDialog(QDialog):
             elif isinstance(editor, QDoubleSpinBox):
                 collected[entry.name] = float(editor.value())
             elif isinstance(editor, QComboBox):
-                collected[entry.name] = editor.currentText()
+                # Objekt- und Quellenwähler tragen die Kennung als Daten, die
+                # übrigen Aufklappmenüs sind ihr eigener Wert.
+                data = editor.currentData()
+                collected[entry.name] = editor.currentText() if data is None else str(data)
             elif isinstance(editor, QLineEdit):
                 collected[entry.name] = editor.text()
         return collected

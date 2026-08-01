@@ -37,6 +37,35 @@ def rename_object(ctx: OpContext) -> OpResult:
     return OpResult(outputs=[dataclasses.replace(source, name=params.name)])
 
 
+@register_op(
+    name="delete_object",
+    title=_("Objekt entfernen"),
+    category="scene",
+    params=BaseParams,
+    consumes=1,
+    produces=0,
+    shortcut="Del",
+    doc=_(
+        "Nimmt ein Objekt aus der Szene. Der Schritt steht im Verlauf, ein "
+        "Rückgängig holt es also zurück."
+    ),
+)
+def delete_object(ctx: OpContext) -> OpResult:
+    """§25: etwas wieder loswerden, ohne den Import zurückzunehmen.
+
+    Eine Operation, die nichts erzeugt — und deshalb keine Ausnahme von
+    Regel 3, sondern ihr genauester Fall: sie ändert kein Objekt, sie gibt
+    keines zurück. Die Auswertung räumt jeden Eingang weg, der nicht wieder
+    herauskommt, also braucht es dafür keinen Sonderweg.
+
+    Was danach noch auf den Körper zeigt, findet ihn nicht mehr: der Stapel
+    lehnt eine spätere Operation auf ihm beim Anlegen ab, und eine, die schon
+    dasteht, hält die Kette an (§15.2). Beides ist besser als ein Objekt, das
+    heimlich weiterlebt, weil ein Schritt darunter es noch braucht.
+    """
+    return OpResult(outputs=[])
+
+
 #: Wie viele Exemplare eines Teils in einer Szene stehen dürfen. Eine Platte
 #: mit zehn Clips ist ein gewöhnlicher Auftrag; hundert sind schon ein
 #: Belastungstest fürs Anordnen, und eine Zahl darüber ist ein Tippfehler,

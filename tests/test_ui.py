@@ -15,9 +15,10 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QComboBox
 
 from app.core.registry import REGISTRY
+from app.core.scene import OperationDraft
 from app.core.scene.project import load
 from app.core.types import Parameter
 from app.ui.main_window import MainWindow
@@ -419,3 +420,133 @@ def test_the_first_run_says_found_and_missing_in_words(qt_app: QApplication) -> 
 
     assert "gefunden" in text or "fehlt" in text
     assert not any(line.startswith(("+ ", "- ")) for line in text.splitlines())
+
+
+# --- Objektbaum (§18.8) ---------------------------------------------------------
+
+
+def _with_two_objects(window: MainWindow) -> None:
+    """Zwei Körper in der Szene, ausgewertet und im Baum.
+
+    Zweimal laden statt einmal duplizieren: die Duplizierung verbraucht ihr
+    Original und vergibt neue Nummern, und dann heißen die beiden nicht mehr
+    obj_1 und obj_2.
+    """
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window._on_scene(window.session.evaluate_now())
+
+
+def test_hiding_takes_a_body_out_of_the_view_but_not_the_scene(window: MainWindow) -> None:
+    """§18.8: ein Filter auf dem Bild, keiner auf der Szene."""
+    _with_two_objects(window)
+
+    window._on_visibility(("obj_1",), False)
+
+    assert window.viewport.hidden == frozenset({"obj_1"})
+    assert "obj_1" in window.session.last_result.scene.objects, "gerechnet wird er weiter"
+
+    window._on_visibility(("obj_1",), True)
+    assert window.viewport.hidden == frozenset()
+
+
+def test_a_hidden_body_says_so_in_words(window: MainWindow) -> None:
+    """Regel 18: eine ausgegraute Zeile allein wäre Farbe als einzige
+    Kodierung."""
+    _with_two_objects(window)
+    window._on_visibility(("obj_1",), False)
+
+    labels = [
+        window.object_tree.tree.topLevelItem(index).text(0)
+        for index in range(window.object_tree.tree.topLevelItemCount())
+    ]
+    hidden = [text for text in labels if "ausgeblendet" in text]
+    assert len(hidden) == 1, labels
+
+
+def test_isolating_hides_the_rest_and_the_same_entry_brings_it_back(
+    window: MainWindow,
+) -> None:
+    _with_two_objects(window)
+
+    window._on_isolate(("obj_1",))
+    assert window.viewport.hidden == frozenset({"obj_2"})
+
+    window._on_isolate(("obj_1",))
+    assert window.viewport.hidden == frozenset()
+
+
+def test_the_tree_names_the_step_a_body_came_from(window: MainWindow) -> None:
+    """§18.8: Herkunft aus Operation und Transaktion."""
+    _with_two_objects(window)
+
+    tip = window.object_tree.tree.topLevelItem(0).toolTip(0)
+    assert "aus Operation" in tip
+    assert "Modell laden" in tip, tip
+
+
+def test_removing_an_object_and_taking_it_back(window: MainWindow) -> None:
+    """Entf ist eine Operation, also holt ein Undo den Körper zurück."""
+    _with_two_objects(window)
+    window.session.apply("Entfernen", [OperationDraft(op="delete_object", inputs=("obj_2",))])
+    window.session.wait_for_idle()
+    assert set(window.session.evaluate_now().scene.objects) == {"obj_1"}
+
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert set(window.session.evaluate_now().scene.objects) == {"obj_1", "obj_2"}
+
+
+def test_an_operation_without_parameters_asks_nothing(window: MainWindow) -> None:
+    """Regel 19: ein Fenster mit nur „OK" wäre die Bestätigung vor einer
+    rücknehmbaren Handlung.
+
+    Der Beweis, dass kein Dialog aufgeht, ist ein Lauf ohne Blockade: ein
+    modales Fenster würde diesen Test hängen lassen.
+    """
+    _with_two_objects(window)
+    window.object_tree.tree.topLevelItem(1).setSelected(True)
+    before = len(window.session.project.document.transactions)
+
+    window.run_operation(REGISTRY.get("delete_object"))
+    window.session.wait_for_idle()
+
+    assert len(window.session.project.document.transactions) == before + 1
+
+
+def test_the_source_picker_offers_sources_and_not_bodies(qt_app: QApplication) -> None:
+    """Eine Quelle ist kein Objekt.
+
+    Beide standen hier in derselben Liste: wer „Modell laden" im Verlauf
+    wieder öffnete, bekam eine Auswahl aus Körpern angeboten, wo eine Datei
+    gemeint war. Gezeigt wird der Dateiname, übergeben die Kennung.
+    """
+    dialog = OperationDialog(
+        REGISTRY.get("load"),
+        {"obj_1": "Gehäuse"},
+        values={"source": "src_1"},
+        sources={"src_1": "halterung.stl", "src_2": "deckel.stl"},
+    )
+    combo = dialog._editors["source"]
+    assert isinstance(combo, QComboBox)
+
+    assert [combo.itemText(index) for index in range(combo.count())] == [
+        "halterung.stl",
+        "deckel.stl",
+    ]
+    assert not combo.isEditable(), "eine getippte Kennung war ein Weg, sich zu vertippen"
+    assert dialog.values()["source"] == "src_1", "der gespeicherte Wert bleibt stehen"
+
+
+def test_an_unknown_stored_value_is_kept_not_replaced(qt_app: QApplication) -> None:
+    """Stillschweigend eine andere Datei einzusetzen wäre schlimmer, als eine
+    unbekannte anzuzeigen."""
+    dialog = OperationDialog(
+        REGISTRY.get("load"),
+        {},
+        values={"source": "src_9"},
+        sources={"src_1": "halterung.stl"},
+    )
+    assert dialog.values()["source"] == "src_9"

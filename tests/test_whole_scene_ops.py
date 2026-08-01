@@ -89,10 +89,30 @@ def test_the_window_hands_the_whole_scene_in() -> None:
 
     objects = ["obj_1", "obj_2", "obj_3"]
 
-    assert inputs_for(REGISTRY.get("arrange_bed"), objects, None) == ("obj_1", "obj_2", "obj_3")
-    assert inputs_for(REGISTRY.get("repair"), objects, "obj_2") == ("obj_2",)
-    assert inputs_for(REGISTRY.get("repair"), objects, None) == ()
-    assert inputs_for(REGISTRY.get("create_box"), objects, "obj_2") == (), "creates, takes nothing"
+    assert inputs_for(REGISTRY.get("arrange_bed"), objects, ()) == ("obj_1", "obj_2", "obj_3")
+    assert inputs_for(REGISTRY.get("repair"), objects, ("obj_2",)) == ("obj_2",)
+    assert inputs_for(REGISTRY.get("repair"), objects, ()) == ()
+    creating = REGISTRY.get("create_box")
+    assert inputs_for(creating, objects, ("obj_2",)) == (), "creates, takes nothing"
+
+
+def test_an_operation_on_two_bodies_gets_two() -> None:
+    """§25: Vereinigen, Abziehen und Schnittmenge nehmen zwei Körper.
+
+    Solange die Auswahl immer genau eines lieferte, war keine der drei über
+    das Menü ausführbar — der Stapel lehnte sie mit „erwartet eine andere
+    Anzahl an Objekten" ab. Die Reihenfolge zählt mit: „A minus B" ist nicht
+    „B minus A".
+    """
+    from app.ui.main_window import inputs_for
+
+    objects = ["obj_1", "obj_2", "obj_3"]
+    spec = REGISTRY.get("subtract_objects")
+    assert spec.consumes == 2
+
+    assert inputs_for(spec, objects, ("obj_2", "obj_1")) == ("obj_2", "obj_1")
+    assert inputs_for(spec, objects, ("obj_1", "obj_2", "obj_3")) == ("obj_1", "obj_2")
+    assert inputs_for(spec, objects, ("obj_1",)) == ("obj_1",), "zu wenige — das Fenster hält an"
 
 
 def test_orienting_turns_the_body(profile: Profile) -> None:

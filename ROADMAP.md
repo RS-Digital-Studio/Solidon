@@ -1291,20 +1291,43 @@ rechnen. Suite: 2106 grün, rot bleibt allein die bekannte Orientierungssuche.
 
 #### Etappe 2 — Der Objektbaum, wie §18.8 ihn beschreibt
 
-- [ ] `delete_object` nach der Op-Checkliste (E2), Kürzel `Entf`, Geometrietest
-- [ ] Sichtbarkeit je Objekt (E3) — Symbol und Wort, im Baum und im Kontextmenü
-- [ ] Isolieren (§18.8): alles außer der Auswahl ausblenden, ein zweiter Aufruf
+- [x] `delete_object` nach der Op-Checkliste (E2), Kürzel `Entf`, Test
+- [x] Sichtbarkeit je Objekt (E3) — Symbol und Wort, im Baum und im Kontextmenü
+- [x] Isolieren (§18.8): alles außer der Auswahl ausblenden, ein zweiter Aufruf
       hebt es auf
-- [ ] Herkunft im Baum: aus welcher Operation und Transaktion ein Körper kommt
-      (`ObjectEntry.created_by` liegt bereits vor und wird nicht gezeigt)
-- [ ] Mehrfachauswahl (`ExtendedSelection`), damit *Vereinigen* und *Abziehen*
-      zwei angeklickte Körper nehmen statt einer Kennung im Textfeld
-- [ ] `OperationDialog` zeigt Objektnamen statt `ObjectId` und ist nicht mehr
-      frei beschreibbar
+- [x] Herkunft im Baum: aus welcher Operation und Transaktion ein Körper kommt
+- [x] Mehrfachauswahl (`ExtendedSelection`), in **Klickreihenfolge** geführt —
+      „A minus B" ist nicht „B minus A", und die Reihenfolge im Baum weiß
+      davon nichts
+- [x] `OperationDialog` gibt Namen aus und Kennungen weiter, kein freies
+      Textfeld mehr
 
-*Abnahme:* Ein Modell importieren, löschen, Strg+Z, es ist wieder da; zwei
-Körper anklicken und vereinigen, ohne etwas zu tippen; `tests/test_ui.py` deckt
-Löschen, Ausblenden und Isolieren ab.
+**Drei Funde beim Bauen, keiner davon aus der Durchsicht:**
+
+**Die drei Booleschen mit zwei Eingängen waren über das Menü nicht
+ausführbar.** `inputs_for` gab immer genau ein Objekt zurück, `union_objects`
+und die beiden anderen erwarten zwei — der Stapel lehnte mit „erwartet eine
+andere Anzahl an Objekten" ab. Aufgefallen ist es erst, als die
+Mehrfachauswahl die Frage stellte, welches denn das zweite sei.
+
+**Der Stapel hielt tote Objekte für lebendig.** `_known_objects()` sammelte
+jede je vergebene Nummer statt der Körper, die am Ende übrig sind. Für das
+Entfernen fiel es auf; es galt aber längst für jede Vereinigung: eine
+Operation auf einem verbrauchten Körper wurde angenommen und scheiterte erst
+beim Rechnen. Jetzt rechnet der Stapel dieselbe Bilanz wie die Auswertung.
+Nebenbei ist damit die Behauptung in E2 berichtigt — sie stimmte aus dem
+falschen Grund.
+
+**Die Quellenauswahl war mit Körpern gefüllt.** `kind="source"` und
+`kind="object"` teilten sich eine Liste, und Objekte standen darin. Wer
+*Modell laden* im Verlauf wieder öffnete, bekam Körper angeboten, wo eine
+Datei gemeint war. Beide haben jetzt ihre eigene Liste, und ein gespeicherter
+Wert, den keine davon kennt, wird angezeigt statt ersetzt.
+
+*Abnahme erfüllt:* Importieren, entfernen, Strg+Z — der Körper ist wieder da.
+Zwei Körper anklicken und abziehen, ohne etwas zu tippen. Ausblenden,
+Isolieren und Herkunft in `tests/test_ui.py`; ein Test hält fest, dass eine
+parameterlose Operation ohne Dialog läuft (Regel 19).
 
 #### Etappe 3 — Die Oberfläche liest ihren eigenen Zustand
 

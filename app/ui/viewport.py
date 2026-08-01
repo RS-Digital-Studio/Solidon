@@ -157,6 +157,9 @@ class Viewport(QWidget):
         """Which build plate is shown; -1 is all of them (§25)."""
         self._painting = False
         """§20: clicks are brush strokes while this is on."""
+        self._hidden: frozenset[ObjectId] = frozenset()
+        """§18.8: was der Nutzer ausgeblendet hat. Ansicht, nicht Szene — die
+        Körper werden weiter gerechnet, geprüft und exportiert."""
 
         if not _available():
             self._layout.addWidget(
@@ -194,7 +197,7 @@ class Viewport(QWidget):
 
         style = DISPLAY_MODES[self._mode]
         for object_id, entry in result.scene.objects.items():
-            if not entry.visible:
+            if not entry.visible or object_id in self._hidden:
                 continue
             if self._plate >= 0 and entry.plate != self._plate:
                 continue
@@ -234,6 +237,23 @@ class Viewport(QWidget):
         self._redraw_features()
         self._redraw_layer()
         self.plotter.render()
+
+    def set_hidden(self, hidden: frozenset[ObjectId]) -> None:
+        """Welche Körper nicht gezeichnet werden (§18.8).
+
+        Ein Filter auf dem Bild wie die Plattenwahl, keiner auf der Szene: ein
+        ausgeblendeter Körper wird weiter gerechnet, steht weiter im
+        Prüfbericht und wird weiter exportiert. Alles andere wäre ein Löschen
+        mit einem harmlosen Namen.
+        """
+        if hidden == self._hidden:
+            return
+        self._hidden = hidden
+        self.show_scene(self._result)
+
+    @property
+    def hidden(self) -> frozenset[ObjectId]:
+        return self._hidden
 
     def set_plate(self, plate: int) -> None:
         """Zeigt eine Druckplatte, oder alle (§25).
