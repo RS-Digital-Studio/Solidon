@@ -27,7 +27,19 @@ from app.core.errors import ValidationError
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, VARIABLE, Registry
 from app.core.scene import expressions
-from app.core.types import Document, ObjectId, Operation, OpId, Origin, Transaction
+from app.core.types import (
+    Document,
+    DocumentChange,
+    DocumentState,
+    Fit,
+    ObjectId,
+    Operation,
+    OpId,
+    Origin,
+    Parameter,
+    ParameterName,
+    Transaction,
+)
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -37,6 +49,67 @@ _OBJECT_PATTERN = re.compile(r"^obj_(\d+)$")
 #: Vorgegebene Urheberschaft. Manuelle Operationen sind einzelne Transaktionen
 #: des Nutzers (§15.5).
 USER_ORIGIN: Final[Origin] = Origin(by="user")
+
+
+def restore(document: Document, state: DocumentState) -> None:
+    """Legt eine Seite einer Dokumentänderung ins Dokument zurück (§15.5).
+
+    Eine Funktion für beide Richtungen: ein Undo schreibt ``before``, ein Redo
+    ``after``, und das Anwenden ebenfalls ``after``. Zwei getrennte Wege wären
+    zwei Stellen, an denen ein Feld vergessen werden kann — und vergessen
+    würde hier heißen, dass ein Undo *fast* alles zurücknimmt.
+
+    Ein Feld, das ``None`` ist, war nicht beteiligt und wird nicht angefasst.
+    Ein Parameter, der ``None`` ist, gab es zu diesem Zeitpunkt nicht und wird
+    entfernt.
+    """
+    if state.parameters is not None:
+        for name, parameter in state.parameters.items():
+            if parameter is None:
+                document.parameters.pop(name, None)
+            else:
+                document.parameters[name] = parameter
+    if state.fits is not None:
+        document.fits[:] = list(state.fits)
+    if state.printer is not None:
+        document.printer = state.printer
+    if state.material is not None:
+        document.material = state.material
+
+
+def change_for(
+    document: Document,
+    *,
+    parameters: Mapping[ParameterName, Parameter] | None = None,
+    fits: Sequence[Fit] | None = None,
+    printer: str | None = None,
+    material: str | None = None,
+) -> DocumentChange:
+    """Baut beide Seiten einer Dokumentänderung aus dem heutigen Stand.
+
+    Damit kein Aufrufer die Vorher-Seite selbst zusammensucht: genau das war
+    der Fehler, den der Agent hatte — er führte seine eigene Buchhaltung über
+    frühere Werte, und die Oberfläche kannte sie nicht. Wer hier ``fits``
+    übergibt, meint die vollständige neue Liste, nicht die Ergänzung.
+    """
+    return DocumentChange(
+        before=DocumentState(
+            parameters=(
+                {name: document.parameters.get(name) for name in parameters}
+                if parameters is not None
+                else None
+            ),
+            fits=tuple(document.fits) if fits is not None else None,
+            printer=document.printer if printer is not None else None,
+            material=document.material if material is not None else None,
+        ),
+        after=DocumentState(
+            parameters=dict(parameters) if parameters is not None else None,
+            fits=tuple(fits) if fits is not None else None,
+            printer=printer,
+            material=material,
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,18 +191,25 @@ class History:
     def apply(
         self,
         title: TranslatableText | str,
-        drafts: Sequence[OperationDraft],
+        drafts: Sequence[OperationDraft] = (),
         origin: Origin = USER_ORIGIN,
+        changes: DocumentChange | None = None,
     ) -> Transaction:
         """Fügt Operationen als eine Transaktion an und gibt sie zurück.
 
         Geprüft wird alles, bevor irgendetwas geschrieben ist — ein
         abgelehnter Aufruf lässt das Dokument exakt, wie es war.
+
+        ``changes`` trägt, was keine Operation ist (§15.5): Parameter,
+        Passungen, Drucker, Material. Eine Transaktion darf daraus allein
+        bestehen — eine gedrehte Zahl ist eine Änderung am Projekt, auch wenn
+        kein Schritt dazukommt, und ohne Transaktion wäre sie nicht
+        rücknehmbar.
         """
-        if not drafts:
+        if not drafts and changes is None:
             raise ValidationError(
                 field="ops",
-                detail=_("Eine Transaktion ohne Operationen ergibt keinen Sinn."),
+                detail=_("Eine Transaktion ohne Operationen und ohne Änderungen ändert nichts."),
                 constraint="empty",
             )
 
@@ -145,9 +225,12 @@ class History:
             title=title,
             ops=tuple(entry.id for entry in planned),
             origin=origin,
+            changes=changes,
         )
         self.document.ops.extend(planned)
         self.document.transactions.append(transaction)
+        if changes is not None:
+            restore(self.document, changes.after)
         return transaction
 
     def _plan(self, draft: OperationDraft, known: set[ObjectId]) -> Operation:
@@ -351,7 +434,12 @@ class History:
     # --- Undo und Redo ---------------------------------------------------------
 
     def undo(self) -> Transaction | None:
-        """Nimmt die letzte Transaktion als Ganzes zurück (§15.5)."""
+        """Nimmt die letzte Transaktion als Ganzes zurück (§15.5).
+
+        Als Ganzes heißt: mit dem, was keine Operation war. Solange das hier
+        nur den Stapel leerte, ließ ein Undo die Parameter und Passungen eines
+        Agentenvorschlags stehen — Regel 16 verlangt ihn vollständig zurück.
+        """
         if not self.document.transactions:
             return None
         transaction = self.document.transactions.pop()
@@ -362,6 +450,8 @@ class History:
             else:
                 remaining.append(entry)
         self.document.ops[:] = remaining
+        if transaction.changes is not None:
+            restore(self.document, transaction.changes.before)
         self._undone.append(transaction)
         return transaction
 
@@ -373,6 +463,8 @@ class History:
             self.document.ops.append(self._undone_ops.pop(op_id))
         self.document.ops.sort(key=lambda entry: entry.id)
         self.document.transactions.append(transaction)
+        if transaction.changes is not None:
+            restore(self.document, transaction.changes.after)
         return transaction
 
     def _forget_undone(self) -> None:

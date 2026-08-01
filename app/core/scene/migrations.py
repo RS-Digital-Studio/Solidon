@@ -23,7 +23,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 4
+FORMAT_VERSION: Final = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,11 +74,29 @@ def _add_print_settings(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _add_transaction_changes(data: dict[str, Any]) -> dict[str, Any]:
+    """4 → 5: eine Transaktion trägt auch, was keine Operation war (§15.5).
+
+    Bis hierher konnte eine Transaktion nur Operationen enthalten; Parameter,
+    Passungen, Drucker und Material standen außerhalb des Undo. Eine ältere
+    Datei hat für ihre Transaktionen also nichts einzutragen — ``None`` sagt
+    genau das, und ein Undo darauf verhält sich wie bisher.
+
+    Was der Schritt *nicht* tut: die Änderungen nachträglich erfinden. Welche
+    Zahl vor einer alten Transaktion galt, steht nirgends; sie zu raten hieße,
+    ein Undo anzubieten, das etwas Falsches zurücklegt.
+    """
+    for transaction in data.get("transactions", ()):
+        transaction.setdefault("changes", None)
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
     Step(from_version=2, to_version=3, apply=_mark_generated_sources),
     Step(from_version=3, to_version=4, apply=_add_print_settings),
+    Step(from_version=4, to_version=5, apply=_add_transaction_changes),
 )
 
 

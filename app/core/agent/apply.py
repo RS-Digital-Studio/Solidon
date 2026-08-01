@@ -3,9 +3,17 @@ Regel 16).
 
 Ein Vorschlag wird **eine** Transaktion. Alles, was er will — Operationen,
 Parameter, Passungen — landet gemeinsam oder gar nicht, und ein Undo nimmt
-alles davon zurück. Parameter und Passungen sind keine Operationen, also
-trägt der Vorschlag mit, was sie vorher waren; genau das macht das Undo
-vollständig statt beinahe vollständig.
+alles davon zurück.
+
+Parameter und Passungen sind keine Operationen. Das trug hier lange eine
+eigene Buchführung: der Vorschlag merkte sich, was vorher galt, und eine
+eigene ``undo``-Funktion legte es zurück. Sie war richtig und wurde nie
+gerufen — die Oberfläche nimmt mit ``History.undo`` zurück, und das kannte
+nur Operationen. Ein angenommener Vorschlag ging also zur Hälfte zurück,
+gegen Regel 16.
+
+Jetzt trägt die Transaktion selbst, was keine Operation war (§15.5). Damit
+gibt es einen Weg zurück statt zwei, und der eine ist der, den jeder nimmt.
 
 Der Chat-Eintrag entsteht ebenfalls hier, und er benennt die Transaktion
 (§26.3). Geht die Transaktion, gilt der Eintrag als verworfen — und das hält
@@ -19,8 +27,8 @@ import secrets
 
 from app.core.agent.proposal import Proposal
 from app.core.log import get_logger
-from app.core.scene.history import History
-from app.core.types import ChatEntry, Document, Transaction
+from app.core.scene.history import History, change_for
+from app.core.types import ChatEntry, Document, DocumentChange, Transaction
 from app.i18n import tr
 
 _log = get_logger(__name__)
@@ -37,19 +45,23 @@ def accept(proposal: Proposal, history: History) -> Transaction | None:
     if proposal.undo_of is not None:
         _undo_named(history, proposal.undo_of)
 
-    for name, parameter in proposal.parameters.items():
-        proposal.previous_parameters.setdefault(name, document.parameters.get(name))
-        document.parameters[name] = parameter
-
-    if proposal.fits:
-        if proposal.previous_fits is None:
-            proposal.previous_fits = list(document.fits)
-        for fit in proposal.fits:
-            document.fits.append(fit)
+    # Die Vorher-Seite kommt aus dem Dokument, in das wirklich geschrieben
+    # wird, nicht aus der Arbeitskopie, auf welcher der Agent gerechnet hat:
+    # zwischen Vorschlag und Annahme liegt eine Entscheidung des Nutzers, und
+    # in der Zeit kann sich etwas geändert haben.
+    changes: DocumentChange | None = None
+    if proposal.parameters or proposal.fits:
+        changes = change_for(
+            document,
+            parameters=proposal.parameters or None,
+            fits=[*document.fits, *proposal.fits] if proposal.fits else None,
+        )
 
     transaction: Transaction | None = None
-    if proposal.drafts:
-        transaction = history.apply(_title(proposal), proposal.drafts, origin=proposal.origin)
+    if proposal.drafts or changes is not None:
+        transaction = history.apply(
+            _title(proposal), proposal.drafts, origin=proposal.origin, changes=changes
+        )
 
     record(document, proposal, transaction)
     _log.info("proposal accepted as %s", transaction.id if transaction else "no transaction")
@@ -59,23 +71,6 @@ def accept(proposal: Proposal, history: History) -> Transaction | None:
 def discard(proposal: Proposal, document: Document) -> None:
     """Wirft einen Vorschlag weg. Das Gespräch behält beide Beiträge (§26.3)."""
     record(document, proposal, None, discarded=True)
-
-
-def undo(proposal: Proposal, history: History, transaction_id: str | None) -> None:
-    """Nimmt einen angenommenen Vorschlag vollständig zurück — auch das, was
-    keine Op war.
-    """
-    document = history.document
-    if transaction_id is not None:
-        _undo_named(history, transaction_id)
-
-    for name, previous in proposal.previous_parameters.items():
-        if previous is None:
-            document.parameters.pop(name, None)
-        else:
-            document.parameters[name] = previous
-    if proposal.previous_fits is not None:
-        document.fits[:] = list(proposal.previous_fits)
 
 
 def record(

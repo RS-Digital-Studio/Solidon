@@ -538,7 +538,7 @@
   "Eine Schicht über drei Vierteln des Düsendurchmessers haftet nicht sicher auf der darunterliegenden.": "A layer above three quarters of the nozzle diameter does not bond safely to the one below it.",
   "Eine Stückzahl muss eine Zahl sein, kein Ausdruck.": "A quantity has to be a number, not an expression.",
   "Eine Toleranz ist entweder eine Zahl oder ein Verweis auf ein Material.": "A tolerance is either a number or a reference to a material.",
-  "Eine Transaktion ohne Operationen ergibt keinen Sinn.": "A transaction without operations makes no sense.",
+  "Eine Transaktion ohne Operationen und ohne Änderungen ändert nichts.": "A transaction with no operations and no changes would do nothing.",
   "Eine Variante ließ sich nicht rechnen.": "One variant could not be computed.",
   "Eine Wand im Querschnitt, aus zwei nebeneinanderliegenden Extrusionsbahnen — die dünnste Wand, die trägt. Die Breite steht im Druckerprofil.": "A wall in section, made of two extrusion beads side by side — the thinnest wall that carries. The width comes from the printer profile.",
   "Eine bündige Passung braucht zwei Flächen.": "A flush fit needs two faces.",

@@ -1395,16 +1395,20 @@ class MainWindow(QMainWindow):
         self.measurements.show_object(name, size, volume)
 
     def _on_parameter_edited(self, name: str, value: float) -> None:
-        """An einer Zahl zu drehen ist eine Änderung am Dokument, dann eine
-        frische Auswertung (§13).
-        """
-        import dataclasses
+        """An einer Zahl zu drehen ist eine Transaktion, dann eine frische
+        Auswertung (§13, §15.5).
 
-        parameters = self.session.project.document.parameters
-        if name not in parameters:
+        Dieselbe Rückfrage wie bei einer Operation: eine Änderung nach einem
+        Undo wirft die abgeschnittenen Schritte weg (§15.4), und das darf eine
+        gedrehte Zahl nicht stiller tun als ein Menüeintrag. Sagt der Nutzer
+        nein, springt die Leiste auf den Stand des Dokuments zurück.
+        """
+        if self.session.history.discardable and not confirm_discard(
+            self.session.history.discardable, self
+        ):
+            self.parameters.show_document(self.session.project.document)
             return
-        parameters[name] = dataclasses.replace(parameters[name], value=value)
-        self.session.evaluate_async()
+        self.session.change_parameter(name, value)
 
     # --- start ------------------------------------------------------------------
 

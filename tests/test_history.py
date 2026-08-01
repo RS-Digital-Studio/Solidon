@@ -7,8 +7,23 @@ import pytest
 from app.core.errors import ValidationError
 from app.core.registry import Registry, op_params, param, register_op
 from app.core.scene import History, OperationDraft
-from app.core.types import BaseParams, Document, OpContext, OpResult, Origin
+from app.core.scene.history import change_for
+from app.core.types import (
+    BaseParams,
+    Document,
+    FeatureRef,
+    Fit,
+    OpContext,
+    OpResult,
+    Origin,
+    Parameter,
+)
 from app.i18n import _
+
+
+def _parameter(name: str, value: float) -> Parameter:
+    """Ein Parameter, wie ihn die Leiste anlegt — kurz gehalten, oft gebraucht."""
+    return Parameter(name=name, value=value, unit="mm")
 
 
 @op_params
@@ -254,3 +269,102 @@ def test_a_reopened_document_continues_the_numbering(registry: Registry) -> None
     create(reopened)
     assert reopened.operations[-1].id == 3
     assert reopened.operations[-1].outputs == ("obj_3",)
+
+
+# --- Was keine Operation ist (§15.5) -------------------------------------------
+
+
+def test_a_transaction_may_consist_of_changes_alone(history: History) -> None:
+    """Eine gedrehte Zahl ist eine Änderung am Projekt, auch ohne Schritt."""
+    document = history.document
+    transaction = history.apply(
+        _("Parameter width"),
+        changes=change_for(document, parameters={"width": _parameter("width", 84.0)}),
+    )
+
+    assert transaction.ops == ()
+    assert document.parameters["width"].value == 84.0
+    assert history.can_undo
+
+
+def test_undo_puts_a_changed_parameter_back(history: History) -> None:
+    document = history.document
+    document.parameters["width"] = _parameter("width", 84.0)
+
+    history.apply(
+        _("Parameter width"),
+        changes=change_for(document, parameters={"width": _parameter("width", 120.0)}),
+    )
+    assert document.parameters["width"].value == 120.0
+
+    history.undo()
+    assert document.parameters["width"].value == 84.0, "§15.5: das Undo nimmt sie mit"
+
+    history.redo()
+    assert document.parameters["width"].value == 120.0
+
+
+def test_undo_removes_a_parameter_that_did_not_exist_before(history: History) -> None:
+    """Der Unterschied zwischen „war 0" und „gab es nicht" — sonst legt ein
+    Undo eine Null an, wo vorher nichts war.
+    """
+    document = history.document
+    history.apply(
+        _("Parameter depth"),
+        changes=change_for(document, parameters={"depth": _parameter("depth", 30.0)}),
+    )
+
+    history.undo()
+    assert "depth" not in document.parameters
+
+    history.redo()
+    assert document.parameters["depth"].value == 30.0
+
+
+def test_undo_puts_fits_printer_and_material_back(history: History) -> None:
+    document = history.document
+    document.printer = "centauri-carbon-2"
+    document.material = "petg"
+    fit = Fit(
+        name="stift_1",
+        a=FeatureRef.parse("obj_1:op1.pin_1"),
+        b=FeatureRef.parse("obj_2:op1.hole_1"),
+    )
+
+    history.apply(
+        _("Anderes Material"),
+        changes=change_for(document, fits=[fit], printer="prusa-mk4", material="tpu-95a"),
+    )
+    assert (document.printer, document.material) == ("prusa-mk4", "tpu-95a")
+    assert [entry.name for entry in document.fits] == ["stift_1"]
+
+    history.undo()
+    assert (document.printer, document.material) == ("centauri-carbon-2", "petg")
+    assert document.fits == []
+
+
+def test_operations_and_changes_travel_in_one_transaction(history: History) -> None:
+    """Regel 16: ein Agentenvorschlag ist eine Transaktion, und ein Undo nimmt
+    ihn ganz zurück — Operationen wie Parameter.
+    """
+    document = history.document
+    create(history)
+    before = len(history.operations)
+
+    history.apply(
+        _("Vorschlag"),
+        [OperationDraft(op="make_object")],
+        changes=change_for(document, parameters={"width": _parameter("width", 84.0)}),
+    )
+    assert len(history.operations) == before + 1
+
+    history.undo()
+    assert len(history.operations) == before
+    assert "width" not in document.parameters, "beide Hälften oder keine"
+
+
+def test_a_transaction_without_operations_and_without_changes_is_refused(
+    history: History,
+) -> None:
+    with pytest.raises(ValidationError):
+        history.apply(_("Nichts"))

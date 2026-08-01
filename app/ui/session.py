@@ -44,6 +44,7 @@ from app.core.scene import (
     orphans,
 )
 from app.core.scene.evaluate import evaluate
+from app.core.scene.history import change_for
 from app.core.scene.project import (
     Project,
     ProjectSources,
@@ -63,6 +64,7 @@ from app.core.types import (
     Report,
     Source,
 )
+from app.core.units import is_close
 from app.i18n import TranslatableText, tr
 
 _log = get_logger(__name__)
@@ -290,6 +292,35 @@ class Session(QObject):
         """Eine Transaktion, dann eine frische Auswertung (§15.5)."""
         try:
             self.history.apply(title, drafts, origin or Origin(by="user"))
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+
+    def change_parameter(self, name: str, value: float) -> None:
+        """Eine gedrehte Zahl der Parameterleiste (§13, §15.5).
+
+        Sie war lange keine Transaktion: die Leiste schrieb geradewegs ins
+        Dokument. Damit war die Änderung weder rücknehmbar — ein Strg+Z nahm
+        stattdessen die letzte Operation zurück — noch als Änderung erkennbar,
+        und weil das Schließen nur sichert, was als geändert gilt, ging sie
+        dabei verloren.
+        """
+        import dataclasses
+
+        parameters = self.project.document.parameters
+        existing = parameters.get(name)
+        if existing is None or is_close(existing.value, value):
+            return
+
+        changed = dataclasses.replace(existing, value=value)
+        try:
+            self.history.apply(
+                f"{tr('Parameter')} {name}",
+                changes=change_for(self.project.document, parameters={name: changed}),
+            )
         except AppError as error:
             self.failed.emit(error)
             return

@@ -487,10 +487,12 @@ def test_one_undo_takes_the_whole_proposal_back(project: Project, profile: Profi
     history = History(project.document)
     ops_before = len(project.document.ops)
 
-    transaction = agent_apply.accept(proposal, history)
+    agent_apply.accept(proposal, history)
     assert "breite" in project.document.parameters
 
-    agent_apply.undo(proposal, history, transaction.id if transaction else None)
+    # Regel 16 über den Weg, den auch das Fenster nimmt: ein gewöhnliches Undo
+    # des Stapels, kein eigener Rückweg für den Agenten.
+    history.undo()
 
     assert len(project.document.ops) == ops_before
     assert "breite" not in project.document.parameters, "a parameter is part of the proposal too"
@@ -522,7 +524,7 @@ def test_after_an_undo_the_turn_counts_as_discarded(project: Project, profile: P
     assert entry.transaction_id == (transaction.id if transaction else None)
     assert not context.is_discarded(entry, project.document)
 
-    agent_apply.undo(proposal, history, transaction.id if transaction else None)
+    history.undo()
 
     assert context.is_discarded(entry, project.document)
 

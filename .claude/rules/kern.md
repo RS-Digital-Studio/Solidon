@@ -51,6 +51,23 @@ verbotene Telemetrie.
 Zweimal auswerten muss identisch sein; ändert sich die Objektzahl, hält die
 Auswertung an, statt still weiterzurechnen.
 
+## Am Dokument wird nie vorbei geschrieben
+
+Alles, was das Dokument ändert, geht durch eine Transaktion — auch das, was
+keine Operation ist. Parameter, Passungen, Drucker und Material reisen als
+`DocumentChange` mit (§15.5); `History.apply(..., changes=...)` nimmt sie
+entgegen, `undo` und `redo` spielen sie zurück und vor. Die Vorher-Seite baut
+`change_for()` aus dem Dokument — wer sie selbst zusammensucht, vergisst einen
+Fall.
+
+Wer stattdessen `document.parameters[...] = ...` schreibt, baut den Fehler
+nach, der hier zweimal steckte: die Änderung ist nicht rücknehmbar, sie gilt
+nicht als Änderung, und beim Schließen ist sie weg.
+
+Die Grenze verläuft an der Auswertung: was sie beeinflusst, gehört in die
+Transaktion. Druckeinstellungen und Sichtbarkeit tun das nicht — die
+Einstellungen reisen zum Slicer, die Sichtbarkeit gehört der Ansicht.
+
 ## Pfade
 
 Keine absoluten Pfade in Projektdateien. Nutzerverzeichnisse kommen aus

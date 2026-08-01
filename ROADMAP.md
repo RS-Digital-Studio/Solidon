@@ -1259,22 +1259,35 @@ dafür.
 
 Fundament (E1). Ohne sie sind vier weitere Funde nicht sauber zu beheben.
 
-- [ ] `DocumentChange` in `core/types.py`, Vorher- und Nachher-Seite
-- [ ] `Transaction.changes`, `History.apply(..., changes=)`, leere Draft-Liste
+- [x] `DocumentState` und `DocumentChange` in `core/types.py`, beide Seiten;
+      `change_for()` baut sie aus dem heutigen Stand, damit kein Aufrufer die
+      Vorher-Seite selbst zusammensucht
+- [x] `Transaction.changes`, `History.apply(..., changes=)`, leere Draft-Liste
       erlaubt, sobald Änderungen dabei sind
-- [ ] `History.undo`/`redo` spielen Änderungen mit
-- [ ] `format_version` hoch, Migration `vN→vN+1`, alte Beispieldatei in
-      `tests/data/`, Test „alte Datei öffnet und rechnet"
-- [ ] `agent/apply.accept` baut eine `DocumentChange`; `apply.undo` und
+- [x] `History.undo`/`redo` spielen Änderungen mit — eine Funktion `restore()`
+      für beide Richtungen
+- [x] Format 4 → 5, Migration `_add_transaction_changes`, `example_v5.p3d`
+      eingecheckt (sie zeigt eine Transaktion, die nur aus einer Änderung
+      besteht)
+- [x] `agent/apply.accept` baut eine `DocumentChange`; `apply.undo` und
       `Proposal.previous_parameters`/`previous_fits` entfallen
-- [ ] Parameterleiste: Änderung als Transaktion mit Titel „Parameter *name*",
-      `_dirty` folgt daraus
-- [ ] `set_print_settings` wird eine Transaktion statt einer stillen Zuweisung
+- [x] Parameterleiste: Änderung als Transaktion mit Titel „Parameter *name*",
+      `_dirty` folgt daraus; die Rückfrage aus §15.4 gilt hier wie im Menü
+- [x] ~~`set_print_settings` wird eine Transaktion~~ — **zurückgenommen beim
+      Bauen.** Der Punkt stand aus Symmetrie im Plan, nicht aus einem Befund:
+      `set_print_settings` setzt `_dirty` längst korrekt, es war nie etwas
+      kaputt. Und die Einstellungen ändern nichts an dem, was die Auswertung
+      rechnet — sie reisen zum Slicer. Damit gilt hier dieselbe Grenze wie bei
+      der Sichtbarkeit in E3: in den Verlauf kommt, was die Auswertung
+      beeinflusst. Drucker und Material tun das (Bauraum, Toleranzverweise),
+      die Druckeinstellungen nicht.
 
-*Abnahme:* Strg+Z nach einer Parameteränderung stellt den alten Wert her; Strg+Z
-nach einem angenommenen Agentenvorschlag mit Parametern **und** Passungen
-stellt beide her (neuer Test, der über `Session` geht, nicht über
-`apply.undo`); eine Datei der alten Fassung öffnet und rechnet.
+*Abnahme erfüllt:* Strg+Z nach einer Parameteränderung stellt den alten Wert
+her; ein Undo eines *neu angelegten* Parameters entfernt ihn, statt eine Null
+zu hinterlassen; Strg+Z nach einem angenommenen Agentenvorschlag stellt
+Parameter **und** Passungen wieder her — geprüft über `History.undo`, also
+über den Weg, den auch das Fenster nimmt. `example_v1` bis `v5` öffnen und
+rechnen. Suite: 2106 grün, rot bleibt allein die bekannte Orientierungssuche.
 
 #### Etappe 2 — Der Objektbaum, wie §18.8 ihn beschreibt
 

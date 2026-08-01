@@ -205,7 +205,6 @@ class AgentSession:
             unit=str(arguments.get("unit", existing.unit if existing else "mm")),
             title=str(arguments.get("title", existing.title if existing else "")),
         )
-        proposal.previous_parameters.setdefault(key, existing)
         proposal.parameters[key] = parameter
         working.parameters[key] = parameter
         return f"{tr('Parameter gesetzt')}: {key} = {parameter.value:g} {parameter.unit}"
@@ -224,8 +223,6 @@ class AgentSession:
             kind=arguments.get("kind", "clearance"),
             tolerance=f"auto:{self.profile.material.id}",
         )
-        if proposal.previous_fits is None:
-            proposal.previous_fits = list(working.fits)
         proposal.fits.append(fit)
         working.fits.append(fit)
         return f"{tr('Passung angelegt')}: {fit.name} ({fit.kind}, {fit.tolerance})"

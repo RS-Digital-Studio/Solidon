@@ -773,6 +773,46 @@ class Operation:
 
 
 @dataclass(frozen=True, slots=True)
+class DocumentState:
+    """Eine Seite einer Dokumentänderung — nur die betroffenen Felder.
+
+    ``None`` heißt „dieses Feld war nicht beteiligt", nicht „leer". Bei den
+    Parametern steht ``None`` als *Wert* dagegen für „gab es zu diesem
+    Zeitpunkt nicht": so wird aus einem Undo, das einen neu angelegten
+    Parameter zurücknimmt, ein Löschen und keine Null.
+    """
+
+    parameters: Mapping[ParameterName, Parameter | None] | None = None
+    fits: tuple[Fit, ...] | None = None
+    printer: str | None = None
+    material: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentChange:
+    """Was eine Transaktion außerhalb des Stapels geändert hat (§15.5).
+
+    Parameter, Passungen, Drucker und Material sind keine Operationen und
+    standen deshalb lange außerhalb des Undo — eine gedrehte Zahl ließ sich
+    nicht zurücknehmen, und ein angenommener Agentenvorschlag ging nur zur
+    Hälfte zurück, obwohl Regel 16 ihn ganz verlangt.
+
+    Die Transaktion trägt jetzt beide Seiten: ``before`` legt ein Undo zurück,
+    ``after`` wiederholt ein Redo. Zwei Momentaufnahmen statt einer Liste von
+    Einzelschritten, weil dieselbe Funktion dann beide Richtungen bedient.
+
+    Was hier hineingehört, entscheidet eine Frage: ändert es, was die
+    Auswertung rechnet? Drucker und Material tun das über Bauraum und
+    Toleranzverweise (§12), Parameter über die Ausdrücke (§13), Passungen über
+    die Prüfung (§14). Die Druckeinstellungen tun es nicht — sie reisen zum
+    Slicer und stehen darum nicht im Verlauf.
+    """
+
+    before: DocumentState = DocumentState()
+    after: DocumentState = DocumentState()
+
+
+@dataclass(frozen=True, slots=True)
 class Transaction:
     """Eine Gruppe von Operationen, die gemeinsam zurückgenommen wird (§15.5)."""
 
@@ -780,6 +820,8 @@ class Transaction:
     title: TranslatableText | str
     ops: tuple[OpId, ...]
     origin: Origin = Origin(by="user")
+    changes: DocumentChange | None = None
+    """Was die Transaktion neben ihren Operationen geändert hat, oder None."""
 
 
 @dataclass(frozen=True, slots=True)

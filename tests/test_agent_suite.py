@@ -191,18 +191,30 @@ def test_every_request_reaches_the_model_with_its_context(
 def test_a_good_answer_becomes_one_transaction(
     case: Case, project: Project, profile: Profile
 ) -> None:
-    """AGENTS.md Regel 16: ein Vorschlag, eine Transaktion, ein Undo."""
+    """AGENTS.md Regel 16: ein Vorschlag, eine Transaktion, ein Undo.
+
+    „Vollständig zurück" heißt: auch die Parameter und Passungen. Solange das
+    hier nur Transaktionen zählte, ging ein Vorschlag, der einen Parameter
+    anlegte, ohne Transaktion durch — und war damit gar nicht zurückzunehmen.
+    """
     _agent, proposal = run(case, project, profile)
     history = History(project.document)
     before = len(project.document.transactions)
+    parameters_before = dict(project.document.parameters)
+    fits_before = list(project.document.fits)
 
     transaction = agent_apply.accept(proposal, history)  # type: ignore[arg-type]
 
-    if proposal.drafts:  # type: ignore[attr-defined]
+    changes_something = bool(
+        proposal.drafts or proposal.parameters or proposal.fits  # type: ignore[attr-defined]
+    )
+    if changes_something:
         assert transaction is not None
         assert len(project.document.transactions) == before + 1
-        agent_apply.undo(proposal, history, transaction.id)  # type: ignore[arg-type]
+        history.undo()
         assert len(project.document.transactions) == before
+        assert project.document.parameters == parameters_before
+        assert project.document.fits == fits_before
     else:
         assert transaction is None
 

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.core.registry import REGISTRY
 from app.core.scene.project import load
+from app.core.types import Parameter
 from app.ui.main_window import MainWindow
 from app.ui.op_dialog import OperationDialog
 from app.ui.session import AskRequest, Session
@@ -68,6 +69,42 @@ def test_undo_and_redo_reach_the_document(session: Session) -> None:
     session.redo()
     session.wait_for_idle()
     assert [entry.op for entry in session.project.document.ops] == ["load"]
+
+
+def test_a_changed_parameter_is_a_transaction(session: Session) -> None:
+    """§13 und §15.5: eine gedrehte Zahl ist rücknehmbar und zählt als Änderung.
+
+    Vorher schrieb die Leiste geradewegs ins Dokument. Das kostete beides: ein
+    Strg+Z nahm die letzte *Operation* zurück statt der Zahl, und weil das
+    Projekt als ungeändert galt, sicherte das Schließen sie nicht.
+    """
+    document = session.project.document
+    document.parameters["width"] = Parameter(name="width", value=84.0, unit="mm")
+
+    session.change_parameter("width", 120.0)
+    session.wait_for_idle()
+
+    assert document.parameters["width"].value == 120.0
+    assert session.modified, "sonst geht die Änderung beim Schließen verloren"
+    assert session.history.can_undo
+
+    session.undo()
+    assert document.parameters["width"].value == 84.0
+
+    session.redo()
+    assert document.parameters["width"].value == 120.0
+
+
+def test_the_same_value_again_changes_nothing(session: Session) -> None:
+    """Eine Spinbox meldet auch, was sie schon anzeigte — daraus wird kein
+    Verlaufseintrag."""
+    document = session.project.document
+    document.parameters["width"] = Parameter(name="width", value=84.0, unit="mm")
+
+    session.change_parameter("width", 84.0)
+
+    assert not session.history.can_undo
+    assert not session.modified
 
 
 def test_saving_and_reopening_keeps_the_stack(session: Session, tmp_path: Path) -> None:

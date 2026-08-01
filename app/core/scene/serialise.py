@@ -20,6 +20,8 @@ from app.core.types import (
     ChatEntry,
     CoolingSettings,
     Document,
+    DocumentChange,
+    DocumentState,
     FeatureRef,
     FilamentSettings,
     Finding,
@@ -190,24 +192,85 @@ def origin_from_data(data: dict[str, Any] | None) -> Origin:
     )
 
 
+def state_to_data(state: DocumentState) -> dict[str, Any]:
+    """Eine Seite einer Dokumentänderung (§15.5).
+
+    Ein Feld, das nicht beteiligt war, fehlt hier ganz — das unterscheidet es
+    von einem, das beteiligt und leer war. Bei den Parametern bleibt ein
+    ``null`` dagegen stehen: es heißt „gab es damals nicht" und macht aus dem
+    Undo eines neuen Parameters ein Löschen.
+    """
+    return _without_none(
+        {
+            "parameters": (
+                None
+                if state.parameters is None
+                else {
+                    name: None if parameter is None else parameter_to_data(parameter)
+                    for name, parameter in state.parameters.items()
+                }
+            ),
+            "fits": None if state.fits is None else [fit_to_data(entry) for entry in state.fits],
+            "printer": state.printer,
+            "material": state.material,
+        }
+    )
+
+
+def state_from_data(data: dict[str, Any]) -> DocumentState:
+    parameters = data.get("parameters")
+    fits = data.get("fits")
+    return DocumentState(
+        parameters=(
+            None
+            if parameters is None
+            else {
+                name: None if entry is None else parameter_from_data(name, entry)
+                for name, entry in parameters.items()
+            }
+        ),
+        fits=None if fits is None else tuple(fit_from_data(entry) for entry in fits),
+        printer=data.get("printer"),
+        material=data.get("material"),
+    )
+
+
+def change_to_data(change: DocumentChange) -> dict[str, Any]:
+    return {"before": state_to_data(change.before), "after": state_to_data(change.after)}
+
+
+def change_from_data(data: dict[str, Any]) -> DocumentChange:
+    return DocumentChange(
+        before=state_from_data(data.get("before", {})),
+        after=state_from_data(data.get("after", {})),
+    )
+
+
 def transaction_to_data(transaction: Transaction) -> dict[str, Any]:
     """Der Titel wird als der Text gespeichert, den der Nutzer sah, nicht als
     Übersetzungsschlüssel: ein Verlaufseintrag ist ein Protokoll dessen, was
     passiert ist, und der Nutzer darf ihn umbenennen."""
-    return {
-        "id": transaction.id,
-        "title": str(transaction.title),
-        "origin": origin_to_data(transaction.origin),
-        "ops": list(transaction.ops),
-    }
+    return _without_none(
+        {
+            "id": transaction.id,
+            "title": str(transaction.title),
+            "origin": origin_to_data(transaction.origin),
+            "ops": list(transaction.ops),
+            "changes": (
+                None if transaction.changes is None else change_to_data(transaction.changes)
+            ),
+        }
+    )
 
 
 def transaction_from_data(data: dict[str, Any]) -> Transaction:
+    changes = data.get("changes")
     return Transaction(
         id=data["id"],
         title=data.get("title", ""),
         ops=tuple(int(entry) for entry in data.get("ops", ())),
         origin=origin_from_data(data.get("origin")),
+        changes=None if changes is None else change_from_data(changes),
     )
 
 

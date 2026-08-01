@@ -6,7 +6,7 @@ alles, was er tut, kommt als eine Transaktion an, die ein einziges Undo
 zurücknimmt.
 """
 
-from app.core.agent.apply import accept, discard, record, undo
+from app.core.agent.apply import accept, discard, record
 from app.core.agent.context import build_messages, is_discarded, system_prompt
 from app.core.agent.proposal import Proposal, Question
 from app.core.agent.session import AgentSession
@@ -24,5 +24,4 @@ __all__ = [
     "record",
     "system_prompt",
     "tool_schemas",
-    "undo",
 ]

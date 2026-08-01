@@ -48,9 +48,6 @@ class Proposal:
     stopped: str = ""
     """Set when a limit ended the run: ``steps`` or ``tokens`` (§26.5)."""
 
-    previous_parameters: dict[ParameterName, Parameter | None] = field(default_factory=dict)
-    previous_fits: list[Fit] | None = None
-
     @property
     def changes_geometry(self) -> bool:
         return bool(self.drafts)
