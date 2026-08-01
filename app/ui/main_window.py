@@ -228,36 +228,42 @@ class MainWindow(QMainWindow):
             tr("Schnitt"),
             self.section_bar,
             lambda: self.section_bar.axis.setCurrentIndex(0),
+            symbol="section",
         )
         self.tools.add(
             "measure",
             tr("Messen"),
             self.measure_bar,
             lambda: self.measure_bar.mode.setCurrentIndex(0),
+            symbol="measure",
         )
         self.tools.add(
             "transform",
             tr("Bewegen"),
             self.transform_bar,
             lambda: self.transform_bar.gizmo.setChecked(False),
+            symbol="move",
         )
         self.tools.add(
             "analysis",
             tr("Analyse"),
             self.analysis_bar,
             lambda: self.analysis_bar.selector.setCurrentIndex(0),
+            symbol="analysis",
         )
         self.tools.add(
             "layers",
             tr("Schichten"),
             self.layer_bar,
             lambda: self.layer_bar.active.setCurrentIndex(0),
+            symbol="layers",
         )
         self.tools.add(
             "explode",
             tr("Explosion"),
             self.explode_bar,
             lambda: self.explode_bar.slider.setValue(0),
+            symbol="explode",
         )
         # Bemalen ändert Materialslots und nicht bloß die Ansicht: das Schließen
         # beendet das Bemalen, nimmt aber nichts Gemaltes zurück.
@@ -266,6 +272,7 @@ class MainWindow(QMainWindow):
             tr("Bemalen"),
             self.paint_bar,
             lambda: self.paint_bar.active.setChecked(False),
+            symbol="paint",
         )
 
         middle = QWidget(self)

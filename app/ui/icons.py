@@ -1,0 +1,130 @@
+"""Symbole für die Oberfläche (Bauplan §19.3, AGENTS.md Regel 18).
+
+**Symbole ergänzen Text, sie ersetzen ihn nicht.** Ein unbeschriftetes Zeichen
+wird geraten, und bei einer Anwendung, die jemand alle paar Wochen öffnet, ist
+Wiedererkennen mehr wert als Kompaktheit. „Schnitt", „Explosion" und „Passung"
+sind keine Begriffe mit einem Bild, auf das sich die Welt geeinigt hat. Was ein
+Symbol hier leistet, ist Unterscheidbarkeit auf einen Blick — sieben Knöpfe mit
+Text sehen alle gleich aus, sieben Knöpfe mit Text und Zeichen nicht.
+
+Von Hand geschriebene Pfade und nicht aus :mod:`app.core.drawing` gerechnet:
+das Modul zeichnet Maßlinien und Schemata, deren Form aus Zahlen folgt. Ein
+Symbol ist eine gestaltete Form, und die entsteht nicht aus einer Formel.
+
+Zwei Dinge halten sie brauchbar:
+
+* **``currentColor`` statt fester Farben.** Qt löst das nicht selbst auf, also
+  wird es beim Laden gegen die Textfarbe ersetzt — ein Satz Symbole für beide
+  Themen, keiner, der im dunklen unsichtbar wird.
+* **Größe an der Schrift, nicht an Pixeln.** Wer die Schrift größer stellt,
+  bekommt größere Symbole; sonst schrumpfen sie neben dem Text zu Punkten.
+"""
+
+from __future__ import annotations
+
+from typing import Final
+
+from PySide6.QtCore import QByteArray, QSize, Qt
+from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
+from PySide6.QtSvg import QSvgRenderer
+from PySide6.QtWidgets import QWidget
+
+#: Wie viel größer als die Zeilenhöhe ein Symbol gezeichnet wird, bevor es
+#: verkleinert wird — sonst franst es auf HiDPI aus.
+OVERSAMPLING: Final = 2
+
+_HEAD: Final = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+    'fill="none" stroke="currentColor" stroke-width="1.6" '
+    'stroke-linecap="round" stroke-linejoin="round">'
+)
+
+#: Die Symbole der Werkzeugzeile. Bewusst in einem Strichstil gehalten: ein
+#: gefülltes und ein gestricheltes Zeichen nebeneinander sehen aus wie zwei
+#: verschiedene Programme.
+PATHS: Final[dict[str, str]] = {
+    # Ein Körper, den eine Ebene durchtrennt.
+    "section": (
+        '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z" />'
+        '<path d="M2.5 13.5h19" stroke-dasharray="3 2.5" />'
+    ),
+    # Maßlinie mit Endstrichen — das Zeichen jeder technischen Zeichnung.
+    "measure": (
+        '<path d="M4 12h16" /><path d="M7 9l-3 3 3 3" /><path d="M17 9l3 3-3 3" />'
+        '<path d="M4 6v3" /><path d="M20 6v3" />'
+    ),
+    # Vier Richtungen: das eine Zeichen fürs Bewegen, auf das sich alle geeinigt haben.
+    "move": (
+        '<path d="M12 3v18" /><path d="M3 12h18" />'
+        '<path d="M9 6l3-3 3 3" /><path d="M9 18l3 3 3-3" />'
+        '<path d="M6 9l-3 3 3 3" /><path d="M18 9l3 3-3 3" />'
+    ),
+    # Eine Karte über einer Fläche: ungleich gefüllte Felder.
+    "analysis": (
+        '<rect x="3.5" y="3.5" width="17" height="17" rx="2" />'
+        '<path d="M3.5 12h17" /><path d="M12 3.5v17" />'
+        '<path d="M3.5 8h8.5" stroke-width="3" opacity="0.45" />'
+        '<path d="M12 16h8.5" stroke-width="3" opacity="0.8" />'
+    ),
+    # Gestapelte Schichten.
+    "layers": (
+        '<path d="M12 3.5 21 8l-9 4.5L3 8z" />'
+        '<path d="M3 12.5 12 17l9-4.5" opacity="0.75" />'
+        '<path d="M3 16.5 12 21l9-4.5" opacity="0.5" />'
+    ),
+    # Auseinandergezogen: zwei Hälften, die voneinander wegwandern. Die erste
+    # Fassung verband sie mit gestrichelten Linien — die verschwanden bei
+    # Symbolgröße, und übrig blieben zwei Quadrate ohne Aussage.
+    "explode": (
+        '<rect x="3" y="3" width="8" height="8" rx="1" />'
+        '<rect x="13" y="13" width="8" height="8" rx="1" />'
+        '<path d="M13.5 10.5 10.5 13.5" />'
+        '<path d="M13.5 10.5h-3v3" />'
+    ),
+    # Ein Pinsel, der eine Fläche einfärbt.
+    "paint": (
+        '<path d="M5 13.5 13.5 5a2.5 2.5 0 0 1 3.5 3.5L8.5 17z" />'
+        '<path d="M5 13.5 8.5 17l-3 2.5-2-2z" />'
+        '<path d="M14 6.5 17.5 10" />'
+    ),
+}
+
+
+def svg_source(name: str, colour: str) -> str:
+    """Das SVG eines Symbols, in einer Farbe statt ``currentColor``."""
+    body = PATHS.get(name)
+    if body is None:
+        return ""
+    return f"{_HEAD}{body}</svg>".replace("currentColor", colour)
+
+
+def icon(name: str, widget: QWidget, *, scale: float = 1.35) -> QIcon:
+    """Ein Symbol in der Textfarbe und in der Größe der Schrift des Widgets.
+
+    ``scale`` ist der Faktor auf die Zeilenhöhe: etwas größer als die Schrift,
+    sonst verschwindet ein Strichsymbol neben dem Wort daneben.
+    """
+    colour = widget.palette().windowText().color()
+    source = svg_source(name, colour.name())
+    if not source:
+        return QIcon()
+    size = max(int(widget.fontMetrics().height() * scale), 12)
+    return QIcon(_pixmap(source, size, colour))
+
+
+def _pixmap(source: str, size: int, colour: QColor) -> QPixmap:
+    renderer = QSvgRenderer(QByteArray(source.encode("utf-8")))
+    if not renderer.isValid():
+        return QPixmap()
+    image = QImage(QSize(size, size) * OVERSAMPLING, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    renderer.render(painter)
+    painter.end()
+    image.setDevicePixelRatio(float(OVERSAMPLING))
+    return QPixmap.fromImage(image)
+
+
+def known() -> tuple[str, ...]:
+    """Welche Symbole es gibt — der Test liest das."""
+    return tuple(PATHS)

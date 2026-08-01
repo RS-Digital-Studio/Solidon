@@ -321,3 +321,28 @@ def test_the_chat_hint_offers_a_way_out(qt_app: QApplication) -> None:
 
     panel.set_available(True, backend="ollama")
     assert not panel.setup.isVisibleTo(panel), "mit Zugang gibt es nichts einzurichten"
+
+
+def test_every_tool_has_a_symbol_and_keeps_its_label(qt_app: QApplication) -> None:
+    """Regel 18: das Zeichen kommt neben den Text, nicht an seine Stelle."""
+    from app.ui import icons
+
+    window = MainWindow(Session(), UiSettings())
+
+    for key, title in window.tools.tool_titles().items():
+        button = window.tools._buttons[key]
+        assert title.strip(), key
+        assert not button.icon().isNull(), f"{key} hat kein Symbol"
+        assert button.text().strip(), f"{key} hat seine Beschriftung verloren"
+    assert len(icons.known()) >= len(window.tools.tool_titles())
+
+
+def test_symbols_render_and_follow_the_text_colour(qt_app: QApplication) -> None:
+    """Ein Satz Zeichen für beide Themen — sonst ist einer davon unsichtbar."""
+    from app.ui import icons
+
+    for name in icons.known():
+        source = icons.svg_source(name, "#ff0000")
+        assert source.startswith("<svg"), name
+        assert "currentColor" not in source, f"{name} hängt an einer festen Farbe"
+        assert "#ff0000" in source, name

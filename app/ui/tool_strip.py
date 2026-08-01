@@ -29,7 +29,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QHBoxLayout,
@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.i18n import TranslatableText, tr
+from app.ui.icons import icon
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +49,9 @@ class Tool:
     key: str
     title: TranslatableText | str
     bar: QWidget
+    symbol: str = ""
+    """Name des Symbols neben der Beschriftung. Neben, nicht statt: ein
+    unbeschriftetes Zeichen wird geraten (Regel 18)."""
     reset: Callable[[], None] | None = None
     """Was passiert, wenn das Werkzeug geschlossen wird. Ohne das bleibt die
     Ansichtsänderung stehen — richtig für alles, was nicht nur die Ansicht
@@ -87,9 +91,10 @@ class ToolStrip(QWidget):
         title: TranslatableText | str,
         bar: QWidget,
         reset: Callable[[], None] | None = None,
+        symbol: str = "",
     ) -> None:
         """Ein Werkzeug anmelden. Seine Leiste startet verborgen."""
-        tool = Tool(key=key, title=title, bar=bar, reset=reset)
+        tool = Tool(key=key, title=title, bar=bar, symbol=symbol, reset=reset)
         self._tools[key] = tool
 
         button = QToolButton(self)
@@ -97,6 +102,9 @@ class ToolStrip(QWidget):
         # nicht allein an einer Farbe hängen (Regel 18). Der gedrückte Zustand
         # ist die zweite Kodierung.
         button.setText(str(title))
+        if symbol:
+            button.setIcon(icon(symbol, button))
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         button.setCheckable(True)
         button.setAutoRaise(True)
         button.setToolTip(str(title))
