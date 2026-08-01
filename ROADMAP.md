@@ -1010,7 +1010,16 @@ Was dabei zutage kam:
   `core.markup` Überschriften eine Stufe nach unten rückt. Ein Test hat es
   gefunden, kein Auge — im Browser sieht ein toter Anker aus wie ein lebender.
 
-**Offen:** Der Prüfbericht meldet „Keine Befunde", während vier Befunde
-darunter stehen — die Zusammenfassung wird von `add_findings` nicht
-nachgezogen. Beim Aufnehmen des Bildes aufgefallen, nicht behoben, weil es
-nicht zum Handbuch gehört.
+Beim Aufnehmen des Bildes vom Prüfbericht fiel auf, dass über vier Befunden
+„Keine Befunde" stand: gezählt wurde nur, was aus der Auswertung kam, nicht was
+über `add_findings` dazukam. Behoben — gezählt wird jetzt, was in der Liste
+steht. Ein Bild von der eigenen Oberfläche zwingt dazu, sie anzusehen.
+
+**Offen: die Orientierungssuche reißt ihr Budget.** `orient_200` braucht auf
+dieser Maschine 23,6 s, das Ziel aus §31 sind 20 s; zwei Läufe hintereinander
+lieferten 23606 und 23654 ms, es ist also kein Rauschen. Der Docstring des
+Tests nennt „etwa 16" — der Wert wurde einmal erreicht und gilt nicht mehr.
+Betroffen ist `core/slice/orientation.py`, zuletzt inhaltlich geändert in
+a8c6565; dazwischen liegt nur die Übersetzungsrunde, die keine Laufzeit kostet.
+Nicht in derselben Runde angefasst: das ist Profiling-Arbeit an der
+Orientierungssuche und gehört nicht ins Handbuch.
