@@ -86,6 +86,12 @@ class PartCatalog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        # „OK" sagt nicht, was es tut — derselbe Befund, der jedem
+        # Operationsdialog seinen handelnden Knopf gegeben hat. Dieser hier
+        # setzt den gewählten Baustein in die Szene, also heißt er so.
+        ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if ok is not None:
+            ok.setText(tr("Einfügen"))
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 

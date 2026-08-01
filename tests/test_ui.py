@@ -956,3 +956,167 @@ def test_a_recent_entry_can_be_forgotten(window: MainWindow, tmp_path: Path) -> 
     window._forget_recent(path)
 
     assert window.settings.recent == []
+
+
+# --- Export aus dem Fenster (§29, §2.2) ------------------------------------------
+
+
+def test_export_writes_the_selected_format(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Weg 1 endet mit „exportieren" — und dieser Schritt war aus dem Fenster
+    nicht erreichbar: der Schreiber stand seit P2 im Kern, der einzige Weg zu
+    einer Datei führte über einen installierten Slicer."""
+    from PySide6.QtWidgets import QFileDialog
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    target = tmp_path / "wuerfel.stl"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "STL (*.stl)")),
+    )
+    window.action_export()
+
+    assert target.is_file(), "der gewählte Name ist die Datei, nicht ein Schema daraus"
+    assert target.stat().st_size > 0
+
+
+def test_export_as_3mf_writes_one_assembly(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mehrere Körper als 3MF sind eine Baugruppe in einer Datei (§20) —
+    nicht eine Datei je Körper, über deren Zusammengehörigkeit der Slicer
+    selbst entscheiden müsste."""
+    from PySide6.QtWidgets import QFileDialog
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    target = tmp_path / "baugruppe.3mf"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
+    )
+    window.object_tree.tree.clearSelection()
+    window.action_export()
+
+    written = list(tmp_path.glob("*.3mf"))
+    assert len(written) == 1, "eine Baugruppe, eine Datei"
+
+
+def test_export_is_disabled_on_an_empty_scene(window: MainWindow) -> None:
+    """Ein Exporteintrag, der auf leerer Szene ein Fenster öffnet, wäre die
+    modale Sackgasse aus der Bedienrunde — er ist stattdessen aus."""
+    assert not window.export_action.isEnabled()
+    assert not window.auto_split_action.isEnabled()
+    assert not window.variants_action.isEnabled()
+
+
+# --- Parameter ohne Agent anlegen (§13, §2.3) ------------------------------------
+
+
+def test_a_parameter_can_be_added_without_the_agent(session: Session) -> None:
+    """§2.3 verspricht: ohne KI funktioniert alles außer dem Chat. Das
+    Anlegen eines Parameters war aber ein reines Agentenwerkzeug — und ein
+    Undo muss den neuen Parameter entfernen, nicht auf Null setzen (§15.5)."""
+    session.add_parameter(Parameter(name="width", value=40.0))
+
+    assert "width" in session.project.document.parameters
+    assert session.modified
+
+    session.undo()
+    assert "width" not in session.project.document.parameters
+
+
+def test_adding_a_taken_parameter_name_fails(session: Session) -> None:
+    """Ein zweiter Parameter gleichen Namens überschriebe den ersten still —
+    stattdessen kommt ein Fehler mit Vorschlag (§2.7)."""
+    caught: list[object] = []
+    session.failed.connect(caught.append)
+    session.add_parameter(Parameter(name="width", value=40.0))
+
+    session.add_parameter(Parameter(name="width", value=50.0))
+
+    assert caught, "der zweite Versuch meldet sich"
+    assert session.project.document.parameters["width"].value == pytest.approx(40.0)
+
+
+def test_a_parameter_expression_may_not_cycle(session: Session) -> None:
+    """Die Zyklusprüfung aus §13 gilt auch für den Weg über die Leiste."""
+    caught: list[object] = []
+    session.failed.connect(caught.append)
+    session.add_parameter(Parameter(name="width", value=40.0))
+
+    session.add_parameter(Parameter(name="height", value=0.0, expression="=@missing + 1"))
+
+    assert caught, "ein Ausdruck auf einen unbekannten Parameter wird abgelehnt"
+    assert "height" not in session.project.document.parameters
+
+
+def test_the_parameter_dialog_validates_inline(qt_app: QApplication) -> None:
+    """Der Dialog lehnt inline ab, statt ein Fenster auf ein Fenster zu
+    stellen: leerer Name, vergebener Name, kaputter Ausdruck."""
+    from app.ui.dialogs import ParameterDialog
+
+    taken = {"width": Parameter(name="width", value=40.0)}
+    dialog = ParameterDialog(taken)
+
+    assert dialog.validation_problem() is not None, "ohne Namen geht es nicht"
+
+    dialog.name_field.setText("width")
+    assert dialog.validation_problem() is not None, "der Name ist vergeben"
+
+    dialog.name_field.setText("height")
+    dialog.expression_field.setText("=@width / 2")
+    assert dialog.validation_problem() is None
+    made = dialog.parameter()
+    assert made.expression == "=@width / 2"
+    assert made.value == pytest.approx(20.0), "der Startwert kommt aus dem Ausdruck"
+
+    dialog.expression_field.setText("import os")
+    assert dialog.validation_problem() is not None, "alles außerhalb der Grammatik fällt durch"
+
+
+def test_the_catalog_button_says_what_it_does(qt_app: QApplication) -> None:
+    """„OK" sagte nicht, was es tut — im Katalog blieb der Standardknopf
+    stehen, während jeder Operationsdialog längst nach seiner Operation
+    heißt."""
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.ui.catalog import PartCatalog
+
+    catalog = PartCatalog()
+    box = catalog.findChild(QDialogButtonBox)
+    assert box is not None
+    ok = box.button(QDialogButtonBox.StandardButton.Ok)
+    assert ok is not None
+    assert ok.text().replace("&", "") == "Einfügen"
+
+
+# --- Auto Split abseits des Hauptthreads (§2.8) ----------------------------------
+
+
+def test_auto_split_runs_in_a_worker(session: Session) -> None:
+    """Die Trennebenensuche lief mit Wartezeiger im Hauptthread — jetzt
+    meldet sie sich über ``splitBusyChanged`` und liefert ihr Ergebnis an
+    einen Rückruf, während das Fenster bedienbar bleibt."""
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+
+    states: list[bool] = []
+    session.splitBusyChanged.connect(states.append)
+    results: list[object] = []
+
+    session.split_async("obj_1", results.append)
+    session.wait_for_idle()
+
+    assert results, "der Rückruf bekommt das Ergebnis"
+    applied = results[0]
+    assert applied.transaction is None, "ein 20-mm-Würfel passt aufs Bett"
+    assert states and states[0] is True and states[-1] is False

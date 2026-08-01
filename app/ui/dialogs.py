@@ -29,6 +29,7 @@ from app.core.backends import keys
 from app.core.errors import CANCEL, REPORT_ERROR, SHOW_DETAILS, Action, AppError
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
+from app.core.scene import expressions
 from app.i18n import tr
 
 _log = get_logger(__name__)
@@ -128,6 +129,131 @@ class CalibrationDialog(QDialog):
         """Was eingetragen wurde, als anwendungsfertige Kalibrierung."""
         return calibration.from_measurements(
             self.material, **{name: editor.value() for name, editor in self.editors.items()}
+        )
+
+
+class ParameterDialog(QDialog):
+    """Ein Projektmaß von Hand anlegen (Bauplan §13, §2.3).
+
+    Anlegen konnte bisher nur der Agent über sein Werkzeug. §2.3 verspricht
+    aber, dass ohne KI alles außer dem Chat funktioniert — und Weg 2 lebt von
+    benannten Maßen. Die Leiste ändert Werte; das hier ist das Gegenstück,
+    das den Namen vergibt.
+
+    Geprüft wird inline, nicht modal: ein Fehlerdialog auf einem Dialog ist
+    eine Sackgasse mit Vorgeschichte. Trägt das Ausdrucksfeld etwas, gehört
+    der Wert dem Ausdruck — das Wertfeld sagt das, indem es sich abschaltet.
+    """
+
+    def __init__(
+        self,
+        parameters: Mapping[str, Any],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(tr("Parameter anlegen"))
+        self.setMinimumWidth(420)
+        self._existing = set(parameters)
+        try:
+            self._values: dict[str, float] = dict(expressions.resolve(parameters))
+        except AppError:
+            # Ein kaputter Bestandsausdruck ist nicht das Problem dieses
+            # Dialogs — dann prüft erst das Anlegen den neuen Ausdruck.
+            self._values = {}
+        self._value: float = 0.0
+
+        explanation = QLabel(
+            tr(
+                "Ein Parameter ist ein benanntes Maß. Operationen und Skizzen "
+                "verweisen mit @name darauf, und an der Zahl zu drehen baut "
+                "das Modell neu."
+            ),
+            self,
+        )
+        explanation.setWordWrap(True)
+
+        self.name_field = QLineEdit(self)
+        self.name_field.setPlaceholderText(tr("zum Beispiel breite"))
+        self.value_field = QDoubleSpinBox(self)
+        self.value_field.setDecimals(3)
+        self.value_field.setRange(-100_000.0, 100_000.0)
+        self.unit_field = QLineEdit("mm", self)
+        self.expression_field = QLineEdit(self)
+        self.expression_field.setPlaceholderText(tr("optional — zum Beispiel =@breite/2 + 5"))
+        # Der Ausdruck besitzt den Wert (§13) — dieselbe Regel, nach der die
+        # Leiste abgeleitete Werte zeigt statt sie zu öffnen.
+        self.expression_field.textChanged.connect(
+            lambda text: self.value_field.setEnabled(not text.strip())
+        )
+
+        form = QFormLayout()
+        form.addRow(tr("Name"), self.name_field)
+        form.addRow(tr("Wert"), self.value_field)
+        form.addRow(tr("Einheit"), self.unit_field)
+        form.addRow(tr("Ausdruck"), self.expression_field)
+
+        self.problem = QLabel("", self)
+        self.problem.setWordWrap(True)
+        self.problem.setVisible(False)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
+        )
+        ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if ok is not None:
+            # Der Knopf sagt, was er tut — wie in jedem Operationsdialog.
+            ok.setText(tr("Anlegen"))
+        buttons.accepted.connect(self._accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(explanation)
+        layout.addLayout(form)
+        layout.addWidget(self.problem)
+        layout.addWidget(buttons)
+
+    def validation_problem(self) -> str | None:
+        """Was dem Anlegen im Weg steht — oder None. Eigene Funktion, weil
+        sie sich ohne modales Fenster prüfen lassen muss."""
+        name = self.name_field.text().strip()
+        if not name:
+            return tr("Der Parameter braucht einen Namen.")
+        if name in self._existing:
+            return tr("Diesen Namen gibt es schon.")
+        try:
+            expressions.check(f"@{name}")
+        except AppError:
+            return tr(
+                "Der Name muss sich in einem Ausdruck als @name schreiben "
+                "lassen — Buchstaben, Ziffern und Unterstriche."
+            )
+        expression = self.expression_field.text().strip()
+        if expression:
+            try:
+                self._value = expressions.evaluate(expression, self._values)
+            except AppError as error:
+                return str(error.detail or error.title)
+        return None
+
+    def _accept(self) -> None:
+        problem = self.validation_problem()
+        if problem is not None:
+            self.problem.setText(problem)
+            self.problem.setVisible(True)
+            return
+        self.accept()
+
+    def parameter(self) -> Any:
+        """Was angelegt werden soll — erst nach einem angenommenen Dialog
+        sinnvoll."""
+        from app.core.types import Parameter
+
+        expression = self.expression_field.text().strip() or None
+        return Parameter(
+            name=self.name_field.text().strip(),
+            value=self._value if expression else self.value_field.value(),
+            unit=self.unit_field.text().strip() or "mm",
+            expression=expression,
         )
 
 

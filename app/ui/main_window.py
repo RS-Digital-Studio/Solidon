@@ -46,6 +46,13 @@ from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import updates
 from app.core.errors import AppError, InternalError
 from app.core.export.handover import SliceOutcome
+from app.core.export.writer import (
+    ExportFormat,
+    plan_export,
+    safe_name,
+    write_assembly,
+    write_plan,
+)
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import calibration
 from app.core.knowledge.parts.ops import op_name as part_op_name
@@ -68,6 +75,7 @@ from app.ui.dialogs import (
     AskDialog,
     CalibrationDialog,
     KeyDialog,
+    ParameterDialog,
     confirm_discard,
     confirm_unsaved,
     show_details,
@@ -140,6 +148,20 @@ class _MapWorker(QThread):
             self.tooLarge.emit()
 
 
+class _UpdateWorker(QThread):
+    """Die Update-Anfrage, abseits des Oberflächen-Threads (§37.2).
+
+    Sie lief beim Start im Hauptthread — ihr Docstring versprach „niemand
+    wartet auf sie", das Fenster wartete aber bis zu vier Sekunden auf einen
+    Server, der nicht antwortet. Jetzt wartet wirklich niemand.
+    """
+
+    done = Signal(object)
+
+    def run(self) -> None:
+        self.done.emit(updates.check())
+
+
 class _SliceWorker(QThread):
     """Eine Schichtanalyse, abseits des Oberflächen-Threads (§2.8, §22).
 
@@ -199,6 +221,24 @@ MENU_GROUPS: tuple[tuple[TranslatableText, tuple[str, ...]], ...] = (
 )
 
 
+def _format_of(target: Path, chosen_filter: str) -> ExportFormat:
+    """Das Exportformat aus dem Dateinamen, sonst aus dem gewählten Filter.
+
+    Wer ``teil.3mf`` tippt, meint 3MF, auch wenn der Filter noch auf STL
+    steht — die Endung ist die ausdrücklichere der beiden Angaben.
+    """
+    from app.core.export.writer import FORMAT_SUFFIX
+
+    suffix = target.suffix.lower()
+    for name, ending in FORMAT_SUFFIX.items():
+        if suffix == ending:
+            return name
+    for name, ending in FORMAT_SUFFIX.items():
+        if f"*{ending}" in chosen_filter:
+            return name
+    return "stl"
+
+
 def _needs_objects(count: int) -> str:
     """Der Satz, der sagt, wie viele Körper fehlen — nicht nur, dass welche
     fehlen.
@@ -230,6 +270,9 @@ class MainWindow(QMainWindow):
         self._slice_cache: SliceResult | None = None
         self._slice_key: tuple[str, int] | None = None
         self._slice_worker: Any = None
+        self._update_worker: Any = None
+        """Die laufende Update-Anfrage (§37.2) — festgehalten wie jeder
+        andere Arbeiter, damit sie das Fenster nicht überlebt."""
         self._proposal: Any = None
         """The agent turn waiting for a decision (§26.5)."""
         self._manual: ManualWindow | None = None
@@ -428,6 +471,7 @@ class MainWindow(QMainWindow):
         self.object_tree.visibilityRequested.connect(self._on_visibility)
         self.object_tree.isolateRequested.connect(self._on_isolate)
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
+        self.parameters.addRequested.connect(self.action_add_parameter)
         self.right.setVisible(self.settings.right_panel_visible)
 
     def _build_status_bar(self) -> None:
@@ -439,6 +483,9 @@ class MainWindow(QMainWindow):
         self.cancel_button = QPushButton(tr("Abbrechen"), self)
         self.cancel_button.setVisible(False)
         self.cancel_button.clicked.connect(self.session.cancel)
+        # Der Knopf gilt für alles, was gerade läuft — auch für die
+        # Trennebenensuche, die ihr eigenes Verwerfen hat (§15.6).
+        self.cancel_button.clicked.connect(self.session.cancel_split)
 
         bar = self.statusBar()
         bar.addWidget(self.measurements, 1)
@@ -498,6 +545,16 @@ class MainWindow(QMainWindow):
             self.action_catalog,
             tr("Alle Bausteine durchsehen: Mutternfalle, Rastnase, Scharnier und die anderen."),
         )
+        self.export_action = self._add_action(
+            file_menu,
+            tr("Exportieren …"),
+            "Ctrl+E",
+            self.action_export,
+            tr(
+                "Die Körper als STL, 3MF, OBJ, PLY oder STEP schreiben — "
+                "mit der Prüfung aus dem Bericht davor."
+            ),
+        )
         self._add_action(
             file_menu,
             tr("Druckeinstellungen …"),
@@ -531,6 +588,13 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             edit_menu,
+            tr("Parameter anlegen …"),
+            None,
+            self.action_add_parameter,
+            tr("Ein Maß benennen, auf das Operationen und Skizzen mit @name verweisen können."),
+        )
+        self.auto_split_action = self._add_action(
+            edit_menu,
             tr("Automatisch teilen …"),
             None,
             self.action_auto_split,
@@ -549,7 +613,7 @@ class MainWindow(QMainWindow):
                 "auch in älteren Projekten."
             ),
         )
-        self._add_action(
+        self.variants_action = self._add_action(
             edit_menu,
             tr("Varianten erzeugen …"),
             None,
@@ -890,6 +954,12 @@ class MainWindow(QMainWindow):
 
         self.undo_action.setEnabled(self.session.history.can_undo)
         self.redo_action.setEnabled(self.session.history.can_redo)
+        # Dieselbe Regel für die zwei Einträge, die keine Operationen sind und
+        # trotzdem einen Körper brauchen: ausgegraut statt einer modalen
+        # Sackgasse nach dem Klick.
+        self.auto_split_action.setEnabled(chosen >= 1)
+        self.variants_action.setEnabled(objects > 0)
+        self.export_action.setEnabled(objects > 0)
 
     def _connect_session(self) -> None:
         self.session.sceneChanged.connect(self._on_scene)
@@ -900,6 +970,7 @@ class MainWindow(QMainWindow):
         self.session.failed.connect(self._on_error)
         self.session.proposalReady.connect(self._on_proposal)
         self.session.agentBusyChanged.connect(self._on_agent_busy)
+        self.session.splitBusyChanged.connect(self._on_split_busy)
         backend = self.session.agent_backend
         self.chat.set_available(
             backend is not None, f"{backend.id}:{backend.model}" if backend else ""
@@ -1012,15 +1083,13 @@ class MainWindow(QMainWindow):
             )
             return
 
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            applied = self.session.auto_split(object_id)
-        except AppError as error:
-            show_error(error, self)
-            return
-        finally:
-            QApplication.restoreOverrideCursor()
+        # Kein Wartezeiger mehr: die Suche prüft Kandidatenebene für
+        # Kandidatenebene und dauert an einem großen Körper Sekunden bis
+        # Minuten — §2.8 verlangt dafür Fortschritt und Abbrechen, kein
+        # eingefrorenes Fenster mit Ankündigung.
+        self.session.split_async(object_id, self._split_done)
 
+    def _split_done(self, applied: Any) -> None:
         self.report.add_findings(applied.findings)
         if applied.transaction is None:
             self.status_message.setText(tr("Dieses Objekt passt bereits auf das Bett."))
@@ -1160,6 +1229,90 @@ class MainWindow(QMainWindow):
             gcode.compare(estimate.support_volume, measured, "support").findings
         )
 
+    def action_export(self) -> None:
+        """§29: die Körper als Datei — der Schritt, mit dem jeder der drei
+        Wege aus §2.2 endet.
+
+        Der Schreiber stand seit P2 im Kern und war, wie vorher schon auf der
+        Kommandozeile, aus dem Fenster nicht erreichbar: der einzige Weg zu
+        einer Datei führte über den Slicer (Strg+P), und der setzt einen
+        installierten Slicer voraus. Exportiert wird die Auswahl, ohne
+        Auswahl alles; ein 3MF wird **eine** Datei mit allen Körpern (§20),
+        jedes andere Format eine Datei je Körper nach dem Namensschema.
+        Die Prüfung davor ist ein Bericht, keine Sperre (§29) — ihre Befunde
+        landen im Prüfbericht.
+        """
+        result = self.session.last_result
+        if result is None or not result.scene.objects:
+            return
+        chosen = self.object_tree.selected_objects()
+        objects = [
+            entry
+            for object_id, entry in result.scene.objects.items()
+            if not chosen or object_id in chosen
+        ]
+
+        stem = safe_name(Path(self.session.title.rstrip("*")).stem, "projekt")
+        filters = ";;".join(
+            (
+                "STL (*.stl)",
+                "3MF (*.3mf)",
+                "OBJ (*.obj)",
+                "PLY (*.ply)",
+                "STEP (*.step)",
+            )
+        )
+        name, chosen_filter = QFileDialog.getSaveFileName(
+            self, tr("Exportieren"), f"{stem}.stl", filters
+        )
+        if not name:
+            return
+        target = Path(name)
+        export_format: ExportFormat = _format_of(target, chosen_filter)
+
+        sources = self.session.project.document.sources
+        try:
+            if export_format == "3mf" and len(objects) > 1:
+                # Eine Baugruppe bleibt eine Datei: der Slicer bekommt einen
+                # Druckauftrag, keine Handvoll Teile (§20).
+                written_path, findings = write_assembly(
+                    objects,
+                    target.parent,
+                    project_name=target.stem,
+                    profile=self.session.profile,
+                    sources=sources,
+                )
+                written = [written_path]
+            else:
+                # Ein fester Name für einen Körper; bei mehreren zählt das
+                # Namensschema aus §29, damit auf der Platte lesbar bleibt,
+                # welches Teil welches ist. Geschweifte Klammern im Namen
+                # sind Zeichen, keine Platzhalter — ``format`` sähe das anders.
+                fixed = target.stem.replace("{", "{{").replace("}", "}}")
+                scheme = fixed if len(objects) == 1 else None
+                plan = plan_export(
+                    objects,
+                    project_name=target.stem,
+                    profile=self.session.profile,
+                    export_format=export_format,
+                    scheme=scheme,
+                    sources=sources,
+                )
+                findings = list(plan.findings)
+                written = write_plan(plan, target.parent, export_format)
+        except AppError as error:
+            show_error(error, self)
+            return
+
+        if findings:
+            self.report.add_findings(list(findings))
+            self._focus_report()
+        self.status_message.setText(
+            f"{tr('Exportiert')}: {written[0].name}"
+            if len(written) == 1
+            else f"{tr('Exportiert')}: {len(written)} {tr('Dateien')} → {target.parent}"
+        )
+
     def action_catalog(self) -> None:
         """§24.3: die Bibliothek, die man sehen kann. Einen Baustein zu wählen
         führt seine Operation aus.
@@ -1257,6 +1410,7 @@ class MainWindow(QMainWindow):
             "file.open": (tr("Öffnen …"), "Ctrl+O", self.action_open),
             "file.save": (tr("Speichern"), "Ctrl+S", self.action_save),
             "file.import": (tr("Modell einfügen …"), "Ctrl+I", self.action_import),
+            "file.export": (tr("Exportieren …"), "Ctrl+E", self.action_export),
             "file.print_settings": (
                 tr("Druckeinstellungen …"),
                 "Ctrl+P",
@@ -1266,6 +1420,11 @@ class MainWindow(QMainWindow):
             "edit.settings": (tr("Einstellungen …"), "Ctrl+,", self.action_settings),
             "edit.undo": (tr("Rückgängig"), "Ctrl+Z", self.action_undo),
             "edit.redo": (tr("Wiederholen"), "Ctrl+Y", self.action_redo),
+            "edit.add_parameter": (
+                tr("Parameter anlegen …"),
+                "",
+                self.action_add_parameter,
+            ),
             "edit.auto_split": (tr("Automatisch teilen …"), "", self.action_auto_split),
             "view.fit": (tr("Alles einpassen"), "Home", self.viewport.reset_camera),
             "view.toggle_right": (tr("Rechten Bereich zeigen"), "F9", self.action_toggle_right),
@@ -1509,6 +1668,21 @@ class MainWindow(QMainWindow):
         elif not self.session.busy:
             self.progress.setRange(0, 100)
             self.progress.setVisible(False)
+
+    def _on_split_busy(self, busy: bool) -> None:
+        """Die Trennebenensuche läuft — Fortschritt und Abbrechen wie bei
+        jedem anderen Lauf über zwei Sekunden (§2.8)."""
+        self.status_message.setText(tr("Die Trennebenen werden gesucht …") if busy else "")
+        self.cancel_button.setVisible(busy or self.progress.isVisible())
+        if busy:
+            # Wie viele Ebenen die Suche prüft, steht vorher nicht fest —
+            # derselbe endlose Balken wie beim Agentenzug.
+            self.progress.setRange(0, 0)
+            self.progress.setVisible(True)
+        elif not self.session.busy and not self.chat.busy:
+            self.progress.setRange(0, 100)
+            self.progress.setVisible(False)
+            self.cancel_button.setVisible(False)
 
     def _on_proposal(self, preview: Any) -> None:
         """Ein Vorschlag ist da: zeigen, was er änderte, dann den Nutzer
@@ -1781,14 +1955,14 @@ class MainWindow(QMainWindow):
         self.status_message.setText(text)
 
     def _on_busy(self, busy: bool) -> None:
-        # Der Agent kann gleichzeitig laufen; dann bleiben Balken und Knopf
-        # stehen, statt mit der Auswertung zu verschwinden.
-        agent_running = self.chat.busy
-        self.progress.setVisible(busy or agent_running)
-        self.cancel_button.setVisible(busy or agent_running)
+        # Agent und Trennebenensuche können gleichzeitig laufen; dann bleiben
+        # Balken und Knopf stehen, statt mit der Auswertung zu verschwinden.
+        others = self.chat.busy or self.session.split_running
+        self.progress.setVisible(busy or others)
+        self.cancel_button.setVisible(busy or others)
         if busy:
             self.progress.setRange(0, 100)
-        if not busy and not agent_running:
+        if not busy and not others:
             self.status_message.setText("")
 
     def _on_ask(self, request: AskRequest) -> None:
@@ -1911,6 +2085,13 @@ class MainWindow(QMainWindow):
         name, size, volume = described
         self.measurements.show_object(name, size, volume)
 
+    def action_add_parameter(self) -> None:
+        """§13: ein Hauptmaß benennen — auch ohne den Agenten (§2.3)."""
+        dialog = ParameterDialog(self.session.project.document.parameters, self)
+        if dialog.exec() != ParameterDialog.DialogCode.Accepted:
+            return
+        self.session.add_parameter(dialog.parameter())
+
     def _on_parameter_edited(self, name: str, value: float) -> None:
         """An einer Zahl zu drehen ist eine Transaktion, dann eine frische
         Auswertung (§13, §15.5).
@@ -1989,7 +2170,13 @@ class MainWindow(QMainWindow):
         """§37.2: ein Hinweis mit einem Link. Nichts wird heruntergeladen, nichts
         ersetzt.
         """
-        release = updates.check()
+        worker = _UpdateWorker()
+        worker.done.connect(self._update_answered)
+        worker.finished.connect(lambda: setattr(self, "_update_worker", None))
+        self._update_worker = worker
+        worker.start()
+
+    def _update_answered(self, release: Any) -> None:
         if release is None or not release.newer_than():
             return
         self.status_message.setText(
@@ -2052,11 +2239,13 @@ class MainWindow(QMainWindow):
             return
         self.session.cancel()
         self.session.wait_for_idle(2000)
-        worker = self._map_worker
-        if worker is not None and worker.isRunning():
-            # Eine Karte, die niemand mehr sehen wird — aber ein Thread, der sein
-            # Fenster überlebt, nimmt den Prozess mit.
-            worker.wait(2000)
+        for worker in (self._map_worker, self._slice_worker, self._update_worker):
+            # Ergebnisse, die niemand mehr sehen wird — aber ein Thread, der
+            # sein Fenster überlebt, nimmt den Prozess mit. Die Schichtanalyse
+            # fehlte hier: Schließen während sie lief war ein Absturz beim
+            # Beenden.
+            if worker is not None and worker.isRunning():
+                worker.wait(2000)
         if self.session.modified:
             self.session.autosave()
         save_settings(self.settings)

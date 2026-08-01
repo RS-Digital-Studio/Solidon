@@ -95,6 +95,24 @@ def apply_split(
 ) -> SplitApplied:
     """Schneidet, bis es passt, und hält jede Naht als Passungspaar fest (§14)."""
     plan = plan_split(mesh, object_id, profile, pins=pins)
+    return apply_planned(document, plan, object_id, profile, pins=pins)
+
+
+def apply_planned(
+    document: Document,
+    plan: SplitPlan,
+    object_id: ObjectId,
+    profile: Profile,
+    *,
+    pins: int = PIN_COUNT,
+) -> SplitApplied:
+    """Wendet einen fertigen Plan an — getrennt vom Suchen.
+
+    Die Suche ist der teure Teil (Schichtanalysen über jede Kandidatenebene)
+    und darf abseits des Oberflächen-Threads laufen (§2.8). Das Anwenden
+    mutiert das Dokument und gehört in den Thread, dem das Dokument gehört —
+    deshalb sind es zwei Funktionen und nicht eine mit einem Schalter.
+    """
     if not plan.drafts:
         return SplitApplied(object_ids=[object_id], findings=list(plan.outcome.findings))
 

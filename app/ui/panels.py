@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QPushButton,
     QSizePolicy,
     QToolButton,
     QTreeWidget,
@@ -369,21 +370,41 @@ class ObjectTree(QWidget):
         isolate.triggered.connect(lambda _checked=False: self.isolateRequested.emit(chosen))
 
 
+def _empty_parameters_text() -> str:
+    """Der leere Zustand sagt, wozu die Leiste da ist — „Noch keine
+    Parameter." allein ließ die Frage offen, wie denn einer entsteht."""
+    return tr(
+        "Noch keine Parameter. Ein Parameter ist ein benanntes Maß — "
+        "Operationen und Skizzen rechnen mit ihm."
+    )
+
+
 class ParameterPanel(QWidget):
     """Benannte Projektmaße; an einer Zahl zu drehen baut das Modell
     neu (§13).
     """
 
     parameterEdited = Signal(str, float)
+    addRequested = Signal()
+    """Der Nutzer will ein Maß benennen — das Fenster öffnet den Dialog."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._form = QFormLayout(self)
-        self._form.setContentsMargins(6, 6, 6, 6)
-        self._empty = QLabel(tr("Noch keine Parameter."), self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(6, 6, 6, 6)
+        self._form = QFormLayout()
+        self._form.setContentsMargins(0, 0, 0, 0)
+        self._empty = QLabel(_empty_parameters_text(), self)
         self._empty.setWordWrap(True)
         self._form.addRow(self._empty)
         self._editors: dict[str, QDoubleSpinBox] = {}
+        # §2.3: das Anlegen war ein Agentenwerkzeug und sonst nichts — wer
+        # ohne Sprachmodell arbeitet, brauchte einen Weg mit der Maus.
+        self.add_button = QPushButton(tr("Parameter anlegen …"), self)
+        self.add_button.clicked.connect(self.addRequested)
+        outer.addLayout(self._form)
+        outer.addWidget(self.add_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        outer.addStretch(1)
 
     def show_document(self, document: Document) -> None:
         while self._form.rowCount():
@@ -391,7 +412,8 @@ class ParameterPanel(QWidget):
         self._editors.clear()
 
         if not document.parameters:
-            self._empty = QLabel(tr("Noch keine Parameter."), self)
+            self._empty = QLabel(_empty_parameters_text(), self)
+            self._empty.setWordWrap(True)
             self._form.addRow(self._empty)
             return
 
@@ -507,6 +529,11 @@ class ReportPanel(QWidget):
         self.list.setWordWrap(True)
         self.list.setTextElideMode(Qt.TextElideMode.ElideNone)
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # §18.4 sagt „Klick auf eine Warnung fährt die Kamera hin" —
+        # ``itemActivated`` allein hieß aber Doppelklick oder Eingabetaste,
+        # und wer einmal klickte, bekam nichts. Beide Wege führen zum Ort;
+        # dass ein Doppelklick dann zweimal fährt, ist dasselbe Ziel.
+        self.list.itemClicked.connect(self._on_activated)
         self.list.itemActivated.connect(self._on_activated)
         self.summary = QLabel(tr("Keine Befunde."), self)
         self.summary.setWordWrap(True)

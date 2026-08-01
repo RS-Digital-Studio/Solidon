@@ -26,7 +26,7 @@ from app.core.agent.session import AgentSession
 from app.core.backends.llm import LLMBackend, first_available
 from app.core.backends.mesh import GeneratedMesh
 from app.core.brep import step as brep_step
-from app.core.errors import AppError, InternalError, OperationCancelled
+from app.core.errors import AppError, InternalError, OperationCancelled, ValidationError
 from app.core.export import threemf
 from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
@@ -41,6 +41,7 @@ from app.core.scene import (
     History,
     OperationDraft,
     ResultCache,
+    expressions,
     orphans,
 )
 from app.core.scene.evaluate import evaluate
@@ -55,10 +56,11 @@ from app.core.scene.project import (
     save,
     write_autosave,
 )
-from app.core.split import SplitApplied, apply_split
+from app.core.split import SplitApplied, apply_planned, apply_split, plan_split
 from app.core.types import (
     Finding,
     Origin,
+    Parameter,
     PrintSettings,
     Profile,
     Quality,
@@ -173,6 +175,31 @@ class _AgentWorker(QThread):
             self.finishedWith.emit(preview)
 
 
+class _SplitWorker(QThread):
+    """Die Trennebenensuche, abseits des GUI-Threads (§2.8, §22.3).
+
+    Sie schneidet jede Kandidatenebene durch das ganze Netz — Sekunden bis
+    Minuten an einem großen Körper, und sie lief mit einem Wartezeiger im
+    Hauptthread. Gerechnet wird hier nur der Plan; das Anwenden mutiert das
+    Dokument und bleibt im Thread, dem das Dokument gehört.
+    """
+
+    done = Signal(object)
+    failedWith = Signal(object)
+
+    def __init__(self, mesh: Any, object_id: str, profile: Profile) -> None:
+        super().__init__()
+        self._mesh = mesh
+        self._object_id = object_id
+        self._profile = profile
+
+    def run(self) -> None:
+        try:
+            self.done.emit(plan_split(self._mesh, self._object_id, self._profile))
+        except AppError as error:
+            self.failedWith.emit(error)
+
+
 def _with_findings(result: EvaluationResult, extra: list[Finding]) -> EvaluationResult:
     """Trägt die Befunde der Prüfung in den Bericht, den das Fenster zeigt."""
     if not extra:
@@ -194,6 +221,8 @@ class Session(QObject):
     proposalReady = Signal(object)
     """An agent turn finished — carries a ``ProposalPreview`` (§26.5)."""
     agentBusyChanged = Signal(bool)
+    splitBusyChanged = Signal(bool)
+    """Die Trennebenensuche läuft oder ist fertig (§2.8)."""
     projectChanged = Signal()
     """Stack, path or title changed; panels reload from the document."""
     failed = Signal(object)
@@ -219,6 +248,10 @@ class Session(QObject):
         """The same for the part library (§24.4): once on opening, not on every run."""
         self._worker: _EvaluationWorker | None = None
         self._agent: _AgentWorker | None = None
+        self._split: _SplitWorker | None = None
+        self._split_discarded = False
+        """Ob das laufende Split-Ergebnis verworfen wurde — der Arbeiter
+        läuft dann aus, ohne dass jemand sein Ergebnis anwendet."""
         self._backend: LLMBackend | None = None
         self._selection: tuple[str, str] | None = None
         self._accepted: dict[str, str | None] = {}
@@ -348,6 +381,44 @@ class Session(QObject):
             self.history.apply(
                 f"{tr('Parameter')} {name}",
                 changes=change_for(self.project.document, parameters={name: changed}),
+            )
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+
+    def add_parameter(self, parameter: Parameter) -> None:
+        """Ein neues Projektmaß von Hand (§13, §2.3, §15.5).
+
+        Anlegen konnte bisher nur der Agent über sein Werkzeug — wer ohne
+        Sprachmodell arbeitet, hatte kein Gegenstück, obwohl §2.3 verspricht,
+        dass ohne KI alles außer dem Chat funktioniert. Die Leiste ändert
+        Werte; das hier vergibt den Namen. Ein Undo entfernt den Parameter
+        wieder, weil er als ``DocumentChange`` reist.
+        """
+        parameters = self.project.document.parameters
+        if parameter.name in parameters:
+            self.failed.emit(
+                ValidationError(
+                    field="name",
+                    detail=tr("Diesen Namen gibt es schon."),
+                    constraint="duplicate",
+                    values={"name": parameter.name},
+                )
+            )
+            return
+        try:
+            # Der Dialog prüft dasselbe, aber der Weg hierher ist nicht der
+            # einzige — was die Grammatik nicht kennt oder im Kreis liest,
+            # kommt nicht ins Dokument.
+            expressions.check(f"@{parameter.name}")
+            if parameter.expression:
+                expressions.resolution_order({**parameters, parameter.name: parameter})
+            self.history.apply(
+                f"{tr('Parameter')} {parameter.name}",
+                changes=change_for(self.project.document, parameters={parameter.name: parameter}),
             )
         except AppError as error:
             self.failed.emit(error)
@@ -491,6 +562,64 @@ class Session(QObject):
             self.projectChanged.emit()
             self.evaluate_async()
         return applied
+
+    def split_async(self, object_id: str, then: Any) -> None:
+        """Auto Split, ohne das Fenster anzuhalten (§2.8).
+
+        Die Suche läuft im Arbeiter, das Anwenden danach hier im Thread des
+        Dokuments; ``then`` bekommt das ``SplitApplied``. Ein Abbruch über
+        :meth:`cancel_split` verwirft den Plan — die Suche kennt keinen
+        Abbruch von innen, aber niemand muss auf ein Ergebnis warten, das er
+        nicht mehr will.
+        """
+        self.wait_for_idle()
+        result = self.last_result
+        entry = result.scene.objects.get(object_id) if result is not None else None
+        if entry is None:
+            self.failed.emit(
+                InternalError(
+                    detail="auto split was asked for an object that is not in the scene",
+                    values={"object": object_id},
+                )
+            )
+            return
+
+        self._split_discarded = False
+        worker = _SplitWorker(as_mesh_data(entry.mesh), object_id, self.profile)
+        worker.done.connect(lambda plan: self._split_planned(plan, object_id, then))
+        worker.failedWith.connect(self._split_failed)
+        worker.finished.connect(lambda: setattr(self, "_split", None))
+        self._split = worker
+        self.splitBusyChanged.emit(True)
+        worker.start()
+
+    @property
+    def split_running(self) -> bool:
+        return self._split is not None and self._split.isRunning()
+
+    def cancel_split(self) -> None:
+        """Das Ergebnis wird verworfen, wenn es kommt — der Knopf wirkt
+        sofort, auch wenn der Arbeiter noch ausläuft."""
+        if self._split is None:
+            return
+        self._split_discarded = True
+        self.splitBusyChanged.emit(False)
+
+    def _split_failed(self, error: AppError) -> None:
+        self.splitBusyChanged.emit(False)
+        if not self._split_discarded:
+            self.failed.emit(error)
+
+    def _split_planned(self, plan: Any, object_id: str, then: Any) -> None:
+        self.splitBusyChanged.emit(False)
+        if self._split_discarded:
+            return
+        applied = apply_planned(self.project.document, plan, object_id, self.profile)
+        if applied.transaction is not None:
+            self._dirty = True
+            self.projectChanged.emit()
+            self.evaluate_async()
+        then(applied)
 
     def undo(self) -> None:
         if self.history.undo() is not None:
@@ -694,7 +823,9 @@ class Session(QObject):
         """
         deadline = time.monotonic() + timeout_ms / 1000.0
         while time.monotonic() < deadline:
-            worker = self._worker
+            # Auch die Trennebenensuche zählt: ein Split-Arbeiter, der das
+            # Fenster überlebt, nimmt beim Beenden den Prozess mit.
+            worker = self._worker or self._split
             if worker is None:
                 break
             worker.wait(50)
