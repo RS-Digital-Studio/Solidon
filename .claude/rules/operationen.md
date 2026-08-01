@@ -31,6 +31,23 @@ Einstellungen" (§2.4).
 Toleranzen verweisen ins Materialprofil (`auto:<material>`), nie als Zahl.
 Wo ein Projektparameter passt, steht keine Streuzahl.
 
+### Skizzenparameter (`kind="sketch"`)
+
+Eine Skizze reist als JSON-Text in einem Parameter (§30.1). Zwei Dinge folgen
+daraus, und beide sind leicht zu übersehen:
+
+**Der Cache-Schlüssel muss die Parameter enthalten, die *in* der Skizze
+gelesen werden.** Ein Maß in der Skizze darf ein Ausdruck sein; ändert sich der
+Projektparameter dahinter, ändert sich der Skizzentext nicht — die Auswertung
+gäbe das alte Ergebnis zurück. `sketch_parameter_references()` sammelt die
+Namen, `_with_sketch_context()` mischt ihre Werte in den Schlüssel.
+
+**Der Agent bekommt den Parameter nicht zu sehen.** Skizzen entstehen über
+benannte Grundformen und Maße, nie über rohe Punktlisten (§26, Leitprinzip 5).
+`json_schema()` lässt `kind="sketch"` deshalb ganz aus, und die Sitzung lehnt
+ein trotzdem mitgeschicktes Argument ab. Zwei Ebenen, weil eine Lücke im
+Schema noch kein Verbot ist.
+
 ## Boolesche Operationen
 
 Die Rückfallkette (§17.2) hat fünf Stufen, und die erreichte Stufe gehört in
