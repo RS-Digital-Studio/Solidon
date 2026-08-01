@@ -20,6 +20,42 @@ Prüfbericht sagt welches.
 Beschriftung in der Oberfläche: „Schichtanalyse", nicht „Vorschau". Sie zeigt
 die Geometrie, nicht die Werkzeugwege.
 
+## Die Einstellungen bleiben trotzdem hier
+
+Kein eigener Slicer heißt **nicht** kein eigenes Profil. `PrintSettings`
+(§29) hält alles, was gedruckt wird — Schichten, Wände, Füllung,
+Temperaturen, Kühlung, Geschwindigkeiten, Stützen, Haftung, Rückzug,
+Filamentfarbe. `export/handover.py` schreibt daraus die Konfiguration des
+externen Slicers, ruft ihn und liest den G-Code zurück. Der Slicer führt aus,
+er entscheidet nicht mehr.
+
+Drei Sachen, die dabei nicht verhandelbar sind:
+
+- **Aufgelöst wird aus drei Ebenen** — Qualitätsstufe, Material, Drucker, in
+  dieser Reihenfolge. Die Düse skaliert die Schichthöhe, die Maschinengrenzen
+  deckeln die Temperatur, ein offener Bauraum bekommt keine Kammertemperatur.
+- **Das Maschinenprofil wird nicht erfunden.** Bettform, Anfahrwege, Start-
+  und Endcode kennt Formwerk nicht; sie kommen aus dem Bestand des Slicers.
+  Bei der Orca-Familie gilt das auch für das Prozessprofil: Formwerk liest das
+  benannte Systemprofil und legt seine Werte darüber, sonst bricht der Lauf
+  mit „process not compatible with printer" ab, bevor er das Modell ansieht.
+- **Ein neuer Slicer kostet eine Tabelle**, keinen Eingriff — `slicer_keys.py`
+  ist das Wörterbuch, `handover.py` der Ablauf.
+
+## Vorschlag oder Befund
+
+`slice/advise.py` schließt aus Geometrie, Material und Maschine auf
+Einstellungen. Die Unterscheidung ist verbindlich:
+
+- Was ein Wert behebt, wird ein **Vorschlag** (`SettingAdvice`) — mit Pfad,
+  altem Wert, neuem Wert und **Begründung**. Ohne Grund kein Vorschlag: eine
+  Zahl, die niemand nachprüfen kann, ist schlechter als die Vorgabe.
+- Was kein Wert behebt, wird ein **Befund** (`Finding`). ASA auf einem offenen
+  Drucker bleibt heikel, auch wenn Lüfter und Brim schon stimmen; das als
+  Vorschlag zu verkleiden hieße, eine richtige Einstellung zu ändern.
+
+Übernommen wird auf Klick, nie von allein.
+
 ## Was die Analyse liefert
 
 Überhangfläche je Schicht, Stützvolumen, Querschnittsverlauf, **Inseln**

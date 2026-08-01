@@ -86,13 +86,16 @@ app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
   scene/      Szene, Stapel, Auswertung, Projektdatei, Parameter, Passungen
   geom/       Ops gegen manifold3d/trimesh, Boolesche Rückfallkette, Reparatur
   brep/       zweiter Kern (OpenCASCADE) — optional, meldet sich ab wenn er fehlt
-  slice/      Schichtanalyse, nie ein G-Code-Slicer
+  slice/      Schichtanalyse und G-Code lesen, nie G-Code schreiben;
+              advise.py schließt aus der Geometrie auf Druckeinstellungen
   ingest/     Einlesen, Einheitenerkennung, 3MF als Baugruppe
   perceive/   Feature-Erkennung, stabile IDs, Analysekarten, Steckbrief
-  knowledge/  Profile, Normteile, Regelsammlung, Kalibrierung, parts/ Bausteine
+  knowledge/  Profile, Normteile, Regelsammlung, Kalibrierung, parts/ Bausteine,
+              print_settings.py löst Stufe + Material + Drucker auf
   agent/      LLM-Schicht: Sitzung, Vorschlag als eine Transaktion, Prüfungen
   backends/   LLM, OpenSCAD, Mesh-Erzeuger — alles extern, alles abschaltbar
-  export/     STL/3MF/STEP, Plattenbelegung
+  export/     STL/3MF/STEP, Plattenbelegung, Übergabe an den Slicer
+              (handover.py ruft ihn, slicer_keys.py übersetzt die Namen)
   manual.py   Handbuch: geschriebene Seiten, Referenz aus dem Register erzeugt
   figures.py  Abbildungskatalog — gezeichnet, gerendert, aufgenommen
   drawing.py  SVG ohne Qt: Maßlinien, Schemata, Netzprojektion

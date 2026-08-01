@@ -225,6 +225,28 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       Werte landen im Nutzerprofil, die mitgelieferten Startwerte bleiben
       unberührt, und weil Toleranzen Verweise sind, rechnen alte Projekte danach
       mit den neuen Werten
+- [x] **Druckeinstellungen in der Anwendung** (§29) — `PrintSettings` hält
+      Schichten, Wände, Füllung, Temperaturen, Kühlung, Geschwindigkeiten,
+      Stützen, Haftung, Rückzug und Filament samt Farbe; aufgelöst aus
+      Qualitätsstufe, Material und Drucker. Der Dialog zeigt vorn acht Werte,
+      dahinter alles nach Gebieten
+- [x] **Hinweg zum Slicer** (§29) — `export/handover.py` schreibt das Profil,
+      ruft den Slicer im Konsolenmodus und liest den G-Code zurück. Drei
+      Familien über `export/slicer_keys.py`: PrusaSlicer und SuperSlicer als
+      eigenständige ini, Orca/Bambu/Elegoo als Prozess-JSON auf ein
+      Systemprofil gelegt, CuraEngine über `-s`
+- [x] **Einstellungen aus der Geometrie** (§29) — `slice/advise.py` schließt
+      aus Schichtanalyse, Material und Maschine auf Stützen, Plattenhaftung,
+      Mindestschichtzeit, Linienbreite und Außenwandtempo. Jeder Vorschlag mit
+      Begründung, übernommen wird auf Klick. Was kein Wert behebt, wird ein
+      Befund statt eines Vorschlags
+- [ ] Maschinen- und Prozessprofil des Slicers in den Einstellungen wählbar —
+      steht in `UiSettings`, wird bisher aber nur gelesen und nicht angeboten.
+      Ohne beide läuft die Orca-Familie in „process not compatible with
+      printer"
+- [ ] Farbgruppen aus der Szene an den Slicer durchreichen — `filament.colour`
+      ist eine Farbe, die 3MF-Materialslots sind mehrere (§20). Für
+      Mehrfarbdruck fehlt die Zuordnung Slot → Extruder
 
 ## P8 — Erste Veröffentlichung
 - [x] Name entschieden, überall durchgezogen — alles Namensbezogene steht in
