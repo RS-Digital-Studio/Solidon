@@ -1,0 +1,985 @@
+"""Druckeinstellungen und Übergabe an den Slicer (Bauplan §29, §2.4).
+
+Der Dialog, der den Wechsel ins andere Programm ersetzt. Vorn steht, was man
+wirklich ändert — Qualität, Füllung, Stützen, Farbe —, hinter „Weitere
+Einstellungen" liegt der Rest, nach Gebieten sortiert (§2.4, gestufte Tiefe).
+
+Die Felder kommen aus :data:`FIELDS`, einer Tabelle: eine neue Einstellung im
+Kernmodell kostet hier eine Zeile und keinen Eingriff. Titel und Einheiten
+stehen bewusst hier und nicht im Kern — es sind Oberflächentexte, sie gehen
+durch ``tr()``, und der Kern kennt keine Beschriftungen.
+
+Was die Geometrie selbst verlangt, steht darunter als Liste mit Begründung
+(:mod:`app.core.slice.advise`). Übernommen wird auf Klick, nie von allein:
+ein Vorschlag, der sich still anwendet, ist eine Einstellung, die der Nutzer
+nicht getroffen hat.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Any, Literal
+
+from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QColorDialog,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QTabWidget,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from app.core import discover, tools
+from app.core.errors import AppError
+from app.core.export import handover
+from app.core.export.writer import plan_export, write_plan
+from app.core.knowledge import print_settings
+from app.core.log import get_logger
+from app.core.slice import advise
+from app.core.types import BoundingBox, PrintSettings, Profile, SettingAdvice, SliceResult
+from app.i18n import tr
+from app.ui.dialogs import show_error
+from app.ui.session import Session
+from app.ui.settings import UiSettings
+
+_log = get_logger(__name__)
+
+FieldKind = Literal["float", "int", "bool", "enum", "colour"]
+
+
+@dataclass(frozen=True, slots=True)
+class Field:
+    """Eine Zeile im Dialog. ``group`` ist der Reiter, ``front`` hebt sie nach
+    vorn."""
+
+    path: str
+    title: str
+    group: str
+    kind: FieldKind = "float"
+    unit: str = ""
+    minimum: float = 0.0
+    maximum: float = 1000.0
+    step: float = 0.1
+    decimals: int = 2
+    choices: tuple[str, ...] = ()
+    front: bool = False
+    factor: float = 1.0
+    """Anzeige geteilt durch Modellwert. Der Kern rechnet Anteile in 0…1, die
+    Werkstatt spricht in Prozent — ein Feld mit ``[%]`` und einer 0,15 darin
+    ist schlicht falsch beschriftet (§19.3)."""
+
+
+#: Gruppen in der Reihenfolge, in der sie erscheinen.
+GROUPS = ("layers", "shell", "infill", "temperature", "cooling", "speed", "support", "other")
+
+
+def group_title(group: str) -> str:
+    return {
+        "layers": tr("Schichten"),
+        "shell": tr("Wände"),
+        "infill": tr("Füllung"),
+        "temperature": tr("Temperaturen"),
+        "cooling": tr("Kühlung"),
+        "speed": tr("Geschwindigkeit"),
+        "support": tr("Stützen"),
+        "other": tr("Haftung, Rückzug, Filament"),
+    }.get(group, group)
+
+
+#: Aufzählungswerte in Worten. Der gespeicherte Wert bleibt englisch — er geht
+#: in die Projektdatei und zum Slicer —, gezeigt wird die Übersetzung (§4.1).
+CHOICE_LABELS: dict[str, str] = {
+    "grid": tr("Gitter"),
+    "gyroid": tr("Gyroid"),
+    "honeycomb": tr("Wabe"),
+    "cubic": tr("Würfel"),
+    "lines": tr("Linien"),
+    "triangles": tr("Dreiecke"),
+    "none": tr("Keine"),
+    "tree": tr("Baum"),
+    "everywhere": tr("Überall"),
+    "build_plate": tr("Nur von der Platte"),
+    "aligned": tr("Ausgerichtet"),
+    "nearest": tr("Nächstgelegen"),
+    "random": tr("Zufällig"),
+    "rear": tr("Hinten"),
+    "skirt": tr("Skirt"),
+    "brim": tr("Brim"),
+    "raft": tr("Raft"),
+}
+
+
+def choice_label(value: str) -> str:
+    return CHOICE_LABELS.get(value, value)
+
+
+FIELDS: tuple[Field, ...] = (
+    # --- Schichten ---
+    Field(
+        "layers.layer_height",
+        tr("Schichthöhe"),
+        "layers",
+        unit="mm",
+        minimum=0.02,
+        maximum=1.2,
+        step=0.02,
+        decimals=3,
+        front=True,
+    ),
+    Field(
+        "layers.first_layer_height",
+        tr("Erste Schicht"),
+        "layers",
+        unit="mm",
+        minimum=0.02,
+        maximum=1.2,
+        step=0.02,
+        decimals=3,
+    ),
+    Field(
+        "layers.line_width",
+        tr("Linienbreite"),
+        "layers",
+        unit="mm",
+        minimum=0.1,
+        maximum=2.0,
+        step=0.02,
+        decimals=3,
+    ),
+    Field(
+        "layers.first_layer_line_width",
+        tr("Linienbreite erste Schicht"),
+        "layers",
+        unit="mm",
+        minimum=0.1,
+        maximum=2.0,
+        step=0.02,
+        decimals=3,
+    ),
+    # --- Wände ---
+    Field("shell.wall_count", tr("Wände"), "shell", kind="int", minimum=1, maximum=20, front=True),
+    Field("shell.top_layers", tr("Deckschichten"), "shell", kind="int", minimum=0, maximum=50),
+    Field("shell.bottom_layers", tr("Bodenschichten"), "shell", kind="int", minimum=0, maximum=50),
+    Field("shell.outer_wall_first", tr("Außenwand zuerst"), "shell", kind="bool"),
+    Field(
+        "shell.seam_position",
+        tr("Naht"),
+        "shell",
+        kind="enum",
+        choices=("aligned", "nearest", "random", "rear"),
+    ),
+    # --- Füllung ---
+    Field(
+        "infill.density",
+        tr("Fülldichte"),
+        "infill",
+        unit="%",
+        minimum=0.0,
+        maximum=100.0,
+        step=5.0,
+        decimals=0,
+        factor=100.0,
+        front=True,
+    ),
+    Field(
+        "infill.pattern",
+        tr("Füllmuster"),
+        "infill",
+        kind="enum",
+        choices=("grid", "gyroid", "honeycomb", "cubic", "lines", "triangles"),
+        front=True,
+    ),
+    Field(
+        "infill.angle",
+        tr("Füllwinkel"),
+        "infill",
+        unit="°",
+        minimum=0.0,
+        maximum=180.0,
+        step=5.0,
+        decimals=1,
+    ),
+    # --- Temperaturen ---
+    Field(
+        "temperature.nozzle",
+        tr("Düse"),
+        "temperature",
+        kind="int",
+        unit="°C",
+        minimum=0,
+        maximum=400,
+        front=True,
+    ),
+    Field(
+        "temperature.nozzle_first_layer",
+        tr("Düse, erste Schicht"),
+        "temperature",
+        kind="int",
+        unit="°C",
+        minimum=0,
+        maximum=400,
+    ),
+    Field(
+        "temperature.bed",
+        tr("Bett"),
+        "temperature",
+        kind="int",
+        unit="°C",
+        minimum=0,
+        maximum=150,
+        front=True,
+    ),
+    Field(
+        "temperature.bed_first_layer",
+        tr("Bett, erste Schicht"),
+        "temperature",
+        kind="int",
+        unit="°C",
+        minimum=0,
+        maximum=150,
+    ),
+    Field(
+        "temperature.chamber",
+        tr("Kammer"),
+        "temperature",
+        kind="int",
+        unit="°C",
+        minimum=0,
+        maximum=90,
+    ),
+    # --- Kühlung ---
+    Field(
+        "cooling.fan_speed",
+        tr("Lüfter"),
+        "cooling",
+        unit="%",
+        minimum=0.0,
+        maximum=100.0,
+        step=5.0,
+        decimals=0,
+        factor=100.0,
+    ),
+    Field(
+        "cooling.bridge_fan_speed",
+        tr("Lüfter bei Brücken"),
+        "cooling",
+        unit="%",
+        minimum=0.0,
+        maximum=100.0,
+        step=5.0,
+        decimals=0,
+        factor=100.0,
+    ),
+    Field(
+        "cooling.disable_first_layers",
+        tr("Lüfter aus für Schichten"),
+        "cooling",
+        kind="int",
+        minimum=0,
+        maximum=20,
+    ),
+    Field(
+        "cooling.minimum_layer_time",
+        tr("Mindestzeit je Schicht"),
+        "cooling",
+        unit="s",
+        minimum=0.0,
+        maximum=120.0,
+        step=1.0,
+        decimals=0,
+    ),
+    # --- Geschwindigkeit ---
+    Field(
+        "speed.outer_wall",
+        tr("Außenwand"),
+        "speed",
+        unit="mm/s",
+        minimum=1.0,
+        maximum=1000.0,
+        step=5.0,
+        decimals=0,
+    ),
+    Field(
+        "speed.inner_wall",
+        tr("Innenwand"),
+        "speed",
+        unit="mm/s",
+        minimum=1.0,
+        maximum=1000.0,
+        step=5.0,
+        decimals=0,
+    ),
+    Field(
+        "speed.infill",
+        tr("Füllung"),
+        "speed",
+        unit="mm/s",
+        minimum=1.0,
+        maximum=1000.0,
+        step=5.0,
+        decimals=0,
+    ),
+    Field(
+        "speed.top_surface",
+        tr("Oberfläche"),
+        "speed",
+        unit="mm/s",
+        minimum=1.0,
+        maximum=1000.0,
+        step=5.0,
+        decimals=0,
+    ),
+    Field(
+        "speed.first_layer",
+        tr("Erste Schicht"),
+        "speed",
+        unit="mm/s",
+        minimum=1.0,
+        maximum=1000.0,
+        step=5.0,
+        decimals=0,
+    ),
+    Field(
+        "speed.travel",
+        tr("Leerfahrt"),
+        "speed",
+        unit="mm/s",
+        minimum=1.0,
+        maximum=1000.0,
+        step=10.0,
+        decimals=0,
+    ),
+    # --- Stützen ---
+    Field(
+        "support.style",
+        tr("Stützen"),
+        "support",
+        kind="enum",
+        choices=("none", "grid", "tree"),
+        front=True,
+    ),
+    Field(
+        "support.placement",
+        tr("Stützen ansetzen"),
+        "support",
+        kind="enum",
+        choices=("everywhere", "build_plate"),
+    ),
+    Field(
+        "support.threshold_angle",
+        tr("Ab Winkel"),
+        "support",
+        unit="°",
+        minimum=0.0,
+        maximum=90.0,
+        step=5.0,
+        decimals=0,
+    ),
+    Field(
+        "support.z_gap",
+        tr("Abstand nach oben"),
+        "support",
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        step=0.05,
+        decimals=2,
+    ),
+    Field(
+        "support.xy_gap",
+        tr("Abstand zur Seite"),
+        "support",
+        unit="mm",
+        minimum=0.0,
+        maximum=5.0,
+        step=0.1,
+        decimals=2,
+    ),
+    Field(
+        "support.density",
+        tr("Stützdichte"),
+        "support",
+        unit="%",
+        minimum=0.0,
+        maximum=100.0,
+        step=5.0,
+        decimals=0,
+        factor=100.0,
+    ),
+    Field(
+        "support.interface_layers",
+        tr("Trennschichten"),
+        "support",
+        kind="int",
+        minimum=0,
+        maximum=10,
+    ),
+    # --- Haftung, Rückzug, Filament ---
+    Field(
+        "adhesion.kind",
+        tr("Plattenhaftung"),
+        "other",
+        kind="enum",
+        choices=("none", "skirt", "brim", "raft"),
+    ),
+    Field("adhesion.skirt_loops", tr("Skirt-Runden"), "other", kind="int", minimum=0, maximum=20),
+    Field(
+        "adhesion.skirt_distance",
+        tr("Skirt-Abstand"),
+        "other",
+        unit="mm",
+        minimum=0.0,
+        maximum=50.0,
+        step=0.5,
+        decimals=1,
+    ),
+    Field(
+        "adhesion.brim_width",
+        tr("Brim-Breite"),
+        "other",
+        unit="mm",
+        minimum=0.0,
+        maximum=50.0,
+        step=0.5,
+        decimals=1,
+    ),
+    Field("adhesion.raft_layers", tr("Raft-Schichten"), "other", kind="int", minimum=0, maximum=20),
+    Field(
+        "retraction.length",
+        tr("Rückzug"),
+        "other",
+        unit="mm",
+        minimum=0.0,
+        maximum=10.0,
+        step=0.1,
+        decimals=2,
+    ),
+    Field(
+        "retraction.speed",
+        tr("Rückzugstempo"),
+        "other",
+        unit="mm/s",
+        minimum=1.0,
+        maximum=200.0,
+        step=5.0,
+        decimals=0,
+    ),
+    Field(
+        "retraction.z_hop",
+        tr("Z-Sprung"),
+        "other",
+        unit="mm",
+        minimum=0.0,
+        maximum=5.0,
+        step=0.05,
+        decimals=2,
+    ),
+    Field("retraction.wipe", tr("Abstreifen"), "other", kind="bool"),
+    Field("filament.colour", tr("Farbe"), "other", kind="colour", front=True),
+    Field(
+        "filament.diameter",
+        tr("Filamentdurchmesser"),
+        "other",
+        unit="mm",
+        minimum=1.0,
+        maximum=4.0,
+        step=0.05,
+        decimals=2,
+    ),
+    Field(
+        "filament.density",
+        tr("Dichte"),
+        "other",
+        unit="g/cm³",
+        minimum=0.5,
+        maximum=3.0,
+        step=0.01,
+        decimals=2,
+    ),
+    Field(
+        "filament.flow_ratio",
+        tr("Flussfaktor"),
+        "other",
+        minimum=0.5,
+        maximum=1.5,
+        step=0.01,
+        decimals=3,
+    ),
+    Field(
+        "filament.cost_per_kg",
+        tr("Preis je Kilogramm"),
+        "other",
+        minimum=0.0,
+        maximum=1000.0,
+        step=1.0,
+        decimals=2,
+    ),
+)
+
+
+class _ColourButton(QPushButton):
+    """Farbwahl, die ihren Wert auch schreibt.
+
+    Regel 18: die Farbe allein trägt die Bedeutung nicht — der Hexwert steht
+    auf dem Knopf, damit die Angabe auch ohne Farbwahrnehmung ablesbar und
+    vorlesbar bleibt.
+    """
+
+    changed = Signal(str)
+
+    def __init__(self, value: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._value = value
+        self._refresh()
+        self.clicked.connect(self._choose)
+
+    def value(self) -> str:
+        return self._value
+
+    def set_value(self, value: str) -> None:
+        self._value = value
+        self._refresh()
+
+    def _refresh(self) -> None:
+        colour = QColor(self._value)
+        readable = "#000000" if colour.lightnessF() > 0.55 else "#ffffff"
+        self.setText(self._value.upper())
+        self.setStyleSheet(f"background-color: {self._value}; color: {readable};")
+
+    def _choose(self) -> None:
+        chosen = QColorDialog.getColor(QColor(self._value), self, tr("Filamentfarbe"))
+        if chosen.isValid():
+            self.set_value(chosen.name())
+            self.changed.emit(self._value)
+
+
+class _SliceWorker(QThread):
+    """Ein Slicer-Lauf abseits der Ereignisschleife (§2.8).
+
+    Ein Teil mit vielen Schichten beschäftigt den Slicer Minuten. Im
+    Qt-Hauptthread hieße das ein eingefrorenes Fenster samt der Fortschritts-
+    zeile, die davon berichten soll.
+    """
+
+    done = Signal(object)
+    failed = Signal(object)
+
+    def __init__(
+        self,
+        model: Path,
+        settings: PrintSettings,
+        profile: Profile,
+        setup: handover.SlicerSetup,
+    ) -> None:
+        super().__init__()
+        self._model = model
+        self._settings = settings
+        self._profile = profile
+        self._setup = setup
+
+    def run(self) -> None:
+        try:
+            outcome = handover.slice_model(self._model, self._settings, self._profile, self._setup)
+        except AppError as problem:
+            self.failed.emit(problem)
+            return
+        self.done.emit(outcome)
+
+
+class PrintSettingsDialog(QDialog):
+    """Alle Druckeinstellungen, die Vorschläge dazu, und der Weg zum G-Code."""
+
+    sliced = Signal(object)
+    """Die Befunde des Laufs, für den Prüfbericht des Fensters."""
+
+    def __init__(
+        self,
+        session: Session,
+        ui_settings: UiSettings,
+        parent: QWidget | None = None,
+        slice_result: SliceResult | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.session = session
+        self.ui_settings = ui_settings
+        self.slice_result = slice_result
+        """Die Schichtanalyse, wenn das Fenster schon eine hat. Ohne sie bleiben
+        die Vorschläge, die aus Material und Maschine folgen (§29)."""
+        self.setWindowTitle(tr("Druckeinstellungen"))
+        self.setMinimumSize(560, 640)
+
+        self._editors: dict[str, QWidget] = {}
+        self._fields: dict[str, Field] = {}
+        self._loading = False
+        self._worker: _SliceWorker | None = None
+        self._temporary: TemporaryDirectory[str] | None = None
+        self.settings = print_settings.resolve(session.profile, self._remembered_quality())
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(self._build_head())
+        layout.addWidget(self._build_front())
+        layout.addWidget(self._build_tabs(), 1)
+        layout.addWidget(self._build_advice())
+        layout.addWidget(self._build_state())
+        layout.addWidget(self._build_buttons())
+
+        self._load_into_editors()
+        self._refresh_advice()
+
+    # --- Aufbau ---------------------------------------------------------------
+
+    def _remembered_quality(self) -> Any:
+        stored = self.ui_settings.print_quality
+        known = print_settings.quality_presets()
+        return stored if stored in known else print_settings.DEFAULT_QUALITY
+
+    def _build_head(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        self.quality = QComboBox(self)
+        for key, title in print_settings.quality_presets().items():
+            self.quality.addItem(title, key)
+        index = self.quality.findData(self.settings.quality)
+        if index >= 0:
+            self.quality.setCurrentIndex(index)
+        self.quality.currentIndexChanged.connect(self._quality_changed)
+
+        profile = self.session.profile
+        row.addWidget(QLabel(tr("Qualität"), self))
+        row.addWidget(self.quality, 1)
+        row.addWidget(QLabel(f"{profile.printer.title} · {profile.material.title}", self))
+        return row
+
+    def _build_front(self) -> QWidget:
+        box = QGroupBox(tr("Das Wichtigste"), self)
+        form = QFormLayout(box)
+        for field in FIELDS:
+            if field.front:
+                form.addRow(self._label(field), self._editor(field))
+        return box
+
+    def _build_tabs(self) -> QWidget:
+        box = QGroupBox(tr("Weitere Einstellungen"), self)
+        box.setCheckable(True)
+        box.setChecked(False)
+        outer = QVBoxLayout(box)
+
+        self.tabs = QTabWidget(box)
+        for group in GROUPS:
+            page = QWidget(self.tabs)
+            form = QFormLayout(page)
+            for field in FIELDS:
+                if field.group == group and not field.front:
+                    form.addRow(self._label(field), self._editor(field))
+            area = QScrollArea(self.tabs)
+            area.setWidget(page)
+            area.setWidgetResizable(True)
+            self.tabs.addTab(area, group_title(group))
+        outer.addWidget(self.tabs)
+        self.tabs.setVisible(False)
+        box.toggled.connect(self.tabs.setVisible)
+        return box
+
+    def _build_advice(self) -> QWidget:
+        box = QGroupBox(tr("Was dieses Teil verlangt"), self)
+        inner = QVBoxLayout(box)
+
+        self.advice_view = QTreeWidget(box)
+        self.advice_view.setColumnCount(3)
+        self.advice_view.setHeaderLabels([tr("Einstellung"), tr("Vorschlag"), tr("Grund")])
+        self.advice_view.setRootIsDecorated(False)
+        self.advice_view.setMaximumHeight(150)
+        inner.addWidget(self.advice_view)
+
+        self.apply_button = QPushButton(tr("Vorschläge übernehmen"), box)
+        self.apply_button.clicked.connect(self._apply_advice)
+        inner.addWidget(self.apply_button, 0, Qt.AlignmentFlag.AlignRight)
+        return box
+
+    def _build_state(self) -> QWidget:
+        holder = QWidget(self)
+        row = QVBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
+        self.state = QLabel("", holder)
+        self.state.setWordWrap(True)
+        self.progress = QProgressBar(holder)
+        self.progress.setRange(0, 0)
+        self.progress.setVisible(False)
+        row.addWidget(self.state)
+        row.addWidget(self.progress)
+        return holder
+
+    def _build_buttons(self) -> QWidget:
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        # Qt beschriftet seine Standardknöpfe selbst, und zwar in der Sprache
+        # des Systems — Regel 20 verlangt, dass auch dieser Text durch tr() geht.
+        close = buttons.button(QDialogButtonBox.StandardButton.Close)
+        if close is not None:
+            close.setText(tr("Schließen"))
+        self.slice_button = QPushButton(tr("Slicen"), self)
+        self.slice_button.setDefault(True)
+        self.slice_button.clicked.connect(self._slice)
+        buttons.addButton(self.slice_button, QDialogButtonBox.ButtonRole.ActionRole)
+        buttons.rejected.connect(self.reject)
+
+        found = discover.find_program("slicer", tools.SLICERS)
+        if found is None:
+            # §27: das Backend meldet sich ab, es nörgelt nicht.
+            self.slice_button.setEnabled(False)
+            self.state.setText(
+                tr("Kein Slicer eingerichtet — die Einstellungen lassen sich trotzdem pflegen.")
+            )
+        return buttons
+
+    def _label(self, field: Field) -> str:
+        return f"{field.title} [{field.unit}]" if field.unit else field.title
+
+    def _editor(self, field: Field) -> QWidget:
+        editor: QWidget
+        if field.kind == "bool":
+            editor = QCheckBox(self)
+            editor.toggled.connect(self._editor_changed)
+        elif field.kind == "int":
+            spin = QSpinBox(self)
+            spin.setRange(int(field.minimum), int(field.maximum))
+            spin.valueChanged.connect(self._editor_changed)
+            editor = spin
+        elif field.kind == "enum":
+            combo = QComboBox(self)
+            # Gezeigt wird die Übersetzung, gespeichert der englische Wert: er
+            # geht in die Projektdatei und zum Slicer (§4.1).
+            for choice in field.choices:
+                combo.addItem(choice_label(choice), choice)
+            combo.currentIndexChanged.connect(self._editor_changed)
+            editor = combo
+        elif field.kind == "colour":
+            button = _ColourButton("#000000", self)
+            button.changed.connect(self._editor_changed)
+            editor = button
+        else:
+            number = QDoubleSpinBox(self)
+            number.setRange(field.minimum, field.maximum)
+            number.setSingleStep(field.step)
+            number.setDecimals(field.decimals)
+            number.valueChanged.connect(self._editor_changed)
+            editor = number
+        self._editors[field.path] = editor
+        self._fields[field.path] = field
+        return editor
+
+    # --- Werte hin und her ----------------------------------------------------
+
+    def _load_into_editors(self) -> None:
+        """Aus dem Modell in die Felder. ``_loading`` hält die Rückmeldung an,
+        sonst schriebe jedes gesetzte Feld sofort wieder zurück."""
+        self._loading = True
+        try:
+            for field in FIELDS:
+                value = print_settings.read_path(self.settings, field.path)
+                editor = self._editors[field.path]
+                if isinstance(editor, QCheckBox):
+                    editor.setChecked(bool(value))
+                elif isinstance(editor, QSpinBox):
+                    editor.setValue(int(value))
+                elif isinstance(editor, QComboBox):
+                    index = editor.findData(str(value))
+                    editor.setCurrentIndex(index if index >= 0 else 0)
+                elif isinstance(editor, _ColourButton):
+                    editor.set_value(str(value))
+                elif isinstance(editor, QDoubleSpinBox):
+                    editor.setValue(float(value) * field.factor)
+        finally:
+            self._loading = False
+
+    def _collect(self) -> PrintSettings:
+        """Aus den Feldern zurück ins Modell."""
+        settings = self.settings
+        for field in FIELDS:
+            editor = self._editors[field.path]
+            value: Any
+            if isinstance(editor, QCheckBox):
+                value = editor.isChecked()
+            elif isinstance(editor, QSpinBox):
+                value = editor.value()
+            elif isinstance(editor, QComboBox):
+                value = editor.currentData()
+            elif isinstance(editor, _ColourButton):
+                value = editor.value()
+            elif isinstance(editor, QDoubleSpinBox):
+                value = float(editor.value()) / field.factor
+            else:
+                continue
+            settings = print_settings.with_path(settings, field.path, value)
+        return settings
+
+    def _editor_changed(self, *_args: object) -> None:
+        if self._loading:
+            return
+        self.settings = self._collect()
+        self._refresh_advice()
+
+    def _quality_changed(self) -> None:
+        """Die Stufe wechseln heißt: neu auflösen. Von Hand Geändertes geht
+        dabei verloren — das ist der Sinn einer Stufe, und rücknehmbar ist es
+        über die Stufe, aus der man kam (Regel 19: keine Rückfrage)."""
+        chosen = self.quality.currentData()
+        if chosen is None:
+            return
+        self.settings = print_settings.resolve(self.session.profile, chosen)
+        self._load_into_editors()
+        self._refresh_advice()
+
+    # --- Vorschläge -----------------------------------------------------------
+
+    def _current_advice(self) -> list[SettingAdvice]:
+        return advise.advise(
+            self.settings,
+            self.session.profile,
+            self.slice_result,
+            bounds=self._bounds(),
+            has_fits=bool(self.session.project.document.fits),
+        )
+
+    def _bounds(self) -> BoundingBox | None:
+        """Der Hüllquader über alles, was auf die Platte geht — daran hängt der
+        Hinweis auf hohe, schmale Teile."""
+        result = self.session.last_result
+        if result is None or not result.scene.objects:
+            return None
+        boxes = [entry.mesh.bounds for entry in result.scene.objects.values() if entry.mesh]
+        if not boxes:
+            return None
+        return BoundingBox(
+            minimum=tuple(min(box.minimum[axis] for box in boxes) for axis in range(3)),  # type: ignore[arg-type]
+            maximum=tuple(max(box.maximum[axis] for box in boxes) for axis in range(3)),  # type: ignore[arg-type]
+        )
+
+    def _shown(self, path: str, value: object) -> str:
+        """Ein Wert so, wie er im Feld daneben steht — sonst schlägt der
+        Vorschlag etwas vor, das der Nutzer nicht wiedererkennt."""
+        field = self._fields.get(path)
+        if isinstance(value, str):
+            return choice_label(value)
+        if field is not None and isinstance(value, int | float):
+            return f"{float(value) * field.factor:g} {field.unit}".strip()
+        return str(value)
+
+    def _refresh_advice(self) -> None:
+        entries = self._current_advice()
+        self.advice_view.clear()
+        for entry in entries:
+            field = self._fields.get(entry.path)
+            # Regel 18: das Ausrufezeichen ist die zweite Kodierung neben der
+            # Einstufung — eine Warnung darf sich nicht allein an Farbe zeigen.
+            marker = "! " if entry.severity == "warning" else ""
+            was = self._shown(entry.path, entry.was)
+            becomes = self._shown(entry.path, entry.value)
+            item = QTreeWidgetItem(
+                [
+                    f"{marker}{field.title if field else entry.path}",
+                    f"{was} → {becomes}",
+                    str(entry.reason),
+                ]
+            )
+            self.advice_view.addTopLevelItem(item)
+        if not entries:
+            self.advice_view.addTopLevelItem(QTreeWidgetItem([tr("Nichts einzuwenden."), "", ""]))
+        self.apply_button.setEnabled(bool(entries))
+        for column in range(2):
+            self.advice_view.resizeColumnToContents(column)
+
+    def _apply_advice(self) -> None:
+        self.settings = advise.apply(self.settings, self._current_advice())
+        self._load_into_editors()
+        self._refresh_advice()
+
+    # --- Slicen ---------------------------------------------------------------
+
+    def _slice(self) -> None:
+        result = self.session.last_result
+        objects = list(result.scene.objects.values()) if result is not None else []
+        if not objects:
+            self.state.setText(tr("Es ist nichts da, was sich slicen ließe."))
+            return
+
+        found = discover.find_program("slicer", tools.SLICERS)
+        if found is None:
+            return
+        try:
+            setup = handover.detect(found)
+        except AppError as problem:
+            show_error(problem, self)
+            return
+        setup = replace(
+            setup,
+            machine_profile=self.ui_settings.slicer_machine_profile,
+            base_process=self.ui_settings.slicer_base_process,
+        )
+
+        self._temporary = TemporaryDirectory(prefix="formwerk-handover-")
+        folder = Path(self._temporary.name)
+        name = self.session.path.stem if self.session.path else "formwerk"
+        plan = plan_export(objects, project_name=name, profile=self.session.profile)
+        written = write_plan(plan, folder)
+        if not written:
+            self.state.setText(tr("Der Export hat keine Datei erzeugt."))
+            return
+
+        self.slice_button.setEnabled(False)
+        self.progress.setVisible(True)
+        self.state.setText(tr("Der Slicer rechnet …"))
+
+        worker = _SliceWorker(written[0], self.settings, self.session.profile, setup)
+        worker.done.connect(self._sliced)
+        worker.failed.connect(self._slice_failed)
+        worker.finished.connect(self._slice_finished)
+        self._worker = worker
+        worker.start()
+
+    def _sliced(self, outcome: handover.SliceOutcome) -> None:
+        metrics = outcome.metrics
+        parts = []
+        if metrics.print_minutes is not None:
+            parts.append(f"{tr('Druckzeit')}: {metrics.print_minutes:.0f} min")
+        grams = metrics.grams(self.settings.filament.density)
+        if grams is not None:
+            parts.append(f"{tr('Material')}: {grams:.1f} g")
+        if metrics.layer_count is not None:
+            parts.append(f"{tr('Schichten')}: {metrics.layer_count}")
+        self.state.setText(" · ".join(parts) if parts else tr("Fertig geslicet."))
+        self.sliced.emit(outcome)
+        _log.info("sliced with %s in %.1f s", metrics.slicer, outcome.seconds)
+
+    def _slice_failed(self, problem: AppError) -> None:
+        self.state.setText("")
+        show_error(problem, self)
+
+    def _slice_finished(self) -> None:
+        self.progress.setVisible(False)
+        self.slice_button.setEnabled(True)
+        self._worker = None
+
+    def closeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
+        """Den Ordner erst freigeben, wenn niemand mehr darin liest."""
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.wait()
+        if self._temporary is not None:
+            self._temporary.cleanup()
+            self._temporary = None
+        super().closeEvent(event)

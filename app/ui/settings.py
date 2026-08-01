@@ -36,6 +36,14 @@ class UiSettings:
     right_panel_visible: bool = True
     printer: str = ""
     material: str = ""
+    print_quality: str = ""
+    """Zuletzt gewählte Qualitätsstufe (§29). Leer heißt: die Vorgabe."""
+    slicer_machine_profile: str = ""
+    """Maschinenprofil aus dem Bestand des Slicers. Formwerk kennt Bettform und
+    Startcode nicht und schreibt sie deshalb nicht — es zeigt darauf (§29)."""
+    slicer_base_process: str = ""
+    """Prozessprofil, auf das die Formwerk-Werte gelegt werden. Die Orca-Familie
+    braucht es, sonst gilt der Prozess als unverträglich mit dem Drucker."""
     first_run_done: bool = False
     check_for_updates: bool = False
     """§37.2: a notice, never an automatic update — and off until it is switched on."""

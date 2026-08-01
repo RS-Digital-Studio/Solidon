@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import updates
 from app.core.errors import AppError, InternalError
+from app.core.export.handover import SliceOutcome
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import calibration
 from app.core.knowledge.parts.ops import op_name as part_op_name
@@ -46,7 +47,7 @@ from app.core.scene import EvaluationResult, OperationDraft, values_for
 from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
-from app.core.types import Finding, ObjectId
+from app.core.types import Finding, ObjectId, SliceResult
 from app.i18n import tr
 from app.ui import first_run
 from app.ui.analysis_bar import AnalysisBar, LayerBar
@@ -77,6 +78,7 @@ from app.ui.panels import (
     collapsible,
     describe_selection,
 )
+from app.ui.print_settings_dialog import PrintSettingsDialog
 from app.ui.report_dialog import ErrorReportDialog
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
@@ -379,6 +381,13 @@ class MainWindow(QMainWindow):
             "Ctrl+K",
             self.action_catalog,
             tr("Alle Bausteine durchsehen: Mutternfalle, Rastnase, Scharnier und die anderen."),
+        )
+        self._add_action(
+            file_menu,
+            tr("Druckeinstellungen …"),
+            "Ctrl+P",
+            self.action_print_settings,
+            tr("Schichten, Temperaturen, Farbe und Stützen einstellen — und slicen lassen."),
         )
         self._add_action(
             file_menu,
@@ -828,6 +837,38 @@ class MainWindow(QMainWindow):
 
     def action_about(self) -> None:
         AboutDialog(self).exec()
+
+    def action_print_settings(self) -> None:
+        """§29: die Einstellungen, mit denen gedruckt wird — hier, nicht im
+        anderen Programm.
+
+        Der Dialog nimmt die Schichtanalyse mit, wo eine vorliegt: die
+        Vorschläge über Stützen, Haftung und Mindestschichtzeit hängen an der
+        Geometrie und nicht am Material allein.
+        """
+        dialog = PrintSettingsDialog(
+            self.session, self.settings, self, slice_result=self._current_slice()
+        )
+        dialog.sliced.connect(self._gcode_returned)
+        dialog.exec()
+        self.settings.print_quality = dialog.settings.quality
+        save_settings(self.settings)
+
+    def _current_slice(self) -> SliceResult | None:
+        """Die Schichtanalyse des gewählten Körpers, über denselben Cache wie
+        die Schichtenvorschau — gerechnet wird sie höchstens einmal."""
+        object_id = self.object_tree.selected()
+        if object_id is None:
+            return None
+        found: SliceResult | None = self._slice_of(object_id)
+        return found
+
+    def _gcode_returned(self, outcome: SliceOutcome) -> None:
+        """Was der Slicer gemessen hat, geht in den Prüfbericht — als gemessen
+        markiert, neben der Schätzung, nie an ihrer Stelle (Regel 14)."""
+        self.report.add_findings(outcome.findings)
+        self._focus_report()
+        self.status_message.setText(f"{tr('Geslicet')}: {outcome.gcode_path.name}")
 
     def action_check_gcode(self) -> None:
         """§28.1: eine geslicete Datei zurücklesen und gegen die Schätzung
