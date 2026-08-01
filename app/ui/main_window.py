@@ -16,13 +16,21 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent, QKeySequence
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QDragEnterEvent,
+    QDropEvent,
+    QKeySequence,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QFileDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -43,13 +51,13 @@ from app.core.knowledge import calibration
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
-from app.core.registry import REGISTRY, OperationSpec, menu_tree
+from app.core.registry import REGISTRY, OperationSpec, PaletteEntry, menu_tree, palette_entries
 from app.core.scene import EvaluationResult, OperationDraft, values_for
 from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.types import Finding, ObjectId, SliceResult
-from app.i18n import tr
+from app.i18n import TranslatableText, _, tr
 from app.ui import first_run
 from app.ui.analysis_bar import AnalysisBar, LayerBar
 from app.ui.catalog import PartCatalog
@@ -67,6 +75,7 @@ from app.ui.dialogs import (
 )
 from app.ui.explode_bar import ExplodeBar
 from app.ui.generate_dialog import GenerateDialog
+from app.ui.icons import icon
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import feature_label
 from app.ui.manual_window import ManualWindow
@@ -89,7 +98,7 @@ from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.start_screen import StartScreen, accepted_path
 from app.ui.theme import apply_theme
-from app.ui.tool_strip import ToolStrip
+from app.ui.tool_strip import ToolStrip, strip_title
 from app.ui.transform_bar import TransformBar
 from app.ui.variants_dialog import VariantsDialog
 from app.ui.viewport import Viewport
@@ -170,6 +179,26 @@ def inputs_for(
     return tuple(selected[: spec.consumes]) if spec.consumes else ()
 
 
+#: Wie die dreizehn Kategorien des Registers auf Menüs der Leiste fallen (§2.5).
+#:
+#: Vier eigene Menüs plus dreizehn aus dem Register waren siebzehn — bei 1280
+#: Pixeln Fensterbreite läuft das über, und selbst wo es passt, ist es keine
+#: Leiste mehr, sondern eine Liste. Die Kategorie im Register bleibt, wie
+#: Bauplan §25 sie festlegt; hier liegt nur eine Zuordnung darüber. Eine
+#: Gruppe mit einer einzigen Kategorie steht flach, sonst bekommt jede
+#: Kategorie ihr Untermenü.
+#: Die Titel sind mit ``_()`` markiert, nicht mit ``tr()``: der Abgleich der
+#: Sprachdateien liest literale Aufrufe, und ``tr(variable)`` sieht er nicht —
+#: die Gruppen wären auf Deutsch stehen geblieben (Regel 20).
+MENU_GROUPS: tuple[tuple[TranslatableText, tuple[str, ...]], ...] = (
+    (_("Objekt"), ("scene",)),
+    (_("Erzeugen"), ("import", "sketch", "label")),
+    (_("Ändern"), ("boolean", "transform", "shaping", "holes", "mesh", "repair")),
+    (_("Bausteine"), ("parts",)),
+    (_("Vorbereiten"), ("prepare", "colour")),
+)
+
+
 def _needs_objects(count: int) -> str:
     """Der Satz, der sagt, wie viele Körper fehlen — nicht nur, dass welche
     fehlen.
@@ -208,6 +237,17 @@ class MainWindow(QMainWindow):
         self._hidden: frozenset[str] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
         Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
+        self._menus: list[QMenu] = []
+        """Jedes Menü der Leiste, festgehalten.
+
+        PySide gibt für ein Menü bei jedem Zugriff einen neuen Wrapper, und
+        wird einer davon eingesammelt, nimmt er das C++-Objekt mit — danach
+        zeigt die Leiste auf ein Menü, das es nicht mehr gibt. Solange nur die
+        Bar sie kannte, ging das gut; mit der zweiten Ebene wird aus dem
+        Zufall ein Fehler."""
+        self._seen_objects = False
+        """Ob die Szene schon einmal einen Körper hatte — der erste bekommt
+        die Kamera."""
         self._op_actions: dict[str, QAction] = {}
         """Die Menüeinträge der Operationen, damit sie sich ausgrauen lassen.
         Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
@@ -218,6 +258,10 @@ class MainWindow(QMainWindow):
         self._build_menus()
         self._connect_session()
         self._update_actions()
+
+        # §2.6: das offene Werkzeug schließen. ``close_tool`` gab es dafür seit
+        # jeher und niemanden, der es rief — Escape tat nichts.
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.tools.close_tool)
 
         self._autosave = QTimer(self)
         self._autosave.setInterval(AUTOSAVE_INTERVAL_MS)
@@ -388,8 +432,7 @@ class MainWindow(QMainWindow):
         bar.addPermanentWidget(self.cancel_button)
 
     def _build_menus(self) -> None:
-        file_menu = self.menuBar().addMenu(tr("Datei"))
-        file_menu.setToolTipsVisible(True)
+        file_menu = self._menu(tr("Datei"))
         self._add_action(
             file_menu,
             tr("Neu"),
@@ -463,8 +506,7 @@ class MainWindow(QMainWindow):
             tr("Formwerk schließen. Ungesichertes wird vorher erfragt."),
         )
 
-        edit_menu = self.menuBar().addMenu(tr("Bearbeiten"))
-        edit_menu.setToolTipsVisible(True)
+        edit_menu = self._menu(tr("Bearbeiten"))
         self._add_action(
             edit_menu,
             tr("Befehlspalette …"),
@@ -538,23 +580,46 @@ class MainWindow(QMainWindow):
         # Alles darunter kommt aus dem Register (§10). Der Hinweis ist die
         # Beschreibung der Operation und steht deshalb an beiden Stellen: in der
         # Statusleiste beim Durchgehen und als Tooltip beim Zögern.
-        for section in menu_tree():
-            menu = self.menuBar().addMenu(str(section.title))
-            menu.setToolTipsVisible(True)
-            for spec in section.entries:
-                action = QAction(str(spec.title), self)
-                if spec.shortcut:
-                    action.setShortcut(QKeySequence(spec.shortcut))
-                action.setStatusTip(str(spec.doc))
-                action.setToolTip(str(spec.doc))
-                action.triggered.connect(
-                    lambda _checked=False, entry=spec: self.run_operation(entry)
-                )
-                menu.addAction(action)
-                self._op_actions[spec.name] = action
+        sections = {section.category: section for section in menu_tree()}
+        for title, categories in MENU_GROUPS:
+            present = [sections[name] for name in categories if name in sections]
+            if not present:
+                continue
+            group = self._menu(str(title))
+            for section in present:
+                # Eine Gruppe aus einer Kategorie braucht kein Untermenü — es
+                # hieße genauso wie das Menü darüber.
+                target = group
+                if len(present) > 1:
+                    # Mit dem Fenster als Elternteil erzeugt, nicht über
+                    # ``addMenu(titel)``: sonst hält nichts auf der Python-Seite
+                    # das Untermenü, und sein C++-Objekt wird eingesammelt,
+                    # während die Leiste es noch zeigt.
+                    target = QMenu(str(section.title), self)
+                    target.setToolTipsVisible(True)
+                    group.addMenu(target)
+                    self._menus.append(target)
+                for spec in section.entries:
+                    self._op_actions[spec.name] = self._operation_action(target, spec)
 
-        view_menu = self.menuBar().addMenu(tr("Ansicht"))
-        view_menu.setToolTipsVisible(True)
+        # Was das Register kennt und diese Tabelle nicht, bekommt sein eigenes
+        # Menü: eine neue Kategorie soll auftauchen, nicht verschwinden.
+        grouped = {name for _title, names in MENU_GROUPS for name in names}
+        for section in menu_tree():
+            if section.category in grouped:
+                continue
+            menu = self._menu(str(section.title))
+            for spec in section.entries:
+                self._op_actions[spec.name] = self._operation_action(menu, spec)
+
+        view_menu = self._menu(tr("Ansicht"))
+        self._add_action(
+            view_menu,
+            tr("Alles einpassen"),
+            "Home",
+            self.viewport.reset_camera,
+            tr("Rückt die Kamera so, dass die ganze Szene ins Bild passt."),
+        )
         self._add_action(
             view_menu,
             tr("Rechten Bereich zeigen"),
@@ -681,8 +746,7 @@ class MainWindow(QMainWindow):
                 hint,
             )
 
-        help_menu = self.menuBar().addMenu(tr("Hilfe"))
-        help_menu.setToolTipsVisible(True)
+        help_menu = self._menu(tr("Hilfe"))
         self._add_action(
             help_menu,
             tr("Handbuch …"),
@@ -724,15 +788,37 @@ class MainWindow(QMainWindow):
         toolbar = QToolBar(tr("Werkzeuge"), self)
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
-        for label, slot in (
-            (tr("Neu"), self.action_new),
-            (tr("Öffnen"), self.action_open),
-            (tr("Speichern"), self.action_save),
-            (tr("Modell einfügen"), self.action_import),
+        # Zeichen neben der Beschriftung, nicht statt ihr (Regel 18) — vier
+        # gleich aussehende Textknöpfe sind dasselbe Problem, das die
+        # Werkzeugzeile unter dem Viewport längst gelöst hat.
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        for symbol, label, slot in (
+            ("new", tr("Neu"), self.action_new),
+            ("open", tr("Öffnen"), self.action_open),
+            ("save", tr("Speichern"), self.action_save),
+            ("import", tr("Modell einfügen"), self.action_import),
         ):
-            action = QAction(label, self)
+            action = QAction(icon(symbol, toolbar), label, self)
             action.triggered.connect(slot)
             toolbar.addAction(action)
+
+    def _menu(self, title: str) -> QMenu:
+        """Ein Menü der Leiste — festgehalten, damit es nicht eingesammelt wird."""
+        menu = self.menuBar().addMenu(title)
+        menu.setToolTipsVisible(True)
+        self._menus.append(menu)
+        return menu
+
+    def _operation_action(self, menu: Any, spec: OperationSpec) -> QAction:
+        """Ein Menüeintrag für eine Operation, überall gleich gebaut."""
+        action = QAction(str(spec.title), self)
+        if spec.shortcut:
+            action.setShortcut(QKeySequence(spec.shortcut))
+        action.setStatusTip(str(spec.doc))
+        action.setToolTip(str(spec.doc))
+        action.triggered.connect(lambda _checked=False, entry=spec: self.run_operation(entry))
+        menu.addAction(action)
+        return action
 
     def _add_action(
         self, menu: Any, label: str, shortcut: Any, slot: Any, hint: str = ""
@@ -1129,16 +1215,64 @@ class MainWindow(QMainWindow):
         self.object_tree.set_unit(unit)  # type: ignore[arg-type]
         self._on_selection(self.object_tree.selected())
 
-    def action_command_palette(self) -> None:
-        """Eine Taste, alles aus dem Register — und die Kürzel lernen sich
-        nebenbei (§2.6).
+    def window_commands(self) -> dict[str, tuple[str, str, Any]]:
+        """Was die Palette außer den Operationen kennen muss (§2.6, §19.2).
+
+        „Alles aus dem Register" war zu wenig: Speichern, das Handbuch, die
+        Darstellungsarten und die sieben Ansichtswerkzeuge stehen nicht im
+        Register, und die Palette soll der Universalzugang sein. Kennung,
+        Titel, Kürzel und was zu tun ist.
         """
-        palette = CommandPalette(parent=self)
+        commands: dict[str, tuple[str, str, Any]] = {
+            "file.new": (tr("Neu"), "Ctrl+N", self.action_new),
+            "file.open": (tr("Öffnen …"), "Ctrl+O", self.action_open),
+            "file.save": (tr("Speichern"), "Ctrl+S", self.action_save),
+            "file.import": (tr("Modell einfügen …"), "Ctrl+I", self.action_import),
+            "file.print_settings": (
+                tr("Druckeinstellungen …"),
+                "Ctrl+P",
+                self.action_print_settings,
+            ),
+            "file.catalog": (tr("Bausteinkatalog …"), "Ctrl+K", self.action_catalog),
+            "edit.settings": (tr("Einstellungen …"), "Ctrl+,", self.action_settings),
+            "edit.undo": (tr("Rückgängig"), "Ctrl+Z", self.action_undo),
+            "edit.redo": (tr("Wiederholen"), "Ctrl+Y", self.action_redo),
+            "edit.auto_split": (tr("Automatisch teilen …"), "", self.action_auto_split),
+            "view.fit": (tr("Alles einpassen"), "Home", self.viewport.reset_camera),
+            "view.toggle_right": (tr("Rechten Bereich zeigen"), "F9", self.action_toggle_right),
+            "help.manual": (tr("Handbuch …"), "F1", self.action_manual),
+        }
+        for key, title in self.tools.tool_titles().items():
+            commands[f"tool.{key}"] = (
+                f"{strip_title()}: {title}",
+                "",
+                lambda name=key: self.tools.toggle(name),
+            )
+        return commands
+
+    def action_command_palette(self) -> None:
+        """Eine Taste, alles — und die Kürzel lernen sich nebenbei (§2.6)."""
+        commands = self.window_commands()
+        extra = [
+            PaletteEntry(
+                name=key,
+                title=title,
+                doc=title,
+                shortcut=shortcut,
+                category=key.split(".", 1)[0],
+            )
+            for key, (title, shortcut, _slot) in commands.items()
+        ]
+        palette = CommandPalette([*palette_entries(), *extra], parent=self)
         if palette.exec() != CommandPalette.DialogCode.Accepted:
             return
         name = palette.chosen()
-        if name:
-            self.run_operation(REGISTRY.get(name))
+        if not name:
+            return
+        if name in commands:
+            commands[name][2]()
+            return
+        self.run_operation(REGISTRY.get(name))
 
     def _on_transform_dragged(self, steps: Any) -> None:
         """Ein Ziehen, eine Transaktion — in einem Schritt zurückgenommen
@@ -1575,7 +1709,14 @@ class MainWindow(QMainWindow):
         self._hidden &= set(result.scene.objects)
         self.viewport.set_hidden(self._hidden)
         self.object_tree.set_hidden(self._hidden)
+        # Der erste Körper einer leeren Szene wird eingepasst. Ohne das blieb
+        # die Kamera, wo sie war: ein importiertes Teil lag außerhalb des
+        # Bildes, und die Anwendung sah aus, als hätte sie nichts geladen.
+        was_empty = not self._seen_objects
+        self._seen_objects = bool(result.scene.objects)
         self.object_tree.show_scene(result, self.session.project.document)
+        if was_empty and self._seen_objects:
+            self.viewport.reset_camera()
         plates = {entry.plate for entry in result.scene.objects.values()}
         self.explode_bar.show_for(len(result.scene.objects), max(plates, default=0) + 1)
         self.report.show_result(result)

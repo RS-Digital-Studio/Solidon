@@ -15,7 +15,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication, QComboBox, QDialog
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QToolBar
 
 from app.core import errors
 from app.core.registry import REGISTRY
@@ -143,13 +144,28 @@ def test_the_title_marks_unsaved_changes(session: Session, tmp_path: Path) -> No
 # --- window ---------------------------------------------------------------------
 
 
+def all_menu_actions(window: MainWindow) -> list[QAction]:
+    """Jeder Menüeintrag, auch in Untermenüs.
+
+    Seit die dreizehn Kategorien in fünf Gruppen liegen (§2.5), steht das
+    meiste eine Ebene tiefer. Erreichbar muss es trotzdem sein — auf welcher
+    Ebene, ist die Frage dieses Tests nicht.
+    """
+    # Gefragt wird das Fenster, nicht die Leiste: es hält seine Menüs, und
+    # ein über ``QAction.menu()`` geholter Wrapper nimmt beim Verwerfen das
+    # C++-Menü mitsamt seinen Einträgen mit. Dass die Menüs auch wirklich in
+    # der Leiste hängen, prüft `test_the_menubar_stays_a_bar`.
+    return [action for menu in window._menus for action in menu.actions() if action.menu() is None]
+
+
+def test_the_menubar_stays_a_bar(window: MainWindow) -> None:
+    """§2.5: siebzehn Menüs sind keine Leiste mehr, sondern eine Liste."""
+    top = [entry for entry in window.menuBar().actions() if entry.menu() is not None]
+    assert len(top) <= 10, [entry.text() for entry in top]
+
+
 def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
-    labels: set[str] = set()
-    for menu_action in window.menuBar().actions():
-        menu = menu_action.menu()
-        if menu is None:
-            continue
-        labels.update(action.text() for action in menu.actions())
+    labels = {action.text() for action in all_menu_actions(window)}
 
     for spec in REGISTRY.all():
         assert str(spec.title) in labels, f"{spec.name} is missing from the menu"
@@ -158,9 +174,7 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
 def test_shortcuts_from_the_registry_are_installed(window: MainWindow) -> None:
     shortcuts = {
         action.shortcut().toString().lower()
-        for menu_action in window.menuBar().actions()
-        if menu_action.menu() is not None
-        for action in menu_action.menu().actions()
+        for action in all_menu_actions(window)
         if not action.shortcut().isEmpty()
     }
     for spec in REGISTRY.all():
@@ -732,3 +746,66 @@ def test_the_printer_of_an_open_project_can_change(session: Session) -> None:
 
     session.undo()
     assert session.project.document.printer == before, "eine Transaktion, also rücknehmbar"
+
+
+# --- Entdeckbarkeit (§2.6, §19.2) -----------------------------------------------
+
+
+def test_the_palette_reaches_more_than_the_registry(window: MainWindow) -> None:
+    """§2.6: die Palette ist der Universalzugang — sie kannte nur Operationen.
+
+    Speichern, das Handbuch und die sieben Ansichtswerkzeuge stehen nicht im
+    Register. `ToolStrip.tool_titles()` und `strip_title()` wurden dafür
+    geschrieben und hatten außer Tests keinen Aufrufer.
+    """
+    commands = window.window_commands()
+
+    assert "file.save" in commands
+    assert "help.manual" in commands
+    for key in window.tools.tool_titles():
+        assert f"tool.{key}" in commands, f"{key} fehlt in der Palette"
+
+    for _title, _shortcut, slot in commands.values():
+        assert callable(slot)
+
+
+def test_escape_closes_the_open_tool(window: MainWindow) -> None:
+    """`close_tool` gab es seit jeher und niemanden, der es rief."""
+    window.tools.toggle("section")
+    assert window.tools.active() == "section"
+
+    window.tools.close_tool()
+    assert window.tools.active() is None
+
+
+def test_the_view_menu_can_fit_everything(window: MainWindow) -> None:
+    """Ohne diesen Eintrag musste man wissen, dass Strg+0 nebenbei einpasst."""
+    labels = {action.text() for action in all_menu_actions(window)}
+    assert "Alles einpassen" in labels
+
+
+def test_the_first_body_gets_the_camera(window: MainWindow) -> None:
+    """Sonst bleibt die Kamera, wo sie war, und das Teil liegt außerhalb des
+    Bildes — die Anwendung sieht aus, als hätte sie nichts geladen."""
+    assert not window._seen_objects
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window._on_scene(window.session.evaluate_now())
+
+    assert window._seen_objects
+
+
+def test_the_toolbar_buttons_carry_a_symbol_and_keep_their_words(
+    window: MainWindow,
+) -> None:
+    """Regel 18: vier gleich aussehende Textknöpfe sind vier Vermutungen."""
+    from app.ui import icons
+
+    for name in ("new", "open", "save", "import"):
+        assert name in icons.known(), f"{name} fehlt im Symbolkatalog"
+
+    toolbar = window.findChildren(QToolBar)[0]
+    for action in toolbar.actions():
+        assert action.text(), "das Wort bleibt"
+        assert not action.icon().isNull(), f"{action.text()} ohne Zeichen"

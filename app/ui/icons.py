@@ -100,6 +100,18 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M5 13.5 8.5 17l-3 2.5-2-2z" />'
         '<path d="M14 6.5 17.5 10" />'
     ),
+    # Ein leeres Blatt mit umgeknickter Ecke.
+    "new": ('<path d="M6 3h7l5 5v13H6z" /><path d="M13 3v5h5" />'),
+    # Ein Ordner, halb geöffnet.
+    "open": ('<path d="M3 6.5h6l2 2.5h10v9.5H3z" /><path d="M3 9h18" />'),
+    # Eine Diskette — das Zeichen fürs Speichern, auf das sich die Welt
+    # tatsächlich geeinigt hat.
+    "save": ('<path d="M4 4h12l4 4v12H4z" /><path d="M8 4v6h7V4" /><path d="M7 20v-6h10v6" />'),
+    # Ein Körper mit einem Pfeil hinein.
+    "import": (
+        '<path d="M13 4.5 20 8.5v7l-7 4-7-4v-7z" stroke-dasharray="3 2" />'
+        '<path d="M2.5 12h7" /><path d="M6.5 9l3 3-3 3" />'
+    ),
     # Ein durchgestrichenes Auge für einen Körper, der da ist und nicht
     # gezeichnet wird. Das Wort „ausgeblendet" steht daneben (Regel 18) — das
     # Zeichen unterscheidet die Zeile auf einen Blick, es trägt sie nicht.

@@ -1423,17 +1423,36 @@ zurück. Suite: 2129 grün.
 
 #### Etappe 6 — Entdeckbarkeit
 
-- [ ] Menügruppen (E5) — neun Menüs statt siebzehn
-- [ ] Befehlspalette nimmt auch Datei-, Ansichts- und Werkzeugbefehle auf;
-      `ToolStrip.tool_titles()` und `strip_title()` bekommen ihren Aufrufer
-- [ ] `Escape` schließt das offene Werkzeug (`close_tool()` ebenso)
-- [ ] *Ansicht → Alles einpassen* mit Kürzel; `reset_camera()` wird auch nach
-      dem ersten Import gerufen
-- [ ] Tastaturnavigation im Viewport nach §19.2: Zoom und Auswahl durchblättern
-- [ ] Symbole für die vier Knöpfe der oberen Werkzeugleiste, aus `icons.py`
+- [x] Menügruppen (E5) — neun Menüs statt siebzehn: *Objekt*, *Erzeugen*,
+      *Ändern*, *Bausteine*, *Vorbereiten*. Eine Gruppe aus einer Kategorie
+      steht flach, sonst bekommt jede Kategorie ihr Untermenü. Eine Kategorie,
+      die diese Tabelle nicht kennt, bekommt weiter ihr eigenes Menü — sie
+      soll auftauchen, nicht verschwinden
+- [x] Befehlspalette nimmt Datei-, Ansichts- und Werkzeugbefehle auf;
+      `ToolStrip.tool_titles()` und `strip_title()` haben ihren Aufrufer
+- [x] `Escape` schließt das offene Werkzeug
+- [x] *Ansicht → Alles einpassen* auf `Home`; dazu bekommt der erste Körper
+      einer leeren Szene die Kamera von selbst
+- [ ] **Offen:** Tastaturnavigation im Viewport nach §19.2 (Zoom, Auswahl
+      durchblättern). Sie hängt an VTKs Interaktionsstil und ist kein
+      Beiwerk der Menüarbeit — eigener Schritt
+- [x] Symbole für die vier Knöpfe der oberen Werkzeugleiste
 
-*Abnahme:* Jeder Befehl der Anwendung ist über die Palette erreichbar — ein
-Test zählt Menüeinträge gegen Paletteneinträge.
+**Zwei Funde beim Bauen:**
+
+**Die Menügruppen wären nie übersetzt worden.** Der Abgleich der Sprachdateien
+liest literale `tr("…")`-Aufrufe; ein `tr(variable)` sieht er nicht. Die Titel
+sind jetzt mit `_()` markiert — dieselbe Falle wartet auf jeden, der Texte in
+einer Tabelle sammelt (Regel 20).
+
+**Menüs brauchen einen Besitzer auf der Python-Seite.** PySide gibt für ein
+Menü bei jedem Zugriff einen neuen Wrapper, und wird einer eingesammelt, nimmt
+er das C++-Objekt mit. Solange nur die Leiste die Menüs kannte, ging das gut;
+mit der zweiten Ebene wurde daraus ein Absturz. Das Fenster hält seine Menüs
+jetzt selbst.
+
+*Abnahme erfüllt:* Neun Menüs in der Leiste, jede Operation weiter erreichbar
+(der Test sucht rekursiv), jeder Fenster-Befehl in der Palette.
 
 #### Etappe 7 — Gestufte Tiefe und Anzeigeleistung
 
