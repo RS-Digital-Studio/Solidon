@@ -207,3 +207,39 @@ def test_advanced_parameters_sit_behind_the_fold(qt_app: QApplication) -> None:
 
     assert groups, "load has advanced parameters, so there is a fold"
     assert not groups[0].isChecked(), "the fold starts closed"
+
+
+def test_the_report_summary_counts_findings_from_both_directions(
+    qt_app: QApplication,
+) -> None:
+    """Befunde kommen aus der Auswertung *und* über ``add_findings`` (§28.2).
+
+    Die Zeile über der Liste zählte nur die erste Sorte und schrieb deshalb
+    „Keine Befunde" über eine Liste voller Befunde — aufgefallen, als für das
+    Handbuch ein Bild davon aufgenommen wurde.
+    """
+    from app.core.types import Finding
+    from app.ui.panels import ReportPanel
+
+    panel = ReportPanel()
+    assert "Keine Befunde" in panel.summary.text()
+
+    panel.add_findings(
+        [
+            Finding(code="a.b", severity="warning", message="offen"),
+            Finding(code="c.d", severity="info", message="dünn"),
+        ]
+    )
+
+    assert panel.list.count() == 2
+    assert "Keine Befunde" not in panel.summary.text()
+    assert "1" in panel.summary.text()
+
+
+def test_a_report_without_findings_says_so(qt_app: QApplication) -> None:
+    from app.ui.panels import ReportPanel
+
+    panel = ReportPanel()
+    panel.show_result(None)
+
+    assert "Keine Befunde" in panel.summary.text()

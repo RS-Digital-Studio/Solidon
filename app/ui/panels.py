@@ -314,28 +314,9 @@ class ReportPanel(QWidget):
 
     def show_result(self, result: EvaluationResult | None) -> None:
         self.list.clear()
-        findings = result.scene.report.findings if result else ()
-        if not findings:
-            self.summary.setText(tr("Keine Befunde."))
-            return
-
-        counts = {level: 0 for level in SEVERITY_MARKER}
-        for finding in findings:
-            counts[finding.severity] += 1
-            item = QListWidgetItem(f"{SEVERITY_MARKER[finding.severity]}  {finding.message}")
-            item.setData(Qt.ItemDataRole.UserRole, finding)
-            item.setForeground(QColor(SEVERITY_ENCODING[finding.severity].colour))
-            # §22.5: woher eine Zahl kommt, ist Teil des Befunds und wird nie dem
-            # Leser zum Annehmen überlassen — eine Schätzung ist keine Messung.
-            details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]
-            details.extend(f"{key}: {value}" for key, value in finding.values.items())
-            item.setToolTip(" · ".join(details))
-            self.list.addItem(item)
-        self.summary.setText(
-            f"{counts['error']} × {tr('Fehler')} · "
-            f"{counts['warning']} × {tr('Warnung')} · "
-            f"{counts['info']} × {tr('Hinweis')}"
-        )
+        for finding in result.scene.report.findings if result else ():
+            self._append(finding)
+        self._count_up()
 
     def add_findings(self, findings: list[Finding]) -> None:
         """Hängt Befunde an, die nicht aus der Auswertung kamen — die
@@ -343,14 +324,42 @@ class ReportPanel(QWidget):
         Herkunft (§22.5).
         """
         for finding in findings:
-            item = QListWidgetItem(f"{SEVERITY_MARKER[finding.severity]}  {finding.message}")
-            item.setData(Qt.ItemDataRole.UserRole, finding)
-            item.setForeground(QColor(SEVERITY_ENCODING[finding.severity].colour))
-            details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]
-            details.extend(f"{key}: {value}" for key, value in finding.values.items())
-            item.setToolTip(" · ".join(details))
-            self.list.addItem(item)
+            self._append(finding)
+        self._count_up()
         self.list.scrollToBottom()
+
+    def _append(self, finding: Finding) -> None:
+        """Einen Befund als Eintrag anhängen."""
+        item = QListWidgetItem(f"{SEVERITY_MARKER[finding.severity]}  {finding.message}")
+        item.setData(Qt.ItemDataRole.UserRole, finding)
+        item.setForeground(QColor(SEVERITY_ENCODING[finding.severity].colour))
+        # §22.5: woher eine Zahl kommt, ist Teil des Befunds und wird nie dem
+        # Leser zum Annehmen überlassen — eine Schätzung ist keine Messung.
+        details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]
+        details.extend(f"{key}: {value}" for key, value in finding.values.items())
+        item.setToolTip(" · ".join(details))
+        self.list.addItem(item)
+
+    def _count_up(self) -> None:
+        """Die Zeile über der Liste aus der Liste selbst zählen.
+
+        Nicht aus dem übergebenen Ergebnis: Befunde kommen aus zwei Richtungen
+        — aus der Auswertung und über ``add_findings`` —, und wer nur die eine
+        zählt, schreibt „Keine Befunde" über eine Liste voller Befunde. Genau
+        das stand hier.
+        """
+        counts = dict.fromkeys(SEVERITY_MARKER, 0)
+        for row in range(self.list.count()):
+            finding: Finding = self.list.item(row).data(Qt.ItemDataRole.UserRole)
+            counts[finding.severity] += 1
+        if not any(counts.values()):
+            self.summary.setText(tr("Keine Befunde."))
+            return
+        self.summary.setText(
+            f"{counts['error']} × {tr('Fehler')} · "
+            f"{counts['warning']} × {tr('Warnung')} · "
+            f"{counts['info']} × {tr('Hinweis')}"
+        )
 
     def worst_severity(self, result: EvaluationResult | None) -> str | None:
         if result is None:
