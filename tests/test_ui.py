@@ -323,6 +323,23 @@ def test_a_report_without_findings_says_so(qt_app: QApplication) -> None:
     assert "Keine Befunde" in panel.summary.text()
 
 
+def test_report_findings_wrap_instead_of_scrolling(qt_app: QApplication) -> None:
+    """§2.7: die Sätze des Prüfberichts müssen ganz lesbar sein.
+
+    Im schmalen rechten Bereich endeten sie mitten im Wort („…um die
+    Materialtoleranz v") hinter einer horizontalen Bildlaufleiste —
+    aufgefallen am Bildschirmfoto des Hauptfensters fürs Handbuch.
+    """
+    from PySide6.QtCore import Qt
+
+    from app.ui.panels import ReportPanel
+
+    panel = ReportPanel()
+    assert panel.list.wordWrap()
+    assert panel.list.textElideMode() == Qt.TextElideMode.ElideNone
+    assert panel.list.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+
+
 def test_the_tool_strip_starts_with_every_bar_closed(qt_app: QApplication) -> None:
     """§2.4: im Ruhezustand zwei Zeilen, nicht fünf."""
     window = MainWindow(Session(), UiSettings())

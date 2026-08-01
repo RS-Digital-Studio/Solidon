@@ -438,6 +438,13 @@ class ReportPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.list = QListWidget(self)
+        # §2.7 schreibt die Sätze, die hier stehen — im schmalen rechten
+        # Bereich endeten sie mitten im Wort hinter einer horizontalen
+        # Bildlaufleiste. Umbruch statt Abschneiden: die Leiste bleibt aus,
+        # und kein Befund wird auf „…" gekürzt.
+        self.list.setWordWrap(True)
+        self.list.setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.list.itemActivated.connect(self._on_activated)
         self.summary = QLabel(tr("Keine Befunde."), self)
         self.summary.setWordWrap(True)
