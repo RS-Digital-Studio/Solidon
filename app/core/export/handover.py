@@ -1,0 +1,340 @@
+"""Übergabe an den Slicer (Bauplan §29, §28.1).
+
+Formwerk baut keinen G-Code-Slicer (§22) — es bedient einen. Der Unterschied
+zum Wechseln in ein anderes Programm ist, dass die Einstellungen hier bleiben:
+Formwerk schreibt sie als Profil, ruft den Slicer im Konsolenmodus, und liest
+die entstandene Datei mit :mod:`app.core.slice.gcode` wieder ein. Wer das
+benutzt, sieht den Slicer nicht mehr.
+
+Was Formwerk **nicht** mitbringt, ist das Maschinenwissen: Bettform,
+Anfahrwege, Start- und Endcode, die Eigenheiten einer Kinematik. Das steht in
+den Profilen, die der Slicer mitbringt, und genau dort bleibt es. Formwerk
+setzt sein Profil darauf — es überschreibt, es ersetzt nicht.
+
+Ein Lauf ist abgesichert wie der OpenSCAD-Lauf (§32): feste Argumentliste,
+kein Shell, eigener Arbeitsordner, Zeitlimit. Der Unterschied ist, dass hier
+kein fremder Quelltext läuft, sondern ein Programm auf eine Datei zeigt.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import tempfile
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Final
+
+from app.core.errors import OPEN_SETTINGS, Action, ExternalToolError
+from app.core.export import slicer_keys
+from app.core.export.slicer_keys import SlicerFlavour
+from app.core.knowledge.print_settings import read_path
+from app.core.log import get_logger
+from app.core.slice import gcode
+from app.core.types import Finding, PrintSettings, Profile
+from app.i18n import _
+
+_log = get_logger(__name__)
+
+#: Slicen dauert länger als alles andere, was Formwerk außer Haus gibt. Fünf
+#: Minuten sind großzügig für ein Teil und immer noch eine Grenze.
+TIMEOUT_SECONDS: Final = 300.0
+
+#: Wonach im Ausgabeordner gesucht wird — die Slicer benennen selbst.
+GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g")
+
+
+@dataclass(frozen=True, slots=True)
+class SlicerSetup:
+    """Welcher Slicer, und worauf seine Profile aufsetzen.
+
+    ``machine_profile`` und ``base_process`` sind Namen aus dem Bestand des
+    Slicers, keine Pfade — sie reisen so auch in eine Projektdatei, ohne gegen
+    Regel 12 zu verstoßen.
+    """
+
+    executable: Path
+    flavour: SlicerFlavour
+    machine_profile: str = ""
+    base_process: str = ""
+
+    @property
+    def name(self) -> str:
+        return self.executable.stem
+
+
+def detect(executable: Path | str) -> SlicerSetup:
+    """Was für ein Slicer das ist. Erkennt an seinem Namen (§29)."""
+    path = Path(executable)
+    flavour = slicer_keys.flavour_of(path.name)
+    if flavour is None:
+        raise ExternalToolError(
+            tool=path.name,
+            detail=_("Formwerk kennt die Kommandozeile dieses Programms nicht."),
+            suggestions=(
+                Action(id="choose_slicer", label=_("Einen anderen Slicer auswählen.")),
+                Action(id="export_only", label=_("Nur exportieren und selbst slicen.")),
+            ),
+        )
+    return SlicerSetup(executable=path, flavour=flavour)
+
+
+def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str]:
+    """Die Einstellungen in der Sprache dieses Slicers (§29).
+
+    Ohne Datei und ohne Aufruf — die Oberfläche zeigt damit an, was übergeben
+    würde, und die Tests prüfen die Zuordnung, ohne dass ein Slicer installiert
+    sein muss.
+    """
+    written: dict[str, str] = {}
+    for path, key, convert in slicer_keys.TABLES[flavour]:
+        written[key] = convert(read_path(settings, path))
+    return written
+
+
+def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
+    """Was der Slicer über die Maschine wissen muss, wenn kein Profil greift.
+
+    Nur für ``prusa``: dort ist eine ``.ini`` eigenständig lauffähig, sobald
+    Düse und Bettform darin stehen. Orca und Cura laden ohnehin ein
+    Maschinenprofil, und dem hier hineinzureden hieße, ihre Anfahrwege und
+    ihren Startcode zu überschreiben.
+    """
+    if flavour != "prusa":
+        return {}
+    printer = profile.printer
+    width, depth, height = printer.build_volume
+    return {
+        "nozzle_diameter": f"{printer.nozzle_diameter:g}",
+        "bed_shape": f"0x0,{width:g}x0,{width:g}x{depth:g},0x{depth:g}",
+        "max_print_height": f"{height:g}",
+    }
+
+
+def write_config(
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup,
+    directory: Path,
+) -> Path:
+    """Schreibt das Profil, das der Slicer gleich lädt."""
+    values = as_mapping(settings, setup.flavour) | _machine_keys(profile, setup.flavour)
+
+    if setup.flavour == "prusa":
+        target = directory / "formwerk.ini"
+        lines = [f"# {settings.title} — von Formwerk geschrieben, nicht von Hand"]
+        lines += [f"{key} = {value}" for key, value in sorted(values.items())]
+        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return target
+
+    if setup.flavour == "orca":
+        target = directory / "formwerk_process.json"
+        target.write_text(
+            json.dumps(_orca_process(values, settings, setup), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return target
+
+    target = directory / "formwerk_cura.txt"
+    target.write_text(
+        "\n".join(f"{key}={value}" for key, value in sorted(values.items())) + "\n",
+        encoding="utf-8",
+    )
+    return target
+
+
+def _orca_process(
+    values: dict[str, str],
+    settings: PrintSettings,
+    setup: SlicerSetup,
+) -> dict[str, object]:
+    """Das Prozessprofil für die Orca-Familie.
+
+    Diese Slicer nehmen kein Prozessprofil an, das nicht zum Drucker passt —
+    sie brechen mit „process not compatible with printer" ab, bevor sie das
+    Modell überhaupt ansehen. Die Kompatibilität steht in Feldern, die
+    Formwerk nicht kennt und nicht erfinden sollte (``compatible_printers``,
+    ``inherits``, die Düsenbindung).
+
+    Also wird nichts erfunden: das benannte Systemprofil wird gelesen und die
+    Formwerk-Werte kommen darüber. Was Formwerk nicht anfasst, bleibt genau so
+    stehen, wie der Hersteller es abgestimmt hat — das ist die Aufteilung aus
+    §29 in einer Datei.
+    """
+    document: dict[str, object] = {}
+    if setup.base_process:
+        base = Path(setup.base_process)
+        if base.is_file():
+            loaded = json.loads(base.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                document.update(loaded)
+    if not document:
+        document = {
+            "type": "process",
+            "name": f"Formwerk {settings.title}",
+            "from": "User",
+            "instantiation": "true",
+        }
+    document.update(values)
+    return document
+
+
+def _command(
+    setup: SlicerSetup,
+    model: Path,
+    config: Path,
+    output: Path,
+) -> list[str]:
+    """Die Kommandozeile dieses Slicers. Eine Liste, nie eine Zeichenkette —
+    ein Dateiname mit Leerzeichen ist sonst zwei Argumente.
+    """
+    binary = str(setup.executable)
+
+    if setup.flavour == "prusa":
+        return [
+            binary,
+            "--export-gcode",
+            "--load",
+            str(config),
+            "--output",
+            str(output / "formwerk.gcode"),
+            str(model),
+        ]
+
+    if setup.flavour == "orca":
+        # Beide Profile, immer in dieser Reihenfolge: erst die Maschine, dann
+        # der Prozess. Umgekehrt prüft der Slicer die Verträglichkeit gegen
+        # einen Drucker, den er noch nicht kennt, und bricht ab.
+        profiles = f"{setup.machine_profile};{config}" if setup.machine_profile else str(config)
+        return [
+            binary,
+            "--load-settings",
+            profiles,
+            "--slice",
+            "0",
+            "--outputdir",
+            str(output),
+            str(model),
+        ]
+
+    arguments = [binary, "slice", "-v"]
+    if setup.machine_profile:
+        arguments += ["-j", setup.machine_profile]
+    for line in config.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            arguments += ["-s", line.strip()]
+    arguments += ["-l", str(model), "-o", str(output / "formwerk.gcode")]
+    return arguments
+
+
+@dataclass(slots=True)
+class SliceOutcome:
+    """Was der Lauf gebracht hat."""
+
+    gcode_path: Path
+    metrics: gcode.GcodeMetrics
+    findings: list[Finding] = field(default_factory=list)
+    seconds: float = 0.0
+
+
+def slice_model(
+    model: Path,
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup,
+    *,
+    output_dir: Path | None = None,
+    timeout: float = TIMEOUT_SECONDS,
+) -> SliceOutcome:
+    """Slicen lassen und die Datei zurücklesen (§29, §28.1).
+
+    Der Rückweg ist der Punkt: was herauskommt, ist nicht bloß eine Datei auf
+    der Platte, sondern gemessene Kennzahlen, die im Prüfbericht neben den
+    geschätzten stehen — mit ihrer Herkunft, nie mit ihnen vermischt
+    (Regel 14).
+    """
+    if not model.is_file():
+        raise ExternalToolError(
+            tool=setup.name,
+            detail=_("Die zu slicende Datei ist nicht da."),
+            values={"path": model.name},
+        )
+    if not setup.executable.is_file():
+        raise ExternalToolError(
+            tool=setup.name,
+            detail=_("Der eingestellte Slicer liegt nicht mehr an seinem Pfad."),
+            suggestions=(OPEN_SETTINGS, Action(id="export_only", label=_("Nur exportieren."))),
+        )
+
+    started = time.perf_counter()
+    with tempfile.TemporaryDirectory(prefix="formwerk-slice-") as directory:
+        workspace = Path(directory)
+        config = write_config(settings, profile, setup, workspace)
+        target = output_dir if output_dir is not None else workspace
+        target.mkdir(parents=True, exist_ok=True)
+
+        completed = subprocess.run(
+            _command(setup, model, config, target),
+            cwd=workspace,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+        produced = _find_gcode(target)
+        if produced is None:
+            raise ExternalToolError(
+                tool=setup.name,
+                exit_code=completed.returncode,
+                detail=_("Der Slicer hat keine Druckdatei geschrieben."),
+                values={"output": completed.stderr.decode("utf-8", errors="replace")[-500:]},
+                suggestions=(
+                    Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
+                    Action(id="check_profile", label=_("Maschinenprofil prüfen.")),
+                    Action(id="export_only", label=_("Nur exportieren und selbst slicen.")),
+                ),
+            )
+
+        metrics = gcode.parse(produced.read_text(encoding="utf-8", errors="replace"))
+        if output_dir is None:
+            # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
+            # erreichen können, also wandert sie neben das Modell.
+            kept = model.with_suffix(".gcode")
+            kept.write_bytes(produced.read_bytes())
+            produced = kept
+
+    findings = gcode.findings_for(metrics)
+    findings.append(
+        Finding(
+            code="slicer.handover",
+            severity="info",
+            message=_(
+                "Diese Datei kommt aus dem externen Slicer, gerechnet mit den Werten aus Formwerk."
+            ),
+            values={"slicer": metrics.slicer or setup.name, "settings": settings.title},
+            source="gcode",
+        )
+    )
+    return SliceOutcome(
+        gcode_path=produced,
+        metrics=metrics,
+        findings=findings,
+        seconds=time.perf_counter() - started,
+    )
+
+
+def _find_gcode(directory: Path) -> Path | None:
+    """Die jüngste Druckdatei im Ordner.
+
+    Die Slicer benennen selbst, und Orca hängt Plattennummern an. Gesucht wird
+    deshalb nach Endung, nicht nach Namen — und die jüngste gewinnt, damit ein
+    zweiter Lauf im selben Ordner nicht die Zahlen des ersten meldet.
+    """
+    candidates = [
+        entry
+        for entry in directory.iterdir()
+        if entry.is_file() and entry.suffix.casefold() in GCODE_SUFFIXES
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda entry: entry.stat().st_mtime)

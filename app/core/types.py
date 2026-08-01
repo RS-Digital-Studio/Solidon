@@ -352,6 +352,185 @@ class Profile:
         return 2.0 * self.printer.extrusion_width
 
 
+# --- Druckeinstellungen (§29) --------------------------------------------------
+#
+# Formwerk hält die Einstellungen, der externe Slicer führt sie aus (§22, §29).
+# Das hier ist also kein Slicer-Format, sondern das eine Modell, aus dem
+# ``export.handover`` die Konfiguration jedes unterstützten Slicers schreibt.
+# Gruppiert statt flach, weil die Oberfläche in denselben Gruppen fragt und die
+# Zuordnungstabellen Punktpfade wie ``cooling.fan_speed`` benutzen.
+
+InfillPattern = Literal["grid", "gyroid", "honeycomb", "cubic", "lines", "triangles"]
+SupportStyle = Literal["none", "grid", "tree"]
+SupportPlacement = Literal["everywhere", "build_plate"]
+SeamPosition = Literal["aligned", "nearest", "random", "rear"]
+AdhesionType = Literal["none", "skirt", "brim", "raft"]
+QualityPreset = Literal["draft", "standard", "fine", "strong"]
+
+
+@dataclass(frozen=True, slots=True)
+class LayerSettings:
+    """Schichthöhen und Extrusionsbreiten in Millimetern."""
+
+    layer_height: float = 0.2
+    first_layer_height: float = 0.25
+    line_width: float = 0.42
+    first_layer_line_width: float = 0.45
+
+
+@dataclass(frozen=True, slots=True)
+class ShellSettings:
+    """Wände, Deckel und Boden — was die Festigkeit und die Oberfläche macht."""
+
+    wall_count: int = 3
+    top_layers: int = 5
+    bottom_layers: int = 4
+    outer_wall_first: bool = False
+    """Außenwand zuerst gibt die genauere Kontur, innen zuerst die bessere
+    Haftung an Überhängen."""
+    seam_position: SeamPosition = "aligned"
+
+
+@dataclass(frozen=True, slots=True)
+class InfillSettings:
+    """Füllung. ``density`` ist ein Anteil, 0.15 sind 15 Prozent."""
+
+    density: float = 0.15
+    pattern: InfillPattern = "grid"
+    angle: float = 45.0
+    """Grad zur X-Achse."""
+
+
+@dataclass(frozen=True, slots=True)
+class TemperatureSettings:
+    """Grad Celsius. ``chamber`` bleibt 0, wo der Drucker keine Kammer hat."""
+
+    nozzle: int = 210
+    nozzle_first_layer: int = 215
+    bed: int = 60
+    bed_first_layer: int = 60
+    chamber: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class CoolingSettings:
+    """Kühlung. ``fan_speed`` ist ein Anteil, 1.0 heißt volle Drehzahl."""
+
+    fan_speed: float = 1.0
+    bridge_fan_speed: float = 1.0
+    disable_first_layers: int = 1
+    """So viele erste Schichten laufen ohne Lüfter — sonst löst sich das Teil."""
+    minimum_layer_time: float = 8.0
+    """Sekunden. Kürzere Schichten werden gebremst, damit sie erstarren."""
+
+
+@dataclass(frozen=True, slots=True)
+class SpeedSettings:
+    """Millimeter je Sekunde."""
+
+    outer_wall: float = 40.0
+    inner_wall: float = 60.0
+    infill: float = 80.0
+    top_surface: float = 40.0
+    first_layer: float = 20.0
+    travel: float = 150.0
+
+
+@dataclass(frozen=True, slots=True)
+class SupportSettings:
+    """Stützen. ``style='none'`` schaltet sie ab, ohne die Werte zu verlieren."""
+
+    style: SupportStyle = "none"
+    placement: SupportPlacement = "everywhere"
+    threshold_angle: float = 50.0
+    """Grad gegen die Senkrechte, ab dem gestützt wird."""
+    z_gap: float = 0.2
+    xy_gap: float = 0.5
+    density: float = 0.15
+    interface_layers: int = 2
+
+
+@dataclass(frozen=True, slots=True)
+class AdhesionSettings:
+    """Was das Teil auf der Platte hält."""
+
+    kind: AdhesionType = "skirt"
+    skirt_loops: int = 2
+    skirt_distance: float = 3.0
+    brim_width: float = 5.0
+    raft_layers: int = 3
+
+
+@dataclass(frozen=True, slots=True)
+class RetractionSettings:
+    """Rückzug gegen Fäden. Millimeter und mm/s."""
+
+    length: float = 0.8
+    speed: float = 35.0
+    z_hop: float = 0.2
+    wipe: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class FilamentSettings:
+    """Was im Slicer am Filament hängt — inklusive der Farbe (§20, §29)."""
+
+    diameter: float = 1.75
+    density: float = 1.24
+    """g/cm³ — geht in Gewicht und Kostenschätzung."""
+    flow_ratio: float = 1.0
+    colour: str = "#4A90D9"
+    """Als ``#RRGGBB``. Reicht bis in die 3MF-Farbgruppen durch."""
+    cost_per_kg: float = 0.0
+    """0 heißt unbekannt, nicht kostenlos — die Kostenschätzung schweigt dann."""
+
+
+@dataclass(frozen=True, slots=True)
+class PrintSettings:
+    """Alle Druckeinstellungen an einer Stelle (§29).
+
+    Der Slicer bekommt sie geschrieben und führt sie aus; er wird nicht mehr
+    von Hand bedient. Was hier fehlt, bleibt beim Slicer-Grundprofil stehen —
+    dieses Modell überschreibt, es ersetzt nicht.
+    """
+
+    id: str = "standard"
+    title: str = "Standard"
+    quality: QualityPreset = "standard"
+    layers: LayerSettings = field(default_factory=LayerSettings)
+    shell: ShellSettings = field(default_factory=ShellSettings)
+    infill: InfillSettings = field(default_factory=InfillSettings)
+    temperature: TemperatureSettings = field(default_factory=TemperatureSettings)
+    cooling: CoolingSettings = field(default_factory=CoolingSettings)
+    speed: SpeedSettings = field(default_factory=SpeedSettings)
+    support: SupportSettings = field(default_factory=SupportSettings)
+    adhesion: AdhesionSettings = field(default_factory=AdhesionSettings)
+    retraction: RetractionSettings = field(default_factory=RetractionSettings)
+    filament: FilamentSettings = field(default_factory=FilamentSettings)
+
+    @property
+    def wall_thickness(self) -> float:
+        """Was die Wände am Ende messen — die Zahl, gegen die eine Konstruktion
+        geprüft wird."""
+        return self.shell.wall_count * self.layers.line_width
+
+
+@dataclass(frozen=True, slots=True)
+class SettingAdvice:
+    """Eine Einstellung, die die Geometrie selbst verlangt (§28.2).
+
+    Ein Vorschlag trägt seinen Grund mit: eine Zahl ohne Begründung ist im
+    Zweifel schlechter als die Vorgabe, weil niemand sie nachprüfen kann.
+    """
+
+    path: str
+    """Punktpfad ins Modell, etwa ``support.style``."""
+    value: object
+    was: object
+    reason: TranslatableText | str
+    severity: Severity = "info"
+
+
 # --- Befunde und Prüfbericht ---------------------------------------------------
 
 
