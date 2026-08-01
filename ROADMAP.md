@@ -1106,3 +1106,280 @@ Wortlaut wiederholt sich zu oft; adressiert wird über Funktions- und
 Klassennamen, und bei einem Namen, den es zweimal gibt, bricht das Werkzeug ab,
 statt zu raten. Die Einrückung braucht keine Sorgfalt — `ruff format`
 normalisiert Docstrings ohnehin.
+
+---
+
+## P14 — Die Oberfläche einlösen
+
+Durchsicht der gesamten Bedienung: 29 Dateien unter `app/ui/`, das Register mit
+seinen 70 Operationen, die Einstellungen und die Verdrahtung zur Sitzung.
+Achtundzwanzig Funde, und keiner davon eine Geschmacksfrage — jeder ist
+entweder ein Versprechen, das der Code nicht einlöst, oder eine Stelle im
+Bauplan, die noch keinen Nutzer hat.
+
+Sie haben fünf Ursachen. Wer die fünf behebt, behebt die achtundzwanzig; wer
+die achtundzwanzig einzeln behebt, baut sie in einem halben Jahr wieder ein.
+
+### Woran es liegt
+
+**1 — Das Dokument kennt nur Operationen.** Alles, was keine Op ist, steht
+außerhalb von Transaktion und Undo: Parameter, Passungen, Druckeinstellungen,
+Drucker und Material. `History.apply` lehnt eine Transaktion ohne Operationen
+sogar ausdrücklich ab. Die Folgen sind die schwersten Funde der Durchsicht:
+
+* Ein Wert in der Parameterleiste wird direkt ins Dokument geschrieben
+  (`main_window.py:1397`). Kein Undo — Strg+Z nimmt stattdessen die letzte
+  *Operation* zurück. Kein `_dirty` — der Titel zeigt kein `*`, und weil
+  `closeEvent` nur `if self.session.modified` sichert, ist die Änderung beim
+  Schließen weg.
+* `agent/apply.py` hat für genau dieses Problem eine Lösung — der Vorschlag
+  trägt `previous_parameters` und `previous_fits` mit, und `apply.undo()`
+  spielt sie zurück. **Nur ruft die Oberfläche `apply.undo()` nie auf.** Sie
+  ruft `history.undo()`, und das kennt nur Operationen. Ein Strg+Z nach einem
+  angenommenen Vorschlag nimmt dessen Operationen zurück und lässt seine
+  Parameter und Passungen stehen. Das ist ein Verstoß gegen Regel 16, und die
+  Tests decken ihn zu, weil sie `apply.undo()` direkt aufrufen statt über den
+  Weg, den ein Mensch nimmt.
+* Der Drucker eines Projekts wird in `new_project` gesetzt und danach nie
+  wieder (`project.py:129`). Es gibt keinen Weg, ihn zu ändern — wer ein
+  Beispielprojekt oder eine fremde Datei öffnet, arbeitet dauerhaft gegen
+  einen fremden Bauraum. Bett, Anordnen, Kollisionsprüfung und Auto Split
+  hängen alle daran.
+
+**2 — Die Oberfläche kennt den Zustand nicht, den sie zeigt.** In
+`main_window.py` steht kein einziges `setEnabled`. Alle 70 Operationen sehen
+bei leerer Szene benutzbar aus; wer eine anklickt, bekommt eine modale
+Sackgasse („Bitte zuerst ein Objekt auswählen"). `undo_action` und
+`redo_action` werden in Attribute gelegt und nie wieder angefasst. Dieselbe
+Blindheit an drei weiteren Stellen: `show_error` gibt die gewählte Handlung
+zurück und **keiner der neun Aufrufer wertet sie aus** — wer auf *Reparieren
+und erneut versuchen* klickt, schließt einen Dialog; der Menühinweis zu
+*Beenden* verspricht eine Rückfrage, die `closeEvent` nie stellt; und
+`recovery_candidates()` für namenlose Projekte hat keinen Aufrufer, die
+Sicherung nach einem Absturz vor dem ersten Speichern wird also nie angeboten.
+
+**3 — Die Oberfläche rechnet selbst.** Die Analysekarte liegt vorbildlich in
+einem Thread. Vier andere Rechnungen nicht: der Schnittschieber sendet
+`valueChanged` fortlaufend und löst pro Pixel einen booleschen `cut()` je
+Körper im Qt-Hauptthread aus; `_slice_of` schneidet synchron und hängt damit
+an Strg+P und an der G-Code-Gegenprobe; der Bausteinkatalog rendert beim
+Öffnen alle Vorschauen nacheinander ohne Wartezeiger; ein Agentenzug dauert
+zehn bis sechzig Sekunden und hat keinen Abbrechen-Knopf. Dazu die Wurzel:
+**die Anzeige-Dezimierung aus §18.9 gibt es nicht.** §31 nennt 500 000
+Dreiecke als Schwelle; der Viewport zeichnet immer das volle Netz.
+
+**4 — Einstellungen haben keinen Ort.** Es gibt keinen Einstellungsdialog.
+Thema und Navigation liegen unter *Ansicht*, Sprache, Drucker und Material
+unter *Hilfe → Erste Schritte*. Wer den Drucker unter „Hilfe" sucht, hat
+geraten. Drei deklarierte Einstellungen sind deshalb tot: `display_unit` wird
+nirgends gelesen (§19.3 Zoll gibt es nicht), `diff_palette` wird gespeichert,
+aber beim Start nie an den Viewport gegeben (die Alternative für
+Farbfehlsichtige ist unerreichbar), und `check_for_updates` lässt sich nur
+durch Handbearbeitung von `settings.json` einschalten. Die Sprache wirkt erst
+nach einem Neustart, und niemand sagt das.
+
+**5 — Gestufte Tiefe ist gedacht, nicht gebaut.** `collapsible()` in
+`panels.py` heißt so, baut aber nur eine Überschrift ohne Umschalter — die
+drei Abschnitte links klappen nicht ein, obwohl §2.5 das verlangt. „Weitere
+Einstellungen" ist eine `QGroupBox(checkable=True, checked=False)`, und die
+graut ihre Kinder aus, statt sie wegzuklappen. In den Druckeinstellungen ist
+deshalb das größte Element des Dialogs — das Register mit 48 Feldern —
+standardmäßig graue tote Fläche mit `stretch=1`. Das Häkchen liest sich
+außerdem wie ein Schalter, der etwas bewirkt.
+
+### Entscheidungen vor dem Code
+
+**E1 — Die Transaktion trägt auch, was keine Operation ist.** `Transaction`
+bekommt ein Feld `changes: DocumentChange | None` mit je einer Vorher- und
+einer Nachher-Seite für Parameter, Passungen, Druckeinstellungen, Drucker und
+Material. `History.apply` nimmt sie entgegen und darf dann ohne Operationen
+auskommen; `undo` und `redo` spielen sie mit zurück und vor. Das ist keine
+Bauplanänderung: §15.5 nennt die Transaktion „die Einheit, auf die sich
+Verlauf, Differenzansicht und Chatverlauf beziehen" und beschränkt sie
+nirgends auf Operationen. Es ist eine Formatänderung — also `format_version`
+hoch, Migration, alte Beispieldatei einchecken, nach der Checkliste in
+`AGENTS.md`. `Proposal.previous_parameters` und `apply.undo()` entfallen
+danach: der Agent baut eine `DocumentChange` wie jeder andere Aufrufer, und es
+gibt genau einen Weg zurück statt zwei.
+
+**E2 — Löschen ist eine Operation, die nichts erzeugt.** `delete_object` mit
+`consumes=1, produces=0`. Nachgesehen statt vermutet: die Auswertungsschleife
+trägt das bereits — `evaluate.py:206` entfernt jedes Eingangsobjekt, das nicht
+wieder herauskommt, und die Ausgabeschleife läuft dann null Mal. `History`
+vergibt für `produces=0` eine leere Ausgabeliste, und eine spätere Operation
+auf dem gelöschten Körper wird beim Anlegen abgelehnt, weil er nicht mehr in
+`_known_objects()` steht. Kein neuer Mechanismus, keine Ausnahme von Regel 3 —
+die Op ändert kein Objekt, sie gibt keines zurück.
+
+**E3 — Sichtbarkeit und Isolieren sind Ansicht, nicht Dokument.** §18.8
+verlangt beides im Objektbaum. Sie kommen trotzdem *nicht* in den Stapel: was
+ausgeblendet ist, ändert nichts an dem, was gerechnet, exportiert und gedruckt
+wird, und ein Verlauf, in dem jeder Lidschlag steht, ist als Verlauf nichts
+mehr wert. Das Fenster führt eine Menge ausgeblendeter Kennungen, der Viewport
+liest sie neben `entry.visible`, der Baum zeigt sie mit Symbol **und** Wort
+(Regel 18). Das bestehende Feld `ObjectEntry.visible` bleibt, was es ist: die
+Vorgabe aus der Auswertung, die eine Op eines Tages setzen darf.
+
+**E4 — Der Drucker wird über E1 gewechselt, nicht über eine Op.** Er ist
+Projektkontext wie die Druckeinstellungen (§12 `"scene": {"printer", "material"}`),
+kein Schritt im Stapel. Als `DocumentChange` ist er rücknehmbar, steht im
+Verlauf und löst eine Neuauswertung aus — Toleranzen sind Verweise (§12), also
+ändert sich Geometrie, und das muss im Verlauf stehen.
+
+**E5 — Die Menüleiste bekommt eine zweite Ebene, das Register nicht.** Heute
+sind es siebzehn Menüs: vier von Hand und dreizehn aus den Kategorien.
+`category` bleibt, wie der Bauplan sie in §25 festlegt; die Oberfläche legt
+eine Zuordnungstabelle Kategorie → Menügruppe darüber und macht aus den
+dreizehn fünf mit Untermenüs (*Objekt*, *Erzeugen*, *Ändern*, *Bausteine*,
+*Druckvorbereitung*). Neun Menüs insgesamt. Eine Tabelle in der Oberfläche ist
+chirurgisch; die Kategorien umzusortieren wäre eine Bauplanänderung für ein
+Anzeigeproblem.
+
+**E6 — Fehlerhandlungen laufen über einen Vermittler.** `show_error` bekommt
+eine Zuordnung `dict[str, Callable]`. Das Hauptfenster stellt die allgemeinen
+(`report_error`, `open_settings`, `show_locations`, `scale_to_fit`,
+`split_model`, `use_voxel_stage`), der Aufrufer ergänzt das, was nur er kann
+(`retry`). Eine Handlung ohne Handler wird nicht angeboten — lieber ein Knopf
+weniger als einer, der nichts tut. Ein Test über alle `Action`-Konstanten
+hält das fest.
+
+**E7 — Die Anzeige-Dezimierung ist die Antwort auf drei Wartezeit-Funde.**
+Erst sie, dann die Threads: ein Schnittschieber auf einem für die Anzeige
+dezimierten Netz ist bereits erträglich, und ein Thread um eine Rechnung, die
+zehnmal zu groß ist, verschiebt das Problem nur. §18.9, Schwelle aus §31.
+
+### Etappen
+
+Sieben Einheiten, jede für sich committierbar, jede mit grüner Suite am Ende.
+Die Reihenfolge ist keine Vorliebe: Etappe 1 trägt 2 und 5, und die
+Dezimierung aus 7 macht die Arbeit in 4 billiger, ist aber keine Voraussetzung
+dafür.
+
+#### Etappe 1 — Was keine Operation ist, wird trotzdem zurückgenommen
+
+Fundament (E1). Ohne sie sind vier weitere Funde nicht sauber zu beheben.
+
+- [ ] `DocumentChange` in `core/types.py`, Vorher- und Nachher-Seite
+- [ ] `Transaction.changes`, `History.apply(..., changes=)`, leere Draft-Liste
+      erlaubt, sobald Änderungen dabei sind
+- [ ] `History.undo`/`redo` spielen Änderungen mit
+- [ ] `format_version` hoch, Migration `vN→vN+1`, alte Beispieldatei in
+      `tests/data/`, Test „alte Datei öffnet und rechnet"
+- [ ] `agent/apply.accept` baut eine `DocumentChange`; `apply.undo` und
+      `Proposal.previous_parameters`/`previous_fits` entfallen
+- [ ] Parameterleiste: Änderung als Transaktion mit Titel „Parameter *name*",
+      `_dirty` folgt daraus
+- [ ] `set_print_settings` wird eine Transaktion statt einer stillen Zuweisung
+
+*Abnahme:* Strg+Z nach einer Parameteränderung stellt den alten Wert her; Strg+Z
+nach einem angenommenen Agentenvorschlag mit Parametern **und** Passungen
+stellt beide her (neuer Test, der über `Session` geht, nicht über
+`apply.undo`); eine Datei der alten Fassung öffnet und rechnet.
+
+#### Etappe 2 — Der Objektbaum, wie §18.8 ihn beschreibt
+
+- [ ] `delete_object` nach der Op-Checkliste (E2), Kürzel `Entf`, Geometrietest
+- [ ] Sichtbarkeit je Objekt (E3) — Symbol und Wort, im Baum und im Kontextmenü
+- [ ] Isolieren (§18.8): alles außer der Auswahl ausblenden, ein zweiter Aufruf
+      hebt es auf
+- [ ] Herkunft im Baum: aus welcher Operation und Transaktion ein Körper kommt
+      (`ObjectEntry.created_by` liegt bereits vor und wird nicht gezeigt)
+- [ ] Mehrfachauswahl (`ExtendedSelection`), damit *Vereinigen* und *Abziehen*
+      zwei angeklickte Körper nehmen statt einer Kennung im Textfeld
+- [ ] `OperationDialog` zeigt Objektnamen statt `ObjectId` und ist nicht mehr
+      frei beschreibbar
+
+*Abnahme:* Ein Modell importieren, löschen, Strg+Z, es ist wieder da; zwei
+Körper anklicken und vereinigen, ohne etwas zu tippen; `tests/test_ui.py` deckt
+Löschen, Ausblenden und Isolieren ab.
+
+#### Etappe 3 — Die Oberfläche liest ihren eigenen Zustand
+
+- [ ] Menüeinträge und Werkzeuge aktivieren und deaktivieren nach Auswahl und
+      Szenenstand; Undo und Redo folgen `history.can_undo`/`can_redo`. Damit
+      entfallen die drei modalen Sackgassen
+- [ ] Fehlerhandlungen verdrahten (E6), alle neun Aufrufstellen
+- [ ] Beim Beenden, bei *Neu* und beim Öffnen nach ungesicherten Änderungen
+      fragen — drei Knöpfe (Speichern, Verwerfen, Abbrechen), kein „Wirklich?".
+      Regel 19 verbietet Rückfragen vor **rücknehmbaren** Handlungen; das
+      Verwerfen eines Dokuments ist keine
+- [ ] Menühinweis zu *Beenden* stimmt danach wieder
+- [ ] `recovery_candidates()` beim Start auswerten und anbieten
+
+*Abnahme:* Bei leerer Szene ist kein Operationsmenü anklickbar; jeder Knopf in
+jedem Fehlerdialog tut etwas oder erscheint nicht; ein Test über alle
+`Action`-Konstanten; Schließen mit ungesicherter Änderung fragt.
+
+#### Etappe 4 — Nichts rechnet mehr im Hauptthread
+
+- [ ] Schnitt- und Explosionsschieber entprellen und den Schnitt in einen
+      Arbeiter legen (Muster: `_MapWorker`)
+- [ ] `_slice_of` asynchron, mit Fortschritt und Abbrechen
+- [ ] Bausteinvorschauen im Hintergrund rendern, Platzhalter bis dahin
+- [ ] Abbrechen für den Agentenzug: `cancel_button` hängt auch an
+      `agentBusyChanged`, `AgentSession` liest `cancelled`
+- [ ] `wait_for_idle` mit `processEvents` aus `auto_split` herausnehmen —
+      Wiedereintritt in Menü-Handler während einer laufenden Aktion
+
+*Abnahme:* Wartezeit-Tabelle §2.8 für jeden der vier Wege nachgemessen; kein
+Weg über 2 s ohne Fortschritt und Abbrechen.
+
+#### Etappe 5 — Einstellungen an einem Ort
+
+- [ ] Dialog *Bearbeiten → Einstellungen* mit Sprache, Anzeigeeinheit, Thema,
+      Navigation, Differenzpalette, Updateprüfung, Vorgaben für Drucker und
+      Material
+- [ ] `display_unit` bekommt Leser: Statusleiste, Objektbaum, Maße,
+      Operationsdialoge (§19.3, `format_length` kann es längst)
+- [ ] `diff_palette` beim Start an den Viewport geben
+- [ ] Sprachwechsel wirkt sofort, oder der Dialog sagt, dass er es nicht tut
+- [ ] Drucker und Material des offenen Projekts wechselbar (E4), mit
+      Neuauswertung und Eintrag im Verlauf
+- [ ] *Erste Schritte* bleibt der erste Start und verweist auf den Dialog
+
+*Abnahme:* Auf Zoll umschalten ändert jede angezeigte Länge und keine
+gerechnete; ein Beispielprojekt lässt sich auf den eigenen Drucker umstellen,
+und der Bauraum im Viewport folgt.
+
+#### Etappe 6 — Entdeckbarkeit
+
+- [ ] Menügruppen (E5) — neun Menüs statt siebzehn
+- [ ] Befehlspalette nimmt auch Datei-, Ansichts- und Werkzeugbefehle auf;
+      `ToolStrip.tool_titles()` und `strip_title()` bekommen ihren Aufrufer
+- [ ] `Escape` schließt das offene Werkzeug (`close_tool()` ebenso)
+- [ ] *Ansicht → Alles einpassen* mit Kürzel; `reset_camera()` wird auch nach
+      dem ersten Import gerufen
+- [ ] Tastaturnavigation im Viewport nach §19.2: Zoom und Auswahl durchblättern
+- [ ] Symbole für die vier Knöpfe der oberen Werkzeugleiste, aus `icons.py`
+
+*Abnahme:* Jeder Befehl der Anwendung ist über die Palette erreichbar — ein
+Test zählt Menüeinträge gegen Paletteneinträge.
+
+#### Etappe 7 — Gestufte Tiefe und Anzeigeleistung
+
+- [ ] `collapsible()` klappt wirklich ein, Zustand wird gemerkt
+- [ ] „Weitere Einstellungen" klappt weg statt auszugrauen — in
+      `op_dialog.py` und in `print_settings_dialog.py`
+- [ ] Anzeige-Dezimierung ab 500 000 Dreiecken (§18.9, §31), nie zurück in den
+      Kern
+- [ ] Nachkommastellen im Operationsdialog aus der Deklaration statt fest zwei
+      — eine Toleranz von 0,075 wird sonst beim Öffnen zu 0,08
+- [ ] Chat mehrzeilig, Strg+Eingabe sendet; die Vorschlagszeile nennt die
+      Operationen beim Namen statt ihrer Anzahl
+
+*Abnahme:* §31 „Viewport-Navigation flüssig bei 1 Mio. Dreiecken" gemessen;
+kein Dialog zeigt graue Felder, die niemand ausgeschaltet hat.
+
+### Was nicht dazugehört
+
+* **Live-Vorschau im Operationsdialog.** Wäre die größte Einzelverbesserung
+  gegenüber Fusion und Blender und ist deshalb kein Nebenher — eigene Phase,
+  nach P14. Der bestehende Weg (anwenden, ansehen, Doppelklick im Verlauf,
+  korrigieren) trägt bis dahin.
+* **Linke Maustaste dreht.** Bambu Studio, OrcaSlicer und PrusaSlicer drehen
+  mit links; die Vorgabe hier folgt §2.9 („linke Taste wählt, rechte oder
+  mittlere dreht") und damit Cura. Die Umsetzung ist bauplantreu — wer das
+  ändern will, ändert erst den Bauplan. Als viertes Wahlschema kostet es fast
+  nichts.
+* **Verlaufs-Schieber, Filterzeile im Prüfbericht, Einträge aus „Zuletzt
+  geöffnet" entfernen.** Echt, aber klein; sie warten auf eine Aufräumrunde.
