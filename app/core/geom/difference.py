@@ -1,13 +1,14 @@
-"""What a change added and what it removed (Bauplan §18.7).
+"""Was eine Änderung hinzugefügt und was sie entfernt hat (Bauplan §18.7).
 
-The difference view is called the most important view in the application (§19.1),
-and it earns that by answering one question: what exactly would this proposal do
-to my model? Not "something changed" — this much material here is gone, that
-much there is new.
+Die Differenzansicht heißt die wichtigste Ansicht der Anwendung (§19.1), und
+sie verdient das, indem sie eine Frage beantwortet: was genau täte dieser
+Vorschlag mit meinem Modell? Nicht „etwas hat sich geändert" — so viel Material
+hier ist fort, so viel dort ist neu.
 
-Both halves are boolean operations, so both come out of the fallback chain
-(§17.2) and both can honestly fail. A difference that could not be computed says
-so instead of showing an empty view that looks like "nothing changed".
+Beide Hälften sind Boolesche Operationen, kommen also beide aus der
+Rückfallkette (§17.2) und können beide ehrlich scheitern. Eine Differenz, die
+sich nicht rechnen ließ, sagt das, statt eine leere Ansicht zu zeigen, die wie
+„nichts hat sich geändert" aussieht.
 """
 
 from __future__ import annotations

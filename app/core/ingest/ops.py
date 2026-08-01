@@ -108,9 +108,10 @@ def load(ctx: OpContext) -> OpResult:
 
     check_limits(len(payload), sum(part.mesh.triangle_count for part in parts))
 
-    # One unit for the whole file. Deciding per body would let two parts of one
-    # assembly come out at different scales, and the question §17.1 asks the
-    # user is about the file, not about each body in it.
+    # Eine Einheit für die ganze Datei. Je Körper zu entscheiden ließe zwei
+    # Teile einer Baugruppe in verschiedenen Maßstäben herauskommen, und
+    # die Frage, die §17.1 dem Nutzer stellt, gilt der Datei, nicht jedem
+    # Körper darin.
     unit = _unit_for(ctx, params, max(part.mesh.bounds.diagonal for part in parts))
 
     outputs: list[SceneObject] = []
@@ -123,9 +124,9 @@ def load(ctx: OpContext) -> OpResult:
             weld=params.weld,
             remove_degenerate=params.remove_degenerate,
             unify_normals=params.unify_normals,
-            # An assembly is placed the way the file placed it: dropping every
-            # body onto Z = 0 on its own would take a lid off its housing and
-            # pile the parts on top of each other.
+            # Eine Baugruppe wird so platziert, wie die Datei sie platziert hat:
+            # jeden Körper für sich auf Z = 0 abzusetzen nähme einem Gehäuse den
+            # Deckel ab und stapelte die Teile aufeinander.
             place_on_bed=params.place_on_bed and len(parts) == 1,
             progress=ctx.progress,
         )

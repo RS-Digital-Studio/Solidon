@@ -177,7 +177,8 @@ def for_object(profile: Profile, entry: SceneObject | None) -> Profile:
     return Profile(printer=profile.printer, material=material(entry.material))
 
 
-#: Which material figure a fit kind reads (§14). Documented here, not scattered.
+#: Welche Materialgröße eine Passungsart liest (§14). Hier dokumentiert,
+#: nicht verstreut.
 _FIT_FIELD: Final[dict[FitKind, str]] = {
     "clearance": "clearance",
     "press": "press",

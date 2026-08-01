@@ -66,7 +66,7 @@ BACKFACE_COLOUR = "#8b3a3a"
 BED_COLOUR = "#5a6472"
 
 
-#: Switch for machines and test runs without a usable OpenGL context.
+#: Schalter für Maschinen und Testläufe ohne brauchbaren OpenGL-Kontext.
 HEADLESS_VARIABLE = f"{ENVIRONMENT_PREFIX}_NO_VIEWPORT"
 
 
@@ -84,7 +84,7 @@ def _available() -> bool:
     try:
         import pyvista  # noqa: F401
         import pyvistaqt  # noqa: F401
-    except Exception:  # pragma: no cover - depends on the machine
+    except Exception:  # pragma: no cover - hängt an der Maschine
         return False
     return True
 
@@ -166,7 +166,8 @@ class Viewport(QWidget):
 
         from pyvistaqt import QtInteractor
 
-        # Typed as Any: pyvista wraps its plotter methods, so annotations do not survive.
+        # Als Any typisiert: pyvista umhüllt seine Plotter-Methoden, Annotationen
+        # überleben das nicht.
         self.plotter = cast(Any, QtInteractor(self))
         self._layout.addWidget(self.plotter.interactor)
         self.plotter.add_axes()
@@ -292,7 +293,9 @@ class Viewport(QWidget):
         return np.asarray(self._map.values, dtype=float)
 
     def _sectioned(self, mesh: Any) -> Any:
-        """Apply the section plane. Cutting is geometry, so the core does it (§18.2)."""
+        """Wendet die Schnittebene an. Schneiden ist Geometrie, also tut es der
+        Kern (§18.2).
+        """
         if self._section is None:
             return mesh
         second = None
@@ -304,20 +307,24 @@ class Viewport(QWidget):
         return result.mesh
 
     def select(self, object_id: ObjectId | None) -> None:
-        """Highlight one object — colour plus the status bar, never colour alone (§19.1)."""
+        """Hebt ein Objekt hervor — Farbe plus Statusleiste, nie Farbe
+        allein (§19.1).
+        """
         self._selected = object_id
         if self.plotter is None:
             return
         for identifier, actor in self._actors.items():
             if self._map is not None and identifier == self._map_object:
-                # A map owns the colour of its body; the selection shows in the
-                # object tree and the status bar instead (§19.1).
+                # Eine Karte besitzt die Farbe ihres Körpers; die Auswahl zeigt sich
+                # stattdessen im Objektbaum und in der Statusleiste (§19.1).
                 continue
             actor.prop.color = SELECTED_COLOUR if identifier == object_id else self._object_colour
         self.plotter.render()
 
     def show_build_volume(self, profile: Profile) -> None:
-        """Bed as a grid at real size, build volume as a transparent box (§18.6)."""
+        """Das Bett als Raster in echter Größe, der Bauraum als durchsichtiger
+        Kasten (§18.6).
+        """
         if self.plotter is None:
             return
         import pyvista as pv
@@ -361,7 +368,7 @@ class Viewport(QWidget):
     # --- theme (§19.3) ----------------------------------------------------------
 
     def set_theme(self, theme: str) -> None:
-        """Background, body and bed colours follow the application theme."""
+        """Hintergrund-, Körper- und Bettfarben folgen dem Anwendungsthema."""
         colours = viewport_colours(theme)  # type: ignore[arg-type]
         self._object_colour = colours["object"]
         self._bed_colour = colours["bed"]
@@ -373,7 +380,7 @@ class Viewport(QWidget):
     # --- display (§18.1) --------------------------------------------------------
 
     def set_display_mode(self, mode: DisplayMode) -> None:
-        """Solid, solid with edges, wireframe or transparent."""
+        """Voll, voll mit Kanten, Drahtgitter oder durchsichtig."""
         self._mode = mode
         self.show_scene(self._result)
 
@@ -382,7 +389,9 @@ class Viewport(QWidget):
         self.show_scene(self._result)
 
     def set_projection(self, projection: Projection) -> None:
-        """Orthographic is what makes measured lengths trustworthy (§18.1)."""
+        """Orthografisch ist das, was gemessene Längen vertrauenswürdig
+        macht (§18.1).
+        """
         self._projection = projection
         if self.plotter is None:
             return
@@ -403,7 +412,9 @@ class Viewport(QWidget):
     # --- section plane (§18.2) --------------------------------------------------
 
     def set_section(self, plane: SectionPlane | None, thickness: float | None = None) -> None:
-        """Cut the view. ``thickness`` turns the cut into a slice."""
+        """Schneidet die Ansicht. ``thickness`` macht aus dem Schnitt eine
+        Scheibe.
+        """
         self._section = plane
         self._slice_thickness = thickness
         self.show_scene(self._result)
@@ -414,11 +425,13 @@ class Viewport(QWidget):
 
     @property
     def section_uncapped(self) -> bool:
-        """True when an open body kept the cut face open — reported, not faked."""
+        """True, wenn ein offener Körper die Schnittfläche offen gelassen hat —
+        gemeldet, nicht vorgetäuscht.
+        """
         return self._uncapped
 
     def section_range(self) -> tuple[float, float]:
-        """Sensible travel for the section slider: the extent of the scene."""
+        """Sinnvoller Weg für den Schnittschieber: die Ausdehnung der Szene."""
         if self._result is None or not self._result.scene.objects:
             return (-100.0, 100.0)
         lows: list[float] = []
@@ -432,13 +445,16 @@ class Viewport(QWidget):
     # --- measuring (§18.3) ------------------------------------------------------
 
     def set_measure_mode(self, mode: MeasureMode) -> None:
-        """Point to point, wall thickness, or off. Clicks snap before they count."""
+        """Punkt zu Punkt, Wandstärke, oder aus. Klicks rasten ein, bevor sie
+        zählen.
+        """
         self._measure_mode = mode
         self._pending_point = None
         if self.plotter is None:
             return
         if mode == "off":
-            # Measuring hands the clicks back to the feature overlay, if it is on.
+            # Das Messen gibt die Klicks an die Merkmals-Überlagerung zurück, falls
+            # sie an ist.
             self.plotter.disable_picking()
             self.set_feature_overlay(self._feature_overlay)
             return
@@ -455,18 +471,20 @@ class Viewport(QWidget):
         return self._measure_mode
 
     def clear_measurements(self) -> None:
-        """Dimensions stay until they are deleted — this is the deleting (§18.3)."""
+        """Maße bleiben, bis sie gelöscht werden — das hier ist das
+        Löschen (§18.3).
+        """
         self.measurements.clear()
         self._pending_point = None
         self._redraw_measurements()
 
     def set_painting(self, active: bool) -> None:
-        """Turn clicks into brush strokes (§20).
+        """Macht aus Klicks Pinselstriche (§20).
 
-        The same picking the measuring uses; what changes is who gets the point.
-        A separate mode rather than a modifier key: painting the model when
-        somebody meant to turn it is the kind of surprise an undo fixes and
-        trust does not survive.
+        Dasselbe Picking, das auch das Messen benutzt; was sich ändert, ist, wer
+        den Punkt bekommt. Ein eigener Modus statt einer Zusatztaste: das Modell
+        zu bemalen, wenn jemand es drehen wollte, ist die Art Überraschung, die
+        ein Undo behebt und Vertrauen nicht übersteht.
         """
         self._painting = active
         if self.plotter is None:
@@ -489,7 +507,7 @@ class Viewport(QWidget):
             self.paintRequested.emit(picked)
             return
         if self._measure_mode == "off":
-            # Not measuring: a click is meant for the feature under it (§18.5).
+            # Nicht am Messen: ein Klick ist für das Merkmal darunter gemeint (§18.5).
             feature_id = self._feature_at(picked)
             if feature_id is not None:
                 self.select_feature(feature_id)
@@ -525,7 +543,9 @@ class Viewport(QWidget):
         self.measurementTaken.emit(measurement)
 
     def _nearest_mesh(self, point: Vec3) -> Any:
-        """The object a click belongs to — the one whose bounds it is closest to."""
+        """Das Objekt, zu dem ein Klick gehört — das, dessen Hüllquader ihm am
+        nächsten ist.
+        """
         if self._result is None:
             return None
         best: Any = None
@@ -576,7 +596,9 @@ class Viewport(QWidget):
     # --- analysis maps (§18.4) --------------------------------------------------
 
     def set_analysis_map(self, analysis: AnalysisMap | None, object_id: ObjectId | None) -> None:
-        """Paint one body by the numbers of a map, or take the map away."""
+        """Färbt einen Körper nach den Zahlen einer Karte, oder nimmt die Karte
+        weg.
+        """
         self._map = analysis
         self._map_object = object_id if analysis is not None else None
         self.show_scene(self._result)
@@ -586,10 +608,12 @@ class Viewport(QWidget):
         return self._map
 
     def fly_to(self, point: Vec3, distance_factor: float = 3.0) -> None:
-        """Move the camera onto a spot without changing the viewing direction (§18.4).
+        """Bewegt die Kamera auf eine Stelle, ohne die Blickrichtung zu
+        ändern (§18.4).
 
-        Turning the model as well would cost the orientation the user just built
-        up; coming closer along the current line of sight keeps it.
+        Das Modell mitzudrehen kostete die Orientierung, die der Nutzer sich
+        gerade aufgebaut hat; entlang der aktuellen Blickachse näher zu kommen
+        behält sie.
         """
         if self.plotter is None:
             return
@@ -619,10 +643,10 @@ class Viewport(QWidget):
     # --- feature overlay (§18.5) ------------------------------------------------
 
     def set_feature_overlay(self, active: bool) -> None:
-        """Labels on the recognised features, and clicking to select them.
+        """Beschriftungen an den erkannten Merkmalen, und Klicken zum Auswählen.
 
-        §18.5 calls this the most important single function: the user does not
-        have to know that a bore is called ``hole_3``, they point at it.
+        §18.5 nennt das die wichtigste Einzelfunktion: der Nutzer muss nicht
+        wissen, dass eine Bohrung ``hole_3`` heißt — er zeigt darauf.
         """
         self._feature_overlay = active
         if self.plotter is None:
@@ -693,7 +717,9 @@ class Viewport(QWidget):
         )
 
     def _feature_at(self, point: Vec3) -> FeatureId | None:
-        """The feature nearest a click — pointing beats typing a name (§18.5)."""
+        """Das Merkmal nächst einem Klick — zeigen schlägt einen Namen
+        tippen (§18.5).
+        """
         import numpy as np
 
         target = np.asarray(point, dtype=float)
@@ -714,11 +740,13 @@ class Viewport(QWidget):
     def show_difference(
         self, difference: Any | None, ghost: EvaluationResult | None = None
     ) -> None:
-        """Added and removed volume, with the previous state as a ghost.
+        """Hinzugekommenes und entferntes Volumen, mit dem vorigen Zustand als
+        Geist.
 
-        Colours come from the palette (§19.1) and are never the only carrier:
-        added and removed also differ in transparency and in the legend of the
-        chat panel, so the view stays readable without colour vision.
+        Die Farben kommen aus der Palette (§19.1) und sind nie der einzige
+        Träger: hinzugekommen und entfernt unterscheiden sich auch in der
+        Transparenz und in der Legende des Chat-Panels — die Ansicht bleibt also
+        ohne Farbsehen lesbar.
         """
         self._difference = difference
         self._ghost = ghost
@@ -762,7 +790,7 @@ class Viewport(QWidget):
         )
 
     def set_difference_palette(self, palette: DiffPalette) -> None:
-        """Blue/orange, red/green or greyscale — the choice from §19.1."""
+        """Blau/Orange, Rot/Grün oder Graustufen — die Wahl aus §19.1."""
         self._diff_palette = palette
         self._redraw_difference()
         if self.plotter is not None:
@@ -771,7 +799,9 @@ class Viewport(QWidget):
     # --- layer analysis (§18.10) ------------------------------------------------
 
     def set_layer(self, layer: LayerInfo | None) -> None:
-        """Show the contours of one layer. Geometry, not tool paths (§18.10)."""
+        """Zeigt die Konturen einer Schicht. Geometrie, keine
+        Werkzeugwege (§18.10).
+        """
         self._layer = layer
         self._redraw_layer()
         if self.plotter is not None:
@@ -802,7 +832,8 @@ class Viewport(QWidget):
         import numpy as np
 
         points = np.array([[float(x), float(y), z] for x, y in ring], dtype=float)
-        # add_lines wants point pairs; a closed ring is every point twice but the ends.
+        # add_lines will Punktpaare; ein geschlossener Ring ist jeder Punkt
+        # zweimal, bis auf die Enden.
         segments = np.repeat(points, 2, axis=0)[1:-1]
         self._layer_actors.append(
             self.plotter.add_lines(segments, color=colour, width=width, name=name)
@@ -811,12 +842,12 @@ class Viewport(QWidget):
     # --- direct manipulation (§18.11) -------------------------------------------
 
     def set_snapping(self, grid_step: float, angle_step: float) -> None:
-        """Grid and angle snapping for the gizmo."""
+        """Raster- und Winkeleinrasten für den Gizmo."""
         self._grid_step = grid_step
         self._angle_step = angle_step
 
     def set_gizmo(self, active: bool) -> None:
-        """Attach the gizmo to the selected object, or take it away."""
+        """Hängt den Gizmo an das gewählte Objekt, oder nimmt ihn weg."""
         if self.plotter is None:
             return
         if self._gizmo is not None:
@@ -832,7 +863,7 @@ class Viewport(QWidget):
         )
 
     def _on_gizmo_released(self, matrix: Any) -> None:
-        """A drag ends as operations, not as a matrix (§18.11, §2.1)."""
+        """Ein Ziehen endet als Operationen, nicht als Matrix (§18.11, §2.1)."""
         import numpy as np
 
         steps = decompose_transform(np.asarray(matrix, dtype=float))
@@ -854,7 +885,7 @@ class Viewport(QWidget):
             self.plotter.reset_camera()
 
     def view_from(self, direction: str) -> None:
-        """One of the seven camera presets (§18.1)."""
+        """Eine der sieben Kameravorgaben (§18.1)."""
         if self.plotter is None or direction not in VIEW_DIRECTIONS:
             return
         position, up = VIEW_DIRECTIONS[direction]
@@ -864,10 +895,11 @@ class Viewport(QWidget):
     # --- navigation (§2.9) ------------------------------------------------------
 
     def set_navigation(self, scheme: NavigationScheme) -> None:
-        """Slicer habit by default; CAD and Blender as alternatives.
+        """Slicer-Gewohnheit als Vorgabe; CAD und Blender als Alternativen.
 
-        The default follows what most people already use: left selects, right or
-        middle rotates, shift and drag pans, the wheel zooms on the pointer.
+        Die Vorgabe folgt dem, was die meisten ohnehin benutzen: links wählt,
+        rechts oder Mitte dreht, Umschalt und Ziehen schiebt, das Rad zoomt auf
+        den Zeiger.
         """
         self._scheme = scheme
         if self.plotter is None:

@@ -399,22 +399,23 @@ class MaterialParams(BaseParams):
     ),
 )
 def set_material(ctx: OpContext) -> OpResult:
-    """§12: one scene, more than one material.
+    """§12: eine Szene, mehr als ein Material.
 
-    A housing in PETG with a seal in TPU is one project and two materials.
-    Without this the seal's clearance, its shrinkage and its first layer are
-    computed from the housing's material — numbers that are not approximate but
-    wrong, and wrong in the direction that scraps a print.
+    Ein Gehäuse in PETG mit einer Dichtung in TPU ist ein Projekt und zwei
+    Materialien. Ohne das würden Spiel, Schrumpf und erste Schicht der Dichtung
+    aus dem Material des Gehäuses gerechnet — Zahlen, die nicht ungefähr sind,
+    sondern falsch, und falsch in der Richtung, die einen Druck zu Ausschuss
+    macht.
 
-    The identifier is checked here rather than offered as a fixed list: the
-    known materials include the user's own profiles, and those appear after
-    this module was imported.
+    Die Kennung wird hier geprüft statt als feste Liste angeboten: zu den
+    bekannten Materialien gehören die eigenen Profile des Nutzers, und die
+    erscheinen, nachdem dieses Modul importiert wurde.
     """
     params = cast(MaterialParams, ctx.params)
     source = ctx.inputs[0]
     chosen = params.material.strip()
     if chosen:
-        material(chosen)  # raises with the list of known ones when it is not
+        material(chosen)  # wirft mit der Liste der bekannten, wenn es keines ist
 
     return OpResult(
         outputs=[dataclasses.replace(source, material=chosen or None)],
@@ -483,10 +484,10 @@ def test_piece(ctx: OpContext) -> OpResult:
 
     window = trimesh.creation.box(extents=(params.size, params.size, params.size))
     window.apply_translation((params.x, params.y, params.z))
-    # A window over empty space is an answer, not a failed operation: without
-    # ``allow_empty`` the chain would try three more stages and then raise, and
-    # the user would read about the voxel solver instead of about the hole they
-    # aimed at.
+    # Ein Fenster über leerem Raum ist eine Antwort, keine gescheiterte
+    # Operation: ohne ``allow_empty`` probierte die Kette drei weitere Stufen
+    # und würfe dann — und der Nutzer läse etwas über den Voxel-Solver statt
+    # über das Loch, auf das er gezielt hat.
     outcome = boolean(
         "intersection", [mesh, mesh.replacing(window)], quality=ctx.quality, allow_empty=True
     )
@@ -583,11 +584,12 @@ class SplitPinnedParams(BaseParams):
     ),
 )
 def split_pinned(ctx: OpContext) -> OpResult:
-    """§25: the cut and the pins in one step, because they belong together.
+    """§25: der Schnitt und die Stifte in einem Schritt, denn sie gehören
+    zusammen.
 
-    A seam without pins is a seam somebody has to align by hand while the glue
-    grabs; a pin without a seam is nothing. Both in one operation also means one
-    undo takes the whole thing back.
+    Eine Naht ohne Stifte ist eine Naht, die jemand von Hand ausrichten muss,
+    während der Kleber greift; ein Stift ohne Naht ist nichts. Beides in einer
+    Operation heißt außerdem: ein Undo nimmt das Ganze zurück.
     """
     params = cast(SplitPinnedParams, ctx.params)
     source = ctx.inputs[0]
@@ -614,7 +616,8 @@ def split_pinned(ctx: OpContext) -> OpResult:
         plan = dataclasses.replace(plan, diameter=params.diameter)
 
     pair = (
-        # Both halves come out of this one body, so the play is its material's.
+        # Beide Hälften kommen aus diesem einen Körper, das Spiel ist also das
+        # seines Materials.
         add_pins(first, second, plan, for_object(ctx.profile, source), play=params.play or None)
         if plan is not None and ctx.profile is not None
         else PinnedPair(first=first, second=second)
@@ -673,7 +676,9 @@ class OrientParams(BaseParams):
     doc=_("Sucht die Lage mit dem geringsten Stützbedarf."),
 )
 def orient_for_print_op(ctx: OpContext) -> OpResult:
-    """Thorough means the layer analysis judges; otherwise the P2 heuristic does."""
+    """Gründlich heißt, die Schichtanalyse urteilt; sonst tut es die
+    P2-Heuristik.
+    """
     params = cast(OrientParams, ctx.params)
     mesh = as_mesh_data(ctx.inputs[0].mesh)
 
@@ -735,8 +740,8 @@ def arrange_bed(ctx: OpContext) -> OpResult:
     result = arrange_on_bed(meshes, ctx.profile, params.spacing, params.plates)
     findings = list(result.findings)
 
-    # Collisions are checked per plate: two parts at the same spot on different
-    # plates never meet.
+    # Kollisionen werden je Platte geprüft: zwei Teile an derselben Stelle auf
+    # verschiedenen Platten treffen sich nie.
     for plate in range(result.plate_count):
         on_plate = [
             mesh for mesh, entry in zip(result.meshes, result.plates, strict=True) if entry == plate
@@ -782,5 +787,6 @@ def check_collisions_op(ctx: OpContext) -> OpResult:
     meshes = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
     findings = check_collisions(meshes, params.clearance)
     findings.extend(check_build_volume(meshes, ctx.profile))
-    # Changes nothing: the objects pass through untouched, the findings are the result.
+    # Ändert nichts: die Objekte gehen unberührt hindurch, die Befunde sind das
+    # Ergebnis.
     return OpResult(outputs=list(ctx.inputs), findings=findings)

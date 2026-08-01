@@ -21,8 +21,9 @@ from app.core.geom.mesh import MeshData
 from app.core.types import BoundingBox, Vec3
 from app.core.units import EPS_GEOM, round_display
 
-#: How far a click may be from a vertex or edge to be pulled onto it, relative
-#: to the model diagonal. Roughly a finger's width on screen.
+#: Wie weit ein Klick von einem Eckpunkt oder einer Kante entfernt sein darf,
+#: um darauf gezogen zu werden — relativ zur Modelldiagonale. Auf dem
+#: Bildschirm etwa eine Fingerbreite.
 SNAP_RADIUS_RELATIVE = 0.02
 
 
@@ -50,7 +51,7 @@ class Measurement:
 
     @property
     def shown(self) -> float:
-        """The value as it appears, rounded to display precision."""
+        """Der Wert, wie er erscheint — auf Anzeigegenauigkeit gerundet."""
         return round_display(self.value)
 
 
@@ -97,7 +98,7 @@ def angle_between(first: Vec3, second: Vec3) -> float:
 
 
 def bounding_box_of(meshes: list[MeshData]) -> BoundingBox:
-    """Bounds of a selection — empty selection gives an empty box."""
+    """Grenzen einer Auswahl — eine leere Auswahl gibt einen leeren Quader."""
     if not meshes:
         return BoundingBox((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
     lows = np.array([mesh.bounds.minimum for mesh in meshes], dtype=float)
@@ -111,7 +112,7 @@ def bounding_box_of(meshes: list[MeshData]) -> BoundingBox:
 
 
 def volume_of(meshes: list[MeshData]) -> float:
-    """Volume of a selection in mm³. Only meaningful for closed bodies."""
+    """Volumen einer Auswahl in mm³. Nur bei geschlossenen Körpern sinnvoll."""
     return float(sum(mesh.volume for mesh in meshes))
 
 
@@ -119,7 +120,9 @@ def volume_of(meshes: list[MeshData]) -> float:
 
 
 def snap(mesh: MeshData, point: Vec3, radius: float | None = None) -> SnapResult:
-    """Pull a click onto the nearest vertex, else the nearest edge, else leave it."""
+    """Zieht einen Klick auf den nächsten Eckpunkt, sonst auf die nächste
+    Kante, sonst lässt ihn stehen.
+    """
     limit = radius if radius is not None else mesh.bounds.diagonal * SNAP_RADIUS_RELATIVE
     target = np.asarray(point, dtype=float)
 
@@ -166,10 +169,11 @@ def _closest_point_on_edges(mesh: MeshData, target: np.ndarray) -> tuple[Vec3 | 
 
 
 def wall_thickness(mesh: MeshData, point: Vec3, direction: Vec3 | None = None) -> float | None:
-    """Thickness at a point: shoot inwards and measure to the first hit (§18.3).
+    """Dicke an einem Punkt: nach innen schießen und bis zum ersten Treffer
+    messen (§18.3).
 
-    Returns None where the ray leaves the body without hitting anything — an
-    honest "cannot say" beats a made up number.
+    Gibt None zurück, wo der Strahl den Körper verlässt, ohne etwas zu treffen —
+    ein ehrliches „kann ich nicht sagen" schlägt eine erfundene Zahl.
     """
     origin = np.asarray(point, dtype=float)
     ray = _inward_direction(mesh, origin, direction)
@@ -224,7 +228,9 @@ def ray_distances(mesh: MeshData, origin: np.ndarray, direction: np.ndarray) -> 
 def _inward_direction(
     mesh: MeshData, origin: np.ndarray, direction: Vec3 | None
 ) -> np.ndarray | None:
-    """The direction to shoot in: the given one, or the inverted face normal."""
+    """Die Richtung zum Schießen: die gegebene, oder die invertierte
+    Flächennormale.
+    """
     if direction is not None:
         ray = np.asarray(direction, dtype=float)
         length = float(np.linalg.norm(ray))

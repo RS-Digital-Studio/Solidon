@@ -25,9 +25,10 @@ FIRST_RELEASE = PartChange(
 
 _TUBES = standards.tube_sizes()
 
-#: A rib thicker than about two thirds of the wall shows as a sink mark on the
-#: other side. Not a printing rule but a moulding one — it holds here too,
-#: because the cooling is just as uneven.
+#: Eine Rippe dicker als etwa zwei Drittel der Wand zeichnet sich auf der
+#: anderen Seite als Einfallstelle ab. Keine Druckregel, sondern eine aus dem
+#: Spritzguss — sie gilt hier genauso, weil die Abkühlung ebenso ungleichmäßig
+#: ist.
 RIB_SHARE = 0.66
 
 
@@ -177,8 +178,8 @@ def cable_gland(raw: BaseParams) -> PartResult:
 
     if params.strain_relief:
         gap = params.relief_gap or diameter * 0.8
-        # The channel behind the wall, narrowed to the clamping gap: the cable
-        # goes in through the round hole and is held in the slot behind it.
+        # Der Kanal hinter der Wand, auf den Klemmspalt verengt: das Kabel geht
+        # durch das runde Loch hinein und wird im Schlitz dahinter gehalten.
         channel = shapes.box(gap, diameter * 2.5, diameter)
         parts.append(shapes.moved(channel, (0.0, 0.0, params.wall)))
         features.append(

@@ -1,22 +1,24 @@
-"""Keeping the material slots through an operation (Bauplan §20).
+"""Die Materialslots durch eine Operation hindurch behalten (Bauplan §20).
 
-"Boolean operations must not lose the slot assignment." They do lose it,
-though — a boolean rebuilds the triangles, and the ones that come out are not
-the ones that went in. So the assignment is carried over: every new triangle
-asks which of the old ones it sits on, and takes its slot.
+„Boolesche Operationen dürfen die Slot-Zuweisung nicht verlieren." Sie
+verlieren sie aber — eine Boolesche Op baut die Dreiecke neu, und die, die
+herauskommen, sind nicht die, die hineingingen. Also wird die Zuweisung
+übertragen: jedes neue Dreieck fragt, auf welchem der alten es sitzt, und nimmt
+dessen Slot.
 
-Nearest face, not nearest vertex: a triangle sits on a surface, and the surface
-is what carries the colour. New cut faces belong to none of the old surfaces —
-they get the slot the operation was told to give them, and by default that is
-the one of the body being cut.
+Nächste Fläche, nicht nächster Eckpunkt: ein Dreieck sitzt auf einer
+Oberfläche, und die Oberfläche ist es, die die Farbe trägt. Neue Schnittflächen
+gehören zu keiner der alten Oberflächen — sie bekommen den Slot, den die
+Operation ihnen zuweisen soll, und per Vorgabe ist das der des Körpers, der
+geschnitten wird.
 
-Which surfaces count as "old" is the caller's decision, and it matters: a body
-that the operation removed is not a source of colour, however close its former
-skin lies to the new one.
+Welche Oberflächen als „alt" zählen, entscheidet der Aufrufer, und das zählt:
+ein Körper, den die Operation entfernt hat, ist keine Farbquelle — wie nah
+seine ehemalige Haut auch an der neuen liegt.
 
-**After the voxel stage the transfer always runs** (§20). That stage replaces
-the meshing entirely, so anything kept from before would be nonsense that
-happens to have the right length.
+**Nach der Voxelstufe läuft die Übertragung immer** (§20). Diese Stufe ersetzt
+die Vernetzung vollständig — alles von vorher Behaltene wäre Unsinn, der
+zufällig die richtige Länge hat.
 """
 
 from __future__ import annotations
@@ -28,8 +30,9 @@ from app.core.log import get_logger
 
 _log = get_logger(__name__)
 
-#: How far a new triangle may sit from an old surface and still count as being
-#: on it, relative to the model diagonal. Beyond that it is a cut face.
+#: Wie weit ein neues Dreieck von einer alten Oberfläche sitzen darf und noch
+#: als auf ihr liegend zählt, relativ zur Modelldiagonale. Darüber hinaus ist
+#: es eine Schnittfläche.
 NEAR_LIMIT = 0.002
 
 #: Slot, den eine Fläche bekommt, die zu keiner Oberfläche der Eingaben

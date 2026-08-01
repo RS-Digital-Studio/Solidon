@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QCheckBox, QDoubleSpinBox, QHBoxLayout, QLabel, QW
 from app.core.units import DISPLAY_UNITS
 from app.i18n import tr
 
-#: Sensible defaults: a millimetre of travel, fifteen degrees of turn.
+#: Sinnvolle Vorgaben: ein Millimeter Weg, fünfzehn Grad Drehung.
 DEFAULT_GRID_STEP = 1.0
 DEFAULT_ANGLE_STEP = 15.0
 

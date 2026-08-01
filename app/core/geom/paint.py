@@ -39,7 +39,8 @@ _log = get_logger(__name__)
 #: wie eine Kante liest.
 EDGE_ANGLE = 30.0
 
-#: How many filaments a slot number may name (§20, same as the colour ops).
+#: Wie viele Filamente eine Slotnummer benennen darf (§20, wie bei den
+#: Farb-Operationen).
 MAX_SLOTS = 8
 
 

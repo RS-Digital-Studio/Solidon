@@ -123,7 +123,7 @@ class VariantsDialog(QDialog):
             return
 
         if not made.complete:
-            # §28.3: a set with a hole in it is not a calibration print.
+            # §28.3: ein Satz mit einer Lücke darin ist kein Kalibrierdruck.
             self.state.setText(tr("Nicht jede Variante ließ sich rechnen — siehe Prüfbericht."))
 
         objects = list(made.scene(self.session.profile).objects.values())

@@ -1,15 +1,16 @@
-"""Searching for a print orientation (Bauplan §22.3, §28.2).
+"""Die Suche nach einer Druckorientierung (Bauplan §22.3, §28.2).
 
-This is what the analysis slicer is really for. Slicing externally meant three
-to five candidates could be judged; slicing internally means hundreds — and the
-judgement is real support volume instead of a rule of thumb over face normals.
+Dafür gibt es den Analyse-Schneider eigentlich. Extern zu schneiden hieß, drei
+bis fünf Kandidaten beurteilen zu können; intern zu schneiden heißt hunderte —
+und das Urteil ist echtes Stützvolumen statt einer Faustregel über
+Flächennormalen.
 
-The sampling is randomised by a stored seed (§11.3): a purely regular sampling
-would systematically favour symmetric bodies, and without the seed the same file
-would not search the same way twice.
+Die Abtastung ist über einen gespeicherten Startwert randomisiert (§11.3): eine
+rein regelmäßige Abtastung bevorzugte systematisch symmetrische Körper, und
+ohne den Startwert suchte dieselbe Datei nicht zweimal gleich.
 
-The search is interruptible. Two hundred candidates take seconds, not
-milliseconds, and §2.8 says nothing may block the window.
+Die Suche ist unterbrechbar. Zweihundert Kandidaten brauchen Sekunden, keine
+Millisekunden, und §2.8 sagt, dass nichts das Fenster blockieren darf.
 """
 
 from __future__ import annotations
@@ -31,23 +32,24 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Layer height for the search. Coarser than a print: the ranking barely moves
-#: below this, and it is what keeps hundreds of candidates affordable (§31).
+#: Schichthöhe für die Suche. Gröber als beim Druck: die Rangfolge bewegt
+#: sich darunter kaum, und genau das hält hunderte Kandidaten
+#: bezahlbar (§31).
 SEARCH_LAYER_HEIGHT = 1.0
 
 #: Default number of directions tried.
 DEFAULT_CANDIDATES = 200
 
 
-#: Support volumes within this share of each other count as equally good, and
-#: then the first layer area decides. Without the tolerance, meshing noise would
-#: pick the orientation.
+#: Stützvolumen innerhalb dieses Anteils voneinander zählen als gleich gut,
+#: und dann entscheidet die Grundfläche. Ohne die Toleranz suchte das
+#: Vernetzungsrauschen die Orientierung aus.
 SUPPORT_TIE = 0.05
 
 
 @dataclass(frozen=True, slots=True)
 class Candidate:
-    """One direction, judged by what it would cost to print."""
+    """Eine Richtung, beurteilt danach, was sie zu drucken kostete."""
 
     direction: Vec3
     support_volume: float
@@ -56,10 +58,11 @@ class Candidate:
 
 
 def better(candidate: Candidate, current: Candidate) -> bool:
-    """Less support wins; only at a tie does the first layer area decide (§22.2).
+    """Weniger Stützen gewinnt; erst bei Gleichstand entscheidet die
+    Grundfläche (§22.2).
 
-    Deliberately lexicographic rather than a weighted sum: a big footprint must
-    never buy its way past real support material.
+    Mit Absicht lexikografisch statt als gewichtete Summe: eine große
+    Aufstandsfläche darf sich nie an echtem Stützmaterial vorbeikaufen.
     """
     reference = max(candidate.support_volume, current.support_volume, EPS_GEOM)
     if abs(candidate.support_volume - current.support_volume) > reference * SUPPORT_TIE:
@@ -69,7 +72,9 @@ def better(candidate: Candidate, current: Candidate) -> bool:
 
 @dataclass(slots=True)
 class SearchResult:
-    """The winner, the field it won against, and what to tell the user."""
+    """Der Gewinner, das Feld, gegen das er gewann, und was dem Nutzer zu
+    sagen ist.
+    """
 
     mesh: MeshData
     best: Candidate
@@ -85,10 +90,8 @@ class SearchResult:
 
 
 def sample_directions(count: int, seed: int | None = None) -> list[Vec3]:
-    """Evenly spread directions on the sphere, rotated by a seeded offset.
-
-    A Fibonacci spiral spreads points evenly; the seeded rotation keeps a
-    symmetric body from always landing on the same few axes.
+    """Gleichmäßig über die Kugel verteilte Richtungen, gedreht um einen
+    gesetzten Versatz.
     """
     generator = np.random.default_rng(seed or 0)
     offset = float(generator.random())
@@ -105,10 +108,12 @@ def sample_directions(count: int, seed: int | None = None) -> list[Vec3]:
 
 
 def judge(mesh: MeshData, direction: Vec3, layer_height: float) -> Candidate:
-    """Turn the body so ``direction`` points down, then slice and count."""
+    """Dreht den Körper, bis ``direction`` nach unten zeigt, dann schneiden und
+    zählen."""
     turned = place_on_bed(apply(mesh, _rotation_to_down(direction)))
-    # §28.2: the search reads one number out of this. Measuring structure
-    # widths on a body that is about to be turned again is work nobody looks at.
+    # §28.2: die Suche liest eine Zahl daraus. Strukturbreiten an einem
+    # Körper zu messen, der gleich wieder gedreht wird, ist Arbeit, die
+    # niemand ansieht.
     result = slice_body(turned, layer_height, detail="support")
     return Candidate(
         direction=direction,
@@ -146,14 +151,15 @@ def search(
     progress: ProgressFn | None = None,
     cancelled: CancelToken | None = None,
 ) -> SearchResult:
-    """Try many orientations and keep the one that needs the least support."""
+    """Probiert viele Orientierungen und behält die, die am wenigsten Stützen
+    braucht."""
     baseline = judge(mesh, (0.0, 0.0, -1.0), layer_height)
     best = baseline
     tried = 1
 
-    # The face normals come along: the best orientation usually has a flat face
-    # on the plate, and an even sampling of the sphere hits an exact axis only
-    # by accident.
+    # Die Flächennormalen kommen mit: die beste Orientierung hat meist eine
+    # ebene Fläche auf der Platte, und eine gleichmäßige Abtastung der Kugel
+    # trifft eine exakte Achse nur zufällig.
     directions = [*face_candidates(mesh), *sample_directions(count, seed)]
     for index, direction in enumerate(directions, start=1):
         if cancelled is not None:

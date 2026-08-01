@@ -84,7 +84,9 @@ class LLMBackend(Protocol):
 
     @property
     def id(self) -> str:
-        """Short name the settings and the transaction origin record (§26.4)."""
+        """Kurzname, den die Einstellungen und die Transaktionsherkunft
+        festhalten (§26.4).
+        """
         ...
 
     @property
@@ -92,7 +94,8 @@ class LLMBackend(Protocol):
 
     @property
     def available(self) -> bool:
-        """False when there is no key or no local server — the chat greys out."""
+        """False, wenn es keinen Schlüssel und keinen lokalen Server gibt — der
+        Chat graut dann aus."""
         ...
 
     def complete(
@@ -286,11 +289,12 @@ class OllamaBackend:
 
     @property
     def available(self) -> bool:
-        """Is a server listening?
+        """Lauscht ein Server?
 
-        Asked with a socket rather than with a request: the answer is needed
-        while a window is being built, and an HTTP call to a closed port costs
-        seconds on some machines — long enough to be felt on every start.
+        Mit einem Socket gefragt statt mit einer Anfrage: die Antwort wird
+        gebraucht, während ein Fenster gebaut wird, und ein HTTP-Aufruf an einen
+        geschlossenen Port kostet auf manchen Maschinen Sekunden — lang genug,
+        um bei jedem Start spürbar zu sein.
         """
         import socket
         from urllib.parse import urlparse

@@ -38,7 +38,8 @@ FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Testkörper für die Selbstkalibrierung (§28.3)."
 )
 
-#: Height of the engraved labels. Two layers at 0.2 mm — readable, cheap.
+#: Höhe der eingravierten Beschriftungen. Zwei Schichten zu 0,2 mm — lesbar,
+#: billig.
 LABEL_DEPTH = 0.4
 
 
@@ -274,13 +275,14 @@ def overhang_fan(raw: BaseParams) -> PartResult:
     depth = 6.0
     base = shapes.box(total, depth, base_height)
     bodies = [base]
-    # The ramps start inside the base and reach a hair into it: a shape that
-    # only touches is a shape that falls off (§39).
+    # Die Rampen beginnen im Sockel und reichen ein Haar in ihn hinein: eine
+    # Form, die nur berührt, ist eine Form, die abfällt (§39).
     start = depth / 2.0 - 1.0
 
     for index in range(params.steps):
-        # Past 85 degrees a ramp lies flat and folds into its neighbour. The
-        # declared range allows the combination, so the part holds the limit.
+        # Über 85 Grad liegt eine Rampe flach und faltet sich in ihre Nachbarin.
+        # Der deklarierte Bereich erlaubt die Kombination, also hält der Baustein
+        # die Grenze selbst ein.
         degrees = min(params.first + params.step * index, 85.0)
         angle = math.radians(degrees)
         x = -total / 2.0 + params.width * (index + 0.5)

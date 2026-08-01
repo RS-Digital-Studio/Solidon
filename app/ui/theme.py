@@ -109,7 +109,7 @@ def contrast_ratio(first: str, second: str) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
-#: Qt attributes for HiDPI. Set before the application exists (§19.3).
+# Qt-Attribute für HiDPI. Gesetzt, bevor es die Anwendung gibt (§19.3).
 def enable_hidpi() -> None:
     """HiDPI-Skalierung mit scharfen Pixmaps — muss vor QApplication laufen."""
     QApplication.setHighDpiScaleFactorRoundingPolicy(

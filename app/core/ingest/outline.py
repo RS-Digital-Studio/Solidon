@@ -34,7 +34,7 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: What this can read. Both come out of trimesh's path loaders.
+#: Was sich hier lesen lässt. Beides kommt aus den Pfad-Ladern von trimesh.
 OUTLINE_SUFFIXES: tuple[str, ...] = (".svg", ".dxf")
 
 
@@ -72,7 +72,7 @@ def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> O
         path = trimesh.load_path(io.BytesIO(payload), file_type=suffix.lower().lstrip("."))
     except PROGRAMMING_ERRORS:
         raise
-    except Exception as problem:  # every parser fails in its own way
+    except Exception as problem:  # jeder Parser scheitert auf seine eigene Art
         raise ValidationError(
             field="file",
             detail=_("Die Zeichnung ließ sich nicht lesen."),

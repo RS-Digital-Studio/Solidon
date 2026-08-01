@@ -1,11 +1,7 @@
-"""Small shapes the parts are built from (Bauplan §24.1).
+"""Kleine Formen, aus denen die Bausteine gebaut werden (Bauplan §24.1).
 
-Everything here is plain ``trimesh`` and ``manifold3d`` — no OpenSCAD, so a part
-depends on no external installation and stays testable (§24.1, §36).
-
-The shapes are deliberately few. A part library grows by combining a handful of
-well understood bodies, not by every part inventing its own cylinder with its
-own segment count and its own idea of where the origin sits.
+Alles hier steht gegen ``manifold3d``, nicht gegen OpenSCAD (§24.1): ein
+Baustein hängt so an keiner externen Installation und bleibt testbar.
 """
 
 from __future__ import annotations
@@ -18,39 +14,44 @@ import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.types import Vec3
 
-#: Segments of a round shape. Fine enough that a printed bore is round, coarse
-#: enough that a part stays a few thousand triangles (§31).
+#: Segmente einer runden Form. Fein genug, dass eine gedruckte Bohrung rund
+#: ist, grob genug, dass ein Baustein ein paar tausend Dreiecke bleibt (§31).
 SEGMENTS = 48
 
-#: How far the ridge of a thread stands out of its core, as a share of the
-#: pitch. Named because three places have to agree on it: the ridge built here,
-#: the core the screw carries it on, and the diameter the nut is cut from. Two
-#: of the three using a different number is a pair that does not screw
-#: together, and it is not visible in either half on its own.
+#: Wie weit der Gang eines Gewindes aus seinem Kern heraussteht, als Anteil
+#: der Steigung. Benannt, weil drei Stellen sich darauf einigen müssen: der
+#: hier gebaute Gang, der Kern, auf dem die Schraube ihn trägt, und der
+#: Durchmesser, aus dem die Mutter geschnitten wird. Zwei der drei mit einer
+#: anderen Zahl sind ein Paar, das sich nicht zusammenschrauben lässt — und in
+#: keiner Hälfte für sich zu sehen.
 RIDGE_SHARE = 0.55
 
-#: How far a subtracted shape reaches past the surface it cuts through. The
-#: rule set asks for it (§39): coincident faces are the classic way to break a
-#: boolean operation.
+#: Wie weit eine abgezogene Form über die Fläche hinausreicht, die sie
+#: durchschneidet. Die Regelsammlung verlangt es (§39): zusammenfallende
+#: Flächen sind der klassische Weg, eine Boolesche Operation zu brechen.
 OVERLAP = 0.01
 
 
 def cylinder(diameter: float, height: float, *, segments: int = SEGMENTS) -> MeshData:
-    """Standing on Z = 0, growing upwards — the frame every part uses."""
+    """Auf Z = 0 stehend, nach oben wachsend — der Rahmen, den jeder Baustein
+    benutzt.
+    """
     body = trimesh.creation.cylinder(radius=diameter / 2.0, height=height, sections=segments)
     body.apply_translation([0.0, 0.0, height / 2.0])
     return MeshData.of(body)
 
 
 def box(width: float, depth: float, height: float) -> MeshData:
-    """Centred in X and Y, standing on Z = 0."""
+    """In X und Y zentriert, auf Z = 0 stehend."""
     body = trimesh.creation.box(extents=(width, depth, height))
     body.apply_translation([0.0, 0.0, height / 2.0])
     return MeshData.of(body)
 
 
 def hexagon(width: float, height: float) -> MeshData:
-    """A hexagonal prism, ``width`` across the flats — a nut, in other words."""
+    """Ein Sechskantprisma, ``width`` über die Schlüsselweite — eine Mutter,
+    mit anderen Worten.
+    """
     radius = width / math.sqrt(3.0)
     angles = np.linspace(0.0, 2.0 * math.pi, 7)[:-1] + math.pi / 6.0
     points = np.column_stack([radius * np.cos(angles), radius * np.sin(angles)])
@@ -59,7 +60,7 @@ def hexagon(width: float, height: float) -> MeshData:
 
 
 def cone(bottom: float, top: float, height: float, *, segments: int = SEGMENTS) -> MeshData:
-    """A truncated cone standing on Z = 0 — a countersink, or a chamfer."""
+    """Ein Kegelstumpf auf Z = 0 — eine Senkung, oder eine Fase."""
     profile = np.array(
         [[0.0, 0.0], [bottom / 2.0, 0.0], [top / 2.0, height], [0.0, height]], dtype=float
     )
@@ -68,7 +69,7 @@ def cone(bottom: float, top: float, height: float, *, segments: int = SEGMENTS) 
 
 
 def slot(width: float, length: float, height: float, *, segments: int = SEGMENTS) -> MeshData:
-    """A rounded slot: two half circles with a rectangle between them."""
+    """Ein Langloch: zwei Halbkreise mit einem Rechteck dazwischen."""
     if length <= width:
         return cylinder(width, height, segments=segments)
     body = trimesh.creation.extrude_polygon(
@@ -107,8 +108,9 @@ def wedge(width: float, depth: float, height: float, tip: float = 0.0) -> MeshDa
         outline = [(0.0, 0.0), (depth, 0.0), (0.0, height)]
 
     body = trimesh.creation.extrude_polygon(_polygon(np.array(outline)), height=width)
-    # The outline lies in XY and grew along Z; turn it so depth runs along Y,
-    # height along Z and the extrusion across X, centred.
+    # Der Umriss liegt in XY und wuchs entlang Z; ihn so drehen, dass die Tiefe
+    # entlang Y läuft, die Höhe entlang Z und die Extrusion quer über X,
+    # zentriert.
     body.apply_transform(
         np.array(
             [

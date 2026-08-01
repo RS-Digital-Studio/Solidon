@@ -33,25 +33,26 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Import limits (§32). A clear message beats a memory overflow.
+#: Importgrenzen (§32). Eine klare Meldung schlägt einen Speicherüberlauf.
 MAX_TRIANGLES: Final = 20_000_000
 MAX_FILE_BYTES: Final = 512 * 1024 * 1024
 
-#: Above this the input stage says something. Not a limit — the one above is
-#: an order of magnitude higher — but the size where the analysis stops being
-#: able to help: the maps refuse at 120 000 and the feature detection at
-#: 200 000 (§31). A community model of two million triangles is a normal thing
-#: to be handed, and it should say what it is rather than just be slow.
+#: Darüber sagt die Eingangsstufe etwas. Keine Grenze — die darüber liegt
+#: eine Größenordnung höher —, sondern die Größe, ab der die Analyse aufhört
+#: helfen zu können: die Karten verweigern bei 120 000 und die
+#: Merkmalserkennung bei 200 000 (§31). Ein Community-Modell mit zwei
+#: Millionen Dreiecken ist etwas, das einem normalerweise gereicht wird, und
+#: es sollte sagen, was es ist, statt nur langsam zu sein.
 HEAVY_TRIANGLES: Final = 500_000
 
-#: What a printable part usually measures across, in millimetres.
+#: Was ein druckbares Teil üblicherweise misst, in Millimetern.
 PLAUSIBLE_MIN_MM: Final = 10.0
 PLAUSIBLE_MAX_MM: Final = 300.0
 
 #: Units a file might have been written in, most likely first.
 CANDIDATE_UNITS: Final[tuple[LengthUnit, ...]] = ("mm", "cm", "in", "m")
 
-#: A component below this share of the largest one counts as a stray fragment.
+#: Eine Komponente unter diesem Anteil der größten zählt als loses Fragment.
 SMALL_COMPONENT_SHARE: Final = 0.001
 
 
@@ -137,7 +138,8 @@ def normalise(
     body: trimesh.Trimesh = mesh.raw.copy()
     scale = to_mm(1.0, unit)
 
-    # 1 — unit. The only place besides display where a conversion happens (§11.1).
+    # 1 — Einheit. Die einzige Stelle außer der Anzeige, an der umgerechnet
+    # wird (§11.1).
     progress(0.0, str(_("Einheit anwenden")))
     if abs(scale - 1.0) > EPS_GEOM:
         body.apply_scale(scale)
@@ -152,7 +154,7 @@ def normalise(
 
     diagonal = float(np.linalg.norm(body.extents)) if len(body.faces) else 0.0
 
-    # 2 — weld vertices, with a tolerance that follows the model size.
+    # 2 — Eckpunkte verschweißen, mit einer Toleranz, die der Modellgröße folgt.
     welded = False
     if weld and len(body.faces):
         progress(0.2, str(_("Punkte verschweißen")))
@@ -205,20 +207,20 @@ def normalise(
                 )
             )
 
-    # 5 — components. Small ones are reported, never dropped silently.
+    # 5 — Komponenten. Kleine werden gemeldet, nie still verworfen.
     progress(0.8, str(_("Komponenten zählen")))
     components = _count_components(body, findings)
 
-    # 6 — position. Placing on the bed is offered, not enforced.
+    # 6 — Lage. Das Aufsetzen aufs Bett wird angeboten, nicht erzwungen.
     if place_on_bed and len(body.faces):
         progress(0.9, str(_("Auf das Bett setzen")))
         body.apply_translation((0.0, 0.0, -float(body.bounds[0][2])))
 
     if len(body.faces) > HEAVY_TRIANGLES:
-        # §31: far past what the analysis can serve. Not refused — the limit for
-        # that is an order of magnitude higher (§17.1) — but said out loud, with
-        # the way out, because a model this size makes every later step slow and
-        # the maps refuse themselves anyway.
+        # §31: weit jenseits dessen, was die Analyse bedienen kann. Nicht
+        # abgelehnt — die Grenze dafür liegt eine Größenordnung höher (§17.1) —,
+        # aber ausgesprochen, mit dem Ausweg dazu: ein Modell dieser Größe macht
+        # jeden späteren Schritt langsam.
         findings.append(
             Finding(
                 code="ingest.very_large",

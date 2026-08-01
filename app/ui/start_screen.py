@@ -74,8 +74,8 @@ def accepted_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
         if not url.isLocalFile():
             continue
         path = Path(url.toLocalFile())
-        # STEP is read by the other kernel and is therefore not among the mesh
-        # suffixes — dropping one has to work all the same (§30).
+        # STEP liest der andere Kern und steht darum nicht unter den
+        # Mesh-Endungen — eines fallenzulassen muss trotzdem gehen (§30).
         if path.suffix.lower() in (
             *READABLE_SUFFIXES,
             *STEP_SUFFIXES,

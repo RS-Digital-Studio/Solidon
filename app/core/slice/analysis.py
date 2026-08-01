@@ -279,7 +279,7 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any]:
 
     corners = triangles[faces]
     height_above = corners[:, :, 2] - z[:, None]
-    # The three edges of a triangle, as "from corner i to corner i+1".
+    # Die drei Kanten eines Dreiecks, als „von Ecke i nach Ecke i+1".
     above = height_above > 0.0
     crossing = above != above[:, [1, 2, 0]]
 
@@ -289,7 +289,8 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any]:
 
     corners, height_above, crossing = corners[keep], height_above[keep], crossing[keep]
     rows = np.arange(len(corners))[:, None]
-    # The two crossing edges, in the order the triangle names them.
+    # Die zwei kreuzenden Kanten, in der Reihenfolge, in der das Dreieck sie
+    # benennt.
     edges = np.argsort(~crossing, axis=1, kind="stable")[:, :2]
 
     start = corners[rows, edges]
@@ -330,16 +331,17 @@ def _polygon_from(points: Any) -> ShapelyPolygon | None:
     if len(parts) == 1:
         return parts[0]
 
-    # Only the outlines count as containers. GEOS hands back the bore of a plate
-    # twice — once as the hole of the plate and once as a disc of its own — and
-    # asking whether the disc lies in the *plate* would answer no, because in
-    # the plate the bore is a hole.
+    # Nur die Außenlinien zählen als Behälter. GEOS gibt die Bohrung einer
+    # Platte zweimal zurück — einmal als Loch der Platte und einmal als
+    # eigene Scheibe — und zu fragen, ob die Scheibe in der *Platte* liegt,
+    # antwortete Nein, denn in der Platte ist die Bohrung ein Loch.
     #
-    # What is asked, on the other hand, has to be a point of the part itself,
-    # not of its outline: for a box the outline is the outer rectangle, and its
-    # middle lies in the cavity. Taken from there, the wall and the cavity each
-    # declare the other to be their hole, both come out odd, and a section that
-    # is plainly there comes back as nothing at all.
+    # Was gefragt wird, muss dagegen ein Punkt des Teils selbst sein, nicht
+    # seiner Außenlinie: bei einer Box ist die Außenlinie das äußere
+    # Rechteck, und dessen Mitte liegt im Hohlraum. Von dort genommen
+    # erklären Wand und Hohlraum einander zum jeweiligen Loch, beide kommen
+    # ungerade heraus, und ein Schnitt, den es offensichtlich gibt, kommt
+    # als gar nichts zurück.
     shells = [ShapelyPolygon(part.exterior) for part in parts]
     points = [part.representative_point() for part in parts]
     inside = [
@@ -391,7 +393,7 @@ def _measure(
     area = float(shape.area)
     region: ShapelyPolygon | None = None
     if on_plate:
-        # Resting on the build plate is the one kind of support that is free.
+        # Auf der Druckplatte aufzuliegen ist die eine Stützart, die nichts kostet.
         overhang = 0.0
         islands = 0.0
     elif previous is None or previous.is_empty:
@@ -406,7 +408,7 @@ def _measure(
         islands = float(_islands(shape, previous).area)
 
     if detail == "support":
-        # Everything below is about the printed structure, not about support.
+        # Alles darunter geht um die gedruckte Struktur, nicht um Stützen.
         return LayerMetrics(
             z=0.0,
             area=area,
@@ -461,14 +463,15 @@ def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERE
     coarse = shape.simplify(WIDTH_SIMPLIFY)
     if coarse.is_empty:
         coarse = shape
-    # Twice the area over the perimeter is the largest circle that can possibly
-    # fit — for a disc and for a square it is exactly the inscribed one. Starting
-    # there instead of at the diagonal keeps every probe small, and a small
-    # erosion on a simplified contour is what makes this affordable at all.
+    # Die doppelte Fläche über dem Umfang ist der größte Kreis, der überhaupt
+    # hineinpasst — bei einer Scheibe und bei einem Quadrat ist es genau der
+    # einbeschriebene. Dort zu beginnen statt bei der Diagonale hält jeden
+    # Versuch klein, und eine kleine Erosion auf einer vereinfachten Kontur ist
+    # das, was das hier überhaupt bezahlbar macht.
     high = 2.0 * float(shape.area) / float(shape.length)
     if interesting_below > 0.0:
         if high <= interesting_below / 2.0:
-            # Cannot be thicker than this anyway; measure it properly.
+            # Dicker kann sie ohnehin nicht sein; jetzt ordentlich messen.
             pass
         elif not coarse.buffer(-interesting_below / 2.0, quad_segs=1, join_style="mitre").is_empty:
             return float(interesting_below)
@@ -492,8 +495,9 @@ def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> flo
     if previous is None or previous.is_empty:
         return 0.0
     free = shape.difference(previous.buffer(OVERHANG_MARGIN))
-    # Bridges are measured against the layer itself, not against the 45 degree
-    # allowance: what spans free air is a bridge whatever its angle.
+    # Brücken werden gegen die Schicht selbst gemessen, nicht gegen die
+    # 45-Grad-Zugabe: was durch freie Luft spannt, ist eine Brücke, egal in
+    # welchem Winkel.
     if free.is_empty:
         return 0.0
     low, left, high, right = free.bounds
@@ -516,8 +520,9 @@ def _to_polygons(shape: ShapelyPolygon) -> tuple[Polygon, ...]:
             outline=_ring(part.exterior),
             holes=tuple(_ring(ring) for ring in part.interiors),
         )
-        # A difference can hand back lines where two areas only touch. They carry
-        # no area, so they are not contours — dropping them keeps the type honest.
+        # Eine Differenz kann Linien zurückgeben, wo zwei Flächen sich nur
+        # berühren. Die tragen keine Fläche, sind also keine Konturen — sie
+        # wegzulassen hält den Typ ehrlich.
         for part in parts
         if not part.is_empty and part.geom_type == "Polygon"
     )

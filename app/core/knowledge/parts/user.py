@@ -30,8 +30,8 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Prefix of the module names own parts are imported under, so they cannot
-#: collide with anything the application ships.
+#: Präfix der Modulnamen, unter denen eigene Bausteine importiert werden —
+#: damit sie mit nichts kollidieren können, was die Anwendung mitbringt.
 MODULE_PREFIX = "formwerk_user_parts"
 
 

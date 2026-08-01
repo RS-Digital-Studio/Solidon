@@ -95,15 +95,17 @@ class _EvaluationWorker(QThread):
         try:
             result = session.run_evaluation()
             if session.pending_part_check:
-                # §24.4: what the library changed since this file was saved is
-                # said once, when it is opened, not on every evaluation.
+                # §24.4: was die Bibliothek geändert hat, seit diese Datei gespeichert
+                # wurde, wird einmal gesagt — beim Öffnen, nicht bei jeder
+                # Auswertung.
                 session.pending_part_check = False
                 result = _with_findings(result, part_check.check(session.project.document))
             if session.pending_orphan_check and result.complete:
-                # §21.3: every feature reference of an opened file is checked once,
-                # here in the worker where asking may block without freezing the
-                # window. A rewritten reference means the scene has to be built
-                # again — with the answer in it, not around it.
+                # §21.3: jeder Merkmalsverweis einer geöffneten Datei wird einmal
+                # geprüft, hier im Arbeiter, wo Fragen blockieren darf, ohne das
+                # Fenster einzufrieren. Ein umgeschriebener Verweis heißt, dass die
+                # Szene neu gebaut werden muss — mit der Antwort darin, nicht
+                # darum herum.
                 session.pending_orphan_check = False
                 check = orphans.check(
                     session.project.document, result.scene, session.ask_from_worker
@@ -320,17 +322,17 @@ class Session(QObject):
             )
             return
         if is_outline(path.suffix):
-            # A flat drawing has no unit question either — it has no third
-            # dimension until somebody says how thick it should be (§25).
+            # Eine flache Zeichnung hat auch keine Einheitenfrage — sie hat keine
+            # dritte Dimension, bis jemand sagt, wie dick sie sein soll (§25).
             self.apply(
                 tr("Zeichnung extrudieren"),
                 [OperationDraft(op="load_outline", params={"source": source_id})],
             )
             return
-        # How many bodies the file holds is decided here, not in the operation:
-        # the stack hands out object ids before anything runs (§11), and for a
-        # 3MF assembly the count is in the file. Counted without reading a single
-        # coordinate — see threemf.count_objects.
+        # Wie viele Körper die Datei hält, entscheidet sich hier, nicht in der
+        # Operation: der Stapel vergibt Objekt-IDs, bevor irgendetwas läuft
+        # (§11), und bei einer 3MF-Baugruppe steht die Zahl in der Datei.
+        # Gezählt, ohne eine einzige Koordinate zu lesen.
         parts = threemf.count_objects(self.project.sources[source_id]) if is_3mf else 1
         self.apply(
             tr("Modell laden"),
@@ -475,7 +477,7 @@ class Session(QObject):
     def run_proposal(self, request: str) -> ProposalPreview:
         """Ein Agentenzug plus seine Vorschau. Läuft im Arbeiter (§26.5)."""
         backend = self.agent_backend
-        if backend is None:  # pragma: no cover - guarded before the worker starts
+        if backend is None:  # pragma: no cover - vor dem Start des Arbeiters abgesichert
             raise AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell."))
 
         agent = AgentSession(
@@ -531,7 +533,7 @@ class Session(QObject):
         self.progressChanged.emit(fraction, text)
 
     def ask_from_worker(self, question: str, choices: list[str]) -> str:
-        """Hand the question to the window and wait for the answer."""
+        """Reicht die Frage ans Fenster und wartet auf die Antwort."""
         request = AskRequest(question=question, choices=list(choices))
         self.askRequested.emit(request)
         request.answered.wait()
@@ -543,8 +545,8 @@ class Session(QObject):
 
     def _on_finished(self, result: Any) -> None:
         self.last_result = result
-        # §17.2: keep the fallback stage that carried each operation, so the file
-        # recomputes the same way tomorrow.
+        # §17.2: die Rückfallstufe behalten, die jede Operation getragen hat —
+        # damit die Datei morgen gleich nachrechnet.
         self.history.record_solvers(result.solvers)
         self.sceneChanged.emit(result)
 
@@ -570,10 +572,8 @@ class Session(QObject):
             self.evaluate_async()
 
     def wait_for_idle(self, timeout_ms: int = 10_000) -> None:
-        """Block until no run is left — including the one a debounce queued up.
-
-        Worker replies arrive as signals, so the event loop has to keep turning
-        while waiting; otherwise the queued run would never start.
+        """Blockiert, bis kein Lauf mehr übrig ist — auch der nicht, den eine
+        Entprellung eingereiht hat.
         """
         deadline = time.monotonic() + timeout_ms / 1000.0
         while time.monotonic() < deadline:

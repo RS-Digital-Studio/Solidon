@@ -18,7 +18,8 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge.parts.registry import PartSpec
 from app.core.types import BaseParams
 
-#: Written into every file, so nobody mistakes it for a parametric model.
+#: In jede Datei geschrieben, damit niemand sie für ein parametrisches
+#: Modell hält.
 HEADER = """// {title} ({name}, Version {version})
 // Erzeugt von Formwerk. Die Werte unten sind zum Nachlesen da: das Modell
 // darunter ist ein festes Netz, kein parametrischer Nachbau.

@@ -27,13 +27,13 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Above this relative difference the cross-check becomes a finding (§28.2).
+#: Über diesem relativen Unterschied wird die Gegenprobe ein Befund (§28.2).
 DEVIATION_LIMIT = 0.15
 
-#: Density of the usual filaments in g/cm³ — for the weight from the length.
+#: Dichte der üblichen Filamente in g/cm³ — für das Gewicht aus der Länge.
 DEFAULT_DENSITY = 1.24
 
-#: Cross section of a 1.75 mm filament in mm².
+#: Querschnitt eines 1,75-mm-Filaments in mm².
 FILAMENT_AREA = 2.405
 
 
@@ -62,7 +62,9 @@ class GcodeMetrics:
 
     @property
     def material_cm3(self) -> float | None:
-        """Filament length as volume — the figure comparable with the estimate."""
+        """Filamentlänge als Volumen — die Größe, die mit der Schätzung
+        vergleichbar ist.
+        """
         if self.filament_mm is None:
             return None
         return self.filament_mm * FILAMENT_AREA / 1000.0
@@ -74,8 +76,9 @@ class GcodeMetrics:
         return None if volume is None else volume * density
 
 
-#: Comment lines the common slicers write. One pattern per fact, not one parser
-#: per slicer: a new slicer usually only needs another line here.
+#: Kommentarzeilen, die die verbreiteten Slicer schreiben. Ein Muster je
+#: Tatsache, nicht ein Parser je Slicer: ein neuer Slicer braucht meist nur
+#: eine weitere Zeile hier.
 _PATTERNS: tuple[tuple[str, str], ...] = (
     ("print_seconds", r";\s*estimated printing time.*?=\s*(?P<value>[0-9hmsd ]+)"),
     ("print_seconds", r";\s*TIME:\s*(?P<value>[0-9.]+)"),
@@ -130,7 +133,7 @@ def _set(metrics: GcodeMetrics, name: str, value: str) -> None:
     if number is None:
         return
     if name == "filament_mm":
-        # "Filament used: 3.42m" is metres, "filament used [mm] = 3420" is not.
+        # „Filament used: 3.42m" sind Meter, „filament used [mm] = 3420" nicht.
         metrics.filament_mm = number * 1000.0 if number < 100.0 else number
     elif name == "filament_grams":
         metrics.filament_grams = number
@@ -161,11 +164,13 @@ def _seconds(value: str) -> float | None:
 
 
 def _support_volume(text: str, layer_height: float) -> float | None:
-    """Extruded filament while the tool was printing support (§28.1).
+    """Extrudiertes Filament, während das Werkzeug Stützen gedruckt
+    hat (§28.1).
 
-    Measured, not estimated: the file says which stretches are support, and the
-    E axis says how much material went into them. Slicers that do not write the
-    type leave this unknown, which is better than a number nobody can check.
+    Gemessen, nicht geschätzt: die Datei sagt, welche Abschnitte Stützen sind,
+    und die E-Achse sagt, wie viel Material in sie ging. Slicer, die den Typ
+    nicht schreiben, lassen das unbekannt — und das ist besser als eine Zahl,
+    die niemand prüfen kann.
     """
     active = False
     seen_type = False
@@ -207,7 +212,7 @@ def _support_volume(text: str, layer_height: float) -> float | None:
 
 @dataclass(slots=True)
 class CrossCheck:
-    """The internal estimate against the measured value (§28.2)."""
+    """Die interne Schätzung gegen den gemessenen Wert (§28.2)."""
 
     what: str
     estimated: float
@@ -227,11 +232,13 @@ class CrossCheck:
 
 
 def compare(estimated: float, measured: float, what: str = "support") -> CrossCheck:
-    """Cross-check one figure. A large difference is a finding, not a correction.
+    """Prüft eine Größe gegen. Ein großer Unterschied ist ein Befund, keine
+    Korrektur.
 
-    §28.2: the internal estimate is not quietly replaced by the measured value.
-    Both stay, both keep their origin, and the report says they disagree — that
-    is the signal that the layer analysis needs work.
+    §28.2: die interne Schätzung wird nicht still durch den gemessenen Wert
+    ersetzt. Beide bleiben, beide behalten ihre Herkunft, und der Bericht sagt,
+    dass sie sich widersprechen — das ist das Signal, dass die Schichtanalyse
+    Arbeit braucht.
     """
     check = CrossCheck(what=what, estimated=estimated, measured=measured)
     if not check.within_limit:
@@ -253,7 +260,9 @@ def compare(estimated: float, measured: float, what: str = "support") -> CrossCh
 
 
 def findings_for(metrics: GcodeMetrics) -> list[Finding]:
-    """What the sliced file says, as entries for the report — marked as measured."""
+    """Was die geslicete Datei sagt, als Einträge für den Prüfbericht — als
+    gemessen markiert.
+    """
     findings: list[Finding] = []
     if metrics.print_minutes is not None:
         findings.append(
