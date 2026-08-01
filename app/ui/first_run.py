@@ -1,12 +1,13 @@
-"""The first run (Bauplan §38).
+"""Der erste Start (Bauplan §38).
 
-Language, printer, material, a look at the external programs, and the key for
-the chat if there is one. Four steps, all of them skippable, all of them
-reachable again later — a wizard that has to be finished before anything can be
-done is a wall, not a welcome.
+Sprache, Drucker, Material, ein Blick auf die externen Programme, und der
+Schlüssel für den Chat, falls es einen gibt. Vier Schritte, alle
+überspringbar, alle später wieder erreichbar — ein Assistent, der zu Ende
+gebracht werden muss, bevor irgendetwas geht, ist eine Wand, kein Willkommen.
 
-It ends where the plan says the first five minutes end (§2.3): at the first
-import. So the last page does not say "done", it offers to open a model.
+Er endet dort, wo der Bauplan die ersten fünf Minuten enden lässt (§2.3): beim
+ersten Import. Die letzte Seite sagt darum nicht „fertig", sie bietet an, ein
+Modell zu öffnen.
 """
 
 from __future__ import annotations
@@ -29,7 +30,8 @@ from app.core.knowledge import profiles
 from app.i18n import SUPPORTED_LANGUAGES, tr
 from app.ui.settings import UiSettings
 
-#: Marker per state, so the list reads without colour as well (§19.1).
+#: Ein Zeichen je Zustand, damit sich die Liste auch ohne Farbe
+#: liest (§19.1).
 FOUND = "+"
 MISSING = "-"
 
@@ -105,7 +107,9 @@ class FirstRunDialog(QDialog):
     # --- result -----------------------------------------------------------------
 
     def apply_to(self, settings: UiSettings) -> UiSettings:
-        """Write the answers back. Called on accept, never on skip."""
+        """Schreibt die Antworten zurück. Beim Annehmen aufgerufen, nie beim
+        Überspringen.
+        """
         settings.language = str(self.language.currentData())
         settings.printer = str(self.printer.currentData())
         settings.material = str(self.material.currentData())
@@ -113,7 +117,7 @@ class FirstRunDialog(QDialog):
         return settings
 
     def _install(self) -> None:
-        """§36: what is missing can be fetched from here, rather than from a README."""
+        """§36: was fehlt, lässt sich von hier holen, statt aus einem README."""
         from app.ui.install_dialog import InstallDialog
 
         InstallDialog(self).exec()
@@ -121,7 +125,9 @@ class FirstRunDialog(QDialog):
         self.install_button.setText(f"{tr('Fehlendes installieren …')}  ·  {_missing_text()}")
 
     def _open(self) -> None:
-        """§2.3: the first five minutes end at the first import, not at "done"."""
+        """§2.3: die ersten fünf Minuten enden beim ersten Import, nicht bei
+        „fertig".
+        """
         self.apply_to(self.settings)
         self.importRequested.emit()
         self.accept()
@@ -134,7 +140,9 @@ def _select(box: QComboBox, identifier: str) -> None:
 
 
 def _missing_text() -> str:
-    """A line about what is not there — shown next to the button that fetches it."""
+    """Eine Zeile über das, was nicht da ist — gezeigt neben dem Knopf, der
+    es holt.
+    """
     absent = install.missing()
     if not absent:
         return tr("Alles Zusätzliche ist vorhanden.")
@@ -159,5 +167,5 @@ def _tool_text() -> str:
 
 
 def should_run(settings: UiSettings) -> bool:
-    """Only once, and only if it was not skipped before."""
+    """Nur einmal, und nur, wenn er nicht vorher übersprungen wurde."""
     return not settings.first_run_done

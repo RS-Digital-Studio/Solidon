@@ -1,8 +1,9 @@
-"""Short texts several parts of the surface need to agree on.
+"""Kurze Texte, auf die sich mehrere Teile der Oberfläche einigen müssen.
 
-A feature is written the same way in the viewport overlay, in the object tree and
-in the status bar — ``hole_3 · Ø4.2``. One place for it means the name the user
-reads is the name the agent uses (§18.5, Leitprinzip 5).
+Ein Merkmal wird in der Viewport-Überlagerung, im Objektbaum und in der
+Statusleiste gleich geschrieben — ``hole_3 · ⌀4.2``. Ein Ort dafür heißt: der
+Name, den der Nutzer liest, ist der Name, den der Agent benutzt (§18.5,
+Leitprinzip 5).
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from app.i18n import tr
 
 
 def feature_label(feature_id: FeatureId, feature: Feature) -> str:
-    """``hole_3 · Ø4.2`` — the label §18.5 asks for, name first."""
+    """``hole_3 · ⌀4.2`` — die Beschriftung, die §18.5 verlangt, Name zuerst."""
     params = feature.params
     if feature.kind == "hole":
         return f"{feature_id} · Ø{format_length(float(params.get('diameter', 0.0)))}"

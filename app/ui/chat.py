@@ -1,13 +1,14 @@
-"""The chat (Bauplan §26.3, §2.5).
+"""Der Chat (Bauplan §26.3, §2.5).
 
-The right-hand side of the window, next to the report. What matters here is not
-the bubbles but the coupling: every turn shows which transaction it produced,
-and a turn whose transaction was taken back is greyed out rather than deleted —
-it happened, it just does not hold any more.
+Die rechte Seite des Fensters, neben dem Prüfbericht. Worauf es hier ankommt,
+sind nicht die Sprechblasen, sondern die Kopplung: jeder Beitrag zeigt, welche
+Transaktion er erzeugt hat, und ein Beitrag, dessen Transaktion zurückgenommen
+wurde, wird ausgegraut statt gelöscht — er ist passiert, er gilt nur nicht
+mehr.
 
-A proposal is never applied by itself. It arrives, the viewport shows what would
-change (§18.7), and two buttons decide. Without a key the whole panel says so in
-one line and stays out of the way (§27).
+Ein Vorschlag wird nie von selbst angewandt. Er kommt an, der Viewport zeigt,
+was sich ändern würde (§18.7), und zwei Knöpfe entscheiden. Ohne Schlüssel sagt
+das ganze Panel das in einer Zeile und hält sich heraus (§27).
 """
 
 from __future__ import annotations
@@ -31,14 +32,15 @@ from app.core.agent.context import is_discarded
 from app.core.types import ChatEntry, Document
 from app.i18n import tr
 
-#: How a turn is marked, so the roles stay apart without colour (§19.1).
+#: Wie ein Beitrag markiert wird, damit die Rollen ohne Farbe
+#: auseinanderbleiben (§19.1).
 ROLE_MARKER = {"user": ">", "agent": "*"}
 
 DISCARDED_COLOUR = "#7a828c"
 
 
 class ChatPanel(QWidget):
-    """Conversation, input line, and the two buttons a proposal needs."""
+    """Gespräch, Eingabezeile, und die zwei Knöpfe, die ein Vorschlag braucht."""
 
     requestSent = Signal(str)
     accepted = Signal()
@@ -99,7 +101,9 @@ class ChatPanel(QWidget):
     # --- state ------------------------------------------------------------------
 
     def set_available(self, available: bool, backend: str = "") -> None:
-        """§27: without a key the chat is off and says so, once, without nagging."""
+        """§27: ohne Schlüssel ist der Chat aus und sagt das — einmal, ohne zu
+        nörgeln.
+        """
         self._available = available
         self.hint.setText(
             f"{tr('Modell')}: {backend}"
@@ -112,7 +116,9 @@ class ChatPanel(QWidget):
         self._update_enabled()
 
     def set_busy(self, busy: bool) -> None:
-        """While the model is thinking nothing more is sent — one turn at a time."""
+        """Während das Modell denkt, wird nichts weiter gesendet — ein Zug nach
+        dem anderen.
+        """
         self._busy = busy
         self._update_enabled()
 
@@ -122,14 +128,18 @@ class ChatPanel(QWidget):
         self.send.setEnabled(usable)
 
     def show_document(self, document: Document) -> None:
-        """Redraw the conversation, greying out what was taken back (§26.3)."""
+        """Zeichnet das Gespräch neu und graut aus, was zurückgenommen
+        wurde (§26.3).
+        """
         self.turns.clear()
         for entry in document.chat:
             self.turns.addItem(_item(entry, is_discarded(entry, document)))
         self.turns.scrollToBottom()
 
     def show_proposal(self, preview: Any | None) -> None:
-        """Offer the decision, with what would change in numbers (§18.7)."""
+        """Bietet die Entscheidung an, mit dem, was sich änderte, in
+        Zahlen (§18.7).
+        """
         if preview is None:
             self.decision.setVisible(False)
             self.summary.setText("")
@@ -151,7 +161,7 @@ def _item(entry: ChatEntry, discarded: bool) -> QListWidgetItem:
     marker = ROLE_MARKER.get(entry.role, "-")
     item = QListWidgetItem(f"{marker} {entry.text}")
     if discarded:
-        # Not deleted: the turn happened. It just does not hold any more (§26.3).
+        # Nicht gelöscht: der Beitrag ist passiert. Er gilt nur nicht mehr (§26.3).
         item.setForeground(QColor(DISCARDED_COLOUR))
         font = QFont(item.font())
         font.setStrikeOut(True)
@@ -167,7 +177,7 @@ def _item(entry: ChatEntry, discarded: bool) -> QListWidgetItem:
 
 
 def describe(preview: Any) -> str:
-    """What the proposal would do, in one readable line."""
+    """Was der Vorschlag täte, in einer lesbaren Zeile."""
     proposal = preview.proposal
     parts: list[str] = []
     if proposal.drafts:

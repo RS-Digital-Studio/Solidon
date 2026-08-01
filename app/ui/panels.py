@@ -1,8 +1,9 @@
-"""The three panels on the left and the report on the right (Bauplan §2.5).
+"""Die drei Panels links und der Prüfbericht rechts (Bauplan §2.5).
 
-Three collapsible sections, not three windows: object tree, parameters, history.
-They read from the document and the last evaluation, and they never change
-geometry themselves — every change goes through an operation (AGENTS.md rule 2).
+Drei einklappbare Abschnitte, keine drei Fenster: Objektbaum, Parameter,
+Verlauf. Sie lesen aus dem Dokument und der letzten Auswertung, und sie ändern
+nie selbst Geometrie — jede Änderung geht durch eine Operation (AGENTS.md
+Regel 2).
 """
 
 from __future__ import annotations
@@ -34,17 +35,20 @@ from app.i18n import tr
 from app.ui.labels import feature_label
 from app.ui.palette import SEVERITY_ENCODING
 
-#: Marker per severity, taken from the shared encoding — colour is never alone (§19.1).
+#: Zeichen je Schweregrad, aus der gemeinsamen Kodierung — Farbe steht nie
+#: allein (§19.1).
 SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items()}
 
 
 def origin_label(source: str) -> str:
-    """Estimated here or measured from G-code — never mixed up (§22.5)."""
+    """Hier geschätzt oder aus G-Code gemessen — nie verwechselt (§22.5)."""
     return tr("intern geschätzt") if source == "internal" else tr("aus G-Code")
 
 
 class ObjectTree(QWidget):
-    """Objects of the scene with their features, origin and size (§18.8, §18.5)."""
+    """Objekte der Szene mit ihren Merkmalen, Herkunft und Größe (§18.8,
+    §18.5).
+    """
 
     selectionChanged = Signal(object)
     featureSelected = Signal(object)
@@ -84,9 +88,9 @@ class ObjectTree(QWidget):
             )
             item.setData(0, Qt.ItemDataRole.UserRole, object_id)
             state = tr("geschlossen") if entry.mesh.is_watertight else tr("offen")
-            # §30: which kind of body this is belongs in the tree, because it
-            # decides what can still be done with it — and the way from B-Rep
-            # to mesh is one-way.
+            # §30: welche Sorte Körper das ist, gehört in den Baum, denn sie
+            # entscheidet, was sich noch mit ihm tun lässt — und der Weg von
+            # B-Rep zu Mesh ist eine Einbahnstraße.
             kind = tr("exakt") if entry.kind == "brep" else tr("Netz")
             tip = f"{object_id} · {kind} · {entry.mesh.triangle_count} {tr('Dreiecke')} · {state}"
             if entry.material:
@@ -95,9 +99,10 @@ class ObjectTree(QWidget):
             if entry.kind == "brep":
                 item.setText(0, f"{entry.name}  ·  {kind}")
             if entry.material:
-                # §12: a body that is not in the project's material has to say
-                # so where the parts are listed — otherwise the only place the
-                # difference shows up is a fit that suddenly wants another gap.
+                # §12: ein Körper, der nicht im Material des Projekts ist, muss das
+                # dort sagen, wo die Teile aufgezählt werden — sonst zeigt sich
+                # der Unterschied nur an einer Passung, die auf einmal ein
+                # anderes Spiel will.
                 item.setText(1, f"{item.text(1)}  ·  {entry.material}")
             for feature_id, feature in entry.features.items():
                 child = QTreeWidgetItem([feature_label(feature_id, feature), feature.kind])
@@ -111,8 +116,9 @@ class ObjectTree(QWidget):
         self._restore(selected_object, selected_feature)
 
     def _restore(self, object_id: ObjectId | None, feature_id: str | None) -> None:
-        """Keep the selection across a re-evaluation — losing it costs the user
-        the place they were working at."""
+        """Behält die Auswahl über eine Neuauswertung hinweg — sie zu verlieren
+        kostet den Nutzer die Stelle, an der er gearbeitet hat.
+        """
         if object_id is None:
             return
         for index in range(self.tree.topLevelItemCount()):
@@ -145,7 +151,9 @@ class ObjectTree(QWidget):
         return value
 
     def select_feature(self, object_id: ObjectId, feature_id: str) -> None:
-        """Follow a click in the viewport — the two views show one selection (§18.5)."""
+        """Folgt einem Klick im Viewport — die zwei Ansichten zeigen eine
+        Auswahl (§18.5).
+        """
         self.tree.clearSelection()
         self._restore(object_id, feature_id)
 
@@ -154,12 +162,15 @@ class ObjectTree(QWidget):
         self.featureSelected.emit(self.selected_feature())
 
     def operations_for_object(self) -> tuple[Any, ...]:
-        """Operations that work on a selected object — the shortest way from seeing
-        to doing (§2.6)."""
+        """Operationen, die auf einem gewählten Objekt arbeiten — der kürzeste
+        Weg vom Sehen zum Tun (§2.6).
+        """
         return tuple(spec for spec in REGISTRY.all() if spec.consumes == 1)
 
     def operations_for_feature(self, kind: str) -> tuple[Any, ...]:
-        """What a bore or a face offers, straight out of ``applies_to`` (§10, §18.5)."""
+        """Was eine Bohrung oder eine Fläche anbietet, direkt aus ``applies_to``
+        (§10, §18.5).
+        """
         return REGISTRY.for_feature(kind)
 
     def _feature_kind(self) -> str | None:
@@ -185,7 +196,9 @@ class ObjectTree(QWidget):
 
 
 class ParameterPanel(QWidget):
-    """Named project dimensions; turning a number rebuilds the model (§13)."""
+    """Benannte Projektmaße; an einer Zahl zu drehen baut das Modell
+    neu (§13).
+    """
 
     parameterEdited = Signal(str, float)
 
@@ -210,7 +223,8 @@ class ParameterPanel(QWidget):
 
         for name, parameter in document.parameters.items():
             if parameter.expression:
-                # Derived values are shown, not edited — the expression owns them.
+                # Abgeleitete Werte werden gezeigt, nicht bearbeitet — der Ausdruck
+                # besitzt sie.
                 label = QLabel(f"{parameter.value:.2f} {parameter.unit}", self)
                 label.setToolTip(parameter.expression)
                 self._form.addRow(f"{parameter.title or name}", label)
@@ -230,12 +244,13 @@ class ParameterPanel(QWidget):
 
 
 class HistoryPanel(QWidget):
-    """Transactions, newest last. The unit of undo (§15.5).
+    """Transaktionen, neueste zuletzt. Die Einheit des Undo (§15.5).
 
-    A transaction is one row, because that is what an undo takes back. Its
-    operations get a row of their own where there is more than one of them —
-    an agent proposal, a split into four — so that every step of the stack can
-    be opened and corrected, not only the ones that came alone (§15.4).
+    Eine Transaktion ist eine Zeile, denn das ist es, was ein Undo
+    zurücknimmt. Ihre Operationen bekommen eine eigene Zeile, wo es mehr als
+    eine gibt — ein Agentenvorschlag, eine Teilung in vier —, damit sich jeder
+    Schritt des Stapels öffnen und korrigieren lässt, nicht nur die, die allein
+    kamen (§15.4).
     """
 
     operationActivated = Signal(int)
@@ -257,7 +272,7 @@ class HistoryPanel(QWidget):
             by = tr("Agent") if transaction.origin.by == "agent" else tr("Nutzer")
             item = QListWidgetItem(f"{transaction.title}  ({by})")
             if stopped_at is not None and stopped_at in transaction.ops:
-                # §15.3: the affected operations are marked in the history.
+                # §15.3: die betroffenen Operationen werden im Verlauf markiert.
                 item.setText(f"! {item.text()}")
             item.setToolTip(
                 f"{transaction.id} · {tr('Ops')} "
@@ -281,7 +296,7 @@ class HistoryPanel(QWidget):
 
 
 class ReportPanel(QWidget):
-    """Findings from ingest, operations and checks (§17.3)."""
+    """Befunde aus Einlesen, Operationen und Prüfungen (§17.3)."""
 
     findingActivated = Signal(object)
 
@@ -310,8 +325,8 @@ class ReportPanel(QWidget):
             item = QListWidgetItem(f"{SEVERITY_MARKER[finding.severity]}  {finding.message}")
             item.setData(Qt.ItemDataRole.UserRole, finding)
             item.setForeground(QColor(SEVERITY_ENCODING[finding.severity].colour))
-            # §22.5: where a number comes from is part of the finding, never left
-            # to the reader to assume — an estimate is not a measurement.
+            # §22.5: woher eine Zahl kommt, ist Teil des Befunds und wird nie dem
+            # Leser zum Annehmen überlassen — eine Schätzung ist keine Messung.
             details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]
             details.extend(f"{key}: {value}" for key, value in finding.values.items())
             item.setToolTip(" · ".join(details))
@@ -323,8 +338,10 @@ class ReportPanel(QWidget):
         )
 
     def add_findings(self, findings: list[Finding]) -> None:
-        """Append findings that did not come from the evaluation — the G-code
-        cross-check for instance (§28.2). They keep their own origin (§22.5)."""
+        """Hängt Befunde an, die nicht aus der Auswertung kamen — die
+        G-Code-Gegenprobe etwa (§28.2). Sie behalten ihre eigene
+        Herkunft (§22.5).
+        """
         for finding in findings:
             item = QListWidgetItem(f"{SEVERITY_MARKER[finding.severity]}  {finding.message}")
             item.setData(Qt.ItemDataRole.UserRole, finding)
@@ -346,7 +363,9 @@ class ReportPanel(QWidget):
 
 
 class ChatPlaceholder(QWidget):
-    """Without an LLM key everything but the chat works — one hint, no nagging (§2.3)."""
+    """Ohne LLM-Schlüssel funktioniert alles außer dem Chat — ein Hinweis,
+    kein Nörgeln (§2.3).
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -366,7 +385,7 @@ class ChatPlaceholder(QWidget):
 
 
 class MeasurementLabel(QLabel):
-    """Dimensions of the selection for the status bar (§2.5)."""
+    """Maße der Auswahl für die Statusleiste (§2.5)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -386,7 +405,9 @@ class MeasurementLabel(QLabel):
 
 
 def collapsible(title: str, content: QWidget) -> QWidget:
-    """A section with a heading — three sections, not three windows (§2.5)."""
+    """Ein Abschnitt mit Überschrift — drei Abschnitte, keine drei
+    Fenster (§2.5).
+    """
     wrapper = QWidget()
     heading = QLabel(title, wrapper)
     heading.setStyleSheet("font-weight: 600;")
@@ -404,7 +425,7 @@ def collapsible(title: str, content: QWidget) -> QWidget:
 
 
 def describe_selection(result: EvaluationResult | None, object_id: ObjectId | None) -> Any:
-    """Name, size and volume of the selected object, or None."""
+    """Name, Größe und Volumen des gewählten Objekts, oder None."""
     if result is None or object_id is None:
         return None
     entry = result.scene.objects.get(object_id)

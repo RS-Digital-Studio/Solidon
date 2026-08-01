@@ -1,11 +1,11 @@
-"""The viewport (Bauplan §18, §2.9).
+"""Der Viewport (Bauplan §18, §2.9).
 
-Not a display window but the inspection tool: build plate and build volume at
-real size, back faces coloured so inverted normals stand out, and three
-navigation schemes so nobody has to unlearn their slicer.
+Kein Anzeigefenster, sondern das Prüfwerkzeug: Druckplatte und Bauraum in
+echter Größe, Rückseiten eingefärbt, damit umgedrehte Normalen auffallen, und
+drei Navigationsschemata, damit niemand seinen Slicer verlernen muss.
 
-The 3D view needs VTK. If that cannot start on a machine, the window still opens
-and says so — everything except the view keeps working.
+Die 3D-Ansicht braucht VTK. Lässt sich das auf einer Maschine nicht starten,
+öffnet das Fenster trotzdem und sagt es — alles außer der Ansicht läuft weiter.
 """
 
 from __future__ import annotations
@@ -71,11 +71,11 @@ HEADLESS_VARIABLE = f"{ENVIRONMENT_PREFIX}_NO_VIEWPORT"
 
 
 def _available() -> bool:
-    """Whether a 3D view can be built here.
+    """Ob sich hier eine 3D-Ansicht bauen lässt.
 
-    VTK needs a real OpenGL context; on the offscreen Qt platform it would not
-    fail politely but take the process with it. So the check happens before,
-    not in an except branch.
+    VTK braucht einen echten OpenGL-Kontext; auf der Offscreen-Qt-Plattform
+    scheiterte es nicht höflich, sondern nähme den Prozess mit. Also passiert
+    die Prüfung davor und nicht in einem except-Zweig.
     """
     if os.environ.get(HEADLESS_VARIABLE):
         return False
@@ -102,7 +102,7 @@ FEATURE_LABEL_COLOUR = "#cfe3f5"
 
 
 class Viewport(QWidget):
-    """The 3D view, or a plain hint when VTK is not available."""
+    """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn VTK fehlt."""
 
     measurementTaken = Signal(object)
     """A finished measurement — carries a ``Measurement``."""
@@ -176,7 +176,7 @@ class Viewport(QWidget):
     # --- scene ------------------------------------------------------------------
 
     def show_scene(self, result: EvaluationResult | None) -> None:
-        """Rebuild the view from the last complete evaluation (§15.3)."""
+        """Baut die Ansicht aus der letzten vollständigen Auswertung neu (§15.3)."""
         self._result = result
         if self.plotter is None:
             return
@@ -235,26 +235,30 @@ class Viewport(QWidget):
         self.plotter.render()
 
     def set_plate(self, plate: int) -> None:
-        """Show one build plate, or all of them (§25).
+        """Zeigt eine Druckplatte, oder alle (§25).
 
-        A filter on the picture, not on the scene: the objects of the other
-        plates are still there, still exported and still in the report.
+        Ein Filter auf dem Bild, nicht auf der Szene: die Objekte der anderen
+        Platten sind weiter da, werden weiter exportiert und stehen weiter im
+        Prüfbericht.
         """
         self._plate = plate
         self.show_scene(self._result)
 
     def set_explosion(self, factor: float) -> None:
-        """Draw the parts apart, for looking at a split (§18.8).
+        """Zeichnet die Teile auseinander, um eine Teilung anzusehen (§18.8).
 
-        Nothing is moved: the offset is added to the points on the way into the
-        view and never reaches the mesh. A part that is exploded is still where
-        the stack says it is, and the export says so too.
+        Bewegt wird nichts: der Versatz kommt auf dem Weg in die Ansicht zu den
+        Punkten hinzu und erreicht das Netz nie. Ein auseinandergezogenes Teil
+        ist immer noch dort, wo der Stapel es sagt, und der Export sagt das
+        auch.
         """
         self._explosion = max(0.0, factor)
         self.show_scene(self._result)
 
     def _exploded(self, entry: Any, result: EvaluationResult) -> Any:
-        """How far this body is drawn from where it sits, outward from the middle."""
+        """Wie weit dieser Körper von seinem Sitz weg gezeichnet wird, von der
+        Mitte nach außen.
+        """
         import numpy as np
 
         if self._explosion <= 0.0 or len(result.scene.objects) < 2:
@@ -276,11 +280,8 @@ class Viewport(QWidget):
         return away / length * length * self._explosion
 
     def _scalars_for(self, object_id: ObjectId, faces: int) -> Any:
-        """Map values for this body, if there are any that still fit it.
-
-        A section cut changes the triangle count, so the map no longer lines up
-        with the geometry on screen. Showing it anyway would colour the wrong
-        triangles — the map steps aside until the cut is gone.
+        """Kartenwerte für diesen Körper, falls es welche gibt, die noch zu ihm
+        passen.
         """
         if self._map is None or self._map_object != object_id:
             return None
@@ -880,7 +881,7 @@ class Viewport(QWidget):
 
 
 def _InteractorStyle(plotter: Any, scheme: NavigationScheme) -> Any:  # noqa: N802
-    """Build a VTK interactor style with the buttons of the chosen scheme."""
+    """Baut einen VTK-Interaktionsstil mit den Tasten des gewählten Schemas."""
     from vtkmodules.vtkInteractionStyle import vtkInteractorStyleTrackballCamera
 
     base = vtkInteractorStyleTrackballCamera

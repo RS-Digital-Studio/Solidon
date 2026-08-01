@@ -1,8 +1,8 @@
-"""The command palette (Bauplan §2.6, §19.2).
+"""Die Befehlspalette (Bauplan §2.6, §19.2).
 
-The universal way in: everything from the registry, reachable by typing. The
-shortcut is shown next to each entry — that is how the shortcuts get learned,
-without anyone reading a table of them.
+Der universelle Weg hinein: alles aus dem Register, per Tippen erreichbar. Das
+Kürzel steht neben jedem Eintrag — so lernt man die Kürzel, ohne dass jemand
+eine Tabelle davon liest.
 """
 
 from __future__ import annotations
@@ -25,7 +25,9 @@ from app.i18n import tr
 
 
 def matches(entry: PaletteEntry, query: str) -> bool:
-    """Substring search over title, name and documentation, accents and all."""
+    """Teilstring-Suche über Titel, Name und Dokumentation, Akzente
+    inbegriffen.
+    """
     if not query:
         return True
     haystack = f"{entry.title} {entry.name} {entry.doc}".casefold()
@@ -70,8 +72,9 @@ class CommandPalette(QDialog):
             self.list.setCurrentRow(0)
 
     def chosen(self) -> str | None:
-        """Name of the picked operation, or None."""
-        # The stubs promise an item; an empty list returns None all the same.
+        """Name der gewählten Operation, oder None."""
+        # Die Stubs versprechen ein Element; eine leere Liste gibt trotzdem None
+        # zurück.
         item = cast(QListWidgetItem | None, self.list.currentItem())
         if item is None:
             return None
@@ -79,7 +82,9 @@ class CommandPalette(QDialog):
         return value
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 - Qt name
-        """Arrow keys steer the list even while the cursor is in the search field."""
+        """Die Pfeiltasten steuern die Liste, auch während der Cursor im Suchfeld
+        steht.
+        """
         key = Qt.Key(event.key())
         if key in (Qt.Key.Key_Down, Qt.Key.Key_Up):
             step = 1 if key == Qt.Key.Key_Down else -1

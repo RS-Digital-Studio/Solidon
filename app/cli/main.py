@@ -1,13 +1,13 @@
-"""Command line entry point (Bauplan §10, ROADMAP P0).
+"""Der Kommandozeilen-Einstieg (Bauplan §10, ROADMAP P0).
 
-The commands are not written out here: they come from the operation registry,
-the same source the menu, the palette and the agent tool schema come from. An
-operation that exists is reachable from the command line the moment it is
-declared.
+Die Befehle stehen hier nicht ausgeschrieben: sie kommen aus dem
+Operationsregister — derselben Quelle, aus der Menü, Palette und
+Agenten-Werkzeugschema kommen. Eine Operation, die es gibt, ist von der
+Kommandozeile aus erreichbar, sobald sie deklariert ist.
 
-``ask`` becomes a numbered question on the terminal, ``progress`` a single line
-that overwrites itself — the same contract the surface implements with a dialog
-and a status bar.
+``ask`` wird eine nummerierte Frage im Terminal, ``progress`` eine einzelne
+Zeile, die sich selbst überschreibt — derselbe Vertrag, den die Oberfläche mit
+einem Dialog und einer Statusleiste umsetzt.
 """
 
 from __future__ import annotations
@@ -49,10 +49,11 @@ _PARAM_TYPES: dict[str, Any] = {"float": float, "int": int, "str": str, "enum": 
 
 
 class TerminalProgress:
-    """One line that overwrites itself, and nothing at all below 0.2 s (§2.8).
+    """Eine Zeile, die sich selbst überschreibt, und unter 0,2 s gar
+    nichts (§2.8).
 
-    Short runs stay quiet: a flicker of progress for something that took a tenth
-    of a second is noise, not feedback.
+    Kurze Läufe bleiben still: ein Aufblitzen von Fortschritt für etwas, das
+    eine Zehntelsekunde gedauert hat, ist Rauschen, keine Rückmeldung.
     """
 
     def __init__(self, delay: float = 0.2) -> None:
@@ -79,7 +80,9 @@ class TerminalProgress:
 
 
 def terminal_ask(question: str, choices: list[str]) -> str:
-    """Ambiguity becomes a numbered question — never a guess (Leitprinzip 6)."""
+    """Mehrdeutigkeit wird eine nummerierte Frage — nie eine
+    Vermutung (Leitprinzip 6).
+    """
     print(f"\n{question}")
     for index, choice in enumerate(choices, start=1):
         print(f"  {index}) {choice}")
@@ -117,7 +120,7 @@ def run_evaluation(project: Project, path: Path, quiet: bool = False) -> Any:
 
 def print_findings(findings: Any) -> None:
     for finding in findings:
-        # Never colour alone (§19.1) — on a terminal the marker carries the meaning.
+        # Nie Farbe allein (§19.1) — im Terminal trägt das Zeichen die Bedeutung.
         marker = {"info": "-", "warning": "!", "error": "X"}[finding.severity]
         print(f"  {marker} {finding.message}")
 
@@ -223,8 +226,8 @@ def command_import(args: argparse.Namespace) -> int:
     )
     project.sources[source_id] = payload
 
-    # Same as the window does: a 3MF assembly needs its body count before the
-    # stack hands out ids (§11).
+    # Wie im Fenster: eine 3MF-Baugruppe braucht ihre Körperzahl, bevor der
+    # Stapel die IDs vergibt (§11).
     parts = threemf.count_objects(payload) if incoming.suffix.lower() == ".3mf" else 1
     history = History(project.document)
     history.apply(
@@ -245,7 +248,9 @@ def command_import(args: argparse.Namespace) -> int:
 
 
 def _chosen_unit(payload: bytes, incoming: Path, requested: str) -> str:
-    """Ask before the operation is written, so the answer is stored with it (§17.1)."""
+    """Fragt, bevor die Operation geschrieben wird, damit die Antwort mit ihr
+    gespeichert wird (§17.1).
+    """
     if requested != "auto":
         return requested
     guess = detect_unit(read_mesh(payload, incoming.suffix).bounds.diagonal)
@@ -269,8 +274,8 @@ def command_run(args: argparse.Namespace) -> int:
     }
     inputs = tuple(args.on or ())
     if spec.takes_whole_scene and not inputs:
-        # Arranging and the collision check work on the whole scene (§25);
-        # without ``--on`` they would otherwise run on nothing.
+        # Anordnen und die Kollisionsprüfung arbeiten auf der ganzen Szene (§25);
+        # ohne ``--on`` liefen sie sonst auf nichts.
         inputs = tuple(run_evaluation(project, path, quiet=True).scene.objects)
 
     history = History(project.document)
@@ -301,11 +306,12 @@ def command_undo(args: argparse.Namespace) -> int:
 
 
 def command_export(args: argparse.Namespace) -> int:
-    """Write the scene out as printable files (§29).
+    """Schreibt die Szene als druckbare Dateien heraus (§29).
 
-    The command line could load a model, repair it and describe it, and then had
-    no way to hand the result back — the writer existed and nothing reached it.
-    A repair that cannot leave the project is a repair nobody can print.
+    Die Kommandozeile konnte ein Modell laden, reparieren und beschreiben — und
+    hatte dann keinen Weg, das Ergebnis zurückzugeben: den Writer gab es, und
+    nichts erreichte ihn. Eine Reparatur, die das Projekt nicht verlassen kann,
+    ist eine Reparatur, die niemand drucken kann.
     """
     path = Path(args.path)
     project = open_project(path)
@@ -329,8 +335,9 @@ def command_export(args: argparse.Namespace) -> int:
         scheme=args.scheme,
         sources=project.document.sources,
     )
-    # The check speaks before the files exist, so a warning is a warning about
-    # what is being written and not about what was written (§29).
+    # Die Prüfung spricht, bevor die Dateien existieren — eine Warnung ist
+    # also eine Warnung über das, was geschrieben wird, nicht über das, was
+    # geschrieben wurde (§29).
     print_findings(plan.findings)
 
     written = write_plan(plan, Path(args.directory), args.export_format)
@@ -423,18 +430,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _speak_utf8() -> None:
-    """Let the console take every name a file can have.
+    """Lässt die Konsole jeden Namen annehmen, den eine Datei haben kann.
 
-    A Windows console encodes to cp1252, and ``print`` on a name outside it
-    raises rather than writing something. That is not a corner case: the first
-    real model handed to this command line was called ``埃菲尔铁塔18cm.stl``, the
-    import ran through, and the run ended in an encoding traceback on the line
-    that reports success. German umlauts survive cp1252, which is why nothing
-    here noticed for a whole phase.
+    Eine Windows-Konsole kodiert nach cp1252, und ``print`` auf einem Namen
+    außerhalb davon wirft, statt etwas zu schreiben. Das ist kein Randfall: das
+    erste echte Modell, das dieser Kommandozeile übergeben wurde, hieß
+    ``埃菲尔铁塔18cm.stl``, der Import lief durch, und der Lauf endete in einem
+    Encoding-Traceback auf der Zeile, die den Erfolg meldet. Deutsche Umlaute
+    überleben cp1252 — darum ist es hier eine ganze Phase lang niemandem
+    aufgefallen.
 
-    ``backslashreplace`` rather than plain UTF-8: a console that cannot show the
-    characters then prints their escapes instead of failing, and the name stays
-    recognisable either way.
+    ``backslashreplace`` statt schlichtem UTF-8: eine Konsole, die die Zeichen
+    nicht darstellen kann, druckt dann ihre Escapes, statt zu scheitern, und
+    der Name bleibt so oder so wiedererkennbar.
     """
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
@@ -455,7 +463,7 @@ def main(argv: list[str] | None = None) -> int:
         print(tr("Abgebrochen."))
         return 130
     except AppError as error:
-        # §2.7: what did not work, why, and what is possible now.
+        # §2.7: was nicht ging, warum, und was jetzt möglich ist.
         print(f"\n{error.title}", file=sys.stderr)
         if error.detail:
             print(f"{error.detail}", file=sys.stderr)

@@ -1,12 +1,12 @@
-"""The brush bar (Bauplan §20, "Bemalen").
+"""Die Pinselleiste (Bauplan §20, „Bemalen").
 
-Switch it on, pick a slot and a radius, click on the model. Every click is one
-operation in the stack, which is what makes painting undoable one stroke at a
-time — and what keeps the picture and the file the same thing.
+Einschalten, einen Slot und einen Radius wählen, aufs Modell klicken. Jeder
+Klick ist eine Operation im Stapel — genau das macht das Malen Strich für
+Strich rücknehmbar, und es hält Bild und Datei dieselbe Sache.
 
-Off by default, and it says so: a view that silently paints when somebody meant
-to turn the model is the kind of surprise an undo fixes and trust does not
-survive.
+Per Vorgabe aus, und sie sagt das: eine Ansicht, die still malt, wenn jemand
+das Modell drehen wollte, ist die Art Überraschung, die ein Undo behebt und
+Vertrauen nicht übersteht.
 """
 
 from __future__ import annotations
@@ -25,12 +25,13 @@ from app.core.geom.paint import EDGE_ANGLE, MAX_SLOTS
 from app.core.units import DISPLAY_UNITS
 from app.i18n import tr
 
-#: The unit of an angle, which is the same in every language this ships in.
+#: Die Einheit eines Winkels — in jeder Sprache, die dieses Programm
+#: mitbringt, dieselbe.
 DEGREE = "°"
 
 
 class PaintBar(QWidget):
-    """Slot, radius and edge angle for the brush (§20)."""
+    """Slot, Radius und Kantenwinkel für den Pinsel (§20)."""
 
     paintingToggled = Signal(bool)
 
@@ -74,7 +75,7 @@ class PaintBar(QWidget):
         return bool(self.active.isChecked())
 
     def values(self) -> dict[str, float | int]:
-        """What one stroke is made of."""
+        """Woraus ein Strich besteht."""
         return {
             "slot": int(self.slot.value()),
             "radius": float(self.radius.value()),
@@ -82,6 +83,6 @@ class PaintBar(QWidget):
         }
 
     def stop(self) -> None:
-        """Switch off — used when the scene changes under the brush."""
+        """Ausschalten — benutzt, wenn sich die Szene unter dem Pinsel ändert."""
         if self.active.isChecked():
             self.active.setChecked(False)

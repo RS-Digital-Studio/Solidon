@@ -1,16 +1,16 @@
-"""Operation dialogs, generated from the parameter schema (Bauplan §10, §2.4).
+"""Operationsdialoge, erzeugt aus dem Parameterschema (Bauplan §10, §2.4).
 
-Graded depth: the two or three values people actually change are on the front,
-tolerances and resolutions sit behind "Weitere Einstellungen". Which is which
-comes from ``placement`` in the schema, so a dialog cannot drift away from the
-operation it belongs to.
+Gestufte Tiefe: die zwei bis drei Werte, die Leute wirklich ändern, stehen
+vorn; Toleranzen und Auflösungen sitzen hinter „Weitere Einstellungen". Was
+wohin gehört, kommt aus ``placement`` im Schema — ein Dialog kann also nicht
+von der Operation abdriften, zu der er gehört.
 
-The dialog can be opened on values instead of on the defaults, and that one
-addition serves two things that look different and are the same: a clicked face
-filling in where the operation goes (§18.5), and an operation of the stack being
-opened again to correct it (§15.4). Both are "here are the values, ask about
-them" — a second dialog for the second case would be a second place to forget a
-parameter in.
+Der Dialog lässt sich auf Werten statt auf den Vorgaben öffnen, und diese eine
+Ergänzung bedient zwei Dinge, die verschieden aussehen und dasselbe sind: eine
+angeklickte Fläche, die einträgt, wohin die Operation gehört (§18.5), und eine
+Operation des Stapels, die zum Korrigieren wieder geöffnet wird (§15.4). Beides
+ist „hier sind die Werte, frag danach" — ein zweiter Dialog für den zweiten
+Fall wäre ein zweiter Ort, an dem sich ein Parameter vergessen lässt.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ from app.i18n import tr
 
 
 class OperationDialog(QDialog):
-    """One dialog for one operation, built from its schema."""
+    """Ein Dialog für eine Operation, gebaut aus ihrem Schema."""
 
     def __init__(
         self,
@@ -63,8 +63,8 @@ class OperationDialog(QDialog):
             label = f"{entry.title}"
             if entry.unit:
                 label = f"{label} [{entry.unit}]"
-            # A value that was filled in belongs in front of the user even when
-            # the schema files it away: it is the one that was just decided.
+            # Ein eingetragener Wert gehört vor den Nutzer, auch wenn das Schema ihn
+            # nach hinten legt: er ist der, der gerade entschieden wurde.
             target = front if entry.placement == "front" or entry.name in given else advanced
             target.addRow(label, editor)
             if entry.doc:
@@ -92,7 +92,9 @@ class OperationDialog(QDialog):
         layout.addWidget(buttons)
 
     def _editor_for(self, entry: ParamSpec, objects: list[str], given: Any = None) -> QWidget:
-        """One editor. ``given`` wins over the schema's default where it is set."""
+        """Ein Editor. ``given`` schlägt die Vorgabe des Schemas, wo es gesetzt
+        ist.
+        """
         start = entry.default if given is None else given
         if entry.kind == "bool":
             editor = QCheckBox(self)
@@ -132,7 +134,7 @@ class OperationDialog(QDialog):
         return line
 
     def values(self) -> dict[str, Any]:
-        """What the user entered, ready for the operation parameters."""
+        """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""
         collected: dict[str, Any] = {}
         for entry in self.spec.params.spec():
             editor = self._editors[entry.name]

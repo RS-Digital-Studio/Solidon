@@ -1,8 +1,8 @@
-"""The first five minutes (Bauplan §2.3).
+"""Die ersten fünf Minuten (Bauplan §2.3).
 
-No empty start screen: recent projects, the example projects once they exist,
-and a large drop area. Dragging and dropping works here as it does on the window,
-the viewport and the object tree.
+Kein leerer Startbildschirm: zuletzt geöffnete Projekte, die Beispielprojekte,
+sobald es sie gibt, und eine große Ablagefläche. Ziehen und Fallenlassen
+funktioniert hier wie am Fenster, am Viewport und am Objektbaum.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from app.i18n import tr
 
 
 class DropArea(QFrame):
-    """The large drop area. Accepts projects and models alike."""
+    """Die große Ablagefläche. Nimmt Projekte und Modelle gleichermaßen."""
 
     fileDropped = Signal(Path)
 
@@ -64,7 +64,9 @@ class DropArea(QFrame):
 
 
 def accepted_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
-    """The first dropped file this application can do something with."""
+    """Die erste fallengelassene Datei, mit der diese Anwendung etwas
+    anfangen kann.
+    """
     data = event.mimeData()
     if not data.hasUrls():
         return None
@@ -85,7 +87,7 @@ def accepted_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
 
 
 class StartScreen(QWidget):
-    """What is shown before a project is open."""
+    """Was gezeigt wird, bevor ein Projekt offen ist."""
 
     openRequested = Signal(Path)
     newRequested = Signal()

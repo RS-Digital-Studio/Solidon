@@ -1,12 +1,12 @@
-"""Explosion view and build plate selector (Bauplan §18.8, §25).
+"""Explosionsansicht und Plattenwähler (Bauplan §18.8, §25).
 
-Two controls on one bar, and both only appear when there is something for them
-to do: the slider from two bodies on, the plate selector from two plates on. A
-control that is always visible and does nothing most of the time teaches people
-to ignore it.
+Zwei Bedienelemente auf einer Leiste, und beide erscheinen nur, wenn es für sie
+etwas zu tun gibt: der Schieber ab zwei Körpern, der Plattenwähler ab zwei
+Platten. Ein Element, das immer sichtbar ist und meistens nichts tut, bringt
+Leuten bei, es zu ignorieren.
 
-Both change the picture and nothing else — the stack, the export and the report
-see every part where it is, on the plate it belongs to.
+Beide ändern das Bild und sonst nichts — Stapel, Export und Prüfbericht sehen
+jedes Teil dort, wo es ist, auf der Platte, auf die es gehört.
 """
 
 from __future__ import annotations
@@ -16,15 +16,18 @@ from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QSlid
 
 from app.i18n import tr
 
-#: The slider counts in tenths, so 20 means "twice the distance from the middle".
+#: Der Schieber zählt in Zehnteln, 20 heißt also „doppelter Abstand zur
+#: Mitte".
 MAX_STEPS = 20
 
-#: What the selector calls "no filter".
+#: Wie der Wähler „kein Filter" nennt.
 ALL_PLATES = -1
 
 
 class ExplodeBar(QWidget):
-    """Pull the parts of a split apart, and pick a build plate to look at."""
+    """Zieht die Teile einer Teilung auseinander und wählt eine Druckplatte
+    zum Ansehen.
+    """
 
     factorChanged = Signal(float)
     plateChanged = Signal(int)
@@ -61,12 +64,14 @@ class ExplodeBar(QWidget):
 
     @property
     def plate(self) -> int:
-        """The plate being shown, or ``ALL_PLATES``."""
+        """Die Platte, die gezeigt wird, oder ``ALL_PLATES``."""
         value = self.plates.currentData()
         return ALL_PLATES if value is None else int(value)
 
     def show_for(self, objects: int, plates: int = 1) -> None:
-        """Visible from two bodies on; folded back together when it disappears."""
+        """Sichtbar ab zwei Körpern; klappt wieder zusammen, wenn sie
+        verschwindet.
+        """
         wanted = objects > 1
         if not wanted and self.slider.value():
             self.slider.setValue(0)
@@ -74,7 +79,7 @@ class ExplodeBar(QWidget):
         self.setVisible(wanted)
 
     def _show_plates(self, plates: int) -> None:
-        """Rebuild the selector, keeping the plate that was being looked at."""
+        """Baut den Wähler neu und behält die Platte, die betrachtet wurde."""
         previous = self.plate
         self.plates.blockSignals(True)
         self.plates.clear()

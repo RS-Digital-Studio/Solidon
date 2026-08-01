@@ -1,13 +1,14 @@
-"""The variant generator, with a way in (Bauplan §28.3, §25).
+"""Der Variantengenerator, mit einem Weg hinein (Bauplan §28.3, §25).
 
-The same stack, computed a few times with one number stepped, arranged side by
-side on one plate: that is how a tolerance gets measured instead of guessed —
-print the row, take the one that fits, read its value off the label.
+Derselbe Stapel, ein paar Mal mit einer gestuften Zahl gerechnet, nebeneinander
+auf einer Platte angeordnet: so wird eine Toleranz gemessen statt geraten —
+die Reihe drucken, die nehmen, die passt, ihren Wert von der Beschriftung
+ablesen.
 
-The variants are deliberately **not** scene objects. The scene is what the stack
-produces (§15.1), and four copies of it are not four objects — they are one
-print job. So they are built, shown as a count, and written out; the project
-stays as it was.
+Die Varianten sind mit Absicht **keine** Szenenobjekte. Die Szene ist, was der
+Stapel erzeugt (§15.1), und vier Kopien davon sind keine vier Objekte — sie
+sind ein Druckauftrag. Also werden sie gebaut, als Anzahl gezeigt und
+herausgeschrieben; das Projekt bleibt, wie es war.
 """
 
 from __future__ import annotations
@@ -41,7 +42,9 @@ _log = get_logger(__name__)
 
 
 class VariantsDialog(QDialog):
-    """Pick a parameter and a step, get a plate full of variants."""
+    """Einen Parameter und eine Schrittweite wählen, eine Platte voller
+    Varianten bekommen.
+    """
 
     def __init__(self, session: Session, parent: QWidget | None = None) -> None:
         super().__init__(parent)

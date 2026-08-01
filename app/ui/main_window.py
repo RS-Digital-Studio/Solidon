@@ -1,12 +1,12 @@
-"""The main window (Bauplan §2.5).
+"""Das Hauptfenster (Bauplan §2.5).
 
-Three visible zones at most: the panels on the left, the viewport in the middle,
-report or chat on the right — and the right side folds away entirely with one
-key. There are no modes; there is one state, and that is the scene.
+Höchstens drei sichtbare Zonen: die Panels links, der Viewport in der Mitte,
+Prüfbericht oder Chat rechts — und die rechte Seite klappt mit einer Taste ganz
+weg. Betriebsarten gibt es nicht; es gibt einen Zustand, und der ist die Szene.
 
-The menu is not written out here either: it is built from the registry, so an
-operation appears in the menu, in the palette and on the command line from the
-moment it is declared (§10).
+Das Menü steht auch hier nicht ausgeschrieben: es wird aus dem Register gebaut
+— eine Operation erscheint also im Menü, in der Palette und auf der
+Kommandozeile, sobald sie deklariert ist (§10).
 """
 
 from __future__ import annotations
@@ -97,10 +97,11 @@ GCODE_FILTER = "G-Code (*.gcode *.gco *.g *.nc)"
 
 
 class _MapWorker(QThread):
-    """One analysis map, off the interface thread (§18.9).
+    """Eine Analysekarte, abseits des Oberflächen-Threads (§18.9).
 
-    Seconds on a large body — long enough that a window computing it in the
-    event loop stops repainting, which reads as a crash rather than as work.
+    Sekunden an einem großen Körper — lang genug, dass ein Fenster, das sie in
+    der Ereignisschleife rechnet, aufhört zu zeichnen, und das liest sich wie
+    ein Absturz statt wie Arbeit.
     """
 
     done = Signal(object)
@@ -119,18 +120,19 @@ class _MapWorker(QThread):
                 maps.build(self._kind, self._entry, profile=self._profile, scene=self._scene)
             )
         except maps.MapTooLarge:
-            # §31: a map that would take minutes says no instead of freezing.
+            # §31: eine Karte, die Minuten bräuchte, sagt Nein, statt einzufrieren.
             self.tooLarge.emit()
 
 
 def inputs_for(
     spec: OperationSpec, objects: list[ObjectId], selected: ObjectId | None
 ) -> tuple[ObjectId, ...]:
-    """Which objects an operation is applied to (§10, §25).
+    """Auf welche Objekte eine Operation angewandt wird (§10, §25).
 
-    Its own function, not two lines inside the menu handler: the rule is the
-    same for the command line and the agent, and an operation that works on the
-    whole scene but is handed nothing runs on nothing and looks broken.
+    Eine eigene Funktion, keine zwei Zeilen im Menü-Handler: die Regel ist
+    dieselbe für Kommandozeile und Agent, und eine Operation, die auf der
+    ganzen Szene arbeitet und nichts bekommt, läuft auf nichts und sieht kaputt
+    aus.
     """
     if spec.takes_whole_scene:
         return tuple(objects)
@@ -138,7 +140,7 @@ def inputs_for(
 
 
 class MainWindow(QMainWindow):
-    """Window, menus and the wiring between session and panels."""
+    """Fenster, Menüs und die Verdrahtung zwischen Sitzung und Panels."""
 
     projectOpened = Signal(Path)
 
@@ -662,7 +664,7 @@ class MainWindow(QMainWindow):
             self.open_path(Path(name))
 
     def open_path(self, path: Path) -> None:
-        """One entry point for menu, recent list and drag and drop."""
+        """Ein Einstiegspunkt für Menü, Zuletzt-Liste und Drag and Drop."""
         try:
             if path.suffix.lower() == PROJECT_SUFFIX:
                 self.session.open_project(path)
@@ -707,14 +709,16 @@ class MainWindow(QMainWindow):
             self.session.import_model(Path(name))
 
     def action_generate(self) -> None:
-        """Way 3 (§2.2): a sentence or a picture becomes a body in the scene."""
+        """Weg 3 (§2.2): ein Satz oder ein Bild wird ein Körper in der Szene."""
         dialog = GenerateDialog(parent=self)
         if dialog.exec() != QDialog.DialogCode.Accepted or dialog.result_mesh is None:
             return
         self.session.add_generated(dialog.result_mesh)
 
     def action_auto_split(self) -> None:
-        """§25: divide the selected part until it fits, and pin the seams (§14)."""
+        """§25: das gewählte Teil teilen, bis es passt, und die Nähte
+        verstiften (§14).
+        """
         object_id = self.object_tree.selected()
         if not object_id:
             QMessageBox.information(
@@ -752,11 +756,13 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
 
     def action_variants(self) -> None:
-        """§28.3: the same stack with one number stepped, side by side on a plate."""
+        """§28.3: derselbe Stapel mit einer gestuften Zahl, nebeneinander auf
+        einer Platte.
+        """
         VariantsDialog(self.session, self).exec()
 
     def action_install_extras(self) -> None:
-        """§36: what is missing, what it is for, and a button that fetches it."""
+        """§36: was fehlt, wofür es da ist, und ein Knopf, der es holt."""
         InstallDialog(self).exec()
 
     def action_manual(self) -> None:
@@ -779,10 +785,11 @@ class MainWindow(QMainWindow):
         AboutDialog(self).exec()
 
     def action_check_gcode(self) -> None:
-        """§28.1: read a sliced file back and hold it against the estimate.
+        """§28.1: eine geslicete Datei zurücklesen und gegen die Schätzung
+        halten.
 
-        The measured numbers land in the report marked as measured; the internal
-        estimate stays where it was. Nothing is silently replaced (§22.5).
+        Die gemessenen Zahlen landen als gemessen markiert im Prüfbericht; die
+        interne Schätzung bleibt, wo sie war. Nichts wird still ersetzt (§22.5).
         """
         name, _filter = QFileDialog.getOpenFileName(
             self, tr("G-Code gegenprüfen"), "", GCODE_FILTER
@@ -815,7 +822,9 @@ class MainWindow(QMainWindow):
         )
 
     def action_catalog(self) -> None:
-        """§24.3: the library one can see. Choosing a part runs its operation."""
+        """§24.3: die Bibliothek, die man sehen kann. Einen Baustein zu wählen
+        führt seine Operation aus.
+        """
         catalog = PartCatalog(self)
         if catalog.exec() != PartCatalog.DialogCode.Accepted:
             return
@@ -824,7 +833,7 @@ class MainWindow(QMainWindow):
             self.run_operation(REGISTRY.get(part_op_name(name)))
 
     def action_report(self) -> None:
-        """§37.2: a report can be made without anything having gone wrong."""
+        """§37.2: ein Bericht lässt sich erstellen, ohne dass etwas schiefging."""
         dialog = ErrorReportDialog(
             summary=tr("Vom Nutzer angelegter Bericht."),
             project=self.session.path,
@@ -833,7 +842,7 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def action_calibrate(self) -> None:
-        """§28.3: measured values into the material profile, and everything follows."""
+        """§28.3: gemessene Werte ins Materialprofil, und alles folgt."""
         material = self.session.project.document.material or self.session.profile.material.id
         dialog = CalibrationDialog(material, self)
         if dialog.exec() != CalibrationDialog.DialogCode.Accepted:
@@ -846,11 +855,13 @@ class MainWindow(QMainWindow):
         self.status_message.setText(
             f"{tr('Kalibriert')}: {calibrated.id} · {tr('Spiel')} {calibrated.clearance:.2f} mm"
         )
-        # Tolerances are references (§12), so the scene has to be built again.
+        # Toleranzen sind Verweise (§12), die Szene muss also neu gebaut werden.
         self.session.evaluate_async()
 
     def action_llm_key(self) -> None:
-        """§27: the user's own key, into the keychain, and the chat wakes up."""
+        """§27: der eigene Schlüssel des Nutzers, in den Schlüsselbund, und der
+        Chat wacht auf.
+        """
         if KeyDialog(parent=self).exec() != KeyDialog.DialogCode.Accepted:
             return
         self.session.set_agent_backend(None)
@@ -860,7 +871,9 @@ class MainWindow(QMainWindow):
         )
 
     def action_command_palette(self) -> None:
-        """One key, everything from the registry — and the shortcuts get learned (§2.6)."""
+        """Eine Taste, alles aus dem Register — und die Kürzel lernen sich
+        nebenbei (§2.6).
+        """
         palette = CommandPalette(parent=self)
         if palette.exec() != CommandPalette.DialogCode.Accepted:
             return
@@ -869,7 +882,9 @@ class MainWindow(QMainWindow):
             self.run_operation(REGISTRY.get(name))
 
     def _on_transform_dragged(self, steps: Any) -> None:
-        """One drag, one transaction — undone in a single step (§18.11, §15.5)."""
+        """Ein Ziehen, eine Transaktion — in einem Schritt zurückgenommen
+        (§18.11, §15.5).
+        """
         selected = self.object_tree.selected()
         if selected is None:
             return
@@ -907,7 +922,9 @@ class MainWindow(QMainWindow):
     # --- analysis maps and layers (§18.4, §18.10) -------------------------------
 
     def _on_map_changed(self, kind: Any) -> None:
-        """Build the chosen map for the selected object and hand it to the view."""
+        """Baut die gewählte Karte für das gewählte Objekt und gibt sie der
+        Ansicht.
+        """
         object_id = self.object_tree.selected()
         if kind is None or object_id is None:
             self.viewport.set_analysis_map(None, None)
@@ -919,11 +936,11 @@ class MainWindow(QMainWindow):
         self._analysis_map(kind, object_id)
 
     def _analysis_map(self, kind: maps.MapKind, object_id: ObjectId) -> None:
-        """§18.9: computed in the background, cached per object and kind.
+        """§18.9: im Hintergrund gerechnet, je Objekt und Art gecacht.
 
-        Seconds on a large body, and a window that stops answering for that long
-        looks broken. A newer request replaces a waiting one — nobody wants the
-        map they clicked away from.
+        Sekunden an einem großen Körper, und ein Fenster, das so lange nicht
+        antwortet, sieht kaputt aus. Eine neuere Anfrage ersetzt eine wartende —
+        niemand will die Karte, von der er weggeklickt hat.
         """
         result = self.session.last_result
         entry = result.scene.objects.get(object_id) if result else None
@@ -959,7 +976,9 @@ class MainWindow(QMainWindow):
         self.analysis_bar.show_legend(analysis)
 
     def _on_layer_changed(self, index: int) -> None:
-        """Scrub through the layer analysis (§18.10) — geometry, not tool paths."""
+        """Durch die Schichtanalyse fahren (§18.10) — Geometrie, keine
+        Werkzeugwege.
+        """
         object_id = self.object_tree.selected()
         if index < 0 or object_id is None:
             self.viewport.set_layer(None)
@@ -989,7 +1008,9 @@ class MainWindow(QMainWindow):
         return self._slice_cache
 
     def _on_finding_activated(self, finding: Finding) -> None:
-        """Click a warning, see the place: the shortest way from problem to spot (§18.4)."""
+        """Eine Warnung anklicken, die Stelle sehen: der kürzeste Weg vom Problem
+        zum Ort (§18.4).
+        """
         object_id = finding.object_id or self.object_tree.selected()
         result = self.session.last_result
         entry = result.scene.objects.get(object_id) if result and object_id else None
@@ -1000,9 +1021,10 @@ class MainWindow(QMainWindow):
         if kind is not None:
             self.analysis_bar.show_map(kind)
             self._analysis_map(kind, entry.id)
-            # The camera goes to the place the finding names. Where the finding
-            # has no place of its own, the map has one — but the map may still
-            # be computing (§18.9), and the view is not held up for it.
+            # Die Kamera geht zu dem Ort, den der Befund nennt. Wo der Befund
+            # keinen eigenen Ort hat, hat die Karte einen — aber die Karte
+            # rechnet vielleicht noch (§18.9), und die Ansicht wird nicht
+            # dafür aufgehalten.
             target = maps.location_of(entry, finding)
             if target is None:
                 cached = self._map_cache.get((entry.id, kind, entry.mesh.triangle_count))
@@ -1016,7 +1038,9 @@ class MainWindow(QMainWindow):
     # --- the agent (§26) --------------------------------------------------------
 
     def _on_request_sent(self, request: str) -> None:
-        """One turn. The selection travels along, or "that hole" means nothing (§26.1)."""
+        """Ein Zug. Die Auswahl reist mit, sonst heißt „dieses Loch"
+        nichts (§26.1).
+        """
         selected = self.object_tree.selected()
         feature = self.object_tree.selected_feature()
         selection = (selected, feature or "") if selected else None
@@ -1027,7 +1051,9 @@ class MainWindow(QMainWindow):
         self.status_message.setText(tr("Der Agent denkt nach.") if busy else "")
 
     def _on_proposal(self, preview: Any) -> None:
-        """A proposal arrived: show what it would change, then let the user decide."""
+        """Ein Vorschlag ist da: zeigen, was er änderte, dann den Nutzer
+        entscheiden lassen.
+        """
         self._proposal = preview
         self.chat.show_proposal(preview)
         if preview.difference is not None:
@@ -1057,7 +1083,9 @@ class MainWindow(QMainWindow):
             self.right.setCurrentWidget(self.chat)
 
     def _on_paint(self, point: Any) -> None:
-        """§20: one click, one operation — so one undo takes one stroke back."""
+        """§20: ein Klick, eine Operation — ein Undo nimmt also einen Strich
+        zurück.
+        """
         object_id = self.object_tree.selected()
         if not object_id:
             self.status_message.setText(tr("Bitte zuerst ein Objekt auswählen."))
@@ -1070,17 +1098,13 @@ class MainWindow(QMainWindow):
         )
 
     def _on_feature_picked(self, feature_id: str) -> None:
-        """A click in the view selects the feature in the tree as well (§18.5)."""
+        """Ein Klick in der Ansicht wählt das Merkmal auch im Baum aus (§18.5)."""
         object_id = self.object_tree.selected()
         if object_id is not None:
             self.object_tree.select_feature(object_id, feature_id)
 
     def _on_feature_selected(self, feature_id: str | None) -> None:
-        """The selected feature, in the view and in the status bar.
-
-        This is where §18.3 gets its "Durchmesser über Feature": the bore is
-        picked, not measured — its diameter comes from the fit that found it.
-        """
+        """Das gewählte Merkmal, in der Ansicht und in der Statusleiste."""
         self.viewport.select_feature(feature_id)
         if feature_id is None:
             return
@@ -1109,7 +1133,9 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
 
     def run_operation(self, spec: OperationSpec) -> None:
-        """Menu entry, dialog, transaction — the same path the agent will take."""
+        """Menüeintrag, Dialog, Transaktion — derselbe Weg, den auch der Agent
+        nehmen wird.
+        """
         if self.session.history.discardable and not confirm_discard(
             self.session.history.discardable, self
         ):
@@ -1145,11 +1171,13 @@ class MainWindow(QMainWindow):
         )
 
     def edit_operation(self, op_id: int) -> None:
-        """Open an operation of the stack again and give it other numbers (§15.4).
+        """Eine Operation des Stapels wieder öffnen und ihr andere Zahlen
+        geben (§15.4).
 
-        The same generated dialog, on the values that are in the file. Before
-        this the only way to a bore two millimetres to the left was to undo and
-        drill again — which is a step to take back, and a position is not.
+        Derselbe erzeugte Dialog, auf den Werten, die in der Datei stehen. Vor
+        dem hier war der einzige Weg zu einer Bohrung zwei Millimeter weiter
+        links, zurückzunehmen und neu zu bohren — und das ist ein Schritt zum
+        Zurücknehmen, eine Position nicht.
         """
         try:
             entry = self.session.history.operation(op_id)
@@ -1167,12 +1195,13 @@ class MainWindow(QMainWindow):
         self.session.change_params(op_id, dialog.values())
 
     def _from_selection(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
-        """What the clicked feature says about where this operation goes (§18.5).
+        """Was das angeklickte Merkmal darüber sagt, wohin diese Operation
+        gehört (§18.5).
 
-        Without this the selection in tree and view was for looking at: the
-        dialog opened on its defaults, and whoever wanted a bore in the face they
-        had just clicked read its coordinates off the analysis card and typed
-        them in.
+        Ohne das war die Auswahl in Baum und Ansicht zum Ansehen da: der Dialog
+        öffnete auf seinen Vorgaben, und wer eine Bohrung in der eben
+        angeklickten Fläche wollte, las ihre Koordinaten von der Analysekarte ab
+        und tippte sie ein.
         """
         feature_id = self.object_tree.selected_feature()
         result = self.session.last_result
@@ -1185,7 +1214,7 @@ class MainWindow(QMainWindow):
     # --- session replies --------------------------------------------------------
 
     def _on_scene(self, result: EvaluationResult) -> None:
-        # New geometry means every map and every slice is out of date.
+        # Neue Geometrie heißt: jede Karte und jeder Schnitt sind veraltet.
         self._map_cache.clear()
         self._slice_key = None
         self.layer_bar.show_result(None)
@@ -1203,7 +1232,8 @@ class MainWindow(QMainWindow):
         self.section_bar.show_capping_state(self.viewport.section_uncapped)
         self.history_panel.show_document(self.session.project.document, result.stopped_at)
         if result.stopped_at is not None:
-            # §15.3: the last complete state stays visible, the status bar says why.
+            # §15.3: der letzte vollständige Zustand bleibt sichtbar, die
+            # Statusleiste sagt warum.
             self.status_message.setText(tr("Die Kette hält an — siehe Prüfbericht."))
             self._focus_report()
         elif self.report.worst_severity(result) in ("warning", "error"):
@@ -1218,7 +1248,8 @@ class MainWindow(QMainWindow):
 
     def _on_progress(self, fraction: float, text: str) -> None:
         self.progress.setValue(int(fraction * 100))
-        # An empty text means the run is over; the line goes away with it (§2.8).
+        # Ein leerer Text heißt, der Lauf ist vorbei; die Zeile geht mit
+        # ihm weg (§2.8).
         self.status_message.setText(text)
 
     def _on_busy(self, busy: bool) -> None:
@@ -1228,7 +1259,7 @@ class MainWindow(QMainWindow):
             self.status_message.setText("")
 
     def _on_ask(self, request: AskRequest) -> None:
-        """The worker waits while this dialog is open (§21.3)."""
+        """Der Arbeiter wartet, solange dieser Dialog offen ist (§21.3)."""
         dialog = AskDialog(request.question, request.choices, self)
         if dialog.exec() == AskDialog.DialogCode.Accepted:
             request.reply(dialog.chosen())
@@ -1236,7 +1267,9 @@ class MainWindow(QMainWindow):
             request.reply(None)
 
     def _on_error(self, error: AppError) -> None:
-        """§33.1: a mistake by the user looks different from a fault in the program."""
+        """§33.1: ein Fehler des Nutzers sieht anders aus als ein Fehler im
+        Programm.
+        """
         if isinstance(error, InternalError):
             self.report_error(error)
             return
@@ -1244,8 +1277,9 @@ class MainWindow(QMainWindow):
 
     def _on_selection(self, object_id: str | None) -> None:
         self.viewport.select(object_id)
-        # The map and the layer analysis belong to one body; another body needs
-        # its own, so they follow the selection instead of lingering.
+        # Karte und Schichtanalyse gehören zu einem Körper; ein anderer Körper
+        # braucht seine eigenen, also folgen sie der Auswahl, statt zu
+        # verweilen.
         self._on_map_changed(self.analysis_bar.chosen())
         self._on_layer_changed(self.layer_bar.index())
         described = describe_selection(self.session.last_result, object_id)
@@ -1256,7 +1290,9 @@ class MainWindow(QMainWindow):
         self.measurements.show_object(name, size, volume)
 
     def _on_parameter_edited(self, name: str, value: float) -> None:
-        """Turning a number is a change to the document, then a fresh evaluation (§13)."""
+        """An einer Zahl zu drehen ist eine Änderung am Dokument, dann eine
+        frische Auswertung (§13).
+        """
         import dataclasses
 
         parameters = self.session.project.document.parameters
@@ -1268,12 +1304,12 @@ class MainWindow(QMainWindow):
     # --- start ------------------------------------------------------------------
 
     def start(self) -> None:
-        """What happens once the window is really on screen (§38).
+        """Was passiert, sobald das Fenster wirklich auf dem Bildschirm ist (§38).
 
-        Deliberately not in the constructor: the first run opens a modal dialog,
-        and a window that does that while it is being built cannot be built by
-        anything that is not a person — a test, a screenshot tool, a second
-        window.
+        Mit Absicht nicht im Konstruktor: der erste Start öffnet einen modalen
+        Dialog, und ein Fenster, das das während seines Aufbaus tut, lässt sich
+        von nichts aufbauen, das kein Mensch ist — kein Test, kein
+        Screenshot-Werkzeug, kein zweites Fenster.
         """
         if first_run.should_run(self.settings):
             self.action_first_run()
@@ -1287,12 +1323,15 @@ class MainWindow(QMainWindow):
         if dialog.exec() == first_run.FirstRunDialog.DialogCode.Accepted:
             dialog.apply_to(self.settings)
         else:
-            # Skipping counts as done: asking again next time would be nagging.
+            # Überspringen zählt als erledigt: beim nächsten Mal wieder zu fragen
+            # wäre Nörgeln.
             self.settings.first_run_done = True
         save_settings(self.settings)
 
     def _check_for_updates(self) -> None:
-        """§37.2: a notice with a link. Nothing is downloaded, nothing replaced."""
+        """§37.2: ein Hinweis mit einem Link. Nichts wird heruntergeladen, nichts
+        ersetzt.
+        """
         release = updates.check()
         if release is None or not release.newer_than():
             return
@@ -1301,7 +1340,9 @@ class MainWindow(QMainWindow):
         )
 
     def report_error(self, error: BaseException, summary: str = "") -> None:
-        """§33.1: a program fault gets a report offer, not a suggestion."""
+        """§33.1: ein Programmfehler bekommt ein Berichtsangebot, keinen
+        Vorschlag.
+        """
         dialog = ErrorReportDialog(
             summary=summary or tr("Im Programm ist ein unerwarteter Fehler aufgetreten."),
             detail=str(error),
@@ -1350,8 +1391,8 @@ class MainWindow(QMainWindow):
         self.session.wait_for_idle(2000)
         worker = self._map_worker
         if worker is not None and worker.isRunning():
-            # A map nobody will see any more, but a thread that outlives its
-            # window takes the process down with it.
+            # Eine Karte, die niemand mehr sehen wird — aber ein Thread, der sein
+            # Fenster überlebt, nimmt den Prozess mit.
             worker.wait(2000)
         if self.session.modified:
             self.session.autosave()

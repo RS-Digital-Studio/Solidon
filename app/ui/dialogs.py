@@ -1,7 +1,8 @@
-"""Questions and errors as the plan describes them (Bauplan §2.7, §21.3).
+"""Fragen und Fehler, wie der Bauplan sie beschreibt (Bauplan §2.7, §21.3).
 
-An error names, in this order, what did not work, why, and what is possible now —
-as buttons, not prose. The stack trace goes to the log, never into the dialog.
+Ein Fehler nennt, in dieser Reihenfolge, was nicht ging, warum, und was jetzt
+möglich ist — als Knöpfe, nicht als Prosa. Der Stapelabzug geht ins Protokoll,
+nie in den Dialog.
 """
 
 from __future__ import annotations
@@ -33,7 +34,9 @@ _log = get_logger(__name__)
 
 
 class AskDialog(QDialog):
-    """Ambiguity stops and asks — over ``ctx.ask``, never from inside the core."""
+    """Mehrdeutigkeit hält an und fragt — über ``ctx.ask``, nie aus dem Kern
+    heraus.
+    """
 
     def __init__(self, question: str, choices: list[str], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -64,13 +67,13 @@ class AskDialog(QDialog):
 
 
 class CalibrationDialog(QDialog):
-    """Entering measured values (Bauplan §28.3).
+    """Gemessene Werte eintragen (Bauplan §28.3).
 
-    Step two of the three: print the test body, measure it, and the numbers go
-    in here. They land in the material profile, not in a model — and because
-    tolerances in the stack are references (§12), every existing project follows
-    afterwards. The dialog says that, because it is the part that surprises
-    people.
+    Schritt zwei von dreien: den Prüfkörper drucken, ihn messen, und die Zahlen
+    kommen hier hinein. Sie landen im Materialprofil, nicht in einem Modell —
+    und weil Toleranzen im Stapel Verweise sind (§12), folgt danach jedes
+    bestehende Projekt. Der Dialog sagt das, denn es ist der Teil, der Leute
+    überrascht.
     """
 
     def __init__(self, material: str, parent: QWidget | None = None) -> None:
@@ -121,18 +124,19 @@ class CalibrationDialog(QDialog):
         layout.addWidget(buttons)
 
     def measured(self) -> calibration.Calibration:
-        """What was entered, as a calibration ready to apply."""
+        """Was eingetragen wurde, als anwendungsfertige Kalibrierung."""
         return calibration.from_measurements(
             self.material, **{name: editor.value() for name, editor in self.editors.items()}
         )
 
 
 class KeyDialog(QDialog):
-    """Where the user puts their own key (Bauplan §27).
+    """Wo der Nutzer seinen eigenen Schlüssel hinlegt (Bauplan §27).
 
-    The key goes into the system keychain and nowhere else — not into the
-    settings, not into the project. The field is a password field, and the
-    dialog never shows a stored key back: it says whether one is there.
+    Der Schlüssel geht in den System-Schlüsselbund und sonst nirgends — nicht
+    in die Einstellungen, nicht ins Projekt. Das Feld ist ein Passwortfeld, und
+    der Dialog zeigt einen gespeicherten Schlüssel nie zurück: er sagt, ob
+    einer da ist.
     """
 
     def __init__(self, account: str = "anthropic", parent: QWidget | None = None) -> None:
@@ -202,7 +206,7 @@ class KeyDialog(QDialog):
 
 
 def show_error(error: AppError, parent: QWidget | None = None) -> Action | None:
-    """Show an error as a suggestion and return the action the user picked."""
+    """Zeigt einen Fehler als Vorschlag und gibt die gewählte Handlung zurück."""
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(tr("Das hat so nicht funktioniert"))
@@ -224,7 +228,7 @@ def show_error(error: AppError, parent: QWidget | None = None) -> Action | None:
 
 
 class AboutDialog(QDialog):
-    """Version, rights holder and the third party licences (§36, §37.2)."""
+    """Version, Rechteinhaber und die Drittanbieter-Lizenzen (§36, §37.2)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -263,16 +267,20 @@ class AboutDialog(QDialog):
 
 
 def _third_party_text() -> str:
-    """The dependency table, read at the moment it is shown."""
+    """Die Abhängigkeitstabelle, gelesen in dem Moment, in dem sie gezeigt
+    wird.
+    """
     try:
         return licences.notices()
-    except Exception as problem:  # pragma: no cover - metadata is machine specific
+    except Exception as problem:  # pragma: no cover - Metadaten sind maschinenabhängig
         _log.warning("could not build the licence list: %s", problem)
         return tr("Die Liste der Fremdbestandteile ließ sich nicht lesen.")
 
 
 def confirm_discard(count: int, parent: QWidget | None = None) -> bool:
-    """The one question that is worth asking: throwing away more than one step (§15.4)."""
+    """Die eine Frage, die sich zu stellen lohnt: mehr als einen Schritt
+    wegzuwerfen (§15.4).
+    """
     if count <= 1:
         return True
     answer = QMessageBox.question(

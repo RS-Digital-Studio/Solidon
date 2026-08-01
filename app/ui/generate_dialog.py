@@ -1,14 +1,15 @@
-"""Way 3 from the window: describe or drop a picture, get a body (§2.2, §27).
+"""Weg 3 aus dem Fenster: beschreiben oder ein Bild fallen lassen, einen
+Körper bekommen (§2.2, §27).
 
-The dialog is deliberately thin. Everything it does lives in
-:mod:`app.core.generate`; what happens here is asking for a sentence, showing
-whether a generator is running at all, and keeping the window responsive while
-a graphics card thinks for a minute.
+Der Dialog ist mit Absicht dünn. Alles, was er tut, lebt in
+:mod:`app.core.generate`; was hier passiert, ist nach einem Satz zu fragen, zu
+zeigen, ob überhaupt ein Generator läuft, und das Fenster bedienbar zu halten,
+während eine Grafikkarte eine Minute lang nachdenkt.
 
-When nothing is running the dialog says so and offers no button to press —
-greyed out, like the chat without a key (§27). It does not try to start
-anything, and it does not hide the entry either: an action that disappears
-looks like a bug, an action that explains itself does not.
+Läuft nichts, sagt der Dialog das und bietet keinen Knopf zum Drücken —
+ausgegraut, wie der Chat ohne Schlüssel (§27). Er versucht nicht, etwas zu
+starten, und er versteckt den Eintrag auch nicht: eine Aktion, die verschwindet,
+sieht aus wie ein Fehler; eine, die sich erklärt, nicht.
 """
 
 from __future__ import annotations
@@ -37,22 +38,24 @@ from app.i18n import tr
 
 _log = get_logger(__name__)
 
-#: What can be dropped in as a starting picture.
+#: Was sich als Ausgangsbild hineinziehen lässt.
 IMAGE_FILTER = "Bilder (*.png *.jpg *.jpeg *.webp)"
 
-#: Upper end of the seed the dialog offers. The same value gives the same run,
-#: as far as the model on the other side allows (§11.3).
+#: Obergrenze des Startwerts, den der Dialog anbietet. Derselbe Wert liefert
+#: dasselbe Ergebnis, soweit das Modell auf der anderen Seite es zulässt
+#: (§11.3).
 MAX_SEED = 2**31 - 1
 
-#: How long closing waits for the worker before it lets go.
+#: Wie lange das Schließen auf den Arbeiter wartet, bevor es loslässt.
 WAIT_MILLISECONDS = 50
 
 
 class _Worker(QThread):
-    """One generation, off the interface thread.
+    """Eine Erzeugung, abseits des Oberflächen-Threads.
 
-    A diffusion model takes minutes; doing that in the event loop would freeze
-    the window and every progress line it is supposed to be showing (§31).
+    Ein Diffusionsmodell braucht Minuten; das in der Ereignisschleife zu tun
+    fröre das Fenster ein — samt jeder Fortschrittszeile, die es zeigen
+    soll (§31).
     """
 
     done = Signal(object)
@@ -86,7 +89,9 @@ class _Worker(QThread):
 
 
 class GenerateDialog(QDialog):
-    """Ask for a description or a picture, then hand back a generated body."""
+    """Fragt nach einer Beschreibung oder einem Bild und gibt einen erzeugten
+    Körper zurück.
+    """
 
     def __init__(self, backend: MeshBackend | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -204,11 +209,11 @@ class GenerateDialog(QDialog):
         self._worker = None
 
     def reject(self) -> None:
-        """Cancelling waits for the thread instead of leaving it running.
+        """Abbrechen wartet auf den Thread, statt ihn laufen zu lassen.
 
-        The request itself keeps going on the other side — there is no call in
-        the interface of §27 to take it back, and inventing one that lies would
-        be worse than saying nothing.
+        Die Anfrage selbst läuft auf der anderen Seite weiter — die
+        Schnittstelle aus §27 hat keinen Aufruf, sie zurückzunehmen, und einen
+        zu erfinden, der lügt, wäre schlechter, als nichts zu sagen.
         """
         worker = self._worker
         if worker is not None and worker.isRunning():

@@ -1,8 +1,8 @@
-"""Surface settings in a plain file (Bauplan §38).
+"""Oberflächen-Einstellungen in einer schlichten Datei (Bauplan §38).
 
-Kept as JSON in the user configuration directory rather than in a platform
-registry: it is readable, portable and easy to reset. Credentials never live
-here — those belong in the system keyring.
+Als JSON im Konfigurationsverzeichnis des Nutzers gehalten statt in einer
+Plattform-Registry: das ist lesbar, portabel und leicht zurückzusetzen.
+Zugangsdaten leben nie hier — die gehören in den System-Schlüsselbund.
 """
 
 from __future__ import annotations
@@ -45,7 +45,9 @@ class UiSettings:
         self.recent = [text, *(entry for entry in self.recent if entry != text)][:MAX_RECENT]
 
     def existing_recent(self) -> list[Path]:
-        """Recent projects that are still there — a dead entry helps nobody."""
+        """Zuletzt geöffnete Projekte, die es noch gibt — ein toter Eintrag hilft
+        niemandem.
+        """
         return [Path(entry) for entry in self.recent if Path(entry).is_file()]
 
 

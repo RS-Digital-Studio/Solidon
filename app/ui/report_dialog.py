@@ -1,14 +1,14 @@
-"""The error report dialog (Bauplan §37.2, §33.1).
+"""Der Fehlerbericht-Dialog (Bauplan §37.2, §33.1).
 
-Shown when something goes wrong that is not the user's doing — an
-``InternalError`` (§33.1). A program fault must never look like a mistake by the
-user, and this is the other half of that rule: it looks different, and it offers
-something to do about it.
+Gezeigt, wenn etwas schiefgeht, das nicht der Nutzer verursacht hat — ein
+``InternalError`` (§33.1). Ein Programmfehler darf nie wie ein Fehler des
+Nutzers aussehen, und das hier ist die andere Hälfte dieser Regel: er sieht
+anders aus, und er bietet etwas an, das man dagegen tun kann.
 
-Nothing is sent. The dialog writes a folder and opens it; whether anything goes
-anywhere is the user's decision. The offer to attach the project says plainly
-that the geometry travels along, because that is exactly what someone needs to
-know before they hand a file to a stranger.
+Gesendet wird nichts. Der Dialog schreibt einen Ordner und öffnet ihn; ob
+irgendetwas irgendwohin geht, ist die Entscheidung des Nutzers. Das Angebot,
+das Projekt anzuhängen, sagt klar, dass die Geometrie mitreist — denn genau das
+muss jemand wissen, bevor er eine Datei einem Fremden gibt.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ _log = get_logger(__name__)
 
 
 class ErrorReportDialog(QDialog):
-    """What happened, what will be attached, and where it was put."""
+    """Was passiert ist, was angehängt wird, und wohin es gelegt wurde."""
 
     def __init__(
         self,

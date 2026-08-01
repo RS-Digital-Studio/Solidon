@@ -1,13 +1,15 @@
-"""Controls for the analysis maps and the layer preview (Bauplan §18.4, §18.10).
+"""Bedienelemente für die Analysekarten und die Schichtvorschau (Bauplan
+§18.4, §18.10).
 
-Two bars, one idea: look at the body through a filter that answers one question.
-Which map is showing is always visible, and so is what its colours mean — §18.4
-asks for a legend and a numeric range on every map, and §19.1 forbids colour as
-the only carrier, so the legend spells out the numbers next to the swatches.
+Zwei Leisten, ein Gedanke: den Körper durch einen Filter ansehen, der eine
+Frage beantwortet. Welche Karte gerade zeigt, ist immer sichtbar, und was ihre
+Farben bedeuten auch — §18.4 verlangt Legende und Zahlenbereich an jeder
+Karte, und §19.1 verbietet Farbe als einzigen Träger, also schreibt die Legende
+die Zahlen neben die Farbfelder.
 
-The layer preview is labelled "Schichtanalyse", never "Vorschau": it shows
-geometry, not tool paths, and calling it a preview would promise something the
-external slicer delivers (§18.10, §22.5).
+Die Schichtvorschau heißt „Schichtanalyse", nie „Vorschau": sie zeigt
+Geometrie, keine Werkzeugwege, und sie Vorschau zu nennen versprüche etwas, das
+der externe Slicer liefert (§18.10, §22.5).
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from app.i18n import tr
 from app.ui.palette import VIRIDIS, map_colour
 from app.ui.panels import origin_label
 
-#: Order of the maps in the selector, matching the table in §18.4.
+#: Reihenfolge der Karten im Wähler, passend zur Tabelle in §18.4.
 MAP_ORDER: tuple[MapKind, ...] = (
     "wall",
     "overhang",
@@ -45,7 +47,9 @@ LEGEND_STEPS = 5
 
 
 class MapLegend(QWidget):
-    """Swatches with their numbers — the legend §18.4 asks for on every map."""
+    """Farbfelder mit ihren Zahlen — die Legende, die §18.4 an jeder Karte
+    verlangt.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -76,7 +80,7 @@ class MapLegend(QWidget):
             )
             self._layout.addWidget(swatch)
 
-        # §22.5: where a number comes from belongs next to the number.
+        # §22.5: woher eine Zahl kommt, gehört neben die Zahl.
         parts = [f"{tr('Herkunft')}: {origin_label(analysis.source)}"]
         if analysis.resolution is not None:
             parts.append(f"{tr('Raster')} {format_length(analysis.resolution)}")
@@ -89,7 +93,9 @@ class MapLegend(QWidget):
 
 
 def _legend_entries(analysis: AnalysisMap) -> list[tuple[str, str]]:
-    """Labels and colours: named levels where there are any, a ramp otherwise."""
+    """Beschriftungen und Farben: benannte Stufen, wo es welche gibt, sonst
+    eine Rampe.
+    """
     if analysis.categories:
         count = len(analysis.categories)
         return [
@@ -110,14 +116,16 @@ def _legend_entries(analysis: AnalysisMap) -> list[tuple[str, str]]:
 
 
 def _readable_on(colour: str) -> str:
-    """Black or white text, whichever stays legible on the swatch (§19.3)."""
+    """Schwarze oder weiße Schrift, je nachdem, was auf dem Farbfeld lesbar
+    bleibt (§19.3).
+    """
     from app.ui.theme import relative_luminance
 
     return "#101418" if relative_luminance(colour) > 0.35 else "#f2f4f7"
 
 
 class AnalysisBar(QWidget):
-    """Which map is showing, plus its legend (§18.4)."""
+    """Welche Karte zeigt, plus ihre Legende (§18.4)."""
 
     mapChanged = Signal(object)
     """The chosen ``MapKind``, or None for no map."""
@@ -159,7 +167,9 @@ class AnalysisBar(QWidget):
         return value
 
     def show_map(self, kind: MapKind | None) -> None:
-        """Switch the selector without emitting — used when a warning picks a map."""
+        """Schaltet den Wähler um, ohne zu senden — benutzt, wenn eine Warnung
+        eine Karte wählt.
+        """
         index = self.selector.findData(kind)
         if index >= 0 and index != self.selector.currentIndex():
             blocked = self.selector.blockSignals(True)
@@ -170,16 +180,18 @@ class AnalysisBar(QWidget):
         self.legend.show_map(analysis)
 
     def show_problem(self, message: str) -> None:
-        """A map that could not be built says so instead of showing nothing."""
+        """Eine Karte, die sich nicht bauen ließ, sagt das, statt nichts zu
+        zeigen.
+        """
         self.legend.show_map(None)
         self.legend.note.setText(message)
 
 
 class LayerBar(QWidget):
-    """Scrub through the height of the body (§18.10).
+    """Durch die Höhe des Körpers fahren (§18.10).
 
-    Deliberately named after what it is: an analysis of layers, not a preview of
-    what the printer will do.
+    Mit Absicht danach benannt, was sie ist: eine Analyse von Schichten, keine
+    Vorschau dessen, was der Drucker tun wird.
     """
 
     layerChanged = Signal(int)

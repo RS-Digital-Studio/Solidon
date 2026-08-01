@@ -1,13 +1,13 @@
-"""The part catalogue (Bauplan §24.3, §2.6).
+"""Der Bausteinkatalog (Bauplan §24.3, §2.6).
 
-"A library one cannot see does not exist for the user." So this is a window with
-pictures, a short description and the two most important parameters of every
-part — and the pictures come out of the parts themselves (§24.3), rendered when
-the catalogue opens.
+„Eine Bibliothek, die man nicht sehen kann, existiert für den Nutzer nicht."
+Also ist das ein Fenster mit Bildern, einer kurzen Beschreibung und den zwei
+wichtigsten Parametern jedes Bausteins — und die Bilder kommen aus den
+Bausteinen selbst (§24.3), gerendert beim Öffnen des Katalogs.
 
-Own parts are marked as such (§24.5). The difference matters: they only exist on
-this machine, and a project that uses one cannot be passed on the way the rest
-can.
+Eigene Bausteine sind als solche gekennzeichnet (§24.5). Der Unterschied
+zählt: sie existieren nur auf dieser Maschine, und ein Projekt, das einen
+benutzt, lässt sich nicht so weitergeben wie der Rest.
 """
 
 from __future__ import annotations
@@ -32,16 +32,17 @@ from app.core.knowledge.parts.preview import SIZE, render
 from app.core.knowledge.parts.registry import PartSpec
 from app.i18n import tr
 
-#: How many parameters a catalogue entry shows. §24.3 asks for the two most
-#: important ones — which are the first two declared, because a declaration is
-#: written in the order someone thinks about the part.
+#: Wie viele Parameter ein Katalogeintrag zeigt. §24.3 verlangt die zwei
+#: wichtigsten — und das sind die zwei zuerst deklarierten, denn eine
+#: Deklaration wird in der Reihenfolge geschrieben, in der jemand über den
+#: Baustein nachdenkt.
 SHOWN_PARAMETERS = 2
 
 OWN_MARKER = "*"
 
 
 class PartCatalog(QDialog):
-    """Pictures, descriptions and a search field."""
+    """Bilder, Beschreibungen und ein Suchfeld."""
 
     partChosen = Signal(str)
 
@@ -76,7 +77,7 @@ class PartCatalog(QDialog):
     # --- content ----------------------------------------------------------------
 
     def show_parts(self, text: str = "") -> None:
-        """Fill the list, grouped as the catalogue groups them."""
+        """Füllt die Liste, gruppiert wie der Katalog gruppiert."""
         self.list.clear()
         wanted = PARTS.search(text) if text.strip() else PARTS.all()
         by_group: dict[str, list[PartSpec]] = {}
@@ -101,7 +102,7 @@ class PartCatalog(QDialog):
         return item
 
     def _preview(self, spec: PartSpec) -> Any:
-        """Rendered on first sight, kept for the rest of the session."""
+        """Beim ersten Ansehen gerendert, für den Rest der Sitzung behalten."""
         from PySide6.QtGui import QIcon
 
         if spec.name not in self._previews:
@@ -138,7 +139,7 @@ class PartCatalog(QDialog):
 
 
 def describe(spec: PartSpec) -> str:
-    """Title, the two most important parameters, and where the part comes from."""
+    """Titel, die zwei wichtigsten Parameter, und woher der Baustein kommt."""
     parameters = ", ".join(str(entry.title) for entry in spec.params.spec()[:SHOWN_PARAMETERS])
     marker = f" {OWN_MARKER} {tr('eigener Baustein')}" if spec.own else ""
     return f"{spec.title}{marker}\n{parameters}"

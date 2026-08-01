@@ -1,9 +1,9 @@
-"""Light and dark theme (Bauplan §19.3).
+"""Helles und dunkles Thema (Bauplan §19.3).
 
-Both themes are built here rather than left to the platform, because contrast is
-part of the product: the viewport, the analysis maps and the difference view all
-assume a known background. Colours that carry meaning live in ``palette.py``;
-what is here is only the frame around them.
+Beide Themen werden hier gebaut statt der Plattform überlassen, denn Kontrast
+ist Teil des Produkts: Viewport, Analysekarten und Differenzansicht setzen alle
+ein bekanntes Hintergrundbild voraus. Farben, die Bedeutung tragen, leben in
+``palette.py``; was hier steht, ist nur der Rahmen darum.
 """
 
 from __future__ import annotations
@@ -79,7 +79,9 @@ def apply_theme(application: QApplication, theme: Theme) -> None:
 
 
 def viewport_colours(theme: Theme) -> dict[str, str]:
-    """The colours the 3D view needs — background gradient, bodies, build plate."""
+    """Die Farben, die die 3D-Ansicht braucht — Hintergrundverlauf, Körper,
+    Druckplatte.
+    """
     colours = THEMES[theme]
     return {
         "bottom": colours["viewport_bottom"],
@@ -90,7 +92,7 @@ def viewport_colours(theme: Theme) -> dict[str, str]:
 
 
 def relative_luminance(colour: str) -> float:
-    """WCAG luminance — the basis for the contrast check in the tests."""
+    """WCAG-Luminanz — die Grundlage der Kontrastprüfung in den Tests."""
     channels = []
     for value in (colour[1:3], colour[3:5], colour[5:7]):
         component = int(value, 16) / 255.0
@@ -101,7 +103,7 @@ def relative_luminance(colour: str) -> float:
 
 
 def contrast_ratio(first: str, second: str) -> float:
-    """Contrast between two colours, 1 (none) to 21 (black on white)."""
+    """Kontrast zwischen zwei Farben, 1 (keiner) bis 21 (schwarz auf weiß)."""
     lighter = max(relative_luminance(first), relative_luminance(second))
     darker = min(relative_luminance(first), relative_luminance(second))
     return (lighter + 0.05) / (darker + 0.05)
@@ -109,7 +111,7 @@ def contrast_ratio(first: str, second: str) -> float:
 
 #: Qt attributes for HiDPI. Set before the application exists (§19.3).
 def enable_hidpi() -> None:
-    """High DPI scaling with sharp pixmaps — has to run before QApplication."""
+    """HiDPI-Skalierung mit scharfen Pixmaps — muss vor QApplication laufen."""
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )

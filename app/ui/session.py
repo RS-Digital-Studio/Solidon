@@ -1,12 +1,13 @@
-"""The bridge between the headless core and the surface (Bauplan §7, §15.6).
+"""Die Brücke zwischen dem kopflosen Kern und der Oberfläche (Bauplan §7,
+§15.6).
 
-Everything that computes runs in a worker thread with progress and a cancel
-button; the window only reacts to signals. The core never learns that Qt exists —
-``progress``, ``ask`` and ``cancelled`` arrive through the ``OpContext`` as they
-do on the command line.
+Alles, was rechnet, läuft in einem Arbeits-Thread mit Fortschritt und
+Abbrechen-Knopf; das Fenster reagiert nur auf Signale. Der Kern erfährt nie,
+dass es Qt gibt — ``progress``, ``ask`` und ``cancelled`` kommen über den
+``OpContext`` an, wie auf der Kommandozeile.
 
-Two rules from §15.6 live here: one run per document, and a newer request
-replaces a waiting one instead of queueing up behind it.
+Zwei Regeln aus §15.6 leben hier: ein Lauf je Dokument, und eine neuere
+Anfrage ersetzt eine wartende, statt sich dahinter anzustellen.
 """
 
 from __future__ import annotations
@@ -61,10 +62,11 @@ _log = get_logger(__name__)
 
 @dataclass(slots=True)
 class AskRequest:
-    """A question travelling from the worker to the window and back.
+    """Eine Frage, die vom Arbeiter zum Fenster reist und zurück.
 
-    The worker blocks on ``answered`` while the window shows the dialog — which
-    is what "the chain stops and asks" means in a threaded surface (§21.3).
+    Der Arbeiter blockiert an ``answered``, während das Fenster den Dialog
+    zeigt — und genau das heißt „die Kette hält an und fragt" in einer
+    threaded Oberfläche (§21.3).
     """
 
     question: str
@@ -119,11 +121,11 @@ class _EvaluationWorker(QThread):
 
 @dataclass(slots=True)
 class ProposalPreview:
-    """A proposal plus what it would look like (§26.5, §18.7).
+    """Ein Vorschlag plus das, wonach er aussähe (§26.5, §18.7).
 
-    The scene and the difference are computed in the worker, not in the window:
-    a difference is two boolean operations per body, and doing that on the GUI
-    thread would freeze the very view it is meant to explain.
+    Szene und Differenz werden im Arbeiter gerechnet, nicht im Fenster: eine
+    Differenz sind zwei Boolesche Operationen je Körper, und das auf dem
+    GUI-Thread zu tun fröre genau die Ansicht ein, die sie erklären soll.
     """
 
     proposal: Proposal
@@ -136,7 +138,7 @@ class ProposalPreview:
 
 
 class _AgentWorker(QThread):
-    """One turn of the agent, off the GUI thread (§26.5)."""
+    """Ein Zug des Agenten, abseits des GUI-Threads (§26.5)."""
 
     finishedWith = Signal(object)
     failedWith = Signal(object)
@@ -159,7 +161,7 @@ class _AgentWorker(QThread):
 
 
 def _with_findings(result: EvaluationResult, extra: list[Finding]) -> EvaluationResult:
-    """Carry the check's findings into the report the window shows."""
+    """Trägt die Befunde der Prüfung in den Bericht, den das Fenster zeigt."""
     if not extra:
         return result
     scene = result.scene
@@ -168,7 +170,7 @@ def _with_findings(result: EvaluationResult, extra: list[Finding]) -> Evaluation
 
 
 class Session(QObject):
-    """Holds the open project and keeps the surface in step with it."""
+    """Hält das offene Projekt und die Oberfläche im Gleichschritt mit ihm."""
 
     sceneChanged = Signal(object)
     """An evaluation finished — carries an ``EvaluationResult``."""
@@ -254,7 +256,7 @@ class Session(QObject):
         return target
 
     def autosave(self) -> None:
-        """Crash recovery container next to the project (§38)."""
+        """Container zur Absturz-Wiederherstellung neben dem Projekt (§38)."""
         if self._dirty:
             write_autosave(self.project, self.path)
 
@@ -275,7 +277,7 @@ class Session(QObject):
         drafts: list[OperationDraft],
         origin: Origin | None = None,
     ) -> None:
-        """One transaction, then a fresh evaluation (§15.5)."""
+        """Eine Transaktion, dann eine frische Auswertung (§15.5)."""
         try:
             self.history.apply(title, drafts, origin or Origin(by="user"))
         except AppError as error:
@@ -286,7 +288,7 @@ class Session(QObject):
         self.evaluate_async()
 
     def change_params(self, op_id: int, params: dict[str, Any]) -> None:
-        """Other parameters for an operation already in the stack (§15.4)."""
+        """Andere Parameter für eine Operation, die schon im Stapel steht (§15.4)."""
         try:
             self.history.change_params(op_id, params)
         except AppError as error:
@@ -297,10 +299,11 @@ class Session(QObject):
         self.evaluate_async()
 
     def import_model(self, path: Path, unit: str = "auto") -> None:
-        """Embed a file and put the matching load operation on the stack (§17.1).
+        """Bettet eine Datei ein und legt die passende load-Operation auf den
+        Stapel (§17.1).
 
-        STEP takes the other kernel and carries its own unit, so it neither
-        needs the unit question nor the mesh input stage (§30, §11.1).
+        STEP nimmt den anderen Kern und trägt seine eigene Einheit — es braucht
+        also weder die Einheitenfrage noch die Mesh-Eingangsstufe (§30, §11.1).
         """
         document = self.project.document
         source_id = f"src_{len(document.sources) + 1}"
@@ -341,10 +344,10 @@ class Session(QObject):
         )
 
     def add_generated(self, result: GeneratedMesh) -> str:
-        """Way 3: embed a generated body, load it, repair it (§2.2).
+        """Weg 3: einen erzeugten Körper einbetten, laden, reparieren (§2.2).
 
-        The two transactions are made in the core; all that happens here is
-        redrawing afterwards, exactly like an import.
+        Die zwei Transaktionen entstehen im Kern; was hier passiert, ist das
+        Neuzeichnen danach — genau wie bei einem Import.
         """
         generation = generate_into(self.project, result)
         self._dirty = True
@@ -353,11 +356,13 @@ class Session(QObject):
         return generation.object_id
 
     def auto_split(self, object_id: str) -> SplitApplied:
-        """§25: cut a part until it fits, with pins and fit pairs (§14).
+        """§25: ein Teil schneiden, bis es passt, mit Stiften und
+        Passungspaaren (§14).
 
-        The search needs the evaluated body, so this waits for the last run
-        instead of guessing from the stack — a split of a stale mesh would put
-        the parting plane where the part no longer is.
+        Die Suche braucht den ausgewerteten Körper, also wartet das hier auf den
+        letzten Lauf, statt aus dem Stapel zu raten — eine Teilung eines
+        veralteten Netzes legte die Trennebene dorthin, wo das Teil nicht mehr
+        ist.
         """
         self.wait_for_idle()
         result = self.last_result
@@ -392,7 +397,7 @@ class Session(QObject):
     # --- evaluation -------------------------------------------------------------
 
     def evaluate_async(self) -> None:
-        """One run per document; a newer request replaces a waiting one (§15.6)."""
+        """Ein Lauf je Dokument; eine neuere Anfrage ersetzt eine wartende (§15.6)."""
         if self._worker is not None and self._worker.isRunning():
             self._rerun_pending = True
             self.cancel_signal.cancel()
@@ -408,7 +413,9 @@ class Session(QObject):
         worker.start()
 
     def run_evaluation(self, quality: Quality | None = None) -> EvaluationResult:
-        """One pass with everything the core needs. No signals, no state."""
+        """Ein Durchlauf mit allem, was der Kern braucht. Keine Signale, kein
+        Zustand.
+        """
         return evaluate(
             self.project.document,
             self.profile,
@@ -421,7 +428,7 @@ class Session(QObject):
         )
 
     def evaluate_now(self) -> EvaluationResult:
-        """Synchronous pass, for the command line, tests and export (§31, fine)."""
+        """Synchroner Durchlauf, für Kommandozeile, Tests und Export (§38)."""
         self.cancel_signal.reset()
         result = self.run_evaluation("fine")
         self.last_result = result
@@ -435,17 +442,21 @@ class Session(QObject):
 
     @property
     def agent_backend(self) -> LLMBackend | None:
-        """The model the chat uses, or None — then the chat is off (§27)."""
+        """Das Modell, das der Chat benutzt, oder None — dann ist der Chat
+        aus (§27).
+        """
         if self._backend is None:
             self._backend = first_available()
         return self._backend
 
     def set_agent_backend(self, backend: LLMBackend | None) -> None:
-        """Choose the model by hand — the settings dialog and the suite use this."""
+        """Das Modell von Hand wählen — der Einstellungsdialog und die Suite tun
+        das.
+        """
         self._backend = backend
 
     def propose_async(self, request: str, selection: tuple[str, str] | None = None) -> None:
-        """Ask the agent. The answer arrives as ``proposalReady``."""
+        """Fragt den Agenten. Die Antwort kommt als ``proposalReady`` an."""
         backend = self.agent_backend
         if backend is None:
             self.failed.emit(AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell.")))
@@ -462,7 +473,7 @@ class Session(QObject):
         worker.start()
 
     def run_proposal(self, request: str) -> ProposalPreview:
-        """One agent turn plus its preview. Runs in the worker (§26.5)."""
+        """Ein Agentenzug plus seine Vorschau. Läuft im Arbeiter (§26.5)."""
         backend = self.agent_backend
         if backend is None:  # pragma: no cover - guarded before the worker starts
             raise AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell."))
@@ -482,7 +493,9 @@ class Session(QObject):
         return preview
 
     def _preview_of(self, proposal: Proposal) -> tuple[Any, SceneDifference | None]:
-        """What the scene would look like — computed on a copy, in draft quality."""
+        """Wonach die Szene aussähe — auf einer Kopie gerechnet, in
+        Entwurfsqualität.
+        """
         import copy
 
         before = self.last_result.scene if self.last_result else None
@@ -499,7 +512,7 @@ class Session(QObject):
         return result.scene, difference
 
     def accept_proposal(self, preview: ProposalPreview) -> None:
-        """Put the proposal into the document as one transaction (§26.5)."""
+        """Legt den Vorschlag als eine Transaktion ins Dokument (§26.5)."""
         transaction = agent_apply.accept(preview.proposal, self.history)
         self._accepted[preview.proposal.request] = transaction.id if transaction else None
         self._dirty = True
@@ -507,7 +520,7 @@ class Session(QObject):
         self.evaluate_async()
 
     def discard_proposal(self, preview: ProposalPreview) -> None:
-        """Throw it away — the conversation keeps both turns (§26.3)."""
+        """Wirft ihn weg — das Gespräch behält beide Beiträge (§26.3)."""
         agent_apply.discard(preview.proposal, self.project.document)
         self._dirty = True
         self.projectChanged.emit()

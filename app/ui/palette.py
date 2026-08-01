@@ -1,13 +1,13 @@
-"""Colour that never carries meaning alone (Bauplan §19.1).
+"""Farbe, die nie allein Bedeutung trägt (Bauplan §19.1).
 
-The difference view is the most important view in the application — and in red
-and green it would be the worst possible combination for colour blindness. So
-blue and orange are the default, red/green and greyscale are alternatives, and
-**every** pair carries a pattern and a symbol besides its colour.
+Die Differenzansicht ist die wichtigste Ansicht der Anwendung — und in Rot und
+Grün wäre sie die denkbar schlechteste Kombination für Farbenblindheit. Also
+sind Blau und Orange die Vorgabe, Rot/Grün und Graustufen sind Alternativen,
+und **jedes** Paar trägt neben seiner Farbe ein Muster und ein Symbol.
 
-Analysis maps use a perceptually uniform ramp (Viridis kind), never a rainbow:
-a rainbow invents edges where the data has none, and it loses its order entirely
-in greyscale.
+Analysekarten benutzen eine wahrnehmungsgleiche Rampe (Viridis-Art), nie einen
+Regenbogen: ein Regenbogen erfindet Kanten, wo die Daten keine haben, und in
+Graustufen verliert er seine Ordnung ganz.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ DiffPalette = Literal["blue_orange", "red_green", "greyscale"]
 
 @dataclass(frozen=True, slots=True)
 class Encoding:
-    """One meaning: colour plus at least one more channel (§19.1)."""
+    """Eine Bedeutung: Farbe plus mindestens ein weiterer Kanal (§19.1)."""
 
     colour: str
     pattern: str
@@ -37,15 +37,17 @@ class Encoding:
 
 @dataclass(frozen=True, slots=True)
 class DifferenceColours:
-    """Added and removed volume in the difference view (§18.7)."""
+    """Hinzugekommenes und entferntes Volumen in der
+    Differenzansicht (§18.7).
+    """
 
     added: Encoding
     removed: Encoding
     unchanged: Encoding
 
 
-#: Blue and orange by default — distinguishable under every common colour vision
-#: deficiency, and still distinguishable in greyscale by luminance.
+#: Blau und Orange als Vorgabe — unter jeder verbreiteten Farbschwäche
+#: unterscheidbar, und in Graustufen über die Helligkeit weiterhin auch.
 DIFF_PALETTES: dict[DiffPalette, DifferenceColours] = {
     "blue_orange": DifferenceColours(
         added=Encoding("#3b82c4", "forward", "+", "Hinzugefügt"),
@@ -64,8 +66,8 @@ DIFF_PALETTES: dict[DiffPalette, DifferenceColours] = {
     ),
 }
 
-#: Viridis, sampled. Monotonically rising luminance is what makes it readable
-#: for everyone and printable in greyscale.
+#: Viridis, abgetastet. Die monoton steigende Helligkeit ist es, die es für
+#: alle lesbar und in Graustufen druckbar macht.
 VIRIDIS: tuple[str, ...] = (
     "#440154",
     "#472d7b",
@@ -78,7 +80,8 @@ VIRIDIS: tuple[str, ...] = (
     "#fde725",
 )
 
-#: Severity markers. The report shows them next to the text, never colour alone.
+#: Zeichen für die Schweregrade. Der Prüfbericht zeigt sie neben dem Text,
+#: nie als Farbe allein.
 SEVERITY_ENCODING: dict[str, Encoding] = {
     "info": Encoding("#6da3d6", "solid", "·", "Hinweis"),
     "warning": Encoding("#e0a33c", "dots", "!", "Warnung"),
@@ -87,7 +90,9 @@ SEVERITY_ENCODING: dict[str, Encoding] = {
 
 
 def map_colour(fraction: float, ramp: tuple[str, ...] = VIRIDIS) -> str:
-    """Colour for a value between 0 and 1 on a perceptually uniform ramp."""
+    """Farbe für einen Wert zwischen 0 und 1 auf einer wahrnehmungsgleichen
+    Rampe.
+    """
     if not ramp:
         raise ValueError("a ramp needs at least one colour")
     position = min(max(fraction, 0.0), 1.0) * (len(ramp) - 1)
@@ -95,11 +100,15 @@ def map_colour(fraction: float, ramp: tuple[str, ...] = VIRIDIS) -> str:
 
 
 def is_monotonic(ramp: tuple[str, ...]) -> bool:
-    """True when luminance rises step by step — the property a rainbow lacks."""
+    """True, wenn die Helligkeit Schritt für Schritt steigt — die
+    Eigenschaft, die einem Regenbogen fehlt.
+    """
     values = [relative_luminance(colour) for colour in ramp]
     return all(later > earlier for earlier, later in pairwise(values))
 
 
 def distinguishable_without_colour(first: Encoding, second: Encoding) -> bool:
-    """Two meanings stay apart even if the colours cannot be told apart (§19.1)."""
+    """Zwei Bedeutungen bleiben auseinander, auch wenn sich die Farben nicht
+    unterscheiden lassen (§19.1).
+    """
     return first.pattern != second.pattern and first.symbol != second.symbol

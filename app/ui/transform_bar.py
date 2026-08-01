@@ -1,8 +1,8 @@
-"""Gizmo switch and snapping steps (Bauplan §18.11).
+"""Gizmo-Schalter und Einrastschritte (Bauplan §18.11).
 
-Numeric entry happens in the operation dialogs — they are generated from the
-same schema and are editable afterwards. What this bar adds is the direct
-manipulation: the gizmo, and how far it snaps.
+Zahleneingabe passiert in den Operationsdialogen — die entstehen aus demselben
+Schema und sind nachträglich änderbar. Was diese Leiste hinzufügt, ist die
+direkte Manipulation: der Gizmo, und wie weit er einrastet.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ DEFAULT_ANGLE_STEP = 15.0
 
 
 class TransformBar(QWidget):
-    """Turn the gizmo on, and set what it snaps to."""
+    """Schaltet den Gizmo ein und stellt ein, worauf er einrastet."""
 
     gizmoToggled = Signal(bool)
     snappingChanged = Signal(float, float)
@@ -53,7 +53,9 @@ class TransformBar(QWidget):
         layout.addStretch(1)
 
     def steps(self) -> tuple[float, float]:
-        """Grid step in millimetres and angle step in degrees. Zero means no snapping."""
+        """Rasterschritt in Millimetern und Winkelschritt in Grad. Null heißt kein
+        Einrasten.
+        """
         return float(self.grid.value()), float(self.angle.value())
 
     def _emit_snapping(self) -> None:

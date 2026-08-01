@@ -47,7 +47,9 @@ ABSENT = "-"
 
 
 class _Worker(QThread):
-    """One install, off the interface thread — a download takes minutes."""
+    """Eine Installation, abseits des Oberflächen-Threads — ein Download
+    braucht Minuten.
+    """
 
     done = Signal(object)
     line = Signal(str)
@@ -174,7 +176,7 @@ class _Row(QWidget):
 
 
 class InstallDialog(QDialog):
-    """The list of what Formwerk can use, and what of it is here."""
+    """Die Liste dessen, was Formwerk benutzen kann, und was davon da ist."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -252,7 +254,8 @@ class InstallDialog(QDialog):
     def reject(self) -> None:
         worker = self._worker
         if worker is not None and worker.isRunning():
-            # An install that is running keeps running; killing a package
-            # manager halfway leaves a machine in a state nobody can read.
+            # Eine laufende Installation läuft weiter; eine Paketverwaltung auf
+            # halbem Weg abzuwürgen lässt eine Maschine in einem Zustand zurück,
+            # den niemand lesen kann.
             worker.wait(50)
         super().reject()

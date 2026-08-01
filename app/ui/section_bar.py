@@ -1,9 +1,9 @@
-"""Controls for the section plane (Bauplan §18.2).
+"""Bedienelemente für die Schnittebene (Bauplan §18.2).
 
-The plane is moved with a slider rather than typed in: looking through a body is
-a searching motion, not a numeric entry. The slice thickness sits next to it, and
-when a body was too open to close the cut face, this bar says so instead of
-pretending the picture is complete.
+Die Ebene wird mit einem Schieber bewegt statt eingetippt: durch einen Körper
+zu sehen ist eine suchende Bewegung, keine Zahleneingabe. Die Scheibendicke
+sitzt daneben, und wenn ein Körper zu offen war, um die Schnittfläche zu
+schließen, sagt diese Leiste das, statt vorzugeben, das Bild sei vollständig.
 """
 
 from __future__ import annotations
@@ -24,12 +24,13 @@ from app.core.geom.section import AXIS_NORMALS, SectionPlane
 from app.core.units import DISPLAY_UNITS, format_length
 from app.i18n import tr
 
-#: The slider works in tenths of a millimetre; EPS_DISPLAY is finer than any drag.
+#: Der Schieber arbeitet in Zehntelmillimetern; EPS_DISPLAY ist feiner als
+#: das.
 STEPS_PER_MM = 10
 
 
 class MeasureBar(QWidget):
-    """Which measuring tool is active, and the way to clear dimensions (§18.3)."""
+    """Welches Messwerkzeug aktiv ist, und der Weg, Maße zu löschen (§18.3)."""
 
     modeChanged = Signal(str)
     clearRequested = Signal()
@@ -65,7 +66,7 @@ class MeasureBar(QWidget):
 
 
 class SectionBar(QWidget):
-    """Axis, position and thickness of the section."""
+    """Achse, Position und Dicke des Schnitts."""
 
     sectionChanged = Signal(object, object)
     """Carries the plane (or None) and the slice thickness (or None)."""
@@ -95,7 +96,8 @@ class SectionBar(QWidget):
         self.thickness.setDecimals(2)
         self.thickness.setRange(0.1, 500.0)
         self.thickness.setValue(10.0)
-        # A unit symbol is not a translation — it comes from the unit table (§11.1).
+        # Ein Einheitenzeichen ist keine Übersetzung — es kommt aus der
+        # Einheitentabelle (§11.1).
         self.thickness.setSuffix(f" {DISPLAY_UNITS[0]}")
         self.thickness.valueChanged.connect(self._emit)
 
@@ -115,7 +117,7 @@ class SectionBar(QWidget):
     # --- state ------------------------------------------------------------------
 
     def set_range(self, low: float, high: float) -> None:
-        """Follow the size of the scene, with a little air on both sides."""
+        """Folgt der Größe der Szene, mit etwas Luft auf beiden Seiten."""
         margin = max(1.0, (high - low) * 0.05)
         self.position.setMinimum(int((low - margin) * STEPS_PER_MM))
         self.position.setMaximum(int((high + margin) * STEPS_PER_MM))
