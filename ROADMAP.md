@@ -1536,3 +1536,56 @@ Phase). Was die Durchsicht fand, war Politur — sechs Funde, alle behoben:
       — Siebzehn-Menü-Leiste mit Überlauf, ausgegraute Gruppen. Neu
       aufgenommen; `make_figures` wechselt jetzt auch Qts Knopfsprache mit,
       und wer die Oberfläche sichtbar ändert, nimmt die Bilder neu auf
+
+## Die zweite Bedienrunde — was das Fenster versprach und nicht hielt
+
+Anlass wie bei der ersten: die Frage nach Bedienfreundlichkeit, Logik und dem
+Stand gegen die Mitbewerber. Die erste Runde hat die Struktur gerichtet, diese
+fand die Versprechen, die noch offen waren — das größte stand sogar gedruckt
+im eigenen Handbuch. Acht Funde, alle behoben:
+
+* **„Datei → Exportieren" gab es nicht.** Das Handbuch beschreibt den Schritt
+  wörtlich („*Datei → Exportieren*, dann 3MF…"), jeder der drei Hauptwege aus
+  §2.2 endet mit ihm — aber der Schreiber aus §29 stand seit P2 im Kern, und
+  der einzige Weg des Fensters zu einer Datei führte über einen installierten
+  Slicer (Strg+P). Dieselbe Lücke hatte die Kommandozeile, bis der Eiffelturm
+  sie fand. Jetzt: *Exportieren …* (Strg+E) — die Auswahl oder alles, ein 3MF
+  als **eine** Baugruppe (§20), sonst eine Datei je Körper nach dem
+  Namensschema; die Prüfung davor meldet in den Prüfbericht (§29).
+* **Einen Parameter anlegen konnte nur der Agent.** §2.3 verspricht, dass
+  ohne KI alles außer dem Chat funktioniert — Weg 2 lebt von benannten Maßen,
+  und wer keinen Schlüssel hatte, konnte keines vergeben. Jetzt: Knopf in der
+  Leiste, Eintrag unter *Bearbeiten*, Dialog mit Inline-Prüfung (Name,
+  Grammatik, Zyklen — §13); die Änderung reist als `DocumentChange`, ein Undo
+  entfernt den Parameter statt ihn zu nullen. Der leere Zustand der Leiste
+  sagt jetzt außerdem, wozu sie da ist.
+* **Auto Split rechnete im Hauptthread**, mit Wartezeiger — die
+  Trennebenensuche schneidet jede Kandidatenebene durch das ganze Netz und
+  braucht an einem großen Körper Minuten. `apply_split` ist in Suche und
+  Anwendung geteilt; die Suche läuft im Arbeiter mit endlosem Balken und
+  Abbrechen (das Ergebnis wird verworfen, wie beim Agentenzug), das Anwenden
+  bleibt im Thread des Dokuments.
+* **Drei Einträge waren modale Sackgassen auf leerer Szene.** *Automatisch
+  teilen*, *Varianten erzeugen* und der neue Export folgen jetzt derselben
+  Regel wie die siebzig Operationseinträge: ausgegraut, solange ihnen fehlt,
+  was sie brauchen.
+* **Die Update-Prüfung blockierte den Start.** Ihr Docstring sagte „niemand
+  wartet auf sie" — das Fenster wartete bis zu vier Sekunden auf einen
+  Server, dessen Adresse bis heute ein Platzhalter ist. Jetzt ein Arbeiter.
+* **Schließen während der Schichtanalyse war ein Absturz beim Beenden.**
+  `closeEvent` wartete auf den Karten-Arbeiter, nicht auf den
+  Schicht-Arbeiter; `wait_for_idle` kannte den Split-Arbeiter nicht. Beide
+  Lücken zu.
+* **Der Prüfbericht wollte einen Doppelklick.** §18.4 sagt „Klick auf eine
+  Warnung fährt die Kamera hin", `itemActivated` heißt aber Doppelklick oder
+  Eingabetaste. Der Einfachklick tut es jetzt auch.
+* **Im Katalog stand noch „OK".** Der Politur-Fund („OK sagt nicht, was es
+  tut") war in jedem Operationsdialog behoben und im Bausteinkatalog nicht —
+  der Knopf heißt jetzt *Einfügen*.
+
+Der Befund zur Lage bleibt der der ersten Runde: die Alleinstellung —
+verstehen, beraten, anpassen, übergeben in einem Programm, ohne Cloud, jeder
+Vorschlag eine rücknehmbare Transaktion — trägt. Die zwei bekannten Lücken
+(Skizzeneditor P13, Live-Vorschau im Op-Dialog) bleiben die zwei bekannten
+Lücken. Die Handbuchbilder sind nach dieser Runde neu aufzunehmen — Menüs,
+Parameterleiste und Katalog haben sich sichtbar geändert.
