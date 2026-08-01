@@ -76,8 +76,10 @@ include = ["app*"]
 "app.core.knowledge.parts" = ["LICENSE"]
 "app.i18n" = ["locales/*.json"]
 # The three example projects are shipped: documentation, acceptance test and
-# start screen content at once (§37.2).
-"app" = ["examples/*.p3d"]
+# start screen content at once (§37.2). The manual figures ship with them —
+# the drawn and rendered ones are computed on the fly, the screenshots cannot
+# be, so they travel as files (one folder per language).
+"app" = ["examples/*.p3d", "images/manual/*/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
