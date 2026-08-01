@@ -1,12 +1,14 @@
-"""Run the agent suite against a real model (Bauplan §35, §40).
+"""Die Agenten-Suite gegen ein echtes Modell laufen lassen (Bauplan §35,
+§40).
 
-The suite in ``tests/`` checks what the harness guarantees. This runner checks
-the other half, the one that needs a model: how often does an ambiguous request
-get a question instead of a guess, how often do main dimensions become
-parameters, how often is an operation invalid.
+Die Suite in ``tests/`` prüft, was die Mechanik garantiert. Dieser Läufer prüft
+die andere Hälfte, die ein Modell braucht: wie oft bekommt eine mehrdeutige
+Anfrage eine Frage statt einer Vermutung, wie oft werden Hauptmaße zu
+Parametern, wie oft ist eine Operation ungültig.
 
-Needs a key or a local model — without one it says so and stops. It is not part
-of the test suite: it costs money and its result is a quota, not a pass or fail.
+Braucht einen Schlüssel oder ein lokales Modell — ohne eines sagt er das und
+hält an. Er ist nicht Teil der Testsuite: er kostet Geld, und sein Ergebnis ist
+eine Quote, kein Bestanden.
 
     python tools/run_agent_suite.py
     python tools/run_agent_suite.py --backend ollama --model qwen2.5-coder:14b
@@ -38,7 +40,7 @@ MESHES = Path(__file__).resolve().parent.parent / "tests" / "data" / "meshes"
 
 #: What §40 expects of a run against a real model.
 TARGET_ASKED = 1.0
-"""Every ambiguous request has to ask. This one is not a quota, it is a rule."""
+"""Jede mehrdeutige Anfrage muss fragen. Das hier ist keine Quote, das ist eine Regel."""
 TARGET_VALID = 0.95
 """Share of operations that were schema-valid on the first attempt."""
 
@@ -97,7 +99,7 @@ def run_case(case: Case, backend: LLMBackend) -> Outcome:
     )
     try:
         proposal = agent.propose(case.request)
-    except Exception as problem:  # a run against a network fails in many ways
+    except Exception as problem:  # ein Lauf gegen ein Netz scheitert auf viele Arten
         outcome.error = str(problem)[:120]
         return outcome
 
@@ -156,8 +158,8 @@ def main() -> int:
     if ambiguous:
         print(f"bei Mehrdeutigkeit gefragt: {asked}/{len(ambiguous)} (Ziel {TARGET_ASKED:.0%})")
 
-    # §35 for pillar A: was a part used instead of own geometry, and did the
-    # main dimensions become parameters?
+    # §35 für Säule A: wurde ein Baustein statt eigener Geometrie benutzt, und
+    # wurden die Hauptmaße zu Parametern?
     building = [entry for entry in outcomes if entry.case.expects_part]
     if building:
         used_parts = sum(

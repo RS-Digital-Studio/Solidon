@@ -1,4 +1,4 @@
-"""Export and the check that runs before it (Bauplan §29, §16.3)."""
+"""Export und die Prüfung, die davor läuft (Bauplan §29, §16.3)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def body(name: str = "cube_clean.stl"):
-    """On the bed, where a part about to be exported belongs."""
+    """Auf dem Bett, wohin ein Teil kurz vor dem Export gehört."""
     return place_on_bed(normalise(read_mesh((MESHES / name).read_bytes(), ".stl"), "mm").mesh)
 
 
@@ -49,7 +49,9 @@ def test_a_single_part_gets_a_plain_name(profile: Profile) -> None:
 
 
 def test_several_parts_are_numbered(profile: Profile) -> None:
-    """§29: on a plate with three parts, you want to see which is which."""
+    """§29: bei drei Teilen auf einer Platte will man sehen, welches welches
+    ist.
+    """
     objects = [
         scene_object("obj_1", "Deckel"),
         scene_object("obj_2", "Boden"),
@@ -85,7 +87,9 @@ def test_a_clean_part_has_nothing_to_report(profile: Profile) -> None:
 
 
 def test_a_part_below_the_bed_is_reported(profile: Profile) -> None:
-    """The build volume starts at Z = 0; half a cube underneath is worth saying."""
+    """Der Bauraum beginnt bei Z = 0; ein halber Würfel darunter ist es wert,
+    gesagt zu werden.
+    """
     sunk = normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
     findings = check_before_export([scene_object(mesh=sunk)], profile, {})
 
@@ -93,7 +97,9 @@ def test_a_part_below_the_bed_is_reported(profile: Profile) -> None:
 
 
 def test_an_open_part_is_reported_but_not_blocked(profile: Profile) -> None:
-    """§29: whoever wants to export anyway can — they just know what they do."""
+    """§29: wer trotzdem exportieren will, kann das — er weiß dann nur, was er
+    tut.
+    """
     open_body = place_on_bed(
         normalise(read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm").mesh
     )
@@ -160,10 +166,11 @@ def test_every_format_writes_something_readable(export_format: str, profile: Pro
 
 
 def test_a_name_keeps_its_alphabet() -> None:
-    """§29: safe, not stripped of everything that is not English.
+    """§29: sicher, nicht von allem befreit, was nicht englisch ist.
 
-    The export used to force the whole name through ASCII: a downloaded
-    ``埃菲尔铁塔18cm`` came out as ``18cm`` and a ``Соединитель`` as ``teil``.
+    Der Export zwang früher den ganzen Namen durch ASCII: ein
+    heruntergeladenes ``埃菲尔铁塔18cm`` kam als ``18cm`` heraus und ein
+    ``Соединитель`` als ``teil``.
     """
     assert safe_name("埃菲尔铁塔18cm") == "埃菲尔铁塔18cm"
     assert safe_name("Соединитель") == "Соединитель"
@@ -171,7 +178,7 @@ def test_a_name_keeps_its_alphabet() -> None:
 
 
 def test_what_is_actually_unsafe_still_goes() -> None:
-    """The part that was always right: separators and reserved punctuation."""
+    """Der Teil, der immer richtig war: Trenner und reservierte Satzzeichen."""
     assert safe_name(r"a/b\c") == "abc"
     assert safe_name('Teil: "gross" <1>') == "Teil_gross_1"
     assert safe_name("*?|") == "teil", "and nothing left over is still the fallback"

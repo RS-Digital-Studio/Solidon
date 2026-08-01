@@ -1,4 +1,6 @@
-"""LLM backends and the key that stays out of the project file (Bauplan §27)."""
+"""LLM-Backends und der Schlüssel, der aus der Projektdatei
+heraushält (Bauplan §27).
+"""
 
 from __future__ import annotations
 
@@ -22,7 +24,7 @@ from app.core.errors import AppError
 
 
 class Recorder:
-    """A transport that answers from a script instead of from a network."""
+    """Ein Transport, der aus einem Skript antwortet statt aus einem Netz."""
 
     def __init__(self, answer: dict[str, Any] | Exception) -> None:
         self.answer = answer
@@ -39,7 +41,9 @@ class Recorder:
 
 @pytest.fixture(autouse=True)
 def no_stored_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Tests never reach the real keychain of the machine they run on."""
+    """Tests erreichen nie den echten Schlüsselbund der Maschine, auf der sie
+    laufen.
+    """
     monkeypatch.setattr(keys, "_keyring", lambda: None)
     monkeypatch.delenv(keys.ENVIRONMENT_VARIABLE, raising=False)
     monkeypatch.delenv(f"{keys.ENVIRONMENT_VARIABLE}_ANTHROPIC", raising=False)
@@ -49,7 +53,9 @@ def no_stored_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_without_a_key_there_is_no_agent(monkeypatch: pytest.MonkeyPatch) -> None:
-    """§27: agent functions grey out, the application stays fully usable."""
+    """§27: die Agentenfunktionen grauen aus, die Anwendung bleibt voll
+    nutzbar.
+    """
     assert keys.read("anthropic") is None
     assert keys.source("anthropic") == "none"
     assert not AnthropicBackend().available
@@ -132,7 +138,7 @@ def test_a_hosted_reply_becomes_text_and_calls(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_the_system_prompt_travels_apart(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Anthropic takes the system text as its own field, not as a turn."""
+    """Anthropic nimmt den Systemtext als eigenes Feld, nicht als Beitrag."""
     monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
     transport = Recorder(anthropic_answer())
 
@@ -175,7 +181,7 @@ def test_without_a_key_the_backend_says_so() -> None:
 def test_an_unreachable_model_is_an_error_with_a_suggestion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """§33.1: every exception carries at least one way out."""
+    """§33.1: jede Ausnahme trägt mindestens einen Ausweg."""
     monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
     transport = Recorder(BackendUnavailable(status=529, detail="overloaded"))
 
@@ -219,7 +225,9 @@ def test_the_local_backend_speaks_the_same_language() -> None:
 
 
 def test_a_local_server_that_is_not_running_is_not_available() -> None:
-    """Asked with a socket, so a closed port costs milliseconds, not seconds."""
+    """Mit einem Socket gefragt, ein geschlossener Port kostet also
+    Millisekunden, keine Sekunden.
+    """
     backend = OllamaBackend(url="http://localhost:1/api/chat", transport=Recorder({}))
 
     started = time.perf_counter()

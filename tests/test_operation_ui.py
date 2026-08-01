@@ -1,14 +1,15 @@
-"""Selecting a face, and correcting an operation afterwards (§18.5, §15.4).
+"""Eine Fläche wählen, und eine Operation nachträglich korrigieren (§18.5,
+§15.4).
 
-Offscreen, and without opening a single dialog: a test that calls ``exec()``
-waits for a person who is not there. What is checked is what goes *into* the
-dialog and what comes back out of the change — the dialog itself is generated
-from the schema and checked in ``tests/test_ui.py``.
+Offscreen, und ohne einen einzigen Dialog zu öffnen: ein Test, der ``exec()``
+aufruft, wartet auf einen Menschen, der nicht da ist. Geprüft wird, was *in*
+den Dialog hineingeht und was aus der Änderung wieder herauskommt — der Dialog
+selbst entsteht aus dem Schema und wird in ``tests/test_ui.py`` geprüft.
 
-The same trap has a second door, and it cost an afternoon here: a live
-``MainWindow`` answers ``session.failed`` with a modal message box. Anything
-that is *meant* to fail therefore runs on a bare ``Session``, which carries the
-same signal and shows nothing.
+Dieselbe Falle hat eine zweite Tür, und die hat hier einen Nachmittag
+gekostet: ein lebendes ``MainWindow`` beantwortet ``session.failed`` mit einer
+modalen Meldung. Alles, was scheitern *soll*, läuft darum auf einer nackten
+``Session``, die dasselbe Signal trägt und nichts zeigt.
 """
 
 from __future__ import annotations
@@ -34,7 +35,9 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 @pytest.fixture
 def window(qt_app: QApplication) -> MainWindow:
-    """The plate with four bores — every feature kind this needs is on it."""
+    """Die Platte mit vier Bohrungen — jede Merkmalsart, die das hier braucht,
+    ist darauf.
+    """
     window = MainWindow(Session(), UiSettings())
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
@@ -42,7 +45,9 @@ def window(qt_app: QApplication) -> MainWindow:
 
 
 def select(window: MainWindow, feature_id: str | None = None) -> str:
-    """Pick the object and, if asked, one of its features — as a click would."""
+    """Das Objekt wählen und, wenn verlangt, eines seiner Merkmale — wie ein
+    Klick es täte.
+    """
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)
@@ -63,7 +68,7 @@ def select(window: MainWindow, feature_id: str | None = None) -> str:
     return object_id
 
 
-# --- the selection reaches the dialog -------------------------------------------
+# --- Die Auswahl erreicht den Dialog ----------------------------------------------
 
 
 def test_without_a_feature_nothing_is_filled_in(window: MainWindow) -> None:
@@ -73,10 +78,11 @@ def test_without_a_feature_nothing_is_filled_in(window: MainWindow) -> None:
 
 
 def test_a_selected_bore_fills_in_where_it_is(window: MainWindow) -> None:
-    """The join §25 asks for: the operation starts where the feature is.
+    """Die Verbindung, die §25 verlangt: die Operation beginnt dort, wo das
+    Merkmal ist.
 
-    plate_holes has its bores at ±25/±15, so the filled-in position can be
-    checked against the file rather than against itself.
+    plate_holes hat seine Bohrungen bei ±25/±15, die eingetragene Position
+    lässt sich also gegen die Datei prüfen statt gegen sich selbst.
     """
     object_id = select(window)
     window._on_feature_picked("hole_1")
@@ -98,14 +104,14 @@ def test_a_part_is_told_the_name_of_the_feature(window: MainWindow) -> None:
 
 
 def test_a_feature_that_is_gone_fills_in_nothing(window: MainWindow) -> None:
-    """Not an error: the tree and the scene may be a moment apart."""
+    """Kein Fehler: Baum und Szene dürfen einen Moment auseinander sein."""
     object_id = select(window)
     window._on_feature_picked("hole_99")
 
     assert window._from_selection(REGISTRY.get("drill_hole"), object_id) == {}
 
 
-# --- the dialog opens on values instead of defaults -----------------------------
+# --- Der Dialog öffnet auf Werten statt auf Vorgaben ------------------------------
 
 
 def test_the_dialog_starts_on_what_it_was_given(qt_app: QApplication) -> None:
@@ -127,7 +133,7 @@ def test_what_it_was_not_given_keeps_the_default(qt_app: QApplication) -> None:
 
 
 def test_a_filled_in_value_is_not_hidden_behind_the_advanced_box(qt_app: QApplication) -> None:
-    """A value that was just decided belongs where it can be seen."""
+    """Ein gerade entschiedener Wert gehört dorthin, wo er zu sehen ist."""
     spec = REGISTRY.get("drill_hole")
     depth = next(entry for entry in spec.params.spec() if entry.name == "depth")
     assert depth.placement == "advanced", "otherwise this test proves nothing"
@@ -163,12 +169,13 @@ def test_an_operation_can_be_given_other_numbers(window: MainWindow) -> None:
 
 
 def test_a_refused_change_reaches_the_surface_as_a_suggestion(qt_app: QApplication) -> None:
-    """§2.7: what cannot be done is said, not swallowed.
+    """§2.7: was nicht geht, wird gesagt, nicht verschluckt.
 
-    On the session alone, without a window: a live ``MainWindow`` answers
-    ``failed`` with a modal message box, and a test that lets one open waits for
-    somebody to click it. What is checked here is that the signal carries the
-    error — who shows it is the window's business.
+    Auf der Sitzung allein, ohne Fenster: ein lebendes ``MainWindow``
+    beantwortet ``failed`` mit einer modalen Meldung, und ein Test, der eine
+    aufgehen lässt, wartet darauf, dass jemand sie wegklickt. Geprüft wird
+    hier, dass das Signal den Fehler trägt — wer ihn zeigt, ist Sache des
+    Fensters.
     """
     session = Session()
     problems: list[object] = []
@@ -180,7 +187,9 @@ def test_a_refused_change_reaches_the_surface_as_a_suggestion(qt_app: QApplicati
 
 
 def test_every_operation_of_the_history_can_be_opened(window: MainWindow) -> None:
-    """A transaction of several operations gets a row per operation (§15.4)."""
+    """Eine Transaktion aus mehreren Operationen bekommt eine Zeile je
+    Operation (§15.4).
+    """
     select(window)
     window.session.apply(
         "Zwei Schritte",

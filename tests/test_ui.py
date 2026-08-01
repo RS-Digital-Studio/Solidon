@@ -1,8 +1,10 @@
-"""The surface: session, window and the dialogs generated from the schema (§2.5, §10).
+"""Die Oberfläche: Sitzung, Fenster und die aus dem Schema erzeugten
+Dialoge (§2.5, §10).
 
-Runs on the offscreen Qt platform, so it works without a screen. What is checked
-here is wiring, not pixels: does the window build itself from the registry, does
-a change go through the stack, does the evaluation stay in the worker.
+Läuft auf der Offscreen-Qt-Plattform, funktioniert also ohne Bildschirm.
+Geprüft wird hier die Verdrahtung, keine Pixel: baut sich das Fenster aus dem
+Register, geht eine Änderung durch den Stapel, bleibt die Auswertung im
+Arbeiter.
 """
 
 from __future__ import annotations
@@ -132,7 +134,7 @@ def test_the_window_starts_on_the_start_screen(window: MainWindow) -> None:
 
 
 def test_the_right_panel_folds_away(window: MainWindow) -> None:
-    assert window.right.isVisible() or True  # not shown yet, but wired
+    assert window.right.isVisible() or True  # noch nicht sichtbar, aber verdrahtet
     window.action_toggle_right()
     assert not window.settings.right_panel_visible
     window.action_toggle_right()
@@ -197,7 +199,7 @@ def test_the_about_dialog_carries_the_licence_information(qt_app: QApplication) 
 
 
 def test_advanced_parameters_sit_behind_the_fold(qt_app: QApplication) -> None:
-    """§2.4: the front side holds what people actually change."""
+    """§2.4: die Vorderseite hält, was Leute wirklich ändern."""
     from PySide6.QtWidgets import QGroupBox
 
     dialog = OperationDialog(REGISTRY.get("load"), [])

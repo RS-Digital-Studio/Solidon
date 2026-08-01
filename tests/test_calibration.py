@@ -111,7 +111,9 @@ def test_a_measurement_lands_in_the_material_profile(own_profiles: Path) -> None
 
 
 def test_the_shipped_profile_stays_untouched(own_profiles: Path) -> None:
-    """The starting set is the starting set — and it stays obvious which is which."""
+    """Der Startbestand ist der Startbestand — und es bleibt offensichtlich,
+    welches welches ist.
+    """
     calibration.apply(calibration.from_measurements("petg", clearance=0.18))
 
     shipped = Path(profiles.__file__).parent / "data" / "materials.toml"
@@ -134,14 +136,16 @@ def test_a_negative_measurement_is_refused() -> None:
 
 
 def test_a_press_fit_may_be_negative(own_profiles: Path) -> None:
-    """An interference fit is oversize on purpose — that one may be below zero."""
+    """Eine Presspassung ist mit Absicht Übermaß — die eine darf unter null
+    liegen.
+    """
     after = calibration.apply(calibration.from_measurements("petg", press=-0.08))
 
     assert after.press == pytest.approx(-0.08)
 
 
 def test_calibration_reaches_existing_projects(own_profiles: Path, profile: Profile) -> None:
-    """§28.3, §12: tolerances are references, so old projects follow along."""
+    """§28.3, §12: Toleranzen sind Verweise, alte Projekte folgen also mit."""
     from app.core.knowledge.parts.ops import PLAY_FIELD
 
     project = new_project("centauri-carbon-2", "petg")
@@ -193,7 +197,7 @@ def project_with_parameter() -> Project:
 
 
 def test_four_variants_come_out_of_one_call(profile: Profile) -> None:
-    """§28.3: four runs with staggered play, arranged, in one go."""
+    """§28.3: vier Läufe mit gestaffeltem Spiel, angeordnet, in einem Zug."""
     project = project_with_parameter()
 
     made = variants.build(
@@ -213,7 +217,7 @@ def test_four_variants_come_out_of_one_call(profile: Profile) -> None:
 
 
 def test_the_variants_stand_next_to_each_other(profile: Profile) -> None:
-    """One print — so they must not sit inside one another."""
+    """Ein Druck — sie dürfen also nicht ineinander sitzen."""
     project = project_with_parameter()
 
     made = variants.build(
@@ -256,7 +260,9 @@ def test_a_variant_is_named_after_its_value(profile: Profile) -> None:
 
 
 def test_the_project_is_left_exactly_as_it_was(profile: Profile) -> None:
-    """A calibration run is a print, not a modelling step — the stack stays put."""
+    """Ein Kalibrierlauf ist ein Druck, kein Konstruktionsschritt — der Stapel
+    bleibt, wo er ist.
+    """
     project = project_with_parameter()
     before = dataclasses.asdict(project.document.parameters["spiel"])
     ops_before = len(project.document.ops)
@@ -297,7 +303,9 @@ def test_the_values_can_be_read_before_the_run() -> None:
 
 
 def test_the_dialog_offers_exactly_the_fields_of_the_profile(own_profiles: Path) -> None:
-    """What can be measured is what the material profile holds — nothing else."""
+    """Was sich messen lässt, ist das, was das Materialprofil hält — sonst
+    nichts.
+    """
     import pytest as _pytest
 
     _pytest.importorskip("PySide6")

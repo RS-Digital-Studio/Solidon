@@ -1,15 +1,16 @@
-"""Threads that actually screw together (§24.3, §25, §40).
+"""Gewinde, die sich wirklich zusammenschrauben lassen (§24.3, §25, §40).
 
-A thread is the one shape whose two halves cannot be judged separately: each of
-them on its own looks like a thread, is watertight and has the right outer
-dimensions, and the pair still does not grip. That is what happened — the nut
-was bored to the major diameter instead of to the core, so nothing was left
-standing for the ridge of the screw to hold on to and it dropped straight
-through. Measured on M6: crest at r = 2,925, hole beginning at r = 3,075.
+Ein Gewinde ist die eine Form, deren zwei Hälften sich nicht getrennt
+beurteilen lassen: jede für sich sieht aus wie ein Gewinde, ist wasserdicht und
+hat die richtigen Außenmaße — und das Paar greift trotzdem nicht. Genau das ist
+passiert: die Mutter wurde auf den Außendurchmesser gebohrt statt auf den Kern,
+es blieb also nichts stehen, woran der Gang der Schraube hätte halten können,
+und sie fiel glatt hindurch. An M6 gemessen: Kamm bei r = 2,925, Loch beginnend
+bei r = 3,075.
 
-Everything here is therefore measured on the *pair*: the material of the one
-has to reach into the valley of the other, and the gap between them has to be
-the clearance that was asked for — not more, not less.
+Alles hier wird darum am *Paar* gemessen: das Material des einen muss ins Tal
+des anderen reichen, und der Spalt dazwischen muss das Spiel sein, nach dem
+gefragt wurde — nicht mehr, nicht weniger.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ BAND = (3.0, 9.0)
 
 
 def radii(body: Mesh, low: float = BAND[0], high: float = BAND[1]) -> tuple[float, float]:
-    """Smallest and largest distance from the axis, in the given band of height."""
+    """Kleinster und größter Abstand von der Achse, im gegebenen Höhenband."""
     points = np.asarray(as_mesh_data(body).raw.vertices)
     inside = points[(points[:, 2] > low) & (points[:, 2] < high)]
     lengths = np.linalg.norm(inside[:, :2], axis=1)
@@ -42,11 +43,12 @@ def pair(size: str = "M6", play: float = 0.15, length: float = 12.0):
 
 
 def test_a_screw_and_its_nut_interlock() -> None:
-    """The regression: both halves were right and the pair was not.
+    """Die Regression: beide Hälften waren richtig und das Paar war es nicht.
 
-    The nut is a *cutter*, so its numbers are the hole it leaves. Its material
-    begins where its bore does, and that has to be inside the valley of the
-    screw — otherwise the screw turns freely in a smooth hole.
+    Die Mutter ist ein *Werkzeug*, ihre Zahlen sind also das Loch, das sie
+    hinterlässt. Ihr Material beginnt dort, wo ihre Bohrung beginnt, und das
+    muss im Tal der Schraube liegen — sonst dreht die Schraube frei in einem
+    glatten Loch.
     """
     male, female = pair()
 
@@ -58,7 +60,7 @@ def test_a_screw_and_its_nut_interlock() -> None:
 
 
 def test_the_gap_is_the_play_that_was_asked_for() -> None:
-    """Not more: a thread with half a millimetre of air holds nothing."""
+    """Nicht mehr: ein Gewinde mit einem halben Millimeter Luft hält nichts."""
     male, female = pair(play=0.15)
 
     screw_core, screw_crest = radii(male.mesh)
@@ -75,7 +77,9 @@ def test_without_play_the_two_meet_exactly() -> None:
 
 
 def test_the_ridge_is_as_deep_as_the_pitch_says() -> None:
-    """§24.3: the depth is a share of the pitch, and all three users share it."""
+    """§24.3: die Tiefe ist ein Anteil der Steigung, und alle drei Nutzer
+    teilen ihn.
+    """
     male, _female = pair(size="M6")
     core, crest = radii(male.mesh)
 
@@ -93,7 +97,7 @@ def test_a_finer_thread_has_a_shallower_ridge() -> None:
 
 
 def test_both_halves_are_closed_bodies() -> None:
-    """§24.3: a part that is not watertight is not a part."""
+    """§24.3: ein Baustein, der nicht wasserdicht ist, ist kein Baustein."""
     male, female = pair()
 
     assert as_mesh_data(male.mesh).is_watertight
@@ -101,7 +105,7 @@ def test_both_halves_are_closed_bodies() -> None:
 
 
 def test_the_screw_stays_under_its_nominal_diameter() -> None:
-    """An M6 that measures 6,2 does not go through a 6 mm hole."""
+    """Eine M6, die 6,2 misst, geht nicht durch ein 6-mm-Loch."""
     male, _female = pair(size="M6", play=0.15)
 
     assert radii(male.mesh)[1] * 2.0 == pytest.approx(6.0 - 0.15, abs=0.01)

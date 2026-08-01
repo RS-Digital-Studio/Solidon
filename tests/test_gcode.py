@@ -1,4 +1,4 @@
-"""Reading G-code back and cross-checking it (Bauplan §28.1, §28.2, §22.5)."""
+"""G-Code zurücklesen und gegenprüfen (Bauplan §28.1, §28.2, §22.5)."""
 
 from __future__ import annotations
 
@@ -54,7 +54,9 @@ def test_a_prusa_file_gives_up_its_numbers() -> None:
 
 
 def test_a_cura_file_gives_up_its_numbers() -> None:
-    """Different comments, same facts — one pattern per fact, not one per slicer."""
+    """Andere Kommentare, dieselben Tatsachen — ein Muster je Tatsache, nicht
+    eines je Slicer.
+    """
     metrics = gcode.parse(CURA)
 
     assert "Cura" in metrics.slicer
@@ -64,7 +66,9 @@ def test_a_cura_file_gives_up_its_numbers() -> None:
 
 
 def test_what_is_not_in_the_file_stays_unknown() -> None:
-    """A missing value is missing, not zero — that is why the file is read."""
+    """Ein fehlender Wert fehlt, er ist nicht null — genau darum wird die
+    Datei gelesen.
+    """
     metrics = gcode.parse("G1 X10 Y10 E1.0\n")
 
     assert metrics.print_seconds is None
@@ -74,7 +78,9 @@ def test_what_is_not_in_the_file_stays_unknown() -> None:
 
 
 def test_the_support_volume_is_measured_not_guessed() -> None:
-    """§28.1: measured support material — from the type comments and the E axis."""
+    """§28.1: gemessenes Stützmaterial — aus den Typ-Kommentaren und der
+    E-Achse.
+    """
     metrics = gcode.parse(PRUSA)
 
     assert metrics.support_mm3 is not None
@@ -85,7 +91,7 @@ def test_absolute_extrusion_is_counted_as_differences() -> None:
     metrics = gcode.parse(CURA)
 
     assert metrics.support_mm3 is not None
-    # E goes 1 → 3 → 5 with the tool on support for the last two moves.
+    # E läuft 1 → 3 → 5, mit dem Werkzeug auf Stützen für die letzten zwei Wege.
     assert metrics.support_mm3 == pytest.approx(4.0 * gcode.FILAMENT_AREA, rel=1e-6)
 
 
@@ -117,7 +123,9 @@ def test_a_close_estimate_says_nothing() -> None:
 
 
 def test_a_far_estimate_becomes_a_finding() -> None:
-    """§28.2: a clear difference is a finding — and a hint to improve §22."""
+    """§28.2: ein klarer Unterschied ist ein Befund — und ein Hinweis, §22 zu
+    verbessern.
+    """
     check = gcode.compare(estimated=500.0, measured=1000.0, what="support")
 
     assert not check.within_limit
@@ -137,7 +145,7 @@ def test_the_estimate_is_never_replaced_by_the_measurement() -> None:
 
 
 def test_every_measured_finding_says_it_was_measured() -> None:
-    """§22.5: an estimate and a measurement never look alike."""
+    """§22.5: eine Schätzung und eine Messung sehen nie gleich aus."""
     metrics = gcode.parse(PRUSA)
     findings = gcode.findings_for(metrics)
 
@@ -148,7 +156,7 @@ def test_every_measured_finding_says_it_was_measured() -> None:
 
 
 def test_an_internal_finding_stays_internal() -> None:
-    """The other half of the same rule, checked from the other side."""
+    """Die andere Hälfte derselben Regel, von der anderen Seite geprüft."""
     import trimesh
 
     from app.core.geom.mesh import MeshData

@@ -1,4 +1,6 @@
-"""The generate dialog, and way 3 reaching the scene through it (§2.2, §27)."""
+"""Der Erzeugen-Dialog, und Weg 3, der durch ihn die Szene erreicht (§2.2,
+§27).
+"""
 
 from __future__ import annotations
 
@@ -26,7 +28,9 @@ def ok(dialog: GenerateDialog):
 
 
 def finish(dialog: GenerateDialog, qt_app: QApplication) -> None:
-    """Run the worker to its end without blocking the interface thread."""
+    """Den Arbeiter zu Ende laufen lassen, ohne den Oberflächen-Thread zu
+    blockieren.
+    """
     dialog._start()
     worker = dialog._worker
     assert worker is not None
@@ -35,7 +39,9 @@ def finish(dialog: GenerateDialog, qt_app: QApplication) -> None:
 
 
 def test_without_a_generator_the_dialog_explains_itself(qt_app: QApplication) -> None:
-    """§27: no backend means greyed out and a sentence, not a hidden menu entry."""
+    """§27: kein Backend heißt ausgegraut und ein Satz, kein versteckter
+    Menüeintrag.
+    """
     dialog = GenerateDialog(backend=ScriptedMeshBackend())
     dialog.prompt.setText("eine Figur")
 
@@ -68,7 +74,9 @@ def test_generating_hands_back_a_body(qt_app: QApplication, generator: ScriptedM
 
 
 def test_a_failure_stays_in_the_dialog(qt_app: QApplication) -> None:
-    """A generator that says no is not a crash — the sentence lands in the dialog."""
+    """Ein Generator, der Nein sagt, ist kein Absturz — der Satz landet im
+    Dialog.
+    """
     dialog = GenerateDialog(backend=ScriptedMeshBackend(answers={"etwas": b"solid x\n"}))
     dialog.prompt.setText("etwas anderes")
 
@@ -82,7 +90,9 @@ def test_a_failure_stays_in_the_dialog(qt_app: QApplication) -> None:
 def test_the_session_puts_a_generated_body_on_the_stack(
     qt_app: QApplication, generator: ScriptedMeshBackend
 ) -> None:
-    """The interface adds nothing to way 3 — it calls the core and redraws."""
+    """Die Oberfläche fügt Weg 3 nichts hinzu — sie ruft den Kern und zeichnet
+    neu.
+    """
     session = Session()
     session.project = new_project("centauri-carbon-2", "petg")
     session.history = History(session.project.document)

@@ -1,8 +1,9 @@
-"""Shared test scaffolding.
+"""Gemeinsames Gerüst für die Tests.
 
-The geometry kernel is not part of P0, so tests use a mesh that only answers the
-questions the ``Mesh`` protocol asks. That is enough for the scene, the stack and
-the evaluation — and it keeps these tests honest about what they check.
+Der Geometriekern ist nicht Teil von P0, die Tests benutzen also ein Netz, das
+nur die Fragen beantwortet, die das ``Mesh``-Protokoll stellt. Das genügt für
+Szene, Stapel und Auswertung — und es hält diese Tests ehrlich darüber, was sie
+prüfen.
 """
 
 from __future__ import annotations
@@ -14,13 +15,13 @@ from dataclasses import dataclass, field
 
 import pytest
 
-# Surface tests need a Qt platform that works without a screen.
+# Oberflächentests brauchen eine Qt-Plattform, die ohne Bildschirm funktioniert.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-# The suite must not read or write the user's own data (§38). Without this a
-# calibrated material on the developer's machine changes what the tests see —
-# and worse, a test run leaves calibrations behind in their profile folder.
-# Set before anything imports `app.core.paths`, because that reads these.
+# Die Suite darf die eigenen Daten des Nutzers weder lesen noch schreiben
+# (§38). Ohne das ändert ein kalibriertes Material auf dem Entwicklerrechner,
+# was die Tests sehen — und schlimmer: ein Testlauf hinterließe Kalibrierungen
+# in seinem Profilordner.
 _ISOLATED = tempfile.mkdtemp(prefix="formwerk-tests-")
 for _variable in ("APPDATA", "LOCALAPPDATA", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
     os.environ[_variable] = _ISOLATED
@@ -54,7 +55,7 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @dataclass(frozen=True, slots=True)
 class FakeMesh:
-    """A mesh stand-in with fixed metrics."""
+    """Ein Netz-Platzhalter mit festen Kennzahlen."""
 
     triangles: int = 12
     vertices: int = 8
@@ -99,7 +100,7 @@ class FakeMesh:
 
 @pytest.fixture(scope="session")
 def qt_app() -> object:
-    """One QApplication for the whole run — widgets crash without it."""
+    """Eine QApplication für den ganzen Lauf — Widgets stürzen ohne sie ab."""
     from PySide6.QtWidgets import QApplication
 
     return QApplication.instance() or QApplication([])

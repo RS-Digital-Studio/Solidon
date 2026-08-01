@@ -1,4 +1,6 @@
-"""Stable feature identifiers, and what happens when they cannot be (§21.2, §21.3)."""
+"""Stabile Merkmalsbezeichner, und was passiert, wenn sie es nicht sein
+können (§21.2, §21.3).
+"""
 
 from __future__ import annotations
 
@@ -30,7 +32,9 @@ def holes_of(mesh: MeshData) -> dict[str, Feature]:
 
 
 def one_hole_plate() -> MeshData:
-    """A plate with a single bore in the middle — the "before" of the twin case."""
+    """Eine Platte mit einer einzigen Bohrung in der Mitte — das „Vorher" des
+    Zwillingsfalls.
+    """
     plate = trimesh.creation.box(extents=(60.0, 30.0, 8.0))
     drill = trimesh.creation.cylinder(radius=2.6, height=40.0, sections=48)
     return MeshData.of(trimesh.boolean.difference([plate, drill]))
@@ -86,7 +90,7 @@ def test_a_new_feature_is_reported_as_fresh() -> None:
 
 
 def test_two_identical_bores_close_together_are_ambiguous() -> None:
-    """§40: plate_holes_twin is reported as ambiguous instead of guessed."""
+    """§40: plate_holes_twin wird als mehrdeutig gemeldet statt geraten."""
     before = one_hole_plate()
     after = body("plate_holes_twin.stl")
 
@@ -105,7 +109,7 @@ def test_two_identical_bores_close_together_are_ambiguous() -> None:
 
 
 def test_the_ambiguity_becomes_a_question_with_choices() -> None:
-    """§21.3: the evaluation stops there and asks over ctx.ask."""
+    """§21.3: die Auswertung hält dort an und fragt über ctx.ask."""
     question, choices = question_for("hole_1", ("hole_1", "hole_2"))
 
     assert "hole_1" in question
@@ -167,7 +171,9 @@ def test_matching_against_nothing_is_not_a_crash() -> None:
 
 
 def test_identifiers_survive_ten_operations(document, profile) -> None:
-    """§40 for P3: after ten steps the bores still carry the names they started with."""
+    """§40 für P3: nach zehn Schritten tragen die Bohrungen noch die Namen,
+    mit denen sie begannen.
+    """
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.scene.project import ProjectSources, new_project
     from app.core.types import Source
@@ -208,7 +214,9 @@ def test_identifiers_survive_ten_operations(document, profile) -> None:
 
 
 def test_features_travel_with_the_motion_the_operation_reports() -> None:
-    """§21.2: a turned body is the same body, and the op is what says so."""
+    """§21.2: ein gedrehter Körper ist derselbe Körper, und die Op ist es, die
+    das sagt.
+    """
     from app.core.geom.ops import as_transform
     from app.core.geom.transform import rotation
     from app.core.perceive.matching import moved_features
@@ -225,7 +233,9 @@ def test_features_travel_with_the_motion_the_operation_reports() -> None:
 
 
 def test_without_the_motion_a_rotation_would_lose_them() -> None:
-    """Why the matrix is worth carrying: the same case without it."""
+    """Warum die Matrix es wert ist, mitgetragen zu werden: derselbe Fall ohne
+    sie.
+    """
     from app.core.geom.transform import rotation
 
     mesh = body("plate_holes.stl")
@@ -237,7 +247,7 @@ def test_without_the_motion_a_rotation_would_lose_them() -> None:
 
 
 def test_a_transform_operation_reports_what_it_did() -> None:
-    """The matrix comes from the operation, not from a comparison afterwards."""
+    """Die Matrix kommt aus der Operation, nicht aus einem Vergleich danach."""
     from app.core.registry import REGISTRY
     from app.core.scene.cancel import NeverCancelled
     from app.core.types import OpContext, Scene, SceneObject

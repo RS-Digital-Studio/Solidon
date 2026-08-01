@@ -1,4 +1,4 @@
-"""Auto split and the explosion view from the window (§25, §18.8)."""
+"""Auto Split und die Explosionsansicht aus dem Fenster (§25, §18.8)."""
 
 from __future__ import annotations
 
@@ -46,7 +46,9 @@ def test_the_bar_only_shows_up_when_there_is_something_to_pull_apart(
 
 
 def test_folding_back_together_resets_the_slider(qt_app: QApplication) -> None:
-    """A slider that keeps a value nobody can see any more is a trap."""
+    """Ein Schieber, der einen Wert behält, den niemand mehr sieht, ist eine
+    Falle.
+    """
     bar = ExplodeBar()
     bar.show_for(2)
     bar.slider.setValue(8)
@@ -91,7 +93,7 @@ def test_a_part_that_fits_is_left_alone(qt_app: QApplication) -> None:
 
 
 def test_the_explosion_never_reaches_the_geometry(qt_app: QApplication) -> None:
-    """§18.8: it is a way of looking at the parts, not a way of moving them."""
+    """§18.8: sie ist eine Art, die Teile anzusehen, keine Art, sie zu bewegen."""
     from app.ui.viewport import Viewport
 
     session = Session()

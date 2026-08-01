@@ -1,9 +1,9 @@
-"""Build the three example projects (Bauplan §37.2, §2.2).
+"""Baut die drei Beispielprojekte (Bauplan §37.2, §2.2).
 
-They are documentation, acceptance test and start screen content at once, so
-they are built the way everything else is built: as operations on a stack. A
-folder of hand-exported files would drift from the application the first time an
-operation changed.
+Sie sind Dokumentation, Abnahmetest und Startbildschirm-Inhalt zugleich, also
+werden sie gebaut, wie alles andere gebaut wird: als Operationen auf einem
+Stapel. Ein Ordner mit von Hand exportierten Dateien driftete von der Anwendung
+ab, sobald sich zum ersten Mal eine Operation ändert.
 
     python tools/make_examples.py
 """
@@ -33,7 +33,9 @@ def with_source(project: Project, name: str, mesh: str, kind: SourceKind = "impo
 
 
 def way_one() -> Project:
-    """Adapting a foreign model: import, repair, on the bed, drill (§2.2)."""
+    """Ein fremdes Modell anpassen: einlesen, reparieren, aufs Bett,
+    bohren (§2.2).
+    """
     project = new_project("centauri-carbon-2", "petg")
     with_source(project, "src_1", "plate_holes.stl")
     history = History(project.document)
@@ -56,7 +58,7 @@ def way_one() -> Project:
 
 
 def way_two() -> Project:
-    """Building new: parameters, a body, parts from the library (§2.2)."""
+    """Neu bauen: Parameter, ein Körper, Bausteine aus der Bibliothek (§2.2)."""
     project = new_project("centauri-carbon-2", "petg")
     document = project.document
     document.parameters["breite"] = Parameter(name="breite", value=60.0, unit="mm", title="Breite")

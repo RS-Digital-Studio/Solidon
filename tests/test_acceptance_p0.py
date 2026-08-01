@@ -1,7 +1,8 @@
-"""The acceptance criteria of phase P0 (Bauplan §40), one test each.
+"""Die Abnahmekriterien der Phase P0 (Bauplan §40), je ein Test.
 
-A phase is finished when its criteria are green — not when it feels complete.
-This file is the proof, so each test names the criterion it stands for.
+Eine Phase ist fertig, wenn ihre Kriterien grün sind — nicht wenn sie sich
+vollständig anfühlt. Diese Datei ist der Beweis, jeder Test benennt also das
+Kriterium, für das er steht.
 """
 
 from __future__ import annotations
@@ -56,8 +57,9 @@ def test_operations_are_visible_in_every_surface(qt_app: object) -> None:
     assert {command.name for command in cli_commands()} == names
     assert {schema["name"] for schema in tool_schemas()} == names
 
-    # The object context menu offers every operation that works on one object,
-    # the feature context menu everything declared for that kind (§10, §18.5).
+    # Das Objekt-Kontextmenü bietet jede Operation an, die auf einem Objekt
+    # arbeitet, das Merkmal-Kontextmenü alles, was für diese Art deklariert
+    # ist (§10, §18.5).
     from app.ui.panels import ObjectTree
 
     offered = {spec.name for spec in ObjectTree.operations_for_object(None)}  # type: ignore[arg-type]
@@ -69,7 +71,7 @@ def test_operations_are_visible_in_every_surface(qt_app: object) -> None:
 
 
 def test_saving_and_loading_keeps_the_stack_bit_identical(tmp_path: Path) -> None:
-    """§40: project save and load preserves the stack bit for bit."""
+    """§40: Speichern und Laden erhält den Stapel Bit für Bit."""
     project = project_with("cube_clean.stl", unit="mm")
     first = save(project, tmp_path / "a.p3d")
     second = save(load(first), tmp_path / "b.p3d")
@@ -79,7 +81,7 @@ def test_saving_and_loading_keeps_the_stack_bit_identical(tmp_path: Path) -> Non
 
 
 def test_evaluating_twice_gives_identical_geometry(profile: Profile) -> None:
-    """§40: two evaluations produce the same geometry."""
+    """§40: zwei Auswertungen erzeugen dieselbe Geometrie."""
     project = project_with("cube_clean.stl", unit="mm")
     sources = ProjectSources(project)
 
@@ -124,7 +126,9 @@ def test_undo_and_redo_over_ten_transactions() -> None:
 def test_import_in_mm_inch_and_cm(
     profile: Profile, name: str, unit: str, size: tuple[float, float, float]
 ) -> None:
-    """§40: import in mm, inch and cm, with the unit question where needed."""
+    """§40: Import in mm, Zoll und cm, mit der Einheitenfrage, wo sie nötig
+    ist.
+    """
     asked: list[str] = []
 
     def ask(question: str, choices: list[str]) -> str:
@@ -143,7 +147,7 @@ def test_import_in_mm_inch_and_cm(
 
 
 def test_a_parameter_change_recomputes_only_its_branch(profile: Profile) -> None:
-    """§40: a parameter change recomputes only the affected branch."""
+    """§40: eine Parameteränderung rechnet nur den betroffenen Zweig neu."""
     project = project_with("cube_clean.stl", unit="mm")
     document = project.document
     document.parameters["name_suffix"] = Parameter(name="name_suffix", value=1.0)
@@ -166,14 +170,14 @@ def test_a_parameter_change_recomputes_only_its_branch(profile: Profile) -> None
 
 
 def test_the_expression_evaluator_refuses_everything_outside_the_grammar() -> None:
-    """§40: the expression evaluator rejects anything outside the grammar."""
+    """§40: der Ausdrucksauswerter lehnt alles außerhalb der Grammatik ab."""
     for text in ("=__import__('os')", "=open('x')", "=@a ** 2", "=eval('1')", "=1;2"):
         with pytest.raises(ValidationError):
             check_expression(text)
 
 
 def test_the_start_screen_has_a_drop_area(qt_app: object) -> None:
-    """§40: start screen with a drop area."""
+    """§40: Startbildschirm mit Ablagefläche."""
     from app.ui.start_screen import DropArea, StartScreen
 
     screen = StartScreen()
@@ -182,7 +186,7 @@ def test_the_start_screen_has_a_drop_area(qt_app: object) -> None:
 
 
 def test_the_printer_starting_set_is_present_and_selectable() -> None:
-    """§40: starting set of printer profiles present and selectable."""
+    """§40: Startbestand an Druckerprofilen vorhanden und wählbar."""
     printers = profiles.printer_profiles()
     assert len(printers) >= 10
     chosen = profiles.make_profile("bambu-a1-mini", "pla")

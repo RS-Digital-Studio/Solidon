@@ -1,8 +1,8 @@
-"""The chat in the window (Bauplan §26.3, §26.5, §27).
+"""Der Chat im Fenster (Bauplan §26.3, §26.5, §27).
 
-Offscreen: what is checked is the coupling, not the layout. Does a turn that was
-taken back look taken back, does a proposal wait for a decision, and does the
-whole thing stay out of the way when there is no model.
+Offscreen: geprüft wird die Kopplung, nicht das Layout. Sieht ein
+zurückgenommener Beitrag zurückgenommen aus, wartet ein Vorschlag auf eine
+Entscheidung, und hält sich das Ganze heraus, wenn es kein Modell gibt.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def scripted(window: MainWindow, *answers: Reply) -> ScriptedBackend:
 
 
 def test_without_a_model_the_chat_says_so_once(qt_app: QApplication) -> None:
-    """§27: agent functions grey out, everything else keeps working."""
+    """§27: die Agentenfunktionen grauen aus, alles andere läuft weiter."""
     panel = ChatPanel()
     panel.set_available(False)
 
@@ -74,7 +74,7 @@ def test_while_the_agent_thinks_nothing_more_is_sent(qt_app: QApplication) -> No
 
 
 def test_a_taken_back_turn_is_struck_through(window: MainWindow) -> None:
-    """§26.3: discarded, not deleted — it happened, it just does not hold."""
+    """§26.3: verworfen, nicht gelöscht — er ist passiert, er gilt nur nicht."""
     document = window.session.project.document
     document.chat.append(ChatEntry(id="c1", role="user", text="Bohr ein Loch"))
     document.chat.append(ChatEntry(id="c2", role="agent", text="Erledigt", transaction_id="t99"))
@@ -113,7 +113,9 @@ def test_a_turn_names_its_transaction(window: MainWindow) -> None:
 
 
 def test_a_proposal_waits_for_a_decision(window: MainWindow) -> None:
-    """§26.5: proposal, difference view, then accept or discard — never on its own."""
+    """§26.5: Vorschlag, Differenzansicht, dann annehmen oder verwerfen — nie
+    von selbst.
+    """
     scripted(
         window,
         Reply(
@@ -181,8 +183,10 @@ def test_discarding_keeps_the_conversation(window: MainWindow) -> None:
 def test_the_key_dialog_never_shows_a_stored_key(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """§27: the key lives in the keychain. A dialog that echoed it back would
-    put it on the screen, into a screenshot, into a bug report."""
+    """§27: der Schlüssel lebt im Schlüsselbund. Ein Dialog, der ihn
+    zurückspiegelte, brächte ihn auf den Bildschirm, in einen Screenshot, in
+    einen Fehlerbericht.
+    """
     from app.core.backends import keys
     from app.ui.dialogs import KeyDialog
 
@@ -231,7 +235,9 @@ def test_the_summary_names_what_would_change(qt_app: QApplication) -> None:
 
 
 def qt_app_process(window: MainWindow) -> None:
-    """Let the worker signals arrive — the agent runs in its own thread."""
+    """Die Signale des Arbeiters ankommen lassen — der Agent läuft in seinem
+    eigenen Thread.
+    """
     import time
 
     application = QApplication.instance()

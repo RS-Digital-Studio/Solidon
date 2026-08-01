@@ -23,7 +23,9 @@ from app.ui.settings import UiSettings
 
 
 def test_the_survey_names_every_tool_and_what_it_is_for() -> None:
-    """§38: configured, not shipped — so the application has to say what is there."""
+    """§38: eingerichtet, nicht mitgeliefert — die Anwendung muss also sagen,
+    was da ist.
+    """
     found = tools.survey()
 
     assert {state.tool.id for state in found} == {"openscad", "slicer", "ollama", "comfyui"}
@@ -134,7 +136,9 @@ def test_the_answers_land_in_the_settings(qt_app: QApplication) -> None:
 
 
 def test_the_first_run_ends_at_the_first_import(qt_app: QApplication) -> None:
-    """§2.3: the first five minutes end at an import, not at a "done" button."""
+    """§2.3: die ersten fünf Minuten enden bei einem Import, nicht bei einem
+    „Fertig"-Knopf.
+    """
     asked: list[bool] = []
     dialog = FirstRunDialog(UiSettings())
     dialog.importRequested.connect(lambda: asked.append(True))
@@ -145,8 +149,10 @@ def test_the_first_run_ends_at_the_first_import(qt_app: QApplication) -> None:
 
 
 def test_a_window_does_not_open_a_dialog_by_itself(qt_app: QApplication) -> None:
-    """A window that opens a modal dialog while being built cannot be built by
-    anything that is not a person — a test, a screenshot tool, a second window."""
+    """Ein Fenster, das während seines Aufbaus einen modalen Dialog öffnet,
+    lässt sich von nichts aufbauen, das kein Mensch ist — kein Test, kein
+    Screenshot-Werkzeug, kein zweites Fenster.
+    """
     settings = UiSettings()
     assert should_run(settings)
 
@@ -175,7 +181,9 @@ def test_a_report_without_the_project_says_nothing_about_geometry() -> None:
 
 
 def test_a_report_with_the_project_says_what_travels_along() -> None:
-    """§37.2: the offer says that the model is attached — quietly would be wrong."""
+    """§37.2: das Angebot sagt, dass das Modell angehängt wird — still wäre
+    falsch.
+    """
     report = reports.ErrorReport(summary="x", include_project=True)
 
     assert report.contains_geometry
@@ -205,7 +213,7 @@ def test_the_project_is_attached_only_when_asked(tmp_path: Path) -> None:
 
 
 def test_nothing_is_sent(tmp_path: Path) -> None:
-    """§37.2: no telemetry. The report is a folder, and it stays one."""
+    """§37.2: keine Telemetrie. Der Bericht ist ein Ordner und bleibt einer."""
     import inspect
 
     source = inspect.getsource(reports)
@@ -253,7 +261,9 @@ def test_the_check_reads_the_version_file() -> None:
 
 
 def test_a_server_that_does_not_answer_is_not_an_error() -> None:
-    """A start that stumbles because a server was down would be worse than no notice."""
+    """Ein Start, der stolpert, weil ein Server nicht erreichbar war, wäre
+    schlimmer als gar kein Hinweis.
+    """
 
     def fail(url: str, headers: dict[str, str], payload: dict[str, object]) -> dict[str, object]:
         raise OSError("no route to host")
@@ -262,12 +272,14 @@ def test_a_server_that_does_not_answer_is_not_an_error() -> None:
 
 
 def test_the_check_is_off_until_it_is_switched_on() -> None:
-    """§37.2: one request that leaves the machine is a decision, not a default."""
+    """§37.2: eine Anfrage, die den Rechner verlässt, ist eine Entscheidung,
+    keine Vorgabe.
+    """
     assert UiSettings().check_for_updates is False
 
 
 def test_nothing_is_downloaded() -> None:
-    """A notice with a link — never an automatic update."""
+    """Ein Hinweis mit einem Link — nie ein automatisches Update."""
     import inspect
 
     source = inspect.getsource(updates)

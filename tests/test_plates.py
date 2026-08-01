@@ -1,8 +1,9 @@
-"""Several build plates in one scene (Bauplan §25, §29).
+"""Mehrere Druckplatten in einer Szene (Bauplan §25, §29).
 
-More parts than fit on one plate is the normal case as soon as somebody prints
-a set of something. What must not happen is that arranging quietly stacks them
-on top of each other, or that the export writes files nobody can tell apart.
+Mehr Teile, als auf eine Platte passen, ist der Normalfall, sobald jemand einen
+Satz von etwas druckt. Was nicht passieren darf, ist, dass das Anordnen sie
+still übereinanderstapelt oder der Export Dateien schreibt, die niemand
+auseinanderhalten kann.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from app.ui.explode_bar import ALL_PLATES, ExplodeBar
 
 
 def slab(size: float = 120.0) -> MeshData:
-    """A plate lying on the bed — anything below Z = 0 is out of the volume."""
+    """Eine Platte auf dem Bett — alles unter Z = 0 ist außerhalb des Raums."""
     body = trimesh.creation.box(extents=(size, size, 10.0))
     body.apply_translation((0.0, 0.0, 5.0))
     return MeshData.of(body)
@@ -42,7 +43,7 @@ def test_what_fits_stays_on_one_plate(profile: Profile) -> None:
 
 
 def test_what_does_not_fit_goes_on_the_next_plate(profile: Profile) -> None:
-    """Four 120 mm slabs fit a 256 mm plate; nine do not."""
+    """Vier 120-mm-Platten passen auf eine 256er; neun nicht."""
     result = arrange_on_bed(many(9), profile, spacing=5.0, plates=4)
 
     assert result.plate_count > 1
@@ -62,7 +63,7 @@ def test_each_plate_is_checked_on_its_own(profile: Profile) -> None:
 
 
 def test_two_parts_at_the_same_spot_on_different_plates_are_fine(profile: Profile) -> None:
-    """Without plates this would be the collision that never happens."""
+    """Ohne Platten wäre das die Kollision, die es nie gibt."""
     result = arrange_on_bed(many(9), profile, spacing=5.0, plates=4)
 
     first = [mesh for mesh, plate in zip(result.meshes, result.plates, strict=True) if plate == 0]
@@ -74,7 +75,9 @@ def test_two_parts_at_the_same_spot_on_different_plates_are_fine(profile: Profil
 
 
 def test_one_plate_too_few_is_said_rather_than_hidden(profile: Profile) -> None:
-    """Nothing is left out — the last plate takes the rest and the report says so."""
+    """Nichts fällt weg — die letzte Platte nimmt den Rest, und der Bericht
+    sagt es.
+    """
     result = arrange_on_bed(many(9), profile, spacing=5.0, plates=1)
 
     assert len(result.meshes) == 9, "every part is placed"
@@ -85,7 +88,7 @@ def test_the_upper_limit_is_a_number_somebody_chose() -> None:
     assert MAX_PLATES == 12
 
 
-# --- as an operation ------------------------------------------------------------
+# --- Als Operation ---------------------------------------------------------------
 
 
 def test_arranging_writes_the_plate_onto_the_objects(profile: Profile) -> None:

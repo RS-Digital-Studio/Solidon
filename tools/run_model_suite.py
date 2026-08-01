@@ -1,14 +1,15 @@
-"""Run the whole pipeline over a folder of real models (Bauplan §34, §35).
+"""Die ganze Kette über einen Ordner echter Modelle laufen lassen (Bauplan
+§34, §35).
 
-The reference corpus in ``tests/data`` is built to be small and to hit one
-thing each. It cannot do what a folder of models somebody actually printed
-does: bring the shapes nobody thinks to construct — a cat with three hundred
-thousand triangles, a scraper exported from a slicer, a bowling game as one
-3MF with twelve bodies in it.
+Der Referenzkorpus in ``tests/data`` ist gebaut, um klein zu sein und je eine
+Sache zu treffen. Was er nicht kann, kann ein Ordner mit Modellen, die jemand
+wirklich gedruckt hat: die Formen bringen, auf die niemand kommt, wenn er
+konstruiert — eine Katze mit dreihunderttausend Dreiecken, ein aus einem Slicer
+exportierter Schaber, ein Bowlingspiel als eine 3MF mit zwölf Körpern darin.
 
-So this is not a test. It is the thing that tells you which test to write:
-every model through the input stage, the feature detection and the layer
-analysis, with what broke and what it cost.
+Das hier ist also kein Test. Es ist das, was einem sagt, welchen Test man
+schreiben muss: jedes Modell durch die Eingangsstufe, die Merkmalserkennung und
+die Schichtanalyse, mit dem, was brach, und dem, was es kostete.
 
     python tools/run_model_suite.py "F:/3D Druck/3D Drucker"
     python tools/run_model_suite.py --limit 10 --skip-slice
@@ -33,14 +34,15 @@ from app.core.knowledge import profiles
 from app.core.perceive.features import detect
 from app.core.slice.analysis import slice_body
 
-#: Above this many triangles the layer analysis is skipped unless asked for —
-#: a two-million-triangle cat is a performance measurement, not a smoke test.
+#: Über so vielen Dreiecken wird die Schichtanalyse übersprungen, außer sie
+#: wird verlangt — eine Katze mit zwei Millionen Dreiecken ist eine
+#: Leistungsmessung, kein Rauchtest.
 SLICE_LIMIT = 400_000
 
 
 @dataclass(slots=True)
 class Outcome:
-    """What one model did."""
+    """Was ein Modell getan hat."""
 
     path: Path
     triangles: int = 0
@@ -55,7 +57,9 @@ class Outcome:
 
 
 def run_one(path: Path, layer_height: float, skip_slice: bool) -> Outcome:
-    """Read, normalise, detect, slice — and catch whatever comes out."""
+    """Lesen, normalisieren, erkennen, schneiden — und auffangen, was
+    herauskommt.
+    """
     outcome = Outcome(path=path)
     try:
         payload = path.read_bytes()
@@ -84,7 +88,7 @@ def run_one(path: Path, layer_height: float, skip_slice: bool) -> Outcome:
             outcome.seconds["slice"] = time.perf_counter() - start
     except AppError as problem:
         outcome.failure = f"{type(problem).__name__}: {problem.title}"
-    except Exception as problem:  # a smoke test wants the unexpected ones most
+    except Exception as problem:  # ein Rauchtest will die unerwarteten am meisten
         outcome.failure = f"{type(problem).__name__}: {problem}"
         outcome.findings.append(traceback.format_exc(limit=3).strip().splitlines()[-1])
     return outcome

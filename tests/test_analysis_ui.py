@@ -1,8 +1,9 @@
-"""Analysis maps, feature overlay and layer analysis in the surface (§18.4, §18.5, §18.10).
+"""Analysekarten, Merkmals-Überlagerung und Schichtanalyse in der
+Oberfläche (§18.4, §18.5, §18.10).
 
-Offscreen again: what is checked is the wiring and the legend, not the picture.
-Whether the colours end up on the right triangle is decided in the core, and
-``tests/test_maps.py`` checks it there.
+Wieder offscreen: geprüft werden die Verdrahtung und die Legende, nicht das
+Bild. Ob die Farben auf dem richtigen Dreieck landen, entscheidet der Kern, und
+``tests/test_maps.py`` prüft es dort.
 """
 
 from __future__ import annotations
@@ -41,7 +42,9 @@ def select_plate(window: MainWindow) -> None:
 
 
 def wait_for_map(window: MainWindow) -> None:
-    """§18.9: maps are built in the background, so the test waits like the window."""
+    """§18.9: Karten werden im Hintergrund gebaut, der Test wartet also wie
+    das Fenster.
+    """
     worker = window._map_worker
     if worker is not None:
         worker.wait(20_000)
@@ -52,7 +55,9 @@ def wait_for_map(window: MainWindow) -> None:
 
 
 def test_every_map_of_the_table_is_offered(qt_app: QApplication) -> None:
-    """§18.4 lists seven maps; the bar offers all seven and "none"."""
+    """§18.4 zählt sieben Karten auf; die Leiste bietet alle sieben an und
+    „keine".
+    """
     bar = AnalysisBar()
     offered = [bar.selector.itemData(index) for index in range(bar.selector.count())]
 
@@ -107,13 +112,13 @@ def test_a_measured_map_shows_its_range_and_its_origin(qt_app: QApplication) -> 
     labels = [text for text, _colour in legend.entries]
     assert labels[0].startswith("1")
     assert labels[-1].startswith("4")
-    # §22.5: the origin of a number belongs next to the number.
+    # §22.5: woher eine Zahl kommt, gehört neben die Zahl.
     assert "intern" in legend.note.text()
     assert "0.3" in legend.note.text(), "a sampled map says how fine it was sampled"
 
 
 def test_the_report_names_the_origin_of_every_finding(window: MainWindow) -> None:
-    """§22.5: an estimate and a measurement are never left to look alike."""
+    """§22.5: eine Schätzung und eine Messung dürfen nie gleich aussehen."""
     window.report.show_result(window.session.last_result)
     if window.report.list.count() == 0:
         pytest.skip("this model produced no findings")
@@ -139,17 +144,19 @@ def test_a_map_of_levels_names_them(qt_app: QApplication) -> None:
 
 
 def test_the_colours_of_the_legend_rise_in_luminance() -> None:
-    """§19.1: the ramp is readable in greyscale, so it must not be a rainbow."""
+    """§19.1: die Rampe ist in Graustufen lesbar, sie darf also kein Regenbogen
+    sein.
+    """
     from app.ui.palette import VIRIDIS, is_monotonic
 
     assert is_monotonic(VIRIDIS)
 
 
-# --- from a warning to the place ------------------------------------------------
+# --- Von einer Warnung zur Stelle -------------------------------------------------
 
 
 def test_clicking_a_warning_switches_the_map_and_moves_the_camera(window: MainWindow) -> None:
-    """§18.4: the shortest way from "there is a problem" to "here it is"."""
+    """§18.4: der kürzeste Weg von „da ist ein Problem" zu „hier ist es"."""
     select_plate(window)
     finding = Finding(
         code="fit.violated",
@@ -192,7 +199,9 @@ def test_the_object_tree_lists_the_features(window: MainWindow) -> None:
 
 
 def test_a_feature_offers_the_operations_that_apply_to_it(window: MainWindow) -> None:
-    """§10, §18.5: the context menu comes out of ``applies_to``, not out of a list."""
+    """§10, §18.5: das Kontextmenü kommt aus ``applies_to``, nicht aus einer
+    Liste.
+    """
     entries = window.object_tree.operations_for_feature("face")
 
     assert entries, "drilling applies to a face"
@@ -207,7 +216,7 @@ def test_selecting_a_feature_reaches_the_viewport(window: MainWindow) -> None:
 
 
 def test_the_diameter_of_a_bore_reaches_the_status_bar(window: MainWindow) -> None:
-    """§18.3: the diameter comes from the feature, not from a measuring click."""
+    """§18.3: der Durchmesser kommt aus dem Merkmal, nicht aus einem Messklick."""
     select_plate(window)
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
@@ -217,7 +226,9 @@ def test_the_diameter_of_a_bore_reaches_the_status_bar(window: MainWindow) -> No
 
 
 def test_a_click_in_the_view_finds_the_feature_under_it(window: MainWindow) -> None:
-    """§40 for P3: a click has to deliver the right feature id, not a near miss."""
+    """§40 für P3: ein Klick muss die richtige Merkmal-ID liefern, keinen
+    Beinahe-Treffer.
+    """
     select_plate(window)
     window.viewport.show_scene(window.session.last_result)
     window.viewport.select("obj_1")
@@ -239,7 +250,7 @@ def test_the_label_names_the_feature_and_its_size(window: MainWindow) -> None:
 
 
 def test_the_layer_bar_is_called_what_it_is(qt_app: QApplication) -> None:
-    """Not a preview: it shows geometry, not tool paths (§18.10)."""
+    """Keine Vorschau: sie zeigt Geometrie, keine Werkzeugwege (§18.10)."""
     bar = LayerBar()
     labels = [bar.active.itemText(index) for index in range(bar.active.count())]
 
