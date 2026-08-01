@@ -58,6 +58,9 @@ def _flag(value: object) -> str:
 
 
 def _boolean(value: object) -> str:
+    """Nur für CuraEngine. Prusa und Orca schreiben ``0``/``1`` — siehe
+    :func:`_flag`, und die Verwechslung ist geräuschlos: ein ``true`` im
+    falschen Profil schaltet nichts ein und meldet auch nichts."""
     return "true" if value else "false"
 
 
@@ -75,6 +78,7 @@ def _support_on(value: object) -> str:
 
 
 def _support_on_boolean(value: object) -> str:
+    """Dasselbe für CuraEngine — vergleiche :func:`_support_on`."""
     return "false" if str(value) == "none" else "true"
 
 
@@ -143,12 +147,16 @@ PRUSA: Final[tuple[Entry, ...]] = (
 
 # --- OrcaSlicer und Bambu Studio ------------------------------------------------
 
+#: Orca benennt zwei Muster anders als sein Vorfahre: es gibt dort weder
+#: ``line`` noch ``honeycomb``. Ein unbekannter Name fällt still auf die
+#: Vorgabe zurück — die Füllung wäre dann eine andere als die eingestellte.
+#: Abgelesen am ausgelieferten Profilbestand, nicht aus der Erinnerung.
 _ORCA_INFILL: Final = {
     "grid": "grid",
     "gyroid": "gyroid",
-    "honeycomb": "honeycomb",
+    "honeycomb": "3dhoneycomb",
     "cubic": "cubic",
-    "lines": "line",
+    "lines": "rectilinear",
     "triangles": "triangles",
 }
 
@@ -198,9 +206,12 @@ ORCA: Final[tuple[Entry, ...]] = (
     ("speed.top_surface", "top_surface_speed", _number),
     ("speed.first_layer", "initial_layer_speed", _number),
     ("speed.travel", "travel_speed", _number),
-    ("support.style", "enable_support", _support_on_boolean),
+    # Orca hat PrusaSlicer als Vorfahren und schreibt Wahrheitswerte wie es:
+    # "0" und "1", nicht "true" und "false". Ein "true" hier bleibt still
+    # wirkungslos — der Slicer meldet nichts, er stützt bloß nicht.
+    ("support.style", "enable_support", _support_on),
     ("support.style", "support_type", _mapped(_ORCA_SUPPORT_TYPE, "normal(auto)")),
-    ("support.placement", "support_on_build_plate_only", _mapped({"build_plate": "true"}, "false")),
+    ("support.placement", "support_on_build_plate_only", _mapped({"build_plate": "1"}, "0")),
     ("support.threshold_angle", "support_threshold_angle", _integer),
     ("support.z_gap", "support_top_z_distance", _number),
     ("support.xy_gap", "support_object_xy_distance", _number),
@@ -213,7 +224,7 @@ ORCA: Final[tuple[Entry, ...]] = (
     ("retraction.length", "retraction_length", _number),
     ("retraction.speed", "retraction_speed", _number),
     ("retraction.z_hop", "z_hop", _number),
-    ("retraction.wipe", "wipe", _boolean),
+    ("retraction.wipe", "wipe", _flag),
     ("filament.diameter", "filament_diameter", _number),
     ("filament.density", "filament_density", _number),
     ("filament.flow_ratio", "filament_flow_ratio", _number),

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from pathlib import Path
+from typing import get_args, get_type_hints
 
 import pytest
 
@@ -334,8 +335,78 @@ def test_support_off_is_written_as_off_everywhere() -> None:
     assert settings.support.style == "none"
 
     assert handover.as_mapping(settings, "prusa")["support_material"] == "0"
-    assert handover.as_mapping(settings, "orca")["enable_support"] == "false"
+    assert handover.as_mapping(settings, "orca")["enable_support"] == "0"
     assert handover.as_mapping(settings, "cura")["support_enable"] == "false"
+
+
+def test_support_on_actually_reaches_the_slicer() -> None:
+    """Der Fehler, den erst ein echter Lauf zeigte: Orca schreibt Wahrheits-
+    werte als ``0``/``1`` wie PrusaSlicer, nicht als ``true``/``false`` wie
+    Cura. Ein ``true`` dort ist geräuschlos wirkungslos — der Slicer meldet
+    nichts, er stützt bloß nicht, und die Stützenart daneben stimmt sogar.
+    """
+    settings = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "support.style", "tree"
+    )
+
+    orca = handover.as_mapping(settings, "orca")
+    assert orca["enable_support"] == "1"
+    assert orca["support_type"] == "tree(auto)"
+    assert handover.as_mapping(settings, "prusa")["support_material"] == "1"
+    assert handover.as_mapping(settings, "cura")["support_enable"] == "true"
+
+
+#: Was die Orca-Familie an diesen Stellen annimmt, abgelesen am ausgelieferten
+#: Profilbestand von OrcaSlicer und seinen Ablegern. Ein Name daneben fällt
+#: still auf die Vorgabe zurück — geprüft wird deshalb hier und nicht im Druck.
+ORCA_VALUES = {
+    "sparse_infill_pattern": {
+        "grid",
+        "gyroid",
+        "cubic",
+        "rectilinear",
+        "alignedrectilinear",
+        "triangles",
+        "3dhoneycomb",
+        "zig-zag",
+        "crosshatch",
+    },
+    "seam_position": {"aligned", "nearest", "back", "aligned_back", "random"},
+    "support_type": {"normal(auto)", "tree(auto)", "normal(manual)", "tree(manual)"},
+    "brim_type": {"no_brim", "outer_only", "auto_brim", "inner_only", "outer_and_inner"},
+    "wall_sequence": {"inner wall/outer wall", "outer wall/inner wall", "inner-outer-inner wall"},
+}
+
+
+@pytest.mark.parametrize("key", sorted(ORCA_VALUES))
+def test_orca_gets_names_it_knows(key: str) -> None:
+    """Über jeden Wert, den ein Feld annehmen kann — ein Muster, das der Slicer
+    nicht kennt, druckt trotzdem, nur eben anders als eingestellt."""
+    settings = print_settings.resolve(profiles.make_profile())
+    path = next(entry[0] for entry in slicer_keys.ORCA if entry[1] == key)
+    for choice in _possible(path):
+        written = handover.as_mapping(print_settings.with_path(settings, path, choice), "orca")[key]
+        assert written in ORCA_VALUES[key], f"{path}={choice} wird zu {written!r}"
+
+
+def _possible(path: str) -> tuple[object, ...]:
+    """Alle Werte, die eine Einstellung annehmen kann — aus ihrem Typ, nicht
+    aus einer zweiten Liste, die veralten könnte."""
+    group, _dot, name = path.partition(".")
+    hints = get_type_hints(type(getattr(print_settings.resolve(profiles.make_profile()), group)))
+    arguments = get_args(hints[name])
+    return arguments or (True, False)
+
+
+@pytest.mark.parametrize("flavour", ["prusa", "orca"])
+def test_the_prusa_family_writes_no_word_booleans(flavour: str) -> None:
+    """Beide erben von Slic3r und lesen nur Zahlen. Ein ``true`` oder
+    ``false`` in einem dieser Profile ist immer ein Fehler."""
+    settings = print_settings.resolve(profiles.make_profile())
+    written = handover.as_mapping(settings, flavour)  # type: ignore[arg-type]
+
+    wrong = {key: value for key, value in written.items() if value in ("true", "false")}
+    assert not wrong, f"{flavour} bekommt Wortwerte: {wrong}"
 
 
 @pytest.mark.parametrize(
