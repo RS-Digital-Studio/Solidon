@@ -83,6 +83,7 @@ from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.start_screen import StartScreen, accepted_path
 from app.ui.theme import apply_theme
+from app.ui.tool_strip import ToolStrip
 from app.ui.transform_bar import TransformBar
 from app.ui.variants_dialog import VariantsDialog
 from app.ui.viewport import Viewport
@@ -216,18 +217,61 @@ class MainWindow(QMainWindow):
         self.paint_bar.paintingToggled.connect(self.viewport.set_painting)
         self.viewport.paintRequested.connect(self._on_paint)
 
+        # §2.4: eine Zeile Umschalter statt sieben Dauerleisten. Wie ein
+        # Werkzeug beim Schließen zurückgenommen wird, steht hier und nicht in
+        # den Leisten — verdrahtet wird sowieso an dieser Stelle.
+        self.tools = ToolStrip(self)
+        self.tools.add(
+            "section",
+            tr("Schnitt"),
+            self.section_bar,
+            lambda: self.section_bar.axis.setCurrentIndex(0),
+        )
+        self.tools.add(
+            "measure",
+            tr("Messen"),
+            self.measure_bar,
+            lambda: self.measure_bar.mode.setCurrentIndex(0),
+        )
+        self.tools.add(
+            "transform",
+            tr("Bewegen"),
+            self.transform_bar,
+            lambda: self.transform_bar.gizmo.setChecked(False),
+        )
+        self.tools.add(
+            "analysis",
+            tr("Analyse"),
+            self.analysis_bar,
+            lambda: self.analysis_bar.selector.setCurrentIndex(0),
+        )
+        self.tools.add(
+            "layers",
+            tr("Schichten"),
+            self.layer_bar,
+            lambda: self.layer_bar.active.setCurrentIndex(0),
+        )
+        self.tools.add(
+            "explode",
+            tr("Explosion"),
+            self.explode_bar,
+            lambda: self.explode_bar.slider.setValue(0),
+        )
+        # Bemalen ändert Materialslots und nicht bloß die Ansicht: das Schließen
+        # beendet das Bemalen, nimmt aber nichts Gemaltes zurück.
+        self.tools.add(
+            "paint",
+            tr("Bemalen"),
+            self.paint_bar,
+            lambda: self.paint_bar.active.setChecked(False),
+        )
+
         middle = QWidget(self)
         middle_layout = QVBoxLayout(middle)
         middle_layout.setContentsMargins(0, 0, 0, 0)
         middle_layout.setSpacing(0)
         middle_layout.addWidget(self.viewport, stretch=1)
-        middle_layout.addWidget(self.section_bar)
-        middle_layout.addWidget(self.measure_bar)
-        middle_layout.addWidget(self.transform_bar)
-        middle_layout.addWidget(self.analysis_bar)
-        middle_layout.addWidget(self.layer_bar)
-        middle_layout.addWidget(self.explode_bar)
-        middle_layout.addWidget(self.paint_bar)
+        middle_layout.addWidget(self.tools)
 
         self.report = ReportPanel(self)
         self.report.findingActivated.connect(self._on_finding_activated)

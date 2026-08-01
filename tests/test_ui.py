@@ -243,3 +243,56 @@ def test_a_report_without_findings_says_so(qt_app: QApplication) -> None:
     panel.show_result(None)
 
     assert "Keine Befunde" in panel.summary.text()
+
+
+def test_the_tool_strip_starts_with_every_bar_closed(qt_app: QApplication) -> None:
+    """§2.4: im Ruhezustand zwei Zeilen, nicht fünf."""
+    window = MainWindow(Session(), UiSettings())
+
+    assert window.tools.active() is None
+    assert not window.section_bar.isVisibleTo(window.tools)
+    assert not window.paint_bar.isVisibleTo(window.tools)
+
+
+def test_opening_a_tool_shows_exactly_its_bar(qt_app: QApplication) -> None:
+    window = MainWindow(Session(), UiSettings())
+    window.tools.toggle("section")
+
+    assert window.tools.active() == "section"
+    assert window.section_bar.isVisibleTo(window.tools)
+    assert not window.analysis_bar.isVisibleTo(window.tools), (
+        "zwei gleichzeitig wären der alte Zustand"
+    )
+
+
+def test_a_second_tool_closes_the_first(qt_app: QApplication) -> None:
+    window = MainWindow(Session(), UiSettings())
+    window.tools.toggle("section")
+
+    window.tools.toggle("analysis")
+
+    assert window.tools.active() == "analysis"
+    assert not window.section_bar.isVisibleTo(window.tools)
+
+
+def test_closing_a_tool_takes_its_view_change_back(qt_app: QApplication) -> None:
+    """Das Schließen ist die Rücknahme — deshalb braucht es kein „Kein Schnitt“."""
+    window = MainWindow(Session(), UiSettings())
+    window.tools.toggle("section")
+    window.section_bar.axis.setCurrentIndex(1)
+
+    window.tools.toggle("section")
+
+    assert window.tools.active() is None
+    assert window.section_bar.axis.currentIndex() == 0
+
+
+def test_every_tool_button_carries_a_label(qt_app: QApplication) -> None:
+    """Regel 18: welches Werkzeug offen ist, hängt nicht allein an einer Farbe."""
+    window = MainWindow(Session(), UiSettings())
+
+    titles = window.tools.tool_titles()
+
+    assert len(titles) == 7
+    for key, title in titles.items():
+        assert title.strip(), key
