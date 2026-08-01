@@ -48,6 +48,7 @@ from app.core.scene.history import change_for
 from app.core.scene.project import (
     Project,
     ProjectSources,
+    clear_autosave,
     embedded_source_path,
     load,
     new_project,
@@ -257,10 +258,28 @@ class Session(QObject):
         self.pending_part_check = True
         self._reset_for(path)
 
+    def recover(self, path: Path) -> None:
+        """Öffnet eine automatische Sicherung, ohne sie zum Projekt zu machen.
+
+        Der Pfad bleibt leer: die Sicherung ist nicht die Datei, die der
+        Nutzer pflegt, und ein „Speichern" darauf würde sie überschreiben,
+        statt nach einem Namen zu fragen.
+        """
+        self.project = load(path)
+        self.pending_orphan_check = True
+        self.pending_part_check = True
+        self._reset_for(None)
+        self._dirty = True
+        self.projectChanged.emit()
+
     def save_project(self, path: Path | None = None) -> Path:
         target = path or self.path
         if target is None:
             raise AppError(tr("Für dieses Projekt gibt es noch keinen Dateinamen."))
+        # Die Sicherung des Zustands, der gerade gespeichert wird, hat sich
+        # damit erledigt — auch die namenlose, aus der eine Wiederherstellung
+        # kam (§38).
+        clear_autosave(self.path)
         save(self.project, target)
         self.path = target
         self._dirty = False

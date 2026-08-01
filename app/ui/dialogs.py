@@ -7,6 +7,7 @@ nie in den Dialog.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from PySide6.QtWidgets import (
@@ -25,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, APP_VERSION, COPYRIGHT
 from app.core.backends import keys
-from app.core.errors import Action, AppError
+from app.core.errors import CANCEL, REPORT_ERROR, SHOW_DETAILS, Action, AppError
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.i18n import tr
@@ -205,8 +206,61 @@ class KeyDialog(QDialog):
         self.accept()
 
 
-def show_error(error: AppError, parent: QWidget | None = None) -> Action | None:
-    """Zeigt einen Fehler als Vorschlag und gibt die gewählte Handlung zurück."""
+def handlers_of(widget: QWidget | None) -> Mapping[str, Callable[[AppError], None]]:
+    """Die Fehlerhandlungen des Fensters, in dem dieser Dialog steckt.
+
+    Damit muss ein Dialog sie nicht durchreichen: die Druckeinstellungen und
+    der Variantendialog zeigen Fehler, und ihre Knöpfe sollen dasselbe tun wie
+    die des Fensters. Ein vergessenes Argument wäre sonst wieder ein Dialog
+    voller Knöpfe ohne Wirkung.
+    """
+    while widget is not None:
+        source = getattr(widget, "error_handlers", None)
+        if callable(source):
+            found: Mapping[str, Callable[[AppError], None]] = source()
+            return found
+        widget = widget.parentWidget()
+    return {}
+
+
+def offered_actions(
+    error: AppError, handlers: Mapping[str, Callable[[AppError], None]]
+) -> list[Action]:
+    """Welche Vorschläge ein Fehlerdialog zeigt (§2.7).
+
+    Eigene Funktion, weil sie sich prüfen lassen muss: ein Test, der dafür
+    den Dialog aufmacht, hängt am modalen Fenster — dieselbe Falle steht
+    schon im Kopf von ``tests/test_ui.py``.
+
+    Angeboten wird, wofür es einen Handler gibt. Bleibt nichts übrig, tritt
+    der Fehlerbericht ein: sonst stünde am Ende ein Fenster mit „Abbrechen",
+    und das ist „fehlgeschlagen" mit mehr Worten (Regel 17).
+    """
+    offered = [action for action in error.suggestions if action.id in handlers]
+    if offered:
+        return offered
+    return [entry for entry in (SHOW_DETAILS, REPORT_ERROR) if entry.id in handlers]
+
+
+def show_error(
+    error: AppError,
+    parent: QWidget | None = None,
+    handlers: Mapping[str, Callable[[AppError], None]] | None = None,
+) -> Action | None:
+    """Zeigt einen Fehler als Vorschlag und **führt die gewählte Handlung aus**.
+
+    Der Rückgabewert gab es von Anfang an, und keiner der Aufrufer las ihn:
+    jeder Knopf schloss ein Fenster und tat sonst nichts. „Reparieren und
+    erneut versuchen" war ein Versprechen, das die Oberfläche nicht hielt —
+    Regel 17 war damit optisch erfüllt und funktional hohl.
+
+    Angeboten wird nur, wofür es einen Handler gibt (§2.7). Lieber ein Knopf
+    weniger als einer, der nichts tut. Damit nie nur „Abbrechen" übrig bleibt,
+    kommt der Fehlerbericht dazu — er geht immer.
+    """
+    known = dict(handlers if handlers is not None else handlers_of(parent))
+    offered = offered_actions(error, known)
+
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(tr("Das hat so nicht funktioniert"))
@@ -215,16 +269,37 @@ def show_error(error: AppError, parent: QWidget | None = None) -> Action | None:
         box.setInformativeText(str(error.detail))
 
     buttons: dict[Any, Action] = {}
-    for action in error.suggestions:
+    for action in offered:
         role = (
             QMessageBox.ButtonRole.AcceptRole
             if action.primary
             else QMessageBox.ButtonRole.ActionRole
         )
         buttons[box.addButton(str(action.label), role)] = action
+    box.addButton(str(CANCEL.label), QMessageBox.ButtonRole.RejectRole)
 
     box.exec()
-    return buttons.get(box.clickedButton())
+    chosen = buttons.get(box.clickedButton())
+    if chosen is not None:
+        known[chosen.id](error)
+    return chosen
+
+
+def show_details(error: AppError, parent: QWidget | None = None) -> None:
+    """Was der Fehler an Zahlen mitbringt — ohne Stapelabzug (§2.7, §33.1)."""
+    lines = [str(error.detail)] if error.detail else []
+    lines.extend(f"{key}: {value}" for key, value in error.values.items())
+    if error.object_id:
+        lines.append(f"{tr('Objekt')}: {error.object_id}")
+    if error.op_id is not None:
+        lines.append(f"{tr('Operation')}: {error.op_id}")
+
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Information)
+    box.setWindowTitle(tr("Einzelheiten"))
+    box.setText(str(error.title))
+    box.setDetailedText("\n".join(lines) or tr("Keine weiteren Angaben."))
+    box.exec()
 
 
 class AboutDialog(QDialog):
@@ -275,6 +350,34 @@ def _third_party_text() -> str:
     except Exception as problem:  # pragma: no cover - Metadaten sind maschinenabhängig
         _log.warning("could not build the licence list: %s", problem)
         return tr("Die Liste der Fremdbestandteile ließ sich nicht lesen.")
+
+
+def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
+    """Vor dem Wegwerfen eines geänderten Dokuments fragen (§2.1, Regel 19).
+
+    Regel 19 verbietet Rückfragen vor **rücknehmbaren** Handlungen. Ein
+    Dokument zu verwerfen ist keine: nach dem Schließen holt kein Undo es
+    zurück. Die Frage hat deshalb drei Antworten und nicht zwei — „Wirklich?"
+    mit Ja und Nein zwingt den Nutzer, das Speichern selbst zu erledigen und
+    von vorn anzufangen.
+
+    Gibt ``save``, ``discard`` oder ``cancel`` zurück.
+    """
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Question)
+    box.setWindowTitle(tr("Ungesicherte Änderungen"))
+    box.setText(tr("Dieses Projekt hat Änderungen, die noch nicht gespeichert sind."))
+    box.setInformativeText(title)
+    save = box.addButton(tr("Speichern"), QMessageBox.ButtonRole.AcceptRole)
+    discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
+    box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    box.setDefaultButton(save)
+    box.exec()
+
+    clicked = box.clickedButton()
+    if clicked is save:
+        return "save"
+    return "discard" if clicked is discard else "cancel"
 
 
 def confirm_discard(count: int, parent: QWidget | None = None) -> bool:

@@ -1331,20 +1331,44 @@ parameterlose Operation ohne Dialog läuft (Regel 19).
 
 #### Etappe 3 — Die Oberfläche liest ihren eigenen Zustand
 
-- [ ] Menüeinträge und Werkzeuge aktivieren und deaktivieren nach Auswahl und
-      Szenenstand; Undo und Redo folgen `history.can_undo`/`can_redo`. Damit
-      entfallen die drei modalen Sackgassen
-- [ ] Fehlerhandlungen verdrahten (E6), alle neun Aufrufstellen
-- [ ] Beim Beenden, bei *Neu* und beim Öffnen nach ungesicherten Änderungen
+- [x] Menüeinträge aktivieren und deaktivieren nach Auswahl und Szenenstand;
+      Undo und Redo folgen `history.can_undo`/`can_redo`. Damit entfallen die
+      drei modalen Sackgassen. **Die Werkzeugzeile bleibt anklickbar** — sie
+      schaltet Ansichten, und ihre Leisten melden inline, was fehlt
+      („Wählen Sie zuerst ein Objekt", in der Leiste statt in einem Fenster).
+      Ein ausgegrauter Schnittknopf bei leerer Szene wäre Strenge ohne Nutzen
+- [x] Fehlerhandlungen verdrahten (E6): sieben Handler im Fenster, und
+      `handlers_of()` findet sie vom Dialog aus über das Elternfenster — damit
+      zeigen auch Druckeinstellungen und Variantendialog wirksame Knöpfe, ohne
+      sie durchzureichen
+- [x] Beim Beenden, bei *Neu* und beim Öffnen nach ungesicherten Änderungen
       fragen — drei Knöpfe (Speichern, Verwerfen, Abbrechen), kein „Wirklich?".
-      Regel 19 verbietet Rückfragen vor **rücknehmbaren** Handlungen; das
-      Verwerfen eines Dokuments ist keine
-- [ ] Menühinweis zu *Beenden* stimmt danach wieder
-- [ ] `recovery_candidates()` beim Start auswerten und anbieten
+      Wer im Dateidialog abbricht, hat nicht gespeichert, und dann wird auch
+      nichts verworfen
+- [x] Menühinweis zu *Beenden* stimmt danach wieder
+- [x] Wiederherstellung für namenlose Projekte — über `find_recovery(None)`,
+      nicht über `recovery_candidates()`: `autosave_path(None)` ist ein fester
+      Pfad, es kann also nur eine geben. Die zweite, schlechtere Antwort auf
+      dieselbe Frage ist entfernt. `Session.recover()` lässt den Pfad leer,
+      damit ein „Speichern" nicht die Sicherung überschreibt, und
+      `save_project` räumt sie auf
 
-*Abnahme:* Bei leerer Szene ist kein Operationsmenü anklickbar; jeder Knopf in
-jedem Fehlerdialog tut etwas oder erscheint nicht; ein Test über alle
-`Action`-Konstanten; Schließen mit ungesicherter Änderung fragt.
+**Was beim Bauen dazukam:** `offered_actions()` ist eine eigene Funktion
+geworden, weil sie sich sonst nicht prüfen ließe — ein Test, der dafür den
+Dialog aufmacht, hängt am modalen Fenster. Genau das ist beim Schreiben
+passiert, und es steht seit der letzten Durchsicht im Kopf von
+`tests/test_ui.py`.
+
+Drei Handlungen sind bewusst nicht verdrahtet und werden deshalb auch nicht
+angeboten: `use_voxel_stage` (die Rückfallstufe ist kein Parameter, den ein
+Dialog setzen kann), `choose` (dafür fragt der Kern über `ctx.ask`, bevor er
+wirft) und `choose_printer` — das kommt mit Etappe 5. Ein Test hält fest, dass
+jede `Action`-Konstante entweder einen Handler hat oder in dieser Liste steht.
+
+*Abnahme erfüllt:* Bei leerer Szene ist keine Operation anklickbar, die einen
+Körper braucht; „Vereinigen" wird erst mit dem zweiten gewählten Körper aktiv;
+jeder gezeigte Knopf im Fehlerdialog führt etwas aus; Schließen mit
+ungesicherter Änderung fragt. Suite: 2122 grün.
 
 #### Etappe 4 — Nichts rechnet mehr im Hauptthread
 

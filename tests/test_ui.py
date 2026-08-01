@@ -15,8 +15,9 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication, QComboBox
+from PySide6.QtWidgets import QApplication, QComboBox, QDialog
 
+from app.core import errors
 from app.core.registry import REGISTRY
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
@@ -550,3 +551,114 @@ def test_an_unknown_stored_value_is_kept_not_replaced(qt_app: QApplication) -> N
         sources={"src_1": "halterung.stl"},
     )
     assert dialog.values()["source"] == "src_9"
+
+
+# --- Der Zustand, den die Oberfläche liest (§2.6, Regel 17) ---------------------
+
+
+def test_operations_are_greyed_out_until_they_could_run(window: MainWindow) -> None:
+    """Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
+    etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten.
+    """
+    drilling = window._op_actions["drill_hole"]
+    joining = window._op_actions["union_objects"]
+    creating = window._op_actions["create_box"]
+
+    assert not drilling.isEnabled(), "leere Szene, kein Körper zum Bohren"
+    assert creating.isEnabled(), "anlegen geht immer"
+
+    _with_two_objects(window)
+    window.object_tree.tree.topLevelItem(0).setSelected(True)
+    assert drilling.isEnabled()
+    assert not joining.isEnabled(), "eine Vereinigung braucht zwei"
+
+    window.object_tree.tree.topLevelItem(1).setSelected(True)
+    assert joining.isEnabled()
+
+
+def test_undo_and_redo_follow_the_stack(window: MainWindow) -> None:
+    assert not window.undo_action.isEnabled()
+    assert not window.redo_action.isEnabled()
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    assert window.undo_action.isEnabled()
+
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert window.redo_action.isEnabled()
+
+
+def test_every_offered_error_action_does_something(window: MainWindow) -> None:
+    """Regel 17 hat zwei Hälften, und die zweite fehlte.
+
+    Die Vorschläge standen als Knöpfe da, und kein einziger Aufrufer las
+    aus, welcher gedrückt wurde — jeder schloss ein Fenster und tat sonst
+    nichts. Was hier zählt: für jede Handlung, die ein Fehler vorschlägt,
+    gibt es entweder einen Handler oder einen benannten Grund.
+    """
+    known = window.error_handlers()
+    postponed = {"use_voxel_stage", "choose", "choose_printer", "cancel", "correct_input", "retry"}
+
+    for name, value in vars(errors).items():
+        if not isinstance(value, errors.Action):
+            continue
+        assert value.id in known or value.id in postponed, (
+            f"{name} wird angeboten, aber nichts führt sie aus"
+        )
+
+
+def test_only_actions_with_a_handler_are_offered(window: MainWindow) -> None:
+    """Lieber ein Knopf weniger als einer, der nichts tut."""
+    from app.ui.dialogs import offered_actions
+
+    error = errors.NotManifoldError(open_edges=3)
+    offered = {action.id for action in offered_actions(error, window.error_handlers())}
+
+    assert "repair_and_retry" in offered
+    assert "show_locations" in offered
+    assert "cancel" not in offered, "das Schließen ist kein Vorschlag, es steht ohnehin da"
+
+
+def test_an_error_without_a_handler_still_offers_a_way_out(window: MainWindow) -> None:
+    """Ein Dialog mit nur „Abbrechen" ist „fehlgeschlagen" mit mehr Worten."""
+    from app.ui.dialogs import offered_actions
+
+    error = errors.AmbiguityError("Welche Fläche ist gemeint?", ("oben", "unten"))
+    offered = [action.id for action in offered_actions(error, window.error_handlers())]
+
+    assert offered, "zu keinem Vorschlag ein Handler — dann tritt der Bericht ein"
+    assert "report_error" in offered
+
+
+def test_the_handlers_are_found_through_the_parent_window(window: MainWindow) -> None:
+    """Ein Dialog im Fenster zeigt dieselben Handlungen wie das Fenster."""
+    from app.ui.dialogs import handlers_of
+
+    dialog = QDialog(window)
+    assert set(handlers_of(dialog)) == set(window.error_handlers())
+
+
+def test_closing_with_unsaved_changes_asks(window: MainWindow, monkeypatch) -> None:
+    """Der Menühinweis versprach das seit jeher; gefragt wurde nie."""
+    import app.ui.main_window as module
+
+    asked: list[str] = []
+    monkeypatch.setattr(
+        module, "confirm_unsaved", lambda title, parent: asked.append(title) or "cancel"
+    )
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    assert window.session.modified
+
+    assert not window._may_discard(), "Abbrechen hält das Schließen an"
+    assert asked, "gefragt wurde"
+
+
+def test_a_saved_project_closes_without_a_question(window: MainWindow, tmp_path: Path) -> None:
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.session.save_project(tmp_path / "projekt.p3d")
+
+    assert window._may_discard(), "nichts Ungesichertes, nichts zu fragen"

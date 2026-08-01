@@ -309,14 +309,6 @@ def clear_autosave(path: Path | None) -> None:
         candidate.unlink()
 
 
-def recovery_candidates() -> tuple[Path, ...]:
-    """Autosaves von Projekten, die nie einen Namen hatten."""
-    folder = user_data_dir() / "recovery"
-    if not folder.is_dir():
-        return ()
-    return tuple(sorted(folder.glob(f"*{AUTOSAVE_SUFFIX}")))
-
-
 def project_data(path: Path) -> dict[str, Any]:
     """Das rohe ``project.json`` eines Containers — für Diagnose und
     Migrationstests."""

@@ -229,6 +229,12 @@ class ObjectTree(QWidget):
         value: str | None = items[0].data(1, Qt.ItemDataRole.UserRole)
         return value
 
+    def select_object(self, object_id: ObjectId) -> None:
+        """Wählt einen Körper von außen aus — der Fehlerdialog tut das, wenn er
+        zeigt, worum es ging."""
+        self.tree.clearSelection()
+        self._restore((object_id,), None)
+
     def select_feature(self, object_id: ObjectId, feature_id: str) -> None:
         """Folgt einem Klick im Viewport — die zwei Ansichten zeigen eine
         Auswahl (§18.5).

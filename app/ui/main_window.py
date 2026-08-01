@@ -61,6 +61,8 @@ from app.ui.dialogs import (
     CalibrationDialog,
     KeyDialog,
     confirm_discard,
+    confirm_unsaved,
+    show_details,
     show_error,
 )
 from app.ui.explode_bar import ExplodeBar
@@ -185,11 +187,16 @@ class MainWindow(QMainWindow):
         self._hidden: frozenset[str] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
         Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
+        self._op_actions: dict[str, QAction] = {}
+        """Die Menüeinträge der Operationen, damit sie sich ausgrauen lassen.
+        Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
+        etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten."""
 
         self._build_central()
         self._build_status_bar()
         self._build_menus()
         self._connect_session()
+        self._update_actions()
 
         self._autosave = QTimer(self)
         self._autosave.setInterval(AUTOSAVE_INTERVAL_MS)
@@ -516,6 +523,7 @@ class MainWindow(QMainWindow):
                     lambda _checked=False, entry=spec: self.run_operation(entry)
                 )
                 menu.addAction(action)
+                self._op_actions[spec.name] = action
 
         view_menu = self.menuBar().addMenu(tr("Ansicht"))
         view_menu.setToolTipsVisible(True)
@@ -722,6 +730,30 @@ class MainWindow(QMainWindow):
         menu.addAction(action)
         return action
 
+    def _update_actions(self) -> None:
+        """Was jetzt geht, sieht man, statt es zu erfahren (§2.6).
+
+        Vorher war jeder der siebzig Einträge immer anklickbar, auch bei leerer
+        Szene; wer einen wählte, bekam ein modales Fenster mit dem Hinweis, dass
+        er vorher etwas hätte auswählen sollen. Eine Sackgasse als Antwort auf
+        eine Frage, die das Menü selbst beantworten kann.
+        """
+        result = self.session.last_result
+        objects = len(result.scene.objects) if result else 0
+        chosen = len(self.object_tree.selected_objects())
+
+        for name, action in self._op_actions.items():
+            spec = REGISTRY.get(name)
+            if spec.takes_whole_scene:
+                action.setEnabled(objects > 0)
+            elif spec.consumes:
+                action.setEnabled(chosen >= spec.consumes)
+            else:
+                action.setEnabled(True)
+
+        self.undo_action.setEnabled(self.session.history.can_undo)
+        self.redo_action.setEnabled(self.session.history.can_redo)
+
     def _connect_session(self) -> None:
         self.session.sceneChanged.connect(self._on_scene)
         self.session.projectChanged.connect(self._on_project)
@@ -739,6 +771,8 @@ class MainWindow(QMainWindow):
     # --- actions ----------------------------------------------------------------
 
     def action_new(self) -> None:
+        if not self._may_discard():
+            return
         self.session.start_new(self.settings.printer, self.settings.material)
         self._show_start_screen(False)
 
@@ -747,8 +781,30 @@ class MainWindow(QMainWindow):
         if name:
             self.open_path(Path(name))
 
+    def _may_discard(self) -> bool:
+        """Fragt, bevor ein geändertes Projekt weggeworfen wird.
+
+        Kein Widerspruch zu Regel 19: die verbietet Rückfragen vor
+        rücknehmbaren Handlungen, und ein verworfenes Dokument holt kein Undo
+        zurück. Die Frage bietet deshalb das Speichern gleich mit an, statt
+        den Nutzer zurückzuschicken.
+        """
+        if not self.session.modified:
+            return True
+        answer = confirm_unsaved(self.session.title, self)
+        if answer == "cancel":
+            return False
+        if answer == "save":
+            self.action_save()
+            # Wer den Dateidialog abbricht, hat nicht gespeichert — und will
+            # dann ganz sicher nicht, dass die Arbeit trotzdem verschwindet.
+            return not self.session.modified
+        return True
+
     def open_path(self, path: Path) -> None:
         """Ein Einstiegspunkt für Menü, Zuletzt-Liste und Drag and Drop."""
+        if path.suffix.lower() == PROJECT_SUFFIX and not self._may_discard():
+            return
         try:
             if path.suffix.lower() == PROJECT_SUFFIX:
                 self.session.open_project(path)
@@ -799,11 +855,14 @@ class MainWindow(QMainWindow):
             return
         self.session.add_generated(dialog.result_mesh)
 
-    def action_auto_split(self) -> None:
+    def action_auto_split(self, object_id: ObjectId | None = None) -> None:
         """§25: das gewählte Teil teilen, bis es passt, und die Nähte
         verstiften (§14).
+
+        Der Körper lässt sich benennen, damit auch der Fehlerdialog „Modell
+        teilen" anbieten kann — er weiß, welches Teil nicht passte.
         """
-        object_id = self.object_tree.selected()
+        object_id = object_id or self.object_tree.selected()
         if not object_id:
             QMessageBox.information(
                 self, tr("Automatisch teilen"), tr("Bitte zuerst ein Objekt auswählen.")
@@ -1416,6 +1475,7 @@ class MainWindow(QMainWindow):
         self.section_bar.set_range(low, high)
         self.section_bar.show_capping_state(self.viewport.section_uncapped)
         self.history_panel.show_document(self.session.project.document, result.stopped_at)
+        self._update_actions()
         if result.stopped_at is not None:
             # §15.3: der letzte vollständige Zustand bleibt sichtbar, die
             # Statusleiste sagt warum.
@@ -1430,6 +1490,7 @@ class MainWindow(QMainWindow):
         self.history_panel.show_document(document)
         self.chat.show_document(document)
         self.setWindowTitle(f"{self.session.title} — {APP_NAME}")
+        self._update_actions()
 
     def _on_progress(self, fraction: float, text: str) -> None:
         self.progress.setValue(int(fraction * 100))
@@ -1460,6 +1521,94 @@ class MainWindow(QMainWindow):
             return
         show_error(error, self)
 
+    def error_handlers(self) -> dict[str, Any]:
+        """Was hinter den Knöpfen eines Fehlerdialogs steckt (§2.7, Regel 17).
+
+        Der Kern schlägt Handlungen vor, die Oberfläche führt sie aus — das
+        war der fehlende Draht. Was hier nicht steht, wird auch nicht
+        angeboten; ein Knopf, der nichts tut, ist schlimmer als keiner.
+
+        Nicht dabei und bewusst: ``use_voxel_stage`` (die Stufe ist kein
+        Parameter, den ein Dialog setzen könnte), ``choose`` (der Kern fragt
+        dafür über ``ctx.ask``, bevor er wirft) und ``choose_printer`` — das
+        kommt mit dem Einstellungsdialog.
+        """
+        return {
+            "report_error": lambda error: self.report_error(error),
+            "show_details": lambda error: show_details(error, self),
+            "show_locations": self._show_error_location,
+            "repair_and_retry": self._repair_after_error,
+            "split_model": self._split_after_error,
+            "scale_to_fit": self._scale_after_error,
+            "open_settings": lambda _error: self.action_install_extras(),
+        }
+
+    def _object_of(self, error: AppError) -> ObjectId | None:
+        """Der Körper, um den es geht — aus dem Fehler oder aus der Auswahl."""
+        if error.object_id:
+            return error.object_id
+        chosen = self.object_tree.selected_objects()
+        return chosen[0] if chosen else None
+
+    def _show_error_location(self, error: AppError) -> None:
+        """„Stellen zeigen" heißt: die Karte, auf der sie zu sehen sind (§18.4).
+
+        Ein Fehler nennt selten eine einzelne Koordinate — bei einem Netz mit
+        drei offenen Kanten wären es drei. Die Defektkarte färbt sie alle, und
+        das ist die Antwort auf die Frage, die der Knopf stellt.
+        """
+        object_id = self._object_of(error)
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result and object_id else None
+        if entry is None:
+            return
+        self.object_tree.select_object(entry.id)
+        self.tools.activate("analysis")
+        self.analysis_bar.show_map("defects")
+        self._analysis_map("defects", entry.id)
+
+    def _repair_after_error(self, error: AppError) -> None:
+        """§17.1: die Reparaturkette auf den Körper, an dem es hing."""
+        object_id = self._object_of(error)
+        if object_id is None:
+            return
+        self.session.apply(
+            REGISTRY.get("repair").title,
+            [OperationDraft(op="repair", inputs=(object_id,))],
+        )
+
+    def _split_after_error(self, error: AppError) -> None:
+        """Zu groß für das Bett: teilen, bis jedes Stück passt (§25)."""
+        object_id = self._object_of(error)
+        if object_id is not None:
+            self.action_auto_split(object_id)
+
+    def _scale_after_error(self, error: AppError) -> None:
+        """Auf den Bauraum verkleinern — mit dem Faktor, der wirklich passt.
+
+        Der Fehler kennt beide Größen; sie hier neu zu raten wäre eine zweite
+        Wahrheit. Ein Prozent Luft, damit das Teil nicht exakt an der Wand des
+        Bauraums klebt.
+        """
+        volume = error.values.get("build_volume")
+        size = error.values.get("size")
+        object_id = self._object_of(error)
+        if object_id is None or not volume or not size:
+            return
+        factor = min(
+            available / needed
+            for available, needed in zip(volume, size, strict=False)
+            if needed > 0.0
+        )
+        self.session.apply(
+            REGISTRY.get("scale_object").title,
+            [
+                OperationDraft(
+                    op="scale_object", inputs=(object_id,), params={"factor": factor * 0.99}
+                )
+            ],
+        )
+
     def _on_selection(self, object_id: str | None) -> None:
         self.viewport.select(object_id)
         # Karte und Schichtanalyse gehören zu einem Körper; ein anderer Körper
@@ -1467,6 +1616,7 @@ class MainWindow(QMainWindow):
         # verweilen.
         self._on_map_changed(self.analysis_bar.chosen())
         self._on_layer_changed(self.layer_bar.index())
+        self._update_actions()
         described = describe_selection(self.session.last_result, object_id)
         if described is None:
             self.measurements.clear_selection()
@@ -1502,8 +1652,39 @@ class MainWindow(QMainWindow):
         """
         if first_run.should_run(self.settings):
             self.action_first_run()
+        self._offer_unsaved_recovery()
         if self.settings.check_for_updates:
             self._check_for_updates()
+
+    def _offer_unsaved_recovery(self) -> None:
+        """§38: eine Sicherung, die nie einen Namen bekam, wird angeboten.
+
+        Sie wurde geschrieben, seit es die automatische Sicherung gibt, und
+        nie angeboten: das Fenster suchte nur neben einer geöffneten Datei.
+        Wer vor dem ersten Speichern abstürzte, hatte die Arbeit verloren,
+        obwohl sie auf der Platte lag.
+        """
+        candidate = find_recovery(None)
+        if candidate is None:
+            return
+        answer = QMessageBox.question(
+            self,
+            tr("Wiederherstellung"),
+            tr(
+                "Ein Projekt aus einer früheren Sitzung wurde nie gespeichert. "
+                "Die automatische Sicherung öffnen?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.session.recover(candidate)
+        except AppError as error:
+            show_error(error, self)
+            return
+        self._show_start_screen(False)
 
     def action_first_run(self) -> None:
         """§38: language, printer, material, external programs. Skippable."""
@@ -1576,6 +1757,12 @@ class MainWindow(QMainWindow):
             event.acceptProposedAction()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name
+        # Der Menühinweis versprach das seit jeher („Ungesichertes wird vorher
+        # erfragt"), gefragt wurde nie: das Fenster schrieb eine automatische
+        # Sicherung und ging zu. Wer die nicht kennt, hat seine Arbeit verloren.
+        if not self._may_discard():
+            event.ignore()
+            return
         self.session.cancel()
         self.session.wait_for_idle(2000)
         worker = self._map_worker
