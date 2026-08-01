@@ -86,6 +86,7 @@ from app.ui.report_dialog import ErrorReportDialog
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
+from app.ui.settings_dialog import SettingsDialog
 from app.ui.start_screen import StartScreen, accepted_path
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip
@@ -500,6 +501,13 @@ class MainWindow(QMainWindow):
                 "Dasselbe Teil mehrfach mit gestaffelten Werten exportieren, "
                 "statt von Hand zu ändern."
             ),
+        )
+        self._add_action(
+            edit_menu,
+            tr("Einstellungen …"),
+            "Ctrl+,",
+            self.action_settings,
+            tr("Sprache, Anzeigeeinheit, Thema, Navigation und die Vorgaben für neue Projekte."),
         )
         self._add_action(
             edit_menu,
@@ -1085,6 +1093,41 @@ class MainWindow(QMainWindow):
         self.chat.set_available(
             backend is not None, f"{backend.id}:{backend.model}" if backend else ""
         )
+
+    def action_settings(self) -> None:
+        """§19.3, §38: alles, was die Anwendung sich merkt, an einer Stelle.
+
+        Was sofort wirken kann, wirkt sofort — Thema, Einheit, Navigation und
+        die Farben der Differenzansicht. Die Sprache kann es nicht, und der
+        Dialog sagt das, statt es den Nutzer herausfinden zu lassen.
+        """
+        dialog = SettingsDialog(self.settings, self)
+        if dialog.exec() != SettingsDialog.DialogCode.Accepted:
+            return
+        dialog.apply_to(self.settings)
+        save_settings(self.settings)
+        self._apply_settings()
+
+    def _apply_settings(self) -> None:
+        """Trägt die Einstellungen dorthin, wo sie wirken."""
+        application = QApplication.instance()
+        if application is not None:
+            apply_theme(application, self.settings.theme)  # type: ignore[arg-type]
+        self.viewport.set_theme(self.settings.theme)
+        self.viewport.set_navigation(self.settings.navigation)  # type: ignore[arg-type]
+        self.viewport.set_difference_palette(self.settings.diff_palette)  # type: ignore[arg-type]
+        self.set_display_unit(self.settings.display_unit)
+
+    def set_display_unit(self, unit: str) -> None:
+        """§19.3: Millimeter oder Zoll — in der Anzeige, nie im Kern.
+
+        Die Einstellung gab es seit P0 und niemanden, der sie las. Jetzt liest
+        sie, wer Längen zeigt: Statusleiste, Objektbaum und die Maße der
+        Auswahl.
+        """
+        self.measurements.set_unit(unit)  # type: ignore[arg-type]
+        self.object_tree.set_unit(unit)  # type: ignore[arg-type]
+        self._on_selection(self.object_tree.selected())
 
     def action_command_palette(self) -> None:
         """Eine Taste, alles aus dem Register — und die Kürzel lernen sich

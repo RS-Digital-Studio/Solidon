@@ -52,7 +52,7 @@ class FirstRunDialog(QDialog):
             f"{APP_NAME} — "
             + tr(
                 "Konstruieren, erzeugen und anpassen für den 3D-Druck. Diese Angaben "
-                "lassen sich jederzeit ändern; überspringen geht auch."
+                "stehen später unter Bearbeiten, Einstellungen; überspringen geht auch."
             ),
             self,
         )

@@ -662,3 +662,73 @@ def test_a_saved_project_closes_without_a_question(window: MainWindow, tmp_path:
     window.session.save_project(tmp_path / "projekt.p3d")
 
     assert window._may_discard(), "nichts Ungesichertes, nichts zu fragen"
+
+
+# --- Einstellungen an einem Ort (§19.3, §38) ------------------------------------
+
+
+def test_the_display_unit_reaches_everything_that_shows_a_length(window: MainWindow) -> None:
+    """§19.3: die Einstellung gab es seit P0 und niemanden, der sie las."""
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window._on_scene(window.session.evaluate_now())
+    window.object_tree.tree.setCurrentItem(window.object_tree.tree.topLevelItem(0))
+
+    assert "20.00" in window.measurements.text()
+    assert "cm³" in window.measurements.text()
+
+    window.set_display_unit("in")
+
+    assert "0.7874" in window.measurements.text(), "20 mm sind 0,7874 Zoll"
+    assert "in³" in window.measurements.text()
+    assert "in" in window.object_tree.tree.topLevelItem(0).text(1)
+
+
+def test_the_settings_dialog_writes_every_value_back(qt_app: QApplication) -> None:
+    from app.ui.settings_dialog import SettingsDialog
+
+    settings = UiSettings()
+    dialog = SettingsDialog(settings)
+    dialog.unit.setCurrentIndex(dialog.unit.findData("in"))
+    dialog.diff_palette.setCurrentIndex(dialog.diff_palette.findData("red_green"))
+    dialog.updates.setChecked(True)
+
+    dialog.apply_to(settings)
+
+    assert (settings.display_unit, settings.diff_palette) == ("in", "red_green")
+    assert settings.check_for_updates
+
+
+def test_a_language_change_says_that_it_waits(qt_app: QApplication) -> None:
+    """Sie wirkt erst beim nächsten Start — das stillschweigend zu übergehen
+    liest sich, als hätte die Einstellung nicht gewirkt."""
+    from app.ui.settings_dialog import SettingsDialog
+
+    dialog = SettingsDialog(UiSettings())
+    assert not dialog.language_note.isVisible()
+
+    other = next(
+        index
+        for index in range(dialog.language.count())
+        if dialog.language.itemData(index) != UiSettings().language
+    )
+    dialog.language.setCurrentIndex(other)
+    assert dialog.language_note.isVisibleTo(dialog)
+
+
+def test_the_printer_of_an_open_project_can_change(session: Session) -> None:
+    """§12: er wurde einmal beim Anlegen gesetzt und danach nie wieder — wer
+    eine fremde Datei öffnete, arbeitete für immer gegen deren Bauraum.
+    """
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+    before = session.project.document.printer
+
+    session.change_scene_profile("prusa-mk4s", "petg")
+    session.wait_for_idle()
+
+    assert session.project.document.printer == "prusa-mk4s"
+    assert session.profile.printer.id == "prusa-mk4s", "das Profil folgt, nicht nur die Kennung"
+
+    session.undo()
+    assert session.project.document.printer == before, "eine Transaktion, also rücknehmbar"

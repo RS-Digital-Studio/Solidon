@@ -53,7 +53,7 @@ from app.core.errors import AppError
 from app.core.export import handover, slicer_profiles
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import write_assembly
-from app.core.knowledge import print_settings
+from app.core.knowledge import print_settings, profiles
 from app.core.log import get_logger
 from app.core.slice import advise
 from app.core.types import (
@@ -554,6 +554,13 @@ FIELDS: tuple[Field, ...] = (
 )
 
 
+def _select_data(box: QComboBox, identifier: str) -> None:
+    """Wählt den Eintrag mit dieser Kennung, wenn es ihn gibt."""
+    index = box.findData(identifier)
+    if index >= 0:
+        box.setCurrentIndex(index)
+
+
 class _ColourButton(QPushButton):
     """Farbwahl, die ihren Wert auch schreibt.
 
@@ -726,11 +733,43 @@ class PrintSettingsDialog(QDialog):
             self.quality.setCurrentIndex(index)
         self.quality.currentIndexChanged.connect(self._quality_changed)
 
-        profile = self.session.profile
+        # Drucker und Material standen hier als Beschriftung — und es gab
+        # nirgends einen Weg, sie zu ändern. Wer eine fremde Datei öffnete,
+        # arbeitete für immer gegen deren Bauraum (§12).
+        document = self.session.project.document
+        self.printer_choice = QComboBox(self)
+        for key, entry in sorted(profiles.printer_profiles().items()):
+            self.printer_choice.addItem(str(entry.title), key)
+        _select_data(self.printer_choice, document.printer or profiles.DEFAULT_PRINTER)
+        self.printer_choice.currentIndexChanged.connect(self._scene_profile_changed)
+
+        self.material_choice = QComboBox(self)
+        for key, material in sorted(profiles.material_profiles().items()):
+            self.material_choice.addItem(str(material.title), key)
+        _select_data(self.material_choice, document.material or profiles.DEFAULT_MATERIAL)
+        self.material_choice.currentIndexChanged.connect(self._scene_profile_changed)
+
         row.addWidget(QLabel(tr("Qualität"), self))
         row.addWidget(self.quality, 1)
-        row.addWidget(QLabel(f"{profile.printer.title} · {profile.material.title}", self))
+        row.addWidget(QLabel(tr("Drucker"), self))
+        row.addWidget(self.printer_choice, 1)
+        row.addWidget(QLabel(tr("Material"), self))
+        row.addWidget(self.material_choice, 1)
         return row
+
+    def _scene_profile_changed(self) -> None:
+        """Ein anderer Drucker heißt andere Vorgaben — und eine Neuauswertung.
+
+        Sofort statt beim Schließen: die Vorschläge in diesem Dialog hängen an
+        Maschine und Material, und sie stehen lassen, während oben etwas
+        anderes gewählt ist, wäre eine Anzeige, die nicht mehr stimmt.
+        """
+        self.session.change_scene_profile(
+            str(self.printer_choice.currentData()), str(self.material_choice.currentData())
+        )
+        self.settings = print_settings.resolve(self.session.profile, self.settings.quality)
+        self._load_into_editors()
+        self._refresh_advice()
 
     def _build_front(self) -> QWidget:
         box = QGroupBox(tr("Das Wichtigste"), self)

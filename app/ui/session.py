@@ -356,6 +356,33 @@ class Session(QObject):
         self.projectChanged.emit()
         self.evaluate_async()
 
+    def change_scene_profile(self, printer: str, material: str) -> None:
+        """Drucker und Material des offenen Projekts (§12, §15.5).
+
+        Beide wurden bisher genau einmal gesetzt — beim Anlegen — und danach
+        nie wieder. Wer ein Beispielprojekt oder eine fremde Datei öffnete,
+        arbeitete dauerhaft gegen einen fremden Bauraum, und Bett, Anordnen,
+        Kollisionsprüfung und Auto Split hingen alle daran.
+
+        Eine Transaktion, keine Operation: es entsteht keine Geometrie. Sie
+        ändert sich trotzdem — Toleranzen sind Verweise ins Materialprofil
+        (§12) —, und was die Auswertung beeinflusst, gehört in den Verlauf.
+        """
+        document = self.project.document
+        if (document.printer, document.material) == (printer, material):
+            return
+        try:
+            self.history.apply(
+                tr("Drucker und Material"),
+                changes=change_for(document, printer=printer, material=material),
+            )
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+
     def change_params(self, op_id: int, params: dict[str, Any]) -> None:
         """Andere Parameter für eine Operation, die schon im Stapel steht (§15.4)."""
         try:

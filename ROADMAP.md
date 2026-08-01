@@ -1397,20 +1397,29 @@ warten jetzt auf das, worauf auch ein Mensch wartet.
 
 #### Etappe 5 — Einstellungen an einem Ort
 
-- [ ] Dialog *Bearbeiten → Einstellungen* mit Sprache, Anzeigeeinheit, Thema,
-      Navigation, Differenzpalette, Updateprüfung, Vorgaben für Drucker und
-      Material
-- [ ] `display_unit` bekommt Leser: Statusleiste, Objektbaum, Maße,
-      Operationsdialoge (§19.3, `format_length` kann es längst)
-- [ ] `diff_palette` beim Start an den Viewport geben
-- [ ] Sprachwechsel wirkt sofort, oder der Dialog sagt, dass er es nicht tut
-- [ ] Drucker und Material des offenen Projekts wechselbar (E4), mit
-      Neuauswertung und Eintrag im Verlauf
-- [ ] *Erste Schritte* bleibt der erste Start und verweist auf den Dialog
+- [x] Dialog *Bearbeiten → Einstellungen* (Strg+Komma), getrennt in zwei
+      Gruppen: was die Anwendung betrifft und was für **neue** Projekte gilt.
+      Der Unterschied stand vorher nirgends und ist der Grund, warum Drucker
+      und Material unter „Hilfe" gelandet waren
+- [x] `display_unit` bekommt Leser: Statusleiste, Objektbaum und die Maße der
+      Auswahl. Dazu `format_volume()` im Kern — in Zoll sind Kubikzentimeter
+      keine Antwort, und der Unterschied ist zu groß, um ihn zu übergehen
+- [x] `diff_palette` und alles andere Gespeicherte beim Start anwenden;
+      `_apply_settings()` ist die eine Stelle dafür, vorher waren es zwei und
+      zwei Werte kamen in keiner davon vor
+- [x] Der Sprachwechsel sagt, dass er auf den nächsten Start wartet — der
+      Katalog wird beim Start installiert, und Texte, die schon auf dem
+      Bildschirm stehen, wechseln nicht mit
+- [x] Drucker und Material des offenen Projekts wechselbar (E4) — im
+      Druckeinstellungs-Dialog, wo sie vorher als Beschriftung standen. Als
+      Transaktion, also rücknehmbar, und die Vorgaben des Dialogs lösen sich
+      sofort neu auf
+- [x] *Erste Schritte* verweist auf den Dialog
 
-*Abnahme:* Auf Zoll umschalten ändert jede angezeigte Länge und keine
-gerechnete; ein Beispielprojekt lässt sich auf den eigenen Drucker umstellen,
-und der Bauraum im Viewport folgt.
+*Abnahme erfüllt:* Auf Zoll umgeschaltet zeigt die Statusleiste 0,7874 für
+einen 20-mm-Würfel, und das Netz bleibt bei 20; ein Projekt lässt sich auf
+einen anderen Drucker umstellen, das Profil folgt, und ein Undo nimmt es
+zurück. Suite: 2129 grün.
 
 #### Etappe 6 — Entdeckbarkeit
 

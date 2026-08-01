@@ -42,8 +42,10 @@ def build_application(argv: list[str] | None = None) -> tuple[QApplication, Main
 
     session = Session()
     window = MainWindow(session, settings)
-    window.viewport.set_navigation(settings.navigation)  # type: ignore[arg-type]
-    window.viewport.set_theme(settings.theme)
+    # Eine Stelle für alle gespeicherten Werte. Vorher standen hier zwei, und
+    # die Anzeigeeinheit und die Differenzpalette gehörten zu den Einstellungen,
+    # die niemand las (§19.3).
+    window._apply_settings()
     return application, window  # type: ignore[return-value]
 
 

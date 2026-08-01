@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
-from app.core.units import format_length
+from app.core.units import LengthUnit, format_length, format_volume
 from app.i18n import tr
 from app.ui.icons import icon
 from app.ui.labels import feature_label
@@ -94,6 +94,7 @@ class ObjectTree(QWidget):
         """Die Reihenfolge, in der angeklickt wurde. „A minus B" ist nicht „B
         minus A", und die Reihenfolge im Baum weiß davon nichts."""
         self._hidden: frozenset[ObjectId] = frozenset()
+        self._unit: LengthUnit = "mm"
         self._result: EvaluationResult | None = None
         self._document: Document | None = None
         """Das Zuletzt-Gezeigte, damit sich der Baum ohne neue Auswertung
@@ -114,6 +115,13 @@ class ObjectTree(QWidget):
         self._hidden = hidden
         self.show_scene(self._result, self._document)
 
+    def set_unit(self, unit: LengthUnit) -> None:
+        """§19.3: Millimeter oder Zoll in der Maße-Spalte."""
+        if unit == self._unit:
+            return
+        self._unit = unit
+        self.show_scene(self._result, self._document)
+
     def show_scene(self, result: EvaluationResult | None, document: Document | None = None) -> None:
         selected = self.selected_objects()
         selected_feature = self.selected_feature()
@@ -124,12 +132,13 @@ class ObjectTree(QWidget):
             return
         for object_id, entry in result.scene.objects.items():
             size = entry.mesh.bounds.size
-            item = QTreeWidgetItem(
-                [
-                    entry.name,
-                    f"{size[0]:.1f} × {size[1]:.1f} × {size[2]:.1f} mm",
-                ]
+            # §19.3: die Einheit stand hier fest, obwohl sie eine Einstellung
+            # ist. Umgerechnet wird nur für die Anzeige — im Netz bleibt jede
+            # Zahl ein Millimeter.
+            measures = " × ".join(
+                format_length(value, self._unit, with_unit=False) for value in size
             )
+            item = QTreeWidgetItem([entry.name, f"{measures} {self._unit}"])
             item.setData(0, Qt.ItemDataRole.UserRole, object_id)
             state = tr("geschlossen") if entry.mesh.is_watertight else tr("offen")
             # §30: welche Sorte Körper das ist, gehört in den Baum, denn sie
@@ -529,7 +538,12 @@ class MeasurementLabel(QLabel):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._unit: LengthUnit = "mm"
         self.clear_selection()
+
+    def set_unit(self, unit: LengthUnit) -> None:
+        """§19.3: die Anzeigeeinheit. Der Kern bleibt bei Millimetern."""
+        self._unit = unit
 
     def clear_selection(self) -> None:
         self.setText(tr("Keine Auswahl"))
@@ -537,10 +551,10 @@ class MeasurementLabel(QLabel):
     def show_object(self, name: str, size: tuple[float, float, float], volume: float) -> None:
         self.setText(
             f"{name}   "
-            f"{format_length(size[0], 'mm', with_unit=False)} × "
-            f"{format_length(size[1], 'mm', with_unit=False)} × "
-            f"{format_length(size[2], 'mm')}   "
-            f"{volume / 1000.0:.1f} cm³"
+            f"{format_length(size[0], self._unit, with_unit=False)} × "
+            f"{format_length(size[1], self._unit, with_unit=False)} × "
+            f"{format_length(size[2], self._unit)}   "
+            f"{format_volume(volume, self._unit)}"
         )
 
 

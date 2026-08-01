@@ -126,6 +126,18 @@ def round_display(value_mm: float) -> float:
     return quantize(value_mm, EPS_DISPLAY)
 
 
+def format_volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
+    """Ein Volumen in der Einheit, die zur Anzeigelänge passt (§19.3).
+
+    In Millimetern rechnet niemand ein Volumen — Kubikzentimeter sind das
+    Maß, in dem Filament verkauft und Verbrauch angegeben wird. Zu Zoll
+    gehören Kubikzoll, und der Unterschied ist zu groß, um ihn zu übergehen.
+    """
+    if unit == "in":
+        return f"{value_mm3 / UNIT_TO_MM['in'] ** 3:.2f} in³"
+    return f"{value_mm3 / 1000.0:.1f} cm³"
+
+
 def format_length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = True) -> str:
     """Formatiert eine Kernlänge für die Anzeige in der gewünschten Einheit.
 
