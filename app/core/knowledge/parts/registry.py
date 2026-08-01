@@ -29,7 +29,7 @@ from app.i18n import TranslatableText, _
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 
-#: Shortest word the search takes seriously.
+#: Kürzestes Wort, das die Suche ernst nimmt.
 MIN_SEARCH_WORD: Final = 4
 
 #: Wörter, die in fast jeder Beschreibung vorkommen und darum nichts sagen.

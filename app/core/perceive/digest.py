@@ -111,7 +111,7 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
 
 
 def _place(centre: object) -> str:
-    """``, bei (25, -15, 8)`` — or nothing, for a feature that has no place."""
+    """``, bei (25, -15, 8)`` — oder nichts, bei einem Merkmal ohne Ort."""
     if not isinstance(centre, list | tuple) or len(centre) != 3:
         return ""
     try:

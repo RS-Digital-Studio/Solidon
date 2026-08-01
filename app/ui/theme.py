@@ -73,7 +73,7 @@ def build_palette(theme: Theme) -> QPalette:
 
 
 def apply_theme(application: QApplication, theme: Theme) -> None:
-    """Switch the whole application over. Takes effect immediately."""
+    """Schaltet die ganze Anwendung um. Wirkt sofort."""
     application.setStyle("Fusion")
     application.setPalette(build_palette(theme))
 

@@ -221,7 +221,7 @@ class CrossCheck:
 
     @property
     def deviation(self) -> float:
-        """Relative difference. Positive means the estimate was too low."""
+        """Relativer Unterschied. Positiv heißt: die Schätzung lag zu niedrig."""
         if self.measured <= 0.0:
             return 0.0
         return (self.measured - self.estimated) / self.measured

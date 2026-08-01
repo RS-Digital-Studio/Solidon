@@ -185,11 +185,12 @@ def wall_thickness(mesh: MeshData, point: Vec3, direction: Vec3 | None = None) -
 
 
 def ray_distances(mesh: MeshData, origin: np.ndarray, direction: np.ndarray) -> np.ndarray:
-    """Distances from ``origin`` to every triangle the ray hits, nearest first.
+    """Abstände von ``origin`` zu jedem Dreieck, das der Strahl trifft,
+    nächstes zuerst.
 
-    Möller-Trumbore over all triangles at once. Vectorised this is fast enough
-    for single rays and needs no spatial index — one dependency less for a
-    handful of lines (AGENTS.md rule 22).
+    Möller-Trumbore über alle Dreiecke auf einmal. Vektorisiert ist das schnell
+    genug für einzelne Strahlen und braucht keinen Raumindex — eine
+    Abhängigkeit weniger für eine Handvoll Zeilen (AGENTS.md Regel 22).
     """
     vertices = np.asarray(mesh.raw.vertices, dtype=float)
     faces = np.asarray(mesh.raw.faces, dtype=np.int64)
