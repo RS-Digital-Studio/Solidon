@@ -153,7 +153,7 @@ def _mesh_of(entry: SceneObject) -> MeshData:
     return mesh
 
 
-# --- Das Voxelfeld, auf dem beide Abstandskarten leben ---------------------------
+# --- Das Voxelfeld, auf dem beide Abstandskarten leben --------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,7 +235,7 @@ def _indices(field: SolidField, points: Any) -> Any:
     return np.clip(indices, 0, upper)
 
 
-# --- thickness ------------------------------------------------------------------
+# --- Wandstärke -----------------------------------------------------------------
 
 
 def wall_thickness_map(
@@ -309,7 +309,7 @@ def _inward_thickness(body: trimesh.Trimesh, field: SolidField) -> list[float]:
     return [float(value) if value > 0.0 else float("nan") for value in values]
 
 
-# --- overhang -------------------------------------------------------------------
+# --- Überhang -------------------------------------------------------------------
 
 
 def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> AnalysisMap:
@@ -347,7 +347,7 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
     )
 
 
-# --- mesh defects ---------------------------------------------------------------
+# --- Netzdefekte ----------------------------------------------------------------
 
 
 def defect_map(mesh: MeshData) -> AnalysisMap:
@@ -379,7 +379,7 @@ def defect_map(mesh: MeshData) -> AnalysisMap:
     )
 
 
-# --- curvature ------------------------------------------------------------------
+# --- Krümmung -------------------------------------------------------------------
 
 
 def curvature_map(mesh: MeshData) -> AnalysisMap:
@@ -406,7 +406,7 @@ def curvature_map(mesh: MeshData) -> AnalysisMap:
     )
 
 
-# --- Was die Erkennung gesehen hat -----------------------------------------------
+# --- Was die Erkennung gesehen hat ----------------------------------------------
 
 
 def feature_map(mesh: MeshData, features: dict[FeatureId, Feature]) -> AnalysisMap:
@@ -434,7 +434,7 @@ def feature_map(mesh: MeshData, features: dict[FeatureId, Feature]) -> AnalysisM
     )
 
 
-# --- fits (§14) -----------------------------------------------------------------
+# --- Passungen (§14) ------------------------------------------------------------
 
 
 def fit_map(mesh: MeshData, entry: SceneObject, scene: Scene | None) -> AnalysisMap:
@@ -491,7 +491,7 @@ def fits_of(scene: Scene, object_id: ObjectId) -> tuple[Fit, ...]:
     return tuple(fit for fit in scene.fits if object_id in (fit.a.object_id, fit.b.object_id))
 
 
-# --- support (§22) --------------------------------------------------------------
+# --- Stützen (§22) --------------------------------------------------------------
 
 
 def support_map(mesh: MeshData, layer_height: float = 0.2) -> AnalysisMap:
@@ -592,7 +592,7 @@ def _drop_below(mesh: MeshData, field: SolidField, centres: Any) -> Any:
     return np.maximum(np.where(landing >= 0, to_surface, to_plate), 0.0)
 
 
-# --- where to fly ---------------------------------------------------------------
+# --- Wohin die Kamera fliegt ----------------------------------------------------
 
 
 def focus_point(entry: SceneObject, analysis: AnalysisMap) -> Vec3 | None:
