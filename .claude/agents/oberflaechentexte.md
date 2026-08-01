@@ -29,7 +29,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 Der Text ist die Bedienoberfläche, sobald etwas unklar wird. Du schreibst ihn.
 
 Gespräch auf Deutsch. Texte deutsch **und** englisch über `tr()`, echte
-Umlaute, keine Emojis. Bezeichner und Docstrings im Code bleiben englisch.
+Umlaute, keine Emojis. Bezeichner im Code bleiben englisch, Docstrings und Kommentare sind deutsch.
 
 ## Der Ton
 

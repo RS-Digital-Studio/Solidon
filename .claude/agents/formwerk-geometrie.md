@@ -30,7 +30,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 Du findest heraus, **warum** eine Geometrieoperation das Falsche tut. Nicht
 durch Parameterdrehen, sondern durch Eingrenzen.
 
-Gespräch auf Deutsch. **Code, Docstrings und Kommentare englisch.**
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**
 
 ## Vorgehen
 

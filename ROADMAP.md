@@ -1023,3 +1023,33 @@ Betroffen ist `core/slice/orientation.py`, zuletzt inhaltlich geändert in
 a8c6565; dazwischen liegt nur die Übersetzungsrunde, die keine Laufzeit kostet.
 Nicht in derselben Runde angefasst: das ist Profiling-Arbeit an der
 Orientierungssuche und gehört nicht ins Handbuch.
+
+---
+
+## Aus der Übersetzungsrunde
+
+`app/`, `tests/` und `tools/` sind vollständig auf deutsche Docstrings und
+Kommentare umgestellt — 2224 Bausteine, in Paketen committet. Der Nachsatz aus
+`AGENTS.md`, es werde nur übersetzt, was ohnehin angefasst wird, ist damit
+erledigt und dort gestrichen.
+
+**Die Sprachregel stand an elf Stellen falsch.** Bauplan §4.1, der
+Sitzungsstart-Hook und neun Agentenbeschreibungen sagten weiter „Docstrings und
+Kommentare englisch" — zwei Sitzungen lang, während genau das Gegenteil
+geschah. Alle nachgezogen. Der Bauplan war die gefährlichste davon: er ist die
+Instanz, die bei Widerspruch gewinnt, hätte die Arbeit also formal für falsch
+erklärt. Die Zeile über Commit-Nachrichten stand aus demselben Grund falsch —
+sie sind seit dem ersten Commit deutsch.
+
+**`ruff` und `mypy` fangen keine ungültige Escape-Sequenz.** Beim Übersetzen
+von `export/writer.py` wurde aus `` ``\\w`` `` im Docstring ein `` ``\w`` ``.
+Beide Werkzeuge liefen grün darüber; vier Tests fielen um, weil sie die Datei
+mit `ast.parse` lesen und `filterwarnings = ["error"]` aus der SyntaxWarning
+einen Fehler macht. Ein grünes `ruff check` heißt nicht, dass die Datei
+fehlerfrei parst.
+
+**Docstrings werden über die AST-Position ersetzt, nicht über Textsuche.** Der
+Wortlaut wiederholt sich zu oft; adressiert wird über Funktions- und
+Klassennamen, und bei einem Namen, den es zweimal gibt, bricht das Werkzeug ab,
+statt zu raten. Die Einrückung braucht keine Sorgfalt — `ruff format`
+normalisiert Docstrings ohnehin.

@@ -52,7 +52,7 @@ _INCLUDE_PATTERN = re.compile(
 #: Rückfall, sondern ein Fehler (§31).
 TIMEOUT_SECONDS = 60.0
 
-#: Names OpenSCAD is installed under.
+#: Namen, unter denen OpenSCAD installiert wird.
 EXECUTABLES = ("openscad", "openscad-nightly", "OpenSCAD")
 
 

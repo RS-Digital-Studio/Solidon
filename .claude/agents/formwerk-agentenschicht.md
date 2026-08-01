@@ -30,7 +30,7 @@ Der LLM-Agent steuert denselben Operations-API fern, den auch die Menüs
 benutzen. Er bekommt keine Sonderwege, keine eigene Geometrie, keinen eigenen
 Zustand.
 
-Gespräch auf Deutsch. **Code, Docstrings und Kommentare englisch.** Der
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.** Der
 Systemprompt selbst ist Text für ein Modell — dessen Sprache richtet sich nach
 dem, was dort bereits steht.
 

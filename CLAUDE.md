@@ -31,9 +31,8 @@ Die Sprachregelung steht verbindlich in `AGENTS.md`; hier die Kurzform:
 
 - **Bezeichner, Dateinamen, Modulnamen: Englisch.**
   `tests/test_language_rules.py` lehnt deutsche Stämme in Bezeichnern ab.
-- **Docstrings und Kommentare: Deutsch** — seit „Doku nachziehen" (b2e6e28).
-  Bestand ist vielfach noch englisch; übersetzt wird, was ohnehin angefasst
-  wird, nie eine Runde nur dafür.
+- **Docstrings und Kommentare: Deutsch** — seit „Doku nachziehen" (b2e6e28),
+  der Bestand ist vollständig nachgezogen. Neues wird deutsch geschrieben.
 - **Oberflächentexte: über `tr()`**, deutsch und englisch in
   `app/i18n/locales/`. Keine feste Zeichenkette in der Oberfläche.
 - **Doku, Bauplan, Roadmap, Commit-Meldungen: Deutsch**, mit echten Umlauten.
@@ -103,6 +102,8 @@ app/images/   Bildschirmfotos fürs Handbuch, je Sprache ein Ordner
 app/cli/      Kommandozeile auf core
 tests/        eine Datei je Testart, data/ ist der Referenzkorpus
 tools/        Hilfsprogramme, nicht Teil der Anwendung
+website/      öffentliche Seiten; handbuch.html und en/manual.html erzeugt
+              tools/make_manual.py, alles andere ist von Hand gepflegt
 3D Drucker/   physische Druckprojekte, eigene CLAUDE.md, nicht im Repository
 ```
 
@@ -133,6 +134,11 @@ Agents (`.claude/agents/`) — die globalen .NET-Agents passen hier nicht:
 
 Befehle (`.claude/skills/`): `/pruefen`, `/regelcheck`, `/neue-op`,
 `/neuer-baustein`, `/bauplan`, `/roadmap`, `/liefern`, `/neues-druckteil`.
+
+Wie die Sitzung selbst bedienbar sein soll, steht in
+`.claude/bedienkonzept-ueberblick.md` (die Sitzung als Ganzes) und
+`.claude/bedienkonzept-funktionen.md` (sechzehn Funktionen einzeln). Entwurf,
+noch nicht Praxis — was daraus umgesetzt ist, steht dort in der Schlusstabelle.
 
 ## Arbeitsweise hier
 

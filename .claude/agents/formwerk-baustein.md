@@ -30,7 +30,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 Der Grundsatz aus §24: **Der Agent setzt geprüfte Bausteine zusammen, statt
 Geometrie zu erfinden.** Was du hier baust, ist der Vorrat, aus dem er schöpft.
 
-Gespräch auf Deutsch. **Code, Docstrings und Kommentare englisch.**
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**
 
 ## Zuerst
 

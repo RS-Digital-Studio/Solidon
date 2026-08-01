@@ -81,11 +81,11 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 | Oberflächentexte | Deutsch + Englisch über `tr()` |
 | Doku und Bauplan | Deutsch |
 
-Kommentare und Docstrings waren bis dahin englisch. Sie sind es an vielen
-Stellen noch: **übersetzt wird, was ohnehin angefasst wird** — eine Runde
-allein dafür wäre ein Diff über die halbe Codebasis, in dem keine einzige
-inhaltliche Änderung mehr zu sehen ist. Bezeichner bleiben englisch, daran
-ändert das nichts (`tests/test_language_rules.py` prüft nur die).
+Kommentare und Docstrings waren bis dahin englisch. Sie sind es nicht mehr:
+`app/`, `tests/` und `tools/` sind vollständig übersetzt. Was neu dazukommt,
+wird deutsch geschrieben — nachträglich zu übersetzen gibt es nichts mehr.
+Bezeichner bleiben englisch, daran ändert das nichts
+(`tests/test_language_rules.py` prüft nur die).
 
 Begriffszuordnung (verbindlich): Op → `Operation`, Transaktion →
 `Transaction`, Baustein → `Part`, Steckbrief → `digest`, Prüfbericht →

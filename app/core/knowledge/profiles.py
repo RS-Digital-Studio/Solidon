@@ -113,7 +113,7 @@ def _load_materials() -> dict[str, MaterialProfile]:
 
 
 def printer_profiles() -> Mapping[str, PrinterProfile]:
-    """All known printer profiles, shipped ones plus the user's own."""
+    """Alle bekannten Druckerprofile — die mitgelieferten und die eigenen."""
     global _printers
     if _printers is None:
         _printers = _load_printers()
@@ -122,7 +122,7 @@ def printer_profiles() -> Mapping[str, PrinterProfile]:
 
 
 def material_profiles() -> Mapping[str, MaterialProfile]:
-    """All known material profiles, shipped ones plus the user's own."""
+    """Alle bekannten Materialprofile — die mitgelieferten und die eigenen."""
     global _materials
     if _materials is None:
         _materials = _load_materials()

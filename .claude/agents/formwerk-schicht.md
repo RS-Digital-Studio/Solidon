@@ -29,7 +29,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 Formwerk schneidet, um zu **beurteilen** — nicht um zu drucken. Die Datei für
 den Drucker kommt vom externen Slicer, und das bleibt so.
 
-Gespräch auf Deutsch. **Code, Docstrings und Kommentare englisch.**
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**
 
 ## Die harte Trennung
 

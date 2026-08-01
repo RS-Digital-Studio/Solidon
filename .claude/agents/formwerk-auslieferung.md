@@ -29,7 +29,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 Was ausgeliefert wird, ist grün und rechtlich sauber. Beides ist prüfbar,
 also wird es geprüft.
 
-Gespräch auf Deutsch. **Code, Docstrings und Kommentare englisch.**
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**
 
 ## Lizenzen
 

@@ -245,15 +245,22 @@ Kriterium; Eindeutigkeit und maschinelle Abnahme sind es.
 | Bereich | Sprache |
 |---|---|
 | Bezeichner im Code, Dateinamen, Modulnamen | Englisch |
-| Docstrings und Kommentare | Englisch |
+| Docstrings und Kommentare | **Deutsch** |
 | Schlüssel in Projektdatei und Schemata | Englisch |
 | Oberflächentexte | Deutsch und Englisch über `tr()` |
 | Doku für Nutzer, dieser Bauplan | Deutsch |
-| Commit-Nachrichten | Englisch |
+| Commit-Nachrichten | **Deutsch** |
 
 Ohne diese Festlegung entsteht ein Gemisch wie `bausteinRegistry` oder
 `wall_staerke`. Der Konsistenztest prüft Bezeichner stichprobenartig gegen
 eine Liste deutscher Stämme.
+
+Docstrings und Kommentare standen hier bis „Doku nachziehen" (b2e6e28) auf
+Englisch. Die Zeile ist geändert, weil die Trennung nicht zwischen Code und
+Prosa verläuft, sondern zwischen **Maschine und Mensch**: Bezeichner liest der
+Interpreter, Kommentare liest nur Robert. `app/`, `tests/` und `tools/` sind
+vollständig nachgezogen; die Prüfung bleibt auf Bezeichner beschränkt, weil nur
+die eindeutig entscheidbar ist.
 
 ### 4.2 Begriffe
 

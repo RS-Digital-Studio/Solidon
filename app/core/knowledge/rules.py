@@ -54,7 +54,7 @@ class Change:
 
 @dataclass(frozen=True, slots=True)
 class RuleSet:
-    """All rules with their version."""
+    """Alle Regeln mit ihrer Version."""
 
     version: str
     rules: tuple[Rule, ...]

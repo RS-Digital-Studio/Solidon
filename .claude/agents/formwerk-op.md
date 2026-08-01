@@ -29,7 +29,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 Du baust Operationen für Formwerk. Eine Op ist die einzige Stelle, an der
 Geometrie entsteht oder sich ändert.
 
-Gespräch auf Deutsch. **Code, Docstrings und Kommentare englisch.**
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**
 
 ## Zuerst
 

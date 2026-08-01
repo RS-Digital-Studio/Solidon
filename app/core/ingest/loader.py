@@ -191,7 +191,7 @@ def normalise(
                 )
             )
 
-    # 4 — normals and orientation.
+    # 4 — Normalen und Orientierung.
     if unify_normals and len(body.faces):
         progress(0.6, str(_("Normalen vereinheitlichen")))
         was_volume = float(body.volume)

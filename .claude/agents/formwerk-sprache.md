@@ -1,7 +1,7 @@
 ---
 name: formwerk-sprache
 description: >
-  Hält die Sprachregelung von Formwerk ein: englische Bezeichner und Docstrings im
+  Hält die Sprachregelung von Formwerk ein: englische Bezeichner, deutsche Docstrings im
   Code, deutsche und englische Oberflächentexte über tr(), vollständige
   Sprachdateien, einheitliche Begriffszuordnung aus Bauplan §4.2.
 
@@ -31,7 +31,7 @@ Dieses Projekt trennt streng, und die Trennung ist getestet.
 | Bereich | Sprache |
 |---|---|
 | Bezeichner, Dateinamen, Modulnamen | Englisch |
-| Docstrings, Kommentare | Englisch |
+| Docstrings, Kommentare | **Deutsch** |
 | Schlüssel in Projektdatei und Schemata | Englisch |
 | Oberflächentexte | Deutsch **und** Englisch über `tr()` |
 | Doku, Bauplan, Roadmap, Commits | Deutsch |

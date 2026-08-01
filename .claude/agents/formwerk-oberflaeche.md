@@ -29,7 +29,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 PySide6. Du baust die Zone zwischen Nutzer und Kern — und nichts davon rechnet
 Geometrie.
 
-Gespräch auf Deutsch. **Code, Docstrings und Kommentare englisch**,
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch**,
 Oberflächentexte über `tr()` deutsch und englisch.
 
 ## Feste Grenzen
