@@ -1,9 +1,10 @@
-"""Parts that make something stiffer or lead something through (Bauplan §24.1).
+"""Bausteine, die etwas versteifen oder hindurchführen (Bauplan §24.1).
 
-The last two of the thirteen: the stiffening rib and the cable gland with
-strain relief. Both are the kind of thing that gets drawn by hand a hundred
-times and wrong half of them — a rib that is thicker than the wall it stiffens
-sinks in, a gland without strain relief tears the wire out of the solder joint.
+Die letzten zwei der dreizehn: die Versteifungsrippe und die
+Kabeldurchführung mit Zugentlastung. Beides ist die Sorte Sache, die hundertmal
+von Hand gezeichnet und in der Hälfte der Fälle falsch wird — eine Rippe, die
+dicker ist als die Wand, die sie versteift, zeichnet sich durch; eine
+Durchführung ohne Zugentlastung reißt den Draht aus der Lötstelle.
 """
 
 from __future__ import annotations

@@ -1,16 +1,19 @@
-"""The part registry (Bauplan §24.1, §24.4).
+"""Das Bausteinregister (Bauplan §24.1, §24.4).
 
-Declared once, like an operation: from one declaration come the catalogue entry,
-the parameter dialog, the agent's ``find_part`` and the documentation. What is
-missing here fails at import time, not in a surface later on.
+Einmal deklariert, wie eine Operation: aus einer Deklaration kommen der
+Katalogeintrag, der Parameterdialog, das ``find_part`` des Agenten und die
+Dokumentation. Was hier fehlt, scheitert beim Import, nicht später in einer
+Oberfläche.
 
-Two things a part carries that an operation does not:
+Zwei Dinge trägt ein Baustein, die eine Operation nicht hat:
 
-* **a version and a change log** (§24.4). The library is part of the way a
-  project was computed, so a correction to ``heatset_m4`` must not quietly
-  recompute old projects differently — Leitprinzip 4 would be broken.
-* **whether it adds or removes material**. A screw hole is a shape to subtract,
-  a rib is one to add, and ``insert_part`` needs to know which without asking.
+* **eine Version und einen Änderungsverlauf** (§24.4). Die Bibliothek ist Teil
+  der Art, wie ein Projekt gerechnet wurde — eine Korrektur an ``heatset_m4``
+  darf alte Projekte also nicht still anders nachrechnen; Leitprinzip 4 wäre
+  gebrochen.
+* **ob er Material hinzufügt oder wegnimmt**. Ein Schraubenloch ist eine Form
+  zum Abziehen, eine Rippe eine zum Hinzufügen, und ``insert_part`` muss das
+  wissen, ohne zu fragen.
 """
 
 from __future__ import annotations
@@ -29,7 +32,7 @@ _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 #: Shortest word the search takes seriously.
 MIN_SEARCH_WORD: Final = 4
 
-#: Words that appear in almost every description and therefore say nothing.
+#: Wörter, die in fast jeder Beschreibung vorkommen und darum nichts sagen.
 STOP_WORDS: Final[frozenset[str]] = frozenset(
     {
         "auch",
@@ -54,7 +57,7 @@ STOP_WORDS: Final[frozenset[str]] = frozenset(
     }
 )
 
-#: Groups of the catalogue (§24.3). They order what the user sees.
+#: Gruppen des Katalogs (§24.3). Sie ordnen, was der Nutzer sieht.
 GROUPS: Final[dict[str, TranslatableText]] = {
     "fasteners": _("Verbindungen"),
     "inserts": _("Einlegeteile"),
@@ -68,7 +71,7 @@ GROUPS: Final[dict[str, TranslatableText]] = {
 
 @dataclass(frozen=True, slots=True)
 class PartChange:
-    """One entry of the change log §24.4 asks for, per part."""
+    """Ein Eintrag des Änderungsverlaufs, den §24.4 verlangt, je Baustein."""
 
     version: str
     date: str
@@ -102,7 +105,7 @@ class PartSpec:
 
 
 class PartRegistry:
-    """Holds the declarations. One default instance; tests build their own."""
+    """Hält die Deklarationen. Eine Vorgabe-Instanz; Tests bauen ihre eigene."""
 
     def __init__(self) -> None:
         self._parts: dict[str, PartSpec] = {}
@@ -160,14 +163,16 @@ class PartRegistry:
         return {name: tuple(entries) for name, entries in grouped.items() if entries}
 
     def search(self, text: str) -> tuple[PartSpec, ...]:
-        """What ``find_part`` answers with (§26.2). Plain word matching — a part
-        library of a few dozen entries needs no index, and a wrong hit from a
-        clever ranking would be worse than an honest miss.
+        """Womit ``find_part`` antwortet (§26.2). Schlichter Wortvergleich — eine
+        Bausteinbibliothek aus ein paar Dutzend Einträgen braucht keinen Index,
+        und ein falscher Treffer aus einer klugen Rangfolge wäre schlimmer als
+        ein ehrlicher Fehlschlag.
 
-        Short and common words are dropped: "eine Mutter mit Gewinde" would
-        otherwise match every part whose description contains "mit", and a
-        library that answers everything is as useless as one that answers
-        nothing."""
+        Kurze und häufige Wörter fallen weg: „eine Mutter mit Gewinde" träfe
+        sonst jeden Baustein, dessen Beschreibung „mit" enthält — und eine
+        Bibliothek, die auf alles antwortet, ist so nutzlos wie eine, die auf
+        nichts antwortet.
+        """
         words = [
             word
             for word in re.split(r"\W+", text.casefold())
@@ -183,11 +188,15 @@ class PartRegistry:
         return tuple(found)
 
     def versions(self) -> dict[str, str]:
-        """Every part with its own version — the comparison §24.4 runs on."""
+        """Jeder Baustein mit seiner eigenen Version — der Vergleich, auf dem
+        §24.4 läuft.
+        """
         return {spec.name: spec.version for spec in self.all()}
 
     def mark_source(self, name: str, source: str) -> PartSpec:
-        """Record where a part came from — the catalogue marks own ones (§24.5)."""
+        """Hält fest, woher ein Baustein kam — der Katalog kennzeichnet die
+        eigenen (§24.5).
+        """
         import dataclasses
 
         spec = dataclasses.replace(self.get(name), source=source)
@@ -198,7 +207,7 @@ class PartRegistry:
         self._parts.clear()
 
 
-#: The registry the application uses.
+#: Das Register, das die Anwendung benutzt.
 PARTS: Final = PartRegistry()
 
 
@@ -216,7 +225,9 @@ def register_part(
     source: str = "shipped",
     registry: PartRegistry | None = None,
 ) -> Callable[[PartFn], PartFn]:
-    """Declare a part. The decorated function stays callable as before."""
+    """Deklariert einen Baustein. Die dekorierte Funktion bleibt aufrufbar
+    wie zuvor.
+    """
 
     def decorate(fn: PartFn) -> PartFn:
         (registry or PARTS).register(
@@ -239,16 +250,19 @@ def register_part(
     return decorate
 
 
-#: Version of the library as a whole. Goes into every project file (§16.2) and
-#: is raised whenever a part changes in a way that moves dimensions.
+#: Version der Bibliothek als Ganzes. Geht in jede Projektdatei (§16.2) und
+#: wird erhöht, sobald ein Baustein sich auf eine Art ändert, die Maße
+#: verschiebt.
 LIBRARY_VERSION: Final = "1"
 
 
 def changed_since(before: dict[str, str], registry: PartRegistry | None = None) -> tuple[str, ...]:
-    """Parts whose version moved since a project was saved (§24.4).
+    """Bausteine, deren Version sich bewegt hat, seit ein Projekt gespeichert
+    wurde (§24.4).
 
-    Only the ones the project actually used are worth a word, so the caller
-    passes exactly those — with the version each was computed with.
+    Nur die, die das Projekt wirklich benutzt hat, sind ein Wort wert — der
+    Aufrufer übergibt also genau diese, mit der Version, mit der jeder
+    gerechnet wurde.
     """
     current = (registry or PARTS).versions()
     return tuple(
@@ -261,12 +275,13 @@ def changed_since(before: dict[str, str], registry: PartRegistry | None = None) 
 def changed_since_library(
     version: str, used: Iterable[str], registry: PartRegistry | None = None
 ) -> tuple[str, ...]:
-    """Used parts that changed since a project was computed (§24.4).
+    """Benutzte Bausteine, die sich geändert haben, seit ein Projekt
+    gerechnet wurde (§24.4).
 
-    A project file records the library version, not a version per part — so the
-    comparison runs over the change logs: whoever has an entry newer than that
-    version has moved, and only the parts the project actually used are worth
-    a word.
+    Eine Projektdatei hält die Bibliotheksversion fest, keine Version je
+    Baustein — der Vergleich läuft also über die Änderungsverläufe: wer einen
+    Eintrag neuer als diese Version hat, hat sich bewegt, und nur die
+    Bausteine, die das Projekt wirklich benutzt hat, sind ein Wort wert.
     """
     source = registry or PARTS
     since = _as_number(version)
@@ -286,7 +301,9 @@ def _as_number(version: str) -> int:
 
 
 def used_parts(operations: Iterable[Any]) -> tuple[str, ...]:
-    """Which parts a stack uses, read off the operation names (§24.4)."""
+    """Welche Bausteine ein Stapel benutzt, abgelesen an den
+    Operationsnamen (§24.4).
+    """
     prefix = "insert_"
     return tuple(
         sorted(
@@ -300,10 +317,11 @@ def used_parts(operations: Iterable[Any]) -> tuple[str, ...]:
 
 
 def missing_parts(before: dict[str, str], registry: PartRegistry | None = None) -> tuple[str, ...]:
-    """Parts a project used that this installation does not have (§24.5).
+    """Bausteine, die ein Projekt benutzt hat und die diese Installation
+    nicht hat (§24.5).
 
-    An own part from someone else's machine lands here, and the evaluation has
-    to stop rather than compute something else (§15.2).
+    Ein eigener Baustein von der Maschine eines anderen landet hier, und die
+    Auswertung muss anhalten, statt etwas anderes zu rechnen (§15.2).
     """
     current = (registry or PARTS).versions()
     return tuple(name for name in sorted(before) if name not in current)

@@ -1,19 +1,20 @@
-"""Every part as an operation (Bauplan §24.1, §10).
+"""Jeder Baustein als Operation (Bauplan §24.1, §10).
 
-A part is declared once and becomes an operation from that declaration —
-menu entry, dialog, command line, agent tool and catalogue entry all follow
-(Leitprinzip 3). Nothing here is written per part; adding a part to the library
-adds it everywhere.
+Ein Baustein wird einmal deklariert und wird aus dieser Deklaration eine
+Operation — Menüeintrag, Dialog, Kommandozeile, Agentenwerkzeug und
+Katalogeintrag folgen alle daraus (Leitprinzip 3). Nichts hier ist je Baustein
+geschrieben; einen Baustein zur Bibliothek hinzuzufügen fügt ihn überall hinzu.
 
-The operation takes the part's own parameters plus where it goes: position,
-axis, angle. A subtractive part is cut out of the body, an additive one is
-joined to it, and which of the two it is comes from the declaration — the user
-does not have to know that a nut trap is a hole and a rib is not.
+Die Operation nimmt die eigenen Parameter des Bausteins plus den Ort, an den er
+gehört: Position, Achse, Winkel. Ein abziehender Baustein wird aus dem Körper
+geschnitten, ein hinzufügender mit ihm vereint, und welcher von beiden es ist,
+kommt aus der Deklaration — der Nutzer muss nicht wissen, dass eine
+Mutternfalle ein Loch ist und eine Rippe nicht.
 
-The play a fit needs is not written into the part either. A part declares
-``play`` and leaves it at zero; here it is filled from the calibrated material
-profile (AGENTS.md rule 7), which is what lets a later calibration reach old
-projects.
+Das Spiel, das eine Passung braucht, steht auch nicht im Baustein. Ein Baustein
+deklariert ``play`` und lässt es auf null; hier wird es aus dem kalibrierten
+Materialprofil gefüllt (AGENTS.md Regel 7) — und genau das lässt eine spätere
+Kalibrierung alte Projekte erreichen.
 """
 
 from __future__ import annotations
@@ -42,8 +43,8 @@ from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
-#: Name of the parameter a part uses for the tolerance it needs. Zero means
-#: "take it from the material profile" (§28.3).
+#: Name des Parameters, den ein Baustein für die Toleranz benutzt, die er
+#: braucht. Null heißt: aus dem Profil füllen.
 PLAY_FIELD = "play"
 
 #: Ortsangaben, die jede Baustein-Operation zusätzlich zu ihren eigenen bekommt.
@@ -129,12 +130,16 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
 
 
 def op_name(part: str) -> str:
-    """``screw_hole`` becomes ``insert_screw_hole`` — one namespace, no clashes."""
+    """``screw_hole`` wird ``insert_screw_hole`` — ein Namensraum, keine
+    Kollisionen.
+    """
     return f"insert_{part}"
 
 
 def build_params(spec: PartSpec) -> type[BaseParams]:
-    """The part's parameters plus where it goes, as one schema (§10)."""
+    """Die Parameter des Bausteins plus den Ort, an den er gehört, als ein
+    Schema (§10).
+    """
     namespace: dict[str, Any] = {"__annotations__": {}}
     for entry in spec.params.fields():
         namespace["__annotations__"][entry.name] = entry.type
@@ -158,7 +163,7 @@ def _camel(name: str) -> str:
 def register_all(
     parts: PartRegistry | None = None, registry: Registry | None = None
 ) -> tuple[str, ...]:
-    """Declare one operation per part. Returns the operation names."""
+    """Deklariert eine Operation je Baustein. Gibt die Operationsnamen zurück."""
     source = parts or PARTS
     made: list[str] = []
     for spec in source.all():
@@ -202,7 +207,7 @@ def _title_for(spec: PartSpec) -> TranslatableText | str:
 
 
 def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
-    """Build the part, put it where it belongs, and join or cut it."""
+    """Baut den Baustein, setzt ihn an seinen Platz und vereint oder schneidet."""
     source = ctx.inputs[0]
     values = _part_values(spec, ctx.params, ctx.profile)
     produced = spec.fn(spec.params(**values))
@@ -224,23 +229,26 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
 
 
 def _part_values(spec: PartSpec, params: Any, profile: Profile | None) -> dict[str, Any]:
-    """The part's own parameters out of the operation's, with the play filled in."""
+    """Die eigenen Parameter des Bausteins aus denen der Operation, mit dem
+    eingefüllten Spiel.
+    """
     wanted = {entry.name for entry in spec.params.fields()}
     values = {name: getattr(params, name) for name in wanted if hasattr(params, name)}
     if PLAY_FIELD in values and not values[PLAY_FIELD] and profile is not None:
-        # Rule 7: the tolerance is a reference into the material profile, never
-        # a number in the file.
+        # Regel 7: die Toleranz ist ein Verweis ins Materialprofil, nie eine Zahl
+        # in der Datei.
         values[PLAY_FIELD] = profile.material.clearance
     return values
 
 
 def _anchor(source: SceneObject, params: Any) -> Vec3:
-    """Where the part goes: at a named feature, or at the origin (§25).
+    """Wohin der Baustein kommt: an ein benanntes Merkmal, oder an den
+    Ursprung (§25).
 
-    §25 asks for "put a part at a recognised feature". The name is enough for
-    that — it is the same name the user clicked and the agent spoke about
-    (§18.5), and a feature that is not there says so instead of landing the part
-    somewhere plausible.
+    §25 verlangt „einen Baustein an ein erkanntes Merkmal setzen". Der Name
+    genügt dafür — es ist derselbe Name, den der Nutzer angeklickt und über den
+    der Agent gesprochen hat (§18.5), und ein Merkmal, das nicht da ist, sagt
+    das, statt den Baustein irgendwo Plausiblem abzusetzen.
     """
     name = str(getattr(params, "at_feature", "") or "")
     if not name:
@@ -267,7 +275,8 @@ def _place(mesh: MeshData, params: Any, anchor: Vec3 = (0.0, 0.0, 0.0)) -> MeshD
     angle = float(getattr(params, "angle", 0.0))
     body = mesh
     if axis != "z":
-        # Lay the part over so its own +Z points along the chosen axis.
+        # Den Baustein so umlegen, dass sein eigenes +Z entlang der gewählten Achse
+        # zeigt.
         body = apply(body, rotation("y", 90.0) if axis == "x" else rotation("x", -90.0))
     if angle:
         body = apply(body, rotation(axis, angle))  # type: ignore[arg-type]
@@ -282,11 +291,12 @@ def _place(mesh: MeshData, params: Any, anchor: Vec3 = (0.0, 0.0, 0.0)) -> MeshD
 def _placed_features(
     produced: PartResult, spec: PartSpec, params: Any, anchor: Vec3 = (0.0, 0.0, 0.0)
 ) -> dict[str, Feature]:
-    """The part's features, moved with it and named so they cannot collide.
+    """Die Merkmale des Bausteins, mitbewegt und so benannt, dass sie nicht
+    kollidieren können.
 
-    ``bore_1`` of the third inserted part would otherwise overwrite the first
-    one's. The part name and the position make it unique without inventing a
-    counter that nobody can predict.
+    ``bore_1`` des dritten eingefügten Bausteins überschriebe sonst das des
+    ersten. Bausteinname und Position machen es eindeutig, ohne einen Zähler zu
+    erfinden, den niemand vorhersagen kann.
     """
     from app.core.perceive.matching import moved_features
 

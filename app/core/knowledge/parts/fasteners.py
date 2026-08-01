@@ -1,12 +1,13 @@
-"""Parts for screws (Bauplan §24.1, group "Verbindungen").
+"""Bausteine für Schrauben (Bauplan §24.1, Gruppe „Verbindungen").
 
-Four of the thirteen: the screw hole with its countersink, the heat-set insert
-bore, the nut trap from the side or from below, and a printable thread.
+Vier der dreizehn: das Schraubenloch mit seiner Senkung, die Bohrung für die
+Einpressbuchse, die Mutternfalle von der Seite oder von unten, und ein
+druckbares Gewinde.
 
-Every dimension comes from the standard table (§24.2) — "hole for an M4
-heat-set insert" is a lookup, not a guess. What the part adds on top is the
-material tolerance from the profile, and it says so in its documentation rather
-than hiding it in a number.
+Jedes Maß kommt aus der Normteiltabelle (§24.2) — „Loch für eine
+M4-Einpressbuchse" ist ein Nachschlagen, keine Vermutung. Was der Baustein
+darauflegt, ist die Materialtoleranz aus dem Profil, und er sagt das in seiner
+Dokumentation, statt es in einer Zahl zu verstecken.
 """
 
 from __future__ import annotations
@@ -98,7 +99,7 @@ def screw_hole(raw: BaseParams) -> PartResult:
     ]
 
     if params.countersink:
-        # A 90 degree countersink is as deep as the head is wide, halved.
+        # Eine 90-Grad-Senkung ist so tief, wie der Kopf breit ist, halbiert.
         depth = (screw.countersink - screw.clearance) / 2.0
         sink = shapes.cone(screw.clearance, screw.countersink, depth)
         parts.append(shapes.moved(sink, (0.0, 0.0, -depth)))
@@ -243,7 +244,7 @@ def nut_trap(raw: BaseParams) -> PartResult:
     ]
 
     if params.slide > 0.0:
-        # The slot the nut is pushed in through, pointing along +Y.
+        # Der Schlitz, durch den die Mutter eingeschoben wird, entlang +Y zeigend.
         channel = shapes.box(width, params.slide, height)
         parts.append(shapes.moved(channel, (0.0, params.slide / 2.0, 0.0)))
 
@@ -258,8 +259,8 @@ def nut_trap(raw: BaseParams) -> PartResult:
 
     body = union(*parts)
     if params.direction == "bottom":
-        # Turned so the opening faces down — laid in from below rather than
-        # pushed in from the side.
+        # Gedreht, sodass die Öffnung nach unten schaut — von unten eingelegt
+        # statt von der Seite eingeschoben.
         body = shapes.turned(body, 90.0, (1.0, 0.0, 0.0))
     return result(body, *features)
 
@@ -316,26 +317,28 @@ class ThreadParams(BaseParams):
     changes=[FIRST_RELEASE],
 )
 def printed_thread(raw: BaseParams) -> PartResult:
-    """A thread, and its counterpart measured so the two actually engage.
+    """Ein Gewinde, und sein Gegenstück so gemessen, dass die zwei wirklich
+    greifen.
 
-    Both are described by the same two numbers — the major diameter and the
-    pitch — and built from opposite ends of the ridge:
+    Beide werden von denselben zwei Zahlen beschrieben — Außendurchmesser und
+    Steigung — und von entgegengesetzten Enden des Gangs her gebaut:
 
-    * outside, the core is two ridge depths under the major diameter and the
-      helix reaches out to it;
-    * inside, the *cutter* starts at that same core diameter and the helix
-      reaches out to the major diameter. Cut from the core rather than from the
-      major diameter, which is the difference between a nut and a smooth hole:
-      a bore at the major diameter leaves nothing standing that the ridge of a
-      screw could hold on to, and the screw drops straight through. Measured on
-      M6: a screw of 5,85 major reaches r = 2,925, and a hole bored to 6,15
-      begins at r = 3,075 — a hundred and fifty micrometres of air.
+    * außen liegt der Kern zwei Gangtiefen unter dem Außendurchmesser, und die
+      Helix reicht bis zu ihm hinaus;
+    * innen beginnt das *Werkzeug* bei genau diesem Kerndurchmesser, und die
+      Helix reicht bis zum Außendurchmesser. Vom Kern geschnitten statt vom
+      Außendurchmesser — das ist der Unterschied zwischen einer Mutter und
+      einem glatten Loch: eine Bohrung auf Außendurchmesser lässt nichts
+      stehen, woran der Gang einer Schraube halten könnte, und die Schraube
+      fällt glatt hindurch. An M6 gemessen: eine Schraube mit 5,85 außen
+      reicht bis r = 2,925, und ein auf 6,15 gebohrtes Loch beginnt bei
+      r = 3,075 — hundertfünfzig Mikrometer Luft.
     """
     params = cast(ThreadParams, raw)
     screw = standards.screw(params.size)
     depth = screw.pitch * shapes.RIDGE_SHARE
     if params.internal:
-        # The cutter: core plus play, with the groove reaching out from there.
+        # Das Werkzeug: Kern plus Spiel, und die Nut reicht von dort hinaus.
         diameter = screw.nominal - 2.0 * depth + params.play
         core = shapes.cylinder(diameter, params.length)
     else:
@@ -344,8 +347,8 @@ def printed_thread(raw: BaseParams) -> PartResult:
 
     ridge = shapes.thread_body(diameter, screw.pitch, params.length, internal=params.internal)
     body = union(core, ridge)
-    # The helix ends a little above the nominal length; cut it back so the part
-    # is exactly as long as it says it is.
+    # Die Helix endet ein Stück über der Nennlänge; sie wird zurückgeschnitten,
+    # damit das Teil genau so lang ist, wie es sagt.
     limit = shapes.cylinder(diameter * 2.0 + 4.0, params.length)
     body = _intersect(body, limit)
 

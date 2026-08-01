@@ -1,12 +1,14 @@
-"""What has to be said when a project is opened (Bauplan §24.4, §24.5).
+"""Was gesagt werden muss, wenn ein Projekt geöffnet wird (Bauplan §24.4,
+§24.5).
 
-The library is part of the way a project was computed. A corrected part must
-therefore not quietly recompute an old project differently — Leitprinzip 4 would
-be broken and nobody would notice.
+Die Bibliothek ist Teil der Art, wie ein Projekt gerechnet wurde. Ein
+korrigierter Baustein darf ein altes Projekt darum nicht still anders
+nachrechnen — Leitprinzip 4 wäre gebrochen, und niemand bemerkte es.
 
-So opening a file asks two questions: which of the parts this project uses have
-changed since, and which of them does this installation not have at all. The
-first is a note with a choice, the second stops the evaluation (§15.2).
+Also stellt das Öffnen einer Datei zwei Fragen: welche der Bausteine, die
+dieses Projekt benutzt, sich seither geändert haben, und welche davon diese
+Installation gar nicht hat. Das erste ist ein Hinweis mit einer Wahl, das
+zweite hält die Auswertung an (§15.2).
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ _log = get_logger(__name__)
 
 
 def check(document: Document, registry: PartRegistry | None = None) -> list[Finding]:
-    """Findings for the report when a project comes in."""
+    """Befunde für den Prüfbericht, wenn ein Projekt hereinkommt."""
     source = registry or PARTS
     used = used_parts(document.ops)
     if not used:
@@ -64,5 +66,7 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
 
 
 def stamp(document: Document) -> None:
-    """Record the library version in the project — done on saving (§16.2)."""
+    """Hält die Bibliotheksversion im Projekt fest — passiert beim
+    Speichern (§16.2).
+    """
     document.parts_version = LIBRARY_VERSION

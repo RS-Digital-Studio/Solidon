@@ -1,12 +1,13 @@
-"""Printer and material profiles (Bauplan §38).
+"""Drucker- und Materialprofile (Bauplan §38).
 
-Profiles are never hard-coded. The shipped starting set lives in ``data/*.toml``
-and is read like the standard parts table; own profiles are derived from it and
-read from the user configuration directory.
+Profile stehen nie fest im Code. Der mitgelieferte Startbestand liegt in
+``data/*.toml`` und wird gelesen wie die Normteiltabelle; eigene Profile
+leiten sich daraus ab und kommen aus dem Konfigurationsverzeichnis des
+Nutzers.
 
-Tolerances are references, not numbers (AGENTS.md rule 7): an operation stores
-``auto:petg`` and :func:`resolve_tolerance` looks it up, which is what makes
-calibration (§28.3) reach existing projects.
+Toleranzen sind Verweise, keine Zahlen (AGENTS.md Regel 7): eine Operation
+speichert ``auto:petg``, und :func:`resolve_tolerance` schlägt es nach — genau
+das lässt die Kalibrierung (§28.3) bestehende Projekte erreichen.
 """
 
 from __future__ import annotations
@@ -130,7 +131,7 @@ def material_profiles() -> Mapping[str, MaterialProfile]:
 
 
 def reload() -> None:
-    """Drop the cache, for example after the user edited a profile."""
+    """Verwirft den Cache, etwa nachdem der Nutzer ein Profil bearbeitet hat."""
     global _printers, _materials
     _printers = None
     _materials = None
@@ -159,17 +160,17 @@ def material(identifier: str) -> MaterialProfile:
 
 
 def make_profile(printer_id: str = DEFAULT_PRINTER, material_id: str = DEFAULT_MATERIAL) -> Profile:
-    """The pair a scene is computed for."""
+    """Das Paar, für das eine Szene gerechnet wird."""
     return Profile(printer=printer(printer_id), material=material(material_id))
 
 
 def for_object(profile: Profile, entry: SceneObject | None) -> Profile:
-    """The profile this one body is printed with (§12).
+    """Das Profil, mit dem dieser eine Körper gedruckt wird (§12).
 
-    Same printer, the body's own material where it has one. Everything that
-    computes a length from the material — clearance, shrinkage, elephant foot —
-    goes through here rather than reading ``profile.material``, so a seal made
-    of TPU is not calculated as if it were the housing around it.
+    Derselbe Drucker, das eigene Material des Körpers, wo er eines hat. Alles,
+    was aus dem Material eine Länge rechnet — Spiel, Schrumpf, Elefantenfuß —
+    geht hier durch statt ``profile.material`` zu lesen: eine Dichtung aus TPU
+    wird also nicht gerechnet, als wäre sie das Gehäuse um sie herum.
     """
     if entry is None or entry.material is None or entry.material == profile.material.id:
         return profile
@@ -186,11 +187,11 @@ _FIT_FIELD: Final[dict[FitKind, str]] = {
 
 
 def resolve_tolerance(value: Tolerance, kind: FitKind, profile: Profile) -> float:
-    """Turn a tolerance reference into millimetres.
+    """Macht aus einem Toleranzverweis Millimeter.
 
-    A number passes through. ``auto:`` uses the scene material, ``auto:petg``
-    a named one — so a project can hold a fit for a material it is not currently
-    set to.
+    Eine Zahl geht durch. ``auto:`` nimmt das Szenenmaterial, ``auto:petg`` ein
+    benanntes — ein Projekt kann also eine Passung für ein Material halten, auf
+    das es gerade nicht eingestellt ist.
     """
     if isinstance(value, int | float):
         return float(value)

@@ -1,20 +1,21 @@
-"""Test bodies for calibration (Bauplan §28.3).
+"""Prüfkörper für die Kalibrierung (Bauplan §28.3).
 
-Three of them, and each answers exactly one question a printer profile asks:
+Drei davon, und jeder beantwortet genau eine Frage, die ein Druckerprofil
+stellt:
 
-* the **fit ladder** — pins and bores with staggered play: which gap slides and
-  which one sticks;
-* the **wall ladder** — walls from one to six extrusion widths: where the
-  printer stops laying material down;
-* the **overhang fan** — surfaces from vertical to nearly flat: where support
-  really becomes necessary.
+* die **Toleranzleiter** — Stifte und Bohrungen mit gestaffeltem Spiel: welcher
+  Spalt gleitet und welcher klemmt;
+* die **Wandstärkenleiter** — Wände von einer bis sechs Extrusionsbreiten: wo
+  der Drucker aufhört, Material abzulegen;
+* der **Überhangfächer** — Flächen von senkrecht bis fast flach: wo Stützen
+  wirklich nötig werden.
 
-Printed once, measured, and the values go into the material profile (§28.3) —
-from where they reach every existing project, because tolerances in the stack
-are references (§12).
+Einmal gedruckt, gemessen, und die Werte gehen ins Materialprofil (§28.3) — von
+dort erreichen sie jedes bestehende Projekt, denn Toleranzen im Stapel sind
+Verweise (§12).
 
-The bodies carry their numbers as raised text, because a printed ladder without
-labels is a puzzle by the next morning.
+Die Körper tragen ihre Zahlen als erhabene Schrift, denn eine gedruckte Leiter
+ohne Beschriftung ist am nächsten Morgen ein Rätsel.
 """
 
 from __future__ import annotations
@@ -294,7 +295,9 @@ def overhang_fan(raw: BaseParams) -> PartResult:
 
 
 def _ramp(width: float, reach: float, rise: float) -> MeshData:
-    """A wedge leaning out over nothing — the shape an overhang test is made of."""
+    """Ein Keil, der über nichts hinauslehnt — die Form, aus der ein
+    Überhangtest besteht.
+    """
     points = np.array(
         [
             [-width / 2.0, 0.0, 0.0],
@@ -325,11 +328,12 @@ def _ramp(width: float, reach: float, rise: float) -> MeshData:
 
 
 def _label(text: str, position: tuple[float, float, float]) -> MeshData:
-    """The number as an engraved bar code of digits.
+    """Die Zahl als eingravierter Strichcode aus Ziffern.
 
-    Not a font: a font is a dependency, a licence question and a rendering
-    problem at once (§36). What is needed here is only to tell four steps apart,
-    and as many little bars as the step number does that on the print bed.
+    Keine Schrift: eine Schrift ist eine Abhängigkeit, eine Lizenzfrage und ein
+    Rendering-Problem zugleich (§36). Gebraucht wird hier nur, vier Stufen
+    auseinanderzuhalten, und so viele kleine Striche wie die Stufennummer tun
+    das auf dem Druckbett.
     """
     count = max(1, round(float(text.replace(",", ".")) * 100) % 10 or 10)
     bars = []

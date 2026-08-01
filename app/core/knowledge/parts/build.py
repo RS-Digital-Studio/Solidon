@@ -1,13 +1,14 @@
-"""Shared ground for every part (Bauplan §24.1).
+"""Gemeinsamer Boden für jeden Baustein (Bauplan §24.1).
 
-Three things every part needs and none of them should invent for itself: a way
-to join shapes, a way to name a provenance feature, and the rule that a
-subtracted shape reaches a hair past the surface it cuts (§39).
+Drei Dinge, die jeder Baustein braucht und keines davon selbst erfinden soll:
+einen Weg, Formen zu vereinen, einen Weg, ein Provenienz-Merkmal zu benennen,
+und die Regel, dass eine abgezogene Form ein Haar über die Fläche hinausreicht,
+die sie schneidet (§39).
 
-The features are the reason parts exist at all. A bore that comes out of the
-library is called ``bore_1`` from the start and does not have to be recognised
-again afterwards (§21.1) — the fit, the digest and the agent all speak about it
-by that name.
+Die Merkmale sind der Grund, warum es Bausteine überhaupt gibt. Eine Bohrung,
+die aus der Bibliothek kommt, heißt von Anfang an ``bore_1`` und muss danach
+nicht neu erkannt werden (§21.1) — Passung, Steckbrief und Agent sprechen alle
+unter diesem Namen von ihr.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from app.core.types import Feature, FeatureId, PartResult, Vec3
 
 
 def union(*meshes: MeshData) -> MeshData:
-    """Join shapes. One body in, one body out."""
+    """Vereint Formen. Ein Körper hinein, ein Körper heraus."""
     bodies = [mesh for mesh in meshes if mesh is not None]
     if len(bodies) == 1:
         return bodies[0]
@@ -38,7 +39,7 @@ def bore(
     axis: Vec3 = (0.0, 0.0, 1.0),
     through: bool = False,
 ) -> tuple[FeatureId, Feature]:
-    """A named bore, as the part promises it (§24.1)."""
+    """Eine benannte Bohrung, so wie der Baustein sie verspricht (§24.1)."""
     return identifier, Feature(
         id=identifier,
         kind="hole",
@@ -61,7 +62,7 @@ def pin(
     length: float = 0.0,
     axis: Vec3 = (0.0, 0.0, 1.0),
 ) -> tuple[FeatureId, Feature]:
-    """The counterpart of a bore — what a fit pairs it with (§14)."""
+    """Das Gegenstück einer Bohrung — das, womit eine Passung sie paart (§14)."""
     return identifier, Feature(
         id=identifier,
         kind="pin",
@@ -113,5 +114,7 @@ def thread(
 
 
 def result(mesh: MeshData, *features: tuple[FeatureId, Feature]) -> PartResult:
-    """A part's answer: the geometry and everything it is willing to be called."""
+    """Die Antwort eines Bausteins: die Geometrie und alles, wie er sich
+    nennen lässt.
+    """
     return PartResult(mesh=mesh, features=dict(features))

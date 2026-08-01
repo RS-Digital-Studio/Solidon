@@ -1,12 +1,13 @@
-"""Standard part dimensions (Bauplan §24.2).
+"""Normteilmaße (Bauplan §24.2).
 
-"Hole for an M4 heat-set insert" has to be something one looks up, not
-something one guesses. The numbers live in ``data/standards.toml`` and are read
-like the printer profiles; a corrected value needs no release.
+„Loch für eine M4-Einpressbuchse" muss etwas sein, das man nachschlägt, nicht
+etwas, das man rät. Die Zahlen stehen in ``data/standards.toml`` und werden
+gelesen wie die Druckerprofile; ein korrigierter Wert braucht kein Release.
 
-Nothing here interprets. A part asks for the clearance hole of an M4 and gets
-4.5 mm; what it does with that — adding the material tolerance, a chamfer, an
-oversize — is the part's business and stays where it can be tested.
+Nichts hier interpretiert. Ein Baustein fragt nach dem Durchgangsloch einer M4
+und bekommt 4,5 mm; was er damit tut — die Materialtoleranz addieren, eine
+Fase, ein Übermaß — ist Sache des Bausteins und bleibt dort, wo es sich testen
+lässt.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ _tables: Tables | None = None
 
 @dataclass(frozen=True, slots=True)
 class Screw:
-    """One metric screw, with the holes that belong to it."""
+    """Eine metrische Schraube, mit den Löchern, die zu ihr gehören."""
 
     size: str
     nominal: float
@@ -62,7 +63,7 @@ class Washer:
 
 @dataclass(frozen=True, slots=True)
 class Insert:
-    """A heat-set insert and the hole it is pressed into."""
+    """Eine Einpressbuchse und das Loch, in das sie gepresst wird."""
 
     size: str
     outer: float
@@ -106,7 +107,7 @@ class Tube:
 
 @dataclass(frozen=True, slots=True)
 class Tables:
-    """Everything the table holds, with its version."""
+    """Alles, was die Tabelle hält, mit ihrer Version."""
 
     version: str
     screws: dict[str, Screw]
@@ -120,7 +121,7 @@ class Tables:
 
 
 def load(path: Path | None = None) -> Tables:
-    """Read the tables. Cached — parts ask for them on every call."""
+    """Liest die Tabellen. Gecacht — Bausteine fragen bei jedem Aufruf danach."""
     global _tables
     if _tables is not None and path is None:
         return _tables
@@ -150,7 +151,7 @@ def _index(kind: type, entries: Any) -> dict[str, Any]:
 
 
 def screw(size: str) -> Screw:
-    """One screw size, or a clear error naming what is known."""
+    """Eine Schraubengröße, oder ein klarer Fehler, der nennt, was bekannt ist."""
     found: Screw = _lookup(load().screws, size, "screw")
     return found
 
@@ -191,7 +192,7 @@ def tube(size: str) -> Tube:
 
 
 def screw_sizes() -> tuple[str, ...]:
-    """The sizes a parameter offers as choices."""
+    """Die Größen, die ein Parameter zur Auswahl anbietet."""
     return tuple(load().screws)
 
 

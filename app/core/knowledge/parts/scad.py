@@ -1,14 +1,15 @@
-"""Parts as OpenSCAD source (Bauplan §24.1).
+"""Bausteine als OpenSCAD-Quelltext (Bauplan §24.1).
 
-``to_scad()`` stays as an *output format*: someone with an OpenSCAD workflow can
-take a part along without Formwerk. What it is not is a second implementation —
-the geometry comes out of the same function the application uses, and is written
-as a ``polyhedron``.
+``to_scad()`` bleibt ein *Ausgabeformat*: wer einen OpenSCAD-Arbeitsablauf hat,
+kann einen Baustein ohne Formwerk mitnehmen. Was es nicht ist, ist eine zweite
+Umsetzung — die Geometrie kommt aus derselben Funktion, die die Anwendung
+benutzt, und wird als ``polyhedron`` geschrieben.
 
-Being clear about that matters. A hand-written SCAD version of every part would
-be a second source of truth that drifts, and the first difference between the
-two would be found by a user, in a print. So the parameters are written into the
-file as variables to read, and the body below them is the exact mesh.
+Darüber klar zu sein zählt. Eine handgeschriebene SCAD-Fassung jedes Bausteins
+wäre eine zweite Quelle der Wahrheit, die abdriftet, und den ersten Unterschied
+zwischen beiden fände ein Nutzer, in einem Druck. Also werden die Parameter als
+lesbare Variablen in die Datei geschrieben, und der Körper darunter ist genau
+das Netz.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ HEADER = """// {title} ({name}, Version {version})
 
 
 def to_scad(spec: PartSpec, params: BaseParams | None = None) -> str:
-    """One part as an OpenSCAD module."""
+    """Ein Baustein als OpenSCAD-Modul."""
     values = params or spec.params()
     mesh = as_mesh_data(spec.fn(values).mesh)
 

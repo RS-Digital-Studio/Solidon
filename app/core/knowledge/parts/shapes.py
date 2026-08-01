@@ -92,14 +92,15 @@ def _slot_outline(width: float, length: float, segments: int) -> np.ndarray:
 
 
 def wedge(width: float, depth: float, height: float, tip: float = 0.0) -> MeshData:
-    """A ramp: full ``depth`` at the bottom, ``tip`` at the top.
+    """Eine Rampe: unten volle ``depth``, oben ``tip``.
 
-    The shape a latch and a snap hook are made of — it prints without support
-    because it grows outwards on the way down, not upwards.
+    Die Form, aus der eine Rastnase und ein Schnapphaken bestehen — sie druckt
+    ohne Stütze, weil sie auf dem Weg nach unten nach außen wächst, nicht nach
+    oben.
 
-    Built as an extruded outline rather than from eight corners by hand: with
-    ``tip`` at zero two of those corners would fall together, and a body with a
-    degenerate face is not watertight (§24.3).
+    Als extrudierter Umriss gebaut statt aus acht Ecken von Hand: mit ``tip``
+    auf null fielen zwei dieser Ecken zusammen, und ein Körper mit einer
+    entarteten Fläche ist nicht wasserdicht (§24.3).
     """
     outline = [(0.0, 0.0), (depth, 0.0), (tip, height), (0.0, height)]
     if tip <= 0.0:
@@ -130,15 +131,17 @@ def thread_body(
     segments: int = SEGMENTS,
     internal: bool = False,
 ) -> MeshData:
-    """A printable thread as a helical ridge — or, inverted, a threaded hole.
+    """Ein druckbares Gewinde als helikaler Gang — oder, invertiert, ein
+    Gewindeloch.
 
-    Not an ISO profile: a printer cannot resolve one, and pretending otherwise
-    would be the kind of accuracy that costs trust (§39). What this builds is
-    the shape printers actually use — a triangular ridge with a flattened crest,
-    rounded by the nozzle anyway.
+    Kein ISO-Profil: ein Drucker kann es nicht auflösen, und etwas anderes zu
+    behaupten wäre die Art Genauigkeit, die Vertrauen kostet (§39). Gebaut wird
+    die Form, die Drucker wirklich benutzen — ein dreieckiger Gang mit
+    abgeflachtem Kamm, den die Düse ohnehin rundet.
 
-    The mesh is stitched by hand rather than swept, because a sweep leaves the
-    ends open and a part that is not watertight is not a part (§24.3).
+    Das Netz wird von Hand vernäht statt gesweept, denn ein Sweep lässt die
+    Enden offen, und ein Baustein, der nicht wasserdicht ist, ist kein
+    Baustein (§24.3).
     """
     steps = max(round(height / pitch), 1) * segments
     if depth is None:
@@ -188,7 +191,7 @@ def thread_body(
 
 
 def _cap(indices: list[int], flip: bool) -> list[list[int]]:
-    """Close a four-point ring with two triangles."""
+    """Schließt einen Vierpunkt-Ring mit zwei Dreiecken."""
     first, second, third, fourth = indices
     faces = [[first, second, third], [first, third, fourth]]
     return [list(reversed(face)) for face in faces] if flip else faces

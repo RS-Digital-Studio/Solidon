@@ -1,11 +1,13 @@
-"""Moving and joining parts (Bauplan §24.1, group "Mechanik").
+"""Bausteine, die sich bewegen und verbinden (Bauplan §24.1, Gruppe
+„Mechanik").
 
-Four of the thirteen: the snap fit, the latch, the living hinge and the dowel
-pair. All four live off dimensions that a printer decides, not a catalogue —
-how thin a hinge may be, how far an arm may bend, how much play a pin needs.
-Those numbers come from the material profile, never as a literal (AGENTS.md
-rule 7): a part declares ``play`` and leaves it at zero, and ``insert_part``
-fills in what the calibrated material says.
+Vier der dreizehn: die Schnappverbindung, die Rastnase, das Filmscharnier und
+das Stiftpaar. Alle vier leben von Maßen, die ein Drucker entscheidet und kein
+Katalog — wie dünn ein Scharnier sein darf, wie weit ein Arm sich biegen darf,
+wie viel Spiel ein Stift braucht. Diese Zahlen kommen aus dem Materialprofil,
+nie als Literal (AGENTS.md Regel 7): ein Baustein deklariert ``play`` und
+lässt es auf null, und ``insert_part`` füllt ein, was das kalibrierte Material
+sagt.
 """
 
 from __future__ import annotations
@@ -24,8 +26,8 @@ FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Erstbestückung der Bibliothek (§24.1)."
 )
 
-#: A cantilever that bends has to be longer than it is thick, or it breaks
-#: instead of springing. Ten to one is the ratio that survives PLA.
+#: Ein Federarm, der sich biegt, muss länger sein als dick, sonst bricht er,
+#: statt zu federn. Zehn zu eins ist das Verhältnis, das PLA übersteht.
 SNAP_RATIO = 10.0
 
 
@@ -114,8 +116,8 @@ def snap_fit(raw: BaseParams) -> PartResult:
 
 @op_params
 class LatchParams(BaseParams):
-    # The lower bounds are what a nozzle can still lay down. A latch of two
-    # tenths of a millimetre is a number, not a part (§24.3).
+    # Die Untergrenzen sind, was eine Düse noch ablegen kann. Eine Rastnase von
+    # zwei Zehntelmillimetern ist eine Zahl, kein Baustein (§24.3).
     width: float = param(
         title=_("Breite"),
         default=6.0,
@@ -324,8 +326,9 @@ def dowel(raw: BaseParams) -> PartResult:
     params = cast(DowelParams, raw)
     is_pin = params.kind == "pin"
     diameter = params.diameter if is_pin else params.diameter + params.play
-    # A chamfer wider than the radius would cut the pin in two. The declared
-    # range allows both independently, so the part holds the limit itself.
+    # Eine Fase breiter als der Radius schnitte den Stift entzwei. Der
+    # deklarierte Bereich erlaubt beides unabhängig, also hält der Baustein die
+    # Grenze selbst ein.
     chamfer = min(params.chamfer, diameter / 2.0 - 0.2)
 
     body = shapes.cylinder(diameter, params.length)
@@ -351,7 +354,7 @@ def dowel(raw: BaseParams) -> PartResult:
 
 
 def _ring(diameter: float, chamfer: float):  # type: ignore[no-untyped-def]
-    """The material a chamfer takes off the top edge of a cylinder."""
+    """Das Material, das eine Fase von der Oberkante eines Zylinders nimmt."""
     outer = shapes.cylinder(diameter + 2.0 * shapes.OVERLAP, chamfer + shapes.OVERLAP)
     inner = shapes.cone(diameter, diameter - 2.0 * chamfer, chamfer)
     return subtract(outer, inner)

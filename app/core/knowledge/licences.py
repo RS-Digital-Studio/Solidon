@@ -1,11 +1,11 @@
-"""Checking dependency licences (Bauplan §36).
+"""Lizenzprüfung der Abhängigkeiten (Bauplan §36).
 
-The policy lives in ``data/licences.toml``; this module compares it against what
-is actually installed. Two things are checked: nothing carries a GPL-style
-licence, and nothing from the banned list is present at all.
+Die Richtlinie steht in ``data/licences.toml``; dieses Modul vergleicht sie mit
+dem, was wirklich installiert ist. Zwei Dinge werden geprüft: dass nichts eine
+GPL-artige Lizenz trägt, und dass nichts von der Sperrliste überhaupt da ist.
 
-The check walks the real dependency tree of the runtime extras, so a transitive
-package cannot slip in unseen.
+Die Prüfung läuft den echten Abhängigkeitsbaum der Laufzeit-Extras ab — ein
+transitives Paket kann sich also nicht ungesehen hineinschleichen.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ class Policy:
 
 @dataclass(frozen=True, slots=True)
 class Violation:
-    """One dependency that does not fit the policy."""
+    """Eine Abhängigkeit, die nicht zur Richtlinie passt."""
 
     package: str
     licence: str
@@ -69,8 +69,11 @@ def normalise(name: str) -> str:
 
 
 def declared_licence(distribution: metadata.Distribution) -> str:
-    """Read the licence out of the package metadata, however it was written."""
-    # Typed as Any: the metadata object is an email.Message, which the stubs hide.
+    """Liest die Lizenz aus den Paket-Metadaten, wie auch immer sie
+    hingeschrieben wurde.
+    """
+    # Als Any typisiert: das Metadaten-Objekt ist eine email.Message, und die
+    # Stubs verbergen das.
     meta: Any = distribution.metadata
     expression = meta.get("License-Expression")
     if expression:
@@ -89,17 +92,21 @@ def declared_licence(distribution: metadata.Distribution) -> str:
 
 
 def _applies_here(requirement: str) -> bool:
-    """False for requirements whose environment marker does not hold on this machine."""
+    """False für Anforderungen, deren Umgebungsmarker auf dieser Maschine
+    nicht gilt.
+    """
     try:
         from packaging.requirements import Requirement
-    except ImportError:  # pragma: no cover - packaging comes with the toolchain
+    except ImportError:  # pragma: no cover - packaging kommt mit der Werkzeugkette
         return True
     parsed = Requirement(requirement)
     return parsed.marker is None or parsed.marker.evaluate({"extra": ""})
 
 
 def requirements_of(distribution: metadata.Distribution) -> set[str]:
-    """Runtime requirements — optional extras of a dependency do not count."""
+    """Laufzeit-Anforderungen — optionale Extras einer Abhängigkeit zählen
+    nicht.
+    """
     names: set[str] = set()
     for requirement in distribution.requires or ():
         if _EXTRA_MARKER.search(requirement) is not None:
@@ -128,7 +135,9 @@ def _direct_requirements(extras: Iterable[str]) -> set[str]:
 
 
 def runtime_packages(extras: Iterable[str] = RUNTIME_EXTRAS) -> dict[str, str]:
-    """Every installed package that ends up in the application, with its licence."""
+    """Jedes installierte Paket, das in der Anwendung landet, mit seiner
+    Lizenz.
+    """
     found: dict[str, str] = {}
     pending = list(_direct_requirements(extras))
     seen: set[str] = set()
@@ -148,7 +157,7 @@ def runtime_packages(extras: Iterable[str] = RUNTIME_EXTRAS) -> dict[str, str]:
 
 
 def check(extras: Iterable[str] = RUNTIME_EXTRAS) -> list[Violation]:
-    """Compare what is installed against the policy. Empty list means green."""
+    """Vergleicht das Installierte mit der Richtlinie. Leere Liste heißt grün."""
     policy = load_policy()
     banned = {normalise(entry) for entry in policy.banned_packages}
     known = {normalise(key): value for key, value in policy.known.items()}
@@ -166,8 +175,8 @@ def check(extras: Iterable[str] = RUNTIME_EXTRAS) -> list[Violation]:
             )
             continue
         lowered = text.lower()
-        # "LGPL-3.0 OR GPL-2.0" is a choice, and we choose LGPL — that is why the
-        # presence of LGPL clears a licence string that also mentions GPL (§36).
+        # „LGPL-3.0 OR GPL-2.0" ist eine Wahl, und wir wählen LGPL — darum räumt
+        # die Anwesenheit von LGPL eine Lizenzangabe ab, die auch GPL nennt (§36).
         if any(entry.lower() in lowered for entry in policy.forbidden) and "lgpl" not in lowered:
             violations.append(Violation(package, text, "GPL-Lizenz ist ausgeschlossen (§36)"))
             continue
@@ -177,7 +186,9 @@ def check(extras: Iterable[str] = RUNTIME_EXTRAS) -> list[Violation]:
 
 
 def notices(extras: Iterable[str] = RUNTIME_EXTRAS) -> str:
-    """The list for the about dialog and the third party notices (§36, §37.2)."""
+    """Die Liste für den Über-Dialog und die Drittanbieter-Hinweise (§36,
+    §37.2).
+    """
     lines = ["| Paket | Lizenz |", "|---|---|"]
     policy = load_policy()
     known = {normalise(key): value for key, value in policy.known.items()}

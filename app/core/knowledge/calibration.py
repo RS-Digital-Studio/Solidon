@@ -1,20 +1,20 @@
-"""Self-calibration (Bauplan §28.3).
+"""Selbstkalibrierung (Bauplan §28.3).
 
-Three steps, and the third is the one that matters:
+Drei Schritte, und der dritte ist der, auf den es ankommt:
 
-1. print a test body — pins and bores with staggered play, a wall thickness
-   ladder, an overhang fan;
-2. measure it;
-3. **the values go into the material profile**, not into a model.
+1. einen Prüfkörper drucken — Stifte und Bohrungen mit gestaffeltem Spiel,
+   eine Wandstärkenleiter, ein Überhangfächer;
+2. ihn ausmessen;
+3. **die Werte gehen ins Materialprofil**, nicht in ein Modell.
 
-Because tolerances in the stack are references and never numbers (§12,
-AGENTS.md rule 7), every existing project recomputes with the calibrated values
-afterwards. That is the whole point: calibrating once fixes every fit that was
-ever built with ``auto:petg``.
+Weil Toleranzen im Stapel Verweise sind und nie Zahlen (§12, AGENTS.md Regel
+7), rechnet danach jedes bestehende Projekt mit den kalibrierten Werten neu.
+Das ist der ganze Sinn: einmal kalibrieren richtet jede Passung, die je mit
+``auto:petg`` gebaut wurde.
 
-Written into the user's own profile file, never into the shipped one — the
-starting set stays as it was, and it stays obvious which of the two a number
-came from.
+Geschrieben wird in die eigene Profildatei des Nutzers, nie in die
+mitgelieferte — der Startbestand bleibt, wie er war, und es bleibt
+offensichtlich, aus welcher der beiden eine Zahl kam.
 """
 
 from __future__ import annotations
@@ -33,10 +33,11 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Name of the file the calibrated values are written into.
+#: Name der Datei, in die die kalibrierten Werte geschrieben werden.
 USER_MATERIALS = "materials.toml"
 
-#: What a calibration may set. Anything else stays as the shipped profile has it.
+#: Was eine Kalibrierung setzen darf. Alles andere bleibt so, wie das
+#: mitgelieferte Profil es hat.
 FIELDS: tuple[str, ...] = (
     "clearance",
     "press",
@@ -48,7 +49,7 @@ FIELDS: tuple[str, ...] = (
 
 @dataclass(slots=True)
 class Measurement:
-    """One measured value for one property."""
+    """Ein Messwert für eine Eigenschaft."""
 
     field: str
     value: float
@@ -57,7 +58,7 @@ class Measurement:
 
 @dataclass(slots=True)
 class Calibration:
-    """What was measured on one material."""
+    """Was an einem Material gemessen wurde."""
 
     material: str
     measurements: list[Measurement] = field(default_factory=list)
@@ -73,7 +74,9 @@ class Calibration:
 
 
 def check(calibration: Calibration) -> None:
-    """Refuse what cannot be a measurement, before anything is written."""
+    """Weist ab, was keine Messung sein kann, bevor irgendetwas geschrieben
+    wird.
+    """
     known = profiles.material_profiles()
     if calibration.material not in known:
         raise ValidationError(
@@ -98,17 +101,18 @@ def check(calibration: Calibration) -> None:
 
 
 def apply(calibration: Calibration, directory: Path | None = None) -> MaterialProfile:
-    """Write the measured values into the user's material profile (§28.3).
+    """Schreibt die gemessenen Werte in das Materialprofil des Nutzers (§28.3).
 
-    The shipped file is never touched. What comes back is the profile as it
-    reads afterwards — calibrated, and saying so.
+    Die mitgelieferte Datei wird nie angefasst. Zurück kommt das Profil, wie es
+    sich danach liest — kalibriert, und das sagt es auch.
     """
     check(calibration)
     target = (directory or user_profiles_dir()) / USER_MATERIALS
     ensure_dir(target.parent)
 
-    # The user's file is read on its own, so it has to be complete: it starts
-    # from the shipped profile and only then takes the measured values.
+    # Die Datei des Nutzers wird für sich gelesen, sie muss also vollständig
+    # sein: sie beginnt beim mitgelieferten Profil und nimmt erst dann die
+    # gemessenen Werte.
     shipped = profiles.material(calibration.material)
     entry: dict[str, Any] = {
         "title": shipped.title,
@@ -138,7 +142,9 @@ def _read(path: Path) -> dict[str, dict[str, Any]]:
 
 
 def _as_toml(table: dict[str, dict[str, Any]]) -> str:
-    """Write the table back. Small and readable — this file is meant to be read."""
+    """Schreibt die Tabelle zurück. Klein und lesbar — diese Datei ist zum
+    Lesen gedacht.
+    """
     lines = [
         "# Kalibrierte Materialwerte (Bauplan §28.3).",
         "# Von Formwerk geschrieben. Die mitgelieferten Startwerte bleiben unberührt;",
@@ -162,7 +168,9 @@ def _literal(value: Any) -> str:
 
 
 def from_measurements(material: str, **values: float) -> Calibration:
-    """Convenience for the dialog and the tests: named values in, calibration out."""
+    """Bequemlichkeit für Dialog und Tests: benannte Werte hinein,
+    Kalibrierung heraus.
+    """
     return Calibration(
         material=material,
         measurements=[

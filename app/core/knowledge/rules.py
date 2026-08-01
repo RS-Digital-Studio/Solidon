@@ -1,13 +1,14 @@
-"""The rule set (Bauplan §39).
+"""Die Regelsammlung (Bauplan §39).
 
-The plan calls this the actual product, so it is treated like one: its own file
-with a version and a change log, not a paragraph in a prompt. The system prompt
-names the version, every transaction records it (§26.4) — which is the only way
-to find out later under which rule an operation came about.
+Der Bauplan nennt sie das eigentliche Produkt, also wird sie wie eines
+behandelt: eine eigene Datei mit Version und Änderungsverlauf, kein Absatz in
+einem Prompt. Der Systemprompt nennt die Version, jede Transaktion hält sie
+fest (§26.4) — und das ist der einzige Weg, später herauszufinden, unter
+welcher Regel eine Operation zustande kam.
 
-Rules are data, like the printer profiles. A rule that changes should not need a
-release, and a rule that made the suite worse should be removable without
-touching code.
+Regeln sind Daten, wie die Druckerprofile. Eine Regel, die sich ändert, soll
+kein Release brauchen, und eine Regel, die die Suite verschlechtert hat, soll
+sich entfernen lassen, ohne Code anzufassen.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ _rules: RuleSet | None = None
 
 @dataclass(frozen=True, slots=True)
 class Rule:
-    """One rule, in the words the agent gets to read."""
+    """Eine Regel, in den Worten, die der Agent zu lesen bekommt."""
 
     id: str
     title: str
@@ -36,13 +37,13 @@ class Rule:
     applies_to: tuple[str, ...] = ()
 
     def as_line(self) -> str:
-        """One rule as one paragraph — the form the system prompt uses."""
+        """Eine Regel als ein Absatz — die Form, die der Systemprompt benutzt."""
         return f"- {self.title}: {' '.join(self.text.split())}"
 
 
 @dataclass(frozen=True, slots=True)
 class Change:
-    """One entry of the change log §39 requires."""
+    """Ein Eintrag des Änderungsverlaufs, den §39 verlangt."""
 
     version: str
     date: str
@@ -63,12 +64,14 @@ class RuleSet:
         return tuple(rule for rule in self.rules if topic in rule.applies_to)
 
     def as_text(self) -> str:
-        """The whole set as the system prompt carries it."""
+        """Die ganze Sammlung, so wie der Systemprompt sie trägt."""
         return "\n".join(rule.as_line() for rule in self.rules)
 
 
 def load(path: Path | None = None) -> RuleSet:
-    """Read the rule set. Cached, because it is asked for on every request."""
+    """Liest die Regelsammlung. Gecacht, denn sie wird bei jeder Anfrage
+    gebraucht.
+    """
     global _rules
     if _rules is not None and path is None:
         return _rules
@@ -103,5 +106,5 @@ def load(path: Path | None = None) -> RuleSet:
 
 
 def version() -> str:
-    """The version every transaction of an agent has to carry (§26.4)."""
+    """Die Version, die jede Transaktion eines Agenten tragen muss (§26.4)."""
     return load().version

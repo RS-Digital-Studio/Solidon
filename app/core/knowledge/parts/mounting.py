@@ -1,8 +1,9 @@
-"""Parts that hold something to something else (Bauplan §24.1).
+"""Bausteine, die etwas an etwas anderem halten (Bauplan §24.1).
 
-Three of the thirteen: the magnet pocket, the wall mount and the keyhole
-hanger. Two of them are shapes to subtract, one is a body to add — which is why
-the declaration says so and ``insert_part`` does not have to guess.
+Drei der dreizehn: die Magnettasche, die Wandhalterung und die
+Schlüsselloch-Aufhängung. Zwei davon sind Formen zum Abziehen, eine ist ein
+Körper zum Hinzufügen — darum sagt die Deklaration es, und ``insert_part`` muss
+nicht raten.
 """
 
 from __future__ import annotations
@@ -80,7 +81,8 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
     parts = [shapes.moved(pocket, (0.0, 0.0, params.cover))]
 
     if params.cover <= 0.0:
-        # Open pocket: reach a hair past the surface so the cut is clean (§39).
+        # Offene Tasche: ein Haar über die Fläche hinausreichen, damit der Schnitt
+        # sauber wird (§39).
         parts.append(
             shapes.moved(shapes.cylinder(diameter, shapes.OVERLAP), (0.0, 0.0, entry.height))
         )
@@ -247,12 +249,12 @@ def keyhole(raw: BaseParams) -> PartResult:
     params = cast(KeyholeParams, raw)
     screw = standards.screw(params.size)
 
-    # The pocket the head sinks into: round at the bottom, a slot upwards.
+    # Die Tasche, in die der Kopf versinkt: unten rund, nach oben ein Schlitz.
     pocket = shapes.slot(screw.head + 0.6, screw.head + 0.6 + params.drop, params.head_room)
     pocket = shapes.turned(pocket, 90.0, (1.0, 0.0, 0.0))
     pocket = shapes.moved(pocket, (0.0, params.head_room, params.drop / 2.0))
 
-    # The slot the shaft slides in, all the way through.
+    # Der Schlitz, in den der Schaft gleitet, ganz hindurch.
     shaft = shapes.slot(
         screw.clearance, screw.clearance + params.drop, params.depth + 2.0 * shapes.OVERLAP
     )

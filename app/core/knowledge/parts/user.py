@@ -1,18 +1,18 @@
-"""Own parts from the user directory (Bauplan §24.5).
+"""Eigene Bausteine aus dem Nutzerverzeichnis (Bauplan §24.5).
 
-The same registration, read from ``<user data>/parts/*.py`` at start. **This is
-not a plugin system**, and the difference is the reach:
+Dieselbe Registrierung, gelesen aus ``<Nutzerdaten>/parts/*.py`` beim Start.
+**Das ist kein Plugin-System**, und der Unterschied ist die Reichweite:
 
-* own parts count on the machine they lie on and **never travel in a project
-  file** — otherwise the rule from §32 would be circumvented, that an
-  incoming file never executes code;
-* opening a project that uses an unknown own part **stops** and says what is
-  missing (§15.2), rather than computing something else;
-* they extend the library, not the application: no new operations, no changes
-  to the surface, no access to the operation stack.
+* eigene Bausteine gelten auf der Maschine, auf der sie liegen, und **reisen
+  nie in einer Projektdatei mit** — sonst wäre die Regel aus §32 umgangen, dass
+  eine hereinkommende Datei nie Code ausführt;
+* ein Projekt zu öffnen, das einen unbekannten eigenen Baustein benutzt, **hält
+  an** und sagt, was fehlt (§15.2), statt etwas anderes zu rechnen;
+* sie erweitern die Bibliothek, nicht die Anwendung: keine neuen Operationen,
+  keine Änderungen an der Oberfläche, kein Zugriff auf den Op-Stapel.
 
-A file that fails to import is reported and skipped. One broken own part must
-not stop the application from starting.
+Eine Datei, die sich nicht importieren lässt, wird gemeldet und übersprungen.
+Ein kaputter eigener Baustein darf die Anwendung nicht am Starten hindern.
 """
 
 from __future__ import annotations
@@ -37,14 +37,16 @@ MODULE_PREFIX = "formwerk_user_parts"
 
 @dataclass(slots=True)
 class LoadResult:
-    """What came out of the user directory."""
+    """Was aus dem Nutzerverzeichnis herausgekommen ist."""
 
     loaded: tuple[str, ...] = ()
     findings: list[Finding] = field(default_factory=list)
 
 
 def load(directory: Path | None = None, registry: PartRegistry | None = None) -> LoadResult:
-    """Read own parts. Missing directory is not an error, it is the normal case."""
+    """Liest eigene Bausteine. Ein fehlendes Verzeichnis ist kein Fehler, es
+    ist der Normalfall.
+    """
     target = directory or user_parts_dir()
     result = LoadResult()
     if not target.is_dir():
@@ -75,11 +77,11 @@ def load(directory: Path | None = None, registry: PartRegistry | None = None) ->
 
 
 def _import_file(path: Path) -> None:
-    """Import one file under its own module name.
+    """Importiert eine Datei unter ihrem eigenen Modulnamen.
 
-    The user's directory is not on the import path, and it does not become part
-    of it: the module is loaded from its location and named so it cannot shadow
-    anything (§32).
+    Das Verzeichnis des Nutzers liegt nicht im Importpfad und wird auch nicht
+    Teil davon: das Modul wird von seinem Ort geladen und so benannt, dass es
+    nichts überdecken kann (§32).
     """
     name = f"{MODULE_PREFIX}.{path.stem}"
     spec = importlib.util.spec_from_file_location(name, path)
@@ -91,15 +93,18 @@ def _import_file(path: Path) -> None:
 
 
 def _mark_as_own(name: str, registry: PartRegistry | None) -> None:
-    """The catalogue marks own parts (§24.5), so the source has to be recorded."""
+    """Der Katalog kennzeichnet eigene Bausteine (§24.5) — die Herkunft muss
+    also festgehalten werden.
+    """
     (registry or PARTS).mark_source(name, "user")
 
 
 def travelling_parts(used: dict[str, str], registry: PartRegistry | None = None) -> tuple[str, ...]:
-    """Own parts a project would need — the ones that never travel with it.
+    """Eigene Bausteine, die ein Projekt bräuchte — die, die nie mit ihm
+    reisen.
 
-    Used when saving and when opening: on the way out to warn, on the way in to
-    stop rather than compute something else.
+    Benutzt beim Speichern und beim Öffnen: auf dem Weg hinaus zum Warnen, auf
+    dem Weg hinein zum Anhalten, statt etwas anderes zu rechnen.
     """
     source = registry or PARTS
     return tuple(name for name in sorted(used) if source.has(name) and source.get(name).own)
