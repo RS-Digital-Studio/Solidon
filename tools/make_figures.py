@@ -221,12 +221,21 @@ def take_all(app: QApplication, language: str) -> None:
 
 
 def main() -> int:
+    from app.ui.app import install_qt_translations
+
     load_operations()
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
+    qt_translator = None
     for language in SUPPORTED_LANGUAGES:
         install_catalog(language, read_catalog(language))
         set_language(language)
+        # Auch Qt selbst spricht die Sprache der Aufnahme — sonst zeigen die
+        # Bilder „Cancel" auf Dialogen, die in der Anwendung (über
+        # build_application) längst „Abbrechen" sagen.
+        if qt_translator is not None:
+            app.removeTranslator(qt_translator)
+        qt_translator = install_qt_translations(app, language)
         take_all(app, language)
     print("\nFertig. Die Suite prüft nur, dass die Dateien da sind — siehe Modulkopf.")
     return 0

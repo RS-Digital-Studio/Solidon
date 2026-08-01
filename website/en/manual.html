@@ -173,6 +173,9 @@
 <p>Reports overlaps and anything sticking out of the build volume.</p>
 <p>Objekte: 0 → -1 · umkehrbar · deterministisch</p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>clearance</code></td><td>mm</td><td>0.0</td><td>0 … 50</td><td>Minimum clearance</td></tr></tbody></table>
+<h4>Remove object (<code>delete_object</code>)</h4>
+<p>Takes an object out of the scene. The step is in the history, so an undo brings it back.</p>
+<p>Objekte: 1 → 0 · umkehrbar · deterministisch · Kürzel <code>Del</code></p>
 <h4>Duplicate object (<code>duplicate_object</code>)</h4>
 <p>Creates further copies of the object. They all stay separate, and the quantity sits in the stack as a number.</p>
 <p>Objekte: 1 → -1 · umkehrbar · deterministisch · Kürzel <code>Ctrl+D</code></p>
