@@ -853,9 +853,16 @@ class MainWindow(QMainWindow):
         Vorschläge über Stützen, Haftung und Mindestschichtzeit hängen an der
         Geometrie und nicht am Material allein.
         """
-        dialog = PrintSettingsDialog(
-            self.session, self.settings, self, slice_result=self._current_slice()
-        )
+        # Eine knappe halbe Sekunde, die zum größten Teil auf die Suche nach dem
+        # Slicer geht — unter der Grenze aus §2.8, aber nicht unter der, ab der
+        # ein Zeiger dazugehört.
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            dialog = PrintSettingsDialog(
+                self.session, self.settings, self, slice_result=self._current_slice()
+            )
+        finally:
+            QApplication.restoreOverrideCursor()
         dialog.sliced.connect(self._gcode_returned)
         dialog.exec()
         self.settings.print_quality = dialog.settings.quality

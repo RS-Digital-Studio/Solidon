@@ -48,7 +48,8 @@ from PySide6.QtWidgets import (
 
 from app.core import discover, tools
 from app.core.errors import AppError
-from app.core.export import handover
+from app.core.export import handover, slicer_profiles
+from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import plan_export, write_plan
 from app.core.knowledge import print_settings
 from app.core.log import get_logger
@@ -603,6 +604,32 @@ class _SliceWorker(QThread):
         self.done.emit(outcome)
 
 
+class _ProfileWorker(QThread):
+    """Den Profilbestand des Slicers durchsehen, ohne den Dialog aufzuhalten.
+
+    Ein ausgelieferter Bestand hat einige tausend Dateien; sie zu lesen dauert
+    unter einer Sekunde, aber im Qt-Hauptthread wäre das eine Sekunde, in der
+    das Fenster nicht erscheint. Es erscheint sofort, und die Auswahl füllt
+    sich nach (§2.8).
+    """
+
+    done = Signal(object)
+
+    def __init__(self, executable: Path, flavour: SlicerFlavour) -> None:
+        super().__init__()
+        self._executable = executable
+        self._flavour = flavour
+
+    def run(self) -> None:
+        try:
+            self.done.emit(slicer_profiles.find_profiles(self._executable, self._flavour))
+        except OSError as problem:
+            # Ein unlesbarer Profilordner ist kein Grund, den Dialog zu
+            # verlieren — die Auswahl bleibt dann eben leer.
+            _log.warning("could not read slicer profiles: %s", problem)
+            self.done.emit([])
+
+
 class PrintSettingsDialog(QDialog):
     """Alle Druckeinstellungen, die Vorschläge dazu, und der Weg zum G-Code."""
 
@@ -629,19 +656,28 @@ class PrintSettingsDialog(QDialog):
         self._fields: dict[str, Field] = {}
         self._loading = False
         self._worker: _SliceWorker | None = None
+        self._profile_worker: _ProfileWorker | None = None
+        self._profiles: list[slicer_profiles.SlicerProfile] = []
         self._temporary: TemporaryDirectory[str] | None = None
         self.settings = print_settings.resolve(session.profile, self._remembered_quality())
+        # Einmal suchen, dreimal gebraucht: die Suche geht über PATH,
+        # Registry und die üblichen Installationsorte und kostet eine halbe
+        # Sekunde — dreimal wäre die Hälfte der Zeit, die der Dialog zum
+        # Aufgehen braucht.
+        self._slicer_path = discover.find_program("slicer", tools.SLICERS)
 
         layout = QVBoxLayout(self)
         layout.addLayout(self._build_head())
         layout.addWidget(self._build_front())
         layout.addWidget(self._build_tabs(), 1)
+        layout.addWidget(self._build_slicer())
         layout.addWidget(self._build_advice())
         layout.addWidget(self._build_state())
         layout.addWidget(self._build_buttons())
 
         self._load_into_editors()
         self._refresh_advice()
+        self._start_profile_search()
 
     # --- Aufbau ---------------------------------------------------------------
 
@@ -696,6 +732,131 @@ class PrintSettingsDialog(QDialog):
         box.toggled.connect(self.tabs.setVisible)
         return box
 
+    def _build_slicer(self) -> QWidget:
+        """Auf welche Profile des Slicers Formwerk seine Werte legt (§29).
+
+        Zwei Auswahlen, aber im Regelfall keine Entscheidung: das
+        Maschinenprofil sagt selbst, welchen Drucker und welche Düse es meint,
+        und benennt sein Standard-Prozessprofil. Getroffen wird beides
+        automatisch — hier steht es, damit man abweichen kann, nicht damit man
+        muss.
+        """
+        self.slicer_box = QGroupBox(tr("Profile des Slicers"), self)
+        self.slicer_box.setCheckable(True)
+        self.slicer_box.setChecked(False)
+        form = QFormLayout(self.slicer_box)
+
+        self.machine_choice = QComboBox(self.slicer_box)
+        self.machine_choice.setEnabled(False)
+        self.machine_choice.currentIndexChanged.connect(self._machine_chosen)
+        self.process_choice = QComboBox(self.slicer_box)
+        self.process_choice.setEnabled(False)
+
+        form.addRow(tr("Drucker"), self.machine_choice)
+        form.addRow(tr("Grundprofil"), self.process_choice)
+        self.profile_note = QLabel(tr("Der Profilbestand wird durchgesehen …"), self.slicer_box)
+        self.profile_note.setWordWrap(True)
+        form.addRow(self.profile_note)
+        return self.slicer_box
+
+    def _start_profile_search(self) -> None:
+        found = self._slicer_path
+        if found is None:
+            self.slicer_box.setVisible(False)
+            return
+        try:
+            flavour = handover.detect(found).flavour
+        except AppError:
+            self.slicer_box.setVisible(False)
+            return
+        if flavour == "prusa":
+            # §29: eine PrusaSlicer-ini läuft eigenständig, sobald Düse und
+            # Bettform darin stehen — und die schreibt Formwerk selbst.
+            self.profile_note.setText(
+                tr(
+                    "Dieser Slicer braucht kein Grundprofil — Formwerk schreibt eine vollständige "
+                    "Konfiguration."
+                )
+            )
+            return
+
+        worker = _ProfileWorker(found, flavour)
+        worker.done.connect(self._profiles_found)
+        worker.finished.connect(self._profile_search_finished)
+        self._profile_worker = worker
+        worker.start()
+
+    def _profiles_found(self, found: list[slicer_profiles.SlicerProfile]) -> None:
+        self._profiles = found
+        machines = slicer_profiles.machines(found)
+        if not machines:
+            self.profile_note.setText(
+                tr("Keine Profile gefunden — ohne sie lehnt dieser Slicer den Auftrag ab.")
+            )
+            return
+
+        self.machine_choice.blockSignals(True)
+        for entry in machines:
+            self.machine_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
+        self.machine_choice.blockSignals(False)
+        self.machine_choice.setEnabled(True)
+        self.process_choice.setEnabled(True)
+
+        chosen, process = slicer_profiles.match(found, self.session.profile.printer)
+        remembered = self.ui_settings.slicer_machine_profile
+        index = self.machine_choice.findData(remembered) if remembered else -1
+        if index < 0 and chosen is not None:
+            index = self.machine_choice.findData(str(chosen.path))
+        self.machine_choice.setCurrentIndex(max(index, 0))
+        self._fill_processes(process)
+
+        if chosen is None:
+            self.profile_note.setText(
+                tr("Zu diesem Drucker passt kein Profil von selbst — bitte auswählen.")
+            )
+            self.slicer_box.setChecked(True)
+        else:
+            self.profile_note.setText(
+                tr(
+                    "Automatisch zugeordnet. Was hier steht, bringt der Slicer mit; Formwerk legt "
+                    "seine Werte darauf."
+                )
+            )
+
+    def _machine_chosen(self) -> None:
+        if self._profiles:
+            self._fill_processes(None)
+
+    def _current_machine(self) -> slicer_profiles.SlicerProfile | None:
+        wanted = self.machine_choice.currentData()
+        return next((entry for entry in self._profiles if str(entry.path) == wanted), None)
+
+    def _fill_processes(self, preferred: slicer_profiles.SlicerProfile | None) -> None:
+        """Nur die Prozessprofile, die zum gewählten Drucker passen.
+
+        Ohne die Einschränkung stünden hier zweitausend Einträge, von denen
+        einer stimmt — und der Slicer lehnte jeden anderen ab, ohne zu sagen,
+        warum.
+        """
+        machine = self._current_machine()
+        fitting = slicer_profiles.processes(self._profiles, machine)
+        self.process_choice.clear()
+        for entry in fitting:
+            self.process_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
+
+        wanted = self.ui_settings.slicer_base_process
+        index = self.process_choice.findData(wanted) if wanted else -1
+        if index < 0 and preferred is not None:
+            index = self.process_choice.findData(str(preferred.path))
+        if index < 0 and machine is not None:
+            named = [entry for entry in fitting if entry.name == machine.default_process]
+            if named:
+                index = self.process_choice.findData(str(named[0].path))
+        self.process_choice.setCurrentIndex(max(index, 0))
+
+    def _profile_search_finished(self) -> None:
+        self._profile_worker = None
+
     def _build_advice(self) -> QWidget:
         box = QGroupBox(tr("Was dieses Teil verlangt"), self)
         inner = QVBoxLayout(box)
@@ -738,7 +899,7 @@ class PrintSettingsDialog(QDialog):
         buttons.addButton(self.slice_button, QDialogButtonBox.ButtonRole.ActionRole)
         buttons.rejected.connect(self.reject)
 
-        found = discover.find_program("slicer", tools.SLICERS)
+        found = self._slicer_path
         if found is None:
             # §27: das Backend meldet sich ab, es nörgelt nicht.
             self.slice_button.setEnabled(False)
@@ -918,7 +1079,7 @@ class PrintSettingsDialog(QDialog):
             self.state.setText(tr("Es ist nichts da, was sich slicen ließe."))
             return
 
-        found = discover.find_program("slicer", tools.SLICERS)
+        found = self._slicer_path
         if found is None:
             return
         try:
@@ -926,11 +1087,21 @@ class PrintSettingsDialog(QDialog):
         except AppError as problem:
             show_error(problem, self)
             return
+        # Was in der Auswahl steht, gilt — sie ist automatisch vorbelegt, aber
+        # der Nutzer darf abweichen, und dann zählt seine Wahl (§29).
         setup = replace(
             setup,
-            machine_profile=self.ui_settings.slicer_machine_profile,
-            base_process=self.ui_settings.slicer_base_process,
+            machine_profile=str(self.machine_choice.currentData() or ""),
+            base_process=str(self.process_choice.currentData() or ""),
         )
+        if setup.flavour != "prusa" and not setup.machine_profile:
+            self.slicer_box.setChecked(True)
+            self.state.setText(
+                tr("Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen.")
+            )
+            return
+        self.ui_settings.slicer_machine_profile = setup.machine_profile
+        self.ui_settings.slicer_base_process = setup.base_process
 
         self._temporary = TemporaryDirectory(prefix="formwerk-handover-")
         folder = Path(self._temporary.name)
@@ -977,8 +1148,9 @@ class PrintSettingsDialog(QDialog):
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
         """Den Ordner erst freigeben, wenn niemand mehr darin liest."""
-        if self._worker is not None and self._worker.isRunning():
-            self._worker.wait()
+        for worker in (self._worker, self._profile_worker):
+            if worker is not None and worker.isRunning():
+                worker.wait()
         if self._temporary is not None:
             self._temporary.cleanup()
             self._temporary = None

@@ -7,6 +7,8 @@ Vorschläge kommen mit Begründung, und ohne Slicer bleibt er benutzbar.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from PySide6.QtWidgets import (
     QApplication,
@@ -16,6 +18,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
 )
 
+from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
 from app.ui.print_settings_dialog import FIELDS, GROUPS, PrintSettingsDialog, _ColourButton
 from app.ui.session import Session
@@ -235,3 +238,114 @@ def test_the_dialog_opens_without_a_slicer(
 def test_slicing_without_a_scene_says_what_is_missing(dialog: PrintSettingsDialog) -> None:
     dialog._slice()
     assert dialog.state.text()
+
+
+# --- Profilauswahl (§29) ------------------------------------------------------------
+
+
+def _profile(name: str, kind: str, **kwargs: object) -> SlicerProfile:
+    return SlicerProfile(path=Path(f"/x/{name}.json"), name=name, kind=kind, **kwargs)  # type: ignore[arg-type]
+
+
+def test_the_found_profiles_fill_both_choices(dialog: PrintSettingsDialog) -> None:
+    machine = _profile(
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+        default_process="0.20mm Standard",
+    )
+    found = [
+        machine,
+        _profile("0.20mm Standard", "process", compatible_printers=(machine.name,)),
+        _profile("0.12mm Fein", "process", inherits="0.20mm Standard"),
+    ]
+
+    dialog._profiles_found(found)
+
+    assert dialog.machine_choice.count() == 1
+    assert dialog.machine_choice.isEnabled()
+    assert dialog.process_choice.count() == 2
+
+
+def test_the_matching_profile_is_preselected(qt_app: QApplication) -> None:
+    """§2.4: eine gute Vorgabe ist mehr wert als eine gute
+    Einstellmöglichkeit. Das Maschinenprofil nennt seinen Drucker und sein
+    Standard-Prozessprofil selbst — es gibt nichts zu erfragen."""
+    session = Session()
+    session.project.document.printer = "centauri-carbon-2"
+    dialog = PrintSettingsDialog(session, UiSettings())
+    machine = _profile(
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+        default_process="0.20mm Standard",
+    )
+    other = _profile(
+        "Ganz anderes Gerät", "machine", printer_model="Ganz anderes Gerät", nozzle=0.4
+    )
+
+    dialog._profiles_found(
+        [
+            other,
+            machine,
+            _profile("0.12mm Fein", "process", compatible_printers=(machine.name,)),
+            _profile("0.20mm Standard", "process", compatible_printers=(machine.name,)),
+        ]
+    )
+
+    assert dialog.machine_choice.currentData() == str(machine.path)
+    assert dialog.process_choice.currentText().startswith("0.20mm Standard")
+
+
+def test_processes_of_other_printers_stay_out(dialog: PrintSettingsDialog) -> None:
+    """Ungefiltert stünden hier zweitausend Einträge, von denen einer stimmt —
+    und der Slicer lehnte jeden anderen ab, ohne zu sagen warum."""
+    machine = _profile("Meiner 0.4 nozzle", "machine", printer_model="Meiner", nozzle=0.4)
+    dialog._profiles_found(
+        [
+            machine,
+            _profile("Passt", "process", compatible_printers=(machine.name,)),
+            _profile("Passt nicht", "process", compatible_printers=("Ein anderer",)),
+        ]
+    )
+
+    shown = [
+        dialog.process_choice.itemText(index) for index in range(dialog.process_choice.count())
+    ]
+    assert shown == ["Passt"]
+
+
+def test_an_own_profile_is_marked_in_words(dialog: PrintSettingsDialog) -> None:
+    machine = _profile("Meiner 0.4 nozzle", "machine", printer_model="Meiner", nozzle=0.4)
+    dialog._profiles_found([machine, _profile("Meine Fassung", "process", from_user=True)])
+
+    assert "(" in dialog.process_choice.itemText(0)
+
+
+def test_no_profiles_found_says_what_that_means(dialog: PrintSettingsDialog) -> None:
+    dialog._profiles_found([])
+
+    assert dialog.profile_note.text()
+    assert not dialog.machine_choice.isEnabled()
+
+
+def test_a_remembered_choice_wins_over_the_match(qt_app: QApplication) -> None:
+    """Wer einmal abgewichen ist, meinte es so."""
+    session = Session()
+    session.project.document.printer = "centauri-carbon-2"
+    settings = UiSettings()
+    machine = _profile(
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+    )
+    other = _profile("Etwas anderes", "machine", printer_model="Etwas anderes", nozzle=0.4)
+    settings.slicer_machine_profile = str(other.path)
+    dialog = PrintSettingsDialog(session, settings)
+
+    dialog._profiles_found([machine, other])
+
+    assert dialog.machine_choice.currentData() == str(other.path)
