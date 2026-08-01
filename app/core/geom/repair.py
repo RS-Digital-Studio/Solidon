@@ -1,12 +1,13 @@
-"""Repairing meshes (Bauplan §25, §17.2).
+"""Netze reparieren (Bauplan §25, §17.2).
 
-Downloaded models are broken in a handful of recurring ways: open edges, needles,
-duplicate faces, stray fragments, inverted normals, self-intersections. Each is
-handled on its own here, and each reports what it did — the report has to be able
-to say what was changed, and the agent has to know what it is standing on (§17.3).
+Heruntergeladene Modelle sind auf eine Handvoll wiederkehrender Arten kaputt:
+offene Kanten, Nadeln, doppelte Flächen, lose Fragmente, umgedrehte Normalen,
+Selbstdurchdringungen. Jede wird hier für sich behandelt, und jede meldet,
+was sie getan hat — der Bericht muss sagen können, was geändert wurde, und
+der Agent muss wissen, worauf er steht (§17.3).
 
-Nothing repairs silently: an operation that changes geometry says so in its
-findings.
+Nichts repariert still: eine Operation, die Geometrie ändert, sagt es in
+ihren Befunden.
 """
 
 from __future__ import annotations
@@ -25,13 +26,13 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: A component below this share of the largest one counts as a stray fragment.
+#: Eine Komponente unter diesem Anteil der größten zählt als loses Fragment.
 SMALL_COMPONENT_SHARE = 0.001
 
 
 @dataclass(slots=True)
 class RepairResult:
-    """The repaired body plus what each step actually did."""
+    """Der reparierte Körper, plus was jeder Schritt wirklich getan hat."""
 
     mesh: MeshData
     findings: list[Finding] = field(default_factory=list)
@@ -39,7 +40,8 @@ class RepairResult:
 
 
 def merge_vertices(mesh: MeshData, tolerance: float | None = None) -> tuple[MeshData, int]:
-    """Weld coincident points. Returns the body and how many vertices went away."""
+    """Verschweißt zusammenfallende Punkte. Liefert den Körper und wie viele
+    Eckpunkte verschwunden sind."""
     body = mesh.raw.copy()
     before = len(body.vertices)
     limit = tolerance if tolerance is not None else weld_tolerance(mesh.bounds.diagonal)
@@ -49,7 +51,7 @@ def merge_vertices(mesh: MeshData, tolerance: float | None = None) -> tuple[Mesh
 
 
 def remove_degenerate_faces(mesh: MeshData) -> tuple[MeshData, int]:
-    """Zero-area triangles, needles and duplicates."""
+    """Null-Flächen-Dreiecke, Nadeln und Duplikate."""
     body = mesh.raw.copy()
     before = len(body.faces)
     body.update_faces(body.nondegenerate_faces(height=EPS_GEOM))
@@ -59,7 +61,8 @@ def remove_degenerate_faces(mesh: MeshData) -> tuple[MeshData, int]:
 
 
 def unify_normals(mesh: MeshData) -> tuple[MeshData, bool]:
-    """Make the winding consistent and turn the body outside out if needed."""
+    """Macht den Umlaufsinn einheitlich und stülpt den Körper nötigenfalls
+    nach außen."""
     body = mesh.raw.copy()
     before = float(body.volume)
     trimesh.repair.fix_winding(body)
@@ -68,35 +71,38 @@ def unify_normals(mesh: MeshData) -> tuple[MeshData, bool]:
     return mesh.replacing(body), abs(float(body.volume) - before) > EPS_GEOM
 
 
-#: How far a point may sit off an edge and still count as lying on it. A T-junction
-#: comes from an exact split in the source CAD, so the deviation is arithmetic
-#: noise rather than a gap.
+#: Wie weit ein Punkt neben einer Kante sitzen darf und noch als auf ihr
+#: liegend zählt. Eine T-Kreuzung stammt aus einem exakten Split im
+#: Quell-CAD — die Abweichung ist Rechenrauschen, kein Spalt.
 ON_EDGE_TOLERANCE = 1e-4
 
-#: Above this many open edges a body is not a model with a defect but a model in
-#: pieces, and pairing every boundary vertex with every boundary edge stops being
-#: the right way to spend a minute.
+#: Über so vielen offenen Kanten ist ein Körper kein Modell mit einem Defekt,
+#: sondern ein Modell in Stücken — und jeden Randpunkt mit jeder Randkante zu
+#: paaren hört auf, die richtige Art zu sein, eine Minute zu verbringen.
 MAX_STITCH_EDGES = 4096
 
 
 def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
-    """Close gaps where a vertex sits on an edge that does not know about it.
+    """Schließt Spalte, wo ein Punkt auf einer Kante sitzt, die nichts von ihm
+    weiß.
 
-    The defect the hole filler cannot touch, and the one a real download brings.
-    An Eiffel tower of 312 000 triangles had exactly one: three open edges over
-    three points at ``y=117,63, z=42,5`` and x of 100,910, 104,763 and 106,690 —
-    3,853 + 1,927 = 5,780, collinear to the last digit. Not a hole, a **T-junction**:
-    the long edge was split by a vertex when the neighbouring face was built, and
-    the face on the other side was never told. ``trimesh.repair.fill_holes``
-    declines it, and rightly so — a triangle over three collinear points has no
-    area, and closing a body with a face that is not there is not closing it.
+    Der Defekt, an den der Lochfüller nicht herankommt — und der, den ein
+    echter Download mitbringt. Ein Eiffelturm mit 312 000 Dreiecken hatte
+    genau einen: drei offene Kanten über drei Punkten bei ``y=117,63,
+    z=42,5`` und x von 100,910, 104,763 und 106,690 — 3,853 + 1,927 = 5,780,
+    kollinear bis zur letzten Stelle. Kein Loch, eine **T-Kreuzung**: die
+    lange Kante wurde beim Bau der Nachbarfläche von einem Punkt geteilt, und
+    der Fläche auf der anderen Seite hat es nie jemand gesagt.
+    ``trimesh.repair.fill_holes`` lehnt ab, und zu Recht — ein Dreieck über
+    drei kollinearen Punkten hat keine Fläche, und einen Körper mit einer
+    Fläche zu schließen, die nicht da ist, ist kein Schließen.
 
-    What actually fits is to give the other face the vertex it is missing: the
-    face on the long edge is split in two at the point sitting on it. No new
-    geometry, no moved surface, and the two new triangles have the area the old
-    one had.
+    Was wirklich passt: der anderen Fläche den Punkt geben, der ihr fehlt —
+    die Fläche an der langen Kante wird am aufsitzenden Punkt in zwei
+    geteilt. Keine neue Geometrie, keine verschobene Oberfläche, und die zwei
+    neuen Dreiecke haben die Fläche, die das alte hatte.
 
-    Returns the body and how many faces were split.
+    Liefert den Körper und wie viele Flächen geteilt wurden.
     """
     body = mesh.raw.copy()
     boundary = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
@@ -107,8 +113,8 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
     points = np.asarray(body.vertices, dtype=float)
     candidates = np.unique(edges)
 
-    # Which face carries which boundary edge: edges_sorted runs three per face,
-    # in face order, so the row index divided by three is the face.
+    # Welche Fläche welche Randkante trägt: edges_sorted läuft drei je Fläche,
+    # in Flächenreihenfolge — der Zeilenindex durch drei ist also die Fläche.
     owner = {tuple(edges[index]): int(boundary[index] // 3) for index in range(len(edges))}
 
     splits: dict[int, list[tuple[int, int, int]]] = {}
@@ -133,8 +139,8 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
         third = next((entry for entry in face if entry not in (first, second)), None)
         if third is None:
             continue
-        # Keep the direction the face was wound in, so the two halves face the
-        # same way the whole did.
+        # Den Umlaufsinn der Fläche behalten, damit die zwei Hälften dahin
+        # schauen, wohin das Ganze schaute.
         position = face.index(first)
         forward = face[(position + 1) % 3] == second
         head, tail = (first, second) if forward else (second, first)
@@ -151,7 +157,7 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
 
 
 def _lies_on(point: np.ndarray, start: np.ndarray, end: np.ndarray) -> bool:
-    """Is this point on the segment, between its ends rather than beyond them?"""
+    """Liegt der Punkt auf der Strecke — zwischen den Enden, nicht dahinter?"""
     along = end - start
     length = float(np.linalg.norm(along))
     if length <= EPS_GEOM:
@@ -165,10 +171,12 @@ def _lies_on(point: np.ndarray, start: np.ndarray, end: np.ndarray) -> bool:
 
 
 def fill_holes(mesh: MeshData) -> tuple[MeshData, bool]:
-    """Close open edges. Small holes only — trimesh cannot bridge a missing wall.
+    """Schließt offene Kanten. Nur kleine Löcher — eine fehlende Wand kann
+    trimesh nicht überbrücken.
 
-    The stitch runs first: a T-junction looks like a hole and is not one, and the
-    filler leaves it exactly as it found it (see :func:`stitch_t_junctions`).
+    Das Vernähen läuft zuerst: eine T-Kreuzung sieht aus wie ein Loch und ist
+    keines, und der Füller lässt sie exakt, wie er sie fand (siehe
+    :func:`stitch_t_junctions`).
     """
     body = mesh.raw.copy()
     if body.is_watertight:
@@ -184,7 +192,8 @@ def fill_holes(mesh: MeshData) -> tuple[MeshData, bool]:
 def remove_small_components(
     mesh: MeshData, share: float = SMALL_COMPONENT_SHARE
 ) -> tuple[MeshData, int]:
-    """Drop stray fragments — but only when asked, never on the way in (§17.1)."""
+    """Wirft lose Fragmente — aber nur auf Nachfrage, nie beim
+    Hereinkommen (§17.1)."""
     pieces = face_components(mesh.raw)
     if len(pieces) <= 1:
         return mesh, 0
@@ -204,15 +213,17 @@ def remove_small_components(
 
 
 def resolve_self_intersections(mesh: MeshData) -> tuple[MeshData, bool]:
-    """Let the kernel rebuild the body; manifold3d normalises self-intersections.
+    """Lässt den Kern den Körper neu aufbauen; manifold3d normalisiert
+    Selbstdurchdringungen.
 
-    A union of a body with itself is a no-op on paper and a clean-up in practice.
+    Eine Vereinigung eines Körpers mit sich selbst ist auf dem Papier ein
+    Leerlauf und in der Praxis ein Aufräumen.
     """
     try:
         rebuilt = trimesh.boolean.union([mesh.raw, mesh.raw])
     except PROGRAMMING_ERRORS:
         raise
-    except Exception as problem:  # pragma: no cover - kernel specific
+    except Exception as problem:  # pragma: no cover - kernspezifisch
         _log.warning("could not resolve self-intersections: %s", problem)
         return mesh, False
     if rebuilt is None or not len(rebuilt.faces):
@@ -230,7 +241,8 @@ def repair(
     small_components: bool = False,
     self_intersections: bool = False,
 ) -> RepairResult:
-    """Run the requested steps in the order that makes each one cheaper."""
+    """Führt die gewünschten Schritte in der Reihenfolge aus, die jeden
+    einzelnen billiger macht."""
     result = RepairResult(mesh=mesh)
 
     if weld:
@@ -285,10 +297,10 @@ def repair(
             )
 
     if holes:
-        # Said separately, because it is a different defect with a different
-        # answer: a seam is a face that was missing a vertex, a hole is a face
-        # that was missing. Somebody reading the report can tell whether their
-        # model had a gap in it or only a bookkeeping error.
+        # Getrennt gemeldet, weil es ein anderer Defekt mit anderer Antwort
+        # ist: eine Naht ist eine Fläche, der ein Punkt fehlte, ein Loch eine
+        # Fläche, die fehlte. Wer den Bericht liest, erkennt, ob sein Modell
+        # eine Lücke hatte oder nur einen Buchhaltungsfehler.
         result.mesh, seams = stitch_t_junctions(result.mesh)
         if seams:
             result.changed = True
@@ -337,6 +349,6 @@ def repair(
 
 
 def open_edge_count(mesh: MeshData) -> int:
-    """Edges belonging to a single triangle — the measure of "open"."""
+    """Kanten, die zu genau einem Dreieck gehören — das Maß von „offen"."""
     single = trimesh.grouping.group_rows(mesh.raw.edges_sorted, require_count=1)
     return len(single)

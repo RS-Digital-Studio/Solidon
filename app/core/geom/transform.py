@@ -1,11 +1,12 @@
-"""Moving, rotating and scaling (Bauplan §25, §18.11).
+"""Verschieben, Drehen und Skalieren (Bauplan §25, §18.11).
 
-Every manipulation is an operation — also the one that started as a drag in the
-viewport (§18.11). So the arithmetic sits here and the gizmo only decides which
-numbers to hand over; undo then takes back a drag exactly like a menu entry.
+Jede Manipulation ist eine Operation — auch die, die als Ziehen im Viewport
+begann (§18.11). Also sitzt die Rechnung hier, und der Gizmo entscheidet nur,
+welche Zahlen er übergibt; das Undo nimmt ein Ziehen danach genauso zurück wie
+einen Menüeintrag.
 
-Snapping belongs to the interaction, not to the geometry: the surface rounds the
-value, the operation stores what was actually applied.
+Das Einrasten gehört zur Interaktion, nicht zur Geometrie: die Oberfläche rundet
+den Wert, die Operation speichert, was wirklich angewandt wurde.
 """
 
 from __future__ import annotations
@@ -23,8 +24,8 @@ from app.core.units import EPS_DISPLAY, EPS_GEOM
 
 Axis = Literal["x", "y", "z"]
 Anchor = Literal["centre", "origin", "bed"]
-"""What a rotation or scaling turns around: the body's centre, the world origin,
-or the point where the body sits on the plate."""
+"""Worum eine Drehung oder Skalierung dreht: die Mitte des Körpers, der
+Weltursprung, oder der Punkt, an dem der Körper auf der Platte aufsitzt."""
 
 AXIS_VECTORS: dict[Axis, Vec3] = {
     "x": (1.0, 0.0, 0.0),
@@ -34,7 +35,7 @@ AXIS_VECTORS: dict[Axis, Vec3] = {
 
 
 def anchor_point(mesh: MeshData, anchor: Anchor) -> Vec3:
-    """The fixed point of a transformation."""
+    """Der Fixpunkt einer Transformation."""
     bounds = mesh.bounds
     if anchor == "origin":
         return (0.0, 0.0, 0.0)
@@ -60,7 +61,7 @@ def rotation(axis: Axis, degrees: float, about: Vec3 = (0.0, 0.0, 0.0)) -> np.nd
 
 
 def scaling(factors: Vec3, about: Vec3 = (0.0, 0.0, 0.0)) -> np.ndarray:
-    """Uniform or per-axis scaling around a fixed point."""
+    """Gleichmäßige oder achsweise Skalierung um einen Fixpunkt."""
     values = np.asarray(factors, dtype=float)
     if np.any(np.abs(values) <= EPS_GEOM):
         raise ValueError("a scale factor of zero would collapse the body")
@@ -72,24 +73,27 @@ def scaling(factors: Vec3, about: Vec3 = (0.0, 0.0, 0.0)) -> np.ndarray:
 
 
 def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
-    """Return a transformed copy. The input is never touched (AGENTS.md rule 3)."""
+    """Gibt eine transformierte Kopie zurück. Die Eingabe wird nie
+    angefasst (AGENTS.md Regel 3)."""
     body = mesh.raw.copy()
     body.apply_transform(matrix)
     return mesh.replacing(body)
 
 
 def place_on_bed(mesh: MeshData) -> MeshData:
-    """Drop the body onto Z = 0 without moving it sideways (§17.1 step 6)."""
+    """Setzt den Körper auf Z = 0, ohne ihn seitlich zu verschieben
+    (§17.1 Schritt 6)."""
     return apply(mesh, translation((0.0, 0.0, -mesh.bounds.minimum[2])))
 
 
 @dataclass(frozen=True, slots=True)
 class TransformSteps:
-    """A gizmo drag, taken apart into things an operation can express (§18.11).
+    """Ein Gizmo-Ziehen, zerlegt in Dinge, die eine Operation ausdrücken
+    kann (§18.11).
 
-    A dragged matrix is not editable afterwards; ``translate 12 mm`` is. So the
-    matrix is decomposed once, here, and what reaches the stack are operations
-    whose numbers can still be changed (§2.1).
+    Eine gezogene Matrix ist danach nicht mehr änderbar; ``verschieben 12 mm``
+    schon. Also wird die Matrix einmal zerlegt, hier, und was den Stapel
+    erreicht, sind Operationen, deren Zahlen sich weiter ändern lassen (§2.1).
     """
 
     offset: Vec3 = (0.0, 0.0, 0.0)
@@ -111,11 +115,12 @@ class TransformSteps:
 
 
 def decompose_transform(matrix: np.ndarray) -> TransformSteps:
-    """Split a transformation into offset, rotation about a main axis, and scale.
+    """Zerlegt eine Transformation in Versatz, Drehung um eine Hauptachse
+    und Skalierung.
 
-    The gizmo turns around its own axes, so a rotation lands on x, y or z; a
-    combined drag simply yields several steps, which then travel as one
-    transaction (§15.5).
+    Der Gizmo dreht um seine eigenen Achsen, eine Drehung landet also auf x, y
+    oder z; ein kombiniertes Ziehen ergibt schlicht mehrere Schritte, die dann
+    als eine Transaktion reisen (§15.5).
     """
     scales, _shear, angles, offset, _perspective = trimesh.transformations.decompose_matrix(
         np.asarray(matrix, dtype=float)
@@ -137,7 +142,8 @@ def decompose_transform(matrix: np.ndarray) -> TransformSteps:
 
 
 def snap_to_step(value: float, step: float) -> float:
-    """Grid and angle snapping. A step of zero means no snapping (§18.11)."""
+    """Raster- und Winkeleinrasten. Schrittweite null heißt: kein
+    Einrasten (§18.11)."""
     if step <= EPS_GEOM:
         return value
     return round(value / step) * step

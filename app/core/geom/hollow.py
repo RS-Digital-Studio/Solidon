@@ -1,17 +1,20 @@
-"""Hollowing out, with the vents that make it printable (Bauplan §25).
+"""Aushöhlen, mit den Entlüftungen, die es druckbar machen (Bauplan §25).
 
-A solid part is material and hours nobody needs. Hollowing it is a good idea
-with one condition attached: resin and unfused powder aside, an FDM print with a
-sealed cavity traps air, and the first bridge over it sags. So the vent is not
-an option here — it is the second half of the operation, and the default.
+Ein massives Teil ist Material und Stunden, die niemand braucht. Es
+auszuhöhlen ist eine gute Idee mit einer Bedingung: Harz und ungeschmolzenes
+Pulver beiseite — ein FDM-Druck mit geschlossenem Hohlraum sperrt Luft ein,
+und die erste Brücke darüber sackt durch. Die Entlüftung ist hier also keine
+Option — sie ist die zweite Hälfte der Operation, und die Vorgabe.
 
-How the inner wall is found: the body is put on the same raster the analysis
-maps use (§18.4), the raster is eroded by the wall thickness, and what is left
-is meshed again. That is the voxel stage of §17.2 with its accuracy and its
-honesty — the wall comes out within half a raster step, and the report says so.
+Wie die Innenwand gefunden wird: der Körper kommt auf dasselbe Raster wie die
+Analysekarten (§18.4), das Raster wird um die Wandstärke erodiert, und was
+übrig bleibt, wird neu vernetzt. Das ist die Voxelstufe aus §17.2 mit ihrer
+Genauigkeit und ihrer Ehrlichkeit — die Wand stimmt auf einen halben
+Rasterschritt, und der Bericht sagt es.
 
-An offset on the triangles themselves would be exact and would fold in on every
-concave corner, which is where a hollow part needs the wall most.
+Ein Versatz auf den Dreiecken selbst wäre exakt und faltete sich an jeder
+konkaven Ecke ein — genau dort, wo ein hohles Teil die Wand am nötigsten
+braucht.
 """
 
 from __future__ import annotations
@@ -31,21 +34,21 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: How fine the raster is, relative to the wall being kept. A third of the wall
-#: means the wall is right to within a sixth of itself.
+#: Wie fein das Raster ist, relativ zur stehenbleibenden Wand. Ein Drittel der
+#: Wand heißt: die Wand stimmt auf ein Sechstel ihrer selbst.
 PITCH_SHARE = 1.0 / 3.0
 
-#: Never finer than this — a raster of a hundred million cells helps nobody.
+#: Nie feiner als das — ein Raster aus hundert Millionen Zellen hilft niemandem.
 MIN_PITCH = 0.3
 
-#: Default vent diameter. Wide enough to let air out, narrow enough that the
-#: hole does not have to be plugged afterwards.
+#: Vorgabe-Durchmesser der Entlüftung. Weit genug, damit Luft entweicht, eng
+#: genug, dass das Loch danach nicht verschlossen werden muss.
 VENT_DIAMETER = 4.0
 
 
 @dataclass(slots=True)
 class HollowResult:
-    """The hollow body, and what had to be said about it."""
+    """Der hohle Körper, und was dazu zu sagen war."""
 
     mesh: MeshData
     removed: float = 0.0
@@ -61,7 +64,9 @@ def hollow(
     vents: int = 1,
     vent_diameter: float = VENT_DIAMETER,
 ) -> HollowResult:
-    """Leave a wall of ``wall`` millimetres and take out the rest."""
+    """Lässt eine Wand von ``wall`` Millimetern stehen und nimmt den Rest
+    heraus.
+    """
     if wall <= EPS_GEOM:
         raise ValueError("a wall thickness has to be positive")
 
@@ -117,7 +122,7 @@ def hollow(
 
 
 def _cavity(mesh: MeshData, wall: float) -> MeshData | None:
-    """The inside of the body, pulled in by the wall thickness."""
+    """Das Innere des Körpers, eingezogen um die Wandstärke."""
     from scipy import ndimage
 
     from app.core.perceive.maps import solid_field
@@ -137,11 +142,11 @@ def _cavity(mesh: MeshData, wall: float) -> MeshData | None:
 def _vent(
     body: MeshData, cavity: MeshData, diameter: float, count: int
 ) -> tuple[MeshData, tuple[Vec3, ...]]:
-    """Drill from the cavity out through the bottom.
+    """Bohrt vom Hohlraum nach unten durch den Boden.
 
-    Downwards on purpose: a vent in the bottom face sits on the build plate,
-    where it is neither seen nor in the way, and the air leaves the way the
-    print grows.
+    Nach unten mit Absicht: eine Entlüftung in der Bodenfläche sitzt auf der
+    Druckplatte, wo sie weder zu sehen noch im Weg ist, und die Luft entweicht
+    in der Richtung, in der der Druck wächst.
     """
     from app.core.geom.transform import apply, translation
 
@@ -152,8 +157,8 @@ def _vent(
 
     spots: list[Vec3] = []
     for index in range(count):
-        # Spread along X across the middle of the cavity, so several vents do
-        # not end up in the same corner.
+        # Entlang X über die Mitte des Hohlraums verteilt, damit mehrere
+        # Entlüftungen nicht in derselben Ecke landen.
         share = (2 * index + 1) / (2 * count)
         x = inside.minimum[0] + inside.size[0] * share
         spots.append((float(x), float(inside.centre[1]), 0.0))
@@ -171,7 +176,7 @@ def _vent(
             drilled = boolean("difference", [drilled, tool]).mesh
         except PROGRAMMING_ERRORS:
             raise
-        except Exception as problem:  # a vent that cannot be cut is not fatal
+        except Exception as problem:  # eine Entlüftung, die nicht geht, ist nicht fatal
             _log.info("vent at %s failed: %s", spot, problem)
             continue
         placed.append(spot)

@@ -1,13 +1,14 @@
-"""Working on the net itself (Bauplan §25, category "Netz").
+"""Arbeit am Netz selbst (Bauplan §25, Kategorie „Netz").
 
-Three operations that change how a body is described without meaning to change
-what it is: fewer triangles, smoother triangles, more even triangles. They earn
-their place with pillar B — a generated mesh arrives with half a million
-triangles and the stair steps of the grid it came off, and both are in the way
-of everything that follows.
+Drei Operationen, die ändern, wie ein Körper beschrieben ist, ohne ändern zu
+wollen, was er ist: weniger Dreiecke, glattere Dreiecke, gleichmäßigere
+Dreiecke. Ihren Platz verdienen sie mit Säule B — ein erzeugtes Netz kommt mit
+einer halben Million Dreiecken und den Treppenstufen des Rasters an, von dem
+es stammt, und beides steht allem Folgenden im Weg.
 
-All three are lossy, and each says how much it lost. A decimation that quietly
-moves a bore by a tenth of a millimetre is worse than one that says so.
+Alle drei sind verlustbehaftet, und jede sagt, wie viel sie verloren hat. Eine
+Dezimierung, die eine Bohrung still um einen Zehntelmillimeter verschiebt, ist
+schlimmer als eine, die es sagt.
 """
 
 from __future__ import annotations
@@ -26,21 +27,22 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Below this many triangles nothing is decimated. A body that small is not
-#: where the time goes, and every removal costs shape.
+#: Unter so vielen Dreiecken wird nichts dezimiert. Bei einem so kleinen
+#: Körper geht die Zeit nicht verloren, und jede Entfernung kostet Form.
 DECIMATE_FLOOR = 500
 
-#: How far a decimation may move the surface before it is worth a warning, as a
-#: share of the model diagonal. Half a percent on a 100 mm part is 0.5 mm — more
-#: than a fit tolerates.
+#: Wie weit eine Dezimierung die Oberfläche verschieben darf, bevor es eine
+#: Warnung wert ist — als Anteil der Modelldiagonale. Ein halbes Prozent auf
+#: einem 100-mm-Teil sind 0,5 mm, mehr als eine Passung verträgt.
 DEVIATION_WARN = 0.005
 
 
 def deviation(before: MeshData, after: MeshData) -> float:
-    """How far the new surface sits from the old one, at worst, in mm.
+    """Wie weit die neue Oberfläche schlimmstenfalls von der alten sitzt, in mm.
 
-    Measured, not estimated: every vertex of the result is asked for its
-    distance to the original surface. That is the number a fit lives or dies by.
+    Gemessen, nicht geschätzt: jeder Eckpunkt des Ergebnisses wird nach seinem
+    Abstand zur ursprünglichen Oberfläche gefragt. Das ist die Zahl, an der
+    eine Passung lebt oder stirbt.
     """
     if not after.triangle_count or not before.triangle_count:
         return 0.0
@@ -50,7 +52,7 @@ def deviation(before: MeshData, after: MeshData) -> float:
 
 
 def decimate(mesh: MeshData, target: int) -> MeshData:
-    """Fewer triangles for the same shape, as far as that is possible."""
+    """Weniger Dreiecke für dieselbe Form, soweit das möglich ist."""
     if mesh.triangle_count <= max(target, DECIMATE_FLOOR):
         return mesh
     reduced = mesh.raw.simplify_quadric_decimation(face_count=target)
@@ -59,10 +61,11 @@ def decimate(mesh: MeshData, target: int) -> MeshData:
 
 
 def smooth(mesh: MeshData, iterations: int) -> MeshData:
-    """Take the noise off a surface without pulling it in.
+    """Nimmt das Rauschen von einer Oberfläche, ohne sie einzuziehen.
 
-    Taubin rather than Laplace: plain smoothing shrinks a body a little with
-    every pass, and after ten passes a 20 mm pin no longer fits a 20 mm hole.
+    Taubin statt Laplace: schlichtes Glätten schrumpft einen Körper mit jedem
+    Durchgang ein wenig, und nach zehn Durchgängen passt ein 20-mm-Stift nicht
+    mehr in ein 20-mm-Loch.
     """
     body = mesh.raw.copy()
     trimesh.smoothing.filter_taubin(body, iterations=iterations)
@@ -70,11 +73,12 @@ def smooth(mesh: MeshData, iterations: int) -> MeshData:
 
 
 def remesh(mesh: MeshData, edge: float) -> MeshData:
-    """Split every edge longer than ``edge`` until none is.
+    """Teilt jede Kante, die länger als ``edge`` ist, bis keine mehr übrig ist.
 
-    Not a full remesher — it only subdivides. That is what an analysis needs
-    (an even sampling of the surface) and it never moves a point, so nothing is
-    lost. Making triangles *coarser* where they are dense is decimation's job.
+    Kein vollwertiger Remesher — er unterteilt nur. Das ist, was eine Analyse
+    braucht (eine gleichmäßige Abtastung der Oberfläche), und er verschiebt nie
+    einen Punkt, es geht also nichts verloren. Dreiecke dort *gröber* zu
+    machen, wo sie dicht sind, ist die Aufgabe der Dezimierung.
     """
     vertices, faces = trimesh.remesh.subdivide_to_size(
         np.asarray(mesh.raw.vertices, dtype=float),
@@ -198,7 +202,9 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
 
 
 def _deviation_findings(before: MeshData, after: MeshData, object_id: str) -> list[Finding]:
-    """Say what it cost — measured against the surface, not guessed from counts."""
+    """Sagt, was es gekostet hat — gemessen an der Oberfläche, nicht aus
+    Zahlen geraten.
+    """
     moved = deviation(before, after)
     limit = max(before.bounds.diagonal, 1.0) * DEVIATION_WARN
     severity: Severity = "warning" if moved > limit else "info"

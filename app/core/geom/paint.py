@@ -1,18 +1,19 @@
-"""Painting slots onto a surface (Bauplan §20, "Bemalen").
+"""Slots auf eine Oberfläche malen (Bauplan §20, „Bemalen").
 
-A brush with a radius, and edge detection — which is the part that makes it
-usable. Painting a radius into a mesh without it means the colour goes round
-the corner onto the back of the part, and cleaning that up by hand costs more
-than the painting saved.
+Ein Pinsel mit Radius, und Kantenerkennung — letztere macht ihn erst
+brauchbar. Einen Radius ohne sie ins Netz zu malen heißt, dass die Farbe um
+die Ecke auf die Rückseite des Teils läuft, und das von Hand aufzuräumen
+kostet mehr, als das Malen gespart hat.
 
-So the brush spreads over the surface rather than through space: it starts at
-the triangle that was clicked and walks to neighbours, and it stops at an edge
-sharper than a given angle. The top of a lid gets painted, the side does not,
-without anybody drawing a boundary.
+Also breitet sich der Pinsel über die Oberfläche aus statt durch den Raum: er
+beginnt am angeklickten Dreieck und läuft zu Nachbarn, und er hält an einer
+Kante an, die schärfer ist als ein gegebener Winkel. Die Oberseite eines
+Deckels wird bemalt, die Seite nicht, ohne dass jemand eine Grenze zeichnet.
 
-The other half of §20 — texture to slots — is in :mod:`app.core.geom.texture`.
-This one is the manual counterpart: for the lettering that has no texture, and
-for correcting what the quantisation got wrong.
+Die andere Hälfte von §20 — Textur zu Slots — steht in
+:mod:`app.core.geom.texture`. Diese hier ist das manuelle Gegenstück: für die
+Beschriftung, die keine Textur hat, und zum Korrigieren dessen, was die
+Quantisierung falsch getroffen hat.
 """
 
 from __future__ import annotations
@@ -33,8 +34,9 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Above this angle between two triangles the brush stops. Thirty degrees keeps
-#: it on a rounded face and holds it back at anything that reads as an edge.
+#: Über diesem Winkel zwischen zwei Dreiecken hält der Pinsel an. Dreißig Grad
+#: halten ihn auf einer gerundeten Fläche und stoppen ihn an allem, was sich
+#: wie eine Kante liest.
 EDGE_ANGLE = 30.0
 
 #: How many filaments a slot number may name (§20, same as the colour ops).
@@ -49,12 +51,12 @@ def brush(
     *,
     edge_angle: float = EDGE_ANGLE,
 ) -> MeshData:
-    """Paint every triangle around ``point`` that belongs to the same surface.
+    """Bemalt jedes Dreieck um ``point``, das zur selben Oberfläche gehört.
 
-    Reached over the surface, not through the air: a walk from neighbour to
-    neighbour that stops at sharp edges and at the radius. Both limits matter —
-    the radius alone would paint through a wall, the edge alone would paint a
-    whole side.
+    Erreicht über die Oberfläche, nicht durch die Luft: ein Lauf von Nachbar
+    zu Nachbar, der an scharfen Kanten und am Radius endet. Beide Grenzen
+    zählen — der Radius allein malte durch eine Wand, die Kante allein eine
+    ganze Seite.
     """
     body = mesh.raw
     faces = len(body.faces)
@@ -65,9 +67,10 @@ def brush(
     away = np.linalg.norm(centres - np.asarray(point, dtype=float), axis=1)
     start = int(np.argmin(away))
     if away[start] > radius:
-        # The stroke did not land on the body. There is always a nearest
-        # triangle, and painting it because it was the nearest would put colour
-        # on the other side of the part from where somebody clicked.
+        # Der Strich ist nicht auf dem Körper gelandet. Ein nächstes Dreieck
+        # gibt es immer, und es zu bemalen, weil es das nächste war, setzte
+        # Farbe auf die andere Seite des Teils als die, auf die jemand
+        # geklickt hat.
         return mesh
 
     within = np.linalg.norm(centres - centres[start], axis=1) <= radius
@@ -81,7 +84,9 @@ def brush(
 
 
 def _walk(mesh: MeshData, start: int, within: np.ndarray, edge_angle: float) -> set[int]:
-    """Faces reachable from ``start`` without crossing an edge or the radius."""
+    """Flächen, die von ``start`` aus erreichbar sind, ohne eine Kante oder
+    den Radius zu überschreiten.
+    """
     adjacency = np.asarray(mesh.raw.face_adjacency)
     if not len(adjacency):
         return {start} if within[start] else set()

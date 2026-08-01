@@ -1,12 +1,12 @@
-"""Choosing a print orientation (Bauplan §25, P2).
+"""Eine Druckorientierung wählen (Bauplan §25, P2).
 
-A heuristic over face normals, and openly labelled as one: it looks for a flat
-face to stand on and counts how much would overhang. In P3 the layer analysis
-(§22) replaces it — then hundreds of rotations get judged by real support volume
-instead of by a rule of thumb.
+Eine Heuristik über Flächennormalen, und offen als solche benannt: sie sucht
+eine ebene Fläche zum Aufstehen und zählt, wie viel überhinge. In P3 ersetzt
+die Schichtanalyse (§22) sie — dann werden hunderte Drehungen an echtem
+Stützvolumen gemessen statt an einer Faustregel.
 
-Until then the rule of thumb is honest about what it is: the finding says which
-candidate won and by what margin.
+Bis dahin ist die Faustregel ehrlich darüber, was sie ist: der Befund sagt,
+welcher Kandidat gewann und mit welchem Abstand.
 """
 
 from __future__ import annotations
@@ -23,28 +23,31 @@ from app.core.types import Finding, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
-#: Faces steeper than this against the plate need support (§39, §18.4).
+#: Flächen, die steiler als das gegen die Platte stehen, brauchen
+#: Stützen (§39, §18.4).
 OVERHANG_LIMIT_DEGREES = 45.0
 
-#: How many candidate directions are looked at beyond the six axis directions.
+#: Wie viele Kandidatenrichtungen über die sechs Achsrichtungen hinaus
+#: angesehen werden.
 MAX_FACE_CANDIDATES = 12
 
 
 @dataclass(frozen=True, slots=True)
 class Orientation:
-    """One candidate and what speaks for it."""
+    """Ein Kandidat und was für ihn spricht."""
 
     direction: Vec3
-    """The face normal that would end up pointing down."""
+    """Die Flächennormale, die am Ende nach unten zeigte."""
     footprint: float
-    """Area that would rest on the plate, in mm²."""
+    """Fläche, die auf der Platte aufläge, in mm²."""
     overhang: float
-    """Area that would need support, in mm²."""
+    """Fläche, die Stützen bräuchte, in mm²."""
     height: float
 
     @property
     def score(self) -> float:
-        """Large footprint, little overhang, low build — in that order."""
+        """Große Aufstandsfläche, wenig Überhang, flache Bauhöhe — in dieser
+        Reihenfolge."""
         return self.footprint * 2.0 - self.overhang - self.height * 10.0
 
 
@@ -56,7 +59,7 @@ class OrientResult:
 
 
 def candidates(mesh: MeshData) -> list[Vec3]:
-    """Six axis directions plus the normals of the largest flat faces."""
+    """Sechs Achsrichtungen plus die Normalen der größten ebenen Flächen."""
     found: list[Vec3] = [
         (0.0, 0.0, 1.0),
         (0.0, 0.0, -1.0),
@@ -86,7 +89,7 @@ def candidates(mesh: MeshData) -> list[Vec3]:
 
 
 def evaluate_direction(mesh: MeshData, direction: Vec3) -> Orientation:
-    """What the body would look like standing on that face."""
+    """Wie der Körper aussähe, stünde er auf dieser Fläche."""
     turned = apply(mesh, _rotation_to_down(direction))
     body = turned.raw
     normals = np.asarray(body.face_normals, dtype=float)
@@ -105,7 +108,7 @@ def evaluate_direction(mesh: MeshData, direction: Vec3) -> Orientation:
 
 
 def _rotation_to_down(direction: Vec3) -> np.ndarray:
-    """The rotation that turns ``direction`` into -Z."""
+    """Die Drehung, die ``direction`` auf -Z bringt."""
     source = np.asarray(direction, dtype=float)
     length = float(np.linalg.norm(source))
     if length <= EPS_GEOM:
@@ -125,7 +128,7 @@ def _rotation_to_down(direction: Vec3) -> np.ndarray:
 
 
 def orient_for_print(mesh: MeshData) -> OrientResult:
-    """Turn the body onto the orientation the heuristic likes best."""
+    """Dreht den Körper in die Lage, die der Heuristik am besten gefällt."""
     scored = [evaluate_direction(mesh, direction) for direction in candidates(mesh)]
     best = max(scored, key=lambda entry: entry.score)
     turned = place_on_bed(apply(mesh, _rotation_to_down(best.direction)))

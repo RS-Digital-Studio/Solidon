@@ -1,18 +1,20 @@
-"""Boolean operations with the fallback chain (Bauplan §17.2).
+"""Boolesche Operationen mit der Rückfallkette (Bauplan §17.2).
 
-| Stage | What it does                                   | Recorded as |
-|-------|------------------------------------------------|-------------|
-| 1     | straight through the kernel                    | ``direct``  |
-| 2     | weld, clean up, try again                      | ``welded``  |
-| 3     | disturb the input geometry minimally           | ``jittered``|
-| 4     | compute on voxels and mesh the result again    | ``voxel``   |
-| 5     | give up, with a finding and a way forward      | —           |
+| Stufe | Was sie tut                                     | Vermerk     |
+|-------|-------------------------------------------------|-------------|
+| 1     | direkt durch den Kern                           | ``direct``  |
+| 2     | verschweißen, aufräumen, erneut                 | ``welded``  |
+| 3     | die Eingangsgeometrie minimal stören            | ``jittered``|
+| 4     | auf Voxeln rechnen, das Ergebnis neu vernetzen  | ``voxel``   |
+| 5     | aufgeben, mit Befund und Weg nach vorn          | —           |
 
-The stage that succeeded is written into the operation, so the same file
-recomputes the same way (§11.3) and the report can say what the numbers are
-worth. Stage 4 costs accuracy and is never used silently.
+Die Stufe, die es geschafft hat, wird in die Operation geschrieben — so
+rechnet dieselbe Datei gleich nach (§11.3), und der Bericht kann sagen, was
+die Zahlen wert sind. Stufe 4 kostet Genauigkeit und läuft nie
+stillschweigend.
 
-In draft quality the chain stops after stage 2, to keep iterating fast (§31).
+In Entwurfsqualität endet die Kette nach Stufe 2 — das Iterieren bleibt
+schnell (§31).
 """
 
 from __future__ import annotations
@@ -36,21 +38,21 @@ _log = get_logger(__name__)
 
 BooleanKind = Literal["union", "difference", "intersection"]
 
-#: The full chain, and the shortened one for draft quality (§31).
+#: Die volle Kette, und die verkürzte für Entwurfsqualität (§31).
 FULL_CHAIN: tuple[SolverStage, ...] = ("direct", "welded", "jittered", "voxel")
 DRAFT_CHAIN: tuple[SolverStage, ...] = ("direct", "welded")
 
-#: How far stage 3 moves the vertices: enough to break a coincidence, far below
-#: anything a printer could resolve.
+#: Wie weit Stufe 3 die Eckpunkte bewegt: genug, um ein Zusammenfallen zu
+#: brechen, weit unter allem, was ein Drucker auflösen könnte.
 JITTER_AMPLITUDE = 1e-4
 
-#: Edge length of the voxel grid in stage 4, relative to the model diagonal.
+#: Kantenlänge des Voxelrasters in Stufe 4, relativ zur Modelldiagonale.
 VOXEL_PITCH_RELATIVE = 0.004
 
 
 @dataclass(slots=True)
 class BooleanOutcome:
-    """The result plus how it was reached."""
+    """Das Ergebnis, plus wie es erreicht wurde."""
 
     mesh: MeshData
     solver: SolverInfo
@@ -67,18 +69,21 @@ def boolean(
     cut_slot: int = DEFAULT_CUT_SLOT,
     allow_empty: bool = False,
 ) -> BooleanOutcome:
-    """Run a boolean operation, falling back stage by stage until one holds.
+    """Führt eine Boolesche Operation aus und fällt Stufe um Stufe zurück, bis
+    eine hält.
 
-    ``cut_slot`` is what a newly cut face gets (§20): by default the slot of the
-    body being cut, so a hole through a two-coloured part does not paint its
-    wall in whatever the cutter happened to be.
+    ``cut_slot`` ist, was eine frisch geschnittene Fläche bekommt (§20): per
+    Vorgabe der Slot des Körpers, der geschnitten wird — ein Loch durch ein
+    zweifarbiges Teil streicht seine Wand so nicht in der Farbe, die das
+    Werkzeug zufällig hatte.
 
-    ``allow_empty`` says that nothing is an answer. For a difference somebody
-    asked for, an empty result means the kernel gave up and the next stage
-    should try — that is what the chain is for. For an intersection it can mean
-    the two bodies simply do not meet, and running three more stages to hear
-    the same thing again turns a fact into an exception the caller has to
-    unpick.
+    ``allow_empty`` sagt: Nichts ist eine Antwort. Bei einer Differenz, die
+    jemand wollte, heißt ein leeres Ergebnis, dass der Kern aufgegeben hat und
+    die nächste Stufe dran ist — dafür ist die Kette da. Bei einer
+    Verschneidung kann es heißen, dass die zwei Körper sich schlicht nicht
+    treffen — und drei weitere Stufen laufen zu lassen, um dasselbe noch
+    einmal zu hören, macht aus einer Tatsache eine Ausnahme, die der Aufrufer
+    auseinandernehmen muss.
     """
     if len(meshes) < 2:
         raise ValueError("a boolean operation needs at least two bodies")
@@ -90,15 +95,15 @@ def boolean(
         attempted.append(stage)
         try:
             result = _run_stage(kind, meshes, stage, seed)
-        except Exception as problem:  # kernels fail in kernel-specific ways
+        except Exception as problem:  # Kerne scheitern auf kerneigene Arten
             _log.info("boolean stage %s failed: %s", stage, problem)
             continue
         if result is None or not _plausible(result, allow_empty):
             _log.info("boolean stage %s produced nothing usable", stage)
             continue
         return BooleanOutcome(
-            # Nothing has no faces to colour, and the transfer would look for
-            # the nearest surface of a body that has none.
+            # Nichts hat keine Flächen zum Färben, und die Übertragung suchte
+            # die nächste Oberfläche eines Körpers, der keine hat.
             mesh=result
             if result.triangle_count == 0
             else _keep_slots(result, meshes, kind, stage, cut_slot),
@@ -124,24 +129,25 @@ def _keep_slots(
     stage: SolverStage,
     cut_slot: int,
 ) -> MeshData:
-    """§20: the slot assignment survives the operation.
+    """§20: die Slot-Zuweisung überlebt die Operation.
 
-    Kept as it is only where the kernel really handed the triangles through
-    unchanged. After the voxel stage that is never the case — the meshing was
-    replaced — so there the transfer always runs.
+    Belassen wird sie nur, wo der Kern die Dreiecke wirklich unverändert
+    durchgereicht hat. Nach der Voxelstufe ist das nie der Fall — die
+    Vernetzung wurde ersetzt —, dort läuft die Übertragung immer.
 
-    Only the bodies that are still *in* the result hand their colour over. In a
-    difference the tool is gone, and the bore wall it left behind is a new
-    surface, not a piece of the drill — otherwise a hole through a red part
-    would come out in whatever colour the cutter happened to have.
+    Nur die Körper, die noch *im* Ergebnis sind, geben ihre Farbe weiter. Bei
+    einer Differenz ist das Werkzeug fort, und die Bohrungswand, die es
+    hinterließ, ist eine neue Oberfläche, kein Stück des Bohrers — sonst käme
+    ein Loch durch ein rotes Teil in der Farbe heraus, die das Werkzeug
+    zufällig hatte.
     """
     if stage != "voxel" and len(result.slots) == len(result.raw.faces) and result.slots:
         return result
     tolerance = None
     if stage == "voxel":
-        # The staircase of the grid is half a voxel deep everywhere; measured
-        # more tightly than that, the body would lose its colour to its own
-        # tessellation rather than to the operation.
+        # Die Treppe des Rasters ist überall einen halben Voxel tief; enger
+        # gemessen verlöre der Körper seine Farbe an die eigene Vernetzung
+        # statt an die Operation.
         diagonal = max(mesh.bounds.diagonal for mesh in sources)
         tolerance = max(diagonal * VOXEL_PITCH_RELATIVE, 0.05) * 1.5
     carriers = sources[:1] if kind == "difference" else sources
@@ -171,17 +177,18 @@ def _kernel(kind: BooleanKind, bodies: list[trimesh.Trimesh], like: MeshData) ->
     result = operation(bodies)
     if result is None:
         return None
-    # An empty body is handed on rather than swallowed here: whether nothing is
-    # an answer or a failure is _plausible's decision, and it is the only place
-    # that knows what the caller asked for.
+    # Ein leerer Körper wird weitergereicht statt hier verschluckt: ob Nichts
+    # eine Antwort oder ein Scheitern ist, entscheidet _plausible — die
+    # einzige Stelle, die weiß, was der Aufrufer wollte.
     return like.replacing(result)
 
 
 def _jitter(mesh: MeshData, seed: int | None, index: int) -> MeshData:
-    """Stage 3: nudge the vertices so coincident faces stop being coincident.
+    """Stufe 3: die Eckpunkte anstupsen, damit zusammenfallende Flächen
+    aufhören zusammenzufallen.
 
-    The seed is stored with the operation, so the same nudge happens again
-    (§11.3) — without it the result would be unreproducible.
+    Der Startwert wird bei der Operation gespeichert, damit derselbe Stups
+    wieder passiert (§11.3) — ohne ihn wäre das Ergebnis unreproduzierbar.
     """
     generator = np.random.default_rng((seed or 0) + index)
     body = mesh.raw.copy()
@@ -191,16 +198,18 @@ def _jitter(mesh: MeshData, seed: int | None, index: int) -> MeshData:
 
 
 def _voxel(kind: BooleanKind, meshes: list[MeshData]) -> MeshData | None:
-    """Stage 4: decide the question on a grid, then mesh the answer again.
+    """Stufe 4: die Frage auf einem Raster entscheiden, die Antwort neu
+    vernetzen.
 
-    Robust where topology is not, and it costs accuracy — which is why the
-    report says so whenever this stage was used (§17.3).
+    Robust, wo die Topologie es nicht ist, und es kostet Genauigkeit — darum
+    sagt der Bericht es jedes Mal, wenn diese Stufe benutzt wurde (§17.3).
     """
     diagonal = max(mesh.bounds.diagonal for mesh in meshes)
     pitch = max(diagonal * VOXEL_PITCH_RELATIVE, 0.05)
 
-    # One raster for all bodies. A difference only ever shrinks the first body,
-    # everything else may grow beyond it, so the grid spans them all.
+    # Ein Raster für alle Körper. Eine Differenz macht den ersten nur kleiner,
+    # alles andere darf über ihn hinauswachsen — das Raster spannt sich also
+    # über alle.
     low = np.min([np.asarray(mesh.bounds.minimum) for mesh in meshes], axis=0) - pitch * 2
     high = np.max([np.asarray(mesh.bounds.maximum) for mesh in meshes], axis=0) + pitch * 2
     shape = tuple(int(np.ceil(value)) for value in (high - low) / pitch + 1)
@@ -216,11 +225,12 @@ def _voxel(kind: BooleanKind, meshes: list[MeshData]) -> MeshData | None:
             combined = combined & other
 
     if not combined.any():
-        # Empty, and marching cubes has nothing to walk over. Same as the
-        # kernel stages: the empty body goes on, _plausible judges it.
+        # Leer, und Marching Cubes hat nichts zum Ablaufen. Wie bei den
+        # Kernstufen: der leere Körper geht weiter, _plausible urteilt.
         return meshes[0].replacing(trimesh.Trimesh())
     body = trimesh.voxel.ops.matrix_to_marching_cubes(matrix=combined, pitch=pitch)
-    # matrix_to_marching_cubes puts cell (0,0,0) at the origin; shift onto the raster.
+    # matrix_to_marching_cubes legt Zelle (0,0,0) an den Ursprung; aufs Raster
+    # zurückschieben.
     body.apply_translation(low)
     return meshes[0].replacing(body)
 
@@ -228,7 +238,7 @@ def _voxel(kind: BooleanKind, meshes: list[MeshData]) -> MeshData | None:
 def _rasterise(
     mesh: MeshData, origin: np.ndarray, pitch: float, shape: tuple[int, ...]
 ) -> np.ndarray:
-    """Put one body onto the shared raster."""
+    """Legt einen Körper auf das gemeinsame Raster."""
     grid = mesh.raw.voxelized(pitch=pitch).fill()
     offset = np.round((np.asarray(grid.transform)[:3, 3] - origin) / pitch).astype(int)
     target = np.zeros(shape, dtype=bool)
@@ -248,20 +258,22 @@ def _rasterise(
 
 
 def shared_volume(first: trimesh.Trimesh, second: trimesh.Trimesh) -> float:
-    """How much volume two bodies have in common — a touch counts as none.
+    """Wie viel Volumen zwei Körper gemeinsam haben — Berührung zählt als
+    keines.
 
-    Bodies that only meet at a surface — a lid on its rim, a part on the plate,
-    two halves of a split — intersect to a flat shell. That shell is closed, so
-    it calls itself watertight, but it has no extent in one direction. Asking
-    trimesh for its volume computes zero and then divides the centre of mass by
-    it, which is a warning about a number nobody wanted: touching is not
-    sharing volume, and the bounding box says so before any integral runs.
+    Körper, die sich nur an einer Fläche treffen — ein Deckel auf seinem Rand,
+    ein Teil auf der Platte, zwei Hälften einer Teilung — verschneiden sich zu
+    einer flachen Schale. Die ist geschlossen, nennt sich also wasserdicht,
+    hat aber in einer Richtung keine Ausdehnung. trimesh nach ihrem Volumen zu
+    fragen rechnet null und teilt dann den Schwerpunkt dadurch — eine Warnung
+    über eine Zahl, die niemand wollte: Berühren ist kein geteiltes Volumen,
+    und der Hüllquader sagt das, bevor irgendein Integral läuft.
     """
     try:
         shared = trimesh.boolean.intersection([first, second])
     except PROGRAMMING_ERRORS:
         raise
-    except Exception:  # kernels fail in kernel-specific ways
+    except Exception:  # Kerne scheitern auf kerneigene Arten
         return 0.0
     if shared is None or not len(shared.faces):
         return 0.0
@@ -272,9 +284,11 @@ def shared_volume(first: trimesh.Trimesh, second: trimesh.Trimesh) -> float:
 
 
 def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:
-    """A result has to have volume; an empty or inside-out body is not an answer.
+    """Ein Ergebnis muss Volumen haben; ein leerer oder umgestülpter Körper ist
+    keine Antwort.
 
-    Unless the caller says otherwise — see ``allow_empty`` in :func:`boolean`.
+    Außer der Aufrufer sagt es anders — siehe ``allow_empty`` in
+    :func:`boolean`.
     """
     if allow_empty and mesh.triangle_count == 0:
         return True

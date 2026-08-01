@@ -1,15 +1,17 @@
-"""Bringing features into line (Bauplan §18.11).
+"""Merkmale in Flucht bringen (Bauplan §18.11).
 
-Snapping that means something: not "close to a grid point" but "this bore is
-now coaxial with that one", "this face lies flat on that face". Both are the
-motion a person describes in words, and both are one operation afterwards —
-a matrix nobody can read is exactly what §2.1 forbids.
+Einrasten, das etwas bedeutet: nicht „nah an einem Rasterpunkt", sondern
+„diese Bohrung ist jetzt koaxial zu jener", „diese Fläche liegt plan auf
+jener". Beides ist die Bewegung, die ein Mensch in Worten beschreibt, und
+beides ist danach eine Operation — eine Matrix, die niemand lesen kann, ist
+genau das, was §2.1 verbietet.
 
-The maths is the same in both cases: turn one direction onto another, then move
-one point onto another. What differs is what counts as the direction and the
-point — for a bore its axis and its centre, for a face its normal and its
-middle. Faces are turned to face *into* each other, bores to run *with* each
-other, which is the difference between lying on something and sliding into it.
+Die Rechnung ist in beiden Fällen dieselbe: eine Richtung auf eine andere
+drehen, dann einen Punkt auf einen anderen schieben. Was sich unterscheidet,
+ist, was als Richtung und Punkt zählt — bei einer Bohrung ihre Achse und ihre
+Mitte, bei einer Fläche ihre Normale und ihr Mittelpunkt. Flächen werden
+*aufeinander zu* gedreht, Bohrungen *miteinander* — das ist der Unterschied
+zwischen Aufliegen und Hineingleiten.
 """
 
 from __future__ import annotations
@@ -30,10 +32,11 @@ _log = get_logger(__name__)
 
 
 def frame_of(feature: Feature) -> tuple[Vec3, Vec3]:
-    """Direction and anchor point of a feature — its axis and its centre.
+    """Richtung und Ankerpunkt eines Merkmals — seine Achse und seine Mitte.
 
-    A bore points along its axis, a face along its normal. An edge loop has
-    neither, and saying so beats inventing one.
+    Eine Bohrung zeigt entlang ihrer Achse, eine Fläche entlang ihrer
+    Normalen. Eine Kantenschleife hat weder noch, und das zu sagen schlägt,
+    eine zu erfinden.
     """
     params = feature.params
     if feature.kind == "hole":
@@ -61,13 +64,14 @@ def frame_of(feature: Feature) -> tuple[Vec3, Vec3]:
 
 
 def align_matrix(source: Feature, target: Feature, flip: bool = False) -> np.ndarray:
-    """The transform that puts ``source`` onto ``target``.
+    """Die Transformation, die ``source`` auf ``target`` legt.
 
-    Two faces meet front to front, so the source normal is turned onto the
-    *inverted* target normal — otherwise the parts would end up back to back,
-    which is the one thing nobody means by "lay this on that". Two bores share
-    an axis, so they are turned onto the same direction. ``flip`` turns the
-    result around for the case where the other way was meant.
+    Zwei Flächen treffen sich Stirn an Stirn, also wird die Quellnormale auf
+    die *invertierte* Zielnormale gedreht — sonst landeten die Teile Rücken an
+    Rücken, und das ist das eine, was niemand mit „leg das auf jenes" meint.
+    Zwei Bohrungen teilen eine Achse, werden also auf dieselbe Richtung
+    gedreht. ``flip`` dreht das Ergebnis um, für den Fall, dass es andersherum
+    gemeint war.
     """
     source_direction, source_point = frame_of(source)
     target_direction, target_point = frame_of(target)
@@ -90,7 +94,8 @@ def align_matrix(source: Feature, target: Feature, flip: bool = False) -> np.nda
 
 
 def rotation_between(source: Vec3, target: Vec3) -> np.ndarray:
-    """Shortest rotation carrying one direction onto another (Rodrigues)."""
+    """Die kürzeste Drehung, die eine Richtung auf eine andere bringt
+    (Rodrigues)."""
     first = np.asarray(_unit(source), dtype=float)
     second = np.asarray(_unit(target), dtype=float)
     axis = np.cross(first, second)
@@ -100,7 +105,8 @@ def rotation_between(source: Vec3, target: Vec3) -> np.ndarray:
     if length <= EPS_GEOM:
         if dot > 0.0:
             return np.eye(4)
-        # Opposite directions: any perpendicular axis turns it, so take one.
+        # Entgegengesetzte Richtungen: jede senkrechte Achse dreht ihn, also
+        # eine davon nehmen.
         helper = np.array([1.0, 0.0, 0.0]) if abs(first[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
         axis = np.cross(first, helper)
         length = float(np.linalg.norm(axis))
@@ -123,7 +129,7 @@ def rotation_between(source: Vec3, target: Vec3) -> np.ndarray:
 
 
 def align(mesh: MeshData, source: Feature, target: Feature, flip: bool = False) -> MeshData:
-    """Move a body so its feature lines up with another one."""
+    """Bewegt einen Körper, bis sein Merkmal mit einem anderen fluchtet."""
     matrix = align_matrix(source, target, flip)
     _log.info("aligning %s onto %s", source.id, target.id)
     return apply(mesh, matrix)

@@ -1,13 +1,15 @@
-"""Text and logos on a face (Bauplan §25, category "Beschriftung").
+"""Text und Logos auf einer Fläche (Bauplan §25, Kategorie „Beschriftung").
 
-A part with its size on it, a lid with what belongs in the box, a bracket with
-the date it was printed: the most common reason people leave a modelling
-program and open another one. It does not need another one.
+Ein Teil mit seiner Größe darauf, ein Deckel mit dem, was in die Box gehört,
+eine Halterung mit dem Datum ihres Drucks: der häufigste Grund, warum Leute
+ein Modellierprogramm verlassen und ein zweites öffnen. Es braucht kein
+zweites.
 
-The letters come from the font as outlines, not as a picture that gets traced —
-so the edges stay clean at any size, and a raised letter has a flat top rather
-than a staircase. Everything after that is the same union or difference every
-other part uses (§24.1).
+Die Buchstaben kommen als Umrisse aus der Schrift, nicht als nachgezeichnetes
+Bild — die Kanten bleiben also in jeder Größe sauber, und ein erhabener
+Buchstabe hat eine ebene Oberseite statt einer Treppe. Alles danach ist
+dieselbe Vereinigung oder Differenz, die jeder andere Baustein auch
+benutzt (§24.1).
 
 The other half is a logo, and that arrives as SVG through the same door: an
 outline is an outline, whether a font drew it or Inkscape did.
@@ -36,9 +38,10 @@ _log = get_logger(__name__)
 
 Placement = Literal["raised", "engraved"]
 
-#: The fonts that are always there. matplotlib ships DejaVu with itself, so a
-#: label looks the same on every machine — a system font that exists on one
-#: computer and not on the next is a project that opens differently.
+#: Die Schriften, die immer da sind. matplotlib bringt DejaVu selbst mit, eine
+#: Beschriftung sieht also auf jedem Rechner gleich aus — eine Systemschrift,
+#: die es auf einem Rechner gibt und auf dem nächsten nicht, ist ein Projekt,
+#: das sich unterschiedlich öffnet.
 FONTS: tuple[str, ...] = ("DejaVu Sans", "DejaVu Serif", "DejaVu Sans Mono")
 
 #: Erklärungen, die beide Beschriftungs-Operationen teilen.
@@ -52,19 +55,21 @@ _FACING_MORE = _("Weitere Achse der Richtung — siehe Normale X.")
 _SIZE = _("Höhe der Großbuchstaben. Unter drei Millimetern verliert der Druck die Form.")
 _FONT = _("DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich aussieht.")
 
-#: How much a raised label reaches into the body, and an engraved one past its
-#: floor. Without this the two faces are coincident and the boolean fails (§39).
+#: Wie weit eine erhabene Beschriftung in den Körper reicht, und eine
+#: gravierte über ihren Boden hinaus. Ohne das fallen die zwei Flächen
+#: zusammen, und die Boolesche Op scheitert (§39).
 OVERLAP = 0.05
 
-#: Below this the letters are thinner than a nozzle and print as a smear.
+#: Darunter sind die Buchstaben dünner als eine Düse und drucken als Schmierer.
 MIN_SIZE = 3.0
 
-#: How many filaments a slot number may name (§20, same as the colour ops).
+#: Wie viele Filamente eine Slotnummer benennen darf (§20, wie bei den
+#: Farb-Operationen).
 MAX_SLOTS = 8
 
 
 def outlines(text: str, size: float, font: str = FONTS[0]) -> list[Any]:
-    """The letters as polygons, in millimetres, sitting on the origin."""
+    """Die Buchstaben als Polygone, in Millimetern, auf dem Ursprung sitzend."""
     from matplotlib.font_manager import FontProperties
     from matplotlib.textpath import TextPath
     from shapely.geometry import Polygon as ShapelyPolygon
@@ -76,8 +81,8 @@ def outlines(text: str, size: float, font: str = FONTS[0]) -> list[Any]:
     if not rings:
         return []
 
-    # A letter like "o" comes as two rings, and which is the hole follows from
-    # containment, not from the order they were drawn in.
+    # Ein Buchstabe wie „o" kommt als zwei Ringe, und welcher das Loch ist,
+    # folgt aus der Enthaltung, nicht aus der Reihenfolge des Zeichnens.
     shapes = [ShapelyPolygon(entry).buffer(0) for entry in rings]
     solid = None
     for shape in sorted(shapes, key=lambda entry: -entry.area):
@@ -89,7 +94,7 @@ def outlines(text: str, size: float, font: str = FONTS[0]) -> list[Any]:
 
 
 def label_solid(shapes: list[Any], depth: float) -> MeshData | None:
-    """One body out of the outlines, standing on Z = 0."""
+    """Ein Körper aus den Umrissen, stehend auf Z = 0."""
     parts = [
         trimesh.creation.extrude_polygon(shape, height=depth)
         for shape in shapes
@@ -101,7 +106,8 @@ def label_solid(shapes: list[Any], depth: float) -> MeshData | None:
 
 
 def place(body: MeshData, position: Vec3, normal: Vec3, angle: float = 0.0) -> MeshData:
-    """Lay a label that stands on +Z onto a face with the given normal."""
+    """Legt eine Beschriftung, die auf +Z steht, auf eine Fläche mit der
+    gegebenen Normalen."""
     placed = body
     if angle:
         placed = apply(placed, rotation("z", angle))
@@ -221,13 +227,14 @@ def label_text(ctx: OpContext) -> OpResult:
             constraint="no_outline",
         )
 
-    # Centred on the point that was clicked, not starting there: a label grows
-    # around its place, which is what anybody putting one on expects.
+    # Zentriert auf dem angeklickten Punkt, nicht dort beginnend: eine
+    # Beschriftung wächst um ihren Ort herum, und genau das erwartet, wer eine
+    # anbringt.
     #
-    # Which way it reaches depends on the mode. Raised: the depth stands proud
-    # of the face and only the overlap reaches in. Engraved: the depth reaches
-    # in and only the overlap stands proud — otherwise the cut takes off the
-    # overlap and leaves the letters as a scratch.
+    # Wohin sie reicht, hängt an der Art. Erhaben: die Tiefe steht über der
+    # Fläche, nur die Überlappung reicht hinein. Graviert: die Tiefe reicht
+    # hinein, nur die Überlappung steht über — sonst nimmt der Schnitt die
+    # Überlappung weg und lässt die Buchstaben als Kratzer zurück.
     middle = body.bounds.centre
     lift = -OVERLAP if mode == "raised" else -params.depth
     body = apply(body, translation((-middle[0], -middle[1], lift)))
@@ -238,9 +245,10 @@ def label_text(ctx: OpContext) -> OpResult:
     body_mesh = as_mesh_data(source.mesh)
     slots = list(source.material_slots)
     if params.slot and mode == "raised":
-        # §20: the letters carry a slot of their own into the union, and the
-        # attribute transfer of the boolean brings it out the other side. That
-        # is what turns a two-colour label into one file instead of two.
+        # §20: die Buchstaben tragen einen eigenen Slot in die Vereinigung,
+        # und die Attributübertragung der Booleschen Op bringt ihn auf der
+        # anderen Seite wieder heraus. Das macht aus einer zweifarbigen
+        # Beschriftung eine Datei statt zwei.
         placed = with_slot(placed, params.slot)
         if not body_mesh.slots:
             body_mesh = with_slot(body_mesh, 0)
@@ -307,12 +315,12 @@ class LabelBodyParams(BaseParams):
     ),
 )
 def create_label(ctx: OpContext) -> OpResult:
-    """§25: the same outlines, standing on their own instead of on a part.
+    """§25: dieselben Umrisse, für sich stehend statt auf einem Teil.
 
-    Two colours can be had either way: this one as a second file for a printer
-    that changes filament by hand, and ``label_text`` with a slot for a machine
-    that reads the groups out of a 3MF (§20). Which is better depends on the
-    printer, so both are here.
+    Zwei Farben gibt es auf beiden Wegen: dieser hier als zweite Datei für
+    einen Drucker, der das Filament von Hand wechselt, und ``label_text`` mit
+    einem Slot für eine Maschine, die die Gruppen aus einer 3MF liest (§20).
+    Was besser ist, hängt am Drucker — darum gibt es beides.
     """
     params = cast(LabelBodyParams, ctx.params)
     if not params.text.strip():
@@ -343,7 +351,7 @@ def create_label(ctx: OpContext) -> OpResult:
 
 
 def _with_slot_named(slots: list[MaterialSlot], index: int) -> list[MaterialSlot]:
-    """Add the slot the lettering goes into, keeping one that is already named."""
+    """Fügt den Slot an, in den die Schrift kommt; ein schon benannter bleibt."""
     known = {entry.index: entry for entry in slots}
     known.setdefault(0, MaterialSlot(index=0, name=str(_("Körper"))))
     known.setdefault(index, MaterialSlot(index=index, name=str(_("Schrift"))))

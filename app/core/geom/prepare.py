@@ -1,14 +1,15 @@
-"""Print preparation: bores, splitting, arranging, collisions (Bauplan §25, §18.6).
+"""Druckvorbereitung: Bohrungen, Teilen, Anordnen, Kollisionen (Bauplan §25,
+§18.6).
 
-Three rules from the rule set (§39) live here, because this is where they would
-otherwise be forgotten:
+Drei Regeln aus der Regelsammlung (§39) leben hier, weil sie sonst genau hier
+vergessen würden:
 
-* a bore is drilled larger than nominal, because FDM prints holes tight — and
-  the amount comes from the calibrated material profile, never from a literal
-  (AGENTS.md rule 7);
-* boolean cuts always overlap by a hundredth of a millimetre, so no two faces
-  are ever coincident;
-* what leaves the build volume is reported, not silently scaled.
+* eine Bohrung wird größer gebohrt als nominal, denn FDM druckt Löcher zu
+  eng — und der Betrag kommt aus dem kalibrierten Materialprofil, nie aus
+  einem Literal (AGENTS.md Regel 7);
+* Boolesche Schnitte überlappen immer um einen hundertstel Millimeter, damit
+  nie zwei Flächen zusammenfallen;
+* was den Bauraum verlässt, wird gemeldet, nicht still skaliert.
 """
 
 from __future__ import annotations
@@ -30,11 +31,11 @@ from app.core.types import BoundingBox, Finding, Profile, Quality, SolverInfo, V
 from app.core.units import EPS_GEOM, format_length
 from app.i18n import _
 
-#: §39: booleans always overlap slightly, never share a face exactly.
+#: §39: Boolesche Ops überlappen immer leicht, nie teilen sie exakt eine Fläche.
 BOOLEAN_OVERLAP = 0.01
 
-#: Sections a drilled cylinder is built from. Fine enough that the printed hole
-#: is round, coarse enough not to explode the triangle count.
+#: Segmente, aus denen ein Bohrzylinder gebaut wird. Fein genug, dass das
+#: gedruckte Loch rund ist, grob genug, um die Dreieckszahl nicht zu sprengen.
 BORE_SECTIONS = 48
 
 
@@ -43,12 +44,12 @@ class BoreResult:
     mesh: MeshData
     solver: SolverInfo
     diameter: float
-    """The diameter actually cut, including the material compensation."""
+    """Der wirklich geschnittene Durchmesser, samt Materialkompensation."""
     findings: list[Finding]
 
 
 def bore_diameter(nominal: float, profile: Profile, compensate: bool) -> float:
-    """Nominal plus what the material eats, from the profile (§39, §28.3)."""
+    """Nominal plus was das Material frisst, aus dem Profil (§39, §28.3)."""
     if not compensate:
         return nominal
     return nominal + resolve_tolerance("auto:", "thread", profile)
@@ -66,7 +67,7 @@ def drill(
     quality: Quality = "fine",
     seed: int | None = None,
 ) -> BoreResult:
-    """Cut a cylindrical bore. Depth zero drills right through."""
+    """Schneidet eine zylindrische Bohrung. Tiefe null bohrt ganz durch."""
     cut_diameter = bore_diameter(diameter, profile, compensate)
     height = depth if depth > EPS_GEOM else _through_length(mesh, axis)
     cylinder = trimesh.creation.cylinder(
@@ -103,18 +104,20 @@ def countersink(
     angle: float = 90.0,
     quality: Quality = "fine",
 ) -> BoreResult:
-    """Break the mouth of a bore with a cone, so a screw head sits flush (§25).
+    """Bricht die Mündung einer Bohrung mit einem Kegel, damit ein
+    Schraubenkopf bündig sitzt (§25).
 
-    The angle is the full angle of the head — 90 degrees for a metric
-    countersunk screw. What is cut is the cone that head describes, which is
-    why the depth follows from the diameter rather than being asked for.
+    Der Winkel ist der volle Kopfwinkel — 90 Grad bei einer metrischen
+    Senkkopfschraube. Geschnitten wird der Kegel, den dieser Kopf beschreibt —
+    darum folgt die Tiefe aus dem Durchmesser, statt abgefragt zu werden.
     """
     depth = diameter / 2.0 / math.tan(math.radians(angle / 2.0))
     cone = trimesh.creation.cone(radius=diameter / 2.0, height=depth, sections=BORE_SECTIONS)
-    # The cone comes out standing on its base with the point up. A countersink
-    # is the other way round: widest at the face, narrowing into the material.
-    # Turned over it runs from zero downwards, which is exactly that — and it
-    # is lifted by the overlap so the two faces do not coincide (§39).
+    # Der Kegel kommt auf seiner Basis stehend heraus, Spitze nach oben. Eine
+    # Senkung ist andersherum: am weitesten an der Fläche, enger werdend ins
+    # Material. Umgedreht läuft er von null abwärts, was genau das ist — und
+    # er wird um die Überlappung angehoben, damit die zwei Flächen nicht
+    # zusammenfallen (§39).
     cone.apply_transform(trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]))
     cone.apply_translation([0.0, 0.0, BOOLEAN_OVERLAP])
     cone.apply_transform(_axis_alignment(axis))
@@ -138,11 +141,11 @@ def plug(
     depth: float = 0.0,
     quality: Quality = "fine",
 ) -> BoreResult:
-    """Fill a bore back in (§25, "verschließen").
+    """Füllt eine Bohrung wieder auf (§25, „verschließen").
 
-    Slightly larger than the hole it fills, because a plug the exact size of the
-    bore meets it in a coincident face — the one thing that reliably breaks a
-    boolean (§39, ``boolean_overlap``).
+    Etwas größer als das Loch, das er füllt — ein Stopfen exakt in Bohrungsgröße
+    trifft sie in einer zusammenfallenden Fläche, dem einen Ding, das eine
+    Boolesche Op zuverlässig bricht (§39, ``boolean_overlap``).
     """
     height = depth if depth > EPS_GEOM else _through_length(mesh, axis)
     cylinder = trimesh.creation.cylinder(
@@ -151,7 +154,8 @@ def plug(
     cylinder.apply_transform(_axis_alignment(axis))
     cylinder.apply_translation(np.asarray(position, dtype=float))
 
-    # Intersect first: the plug must not grow out of the body it fills.
+    # Erst verschneiden: der Stopfen darf nicht aus dem Körper herauswachsen,
+    # den er füllt.
     inner = boolean("intersection", [mesh.replacing(cylinder), _shell(mesh)], quality=quality)
     outcome = boolean("union", [mesh, inner.mesh], quality=quality)
     return BoreResult(
@@ -163,23 +167,25 @@ def plug(
 
 
 def _shell(mesh: MeshData) -> MeshData:
-    """The body as a solid to clip against — the convex hull is close enough.
+    """Der Körper als Volumen zum Beschneiden — die konvexe Hülle ist nah
+    genug.
 
-    A plug is cut back to the outside of the part, and for that the hull is the
-    right shape: it never reaches inside a cavity, so a plug can never fill one.
+    Ein Stopfen wird auf die Außenseite des Teils zurückgeschnitten, und dafür
+    ist die Hülle die richtige Form: sie greift nie in einen Hohlraum hinein,
+    ein Stopfen kann also nie einen füllen.
     """
     return mesh.replacing(mesh.raw.convex_hull)
 
 
 def _through_length(mesh: MeshData, axis: Axis) -> float:
-    """Long enough to pass through the whole body along that axis."""
+    """Lang genug, um den ganzen Körper entlang dieser Achse zu durchqueren."""
     size = mesh.bounds.size
     index = {"x": 0, "y": 1, "z": 2}[axis]
     return float(size[index]) + BOOLEAN_OVERLAP * 4
 
 
 def _axis_alignment(axis: Axis) -> np.ndarray:
-    """Cylinders are built along Z; turn them onto the requested axis."""
+    """Zylinder werden entlang Z gebaut; auf die gewünschte Achse drehen."""
     if axis == "z":
         return np.eye(4)
     angle = math.radians(90.0)
@@ -188,7 +194,7 @@ def _axis_alignment(axis: Axis) -> np.ndarray:
 
 
 def split_at_plane(mesh: MeshData, plane: SectionPlane) -> tuple[MeshData, MeshData, list[Finding]]:
-    """Cut a body in two, both halves closed (§18.2, §25)."""
+    """Schneidet einen Körper in zwei, beide Hälften geschlossen (§18.2, §25)."""
     first = cut(mesh, plane)
     second = cut(mesh, plane.flipped())
     findings: list[Finding] = []
@@ -203,25 +209,26 @@ def split_at_plane(mesh: MeshData, plane: SectionPlane) -> tuple[MeshData, MeshD
     return first.mesh, second.mesh, findings
 
 
-#: How many build plates one scene may be spread over. Not a technical limit —
-#: past this many, whoever is printing wants a second project rather than a
-#: list nobody can keep track of.
+#: Über wie viele Druckplatten eine Szene verteilt werden darf. Keine
+#: technische Grenze — jenseits davon will, wer druckt, ein zweites Projekt
+#: statt einer Liste, die niemand mehr überblickt.
 MAX_PLATES = 12
 
 
 def compensate_elephant_foot(
     mesh: MeshData, profile: Profile, height: float = 0.6, amount: float | None = None
 ) -> tuple[MeshData, list[Finding]]:
-    """Pull the first layers in by what the first layer spreads out (§25, §28.3).
+    """Zieht die ersten Schichten um das ein, was die erste Schicht
+    auseinanderläuft (§25, §28.3).
 
-    The value comes from the material profile, never from a guess (rule 7): a
-    calibration measures it, and a part built before that calibration gets it
-    when the profile changes.
+    Der Wert kommt aus dem Materialprofil, nie aus einer Schätzung (Regel 7):
+    eine Kalibrierung misst ihn, und ein Teil von vor dieser Kalibrierung
+    bekommt ihn, sobald sich das Profil ändert.
 
-    A straight step, not a taper — which is exactly what a slicer's "elephant
-    foot compensation" does too. A taper would need a loft, and the mesh kernel
-    has none; the B-Rep kernel could do it exactly (§30) and does not have to,
-    because the printed result is the same.
+    Eine gerade Stufe, keine Schräge — genau das tut auch die
+    „Elefantenfuß-Kompensation" eines Slicers. Eine Schräge bräuchte einen
+    Loft, und der Mesh-Kern hat keinen; der B-Rep-Kern könnte es exakt (§30)
+    und muss nicht, denn das gedruckte Ergebnis ist dasselbe.
     """
     from shapely.geometry import Polygon as ShapelyPolygon
 
@@ -247,8 +254,8 @@ def compensate_elephant_foot(
             )
         ]
 
-    # What has to go: the ring between the real outline and the pulled-in one,
-    # over the height of the first layers.
+    # Was weg muss: der Ring zwischen dem echten Umriss und dem eingezogenen,
+    # über die Höhe der ersten Schichten.
     ring = section.difference(pulled)
     if ring.is_empty:
         return mesh, []
@@ -277,7 +284,7 @@ def compensate_elephant_foot(
 
 @dataclass(frozen=True, slots=True)
 class Arrangement:
-    """Where the bodies ended up, and on which plate."""
+    """Wo die Körper gelandet sind, und auf welcher Platte."""
 
     meshes: list[MeshData]
     plates: list[int]
@@ -291,15 +298,17 @@ class Arrangement:
 def arrange_on_bed(
     meshes: list[MeshData], profile: Profile, spacing: float = 5.0, plates: int = 1
 ) -> Arrangement:
-    """Lay the bodies out on the plate in a row, then wrap into rows (§25).
+    """Legt die Körper in einer Reihe auf die Platte, dann in Zeilen
+    umbrechend (§25).
 
-    Deliberately simple: a shelf packing that anyone can predict beats a clever
-    one that moves parts around for reasons nobody can see.
+    Bewusst einfach: ein Regal-Packen, das jeder vorhersagen kann, schlägt ein
+    kluges, das Teile aus Gründen verschiebt, die niemand sieht.
 
-    What does not fit goes on the next plate — up to ``plates`` of them. More
-    parts than plates is not an error to hide: the last plate takes the rest and
-    the report says it is overfull, because a part silently left out of an
-    arrangement is a part that never gets printed.
+    Was nicht passt, kommt auf die nächste Platte — bis zu ``plates`` davon.
+    Mehr Teile als Platten sind kein Fehler zum Verstecken: die letzte Platte
+    nimmt den Rest, und der Bericht sagt, dass sie übervoll ist — denn ein
+    Teil, das still aus einer Anordnung fällt, ist ein Teil, das nie gedruckt
+    wird.
     """
     width, depth, _height = profile.printer.build_volume
     arranged: list[MeshData] = []
@@ -351,7 +360,7 @@ def arrange_on_bed(
 
 
 def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile) -> bool:
-    """Does anything on the last plate stick out of it?"""
+    """Steht auf der letzten Platte etwas über sie hinaus?"""
     last = max(plates, default=0)
     on_last = [mesh for mesh, plate in zip(meshes, plates, strict=True) if plate == last]
     return bool(check_build_volume(on_last, profile))
@@ -360,10 +369,11 @@ def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile) -> bo
 def check_build_volume(
     meshes: list[MeshData], profile: Profile, plates: list[int] | None = None
 ) -> list[Finding]:
-    """What sticks out of the build volume is reported, never quietly scaled.
+    """Was über den Bauraum hinaussteht, wird gemeldet, nie still skaliert.
 
-    Checked per plate: two objects at the same place on different plates are
-    not a problem, and neither is a plate that is full while the next is empty.
+    Geprüft je Platte: zwei Objekte an derselben Stelle auf verschiedenen
+    Platten sind kein Problem, und eine volle Platte neben einer leeren auch
+    nicht.
     """
     width, depth, height = profile.printer.build_volume
     allowed = BoundingBox((-width / 2.0, -depth / 2.0, 0.0), (width / 2.0, depth / 2.0, height))
@@ -397,16 +407,17 @@ def check_build_volume(
 
 
 def check_collisions(meshes: list[MeshData], clearance: float = 0.0) -> list[Finding]:
-    """Do two bodies really overlap (§18.6)?
+    """Überschneiden sich zwei Körper wirklich (§18.6)?
 
-    Two stages, because the cheap answer is wrong often enough to matter. Boxes
-    first: they rule out almost every pair for nothing. What survives that gets
-    asked properly — two parts that hook into each other have overlapping boxes
-    and touch nowhere, and a report that calls those a collision is a report
-    people learn to ignore.
+    Zwei Stufen, weil die billige Antwort oft genug falsch ist, um zu zählen.
+    Erst die Quader: sie schließen fast jedes Paar umsonst aus. Was das
+    übersteht, wird richtig gefragt — zwei Teile, die ineinandergreifen, haben
+    überlappende Quader und berühren sich nirgends, und ein Bericht, der das
+    Kollision nennt, ist ein Bericht, den Leute zu ignorieren lernen.
 
-    Where the exact answer cannot be had — an open body has no inside — the box
-    stands, and the finding says which of the two it is.
+    Wo die exakte Antwort nicht zu haben ist — ein offener Körper hat kein
+    Innen —, bleibt der Quader stehen, und der Befund sagt, welcher von beiden
+    es ist.
     """
     findings: list[Finding] = []
     for first in range(len(meshes)):
@@ -416,9 +427,10 @@ def check_collisions(meshes: list[MeshData], clearance: float = 0.0) -> list[Fin
 
             exact = _really_overlap(meshes[first], meshes[second], clearance)
             if exact is False:
-                # Boxes overlap, bodies do not touch. That is an assembly, not
-                # a problem, and saying so for every pair of a product would be
-                # the noise that makes a report unreadable.
+                # Quader überlappen, Körper berühren sich nicht. Das ist eine
+                # Baugruppe, kein Problem — und es für jedes Paar eines
+                # Produkts zu sagen, wäre das Rauschen, das einen Bericht
+                # unlesbar macht.
                 continue
             findings.append(
                 Finding(
@@ -436,14 +448,15 @@ def check_collisions(meshes: list[MeshData], clearance: float = 0.0) -> list[Fin
 
 
 def _really_overlap(first: MeshData, second: MeshData, clearance: float) -> bool | None:
-    """Do the bodies share volume, or come closer than ``clearance``?
+    """Teilen sich die Körper Volumen, oder kommen sie sich näher als
+    ``clearance``?
 
-    ``None`` when that cannot be decided — an open body has no inside, and
-    guessing one would turn a warning into a lie.
+    ``None``, wenn sich das nicht entscheiden lässt — ein offener Körper hat
+    kein Innen, und eines zu raten machte aus einer Warnung eine Lüge.
 
-    :func:`shared_volume` asks the kernel directly rather than going through the
-    fallback chain of §17.2, and counts a mere touch as nothing — two parts that
-    stand next to each other on the plate are not in each other's way.
+    :func:`shared_volume` fragt den Kern direkt, statt durch die Rückfallkette
+    aus §17.2 zu gehen, und zählt bloßes Berühren als nichts — zwei Teile
+    nebeneinander auf der Platte stehen sich nicht im Weg.
     """
     if not (first.is_watertight and second.is_watertight):
         return None
@@ -453,14 +466,14 @@ def _really_overlap(first: MeshData, second: MeshData, clearance: float) -> bool
     if clearance <= EPS_GEOM:
         return False
 
-    # Apart, but perhaps not far enough. Measured from the surface, which is
-    # what a spacing on the plate means.
+    # Auseinander, aber vielleicht nicht weit genug. Gemessen ab der
+    # Oberfläche — das ist es, was ein Abstand auf der Platte bedeutet.
     try:
         query = trimesh.proximity.ProximityQuery(first.raw)
         _closest, distance, _face = query.on_surface(np.asarray(second.raw.vertices, dtype=float))
     except PROGRAMMING_ERRORS:
         raise
-    except Exception:  # a proximity query on a broken body fails in its own ways
+    except Exception:  # eine Abstandsanfrage an einen kaputten Körper scheitert auf eigene Arten
         return False
     return bool(len(distance)) and float(np.min(distance)) < clearance
 

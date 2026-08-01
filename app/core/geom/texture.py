@@ -1,17 +1,19 @@
-"""From a texture to printable slots (Bauplan §20).
+"""Von einer Textur zu druckbaren Slots (Bauplan §20).
 
-A generated body arrives with a texture of thousands of colours; a printer has
-four, or five, or one. The way from the one to the other is the one §20 names:
-back-project onto the triangles, quantise onto the number of filaments loaded,
-smooth against single-triangle speckle, store as slots.
+Ein erzeugter Körper kommt mit einer Textur aus tausenden Farben an; ein
+Drucker hat vier, oder fünf, oder eine. Der Weg vom einen zum anderen ist der,
+den §20 benennt: auf die Dreiecke zurückprojizieren, auf die Zahl der
+geladenen Filamente quantisieren, gegen Einzeldreieck-Sprenkel glätten, als
+Slots ablegen.
 
-The quantisation is k-Means, **with a stored starting value**. That is the whole
-reason it is written out here rather than pulled from a library with a global
-random state: the same model with the same seed has to come out the same way,
-or the file does not describe the part any more (§11.3).
+Die Quantisierung ist k-Means, **mit gespeichertem Startwert**. Genau darum
+steht sie hier ausgeschrieben statt aus einer Bibliothek mit globalem
+Zufallszustand geholt: dasselbe Modell mit demselben Startwert muss gleich
+herauskommen, sonst beschreibt die Datei das Teil nicht mehr (§11.3).
 
-And it is never as fine as the render. Two colours that a screen keeps apart end
-up in the same filament, and the operation says so rather than pretending.
+Und sie ist nie so fein wie die Darstellung. Zwei Farben, die ein Bildschirm
+auseinanderhält, landen im selben Filament — und die Operation sagt das,
+statt so zu tun als nicht.
 """
 
 from __future__ import annotations
@@ -29,21 +31,23 @@ from app.i18n import tr
 
 _log = get_logger(__name__)
 
-#: How often the centres are moved before the result is called settled. Colour
-#: space is small and k is tiny; this converges long before it runs out.
+#: Wie oft die Zentren bewegt werden, bevor das Ergebnis als eingependelt
+#: gilt. Der Farbraum ist klein und k winzig; das konvergiert lange vor dem
+#: Ende.
 ROUNDS = 20
 
-#: How often the speckle filter runs. Twice catches a pair of stray triangles
-#: sitting next to each other; more than that starts eating real detail.
+#: Wie oft der Sprenkelfilter läuft. Zweimal erwischt ein Paar verirrter
+#: Dreiecke nebeneinander; mehr fängt an, echtes Detail zu fressen.
 SMOOTH_ROUNDS = 2
 
-#: Below this share of the surface a colour is not worth a filament change.
+#: Unter diesem Anteil der Oberfläche ist eine Farbe keinen Filamentwechsel
+#: wert.
 MIN_SHARE = 0.002
 
 
 @dataclass(frozen=True, slots=True)
 class Quantisation:
-    """The assignment and the colours it settled on."""
+    """Die Zuordnung und die Farben, auf die sie sich eingependelt hat."""
 
     labels: np.ndarray
     centres: np.ndarray
@@ -54,11 +58,12 @@ class Quantisation:
 
 
 def face_colours(mesh: trimesh.Trimesh) -> np.ndarray | None:
-    """One colour per triangle, in 0..1 — or ``None`` when the body has none.
+    """Eine Farbe je Dreieck, in 0..1 — oder ``None``, wenn der Körper keine
+    hat.
 
-    Sampled at the centre of the triangle rather than averaged from its
-    corners: on the boundary between two colours the corner average invents a
-    third one that is in neither the texture nor the filament drawer.
+    Abgetastet in der Mitte des Dreiecks statt aus seinen Ecken gemittelt: an
+    der Grenze zwischen zwei Farben erfindet der Eckmittelwert eine dritte,
+    die es weder in der Textur noch in der Filamentschublade gibt.
     """
     visual: Any = mesh.visual
     kind = getattr(visual, "kind", None)
@@ -69,8 +74,8 @@ def face_colours(mesh: trimesh.Trimesh) -> np.ndarray | None:
         sampled = _sample_texture(mesh)
         if sampled is not None:
             return sampled
-        # A texture without an image left: trimesh can still turn the UVs into
-        # per-vertex colours, and that is better than no colour at all.
+        # Eine Textur ohne verbliebenes Bild: trimesh kann aus den UVs immer
+        # noch Farben je Eckpunkt machen, und das ist besser als gar keine.
         visual = visual.to_color()
 
     colours = np.asarray(getattr(visual, "face_colors", ()), dtype=float)
@@ -80,7 +85,7 @@ def face_colours(mesh: trimesh.Trimesh) -> np.ndarray | None:
 
 
 def _sample_texture(mesh: trimesh.Trimesh) -> np.ndarray | None:
-    """Read the image at the UV centre of every triangle."""
+    """Liest das Bild an der UV-Mitte jedes Dreiecks."""
     material = getattr(mesh.visual, "material", None)
     image = getattr(material, "image", None)
     uv = getattr(mesh.visual, "uv", None)
@@ -91,17 +96,18 @@ def _sample_texture(mesh: trimesh.Trimesh) -> np.ndarray | None:
     height, width = picture.shape[:2]
 
     middle = np.asarray(uv, dtype=float)[mesh.faces].mean(axis=1)
-    # UV runs from the bottom left, image rows from the top left.
+    # UV läuft von unten links, Bildzeilen von oben links.
     columns = np.clip((middle[:, 0] % 1.0) * width, 0, width - 1).astype(int)
     rows = np.clip((1.0 - middle[:, 1] % 1.0) * height, 0, height - 1).astype(int)
     return np.asarray(picture[rows, columns], dtype=float)
 
 
 def quantise(colours: np.ndarray, count: int, seed: int) -> Quantisation:
-    """k-Means over the triangle colours, reproducible for a given ``seed``.
+    """k-Means über die Dreiecksfarben, reproduzierbar für ein gegebenes
+    ``seed``.
 
-    Fewer distinct colours than filaments is not a failure — it is a body that
-    needs three filaments, and then three is the answer.
+    Weniger verschiedene Farben als Filamente ist kein Fehlschlag — es ist ein
+    Körper, der drei Filamente braucht, und dann sind drei die Antwort.
     """
     if count < 1:
         raise ValueError("a quantisation needs at least one colour")
@@ -127,11 +133,13 @@ def quantise(colours: np.ndarray, count: int, seed: int) -> Quantisation:
 
 
 def _starting_centres(colours: np.ndarray, count: int, seed: int) -> np.ndarray:
-    """k-Means++ start, drawn from one seeded generator and nothing else.
+    """k-Means++-Start, gezogen aus einem gesetzten Generator und sonst
+    nichts.
 
-    Spreading the first centres apart matters more here than anywhere: with a
-    random start two filaments can land in the same shade of grey and the model
-    comes out with one colour fewer than the printer has loaded.
+    Die ersten Zentren auseinanderzuziehen zählt hier mehr als irgendwo
+    sonst: mit zufälligem Start landen zwei Filamente im selben Grauton, und
+    das Modell kommt mit einer Farbe weniger heraus, als der Drucker geladen
+    hat.
     """
     generator = np.random.default_rng(seed)
     chosen = [colours[int(generator.integers(len(colours)))]]
@@ -152,12 +160,13 @@ def _assign(colours: np.ndarray, centres: np.ndarray) -> np.ndarray:
 
 
 def smooth(mesh: trimesh.Trimesh, labels: np.ndarray, rounds: int = SMOOTH_ROUNDS) -> np.ndarray:
-    """Take away the colours no neighbour agrees with.
+    """Nimmt die Farben weg, denen kein Nachbar zustimmt.
 
-    A single triangle in its own colour is not a detail a printer can hold — it
-    is a filament change for a surface smaller than the nozzle. Only triangles
-    that disagree with *all* their neighbours are touched; a real boundary has
-    triangles of its own colour on one side and survives.
+    Ein einzelnes Dreieck in eigener Farbe ist kein Detail, das ein Drucker
+    halten kann — es ist ein Filamentwechsel für eine Fläche kleiner als die
+    Düse. Angefasst werden nur Dreiecke, die *allen* ihren Nachbarn
+    widersprechen; eine echte Grenze hat auf einer Seite Dreiecke ihrer
+    eigenen Farbe und überlebt.
     """
     adjacency = np.asarray(mesh.face_adjacency)
     if not len(adjacency) or not len(labels):
@@ -177,10 +186,12 @@ def smooth(mesh: trimesh.Trimesh, labels: np.ndarray, rounds: int = SMOOTH_ROUND
 
 
 def to_slots(mesh: MeshData, count: int, seed: int) -> tuple[MeshData, list[MaterialSlot]]:
-    """The whole way of §20: texture in, slots and filament colours out.
+    """Der ganze Weg aus §20: Textur hinein, Slots und Filamentfarben
+    heraus.
 
-    Returns the body unchanged when it carries no colour at all — a grey STL
-    stays a grey STL rather than being given colours it never had.
+    Gibt den Körper unverändert zurück, wenn er gar keine Farbe trägt — ein
+    graues STL bleibt ein graues STL, statt Farben zu bekommen, die es nie
+    hatte.
     """
     colours = face_colours(mesh.raw)
     if colours is None:
@@ -205,11 +216,11 @@ def to_slots(mesh: MeshData, count: int, seed: int) -> tuple[MeshData, list[Mate
 def _drop_the_negligible(
     mesh: trimesh.Trimesh, labels: np.ndarray, centres: np.ndarray, colours: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Throw away the slots that would cost a filament change for nothing.
+    """Wirft die Slots weg, die einen Filamentwechsel für nichts kosteten.
 
-    Measured by area, not by triangle count: a fine mesh can put a thousand
-    triangles into a patch the size of a fingernail, and a coarse one one
-    triangle across half the part.
+    Gemessen an der Fläche, nicht an der Dreieckszahl: ein feines Netz legt
+    tausend Dreiecke in einen Fleck von Fingernagelgröße, ein grobes ein
+    Dreieck über das halbe Teil.
     """
     areas = np.asarray(mesh.area_faces, dtype=float)
     total = float(areas.sum()) or 1.0

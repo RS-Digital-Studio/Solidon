@@ -1,13 +1,14 @@
-"""Primitives and OpenSCAD bodies (Bauplan §25, category "Boolesch").
+"""Primitive und OpenSCAD-Körper (Bauplan §25, Kategorie „Boolesch").
 
-Pillar A starts here: without a way to put a first body into an empty scene,
-"build me a bracket" has nothing to stand on. Three primitives are enough for
-that — everything else is a boolean of those and a part from the library, which
-is exactly the order the rule set asks for (§39: parts before primitives).
+Säule A beginnt hier: ohne einen Weg, einen ersten Körper in eine leere Szene
+zu setzen, hat „bau mir eine Halterung" nichts, worauf es stehen könnte. Drei
+Primitive genügen dafür — alles andere ist eine Boolesche Op daraus und ein
+Baustein aus der Bibliothek, und genau diese Reihenfolge verlangt die
+Regelsammlung (§39: Bausteine vor Primitiven).
 
-The OpenSCAD body is the fallback level (§24.1) and stays optional: the source
-is checked before it runs (§32), and without an installation the operation says
-so instead of failing halfway.
+Der OpenSCAD-Körper ist die Rückfallebene (§24.1) und bleibt optional: der
+Quelltext wird vor dem Lauf geprüft (§32), und ohne Installation sagt die
+Operation das, statt auf halbem Weg zu scheitern.
 """
 
 from __future__ import annotations
@@ -208,7 +209,9 @@ class ScadParams(BaseParams):
     ),
 )
 def create_from_scad(ctx: OpContext) -> OpResult:
-    """§24.1: the fallback. The check in §32 happens before anything runs."""
+    """§24.1: die Rückfallebene. Die Prüfung aus §32 läuft, bevor irgendetwas
+    ausgeführt wird.
+    """
     params = cast(ScadParams, ctx.params)
     result = openscad.render(params.source)
     mesh = read_mesh(result.stl, ".stl")
@@ -217,7 +220,9 @@ def create_from_scad(ctx: OpContext) -> OpResult:
 
 
 def _object(name: str, mesh: MeshData, height: float) -> SceneObject:
-    """A fresh body with the one feature it can honestly promise: its top face."""
+    """Ein frischer Körper mit dem einen Merkmal, das er ehrlich versprechen
+    kann: seiner Oberseite.
+    """
     size = mesh.bounds.size
     features: dict[str, Feature] = dict(
         [

@@ -1,23 +1,24 @@
-"""Auto split: cutting a part until it fits on the plate (Bauplan §22.3, §25).
+"""Auto Split: ein Teil schneiden, bis es auf die Platte passt (Bauplan
+§22.3, §25).
 
-The parting plane is found with the same machinery as the orientation search —
-the layer analysis (§22.3). For a set of cut positions the cross-section is
-computed and judged, and the best one wins. What makes a section good is not
-its size:
+Die Trennebene wird mit derselben Maschinerie gefunden wie die
+Orientierungssuche — der Schichtanalyse (§22.3). Für eine Reihe von
+Schnittpositionen wird der Querschnitt gerechnet und beurteilt, der beste
+gewinnt. Was einen Schnitt gut macht, ist nicht seine Größe:
 
-* **One contour, not five.** A plane through five thin arms leaves five thin
-  bridges, and every one of them is a place the part breaks at.
-* **Prismatic.** Where the section barely changes over a millimetre the cut
-  runs through a straight stretch — the two faces meet flat, and a dowel finds
-  material on both sides. Where it changes fast the plane is cutting across a
-  curve.
-* **Balanced.** Of two cuts that are equally good, the one nearer the middle
-  wins: it takes fewer cuts to get everything onto the plate.
+* **Eine Kontur, nicht fünf.** Eine Ebene durch fünf dünne Arme hinterlässt
+  fünf dünne Brücken, und jede davon ist eine Stelle, an der das Teil bricht.
+* **Prismatisch.** Wo sich der Querschnitt über einen Millimeter kaum ändert,
+  läuft der Schnitt durch ein gerades Stück — die zwei Flächen treffen sich
+  plan, und ein Passstift findet auf beiden Seiten Material. Wo er sich
+  schnell ändert, schneidet die Ebene quer durch eine Kurve.
+* **Ausgewogen.** Von zwei gleich guten Schnitten gewinnt der näher an der
+  Mitte: er braucht weniger Schnitte, bis alles auf der Platte liegt.
 
-Where no plane helps at all, the convex decomposition is asked where the body
-naturally comes apart, and the cut is placed there — as a plane, not as the
-hulls themselves. Hull pieces are an approximation, and glueing an
-approximation back together gives an approximate part (§11.1).
+Wo gar keine Ebene hilft, wird die konvexe Zerlegung gefragt, wo der Körper
+von selbst auseinanderfällt, und der Schnitt dorthin gelegt — als Ebene,
+nicht als die Hüllen selbst. Hüllenstücke sind eine Näherung, und eine
+Näherung wieder zusammenzukleben ergibt ein genähertes Teil (§11.1).
 """
 
 from __future__ import annotations
@@ -39,41 +40,44 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: How many cut positions are tried per axis. Enough to find the flat spot on a
-#: real part, few enough that the search stays under a second.
+#: Wie viele Schnittpositionen je Achse probiert werden. Genug, um die flache
+#: Stelle eines echten Teils zu finden, wenig genug, dass die Suche unter
+#: einer Sekunde bleibt.
 SAMPLES = 33
 
-#: How far the part has to stay below the build volume. Not decoration: a part
-#: that exactly fills the plate cannot be arranged next to anything.
+#: Wie weit das Teil unter dem Bauraum bleiben muss. Keine Dekoration: ein
+#: Teil, das die Platte exakt füllt, lässt sich neben nichts mehr anordnen.
 MARGIN = 2.0
 
-#: Upper bound on the pieces. A part that needs more than this is not a split
-#: problem, it is the wrong printer — and the report says so instead of running.
+#: Obergrenze der Stücke. Ein Teil, das mehr braucht, ist kein
+#: Teilungsproblem, sondern der falsche Drucker — und der Bericht sagt das,
+#: statt loszulaufen.
 MAX_PARTS = 12
 
-#: How far above and below a candidate the section is measured to see whether
-#: the body is prismatic there.
+#: Wie weit über und unter einem Kandidaten der Querschnitt gemessen wird, um
+#: zu sehen, ob der Körper dort prismatisch ist.
 PRISM_STEP = 0.5
 
-#: Weights of the three criteria. Contours dominate on purpose: a seam that
-#: falls apart into several bridges is worse than any amount of imbalance.
+#: Gewichte der drei Kriterien. Konturen dominieren mit Absicht: eine Naht,
+#: die in mehrere Brücken zerfällt, ist schlimmer als jede Unwucht.
 CONTOUR_WEIGHT = 1.0
 PRISM_WEIGHT = 0.6
 BALANCE_WEIGHT = 0.25
 
-#: Above this score the sampled planes are all mediocre, and the convex
-#: decomposition is asked for a second opinion.
+#: Über dieser Punktzahl sind die abgetasteten Ebenen alle mittelmäßig, und
+#: die konvexe Zerlegung wird um eine zweite Meinung gebeten.
 HINT_THRESHOLD = 0.3
 
-#: How much of the usable length the first cut takes off a body that is more
-#: than twice too long. Not the full length: the search needs room to find a
-#: seam, and a piece cut to the exact limit cannot be arranged next to anything.
+#: Wie viel der nutzbaren Länge der erste Schnitt von einem Körper nimmt, der
+#: mehr als doppelt zu lang ist. Nicht die volle Länge: die Suche braucht
+#: Raum für eine Naht, und ein exakt auf die Grenze geschnittenes Stück lässt
+#: sich neben nichts anordnen.
 FIRST_SLICE_SHARE = 0.7
 
 
 @dataclass(frozen=True, slots=True)
 class Candidate:
-    """One possible parting plane, and what speaks for it."""
+    """Eine mögliche Trennebene, und was für sie spricht."""
 
     axis: Axis
     position: float
@@ -88,11 +92,12 @@ class Candidate:
 
 @dataclass(frozen=True, slots=True)
 class Step:
-    """One cut of the plan: which piece was divided, and along which plane.
+    """Ein Schnitt des Plans: welches Stück geteilt wurde, entlang welcher
+    Ebene.
 
-    The index is what turns a search result into a stack: the caller walks the
-    steps in order and knows at every point which object the next cut applies
-    to, without having to re-derive it from the geometry.
+    Der Index macht aus einem Suchergebnis einen Stapel: der Aufrufer geht
+    die Schritte der Reihe nach und weiß an jedem Punkt, auf welches Objekt
+    der nächste Schnitt wirkt — ohne es aus der Geometrie zurückzuleiten.
     """
 
     part_index: int
@@ -101,7 +106,8 @@ class Step:
 
 @dataclass(slots=True)
 class SplitOutcome:
-    """The pieces, the cuts that made them, and what is worth saying about it."""
+    """Die Stücke, die Schnitte, die sie gemacht haben, und was darüber zu
+    sagen ist."""
 
     parts: list[MeshData]
     cuts: list[Step] = field(default_factory=list)
@@ -115,14 +121,14 @@ class SplitOutcome:
 def oversize(
     mesh: MeshData, profile: Profile, margin: float = MARGIN
 ) -> tuple[float, float, float]:
-    """How much the body sticks out of the build volume, per axis, in mm."""
+    """Wie weit der Körper über den Bauraum hinaussteht, je Achse, in mm."""
     limits = [value - 2.0 * margin for value in profile.printer.build_volume]
     size = mesh.bounds.size
     return tuple(max(0.0, float(size[index]) - limits[index]) for index in range(3))  # type: ignore[return-value]
 
 
 def fits(mesh: MeshData, profile: Profile, margin: float = MARGIN) -> bool:
-    """Does the body fit on the plate at all, in the orientation it has?"""
+    """Passt der Körper überhaupt auf die Platte, in der Lage, die er hat?"""
     return max(oversize(mesh, profile, margin)) <= EPS_GEOM
 
 
@@ -133,11 +139,13 @@ def split_to_fit(
     max_parts: int = MAX_PARTS,
     samples: int = SAMPLES,
 ) -> SplitOutcome:
-    """Cut until every piece fits, or until it is clear that cutting will not do it.
+    """Schneidet, bis jedes Stück passt — oder klar ist, dass Schneiden es
+    nicht richten wird.
 
-    Breadth first: the piece that sticks out furthest is cut next. That keeps
-    the number of pieces down — cutting the worst offender first is what a
-    person does with a saw, and for the same reason.
+    In der Breite zuerst: das Stück, das am weitesten übersteht, wird als
+    Nächstes geschnitten. Das hält die Stückzahl klein — den schlimmsten
+    Übeltäter zuerst zu schneiden ist, was ein Mensch mit einer Säge tut, und
+    aus demselben Grund.
     """
     outcome = SplitOutcome(parts=[mesh])
     if fits(mesh, profile):
@@ -190,7 +198,7 @@ def split_to_fit(
 
 
 def _worst(parts: list[MeshData], profile: Profile) -> int | None:
-    """Which piece sticks out furthest — or ``None`` when they all fit."""
+    """Welches Stück am weitesten übersteht — oder ``None``, wenn alle passen."""
     overshoot = [max(oversize(part, profile)) for part in parts]
     largest = max(overshoot, default=0.0)
     if largest <= EPS_GEOM:
@@ -204,10 +212,10 @@ def find_plane(
     *,
     samples: int = SAMPLES,
 ) -> Candidate | None:
-    """The best parting plane for this body, or ``None`` when none helps.
+    """Die beste Trennebene für diesen Körper, oder ``None``, wenn keine hilft.
 
-    Only planes that actually make the piece fit better count. A beautiful seam
-    that leaves both halves too large is not an answer.
+    Nur Ebenen zählen, die das Stück wirklich passender machen. Eine schöne
+    Naht, die beide Hälften zu groß lässt, ist keine Antwort.
     """
     axis = _axis_to_cut(mesh, profile)
     if axis is None:
@@ -220,8 +228,9 @@ def find_plane(
     if best is not None and best.score <= HINT_THRESHOLD:
         return best
 
-    # Nothing convincing among the sampled planes: ask the decomposition where
-    # the body comes apart by itself, and judge that position by the same rules.
+    # Nichts Überzeugendes unter den abgetasteten Ebenen: die Zerlegung
+    # fragen, wo der Körper von selbst auseinanderfällt, und diese Position
+    # nach denselben Regeln beurteilen.
     hinted = _from_decomposition(mesh, axis, window)
     if hinted is not None and (best is None or hinted.score < best.score):
         return hinted
@@ -229,7 +238,8 @@ def find_plane(
 
 
 def _axis_to_cut(mesh: MeshData, profile: Profile) -> Axis | None:
-    """Cut across the direction that does not fit — the longest one that sticks out."""
+    """Quer zu der Richtung schneiden, die nicht passt — der längsten, die
+    übersteht."""
     over = oversize(mesh, profile)
     if max(over) <= EPS_GEOM:
         return None
@@ -237,12 +247,13 @@ def _axis_to_cut(mesh: MeshData, profile: Profile) -> Axis | None:
 
 
 def _window(mesh: MeshData, profile: Profile, axis: Axis) -> tuple[float, float]:
-    """The range of cut positions worth trying.
+    """Der Bereich der Schnittpositionen, die sich zu probieren lohnen.
 
-    Normally that is where *both* halves come out short enough. A body more
-    than twice as long as the plate has no such position — there the first cut
-    takes off one piece that fits and leaves the rest for the next round, which
-    is what somebody with a saw does too.
+    Normalerweise ist das, wo *beide* Hälften kurz genug herauskommen. Ein
+    Körper, mehr als doppelt so lang wie die Platte, hat keine solche
+    Position — dort nimmt der erste Schnitt ein passendes Stück ab und lässt
+    den Rest für die nächste Runde. Auch das tut jemand mit einer Säge
+    genauso.
     """
     index = "xyz".index(axis)
     limit = profile.printer.build_volume[index] - 2.0 * MARGIN
@@ -252,14 +263,15 @@ def _window(mesh: MeshData, profile: Profile, axis: Axis) -> tuple[float, float]
     earliest = high - limit
     latest = low + limit
     if earliest <= latest:
-        # Never cut so close to the end that a sliver comes off.
+        # Nie so nah am Ende schneiden, dass ein Span abfällt.
         inset = (high - low) * 0.05
         return (max(earliest, low + inset), min(latest, high - inset))
     return (low + limit * FIRST_SLICE_SHARE, low + limit)
 
 
 def _judge(mesh: MeshData, axis: Axis, positions: np.ndarray) -> list[Candidate]:
-    """Section the body at every candidate position and score what comes out."""
+    """Schneidet den Körper an jeder Kandidatenposition und bewertet, was
+    herauskommt."""
     heights = np.concatenate([positions - PRISM_STEP, positions, positions + PRISM_STEP])
     sections = sections_along(mesh, axis, heights)
     count = len(positions)
@@ -295,7 +307,7 @@ def _judge(mesh: MeshData, axis: Axis, positions: np.ndarray) -> list[Candidate]
 
 
 def upright(axis: Axis) -> np.ndarray:
-    """The turn that puts ``axis`` on +Z. Identity for Z itself."""
+    """Die Drehung, die ``axis`` auf +Z legt. Für Z selbst die Identität."""
     if axis == "z":
         return np.eye(4)
     return np.asarray(
@@ -305,12 +317,13 @@ def upright(axis: Axis) -> np.ndarray:
 
 
 def sections_along(mesh: MeshData, axis: Axis, heights: np.ndarray) -> list[Any]:
-    """Cross-sections along any axis, by turning that axis upright first.
+    """Querschnitte entlang beliebiger Achsen — die Achse wird erst aufgerichtet.
 
-    The layer analysis cuts along Z and does it well; rotating the body is
-    cheaper than a second implementation, and it keeps the two answers
-    comparable. The polygons are in the turned frame — :func:`upright` gives the
-    matrix back, so a point on them can be put where it belongs in the world.
+    Die Schichtanalyse schneidet entlang Z und kann das gut; den Körper zu
+    drehen ist billiger als eine zweite Umsetzung, und es hält die zwei
+    Antworten vergleichbar. Die Polygone liegen im gedrehten Bezugssystem —
+    :func:`upright` gibt die Matrix her, ein Punkt darauf lässt sich also
+    dorthin legen, wo er in der Welt hingehört.
     """
     body = mesh
     if axis != "z":
@@ -318,9 +331,10 @@ def sections_along(mesh: MeshData, axis: Axis, heights: np.ndarray) -> list[Any]
         turned.apply_transform(upright(axis))
         body = MeshData.of(turned)
 
-    # The layer analysis sorts every triangle into the layers it reaches and
-    # therefore expects the heights in order. The search asks for them in the
-    # order it thought of them, so they are sorted here and put back after.
+    # Die Schichtanalyse sortiert jedes Dreieck in die Schichten, die es
+    # erreicht, und erwartet die Höhen darum geordnet. Die Suche fragt sie in
+    # der Reihenfolge an, in der sie ihr einfielen — also wird hier sortiert
+    # und danach zurückgestellt.
     order = np.argsort(np.asarray(heights, dtype=float))
     sections = cross_sections(body, np.asarray(heights, dtype=float)[order])
     result: list[Any] = [None] * len(order)
@@ -330,7 +344,7 @@ def sections_along(mesh: MeshData, axis: Axis, heights: np.ndarray) -> list[Any]
 
 
 def _cut_in_two(mesh: MeshData, candidate: Candidate) -> tuple[MeshData | None, MeshData | None]:
-    """Both halves of one cut, each with its face closed (§25)."""
+    """Beide Hälften eines Schnitts, jede mit geschlossener Fläche (§25)."""
     from app.core.geom.prepare import split_at_plane
 
     first, second, _findings = split_at_plane(mesh, candidate.plane)
@@ -343,12 +357,13 @@ def _cut_in_two(mesh: MeshData, candidate: Candidate) -> tuple[MeshData | None, 
 def _from_decomposition(
     mesh: MeshData, axis: Axis, window: tuple[float, float]
 ) -> Candidate | None:
-    """Ask where the body naturally comes apart, and judge cutting there.
+    """Fragt, wo der Körper von selbst auseinanderfällt, und beurteilt einen
+    Schnitt dort.
 
-    The convex decomposition is a hint, not the result: its hulls approximate
-    the body, and a part glued together from approximations is an approximate
-    part. What is taken from it is one number — the position where two of its
-    pieces meet along the axis being cut.
+    Die konvexe Zerlegung ist ein Hinweis, nicht das Ergebnis: ihre Hüllen
+    nähern den Körper an, und ein aus Näherungen zusammengeklebtes Teil ist
+    ein genähertes Teil. Genommen wird von ihr eine Zahl — die Position, an
+    der zwei ihrer Stücke entlang der Schnittachse aneinanderstoßen.
     """
     pieces = convex_parts(mesh)
     if len(pieces) < 2:
@@ -367,18 +382,18 @@ def _from_decomposition(
 
 
 def convex_parts(mesh: MeshData, *, limit: int = 8) -> list[MeshData]:
-    """Convex pieces of the body, largest first — empty when V-HACD is missing.
+    """Konvexe Stücke des Körpers, größte zuerst — leer, wenn V-HACD fehlt.
 
-    No seed: this V-HACD offers no randomisation knob and returns the same
-    hulls for the same body, which is what §11.3 wants of it. Without the
-    module the answer is an empty list and the caller says so; it is an
-    optional dependency and never a crash.
+    Kein Startwert: dieses V-HACD bietet keinen Zufallsregler und liefert für
+    denselben Körper dieselben Hüllen — genau das, was §11.3 von ihm will.
+    Ohne das Modul ist die Antwort eine leere Liste, und der Aufrufer sagt
+    es; es ist eine optionale Abhängigkeit und nie ein Absturz.
     """
     try:
         raw = mesh.raw.convex_decomposition(maxConvexHulls=limit)
     except PROGRAMMING_ERRORS:
         raise
-    except Exception as problem:  # the module is optional, and V-HACD is C++
+    except Exception as problem:  # das Modul ist optional, und V-HACD ist C++
         _log.info("convex decomposition unavailable: %s", problem)
         return []
     pieces = raw if isinstance(raw, list) else [raw]

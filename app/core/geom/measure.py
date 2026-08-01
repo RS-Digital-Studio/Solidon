@@ -1,12 +1,13 @@
-"""Measuring (Bauplan §18.3).
+"""Messen (Bauplan §18.3).
 
-The viewport is not a display window but the inspection tool, and measuring is
-the part of it that has to be exact. So the arithmetic lives here, where it can
-be checked against known bodies, and the surface only collects clicks.
+Der Viewport ist kein Anzeigefenster, sondern das Prüfwerkzeug, und Messen ist
+der Teil davon, der exakt sein muss. Also lebt die Rechnung hier, wo sie gegen
+bekannte Körper geprüft werden kann, und die Oberfläche sammelt nur Klicks.
 
-Snapping is what makes a measurement reproducible: a click never lands exactly
-on a corner, so it is pulled to the nearest vertex or edge before anything is
-computed. Rounding happens on display only (§11.2).
+Einrasten ist, was eine Messung reproduzierbar macht: ein Klick landet nie
+genau auf einer Ecke, also wird er auf den nächsten Eckpunkt oder die nächste
+Kante gezogen, bevor irgendetwas gerechnet wird. Gerundet wird nur in der
+Anzeige (§11.2).
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ SNAP_RADIUS_RELATIVE = 0.02
 
 @dataclass(frozen=True, slots=True)
 class SnapResult:
-    """Where a click ended up, and what it was pulled to."""
+    """Wo ein Klick gelandet ist, und worauf er gezogen wurde."""
 
     point: Vec3
     kind: str
@@ -38,7 +39,7 @@ class SnapResult:
 
 @dataclass(frozen=True, slots=True)
 class Measurement:
-    """One dimension that stays until it is deleted (§18.3)."""
+    """Ein Maß, das bleibt, bis es gelöscht wird (§18.3)."""
 
     kind: str
     """``distance``, ``diameter``, ``thickness`` or ``angle``."""
@@ -55,7 +56,9 @@ class Measurement:
 
 @dataclass(slots=True)
 class MeasurementList:
-    """Dimensions of a session. They stay until deleted, never expire on their own."""
+    """Die Maße einer Sitzung. Sie bleiben bis zum Löschen und verfallen
+    nie von selbst.
+    """
 
     entries: list[Measurement] = field(default_factory=list)
 
@@ -83,7 +86,7 @@ def distance(a: Vec3, b: Vec3) -> float:
 
 
 def angle_between(first: Vec3, second: Vec3) -> float:
-    """Angle between two directions in degrees, always the smaller one."""
+    """Winkel zwischen zwei Richtungen in Grad, immer der kleinere."""
     one = np.asarray(first, dtype=float)
     two = np.asarray(second, dtype=float)
     lengths = float(np.linalg.norm(one)) * float(np.linalg.norm(two))

@@ -1,11 +1,11 @@
-"""The mesh hull around the geometry kernel (Bauplan §9, §7).
+"""Die Mesh-Hülle um den Geometriekern (Bauplan §9, §7).
 
-The rest of the core talks to the ``Mesh`` protocol, never to ``trimesh`` or
-``manifold3d`` directly. That is what keeps the kernel exchangeable and makes
-the B-Rep kernel (§30) an addition rather than a rewrite.
+Der Rest des Kerns spricht mit dem ``Mesh``-Protokoll, nie direkt mit
+``trimesh`` oder ``manifold3d``. Das hält den Kern austauschbar und macht den
+B-Rep-Kern (§30) zu einer Ergänzung statt einem Umbau.
 
-A ``MeshData`` is treated as immutable: every operation returns a new one, which
-is what non-destructive editing means one layer down.
+Eine ``MeshData`` gilt als unveränderlich: jede Operation gibt eine neue
+zurück — das ist non-destruktives Bearbeiten, eine Ebene tiefer.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import io
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:  # the 3MF module needs MeshData, so the import can only go one way
+if TYPE_CHECKING:  # das 3MF-Modul braucht MeshData, der Import geht also nur in eine Richtung
     from app.core.export.threemf import Part
 
 import numpy as np
@@ -24,18 +24,18 @@ from app.core.errors import PROGRAMMING_ERRORS, GeometryError, ValidationError
 from app.core.types import BoundingBox, Mesh
 from app.i18n import _
 
-#: Extensions the input stage can read (§25, "Import").
+#: Endungen, die die Eingangsstufe lesen kann (§25, „Import").
 READABLE_SUFFIXES: tuple[str, ...] = (".stl", ".obj", ".ply", ".off", ".glb", ".gltf", ".3mf")
 
 
 @dataclass(frozen=True, slots=True)
 class MeshData:
-    """One body: vertices, triangles and a material slot per triangle (§20)."""
+    """Ein Körper: Eckpunkte, Dreiecke und ein Materialslot je Dreieck (§20)."""
 
     raw: trimesh.Trimesh
     slots: tuple[int, ...] = field(default_factory=tuple)
 
-    # --- protocol ---------------------------------------------------------------
+    # --- Protokoll --------------------------------------------------------------
 
     @property
     def vertex_count(self) -> int:
@@ -75,21 +75,23 @@ class MeshData:
     def slot_indices(self) -> tuple[int, ...]:
         return self.slots
 
-    # --- construction -----------------------------------------------------------
+    # --- Aufbau -----------------------------------------------------------------
 
     @classmethod
     def of(cls, mesh: trimesh.Trimesh, slots: tuple[int, ...] = ()) -> MeshData:
         return cls(raw=mesh, slots=slots)
 
     def replacing(self, mesh: trimesh.Trimesh) -> MeshData:
-        """A new hull around a changed body, keeping the slots where they fit."""
+        """Eine neue Hülle um einen geänderten Körper; die Slots bleiben, wo
+        sie passen."""
         slots = self.slots if len(self.slots) == len(mesh.faces) else ()
         return MeshData(raw=mesh, slots=slots)
 
-    # --- serialisation ----------------------------------------------------------
+    # --- Serialisierung ---------------------------------------------------------
 
     def to_bytes(self) -> bytes:
-        """Lossless form for the disk cache — STL would drop the slots."""
+        """Verlustfreie Form für den Platten-Cache — STL würde die Slots
+        verlieren."""
         buffer = io.BytesIO()
         np.savez_compressed(
             buffer,
@@ -107,23 +109,23 @@ class MeshData:
         return cls(raw=mesh, slots=slots)
 
     def to_stl(self) -> bytes:
-        """Binary STL, for export and for handing over to a slicer (§29)."""
+        """Binäres STL, für den Export und die Übergabe an einen Slicer (§29)."""
         result: bytes = trimesh.exchange.stl.export_stl(self.raw)
         return result
 
 
 def as_mesh_data(mesh: Mesh) -> MeshData:
-    """The concrete mesh behind the protocol.
+    """Das konkrete Netz hinter dem Protokoll.
 
-    Operations declare ``Mesh`` because that is the contract (§9), but the
-    triangle work needs the kernel. Once the B-Rep core arrives (§30) this is
-    where a body of the wrong kind is turned away with a clear message.
+    Operationen deklarieren ``Mesh``, denn das ist der Vertrag (§9) — aber die
+    Dreiecksarbeit braucht den Kern. Hier wird ein Körper der falschen Sorte
+    mit klarer Meldung abgewiesen (§30).
     """
     if isinstance(mesh, MeshData):
         return mesh
-    # §30: the way from B-Rep to mesh is open at any time, so a mesh operation
-    # on an exact body works — on its tessellation, and the object comes out
-    # marked as a mesh afterwards, because that is what it now is.
+    # §30: der Weg von B-Rep zu Mesh steht jederzeit offen — eine Mesh-Op auf
+    # einem exakten Körper funktioniert also: auf seiner Tessellation, und das
+    # Objekt kommt danach als Mesh markiert heraus, denn das ist es jetzt.
     converted = getattr(mesh, "to_mesh", None)
     if callable(converted):
         result = converted()
@@ -136,11 +138,12 @@ def as_mesh_data(mesh: Mesh) -> MeshData:
 
 
 def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
-    """Connected components as triangle indices.
+    """Zusammenhängende Komponenten als Dreiecksindizes.
 
-    Done over the face adjacency rather than ``Trimesh.split`` on purpose:
-    splitting builds submeshes and tries to repair them, which is both slower and
-    a decision the input stage has not made yet (§17.1 step 5).
+    Mit Absicht über die Flächen-Nachbarschaft statt ``Trimesh.split``: das
+    Splitten baut Teilnetze und versucht, sie zu reparieren — das ist
+    langsamer und zugleich eine Entscheidung, die die Eingangsstufe noch gar
+    nicht getroffen hat (§17.1 Schritt 5).
     """
     count = len(mesh.faces)
     if count == 0:
@@ -153,7 +156,8 @@ def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
 
 
 def read_mesh(payload: bytes, suffix: str) -> MeshData:
-    """Parse a file that is already in memory. No processing yet — that is §17.1."""
+    """Parst eine Datei, die schon im Speicher liegt. Noch keine
+    Aufbereitung — die ist §17.1."""
     normalised = suffix.lower()
     if normalised not in READABLE_SUFFIXES:
         raise ValidationError(
@@ -163,10 +167,10 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
             values={"suffix": suffix, "known": list(READABLE_SUFFIXES)},
         )
     if normalised == ".3mf":
-        # Not through trimesh: it resolves a component that points into an
-        # external object file to the whole file instead of to the object it
-        # names, and hands back every body once per component. Imported here
-        # rather than at the top because the 3MF module needs MeshData.
+        # Nicht über trimesh: es löst eine Komponente, die in eine externe
+        # Objektdatei zeigt, zur ganzen Datei auf statt zu dem Objekt, das sie
+        # benennt, und gibt jeden Körper einmal je Komponente zurück. Hier
+        # statt oben importiert, weil das 3MF-Modul MeshData braucht.
         from app.core.export import threemf
 
         parts = threemf.read_objects(payload)
@@ -179,7 +183,7 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
         )
     except PROGRAMMING_ERRORS:
         raise
-    except Exception as problem:  # trimesh raises a wide range of parser errors
+    except Exception as problem:  # trimesh wirft eine breite Palette an Parserfehlern
         raise ValidationError(
             field="file",
             detail=_("Die Datei ließ sich nicht lesen; sie ist vermutlich beschädigt."),
@@ -200,13 +204,14 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
 
 
 def _joined(parts: list[Part]) -> MeshData:
-    """The bodies of a 3MF as the one body this function promises.
+    """Die Körper einer 3MF als der eine Körper, den diese Funktion verspricht.
 
-    Whoever wants them apart asks :func:`app.core.export.threemf.read_objects`;
-    here they are welded, because that is what a single return value can be. The
-    slots come along only from a file with one body: every part numbers its own
-    slots from zero, and merging those numberings without a shared palette would
-    put the wrong filament on half the triangles (§20).
+    Wer sie getrennt will, fragt :func:`app.core.export.threemf.read_objects`;
+    hier werden sie verschweißt, denn das ist, was ein einzelner Rückgabewert
+    sein kann. Die Slots reisen nur aus einer Datei mit einem Körper mit:
+    jedes Teil nummeriert seine Slots ab null, und diese Nummerierungen ohne
+    gemeinsame Palette zu mischen setzte das falsche Filament auf die Hälfte
+    der Dreiecke (§20).
     """
     if len(parts) == 1:
         return parts[0].mesh
@@ -214,7 +219,7 @@ def _joined(parts: list[Part]) -> MeshData:
 
 
 class MeshCodec:
-    """Codec for the disk cache (§38). Registered once the kernel is available."""
+    """Codec für den Platten-Cache (§38). Registriert, sobald der Kern da ist."""
 
     suffix = ".npz"
 

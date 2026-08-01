@@ -23,13 +23,14 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Volumes below this are meshing noise, not a change (§11.2 in spirit).
+#: Volumen darunter sind Vernetzungsrauschen, keine Änderung (§11.2 dem
+#: Sinne nach).
 NOISE_VOLUME = 1e-3
 
 
 @dataclass(slots=True)
 class Difference:
-    """The added and the removed volume of one body."""
+    """Das hinzugekommene und das entfernte Volumen eines Körpers."""
 
     object_id: ObjectId
     added: MeshData | None = None
@@ -46,7 +47,7 @@ class Difference:
 
 @dataclass(slots=True)
 class SceneDifference:
-    """The whole scene, body by body, plus what appeared and vanished."""
+    """Die ganze Szene, Körper für Körper, plus was erschien und verschwand."""
 
     entries: dict[ObjectId, Difference] = field(default_factory=dict)
     created: tuple[ObjectId, ...] = ()
@@ -68,7 +69,7 @@ class SceneDifference:
 
 
 def compare(before: MeshData, after: MeshData, *, quality: Quality = "draft") -> Difference:
-    """One body against its successor."""
+    """Ein Körper gegen seinen Nachfolger."""
     entry = Difference(object_id="")
     added = _cut(after, before, quality)
     removed = _cut(before, after, quality)
@@ -92,7 +93,8 @@ def compare(before: MeshData, after: MeshData, *, quality: Quality = "draft") ->
 
 
 def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -> SceneDifference:
-    """The difference of a whole transaction — the unit §18.7 measures in."""
+    """Die Differenz einer ganzen Transaktion — die Einheit, in der §18.7
+    misst."""
     result = SceneDifference()
     result.created = tuple(name for name in after.objects if name not in before.objects)
     result.deleted = tuple(name for name in before.objects if name not in after.objects)
@@ -113,7 +115,8 @@ def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -
 
 
 def _same_bounds(first: MeshData, second: MeshData) -> bool:
-    """Cheap pre-check: same volume and same box means nothing moved either."""
+    """Billige Vorprüfung: gleiches Volumen und gleicher Quader heißt, dass
+    sich auch nichts bewegt hat."""
     return all(
         abs(a - b) < 1e-6
         for a, b in zip(

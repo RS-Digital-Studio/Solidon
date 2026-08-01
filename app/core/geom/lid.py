@@ -1,16 +1,17 @@
-"""A lid for an opening (Bauplan §25, §14).
+"""Ein Deckel für eine Öffnung (Bauplan §25, §14).
 
-The most common second half of a part. Somebody has a box — modelled here,
-downloaded, or scanned — and needs something that closes it. Doing that by hand
-means measuring the cavity, drawing it again a fraction smaller, and finding out
-at the printer by how much the fraction was wrong.
+Die häufigste zweite Hälfte eines Teils. Jemand hat eine Box — hier
+modelliert, heruntergeladen oder gescannt — und braucht etwas, das sie
+verschließt. Von Hand heißt das: den Hohlraum ausmessen, ihn einen Tick
+kleiner nachzeichnen, und am Drucker herausfinden, um wie viel der Tick
+falsch war.
 
-The cavity is not measured, it is taken: a cut through the wall at the height of
-the opening gives the outer contour and the hole inside it, and the collar is
-that hole shrunk by the clearance from the material profile (§12). The number
-that decides whether the lid goes on is therefore the same one the fit check
-uses, and calibrating the material (§28.3) reaches a lid that was built before
-the calibration.
+Der Hohlraum wird nicht gemessen, er wird genommen: ein Schnitt durch die
+Wand auf Höhe der Öffnung liefert die Außenkontur und das Loch darin, und der
+Kragen ist dieses Loch, geschrumpft um das Spiel aus dem Materialprofil
+(§12). Die Zahl, die entscheidet, ob der Deckel passt, ist also dieselbe, die
+die Passungsprüfung benutzt — und eine Materialkalibrierung (§28.3) erreicht
+einen Deckel, der vor ihr gebaut wurde.
 """
 
 from __future__ import annotations
@@ -36,33 +37,36 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: How far below the rim the cut is taken. Exactly at the top edge a cut meets
-#: the end of the wall and gives a line instead of a ring; a tenth of a
-#: millimetre down it is safely in the material.
+#: Wie weit unter dem Rand der Schnitt genommen wird. Exakt an der Oberkante
+#: trifft ein Schnitt das Ende der Wand und liefert eine Linie statt eines
+#: Rings; einen Zehntelmillimeter tiefer ist er sicher im Material.
 BELOW_RIM = 0.1
 
-#: Below this a cavity is a bore, not an opening — 100 mm² is a hole of eleven
-#: millimetres, and nobody puts a lid collar into a screw hole. Above it every
-#: ring counts, including a small compartment next to a large one: a slot of
-#: twelve millimetres square takes a collar perfectly well, and measuring
-#: cavities against each other rather than against a size would throw it away.
+#: Darunter ist ein Hohlraum eine Bohrung, keine Öffnung — 100 mm² sind ein
+#: Loch von elf Millimetern, und niemand steckt einen Deckelkragen in ein
+#: Schraubenloch. Darüber zählt jeder Ring, auch ein kleines Fach neben einem
+#: großen: ein Schlitz von zwölf Millimetern im Quadrat nimmt einen Kragen
+#: bestens, und Hohlräume gegeneinander statt gegen eine Größe zu messen
+#: würfe ihn weg.
 MIN_CAVITY = 100.0
 
-#: How far the collar is pulled in beyond the clearance, so the lid does not
-#: sit on the collar instead of on the rim.
+#: Wie weit der Kragen über das Spiel hinaus eingezogen wird, damit der Deckel
+#: nicht auf dem Kragen sitzt statt auf dem Rand.
 COLLAR_RELIEF = 0.2
 
 
 def opening(mesh: MeshData, z: float) -> tuple[Any, list[Any]]:
-    """The wall ring at this height, as the filled outline and what is open in it.
+    """Der Wandring auf dieser Höhe, als gefüllter Umriss plus was darin offen
+    ist.
 
-    The section itself is a ring — wall material with the cavity as its hole.
-    The lid is meant to *cover* that hole, so what comes back as the outline is
-    the ring filled in; taking the section as it stands would give a lid with
-    the opening cut out of it.
+    Der Schnitt selbst ist ein Ring — Wandmaterial mit dem Hohlraum als Loch.
+    Der Deckel soll dieses Loch *bedecken*, also kommt als Umriss der
+    aufgefüllte Ring zurück; den Schnitt zu nehmen, wie er ist, ergäbe einen
+    Deckel mit herausgeschnittener Öffnung.
 
-    Raises when there is nothing to close: a body that is solid here has no
-    opening, and a lid over it would be a plate glued onto a block.
+    Wirft, wenn es nichts zu schließen gibt: ein Körper, der hier massiv ist,
+    hat keine Öffnung, und ein Deckel darüber wäre eine auf einen Block
+    geklebte Platte.
     """
     from shapely.ops import unary_union
 
@@ -100,18 +104,21 @@ def _holes_of(part: Any) -> list[Any]:
 
 
 def plane_of(source: SceneObject, name: str, stated: float) -> float:
-    """The height the opening is at: from the chosen face, or from the number.
+    """Die Höhe, auf der die Öffnung liegt: aus der gewählten Fläche, oder aus
+    der Zahl.
 
-    A face wins over the number because it is the more specific of the two — the
-    number defaults to the top of the body, which is a guess, while a face is
-    what somebody clicked. Both are in the file, so the answer does not depend on
-    what happens to be selected when the project is opened again (§11).
+    Eine Fläche schlägt die Zahl, denn sie ist die spezifischere von beiden —
+    die Zahl fällt auf die Oberkante des Körpers zurück, was eine Vermutung
+    ist, während eine Fläche das ist, was jemand angeklickt hat. Beide stehen
+    in der Datei — die Antwort hängt also nicht davon ab, was beim
+    Wiederöffnen des Projekts gerade ausgewählt ist (§11).
 
-    A face that does not look upward is refused rather than read as a height.
-    Any face has a centre with a Z in it, and the ceiling of a cavity has one
-    that lies inside the part — taken as an opening height it put the lid into
-    the middle of the box, at 26,9 of 30 millimetres, and nothing further down
-    noticed because a cut below that plane does meet the wall.
+    Eine Fläche, die nicht nach oben schaut, wird abgewiesen statt als Höhe
+    gelesen. Jede Fläche hat einen Mittelpunkt mit einem Z darin, und die
+    Decke eines Hohlraums einen, der im Teil liegt — als Öffnungshöhe
+    genommen setzte er den Deckel mitten in die Box, auf 26,9 von 30
+    Millimetern, und weiter unten fiel es niemandem auf, weil ein Schnitt
+    unter dieser Ebene die Wand ja trifft.
     """
     if not name:
         return stated or float(source.mesh.bounds.maximum[2])
@@ -153,11 +160,12 @@ def build(
     clearance: float,
     z: float,
 ) -> MeshData:
-    """Plate plus collar, standing on the rim of the opening.
+    """Platte plus Kragen, stehend auf dem Rand der Öffnung.
 
-    The plate covers the whole outline, so it looks like the box it belongs to.
-    The collar reaches down into every cavity — a divided box gets one per
-    compartment, because that is what keeps the lid from turning.
+    Die Platte deckt den ganzen Umriss ab, damit sie aussieht wie die Box, zu
+    der sie gehört. Der Kragen greift in jeden Hohlraum hinab — eine
+    unterteilte Box bekommt einen je Fach, denn genau das hält den Deckel vom
+    Verdrehen ab.
     """
     plates = [
         trimesh.creation.extrude_polygon(piece, height=thickness)
@@ -249,12 +257,12 @@ class LidParams(BaseParams):
     ),
 )
 def create_lid(ctx: OpContext) -> OpResult:
-    """§25: the second half of every box.
+    """§25: die zweite Hälfte jeder Box.
 
-    The lid stays where the opening is instead of jumping onto the bed. Whether
-    it closes the box is the question somebody has at this moment, and that can
-    only be seen in place; arranging for the print is its own operation and
-    knows about every other body too.
+    Der Deckel bleibt, wo die Öffnung ist, statt aufs Bett zu springen. Ob er
+    die Box schließt, ist die Frage, die jemand in diesem Moment hat, und das
+    sieht man nur an Ort und Stelle; das Anordnen für den Druck ist eine
+    eigene Operation und kennt auch jeden anderen Körper.
     """
     params = cast(LidParams, ctx.params)
     source = ctx.inputs[0]
@@ -312,29 +320,29 @@ def create_lid(ctx: OpContext) -> OpResult:
     )
 
 
-# --- the turning lid ------------------------------------------------------------
+# --- Der Drehdeckel --------------------------------------------------------------
 
-#: Pitch of a printed coarse thread. Coarse on purpose: a jar lid is turned by
-#: hand and half a turn should close it, while a fine ridge is one the nozzle
-#: rounds away until nothing grips.
+#: Steigung eines gedruckten Grobgewindes. Grob mit Absicht: ein Glasdeckel
+#: wird von Hand gedreht, und eine halbe Umdrehung soll ihn schließen — einen
+#: feinen Grat rundet die Düse weg, bis nichts mehr greift.
 DEFAULT_PITCH = 3.0
 
-#: How much taller the lid's threaded skirt is than the neck, so the lid comes
-#: to rest on the rim and not on the end of the thread.
+#: Um wie viel die Gewindeschürze des Deckels höher ist als der Hals, damit
+#: der Deckel auf dem Rand aufsetzt und nicht auf dem Gewindeende.
 SKIRT_RELIEF = 0.6
 
-#: Sections around a turned body. Coarser than this and a "round" neck is a
-#: polygon the lid catches on.
+#: Segmente um einen gedrehten Körper. Gröber, und ein „runder" Hals ist ein
+#: Vieleck, an dem der Deckel hakt.
 NECK_SECTIONS = 96
 
 
 def neck_diameters(outline: Any, cavities: list[Any]) -> tuple[float, float]:
-    """Outer and bore diameter of a neck that fits this opening.
+    """Außen- und Bohrungsdurchmesser eines Halses, der zu dieser Öffnung passt.
 
-    Both come from the narrower side, not from a fitted circle: on a round
-    opening that *is* the diameter, and on a rectangular one it is the largest
-    round neck the wall can still carry. A circle through the corners of a
-    square would stand out over its sides.
+    Beide kommen von der schmaleren Seite, nicht aus einem eingepassten Kreis:
+    bei einer runden Öffnung *ist* das der Durchmesser, bei einer eckigen der
+    größte runde Hals, den die Wand noch tragen kann. Ein Kreis durch die
+    Ecken eines Quadrats stünde über dessen Seiten hinaus.
     """
     left, bottom, right, top = outline.bounds
     widest = max(cavities, key=lambda ring: ring.area)
@@ -346,7 +354,7 @@ def neck_diameters(outline: Any, cavities: list[Any]) -> tuple[float, float]:
 
 
 def _pipe(outer: float, inner: float, height: float, z: float) -> MeshData:
-    """A ring of material standing on ``z``, open all the way through."""
+    """Ein Materialring, stehend auf ``z``, ganz durchgehend offen."""
     shell = trimesh.creation.cylinder(radius=outer / 2.0, height=height, sections=NECK_SECTIONS)
     shell.apply_translation((0.0, 0.0, z + height / 2.0))
     if inner <= EPS_GEOM:
@@ -453,15 +461,16 @@ class ScrewLidParams(BaseParams):
 def screw_lid(ctx: OpContext) -> OpResult:
     """§25: der Zwilling des eingeschobenen Deckels.
 
-    Two pairs in the model corpus are exactly this and nothing else:
-    ``gewuerzbehaelter_body`` beside ``deckel_dreh``, and ``kartuschen_kaefig``
-    beside ``kartuschen_deckel``. The part library has a thread, but only in the
-    metric screw sizes M2 to M8 — a jar neck of forty millimetres with a coarse
-    pitch was out of its reach entirely.
+    Zwei Paare im Modellkorpus sind genau das und nichts anderes:
+    ``gewuerzbehaelter_body`` neben ``deckel_dreh``, und ``kartuschen_kaefig``
+    neben ``kartuschen_deckel``. Die Bausteinbibliothek hat ein Gewinde, aber
+    nur in den metrischen Schraubengrößen M2 bis M8 — ein Glashals von vierzig
+    Millimetern mit grober Steigung lag ganz außerhalb ihrer Reichweite.
 
-    Both halves come out of one operation because they are one decision. A neck
-    cut to one pitch and a lid to another is not two mistakes; it is the one
-    mistake that is easiest to make when the halves are made apart.
+    Beide Hälften kommen aus einer Operation, weil sie eine Entscheidung
+    sind. Ein Hals mit der einen Steigung und ein Deckel mit einer anderen
+    sind nicht zwei Fehler — es ist der eine Fehler, der am leichtesten
+    passiert, wenn die Hälften getrennt entstehen.
     """
     params = cast(ScrewLidParams, ctx.params)
     source = ctx.inputs[0]
@@ -495,9 +504,9 @@ def screw_lid(ctx: OpContext) -> OpResult:
             values={"neck_mm": round(major, 2), "bore_mm": round(bore, 2)},
         )
 
-    # The core carries the ridge, so it is two ridge depths narrower than the
-    # thread is wide: unioned onto a neck of the full diameter the ridge would
-    # sit inside the material and change nothing at all.
+    # Der Kern trägt den Gang, ist also zwei Gangtiefen schmaler als das
+    # Gewinde breit: auf einen Hals mit vollem Durchmesser vereinigt säße der
+    # Gang im Material und änderte gar nichts.
     neck = _pipe(core, bore, params.height, z)
     turns = _lifted(thread_body(major, params.pitch, params.height), z)
     threaded = boolean("union", [mesh, neck], quality=ctx.quality).mesh
@@ -532,15 +541,16 @@ def screw_lid(ctx: OpContext) -> OpResult:
 
 
 def _screw_cap(major: float, params: ScrewLidParams, clearance: float) -> MeshData:
-    """The lid: a cap whose inside carries the counterpart of the neck thread.
+    """Der Deckel: eine Kappe, deren Innenseite das Gegenstück zum
+    Halsgewinde trägt.
 
-    Cut from the *core* diameter plus the clearance, not from the major one.
-    That is the whole difference between a lid and a sleeve: bored to the major
-    diameter nothing is left standing for the ridge of the neck to hold, and the
-    lid slides straight off. The same rule as the nut of the part library, and
-    for the same reason.
+    Gebohrt auf den *Kern*-Durchmesser plus Spiel, nicht auf den
+    Außendurchmesser. Das ist der ganze Unterschied zwischen Deckel und
+    Hülse: auf den Außendurchmesser gebohrt bleibt nichts stehen, woran der
+    Gang des Halses halten könnte, und der Deckel rutscht glatt ab. Dieselbe
+    Regel wie bei der Mutter der Bausteinbibliothek, aus demselben Grund.
 
-    The open end stands on Z = 0, so it prints without a support anywhere.
+    Das offene Ende steht auf Z = 0 — so druckt er ohne jede Stütze.
     """
     skirt = params.height + SKIRT_RELIEF
     inside = major - 2.0 * params.pitch * RIDGE_SHARE + clearance
@@ -551,8 +561,9 @@ def _screw_cap(major: float, params: ScrewLidParams, clearance: float) -> MeshDa
     )
     body.apply_translation((0.0, 0.0, (skirt + params.thickness) / 2.0))
 
-    # The two shapes a threaded hole is cut with: the bore at the core, and the
-    # groove reaching out of it to the major diameter.
+    # Die zwei Formen, mit denen ein Gewindeloch geschnitten wird: die Bohrung
+    # auf Kerndurchmesser, und die Nut, die von ihr bis zum Außendurchmesser
+    # reicht.
     hollow = trimesh.creation.cylinder(
         radius=inside / 2.0, height=skirt + BOOLEAN_OVERLAP, sections=NECK_SECTIONS
     )

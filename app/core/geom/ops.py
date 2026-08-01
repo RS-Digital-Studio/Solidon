@@ -1,8 +1,8 @@
-"""Geometry operations (Bauplan §25, category "Transformation").
+"""Geometrie-Operationen (Bauplan §25, Kategorie „Transformation").
 
-These are the operations the gizmo produces (§18.11): a drag in the viewport ends
-as one of them, with the numbers the drag arrived at. That is what makes a drag
-undoable like everything else.
+Das sind die Operationen, die der Gizmo erzeugt (§18.11): ein Ziehen im
+Viewport endet als eine von ihnen, mit den Zahlen, bei denen das Ziehen
+angekommen ist. Genau das macht ein Ziehen rücknehmbar wie alles andere.
 """
 
 from __future__ import annotations
@@ -35,7 +35,9 @@ _ANCHORS = ("centre", "origin", "bed")
 
 
 def as_transform(matrix: Any) -> Transform:
-    """A matrix as plain numbers, so it survives the cache and the file (§21.2)."""
+    """Eine Matrix als nackte Zahlen, damit sie Cache und Datei
+    übersteht (§21.2).
+    """
     rows = [tuple(float(value) for value in row) for row in matrix]
     return cast(Transform, tuple(rows))
 
@@ -182,7 +184,7 @@ class ScaleParams(BaseParams):
 def scale_object(ctx: OpContext) -> OpResult:
     params = cast(ScaleParams, ctx.params)
     source = ctx.inputs[0]
-    # A per-axis value of zero means "use the uniform factor for this axis".
+    # Ein Achswert von null heißt: „für diese Achse den gleichmäßigen Faktor".
     factors = (
         params.fx or params.factor,
         params.fy or params.factor,
@@ -226,15 +228,16 @@ class MirrorParams(BaseParams):
     ),
 )
 def mirror_object(ctx: OpContext) -> OpResult:
-    """§25: a mirror is a scale by minus one about one axis.
+    """§25: eine Spiegelung ist eine Skalierung mit minus eins um eine Achse.
 
-    A reflection turns every triangle inside out, and a body with inverted
-    normals is one every later operation gets wrong. The kernel turns the
-    winding back for a matrix with a negative determinant — the test measures
-    the volume afterwards, because "it is handled somewhere" is not a promise.
+    Eine Spiegelung stülpt jedes Dreieck um, und ein Körper mit umgedrehten
+    Normalen ist einer, den jede spätere Operation falsch versteht. Der Kern
+    dreht den Umlaufsinn bei einer Matrix mit negativer Determinante zurück —
+    der Test misst danach das Volumen, denn „das macht schon irgendwer" ist
+    kein Versprechen.
 
-    The features are dropped: a bore called ``hole_1`` on the right-hand part is
-    not the same bore on the left-hand one, and re-detection names them anew
+    Die Merkmale fallen weg: eine Bohrung namens ``hole_1`` am rechten Teil
+    ist nicht dieselbe Bohrung am linken, und die Neuerkennung benennt sie neu
     (§21.2).
     """
     params = cast(MirrorParams, ctx.params)
@@ -330,7 +333,9 @@ class BooleanParams(BaseParams):
 
 
 def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult:
-    """Two bodies in, one out — with the fallback chain behind it (§17.2)."""
+    """Zwei Körper hinein, einer heraus — mit der Rückfallkette
+    dahinter (§17.2).
+    """
     first, second = (as_mesh_data(entry.mesh) for entry in ctx.inputs[:2])
     outcome = boolean(kind, [first, second], quality=ctx.quality, seed=seed)
     return OpResult(
@@ -437,7 +442,9 @@ class AlignParams(BaseParams):
     doc=_("Bringt eine Bohrungsachse oder eine Fläche mit einer zweiten zur Deckung."),
 )
 def align_to_feature(ctx: OpContext) -> OpResult:
-    """Snapping as an operation (§18.11): the file says what was lined up with what."""
+    """Einrasten als Operation (§18.11): die Datei sagt, was womit in Flucht
+    gebracht wurde.
+    """
     params = cast(AlignParams, ctx.params)
     source = ctx.inputs[0]
     reference = FeatureRef.parse(params.target) if ":" in params.target else None

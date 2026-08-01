@@ -1,17 +1,18 @@
-"""Dowel pins across a parting plane (Bauplan §25, §14).
+"""Passstifte über eine Trennebene (Bauplan §25, §14).
 
-A split part that is only glued has one job left for the person holding it:
-lining the halves up while the glue grabs. Two pins take that job away, and
-they are the reason auto split is worth having at all.
+Ein geteiltes Teil, das nur geklebt wird, lässt dem, der es hält, eine
+Aufgabe: die Hälften auszurichten, während der Kleber greift. Zwei Stifte
+nehmen diese Aufgabe ab — und sie sind der Grund, warum Auto Split überhaupt
+lohnt.
 
-Where the pins go is decided on the cut face, not on the bounding box: the
-section polygon is pulled in by the pin radius plus a wall, and what is left is
-where material exists on both sides. Two pins along the long direction of that
-region — one would let the halves twist.
+Wo die Stifte hinkommen, entscheidet sich auf der Schnittfläche, nicht am
+Hüllquader: das Schnittpolygon wird um Stiftradius plus Wand eingezogen, und
+was übrig bleibt, ist, wo auf beiden Seiten Material ist. Zwei Stifte entlang
+der langen Richtung dieses Bereichs — einer ließe die Hälften verdrehen.
 
-The play is not a number here. It comes from the material profile
-(AGENTS.md rule 7), so a calibration later reaches parts that were split
-before it, and the fit pair records the reference rather than the value (§14).
+Das Spiel ist hier keine Zahl. Es kommt aus dem Materialprofil (AGENTS.md
+Regel 7), damit eine spätere Kalibrierung Teile erreicht, die vor ihr geteilt
+wurden — und das Passungspaar hält den Verweis fest, nicht den Wert (§14).
 """
 
 from __future__ import annotations
@@ -32,29 +33,32 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: How many pins a seam gets. One pin is a hinge, three is a tolerance problem.
+#: Wie viele Stifte eine Naht bekommt. Ein Stift ist ein Scharnier, drei sind
+#: ein Toleranzproblem.
 PIN_COUNT = 2
 
-#: Pin diameter relative to the shorter side of the cut face, and the range it
-#: is held to. Thin pins shear, fat ones weaken the part they sit in.
+#: Stiftdurchmesser relativ zur kürzeren Seite der Schnittfläche, und der
+#: Bereich, in dem er gehalten wird. Dünne Stifte scheren ab, dicke schwächen
+#: das Teil, in dem sie sitzen.
 PIN_RELATIVE = 0.12
 PIN_MIN = 3.0
 PIN_MAX = 8.0
 
-#: How deep a pin sits in each half, relative to its diameter.
+#: Wie tief ein Stift in jeder Hälfte sitzt, relativ zu seinem Durchmesser.
 PIN_DEPTH_FACTOR = 1.5
 
-#: Material that has to stay around a pin. Below this the bore breaks out.
+#: Material, das um einen Stift stehen bleiben muss. Darunter bricht die
+#: Bohrung aus.
 PIN_WALL = 1.6
 
-#: Extra depth of the bore over the pin, so the halves close on the face and
-#: not on the pin's end.
+#: Zusatztiefe der Bohrung über den Stift hinaus, damit die Hälften auf der
+#: Fläche schließen und nicht auf dem Stiftende.
 BORE_RELIEF = 0.4
 
 
 @dataclass(frozen=True, slots=True)
 class PinPlan:
-    """Where the pins go, and how big they are."""
+    """Wo die Stifte hinkommen, und wie groß sie sind."""
 
     positions: tuple[Vec3, ...]
     diameter: float
@@ -69,7 +73,8 @@ class PinPlan:
 
 @dataclass(slots=True)
 class PinnedPair:
-    """Both halves after pinning, with the features a fit pair needs."""
+    """Beide Hälften nach dem Verstiften, mit den Merkmalen, die ein
+    Passungspaar braucht."""
 
     first: MeshData
     second: MeshData
@@ -81,10 +86,11 @@ class PinnedPair:
 def plan_pins(
     mesh: MeshData, candidate: Candidate, *, count: int = PIN_COUNT, wall: float = PIN_WALL
 ) -> PinPlan:
-    """Find room for pins on the cut face of ``candidate``.
+    """Sucht Platz für Stifte auf der Schnittfläche von ``candidate``.
 
-    Returns a plan with no positions when the face is too small — a seam
-    without pins still glues, and a pin that breaks out of the wall does not.
+    Liefert einen Plan ohne Positionen, wenn die Fläche zu klein ist — eine
+    Naht ohne Stifte klebt immer noch, ein Stift, der aus der Wand ausbricht,
+    nicht.
     """
     section = sections_along(mesh, cast(Any, candidate.axis), np.array([candidate.position]))[0]
     if section is None or section.is_empty:
@@ -108,17 +114,17 @@ def plan_pins(
 
 
 def _diameter(section: Any) -> float:
-    """From the narrowest direction of the face, held inside the usable range."""
+    """Aus der schmalsten Richtung der Fläche, gehalten im nutzbaren Bereich."""
     low_x, low_y, high_x, high_y = section.bounds
     narrow = min(high_x - low_x, high_y - low_y)
     return float(min(PIN_MAX, max(PIN_MIN, narrow * PIN_RELATIVE)))
 
 
 def _spread(room: Any, count: int) -> list[tuple[float, float]]:
-    """Points spread along the long direction of the usable region.
+    """Punkte, verteilt entlang der langen Richtung des nutzbaren Bereichs.
 
-    Along the *long* direction on purpose: two pins close together hold about
-    as well against twisting as one.
+    Entlang der *langen* Richtung mit Absicht: zwei Stifte dicht beieinander
+    halten gegen Verdrehen etwa so gut wie einer.
     """
     from shapely.geometry import Point
     from shapely.ops import nearest_points
@@ -139,11 +145,11 @@ def _spread(room: Any, count: int) -> list[tuple[float, float]]:
 
 
 def _in_world(point: tuple[float, float], candidate: Candidate) -> Vec3:
-    """A point of the section back in world coordinates.
+    """Ein Punkt des Schnitts zurück in Weltkoordinaten.
 
-    The section was taken with the cut axis turned upright, so the way back is
-    that same turn inverted — not a table of sign flips that has to be right
-    for three axes at once.
+    Der Schnitt wurde mit aufgerichteter Schnittachse genommen, der Rückweg
+    ist also dieselbe Drehung, invertiert — keine Tabelle von
+    Vorzeichenwechseln, die für drei Achsen gleichzeitig stimmen muss.
     """
     turned = np.array([point[0], point[1], candidate.position, 1.0])
     back = np.linalg.inv(upright(cast(Any, candidate.axis))) @ turned
@@ -158,11 +164,11 @@ def add_pins(
     *,
     play: float | None = None,
 ) -> PinnedPair:
-    """Put the pins into one half and the bores into the other.
+    """Setzt die Stifte in die eine Hälfte und die Bohrungen in die andere.
 
-    ``first`` carries the pins. Which half that is does not matter mechanically
-    — what matters is that the two are told apart, because the fit pair names
-    one of each (§14).
+    ``first`` trägt die Stifte. Welche Hälfte das ist, ist mechanisch egal —
+    wichtig ist, dass die beiden auseinandergehalten werden, denn das
+    Passungspaar benennt je eine (§14).
     """
     pair = PinnedPair(first=first, second=second, findings=list(plan.findings))
     if not plan.count:
@@ -214,7 +220,7 @@ def add_pins(
 
 
 def _part(name: str, **values: Any) -> MeshData:
-    """One body from the library. Parts before primitives (§39), here as well."""
+    """Ein Körper aus der Bibliothek. Bausteine vor Primitiven (§39), auch hier."""
     from app.core.geom.mesh import as_mesh_data
 
     spec = PARTS.get(name)
@@ -222,7 +228,8 @@ def _part(name: str, **values: Any) -> MeshData:
 
 
 def _upright(body: MeshData, axis: str, position: Vec3, offset: float) -> MeshData:
-    """Lay a part that stands on +Z along the cut axis and move it into place."""
+    """Legt einen Baustein, der auf +Z steht, entlang der Schnittachse und
+    schiebt ihn an seinen Platz."""
     placed = body
     if axis == "x":
         placed = apply(placed, rotation("y", 90.0))

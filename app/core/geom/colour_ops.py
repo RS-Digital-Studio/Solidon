@@ -1,9 +1,9 @@
-"""Colour operations (Bauplan §25, category "Farbe").
+"""Farb-Operationen (Bauplan §25, Kategorie „Farbe").
 
-Two operations, and between them the whole of §20 that a user can reach today:
-assign a slot by hand, or let a texture decide. The brush with a radius is a
-late phase — but everything below it is here, so the brush will only have to
-paint, not invent a data model.
+Zwei Operationen, und zwischen ihnen alles von §20, was ein Nutzer heute
+erreichen kann: einen Slot von Hand zuweisen, oder eine Textur entscheiden
+lassen. Der Pinsel mit Radius ist eine späte Phase — aber alles unter ihm ist
+hier, er wird also nur malen müssen, kein Datenmodell erfinden.
 """
 
 from __future__ import annotations
@@ -23,9 +23,9 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: How many filaments the operations allow to be named. More than eight is not
-#: a machine anybody owns, and every one of them is a manual change or an AMS
-#: slot somebody has to fill.
+#: Wie viele Filamente die Operationen benennen lassen. Mehr als acht ist
+#: keine Maschine, die jemand besitzt, und jedes einzelne ist ein
+#: Handwechsel oder ein AMS-Slot, den jemand füllen muss.
 MAX_SLOTS = 8
 
 _HEX = re.compile(r"^#?([0-9a-fA-F]{6})$")
@@ -83,7 +83,7 @@ def assign_slot(ctx: OpContext) -> OpResult:
 
 
 def _colour_from(text: str) -> tuple[float, float, float] | None:
-    """``#RRGGBB`` as three numbers, and a clear error for anything else."""
+    """``#RRGGBB`` als drei Zahlen, und ein klarer Fehler für alles andere."""
     if not text:
         return None
     match = _HEX.match(text.strip())
@@ -126,11 +126,12 @@ class SlotsFromTextureParams(BaseParams):
     ),
 )
 def slots_from_texture(ctx: OpContext) -> OpResult:
-    """§20, and the sentence that goes with it: never as fine as the render.
+    """§20, und der Satz, der dazugehört: nie so fein wie die Darstellung.
 
-    The starting value comes from the operation, not from a parameter of its
-    own: §11.3 already keeps one with every randomised step, and that is what
-    makes the quantisation repeat itself when the file is opened again.
+    Der Startwert kommt aus der Operation, nicht aus einem eigenen Parameter:
+    §11.3 führt ohnehin bei jedem randomisierten Schritt einen mit, und genau
+    das lässt die Quantisierung sich wiederholen, wenn die Datei erneut
+    geöffnet wird.
     """
     params = cast(SlotsFromTextureParams, ctx.params)
     source = ctx.inputs[0]
@@ -181,7 +182,9 @@ def slots_from_texture(ctx: OpContext) -> OpResult:
 
 
 def _merged(existing: list[MaterialSlot], added: list[MaterialSlot]) -> list[MaterialSlot]:
-    """New assignments win; slots the object already knew and still uses stay."""
+    """Neue Zuweisungen gewinnen; Slots, die das Objekt schon kannte und
+    weiter benutzt, bleiben.
+    """
     known = {entry.index: entry for entry in existing}
     known.update({entry.index: entry for entry in added})
     return [known[index] for index in sorted(known)]

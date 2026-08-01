@@ -1,8 +1,8 @@
-"""Operations for print preparation (Bauplan §25).
+"""Operationen für die Druckvorbereitung (Bauplan §25).
 
-Drilling, splitting, arranging and the collision check. The last one changes no
-geometry at all — it only reports, which is a perfectly good thing for an
-operation to do when the alternative is a surprise at the printer.
+Bohren, Teilen, Anordnen und die Kollisionsprüfung. Die letzte ändert gar
+keine Geometrie — sie meldet nur, und das ist eine völlig gute Sache für eine
+Operation, wenn die Alternative eine Überraschung am Drucker ist.
 """
 
 from __future__ import annotations
@@ -367,8 +367,9 @@ def compensate_first_layer(ctx: OpContext) -> OpResult:
 
     mesh, findings = compensate_elephant_foot(
         as_mesh_data(source.mesh),
-        # The squish is the material's, and this body may not be in the
-        # project's (§12) — a TPU seal spreads further than the PETG around it.
+        # Das Auseinanderlaufen gehört zum Material, und dieser Körper ist
+        # vielleicht nicht im Material des Projekts (§12) — eine TPU-Dichtung
+        # läuft weiter als das PETG um sie herum.
         for_object(ctx.profile, source),
         height=params.height,
         amount=params.amount or None,

@@ -32,7 +32,8 @@ _log = get_logger(__name__)
 #: on it, relative to the model diagonal. Beyond that it is a cut face.
 NEAR_LIMIT = 0.002
 
-#: Slot a face gets that belongs to no surface of the inputs.
+#: Slot, den eine Fläche bekommt, die zu keiner Oberfläche der Eingaben
+#: gehört.
 DEFAULT_CUT_SLOT = 0
 
 
@@ -43,7 +44,7 @@ def transfer(
     cut_slot: int = DEFAULT_CUT_SLOT,
     tolerance: float | None = None,
 ) -> MeshData:
-    """Give every triangle of ``result`` the slot of the surface it lies on.
+    """Gibt jedem Dreieck von ``result`` den Slot der Oberfläche, auf der es liegt.
 
     Without slots anywhere in the inputs nothing is carried and nothing is
     invented: a body with one material stays a body with one material.
@@ -81,7 +82,7 @@ def transfer(
 
 
 def _nearest(mesh: MeshData, points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """For every point: the slot of the closest triangle, and how far it was.
+    """Für jeden Punkt: der Slot des nächsten Dreiecks, und wie weit es weg war.
 
     Distance to the *surface*, not to the nearest triangle centre. A boolean
     splits one big face into many small ones, and their centres end up far from
@@ -97,12 +98,13 @@ def _nearest(mesh: MeshData, points: np.ndarray) -> tuple[np.ndarray, np.ndarray
 
 
 def with_slot(mesh: MeshData, slot: int) -> MeshData:
-    """One slot for the whole body — where a colour is assigned by hand."""
+    """Ein Slot für den ganzen Körper — wo eine Farbe von Hand zugewiesen wird."""
     return MeshData(raw=mesh.raw, slots=tuple([int(slot)] * len(mesh.raw.faces)))
 
 
 def counts(mesh: MeshData) -> dict[int, int]:
-    """How many triangles sit in which slot. Read by the report and the export."""
+    """Wie viele Dreiecke in welchem Slot sitzen. Liest der Prüfbericht und
+    der Export."""
     if not mesh.slots:
         return {0: len(mesh.raw.faces)}
     values, amounts = np.unique(np.asarray(mesh.slots), return_counts=True)
