@@ -133,6 +133,12 @@ class OperationDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        # Der Knopf benennt die Handlung: „Bohrung setzen" statt „OK". Was
+        # gleich passiert, steht damit dort, wo entschieden wird — der
+        # Fenstertitel ist beim Klicken nicht mehr im Blick.
+        ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if ok is not None:
+            ok.setText(str(spec.title))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

@@ -132,6 +132,24 @@ def test_what_it_was_not_given_keeps_the_default(qt_app: QApplication) -> None:
     assert dialog.values()["diameter"] == pytest.approx(5.0), "the schema's default"
 
 
+def test_the_confirm_button_names_the_operation(qt_app: QApplication) -> None:
+    """Der Knopf sagt, was gleich passiert: „Bohrung setzen" statt „OK".
+
+    Der Fenstertitel trägt den Namen zwar auch, steht aber beim Klicken nicht
+    im Blick — und ein Dialog, dessen Knöpfe „OK/Abbrechen" heißen, liest sich
+    bei jeder Operation gleich.
+    """
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    spec = REGISTRY.get("drill_hole")
+
+    dialog = OperationDialog(spec, [], None)
+
+    ok = dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Ok)
+    assert ok is not None
+    assert ok.text().replace("&", "") == str(spec.title)
+
+
 def test_a_filled_in_value_is_not_hidden_behind_the_advanced_box(qt_app: QApplication) -> None:
     """Ein gerade entschiedener Wert gehört dorthin, wo er zu sehen ist."""
     spec = REGISTRY.get("drill_hole")
