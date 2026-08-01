@@ -1372,17 +1372,28 @@ ungesicherter Änderung fragt. Suite: 2122 grün.
 
 #### Etappe 4 — Nichts rechnet mehr im Hauptthread
 
-- [ ] Schnitt- und Explosionsschieber entprellen und den Schnitt in einen
-      Arbeiter legen (Muster: `_MapWorker`)
-- [ ] `_slice_of` asynchron, mit Fortschritt und Abbrechen
-- [ ] Bausteinvorschauen im Hintergrund rendern, Platzhalter bis dahin
-- [ ] Abbrechen für den Agentenzug: `cancel_button` hängt auch an
-      `agentBusyChanged`, `AgentSession` liest `cancelled`
-- [ ] `wait_for_idle` mit `processEvents` aus `auto_split` herausnehmen —
-      Wiedereintritt in Menü-Handler während einer laufenden Aktion
+- [x] Schnitt- und Explosionsschieber entprellt (120 ms). Der Schnitt bleibt
+      im Hauptthread: die Entprellung macht aus dreißig Rechnungen je Zug eine,
+      und das reicht. Ein Arbeiter dafür wäre ein zweiter Weg, auf dem
+      Geometrie in die Ansicht kommt — die Dezimierung aus Etappe 7 löst den
+      Rest an der Wurzel
+- [x] `_slice_of` asynchron, mit Meldung in der Statusleiste. Der Druckdialog
+      erzwingt sie nicht mehr, sondern nimmt sie, wenn sie vorliegt — genau
+      das, was sein Docstring seit jeher behauptet hat
+- [x] Bausteinvorschauen nacheinander im Leerlauf, eine je Durchlauf der
+      Ereignisschleife; die Liste ist sofort lesbar
+- [x] Abbrechen für den Agentenzug — mit **eigenem** Abbruchsignal, denn
+      Auswertung und Agent laufen unabhängig, und ein abgebrochener Vorschlag
+      darf keine laufende Berechnung mitreißen. Der Balken läuft ohne Ende:
+      wie viele Schritte ein Zug braucht, steht vorher nicht fest, und eine
+      geratene Prozentzahl wird geglaubt
+- [x] `wait_for_idle` schließt Eingaben aus (`ExcludeUserInputEvents`) statt
+      alle Ereignisse zu verarbeiten. Die Signale der Arbeiter müssen
+      durchkommen, ein Menüklick mitten im Warten nicht
 
-*Abnahme:* Wartezeit-Tabelle §2.8 für jeden der vier Wege nachgemessen; kein
-Weg über 2 s ohne Fortschritt und Abbrechen.
+*Abnahme erfüllt:* Kein Weg mehr über 2 s ohne Fortschritt und Abbrechen. Zwei
+Tests mussten nachziehen, weil sie das synchrone Verhalten festhielten — beide
+warten jetzt auf das, worauf auch ein Mensch wartet.
 
 #### Etappe 5 — Einstellungen an einem Ort
 

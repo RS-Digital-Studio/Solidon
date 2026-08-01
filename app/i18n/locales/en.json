@@ -327,6 +327,7 @@
   "Die Projektdatei liegt bei. Sie enthält die Geometrie des Modells.": "The project file is attached. It contains the geometry of the model.",
   "Die STEP-Datei enthält keine Geometrie.": "The STEP file contains no geometry.",
   "Die STEP-Datei ließ sich nicht schreiben.": "The STEP file could not be written.",
+  "Die Schichtanalyse läuft …": "Analysing layers …",
   "Die Schnittfläche ist für Passstifte zu klein — geklebt hält sie trotzdem.": "The cut face is too small for dowel pins — glued it still holds.",
   "Die Schnittflächen konnten nicht geschlossen werden.": "The cut faces could not be closed.",
   "Die Schraube in der Wand. Ihr Kopf geht durch das runde Ende, ihr Schaft hält im Schlitz.": "The screw in the wall. Its head passes through the round end, its shank holds in the slot.",

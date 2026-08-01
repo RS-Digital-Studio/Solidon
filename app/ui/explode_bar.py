@@ -11,10 +11,11 @@ jedes Teil dort, wo es ist, auf der Platte, auf die es gehört.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QSlider, QWidget
 
 from app.i18n import tr
+from app.ui.section_bar import SETTLE_MS
 
 #: Der Schieber zählt in Zehnteln, 20 heißt also „doppelter Abstand zur
 #: Mitte".
@@ -34,6 +35,10 @@ class ExplodeBar(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._pending = QTimer(self)
+        self._pending.setSingleShot(True)
+        self._pending.timeout.connect(self._settled)
+
         self.slider = QSlider(Qt.Orientation.Horizontal, self)
         self.slider.setRange(0, MAX_STEPS)
         self.slider.setValue(0)
@@ -97,7 +102,12 @@ class ExplodeBar(QWidget):
             self.plateChanged.emit(ALL_PLATES)
 
     def _on_moved(self, value: int) -> None:
-        self.factorChanged.emit(value / 10.0)
+        """Entprellt wie der Schnitt: jede Stufe baut die ganze Ansicht neu."""
+        del value
+        self._pending.start(SETTLE_MS)
+
+    def _settled(self) -> None:
+        self.factorChanged.emit(self.factor)
 
     def _on_plate(self, index: int) -> None:
         del index

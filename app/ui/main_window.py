@@ -130,6 +130,25 @@ class _MapWorker(QThread):
             self.tooLarge.emit()
 
 
+class _SliceWorker(QThread):
+    """Eine Schichtanalyse, abseits des Oberflächen-Threads (§2.8, §22).
+
+    Dieselbe Begründung wie bei der Analysekarte, nur später bemerkt: an einem
+    großen Körper dauert sie Sekunden, und ein Wartezeiger macht daraus keine
+    kürzere Blockade, nur eine angekündigte.
+    """
+
+    done = Signal(object)
+
+    def __init__(self, entry: Any, layer_height: float) -> None:
+        super().__init__()
+        self._entry = entry
+        self._layer_height = layer_height
+
+    def run(self) -> None:
+        self.done.emit(slice_body(as_mesh_data(self._entry.mesh), self._layer_height))
+
+
 def inputs_for(
     spec: OperationSpec, objects: list[ObjectId], selected: Sequence[ObjectId]
 ) -> tuple[ObjectId, ...]:
@@ -178,8 +197,9 @@ class MainWindow(QMainWindow):
         self._map_worker: Any = None
         """The map being computed (§18.9). A newer request replaces it."""
         """Only the last map is kept: they are cheap to rebuild and large to hold."""
-        self._slice_cache: Any = None
+        self._slice_cache: SliceResult | None = None
         self._slice_key: tuple[str, int] | None = None
+        self._slice_worker: Any = None
         self._proposal: Any = None
         """The agent turn waiting for a decision (§26.5)."""
         self._manual: ManualWindow | None = None
@@ -956,13 +976,17 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
 
     def _current_slice(self) -> SliceResult | None:
-        """Die Schichtanalyse des gewählten Körpers, über denselben Cache wie
-        die Schichtenvorschau — gerechnet wird sie höchstens einmal."""
+        """Die Schichtanalyse des gewählten Körpers, **wenn sie schon vorliegt**.
+
+        Der Dialog beschreibt genau diesen Vertrag: „die Schichtanalyse, wenn
+        das Fenster schon eine hat". Sie hier zu erzwingen hieß, den Weg zu den
+        Druckeinstellungen an einer Rechnung aufzuhalten, die niemand bestellt
+        hat — ohne sie bleiben die Vorschläge aus Material und Maschine (§29).
+        """
         object_id = self.object_tree.selected()
         if object_id is None:
             return None
-        found: SliceResult | None = self._slice_of(object_id)
-        return found
+        return self._slice_of(object_id)
 
     def _gcode_returned(self, outcome: SliceOutcome) -> None:
         """Was der Slicer gemessen hat, geht in den Prüfbericht — als gemessen
@@ -987,25 +1011,30 @@ class MainWindow(QMainWindow):
         metrics = gcode.parse(Path(name).read_text(encoding="utf-8", errors="replace"))
         findings = gcode.findings_for(metrics)
 
-        object_id = self.object_tree.selected()
-        result = self.session.last_result
-        entry = result.scene.objects.get(object_id) if result and object_id else None
-        if entry is not None and metrics.support_mm3 is not None:
-            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-            try:
-                estimate = slice_body(
-                    as_mesh_data(entry.mesh), self.session.profile.printer.layer_height
-                )
-            finally:
-                QApplication.restoreOverrideCursor()
-            findings.extend(
-                gcode.compare(estimate.support_volume, metrics.support_mm3, "support").findings
-            )
-
         self.report.add_findings(findings)
         self._focus_report()
         self.status_message.setText(
             f"{tr('G-Code gelesen')}: {metrics.slicer or tr('unbekannter Slicer')}"
+        )
+
+        # Die Gegenprobe zum Stützvolumen braucht die eigene Schätzung. Sie
+        # wird geholt, nicht erzwungen: liegt sie noch nicht vor, rechnet der
+        # Arbeiter sie und der Vergleich kommt nach — die gemessenen Zahlen
+        # stehen längst im Bericht (§22.5).
+        object_id = self.object_tree.selected()
+        if object_id is not None and metrics.support_mm3 is not None:
+            measured = metrics.support_mm3
+            self._slice_of(
+                object_id,
+                lambda estimate, measured=measured: self._compare_support(estimate, measured),
+            )
+
+    def _compare_support(self, estimate: SliceResult | None, measured: float) -> None:
+        """Geschätztes gegen gemessenes Stützvolumen (§22.5, Regel 14)."""
+        if estimate is None:
+            return
+        self.report.add_findings(
+            gcode.compare(estimate.support_volume, measured, "support").findings
         )
 
     def action_catalog(self) -> None:
@@ -1170,29 +1199,51 @@ class MainWindow(QMainWindow):
         if index < 0 or object_id is None:
             self.viewport.set_layer(None)
             return
-        result = self._slice_of(object_id)
+        self._slice_of(object_id, lambda result: self._show_layer(result, index))
+
+    def _show_layer(self, result: SliceResult | None, index: int) -> None:
         if result is None or not result.layers:
             self.viewport.set_layer(None)
             return
         self.viewport.set_layer(result.layers[min(index, len(result.layers) - 1)])
 
-    def _slice_of(self, object_id: ObjectId) -> Any:
+    def _slice_of(self, object_id: ObjectId, then: Any = None) -> SliceResult | None:
+        """Die Schichtanalyse eines Körpers — aus dem Cache oder gerechnet.
+
+        Gerechnet wird im Arbeiter (§2.8): an einem großen Netz sind das
+        Sekunden, und ein Fenster, das sie in der Ereignisschleife verbringt,
+        hört auf zu zeichnen. Vorher stand hier ein Wartezeiger, und der macht
+        aus einer Blockade nur eine angekündigte.
+
+        Gibt das Ergebnis zurück, **wenn** es schon vorliegt; sonst ``None``
+        und ``then`` wird gerufen, sobald es da ist.
+        """
         result = self.session.last_result
         entry = result.scene.objects.get(object_id) if result else None
         if entry is None:
             return None
+
         key = (object_id, entry.mesh.triangle_count)
-        if key != self._slice_key:
-            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-            try:
-                self._slice_cache = slice_body(
-                    as_mesh_data(entry.mesh), self.session.profile.printer.layer_height
-                )
-            finally:
-                QApplication.restoreOverrideCursor()
-            self._slice_key = key
-            self.layer_bar.show_result(self._slice_cache)
-        return self._slice_cache
+        if key == self._slice_key:
+            if then is not None:
+                then(self._slice_cache)
+            return self._slice_cache
+
+        self.status_message.setText(tr("Die Schichtanalyse läuft …"))
+        worker = _SliceWorker(entry, self.session.profile.printer.layer_height)
+        worker.done.connect(lambda outcome, key=key: self._slice_ready(outcome, key, then))
+        worker.finished.connect(lambda: setattr(self, "_slice_worker", None))
+        self._slice_worker = worker
+        worker.start()
+        return None
+
+    def _slice_ready(self, outcome: SliceResult, key: tuple[Any, ...], then: Any) -> None:
+        self._slice_cache = outcome
+        self._slice_key = key
+        self.layer_bar.show_result(outcome)
+        self.status_message.setText("")
+        if then is not None:
+            then(outcome)
 
     def _on_finding_activated(self, finding: Finding) -> None:
         """Eine Warnung anklicken, die Stelle sehen: der kürzeste Weg vom Problem
@@ -1234,8 +1285,24 @@ class MainWindow(QMainWindow):
         self.session.propose_async(request, selection)
 
     def _on_agent_busy(self, busy: bool) -> None:
+        """Ein Zug dauert zehn bis sechzig Sekunden — §2.8 verlangt dafür
+        Fortschritt **und** Abbrechen.
+
+        Bisher gab es nur den Satz „Der Agent denkt nach.": der Knopf hing
+        allein an der Auswertung, und ein Zug, der zu lange lief, war nur über
+        das Schließen des Fensters zu beenden.
+        """
         self.chat.set_busy(busy)
         self.status_message.setText(tr("Der Agent denkt nach.") if busy else "")
+        self.cancel_button.setVisible(busy or self.progress.isVisible())
+        if busy:
+            # Wie viele Schritte ein Zug braucht, steht vorher nicht fest —
+            # ein Balken ohne Ende sagt „es läuft", ohne etwas zu versprechen.
+            self.progress.setRange(0, 0)
+            self.progress.setVisible(True)
+        elif not self.session.busy:
+            self.progress.setRange(0, 100)
+            self.progress.setVisible(False)
 
     def _on_proposal(self, preview: Any) -> None:
         """Ein Vorschlag ist da: zeigen, was er änderte, dann den Nutzer
@@ -1499,9 +1566,14 @@ class MainWindow(QMainWindow):
         self.status_message.setText(text)
 
     def _on_busy(self, busy: bool) -> None:
-        self.progress.setVisible(busy)
-        self.cancel_button.setVisible(busy)
-        if not busy:
+        # Der Agent kann gleichzeitig laufen; dann bleiben Balken und Knopf
+        # stehen, statt mit der Auswertung zu verschwinden.
+        agent_running = self.chat.busy
+        self.progress.setVisible(busy or agent_running)
+        self.cancel_button.setVisible(busy or agent_running)
+        if busy:
+            self.progress.setRange(0, 100)
+        if not busy and not agent_running:
             self.status_message.setText("")
 
     def _on_ask(self, request: AskRequest) -> None:

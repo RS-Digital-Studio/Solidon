@@ -59,11 +59,19 @@ def test_folding_back_together_resets_the_slider(qt_app: QApplication) -> None:
 
 
 def test_the_slider_reports_a_factor(qt_app: QApplication) -> None:
+    """Der Faktor kommt entprellt: jede Stufe baut die ganze Ansicht neu, und
+    ein Zug über den Regler soll eine Rechnung auslösen statt zwanzig.
+    """
     bar = ExplodeBar()
     seen: list[float] = []
     bar.factorChanged.connect(seen.append)
 
+    bar.slider.setValue(4)
     bar.slider.setValue(10)
+    assert seen == [], "während der Zeiger unterwegs ist, wird nicht gerechnet"
+
+    qt_app.processEvents()
+    bar._settled()
 
     assert seen == [1.0]
     assert bar.factor == 1.0

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QByteArray, Qt, Signal
+from PySide6.QtCore import QByteArray, Qt, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
@@ -73,6 +73,7 @@ class PartCatalog(QDialog):
 
         self._previews: dict[str, QPixmap] = {}
         self.show_parts()
+        QTimer.singleShot(0, self._render_pending)
 
     # --- content ----------------------------------------------------------------
 
@@ -102,21 +103,58 @@ class PartCatalog(QDialog):
         return item
 
     def _preview(self, spec: PartSpec) -> Any:
-        """Beim ersten Ansehen gerendert, für den Rest der Sitzung behalten."""
+        """Das Vorschaubild, wenn es schon da ist — sonst nichts.
+
+        Jedes Bild wird aus dem Baustein gerechnet (§24.3). Alle beim Öffnen
+        nacheinander zu rendern hieß: der Katalog geht auf, wenn das letzte
+        fertig ist, und bis dahin hängt das Fenster. Jetzt füllen sie sich
+        nach, und die Liste ist sofort lesbar — die Beschreibung daneben steht
+        ohnehin von Anfang an.
+        """
         from PySide6.QtGui import QIcon
 
-        if spec.name not in self._previews:
-            image = render(spec)
-            pixmap = QPixmap(_icon_size())
-            pixmap.fill(Qt.GlobalColor.transparent)
-            renderer = QSvgRenderer(QByteArray(image.svg.encode("utf-8")))
-            from PySide6.QtGui import QPainter
+        found = self._previews.get(spec.name)
+        return QIcon(found) if found is not None else QIcon()
 
-            painter = QPainter(pixmap)
-            renderer.render(painter)
-            painter.end()
-            self._previews[spec.name] = pixmap
-        return QIcon(self._previews[spec.name])
+    def _render_pending(self) -> None:
+        """Rendert das nächste fehlende Bild und reiht sich neu ein.
+
+        Eines je Durchlauf der Ereignisschleife: das Fenster bleibt zwischen
+        den Bildern bedienbar, und wer den Katalog gleich wieder schließt,
+        hat nicht auf achtzehn Rechnungen gewartet.
+        """
+        from PySide6.QtGui import QPainter
+
+        missing = next((spec for spec in PARTS.all() if spec.name not in self._previews), None)
+        if missing is None:
+            return
+
+        image = render(missing)
+        pixmap = QPixmap(_icon_size())
+        pixmap.fill(Qt.GlobalColor.transparent)
+        renderer = QSvgRenderer(QByteArray(image.svg.encode("utf-8")))
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        self._previews[missing.name] = pixmap
+
+        self._refresh_icon(missing.name)
+        QTimer.singleShot(0, self._render_pending)
+
+    def _refresh_icon(self, name: str) -> None:
+        """Hängt ein fertiges Bild an seine Zeile, ohne die Liste neu zu bauen —
+        ein Neuaufbau würde die Auswahl und die Bildlaufposition mitnehmen.
+        """
+        pixmap = self._previews.get(name)
+        if pixmap is None:
+            return
+        from PySide6.QtGui import QIcon
+
+        for row in range(self.list.count()):
+            item = self.list.item(row)
+            if item is not None and item.data(Qt.ItemDataRole.UserRole) == name:
+                item.setIcon(QIcon(pixmap))
+                return
 
     # --- choosing ---------------------------------------------------------------
 

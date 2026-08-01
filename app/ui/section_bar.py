@@ -8,7 +8,7 @@ schließen, sagt diese Leiste das, statt vorzugeben, das Bild sei vollständig.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -27,6 +27,12 @@ from app.i18n import tr
 #: Der Schieber arbeitet in Zehntelmillimetern; EPS_DISPLAY ist feiner als
 #: das.
 STEPS_PER_MM = 10
+
+#: Wie lange der Schnitt wartet, bis der Schieber zur Ruhe gekommen ist.
+#: Kurz genug, dass es sich unmittelbar anfühlt (§2.8: unter 0,2 s wird nichts
+#: angezeigt), lang genug, dass ein Zug über den Regler eine Rechnung auslöst
+#: statt dreißig.
+SETTLE_MS = 120
 
 
 class MeasureBar(QWidget):
@@ -73,6 +79,10 @@ class SectionBar(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+
+        self._pending = QTimer(self)
+        self._pending.setSingleShot(True)
+        self._pending.timeout.connect(self._settled)
 
         self.axis = QComboBox(self)
         self.axis.addItem(tr("Kein Schnitt"), userData=None)
@@ -144,6 +154,17 @@ class SectionBar(QWidget):
         self.thickness.setEnabled(active and self.as_slice.isChecked())
 
     def _emit(self) -> None:
+        """Die Zahl folgt sofort, der Schnitt entprellt.
+
+        Ein Schnitt ist eine boolesche Operation je Körper (§18.2), und der
+        Schieber sendet bei jedem Pixel. An einem großen Netz hieß das: die
+        Ansicht rechnet dreißigmal, was einmal gereicht hätte, und der
+        Schieber ruckelt. Die Beschriftung bleibt trotzdem am Zeiger — sie
+        kostet nichts, und ohne sie fühlt sich der Regler tot an.
+        """
         self._update_enabled()
         self.readout.setText(format_length(self.position.value() / STEPS_PER_MM))
+        self._pending.start(SETTLE_MS)
+
+    def _settled(self) -> None:
         self.sectionChanged.emit(self.plane(), self.thickness_value())

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
+from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, QThread, Signal
 
 from app.core.agent import apply as agent_apply
 from app.core.agent.proposal import Proposal
@@ -205,6 +205,10 @@ class Session(QObject):
         self.history = History(self.project.document)
         self.cache = ResultCache()
         self.cancel_signal = CancelSignal()
+        self.agent_cancel = CancelSignal()
+        """Ein eigenes Signal für den Agentenzug: Auswertung und Agent laufen
+        unabhängig, und ein abgebrochener Vorschlag darf keine laufende
+        Berechnung mitreißen (§15.6)."""
         self.path: Path | None = None
         self.quality: Quality = "draft"
         """Draft while iterating; the export and the final report switch to fine (§31)."""
@@ -238,6 +242,11 @@ class Session(QObject):
     @property
     def modified(self) -> bool:
         return self._dirty
+
+    @property
+    def busy(self) -> bool:
+        """True, solange eine Auswertung läuft — der Fortschritt gehört ihr."""
+        return self._worker is not None and self._worker.isRunning()
 
     @property
     def title(self) -> str:
@@ -510,7 +519,9 @@ class Session(QObject):
         return result
 
     def cancel(self) -> None:
+        """Der eine Knopf hält beides an, was gerade laufen kann (§2.8)."""
         self.cancel_signal.cancel()
+        self.agent_cancel.cancel()
 
     # --- the agent (§26) --------------------------------------------------------
 
@@ -538,6 +549,7 @@ class Session(QObject):
         if self._agent is not None and self._agent.isRunning():
             return
         self._selection = selection
+        self.agent_cancel.reset()
         self.agentBusyChanged.emit(True)
         worker = _AgentWorker(self, request)
         worker.finishedWith.connect(self._on_proposal)
@@ -559,6 +571,7 @@ class Session(QObject):
             sources=ProjectSources(self.project, base_dir=self.base_dir),
             ask=self.ask_from_worker,
             selection=self._selection,
+            cancelled=self.agent_cancel,
         )
         proposal = agent.propose(request)
         preview = ProposalPreview(proposal=proposal)
@@ -646,6 +659,11 @@ class Session(QObject):
     def wait_for_idle(self, timeout_ms: int = 10_000) -> None:
         """Blockiert, bis kein Lauf mehr übrig ist — auch der nicht, den eine
         Entprellung eingereiht hat.
+
+        Ereignisse werden verarbeitet, weil die Arbeiter ihre Ergebnisse über
+        Signale zurückgeben und sonst nie ankämen. Eingaben aber nicht: sonst
+        startet ein Menüklick mitten in diesem Warten die nächste Aktion, und
+        die trifft auf einen Zustand, den gerade jemand anders umbaut.
         """
         deadline = time.monotonic() + timeout_ms / 1000.0
         while time.monotonic() < deadline:
@@ -655,4 +673,4 @@ class Session(QObject):
             worker.wait(50)
             application = QCoreApplication.instance()
             if application is not None:
-                application.processEvents()
+                application.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)

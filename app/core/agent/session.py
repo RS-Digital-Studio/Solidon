@@ -48,6 +48,7 @@ from app.core.registry import REGISTRY, Registry, validate
 from app.core.scene.evaluate import EvaluationResult, evaluate
 from app.core.scene.history import History, OperationDraft
 from app.core.types import (
+    CancelToken,
     Document,
     FeatureRef,
     Fit,
@@ -91,6 +92,10 @@ class AgentSession:
     max_steps: int = MAX_STEPS
     max_tokens: int = MAX_TOKENS
     selection: tuple[ObjectId, str] | None = None
+    cancelled: CancelToken | None = None
+    """§15.6: ein Zug dauert zehn bis sechzig Sekunden, und so lange muss er
+    sich abbrechen lassen. Geprüft wird zwischen den Schritten — mitten in
+    einer Antwort des Modells gibt es keine Stelle dafür."""
 
     def propose(self, request: str) -> Proposal:
         """Beantwortet eine Anfrage mit einem Vorschlag. Am Dokument wird nichts
@@ -109,6 +114,8 @@ class AgentSession:
         tools = list(tool_schemas(self.registry))
 
         while True:
+            if self.cancelled is not None:
+                self.cancelled.raise_if_cancelled()
             reply = self.backend.complete(messages, tools, temperature=self.temperature)
             proposal.steps += 1
             proposal.input_tokens += reply.input_tokens

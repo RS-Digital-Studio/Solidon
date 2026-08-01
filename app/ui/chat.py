@@ -132,6 +132,10 @@ class ChatPanel(QWidget):
         self._busy = busy
         self._update_enabled()
 
+    @property
+    def busy(self) -> bool:
+        return self._busy
+
     def _update_enabled(self) -> None:
         usable = self._available and not self._busy
         self.input.setEnabled(usable)

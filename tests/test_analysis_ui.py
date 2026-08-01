@@ -249,6 +249,20 @@ def test_the_label_names_the_feature_and_its_size(window: MainWindow) -> None:
 # --- layer analysis (§18.10) ----------------------------------------------------
 
 
+def _wait_for_slice(window: MainWindow, timeout_ms: int = 20_000) -> None:
+    """Wartet auf den Schichtanalyse-Arbeiter des Fensters.
+
+    Kein `processEvents` in einer Endlosschleife: der Thread wird abgewartet
+    und danach einmal die Warteschlange geleert, damit sein Signal ankommt.
+    """
+    worker = window._slice_worker
+    if worker is not None:
+        worker.wait(timeout_ms)
+    application = QApplication.instance()
+    if application is not None:
+        application.processEvents()
+
+
 def test_the_layer_bar_is_called_what_it_is(qt_app: QApplication) -> None:
     """Keine Vorschau: sie zeigt Geometrie, keine Werkzeugwege (§18.10)."""
     bar = LayerBar()
@@ -259,8 +273,12 @@ def test_the_layer_bar_is_called_what_it_is(qt_app: QApplication) -> None:
 
 
 def test_scrubbing_shows_one_layer(window: MainWindow) -> None:
+    """Die Schichtanalyse rechnet im Arbeiter (§2.8) — die Leiste füllt sich,
+    sobald sie da ist, statt das Fenster so lange anzuhalten.
+    """
     select_plate(window)
     window.layer_bar.active.setCurrentIndex(1)
+    _wait_for_slice(window)
 
     assert window.layer_bar.slider.maximum() > 0, "the plate has layers"
     window.layer_bar.slider.setValue(3)
