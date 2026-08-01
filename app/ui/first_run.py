@@ -30,10 +30,11 @@ from app.core.knowledge import profiles
 from app.i18n import SUPPORTED_LANGUAGES, language_name, tr
 from app.ui.settings import UiSettings
 
-#: Ein Zeichen je Zustand, damit sich die Liste auch ohne Farbe
-#: liest (§19.1).
-FOUND = "+"
-MISSING = "-"
+#: Der Zustand jedes Programms steht als Wort in der Zeile, damit sich die
+#: Liste auch ohne Farbe liest (§19.1). Vorher stand dort ein Plus- und ein
+#: ein Minuszeichen — beides kurz, beides zu raten. In der einzigen Liste,
+#: die jemand beim allerersten Start zu lesen bekommt, ist das ein schlechter
+#: Tausch für zwei gesparte Zeichen.
 
 
 class FirstRunDialog(QDialog):
@@ -160,11 +161,11 @@ def _tool_text() -> str:
     """
     lines = []
     for state in tools.survey():
-        marker = FOUND if state.available else MISSING
+        marker = tr("gefunden") if state.available else tr("fehlt")
         where = str(state.path) if state.path else state.tool.address()
         if not state.available:
             where = str(state.explain())
-        lines.append(f"{marker} {state.tool.title}: {where}\n   {state.tool.what_for}")
+        lines.append(f"{marker} — {state.tool.title}: {where}\n   {state.tool.what_for}")
     return "\n".join(lines)
 
 

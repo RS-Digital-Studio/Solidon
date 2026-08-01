@@ -32,6 +32,7 @@ from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
 from app.core.units import format_length
 from app.i18n import tr
+from app.ui.icons import icon
 from app.ui.labels import feature_label
 from app.ui.palette import SEVERITY_ENCODING
 
@@ -330,9 +331,15 @@ class ReportPanel(QWidget):
 
     def _append(self, finding: Finding) -> None:
         """Einen Befund als Eintrag anhängen."""
-        item = QListWidgetItem(f"{SEVERITY_MARKER[finding.severity]}  {finding.message}")
+        encoding = SEVERITY_ENCODING[finding.severity]
+        item = QListWidgetItem(str(finding.message))
+        # Die Form trägt den Schweregrad, die Farbe verstärkt ihn nur: ein
+        # Dreieck bleibt ein Dreieck, auch wo die Farbe nicht ankommt.
+        item.setIcon(
+            icon(f"severity-{finding.severity}", self.list, colour=QColor(encoding.colour))
+        )
         item.setData(Qt.ItemDataRole.UserRole, finding)
-        item.setForeground(QColor(SEVERITY_ENCODING[finding.severity].colour))
+        item.setForeground(QColor(encoding.colour))
         # §22.5: woher eine Zahl kommt, ist Teil des Befunds und wird nie dem
         # Leser zum Annehmen überlassen — eine Schätzung ist keine Messung.
         details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]

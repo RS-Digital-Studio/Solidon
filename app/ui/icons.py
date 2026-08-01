@@ -81,6 +81,19 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M13.5 10.5 10.5 13.5" />'
         '<path d="M13.5 10.5h-3v3" />'
     ),
+    # Die Schweregrade des Prüfberichts. Hier ist Ikonografie ausnahmsweise
+    # etabliert: Dreieck warnt, Kreis erklärt, Achteck hält an — die Form trägt
+    # allein, auch wo die Farbe wegfällt (Regel 18).
+    "severity-info": (
+        '<circle cx="12" cy="12" r="8.5" /><path d="M12 11.2v5" /><path d="M12 8.2v.6" />'
+    ),
+    "severity-warning": (
+        '<path d="M12 4 21 19.5H3z" /><path d="M12 10v4.5" /><path d="M12 17.2v.6" />'
+    ),
+    "severity-error": (
+        '<path d="M8.6 3.5h6.8L20.5 8.6v6.8L15.4 20.5H8.6L3.5 15.4V8.6z" />'
+        '<path d="M9.4 9.4l5.2 5.2" /><path d="M14.6 9.4l-5.2 5.2" />'
+    ),
     # Ein Pinsel, der eine Fläche einfärbt.
     "paint": (
         '<path d="M5 13.5 13.5 5a2.5 2.5 0 0 1 3.5 3.5L8.5 17z" />'
@@ -98,18 +111,18 @@ def svg_source(name: str, colour: str) -> str:
     return f"{_HEAD}{body}</svg>".replace("currentColor", colour)
 
 
-def icon(name: str, widget: QWidget, *, scale: float = 1.35) -> QIcon:
+def icon(name: str, widget: QWidget, *, scale: float = 1.35, colour: QColor | None = None) -> QIcon:
     """Ein Symbol in der Textfarbe und in der Größe der Schrift des Widgets.
 
     ``scale`` ist der Faktor auf die Zeilenhöhe: etwas größer als die Schrift,
     sonst verschwindet ein Strichsymbol neben dem Wort daneben.
     """
-    colour = widget.palette().windowText().color()
-    source = svg_source(name, colour.name())
+    tone = colour or widget.palette().windowText().color()
+    source = svg_source(name, tone.name())
     if not source:
         return QIcon()
     size = max(int(widget.fontMetrics().height() * scale), 12)
-    return QIcon(_pixmap(source, size, colour))
+    return QIcon(_pixmap(source, size, tone))
 
 
 def _pixmap(source: str, size: int, colour: QColor) -> QPixmap:

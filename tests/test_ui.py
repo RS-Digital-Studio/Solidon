@@ -346,3 +346,39 @@ def test_symbols_render_and_follow_the_text_colour(qt_app: QApplication) -> None
         assert source.startswith("<svg"), name
         assert "currentColor" not in source, f"{name} hängt an einer festen Farbe"
         assert "#ff0000" in source, name
+
+
+def test_findings_carry_their_severity_as_a_shape(qt_app: QApplication) -> None:
+    """Regel 18: die Form trägt den Schweregrad, die Farbe verstärkt ihn nur.
+
+    Vorher stand ein „!" oder ein „·" im Text der Zeile. Das erfüllte die Regel,
+    sah aber nach Behelf aus — und Warndreieck, Info-Kreis und Fehler-Achteck
+    sind Zeichen, die niemand lernen muss.
+    """
+    from app.core.types import Finding
+    from app.ui.panels import ReportPanel
+
+    panel = ReportPanel()
+    panel.add_findings(
+        [
+            Finding(code="a.b", severity="error", message="kaputt"),
+            Finding(code="c.d", severity="warning", message="offen"),
+            Finding(code="e.f", severity="info", message="dünn"),
+        ]
+    )
+
+    assert panel.list.count() == 3
+    for row in range(panel.list.count()):
+        item = panel.list.item(row)
+        assert not item.icon().isNull(), item.text()
+        assert not item.text().startswith(("!", "·", "X")), "der Marker steckt jetzt im Zeichen"
+
+
+def test_the_first_run_says_found_and_missing_in_words(qt_app: QApplication) -> None:
+    """„+" und „−" waren die kryptischste Stelle im allerersten Dialog."""
+    from app.ui.first_run import _tool_text
+
+    text = _tool_text()
+
+    assert "gefunden" in text or "fehlt" in text
+    assert not any(line.startswith(("+ ", "- ")) for line in text.splitlines())
