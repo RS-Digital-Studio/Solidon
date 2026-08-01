@@ -250,9 +250,28 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       und wo die Maschine am Anschlag ist, stattdessen langsamer. Die Regel
       rechnet gegen den Stand *nach* den übrigen Vorschlägen, und die Zahl
       reist als `filament_max_volumetric_speed` zum Slicer mit
+- [x] **Druckeinstellungen im Projekt** (§29) — `format_version` 4 mit
+      Migration; `None` heißt „noch nichts entschieden", nicht „alles null".
+      Beispieldatei `example_v4.p3d` eingecheckt
+- [x] **Druckdatei speichern** — was der Slicer schreibt, lag im Arbeitsordner
+      und verschwand mit ihm. Jetzt speicherbar, mit Ordner und Name des
+      Projekts als Vorschlag
+- [x] **Vorschläge einzeln wählbar** — vorbelegt angehakt, aber abwählbar;
+      alles-oder-nichts hieße, für einen unpassenden Vorschlag die übrigen
+      mit aufzugeben
+- [x] **Nur die gewählte Plattenhaftung bekommt Maße** — Skirt, Brim und Raft
+      sind Maße ihrer Art, keine Schalter. Vorher lief unter jedem Teil ein
+      Raft mit, auch bei eingestelltem Skirt
 - [ ] Farbgruppen aus der Szene an den Slicer durchreichen — `filament.colour`
       ist eine Farbe, die 3MF-Materialslots sind mehrere (§20). Für
       Mehrfarbdruck fehlt die Zuordnung Slot → Extruder
+- [ ] 3MF als Baugruppe **schreiben** — `threemf.write` kann ein Mesh, nicht
+      mehrere. Solange das fehlt, gehen mehrere Objekte als einzelne Dateien
+      an den Slicer, und die Anordnung macht er statt Formwerk (§20, §29)
+- [ ] Prusa- und Cura-Adapter gegen die echten Programme prüfen — die
+      Zuordnung steht, verifiziert ist bisher nur die Orca-Familie
+      (ElegooSlicer 1.5.2.2). Bei Orca hat erst der echte Lauf drei Fehler
+      gezeigt, die keine Dokumentation nennt
 
 ## P8 — Erste Veröffentlichung
 - [x] Name entschieden, überall durchgezogen — alles Namensbezogene steht in

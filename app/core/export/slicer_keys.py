@@ -289,6 +289,27 @@ CURA: Final[tuple[Entry, ...]] = (
     ("filament.flow_ratio", "material_flow", _percent),
 )
 
+#: Welche Schlüssel zu welcher Haftungsart gehören. Die Slicer lesen sie als
+#: unabhängige Maße, gemeint ist aber genau eine Art: wer Skirt eingestellt hat
+#: und trotzdem ``raft_layers`` mitschickt, bekommt beides.
+ADHESION_KEYS: Final[dict[SlicerFlavour, dict[str, tuple[str, ...]]]] = {
+    "prusa": {
+        "skirt": ("skirts",),
+        "brim": ("brim_width",),
+        "raft": ("raft_layers",),
+    },
+    "orca": {
+        "skirt": ("skirt_loops",),
+        "brim": ("brim_width",),
+        "raft": ("raft_layers",),
+    },
+    "cura": {
+        "skirt": ("skirt_line_count",),
+        "brim": ("brim_width",),
+        "raft": ("raft_surface_layers",),
+    },
+}
+
 TABLES: Final[dict[SlicerFlavour, tuple[Entry, ...]]] = {
     "prusa": PRUSA,
     "orca": ORCA,

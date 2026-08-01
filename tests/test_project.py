@@ -375,6 +375,28 @@ def test_a_file_from_before_the_agent_gets_an_empty_conversation() -> None:
     assert project.document.chat == []
 
 
+def test_a_file_from_before_the_print_settings_has_none() -> None:
+    """3 → 4: keine eigenen Druckeinstellungen heißt nicht „alles auf null",
+    sondern „noch nichts entschieden" — es gilt weiter, was sich aus Stufe,
+    Material und Drucker ergibt (§29).
+    """
+    project = load(Path(__file__).parent / "data" / "projects" / "example_v3.p3d")
+
+    assert project.document.print_settings is None
+
+
+def test_print_settings_survive_the_round_trip(tmp_path: Path) -> None:
+    """Was eingestellt wurde, muss beim nächsten Öffnen noch da sein — sonst
+    ist der Dialog eine Sitzung lang gültig und danach vergessen."""
+    project = load(Path(__file__).parent / "data" / "projects" / "example_v4.p3d")
+    settings = project.document.print_settings
+    assert settings is not None
+
+    reopened = load(save(project, tmp_path / "wieder.p3d"))
+
+    assert reopened.document.print_settings == settings
+
+
 def test_a_file_from_before_pillar_b_has_no_generated_sources() -> None:
     """2 → 3: damals wurde nichts erzeugt, also trägt nichts einen Prompt."""
     project = load(Path(__file__).parent / "data" / "projects" / "example_v2.p3d")

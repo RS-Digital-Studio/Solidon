@@ -12,22 +12,34 @@ Parameter (§13).
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import fields
+from typing import Any, Final
 
 from app.core.types import (
+    AdhesionSettings,
     ChatEntry,
+    CoolingSettings,
     Document,
     FeatureRef,
+    FilamentSettings,
     Finding,
     Fit,
+    InfillSettings,
     IngestInfo,
+    LayerSettings,
     Operation,
     Origin,
     Parameter,
+    PrintSettings,
     Report,
+    RetractionSettings,
+    ShellSettings,
     SolverInfo,
     Source,
     SourceOrigin,
+    SpeedSettings,
+    SupportSettings,
+    TemperatureSettings,
     Transaction,
 )
 
@@ -317,6 +329,56 @@ def report_from_data(data: dict[str, Any]) -> Report:
 # --- Document ------------------------------------------------------------------
 
 
+#: Die Gruppen von :class:`PrintSettings` und ihre Klassen. Gelesen wird über
+#: die Felder der Dataclass, nicht über eine zweite Liste von Namen: eine neue
+#: Einstellung soll gespeichert werden, ohne dass jemand hier daran denkt.
+_SETTING_GROUPS: Final[dict[str, type]] = {
+    "layers": LayerSettings,
+    "shell": ShellSettings,
+    "infill": InfillSettings,
+    "temperature": TemperatureSettings,
+    "cooling": CoolingSettings,
+    "speed": SpeedSettings,
+    "support": SupportSettings,
+    "adhesion": AdhesionSettings,
+    "retraction": RetractionSettings,
+    "filament": FilamentSettings,
+}
+
+
+def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:
+    """Die Druckeinstellungen als Schlüssel und Werte (§29)."""
+    data: dict[str, Any] = {
+        "id": settings.id,
+        "title": settings.title,
+        "quality": settings.quality,
+    }
+    for group in _SETTING_GROUPS:
+        section = getattr(settings, group)
+        data[group] = {entry.name: getattr(section, entry.name) for entry in fields(section)}
+    return data
+
+
+def print_settings_from_data(data: dict[str, Any]) -> PrintSettings:
+    """Zurück aus der Projektdatei.
+
+    Was in der Datei fehlt, bleibt auf der Vorgabe der Dataclass — eine ältere
+    Datei kennt eine später hinzugekommene Einstellung nicht, und das ist kein
+    Fehler, sondern der Normalfall beim Öffnen.
+    """
+    groups: dict[str, Any] = {}
+    for group, klass in _SETTING_GROUPS.items():
+        stored = data.get(group, {})
+        known = {entry.name for entry in fields(klass)}
+        groups[group] = klass(**{key: value for key, value in stored.items() if key in known})
+    return PrintSettings(
+        id=str(data.get("id", "standard")),
+        title=str(data.get("title", "")),
+        quality=data.get("quality", "standard"),
+        **groups,
+    )
+
+
 def document_to_data(document: Document) -> dict[str, Any]:
     return {
         "format_version": document.format_version,
@@ -334,6 +396,11 @@ def document_to_data(document: Document) -> dict[str, Any]:
         "transactions": [transaction_to_data(entry) for entry in document.transactions],
         "ops": [operation_to_data(entry) for entry in document.ops],
         "chat": [chat_to_data(entry) for entry in document.chat],
+        "print_settings": (
+            None
+            if document.print_settings is None
+            else print_settings_to_data(document.print_settings)
+        ),
     }
 
 
@@ -358,4 +425,9 @@ def document_from_data(data: dict[str, Any]) -> Document:
         transactions=[transaction_from_data(entry) for entry in data.get("transactions", ())],
         ops=[operation_from_data(entry) for entry in data.get("ops", ())],
         chat=[chat_from_data(entry) for entry in data.get("chat", ())],
+        print_settings=(
+            print_settings_from_data(stored)
+            if isinstance(stored := data.get("print_settings"), dict)
+            else None
+        ),
     )

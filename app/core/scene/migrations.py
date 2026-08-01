@@ -23,7 +23,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 3
+FORMAT_VERSION: Final = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,10 +61,24 @@ def _mark_generated_sources(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _add_print_settings(data: dict[str, Any]) -> dict[str, Any]:
+    """3 → 4: womit gedruckt wird, steht im Projekt (§29).
+
+    Eine ältere Datei hat keine eigenen Druckeinstellungen, und ``None`` sagt
+    genau das: es gilt weiter, was sich aus Qualitätsstufe, Material und
+    Drucker ergibt. Erst wer sie einmal ändert, hat welche — vorher wäre ein
+    voller Satz Zahlen in der Datei eine Behauptung über eine Entscheidung,
+    die niemand getroffen hat.
+    """
+    data.setdefault("print_settings", None)
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
     Step(from_version=2, to_version=3, apply=_mark_generated_sources),
+    Step(from_version=3, to_version=4, apply=_add_print_settings),
 )
 
 

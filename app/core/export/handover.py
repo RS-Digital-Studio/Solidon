@@ -22,6 +22,7 @@ import json
 import subprocess
 import tempfile
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
@@ -90,6 +91,31 @@ def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str
     written: dict[str, str] = {}
     for path, key, convert in slicer_keys.TABLES[flavour]:
         written[key] = convert(read_path(settings, path))
+    return _only_chosen_adhesion(written, settings, flavour)
+
+
+def _only_chosen_adhesion(
+    written: dict[str, str], settings: PrintSettings, flavour: SlicerFlavour
+) -> dict[str, str]:
+    """Nullt die Maße der Haftungsarten, die nicht gewählt sind.
+
+    ``skirt_loops``, ``brim_width`` und ``raft_layers`` sind Maße *ihrer
+    jeweiligen Art*, keine unabhängigen Schalter — aber die Slicer lesen sie
+    als solche. Wer alle drei schreibt, bekommt alle drei: ein Raft unter
+    einem Teil, für das „Skirt" eingestellt war.
+
+    Das ist kein Schönheitsfehler. Ein ungewollter Raft kostet Material, Zeit
+    und die Unterseite des Teils, und er fällt erst auf der Platte auf —
+    hier gefunden, weil zwei kleine Teile plötzlich nicht mehr nebeneinander
+    passten.
+    """
+    kind = settings.adhesion.kind
+    for wanted, keys in slicer_keys.ADHESION_KEYS[flavour].items():
+        if wanted == kind:
+            continue
+        for key in keys:
+            if key in written:
+                written[key] = "0"
     return written
 
 
@@ -182,14 +208,20 @@ def _orca_process(
 
 def _command(
     setup: SlicerSetup,
-    model: Path,
+    models: Sequence[Path],
     config: Path,
     output: Path,
 ) -> list[str]:
     """Die Kommandozeile dieses Slicers. Eine Liste, nie eine Zeichenkette —
     ein Dateiname mit Leerzeichen ist sonst zwei Argumente.
+
+    Mehrere Modelle gehen zusammen hinein: die Slicer ordnen sie selbst auf der
+    Platte an, und das ist ihre Aufgabe. Eines nach dem anderen zu slicen
+    ergäbe ebenso viele Druckdateien, von denen jede so tut, als sei sie der
+    ganze Auftrag.
     """
     binary = str(setup.executable)
+    files = [str(entry) for entry in models]
 
     if setup.flavour == "prusa":
         return [
@@ -199,7 +231,7 @@ def _command(
             str(config),
             "--output",
             str(output / "formwerk.gcode"),
-            str(model),
+            *files,
         ]
 
     if setup.flavour == "orca":
@@ -215,7 +247,7 @@ def _command(
             "0",
             "--outputdir",
             str(output),
-            str(model),
+            *files,
         ]
 
     arguments = [binary, "slice", "-v"]
@@ -224,7 +256,9 @@ def _command(
     for line in config.read_text(encoding="utf-8").splitlines():
         if line.strip():
             arguments += ["-s", line.strip()]
-    arguments += ["-l", str(model), "-o", str(output / "formwerk.gcode")]
+    for entry in files:
+        arguments += ["-l", entry]
+    arguments += ["-o", str(output / "formwerk.gcode")]
     return arguments
 
 
@@ -239,7 +273,7 @@ class SliceOutcome:
 
 
 def slice_model(
-    model: Path,
+    model: Path | Sequence[Path],
     settings: PrintSettings,
     profile: Profile,
     setup: SlicerSetup,
@@ -253,12 +287,23 @@ def slice_model(
     der Platte, sondern gemessene Kennzahlen, die im Prüfbericht neben den
     geschätzten stehen — mit ihrer Herkunft, nie mit ihnen vermischt
     (Regel 14).
+
+    Mehrere Modelle gehen als eine Platte hinein und ergeben eine Druckdatei.
+    Ein einzelner Pfad ist dabei der Sonderfall mit einem Eintrag, nicht ein
+    anderer Weg.
     """
-    if not model.is_file():
+    models = [model] if isinstance(model, Path) else list(model)
+    if not models:
+        raise ExternalToolError(
+            tool=setup.name,
+            detail=_("Es wurde nichts zum Slicen übergeben."),
+        )
+    missing = [entry for entry in models if not entry.is_file()]
+    if missing:
         raise ExternalToolError(
             tool=setup.name,
             detail=_("Die zu slicende Datei ist nicht da."),
-            values={"path": model.name},
+            values={"path": ", ".join(entry.name for entry in missing)},
         )
     if not setup.executable.is_file():
         raise ExternalToolError(
@@ -275,7 +320,7 @@ def slice_model(
         target.mkdir(parents=True, exist_ok=True)
 
         completed = subprocess.run(
-            _command(setup, model, config, target),
+            _command(setup, models, config, target),
             cwd=workspace,
             capture_output=True,
             timeout=timeout,
@@ -287,7 +332,10 @@ def slice_model(
                 tool=setup.name,
                 exit_code=completed.returncode,
                 detail=_("Der Slicer hat keine Druckdatei geschrieben."),
-                values={"output": completed.stderr.decode("utf-8", errors="replace")[-500:]},
+                # Beide Ströme: die Orca-Familie protokolliert auf stdout und
+                # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
+                # ohne Text zu melden — und das ist schlimmer als keiner.
+                values={"output": _tail(completed.stdout, completed.stderr)},
                 suggestions=(
                     Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
                     Action(id="check_profile", label=_("Maschinenprofil prüfen.")),
@@ -299,7 +347,7 @@ def slice_model(
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
             # erreichen können, also wandert sie neben das Modell.
-            kept = model.with_suffix(".gcode")
+            kept = models[0].with_suffix(".gcode")
             kept.write_bytes(produced.read_bytes())
             produced = kept
 
@@ -321,6 +369,17 @@ def slice_model(
         findings=findings,
         seconds=time.perf_counter() - started,
     )
+
+
+def _tail(*streams: bytes, limit: int = 800) -> str:
+    """Das Ende dessen, was der Slicer gesagt hat.
+
+    Der Anfang ist bei allen dieser Programme eine Seite Versionsangaben; was
+    erklärt, warum nichts herauskam, steht unten.
+    """
+    text = "\n".join(stream.decode("utf-8", errors="replace").strip() for stream in streams)
+    lines = [line for line in text.splitlines() if line.strip()]
+    return "\n".join(lines)[-limit:]
 
 
 def _find_gcode(directory: Path) -> Path | None:

@@ -85,6 +85,29 @@ Eigenheiten, die dabei nicht angenommen werden dürfen:
   `default_print_profile` reichen. Trifft nichts, bleibt die Auswahl leer:
   eine falsche Vorauswahl sieht aus wie eine Entscheidung.
 
+## Was geschrieben wird, ist nicht alles, was im Modell steht
+
+Skirt, Brim und Raft sind Maße **ihrer jeweiligen Art**, keine unabhängigen
+Schalter — die Slicer lesen sie aber als solche. Wer alle drei schreibt,
+bekommt alle drei: einen Raft unter einem Teil, für das „Skirt" eingestellt
+war. `_only_chosen_adhesion` nullt deshalb die Maße der nicht gewählten Arten.
+
+Dieselbe Vorsicht gilt für jede künftige Einstellung, die eine Art *und* ihre
+Maße hat. Der Fehler ist geräuschlos, kostet Material und Zeit und fällt erst
+auf der Platte auf.
+
+## Die Druckdatei gehört dem Nutzer
+
+Der Lauf endet nicht bei den Kennzahlen. Was der Slicer schreibt, liegt im
+Arbeitsordner und verschwindet mit ihm — es muss speicherbar sein, sonst war
+der ganze Weg eine Zahl auf dem Bildschirm. Vorgeschlagen werden Ordner und
+Name des Projekts.
+
+Die Druckeinstellungen selbst gehören ins **Projekt** (`format_version` 4),
+nicht in die Anwendungskonfiguration: sie beschreiben das Teil, nicht den
+Rechner. Slicer-Pfad und Profilwahl bleiben dagegen bei der Anwendung — ein
+Projekt wird auch auf einem Rechner geöffnet, wo ein anderer Slicer liegt.
+
 ## Was die Analyse liefert
 
 Überhangfläche je Schicht, Stützvolumen, Querschnittsverlauf, **Inseln**

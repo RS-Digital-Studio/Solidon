@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -18,8 +19,10 @@ from PySide6.QtWidgets import (
     QSpinBox,
 )
 
+from app.core.export import handover
 from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
+from app.core.slice import gcode
 from app.ui.print_settings_dialog import FIELDS, GROUPS, PrintSettingsDialog, _ColourButton
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -238,6 +241,111 @@ def test_the_dialog_opens_without_a_slicer(
 def test_slicing_without_a_scene_says_what_is_missing(dialog: PrintSettingsDialog) -> None:
     dialog._slice()
     assert dialog.state.text()
+
+
+# --- was bleibt, wenn der Dialog zugeht ---------------------------------------------
+
+
+def test_the_project_settings_win_over_the_preset(qt_app: QApplication) -> None:
+    """§29: was eingestellt wurde, gilt beim nächsten Öffnen weiter — sonst
+    wäre der Dialog eine Sitzung lang gültig und danach vergessen."""
+    session = Session()
+    stored = print_settings.with_path(
+        print_settings.resolve(session.profile), "shell.wall_count", 9
+    )
+    session.project.document.print_settings = stored
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    assert dialog.settings.shell.wall_count == 9
+
+
+def test_a_project_without_settings_falls_back_to_the_preset(dialog: PrintSettingsDialog) -> None:
+    """Kein eigener Satz heißt „noch nichts entschieden", nicht „alles null"."""
+    assert dialog.settings.shell.wall_count > 0
+
+
+def test_the_session_takes_the_settings_and_marks_the_project(qt_app: QApplication) -> None:
+    session = Session()
+    changed = print_settings.with_path(
+        print_settings.resolve(session.profile), "infill.density", 0.42
+    )
+
+    session.set_print_settings(changed)
+
+    assert session.project.document.print_settings == changed
+    assert session.modified
+
+
+def test_setting_the_same_values_changes_nothing(qt_app: QApplication) -> None:
+    """Den Dialog zu öffnen und ohne Änderung zu schließen darf ein Projekt
+    nicht als geändert markieren."""
+    session = Session()
+    same = print_settings.resolve(session.profile)
+    session.set_print_settings(same)
+    session._dirty = False
+
+    session.set_print_settings(same)
+
+    assert not session.modified
+
+
+# --- Vorschläge einzeln wählen ------------------------------------------------------
+
+
+def test_advice_can_be_taken_one_at_a_time(qt_app: QApplication) -> None:
+    """Alles oder nichts hieße: wer einen Vorschlag nicht will, gibt die
+    übrigen mit auf."""
+    session = Session()
+    session.project.document.material = "tpu-95a"
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.advice_view.topLevelItemCount() >= 2
+
+    first = dialog.advice_view.topLevelItem(0)
+    assert first is not None
+    first.setCheckState(0, Qt.CheckState.Unchecked)
+    skipped = str(first.data(0, Qt.ItemDataRole.UserRole))
+    before = print_settings.read_path(dialog.settings, skipped)
+
+    dialog._apply_advice()
+
+    assert print_settings.read_path(dialog.settings, skipped) == before
+
+
+def test_every_advice_starts_checked(qt_app: QApplication) -> None:
+    """Die Vorschläge sind begründet — sie vorbelegt zu lassen ist die gute
+    Vorgabe, nicht die bequeme."""
+    session = Session()
+    session.project.document.material = "tpu-95a"
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    for index in range(dialog.advice_view.topLevelItemCount()):
+        item = dialog.advice_view.topLevelItem(index)
+        assert item is not None and item.checkState(0) == Qt.CheckState.Checked
+
+
+# --- die Druckdatei -----------------------------------------------------------------
+
+
+def test_the_save_button_stays_off_until_something_was_sliced(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Ein Knopf, der eine Datei speichern soll, die es nicht gibt, ist eine
+    Sackgasse."""
+    assert not dialog.save_button.isEnabled()
+
+
+def test_slicing_makes_the_file_available(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
+    """Ohne diesen Schritt wäre der ganze Lauf eine Zahl auf dem Bildschirm
+    und nichts, was auf einen Drucker geht."""
+    produced = tmp_path / "plate_1.gcode"
+    produced.write_text("; nur ein Test\n", encoding="utf-8")
+    outcome = handover.SliceOutcome(gcode_path=produced, metrics=gcode.GcodeMetrics())
+
+    dialog._sliced(outcome)
+
+    assert dialog.save_button.isEnabled()
+    assert dialog._gcode == produced
 
 
 # --- Profilauswahl (§29) ------------------------------------------------------------

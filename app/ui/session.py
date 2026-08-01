@@ -54,7 +54,15 @@ from app.core.scene.project import (
     write_autosave,
 )
 from app.core.split import SplitApplied, apply_split
-from app.core.types import Finding, Origin, Profile, Quality, Report, Source
+from app.core.types import (
+    Finding,
+    Origin,
+    PrintSettings,
+    Profile,
+    Quality,
+    Report,
+    Source,
+)
 from app.i18n import TranslatableText, tr
 
 _log = get_logger(__name__)
@@ -299,6 +307,20 @@ class Session(QObject):
         self._dirty = True
         self.projectChanged.emit()
         self.evaluate_async()
+
+    def set_print_settings(self, settings: PrintSettings) -> None:
+        """Womit dieses Projekt gedruckt wird (§29).
+
+        Keine Operation und keine Transaktion: es entsteht keine Geometrie und
+        es ändert sich keine. Das Projekt gilt danach als geändert, damit die
+        Einstellung nicht beim nächsten Schließen verloren geht — sichtbar
+        wird sie im Titel, wie jede andere Änderung auch.
+        """
+        if self.project.document.print_settings == settings:
+            return
+        self.project.document.print_settings = settings
+        self._dirty = True
+        self.projectChanged.emit()
 
     def import_model(self, path: Path, unit: str = "auto") -> None:
         """Bettet eine Datei ein und legt die passende load-Operation auf den

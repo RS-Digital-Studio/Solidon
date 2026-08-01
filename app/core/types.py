@@ -871,6 +871,14 @@ class Document:
     """Das Gespräch, das zu diesem Stapel geführt hat (§26.3). Mit dem Projekt
     gespeichert: ein Container ist ein Fehlerbericht (§16.2), und ein halber
     Fehlerbericht ist einer ohne den Satz, der die Operation ausgelöst hat."""
+    print_settings: PrintSettings | None = None
+    """Womit dieses Projekt gedruckt wird (§29).
+
+    Beim Projekt und nicht bei der Anwendung, weil es zum Teil gehört und
+    nicht zum Rechner: eine Dichtung aus TPU bleibt eine Dichtung aus TPU,
+    auch wenn dazwischen etwas anderes gedruckt wurde. ``None`` heißt: noch
+    nichts eingestellt, es gilt die Auflösung aus Stufe, Material und Drucker.
+    """
 
 
 # --- Schichtanalyse (§22) ------------------------------------------------------

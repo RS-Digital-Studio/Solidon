@@ -865,6 +865,11 @@ class MainWindow(QMainWindow):
             QApplication.restoreOverrideCursor()
         dialog.sliced.connect(self._gcode_returned)
         dialog.exec()
+
+        # Die Einstellungen gehören zum Projekt, die Stufe und die Slicer-Wahl
+        # zur Anwendung (§29). Getrennt gespeichert, weil ein Projekt auf einem
+        # anderen Rechner geöffnet wird, wo ein anderer Slicer liegt.
+        self.session.set_print_settings(dialog.settings)
         self.settings.print_quality = dialog.settings.quality
         save_settings(self.settings)
 

@@ -490,6 +490,32 @@ def _possible(path: str) -> tuple[object, ...]:
     return arguments or (True, False)
 
 
+@pytest.mark.parametrize("flavour", ["prusa", "orca", "cura"])
+@pytest.mark.parametrize("kind", ["skirt", "brim", "raft", "none"])
+def test_only_the_chosen_adhesion_gets_measurements(flavour: str, kind: str) -> None:
+    """Skirt, Brim und Raft sind Maße *ihrer* Art, keine unabhängigen
+    Schalter — aber die Slicer lesen sie als solche.
+
+    Alle drei zu schreiben hieße, alle drei zu bekommen: ein Raft unter einem
+    Teil, für das „Skirt" eingestellt war. Das kostet Material, Zeit und die
+    Unterseite, und es fällt erst auf der Platte auf.
+    """
+    settings = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "adhesion.kind", kind
+    )
+    written = handover.as_mapping(settings, flavour)  # type: ignore[arg-type]
+
+    for wanted, keys in slicer_keys.ADHESION_KEYS[flavour].items():  # type: ignore[index]
+        for key in keys:
+            if key not in written:
+                continue
+            value = float(written[key])
+            if wanted == kind:
+                assert value > 0.0, f"{kind}: {key} muss ein Maß haben"
+            else:
+                assert value == 0.0, f"{kind}: {key} gehört zu {wanted} und muss null sein"
+
+
 @pytest.mark.parametrize("flavour", ["prusa", "orca"])
 def test_the_prusa_family_writes_no_word_booleans(flavour: str) -> None:
     """Beide erben von Slic3r und lesen nur Zahlen. Ein ``true`` oder

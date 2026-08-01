@@ -17,6 +17,7 @@ nicht getroffen hat.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -594,7 +596,7 @@ class _SliceWorker(QThread):
 
     def __init__(
         self,
-        model: Path,
+        model: Sequence[Path],
         settings: PrintSettings,
         profile: Profile,
         setup: handover.SlicerSetup,
@@ -669,7 +671,15 @@ class PrintSettingsDialog(QDialog):
         self._profile_worker: _ProfileWorker | None = None
         self._profiles: list[slicer_profiles.SlicerProfile] = []
         self._temporary: TemporaryDirectory[str] | None = None
-        self.settings = print_settings.resolve(session.profile, self._remembered_quality())
+        self._gcode: Path | None = None
+        # Was das Projekt mitbringt, gilt: eine Dichtung aus TPU bleibt eine
+        # Dichtung aus TPU, auch wenn dazwischen anderes gedruckt wurde (§29).
+        # Erst ohne eigene Einstellungen wird aus Stufe, Material und Drucker
+        # aufgelöst.
+        stored = session.project.document.print_settings
+        self.settings = stored or print_settings.resolve(
+            session.profile, self._remembered_quality()
+        )
         # Einmal suchen, dreimal gebraucht: die Suche geht über PATH,
         # Registry und die üblichen Installationsorte und kostet eine halbe
         # Sekunde — dreimal wäre die Hälfte der Zeit, die der Dialog zum
@@ -907,6 +917,10 @@ class PrintSettingsDialog(QDialog):
         self.slice_button.setDefault(True)
         self.slice_button.clicked.connect(self._slice)
         buttons.addButton(self.slice_button, QDialogButtonBox.ButtonRole.ActionRole)
+        self.save_button = QPushButton(tr("Druckdatei speichern …"), self)
+        self.save_button.setEnabled(False)
+        self.save_button.clicked.connect(self._save_gcode)
+        buttons.addButton(self.save_button, QDialogButtonBox.ButtonRole.ActionRole)
         buttons.rejected.connect(self.reject)
 
         found = self._slicer_path
@@ -1068,6 +1082,12 @@ class PrintSettingsDialog(QDialog):
                     str(entry.reason),
                 ]
             )
+            # Angehakt heißt „wird übernommen". Vorbelegt ja, denn die
+            # Vorschläge sind begründet — aber einzeln abwählbar, weil sonst
+            # die Wahl zwischen allen und keinem bestünde und der Nutzer für
+            # einen unpassenden Vorschlag die übrigen mit aufgäbe.
+            item.setCheckState(0, Qt.CheckState.Checked)
+            item.setData(0, Qt.ItemDataRole.UserRole, entry.path)
             self.advice_view.addTopLevelItem(item)
         if not entries:
             self.advice_view.addTopLevelItem(QTreeWidgetItem([tr("Nichts einzuwenden."), "", ""]))
@@ -1075,8 +1095,18 @@ class PrintSettingsDialog(QDialog):
         for column in range(2):
             self.advice_view.resizeColumnToContents(column)
 
+    def _chosen_advice(self) -> list[SettingAdvice]:
+        """Die angehakten Vorschläge, in der Reihenfolge der Liste."""
+        wanted = {
+            item.data(0, Qt.ItemDataRole.UserRole)
+            for index in range(self.advice_view.topLevelItemCount())
+            if (item := self.advice_view.topLevelItem(index)) is not None
+            and item.checkState(0) == Qt.CheckState.Checked
+        }
+        return [entry for entry in self._current_advice() if entry.path in wanted]
+
     def _apply_advice(self) -> None:
-        self.settings = advise.apply(self.settings, self._current_advice())
+        self.settings = advise.apply(self.settings, self._chosen_advice())
         self._load_into_editors()
         self._refresh_advice()
 
@@ -1116,7 +1146,12 @@ class PrintSettingsDialog(QDialog):
         self._temporary = TemporaryDirectory(prefix="formwerk-handover-")
         folder = Path(self._temporary.name)
         name = self.session.path.stem if self.session.path else "formwerk"
-        plan = plan_export(objects, project_name=name, profile=self.session.profile)
+        # 3MF und nicht STL: es trägt alle Objekte samt Anordnung und
+        # Farbgruppen in *einer* Datei (§20, §29). Mit STL bekäme der Slicer
+        # eine Datei je Objekt, und geslicet würde still nur die erste.
+        plan = plan_export(
+            objects, project_name=name, profile=self.session.profile, export_format="3mf"
+        )
         written = write_plan(plan, folder)
         if not written:
             self.state.setText(tr("Der Export hat keine Datei erzeugt."))
@@ -1126,7 +1161,7 @@ class PrintSettingsDialog(QDialog):
         self.progress.setVisible(True)
         self.state.setText(tr("Der Slicer rechnet …"))
 
-        worker = _SliceWorker(written[0], self.settings, self.session.profile, setup)
+        worker = _SliceWorker(written, self.settings, self.session.profile, setup)
         worker.done.connect(self._sliced)
         worker.failed.connect(self._slice_failed)
         worker.finished.connect(self._slice_finished)
@@ -1144,8 +1179,37 @@ class PrintSettingsDialog(QDialog):
         if metrics.layer_count is not None:
             parts.append(f"{tr('Schichten')}: {metrics.layer_count}")
         self.state.setText(" · ".join(parts) if parts else tr("Fertig geslicet."))
+        # Die Datei liegt im Arbeitsordner, der beim Schließen verschwindet.
+        # Ohne diesen Knopf wäre der ganze Lauf eine Zahl auf dem Bildschirm
+        # und nichts, was auf einen Drucker geht.
+        self._gcode = outcome.gcode_path
+        self.save_button.setEnabled(True)
         self.sliced.emit(outcome)
         _log.info("sliced with %s in %.1f s", metrics.slicer, outcome.seconds)
+
+    def _save_gcode(self) -> None:
+        """Die Druckdatei dorthin, wo der Nutzer sie haben will (§29).
+
+        Vorgeschlagen wird der Ordner des Projekts und der Name des Projekts —
+        eine Datei namens ``plate_1.gcode`` in den Downloads findet später
+        niemand wieder.
+        """
+        if self._gcode is None or not self._gcode.is_file():
+            return
+        start = self.session.path.parent if self.session.path else Path.home()
+        stem = self.session.path.stem if self.session.path else "formwerk"
+        chosen, _filter = QFileDialog.getSaveFileName(
+            self,
+            tr("Druckdatei speichern"),
+            str(start / f"{stem}.gcode"),
+            "G-Code (*.gcode)",
+        )
+        if not chosen:
+            return
+        target = Path(chosen)
+        target.write_bytes(self._gcode.read_bytes())
+        self.state.setText(f"{tr('Gespeichert')}: {target.name}")
+        _log.info("wrote g-code to %s", target)
 
     def _slice_failed(self, problem: AppError) -> None:
         self.state.setText("")
