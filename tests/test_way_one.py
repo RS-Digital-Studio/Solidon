@@ -1,11 +1,13 @@
-"""Way 1 from Bauplan §2.2, end to end — the acceptance test for P2 (§40).
+"""Weg 1 aus Bauplan §2.2, Ende zu Ende — der Abnahmetest für P2 (§40).
 
-    Drop a file → unit question if needed → the model stands, report visible →
-    click a face → pick an operation → preview → accept → export.
+    Datei fallen lassen → Einheitenfrage, wenn nötig → das Modell steht,
+    Prüfbericht sichtbar → eine Fläche anklicken → eine Operation wählen →
+    Vorschau → annehmen → exportieren.
 
-The chat part belongs to P4; here the operation comes from the context menu,
-which is the other half of the same sentence in §2.2. Everything else is the
-real path: real files, the real stack, the real evaluation, real exported bytes.
+Der Chat-Teil gehört zu P4; hier kommt die Operation aus dem Kontextmenü, und
+das ist die andere Hälfte desselben Satzes in §2.2. Alles übrige ist der echte
+Weg: echte Dateien, der echte Stapel, die echte Auswertung, echte exportierte
+Bytes.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def test_way_one_from_dropped_file_to_exported_part(tmp_path: Path, profile: Profile) -> None:
-    # --- the file is dropped on the window -------------------------------------
+    # --- Die Datei wird auf das Fenster fallen gelassen ------------------------
     project = new_project("centauri-carbon-2", "petg")
     incoming = MESHES / "bracket_inch.stl"
     project.document.sources["src_1"] = Source(
@@ -40,7 +42,7 @@ def test_way_one_from_dropped_file_to_exported_part(tmp_path: Path, profile: Pro
         [OperationDraft(op="load", params={"source": "src_1", "unit": "auto"})],
     )
 
-    # --- the unit is ambiguous, so it is asked, not guessed (§17.1) -------------
+    # --- Die Einheit ist mehrdeutig, also wird gefragt, nicht geraten (§17.1) --
     asked: list[list[str]] = []
 
     def ask(question: str, choices: list[str]) -> str:
@@ -56,13 +58,13 @@ def test_way_one_from_dropped_file_to_exported_part(tmp_path: Path, profile: Pro
     body = result.scene.objects["obj_1"]
     assert body.mesh.bounds.size == pytest.approx((101.6, 50.8, 6.35))
 
-    # --- the model stands, the report is visible (§17.3) -----------------------
+    # --- Das Modell steht, der Prüfbericht ist sichtbar (§17.3) ----------------
     assert result.scene.report.findings, "the input stage always has something to say"
 
-    # --- repair, because a downloaded model usually needs it -------------------
+    # --- Reparieren, denn ein heruntergeladenes Modell braucht das meist -------
     history.apply(_("Reparieren"), [OperationDraft(op="repair", inputs=("obj_1",))])
 
-    # --- put it on the bed and drill a hole, as the context menu would ---------
+    # --- Aufs Bett setzen und bohren, wie es das Kontextmenü täte --------------
     assert "drill_hole" in {spec.name for spec in REGISTRY.for_feature("face")}
     history.apply(_("Auf das Bett setzen"), [OperationDraft(op="place_on_bed", inputs=("obj_1",))])
     history.apply(
@@ -84,11 +86,11 @@ def test_way_one_from_dropped_file_to_exported_part(tmp_path: Path, profile: Pro
     assert drilled.mesh.bounds.minimum[2] == pytest.approx(0.0), "it sits on the bed"
     assert "bore.compensated" in {finding.code for finding in result.scene.report.findings}
 
-    # --- the preview is a second evaluation, and it agrees with the first ------
+    # --- Die Vorschau ist eine zweite Auswertung, und sie stimmt mit der ersten überein
     again = evaluate(project.document, profile, sources=sources, cache=cache, ask=ask)
     assert again.object_hashes == result.object_hashes
 
-    # --- accepted: save, and the stack survives the round trip -----------------
+    # --- Angenommen: speichern, und der Stapel übersteht die runde Reise -------
     history.record_solvers(result.solvers)
     path = save(project, tmp_path / "halterung.p3d")
     reopened = load(path)
@@ -117,7 +119,9 @@ def test_way_one_from_dropped_file_to_exported_part(tmp_path: Path, profile: Pro
 
 
 def test_way_one_undone_completely(tmp_path: Path, profile: Profile) -> None:
-    """Nothing is final: every step of way 1 comes back off the stack (§2.1)."""
+    """Nichts ist endgültig: jeder Schritt von Weg 1 kommt vom Stapel wieder
+    herunter (§2.1).
+    """
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source(
         id="src_1", kind="import", path="sources/cube_clean.stl", sha256=""

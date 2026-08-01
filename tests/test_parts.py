@@ -1,10 +1,11 @@
-"""The part library (Bauplan §24).
+"""Die Bausteinbibliothek (Bauplan §24).
 
-§24.3 sets the bar: every part is computed through its whole parameter range —
-watertight, minimum wall thickness, no self-intersection at the limits, features
-correctly named. **A part without this test counts as not present.** So the
-range test is parametrised over the registry: a new part is covered the moment
-it is declared, and a part that fails at its own limits fails here.
+§24.3 setzt die Latte: jeder Baustein wird über seinen gesamten
+Parameterbereich gerechnet — wasserdicht, Mindestwandstärke, keine
+Selbstdurchdringung an den Grenzen, Merkmale richtig benannt. **Ein Baustein
+ohne diesen Test gilt als nicht vorhanden.** Also ist der Bereichstest über das
+Register parametrisiert: ein neuer Baustein ist abgedeckt, sobald er deklariert
+ist, und ein Baustein, der an seinen eigenen Grenzen scheitert, scheitert hier.
 """
 
 from __future__ import annotations
@@ -31,11 +32,11 @@ def ids(spec: PartSpec) -> str:
 
 
 def corners(spec: PartSpec) -> list[dict[str, Any]]:
-    """The parameter range as the values a part has to survive.
+    """Der Parameterbereich als die Werte, die ein Baustein überstehen muss.
 
-    Not a sweep over everything — the corners are where a part breaks: the
-    smallest and the largest of every number, every choice of every enum, both
-    states of every switch.
+    Kein Durchlauf über alles — die Ecken sind, wo ein Baustein bricht: der
+    kleinste und der größte Wert jeder Zahl, jede Wahl jedes Enums, beide
+    Zustände jedes Schalters.
     """
     entries = spec.params.spec()
     combinations: list[dict[str, Any]] = [{}]
@@ -51,7 +52,7 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
         if not values:
             continue
         combinations = [{**base, entry.name: value} for base in combinations for value in values]
-        # Keep it finite: the corners of every parameter, not every product.
+        # Endlich halten: die Ecken jedes Parameters, nicht jedes Produkt.
         if len(combinations) > 24:
             combinations = combinations[:24]
     return combinations
@@ -61,11 +62,11 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
 
 
 def test_the_library_has_the_first_set_from_the_plan() -> None:
-    """§24.1 names thirteen parts for the first release.
+    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung.
 
-    The calibration bodies from §28.3 are parts too, but they are not part of
-    that set — they are tools for the printer, not for the model, and they have
-    their own group in the catalogue.
+    Die Kalibrierkörper aus §28.3 sind auch Bausteine, gehören aber nicht zu
+    diesem Satz — sie sind Werkzeuge für den Drucker, nicht für das Modell, und
+    sie haben ihre eigene Gruppe im Katalog.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
@@ -82,7 +83,9 @@ def test_every_part_is_completely_declared() -> None:
 
 
 def test_a_part_without_features_is_refused() -> None:
-    """§24.1: provenance features are the point of a part, not a nicety."""
+    """§24.1: Provenienz-Merkmale sind der Sinn eines Bausteins, keine
+    Nettigkeit.
+    """
     from app.core.errors import InternalError
 
     registry = PartRegistry()
@@ -96,11 +99,11 @@ def test_a_part_without_features_is_refused() -> None:
         @register_part(
             name="nameless", title="x", group="fasteners", params=Params, registry=registry
         )
-        def nameless(raw: BaseParams) -> PartResult:  # pragma: no cover - never runs
+        def nameless(raw: BaseParams) -> PartResult:  # pragma: no cover - läuft nie
             raise AssertionError
 
 
-# --- the range test §24.3 asks for -------------------------------------------------
+# --- Der Bereichstest, den §24.3 verlangt -----------------------------------------
 
 
 @pytest.mark.parametrize("spec", PARTS.all(), ids=ids)
@@ -121,7 +124,9 @@ def test_a_part_holds_over_its_whole_range(spec: PartSpec, profile: Profile) -> 
 
 @pytest.mark.parametrize("spec", PARTS.all(), ids=ids)
 def test_a_part_names_the_features_it_promised(spec: PartSpec) -> None:
-    """§24.1: what the declaration promises has to come out of the function."""
+    """§24.1: was die Deklaration verspricht, muss aus der Funktion
+    herauskommen.
+    """
     result = spec.fn(spec.params())
 
     assert result.features, f"{spec.name} returned no features"
@@ -133,7 +138,7 @@ def test_a_part_names_the_features_it_promised(spec: PartSpec) -> None:
 
 @pytest.mark.parametrize("spec", PARTS.all(), ids=ids)
 def test_a_part_is_reproducible(spec: PartSpec) -> None:
-    """Leitprinzip 4: the same parameters give the same geometry."""
+    """Leitprinzip 4: dieselben Parameter geben dieselbe Geometrie."""
     first = spec.fn(spec.params())
     second = spec.fn(spec.params())
 
@@ -145,7 +150,7 @@ def test_a_part_is_reproducible(spec: PartSpec) -> None:
 
 
 def test_the_table_answers_the_question_from_the_plan() -> None:
-    """§24.2: "hole for an M4 heat-set insert" has to be a lookup."""
+    """§24.2: „Loch für eine M4-Einpressbuchse" muss ein Nachschlagen sein."""
     assert standards.insert("M4").hole == pytest.approx(5.6)
     assert standards.screw("M4").clearance == pytest.approx(4.5)
     assert standards.nut("M4").width == pytest.approx(7.0)
@@ -166,11 +171,11 @@ def test_an_unknown_size_says_what_is_known() -> None:
     assert "M4" in str(raised.value.values["known"])
 
 
-# --- the operations that come out of the parts --------------------------------------
+# --- Die Operationen, die aus den Bausteinen entstehen ----------------------------
 
 
 def test_every_part_became_an_operation() -> None:
-    """§10, Leitprinzip 3: declared once, and every surface follows."""
+    """§10, Leitprinzip 3: einmal deklariert, und jede Oberfläche folgt."""
     for spec in PARTS.all():
         assert REGISTRY.has(part_ops.op_name(spec.name)), spec.name
 
@@ -240,7 +245,9 @@ def test_an_additive_part_adds_material(profile: Profile) -> None:
 
 
 def test_the_features_of_a_part_reach_the_scene(profile: Profile) -> None:
-    """§24.1, §21.1: a bore from the library is named from the start."""
+    """§24.1, §21.1: eine Bohrung aus der Bibliothek ist von Anfang an
+    benannt.
+    """
     project = project_with_plate()
     History(project.document).apply(
         "Magnet",
@@ -263,7 +270,7 @@ def test_the_features_of_a_part_reach_the_scene(profile: Profile) -> None:
 
 
 def test_the_play_comes_from_the_material_profile(profile: Profile) -> None:
-    """AGENTS.md rule 7: never a fixed number in the file."""
+    """AGENTS.md Regel 7: nie eine feste Zahl in der Datei."""
     project = project_with_plate()
     History(project.document).apply(
         "Passbohrung",
@@ -297,7 +304,9 @@ def test_the_play_comes_from_the_material_profile(profile: Profile) -> None:
     ],
 )
 def test_every_part_operation_runs_on_a_body(name: str, profile: Profile) -> None:
-    """One run per operation — a declaration nobody ever called is not finished."""
+    """Ein Lauf je Operation — eine Deklaration, die nie jemand aufgerufen
+    hat, ist nicht fertig.
+    """
     project = project_with_plate()
     History(project.document).apply(
         name, [OperationDraft(op=name, inputs=("obj_1",), params={"z": 4.0})]
@@ -323,7 +332,9 @@ def test_a_changed_part_is_named(profile: Profile) -> None:
 
 
 def test_a_part_that_is_gone_is_named() -> None:
-    """§24.5: an own part from another machine is missing, not silently skipped."""
+    """§24.5: ein eigener Baustein von einer anderen Maschine fehlt, er wird
+    nicht still übersprungen.
+    """
     assert missing_parts({"eigenbau": "1", "rib": "1"}) == ("eigenbau",)
 
 

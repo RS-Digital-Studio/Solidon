@@ -1,4 +1,4 @@
-"""The scene digest and the fit check (Bauplan §23, §14)."""
+"""Der Steckbrief der Szene und die Passungsprüfung (Bauplan §23, §14)."""
 
 from __future__ import annotations
 
@@ -59,11 +59,13 @@ def test_the_digest_describes_every_object(profile: Profile) -> None:
 
 
 def test_the_digest_lists_features_by_name(profile: Profile) -> None:
-    """Leitprinzip 5: the agent refers to these names, never to coordinates."""
+    """Leitprinzip 5: der Agent bezieht sich auf diese Namen, nie auf
+    Koordinaten.
+    """
     text = digest(plate_scene(profile))
 
     assert "hole_1" in text
-    # A bore made of 48 segments measures a hair under its nominal diameter.
+    # Eine Bohrung aus 48 Segmenten misst ein Haar unter ihrem Nenndurchmesser.
     assert "Ø 5.1" in text or "Ø 5.2" in text
     assert "Achse +Z" in text
     assert "Durchgang" in text
@@ -81,7 +83,7 @@ def test_the_digest_shows_parameters_and_selection(profile: Profile) -> None:
 
 
 def test_the_digest_carries_warnings_but_not_noise(profile: Profile) -> None:
-    """§26.1: the agent has to know what it is standing on."""
+    """§26.1: der Agent muss wissen, worauf er steht."""
     scene = plate_scene(profile)
     scene.report = Report(
         (
@@ -146,7 +148,7 @@ def test_a_fit_that_matches_the_profile_says_nothing(profile: Profile) -> None:
 
 
 def test_a_tight_fit_is_reported(profile: Profile) -> None:
-    """§14: violations appear in the report, never silently."""
+    """§14: Verletzungen erscheinen im Prüfbericht, nie still."""
     scene = pin_and_hole(5.02, 5.0, profile)
     scene.fits.append(clearance_fit())
 
@@ -165,7 +167,7 @@ def test_a_loose_fit_is_reported(profile: Profile) -> None:
 
 
 def test_the_tolerance_follows_the_material(profile: Profile) -> None:
-    """AGENTS.md rule 7: the number lives in the profile, not in the file."""
+    """AGENTS.md Regel 7: die Zahl lebt im Profil, nicht in der Datei."""
     tpu = profiles.make_profile("centauri-carbon-2", "tpu-95a")
     scene = pin_and_hole(5.0 + profiles.material("petg").clearance, 5.0, profile)
     scene.fits.append(clearance_fit())
@@ -176,7 +178,7 @@ def test_the_tolerance_follows_the_material(profile: Profile) -> None:
 
 
 def two_faces(offset: float, normal_b: tuple[float, float, float], profile: Profile) -> Scene:
-    """Two faces that are meant to sit in one plane, and one that is offset."""
+    """Zwei Flächen, die in einer Ebene sitzen sollen, und eine versetzte."""
     lower = Feature(
         id="face_1",
         kind="face",
@@ -213,7 +215,9 @@ def flush_fit() -> Fit:
 
 
 def test_two_faces_in_one_plane_say_nothing(profile: Profile) -> None:
-    """§14: ``flush`` was accepted and never checked — a fit kind as a stage prop."""
+    """§14: ``flush`` wurde angenommen und nie geprüft — eine Passungsart als
+    Bühnenrequisite.
+    """
     scene = two_faces(0.0, (0.0, 0.0, -1.0), profile)
     scene.fits.append(flush_fit())
 
@@ -231,7 +235,9 @@ def test_a_lid_that_sits_proud_is_reported(profile: Profile) -> None:
 
 
 def test_faces_at_an_angle_are_a_different_mistake(profile: Profile) -> None:
-    """Two planes meeting at a corner have no distance worth reporting."""
+    """Zwei Ebenen, die sich an einer Ecke treffen, haben keinen Abstand, der
+    sich zu melden lohnt.
+    """
     scene = two_faces(0.0, (1.0, 0.0, 0.0), profile)
     scene.fits.append(flush_fit())
 
@@ -280,15 +286,17 @@ def test_fits_can_be_added_and_removed() -> None:
     assert entries == []
 
 
-# --- a scene is not one material (§12) ------------------------------------------
+# --- Eine Szene ist nicht ein Material (§12) ------------------------------------
 
 
 def test_a_softer_body_gets_its_own_clearance(profile: Profile) -> None:
-    """The case the model folder showed: a TPU seal in a PETG housing.
+    """Der Fall, den der Modellordner zeigte: eine TPU-Dichtung im
+    PETG-Gehäuse.
 
-    Computed with the project material the gap is 0,25 — the number for PETG.
-    The seal is TPU and wants 0,35, and the difference is not academic: at
-    0,25 the assembly is a press fit nobody asked for.
+    Mit dem Projektmaterial gerechnet ist der Spalt 0,25 — die Zahl für PETG.
+    Die Dichtung ist TPU und will 0,35, und der Unterschied ist nicht
+    akademisch: bei 0,25 ist der Zusammenbau eine Presspassung, nach der
+    niemand gefragt hat.
     """
     scene = pin_and_hole(5.0 + profiles.material("tpu-95a").clearance, 5.0, profile)
     scene.fits.append(clearance_fit())
@@ -310,7 +318,7 @@ def test_the_finding_names_both_materials(profile: Profile) -> None:
 
 
 def test_one_material_is_not_worth_mentioning(profile: Profile) -> None:
-    """Noise in a report is what makes the report unread."""
+    """Rauschen in einem Bericht ist das, was den Bericht ungelesen lässt."""
     scene = pin_and_hole(5.0, 5.0, profile)
     scene.fits.append(clearance_fit())
 
@@ -320,7 +328,9 @@ def test_one_material_is_not_worth_mentioning(profile: Profile) -> None:
 
 
 def test_a_named_material_stays_what_it_says(profile: Profile) -> None:
-    """`auto:petg` was written down on purpose and no body overrules it (§12)."""
+    """``auto:petg`` wurde mit Absicht hingeschrieben, und kein Körper
+    überstimmt es (§12).
+    """
     scene = pin_and_hole(5.0 + profiles.material("petg").clearance, 5.0, profile)
     scene.objects["obj_2"].material = "tpu-95a"
     scene.fits.append(
@@ -337,11 +347,11 @@ def test_a_named_material_stays_what_it_says(profile: Profile) -> None:
 
 
 def test_a_press_fit_takes_the_gentler_number(profile: Profile) -> None:
-    """Negative values: the larger one is the smaller interference.
+    """Negative Werte: der größere ist das kleinere Übermaß.
 
-    PETG presses with -0,05 and TPU with -0,10. Pressing a TPU pin into a PETG
-    hole with the TPU figure means 0,1 mm of oversize in a body that does not
-    give — the housing splits. -0,05 holds and survives.
+    PETG presst mit -0,05 und TPU mit -0,10. Einen TPU-Stift mit der TPU-Zahl
+    in ein PETG-Loch zu pressen heißt 0,1 mm Übermaß in einem Körper, der nicht
+    nachgibt — das Gehäuse reißt. -0,05 hält und übersteht es.
     """
     scene = pin_and_hole(5.0, 5.05, profile)
     scene.objects["obj_2"].material = "tpu-95a"
@@ -366,11 +376,12 @@ def test_the_digest_names_a_body_that_is_not_in_the_project_material(profile: Pr
 
 
 def test_the_digest_says_where_a_feature_is(profile: Profile) -> None:
-    """§26.1: the agent sees only this text.
+    """§26.1: der Agent sieht nur diesen Text.
 
-    Diameter and axis without a position is a description nobody can act on:
-    "put a part at hole_1" works from the name, "drill beside it" does not. The
-    surface has known the position since a feature can be clicked (§18.5).
+    Durchmesser und Achse ohne Position sind eine Beschreibung, auf die niemand
+    handeln kann: „setz einen Baustein an hole_1" geht über den Namen, „bohr
+    daneben" nicht. Die Oberfläche kennt die Position, seit ein Merkmal
+    anklickbar ist (§18.5).
     """
     text = digest(plate_scene(profile))
 

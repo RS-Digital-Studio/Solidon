@@ -21,7 +21,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 @pytest.mark.parametrize("spec", PARTS.all(), ids=lambda spec: spec.name)
 def test_every_part_renders_a_preview(spec: object) -> None:
-    """§24.3: the pictures come out of the parts, not out of a folder."""
+    """§24.3: die Bilder kommen aus den Bausteinen, nicht aus einem Ordner."""
     image = preview.render(spec)  # type: ignore[arg-type]
 
     assert image.svg.startswith("<svg")
@@ -30,7 +30,9 @@ def test_every_part_renders_a_preview(spec: object) -> None:
 
 
 def test_a_subtractive_part_looks_different() -> None:
-    """A shape that removes material is not drawn like one that adds it (§19.1)."""
+    """Eine Form, die Material wegnimmt, wird nicht gezeichnet wie eine, die
+    welches hinzufügt (§19.1).
+    """
     hole = preview.render(PARTS.get("screw_hole"))
     rib = preview.render(PARTS.get("rib"))
 
@@ -56,7 +58,9 @@ def test_a_part_can_be_written_as_scad() -> None:
 
 
 def test_the_scad_file_names_its_parameters() -> None:
-    """The values are in the file to read, even though the body is a fixed mesh."""
+    """Die Werte stehen in der Datei zum Lesen, auch wenn der Körper ein
+    festes Netz ist.
+    """
     text = scad.to_scad(PARTS.get("screw_hole"))
 
     assert 'size = "M3";' in text
@@ -107,7 +111,7 @@ def eigenbau(raw: BaseParams) -> PartResult:
 
 
 def test_an_own_part_is_loaded_and_marked(tmp_path: Path) -> None:
-    """§24.5: same registration, but the catalogue says where it came from."""
+    """§24.5: dieselbe Registrierung, aber der Katalog sagt, woher er kam."""
     (tmp_path / "eigenbau.py").write_text(OWN_PART, encoding="utf-8")
     registry = PartRegistry()
 
@@ -139,7 +143,9 @@ def test_a_missing_directory_is_not_an_error(tmp_path: Path) -> None:
 
 
 def test_an_own_part_never_travels_with_the_project(tmp_path: Path) -> None:
-    """§24.5, §32: an incoming file must not carry code — so it carries none."""
+    """§24.5, §32: eine hereinkommende Datei darf keinen Code tragen — also
+    trägt sie keinen.
+    """
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source(
         id="src_1", kind="import", path="sources/cube_clean.stl", sha256=""
@@ -172,7 +178,9 @@ def test_saving_records_the_library_version(tmp_path: Path) -> None:
 
 
 def test_the_used_parts_are_read_off_the_stack() -> None:
-    """§24.4: which parts a project uses follows from its stack, nothing else."""
+    """§24.4: welche Bausteine ein Projekt benutzt, folgt aus seinem Stapel
+    und sonst nichts.
+    """
     from app.core.types import Operation
 
     document = Document(format_version=2, app_version="0.0.1")
@@ -186,7 +194,9 @@ def test_the_used_parts_are_read_off_the_stack() -> None:
 
 
 def test_a_project_from_an_older_library_is_told_what_moved() -> None:
-    """§24.4: which *used* parts changed, not just that something did."""
+    """§24.4: welche *benutzten* Bausteine sich geändert haben, nicht nur dass
+    sich etwas geändert hat.
+    """
     from app.core.types import Operation
 
     document = Document(format_version=2, app_version="0.0.1", parts_version="0")
@@ -211,7 +221,9 @@ def test_a_project_of_the_current_library_says_nothing() -> None:
 
 
 def test_a_project_with_an_unknown_part_is_an_error() -> None:
-    """§24.5: an own part from another machine stops the chain, quietly is not an option."""
+    """§24.5: ein eigener Baustein von einer anderen Maschine hält die Kette
+    an — still ist keine Option.
+    """
     from app.core.types import Operation
 
     document = Document(format_version=2, app_version="0.0.1", parts_version=LIBRARY_VERSION)

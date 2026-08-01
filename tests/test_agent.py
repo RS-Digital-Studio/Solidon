@@ -1,9 +1,9 @@
-"""The agent layer: context, tools, proposal (Bauplan §26).
+"""Die Agentenschicht: Kontext, Werkzeuge, Vorschlag (Bauplan §26).
 
-Everything runs against the scripted backend, so what is measured here is the
-harness and not the weather: does the context carry what §26.1 lists, is a
-proposal exactly one transaction, does an undo take it back completely, and is
-every operation schema-checked before anything is computed.
+Alles läuft gegen das geskriptete Backend — gemessen wird hier also die
+Mechanik und nicht das Wetter: trägt der Kontext, was §26.1 aufzählt, ist ein
+Vorschlag genau eine Transaktion, nimmt ein Undo ihn vollständig zurück, und
+ist jede Operation schemageprüft, bevor irgendetwas gerechnet wird.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 @pytest.fixture
 def project() -> Project:
-    """A project with one plate on the stack — the starting point of way 1."""
+    """Ein Projekt mit einer Platte auf dem Stapel — der Startpunkt von Weg 1."""
     made = new_project("centauri-carbon-2", "petg")
     made.document.sources["src_1"] = Source(
         id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
@@ -93,7 +93,9 @@ def test_the_report_travels_with_its_codes(project: Project, profile: Profile) -
 
 
 def test_discarded_turns_travel_as_discarded(project: Project, profile: Profile) -> None:
-    """§26.3: after an undo the agent must not argue with what is gone."""
+    """§26.3: nach einem Undo darf der Agent nicht mit dem argumentieren, was
+    fort ist.
+    """
     document = project.document
     document.chat.append(ChatEntry(id="c1", role="user", text="Bohr ein Loch"))
     document.chat.append(ChatEntry(id="c2", role="agent", text="Erledigt", transaction_id="t99"))
@@ -143,7 +145,9 @@ def test_a_tool_without_inputs_asks_for_none() -> None:
 
 
 def test_ask_user_is_offered_first_of_the_extras() -> None:
-    """§26.2: asking is a duty, so it is not buried at the end of the list."""
+    """§26.2: Fragen ist Pflicht, es wird also nicht ans Ende der Liste
+    vergraben.
+    """
     extras = [entry["name"] for entry in tools.extra_tools()]
 
     assert extras[0] == tools.ASK_USER
@@ -280,7 +284,7 @@ def test_an_operation_that_stops_the_chain_is_dropped(project: Project, profile:
 def test_the_check_after_every_operation_reaches_the_model(
     project: Project, profile: Profile
 ) -> None:
-    """§26.5: the finding goes back into the context."""
+    """§26.5: der Befund geht zurück in den Kontext."""
     backend = ScriptedBackend(
         answers=[
             Reply(
@@ -350,7 +354,9 @@ def test_asking_reaches_the_surface(project: Project, profile: Profile) -> None:
 
 
 def test_the_step_limit_is_hard(project: Project, profile: Profile) -> None:
-    """§26.5: a model going in circles stops, and the proposal says why."""
+    """§26.5: ein Modell, das sich im Kreis dreht, hält an, und der Vorschlag
+    sagt warum.
+    """
     calls = [
         Reply(tool_calls=(ToolCall(id=str(index), name="read_report", arguments={}),))
         for index in range(20)
@@ -388,7 +394,7 @@ def test_parameters_are_offered_as_parameters(project: Project, profile: Profile
 
 
 def test_a_fit_takes_its_tolerance_from_the_material(project: Project, profile: Profile) -> None:
-    """AGENTS.md rule 7: never a fixed number."""
+    """AGENTS.md Regel 7: nie eine feste Zahl."""
     agent = session(
         project,
         profile,
@@ -420,7 +426,7 @@ def test_a_fit_takes_its_tolerance_from_the_material(project: Project, profile: 
 
 
 def test_a_proposal_becomes_exactly_one_transaction(project: Project, profile: Profile) -> None:
-    """AGENTS.md rule 16 and the P4 acceptance criterion."""
+    """AGENTS.md Regel 16 und das P4-Abnahmekriterium."""
     agent = session(
         project,
         profile,
@@ -491,7 +497,7 @@ def test_one_undo_takes_the_whole_proposal_back(project: Project, profile: Profi
 
 
 def test_after_an_undo_the_turn_counts_as_discarded(project: Project, profile: Profile) -> None:
-    """§26.3: the coupling is what keeps the next context honest."""
+    """§26.3: die Kopplung ist es, die den nächsten Kontext ehrlich hält."""
     agent = session(
         project,
         profile,

@@ -1,14 +1,14 @@
-"""Way 2 from §2.2, end to end (Bauplan §40 for P6).
+"""Weg 2 aus §2.2, Ende zu Ende (Bauplan §40 für P6).
 
-    New project → describe what is needed → the agent creates parameters and
-    places parts → the parameter bar shows the main dimensions → turn a number,
-    the model follows immediately → export.
+    Neues Projekt → beschreiben, was gebraucht wird → der Agent legt Parameter
+    an und setzt Bausteine → die Parameterleiste zeigt die Hauptmaße → an einer
+    Zahl drehen, das Modell folgt sofort → exportieren.
 
-What is checked here is that this way holds together: every step is an
-operation, the main dimensions really are parameters, the parts really come out
-of the library, and turning a number really rebuilds the model. The model is
-scripted (``ScriptedBackend``) — how well a real one plays this is measured by
-``tools/run_agent_suite.py``, not by the suite.
+Geprüft wird hier, dass dieser Weg zusammenhält: jeder Schritt ist eine
+Operation, die Hauptmaße sind wirklich Parameter, die Bausteine kommen wirklich
+aus der Bibliothek, und an einer Zahl zu drehen baut das Modell wirklich neu.
+Das Modell ist geskriptet (``ScriptedBackend``) — wie gut ein echtes diesen Weg
+spielt, misst ``tools/run_agent_suite.py``, nicht die Suite.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from app.core.types import Profile
 
 @pytest.fixture
 def project() -> Project:
-    """A new project — way 2 starts on an empty scene."""
+    """Ein neues Projekt — Weg 2 beginnt auf einer leeren Szene."""
     return new_project("centauri-carbon-2", "petg")
 
 
@@ -39,8 +39,9 @@ def call(index: int, tool: str, **arguments: object) -> ToolCall:
     return ToolCall(id=str(index), name=tool, arguments=arguments)
 
 
-#: What a model that follows the rule set does with "a bracket with two M4 holes":
-#: parameters first, then a primitive, then parts from the library (§39).
+#: Was ein Modell, das der Regelsammlung folgt, mit „eine Halterung mit zwei
+#: M4-Löchern" tut: erst Parameter, dann ein Primitiv, dann Bausteine aus der
+#: Bibliothek (§39).
 BRACKET = [
     Reply(
         text="Ich lege die Hauptmaße als Parameter an.",
@@ -94,13 +95,15 @@ def agent(project: Project, profile: Profile, answers: list[Reply]) -> AgentSess
 def test_way_two_runs_from_a_sentence_to_a_file(
     project: Project, profile: Profile, tmp_path: Path
 ) -> None:
-    """The whole way, in one test, with one assertion per promise of §2.2."""
+    """Der ganze Weg, in einem Test, mit einer Zusicherung je Versprechen aus
+    §2.2.
+    """
     session = agent(project, profile, BRACKET)
 
-    # 1. describe what is needed
+    # 1. beschreiben, was gebraucht wird
     proposal = session.propose("Bau mir einen Halter 60 x 40 x 6 mm mit zwei M4-Löchern.")
 
-    # 2. the agent works with parameters and parts, not with loose numbers
+    # 2. der Agent arbeitet mit Parametern und Bausteinen, nicht mit losen Zahlen
     assert set(proposal.parameters) == {"breite", "tiefe", "staerke"}
     assert [draft.op for draft in proposal.drafts] == [
         "create_box",
@@ -108,13 +111,13 @@ def test_way_two_runs_from_a_sentence_to_a_file(
         "insert_screw_hole",
     ]
 
-    # 3. one proposal is one transaction
+    # 3. ein Vorschlag ist eine Transaktion
     history = History(project.document)
     transaction = agent_apply.accept(proposal, history)
     assert transaction is not None
     assert len(project.document.transactions) == 1
 
-    # 4. the parameter bar shows the main dimensions
+    # 4. die Parameterleiste zeigt die Hauptmaße
     assert project.document.parameters["breite"].value == 60.0
 
     sources = ProjectSources(project)
@@ -126,7 +129,7 @@ def test_way_two_runs_from_a_sentence_to_a_file(
     assert body.mesh.bounds.size[0] == pytest.approx(60.0, abs=0.1)
     assert "screw_hole_bore_1" in body.features, "the bores come named out of the library"
 
-    # 5. turning a number rebuilds the model
+    # 5. an einer Zahl zu drehen baut das Modell neu
     parameters = project.document.parameters
     parameters["breite"] = dataclasses.replace(parameters["breite"], value=80.0)
     _bind_width(project)
@@ -147,11 +150,12 @@ def test_way_two_runs_from_a_sentence_to_a_file(
 
 
 def _bind_width(project: Project) -> None:
-    """Tie the box to the parameter — §13: the model follows the number.
+    """Bindet die Box an den Parameter — §13: das Modell folgt der Zahl.
 
-    A model that has just created a parameter should write ``=@breite`` into the
-    operation itself. The scripted one does not, so the test does it: what is
-    being checked here is that the binding works, not that a script remembered.
+    Ein Modell, das gerade einen Parameter angelegt hat, sollte ``=@breite``
+    selbst in die Operation schreiben. Das geskriptete tut das nicht, also tut
+    es der Test: geprüft wird hier, dass die Bindung funktioniert, nicht dass
+    ein Skript sich erinnert hat.
     """
     for index, operation in enumerate(project.document.ops):
         if operation.op == "create_box":
@@ -161,7 +165,7 @@ def _bind_width(project: Project) -> None:
 
 
 def test_the_agent_prefers_a_part_over_own_geometry(project: Project, profile: Profile) -> None:
-    """§39, §40 for P6: parts before primitives, and it is measurable."""
+    """§39, §40 für P6: Bausteine vor Primitiven, und es ist messbar."""
     session = agent(project, profile, BRACKET)
     proposal = session.propose("Halter mit zwei M4-Löchern")
 
@@ -173,7 +177,7 @@ def test_the_agent_prefers_a_part_over_own_geometry(project: Project, profile: P
 
 
 def test_the_library_is_searchable_before_building(project: Project, profile: Profile) -> None:
-    """§26.2: find_part answers with the operation, not just with a name."""
+    """§26.2: find_part antwortet mit der Operation, nicht nur mit einem Namen."""
     session = agent(
         project,
         profile,
@@ -210,7 +214,9 @@ def test_a_search_without_a_hit_says_so(project: Project, profile: Profile) -> N
 
 
 def test_a_part_can_be_placed_at_a_feature(project: Project, profile: Profile) -> None:
-    """§25: put a part at a recognised feature — by name, not by coordinates."""
+    """§25: einen Baustein an ein erkanntes Merkmal setzen — über den Namen,
+    nicht über Koordinaten.
+    """
     session = agent(
         project,
         profile,
@@ -242,7 +248,7 @@ def test_a_part_can_be_placed_at_a_feature(project: Project, profile: Profile) -
 
 
 def test_a_part_at_a_feature_that_does_not_exist_stops(project: Project, profile: Profile) -> None:
-    """§15.2: no guessing where a named feature is not there."""
+    """§15.2: kein Raten, wo ein benanntes Merkmal nicht da ist."""
     session = agent(
         project,
         profile,
@@ -268,7 +274,9 @@ def test_a_part_at_a_feature_that_does_not_exist_stops(project: Project, profile
 
 
 def test_every_primitive_stands_on_the_bed(profile: Profile) -> None:
-    """A body that starts below the plate is a body nobody asked for."""
+    """Ein Körper, der unter der Platte beginnt, ist ein Körper, nach dem
+    niemand gefragt hat.
+    """
     from app.core.registry import REGISTRY
     from app.core.scene import OperationDraft
 
@@ -285,7 +293,9 @@ def test_every_primitive_stands_on_the_bed(profile: Profile) -> None:
 
 
 def test_a_part_of_the_library_is_used_by_name() -> None:
-    """The search the agent uses is the search the catalogue uses (§24.3, §26.2)."""
+    """Die Suche, die der Agent benutzt, ist die Suche des Katalogs (§24.3,
+    §26.2).
+    """
     assert PARTS.search("Mutter")
     assert PARTS.search("Magnet")
     assert not PARTS.search("Evolventenverzahnung")

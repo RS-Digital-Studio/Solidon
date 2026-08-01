@@ -21,8 +21,8 @@ from app.core.geom.mesh import Mesh, as_mesh_data
 from app.core.knowledge.parts.fasteners import ThreadParams, printed_thread
 from app.core.knowledge.parts.shapes import RIDGE_SHARE
 
-#: Where the radii are measured: inside the threaded length, clear of the end
-#: caps, which sit on the axis and would report a radius of zero.
+#: Wo die Radien gemessen werden: innerhalb der Gewindelänge, abseits der
+#: Endkappen, die auf der Achse sitzen und einen Radius von null meldeten.
 BAND = (3.0, 9.0)
 
 

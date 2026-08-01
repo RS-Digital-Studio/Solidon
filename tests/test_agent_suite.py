@@ -1,20 +1,21 @@
-"""The agent suite for pillar C (Bauplan §35, §40 for P4).
+"""Die Agenten-Suite für Säule C (Bauplan §35, §40 für P4).
 
-Two halves, and being clear about which is which matters.
+Zwei Hälften, und es zählt, klar zu sein, welche welche ist.
 
-**Without a model** — what runs here — the suite checks what the *harness*
-guarantees, and only that: every request reaches the model with the context it
-needs, every operation a case expects exists and is offered as a tool, a good
-answer becomes exactly one transaction, an ambiguous case that asks reaches the
-surface with its question, and an operation is schema-checked before anything is
-computed. A scripted backend plays the part of a good answer; that says nothing
-about a real model, and the suite does not claim otherwise.
+**Ohne Modell** — was hier läuft — prüft die Suite, was die *Mechanik*
+garantiert, und nur das: dass jede Anfrage das Modell mit dem Kontext erreicht,
+den sie braucht, dass jede Operation, die ein Fall erwartet, existiert und als
+Werkzeug angeboten wird, dass eine gute Antwort genau eine Transaktion wird,
+dass ein mehrdeutiger Fall, der fragt, mit seiner Frage die Oberfläche
+erreicht, und dass eine Operation schemageprüft ist, bevor gerechnet wird. Ein
+geskriptetes Backend spielt die gute Antwort; das sagt nichts über ein echtes
+Modell, und die Suite behauptet das auch nicht.
 
-**With a model** — ``tools/run_agent_suite.py`` — the same cases go to whatever
-backend is configured, and the quota §40 asks for comes out: how often was a
-question asked where the request was ambiguous, how often did main dimensions
-become parameters, how often was an operation invalid. That run needs a key and
-is not part of the test suite.
+**Mit Modell** — ``tools/run_agent_suite.py`` — gehen dieselben Fälle an das
+konfigurierte Backend, und heraus kommt die Quote, die §40 verlangt: wie oft
+wurde gefragt, wo die Anfrage mehrdeutig war, wie oft wurden Hauptmaße zu
+Parametern, wie oft war eine Operation ungültig. Dieser Lauf braucht einen
+Schlüssel und ist nicht Teil der Testsuite.
 """
 
 from __future__ import annotations
@@ -51,7 +52,7 @@ def project() -> Project:
 
 
 def good_answer(case: Case) -> list[Reply]:
-    """What a model that follows the rules would do with this case."""
+    """Was ein Modell, das den Regeln folgt, mit diesem Fall täte."""
     if case.ambiguous:
         return [
             Reply(
@@ -101,8 +102,8 @@ def _call(index: int, name: str) -> ToolCall:
     elif name == "drill_hole":
         arguments.update({"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 4.0, "axis": "z"})
     elif name == "orient_for_print":
-        # The search over hundreds of candidates is measured in the performance
-        # suite; here it would only make every run slower without checking more.
+        # Die Suche über hunderte Kandidaten wird in der Leistungs-Suite gemessen;
+        # hier machte sie jeden Lauf nur langsamer, ohne mehr zu prüfen.
         arguments["thorough"] = False
     return ToolCall(id=str(index), name=name, arguments=arguments)
 
@@ -126,7 +127,7 @@ def run(case: Case, project: Project, profile: Profile) -> tuple[AgentSession, o
     return agent, proposal
 
 
-# --- the corpus of requests -------------------------------------------------------
+# --- Der Korpus der Anfragen ------------------------------------------------------
 
 
 def test_the_suite_has_the_size_the_plan_asks_for() -> None:
@@ -142,7 +143,9 @@ def test_the_suite_has_the_size_the_plan_asks_for() -> None:
 
 
 def test_every_expected_operation_exists() -> None:
-    """A case that expects an operation nobody declared would pass by accident."""
+    """Ein Fall, der eine Operation erwartet, die niemand deklariert hat,
+    ginge aus Versehen durch.
+    """
     known = {spec.name for spec in REGISTRY.all()}
 
     for case in CASES:
@@ -158,14 +161,16 @@ def test_every_expected_operation_is_offered_as_a_tool() -> None:
             assert name in offered, f"{case.id}: {name} is not a tool"
 
 
-# --- what the harness guarantees --------------------------------------------------
+# --- Was die Mechanik garantiert --------------------------------------------------
 
 
 @pytest.mark.parametrize("case", CASES, ids=[case.id for case in CASES])
 def test_every_request_reaches_the_model_with_its_context(
     case: Case, project: Project, profile: Profile
 ) -> None:
-    """§26.1: digest, report, rules — and the selection where there is one."""
+    """§26.1: Steckbrief, Prüfbericht, Regeln — und die Auswahl, wo es eine
+    gibt.
+    """
     agent, _proposal = run(case, project, profile)
     backend = agent.backend
     assert isinstance(backend, ScriptedBackend)
@@ -186,7 +191,7 @@ def test_every_request_reaches_the_model_with_its_context(
 def test_a_good_answer_becomes_one_transaction(
     case: Case, project: Project, profile: Profile
 ) -> None:
-    """AGENTS.md rule 16: one proposal, one transaction, one undo."""
+    """AGENTS.md Regel 16: ein Vorschlag, eine Transaktion, ein Undo."""
     _agent, proposal = run(case, project, profile)
     history = History(project.document)
     before = len(project.document.transactions)
@@ -206,7 +211,9 @@ def test_a_good_answer_becomes_one_transaction(
 def test_an_ambiguous_request_can_ask_and_the_question_arrives(
     case: Case, project: Project, profile: Profile
 ) -> None:
-    """§26.2: the question has to reach the surface, not stay in the model."""
+    """§26.2: die Frage muss die Oberfläche erreichen, nicht im Modell
+    bleiben.
+    """
     _agent, proposal = run(case, project, profile)
 
     assert proposal.asked, f"{case.id} is ambiguous and the harness has to carry the question"
@@ -225,7 +232,7 @@ def test_the_expected_operations_end_up_in_the_proposal(
 
 
 def test_a_parameter_case_produces_a_parameter(project: Project, profile: Profile) -> None:
-    """§39: main dimensions become parameters, and the suite measures it."""
+    """§39: Hauptmaße werden Parameter, und die Suite misst es."""
     case = next(entry for entry in CASES if entry.expects_parameter)
     _agent, proposal = run(case, project, profile)
 
@@ -243,7 +250,7 @@ def test_a_question_about_the_model_changes_nothing(project: Project, profile: P
 def test_an_invalid_operation_never_reaches_the_geometry(
     project: Project, profile: Profile
 ) -> None:
-    """§40 for P4: schema-valid before anything is computed."""
+    """§40 für P4: schemagültig, bevor irgendetwas gerechnet wird."""
     agent = AgentSession(
         backend=ScriptedBackend(
             answers=[
@@ -270,7 +277,7 @@ def test_an_invalid_operation_never_reaches_the_geometry(
     assert len(project.document.ops) == 1, "only the load operation, nothing added"
 
 
-# --- pillar A (§40 for P6) ----------------------------------------------------------
+# --- Säule A (§40 für P6) ---------------------------------------------------------
 
 
 def test_pillar_a_prefers_parts_over_own_geometry() -> None:
@@ -298,7 +305,7 @@ def test_pillar_a_prefers_parts_over_own_geometry() -> None:
 
 
 def test_pillar_a_turns_main_dimensions_into_parameters() -> None:
-    """§39, §35: main dimensions become parameters, and it is measurable."""
+    """§39, §35: Hauptmaße werden Parameter, und es ist messbar."""
     from tests.agent_cases import CASES_A
 
     assert [case.id for case in CASES_A if case.expects_parameter] == [
@@ -332,7 +339,9 @@ def test_the_free_shape_no_longer_needs_the_fallback() -> None:
 
 
 def test_the_scene_stays_evaluable_after_every_case(project: Project, profile: Profile) -> None:
-    """A proposal that cannot be computed is worse than none — so all of them are."""
+    """Ein Vorschlag, der sich nicht rechnen lässt, ist schlechter als keiner —
+    also lassen sich alle rechnen.
+    """
     for case in CASES:
         made = new_project("centauri-carbon-2", "petg")
         made.document.sources["src_1"] = project.document.sources["src_1"]

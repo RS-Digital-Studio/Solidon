@@ -1,14 +1,14 @@
-"""The reference requests for pillar C (Bauplan §35, §40 for P4).
+"""Die Referenzanfragen für Säule C (Bauplan §35, §40 für P4).
 
-Fifteen requests to way 1 — adapting a foreign model — of which three are
-deliberately ambiguous. They are data, not test functions, because two runners
-use them: the suite in ``test_agent_suite.py``, which checks what the harness
-guarantees without a model, and ``tools/run_agent_suite.py``, which puts them to
-a real model and reports the quota.
+Fünfzehn Anfragen an Weg 1 — ein fremdes Modell anpassen —, von denen drei mit
+Absicht mehrdeutig sind. Sie sind Daten, keine Testfunktionen, denn zwei
+Läufer benutzen sie: die Suite in ``test_agent_suite.py``, die ohne Modell
+prüft, was die Mechanik garantiert, und ``tools/run_agent_suite.py``, das sie
+einem echten Modell vorlegt und die Quote meldet.
 
-What is measured is named in §35: is an existing part used instead of own
-geometry, do main dimensions become parameters, and is a question asked when the
-request is ambiguous.
+Gemessen wird, was §35 benennt: wird ein vorhandener Baustein statt eigener
+Geometrie benutzt, werden Hauptmaße zu Parametern, und wird gefragt, wenn die
+Anfrage mehrdeutig ist.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True, slots=True)
 class Case:
-    """One reference request and what a good answer looks like."""
+    """Eine Referenzanfrage und wie eine gute Antwort darauf aussieht."""
 
     id: str
     request: str
@@ -40,7 +40,7 @@ class Case:
     """§35: is an existing part used instead of own geometry?"""
 
 
-#: Way 1 of §2.2, on the plate with four bores from the corpus.
+#: Weg 1 aus §2.2, auf der Platte mit vier Bohrungen aus dem Korpus.
 CASES: tuple[Case, ...] = (
     Case(
         id="move",
@@ -127,9 +127,9 @@ CASES: tuple[Case, ...] = (
     ),
 )
 
-#: Way 2 of §2.2 — building something new, on an empty project. What is measured
-#: here is what §35 asks about pillar A: is a part used instead of own geometry,
-#: and do the main dimensions become parameters.
+#: Weg 2 aus §2.2 — etwas Neues bauen, auf einem leeren Projekt. Gemessen wird
+#: hier, wonach §35 bei Säule A fragt: wird ein Baustein statt eigener Geometrie
+#: benutzt, und werden die Hauptmaße zu Parametern.
 CASES_A: tuple[Case, ...] = (
     Case(
         id="bracket",

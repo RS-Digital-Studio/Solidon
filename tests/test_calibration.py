@@ -1,4 +1,4 @@
-"""Self-calibration, test bodies and the variant generator (Bauplan §28.3)."""
+"""Selbstkalibrierung, Prüfkörper und Variantengenerator (Bauplan §28.3)."""
 
 from __future__ import annotations
 
@@ -19,7 +19,9 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 @pytest.fixture(autouse=True)
 def own_profiles(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Never write into the profile directory of the machine the tests run on."""
+    """Nie in das Profilverzeichnis der Maschine schreiben, auf der die Tests
+    laufen.
+    """
     directory = tmp_path / "profiles"
     monkeypatch.setattr(profiles, "user_profiles_dir", lambda: directory)
     monkeypatch.setattr(calibration, "user_profiles_dir", lambda: directory)
@@ -33,7 +35,7 @@ def own_profiles(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.mark.parametrize("name", ["fit_ladder", "wall_ladder", "overhang_fan"])
 def test_a_test_body_prints_as_one_piece(name: str) -> None:
-    """A calibration body that falls apart on the plate measures nothing."""
+    """Ein Kalibrierkörper, der auf der Platte auseinanderfällt, misst nichts."""
     spec = PARTS.get(name)
     result = spec.fn(spec.params())
 
@@ -43,7 +45,9 @@ def test_a_test_body_prints_as_one_piece(name: str) -> None:
 
 
 def test_the_fit_ladder_staggers_its_play() -> None:
-    """§28.3: pins and bores with staggered play — and the numbers say which."""
+    """§28.3: Stifte und Bohrungen mit gestaffeltem Spiel — und die Zahlen
+    sagen, welche.
+    """
     spec = PARTS.get("fit_ladder")
     result = spec.fn(spec.params(diameter=6.0, steps=4, first=0.10, step=0.05))
 
@@ -66,7 +70,9 @@ def test_the_wall_ladder_climbs_in_extrusion_widths() -> None:
 
 @pytest.mark.parametrize("name", ["insert_fit_ladder", "insert_wall_ladder", "insert_overhang_fan"])
 def test_a_test_body_reaches_the_scene_as_an_operation(name: str, profile: Profile) -> None:
-    """Like every part, a test body is an operation (§10) — printable in one step."""
+    """Wie jeder Baustein ist ein Prüfkörper eine Operation (§10) — in einem
+    Schritt druckbar.
+    """
     project = new_project("centauri-carbon-2", "petg")
     History(project.document).apply(
         "Grundplatte", [OperationDraft(op="create_box", params={"width": 5.0, "depth": 5.0})]
@@ -90,7 +96,7 @@ def test_the_overhang_fan_leans_further_step_by_step() -> None:
 
 
 def test_a_measurement_lands_in_the_material_profile(own_profiles: Path) -> None:
-    """Step three of §28.3: the values go into the profile, not into a model."""
+    """Schritt drei aus §28.3: die Werte gehen ins Profil, nicht in ein Modell."""
     before = profiles.material("petg")
     assert not before.calibrated
 

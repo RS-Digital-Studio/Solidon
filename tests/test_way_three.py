@@ -1,12 +1,12 @@
-"""Way 3 from §2.2, end to end (Bauplan §40 for P9).
+"""Weg 3 aus §2.2, Ende zu Ende (Bauplan §40 für P9).
 
     Text oder Bild → Mesh → Reparaturkette läuft automatisch → Prüfbericht →
     gegebenenfalls teilen und verstiften → exportieren.
 
-Splitting and pinning is P10; everything before it is here. The generator is
-scripted, and what it hands over is deliberately the kind of mesh a real one
-delivers: open, with a stray fragment, and coloured in more shades than any
-printer has filaments.
+Teilen und Verstiften ist P10; alles davor steht hier. Der Generator ist
+geskriptet, und was er übergibt, ist mit Absicht die Sorte Netz, die ein echter
+liefert: offen, mit einem losen Fragment, und in mehr Schattierungen gefärbt,
+als irgendein Drucker Filamente hat.
 """
 
 from __future__ import annotations
@@ -35,10 +35,11 @@ def project() -> Project:
 
 
 def generated_body() -> bytes:
-    """What a generator really delivers: an open shell plus a loose crumb.
+    """Was ein Generator wirklich liefert: eine offene Schale plus einen losen
+    Krümel.
 
-    PLY, because it keeps the per-face colours a generated model comes with —
-    and those colours are what §20 has to turn into filaments.
+    PLY, weil es die Farben je Fläche behält, mit denen ein erzeugtes Modell
+    ankommt — und genau diese Farben muss §20 in Filamente verwandeln.
     """
     shell = trimesh.load(MESHES / "broken_open.stl", process=False)
     crumb = trimesh.creation.box(extents=(0.4, 0.4, 0.4))
@@ -51,8 +52,9 @@ def generated_body() -> bytes:
     colours[:, 3] = 255
     colours[:, 0] = (255 * (middle > middle.mean())).astype(np.uint8)
     colours[:, 2] = (255 * (middle <= middle.mean())).astype(np.uint8)
-    # A little noise on the green channel: a render keeps those apart, a printer
-    # does not, and the quantisation has to be the one that says so.
+    # Ein wenig Rauschen auf dem Grünkanal: eine Darstellung hält die
+    # auseinander, ein Drucker nicht — und die Quantisierung muss die sein, die
+    # das sagt.
     colours[:, 1] = (40 * shades).astype(np.uint8)
     body.visual.face_colors = colours
     return bytes(trimesh.exchange.export.export_mesh(body, None, file_type="ply"))
@@ -77,7 +79,9 @@ def test_a_description_becomes_a_body_in_the_scene(project: Project, profile: Pr
 
 
 def test_the_generated_file_is_a_source_and_not_an_operation(project: Project) -> None:
-    """§11.3: a generator is not a function, so the bytes are what is kept."""
+    """§11.3: ein Generator ist keine Funktion, aufgehoben werden also die
+    Bytes.
+    """
     result = from_text(project, backend(), "eine kleine Figur", seed=7)
 
     source = project.document.sources[result.source_id]
@@ -91,7 +95,9 @@ def test_the_generated_file_is_a_source_and_not_an_operation(project: Project) -
 
 
 def test_the_repair_chain_runs_without_being_asked(project: Project, profile: Profile) -> None:
-    """§2.2: „Reparaturkette läuft automatisch“ — and it is visible in the report."""
+    """§2.2: „Reparaturkette läuft automatisch" — und es ist im Prüfbericht zu
+    sehen.
+    """
     from_text(project, backend(), "eine kleine Figur", seed=7)
 
     scene = evaluated(project, profile)
@@ -102,7 +108,7 @@ def test_the_repair_chain_runs_without_being_asked(project: Project, profile: Pr
 
 
 def test_the_repair_is_one_step_that_can_be_taken_back(project: Project, profile: Profile) -> None:
-    """It runs automatically, which is not the same as being unavoidable."""
+    """Sie läuft automatisch, und das ist nicht dasselbe wie unvermeidlich."""
     from_text(project, backend(), "eine kleine Figur", seed=7)
     with_repair = evaluated(project, profile)
     object_id = next(iter(with_repair.scene.objects))
@@ -128,7 +134,9 @@ def test_a_picture_takes_the_same_way(project: Project, profile: Profile) -> Non
 def test_the_colours_become_filaments_and_reach_the_3mf(
     project: Project, profile: Profile, tmp_path: Path
 ) -> None:
-    """The whole of §20 on a generated body: texture in, colour groups out."""
+    """Das ganze §20 an einem erzeugten Körper: Textur hinein, Farbgruppen
+    heraus.
+    """
     result = from_text(project, backend(), "eine kleine Figur", seed=7)
     History(project.document).apply(
         "Farben",
@@ -161,10 +169,12 @@ def test_the_colours_become_filaments_and_reach_the_3mf(
 def test_the_same_seed_gives_the_same_filaments(
     project: Project, profile: Profile, tmp_path: Path
 ) -> None:
-    """§20: the quantisation is reproducible, or the file stops describing the part.
+    """§20: die Quantisierung ist reproduzierbar, sonst hört die Datei auf,
+    das Teil zu beschreiben.
 
-    Reproducible across a save, which is the case that matters: the seed the
-    history handed out has to come back out of the file (§11.3).
+    Reproduzierbar über ein Speichern hinweg, und das ist der Fall, auf den es
+    ankommt: der Startwert, den der Verlauf vergeben hat, muss aus der Datei
+    wieder herauskommen (§11.3).
     """
     result = from_text(project, backend(), "eine kleine Figur", seed=7)
     History(project.document).apply(
@@ -188,7 +198,9 @@ def test_the_same_seed_gives_the_same_filaments(
 def test_the_project_survives_being_saved_and_opened(
     project: Project, profile: Profile, tmp_path: Path
 ) -> None:
-    """Way 3 ends in a file like every other way — with its provenance intact."""
+    """Weg 3 endet in einer Datei wie jeder andere Weg — mit unversehrter
+    Provenienz.
+    """
     result = from_text(project, backend(), "eine kleine Figur", seed=7)
     save(project, tmp_path / "figur.p3d")
 
