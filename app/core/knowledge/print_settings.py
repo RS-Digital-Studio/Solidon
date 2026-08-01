@@ -193,6 +193,7 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
             density=float(stuff.get("density", 1.24)),
             flow_ratio=float(stuff.get("flow_ratio", 1.0)),
             colour=str(stuff.get("colour", "#4A90D9")),
+            max_flow=float(stuff.get("max_flow", 12.0)),
         ),
     )
 

@@ -524,6 +524,16 @@ FIELDS: tuple[Field, ...] = (
         decimals=3,
     ),
     Field(
+        "filament.max_flow",
+        tr("Höchster Volumenstrom"),
+        "other",
+        unit="mm³/s",
+        minimum=0.5,
+        maximum=60.0,
+        step=0.5,
+        decimals=1,
+    ),
+    Field(
         "filament.cost_per_kg",
         tr("Preis je Kilogramm"),
         "other",

@@ -56,6 +56,35 @@ Einstellungen. Die Unterscheidung ist verbindlich:
 
 Übernommen wird auf Klick, nie von allein.
 
+**Ein Vorschlag je Einstellung**, und `was` ist immer der Ausgangswert. Regeln,
+die auf denselben Wert zielen, werden zusammengeführt; die spätere gewinnt,
+weil sie den Stand der früheren gesehen hat. Der Volumenstrom läuft deshalb
+zuletzt: er hängt an Schichthöhe, Bahnbreite und Tempo, an denen die anderen
+Regeln gedreht haben können.
+
+**Der Volumenstrom ist die Grenze, die kein Feld zeigt.** Schichthöhe mal
+Bahnbreite mal Geschwindigkeit gegen `max_flow` des Materials — darüber
+fördert der Antrieb mehr, als das Hotend flüssig bekommt, die Bahn wird dünner
+als gerechnet, und an den Einstellungen sieht man nichts. Zwei Auswege, beide
+werden genannt und keiner erzwungen: heißer, solange die Maschine das kann,
+sonst langsamer.
+
+## Das Maschinenprofil des Slicers
+
+`export/slicer_profiles.py` liest den Bestand des installierten Slicers. Vier
+Eigenheiten, die dabei nicht angenommen werden dürfen:
+
+- **Die Ordnertiefe ist nicht einheitlich** — Bambu legt in `machine/`, Elegoo
+  in `machine/ECC2/`. Gesucht wird nach dem Ordnernamen irgendwo im Pfad.
+- **Verträglichkeit wird vererbt.** Ein Profil je Familie trägt
+  `compatible_printers`, die Geschwister erben sie über `inherits`. Wer nur
+  das eigene Feld liest, bietet eines von sieben an.
+- **Eigene Profile tragen kein `type`** und kein `instantiation` — sie erben
+  und stehen unter `from: User`. Genau die gehören in die Liste.
+- **Zugeordnet, nicht erfragt.** `printer_model`, Düse und
+  `default_print_profile` reichen. Trifft nichts, bleibt die Auswahl leer:
+  eine falsche Vorauswahl sieht aus wie eine Entscheidung.
+
 ## Was die Analyse liefert
 
 Überhangfläche je Schicht, Stützvolumen, Querschnittsverlauf, **Inseln**

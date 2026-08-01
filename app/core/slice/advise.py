@@ -19,6 +19,7 @@ Werten aus dem G-Code wird es nie vermischt (Regel 14, §22.5).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Final
 
 from app.core.knowledge import print_settings as settings_table
@@ -72,6 +73,20 @@ WARPING_MATERIALS: Final = frozenset({"asa", "abs"})
 #: Materialien, die zu weich sind, um schnell gefördert zu werden.
 FLEXIBLE_MATERIALS: Final = frozenset({"tpu-95a"})
 
+#: Um so viel Grad wird die Düse angehoben, wenn der Volumenstrom es verlangt.
+#: Zehn Grad sind ein spürbarer Schritt und bleiben im Rahmen dessen, was ein
+#: Filament aushält — die große Änderung gehört ins Materialprofil, nicht in
+#: einen Vorschlag.
+TEMPERATURE_STEP: Final = 10
+
+#: Um so viel Grad wird das Bett angehoben, wo die Haftung es verlangt.
+BED_STEP: Final = 5
+
+#: Kammertemperatur, die ein schrumpfendes Material auf einem geschlossenen
+#: Gerät braucht. Warm genug, dass die unteren Schichten nicht erstarren,
+#: bevor die oberen liegen — und weit unter dem, was der Antrieb aushält.
+CHAMBER_FOR_WARPING: Final = 50
+
 
 def advise(
     settings: PrintSettings,
@@ -94,7 +109,96 @@ def advise(
         advice += _from_geometry(settings, profile, result, bounds)
     if has_fits:
         advice += _from_fits(settings)
+
+    # Der Volumenstrom hängt an Schichthöhe, Bahnbreite und Tempo — und an
+    # genau diesen Werten haben die Vorschläge oben womöglich gedreht. Er wird
+    # deshalb gegen den Stand *nach* ihnen gerechnet, sonst empfiehlt er eine
+    # heißere Düse für ein Tempo, das nebenan schon gesenkt wurde.
+    advice = _merged(settings, advice + _from_flow(apply(settings, advice), profile))
+
     _log.info("advising %d settings", len(advice))
+    return advice
+
+
+def _merged(settings: PrintSettings, advice: list[SettingAdvice]) -> list[SettingAdvice]:
+    """Ein Vorschlag je Einstellung, und ``was`` ist immer der Ausgangswert.
+
+    Zwei Regeln können denselben Wert meinen — bei weichem Filament senkt die
+    Materialregel das Tempo, und der Volumenstrom will es womöglich noch
+    weiter. Zwei Zeilen für dieselbe Einstellung wären keine zwei Vorschläge,
+    sondern eine Liste, die sich selbst widerspricht: die spätere Regel hat den
+    Stand der früheren gesehen, also gewinnt sie.
+    """
+    by_path: dict[str, SettingAdvice] = {}
+    for entry in advice:
+        by_path[entry.path] = replace(entry, was=settings_table.read_path(settings, entry.path))
+    # Vorschläge, die nach dem Zusammenführen nichts mehr ändern, fallen weg.
+    return [entry for entry in by_path.values() if entry.value != entry.was]
+
+
+def flow_of(settings: PrintSettings, speed: float) -> float:
+    """Wie viel Material bei diesem Tempo je Sekunde durch die Düse muss, in
+    mm³/s.
+
+    Schichthöhe mal Bahnbreite mal Geschwindigkeit — die Rechnung, die die drei
+    Einstellungen verbindet, an denen sonst einzeln gedreht wird. Sie ist der
+    Grund, warum eine Schichthöhe, die gestern ging, heute mit einer schnelleren
+    Stufe Löcher in die Wand zieht.
+    """
+    return settings.layers.layer_height * settings.layers.line_width * speed
+
+
+def _from_flow(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]:
+    """Was nicht durch die Düse passt (§29).
+
+    Das Hotend ist die eigentliche Grenze, und sie wird selten als solche
+    gezeigt: der Antrieb fördert weiter, das Material wird nur nicht mehr
+    warm genug. Die Bahn wird dann dünner als gerechnet, die Wand porös, und
+    an den Einstellungen sieht man nichts.
+
+    Zwei Wege heraus, und beide werden genannt: heißer, solange die Maschine
+    das kann, sonst langsamer. Welcher richtig ist, weiß Formwerk nicht —
+    darum entscheidet es das nicht.
+    """
+    advice: list[SettingAdvice] = []
+    limit = settings.filament.max_flow
+    if limit <= 0.0:
+        return advice
+
+    fastest = max(settings.speed.infill, settings.speed.inner_wall)
+    needed = flow_of(settings, fastest)
+    if needed <= limit:
+        return advice
+
+    headroom = profile.printer.nozzle_temperature_max - settings.temperature.nozzle
+    if headroom >= TEMPERATURE_STEP:
+        advice.append(
+            SettingAdvice(
+                path="temperature.nozzle",
+                value=settings.temperature.nozzle + TEMPERATURE_STEP,
+                was=settings.temperature.nozzle,
+                reason=_(
+                    "Bei diesem Tempo müssen mehr Kubikmillimeter je Sekunde durch die "
+                    "Düse, als das Material bei dieser Temperatur flüssig wird."
+                ),
+                severity="warning",
+            )
+        )
+    else:
+        # Ohne Luft nach oben bleibt nur der andere Weg — und ein Vorschlag,
+        # der die Maschinengrenze überschreitet, wäre keiner.
+        advice.append(
+            SettingAdvice(
+                path="speed.infill",
+                value=round(limit / (settings.layers.layer_height * settings.layers.line_width)),
+                was=settings.speed.infill,
+                reason=_(
+                    "Schneller bekommt dieses Hotend das Material nicht mehr aufgeschmolzen, "
+                    "und heißer kann der Drucker nicht."
+                ),
+                severity="warning",
+            )
+        )
     return advice
 
 
@@ -173,6 +277,26 @@ def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdv
                     severity="warning",
                 )
             )
+
+    if (
+        material in WARPING_MATERIALS
+        and profile.printer.enclosed
+        and settings.temperature.chamber <= 0
+    ):
+        # Ein geschlossener Bauraum ist nur so viel wert, wie er geheizt wird.
+        # Das Materialprofil setzt die Kammer; steht sie trotzdem auf null, hat
+        # jemand sie ausgeschaltet — auf einem Gerät, das den Grund dafür hat.
+        advice.append(
+            SettingAdvice(
+                path="temperature.chamber",
+                value=CHAMBER_FOR_WARPING,
+                was=settings.temperature.chamber,
+                reason=_(
+                    "Dieser Drucker hat einen geschlossenen Bauraum, und dieses Material "
+                    "ist der Grund, warum das hilft."
+                ),
+            )
+        )
 
     if material in FLEXIBLE_MATERIALS:
         for path, current in (
@@ -255,6 +379,28 @@ def _from_geometry(
                 was=settings.adhesion.kind,
                 reason=_("Die Standfläche ist klein — ein Brim verhindert, dass das Teil abreißt."),
                 severity="warning",
+            )
+        )
+
+    if (
+        0.0 < result.first_layer_area < SMALL_FOOTPRINT
+        and profile.material.id in WARPING_MATERIALS
+        and settings.temperature.bed_first_layer < profile.printer.bed_temperature_max
+    ):
+        # Wenig Fläche und ein Material, das zieht: das Bett ist der einzige
+        # Halt, den das Teil in der ersten Minute hat.
+        advice.append(
+            SettingAdvice(
+                path="temperature.bed_first_layer",
+                value=min(
+                    settings.temperature.bed_first_layer + BED_STEP,
+                    profile.printer.bed_temperature_max,
+                ),
+                was=settings.temperature.bed_first_layer,
+                reason=_(
+                    "Kleine Standfläche und ein Material, das sich zusammenzieht — ein "
+                    "wärmeres Bett hält die erste Schicht unten."
+                ),
             )
         )
 

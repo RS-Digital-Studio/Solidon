@@ -16,6 +16,12 @@
 # Alle Längen in Millimetern, Temperaturen in Grad Celsius, Geschwindigkeiten in
 # mm/s. Anteile sind Zahlen zwischen 0 und 1 — 0.15 sind fünfzehn Prozent.
 #
+# `max_flow` ist der Volumenstrom in mm³/s, den ein übliches Hotend bei der
+# angegebenen Temperatur flüssig bekommt. Er ist die Grenze, an der Schichthöhe,
+# Bahnbreite und Geschwindigkeit zusammenlaufen — wer schneller fördert, bekommt
+# dünnere Bahnen als gerechnet. Werte für ein Standard-Hotend; ein Hochfluss-
+# Hotend schafft das Doppelte und gehört ins eigene Profil.
+#
 # Die Werte sind belastbare Ausgangspunkte für eine 0,4-mm-Düse, keine
 # Messungen. Was der Druck widerlegt, gehört ins eigene Profil.
 
@@ -105,6 +111,7 @@ z_hop = 0.2
 density = 1.24
 flow_ratio = 0.98
 colour = "#4A90D9"
+max_flow = 12.0
 adhesion = "skirt"
 
 [material.petg]
@@ -122,6 +129,7 @@ z_hop = 0.3
 density = 1.27
 flow_ratio = 0.95
 colour = "#3FAE6B"
+max_flow = 10.0
 adhesion = "skirt"
 # PETG zieht Fäden und klebt an der Platte fest: weniger Lüfter, mehr Rückzug,
 # und der Z-Hop hält die Düse aus dem eben Gelegten heraus.
@@ -141,6 +149,7 @@ z_hop = 0.3
 density = 1.30
 flow_ratio = 0.96
 colour = "#2C2C2C"
+max_flow = 9.0
 adhesion = "brim"
 # Gefüllte Filamente brauchen eine gehärtete Düse; das steht im Handbuch, nicht
 # in einer Zahl hier.
@@ -160,6 +169,7 @@ z_hop = 0.2
 density = 1.07
 flow_ratio = 0.97
 colour = "#D9D0C1"
+max_flow = 11.0
 adhesion = "brim"
 
 [material.abs]
@@ -177,6 +187,7 @@ z_hop = 0.2
 density = 1.04
 flow_ratio = 0.97
 colour = "#B84A4A"
+max_flow = 11.0
 adhesion = "brim"
 # ASA und ABS ziehen sich beim Abkühlen zusammen. Wenig Lüfter, warme Kammer,
 # Brim — ohne geschlossenen Bauraum reißen hohe Teile an den Ecken auf.
@@ -196,6 +207,7 @@ z_hop = 0.0
 density = 1.21
 flow_ratio = 1.05
 colour = "#E0A32E"
+max_flow = 3.5
 adhesion = "skirt"
 # Weiches Filament staucht im Bowden statt zurückzuziehen: kurzer, langsamer
 # Rückzug. Die Geschwindigkeitsdeckelung steckt in `advise.py`, nicht hier —

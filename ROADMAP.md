@@ -240,10 +240,16 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       Mindestschichtzeit, Linienbreite und Außenwandtempo. Jeder Vorschlag mit
       Begründung, übernommen wird auf Klick. Was kein Wert behebt, wird ein
       Befund statt eines Vorschlags
-- [ ] Maschinen- und Prozessprofil des Slicers in den Einstellungen wählbar —
-      steht in `UiSettings`, wird bisher aber nur gelesen und nicht angeboten.
-      Ohne beide läuft die Orca-Familie in „process not compatible with
-      printer"
+- [x] **Maschinen- und Prozessprofil des Slicers wählbar** (§29) —
+      `export/slicer_profiles.py` liest den Bestand des installierten Slicers,
+      löst die Erbkette der Verträglichkeit auf und ordnet über `printer_model`,
+      Düse und `default_print_profile` selbst zu. Die Auswahl steht im Dialog
+      für den Fall, dass jemand abweichen will; gelesen wird im Hintergrund
+- [x] **Volumenstrom als Grenze** (§29) — `max_flow` je Material, gegen
+      Schichthöhe mal Bahnbreite mal Tempo geprüft. Darüber Düse heißer,
+      und wo die Maschine am Anschlag ist, stattdessen langsamer. Die Regel
+      rechnet gegen den Stand *nach* den übrigen Vorschlägen, und die Zahl
+      reist als `filament_max_volumetric_speed` zum Slicer mit
 - [ ] Farbgruppen aus der Szene an den Slicer durchreichen — `filament.colour`
       ist eine Farbe, die 3MF-Materialslots sind mehrere (§20). Für
       Mehrfarbdruck fehlt die Zuordnung Slot → Extruder

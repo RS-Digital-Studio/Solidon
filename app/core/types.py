@@ -483,6 +483,14 @@ class FilamentSettings:
     """Als ``#RRGGBB``. Reicht bis in die 3MF-Farbgruppen durch."""
     cost_per_kg: float = 0.0
     """0 heißt unbekannt, nicht kostenlos — die Kostenschätzung schweigt dann."""
+    max_flow: float = 12.0
+    """Wie viel Material die Düse je Sekunde aufschmelzen kann, in mm³/s.
+
+    Die Grenze, an der Schichthöhe, Bahnbreite und Geschwindigkeit
+    zusammenlaufen: darüber fördert der Antrieb mehr, als das Hotend flüssig
+    bekommt, und die Bahn wird dünner als gerechnet. Ein Wert je Material,
+    denn TPU braucht ein Vielfaches der Zeit von PLA.
+    """
 
 
 @dataclass(frozen=True, slots=True)

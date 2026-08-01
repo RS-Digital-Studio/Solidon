@@ -251,6 +251,98 @@ def test_flexible_material_caps_the_speed() -> None:
     assert all(float(entry.value) <= advise.FLEXIBLE_MAX_SPEED for entry in speeds)  # type: ignore[arg-type]
 
 
+def test_too_much_flow_asks_for_a_hotter_nozzle() -> None:
+    """Die Grenze, die kein Feld zeigt: Schichthöhe mal Bahnbreite mal Tempo
+    ist der Volumenstrom, und darüber wird die Bahn dünner als gerechnet —
+    ohne dass an den Einstellungen etwas falsch aussähe."""
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    settings = print_settings.resolve(profile, "draft")
+    assert advise.flow_of(settings, settings.speed.infill) > settings.filament.max_flow
+
+    entries = advise.advise(settings, profile)
+
+    hotter = next(entry for entry in entries if entry.path == "temperature.nozzle")
+    assert int(hotter.value) > settings.temperature.nozzle  # type: ignore[call-overload]
+
+
+def test_a_calm_setting_needs_no_flow_advice() -> None:
+    profile = profiles.make_profile("prusa-mk4s", "petg")
+    settings = print_settings.resolve(profile, "fine")
+
+    entries = advise.advise(settings, profile)
+
+    assert not [entry for entry in entries if entry.path == "temperature.nozzle"]
+
+
+def test_a_nozzle_at_its_limit_slows_down_instead() -> None:
+    """Heißer geht nicht immer — dann ist der andere Weg der einzige, und ein
+    Vorschlag über die Maschinengrenze hinaus wäre keiner."""
+    profile = profiles.make_profile("anycubic-kobra-2", "pla")
+    settings = print_settings.with_path(
+        print_settings.resolve(profile, "draft"),
+        "temperature.nozzle",
+        profile.printer.nozzle_temperature_max,
+    )
+
+    entries = advise.advise(settings, profile)
+
+    slower = next(entry for entry in entries if entry.path == "speed.infill")
+    assert float(slower.value) < settings.speed.infill  # type: ignore[arg-type]
+    assert not [
+        entry
+        for entry in entries
+        if entry.path == "temperature.nozzle"
+        and int(entry.value) > profile.printer.nozzle_temperature_max  # type: ignore[call-overload]
+    ]
+
+
+def test_the_flow_rule_sees_what_the_others_changed() -> None:
+    """Bei weichem Filament senkt die Materialregel das Tempo. Rechnete der
+    Volumenstrom gegen das alte, empfähle er eine heißere Düse für ein Tempo,
+    das nebenan schon gesenkt wurde."""
+    profile = profiles.make_profile("prusa-mk4s", "tpu-95a")
+    settings = print_settings.resolve(profile, "draft")
+
+    entries = advise.advise(settings, profile)
+    after = advise.apply(settings, entries)
+
+    assert after.speed.infill <= advise.FLEXIBLE_MAX_SPEED
+    assert advise.flow_of(after, after.speed.infill) < advise.flow_of(
+        settings, settings.speed.infill
+    )
+
+
+def test_no_setting_gets_two_suggestions() -> None:
+    """Zwei Zeilen für dieselbe Einstellung wären keine zwei Vorschläge,
+    sondern eine Liste, die sich selbst widerspricht."""
+    profile = profiles.make_profile("prusa-mk4s", "tpu-95a")
+    settings = print_settings.resolve(profile, "draft")
+
+    paths = [entry.path for entry in advise.advise(settings, profile, has_fits=True)]
+
+    assert len(paths) == len(set(paths))
+
+
+def test_a_heated_chamber_gets_used_when_it_is_there() -> None:
+    profile = profiles.make_profile("bambu-x1c", "abs")
+    settings = print_settings.with_path(print_settings.resolve(profile), "temperature.chamber", 0)
+
+    entries = advise.advise(settings, profile)
+
+    chamber = next(entry for entry in entries if entry.path == "temperature.chamber")
+    assert int(chamber.value) > 0  # type: ignore[call-overload]
+
+
+def test_the_flow_limit_reaches_the_slicer() -> None:
+    """Die Zahl gehört ins Filamentprofil — dort setzt der Slicer sie durch,
+    auch für die Wege, die Formwerk nicht einzeln einstellt."""
+    settings = print_settings.resolve(profiles.make_profile("prusa-mk4s", "tpu-95a"))
+
+    for flavour in ("prusa", "orca"):
+        written = handover.as_mapping(settings, flavour)  # type: ignore[arg-type]
+        assert written["filament_max_volumetric_speed"] == "3.5"
+
+
 def test_fits_slow_the_outer_wall_down() -> None:
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)

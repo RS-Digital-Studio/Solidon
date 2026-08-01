@@ -143,6 +143,7 @@ PRUSA: Final[tuple[Entry, ...]] = (
     ("filament.flow_ratio", "extrusion_multiplier", _number),
     ("filament.colour", "filament_colour", _plain),
     ("filament.cost_per_kg", "filament_cost", _number),
+    ("filament.max_flow", "filament_max_volumetric_speed", _number),
 )
 
 # --- OrcaSlicer und Bambu Studio ------------------------------------------------
@@ -230,6 +231,7 @@ ORCA: Final[tuple[Entry, ...]] = (
     ("filament.flow_ratio", "filament_flow_ratio", _number),
     ("filament.colour", "filament_colour", _plain),
     ("filament.cost_per_kg", "filament_cost", _number),
+    ("filament.max_flow", "filament_max_volumetric_speed", _number),
 )
 
 # --- CuraEngine -----------------------------------------------------------------
