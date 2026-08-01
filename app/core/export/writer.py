@@ -71,7 +71,7 @@ def safe_name(text: str, fallback: str = "teil") -> str:
 
     Wirklich unsicher ist eine kurze Liste — Pfadtrenner, Doppelpunkte, die
     Zeichen, die Windows sich vorbehält — und :data:`_UNSAFE` hält sich bereits
-    daran: ``\w`` deckt jeden Buchstaben ab, den Unicode kennt.
+    daran: ``\\w`` deckt jeden Buchstaben ab, den Unicode kennt.
     """
     replacements = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"}
     for character, replacement in replacements.items():

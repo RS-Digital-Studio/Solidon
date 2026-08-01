@@ -473,10 +473,10 @@ class TestPieceParams(BaseParams):
 def test_piece(ctx: OpContext) -> OpResult:
     """§28.3, aus der Praxis: eine Passung prüft man am Ausschnitt, nicht am Teil.
 
-    The cut is an intersection with a cube, so what comes out is the real
-    geometry with the real tolerances — not a rebuilt approximation of it. A
-    piece that prints differently from the part it stands for would be worse
-    than no test at all.
+    Der Ausschnitt ist eine Verschneidung mit einem Würfel — heraus kommt also
+    die echte Geometrie mit den echten Toleranzen, keine nachgebaute Näherung
+    davon. Ein Prüfstück, das anders druckt als das Teil, für das es steht,
+    wäre schlechter als gar kein Test.
     """
     params = cast(TestPieceParams, ctx.params)
     source = ctx.inputs[0]

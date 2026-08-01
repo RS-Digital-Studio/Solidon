@@ -49,14 +49,15 @@ def transfer(
 ) -> MeshData:
     """Gibt jedem Dreieck von ``result`` den Slot der Oberfläche, auf der es liegt.
 
-    Without slots anywhere in the inputs nothing is carried and nothing is
-    invented: a body with one material stays a body with one material.
+    Ohne Slots irgendwo in den Eingaben wird nichts übertragen und nichts
+    erfunden: ein Körper mit einem Material bleibt ein Körper mit einem
+    Material.
 
-    ``tolerance`` is how far a triangle may sit from an old surface and still
-    count as being on it. It has to follow the stage that produced the mesh: a
-    voxel result is stair-stepped by half a voxel everywhere, and measured with
-    the tolerance of an exact boolean it would lose its colour to its own
-    staircase.
+    ``tolerance`` ist, wie weit ein Dreieck von einer alten Oberfläche sitzen
+    darf und noch als auf ihr liegend zählt. Sie muss der Stufe folgen, die das
+    Netz erzeugt hat: ein Voxel-Ergebnis ist überall um einen halben Voxel
+    getreppt, und mit der Toleranz einer exakten Booleschen Op gemessen verlöre
+    es seine Farbe an die eigene Treppe.
     """
     if not any(mesh.slots for mesh in sources):
         return result
@@ -87,10 +88,10 @@ def transfer(
 def _nearest(mesh: MeshData, points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Für jeden Punkt: der Slot des nächsten Dreiecks, und wie weit es weg war.
 
-    Distance to the *surface*, not to the nearest triangle centre. A boolean
-    splits one big face into many small ones, and their centres end up far from
-    the centre of the face they came from — measured that way, a body would lose
-    its colour to its own re-triangulation.
+    Abstand zur *Oberfläche*, nicht zum nächsten Dreiecksmittelpunkt. Eine
+    Boolesche Op teilt eine große Fläche in viele kleine, und deren Mittelpunkte
+    landen weit von dem der Fläche entfernt, aus der sie kamen — so gemessen
+    verlöre ein Körper seine Farbe an die eigene Neuvernetzung.
     """
     import trimesh
 
