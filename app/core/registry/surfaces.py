@@ -1,15 +1,16 @@
-"""Everything that is generated from the registry (Bauplan §10).
+"""Alles, was aus dem Register erzeugt wird (Bauplan §10).
 
-| Output                | Derived from                       |
-|-----------------------|------------------------------------|
-| menu entry and dialog | title, category, parameter schema  |
-| context menu          | applies_to                         |
-| palette and shortcut  | title, doc, shortcut               |
-| command line          | name, parameter schema             |
-| agent tool schema     | name, doc, JSON schema             |
-| documentation section | all of it                          |
+| Ausgabe                    | Abgeleitet aus                        |
+|----------------------------|---------------------------------------|
+| Menüeintrag und Dialog     | title, category, Parameterschema      |
+| Kontextmenü                | applies_to                            |
+| Palette und Kürzel         | title, doc, shortcut                  |
+| Kommandozeile              | name, Parameterschema                 |
+| Agenten-Werkzeugschema     | name, doc, JSON-Schema                |
+| Dokumentationsabschnitt    | alles davon                           |
 
-Nothing here knows about Qt: these are data structures a surface renders.
+Nichts hier weiß von Qt: das sind Datenstrukturen, die eine Oberfläche
+darstellt.
 """
 
 from __future__ import annotations
@@ -39,13 +40,17 @@ def menu_tree(registry: Registry | None = None) -> tuple[MenuSection, ...]:
 
 
 def context_menu(feature_kind: str, registry: Registry | None = None) -> tuple[OperationSpec, ...]:
-    """What a click on a feature offers — the shortest way from seeing to doing (§2.6)."""
+    """Was ein Klick auf ein Merkmal anbietet — der kürzeste Weg vom Sehen
+    zum Tun (§2.6).
+    """
     return (registry or REGISTRY).for_feature(feature_kind)
 
 
 @dataclass(frozen=True, slots=True)
 class PaletteEntry:
-    """One line of the command palette. The shortcut is shown, so it gets learned."""
+    """Eine Zeile der Befehlspalette. Das Kürzel steht daneben, so lernt man
+    es nebenbei.
+    """
 
     name: str
     title: TranslatableText | str
@@ -69,7 +74,7 @@ def palette_entries(registry: Registry | None = None) -> tuple[PaletteEntry, ...
 
 @dataclass(frozen=True, slots=True)
 class CliArgument:
-    """One command line option, derived from a parameter."""
+    """Eine Kommandozeilen-Option, abgeleitet aus einem Parameter."""
 
     flag: str
     name: str
@@ -82,7 +87,7 @@ class CliArgument:
 
 @dataclass(frozen=True, slots=True)
 class CliCommand:
-    """One command line command, derived from an operation."""
+    """Ein Kommandozeilen-Befehl, abgeleitet aus einer Operation."""
 
     name: str
     help: str
@@ -95,7 +100,9 @@ def _help_text(spec: ParamSpec) -> str:
 
 
 def cli_commands(registry: Registry | None = None) -> tuple[CliCommand, ...]:
-    """Commands out of the registry (ROADMAP P0: the CLI reads the same source)."""
+    """Befehle aus dem Register (ROADMAP P0: die Kommandozeile liest
+    dieselbe Quelle).
+    """
     commands: list[CliCommand] = []
     for spec in (registry or REGISTRY).all():
         arguments = tuple(
@@ -115,7 +122,9 @@ def cli_commands(registry: Registry | None = None) -> tuple[CliCommand, ...]:
 
 
 def tool_schemas(registry: Registry | None = None) -> tuple[dict[str, Any], ...]:
-    """Tool descriptions for the agent (§26.2). Same schema as dialog and CLI."""
+    """Werkzeugbeschreibungen für den Agenten (§26.2). Dasselbe Schema wie
+    Dialog und Kommandozeile.
+    """
     return tuple(
         {
             "name": spec.name,

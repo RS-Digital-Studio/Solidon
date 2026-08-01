@@ -1,14 +1,17 @@
-"""Shaping a B-Rep body (Bauplan §30, §25).
+"""Einen B-Rep-Körper formen (Bauplan §30, §25).
 
-The two operations that are the reason for a second kernel: a fillet and a
-chamfer on real edges. On a mesh both are approximations of an approximation —
-the edge is already a chain of segments, and rounding it rounds the segments.
-Here the edge is a curve and the result is exact.
+Die zwei Operationen, die der Grund für einen zweiten Kern sind: Verrundung
+und Fase an echten Kanten. Auf einem Netz sind beide Näherungen einer
+Näherung — die Kante ist schon eine Kette von Segmenten, und sie zu runden
+rundet die Segmente. Hier ist die Kante eine Kurve, und das Ergebnis ist
+exakt.
 
-Which edges get treated is a selection, and the selection is by geometry, not
-by index: an index into the topology of a body changes the moment anything else
-about it changes, and a fillet that moves when an unrelated hole is drilled is
-worse than no fillet (§21.2, the same reason feature identifiers are matched).
+Welche Kanten behandelt werden, ist eine Auswahl, und die Auswahl läuft über
+Geometrie, nicht über Indizes: ein Index in die Topologie eines Körpers
+ändert sich, sobald sich irgendetwas anderes an ihm ändert, und eine
+Verrundung, die wandert, wenn ein unbeteiligtes Loch gebohrt wird, ist
+schlimmer als gar keine (§21.2, derselbe Grund, aus dem Merkmalsbezeichner
+zugeordnet werden).
 """
 
 from __future__ import annotations
@@ -27,14 +30,16 @@ _log = get_logger(__name__)
 
 EdgeChoice = Literal["all", "vertical", "horizontal", "top", "bottom"]
 
-#: Which edges a choice means. "Vertical" is what somebody means by "round the
-#: corners of this box": the four uprights, not the plate edges.
+#: Welche Kanten eine Auswahl meint. „Senkrecht" ist, was jemand mit „runde
+#: die Ecken dieser Box" meint: die vier Stehenden, nicht die Plattenkanten.
 EDGE_CHOICES: tuple[EdgeChoice, ...] = ("all", "vertical", "horizontal", "top", "bottom")
 
 
 @dataclass(frozen=True, slots=True)
 class EdgeInfo:
-    """One edge, described by what it is rather than by where it is stored."""
+    """Eine Kante, beschrieben über das, was sie ist, statt über ihren
+    Speicherplatz.
+    """
 
     edge: Any
     length: float
@@ -51,7 +56,9 @@ class EdgeInfo:
 
 
 def box(width: float, depth: float, height: float) -> Solid:
-    """A box on the bed, centred in X and Y — the same anchor as the mesh side."""
+    """Ein Quader auf dem Bett, in X und Y zentriert — derselbe Ankerpunkt wie
+    auf der Mesh-Seite.
+    """
     require()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
     from OCP.gp import gp_Pnt
@@ -61,7 +68,7 @@ def box(width: float, depth: float, height: float) -> Solid:
 
 
 def cylinder(diameter: float, height: float) -> Solid:
-    """A cylinder standing on Z = 0."""
+    """Ein Zylinder, stehend auf Z = 0."""
     require()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
 
@@ -69,7 +76,7 @@ def cylinder(diameter: float, height: float) -> Solid:
 
 
 def edges_of(solid: Solid) -> list[EdgeInfo]:
-    """Every edge with the numbers a selection can be made from."""
+    """Jede Kante mit den Zahlen, aus denen sich eine Auswahl treffen lässt."""
     require()
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepGProp import BRepGProp
@@ -101,7 +108,7 @@ def edges_of(solid: Solid) -> list[EdgeInfo]:
 
 
 def choose(solid: Solid, choice: EdgeChoice) -> list[EdgeInfo]:
-    """The edges a named selection means."""
+    """Die Kanten, die eine benannte Auswahl meint."""
     described = edges_of(solid)
     if choice == "all":
         return described
@@ -122,7 +129,9 @@ def choose(solid: Solid, choice: EdgeChoice) -> list[EdgeInfo]:
 
 
 def fillet(solid: Solid, radius: float, choice: EdgeChoice = "all") -> Solid:
-    """Round the chosen edges. Exact, because the edge is a curve (§30)."""
+    """Rundet die gewählten Kanten. Exakt, weil die Kante eine Kurve
+    ist (§30).
+    """
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
 
@@ -158,7 +167,9 @@ def chamfer(solid: Solid, distance: float, choice: EdgeChoice = "all") -> Solid:
 
 
 def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> Solid:
-    """Run the builder and turn its failure into a sentence somebody can act on."""
+    """Führt den Builder aus und macht aus seinem Scheitern einen Satz, auf
+    den jemand reagieren kann.
+    """
     try:
         builder.Build()
         if not builder.IsDone():
@@ -181,12 +192,13 @@ def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> So
 
 
 def boolean(kind: Literal["union", "difference", "intersection"], parts: list[Solid]) -> Solid:
-    """Precise booleans: no tessellation, so no tessellation artefacts (§30).
+    """Präzise Boolesche Ops: keine Tessellation, also keine
+    Tessellations-Artefakte (§30).
 
-    There is no fallback chain here, and that is not an omission — the chain of
-    §17.2 exists because meshes disagree about what is inside. Two B-Rep solids
-    do not, and where this fails the answer is a real error rather than a
-    coarser attempt.
+    Eine Rückfallkette gibt es hier nicht, und das ist keine Auslassung — die
+    Kette aus §17.2 existiert, weil Netze sich uneinig sind, was innen ist.
+    Zwei B-Rep-Volumen sind das nicht, und wo das hier scheitert, ist die
+    Antwort ein echter Fehler statt eines gröberen Versuchs.
     """
     require()
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
@@ -209,7 +221,7 @@ def boolean(kind: Literal["union", "difference", "intersection"], parts: list[So
 
 
 def moved(solid: Solid, offset: Vec3) -> Solid:
-    """Shift a body. Rigid motions stay exact on a B-Rep."""
+    """Verschiebt einen Körper. Starre Bewegungen bleiben auf einem B-Rep exakt."""
     require()
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
     from OCP.gp import gp_Trsf, gp_Vec

@@ -1,19 +1,21 @@
-"""One turn of the agent, from request to proposal (Bauplan §26.5).
+"""Ein Zug des Agenten, von der Anfrage zum Vorschlag (Bauplan §26.5).
 
-The loop is short on purpose: ask the model, run what it asked for, hand back
-what happened, repeat until it stops asking. What makes it trustworthy is what
-happens around it.
+Die Schleife ist mit Absicht kurz: das Modell fragen, ausführen, worum es
+gebeten hat, zurückgeben, was passiert ist, wiederholen, bis es aufhört zu
+fragen. Vertrauenswürdig macht sie, was drumherum passiert.
 
-* Operations are **collected**, not applied to the user's document. They run on
-  a scratch copy so the check after every operation (§26.5) has something to
-  check, and the user's project stays untouched until they accept.
-* Every operation is **schema-valid before it is computed**. An invalid call
-  comes back as a message the model can fix, not as an exception.
-* Ambiguity **asks** (§26.2). The question travels out through the same callback
-  the operations use (§9), so the command line asks on the command line and the
-  window asks in a dialog.
-* Step and token limits are **hard** (§26.5). A model that keeps going in
-  circles stops after a fixed number of turns and says so.
+* Operationen werden **gesammelt**, nicht auf das Dokument des Nutzers
+  angewandt. Sie laufen auf einer Arbeitskopie, damit die Prüfung nach jeder
+  Operation (§26.5) etwas zu prüfen hat — und das Projekt des Nutzers bleibt
+  unberührt, bis er annimmt.
+* Jede Operation ist **schemagültig, bevor gerechnet wird**. Ein ungültiger
+  Aufruf kommt als Meldung zurück, die das Modell korrigieren kann, nicht als
+  Ausnahme.
+* Mehrdeutigkeit **fragt** (§26.2). Die Frage reist über denselben Rückruf
+  hinaus, den auch die Operationen benutzen (§9) — die Kommandozeile fragt
+  also auf der Kommandozeile, das Fenster in einem Dialog.
+* Schritt- und Token-Grenzen sind **hart** (§26.5). Ein Modell, das sich im
+  Kreis dreht, hält nach einer festen Zahl von Zügen an und sagt es.
 """
 
 from __future__ import annotations
@@ -60,7 +62,7 @@ from app.i18n import tr
 
 _log = get_logger(__name__)
 
-#: Hard limits from §26.5. A run that hits one of them says which.
+#: Harte Grenzen aus §26.5. Ein Lauf, der an eine stößt, sagt an welche.
 MAX_STEPS = 8
 MAX_TOKENS = 120_000
 
@@ -68,13 +70,15 @@ AskFn = Callable[[str, list[str]], str]
 
 
 def _refuse(question: str, options: list[str]) -> str:
-    """Without anyone to ask, an ambiguous request cannot be answered."""
+    """Ohne jemanden zum Fragen lässt sich eine mehrdeutige Anfrage nicht
+    beantworten.
+    """
     raise AppError(tr("Für diese Rückfrage ist niemand da."), detail=question)
 
 
 @dataclass(slots=True)
 class AgentSession:
-    """One conversation against one document."""
+    """Ein Gespräch gegen ein Dokument."""
 
     backend: LLMBackend
     document: Document
@@ -89,7 +93,9 @@ class AgentSession:
     selection: tuple[ObjectId, str] | None = None
 
     def propose(self, request: str) -> Proposal:
-        """Answer a request with a proposal. Nothing is applied to the document."""
+        """Beantwortet eine Anfrage mit einem Vorschlag. Am Dokument wird nichts
+        angewandt.
+        """
         active = self.rule_set or rules.load()
         proposal = Proposal(request=request, origin=self._origin(active))
 
@@ -142,7 +148,9 @@ class AgentSession:
         history: History,
         scene: Scene,
     ) -> tuple[str, Scene]:
-        """Run one tool call and say what happened, in words the model reads."""
+        """Führt einen Werkzeugaufruf aus und sagt, was passiert ist — in Worten,
+        die das Modell liest.
+        """
         name = call.name
         arguments = dict(call.arguments)
 
@@ -161,8 +169,10 @@ class AgentSession:
         return self._operation(call, proposal, working, history, scene)
 
     def _ask_user(self, arguments: dict[str, Any], proposal: Proposal) -> str:
-        """§26.2: asking is a duty. The answer goes into the proposal as well, so
-        the surface can show what was decided and on what basis."""
+        """§26.2: Fragen ist Pflicht. Die Antwort geht auch in den Vorschlag,
+        damit die Oberfläche zeigen kann, was auf welcher Grundlage entschieden
+        wurde.
+        """
         text = str(arguments.get("question", "")).strip()
         options = [str(entry) for entry in arguments.get("options", ())]
         question = Question(text=text, options=tuple(options))
@@ -228,7 +238,9 @@ class AgentSession:
         history: History,
         scene: Scene,
     ) -> tuple[str, Scene]:
-        """An operation from the registry: validate, apply to the copy, check."""
+        """Eine Operation aus dem Register: validieren, auf die Kopie anwenden,
+        prüfen.
+        """
         try:
             spec = self.registry.get(call.name)
         except AppError:
@@ -237,8 +249,9 @@ class AgentSession:
         arguments = dict(call.arguments)
         inputs = tuple(str(entry) for entry in arguments.pop(OBJECTS_FIELD, ()) or ())
         if spec.takes_whole_scene and not inputs:
-            # Arranging works on everything (§25). Making the model list every
-            # object would be a chance to forget one, and the scene knows them.
+            # Anordnen wirkt auf alles (§25). Das Modell jedes Objekt aufzählen
+            # zu lassen wäre eine Gelegenheit, eines zu vergessen — und die
+            # Szene kennt sie.
             inputs = tuple(scene.objects)
         if any(
             entry.kind == "sketch" and arguments.get(entry.name) for entry in spec.params.spec()
@@ -268,8 +281,9 @@ class AgentSession:
         proposal.findings.extend(findings)
 
         if result.stopped_at is not None:
-            # §15.2: the chain stopped, so this operation is not part of the
-            # proposal. The scratch copy goes back to where it was.
+            # §15.2: die Kette hat angehalten, diese Operation ist also nicht
+            # Teil des Vorschlags. Die Arbeitskopie geht dorthin zurück, wo sie
+            # war.
             history.undo()
             return f"{tr('Die Kette hält an')}: {checks.as_lines(findings)}", before
 
@@ -284,7 +298,9 @@ class AgentSession:
     # --- helpers ----------------------------------------------------------------
 
     def _evaluate(self, document: Document) -> EvaluationResult:
-        """§26.5: the agent works in draft quality and switches only at the end."""
+        """§26.5: der Agent arbeitet in Entwurfsqualität und schaltet erst am
+        Ende um.
+        """
         return evaluate(
             document,
             self.profile,
@@ -295,7 +311,7 @@ class AgentSession:
         )
 
     def _origin(self, active: rules.RuleSet) -> Origin:
-        """§26.4: under which conditions this proposal came about."""
+        """§26.4: unter welchen Bedingungen dieser Vorschlag zustande kam."""
         return Origin(
             by="agent",
             model=f"{self.backend.id}:{self.backend.model}",
@@ -306,7 +322,9 @@ class AgentSession:
 
 
 def _objects_text(scene: Scene) -> str:
-    """The scene in one line — enough for the model to see what it did."""
+    """Die Szene in einer Zeile — genug, damit das Modell sieht, was es getan
+    hat.
+    """
     if not scene.objects:
         return tr("Keine Objekte.")
     parts = []
@@ -335,10 +353,11 @@ def _from(severity: str) -> set[str]:
 
 
 def _find_part(description: str) -> str:
-    """§26.2: look in the library before building geometry by hand.
+    """§26.2: in der Bibliothek nachsehen, bevor Geometrie von Hand entsteht.
 
-    The answer names the operation, not just the part: what the model does with
-    a find is call it, and a name it has to guess at is a name it gets wrong.
+    Die Antwort nennt die Operation, nicht nur den Baustein: was das Modell mit
+    einem Fund tut, ist ihn aufzurufen, und einen Namen, den es raten muss,
+    rät es falsch.
     """
     from app.core.knowledge.parts import PARTS
     from app.core.knowledge.parts.ops import op_name

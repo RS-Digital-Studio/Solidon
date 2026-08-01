@@ -1,18 +1,20 @@
-"""The B-Rep body and its way into a mesh (Bauplan §30, §9).
+"""Der B-Rep-Körper und sein Weg ins Netz (Bauplan §30, §9).
 
-A :class:`Solid` satisfies the same ``Mesh`` protocol as everything else, so
-the viewport, the report, the layer analysis and the export keep working on a
-B-Rep object without knowing it is one. What it does *not* do is answer from the
-tessellation where it can answer exactly: volume and area come from the kernel,
-not from the triangles, and the difference on a filleted part is not academic.
+Ein :class:`Solid` erfüllt dasselbe ``Mesh``-Protokoll wie alles andere —
+Viewport, Prüfbericht, Schichtanalyse und Export arbeiten also weiter mit
+einem B-Rep-Objekt, ohne zu wissen, dass es eines ist. Was er *nicht* tut, ist
+aus der Tessellation zu antworten, wo er exakt antworten kann: Volumen und
+Fläche kommen aus dem Kern, nicht aus den Dreiecken, und der Unterschied ist
+an einem verrundeten Teil nicht akademisch.
 
-The tessellation is made once and kept. It is a view of the body, never the
-body — every operation works on the shape, and the triangles are recomputed
-after it. The other direction, mesh back to B-Rep, does not exist here: the
-edges are gone, and a "reconstruction" would invent them (§30).
+Die Tessellation wird einmal gemacht und aufgehoben. Sie ist eine Sicht auf
+den Körper, nie der Körper — jede Operation arbeitet auf der Form, und die
+Dreiecke werden danach neu gerechnet. Die andere Richtung, Netz zurück zu
+B-Rep, gibt es hier nicht: die Kanten sind fort, und eine „Rekonstruktion"
+erfände sie (§30).
 
-OpenCASCADE is optional. Without it every entry point says so in one sentence
-and the rest of the application is untouched (§36).
+OpenCASCADE ist optional. Ohne es sagt jeder Einstiegspunkt das in einem Satz,
+und der Rest der Anwendung bleibt unberührt (§36).
 """
 
 from __future__ import annotations
@@ -28,17 +30,17 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: How far the tessellation may deviate from the real surface, in mm. Fine
-#: enough that a fillet looks round on screen, coarse enough that a STEP
-#: assembly does not arrive as a million triangles (§31).
+#: Wie weit die Tessellation von der echten Oberfläche abweichen darf, in mm.
+#: Fein genug, dass eine Verrundung auf dem Bildschirm rund aussieht, grob
+#: genug, dass eine STEP-Baugruppe nicht als Million Dreiecke ankommt (§31).
 DEFLECTION = 0.05
 
-#: Angular deviation in radians, for the same reason.
+#: Winkelabweichung im Bogenmaß, aus demselben Grund.
 ANGULAR_DEFLECTION = 0.3
 
 
 class BRepUnavailable(AppError):
-    """The B-Rep kernel is not installed."""
+    """Der B-Rep-Kern ist nicht installiert."""
 
     default_title = _("Der B-Rep-Kern ist auf diesem Rechner nicht installiert.")
 
@@ -53,7 +55,7 @@ class BRepUnavailable(AppError):
 
 
 def available() -> bool:
-    """Is the kernel there? Asked before an action offers itself (§36)."""
+    """Ist der Kern da? Wird gefragt, bevor sich eine Handlung anbietet (§36)."""
     try:
         import OCP.BRepPrimAPI  # noqa: F401
     except Exception:  # a compiled extension fails in more ways than ImportError
@@ -62,19 +64,21 @@ def available() -> bool:
 
 
 def require() -> None:
-    """Raise the one clear error, rather than an import trace from a binding."""
+    """Wirft den einen klaren Fehler statt eines Import-Stapelabzugs aus
+    einer Bindung.
+    """
     if not available():
         raise BRepUnavailable()
     _quieten()
 
 
 def _quieten() -> None:
-    """Take OpenCASCADE's own printer off the console.
+    """Nimmt OpenCASCADEs eigenen Drucker von der Konsole.
 
-    The STEP writer reports its progress on standard output, which on the
-    command line lands in the middle of whatever was being written and in the
-    packaged application goes nowhere useful at all. Formwerk logs (§33.2); the
-    kernel does not get its own channel.
+    Der STEP-Schreiber meldet seinen Fortschritt auf der Standardausgabe, und
+    die landet auf der Kommandozeile mitten in dem, was gerade geschrieben
+    wird, und in der paketierten Anwendung nirgendwo Nützlichem. Formwerk
+    protokolliert (§33.2); der Kern bekommt keinen eigenen Kanal.
     """
     global _quiet
     if _quiet:
@@ -83,7 +87,7 @@ def _quieten() -> None:
         from OCP.Message import Message, Message_PrinterOStream
 
         Message.DefaultMessenger_s().RemovePrinters(Message_PrinterOStream.get_type_descriptor_s())
-    except Exception as problem:  # a binding without the printer API is fine
+    except Exception as problem:  # eine Bindung ohne die Printer-API ist in Ordnung
         _log.debug("could not silence the kernel messenger: %s", problem)
     _quiet = True
 
@@ -93,7 +97,9 @@ _quiet = False
 
 @dataclass(frozen=True, slots=True)
 class Solid:
-    """One B-Rep body. Satisfies the ``Mesh`` protocol by tessellating itself."""
+    """Ein B-Rep-Körper. Erfüllt das ``Mesh``-Protokoll, indem er sich selbst
+    tesselliert.
+    """
 
     shape: Any
     """``TopoDS_Shape``. Typed loosely on purpose — the binding is optional."""
@@ -104,7 +110,7 @@ class Solid:
 
     @property
     def volume(self) -> float:
-        """From the kernel, not from the triangles — that is the whole point."""
+        """Aus dem Kern, nicht aus den Dreiecken — das ist der ganze Punkt."""
         return float(self._properties("volume").Mass())
 
     @property
@@ -120,7 +126,7 @@ class Solid:
         return len(self.edges())
 
     def faces(self) -> list[Any]:
-        """Every face, once. Named entities — this is what §30 buys."""
+        """Jede Fläche, einmal. Benannte Entitäten — das ist es, was §30 einbringt."""
         return self._explore("face")
 
     def edges(self) -> list[Any]:
@@ -130,7 +136,7 @@ class Solid:
 
     @property
     def mesh(self) -> MeshData:
-        """The triangles. Made once, and never fed back into the shape."""
+        """Die Dreiecke. Einmal gemacht, und nie in die Form zurückgespeist."""
         cached = self._cache.get("mesh")
         if cached is None:
             cached = tessellate(self.shape, self.deflection)
@@ -138,7 +144,7 @@ class Solid:
         return cast(MeshData, cached)
 
     def to_mesh(self) -> MeshData:
-        """The one-way door of §30. Explicit, because the way back is closed."""
+        """Die Einbahntür aus §30. Ausdrücklich, denn der Rückweg ist zu."""
         return self.mesh
 
     @property
@@ -167,14 +173,16 @@ class Solid:
 
     @property
     def raw(self) -> Any:
-        """The triangles, for the surfaces that draw them."""
+        """Die Dreiecke, für die Oberflächen, die sie zeichnen."""
         return self.mesh.raw
 
     def to_stl(self) -> bytes:
         return self.mesh.to_stl()
 
     def replacing(self, shape: Any) -> Solid:
-        """A new body around a changed shape, at the same tessellation quality."""
+        """Ein neuer Körper um eine geänderte Form, in derselben
+        Tessellationsqualität.
+        """
         return Solid(shape=shape, deflection=self.deflection)
 
     # --- inside ------------------------------------------------------------------
@@ -206,8 +214,8 @@ class Solid:
 
         found = TopTools_IndexedMapOfShape()
         TopExp.MapShapes_s(self.shape, TopAbs_FACE if kind == "face" else TopAbs_EDGE, found)
-        # The map hands back plain shapes; everything downstream wants the real
-        # type, and a wrong cast here fails much further away.
+        # Die Karte gibt nackte Formen zurück; alles danach will den echten
+        # Typ, und ein falscher Cast hier scheitert erst viel weiter weg.
         as_typed = TopoDS.Face_s if kind == "face" else TopoDS.Edge_s
         entities = [as_typed(found.FindKey(index)) for index in range(1, found.Extent() + 1)]
         self._cache[f"list:{kind}"] = entities
@@ -215,7 +223,7 @@ class Solid:
 
 
 def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
-    """Triangles for a shape, fine enough that a fillet reads as round."""
+    """Dreiecke für eine Form, fein genug, dass eine Verrundung rund wirkt."""
     import numpy as np
     import trimesh
     from OCP.BRep import BRep_Tool
@@ -247,8 +255,9 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
         reversed_face = face.Orientation() == TopAbs_REVERSED
         for index in range(1, triangulation.NbTriangles() + 1):
             first, second, third = triangulation.Triangle(index).Get()
-            # A reversed face means the winding has to be turned around, or the
-            # body comes out inside-out and every volume is negative.
+            # Eine umgekehrte Fläche heißt, dass der Umlaufsinn zu drehen ist —
+            # sonst kommt der Körper umgestülpt heraus und jedes Volumen ist
+            # negativ.
             corners = (third, second, first) if reversed_face else (first, second, third)
             faces.append(
                 (corners[0] - 1 + offset, corners[1] - 1 + offset, corners[2] - 1 + offset)

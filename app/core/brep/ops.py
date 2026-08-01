@@ -408,11 +408,12 @@ class ToMeshParams(BaseParams):
     ),
 )
 def brep_to_mesh(ctx: OpContext) -> OpResult:
-    """§30: the one-way door, and it is a step in the stack so it can be undone.
+    """§30: die Einbahntür — und ein Schritt im Stapel, damit sie sich
+    zurücknehmen lässt.
 
-    Taken back by an undo, not by a reconstruction: the operation stays in the
-    history, and removing it brings the exact body back because the stack is
-    recomputed, not patched.
+    Zurückgenommen von einem Undo, nicht von einer Rekonstruktion: die
+    Operation bleibt im Verlauf, und sie zu entfernen bringt den exakten
+    Körper zurück, weil der Stapel neu gerechnet und nicht geflickt wird.
     """
     params = cast(ToMeshParams, ctx.params)
     source, body = _brep_input(ctx)
@@ -432,7 +433,9 @@ def brep_to_mesh(ctx: OpContext) -> OpResult:
 
 
 def _brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
-    """The input and its exact body, or a clear sentence when it is a mesh (§33.1)."""
+    """Die Eingabe und ihr exakter Körper — oder ein klarer Satz, wenn es ein
+    Netz ist (§33.1).
+    """
     require()
     source = ctx.inputs[0]
     if not isinstance(source.mesh, Solid):

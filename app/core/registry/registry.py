@@ -1,9 +1,9 @@
-"""The operation registry (Bauplan §10).
+"""Das Register der Operationen (Bauplan §10).
 
-An operation is declared exactly once; menu, context menu, palette, command
-line, agent tool schema and documentation are generated from that declaration
-(§1, Leitprinzip 3). A registration that is incomplete fails here, at import
-time, not in a surface later on.
+Eine Operation wird genau einmal deklariert; Menü, Kontextmenü, Palette,
+Kommandozeile, Agenten-Werkzeugschema und Dokumentation entstehen aus dieser
+Deklaration (§1, Leitprinzip 3). Eine unvollständige Registrierung scheitert
+hier, beim Import, nicht später in einer Oberfläche.
 """
 
 from __future__ import annotations
@@ -19,14 +19,15 @@ from app.i18n import TranslatableText, _
 
 FEATURE_KINDS: Final[tuple[str, ...]] = get_args(FeatureKind)
 
-#: Categories from the operation catalogue (§25). They order the menu.
-#: The catalogue of §25, in the order it appears in the menu. Four of these hold
-#: no operations and are not going to: parameters and fits live in the document
-#: and are changed by their panels and by the agent (§13, §14); export and the
-#: variant generator are flows that run *around* an evaluation rather than
-#: inside one — a variant set re-evaluates the whole stack, which an operation
-#: within that evaluation cannot do (§15.1). Empty categories never reach a
-#: menu, so they cost nothing but this paragraph.
+#: Kategorien aus dem Operationskatalog (§25). Sie ordnen das Menü.
+#: Der Katalog aus §25, in der Reihenfolge, in der er im Menü erscheint. Vier
+#: davon halten keine Operationen und werden es auch nicht: Parameter und
+#: Passungen leben im Dokument und werden über ihre Panels und den Agenten
+#: geändert (§13, §14); Export und Variantengenerator sind Abläufe, die *um*
+#: eine Auswertung herum laufen statt in ihr — ein Variantensatz wertet den
+#: ganzen Stapel neu aus, und das kann eine Operation innerhalb dieser
+#: Auswertung nicht (§15.1). Leere Kategorien erreichen nie ein Menü, sie
+#: kosten also nichts außer diesem Absatz.
 CATEGORIES: Final[dict[str, TranslatableText]] = {
     "scene": _("Szene"),
     "parameters": _("Parameter"),
@@ -49,13 +50,15 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 
-#: ``produces=VARIABLE``: as many objects out as went in.
+#: ``produces=VARIABLE``: so viele Objekte heraus wie hinein.
 VARIABLE: Final = -1
 
 
 @dataclass(frozen=True, slots=True)
 class OperationSpec:
-    """Everything known about one operation. The single source for all surfaces."""
+    """Alles, was über eine Operation bekannt ist. Die eine Quelle für alle
+    Oberflächen.
+    """
 
     name: str
     title: TranslatableText | str
@@ -91,23 +94,24 @@ class OperationSpec:
 
     @property
     def takes_whole_scene(self) -> bool:
-        """Does this operation work on every object at once?
+        """Arbeitet diese Operation auf allen Objekten zugleich?
 
-        Arranging and the collision check do: they take no particular object
-        and hand back all of them. Every surface has to pass the whole scene in
-        — an operation of this kind with no inputs runs on nothing and looks
-        broken, which is exactly how it looked before this property existed.
+        Anordnen und die Kollisionsprüfung tun das: sie nehmen kein bestimmtes
+        Objekt und geben alle zurück. Jede Oberfläche muss ihnen die ganze
+        Szene hineingeben — eine Operation dieser Art ohne Eingaben läuft auf
+        nichts und sieht kaputt aus, und genau so sah sie aus, bevor es diese
+        Eigenschaft gab.
 
-        Declared rather than worked out from ``consumes == 0 and produces ==
-        VARIABLE``, which is what it used to be: loading an assembly also takes
-        no object and returns any number of them, and it wants the scene passed
-        in about as much as it wants the weather.
+        Deklariert statt aus ``consumes == 0 and produces == VARIABLE``
+        hergeleitet, was sie früher war: eine Baugruppe zu laden nimmt auch
+        kein Objekt und gibt beliebig viele zurück — und will die Szene
+        ungefähr so dringend hineingereicht bekommen wie das Wetter.
         """
         return self.whole_scene
 
 
 class Registry:
-    """Holds the declarations. One default instance; tests build their own."""
+    """Hält die Deklarationen. Eine Vorgabe-Instanz; Tests bauen ihre eigene."""
 
     def __init__(self) -> None:
         self._ops: dict[str, OperationSpec] = {}
@@ -179,7 +183,7 @@ class Registry:
         return {name: tuple(entries) for name, entries in grouped.items() if entries}
 
     def for_feature(self, kind: str) -> tuple[OperationSpec, ...]:
-        """What the context menu on a feature offers (§18.5)."""
+        """Was das Kontextmenü an einem Merkmal anbietet (§18.5)."""
         return tuple(spec for spec in self.all() if kind in spec.applies_to)
 
     def by_shortcut(self, shortcut: str) -> OperationSpec | None:
@@ -193,7 +197,7 @@ class Registry:
         self._ops.clear()
 
 
-#: The registry the application uses.
+#: Das Register, das die Anwendung benutzt.
 REGISTRY: Final = Registry()
 
 
@@ -215,7 +219,9 @@ def register_op(
     doc: TranslatableText | str = "",
     registry: Registry | None = None,
 ) -> Callable[[OpFn], OpFn]:
-    """Declare an operation. The decorated function stays callable as before."""
+    """Deklariert eine Operation. Die dekorierte Funktion bleibt aufrufbar
+    wie zuvor.
+    """
 
     def decorate(fn: OpFn) -> OpFn:
         (registry or REGISTRY).register(
@@ -244,7 +250,7 @@ def register_op(
 
 @dataclass(frozen=True, slots=True)
 class MenuSection:
-    """One menu section, derived from a category (§10)."""
+    """Ein Menüabschnitt, abgeleitet aus einer Kategorie (§10)."""
 
     category: str
     title: TranslatableText | str

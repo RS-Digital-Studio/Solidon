@@ -1,14 +1,16 @@
-"""Features from topology (Bauplan §30, §21).
+"""Merkmale aus der Topologie (Bauplan §30, §21).
 
-On a mesh, finding a hole means clustering triangles and fitting a cylinder to
-them, and giving it a name that survives the next operation means matching
-against the previous names (§21.2). On a B-Rep body none of that is necessary:
-a cylindrical face *is* a cylindrical face, and it says its own radius and axis.
+Auf einem Netz heißt ein Loch zu finden: Dreiecke gruppieren und einen
+Zylinder hineinpassen — und ihm einen Namen zu geben, der die nächste
+Operation überlebt, heißt gegen die vorigen Namen zuordnen (§21.2). Auf einem
+B-Rep-Körper ist nichts davon nötig: eine zylindrische Fläche *ist* eine
+zylindrische Fläche, und sie nennt ihren Radius und ihre Achse selbst.
 
-That is the jump §30 promises, and it is why this file is short. What it does
-not do is invent certainty: a cylindrical face is only reported as a hole when
-it is a full turn and points into the material — a rounded outer corner is a
-cylinder too, and calling it a bore would put a screw through the wall.
+Das ist der Sprung, den §30 verspricht, und darum ist diese Datei kurz. Was
+sie nicht tut, ist Gewissheit erfinden: eine zylindrische Fläche wird nur als
+Loch gemeldet, wenn sie eine volle Umdrehung macht und ins Material zeigt —
+eine gerundete Außenecke ist auch ein Zylinder, und sie eine Bohrung zu nennen
+setzte eine Schraube durch die Wand.
 """
 
 from __future__ import annotations
@@ -22,13 +24,16 @@ from app.core.units import EPS_GEOM
 
 _log = get_logger(__name__)
 
-#: How much of a full turn a cylindrical face has to cover to count as a bore.
-#: Below that it is a fillet or a rounded corner, not a hole.
+#: Wie viel einer vollen Umdrehung eine zylindrische Fläche abdecken muss, um
+#: als Bohrung zu zählen. Darunter ist sie eine Verrundung oder eine gerundete
+#: Ecke, kein Loch.
 FULL_TURN = 0.9
 
 
 def features_of(solid: Solid) -> dict[FeatureId, Feature]:
-    """Holes and planar faces, read off the topology rather than fitted."""
+    """Löcher und ebene Flächen, aus der Topologie abgelesen statt
+    eingepasst.
+    """
     found: dict[FeatureId, Feature] = {}
     holes = 0
     faces = 0
@@ -57,7 +62,7 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
 
 
 def _describe(face: Any, index: int) -> tuple[FeatureKind, dict[str, Any]] | None:
-    """What this face is, in the vocabulary of §21."""
+    """Was diese Fläche ist, im Vokabular von §21."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.BRepGProp import BRepGProp
     from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Plane

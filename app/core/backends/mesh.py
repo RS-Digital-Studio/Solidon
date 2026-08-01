@@ -1,19 +1,20 @@
-"""Mesh generation, locally or hosted (Bauplan §27, pillar B).
+"""Mesh-Erzeugung, lokal oder gehostet (Bauplan §27, Säule B).
 
-The interface knows two calls and nothing else: ``text_to_mesh`` and
-``image_to_mesh``. No user code, no file paths, no state — a hosted service can
-satisfy the same two calls later without anything above noticing (§27).
+Die Schnittstelle kennt zwei Aufrufe und sonst nichts: ``text_to_mesh`` und
+``image_to_mesh``. Kein Nutzercode, keine Dateipfade, kein Zustand — ein
+gehosteter Dienst kann später dieselben zwei Aufrufe bedienen, ohne dass
+darüber irgendetwas davon merkt (§27).
 
-Locally that is ComfyUI, reached over its HTTP API: a workflow graph goes in, a
-job id comes back, the result is fetched when it is done. The graph is a data
-file, not code — whoever has a different generator installed replaces the file
-instead of patching Python.
+Lokal ist das ComfyUI, erreicht über seine HTTP-API: ein Workflow-Graph geht
+hinein, eine Auftrags-ID kommt zurück, das Ergebnis wird geholt, wenn es
+fertig ist. Der Graph ist eine Datendatei, kein Code — wer einen anderen
+Generator installiert hat, tauscht die Datei aus, statt Python zu flicken.
 
-What comes out is never trusted — generators produce meshes with holes, stray
-components and inverted normals as a matter of course. The repair chain that
-deals with that is not here though: it belongs on the stack, where it is
-visible and can be taken back (§2.2, way 3, and :mod:`app.core.generate`). A
-backend delivers, it does not judge.
+Was herauskommt, wird nie geglaubt — Generatoren erzeugen Netze mit Löchern,
+losen Komponenten und umgedrehten Normalen als Normalfall. Die Reparaturkette,
+die sich darum kümmert, steht aber nicht hier: sie gehört auf den Stapel, wo
+sie sichtbar und rücknehmbar ist (§2.2, Weg 3, und :mod:`app.core.generate`).
+Ein Backend liefert, es urteilt nicht.
 """
 
 from __future__ import annotations
@@ -39,21 +40,21 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: How long a generation may take. Minutes, not seconds — this is a diffusion
-#: model on somebody's graphics card, not a database query.
+#: Wie lange eine Erzeugung dauern darf. Minuten, keine Sekunden — das ist ein
+#: Diffusionsmodell auf jemandes Grafikkarte, keine Datenbankabfrage.
 TIMEOUT_SECONDS = 600.0
 
-#: How often the job is asked whether it is done.
+#: Wie oft der Auftrag gefragt wird, ob er fertig ist.
 POLL_SECONDS = 1.0
 
-#: How long the check "is ComfyUI running" may take. Same reason as the model
-#: probe: it happens while a window is being built.
+#: Wie lange die Prüfung „läuft ComfyUI" dauern darf. Derselbe Grund wie beim
+#: Modell-Test: sie passiert, während ein Fenster gebaut wird.
 PROBE_SECONDS = 0.25
 
 DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
 
-#: The shipped workflow graphs, one per call. Placeholders in them are filled
-#: in before sending: ``{prompt}``, ``{seed}``, ``{image}``.
+#: Die mitgelieferten Workflow-Graphen, einer je Aufruf. Platzhalter darin
+#: werden vor dem Senden gefüllt: ``{prompt}``, ``{seed}``, ``{image}``.
 WORKFLOW_DIR = Path(__file__).parent / "data"
 
 _PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
@@ -77,11 +78,12 @@ def _configured_url() -> str:
 
 @dataclass(frozen=True, slots=True)
 class GeneratedMesh:
-    """A generated body, as it came, plus where it came from (§11.3).
+    """Ein erzeugter Körper, wie er kam, plus woher er kam (§11.3).
 
-    The bytes are kept beside the parsed body on purpose: they are what gets
-    embedded in the project (§16.1), and re-encoding them here would throw away
-    the texture that pillar B's whole colour path depends on (§20).
+    Die Bytes werden mit Absicht neben dem geparsten Körper aufgehoben: sie
+    sind das, was ins Projekt eingebettet wird (§16.1), und sie hier neu zu
+    kodieren würfe die Textur weg, an der der ganze Farbweg von Säule B
+    hängt (§20).
     """
 
     mesh: MeshData
@@ -93,14 +95,14 @@ class GeneratedMesh:
 
 
 class MeshBackend(Protocol):
-    """The two calls of §27, and nothing more."""
+    """Die zwei Aufrufe aus §27, und nicht mehr."""
 
     @property
     def id(self) -> str: ...
 
     @property
     def available(self) -> bool:
-        """False when nothing is running — the generate action greys out."""
+        """False, wenn nichts läuft — die Erzeugen-Aktion graut aus."""
         ...
 
     def text_to_mesh(
@@ -113,7 +115,7 @@ class MeshBackend(Protocol):
 
 
 class GenerationFailed(AppError):
-    """The generator did not deliver a body."""
+    """Der Generator hat keinen Körper geliefert."""
 
     default_title = _("Die Mesh-Erzeugung hat kein Modell geliefert.")
 
@@ -121,15 +123,15 @@ class GenerationFailed(AppError):
         super().__init__(detail=detail or None)
 
 
-# --- transports -------------------------------------------------------------------
+# --- Transporte -------------------------------------------------------------------
 
 Fetch = Callable[[str, bytes | None, dict[str, str]], bytes]
-"""``url, body, headers -> bytes``. Replaceable, which is what lets the suite
-run the whole way without a graphics card."""
+"""``url, body, headers -> bytes``. Austauschbar — genau das lässt die Suite
+den ganzen Weg ohne Grafikkarte fahren."""
 
 
 def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = None) -> bytes:
-    """One request, bytes back. POST when there is a body, GET otherwise."""
+    """Eine Anfrage, Bytes zurück. POST, wenn es einen Rumpf gibt, sonst GET."""
     request = urllib.request.Request(url, data=body, headers=headers or {})
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as answer:
@@ -143,7 +145,9 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
 
 
 def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:
-    """A socket, not a request: a closed port answers instantly, HTTP does not."""
+    """Ein Socket, keine Anfrage: ein geschlossener Port antwortet sofort,
+    HTTP nicht.
+    """
     parts = urllib.parse.urlparse(url)
     try:
         with socket.create_connection((parts.hostname or "", parts.port or 80), timeout=seconds):
@@ -157,11 +161,11 @@ def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:
 
 @dataclass(slots=True)
 class ComfyBackend:
-    """ComfyUI on this machine, over its HTTP API (§27).
+    """ComfyUI auf diesem Rechner, über seine HTTP-API (§27).
 
-    Three requests: post the graph, wait for the job, fetch the file. The
-    client id is new every time — the backend keeps no state, so neither does
-    this (§27).
+    Drei Anfragen: den Graphen abschicken, auf den Auftrag warten, die Datei
+    holen. Die Client-ID ist jedes Mal neu — das Backend führt keinen Zustand,
+    also tut dieses hier es auch nicht (§27).
     """
 
     # Die Adresse ist nicht fest: wer ComfyUI auf einem zweiten Rechner oder
@@ -202,7 +206,7 @@ class ComfyBackend:
     # --- the three steps ---
 
     def _graph(self, name: str, values: dict[str, Any]) -> dict[str, Any]:
-        """Load the shipped workflow and put the values into it."""
+        """Lädt den mitgelieferten Workflow und setzt die Werte hinein."""
         path = self.workflows / f"{name}.json"
         try:
             text = path.read_text(encoding="utf-8")
@@ -211,7 +215,9 @@ class ComfyBackend:
         return dict(_filled(json.loads(text), values))
 
     def _upload(self, image: bytes) -> str:
-        """Put the image where ComfyUI can see it, and return the name it got."""
+        """Legt das Bild dorthin, wo ComfyUI es sehen kann, und gibt den Namen
+        zurück, den es bekommen hat.
+        """
         name = f"formwerk_{uuid.uuid4().hex}.png"
         boundary = uuid.uuid4().hex
         body = b"".join(
@@ -254,7 +260,7 @@ class ComfyBackend:
         )
 
     def _wait(self, job: str, progress: ProgressFn) -> dict[str, Any]:
-        """Poll until the job is in the history. There is no push to listen to."""
+        """Fragt, bis der Auftrag im Verlauf steht. Es gibt kein Push zum Zuhören."""
         deadline = time.monotonic() + self.timeout_seconds
         while time.monotonic() < deadline:
             answer = self.transport(f"{self.url}/history/{job}", None, {})
@@ -267,7 +273,7 @@ class ComfyBackend:
         raise GenerationFailed(detail="the generation ran into its time limit")
 
     def _download(self, outputs: dict[str, Any]) -> tuple[bytes, str]:
-        """Find the mesh among the outputs and fetch it."""
+        """Findet das Netz unter den Ausgaben und holt es."""
         for node in outputs.values():
             for key in ("meshes", "3d", "result", "files"):
                 for entry in node.get(key, ()) or ():
@@ -288,16 +294,16 @@ class ComfyBackend:
         raise GenerationFailed(detail="the job produced no mesh file")
 
 
-# --- scripted, for the suite ------------------------------------------------------
+# --- Geskriptet, für die Suite ------------------------------------------------------
 
 
 @dataclass(slots=True)
 class ScriptedMeshBackend:
-    """A generator that hands back a prepared file (§35).
+    """Ein Generator, der eine vorbereitete Datei zurückgibt (§35).
 
-    Way 3 has to be testable without a graphics card, and a test that only ever
-    sees clean geometry would prove nothing — so what gets prepared here are
-    the broken bodies a generator really delivers.
+    Weg 3 muss ohne Grafikkarte testbar sein, und ein Test, der nur saubere
+    Geometrie zu sehen bekäme, bewiese nichts — vorbereitet werden hier also
+    die kaputten Körper, die ein Generator wirklich liefert.
     """
 
     answers: dict[str, bytes] = field(default_factory=dict)
@@ -343,11 +349,11 @@ class ScriptedMeshBackend:
 
 
 def _filled(node: Any, values: dict[str, Any]) -> Any:
-    """Put the values into the graph, keeping their type.
+    """Setzt die Werte in den Graphen ein und behält ihren Typ.
 
-    A placeholder standing alone becomes the value itself, so ``"{seed}"``
-    arrives as a number — ComfyUI checks the types of its inputs and a seed as
-    text is rejected by the node, not by us.
+    Ein Platzhalter, der allein steht, wird zum Wert selbst — ``"{seed}"``
+    kommt also als Zahl an: ComfyUI prüft die Typen seiner Eingänge, und ein
+    Startwert als Text wird vom Knoten abgelehnt, nicht von uns.
     """
     if isinstance(node, dict):
         return {key: _filled(value, values) for key, value in node.items()}

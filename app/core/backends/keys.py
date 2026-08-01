@@ -1,12 +1,13 @@
-"""Where the user's own key lives (Bauplan §27).
+"""Wo der eigene Schlüssel des Nutzers liegt (Bauplan §27).
 
-The system keychain, and nowhere else: not in the project file, not in the
-settings, not in a dotfile next to the models. A project file is handed around
-as a bug report (§33.3), and a key that travelled with it would be gone.
+Im System-Schlüsselbund, und sonst nirgends: nicht in der Projektdatei, nicht
+in den Einstellungen, nicht in einer Punktdatei neben den Modellen. Eine
+Projektdatei wird als Fehlerbericht herumgereicht (§33.3), und ein Schlüssel,
+der mitgereist wäre, wäre weg.
 
-``keyring`` is optional. Without it the key can still be handed over through the
-environment — useful on a build server — and the surface says which of the two
-it found rather than pretending there is a keychain.
+``keyring`` ist optional. Ohne es lässt sich der Schlüssel weiterhin über die
+Umgebung übergeben — nützlich auf einem Bauserver — und die Oberfläche sagt,
+welches von beiden sie gefunden hat, statt einen Schlüsselbund vorzutäuschen.
 """
 
 from __future__ import annotations
@@ -18,35 +19,35 @@ from app.core.log import get_logger
 
 _log = get_logger(__name__)
 
-#: Name the key is filed under in the keychain.
+#: Unter welchem Namen der Schlüssel im Schlüsselbund abgelegt ist.
 SERVICE = "formwerk-llm"
 
-#: Fallback for machines without a keychain, e.g. a build server.
+#: Rückfall für Rechner ohne Schlüsselbund, etwa einen Bauserver.
 ENVIRONMENT_VARIABLE = f"{ENVIRONMENT_PREFIX}_LLM_KEY"
 
 
 def _keyring() -> Any | None:
     try:
         import keyring
-    except Exception:  # pragma: no cover - depends on the installation
+    except Exception:  # pragma: no cover - hängt an der Installation
         return None
     return keyring
 
 
 def available() -> bool:
-    """Whether a keychain can be reached at all."""
+    """Ob überhaupt ein Schlüsselbund erreichbar ist."""
     return _keyring() is not None
 
 
 def read(account: str) -> str | None:
-    """The key for one backend, from the keychain or the environment."""
+    """Der Schlüssel eines Backends, aus dem Schlüsselbund oder der Umgebung."""
     import os
 
     keychain = _keyring()
     if keychain is not None:
         try:
             stored = keychain.get_password(SERVICE, account)
-        except Exception as error:  # pragma: no cover - locked or missing keychain
+        except Exception as error:  # pragma: no cover - gesperrter oder fehlender Schlüsselbund
             _log.warning("keychain unreachable: %s", error)
             stored = None
         if stored:
@@ -59,7 +60,9 @@ def read(account: str) -> str | None:
 
 
 def store(account: str, key: str) -> bool:
-    """Put a key into the keychain. False when there is none to put it in."""
+    """Legt einen Schlüssel in den Schlüsselbund. False, wenn es keinen gibt,
+    in den er passte.
+    """
     keychain = _keyring()
     if keychain is None:
         return False
@@ -69,7 +72,9 @@ def store(account: str, key: str) -> bool:
 
 
 def forget(account: str) -> bool:
-    """Remove a key again — the one thing a settings dialog must be able to do."""
+    """Entfernt einen Schlüssel wieder — das eine, was ein
+    Einstellungsdialog können muss.
+    """
     keychain = _keyring()
     if keychain is None:
         return False
@@ -81,7 +86,9 @@ def forget(account: str) -> bool:
 
 
 def source(account: str) -> str:
-    """Where the key came from, for the settings dialog: keychain, environment, none."""
+    """Woher der Schlüssel kam, für den Einstellungsdialog: Schlüsselbund,
+    Umgebung, keiner.
+    """
     import os
 
     keychain = _keyring()

@@ -1,18 +1,19 @@
-"""The language model behind the agent (Bauplan §27).
+"""Das Sprachmodell hinter dem Agenten (Bauplan §27).
 
-One interface, three ways to satisfy it: the user's own key against a hosted
-model, a local model over Ollama, and a scripted one for the suite. The agent
-layer above never learns which of them answered.
+Eine Schnittstelle, drei Wege sie zu erfüllen: der eigene Schlüssel des
+Nutzers gegen ein gehostetes Modell, ein lokales Modell über Ollama, und ein
+geskriptetes für die Suite. Die Agentenschicht darüber erfährt nie, welches
+geantwortet hat.
 
-Two things are deliberate. First, no vendor SDK: the request is a handful of
-JSON fields and the answer is JSON back, and a dependency that has to be
-licence-checked and updated is a poor trade for that (§36). Second, the
-transport is a function that can be replaced — the suite runs the whole agent
-without touching a network.
+Zwei Dinge sind Absicht. Erstens kein Hersteller-SDK: die Anfrage ist eine
+Handvoll JSON-Felder, und die Antwort ist JSON zurück — eine Abhängigkeit, die
+lizenzgeprüft und aktualisiert werden muss, ist dafür ein schlechter Tausch
+(§36). Zweitens ist der Transport eine Funktion, die sich austauschen lässt —
+die Suite fährt den ganzen Agenten, ohne ein Netz anzufassen.
 
-Without a key the agent functions are switched off and everything else keeps
-working (§27). That is not a fallback, it is the normal state on a fresh
-machine.
+Ohne Schlüssel sind die Agentenfunktionen abgeschaltet, und alles andere läuft
+weiter (§27). Das ist kein Rückfall, das ist der Normalzustand auf einem
+frischen Rechner.
 """
 
 from __future__ import annotations
@@ -33,17 +34,18 @@ _log = get_logger(__name__)
 
 Role = Literal["system", "user", "assistant", "tool"]
 
-#: How long a single request may take before it is given up on.
+#: Wie lange eine einzelne Anfrage dauern darf, bevor sie aufgegeben wird.
 TIMEOUT_SECONDS = 120.0
 
-#: How long the check "is a local model running" may take. It happens while the
-#: window is being built, so it has to be over before anyone notices.
+#: Wie lange die Prüfung „läuft ein lokales Modell" dauern darf. Sie passiert,
+#: während das Fenster gebaut wird, muss also vorbei sein, bevor es jemand
+#: bemerkt.
 PROBE_SECONDS = 0.25
 
 
 @dataclass(frozen=True, slots=True)
 class ToolCall:
-    """One operation the model wants to run, with its arguments."""
+    """Eine Operation, die das Modell ausführen will, mit ihren Argumenten."""
 
     id: str
     name: str
@@ -52,7 +54,7 @@ class ToolCall:
 
 @dataclass(frozen=True, slots=True)
 class Message:
-    """One turn of the conversation as the backend sees it."""
+    """Ein Gesprächsbeitrag, wie das Backend ihn sieht."""
 
     role: Role
     content: str = ""
@@ -63,7 +65,7 @@ class Message:
 
 @dataclass(frozen=True, slots=True)
 class Reply:
-    """What came back: words, calls, and what it cost."""
+    """Was zurückkam: Worte, Aufrufe, und was es gekostet hat."""
 
     text: str = ""
     tool_calls: tuple[ToolCall, ...] = ()
@@ -78,7 +80,7 @@ class Reply:
 
 
 class LLMBackend(Protocol):
-    """What the agent needs from a model, and nothing more."""
+    """Was der Agent von einem Modell braucht, und nicht mehr."""
 
     @property
     def id(self) -> str:
@@ -108,9 +110,9 @@ agent testable without a network."""
 
 
 def post_json(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
-    """The default transport: one POST, JSON in, JSON out."""
+    """Der Vorgabe-Transport: ein POST, JSON hinein, JSON heraus."""
     body = json.dumps(payload).encode("utf-8")
-    # The address comes from the backend, never from something the model said.
+    # Die Adresse kommt aus dem Backend, nie aus etwas, das das Modell gesagt hat.
     request = urllib.request.Request(
         url, data=body, headers={"Content-Type": "application/json", **headers}
     )
@@ -125,7 +127,7 @@ def post_json(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dic
 
 
 class BackendUnavailable(AppError):
-    """The model could not be reached, or refused."""
+    """Das Modell war nicht erreichbar oder hat abgelehnt."""
 
     default_title = _("Das Sprachmodell hat nicht geantwortet.")
 
@@ -136,7 +138,7 @@ class BackendUnavailable(AppError):
         )
 
 
-# --- hosted, with the user's own key ---------------------------------------------
+# --- Gehostet, mit dem eigenen Schlüssel des Nutzers -------------------------------
 
 
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"
@@ -146,7 +148,9 @@ ANTHROPIC_VERSION = "2023-06-01"
 
 @dataclass(slots=True)
 class AnthropicBackend:
-    """A hosted model, reached with the key from the keychain (§27)."""
+    """Ein gehostetes Modell, erreicht mit dem Schlüssel aus dem
+    Schlüsselbund (§27).
+    """
 
     model: str = DEFAULT_ANTHROPIC_MODEL
     transport: Transport = post_json
@@ -266,9 +270,9 @@ def _configured_ollama_url() -> str:
 
 @dataclass(slots=True)
 class OllamaBackend:
-    """A local model. §27: tool calling needs a big enough model — small ones
-    fail reproducibly, which is why the recommended list belongs in the docs and
-    not in a hopeful default."""
+    """Ein lokales Modell. §27: Werkzeugaufrufe brauchen ein hinreichend
+    großes Modell — kleine scheitern daran, und der Fehler sagt das.
+    """
 
     model: str = DEFAULT_OLLAMA_MODEL
     # Wie bei ComfyUI: die Adresse darf woanders hinzeigen, wenn das Modell auf
@@ -365,12 +369,14 @@ def _from_ollama(answer: dict[str, Any], model: str) -> Reply:
 
 
 def backends() -> tuple[LLMBackend, ...]:
-    """Everything that could answer, in the order the settings offer it."""
+    """Alles, was antworten könnte, in der Reihenfolge, in der die
+    Einstellungen es anbieten."""
     return (AnthropicBackend(), OllamaBackend())
 
 
 def first_available() -> LLMBackend | None:
-    """The backend the chat uses without being told. None means: no chat (§27)."""
+    """Das Backend, das der Chat ungefragt benutzt. None heißt: kein
+    Chat (§27)."""
     for backend in backends():
         if backend.available:
             return backend

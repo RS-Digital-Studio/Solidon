@@ -1,14 +1,17 @@
-"""What the agent can do (Bauplan §26.2).
+"""Was der Agent tun kann (Bauplan §26.2).
 
-Every operation from the registry, plus seven tools that reach past geometry:
-asking, undoing, parameters, fits, the report, and the part library.
+Jede Operation aus dem Register, plus sieben Werkzeuge, die über Geometrie
+hinausreichen: fragen, zurücknehmen, Parameter, Passungen, der Prüfbericht und
+die Bausteinbibliothek.
 
-The operations are not written out here either — they come from the registry
-like the menu and the command line do (§10). An operation declared today is a
-tool tomorrow without anyone touching this file.
+Die Operationen stehen auch hier nicht ausgeschrieben — sie kommen aus dem
+Register, wie Menü und Kommandozeile (§10). Eine Operation, die heute
+deklariert wird, ist morgen ein Werkzeug, ohne dass jemand diese Datei
+anfasst.
 
-``ask_user`` is not politeness but a duty (Leitprinzip 6, §26.2): the suite
-deliberately contains ambiguous requests and measures whether it was used.
+``ask_user`` ist keine Höflichkeit, sondern Pflicht (Leitprinzip 6, §26.2):
+die Suite enthält absichtlich mehrdeutige Anfragen und misst, ob es benutzt
+wurde.
 """
 
 from __future__ import annotations
@@ -19,9 +22,9 @@ from app.core.registry import REGISTRY, Registry
 from app.core.registry import tool_schemas as op_schemas
 from app.i18n import _
 
-#: Name of the extra property every operation tool carries: which objects it
-#: applies to. The parameter schema knows nothing about the scene, so this is
-#: added here rather than in every declaration.
+#: Name der Zusatz-Eigenschaft, die jedes Operationswerkzeug trägt: auf welche
+#: Objekte es wirkt. Das Parameterschema weiß nichts von der Szene, also kommt
+#: sie hier dazu statt in jede Deklaration.
 OBJECTS_FIELD: Final = "objects"
 
 ASK_USER: Final = "ask_user"
@@ -49,7 +52,9 @@ def tool_schemas(registry: Registry | None = None) -> tuple[dict[str, Any], ...]
 
 
 def operation_tools(registry: Registry | None = None) -> tuple[dict[str, Any], ...]:
-    """The registry as tools, each with the objects it works on."""
+    """Das Register als Werkzeuge, jedes mit den Objekten, auf denen es
+    arbeitet.
+    """
     source = registry or REGISTRY
     schemas = []
     for schema in op_schemas(source):
@@ -78,7 +83,7 @@ def operation_tools(registry: Registry | None = None) -> tuple[dict[str, Any], .
 
 
 def extra_tools() -> tuple[dict[str, Any], ...]:
-    """The seven from the table in §26.2."""
+    """Die sieben aus der Tabelle in §26.2."""
     return (
         {
             "name": ASK_USER,

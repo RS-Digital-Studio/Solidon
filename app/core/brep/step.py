@@ -1,13 +1,15 @@
-"""STEP in and out (Bauplan §30, §25, §29).
+"""STEP hinein und hinaus (Bauplan §30, §25, §29).
 
-STEP is the format that carries a construction rather than a skin: faces,
-edges and their curves survive it, which is why it is worth having a second
-kernel for at all. A round trip has to come back as the same body — not as the
-same picture — and the test says so by measuring volume and counting faces.
+STEP ist das Format, das eine Konstruktion trägt statt einer Haut: Flächen,
+Kanten und ihre Kurven überstehen es — und genau darum lohnt ein zweiter Kern
+überhaupt. Eine runde Reise muss als derselbe Körper zurückkommen, nicht als
+dasselbe Bild, und der Test sagt das, indem er Volumen misst und Flächen
+zählt.
 
-Units: STEP files carry their own, and OpenCASCADE converts to millimetres on
-the way in. That is the one conversion the input stage does not have to guess
-at (§11.1), and the reason a STEP never asks the unit question.
+Einheiten: STEP-Dateien tragen ihre eigenen, und OpenCASCADE rechnet beim
+Hereinkommen auf Millimeter um. Das ist die eine Umrechnung, die die
+Eingangsstufe nicht raten muss (§11.1), und der Grund, warum ein STEP nie die
+Einheitenfrage stellt.
 """
 
 from __future__ import annotations
@@ -21,12 +23,12 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: What a STEP file is called. Both spellings are in the wild.
+#: Wie eine STEP-Datei heißt. Beide Schreibweisen kommen vor.
 SUFFIXES: tuple[str, ...] = (".step", ".stp")
 
 
 def read(payload: bytes) -> Solid:
-    """One body from STEP bytes. Several shapes arrive as one compound."""
+    """Ein Körper aus STEP-Bytes. Mehrere Formen kommen als ein Compound an."""
     require()
     import tempfile
 
@@ -58,7 +60,7 @@ def read(payload: bytes) -> Solid:
 
 
 def write(solid: Solid) -> bytes:
-    """A body as STEP bytes, in millimetres."""
+    """Ein Körper als STEP-Bytes, in Millimetern."""
     require()
     import tempfile
 

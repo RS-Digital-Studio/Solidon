@@ -1,18 +1,20 @@
-"""What the agent gets to see (Bauplan §26.1).
+"""Was der Agent zu sehen bekommt (Bauplan §26.1).
 
-Five things, and each one for a reason:
+Fünf Dinge, jedes aus einem Grund:
 
-* the **digest** (§23) with parameters and the current selection — without the
-  selection "make that hole bigger" points at nothing;
-* the **report** including the fallback stages that carried an operation — the
-  agent has to know what it is standing on (§17.3);
-* the **history in short form** — without it "take that back" cannot be acted on;
-* the **valid chat turns** (§26.3), not the raw log: a turn whose transaction was
-  undone travels along as "verworfen" at most;
-* the **rule set** in its current version (§39), inside the system prompt.
+* der **Steckbrief** (§23) mit Parametern und der aktuellen Auswahl — ohne die
+  Auswahl zeigt „mach das Loch größer" auf nichts;
+* der **Prüfbericht** samt der Rückfallstufen, die eine Operation getragen
+  haben — der Agent muss wissen, worauf er steht (§17.3);
+* der **Verlauf in Kurzform** — ohne ihn lässt sich „nimm das zurück" nicht
+  ausführen;
+* die **gültigen Chatbeiträge** (§26.3), nicht das rohe Protokoll: ein Beitrag,
+  dessen Transaktion zurückgenommen wurde, reist höchstens als „verworfen" mit;
+* die **Regelsammlung** in ihrer aktuellen Version (§39), im Systemprompt.
 
-Nothing here is clever. It is a text, and being able to read it is the point:
-what the model was told has to be checkable by a person.
+Nichts hier ist raffiniert. Es ist ein Text, und dass man ihn lesen kann, ist
+der Punkt: was dem Modell gesagt wurde, muss für einen Menschen nachprüfbar
+sein.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from app.core.agent.prompt import system_prompt  # isort: skip
 
 __all__ = ["build_messages", "conversation", "system_prompt", "world_text"]
 
-#: How many turns of the conversation travel along at most.
+#: Wie viele Gesprächsbeiträge höchstens mitreisen.
 HISTORY_LIMIT = 12
 
 
@@ -41,7 +43,7 @@ def build_messages(
     selection: tuple[ObjectId, str] | None = None,
     rule_set: rules.RuleSet | None = None,
 ) -> list[Message]:
-    """The whole context as the backend takes it."""
+    """Der ganze Kontext, so wie das Backend ihn nimmt."""
     messages = [
         Message(role="system", content=system_prompt(rule_set)),
         Message(role="user", content=world_text(document, scene, selection)),
@@ -56,7 +58,7 @@ def world_text(
     scene: Scene,
     selection: tuple[ObjectId, str] | None = None,
 ) -> str:
-    """Digest, report and history in one block."""
+    """Steckbrief, Prüfbericht und Verlauf in einem Block."""
     parts = [f"{tr('Szene und Verlauf')}:", digest(scene, document, selection)]
     report = report_text(scene.report)
     if report:
@@ -65,7 +67,7 @@ def world_text(
 
 
 def report_text(report: Report) -> str:
-    """The findings, with the fallback stage that produced them (§17.3, §26.1)."""
+    """Die Befunde, mit der Rückfallstufe, die sie erzeugt hat (§17.3, §26.1)."""
     if not report.findings:
         return ""
     lines = [f"{tr('Prüfbericht')}:"]
@@ -79,11 +81,12 @@ def report_text(report: Report) -> str:
 
 
 def conversation(entries: Sequence[ChatEntry], document: Document) -> list[Message]:
-    """The valid turns (§26.3).
+    """Die gültigen Beiträge (§26.3).
 
-    A turn whose transaction is no longer in the document was taken back. It is
-    not dropped — the agent would argue in circles — but it travels as one line
-    saying that it was discarded, and its content stays out.
+    Ein Beitrag, dessen Transaktion nicht mehr im Dokument steht, wurde
+    zurückgenommen. Er fällt nicht weg — der Agent argumentierte im Kreis —,
+    aber er reist als eine Zeile mit, die sagt, dass er verworfen wurde, und
+    sein Inhalt bleibt draußen.
     """
     active = {transaction.id for transaction in document.transactions}
     messages: list[Message] = []
@@ -104,7 +107,9 @@ def conversation(entries: Sequence[ChatEntry], document: Document) -> list[Messa
 
 
 def is_discarded(entry: ChatEntry, document: Document) -> bool:
-    """Whether a turn was taken back — the surface greys it out (§26.3)."""
+    """Ob ein Beitrag zurückgenommen wurde — die Oberfläche graut ihn
+    aus (§26.3).
+    """
     if entry.transaction_id is None:
         return False
     return entry.transaction_id not in {transaction.id for transaction in document.transactions}

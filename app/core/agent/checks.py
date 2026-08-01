@@ -1,12 +1,13 @@
-"""The check that runs after every operation of a proposal (Bauplan §26.5).
+"""Die Prüfung nach jeder Operation eines Vorschlags (Bauplan §26.5).
 
-Watertight, volume plausible, no unexpected components, no orphaned references,
-no violated fits — and the finding goes back into the context. Without that the
-agent proposes a second operation on a body its first one already broke.
+Wasserdicht, Volumen plausibel, keine unerwarteten Komponenten, keine
+verwaisten Verweise, keine verletzten Passungen — und der Befund geht zurück
+in den Kontext. Ohne das schlägt der Agent eine zweite Operation auf einem
+Körper vor, den seine erste schon kaputtgemacht hat.
 
-The checks are deliberately blunt. They are not a quality judgement, they are a
-tripwire: something happened here that the model should know about before it
-carries on.
+Die Prüfungen sind mit Absicht grob. Sie sind kein Qualitätsurteil, sie sind
+ein Stolperdraht: hier ist etwas passiert, das das Modell wissen sollte, bevor
+es weitermacht.
 """
 
 from __future__ import annotations
@@ -15,17 +16,20 @@ from app.core.scene.evaluate import EvaluationResult
 from app.core.types import Finding, Mesh, ObjectId, Scene, SceneObject
 from app.i18n import _
 
-#: Volume ratio outside which a change is worth mentioning. A boolean can halve
-#: a body legitimately; a factor of ten in either direction is a slip.
+#: Volumenverhältnis, außerhalb dessen eine Änderung erwähnenswert ist. Eine
+#: Boolesche Op darf einen Körper legitim halbieren; ein Faktor zehn in
+#: irgendeine Richtung ist ein Ausrutscher.
 VOLUME_FACTOR = 10.0
 
-#: Codes the check passes through from the evaluation, because they say exactly
-#: what §26.5 asks about.
+#: Codes, die die Prüfung aus der Auswertung durchreicht, weil sie genau das
+#: sagen, wonach §26.5 fragt.
 PASSED_THROUGH = ("perceive.orphaned", "feature.orphaned", "fit.violated", "fit.missing_feature")
 
 
 def check(result: EvaluationResult, before: Scene | None = None) -> list[Finding]:
-    """What the agent has to know about the state its operation produced."""
+    """Was der Agent über den Zustand wissen muss, den seine Operation
+    erzeugt hat.
+    """
     findings: list[Finding] = []
     scene = result.scene
 
@@ -99,7 +103,7 @@ def _compare(object_id: ObjectId, earlier: SceneObject, mesh: Mesh) -> list[Find
 
 
 def as_lines(findings: list[Finding]) -> str:
-    """The findings as the tool result the model reads."""
+    """Die Befunde als das Werkzeugergebnis, das das Modell liest."""
     if not findings:
         return str(_("Prüfung ohne Befund."))
     return "\n".join(f"{finding.code}: {finding.message}" for finding in findings)

@@ -1,24 +1,26 @@
-"""OpenSCAD as the fallback level (Bauplan §24.1, §32, §36).
+"""OpenSCAD als Rückfallebene (Bauplan §24.1, §32, §36).
 
-Only ever called as an installed external program, never bundled: OpenSCAD is
-GPL and the application is not (§36). And only ever as a fallback — parts are
-built against ``manifold3d``, so nothing on the core path needs an installation
-(§24.1).
+Immer nur als installiertes externes Programm aufgerufen, nie mitgeliefert:
+OpenSCAD ist GPL, die Anwendung nicht (§36). Und immer nur als Rückfall —
+Bausteine sind gegen ``manifold3d`` gebaut, nichts auf dem Hauptweg braucht
+also eine Installation (§24.1).
 
-What makes this safe is not the sandbox, it is the check before it. Source code
-reaches this module from two directions that are equally untrusted: a project
-file passed around as a bug report (§33.3), and a language model. Both may
-contain ``include <...>`` pointing anywhere on the machine.
+Was das hier sicher macht, ist nicht die Sandbox, sondern die Prüfung davor.
+Quelltext erreicht dieses Modul aus zwei gleichermaßen unvertrauten
+Richtungen: aus einer Projektdatei, die als Fehlerbericht herumgereicht wird
+(§33.3), und aus einem Sprachmodell. Beide können ``include <...>`` enthalten,
+das irgendwohin auf dem Rechner zeigt.
 
-So the rules from §32 are enforced here, in this order:
+Also werden die Regeln aus §32 hier durchgesetzt, in dieser Reihenfolge:
 
-1. the source is **read** before it is run — ``include``, ``use``, ``import``
-   and ``surface`` only with relative paths below the working directory;
-2. every run gets its **own working directory** and nothing outside it;
-3. **time and memory are capped**, and the process gets no network.
+1. der Quelltext wird **gelesen**, bevor er läuft — ``include``, ``use``,
+   ``import`` und ``surface`` nur mit relativen Pfaden unterhalb des
+   Arbeitsordners;
+2. jeder Lauf bekommt seinen **eigenen Arbeitsordner** und nichts außerhalb;
+3. **Zeit und Speicher sind gedeckelt**, und der Prozess bekommt kein Netz.
 
-A refused source is not run at all. That is checked in the tests, because "it
-would probably fail anyway" is not a security argument.
+Ein abgelehnter Quelltext läuft gar nicht erst. Das steht in den Tests, denn
+„es würde ohnehin scheitern" ist kein Sicherheitsargument.
 """
 
 from __future__ import annotations
@@ -37,8 +39,8 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Statements that pull something else in. Every one of them is a way out of
-#: the working directory if the path is not checked.
+#: Anweisungen, die etwas anderes hereinholen. Jede einzelne ist ein Weg aus
+#: dem Arbeitsordner hinaus, wenn der Pfad nicht geprüft wird.
 INCLUDING = ("include", "use", "import", "surface")
 
 _INCLUDE_PATTERN = re.compile(
@@ -46,8 +48,8 @@ _INCLUDE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-#: How long a render may take. A model that needs longer is not a fallback, it
-#: is a mistake (§31).
+#: Wie lange ein Lauf dauern darf. Ein Modell, das länger braucht, ist kein
+#: Rückfall, sondern ein Fehler (§31).
 TIMEOUT_SECONDS = 60.0
 
 #: Names OpenSCAD is installed under.
@@ -56,7 +58,7 @@ EXECUTABLES = ("openscad", "openscad-nightly", "OpenSCAD")
 
 @dataclass(frozen=True, slots=True)
 class SourceCheck:
-    """What reading the source found (§32)."""
+    """Was das Lesen des Quelltexts ergeben hat (§32)."""
 
     allowed: bool
     references: tuple[str, ...] = ()
@@ -69,7 +71,7 @@ class SourceCheck:
 
 
 class UnsafeSource(AppError):
-    """The source wanted something outside its working directory."""
+    """Der Quelltext wollte etwas außerhalb seines Arbeitsordners."""
 
     default_title = _("Dieser OpenSCAD-Quelltext greift nach außen.")
     default_suggestions = (
@@ -79,7 +81,9 @@ class UnsafeSource(AppError):
 
 
 class ScadUnavailable(AppError):
-    """OpenSCAD is not installed. Everything except this fallback keeps working."""
+    """OpenSCAD ist nicht installiert. Alles außer dieser Rückfallebene
+    läuft weiter.
+    """
 
     default_title = _("OpenSCAD ist auf diesem Rechner nicht installiert.")
     default_suggestions = (
@@ -89,11 +93,12 @@ class ScadUnavailable(AppError):
 
 
 def check_source(source: str) -> SourceCheck:
-    """Read the source and decide whether it may run (§32).
+    """Liest den Quelltext und entscheidet, ob er laufen darf (§32).
 
-    A relative path below the working directory is fine. Everything else — an
-    absolute path, a drive letter, a step upwards, a URL — is refused, and the
-    finding names what was refused rather than only that something was.
+    Ein relativer Pfad unterhalb des Arbeitsordners ist in Ordnung. Alles
+    andere — ein absoluter Pfad, ein Laufwerksbuchstabe, ein Schritt nach oben,
+    eine URL — wird abgelehnt, und der Befund nennt, *was* abgelehnt wurde,
+    nicht nur, dass etwas abgelehnt wurde.
     """
     references: list[str] = []
     refused: list[str] = []
@@ -156,7 +161,7 @@ def executable() -> str | None:
 
 @dataclass(slots=True)
 class RenderResult:
-    """What a run produced."""
+    """Was ein Lauf erzeugt hat."""
 
     stl: bytes = b""
     findings: list[Finding] = field(default_factory=list)
@@ -164,7 +169,9 @@ class RenderResult:
 
 
 def render(source: str, *, timeout: float = TIMEOUT_SECONDS) -> RenderResult:
-    """Run a source and hand back the mesh — after the check, never before."""
+    """Führt einen Quelltext aus und gibt das Netz zurück — nach der Prüfung,
+    nie davor.
+    """
     check = check_source(source)
     if not check.allowed:
         raise UnsafeSource(
@@ -219,11 +226,12 @@ def render(source: str, *, timeout: float = TIMEOUT_SECONDS) -> RenderResult:
 
 
 def _environment(workspace: Path) -> dict[str, str]:
-    """A run gets a fixed working directory and no way to the network (§32).
+    """Ein Lauf bekommt einen festen Arbeitsordner und keinen Weg ins
+    Netz (§32).
 
-    Nothing here can stop a determined program, and it is not meant to: what it
-    stops is a source that quietly reads a font, a file or a URL because the
-    model happened to ask for one.
+    Nichts hier hält ein entschlossenes Programm auf, und das soll es auch
+    nicht: aufgehalten wird ein Quelltext, der still eine Schrift, eine Datei
+    oder eine URL liest, weil das Modell zufällig danach gefragt hat.
     """
     keep = ("PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "HOME", "USERPROFILE", "DISPLAY")
     environment = {name: os.environ[name] for name in keep if name in os.environ}

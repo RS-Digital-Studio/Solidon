@@ -1,13 +1,13 @@
-"""One proposal, one transaction (Bauplan §26.5, AGENTS.md rule 16).
+"""Ein Vorschlag, eine Transaktion (Bauplan §26.5, AGENTS.md Regel 16).
 
-Everything an agent turn wants to change is collected here and applied in one
-go — or not at all. That is what makes "one undo takes it back" true instead of
-aspirational, and it is why the operations are gathered rather than applied one
-by one while the model is still talking.
+Alles, was ein Agentenzug ändern will, wird hier gesammelt und in einem Zug
+angewandt — oder gar nicht. Genau das macht „ein Undo nimmt es zurück" wahr
+statt bloß gewollt, und darum werden die Operationen gesammelt, statt einzeln
+angewandt zu werden, während das Modell noch redet.
 
-Parameters and fits are not operations, so a transaction alone would not undo
-them. The proposal therefore carries what they were before it ran, and taking
-it back restores exactly that.
+Parameter und Passungen sind keine Operationen, eine Transaktion allein nähme
+sie also nicht zurück. Der Vorschlag trägt darum mit, was sie vorher waren,
+und ihn zurückzunehmen stellt genau das wieder her.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from app.core.types import Finding, Fit, Origin, Parameter, ParameterName, Trans
 
 @dataclass(slots=True)
 class Question:
-    """One thing the agent asked instead of guessing (§26.2)."""
+    """Eine Sache, die der Agent gefragt hat, statt zu raten (§26.2)."""
 
     text: str
     options: tuple[str, ...] = ()
@@ -29,7 +29,7 @@ class Question:
 
 @dataclass(slots=True)
 class Proposal:
-    """What one request produced, before anyone accepted it."""
+    """Was eine Anfrage erzeugt hat, bevor jemand sie angenommen hat."""
 
     request: str
     answer: str = ""
@@ -57,7 +57,9 @@ class Proposal:
 
     @property
     def empty(self) -> bool:
-        """A proposal that only answered — nothing to accept, nothing to undo."""
+        """Ein Vorschlag, der nur geantwortet hat — nichts anzunehmen, nichts
+        zurückzunehmen.
+        """
         return not (self.drafts or self.parameters or self.fits or self.undo_of)
 
     @property
@@ -65,7 +67,7 @@ class Proposal:
         return bool(self.questions)
 
     def summary(self) -> str:
-        """One line for the history entry and the chat."""
+        """Eine Zeile für den Verlaufseintrag und den Chat."""
         if self.answer:
             return self.answer.strip().splitlines()[0]
         if self.drafts:

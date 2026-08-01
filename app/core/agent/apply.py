@@ -1,14 +1,16 @@
-"""Accepting and taking back a proposal (Bauplan §26.5, AGENTS.md rule 16).
+"""Einen Vorschlag annehmen und zurücknehmen (Bauplan §26.5, AGENTS.md
+Regel 16).
 
-A proposal becomes **one** transaction. Everything it wants — operations,
-parameters, fits — lands together or not at all, and one undo takes all of it
-back. Parameters and fits are not operations, so the proposal carries what they
-were before it ran; that is what makes the undo complete rather than nearly
-complete.
+Ein Vorschlag wird **eine** Transaktion. Alles, was er will — Operationen,
+Parameter, Passungen — landet gemeinsam oder gar nicht, und ein Undo nimmt
+alles davon zurück. Parameter und Passungen sind keine Operationen, also
+trägt der Vorschlag mit, was sie vorher waren; genau das macht das Undo
+vollständig statt beinahe vollständig.
 
-The chat entry is written here as well, and it names the transaction (§26.3).
-When the transaction goes, the entry counts as discarded — which is what keeps
-the agent from arguing with a state that no longer exists.
+Der Chat-Eintrag entsteht ebenfalls hier, und er benennt die Transaktion
+(§26.3). Geht die Transaktion, gilt der Eintrag als verworfen — und das hält
+den Agenten davon ab, mit einem Zustand zu argumentieren, den es nicht mehr
+gibt.
 """
 
 from __future__ import annotations
@@ -25,9 +27,10 @@ _log = get_logger(__name__)
 
 
 def accept(proposal: Proposal, history: History) -> Transaction | None:
-    """Put the proposal into the document as one transaction.
+    """Legt den Vorschlag als eine Transaktion ins Dokument.
 
-    Returns the transaction, or None when the proposal only answered.
+    Gibt die Transaktion zurück — oder None, wenn der Vorschlag nur geantwortet
+    hat.
     """
     document = history.document
 
@@ -54,12 +57,14 @@ def accept(proposal: Proposal, history: History) -> Transaction | None:
 
 
 def discard(proposal: Proposal, document: Document) -> None:
-    """Throw a proposal away. The conversation keeps both turns (§26.3)."""
+    """Wirft einen Vorschlag weg. Das Gespräch behält beide Beiträge (§26.3)."""
     record(document, proposal, None, discarded=True)
 
 
 def undo(proposal: Proposal, history: History, transaction_id: str | None) -> None:
-    """Take an accepted proposal back completely — including what was not an op."""
+    """Nimmt einen angenommenen Vorschlag vollständig zurück — auch das, was
+    keine Op war.
+    """
     document = history.document
     if transaction_id is not None:
         _undo_named(history, transaction_id)
@@ -79,7 +84,7 @@ def record(
     transaction: Transaction | None,
     discarded: bool = False,
 ) -> tuple[ChatEntry, ChatEntry]:
-    """Write both turns of the exchange into the project (§26.3)."""
+    """Schreibt beide Beiträge des Austauschs ins Projekt (§26.3)."""
     question = ChatEntry(id=_identifier(), role="user", text=proposal.request)
     answer = ChatEntry(
         id=_identifier(),
@@ -93,9 +98,11 @@ def record(
 
 
 def _undo_named(history: History, transaction_id: str) -> None:
-    """Undo back to and including one transaction. Undo is a stack, so getting
-    to an older entry means taking the newer ones with it — and saying so is
-    better than pretending a single entry can be plucked out of the middle."""
+    """Nimmt zurück bis einschließlich einer Transaktion. Undo ist ein
+    Stapel: zu einem älteren Eintrag zu kommen heißt, die neueren mitzunehmen —
+    und das zu sagen ist besser, als so zu tun, als ließe sich ein einzelner
+    Eintrag aus der Mitte herauspflücken.
+    """
     while history.document.transactions:
         last = history.document.transactions[-1]
         history.undo()

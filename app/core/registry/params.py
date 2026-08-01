@@ -1,16 +1,17 @@
-"""Parameter schemas of operations (Bauplan §10).
+"""Parameterschemata der Operationen (Bauplan §10).
 
-One declaration carries bounds, unit, default and the front/advanced placement
-from §2.4, and the same definition validates dialog, command line and agent call.
+Eine Deklaration trägt Grenzen, Einheit, Vorgabe und die Vorderseiten-Zuordnung
+aus §2.4, und dieselbe Definition validiert Dialog, Kommandozeile und
+Agentenaufruf.
 
-Declared as a dataclass so no dependency is needed::
+Als Dataclass deklariert, damit keine Abhängigkeit nötig ist::
 
     @op_params
     class ResizeHoleParams(BaseParams):
         diameter: float = param(title=_("Durchmesser"), default=5.0, unit="mm", minimum=0.1)
 
-Parameter expressions ("=@width/2", §13) are resolved by the scene before an
-operation runs; what arrives here is always a plain value.
+Parameterausdrücke ("=@width/2", §13) löst die Szene auf, bevor eine Operation
+läuft; was hier ankommt, ist immer ein nackter Wert.
 """
 
 from __future__ import annotations
@@ -48,7 +49,9 @@ def param(
     placement: ParamPlacement = "front",
     doc: TranslatableText | str | None = None,
 ) -> Any:
-    """Declare one parameter. Everything the surfaces need sits in one place."""
+    """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
+    an einer Stelle.
+    """
     metadata = {
         _METADATA_KEY: {
             "title": title,
@@ -82,10 +85,12 @@ def _kind_of(annotation: Any, declared: ParamKind | None, choices: tuple[str, ..
 
 
 def op_params(cls: type[P]) -> type[P]:
-    """Turn a declaration into a frozen parameter set with a derived schema.
+    """Macht aus einer Deklaration einen eingefrorenen Parametersatz mit
+    abgeleitetem Schema.
 
-    Keyword-only, so declaration order stays free: required parameters may follow
-    ones that carry a default, and nothing is ever passed positionally.
+    Nur Schlüsselwörter, damit die Reihenfolge der Deklaration frei bleibt:
+    Pflichtparameter dürfen auf welche mit Vorgabe folgen, und übergeben wird
+    nie positionell.
     """
     data_class = dataclass(frozen=True, slots=True, kw_only=True)(cls)
     specs: list[ParamSpec] = []
@@ -118,7 +123,9 @@ def op_params(cls: type[P]) -> type[P]:
 
 
 def _coerce(spec: ParamSpec, value: Any) -> Any:
-    """Check one value against its schema entry and return it in core form."""
+    """Prüft einen Wert gegen seinen Schemaeintrag und gibt ihn in Kernform
+    zurück.
+    """
     if spec.kind == "bool":
         if not isinstance(value, bool):
             raise ValidationError(
@@ -182,7 +189,9 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
 
 
 def validate(params_class: type[P], values: Mapping[str, Any]) -> P:
-    """Build a validated parameter set, or fail with a correctable error."""
+    """Baut einen validierten Parametersatz — oder scheitert mit einem
+    korrigierbaren Fehler.
+    """
     specs = params_class.spec()
     known = {spec.name for spec in specs}
     unknown = sorted(set(values) - known)
@@ -224,7 +233,7 @@ _JSON_TYPE: dict[ParamKind, str] = {
 
 
 def json_schema(params_class: type[BaseParams]) -> dict[str, Any]:
-    """JSON schema for the agent tool description (§10, §26.2)."""
+    """JSON-Schema für die Werkzeugbeschreibung des Agenten (§10, §26.2)."""
     properties: dict[str, Any] = {}
     required: list[str] = []
     for spec in params_class.spec():

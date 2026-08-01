@@ -1,12 +1,12 @@
-"""The system prompt (Bauplan §26.1, §39).
+"""Der Systemprompt (Bauplan §26.1, §39).
 
-Versioned, because every transaction records which prompt produced it (§26.4).
-Change the text, raise the version — otherwise a project file claims to have
-been made under a prompt that no longer exists.
+Versioniert, denn jede Transaktion hält fest, welcher Prompt sie erzeugt hat
+(§26.4). Text ändern heißt Version erhöhen — sonst behauptet eine
+Projektdatei, unter einem Prompt entstanden zu sein, den es nicht mehr gibt.
 
-The four sentences at the end are the ones §26.5 wants anchored here and
-measured in the suite: parts before primitives, an operation list before
-OpenSCAD, parameters before numbers, questions before guessing.
+Die vier Sätze am Ende sind die, die §26.5 hier verankert und in der Suite
+gemessen haben will: Bausteine vor Primitiven, Op-Liste vor OpenSCAD,
+Parameter vor Zahlen, Fragen vor Raten.
 """
 
 from __future__ import annotations
@@ -45,7 +45,9 @@ Vorschlag ändert.
 
 
 def system_prompt(rule_set: rules.RuleSet | None = None) -> str:
-    """Role, rules and habits — everything the model has to know before it starts."""
+    """Rolle, Regeln und Gewohnheiten — alles, was das Modell wissen muss,
+    bevor es anfängt.
+    """
     active = rule_set or rules.load()
     parts = [
         _ROLE.strip(),

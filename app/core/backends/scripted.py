@@ -1,13 +1,13 @@
-"""A model that says what it was told to say (Bauplan §35, §40).
+"""Ein Modell, das sagt, was man ihm aufgetragen hat (Bauplan §35, §40).
 
-The agent suite has to check the harness, not the weather: does the context
-carry the selection, is a proposal exactly one transaction, does an undo really
-take it back. None of that needs a language model, and running it against one
-would make the suite slow, expensive and flaky at the same time.
+Die Agenten-Suite muss die Mechanik prüfen, nicht das Wetter: trägt der
+Kontext die Auswahl, ist ein Vorschlag genau eine Transaktion, nimmt ein Undo
+ihn wirklich zurück. Nichts davon braucht ein Sprachmodell, und es gegen eines
+laufen zu lassen machte die Suite langsam, teuer und wackelig zugleich.
 
-So the suite drives this backend. It answers from a script and keeps everything
-it was asked, which is how a test can assert that the digest, the report and the
-rule set actually reached the model.
+Also fährt die Suite dieses Backend. Es antwortet aus einem Skript und behält
+alles, wonach es gefragt wurde — so kann ein Test behaupten, dass Steckbrief,
+Prüfbericht und Regelsammlung das Modell wirklich erreicht haben.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ Answer = Reply | Callable[[Sequence[Message]], Reply]
 
 @dataclass(slots=True)
 class ScriptedBackend:
-    """Hands out prepared answers and records the conversation."""
+    """Gibt vorbereitete Antworten aus und schreibt das Gespräch mit."""
 
     answers: list[Answer] = field(default_factory=list)
     model: str = "scripted"
@@ -63,7 +63,7 @@ class ScriptedBackend:
 
     @property
     def last_system_prompt(self) -> str:
-        """What the model was told about the world on the last request."""
+        """Was dem Modell bei der letzten Anfrage über die Welt gesagt wurde."""
         if not self.seen:
             return ""
         return " ".join(entry.content for entry in self.seen[-1] if entry.role == "system")
