@@ -14,13 +14,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QByteArray, Qt, QTimer, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QByteArray, QEvent, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QFont, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QLineEdit,
+    QListView,
     QListWidget,
     QListWidgetItem,
     QVBoxLayout,
@@ -40,6 +41,15 @@ SHOWN_PARAMETERS = 2
 
 OWN_MARKER = "*"
 
+#: Anzeigegröße des Vorschaubilds in einer Kachel. Gerendert wird weiter in
+#: ``SIZE`` — die Reserve zahlt sich auf HiDPI-Bildschirmen aus.
+TILE_ICON = 96
+
+#: Grundfläche einer Kachel: breit genug für „Schraubenloch mit Senkung" in
+#: zwei Zeilen, hoch genug für Bild, Titel und die zwei Parameter darunter.
+TILE_WIDTH = 164
+TILE_HEIGHT = 176
+
 
 class PartCatalog(QDialog):
     """Bilder, Beschreibungen und ein Suchfeld."""
@@ -49,16 +59,29 @@ class PartCatalog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Bausteine"))
-        self.resize(560, 640)
+        self.resize(740, 640)
 
         self.search = QLineEdit(self)
         self.search.setPlaceholderText(tr("Suchen — zum Beispiel Mutter, Magnet, Kabel"))
         self.search.textChanged.connect(self.show_parts)
 
+        # §2.6 will eine Bibliothek, die man sieht. Als Liste mit bildhohen
+        # Zeilen zeigte das Fenster zweieinhalb von dreizehn Bausteinen — als
+        # Kachelraster steht die ganze Gruppe auf einem Blick da, und die
+        # Pfeiltasten laufen in beide Richtungen.
         self.list = QListWidget(self)
-        self.list.setIconSize(_icon_size())
+        self.list.setViewMode(QListView.ViewMode.IconMode)
+        self.list.setMovement(QListView.Movement.Static)
+        self.list.setResizeMode(QListView.ResizeMode.Adjust)
+        self.list.setWrapping(True)
+        self.list.setSpacing(8)
+        self.list.setIconSize(QSize(TILE_ICON, TILE_ICON))
         self.list.setWordWrap(True)
         self.list.itemDoubleClicked.connect(self._chosen)
+        # Die Überschriften folgen der Breite der Liste, nicht der des
+        # Dialogs: dessen resizeEvent feuert, bevor das Layout der Liste ihre
+        # Größe gegeben hat, und die Zeile bliebe eine Kachel breit.
+        self.list.installEventFilter(self)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -91,15 +114,42 @@ class PartCatalog(QDialog):
                 continue
             heading = QListWidgetItem(str(title))
             heading.setFlags(Qt.ItemFlag.NoItemFlags)
+            font = QFont(heading.font())
+            font.setBold(True)
+            heading.setFont(font)
             self.list.addItem(heading)
             for spec in entries:
                 self.list.addItem(self._item(spec))
+        self._stretch_headings()
+
+    def _stretch_headings(self) -> None:
+        """Eine Überschrift nimmt die ganze Zeile.
+
+        Im Raster wäre sie sonst eine Kachel unter vielen, und die Gruppe
+        begänne irgendwo in der Zeilenmitte. Die volle Breite erzwingt den
+        Umbruch davor und danach — das ist die ganze Abschnittslogik.
+        """
+        width = max(self.list.viewport().width() - 2 * self.list.spacing(), TILE_WIDTH)
+        height = self.list.fontMetrics().height() + 10
+        for row in range(self.list.count()):
+            item = self.list.item(row)
+            if item is not None and item.data(Qt.ItemDataRole.UserRole) is None:
+                item.setSizeHint(QSize(width, height))
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
+        if watched is self.list and event.type() == QEvent.Type.Resize:
+            # Ein Filter sieht das Ereignis vor dem Ziel — der Viewport hat
+            # hier noch die alte Breite. Erst nach der Verarbeitung messen.
+            QTimer.singleShot(0, self._stretch_headings)
+        handled: bool = super().eventFilter(watched, event)
+        return handled
 
     def _item(self, spec: PartSpec) -> QListWidgetItem:
         item = QListWidgetItem(describe(spec))
         item.setData(Qt.ItemDataRole.UserRole, spec.name)
         item.setIcon(self._preview(spec))
         item.setToolTip(str(spec.doc))
+        item.setSizeHint(QSize(TILE_WIDTH, TILE_HEIGHT))
         return item
 
     def _preview(self, spec: PartSpec) -> Any:
