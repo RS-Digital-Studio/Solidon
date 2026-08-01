@@ -15,7 +15,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QShortcut
 from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QToolBar
 
 from app.core import errors
@@ -851,3 +851,95 @@ def test_the_toolbar_buttons_carry_a_symbol_and_keep_their_words(
     for action in toolbar.actions():
         assert action.text(), "das Wort bleibt"
         assert not action.icon().isNull(), f"{action.text()} ohne Zeichen"
+
+
+# --- Die Aufräumrunde -----------------------------------------------------------
+
+
+def test_the_keyboard_reaches_zoom_and_the_next_body(window: MainWindow) -> None:
+    """§19.2: der Viewport ist mit der Tastatur navigierbar.
+
+    Die Achsansichten waren es, Zoom und Durchblättern nicht — wer ohne
+    Zeigegerät arbeitet, sah jedes Modell aus derselben Entfernung.
+    """
+    _with_two_objects(window)
+    window.object_tree.tree.topLevelItem(0).setSelected(True)
+    assert window.object_tree.selected_objects() == ("obj_1",)
+
+    window.object_tree.step_selection(True)
+    assert window.object_tree.selected_objects() == ("obj_2",)
+
+    # Reihum: hinter dem letzten kommt wieder der erste.
+    window.object_tree.step_selection(True)
+    assert window.object_tree.selected_objects() == ("obj_1",)
+
+    window.object_tree.step_selection(False)
+    assert window.object_tree.selected_objects() == ("obj_2",)
+
+    shortcuts = {entry.key().toString() for entry in window.findChildren(QShortcut)}
+    assert "Ctrl+Tab" in shortcuts
+    assert any("+" in text for text in shortcuts), "der Zoom hat ein Kürzel"
+
+
+def test_the_fourth_navigation_scheme_exists_without_changing_the_default() -> None:
+    """Bambu, Orca und Prusa drehen mit links; §2.9 gibt Cura vor.
+
+    Ein viertes Wahlschema ist keine Bauplanänderung — die Vorgabe bleibt.
+    """
+    from app.ui.settings_dialog import NAVIGATION
+
+    assert "orbit" in NAVIGATION
+    assert UiSettings().navigation == "slicer", "die Vorgabe folgt weiter §2.9"
+
+
+def test_the_report_can_be_filtered(window: MainWindow) -> None:
+    """Ein Bericht mit hundert Hinweisen und zwei Fehlern versteckt die zwei."""
+    from app.core.types import Finding
+
+    window.report.add_findings(
+        [
+            Finding(code="a", severity="info", message="Wandstärke knapp"),
+            Finding(code="b", severity="error", message="Netz ist offen"),
+        ]
+    )
+    assert window.report.list.count() == 2
+
+    window.report.severity.setCurrentIndex(window.report.severity.findData("error"))
+    hidden = [window.report.list.item(row).isHidden() for row in range(window.report.list.count())]
+    assert hidden == [True, False]
+
+    window.report.severity.setCurrentIndex(0)
+    window.report.search.setText("wandstärke")
+    hidden = [window.report.list.item(row).isHidden() for row in range(window.report.list.count())]
+    assert hidden == [False, True], "der Text filtert unabhängig vom Schweregrad"
+
+    assert "1 × Fehler" in window.report.summary.text(), "gezählt wird der ganze Bericht"
+
+
+def test_the_history_shows_what_a_redo_would_bring_back(window: MainWindow) -> None:
+    """Zurückgenommene Schritte verschwanden hier spurlos."""
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window._on_project()
+    before = window.history_panel.list.count()
+
+    window.session.undo()
+    window.session.wait_for_idle()
+    window._on_project()
+
+    labels = [
+        window.history_panel.list.item(row).text()
+        for row in range(window.history_panel.list.count())
+    ]
+    assert any("zurückgenommen" in text for text in labels), labels
+    assert window.history_panel.list.count() == before, "nichts verschwindet, es wechselt die Seite"
+
+
+def test_a_recent_entry_can_be_forgotten(window: MainWindow, tmp_path: Path) -> None:
+    """Was einmal in der Liste stand, blieb bis es hinausrutschte."""
+    path = tmp_path / "versuch.p3d"
+    window.settings.recent = [str(path)]
+
+    window._forget_recent(path)
+
+    assert window.settings.recent == []

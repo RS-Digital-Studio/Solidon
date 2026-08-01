@@ -1433,9 +1433,8 @@ zurück. Suite: 2129 grün.
 - [x] `Escape` schließt das offene Werkzeug
 - [x] *Ansicht → Alles einpassen* auf `Home`; dazu bekommt der erste Körper
       einer leeren Szene die Kamera von selbst
-- [ ] **Offen:** Tastaturnavigation im Viewport nach §19.2 (Zoom, Auswahl
-      durchblättern). Sie hängt an VTKs Interaktionsstil und ist kein
-      Beiwerk der Menüarbeit — eigener Schritt
+- [x] Tastaturnavigation im Viewport nach §19.2: Zoom auf den Standardkürzeln,
+      Durchblättern der Körper auf Strg+Tab und Strg+Umschalt+Tab, reihum
 - [x] Symbole für die vier Knöpfe der oberen Werkzeugleiste
 
 **Zwei Funde beim Bauen:**
@@ -1483,10 +1482,25 @@ niemand ausgeschaltet hat. Suite: 2136 grün.
   gegenüber Fusion und Blender und ist deshalb kein Nebenher — eigene Phase,
   nach P14. Der bestehende Weg (anwenden, ansehen, Doppelklick im Verlauf,
   korrigieren) trägt bis dahin.
-* **Linke Maustaste dreht.** Bambu Studio, OrcaSlicer und PrusaSlicer drehen
-  mit links; die Vorgabe hier folgt §2.9 („linke Taste wählt, rechte oder
-  mittlere dreht") und damit Cura. Die Umsetzung ist bauplantreu — wer das
-  ändern will, ändert erst den Bauplan. Als viertes Wahlschema kostet es fast
-  nichts.
-* **Verlaufs-Schieber, Filterzeile im Prüfbericht, Einträge aus „Zuletzt
-  geöffnet" entfernen.** Echt, aber klein; sie warten auf eine Aufräumrunde.
+* **Linke Maustaste dreht als Vorgabe.** Bambu Studio, OrcaSlicer und
+  PrusaSlicer tun das; §2.9 gibt Cura vor. Die Vorgabe zu wechseln wäre eine
+  Bauplanänderung und bleibt eine Entscheidung für sich — **als viertes
+  Wahlschema ist es gebaut** (`orbit`), und dabei fiel auf, dass der
+  Menühinweis der Vorgabe seit jeher das Gegenteil dessen beschrieb, was sie
+  tut: „links drehen, rechts schieben" ist Bambu, nicht Cura.
+
+### Die Aufräumrunde
+
+Drei Kleinigkeiten, die in der Durchsicht als „echt, aber klein" standen:
+
+- [x] **Verlauf zeigt, was ein Redo zurückholt.** Zurückgenommene
+      Transaktionen verschwanden spurlos; ob es noch etwas
+      wiederherzustellen gab, verriet allein der Zustand des Menüeintrags.
+      Sie stehen jetzt unten, durchgestrichen und ausgegraut — wie ein
+      verworfener Chatbeitrag und aus demselben Grund (§26.3)
+- [x] **Filterzeile im Prüfbericht**, Text und Schweregrad unabhängig
+      voneinander. Die Zählung darüber bleibt die des ganzen Berichts: ein
+      Filter, der auch die Zusammenfassung filtert, verschweigt, dass es noch
+      etwas anderes gibt
+- [x] **Einträge aus „Zuletzt geöffnet" entfernen** — über das Kontextmenü.
+      Die Datei bleibt, wo sie ist

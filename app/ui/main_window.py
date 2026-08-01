@@ -263,6 +263,19 @@ class MainWindow(QMainWindow):
         # jeher und niemanden, der es rief — Escape tat nichts.
         QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.tools.close_tool)
 
+        # §19.2: der Viewport ist mit der Tastatur navigierbar. Die
+        # Achsansichten waren es, Zoom und Durchblättern nicht — wer ohne
+        # Zeigegerät arbeitet, sah jedes Modell aus derselben Entfernung.
+        for sequence, step in (
+            (QKeySequence.StandardKey.ZoomIn, 1.25),
+            (QKeySequence.StandardKey.ZoomOut, 0.8),
+        ):
+            QShortcut(sequence, self, lambda factor=step: self.viewport.zoom(factor))
+        QShortcut(QKeySequence("Ctrl+Tab"), self, lambda: self.object_tree.step_selection(True))
+        QShortcut(
+            QKeySequence("Ctrl+Shift+Tab"), self, lambda: self.object_tree.step_selection(False)
+        )
+
         self._autosave = QTimer(self)
         self._autosave.setInterval(AUTOSAVE_INTERVAL_MS)
         self._autosave.timeout.connect(self.session.autosave)
@@ -401,6 +414,7 @@ class MainWindow(QMainWindow):
         self.start_screen.browseRequested.connect(self.action_open)
         self.start_screen.openRequested.connect(self.open_path)
         self.start_screen.fileDropped.connect(self.open_path)
+        self.start_screen.forgetRequested.connect(self._forget_recent)
 
         self.stack = QStackedWidget(self)
         self.stack.addWidget(self.start_screen)
@@ -732,8 +746,16 @@ class MainWindow(QMainWindow):
         for scheme, label, hint in (
             (
                 "slicer",
-                tr("Navigation: Slicer"),
-                tr("Maustasten wie in einem Slicer — links drehen, rechts schieben."),
+                tr("Navigation: Cura"),
+                # Der Hinweis stand hier andersherum, als das Schema arbeitet:
+                # „links drehen, rechts schieben" beschreibt Bambu und Prusa,
+                # nicht die Vorgabe aus §2.9.
+                tr("Links wählt, rechts dreht, Umschalt und Ziehen schiebt."),
+            ),
+            (
+                "orbit",
+                tr("Navigation: Bambu, Orca, Prusa"),
+                tr("Links dreht, rechts schiebt — die verbreitetste Aufteilung."),
             ),
             ("cad", tr("Navigation: CAD"), tr("Wie in einem CAD-Programm: Mittlere Taste dreht.")),
             ("blender", tr("Navigation: Blender"), tr("Wie in Blender.")),
@@ -894,6 +916,12 @@ class MainWindow(QMainWindow):
         name, _filter = QFileDialog.getOpenFileName(self, tr("Projekt öffnen"), "", PROJECT_FILTER)
         if name:
             self.open_path(Path(name))
+
+    def _forget_recent(self, path: Path) -> None:
+        """Einen Eintrag aus „Zuletzt geöffnet" nehmen — die Datei bleibt."""
+        self.settings.recent = [entry for entry in self.settings.recent if entry != str(path)]
+        save_settings(self.settings)
+        self.start_screen.show_recent(self.settings.existing_recent())
 
     def _may_discard(self) -> bool:
         """Fragt, bevor ein geändertes Projekt weggeworfen wird.
@@ -1725,7 +1753,9 @@ class MainWindow(QMainWindow):
         low, high = self.viewport.section_range()
         self.section_bar.set_range(low, high)
         self.section_bar.show_capping_state(self.viewport.section_uncapped)
-        self.history_panel.show_document(self.session.project.document, result.stopped_at)
+        self.history_panel.show_document(
+            self.session.project.document, result.stopped_at, self.session.history.undone
+        )
         self._update_actions()
         if result.stopped_at is not None:
             # §15.3: der letzte vollständige Zustand bleibt sichtbar, die
@@ -1738,7 +1768,7 @@ class MainWindow(QMainWindow):
     def _on_project(self) -> None:
         document = self.session.project.document
         self.parameters.show_document(document)
-        self.history_panel.show_document(document)
+        self.history_panel.show_document(document, undone=self.session.history.undone)
         self.chat.show_document(document)
         self.setWindowTitle(f"{self.session.title} — {APP_NAME}")
         self._update_actions()

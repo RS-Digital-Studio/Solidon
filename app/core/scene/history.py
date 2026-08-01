@@ -170,6 +170,15 @@ class History:
         """Transaktionen, die die nächste Änderung wegwerfen würde (§15.4)."""
         return len(self._undone)
 
+    @property
+    def undone(self) -> tuple[Transaction, ...]:
+        """Was zurückgenommen wurde, jüngste zuletzt — für den Verlauf.
+
+        Der zeigte nur den aktuellen Stand; ob es noch etwas
+        wiederherzustellen gab, verriet allein der Zustand des Menüeintrags.
+        """
+        return tuple(self._undone)
+
     def operation(self, op_id: OpId) -> Operation:
         for entry in self.document.ops:
             if entry.id == op_id:

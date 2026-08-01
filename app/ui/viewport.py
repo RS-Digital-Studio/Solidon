@@ -33,7 +33,10 @@ from app.ui.theme import viewport_colours
 
 _log = get_logger(__name__)
 
-NavigationScheme = Literal["slicer", "cad", "blender"]
+NavigationScheme = Literal["slicer", "cad", "blender", "orbit"]
+"""``slicer`` folgt §2.9 und damit Cura: links wählt, rechts dreht.
+``orbit`` ist die Aufteilung von Bambu Studio, OrcaSlicer und PrusaSlicer —
+links dreht, rechts schiebt. Ein viertes Schema, keine andere Vorgabe."""
 
 DisplayMode = Literal["solid", "solid_edges", "wireframe", "transparent"]
 """How a body is drawn (§18.1)."""
@@ -941,6 +944,18 @@ class Viewport(QWidget):
         if self.plotter is not None:
             self.plotter.reset_camera()
 
+    def zoom(self, factor: float) -> None:
+        """Näher heran oder weiter weg — ohne Maus (§19.2).
+
+        Die Achsansichten gab es auf der Tastatur, den Zoom nicht: wer ohne
+        Zeigegerät arbeitet, kam an ein Modell heran, sah es aber immer aus
+        derselben Entfernung.
+        """
+        if self.plotter is None or factor <= 0.0:
+            return
+        self.plotter.camera.zoom(factor)
+        self.plotter.render()
+
     def view_from(self, direction: str) -> None:
         """Eine der sieben Kameravorgaben (§18.1)."""
         if self.plotter is None or direction not in VIEW_DIRECTIONS:
@@ -1005,10 +1020,16 @@ def _InteractorStyle(plotter: Any, scheme: NavigationScheme) -> Any:  # noqa: N8
             if scheme == "cad":
                 self.StartDolly()
                 return
+            if scheme == "orbit":
+                # Links dreht, rechts schiebt — die Aufteilung von Bambu
+                # Studio, OrcaSlicer und PrusaSlicer.
+                self.StartPan()
+                return
             self.StartRotate()
 
         def _right_up(self, *_: Any) -> None:
             self.EndRotate()
             self.EndDolly()
+            self.EndPan()
 
     return Style()

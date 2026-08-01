@@ -12,12 +12,15 @@ from collections.abc import Sequence
 from typing import Any
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QDoubleSpinBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMenu,
@@ -41,6 +44,19 @@ from app.ui.palette import SEVERITY_ENCODING
 #: Zeichen je Schweregrad, aus der gemeinsamen Kodierung — Farbe steht nie
 #: allein (§19.1).
 SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items()}
+
+#: Farbe der zurückgenommenen Schritte im Verlauf — dieselbe wie für einen
+#: verworfenen Chatbeitrag, und aus demselben Grund.
+UNDONE_COLOUR = "#7a828c"
+
+
+def _severity_label(severity: str) -> str:
+    """Der Schweregrad als Wort — die Filterzeile zeigt beides (Regel 18)."""
+    return {
+        "error": tr("Fehler"),
+        "warning": tr("Warnung"),
+        "info": tr("Hinweis"),
+    }.get(severity, severity)
 
 
 def origin_label(source: str) -> str:
@@ -239,6 +255,29 @@ class ObjectTree(QWidget):
         value: str | None = items[0].data(1, Qt.ItemDataRole.UserRole)
         return value
 
+    def step_selection(self, forward: bool = True) -> None:
+        """Zum nächsten Körper weiterschalten (§19.2).
+
+        Reihum: hinter dem letzten kommt wieder der erste. Ohne den Umlauf
+        endet das Durchblättern am Rand, und wer einen Körper sucht, muss
+        wissen, in welche Richtung er liegt.
+        """
+        count = self.tree.topLevelItemCount()
+        if not count:
+            return
+        chosen = self.selected_objects()
+        current = -1
+        if chosen:
+            for index in range(count):
+                item = self.tree.topLevelItem(index)
+                if item is not None and item.data(0, Qt.ItemDataRole.UserRole) == chosen[0]:
+                    current = index
+                    break
+        target = self.tree.topLevelItem((current + (1 if forward else -1)) % count)
+        if target is not None:
+            self.tree.setCurrentItem(target)
+            self.tree.scrollToItem(target)
+
     def select_object(self, object_id: ObjectId) -> None:
         """Wählt einen Körper von außen aus — der Fehlerdialog tut das, wenn er
         zeigt, worum es ging."""
@@ -400,7 +439,20 @@ class HistoryPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.list)
 
-    def show_document(self, document: Document, stopped_at: int | None = None) -> None:
+    def show_document(
+        self,
+        document: Document,
+        stopped_at: int | None = None,
+        undone: Sequence[Any] = (),
+    ) -> None:
+        """Der Verlauf, und was ein Redo zurückholen würde.
+
+        Zurückgenommene Transaktionen verschwanden hier spurlos: der Verlauf
+        endete beim aktuellen Stand, und ob es noch etwas wiederherzustellen
+        gab, verriet nur der Zustand des Menüeintrags. Sie stehen jetzt unten,
+        durchgestrichen und ausgegraut — wie ein verworfener Chatbeitrag, und
+        aus demselben Grund: es ist passiert, es gilt nur gerade nicht (§26.3).
+        """
         self.list.clear()
         titles = {entry.id: entry.op for entry in document.ops}
         for transaction in document.transactions:
@@ -422,6 +474,16 @@ class HistoryPanel(QWidget):
                     child = QListWidgetItem(f"    {op_id}  {titles.get(op_id, '')}")
                     child.setData(Qt.ItemDataRole.UserRole, op_id)
                     self.list.addItem(child)
+
+        for transaction in reversed(list(undone)):
+            item = QListWidgetItem(f"{transaction.title}  ({tr('zurückgenommen')})")
+            font = QFont(item.font())
+            font.setStrikeOut(True)
+            item.setFont(font)
+            item.setForeground(QColor(UNDONE_COLOUR))
+            item.setToolTip(tr("Ein Wiederholen holt diesen Schritt zurück."))
+            self.list.addItem(item)
+
         self.list.scrollToBottom()
 
     def _on_activated(self, item: QListWidgetItem) -> None:
@@ -449,16 +511,53 @@ class ReportPanel(QWidget):
         self.summary = QLabel(tr("Keine Befunde."), self)
         self.summary.setWordWrap(True)
 
+        # Ein Bericht mit hundert Hinweisen und zwei Fehlern versteckt die zwei.
+        # Gefiltert wird über den Text und über den Schweregrad; beides
+        # zusammen, weil „Wandstärke" und „nur die Fehler" verschiedene Fragen
+        # sind (§17.3).
+        self.search = QLineEdit(self)
+        self.search.setPlaceholderText(tr("Befunde durchsuchen …"))
+        self.search.textChanged.connect(self._refilter)
+        self.severity = QComboBox(self)
+        self.severity.addItem(tr("Alle"), "")
+        for name in ("error", "warning", "info"):
+            self.severity.addItem(f"{SEVERITY_MARKER[name]} {_severity_label(name)}", name)
+        self.severity.currentIndexChanged.connect(self._refilter)
+
+        filter_row = QHBoxLayout()
+        filter_row.setContentsMargins(0, 0, 0, 0)
+        filter_row.addWidget(self.search, stretch=1)
+        filter_row.addWidget(self.severity)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.addWidget(self.summary)
+        layout.addLayout(filter_row)
         layout.addWidget(self.list)
+
+    def _refilter(self) -> None:
+        """Blendet aus, was nicht passt — gelöscht wird nichts.
+
+        Die Zählung über der Liste bleibt die des ganzen Berichts: eine
+        Filterzeile, die auch die Zusammenfassung filtert, verschweigt, dass es
+        noch etwas anderes gibt.
+        """
+        query = self.search.text().casefold()
+        wanted = str(self.severity.currentData() or "")
+        for row in range(self.list.count()):
+            item = self.list.item(row)
+            finding: Finding = item.data(Qt.ItemDataRole.UserRole)
+            matches = (not query or query in str(finding.message).casefold()) and (
+                not wanted or finding.severity == wanted
+            )
+            item.setHidden(not matches)
 
     def show_result(self, result: EvaluationResult | None) -> None:
         self.list.clear()
         for finding in result.scene.report.findings if result else ():
             self._append(finding)
         self._count_up()
+        self._refilter()
 
     def add_findings(self, findings: list[Finding]) -> None:
         """Hängt Befunde an, die nicht aus der Auswertung kamen — die
@@ -468,6 +567,7 @@ class ReportPanel(QWidget):
         for finding in findings:
             self._append(finding)
         self._count_up()
+        self._refilter()
         self.list.scrollToBottom()
 
     def _append(self, finding: Finding) -> None:

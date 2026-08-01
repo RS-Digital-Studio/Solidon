@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QFrame,
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -93,6 +94,8 @@ class StartScreen(QWidget):
     newRequested = Signal()
     browseRequested = Signal()
     fileDropped = Signal(Path)
+    forgetRequested = Signal(Path)
+    """Ein Eintrag soll aus der Liste verschwinden — die Datei bleibt."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -103,6 +106,10 @@ class StartScreen(QWidget):
 
         self.recent_list = QListWidget(self)
         self.recent_list.itemActivated.connect(self._on_recent)
+        # Zehn Einträge, und was einmal darin stand, blieb bis es hinausrutschte:
+        # ein Versuchsprojekt hielt sich länger als das Interesse daran.
+        self.recent_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.recent_list.customContextMenuRequested.connect(self._on_recent_menu)
 
         # §37.2: die Beispielprojekte sind Inhalt des Startbildschirms und kein
         # Ordner, den jemand suchen muss. Die Höhe richtet sich nach ihrer Zahl —
@@ -167,6 +174,19 @@ class StartScreen(QWidget):
         stored = item.data(Qt.ItemDataRole.UserRole)
         if stored:
             self.openRequested.emit(Path(stored))
+
+    def _on_recent_menu(self, position: QPoint) -> None:
+        """Einen Eintrag vergessen — die Datei selbst bleibt, wo sie ist."""
+        item = self.recent_list.itemAt(position)
+        stored = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        if not stored:
+            return
+        menu = QMenu(self)
+        action = menu.addAction(tr("Aus der Liste entfernen"))
+        action.triggered.connect(
+            lambda _checked=False, path=str(stored): self.forgetRequested.emit(Path(path))
+        )
+        menu.exec(self.recent_list.viewport().mapToGlobal(position))
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
         if accepted_path(event) is not None:

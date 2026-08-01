@@ -36,7 +36,8 @@ from app.ui.settings import UiSettings
 
 #: Die Bezeichnungen der Navigationsschemata (§2.9).
 NAVIGATION = {
-    "slicer": tr("Wie im Slicer — links wählt, rechts dreht"),
+    "slicer": tr("Wie in Cura — links wählt, rechts dreht"),
+    "orbit": tr("Wie in Bambu Studio, Orca und PrusaSlicer — links dreht"),
     "cad": tr("Wie im CAD — mittlere Taste dreht"),
     "blender": tr("Wie in Blender"),
 }
