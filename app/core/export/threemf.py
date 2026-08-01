@@ -1,31 +1,35 @@
-"""3MF with colour groups (Bauplan §20, §29).
+"""3MF mit Farbgruppen (Bauplan §20, §29).
 
-trimesh writes 3MF, but not the per-triangle material groups a multi-colour
-print needs. So the container is written here: the format is a ZIP with one XML
-inside, and the part that matters is fifteen lines of it.
+trimesh schreibt 3MF, aber nicht die Materialgruppen je Dreieck, die ein
+mehrfarbiger Druck braucht. Also wird der Container hier geschrieben: das
+Format ist ein ZIP mit einem XML darin, und der Teil, auf den es ankommt, sind
+fünfzehn Zeilen davon.
 
-The mapping is the one from §20: one material slot of the object becomes one
-entry in a ``basematerials`` group, and every triangle carries the index of its
-slot. That is what a slicer reads to know which filament a face belongs to.
+Die Zuordnung ist die aus §20: ein Materialslot des Objekts wird ein Eintrag
+in einer ``basematerials``-Gruppe, und jedes Dreieck trägt den Index seines
+Slots. Genau das liest ein Slicer, um zu wissen, zu welchem Filament eine
+Fläche gehört.
 
-Reading them back is here too, and for the same reason: trimesh parses the
-geometry of a 3MF but hands back a uniform grey. A file exported from here and
-opened again would lose exactly the thing this module was written for.
+Das Zurücklesen steht ebenfalls hier, aus demselben Grund: trimesh parst die
+Geometrie einer 3MF, gibt sie aber einheitlich grau zurück. Eine von hier
+exportierte und wieder geöffnete Datei verlöre genau das, wofür dieses Modul
+geschrieben wurde.
 
-The geometry is read here as well now, and that was not the plan. A 3MF from a
-slicer keeps its objects in separate files under ``3D/Objects/`` and references
-them from the build — the production extension. trimesh resolves a component
-that points into such a file to the *whole file* instead of to the one object it
-names, so a file with seventeen parts in one object file came out seventeen times
-over, every body stacked on a copy of itself. Measured on the model corpus: a
-nozzle of two bodies and 290 120 triangles arrived as four bodies and 580 240,
-with twice the volume — and so twice the material estimate and twice the print
-time. That is not a speed problem, so it is not fixed with a faster parser but
-with the right one.
+Die Geometrie wird inzwischen auch hier gelesen, und das war nicht der Plan.
+Eine 3MF aus einem Slicer hält ihre Objekte in getrennten Dateien unter
+``3D/Objects/`` und verweist aus dem Build darauf — die Production-Erweiterung.
+trimesh löst eine Komponente, die in so eine Datei zeigt, zur *ganzen Datei*
+auf statt zu dem einen Objekt, das sie benennt: eine Datei mit siebzehn Teilen
+in einer Objektdatei kam siebzehnmal heraus, jeder Körper auf einer Kopie
+seiner selbst gestapelt. Am Modellkorpus gemessen: eine Düse aus zwei Körpern
+und 290 120 Dreiecken kam als vier Körper und 580 240 an, mit doppeltem Volumen
+— und damit doppelter Materialschätzung und doppelter Druckzeit. Das ist kein
+Tempoproblem, also wird es nicht mit einem schnelleren Parser behoben, sondern
+mit dem richtigen.
 
-Written by hand rather than with a library because there is no library that
-does only this — and a 3MF writer that does everything else too would be a
-dependency for fifteen lines.
+Von Hand geschrieben statt mit einer Bibliothek, weil es keine gibt, die nur
+das tut — und ein 3MF-Schreiber, der alles andere auch kann, wäre eine
+Abhängigkeit für fünfzehn Zeilen.
 """
 
 from __future__ import annotations
@@ -54,36 +58,40 @@ MODEL_RELATIONSHIP = "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmod
 
 MODEL_PATH = "3D/3dmodel.model"
 
-#: Where a slicer writes the names of the parts. Not part of the format — the
-#: standard has a ``name`` attribute and these files leave it empty — but it is
-#: the only place "Wasserfall_4_TPU-Liner" is written down, and a scene of
-#: bodies called "object 7" is a scene nobody can work in. Read if present,
-#: shrugged off if not.
+#: Wo ein Slicer die Namen der Teile hinschreibt. Nicht Teil des Formats —
+#: der Standard hat ein ``name``-Attribut, und diese Dateien lassen es leer —
+#: aber es ist der einzige Ort, an dem „Wasserfall_4_TPU-Liner" notiert steht,
+#: und eine Szene aus Körpern namens „object 7" ist eine Szene, in der niemand
+#: arbeiten kann. Gelesen, wenn da; achselzuckend übergangen, wenn nicht.
 SETTINGS_PATH = "Metadata/model_settings.config"
 
-#: Suffixes a slicer leaves in a part name because the part came from a file.
+#: Endungen, die ein Slicer in einem Teilnamen stehen lässt, weil das Teil aus
+#: einer Datei kam.
 NAME_SUFFIXES = (".stl", ".3mf", ".obj", ".step", ".stp")
 
-#: Stand-in for counting, where only the names matter.
+#: Platzhalter fürs Zählen, wo nur die Namen zählen.
 _EMPTY = MeshData.of(trimesh.Trimesh())
 
-#: Colour a slot gets that has none. Grey, so nobody mistakes it for a choice.
+#: Farbe, die ein Slot ohne eigene bekommt. Grau, damit niemand sie für eine
+#: Wahl hält.
 DEFAULT_COLOUR = (0.72, 0.72, 0.72)
 
-#: How deep a component may reference other components. The format allows a
-#: tree, and a file that nests this far is broken rather than clever.
+#: Wie tief eine Komponente andere Komponenten referenzieren darf. Das Format
+#: erlaubt einen Baum, und eine Datei, die so tief verschachtelt, ist kaputt
+#: statt raffiniert.
 #:
-#: A depth limit alone is not enough against a cycle, which was worth measuring:
-#: two objects referencing each other with two components each have 2^32 paths
-#: through them, all of them 32 deep and none of them repeated — so the limit
-#: holds and the import never returns. Five hundred bytes of file. What actually
-#: stops it is refusing to enter an object that is already on the way there
-#: (§32: a limit says something, it does not hang).
+#: Eine Tiefengrenze allein reicht gegen einen Zyklus nicht, und das war eine
+#: Messung wert: zwei Objekte, die sich gegenseitig mit je zwei Komponenten
+#: referenzieren, haben 2^32 Pfade hindurch, alle 32 tief und keiner
+#: wiederholt — die Grenze hält also, und der Import kehrt nie zurück.
+#: Fünfhundert Byte Datei. Was es wirklich stoppt, ist die Weigerung, ein
+#: Objekt zu betreten, das schon auf dem Weg dorthin liegt (§32: eine Grenze
+#: sagt etwas, sie hängt nicht).
 MAX_DEPTH = 32
 
 
 def write(mesh: MeshData, slots: list[MaterialSlot] | None = None, name: str = "") -> bytes:
-    """One body as a 3MF container, with one material per slot."""
+    """Ein Körper als 3MF-Container, mit einem Material je Slot."""
     entries = _slots_for(mesh, slots)
     model = _model_xml(mesh, entries, name)
 
@@ -98,7 +106,7 @@ def write(mesh: MeshData, slots: list[MaterialSlot] | None = None, name: str = "
 
 @dataclass(frozen=True, slots=True)
 class Groups:
-    """The colour groups a 3MF file carries (§20, import)."""
+    """Die Farbgruppen, die eine 3MF-Datei trägt (§20, Import)."""
 
     slots: tuple[int, ...]
     """One slot index per triangle, in the order the file lists them."""
@@ -106,16 +114,18 @@ class Groups:
 
 
 def read(payload: bytes, faces: int) -> Groups | None:
-    """Read the material groups back out of a 3MF, or ``None`` when it has none.
+    """Liest die Materialgruppen aus einer 3MF zurück — oder ``None``, wenn
+    sie keine hat.
 
-    Only a file with a single mesh object is read: with several of them the
-    triangles are concatenated on the way in, and guessing the order they ended
-    up in would be worse than saying nothing. ``faces`` is what the loaded body
-    actually has — a mismatch means exactly that case.
+    Gelesen wird nur eine Datei mit einem einzigen Mesh-Objekt: bei mehreren
+    werden die Dreiecke auf dem Weg hinein aneinandergehängt, und die
+    Reihenfolge zu raten, in der sie gelandet sind, wäre schlechter, als nichts
+    zu sagen. ``faces`` ist das, was der geladene Körper wirklich hat — eine
+    Abweichung heißt genau dieser Fall.
 
-    The slot numbers come out as 0..n-1. 3MF knows positions in a group, not our
-    numbering, so a body whose only colour was slot 3 comes back as slot 0 with
-    its name and colour intact.
+    Die Slotnummern kommen als 0..n-1 heraus. 3MF kennt Positionen in einer
+    Gruppe, nicht unsere Nummerierung — ein Körper, dessen einzige Farbe Slot 3
+    war, kommt also als Slot 0 zurück, mit Namen und Farbe unversehrt.
     """
     try:
         with zipfile.ZipFile(BytesIO(payload)) as container:
@@ -147,7 +157,7 @@ def read(payload: bytes, faces: int) -> Groups | None:
     )
     used = sorted(set(assignment))
     if len(used) < 2:
-        return None  # one material for the whole body is not a group worth keeping
+        return None  # ein Material für den ganzen Körper ist keine Gruppe, die sich lohnt
     order = {position: index for index, position in enumerate(used)}
     return Groups(
         slots=tuple(order[entry] for entry in assignment),
@@ -161,7 +171,7 @@ def read(payload: bytes, faces: int) -> Groups | None:
 
 @dataclass(frozen=True, slots=True)
 class Part:
-    """One body of a 3MF build, with the place the file put it."""
+    """Ein Körper eines 3MF-Builds, mit dem Ort, an den die Datei ihn setzt."""
 
     name: str
     mesh: MeshData
@@ -169,18 +179,20 @@ class Part:
 
 
 def read_objects(payload: bytes) -> list[Part]:
-    """Every body the build places, each where the file puts it.
+    """Jeder Körper, den der Build platziert, jeder dort, wohin die Datei ihn
+    setzt.
 
-    An empty list means this is not a 3MF that can be read — the caller falls
-    back to the general loader rather than being handed an exception for a file
-    that another reader may well manage.
+    Eine leere Liste heißt: das ist keine 3MF, die sich hier lesen lässt — der
+    Aufrufer fällt auf den allgemeinen Loader zurück, statt für eine Datei eine
+    Ausnahme zu bekommen, die ein anderer Leser durchaus schaffen mag.
 
-    One body per leaf mesh, not one per build item. A slicer packs an assembly
-    as one item made of components, and those components *are* the separate
-    parts: housing, lid, spout, liner. Handing them over as a single welded body
-    would throw away exactly the division that makes them printable one at a
-    time — and it is the division the project needs anyway, for its own material
-    per body (§12) and its own plate (§25).
+    Ein Körper je Blatt-Mesh, nicht einer je Build-Element. Ein Slicer packt
+    eine Baugruppe als ein Element aus Komponenten, und diese Komponenten
+    *sind* die einzelnen Teile: Gehäuse, Deckel, Tülle, Liner. Sie als einen
+    verschweißten Körper zu übergeben würfe genau die Teilung weg, die sie
+    einzeln druckbar macht — und es ist die Teilung, die das Projekt ohnehin
+    braucht, für sein eigenes Material je Körper (§12) und seine eigene
+    Platte (§25).
     """
     parts: list[Part] = []
     for leaf in _leaves(payload):
@@ -203,19 +215,22 @@ def read_objects(payload: bytes) -> list[Part]:
 
 
 def count_objects(payload: bytes) -> int:
-    """How many bodies :func:`read_objects` would hand back.
+    """Wie viele Körper :func:`read_objects` zurückgäbe.
 
-    The stack hands out object ids before anything is computed (§11), so the
-    count has to be known before the geometry is. It walks the same tree without
-    turning a single triangle into a number — the coordinates are what costs, not
-    finding out that they are there.
+    Der Stapel vergibt Objekt-IDs, bevor irgendetwas gerechnet ist (§11) — die
+    Anzahl muss also bekannt sein, bevor es die Geometrie ist. Es läuft
+    denselben Baum ab, ohne ein einziges Dreieck in eine Zahl zu verwandeln:
+    die Koordinaten sind das, was kostet, nicht die Feststellung, dass es sie
+    gibt.
     """
     return len(_numbered([Part(name=leaf.name, mesh=_EMPTY) for leaf in _leaves(payload)]))
 
 
 @dataclass(frozen=True, slots=True)
 class _Leaf:
-    """One mesh the build reaches, and everything known about it on the way."""
+    """Ein Mesh, das der Build erreicht, und alles, was unterwegs über es
+    bekannt wurde.
+    """
 
     name: str
     node: ET.Element
@@ -224,7 +239,9 @@ class _Leaf:
 
 
 def _leaves(payload: bytes) -> list[_Leaf]:
-    """Walk the build and collect every mesh it reaches, in order."""
+    """Läuft den Build ab und sammelt jedes Mesh, das er erreicht, der Reihe
+    nach.
+    """
     try:
         with zipfile.ZipFile(BytesIO(payload)) as container:
             names = set(container.namelist())
@@ -263,10 +280,11 @@ def _leaves(payload: bytes) -> list[_Leaf]:
 
 
 def _numbered(parts: list[Part]) -> list[Part]:
-    """Tell apart bodies that came out with the same name.
+    """Hält Körper auseinander, die mit demselben Namen herauskamen.
 
-    Seventeen parts of one object file share whatever the object was called, and
-    an object tree with seventeen identical entries is a list, not a tree.
+    Siebzehn Teile einer Objektdatei teilen sich, wie auch immer das Objekt
+    hieß, und ein Objektbaum mit siebzehn identischen Einträgen ist eine Liste,
+    kein Baum.
     """
     seen: dict[str, int] = {}
     result: list[Part] = []
@@ -283,10 +301,11 @@ def _numbered(parts: list[Part]) -> list[Part]:
 
 
 def _titles(payload: bytes) -> dict[str, str]:
-    """Names the slicer wrote down, by object and by part id.
+    """Namen, die der Slicer notiert hat, nach Objekt und nach Part-ID.
 
-    A part id is what a component names, so the leaf gets the name of the file
-    it once was — which is the name somebody chose.
+    Eine Part-ID ist das, was eine Komponente benennt — das Blatt bekommt also
+    den Namen der Datei, die es einmal war, und das ist der Name, den jemand
+    gewählt hat.
     """
     try:
         config = ET.fromstring(payload)
@@ -306,7 +325,9 @@ def _titles(payload: bytes) -> dict[str, str]:
 
 
 def _without_suffix(name: str) -> str:
-    """``Wasserfall_4_TPU-Liner.stl`` is a part called Wasserfall_4_TPU-Liner."""
+    """``Wasserfall_4_TPU-Liner.stl`` ist ein Teil namens
+    Wasserfall_4_TPU-Liner.
+    """
     lowered = name.lower()
     for suffix in NAME_SUFFIXES:
         if lowered.endswith(suffix):
@@ -325,7 +346,9 @@ def _parts_of(
     depth: int,
     seen: frozenset[tuple[str, str]] = frozenset(),
 ) -> list[_Leaf]:
-    """The meshes one object contributes, with the transforms above it applied."""
+    """Die Meshes, die ein Objekt beiträgt, mit den Transformationen darüber
+    angewandt.
+    """
     if depth > MAX_DEPTH:
         _log.warning("3MF component nesting deeper than %d — stopped", MAX_DEPTH)
         return []
@@ -335,8 +358,9 @@ def _parts_of(
 
     entry = catalog.get(path, {}).get(identifier)
     if entry is None:
-        # A component that names an object nobody wrote down. Silently dropping
-        # the whole file over it would be worse than dropping the one body.
+        # Eine Komponente, die ein Objekt benennt, das niemand notiert hat. Die
+        # ganze Datei darüber still fallenzulassen wäre schlimmer, als den
+        # einen Körper fallenzulassen.
         _log.info("3MF references object %s in %s, which is not there", identifier, path)
         return []
 
@@ -362,9 +386,9 @@ def _parts_of(
         child = component.get("objectid")
         if child is None:
             continue
-        # The path of a component is where *its* object lives. Without this line
-        # every component of an external file resolves to the whole file, which
-        # is the multiplication this reader exists for.
+        # Der Pfad einer Komponente ist der Ort, an dem *ihr* Objekt lebt. Ohne
+        # diese Zeile löst jede Komponente einer externen Datei zur ganzen Datei
+        # auf — und das ist die Vervielfachung, für die es diesen Leser gibt.
         stated = component.get(f"{{{PRODUCTION_NAMESPACE}}}path")
         child_path = _inside(stated) if stated else path
         found.extend(
@@ -384,16 +408,17 @@ def _parts_of(
 
 
 def _inside(path: str | None) -> str:
-    """A part path as the container spells it.
+    """Ein Teilpfad, wie der Container ihn schreibt.
 
-    The format writes them absolute — ``/3D/Objects/lid.model`` — and a ZIP has
-    no root, so the leading slash has to go or every lookup misses.
+    Das Format schreibt sie absolut — ``/3D/Objects/lid.model`` — und ein ZIP
+    hat keine Wurzel: der führende Schrägstrich muss also weg, sonst geht jede
+    Suche daneben.
     """
     return (path or MODEL_PATH).lstrip("/")
 
 
 def _objects_in(model: ET.Element) -> dict[str, ET.Element]:
-    """Every object of one model file, by id."""
+    """Jedes Objekt einer Modelldatei, nach ID."""
     found: dict[str, ET.Element] = {}
     for entry in model.findall(f".//{{{CORE_NAMESPACE}}}object"):
         identifier = entry.get("id")
@@ -403,7 +428,7 @@ def _objects_in(model: ET.Element) -> dict[str, ET.Element]:
 
 
 def _mesh_from(node: ET.Element) -> MeshData | None:
-    """The triangles of one ``mesh`` node."""
+    """Die Dreiecke eines ``mesh``-Knotens."""
     vertices = node.find(f"{{{CORE_NAMESPACE}}}vertices")
     triangles = node.find(f"{{{CORE_NAMESPACE}}}triangles")
     if vertices is None or triangles is None or not len(triangles):
@@ -428,11 +453,12 @@ def _mesh_from(node: ET.Element) -> MeshData | None:
 def _groups_of(
     node: ET.Element, materials: dict[str, list[tuple[str, tuple[float, float, float]]]]
 ) -> Groups | None:
-    """The colour groups of one mesh — its own, not the file's (§20).
+    """Die Farbgruppen eines Meshes — seine eigenen, nicht die der
+    Datei (§20).
 
-    Per mesh rather than per file, which is what the older reader could not do:
-    it gave up as soon as a 3MF held more than one body, so a two-colour
-    assembly lost every colour it had.
+    Je Mesh statt je Datei, und genau das konnte der ältere Leser nicht: er gab
+    auf, sobald eine 3MF mehr als einen Körper hielt — eine zweifarbige
+    Baugruppe verlor also jede Farbe, die sie hatte.
     """
     if not materials:
         return None
@@ -448,7 +474,7 @@ def _groups_of(
     )
     used = sorted(set(assignment))
     if len(used) < 2:
-        return None  # one material for the whole body is not a group worth keeping
+        return None  # ein Material für den ganzen Körper ist keine Gruppe, die sich lohnt
     order = {position: index for index, position in enumerate(used)}
     return Groups(
         slots=tuple(order[entry] for entry in assignment),
@@ -461,7 +487,9 @@ def _groups_of(
 
 
 def _matrix(text: str | None) -> np.ndarray:
-    """A 3MF transform — twelve numbers, column-major 4x3 — as a 4x4 matrix."""
+    """Eine 3MF-Transformation — zwölf Zahlen, spaltenweise 4x3 — als
+    4x4-Matrix.
+    """
     if not text:
         return np.eye(4)
     parts = text.replace(",", " ").split()
@@ -478,7 +506,7 @@ def _matrix(text: str | None) -> np.ndarray:
 
 
 def _materials_in(model: ET.Element) -> dict[str, list[tuple[str, tuple[float, float, float]]]]:
-    """Every ``basematerials`` group, by id, in document order."""
+    """Jede ``basematerials``-Gruppe, nach ID, in Dokumentreihenfolge."""
     found: dict[str, list[tuple[str, tuple[float, float, float]]]] = {}
     for group in model.findall(f".//{{{CORE_NAMESPACE}}}basematerials"):
         identifier = group.get("id")
@@ -492,7 +520,7 @@ def _materials_in(model: ET.Element) -> dict[str, list[tuple[str, tuple[float, f
 
 
 def _rgb(text: str | None) -> tuple[float, float, float]:
-    """``#RRGGBB`` or ``#RRGGBBAA`` as three numbers; alpha does not print."""
+    """``#RRGGBB`` oder ``#RRGGBBAA`` als drei Zahlen; Alpha druckt nicht."""
     digits = (text or "").lstrip("#")
     if len(digits) not in (6, 8):
         return DEFAULT_COLOUR
@@ -504,7 +532,7 @@ def _rgb(text: str | None) -> tuple[float, float, float]:
 
 
 def _slots_for(mesh: MeshData, slots: list[MaterialSlot] | None) -> list[MaterialSlot]:
-    """Every slot the mesh actually uses, with a name and a colour."""
+    """Jeder Slot, den das Mesh wirklich benutzt, mit Namen und Farbe."""
     from app.core.geom.attributes import used_slots
 
     known = {entry.index: entry for entry in (slots or [])}

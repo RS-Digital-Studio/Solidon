@@ -1,18 +1,22 @@
-"""Flat outlines with a height (Bauplan §25, "SVG und DXF mit Extrusion").
+"""Flache Umrisse mit einer Höhe (Bauplan §25, „SVG und DXF mit
+Extrusion").
 
-A logo, a gasket, a front panel, a template traced from a photo: two dimensions
-plus a thickness is a large share of what gets printed, and the usual way there
-is a detour through a modelling program. This is the short way.
+Ein Logo, eine Dichtung, eine Frontplatte, eine von einem Foto abgezeichnete
+Schablone: zwei Dimensionen plus eine Dicke sind ein großer Teil dessen, was
+gedruckt wird, und der übliche Weg dahin ist ein Umweg über ein
+Modellierprogramm. Das hier ist der kurze Weg.
 
-Holes come out as holes. That sounds obvious and is the part that goes wrong in
-naive implementations — a contour inside another contour is a hole, and the
-nesting decides it, not the order the file lists them in. That work is trimesh's
-here, and it does it right.
+Löcher kommen als Löcher heraus. Das klingt selbstverständlich und ist der
+Teil, der in naiven Umsetzungen schiefgeht — eine Kontur in einer anderen
+Kontur ist ein Loch, und das entscheidet die Verschachtelung, nicht die
+Reihenfolge, in der die Datei sie aufzählt. Diese Arbeit gehört hier trimesh,
+und es macht sie richtig.
 
-**Units.** SVG has no reliable unit: a file says 100 and means pixels,
-millimetres or points depending on who wrote it. So the coordinates are read as
-millimetres and there is a target width to say otherwise — a guess dressed up as
-detection would be worse than a number somebody can see and change (§11.1).
+**Einheiten.** SVG hat keine verlässliche: eine Datei sagt 100 und meint
+Pixel, Millimeter oder Punkt, je nachdem wer sie geschrieben hat. Also werden
+die Koordinaten als Millimeter gelesen, und es gibt eine Zielbreite, um es
+anders zu sagen — eine als Erkennung verkleidete Vermutung wäre schlechter als
+eine Zahl, die jemand sieht und ändern kann (§11.1).
 """
 
 from __future__ import annotations
@@ -36,7 +40,7 @@ OUTLINE_SUFFIXES: tuple[str, ...] = (".svg", ".dxf")
 
 @dataclass(frozen=True, slots=True)
 class OutlineResult:
-    """The extruded body and what the outline looked like."""
+    """Der extrudierte Körper und wie der Umriss aussah."""
 
     mesh: MeshData
     contours: int
@@ -49,10 +53,10 @@ def is_outline(suffix: str) -> bool:
 
 
 def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> OutlineResult:
-    """Read a flat drawing and give it a thickness.
+    """Liest eine flache Zeichnung und gibt ihr eine Dicke.
 
-    ``width`` scales the whole outline so it comes out that wide; zero takes
-    the numbers in the file as millimetres.
+    ``width`` skaliert den ganzen Umriss so, dass er diese Breite bekommt;
+    null nimmt die Zahlen in der Datei als Millimeter.
     """
     if height <= EPS_GEOM:
         raise ValueError("an extrusion needs a positive height")
@@ -92,11 +96,11 @@ def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> O
     parts = [trimesh.creation.extrude_polygon(entry, height=height) for entry in polygons]
     body = parts[0] if len(parts) == 1 else trimesh.util.concatenate(parts)
     if abs(scale - 1.0) > EPS_GEOM:
-        # Only in the plane: the height was asked for in millimetres and does
-        # not shrink because the drawing was scaled to a width.
+        # Nur in der Ebene: die Höhe wurde in Millimetern verlangt und schrumpft
+        # nicht, weil die Zeichnung auf eine Breite skaliert wurde.
         body.apply_scale([scale, scale, 1.0])
-    # Onto the plate and centred: an outline drawn around some corner of a
-    # drawing sheet would otherwise land wherever that corner was.
+    # Auf die Platte und zentriert: ein Umriss, gezeichnet um irgendeine Ecke
+    # eines Zeichenblatts, landete sonst dort, wo diese Ecke war.
     body.apply_translation(-body.bounds[0] * [0, 0, 1] - [*body.centroid[:2], 0.0])
 
     _log.info("extruded %d contour(s) from %s", len(polygons), suffix)

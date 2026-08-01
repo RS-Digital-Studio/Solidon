@@ -1,17 +1,19 @@
-"""Reading G-code back (Bauplan §28.1, §28.2).
+"""G-Code zurücklesen (Bauplan §28.1, §28.2).
 
-The layer analysis (§22) searches and judges; the external slicer delivers the
-truth for the file that goes to the printer. This module reads that truth back:
-print time, material, **measured** support volume, layer count, warnings.
+Die Schichtanalyse (§22) sucht und beurteilt; der externe Slicer liefert die
+Wahrheit für die Datei, die zum Drucker geht. Dieses Modul liest diese Wahrheit
+zurück: Druckzeit, Material, **gemessenes** Stützvolumen, Schichtzahl,
+Warnungen.
 
-The relationship is the way round §28.2 describes it. The search runs internally
-over hundreds of candidates; the external run confirms the winner and gives the
-cost estimate. So this is not a second slicer, it is the final acceptance.
+Das Verhältnis ist herum, wie §28.2 es beschreibt. Die Suche läuft intern über
+hunderte Kandidaten; der externe Lauf bestätigt den Gewinner und liefert die
+Kostenschätzung. Das hier ist also kein zweiter Slicer, es ist die
+Endabnahme.
 
-Every number that comes out of here carries ``source="gcode"`` and is never
-mixed with an internal estimate (§22.5). Where the two differ by more than a
-sixth, that is a finding — and a hint that the layer analysis needs work, not a
-reason to quietly prefer one of them.
+Jede Zahl, die hier herauskommt, trägt ``source="gcode"`` und wird nie mit
+einer internen Schätzung vermischt (§22.5). Wo die zwei um mehr als ein
+Sechstel auseinanderliegen, ist das ein Befund — und ein Hinweis, dass die
+Schichtanalyse Arbeit braucht, kein Grund, eine von beiden still vorzuziehen.
 """
 
 from __future__ import annotations
@@ -37,11 +39,11 @@ FILAMENT_AREA = 2.405
 
 @dataclass(slots=True)
 class GcodeMetrics:
-    """What a sliced file says about itself.
+    """Was eine geslicete Datei über sich selbst sagt.
 
-    Everything optional: slicers write different comments, and a missing value
-    is missing — it is not zero. That distinction is the whole point of reading
-    the file rather than guessing from it.
+    Alles optional: Slicer schreiben verschiedene Kommentare, und ein
+    fehlender Wert fehlt — er ist nicht null. Genau diese Unterscheidung ist
+    der ganze Grund, die Datei zu lesen statt aus ihr zu raten.
     """
 
     slicer: str = ""
@@ -94,7 +96,7 @@ _WARNING = re.compile(r";\s*(?:WARNING|Warnung)[:\s]\s*(?P<text>.+)", re.IGNOREC
 
 
 def parse(text: str) -> GcodeMetrics:
-    """Read a G-code file. What is not in it stays unknown."""
+    """Liest eine G-Code-Datei. Was nicht darin steht, bleibt unbekannt."""
     metrics = GcodeMetrics()
     warnings: list[str] = []
 
@@ -146,7 +148,7 @@ def _number(value: str) -> float | None:
 
 
 def _seconds(value: str) -> float | None:
-    """``2h 14m 3s``, ``14m``, or plain seconds — all of them appear."""
+    """``2h 14m 3s``, ``14m``, oder nackte Sekunden — alles davon kommt vor."""
     plain = _number(value)
     if plain is not None:
         return plain

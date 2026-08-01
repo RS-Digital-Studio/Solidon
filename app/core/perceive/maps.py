@@ -1,16 +1,16 @@
-"""Analysis maps (Bauplan §18.4).
+"""Analysekarten (Bauplan §18.4).
 
-Seven ways of looking at the same body: how thick it is, where it overhangs,
-where the mesh is broken, how it curves, what the detection made of it, which
-fits it takes part in, and where support will grow.
+Sieben Arten, denselben Körper anzusehen: wie dick er ist, wo er überhängt, wo
+das Netz kaputt ist, wie er sich krümmt, was die Erkennung aus ihm gemacht
+hat, an welchen Passungen er beteiligt ist, und wo Stützen wachsen werden.
 
-The maps are computed here, not in the viewport. The surface only needs the
-numbers, the range and the unit — it paints them with the ramp from §19.1 and
-draws the legend. That keeps the maps testable without a window, and it keeps
-``core`` free of Qt.
+Die Karten werden hier gerechnet, nicht im Viewport. Die Oberfläche braucht
+nur die Zahlen, den Bereich und die Einheit — sie malt sie mit der Rampe aus
+§19.1 und zeichnet die Legende. Das hält die Karten ohne Fenster testbar, und
+es hält ``core`` frei von Qt.
 
-Every number carries ``source="internal"`` (§22.5). A support estimate from the
-layer analysis is not a measured value from G-code, and the legend says so.
+Jede Zahl trägt ``source="internal"`` (§22.5). Eine Stützschätzung aus der
+Schichtanalyse ist kein gemessener Wert aus G-Code, und die Legende sagt das.
 """
 
 from __future__ import annotations
@@ -46,26 +46,29 @@ _log = get_logger(__name__)
 
 MapKind = Literal["wall", "overhang", "defects", "curvature", "features", "fits", "support"]
 
-#: Above this a map is refused rather than computed for minutes (§31). The maps
-#: shoot one ray per triangle, and that cost grows with the square of the mesh.
+#: Darüber wird eine Karte abgelehnt statt minutenlang gerechnet (§31). Die
+#: Karten schießen einen Strahl je Dreieck, und diese Kosten wachsen mit dem
+#: Quadrat des Netzes.
 MAP_LIMIT_TRIANGLES = 120_000
 
-#: Everything steeper than this needs support — the line the rule set draws (§39).
+#: Alles Steilere braucht Stützen — die Linie, die die Regelsammlung
+#: zieht (§39).
 OVERHANG_LIMIT_DEGREES = 45.0
 
-#: Face categories of the defect map, in the order their values run.
+#: Flächenkategorien der Defektkarte, in der Reihenfolge ihrer Werte.
 DEFECT_LEVELS = ("in Ordnung", "offene Kante", "Non-Manifold")
 
-#: Face categories of the fit map.
+#: Flächenkategorien der Passungskarte.
 FIT_LEVELS = ("unbeteiligt", "Teil einer Passung", "Passung verletzt")
 
 
 @dataclass(frozen=True, slots=True)
 class AnalysisMap:
-    """One map over the triangles of a body.
+    """Eine Karte über die Dreiecke eines Körpers.
 
-    ``values`` holds one number per triangle. ``nan`` means "cannot say" — a ray
-    that left the body without hitting anything is not a thickness of zero.
+    ``values`` hält eine Zahl je Dreieck. ``nan`` heißt „kann ich nicht sagen" —
+    ein Strahl, der den Körper verlassen hat, ohne etwas zu treffen, ist keine
+    Dicke von null.
     """
 
     kind: MapKind
@@ -96,7 +99,7 @@ class AnalysisMap:
 
 
 class MapTooLarge(Exception):
-    """The body has more triangles than a map is willing to walk (§31)."""
+    """Der Körper hat mehr Dreiecke, als eine Karte abzulaufen bereit ist (§31)."""
 
     def __init__(self, triangles: int) -> None:
         super().__init__(f"{triangles} triangles exceed the map limit {MAP_LIMIT_TRIANGLES}")
@@ -121,7 +124,9 @@ def build(
     profile: Profile | None = None,
     scene: Scene | None = None,
 ) -> AnalysisMap:
-    """The one entry point the surface uses; the rest is the map itself."""
+    """Der eine Einstiegspunkt, den die Oberfläche benutzt; der Rest ist die
+    Karte selbst.
+    """
     mesh = _mesh_of(entry)
     if mesh.triangle_count > MAP_LIMIT_TRIANGLES:
         raise MapTooLarge(mesh.triangle_count)
@@ -143,30 +148,32 @@ def build(
 
 def _mesh_of(entry: SceneObject) -> MeshData:
     mesh = entry.mesh
-    if not isinstance(mesh, MeshData):  # pragma: no cover - only one kernel today
+    if not isinstance(mesh, MeshData):  # pragma: no cover - heute nur ein Kern
         raise TypeError("analysis maps need the trimesh backed mesh")
     return mesh
 
 
-# --- the voxel field both distance maps live on ---------------------------------
+# --- Das Voxelfeld, auf dem beide Abstandskarten leben ---------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class SolidField:
-    """The body as a filled raster, plus the distance to the outside per voxel.
+    """Der Körper als gefülltes Raster, plus der Abstand nach außen je Voxel.
 
-    Both distance maps need the same two questions answered — "is there material
-    here" and "how far is it to the surface" — and both answers are far cheaper
-    on a raster than as one ray per triangle: a ray per triangle grows with the
-    square of the mesh, this grows with the volume and does not care how fine the
-    mesh is.
+    Beide Abstandskarten brauchen dieselben zwei Fragen beantwortet — „ist hier
+    Material" und „wie weit ist es bis zur Oberfläche" — und beide Antworten
+    sind auf einem Raster weit billiger als mit einem Strahl je Dreieck: ein
+    Strahl je Dreieck wächst mit dem Quadrat des Netzes, das hier wächst mit
+    dem Volumen und schert sich nicht darum, wie fein das Netz ist.
 
-    The raster comes out of the same cross sections the layer analysis uses
-    (§22.1), not out of a mesh subdivision — a plate of twelve big triangles
-    would take minutes to subdivide and takes milliseconds to cut.
+    Das Raster kommt aus denselben Querschnitten, die die Schichtanalyse
+    benutzt (§22.1), nicht aus einer Netzunterteilung — eine Platte aus zwölf
+    großen Dreiecken bräuchte Minuten zum Unterteilen und braucht
+    Millisekunden zum Schneiden.
 
-    The price is resolution: everything read from this field is quantised to
-    ``pitch``, and the legend says so rather than pretending otherwise.
+    Der Preis ist die Auflösung: alles, was aus diesem Feld gelesen wird, ist
+    auf ``pitch`` quantisiert, und die Legende sagt das, statt etwas anderes
+    vorzugeben.
     """
 
     filled: Any
@@ -175,28 +182,30 @@ class SolidField:
     pitch: float
 
 
-#: The raster never gets finer than this many steps along the diagonal. A finer
-#: grid buys accuracy nobody can print and costs memory nobody wants to spend.
+#: Feiner als so viele Schritte entlang der Diagonale wird das Raster nie. Ein
+#: feineres Gitter kauft Genauigkeit, die niemand drucken kann, und kostet
+#: Speicher, den niemand ausgeben will.
 MAX_GRID_STEPS = 300
 
 
 def solid_field(mesh: MeshData, pitch: float | None = None) -> SolidField:
-    """Raster the body: which cells hold material and which do not."""
+    """Rastert den Körper: welche Zellen Material halten und welche nicht."""
     import shapely
 
     step = pitch if pitch is not None else default_pitch(mesh)
     low = np.asarray(mesh.bounds.minimum, dtype=float) - step
     high = np.asarray(mesh.bounds.maximum, dtype=float) + step
-    # One empty cell all around, so a walk that leaves the body always lands on
-    # something empty instead of falling off the raster.
+    # Ringsum eine leere Zelle, damit ein Lauf, der den Körper verlässt, immer
+    # auf etwas Leerem landet, statt vom Raster zu fallen.
     axes = [np.arange(low[axis], high[axis] + step, step) for axis in range(3)]
     filled = np.zeros(tuple(len(axis) for axis in axes), dtype=bool)
 
     grid_x, grid_y = np.meshgrid(axes[0], axes[1], indexing="ij")
     flat_x, flat_y = grid_x.ravel(), grid_y.ravel()
-    # Every height in one pass. Cutting layer by layer walked all the triangles
-    # once per layer — three hundred layers of a body with three hundred
-    # thousand triangles is where the wall map spent most of its time.
+    # Jede Höhe in einem Durchgang. Schicht für Schicht zu schneiden lief alle
+    # Dreiecke einmal je Schicht ab — dreihundert Schichten eines Körpers mit
+    # dreihunderttausend Dreiecken sind die Stelle, an der die Wandkarte die
+    # meiste Zeit verbrachte.
     for index, shape in enumerate(cross_sections(mesh, axes[2])):
         if shape is None or shape.is_empty:
             continue
@@ -211,13 +220,15 @@ def solid_field(mesh: MeshData, pitch: float | None = None) -> SolidField:
 
 
 def default_pitch(mesh: MeshData, extrusion_width: float = 0.42) -> float:
-    """Half an extrusion width, but never more steps than the raster allows."""
+    """Eine halbe Extrusionsbreite, aber nie mehr Schritte, als das Raster
+    zulässt.
+    """
     diagonal = float(mesh.bounds.diagonal)
     return max(extrusion_width / 2.0, diagonal / MAX_GRID_STEPS)
 
 
 def _indices(field: SolidField, points: Any) -> Any:
-    """World points as grid indices, clipped to the raster."""
+    """Weltpunkte als Rasterindizes, auf das Raster beschnitten."""
     raw = (np.asarray(points, dtype=float) - field.origin) / field.pitch
     indices = np.rint(raw).astype(int)
     upper = np.asarray(field.filled.shape) - 1
@@ -230,12 +241,14 @@ def _indices(field: SolidField, points: Any) -> Any:
 def wall_thickness_map(
     mesh: MeshData, minimum: float | None = None, pitch: float | None = None
 ) -> AnalysisMap:
-    """Thickness under every triangle: inwards along the normal to the far wall.
+    """Die Dicke unter jedem Dreieck: einwärts entlang der Normalen bis zur
+    gegenüberliegenden Wand.
 
-    The same question the measuring tool answers with a single ray (§18.3), so
-    clicking a spot and looking at the map give the same number — up to the grid
-    the map is sampled on. Where the walk finds no material at all the value is
-    ``nan``: an open surface has no thickness, and zero would be a lie.
+    Dieselbe Frage, die das Messwerkzeug mit einem einzelnen Strahl beantwortet
+    (§18.3) — eine Stelle anzuklicken und auf die Karte zu sehen gibt also
+    dieselbe Zahl, bis auf das Raster, auf dem die Karte abgetastet ist. Wo der
+    Lauf gar kein Material findet, ist der Wert ``nan``: eine offene Fläche hat
+    keine Dicke, und null wäre eine Lüge.
     """
     body = mesh.raw
     if not len(body.faces):
@@ -271,11 +284,11 @@ def wall_thickness_map(
 
 
 def _inward_thickness(body: trimesh.Trimesh, field: SolidField) -> list[float]:
-    """Walk inwards from every triangle until the material runs out."""
+    """Läuft von jedem Dreieck einwärts, bis das Material ausgeht."""
     centres = np.asarray(body.triangles_center, dtype=float)
     normals = np.asarray(body.face_normals, dtype=float)
 
-    # Nothing can be thicker than the body is long.
+    # Nichts kann dicker sein, als der Körper lang ist.
     steps = int(float(body.scale) / field.pitch) + 2
     reached = np.zeros(len(centres), dtype=float)
     inside = np.ones(len(centres), dtype=bool)
@@ -284,8 +297,9 @@ def _inward_thickness(body: trimesh.Trimesh, field: SolidField) -> list[float]:
         points = centres - normals * (field.pitch * (step + 0.5))
         indices = _indices(field, points)
         here = field.filled[indices[:, 0], indices[:, 1], indices[:, 2]]
-        # Once a walk has left the material it stops counting: what lies beyond
-        # the far wall belongs to the next wall, not to this one.
+        # Hat ein Lauf das Material einmal verlassen, hört er auf zu zählen: was
+        # jenseits der gegenüberliegenden Wand liegt, gehört zur nächsten Wand,
+        # nicht zu dieser.
         inside &= here
         if not inside.any():
             break
@@ -299,11 +313,11 @@ def _inward_thickness(body: trimesh.Trimesh, field: SolidField) -> list[float]:
 
 
 def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> AnalysisMap:
-    """Angle against the build direction, zero for a vertical wall (§18.4).
+    """Winkel gegen die Baurichtung, null bei einer senkrechten Wand (§18.4).
 
-    A wall parallel to Z is 0°, a ceiling facing straight down is 90°. Upward
-    facing triangles are not overhangs at all, so they stay at zero instead of
-    turning negative.
+    Eine Wand parallel zu Z ist 0°, eine Decke, die gerade nach unten schaut,
+    90°. Nach oben schauende Dreiecke sind gar keine Überhänge — sie bleiben
+    also bei null, statt negativ zu werden.
     """
     body = mesh.raw
     if not len(body.faces):
@@ -369,7 +383,9 @@ def defect_map(mesh: MeshData) -> AnalysisMap:
 
 
 def curvature_map(mesh: MeshData) -> AnalysisMap:
-    """Sharpest angle to a neighbour — edges stand out, fillets stay smooth."""
+    """Der schärfste Winkel zu einem Nachbarn — Kanten stechen hervor,
+    Verrundungen bleiben glatt.
+    """
     body = mesh.raw
     values = np.zeros(len(body.faces), dtype=float)
     pairs = np.asarray(body.face_adjacency)
@@ -390,11 +406,13 @@ def curvature_map(mesh: MeshData) -> AnalysisMap:
     )
 
 
-# --- what the detection saw -----------------------------------------------------
+# --- Was die Erkennung gesehen hat -----------------------------------------------
 
 
 def feature_map(mesh: MeshData, features: dict[FeatureId, Feature]) -> AnalysisMap:
-    """Every feature in its own level — "verstehen, was die KI sieht" (§18.4)."""
+    """Jedes Merkmal auf einer eigenen Stufe — „verstehen, was die KI
+    sieht" (§18.4).
+    """
     body = mesh.raw
     values = np.zeros(len(body.faces), dtype=float)
     names: list[str] = [str(_("ohne Merkmal"))]
@@ -420,7 +438,9 @@ def feature_map(mesh: MeshData, features: dict[FeatureId, Feature]) -> AnalysisM
 
 
 def fit_map(mesh: MeshData, entry: SceneObject, scene: Scene | None) -> AnalysisMap:
-    """Which triangles take part in a fit, and which of those are violated."""
+    """Welche Dreiecke an einer Passung teilnehmen, und welche davon verletzt
+    sind.
+    """
     body = mesh.raw
     values = np.zeros(len(body.faces), dtype=float)
     if scene is not None:
@@ -451,7 +471,9 @@ def fit_map(mesh: MeshData, entry: SceneObject, scene: Scene | None) -> Analysis
 
 
 def _violated_features(scene: Scene, object_id: ObjectId) -> set[FeatureId]:
-    """Features named by a fit finding — the report is the single source (§14)."""
+    """Merkmale, die ein Passungsbefund benennt — der Prüfbericht ist die
+    eine Quelle (§14).
+    """
     names: set[FeatureId] = set()
     for finding in scene.report.findings:
         if not finding.code.startswith("fit."):
@@ -463,7 +485,9 @@ def _violated_features(scene: Scene, object_id: ObjectId) -> set[FeatureId]:
 
 
 def fits_of(scene: Scene, object_id: ObjectId) -> tuple[Fit, ...]:
-    """Fits one object takes part in — used by the legend and the digest."""
+    """Passungen, an denen ein Objekt teilnimmt — benutzt von Legende und
+    Steckbrief.
+    """
     return tuple(fit for fit in scene.fits if object_id in (fit.a.object_id, fit.b.object_id))
 
 
@@ -471,12 +495,13 @@ def fits_of(scene: Scene, object_id: ObjectId) -> tuple[Fit, ...]:
 
 
 def support_map(mesh: MeshData, layer_height: float = 0.2) -> AnalysisMap:
-    """How tall the support column under each triangle would grow.
+    """Wie hoch die Stützsäule unter jedem Dreieck wüchse.
 
-    The *judgement* — does this spot need support at all — comes from the layer
-    analysis (§22): a triangle counts only if its centre falls into a layer's
-    unsupported region. The *height* is the drop below it. Both are estimates
-    from this application, never numbers measured from G-code (§22.5).
+    Das *Urteil* — braucht diese Stelle überhaupt Stützen — kommt aus der
+    Schichtanalyse (§22): ein Dreieck zählt nur, wenn seine Mitte in den
+    ungestützten Bereich einer Schicht fällt. Die *Höhe* ist der Abfall
+    darunter. Beides sind Schätzungen dieser Anwendung, nie aus G-Code gemessene
+    Zahlen (§22.5).
     """
     body = mesh.raw
     if not len(body.faces):
@@ -513,7 +538,7 @@ def support_map(mesh: MeshData, layer_height: float = 0.2) -> AnalysisMap:
 
 
 def _overhang_regions(result: SliceResult) -> list[tuple[float, list[Any]]]:
-    """Layer height and its unsupported contours, as shapely shapes."""
+    """Schichthöhe und ihre ungestützten Konturen, als shapely-Formen."""
     regions: list[tuple[float, list[Any]]] = []
     for layer in result.layers:
         shapes = [
@@ -541,20 +566,23 @@ def _inside(shapes: list[Any], x: float, y: float) -> bool:
 
 
 def _drop_below(mesh: MeshData, field: SolidField, centres: Any) -> Any:
-    """How far it is straight down to the next material, or to the build plate.
+    """Wie weit es senkrecht nach unten bis zum nächsten Material geht — oder
+    bis zur Druckplatte.
 
-    Read off the same raster the thickness map uses: in every column the highest
-    filled voxel below the triangle is where a support column would land.
+    Vom selben Raster abgelesen, das die Dickenkarte benutzt: in jeder Säule
+    ist das höchste gefüllte Voxel unter dem Dreieck die Stelle, an der eine
+    Stützsäule aufsetzte.
     """
     filled = field.filled
     height = filled.shape[2]
     ladder = np.arange(height).reshape(1, 1, height)
-    # Highest filled voxel at or below each level, per column; -1 where none is.
+    # Höchstes gefülltes Voxel auf oder unter jeder Ebene, je Säule; -1, wo es
+    # keines gibt.
     below = np.maximum.accumulate(np.where(filled, ladder, -1), axis=2)
 
     indices = _indices(field, centres)
     rows, columns, layers = indices[:, 0], indices[:, 1], indices[:, 2]
-    # Two voxels down, so the triangle does not find the wall it sits on.
+    # Zwei Voxel tiefer, damit das Dreieck nicht die Wand findet, auf der es sitzt.
     start = np.maximum(layers - 2, 0)
     landing = below[rows, columns, start]
 
@@ -568,7 +596,9 @@ def _drop_below(mesh: MeshData, field: SolidField, centres: Any) -> Any:
 
 
 def focus_point(entry: SceneObject, analysis: AnalysisMap) -> Vec3 | None:
-    """Centre of what the map highlights — where the camera should look (§18.4)."""
+    """Die Mitte dessen, was die Karte hervorhebt — wohin die Kamera schauen
+    soll (§18.4).
+    """
     if not analysis.highlighted:
         return None
     mesh = _mesh_of(entry)
@@ -579,7 +609,9 @@ def focus_point(entry: SceneObject, analysis: AnalysisMap) -> Vec3 | None:
 
 
 def location_of(entry: SceneObject, finding: Finding) -> Vec3 | None:
-    """Where a finding sits: its own location, or the centre of its features."""
+    """Wo ein Befund sitzt: an seinem eigenen Ort, oder in der Mitte seiner
+    Merkmale.
+    """
     if finding.location is not None:
         return finding.location
     mesh = _mesh_of(entry)
@@ -595,7 +627,9 @@ def location_of(entry: SceneObject, finding: Finding) -> Vec3 | None:
 
 
 def map_for(finding: Finding) -> MapKind | None:
-    """Which map explains a finding — the shortest way from warning to place (§18.4)."""
+    """Welche Karte einen Befund erklärt — der kürzeste Weg von der Warnung
+    zur Stelle (§18.4).
+    """
     code = finding.code
     if code.startswith("fit."):
         return "fits"

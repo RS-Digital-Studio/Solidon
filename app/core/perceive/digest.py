@@ -1,13 +1,13 @@
-"""The scene digest for the agent (Bauplan §23).
+"""Der Steckbrief der Szene für den Agenten (Bauplan §23).
 
-What the agent gets to see, in words: objects with their dimensions, features
-with their names, the parameters, the current selection, the stack in short
-form. The agent refers to these names and never to coordinates (Leitprinzip 5),
-so this text is the vocabulary the whole conversation runs on.
+Was der Agent zu sehen bekommt, in Worten: Objekte mit ihren Maßen, Merkmale
+mit ihren Namen, die Parameter, die aktuelle Auswahl, der Stapel in Kurzform.
+Der Agent bezieht sich auf diese Namen und nie auf Koordinaten (Leitprinzip
+5) — dieser Text ist also das Vokabular, auf dem das ganze Gespräch läuft.
 
-It is written for reading. A wall of JSON would carry the same facts and be
-harder to reason about — for the model as much as for the person checking what
-the model was told.
+Er ist zum Lesen geschrieben. Eine Wand aus JSON trüge dieselben Fakten und
+wäre schwerer zu durchdenken — für das Modell so gut wie für den Menschen, der
+nachsieht, was dem Modell gesagt wurde.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ def digest(
     document: Document | None = None,
     selection: tuple[ObjectId, str] | None = None,
 ) -> str:
-    """The whole scene in the form §23 describes."""
+    """Die ganze Szene in der Form, die §23 beschreibt."""
     lines: list[str] = [_scene_line(scene)]
 
     if scene.parameters:
@@ -70,8 +70,8 @@ def _object_lines(object_id: ObjectId, entry: SceneObject) -> list[str]:
     if on_bed:
         facts.append(on_bed)
     if entry.material:
-        # Only when it differs from the project's — the scene line already says
-        # that one, and repeating it on every body would be noise (§26.1).
+        # Nur, wenn es vom Projektmaterial abweicht — die Szenenzeile nennt
+        # jenes bereits, und es an jedem Körper zu wiederholen wäre Rauschen (§26.1).
         facts.append(entry.material)
 
     lines = [f'{object_id}  "{entry.name}"  ' + ", ".join(facts)]
@@ -81,13 +81,14 @@ def _object_lines(object_id: ObjectId, entry: SceneObject) -> list[str]:
 
 
 def _feature_line(feature_id: str, feature: Feature) -> str:
-    """One feature, with where it is.
+    """Ein Merkmal, mit dem Ort, an dem es sitzt.
 
-    The position was missing here, and it made the digest a description the agent
-    could not act on: it read the diameter and the axis of a bore and had nothing
-    to say where the bore was. For "put a part at hole_1" the name suffices, and
-    for "drill beside it" it does not. The surface has known the position since it
-    can be clicked (§18.5) — the agent sees only this text (§26.1).
+    Die Position fehlte hier, und das machte den Steckbrief zu einer
+    Beschreibung, auf die der Agent nicht handeln konnte: er las Durchmesser
+    und Achse einer Bohrung und hatte nichts, was sagte, *wo* sie ist. Für
+    „setz einen Baustein an hole_1" reicht der Name, für „bohr daneben"
+    nicht. Die Oberfläche kennt die Position, seit sie anklickbar ist (§18.5)
+    — der Agent sieht nur diesen Text (§26.1).
     """
     params = feature.params
     at = _place(params.get("centre"))
@@ -121,7 +122,7 @@ def _place(centre: object) -> str:
 
 
 def _axis_name(vector: tuple[float, float, float]) -> str:
-    """Turn a direction into something readable: +Z rather than (0, 0, 1)."""
+    """Macht aus einer Richtung etwas Lesbares: +Z statt (0, 0, 1)."""
     names = ("X", "Y", "Z")
     largest = max(range(3), key=lambda index: abs(vector[index]))
     sign = "+" if vector[largest] >= 0 else "-"
@@ -129,8 +130,9 @@ def _axis_name(vector: tuple[float, float, float]) -> str:
 
 
 def _finding_lines(scene: Scene) -> list[str]:
-    """Warnings and notes belong in the digest — the agent has to know what it
-    is standing on (§17.3, §26.1)."""
+    """Warnungen und Hinweise gehören in den Steckbrief — der Agent muss
+    wissen, worauf er steht (§17.3, §26.1).
+    """
     lines: list[str] = []
     for finding in scene.report.findings:
         if finding.severity == "info":

@@ -1,16 +1,18 @@
-"""Feature detection (Bauplan §21.1).
+"""Merkmalserkennung (Bauplan §21.1).
 
-What an STL does not say, this module works out: where the bores are, which
-faces are flat, where the mesh is open. That vocabulary is what makes the rest
-possible — the context menu on a bore, the agent that says "the hole on the top
-face" instead of coordinates, the fit between a pin and its hole.
+Was ein STL nicht sagt, arbeitet dieses Modul heraus: wo die Bohrungen sind,
+welche Flächen eben sind, wo das Netz offen ist. Dieses Vokabular macht den
+Rest erst möglich — das Kontextmenü an einer Bohrung, den Agenten, der „das
+Loch auf der Oberseite" sagt statt Koordinaten, die Passung zwischen einem
+Stift und seinem Loch.
 
-Bores are found by fitting a cylinder rather than by looking for round edges:
-a fit has an axis, a radius and a residual, so the answer can be judged instead
-of believed. Faces come from coplanar patches, open edges from the mesh itself.
+Bohrungen werden gefunden, indem ein Zylinder eingepasst wird, nicht indem
+nach runden Kanten gesucht wird: eine Einpassung hat eine Achse, einen Radius
+und einen Restfehler — die Antwort lässt sich also beurteilen statt glauben.
+Flächen kommen aus koplanaren Flecken, offene Kanten aus dem Netz selbst.
 
-Nothing here guesses in silence. What does not fit a shape simply is not a
-feature, and the digest says how many were found.
+Nichts hier rät im Stillen. Was zu keiner Form passt, ist schlicht kein
+Merkmal, und der Steckbrief sagt, wie viele gefunden wurden.
 """
 
 from __future__ import annotations
@@ -28,14 +30,15 @@ from app.core.units import EPS_GEOM
 
 _log = get_logger(__name__)
 
-#: How well a patch has to fit a cylinder to count as a bore: the radius may
-#: scatter by this share before the fit is rejected.
+#: Wie gut ein Fleck zu einem Zylinder passen muss, um als Bohrung zu zählen:
+#: der Radius darf um diesen Anteil streuen, bevor die Einpassung abgelehnt wird.
 CYLINDER_TOLERANCE = 0.08
 
-#: A patch needs at least this many triangles to be judged at all.
+#: Ein Fleck braucht mindestens so viele Dreiecke, um überhaupt beurteilt zu
+#: werden.
 MIN_PATCH_FACES = 6
 
-#: Faces smaller than this share of the largest one are not reported separately.
+#: Flächen unter diesem Anteil der größten werden nicht eigens gemeldet.
 MIN_FACE_SHARE = 0.02
 
 #: …und unter dieser absoluten Größe erst recht nicht, egal wie groß der Rest ist.
@@ -59,15 +62,16 @@ MIN_FACE_AREA = 4.0
 #: eine Achse herumstehen.
 MIN_HOLE_DIAMETER = 0.5
 
-#: …unless they are made of at least this many coplanar triangles. A cylinder
-#: cap comes out of the kernel as one triangle per segment, so counting them is
-#: what tells a small flat face apart from a slice of a curved one.
+#: … außer sie bestehen aus mindestens so vielen koplanaren Dreiecken. Ein
+#: Zylinderdeckel kommt aus dem Kern als ein Dreieck je Segment — sie zu zählen
+#: ist also das, was eine kleine ebene Fläche von einer Scheibe einer gekrümmten
+#: unterscheidet.
 MIN_FLAT_FACES = 8
 
 
 @dataclass(frozen=True, slots=True)
 class CylinderFit:
-    """A cylinder fitted through a patch of triangles."""
+    """Ein Zylinder, eingepasst durch einen Fleck von Dreiecken."""
 
     axis: Vec3
     centre: Vec3
@@ -83,10 +87,10 @@ class CylinderFit:
 
 
 def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
-    """Everything this module can recognise, with stable names.
+    """Alles, was dieses Modul erkennen kann, mit stabilen Namen.
 
-    Bores and pins share their search (see :func:`_cylinders`), so asking for
-    both costs what asking for one used to.
+    Bohrungen und Stifte teilen ihre Suche (siehe :func:`_cylinders`) — beide
+    zu erfragen kostet also, was früher eines kostete.
     """
     found: dict[FeatureId, Feature] = {}
     for feature in [
@@ -104,19 +108,21 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
 
 
 def _cylinders(mesh: MeshData) -> list[tuple[CylinderFit, list[int]]]:
-    """Every cylindrical patch of the body, fitted once.
+    """Jeder zylindrische Fleck des Körpers, einmal eingepasst.
 
-    Bores and pins are the same search read two ways, and the search is the
-    expensive half: on a body of a million triangles the facets and the
-    connected patches cost seconds. Doing it twice doubled the detection time
-    for nothing, so it happens here and both callers filter the result.
+    Bohrungen und Stifte sind dieselbe Suche, zweimal gelesen, und die Suche
+    ist die teure Hälfte: an einem Körper mit einer Million Dreiecken kosten
+    die Facetten und die zusammenhängenden Flecken Sekunden. Sie zweimal zu
+    machen verdoppelte die Erkennungszeit für nichts — also passiert sie hier,
+    und beide Aufrufer filtern das Ergebnis.
     """
     body = mesh.raw
     if not len(body.faces):
         return []
 
-    # A bore wall is made of many narrow flat segments, so "belongs to a facet"
-    # is not the dividing line — "belongs to a *large* facet" is.
+    # Eine Bohrungswand besteht aus vielen schmalen ebenen Segmenten — „gehört zu
+    # einer Facette" ist also nicht die Trennlinie, „gehört zu einer *großen*
+    # Facette" schon.
     planar = _large_facet_faces(body)
     curved = [index for index in range(len(body.faces)) if index not in planar]
     if not curved:
@@ -130,7 +136,8 @@ def _cylinders(mesh: MeshData) -> list[tuple[CylinderFit, list[int]]]:
         if fit is not None and fit.good:
             found.append((fit, patch))
 
-    # Sorted by position, so the numbering is reproducible for the same body.
+    # Nach Position sortiert, damit die Nummerierung für denselben Körper
+    # reproduzierbar ist.
     found.sort(key=lambda entry: (round(entry[0].centre[0], 3), round(entry[0].centre[1], 3)))
     return found
 
@@ -163,12 +170,12 @@ def detect_holes(mesh: MeshData) -> list[Feature]:
 
 
 def detect_pins(mesh: MeshData) -> list[Feature]:
-    """Cylindrical patches whose normals point outwards (§21.1).
+    """Zylindrische Flecken, deren Normalen nach außen zeigen (§21.1).
 
-    The same fit as a bore, read the other way round. It is worth having for
-    one reason: a pin is what a bore is paired with (§14), and a fit needs both
-    ends. Auto split names the pins it makes itself — this is for the part that
-    came from somewhere else.
+    Dieselbe Einpassung wie bei einer Bohrung, andersherum gelesen. Sie lohnt
+    aus einem Grund: ein Stift ist das, womit eine Bohrung gepaart wird (§14),
+    und eine Passung braucht beide Enden. Auto Split benennt die Stifte, die es
+    selbst macht — dieser hier ist für das Teil, das von woanders kam.
     """
     body = mesh.raw
     found = [entry for entry in _cylinders(mesh) if not entry[0].inward]
@@ -191,14 +198,16 @@ def detect_pins(mesh: MeshData) -> list[Feature]:
 
 
 def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
-    """Triangles that belong to a flat patch big enough to be a face of its own.
+    """Dreiecke, die zu einem ebenen Fleck gehören, der groß genug für eine
+    eigene Fläche ist.
 
-    Two ways to qualify, and the second one is not decoration. Area alone is
-    measured against the largest face of the body, and on a plate with a pin on
-    it the pin's top face is under two percent of the plate — so it counted as
-    curved, joined the pin's wall, and the cylinder fit over wall-plus-cap came
-    out as nothing at all. A patch of many coplanar triangles is a face whatever
-    its size next to the rest of the part.
+    Zwei Wege sich zu qualifizieren, und der zweite ist keine Zierde. Die
+    Fläche allein wird gegen die größte Fläche des Körpers gemessen, und auf
+    einer Platte mit einem Stift darauf ist die Stiftoberseite unter zwei
+    Prozent der Platte — sie zählte also als gekrümmt, schloss sich der
+    Stiftwand an, und die Zylinder-Einpassung über Wand-plus-Deckel kam als gar
+    nichts heraus. Ein Fleck aus vielen koplanaren Dreiecken ist eine Fläche,
+    egal welche Größe er neben dem Rest des Teils hat.
     """
     facets = list(body.facets)
     if not facets:
@@ -214,10 +223,10 @@ def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
 
 
 def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
-    """Least-squares cylinder through a patch of triangles.
+    """Kleinste-Quadrate-Zylinder durch einen Fleck von Dreiecken.
 
-    The axis is the direction every normal is perpendicular to — the eigenvector
-    of the normal covariance with the smallest eigenvalue.
+    Die Achse ist die Richtung, auf der jede Normale senkrecht steht — der
+    Eigenvektor der Normalen-Kovarianz mit dem kleinsten Eigenwert.
     """
     normals = np.asarray(body.face_normals[patch], dtype=float)
     centres = np.asarray(body.triangles_center[patch], dtype=float)
@@ -226,7 +235,7 @@ def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
     axis = vectors[:, 0]
     axis = axis / float(np.linalg.norm(axis))
 
-    # Project into the plane perpendicular to the axis and fit a circle there.
+    # In die Ebene senkrecht zur Achse projizieren und dort einen Kreis einpassen.
     basis_u, basis_v = _plane_basis(axis)
     flat = np.column_stack([centres @ basis_u, centres @ basis_v])
     centre_2d, radius = _fit_circle(flat)
@@ -261,7 +270,9 @@ def _plane_basis(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
-    """Algebraic circle fit (Kåsa): linear, stable enough for a drilled hole."""
+    """Algebraische Kreiseinpassung (Kåsa): linear, stabil genug für ein
+    gebohrtes Loch.
+    """
     matrix = np.column_stack([points[:, 0], points[:, 1], np.ones(len(points))])
     target = points[:, 0] ** 2 + points[:, 1] ** 2
     solution, *_ = np.linalg.lstsq(matrix, target, rcond=None)
@@ -271,14 +282,18 @@ def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
 
 
 def _patch_extent(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> float:
-    """How far the patch reaches along its own axis — the depth of the bore."""
+    """Wie weit der Fleck entlang seiner eigenen Achse reicht — die Tiefe der
+    Bohrung.
+    """
     points = np.asarray(body.vertices[np.unique(body.faces[patch])], dtype=float)
     along = points @ np.asarray(axis, dtype=float)
     return float(along.max() - along.min())
 
 
 def _is_through(mesh: MeshData, fit: CylinderFit) -> bool:
-    """A bore is through when it is as deep as the body is thick along its axis."""
+    """Eine Bohrung ist durchgehend, wenn sie so tief ist, wie der Körper
+    entlang ihrer Achse dick ist.
+    """
     axis = np.asarray(fit.axis, dtype=float)
     corners = np.asarray(mesh.raw.vertices, dtype=float) @ axis
     thickness = float(corners.max() - corners.min())
@@ -299,7 +314,7 @@ def _bore_depth(mesh: MeshData, fit: CylinderFit) -> float:
 
 
 def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int]]:
-    """Group the given triangles into connected patches."""
+    """Gruppiert die gegebenen Dreiecke in zusammenhängende Flecken."""
     wanted = set(faces)
     adjacency = [
         pair for pair in np.asarray(body.face_adjacency) if pair[0] in wanted and pair[1] in wanted
@@ -324,8 +339,9 @@ def detect_faces(mesh: MeshData) -> list[Feature]:
 
     areas = [float(body.area_faces[facet].sum()) for facet in facets]
     largest = max(areas)
-    # The same threshold the bore detection uses, so a patch is either a face or
-    # part of a curved surface — never both, never neither.
+    # Dieselbe Schwelle, die die Bohrungserkennung benutzt — ein Fleck ist also
+    # entweder eine Fläche oder Teil einer gekrümmten Oberfläche, nie beides,
+    # nie keines.
     entries = [
         (facet, area)
         for facet, area in zip(facets, areas, strict=True)
@@ -370,7 +386,9 @@ def detect_faces(mesh: MeshData) -> list[Feature]:
 
 
 def detect_edge_loops(mesh: MeshData) -> list[Feature]:
-    """Open edges are defects, and knowing where they are is half the repair."""
+    """Offene Kanten sind Defekte, und zu wissen wo sie sind, ist die halbe
+    Reparatur.
+    """
     body = mesh.raw
     single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
     if not len(single):

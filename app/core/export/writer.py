@@ -1,12 +1,13 @@
-"""Export and the check that runs before it (Bauplan §29, §16.3).
+"""Export und die Prüfung, die davor läuft (Bauplan §29, §16.3).
 
-The check is a report, not a barrier: watertightness, build volume, wall
-thickness and the licence of the sources are stated, and whoever wants to export
-anyway can — they just know what they are doing.
+Die Prüfung ist ein Bericht, keine Sperre: Wasserdichtheit, Bauraum,
+Wandstärke und die Lizenz der Quellen werden genannt, und wer trotzdem
+exportieren will, kann das — er weiß dann nur, was er tut.
 
-The naming scheme matters more than it looks. Someone printing three parts wants
-to see which is which on the plate, so ``projekt_halterung_1von3.stl`` is the
-default, and object names are made file-system-safe without becoming unreadable.
+Das Namensschema zählt mehr, als es aussieht. Wer drei Teile druckt, will auf
+der Platte sehen, welches welches ist — also ist
+``projekt_halterung_1von3.stl`` die Vorgabe, und Objektnamen werden
+dateisystemtauglich gemacht, ohne unlesbar zu werden.
 """
 
 from __future__ import annotations
@@ -32,26 +33,26 @@ _log = get_logger(__name__)
 
 ExportFormat = Literal["stl", "3mf", "obj", "ply", "step"]
 
-#: What each format is written as. STL stays binary — ASCII would be five times
-#: the size for the same triangles.
+#: Als was jedes Format geschrieben wird. STL bleibt binär — ASCII wäre für
+#: dieselben Dreiecke fünfmal so groß.
 FORMAT_SUFFIX: dict[ExportFormat, str] = {
     "stl": ".stl",
     "3mf": ".3mf",
     "obj": ".obj",
     "ply": ".ply",
-    # §30: only a B-Rep object has anything to put in a STEP file. A mesh
-    # exported as STEP would be a STEP file full of triangles — legal, and a
-    # lie about what it contains.
+    # §30: nur ein B-Rep-Objekt hat etwas, das in eine STEP-Datei gehört. Ein
+    # als STEP exportiertes Netz wäre eine STEP-Datei voller Dreiecke — legal,
+    # und eine Lüge über ihren Inhalt.
     "step": ".step",
 }
 
-#: Default naming scheme (§29). ``{index}`` and ``{count}`` only appear when
-#: there is more than one part.
+#: Vorgabe-Namensschema (§29). ``{index}`` und ``{count}`` erscheinen nur,
+#: wenn es mehr als ein Teil gibt.
 DEFAULT_SCHEME = "{project}_{object}_{index}von{count}"
 SINGLE_SCHEME = "{project}_{object}"
 
-#: With more than one build plate the plate goes into the name (§25). Whoever
-#: takes the files to the printer needs to know which ones belong together.
+#: Bei mehr als einer Druckplatte kommt die Platte in den Namen (§25). Wer
+#: die Dateien zum Drucker trägt, muss wissen, welche zusammengehören.
 PLATE_SCHEME = "{project}_platte{plate}_{object}_{index}von{count}"
 
 _UNSAFE = re.compile(r"[^\w\-. ]+", re.UNICODE)
@@ -82,7 +83,7 @@ def safe_name(text: str, fallback: str = "teil") -> str:
 
 @dataclass(frozen=True, slots=True)
 class ExportEntry:
-    """One file about to be written."""
+    """Eine Datei, die gleich geschrieben wird."""
 
     object_id: str
     filename: str
@@ -99,14 +100,14 @@ class ExportEntry:
 
 @dataclass(frozen=True, slots=True)
 class ExportPlan:
-    """What would be written, and what the check found first."""
+    """Was geschrieben würde, und was die Prüfung vorher gefunden hat."""
 
     entries: tuple[ExportEntry, ...] = ()
     findings: tuple[Finding, ...] = field(default_factory=tuple)
 
     @property
     def blocked(self) -> bool:
-        """Never true — the check reports, it does not block (§29)."""
+        """Nie wahr — die Prüfung berichtet, sie blockiert nicht (§29)."""
         return False
 
 
@@ -119,7 +120,7 @@ def plan_export(
     scheme: str | None = None,
     sources: dict[str, Source] | None = None,
 ) -> ExportPlan:
-    """Work out the file names and run the pre-export check."""
+    """Ermittelt die Dateinamen und führt die Prüfung vor dem Export aus."""
     if not objects:
         raise ValidationError(
             field="objects",
@@ -167,7 +168,7 @@ def plan_export(
 def check_before_export(
     objects: list[SceneObject], profile: Profile, sources: dict[str, Source]
 ) -> list[Finding]:
-    """A report before writing, not a barrier (§29)."""
+    """Ein Bericht vor dem Schreiben, keine Sperre (§29)."""
     findings: list[Finding] = []
     meshes = [as_mesh_data(entry.mesh) for entry in objects]
 
@@ -197,7 +198,9 @@ def check_before_export(
 
 
 def _licence_findings(sources: dict[str, Source]) -> list[Finding]:
-    """§16.3: one factual note when a source carries a restriction. No lecture."""
+    """§16.3: ein sachlicher Hinweis, wenn eine Quelle eine Einschränkung
+    trägt. Keine Belehrung.
+    """
     restricted = [
         source for source in sources.values() if source.origin is not None and source.origin.licence
     ]
@@ -222,7 +225,7 @@ def _licence_findings(sources: dict[str, Source]) -> list[Finding]:
 def write_plan(
     plan: ExportPlan, directory: Path, export_format: ExportFormat = "stl"
 ) -> list[Path]:
-    """Write the planned files and return what was written."""
+    """Schreibt die geplanten Dateien und gibt zurück, was geschrieben wurde."""
     directory.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for entry in plan.entries:
@@ -242,11 +245,12 @@ def export_bytes(
     name: str = "",
     body: Mesh | None = None,
 ) -> bytes:
-    """One body in one format.
+    """Ein Körper in einem Format.
 
-    3MF is written here rather than by trimesh: it is the one format that
-    carries the material groups of §20, and trimesh does not write them. STEP
-    is written from the exact body, and only exists when there is one (§30).
+    3MF wird hier geschrieben statt von trimesh: es ist das eine Format, das
+    die Materialgruppen aus §20 trägt, und trimesh schreibt sie nicht. STEP
+    wird aus dem exakten Körper geschrieben und gibt es nur, wenn es einen
+    gibt (§30).
     """
     if export_format == "step":
         return _step_bytes(body)
@@ -259,7 +263,9 @@ def export_bytes(
 
 
 def _step_bytes(body: Mesh | None) -> bytes:
-    """STEP of an exact body — and a clear no when there is none (§30)."""
+    """STEP eines exakten Körpers — und ein klares Nein, wenn es keinen
+    gibt (§30).
+    """
     from app.core.brep import step as brep_step
 
     if body is None or not isinstance(body, BRepBody):
@@ -274,7 +280,7 @@ def _step_bytes(body: Mesh | None) -> bytes:
 
 
 def describe_plan(plan: ExportPlan) -> str:
-    """A short summary for the status bar and the command line."""
+    """Eine kurze Zusammenfassung für Statusleiste und Kommandozeile."""
     total = sum(entry.mesh.volume for entry in plan.entries) / 1000.0
     return (
         f"{len(plan.entries)} {tr('Dateien')} · "

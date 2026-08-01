@@ -1,17 +1,17 @@
-"""The analysis slicer (Bauplan §22).
+"""Der Analyse-Schneider (Bauplan §22).
 
-Deliberately **not** a G-code slicer. Perimeters, seams, cooling, retraction and
-machine limits are fifteen years of other people's work, and a worse answer would
-cost the trust in the whole application. The file that goes to the printer keeps
-coming from the external slicer (§28).
+Mit Absicht **kein** G-Code-Slicer. Perimeter, Nähte, Kühlung, Retraktion und
+Maschinengrenzen sind fünfzehn Jahre Arbeit anderer Leute, und eine schlechtere
+Antwort kostete das Vertrauen in die ganze Anwendung. Die Datei, die zum
+Drucker geht, kommt weiterhin aus dem externen Slicer (§28).
 
-Cutting for *analysis* is a different matter, and the bigger lever: with numbers
-per layer in milliseconds, the orientation search can judge hundreds of rotations
-by real support volume instead of a rule of thumb (§22.3).
+Zur *Analyse* zu schneiden ist eine andere Sache, und der größere Hebel: mit
+Zahlen je Schicht in Millisekunden kann die Orientierungssuche hunderte
+Drehungen an echtem Stützvolumen messen statt an einer Faustregel (§22.3).
 
-Every number here is ``internal``. It is never mixed with a figure measured from
-G-code (§22.5) — an estimated support volume and a measured one are different
-things, and the report says which is which.
+Jede Zahl hier ist ``internal``. Sie wird nie mit einer aus G-Code gemessenen
+Größe vermischt (§22.5) — ein geschätztes Stützvolumen und ein gemessenes sind
+verschiedene Dinge, und der Bericht sagt, welches welches ist.
 """
 
 from __future__ import annotations
@@ -31,32 +31,36 @@ from app.core.units import EPS_GEOM
 
 _log = get_logger(__name__)
 
-#: Smallest overhang that is not just meshing noise.
+#: Der kleinste Überhang, der nicht bloß Vernetzungsrauschen ist.
 OVERHANG_MARGIN = 0.05
 
-#: A layer may grow sideways by one layer height and still be printable — that
-#: is exactly 45 degrees, the angle the rule set draws the line at (§39, §18.4).
-#: Only what reaches further than this counts as an overhang.
+#: Eine Schicht darf um eine Schichthöhe seitlich wachsen und bleibt
+#: druckbar — das sind genau 45 Grad, der Winkel, an dem die Regelsammlung die
+#: Linie zieht (§39, §18.4).
+#: Nur was weiter reicht, zählt als Überhang.
 OVERHANG_ANGLE_FACTOR = 1.0
 
-#: Steps of the binary search for the smallest structure width. Six halvings of
-#: a bracket that is already close leave under two percent.
+#: Schritte der binären Suche nach der kleinsten Strukturbreite. Sechs
+#: Halbierungen einer ohnehin engen Klammer lassen unter zwei Prozent übrig.
 WIDTH_STEPS = 6
 
-#: How far the contour may be simplified before that search — a hundredth of a
-#: millimetre is a tenth of what the finest nozzle can put down.
+#: Wie weit die Kontur vor dieser Suche vereinfacht werden darf — ein
+#: hundertstel Millimeter ist ein Zehntel dessen, was die feinste Düse
+#: ablegen kann.
 WIDTH_SIMPLIFY = 0.01
 
-#: Above this width a structure is simply "thick" and is not measured further.
-#: Two millimetres is five nozzle diameters — no warning in §22.2 looks above it,
-#: and the search for an exact value up there cost more than everything else.
+#: Über dieser Breite ist eine Struktur schlicht „dick" und wird nicht weiter
+#: gemessen. Zwei Millimeter sind fünf Düsendurchmesser — keine Warnung in
+#: §22.2 schaut darüber, und die Suche nach einem exakten Wert dort oben
+#: kostete mehr als alles andere zusammen.
 WIDTH_INTERESTING = 2.0
 
-#: Below this many layers the fan-out costs more than it saves — starting eight
-#: threads for twenty polygons is all overhead.
+#: Unter so vielen Schichten kostet das Auffächern mehr, als es spart — acht
+#: Threads für zwanzig Polygone zu starten ist reiner Verwaltungsaufwand.
 PARALLEL_FROM = 40
 
-#: Upper bound on threads. Past this the layers are too small to fill them.
+#: Obergrenze der Threads. Darüber sind die Schichten zu klein, um sie zu
+#: füllen.
 MAX_WORKERS = 8
 
 Detail = Literal["full", "support"]
@@ -66,7 +70,7 @@ orientation search does not read (§28.2)."""
 
 @dataclass(frozen=True, slots=True)
 class LayerMetrics:
-    """What one layer contributes to the judgement (§22.2)."""
+    """Was eine Schicht zum Urteil beiträgt (§22.2)."""
 
     z: float
     area: float
@@ -80,12 +84,13 @@ class LayerMetrics:
 
 
 def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full") -> SliceResult:
-    """Cut the body into layers and measure each one (§22.1, §22.2).
+    """Schneidet den Körper in Schichten und misst jede (§22.1, §22.2).
 
-    ``detail="support"`` measures only what support needs: overhangs, islands
-    and the areas. The orientation search calls this two hundred times and
-    reads exactly one number out of it (§28.2) — computing structure widths for
-    a body that is about to be turned again is work nobody looks at.
+    ``detail="support"`` misst nur, was die Stützen brauchen: Überhänge,
+    Inseln und die Flächen. Die Orientierungssuche ruft das zweihundertmal auf
+    und liest genau eine Zahl daraus (§28.2) — Strukturbreiten für einen
+    Körper zu rechnen, der gleich wieder gedreht wird, ist Arbeit, die niemand
+    ansieht.
     """
     if layer_height <= EPS_GEOM:
         raise ValueError("layer height has to be positive")
@@ -98,7 +103,7 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
     layers: list[LayerInfo] = []
     support = 0.0
 
-    # Half a layer above the bottom: the first cut has to hit material.
+    # Eine halbe Schicht über dem Boden: der erste Schnitt muss Material treffen.
     heights = np.arange(low + layer_height / 2.0, high, layer_height)
     sections = cross_sections(mesh, heights)
     measured = _measure_all(sections, layer_height, detail)
@@ -138,20 +143,23 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
 def _measure_all(
     sections: list[ShapelyPolygon | None], layer_height: float, detail: Detail
 ) -> list[LayerMetrics | None]:
-    """Measure every layer, on as many threads as the machine has.
+    """Misst jede Schicht, auf so vielen Threads wie die Maschine hat.
 
-    This is worth a paragraph. A layer is measured against the one below it, so
-    the loop *looks* sequential — but the pair is all it needs, and the pairs
-    are known once the sections are cut. So the work fans out.
+    Das ist einen Absatz wert. Eine Schicht wird gegen die darunter gemessen,
+    die Schleife *sieht* also sequenziell aus — aber das Paar ist alles, was
+    sie braucht, und die Paare stehen fest, sobald die Schnitte gemacht sind.
+    Also fächert die Arbeit auf.
 
-    Threads, not processes: the measuring happens in GEOS, and GEOS lets go of
-    the interpreter lock while it works. Measured on a body of 328 000
-    triangles: 0.81 s on one thread, 0.15 s on eight. Processes would have to
-    copy every polygon twice and would be slower than the sequential loop.
+    Threads, keine Prozesse: gemessen wird in GEOS, und GEOS gibt den
+    Interpreter-Lock frei, während es arbeitet. Gemessen an einem Körper mit
+    328 000 Dreiecken: 0,81 s auf einem Thread, 0,15 s auf acht. Prozesse
+    müssten jedes Polygon zweimal kopieren und wären langsamer als die
+    sequenzielle Schleife.
 
-    ``on_plate`` is the one thing the fan-out has to be careful with: the first
-    layer with material rests on the plate and needs no support, and so does
-    the first one after a gap. That is decided here, before anything starts.
+    ``on_plate`` ist das eine, womit das Auffächern vorsichtig sein muss: die
+    erste Schicht mit Material liegt auf der Platte und braucht keine Stütze,
+    und die erste nach einer Lücke auch nicht. Das wird hier entschieden, bevor
+    irgendetwas beginnt.
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -184,32 +192,34 @@ def _measure_all(
 
 
 def _workers() -> int:
-    """One thread per core, within reason. More only adds switching."""
+    """Ein Thread je Kern, in Maßen. Mehr fügt nur Umschalten hinzu."""
     import os
 
     return max(1, min(MAX_WORKERS, (os.cpu_count() or 2)))
 
 
 def cross_section(mesh: MeshData, z: float) -> ShapelyPolygon | None:
-    """One plane through the mesh, as a polygon with holes (§22.1).
+    """Eine Ebene durch das Netz, als Polygon mit Löchern (§22.1).
 
-    Public because the analysis maps raster the body out of these sections
-    (§18.4) — the same cut, used twice.
+    Öffentlich, weil die Analysekarten den Körper aus diesen Schnitten rastern
+    (§18.4) — derselbe Schnitt, zweimal benutzt.
     """
     return cross_sections(mesh, np.array([z], dtype=float))[0]
 
 
 def cross_sections(mesh: MeshData, heights: Any) -> list[ShapelyPolygon | None]:
-    """Many planes at once — the reason the layer analysis is usable at all.
+    """Viele Ebenen auf einmal — der Grund, warum die Schichtanalyse
+    überhaupt brauchbar ist.
 
-    Cutting plane by plane means walking every triangle for every layer, and a
-    body of two hundred thousand triangles sliced into four hundred layers walks
-    eighty million of them. Here each triangle is sorted into the layers its own
-    height reaches, so every layer only sees what actually crosses it.
+    Ebene für Ebene zu schneiden heißt, jedes Dreieck für jede Schicht
+    abzulaufen, und ein Körper aus zweihunderttausend Dreiecken in
+    vierhundert Schichten läuft achtzig Millionen davon ab. Hier wird jedes
+    Dreieck in die Schichten einsortiert, die seine eigene Höhe erreicht —
+    jede Schicht sieht also nur, was sie wirklich kreuzt.
 
-    The coordinates stay the world's X and Y at every height. That is not a
-    detail: comparing a layer with the one below it only means anything if both
-    are drawn on the same map.
+    Die Koordinaten bleiben auf jeder Höhe X und Y der Welt. Das ist kein
+    Detail: eine Schicht mit der darunter zu vergleichen bedeutet nur etwas,
+    wenn beide auf dieselbe Karte gezeichnet sind.
     """
     heights = np.asarray(heights, dtype=float)
     empty: list[ShapelyPolygon | None] = [None] * len(heights)
@@ -225,12 +235,13 @@ def cross_sections(mesh: MeshData, heights: Any) -> list[ShapelyPolygon | None]:
     starts = np.searchsorted(layers, np.arange(len(heights)), side="left")
     ends = np.searchsorted(layers, np.arange(len(heights)), side="right")
 
-    # Tried and taken back out: fanning this loop over threads the way
-    # ``_measure_all`` does made it slower — 0.758 s against 0.714 s on a body
-    # of 328 000 triangles. Building one polygon at a time holds the
-    # interpreter lock, unlike the vectorised predicates the measuring uses, so
-    # all that is left is the overhead of handing four hundred small jobs
-    # around. The measurement is here so nobody spends the afternoon again.
+    # Probiert und wieder herausgenommen: diese Schleife über Threads
+    # aufzufächern, wie ``_measure_all`` es tut, machte sie langsamer — 0,758 s
+    # gegen 0,714 s an einem Körper mit 328 000 Dreiecken. Ein Polygon nach dem
+    # anderen zu bauen hält den Interpreter-Lock, anders als die vektorisierten
+    # Prädikate, die das Messen benutzt — übrig bleibt also nur der Aufwand,
+    # vierhundert kleine Aufträge herumzureichen. Die Messung steht hier, damit
+    # niemand den Nachmittag noch einmal verbringt.
     result: list[ShapelyPolygon | None] = []
     for start, end in zip(starts, ends, strict=True):
         result.append(_polygon_from(points[start:end]) if end > start else None)
@@ -238,18 +249,19 @@ def cross_sections(mesh: MeshData, heights: Any) -> list[ShapelyPolygon | None]:
 
 
 def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any]:
-    """Where every triangle crosses every plane it reaches.
+    """Wo jedes Dreieck jede Ebene kreuzt, die es erreicht.
 
-    Returns the segments as ``(n, 2, 2)`` points in XY and the layer each one
-    belongs to. ``heights`` has to be ascending; the spacing may be anything.
+    Liefert die Segmente als ``(n, 2, 2)`` Punkte in XY und die Schicht, zu der
+    jedes gehört. ``heights`` muss aufsteigend sein; der Abstand darf beliebig
+    sein.
     """
     triangles = np.asarray(mesh.raw.triangles, dtype=float)
 
     vertical = triangles[:, :, 2]
-    # Which planes a triangle reaches, looked up rather than computed from a
-    # spacing: the layer analysis asks for evenly spaced heights, the parting
-    # plane search (§22.3) does not, and arithmetic on an assumed step gives
-    # that second caller silently empty layers.
+    # Welche Ebenen ein Dreieck erreicht, nachgeschlagen statt aus einem
+    # Abstand gerechnet: die Schichtanalyse fragt nach gleichmäßigen Höhen, die
+    # Trennebenensuche (§22.3) nicht — und Arithmetik auf einem angenommenen
+    # Schritt gibt diesem zweiten Aufrufer still leere Schichten.
     first = np.searchsorted(heights, vertical.min(axis=1) - EPS_GEOM, side="left")
     last = np.searchsorted(heights, vertical.max(axis=1) + EPS_GEOM, side="right") - 1
     np.clip(first, 0, len(heights) - 1, out=first)
@@ -294,13 +306,14 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any]:
 
 
 def _polygon_from(points: Any) -> ShapelyPolygon | None:
-    """Build the filled area of one layer out of its loose segments.
+    """Baut die gefüllte Fläche einer Schicht aus ihren losen Segmenten.
 
-    The segments come from triangles that share their corners exactly, so after
-    rounding away the last floating point digits the ends match and GEOS can
-    close the rings itself. What comes back are rings, not areas: an outer ring
-    and the ring of a bore look the same. Which is which follows from how deep a
-    ring sits inside the others — even is material, odd is a hole.
+    Die Segmente kommen aus Dreiecken, die ihre Ecken exakt teilen — nach dem
+    Wegrunden der letzten Fließkommastellen passen die Enden also zusammen, und
+    GEOS kann die Ringe selbst schließen. Zurück kommen Ringe, keine Flächen:
+    ein Außenring und der Ring einer Bohrung sehen gleich aus. Was was ist,
+    folgt daraus, wie tief ein Ring in den anderen sitzt — gerade ist Material,
+    ungerade ein Loch.
     """
     rounded = np.round(points.reshape(-1, 2), 6)
     lengths = np.linalg.norm(rounded[1::2] - rounded[0::2], axis=1)
@@ -353,16 +366,17 @@ def _polygon_from(points: Any) -> ShapelyPolygon | None:
 
 
 def _repaired(shape: ShapelyPolygon) -> ShapelyPolygon:
-    """A ring and its hole may touch, and then the polygon is invalid.
+    """Ein Ring und sein Loch dürfen sich berühren, und dann ist das Polygon
+    ungültig.
 
-    Real models do that: a pocket that reaches exactly to the outer wall leaves
-    a hole whose boundary meets the shell in one point. GEOS builds the polygon
-    without complaint and throws on the next operation over it — so it is
-    repaired here rather than three call levels further on, where the message
-    would name a coordinate and nothing else.
+    Echte Modelle tun das: eine Tasche, die exakt bis an die Außenwand reicht,
+    lässt ein Loch, dessen Rand die Hülle in einem Punkt trifft. GEOS baut das
+    Polygon ohne Klage und wirft bei der nächsten Operation darüber — also wird
+    hier repariert statt drei Aufrufebenen weiter, wo die Meldung eine
+    Koordinate nennte und sonst nichts.
 
-    ``buffer(0)`` is the repair because the answer wanted is an area: it drops
-    the degenerate seam and keeps the material.
+    ``buffer(0)`` ist die Reparatur, weil die gesuchte Antwort eine Fläche ist:
+    es lässt die entartete Naht fallen und behält das Material.
     """
     return shape if shape.is_valid else shape.buffer(0)
 
@@ -417,7 +431,9 @@ def _measure(
 
 
 def _islands(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> ShapelyPolygon:
-    """Contours with no connection downwards — these need support, always (§22.2)."""
+    """Konturen ohne Verbindung nach unten — die brauchen Stützen,
+    immer (§22.2).
+    """
     if previous is None or previous.is_empty:
         return shape
     parts = getattr(shape, "geoms", [shape])
@@ -426,18 +442,19 @@ def _islands(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> ShapelyP
 
 
 def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERESTING) -> float:
-    """Smallest structure width, found by eroding until nothing is left.
+    """Die kleinste Strukturbreite, gefunden durch Erodieren, bis nichts mehr
+    übrig ist.
 
-    Checkable against the nozzle diameter, which is what it is for (§22.2).
+    Prüfbar gegen den Düsendurchmesser, und dafür ist sie da (§22.2).
 
-    Three liberties are taken for speed, and none of them changes an answer
-    anybody acts on. The contour is simplified by a hundredth of a millimetre
-    first and the erosion uses mitred corners instead of rounded ones — both
-    stay far below what a printer can resolve. And a layer that survives one
-    erosion by half of ``interesting_below`` is reported as exactly that width
-    and not measured further: whether a wall is four millimetres or nine is not
-    a question the report asks, and the search for it cost more than the rest of
-    the analysis together.
+    Drei Freiheiten werden fürs Tempo genommen, und keine davon ändert eine
+    Antwort, auf die jemand handelt. Die Kontur wird zuerst um einen
+    hundertstel Millimeter vereinfacht, und die Erosion benutzt gefaste statt
+    gerundeter Ecken — beides bleibt weit unter dem, was ein Drucker auflöst.
+    Und eine Schicht, die eine Erosion um die Hälfte von ``interesting_below``
+    übersteht, wird als genau diese Breite gemeldet und nicht weiter gemessen:
+    ob eine Wand vier oder neun Millimeter dick ist, fragt der Bericht nicht,
+    und die Suche danach kostete mehr als der Rest der Analyse zusammen.
     """
     if shape.is_empty or shape.length <= EPS_GEOM:
         return 0.0
@@ -469,7 +486,9 @@ def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERE
 
 
 def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> float:
-    """Longest free span in this layer — what has to be bridged (§22.2)."""
+    """Die längste freie Spannweite dieser Schicht — was überbrückt werden
+    muss (§22.2).
+    """
     if previous is None or previous.is_empty:
         return 0.0
     free = shape.difference(previous.buffer(OVERHANG_MARGIN))
@@ -486,7 +505,9 @@ def _contour_count(shape: ShapelyPolygon) -> int:
 
 
 def _to_polygons(shape: ShapelyPolygon) -> tuple[Polygon, ...]:
-    """Shapely to the core's own contour type — the core keeps its own vocabulary."""
+    """Shapely zum eigenen Konturtyp des Kerns — der Kern behält sein eigenes
+    Vokabular.
+    """
     if shape.is_empty:
         return ()
     parts = getattr(shape, "geoms", [shape])
@@ -503,8 +524,10 @@ def _to_polygons(shape: ShapelyPolygon) -> tuple[Polygon, ...]:
 
 
 def _ring(ring: Any) -> tuple[tuple[float, float], ...]:
-    """One contour as plain numbers. A detailed layer brings thousands of points,
-    so the coordinates are pulled out in one call rather than one at a time."""
+    """Eine Kontur als nackte Zahlen. Eine detaillierte Schicht bringt
+    tausende Punkte, die Koordinaten werden also in einem Aufruf herausgeholt
+    statt einzeln.
+    """
     return tuple(map(tuple, shapely.get_coordinates(ring).tolist()))
 
 
@@ -516,17 +539,17 @@ def total_overhang(result: SliceResult) -> float:
 
 
 def island_layers(result: SliceResult) -> tuple[float, ...]:
-    """Heights at which a contour starts in mid-air (§22.2)."""
+    """Höhen, auf denen eine Kontur in der Luft beginnt (§22.2)."""
     return tuple(layer.z for layer in result.layers if layer.islands)
 
 
 def narrowest(result: SliceResult) -> float:
-    """The thinnest structure anywhere in the body.
+    """Die dünnste Struktur irgendwo im Körper.
 
-    Exact below :data:`WIDTH_INTERESTING`, which is where the question is asked
-    (§22.2). A body whose thinnest place is thicker than that reports exactly
-    that limit — "at least two millimetres", not a measurement. Anything showing
-    this number has to say so.
+    Exakt unterhalb von :data:`WIDTH_INTERESTING`, wo die Frage gestellt wird
+    (§22.2). Ein Körper, dessen dünnste Stelle dicker ist, meldet genau diese
+    Grenze — „mindestens zwei Millimeter", keine Messung. Was diese Zahl zeigt,
+    muss das sagen.
     """
     widths = [layer.min_width for layer in result.layers if layer.min_width > EPS_GEOM]
     return min(widths) if widths else 0.0

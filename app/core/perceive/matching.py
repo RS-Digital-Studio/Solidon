@@ -1,20 +1,22 @@
-"""Keeping feature identifiers stable across operations (Bauplan §21.2, §21.3).
+"""Merkmalsbezeichner über Operationen hinweg stabil halten (Bauplan
+§21.2, §21.3).
 
-After every operation the detection runs again, and the new features have to be
-matched to the old ones — otherwise ``hole_3`` in step five is a different hole
-than ``hole_3`` in step four, and every reference in the stack quietly rots.
+Nach jeder Operation läuft die Erkennung erneut, und die neuen Merkmale müssen
+den alten zugeordnet werden — sonst ist ``hole_3`` in Schritt fünf ein anderes
+Loch als ``hole_3`` in Schritt vier, und jeder Verweis im Stapel verrottet
+still.
 
-Matching happens over a feature vector (kind, diameter, axis, position **in the
-object's own frame**, neighbourhood) with the Hungarian method over the cost
-matrix. Position is taken relative to the body, so moving the whole object does
-not orphan every feature it has.
+Zugeordnet wird über einen Merkmalsvektor (Art, Durchmesser, Achse, Position
+**im eigenen Bezugssystem des Objekts**, Nachbarschaft) mit der ungarischen
+Methode über der Kostenmatrix. Die Position wird relativ zum Körper genommen,
+damit das Verschieben des ganzen Objekts nicht jedes Merkmal verwaist.
 
-Three outcomes, and only one of them is quiet:
+Drei Ausgänge, und nur einer davon ist still:
 
-* one clear partner below the threshold — the identifier stays;
-* no partner — orphaned;
-* several equally good candidates — **ambiguous**, and that stops the chain and
-  asks (§21.3). Guessing here would be worse than asking.
+* ein klarer Partner unter der Schwelle — der Bezeichner bleibt;
+* kein Partner — verwaist;
+* mehrere gleich gute Kandidaten — **mehrdeutig**, und das hält die Kette an
+  und fragt (§21.3). Hier zu raten wäre schlimmer als zu fragen.
 """
 
 from __future__ import annotations
@@ -30,8 +32,8 @@ from app.core.units import EPS_GEOM
 
 _log = get_logger(__name__)
 
-#: How close the second best candidate may be before the match counts as
-#: ambiguous, relative to the best cost.
+#: Wie nah der zweitbeste Kandidat sein darf, bevor die Zuordnung als
+#: mehrdeutig gilt — relativ zur besten Kostenzahl.
 AMBIGUITY_MARGIN = 0.25
 
 #: …und absolut, für den Fall, dass der beste Treffer fast nichts kostet.
@@ -43,9 +45,9 @@ AMBIGUITY_MARGIN = 0.25
 #: ist nicht zu unterscheiden.
 AMBIGUITY_FLOOR = 0.05
 
-#: Tolerances, one per part of the feature vector. Each part is divided by its
-#: own tolerance, so a cost of 1.0 means "as far off as we still accept" no
-#: matter which part it came from.
+#: Toleranzen, eine je Teil des Merkmalsvektors. Jedes Teil wird durch seine
+#: eigene Toleranz geteilt — eine Kostenzahl von 1.0 heißt also „so weit
+#: daneben, wie wir gerade noch annehmen", egal aus welchem Teil sie kam.
 POSITION_TOLERANCE = 0.08
 """Share of the model diagonal a feature may have travelled."""
 DIAMETER_TOLERANCE = 0.15
@@ -53,16 +55,17 @@ DIAMETER_TOLERANCE = 0.15
 AXIS_TOLERANCE = 0.3
 """Length of the difference between the unit axes, roughly 17 degrees."""
 
-#: Everything below this counts as the same feature.
+#: Alles darunter zählt als dasselbe Merkmal.
 MATCH_THRESHOLD = 1.0
 
-#: What a mismatch in kind costs: more than anything else can add up to.
+#: Was ein Artunterschied kostet: mehr, als alles andere zusammen erreichen
+#: kann.
 KIND_PENALTY = 1e6
 
 
 @dataclass(slots=True)
 class MatchResult:
-    """Who became whom, and what could not be decided."""
+    """Wer wer geworden ist, und was sich nicht entscheiden ließ."""
 
     mapping: dict[FeatureId, FeatureId] = field(default_factory=dict)
     """Old identifier to new identifier."""
@@ -75,12 +78,12 @@ class MatchResult:
 
     @property
     def settled(self) -> bool:
-        """True when nothing needs a decision from the user."""
+        """True, wenn nichts eine Entscheidung des Nutzers braucht."""
         return not self.ambiguous and not self.orphaned
 
 
 def feature_vector(feature: Feature, centre: Vec3, diagonal: float) -> np.ndarray:
-    """Position relative to the body, plus what the feature is."""
+    """Position relativ zum Körper, plus was das Merkmal ist."""
     params = feature.params
     position = np.asarray(params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
     relative = (position - np.asarray(centre, dtype=float)) / max(diagonal, EPS_GEOM)
@@ -96,10 +99,11 @@ def cost(
     second_centre: Vec3,
     diagonal: float,
 ) -> float:
-    """What it would cost to call these two the same feature.
+    """Was es kostete, diese zwei dasselbe Merkmal zu nennen.
 
-    Each body is measured in its own frame, so moving the whole object leaves
-    every cost untouched — otherwise a translation would orphan everything.
+    Jeder Körper wird in seinem eigenen Bezugssystem gemessen — das Verschieben
+    des ganzen Objekts lässt also jede Kostenzahl unberührt; sonst verwaiste
+    eine Verschiebung alles.
     """
     if first.kind != second.kind:
         return KIND_PENALTY
@@ -121,10 +125,10 @@ def match(
     diagonal: float,
     old_centre: Vec3 | None = None,
 ) -> MatchResult:
-    """Assign new features to old identifiers, and say what stayed open.
+    """Ordnet neue Merkmale alten Bezeichnern zu und sagt, was offen blieb.
 
-    ``centre`` is the new body's frame; ``old_centre`` the one the old features
-    were measured in, defaulting to the same.
+    ``centre`` ist das Bezugssystem des neuen Körpers, ``old_centre`` das, in
+    dem die alten Merkmale gemessen wurden — per Vorgabe dasselbe.
     """
     if not old:
         return MatchResult(fresh=tuple(new))
@@ -165,7 +169,7 @@ def match(
             if other != column and float(matrix[row, other]) <= limit
         ]
         if rivals:
-            # §21.3: several dense candidates — stop and ask instead of guessing.
+            # §21.3: mehrere dichte Kandidaten — anhalten und fragen statt raten.
             result.ambiguous[old_id] = (new_ids[column], *rivals)
             continue
 
@@ -186,7 +190,9 @@ def match(
 
 
 def apply_mapping(new: dict[FeatureId, Feature], result: MatchResult) -> dict[FeatureId, Feature]:
-    """Rename the new features onto the old identifiers that survived."""
+    """Benennt die neuen Merkmale auf die alten Bezeichner um, die überlebt
+    haben.
+    """
     renamed: dict[FeatureId, Feature] = {}
     reverse = {value: key for key, value in result.mapping.items()}
     for identifier, feature in new.items():
@@ -202,7 +208,9 @@ def apply_mapping(new: dict[FeatureId, Feature], result: MatchResult) -> dict[Fe
 
 
 def question_for(old_id: FeatureId, candidates: tuple[FeatureId, ...]) -> tuple[str, list[str]]:
-    """The question the core asks when a feature cannot be told apart (§21.3)."""
+    """Die Frage, die der Kern stellt, wenn sich ein Merkmal nicht
+    unterscheiden lässt (§21.3).
+    """
     from app.i18n import tr
 
     return (
@@ -214,12 +222,14 @@ def question_for(old_id: FeatureId, candidates: tuple[FeatureId, ...]) -> tuple[
 def moved_features(
     features: dict[FeatureId, Feature], transform: Transform
 ) -> dict[FeatureId, Feature]:
-    """Carry features along a rigid motion the operation reported (§21.2).
+    """Nimmt Merkmale entlang einer starren Bewegung mit, die die Operation
+    gemeldet hat (§21.2).
 
-    Only the parts that live in space are touched: the point a feature sits at
-    and the direction it points in. A diameter does not move, and an area is not
-    a place. Without this a rotation would orphan every feature on the body —
-    not because it disappeared, but because it is somewhere else now.
+    Angefasst wird nur, was im Raum lebt: der Punkt, an dem ein Merkmal sitzt,
+    und die Richtung, in die es zeigt. Ein Durchmesser bewegt sich nicht, und
+    eine Fläche ist kein Ort. Ohne das verwaiste eine Drehung jedes Merkmal am
+    Körper — nicht weil es verschwunden wäre, sondern weil es jetzt woanders
+    ist.
     """
     matrix = np.asarray(transform, dtype=float)
     turn = matrix[:3, :3]

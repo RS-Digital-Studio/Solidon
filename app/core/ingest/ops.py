@@ -1,8 +1,9 @@
-"""The ``load`` operation (Bauplan §17.1).
+"""Die ``load``-Operation (Bauplan §17.1).
 
-The input stage is an operation, not a hidden preparation step: its parameters
-stay visible in the stack and can be changed afterwards. Loading the same file
-with a different unit is therefore a parameter change, not a fresh import.
+Die Eingangsstufe ist eine Operation, kein versteckter Vorbereitungsschritt:
+ihre Parameter bleiben im Stapel sichtbar und lassen sich nachträglich ändern.
+Dieselbe Datei mit einer anderen Einheit zu laden ist darum eine
+Parameteränderung, kein neuer Import.
 """
 
 from __future__ import annotations
@@ -148,7 +149,7 @@ def load(ctx: OpContext) -> OpResult:
 
 
 def _named(findings: Sequence[Finding], name: str) -> list[Finding]:
-    """Say which body of an assembly a finding is about."""
+    """Sagt, um welchen Körper einer Baugruppe es bei einem Befund geht."""
     return [
         dataclasses.replace(entry, values={**entry.values, "object": name}) for entry in findings
     ]
@@ -198,7 +199,7 @@ class LoadOutlineParams(BaseParams):
     ),
 )
 def load_outline(ctx: OpContext) -> OpResult:
-    """§25: two dimensions plus a thickness, without a detour through Blender."""
+    """§25: zwei Dimensionen plus eine Dicke, ohne Umweg über Blender."""
     params = cast(LoadOutlineParams, ctx.params)
     if ctx.sources is None:
         raise InternalError(
@@ -232,10 +233,10 @@ def load_outline(ctx: OpContext) -> OpResult:
 def _colour_groups(
     payload: bytes, suffix: str, mesh: MeshData
 ) -> tuple[MeshData, list[MaterialSlot]]:
-    """§20, import side: 3MF carries a slot per triangle, and it is kept.
+    """§20, Importseite: 3MF trägt einen Slot je Dreieck, und der bleibt.
 
-    Everything else keeps the behaviour it had — STL has no colour, and a
-    texture becomes slots when the user asks for it, not on the way in.
+    Alles andere behält sein Verhalten — STL hat keine Farbe, und eine Textur
+    wird zu Slots, wenn der Nutzer danach fragt, nicht auf dem Weg hinein.
     """
     if suffix.lower() != ".3mf":
         return mesh, []
@@ -246,7 +247,9 @@ def _colour_groups(
 
 
 def _unit_for(ctx: OpContext, params: LoadParams, diagonal: float) -> LengthUnit:
-    """Take the stored unit, or run the heuristic and ask when it is not sure."""
+    """Nimmt die gespeicherte Einheit — oder lässt die Heuristik laufen und
+    fragt, wenn sie sich nicht sicher ist.
+    """
     if params.unit != "auto":
         return cast(LengthUnit, params.unit)
 

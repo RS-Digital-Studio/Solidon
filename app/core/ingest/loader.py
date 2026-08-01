@@ -1,17 +1,19 @@
-"""The input stage (Bauplan §17.1).
+"""Die Eingangsstufe (Bauplan §17.1).
 
-Every loaded file walks the same six steps, in this order:
+Jede geladene Datei geht dieselben sechs Schritte, in dieser Reihenfolge:
 
-1. determine the unit — STL carries none, so a heuristic decides and **asks when
-   it is not sure** instead of assuming;
-2. weld vertices with a tolerance scaled to the model size;
-3. remove degenerate triangles (zero area, needles, duplicates);
-4. unify normals and check the orientation;
-5. count components and **report** small parts instead of silently deleting them;
-6. find the centre of mass and **offer** to place the model on the bed.
+1. Einheit bestimmen — STL trägt keine, also entscheidet eine Heuristik und
+   **fragt, wenn sie sich nicht sicher ist**, statt anzunehmen;
+2. Eckpunkte verschweißen, mit einer Toleranz, die mit der Modellgröße
+   skaliert;
+3. entartete Dreiecke entfernen (Nullfläche, Nadeln, Duplikate);
+4. Normalen vereinheitlichen und die Ausrichtung prüfen;
+5. Komponenten zählen und Kleinstteile **melden** statt still zu löschen;
+6. den Schwerpunkt finden und das Aufsetzen aufs Bett **anbieten**.
 
-Everything the stage did lands in ``IngestInfo`` and in findings, so the report
-(§17.3) and the digest can say what was changed on the way in.
+Alles, was die Stufe getan hat, landet in ``IngestInfo`` und in Befunden — der
+Prüfbericht (§17.3) und der Steckbrief können also sagen, was auf dem Weg
+hinein geändert wurde.
 """
 
 from __future__ import annotations
@@ -55,7 +57,9 @@ SMALL_COMPONENT_SHARE: Final = 0.001
 
 @dataclass(frozen=True, slots=True)
 class UnitGuess:
-    """What the heuristic found. ``unit`` is None when it is not sure (§17.1)."""
+    """Was die Heuristik gefunden hat. ``unit`` ist None, wenn sie sich nicht
+    sicher ist (§17.1).
+    """
 
     unit: LengthUnit | None
     candidates: tuple[LengthUnit, ...]
@@ -67,10 +71,11 @@ class UnitGuess:
 
 
 def detect_unit(diagonal: float) -> UnitGuess:
-    """Guess the unit of a file from the size of its bounding box.
+    """Rät die Einheit einer Datei aus der Größe ihres Hüllquaders.
 
-    Exactly one plausible reading wins. Several plausible readings mean the
-    question goes to the user — that is Leitprinzip 6, not politeness.
+    Genau eine plausible Lesart gewinnt. Mehrere plausible Lesarten heißen,
+    dass die Frage an den Nutzer geht — das ist Leitprinzip 6, keine
+    Höflichkeit.
     """
     if diagonal <= EPS_GEOM:
         return UnitGuess(unit=None, candidates=CANDIDATE_UNITS, diagonal=diagonal)
@@ -85,7 +90,9 @@ def detect_unit(diagonal: float) -> UnitGuess:
 
 
 def check_limits(payload_size: int, triangle_count: int) -> None:
-    """Refuse oversized input with a clear message rather than running out of memory."""
+    """Lehnt übergroße Eingaben mit klarer Meldung ab, statt dass der Speicher
+    ausgeht.
+    """
     if payload_size > MAX_FILE_BYTES:
         raise ValidationError(
             field="file",
@@ -104,7 +111,7 @@ def check_limits(payload_size: int, triangle_count: int) -> None:
 
 @dataclass(frozen=True, slots=True)
 class IngestResult:
-    """The normalised mesh plus what happened to it."""
+    """Das normalisierte Netz plus was mit ihm passiert ist."""
 
     mesh: MeshData
     info: IngestInfo
@@ -125,7 +132,7 @@ def normalise(
     place_on_bed: bool = False,
     progress: ProgressFn = _silent,
 ) -> IngestResult:
-    """Run the six steps and report what they did."""
+    """Führt die sechs Schritte aus und meldet, was sie getan haben."""
     findings: list[Finding] = []
     body: trimesh.Trimesh = mesh.raw.copy()
     scale = to_mm(1.0, unit)
@@ -252,13 +259,17 @@ def normalise(
 
 
 def _open_edge_count(body: trimesh.Trimesh) -> int:
-    """Edges belonging to a single triangle. Counted directly, without a graph library."""
+    """Kanten, die zu genau einem Dreieck gehören. Direkt gezählt, ohne
+    Graphenbibliothek.
+    """
     single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
     return len(single)
 
 
 def _digits_for(tolerance: float) -> int:
-    """Merge tolerance expressed the way trimesh wants it: decimal places."""
+    """Die Verschweißtoleranz so ausgedrückt, wie trimesh sie will:
+    als Nachkommastellen.
+    """
     if tolerance <= 0.0:
         return 8
     return max(0, min(12, round(float(-np.log10(tolerance)))))
