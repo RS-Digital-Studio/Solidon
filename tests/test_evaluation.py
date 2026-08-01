@@ -1,4 +1,6 @@
-"""Evaluation as a pure function, and what it does when it cannot go on (§15)."""
+"""Die Auswertung als reine Funktion, und was sie tut, wenn sie nicht
+weiterkann (§15).
+"""
 
 from __future__ import annotations
 
@@ -231,7 +233,8 @@ def test_a_missing_input_stops_the_chain(
 ) -> None:
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
     history.apply(_("Teilen"), [OperationDraft(op="split_object", inputs=("obj_1",))])
-    # The split consumed obj_1; a later operation still pointing at it is unfulfillable.
+    # Der Split hat obj_1 verbraucht; eine spätere Operation, die noch darauf
+    # zeigt, ist nicht erfüllbar.
     history.apply(
         _("Danach"),
         [OperationDraft(op="resize_object", inputs=("obj_2",), outputs=("obj_2",))],

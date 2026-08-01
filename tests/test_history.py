@@ -190,7 +190,9 @@ def test_the_declared_object_count_is_enforced(history: History) -> None:
 
 
 def test_a_random_operation_always_ends_up_with_a_stored_seed(history: History) -> None:
-    """§11.3: what matters is that the seed is kept, not who thought of it."""
+    """§11.3: entscheidend ist, dass der Startwert aufgehoben wird, nicht wer
+    ihn sich ausgedacht hat.
+    """
     object_id = create(history)
     history.apply(_("Verteilen"), [OperationDraft(op="scatter", inputs=(object_id,))])
     drawn = history.operations[-1].seed

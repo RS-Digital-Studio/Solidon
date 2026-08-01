@@ -1,12 +1,13 @@
-"""What a clicked feature says about an operation (§18.5, §25, §40).
+"""Was ein angeklicktes Merkmal über eine Operation sagt (§18.5, §25, §40).
 
-Recognising features was P3 and placing parts was P5; the two were never joined.
-The feature was selectable in the tree and in the view, and the dialog that
-opened next knew nothing about it — anybody wanting a bore in the face they had
-just clicked read the coordinates off the analysis card and typed them in.
+Merkmale zu erkennen war P3 und Bausteine zu setzen war P5; verbunden wurden
+die zwei nie. Das Merkmal war im Baum und in der Ansicht wählbar, und der
+Dialog, der sich als Nächstes öffnete, wusste nichts davon — wer eine Bohrung
+in der eben angeklickten Fläche wollte, las die Koordinaten von der
+Analysekarte ab und tippte sie ein.
 
-These tests hold the join: which parameters a feature fills in, and — just as
-important — which it leaves alone.
+Diese Tests halten die Verbindung: welche Parameter ein Merkmal einträgt, und
+— genauso wichtig — welche es in Ruhe lässt.
 """
 
 from __future__ import annotations
@@ -50,7 +51,7 @@ def hole(
 
 
 def test_a_face_says_where_a_bore_goes() -> None:
-    """The case this exists for: click a face, drill there."""
+    """Der Fall, für den es das gibt: eine Fläche anklicken, dort bohren."""
     values = values_for(REGISTRY.get("drill_hole"), face(centre=(12.0, -3.0, 8.0)))
 
     assert values["x"] == pytest.approx(12.0)
@@ -65,7 +66,9 @@ def test_the_normal_of_a_face_becomes_the_axis() -> None:
 
 
 def test_a_face_at_an_angle_names_no_axis() -> None:
-    """A rounded value nobody was told about is worse than none."""
+    """Ein gerundeter Wert, von dem niemandem etwas gesagt wurde, ist
+    schlechter als keiner.
+    """
     slanted = values_for(REGISTRY.get("drill_hole"), face(normal=(0.7, 0.0, 0.71)))
 
     assert "axis" not in slanted
@@ -73,7 +76,7 @@ def test_a_face_at_an_angle_names_no_axis() -> None:
 
 
 def test_lettering_takes_the_full_direction() -> None:
-    """§25: a label follows the normal, not the nearest axis."""
+    """§25: eine Beschriftung folgt der Normalen, nicht der nächsten Achse."""
     values = values_for(REGISTRY.get("label_text"), face(normal=(0.0, 1.0, 0.0)))
 
     assert (values["nx"], values["ny"], values["nz"]) == (0.0, 1.0, 0.0)
@@ -85,13 +88,15 @@ def test_the_axis_of_a_bore_is_used_where_there_is_no_normal() -> None:
     assert values["axis"] == "y"
 
 
-# --- what is deliberately not filled in -----------------------------------------
+# --- Was mit Absicht nicht eingetragen wird --------------------------------------
 
 
 def test_the_diameter_is_never_guessed() -> None:
-    """A countersink takes the head of the screw, not the bore it sits on.
+    """Eine Senkung nimmt den Kopf der Schraube, nicht die Bohrung, auf der
+    sie sitzt.
 
-    5,2 filled in there is a wrong number that looks like a measured one.
+    Eine dort eingetragene 5,2 ist eine falsche Zahl, die wie eine gemessene
+    aussieht.
     """
     values = values_for(REGISTRY.get("countersink_hole"), hole(diameter=5.2))
 
@@ -99,7 +104,9 @@ def test_the_diameter_is_never_guessed() -> None:
 
 
 def test_an_operation_that_names_features_gets_the_name() -> None:
-    """The part library places itself at a feature; the position is an offset."""
+    """Die Bausteinbibliothek setzt sich selbst an ein Merkmal; die Position
+    ist ein Versatz.
+    """
     values = values_for(REGISTRY.get("insert_heatset_m4"), hole())
 
     assert values == {"at_feature": "hole_1"}, "the name is the whole answer"
@@ -126,11 +133,12 @@ def test_the_dominant_axis_needs_to_be_dominant() -> None:
 
 
 def test_only_a_face_looking_up_counts_as_an_opening() -> None:
-    """Flat is not enough — the ceiling of a cavity is flat and points down.
+    """Flach ist nicht genug — die Decke eines Hohlraums ist flach und zeigt
+    nach unten.
 
-    Chosen as the height of an opening it built a lid inside the box, at 26,9 of
-    30 millimetres, and nothing downstream noticed: a cut below that plane does
-    meet the wall.
+    Als Höhe einer Öffnung gewählt baute sie einen Deckel ins Innere der Box,
+    auf 26,9 von 30 Millimetern, und weiter unten fiel es niemandem auf: ein
+    Schnitt unter dieser Ebene trifft ja die Wand.
     """
     assert faces_up(face(normal=(0.0, 0.0, 1.0)))
     assert not faces_up(face(normal=(0.0, 0.0, -1.0))), "a ceiling is flat too"

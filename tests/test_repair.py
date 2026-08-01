@@ -1,4 +1,4 @@
-"""Repair against the broken files in the corpus (Bauplan §25, §34)."""
+"""Reparatur gegen die kaputten Dateien im Korpus (Bauplan §25, §34)."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def raw(name: str):
-    """Straight from the file — unwelded, as STL delivers it."""
+    """Direkt aus der Datei — unverschweißt, so wie STL sie liefert."""
     return read_mesh((MESHES / name).read_bytes(), ".stl")
 
 
@@ -59,10 +59,11 @@ def test_filling_closes_a_single_missing_triangle() -> None:
 
 
 def test_filling_reaches_its_limit_on_a_missing_wall() -> None:
-    """§34: broken_open.stl is missing three faces — that is a wall, not a hole.
+    """§34: broken_open.stl fehlen drei Flächen — das ist eine Wand, kein Loch.
 
-    Triangle-sized holes are closed; a missing wall is what the voxel stage of
-    the fallback chain is for (§17.2). Until then the finding says so plainly.
+    Dreiecksgroße Löcher werden geschlossen; eine fehlende Wand ist das, wofür
+    die Voxelstufe der Rückfallkette da ist (§17.2). Bis dahin sagt der Befund
+    es klar.
     """
     body, _welded = merge_vertices(raw("broken_open.stl"))
     assert open_edge_count(body) > 0
@@ -117,7 +118,7 @@ def test_repair_reports_every_step_it_took() -> None:
 
 
 def test_repair_says_when_it_could_not_close_the_body() -> None:
-    """An honest "still open" beats a silent half repair."""
+    """Ein ehrliches „immer noch offen" schlägt eine stille halbe Reparatur."""
     body, _welded = merge_vertices(raw("cube_clean.stl"))
     half = body.replacing(body.raw.submesh([range(0, 6)], append=True))
 
@@ -125,7 +126,7 @@ def test_repair_says_when_it_could_not_close_the_body() -> None:
     assert "repair.still_open" in {finding.code for finding in result.findings}
 
 
-# --- as an operation ------------------------------------------------------------
+# --- Als Operation ---------------------------------------------------------------
 
 
 def test_repair_runs_as_an_operation(document: Document, profile: Profile) -> None:
@@ -159,24 +160,24 @@ def test_the_repair_operation_is_registered_completely() -> None:
     assert front == ["fill_holes"], "§2.4: the front side holds what people actually change"
 
 
-# --- a vertex on an edge is not a hole (§25) ------------------------------------
+# --- Ein Punkt auf einer Kante ist kein Loch (§25) -------------------------------
 
 
 def t_junction() -> MeshData:
-    """A box whose top face has a vertex sitting on one of its edges.
+    """Eine Box, auf deren Oberseite ein Punkt auf einer ihrer Kanten sitzt.
 
-    The defect a real download brings: an Eiffel tower of 312 000 triangles had
-    exactly one, three open edges over three collinear points. The neighbouring
-    face was split at that point when it was built and the face on the other side
-    was never told.
+    Der Defekt, den ein echter Download mitbringt: ein Eiffelturm mit 312 000
+    Dreiecken hatte genau einen, drei offene Kanten über drei kollinearen
+    Punkten. Die Nachbarfläche wurde beim Bau an diesem Punkt geteilt, und der
+    Fläche auf der anderen Seite hat es nie jemand gesagt.
     """
     body = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
     vertices = [list(map(float, point)) for point in body.vertices]
     faces = [list(map(int, face)) for face in body.faces]
 
-    # Take one face and split its longest edge at the midpoint — only on that
-    # side. The neighbour keeps the undivided edge, and the gap between them is
-    # a triangle with three collinear corners.
+    # Eine Fläche nehmen und ihre längste Kante in der Mitte teilen — nur auf
+    # dieser Seite. Die Nachbarin behält die ungeteilte Kante, und die Lücke
+    # dazwischen ist ein Dreieck mit drei kollinearen Ecken.
     victim = faces.pop()
     first, second, third = victim
     middle = len(vertices)
@@ -198,10 +199,11 @@ def test_a_vertex_on_an_edge_is_stitched() -> None:
 
 
 def test_the_hole_filler_alone_cannot_do_it() -> None:
-    """Why this exists: a triangle over three collinear points has no area.
+    """Warum es das hier gibt: ein Dreieck über drei kollinearen Punkten hat
+    keine Fläche.
 
-    ``trimesh.repair.fill_holes`` declines, and rightly so — closing a body with
-    a face that is not there is not closing it.
+    ``trimesh.repair.fill_holes`` lehnt ab, und zu Recht — einen Körper mit
+    einer Fläche zu schließen, die nicht da ist, ist kein Schließen.
     """
     body = t_junction().raw.copy()
 
@@ -211,7 +213,9 @@ def test_the_hole_filler_alone_cannot_do_it() -> None:
 
 
 def test_a_stitched_body_has_no_zero_area_faces() -> None:
-    """The other way to "close" it, and the reason that way is wrong."""
+    """Der andere Weg, ihn zu „schließen", und der Grund, warum dieser Weg
+    falsch ist.
+    """
     fixed, _seams = stitch_t_junctions(t_junction())
 
     assert not (fixed.raw.area_faces < 1e-12).any()
@@ -227,7 +231,9 @@ def test_a_sound_body_is_left_alone() -> None:
 
 
 def test_repair_reports_the_seam_separately_from_a_hole() -> None:
-    """A seam and a hole are different defects and get different sentences."""
+    """Eine Naht und ein Loch sind verschiedene Defekte und bekommen
+    verschiedene Sätze.
+    """
     outcome = repair(t_junction(), holes=True)
 
     codes = [finding.code for finding in outcome.findings]

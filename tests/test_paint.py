@@ -1,9 +1,9 @@
-"""The brush (Bauplan §20, "Bemalen").
+"""Der Pinsel (Bauplan §20, „Bemalen").
 
-The whole feature is one sentence — put a slot on the faces around a point —
-and one hard part: stopping at edges. Without that the colour goes round the
-corner onto the back of the part, and cleaning that up costs more than the
-painting saved. So that is what most of this file measures.
+Das ganze Feature ist ein Satz — einen Slot auf die Flächen um einen Punkt
+legen — und ein schwerer Teil: an Kanten anhalten. Ohne das läuft die Farbe um
+die Ecke auf die Rückseite des Teils, und das aufzuräumen kostet mehr, als das
+Malen gespart hat. Also misst der größte Teil dieser Datei genau das.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def run(op: str, entry: SceneObject, profile: Profile, **params: object):
 
 
 def test_the_brush_stops_at_an_edge_however_wide_it_is() -> None:
-    """The point of the whole thing: a radius alone paints round the corner."""
+    """Der Punkt der ganzen Sache: ein Radius allein malt um die Ecke."""
     painted = brush(plate(), (0.0, 0.0, 10.0), radius=1000.0, slot=1)
 
     assert counts(painted) == {0: 10, 1: 2}, "the top face, and nothing else"
@@ -65,7 +65,9 @@ def test_a_wide_enough_angle_paints_over_everything() -> None:
 
 
 def test_on_a_smooth_surface_the_radius_is_what_decides() -> None:
-    """A sphere has no edges — so the brush is a circle again, as expected."""
+    """Eine Kugel hat keine Kanten — der Pinsel ist also wieder ein Kreis, wie
+    erwartet.
+    """
     sphere = ball()
 
     small = counts(brush(sphere, (0.0, 0.0, 20.0), radius=5.0, slot=1)).get(1, 0)
@@ -75,7 +77,7 @@ def test_on_a_smooth_surface_the_radius_is_what_decides() -> None:
 
 
 def test_painting_does_not_move_a_single_point() -> None:
-    """§20: the slot is an attribute. Colour is not geometry."""
+    """§20: der Slot ist ein Attribut. Farbe ist keine Geometrie."""
     before = plate()
 
     painted = brush(before, (0.0, 0.0, 10.0), radius=20.0, slot=2)
@@ -92,7 +94,7 @@ def test_a_second_stroke_does_not_undo_the_first() -> None:
     assert used_slots(twice) == (0, 1, 2), "top, bottom and the sides in between"
 
 
-# --- as an operation ------------------------------------------------------------
+# --- Als Operation ---------------------------------------------------------------
 
 
 def test_painting_runs_as_an_operation(profile: Profile) -> None:
@@ -116,7 +118,7 @@ def test_a_stroke_that_hits_nothing_says_so(profile: Profile) -> None:
 
 
 def test_the_slot_keeps_the_name_it_was_given(profile: Profile) -> None:
-    """A second stroke into the same slot must not rename it."""
+    """Ein zweiter Strich in denselben Slot darf ihn nicht umbenennen."""
     entry = SceneObject(id="obj_1", name="Deckel", mesh=plate())
     first = run("paint_slot", entry, profile, slot=1, radius=1000.0, z=10.0, name="Rot").outputs[0]
 
@@ -129,7 +131,9 @@ def test_the_slot_keeps_the_name_it_was_given(profile: Profile) -> None:
 
 
 def test_the_bar_is_off_until_somebody_switches_it_on(qt_app: QApplication) -> None:
-    """Painting a model somebody meant to turn is not a mistake an undo covers."""
+    """Ein Modell zu bemalen, das jemand drehen wollte, ist kein Fehler, den
+    ein Undo deckt.
+    """
     bar = PaintBar()
 
     assert not bar.painting

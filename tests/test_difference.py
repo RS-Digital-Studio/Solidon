@@ -40,7 +40,9 @@ def test_a_body_that_shrank_shows_the_removed_volume() -> None:
 
 
 def test_a_body_that_moved_shows_both_sides() -> None:
-    """Moving is removing here and adding there — and the view says so."""
+    """Bewegen ist hier Entfernen und dort Hinzufügen — und die Ansicht sagt
+    das.
+    """
     moved = apply(cube(20.0), translation((10.0, 0.0, 0.0)))
     difference = compare(cube(20.0), moved)
 
@@ -55,7 +57,7 @@ def test_an_unchanged_body_is_not_a_change() -> None:
 
 
 def test_the_solver_stage_is_kept(profile: Profile) -> None:
-    """§17.2: which stage carried the difference is part of the answer."""
+    """§17.2: welche Stufe die Differenz getragen hat, ist Teil der Antwort."""
     difference = compare(cube(20.0), cube(24.0))
 
     assert difference.solvers

@@ -1,8 +1,9 @@
-"""The lid over an opening (§25, §14, §40).
+"""Der Deckel über einer Öffnung (§25, §14, §40).
 
-A box of known dimensions, so every number the lid comes out with can be
-checked: the collar is the cavity minus twice the clearance, and the proof that
-it fits is that lid and housing share no volume at all.
+Eine Box mit bekannten Maßen, damit sich jede Zahl nachprüfen lässt, mit der
+der Deckel herauskommt: der Kragen ist der Hohlraum minus zweimal das Spiel,
+und der Beweis, dass er passt, ist, dass Deckel und Gehäuse gar kein Volumen
+teilen.
 """
 
 from __future__ import annotations
@@ -24,8 +25,8 @@ from app.core.types import OpContext, Profile, Scene, SceneObject
 
 load_operations()
 
-#: The housing every test measures against: 60 x 40 x 30 outside, 3 mm walls,
-#: 1,5 mm floor, open at the top. Cavity 54 x 34.
+#: Das Gehäuse, gegen das jeder Test misst: 60 x 40 x 30 außen, 3 mm Wände,
+#: 1,5 mm Boden, oben offen. Hohlraum 54 x 34.
 OUTER = (60.0, 40.0, 30.0)
 CAVITY = (54.0, 34.0)
 
@@ -57,7 +58,9 @@ def make_lid(entry: SceneObject, profile: Profile, **params: object):
 
 
 def test_the_lid_covers_the_opening(profile: Profile) -> None:
-    """A lid with a hole in it is not a lid — the section's own hole is filled."""
+    """Ein Deckel mit einem Loch darin ist kein Deckel — das eigene Loch des
+    Schnitts wird gefüllt.
+    """
     result = make_lid(housing(), profile, thickness=2.4, collar=4.0)
     body = result.outputs[1].mesh
 
@@ -69,7 +72,7 @@ def test_the_lid_covers_the_opening(profile: Profile) -> None:
 
 
 def test_the_collar_is_the_cavity_less_the_clearance(profile: Profile) -> None:
-    """§12: the number comes from the material profile, not from the file."""
+    """§12: die Zahl kommt aus dem Materialprofil, nicht aus der Datei."""
     result = make_lid(housing(), profile, thickness=2.4, collar=4.0)
     body = result.outputs[1].mesh.raw
 
@@ -82,7 +85,9 @@ def test_the_collar_is_the_cavity_less_the_clearance(profile: Profile) -> None:
 
 
 def test_the_lid_really_goes_in(profile: Profile) -> None:
-    """The one measurement that matters: lid and housing share no volume."""
+    """Die eine Messung, auf die es ankommt: Deckel und Gehäuse teilen kein
+    Volumen.
+    """
     entry = housing()
     body = make_lid(entry, profile, thickness=2.4, collar=4.0).outputs[1].mesh
 
@@ -98,7 +103,9 @@ def test_the_lid_sits_on_the_rim(profile: Profile) -> None:
 
 
 def test_a_softer_lid_gets_more_room(profile: Profile) -> None:
-    """§12 again: the lid of a TPU housing is not the lid of a PETG one."""
+    """§12 noch einmal: der Deckel eines TPU-Gehäuses ist nicht der eines
+    PETG-Gehäuses.
+    """
     stiff = make_lid(housing(), profile, collar=4.0).findings[0].values["clearance_mm"]
     soft = make_lid(housing("tpu-95a"), profile, collar=4.0).findings[0].values["clearance_mm"]
 
@@ -126,7 +133,9 @@ def test_a_solid_body_has_nothing_to_close(profile: Profile) -> None:
 
 
 def test_a_screw_hole_is_not_an_opening(profile: Profile) -> None:
-    """A 4 mm bore is a bore. A collar in it would be a pin nobody asked for."""
+    """Eine 4-mm-Bohrung ist eine Bohrung. Ein Kragen darin wäre ein Stift,
+    nach dem niemand gefragt hat.
+    """
     plate = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
     plate.apply_translation((0.0, 0.0, 5.0))
     bore = trimesh.creation.cylinder(radius=2.0, height=30.0, sections=64)
@@ -141,7 +150,9 @@ def test_a_screw_hole_is_not_an_opening(profile: Profile) -> None:
 
 
 def test_two_compartments_get_two_collars(profile: Profile) -> None:
-    """A divided box: one collar per compartment is what stops the lid turning."""
+    """Eine unterteilte Box: ein Kragen je Fach ist das, was den Deckel vom
+    Verdrehen abhält.
+    """
     outer = trimesh.creation.box(extents=(80.0, 40.0, 20.0))
     outer.apply_translation((0.0, 0.0, 10.0))
     cut = []
@@ -167,12 +178,12 @@ def test_the_lid_carries_the_material_of_the_body_it_closes(profile: Profile) ->
 
 
 def test_a_screw_post_bore_is_not_a_compartment(profile: Profile) -> None:
-    """The real neighbour of an opening: M3 holes in the corner posts.
+    """Der echte Nachbar einer Öffnung: M3-Löcher in den Ecksäulen.
 
-    Eight square millimetres against eighteen hundred — a collar in one would be
-    a pin in the screw's way. The absolute limit settles it without measuring
-    the cavities against each other, which would throw away a small compartment
-    that a collar fits perfectly well.
+    Acht Quadratmillimeter gegen achtzehnhundert — ein Kragen in einem davon
+    wäre ein Stift im Weg der Schraube. Die absolute Grenze entscheidet das,
+    ohne die Hohlräume gegeneinander zu messen; das würfe ein kleines Fach weg,
+    in das ein Kragen bestens passt.
     """
     body = housing().mesh.raw.copy()
     posts = []
@@ -191,7 +202,7 @@ def test_a_screw_post_bore_is_not_a_compartment(profile: Profile) -> None:
 
 
 def test_a_small_compartment_still_gets_a_collar(profile: Profile) -> None:
-    """A pen slot of 12 x 12 next to a compartment fifteen times its size."""
+    """Ein Stiftfach von 12 x 12 neben einem Fach fünfzehnmal seiner Größe."""
     outer = trimesh.creation.box(extents=(80.0, 40.0, 20.0))
     outer.apply_translation((0.0, 0.0, 10.0))
     big = trimesh.creation.box(extents=(50.0, 34.0, 18.0))
@@ -211,7 +222,7 @@ def test_a_small_compartment_still_gets_a_collar(profile: Profile) -> None:
 
 
 def jar(radius: float = 20.0, wall: float = 3.0, height: float = 60.0) -> SceneObject:
-    """A round tin, open at the top: the shape a screw lid belongs on."""
+    """Eine runde Dose, oben offen: die Form, auf die ein Drehdeckel gehört."""
     outer = trimesh.creation.cylinder(radius=radius, height=height, sections=96)
     outer.apply_translation((0.0, 0.0, height / 2.0))
     inner = trimesh.creation.cylinder(radius=radius - wall, height=height - wall, sections=96)
@@ -239,7 +250,9 @@ def make_screw_lid(entry: SceneObject, profile: Profile, **params: object):
 
 
 def radii(body: MeshData, low: float, high: float) -> tuple[float, float]:
-    """Smallest and largest distance from the axis inside a band of height."""
+    """Kleinster und größter Abstand von der Achse innerhalb eines
+    Höhenbandes.
+    """
     points = np.asarray(body.raw.vertices)
     inside = points[(points[:, 2] > low) & (points[:, 2] < high)]
     lengths = np.linalg.norm(inside[:, :2], axis=1)
@@ -248,11 +261,12 @@ def radii(body: MeshData, low: float, high: float) -> tuple[float, float]:
 
 
 def test_the_neck_and_the_lid_are_one_thread(profile: Profile) -> None:
-    """The measurement that decides it: does the lid grip, or does it slide off?
+    """Die Messung, die es entscheidet: greift der Deckel, oder rutscht er ab?
 
-    The lid is cut from the core diameter plus the clearance, so its material
-    reaches into the valley of the neck. Cut from the major diameter instead —
-    the mistake the part library's nut made — it would be a sleeve.
+    Der Deckel ist vom Kerndurchmesser plus Spiel geschnitten, sein Material
+    reicht also ins Tal des Halses. Stattdessen vom Außendurchmesser
+    geschnitten — der Fehler, den die Mutter der Bausteinbibliothek gemacht
+    hat — wäre er eine Hülse.
     """
     result = make_screw_lid(jar(), profile, height=8.0, pitch=3.0)
     neck, lid = result.outputs[0].mesh, result.outputs[1].mesh
@@ -274,7 +288,9 @@ def test_both_halves_come_out_closed(profile: Profile) -> None:
 
 
 def test_the_neck_keeps_the_diameter_of_the_opening(profile: Profile) -> None:
-    """A neck wider than the tin is a lid that overhangs the wall it sits on."""
+    """Ein Hals breiter als die Dose ist ein Deckel, der über die Wand
+    hinaussteht, auf der er sitzt.
+    """
     result = make_screw_lid(jar(radius=20.0), profile, height=8.0, pitch=3.0)
 
     assert result.findings[0].values["neck_mm"] == pytest.approx(40.0, abs=0.5)
@@ -282,14 +298,16 @@ def test_the_neck_keeps_the_diameter_of_the_opening(profile: Profile) -> None:
 
 
 def test_the_lid_stands_on_its_open_end(profile: Profile) -> None:
-    """§25: printed the other way up a cap needs support in its own thread."""
+    """§25: andersherum gedruckt braucht eine Kappe Stützen im eigenen
+    Gewinde.
+    """
     lid = make_screw_lid(jar(), profile, height=8.0, pitch=3.0).outputs[1].mesh
 
     assert lid.bounds.minimum[2] == pytest.approx(0.0, abs=0.01)
 
 
 def test_the_skirt_is_taller_than_the_neck(profile: Profile) -> None:
-    """Otherwise the lid comes to rest on the end of the thread, not on the rim."""
+    """Sonst setzt der Deckel auf dem Gewindeende auf statt auf dem Rand."""
     result = make_screw_lid(jar(), profile, height=8.0, pitch=3.0, thickness=2.4)
     lid = result.outputs[1].mesh
 
@@ -297,7 +315,7 @@ def test_the_skirt_is_taller_than_the_neck(profile: Profile) -> None:
 
 
 def test_a_thin_wall_cannot_carry_a_coarse_thread(profile: Profile) -> None:
-    """Two ridge depths of 5 mm pitch do not fit into a wall of 1,5."""
+    """Zwei Gangtiefen bei 5 mm Steigung passen nicht in eine Wand von 1,5."""
     with pytest.raises(ValidationError) as problem:
         make_screw_lid(jar(radius=20.0, wall=1.5), profile, height=8.0, pitch=5.0)
 
@@ -305,7 +323,7 @@ def test_a_thin_wall_cannot_carry_a_coarse_thread(profile: Profile) -> None:
 
 
 def test_a_softer_material_gets_more_play(profile: Profile) -> None:
-    """§12: the clearance of the thread is the material's, like every other."""
+    """§12: das Spiel des Gewindes gehört dem Material, wie jedes andere auch."""
     stiff = make_screw_lid(jar(), profile, pitch=3.0).findings[0].values["clearance_mm"]
     soft_jar = jar()
     soft_jar.material = "tpu-95a"
@@ -315,11 +333,13 @@ def test_a_softer_material_gets_more_play(profile: Profile) -> None:
 
 
 def test_the_ceiling_of_a_cavity_is_not_an_opening(profile: Profile) -> None:
-    """The review's find: flat was not enough, it has to look up.
+    """Der Fund der Durchsicht: flach war nicht genug, sie muss nach oben
+    schauen.
 
-    A box open at the bottom has an interior ceiling — flat, pointing down, with
-    a centre at 26,9 of 30 mm. Chosen as the opening it built a lid inside the
-    box and no step complained, because a cut below that plane does meet a wall.
+    Eine unten offene Box hat eine Innendecke — flach, nach unten zeigend, mit
+    einem Mittelpunkt bei 26,9 von 30 mm. Als Öffnung gewählt baute sie einen
+    Deckel ins Innere der Box, und kein Schritt beschwerte sich, denn ein
+    Schnitt unter dieser Ebene trifft ja eine Wand.
     """
     outer = trimesh.creation.box(extents=(60.0, 40.0, 30.0))
     outer.apply_translation((0.0, 0.0, 15.0))
@@ -343,7 +363,7 @@ def test_the_ceiling_of_a_cavity_is_not_an_opening(profile: Profile) -> None:
 
 
 def test_a_chosen_rim_decides_the_height(profile: Profile) -> None:
-    """And the other way round: the face that was clicked is the one that counts."""
+    """Und andersherum: die angeklickte Fläche ist die, die zählt."""
     entry = housing()
     entry.features = detect(entry.mesh)
     rim = next(

@@ -1,9 +1,9 @@
-"""From texture to filament (Bauplan §20).
+"""Von der Textur zum Filament (Bauplan §20).
 
-The acceptance criterion of P9 names one property and it is the one that is
-easy to lose: "quantisation reproducible for the same starting value". A
-k-Means that draws from a global random state passes every visual check and
-still gives a different part on the next run.
+Das Abnahmekriterium von P9 nennt eine Eigenschaft, und es ist die, die sich
+leicht verliert: „Quantisierung reproduzierbar für denselben Startwert". Ein
+k-Means, das aus einem globalen Zufallszustand zieht, besteht jede
+Sichtprüfung — und liefert im nächsten Lauf ein anderes Teil.
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ from app.core.types import OpContext, Profile, Scene, SceneObject
 
 
 def plate() -> trimesh.Trimesh:
-    """A plate fine enough to carry a boundary through its triangles."""
+    """Eine Platte, fein genug, um eine Grenze durch ihre Dreiecke zu tragen."""
     body = trimesh.creation.box(extents=(20.0, 20.0, 2.0))
     return body.subdivide().subdivide().subdivide()
 
 
 def painted(colours: list[tuple[int, int, int]]) -> trimesh.Trimesh:
-    """A plate whose triangles are coloured left to right."""
+    """Eine Platte, deren Dreiecke von links nach rechts eingefärbt sind."""
     body = plate()
     middle = body.triangles_center[:, 0]
     edges = np.linspace(middle.min(), middle.max() + 1e-9, len(colours) + 1)
@@ -66,7 +66,7 @@ def test_face_colours_are_read_as_they_are() -> None:
 
 
 def test_a_texture_is_sampled_at_the_centre_of_the_triangle() -> None:
-    """Averaging the corners would invent a purple that is in no filament."""
+    """Die Ecken zu mitteln erfände ein Violett, das in keinem Filament ist."""
     image = Image.new("RGB", (32, 32), (255, 0, 0))
     for column in range(16):
         for row in range(32):
@@ -91,7 +91,9 @@ def test_fewer_colours_than_filaments_stay_as_they_are() -> None:
 
 
 def test_the_same_seed_gives_the_same_assignment() -> None:
-    """§20 and §11.3: the file has to describe the part on the next run too."""
+    """§20 und §11.3: die Datei muss das Teil auch im nächsten Lauf
+    beschreiben.
+    """
     generator = np.random.default_rng(7)
     colours = generator.random((400, 3))
 
@@ -103,7 +105,7 @@ def test_the_same_seed_gives_the_same_assignment() -> None:
 
 
 def test_the_starting_value_is_the_only_source_of_chance() -> None:
-    """Two seeds may differ — but nothing else is allowed to."""
+    """Zwei Startwerte dürfen sich unterscheiden — sonst nichts."""
     generator = np.random.default_rng(7)
     colours = np.vstack(
         [
@@ -115,7 +117,8 @@ def test_the_starting_value_is_the_only_source_of_chance() -> None:
     for seed in (0, 1, 2, 3):
         result = texture.quantise(colours, 3, seed=seed)
         assert result.count == 3
-        # Well separated clusters end up the same however the start was drawn.
+        # Gut getrennte Cluster kommen gleich heraus, wie auch immer der Start
+        # gezogen wurde.
         assert sorted(np.bincount(result.labels).tolist()) == [120, 120, 120]
 
 

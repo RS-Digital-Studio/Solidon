@@ -50,10 +50,11 @@ def filled() -> Project:
 
 
 def build_example_project() -> Project:
-    """A project with everything the format has to carry.
+    """Ein Projekt mit allem, was das Format tragen muss.
 
-    Also the source of the checked-in example file: every format version keeps
-    one, so migrations can be tested against real files (§16.2).
+    Zugleich die Quelle der eingecheckten Beispieldatei: jede Formatversion
+    behält eine, damit sich Migrationen gegen echte Dateien testen
+    lassen (§16.2).
     """
     project = new_project(printer="centauri-carbon-2", material="petg")
     document = project.document
@@ -76,8 +77,8 @@ def build_example_project() -> Project:
         ),
     )
     project.sources["src_1"] = MESH_PAYLOAD
-    # A generated source too, so the checked-in file really carries what
-    # pillar B writes into it (§27): the prompt and the starting value.
+    # Auch eine erzeugte Quelle, damit die eingecheckte Datei wirklich trägt,
+    # was Säule B hineinschreibt (§27): den Prompt und den Startwert.
     document.sources["src_2"] = Source(
         id="src_2",
         kind="generated",
@@ -102,8 +103,8 @@ def build_example_project() -> Project:
         )
     )
 
-    # One object has to exist before something can be done to it; the load
-    # operation that will put it there is a later P0 step.
+    # Ein Objekt muss existieren, bevor sich etwas damit tun lässt; die
+    # load-Operation, die es dorthin bringt, ist ein späterer P0-Schritt.
     document.ops.append(
         Operation(
             id=1, op="rename_object", inputs=(), outputs=("obj_1",), params={"name": "Halterung"}
@@ -116,8 +117,8 @@ def build_example_project() -> Project:
         [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"name": "=@width"})],
         origin=agent,
     )
-    # The conversation belongs to the file since version 2, and an agent turn
-    # names the transaction it produced (§26.3).
+    # Das Gespräch gehört seit Version 2 zur Datei, und ein Agentenbeitrag
+    # benennt die Transaktion, die er erzeugt hat (§26.3).
     document.chat.append(ChatEntry(id="c1", role="user", text="Bitte duplizieren."))
     document.chat.append(
         ChatEntry(
@@ -156,7 +157,7 @@ def test_saving_and_loading_keeps_the_stack(filled: Project, tmp_path: Path) -> 
 
 
 def test_a_second_round_trip_writes_the_same_bytes(filled: Project, tmp_path: Path) -> None:
-    """Bit-identical on save and load — the P0 acceptance criterion."""
+    """Bitgleich beim Speichern und Laden — das P0-Abnahmekriterium."""
     first = save(filled, tmp_path / "a.p3d")
     reopened = load(first)
     second = save(reopened, tmp_path / "b.p3d")
@@ -330,7 +331,9 @@ def test_an_autosave_older_than_the_project_is_not_offered(filled: Project, tmp_
 
 
 def test_the_checked_in_example_still_opens() -> None:
-    """The regression net for the format: this file must keep opening (§16.2)."""
+    """Das Regressionsnetz des Formats: diese Datei muss sich weiter öffnen
+    lassen (§16.2).
+    """
     project = load(EXAMPLE_FILE)
 
     assert project.document.format_version == FORMAT_VERSION
@@ -348,7 +351,9 @@ def test_the_checked_in_example_still_opens() -> None:
 
 
 def test_every_older_example_migrates_to_today() -> None:
-    """§16.2 keeps one example per version, and each one has to arrive here."""
+    """§16.2 behält ein Beispiel je Version, und jedes davon muss hier
+    ankommen.
+    """
     examples = sorted((Path(__file__).parent / "data" / "projects").glob("example_v*.p3d"))
 
     assert len(examples) >= FORMAT_VERSION, "one checked-in file per format version"
@@ -362,14 +367,16 @@ def test_every_older_example_migrates_to_today() -> None:
 
 
 def test_a_file_from_before_the_agent_gets_an_empty_conversation() -> None:
-    """1 → 2: no chat is not a broken file, it is a file from before the chat."""
+    """1 → 2: kein Chat ist keine kaputte Datei, sondern eine aus der Zeit vor
+    dem Chat.
+    """
     project = load(Path(__file__).parent / "data" / "projects" / "example_v1.p3d")
 
     assert project.document.chat == []
 
 
 def test_a_file_from_before_pillar_b_has_no_generated_sources() -> None:
-    """2 → 3: nothing was generated back then, so nothing carries a prompt."""
+    """2 → 3: damals wurde nichts erzeugt, also trägt nichts einen Prompt."""
     project = load(Path(__file__).parent / "data" / "projects" / "example_v2.p3d")
 
     assert all(entry.kind != "generated" for entry in project.document.sources.values())

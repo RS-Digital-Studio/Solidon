@@ -1,9 +1,9 @@
-"""The operations §25 names and the register was missing (§25, §10).
+"""Die Operationen, die §25 nennt und die dem Register fehlten (§25, §10).
 
 Spiegeln, Netz, Aushöhlen, Elefantenfuß, Senken, Verschließen, Beschriftung,
-Zeichnungen. Every one of them is something people otherwise leave the
-application for — and every one of them is measured here against a number that
-can be worked out by hand, not looked at in a picture.
+Zeichnungen. Jede einzelne ist etwas, wofür Leute die Anwendung sonst verlassen
+— und jede einzelne wird hier gegen eine Zahl gemessen, die sich von Hand
+nachrechnen lässt, nicht auf einem Bild angeschaut.
 """
 
 from __future__ import annotations
@@ -57,7 +57,9 @@ def run(op: str, entry: SceneObject | None, profile: Profile, **params: object):
 
 
 def test_mirroring_turns_the_part_over_without_turning_it_inside_out(profile: Profile) -> None:
-    """A mirror inverts every triangle — a body with inside-out normals is broken."""
+    """Eine Spiegelung stülpt jedes Dreieck um — ein Körper mit umgedrehten
+    Normalen ist kaputt.
+    """
     wedge = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
     wedge.apply_translation((15.0, 0.0, 10.0))
     entry = SceneObject(id="obj_1", name="Rechts", mesh=MeshData.of(wedge))
@@ -93,7 +95,9 @@ def test_a_small_body_is_left_alone() -> None:
 
 
 def test_smoothing_does_not_shrink_the_body(profile: Profile) -> None:
-    """Taubin rather than Laplace — ten passes of the latter cost a fit."""
+    """Taubin statt Laplace — zehn Durchgänge des Letzteren kosten eine
+    Passung.
+    """
     sphere = MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=20.0))
     entry = SceneObject(id="obj_1", name="Kugel", mesh=sphere)
 
@@ -154,7 +158,7 @@ def test_hollow_runs_as_an_operation(profile: Profile) -> None:
 
 
 def test_the_first_layers_are_pulled_in_by_the_profile_value(profile: Profile) -> None:
-    """Rule 7: the value comes from the material, never from a guess."""
+    """Regel 7: der Wert kommt aus dem Material, nie aus einer Schätzung."""
     body = block(40.0, 40.0, 10.0)
     entry = SceneObject(id="obj_1", name="Klotz", mesh=body)
 
@@ -217,7 +221,9 @@ def test_the_hole_operations_are_in_the_register() -> None:
 
 
 def test_a_letter_with_a_hole_comes_out_with_a_hole() -> None:
-    """ "o" is two rings, and which one is the hole follows from containment."""
+    """„o" sind zwei Ringe, und welcher das Loch ist, folgt aus der
+    Enthaltung.
+    """
     shapes = outlines("o", 10.0)
 
     assert shapes
@@ -238,7 +244,9 @@ def test_raised_text_adds_exactly_its_own_volume(profile: Profile) -> None:
 
 
 def test_engraved_text_takes_away_the_same_volume(profile: Profile) -> None:
-    """The bug this test is about: a cut that only reaches the overlap is a scratch."""
+    """Der Fehler, um den es hier geht: ein Schnitt, der nur bis zur
+    Überlappung reicht, ist ein Kratzer.
+    """
     plate = trimesh.creation.box(extents=(40.0, 20.0, 4.0))
     plate.apply_translation((0.0, 0.0, 2.0))
     entry = SceneObject(id="obj_1", name="Platte", mesh=MeshData.of(plate))
@@ -263,11 +271,11 @@ def test_a_label_without_text_is_a_user_error(profile: Profile) -> None:
 
 
 def test_lettering_can_carry_its_own_slot(profile: Profile) -> None:
-    """§20: two colours in one file instead of two files.
+    """§20: zwei Farben in einer Datei statt in zwei Dateien.
 
-    The letters go into the union already wearing their slot, and the attribute
-    transfer of the boolean brings it out the other side (P9). What the printer
-    reads is a 3MF with two groups.
+    Die Buchstaben gehen mit ihrem Slot bekleidet in die Vereinigung, und die
+    Attributübertragung der Booleschen Op bringt ihn auf der anderen Seite
+    heraus (P9). Was der Drucker liest, ist eine 3MF mit zwei Gruppen.
     """
     from app.core.geom.attributes import counts, used_slots
 
@@ -297,7 +305,9 @@ def test_without_a_slot_the_lettering_stays_one_colour(profile: Profile) -> None
 
 
 def test_a_label_can_be_a_body_of_its_own(profile: Profile) -> None:
-    """The other way to two colours: a second file for a printer without an AMS."""
+    """Der andere Weg zu zwei Farben: eine zweite Datei für einen Drucker ohne
+    AMS.
+    """
     result = run("create_label", None, profile, text="RS", size=10.0, depth=2.0)
 
     body = result.outputs[0]
@@ -325,7 +335,7 @@ def drilled_plate() -> MeshData:
 
 
 def test_a_test_piece_is_a_cut_out_of_the_real_part(profile: Profile) -> None:
-    """A piece that prints differently from the part would be worse than none."""
+    """Ein Stück, das anders druckt als das Teil, wäre schlechter als keines."""
     body = drilled_plate()
     entry = SceneObject(id="obj_1", name="Halterung", mesh=body)
 
@@ -347,7 +357,9 @@ def test_the_test_piece_lands_on_the_bed(profile: Profile) -> None:
 
 
 def test_the_bore_is_still_in_the_piece(profile: Profile) -> None:
-    """Otherwise it is a cube, and a cube proves nothing about a fit."""
+    """Sonst ist es ein Würfel, und ein Würfel beweist nichts über eine
+    Passung.
+    """
     entry = SceneObject(id="obj_1", name="Halterung", mesh=drilled_plate())
 
     result = run("test_piece", entry, profile, size=20.0, x=25.0, y=15.0, z=4.0)
@@ -396,7 +408,9 @@ def test_a_drawing_with_no_closed_area_says_so() -> None:
 
 
 def test_a_drawing_reaches_the_scene_through_load_outline(profile: Profile) -> None:
-    """§25: the same way in as every other file — a source and an operation."""
+    """§25: derselbe Weg hinein wie bei jeder anderen Datei — eine Quelle und
+    eine Operation.
+    """
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.scene.project import ProjectSources, new_project
     from app.core.types import Source
@@ -431,13 +445,15 @@ def test_only_flat_formats_go_this_way() -> None:
 
 
 def test_every_category_of_the_plan_has_something_in_it() -> None:
-    """§25 lists what the application can do; an empty category is a gap."""
+    """§25 zählt auf, was die Anwendung kann; eine leere Kategorie ist eine
+    Lücke.
+    """
     filled = {spec.category for spec in REGISTRY.all()}
     for category in ("transform", "mesh", "prepare", "holes", "label", "import", "colour"):
         assert category in filled, category
 
 
-# --- one scene, more than one material (§12) ------------------------------------
+# --- Eine Szene, mehr als ein Material (§12) -------------------------------------
 
 
 def test_a_body_can_be_given_its_own_material(profile: Profile) -> None:
@@ -468,11 +484,11 @@ def test_an_unknown_material_says_which_ones_there_are(profile: Profile) -> None
 
 
 def test_the_elephant_foot_follows_the_body_not_the_project(profile: Profile) -> None:
-    """§12: TPU squashes 0,25 mm into its first layer, PETG 0,2.
+    """§12: TPU quetscht 0,25 mm in seine erste Schicht, PETG 0,2.
 
-    Computed with the project material a TPU seal comes out 0,05 mm too wide
-    all the way round — on a seal that is the difference between sealing and
-    not.
+    Mit dem Projektmaterial gerechnet kommt eine TPU-Dichtung ringsum 0,05 mm
+    zu breit heraus — bei einer Dichtung ist das der Unterschied zwischen
+    dichten und nicht dichten.
     """
     plain = run("compensate_first_layer", SceneObject(id="obj_1", name="A", mesh=block()), profile)
     soft = run(

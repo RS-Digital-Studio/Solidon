@@ -1,9 +1,11 @@
-"""Material slots: carrying them through operations and out into 3MF (§20, §29).
+"""Materialslots: sie durch Operationen tragen und nach 3MF hinausbringen
+(§20, §29).
 
-The acceptance criterion of P9 is short and hard: "the slot assignment survives
-boolean operations including the voxel stage". Both halves are tested — the
-easy one where the kernel hands the triangles through, and the one where the
-mesh was replaced entirely and every triangle has to ask where it came from.
+Das Abnahmekriterium von P9 ist kurz und hart: „die Slot-Zuweisung überlebt
+Boolesche Operationen einschließlich der Voxelstufe". Beide Hälften werden
+geprüft — die leichte, in der der Kern die Dreiecke durchreicht, und die, in
+der das Netz vollständig ersetzt wurde und jedes Dreieck fragen muss, woher es
+kam.
 """
 
 from __future__ import annotations
@@ -36,10 +38,10 @@ def pin(radius: float = 3.0, height: float = 40.0) -> MeshData:
 
 
 def area_share(mesh: MeshData, slot: int) -> float:
-    """Which fraction of the surface sits in one slot — the honest measure.
+    """Welcher Anteil der Oberfläche in einem Slot sitzt — das ehrliche Maß.
 
-    Triangle counts lie after a voxel run: the staircase produces many small
-    faces where the original had few large ones.
+    Dreieckszahlen lügen nach einem Voxellauf: die Treppe erzeugt viele kleine
+    Flächen, wo das Original wenige große hatte.
     """
     areas = mesh.raw.area_faces
     chosen = [area for area, entry in zip(areas, mesh.slots, strict=True) if entry == slot]
@@ -71,7 +73,7 @@ def test_slots_survive_a_direct_difference() -> None:
 
 
 def test_slots_survive_the_voxel_stage() -> None:
-    """§20, the case that costs the work: the meshing was thrown away."""
+    """§20, der Fall, der die Arbeit kostet: die Vernetzung wurde weggeworfen."""
     result = boolean("difference", [with_slot(cube(), 1), pin()], stages=("voxel",))
 
     assert result.solver.strategy == "voxel"
@@ -82,7 +84,9 @@ def test_slots_survive_the_voxel_stage() -> None:
 
 
 def test_the_cutter_does_not_paint_the_body_it_cuts() -> None:
-    """A hole through a red part has grey walls, not the colour of the drill."""
+    """Ein Loch durch ein rotes Teil hat graue Wände, nicht die Farbe des
+    Bohrers.
+    """
     result = boolean("difference", [with_slot(cube(), 1), with_slot(pin(), 7)])
 
     assert 7 not in used_slots(result.mesh)
@@ -111,7 +115,9 @@ def test_transfer_keeps_a_union_of_two_colours_apart() -> None:
 
 
 def test_the_assignment_is_reproducible() -> None:
-    """Same input, same assignment — nothing here is allowed to be random (§11.3)."""
+    """Gleiche Eingabe, gleiche Zuweisung — nichts hier darf zufällig
+    sein (§11.3).
+    """
     first = boolean("difference", [with_slot(cube(), 1), pin()], stages=("voxel",))
     second = boolean("difference", [with_slot(cube(), 1), pin()], stages=("voxel",))
 
@@ -119,7 +125,9 @@ def test_the_assignment_is_reproducible() -> None:
 
 
 def test_transfer_takes_the_surfaces_it_is_given() -> None:
-    """The rule of §20 lives in ``transfer``; who counts as a source is decided outside."""
+    """Die Regel aus §20 lebt in ``transfer``; wer als Quelle zählt, wird
+    außerhalb entschieden.
+    """
     result = boolean("difference", [with_slot(cube(), 1), with_slot(pin(), 7)])
     including_the_tool = transfer(result.mesh, [with_slot(cube(), 1), with_slot(pin(), 7)])
 
@@ -163,7 +171,9 @@ def test_3mf_carries_one_colour_group_per_slot() -> None:
 
 
 def test_3mf_only_declares_the_slots_the_body_uses() -> None:
-    """An object may know five filaments; the file only mentions the ones on it."""
+    """Ein Objekt darf fünf Filamente kennen; die Datei nennt nur die, die auf
+    ihm sind.
+    """
     slots = [MaterialSlot(index=index, name=f"Farbe {index}") for index in range(5)]
 
     model = model_of(threemf.write(with_slot(cube(), 3), slots))
@@ -190,7 +200,9 @@ def test_3mf_keeps_the_geometry_and_the_unit() -> None:
 
 
 def test_3mf_written_here_can_be_read_here_again() -> None:
-    """§20, import: a file exported from Formwerk must not lose its colours."""
+    """§20, Import: eine aus Formwerk exportierte Datei darf ihre Farben nicht
+    verlieren.
+    """
     body = boolean("union", [with_slot(cube(), 1), with_slot(cube(offset=(20, 0, 0)), 2)]).mesh
     slots = [
         MaterialSlot(index=1, name="Rot", colour=(1.0, 0.0, 0.0)),
@@ -213,12 +225,16 @@ def test_reading_a_3mf_without_groups_says_so() -> None:
 
 
 def test_a_3mf_with_a_different_triangle_count_is_not_guessed_at() -> None:
-    """Several bodies get concatenated on the way in — then the order is unknown."""
+    """Mehrere Körper werden auf dem Weg hinein aneinandergehängt — dann ist
+    die Reihenfolge unbekannt.
+    """
     assert threemf.read(threemf.write(with_slot(cube(), 1)), 999) is None
 
 
 def test_loading_a_3mf_brings_its_colours_into_the_scene(profile: Profile) -> None:
-    """The whole import side of §20: file on disk, coloured object in the scene."""
+    """Die ganze Importseite von §20: Datei auf der Platte, farbiges Objekt in
+    der Szene.
+    """
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.scene.project import ProjectSources, new_project
     from app.core.types import Source

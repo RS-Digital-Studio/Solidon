@@ -12,7 +12,7 @@ from tests.conftest import FakeMesh, make_object
 
 
 class FakeCodec:
-    """Stands in for the geometry layer, which supplies the real one later."""
+    """Steht für die Geometrieschicht, die den echten später liefert."""
 
     suffix = ".json"
 

@@ -43,7 +43,9 @@ def cube():
 
 
 def test_a_bore_is_cut_larger_than_nominal(profile: Profile) -> None:
-    """§39: FDM prints holes tight, so the bore is widened — from the profile."""
+    """§39: FDM druckt Löcher zu eng, die Bohrung wird also größer — aus dem
+    Profil.
+    """
     petg = profiles.material("petg")
     assert bore_diameter(5.0, profile, compensate=True) == pytest.approx(
         5.0 + petg.hole_compensation
@@ -52,7 +54,7 @@ def test_a_bore_is_cut_larger_than_nominal(profile: Profile) -> None:
 
 
 def test_the_compensation_comes_from_the_material_not_from_a_literal() -> None:
-    """AGENTS.md rule 7: tolerances are references into the profile."""
+    """AGENTS.md Regel 7: Toleranzen sind Verweise ins Profil."""
     petg = profiles.make_profile("centauri-carbon-2", "petg")
     tpu = profiles.make_profile("centauri-carbon-2", "tpu-95a")
 
@@ -94,7 +96,7 @@ def test_a_bore_follows_its_axis(axis: str, profile: Profile) -> None:
 
 
 def test_the_boolean_overlap_is_the_one_from_the_rule_set() -> None:
-    """§39: always a hundredth of a millimetre, never coincident faces."""
+    """§39: immer ein hundertstel Millimeter, nie zusammenfallende Flächen."""
     assert pytest.approx(0.01) == BOOLEAN_OVERLAP
 
 
@@ -166,7 +168,9 @@ def test_a_clearance_makes_the_check_stricter() -> None:
 
 
 def bracket() -> MeshData:
-    """A block with a slot through it — the shape whose box lies about it."""
+    """Ein Block mit einem Schlitz hindurch — die Form, über die ihr Quader
+    lügt.
+    """
     import trimesh
 
     outer = trimesh.creation.box(extents=(30.0, 20.0, 30.0))
@@ -185,11 +189,11 @@ def bar(height: float) -> MeshData:
 
 
 def test_a_part_sitting_inside_a_slot_is_not_a_collision() -> None:
-    """§18.6: the boxes overlap and the bodies never touch.
+    """§18.6: die Quader überlappen, und die Körper berühren sich nie.
 
-    This is the case that makes people stop reading a report — every assembly
-    that hooks together has it, and calling all of them collisions is the same
-    as reporting nothing.
+    Das ist der Fall, der Leute aufhören lässt, einen Bericht zu lesen — jede
+    Baugruppe, die ineinandergreift, hat ihn, und sie alle Kollisionen zu nennen
+    ist dasselbe, wie gar nichts zu melden.
     """
     assert not check_collisions([bracket(), bar(6.0)])
 
@@ -203,13 +207,17 @@ def test_a_part_that_really_sits_in_the_material_is_one() -> None:
 
 
 def test_too_close_counts_as_a_collision_when_a_clearance_is_asked_for() -> None:
-    """Measured from the surface — a spacing on the plate means exactly that."""
+    """Von der Oberfläche gemessen — ein Abstand auf der Platte bedeutet genau
+    das.
+    """
     assert not check_collisions([bracket(), bar(9.0)], clearance=0.2), "half a millimetre apart"
     assert check_collisions([bracket(), bar(9.8)], clearance=0.5), "a tenth apart, half asked for"
 
 
 def test_an_open_body_falls_back_to_the_box_and_says_so() -> None:
-    """An open body has no inside; guessing one would turn a warning into a lie."""
+    """Ein offener Körper hat kein Innen; eines zu raten machte aus einer
+    Warnung eine Lüge.
+    """
     import trimesh
 
     broken = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
@@ -270,7 +278,7 @@ def test_splitting_runs_as_an_operation(document: Document, profile: Profile) ->
 
 
 def test_arranging_runs_over_every_object(document: Document, profile: Profile) -> None:
-    """An operation with a variable object count: as many out as went in."""
+    """Eine Operation mit variabler Objektzahl: so viele heraus wie hinein."""
     project, history = loaded(document, count=3)
     history.apply(
         _("Anordnen"),

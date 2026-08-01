@@ -1,4 +1,4 @@
-"""Transformations, and that a drag ends up as an operation (§18.11, §25)."""
+"""Transformationen, und dass ein Ziehen als Operation endet (§18.11, §25)."""
 
 from __future__ import annotations
 
@@ -96,7 +96,9 @@ def test_placing_on_the_bed_only_moves_in_z() -> None:
 
 
 def test_a_dragged_matrix_becomes_editable_steps() -> None:
-    """§18.11: a drag turns into operations whose numbers can still be changed."""
+    """§18.11: ein Ziehen wird zu Operationen, deren Zahlen sich weiter ändern
+    lassen.
+    """
     steps = decompose_transform(translation((5.0, 0.0, -3.0)))
     assert steps.offset == pytest.approx((5.0, 0.0, -3.0))
     assert steps.moves
@@ -134,7 +136,7 @@ def test_an_untouched_gizmo_yields_nothing() -> None:
 
 
 def test_snapping_rounds_to_the_step() -> None:
-    """§18.11: grid and angle snapping belong to the interaction, not the geometry."""
+    """§18.11: Einrasten gehört zur Interaktion, nicht zur Geometrie."""
     assert snap_to_step(10.4, 1.0) == pytest.approx(10.0)
     assert snap_to_step(10.6, 1.0) == pytest.approx(11.0)
     assert snap_to_step(37.0, 15.0) == pytest.approx(30.0)
@@ -190,7 +192,7 @@ def test_every_transformation_runs_as_an_operation(
 
 
 def test_a_transformation_is_taken_back_by_one_undo(document: Document, profile: Profile) -> None:
-    """§18.11: a drag becomes one operation, so one undo takes it back."""
+    """§18.11: ein Ziehen wird eine Operation, ein Undo nimmt es also zurück."""
     history = prepared(document)
     before = evaluate_with(document, profile).scene.objects["obj_1"].mesh.bounds.centre
 

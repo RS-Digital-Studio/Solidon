@@ -1,4 +1,6 @@
-"""The scene operations, run through the real stack and evaluation (§25)."""
+"""Die Szenen-Operationen, durch den echten Stapel und die Auswertung
+gefahren (§25).
+"""
 
 from __future__ import annotations
 
@@ -19,7 +21,9 @@ class StartParams(BaseParams):
 
 @pytest.fixture
 def registry() -> Registry:
-    """The real scene operations plus a stand-in for the load step, which is P0 later."""
+    """Die echten Szenen-Operationen plus einen Platzhalter für den
+    Ladeschritt, der später P0 ist.
+    """
     own = Registry()
 
     @register_op(
@@ -135,16 +139,18 @@ def test_undo_takes_the_rename_back(
     assert result.scene.objects["obj_1"].name == "Halterung"
 
 
-# --- a quantity belongs in the stack, not in the file name ----------------------
+# --- Eine Stückzahl gehört in den Stapel, nicht in den Dateinamen ----------------
 
 
 def test_ten_of_a_part_is_one_operation(
     document: Document, profile: Profile, registry: Registry
 ) -> None:
-    """§25: "Clippy_Filament-Clip_x10" is a quantity nobody can change any more.
+    """§25: „Clippy_Filament-Clip_x10" ist eine Stückzahl, die niemand mehr
+    ändern kann.
 
-    Here it is a number in one step of the stack — ten objects out of one
-    operation, instead of nine duplications nobody can read afterwards.
+    Hier ist sie eine Zahl in einem Schritt des Stapels — zehn Objekte aus
+    einer Operation, statt neun Duplizierungen, die danach niemand mehr lesen
+    kann.
     """
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
@@ -162,11 +168,11 @@ def test_ten_of_a_part_is_one_operation(
 def test_another_count_is_also_one_step_back_and_forward(
     document: Document, profile: Profile, registry: Registry
 ) -> None:
-    """Six instead of three, the long way round: undo and apply again.
+    """Sechs statt drei, auf dem langen Weg: zurücknehmen und neu anwenden.
 
-    ``change_params`` is the short way and does the same thing where nothing
-    depends on the objects. This path stays tested because it is the one that
-    still works when something does.
+    ``change_params`` ist der kurze Weg und tut dasselbe, wo nichts von den
+    Objekten abhängt. Dieser Pfad bleibt getestet, weil er der ist, der noch
+    funktioniert, wenn doch etwas abhängt.
     """
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
@@ -188,7 +194,9 @@ def test_another_count_is_also_one_step_back_and_forward(
 def test_a_count_of_one_leaves_it_at_one(
     document: Document, profile: Profile, registry: Registry
 ) -> None:
-    """Not an error: a duplicate of one is the object, and the stack may say so."""
+    """Kein Fehler: ein Duplikat von eins ist das Objekt, und der Stapel darf
+    das sagen.
+    """
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
     history.apply(
@@ -202,7 +210,7 @@ def test_a_count_of_one_leaves_it_at_one(
 def test_a_count_that_has_to_be_calculated_is_refused(
     document: Document, registry: Registry
 ) -> None:
-    """§13: the ids are handed out before an expression is resolved."""
+    """§13: die IDs werden vergeben, bevor ein Ausdruck aufgelöst ist."""
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
 
@@ -215,14 +223,15 @@ def test_a_count_that_has_to_be_calculated_is_refused(
     assert problem.value.constraint == "not_a_number"
 
 
-# --- an operation of the stack can be corrected (§15.4) -------------------------
+# --- Eine Operation des Stapels lässt sich korrigieren (§15.4) -------------------
 
 
 def test_a_parameter_can_be_changed_afterwards(
     document: Document, profile: Profile, registry: Registry
 ) -> None:
-    """What makes the stack a stack: a name two letters different is not a step
-    to take back and do again."""
+    """Was den Stapel zum Stapel macht: ein Name, zwei Buchstaben anders, ist
+    kein Schritt zum Zurücknehmen und Neu-Tun.
+    """
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
     history.apply(
@@ -240,7 +249,9 @@ def test_a_parameter_can_be_changed_afterwards(
 def test_only_the_named_parameters_change(
     document: Document, profile: Profile, registry: Registry
 ) -> None:
-    """Everything not mentioned keeps its value — a dialog may send one field."""
+    """Alles nicht Genannte behält seinen Wert — ein Dialog darf ein Feld
+    schicken.
+    """
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
     history.apply(
@@ -270,7 +281,9 @@ def test_an_unknown_parameter_is_refused(document: Document, registry: Registry)
 def test_the_count_may_change_while_nothing_uses_the_objects(
     document: Document, profile: Profile, registry: Registry
 ) -> None:
-    """Ten instead of three, on the last step of the stack: new ids, no harm."""
+    """Zehn statt drei, auf dem letzten Schritt des Stapels: neue IDs, kein
+    Schaden.
+    """
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
     history.apply(
@@ -286,11 +299,11 @@ def test_the_count_may_change_while_nothing_uses_the_objects(
 def test_a_count_that_later_steps_depend_on_is_not_changed_silently(
     document: Document, registry: Registry
 ) -> None:
-    """The ids of the new bodies are not the old ones.
+    """Die IDs der neuen Körper sind nicht die alten.
 
-    A later operation would point at objects that no longer exist, and an error
-    at the far end of the stack about a number changed at the near end is one
-    nobody connects back to what they did.
+    Eine spätere Operation zeigte auf Objekte, die es nicht mehr gibt, und ein
+    Fehler am fernen Ende des Stapels über eine Zahl, die am nahen Ende
+    geändert wurde, ist einer, den niemand mit dem verbindet, was er getan hat.
     """
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
@@ -313,7 +326,9 @@ def test_a_count_that_later_steps_depend_on_is_not_changed_silently(
 def test_changing_a_parameter_discards_what_was_undone(
     document: Document, registry: Registry
 ) -> None:
-    """§15.4: there are no branches, and a redo onto a changed stack would be one."""
+    """§15.4: Verzweigungen gibt es nicht, und ein Redo auf einen geänderten
+    Stapel wäre eine.
+    """
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
     history.apply(
@@ -338,11 +353,13 @@ def test_an_operation_that_is_not_there_says_so(document: Document, registry: Re
 def test_a_count_outside_the_range_never_reaches_the_document(
     document: Document, registry: Registry
 ) -> None:
-    """The review's find: the ids are handed out before the range is checked.
+    """Der Fund der Durchsicht: die IDs werden vergeben, bevor der Bereich
+    geprüft ist.
 
-    Five million was five million ids in the document in a second, and the
-    declared limit of a hundred came too late to stop it — validation runs where
-    the scene is computed, and by then the stack has already written them down.
+    Fünf Millionen waren in einer Sekunde fünf Millionen IDs im Dokument, und
+    die deklarierte Grenze von hundert kam zu spät, um das zu stoppen — die
+    Validierung läuft dort, wo die Szene gerechnet wird, und da hat der Stapel
+    sie längst hingeschrieben.
     """
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
@@ -358,7 +375,7 @@ def test_a_count_outside_the_range_never_reaches_the_document(
 
 
 def test_the_declared_maximum_is_the_limit(document: Document, registry: Registry) -> None:
-    """One truth: the number in the declaration, not a second one in the stack."""
+    """Eine Wahrheit: die Zahl in der Deklaration, keine zweite im Stapel."""
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
     highest = next(

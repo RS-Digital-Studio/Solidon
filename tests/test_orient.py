@@ -1,4 +1,6 @@
-"""Print orientation as a heuristic, openly labelled as one (Bauplan §25, P2)."""
+"""Druckorientierung als Heuristik, offen als solche benannt (Bauplan §25,
+P2).
+"""
 
 from __future__ import annotations
 
@@ -21,7 +23,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def plate():
-    """A flat plate: 80 x 50 x 8 mm. Its best side is obvious."""
+    """Eine flache Platte: 80 x 50 x 8 mm. Ihre beste Seite ist offensichtlich."""
     return normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
 
 
@@ -51,7 +53,7 @@ def test_the_footprint_beats_the_alternatives() -> None:
 
 
 def test_the_heuristic_says_that_it_is_one() -> None:
-    """It will be replaced by the layer analysis in P3, and it says so."""
+    """Sie wird in P3 von der Schichtanalyse ersetzt, und sie sagt das auch."""
     result = orient_for_print(plate())
     codes = {finding.code for finding in result.findings}
 
@@ -61,7 +63,9 @@ def test_the_heuristic_says_that_it_is_one() -> None:
 
 
 def test_heavy_overhang_is_called_out() -> None:
-    """A cone on its tip cannot be saved by turning it — so it says so."""
+    """Ein Kegel auf seiner Spitze lässt sich durch Drehen nicht retten — also
+    sagt er das.
+    """
     cone = MeshData.of(trimesh.creation.cone(radius=20.0, height=60.0, sections=32))
     result = orient_for_print(apply(cone, rotation("x", 180.0)))
 
@@ -109,7 +113,7 @@ def test_orienting_runs_as_an_operation(document: Document, profile: Profile) ->
 def test_the_thorough_orientation_uses_the_layer_analysis(
     document: Document, profile: Profile
 ) -> None:
-    """Default is thorough: hundreds of positions judged by real support volume."""
+    """Vorgabe ist gründlich: hunderte Lagen, an echtem Stützvolumen beurteilt."""
     project = new_project("centauri-carbon-2", "petg")
     project.document = document
     document.sources["src_1"] = Source(

@@ -33,7 +33,7 @@ def document_with(*fits: Fit) -> Document:
 
 
 def fit_to(feature_id: str, name: str = "stift_1") -> Fit:
-    """Both sides on the plate, so only the side under test can go missing."""
+    """Beide Seiten auf der Platte, damit nur die geprüfte Seite fehlen kann."""
     return Fit(
         name=name,
         a=FeatureRef("obj_1", feature_id),
@@ -56,7 +56,7 @@ def test_references_that_resolve_are_left_alone(scene: Scene) -> None:
 
 
 def test_a_lost_reference_is_put_to_the_user(scene: Scene) -> None:
-    """§21.3: the chain asks, it never picks a hole by itself."""
+    """§21.3: die Kette fragt, sie sucht sich nie selbst ein Loch aus."""
     document = document_with(fit_to("hole_9"))
     asked: list[tuple[str, list[str]]] = []
 
@@ -98,7 +98,9 @@ def test_the_user_can_drop_the_fit_instead(scene: Scene) -> None:
 
 
 def test_a_reference_without_any_candidate_is_an_error(scene: Scene) -> None:
-    """Nothing to choose from means nothing to ask — it is reported, not guessed."""
+    """Nichts zur Auswahl heißt nichts zu fragen — es wird gemeldet, nicht
+    geraten.
+    """
     document = document_with(
         Fit(
             name="weg",
@@ -115,7 +117,7 @@ def test_a_reference_without_any_candidate_is_an_error(scene: Scene) -> None:
 
 
 def test_the_candidates_keep_to_the_kind(scene: Scene) -> None:
-    """A hole is replaced by a hole, never by a face."""
+    """Ein Loch wird durch ein Loch ersetzt, nie durch eine Fläche."""
     document = document_with(fit_to("hole_9"))
     seen: list[list[str]] = []
 
@@ -156,17 +158,19 @@ def test_the_references_of_a_document_are_listed() -> None:
 
 
 def test_the_candidates_can_be_shown_highlighted(scene: Scene) -> None:
-    """§21.3 wants the candidates marked in the view, so they come with their data."""
+    """§21.3 will die Kandidaten in der Ansicht markiert, sie kommen also mit
+    ihren Daten.
+    """
     found = orphans.candidates_of(scene, FeatureRef("obj_1", "hole_9"))
 
     assert found and all(feature.kind == "hole" for feature in found.values())
 
 
-# --- operations name features too, and never were checked -----------------------
+# --- Operationen benennen auch Merkmale, und wurden nie geprüft ------------------
 
 
 def document_with_op(named: str, op: str = "insert_heatset_m4") -> Document:
-    """A document whose one operation points at a feature by name."""
+    """Ein Dokument, dessen eine Operation ein Merkmal namentlich benennt."""
     document = Document(format_version=1, app_version="0.0.1")
     document.ops.append(
         Operation(id=1, op=op, inputs=("obj_1",), outputs=("obj_1",), params={"at_feature": named})
@@ -175,11 +179,13 @@ def document_with_op(named: str, op: str = "insert_heatset_m4") -> Document:
 
 
 def test_an_operation_that_names_a_feature_is_a_reference() -> None:
-    """The gap this closes: eighteen operations declare one and none was listed.
+    """Die Lücke, die das hier schließt: achtzehn Operationen deklarieren
+    eines, und keine wurde aufgezählt.
 
-    ``references`` said "operations carry coordinates, not feature ids" — and it
-    had been wrong since the part library arrived. A file whose hole was gone did
-    not get §21.3's question; it stopped at that operation with an error.
+    ``references`` sagte „Operationen tragen Koordinaten, keine Merkmal-IDs" —
+    und das war falsch, seit es die Bausteinbibliothek gibt. Eine Datei, deren
+    Loch fort war, bekam nicht die Frage aus §21.3; sie hielt an dieser
+    Operation mit einem Fehler an.
     """
     found = orphans.references(document_with_op("hole_1"))
 
@@ -188,7 +194,9 @@ def test_an_operation_that_names_a_feature_is_a_reference() -> None:
 
 
 def test_an_empty_reference_is_not_a_reference() -> None:
-    """Most operations leave it empty, and an empty name points nowhere."""
+    """Die meisten Operationen lassen es leer, und ein leerer Name zeigt
+    nirgendwohin.
+    """
     assert orphans.references(document_with_op("")) == []
 
 
@@ -208,7 +216,9 @@ def test_a_lost_reference_of_an_operation_is_put_to_the_user(scene: Scene) -> No
 
 
 def test_dropping_it_clears_the_name_and_keeps_the_step(scene: Scene) -> None:
-    """An operation is a step somebody took — deleting it would take the geometry."""
+    """Eine Operation ist ein Schritt, den jemand getan hat — sie zu löschen
+    nähme die Geometrie mit.
+    """
     document = document_with_op("hole_9")
 
     result = orphans.check(document, scene, lambda question, choices: orphans.REMOVE_CHOICE)
@@ -219,5 +229,5 @@ def test_dropping_it_clears_the_name_and_keeps_the_step(scene: Scene) -> None:
 
 
 def test_an_operation_the_registry_does_not_know_is_skipped() -> None:
-    """A file from a newer version, or a plugin that is not loaded."""
+    """Eine Datei aus einer neueren Version, oder ein nicht geladenes Plugin."""
     assert orphans.references(document_with_op("hole_1", op="op_from_the_future")) == []

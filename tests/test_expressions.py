@@ -1,4 +1,6 @@
-"""The grammar accepts what it declares and rejects everything else (§13, §32)."""
+"""Die Grammatik nimmt an, was sie deklariert, und lehnt alles andere
+ab (§13, §32).
+"""
 
 from __future__ import annotations
 

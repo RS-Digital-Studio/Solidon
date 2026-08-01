@@ -1,7 +1,8 @@
-"""The boolean fallback chain (Bauplan §17.2, §35).
+"""Die Boolesche Rückfallkette (Bauplan §17.2, §35).
 
-Every stage is forced once, so none of them can quietly rot: the chain is only
-worth having if stage 4 still works on the day stage 1 gives up.
+Jede Stufe wird einmal erzwungen, damit keine von ihnen still verrottet: die
+Kette lohnt nur, wenn Stufe 4 an dem Tag noch funktioniert, an dem Stufe 1
+aufgibt.
 """
 
 from __future__ import annotations
@@ -52,7 +53,7 @@ def test_intersection_keeps_only_the_overlap() -> None:
 
 
 def test_the_stage_that_worked_is_recorded() -> None:
-    """§17.2: the successful stage is written into the operation."""
+    """§17.2: die erfolgreiche Stufe wird in die Operation geschrieben."""
     result = boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))])
 
     assert result.solver.attempted == ("direct",)
@@ -61,7 +62,9 @@ def test_the_stage_that_worked_is_recorded() -> None:
 
 @pytest.mark.parametrize("stage", ["welded", "jittered", "voxel"])
 def test_every_stage_can_carry_the_operation_alone(stage: str) -> None:
-    """§35: each stage forced once — a chain nobody exercises is a chain that rots."""
+    """§35: jede Stufe einmal erzwungen — eine Kette, die niemand übt, ist
+    eine Kette, die verrottet.
+    """
     result = boolean(
         "union",
         [solid(), box(20.0, (10.0, 0.0, 0.0))],
@@ -71,14 +74,15 @@ def test_every_stage_can_carry_the_operation_alone(stage: str) -> None:
 
     assert result.solver.strategy == stage
     assert result.mesh.triangle_count > 0
-    # Jitter moves vertices, voxels round to a grid — both trade accuracy for
-    # an answer, which is exactly what the later stages are for (§17.2).
+    # Jitter bewegt Eckpunkte, Voxel runden auf ein Raster — beide tauschen
+    # Genauigkeit gegen eine Antwort, und genau dafür sind die späteren Stufen
+    # da (§17.2).
     tolerance = {"welded": 1e-6, "jittered": 1e-3, "voxel": 0.05}[stage]
     assert result.mesh.volume == pytest.approx(12000.0, rel=tolerance)
 
 
 def test_the_voxel_stage_says_that_it_rounded() -> None:
-    """§17.3: stage 4 costs accuracy and is never used silently."""
+    """§17.3: Stufe 4 kostet Genauigkeit und wird nie stillschweigend benutzt."""
     result = boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))], stages=("voxel",))
 
     codes = {finding.code for finding in result.findings}
@@ -87,7 +91,9 @@ def test_the_voxel_stage_says_that_it_rounded() -> None:
 
 
 def test_the_jitter_stage_carries_its_seed() -> None:
-    """§11.3: without a stored seed the result would not be reproducible."""
+    """§11.3: ohne gespeicherten Startwert wäre das Ergebnis nicht
+    reproduzierbar.
+    """
     first = boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))], seed=42, stages=("jittered",))
     second = boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))], seed=42, stages=("jittered",))
 
@@ -96,14 +102,16 @@ def test_the_jitter_stage_carries_its_seed() -> None:
 
 
 def test_draft_quality_stops_after_the_second_stage() -> None:
-    """§31: iterating stays fast, so draft does not spend time on voxels."""
+    """§31: das Iterieren bleibt schnell, der Entwurf gibt also keine Zeit für
+    Voxel aus.
+    """
     assert DRAFT_CHAIN == ("direct", "welded")
     assert FULL_CHAIN[:2] == DRAFT_CHAIN
     assert "voxel" in FULL_CHAIN and "voxel" not in DRAFT_CHAIN
 
 
 def test_an_impossible_operation_ends_with_a_finding_and_a_way_forward() -> None:
-    """§17.2 stage 5: giving up is allowed, giving up silently is not."""
+    """§17.2 Stufe 5: aufgeben ist erlaubt, still aufgeben nicht."""
     with pytest.raises(BooleanFailedError) as caught:
         boolean(
             "intersection",
@@ -124,7 +132,9 @@ def test_at_least_two_bodies_are_needed() -> None:
 
 
 def two_body_document(document, profile):
-    """Two overlapping cubes in a document, ready for a boolean operation."""
+    """Zwei überlappende Würfel in einem Dokument, bereit für eine Boolesche
+    Operation.
+    """
     from app.core.registry import REGISTRY
     from app.core.scene import History, OperationDraft
     from app.core.scene.project import new_project
@@ -156,7 +166,9 @@ def two_body_document(document, profile):
 
 
 def test_a_boolean_operation_records_its_stage(document, profile) -> None:
-    """§17.2: the stage that carried the operation is written into the stack."""
+    """§17.2: die Stufe, die die Operation getragen hat, wird in den Stapel
+    geschrieben.
+    """
     from app.core.scene import OperationDraft, evaluate
     from app.core.scene.project import ProjectSources
     from app.i18n import _
@@ -170,7 +182,8 @@ def test_a_boolean_operation_records_its_stage(document, profile) -> None:
     result = evaluate(document, profile, sources=ProjectSources(project))
 
     assert result.complete
-    # Two bodies in, one out: the result is a new object, the inputs are consumed.
+    # Zwei Körper hinein, einer heraus: das Ergebnis ist ein neues Objekt, die
+    # Eingaben sind verbraucht.
     assert result.scene.objects["obj_3"].mesh.volume == pytest.approx(12000.0, rel=1e-6)
     assert "obj_1" not in result.scene.objects
 
@@ -215,16 +228,17 @@ def test_intersect_objects_runs_as_an_operation(document, profile) -> None:
     assert result.scene.objects["obj_3"].mesh.volume == pytest.approx(4000.0, rel=1e-6)
 
 
-# --- a wrong call is not an answer (§33.1) --------------------------------------
+# --- Ein falscher Aufruf ist keine Antwort (§33.1) -------------------------------
 
 
 def test_a_wrong_call_into_the_kernel_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The lesson of the convex decomposition, held down where it can be.
+    """Die Lektion der konvexen Zerlegung, dort festgehalten, wo es geht.
 
-    Handlers around a kernel catch broadly, because a kernel fails in kernel-ways
-    and that is an answer. A TypeError is not: it means the call is wrong, and
-    swallowing it turns a bug into an empty result. The decomposition of §22.3
-    did exactly that for two phases, behind a green suite.
+    Handler um einen Kern fangen breit, denn ein Kern scheitert auf Kernarten,
+    und das ist eine Antwort. Ein TypeError ist keine: er heißt, dass der
+    Aufruf falsch ist, und ihn zu verschlucken macht aus einem Fehler ein leeres
+    Ergebnis. Die Zerlegung aus §22.3 tat genau das, zwei Phasen lang, hinter
+    einer grünen Suite.
     """
 
     def wrong(*_args: object, **_kwargs: object) -> None:
@@ -237,7 +251,9 @@ def test_a_wrong_call_into_the_kernel_is_not_swallowed(monkeypatch: pytest.Monke
 
 
 def test_a_kernel_that_gives_up_is_still_an_answer(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The other half of the rule: what the handler is actually for stays caught."""
+    """Die andere Hälfte der Regel: wofür der Handler wirklich da ist, bleibt
+    gefangen.
+    """
 
     def gave_up(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("manifold: could not solve")

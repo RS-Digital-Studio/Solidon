@@ -1,8 +1,8 @@
-"""Auto split with pinning (Bauplan §25, §22.3, §14; §40 for P10).
+"""Auto Split mit Verstiftung (Bauplan §25, §22.3, §14; §40 für P10).
 
-The acceptance criterion is three sentences: every part watertight on its own,
-fit pairs created and checked, and ``oversized.stl`` divided into something
-printable without anybody touching a parameter. All three are here.
+Das Abnahmekriterium sind drei Sätze: jedes Teil für sich wasserdicht,
+Passungspaare angelegt und geprüft, und ``oversized.stl`` in etwas Druckbares
+geteilt, ohne dass jemand einen Parameter anfasst. Alle drei stehen hier.
 """
 
 from __future__ import annotations
@@ -29,7 +29,9 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def body(name: str = "oversized.stl") -> MeshData:
-    """As the input stage delivers it — welded, and therefore closed."""
+    """So, wie die Eingangsstufe ihn liefert — verschweißt und damit
+    geschlossen.
+    """
     return normalise(read_mesh((MESHES / name).read_bytes(), ".stl"), "mm").mesh
 
 
@@ -56,7 +58,9 @@ def test_the_oversize_is_measured_per_axis(profile: Profile) -> None:
 
 
 def test_the_plane_lands_in_the_slim_middle(profile: Profile) -> None:
-    """§22.3: the section decides, and the slim prismatic middle wins."""
+    """§22.3: der Querschnitt entscheidet, und die schmale prismatische Mitte
+    gewinnt.
+    """
     candidate = autosplit.find_plane(body(), profile)
 
     assert candidate is not None
@@ -67,7 +71,9 @@ def test_the_plane_lands_in_the_slim_middle(profile: Profile) -> None:
 
 
 def test_a_seam_with_several_bridges_loses(profile: Profile) -> None:
-    """Two arms side by side: cutting across both is worse than cutting the joint."""
+    """Zwei Arme nebeneinander: quer durch beide zu schneiden ist schlechter,
+    als die Verbindung zu schneiden.
+    """
     left = trimesh.creation.box(extents=(300.0, 20.0, 20.0))
     left.apply_translation((0.0, -40.0, 10.0))
     right = trimesh.creation.box(extents=(300.0, 20.0, 20.0))
@@ -91,7 +97,7 @@ def test_a_body_twice_too_long_takes_two_cuts(profile: Profile) -> None:
 
 
 def test_every_piece_is_closed_and_nothing_is_lost(profile: Profile) -> None:
-    """The P10 criterion: each part watertight, and the volume adds up."""
+    """Das P10-Kriterium: jedes Teil wasserdicht, und das Volumen geht auf."""
     whole = body()
     outcome = autosplit.split_to_fit(whole, profile)
 
@@ -102,7 +108,9 @@ def test_every_piece_is_closed_and_nothing_is_lost(profile: Profile) -> None:
 
 
 def test_the_steps_say_which_piece_was_cut(profile: Profile) -> None:
-    """Without that the stack cannot be built — the next cut needs an object."""
+    """Ohne das lässt sich der Stapel nicht bauen — der nächste Schnitt
+    braucht ein Objekt.
+    """
     outcome = autosplit.split_to_fit(bar(600.0), profile)
 
     assert [step.part_index for step in outcome.cuts] == [0, 1]
@@ -116,14 +124,14 @@ def test_the_search_stops_instead_of_cutting_forever(profile: Profile) -> None:
 
 
 def test_convex_parts_take_an_l_apart(profile: Profile) -> None:
-    """§22.3: the decomposition finds where an L comes apart by itself.
+    """§22.3: die Zerlegung findet, wo ein L von selbst auseinanderfällt.
 
-    This test used to skip itself when the answer was empty, and the answer was
-    always empty: the call passed a ``randomizeSeed`` that this V-HACD does not
-    have, the TypeError was read as "module missing", and the whole hint path
-    of the plane search was dead behind a green suite. So: no skip. If V-HACD
-    is installed it has to deliver, and the corner of the L is what it must
-    find.
+    Dieser Test übersprang sich früher, wenn die Antwort leer war, und die
+    Antwort war immer leer: der Aufruf übergab ein ``randomizeSeed``, das dieses
+    V-HACD nicht hat, der TypeError wurde als „Modul fehlt" gelesen, und der
+    ganze Hinweispfad der Ebenensuche war hinter einer grünen Suite tot. Also:
+    kein Skip. Ist V-HACD installiert, muss es liefern, und die Ecke des L ist
+    das, was es finden muss.
     """
     shape = trimesh.boolean.union(
         [
@@ -141,7 +149,9 @@ def test_convex_parts_take_an_l_apart(profile: Profile) -> None:
 
 
 def test_convex_parts_are_reproducible(profile: Profile) -> None:
-    """§11.3: the same body gives the same pieces, without a seed to store."""
+    """§11.3: derselbe Körper gibt dieselben Stücke, ohne einen Startwert zu
+    speichern.
+    """
     shape = trimesh.boolean.union(
         [
             trimesh.creation.box(extents=(60.0, 20.0, 20.0)),
@@ -173,7 +183,7 @@ def test_pins_sit_inside_the_cut_face(profile: Profile) -> None:
 
 
 def test_a_face_too_small_gets_no_pins_and_says_so(profile: Profile) -> None:
-    """A seam without pins still glues; a pin through the wall does not."""
+    """Eine Naht ohne Stifte klebt immer noch; ein Stift durch die Wand nicht."""
     thin = MeshData.of(trimesh.creation.box(extents=(400.0, 3.0, 3.0)))
     candidate = autosplit.find_plane(thin, profile)
     assert candidate is not None
@@ -201,7 +211,9 @@ def test_the_pin_goes_into_one_half_and_the_bore_into_the_other(profile: Profile
 
 
 def test_the_play_comes_from_the_material_profile(profile: Profile) -> None:
-    """Rule 7: the bore is the pin plus the calibrated clearance, never a literal."""
+    """Regel 7: die Bohrung ist der Stift plus das kalibrierte Spiel, nie ein
+    Literal.
+    """
     whole = body()
     candidate = autosplit.find_plane(whole, profile)
     assert candidate is not None
@@ -215,7 +227,7 @@ def test_the_play_comes_from_the_material_profile(profile: Profile) -> None:
     assert bore - pin == pytest.approx(profile.material.clearance)
 
 
-# --- as an operation ------------------------------------------------------------
+# --- Als Operation ---------------------------------------------------------------
 
 
 def run(op: str, entry: SceneObject, profile: Profile, **params: object):
@@ -295,7 +307,7 @@ def test_the_plan_is_one_operation_per_cut(loaded, profile: Profile) -> None:
 def test_oversized_is_divided_without_anybody_touching_a_parameter(
     loaded, profile: Profile
 ) -> None:
-    """The P10 acceptance criterion, end to end (§40)."""
+    """Das P10-Abnahmekriterium, Ende zu Ende (§40)."""
     project, mesh = loaded
 
     applied = apply_split(project.document, mesh, "obj_1", profile)
@@ -310,7 +322,7 @@ def test_oversized_is_divided_without_anybody_touching_a_parameter(
 
 
 def test_the_seams_become_fit_pairs(loaded, profile: Profile) -> None:
-    """§14: auto split creates the pairs, because that is where they arise."""
+    """§14: Auto Split legt die Paare an, denn dort entstehen sie."""
     project, mesh = loaded
 
     applied = apply_split(project.document, mesh, "obj_1", profile)
@@ -355,7 +367,9 @@ def test_a_part_that_already_fits_is_not_cut(profile: Profile) -> None:
 
 
 def test_the_sections_of_a_turned_axis_match_the_upright_ones(profile: Profile) -> None:
-    """The turn has to be exact — the pin positions are computed through it."""
+    """Die Drehung muss exakt sein — die Stiftpositionen werden durch sie
+    gerechnet.
+    """
     plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 20.0)))
 
     along_z = autosplit.sections_along(plate, "z", np.array([0.0]))[0]

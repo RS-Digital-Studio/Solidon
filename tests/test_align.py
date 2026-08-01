@@ -1,8 +1,8 @@
-"""Snapping onto features (Bauplan §18.11).
+"""Einrasten auf Merkmale (Bauplan §18.11).
 
-The promise is "bring these bore axes into line", and the check is the same
-sentence in numbers: afterwards the axes are parallel and the centres are in
-one place.
+Das Versprechen ist „Bohrungsachsen zur Deckung bringen", und die Prüfung ist
+derselbe Satz in Zahlen: danach sind die Achsen parallel und die Mittelpunkte
+an einem Ort.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def test_a_feature_without_an_axis_says_so() -> None:
 
 
 def test_two_bores_end_up_coaxial() -> None:
-    """§18.11: "Bohrungsachsen zur Deckung bringen" — checked as exactly that."""
+    """§18.11: „Bohrungsachsen zur Deckung bringen" — genau daraufhin geprüft."""
     fixed = plate()
     moving = apply(apply(plate(), rotation("y", 35.0)), translation((60.0, -20.0, 15.0)))
 
@@ -104,7 +104,9 @@ def test_flipping_turns_the_body_the_other_way() -> None:
 
 
 def test_two_faces_meet_front_to_front() -> None:
-    """Laying one part on another means the normals point at each other."""
+    """Ein Teil auf ein anderes zu legen heißt, dass die Normalen aufeinander
+    zeigen.
+    """
     fixed = plate()
     moving = apply(plate(), rotation("x", 20.0))
 
@@ -118,11 +120,13 @@ def test_two_faces_meet_front_to_front() -> None:
     assert float(normal_after @ normal_target) == pytest.approx(-1.0, abs=1e-3)
 
 
-# --- as an operation ------------------------------------------------------------
+# --- Als Operation ---------------------------------------------------------------
 
 
 def test_aligning_is_an_operation(document: Document, profile: Profile) -> None:
-    """AGENTS.md rule 2: a snap is an op, so the file says what was lined up."""
+    """AGENTS.md Regel 2: ein Einrasten ist eine Op, die Datei sagt also, was
+    womit in Flucht gebracht wurde.
+    """
     project = new_project("centauri-carbon-2", "petg")
     project.document = document
     for name in ("src_1", "src_2"):

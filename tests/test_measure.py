@@ -1,4 +1,4 @@
-"""Measuring against a body whose dimensions are known (Bauplan §18.3)."""
+"""Messen an einem Körper mit bekannten Maßen (Bauplan §18.3)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def cube():
-    """20 mm cube, centred on the origin, welded and watertight."""
+    """20-mm-Würfel, auf den Ursprung zentriert, verschweißt und wasserdicht."""
     return normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
 
 
@@ -40,7 +40,7 @@ def test_angles_are_reported_as_the_smaller_one() -> None:
 
 
 def test_a_click_near_a_corner_snaps_onto_it() -> None:
-    """§18.3: snapping is what makes a measurement reproducible."""
+    """§18.3: Einrasten ist das, was eine Messung reproduzierbar macht."""
     result = snap(cube(), (10.2, 9.8, 10.1))
 
     assert result.kind == "vertex"
@@ -72,7 +72,7 @@ def test_measuring_the_cube_edge_after_snapping() -> None:
 
 
 def test_wall_thickness_of_a_solid_cube() -> None:
-    """From the middle of a face straight through: 20 mm of material."""
+    """Von der Mitte einer Fläche gerade hindurch: 20 mm Material."""
     assert wall_thickness(cube(), (0.0, 0.0, 10.0)) == pytest.approx(20.0, abs=1e-3)
 
 
@@ -83,7 +83,9 @@ def test_wall_thickness_in_a_given_direction() -> None:
 
 
 def test_wall_thickness_says_nothing_where_it_cannot_tell() -> None:
-    """A ray that leaves the body reports nothing instead of a made up number."""
+    """Ein Strahl, der den Körper verlässt, meldet nichts statt einer
+    erfundenen Zahl.
+    """
     assert wall_thickness(cube(), (0.0, 0.0, 10.0), (0.0, 0.0, 1.0)) is None
 
 

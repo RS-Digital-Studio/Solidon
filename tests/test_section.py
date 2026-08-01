@@ -1,8 +1,8 @@
-"""The cut face is closed (Bauplan §18.2).
+"""Die Schnittfläche ist geschlossen (Bauplan §18.2).
 
-Checked by measuring, not by comparing pixels: a capped cut through a solid is
-watertight and has exactly the volume geometry says it should. A picture could
-not tell those apart from a hollow shell.
+Geprüft durch Messen, nicht durch Pixelvergleich: ein gedeckelter Schnitt durch
+einen Vollkörper ist wasserdicht und hat genau das Volumen, das die Geometrie
+sagt. Ein Bild könnte das nicht von einer hohlen Schale unterscheiden.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def test_a_plane_beyond_the_body_leaves_nothing() -> None:
 
 
 def test_two_planes_leave_a_slice() -> None:
-    """§18.2: an optional second plane turns the cut into a slice."""
+    """§18.2: eine optionale zweite Ebene macht aus dem Schnitt eine Scheibe."""
     body = solid()
     result = cut(body, SectionPlane.along("z", 5.0), SectionPlane.along("z", -5.0).flipped())
 
@@ -74,7 +74,9 @@ def test_a_free_plane_works_like_an_axis_plane() -> None:
 
 
 def test_a_plate_with_holes_is_capped_around_the_holes() -> None:
-    """The case that decides it: the cut face has an outline and four holes in it."""
+    """Der Fall, der es entscheidet: die Schnittfläche hat einen Umriss und
+    vier Löcher darin.
+    """
     plate = solid("plate_holes.stl")
     result = cut(plate, SectionPlane.along("z", 0.0))
 
@@ -84,7 +86,9 @@ def test_a_plate_with_holes_is_capped_around_the_holes() -> None:
 
 
 def test_an_open_model_is_cut_but_reported_as_uncapped() -> None:
-    """An open body cannot be capped honestly — so it is not faked (§18.2)."""
+    """Ein offener Körper lässt sich nicht ehrlich deckeln — also wird es
+    nicht vorgetäuscht (§18.2).
+    """
     body = normalise(read_mesh((MESHES / "broken_open.stl").read_bytes(), ".stl"), "mm").mesh
     result = cut(body, SectionPlane.along("z", 0.0))
 
