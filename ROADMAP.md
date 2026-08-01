@@ -1504,3 +1504,35 @@ Drei Kleinigkeiten, die in der Durchsicht als „echt, aber klein" standen:
       etwas anderes gibt
 - [x] **Einträge aus „Zuletzt geöffnet" entfernen** — über das Kontextmenü.
       Die Datei bleibt, wo sie ist
+
+## Durchsicht: Politur, die man auf jedem Bild sieht
+
+Anlass war die Frage nach Bedienfreundlichkeit, Logik und dem Stand gegen die
+Mitbewerber. Der Befund zur Sache: die Alleinstellung — verstehen, beraten,
+anpassen, übergeben in einem Programm — trägt; gegen Tinkercad zählt die
+Druckintelligenz, gegen Fusion und FreeCAD die Druckfrage, die dort niemand
+beantwortet, gegen die Text-to-CAD-Dienste die eine rücknehmbare Transaktion
+je Vorschlag und der Betrieb ohne Cloud. Die zwei echten Lücken sind bekannt
+und bleiben es: Skizzeneditor (P13) und Live-Vorschau im Op-Dialog (eigene
+Phase). Was die Durchsicht fand, war Politur — sechs Funde, alle behoben:
+
+- [x] **Auf jedem zweiten Dialog stand „Cancel".** Qt beschriftet seine
+      Standardknöpfe selbst, und niemand hatte den qtbase-Katalog geladen —
+      der Sprachtest sah es nicht, weil es keine eigene Zeichenkette ist.
+      Geprüft wird jetzt am echten Artefakt, einer QDialogButtonBox
+- [x] **Der Prüfbericht schnitt seine Sätze mitten im Wort ab** — genau die
+      Sätze, für die §2.7 geschrieben wurde, hinter einer horizontalen
+      Bildlaufleiste. Jetzt Umbruch statt Abschneiden
+- [x] **„OK" sagte nicht, was es tut.** Der Bestätigen-Knopf jedes
+      Operationsdialogs heißt jetzt wie die Operation — „Bohrung setzen"
+      statt „OK", aus dem Register, also übersetzt
+- [x] **Der Katalog zeigte zweieinhalb von dreizehn Bausteinen.** Jetzt ein
+      Kachelraster; die Gruppenüberschrift nimmt die ganze Zeile, die
+      Pfeiltasten laufen in beide Richtungen
+- [x] **Das Handbuch war vom Startbildschirm aus unsichtbar** — 25 Seiten
+      für die ersten fünfzehn Minuten, erreichbar nur über das Hilfemenü
+      eines Fensters, das ein neuer Nutzer noch nie gesehen hat
+- [x] **Die Handbuchbilder zeigten die Oberfläche von vor der Bedienrunde**
+      — Siebzehn-Menü-Leiste mit Überlauf, ausgegraute Gruppen. Neu
+      aufgenommen; `make_figures` wechselt jetzt auch Qts Knopfsprache mit,
+      und wer die Oberfläche sichtbar ändert, nimmt die Bilder neu auf
