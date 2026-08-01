@@ -63,7 +63,14 @@ zusammen. Weiteres:
 .venv\Scripts\python.exe -m app.ui.app                          # Anwendung starten
 .venv\Scripts\python.exe -m app.cli.main --help                 # Kommandozeile
 .venv\Scripts\python.exe tools/run_agent_suite.py               # kostet Geld, kein Testlauf
+.venv\Scripts\python.exe tools/make_figures.py                  # Bildschirmfotos fürs Handbuch
+.venv\Scripts\python.exe tools/make_manual.py                   # Handbuch als Website und PDF
 ```
+
+Die letzten beiden laufen **nicht** offscreen und dürfen es nicht: unter
+`QT_QPA_PLATFORM=offscreen` hat Qt auf dieser Maschine null Schriftfamilien,
+und jede Beschriftung in jedem Bild wird zu einem leeren Kästchen. Wer ein
+erzeugtes Bild prüft, prüft es aus demselben Grund unter der echten Plattform.
 
 Erstaufbau: `python -m venv .venv` und
 `.venv\Scripts\python.exe -m pip install -e ".[dev,geom,ui,agent,brep]"`.
@@ -87,7 +94,12 @@ app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
   agent/      LLM-Schicht: Sitzung, Vorschlag als eine Transaktion, Prüfungen
   backends/   LLM, OpenSCAD, Mesh-Erzeuger — alles extern, alles abschaltbar
   export/     STL/3MF/STEP, Plattenbelegung
+  manual.py   Handbuch: geschriebene Seiten, Referenz aus dem Register erzeugt
+  figures.py  Abbildungskatalog — gezeichnet, gerendert, aufgenommen
+  drawing.py  SVG ohne Qt: Maßlinien, Schemata, Netzprojektion
+  markup.py   Markdown → HTML, nur die selbst erzeugte Teilmenge
 app/ui/       PySide6 — darf core benutzen, nie umgekehrt
+app/images/   Bildschirmfotos fürs Handbuch, je Sprache ein Ordner
 app/cli/      Kommandozeile auf core
 tests/        eine Datei je Testart, data/ ist der Referenzkorpus
 tools/        Hilfsprogramme, nicht Teil der Anwendung

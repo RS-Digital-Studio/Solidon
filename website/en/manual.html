@@ -31,14 +31,14 @@
 <main>
 <p><a href="index.html">← Formwerk</a></p>
 <h1>Manual — Formwerk</h1>
-<nav class="toc"><strong>Inhalt</strong><ul><li><a href="#what">What Formwerk is</a></li><li><a href="#start">The first fifteen minutes</a></li><li><a href="#window">The window</a></li><li><a href="#ways">The three ways</a></li><li><a href="#history">The history</a></li><li><a href="#parameters">Parameters and expressions</a></li><li><a href="#tolerances">Material, tolerances, fits</a></li><li><a href="#parts">The parts</a></li><li><a href="#printing">Onto the plate and out</a></li><li><a href="#chat">The chat</a></li><li><a href="#trouble">When something goes wrong</a></li><li><a href="#glossary">Glossary</a></li><li><a href="#scene">Scene</a></li><li><a href="#repair">Repair</a></li><li><a href="#transform">Transformation</a></li><li><a href="#boolean">Boolean</a></li><li><a href="#sketch">Sketch</a></li><li><a href="#shaping">Shaping</a></li><li><a href="#holes">Holes</a></li><li><a href="#parts">Parts</a></li><li><a href="#prepare">Print preparation</a></li><li><a href="#import">Import</a></li><li><a href="#colour">Colour</a></li><li><a href="#label">Lettering</a></li><li><a href="#mesh">Mesh</a></li></ul></nav>
-<h3>What Formwerk is</h3>
+<nav class="toc"><strong>Contents</strong><ul><li><a href="#what">What Formwerk is</a></li><li><a href="#start">The first fifteen minutes</a></li><li><a href="#window">The window</a></li><li><a href="#ways">The three ways</a></li><li><a href="#history">The history</a></li><li><a href="#parameters">Parameters and expressions</a></li><li><a href="#tolerances">Material, tolerances, fits</a></li><li><a href="#parts">The parts</a></li><li><a href="#printing">Onto the plate and out</a></li><li><a href="#chat">The chat</a></li><li><a href="#trouble">When something goes wrong</a></li><li><a href="#glossary">Glossary</a></li><li><a href="#scene">Scene</a></li><li><a href="#repair">Repair</a></li><li><a href="#transform">Transformation</a></li><li><a href="#boolean">Boolean</a></li><li><a href="#sketch">Sketch</a></li><li><a href="#shaping">Shaping</a></li><li><a href="#holes">Holes</a></li><li><a href="#parts">Parts</a></li><li><a href="#prepare">Print preparation</a></li><li><a href="#import">Import</a></li><li><a href="#colour">Colour</a></li><li><a href="#label">Lettering</a></li><li><a href="#mesh">Mesh</a></li></ul></nav>
+<h3 id="what">What Formwerk is</h3>
 <p>Formwerk builds, changes and print-readies models for the 3D printer.</p>
 <p>Three things set it apart from what else is open:</p>
 <ul><li><strong>Every step stays a number.</strong> A hole two millimetres off gets moved, not drilled again.</li><li><strong>Fits come from the material, not from a feeling.</strong> Measure your clearance once and you improve parts you built before.</li><li><strong>Building blocks instead of handwork.</strong> Nut trap, heat-set insert, latch, living hinge, magnet pocket — one click each instead of half an hour each.</li></ul>
 <p><strong>What it is not:</strong> no CAD replacement — there are no sketches and no constraints. No slicer — the print file still comes from the slicer, Formwerk only searches and judges. No cloud — no account, no telemetry, nothing that leaves the machine.</p>
 <p>Without a network, without an account and without a language model, everything except the chat stays usable.</p>
-<h3>The first fifteen minutes</h3>
+<h3 id="start">The first fifteen minutes</h3>
 <p>Anyone who has never worked with a construction program starts here. A downloaded model gets a hole and goes on to the slicer afterwards — the most common case of all, in eight steps.</p>
 <p><strong>1. Answer three questions at first start.</strong> Language, printer, material. If your own printer is not in the list, a similar one will do — the dimensions can be changed later. Skipping works too, and then the defaults apply.</p>
 <figure><img src="../handbuch/en/start-screen.png" alt="The start screen: recently opened projects, the three example projects and a large area to drop a file onto."><figcaption>No empty start screen — there is always something to begin with.</figcaption></figure>
@@ -55,7 +55,7 @@
 <p><strong>7. If the hole sits wrong, it is moved, not drilled again.</strong> A double-click on the step in the history reopens it. Change the number, apply, done. That still works next week.</p>
 <p><strong>8. Export.</strong> <em>File → Export</em>, then 3MF if your slicer can read it — otherwise STL. That file goes into the slicer, and the slicer turns it into G-code.</p>
 <p>The first run needs no more than this. Everything else in this manual builds on it.</p>
-<h3>The window</h3>
+<h3 id="window">The window</h3>
 <p>Three zones, and none of them hides.</p>
 <figure><img src="../handbuch/en/window.svg" alt="The window: the toolbar at the top, on the left the object tree, parameters and history one below the other, in the middle the viewport with the model, on the right either the chat or the report, at the bottom the status bar."><figcaption>Three zones, no modes. The right-hand column can be hidden entirely.</figcaption></figure>
 <p><strong>On the left</strong> sit the object tree, the parameters and the history one below the other, each section collapsible. The object tree shows what is in the scene; the parameter list the named dimensions of the project; the history every step that led to the current state.</p>
@@ -64,25 +64,25 @@
 <p><strong>At the bottom</strong> the status bar: dimensions of the selection, progress of a running computation, open warnings.</p>
 <p><strong>There are no modes.</strong> No switching between “editing” and “building”, no workbenches — there is one state, and that is the scene.</p>
 <p><strong>When you are looking for something, open the command palette.</strong> It finds every operation by name and shows the keyboard shortcut right beside it. That way you learn the shortcuts in passing instead of memorising them.</p>
-<h3>The three ways</h3>
+<h3 id="ways">The three ways</h3>
 <p>Almost every task takes one of three ways. Each has an example project ready — on the start screen, to open and look through.</p>
 <figure><img src="../handbuch/en/ways.svg" alt="Three sequences one below the other: adapting a foreign model (import, repair, drill, export), building from scratch (name dimensions, primitives, parts, export) and preparing a generated mesh (generate, repair chain, check, export)."><figcaption>Each way has an example project waiting on the start screen.</figcaption></figure>
 <p><strong>Way 1 — adapting a foreign model.</strong> Something downloaded that almost fits: import, repair, drill, export. The most common way, and the one where the repair counts.</p>
 <p><strong>Way 2 — building from scratch.</strong> Something new out of primitives and parts, with named parameters: width, depth, thickness. Change a number and the part changes.</p>
 <p><strong>Way 3 — preparing a generated model.</strong> What an image model delivers is a surface, not a construction. It goes through the repair chain, and holes come afterwards as steps of their own — not by measuring the mesh.</p>
-<h3>The history</h3>
+<h3 id="history">The history</h3>
 <p>Every operation sits in the history, and there it stays changeable. That is the difference everything else hangs on: a model here is not a mesh of triangles but the list of steps it came about through.</p>
 <figure><img src="../handbuch/en/stack.svg" alt="Four steps one below the other — load model, repair, hole Ø 4.2 mm, place on bed. An arrow points at the third step: a double-click reopens it, and only the steps below it are recomputed."><figcaption>Every step stays a number — tomorrow as well.</figcaption></figure>
 <p><strong>A double-click on a step</strong> reopens it — with the values that are in the file. To move a hole two millimetres, change the number; only what hangs below is recomputed.</p>
 <p><strong>Undo takes back a whole transaction</strong>, not half a step. A proposal from the chat is exactly one transaction — an undo takes it back completely.</p>
 <p>Two limits are deliberate. Steps taken back fall away as soon as a new one arrives: there are no branches. And a change that alters the <em>number</em> of objects while later steps work with them is refused — the new bodies are not the old ones, and an error at the end about a number at the beginning is one nobody can trace.</p>
 <p><strong>Clicking sets things up.</strong> Select a face in the window and then call an operation, and position and axis are already filled in. The size is not: a countersink takes the head of the screw, not the diameter of the hole it sits on.</p>
-<h3>Parameters and expressions</h3>
+<h3 id="parameters">Parameters and expressions</h3>
 <p>A project has named parameters — <code>breite</code>, <code>tiefe</code>, <code>wandstaerke</code> — and operations may compute with them instead of with fixed numbers.</p>
 <p>Allowed are the four basic operations, brackets, <code>min</code>, <code>max</code>, <code>abs</code>, <code>round</code> and references to other parameters. Nothing else is: the expression is computed by an evaluator of our own, not by Python. A project file is a file and not a program, and a language model does not change that.</p>
 <p>Cycles are found and named instead of computed until something gives way.</p>
 <p>Everything is computed in millimetres and double precision. Rounding happens only on the way to the screen.</p>
-<h3>Material, tolerances, fits</h3>
+<h3 id="tolerances">Material, tolerances, fits</h3>
 <p>The piece that sets Formwerk apart from a slicer.</p>
 <p>A printed part is never as large as drawn. Plastic shrinks as it cools, a hole of 5 mm comes out narrower, and the bottom layer is squashed wider than all the others. Anyone who wants to push two parts together has to allow for that — and that is exactly what Formwerk takes off your hands.</p>
 <p><strong>The clearance is in the material profile, not in the model.</strong> To put a pin into a hole you do not enter 0.2 — you say <em>fit</em>, and the number comes from the profile of the material being printed.</p>
@@ -94,7 +94,7 @@
 <figure><img src="../handbuch/en/elephant-foot.svg" alt="A stack of layers on the print bed. The lowest is wider than all the others because it is pressed down — the elephant foot."><figcaption>For fits on the first layer, Formwerk allows for it.</figcaption></figure>
 <p><strong>The test piece</strong> cuts a cube out around one spot instead of rebuilding it. What gets printed is the real geometry with the real tolerance: two minutes instead of two hours, and the result holds for the part.</p>
 <p><strong>A scene may have several materials.</strong> A TPU gasket in a PETG housing shrinks differently and wants more clearance. With <em>set material</em> the single body gets its own profile, and tolerances, elephant foot and fit checking compute with it.</p>
-<h3>The parts</h3>
+<h3 id="parts">The parts</h3>
 <p>Sinking a hexagon into a wall so deep that an M4 nut fits and the screw still bites is half an hour of work — the first time. The part library takes it off your hands: pick a part, pick a size, place it on the face.</p>
 <p><strong>The dimensions come from a table, not from memory.</strong> What across-flats an M4 hexagon has, how deep a heat-set insert sits, how wide a living hinge may be — that is looked up, not estimated.</p>
 <p><strong>Nut trap</strong> — the pocket for a hex nut that is dropped in during printing. The most common way to get a load-bearing thread on a printed part.</p>
@@ -108,7 +108,7 @@
 <p>Then there are the screw hole, magnet pocket, cable gland, rib, keyhole, printed thread and the test bodies from the previous chapter. The catalogue shows a picture for each — a library you cannot see does not exist for the user.</p>
 <figure><img src="../handbuch/en/catalog.png" alt="The part catalogue: preview images instead of a list of names, ordered by group."></figure>
 <p><strong>Every part stays as changeable as any other operation.</strong> It sits in the history, its dimensions can be corrected later, and the places it attaches to keep their names.</p>
-<h3>Onto the plate and out</h3>
+<h3 id="printing">Onto the plate and out</h3>
 <p><strong>Arrange on the bed</strong> lays the objects out side by side and starts a new plate as soon as the current one is full. Whatever does not fit even then is not left out but reported.</p>
 <p><strong>Too large for the bed?</strong> <em>Split automatically</em> cuts until every piece fits. The cut plane is searched for rather than guessed, two dowel pins go into every cut face, and each cut stays a number you can change afterwards.</p>
 <figure><img src="../handbuch/en/split.svg" alt="On the left an object reaching past the edge of the print bed. On the right the same object cut in two, with two dowel pins in the cut face."><figcaption>The dowel pins make sure the halves only go together one way round.</figcaption></figure>
@@ -119,12 +119,12 @@
 <p><strong>Export goes to STL, 3MF or STEP.</strong> 3MF is what slicers prefer, and it carries the material slots along as colour groups; STL knows no colour and loses them accordingly. STEP is there for exact bodies, with real faces and edges.</p>
 <p><strong>The slicer stays outside.</strong> The layer analysis finds and judges — islands, spans, thin spots, the best orientation — but the slicer writes the print file. Where both give numbers, it is always stated which came from where.</p>
 <figure><img src="../handbuch/en/layers.svg" alt="A bridge between two piers with its span dimensioned, and beside it a small block hanging in mid-air — an island."><figcaption>Analysed here, sliced as before in the slicer.</figcaption></figure>
-<h3>The chat</h3>
+<h3 id="chat">The chat</h3>
 <p>The chat calls the same operations that stand in the menus — it is a second hand on the same tool, not a second way past it.</p>
 <p>Two things follow. <strong>Every proposal is exactly one transaction</strong>: an undo takes it back completely, never half. And <strong>the chat computes no geometry</strong> — it picks operations and values, the computing happens in the program.</p>
 <p>It needs a model: either a key of your own or a local Ollama. For the tool calls it has to be big enough; below 7B they fail reproducibly.</p>
 <p>Everything else in Formwerk works without a language model.</p>
-<h3>When something goes wrong</h3>
+<h3 id="trouble">When something goes wrong</h3>
 <p>The cases that are most common at the start — what is behind them and what helps.</p>
 <p><strong>“The model is not closed.”</strong> Faces are missing from the file, or triangles face the wrong way. With downloaded models that is normal. <em>Repair</em> in the report closes small holes and turns faces around. If a whole wall is missing, no repair can guess it — then the file is broken and another source is the shorter way.</p>
 <p><strong>A boolean operation fails or eats too much.</strong> Boolean operations need clean input bodies. Formwerk tries several methods in turn and says afterwards which one carried it. If it says <em>voxel</em>, the computation was coarse and accuracy was lost — then repair first and combine again.</p>
@@ -136,7 +136,7 @@
 <p><strong>The chat does not answer.</strong> It needs a language model — your own key or a local Ollama. Small models below about seven billion parameters fail at the tool calls, and they do so reliably. Everything except the chat works without one.</p>
 <p><strong>Everything is sluggish.</strong> While you work, draft quality is running; the fine computation comes at export. With very large meshes it helps to simplify early — the triangle count is in the object tree.</p>
 <p><strong>As a rule:</strong> no error in Formwerk stops at the observation. If there is no action beside it that carries on, that is a bug in Formwerk and worth a report.</p>
-<h3>Glossary</h3>
+<h3 id="glossary">Glossary</h3>
 <p>The words that turn up in Formwerk, in slicers and in printing forums — briefly explained.</p>
 <p><strong>Mesh</strong> — a body as a shell of triangles. STL and OBJ contain nothing else: no circles, no dimensions, only triangles.</p>
 <p><strong>Closed (watertight)</strong> — the shell has no hole, inside and outside are unambiguous. Only a closed body can be combined and printed reliably.</p>
@@ -164,7 +164,7 @@
 <p><strong>STEP</strong> — a format with real faces and edges instead of triangles. What classical CAD programs exchange.</p>
 <p><strong>Report</strong> — the list of what stands out about the scene, each entry with an action that fixes it.</p>
 <p><strong>Material slot</strong> — the assignment of a face to a material or a colour for multi-material printing.</p>
-<h3>Scene</h3>
+<h3 id="scene">Scene</h3>
 <h4>Arrange on the bed (<code>arrange_bed</code>)</h4>
 <p>Lays all objects out side by side on the build plate.</p>
 <p>Objekte: 0 → -1 · umkehrbar · deterministisch</p>
@@ -181,12 +181,12 @@
 <p>Gives an object a different name. The geometry is untouched.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch · Kürzel <code>F2</code></p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>name</code></td><td></td><td>erforderlich</td><td></td><td>Name</td></tr></tbody></table>
-<h3>Repair</h3>
+<h3 id="repair">Repair</h3>
 <h4>Repair (<code>repair</code>)</h4>
 <p>Closes holes, removes degenerate triangles and lines the faces up.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>fill_holes</code></td><td></td><td>True</td><td></td><td>Close open places</td></tr><tr><td><code>weld</code></td><td></td><td>True</td><td></td><td>Welding vertices</td></tr><tr><td><code>degenerate</code></td><td></td><td>True</td><td></td><td>Remove degenerate triangles</td></tr><tr><td><code>normals</code></td><td></td><td>True</td><td></td><td>Unifying normals</td></tr><tr><td><code>small_components</code></td><td></td><td>False</td><td></td><td>Delete stray fragments</td></tr><tr><td><code>self_intersections</code></td><td></td><td>False</td><td></td><td>Resolve self-intersections</td></tr></tbody></table>
-<h3>Transformation</h3>
+<h3 id="transform">Transformation</h3>
 <h4>Align to feature (<code>align_to_feature</code>)</h4>
 <p>Brings a bore axis or a face into line with a second one.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch · Features: hole, face</p>
@@ -214,7 +214,7 @@
 <p>Moves an object by the given millimetres.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch · Kürzel <code>Ctrl+T</code></p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>dx</code></td><td>mm</td><td>0.0</td><td></td><td>Offset X</td></tr><tr><td><code>dy</code></td><td>mm</td><td>0.0</td><td></td><td>Offset Y</td></tr><tr><td><code>dz</code></td><td>mm</td><td>0.0</td><td></td><td>Offset Z</td></tr></tbody></table>
-<h3>Boolean</h3>
+<h3 id="boolean">Boolean</h3>
 <h4>Add a box (<code>create_box</code>)</h4>
 <p>Adds a box. Look in the part library first (§39).</p>
 <p>Objekte: 0 → 1 · umkehrbar · deterministisch</p>
@@ -248,7 +248,7 @@
 <h4>Unite (<code>union_objects</code>)</h4>
 <p>Merges two objects into one.</p>
 <p>Objekte: 2 → 1 · umkehrbar · mit Startwert</p>
-<h3>Sketch</h3>
+<h3 id="sketch">Sketch</h3>
 <h4>Extrude base shape (<code>sketch_extrude</code>)</h4>
 <p>Raises a base shape straight up into a body. The outline comes from a solved sketch and enters the kernel as an exact curve (§30.1) — a circle really is round.</p>
 <p>Objekte: 0 → 1 · umkehrbar · deterministisch</p>
@@ -269,7 +269,7 @@
 <p>Sweeps a cross-section along a bend: starting upright, tilting sideways with the bend radius — a pipe elbow in one step.</p>
 <p>Objekte: 0 → 1 · umkehrbar · deterministisch</p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>shape</code></td><td></td><td>circle</td><td>rectangle, slot, circle, polygon</td><td>Base shape</td></tr><tr><td><code>length</code></td><td>mm</td><td>10.0</td><td>0.1 … 1000</td><td>Length</td></tr><tr><td><code>width</code></td><td>mm</td><td>10.0</td><td>0.1 … 1000</td><td>Width</td></tr><tr><td><code>bend_radius</code></td><td>mm</td><td>20.0</td><td>0.1 … 1000</td><td>Bend radius</td></tr><tr><td><code>bend_angle</code></td><td>°</td><td>90.0</td><td>1 … 180</td><td>Bend angle</td></tr><tr><td><code>name</code></td><td></td><td></td><td></td><td>Name</td></tr><tr><td><code>corners</code></td><td></td><td>6</td><td>3 … 64</td><td>Corners</td></tr><tr><td><code>sketch</code></td><td></td><td></td><td></td><td>Sketch</td></tr></tbody></table>
-<h3>Shaping</h3>
+<h3 id="shaping">Shaping</h3>
 <h4>Add a chamfer (<code>chamfer_edges</code>)</h4>
 <p>Breaks edges of a B-Rep body at 45 degrees.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>
@@ -290,7 +290,7 @@
 <p>A stud with a true helical external thread — as an exact body that survives STEP export. Enlarged by the clearance and subtracted from a body it becomes the internal thread.</p>
 <p>Objekte: 0 → 1 · umkehrbar · deterministisch</p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>diameter</code></td><td>mm</td><td>10.0</td><td>2 … 100</td><td>Nominal diameter</td></tr><tr><td><code>pitch</code></td><td>mm</td><td>1.5</td><td>0.25 … 8</td><td>Pitch</td></tr><tr><td><code>length</code></td><td>mm</td><td>12.0</td><td>1 … 500</td><td>Length</td></tr><tr><td><code>name</code></td><td></td><td></td><td></td><td>Name</td></tr></tbody></table>
-<h3>Holes</h3>
+<h3 id="holes">Holes</h3>
 <h4>Countersink (<code>countersink_hole</code>)</h4>
 <p>Opens the mouth of a bore so a screw head sits flush.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch · Features: hole</p>
@@ -303,7 +303,7 @@
 <p>Fills a bore back in — for instance when a foreign part has one too many.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch · Features: hole</p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>diameter</code></td><td>mm</td><td>5.0</td><td>0.2 … 200</td><td>Diameter</td></tr><tr><td><code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Position X</td></tr><tr><td><code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Position Y</td></tr><tr><td><code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Position Z</td></tr><tr><td><code>axis</code></td><td></td><td>z</td><td>x, y, z</td><td>Axis</td></tr><tr><td><code>depth</code></td><td>mm</td><td>0.0</td><td>0 … 1000</td><td>Depth</td></tr></tbody></table>
-<h3>Parts</h3>
+<h3 id="parts">Parts</h3>
 <h4>Create lid (<code>create_lid</code>)</h4>
 <p>Creates a matching lid with a collar for an opening. The cavity is cut out of the body rather than measured again — the clearance comes from the material profile.</p>
 <p>Objekte: 1 → 2 · umkehrbar · deterministisch · Features: face</p>
@@ -376,7 +376,7 @@
 <p>Puts a threaded neck on the opening and creates the matching screw lid. Both threads come from the same pitch, the clearance from the material profile.</p>
 <p>Objekte: 1 → 2 · umkehrbar · deterministisch · Features: face</p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>height</code></td><td>mm</td><td>8.0</td><td>2 … 100</td><td>Thread height</td></tr><tr><td><code>pitch</code></td><td>mm</td><td>3.0</td><td>1 … 10</td><td>Pitch</td></tr><tr><td><code>thickness</code></td><td>mm</td><td>2.4</td><td>0.8 … 50</td><td>Lid thickness</td></tr><tr><td><code>wall</code></td><td>mm</td><td>2.4</td><td>0.8 … 20</td><td>Wall thickness of the lid</td></tr><tr><td><code>neck</code></td><td>mm</td><td>0.0</td><td>0 … 400</td><td>Neck diameter</td></tr><tr><td><code>at_feature</code></td><td></td><td></td><td></td><td>At face</td></tr><tr><td><code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Height of the opening</td></tr><tr><td><code>clearance</code></td><td>mm</td><td>0.0</td><td>0 … 2</td><td>Play</td></tr></tbody></table>
-<h3>Print preparation</h3>
+<h3 id="prepare">Print preparation</h3>
 <h4>Compensate the elephant foot (<code>compensate_first_layer</code>)</h4>
 <p>Pulls the first layers in by what they spread out while printing. The value comes from the material profile.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>
@@ -401,7 +401,7 @@
 <p>Cuts a cube out around a spot, to print it and try it out — two minutes instead of two hours.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch · Features: hole, pin, face</p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>size</code></td><td>mm</td><td>20.0</td><td>2 … 200</td><td>Edge length</td></tr><tr><td><code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Position X</td></tr><tr><td><code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Position Y</td></tr><tr><td><code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Position Z</td></tr><tr><td><code>on_bed</code></td><td></td><td>True</td><td></td><td>Place on the bed</td></tr></tbody></table>
-<h3>Import</h3>
+<h3 id="import">Import</h3>
 <h4>Load model (<code>load</code>)</h4>
 <p>Reads a model file, converts it to millimetres and cleans it up. A 3MF assembly arrives as several objects rather than as one lump.</p>
 <p>Objekte: 0 → -1 · umkehrbar · deterministisch</p>
@@ -414,7 +414,7 @@
 <p>Reads a STEP file as a B-Rep body. STEP carries its own unit — the unit question does not arise (§11.1).</p>
 <p>Objekte: 0 → 1 · umkehrbar · deterministisch</p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>source</code></td><td></td><td>erforderlich</td><td></td><td>Source</td></tr><tr><td><code>name</code></td><td></td><td></td><td></td><td>Name</td></tr></tbody></table>
-<h3>Colour</h3>
+<h3 id="colour">Colour</h3>
 <h4>Assign slot (<code>assign_slot</code>)</h4>
 <p>Puts the whole object into one material slot. A part becomes multi-coloured by uniting bodies with different assignments.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>
@@ -427,7 +427,7 @@
 <p>Reduces the texture of an object to the number of filaments loaded and stores the result as material slots (§20).</p>
 <p>Objekte: 1 → 1 · umkehrbar · mit Startwert</p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>filaments</code></td><td></td><td>4</td><td>1 … 8</td><td>Filaments</td></tr></tbody></table>
-<h3>Lettering</h3>
+<h3 id="label">Lettering</h3>
 <h4>Lettering as a body (<code>create_label</code>)</h4>
 <p>Creates lettering as an object of its own — for two-colour printing with two files, and for letters that get glued on.</p>
 <p>Objekte: 0 → 1 · umkehrbar · deterministisch</p>
@@ -436,7 +436,7 @@
 <p>Puts text raised or engraved on a face. The font is processed as an outline, not as a picture — the edges stay clean at any size.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch · Features: face</p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>text</code></td><td></td><td></td><td></td><td>Text</td></tr><tr><td><code>size</code></td><td>mm</td><td>8.0</td><td>3 … 200</td><td>Font size</td></tr><tr><td><code>depth</code></td><td>mm</td><td>0.6</td><td>0.1 … 10</td><td>Depth</td></tr><tr><td><code>mode</code></td><td></td><td>raised</td><td>raised, engraved</td><td>Kind</td></tr><tr><td><code>slot</code></td><td></td><td>0</td><td>0 … 7</td><td>Material slot</td></tr><tr><td><code>font</code></td><td></td><td>DejaVu Sans</td><td>DejaVu Sans, DejaVu Serif, DejaVu Sans Mono</td><td>Font</td></tr><tr><td><code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Position X</td></tr><tr><td><code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Position Y</td></tr><tr><td><code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Position Z</td></tr><tr><td><code>nx</code></td><td></td><td>0.0</td><td></td><td>Normal X</td></tr><tr><td><code>ny</code></td><td></td><td>0.0</td><td></td><td>Normal Y</td></tr><tr><td><code>nz</code></td><td></td><td>1.0</td><td></td><td>Normal Z</td></tr><tr><td><code>angle</code></td><td>grad</td><td>0.0</td><td>-360 … 360</td><td>Rotation</td></tr></tbody></table>
-<h3>Mesh</h3>
+<h3 id="mesh">Mesh</h3>
 <h4>Convert to a mesh (<code>brep_to_mesh</code>)</h4>
 <p>Turns a B-Rep body into a triangle mesh. There is no way back — the edges are gone afterwards (§30).</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>

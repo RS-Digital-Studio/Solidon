@@ -960,3 +960,57 @@ Subdomain `formwerk.rsdigital.de` — dort liegen auch die `version.json`
 `website/`, die Schrittliste für DNS und Upload in `website/README.md`.
 Impressum und Datenschutz sind Entwürfe und vor der Veröffentlichung zu
 prüfen.
+
+## Aus der Frage nach dem Handbuch
+
+Anlass war eine Feststellung, keine Fehlermeldung: „Wir wollen Geld dafür."
+Das Handbuch hatte achtzehn Seiten, kein einziges Bild, und seine sieben
+geschriebenen Seiten erklärten Begriffe statt Handgriffe. Wer Formwerk zum
+ersten Mal öffnete, fand nichts, was ihn vom Startbildschirm bis zur
+exportierten Datei führt.
+
+**Jetzt fünfundzwanzig Seiten, zwanzig Abbildungen, drei Ausgabewege.** Fünf
+neue Kapitel: die ersten fünfzehn Minuten Klick für Klick, das Fenster, die
+Bausteine, „Wenn etwas nicht geht" mit zehn Anfängerfällen, und ein Wörterbuch
+mit dreißig Begriffen — „wasserdicht", „Elefantenfuß" und „Insel" kennt
+niemand, der nicht schon drinsteckt.
+
+**Keine Abbildung wird von Hand gepflegt.** Schemata entstehen als SVG aus
+`core/drawing`, Bausteine und Op-Ergebnisse werden aus der echten Geometrie
+projiziert, die fünf Bildschirmfotos nimmt `tools/make_figures.py` auf. Weil
+die Beschriftungen Text bleiben, ist das englische Handbuch bis in die Bilder
+hinein übersetzt.
+
+Was dabei zutage kam:
+
+* **Das Passungsbild zeigte 0,20 mm, im Materialprofil stehen 0,25.**
+  Ausgerechnet die Abbildung, die erklärt, dass Toleranzen nicht abgetippt
+  werden, hatte eine abgetippte Toleranz. Die Zahlen in den Zeichnungen kommen
+  jetzt aus den Profilen — dasselbe galt für Elefantenfuß und Wandstärke.
+* **Ein Körper aus achtundzwanzig Dreiecken ist ohne Kantenlinien ein grauer
+  Fleck.** Die Projektion zeichnet jetzt Feature- und Silhouettenkanten und
+  lässt abgewandte Flächen weg; das halbiert nebenbei die Dateigröße. Dazu ein
+  Aufheller von hinten, sonst läuft jede abgewandte Fläche ins Schwarze.
+* **Der feste Dreiviertelwinkel verdeckt bei einer Mutternfalle das Sechskant.**
+  Die Kamera steht jetzt je Abbildung.
+* **`QT_QPA_PLATFORM=offscreen` hat auf dieser Maschine null Schriftfamilien.**
+  Jede Prüfung an einem Bild und jede Aufnahme läuft deshalb unter der echten
+  Plattform. Unter `offscreen` wären alle Beschriftungen leere Kästchen —
+  einmal fast übersehen, weil die Bilder als Bilder plausibel aussahen.
+* **`QWidget.grab` erfasst keinen OpenGL-Inhalt.** Das Hauptfenster kam zweimal
+  mit schwarzer Bildmitte zurück, bis es über den Bildschirm gegriffen wurde.
+* **Im PDF passte das ganze Handbuch auf zwei Seiten.** `QTextDocument` rechnet
+  in Pixeln; bei 1200 dpi ist eine Zwölf-Pixel-Schrift auf A4 ein Staubkorn.
+  Bei 96 dpi sind es achtundzwanzig Seiten. Und weil `QTextDocument` kein
+  `max-width` kennt, stand jedes Bildschirmfoto zur Hälfte außerhalb der Seite.
+* **Beide Sprachen schrieben in denselben Bilderordner.** Der englische Lauf
+  überschrieb die deutschen Zeichnungen, und die deutsche Seite zeigte
+  englische Bilder.
+* **Die Anker des Inhaltsverzeichnisses griffen ins Leere**, weil
+  `core.markup` Überschriften eine Stufe nach unten rückt. Ein Test hat es
+  gefunden, kein Auge — im Browser sieht ein toter Anker aus wie ein lebender.
+
+**Offen:** Der Prüfbericht meldet „Keine Befunde", während vier Befunde
+darunter stehen — die Zusammenfassung wird von `add_findings` nicht
+nachgezogen. Beim Aufnehmen des Bildes aufgefallen, nicht behoben, weil es
+nicht zum Handbuch gehört.

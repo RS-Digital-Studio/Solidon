@@ -96,20 +96,40 @@ def write_figures(target: Path, language: str) -> dict[str, str]:
     return sources
 
 
-def contents() -> str:
-    """Ein Inhaltsverzeichnis — bei fünfundzwanzig Kapiteln kein Luxus."""
-    items = "".join(f'<li><a href="#{page.key}">{page.title}</a></li>' for page in manual.pages())
-    return f'<nav class="toc"><strong>{tr("Inhalt")}</strong><ul>{items}</ul></nav>'
+#: Die Überschrift des Inhaltsverzeichnisses. Nicht über ``tr()``: der
+#: Textsammler liest nur ``app/``, und ein Wort, das nur auf der Website
+#: vorkommt, gehört nicht in den Katalog der Anwendung — es stünde dort für
+#: immer als unübersetzbar herum.
+CONTENTS = {"de": "Inhalt", "en": "Contents"}
 
-    # Anker setzt `anchored` weiter unten; hier steht nur die Liste.
+
+def contents(language: str) -> str:
+    """Ein Inhaltsverzeichnis — bei fünfundzwanzig Kapiteln kein Luxus.
+
+    Die Anker dazu setzt `anchored`; hier steht nur die Liste.
+    """
+    items = "".join(f'<li><a href="#{page.key}">{page.title}</a></li>' for page in manual.pages())
+    heading = CONTENTS.get(language, CONTENTS["de"])
+    return f'<nav class="toc"><strong>{heading}</strong><ul>{items}</ul></nav>'
 
 
 def anchored(html: str) -> str:
-    """Jeder Kapitelüberschrift ihren Anker geben, damit das Verzeichnis trägt."""
+    """Jeder Kapitelüberschrift ihren Anker geben, damit das Verzeichnis trägt.
+
+    Die Ebene steht nicht fest: ``core.markup`` rückt Überschriften um eine
+    Stufe nach unten, weil die Seite selbst das ``<h1>`` trägt. Ein Anker, der
+    auf ``<h2>`` festgenagelt ist, greift dann ins Leere — und das
+    Inhaltsverzeichnis führt nirgendwohin, ohne dass es jemand sieht.
+    """
     for page in manual.pages():
-        heading = f"<h2>{page.title}</h2>"
-        if heading in html:
-            html = html.replace(heading, f'<h2 id="{page.key}">{page.title}</h2>', 1)
+        pattern = re.compile(rf"<h([1-6])>{re.escape(str(page.title))}</h\1>")
+        html = pattern.sub(
+            lambda match, key=page.key: (  # type: ignore[misc]
+                f'<h{match.group(1)} id="{key}">{match.group(0)[4:-5]}</h{match.group(1)}>'
+            ),
+            html,
+            count=1,
+        )
     return html
 
 
@@ -127,7 +147,7 @@ def page_html(language: str, prefix: str) -> str:
         f"<style>{STYLE}</style>\n</head>\n<body>\n<main>\n"
         f'<p><a href="{home}">← {APP_NAME}</a></p>\n'
         f"<h1>{title}</h1>\n"
-        f"{contents()}\n"
+        f"{contents(language)}\n"
         f"{anchored(body)}\n"
         f"</main>\n</body>\n</html>\n"
     )
