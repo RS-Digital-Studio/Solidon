@@ -143,6 +143,8 @@ def page_html(language: str, prefix: str) -> str:
         f'<meta charset="utf-8">\n'
         f'<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         f"<title>{title}</title>\n"
+        f'<link rel="icon" href="{"icon.svg" if language == "de" else "../icon.svg"}" '
+        f'type="image/svg+xml">\n'
         f'<link rel="stylesheet" href="{"style.css" if language == "de" else "../style.css"}">\n'
         f"<style>{STYLE}</style>\n</head>\n<body>\n<main>\n"
         f'<p><a href="{home}">← {APP_NAME}</a></p>\n'

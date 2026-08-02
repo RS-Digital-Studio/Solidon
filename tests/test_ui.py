@@ -456,6 +456,18 @@ def test_symbols_render_and_follow_the_text_colour(qt_app: QApplication) -> None
         assert "#ff0000" in source, name
 
 
+def test_the_application_icon_carries_every_size(qt_app: QApplication) -> None:
+    """Das Fenster-Symbol kommt aus der SVG-Quelle — leer hieße: Windows zeigt
+    sein Standardbild, und niemand merkt es vor dem ersten Screenshot.
+    """
+    from app.ui import icons
+
+    symbol = icons.application_icon()
+
+    assert not symbol.isNull()
+    assert len(symbol.availableSizes()) == len(icons.APPLICATION_ICON_SIZES)
+
+
 def test_findings_carry_their_severity_as_a_shape(qt_app: QApplication) -> None:
     """Regel 18: die Form trägt den Schweregrad, die Farbe verstärkt ihn nur.
 

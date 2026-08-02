@@ -67,6 +67,7 @@ def main() -> int:
             f"/DSourceDir={SOURCE_DIR}",
             f"/DOutputDir={OUTPUT_DIR}",
             f"/DLicenseFile={ROOT / 'LICENSE'}",
+            f"/DSetupIconFile={ROOT / 'packaging' / 'formwerk.ico'}",
             str(SCRIPT),
         ],
         check=False,

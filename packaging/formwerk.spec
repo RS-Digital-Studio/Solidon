@@ -22,6 +22,8 @@ datas = [
     (str(ROOT / "app" / "core" / "backends" / "data"), "app/core/backends/data"),
     (str(ROOT / "app" / "i18n" / "locales"), "app/i18n/locales"),
     (str(ROOT / "app" / "examples"), "app/examples"),
+    # Das Fenster rastert sein Symbol zur Laufzeit aus der SVG-Quelle.
+    (str(ROOT / "app" / "images" / "icon"), "app/images/icon"),
     (str(ROOT / "LICENSE"), "."),
     (str(ROOT / "THIRD-PARTY-NOTICES.md"), "."),
 ]
@@ -79,7 +81,8 @@ executable = EXE(
     exclude_binaries=True,
     name="Formwerk",
     console=False,
-    icon=None,
+    # Erzeugt von tools/make_icon.py aus app/images/icon/formwerk.svg.
+    icon=str(ROOT / "packaging" / "formwerk.ico"),
     # Signiert wird nach dem Bauen, in der CI (§37.2). Hier stünde sonst das
     # Zertifikat auf jeder Entwicklermaschine.
 )

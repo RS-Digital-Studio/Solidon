@@ -8,8 +8,8 @@
 ;
 ;     python tools/make_installer.py
 ;
-; Ein eigenes Anwendungssymbol gibt es noch nicht; bis dahin zeigt der
-; Installer das Standardbild von Inno Setup.
+; Das Anwendungssymbol kommt als Define herein (packaging/formwerk.ico,
+; erzeugt von tools/make_icon.py aus der SVG-Quelle).
 
 [Setup]
 AppId={#AppId}
@@ -36,6 +36,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; Nachfrage überlässt die Wahl dem Nutzer, statt sie zu treffen.
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+SetupIconFile={#SetupIconFile}
 UninstallDisplayName={#AppName}
 UninstallDisplayIcon={app}\{#AppName}.exe
 

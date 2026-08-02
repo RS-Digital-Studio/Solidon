@@ -22,6 +22,7 @@ Zwei Dinge halten sie brauchbar:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Final
 
 from PySide6.QtCore import QByteArray, QSize, Qt
@@ -162,3 +163,35 @@ def _pixmap(source: str, size: int, colour: QColor) -> QPixmap:
 def known() -> tuple[str, ...]:
     """Welche Symbole es gibt — der Test liest das."""
     return tuple(PATHS)
+
+
+#: Die Größen, in denen das Fenster-Symbol vorgehalten wird — dieselbe Reihe
+#: fragt Windows für Taskleiste, Alt-Tab und Titelzeile ab.
+APPLICATION_ICON_SIZES: Final = (16, 24, 32, 48, 64, 128, 256)
+
+
+def application_icon() -> QIcon:
+    """Das Anwendungssymbol, zur Laufzeit aus seiner SVG-Quelle gerastert.
+
+    Die Quelle liegt in ``app/images/icon/formwerk.svg`` und ist dieselbe,
+    aus der ``tools/make_icon.py`` die ICO für exe und Installer baut — ein
+    Bild, drei Abnehmer. Fehlt die Datei, gibt es ein leeres Symbol und die
+    Plattform zeigt ihr Standardbild; ein Start scheitert daran nicht.
+    """
+    source = Path(__file__).resolve().parent.parent / "images" / "icon" / "formwerk.svg"
+    try:
+        data = source.read_bytes()
+    except OSError:
+        return QIcon()
+    renderer = QSvgRenderer(QByteArray(data))
+    if not renderer.isValid():
+        return QIcon()
+    result = QIcon()
+    for size in APPLICATION_ICON_SIZES:
+        image = QImage(QSize(size, size), QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        renderer.render(painter)
+        painter.end()
+        result.addPixmap(QPixmap.fromImage(image))
+    return result

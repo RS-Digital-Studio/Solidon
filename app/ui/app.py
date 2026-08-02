@@ -17,6 +17,7 @@ from app.core.bootstrap import load_operations
 from app.core.log import configure, get_logger
 from app.i18n import set_language
 from app.i18n.catalog import install_language
+from app.ui.icons import application_icon
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import load_settings
@@ -47,10 +48,12 @@ def build_application(argv: list[str] | None = None) -> tuple[QApplication, Main
     starten.
     """
     enable_hidpi()
-    application = QApplication.instance() or QApplication(argv or sys.argv)
+    existing = QApplication.instance()
+    application = existing if isinstance(existing, QApplication) else QApplication(argv or sys.argv)
     application.setApplicationName(APP_NAME)
     application.setApplicationVersion(APP_VERSION)
     application.setOrganizationDomain(APP_ID)
+    application.setWindowIcon(application_icon())
 
     settings = load_settings()
     install_language(settings.language)
@@ -65,7 +68,7 @@ def build_application(argv: list[str] | None = None) -> tuple[QApplication, Main
     # die Anzeigeeinheit und die Differenzpalette gehörten zu den Einstellungen,
     # die niemand las (§19.3).
     window._apply_settings()
-    return application, window  # type: ignore[return-value]
+    return application, window
 
 
 def main(argv: list[str] | None = None) -> int:
