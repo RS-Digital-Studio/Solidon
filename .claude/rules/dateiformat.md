@@ -24,6 +24,16 @@ Keine absoluten Pfade. Kein ausführbarer Code. Keine eigenen Bausteine — ein
 Projekt verweist auf sie namentlich, und fehlt einer, hält die Auswertung an
 und sagt welcher (§24.5, §32).
 
+## Transaktionstitel
+
+Seit Version 6 trägt ein Titel aus dem Code `title_translatable`: `title` ist
+dann die Message-ID (der deutsche Quelltext) und wird erst bei der Anzeige
+aufgelöst. Ohne die Markierung ist der Titel wörtlich gemeint — was ein Nutzer
+selbst benannt hat, wird nie übersetzt. Wer irgendwo einen Transaktionstitel
+vergibt, nimmt `_()` statt `tr()`, sonst friert der Text in der Sprache des
+Speicherzeitpunkts ein. Die Titel der Beispiel-Bauer sammelt die Extraktion
+über `EXTRA_SOURCES` in `app/i18n/extract.py` mit ein.
+
 ## Eingangsstufe
 
 Jede geladene Datei durchläuft dieselbe Kette, und das Ergebnis steht in

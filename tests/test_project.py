@@ -36,7 +36,7 @@ from app.core.types import (
     Source,
     SourceOrigin,
 )
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 MESH_PAYLOAD = b"solid test\nendsolid test\n"
 
@@ -353,6 +353,9 @@ def test_the_checked_in_example_still_opens() -> None:
     assert project.sources["src_1"] == MESH_PAYLOAD
     assert [entry.role for entry in project.document.chat] == ["user", "agent"]
     assert project.document.chat[1].transaction_id, "§26.3: a turn names what it changed"
+    assert isinstance(project.document.transactions[0].title, TranslatableText), (
+        "ein Titel aus dem Code reist seit Version 6 als Message-ID"
+    )
 
     generated = project.document.sources["src_2"].origin
     assert generated is not None
@@ -373,6 +376,33 @@ def test_every_older_example_migrates_to_today() -> None:
             "rename_object",
             "duplicate_object",
         ], path.name
+
+
+def test_a_title_from_an_older_file_stays_literal(tmp_path: Path) -> None:
+    """5 → 6: was eine ältere Datei als Titel trägt, bleibt wörtlich.
+
+    Ob der Text damals aus dem Code kam oder vom Nutzer getippt wurde, steht
+    nirgends — also wird er nicht zur Message-ID erklärt und nie übersetzt.
+    Auch ein erneutes Speichern im neuen Format ändert daran nichts.
+    """
+    project = load(Path(__file__).parent / "data" / "projects" / "example_v5.p3d")
+
+    title = project.document.transactions[0].title
+    assert isinstance(title, str)
+    assert title == "Duplizieren"
+
+    reopened = load(save(project, tmp_path / "wieder.p3d"))
+    assert isinstance(reopened.document.transactions[0].title, str)
+
+
+def test_a_translatable_title_survives_the_round_trip(filled: Project, tmp_path: Path) -> None:
+    """Ein Titel aus dem Code reist als Message-ID und löst sich erst bei der
+    Anzeige auf — auch nach Speichern und Öffnen (§4.1)."""
+    reopened = load(save(filled, tmp_path / "projekt.p3d"))
+
+    title = reopened.document.transactions[0].title
+    assert isinstance(title, TranslatableText)
+    assert title.msgid == "Duplizieren"
 
 
 def test_a_file_from_before_the_agent_gets_an_empty_conversation() -> None:

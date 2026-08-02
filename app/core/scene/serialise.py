@@ -44,6 +44,7 @@ from app.core.types import (
     TemperatureSettings,
     Transaction,
 )
+from app.i18n import TranslatableText
 
 
 def _without_none(data: dict[str, Any]) -> dict[str, Any]:
@@ -247,13 +248,21 @@ def change_from_data(data: dict[str, Any]) -> DocumentChange:
 
 
 def transaction_to_data(transaction: Transaction) -> dict[str, Any]:
-    """Der Titel wird als der Text gespeichert, den der Nutzer sah, nicht als
-    Übersetzungsschlüssel: ein Verlaufseintrag ist ein Protokoll dessen, was
-    passiert ist, und der Nutzer darf ihn umbenennen."""
+    """Ein Titel aus dem Code reist als Message-ID, ein getippter als Text.
+
+    ``title_translatable`` unterscheidet die beiden: steht es, ist ``title``
+    die Message-ID (der deutsche Quelltext, §4.1), und die Anzeige löst sie in
+    der aktiven Sprache auf — die mitgelieferten Beispiele zeigen ihren
+    Verlauf so auch englisch. Fehlt es, ist ``title`` wörtlich gemeint und
+    bleibt es auch: was ein Nutzer selbst benannt hat, wird nicht übersetzt.
+    """
+    title = transaction.title
     return _without_none(
         {
             "id": transaction.id,
-            "title": str(transaction.title),
+            "title": title.msgid if isinstance(title, TranslatableText) else str(title),
+            "title_translatable": True if isinstance(title, TranslatableText) else None,
+            "title_context": title.context if isinstance(title, TranslatableText) else None,
             "origin": origin_to_data(transaction.origin),
             "ops": list(transaction.ops),
             "changes": (
@@ -265,9 +274,12 @@ def transaction_to_data(transaction: Transaction) -> dict[str, Any]:
 
 def transaction_from_data(data: dict[str, Any]) -> Transaction:
     changes = data.get("changes")
+    title: TranslatableText | str = data.get("title", "")
+    if data.get("title_translatable"):
+        title = TranslatableText(str(title), data.get("title_context"))
     return Transaction(
         id=data["id"],
-        title=data.get("title", ""),
+        title=title,
         ops=tuple(int(entry) for entry in data.get("ops", ())),
         origin=origin_from_data(data.get("origin")),
         changes=None if changes is None else change_from_data(changes),

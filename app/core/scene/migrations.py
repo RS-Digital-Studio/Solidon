@@ -23,7 +23,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 5
+FORMAT_VERSION: Final = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,12 +91,32 @@ def _add_transaction_changes(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _keep_transaction_titles_literal(data: dict[str, Any]) -> dict[str, Any]:
+    """5 → 6: ein Transaktionstitel darf eine Message-ID sein (§4.1).
+
+    Ab Version 6 vermerkt ``title_translatable``, dass ein Titel aus dem Code
+    stammt und erst bei der Anzeige in die aktive Sprache aufgelöst wird.
+    Eine ältere Datei trägt den aufgelösten Text, und dabei bleibt es: ob er
+    aus dem Code kam oder vom Nutzer getippt wurde, steht nirgends, und ein
+    Abgleich mit dem Katalog wäre geraten — ein selbst vergebener Titel, der
+    zufällig einem Katalogeintrag gleicht, würde plötzlich übersetzt. Alte
+    Titel bleiben also wörtlich; strukturell ändert dieser Schritt nichts.
+
+    Die Versionserhöhung selbst ist der Schutz: eine ältere Fassung des
+    Programms kennt die Markierung nicht und würde sie beim Speichern
+    stillschweigend verwerfen — sie lehnt eine Version-6-Datei stattdessen
+    freundlich ab.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
     Step(from_version=2, to_version=3, apply=_mark_generated_sources),
     Step(from_version=3, to_version=4, apply=_add_print_settings),
     Step(from_version=4, to_version=5, apply=_add_transaction_changes),
+    Step(from_version=5, to_version=6, apply=_keep_transaction_titles_literal),
 )
 
 

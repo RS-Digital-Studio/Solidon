@@ -32,7 +32,7 @@ from app.core.types import (
     Profile,
     TransactionId,
 )
-from app.i18n import tr
+from app.i18n import _
 
 _log = get_logger(__name__)
 
@@ -124,7 +124,7 @@ def apply_planned(
     for step, draft in zip(plan.outcome.cuts, plan.drafts, strict=True):
         target = pieces[step.part_index]
         applied = history.apply(
-            tr("Teilen und verstiften"),
+            _("Teilen und verstiften"),
             [OperationDraft(op=draft.op, inputs=(target,), params=dict(draft.params))],
             Origin(by="user"),
         )

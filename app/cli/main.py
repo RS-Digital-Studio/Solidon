@@ -40,7 +40,7 @@ from app.core.scene.project import (
 )
 from app.core.types import Source
 from app.core.units import format_length
-from app.i18n import tr
+from app.i18n import _, tr
 
 _PARAM_TYPES: dict[str, Any] = {"float": float, "int": int, "str": str, "enum": str}
 
@@ -200,7 +200,8 @@ def command_info(args: argparse.Namespace) -> int:
     print(tr("Verlauf"))
     for transaction in document.transactions:
         ops = ", ".join(str(entry) for entry in transaction.ops)
-        print(f"  {transaction.id:<5} {transaction.title:<28} ({tr('Ops')} {ops})")
+        # !s zuerst: ein übersetzbarer Titel kennt keine Formatbreite.
+        print(f"  {transaction.id:<5} {transaction.title!s:<28} ({tr('Ops')} {ops})")
     print_report(result)
     return 0 if result.complete else 1
 
@@ -231,7 +232,7 @@ def command_import(args: argparse.Namespace) -> int:
     parts = threemf.count_objects(payload) if incoming.suffix.lower() == ".3mf" else 1
     history = History(project.document)
     history.apply(
-        tr("Modell laden"),
+        _("Modell laden"),
         [
             OperationDraft(
                 op="load", params={"source": source_id, "unit": unit}, produces=max(parts, 1)

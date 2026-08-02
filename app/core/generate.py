@@ -28,7 +28,7 @@ from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.project import Project, embedded_source_path
 from app.core.types import ObjectId, Origin, ProgressFn, Source, SourceId, SourceOrigin
-from app.i18n import _, tr
+from app.i18n import _
 
 _log = get_logger(__name__)
 
@@ -123,7 +123,7 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # lesbar.
     origin = Origin(by="user")
     loading = history.apply(
-        tr("Modell erzeugen"),
+        _("Modell erzeugen"),
         [
             OperationDraft(
                 op="load",
@@ -135,7 +135,7 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     object_id = document.ops[-1].outputs[0]
 
     repairing = history.apply(
-        tr("Reparaturkette"),
+        _("Reparaturkette"),
         [OperationDraft(op="repair", inputs=(object_id,), params=dict(GENERATED_REPAIR))],
         origin,
     )
