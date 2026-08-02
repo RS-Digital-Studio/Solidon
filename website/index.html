@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Formwerk — druckbare 3D-Modelle konstruieren, generieren und bearbeiten</title>
 <meta name="description" content="Formwerk ist eine Desktop-Anwendung für den 3D-Druck: Modelle konstruieren, generieren und bearbeiten — lokal, ohne Konto, ohne Abo. Die Geometrie rechnet Code, nie das Sprachmodell.">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -28,10 +29,16 @@
 
       <div class="download">
         <strong>Version 1.0 erscheint 2026</strong>
+        <p><b>14 Tage kostenlos testen</b>, danach Einmalkauf:
+        <b>49 € zur Einführung</b>, später 79 € — kein Abo, kein Konto,
+        alle 1.x-Updates inklusive.</p>
         <p>Für Windows und Linux. Diese Seite ist dann auch die
-        Download-Adresse — wer früher hineinschauen will, meldet sich unter
-        der Adresse im Impressum.</p>
+        Download-Adresse — wer früher hineinschauen will, schreibt an
+        <a href="mailto:admin@rs-digital.org">admin@rs-digital.org</a>.</p>
       </div>
+
+      <img class="screenshot" src="handbuch/de/main-window.png" width="1180" height="760"
+           alt="Das Hauptfenster von Formwerk: links der Objektbaum mit Parametern und Verlauf, in der Mitte die 3D-Ansicht, rechts der Prüfbericht">
     </div>
 
     <section id="wege">
@@ -56,7 +63,10 @@
           <h3>Aus Text oder Bild</h3>
           <p>Ein generiertes Mesh durchläuft automatisch die Reparaturkette,
           bekommt einen Prüfbericht und wird bei Bedarf geteilt und
-          verstiftet — bis es druckbar auf der Platte liegt.</p>
+          verstiftet — bis es druckbar auf der Platte liegt. Braucht ein
+          lokal laufendes ComfyUI mit Erzeuger-Modell und eine kräftige
+          Grafikkarte; ohne beides bleiben Weg 1 und 2 vollständig
+          nutzbar.</p>
         </div>
       </div>
     </section>
@@ -98,6 +108,12 @@
           <li><b>Keine Maßgarantie aus generierten Meshes.</b> Was aus Text
           oder Bild entsteht, wird druckbar gemacht — maßhaltig konstruiert
           wird über Wege 1 und 2.</li>
+          <li><b>Die KI bringt ihre eigenen Kosten mit.</b> Der Chat läuft
+          mit eigenem API-Schlüssel — die Modellnutzung rechnet der Anbieter
+          ab, typisch sind Centbeträge je Vorschlag. Kostenlos geht es lokal
+          über Ollama; ein taugliches Modell (ab etwa 14 Milliarden
+          Parametern) braucht dafür eine Grafikkarte mit rund 10 GB
+          Speicher.</li>
         </ul>
       </div>
     </section>
@@ -107,9 +123,14 @@
       <table class="req">
         <tr><td>Betriebssystem</td><td>Windows 10/11 (64 Bit) oder Linux</td></tr>
         <tr><td>Speicherplatz</td><td>rund 750 MB installiert, Download rund 255 MB</td></tr>
-        <tr><td>Optional</td><td>Ollama oder ein API-Schlüssel für den Chat,
-        OpenSCAD, ein Slicer, ComfyUI für das Generieren — alles wird
-        gefunden oder angegeben, nichts davon ist Pflicht</td></tr>
+        <tr><td>Chat (optional)</td><td>eigener API-Schlüssel (laufende
+        Kosten beim Anbieter) oder Ollama mit einem Modell ab etwa
+        14 Milliarden Parametern — das braucht eine Grafikkarte mit rund
+        10 GB Speicher</td></tr>
+        <tr><td>Generieren (optional)</td><td>lokal laufendes ComfyUI mit
+        Erzeuger-Modell und kräftiger Grafikkarte</td></tr>
+        <tr><td>Weiteres (optional)</td><td>OpenSCAD, ein Slicer — alles
+        wird gefunden oder angegeben, nichts davon ist Pflicht</td></tr>
       </table>
     </section>
 
@@ -120,6 +141,7 @@
   <div class="wrap">
     © 2026 RS Digital ·
     <a href="/handbuch.html">Handbuch</a> ·
+    <a href="mailto:admin@rs-digital.org">admin@rs-digital.org</a> ·
     <a href="/impressum.html">Impressum</a> ·
     <a href="/datenschutz.html">Datenschutz</a> ·
     <a href="/en/">English</a>

@@ -9,7 +9,10 @@ Ordner wird unverändert hochgeladen; einen Build-Schritt gibt es nicht.
 |---|---|
 | `index.html` | Startseite deutsch |
 | `en/index.html` | Startseite englisch |
-| `impressum.html` | Impressum — **Entwurf mit Platzhaltern** |
+| `handbuch.html`, `en/manual.html` | Handbuch — erzeugt von `tools/make_manual.py`, nie von Hand ändern |
+| `handbuch/` | Abbildungen des Handbuchs, je Sprache ein Ordner |
+| `icon.svg` | Anwendungssymbol als Favicon — erzeugt von `tools/make_icon.py` |
+| `impressum.html` | Impressum — **Entwurf, Anschrift fehlt noch** |
 | `datenschutz.html` | Datenschutzerklärung — **Entwurf mit Platzhaltern** |
 | `style.css` | Gestaltung, hell und dunkel über `prefers-color-scheme` |
 | `version.json` | Versionsdatei für den Update-Hinweis (`core/updates.py`) |
@@ -33,8 +36,11 @@ Ordner wird unverändert hochgeladen; einen Build-Schritt gibt es nicht.
 ## Vor der Veröffentlichung
 
 - Platzhalter in `impressum.html` und `datenschutz.html` ersetzen
-  (Anschrift, Kontaktadresse, Hoster) und beide Texte prüfen — sie sind
-  Entwürfe, keine Rechtsberatung.
+  (Anschrift, Hoster; die Kontaktadresse admin@rs-digital.org steht schon)
+  und beide Texte prüfen — sie sind Entwürfe, keine Rechtsberatung.
+- Das Postfach `admin@rs-digital.org` anlegen bzw. prüfen, dass es
+  ankommt — es steht auf beiden Startseiten, im Impressum, im Über-Dialog
+  und im Fehlerbericht der Anwendung.
 - Den Installer in das Verzeichnis legen und den Download-Kasten in beiden
   `index.html` auf den echten Link umstellen. Die Dateien kommen aus der CI
   (oder lokal aus `tools/make_installer.py`) und heißen

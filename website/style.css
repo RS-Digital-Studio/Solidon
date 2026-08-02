@@ -99,6 +99,18 @@ nav.lang a:hover { color: var(--accent); }
 
 .download p { margin: 0.5rem 0 0; color: var(--muted); }
 
+.download b { color: var(--fg); }
+
+img.screenshot {
+  display: block;
+  width: 100%;
+  max-width: 56rem;
+  height: auto;
+  margin-top: 2.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+
 section {
   padding: 2.5rem 0;
   border-top: 1px solid var(--line);

@@ -1637,6 +1637,62 @@ sind sie gebaut, und beide auf den Wegen, die schon dalagen:
   Ersetzte Arbeiter bleiben jetzt referenziert, bis sie ausgelaufen sind
   (`_retire`, `_previews`-Pool), und ein Stresstest hält das Muster fest.
 
+## Aus der Analyse für Neulinge und Kunden
+
+Anlass war die Frage, wie die Anwendung auf Neulinge und zahlende Kunden
+wirkt. Der Befund: die Onboarding-Substanz trägt — Startbildschirm mit
+Beispielen, Handbuch-Knopf, überspringbarer Erststart, Fehler als Vorschlag.
+Die verbliebenen Lücken lagen fast alle **vor dem ersten Start und neben der
+App**: beim Kaufweg, beim Vertrauen und beim Erwartungsmanagement der KI.
+Behoben in dieser Runde:
+
+* **Es gab keinen Weg, Kunde zu werden.** Kein Preis, kein Kontakt — der
+  einzige angebotene Weg („Adresse im Impressum") führte auf einen
+  Platzhalter. Jetzt: **Support-Adresse admin@rs-digital.org** als Konstante
+  in `app/branding.py`, gelesen von Über-Dialog, Fehlerbericht-Dialog,
+  README, Impressum und beiden Startseiten. Der Fehlerbericht sagt jetzt
+  auch, wohin der abgelegte Ordner kann — er verschickt weiter nichts.
+* **Kaufmodell auf der Website** (Entscheidung Robert, Preis delegiert):
+  14 Tage kostenlos testen, dann Einmalkauf — **49 € zur Einführung, später
+  79 €**, alle 1.x-Updates inklusive. Einordnung: Plasticity als nächster
+  Vergleich (Indie-CAD, Einmalkauf) liegt bei 149 $, Shapr3D bei ~299 €/Jahr,
+  Fusion weit darüber, die Hobby-Konkurrenz bei null. Eine 1.0 einer neuen
+  Marke ohne Nutzerbasis startet darunter; „wir verbessern uns weiter" ist
+  als 1.x-Zusage eingelöst, und der Einführungspreis belohnt die, die früh
+  einsteigen.
+* **Das Kernversprechen war beim Auspacken leer.** Der Erste-Schritte-Dialog
+  bekam den Chat-Zugang (Zustandszeile + Knopf zum Schlüsseldialog), den
+  sein Docstring seit jeher versprach; das Fenster weckt den Chat danach
+  ohne Neustart. Der einzige Weg dorthin war vorher ein Knopf in einem
+  Panel, das ein neuer Nutzer noch nie gesehen hat.
+* **Der Satz aus §27 fällt jetzt bei der Einrichtung.** Wacht der Chat über
+  Ollama auf, fragt ein Arbeiter die installierten Modelle ab
+  (`llm.ollama_size_warning`): unter 7 Milliarden Parametern oder gar nicht
+  installiert gibt es einen Satz im Chat-Panel — einmal, bei der
+  Einrichtung, nicht bei jedem Start. Ein Server, der nicht antwortet,
+  bleibt Schweigen statt Warnung.
+* **Ein Anwendungssymbol existiert.** Gestaltete SVG-Quelle
+  (`app/images/icon/formwerk.svg`: isometrischer Körper, Bohrung,
+  Schichtlinien, Markenfarbe), gerastert von `tools/make_icon.py` zu
+  `packaging/formwerk.ico` (DIB + 256er-PNG, ohne neue Abhängigkeit) und
+  `website/icon.svg`; das Fenster rastert die Quelle zur Laufzeit
+  (`icons.application_icon`). Eingebunden in Spec, Installer-Skript und
+  alle Website-Köpfe. Damit ist die Vorbedingung für AppImage/Flatpak da.
+* **Die Website sagt jetzt, was die KI kostet und braucht.** Weg 3 nennt
+  ComfyUI und Grafikkarte, die Systemvoraussetzungen nennen die 14B/10-GB-
+  Wahrheit für den lokalen Chat und die laufenden API-Kosten beim eigenen
+  Schlüssel — Kunden verzeihen Kosten, die vorher dastanden. Dazu das erste
+  Bildschirmfoto auf der Startseite; eines, das fertig danebenlag.
+
+**Weiterhin offen, weil es niemand von hier aus erledigen kann:** das
+Postfach admin@rs-digital.org anlegen; Anschrift ins Impressum; Zertifikat
+gegen SmartScreen; CI nie gelaufen; Zahlungsanbieter und
+Lizenzschlüssel-Mechanik für Testphase und Kauf; ein Betatest mit fremden
+Nutzern — 2100 Tests sagen, dass der Code tut, was gemeint war, nicht, dass
+ein Fremder ihn bedienen kann. Anzumerken: die Web-Domain ist
+formwerk.rsdigital.de, die Mail-Domain rs-digital.org — zwei Schreibweisen
+nebeneinander, bewusst so entschieden oder zu vereinheitlichen.
+
 ## Der erste echte CI-Lauf
 
 Am 02.08.2026 ging das Repository auf GitHub (privat, `RS-Digital-Studio/
@@ -1661,3 +1717,35 @@ denen keiner auf dieser Maschine sichtbar war:
 * **Die Leistungstests messen auf geteilten Runnern nur Streuung.** §31
   meint eine Referenzmaschine; die CI läuft `-m "not performance"`, das
   Budget prüft der lokale Lauf.
+
+## Die Beispiele wurden Touren
+
+Der Anlass war ein Satz aus der Neulingsperspektive: „Ich wüsste nicht, was
+ich machen soll." §37.2 nennt die Beispiele Doku — sie waren aber fertige
+Projekte: das Ergebnis sichtbar, der Auftrag unsichtbar, und alles Wissen
+über das Warum steckte in Docstrings von `tools/make_examples.py`, wo kein
+Nutzer je liest.
+
+Jetzt öffnet sich jedes der sieben Beispiele mit einer Tour im rechten
+Bereich (dritter Reiter neben Prüfbericht und Chat): Schritt für Schritt,
+und die Tour erkennt am Dokument und am Verlauf, wann ein Schritt getan
+ist — Durchmesser gedreht, Strg+Z, Strg+Y, Baustein gesetzt. Undo und Redo
+sind damit das Lehrmittel, nicht nur ein Menüeintrag. Drei Entscheidungen
+dabei:
+
+* **Ein Angebot, keine Sperre.** „Weiter" schaltet jeden Schritt auch ohne
+  Erkennung, „Tour beenden" steht immer daneben (Regel 19). Erledigt trägt
+  einen Haken, der aktuelle Schritt Pfeil und Fettschrift (Regel 18).
+* **Die Schritte leben im Kern** (`app/core/tour.py`, ohne Qt), die
+  Erkennung ist eine Funktion auf Dokument und Verlauf. `tests/test_tour.py`
+  spielt jede Tour als Drehbuch durch — driftet sie gegen
+  `tools/make_examples.py`, wird genau das rot.
+* **Der Warnungssprung zum Prüfbericht lässt der aktiven Tour den Reiter.**
+  Sonst risse die Anleitung genau dann ab, wenn das Beispiel planmäßig
+  Befunde erzeugt (Weg 1: die Reparatur).
+
+Nebenbefund, offen: die Transaktionstitel der Beispiele („Bohrung setzen",
+„Anordnen") stehen als deutsche Zeichenketten in den Projektdateien und
+bleiben auch in der englischen Oberfläche deutsch — die englischen Tourtexte
+zitieren sie deshalb deutsch. Übersetzbare Transaktionstitel wären der
+saubere Fix.

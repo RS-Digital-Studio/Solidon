@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Formwerk — design, generate and edit printable 3D models</title>
 <meta name="description" content="Formwerk is a desktop application for 3D printing: design, generate and edit printable models — local, no account, no subscription. Geometry is computed by code, never by the language model.">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../style.css">
 </head>
 <body>
@@ -28,10 +29,16 @@
 
       <div class="download">
         <strong>Version 1.0 ships in 2026</strong>
+        <p><b>14-day free trial</b>, then a one-time purchase:
+        <b>€49 at launch</b>, €79 later — no subscription, no account,
+        every 1.x update included.</p>
         <p>For Windows and Linux. This page will be the download address —
-        if you want an early look, reach out via the address in the
-        legal notice.</p>
+        if you want an early look, write to
+        <a href="mailto:admin@rs-digital.org">admin@rs-digital.org</a>.</p>
       </div>
+
+      <img class="screenshot" src="../handbuch/en/main-window.png" width="1180" height="760"
+           alt="The Formwerk main window: object tree with parameters and history on the left, the 3D view in the middle, the inspection report on the right">
     </div>
 
     <section id="ways">
@@ -56,7 +63,9 @@
           <h3>From text or image</h3>
           <p>A generated mesh runs through the repair chain automatically,
           gets an inspection report and is split and pinned when needed —
-          until it sits printable on the plate.</p>
+          until it sits printable on the plate. Needs a locally running
+          ComfyUI with a generator model and a capable graphics card;
+          without both, ways 1 and 2 remain fully usable.</p>
         </div>
       </div>
     </section>
@@ -100,6 +109,11 @@
           <li><b>No dimensional guarantees from generated meshes.</b>
           What comes from text or images is made printable — accurate
           design happens on ways 1 and 2.</li>
+          <li><b>The AI brings its own cost.</b> The chat runs on your own
+          API key — the provider bills the model use, typically cents per
+          proposal. Running it locally through Ollama is free, but a
+          capable model (around 14 billion parameters and up) needs a
+          graphics card with roughly 10 GB of memory.</li>
         </ul>
       </div>
     </section>
@@ -109,9 +123,14 @@
       <table class="req">
         <tr><td>Operating system</td><td>Windows 10/11 (64 bit) or Linux</td></tr>
         <tr><td>Disk space</td><td>about 750 MB installed, download about 255 MB</td></tr>
-        <tr><td>Optional</td><td>Ollama or an API key for the chat,
-        OpenSCAD, a slicer, ComfyUI for generating — all of them are found
-        or configured, none of them required</td></tr>
+        <tr><td>Chat (optional)</td><td>your own API key (ongoing cost at
+        the provider) or Ollama with a model of around 14 billion
+        parameters and up — which needs a graphics card with roughly
+        10 GB of memory</td></tr>
+        <tr><td>Generate (optional)</td><td>a locally running ComfyUI with
+        a generator model and a capable graphics card</td></tr>
+        <tr><td>Other (optional)</td><td>OpenSCAD, a slicer — all of them
+        are found or configured, none of them required</td></tr>
       </table>
     </section>
 
@@ -122,6 +141,7 @@
   <div class="wrap">
     © 2026 RS Digital ·
     <a href="/en/manual.html">Manual</a> ·
+    <a href="mailto:admin@rs-digital.org">admin@rs-digital.org</a> ·
     <a href="/impressum.html">Legal notice</a> ·
     <a href="/datenschutz.html">Privacy</a> ·
     <a href="/">Deutsch</a>
