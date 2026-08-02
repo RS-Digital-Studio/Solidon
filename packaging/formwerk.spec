@@ -1,11 +1,12 @@
-# PyInstaller specification (Bauplan §37.2, §38).
+# PyInstaller-Spezifikation (Bauplan §37.2, §38).
 #
-# One folder, not one file: a single executable unpacks itself on every start,
-# and with VTK and Qt in it that is seconds the user waits for nothing.
+# Ein Ordner, keine Ein-Datei-Anwendung: eine einzelne ausführbare Datei packt
+# sich bei jedem Start selbst aus, und mit VTK und Qt darin sind das Sekunden,
+# in denen der Nutzer auf nichts wartet.
 #
-# What is deliberately **not** bundled (§36, §38): OpenSCAD and the slicers are
-# GPL and are only ever called; Ollama and ComfyUI are configured. The
-# application checks for all four at start and says which are missing.
+# Was absichtlich **nicht** mitreist (§36, §38): OpenSCAD und die Slicer sind
+# GPL und werden nur aufgerufen; Ollama und ComfyUI werden angegeben. Die
+# Anwendung prüft alle vier beim Start und sagt, was fehlt.
 #
 #     pyinstaller packaging/formwerk.spec
 
@@ -24,13 +25,13 @@ datas = [
     (str(ROOT / "LICENSE"), "."),
     (str(ROOT / "THIRD-PARTY-NOTICES.md"), "."),
 ]
-# trimesh and pyvista read data files of their own at import time.
+# trimesh und pyvista lesen beim Import eigene Datendateien.
 datas += collect_data_files("trimesh")
 datas += collect_data_files("pyvista")
 
 hiddenimports = [
-    # The operations register themselves on import (§10); PyInstaller cannot see
-    # an import that only happens through a string in the bootstrap.
+    # Die Operationen registrieren sich beim Import selbst (§10); PyInstaller
+    # sieht keinen Import, der nur über eine Zeichenkette im Bootstrap passiert.
     *collect_submodules("app.core.geom"),
     *collect_submodules("app.core.knowledge.parts"),
     *collect_submodules("app.core.scene"),
@@ -39,10 +40,11 @@ hiddenimports = [
     "vtkmodules.all",
     "vtkmodules.util.data_model",
     "vtkmodules.util.execution_model",
-    # The optional kernels are imported inside functions so the application
-    # starts without them (§30, §22.3). PyInstaller only sees imports at module
-    # level, so they are named here — a packaged build cannot install them
-    # afterwards, and one that silently lacks fillets is worse than a large one.
+    # Die optionalen Kerne werden innerhalb von Funktionen importiert, damit
+    # die Anwendung ohne sie startet (§30, §22.3). PyInstaller sieht nur
+    # Importe auf Modulebene, also stehen sie hier — ein paketierter Build
+    # kann nichts nachinstallieren, und einer, dem stillschweigend die
+    # Verrundungen fehlen, ist schlimmer als ein großer.
     "OCP.BRepPrimAPI",
     "OCP.BRepFilletAPI",
     "OCP.BRepAlgoAPI",
@@ -78,8 +80,8 @@ executable = EXE(
     name="Formwerk",
     console=False,
     icon=None,
-    # Signing happens after the build, in the CI (§37.2). Doing it here would
-    # need the certificate on every developer machine.
+    # Signiert wird nach dem Bauen, in der CI (§37.2). Hier stünde sonst das
+    # Zertifikat auf jeder Entwicklermaschine.
 )
 
 collected = COLLECT(

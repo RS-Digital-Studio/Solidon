@@ -12,53 +12,55 @@ authors = [{ name = "RS Digital" }]
 dependencies = []
 
 [project.optional-dependencies]
-# Geometry kernels and mesh IO. Licence check runs against Bauplan §36.
+# Geometriekerne und Netz-Ein-/Ausgabe. Die Lizenzprüfung läuft gegen §36.
 geom = [
   "numpy>=1.26",
-  # trimesh needs a graph engine for watertightness and components; scipy also
-  # brings the assignment solver the feature matching in §21.2 will use.
+  # trimesh braucht einen Graphen für Wasserdichtheit und Komponenten; scipy
+  # bringt zudem den Zuordnungslöser für das Feature-Matching aus §21.2 mit.
   "scipy>=1.13",
   "trimesh>=4.4",
   "manifold3d>=2.5",
-  # Polygon work behind the capped section cut (§18.2). BSD-3, bundles GEOS (LGPL).
+  # Polygonarbeit hinter dem gedeckelten Schnitt (§18.2). BSD-3, bündelt GEOS (LGPL).
   "shapely>=2.0",
-  # Contour hierarchy for the same cut: without these two a cut through a plate
-  # with a hole cannot be closed. BSD-3 and MIT.
+  # Konturhierarchie für denselben Schnitt: ohne diese beiden lässt sich ein
+  # Schnitt durch eine Platte mit Loch nicht schließen. BSD-3 und MIT.
   "networkx>=3.0",
   "rtree>=1.2",
-  # Marching cubes for the voxel stage of the boolean fallback chain (§17.2). BSD-3.
+  # Marching Cubes für die Voxelstufe der Booleschen Rückfallkette (§17.2). BSD-3.
   "scikit-image>=0.24",
-  # 3MF is the format slicers prefer, and it needs an XML writer (§29). BSD-3.
+  # 3MF ist das Format, das Slicer bevorzugen, und es braucht einen
+  # XML-Schreiber (§29). BSD-3.
   "lxml>=5.0",
-  # V-HACD tells the auto split where a body comes apart by itself (§22.3).
-  # Optional at runtime: without it the plane search answers on its own. BSD-3.
+  # V-HACD sagt dem Auto Split, wo ein Körper von selbst auseinanderfällt
+  # (§22.3). Zur Laufzeit optional: ohne es antwortet die Ebenensuche allein. BSD-3.
   "vhacdx>=0.0.8",
-  # Decimation for generated meshes (§25, "Netz"). MIT.
+  # Dezimierung für generierte Netze (§25, „Netz"). MIT.
   "fast-simplification>=0.1.9",
-  # SVG paths behind the drawing import (§25). MIT; DXF trimesh reads itself.
+  # SVG-Pfade hinter dem Zeichnungsimport (§25). MIT; DXF liest trimesh selbst.
   "svg.path>=6.3",
 ]
-# Desktop shell. PySide6 is LGPL and must stay dynamically linked (§36).
+# Desktop-Hülle. PySide6 ist LGPL und bleibt dynamisch gelinkt (§36).
 ui = [
   "PySide6>=6.7",
   "pyvista>=0.44",
   "pyvistaqt>=0.11",
 ]
-# The agent needs a place for the user's own key (§27). Without this extra the
-# application works; only the chat stays switched off.
+# Der Agent braucht einen Ort für den Schlüssel des Nutzers (§27). Ohne dieses
+# Extra läuft die Anwendung; nur der Chat bleibt aus.
 agent = ["keyring>=25.0"]
-# The second construction kernel (§30): real edges, and therefore exact fillets,
-# chamfers and STEP. Optional — without it those operations say so in one
-# sentence and everything else is untouched. The binding is Apache-2.0, the
-# kernel underneath LGPL-2.1 with the OCCT linking exception, so it is used as a
-# dynamically linked library like PySide6 (§36). "novtk" because pyvista already
-# brings VTK; two copies in one process are one too many.
+# Der zweite Konstruktionskern (§30): echte Kanten, und damit exakte
+# Verrundungen, Fasen und STEP. Optional — ohne ihn sagen diese Operationen das
+# in einem Satz, und alles andere bleibt unberührt. Die Anbindung ist
+# Apache-2.0, der Kern darunter LGPL-2.1 mit der OCCT-Linking-Ausnahme, also
+# wird er wie PySide6 als dynamisch gelinkte Bibliothek benutzt (§36). „novtk",
+# weil pyvista VTK schon mitbringt; zwei Kopien in einem Prozess sind eine zu
+# viel.
 brep = ["cadquery-ocp-novtk>=7.8"]
 dev = [
   "pytest>=8.0",
   "ruff>=0.6",
   "mypy>=1.11",
-  # Evaluates environment markers for the licence check.
+  # Wertet Umgebungsmarker für die Lizenzprüfung aus.
   "packaging>=24.0",
 ]
 
@@ -70,23 +72,23 @@ include = ["app*"]
 
 [tool.setuptools.package-data]
 "app.core.knowledge" = ["data/*.toml"]
-# The ComfyUI workflows are data, not code (§27): a different generator means a
-# different file, not a patch.
+# Die ComfyUI-Workflows sind Daten, kein Code (§27): ein anderer Generator
+# heißt eine andere Datei, kein Patch.
 "app.core.backends" = ["data/*.json"]
 "app.core.knowledge.parts" = ["LICENSE"]
 "app.i18n" = ["locales/*.json"]
-# The three example projects are shipped: documentation, acceptance test and
-# start screen content at once (§37.2). The manual figures ship with them —
-# the drawn and rendered ones are computed on the fly, the screenshots cannot
-# be, so they travel as files (one folder per language).
+# Die drei Beispielprojekte reisen mit: Dokumentation, Abnahmetest und
+# Startbildschirm-Inhalt zugleich (§37.2). Die Handbuchbilder dazu — die
+# gezeichneten und gerenderten entstehen im Lauf, die Bildschirmfotos nicht,
+# also reisen sie als Dateien (ein Ordner je Sprache).
 "app" = ["examples/*.p3d", "images/manual/*/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["error"]
 markers = [
-  "performance: measures against the budget in Bauplan §31",
-  "slow: takes noticeably longer than a unit test",
+  "performance: misst gegen das Budget aus Bauplan §31",
+  "slow: dauert spürbar länger als ein Unit-Test",
 ]
 
 [tool.ruff]
@@ -97,26 +99,29 @@ target-version = "py311"
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
-# Bauplan §33.1 fixes the exception names. OutOfBuildVolume and OperationCancelled
-# are part of the contract, not a style choice.
+# Bauplan §33.1 legt die Ausnahmenamen fest. OutOfBuildVolume und
+# OperationCancelled sind Teil des Vertrags, keine Stilfrage.
 "app/core/errors.py" = ["N818"]
-# MapTooLarge is a control-flow signal inside the maps, not a reported error.
+# MapTooLarge ist ein Ablaufsignal innerhalb der Karten, kein gemeldeter Fehler.
 "app/core/perceive/maps.py" = ["N818"]
-# BackendUnavailable reads as a state, and it is one — §33.1 fixes the names.
+# BackendUnavailable liest sich als Zustand, und ist einer — §33.1 legt die
+# Namen fest.
 "app/core/backends/llm.py" = ["N818"]
-# UnsafeSource and ScadUnavailable read as states too, and both are AppErrors.
+# UnsafeSource und ScadUnavailable lesen sich ebenso als Zustand, beide sind
+# AppErrors.
 "app/core/backends/openscad.py" = ["N818"]
-# GenerationFailed says what happened, which is what the user reads (§33.1).
+# GenerationFailed sagt, was passiert ist — und das liest der Nutzer (§33.1).
 "app/core/backends/mesh.py" = ["N818"]
-# BRepUnavailable is a state like the two above, and §33.1 fixes the names.
+# BRepUnavailable ist ein Zustand wie die beiden oben, §33.1 legt die Namen fest.
 "app/core/brep/kernel.py" = ["N818"]
-# The suite has to redirect the user directories before anything reads them,
-# so those two imports come after the environment is set (§38).
+# Die Suite muss die Nutzerverzeichnisse umbiegen, bevor irgendetwas sie liest,
+# also kommen diese beiden Importe nach dem Setzen der Umgebung (§38).
 "tests/conftest.py" = ["E402"]
-# Qt signals are camelCase by convention, and "20 × 20 mm" is how a dimension is
-# written in German — both are deliberate in the surface.
+# Qt-Signale sind per Konvention camelCase, und „20 × 20 mm" ist die deutsche
+# Schreibweise eines Maßes — beides ist in der Oberfläche Absicht.
 "app/ui/*" = ["N815", "RUF001"]
-# The digest is read by people and by the model; "20 × 20 mm" is the right sign.
+# Den Steckbrief lesen Menschen und das Modell; „20 × 20 mm" ist das richtige
+# Zeichen.
 "app/core/perceive/digest.py" = ["RUF001"]
 "tests/*" = ["RUF001", "RUF002"]
 
@@ -134,18 +139,20 @@ module = [
   "scipy.*",
   "skimage.*",
   "shapely.*",
-  # The OpenCASCADE binding is a compiled extension without stubs (§30).
+  # Die OpenCASCADE-Anbindung ist eine kompilierte Erweiterung ohne Stubs (§30).
   "OCP.*",
 ]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# Platform branches are unreachable on every platform except one — that is the point.
+# Plattformzweige sind auf jeder Plattform außer einer unerreichbar — genau
+# dafür sind sie da.
 module = ["app.core.paths", "app.core.discover"]
 warn_unreachable = false
 
 [[tool.mypy.overrides]]
-# trimesh ships only partial annotations; calls into it cannot be typed from here.
+# trimesh liefert nur teilweise Annotationen; Aufrufe hinein lassen sich von
+# hier aus nicht typisieren.
 module = [
   "app.core.geom.*",
   "app.core.ingest.*",
@@ -153,7 +160,7 @@ module = [
   "app.core.perceive.*",
   "app.core.slice.*",
   "app.core.knowledge.parts.*",
-  # The same for OpenCASCADE: an unstubbed extension module (§30).
+  # Dasselbe für OpenCASCADE: ein Erweiterungsmodul ohne Stubs (§30).
   "app.core.brep.*",
 ]
 disallow_untyped_calls = false

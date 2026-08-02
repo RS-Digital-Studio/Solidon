@@ -1,4 +1,4 @@
-"""Makes the repository importable without an install step."""
+"""Macht das Repository ohne Installationsschritt importierbar."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 
 from app.core.bootstrap import load_operations  # noqa: E402
 
-# The registry has to be filled before tests are collected: the consistency
-# checks in tests/test_registry_consistency.py parametrise over it.
+# Das Register muss gefüllt sein, bevor die Tests eingesammelt werden: die
+# Konsistenzprüfungen in tests/test_registry_consistency.py parametrisieren
+# darüber.
 load_operations()
