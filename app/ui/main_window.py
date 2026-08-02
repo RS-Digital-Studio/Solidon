@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
-from app.core import updates
+from app.core import examples, updates
 from app.core.backends import llm
 from app.core.errors import AppError, InternalError
 from app.core.export.handover import SliceOutcome
@@ -64,6 +64,7 @@ from app.core.scene import EvaluationResult, OperationDraft, values_for
 from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
+from app.core.tour import tour_for
 from app.core.types import Finding, ObjectId, SliceResult
 from app.i18n import TranslatableText, _, tr
 from app.ui import first_run
@@ -108,6 +109,7 @@ from app.ui.settings_dialog import SettingsDialog
 from app.ui.start_screen import StartScreen, accepted_path
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
+from app.ui.tour import TourPanel
 from app.ui.transform_bar import TransformBar
 from app.ui.variants_dialog import VariantsDialog
 from app.ui.viewport import Viewport
@@ -465,9 +467,21 @@ class MainWindow(QMainWindow):
         self.chat.discarded.connect(self._on_proposal_discarded)
         self.chat.setupRequested.connect(self.action_install_extras)
 
+        # §37.2: die Beispiele sind auch Doku. Die Tour macht sie dazu — der
+        # Reiter ist nur sichtbar, solange ein Beispiel offen ist.
+        self.tour = TourPanel(self.session, self)
+        self.tour.closed.connect(self._remove_tour)
+
         self.right = QTabWidget(self)
         self.right.addTab(self.report, tr("Prüfbericht"))
         self.right.addTab(self.chat, tr("Chat"))
+        # Der Reiter wird einmal angelegt und danach nur noch ein- und
+        # ausgeblendet, nie entfernt: ``removeTab`` machte das Panel elternlos,
+        # und ein elternloses Widget gehört dem Speicherbereiniger — der es
+        # irgendwann aus einem Arbeiter-Thread zerstörte. Ein Absturz ohne
+        # Zeile, lange nach der Tour.
+        self.right.addTab(self.tour, tr("Tour"))
+        self.right.setTabVisible(self.right.indexOf(self.tour), False)
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self.splitter.addWidget(left)
@@ -1005,6 +1019,7 @@ class MainWindow(QMainWindow):
         if not self._may_discard():
             return
         self.session.start_new(self.settings.printer, self.settings.material)
+        self._remove_tour()
         self._show_start_screen(False)
 
     def action_open(self) -> None:
@@ -1048,6 +1063,7 @@ class MainWindow(QMainWindow):
                 self.settings.remember(path)
                 save_settings(self.settings)
                 self._offer_recovery(path)
+                self._offer_tour(path)
             else:
                 if self.stack.currentWidget() is self.start_screen:
                     self.session.start_new(self.settings.printer, self.settings.material)
@@ -2342,7 +2358,39 @@ class MainWindow(QMainWindow):
     def _focus_report(self) -> None:
         if not self.right.isVisible():
             return
+        if self.right.currentWidget() is self.tour and self.tour.active:
+            # Die Tour zeigt selbst auf den Prüfbericht, wenn er dran ist —
+            # ein Reiterwechsel unter der Anleitung weg wäre ihr Ende.
+            return
         self.right.setCurrentWidget(self.report)
+
+    def _offer_tour(self, path: Path) -> None:
+        """§37.2: ein Beispiel öffnet sich mit seiner Tour — jedes andere
+        Projekt räumt sie weg.
+
+        Kein Dialog und keine Frage: der Reiter ist da, die Tour beginnt, und
+        „Tour beenden“ ist jederzeit einen Klick entfernt (Regel 19).
+        """
+        example = examples.by_path(path)
+        tour = tour_for(example.id) if example is not None else None
+        if example is None or tour is None:
+            self._remove_tour()
+            return
+        self.right.setTabVisible(self.right.indexOf(self.tour), True)
+        self.tour.start(example, tour)
+        if not self.right.isVisible():
+            # Wer die rechte Spalte ausgeblendet hatte, bekäme eine
+            # unsichtbare Tour — und das Beispiel wurde gerade absichtlich
+            # geöffnet. Einblenden wie über F9, samt Einstellung.
+            self.settings.right_panel_visible = True
+            save_settings(self.settings)
+            self.right.setVisible(True)
+        self.right.setCurrentWidget(self.tour)
+
+    def _remove_tour(self) -> None:
+        """Blendet den Tour-Reiter aus — beim Beenden und beim Projektwechsel."""
+        self.tour.reset()
+        self.right.setTabVisible(self.right.indexOf(self.tour), False)
 
     def _offer_recovery(self, path: Path) -> None:
         candidate = find_recovery(path)

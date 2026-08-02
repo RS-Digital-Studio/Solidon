@@ -29,6 +29,14 @@ einklappbare Abschnitte; Mitte der Viewport; rechts **entweder** Chat **oder**
 Prüfbericht, umschaltbar und ganz ausblendbar. Die Umschaltung springt zum
 Bericht, wenn eine Warnung entsteht.
 
+Solange ein Beispielprojekt offen ist, hat die rechte Spalte einen dritten
+Reiter: die Tour (`app/ui/tour.py`, Schritte in `app/core/tour.py`). Sie
+erkennt getane Schritte über `projectChanged` am Dokument und Verlauf, „Weiter"
+schaltet jeden Schritt auch ohne Erkennung — Angebot, keine Sperre. Der
+Warnungssprung zum Bericht lässt der aktiven Tour den Reiter; jedes andere
+Projekt räumt ihn weg. Die Erkennungswerte müssen zu `tools/make_examples.py`
+passen — driftet beides, wird `tests/test_tour.py` rot.
+
 **Keine Betriebsarten.** Kein Umschalten zwischen „Bearbeiten" und
 „Konstruieren" — es gibt einen Zustand, und der ist die Szene.
 

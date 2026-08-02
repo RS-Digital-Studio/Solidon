@@ -1250,3 +1250,79 @@ def test_rapid_previews_never_orphan_a_worker(session: Session) -> None:
 
     assert len(collected) == 1, "nur die jüngste Vorschau wird geliefert"
     assert not session._previews, "kein Arbeiter bleibt zurück"
+
+
+# --- die Tour durch ein Beispiel (§37.2) ------------------------------------------
+
+
+def _tour_tab_visible(window: MainWindow) -> bool:
+    """Ob der Tour-Reiter gerade angeboten wird — er existiert immer, sichtbar
+    ist er nur mit offenem Beispiel."""
+    return window.right.isTabVisible(window.right.indexOf(window.tour))
+
+
+def test_opening_an_example_starts_its_tour(window: MainWindow, session: Session) -> None:
+    """§37.2: ein Beispiel öffnet sich mit seiner Tour, und die Erkennung
+    schaltet an den echten Signalen der Sitzung weiter — Doppelklick-Änderung,
+    Undo und Redo, wie ein Nutzer sie auslöst.
+
+    Die Wartezeiten sind großzügig: das Beispiel rechnet eine echte Reparatur,
+    und läuft die auf einer belasteten Maschine über die 10-Sekunden-Vorgabe
+    von ``wait_for_idle`` hinaus, endet der Test mit laufendem Arbeiter — den
+    zerstört der Speicherbereiniger später mitsamt C++-Objekt, und die Suite
+    reißt ohne Zeile am Ende ab.
+    """
+    from app.core import examples
+
+    window.open_path(examples.directory() / "weg1-halterung-anpassen.p3d")
+    session.wait_for_idle(120_000)
+
+    assert _tour_tab_visible(window)
+    assert window.right.currentWidget() is window.tour, "auch eine Warnung stiehlt den Reiter nicht"
+    assert window.tour.active
+    assert window.tour.current_index == 0, "der Leseschritt wartet auf „Weiter“"
+
+    window.tour.advance()
+    assert window.tour.current_index == 1
+
+    # Die Handlung aus Schritt 2: der Durchmesser der Bohrung ändert sich.
+    drill = next(entry for entry in session.project.document.ops if entry.op == "drill_hole")
+    session.change_params(drill.id, {"diameter": 6.0})
+    assert window.tour.current_index == 2
+
+    session.undo()
+    assert window.tour.current_index == 3
+
+    session.redo()
+    assert window.tour.current_index == 4
+
+    window.tour.advance()
+    assert window.tour.current_index == 5
+    assert not window.tour.closing.isHidden(), "der Abschluss steht da"
+    assert window.tour.next_button.isHidden(), "hinter dem letzten Schritt gibt es kein Weiter"
+
+    window.tour.stop_button.click()
+    assert not _tour_tab_visible(window)
+    session.wait_for_idle(120_000)
+    assert not session.busy, "kein Arbeiter überlebt den Test"
+
+
+def test_a_plain_project_carries_no_tour(
+    window: MainWindow, session: Session, tmp_path: Path
+) -> None:
+    """Die Tour gehört den Beispielen: ein gewöhnliches Projekt räumt den
+    Reiter wieder weg, statt eine fremde Anleitung weiterlaufen zu lassen."""
+    from app.core import examples
+    from app.core.scene.project import new_project, save
+
+    window.open_path(examples.directory() / "weg1-halterung-anpassen.p3d")
+    session.wait_for_idle(120_000)
+    assert _tour_tab_visible(window)
+
+    path = save(new_project("centauri-carbon-2", "petg"), tmp_path / "plain.p3d")
+    window.open_path(path)
+    session.wait_for_idle(120_000)
+
+    assert not _tour_tab_visible(window)
+    assert not window.tour.active
+    assert not session.busy, "kein Arbeiter überlebt den Test"

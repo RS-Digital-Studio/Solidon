@@ -166,8 +166,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         title=_("Die drei Wege"),
         body=_(
             "Fast jede Aufgabe geht einen von drei Wegen. Zu jedem liegt ein "
-            "Beispielprojekt bereit — auf dem Startbildschirm, zum Öffnen und "
-            "Nachsehen.\n\n"
+            "Beispielprojekt bereit — auf dem Startbildschirm, und jedes "
+            "öffnet sich mit einer Tour: rechts steht Schritt für Schritt, "
+            "was Sie ausprobieren sollten, und die Tour merkt selbst, wenn "
+            "ein Schritt getan ist.\n\n"
             "![](figure:ways)\n\n"
             "**Weg 1 — ein fremdes Modell anpassen.** Etwas heruntergeladen, es "
             "passt fast: einlesen, reparieren, bohren, exportieren. Der "

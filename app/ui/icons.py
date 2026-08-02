@@ -122,6 +122,11 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />'
         '<path d="M4 20 20 4" />'
     ),
+    # Ein Haken: ein erledigter Schritt der Tour. Der Text der Zeile bleibt
+    # stehen (Regel 18) — das Zeichen sagt nur den Zustand.
+    "done": ('<path d="M4.5 12.5l4.5 4.5L19.5 7" />'),
+    # Ein Pfeil auf den aktuellen Schritt der Tour.
+    "step": ('<path d="M4 12h12.5" /><path d="M11.5 6.5 17 12l-5.5 5.5" />'),
 }
 
 

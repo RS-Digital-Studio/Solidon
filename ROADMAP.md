@@ -1744,6 +1744,20 @@ dabei:
   Sonst risse die Anleitung genau dann ab, wenn das Beispiel planmäßig
   Befunde erzeugt (Weg 1: die Reparatur).
 
+**Die neuen Tests fanden einen alten Absturz.** Die Suite riss sporadisch
+Tests *nach* den Tour-Tests ohne eine Zeile Traceback ab (Exit 127, kein
+Faulthandler-Dump). Eingekreist über Wegwerf-Sonden mit Etappenmeldungen:
+`Session._on_thread_done` läuft als Slot des `finished`-Signals seines
+eigenen Arbeiters und überschrieb dort die letzte Referenz — der
+PySide-Wrapper starb mitsamt C++-QThread, während Qt die Zustellung noch auf
+dem Stapel hatte. Ausgelöst hat es erst die Tour: ihre Tests fahren schnelle
+Ketten (ändern, Undo, Redo) auf einem schweren Dokument, jede davon ersetzt
+einen laufenden Arbeiter. Der Fix hält den ausgelaufenen Arbeiter fest, bis
+ihn der nächste ablöst — dasselbe Muster wie `_retired` im Hauptfenster.
+Sechzehn Läufe des vorher zu etwa der Hälfte roten Testpaars sind seither
+grün. **Anzusehen bleibt:** `_on_agent_done` und der Split-Arbeiter lassen
+ihre Referenz genauso los; dort hämmert nur niemand.
+
 Nebenbefund, offen: die Transaktionstitel der Beispiele („Bohrung setzen",
 „Anordnen") stehen als deutsche Zeichenketten in den Projektdateien und
 bleiben auch in der englischen Oberfläche deutsch — die englischen Tourtexte
