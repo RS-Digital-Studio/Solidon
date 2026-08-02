@@ -31,12 +31,12 @@ datas += collect_data_files("pyvista")
 
 hiddenimports = [
     # Die Operationen registrieren sich beim Import selbst (§10); PyInstaller
-    # sieht keinen Import, der nur über eine Zeichenkette im Bootstrap passiert.
-    *collect_submodules("app.core.geom"),
-    *collect_submodules("app.core.knowledge.parts"),
-    *collect_submodules("app.core.scene"),
-    *collect_submodules("app.core.ingest"),
-    *collect_submodules("app.core.brep"),
+    # sieht keinen Import, der nur über eine Zeichenkette im Bootstrap
+    # passiert. Eingesammelt wird der **ganze** eigene Kern: die
+    # handgepflegte Teilmenge, die hier stand, ist mit dem Bootstrap
+    # auseinandergedriftet — die Skizzen-Ops fehlten, und der Bau endete
+    # beim Start mit einem ModuleNotFoundError statt eines Fensters.
+    *collect_submodules("app.core"),
     "vtkmodules.all",
     "vtkmodules.util.data_model",
     "vtkmodules.util.execution_model",
