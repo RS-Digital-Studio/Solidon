@@ -204,11 +204,21 @@ def test_checksums_are_written_and_verified(filled: Project, tmp_path: Path) -> 
     assert caught.value.suggestions
 
 
-def test_absolute_paths_are_refused(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "path",
+    [
+        # Beide Konventionen, denn die Datei reist: „C:/…" ist auf POSIX nur
+        # ein Ordnername, ein Laufwerk ohne Schrägstrich und ein UNC-Pfad
+        # sind trotzdem absolut.
+        "C:/somewhere/halterung.stl",
+        "C:halterung.stl",
+        "//server/share/halterung.stl",
+        "/somewhere/halterung.stl",
+    ],
+)
+def test_absolute_paths_are_refused(tmp_path: Path, path: str) -> None:
     project = new_project()
-    project.document.sources["src_1"] = Source(
-        id="src_1", kind="import", path="C:/somewhere/halterung.stl", sha256=""
-    )
+    project.document.sources["src_1"] = Source(id="src_1", kind="import", path=path, sha256="")
     project.sources["src_1"] = MESH_PAYLOAD
 
     with pytest.raises(ValidationError) as caught:
@@ -216,11 +226,10 @@ def test_absolute_paths_are_refused(tmp_path: Path) -> None:
     assert caught.value.constraint == "absolute_path"
 
 
-def test_paths_leaving_the_container_are_refused(tmp_path: Path) -> None:
+@pytest.mark.parametrize("path", ["../outside.stl", "..\\outside.stl"])
+def test_paths_leaving_the_container_are_refused(tmp_path: Path, path: str) -> None:
     project = new_project()
-    project.document.sources["src_1"] = Source(
-        id="src_1", kind="import", path="../outside.stl", sha256=""
-    )
+    project.document.sources["src_1"] = Source(id="src_1", kind="import", path=path, sha256="")
     project.sources["src_1"] = MESH_PAYLOAD
 
     with pytest.raises(ValidationError):

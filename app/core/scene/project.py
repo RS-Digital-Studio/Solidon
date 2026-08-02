@@ -27,7 +27,7 @@ import json
 import os
 import zipfile
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Final
 
 from app.branding import APP_VERSION, PROJECT_SUFFIX
@@ -142,8 +142,18 @@ def embedded_source_path(filename: str) -> str:
 
 
 def _check_relative(path: str, where: str) -> None:
-    candidate = Path(path)
-    if candidate.is_absolute() or ".." in candidate.parts or path.startswith(("/", "\\")):
+    # Geurteilt wird über beide Konventionen zugleich: eine Projektdatei reist
+    # zwischen Plattformen, und „C:/…" muss auch dort abgelehnt werden, wo es
+    # für Path nur ein Ordnername ist (Regel 12). PureWindowsPath kennt beide
+    # Trennzeichen, also sieht sie auch „..\…" — der Plattform-Path auf POSIX
+    # nicht.
+    candidate = PureWindowsPath(path)
+    if (
+        candidate.drive
+        or candidate.is_absolute()
+        or ".." in candidate.parts
+        or path.startswith(("/", "\\"))
+    ):
         raise ValidationError(
             field=where,
             detail=_("In Projektdateien stehen keine absoluten Pfade."),
