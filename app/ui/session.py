@@ -284,6 +284,14 @@ class Session(QObject):
         self.pending_part_check = False
         """The same for the part library (§24.4): once on opening, not on every run."""
         self._worker: _EvaluationWorker | None = None
+        self._finished_worker: _EvaluationWorker | None = None
+        """Der zuletzt ausgelaufene Auswertungs-Arbeiter, festgehalten bis ihn
+        der nächste ablöst. ``_on_thread_done`` läuft als Slot seines eigenen
+        ``finished``-Signals — die Referenz dort einfach zu überschreiben ließ
+        den Wrapper mitsamt C++-Objekt sterben, während Qt die Zustellung noch
+        auf dem Stapel hatte. Bei schnellen Ketten (ändern, Undo, Redo auf
+        einem schweren Dokument) riss das die Suite Tests später ohne eine
+        Zeile Traceback ab."""
         self._agent: _AgentWorker | None = None
         self._split: _SplitWorker | None = None
         self._split_discarded = False
@@ -925,6 +933,9 @@ class Session(QObject):
 
     def _on_thread_done(self) -> None:
         self.busyChanged.emit(False)
+        # Nicht einfach loslassen: der Aufruf hier kommt vom Signal des
+        # Arbeiters selbst, und sein Wrapper muss die Zustellung überleben.
+        self._finished_worker = self._worker
         self._worker = None
         if self._rerun_pending:
             self._rerun_pending = False
