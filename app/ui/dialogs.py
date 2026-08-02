@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -24,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_NAME, APP_VERSION, COPYRIGHT
+from app.branding import APP_NAME, APP_VERSION, COPYRIGHT, SUPPORT_ADDRESS
 from app.core.backends import keys
 from app.core.errors import CANCEL, REPORT_ERROR, SHOW_DETAILS, Action, AppError
 from app.core.knowledge import calibration, licences, profiles
@@ -442,6 +443,9 @@ class AboutDialog(QDialog):
         rights = QLabel(f"{COPYRIGHT}. {tr('Alle Rechte vorbehalten.')}", self)
         rights.setWordWrap(True)
 
+        support = QLabel(f"{tr('Support und Kontakt')}: {SUPPORT_ADDRESS}", self)
+        support.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+
         exceptions = QLabel(
             tr(
                 "Bausteinbibliothek und Referenzkorpus stehen unter der MIT-Lizenz, "
@@ -461,6 +465,7 @@ class AboutDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(heading)
         layout.addWidget(rights)
+        layout.addWidget(support)
         layout.addWidget(exceptions)
         layout.addWidget(QLabel(tr("Fremde Bestandteile"), self))
         layout.addWidget(third_party, stretch=1)

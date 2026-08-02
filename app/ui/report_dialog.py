@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.branding import SUPPORT_ADDRESS
 from app.core import report as reports
 from app.core.log import get_logger
 from app.i18n import tr
@@ -58,8 +59,9 @@ class ErrorReportDialog(QDialog):
         headline = QLabel(
             tr(
                 "Das war ein Programmfehler, nicht Ihre Schuld. "
-                "Hier wird ein Bericht zusammengestellt — verschickt wird nichts."
-            ),
+                "Hier wird ein Bericht zusammengestellt — verschickt wird nichts. "
+                "Wenn Sie möchten, senden Sie den abgelegten Ordner an {address}."
+            ).replace("{address}", SUPPORT_ADDRESS),
             self,
         )
         headline.setWordWrap(True)

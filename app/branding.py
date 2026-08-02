@@ -23,6 +23,11 @@ APP_ID: Final = "de.rsdigital.formwerk"
 #: Präfix der Umgebungsvariablen, die zu dieser Anwendung gehören.
 ENVIRONMENT_PREFIX: Final = "FORMWERK"
 
+#: Wohin sich Kunden wenden — Fehlerberichte, Fragen, Interesse vor dem
+#: Erscheinen. Ein Kanal, eine Adresse; sie steht im Über-Dialog, im
+#: Fehlerbericht und auf der Website.
+SUPPORT_ADDRESS: Final = "admin@rs-digital.org"
+
 #: Endung des Projektcontainers (Bauplan §16.1).
 PROJECT_SUFFIX: Final = ".p3d"
 
