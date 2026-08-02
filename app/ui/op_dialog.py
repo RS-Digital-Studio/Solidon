@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -60,6 +60,9 @@ def _decimals_for(entry: ParamSpec) -> int:
 class OperationDialog(QDialog):
     """Ein Dialog für eine Operation, gebaut aus ihrem Schema."""
 
+    valuesChanged = Signal()
+    """Ein Wert hat sich geändert — die Live-Vorschau (§18.7) hört zu."""
+
     def __init__(
         self,
         spec: OperationSpec,
@@ -67,12 +70,16 @@ class OperationDialog(QDialog):
         parent: QWidget | None = None,
         values: Mapping[str, Any] | None = None,
         sources: Mapping[str, str] | None = None,
+        parameter_values: Mapping[str, float] | None = None,
     ) -> None:
         super().__init__(parent)
         self.spec = spec
         self.setWindowTitle(str(spec.title))
         self.setMinimumWidth(380)
         self._editors: dict[str, QWidget] = {}
+        self._parameter_values = dict(parameter_values or {})
+        """Aufgelöste Projektparameter — der Skizzeneditor rechnet
+        Maßausdrücke damit (§13, §30.1)."""
         given = dict(values or {})
         # Der Dialog spricht in Namen, das Dokument in Kennungen. Wer nur eine
         # Liste übergibt, bekommt die Kennungen zu sehen.
@@ -87,6 +94,7 @@ class OperationDialog(QDialog):
         for entry in spec.params.spec():
             editor = self._editor_for(entry, names, given.get(entry.name))
             self._editors[entry.name] = editor
+            self._watch(editor)
             label = f"{entry.title}"
             if entry.unit:
                 label = f"{label} [{entry.unit}]"
@@ -143,6 +151,25 @@ class OperationDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    def _watch(self, editor: QWidget) -> None:
+        """Verbindet das Änderungssignal des Editors mit ``valuesChanged``.
+
+        Je Editorsorte eines — die Vorschau will von jedem Feld wissen, nicht
+        nur von den Zahlen.
+        """
+        from app.ui.sketch_editor import SketchField
+
+        if isinstance(editor, SketchField):
+            editor.changed.connect(self.valuesChanged)
+        elif isinstance(editor, QCheckBox):
+            editor.toggled.connect(self.valuesChanged)
+        elif isinstance(editor, QSpinBox | QDoubleSpinBox):
+            editor.valueChanged.connect(self.valuesChanged)
+        elif isinstance(editor, QComboBox):
+            editor.currentIndexChanged.connect(self.valuesChanged)
+        elif isinstance(editor, QLineEdit):
+            editor.textChanged.connect(self.valuesChanged)
+
     def _editor_for(
         self, entry: ParamSpec, objects: Mapping[str, str], given: Any = None
     ) -> QWidget:
@@ -175,6 +202,12 @@ class OperationDialog(QDialog):
             if start is not None and start in entry.choices:
                 combo.setCurrentText(str(start))
             return combo
+        if entry.kind == "sketch":
+            # §30.1 Stufe zwei: der Text ist ein Speicherformat, keine
+            # Eingabe — gezeichnet wird im Editor, das Feld fasst zusammen.
+            from app.ui.sketch_editor import SketchField
+
+            return SketchField(str(start or ""), self._parameter_values, self)
         if entry.kind in ("object", "source"):
             # Der Name steht da, die Kennung reist mit. Ein frei beschreibbares
             # Feld war hier ein Weg, „obj_12" falsch zu tippen — und der Baum
@@ -201,10 +234,14 @@ class OperationDialog(QDialog):
 
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""
+        from app.ui.sketch_editor import SketchField
+
         collected: dict[str, Any] = {}
         for entry in self.spec.params.spec():
             editor = self._editors[entry.name]
-            if isinstance(editor, QCheckBox):
+            if isinstance(editor, SketchField):
+                collected[entry.name] = editor.text()
+            elif isinstance(editor, QCheckBox):
                 collected[entry.name] = editor.isChecked()
             elif isinstance(editor, QSpinBox):
                 collected[entry.name] = editor.value()
