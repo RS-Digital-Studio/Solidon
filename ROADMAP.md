@@ -1636,3 +1636,28 @@ sind sie gebaut, und beide auf den Wegen, die schon dalagen:
   (`Windows fatal exception: access violation`, „Garbage-collecting").
   Ersetzte Arbeiter bleiben jetzt referenziert, bis sie ausgelaufen sind
   (`_retire`, `_previews`-Pool), und ein Stresstest hält das Muster fest.
+
+## Der erste echte CI-Lauf
+
+Am 02.08.2026 ging das Repository auf GitHub (privat, `RS-Digital-Studio/
+Formwerk`), und die CI lief zum ersten Mal wirklich — mit vier Funden, von
+denen keiner auf dieser Maschine sichtbar war:
+
+* **Ein frisches Environment zieht trimesh 5.0.0**, und der Major-Sprung
+  riss mypy (die neuen Annotationen geben für `concatenate` den Obertyp
+  `Geometry`) und mehrere Tests. Die Engführung auf `Trimesh` lebt jetzt an
+  einer Stelle (`mesh.concatenated`); trimesh ist unter 5 gepinnt.
+  **Offen: die trimesh-5-Migration als eigener Durchgang** — venv anheben,
+  Suite durchmessen, dann den Pin lösen. Nicht nebenbei machen: der erste
+  Lauf zeigte auf Windows drei zusätzliche rote Tests und eine abgerissene
+  pytest-Ausgabe.
+* **„C:/…" ist auf POSIX ein Ordnername.** Die Absolutpfad-Prüfung der
+  Projektdatei (Regel 12) urteilte mit dem Plattform-`Path` und ließ
+  Laufwerkspfade auf dem Mac durch — und `..\` mit Backslash gleich mit.
+  Jetzt urteilt `PureWindowsPath` über beide Konventionen, die Fälle sind
+  Testfälle.
+* **Die Runner haben kein libEGL.** PySide6 lädt es auch offscreen; ein
+  apt-Schritt stellt die Qt-Systembibliotheken in beiden Jobs bereit.
+* **Die Leistungstests messen auf geteilten Runnern nur Streuung.** §31
+  meint eine Referenzmaschine; die CI läuft `-m "not performance"`, das
+  Budget prüft der lokale Lauf.
