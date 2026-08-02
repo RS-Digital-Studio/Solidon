@@ -284,9 +284,15 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       `app/branding.py`
 - [~] CI-Bauläufe, Signierung Windows, AppImage/Flatpak — `.github/workflows/`
       baut Windows und Linux, erst nachdem die Suite auf allen drei Plattformen
-      grün ist; die Signierung überspringt sich ohne Zertifikat. **Ungeprüft**,
-      weil dieses Repository noch nicht auf einem CI-Dienst liegt; AppImage und
-      Flatpak fehlen, das Linux-Paket ist bisher der PyInstaller-Ordner
+      grün ist. Windows wird zu einer Setup-Datei (`packaging/formwerk.iss`,
+      gebaut von `tools/make_installer.py`, das die Werte aus
+      `app/branding.py` liest), Linux zu einem tar.gz, weil der
+      Artefakt-Upload sonst die Ausführungsrechte verliert; Anwendung und
+      Installer werden signiert, der Schritt überspringt sich ohne Zertifikat.
+      **Ungeprüft**, weil dieses Repository noch nicht auf einem CI-Dienst
+      liegt; AppImage und Flatpak fehlen — beide brauchen zuerst ein
+      Anwendungssymbol, das es noch nicht gibt (auch Installer und exe zeigen
+      bis dahin Standardbilder)
 - [x] Erstinbetriebnahme (§38) — Sprache, Drucker, Material, externe Programme;
       überspringbar, nachholbar, endet beim ersten Import
 - [x] Fehlerberichtsdialog mit Container-Anhang — legt einen Ordner an,
@@ -297,8 +303,10 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       auf dem Startbildschirm
 - [~] Doku, Website, Lizenzhinweise — README mit Erwartungsmanagement, den drei
       Wegen, Paketierung und einem Supportkanal; Lizenzhinweise vollständig.
-      **Eine Website gibt es nicht**, und die Adresse in `core/updates.py` ist
-      bisher ein Platzhalter
+      Die Adresse in `core/updates.py` steht seit der Subdomain-Entscheidung.
+      **Hochgeladen ist nichts** — die Quelldateien liegen in `website/`, die
+      Schrittliste in `website/README.md`, Impressum und Datenschutz sind
+      Entwürfe mit Platzhaltern
 - [x] Update-Hinweis beim Start — fragt eine Versionsdatei, lädt nichts, und ist
       aus, bis ihn jemand einschaltet
 

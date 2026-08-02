@@ -64,6 +64,7 @@ zusammen. Weiteres:
 .venv\Scripts\python.exe tools/run_agent_suite.py               # kostet Geld, kein Testlauf
 .venv\Scripts\python.exe tools/make_figures.py                  # Bildschirmfotos fürs Handbuch
 .venv\Scripts\python.exe tools/make_manual.py                   # Handbuch als Website und PDF
+.venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Formwerk, braucht Inno Setup 6
 ```
 
 Die letzten beiden laufen **nicht** offscreen und dürfen es nicht: unter

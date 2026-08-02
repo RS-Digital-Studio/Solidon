@@ -36,7 +36,10 @@ Ordner wird unverändert hochgeladen; einen Build-Schritt gibt es nicht.
   (Anschrift, Kontaktadresse, Hoster) und beide Texte prüfen — sie sind
   Entwürfe, keine Rechtsberatung.
 - Den Installer in das Verzeichnis legen und den Download-Kasten in beiden
-  `index.html` auf den echten Link umstellen.
+  `index.html` auf den echten Link umstellen. Die Dateien kommen aus der CI
+  (oder lokal aus `tools/make_installer.py`) und heißen
+  `Formwerk-Setup-<Version>.exe` für Windows und
+  `Formwerk-<Version>-linux-x86_64.tar.gz` für Linux.
 - `version.json` führen: `version` ist die veröffentlichte Version,
   `url` die Download-Seite, `notes` ein Satz zur Neuerung. Die Anwendung
   vergleicht gegen `APP_VERSION` in `app/branding.py` und zeigt nur einen
