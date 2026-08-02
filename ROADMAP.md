@@ -975,16 +975,13 @@ laufen parallel und stehen weiter oben unter „Bewusst offen".
       Parameteränderung im Cache. Der Agent bekommt den Parameter nicht
       (§26: Grundformen statt roher Punktlisten) — das Tool-Schema bietet
       ihn nicht an, und die Sitzung lehnt ihn auch geraten ab
-- [ ] Grafischer Skizzeneditor im Viewport (Ebene aus Fläche, Zeichnen,
-      Bedingungen), offscreen testbar — **der letzte offene Baustein von
-      P13**; bis dahin sind die Grundformen über Dialog, CLI und Agent der
-      Weg (Ausgabestufe eins aus §30.1, für sich abnahmefähig); die
-      Parameterstrecke dafür liegt bereit (`kind="sketch"`, der Dialog
-      zeigt bis dahin das Textfeld). Offen dabei: ob eine unterbestimmte
-      gezeichnete Skizze an der Op einen Befund erzeugt — §30.1 legt es
-      nahe, aber jede Skizze ohne `fixed`-Bedingung hätte ihn (freie
-      Lage), und ein Hinweis, der immer erscheint, wäre keiner; im Editor
-      ist die Anzeige der Freiheitsgrade ohnehin live
+- [x] Grafischer Skizzeneditor (Zeichnen, Bedingungen über Werkzeugleiste
+      und Kontextmenü), offscreen testbar — `app/ui/sketch_editor.py`,
+      angebunden über das `kind="sketch"`-Feld jedes Operationsdialogs;
+      die Ebene kommt weiter aus dem Flächenparameter der Op. Die offene
+      Frage von damals ist beantwortet, wie der Punkt es nahelegte: kein
+      Befund an der Op — die Freiheitsgrade stehen live in der Statuszeile
+      des Editors, und das Feld fasst sie zusammen
 - [x] Agenten-Suite von 30 auf 33 Fälle: Sechseck-Sockel, Deckel mit Tasche,
       Handlauf-Bogen — und der Trichter dreht sich um: was den
       OpenSCAD-Rückfall brauchte, kann `sketch_loft` jetzt im Haus. Die
@@ -1481,7 +1478,8 @@ niemand ausgeschaltet hat. Suite: 2136 grün.
 * **Live-Vorschau im Operationsdialog.** Wäre die größte Einzelverbesserung
   gegenüber Fusion und Blender und ist deshalb kein Nebenher — eigene Phase,
   nach P14. Der bestehende Weg (anwenden, ansehen, Doppelklick im Verlauf,
-  korrigieren) trägt bis dahin.
+  korrigieren) trägt bis dahin. *Eingelöst — siehe „Die zwei bekannten
+  Lücken" unten.*
 * **Linke Maustaste dreht als Vorgabe.** Bambu Studio, OrcaSlicer und
   PrusaSlicer tun das; §2.9 gibt Cura vor. Die Vorgabe zu wechseln wäre eine
   Bauplanänderung und bleibt eine Entscheidung für sich — **als viertes
@@ -1589,3 +1587,44 @@ Vorschlag eine rücknehmbare Transaktion — trägt. Die zwei bekannten Lücken
 (Skizzeneditor P13, Live-Vorschau im Op-Dialog) bleiben die zwei bekannten
 Lücken. Die Handbuchbilder sind nach dieser Runde neu aufzunehmen — Menüs,
 Parameterleiste und Katalog haben sich sichtbar geändert.
+
+## Die zwei bekannten Lücken sind zu
+
+Beide Runden nannten dieselben zwei Lücken gegen Fusion und Shapr3D — jetzt
+sind sie gebaut, und beide auf den Wegen, die schon dalagen:
+
+* **Die Live-Vorschau im Operationsdialog** ist dieselbe Differenzansicht
+  wie beim Agentenvorschlag, nur früher: `preview_scene` verallgemeinert
+  die Vorschau-Rechnung des Agenten (Kopie, Entwurfsqualität, Cache trägt
+  die alten Schritte), `valuesChanged` am erzeugten Dialog entprellt auf
+  300 ms, und die erste Vorschau läuft beim Öffnen — die Vorgaben sind
+  schon eine Aussage. Auch das Wiederöffnen im Verlauf zeigt live, als
+  geänderte Operation gerechnet, nicht als neuer Schritt (§15.4). Eine
+  angehaltene Kette zeigt nichts statt einer leeren Differenz — die sähe
+  aus wie „keine Änderung", und das wäre gelogen. Rückfragen stellt die
+  Vorschau nie: was eine Antwort braucht, bekommt sie beim Anwenden.
+* **Der grafische Skizzeneditor** (§30.1 Stufe zwei) zeichnet Punkt,
+  Linie, Kreis und Bogen, fängt auf vorhandene Punkte (der Fang wird eine
+  Deckungs-Bedingung, keine kopierte Zahl), setzt alle neun Bedingungen
+  über Werkzeugleiste **und** Kontextmenü — angeboten nur, was zur
+  Auswahl passt —, und Maße sind Ausdrücke der Grammatik mit
+  Inline-Prüfung. Der Solver läuft nach jedem Schritt: die
+  Freiheitsgrade stehen live in der Statuszeile, ein Konflikt nennt sein
+  Paar und lässt die letzte gültige Lage stehen (§15.3). Grundformen
+  kommen aus `shapes` mit verschobenen Zielen. Der Editor liest und
+  schreibt den Text der Skizzen-Ops — es gibt keinen zweiten
+  Skizzenbegriff, `change_params` und der Cache gelten unverändert.
+
+**Zwei Funde nebenbei, beide älter als diese Runde:**
+
+* **Das Handbuch behauptete „kein CAD-Ersatz — es gibt keine Skizzen und
+  keine Zwangsbedingungen."** Seit P13 falsch, und der Launch soll die
+  Skizzen als Kernargument führen. Die Seite sagt jetzt, was da ist.
+* **Ein ersetzter Arbeiter wurde dem Speicherbereiniger überlassen.**
+  „Eine neuere Anfrage ersetzt die wartende" hieß bei Analysekarte und
+  Schichtanalyse: die Referenz überschreiben — und ein laufender QThread
+  ohne Referenz wird mitsamt C++-Objekt zerstört. Das ist der Absturz
+  ohne Zeile, der die Suite heute zweimal sporadisch riss
+  (`Windows fatal exception: access violation`, „Garbage-collecting").
+  Ersetzte Arbeiter bleiben jetzt referenziert, bis sie ausgelaufen sind
+  (`_retire`, `_previews`-Pool), und ein Stresstest hält das Muster fest.
