@@ -273,6 +273,11 @@ class MainWindow(QMainWindow):
         self._update_worker: Any = None
         """Die laufende Update-Anfrage (§37.2) — festgehalten wie jeder
         andere Arbeiter, damit sie das Fenster nicht überlebt."""
+        self._retired: list[Any] = []
+        """Ersetzte Arbeiter, bis sie ausgelaufen sind. „Eine neuere Anfrage
+        ersetzt die wartende" hieß hier: die Referenz überschreiben — und ein
+        laufender QThread ohne Referenz wird vom Speicherbereiniger mitsamt
+        C++-Objekt zerstört. Ein Absturz ohne Zeile, irgendwann später."""
         self._proposal: Any = None
         """The agent turn waiting for a decision (§26.5)."""
         self._manual: ManualWindow | None = None
@@ -1544,8 +1549,23 @@ class MainWindow(QMainWindow):
             )
         )
         worker.finished.connect(lambda: setattr(self, "_map_worker", None))
+        self._retire(self._map_worker)
         self._map_worker = worker
         worker.start()
+
+    def _retire(self, worker: Any) -> None:
+        """Hält einen ersetzten Arbeiter fest, bis er ausgelaufen ist.
+
+        Sein Ergebnis will niemand mehr — aber sein Thread läuft noch, und
+        ohne Referenz zerstört der Speicherbereiniger das QThread-Objekt
+        unter ihm.
+        """
+        if worker is None or not worker.isRunning():
+            return
+        self._retired.append(worker)
+        worker.finished.connect(
+            lambda done=worker: self._retired.remove(done) if done in self._retired else None
+        )
 
     def _map_ready(self, analysis: Any, key: tuple[Any, ...], object_id: ObjectId) -> None:
         self._map_cache = {key: analysis}
@@ -1598,6 +1618,7 @@ class MainWindow(QMainWindow):
         worker = _SliceWorker(entry, self.session.profile.printer.layer_height)
         worker.done.connect(lambda outcome, key=key: self._slice_ready(outcome, key, then))
         worker.finished.connect(lambda: setattr(self, "_slice_worker", None))
+        self._retire(self._slice_worker)
         self._slice_worker = worker
         worker.start()
         return None
@@ -1812,9 +1833,23 @@ class MainWindow(QMainWindow):
         params: dict[str, Any] = dict(values)
         if spec.params.spec():
             dialog = OperationDialog(
-                spec, self._object_names(), self, values=values, sources=self._source_names()
+                spec,
+                self._object_names(),
+                self,
+                values=values,
+                sources=self._source_names(),
+                parameter_values=self._parameter_values(),
             )
-            if dialog.exec() != OperationDialog.DialogCode.Accepted:
+            inputs = inputs_for(spec, objects, chosen)
+            # §18.7: der Dialog zeigt, was er täte, während getippt wird —
+            # dieselbe Differenzansicht wie beim Agentenvorschlag.
+            self._wire_preview(
+                dialog,
+                lambda entered: [OperationDraft(op=spec.name, inputs=inputs, params=entered)],
+            )
+            accepted = dialog.exec() == OperationDialog.DialogCode.Accepted
+            self._clear_preview()
+            if not accepted:
                 return
             params = dialog.values()
         # Ohne Parameter gibt es nichts zu fragen, und ein Fenster mit nur „OK"
@@ -1855,11 +1890,63 @@ class MainWindow(QMainWindow):
             self,
             values=entry.params,
             sources=self._source_names(),
+            parameter_values=self._parameter_values(),
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
-        if dialog.exec() != OperationDialog.DialogCode.Accepted:
+        # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
+        # gerechnet als geänderte Operation, nicht als neuer Schritt (§15.4).
+        self._wire_preview(dialog, None, change_op=op_id)
+        accepted = dialog.exec() == OperationDialog.DialogCode.Accepted
+        self._clear_preview()
+        if not accepted:
             return
         self.session.change_params(op_id, dialog.values())
+
+    def _parameter_values(self) -> dict[str, float]:
+        """Die aufgelösten Projektparameter — der Skizzeneditor rechnet
+        Maßausdrücke damit (§13)."""
+        from app.core.scene import expressions
+
+        try:
+            return dict(expressions.resolve(self.session.project.document.parameters))
+        except AppError:
+            return {}
+
+    def _wire_preview(
+        self, dialog: OperationDialog, drafts_of: Any, *, change_op: int | None = None
+    ) -> None:
+        """Verbindet einen Operationsdialog mit der Live-Vorschau (§18.7).
+
+        Entprellt: dreißig Klicks auf den Drehknopf sind eine Rechnung, nicht
+        dreißig. Die erste Vorschau läuft sofort — auch die Vorgaben sind eine
+        Aussage darüber, was gleich passiert.
+        """
+        timer = QTimer(dialog)
+        timer.setSingleShot(True)
+        timer.setInterval(300)
+
+        def request() -> None:
+            entered = dialog.values()
+            if change_op is not None:
+                self.session.preview_async(
+                    self._show_preview, change_op=change_op, change_values=entered
+                )
+            else:
+                self.session.preview_async(self._show_preview, drafts_of(entered))
+
+        timer.timeout.connect(request)
+        dialog.valuesChanged.connect(lambda: timer.start())
+        request()
+
+    def _show_preview(self, difference: Any) -> None:
+        self.viewport.show_difference(difference)
+
+    def _clear_preview(self) -> None:
+        """Der Dialog ist zu: die Vorschau geht, ein wartender Agentenvorschlag
+        bekommt seine Differenz zurück."""
+        self.session.cancel_preview()
+        pending = self._proposal.difference if self._proposal is not None else None
+        self.viewport.show_difference(pending)
 
     def _object_names(self) -> dict[str, str]:
         """Kennung auf Name, wie die Dialoge die Szene sehen.
@@ -2239,7 +2326,7 @@ class MainWindow(QMainWindow):
             return
         self.session.cancel()
         self.session.wait_for_idle(2000)
-        for worker in (self._map_worker, self._slice_worker, self._update_worker):
+        for worker in (self._map_worker, self._slice_worker, self._update_worker, *self._retired):
             # Ergebnisse, die niemand mehr sehen wird — aber ein Thread, der
             # sein Fenster überlebt, nimmt den Prozess mit. Die Schichtanalyse
             # fehlte hier: Schließen während sie lief war ein Absturz beim

@@ -175,6 +175,35 @@ class _AgentWorker(QThread):
             self.finishedWith.emit(preview)
 
 
+class _PreviewWorker(QThread):
+    """Eine Dialog-Vorschau, abseits des GUI-Threads (§18.7, §2.8).
+
+    Dieselbe Begründung wie beim Agentenvorschlag: die Differenz sind zwei
+    Boolesche Operationen je Körper. ``generation`` stempelt das Ergebnis —
+    wer weitertippt, ersetzt die Anfrage, und eine verspätete Antwort auf
+    eine alte Frage wird verworfen statt gezeigt.
+    """
+
+    done = Signal(int, object)
+
+    def __init__(self, session: Session, generation: int, compute: Any) -> None:
+        super().__init__()
+        self._session = session
+        self._generation = generation
+        self._compute = compute
+
+    def run(self) -> None:
+        try:
+            _scene, difference = self._compute()
+        except (AppError, OperationCancelled):
+            # Beim Tippen entstehen ungültige Zwischenstände; der echte
+            # Fehler kommt beim Anwenden als Vorschlag (§2.7). Die Vorschau
+            # zeigt dann schlicht nichts Neues.
+            self.done.emit(self._generation, None)
+        else:
+            self.done.emit(self._generation, difference)
+
+
 class _SplitWorker(QThread):
     """Die Trennebenensuche, abseits des GUI-Threads (§2.8, §22.3).
 
@@ -198,6 +227,14 @@ class _SplitWorker(QThread):
             self.done.emit(plan_split(self._mesh, self._object_id, self._profile))
         except AppError as error:
             self.failedWith.emit(error)
+
+
+def _no_questions(question: str, choices: list[str]) -> str:
+    """Die ask-Funktion der stillen Vorschau: sie fragt nicht, sie hält an.
+
+    Eine Rückfrage mitten im Tippen wäre ein Fenster über einem Fenster —
+    was eine Antwort braucht, bekommt sie beim Anwenden über den echten Weg."""
+    raise OperationCancelled
 
 
 def _with_findings(result: EvaluationResult, extra: list[Finding]) -> EvaluationResult:
@@ -252,6 +289,17 @@ class Session(QObject):
         self._split_discarded = False
         """Ob das laufende Split-Ergebnis verworfen wurde — der Arbeiter
         läuft dann aus, ohne dass jemand sein Ergebnis anwendet."""
+        self._previews: list[_PreviewWorker] = []
+        """Jeder laufende Vorschau-Arbeiter, festgehalten bis ``finished``.
+
+        Eine neuere Anfrage ersetzt die alte nur in der Anzeige — der alte
+        Thread rechnet aus. Die Referenz zu überschreiben hieße, ein
+        laufendes QThread-Objekt dem Speicherbereiniger zu überlassen, und
+        der zerstört das C++-Objekt unter dem Thread: ein Absturz ohne
+        Zeile, irgendwann später."""
+        self._preview_generation = 0
+        """Stempel der jüngsten Vorschau-Anfrage (§18.7) — eine verspätete
+        Antwort auf eine ältere wird verworfen statt gezeigt."""
         self._backend: LLMBackend | None = None
         self._selection: tuple[str, str] | None = None
         self._accepted: dict[str, str | None] = {}
@@ -563,6 +611,47 @@ class Session(QObject):
             self.evaluate_async()
         return applied
 
+    def preview_async(
+        self,
+        then: Any,
+        drafts: list[OperationDraft] | None = None,
+        *,
+        change_op: int | None = None,
+        change_values: dict[str, Any] | None = None,
+    ) -> None:
+        """Die Live-Vorschau des Operationsdialogs (§18.7).
+
+        Eine neuere Anfrage ersetzt die wartende — gerechnet wird beides,
+        gezeigt nur das Jüngste. ``then`` bekommt die ``SceneDifference``
+        oder ``None``, wenn es nichts zu zeigen gibt.
+        """
+        self._preview_generation += 1
+        generation = self._preview_generation
+
+        def compute() -> tuple[Any, SceneDifference | None]:
+            return self.preview_scene(
+                list(drafts or []), change_op=change_op, change_values=change_values
+            )
+
+        worker = _PreviewWorker(self, generation, compute)
+        worker.done.connect(lambda stamp, difference: self._preview_done(stamp, difference, then))
+        worker.finished.connect(lambda done=worker: self._preview_finished(done))
+        self._previews.append(worker)
+        worker.start()
+
+    def _preview_finished(self, worker: _PreviewWorker) -> None:
+        if worker in self._previews:
+            self._previews.remove(worker)
+
+    def _preview_done(self, stamp: int, difference: Any, then: Any) -> None:
+        if stamp != self._preview_generation:
+            return
+        then(difference)
+
+    def cancel_preview(self) -> None:
+        """Der Dialog ist zu — was noch rechnet, wird verworfen, nicht gezeigt."""
+        self._preview_generation += 1
+
     def split_async(self, object_id: str, then: Any) -> None:
         """Auto Split, ohne das Fenster anzuhalten (§2.8).
 
@@ -739,18 +828,47 @@ class Session(QObject):
         """Wonach die Szene aussähe — auf einer Kopie gerechnet, in
         Entwurfsqualität.
         """
+        return self.preview_scene(
+            list(proposal.drafts), origin=proposal.origin, ask=self.ask_from_worker
+        )
+
+    def preview_scene(
+        self,
+        drafts: list[OperationDraft],
+        *,
+        origin: Origin | None = None,
+        ask: Any = None,
+        change_op: int | None = None,
+        change_values: dict[str, Any] | None = None,
+    ) -> tuple[Any, SceneDifference | None]:
+        """Wonach die Szene aussähe — die eine Vorschau für Agent und Dialog.
+
+        Auf einer Kopie des Dokuments, in Entwurfsqualität; der Cache trägt
+        alle Schritte, die schon gerechnet sind. ``change_op`` mit
+        ``change_values`` zeigt statt neuer Schritte eine geänderte Operation
+        des Stapels (§15.4). Ohne ``ask`` hält eine Rückfrage die Vorschau an,
+        statt mitten ins Tippen ein Fenster zu stellen — was eine Frage
+        braucht, hat keine stille Vorschau.
+        """
         import copy
 
         before = self.last_result.scene if self.last_result else None
         working = copy.deepcopy(self.project.document)
-        History(working).apply(tr("Vorschau"), proposal.drafts, origin=proposal.origin)
+        if change_op is not None:
+            History(working).change_params(change_op, dict(change_values or {}))
+        else:
+            History(working).apply(tr("Vorschau"), drafts, origin=origin or Origin(by="user"))
         result = evaluate(
             working,
             self.profile,
             quality="draft",
             sources=ProjectSources(self.project, base_dir=self.base_dir),
-            ask=self.ask_from_worker,
+            ask=ask or _no_questions,
         )
+        if result.stopped_at is not None:
+            # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
+            # sähe aus wie „keine Änderung", und das wäre gelogen.
+            return result.scene, None
         difference = compare_scenes(before, result.scene) if before is not None else None
         return result.scene, difference
 
@@ -823,9 +941,9 @@ class Session(QObject):
         """
         deadline = time.monotonic() + timeout_ms / 1000.0
         while time.monotonic() < deadline:
-            # Auch die Trennebenensuche zählt: ein Split-Arbeiter, der das
-            # Fenster überlebt, nimmt beim Beenden den Prozess mit.
-            worker = self._worker or self._split
+            # Auch Trennebenensuche und Vorschau zählen: ein Arbeiter, der
+            # das Fenster überlebt, nimmt beim Beenden den Prozess mit.
+            worker = self._worker or self._split or next(iter(self._previews), None)
             if worker is None:
                 break
             worker.wait(50)

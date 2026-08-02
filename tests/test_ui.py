@@ -1120,3 +1120,121 @@ def test_auto_split_runs_in_a_worker(session: Session) -> None:
     applied = results[0]
     assert applied.transaction is None, "ein 20-mm-Würfel passt aufs Bett"
     assert states and states[0] is True and states[-1] is False
+
+
+# --- Live-Vorschau im Operationsdialog (§18.7) -----------------------------------
+
+
+def test_a_preview_delivers_a_difference(session: Session) -> None:
+    """Der Dialog zeigt, was er täte: dieselbe Differenzansicht wie beim
+    Agentenvorschlag, gerechnet auf einer Kopie, ohne den Stapel anzufassen."""
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+    stack_before = list(session.project.document.ops)
+
+    collected: list[object] = []
+    session.preview_async(
+        collected.append,
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 4.0, "x": 0.0, "y": 0.0, "z": 0.0, "axis": "z"},
+            )
+        ],
+    )
+    session.wait_for_idle()
+
+    assert collected, "die Vorschau liefert"
+    difference = collected[0]
+    assert difference is not None and difference.changed, "eine Bohrung ändert Volumen"
+    assert list(session.project.document.ops) == stack_before, "der Stapel bleibt unberührt"
+
+
+def test_a_cancelled_preview_stays_silent(session: Session) -> None:
+    """Der Dialog ist zu, bevor die Rechnung fertig ist — das Ergebnis wird
+    verworfen statt gezeigt (§18.7)."""
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+
+    collected: list[object] = []
+    session.preview_async(
+        collected.append,
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 4.0, "x": 0.0, "y": 0.0, "z": 0.0, "axis": "z"},
+            )
+        ],
+    )
+    session.cancel_preview()
+    session.wait_for_idle()
+
+    assert not collected, "eine verworfene Vorschau meldet sich nicht mehr"
+
+
+def test_a_broken_preview_shows_nothing_instead_of_failing(session: Session) -> None:
+    """Beim Tippen entstehen ungültige Zwischenstände — die Vorschau zeigt
+    dann nichts; der echte Fehler kommt beim Anwenden als Vorschlag (§2.7)."""
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+
+    collected: list[object] = []
+    session.preview_async(
+        collected.append,
+        [OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": -1.0})],
+    )
+    session.wait_for_idle()
+
+    assert collected == [None], "kein Fehlerdialog, nur keine Vorschau"
+
+
+def test_the_wired_dialog_previews_into_the_viewport(window: MainWindow) -> None:
+    """Die Verdrahtung Ende zu Ende: Dialog auf, erste Vorschau läuft von
+    selbst, die Differenz steht im Viewport — und mit dem Schließen geht sie."""
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    spec = REGISTRY.get("drill_hole")
+    dialog = OperationDialog(spec, window._object_names(), window)
+    window._wire_preview(
+        dialog,
+        lambda entered: [OperationDraft(op=spec.name, inputs=("obj_1",), params=entered)],
+    )
+    window.session.wait_for_idle()
+
+    assert window.viewport.difference is not None, "die Vorgaben sind schon eine Aussage"
+
+    window._clear_preview()
+    assert window.viewport.difference is None
+
+
+def test_rapid_previews_never_orphan_a_worker(session: Session) -> None:
+    """Wer schnell tippt, startet Vorschau auf Vorschau. Jeder laufende
+    Arbeiter bleibt referenziert, bis er ausgelaufen ist — ein QThread ohne
+    Referenz wird sonst vom Speicherbereiniger mitsamt laufendem C++-Objekt
+    zerstört: der Absturz ohne Zeile, der die Suite sporadisch riss."""
+    import gc
+
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+
+    collected: list[object] = []
+    for diameter in (2.0, 3.0, 4.0, 5.0, 6.0):
+        session.preview_async(
+            collected.append,
+            [
+                OperationDraft(
+                    op="drill_hole",
+                    inputs=("obj_1",),
+                    params={"diameter": diameter, "x": 0.0, "y": 0.0, "z": 0.0, "axis": "z"},
+                )
+            ],
+        )
+    gc.collect()
+    session.wait_for_idle()
+    gc.collect()
+
+    assert len(collected) == 1, "nur die jüngste Vorschau wird geliefert"
+    assert not session._previews, "kein Arbeiter bleibt zurück"
