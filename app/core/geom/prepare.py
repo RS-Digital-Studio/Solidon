@@ -23,7 +23,7 @@ import trimesh
 
 from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.boolean import boolean, shared_volume
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, concatenated
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
@@ -267,7 +267,7 @@ def compensate_elephant_foot(
     if not parts:
         return mesh, []
 
-    collar = trimesh.util.concatenate(parts)
+    collar = concatenated(parts)
     collar.apply_translation([0.0, 0.0, bottom - BOOLEAN_OVERLAP / 2.0])
     outcome = boolean("difference", [mesh, mesh.replacing(collar)])
     findings = list(outcome.findings)

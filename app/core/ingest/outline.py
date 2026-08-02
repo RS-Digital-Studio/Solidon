@@ -27,7 +27,7 @@ from dataclasses import dataclass
 import trimesh
 
 from app.core.errors import PROGRAMMING_ERRORS, ValidationError
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, concatenated
 from app.core.log import get_logger
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -94,7 +94,7 @@ def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> O
     scale = (width / actual) if width > EPS_GEOM and actual > EPS_GEOM else 1.0
 
     parts = [trimesh.creation.extrude_polygon(entry, height=height) for entry in polygons]
-    body = parts[0] if len(parts) == 1 else trimesh.util.concatenate(parts)
+    body = parts[0] if len(parts) == 1 else concatenated(parts)
     if abs(scale - 1.0) > EPS_GEOM:
         # Nur in der Ebene: die Höhe wurde in Millimetern verlangt und schrumpft
         # nicht, weil die Zeichnung auf eine Breite skaliert wurde.

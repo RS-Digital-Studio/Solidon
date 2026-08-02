@@ -26,7 +26,7 @@ import trimesh
 from app.core.errors import ValidationError
 from app.core.geom.attributes import with_slot
 from app.core.geom.boolean import BooleanKind, boolean
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import apply, rotation, translation
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -102,7 +102,7 @@ def label_solid(shapes: list[Any], depth: float) -> MeshData | None:
     ]
     if not parts:
         return None
-    return MeshData.of(trimesh.util.concatenate(parts))
+    return MeshData.of(concatenated(parts))
 
 
 def place(body: MeshData, position: Vec3, normal: Vec3, angle: float = 0.0) -> MeshData:

@@ -203,6 +203,19 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
     return MeshData.of(loaded)
 
 
+def concatenated(parts: list[trimesh.Trimesh]) -> trimesh.Trimesh:
+    """Verschweißt mehrere Netze zu einem.
+
+    trimesh annotiert ``concatenate`` mit dem gemeinsamen Obertyp ``Geometry``,
+    weil auch Punktwolken hineinpassen; aus lauter ``Trimesh`` entsteht aber
+    immer ein ``Trimesh``. Die eine Engführung lebt hier, nicht an jeder
+    Aufrufstelle.
+    """
+    merged = trimesh.util.concatenate(parts)
+    assert isinstance(merged, trimesh.Trimesh)
+    return merged
+
+
 def _joined(parts: list[Part]) -> MeshData:
     """Die Körper einer 3MF als der eine Körper, den diese Funktion verspricht.
 
@@ -215,7 +228,7 @@ def _joined(parts: list[Part]) -> MeshData:
     """
     if len(parts) == 1:
         return parts[0].mesh
-    return MeshData.of(trimesh.util.concatenate([part.mesh.raw for part in parts]))
+    return MeshData.of(concatenated([part.mesh.raw for part in parts]))
 
 
 class MeshCodec:
