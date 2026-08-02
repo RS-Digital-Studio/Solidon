@@ -1768,8 +1768,9 @@ der Anzeige auf; was ein Nutzer selbst benannt hat, bleibt wörtlich, und
 nirgends, ein Katalogabgleich wäre geraten. Die Beispiele sind neu gebaut,
 die englischen Tourtexte zitieren die englischen Titel („Drill a bore",
 „Arrange"), und die Extraktion sammelt die Titel der Beispiel-Bauer über
-`EXTRA_SOURCES` mit ein. Offen daneben: die Oberfläche vergibt eigene
-Transaktionstitel noch über `tr()` (`main_window.py`, `session.py`) — sie
-frieren weiter in der Sitzungssprache ein und wären mit `_()` ebenfalls
-übersetzbar; nicht mit angefasst, weil beide Dateien gerade in einer
-parallelen Sitzung in Arbeit sind.
+`EXTRA_SOURCES` mit ein. Im zweiten Durchgang vergibt auch die Oberfläche
+ihre Titel über `_()` („Direkt bewegt", „Bemalen", „Modell laden", „STEP
+laden", „Zeichnung extrudieren", „Drucker und Material") — nur die
+zusammengesetzten Parameter-Titel (`Parameter {name}`) bleiben wörtlich:
+eine Message-ID kennt keine Platzhalter, und der Nutzername im Titel gehört
+ohnehin nicht übersetzt.

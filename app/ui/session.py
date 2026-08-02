@@ -68,7 +68,7 @@ from app.core.types import (
     Source,
 )
 from app.core.units import is_close
-from app.i18n import TranslatableText, tr
+from app.i18n import TranslatableText, _, tr
 
 _log = get_logger(__name__)
 
@@ -500,7 +500,7 @@ class Session(QObject):
             return
         try:
             self.history.apply(
-                tr("Drucker und Material"),
+                _("Drucker und Material"),
                 changes=change_for(document, printer=printer, material=material),
             )
         except AppError as error:
@@ -552,7 +552,7 @@ class Session(QObject):
         is_3mf = path.suffix.lower() == ".3mf"
         if brep_step.is_step(path.suffix):
             self.apply(
-                tr("STEP laden"),
+                _("STEP laden"),
                 [OperationDraft(op="load_step", params={"source": source_id})],
             )
             return
@@ -560,7 +560,7 @@ class Session(QObject):
             # Eine flache Zeichnung hat auch keine Einheitenfrage — sie hat keine
             # dritte Dimension, bis jemand sagt, wie dick sie sein soll (§25).
             self.apply(
-                tr("Zeichnung extrudieren"),
+                _("Zeichnung extrudieren"),
                 [OperationDraft(op="load_outline", params={"source": source_id})],
             )
             return
@@ -570,7 +570,7 @@ class Session(QObject):
         # Gezählt, ohne eine einzige Koordinate zu lesen.
         parts = threemf.count_objects(self.project.sources[source_id]) if is_3mf else 1
         self.apply(
-            tr("Modell laden"),
+            _("Modell laden"),
             [
                 OperationDraft(
                     op="load",
@@ -865,7 +865,7 @@ class Session(QObject):
         if change_op is not None:
             History(working).change_params(change_op, dict(change_values or {}))
         else:
-            History(working).apply(tr("Vorschau"), drafts, origin=origin or Origin(by="user"))
+            History(working).apply(_("Vorschau"), drafts, origin=origin or Origin(by="user"))
         result = evaluate(
             working,
             self.profile,

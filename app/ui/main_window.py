@@ -1560,7 +1560,7 @@ class MainWindow(QMainWindow):
                 )
             )
         if drafts:
-            self.session.apply(tr("Direkt bewegt"), drafts)
+            self.session.apply(_("Direkt bewegt"), drafts)
 
     def _on_measurement(self, measurement: Any) -> None:
         self.measure_bar.show_measurement(
@@ -1810,7 +1810,7 @@ class MainWindow(QMainWindow):
 
         params = {**self.paint_bar.values(), "x": point[0], "y": point[1], "z": point[2]}
         self.session.apply(
-            tr("Bemalen"),
+            _("Bemalen"),
             [OperationDraft(op="paint_slot", inputs=(object_id,), params=params)],
         )
 

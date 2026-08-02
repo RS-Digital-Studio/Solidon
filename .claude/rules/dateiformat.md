@@ -31,8 +31,10 @@ dann die Message-ID (der deutsche Quelltext) und wird erst bei der Anzeige
 aufgelöst. Ohne die Markierung ist der Titel wörtlich gemeint — was ein Nutzer
 selbst benannt hat, wird nie übersetzt. Wer irgendwo einen Transaktionstitel
 vergibt, nimmt `_()` statt `tr()`, sonst friert der Text in der Sprache des
-Speicherzeitpunkts ein. Die Titel der Beispiel-Bauer sammelt die Extraktion
-über `EXTRA_SOURCES` in `app/i18n/extract.py` mit ein.
+Speicherzeitpunkts ein. Ausnahme: zusammengesetzte Titel wie
+`f"{tr('Parameter')} {name}"` bleiben wörtlich — eine Message-ID kennt keine
+Platzhalter. Die Titel der Beispiel-Bauer sammelt die Extraktion über
+`EXTRA_SOURCES` in `app/i18n/extract.py` mit ein.
 
 ## Eingangsstufe
 
