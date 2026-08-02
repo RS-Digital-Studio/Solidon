@@ -19,11 +19,17 @@ from app.i18n.catalog import read_catalog, write_catalog
 MARKERS = ("_", "tr")
 PACKAGE_DIR = Path(__file__).parent.parent
 
+#: Quellen außerhalb des Pakets, deren Message-IDs trotzdem ausgeliefert
+#: werden: die Transaktionstitel der Beispiel-Bauer reisen in den erzeugten
+#: ``.p3d``-Dateien mit und müssen im Katalog stehen, sonst zeigt der Verlauf
+#: sie unübersetzt.
+EXTRA_SOURCES = (PACKAGE_DIR.parent / "tools" / "make_examples.py",)
+
 
 def message_ids(paths: list[Path] | None = None) -> set[str]:
     """Jedes Literal, das an einen Übersetzungsmarker übergeben wird."""
     found: set[str] = set()
-    for path in paths or sorted(PACKAGE_DIR.rglob("*.py")):
+    for path in paths or (*sorted(PACKAGE_DIR.rglob("*.py")), *EXTRA_SOURCES):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):

@@ -1758,8 +1758,18 @@ Sechzehn Läufe des vorher zu etwa der Hälfte roten Testpaars sind seither
 grün. **Anzusehen bleibt:** `_on_agent_done` und der Split-Arbeiter lassen
 ihre Referenz genauso los; dort hämmert nur niemand.
 
-Nebenbefund, offen: die Transaktionstitel der Beispiele („Bohrung setzen",
-„Anordnen") stehen als deutsche Zeichenketten in den Projektdateien und
-bleiben auch in der englischen Oberfläche deutsch — die englischen Tourtexte
-zitieren sie deshalb deutsch. Übersetzbare Transaktionstitel wären der
-saubere Fix.
+Nebenbefund, behoben: die Transaktionstitel der Beispiele („Bohrung setzen",
+„Anordnen") standen als deutsche Zeichenketten in den Projektdateien und
+blieben auch in der englischen Oberfläche deutsch — die englischen Tourtexte
+zitierten sie deshalb deutsch. Jetzt reist ein Titel aus dem Code als
+Message-ID (Formatversion 6, `title_translatable`) und löst sich erst bei
+der Anzeige auf; was ein Nutzer selbst benannt hat, bleibt wörtlich, und
+ältere Dateien bleiben es auch — welcher alte Titel aus dem Code kam, steht
+nirgends, ein Katalogabgleich wäre geraten. Die Beispiele sind neu gebaut,
+die englischen Tourtexte zitieren die englischen Titel („Drill a bore",
+„Arrange"), und die Extraktion sammelt die Titel der Beispiel-Bauer über
+`EXTRA_SOURCES` mit ein. Offen daneben: die Oberfläche vergibt eigene
+Transaktionstitel noch über `tr()` (`main_window.py`, `session.py`) — sie
+frieren weiter in der Sitzungssprache ein und wären mit `_()` ebenfalls
+übersetzbar; nicht mit angefasst, weil beide Dateien gerade in einer
+parallelen Sitzung in Arbeit sind.

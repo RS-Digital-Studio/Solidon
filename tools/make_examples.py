@@ -23,6 +23,7 @@ from app.core.knowledge import profiles
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project, save
 from app.core.types import Parameter, Source, SourceKind
+from app.i18n import _
 
 CORPUS = Path(__file__).resolve().parent.parent / "tests" / "data" / "meshes"
 
@@ -40,12 +41,12 @@ def way_one() -> Project:
     with_source(project, "src_1", "plate_holes.stl")
     history = History(project.document)
     history.apply(
-        "Modell laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+        _("Modell laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
     )
-    history.apply("Reparieren", [OperationDraft(op="repair", inputs=("obj_1",), params={})])
-    history.apply("Auf das Bett", [OperationDraft(op="place_on_bed", inputs=("obj_1",))])
+    history.apply(_("Reparieren"), [OperationDraft(op="repair", inputs=("obj_1",), params={})])
+    history.apply(_("Auf das Bett"), [OperationDraft(op="place_on_bed", inputs=("obj_1",))])
     history.apply(
-        "Bohrung setzen",
+        _("Bohrung setzen"),
         [
             OperationDraft(
                 op="drill_hole",
@@ -67,7 +68,7 @@ def way_two() -> Project:
 
     history = History(document)
     history.apply(
-        "Grundkörper",
+        _("Grundkörper"),
         [
             OperationDraft(
                 op="create_box",
@@ -81,7 +82,7 @@ def way_two() -> Project:
         ],
     )
     history.apply(
-        "Schraubenlöcher",
+        _("Schraubenlöcher"),
         [
             OperationDraft(
                 op="insert_screw_hole",
@@ -96,7 +97,7 @@ def way_two() -> Project:
         ],
     )
     history.apply(
-        "Versteifung",
+        _("Versteifung"),
         [
             OperationDraft(
                 op="insert_rib",
@@ -127,7 +128,7 @@ def way_three() -> Project:
     generation = from_text(project, backend, "eine kleine Figur", seed=7)
 
     History(project.document).apply(
-        "Auf das Bett", [OperationDraft(op="place_on_bed", inputs=(generation.object_id,))]
+        _("Auf das Bett"), [OperationDraft(op="place_on_bed", inputs=(generation.object_id,))]
     )
     return project
 
@@ -148,7 +149,7 @@ def housing() -> Project:
 
     history = History(document)
     history.apply(
-        "Boden",
+        _("Boden"),
         [
             OperationDraft(
                 op="create_box",
@@ -162,7 +163,7 @@ def housing() -> Project:
         ],
     )
     history.apply(
-        "Befestigung",
+        _("Befestigung"),
         [
             OperationDraft(
                 op="insert_nut_trap",
@@ -182,7 +183,7 @@ def housing() -> Project:
         ],
     )
     history.apply(
-        "Kabel",
+        _("Kabel"),
         [
             OperationDraft(
                 op="insert_cable_gland",
@@ -196,11 +197,11 @@ def housing() -> Project:
     # Erst duplizieren, dann ausschneiden — sonst wäre das Gehäuse selbst weg,
     # denn das Prüfstück ist ein Ausschnitt und keine Kopie.
     history.apply(
-        "Kopie zum Prüfen",
+        _("Kopie zum Prüfen"),
         [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 2})],
     )
     history.apply(
-        "Prüfstück",
+        _("Prüfstück"),
         [
             OperationDraft(
                 op="test_piece",
@@ -224,7 +225,7 @@ def two_colour_sign() -> Project:
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
     history.apply(
-        "Schild",
+        _("Schild"),
         [
             OperationDraft(
                 op="create_box",
@@ -233,7 +234,7 @@ def two_colour_sign() -> Project:
         ],
     )
     history.apply(
-        "Beschriftung",
+        _("Beschriftung"),
         [
             OperationDraft(
                 op="label_text",
@@ -243,7 +244,7 @@ def two_colour_sign() -> Project:
         ],
     )
     history.apply(
-        "Aufhängung",
+        _("Aufhängung"),
         [
             OperationDraft(
                 op="insert_keyhole",
@@ -255,7 +256,7 @@ def two_colour_sign() -> Project:
     # Der zweite Weg zur Zweifarbigkeit: Buchstaben als eigener Körper, für den
     # Drucker mit einem Werkzeug und für Lettern zum Aufkleben.
     history.apply(
-        "Lettern",
+        _("Lettern"),
         [
             OperationDraft(
                 op="create_label",
@@ -270,7 +271,7 @@ def two_colour_sign() -> Project:
         ],
     )
     history.apply(
-        "Zweites Filament",
+        _("Zweites Filament"),
         [OperationDraft(op="assign_slot", inputs=("obj_2",), params={"slot": 1, "name": "Weiß"})],
     )
     return project
@@ -287,7 +288,7 @@ def calibration_plate() -> Project:
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
     history.apply(
-        "Prüfkörper",
+        _("Prüfkörper"),
         [
             OperationDraft(
                 op="create_box",
@@ -304,7 +305,7 @@ def calibration_plate() -> Project:
         ],
     )
     history.apply(
-        "Leitern",
+        _("Leitern"),
         [
             OperationDraft(op="insert_fit_ladder", inputs=("obj_1",), params={"z": 2.0}),
             OperationDraft(op="insert_wall_ladder", inputs=("obj_2",), params={"z": 2.0}),
@@ -314,7 +315,7 @@ def calibration_plate() -> Project:
     # arrange_bed arbeitet auf der ganzen Szene (``takes_whole_scene``), und wer
     # sie aufruft, muss ihr die Objekte auch geben — sonst rechnet sie auf nichts.
     history.apply(
-        "Anordnen",
+        _("Anordnen"),
         [
             OperationDraft(
                 op="arrange_bed", inputs=("obj_1", "obj_2", "obj_3"), params={"spacing": 8.0}
@@ -339,7 +340,7 @@ def hollow_and_split() -> Project:
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
     history.apply(
-        "Klotz",
+        _("Klotz"),
         [
             OperationDraft(
                 op="create_box",
@@ -348,7 +349,7 @@ def hollow_and_split() -> Project:
         ],
     )
     history.apply(
-        "Teilen und verstiften",
+        _("Teilen und verstiften"),
         [
             OperationDraft(
                 op="split_pinned",
@@ -360,7 +361,7 @@ def hollow_and_split() -> Project:
     # Der Schnitt verbraucht obj_1 und legt obj_2 und obj_3 an; ab hier laufen
     # beide Hälften getrennt weiter.
     history.apply(
-        "Aushöhlen",
+        _("Aushöhlen"),
         [
             OperationDraft(
                 op="hollow_object",
@@ -375,7 +376,7 @@ def hollow_and_split() -> Project:
         ],
     )
     history.apply(
-        "Anordnen",
+        _("Anordnen"),
         [OperationDraft(op="arrange_bed", inputs=("obj_2", "obj_3"), params={"spacing": 6.0})],
     )
     return project
