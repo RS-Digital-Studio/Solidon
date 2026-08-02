@@ -1,9 +1,14 @@
 """Der erste Start (Bauplan §38).
 
 Sprache, Drucker, Material, ein Blick auf die externen Programme, und der
-Schlüssel für den Chat, falls es einen gibt. Vier Schritte, alle
-überspringbar, alle später wieder erreichbar — ein Assistent, der zu Ende
-gebracht werden muss, bevor irgendetwas geht, ist eine Wand, kein Willkommen.
+Zugang für den Chat. Vier Schritte, alle überspringbar, alle später wieder
+erreichbar — ein Assistent, der zu Ende gebracht werden muss, bevor
+irgendetwas geht, ist eine Wand, kein Willkommen.
+
+Der Chat steht mit im Dialog, weil er das Versprechen ist, mit dem die
+Anwendung antritt — und weil ein neuer Nutzer weder einen Schlüssel noch ein
+laufendes Ollama mitbringt. Der einzige andere Weg dorthin ist ein Knopf in
+einem Panel, das er noch nie gesehen hat.
 
 Er endet dort, wo der Bauplan die ersten fünf Minuten enden lässt (§2.3): beim
 ersten Import. Die letzte Seite sagt darum nicht „fertig", sie bietet an, ein
@@ -26,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME
 from app.core import install, tools
+from app.core.backends import llm
 from app.core.knowledge import profiles
 from app.i18n import SUPPORTED_LANGUAGES, language_name, tr
 from app.ui.settings import UiSettings
@@ -89,6 +95,12 @@ class FirstRunDialog(QDialog):
         )
         self.install_button.clicked.connect(self._install)
 
+        self.chat_state = QLabel(_chat_text(), self)
+        self.chat_state.setWordWrap(True)
+
+        self.chat_button = QPushButton(tr("Chat einrichten …"), self)
+        self.chat_button.clicked.connect(self._setup_chat)
+
         self.open_button = QPushButton(tr("Modell öffnen …"), self)
         self.open_button.clicked.connect(self._open)
 
@@ -104,6 +116,8 @@ class FirstRunDialog(QDialog):
         layout.addWidget(QLabel(tr("Externe Programme — keines davon ist Pflicht:"), self))
         layout.addWidget(self.tools)
         layout.addWidget(self.install_button)
+        layout.addWidget(self.chat_state)
+        layout.addWidget(self.chat_button)
         layout.addWidget(self.open_button)
         layout.addWidget(buttons)
 
@@ -126,6 +140,18 @@ class FirstRunDialog(QDialog):
         InstallDialog(self).exec()
         self.tools.setText(_tool_text())
         self.install_button.setText(f"{tr('Fehlendes installieren …')}  ·  {_missing_text()}")
+        self.chat_state.setText(_chat_text())
+
+    def _setup_chat(self) -> None:
+        """§27: der Zugang für den Chat, vom ersten Start aus erreichbar.
+
+        Derselbe Dialog wie unter *Bearbeiten → Zugang zum Sprachmodell* — nur
+        eben hier, wo ein neuer Nutzer steht.
+        """
+        from app.ui.dialogs import KeyDialog
+
+        KeyDialog(parent=self).exec()
+        self.chat_state.setText(_chat_text())
 
     def _open(self) -> None:
         """§2.3: die ersten fünf Minuten enden beim ersten Import, nicht bei
@@ -140,6 +166,22 @@ def _select(box: QComboBox, identifier: str) -> None:
     index = box.findData(identifier)
     if index >= 0:
         box.setCurrentIndex(index)
+
+
+def _chat_text() -> str:
+    """Ob der Chat einen Zugang hat (§27) — als Satz, nicht als Symbol.
+
+    Ein bereites Backend wird beim Namen genannt; ohne eines steht hier, was
+    fehlt und dass alles andere davon unberührt bleibt.
+    """
+    backend = llm.first_available()
+    if backend is not None:
+        return f"{tr('Der Chat ist bereit')} — {backend.id}: {backend.model}"
+    return tr(
+        "Der Chat braucht einen Zugang zu einem Sprachmodell — ein eigener "
+        "Schlüssel oder ein lokales Modell über Ollama. Alles andere "
+        "funktioniert ohne."
+    )
 
 
 def _missing_text() -> str:

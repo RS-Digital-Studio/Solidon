@@ -8,6 +8,7 @@ import pytest
 
 from app.core import report as reports
 from app.core import tools, updates
+from app.core.backends import llm
 
 pytest.importorskip("PySide6")
 
@@ -121,6 +122,45 @@ def test_the_first_run_asks_the_four_things(qt_app: QApplication) -> None:
     assert dialog.material.count() >= 1
     assert "OpenSCAD" in dialog.tools.text()
     assert dialog.open_button.text().startswith("Modell")
+
+
+def test_the_first_run_offers_the_chat_setup(qt_app: QApplication) -> None:
+    """Der Chat ist das Versprechen, mit dem die Anwendung antritt — der Weg
+    dorthin gehört in den ersten Start, nicht nur in ein Panel, das ein neuer
+    Nutzer noch nie gesehen hat.
+    """
+    dialog = FirstRunDialog(UiSettings())
+
+    assert dialog.chat_button.text().startswith("Chat")
+    assert dialog.chat_state.text().strip()
+
+
+def test_the_chat_line_says_what_is_missing(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne Zugang steht da, was fehlt und dass alles andere ohne funktioniert
+    — nicht der Zustand der Entwicklermaschine.
+    """
+    monkeypatch.setattr(llm, "first_available", lambda: None)
+
+    dialog = FirstRunDialog(UiSettings())
+
+    assert "Sprachmodell" in dialog.chat_state.text()
+    assert "funktioniert" in dialog.chat_state.text()
+
+
+def test_the_chat_line_names_the_ready_backend(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein bereites Backend wird beim Namen genannt — „bereit" allein wäre
+    eine Behauptung ohne Adresse.
+    """
+    monkeypatch.setattr(llm, "first_available", lambda: llm.OllamaBackend())
+
+    dialog = FirstRunDialog(UiSettings())
+
+    assert "ollama" in dialog.chat_state.text()
+    assert llm.DEFAULT_OLLAMA_MODEL in dialog.chat_state.text()
 
 
 def test_the_answers_land_in_the_settings(qt_app: QApplication) -> None:

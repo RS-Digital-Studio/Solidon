@@ -23,12 +23,12 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol
+from typing import Any, Final, Literal, Protocol
 
 from app.core.backends import keys
 from app.core.errors import AppError
 from app.core.log import get_logger
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -366,6 +366,87 @@ def _from_ollama(answer: dict[str, Any], model: str) -> Reply:
         stop_reason=str(answer.get("done_reason", "")),
         input_tokens=int(answer.get("prompt_eval_count", 0)),
         output_tokens=int(answer.get("eval_count", 0)),
+    )
+
+
+#: Unterhalb dieser Modellgröße (Milliarden Parameter) scheitern
+#: Werkzeugaufrufe erfahrungsgemäß reproduzierbar (§27). Die Grenze steht im
+#: README und im Warnsatz — wer sie ändert, zieht beide nach.
+OLLAMA_MIN_PARAMETERS: Final = 7.0
+
+#: Wie lange die Frage nach den installierten Modellen dauern darf. Sie läuft
+#: in einem Arbeiter, nie im Oberflächen-Thread — das Limit begrenzt nur, wie
+#: lange der Arbeiter lebt.
+TAGS_TIMEOUT_SECONDS = 3.0
+
+Fetch = Callable[[str], dict[str, Any]]
+"""``url -> answer``. Austauschbar, damit die Prüfung ohne Netz testbar ist."""
+
+
+def _get_json(url: str) -> dict[str, Any]:
+    """Ein GET, JSON heraus — das Gegenstück zu :func:`post_json` für die
+    Modell-Liste von Ollama."""
+    request = urllib.request.Request(url)
+    with urllib.request.urlopen(request, timeout=TAGS_TIMEOUT_SECONDS) as answer:
+        return dict(json.loads(answer.read().decode("utf-8")))
+
+
+def parse_parameter_count(text: str) -> float | None:
+    """„14.8B" → 14,8 Milliarden, „780M" → 0,78. ``None``, wenn das Format
+    fremd ist — dann wird nichts behauptet."""
+    cleaned = text.strip().upper()
+    if len(cleaned) < 2:
+        return None
+    scale = {"B": 1.0, "M": 1e-3, "K": 1e-6}.get(cleaned[-1])
+    if scale is None:
+        return None
+    try:
+        return float(cleaned[:-1]) * scale
+    except ValueError:
+        return None
+
+
+def ollama_size_warning(
+    model: str, url: str | None = None, fetch: Fetch = _get_json
+) -> TranslatableText | None:
+    """Der Satz aus §27, an der Stelle gesagt, an der er hilft.
+
+    Ein Neuling installiert Ollama mit einem kleinen Modell und erlebt das
+    dokumentierte Scheitern der Werkzeugaufrufe, ohne zu wissen warum. Diese
+    Prüfung fragt die installierten Modelle ab und antwortet dreifach:
+    ``None``, wenn nichts zu sagen ist (Server weg — dann meldet sich der Chat
+    ohnehin ab — oder Modell groß genug); ein Satz, wenn das eingestellte
+    Modell fehlt; ein Satz, wenn es unter der Erfahrungsgrenze liegt.
+    """
+    address = (url or _configured_ollama_url()).replace("/api/chat", "/api/tags")
+    try:
+        answer = fetch(address)
+    except (OSError, ValueError):
+        return None
+
+    wanted = {model, f"{model}:latest"}
+    entry = next(
+        (
+            candidate
+            for candidate in answer.get("models", ())
+            if str(candidate.get("name", "")) in wanted
+        ),
+        None,
+    )
+    if entry is None:
+        return _(
+            "Das eingestellte Modell ist bei Ollama nicht installiert — der "
+            "erste Chat-Zug würde scheitern. „ollama pull“ mit dem Modellnamen "
+            "holt es."
+        )
+    size = parse_parameter_count(str(entry.get("details", {}).get("parameter_size", "")))
+    if size is None or size >= OLLAMA_MIN_PARAMETERS:
+        return None
+    return _(
+        "Das lokale Modell hat weniger als 7 Milliarden Parameter — "
+        "Werkzeugaufrufe scheitern damit erfahrungsgemäß. Bewährt hat sich "
+        "qwen2.5-coder:14b; das braucht eine Grafikkarte mit rund 10 GB "
+        "Speicher."
     )
 
 

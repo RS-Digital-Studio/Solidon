@@ -64,6 +64,12 @@ class ChatPanel(QWidget):
         self.setup.clicked.connect(self.setupRequested)
         self.setup.setVisible(False)
 
+        # §27, ohne zu nörgeln: ein Satz, wenn das lokale Modell zu klein ist
+        # oder fehlt — einmal sichtbar, solange es gilt, sonst gar nicht.
+        self.notice = QLabel("", self)
+        self.notice.setWordWrap(True)
+        self.notice.setVisible(False)
+
         # Mehrzeilig: „Halter, 60 auf 40, zwei M4-Löcher im Abstand von 45,
         # Wandstärke 3" ist die Art Anfrage, für die der Chat da ist, und in
         # einer Zeile sieht man davon ein Drittel. Die Eingabetaste sendet
@@ -104,6 +110,7 @@ class ChatPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.addWidget(self.hint)
+        layout.addWidget(self.notice)
         layout.addWidget(self.setup)
         layout.addWidget(self.turns, stretch=1)
         layout.addWidget(self.decision)
@@ -130,6 +137,11 @@ class ChatPanel(QWidget):
         )
         self.setup.setVisible(not available)
         self._update_enabled()
+
+    def set_notice(self, text: str) -> None:
+        """Ein Hinweis unter dem Zustand — leer heißt: nichts zu sagen."""
+        self.notice.setText(text)
+        self.notice.setVisible(bool(text))
 
     def set_busy(self, busy: bool) -> None:
         """Während das Modell denkt, wird nichts weiter gesendet — ein Zug nach

@@ -18,6 +18,8 @@ from app.core.backends.llm import (
     Reply,
     ToolCall,
     first_available,
+    ollama_size_warning,
+    parse_parameter_count,
 )
 from app.core.backends.scripted import ScriptedBackend
 from app.core.errors import AppError
@@ -267,3 +269,77 @@ def test_the_scripted_backend_keeps_what_it_was_told() -> None:
 
     assert "Regelsammlung 1" in backend.last_system_prompt
     assert backend.tools_seen[0] == ("ask_user",)
+
+
+# --- the model size check (§27) ----------------------------------------------------
+
+
+def _tags(*models: tuple[str, str]) -> dict[str, Any]:
+    """Eine Ollama-``/api/tags``-Antwort aus Name und Parametergröße."""
+    return {
+        "models": [{"name": name, "details": {"parameter_size": size}} for name, size in models]
+    }
+
+
+def test_parameter_sizes_are_read_in_billions() -> None:
+    assert parse_parameter_count("14.8B") == pytest.approx(14.8)
+    assert parse_parameter_count("7B") == pytest.approx(7.0)
+    assert parse_parameter_count("780M") == pytest.approx(0.78)
+    assert parse_parameter_count("unfug") is None
+    assert parse_parameter_count("") is None
+
+
+def test_a_small_model_gets_the_sentence_from_the_spec() -> None:
+    """§27: kleine Modelle scheitern an Werkzeugaufrufen reproduzierbar — der
+    Satz dazu fällt bei der Einrichtung, nicht erst beim Scheitern.
+    """
+    warning = ollama_size_warning("llama3.2:3b", fetch=lambda url: _tags(("llama3.2:3b", "3.2B")))
+
+    assert warning is not None
+    assert "Milliarden" in str(warning)
+
+
+def test_a_big_model_passes_in_silence() -> None:
+    assert (
+        ollama_size_warning(
+            "qwen2.5-coder:14b", fetch=lambda url: _tags(("qwen2.5-coder:14b", "14.8B"))
+        )
+        is None
+    )
+
+
+def test_a_missing_model_is_its_own_answer() -> None:
+    """Ein eingestelltes Modell, das nicht installiert ist, scheitert beim
+    ersten Zug genauso still — auch das wird bei der Einrichtung gesagt.
+    """
+    warning = ollama_size_warning("qwen2.5-coder:14b", fetch=lambda url: _tags())
+
+    assert warning is not None
+    assert "nicht installiert" in str(warning)
+
+
+def test_a_model_without_a_tag_matches_its_latest() -> None:
+    """Ollama behandelt „modell" als „modell:latest" — die Prüfung auch."""
+    assert (
+        ollama_size_warning(
+            "qwen2.5-coder", fetch=lambda url: _tags(("qwen2.5-coder:latest", "14.8B"))
+        )
+        is None
+    )
+
+
+def test_a_silent_server_is_not_an_error() -> None:
+    """Antwortet der Server nicht, meldet sich der Chat ohnehin ab — eine
+    Warnung obendrauf wäre geraten.
+    """
+
+    def fail(url: str) -> dict[str, Any]:
+        raise OSError("no route to host")
+
+    assert ollama_size_warning("qwen2.5-coder:14b", fetch=fail) is None
+
+
+def test_an_unknown_size_claims_nothing() -> None:
+    warning = ollama_size_warning("mystery", fetch=lambda url: _tags(("mystery", "keine Angabe")))
+
+    assert warning is None

@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import updates
+from app.core.backends import llm
 from app.core.errors import AppError, InternalError
 from app.core.export.handover import SliceOutcome
 from app.core.export.writer import (
@@ -162,6 +163,24 @@ class _UpdateWorker(QThread):
         self.done.emit(updates.check())
 
 
+class _OllamaSizeWorker(QThread):
+    """Die Modellgrößen-Frage an Ollama (§27), abseits des Oberflächen-Threads.
+
+    Sie läuft nur, wenn der Chat über das lokale Modell aufwacht. Das Ergebnis
+    ist ein Satz oder nichts — und ein Server, der nicht antwortet, ist kein
+    Fehler, sondern Schweigen.
+    """
+
+    done = Signal(object)
+
+    def __init__(self, model: str) -> None:
+        super().__init__()
+        self._model = model
+
+    def run(self) -> None:
+        self.done.emit(llm.ollama_size_warning(self._model))
+
+
 class _SliceWorker(QThread):
     """Eine Schichtanalyse, abseits des Oberflächen-Threads (§2.8, §22).
 
@@ -273,6 +292,8 @@ class MainWindow(QMainWindow):
         self._update_worker: Any = None
         """Die laufende Update-Anfrage (§37.2) — festgehalten wie jeder
         andere Arbeiter, damit sie das Fenster nicht überlebt."""
+        self._ollama_size_worker: Any = None
+        """Die Modellgrößen-Frage an Ollama (§27), aus demselben Grund."""
         self._retired: list[Any] = []
         """Ersetzte Arbeiter, bis sie ausgelaufen sind. „Eine neuere Anfrage
         ersetzt die wartende" hieß hier: die Referenz überschreiben — und ein
@@ -976,10 +997,7 @@ class MainWindow(QMainWindow):
         self.session.proposalReady.connect(self._on_proposal)
         self.session.agentBusyChanged.connect(self._on_agent_busy)
         self.session.splitBusyChanged.connect(self._on_split_busy)
-        backend = self.session.agent_backend
-        self.chat.set_available(
-            backend is not None, f"{backend.id}:{backend.model}" if backend else ""
-        )
+        self._refresh_chat_availability()
 
     # --- actions ----------------------------------------------------------------
 
@@ -1362,10 +1380,38 @@ class MainWindow(QMainWindow):
         if KeyDialog(parent=self).exec() != KeyDialog.DialogCode.Accepted:
             return
         self.session.set_agent_backend(None)
+        self._refresh_chat_availability(probe_local=True)
+
+    def _refresh_chat_availability(self, probe_local: bool = False) -> None:
+        """Der eine Ort, an dem der Chat-Zustand gelesen wird.
+
+        Vorher stand derselbe Dreizeiler an drei Stellen. Dazu die Prüfung aus
+        §27: wacht der Chat über das lokale Modell auf, fragt ein Arbeiter die
+        Modellgröße ab — im Hintergrund, denn ein Start, der auf einen
+        HTTP-Aufruf wartet, wäre der Fehler der Update-Prüfung noch einmal.
+
+        ``probe_local`` gilt nur für Einrichtungs-Anlässe (erster Start,
+        Schlüsseldialog): der stille Fensterbau startet keinen Arbeiter, dessen
+        Leben an einer HTTP-Antwort hängt — Tests und Screenshot-Werkzeuge
+        bauen Fenster und warten auf keinen. Und einmal bei der Einrichtung
+        gesagt ist genug — bei jedem Start wäre es Nörgeln (§27).
+        """
         backend = self.session.agent_backend
         self.chat.set_available(
             backend is not None, f"{backend.id}:{backend.model}" if backend else ""
         )
+        self.chat.set_notice("")
+        if not probe_local or backend is None or backend.id != "ollama":
+            return
+        worker = _OllamaSizeWorker(backend.model)
+        worker.done.connect(self._ollama_size_answered)
+        worker.finished.connect(lambda: setattr(self, "_ollama_size_worker", None))
+        self._ollama_size_worker = worker
+        worker.start()
+
+    def _ollama_size_answered(self, warning: Any) -> None:
+        if warning is not None:
+            self.chat.set_notice(str(warning))
 
     def action_settings(self) -> None:
         """§19.3, §38: alles, was die Anwendung sich merkt, an einer Stelle.
@@ -2242,7 +2288,8 @@ class MainWindow(QMainWindow):
         self._show_start_screen(False)
 
     def action_first_run(self) -> None:
-        """§38: language, printer, material, external programs. Skippable."""
+        """§38: Sprache, Drucker, Material, externe Programme, Chat-Zugang.
+        Überspringbar."""
         dialog = first_run.FirstRunDialog(self.settings, self)
         dialog.importRequested.connect(self.action_import)
         if dialog.exec() == first_run.FirstRunDialog.DialogCode.Accepted:
@@ -2252,6 +2299,10 @@ class MainWindow(QMainWindow):
             # wäre Nörgeln.
             self.settings.first_run_done = True
         save_settings(self.settings)
+        # Wer im Dialog den Chat eingerichtet hat, soll ihn nicht erst nach
+        # einem Neustart bekommen — derselbe Weckruf wie in action_llm_key.
+        self.session.set_agent_backend(None)
+        self._refresh_chat_availability(probe_local=True)
 
     def _check_for_updates(self) -> None:
         """§37.2: ein Hinweis mit einem Link. Nichts wird heruntergeladen, nichts
@@ -2326,7 +2377,13 @@ class MainWindow(QMainWindow):
             return
         self.session.cancel()
         self.session.wait_for_idle(2000)
-        for worker in (self._map_worker, self._slice_worker, self._update_worker, *self._retired):
+        for worker in (
+            self._map_worker,
+            self._slice_worker,
+            self._update_worker,
+            self._ollama_size_worker,
+            *self._retired,
+        ):
             # Ergebnisse, die niemand mehr sehen wird — aber ein Thread, der
             # sein Fenster überlebt, nimmt den Prozess mit. Die Schichtanalyse
             # fehlte hier: Schließen während sie lief war ein Absturz beim
