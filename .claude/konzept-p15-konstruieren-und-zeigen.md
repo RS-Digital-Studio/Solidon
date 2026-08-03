@@ -685,13 +685,23 @@ Schnittebene nimmt eine getippte Zahl. Beide Sprachen vollständig.
 
 ### Etappe 3 — Skizzieren im Viewport (D1, E4)
 
-- [ ] Skizzenmodus: Ebene wählen (Hauptebene oder planare Fläche), Kamera
-      senkrecht, Szene durchscheinend, eigene Werkzeugleiste
-- [ ] `SketchCanvas` wandert in den Viewport-Aufsatz, der Dialog entfällt
-- [ ] Hinweiszeile und Zahleneingabe aus Etappe 2 gelten hier (D7: tippen,
-      Tab, Enter)
-- [ ] Bauraumgrenze und Schichtrichtung sichtbar (E1)
-- [ ] Freiheitsgrade und Konflikte in der Statuszeile, nicht als Dialog
+- [x] Skizzenmodus: der mittlere Bereich ist ein Stapel aus Ansicht und
+      Zeichenfläche; eigene Leiste mit *Fertig* und *Verwerfen*, Escape kommt
+      heraus wie aus jedem Werkzeug
+- [x] `SketchPanel` herausgelöst — Dialog **und** Modus benutzen dasselbe, und
+      damit kann keiner ein Werkzeug bekommen, das der andere nicht hat. Der
+      Dialog bleibt für den Weg über den Verlauf: wer eine Operation dort
+      wieder öffnet, ist schon in einem Dialog
+- [x] Ein Menüeintrag mit Skizzenfeld führt in den Modus statt in den Dialog;
+      *Fertig* öffnet die Operation auf der gezeichneten Skizze
+- [x] Freiheitsgrade und Konflikte in der Statuszeile, nicht als Dialog —
+      stand schon und gilt unverändert
+- [x] Maße werden gerundet angezeigt (§11.2) — an der Bemaßung stand
+      `40.000000000`, weil das Speicherformat neun Stellen schreibt
+- [ ] Ebene wählen (Hauptebene oder angeklickte planare Fläche) — heute nimmt
+      die Skizze die Ebene aus dem Flächenparameter der Operation, also nach
+      dem Zeichnen statt davor
+- [ ] Bauraumgrenze und Schichtrichtung auf der Zeichenfläche sichtbar (E1)
 
 *Abnahme:* Von der leeren Szene bis zum extrudierten Profil ohne einen
 modalen Dialog. Bestehende Skizzen aus Projektdateien öffnen unverändert.
