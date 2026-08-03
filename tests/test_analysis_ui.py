@@ -92,6 +92,38 @@ def test_without_a_selection_the_bar_says_what_is_missing(window: MainWindow) ->
     assert "Objekt" in window.analysis_bar.legend.note.text()
 
 
+def test_ambient_occlusion_yields_to_a_map(qt_app: QApplication) -> None:
+    """Schönheit vor Ablesbarkeit gibt es nicht (§18.4, Konzept P15 §7).
+
+    Die Umgebungsverdeckung dunkelt Vertiefungen nach — auf einer Karte, die
+    nach Zahlen färbt und ihren Wertebereich als Legende danebenstellt, wäre
+    der abgelesene Wert damit ein anderer als der gemeldete.
+
+    Geprüft wird die Regel, nicht der Plotter: offscreen gibt es keinen, und
+    ein Test, der sich dort überspringt, prüft nie etwas.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        assert viewport.ambient_occlusion, "ohne Karte ist die Verdeckung an"
+
+        viewport.set_analysis_map(
+            maps.AnalysisMap(kind="wall", title="x", values=(1.0,), unit="mm", low=1.0, high=4.0),
+            None,
+        )
+        assert not viewport.ambient_occlusion, "mit Karte ist sie aus"
+
+        viewport.set_analysis_map(None, None)
+        assert viewport.ambient_occlusion, "danach wieder an"
+    finally:
+        # Ein Widget ohne Elternteil räumt sich nicht selbst weg, und was am
+        # Ende des Laufs noch lebt, wird beim Herunterfahren des Interpreters
+        # aufgeräumt — dann ist der Thread-Pool der Schichtanalyse längst zu,
+        # und die Meldung darüber landet als Rauschen in einer grünen Suite.
+        viewport.deleteLater()
+
+
 # --- the legend -----------------------------------------------------------------
 
 

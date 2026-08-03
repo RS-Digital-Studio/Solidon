@@ -625,12 +625,13 @@ die Regel, auf der 3 und 4 aufsetzen.
 Zuerst, nicht zuletzt. Eine Obergrenze, die erst nach den fünfzehn neuen
 Operationen eingezogen wird, ist keine Grenze mehr, sondern eine Aufräumaktion.
 
-- [ ] Die sieben Obergrenzen aus E12 als Tests — sie sind heute alle erfüllt,
+- [x] Die sieben Obergrenzen aus E12 als Tests — sie sind heute alle erfüllt,
       also ist der Lauf sofort grün und schlägt erst an, wenn jemand sie reißt
-- [ ] `applies_to` sortiert Befehlspalette und Werkzeugleiste (E13)
-- [ ] Feld `icon` im Register, Konsistenztest zunächst mit Ausnahmeliste; sie
-      wird in Etappe 8 leer
-- [ ] Die Zuordnung „Funktion → Hauptweg" (E14) steht in der Rules-Datei
+- [x] `applies_to` sortiert die Befehlspalette (E13) — die Werkzeugleiste hat
+      sieben feste Ansichtswerkzeuge und keine Reihenfolge zu sortieren
+- [x] Feld `icon` im Register; geprüft wird, dass ein deklariertes Symbol
+      existiert — die Vollständigkeit kommt mit den Symbolen in Etappe 8
+- [x] Die Zuordnung „Funktion → Hauptweg" (E14) steht in der Rules-Datei
       `oberflaeche.md`, damit sie bei jeder neuen Operation gefragt wird
 
 *Abnahme:* Die Suite bleibt grün. Ein Versuch, ein achtes Werkzeug in die Zeile

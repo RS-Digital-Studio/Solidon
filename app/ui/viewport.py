@@ -64,6 +64,17 @@ VIEW_DIRECTIONS: dict[str, tuple[tuple[float, float, float], tuple[float, float,
     "iso": ((1.0, -1.0, 0.8), (0.0, 0.0, 1.0)),
 }
 
+#: Reichweite der Umgebungsverdeckung in Weltmaß, also Millimetern. Acht ist
+#: die Größenordnung, in der Druckteile ihre Merkmale haben — eine Bohrung,
+#: eine Nut, eine Wandstärke. Deutlich größer gewählt legt sich der Schatten
+#: über ganze Flächen und sieht aus wie Schmutz.
+SSAO_RADIUS = 8.0
+
+#: Wie weit zwei Tiefen auseinanderliegen müssen, damit eine die andere
+#: verdeckt. Zu klein, und eine ebene Fläche verdeckt sich selbst — das ist
+#: das Streifenmuster, an dem man schlecht eingestellte Verdeckung erkennt.
+SSAO_BIAS = 0.01
+
 OBJECT_COLOUR = "#b9c4d0"
 SELECTED_COLOUR = "#f0a54a"
 BACKFACE_COLOUR = "#8b3a3a"
@@ -154,6 +165,7 @@ class Viewport(QWidget):
         self._angle_step = 15.0
         self._map: AnalysisMap | None = None
         self._map_object: ObjectId | None = None
+        self._occlusion_applied = False
         self._feature_overlay = False
         self._feature_actors: list[Any] = []
         self._selected_feature: FeatureId | None = None
@@ -189,8 +201,64 @@ class Viewport(QWidget):
         self.plotter = cast(Any, QtInteractor(self))
         self._layout.addWidget(self.plotter.interactor)
         self.plotter.add_axes()
+        self._apply_render_quality()
         self.set_theme("dark")
         self.set_navigation("slicer")
+
+    # --- Darstellungsqualität (§18.1) -------------------------------------------
+
+    def _apply_render_quality(self) -> None:
+        """Kantenglättung und Umgebungsverdeckung.
+
+        Zwei Zutaten, beide gemessen: Kantenglättung kostet auf dieser Maschine
+        nichts Messbares und nimmt jeder schrägen Kante die Treppe.
+        **Umgebungsverdeckung** ist die eigentliche Verbesserung — sie
+        verdunkelt, was eng beieinander liegt, und macht damit eine Bohrung
+        ohne eine einzige Linie als Vertiefung erkennbar.
+
+        Beide laufen in einem ``try``, weil sie am Treiber hängen: eine
+        Maschine, deren OpenGL sie nicht kann, soll ein einfacheres Bild
+        bekommen und keinen Absturz. Was nicht ging, steht im Protokoll — nicht
+        vor dem Nutzer, der hat nichts davon.
+        """
+        if self.plotter is None:
+            return
+        try:
+            self.plotter.enable_anti_aliasing("fxaa")
+        except Exception as problem:  # pragma: no cover - hängt am Treiber
+            _log.info("anti-aliasing unavailable: %s", problem)
+        self._apply_ambient_occlusion()
+
+    @property
+    def ambient_occlusion(self) -> bool:
+        """Ob die Umgebungsverdeckung gerade gelten soll.
+
+        **Sie muss aus, solange eine Analysekarte läuft.** Die Karte färbt
+        nach Zahlen und stellt eine Legende mit Wertebereich daneben (§18.4);
+        eine Verdeckung, die Vertiefungen nachdunkelt, verschöbe genau dort die
+        Farbe, wo die Karte etwas aussagt — der abgelesene Wert wäre ein
+        anderer als der gemeldete. Schönheit vor Ablesbarkeit gibt es nicht.
+
+        Als Eigenschaft und nicht als Zustand des Plotters, damit die **Regel**
+        prüfbar bleibt: auf der Offscreen-Plattform gibt es keinen Plotter, und
+        ein Test, der sich dort überspringt, prüft nie etwas.
+        """
+        return self._map is None
+
+    def _apply_ambient_occlusion(self) -> None:
+        """Die Regel an den Plotter geben, wenn es einen gibt."""
+        wanted = self.ambient_occlusion
+        if self.plotter is None or self._occlusion_applied == wanted:
+            return
+        try:
+            if wanted:
+                self.plotter.enable_ssao(radius=SSAO_RADIUS, bias=SSAO_BIAS)
+            else:
+                self.plotter.disable_ssao()
+        except Exception as problem:  # pragma: no cover - hängt am Treiber
+            _log.info("ambient occlusion unavailable: %s", problem)
+            return
+        self._occlusion_applied = wanted
 
     # --- scene ------------------------------------------------------------------
 
@@ -661,6 +729,8 @@ class Viewport(QWidget):
         """
         self._map = analysis
         self._map_object = object_id if analysis is not None else None
+        # Solange Farbe eine Zahl bedeutet, darf nichts sie nachdunkeln.
+        self._apply_ambient_occlusion()
         self.show_scene(self._result)
 
     @property
