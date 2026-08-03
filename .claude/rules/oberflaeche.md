@@ -48,6 +48,41 @@ Toleranzen, Auflösungen, Rückfallverhalten. Die Vorgaben kommen aus dem
 Drucker- und Materialprofil. **Eine gute Vorgabe ist mehr wert als eine gute
 Einstellmöglichkeit.**
 
+## Die Oberfläche wächst nicht mit
+
+Vielseitigkeit gehört in die Tiefe, nicht an die Oberfläche (§2). Die Zahlen
+dazu stehen in `tests/test_interface_limits.py` und werden rot, wenn sie
+gerissen werden:
+
+| Grenze | Wert |
+|---|---|
+| Menüs in der Leiste | ≤ 9 |
+| Zeilen in einem Menü (ein Untermenü zählt als eine) | ≤ 12 |
+| Umschalter in der Werkzeugzeile | ≤ 8 |
+| Felder auf der Vorderseite eines Operationsdialogs | ≤ 8 |
+| Menüeinträge je Operation | genau 1 |
+
+Wer eine Zahl erhöhen will, tut das mit Absicht und begründet es im Commit.
+
+**Eine Operation je Handlung, nicht je Variante.** Neun Texturmuster sind ein
+Menüeintrag mit einem Auswahlparameter, nicht neun Einträge. Rechteck aus zwei
+Ecken oder aus Mitte und Maß ist dasselbe Werkzeug mit einem Umschalter.
+
+**Jede neue Funktion nennt ihren Hauptweg** (§2.2), bevor sie einen Platz
+bekommt:
+
+| Weg | Ort an der Oberfläche |
+|---|---|
+| Weg 1 — fremdes Modell anpassen | Kontextmenü am Merkmal, Vorschlag im Prüfbericht |
+| Weg 2 — neu konstruieren | Werkzeugzeile, Menü *Erzeugen* / *Ändern* |
+| Weg 3 — generieren | Chat und Generierungsdialog |
+| keiner der drei | Untermenü und Befehlspalette, sonst nichts |
+
+**Was zur Auswahl passt, steht vorn.** `applies_to` sortiert nicht nur das
+Kontextmenü, sondern auch die Befehlspalette
+(`palette_entries(for_feature=...)`). Es ist eine Reihenfolge, keine Auswahl —
+eine Palette, die aussortiert, wäre eine Betriebsart mit anderem Namen.
+
 ## Wartezeit
 
 | Dauer | Anzeige |

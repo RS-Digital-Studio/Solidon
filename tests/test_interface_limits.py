@@ -21,7 +21,7 @@ from collections import Counter
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.registry import REGISTRY
+from app.core.registry import REGISTRY, palette_entries
 
 pytest.importorskip("PySide6")
 
@@ -134,6 +134,45 @@ def test_no_menu_becomes_a_list_to_search(window: MainWindow) -> None:
         f"Diese Menüs zeigen mehr als {MAX_SUBMENU_ENTRIES} Zeilen: {over}. "
         "Eine Zwischenebene (wie die Bausteingruppen) oder eine Kategorie "
         "weniger — Bauplan §25 und MENU_GROUPS sind die Stellen dafür."
+    )
+
+
+def test_every_declared_icon_really_exists() -> None:
+    """Ein Symbolname, den es nicht gibt, ist ein leerer Knopf.
+
+    Die **Vollständigkeit** — keine Operation ohne Symbol — kommt mit den
+    gezeichneten Symbolen in P15 Etappe 8. Bis dahin greift diese Hälfte der
+    Regel: was deklariert ist, muss es geben. Eine Ausnahmeliste über
+    einundsiebzig Operationen wäre keine Prüfung, sondern eine Abschrift.
+    """
+    from app.ui.icons import PATHS
+
+    wrong = {
+        spec.name: spec.icon for spec in REGISTRY.all() if spec.icon and spec.icon not in PATHS
+    }
+    assert not wrong, (
+        f"Diese Operationen nennen ein Symbol, das es in app/ui/icons.py nicht gibt: {wrong}."
+    )
+
+
+def test_the_palette_puts_what_fits_the_selection_first() -> None:
+    """Wer eine Bohrung angeklickt hat, sucht Senken — nicht das, was vorn im
+    Register steht (Konzept P15 §5, E13).
+
+    Und es bleibt eine Reihenfolge: die Zahl der Zeilen ändert sich nicht.
+    Eine Palette, die aussortiert, wäre eine Betriebsart mit anderem Namen.
+    """
+    plain = palette_entries()
+    sorted_for_hole = palette_entries(for_feature="hole")
+    assert len(plain) == len(sorted_for_hole)
+    assert {entry.name for entry in plain} == {entry.name for entry in sorted_for_hole}
+
+    for_hole = {spec.name for spec in REGISTRY.all() if "hole" in spec.applies_to}
+    assert for_hole, "keine Operation deklariert sich für Bohrungen — Test wertlos"
+    leading = {entry.name for entry in sorted_for_hole[: len(for_hole)]}
+    assert leading == for_hole, (
+        f"Diese Operationen sollten bei ausgewählter Bohrung vorn stehen: "
+        f"{sorted(for_hole)}, vorn stehen aber {sorted(leading)}."
     )
 
 

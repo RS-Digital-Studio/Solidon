@@ -59,7 +59,23 @@ class PaletteEntry:
     shortcut: str | None = None
 
 
-def palette_entries(registry: Registry | None = None) -> tuple[PaletteEntry, ...]:
+def palette_entries(
+    registry: Registry | None = None, *, for_feature: str | None = None
+) -> tuple[PaletteEntry, ...]:
+    """Alle Operationen als Palettenzeilen.
+
+    Ist ein Merkmal ausgewählt, stehen die Operationen vorn, die dafür
+    deklariert sind (``applies_to``, §10). Wer eine Bohrung angeklickt hat,
+    sucht Senken und Verschließen — und nicht das, was zufällig vorn im
+    Alphabet steht.
+
+    Es ist eine **Reihenfolge, keine Auswahl**: alles bleibt erreichbar. Eine
+    Palette, die aussortiert, wäre eine Betriebsart mit anderem Namen, und die
+    stehen auf der Nicht-bauen-Liste.
+    """
+    specs = list((registry or REGISTRY).all())
+    if for_feature:
+        specs.sort(key=lambda spec: for_feature not in spec.applies_to)
     return tuple(
         PaletteEntry(
             name=spec.name,
@@ -68,7 +84,7 @@ def palette_entries(registry: Registry | None = None) -> tuple[PaletteEntry, ...
             doc=spec.doc,
             shortcut=spec.shortcut,
         )
-        for spec in (registry or REGISTRY).all()
+        for spec in specs
     )
 
 

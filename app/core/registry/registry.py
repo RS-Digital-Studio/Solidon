@@ -85,6 +85,12 @@ class OperationSpec:
     touches_features: bool = False
     deterministic: bool = True
     shortcut: str | None = None
+    icon: str = ""
+    """Name des Symbols, unter dem die Oberfläche es findet (``app/ui/icons.py``).
+
+    Leer heißt: noch keines. Der Konsistenztest führt dazu eine Ausnahmeliste,
+    die mit P15 leer wird — bis dahin ist ein Menüeintrag ohne Symbol reiner
+    Text, und reiner Text ist bei einundsiebzig Einträgen schwer zu finden."""
     doc: TranslatableText | str = ""
 
     @property
@@ -216,6 +222,7 @@ def register_op(
     touches_features: bool = False,
     deterministic: bool = True,
     shortcut: str | None = None,
+    icon: str = "",
     doc: TranslatableText | str = "",
     registry: Registry | None = None,
 ) -> Callable[[OpFn], OpFn]:
@@ -240,6 +247,7 @@ def register_op(
                 touches_features=touches_features,
                 deterministic=deterministic,
                 shortcut=shortcut,
+                icon=icon,
                 doc=doc,
             )
         )

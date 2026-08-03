@@ -1554,6 +1554,23 @@ class MainWindow(QMainWindow):
             )
         return commands
 
+    def selected_feature_kind(self) -> str | None:
+        """Die Art des gerade ausgewählten Merkmals — ``hole``, ``face`` und
+        so fort, oder ``None``.
+
+        Sie entscheidet, was die Befehlspalette zuerst zeigt (Konzept P15 §5,
+        E13). Dieselbe Auskunft, aus der auch das Kontextmenü gebaut wird, nur
+        an der anderen Stelle gefragt.
+        """
+        feature_id = self.object_tree.selected_feature()
+        selected = self.object_tree.selected()
+        result = self.session.last_result
+        if not feature_id or selected is None or result is None:
+            return None
+        entry = result.scene.objects.get(selected)
+        feature = entry.features.get(feature_id) if entry else None
+        return feature.kind if feature is not None else None
+
     def action_command_palette(self) -> None:
         """Eine Taste, alles — und die Kürzel lernen sich nebenbei (§2.6)."""
         commands = self.window_commands()
@@ -1567,7 +1584,8 @@ class MainWindow(QMainWindow):
             )
             for key, (title, shortcut, _slot) in commands.items()
         ]
-        palette = CommandPalette([*palette_entries(), *extra], parent=self)
+        entries = palette_entries(for_feature=self.selected_feature_kind())
+        palette = CommandPalette([*entries, *extra], parent=self)
         if palette.exec() != CommandPalette.DialogCode.Accepted:
             return
         name = palette.chosen()
