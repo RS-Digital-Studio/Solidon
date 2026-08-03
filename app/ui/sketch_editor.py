@@ -23,6 +23,7 @@ from typing import Any
 from PySide6.QtCore import QPoint, QPointF, Qt, Signal
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
@@ -169,6 +170,16 @@ class SketchCanvas(QWidget):
         """Die Grundfläche des Bauraums, gegen die gezeichnet wird."""
         self._bed = size
         self.update()
+
+    def set_plane(self, plane: str) -> None:
+        """Auf welcher Hauptebene die Skizze liegt (§30.1).
+
+        Sie entscheidet, wohin extrudiert wird — nicht, wie gezeichnet wird:
+        die Zeichenfläche bleibt eine Fläche, und die zwei Achsen darauf
+        heißen je nach Ebene anders. Das steht in der Beschriftung, nicht in
+        einer gedrehten Ansicht.
+        """
+        self._apply(replace(self.sketch, plane=plane))
 
     def outside_bed(self) -> bool:
         """Ob die Skizze über den Bauraum hinausragt.
@@ -835,6 +846,24 @@ class SketchPanel(QWidget):
             )
         shapes_button.setMenu(shapes_menu)
         tools.addWidget(shapes_button)
+
+        # Die Ebene gehört vor das Zeichnen, nicht hinter das Ergebnis: sie
+        # entscheidet, wohin extrudiert wird (§30.1). Ein Auswahlfeld und
+        # keine drei Knöpfe — eine Handlung, eine Stelle (Konzept P15, E11).
+        self.plane_choice = QComboBox(self)
+        for value, label in (
+            ("plane:xy", tr("Ebene XY — liegend")),
+            ("plane:xz", tr("Ebene XZ — stehend, nach hinten")),
+            ("plane:yz", tr("Ebene YZ — stehend, zur Seite")),
+        ):
+            self.plane_choice.addItem(label, userData=value)
+        self.plane_choice.setCurrentIndex(
+            max(0, self.plane_choice.findData(self.canvas.sketch.plane))
+        )
+        self.plane_choice.currentIndexChanged.connect(
+            lambda _index: self.canvas.set_plane(str(self.plane_choice.currentData()))
+        )
+        tools.addWidget(self.plane_choice)
         tools.addStretch(1)
 
         undo_button = QToolButton(self)

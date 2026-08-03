@@ -309,3 +309,38 @@ def test_the_draft_angle_matches_the_closed_form() -> None:
         + 4.0 / 3.0 * height**3 * slope**2
     )
     assert solid_of(result).volume == pytest.approx(expected, rel=1e-6)
+
+
+# --- die Ebene der Skizze (§30.1) ------------------------------------------------
+
+
+def test_a_sketch_is_extruded_along_the_normal_of_its_plane() -> None:
+    """``Sketch.plane`` ist ein Vertrag, kein Feld zum Anschauen.
+
+    §30.1 nennt vier Ebenen — die drei Hauptebenen und eine angeklickte
+    planare Fläche. Der Typ deklariert sie, das Dateiformat speichert sie, und
+    bis hierher **las sie niemand**: jede Skizze lag auf XY, gleichgültig, was
+    dastand. Ein Feld, das man setzen kann und das nichts tut, ist schlimmer
+    als keines — es sieht aus wie eine Zusage.
+
+    Gemessen wird an der Hüllbox, nicht am Volumen: ein Quader hat auf jeder
+    Ebene dasselbe Volumen, und genau deshalb hätte ein Volumentest den Fehler
+    nie gefunden.
+    """
+    from dataclasses import replace
+
+    from app.core.sketch import shapes
+
+    flat = shapes.rectangle(40.0, 20.0)
+    upright = replace(flat, plane="plane:xz")
+
+    on_xy = solid_of(run("sketch_extrude", sketch=sketch_to_text(flat), height=10.0))
+    on_xz = solid_of(run("sketch_extrude", sketch=sketch_to_text(upright), height=10.0))
+
+    assert on_xy.volume == pytest.approx(on_xz.volume, rel=1e-9), (
+        "dasselbe Rechteck, dieselbe Menge"
+    )
+
+    assert on_xy.bounds.size == pytest.approx((40.0, 20.0, 10.0), abs=1e-6)
+    # Auf XZ liegt die Skizzenbreite in Z, und aufgezogen wird nach Y.
+    assert on_xz.bounds.size == pytest.approx((40.0, 10.0, 20.0), abs=1e-6)

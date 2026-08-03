@@ -201,6 +201,27 @@ def test_removing_an_element_renumbers_the_constraints(qt_app: QApplication) -> 
     assert canvas.sketch.constraints[0].targets == (0, 1), "die Ziele sind umnummeriert"
 
 
+def test_the_chosen_plane_travels_with_the_sketch(qt_app: QApplication) -> None:
+    """Die Ebene wird vor dem Zeichnen gewählt und reist im Text mit (§30.1).
+
+    Sie zu wählen ist erst dann etwas wert, wenn sie ankommt —
+    ``tests/test_sketch_ops.py`` misst am Körper nach, dass sie das tut.
+    """
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        assert panel.canvas.sketch.plane == "plane:xy", "liegend ist die Vorgabe"
+
+        panel.plane_choice.setCurrentIndex(panel.plane_choice.findData("plane:xz"))
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+
+        assert panel.canvas.sketch.plane == "plane:xz"
+        assert sketch_from_text(panel.sketch_text()).plane == "plane:xz"
+    finally:
+        panel.deleteLater()
+
+
 def test_the_canvas_knows_when_a_sketch_leaves_the_build_volume(qt_app: QApplication) -> None:
     """Die Zeichenfläche ist der früheste Ort, an dem ein zu großes Teil
     auffällt (Konzept P15 §4, E1).

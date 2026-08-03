@@ -72,6 +72,16 @@ def _drawn_profile(ctx: OpContext, sketch_text: str) -> Profile:
     return profile_of(solve_sketch(sketch_from_text(sketch_text), values))
 
 
+def _plane_of(sketch_text: str) -> str:
+    """Auf welcher Ebene eine gezeichnete Skizze liegt (§30.1).
+
+    Ohne gezeichnete Skizze gilt XY: die Grundformen liegen dort, und eine
+    Operation ohne Skizze hat keine Ebene zu wählen."""
+    if not sketch_text:
+        return "plane:xy"
+    return sketch_from_text(sketch_text).plane
+
+
 def _profile_for(
     ctx: OpContext, sketch_text: str, shape: str, length: float, width: float, corners: int
 ) -> Profile:
@@ -152,7 +162,7 @@ def sketch_extrude(ctx: OpContext) -> OpResult:
     profile = _profile_for(
         ctx, params.sketch, params.shape, params.length, params.width, params.corners
     )
-    solid = profiles.extrude(profile, params.height)
+    solid = profiles.extrude(profile, params.height, _plane_of(params.sketch))
     return OpResult(outputs=[_created(params.name, str(_("Grundform")), solid)])
 
 

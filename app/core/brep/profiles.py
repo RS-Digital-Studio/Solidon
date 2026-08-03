@@ -43,6 +43,22 @@ def _lift_xz(point: Point2) -> Any:
     return gp_Pnt(point[0], 0.0, point[1])
 
 
+def _lift_yz(point: Point2) -> Any:
+    """Skizze in der YZ-Ebene — x wird Tiefe, y wird Höhe."""
+    from OCP.gp import gp_Pnt
+
+    return gp_Pnt(0.0, point[0], point[1])
+
+
+#: Die drei Hauptebenen aus §30.1 mit ihrer Hebefunktion und der Richtung, in
+#: die ein Prisma darauf wächst — die Normale der Ebene.
+PLANES: dict[str, tuple[_Lift, tuple[float, float, float]]] = {
+    "plane:xy": (_lift_xy, (0.0, 0.0, 1.0)),
+    "plane:xz": (_lift_xz, (0.0, 1.0, 0.0)),
+    "plane:yz": (_lift_yz, (1.0, 0.0, 0.0)),
+}
+
+
 def _wire(profile: Profile, lift: _Lift) -> Any:
     """Der Umriss als Draht: Strecken als Segmente, Bögen als echte Bögen."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
@@ -84,15 +100,29 @@ def _face(profile: Profile, lift: _Lift) -> Any:
     return BRepBuilderAPI_MakeFace(_wire(profile, lift), True).Face()
 
 
-def extrude(profile: Profile, height: float) -> Solid:
-    """Zieht den Umriss senkrecht nach oben auf — der Boden liegt auf Z = 0."""
+def extrude(profile: Profile, height: float, plane: str = "plane:xy") -> Solid:
+    """Zieht den Umriss senkrecht zu seiner Ebene auf.
+
+    Auf XY liegt der Boden bei Z = 0 und es geht nach oben — der Normalfall.
+    Die beiden anderen Hauptebenen wachsen entlang ihrer eigenen Normalen;
+    eine Skizze, die auf XZ liegt, wird nach Y aufgezogen und nicht nach oben.
+
+    Eine unbekannte Ebene wird abgewiesen statt stillschweigend als XY
+    gelesen: bis hierher trug ``Sketch.plane`` seinen Wert bis in die
+    Projektdatei, und niemand las ihn — eine falsche Ebene sah aus wie eine
+    erfüllte Zusage.
+    """
     require()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
     from OCP.gp import gp_Vec
 
     if height <= 0.0:
         raise ValidationError("height", _("Dieses Maß muss größer als null sein."), value=height)
-    return Solid(BRepPrimAPI_MakePrism(_face(profile, _lift_xy), gp_Vec(0.0, 0.0, height)).Shape())
+    if plane not in PLANES:
+        raise ValidationError("plane", _("Diese Ebene gibt es nicht."), value=plane)
+    lift, normal = PLANES[plane]
+    direction = gp_Vec(normal[0] * height, normal[1] * height, normal[2] * height)
+    return Solid(BRepPrimAPI_MakePrism(_face(profile, lift), direction).Shape())
 
 
 def revolve(profile: Profile, angle_deg: float) -> Solid:
