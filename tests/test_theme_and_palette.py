@@ -26,8 +26,13 @@ def test_text_has_enough_contrast_in_both_themes(theme: str) -> None:
 @pytest.mark.parametrize("theme", list(THEMES))
 def test_the_viewport_follows_the_theme(theme: str) -> None:
     colours = viewport_colours(theme)  # type: ignore[arg-type]
-    assert set(colours) == {"bottom", "top", "object", "bed"}
+    assert set(colours) == {"bottom", "top", "object", "bed", "edge"}
     assert contrast_ratio(colours["object"], colours["bottom"]) >= 1.8, "a body stands out"
+    # Eine Körperkante, die man suchen muss, hilft niemandem — dieselbe
+    # Schwelle, die WCAG für lesbaren Text nennt, und aus demselben Grund.
+    assert contrast_ratio(colours["edge"], colours["object"]) >= 4.0, (
+        "die Kante muss sich vom Körper abheben"
+    )
 
 
 def test_the_two_themes_are_actually_different() -> None:

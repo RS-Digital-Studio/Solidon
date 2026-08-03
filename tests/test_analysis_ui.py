@@ -124,6 +124,34 @@ def test_ambient_occlusion_yields_to_a_map(qt_app: QApplication) -> None:
         viewport.deleteLater()
 
 
+def test_feature_edges_leave_a_round_body_alone() -> None:
+    """Eine Kugel hat keine Kante, und eine erfundene wäre schlimmer als keine.
+
+    Geprüft wird die Auswahlregel selbst, nicht das Bild: der Winkel entscheidet,
+    was als Kante des Körpers gilt. Ein fein aufgelöster Zylinder darf seine
+    Facetten nicht als Kanten bekommen, sonst ist das Ergebnis dasselbe wie
+    „Massiv mit Kanten" — und dafür gibt es diesen Modus schon.
+    """
+    pv = pytest.importorskip("pyvista")
+    from app.ui.viewport import FEATURE_EDGE_ANGLE
+
+    def edges_of(mesh: object) -> int:
+        found = mesh.extract_feature_edges(  # type: ignore[attr-defined]
+            feature_angle=FEATURE_EDGE_ANGLE,
+            boundary_edges=True,
+            non_manifold_edges=False,
+            feature_edges=True,
+            manifold_edges=False,
+        )
+        return int(found.n_cells)
+
+    assert edges_of(pv.Sphere(theta_resolution=120, phi_resolution=120)) == 0
+    assert edges_of(pv.Cylinder(resolution=96).triangulate()) > 0, (
+        "die Deckflächen eines Zylinders treffen die Mantelfläche im rechten Winkel"
+    )
+    assert edges_of(pv.Cube().triangulate()) == 12, "ein Würfel hat zwölf Kanten"
+
+
 # --- the legend -----------------------------------------------------------------
 
 

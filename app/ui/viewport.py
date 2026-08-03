@@ -86,6 +86,18 @@ SSAO_RADIUS = 2.0
 #: das Streifenmuster, an dem man schlecht eingestellte Verdeckung erkennt.
 SSAO_BIAS = 0.01
 
+#: Ab welchem Winkel zwischen zwei Dreiecken eine Kante als Kante des Körpers
+#: gilt. Dreißig Grad lässt die Facetten eines fein aufgelösten Zylinders in
+#: Ruhe — die liegen bei zweihundert Segmenten unter zwei Grad — und nimmt
+#: jede Fase mit, denn eine Fase unter dreißig Grad ist keine mehr.
+FEATURE_EDGE_ANGLE = 30.0
+
+#: Strichstärke der Körperkanten. Bei 1,0 verschwanden sie neben der
+#: Umgebungsverdeckung; die Farbe ist je Thema auf Kontrast 4,5 gegen den
+#: Körper gerechnet — dieselbe Schwelle, die WCAG für lesbaren Text nennt, und
+#: aus demselben Grund: eine Linie, die man suchen muss, hilft niemandem.
+FEATURE_EDGE_WIDTH = 1.5
+
 OBJECT_COLOUR = "#b9c4d0"
 SELECTED_COLOUR = "#f0a54a"
 BACKFACE_COLOUR = "#8b3a3a"
@@ -177,6 +189,8 @@ class Viewport(QWidget):
         self._map: AnalysisMap | None = None
         self._map_object: ObjectId | None = None
         self._occlusion_applied = False
+        self._edge_actors: list[Any] = []
+        self._edge_colour = "#4c5258"
         self._feature_overlay = False
         self._feature_actors: list[Any] = []
         self._selected_feature: FeatureId | None = None
@@ -303,6 +317,9 @@ class Viewport(QWidget):
         for actor in self._actors.values():
             self.plotter.remove_actor(actor, render=False)
         self._actors.clear()
+        for actor in self._edge_actors:
+            self.plotter.remove_actor(actor, render=False)
+        self._edge_actors.clear()
         self._uncapped = False
         if result is None:
             self.plotter.render()
@@ -348,11 +365,57 @@ class Viewport(QWidget):
                 **extra,
             )
             self._actors[object_id] = actor
+            self._draw_feature_edges(surface, object_id)
 
         self.select(self._selected)
         self._redraw_features()
         self._redraw_layer()
         self.plotter.render()
+
+    def _draw_feature_edges(self, surface: Any, object_id: ObjectId) -> None:
+        """Die Kanten des *Körpers*, nicht die des Netzes (§18.1).
+
+        „Massiv mit Kanten" zeichnet jede Dreieckskante — das beantwortet die
+        Frage, wie fein das Netz ist, und dafür ist es da. Es beantwortet
+        nicht, wo das Teil eine Kante hat: bei einem Zylinder aus zweihundert
+        Segmenten geht die eine Kante, auf die es ankommt, in
+        zweihundertneunundneunzig anderen unter.
+
+        Hier stehen deshalb nur Kanten, an denen zwei Flächen wirklich
+        aufeinandertreffen, dazu die offenen Ränder — bei einem undichten Netz
+        also genau die Stellen, die der Prüfbericht meldet. Ein rundes Teil
+        bekommt gar keine: eine Kugel hat keine Kante, und eine erfundene wäre
+        schlimmer als keine.
+
+        Nur im massiven Modus. In den anderen drei ist entweder alles schon
+        gezeichnet oder man sieht hindurch, und dann wäre eine zweite
+        Linienlage nur Gitter.
+        """
+        if self.plotter is None or self._mode != "solid":
+            return
+        try:
+            edges = surface.extract_feature_edges(
+                feature_angle=FEATURE_EDGE_ANGLE,
+                boundary_edges=True,
+                non_manifold_edges=False,
+                feature_edges=True,
+                manifold_edges=False,
+            )
+        except Exception as problem:  # pragma: no cover - hängt an der Geometrie
+            _log.info("feature edges unavailable: %s", problem)
+            return
+        if edges.n_cells == 0:
+            return
+        self._edge_actors.append(
+            self.plotter.add_mesh(
+                edges,
+                color=self._edge_colour,
+                line_width=FEATURE_EDGE_WIDTH,
+                name=f"edges:{object_id}",
+                render=False,
+                pickable=False,
+            )
+        )
 
     def set_hidden(self, hidden: frozenset[ObjectId]) -> None:
         """Welche Körper nicht gezeichnet werden (§18.8).
@@ -533,6 +596,7 @@ class Viewport(QWidget):
         colours = viewport_colours(theme)  # type: ignore[arg-type]
         self._object_colour = colours["object"]
         self._bed_colour = colours["bed"]
+        self._edge_colour = colours["edge"]
         if self.plotter is None:
             return
         self.plotter.set_background(colours["bottom"], top=colours["top"])
