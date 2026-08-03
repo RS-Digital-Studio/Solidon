@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 
 from app.core.errors import ValidationError
-from app.core.types import Sketch, SketchConstraint, SketchElement
+from app.core.types import Point2, Sketch, SketchConstraint, SketchElement
 from app.i18n import _
 
 #: Die Grundformen, die jede Skizzen-Op anbietet — eine Quelle für alle Dialoge.
@@ -145,6 +145,98 @@ def polygon(diameter: float, corners: int) -> Sketch:
     constraints.append(SketchConstraint("horizontal", (0, 1)))
     constraints.append(SketchConstraint("fixed", (0,)))
     return Sketch(plane="plane:xy", elements=elements, constraints=tuple(constraints))
+
+
+def _holes(centres: list[Point2], diameter: float) -> Sketch:
+    """Kreise gleicher Größe an gegebenen Mittelpunkten, jeder für sich fest.
+
+    Jedes Loch bekommt seinen eigenen Radius als Maß und seinen eigenen
+    Festpunkt — damit ist die Skizze bestimmt, ohne dass ein Loch am anderen
+    hängt. Das ist die Entscheidung gegen ein assoziatives Muster: die
+    Parametrik liegt in Formwerk eine Ebene höher (§13, Maße sind Ausdrücke),
+    und ein zweiter Mechanismus daneben wäre einer, der mit dem ersten
+    auseinanderlaufen kann.
+    """
+    radius = diameter / 2.0
+    elements = tuple(
+        SketchElement("circle", (centre, (centre[0] + radius, centre[1]))) for centre in centres
+    )
+    constraints: list[SketchConstraint] = []
+    for index in range(len(centres)):
+        centre_point = 2 * index
+        constraints.append(
+            SketchConstraint("distance", (centre_point, centre_point + 1), _number(radius))
+        )
+        constraints.append(SketchConstraint("fixed", (centre_point,)))
+    return Sketch(plane="plane:xy", elements=elements, constraints=tuple(constraints))
+
+
+def _at_least_two(field: str, value: int) -> None:
+    if value < 2:
+        raise ValidationError(
+            field,
+            _("Ein Muster braucht mindestens zwei Elemente."),
+            value=value,
+            constraint="pattern_count",
+        )
+
+
+def bolt_circle(pitch_diameter: float, count: int, hole_diameter: float) -> Sketch:
+    """Löcher gleichmäßig auf einem Teilkreis — Flansch, Deckel, Nabe.
+
+    Das erste Loch liegt auf der positiven X-Achse; von dort geht es gegen den
+    Uhrzeigersinn. Von Hand hieß dieselbe Skizze, jeden Mittelpunkt einzeln
+    auszurechnen, mit einem Rechenfehler je Gelegenheit.
+    """
+    _positive("pitch_diameter", pitch_diameter)
+    _positive("hole_diameter", hole_diameter)
+    _at_least_two("count", count)
+    if hole_diameter >= pitch_diameter:
+        raise ValidationError(
+            "hole_diameter",
+            _("Die Löcher sind größer als der Teilkreis, auf dem sie sitzen."),
+            value=hole_diameter,
+            constraint="hole_fits",
+        )
+    radius = pitch_diameter / 2.0
+    centres = [
+        (
+            radius * math.cos(2.0 * math.pi * index / count),
+            radius * math.sin(2.0 * math.pi * index / count),
+        )
+        for index in range(count)
+    ]
+    return _holes(centres, hole_diameter)
+
+
+def hole_grid(columns: int, rows: int, spacing: float, hole_diameter: float) -> Sketch:
+    """Ein Lochraster um den Ursprung — Lüftungsgitter, Steckplatte, Lochblech.
+
+    ``spacing`` ist der Abstand von Mitte zu Mitte, in beiden Richtungen
+    derselbe: ein Raster mit zwei Abständen ist zwei Entscheidungen, und die
+    zweite braucht selten jemand.
+    """
+    _positive("spacing", spacing)
+    _positive("hole_diameter", hole_diameter)
+    if columns * rows < 2:
+        _at_least_two("columns", columns * rows)
+    if columns < 1 or rows < 1:
+        _at_least_two("columns", min(columns, rows))
+    if hole_diameter >= spacing:
+        raise ValidationError(
+            "hole_diameter",
+            _("Die Löcher sind mindestens so groß wie ihr Abstand — sie überschneiden sich."),
+            value=hole_diameter,
+            constraint="hole_fits",
+        )
+    left = -(columns - 1) * spacing / 2.0
+    bottom = -(rows - 1) * spacing / 2.0
+    centres = [
+        (left + column * spacing, bottom + row * spacing)
+        for row in range(rows)
+        for column in range(columns)
+    ]
+    return _holes(centres, hole_diameter)
 
 
 def _number(value: float) -> str:

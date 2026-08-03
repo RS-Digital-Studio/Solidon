@@ -320,3 +320,71 @@ def test_a_reference_measure_reports_without_driving() -> None:
     solved = solve_sketch(both)
     # Vier Freiheitsgrade hat die Linie, ``fixed`` nimmt zwei, das Maß einen.
     assert solved.free_dof == 1, "die Richtung bleibt frei, das Referenzmaß ändert daran nichts"
+
+
+# --- Skizzenmuster (§30.1, D9) --------------------------------------------------
+
+
+def test_a_bolt_circle_places_its_holes_on_the_pitch_diameter() -> None:
+    """Der häufigste Fall am Druckteil: ein Deckel mit Lochkreis.
+
+    Von Hand hieß das, sechs Kreise einzeln zu setzen und ihre Mittelpunkte
+    auszurechnen — mit einem Rechenfehler je Gelegenheit.
+
+    Das Muster ist **nicht assoziativ**: es erzeugt echte Elemente mit echten
+    Bedingungen. Die Parametrik liegt in Formwerk eine Ebene höher — Maße sind
+    Ausdrücke, und ein Projektparameter dreht den Teilkreis. Ein zweiter
+    Mechanismus daneben wäre der Fehler, den SindriCADs eigenes Audit als
+    Datenkorruption führt: dort backt jede Bearbeitung die abgeleiteten Kopien
+    in die gespeicherten Elemente.
+    """
+    import itertools
+    import math
+
+    from app.core.sketch import shapes
+    from app.core.sketch.solver import solve_sketch
+
+    sketch = shapes.bolt_circle(pitch_diameter=50.0, count=6, hole_diameter=4.0)
+    assert len(sketch.elements) == 6, "sechs Löcher, sechs Kreise"
+
+    solved = solve_sketch(sketch)
+    # Ein Kreis behält den Freiheitsgrad, um den sein Randpunkt rotieren darf —
+    # so ist es bei ``circle`` seit jeher, und wo der Randpunkt sitzt, ändert am
+    # Kreis nichts. Bestimmt ist, worauf es ankommt: Ort und Radius.
+    assert solved.free_dof == 6, "je Loch die Drehung seines Randpunkts, sonst nichts"
+
+    centres = [element.points[0] for element in solved.elements]
+    for x, y in centres:
+        assert math.hypot(x, y) == pytest.approx(25.0, abs=1e-6), "auf dem Teilkreis"
+
+    angles = sorted(math.degrees(math.atan2(y, x)) % 360.0 for x, y in centres)
+    steps = [round(b - a, 6) for a, b in itertools.pairwise(angles)]
+    assert all(step == pytest.approx(60.0, abs=1e-6) for step in steps), "gleichmäßig verteilt"
+
+
+def test_a_grid_of_holes_counts_rows_times_columns() -> None:
+    """Ein Lochraster — Lüftungsgitter, Steckplatte, Lochblech."""
+    from app.core.sketch import shapes
+    from app.core.sketch.solver import solve_sketch
+
+    sketch = shapes.hole_grid(columns=4, rows=3, spacing=10.0, hole_diameter=3.0)
+    assert len(sketch.elements) == 12
+
+    solved = solve_sketch(sketch)
+    assert solved.free_dof == 12, "je Loch die Drehung seines Randpunkts"
+
+    centres = {(round(x, 6), round(y, 6)) for x, y in (e.points[0] for e in solved.elements)}
+    assert len(centres) == 12, "kein Loch liegt auf einem anderen"
+    xs = sorted({x for x, _ in centres})
+    assert xs[-1] - xs[0] == pytest.approx(30.0, abs=1e-6), "drei Abstände zwischen vier Spalten"
+
+
+def test_a_pattern_rejects_a_count_below_two() -> None:
+    """Ein Muster aus einem Element ist kein Muster, sondern ein Kreis."""
+    from app.core.errors import ValidationError
+    from app.core.sketch import shapes
+
+    with pytest.raises(ValidationError):
+        shapes.bolt_circle(pitch_diameter=50.0, count=1, hole_diameter=4.0)
+    with pytest.raises(ValidationError):
+        shapes.hole_grid(columns=1, rows=1, spacing=10.0, hole_diameter=3.0)

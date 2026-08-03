@@ -859,6 +859,17 @@ class SketchPanel(QWidget):
             (tr("Langloch 40 × 10"), lambda: shapes.slot(40.0, 10.0)),
             (tr("Kreis Ø 20"), lambda: shapes.circle(20.0)),
             (tr("Sechseck Ø 20"), lambda: shapes.polygon(20.0, 6)),
+            # Muster stehen bei den Grundformen und nicht in einem eigenen
+            # Menü: sie sind dasselbe — eine fertige Skizze, die man einfügt
+            # und danach bemaßt (Konzept P15, E11).
+            (
+                tr("Lochkreis Ø 50, 6 × Ø 4"),
+                lambda: shapes.bolt_circle(pitch_diameter=50.0, count=6, hole_diameter=4.0),
+            ),
+            (
+                tr("Lochraster 4 × 3, Abstand 10"),
+                lambda: shapes.hole_grid(columns=4, rows=3, spacing=10.0, hole_diameter=3.0),
+            ),
         ):
             action = shapes_menu.addAction(label)
             action.triggered.connect(
