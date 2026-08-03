@@ -158,6 +158,28 @@ class SketchCanvas(QWidget):
         self._scale = 4.0
         self._centre = QPointF(0.0, 0.0)
         self._panning: QPoint | None = None
+        self._bed: tuple[float, float] | None = None
+        """Breite und Tiefe des Druckbetts, oder ``None``.
+
+        Die Zeichenfläche ist der früheste Ort, an dem eine zu große Skizze
+        auffallen kann — später kostet es einen Export, einen Slicerlauf und
+        die Frage, warum das Teil nicht auf die Platte passt (E1)."""
+
+    def set_bed(self, size: tuple[float, float] | None) -> None:
+        """Die Grundfläche des Bauraums, gegen die gezeichnet wird."""
+        self._bed = size
+        self.update()
+
+    def outside_bed(self) -> bool:
+        """Ob die Skizze über den Bauraum hinausragt.
+
+        Gemessen an den gelösten Punkten und nicht am Umriss: ein Punkt
+        außerhalb reicht, und ob die Kette dazwischen schließt, ist eine
+        andere Frage mit einer anderen Meldung."""
+        if self._bed is None:
+            return False
+        half_x, half_y = self._bed[0] / 2.0, self._bed[1] / 2.0
+        return any(abs(x) > half_x or abs(y) > half_y for x, y in self.points())
 
     # --- Modell -----------------------------------------------------------------
 
@@ -516,6 +538,7 @@ class SketchCanvas(QWidget):
         painter.fillRect(self.rect(), palette.base())
 
         self._paint_grid(painter)
+        self._paint_bed(painter)
 
         chosen_points = {entry[1][0] for entry in self.selection if entry[0] == "point"}
         chosen_elements: set[int] = set()
@@ -545,6 +568,39 @@ class SketchCanvas(QWidget):
 
         self._paint_measures(painter, points)
         self._paint_pending(painter)
+
+    def _paint_bed(self, painter: QPainter) -> None:
+        """Die Grenze des Bauraums als Rechteck um den Ursprung (E1).
+
+        Gestrichelt und beschriftet, nicht nur eingefärbt: Regel 18 gilt hier
+        wie überall, und eine Linie, die man für Raster halten kann, sagt
+        nichts. Wer darüber hinauszeichnet, sieht es an der Skizze — nicht
+        erst, wenn der Slicer das Teil neben die Platte legt.
+        """
+        if self._bed is None:
+            return
+        half_x, half_y = self._bed[0] / 2.0, self._bed[1] / 2.0
+        outside = self.outside_bed()
+        colour = QColor(self.palette().text().color())
+        colour.setAlpha(200 if outside else 110)
+        pen = QPen(colour, 2.0 if outside else 1.2, Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        top_left = self._to_screen(-half_x, half_y)
+        bottom_right = self._to_screen(half_x, -half_y)
+        painter.drawRect(
+            int(top_left.x()),
+            int(top_left.y()),
+            int(bottom_right.x() - top_left.x()),
+            int(bottom_right.y() - top_left.y()),
+        )
+        label = tr("Bauraum {x} × {y}").format(
+            x=format_length(self._bed[0], with_unit=False),
+            y=format_length(self._bed[1], with_unit=False),
+        )
+        if outside:
+            label = f"{label} — {tr('die Skizze ragt darüber hinaus')}"
+        painter.drawText(top_left + QPointF(4.0, -4.0), label)
 
     def _paint_grid(self, painter: QPainter) -> None:
         palette = self.palette()
@@ -883,6 +939,10 @@ class SketchPanel(QWidget):
             return True
         handled: bool = super().eventFilter(watched, event)
         return handled
+
+    def set_bed(self, size: tuple[float, float] | None) -> None:
+        """Den Bauraum an die Zeichenfläche weiterreichen (E1)."""
+        self.canvas.set_bed(size)
 
     def sketch_text(self) -> str:
         """Der Parameterwert, wie ihn die Skizzen-Ops lesen (§30.1) — leer,

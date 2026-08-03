@@ -201,6 +201,27 @@ def test_removing_an_element_renumbers_the_constraints(qt_app: QApplication) -> 
     assert canvas.sketch.constraints[0].targets == (0, 1), "die Ziele sind umnummeriert"
 
 
+def test_the_canvas_knows_when_a_sketch_leaves_the_build_volume(qt_app: QApplication) -> None:
+    """Die Zeichenfläche ist der früheste Ort, an dem ein zu großes Teil
+    auffällt (Konzept P15 §4, E1).
+
+    Später kostet derselbe Fehler einen Export, einen Slicerlauf und die
+    Frage, warum das Teil nicht auf die Platte passt. SindriCAD kann eine
+    Skizze zeichnen; ob sie in den Drucker passt, weiß dort niemand.
+    """
+    canvas = SketchCanvas()
+    canvas.set_bed((220.0, 220.0))
+    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    assert not canvas.outside_bed(), "vierzig Millimeter passen auf zweihundertzwanzig"
+
+    canvas.set_sketch(shapes.rectangle(300.0, 20.0))
+    assert canvas.outside_bed(), "dreihundert nicht"
+
+    # Ohne bekannten Bauraum wird nichts behauptet.
+    canvas.set_bed(None)
+    assert not canvas.outside_bed()
+
+
 def test_a_measure_is_shown_rounded_but_stored_exactly(qt_app: QApplication) -> None:
     """§11.2: gerundet wird in der Anzeige, nie im Wert.
 

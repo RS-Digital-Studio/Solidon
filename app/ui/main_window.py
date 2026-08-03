@@ -1696,6 +1696,11 @@ class MainWindow(QMainWindow):
         if self._sketch_panel is not None:
             return
         panel = SketchPanel(text, self._parameter_values(), self)
+        # Die Zeichenfläche ist der früheste Ort, an dem ein zu großes Teil
+        # auffallen kann (E1). Der Bauraum steht im Profil, also braucht es
+        # dafür keine neue Rechnung — nur die Zahl an die richtige Stelle.
+        volume = self.session.profile.printer.build_volume
+        panel.set_bed((float(volume[0]), float(volume[1])))
         self._sketch_panel = panel
         self._sketch_target = op_name
         self.middle_stack.addWidget(panel)
