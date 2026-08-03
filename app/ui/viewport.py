@@ -127,6 +127,12 @@ def _available() -> bool:
     return True
 
 
+def _hex(colour: tuple[float, float, float]) -> str:
+    """Eine Slotfarbe (0 bis 1 je Kanal, §20) als Hexwert für den Plotter."""
+    red, green, blue = (round(max(0.0, min(1.0, part)) * 255) for part in colour)
+    return f"#{red:02x}{green:02x}{blue:02x}"
+
+
 MeasureMode = Literal["off", "distance", "thickness"]
 
 MEASURE_COLOUR = "#f0a54a"
@@ -354,6 +360,8 @@ class Viewport(QWidget):
                     "show_scalar_bar": False,
                     "nan_color": "#4a4f57",
                 }
+            elif self._map is None:
+                extra = self._slot_colours(surface, mesh, entry, len(raw.faces))
             actor = self.plotter.add_mesh(
                 surface,
                 color=self._object_colour,
@@ -371,6 +379,47 @@ class Viewport(QWidget):
         self._redraw_features()
         self._redraw_layer()
         self.plotter.render()
+
+    def _slot_colours(self, surface: Any, mesh: Any, entry: Any, face_count: int) -> dict[str, Any]:
+        """Ein bemalter Körper wird in seinen Filamentfarben gezeichnet (§20).
+
+        Formwerk kennt Materialslots seit P9: ``paint_slot`` setzt sie,
+        ``slots_from_texture`` leitet sie ab, der 3MF-Export macht daraus den
+        Farbwechsel für den Drucker. Die Ansicht malte trotzdem alles grau —
+        wer ein Teil zweifarbig bemalte, sah das Ergebnis zum ersten Mal im
+        Slicer.
+
+        Das ist keine Dekoration: die Farbe steht im Dokument, sie ist der
+        Wert, der exportiert wird, und sie hier zu zeigen ist die einzige
+        Gelegenheit, einen Fehlgriff zu bemerken, solange er noch billig ist.
+
+        Eine Analysekarte hat Vorrang; sie färbt nach Zahlen, und zwei
+        Bedeutungen auf derselben Fläche wären keine.
+        """
+        slots = getattr(entry, "material_slots", None)
+        indices = getattr(mesh, "slots", ())
+        if not slots or len(indices) != face_count:
+            return {}
+
+        import numpy as np
+
+        known = {slot.index: slot for slot in slots}
+        highest = max(known)
+        table = []
+        for index in range(highest + 1):
+            slot = known.get(index)
+            colour = slot.colour if slot is not None else None
+            table.append(_hex(colour) if colour is not None else self._object_colour)
+        if len(table) < 2:
+            # Ein einziger Slot ist kein Mehrfarbdruck, sondern die Vorgabe.
+            return {}
+        surface.cell_data["slot"] = np.asarray(indices, dtype=np.int32)
+        return {
+            "scalars": "slot",
+            "cmap": table,
+            "clim": (0, highest),
+            "show_scalar_bar": False,
+        }
 
     def _draw_feature_edges(self, surface: Any, object_id: ObjectId) -> None:
         """Die Kanten des *Körpers*, nicht die des Netzes (§18.1).

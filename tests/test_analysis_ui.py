@@ -8,6 +8,7 @@ Bild. Ob die Farben auf dem richtigen Dreieck landen, entscheidet der Kern, und
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -28,11 +29,27 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 @pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
+def window(qt_app: QApplication) -> Iterator[MainWindow]:
+    """Ein Fenster für einen Test — und danach wieder weg.
+
+    Ohne das Aufräumen überlebt es den Test, seine Arbeiter laufen weiter, und
+    beim Herunterfahren des Interpreters ist der Thread-Pool der
+    Schichtanalyse längst zu: „cannot schedule new futures after interpreter
+    shutdown", quer über eine grüne Suite. Ein Fenster, das niemand schließt,
+    ist in einem Test dasselbe wie eine Datei, die niemand schließt.
+
+    **Nicht** über ``close()``: das löst ``closeEvent`` aus, und der fragt bei
+    ungesicherten Änderungen modal nach — der Test hängt dann an einem Fenster,
+    das niemand sieht. Dieselbe Falle steht seit zwei Runden im Kopf von
+    ``tests/test_ui.py``. Abgewartet und weggeräumt reicht.
+    """
     window = MainWindow(Session(), UiSettings())
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
-    return window
+    yield window
+    window.session.wait_for_idle()
+    wait_for_map(window)
+    window.deleteLater()
 
 
 def select_plate(window: MainWindow) -> None:
@@ -121,6 +138,49 @@ def test_ambient_occlusion_yields_to_a_map(qt_app: QApplication) -> None:
         # Ende des Laufs noch lebt, wird beim Herunterfahren des Interpreters
         # aufgeräumt — dann ist der Thread-Pool der Schichtanalyse längst zu,
         # und die Meldung darüber landet als Rauschen in einer grünen Suite.
+        viewport.deleteLater()
+
+
+def test_a_painted_body_is_drawn_in_its_filament_colours(qt_app: QApplication) -> None:
+    """§20: die Farbe steht im Dokument und wird exportiert — sie gehört
+    gezeigt, solange ein Fehlgriff noch billig ist.
+
+    Geprüft wird die Farbtabelle, nicht das Bild: sie entscheidet, welcher
+    Slot welche Farbe bekommt, und sie ist ohne OpenGL-Kontext zu haben.
+    """
+    pv = pytest.importorskip("pyvista")
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.viewport import Viewport
+
+    body = trimesh.creation.box(extents=(10, 10, 10))
+    # Halb rot, halb blau — zwölf Dreiecke, sechs je Farbe.
+    mesh = MeshData.of(body, tuple([1] * 6 + [2] * 6))
+    entry = SceneObject(
+        id=1,
+        name="Teil",
+        mesh=mesh,
+        material_slots=[
+            MaterialSlot(index=1, name="Rot", colour=(1.0, 0.0, 0.0)),
+            MaterialSlot(index=2, name="Blau", colour=(0.0, 0.0, 1.0)),
+        ],
+    )
+
+    viewport = Viewport()
+    try:
+        surface = pv.Cube().triangulate()
+        extra = viewport._slot_colours(surface, mesh, entry, 12)
+        assert extra["cmap"][1] == "#ff0000"
+        assert extra["cmap"][2] == "#0000ff"
+        assert extra["clim"] == (0, 2)
+        assert list(surface.cell_data["slot"]) == [1] * 6 + [2] * 6
+
+        # Ein Körper ohne Bemalung bleibt in der Objektfarbe.
+        plain = SceneObject(id=2, name="Grau", mesh=MeshData.of(body))
+        assert viewport._slot_colours(surface, plain.mesh, plain, 12) == {}
+    finally:
         viewport.deleteLater()
 
 
