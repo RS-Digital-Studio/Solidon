@@ -645,18 +645,21 @@ zu hängen, wird rot — nachgewiesen an einem Wegwerf-Eintrag.
       Der Radius ist an einer gebohrten Platte abgemessen (2 mm, nicht die
       zuerst geschätzten 8 — das war der schwächste Wert der Reihe)
 - [ ] Kontaktschatten auf der Druckplatte; Platte mit Raster und Maßstab
-- [ ] **Feature-Kanten statt Dreieckskanten** — dieselbe Silhouettenlogik, die
-      `core/drawing` fürs Handbuch schon rechnet
-- [ ] **Materialdarstellung aus dem Dokument** (E3): Glanz nach Material, Farbe
-      nach Filament; abschaltbar, Vorgabe an
+- [x] **Feature-Kanten statt Dreieckskanten** — über `extract_feature_edges`
+      ab 30°, nur im massiven Modus; Farbe je Thema auf Kontrast 4,5 gerechnet
+- [x] **Materialdarstellung aus dem Dokument** (E3) — als **Filamentfarbe je
+      Materialslot**, nicht als Glanzwert je Material: die Slots stehen im
+      Dokument und werden exportiert, ein Glanzwert wäre erfunden gewesen.
+      Der Viewport kannte das Wort „slot" bis dahin nicht
 - [x] **ViewCube** (D4) — `add_camera_orientation_widget`, anklickbar, dreht
       die Kamera auf die getroffene Seite. **Die Ansichtsleiste unten links
       entfällt**: der Würfel deckt alle sieben Voreinstellungen ab, und eine
       zweite Leiste daneben wäre Doppelung, die Viewport-Fläche kostet — genau
       das, was §5 verhindern soll. Menüeinträge und Kürzel bleiben, weil eine
       Ansicht keine Operation ist (§19.2)
-- [ ] Leistungsschutz: jede Zutat schaltet sich ab, wo sie §31 reißt; die
-      Anzeige-Dezimierung aus P14 bleibt davor
+- [x] Leistungsschutz: die Kantensuche hört bei 200 000 Dreiecken je Körper
+      auf (0,15 ms je tausend, gemessen) — dieselbe Zahl wie das
+      Dezimierungsziel, weil es dieselbe Frage ist
 - [ ] Handbuchbilder neu aufnehmen (echte Plattform, nie offscreen)
 
 *Abnahme:* Ein 20-mm-Würfel ist neben einem gedruckten Teil als Material

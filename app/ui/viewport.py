@@ -152,6 +152,19 @@ DISPLAY_DECIMATION_ABOVE = 500_000
 #: Zug am Schnittschieber nicht durch eine Million Dreiecke geht.
 DISPLAY_DECIMATION_TARGET = 200_000
 
+#: Ab wie vielen Dreiecken ein Körper keine Kantenlinien mehr bekommt.
+#:
+#: Die Suche läuft linear: rund 0,15 ms je tausend Dreiecke, gemessen an Kugeln
+#: von 7 000 bis 350 000 Dreiecken (1,6 · 4,7 · 12,4 · 27,2 · 52,9 ms). Bei
+#: dieser Grenze sind es dreißig Millisekunden je Körper und Szenenaufbau —
+#: mehr will die Ansicht dafür nicht ausgeben.
+#:
+#: Dieselbe Zahl wie das Dezimierungsziel, weil es dieselbe Frage ist. Und
+#: der Verlust ist gering: Netze dieser Größe sind Scans oder erzeugte Körper,
+#: und die haben bei dreißig Grad ohnehin fast keine Kanten — die 350 000er
+#: Kugel liefert null.
+FEATURE_EDGE_LIMIT = DISPLAY_DECIMATION_TARGET
+
 
 class Viewport(QWidget):
     """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn VTK fehlt."""
@@ -441,6 +454,8 @@ class Viewport(QWidget):
         Linienlage nur Gitter.
         """
         if self.plotter is None or self._mode != "solid":
+            return
+        if surface.n_cells > FEATURE_EDGE_LIMIT:
             return
         try:
             edges = surface.extract_feature_edges(
