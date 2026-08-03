@@ -1,9 +1,16 @@
 """Bedienelemente für die Schnittebene (Bauplan §18.2).
 
-Die Ebene wird mit einem Schieber bewegt statt eingetippt: durch einen Körper
-zu sehen ist eine suchende Bewegung, keine Zahleneingabe. Die Scheibendicke
-sitzt daneben, und wenn ein Körper zu offen war, um die Schnittfläche zu
-schließen, sagt diese Leiste das, statt vorzugeben, das Bild sei vollständig.
+Die Ebene wird mit einem Schieber bewegt: durch einen Körper zu sehen ist eine
+suchende Bewegung. **Und sie lässt sich eintippen** — „schneide bei 12,5" ist
+keine Suche, sondern eine Zahl. Der Regler bleibt dabei die Wahrheit über die
+Position; das Feld ist ein zweiter Weg zu derselben Zahl, kein zweiter Zustand.
+
+Der Absatz stand hier zwei Phasen lang andersherum („statt eingetippt") und
+klang schlüssig. Er war es auch — für die Hälfte der Fälle, die er beschrieb.
+
+Die Scheibendicke sitzt daneben, und wenn ein Körper zu offen war, um die
+Schnittfläche zu schließen, sagt diese Leiste das, statt vorzugeben, das Bild
+sei vollständig.
 """
 
 from __future__ import annotations
@@ -96,8 +103,19 @@ class SectionBar(QWidget):
         self.position.setValue(0)
         self.position.valueChanged.connect(self._emit)
 
-        self.readout = QLabel(format_length(0.0), self)
+        # Eingabefeld, nicht Beschriftung: durch einen Körper zu sehen ist eine
+        # suchende Bewegung, und dafür ist der Regler da — aber „schneide bei
+        # 12,5" ist keine Suche, sondern eine Zahl, und die tippt man. Beides,
+        # nicht eines von beiden (Konzept P15 §4, E2).
+        self.readout = QDoubleSpinBox(self)
+        self.readout.setDecimals(1)
+        self.readout.setSingleStep(1.0)
         self.readout.setMinimumWidth(90)
+        self.readout.setSuffix(f" {DISPLAY_UNITS[0]}")
+        self.readout.setKeyboardTracking(False)
+        self.readout.valueChanged.connect(self._typed)
+        self._syncing = False
+        """Schutz gegen das Echo: Regler setzt Feld setzt Regler."""
 
         self.as_slice = QCheckBox(tr("Scheibe"), self)
         self.as_slice.toggled.connect(self._emit)
@@ -131,6 +149,7 @@ class SectionBar(QWidget):
         margin = max(1.0, (high - low) * 0.05)
         self.position.setMinimum(int((low - margin) * STEPS_PER_MM))
         self.position.setMaximum(int((high + margin) * STEPS_PER_MM))
+        self.readout.setRange(low - margin, high + margin)
 
     def plane(self) -> SectionPlane | None:
         axis = self.axis.currentData()
@@ -163,7 +182,24 @@ class SectionBar(QWidget):
         kostet nichts, und ohne sie fühlt sich der Regler tot an.
         """
         self._update_enabled()
-        self.readout.setText(format_length(self.position.value() / STEPS_PER_MM))
+        if not self._syncing:
+            self._syncing = True
+            self.readout.setValue(self.position.value() / STEPS_PER_MM)
+            self._syncing = False
+        self._pending.start(SETTLE_MS)
+
+    def _typed(self, value: float) -> None:
+        """Eine getippte Höhe bewegt den Regler — und damit den Schnitt.
+
+        Der Regler bleibt die Wahrheit über die Position: er hält den Bereich
+        der Szene, und die Rundung auf Zehntelmillimeter ist seine. Das Feld
+        ist ein zweiter Weg zu derselben Zahl, kein zweiter Zustand.
+        """
+        if self._syncing:
+            return
+        self._syncing = True
+        self.position.setValue(round(value * STEPS_PER_MM))
+        self._syncing = False
         self._pending.start(SETTLE_MS)
 
     def _settled(self) -> None:

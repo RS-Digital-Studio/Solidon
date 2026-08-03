@@ -406,6 +406,11 @@ class MainWindow(QMainWindow):
             self.section_bar,
             lambda: self.section_bar.axis.setCurrentIndex(0),
             symbol="section",
+            hint=tr(
+                "Ziehen Sie den Regler durch das Teil, oder tippen Sie eine Höhe. "
+                "Die Schnittfläche wird geschlossen gezeigt — so ist die Wandstärke "
+                "ablesbar."
+            ),
         )
         self.tools.add(
             "measure",
@@ -413,6 +418,10 @@ class MainWindow(QMainWindow):
             self.measure_bar,
             lambda: self.measure_bar.mode.setCurrentIndex(0),
             symbol="measure",
+            hint=tr(
+                "Zwei Punkte im Bild anklicken. Der Fang rastet auf Ecken und Kanten; "
+                "für die Wandstärke genügt ein Klick auf die Fläche."
+            ),
         )
         self.tools.add(
             "transform",
@@ -420,6 +429,10 @@ class MainWindow(QMainWindow):
             self.transform_bar,
             lambda: self.transform_bar.gizmo.setChecked(False),
             symbol="move",
+            hint=tr(
+                "Am Griff im Bild ziehen, oder Werte eintippen. Jeder Zug wird ein "
+                "Schritt im Verlauf und ist einzeln zurücknehmbar."
+            ),
         )
         self.tools.add(
             "analysis",
@@ -427,6 +440,10 @@ class MainWindow(QMainWindow):
             self.analysis_bar,
             lambda: self.analysis_bar.selector.setCurrentIndex(0),
             symbol="analysis",
+            hint=tr(
+                "Karte wählen — der Körper färbt sich nach Zahlen, die Legende nennt "
+                "den Bereich. Ein Klick auf eine Warnung im Prüfbericht fährt hin."
+            ),
         )
         self.tools.add(
             "layers",
@@ -434,6 +451,10 @@ class MainWindow(QMainWindow):
             self.layer_bar,
             lambda: self.layer_bar.active.setCurrentIndex(0),
             symbol="layers",
+            hint=tr(
+                "Durch die Höhe fahren und den Querschnitt ansehen. Inseln sind "
+                "hervorgehoben: dort beginnt Material in der Luft."
+            ),
         )
         self.tools.add(
             "explode",
@@ -441,6 +462,10 @@ class MainWindow(QMainWindow):
             self.explode_bar,
             lambda: self.explode_bar.slider.setValue(0),
             symbol="explode",
+            hint=tr(
+                "Regler schiebt die Teile auseinander. Nur die Ansicht — was "
+                "exportiert wird, bleibt, wo es ist."
+            ),
         )
         # Bemalen ändert Materialslots und nicht bloß die Ansicht: das Schließen
         # beendet das Bemalen, nimmt aber nichts Gemaltes zurück.
@@ -450,6 +475,10 @@ class MainWindow(QMainWindow):
             self.paint_bar,
             lambda: self.paint_bar.active.setChecked(False),
             symbol="paint",
+            hint=tr(
+                "Slot wählen, dann auf die Fläche klicken. Das ändert das Modell, "
+                "nicht nur das Bild — Strg+Z nimmt es zurück."
+            ),
         )
 
         middle = QWidget(self)

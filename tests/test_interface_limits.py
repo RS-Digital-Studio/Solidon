@@ -137,6 +137,40 @@ def test_no_menu_becomes_a_list_to_search(window: MainWindow) -> None:
     )
 
 
+def test_every_tool_says_what_it_expects(window: MainWindow) -> None:
+    """Ein Werkzeug, dessen erster Handgriff geraten werden muss, ist eines zu
+    viel (Konzept P15 §4, E2).
+
+    Der Satz ist nicht die Beschriftung — die steht auf dem Knopf. Er sagt, was
+    jetzt zu tun ist. Deshalb prüft dieser Test auch, dass er länger ist als
+    der Titel: „Schnitt" als Hinweis zu „Schnitt" wäre die stille Art, die
+    Regel zu erfüllen, ohne sie einzuhalten.
+    """
+    without = []
+    too_short = []
+    for key, tool in window.tools.tools().items():
+        hint = str(tool.hint).strip()
+        if not hint:
+            without.append(key)
+        elif len(hint) <= len(str(tool.title)) + 10:
+            too_short.append((key, hint))
+
+    assert not without, (
+        f"Diese Werkzeuge sagen nicht, was sie erwarten: {without}. "
+        "ToolStrip.add(..., hint=tr('…')) — ein Satz, kein Titel."
+    )
+    assert not too_short, f"Diese Hinweise wiederholen nur den Titel: {too_short}."
+
+
+def test_a_tool_hint_appears_and_goes_with_the_tool(window: MainWindow) -> None:
+    """Der Hinweis gehört dem Werkzeug, nicht dem Fenster."""
+    window.tools.activate("section")
+    assert window.tools.hint_text(), "geöffnet steht der Hinweis da"
+
+    window.tools.close_tool()
+    assert not window.tools.hint_text(), "geschlossen ist er weg"
+
+
 def test_every_declared_icon_really_exists() -> None:
     """Ein Symbolname, den es nicht gibt, ist ein leerer Knopf.
 

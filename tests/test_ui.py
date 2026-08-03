@@ -395,6 +395,30 @@ def test_closing_a_tool_takes_its_view_change_back(qt_app: QApplication) -> None
     assert window.section_bar.axis.currentIndex() == 0
 
 
+def test_a_typed_cut_height_moves_the_plane(qt_app: QApplication) -> None:
+    """Ziehen **und** tippen, nicht eines von beiden (Konzept P15 §4, E2).
+
+    Ein Zug durch den Körper ist eine Suche; „schneide bei 12,5" ist eine Zahl.
+    Der Regler bleibt die Wahrheit über die Position — geprüft wird deshalb,
+    dass die getippte Höhe wirklich in der Ebene ankommt und nicht nur im Feld
+    steht.
+    """
+    window = MainWindow(Session(), UiSettings())
+    bar = window.section_bar
+    bar.set_range(-40.0, 40.0)
+    bar.axis.setCurrentIndex(1)
+
+    bar.readout.setValue(12.5)
+
+    plane = bar.plane()
+    assert plane is not None
+    assert plane.position == pytest.approx(12.5)
+
+    # Und andersherum: der Regler führt das Feld nach.
+    bar.position.setValue(-70)
+    assert bar.readout.value() == pytest.approx(-7.0)
+
+
 def test_every_tool_button_carries_a_label(qt_app: QApplication) -> None:
     """Regel 18: welches Werkzeug offen ist, hängt nicht allein an einer Farbe."""
     window = MainWindow(Session(), UiSettings())
