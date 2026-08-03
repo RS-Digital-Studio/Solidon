@@ -64,11 +64,22 @@ VIEW_DIRECTIONS: dict[str, tuple[tuple[float, float, float], tuple[float, float,
     "iso": ((1.0, -1.0, 0.8), (0.0, 0.0, 1.0)),
 }
 
-#: Reichweite der Umgebungsverdeckung in Weltmaß, also Millimetern. Acht ist
-#: die Größenordnung, in der Druckteile ihre Merkmale haben — eine Bohrung,
-#: eine Nut, eine Wandstärke. Deutlich größer gewählt legt sich der Schatten
-#: über ganze Flächen und sieht aus wie Schmutz.
-SSAO_RADIUS = 8.0
+#: Reichweite der Umgebungsverdeckung in Weltmaß, also Millimetern.
+#:
+#: An einer gebohrten Platte mit einer Tasche nachgemessen, gegen dasselbe Bild
+#: ohne Verdeckung: 1 mm → 3,77 mittlere Abweichung, 2 mm → 1,75, 4 mm → 1,07,
+#: 8 mm → 0,95, 16 mm → 1,93. Der erste Ansatz stand auf 8 und war damit der
+#: **schwächste** Wert der Reihe — die Begründung dafür („die Größenordnung, in
+#: der Druckteile ihre Merkmale haben") klang plausibel und war falsch: gesucht
+#: wird im Umkreis dieses Radius nach verdeckenden Nachbarn, und wer zu weit
+#: sucht, mittelt die Kante weg, um die es geht.
+#:
+#: Genommen ist trotzdem nicht der stärkste Wert. Bei 1 mm zeigen ebene
+#: Seitenflächen im Bild waagerechte Streifen — die Selbstverdeckung, vor der
+#: :data:`SSAO_BIAS` warnt; die höhere Zahl ist dort größtenteils Rauschen. Zwei
+#: Millimeter ist die Größenordnung einer Fase, einer Nutbreite, eines
+#: Bohrungsrands, und das Bild bleibt sauber.
+SSAO_RADIUS = 2.0
 
 #: Wie weit zwei Tiefen auseinanderliegen müssen, damit eine die andere
 #: verdeckt. Zu klein, und eine ebene Fläche verdeckt sich selbst — das ist
@@ -201,11 +212,33 @@ class Viewport(QWidget):
         self.plotter = cast(Any, QtInteractor(self))
         self._layout.addWidget(self.plotter.interactor)
         self.plotter.add_axes()
+        self._add_orientation_widget()
         self._apply_render_quality()
         self.set_theme("dark")
         self.set_navigation("slicer")
 
     # --- Darstellungsqualität (§18.1) -------------------------------------------
+
+    def _add_orientation_widget(self) -> None:
+        """Der Würfel oben rechts: anfassbare Achsen statt eines Menüwegs.
+
+        `add_axes` zeigt nur an, wo Norden ist; dieser Würfel lässt sich
+        **anklicken** und dreht die Kamera auf die getroffene Seite. Damit ist
+        der häufigste aller Ansichtswechsel — „zeig mir das von oben" — eine
+        Mausbewegung statt zweier Menüebenen.
+
+        Er ersetzt die Kürzel nicht und die Kameraeinträge auch nicht: dasselbe
+        Ziel auf drei Wegen ist bei einer Ansicht kein Widerspruch, sondern die
+        Regel aus §19.2 (alles über die Palette, Kürzel lernen sich nebenbei).
+        Was genau eine Stelle haben muss, sind Operationen — und der Würfel ist
+        keine.
+        """
+        if self.plotter is None:
+            return
+        try:
+            self.plotter.add_camera_orientation_widget()
+        except Exception as problem:  # pragma: no cover - hängt am Treiber
+            _log.info("orientation widget unavailable: %s", problem)
 
     def _apply_render_quality(self) -> None:
         """Kantenglättung und Umgebungsverdeckung.

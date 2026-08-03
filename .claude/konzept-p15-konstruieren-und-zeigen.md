@@ -639,15 +639,22 @@ zu hängen, wird rot — nachgewiesen an einem Wegwerf-Eintrag.
 
 ### Etappe 1 — Die Ansicht sieht aus wie 2026 (D20, E3)
 
-- [ ] Kantenglättung (`enable_anti_aliasing`), Umgebungsverdeckung
-      (`enable_ssao`), Studiobeleuchtung statt Standardlicht
+- [x] Kantenglättung (`enable_anti_aliasing`) und Umgebungsverdeckung
+      (`enable_ssao`); die Verdeckung weicht, solange eine Analysekarte läuft —
+      sonst verschöbe sie die Farbe genau dort, wo die Karte etwas aussagt.
+      Der Radius ist an einer gebohrten Platte abgemessen (2 mm, nicht die
+      zuerst geschätzten 8 — das war der schwächste Wert der Reihe)
 - [ ] Kontaktschatten auf der Druckplatte; Platte mit Raster und Maßstab
 - [ ] **Feature-Kanten statt Dreieckskanten** — dieselbe Silhouettenlogik, die
       `core/drawing` fürs Handbuch schon rechnet
 - [ ] **Materialdarstellung aus dem Dokument** (E3): Glanz nach Material, Farbe
       nach Filament; abschaltbar, Vorgabe an
-- [ ] **ViewCube und Ansichtsleiste** (D4) — die sieben Voreinstellungen aus
-      §18.1 dorthin, wo die Hand ist
+- [x] **ViewCube** (D4) — `add_camera_orientation_widget`, anklickbar, dreht
+      die Kamera auf die getroffene Seite. **Die Ansichtsleiste unten links
+      entfällt**: der Würfel deckt alle sieben Voreinstellungen ab, und eine
+      zweite Leiste daneben wäre Doppelung, die Viewport-Fläche kostet — genau
+      das, was §5 verhindern soll. Menüeinträge und Kürzel bleiben, weil eine
+      Ansicht keine Operation ist (§19.2)
 - [ ] Leistungsschutz: jede Zutat schaltet sich ab, wo sie §31 reißt; die
       Anzeige-Dezimierung aus P14 bleibt davor
 - [ ] Handbuchbilder neu aufnehmen (echte Plattform, nie offscreen)
