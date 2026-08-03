@@ -698,10 +698,19 @@ Schnittebene nimmt eine getippte Zahl. Beide Sprachen vollständig.
       stand schon und gilt unverändert
 - [x] Maße werden gerundet angezeigt (§11.2) — an der Bemaßung stand
       `40.000000000`, weil das Speicherformat neun Stellen schreibt
-- [ ] Ebene wählen (Hauptebene oder angeklickte planare Fläche) — heute nimmt
-      die Skizze die Ebene aus dem Flächenparameter der Operation, also nach
-      dem Zeichnen statt davor
-- [ ] Bauraumgrenze und Schichtrichtung auf der Zeichenfläche sichtbar (E1)
+- [x] **Ebene wählen** — Auswahlfeld über der Zeichenfläche, und `extrude()`
+      hebt den Umriss entlang der Normalen seiner Ebene. Dabei kam heraus,
+      dass `Sketch.plane` ein Vertrag ohne Leser war: deklariert, gespeichert,
+      nie ausgewertet. Ein Volumentest hätte es nie gefunden — ein Quader hat
+      auf jeder Ebene dasselbe Volumen
+- [x] **Bauraumgrenze auf der Zeichenfläche** (E1) — gestrichelt, beschriftet,
+      und wer darüber hinauszeichnet, liest es neben dem Umriss
+- [ ] `feature:<id>` — die angeklickte planare Fläche als Skizzenebene. Sie
+      braucht die Ebene des Merkmals und die Rücktransformation und ist damit
+      ein eigener Schritt
+- [ ] Schichtrichtung auf der Zeichenfläche — auf XY zeigt sie aus dem Bild
+      heraus, auf XZ und YZ liegt sie darin; das ist eine Beschriftung, keine
+      Zeichnung, und gehört zur Ebenenwahl statt daneben
 
 *Abnahme:* Von der leeren Szene bis zum extrudierten Profil ohne einen
 modalen Dialog. Bestehende Skizzen aus Projektdateien öffnen unverändert.
