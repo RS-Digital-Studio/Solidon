@@ -668,13 +668,17 @@ erreicht alle sieben Voreinstellungen ohne Menü.
 
 ### Etappe 2 — Die Bediensprache wird eine Regel (D2, D3, E2)
 
-- [ ] `ToolStrip` bekommt **Hinweiszeile** und **Viewport-Eingabefeld**; jedes
-      Werkzeug meldet Hinweistext, Zahlbeschriftung und Einheit beim Anmelden
-- [ ] Alle sieben vorhandenen Werkzeuge ziehen nach — Schnitt bekommt seine
-      Zahleneingabe (D2), Messen und Bewegen ihre Hinweiszeile
-- [ ] `Escape` verlässt jedes Werkzeug (steht seit P14, gilt dann überall)
-- [ ] Ein Test hält fest, dass **jedes** angemeldete Werkzeug einen
-      übersetzten Hinweistext hat — sonst ist die Regel wieder ein Einzelfall
+- [x] `ToolStrip` bekommt eine **Hinweiszeile**; jedes Werkzeug meldet seinen
+      Satz beim Anmelden (`hint=`). Die Zahleneingabe bleibt in der Leiste des
+      Werkzeugs statt als Feld im Viewport — dort steht sie neben den übrigen
+      Werten desselben Werkzeugs, und ein Qt-Feld über einem VTK-Fenster wäre
+      ein zweiter Zeichenweg für einen Gewinn, den niemand benennen kann
+- [x] Alle sieben Werkzeuge haben ihren Satz, deutsch und englisch; die
+      Schnittebene hat ihr Zahlenfeld (D2), zweiwegig an den Regler gebunden
+- [x] `Escape` verlässt jedes Werkzeug — stand seit P14 und gilt unverändert
+- [x] Ein Test hält fest, dass jedes angemeldete Werkzeug einen Satz hat — und
+      dass er länger ist als der Titel: der Titel als Hinweis wäre die stille
+      Art, die Regel zu erfüllen, ohne sie einzuhalten
 
 *Abnahme:* Kein Werkzeug lässt den Nutzer raten, was es erwartet. Die
 Schnittebene nimmt eine getippte Zahl. Beide Sprachen vollständig.
