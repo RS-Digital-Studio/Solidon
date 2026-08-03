@@ -52,7 +52,13 @@ _CONSTRAINT_TARGETS: Final[dict[str, int]] = {
     "tangent": 4,
     "symmetric": 4,
     "fixed": 1,
+    "reference": 2,
 }
+
+#: Bedingungen, die nichts festlegen. Sie werden geprüft wie jede andere —
+#: falsche Zielzahl bleibt ein Fehler — aber sie kommen nie ins
+#: Gleichungssystem: ein Referenzmaß misst (§30.1).
+_MEASURING_ONLY: Final[frozenset[str]] = frozenset({"reference"})
 
 _ResidualFn = Callable[[np.ndarray], tuple[float, ...]]
 _GradientFn = Callable[[np.ndarray, np.ndarray], None]
@@ -345,6 +351,18 @@ def _build_equations(
                 value=len(constraint.targets),
                 constraint=constraint.kind,
             )
+        if constraint.kind in _MEASURING_ONLY:
+            # Zielprüfung oben gilt weiter; hier endet der Weg, denn ohne
+            # Gleichung gibt es weder Rang noch Rest noch Konflikt.
+            for target in constraint.targets:
+                if not 0 <= target < total:
+                    raise ValidationError(
+                        field,
+                        _("Diese Bedingung zeigt auf einen Punkt, den es nicht gibt."),
+                        value=target,
+                        constraint=constraint.kind,
+                    )
+            continue
         for target in constraint.targets:
             if not 0 <= target < total:
                 raise ValidationError(

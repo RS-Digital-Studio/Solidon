@@ -968,6 +968,7 @@ SketchConstraintKind = Literal[
     "tangent",
     "symmetric",
     "fixed",
+    "reference",
 ]
 
 

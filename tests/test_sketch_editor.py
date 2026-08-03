@@ -27,6 +27,7 @@ from app.ui.sketch_editor import (
     SketchCanvas,
     SketchEditorDialog,
     SketchField,
+    SketchPanel,
 )
 
 
@@ -199,6 +200,41 @@ def test_removing_an_element_renumbers_the_constraints(qt_app: QApplication) -> 
 
     assert len(canvas.sketch.elements) == 1
     assert canvas.sketch.constraints[0].targets == (0, 1), "die Ziele sind umnummeriert"
+
+
+def test_a_reference_measure_shows_what_is_there(qt_app: QApplication) -> None:
+    """Ein Referenzmaß zeigt den gemessenen Abstand in Klammern (D13).
+
+    In Klammern wie in jedem CAD, damit man es nie mit einem treibenden Maß
+    verwechselt — das zeigt seinen Ausdruck, auch wenn der Solver ihn gerade
+    nicht erfüllen konnte.
+    """
+    from app.core.types import SketchConstraint
+    from app.ui.sketch_editor import measure_label
+
+    points = [(0.0, 0.0), (30.0, 40.0)]
+    reference = SketchConstraint(kind="reference", targets=(0, 1))
+    assert measure_label(reference, points) == "(50.00)", "drei, vier, fünf"
+
+    driving = SketchConstraint(kind="distance", targets=(0, 1), value="=@width")
+    assert measure_label(driving, points) == "=@width", "ein Ausdruck bleibt der Ausdruck"
+
+    # Ein Ziel, das es nicht gibt, malt nichts statt abzustürzen.
+    assert measure_label(SketchConstraint(kind="reference", targets=(0, 9)), points) == ""
+
+
+def test_a_reference_measure_is_offered_for_two_points(qt_app: QApplication) -> None:
+    """Es passt zur selben Auswahl wie ein Maß — zwei Punkte."""
+    panel = SketchPanel(sketch_to_text(shapes.rectangle(40.0, 20.0)))
+    try:
+        panel.canvas.selection = [("point", (0,)), ("point", (2,))]
+        offers = panel.constraint_offers()
+        assert offers["reference"] and offers["distance"]
+
+        panel.canvas.selection = [("line", (0, 1))]
+        assert not panel.constraint_offers()["reference"]
+    finally:
+        panel.deleteLater()
 
 
 def test_the_chosen_plane_travels_with_the_sketch(qt_app: QApplication) -> None:

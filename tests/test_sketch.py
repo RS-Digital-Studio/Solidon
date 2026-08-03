@@ -276,3 +276,47 @@ def test_every_analytic_gradient_matches_central_differences() -> None:
     assert np.allclose(analytic_flat, numeric, atol=1e-5), (
         f"größte Abweichung: {float(np.max(np.abs(analytic_flat - numeric))):.2e}"
     )
+
+
+def test_a_reference_measure_reports_without_driving() -> None:
+    """Ein Referenzmaß misst, es treibt nicht (§30.1, D13).
+
+    SindriCADs Sketcher hat es, unserer hatte es nicht: jedes Maß legte fest.
+    Wer nur wissen wollte, wie lang die Diagonale gerade ist, musste sie
+    festlegen — und hatte damit eine Bedingung mehr, als er wollte.
+
+    Also darf es die Freiheitsgrade nicht ändern und nie in einen Konflikt
+    geraten: es hat keine Gleichung, über die es sich mit einer anderen
+    streiten könnte.
+    """
+    from app.core.sketch.solver import solve_sketch
+    from app.core.types import Sketch, SketchConstraint, SketchElement
+
+    line = SketchElement(kind="line", points=((0.0, 0.0), (30.0, 40.0)))
+    plain = Sketch(plane="plane:xy", elements=(line,))
+    before = solve_sketch(plain)
+
+    with_reference = Sketch(
+        plane="plane:xy",
+        elements=(line,),
+        constraints=(SketchConstraint(kind="reference", targets=(0, 1)),),
+    )
+    after = solve_sketch(with_reference)
+
+    assert after.free_dof == before.free_dof, "ein Referenzmaß nimmt keinen Freiheitsgrad"
+    assert after.elements == before.elements, "und bewegt nichts"
+
+    # Auch neben einem echten Maß auf derselben Strecke: kein Widerspruch,
+    # keine Überbestimmung — es steht ausserhalb des Gleichungssystems.
+    both = Sketch(
+        plane="plane:xy",
+        elements=(line,),
+        constraints=(
+            SketchConstraint(kind="fixed", targets=(0,)),
+            SketchConstraint(kind="distance", targets=(0, 1), value="50"),
+            SketchConstraint(kind="reference", targets=(0, 1)),
+        ),
+    )
+    solved = solve_sketch(both)
+    # Vier Freiheitsgrade hat die Linie, ``fixed`` nimmt zwei, das Maß einen.
+    assert solved.free_dof == 1, "die Richtung bleibt frei, das Referenzmaß ändert daran nichts"

@@ -76,6 +76,7 @@ def _constraint_label(kind: SketchConstraintKind) -> str:
         "tangent": tr("Tangential"),
         "symmetric": tr("Symmetrisch"),
         "fixed": tr("Fest"),
+        "reference": tr("Referenzmaß"),
     }[kind]
 
 
@@ -96,6 +97,24 @@ def readable_measure(expression: str) -> str:
     except ValueError:
         return expression
     return format_length(value, with_unit=False)
+
+
+def measure_label(constraint: SketchConstraint, points: list[tuple[float, float]]) -> str:
+    """Was an einer Maßbedingung steht.
+
+    Ein treibendes Maß zeigt seinen Ausdruck — das ist die Aussage, und sie
+    gilt auch dann, wenn der Solver sie gerade nicht erfüllen konnte. Ein
+    Referenzmaß hat keinen Ausdruck: es zeigt, was gerade da ist, in Klammern
+    wie in jedem CAD, damit man die beiden nie verwechselt.
+    """
+    if constraint.kind != "reference":
+        return readable_measure(constraint.value)
+    first, second = constraint.targets[0], constraint.targets[1]
+    if max(first, second) >= len(points):
+        return ""
+    ax, ay = points[first]
+    bx, by = points[second]
+    return f"({format_length(math.hypot(bx - ax, by - ay), with_unit=False)})"
 
 
 def flat_offsets(sketch: Sketch) -> list[int]:
@@ -677,12 +696,12 @@ class SketchCanvas(QWidget):
         der Ausdruck, so wie er gilt."""
         painter.setPen(QPen(self.palette().text().color(), 1.0))
         for entry in self.sketch.constraints:
-            if entry.kind != "distance" or len(entry.targets) != 2:
+            if entry.kind not in ("distance", "reference") or len(entry.targets) != 2:
                 continue
             a = points[entry.targets[0]]
             b = points[entry.targets[1]]
             middle = self._to_screen((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
-            painter.drawText(middle, readable_measure(entry.value))
+            painter.drawText(middle, measure_label(entry, points))
 
     def _paint_pending(self, painter: QPainter) -> None:
         if not self._pending_world:
@@ -777,6 +796,7 @@ _NEEDS: dict[SketchConstraintKind, tuple[tuple[str, ...], ...]] = {
     "tangent": (("line", "circle"), ("line", "arc")),
     "symmetric": (("point", "point", "line"),),
     "fixed": (("point",),),
+    "reference": (("point", "point"),),
 }
 
 
@@ -948,8 +968,9 @@ class SketchPanel(QWidget):
         self.constraint_list.clear()
         for entry in self.canvas.sketch.constraints:
             label = _constraint_label(entry.kind)
-            if entry.value:
-                label = f"{label} {readable_measure(entry.value)}"
+            shown = measure_label(entry, self.canvas.points())
+            if shown:
+                label = f"{label} {shown}"
             targets = ", ".join(str(target) for target in entry.targets)
             item = QListWidgetItem(f"{label}  ({targets})")
             self.constraint_list.addItem(item)
