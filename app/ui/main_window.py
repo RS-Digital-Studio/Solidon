@@ -11,7 +11,7 @@ Kommandozeile, sobald sie deklariert ist (§10).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QFileDialog,
+    QHBoxLayout,
     QLabel,
     QMainWindow,
     QMenu,
@@ -106,6 +107,7 @@ from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import SettingsDialog
+from app.ui.sketch_editor import SketchPanel
 from app.ui.start_screen import StartScreen, accepted_path
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
@@ -260,6 +262,27 @@ def _format_of(target: Path, chosen_filter: str) -> ExportFormat:
     return "stl"
 
 
+def _has_sketch_param(spec: OperationSpec) -> bool:
+    """Ob diese Operation eine gezeichnete Skizze verbraucht (§30.1)."""
+    return any(entry.kind == "sketch" for entry in spec.params.spec())
+
+
+def _sketch_param(op_name: str) -> str:
+    """Wie der Skizzenparameter dieser Operation heißt (§30.1).
+
+    Gefragt statt geraten: der Name steht im Schema, und eine zweite Liste
+    daneben wäre eine zweite Wahrheit. Operationen ohne Skizzenfeld kommen
+    hier nie an — der Modus wird nur für die angeboten, die eines haben.
+    """
+    for entry in REGISTRY.get(op_name).params.spec():
+        if entry.kind == "sketch":
+            return entry.name
+    raise InternalError(
+        detail=f"{op_name!r} has no sketch parameter",
+        values={"op": op_name},
+    )
+
+
 def _needs_objects(count: int) -> str:
     """Der Satz, der sagt, wie viele Körper fehlen — nicht nur, dass welche
     fehlen.
@@ -332,7 +355,7 @@ class MainWindow(QMainWindow):
 
         # §2.6: das offene Werkzeug schließen. ``close_tool`` gab es dafür seit
         # jeher und niemanden, der es rief — Escape tat nichts.
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.tools.close_tool)
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self._escape)
 
         # §19.2: der Viewport ist mit der Tastatur navigierbar. Die
         # Achsansichten waren es, Zoom und Durchblättern nicht — wer ohne
@@ -481,11 +504,43 @@ class MainWindow(QMainWindow):
             ),
         )
 
+        # §30.1 Stufe zwei: die Skizze ist ein Modus des mittleren Bereichs,
+        # kein Fenster darüber. Der Stapel hat zwei Seiten — die Ansicht und
+        # die Zeichenfläche —, und ein Modus, der die Ansicht ersetzt, ist
+        # ehrlicher als ein Qt-Widget über einem OpenGL-Fenster: was man dort
+        # sieht, gehört zwei Zeichenwegen, und einer von beiden hat immer
+        # gerade nicht neu gezeichnet.
+        self.middle_stack = QStackedWidget(self)
+        self.middle_stack.addWidget(self.viewport)
+        self._sketch_panel: SketchPanel | None = None
+        self._sketch_target: str | None = None
+        """Der Operationsname, für den gerade gezeichnet wird."""
+
+        # Die Leiste des Skizzenmodus. Sie steht neben der Werkzeugzeile statt
+        # in ihr: die sieben dort sind Ansichtswerkzeuge, die sich gegenseitig
+        # ablösen — Zeichnen ist keines davon, und ein achter Umschalter hätte
+        # die Grenze aus Etappe 0 gerissen, ohne dass er hingehört.
+        self.sketch_bar = QWidget(self)
+        sketch_row = QHBoxLayout(self.sketch_bar)
+        sketch_row.setContentsMargins(6, 3, 6, 3)
+        self._sketch_hint = QLabel(
+            tr("Zeichnen, dann Fertig — die Operation öffnet auf der Skizze."), self.sketch_bar
+        )
+        sketch_row.addWidget(self._sketch_hint, stretch=1)
+        done = QPushButton(tr("Fertig"), self.sketch_bar)
+        done.clicked.connect(lambda: self.finish_sketch(keep=True))
+        discard = QPushButton(tr("Verwerfen"), self.sketch_bar)
+        discard.clicked.connect(lambda: self.finish_sketch(keep=False))
+        sketch_row.addWidget(done)
+        sketch_row.addWidget(discard)
+        self.sketch_bar.setVisible(False)
+
         middle = QWidget(self)
         middle_layout = QVBoxLayout(middle)
         middle_layout.setContentsMargins(0, 0, 0, 0)
         middle_layout.setSpacing(0)
-        middle_layout.addWidget(self.viewport, stretch=1)
+        middle_layout.addWidget(self.middle_stack, stretch=1)
+        middle_layout.addWidget(self.sketch_bar)
         middle_layout.addWidget(self.tools)
 
         self.report = ReportPanel(self)
@@ -1021,7 +1076,14 @@ class MainWindow(QMainWindow):
             action.setShortcut(QKeySequence(spec.shortcut))
         action.setStatusTip(str(spec.doc))
         action.setToolTip(str(spec.doc))
-        action.triggered.connect(lambda _checked=False, entry=spec: self.run_operation(entry))
+        # Eine Operation mit Skizzenfeld führt in den Zeichenmodus statt in
+        # einen Dialog mit einem Feld, das man erst aufklappen muss (§30.1
+        # Stufe zwei). Derselbe Eintrag, derselbe Weg dahinter — nur der
+        # erste Schritt ist das Zeichnen und nicht das Ausfüllen.
+        if _has_sketch_param(spec):
+            action.triggered.connect(lambda _checked=False, name=spec.name: self.start_sketch(name))
+        else:
+            action.triggered.connect(lambda _checked=False, entry=spec: self.run_operation(entry))
         menu.addAction(action)
         return action
 
@@ -1600,6 +1662,78 @@ class MainWindow(QMainWindow):
         feature = entry.features.get(feature_id) if entry else None
         return feature.kind if feature is not None else None
 
+    # --- Skizzenmodus (§30.1 Stufe zwei) ----------------------------------------
+
+    def _escape(self) -> None:
+        """Escape verlässt, was gerade offen ist — ein Werkzeug oder die Skizze.
+
+        Die Skizze zuerst: sie liegt vor der Ansicht, und wer zeichnet, meint
+        mit Escape sie und nicht eine Leiste darunter. Verworfen wird dabei
+        nichts Gerechnetes — die Skizze war noch keine Operation.
+        """
+        if self._sketch_panel is not None:
+            self.finish_sketch(keep=False)
+            return
+        self.tools.close_tool()
+
+    def sketching(self) -> bool:
+        """Ob gerade gezeichnet wird statt betrachtet."""
+        return self._sketch_panel is not None
+
+    def start_sketch(self, op_name: str, text: str = "") -> None:
+        """In den Skizzenmodus wechseln, für die Operation, die sie verbraucht.
+
+        Der mittlere Bereich zeigt die Zeichenfläche statt der Ansicht; die
+        Werkzeugzeile darunter bleibt, wo sie ist, und trägt Fertig und
+        Verwerfen. Kein Fenster darüber, kein modaler Zustand — Escape kommt
+        hier heraus wie aus jedem anderen Werkzeug (§2.1).
+
+        Die Skizze bleibt dabei, was §30.1 aus ihr macht: der Parameterwert
+        einer Operation. Am Ende steht derselbe Text, den auch der Dialog
+        erzeugt, und alles Weitere — Cache, Undo, die Sperre für den Agenten —
+        gilt unverändert.
+        """
+        if self._sketch_panel is not None:
+            return
+        panel = SketchPanel(text, self._parameter_values(), self)
+        self._sketch_panel = panel
+        self._sketch_target = op_name
+        self.middle_stack.addWidget(panel)
+        self.middle_stack.setCurrentWidget(panel)
+        # Der Startbildschirm liegt vor dem Arbeitsbereich, solange nichts
+        # offen ist — und zu zeichnen beginnen ist genau der Fall, in dem noch
+        # nichts offen ist (Weg 2, §2.2). Ohne diese Zeile meldete die
+        # Statusleiste den Modus, und zu sehen war der Startbildschirm.
+        self._show_start_screen(False)
+        self.tools.close_tool()
+        self.sketch_bar.setVisible(True)
+        self._update_actions()
+        self.statusBar().showMessage(
+            tr("Skizze für {op} — Escape verlässt den Modus.").format(
+                op=str(REGISTRY.get(op_name).title)
+            )
+        )
+
+    def finish_sketch(self, keep: bool = True) -> None:
+        """Den Modus verlassen. Mit ``keep`` öffnet die Operation auf der
+        gezeichneten Skizze, sonst wird sie verworfen.
+        """
+        panel = self._sketch_panel
+        target = self._sketch_target
+        if panel is None:
+            return
+        text = panel.sketch_text() if keep else ""
+        self.middle_stack.setCurrentWidget(self.viewport)
+        self.middle_stack.removeWidget(panel)
+        panel.deleteLater()
+        self._sketch_panel = None
+        self._sketch_target = None
+        self.sketch_bar.setVisible(False)
+        self.statusBar().clearMessage()
+        self._update_actions()
+        if keep and target and text:
+            self.run_operation(REGISTRY.get(target), given={_sketch_param(target): text})
+
     def action_command_palette(self) -> None:
         """Eine Taste, alles — und die Kürzel lernen sich nebenbei (§2.6)."""
         commands = self.window_commands()
@@ -1967,9 +2101,14 @@ class MainWindow(QMainWindow):
         self.settings.navigation = scheme
         save_settings(self.settings)
 
-    def run_operation(self, spec: OperationSpec) -> None:
+    def run_operation(self, spec: OperationSpec, given: Mapping[str, Any] | None = None) -> None:
         """Menüeintrag, Dialog, Transaktion — derselbe Weg, den auch der Agent
         nehmen wird.
+
+        ``given`` belegt Felder vor, die der Aufrufer schon kennt — der
+        Skizzenmodus reicht so seine gezeichnete Skizze herein. Es ersetzt den
+        Dialog nicht: die übrigen Werte fragt er weiter, und was hier steht,
+        lässt sich dort ändern.
         """
         if self.session.history.discardable and not confirm_discard(
             self.session.history.discardable, self
@@ -1987,7 +2126,8 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, str(spec.title), tr("Die Szene ist leer."))
             return
 
-        values = self._from_selection(spec, chosen[0] if chosen else None)
+        values = dict(self._from_selection(spec, chosen[0] if chosen else None))
+        values.update(given or {})
         params: dict[str, Any] = dict(values)
         if spec.params.spec():
             dialog = OperationDialog(

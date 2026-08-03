@@ -48,6 +48,7 @@ from app.core.types import (
     SketchElement,
     SolvedSketch,
 )
+from app.core.units import format_length
 from app.i18n import tr
 
 #: Fangradius in Pixeln: näher als das an einem Punkt heißt „dieser Punkt".
@@ -75,6 +76,25 @@ def _constraint_label(kind: SketchConstraintKind) -> str:
         "symmetric": tr("Symmetrisch"),
         "fixed": tr("Fest"),
     }[kind]
+
+
+def readable_measure(expression: str) -> str:
+    """Ein Maß, wie es dastehen soll — nicht, wie es gespeichert ist.
+
+    Grundformen schreiben ihre Maße mit neun Nachkommastellen, damit nie ein
+    ``1e-05`` in einem Ausdruck landet (`shapes._number`). Im Speicherformat
+    ist das richtig; an einer Bemaßung stand damit ``40.000000000``, wo 40
+    gemeint ist. §11.2 sagt es klar: gerundet wird in der Anzeige.
+
+    Ein Ausdruck, der keine reine Zahl ist, bleibt wörtlich stehen —
+    ``=@width / 2`` ist die Aussage, und sie auszurechnen würde verbergen,
+    dass hier ein Parameter hängt.
+    """
+    try:
+        value = float(expression)
+    except ValueError:
+        return expression
+    return format_length(value, with_unit=False)
 
 
 def flat_offsets(sketch: Sketch) -> list[int]:
@@ -595,7 +615,7 @@ class SketchCanvas(QWidget):
             a = points[entry.targets[0]]
             b = points[entry.targets[1]]
             middle = self._to_screen((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
-            painter.drawText(middle, entry.value)
+            painter.drawText(middle, readable_measure(entry.value))
 
     def _paint_pending(self, painter: QPainter) -> None:
         if not self._pending_world:
@@ -693,8 +713,17 @@ _NEEDS: dict[SketchConstraintKind, tuple[tuple[str, ...], ...]] = {
 }
 
 
-class SketchEditorDialog(QDialog):
-    """Zeichenfläche, Werkzeugleiste, Bedingungsliste, Statuszeile (§30.1)."""
+class SketchPanel(QWidget):
+    """Zeichenfläche, Werkzeugleiste, Bedingungsliste, Statuszeile (§30.1).
+
+    Der Inhalt ohne den Rahmen darum. Zwei Stellen benutzen ihn: der Dialog
+    aus dem Operationsfeld und der Skizzenmodus im Fenster — und weil es
+    derselbe ist, kann keiner der beiden ein Werkzeug bekommen, das der andere
+    nicht hat.
+    """
+
+    sketchChanged = Signal()
+    """Weitergereicht von der Zeichenfläche, damit ein Rahmen mithören kann."""
 
     def __init__(
         self,
@@ -703,8 +732,6 @@ class SketchEditorDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Skizze zeichnen"))
-        self.resize(860, 560)
         self._params = dict(parameter_values or {})
 
         self.canvas = SketchCanvas(self, parameter_values=self._params)
@@ -777,16 +804,6 @@ class SketchEditorDialog(QDialog):
         self.status = QLabel(opening or self.canvas.status_text(), self)
         self.status.setWordWrap(True)
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
-            self,
-        )
-        ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
-        if ok is not None:
-            ok.setText(tr("Übernehmen"))
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-
         side = QVBoxLayout()
         side.addWidget(QLabel(tr("Bedingungen"), self))
         side.addWidget(self.constraint_list, stretch=1)
@@ -796,17 +813,16 @@ class SketchEditorDialog(QDialog):
         middle.addLayout(side)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(tools)
         layout.addLayout(constraints_row)
         layout.addLayout(middle, stretch=1)
         layout.addWidget(self.status)
-        layout.addWidget(buttons)
 
+        self.canvas.sketchChanged.connect(self.sketchChanged)
         self.canvas.sketchChanged.connect(self._refresh_constraints)
         self.canvas.selectionChanged.connect(self._refresh_buttons)
         self.canvas.statusChanged.connect(self.status.setText)
-        # Undo gilt überall, auch hier (§19.2) — derselbe Griff wie im Fenster.
-        QShortcut(QKeySequence.StandardKey.Undo, self, self.canvas.undo)
         self.constraint_list.installEventFilter(self)
         self._refresh_constraints()
         self._refresh_buttons()
@@ -848,7 +864,7 @@ class SketchEditorDialog(QDialog):
         for entry in self.canvas.sketch.constraints:
             label = _constraint_label(entry.kind)
             if entry.value:
-                label = f"{label} {entry.value}"
+                label = f"{label} {readable_measure(entry.value)}"
             targets = ", ".join(str(target) for target in entry.targets)
             item = QListWidgetItem(f"{label}  ({targets})")
             self.constraint_list.addItem(item)
@@ -874,6 +890,64 @@ class SketchEditorDialog(QDialog):
         if not self.canvas.sketch.elements:
             return ""
         return sketch_to_text(self.canvas.sketch)
+
+
+class SketchEditorDialog(QDialog):
+    """Das Panel in einem Fenster, für den Weg über das Operationsfeld.
+
+    Der Skizzenmodus im Hauptfenster nimmt dasselbe Panel ohne diesen Rahmen
+    (§30.1 Stufe zwei). Beide Wege bleiben, weil beide gebraucht werden: wer
+    eine Operation im Verlauf wieder öffnet, ist schon in einem Dialog, und ihn
+    dafür in einen Modus zu schicken wäre ein Umweg.
+    """
+
+    def __init__(
+        self,
+        text: str = "",
+        parameter_values: Mapping[str, float] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(tr("Skizze zeichnen"))
+        self.resize(860, 560)
+
+        self.panel = SketchPanel(text, parameter_values, self)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if ok is not None:
+            ok.setText(tr("Übernehmen"))
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.panel, stretch=1)
+        layout.addWidget(buttons)
+
+        # Undo gilt überall, auch hier (§19.2) — derselbe Griff wie im Fenster.
+        QShortcut(QKeySequence.StandardKey.Undo, self, self.panel.canvas.undo)
+
+    @property
+    def canvas(self) -> SketchCanvas:
+        """Die Zeichenfläche des Panels. Die Tests greifen darauf zu."""
+        return self.panel.canvas
+
+    @property
+    def status(self) -> QLabel:
+        """Die Statuszeile des Panels — Freiheitsgrade und Konflikte."""
+        return self.panel.status
+
+    def constraint_offers(self) -> dict[SketchConstraintKind, bool]:
+        return self.panel.constraint_offers()
+
+    def request_constraint(self, kind: SketchConstraintKind) -> None:
+        self.panel.request_constraint(kind)
+
+    def sketch_text(self) -> str:
+        return self.panel.sketch_text()
 
 
 class SketchField(QWidget):

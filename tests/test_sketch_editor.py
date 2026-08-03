@@ -3,6 +3,10 @@
 Geprüft wird die Verdrahtung und das Modell, keine Pixel: gezeichnet wird
 über dieselben Methoden, die auch die Maus ruft, Bedingungen gehen den Weg
 der Knöpfe, und am Ende steht der Text, den die Skizzen-Ops lesen.
+
+Am Ende der Datei der **Skizzenmodus des Fensters**: er benutzt dasselbe
+Panel, geprüft wird dort deshalb der Weg hinein und heraus, nicht noch einmal
+das Zeichnen.
 """
 
 from __future__ import annotations
@@ -195,3 +199,95 @@ def test_removing_an_element_renumbers_the_constraints(qt_app: QApplication) -> 
 
     assert len(canvas.sketch.elements) == 1
     assert canvas.sketch.constraints[0].targets == (0, 1), "die Ziele sind umnummeriert"
+
+
+def test_a_measure_is_shown_rounded_but_stored_exactly(qt_app: QApplication) -> None:
+    """§11.2: gerundet wird in der Anzeige, nie im Wert.
+
+    Grundformen schreiben neun Nachkommastellen, damit kein ``1e-05`` in einem
+    Ausdruck landet. An der Bemaßung stand damit ``40.000000000``.
+    """
+    from app.ui.sketch_editor import readable_measure
+
+    assert readable_measure("40.000000000") == "40.00"
+    assert readable_measure("12.345000000") == "12.35"
+    # Ein Ausdruck bleibt, was er ist: ihn auszurechnen verbärge den Parameter.
+    assert readable_measure("=@width / 2") == "=@width / 2"
+
+    text = sketch_to_text(shapes.rectangle(40.0, 20.0))
+    assert "40.000000000" in text, "gespeichert bleibt die genaue Zahl"
+
+
+# --- der Skizzenmodus im Fenster (§30.1 Stufe zwei) -----------------------------
+
+
+def test_a_sketch_operation_opens_the_mode_not_a_dialog(qt_app: QApplication) -> None:
+    """Der Bauplan verlangt den Editor **im Viewport**, nicht in einem Fenster
+    darüber (§30.1).
+
+    Geprüft wird, was ein Mensch tut: den Menüeintrag auslösen. Dahinter
+    entscheidet ``_has_sketch_param``, ob es in den Modus geht — und für eine
+    Operation ohne Skizzenfeld darf es das nicht.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        assert not window.sketching()
+
+        window.start_sketch("sketch_extrude")
+        assert window.sketching(), "die Zeichenfläche liegt vor der Ansicht"
+        assert window.middle_stack.currentWidget() is not window.viewport
+        # ``isHidden`` statt ``isVisible``: ein Fenster, das nie ``show()``
+        # gesehen hat, hat keine sichtbaren Kinder — versteckt worden zu sein
+        # ist die Aussage, die hier trägt.
+        assert not window.sketch_bar.isHidden(), "Fertig und Verwerfen stehen bereit"
+
+        # Escape verlässt den Modus wie jedes andere Werkzeug (§2.1).
+        window._escape()
+        assert not window.sketching()
+        assert window.middle_stack.currentWidget() is window.viewport
+    finally:
+        window.deleteLater()
+
+
+def test_leaving_the_sketch_mode_empty_starts_no_operation(qt_app: QApplication) -> None:
+    """Wer nichts gezeichnet hat, hat nichts gemeint.
+
+    Ohne das öffnete jedes versehentliche Escape einen Operationsdialog auf
+    einer leeren Skizze — eine Sackgasse, die §2.1 ausdrücklich ausschließt.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_extrude")
+        window.finish_sketch(keep=True)
+        assert not window.sketching()
+        assert not window.session.history.transactions, "nichts gezeichnet, nichts angewandt"
+    finally:
+        window.deleteLater()
+
+
+def test_the_drawn_sketch_reaches_the_operation(qt_app: QApplication) -> None:
+    """Was gezeichnet wurde, steht danach im Parameter der Operation.
+
+    Der Text ist derselbe, den auch der Dialog erzeugt — es gibt keinen
+    zweiten Skizzenbegriff (§30.1), und dieser Test hält genau das fest.
+    """
+    from app.ui.main_window import _sketch_param
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        text = panel.sketch_text()
+        assert text, "eine eingefügte Grundform ist eine Skizze"
+        assert sketch_from_text(text).elements, "und sie liest sich zurück"
+        assert _sketch_param("sketch_extrude") == "sketch"
+    finally:
+        panel.deleteLater()
