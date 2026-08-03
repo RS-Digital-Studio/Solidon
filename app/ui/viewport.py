@@ -244,7 +244,6 @@ class Viewport(QWidget):
         # überleben das nicht.
         self.plotter = cast(Any, QtInteractor(self))
         self._layout.addWidget(self.plotter.interactor)
-        self.plotter.add_axes()
         self._add_orientation_widget()
         self._apply_render_quality()
         self.set_theme("dark")
@@ -265,6 +264,12 @@ class Viewport(QWidget):
         Regel aus §19.2 (alles über die Palette, Kürzel lernen sich nebenbei).
         Was genau eine Stelle haben muss, sind Operationen — und der Würfel ist
         keine.
+
+        **Er ersetzt aber `add_axes`.** Das kleine Achsenkreuz unten links sagt
+        dasselbe und lässt sich nicht anfassen; zwei Anzeigen für dieselbe
+        Auskunft in einem Bild sind eine zu viel. Aufgefallen ist es erst auf
+        dem neu aufgenommenen Handbuchbild — im Code standen die beiden Zeilen
+        untereinander und sahen wie zwei verschiedene Dinge aus.
         """
         if self.plotter is None:
             return

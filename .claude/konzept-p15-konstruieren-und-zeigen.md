@@ -660,7 +660,7 @@ zu hängen, wird rot — nachgewiesen an einem Wegwerf-Eintrag.
 - [x] Leistungsschutz: die Kantensuche hört bei 200 000 Dreiecken je Körper
       auf (0,15 ms je tausend, gemessen) — dieselbe Zahl wie das
       Dezimierungsziel, weil es dieselbe Frage ist
-- [ ] Handbuchbilder neu aufnehmen (echte Plattform, nie offscreen)
+- [x] Handbuchbilder neu aufgenommen (echte Plattform, nie offscreen) — und das Bild fand die Doppelung: `add_axes` neben dem Würfel
 
 *Abnahme:* Ein 20-mm-Würfel ist neben einem gedruckten Teil als Material
 erkennbar. Kein Messwert fällt über die 25-%-Schwelle. Die Ansichtsleiste
