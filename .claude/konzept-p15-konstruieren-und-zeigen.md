@@ -11,8 +11,14 @@ dort steht, ist erheblich mehr als die Werbung nennt. Die Bewertung ist
 entsprechend korrigiert — an mehreren Stellen zu unseren Ungunsten.
 
 Aufbau: was die Quellen wirklich zeigen (§1), der gemessene Ist-Stand (§2), das
-Delta (§3), die Leitentscheidungen (§4), die Etappen (§5), die Abgrenzung (§6),
-die Folgen für Bauplan und Roadmap (§7).
+Delta (§3), die Leitentscheidungen (§4), **wie die Oberfläche einfach bleibt,
+während alles wächst** (§5), der Farbakzent (§6), die Etappen (§7), die
+Abgrenzung (§8), die Folgen für Bauplan und Roadmap (§9).
+
+Der Auftrag hat drei Teile: **alles** aus den Quellen übertreffen, die Bedienung
+dabei **einfach, übersichtlich und leicht zu verstehen** halten, und der
+Anwendung einen **blauen Farbakzent** geben. §5 und §6 sind die Antwort auf die
+letzten beiden — und §5 ist der schwierigere von beiden.
 
 ---
 
@@ -451,13 +457,179 @@ steuert sie fern — dieselben Ops wie ein Menüeintrag, Leitprinzip 1.
 
 ---
 
-## 5. Etappen
+## 5. Die Oberfläche darf nicht mitwachsen
 
-Neun Einheiten, jede für sich committierbar, jede mit grüner Suite am Ende. Die
-Reihenfolge folgt der Sichtbarkeit und den Abhängigkeiten: Etappe 1 ändert jedes
-Bildschirmfoto, Etappe 2 ist die Regel, auf der 3 und 4 aufsetzen.
+**Der Auftrag lautet: alles bauen, und die Bedienung bleibt einfach,
+übersichtlich und leicht zu verstehen.** Das ist eine Spannung, und sie wird
+hier aufgelöst, nicht weggeredet.
 
-### Etappe 1 — Die Ansicht sieht aus wie 2026 (D20, E3)
+Der Bauplan hat die Antwort schon in §2: *„Die Anwendung ist vielseitig — genau
+deshalb muss die Oberfläche einfach bleiben. Vielseitigkeit gehört in die
+Tiefe, nicht an die Oberfläche."* P15 fügt rund fünfzehn Operationen und einen
+Modus hinzu. Ohne Gegenmaßnahme wächst die Oberfläche mit, und dann ist der
+Auftrag zur Hälfte verfehlt.
+
+### E11 — Eine Operation je Handlung, nicht je Variante
+
+Die wichtigste Entwurfsregel, und die billigste. SindriCADs Skizzenleiste hat
+*Rectangle, Center Rect, Circle, Circle 2-Pt, Circle 3-Pt* — **fünf Werkzeuge
+für zwei Formen**. Das ist genau die Art Wachstum, die wir nicht übernehmen.
+
+Bei uns heißt das:
+
+* **Eine** Operation *Textur aufbringen* mit einem Parameter *Muster* — nicht
+  neun Einträge für Rändel, Wabe, Welle, Voronoi und den Rest.
+* **Eine** Operation *Muster* mit einem Parameter *Art* (linear, kreisförmig) —
+  nicht zwei Einträge.
+* **Eine** Operation *Gitter füllen* mit einem Parameter *Struktur*.
+* Rechteck aus zwei Ecken oder aus Mitte und Maß ist **dasselbe Werkzeug** mit
+  einem Umschalter, nicht zwei Knöpfe.
+
+Fünfzehn neue Fähigkeiten werden damit zu **sechs neuen Menüeinträgen**. Der
+Preis ist ein Auswahlfeld im Dialog — und das steht dort, wo §2.5 die Tiefe
+haben will.
+
+### E12 — Die Einfachheit bekommt Tests, so wie die Regeln sie haben
+
+Eine Absichtserklärung hält keine zwei Phasen. Was Formwerk gegen Regelbrüche
+tut, tut es ab jetzt gegen Überfüllung: **Obergrenzen, die rot werden.**
+
+| Grenze | Wert | Warum diese Zahl |
+|---|---|---|
+| Menüs in der Leiste | **≤ 9** | steht seit P14 (E5 dort), wird jetzt ein Test |
+| Umschalter in der Werkzeugzeile | **≤ 8** | heute sieben; die achte Funktion verdrängt eine, oder sie ist keine Leiste wert |
+| Felder auf der **Vorderseite** eines Operationsdialogs | **≤ 8** | die Zahl, die die Druckeinstellungen schon einhalten |
+| Menüeinträge je Operation | **genau 1** | zwei Wege zur selben Handlung sind zwei Stellen, an denen einer fehlen kann |
+| Einträge in einem Untermenü | **≤ 12** | darüber liest niemand mehr, er sucht |
+| Werkzeuge ohne Hinweissatz | **0** | die Regel aus E2 |
+| Operationen ohne Symbol | **0** | die Regel aus E7 |
+
+Diese sieben Zeilen sind der eigentliche Schutz. Wer eine achte Werkzeugleiste
+will, muss beim Testlauf begründen, welche geht — und das ist genau der
+Zeitpunkt, an dem die Frage gestellt gehört.
+
+### E13 — Was zur Auswahl passt, steht vorn
+
+`applies_to` gibt es seit §10 und filtert heute nur das Kontextmenü. Es sortiert
+ab jetzt auch **Befehlspalette und Werkzeugleiste**: wer eine Bohrung
+angeklickt hat, sieht Senken und Verschließen oben, nicht alphabetisch
+irgendwo.
+
+Das ist keine Betriebsart (die stehen auf der Nicht-bauen-Liste) und keine
+Einstellung. Es ist **Reihenfolge**, und sie kostet den Nutzer nichts, den sie
+nicht interessiert.
+
+### E14 — Jede neue Funktion muss ihren Platz in einem der drei Wege haben
+
+§2.2 nennt drei Hauptwege, und sie müssen ohne Handbuch gehen. Die Prüffrage
+für jede neue Funktion aus P15 lautet deshalb: **in welchem der drei Wege
+kommt sie vor?**
+
+* Textur, Muster, Press/Pull, Skizzenmodus → **Weg 2** (neu konstruieren),
+  also Werkzeugleiste und Menü *Erzeugen* / *Ändern*.
+* Thicken, Delete Face → **Weg 1** (fremdes Modell anpassen), also
+  Kontextmenü an der Fläche und Vorschlag im Prüfbericht.
+* Gitterfüllung → **Druckvorbereitung**, also dorthin, wo Aushöhlen steht.
+* MCP, Kürzelbelegung → in **keinem** der drei Wege, also Einstellungen.
+
+Was in keinen Weg passt, bekommt keinen Platz an der Oberfläche — nur einen
+Eintrag im Untermenü und in der Palette. Das ist die Antwort auf „alles
+wollen": alles ist **da**, aber nicht alles ist **vorn**.
+
+---
+
+## 6. Der Farbakzent
+
+Gewünscht ist ein herausstechender blauer Ton als Akzent der Anwendung.
+Das geht — aber nicht, indem man einen Hexwert hinschreibt, denn Blau ist in
+Formwerk **bereits dreifach belegt**: „hinzugefügtes Volumen" in der
+Differenzansicht (`#3b82c4`), „Hinweis" im Prüfbericht (`#6da3d6`) und die
+Auswahlfarbe der Oberfläche (`#3d6ea5` / `#2f6fb0`). Das Anwendungssymbol ist
+heute **kupfer** (`#e08b4e`).
+
+### E15 — Gesättigt heißt bedienbar, gedeckt heißt Information
+
+Die Regel, die den Konflikt auflöst, und sie ist stärker als eine Farbwahl:
+
+> **Kräftige, gesättigte Farbe gehört dem, was man anfassen kann. Gedeckte
+> Farbe gehört dem, was etwas bedeutet.**
+
+Damit trägt der Akzent nie Bedeutung (Regel 18 bleibt unberührt), und die
+Datenfarben sehen nie aus wie Knöpfe. Ein Nutzer lernt das in fünf Minuten,
+ohne dass es ihm jemand sagt.
+
+### Die Farbfamilie — gerechnet, nicht behauptet
+
+Ein einziger Ton schafft es nicht durch beide Themen: WCAG verlangt 3:1 für
+Bedienelemente und 4,5:1 für Text. Deshalb ein Kernton und zwei
+Thementöne — dasselbe Muster, das `highlight` heute schon hat.
+
+| Rolle | Hex | auf dunkel | auf hell | weiße Schrift darauf |
+|---|---|---|---|---|
+| **Kern** — Marke, Logo, Fokusrahmen, aktiver Zustand | **`#0A84FF`** | 4,11 | 3,29 | 3,65 |
+| Akzenttext und Symbole, dunkles Thema | `#3D9BFF` | **5,23** | — | — |
+| Akzenttext, helles Thema; gefüllter Knopf mit weißer Schrift | `#0B6BD8` | — | **4,60** | **5,11** |
+
+Der Kernton hält auf **beiden** Themen die 3:1 für Bedienelemente. Für Text
+tritt je Thema die Variante an — nur so wird der Akzent auch für schwache
+Augen lesbar, statt bloß hübsch zu sein.
+
+### Eine Anpassung, die daraus folgt
+
+Das Diff-Blau `#3b82c4` liegt in der Helligkeit **zu nah am Akzent**
+(ΔL = 0,029). Nebeneinander im selben Bild sähe „hinzugefügtes Volumen" aus wie
+„anklickbar". Vorschlag: **`#2E6B9E`** — gedeckter, ΔL steigt auf 0,102 (mehr
+als das Dreifache), und der Kontrast gegen das Orange der entfernten Seite
+steigt von 1,52 auf 2,12. Muster und Symbol tragen die Bedeutung ohnehin
+weiter (Regel 18); die Palettentests laufen unverändert mit.
+
+### Wo der Akzent auftritt — und wo nicht
+
+**Ja:** aktives Werkzeug in der Zeile · Fokusrahmen · Fortschrittsbalken ·
+der Bestätigungsknopf jedes Dialogs · Links im Handbuch · die aktive Tour ·
+Logo, Website, Installer.
+
+**Nein:** in der 3D-Ansicht. Dort bleiben Auswahl (orange `#f0a54a`),
+Rückseiten, Differenzansicht und Analysekarten unter sich — sie tragen
+Bedeutung, und Bedeutung bekommt keine Markenfarbe.
+
+### Das Anwendungssymbol geht mit
+
+Es ist heute kupfer, und eine Marke mit zwei Leitfarben ohne Grund ist keine
+Marke. Die SVG-Quelle (`app/images/icon/formwerk.svg`) bekommt die neue
+Familie; `tools/make_icon.py` rastert wie bisher nach ICO und Website-Favicon,
+und alle Website-Köpfe folgen automatisch, weil sie dieselbe Quelle lesen.
+
+Das ist eine bewusste Entscheidung gegen einen jungen Bestand — das Symbol ist
+neu. Wer den Kupferton behalten will, sagt es jetzt; danach hängen Installer,
+Website und Store-Bilder daran.
+
+---
+
+## 7. Etappen
+
+Zehn Einheiten, jede für sich committierbar, jede mit grüner Suite am Ende. Die
+Reihenfolge folgt der Sichtbarkeit und den Abhängigkeiten: Etappe 0 zieht die
+Grenzen, bevor etwas wächst; Etappe 1 ändert jedes Bildschirmfoto; Etappe 2 ist
+die Regel, auf der 3 und 4 aufsetzen.
+
+### Etappe 0 — Die Grenzen stehen, bevor etwas wächst (E11–E14)
+
+Zuerst, nicht zuletzt. Eine Obergrenze, die erst nach den fünfzehn neuen
+Operationen eingezogen wird, ist keine Grenze mehr, sondern eine Aufräumaktion.
+
+- [ ] Die sieben Obergrenzen aus E12 als Tests — sie sind heute alle erfüllt,
+      also ist der Lauf sofort grün und schlägt erst an, wenn jemand sie reißt
+- [ ] `applies_to` sortiert Befehlspalette und Werkzeugleiste (E13)
+- [ ] Feld `icon` im Register, Konsistenztest zunächst mit Ausnahmeliste; sie
+      wird in Etappe 8 leer
+- [ ] Die Zuordnung „Funktion → Hauptweg" (E14) steht in der Rules-Datei
+      `oberflaeche.md`, damit sie bei jeder neuen Operation gefragt wird
+
+*Abnahme:* Die Suite bleibt grün. Ein Versuch, ein achtes Werkzeug in die Zeile
+zu hängen, wird rot — nachgewiesen an einem Wegwerf-Eintrag.
+
+### Etappe 1 — Die Ansicht sieht aus wie 2026 (D20, E3, E15)
 
 - [ ] Kantenglättung (`enable_anti_aliasing`), Umgebungsverdeckung
       (`enable_ssao`), Studiobeleuchtung statt Standardlicht
@@ -468,13 +640,18 @@ Bildschirmfoto, Etappe 2 ist die Regel, auf der 3 und 4 aufsetzen.
       nach Filament; abschaltbar, Vorgabe an
 - [ ] **ViewCube und Ansichtsleiste** (D4) — die sieben Voreinstellungen aus
       §18.1 dorthin, wo die Hand ist
+- [ ] **Der Farbakzent** (§6): Familie in `theme.py`, Diff-Blau auf `#2E6B9E`,
+      Anwendungssymbol auf die neue Familie, Website-Köpfe folgen der Quelle
+- [ ] Kontrasttest über die ganze Familie — dieselbe WCAG-Prüfung, die
+      `theme.py` für die Themen schon fährt
 - [ ] Leistungsschutz: jede Zutat schaltet sich ab, wo sie §31 reißt; die
       Anzeige-Dezimierung aus P14 bleibt davor
 - [ ] Handbuchbilder neu aufnehmen (echte Plattform, nie offscreen)
 
 *Abnahme:* Ein 20-mm-Würfel ist neben einem gedruckten Teil als Material
 erkennbar. Kein Messwert fällt über die 25-%-Schwelle. Die Ansichtsleiste
-erreicht alle sieben Voreinstellungen ohne Menü.
+erreicht alle sieben Voreinstellungen ohne Menü. Kein Ton der Akzentfamilie
+liegt unter seiner WCAG-Schwelle, und kein Pixel der 3D-Ansicht trägt ihn.
 
 ### Etappe 2 — Die Bediensprache wird eine Regel (D2, D3, E2)
 
@@ -517,10 +694,12 @@ modalen Dialog. Bestehende Skizzen aus Projektdateien öffnen unverändert.
 *Abnahme:* Ein Lochkreis mit acht Bohrungen aus einer Bedingung. Ein
 Referenzmaß ändert die Freiheitsgrade nicht.
 
-### Etappe 5 — Oberflächentexturen (D8, E1, E5)
+### Etappe 5 — Oberflächentexturen (D8, E1, E5, E11)
 
 - [ ] Kategorie `surface` im Register; Bauplan §25 ergänzen
-- [ ] `apply_texture` mit neun Wegen (acht Muster + Höhenkarte aus Graustufenbild)
+- [ ] **Eine** Operation `apply_texture` mit einem Parameter *Muster* über neun
+      Werte (acht Muster + Höhenkarte aus Graustufenbild) — nicht neun
+      Menüeinträge (E11)
 - [ ] **Exakte Gitter** — Netzpunkte auf den Knicklinien (E5.1)
 - [ ] **Einwärts oder auswärts** als Schalter (E5.2)
 - [ ] Umlaufend auf Zylindern; wo ein Muster sich nur bei bestimmten Winkeln
@@ -532,10 +711,11 @@ Referenzmaß ändert die Freiheitsgrade nicht.
 *Abnahme:* Ein Rändelgriff auf einem Gehäuse, mit 0,4-mm-Düse geprüft; eine
 Teilung von 0,3 mm wird abgelehnt, mit der Zahl und dem Vorschlag.
 
-### Etappe 6 — Muster, Press/Pull, Thicken (D9, D10, D14, D15)
+### Etappe 6 — Muster, Press/Pull, Thicken (D9, D10, D14, D15, E11)
 
-- [ ] `pattern_linear` (Richtung, Anzahl, Abstand), `pattern_circular` (Achse,
-      Anzahl, Winkel) — mit Bauraum- und Kollisionsprüfung (E1)
+- [ ] **Eine** Operation `pattern` mit einem Parameter *Art* — linear
+      (Richtung, Anzahl, Abstand) oder kreisförmig (Achse, Anzahl, Winkel),
+      mit Bauraum- und Kollisionsprüfung (E1)
 - [ ] `push_face` — gewählte Fläche entlang ihrer Normalen versetzen, exakt auf
       B-Rep, als Extrusion auf dem Mesh-Kern; Wandstärkenprüfung danach
 - [ ] `offset_face` — mit folgenden Nachbarwänden
@@ -548,10 +728,11 @@ Teilung von 0,3 mm wird abgelehnt, mit der Zahl und dem Vorschlag.
 Zug die Wand unter das Materialminimum bringt, meldet es vor dem Anwenden. Ein
 offenes Community-Modell wird durch `thicken` ein Körper.
 
-### Etappe 7 — Gitterfüllung (D17, E6)
+### Etappe 7 — Gitterfüllung (D17, E6, E11)
 
-- [ ] `lattice_fill`: Gyroid, Wabe, Würfelgitter; Zellgröße und Wandstärke als
-      Parameter, Mindestwandstärke aus dem Materialprofil (Regel 7)
+- [ ] **Eine** Operation `lattice_fill` mit einem Parameter *Struktur* (Gyroid,
+      Wabe, Würfelgitter); Zellgröße und Wandstärke als Parameter,
+      Mindestwandstärke aus dem Materialprofil (Regel 7)
 - [ ] Kennzahl im Steckbrief: Volumenanteil, Masse gegen den vollen Körper
 - [ ] Zusammenspiel mit `hollow_object`: füllen setzt aushöhlen voraus, und die
       Operation sagt das, statt es stillschweigend selbst zu tun
@@ -563,12 +744,15 @@ geschlossen. Die Schichtanalyse findet keine Insel.
 
 - [ ] Kürzeltabelle mit zwei Belegungen, umschaltbar in den Einstellungen
 - [ ] `?` zeigt die Kürzelübersicht, erzeugt aus dem Register
-- [ ] **Symbol je Operation** (`icon` im Register), Konsistenztest
+- [ ] **Symbol je Operation** (`icon` im Register); die Ausnahmeliste aus
+      Etappe 0 wird leer und der Test damit scharf
 - [ ] Bild ins Chatfenster ziehen als Eingabe
 - [ ] Vier Generierungsvorschläge als Kacheln, einer wird übernommen
 
 *Abnahme:* Wer aus Fusion kommt, findet Extrude, Press/Pull, Fillet und Move
-auf den erwarteten Tasten. Kein Menüeintrag ist reiner Text.
+auf den erwarteten Tasten. Kein Menüeintrag ist reiner Text. Alle sieben
+Obergrenzen aus E12 sind nach dem vollen Ausbau eingehalten — das ist die
+eigentliche Abnahme dieses Konzepts.
 
 ### Etappe 9 — MCP-Schnittstelle (D19, E9)
 
@@ -589,7 +773,7 @@ einem zufriedenen Nutzer. D21 gehört zur Veröffentlichung, D22 in §41.
 
 ---
 
-## 6. Was nicht gebaut wird — und warum
+## 8. Was nicht gebaut wird — und warum
 
 * **FEM-Festigkeitssimulation** (FilaSim). Ein eigener Fachbereich mit eigener
   Validierungspflicht: Anisotropie des Schichtaufbaus, Lagenhaftung,
@@ -609,7 +793,7 @@ einem zufriedenen Nutzer. D21 gehört zur Veröffentlichung, D22 in §41.
 
 ---
 
-## 7. Folgen für Bauplan und Roadmap
+## 9. Folgen für Bauplan und Roadmap
 
 Nichts davon wird ohne Ansage geändert. Was zu ändern wäre:
 
@@ -617,16 +801,20 @@ Nichts davon wird ohne Ansage geändert. Was zu ändern wäre:
 |---|---|
 | **§25 Operationskatalog** | neue Kategorie **Oberfläche** (Textur, Gitterfüllung); **Muster** unter Transformation; **Fläche versetzen**, **Aufdicken** unter Formgebung; Skizze um Spline, Text, Referenzmaß, Skizzenmuster |
 | **§18 Viewport** | neuer Abschnitt Darstellungsqualität (Kantenglättung, Umgebungsverdeckung, Kontaktschatten, Feature-Kanten, Materialdarstellung); ViewCube und Ansichtsleiste zu §18.1 |
-| **§19 Bedienung** | **die Werkzeugregel aus E2** als eigener Punkt; Kürzelbelegungen (zwei Sätze, eine Quelle); `?`-Übersicht; Symbol je Operation |
+| **§19 Bedienung** | **die Werkzeugregel aus E2** als eigener Punkt; **die sieben Obergrenzen aus E12**; Kürzelbelegungen (zwei Sätze, eine Quelle); `?`-Übersicht; Symbol je Operation |
+| **§19.1 Farbe** | die Regel aus E15 (gesättigt bedienbar, gedeckt Information); die Akzentfamilie; das angepasste Diff-Blau |
+| **§37.1 Marke** | der Akzent als Markenfarbe, Anwendungssymbol und Website folgen |
+| **§10 Register** | Feld `icon`; `applies_to` sortiert auch Palette und Werkzeugleiste |
 | **§30.1** | Stufe zwei präzisieren: der Editor **ist** ein Viewport-Modus; der heutige Dialogstand ist ein Zwischenstand, keine Erfüllung. Zehnte Bedingungsart für Splines |
 | **§26/§32** | MCP als zweite Fernsteuerung mit den vier Auflagen aus E9 |
 | **§31 Leistungsbudget** | Zielwerte für die neue Darstellung; Texturprägung und Gitterfüllung als messbare Pfade |
 | **§41 Ausbaustufen** | Druckerverbindung (D22) und STEP-Kanonisierung (D16) dort aufnehmen |
-| **ROADMAP.md** | P15 mit den neun Etappen aus §5 |
+| **`.claude/rules/oberflaeche.md`** | die Zuordnung „Funktion → Hauptweg" (E14) und die Obergrenzen, damit beides bei jeder neuen Operation gefragt wird |
+| **ROADMAP.md** | P15 mit den zehn Etappen aus §7 |
 
 ---
 
-## 8. Der Satz, um den es geht
+## 10. Der Satz, um den es geht
 
 SindriCAD kann ein Teil bauen — nach sechs Wochen erstaunlich gut, und in der
 Bedienung heute besser als wir. Meshy kann ein Teil erfinden und sagt selbst,
@@ -636,3 +824,9 @@ das einzige der drei, das beides andere auch kann.
 Was fehlt, ist nicht die Substanz. Es sind Konstruktionswerkzeuge, ein
 Skizzenmodus, eine Bedienregel und eine Ansicht, die zeigt, was das Programm
 ohnehin schon weiß.
+
+Und der Auftrag hat zwei Hälften, nicht eine. **Alles bauen** steht in §7 als
+zehn Etappen. **Einfach bleiben** steht in §5 als sieben Zahlen, die rot
+werden. Die zweite Hälfte ist die schwierigere: Funktionen kann man
+nachliefern, eine überfüllte Oberfläche nicht zurücknehmen, ohne jemandem etwas
+wegzunehmen.
