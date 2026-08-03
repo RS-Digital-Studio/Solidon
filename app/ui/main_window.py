@@ -718,8 +718,10 @@ class MainWindow(QMainWindow):
                     target.setToolTipsVisible(True)
                     group.addMenu(target)
                     self._menus.append(target)
+                subgroups: dict[str, QMenu] = {}
                 for spec in section.entries:
-                    self._op_actions[spec.name] = self._operation_action(target, spec)
+                    place = self._subgroup_for(spec, target, subgroups)
+                    self._op_actions[spec.name] = self._operation_action(place, spec)
 
         # Was das Register kennt und diese Tabelle nicht, bekommt sein eigenes
         # Menü: eine neue Kategorie soll auftauchen, nicht verschwinden.
@@ -748,6 +750,10 @@ class MainWindow(QMainWindow):
         )
         view_menu.addSeparator()
 
+        # Sechs Blöcke ohne Überschrift waren dreiundzwanzig Zeilen, durch
+        # Trennstriche gegliedert — eine Liste, die man absucht (Konzept P15
+        # §5). Was zusammengehört, bekommt jetzt seinen Namen und seine Ebene.
+        display_menu = self._submenu(view_menu, tr("Darstellung"))
         for mode, label, shortcut, hint in (
             ("solid", tr("Massiv"), "1", tr("Die Oberfläche, wie sie gedruckt wird.")),
             (
@@ -770,13 +776,13 @@ class MainWindow(QMainWindow):
             ),
         ):
             self._add_action(
-                view_menu,
+                display_menu,
                 label,
                 shortcut,
                 lambda checked=False, key=mode: self.viewport.set_display_mode(key),
                 hint,
             )
-        view_menu.addSeparator()
+        display_menu.addSeparator()
         for shading, label, hint in (
             (
                 "flat",
@@ -790,12 +796,13 @@ class MainWindow(QMainWindow):
             ),
         ):
             self._add_action(
-                view_menu,
+                display_menu,
                 label,
                 None,
                 lambda checked=False, key=shading: self.viewport.set_shading(key),
                 hint,
             )
+        display_menu.addSeparator()
         for projection, label, shortcut, hint in (
             (
                 "perspective",
@@ -811,13 +818,14 @@ class MainWindow(QMainWindow):
             ),
         ):
             self._add_action(
-                view_menu,
+                display_menu,
                 label,
                 shortcut,
                 lambda checked=False, key=projection: self.viewport.set_projection(key),
                 hint,
             )
-        view_menu.addSeparator()
+
+        camera_menu = self._submenu(view_menu, tr("Kamera"))
         standpoint = tr("Kamera auf diesen Standpunkt setzen.")
         for name, label, shortcut in (
             ("iso", tr("Isometrisch"), "Ctrl+0"),
@@ -829,7 +837,7 @@ class MainWindow(QMainWindow):
             ("bottom", tr("Unten"), "Ctrl+6"),
         ):
             self._add_action(
-                view_menu,
+                camera_menu,
                 label,
                 shortcut,
                 lambda checked=False, key=name: self.viewport.view_from(key),
@@ -847,7 +855,7 @@ class MainWindow(QMainWindow):
                 lambda checked=False, key=theme: self.action_theme(key),
                 hint,
             )
-        view_menu.addSeparator()
+        navigation_menu = self._submenu(view_menu, tr("Navigation"))
         for scheme, label, hint in (
             (
                 "slicer",
@@ -866,7 +874,7 @@ class MainWindow(QMainWindow):
             ("blender", tr("Navigation: Blender"), tr("Wie in Blender.")),
         ):
             self._add_action(
-                view_menu,
+                navigation_menu,
                 label,
                 None,
                 lambda checked=False, key=scheme: self.action_navigation(key),
@@ -935,6 +943,47 @@ class MainWindow(QMainWindow):
         menu.setToolTipsVisible(True)
         self._menus.append(menu)
         return menu
+
+    def _submenu(self, parent: QMenu, title: str) -> QMenu:
+        """Eine Zwischenebene. Elternteil ist das Fenster, nicht das Menü —
+        sonst hält nichts auf der Python-Seite das Untermenü fest, und sein
+        C++-Objekt wird eingesammelt, während die Leiste es noch zeigt.
+        """
+        submenu = QMenu(title, self)
+        submenu.setToolTipsVisible(True)
+        parent.addMenu(submenu)
+        self._menus.append(submenu)
+        return submenu
+
+    def _subgroup_for(self, spec: OperationSpec, menu: QMenu, made: dict[str, QMenu]) -> QMenu:
+        """Das Menü, in das dieser Eintrag gehört — mit einer Zwischenebene,
+        wo die Kategorie sonst zu lang würde (Konzept P15 §5).
+
+        Betrifft heute die Bausteine: sechzehn Einfügungen flach untereinander
+        sind eine Liste, die man absucht, kein Menü, das man liest. Die
+        Gliederung ist nicht erfunden — es ist dieselbe Gruppe, nach der der
+        Katalog seine Kacheln ordnet (``parts.GROUPS``). Was keine Gruppe hat,
+        bleibt oben stehen: ``create_lid`` ist kein Baustein aus der
+        Bibliothek.
+        """
+        from app.core.knowledge.parts import GROUPS, PARTS
+        from app.core.knowledge.parts.ops import op_name
+
+        group = next(
+            (part.group for part in PARTS.all() if op_name(part.name) == spec.name),
+            None,
+        )
+        if group is None or group not in GROUPS:
+            return menu
+        if group not in made:
+            # Elternteil ist das Fenster, nicht das Menü — siehe die
+            # Begründung eine Ebene höher.
+            submenu = QMenu(str(GROUPS[group]), self)
+            submenu.setToolTipsVisible(True)
+            menu.addMenu(submenu)
+            self._menus.append(submenu)
+            made[group] = submenu
+        return made[group]
 
     def _operation_action(self, menu: Any, spec: OperationSpec) -> QAction:
         """Ein Menüeintrag für eine Operation, überall gleich gebaut."""

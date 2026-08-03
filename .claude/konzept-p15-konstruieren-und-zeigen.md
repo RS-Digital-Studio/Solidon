@@ -15,10 +15,10 @@ Delta (§3), die Leitentscheidungen (§4), **wie die Oberfläche einfach bleibt,
 während alles wächst** (§5), der Farbakzent (§6), die Etappen (§7), die
 Abgrenzung (§8), die Folgen für Bauplan und Roadmap (§9).
 
-Der Auftrag hat drei Teile: **alles** aus den Quellen übertreffen, die Bedienung
-dabei **einfach, übersichtlich und leicht zu verstehen** halten, und der
-Anwendung einen **blauen Farbakzent** geben. §5 und §6 sind die Antwort auf die
-letzten beiden — und §5 ist der schwierigere von beiden.
+Der Auftrag hat zwei Teile: **alles** aus den Quellen übertreffen und die
+Bedienung dabei **einfach, übersichtlich und leicht zu verstehen** halten. §5
+ist die Antwort auf den zweiten und der schwierigere Teil des Konzepts. Ein
+dritter — der blaue Farbakzent — ist untersucht und **vertagt** (§6).
 
 ---
 
@@ -538,9 +538,16 @@ wollen": alles ist **da**, aber nicht alles ist **vorn**.
 
 ---
 
-## 6. Der Farbakzent
+## 6. Der Farbakzent — vertagt
 
-Gewünscht ist ein herausstechender blauer Ton als Akzent der Anwendung.
+> **Entscheidung vom 03.08.2026: zurückgestellt.** Die Analyse bleibt hier
+> stehen, gebaut wird sie nicht. Der Grund ist der Umfang der Folgen: der
+> Akzent zieht Anwendungssymbol, Installer, Website und Store-Bilder mit, und
+> das ist eine Markenentscheidung, keine Etappe. Etappe 1 baut die
+> Darstellungsqualität **ohne** ihn; er lässt sich danach jederzeit
+> nachziehen, weil `theme.py` die eine Stelle dafür ist.
+
+Gewünscht war ein herausstechender blauer Ton als Akzent der Anwendung.
 Das geht — aber nicht, indem man einen Hexwert hinschreibt, denn Blau ist in
 Formwerk **bereits dreifach belegt**: „hinzugefügtes Volumen" in der
 Differenzansicht (`#3b82c4`), „Hinweis" im Prüfbericht (`#6da3d6`) und die
@@ -629,7 +636,7 @@ Operationen eingezogen wird, ist keine Grenze mehr, sondern eine Aufräumaktion.
 *Abnahme:* Die Suite bleibt grün. Ein Versuch, ein achtes Werkzeug in die Zeile
 zu hängen, wird rot — nachgewiesen an einem Wegwerf-Eintrag.
 
-### Etappe 1 — Die Ansicht sieht aus wie 2026 (D20, E3, E15)
+### Etappe 1 — Die Ansicht sieht aus wie 2026 (D20, E3)
 
 - [ ] Kantenglättung (`enable_anti_aliasing`), Umgebungsverdeckung
       (`enable_ssao`), Studiobeleuchtung statt Standardlicht
@@ -640,18 +647,13 @@ zu hängen, wird rot — nachgewiesen an einem Wegwerf-Eintrag.
       nach Filament; abschaltbar, Vorgabe an
 - [ ] **ViewCube und Ansichtsleiste** (D4) — die sieben Voreinstellungen aus
       §18.1 dorthin, wo die Hand ist
-- [ ] **Der Farbakzent** (§6): Familie in `theme.py`, Diff-Blau auf `#2E6B9E`,
-      Anwendungssymbol auf die neue Familie, Website-Köpfe folgen der Quelle
-- [ ] Kontrasttest über die ganze Familie — dieselbe WCAG-Prüfung, die
-      `theme.py` für die Themen schon fährt
 - [ ] Leistungsschutz: jede Zutat schaltet sich ab, wo sie §31 reißt; die
       Anzeige-Dezimierung aus P14 bleibt davor
 - [ ] Handbuchbilder neu aufnehmen (echte Plattform, nie offscreen)
 
 *Abnahme:* Ein 20-mm-Würfel ist neben einem gedruckten Teil als Material
 erkennbar. Kein Messwert fällt über die 25-%-Schwelle. Die Ansichtsleiste
-erreicht alle sieben Voreinstellungen ohne Menü. Kein Ton der Akzentfamilie
-liegt unter seiner WCAG-Schwelle, und kein Pixel der 3D-Ansicht trägt ihn.
+erreicht alle sieben Voreinstellungen ohne Menü.
 
 ### Etappe 2 — Die Bediensprache wird eine Regel (D2, D3, E2)
 
@@ -802,8 +804,8 @@ Nichts davon wird ohne Ansage geändert. Was zu ändern wäre:
 | **§25 Operationskatalog** | neue Kategorie **Oberfläche** (Textur, Gitterfüllung); **Muster** unter Transformation; **Fläche versetzen**, **Aufdicken** unter Formgebung; Skizze um Spline, Text, Referenzmaß, Skizzenmuster |
 | **§18 Viewport** | neuer Abschnitt Darstellungsqualität (Kantenglättung, Umgebungsverdeckung, Kontaktschatten, Feature-Kanten, Materialdarstellung); ViewCube und Ansichtsleiste zu §18.1 |
 | **§19 Bedienung** | **die Werkzeugregel aus E2** als eigener Punkt; **die sieben Obergrenzen aus E12**; Kürzelbelegungen (zwei Sätze, eine Quelle); `?`-Übersicht; Symbol je Operation |
-| **§19.1 Farbe** | die Regel aus E15 (gesättigt bedienbar, gedeckt Information); die Akzentfamilie; das angepasste Diff-Blau |
-| **§37.1 Marke** | der Akzent als Markenfarbe, Anwendungssymbol und Website folgen |
+| ~~**§19.1 Farbe**~~ | *vertagt* — die Regel aus E15, die Akzentfamilie, das angepasste Diff-Blau |
+| ~~**§37.1 Marke**~~ | *vertagt* — der Akzent als Markenfarbe, Anwendungssymbol und Website |
 | **§10 Register** | Feld `icon`; `applies_to` sortiert auch Palette und Werkzeugleiste |
 | **§30.1** | Stufe zwei präzisieren: der Editor **ist** ein Viewport-Modus; der heutige Dialogstand ist ein Zwischenstand, keine Erfüllung. Zehnte Bedingungsart für Splines |
 | **§26/§32** | MCP als zweite Fernsteuerung mit den vier Auflagen aus E9 |

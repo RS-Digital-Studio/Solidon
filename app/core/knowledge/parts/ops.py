@@ -51,6 +51,13 @@ PLAY_FIELD = "play"
 #: Die Erklärungen stehen hier und nicht bei den achtzehn Bausteinen: dieselbe
 #: Zahl bedeutet überall dasselbe, und einmal geschrieben kann sie nicht an
 #: siebzehn Stellen anders lauten.
+#:
+#: **Die drei Koordinaten liegen hinten** (Konzept P15 §5): sie sind bei jedem
+#: Baustein dieselben und sagen nichts über ihn — vorn standen damit drei
+#: Felder, die vom eigentlichen Maß ablenken. Wer eine Fläche angeklickt hat,
+#: bekommt sie ohnehin eingetragen; wer den Baustein danach bewegt, nimmt das
+#: Gizmo (§18.11). ``at_feature`` bleibt vorn, denn das ist die fachliche
+#: Frage „wohin" und keine abgelesene Zahl.
 _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
     (
         "x",
@@ -59,6 +66,7 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
             title=_("Position X"),
             default=0.0,
             unit="mm",
+            placement="advanced",
             doc=_(
                 "Wo der Baustein sitzt, gemessen im Koordinatensystem des Objekts. "
                 "Eine angeklickte Fläche trägt den Wert selbst ein."
@@ -72,6 +80,7 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
             title=_("Position Y"),
             default=0.0,
             unit="mm",
+            placement="advanced",
             doc=_("Zweite Achse der Position — siehe Position X."),
         ),
     ),
@@ -82,6 +91,7 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
             title=_("Position Z"),
             default=0.0,
             unit="mm",
+            placement="advanced",
             doc=_("Höhe über der Grundfläche des Objekts."),
         ),
     ),
