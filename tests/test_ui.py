@@ -651,6 +651,70 @@ def test_removing_an_object_and_taking_it_back(window: MainWindow) -> None:
     assert set(window.session.evaluate_now().scene.objects) == {"obj_1", "obj_2"}
 
 
+def test_an_operation_dialog_does_not_lock_the_window(window: MainWindow) -> None:
+    """§18.7: eine Vorschau, die man nicht umdrehen kann, ist eine halbe.
+
+    ``exec()`` sperrte jede Kameraführung, solange der Dialog offen war — wer
+    sehen wollte, ob die Bohrung auf der Rückseite austritt, musste abbrechen,
+    drehen und von vorn anfangen. Der Beweis ist ein Lauf ohne Blockade: ein
+    modaler Dialog ließe diesen Test hängen.
+    """
+    _with_two_objects(window)
+    window.object_tree.tree.topLevelItem(0).setSelected(True)
+    before = len(window.session.project.document.transactions)
+
+    window.run_operation(REGISTRY.get("drill_hole"))
+
+    dialog = window._op_dialog
+    assert dialog is not None, "der Dialog steht offen und hat die Kontrolle zurückgegeben"
+    assert dialog.isVisible()
+    assert len(window.session.project.document.transactions) == before, (
+        "solange nichts übernommen ist, bleibt der Stapel unberührt"
+    )
+
+    dialog.accept()
+    window.session.wait_for_idle()
+
+    assert window._op_dialog is None, "nach dem Schließen hält das Fenster keinen Dialog mehr"
+    assert len(window.session.project.document.transactions) == before + 1
+
+
+def test_a_rejected_dialog_changes_nothing(window: MainWindow) -> None:
+    """Abbrechen heißt abbrechen — auch ohne Sperre."""
+    _with_two_objects(window)
+    window.object_tree.tree.topLevelItem(0).setSelected(True)
+    before = len(window.session.project.document.transactions)
+
+    window.run_operation(REGISTRY.get("drill_hole"))
+    assert window._op_dialog is not None
+    window._op_dialog.reject()
+    window.session.wait_for_idle()
+
+    assert window._op_dialog is None
+    assert len(window.session.project.document.transactions) == before
+
+
+def test_a_second_dialog_closes_the_first(window: MainWindow) -> None:
+    """Zwei Vorschauen um denselben Viewport wären eine Frage ohne Antwort.
+
+    Das verhinderte bisher die Sperre; ohne sie muss es die Stelle tun, die
+    den Dialog öffnet.
+    """
+    _with_two_objects(window)
+    window.object_tree.tree.topLevelItem(0).setSelected(True)
+
+    window.run_operation(REGISTRY.get("drill_hole"))
+    first = window._op_dialog
+    assert first is not None
+
+    window.run_operation(REGISTRY.get("drill_hole"))
+    second = window._op_dialog
+
+    assert second is not None
+    assert second is not first, "der zweite Dialog ist ein anderer"
+    assert not first.isVisible(), "und der erste ist zu"
+
+
 def test_an_operation_without_parameters_asks_nothing(window: MainWindow) -> None:
     """Regel 19: ein Fenster mit nur „OK" wäre die Bestätigung vor einer
     rücknehmbaren Handlung.

@@ -374,6 +374,55 @@ def test_a_click_in_the_view_finds_the_feature_under_it(window: MainWindow) -> N
     assert picked == "hole_3"
 
 
+class _PickyPlotter:
+    """Ein Plotter, der sich beim Picking verhält wie pyvista.
+
+    Der echte lehnt ein zweites ``enable_point_picking`` mit einer Ausnahme ab.
+    Offscreen gibt es keinen Plotter, also führt kein Test den Zweig aus, in
+    dem das Picking eingeschaltet wird — genau darum startete die Anwendung
+    nach dem Anschließen der Auswahl nicht mehr, und die Suite war grün dabei.
+    """
+
+    def __init__(self) -> None:
+        self.enabled = False
+        self.rounds = 0
+
+    def enable_point_picking(self, **_: object) -> None:
+        if self.enabled:
+            raise RuntimeError("Picking is already enabled")
+        self.enabled = True
+        self.rounds += 1
+
+    def disable_picking(self) -> None:
+        self.enabled = False
+
+
+def test_switching_navigation_keeps_the_picking_alive(qt_app: QApplication) -> None:
+    """Ein Stilwechsel darf das Picking weder abhängen noch doppelt anschalten.
+
+    Ein neuer Interaktionsstil bringt eigene Beobachter mit; das Picking hängt
+    am alten und wäre nach jedem Wechsel weg. Es einfach erneut einzuschalten
+    reicht aber nicht — der Plotter besteht darauf, vorher gefragt zu werden.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        plotter = _PickyPlotter()
+        viewport.plotter = plotter
+
+        viewport._enable_picking()
+        assert plotter.enabled and plotter.rounds == 1
+
+        # Zweimal hintereinander, wie beim Aufbau und bei jedem Schemawechsel.
+        viewport._enable_picking()
+        assert plotter.enabled, "danach ist das Picking an"
+        assert plotter.rounds == 2, "und es wurde wirklich neu aufgesetzt"
+    finally:
+        viewport.plotter = None
+        viewport.deleteLater()
+
+
 def test_fitting_measures_the_bodies_not_the_build_volume(window: MainWindow) -> None:
     """§18.1: „Alles einpassen" meint die Körper.
 

@@ -384,6 +384,10 @@ class MainWindow(QMainWindow):
         """The agent turn waiting for a decision (§26.5)."""
         self._manual: ManualWindow | None = None
         """Das Handbuchfenster, einmal gebaut und danach wiederverwendet."""
+        self._op_dialog: OperationDialog | None = None
+        """Der offene Operationsdialog. Er sperrt das Fenster nicht mehr, also
+        braucht er eine Referenz: ein Dialog, den nur eine lokale Variable hält,
+        verschwindet mit dem Verlassen der Funktion."""
         self._hidden: frozenset[str] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
         Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
@@ -2309,7 +2313,14 @@ class MainWindow(QMainWindow):
 
         values = dict(self._from_selection(spec, chosen[0] if chosen else None))
         values.update(given or {})
-        params: dict[str, Any] = dict(values)
+        inputs = inputs_for(spec, objects, chosen)
+
+        def run(params: Mapping[str, Any]) -> None:
+            self.session.apply(
+                spec.title,
+                [OperationDraft(op=spec.name, inputs=inputs, params=dict(params))],
+            )
+
         if spec.params.spec():
             dialog = OperationDialog(
                 spec,
@@ -2319,7 +2330,6 @@ class MainWindow(QMainWindow):
                 sources=self._source_names(),
                 parameter_values=self._parameter_values(),
             )
-            inputs = inputs_for(spec, objects, chosen)
             # §18.7: der Dialog zeigt, was er täte, während getippt wird —
             # dieselbe Differenzansicht wie beim Agentenvorschlag.
             self._wire_preview(
@@ -2327,26 +2337,13 @@ class MainWindow(QMainWindow):
                 lambda entered: [OperationDraft(op=spec.name, inputs=inputs, params=entered)],
             )
             dialog.place_beside(self.viewport)
-            accepted = dialog.exec() == OperationDialog.DialogCode.Accepted
-            self._clear_preview()
-            if not accepted:
-                return
-            params = dialog.values()
+            self._open_operation_dialog(dialog, lambda: run(dialog.values()))
+            return
         # Ohne Parameter gibt es nichts zu fragen, und ein Fenster mit nur „OK"
         # wäre die Bestätigung vor einer rücknehmbaren Handlung, die Regel 19
         # verbietet. Entfernen, Vereinigen, Abziehen — alle laufen sofort, und
         # alle nimmt ein Undo zurück.
-
-        self.session.apply(
-            spec.title,
-            [
-                OperationDraft(
-                    op=spec.name,
-                    inputs=inputs_for(spec, objects, chosen),
-                    params=params,
-                )
-            ],
-        )
+        run(values)
 
     # --- Fernsteuerung über MCP (Konzept P15 §7 Etappe 9, D19) ------------------
 
@@ -2496,11 +2493,9 @@ class MainWindow(QMainWindow):
         # gerechnet als geänderte Operation, nicht als neuer Schritt (§15.4).
         self._wire_preview(dialog, None, change_op=op_id)
         dialog.place_beside(self.viewport)
-        accepted = dialog.exec() == OperationDialog.DialogCode.Accepted
-        self._clear_preview()
-        if not accepted:
-            return
-        self.session.change_params(op_id, dialog.values())
+        self._open_operation_dialog(
+            dialog, lambda: self.session.change_params(op_id, dialog.values())
+        )
 
     def _parameter_values(self) -> dict[str, float]:
         """Die aufgelösten Projektparameter — der Skizzeneditor rechnet
@@ -2511,6 +2506,35 @@ class MainWindow(QMainWindow):
             return dict(expressions.resolve(self.session.project.document.parameters))
         except AppError:
             return {}
+
+    def _open_operation_dialog(self, dialog: OperationDialog, on_accept: Any) -> None:
+        """Öffnet einen Operationsdialog, ohne das Fenster zu sperren.
+
+        Ein Operationsdialog trägt eine Live-Vorschau (§18.7), und eine
+        Vorschau, die man nicht umdrehen kann, ist eine halbe: ``exec()``
+        blockierte jede Kameraführung, solange der Dialog offen war. Wer sehen
+        wollte, ob die Bohrung auf der Rückseite austritt, musste abbrechen,
+        drehen und von vorn anfangen.
+
+        Der Stapel wird ohnehin erst bei „Übernehmen" angefasst — die Sperre
+        schützte nichts. Was sie verhinderte, war ein zweiter offener Dialog;
+        das übernimmt jetzt diese Stelle, denn zwei Vorschauen um denselben
+        Viewport wären eine Frage ohne Antwort.
+        """
+        previous = self._op_dialog
+        if previous is not None:
+            previous.reject()
+
+        def finished(code: int) -> None:
+            self._op_dialog = None
+            self._clear_preview()
+            if code == QDialog.DialogCode.Accepted:
+                on_accept()
+
+        dialog.finished.connect(finished)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self._op_dialog = dialog
+        dialog.show()
 
     def _wire_preview(
         self, dialog: OperationDialog, drafts_of: Any, *, change_op: int | None = None

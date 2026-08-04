@@ -359,8 +359,9 @@ class Viewport(QWidget):
         self._add_orientation_widget()
         self._apply_render_quality()
         self.set_theme("dark")
+        # Schaltet das Picking gleich mit ein — ein Stilwechsel und der erste
+        # Aufbau sind für die Ansicht dasselbe.
         self.set_navigation("slicer")
-        self._enable_picking()
 
     # --- Darstellungsqualität (§18.1) -------------------------------------------
 
@@ -1592,9 +1593,17 @@ class Viewport(QWidget):
         Merkmalsbeschriftung eingeschaltet waren. Damit war „links wählt aus",
         was das Schema verspricht und das Handbuch beschreibt, in der Vorgabe
         nicht wahr: ein Klick auf einen Körper tat nichts.
+
+        Erst abschalten, dann anschalten: pyvista lehnt ein zweites
+        ``enable_point_picking`` mit einer Ausnahme ab, und gerufen wird das
+        hier bei jedem Wechsel des Navigationsschemas. Ohne die Zeile davor
+        startete die Anwendung nicht mehr — offscreen gibt es keinen Plotter,
+        also führt kein Test diesen Zweig aus, und der Fehler kam erst beim
+        Öffnen des Fensters heraus.
         """
         if self.plotter is None:
             return
+        self.plotter.disable_picking()
         self.plotter.enable_point_picking(
             callback=self._on_picked,
             show_message=False,
