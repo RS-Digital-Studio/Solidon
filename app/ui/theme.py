@@ -16,6 +16,20 @@ from PySide6.QtWidgets import QApplication
 
 Theme = Literal["dark", "light"]
 
+#: Die Auswahlfarbe, in beiden Themen dieselbe.
+#:
+#: Sie kommt aus ``palette.ROLES["select"]`` und ist damit dieselbe, in der der
+#: Viewport einen gewählten Körper färbt. Vorher waren es zwei: Qts Blau in der
+#: Liste, Bernstein im Bild — dieselbe Handlung, zwei Farben, nichts verband
+#: sie. Wer im Baum klickte, sah eine blaue Zeile und einen orangen Körper und
+#: musste selbst schließen, dass das dasselbe meint.
+#:
+#: Die Schrift darauf ist dunkel und nicht weiß. Nachgemessen: Bernstein gegen
+#: Weiß bringt 2,06 Kontrast, gegen ``#1c2026`` sind es 7,93. Ein heller Balken
+#: verlangt dunkle Schrift, auch im dunklen Thema.
+_SELECTION = "#f0a54a"
+_ON_SELECTION = "#1c2026"
+
 #: Window, panel and text colours per theme, contrast checked against WCAG AA.
 THEMES: dict[Theme, dict[str, str]] = {
     "dark": {
@@ -24,8 +38,8 @@ THEMES: dict[Theme, dict[str, str]] = {
         "alternate": "#262b33",
         "text": "#e6e9ee",
         "disabled": "#7c848f",
-        "highlight": "#3d6ea5",
-        "highlight_text": "#ffffff",
+        "highlight": _SELECTION,
+        "highlight_text": _ON_SELECTION,
         "tooltip": "#2c323c",
         "viewport_bottom": "#20242b",
         "viewport_top": "#2c323c",
@@ -40,8 +54,8 @@ THEMES: dict[Theme, dict[str, str]] = {
         "alternate": "#e9ebee",
         "text": "#1c2026",
         "disabled": "#8b929b",
-        "highlight": "#2f6fb0",
-        "highlight_text": "#ffffff",
+        "highlight": _SELECTION,
+        "highlight_text": _ON_SELECTION,
         "tooltip": "#ffffe1",
         "viewport_bottom": "#dfe3e8",
         "viewport_top": "#f4f6f8",

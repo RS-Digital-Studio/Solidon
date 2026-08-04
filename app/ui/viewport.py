@@ -34,7 +34,7 @@ from app.core.types import Feature, FeatureId, LayerInfo, ObjectId, Profile, Vec
 from app.core.units import EPS_DISPLAY, EPS_GEOM, EPS_MATCH_MINIMUM, EPS_MATCH_RELATIVE
 from app.i18n import tr
 from app.ui.labels import feature_label
-from app.ui.palette import DIFF_PALETTES, VIRIDIS, DiffPalette
+from app.ui.palette import DIFF_PALETTES, ROLES, VIRIDIS, DiffPalette
 from app.ui.theme import viewport_colours
 
 _log = get_logger(__name__)
@@ -104,9 +104,12 @@ FEATURE_EDGE_ANGLE = 30.0
 #: aus demselben Grund: eine Linie, die man suchen muss, hilft niemandem.
 FEATURE_EDGE_WIDTH = 1.5
 
+#: Was eine Bedeutung trägt, kommt aus ``palette.ROLES`` — dort steht die
+#: Auswahlfarbe einmal, und der Objektbaum färbt in derselben. Vorher standen
+#: hier neun eigene Werte, die kein Thema kannten und keine andere Stelle.
 OBJECT_COLOUR = "#b9c4d0"
-SELECTED_COLOUR = "#f0a54a"
-BACKFACE_COLOUR = "#8b3a3a"
+SELECTED_COLOUR = ROLES["select"]
+BACKFACE_COLOUR = ROLES["backface"]
 BED_COLOUR = "#5a6472"
 
 #: Der gefüllte Grund der Platte — dunkler als das Raster darauf und heller
@@ -176,7 +179,7 @@ def _hex(colour: tuple[float, float, float]) -> str:
 
 MeasureMode = Literal["off", "distance", "thickness"]
 
-MEASURE_COLOUR = "#f0a54a"
+MEASURE_COLOUR = ROLES["measure"]
 
 #: Wie weit die Maus zwischen Drücken und Loslassen wandern darf, damit es noch
 #: als Klick zählt. In jedem Schema tut die rechte Taste auch etwas an der
@@ -205,11 +208,11 @@ FACE_HANDLE_SHARE = 0.06
 FACE_HANDLE_MINIMUM = 2.0
 
 #: Layer analysis (§18.10): contour, island, unsupported region.
-LAYER_COLOUR = "#7fb2e5"
-ISLAND_COLOUR = "#e0a33c"
-OVERHANG_COLOUR = "#d05a5a"
+LAYER_COLOUR = ROLES["layer"]
+ISLAND_COLOUR = ROLES["island"]
+OVERHANG_COLOUR = ROLES["overhang"]
 
-FEATURE_LABEL_COLOUR = "#cfe3f5"
+FEATURE_LABEL_COLOUR = ROLES["feature"]
 
 #: Ab wann für die Anzeige dezimiert wird (§18.9, Schwelle aus §31). Darunter
 #: kostet die Vereinfachung mehr, als sie beim Zeichnen einspart.

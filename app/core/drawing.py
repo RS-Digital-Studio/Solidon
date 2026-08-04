@@ -70,6 +70,18 @@ class Palette:
 
 
 #: Beide Themen. Kontraste gegen den jeweiligen Fensterhintergrund geprüft.
+#:
+#: **Diese Werte sehen aus wie Dubletten der Rollen in ``app/ui/palette.py``
+#: und sind keine.** Nachgemessen: der Warnton der Oberfläche (``#e0a33c``)
+#: bringt auf weißem Papier 2,22 Kontrast und liegt damit unter der
+#: AA-Schwelle; ``#b4611c`` bringt dort 4,50. Zeichnungen liegen auf Papier
+#: oder auf dunklem Grund, die Oberfläche nur auf letzterem — dieselbe Rolle,
+#: drei Hintergründe, drei Werte. Wer sie gleichzieht, macht eine der drei
+#: unlesbar.
+#:
+#: Aus demselben Grund liest der Kern die Rollen nicht: er darf nichts aus
+#: ``app/ui`` importieren, und er bräuchte sie auch nicht — was hier steht,
+#: gilt für Papier.
 PALETTES: Final[dict[Theme, Palette]] = {
     "light": Palette(
         paper="#ffffff",

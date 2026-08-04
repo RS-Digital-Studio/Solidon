@@ -77,3 +77,53 @@ def test_the_map_ramp_covers_its_range() -> None:
 def test_an_empty_ramp_is_refused() -> None:
     with pytest.raises(ValueError):
         map_colour(0.5, ())
+
+
+def test_a_role_has_one_colour_across_the_interface() -> None:
+    """§19.1: dieselbe Bedeutung, überall derselbe Wert.
+
+    Jedes Modul führte seine eigenen Konstanten: „Warnung" hatte drei Werte,
+    „Hinweis" fünf. Keiner davon war falsch — sie kannten einander nur nicht,
+    und die nächste Stelle hätte einen sechsten bekommen.
+    """
+    from app.ui import viewport
+    from app.ui.palette import ROLES
+
+    assert ROLES["select"] == viewport.SELECTED_COLOUR
+    assert ROLES["measure"] == viewport.MEASURE_COLOUR
+    assert ROLES["layer"] == viewport.LAYER_COLOUR
+    assert ROLES["island"] == viewport.ISLAND_COLOUR
+    assert ROLES["overhang"] == viewport.OVERHANG_COLOUR
+    assert ROLES["feature"] == viewport.FEATURE_LABEL_COLOUR
+    assert ROLES["backface"] == viewport.BACKFACE_COLOUR
+
+    for severity, encoding in SEVERITY_ENCODING.items():
+        assert encoding.colour == ROLES[severity]  # type: ignore[literal-required]
+
+
+def test_selecting_looks_the_same_in_the_list_and_in_the_view() -> None:
+    """Dieselbe Handlung, dieselbe Farbe.
+
+    Der Objektbaum färbte in Qts Blau, der Viewport in Bernstein. Wer im Baum
+    klickte, sah eine blaue Zeile und einen orangen Körper und musste selbst
+    schließen, dass das dasselbe meint.
+    """
+    from app.ui.palette import ROLES
+    from app.ui.theme import THEMES
+
+    for theme in THEMES.values():
+        assert theme["highlight"] == ROLES["select"]
+
+
+def test_the_selection_bar_carries_readable_text() -> None:
+    """Ein heller Balken verlangt dunkle Schrift, auch im dunklen Thema.
+
+    Bernstein gegen Weiß bringt 2,06 — unter jeder Schwelle. Die Farbe zu
+    nehmen und die Schrift zu vergessen hieße, eine Auswahl unlesbar zu machen,
+    um sie einheitlich zu machen.
+    """
+    from app.ui.theme import THEMES
+
+    for name, theme in THEMES.items():
+        ratio = contrast_ratio(theme["highlight"], theme["highlight_text"])
+        assert ratio >= 4.5, f"{name}: Auswahlbalken trägt nur {ratio:.2f} Kontrast"

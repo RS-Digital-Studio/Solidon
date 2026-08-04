@@ -20,6 +20,46 @@ from app.ui.theme import relative_luminance
 
 DiffPalette = Literal["blue_orange", "red_green", "greyscale"]
 
+Role = Literal[
+    "select",
+    "measure",
+    "info",
+    "warning",
+    "error",
+    "layer",
+    "island",
+    "overhang",
+    "feature",
+    "backface",
+]
+
+#: Die Farbe je Bedeutung — die eine Stelle, an der eine Rolle ihren Wert
+#: bekommt.
+#:
+#: Vorher hatte „Warnung" drei: ``#e0a33c`` im Prüfbericht und für Inseln,
+#: ``#d99048`` in dunklen Zeichnungen, ``#b4611c`` in hellen. „Hinweis" hatte
+#: fünf. Gleiche Bedeutung, verschiedene Werte, weil jedes Modul seine eigenen
+#: Konstanten führte — und keiner davon war falsch, sie kannten einander nur
+#: nicht.
+#:
+#: **Bernstein ist die Auswahl, und das mit Absicht.** Der Objektbaum färbte
+#: blau (Qts Vorgabe), der Viewport orange: dieselbe Handlung, zwei Farben,
+#: nichts verband sie. Genommen ist der Ton des Anwendungssymbols — er
+#: unterscheidet Formwerk vom Qt-Standardblau, das jede zweite Desktop-
+#: Anwendung trägt, und er passt zu warmem Filament.
+ROLES: dict[Role, str] = {
+    "select": "#f0a54a",
+    "measure": "#f0a54a",
+    "info": "#6da3d6",
+    "warning": "#e0a33c",
+    "error": "#d05a5a",
+    "layer": "#7fb2e5",
+    "island": "#e0a33c",
+    "overhang": "#d05a5a",
+    "feature": "#cfe3f5",
+    "backface": "#8b3a3a",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class Encoding:
@@ -83,9 +123,9 @@ VIRIDIS: tuple[str, ...] = (
 #: Zeichen für die Schweregrade. Der Prüfbericht zeigt sie neben dem Text,
 #: nie als Farbe allein.
 SEVERITY_ENCODING: dict[str, Encoding] = {
-    "info": Encoding("#6da3d6", "solid", "·", "Hinweis"),
-    "warning": Encoding("#e0a33c", "dots", "!", "Warnung"),
-    "error": Encoding("#d05a5a", "backward", "X", "Fehler"),
+    "info": Encoding(ROLES["info"], "solid", "·", "Hinweis"),
+    "warning": Encoding(ROLES["warning"], "dots", "!", "Warnung"),
+    "error": Encoding(ROLES["error"], "backward", "X", "Fehler"),
 }
 
 
