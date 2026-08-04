@@ -805,8 +805,11 @@ kommt aus `ctx.seed`, so wie Regel 9 es sagt.
       sind** — bis hierher meldete der Prüfbericht sie richtig, und danach ging
       nichts mehr
 - [ ] `sketch_extrude` bekommt Zielfläche und Region (D14)
-- [ ] Wandstärkenprüfung nach `push_face` (E1) — die Zahl steht im
-      Materialprofil, gefragt wird noch nicht
+- [x] Wandstärkenprüfung — **sie steht schon, und besser**: `slice/advise.py`
+      misst die dünnste Stelle am ganzen Körper und schlägt die Linienbreite
+      vor, mit der sie doch entsteht. Sie in `push_face` zu kopieren hieße, je
+      Zug eine Schichtanalyse zu fahren — Sekunden für eine Zahl, die der
+      Bericht danach ohnehin nennt. Sie war ungeprüft; jetzt nicht mehr
 - [ ] Gizmo greift die Fläche direkt; ein Zug ist **eine** Transaktion (§18.11)
 
 *Abnahme teils erfüllt:* Ein Lochkreis aus einer Operation, sechs Kopien auf

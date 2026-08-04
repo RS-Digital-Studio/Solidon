@@ -28,7 +28,9 @@ from app.core.types import (
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
-def _layers(*areas: float, overhang: float = 0.0, islands: bool = False) -> SliceResult:
+def _layers(
+    *areas: float, overhang: float = 0.0, islands: bool = False, min_width: float = 5.0
+) -> SliceResult:
     """Ein Schnittergebnis mit vorgegebenen Flächen — für die Vorschläge reicht
     das, sie lesen nur Kennzahlen."""
     square = ((0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0))
@@ -39,7 +41,7 @@ def _layers(*areas: float, overhang: float = 0.0, islands: bool = False) -> Slic
             area=area,
             overhang_area=overhang,
             islands=(square,) if islands and index > 0 else (),
-            min_width=5.0,
+            min_width=min_width,
         )
         for index, area in enumerate(areas)
     )
@@ -169,6 +171,44 @@ def test_a_part_that_floats_nowhere_gets_its_supports_taken_away() -> None:
 
     chosen = next(entry for entry in entries if entry.path == "support.style")
     assert chosen.value == "none"
+
+
+def test_a_wall_thinner_than_two_lines_asks_for_a_narrower_line() -> None:
+    """Die Wandstärkenprüfung sitzt hier und nicht in jeder Operation (E1).
+
+    Konzept P15 hatte sie für ``push_face`` vorgesehen — eine Wand, die der
+    Zug unter das Materialminimum bringt, soll das sagen. Sie steht schon, und
+    zwar besser: sie misst am **ganzen** Körper statt nur an der gezogenen
+    Fläche, sie läuft dort, wo die Schichtanalyse ohnehin rechnet, und sie
+    nennt die Linienbreite, mit der die Stelle doch entsteht.
+
+    Sie in eine Operation zu kopieren hieße, je Zug eine Schichtanalyse zu
+    fahren — Sekunden für eine Zahl, die der Bericht danach ohnehin nennt.
+
+    Dieser Test hält die Zusage fest; ohne ihn stand die Prüfung ungeprüft im
+    Code.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+    two_lines = 2.0 * settings.layers.line_width
+    result = _layers(500.0, 500.0, 500.0, min_width=two_lines * 0.6)
+
+    entries = advise.advise(settings, profiles.make_profile(), result)
+
+    chosen = next(entry for entry in entries if entry.path == "layers.line_width")
+    assert chosen.value < settings.layers.line_width, "eine schmalere Linie erreicht die Stelle"
+    assert chosen.severity == "warning"
+    assert chosen.reason, "ein Vorschlag ohne Grund ist keiner"
+
+
+def test_a_wall_wide_enough_says_nothing() -> None:
+    """Eine Wand, die passt, bekommt keinen Vorschlag — sonst stünde an jedem
+    Teil einer."""
+    settings = print_settings.resolve(profiles.make_profile())
+    result = _layers(500.0, 500.0, 500.0, min_width=5.0)
+
+    entries = advise.advise(settings, profiles.make_profile(), result)
+
+    assert "layers.line_width" not in _paths(entries)
 
 
 def test_a_small_footprint_asks_for_a_brim() -> None:
