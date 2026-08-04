@@ -404,3 +404,33 @@ def test_a_scheme_only_changes_what_it_names() -> None:
         f"Die Belegung nennt Operationen, die es nicht gibt: {sorted(unknown)}. "
         "Eine Taste für nichts ist eine Taste, die niemand wiederfindet."
     )
+
+
+def test_the_menu_says_which_theme_and_scheme_are_active(window: MainWindow) -> None:
+    """§2.6: vier Navigationsschemata und zwei Themen, und keines mit Haken.
+
+    Wer die Vorgabe einmal umgestellt hat, konnte danach nur ausprobieren,
+    worauf sie steht.
+    """
+    ticked = {
+        action.data()
+        for action in (*window._theme_group.actions(), *window._navigation_group.actions())
+        if action.isChecked()
+    }
+
+    assert window.settings.theme in ticked
+    assert window.settings.navigation in ticked
+    assert len(ticked) == 2, "je Gruppe genau einer"
+
+
+def test_switching_moves_the_tick(window: MainWindow) -> None:
+    """Qt setzt den Haken beim Klick von selbst — nicht aber, wenn die
+    Einstellung von woanders kommt, etwa aus dem Einstellungsdialog."""
+    window.action_navigation("cad")
+
+    ticked = {action.data() for action in window._navigation_group.actions() if action.isChecked()}
+    assert ticked == {"cad"}
+
+    window.action_navigation("blender")
+    ticked = {action.data() for action in window._navigation_group.actions() if action.isChecked()}
+    assert ticked == {"blender"}, "und der alte Haken geht weg"

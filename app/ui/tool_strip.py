@@ -29,9 +29,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, QRect, Qt, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QToolButton,
@@ -41,6 +42,44 @@ from PySide6.QtWidgets import (
 
 from app.i18n import TranslatableText, tr
 from app.ui.icons import icon
+
+
+def list_top(field: QRect, height: int, window: QRect) -> int:
+    """Wo eine aufgeklappte Liste anfangen soll, damit sie im Fenster bleibt.
+
+    Alle Angaben in Bildschirmkoordinaten. Qt hält eine Aufklappliste am
+    *Bildschirm*, nicht am Fenster — eine Liste in der untersten Leiste klappt
+    deshalb über die Anwendung hinaus auf den Schreibtisch und verdeckt, was
+    dort liegt. Für eine Zeile ganz unten heißt „unten kein Platz" also nicht
+    „gar kein Platz", sondern „nach oben".
+    """
+    if field.bottom() + height <= window.bottom():
+        return field.bottom()
+    above = field.top() - height
+    if above >= window.top():
+        return above
+    # Weder darüber noch darunter: dann bündig an die Unterkante. Oben
+    # abgeschnitten und scrollbar ist besser als über den Rand hinaus.
+    return max(window.bottom() - height, window.top())
+
+
+class BarComboBox(QComboBox):
+    """Eine Aufklappliste, die im Fenster bleibt.
+
+    Die Leisten unter dem Viewport sitzen an der Unterkante der Anwendung; ihre
+    Listen sind der einzige Ort, an dem das auffällt. Deshalb hier und nicht
+    überall: eine Liste im Objektbaum hat das Problem nicht.
+    """
+
+    def showPopup(self) -> None:  # noqa: N802 — Qt-Name
+        super().showPopup()
+        popup = self.view().window()
+        window = self.window()
+        field = QRect(self.mapToGlobal(QPoint(0, 0)), self.size())
+        frame = QRect(window.mapToGlobal(QPoint(0, 0)), window.size())
+        top = list_top(field, popup.height(), frame)
+        if top != popup.y():
+            popup.move(popup.x(), top)
 
 
 @dataclass(frozen=True, slots=True)

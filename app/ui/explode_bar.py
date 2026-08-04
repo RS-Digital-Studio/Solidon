@@ -12,10 +12,11 @@ jedes Teil dort, wo es ist, auf der Platte, auf die es gehört.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QSlider, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSlider, QWidget
 
 from app.i18n import tr
 from app.ui.section_bar import SETTLE_MS
+from app.ui.tool_strip import BarComboBox
 
 #: Der Schieber zählt in Zehnteln, 20 heißt also „doppelter Abstand zur
 #: Mitte".
@@ -49,7 +50,7 @@ class ExplodeBar(QWidget):
         self.reset.clicked.connect(lambda: self.slider.setValue(0))
 
         self.plate_label = QLabel(tr("Druckplatte"), self)
-        self.plates = QComboBox(self)
+        self.plates = BarComboBox(self)
         self.plates.setToolTip(tr("Zeigt nur die Objekte einer Platte."))
         self.plates.currentIndexChanged.connect(self._on_plate)
 

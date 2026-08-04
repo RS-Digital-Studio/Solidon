@@ -805,3 +805,51 @@ def test_a_body_below_the_plate_throws_nothing_forward() -> None:
     sunk = shadow_points(np.array([[5.0, 7.0, -12.0]]))
     assert sunk[0][0] == pytest.approx(5.0)
     assert sunk[0][1] == pytest.approx(7.0)
+
+
+def test_a_list_in_the_bottom_bar_opens_upwards_when_it_has_to() -> None:
+    """Qt hält eine Aufklappliste am Bildschirm, nicht am Fenster.
+
+    Die Leisten unter dem Viewport sitzen an der Unterkante der Anwendung —
+    ihre Listen klappten über das Fenster hinaus auf den Schreibtisch und
+    verdeckten, was dort lag. Gerechnet wird in Bildschirmkoordinaten.
+    """
+    from PySide6.QtCore import QRect
+
+    from app.ui.tool_strip import list_top
+
+    window = QRect(100, 100, 900, 600)  # unten bei 699
+
+    roomy = QRect(120, 200, 160, 24)  # unten bei 223
+    assert list_top(roomy, 200, window) == roomy.bottom(), "passt darunter — dann darunter"
+
+    cramped = QRect(120, 640, 160, 24)  # unten bei 663, darunter nur 36
+    assert list_top(cramped, 200, window) == cramped.top() - 200, "sonst darüber"
+
+    tall = list_top(cramped, 700, window)
+    assert tall == window.top(), "passt nirgends: dann bündig, nicht über den Rand"
+    assert tall + 700 >= window.bottom()
+
+
+def test_every_list_in_the_bottom_bars_knows_that(qt_app: QApplication) -> None:
+    """Und zwar jede — die Regel nützt nichts, wenn eine Leiste sie vergisst.
+
+    Geprüft werden die Leisten unter dem Viewport. Listen in Dialogen haben das
+    Problem nicht: die stehen in der Fenstermitte.
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    from app.ui.explode_bar import ExplodeBar
+    from app.ui.section_bar import MeasureBar, SectionBar
+    from app.ui.tool_strip import BarComboBox
+
+    plain: list[str] = []
+    for bar in (AnalysisBar(), LayerBar(), ExplodeBar(), MeasureBar(), SectionBar()):
+        for child in bar.findChildren(QComboBox):
+            if not isinstance(child, BarComboBox):
+                plain.append(f"{type(bar).__name__}.{child.objectName() or '?'}")
+
+    assert not plain, (
+        f"Diese Listen klappen über den Fensterrand hinaus: {plain}. "
+        "In einer Leiste unter dem Viewport ist BarComboBox die richtige Klasse."
+    )

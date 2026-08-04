@@ -18,7 +18,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
@@ -31,6 +30,7 @@ from app.core.geom.section import AXIS_NORMALS, SectionPlane
 from app.core.units import DISPLAY_UNITS
 from app.i18n import tr
 from app.ui.labels import length
+from app.ui.tool_strip import BarComboBox
 
 #: Der Schieber arbeitet in Zehntelmillimetern; EPS_DISPLAY ist feiner als
 #: das.
@@ -52,7 +52,7 @@ class MeasureBar(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self.mode = QComboBox(self)
+        self.mode = BarComboBox(self)
         self.mode.addItem(tr("Nicht messen"), userData="off")
         self.mode.addItem(tr("Abstand messen"), userData="distance")
         self.mode.addItem(tr("Wandstärke messen"), userData="thickness")
@@ -92,7 +92,7 @@ class SectionBar(QWidget):
         self._pending.setSingleShot(True)
         self._pending.timeout.connect(self._settled)
 
-        self.axis = QComboBox(self)
+        self.axis = BarComboBox(self)
         self.axis.addItem(tr("Kein Schnitt"), userData=None)
         for axis, label in (("x", tr("Schnitt X")), ("y", tr("Schnitt Y")), ("z", tr("Schnitt Z"))):
             self.axis.addItem(label, userData=axis)

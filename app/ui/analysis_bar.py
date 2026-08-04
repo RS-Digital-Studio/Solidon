@@ -17,7 +17,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QHBoxLayout,
     QLabel,
     QSlider,
@@ -30,6 +29,7 @@ from app.i18n import tr
 from app.ui.labels import length
 from app.ui.palette import VIRIDIS, map_colour
 from app.ui.panels import origin_label
+from app.ui.tool_strip import BarComboBox
 
 #: Reihenfolge der Karten im Wähler, passend zur Tabelle in §18.4.
 MAP_ORDER: tuple[MapKind, ...] = (
@@ -135,7 +135,7 @@ class AnalysisBar(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self.selector = QComboBox(self)
+        self.selector = BarComboBox(self)
         self.selector.addItem(tr("Keine Karte"), userData=None)
         for kind, label in (
             ("wall", tr("Wandstärke")),
@@ -200,7 +200,7 @@ class LayerBar(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self.active = QComboBox(self)
+        self.active = BarComboBox(self)
         self.active.addItem(tr("Keine Schichtanalyse"), userData=False)
         self.active.addItem(tr("Schichtanalyse"), userData=True)
         self.active.currentIndexChanged.connect(lambda _index: self._emit())
