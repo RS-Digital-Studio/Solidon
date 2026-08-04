@@ -8,7 +8,10 @@ from pathlib import Path
 
 import pytest
 
+from app.branding import PROJECT_SUFFIX
+from app.core import examples
 from app.core.errors import ValidationError
+from app.core.paths import user_data_dir
 from app.core.scene import History, OperationDraft
 from app.core.scene.migrations import FORMAT_VERSION, Step, migrate
 from app.core.scene.project import (
@@ -455,3 +458,24 @@ def _rewrite_project_entry(path: Path, data: dict[str, object]) -> None:
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as container:
         for name, payload in entries.items():
             container.writestr(name, payload)
+
+
+def test_an_example_never_gets_an_autosave_beside_it() -> None:
+    """Die Installation ist kein Ablageort (§37.2, §38).
+
+    Zwei Sicherungen neben zwei Beispielen haben genau das angerichtet, wovor
+    diese Regel schützt: der Tour-Test blieb in einem Wiederherstellungsdialog
+    stehen, und ein hängender Test sagt nicht, warum er hängt. Unter
+    „Programme" wäre das Schreiben ohnehin verboten gewesen.
+
+    Der Name bleibt eindeutig — er trägt den des Beispiels —, damit zwei
+    offene Beispiele nicht dieselbe Sicherung überschreiben.
+    """
+    example = examples.directory() / f"weg1-halterung-anpassen{PROJECT_SUFFIX}"
+    target = autosave_path(example)
+    assert target.parent != example.parent
+    assert target.parent == user_data_dir() / "recovery"
+    assert example.name in target.name
+
+    ordinary = Path("irgendwo") / f"projekt{PROJECT_SUFFIX}"
+    assert autosave_path(ordinary).parent == ordinary.parent

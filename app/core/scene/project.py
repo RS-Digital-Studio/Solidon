@@ -31,6 +31,7 @@ from pathlib import Path, PureWindowsPath
 from typing import Any, Final
 
 from app.branding import APP_VERSION, PROJECT_SUFFIX
+from app.core import examples
 from app.core.errors import ValidationError
 from app.core.knowledge.parts.registry import LIBRARY_VERSION
 from app.core.log import get_logger
@@ -287,13 +288,25 @@ def load(path: Path) -> Project:
 # --- Autosave und Absturz-Wiederherstellung (§38) --------------------------------
 
 
+def _recovery_dir() -> Path:
+    return ensure_dir(user_data_dir() / "recovery")
+
+
 def autosave_path(path: Path | None) -> Path:
     """Neben dem Projekt — oder im Nutzerverzeichnis, solange es noch keinen
-    Namen hat."""
+    Namen hat.
+
+    **Ein Beispiel bekommt seines nie daneben.** Beispiele liegen in der
+    Installation (§37.2); dort zu schreiben ist unter „Programme" schlicht
+    nicht erlaubt und im Entwicklerbaum eine Verschmutzung, die niemand sucht.
+    Genau das war der Fall: zwei Sicherungen neben zwei Beispielen ließen den
+    Tour-Test in einem Wiederherstellungsdialog hängen, und ein Test, der
+    hängt, sagt nicht, warum.
+    """
     if path is None:
-        return (
-            ensure_dir(user_data_dir() / "recovery") / f"unsaved{PROJECT_SUFFIX}{AUTOSAVE_SUFFIX}"
-        )
+        return _recovery_dir() / f"unsaved{PROJECT_SUFFIX}{AUTOSAVE_SUFFIX}"
+    if path.parent == examples.directory():
+        return _recovery_dir() / f"{path.name}{AUTOSAVE_SUFFIX}"
     return path.with_name(path.name + AUTOSAVE_SUFFIX)
 
 
