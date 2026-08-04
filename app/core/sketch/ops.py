@@ -488,3 +488,60 @@ def sketch_loft(ctx: OpContext) -> OpResult:
     )
     solid = profiles.loft(bottom, top, params.height)
     return OpResult(outputs=[_created(params.name, str(_("Übergang")), solid)])
+
+
+# --- Fläche versetzen (Konzept P15 §7 Etappe 6, D10) ----------------------------
+
+
+@op_params
+class PushFaceParams(BaseParams):
+    distance: float = param(
+        title=_("Weg"),
+        default=2.0,
+        unit="mm",
+        doc=_(
+            "Wie weit die Fläche wandert. Positiv nach außen, negativ hinein — "
+            "dasselbe Werkzeug für beides."
+        ),
+    )
+    nx: float = param(
+        title=_("Richtung X"),
+        default=0.0,
+        doc=_(
+            "Welche Flächen bewegt werden: die, deren Normale hierhin zeigt. Eine "
+            "angeklickte Fläche trägt die Richtung selbst ein."
+        ),
+    )
+    ny: float = param(
+        title=_("Richtung Y"),
+        default=0.0,
+        doc=_("Zweite Achse der Richtung — siehe Richtung X."),
+    )
+    nz: float = param(
+        title=_("Richtung Z"),
+        default=1.0,
+        doc=_("Dritte Achse der Richtung. Vorgabe ist nach oben."),
+    )
+
+
+@register_op(
+    name="push_face",
+    title=_("Fläche versetzen"),
+    category="shaping",
+    params=PushFaceParams,
+    consumes=1,
+    produces=1,
+    applies_to=("face",),
+    doc=_(
+        "Greift eine Fläche und verschiebt sie entlang ihrer Normalen; die "
+        "Nachbarwände wachsen mit. Der Weg, eine Wand zu ändern, ohne die "
+        "Operation zu suchen, die sie erzeugt hat — bei einem importierten STEP "
+        "gibt es keine."
+    ),
+)
+def push_face(ctx: OpContext) -> OpResult:
+    """Press/Pull auf dem exakten Kern."""
+    params = cast(PushFaceParams, ctx.params)
+    source, solid = _brep_input(ctx)
+    moved = profiles.push_faces(solid, (params.nx, params.ny, params.nz), params.distance)
+    return OpResult(outputs=[dataclasses.replace(source, mesh=moved, features={})])

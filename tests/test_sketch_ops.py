@@ -344,3 +344,55 @@ def test_a_sketch_is_extruded_along_the_normal_of_its_plane() -> None:
     assert on_xy.bounds.size == pytest.approx((40.0, 20.0, 10.0), abs=1e-6)
     # Auf XZ liegt die Skizzenbreite in Z, und aufgezogen wird nach Y.
     assert on_xz.bounds.size == pytest.approx((40.0, 10.0, 20.0), abs=1e-6)
+
+
+# --- Fläche versetzen (Konzept P15 §7 Etappe 6, D10) ----------------------------
+
+
+def test_pushing_a_face_moves_the_wall_and_the_neighbours_follow() -> None:
+    """Press/Pull: eine Fläche greifen und versetzen, ohne den Rest neu zu
+    zeichnen.
+
+    Das Standardwerkzeug jedes CAD, und Formwerk hatte es nicht: eine Wand
+    zwei Millimeter herauszuziehen hieß, die Operation zu suchen, die sie
+    erzeugt hat, und ihre Zahl zu ändern — wenn es eine gab. Bei einem
+    importierten STEP gibt es keine.
+
+    Gemessen an der Hüllbox: der Quader wird in genau einer Achse länger, und
+    die Nachbarwände wachsen mit, statt eine Lücke zu lassen.
+    """
+    if not available():
+        pytest.skip("ohne B-Rep-Kern gibt es keine Flächen zum Greifen")
+
+    entry = brep_box(width=40.0, depth=30.0, height=20.0)
+    before = entry.mesh.bounds.size
+
+    result = run("push_face", entry=entry, distance=5.0, nx=1.0, ny=0.0, nz=0.0)
+
+    after = solid_of(result).bounds.size
+    assert after[0] == pytest.approx(before[0] + 5.0, abs=1e-6), "in X fünf länger"
+    assert after[1] == pytest.approx(before[1], abs=1e-6), "in Y unverändert"
+    assert after[2] == pytest.approx(before[2], abs=1e-6), "in Z unverändert"
+    assert solid_of(result).volume > entry.mesh.volume
+
+
+def test_pulling_a_face_inwards_removes_material() -> None:
+    """Ein negativer Weg zieht die Wand hinein — dasselbe Werkzeug."""
+    if not available():
+        pytest.skip("ohne B-Rep-Kern gibt es keine Flächen zum Greifen")
+
+    entry = brep_box(width=40.0, depth=30.0, height=20.0)
+
+    result = run("push_face", entry=entry, distance=-5.0, nx=1.0, ny=0.0, nz=0.0)
+
+    assert solid_of(result).bounds.size[0] == pytest.approx(35.0, abs=1e-6)
+    assert solid_of(result).volume < entry.mesh.volume
+
+
+def test_pushing_a_face_by_nothing_is_a_user_error() -> None:
+    """Null Weg ist keine Bewegung, sondern ein vergessener Wert."""
+    if not available():
+        pytest.skip("ohne B-Rep-Kern gibt es keine Flächen zum Greifen")
+
+    with pytest.raises(ValidationError):
+        run("push_face", entry=brep_box(), distance=0.0, nx=1.0, ny=0.0, nz=0.0)

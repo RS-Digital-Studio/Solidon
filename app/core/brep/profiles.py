@@ -468,3 +468,63 @@ def _finished(builder: Any, sentence: Any, base: Solid | None = None) -> Solid:
         raise GeometryError(detail=sentence) from problem
     _log.info("profile build via %s", type(builder).__name__)
     return base.replacing(shape) if base is not None else Solid(shape)
+
+
+def push_faces(solid: Solid, direction: tuple[float, float, float], distance: float) -> Solid:
+    """Versetzt die Flächen, die in eine Richtung zeigen, entlang ihrer Normalen.
+
+    Das ist Press/Pull: eine Wand greifen und verschieben, ohne den Rest neu zu
+    zeichnen. Über jeder gewählten Fläche entsteht ein Prisma ihres eigenen
+    Umrisses; nach außen wird es vereinigt, nach innen abgezogen. Damit wachsen
+    die Nachbarwände mit, statt eine Stufe zu hinterlassen — das Prisma hat
+    genau die Kontur der Fläche, die es fortsetzt.
+
+    **Nicht** über ``BRepOffsetAPI_MakeOffsetShape``: das war der erste Versuch
+    und versetzt *alle* Flächen des Körpers. Eine Ausnahmeliste nimmt es zwar
+    entgegen, aber ``PerformByJoin`` liest sie nicht — der Quader wurde in
+    beide Richtungen kürzer, und der Test sagte es sofort.
+    """
+    require()
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.gp import gp_Vec
+
+    if abs(distance) <= 1e-9:
+        raise ValidationError(
+            "distance",
+            _("Ohne Weg bewegt sich nichts — dieser Wert darf nicht null sein."),
+            value=distance,
+        )
+    wanted = _facing(solid, direction)
+    if not wanted:
+        raise ValidationError(
+            "nx",
+            _("In diese Richtung zeigt keine ebene Fläche dieses Körpers."),
+            value=direction,
+            constraint="no_face",
+        )
+
+    shape = solid.shape
+    for face, normal in wanted:
+        reach = gp_Vec(*(value * abs(distance) for value in normal))
+        prism = BRepPrimAPI_MakePrism(face, reach if distance > 0 else reach.Reversed()).Shape()
+        joined = BRepAlgoAPI_Fuse(shape, prism) if distance > 0 else BRepAlgoAPI_Cut(shape, prism)
+        joined.Build()
+        shape = joined.Shape()
+    return Solid(shape)
+
+
+def _facing(
+    solid: Solid, direction: tuple[float, float, float]
+) -> list[tuple[Any, tuple[float, float, float]]]:
+    """Die ebenen Flächen, deren Normale in die gegebene Richtung zeigt, mit
+    ihrer eigenen Normalen — das Prisma folgt der Fläche, nicht der Anfrage."""
+    length = math.sqrt(sum(value * value for value in direction))
+    if length <= 1e-9:
+        return []
+    unit = [value / length for value in direction]
+    return [
+        (face, normal)
+        for face, normal, _centre in _planar_faces(solid)
+        if sum(a * b for a, b in zip(normal, unit, strict=True)) > 0.9
+    ]
