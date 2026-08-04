@@ -16,7 +16,7 @@ sondern eine Zahl in der Statuszeile (§30.1).
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -61,6 +61,14 @@ PICK_PX = 5.0
 #: Eine leere Skizze beginnt auf der XY-Ebene — die Ops setzen sie über
 #: ihren Flächenparameter dorthin, wo sie hingehört (§30.1).
 EMPTY = Sketch(plane="plane:xy", elements=())
+
+#: Ab wann eine Fläche als waagerecht gilt und ab wann als senkrecht, gemessen
+#: am Betrag der Z-Komponente ihrer Normalen. Die Werte entsprechen 15° und
+#: 75° gegen die Waagerechte — dazwischen ist die Fläche geneigt, und dann ist
+#: „parallel" oder „quer" beides falsch. Keine Toleranz im Sinne von Regel 7:
+#: es geht um die Wortwahl eines Hinweises, nicht um Geometrie.
+_FLAT_ENOUGH = 0.966
+_STEEP_ENOUGH = 0.259
 
 
 def _constraint_label(kind: SketchConstraintKind) -> str:
@@ -178,6 +186,10 @@ class SketchCanvas(QWidget):
         self._scale = 4.0
         self._centre = QPointF(0.0, 0.0)
         self._panning: QPoint | None = None
+        self._face_normals: dict[str, tuple[float, float, float]] = {}
+        """Die Normalen der Flächen, auf denen gezeichnet werden darf.
+
+        Nur für den Hinweis zur Schichtrichtung — siehe ``offer_faces``."""
         self._bed: tuple[float, float] | None = None
         """Breite und Tiefe des Druckbetts, oder ``None``.
 
@@ -190,8 +202,55 @@ class SketchCanvas(QWidget):
         self._bed = size
         self.update()
 
+    def layer_note(self) -> str:
+        """Wie die Schichten zu dieser Ebene liegen (E1).
+
+        Auf XY liegen sie **parallel** zur Zeichenfläche: der Körper wächst aus
+        dem Bild heraus, jede gezeichnete Linie ist eine Kontur. Auf XZ und YZ
+        stehen sie quer dazu — dann läuft die Schichtung durch die Zeichnung
+        hindurch, und was hier waagerecht aussieht, ist im Druck eine Fuge.
+
+        Bei einer angeklickten Fläche entscheidet ihre Neigung, und die ist
+        bekannt: die Anwendung reicht sie mit der Fläche herein. Der Satz sagt
+        deshalb auch dort etwas, statt sich auf „kommt darauf an"
+        zurückzuziehen.
+
+        Das entscheidet über Festigkeit und Überhänge und steht deshalb an der
+        Ebenenwahl, wo es jemanden erreicht, bevor er zeichnet. Eine
+        Beschriftung und keine Zeichnung: die Richtung ist ein Satz, kein Bild.
+        """
+        plane = self.sketch.plane
+        if plane.startswith("feature:"):
+            normal = self._face_normals.get(plane.partition(":")[2])
+            if normal is None:
+                return tr("Auf einer Fläche des Körpers — die Schichtrichtung folgt ihrer Neigung.")
+            upright = abs(normal[2])
+            if upright > _FLAT_ENOUGH:
+                return tr("Schichten liegen parallel zur Zeichnung — sie wächst nach oben heraus.")
+            if upright < _STEEP_ENOUGH:
+                return tr(
+                    "Schichten stehen quer zur Zeichnung — was hier waagerecht liegt, "
+                    "wird eine Fuge."
+                )
+            return tr("Diese Fläche ist geneigt — der Körper wächst schräg zur Schichtung.")
+        if plane == "plane:xy":
+            return tr("Schichten liegen parallel zur Zeichnung — sie wächst nach oben heraus.")
+        return tr(
+            "Schichten stehen quer zur Zeichnung — was hier waagerecht liegt, wird eine Fuge."
+        )
+
+    def offer_faces(self, faces: Mapping[str, tuple[float, float, float]]) -> None:
+        """Die planaren Flächen, auf denen gezeichnet werden kann.
+
+        Nur die Normalen, nicht die Flächen selbst: der Zeichenbereich rechnet
+        nicht in 3D, er braucht die Richtung ausschließlich für den Satz über
+        die Schichtung. Alles Weitere macht ``app.core.sketch.planes`` bei der
+        Auswertung neu — hier etwas zu speichern hieße, es veralten zu lassen.
+        """
+        self._face_normals = dict(faces)
+
     def set_plane(self, plane: str) -> None:
-        """Auf welcher Hauptebene die Skizze liegt (§30.1).
+        """Auf welcher Ebene die Skizze liegt (§30.1).
 
         Sie entscheidet, wohin extrudiert wird — nicht, wie gezeichnet wird:
         die Zeichenfläche bleibt eine Fläche, und die zwei Achsen darauf
@@ -967,7 +1026,22 @@ class SketchPanel(QWidget):
             lambda _index: self.canvas.set_plane(str(self.plane_choice.currentData()))
         )
         tools.addWidget(self.plane_choice)
+
+        # Was die Ebene für den Druck bedeutet, direkt daneben (E1). Ein Satz
+        # an der Wahl erreicht jemanden, bevor er zeichnet; im Prüfbericht
+        # stünde er, nachdem alles fertig ist.
+        self.layer_note = QLabel(self.canvas.layer_note(), self)
+        self.layer_note.setWordWrap(True)
+        note_font = self.layer_note.font()
+        note_font.setItalic(True)
+        self.layer_note.setFont(note_font)
+        self.canvas.sketchChanged.connect(lambda: self.layer_note.setText(self.canvas.layer_note()))
+        tools.addWidget(self.layer_note)
         tools.addStretch(1)
+
+        # Die drei Grundebenen stehen immer; die Flächen des Körpers kommen
+        # dazu, sobald einer da ist. Deshalb hier keine feste Liste.
+        self._plane_count = self.plane_choice.count()
 
         undo_button = QToolButton(self)
         undo_button.setText(tr("Rückgängig"))
@@ -1076,6 +1150,28 @@ class SketchPanel(QWidget):
     def set_bed(self, size: tuple[float, float] | None) -> None:
         """Den Bauraum an die Zeichenfläche weiterreichen (E1)."""
         self.canvas.set_bed(size)
+
+    def offer_faces(self, faces: Sequence[tuple[str, str, tuple[float, float, float]]]) -> None:
+        """Die planaren Flächen der Szene als weitere Ebenen anbieten (§30.1).
+
+        ID, Beschriftung, Normale — in dieser Reihenfolge. Die drei
+        Grundebenen bleiben stehen und vorn: sie gelten immer, die Flächen nur
+        solange der Körper sie hat.
+
+        Ein Auswahlfeld und kein zweites Bedienelement daneben. Eine Fläche ist
+        eine Ebene wie XY auch, und wer sie in einen eigenen Knopf auslagert,
+        behauptet einen Unterschied, den es beim Zeichnen nicht gibt (E11).
+        """
+        while self.plane_choice.count() > self._plane_count:
+            self.plane_choice.removeItem(self.plane_choice.count() - 1)
+        for feature_id, label, _normal in faces:
+            self.plane_choice.addItem(label, userData=f"feature:{feature_id}")
+        self.canvas.offer_faces({feature_id: normal for feature_id, _label, normal in faces})
+        # Die Wahl kann durch das Entfernen weggefallen sein — dann steht sie
+        # jetzt auf XY, und der Hinweis darunter muss das mitbekommen.
+        chosen = self.plane_choice.findData(self.canvas.sketch.plane)
+        self.plane_choice.setCurrentIndex(max(0, chosen))
+        self.layer_note.setText(self.canvas.layer_note())
 
     def sketch_text(self) -> str:
         """Der Parameterwert, wie ihn die Skizzen-Ops lesen (§30.1) — leer,

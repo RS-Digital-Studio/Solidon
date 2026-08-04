@@ -8,8 +8,10 @@ nicht. Genau daran erkennt man, dass der Weg stimmt.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 
+import numpy as np
 import pytest
 
 from app.core.brep.kernel import Solid, available
@@ -17,6 +19,8 @@ from app.core.errors import ValidationError
 from app.core.registry import REGISTRY
 from app.core.scene import ResultCache, evaluate
 from app.core.scene.cancel import NeverCancelled
+from app.core.sketch import shapes
+from app.core.sketch.planes import frame_for
 from app.core.sketch.serialize import sketch_to_text
 from app.core.types import (
     Document,
@@ -396,3 +400,145 @@ def test_pushing_a_face_by_nothing_is_a_user_error() -> None:
 
     with pytest.raises(ValidationError):
         run("push_face", entry=brep_box(), distance=0.0, nx=1.0, ny=0.0, nz=0.0)
+
+
+# --- Skizzenebene aus einer Fläche (§30.1, Konzept P15 D9) ----------------------
+
+
+def sketch_on(plane: str, size: float = 10.0) -> str:
+    """Ein Quadrat auf der genannten Ebene, als Skizzentext."""
+    drawn = dataclasses.replace(shapes.rectangle(size, size), plane=plane)
+    return sketch_to_text(drawn)
+
+
+def test_frame_of_a_face_points_away_from_the_body() -> None:
+    """Die Normale einer Fläche zeigt nicht verlässlich nach außen.
+
+    OpenCASCADE führt sie als Achsenrichtung der Ebene, und die hängt an der
+    Orientierung der Fläche im Körper: der Quader oben meldet für die Fläche
+    bei x = −20 die Richtung +X, also nach innen. Wer darauf extrudiert, baut
+    in den Körper hinein. Der Rahmen richtet sie deshalb am Körper aus — und
+    das ist der Grund, warum es diesen Test gibt.
+    """
+    box = brep_box()
+    away = frame_for("feature:face_1", [box])
+    assert away.origin == pytest.approx((-20.0, 0.0, 10.0))
+    assert away.normal == pytest.approx((-1.0, 0.0, 0.0))
+
+    other = frame_for("feature:face_2", [box])
+    assert other.normal == pytest.approx((1.0, 0.0, 0.0))
+
+
+def test_frame_axes_are_orthonormal_and_right_handed() -> None:
+    """Sonst verzerrt die Skizze — und zwar unauffällig.
+
+    Eine schiefe zweite Achse liefert immer noch einen Körper, nur eben einen
+    falschen. Die Probe ist billig, der Fehler wäre teuer.
+    """
+    box = brep_box()
+    for name in ("face_1", "face_3", "face_6"):
+        frame = frame_for(f"feature:{name}", [box])
+        x_axis = np.asarray(frame.x_axis)
+        y_axis = np.asarray(frame.y_axis)
+        normal = np.asarray(frame.normal)
+        assert float(np.linalg.norm(x_axis)) == pytest.approx(1.0)
+        assert float(np.linalg.norm(y_axis)) == pytest.approx(1.0)
+        assert float(x_axis @ y_axis) == pytest.approx(0.0, abs=1e-9)
+        assert np.cross(x_axis, y_axis) == pytest.approx(normal)
+
+
+def test_the_top_face_matches_the_global_plane() -> None:
+    """Eine waagerechte Fläche darf nichts drehen.
+
+    Wäre die erste Achse anders gewählt, käme dieselbe Skizze auf derselben
+    Höhe gedreht heraus — und niemand wüsste, warum.
+    """
+    frame = frame_for("feature:face_6", [brep_box()])
+    assert frame.x_axis == pytest.approx((1.0, 0.0, 0.0))
+    assert frame.y_axis == pytest.approx((0.0, 1.0, 0.0))
+    assert frame.normal == pytest.approx((0.0, 0.0, 1.0))
+
+
+def test_extruding_on_a_face_grows_away_from_it() -> None:
+    """Der eigentliche Zweck: ein Klotz auf der Seitenwand, nicht darin.
+
+    Zehn auf zehn, fünf hoch, auf der Fläche bei x = +20 — der Körper muss bei
+    genau 20 anfangen und bei 25 aufhören. Das Volumen prüft mit, dass die
+    Skizze dabei nicht verzerrt wurde.
+    """
+    box = brep_box()
+    result = run(
+        "sketch_extrude", box, sketch=sketch_on("feature:face_2"), height=5.0, name="Klotz"
+    )
+    body = solid_of(result)
+    assert body.volume == pytest.approx(500.0, rel=1e-6)
+    low, high = body.bounds.minimum, body.bounds.maximum
+    assert low[0] == pytest.approx(20.0)
+    assert high[0] == pytest.approx(25.0)
+    # Auf der Fläche zentriert, nicht am Weltursprung: die Skizze liegt im
+    # Rahmen der Fläche, und deren Mitte ist (20, 0, 10).
+    assert (low[1] + high[1]) / 2.0 == pytest.approx(0.0, abs=1e-6)
+    assert (low[2] + high[2]) / 2.0 == pytest.approx(10.0, abs=1e-6)
+
+
+def test_an_unknown_face_says_which_ones_exist() -> None:
+    """Regel 17: der Fehler nennt einen Weg weiter.
+
+    Eine Fläche kann verschwinden, weil eine Operation davor sie verschluckt
+    hat — dann ist die Skizze nicht falsch, sondern verwaist, und der Nutzer
+    braucht die Liste dessen, was jetzt da ist.
+    """
+    with pytest.raises(ValidationError) as caught:
+        frame_for("feature:face_99", [brep_box()])
+    assert caught.value.suggestions
+
+
+# --- Extrudieren bis zu einer Fläche (D14) --------------------------------------
+
+
+def test_extruding_up_to_a_face_takes_its_height_from_there() -> None:
+    """Die Höhe steht dann nicht mehr im Dialog, sondern im Körper.
+
+    Zwanzig Millimeter abzumessen und einzutippen ist die Art Arbeit, die eine
+    Anwendung übernehmen soll: die Oberseite des Quaders liegt bei z = 20, also
+    ist die Höhe 20 — und sie bleibt es, wenn der Quader morgen 25 hoch ist.
+    """
+    box = brep_box()
+    result = run("sketch_extrude", box, shape="rectangle", length=10, width=10, up_to="face_6")
+    body = solid_of(result)
+    assert body.volume == pytest.approx(100.0 * 20.0, rel=1e-6)
+    assert body.bounds.maximum[2] == pytest.approx(20.0)
+
+
+def test_a_target_parallel_to_the_direction_is_refused() -> None:
+    """Eine Wand, an der man entlangfährt, wird nie erreicht.
+
+    Ohne diese Prüfung käme eine Division durch beinahe null heraus und daraus
+    ein Körper von einigen Kilometern Höhe — rechnerisch erklärbar, als
+    Antwort auf „bis zu dieser Fläche" aber unbrauchbar.
+    """
+    box = brep_box()
+    with pytest.raises(ValidationError) as caught:
+        run("sketch_extrude", box, shape="rectangle", length=10, width=10, up_to="face_2")
+    assert caught.value.suggestions
+
+
+def test_a_target_behind_the_sketch_is_refused() -> None:
+    """Nach unten extrudieren heißt, die Skizze auf die andere Fläche zu legen.
+
+    Eine negative Höhe stillschweigend als positive zu lesen, baute den Körper
+    in die falsche Richtung; sie durchzulassen, baute ihn rückwärts durch die
+    Skizze. Beides wäre eine Antwort auf eine Frage, die niemand gestellt hat.
+    """
+    box = brep_box(height=20.0)
+    with pytest.raises(ValidationError) as caught:
+        run(
+            "sketch_extrude",
+            box,
+            shape="rectangle",
+            length=10,
+            width=10,
+            sketch=sketch_on("feature:face_6"),
+            up_to="face_5",
+        )
+    assert caught.value.suggestions

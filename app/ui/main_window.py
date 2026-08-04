@@ -296,6 +296,26 @@ def _needs_objects(count: int) -> str:
     return tr("Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.")
 
 
+def _face_side(normal: Any) -> str:
+    """Wo eine Fläche sitzt, in einem Wort.
+
+    Nur nach der Richtung ihrer Normalen, ohne den Körper zu befragen. Das ist
+    grob und reicht: gebraucht wird es, um zwei Flächen in einer Liste
+    auseinanderzuhalten, nicht um sie zu vermessen.
+
+    Die Normale kann nach innen zeigen — ``app.core.sketch.planes`` dreht sie
+    erst bei der Auswertung um. „Oben" und „unten" können deshalb vertauscht
+    sein; für das Wiedererkennen in einer Liste ändert das nichts, und die
+    Richtung, in die extrudiert wird, entscheidet ohnehin der Kern.
+    """
+    x, y, z = (float(normal[0]), float(normal[1]), float(normal[2]))
+    if abs(z) >= max(abs(x), abs(y)):
+        return tr("oben") if z >= 0.0 else tr("unten")
+    if abs(x) >= abs(y):
+        return tr("rechts") if x >= 0.0 else tr("links")
+    return tr("hinten") if y >= 0.0 else tr("vorn")
+
+
 class MainWindow(QMainWindow):
     """Fenster, Menüs und die Verdrahtung zwischen Sitzung und Panels."""
 
@@ -1697,6 +1717,45 @@ class MainWindow(QMainWindow):
         feature = entry.features.get(feature_id) if entry else None
         return feature.kind if feature is not None else None
 
+    def _drawable_faces(self) -> list[tuple[str, str, tuple[float, float, float]]]:
+        """Die planaren Flächen der Szene, auf denen gezeichnet werden kann.
+
+        Nach Fläche absteigend: auf einer Deckplatte zeichnet man, auf einer
+        Fase von zwei Quadratmillimetern nicht, und eine Liste in
+        Erkennungsreihenfolge stellte beide gleichberechtigt nebeneinander.
+        Der Deckel steht damit oben, wo er hingehört.
+
+        Die Beschriftung nennt Objekt, Größe und Lage — eine Feature-ID allein
+        („face_7") sagt niemandem, welche Fläche gemeint ist. Ausgewählt wird
+        sie ohnehin im Baum oder im Viewport; hier muss man sie nur
+        wiedererkennen.
+        """
+        result = self.session.last_result
+        if result is None:
+            return []
+        found: list[tuple[float, str, str, tuple[float, float, float]]] = []
+        for entry in result.scene.objects.values():
+            for feature_id, feature in entry.features.items():
+                if feature.kind != "face":
+                    continue
+                area = float(feature.params.get("area", 0.0))
+                normal = feature.params.get("normal", (0.0, 0.0, 1.0))
+                label = tr("Fläche an {object} — {area} mm², {side}").format(
+                    object=entry.name,
+                    area=f"{area:.0f}",
+                    side=_face_side(normal),
+                )
+                found.append(
+                    (
+                        area,
+                        feature_id,
+                        label,
+                        (float(normal[0]), float(normal[1]), float(normal[2])),
+                    )
+                )
+        found.sort(key=lambda row: -row[0])
+        return [(feature_id, label, normal) for _area, feature_id, label, normal in found]
+
     # --- Skizzenmodus (§30.1 Stufe zwei) ----------------------------------------
 
     def _escape(self) -> None:
@@ -1736,6 +1795,7 @@ class MainWindow(QMainWindow):
         # dafür keine neue Rechnung — nur die Zahl an die richtige Stelle.
         volume = self.session.profile.printer.build_volume
         panel.set_bed((float(volume[0]), float(volume[1])))
+        panel.offer_faces(self._drawable_faces())
         self._sketch_panel = panel
         self._sketch_target = op_name
         self.middle_stack.addWidget(panel)

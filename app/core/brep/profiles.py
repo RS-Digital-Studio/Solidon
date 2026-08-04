@@ -19,7 +19,7 @@ from app.core.brep.kernel import Solid, require
 from app.core.errors import PROGRAMMING_ERRORS, GeometryError, ValidationError
 from app.core.log import get_logger
 from app.core.sketch.profile import Profile
-from app.core.types import Point2
+from app.core.types import PlaneFrame, Point2
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -122,12 +122,41 @@ def _face(profile: Profile, lift: _Lift) -> Any:
     return BRepBuilderAPI_MakeFace(_wire(profile, lift), True).Face()
 
 
-def extrude(profile: Profile, height: float, plane: str = "plane:xy") -> Solid:
+def _lift_frame(frame: PlaneFrame) -> _Lift:
+    """Die Hebefunktion eines freien Rahmens (§30.1).
+
+    Dieselbe Rechnung wie bei den drei Hauptebenen, nur mit Achsen, die nicht
+    im Voraus feststehen: der Zeichenpunkt wird als Vielfaches der beiden
+    Rahmenachsen auf den Ursprung addiert."""
+
+    def lift(point: Point2) -> Any:
+        from OCP.gp import gp_Pnt
+
+        return gp_Pnt(
+            frame.origin[0] + point[0] * frame.x_axis[0] + point[1] * frame.y_axis[0],
+            frame.origin[1] + point[0] * frame.x_axis[1] + point[1] * frame.y_axis[1],
+            frame.origin[2] + point[0] * frame.x_axis[2] + point[1] * frame.y_axis[2],
+        )
+
+    return lift
+
+
+def extrude(
+    profile: Profile,
+    height: float,
+    plane: str = "plane:xy",
+    frame: PlaneFrame | None = None,
+) -> Solid:
     """Zieht den Umriss senkrecht zu seiner Ebene auf.
 
     Auf XY liegt der Boden bei Z = 0 und es geht nach oben — der Normalfall.
     Die beiden anderen Hauptebenen wachsen entlang ihrer eigenen Normalen;
     eine Skizze, die auf XZ liegt, wird nach Y aufgezogen und nicht nach oben.
+
+    Ist ``frame`` gesetzt, gilt er statt ``plane``: die Skizze liegt dann auf
+    einer Fläche eines vorhandenen Körpers, und ``plane`` trägt nur noch deren
+    ID. Den Rahmen rechnet ``app.core.sketch.planes`` aus dem Feature aus — hier
+    unten ist von Szenen nichts bekannt und soll auch nichts bekannt sein.
 
     Eine unbekannte Ebene wird abgewiesen statt stillschweigend als XY
     gelesen: bis hierher trug ``Sketch.plane`` seinen Wert bis in die
@@ -140,9 +169,12 @@ def extrude(profile: Profile, height: float, plane: str = "plane:xy") -> Solid:
 
     if height <= 0.0:
         raise ValidationError("height", _("Dieses Maß muss größer als null sein."), value=height)
-    if plane not in PLANES:
+    if frame is not None:
+        lift, normal = _lift_frame(frame), frame.normal
+    elif plane in PLANES:
+        lift, normal = PLANES[plane]
+    else:
         raise ValidationError("plane", _("Diese Ebene gibt es nicht."), value=plane)
-    lift, normal = PLANES[plane]
     direction = gp_Vec(normal[0] * height, normal[1] * height, normal[2] * height)
     return Solid(BRepPrimAPI_MakePrism(_face(profile, lift), direction).Shape())
 

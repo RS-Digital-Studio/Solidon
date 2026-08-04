@@ -23,10 +23,11 @@ from app.core.brep.kernel import Solid, require
 from app.core.errors import ValidationError
 from app.core.registry import op_params, param, register_op
 from app.core.sketch import shapes
+from app.core.sketch.planes import frame_for, frame_of, height_to, is_feature_plane
 from app.core.sketch.profile import Profile, profile_of, shifted
 from app.core.sketch.serialize import sketch_from_text
 from app.core.sketch.solver import solve_sketch
-from app.core.types import BaseParams, OpContext, OpResult, SceneObject
+from app.core.types import BaseParams, OpContext, OpResult, PlaneFrame, SceneObject
 from app.i18n import _
 
 #: Ein Satz, den drei Parameterschemata teilen — deshalb steht er einmal hier.
@@ -80,6 +81,42 @@ def _plane_of(sketch_text: str) -> str:
     if not sketch_text:
         return "plane:xy"
     return sketch_from_text(sketch_text).plane
+
+
+def _frame_of(ctx: OpContext, plane: str) -> PlaneFrame | None:
+    """Der Rahmen einer Flächenebene, sonst nichts.
+
+    ``None`` heißt nicht „unbekannt", sondern „eine der drei Hauptebenen" —
+    die kennt der B-Rep-Kern selbst, und ihm die Szene zu reichen, damit er
+    nachschlägt, was feststeht, wäre eine Abhängigkeit ohne Gegenwert."""
+    if not is_feature_plane(plane):
+        return None
+    return frame_for(plane, ctx.scene.objects.values())
+
+
+def _height_of(
+    ctx: OpContext,
+    height: float,
+    plane: str,
+    frame: PlaneFrame | None,
+    up_to: str,
+) -> float:
+    """Die eingetragene Höhe — oder die, die bis zur Zielfläche reicht (D14).
+
+    Zwanzig Millimeter abzumessen und einzutippen ist Arbeit, die die Anwendung
+    übernehmen kann, und das Ergebnis hält: wächst der Körper darunter, wächst
+    dieser mit. Die Höhe bleibt trotzdem ein eigener Parameter — ohne
+    Zielfläche gilt sie, und eine Operation, die zwei Wege je nach Belegung
+    geht, ist immer noch **eine** Operation (E11).
+    """
+    if not up_to:
+        return height
+    # Die Normalen der drei Hauptebenen stehen in ``profiles.PLANES`` — sie
+    # hier noch einmal aufzuschreiben hieße, zwei Wahrheiten zu führen.
+    upright = profiles.PLANES[plane][1]
+    start = frame if frame is not None else frame_of(upright, (0.0, 0.0, 0.0))
+    target = frame_for(f"feature:{up_to}", ctx.scene.objects.values())
+    return height_to(start, target)
 
 
 def _profile_for(
@@ -137,6 +174,15 @@ class SketchExtrudeParams(BaseParams):
         placement="advanced",
         doc=_CORNERS_DOC,
     )
+    up_to: str = param(
+        title=_("Bis zur Fläche"),
+        default="",
+        placement="advanced",
+        doc=_(
+            "Statt der Höhe: bis auf die Höhe dieser Fläche. Leer heißt, die "
+            "Höhe darüber gilt. Eine angeklickte Fläche trägt sich selbst ein."
+        ),
+    )
     name: str = param(title=_("Name"), default="", placement="advanced", doc=_NAME_DOC)
     sketch: str = param(
         title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
@@ -162,7 +208,10 @@ def sketch_extrude(ctx: OpContext) -> OpResult:
     profile = _profile_for(
         ctx, params.sketch, params.shape, params.length, params.width, params.corners
     )
-    solid = profiles.extrude(profile, params.height, _plane_of(params.sketch))
+    plane = _plane_of(params.sketch)
+    frame = _frame_of(ctx, plane)
+    height = _height_of(ctx, params.height, plane, frame, params.up_to)
+    solid = profiles.extrude(profile, height, plane, frame)
     return OpResult(outputs=[_created(params.name, str(_("Grundform")), solid)])
 
 

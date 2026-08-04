@@ -1015,6 +1015,23 @@ class Sketch:
 
 
 @dataclass(frozen=True, slots=True)
+class PlaneFrame:
+    """Wohin eine Skizzenebene im Raum zeigt (§30.1).
+
+    Der Ursprung ist der Nullpunkt der Zeichnung, ``x_axis`` und ``y_axis``
+    sind ihre beiden Richtungen, ``normal`` steht senkrecht darauf und ist die,
+    in die extrudiert wird. Alle drei sind Einheitsvektoren und rechtshändig.
+
+    Bei den drei Hauptebenen steht das fest. Bei ``feature:<id>`` wird der
+    Rahmen aus der Fläche gerechnet — siehe ``app.core.sketch.planes``."""
+
+    origin: Vec3
+    x_axis: Vec3
+    y_axis: Vec3
+    normal: Vec3
+
+
+@dataclass(frozen=True, slots=True)
 class SolvedSketch:
     """Das Ergebnis des Solvers: dieselben Elemente mit gelösten Koordinaten.
 
