@@ -129,6 +129,25 @@ class ValidationError(UserError):
         self.constraint = constraint
 
 
+class NeedsSolidError(UserError):
+    """Die Operation braucht einen exakten Körper, bekommt aber ein Netz (§30).
+
+    Vorher war das eine :class:`ValidationError`, und die heißt „Ein Wert liegt
+    außerhalb des zulässigen Bereichs" — für einen Winkel von 2°, der
+    einwandfrei war. Der richtige Satz stand im ``detail`` und kam nie an;
+    gesucht hätte man danach am falschen Ende, nämlich bei den Zahlen.
+
+    Der Vorschlag ist bewusst schmal: einen Rückweg vom Netz zum exakten Körper
+    gibt es nicht (er stünde sonst hier), und einen Knopf anzubieten, der nichts
+    tut, wäre schlimmer als keiner. Was hilft, sagt der Satz.
+    """
+
+    default_title: ClassVar[TranslatableText] = _(
+        "Diese Operation arbeitet nur auf einem exakten Körper."
+    )
+    default_suggestions: ClassVar[tuple[Action, ...]] = (CANCEL,)
+
+
 class SketchConflictError(UserError):
     """Zwei Bedingungen einer Skizze vertragen sich nicht (§30.1).
 

@@ -20,7 +20,7 @@ from typing import cast
 from app.core.brep import edit, profiles, step
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
-from app.core.errors import InternalError, ValidationError
+from app.core.errors import InternalError, NeedsSolidError, ValidationError
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
 from app.i18n import _
@@ -439,11 +439,13 @@ def _brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
     require()
     source = ctx.inputs[0]
     if not isinstance(source.mesh, Solid):
-        raise ValidationError(
-            field="in",
-            detail=_("Diese Operation braucht einen B-Rep-Körper; hier liegt ein Netz."),
-            value=source.id,
-            constraint="needs_brep",
+        raise NeedsSolidError(
+            detail=_(
+                "{name} ist ein Netz. Exakte Körper kommen aus einer STEP-Datei "
+                "oder aus den Grundformen, deren Name mit Exakt beginnt."
+            ),
+            values={"name": source.name},
+            object_id=source.id,
         )
     return source, source.mesh
 

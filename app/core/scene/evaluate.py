@@ -531,12 +531,26 @@ def check_placement(scene: Scene) -> list[Finding]:
 
 
 def _finding_from(error: AppError, operation: Operation) -> Finding:
+    """Ein Fehler als Zeile im Prüfbericht (§17.3, §33.1).
+
+    Genommen wird der Detailsatz, wo es einen gibt. Bisher stand hier nur der
+    Titel — und der ist die Art des Fehlers, nicht sein Grund: „Ein Wert liegt
+    außerhalb des zulässigen Bereichs" für einen Körper, dessen Bauart nicht
+    passte. Wer danach sucht, sucht bei den Zahlen.
+
+    Der Titel geht dabei nicht verloren: er steht in ``values`` und damit im
+    Bericht wie im Fehlercontainer.
+    """
+    values = {key: str(value) for key, value in error.values.items()}
+    if error.detail is not None:
+        values["kind"] = str(error.title)
     return Finding(
         code=f"op.{operation.op}.{type(error).__name__}",
         severity="error",
-        message=error.title,
+        message=error.detail if error.detail is not None else error.title,
+        object_id=error.object_id,
         op_id=operation.id,
-        values={key: str(value) for key, value in error.values.items()},
+        values=values,
     )
 
 

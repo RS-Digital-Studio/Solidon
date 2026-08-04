@@ -133,6 +133,22 @@ def registry() -> Registry:
         raise GeometryError()
 
     @register_op(
+        name="detailed_failure",
+        title=_("Scheitert mit Grund"),
+        category="boolean",
+        params=EmptyParams,
+        consumes=1,
+        produces=1,
+        doc=_("Testfassung."),
+        registry=own,
+    )
+    def failing_with_detail(ctx: OpContext) -> OpResult:
+        raise GeometryError(
+            detail=_("Der Schlitz ist schmaler als die Düse."),
+            object_id=ctx.inputs[0].id,
+        )
+
+    @register_op(
         name="cancelling_object",
         title=_("Bricht ab"),
         category="prepare",
@@ -259,6 +275,31 @@ def test_a_failing_operation_stops_the_chain_with_its_error(
     assert any(
         finding.code.startswith("op.failing_object") for finding in result.scene.report.findings
     )
+
+
+def test_the_report_carries_the_reason_not_only_the_kind(
+    history: History, document: Document, profile: Profile, registry: Registry
+) -> None:
+    """§33.1: der Titel nennt die Art des Fehlers, das Detail seinen Grund.
+
+    Der Bericht nahm bisher nur den Titel — und der ist bei einer
+    ValidationError „Ein Wert liegt außerhalb des zulässigen Bereichs", auch
+    wenn kein Wert schuld war. Der Satz, der die Sache erklärt, stand im Detail
+    und kam nie an; die Art des Fehlers steht dafür jetzt in ``values``.
+    """
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Scheitert"), [OperationDraft(op="detailed_failure", inputs=("obj_1",))])
+
+    result = evaluate(document, profile, registry=registry)
+    failure = next(
+        finding
+        for finding in result.scene.report.findings
+        if finding.code.startswith("op.detailed_failure")
+    )
+
+    assert "Der Schlitz ist schmaler als die Düse" in str(failure.message)
+    assert "kind" in failure.values, "die Art des Fehlers geht nicht verloren"
+    assert failure.object_id == "obj_1", "und der Körper, den er meint, steht dabei"
 
 
 def test_an_invalid_parameter_stops_before_the_operation_runs(

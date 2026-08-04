@@ -17,7 +17,7 @@ import trimesh
 from app.core.brep import edit, step
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, available, tessellate
-from app.core.errors import GeometryError, ValidationError
+from app.core.errors import GeometryError, NeedsSolidError, ValidationError
 from app.core.export.writer import export_bytes, plan_export, write_plan
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.registry import REGISTRY
@@ -256,14 +256,25 @@ def test_chamfer_edges_runs_as_an_operation(profile: Profile) -> None:
 
 
 def test_a_mesh_body_is_turned_away_with_a_sentence(profile: Profile) -> None:
+    """§33.1: der Titel nennt die Art des Fehlers, das Detail seinen Grund.
+
+    Vorher war das eine ValidationError, und die heißt „Ein Wert liegt
+    außerhalb des zulässigen Bereichs" — für einen Radius, der einwandfrei war.
+    Der erklärende Satz stand im Detail und erreichte den Prüfbericht nicht;
+    wer danach suchte, suchte bei den Zahlen.
+    """
     entry = SceneObject(
         id="obj_1", name="Netz", mesh=MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
     )
 
-    with pytest.raises(ValidationError) as problem:
+    with pytest.raises(NeedsSolidError) as problem:
         run("fillet_edges", entry, profile, radius=1.0, edges="all")
 
-    assert problem.value.constraint == "needs_brep"
+    error = problem.value
+    assert "exakten Körper" in str(error.title)
+    assert error.detail is not None and "Netz" in str(error.detail)
+    assert error.object_id == "obj_1", "der Fehler nennt den Körper, den er meint"
+    assert error.suggestions, "Regel 17: nie ohne Handlungsvorschlag"
 
 
 def test_brep_to_mesh_is_a_step_in_the_stack(profile: Profile) -> None:
