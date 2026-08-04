@@ -112,3 +112,119 @@ def test_a_size_is_never_hardcoded_in_the_sheet() -> None:
     sizes = {size for size, _weight in type_scale(10).values()}
     for match in re.finditer(r"font-size:\s*(\d+)pt", sheet):
         assert int(match.group(1)) in sizes, f"{match.group(0)} steht in keiner Stufe"
+
+
+# --- der Themenwechsel kommt überall an (Konzept Teil 10, Punkt 10) --------------
+
+
+def _corner_colours(pixmap: object) -> set[tuple[int, int, int]]:
+    """Die Farben, die in einem Symbol vorkommen — ohne die durchsichtigen."""
+    image = pixmap.toImage()  # type: ignore[attr-defined]
+    found = set()
+    for x in range(0, image.width(), 2):
+        for y in range(0, image.height(), 2):
+            colour = image.pixelColor(x, y)
+            if colour.alpha() > 128:
+                found.add((colour.red(), colour.green(), colour.blue()))
+    return found
+
+
+def test_an_icon_takes_its_colour_when_it_is_drawn(qt_app: object) -> None:
+    """Dasselbe Symbol, zwei Themen, zwei Farben.
+
+    Vorher wurde beim Aufbau einmal gerastert, in der Textfarbe, die gerade
+    galt. Nach dem Wechsel stand dieselbe Grafik weiter da: im hellen Thema
+    hell auf hell, und die halbe Werkzeugzeile bestand aus Text mit Lücken
+    davor.
+    """
+    from PySide6.QtCore import QSize
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    from app.ui.icons import icon
+    from app.ui.theme import apply_theme
+
+    widget = QWidget()
+    application = QApplication.instance()
+    assert application is not None
+
+    apply_theme(application, "dark")  # type: ignore[arg-type]
+    same = icon("save", widget)
+    on_dark = _corner_colours(same.pixmap(QSize(32, 32)))
+
+    apply_theme(application, "light")  # type: ignore[arg-type]
+    on_light = _corner_colours(same.pixmap(QSize(32, 32)))
+
+    assert on_dark and on_light
+    assert on_dark != on_light, "dasselbe Symbol-Objekt, und es folgt dem Thema"
+
+
+def test_a_role_colour_stays_what_it_means(qt_app: object) -> None:
+    """Der Schweregrad eines Befunds ist keine Themenfrage.
+
+    Rot heißt Fehler, in beiden Themen. Nur die Symbole ohne eigene Farbe
+    folgen der Schrift.
+    """
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    from app.ui.icons import icon
+    from app.ui.theme import apply_theme
+
+    widget = QWidget()
+    application = QApplication.instance()
+    assert application is not None
+    role = QColor("#d05a5a")
+
+    apply_theme(application, "dark")  # type: ignore[arg-type]
+    fixed = icon("severity-error", widget, colour=role)
+    on_dark = _corner_colours(fixed.pixmap(QSize(32, 32)))
+
+    apply_theme(application, "light")  # type: ignore[arg-type]
+    on_light = _corner_colours(icon("severity-error", widget, colour=role).pixmap(QSize(32, 32)))
+
+    assert on_dark == on_light
+
+
+def test_a_cached_pixmap_is_dropped_when_the_theme_turns(qt_app: object) -> None:
+    """Ein QLabel kann nur Pixmaps, und ein Pixmap altert.
+
+    Die Häkchen und der Pfeil der Tour liegen als Bild vor. Wer eines
+    zwischenspeichert, muss darauf hören, wann seine Farbe nicht mehr stimmt.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.session import Session
+    from app.ui.theme import apply_theme
+    from app.ui.tour import TourPanel
+
+    application = QApplication.instance()
+    assert application is not None
+    apply_theme(application, "dark")  # type: ignore[arg-type]
+
+    panel = TourPanel(Session())
+    before = _corner_colours(panel._mark("done"))
+    assert before
+
+    apply_theme(application, "light")  # type: ignore[arg-type]
+    panel.changeEvent(QEvent(QEvent.Type.PaletteChange))
+
+    assert _corner_colours(panel._mark("done")) != before
+
+
+def test_a_step_that_does_not_fit_ends_in_an_ellipsis(qt_app: object) -> None:
+    """„…Transaktionen: Bode" liest sich nicht wie eine Kürzung, sondern wie
+    ein Fehler."""
+    from app.ui.tour import StepLabel
+
+    long = "1. Der Verlauf zeigt sie als Transaktionen: Boden, Befestigung, Kabel."
+    label = StepLabel(long)
+    label.resize(120, 20)
+    label.set_wrapped(False)
+
+    assert label.text().endswith("…")
+    assert label.full_text() == long, "gekürzt wird die Anzeige, nicht der Text"
+
+    label.set_wrapped(True)
+    assert label.text() == long, "umgebrochen steht er wieder ganz da"

@@ -25,10 +25,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final
 
-from PySide6.QtCore import QByteArray, QSize, Qt
-from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
+from PySide6.QtCore import QByteArray, QRect, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QIcon, QIconEngine, QImage, QPainter, QPalette, QPixmap
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 
 #: Wie viel größer als die Zeilenhöhe ein Symbol gezeichnet wird, bevor es
 #: verkleinert wird — sonst franst es auf HiDPI aus.
@@ -234,18 +234,68 @@ def icon_name_for(spec: object) -> str:
     return f"category.{getattr(spec, 'category', '')}"
 
 
+class ThemedIcon(QIconEngine):
+    """Ein Symbol, das seine Farbe beim **Zeichnen** holt, nicht beim Erzeugen.
+
+    Vorher wurde beim Aufbau einmal gerastert — in der Textfarbe, die gerade
+    galt. Nach einem Themenwechsel stand dieselbe Grafik weiter da: im hellen
+    Thema hell auf hell, und die halbe Werkzeugzeile bestand aus Text mit
+    Lücken davor. Ein Symbol, das seine Farbe jedes Mal neu nimmt, kann gar
+    nicht veralten, und der Wechsel braucht keine Liste aller Stellen, die
+    eines tragen.
+
+    Nebenher wird es scharf: gezeichnet wird in die angeforderte Größe, nicht
+    ein festes Pixmap auf sie hochgerechnet.
+    """
+
+    def __init__(self, name: str) -> None:
+        super().__init__()
+        self._name = name
+
+    def _tone(self, mode: QIcon.Mode) -> QColor:
+        palette = QApplication.palette()
+        if mode == QIcon.Mode.Disabled:
+            return palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText)
+        return palette.windowText().color()
+
+    def paint(self, painter: QPainter, rect: QRect, mode: QIcon.Mode, state: QIcon.State) -> None:
+        source = svg_source(self._name, self._tone(mode).name())
+        if not source:
+            return
+        renderer = QSvgRenderer(QByteArray(source.encode("utf-8")))
+        if renderer.isValid():
+            renderer.render(painter, QRectF(rect))
+
+    def pixmap(self, size: QSize, mode: QIcon.Mode, state: QIcon.State) -> QPixmap:
+        source = svg_source(self._name, self._tone(mode).name())
+        if not source:
+            return QPixmap()
+        return _pixmap(source, max(size.width(), size.height()), self._tone(mode))
+
+    def clone(self) -> QIconEngine:
+        return ThemedIcon(self._name)
+
+
 def icon(name: str, widget: QWidget, *, scale: float = 1.35, colour: QColor | None = None) -> QIcon:
     """Ein Symbol in der Textfarbe und in der Größe der Schrift des Widgets.
 
     ``scale`` ist der Faktor auf die Zeilenhöhe: etwas größer als die Schrift,
     sonst verschwindet ein Strichsymbol neben dem Wort daneben.
+
+    Ohne ``colour`` folgt es dem Thema und färbt sich bei jedem Zeichnen neu.
+    Mit ``colour`` bleibt es dabei: eine Rollenfarbe — der Schweregrad eines
+    Befunds etwa — bedeutet etwas und darf sich mit dem Thema nicht ändern.
     """
-    tone = colour or widget.palette().windowText().color()
-    source = svg_source(name, tone.name())
+    if colour is None:
+        # ``scale`` bleibt für den Fall mit fester Farbe: ein Vektorsymbol
+        # zeichnet in jede angeforderte Größe, es braucht keine eigene.
+        return QIcon(ThemedIcon(name)) if name in PATHS else QIcon()
+
+    source = svg_source(name, colour.name())
     if not source:
         return QIcon()
     size = max(int(widget.fontMetrics().height() * scale), 12)
-    return QIcon(_pixmap(source, size, tone))
+    return QIcon(_pixmap(source, size, colour))
 
 
 def _pixmap(source: str, size: int, colour: QColor) -> QPixmap:

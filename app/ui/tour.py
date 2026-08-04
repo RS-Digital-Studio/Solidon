@@ -17,7 +17,9 @@ Zwei Grundsätze:
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from typing import Any
+
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QFont, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -36,6 +38,45 @@ from app.i18n import tr
 from app.ui.icons import icon
 from app.ui.session import Session
 from app.ui.style import NORMAL, TIGHT
+
+
+class StepLabel(QLabel):
+    """Eine Schrittzeile, die umbricht oder mit Auslassung endet.
+
+    Nur der aktuelle Schritt steht in voller Länge da; die übrigen sind eine
+    Zeile. Qt schneidet eine zu lange Zeile stumpf ab — „…Transaktionen: Bode"
+    liest sich nicht wie eine Kürzung, sondern wie ein Fehler. Ein Widget, das
+    beides kann, hält die Entscheidung an einer Stelle: gekürzt wird beim
+    Zeichnen, also auch nach jeder Änderung der Spaltenbreite.
+    """
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self._full = text
+
+    def setText(self, text: str) -> None:  # noqa: N802 — Qt-Name
+        self._full = text
+        self._show()
+
+    def full_text(self) -> str:
+        """Der ungekürzte Text — was der Test prüft."""
+        return self._full
+
+    def set_wrapped(self, wrapped: bool) -> None:
+        self.setWordWrap(wrapped)
+        self._show()
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        super().resizeEvent(event)
+        self._show()
+
+    def _show(self) -> None:
+        if self.wordWrap():
+            super().setText(self._full)
+            return
+        super().setText(
+            self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, self.width())
+        )
 
 
 class TourPanel(QWidget):
@@ -67,7 +108,7 @@ class TourPanel(QWidget):
         self._already: set[int] = set()
         """Schritte, deren Erkennung schon beim Start zutraf. Sie zählen nicht
         als getan — der Nutzer hat sie nicht getan."""
-        self._rows: list[tuple[QLabel, QLabel]] = []
+        self._rows: list[tuple[QLabel, StepLabel]] = []
         self._row_hosts: list[QWidget] = []
         """Ein Trägerwidget je Schrittzeile. Aufgeräumt wird über genau ein
         ``deleteLater`` auf dem Träger — Marker und Text sterben als seine
@@ -187,7 +228,7 @@ class TourPanel(QWidget):
             marker = QLabel("", host)
             marker.setFixedWidth(self.fontMetrics().height() + 4)
             marker.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
-            text = QLabel(f"{index + 1}. {step.text}", host)
+            text = StepLabel(f"{index + 1}. {step.text}", host)
             text.setWordWrap(True)
             row = QHBoxLayout(host)
             row.setContentsMargins(0, 0, 0, 0)
@@ -274,6 +315,19 @@ class TourPanel(QWidget):
 
     # --- Darstellung ------------------------------------------------------------
 
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 — Qt-Name
+        """Ein Themenwechsel macht jedes gespeicherte Pixmap falsch.
+
+        Die Häkchen und der Pfeil liegen als Bild vor, nicht als Symbol — ein
+        QLabel kann nur Pixmaps. Wer eines zwischenspeichert, muss darauf
+        hören, wann seine Farbe nicht mehr stimmt; sonst standen sie nach dem
+        Wechsel hell auf hell da und die Tour hatte keine Zeichen mehr.
+        """
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.PaletteChange:
+            self._marks.clear()
+            self._update_marks()
+
     def _mark(self, name: str) -> QPixmap:
         pixmap = self._marks.get(name)
         if pixmap is None:
@@ -301,9 +355,9 @@ class TourPanel(QWidget):
             body.setBold(index == self._current)
             text.setFont(body)
             text.setEnabled(index <= self._current)
-            # Nur der aktuelle Schritt bricht um; die anderen kürzt Qt auf
-            # ihre Zeile.
-            text.setWordWrap(index == self._current)
+            # Nur der aktuelle Schritt bricht um; die anderen enden mit einer
+            # Auslassung auf ihrer Zeile.
+            text.set_wrapped(index == self._current)
             if index < self._current:
                 marker.setPixmap(self._mark("done"))
             elif index == self._current:
