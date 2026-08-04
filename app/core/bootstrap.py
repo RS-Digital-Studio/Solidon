@@ -21,6 +21,7 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.geom.paint",
     "app.core.geom.mesh_ops",
     "app.core.geom.label_ops",
+    "app.core.geom.lattice",
     "app.core.geom.texture_ops",
     "app.core.geom.lid",
     # §30: der zweite Kern deklariert seine Operationen wie jedes andere Modul.
