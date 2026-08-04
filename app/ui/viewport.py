@@ -291,6 +291,10 @@ class Viewport(QWidget):
         self._actors: dict[ObjectId, Any] = {}
         self._frame_actors: list[Any] = []
         self._selected: ObjectId | None = None
+        self._fitted = False
+        """Ob die Kamera schon einmal auf die Körper eingepasst wurde. Fällt
+        zurück, sobald die Szene leer ist — das nächste Projekt wird wieder
+        eingepasst."""
         self._scheme: NavigationScheme = "slicer"
         self._mode: DisplayMode = "solid"
         self._shading: Shading = "flat"
@@ -497,6 +501,11 @@ class Viewport(QWidget):
     def show_scene(self, result: EvaluationResult | None) -> None:
         """Baut die Ansicht aus der letzten vollständigen Auswertung neu (§15.3)."""
         self._result = result
+        # Vor dem Plotter-Zweig: ob ein Projekt schon einmal im Bild stand, ist
+        # eine Aussage über die Szene und nicht über VTK — offscreen gibt es
+        # keinen Plotter, und ein Test, der sich dort überspringt, prüft nie
+        # etwas.
+        self._fit_once_for(result)
         if self.plotter is None:
             return
         for actor in self._actors.values():
@@ -551,6 +560,13 @@ class Viewport(QWidget):
                 backface_params={"color": BACKFACE_COLOUR},
                 name=f"object:{object_id}",
                 render=False,
+                # Die Ansicht wird bei jeder Änderung neu aufgebaut, und pyvista
+                # setzt die Kamera zurück, sobald es den ersten Aktor bekommt —
+                # nach dem Leerräumen ist jeder Körper der erste. Damit sprang
+                # die Ansicht bei jeder Auswahl auf Anfang, und ein
+                # Heranzoomen überlebte keinen Klick. Eingepasst wird
+                # ausdrücklich, in `_fit_once_for`.
+                reset_camera=False,
                 **style,
                 **extra,
             )
@@ -1491,8 +1507,45 @@ class Viewport(QWidget):
             self.transformDragged.emit(snapped)
 
     def reset_camera(self) -> None:
-        if self.plotter is not None:
+        """Passt auf die Körper ein — nicht auf den Bauraum.
+
+        ``plotter.reset_camera()`` nimmt alle Aktoren, und dazu gehört der
+        Rahmen des Bauraums. Bei einem 80-mm-Teil in einem 256er Bauraum füllte
+        damit die Kulisse das Bild und das Teil war ein Fleck darin: „Alles
+        einpassen" tat sichtbar nichts, weil schon eingepasst war.
+
+        Ohne Körper bleibt der Bauraum das Maß — dann ist er das Einzige, was
+        es zu sehen gibt.
+        """
+        if self.plotter is None:
+            return
+        bounds = self._object_bounds()
+        if bounds is None:
             self.plotter.reset_camera()
+            return
+        self.plotter.reset_camera(bounds=bounds)
+
+    def _fit_once_for(self, result: EvaluationResult | None) -> None:
+        """Passt ein, wenn die Ansicht zum ersten Mal etwas zu zeigen hat.
+
+        Ein geöffnetes Projekt soll im Bild stehen, ohne dass jemand Pos1
+        drückt. Jeder weitere Aufbau lässt die Kamera in Ruhe: wer heranzoomt,
+        eine Bohrung setzt und die Ansicht dabei verliert, hat den Zoom
+        zweimal gemacht.
+        """
+        has_objects = result is not None and bool(result.scene.objects)
+        if has_objects and not self._fitted:
+            self.reset_camera()
+        self._fitted = has_objects
+
+    def _object_bounds(self) -> tuple[float, float, float, float, float, float] | None:
+        """Der Hüllquader über alle Körper, im Format von VTK, oder nichts."""
+        if self._result is None or not self._result.scene.objects:
+            return None
+        boxes = [entry.mesh.bounds for entry in self._result.scene.objects.values()]
+        low = [min(box.minimum[axis] for box in boxes) for axis in range(3)]
+        high = [max(box.maximum[axis] for box in boxes) for axis in range(3)]
+        return (low[0], high[0], low[1], high[1], low[2], high[2])
 
     def zoom(self, factor: float) -> None:
         """Näher heran oder weiter weg — ohne Maus (§19.2).

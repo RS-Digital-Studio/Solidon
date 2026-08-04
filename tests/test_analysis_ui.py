@@ -374,6 +374,62 @@ def test_a_click_in_the_view_finds_the_feature_under_it(window: MainWindow) -> N
     assert picked == "hole_3"
 
 
+def test_fitting_measures_the_bodies_not_the_build_volume(window: MainWindow) -> None:
+    """§18.1: „Alles einpassen" meint die Körper.
+
+    ``plotter.reset_camera()`` nimmt alle Aktoren, und dazu gehört der Rahmen
+    des Bauraums. Bei einem 80-mm-Teil in einem 256er Bauraum füllte damit die
+    Kulisse das Bild — der Befehl tat sichtbar nichts, weil schon eingepasst
+    war.
+    """
+    window.viewport.show_scene(window.session.last_result)
+    entry = window.session.last_result.scene.objects["obj_1"]
+    box = entry.mesh.bounds
+
+    bounds = window.viewport._object_bounds()
+    assert bounds is not None
+    assert bounds == (
+        box.minimum[0],
+        box.maximum[0],
+        box.minimum[1],
+        box.maximum[1],
+        box.minimum[2],
+        box.maximum[2],
+    )
+
+
+def test_an_empty_scene_still_shows_the_build_volume(qt_app: QApplication) -> None:
+    """Ohne Körper ist der Bauraum das Einzige, was es zu sehen gibt."""
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        assert viewport._object_bounds() is None
+    finally:
+        viewport.deleteLater()
+
+
+def test_the_camera_is_fitted_once_and_then_left_alone(window: MainWindow) -> None:
+    """Ein Zoom überlebt die nächste Auswahl.
+
+    Die Ansicht wird bei jeder Änderung neu aufgebaut; pyvista setzt die Kamera
+    zurück, sobald es den ersten Aktor bekommt, und nach dem Leerräumen ist
+    jeder Körper der erste. Damit sprang die Ansicht bei jedem Klick auf
+    Anfang.
+    """
+    result = window.session.last_result
+    window.viewport.show_scene(result)
+    assert window.viewport._fitted, "das geöffnete Projekt steht im Bild"
+
+    window.viewport.show_scene(result)
+    assert window.viewport._fitted, "und der nächste Aufbau passt nicht erneut ein"
+
+    window.viewport.show_scene(None)
+    assert not window.viewport._fitted, (
+        "eine leere Szene macht den Weg für das nächste Projekt frei"
+    )
+
+
 def test_a_click_on_the_body_selects_it(window: MainWindow) -> None:
     """§2.9 und §18.5: „links wählt aus" muss ohne den Baum gelten.
 

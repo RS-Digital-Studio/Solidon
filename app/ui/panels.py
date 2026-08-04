@@ -279,11 +279,16 @@ class ObjectTree(QWidget):
             self.tree.setCurrentItem(target)
             self.tree.scrollToItem(target)
 
-    def select_object(self, object_id: ObjectId) -> None:
+    def select_object(self, object_id: ObjectId | None) -> None:
         """Wählt einen Körper von außen aus — der Fehlerdialog tut das, wenn er
-        zeigt, worum es ging."""
+        zeigt, worum es ging, und ein Klick in der Ansicht ebenso.
+
+        ``None`` hebt die Auswahl auf: wer neben das Modell klickt, will sie
+        loswerden.
+        """
         self.tree.clearSelection()
-        self._restore((object_id,), None)
+        if object_id is not None:
+            self._restore((object_id,), None)
 
     def select_feature(self, object_id: ObjectId, feature_id: str) -> None:
         """Folgt einem Klick im Viewport — die zwei Ansichten zeigen eine
