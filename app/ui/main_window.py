@@ -2268,6 +2268,10 @@ class MainWindow(QMainWindow):
         self.chat.show_proposal(preview)
         if preview.difference is not None:
             self.viewport.show_difference(preview.difference)
+            self.viewport.mark_preview(
+                tr("Vorschlag — noch nicht übernommen"),
+                tr("Leertaste halten: vorher"),
+            )
         self._focus_chat()
 
     def _on_proposal_accepted(self) -> None:
@@ -2286,6 +2290,7 @@ class MainWindow(QMainWindow):
         self._proposal = None
         self.chat.show_proposal(None)
         self.viewport.show_difference(None)
+        self.viewport.mark_preview("")
         self.chat.show_document(self.session.project.document)
 
     def _focus_chat(self) -> None:
@@ -2691,6 +2696,10 @@ class MainWindow(QMainWindow):
 
     def _show_preview(self, difference: Any) -> None:
         self.viewport.show_difference(difference)
+        self.viewport.mark_preview(
+            tr("Vorschau — noch nicht übernommen"),
+            tr("Leertaste halten: vorher"),
+        )
 
     def _clear_preview(self) -> None:
         """Der Dialog ist zu: die Vorschau geht, ein wartender Agentenvorschlag
@@ -2698,6 +2707,12 @@ class MainWindow(QMainWindow):
         self.session.cancel_preview()
         pending = self._proposal.difference if self._proposal is not None else None
         self.viewport.show_difference(pending)
+        # Ein wartender Vorschlag ist auch noch nicht übernommen — nur sagt er
+        # es anders: über ihn entscheidet der Chat, nicht ein Dialog.
+        self.viewport.mark_preview(
+            tr("Vorschlag — noch nicht übernommen") if pending is not None else "",
+            tr("Leertaste halten: vorher") if pending is not None else "",
+        )
 
     def _object_names(self) -> dict[str, str]:
         """Kennung auf Name, wie die Dialoge die Szene sehen.

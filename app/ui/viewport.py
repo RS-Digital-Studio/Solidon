@@ -14,8 +14,8 @@ import os
 import weakref
 from typing import Any, Literal, cast
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from app.branding import ENVIRONMENT_PREFIX
 from app.core.geom.measure import Measurement, MeasurementList, distance, snap, wall_thickness
@@ -35,7 +35,7 @@ from app.core.units import EPS_DISPLAY, EPS_GEOM, EPS_MATCH_MINIMUM, EPS_MATCH_R
 from app.i18n import tr
 from app.ui.labels import feature_label
 from app.ui.palette import DIFF_PALETTES, ROLES, VIRIDIS, DiffPalette
-from app.ui.theme import viewport_colours
+from app.ui.theme import THEMES, viewport_colours
 
 _log = get_logger(__name__)
 
@@ -289,6 +289,124 @@ def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, floa
     return marks
 
 
+#: Abstand des Vorschaubands von der Oberkante des Viewports.
+BANNER_TOP = 12
+
+
+class PreviewBanner(QFrame):
+    """Ein Band über dem Bild: was hier steht, ist noch nicht übernommen.
+
+    Die Live-Vorschau gab es lange, bevor jemand sie sah — der Dialog stand
+    mittig darüber und war modal. Beides ist weg; geblieben war die stillere
+    Hälfte des Problems: ein verändertes Bild sieht aus wie ein Ergebnis. Also
+    sagt das Bild selbst, dass es keins ist.
+
+    Die Legende steht mit im Band, nicht anderswo: sie erklärt Farben, die
+    genau hier liegen. Farbe allein trägt nichts (Regel 18) — jedes Feld führt
+    sein Zeichen und seinen Namen.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("previewBanner")
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 5, 12, 5)
+        layout.setSpacing(10)
+
+        self.note = QLabel("", self)
+        self.legend = QLabel("", self)
+        self.hint = QLabel("", self)
+        self.hint.setObjectName("previewHint")
+        layout.addWidget(self.note)
+        layout.addWidget(self.legend)
+        layout.addWidget(self.hint)
+        self.set_theme("dark")
+        self.hide()
+
+    def set_theme(self, theme: str) -> None:
+        """Farben aus dem Thema, damit das Band auf beiden Hintergründen liegt.
+
+        Der Rahmen ist **gestrichelt**, und das ist keine Verzierung: „noch
+        nicht übernommen" ist ein Zustand, und gestrichelt heißt in jeder
+        Oberfläche vorläufig. Damit trägt die Aussage auch, wenn jemand die
+        Farben nicht unterscheiden kann (Regel 18).
+        """
+        colours = THEMES["light" if theme == "light" else "dark"]
+        self.setStyleSheet(
+            f"#previewBanner {{ background: {colours['window']};"
+            f" border: 1px dashed {colours['disabled']}; border-radius: 4px; }}"
+            f"#previewBanner QLabel {{ color: {colours['text']}; background: transparent; }}"
+            f"#previewBanner #previewHint {{ color: {colours['disabled']}; }}"
+        )
+
+    def show_preview(self, note: str, palette: DiffPalette, hint: str) -> None:
+        """Zeigt das Band mit Text, Legende und dem Griff zum Vergleichen."""
+        colours = DIFF_PALETTES[palette]
+        self.note.setText(note)
+        self.legend.setText(
+            "   ".join(
+                f"{encoding.symbol} {tr(encoding.label_key)}"
+                for encoding in (colours.added, colours.removed)
+            )
+        )
+        self.legend.setStyleSheet(f"color: {colours.added.colour};")
+        self.hint.setText(hint)
+        self.show()
+        self.adjustSize()
+        self.place()
+
+    def place(self) -> None:
+        """Oben mittig — dort verdeckt es am wenigsten vom Körper."""
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        self.move(max((parent.width() - self.width()) // 2, 0), BANNER_TOP)
+
+
+def types_text(widget: QWidget | None) -> bool:
+    """Ob in diesem Feld ein Leerzeichen ein Leerzeichen ist."""
+    from PySide6.QtWidgets import QAbstractSpinBox, QComboBox, QLineEdit, QTextEdit
+
+    if isinstance(widget, QLineEdit | QTextEdit | QAbstractSpinBox):
+        return True
+    return isinstance(widget, QComboBox) and widget.isEditable()
+
+
+class HoldToCompare(QWidget):
+    """Leertaste halten heißt: kurz das Vorher sehen.
+
+    Als Filter auf der Anwendung, nicht als Tastenkürzel — ein Kürzel feuert
+    beim Drücken und weiß vom Loslassen nichts. Und nicht am Viewport selbst:
+    solange ein Operationsdialog offen ist, liegt der Fokus dort, und genau
+    dann will man vergleichen.
+
+    Auto-Repeat wird verworfen. Eine gehaltene Taste schickt eine Folge aus
+    Press und Release, nicht einen langen Druck; ohne diese Prüfung flackerte
+    die Vorschau im Takt der Tastenwiederholung.
+    """
+
+    def __init__(self, viewport: Viewport) -> None:
+        super().__init__(viewport)
+        self.hide()
+        self._viewport = viewport
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 — Qt-Name
+        kind = event.type()
+        if kind not in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+            return False
+        if event.key() != Qt.Key.Key_Space or event.isAutoRepeat():
+            return False
+        # ``watched`` ist bei einer Taste das Widget mit dem Fokus. Es zu
+        # nehmen statt ``QApplication.focusWidget()`` ist nicht nur kürzer: es
+        # ist die Frage, um die es geht — wer bekommt diesen Anschlag?
+        if types_text(watched):
+            return False
+        self._viewport.hold_before(kind == QEvent.Type.KeyPress)
+        return True
+
+
 class Viewport(QWidget):
     """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn VTK fehlt."""
 
@@ -361,6 +479,8 @@ class Viewport(QWidget):
         self._layer: LayerInfo | None = None
         self._difference: Any | None = None
         self._difference_actors: list[Any] = []
+        self._difference_held = False
+        """Ob die Vorschau gerade weggehalten wird, um das Vorher zu sehen."""
         self._diff_palette: DiffPalette = "blue_orange"
         self._ghost: EvaluationResult | None = None
         self._explosion = 0.0
@@ -375,6 +495,13 @@ class Viewport(QWidget):
         self._display_cache: dict[tuple[ObjectId, int], Any] = {}
         """§18.9: die dezimierte Fassung des zuletzt gezeigten Körpers. Sie
         fließt nie in den Kern zurück."""
+
+        self.banner = PreviewBanner(self)
+        """Das Band über dem Bild, wenn eine Vorschau läuft."""
+        self._compare = HoldToCompare(self)
+        """Der Filter für die Leertaste. Er hängt an der Anwendung, solange das
+        Band steht — nicht länger, sonst schluckt er anderswo Leerzeichen."""
+        self._comparing = False
 
         if not _available():
             self._layout.addWidget(
@@ -939,6 +1066,7 @@ class Viewport(QWidget):
         self._bed_colour = colours["bed"]
         self._bed_surface = colours["bed_surface"]
         self._edge_colour = colours["edge"]
+        self.banner.set_theme(theme)
         if self.plotter is None:
             return
         self.plotter.set_background(colours["bottom"], top=colours["top"])
@@ -1344,13 +1472,54 @@ class Viewport(QWidget):
     def difference(self) -> Any | None:
         return self._difference
 
+    def mark_preview(self, note: str, hint: str = "") -> None:
+        """Sagt im Bild, dass die gezeigte Änderung noch nicht übernommen ist.
+
+        Leerer Text nimmt das Band wieder weg. Der Text kommt von außen: der
+        Viewport weiß nicht, ob er eine Operation vorführt oder einen
+        Agentenvorschlag, und beides heißt etwas anderes.
+        """
+        from PySide6.QtWidgets import QApplication
+
+        application = QApplication.instance()
+        if note:
+            self.banner.show_preview(note, self._diff_palette, hint)
+            if application is not None and not self._comparing:
+                application.installEventFilter(self._compare)
+                self._comparing = True
+        else:
+            self.banner.hide()
+            self.hold_before(False)
+            if application is not None and self._comparing:
+                application.removeEventFilter(self._compare)
+                self._comparing = False
+
+    def hold_before(self, held: bool) -> None:
+        """Blendet die Vorschau weg, solange jemand den Vergleich hält.
+
+        Einen Unterschied sieht man nur, wenn man beides kennt. Das Modell
+        darunter ist ohnehin der Stand *vor* der Operation — die Vorschau liegt
+        nur darüber. Sie wegzunehmen ist also schon der ganze Vergleich, und er
+        kostet keine zweite Rechnung.
+        """
+        if held == self._difference_held:
+            return
+        self._difference_held = held
+        self._redraw_difference()
+        if self.plotter is not None:
+            self.plotter.render()
+
+    @property
+    def difference_held(self) -> bool:
+        return self._difference_held
+
     def _redraw_difference(self) -> None:
         if self.plotter is None:
             return
         for actor in self._difference_actors:
             self.plotter.remove_actor(actor, render=False)
         self._difference_actors.clear()
-        if self._difference is None:
+        if self._difference is None or self._difference_held:
             return
 
         colours = DIFF_PALETTES[self._diff_palette]
@@ -1379,8 +1548,15 @@ class Viewport(QWidget):
         """Blau/Orange, Rot/Grün oder Graustufen — die Wahl aus §19.1."""
         self._diff_palette = palette
         self._redraw_difference()
+        if not self.banner.isHidden():
+            # Die Legende erklärt Farben; die haben sich gerade geändert.
+            self.banner.show_preview(self.banner.note.text(), palette, self.banner.hint.text())
         if self.plotter is not None:
             self.plotter.render()
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        super().resizeEvent(event)
+        self.banner.place()
 
     # --- layer analysis (§18.10) ------------------------------------------------
 

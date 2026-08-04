@@ -15,7 +15,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QToolBar
 
@@ -24,8 +24,10 @@ from app.core.registry import REGISTRY
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
 from app.core.types import Parameter
+from app.i18n import tr
 from app.ui.main_window import REMOTE_ORIGIN, MainWindow
 from app.ui.op_dialog import OperationDialog
+from app.ui.palette import DIFF_PALETTES
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings
 
@@ -1867,3 +1869,103 @@ def test_every_worker_survives_the_delivery_of_its_own_signal(session: Session) 
     # freigegeben zu haben.
     assert session._finished_worker is not None
     assert session._worker is None
+
+
+# --- die Vorschau sagt, dass sie eine ist (Konzept Teil 10, 9b) ------------------
+
+
+def test_a_running_preview_says_it_is_one(window: MainWindow) -> None:
+    """Ein verändertes Bild sieht aus wie ein Ergebnis.
+
+    Die Live-Vorschau gab es lange, bevor jemand sie sah; seit der Dialog neben
+    dem Bild steht, sieht man sie — und damit wird die stillere Hälfte des
+    Problems sichtbar: nichts sagte, dass das Gezeigte noch nicht übernommen
+    ist.
+    """
+    banner = window.viewport.banner
+    assert banner.isHidden(), "ohne Vorschau kein Band"
+
+    window._show_preview(object())
+    assert not banner.isHidden()
+    assert "noch nicht übernommen" in banner.note.text()
+
+    window._clear_preview()
+    assert banner.isHidden(), "Dialog zu, Band weg"
+
+
+def test_the_legend_names_the_colours_it_explains(window: MainWindow) -> None:
+    """Regel 18: Farbe trägt nie allein. Das Band führt Zeichen und Namen."""
+    window._show_preview(object())
+    text = window.viewport.banner.legend.text()
+
+    for encoding in (DIFF_PALETTES["blue_orange"].added, DIFF_PALETTES["blue_orange"].removed):
+        assert encoding.symbol in text
+        assert tr(encoding.label_key) in text
+
+
+def test_switching_the_palette_relabels_the_legend(window: MainWindow) -> None:
+    """Die Legende erklärt Farben — wechseln die, muss sie mitgehen."""
+    window._show_preview(object())
+    window.viewport.set_difference_palette("greyscale")
+
+    assert not window.viewport.banner.isHidden()
+    assert tr(DIFF_PALETTES["greyscale"].added.label_key) in window.viewport.banner.legend.text()
+
+
+def test_holding_space_shows_the_state_before(window: MainWindow) -> None:
+    """Einen Unterschied sieht man nur, wenn man beides kennt.
+
+    Das Modell unter der Vorschau *ist* der Stand vor der Operation — die
+    Differenz liegt nur darüber. Sie wegzunehmen ist deshalb schon der ganze
+    Vergleich, und er kostet keine zweite Rechnung.
+    """
+    from PySide6.QtGui import QKeyEvent
+
+    window._show_preview(object())
+    viewport = window.viewport
+    assert not viewport.difference_held
+
+    hold = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+    let_go = QKeyEvent(QEvent.Type.KeyRelease, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+
+    assert viewport._compare.eventFilter(window, hold), "die Leertaste gehört hier der Vorschau"
+    assert viewport.difference_held
+
+    assert viewport._compare.eventFilter(window, let_go)
+    assert not viewport.difference_held
+
+
+def test_a_space_in_a_text_field_stays_a_space(window: MainWindow) -> None:
+    """Sonst könnte man keinen Namen mit Leerzeichen tippen, solange eine
+    Vorschau läuft — und eine Vorschau läuft, sobald ein Dialog offen ist."""
+    from PySide6.QtGui import QKeyEvent
+    from PySide6.QtWidgets import QLineEdit
+
+    window._show_preview(object())
+    field = QLineEdit(window)
+    field.setFocus()
+
+    hold = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+    assert not window.viewport._compare.eventFilter(field, hold)
+    assert not window.viewport.difference_held
+
+
+def test_a_held_key_is_not_a_flicker(window: MainWindow) -> None:
+    """Eine gehaltene Taste schickt eine Folge aus Press und Release, nicht
+    einen langen Druck. Ohne diese Prüfung flackerte die Vorschau im Takt der
+    Tastenwiederholung."""
+    from PySide6.QtGui import QKeyEvent
+
+    window._show_preview(object())
+    window.viewport._compare.eventFilter(
+        window, QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+    )
+
+    repeat = QKeyEvent(
+        QEvent.Type.KeyRelease,
+        Qt.Key.Key_Space,
+        Qt.KeyboardModifier.NoModifier,
+        autorep=True,
+    )
+    assert not window.viewport._compare.eventFilter(window, repeat)
+    assert window.viewport.difference_held, "die Wiederholung ändert nichts"
