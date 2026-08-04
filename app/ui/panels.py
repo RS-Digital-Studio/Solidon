@@ -70,6 +70,21 @@ def origin_label(source: str) -> str:
 _LINE_VALUES = ("object", "a", "b", "excess", "shared")
 
 
+def _identity(finding: Finding) -> tuple[Any, ...]:
+    """Woran zwei Befunde derselbe sind.
+
+    Der Code allein reicht nicht — zwei Körper stehen aus verschiedenen Gründen
+    über den Bauraum hinaus, und das sind zwei Zeilen. Die Werte gehören dazu:
+    ändert sich die Zahl, ist es eine neue Aussage über dieselbe Sache.
+    """
+    return (
+        finding.code,
+        finding.object_id,
+        str(finding.message),
+        tuple(sorted((key, str(value)) for key, value in finding.values.items())),
+    )
+
+
 def _line_for(finding: Finding) -> str:
     """Die Zeile eines Befunds: die Meldung und wovon sie handelt.
 
@@ -629,12 +644,33 @@ class ReportPanel(QWidget):
         """Hängt Befunde an, die nicht aus der Auswertung kamen — die
         G-Code-Gegenprobe etwa (§28.2). Sie behalten ihre eigene
         Herkunft (§22.5).
+
+        Was schon dasteht, kommt nicht noch einmal. Mehrere Prüfungen sehen
+        dieselbe Sache: „Kollisionen prüfen" und die Exportprüfung melden beide,
+        dass ein Körper über den Bauraum hinaussteht, und nach beiden stand die
+        Zeile zweimal da. Zweimal gemeldet ist nicht zweimal passiert — ein
+        Zähler daneben wäre eine Zahl, die etwas anderes behauptet.
         """
+        known = self._known()
+        added = False
         for finding in findings:
+            key = _identity(finding)
+            if key in known:
+                continue
+            known.add(key)
             self._append(finding)
+            added = True
         self._count_up()
         self._refilter()
-        self.list.scrollToBottom()
+        if added:
+            self.list.scrollToBottom()
+
+    def _known(self) -> set[tuple[Any, ...]]:
+        """Woran die Liste einen Befund wiedererkennt."""
+        return {
+            _identity(self.list.item(row).data(Qt.ItemDataRole.UserRole))
+            for row in range(self.list.count())
+        }
 
     def _append(self, finding: Finding) -> None:
         """Einen Befund als Eintrag anhängen."""

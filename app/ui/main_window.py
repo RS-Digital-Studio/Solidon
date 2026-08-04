@@ -1519,7 +1519,9 @@ class MainWindow(QMainWindow):
         Auswahl alles; ein 3MF wird **eine** Datei mit allen Körpern (§20),
         jedes andere Format eine Datei je Körper nach dem Namensschema.
         Die Prüfung davor ist ein Bericht, keine Sperre (§29) — ihre Befunde
-        landen im Prüfbericht.
+        landen im Prüfbericht, und zwar bevor geschrieben wird. „Wer trotzdem
+        exportieren will, kann das — er weiß dann nur, was er tut", sagt §29,
+        und das setzt voraus, dass er es vorher weiß.
         """
         result = self.session.last_result
         if result is None or not result.scene.objects:
@@ -1562,6 +1564,11 @@ class MainWindow(QMainWindow):
                     sources=sources,
                 )
                 written = [written_path]
+                # Die Baugruppe prüft und schreibt in einem Zug: hier ist
+                # „vorher" nicht zu haben, ohne die Datei zweimal zu bauen.
+                if findings:
+                    self.report.add_findings(list(findings))
+                    self._focus_report()
             else:
                 # Ein fester Name für einen Körper; bei mehreren zählt das
                 # Namensschema aus §29, damit auf der Platte lesbar bleibt,
@@ -1578,14 +1585,19 @@ class MainWindow(QMainWindow):
                     sources=sources,
                 )
                 findings = list(plan.findings)
+                # §29 sagt „vor dem Schreiben", und das ist keine Feinheit: der
+                # Bericht ist die Grundlage dafür, dass jemand weiß, was er tut.
+                # Danach gezeigt wäre er die Nachricht, dass er es nicht wusste.
+                # Eine Sperre wird daraus nicht — geschrieben wird gleich
+                # danach, ohne Rückfrage (Regel 19).
+                if findings:
+                    self.report.add_findings(findings)
+                    self._focus_report()
                 written = write_plan(plan, target.parent, export_format)
         except AppError as error:
             show_error(error, self)
             return
 
-        if findings:
-            self.report.add_findings(list(findings))
-            self._focus_report()
         self.status_message.setText(
             f"{tr('Exportiert')}: {written[0].name}"
             if len(written) == 1

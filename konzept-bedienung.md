@@ -617,9 +617,25 @@ Getestet war die Zusage bis dahin nicht; jetzt hält
   Bauraum hinaus" **zweimal** in der Liste.
 * **Der Export läuft durch, obwohl das Ergebnis nicht druckbar ist**: zwei sich
   durchdringende Körper, einer außerhalb des Bauraums — die STL wird
-  kommentarlos geschrieben. Ein Exportdialog fehlt ganz; es gibt nur den
-  Windows-Dateidialog, und was bei zwei Objekten hineinkommt, wird nicht
-  gefragt. Vorgabeformat ist STL, obwohl das Projekt Materialslots kennt.
+  geschrieben.
+
+  **Korrektur zur ersten Fassung.** Dort stand „kommentarlos" und der
+  Vorschlag, mit „Trotzdem exportieren / Erst in Ordnung bringen" zu fragen.
+  Beides ist falsch. Kommentarlos war es nicht: die Exportprüfung lief und
+  meldete den Bauraum, ich hatte den Befund für den älteren aus der
+  Kollisionsprüfung gehalten (siehe das Duplikat eine Zeile darüber). Und
+  fragen darf der Export nicht — Bauplan §29 schreibt vor: „Exportprüfung vor
+  dem Schreiben, **als Bericht, nicht als Blockade** … Wer trotzdem
+  exportieren will, kann das — er weiß dann nur, was er tut." Ein
+  Bestätigungsdialog wäre zudem Regel 19.
+
+  Was bleibt, steht in demselben Satz: *er weiß dann, was er tut* — und das
+  setzt voraus, dass er es **vorher** weiß. Die Befunde erschienen nach dem
+  Schreiben.
+
+  Und was unabhängig davon fehlt: Ein Exportdialog gibt es nicht, nur den
+  Windows-Dateidialog. Was bei mehreren Objekten hineinkommt, wird nicht
+  gefragt, und Vorgabeformat ist STL, obwohl das Projekt Materialslots kennt.
 
 ### 5.4 Der Verlauf
 
@@ -658,7 +674,8 @@ mehr als eine Sitzung.
 4. Befunde zusammenfassen statt anhäufen.
 5. Jede Handlung endet in einer Aussage — auch „hier war nichts zu tun", und
    an einer Stelle, die man sieht, ohne sie zu suchen.
-6. Export prüft und bietet an; Exportdialog mit Umfang, Format und Namensschema.
+6. Export zeigt seine Befunde, **bevor** er schreibt — als Bericht, nicht als
+   Blockade (§29). Dazu ein Exportdialog mit Umfang, Format und Namensschema.
 7. Entf gilt nach Fokus; Kontextmenü im Verlauf; Verlaufstitel immer
    übersetzt; Knopfbeschriftung nach Handlung.
 8. Absturzursache suchen — Qt-Warnung als Spur, Absturzprotokoll schreiben.
@@ -859,7 +876,8 @@ Nach Wirkung je Aufwand.
 20. Fehler mit richtiger Ursache und Vorschlag, sichtbar im Dialog
 21. Jede Handlung endet in einer Aussage
 22. Befunde mit Objekt, Zahl und Klickziel; keine Duplikate
-23. Export prüft, bevor er schreibt; Exportdialog mit Umfang und Format
+23. Export zeigt seine Befunde vor dem Schreiben (§29: Bericht, keine
+    Blockade); Exportdialog mit Umfang und Format
 24. Entf nach Fokus; Kontextmenü im Verlauf; interne Namen raus
 25. Agententexte aus den Nutzerdialogen; § raus; Zahlen mit Komma; Kürzel
     deutsch und vollständig

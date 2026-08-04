@@ -8,6 +8,7 @@ Bild. Ob die Farben auf dem richtigen Dreieck landen, entscheidet der Kern, und
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -449,6 +450,56 @@ def test_switching_navigation_keeps_the_picking_alive(qt_app: QApplication) -> N
     finally:
         viewport.plotter = None
         viewport.deleteLater()
+
+
+def test_the_same_finding_is_not_listed_twice(qt_app: QApplication) -> None:
+    """§17.3: zweimal gemeldet ist nicht zweimal passiert.
+
+    „Kollisionen prüfen" und die Exportprüfung sehen dieselbe Sache. Nach
+    beidem stand „Ein Objekt steht über den Bauraum hinaus" zweimal im Bericht,
+    und wer das liest, sucht nach zwei Körpern, von denen es nur einen gibt.
+
+    Geprüft wird das Panel allein: es braucht kein Fenster, und jedes Fenster
+    bringt einen Viewport mit, der aufgeräumt werden will.
+    """
+    from app.ui.panels import ReportPanel
+
+    finding = Finding(
+        code="arrange.out_of_build_volume",
+        severity="warning",
+        message="Ein Objekt steht über den Bauraum hinaus.",
+        object_id="obj_1",
+        values={"object": "Halter", "excess": "15,00 mm"},
+    )
+    panel = ReportPanel()
+    try:
+        panel.add_findings([finding])
+        panel.add_findings([finding])
+
+        assert panel.list.count() == 1
+    finally:
+        panel.deleteLater()
+
+
+def test_the_same_message_about_another_body_stays_its_own_line(qt_app: QApplication) -> None:
+    """Zwei Körper stehen aus verschiedenen Gründen hinaus — zwei Zeilen."""
+    from app.ui.panels import ReportPanel
+
+    first = Finding(
+        code="arrange.out_of_build_volume",
+        severity="warning",
+        message="Ein Objekt steht über den Bauraum hinaus.",
+        object_id="obj_1",
+        values={"object": "Halter"},
+    )
+    second = dataclasses.replace(first, object_id="obj_2", values={"object": "Deckel"})
+    panel = ReportPanel()
+    try:
+        panel.add_findings([first, second])
+
+        assert panel.list.count() == 2
+    finally:
+        panel.deleteLater()
 
 
 def test_a_finding_says_in_its_line_what_it_is_about() -> None:
