@@ -477,8 +477,9 @@ def apply_texture(ctx: OpContext) -> OpResult:
     from app.core.geom.transform import apply, translation
 
     params = cast(TextureParams, ctx.params)
-    if ctx.profile is not None:
-        check_printable(params.pattern, params.pitch, params.depth, ctx.profile.printer)
+    # §9: das Profil gehört zum Kontext und ist immer da — eine Prüfung darauf
+    # wäre eine Frage, deren Antwort der Vertrag schon gibt.
+    check_printable(params.pattern, params.pitch, params.depth, ctx.profile.printer)
 
     shapes = pattern_shapes(
         params.pattern,

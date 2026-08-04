@@ -9,10 +9,15 @@ glaubwürdig, wenn auch die billigen Fälle sich daran halten.
 from __future__ import annotations
 
 import dataclasses
+import math
+from dataclasses import replace
 from typing import cast
 
+from app.core.errors import CORRECT_INPUT, SPLIT_MODEL, ValidationError
+from app.core.geom.mesh import as_mesh_data
 from app.core.registry import VARIABLE, op_params, param, register_op
-from app.core.types import BaseParams, OpContext, OpResult
+from app.core.types import BaseParams, OpContext, OpResult, SceneObject
+from app.core.units import EPS_GEOM
 from app.i18n import _, tr
 
 
@@ -137,3 +142,191 @@ def _copy_name(original: str, chosen: str, index: int, count: int) -> str:
     """
     base = chosen or f"{original} ({tr('Kopie')})"
     return base if count <= 2 else f"{base} {index - 1}"
+
+
+# --- Muster (Bauplan §25, Kategorie „Transformation") ---------------------------
+
+
+#: Wie viele Kopien ein Muster höchstens legt. Dieselbe Zahl und derselbe
+#: Grund wie beim Duplizieren: darüber ist es ein Tippfehler.
+MAX_PATTERN = MAX_COPIES
+
+
+@op_params
+class PatternParams(BaseParams):
+    kind: str = param(
+        title=_("Art"),
+        default="linear",
+        choices=("linear", "circular"),
+        doc=_(
+            "Linear reiht die Kopien entlang einer Richtung auf, kreisförmig legt "
+            "sie um eine Achse. Eine Operation, zwei Arten — nicht zwei Einträge."
+        ),
+    )
+    count: int = param(
+        title=_("Anzahl"),
+        default=4,
+        minimum=1,
+        maximum=MAX_PATTERN,
+        doc=_(
+            "Wie viele Ausfertigungen es danach gibt, das Original mitgezählt. "
+            "Eine einzige ist kein Muster."
+        ),
+    )
+    spacing: float = param(
+        title=_("Abstand"),
+        default=20.0,
+        unit="mm",
+        minimum=0.0,
+        doc=_("Von Mitte zu Mitte, bei der linearen Art. Kreisförmig zählt der Winkel."),
+    )
+    angle: float = param(
+        title=_("Winkel"),
+        default=360.0,
+        unit="grad",
+        minimum=-360.0,
+        maximum=360.0,
+        doc=_(
+            "Über welchen Bogen die Kopien verteilt werden. Volle 360 Grad "
+            "schließen den Kranz, ohne dass zwei Kopien aufeinanderfallen."
+        ),
+    )
+    axis: str = param(
+        title=_("Achse"),
+        default="z",
+        choices=("x", "y", "z"),
+        placement="advanced",
+        doc=_("Um welche Achse der Kranz läuft. Sie geht durch den Ursprung."),
+    )
+    dx: float = param(
+        title=_("Richtung X"),
+        default=1.0,
+        placement="advanced",
+        doc=_("Richtung der linearen Reihe. Ohne Richtung lägen alle Kopien übereinander."),
+    )
+    dy: float = param(
+        title=_("Richtung Y"),
+        default=0.0,
+        placement="advanced",
+        doc=_("Zweite Achse der Richtung — siehe Richtung X."),
+    )
+    dz: float = param(
+        title=_("Richtung Z"),
+        default=0.0,
+        placement="advanced",
+        doc=_("Dritte Achse der Richtung — siehe Richtung X."),
+    )
+
+
+@register_op(
+    name="pattern",
+    title=_("Muster"),
+    category="transform",
+    params=PatternParams,
+    consumes=1,
+    produces=VARIABLE,
+    produces_from="count",
+    doc=_(
+        "Legt Kopien in einer Reihe oder auf einem Kreis an — ein Lochbild, ein "
+        "Kranz Schraubdome, eine Reihe Clips. Ein Schritt mit einer Zahl darin "
+        "statt neun gleicher Schritte im Stapel."
+    ),
+)
+def pattern(ctx: OpContext) -> OpResult:
+    """Muster am Körper, linear oder kreisförmig.
+
+    Geprüft wird **vor** dem Kopieren, ob das Ergebnis noch auf die Platte
+    passt (E1): dreißig Kopien im Abstand zwanzig sind sechshundert
+    Millimeter, und das zu sagen ist billiger als dreißig Körper, die niemand
+    drucken kann.
+    """
+    from app.core.geom.transform import Axis, apply, rotation, translation
+
+    params = cast(PatternParams, ctx.params)
+    source = ctx.inputs[0]
+    if params.count < 2:
+        raise ValidationError(
+            "count",
+            _("Ein Muster braucht mindestens zwei Ausfertigungen."),
+            value=params.count,
+            constraint="pattern_count",
+        )
+
+    if params.kind == "linear":
+        direction = (params.dx, params.dy, params.dz)
+        length = math.sqrt(sum(value * value for value in direction))
+        if length <= EPS_GEOM:
+            raise ValidationError(
+                "dx",
+                _("Ohne Richtung lägen alle Kopien übereinander."),
+                value=length,
+                constraint="no_direction",
+            )
+        unit: tuple[float, float, float] = (
+            direction[0] / length,
+            direction[1] / length,
+            direction[2] / length,
+        )
+        _check_volume(ctx, source, params.spacing * (params.count - 1), unit)
+        steps = [
+            translation(
+                (
+                    unit[0] * params.spacing * index,
+                    unit[1] * params.spacing * index,
+                    unit[2] * params.spacing * index,
+                )
+            )
+            for index in range(params.count)
+        ]
+    else:
+        # Ein voller Kranz teilt durch die Zahl, ein Teilbogen durch die
+        # Zwischenräume — sonst fielen bei 360 Grad die erste und die letzte
+        # Kopie aufeinander.
+        full = abs(abs(params.angle) - 360.0) <= EPS_GEOM
+        divisor = params.count if full else max(params.count - 1, 1)
+        steps = [
+            rotation(cast(Axis, params.axis), params.angle * index / divisor)
+            for index in range(params.count)
+        ]
+
+    outputs = [
+        dataclasses.replace(
+            source,
+            name=_copy_name(source.name, "", index + 1, params.count) if index else source.name,
+            mesh=apply(as_mesh_data(source.mesh), step) if index else source.mesh,
+            features={} if index else dict(source.features),
+            material_slots=list(source.material_slots),
+        )
+        for index, step in enumerate(steps)
+    ]
+    return OpResult(outputs=outputs)
+
+
+def _check_volume(
+    ctx: OpContext, source: SceneObject, reach: float, unit: tuple[float, float, float]
+) -> None:
+    """Ob die Reihe noch auf die Platte passt (E1).
+
+    Gemessen an der Ausdehnung, die dazukommt: die Kopien wandern entlang der
+    Richtung, also wächst der Bauraumbedarf in jeder Achse um den Anteil, den
+    die Richtung dort hat.
+    """
+    volume = ctx.profile.printer.build_volume
+    size = as_mesh_data(source.mesh).bounds.size
+    for axis in range(3):
+        needed = size[axis] + abs(unit[axis]) * reach
+        if needed > volume[axis] + EPS_GEOM:
+            raise ValidationError(
+                "count",
+                _(
+                    "So viele Kopien reichen über den Bauraum hinaus. Wie weit, steht "
+                    "in „needed_mm“; was die Maschine kann, in „volume_mm“."
+                ),
+                value=needed,
+                constraint="build_volume",
+                values={"needed_mm": round(needed, 1), "volume_mm": round(volume[axis], 1)},
+                suggestions=[
+                    replace(CORRECT_INPUT, label=_("Anzahl oder Abstand verringern")),
+                    SPLIT_MODEL,
+                ],
+            )
