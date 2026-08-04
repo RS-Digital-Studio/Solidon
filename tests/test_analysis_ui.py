@@ -50,12 +50,21 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
       und genau der war die Ursache des Rauschens.
 
     **Zum sporadischen Absturz** (``Windows fatal exception: access
-    violation``, ohne Zeile, an wechselnder Stelle): den gibt es hier
-    unabhängig von dieser Fixture. Nachgemessen an je vier Läufen — mit
-    Aufräumung, mit Löschen, und ganz ohne — riss er in jeder Fassung, auch in
-    der ohne. Er gehört zu dem Muster, das die Roadmap als „ersetzte Arbeiter
-    lassen ihre Referenz los" führt und für zwei Stellen behoben hat; die
-    übrigen sind dort namentlich notiert.
+    violation``, ohne Zeile, an wechselnder Stelle): der galt hier lange als
+    unabhängig von jeder Aufräumung — nachgemessen an je vier Läufen mit
+    Aufräumung, mit Löschen und ganz ohne, riss er in jeder Fassung.
+
+    Eine Ursache ist inzwischen gefunden und behoben: der Interaktionsstil des
+    Viewports hielt eine gebundene Methode und damit den Viewport, der den
+    Plotter hält, der den Interactor hält, der den Stil hält. Diese Schleife
+    überlebt jedes Schließen; abgeräumt wird sie später, und dann steht ein
+    C++-Objekt hinter einer Python-Referenz, die es nicht mehr gibt. Mit einer
+    schwachen Referenz läuft die Suite wieder in einem Zug.
+
+    Es bleibt dasselbe Muster, das die Roadmap als „ersetzte Arbeiter lassen
+    ihre Referenz los" führt. Reißt es wieder, ist die erste Frage: welche
+    Python-Referenz hält ein Qt- oder VTK-Objekt am Leben, das längst weg
+    sein sollte?
     """
     window = MainWindow(Session(), UiSettings())
     window.open_path(MESHES / "plate_holes.stl")
