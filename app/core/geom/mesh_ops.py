@@ -19,6 +19,7 @@ from typing import cast
 import numpy as np
 import trimesh
 
+from app.core.errors import CANCEL, ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -225,3 +226,121 @@ def _deviation_findings(before: MeshData, after: MeshData, object_id: str) -> li
             },
         )
     ]
+
+
+# --- Aufdicken (Konzept P15 §7 Etappe 6, D15) -----------------------------------
+
+
+@op_params
+class ThickenParams(BaseParams):
+    thickness: float = param(
+        title=_("Wandstärke"),
+        default=2.0,
+        unit="mm",
+        minimum=0.1,
+        doc=_(
+            "Wie dick die Wand wird. Unter zwei Extrusionsbahnen ist sie fragil — "
+            "was das für dieses Material heißt, sagt der Prüfbericht."
+        ),
+    )
+
+
+@register_op(
+    name="thicken",
+    title=_("Fläche aufdicken"),
+    category="mesh",
+    params=ThickenParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Gibt einer offenen Fläche eine Wand und macht sie damit zu einem Körper. "
+        "Der Weg für ein Netz, das als Fläche ankommt statt als Volumen."
+    ),
+)
+def thicken(ctx: OpContext) -> OpResult:
+    """Aus einer Fläche einen Körper machen.
+
+    Sechs von 68 echten Modellen sind nicht geschlossen; das ist bei
+    Community-Modellen normal, und bis hierher war es eine Sackgasse. Der
+    Prüfbericht meldete es korrekt, und danach ging nichts mehr: eine
+    Boolesche Operation braucht ein Volumen, und eine Fläche hat keines.
+
+    Ein Körper, der schon einer ist, bekommt **keine** zweite Haut, sondern
+    eine Meldung. Ihn stillschweigend zu verdoppeln wäre ein Ergebnis, das
+    aussieht wie das Original und beim Schneiden auffällt.
+    """
+    params = cast(ThickenParams, ctx.params)
+    source = ctx.inputs[0]
+    before = as_mesh_data(source.mesh)
+    if before.raw.is_watertight:
+        raise ValidationError(
+            "thickness",
+            _(
+                "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre "
+                "keine Wand, sondern eine Verdopplung."
+            ),
+            value=params.thickness,
+            constraint="already_solid",
+            suggestions=[CANCEL],
+        )
+
+    thickened = _thickened(before, params.thickness)
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=thickened, features={})],
+        findings=[
+            Finding(
+                code="mesh.thickened",
+                severity="info",
+                message=_("Aus einer offenen Fläche wurde ein Körper mit Wandstärke."),
+            )
+        ],
+    )
+
+
+def _thickened(mesh: MeshData, thickness: float) -> MeshData:
+    """Die Fläche nach innen auftragen und die Ränder schließen.
+
+    Drei Teile, und kein einziger boolescher Schnitt: die Fläche selbst bleibt
+    die Außenseite, eine um die Wandstärke entlang der Punktnormalen versetzte
+    Kopie mit umgedrehten Dreiecken wird die Innenseite, und für jede offene
+    Kante schließt ein Viereck den Spalt dazwischen.
+
+    Der naheliegende Weg — jedes Dreieck zu einem Prisma und alle vereinigen —
+    war der erste Versuch und ist zweimal falsch: er kostet eine Boolesche
+    Operation je Dreieck, und ohne sie bleiben die Innenflächen stehen. Das
+    Ergebnis war ein Netz mit achtzig Flächen, das aussah wie ein Körper und
+    keiner war.
+
+    **Punktnormalen, nicht Flächennormalen.** Mit Flächennormalen bekommt jedes
+    Dreieck seinen eigenen Versatz, und an jeder Kante klafft die Innenseite
+    auseinander.
+    """
+    import numpy as np
+
+    body = mesh.raw
+    outer = np.asarray(body.vertices, dtype=float)
+    inner = outer - np.asarray(body.vertex_normals, dtype=float) * thickness
+    count = len(outer)
+
+    faces = np.asarray(body.faces, dtype=np.int64)
+    # Innen läuft die Umlaufrichtung andersherum, sonst zeigen dort alle
+    # Normalen in den Körper hinein.
+    flipped = faces[:, ::-1] + count
+
+    edges = np.sort(np.asarray(body.edges, dtype=np.int64), axis=1)
+    unique, counts = np.unique(edges, axis=0, return_counts=True)
+    border = unique[counts == 1]
+    walls = [[first, second, second + count, first + count] for first, second in border.tolist()]
+    quads = np.asarray(
+        [[wall[0], wall[1], wall[2]] for wall in walls]
+        + [[wall[0], wall[2], wall[3]] for wall in walls],
+        dtype=np.int64,
+    ).reshape(-1, 3)
+
+    built = trimesh.Trimesh(
+        vertices=np.vstack([outer, inner]),
+        faces=np.vstack([faces, flipped, quads]) if len(quads) else np.vstack([faces, flipped]),
+        process=True,
+    )
+    built.fix_normals()
+    return mesh.replacing(built)

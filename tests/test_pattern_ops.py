@@ -120,3 +120,45 @@ def test_a_linear_pattern_without_a_direction_is_refused() -> None:
         run("pattern", cube(), kind="linear", count=3, spacing=15.0, dx=0.0, dy=0.0, dz=0.0)
 
     assert problem.value.field == "dx"
+
+
+# --- Aufdicken (D15) -------------------------------------------------------------
+
+
+def open_shell() -> SceneObject:
+    """Eine Schale ohne Boden — genau das, was aus dem Netz kommt, wenn jemand
+    eine Fläche gescannt oder ein STL falsch exportiert hat."""
+    box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    keep = [index for index, normal in enumerate(box.face_normals) if normal[2] > -0.9]
+    shell = trimesh.Trimesh(vertices=box.vertices, faces=box.faces[keep], process=True)
+    return SceneObject(id="obj_1", name="Schale", mesh=MeshData.of(shell))
+
+
+def test_thicken_turns_an_open_surface_into_a_body() -> None:
+    """Sechs von 68 echten Modellen sind nicht geschlossen — das ist bei
+    Community-Modellen normal, und bis hierher war es eine Sackgasse.
+
+    Der Prüfbericht meldete es korrekt, und danach konnte man nichts tun: eine
+    Boolesche Operation braucht ein Volumen, und eine Fläche hat keines.
+    ``thicken`` gibt ihr eine Wand.
+    """
+    shell = open_shell()
+    assert not shell.mesh.raw.is_watertight, "die Schale ist offen"
+
+    result = run("thicken", shell, thickness=2.0)
+
+    body = result.outputs[0].mesh
+    assert body.raw.is_watertight, "danach ist sie ein Körper"
+    assert body.volume > 0.0
+    # Fünf Seiten zu 20 mal 20 bei 2 mm Wand sind grob 2000 mm³; die Ecken
+    # überlappen, also liegt das Ergebnis darunter statt darüber.
+    assert 1000.0 < body.volume < 2600.0
+
+
+def test_thicken_leaves_a_closed_body_alone() -> None:
+    """Ein Körper, der schon einer ist, braucht keine Wand — und bekommt eine
+    Meldung statt einer stillen Verdopplung seiner Haut."""
+    with pytest.raises(ValidationError) as problem:
+        run("thicken", cube(), thickness=2.0)
+
+    assert problem.value.field == "thickness"
