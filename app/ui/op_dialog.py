@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
 from app.core.registry import OperationSpec
 from app.core.types import ParamSpec
 from app.i18n import tr
+from app.ui.labels import choice_label
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
 #: von 0,075 mm wurde bei zwei Nachkommastellen beim Öffnen des Dialogs zu 0,08
@@ -205,10 +206,15 @@ class OperationDialog(QDialog):
                 number.setValue(float(start))
             return number
         if entry.kind == "enum" or entry.choices:
+            # Der Wert bleibt der Schlüssel, gezeigt wird der Name: „cable-5"
+            # stand als Beschriftung im Dialog, und das erkennt niemand ohne die
+            # Normteiltabelle daneben. Was schon ein Name ist — „M4", „PLA" —
+            # bleibt unverändert.
             combo = QComboBox(self)
-            combo.addItems(list(entry.choices))
+            for choice in entry.choices:
+                combo.addItem(choice_label(str(choice)), choice)
             if start is not None and start in entry.choices:
-                combo.setCurrentText(str(start))
+                combo.setCurrentIndex(combo.findData(start))
             return combo
         if entry.kind == "sketch":
             # §30.1 Stufe zwei: der Text ist ein Speicherformat, keine

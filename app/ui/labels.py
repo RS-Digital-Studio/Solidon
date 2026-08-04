@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QLocale
 
+from app.core.errors import AppError
 from app.core.types import Feature, FeatureId
 from app.core.units import LengthUnit, format_length, format_volume
 from app.i18n import tr
@@ -39,6 +40,29 @@ def length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = True) -> 
 def volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
     """Ein Volumen, wie die Oberfläche es schreibt."""
     return localised(format_volume(value_mm3, unit))
+
+
+def choice_label(value: str) -> str:
+    """Ein Auswahlwert, wie der Nutzer ihn lesen kann.
+
+    Normteilschlüssel sind englisch und kurz, weil sie Schlüssel sind — im
+    Dialog standen sie aber als Beschriftung: „cable-5", „ptfe-4x2". Das tippt
+    niemand ab und niemand erkennt es, ohne die Tabelle danebenzulegen.
+
+    Erzeugt aus den Maßen und nicht als zweite Liste gepflegt: sonst hätte ein
+    neues Normteil einen Namen an einer Stelle und keinen an der anderen. Was
+    die Tabelle nicht kennt — „M4", „PLA", „z" —, bleibt, wie es ist; diese
+    Werte sind selbst schon der Name.
+    """
+    from app.core.knowledge import standards
+
+    try:
+        tube = standards.tube(value)
+    except AppError:
+        return value
+    if tube.inner > 0.0:
+        return f"{tr('Schlauch')} {length(tube.outer, with_unit=False)} × {length(tube.inner)}"
+    return f"{tr('Rundkabel')} Ø{length(tube.outer)}"
 
 
 def feature_label(feature_id: FeatureId, feature: Feature) -> str:

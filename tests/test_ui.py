@@ -857,6 +857,43 @@ def test_a_click_without_a_dialog_changes_no_values(window: MainWindow) -> None:
     assert window._op_dialog is None
 
 
+def test_a_standard_part_is_offered_by_its_name(qt_app: QApplication) -> None:
+    """§24: „cable-5" erkennt niemand ohne die Normteiltabelle daneben.
+
+    Der Schlüssel ist englisch und kurz, weil er ein Schlüssel ist. Im Dialog
+    stand er als Beschriftung — und wer eine Kabeldurchführung setzen will,
+    sucht „Rundkabel Ø5 mm".
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    from app.core.knowledge.parts.ops import op_name as part_op_name
+
+    dialog = OperationDialog(REGISTRY.get(part_op_name("cable_gland")), ["obj_1"])
+    try:
+        editor = dialog._editors["size"]
+        assert isinstance(editor, QComboBox)
+
+        labels = [editor.itemText(index) for index in range(editor.count())]
+        assert any("Rundkabel" in text for text in labels), "der Name steht da"
+        assert "cable-5" not in labels, "und der Schlüssel nicht"
+
+        # Der Wert bleibt der Schlüssel — sonst fände die Tabelle ihn nicht.
+        values = [editor.itemData(index) for index in range(editor.count())]
+        assert "cable-5" in values
+    finally:
+        dialog.deleteLater()
+
+
+def test_a_choice_that_is_already_a_name_stays_as_it_is(qt_app: QApplication) -> None:
+    """„M4", „PLA", „z" sind selbst schon der Name — daran gibt es nichts zu
+    übersetzen."""
+    from app.ui.labels import choice_label
+
+    assert choice_label("M4") == "M4"
+    assert choice_label("z") == "z"
+    assert choice_label("gibt-es-nicht") == "gibt-es-nicht"
+
+
 def test_numbers_are_written_the_way_the_input_fields_write_them(
     qt_app: QApplication,
 ) -> None:
