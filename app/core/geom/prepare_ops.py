@@ -27,6 +27,7 @@ from app.core.geom.prepare import (
     compensate_elephant_foot,
     countersink,
     drill,
+    named_for,
     plug,
     split_at_plane,
 )
@@ -789,4 +790,4 @@ def check_collisions_op(ctx: OpContext) -> OpResult:
     findings.extend(check_build_volume(meshes, ctx.profile))
     # Ändert nichts: die Objekte gehen unberührt hindurch, die Befunde sind das
     # Ergebnis.
-    return OpResult(outputs=list(ctx.inputs), findings=findings)
+    return OpResult(outputs=list(ctx.inputs), findings=named_for(findings, ctx.inputs))

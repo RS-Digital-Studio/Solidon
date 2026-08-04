@@ -29,7 +29,7 @@ from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
 from app.core.types import BoundingBox, Finding, Mesh, Profile, Quality, SolverInfo, Vec3
-from app.core.units import EPS_GEOM, format_length
+from app.core.units import EPS_GEOM, format_length, format_volume
 from app.i18n import _
 
 #: §39: Boolesche Ops überlappen immer leicht, nie teilen sie exakt eine Fläche.
@@ -387,17 +387,20 @@ def check_build_volume(
 
     for index, mesh in enumerate(meshes):
         bounds = mesh.bounds
-        outside = [
-            axis
-            for axis, (low, high, limit_low, limit_high) in enumerate(
-                zip(bounds.minimum, bounds.maximum, allowed.minimum, allowed.maximum, strict=True)
+        over = [
+            max(limit_low - low, high - limit_high, 0.0)
+            for low, high, limit_low, limit_high in zip(
+                bounds.minimum, bounds.maximum, allowed.minimum, allowed.maximum, strict=True
             )
-            if low < limit_low - EPS_GEOM or high > limit_high + EPS_GEOM
         ]
+        outside = [axis for axis, excess in enumerate(over) if excess > EPS_GEOM]
         if outside:
             values: dict[str, Any] = {
                 "object": index,
                 "axes": ", ".join("xyz"[axis] for axis in outside),
+                # Wie weit — sonst steht dort eine Warnung, die zwischen einem
+                # Zehntel Millimeter und einem halben Modell nicht unterscheidet.
+                "excess": format_length(max(over)),
             }
             if plates is not None and index < len(plates):
                 values["plate"] = plates[index] + 1
@@ -410,6 +413,40 @@ def check_build_volume(
                 )
             )
     return findings
+
+
+#: Welche Felder eines Befunds Indizes in die geprüfte Liste sind. ``object``
+#: kommt von der Bauraumprüfung, ``a`` und ``b`` von der Kollisionsprüfung.
+_INDEX_FIELDS = ("object", "a", "b")
+
+
+def named_for(findings: list[Finding], entries: Sequence[Any]) -> list[Finding]:
+    """Ersetzt die Indizes eines Befunds durch Namen und setzt den Körper.
+
+    Die Prüfungen bekommen eine Liste von Netzen und kennen darum nur deren
+    Reihenfolge. Der Bericht las das als „Zwei Objekte überschneiden sich" —
+    bei zwei Körpern ist klar, welche gemeint sind, bei zwanzig steht man davor
+    und sucht. Wer die Kennungen hat, trägt sie nach; das ist der Aufrufer,
+    denn er hat die Szene.
+    """
+    import dataclasses
+
+    named: list[Finding] = []
+    for finding in findings:
+        values = dict(finding.values)
+        first: Any = None
+        for field_name in _INDEX_FIELDS:
+            index = values.get(field_name)
+            if not isinstance(index, int | float) or not 0 <= int(index) < len(entries):
+                continue
+            entry = entries[int(index)]
+            values[field_name] = entry.name
+            if first is None:
+                first = entry.id
+        named.append(
+            dataclasses.replace(finding, object_id=finding.object_id or first, values=values)
+        )
+    return named
 
 
 def check_collisions(meshes: list[MeshData], clearance: float = 0.0) -> list[Finding]:
@@ -438,16 +475,24 @@ def check_collisions(meshes: list[MeshData], clearance: float = 0.0) -> list[Fin
                 # Produkts zu sagen, wäre das Rauschen, das einen Bericht
                 # unlesbar macht.
                 continue
+            values: dict[str, Any] = {
+                "a": first,
+                "b": second,
+                "checked": "exact" if exact is not None else "box",
+            }
+            if exact is not None and meshes[first].is_watertight and meshes[second].is_watertight:
+                # Wie viel — ein Streifschuss von einem Kubikmillimeter ist
+                # etwas anderes als zwei Teile, die zur Hälfte ineinander
+                # stecken, und der Bericht sagte für beides dasselbe.
+                shared = shared_volume(meshes[first].raw, meshes[second].raw)
+                if shared > EPS_GEOM:
+                    values["shared"] = format_volume(shared)
             findings.append(
                 Finding(
                     code="arrange.collision",
                     severity="warning",
                     message=_("Zwei Objekte überschneiden sich."),
-                    values={
-                        "a": first,
-                        "b": second,
-                        "checked": "exact" if exact is not None else "box",
-                    },
+                    values=values,
                 )
             )
     return findings

@@ -451,6 +451,37 @@ def test_switching_navigation_keeps_the_picking_alive(qt_app: QApplication) -> N
         viewport.deleteLater()
 
 
+def test_a_finding_says_in_its_line_what_it_is_about() -> None:
+    """§17.3: „Zwei Objekte überschneiden sich" — welche zwei?
+
+    Die Antwort stand schon in ``values``, aber nur im Tooltip: man musste
+    wissen, dass dort etwas ist, und mit der Maus hinfahren. Ein Bericht, den
+    man abfährt, um ihn zu lesen, wird nicht gelesen.
+    """
+    from app.ui.panels import _line_for
+
+    finding = Finding(
+        code="arrange.collision",
+        severity="warning",
+        message="Zwei Objekte überschneiden sich.",
+        values={"a": "Gehäuse", "b": "Deckel", "shared": "12,40 mm³", "checked": "exact"},
+    )
+
+    line = _line_for(finding)
+    assert "Gehäuse" in line and "Deckel" in line
+    assert "12,40 mm³" in line, "und wie viel — ein Streifschuss ist kein Problem"
+    assert "exact" not in line, "das Verfahren gehört in den Tooltip, nicht in die Zeile"
+
+
+def test_a_finding_without_values_stays_as_it_is() -> None:
+    """Kein Gedankenstrich ohne etwas dahinter."""
+    from app.ui.panels import _line_for
+
+    finding = Finding(code="ingest.welded", severity="info", message="Doppelte Punkte verschweißt.")
+
+    assert _line_for(finding) == "Doppelte Punkte verschweißt."
+
+
 def test_a_part_that_fits_gets_told_so(window: MainWindow) -> None:
     """§2.7: eine Handlung endet in einer Aussage, auch wenn nichts zu tun war.
 

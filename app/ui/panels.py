@@ -65,6 +65,28 @@ def origin_label(source: str) -> str:
     return tr("intern geschätzt") if source == "internal" else tr("aus G-Code")
 
 
+#: Werte, die in der Zeile eines Befunds stehen — die, nach denen man beim
+#: Lesen zuerst fragt: welcher Körper, und wie viel.
+_LINE_VALUES = ("object", "a", "b", "excess", "shared")
+
+
+def _line_for(finding: Finding) -> str:
+    """Die Zeile eines Befunds: die Meldung und wovon sie handelt.
+
+    „Zwei Objekte überschneiden sich" — welche zwei? „Ein Objekt steht über den
+    Bauraum hinaus" — welches, und um wie viel? Die Antworten standen schon in
+    ``values``, aber nur im Tooltip: man musste wissen, dass dort etwas ist, und
+    mit der Maus hinfahren. Jetzt stehen sie in der Zeile.
+
+    Nur die fünf Felder, nach denen man beim Lesen zuerst fragt. Alle wären
+    wieder ein Tooltip, nur breiter — und der bleibt ohnehin daneben stehen.
+    """
+    extra = [str(finding.values[key]) for key in _LINE_VALUES if key in finding.values]
+    if not extra:
+        return str(finding.message)
+    return f"{finding.message} — {' · '.join(extra)}"
+
+
 def _origin_text(created_by: int | None, document: Document | None) -> str:
     """Aus welcher Operation und Transaktion ein Körper stammt (§18.8).
 
@@ -617,7 +639,7 @@ class ReportPanel(QWidget):
     def _append(self, finding: Finding) -> None:
         """Einen Befund als Eintrag anhängen."""
         encoding = SEVERITY_ENCODING[finding.severity]
-        item = QListWidgetItem(str(finding.message))
+        item = QListWidgetItem(_line_for(finding))
         # Die Form trägt den Schweregrad, die Farbe verstärkt ihn nur: ein
         # Dreieck bleibt ein Dreieck, auch wo die Farbe nicht ankommt.
         item.setIcon(

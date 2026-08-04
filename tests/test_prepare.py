@@ -164,7 +164,10 @@ def test_a_body_below_the_bed_is_reported_without_being_asked(profile: Profile) 
     from app.core.scene.evaluate import check_placement
     from app.core.types import Scene, SceneObject
 
-    sunk = SceneObject(id=1, name="Halter", mesh=apply(cube(), translation((0.0, 0.0, -5.0))))
+    # Kennung und Schlüssel sind dasselbe — die Auswertung setzt ``id`` beim
+    # Einhängen, und ein Test, der das anders macht, prüft eine Szene, die es
+    # nicht gibt.
+    sunk = SceneObject(id="obj_1", name="Halter", mesh=apply(cube(), translation((0.0, 0.0, -5.0))))
     scene = Scene(objects={"obj_1": sunk}, profile=profile)
 
     findings = check_placement(scene)
@@ -172,7 +175,7 @@ def test_a_body_below_the_bed_is_reported_without_being_asked(profile: Profile) 
     assert findings, "ein Körper unter der Platte ist ein Befund"
     assert findings[0].code == "arrange.out_of_build_volume"
     assert findings[0].object_id == "obj_1", "der Befund nennt den Körper, den er meint"
-    assert findings[0].values["name"] == "Halter"
+    assert findings[0].values["object"] == "Halter", "und zwar mit Namen, nicht mit Listenplatz"
 
 
 def test_a_body_on_the_bed_says_nothing(profile: Profile) -> None:
@@ -180,9 +183,57 @@ def test_a_body_on_the_bed_says_nothing(profile: Profile) -> None:
     from app.core.scene.evaluate import check_placement
     from app.core.types import Scene, SceneObject
 
-    standing = SceneObject(id=1, name="Halter", mesh=apply(cube(), translation((0.0, 0.0, 10.0))))
+    standing = SceneObject(
+        id="obj_1", name="Halter", mesh=apply(cube(), translation((0.0, 0.0, 10.0)))
+    )
 
     assert not check_placement(Scene(objects={"obj_1": standing}, profile=profile))
+
+
+def test_a_finding_names_its_bodies_instead_of_their_places(profile: Profile) -> None:
+    """§17.3: „Zwei Objekte überschneiden sich" — welche zwei?
+
+    Die Prüfungen bekommen eine Liste von Netzen und kennen darum nur deren
+    Reihenfolge. Bei zwei Körpern ist klar, was gemeint ist; bei zwanzig steht
+    man vor dem Bericht und sucht. Wer die Kennungen hat, trägt sie nach.
+    """
+    from app.core.geom.prepare import named_for
+    from app.core.types import SceneObject
+
+    entries = [
+        SceneObject(id="obj_1", name="Gehäuse", mesh=cube()),
+        SceneObject(id="obj_2", name="Deckel", mesh=apply(cube(), translation((5.0, 0.0, 0.0)))),
+    ]
+    findings = named_for(check_collisions([entry.mesh for entry in entries]), entries)
+
+    assert findings
+    assert findings[0].values["a"] == "Gehäuse"
+    assert findings[0].values["b"] == "Deckel"
+    assert findings[0].object_id == "obj_1", "ein Klick muss irgendwohin führen"
+
+
+def test_a_collision_says_how_deep(profile: Profile) -> None:
+    """Ein Streifschuss ist etwas anderes als zwei Teile, die ineinanderstecken.
+
+    Der Bericht sagte für beides dasselbe. Jetzt steht das gemeinsame Volumen
+    dabei — dieselbe Zahl, an der man entscheidet, ob es ein Problem ist.
+    """
+    findings = check_collisions([cube(), apply(cube(), translation((5.0, 0.0, 0.0)))])
+
+    assert findings and "shared" in findings[0].values
+
+
+def test_sticking_out_says_how_far(profile: Profile) -> None:
+    """Sonst steht dort eine Warnung, die ein Zehntel Millimeter und ein halbes
+    Modell nicht unterscheidet.
+    """
+    far_away = apply(cube(), translation((400.0, 0.0, 0.0)))
+
+    findings = check_build_volume([far_away], profile)
+
+    assert findings
+    assert "excess" in findings[0].values
+    assert "mm" in str(findings[0].values["excess"])
 
 
 def test_overlapping_bodies_are_reported() -> None:

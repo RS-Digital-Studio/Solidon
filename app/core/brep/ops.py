@@ -440,9 +440,12 @@ def _brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
     source = ctx.inputs[0]
     if not isinstance(source.mesh, Solid):
         raise NeedsSolidError(
+            # Ohne Platzhalter: TranslatableText löst nur den Katalog auf und
+            # formatiert nicht — ein „{name}" stünde dem Nutzer wörtlich da.
+            # Der Name reist wie überall in ``values``.
             detail=_(
-                "{name} ist ein Netz. Exakte Körper kommen aus einer STEP-Datei "
-                "oder aus den Grundformen, deren Name mit Exakt beginnt."
+                "Der gewählte Körper ist ein Netz. Exakte Körper kommen aus einer "
+                "STEP-Datei oder aus den Grundformen, deren Name mit Exakt beginnt."
             ),
             values={"name": source.name},
             object_id=source.id,

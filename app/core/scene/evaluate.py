@@ -516,18 +516,16 @@ def check_placement(scene: Scene) -> list[Finding]:
     die Reihenfolge seiner Liste — hier gibt es die Kennungen, also werden sie
     nachgetragen; ein Bericht, der „ein Objekt" sagt, hilft bei zwanzig nicht.
     """
-    from app.core.geom.prepare import check_build_volume
+    from app.core.geom.prepare import check_build_volume, named_for
 
     profile = scene.profile
     if profile is None or not scene.objects:
         return []
-    named: list[Finding] = []
-    for object_id, entry in scene.objects.items():
-        for finding in check_build_volume([entry.mesh], profile, [entry.plate]):
-            values = dict(finding.values)
-            values["name"] = entry.name
-            named.append(dataclasses.replace(finding, object_id=object_id, values=values))
-    return named
+    entries = list(scene.objects.values())
+    findings = check_build_volume(
+        [entry.mesh for entry in entries], profile, [entry.plate for entry in entries]
+    )
+    return named_for(findings, entries)
 
 
 def _finding_from(error: AppError, operation: Operation) -> Finding:
