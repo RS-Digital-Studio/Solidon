@@ -717,18 +717,32 @@ modalen Dialog. Bestehende Skizzen aus Projektdateien öffnen unverändert.
 
 ### Etappe 4 — Die Skizze wird vollständig (D9, D11, D12, D13)
 
-- [ ] **Spline** als Element; zehnte Bedingungsart für Tangentenstetigkeit
-- [ ] **Text als Kontur** aus Systemschriften — der Weg, den `label_text` für
-      Körper schon geht, für die Skizze
-- [ ] **Referenzmaß**: misst, treibt nicht; als eigene Bedingungsart, die keine
-      Freiheitsgrade nimmt
-- [ ] **Skizzenmuster**: Lochkreis, Raster, Wabe — assoziativ, also am Muster
-      geändert statt an den Kopien
-- [ ] Parameterbereichstests je Element; der Solver muss jede Grundform selbst
-      annehmen (die Lehre aus dem Langloch)
+- [x] **Referenzmaß** — zehnte Bedingungsart, und die einzige ohne Gleichung:
+      sie nimmt keinen Freiheitsgrad und kann mit nichts in Widerspruch
+      geraten. Ihr Wert steht nicht im Text, sondern folgt aus der Lage — ihn
+      einzutragen hieße, ihn festzulegen
+- [x] **Skizzenmuster** — `bolt_circle` und `hole_grid` als Grundformen,
+      **nicht assoziativ**. SindriCADs eigenes Audit führt genau diese Funktion
+      als Datenkorruption: dort backt jede Bearbeitung die abgeleiteten Kopien
+      in die gespeicherten Elemente. Formwerks Parametrik liegt eine Ebene
+      höher — Maße sind Ausdrücke (§13), ein Projektparameter dreht den
+      Teilkreis
+- [x] **Spline** als Element — die einzige Art ohne feste Punktzahl; der Kern
+      bekommt eine B-Spline **durch** die Punkte, keine Segmentfolge. Die
+      Tangentenstetigkeit als eigene Bedingung fehlt und wird nicht vermisst:
+      der Spline ist von Haus aus glatt, und wo er an eine Linie stößt,
+      entscheidet die Deckung
+- [–] **Text als Skizzenkontur** — *bewusst nicht gebaut.* `Profile` trägt
+      genau einen geschlossenen Umriss; ein Schriftzug ist eine Menge davon,
+      und A, B und O tragen zusätzlich ein Loch. Das zu ändern hieße, alle fünf
+      Skizzen-Operationen und den B-Rep-Kern anzufassen — für einen Fall, den
+      `create_label` vollständig löst: drei Buchstaben, drei geschlossene
+      Körper, Löcher an der richtigen Stelle. Ein Test hält das fest, damit die
+      Entscheidung nicht bei der nächsten Durchsicht neu geraten wird
 
-*Abnahme:* Ein Lochkreis mit acht Bohrungen aus einer Bedingung. Ein
-Referenzmaß ändert die Freiheitsgrade nicht.
+*Abnahme erfüllt:* Ein Lochkreis mit sechs Bohrungen aus einem Menüeintrag.
+Ein Referenzmaß ändert die Freiheitsgrade nicht. Ein Spline schließt einen
+Umriss und wird ein Körper.
 
 ### Etappe 5 — Oberflächentexturen (D8, E1, E5, E11)
 

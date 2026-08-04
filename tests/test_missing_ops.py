@@ -316,6 +316,30 @@ def test_a_label_can_be_a_body_of_its_own(profile: Profile) -> None:
     assert body.mesh.triangle_count > 0
 
 
+def test_a_label_body_keeps_the_counters_of_its_letters(profile: Profile) -> None:
+    """Warum es **keinen** Text als Skizzenelement gibt (Konzept P15, D12).
+
+    SindriCADs Sketcher kann einen Schriftzug als Skizzenkontur; unserer kann
+    es nicht, und das ist eine Entscheidung. ``Profile`` trägt genau **einen**
+    geschlossenen Umriss — ein Schriftzug ist eine Menge davon, jeder Buchstabe
+    einer, und A, B und O tragen zusätzlich ein Loch. Das zu ändern hieße, alle
+    fünf Skizzen-Operationen und den B-Rep-Kern anzufassen.
+
+    Für einen Fall, den ``create_label`` bereits vollständig löst: drei
+    getrennte Körper, jeder geschlossen, mit den Löchern an der richtigen
+    Stelle. Dieser Test hält das fest, damit die Entscheidung eine Grundlage
+    behält und nicht bei der nächsten Durchsicht neu geraten wird.
+    """
+    result = run("create_label", None, profile, text="ABO", size=10.0, depth=2.0)
+
+    body = result.outputs[0].mesh
+    assert body.raw.is_watertight, "jeder Buchstabe ist ein geschlossener Körper"
+    assert len(body.raw.split()) == 3, "drei Buchstaben, drei Teile"
+    # Die volle Hüllfläche wäre rund 157 mm³ bei 2 mm Tiefe; die Zähler in A,
+    # B und O fehlen darin, also liegt das Volumen deutlich darunter.
+    assert body.volume < 0.75 * body.bounds.size[0] * body.bounds.size[1] * 2.0
+
+
 def test_an_empty_label_body_is_a_user_error(profile: Profile) -> None:
     with pytest.raises(ValidationError) as problem:
         run("create_label", None, profile, text="  ", size=10.0)
