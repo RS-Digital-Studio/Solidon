@@ -171,21 +171,30 @@ def test_a_tool_hint_appears_and_goes_with_the_tool(window: MainWindow) -> None:
     assert not window.tools.hint_text(), "geschlossen ist er weg"
 
 
-def test_every_declared_icon_really_exists() -> None:
-    """Ein Symbolname, den es nicht gibt, ist ein leerer Knopf.
+def test_every_operation_has_an_icon_and_every_icon_exists() -> None:
+    """Kein Menüeintrag ist reiner Text (Konzept P15 §5, E12).
 
-    Die **Vollständigkeit** — keine Operation ohne Symbol — kommt mit den
-    gezeichneten Symbolen in P15 Etappe 8. Bis dahin greift diese Hälfte der
-    Regel: was deklariert ist, muss es geben. Eine Ausnahmeliste über
-    einundsiebzig Operationen wäre keine Prüfung, sondern eine Abschrift.
+    Beide Hälften der Regel: jede Operation führt ein Symbol, und jedes
+    genannte gibt es auch. Getragen wird das von der Kategorie — eine
+    Operation darf ihr eigenes deklarieren, muss aber nicht.
+
+    **Warum nicht je Operation:** dreiundsiebzig Symbole zu unterscheiden ist
+    schwerer als dreiundsiebzig Wörter zu lesen, und drei ähnliche Bohrer
+    nebeneinander sagen weniger als einer über allen Bohr-Operationen. Was ein
+    Symbol in einem Menü leistet, ist die Gruppe auf einen Blick; den Rest
+    trägt die Beschriftung daneben (Regel 18).
     """
-    from app.ui.icons import PATHS
+    from app.ui.icons import PATHS, icon_name_for
 
-    wrong = {
-        spec.name: spec.icon for spec in REGISTRY.all() if spec.icon and spec.icon not in PATHS
+    missing = {
+        spec.name: icon_name_for(spec)
+        for spec in REGISTRY.all()
+        if icon_name_for(spec) not in PATHS
     }
-    assert not wrong, (
-        f"Diese Operationen nennen ein Symbol, das es in app/ui/icons.py nicht gibt: {wrong}."
+    assert not missing, (
+        f"Diese Operationen haben kein Symbol: {missing}. Entweder trägt die "
+        "Operation eines (icon=…), oder ihre Kategorie braucht eines in "
+        "app/ui/icons.py unter „category.<name>“."
     )
 
 

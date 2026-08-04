@@ -86,7 +86,7 @@ from app.ui.dialogs import (
 )
 from app.ui.explode_bar import ExplodeBar
 from app.ui.generate_dialog import GenerateDialog
-from app.ui.icons import icon
+from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import feature_label
 from app.ui.manual_window import ManualWindow
@@ -1079,7 +1079,7 @@ class MainWindow(QMainWindow):
 
     def _operation_action(self, menu: Any, spec: OperationSpec) -> QAction:
         """Ein Menüeintrag für eine Operation, überall gleich gebaut."""
-        action = QAction(str(spec.title), self)
+        action = QAction(icon(icon_name_for(spec), self), str(spec.title), self)
         if spec.shortcut:
             action.setShortcut(QKeySequence(spec.shortcut))
         action.setStatusTip(str(spec.doc))

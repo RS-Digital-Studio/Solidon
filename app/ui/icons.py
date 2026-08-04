@@ -127,6 +127,88 @@ PATHS: Final[dict[str, str]] = {
     "done": ('<path d="M4.5 12.5l4.5 4.5L19.5 7" />'),
     # Ein Pfeil auf den aktuellen Schritt der Tour.
     "step": ('<path d="M4 12h12.5" /><path d="M11.5 6.5 17 12l-5.5 5.5" />'),
+    # --- je Kategorie eines (Konzept P15 §7 Etappe 8, D5) ----------------------
+    #
+    # **Nicht je Operation.** Dreiundsiebzig Symbole zu unterscheiden ist
+    # schwerer als dreiundsiebzig Wörter zu lesen, und drei ähnliche Bohrer
+    # nebeneinander sagen weniger als einer über allen Bohr-Operationen. Was
+    # ein Symbol hier leistet, ist dasselbe wie in der Werkzeugzeile: die
+    # Gruppe auf einen Blick, die Beschriftung daneben für alles Weitere
+    # (Regel 18).
+    #
+    # Eine Operation darf trotzdem ihr eigenes führen; `icon` im Register
+    # schlägt das der Kategorie.
+    # Szene: mehrere Körper nebeneinander.
+    "category.scene": (
+        '<rect x="3" y="9" width="8" height="8" rx="1" />'
+        '<rect x="13" y="5" width="8" height="8" rx="1" opacity="0.6" />'
+    ),
+    # Reparatur: eine Naht, die geschlossen wird.
+    "category.repair": (
+        '<path d="M4 12h16" stroke-dasharray="3 2" />'
+        '<path d="M9 7l3 5-3 5" /><path d="M15 7l-3 5 3 5" />'
+    ),
+    # Transformation: ein Körper mit Bewegungspfeil.
+    "category.transform": (
+        '<rect x="3.5" y="9.5" width="8" height="8" rx="1" />'
+        '<path d="M14 13.5h6" /><path d="M17.5 10 21 13.5 17.5 17" />'
+    ),
+    # Boolesch: zwei Kreise mit gemeinsamer Fläche.
+    "category.boolean": (
+        '<circle cx="9.5" cy="12" r="6" /><circle cx="14.5" cy="12" r="6" opacity="0.6" />'
+    ),
+    # Skizze: ein Umriss mit Punkten darauf.
+    "category.sketch": (
+        '<path d="M5 17l4-9 5 5 5-7" />'
+        '<circle cx="5" cy="17" r="1.6" /><circle cx="9" cy="8" r="1.6" />'
+        '<circle cx="14" cy="13" r="1.6" /><circle cx="19" cy="6" r="1.6" />'
+    ),
+    # Formgebung: eine gebrochene Kante — die Fase.
+    "category.shaping": ('<path d="M4 20V9l5-5h11v16z" /><path d="M4 9h5V4" opacity="0.6" />'),
+    # Bohrungen: ein Loch in einer Platte, im Schnitt.
+    "category.holes": (
+        '<rect x="3.5" y="7" width="17" height="10" rx="1" />'
+        '<ellipse cx="12" cy="12" rx="3.2" ry="4.2" />'
+    ),
+    # Bausteine: ein Teil, das in ein anderes greift.
+    "category.parts": ('<path d="M4 8h6V5h4v3h6v8h-6v3h-4v-3H4z" />'),
+    # Druckvorbereitung: ein Teil auf der Platte.
+    "category.prepare": (
+        '<path d="M8 14V7l4-3 4 3v7" />'
+        '<path d="M3 17.5h18" stroke-width="2.2" />'
+        '<path d="M6 20.5h12" opacity="0.5" />'
+    ),
+    # Farbe: ein Pinsel über einer Fläche.
+    "category.colour": (
+        '<path d="M4 20c0-3 2-4 4-4 2 0 3 1 3 3s-2 3-4 3c-1.5 0-3-.6-3-2z" />'
+        '<path d="M9.5 16.5 19 5.5a1.8 1.8 0 0 1 2.6 2.5L11 18" />'
+    ),
+    # Beschriftung: ein A auf einer Grundlinie.
+    "category.label": (
+        '<path d="M6.5 15.5 11 5l4.5 10.5" /><path d="M8 12.5h6" />'
+        '<path d="M3.5 19.5h17" opacity="0.6" />'
+    ),
+    # Oberfläche: eine Fläche mit Muster darauf.
+    "category.surface": (
+        '<rect x="3.5" y="3.5" width="17" height="17" rx="2" />'
+        '<path d="M3.5 9h17" opacity="0.7" /><path d="M3.5 15h17" opacity="0.7" />'
+        '<path d="M9 3.5v17" opacity="0.45" /><path d="M15 3.5v17" opacity="0.45" />'
+    ),
+    # Import: eine Datei mit einem Pfeil hinein. Es gibt schon ein „import"
+    # für die Werkzeugleiste; das hier ist das der Kategorie, und beide
+    # nebeneinander wären eine Verwechslung — deshalb dasselbe Zeichen.
+    "category.import": (
+        '<path d="M14 3.5H6.5A1.5 1.5 0 0 0 5 5v14a1.5 1.5 0 0 0 1.5 1.5h11'
+        'A1.5 1.5 0 0 0 19 19V8.5z" />'
+        '<path d="M14 3.5V8.5h5" opacity="0.6" />'
+        '<path d="M12 10.5v6" /><path d="M9.5 14 12 16.5 14.5 14" />'
+    ),
+    # Netz: die Dreiecke selbst.
+    "category.mesh": (
+        '<path d="M12 3.5 21 9v6l-9 5.5L3 15V9z" />'
+        '<path d="M12 3.5v17" opacity="0.55" />'
+        '<path d="M3 9l18 6" opacity="0.55" /><path d="M21 9 3 15" opacity="0.55" />'
+    ),
 }
 
 
@@ -136,6 +218,20 @@ def svg_source(name: str, colour: str) -> str:
     if body is None:
         return ""
     return f"{_HEAD}{body}</svg>".replace("currentColor", colour)
+
+
+def icon_name_for(spec: object) -> str:
+    """Welches Symbol eine Operation trägt.
+
+    Ihr eigenes, wenn sie eines deklariert hat; sonst das ihrer Kategorie.
+    Damit hat **jede** Operation eines, ohne dass jemand dreiundsiebzig
+    Zeichnungen pflegt — und die Kategorie ist ohnehin die Auskunft, die ein
+    Symbol in einem Menü geben kann.
+    """
+    own = str(getattr(spec, "icon", "") or "")
+    if own:
+        return own
+    return f"category.{getattr(spec, 'category', '')}"
 
 
 def icon(name: str, widget: QWidget, *, scale: float = 1.35, colour: QColor | None = None) -> QIcon:
