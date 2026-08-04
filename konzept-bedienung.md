@@ -885,6 +885,44 @@ Nach Wirkung je Aufwand.
 
 ---
 
+## Stand (5. August 2026)
+
+Zweiundzwanzig Commits, die Suite bei 2558 Tests. Was von der Reihenfolge oben
+erledigt ist und was nicht:
+
+**Erledigt** — 1, 2, 3, 4, 6, 9a, 9d, 20, 22, 23, 24, 25.
+
+Damit ist die ganze Gruppe „Zuerst" durch, die Fehlerbehandlung, die Befunde,
+der Verlauf und die Texte. Der Op-Dialog steht am Rand und sperrt nicht mehr;
+die Farbrollen kommen aus einer Quelle.
+
+**Teilweise**
+
+* **5** — die Bauraumprüfung läuft nach jeder Auswertung. Was fehlt: der
+  Import legt nicht auf die Platte. `load` hat den Parameter (`place_on_bed`),
+  seine Vorgabe ist `False`, und sie zu drehen ändert jedes bestehende
+  Projekt — das ist eine Entscheidung, keine Reparatur.
+* **21** — die Aussage gibt es (5.2), und jetzt hält sie ein Test fest. Offen
+  bleibt die Stelle: die Statusleiste sieht nach einer Menüaktion niemand an.
+* **26** — die Absturzursache ist gefunden und behoben (eine Referenzschleife
+  zwischen Python und VTK, siehe 5.5); ein Absturzprotokoll gibt es weiterhin
+  nicht.
+
+**Offen** — 7, 8, 9, 9b, 9c, 10, 11, 12, 13, 14 und die fünf Zeichenpunkte
+15 bis 19.
+
+Das ist der Gestaltungsteil: Stylesheet, Typografie, Abstandsraster, helles
+Thema, Startbildschirm, Katalog, Bauraum und Gizmo — und der Skizzeneditor
+gegen Fusion. Dazu aus Teil 8 und 9, die nicht in der Reihenfolge stehen: die
+Grundformen unter *Ändern → Boolesch*, die Erstinbetriebnahme, das vorbelegte
+Slicer-Profil, die Druckerliste, die Spalten des Objektbaums, die Skala der
+Wandstärkenkarte und die Schichtenvorschau, die nichts schneidet.
+
+Bis hierher waren es Fehler — Dinge, die etwas anderes taten, als sie sagten.
+Was übrig ist, ändert die Anwendung sichtbar.
+
+---
+
 ## Was gut ist und so bleiben soll
 
 * **Der Ton.** „Ohne die zieht jeder Ruck am Kabel direkt an der Lötstelle."
