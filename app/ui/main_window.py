@@ -18,6 +18,7 @@ from typing import Any, cast
 from PySide6.QtCore import QPoint, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import (
     QAction,
+    QActionGroup,
     QCloseEvent,
     QDragEnterEvent,
     QDropEvent,
@@ -146,6 +147,18 @@ AUTOSAVE_INTERVAL_MS = 120_000
 #: zeigt. Lang genug, um den Blick dorthin zu ziehen, kurz genug, um nicht als
 #: Zustand gelesen zu werden.
 FLASH_MS = 1200
+
+
+def _tick(group: QActionGroup, value: str) -> None:
+    """Setzt das Häkchen auf den Eintrag, der jetzt gilt.
+
+    Qt tut das von selbst, wenn jemand im Menü klickt — nicht aber, wenn die
+    Einstellung von woanders kommt, etwa aus dem Einstellungsdialog. Dann stand
+    der Haken auf dem alten Eintrag und behauptete etwas Falsches.
+    """
+    for action in group.actions():
+        action.setChecked(action.data() == value)
+
 
 PROJECT_FILTER = f"{APP_NAME} ({'*' + PROJECT_SUFFIX})"
 MODEL_FILTER = "Modelle (*.stl *.3mf *.obj *.glb *.gltf *.ply *.off *.step *.stp *.svg *.dxf)"
@@ -377,6 +390,9 @@ class MainWindow(QMainWindow):
         self._slice_key: tuple[str, int] | None = None
         self._slice_worker: Any = None
         self._update_worker: Any = None
+        self._finished_update_worker: Any = None
+        """Die ausgelaufene Abfrage, festgehalten bis zur nächsten — dieselbe
+        Halteleine wie bei den Arbeitern der Sitzung."""
         """Die laufende Update-Anfrage (§37.2) — festgehalten wie jeder
         andere Arbeiter, damit sie das Fenster nicht überlebt."""
         self._ollama_size_worker: Any = None
@@ -1010,18 +1026,30 @@ class MainWindow(QMainWindow):
                 standpoint,
             )
         view_menu.addSeparator()
+        # Vier Navigationsschemata und zwei Themen, und keines sagte, welches
+        # gerade gilt. Wer die Vorgabe einmal umgestellt hat, konnte danach nur
+        # ausprobieren, worauf sie steht.
+        self._theme_group = QActionGroup(self)
+        self._theme_group.setExclusive(True)
         for theme, label, hint in (
             ("dark", tr("Dunkles Thema"), tr("Helle Geometrie auf dunklem Grund.")),
             ("light", tr("Helles Thema"), tr("Dunkle Geometrie auf hellem Grund.")),
         ):
-            self._add_action(
+            action = self._add_action(
                 view_menu,
                 label,
                 None,
                 lambda checked=False, key=theme: self.action_theme(key),
                 hint,
             )
+            action.setCheckable(True)
+            action.setChecked(theme == self.settings.theme)
+            action.setData(theme)
+            self._theme_group.addAction(action)
+
         navigation_menu = self._submenu(view_menu, tr("Navigation"))
+        self._navigation_group = QActionGroup(self)
+        self._navigation_group.setExclusive(True)
         for scheme, label, hint in (
             (
                 "slicer",
@@ -1039,13 +1067,17 @@ class MainWindow(QMainWindow):
             ("cad", tr("Navigation: CAD"), tr("Wie in einem CAD-Programm: Mittlere Taste dreht.")),
             ("blender", tr("Navigation: Blender"), tr("Wie in Blender.")),
         ):
-            self._add_action(
+            action = self._add_action(
                 navigation_menu,
                 label,
                 None,
                 lambda checked=False, key=scheme: self.action_navigation(key),
                 hint,
             )
+            action.setCheckable(True)
+            action.setChecked(scheme == self.settings.navigation)
+            action.setData(scheme)
+            self._navigation_group.addAction(action)
 
         help_menu = self._menu(tr("Hilfe"))
         self._add_action(
@@ -2372,11 +2404,13 @@ class MainWindow(QMainWindow):
         self.viewport.set_theme(theme)
         self.settings.theme = theme
         save_settings(self.settings)
+        _tick(self._theme_group, theme)
 
     def action_navigation(self, scheme: str) -> None:
         self.viewport.set_navigation(scheme)  # type: ignore[arg-type]
         self.settings.navigation = scheme
         save_settings(self.settings)
+        _tick(self._navigation_group, scheme)
 
     def run_operation(self, spec: OperationSpec, given: Mapping[str, Any] | None = None) -> None:
         """Menüeintrag, Dialog, Transaktion — derselbe Weg, den auch der Agent
@@ -3027,9 +3061,17 @@ class MainWindow(QMainWindow):
         """
         worker = _UpdateWorker()
         worker.done.connect(self._update_answered)
-        worker.finished.connect(lambda: setattr(self, "_update_worker", None))
+        # Nicht als Lambda, das ``None`` in genau das Feld schreibt, dessen
+        # Objekt es gerade zustellt: derselbe Fehler, der beim Auswertungs-
+        # Arbeiter die Suite ohne Traceback abriss (siehe Session).
+        worker.finished.connect(self._update_worker_done)
         self._update_worker = worker
         worker.start()
+
+    def _update_worker_done(self) -> None:
+        """Die Abfrage ist ausgelaufen — ihr Arbeiter bleibt bis zur nächsten."""
+        self._finished_update_worker = self._update_worker
+        self._update_worker = None
 
     def _update_answered(self, release: Any) -> None:
         if release is None or not release.newer_than():
@@ -3172,6 +3214,7 @@ class MainWindow(QMainWindow):
             self._map_worker,
             self._slice_worker,
             self._update_worker,
+            self._finished_update_worker,
             self._ollama_size_worker,
             *self._retired,
         ):

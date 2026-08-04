@@ -944,9 +944,30 @@ Herkunftsvermerk nennt `mcp`, und ein Strg+Z nimmt sie zurück. Der Sockel ist a
 
 ### Nicht in P15, aber notiert
 
-**D16** (STEP-Kanonisierung), **D21** (Selbstaktualisierung) und **D22**
-(Druckerverbindung) sind echt, aber keines davon steht zwischen Formwerk und
-einem zufriedenen Nutzer. D21 gehört zur Veröffentlichung, D22 in §41.
+Von den dreien blieb einer übrig — die anderen zwei waren beim Nachmessen
+keine Lücken, sondern **ungeprüft übernommene Befunde aus dem Vergleich**.
+
+**D16 (STEP-Kanonisierung) trifft nicht zu.** `load_step` ruft `features_of`
+wie jede andere B-Rep-Operation; ein Quader kommt mit sechs adressierbaren
+Flächen zurück, und dreimaliges Laden derselben Datei ergibt dieselben Namen
+mit denselben Flächeninhalten und Mittelpunkten. Genau das ist die Zusage,
+die dahintersteht: wäre die Reihenfolge zufällig, zeigte eine gespeicherte
+Skizzenebene (`feature:face_3`) morgen auf eine andere Wand. Ein Test hält es
+jetzt fest (`tests/test_brep.py`).
+
+**D21 (Selbstaktualisierung) gibt es.** `_check_for_updates` fragt beim Start
+nach, wenn die Einstellung an ist, und meldet eine neue Fassung als Hinweis mit
+Link — nichts wird geladen, nichts ersetzt, so wie §37.2 es verlangt.
+
+**D22 (Druckerverbindung) bleibt offen** und gehört dorthin, wo der Bauplan sie
+führt: §41, Ausbaustufen. Sie öffnet die Anwendung zum Netzwerk und braucht
+Zugangsdaten — das ist ein eigenes Vorhaben mit eigener Entscheidung, kein
+Rest dieser Runde.
+
+**Die Lehre daraus gehört zum Konzept.** Zweiundzwanzig Lücken kamen aus dem
+Vergleich mit anderen Anwendungen; zwei davon hatte Formwerk längst
+geschlossen, und niemand hatte nachgesehen. Ein Vergleich sagt, was die anderen
+können — nicht, was man selbst nicht kann.
 
 ---
 

@@ -384,7 +384,10 @@ def test_step_comes_back_addressable_and_stable() -> None:
     payload = step.write(edit.box(40.0, 30.0, 20.0))
     runs = [
         {
-            key: (round(entry.params["area"], 4), tuple(round(v, 6) for v in entry.params["centre"]))
+            key: (
+                round(entry.params["area"], 4),
+                tuple(round(v, 6) for v in entry.params["centre"]),
+            )
             for key, entry in features_of(step.read(payload)).items()
         }
         for _ in range(3)
