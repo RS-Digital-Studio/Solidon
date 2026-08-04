@@ -33,6 +33,7 @@ from app.core.units import DISPLAY_UNITS
 from app.i18n import SUPPORTED_LANGUAGES, language_name, tr
 from app.ui.palette import DIFF_PALETTES
 from app.ui.settings import UiSettings
+from app.ui.shortcut_schemes import SCHEMES
 
 #: Die Bezeichnungen der Navigationsschemata (§2.9).
 NAVIGATION = {
@@ -83,6 +84,18 @@ class SettingsDialog(QDialog):
         )
         _select(self.diff_palette, settings.diff_palette)
 
+        # Konzept P15, E7: wer aus Fusion kommt, hat E und F in den Fingern.
+        # Die Vorgabe bleibt die des Registers; das hier legt einzelne Tasten
+        # darüber und wirkt beim nächsten Start, weil die Menüs beim Bau
+        # gesetzt werden.
+        self.shortcuts = _choices(
+            self, {key: str(label) for key, (label, _table) in SCHEMES.items()}
+        )
+        _select(self.shortcuts, settings.shortcut_scheme)
+        self.shortcuts.setToolTip(
+            tr("Welche Tasten die Operationen führen. Wirkt beim nächsten Start.")
+        )
+
         self.updates = QCheckBox(tr("Beim Start nach einer neuen Fassung sehen"), self)
         self.updates.setChecked(settings.check_for_updates)
         self.updates.setToolTip(
@@ -120,6 +133,7 @@ class SettingsDialog(QDialog):
         form.addRow(tr("Thema"), self.theme)
         form.addRow(tr("Navigation"), self.navigation)
         form.addRow(tr("Differenzansicht"), self.diff_palette)
+        form.addRow(tr("Tastenbelegung"), self.shortcuts)
         form.addRow("", self.updates)
         return box
 
@@ -156,6 +170,7 @@ class SettingsDialog(QDialog):
         settings.theme = str(self.theme.currentData())
         settings.navigation = str(self.navigation.currentData())
         settings.diff_palette = str(self.diff_palette.currentData())
+        settings.shortcut_scheme = str(self.shortcuts.currentData())
         settings.check_for_updates = self.updates.isChecked()
         settings.printer = str(self.printer.currentData())
         settings.material = str(self.material.currentData())

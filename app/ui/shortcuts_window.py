@@ -26,23 +26,27 @@ from PySide6.QtWidgets import (
 
 from app.core.registry import CATEGORIES, REGISTRY
 from app.i18n import tr
+from app.ui.shortcut_schemes import shortcut_for
 
 
-def entries(commands: dict[str, tuple[str, str, object]]) -> list[tuple[str, str, str]]:
+def entries(
+    commands: dict[str, tuple[str, str, object]], scheme: str = "default"
+) -> list[tuple[str, str, str]]:
     """Gruppe, Titel und Kürzel — aus beiden Quellen, ohne Dubletten.
 
     Was kein Kürzel hat, steht nicht darin: eine Kürzelübersicht mit leeren
     Zeilen ist eine Liste aller Befehle, und die ist die Befehlspalette.
     """
     found: list[tuple[str, str, str]] = []
-    for key, (title, shortcut, _slot) in commands.items():
+    for name, (title, shortcut, _slot) in commands.items():
         if shortcut:
-            group = key.split(".", 1)[0]
+            group = name.split(".", 1)[0]
             found.append((_group_title(group), str(title), str(shortcut)))
     for spec in REGISTRY.all():
-        if spec.shortcut:
+        chosen = shortcut_for(spec.name, spec.shortcut, scheme)
+        if chosen:
             found.append(
-                (str(CATEGORIES.get(spec.category, spec.category)), str(spec.title), spec.shortcut)
+                (str(CATEGORIES.get(spec.category, spec.category)), str(spec.title), chosen)
             )
     return sorted(found)
 
@@ -62,7 +66,10 @@ class ShortcutsWindow(QDialog):
     """Alle belegten Tasten, nach Gruppen."""
 
     def __init__(
-        self, commands: dict[str, tuple[str, str, object]], parent: QWidget | None = None
+        self,
+        commands: dict[str, tuple[str, str, object]],
+        parent: QWidget | None = None,
+        scheme: str = "default",
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Tastenkürzel"))
@@ -74,7 +81,7 @@ class ShortcutsWindow(QDialog):
         self.tree.setAlternatingRowColors(True)
 
         current = ""
-        for group, title, shortcut in entries(commands):
+        for group, title, shortcut in entries(commands, scheme):
             if group != current:
                 current = group
                 heading = QTreeWidgetItem([group, ""])

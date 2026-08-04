@@ -279,3 +279,53 @@ def test_the_shortcut_list_is_generated_from_both_sources(window: MainWindow) ->
         "was kein Kürzel hat, gehört nicht in eine Kürzelübersicht — "
         "die Liste aller Befehle ist die Palette"
     )
+
+
+# --- die zweite Kürzelbelegung (Konzept P15 §7 Etappe 8, E7) --------------------
+
+
+def test_no_scheme_gives_the_same_key_to_two_things(window: MainWindow) -> None:
+    """Ein Kürzel, das zwei Dinge auslöst, löst keines aus.
+
+    Das Register lehnt Dubletten seit P0 ab; eine Belegung, die sich darüber
+    legt, kann sie trotzdem einführen — und zwar still, weil sie das Register
+    nicht anfasst. Geprüft wird jede Belegung gegen sich selbst **und** gegen
+    die Fensterbefehle, die überall dieselben sind.
+    """
+    from app.ui.shortcut_schemes import SCHEMES
+    from app.ui.shortcuts_window import entries
+
+    window_keys = {
+        shortcut for _title, shortcut, _slot in window.window_commands().values() if shortcut
+    }
+    for scheme in SCHEMES:
+        keys = [shortcut for _group, _title, shortcut in entries({}, scheme)]
+        twice = {key for key in keys if keys.count(key) > 1}
+        assert not twice, f"Belegung {scheme!r} vergibt {sorted(twice)} doppelt"
+
+        clash = set(keys) & window_keys
+        assert not clash, (
+            f"Belegung {scheme!r} greift nach {sorted(clash)} — das gehört den "
+            "Fensterbefehlen, und die sind in jeder Belegung dieselben"
+        )
+
+
+def test_a_scheme_only_changes_what_it_names() -> None:
+    """Eine Belegung ist eine Änderung an einzelnen Tasten, keine zweite Liste.
+
+    Sonst liefe sie beim nächsten neuen Kürzel auseinander: das Register bekäme
+    eines, die Tabelle nicht, und in einer der beiden Belegungen fehlte es
+    stillschweigend.
+    """
+    from app.ui.shortcut_schemes import FUSION, shortcut_for
+
+    assert shortcut_for("rename_object", "F2", "fusion") == "F2", "was sie nicht nennt, bleibt"
+    assert shortcut_for("sketch_extrude", None, "fusion") == "E", "was sie nennt, gilt"
+    assert shortcut_for("sketch_extrude", None, "default") is None, "die Vorgabe ist das Register"
+
+    known = {spec.name for spec in REGISTRY.all()}
+    unknown = set(FUSION) - known
+    assert not unknown, (
+        f"Die Belegung nennt Operationen, die es nicht gibt: {sorted(unknown)}. "
+        "Eine Taste für nichts ist eine Taste, die niemand wiederfindet."
+    )

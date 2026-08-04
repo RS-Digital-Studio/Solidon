@@ -45,6 +45,9 @@ class UiSettings:
     """Prozessprofil, auf das die Formwerk-Werte gelegt werden. Die Orca-Familie
     braucht es, sonst gilt der Prozess als unverträglich mit dem Drucker."""
     first_run_done: bool = False
+    shortcut_scheme: str = "default"
+    """Welche Kürzelbelegung gilt (Konzept P15, E7). Die Vorgabe ist die des
+    Registers; „fusion" legt einzelne Buchstaben darüber."""
     check_for_updates: bool = False
     """§37.2: a notice, never an automatic update — and off until it is switched on."""
 

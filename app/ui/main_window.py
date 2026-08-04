@@ -107,6 +107,7 @@ from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import SettingsDialog
+from app.ui.shortcut_schemes import shortcut_for
 from app.ui.sketch_editor import SketchPanel
 from app.ui.start_screen import StartScreen, accepted_path
 from app.ui.theme import apply_theme
@@ -1080,8 +1081,9 @@ class MainWindow(QMainWindow):
     def _operation_action(self, menu: Any, spec: OperationSpec) -> QAction:
         """Ein Menüeintrag für eine Operation, überall gleich gebaut."""
         action = QAction(icon(icon_name_for(spec), self), str(spec.title), self)
-        if spec.shortcut:
-            action.setShortcut(QKeySequence(spec.shortcut))
+        key = shortcut_for(spec.name, spec.shortcut, self.settings.shortcut_scheme)
+        if key:
+            action.setShortcut(QKeySequence(key))
         action.setStatusTip(str(spec.doc))
         action.setToolTip(str(spec.doc))
         # Eine Operation mit Skizzenfeld führt in den Zeichenmodus statt in
@@ -1330,7 +1332,7 @@ class MainWindow(QMainWindow):
         """
         from app.ui.shortcuts_window import ShortcutsWindow
 
-        ShortcutsWindow(self.window_commands(), self).exec()
+        ShortcutsWindow(self.window_commands(), self, self.settings.shortcut_scheme).exec()
 
     def action_manual(self) -> None:
         """Das Handbuch — ein Fenster, kein Dialog.
