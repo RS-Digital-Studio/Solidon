@@ -247,6 +247,52 @@ def test_a_dialog_is_generated_from_the_parameter_schema(qt_app: QApplication) -
     assert values["weld"] is True
 
 
+def test_the_dialog_keeps_out_of_the_middle_of_the_view(qt_app: QApplication) -> None:
+    """§18.7: der Dialog trägt eine Live-Vorschau und darf sie nicht verdecken.
+
+    Qt setzt Dialoge mittig zum Elternfenster, und die Mitte ist genau die
+    Stelle, an der die Kamera das Modell zeigt — die Vorschau entstand hinter
+    dem Dialog, der sie ausgelöst hat.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    anchor = QWidget()
+    anchor.resize(1200, 800)
+    anchor.show()
+    dialog = OperationDialog(REGISTRY.get("load"), ["obj_1"])
+    try:
+        dialog.place_beside(anchor)
+        middle = anchor.mapToGlobal(anchor.rect().center()).x()
+
+        assert dialog.x() > middle, "der Dialog steht rechts, nicht über der Mitte"
+        assert dialog.y() >= anchor.mapToGlobal(anchor.rect().topLeft()).y()
+    finally:
+        dialog.deleteLater()
+        anchor.deleteLater()
+
+
+def test_a_narrow_view_leaves_the_dialog_where_it_was(qt_app: QApplication) -> None:
+    """Passt er nicht daneben, bleibt er, wo Qt ihn hingesetzt hat.
+
+    Ein Dialog halb außerhalb des Bildschirms wäre schlimmer als einer in der
+    Mitte.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    anchor = QWidget()
+    anchor.resize(120, 400)
+    anchor.show()
+    dialog = OperationDialog(REGISTRY.get("load"), ["obj_1"])
+    try:
+        before = dialog.pos()
+        dialog.place_beside(anchor)
+
+        assert dialog.pos() == before
+    finally:
+        dialog.deleteLater()
+        anchor.deleteLater()
+
+
 def test_the_about_dialog_carries_the_licence_information(qt_app: QApplication) -> None:
     """§36: licence notices belong in the about dialog."""
     from PySide6.QtWidgets import QLabel, QTextBrowser

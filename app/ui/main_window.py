@@ -2326,6 +2326,7 @@ class MainWindow(QMainWindow):
                 dialog,
                 lambda entered: [OperationDraft(op=spec.name, inputs=inputs, params=entered)],
             )
+            dialog.place_beside(self.viewport)
             accepted = dialog.exec() == OperationDialog.DialogCode.Accepted
             self._clear_preview()
             if not accepted:
@@ -2494,6 +2495,7 @@ class MainWindow(QMainWindow):
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
         # gerechnet als geänderte Operation, nicht als neuer Schritt (§15.4).
         self._wire_preview(dialog, None, change_op=op_id)
+        dialog.place_beside(self.viewport)
         accepted = dialog.exec() == OperationDialog.DialogCode.Accepted
         self._clear_preview()
         if not accepted:

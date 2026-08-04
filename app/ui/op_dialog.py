@@ -43,6 +43,10 @@ from app.i18n import tr
 #: — eine stille Änderung an einer Zahl, die jemand gemessen hat.
 _FINE_BELOW = 1.0
 
+#: Abstand des Dialogs zu Rand und Oberkante des Viewports. Weit genug, dass er
+#: als eigenes Fenster erkennbar bleibt, nah genug, dass er zur Ansicht gehört.
+DIALOG_MARGIN = 16
+
 
 def _decimals_for(entry: ParamSpec) -> int:
     """Wie fein ein Feld sein muss, damit sein Wertebereich hineinpasst (§11.2).
@@ -231,6 +235,29 @@ class OperationDialog(QDialog):
         if start:
             line.setText(str(start))
         return line
+
+    def place_beside(self, anchor: QWidget | None) -> None:
+        """Setzt den Dialog an den Rand statt in die Bildmitte.
+
+        Ein Operationsdialog trägt eine Live-Vorschau (§18.7): was er zeigt,
+        entsteht während des Tippens im Viewport. Qt setzt Dialoge mittig zum
+        Elternfenster — und die Mitte des Fensters ist genau die Stelle, an der
+        die Kamera das Modell zeigt. Die Vorschau entstand hinter dem Dialog,
+        der sie ausgelöst hat.
+
+        Angelegt wird oben rechts im übergebenen Bereich, mit demselben Abstand
+        zu Rand und Kante. Passt der Dialog dort nicht, bleibt er, wo Qt ihn
+        hingesetzt hat — ein Dialog außerhalb des Bildschirms wäre schlimmer
+        als einer in der Mitte.
+        """
+        if anchor is None:
+            return
+        area = anchor.rect()
+        size = self.sizeHint()
+        if size.width() + 2 * DIALOG_MARGIN > area.width():
+            return
+        corner = anchor.mapToGlobal(area.topRight())
+        self.move(corner.x() - size.width() - DIALOG_MARGIN, corner.y() + DIALOG_MARGIN)
 
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""
