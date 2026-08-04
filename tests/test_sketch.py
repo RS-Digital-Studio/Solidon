@@ -388,3 +388,78 @@ def test_a_pattern_rejects_a_count_below_two() -> None:
         shapes.bolt_circle(pitch_diameter=50.0, count=1, hole_diameter=4.0)
     with pytest.raises(ValidationError):
         shapes.hole_grid(columns=1, rows=1, spacing=10.0, hole_diameter=3.0)
+
+
+# --- Spline (§30.1, D11) ---------------------------------------------------------
+
+
+def test_a_spline_carries_as_many_points_as_it_was_drawn_with() -> None:
+    """Der Spline bricht die feste Punktzahl je Elementart — und nur die.
+
+    Bis hierher trug jede Art eine feste Zahl: ein Punkt einen, eine Linie
+    zwei, ein Bogen drei. Ein Spline hat so viele, wie jemand geklickt hat.
+    Die tragende Invariante bleibt trotzdem stehen: **alle Freiheitsgrade sind
+    Punktkoordinaten**, der Solver kennt weiter genau eine Sorte Variable.
+    """
+    from app.core.sketch.solver import solve_sketch
+    from app.core.types import Sketch, SketchConstraint, SketchElement
+
+    points = ((0.0, 0.0), (10.0, 8.0), (20.0, -4.0), (30.0, 0.0))
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement(kind="spline", points=points),),
+        constraints=(SketchConstraint(kind="fixed", targets=(0,)),),
+    )
+
+    solved = solve_sketch(sketch)
+    assert solved.elements[0].points == points, "ohne Bedingungen bleibt er, wo er gezeichnet wurde"
+    assert solved.free_dof == 6, "vier Punkte, acht Freiheitsgrade, zwei nimmt der Festpunkt"
+
+
+def test_a_spline_needs_at_least_two_points() -> None:
+    """Ein Spline durch einen Punkt ist ein Punkt."""
+    from app.core.errors import ValidationError
+    from app.core.sketch.solver import solve_sketch
+    from app.core.types import Sketch, SketchElement
+
+    single = Sketch(
+        plane="plane:xy", elements=(SketchElement(kind="spline", points=((0.0, 0.0),)),)
+    )
+    with pytest.raises(ValidationError):
+        solve_sketch(single)
+
+
+def test_a_spline_closes_a_profile_and_becomes_a_body() -> None:
+    """Der Umriss nimmt den Spline auf, und der Kern baut ihn als exakte Kurve.
+
+    Gemessen wird an der Hüllbox: die Fläche unter einer Freiform hat keine
+    geschlossene Formel, ihre Ausdehnung schon. Der Spline geht durch seine
+    Punkte, also ist die Breite genau der Abstand von erstem zu letztem.
+    """
+    from app.core.brep.kernel import available
+    from app.core.sketch.profile import profile_of
+    from app.core.sketch.solver import solve_sketch
+    from app.core.types import Sketch, SketchElement
+
+    if not available():
+        pytest.skip("ohne B-Rep-Kern gibt es keinen Körper")
+
+    from app.core.brep import profiles as brep_profiles
+
+    # Ein Deckel mit gewölbter Oberkante: Spline hin, Linie zurück.
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(
+                kind="spline", points=((0.0, 0.0), (10.0, 6.0), (20.0, 6.0), (30.0, 0.0))
+            ),
+            SketchElement(kind="line", points=((30.0, 0.0), (0.0, 0.0))),
+        ),
+    )
+    profile = profile_of(solve_sketch(sketch))
+    body = brep_profiles.extrude(profile, 5.0)
+
+    size = body.bounds.size
+    assert size[0] == pytest.approx(30.0, abs=1e-6), "so breit wie der Spline lang ist"
+    assert size[2] == pytest.approx(5.0, abs=1e-6), "und fünf hoch"
+    assert body.volume > 0.0

@@ -30,26 +30,39 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 @pytest.fixture
 def window(qt_app: QApplication) -> Iterator[MainWindow]:
-    """Ein Fenster für einen Test — und danach wieder weg.
+    """Ein Fenster für einen Test — und danach warten, bis es still ist.
 
-    Ohne das Aufräumen überlebt es den Test, seine Arbeiter laufen weiter, und
-    beim Herunterfahren des Interpreters ist der Thread-Pool der
-    Schichtanalyse längst zu: „cannot schedule new futures after interpreter
-    shutdown", quer über eine grüne Suite. Ein Fenster, das niemand schließt,
-    ist in einem Test dasselbe wie eine Datei, die niemand schließt.
+    Ohne das lief nach dem Test noch ein Arbeiter, und beim Herunterfahren des
+    Interpreters ist der Thread-Pool der Schichtanalyse längst zu: „cannot
+    schedule new futures after interpreter shutdown", quer über eine grüne
+    Suite. Gewartet wird auf **alle** Arbeiter des Fensters, nicht nur auf die
+    der Sitzung — das Fenster führt vier eigene, und einer davon, die
+    Update-Prüfung, startet bei jedem Fenster von selbst.
 
-    **Nicht** über ``close()``: das löst ``closeEvent`` aus, und der fragt bei
-    ungesicherten Änderungen modal nach — der Test hängt dann an einem Fenster,
-    das niemand sieht. Dieselbe Falle steht seit zwei Runden im Kopf von
-    ``tests/test_ui.py``. Abgewartet und weggeräumt reicht.
+    **Gewartet, nicht gelöscht**, und nicht über ``close()``:
+
+    * ``close()`` löst ``closeEvent`` aus, und der fragt bei ungesicherten
+      Änderungen modal nach — der Test hängt dann an einem Fenster, das
+      niemand sieht. Die Falle steht seit zwei Runden im Kopf von
+      ``tests/test_ui.py``.
+    * ``deleteLater`` brachte nichts und kostete Stabilität. Ein Fenster, das
+      liegen bleibt, ist harmlos; ein Thread, der noch läuft, ist es nicht,
+      und genau der war die Ursache des Rauschens.
+
+    **Zum sporadischen Absturz** (``Windows fatal exception: access
+    violation``, ohne Zeile, an wechselnder Stelle): den gibt es hier
+    unabhängig von dieser Fixture. Nachgemessen an je vier Läufen — mit
+    Aufräumung, mit Löschen, und ganz ohne — riss er in jeder Fassung, auch in
+    der ohne. Er gehört zu dem Muster, das die Roadmap als „ersetzte Arbeiter
+    lassen ihre Referenz los" führt und für zwei Stellen behoben hat; die
+    übrigen sind dort namentlich notiert.
     """
     window = MainWindow(Session(), UiSettings())
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
     yield window
-    window.session.wait_for_idle()
     wait_for_map(window)
-    window.deleteLater()
+    window.wait_for_workers()
 
 
 def select_plate(window: MainWindow) -> None:

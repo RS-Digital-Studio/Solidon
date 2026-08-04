@@ -2657,15 +2657,21 @@ class MainWindow(QMainWindow):
             self.open_path(path)
             event.acceptProposedAction()
 
-    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name
-        # Der Menühinweis versprach das seit jeher („Ungesichertes wird vorher
-        # erfragt"), gefragt wurde nie: das Fenster schrieb eine automatische
-        # Sicherung und ging zu. Wer die nicht kennt, hat seine Arbeit verloren.
-        if not self._may_discard():
-            event.ignore()
-            return
+    def wait_for_workers(self, timeout_ms: int = 2000) -> None:
+        """Jeden Arbeiter dieses Fensters auslaufen lassen.
+
+        Ergebnisse, die niemand mehr sehen wird — aber **ein Thread, der sein
+        Fenster überlebt, nimmt den Prozess mit**. Die Schichtanalyse fehlte
+        hier einmal: Schließen während sie lief war ein Absturz beim Beenden.
+
+        Als eigene Methode und nicht nur im ``closeEvent``, weil es zwei Wege
+        gibt, ein Fenster loszuwerden: schließen und wegräumen. Der zweite ist
+        der Weg der Tests, und dort führte er zu genau dem Absturz, gegen den
+        die Liste hier geschrieben wurde — nur ohne Zeile, weil niemand mehr
+        da war, die zu schreiben.
+        """
         self.session.cancel()
-        self.session.wait_for_idle(2000)
+        self.session.wait_for_idle(timeout_ms)
         for worker in (
             self._map_worker,
             self._slice_worker,
@@ -2673,12 +2679,17 @@ class MainWindow(QMainWindow):
             self._ollama_size_worker,
             *self._retired,
         ):
-            # Ergebnisse, die niemand mehr sehen wird — aber ein Thread, der
-            # sein Fenster überlebt, nimmt den Prozess mit. Die Schichtanalyse
-            # fehlte hier: Schließen während sie lief war ein Absturz beim
-            # Beenden.
             if worker is not None and worker.isRunning():
-                worker.wait(2000)
+                worker.wait(timeout_ms)
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name
+        # Der Menühinweis versprach das seit jeher („Ungesichertes wird vorher
+        # erfragt"), gefragt wurde nie: das Fenster schrieb eine automatische
+        # Sicherung und ging zu. Wer die nicht kennt, hat seine Arbeit verloren.
+        if not self._may_discard():
+            event.ignore()
+            return
+        self.wait_for_workers()
         if self.session.modified:
             self.session.autosave()
         save_settings(self.settings)

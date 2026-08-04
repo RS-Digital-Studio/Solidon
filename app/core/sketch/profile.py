@@ -34,10 +34,15 @@ class ProfileSegment:
     Ende — damit bleibt die Geometrie beim Umdrehen der Laufrichtung
     dieselbe, und der Kern baut den Bogen aus drei Punkten exakt nach."""
 
-    kind: Literal["line", "arc"]
+    kind: Literal["line", "arc", "spline"]
     start: Point2
     end: Point2
     via: Point2 | None = None
+    through: tuple[Point2, ...] = ()
+    """Bei einem Spline **alle** Punkte, durch die er läuft, einschließlich
+    Anfang und Ende. Der Kern legt daraus eine B-Spline-Kurve, die jeden davon
+    trifft — segmentiert wird nichts, und beim Umdrehen der Laufrichtung dreht
+    sich diese Liste mit."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +60,7 @@ class Profile:
 def profile_of(solved: SolvedSketch) -> Profile:
     """Verkettet die Elemente einer gelösten Skizze zu einem Umriss."""
     circles = [element for element in solved.elements if element.kind == "circle"]
-    drawable = [element for element in solved.elements if element.kind in ("line", "arc")]
+    drawable = [element for element in solved.elements if element.kind in ("line", "arc", "spline")]
 
     if circles and not drawable:
         if len(circles) > 1:
@@ -101,6 +106,9 @@ def shifted(profile: Profile, dx: float, dy: float) -> Profile:
                 (segment.start[0] + dx, segment.start[1] + dy),
                 (segment.end[0] + dx, segment.end[1] + dy),
                 via=None if segment.via is None else (segment.via[0] + dx, segment.via[1] + dy),
+                # Die Stützpunkte ziehen mit: ohne sie käme der Spline
+                # verschoben an seinen Enden und unverschoben dazwischen an.
+                through=tuple((x + dx, y + dy) for x, y in segment.through),
             )
             for segment in profile.segments
         )
@@ -110,6 +118,8 @@ def shifted(profile: Profile, dx: float, dy: float) -> Profile:
 def _segment(kind: str, points: tuple[Point2, ...]) -> ProfileSegment:
     if kind == "line":
         return ProfileSegment("line", points[0], points[1])
+    if kind == "spline":
+        return ProfileSegment("spline", points[0], points[-1], through=points)
     centre, start, end = points
     return ProfileSegment("arc", start, end, via=_arc_midpoint(centre, start, end))
 
@@ -127,7 +137,13 @@ def _arc_midpoint(centre: Point2, start: Point2, end: Point2) -> Point2:
 
 
 def _flipped(segment: ProfileSegment) -> ProfileSegment:
-    return ProfileSegment(segment.kind, segment.end, segment.start, via=segment.via)
+    return ProfileSegment(
+        segment.kind,
+        segment.end,
+        segment.start,
+        via=segment.via,
+        through=tuple(reversed(segment.through)),
+    )
 
 
 def _joins(a: Point2, b: Point2) -> bool:

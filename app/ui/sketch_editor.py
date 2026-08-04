@@ -21,7 +21,7 @@ from dataclasses import replace
 from typing import Any
 
 from PySide6.QtCore import QPoint, QPointF, Qt, Signal
-from PySide6.QtGui import QColor, QKeySequence, QPainter, QPen, QShortcut
+from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QPen, QShortcut
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -480,6 +480,13 @@ class SketchCanvas(QWidget):
         self._pending.append(snapped if snapped is not None else -1)
         self._pending_world.append(world)
 
+        if self.tool == "spline":
+            # Ein Spline endet nicht bei einer Punktzahl, sondern wenn jemand
+            # sagt, dass er fertig ist: Doppelklick, Eingabetaste oder ein
+            # zweiter Klick auf denselben Punkt. Bis dahin sammelt er.
+            self.update()
+            return
+
         needed = {"point": 1, "line": 2, "circle": 2, "arc": 3}[self.tool]
         if len(self._pending_world) < needed:
             self.update()
@@ -507,6 +514,35 @@ class SketchCanvas(QWidget):
             # Deckung auf den eben gesetzten Punkt.
             self._pending.append(begin + 1)
             self._pending_world.append(kept)
+
+    def finish_spline(self) -> None:
+        """Den gesammelten Spline abschließen.
+
+        Unter zwei Punkten entsteht nichts — ein Spline durch einen Punkt ist
+        ein Punkt, und den gibt es als eigenes Werkzeug. Die gesammelten
+        Klicks fallen dann weg statt eine ungültige Skizze zu erzeugen.
+        """
+        if self.tool != "spline" or len(self._pending_world) < 2:
+            self._pending.clear()
+            self._pending_world.clear()
+            self.update()
+            return
+        begin = len(_flat_points(self.sketch))
+        element = SketchElement("spline", tuple(self._pending_world))
+        snapped_pairs = tuple(
+            SketchConstraint("coincident", (snapped_flat, begin + local))
+            for local, snapped_flat in enumerate(self._pending)
+            if snapped_flat >= 0
+        )
+        self._pending.clear()
+        self._pending_world.clear()
+        self._apply(
+            replace(
+                self.sketch,
+                elements=(*self.sketch.elements, element),
+                constraints=(*self.sketch.constraints, *snapped_pairs),
+            )
+        )
 
     def mouseMoveEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         if self._panning is not None:
@@ -539,10 +575,20 @@ class SketchCanvas(QWidget):
             self._pending_world.clear()
             self.update()
             return
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and self.tool == "spline":
+            self.finish_spline()
+            return
         if event.key() == Qt.Key.Key_Delete:
             self.remove_selected()
             return
         super().keyPressEvent(event)
+
+    def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        """Doppelklick schließt den Spline — derselbe Griff wie in jedem CAD."""
+        if self.tool == "spline":
+            self.finish_spline()
+            return
+        super().mouseDoubleClickEvent(event)
 
     def _context_menu(self, event: Any) -> None:
         """Bedingungen am Ort der Auswahl — §30.1 nennt das Kontextmenü
@@ -690,6 +736,31 @@ class SketchCanvas(QWidget):
             end_angle = math.degrees(math.atan2(end[1] - centre[1], end[0] - centre[0]))
             sweep = (end_angle - begin_angle) % 360.0
             painter.drawArc(box, int(begin_angle * 16), int(sweep * 16))
+        elif element.kind == "spline":
+            # Als Kurve gezeichnet, nicht als Polygonzug: der Kern baut daraus
+            # eine B-Spline durch dieselben Punkte, und eine Vorschau, die
+            # Ecken zeigt, wo das Ergebnis keine hat, wäre eine Lüge über die
+            # Geometrie. Qt kann kubische Bézier — vier Punkte je Stück, die
+            # Kontrollpunkte aus den Nachbarn gemittelt (Catmull-Rom).
+            path = QPainterPath(self._to_screen(*points[begin]))
+            count = len(element.points)
+            row = [points[begin + step] for step in range(count)]
+            for index in range(count - 1):
+                before = row[max(index - 1, 0)]
+                first, second = row[index], row[index + 1]
+                after = row[min(index + 2, count - 1)]
+                path.cubicTo(
+                    self._to_screen(
+                        first[0] + (second[0] - before[0]) / 6.0,
+                        first[1] + (second[1] - before[1]) / 6.0,
+                    ),
+                    self._to_screen(
+                        second[0] - (after[0] - first[0]) / 6.0,
+                        second[1] - (after[1] - first[1]) / 6.0,
+                    ),
+                    self._to_screen(*second),
+                )
+            painter.drawPath(path)
 
     def _paint_measures(self, painter: QPainter, points: list[tuple[float, float]]) -> None:
         """Maßbedingungen stehen als Text an ihrer Strecke — der Wert oder
@@ -840,6 +911,7 @@ class SketchPanel(QWidget):
             ("line", tr("Linie")),
             ("circle", tr("Kreis")),
             ("arc", tr("Bogen")),
+            ("spline", tr("Spline")),
         ):
             button = QToolButton(self)
             button.setText(label)

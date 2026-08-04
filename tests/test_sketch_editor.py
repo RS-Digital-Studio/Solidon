@@ -202,6 +202,45 @@ def test_removing_an_element_renumbers_the_constraints(qt_app: QApplication) -> 
     assert canvas.sketch.constraints[0].targets == (0, 1), "die Ziele sind umnummeriert"
 
 
+def test_a_spline_is_drawn_with_as_many_clicks_as_you_like(qt_app: QApplication) -> None:
+    """Ein Spline endet nicht bei einer Punktzahl, sondern wenn jemand sagt,
+    dass er fertig ist (D11).
+
+    Linie, Kreis und Bogen schließen sich nach zwei oder drei Klicks selbst —
+    beim Spline geht das nicht, weil es keine richtige Zahl gibt. Doppelklick
+    oder Eingabetaste schließen ihn.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+    canvas.set_tool("spline")
+
+    for x, y in ((0.0, 0.0), (10.0, 8.0), (20.0, -4.0), (30.0, 0.0)):
+        canvas.place(canvas._to_screen(x, y))
+    assert not canvas.sketch.elements, "solange gesammelt wird, entsteht nichts"
+
+    canvas.finish_spline()
+    assert len(canvas.sketch.elements) == 1
+    element = canvas.sketch.elements[0]
+    assert element.kind == "spline"
+    assert len(element.points) == 4, "so viele Punkte, wie geklickt wurde"
+
+
+def test_a_spline_with_one_point_is_dropped(qt_app: QApplication) -> None:
+    """Ein Spline durch einen Punkt ist ein Punkt — und den gibt es als
+    eigenes Werkzeug. Die gesammelten Klicks fallen weg, statt eine ungültige
+    Skizze zu erzeugen, die der Solver dann ablehnt.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+    canvas.set_tool("spline")
+    canvas.place(canvas._to_screen(5.0, 5.0))
+
+    canvas.finish_spline()
+
+    assert not canvas.sketch.elements
+    assert canvas.solved is None
+
+
 def test_a_reference_measure_shows_what_is_there(qt_app: QApplication) -> None:
     """Ein Referenzmaß zeigt den gemessenen Abstand in Klammern (D13).
 

@@ -41,6 +41,10 @@ _TOL: Final[float] = EPS_GEOM
 #: Wie viele Punkte ein Element je ``kind`` trägt (§9).
 _ELEMENT_POINTS: Final[dict[str, int]] = {"point": 1, "line": 2, "circle": 2, "arc": 3}
 
+#: Arten ohne feste Punktzahl, mit ihrem Mindestmaß. Ein Spline läuft durch so
+#: viele Punkte, wie jemand gesetzt hat — unter zweien ist er ein Punkt.
+_ELEMENT_MINIMUM: Final[dict[str, int]] = {"spline": 2}
+
 #: Wie viele Zielpunkte eine Bedingung je ``kind`` nimmt.
 _CONSTRAINT_TARGETS: Final[dict[str, int]] = {
     "distance": 2,
@@ -328,8 +332,16 @@ def _build_equations(
     offsets: list[int] = []
     coords: list[Point2] = []
     for position, element in enumerate(sketch.elements):
-        expected = _ELEMENT_POINTS[element.kind]
-        if len(element.points) != expected:
+        least = _ELEMENT_MINIMUM.get(element.kind)
+        if least is not None:
+            if len(element.points) < least:
+                raise ValidationError(
+                    f"elements[{position}]",
+                    _("Das Element hat zu wenige Punkte."),
+                    value=len(element.points),
+                    constraint=element.kind,
+                )
+        elif len(element.points) != _ELEMENT_POINTS[element.kind]:
             raise ValidationError(
                 f"elements[{position}]",
                 _("Das Element hat die falsche Zahl von Punkten."),

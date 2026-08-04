@@ -72,6 +72,8 @@ def _wire(profile: Profile, lift: _Lift) -> Any:
     for segment in profile.segments:
         if segment.kind == "line":
             edge = BRepBuilderAPI_MakeEdge(lift(segment.start), lift(segment.end)).Edge()
+        elif segment.kind == "spline":
+            edge = BRepBuilderAPI_MakeEdge(_spline_curve(segment.through, lift)).Edge()
         else:
             assert segment.via is not None  # profile_of setzt via bei jedem Bogen
             curve = GC_MakeArcOfCircle(
@@ -80,6 +82,26 @@ def _wire(profile: Profile, lift: _Lift) -> Any:
             edge = BRepBuilderAPI_MakeEdge(curve).Edge()
         maker.Add(edge)
     return maker.Wire()
+
+
+def _spline_curve(points: tuple[Point2, ...], lift: _Lift) -> Any:
+    """Eine B-Spline-Kurve **durch** die gegebenen Punkte, nicht daneben.
+
+    ``GeomAPI_PointsToBSpline`` interpoliert: die Kurve trifft jeden Punkt,
+    statt von ihm angezogen zu werden. Das ist die Erwartung an einer Skizze —
+    wer einen Punkt setzt, meint ihn, und ein Maß darauf wäre sonst eine
+    Aussage über etwas, das die Kurve nur ungefähr tut.
+
+    Der Kern bekommt damit die exakte Kurve und keine Segmentfolge (§30) —
+    dieselbe Zusage, die für Bögen seit P13 gilt.
+    """
+    from OCP.GeomAPI import GeomAPI_PointsToBSpline
+    from OCP.TColgp import TColgp_Array1OfPnt
+
+    array = TColgp_Array1OfPnt(1, len(points))
+    for index, point in enumerate(points, start=1):
+        array.SetValue(index, lift(point))
+    return GeomAPI_PointsToBSpline(array).Curve()
 
 
 def _circle_edge(centre: Point2, radius: float, lift: _Lift) -> Any:

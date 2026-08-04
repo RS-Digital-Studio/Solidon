@@ -29,7 +29,7 @@ from app.core.types import (
 )
 from app.i18n import _
 
-_ELEMENT_KINDS: frozenset[str] = frozenset(("point", "line", "arc", "circle"))
+_ELEMENT_KINDS: frozenset[str] = frozenset(("point", "line", "arc", "circle", "spline"))
 _CONSTRAINT_KINDS: frozenset[str] = frozenset(
     (
         "distance",
@@ -41,6 +41,7 @@ _CONSTRAINT_KINDS: frozenset[str] = frozenset(
         "tangent",
         "symmetric",
         "fixed",
+        "reference",
     )
 )
 

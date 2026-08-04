@@ -957,7 +957,7 @@ class SliceResult:
 
 # --- Skizzen (§30.1) -----------------------------------------------------------
 
-SketchElementKind = Literal["point", "line", "arc", "circle"]
+SketchElementKind = Literal["point", "line", "arc", "circle", "spline"]
 SketchConstraintKind = Literal[
     "distance",
     "coincident",
@@ -980,7 +980,11 @@ class SketchElement:
     einen Punkt auf dem Rand, ``arc`` Mittelpunkt, Anfang und Ende — der Bogen
     läuft **gegen den Uhrzeigersinn** von Anfang nach Ende. Damit sind alle
     Freiheitsgrade Punktkoordinaten, und der Solver kennt genau eine Sorte
-    Variable."""
+    Variable.
+
+    ``spline`` ist die einzige Art ohne feste Punktzahl: er läuft durch so
+    viele, wie jemand gesetzt hat, mindestens zwei. Die Invariante darüber
+    bleibt unberührt — auch seine Punkte sind Punkte."""
 
     kind: SketchElementKind
     points: tuple[Point2, ...]
