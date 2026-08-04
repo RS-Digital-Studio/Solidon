@@ -14,52 +14,70 @@ ohnehin übersetzt sind.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QLabel,
+    QMenu,
+    QMenuBar,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from app.core.registry import CATEGORIES, REGISTRY
 from app.i18n import tr
-from app.ui.shortcut_schemes import shortcut_for
 
 
-def entries(
-    commands: dict[str, tuple[str, str, object]], scheme: str = "default"
-) -> list[tuple[str, str, str]]:
-    """Gruppe, Titel und Kürzel — aus beiden Quellen, ohne Dubletten.
+def entries(menu_bar: QMenuBar | None) -> list[tuple[str, str, str]]:
+    """Gruppe, Titel und Kürzel — aus der Menüleiste, so wie sie dasteht.
+
+    Gelesen wurden vorher zwei Quellen: die Befehlstabelle des Fensters und das
+    Register. Beide zusammen sind nicht alles. Die fünfzehn Tasten für
+    Darstellung (``1`` bis ``6``) und Kameravorgaben (``Strg+0`` bis
+    ``Strg+6``) gehen
+    weder durch die eine noch durch die andere — sie standen in keiner
+    Übersicht, obwohl sie im Menü daneben stehen.
+
+    Die Menüleiste kennt sie alle, denn dort landet jede Aktion, die ein
+    Mensch findet. Und sie liefert die Gruppe gleich mit: das Menü, in dem der
+    Eintrag steht, ist die Gruppe, die der Nutzer sieht.
 
     Was kein Kürzel hat, steht nicht darin: eine Kürzelübersicht mit leeren
     Zeilen ist eine Liste aller Befehle, und die ist die Befehlspalette.
     """
     found: list[tuple[str, str, str]] = []
-    for name, (title, shortcut, _slot) in commands.items():
-        if shortcut:
-            group = name.split(".", 1)[0]
-            found.append((_group_title(group), str(title), str(shortcut)))
-    for spec in REGISTRY.all():
-        chosen = shortcut_for(spec.name, spec.shortcut, scheme)
-        if chosen:
-            found.append(
-                (str(CATEGORIES.get(spec.category, spec.category)), str(spec.title), chosen)
-            )
+    if menu_bar is None:
+        return found
+    for action in menu_bar.actions():
+        submenu = action.menu()
+        if isinstance(submenu, QMenu):
+            _collect(submenu, _plain(action.text()), found)
     return sorted(found)
 
 
-def _group_title(group: str) -> str:
-    """Der Name einer Befehlsgruppe des Fensters."""
-    return {
-        "file": tr("Datei"),
-        "edit": tr("Bearbeiten"),
-        "view": tr("Ansicht"),
-        "tool": tr("Werkzeuge"),
-        "help": tr("Hilfe"),
-    }.get(group, group)
+def _collect(menu: QMenu, group: str, found: list[tuple[str, str, str]]) -> None:
+    """Sammelt ein Menü und seine Untermenüs unter derselben Gruppe."""
+    for action in menu.actions():
+        submenu = action.menu()
+        if isinstance(submenu, QMenu):
+            _collect(submenu, group, found)
+            continue
+        sequence = action.shortcut()
+        if sequence.isEmpty():
+            continue
+        # ``NativeText`` schreibt die Taste so, wie sie auf der Tastatur heißt
+        # und im Menü daneben steht: „Strg+Z", nicht „Ctrl+Z". Vorher stand hier
+        # der rohe Deklarationstext, und damit sprach die Übersicht englisch,
+        # während das Menü deutsch sprach.
+        key = sequence.toString(QKeySequence.SequenceFormat.NativeText)
+        found.append((group, _plain(action.text()), key))
+
+
+def _plain(text: str) -> str:
+    """Ein Beschriftungstext ohne Qt-Zutaten: kein „&", kein „…"."""
+    return text.replace("&", "").removesuffix("…").strip().removesuffix(" …").strip()
 
 
 class ShortcutsWindow(QDialog):
@@ -67,9 +85,9 @@ class ShortcutsWindow(QDialog):
 
     def __init__(
         self,
-        commands: dict[str, tuple[str, str, object]],
+        menu_bar: QMenuBar | None,
         parent: QWidget | None = None,
-        scheme: str = "default",
+        palette_key: str = "",
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Tastenkürzel"))
@@ -81,7 +99,7 @@ class ShortcutsWindow(QDialog):
         self.tree.setAlternatingRowColors(True)
 
         current = ""
-        for group, title, shortcut in entries(commands, scheme):
+        for group, title, shortcut in entries(menu_bar):
             if group != current:
                 current = group
                 heading = QTreeWidgetItem([group, ""])
@@ -93,7 +111,14 @@ class ShortcutsWindow(QDialog):
             self.tree.addTopLevelItem(QTreeWidgetItem([f"    {title}", shortcut]))
         self.tree.resizeColumnToContents(0)
 
-        note = QLabel(tr("Alles ist außerdem über die Befehlspalette erreichbar — Strg+G."), self)
+        # Das Kürzel kommt von der Aktion selbst. Hier stand „Strg+G", und das
+        # öffnet „Modell erzeugen" — eine Übersicht über Tastenkürzel, die ein
+        # falsches nennt, ist schlimmer als keine.
+        note = QLabel(
+            tr("Alles ist außerdem über die Befehlspalette erreichbar.")
+            + (f" — {palette_key}" if palette_key else ""),
+            self,
+        )
         note.setWordWrap(True)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)

@@ -257,27 +257,96 @@ def test_every_operation_has_exactly_one_menu_entry(window: MainWindow) -> None:
 # --- die Kürzelübersicht (Konzept P15 §7 Etappe 8, D6) --------------------------
 
 
-def test_the_shortcut_list_is_generated_from_both_sources(window: MainWindow) -> None:
+def test_the_shortcut_list_is_generated_from_the_menu_bar(window: MainWindow) -> None:
     """`?` zeigt, was es gibt — erzeugt, nicht gepflegt.
 
-    Eine von Hand geschriebene Liste wäre am Tag nach dem nächsten Kürzel
-    falsch, und niemand würde es merken. Diese liest das Register und die
-    Befehlstabelle des Fensters; damit steht sie auch in beiden Sprachen, ohne
-    dass jemand sie übersetzt.
+    Gelesen wurden vorher zwei Quellen, die Befehlstabelle des Fensters und das
+    Register. Beide zusammen sind nicht alles: die Tasten für Darstellung und
+    Kameravorgaben gehen durch keine von beiden und standen deshalb in keiner
+    Übersicht, obwohl sie im Menü daneben stehen.
+
+    Die Menüleiste kennt sie alle — dort landet jede Aktion, die ein Mensch
+    findet — und liefert die Gruppe gleich mit.
     """
+    from PySide6.QtGui import QKeySequence
+
     from app.ui.shortcuts_window import entries
 
-    found = entries(window.window_commands())
+    found = entries(window.menuBar())
     assert found, "es gibt Kürzel, also steht etwas drin"
 
     keys = {shortcut for _group, _title, shortcut in found}
-    assert "Ctrl+S" in keys, "die Fensterbefehle sind dabei"
-    from_registry = {spec.shortcut for spec in REGISTRY.all() if spec.shortcut}
+    native = QKeySequence("Ctrl+S").toString(QKeySequence.SequenceFormat.NativeText)
+    assert native in keys, "die Fensterbefehle sind dabei"
+
+    from_registry = {
+        QKeySequence(spec.shortcut).toString(QKeySequence.SequenceFormat.NativeText)
+        for spec in REGISTRY.all()
+        if spec.shortcut
+    }
     assert from_registry <= keys, "und jede Operation, die eines führt"
+
+    # Die fünfzehn, die vorher fehlten.
+    for key in ("1", "2", "3", "4"):
+        assert key in keys, f"die Darstellungstaste {key} steht in der Übersicht"
+    assert QKeySequence("Ctrl+0").toString(QKeySequence.SequenceFormat.NativeText) in keys, (
+        "und die Kameravorgaben ebenso"
+    )
 
     assert all(shortcut for _group, _title, shortcut in found), (
         "was kein Kürzel hat, gehört nicht in eine Kürzelübersicht — "
         "die Liste aller Befehle ist die Palette"
+    )
+
+
+def test_the_shortcut_list_writes_keys_the_way_the_menu_does(window: MainWindow) -> None:
+    """§4.1: die Übersicht sprach englisch, während das Menü deutsch sprach.
+
+    Dort stand „Ctrl+Z", im Bearbeiten-Menü daneben „Strg+Z" — dieselbe Taste,
+    zwei Schreibweisen, und die eine findet auf keiner deutschen Tastatur
+    statt. Übersetzt wird das von Qt selbst, sobald sein Katalog geladen ist;
+    geprüft wird deshalb die Kopplung und nicht die Sprache: die Übersicht
+    schreibt, was die Aktion schreibt.
+    """
+    from PySide6.QtGui import QAction, QKeySequence
+
+    from app.ui.shortcuts_window import entries
+
+    keys = {shortcut for _group, _title, shortcut in entries(window.menuBar())}
+    with_keys = [
+        action
+        for action in window.findChildren(QAction)
+        if not action.shortcut().isEmpty() and action.menu() is None
+    ]
+    assert with_keys, "es gibt Menüeinträge mit Kürzeln"
+
+    for action in with_keys[:20]:
+        native = action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+        if native in keys:
+            continue
+        # Nicht jede Aktion steht in einem Menü — Werkzeugleiste und
+        # fensterweite Kürzel gibt es auch. Was drinsteht, muss aber passen.
+        assert action.shortcut().toString() not in keys, (
+            f"{action.text()}: die Übersicht schreibt anders als die Aktion"
+        )
+
+
+def test_the_note_names_the_key_that_opens_the_palette(window: MainWindow) -> None:
+    """Eine Übersicht über Tastenkürzel, die ein falsches nennt, ist schlimmer
+    als keine.
+
+    Unter der Liste stand „Strg+G" — das öffnet *Modell erzeugen*. Die Palette
+    liegt auf Strg+Umschalt+P, und die Zeile holt sich die Taste jetzt von der
+    Aktion selbst.
+    """
+    from PySide6.QtGui import QKeySequence
+
+    expected = QKeySequence("Ctrl+Shift+P").toString(QKeySequence.SequenceFormat.NativeText)
+
+    assert window._palette_action.shortcut() == QKeySequence("Ctrl+Shift+P")
+    assert (
+        window._palette_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+        == expected
     )
 
 
@@ -292,14 +361,20 @@ def test_no_scheme_gives_the_same_key_to_two_things(window: MainWindow) -> None:
     nicht anfasst. Geprüft wird jede Belegung gegen sich selbst **und** gegen
     die Fensterbefehle, die überall dieselben sind.
     """
-    from app.ui.shortcut_schemes import SCHEMES
-    from app.ui.shortcuts_window import entries
+    from app.ui.shortcut_schemes import SCHEMES, shortcut_for
 
     window_keys = {
         shortcut for _title, shortcut, _slot in window.window_commands().values() if shortcut
     }
     for scheme in SCHEMES:
-        keys = [shortcut for _group, _title, shortcut in entries({}, scheme)]
+        # Gefragt wird die Belegung selbst, nicht die Anzeige: geprüft wird,
+        # welche Taste eine Operation führt, und nicht, wie sie geschrieben
+        # steht.
+        keys = [
+            key
+            for spec in REGISTRY.all()
+            if (key := shortcut_for(spec.name, spec.shortcut, scheme))
+        ]
         twice = {key for key in keys if keys.count(key) > 1}
         assert not twice, f"Belegung {scheme!r} vergibt {sorted(twice)} doppelt"
 

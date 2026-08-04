@@ -770,7 +770,9 @@ class MainWindow(QMainWindow):
         )
 
         edit_menu = self._menu(tr("Bearbeiten"))
-        self._add_action(
+        # Gemerkt, weil die Kürzelübersicht darauf verweist. Dort stand die
+        # Taste als Text, und der war falsch.
+        self._palette_action = self._add_action(
             edit_menu,
             tr("Befehlspalette …"),
             "Ctrl+Shift+P",
@@ -1420,7 +1422,11 @@ class MainWindow(QMainWindow):
         """
         from app.ui.shortcuts_window import ShortcutsWindow
 
-        ShortcutsWindow(self.window_commands(), self, self.settings.shortcut_scheme).exec()
+        ShortcutsWindow(
+            self.menuBar(),
+            self,
+            self._palette_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText),
+        ).exec()
 
     def action_manual(self) -> None:
         """Das Handbuch — ein Fenster, kein Dialog.
