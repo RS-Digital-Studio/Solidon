@@ -151,6 +151,15 @@ QToolButton#sectionHeading:hover {{ background: {hover}; }}
 QToolButton#sectionHeading:checked {{ background: transparent; color: {text}; }}
 QToolButton#sectionHeading:checked:hover {{ background: {hover}; }}
 
+/* Eine Beispielkachel ist ein großer Knopf mit zwei Zeilen darin. */
+QFrame#exampleTile {{
+    background: {base};
+    border: 1px solid {line};
+    border-radius: {NORMAL}px;
+}}
+QFrame#exampleTile:hover {{ border-color: {highlight}; background: {hover}; }}
+QFrame#exampleTile:focus {{ border: 2px solid {highlight}; }}
+
 /* --- Eingaben: der Fokus muss man sehen -------------------------------- */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit, QTextEdit {{
     background: {base};
