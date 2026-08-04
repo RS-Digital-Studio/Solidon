@@ -74,7 +74,7 @@ class BrepBoxParams(BaseParams):
     produces=1,
     doc=_(
         "Legt einen Quader als B-Rep-Körper an — mit echten Kanten, an die "
-        "Fasen und Verrundungen gesetzt werden können (§30)."
+        "Fasen und Verrundungen gesetzt werden können."
     ),
 )
 def create_brep_box(ctx: OpContext) -> OpResult:
@@ -145,7 +145,7 @@ class LoadStepParams(BaseParams):
     produces=1,
     doc=_(
         "Liest eine STEP-Datei als B-Rep-Körper. STEP trägt seine Einheit selbst — "
-        "die Einheitenfrage entfällt (§11.1)."
+        "die Einheitenfrage entfällt."
     ),
 )
 def load_step(ctx: OpContext) -> OpResult:
@@ -175,7 +175,7 @@ def load_step(ctx: OpContext) -> OpResult:
             Finding(
                 code="brep.loaded",
                 severity="info",
-                message=_("Ein exakter Körper mit benannten Flächen und Kanten (§30)."),
+                message=_("Ein exakter Körper mit benannten Flächen und Kanten."),
                 values={"faces": solid.face_count, "edges": solid.edge_count},
             )
         ],
@@ -212,7 +212,7 @@ class FilletParams(BaseParams):
     produces=1,
     doc=_(
         "Verrundet Kanten eines B-Rep-Körpers — geometrisch exakt, weil die "
-        "Kante eine Kurve ist und keine Folge von Segmenten (§30)."
+        "Kante eine Kurve ist und keine Folge von Segmenten."
     ),
 )
 def fillet_edges(ctx: OpContext) -> OpResult:
@@ -404,7 +404,7 @@ class ToMeshParams(BaseParams):
     produces=1,
     doc=_(
         "Wandelt einen B-Rep-Körper in ein Dreiecksnetz um. Der Weg zurück "
-        "besteht nicht — die Kanten sind danach fort (§30)."
+        "besteht nicht — die Kanten sind danach fort."
     ),
 )
 def brep_to_mesh(ctx: OpContext) -> OpResult:

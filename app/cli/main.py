@@ -397,7 +397,7 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("directory", nargs="?", default=".")
     export.add_argument("--format", dest="export_format", default="stl", choices=("stl", "3mf"))
     export.add_argument("--on", nargs="*", default=None, help=tr("Objekte, z. B. obj_1"))
-    export.add_argument("--scheme", default=None, help=tr("Namensschema, siehe §29"))
+    export.add_argument("--scheme", default=None, help=tr("Namensschema für die Dateinamen"))
     export.set_defaults(handler=command_export)
 
     run = commands.add_parser("run", help=tr("Eine Operation ausführen"))

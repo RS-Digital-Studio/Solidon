@@ -148,7 +148,7 @@ class SmoothParams(BaseParams):
     produces=1,
     doc=_(
         "Nimmt die Rauheit aus einer Oberfläche, ohne den Körper zu schrumpfen. "
-        "Für erzeugte Netze mit Treppenstufen (§27)."
+        "Für erzeugte Netze mit Treppenstufen."
     ),
 )
 def smooth_mesh(ctx: OpContext) -> OpResult:

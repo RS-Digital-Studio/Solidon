@@ -74,7 +74,7 @@ def _drawn_profile(ctx: OpContext, sketch_text: str) -> Profile:
 
 
 def _plane_of(sketch_text: str) -> str:
-    """Auf welcher Ebene eine gezeichnete Skizze liegt (§30.1).
+    """Auf welcher Ebene eine gezeichnete Skizze liegt.
 
     Ohne gezeichnete Skizze gilt XY: die Grundformen liegen dort, und eine
     Operation ohne Skizze hat keine Ebene zu wählen."""
@@ -250,7 +250,7 @@ class SketchExtrudeParams(BaseParams):
     produces=1,
     doc=_(
         "Zieht eine Grundform senkrecht zu einem Körper auf. Der Umriss kommt "
-        "aus einer gelösten Skizze und geht als exakte Kurve in den Kern (§30.1) "
+        "aus einer gelösten Skizze und geht als exakte Kurve in den Kern "
         "— ein Kreis ist wirklich rund."
     ),
 )

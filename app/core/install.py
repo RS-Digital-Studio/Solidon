@@ -74,7 +74,7 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
     Requirement(
         id="brep",
         title="OpenCASCADE",
-        what_for=_("Exakte Kanten: Fasen, Verrundungen und STEP (§30)."),
+        what_for=_("Exakte Kanten: Fasen, Verrundungen und STEP."),
         kind="package",
         package="cadquery-ocp-novtk",
         module="OCP.BRepPrimAPI",
@@ -83,7 +83,7 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
     Requirement(
         id="vhacd",
         title="V-HACD",
-        what_for=_("Hinweis, wo ein Körper von selbst auseinanderfällt (§22.3)."),
+        what_for=_("Hinweis, wo ein Körper von selbst auseinanderfällt."),
         kind="package",
         package="vhacdx",
         module="vhacdx",
@@ -92,7 +92,7 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
     Requirement(
         id="keyring",
         title=_("Schlüsselbund"),
-        what_for=_("Legt den Zugang zum Sprachmodell im System ab (§27)."),
+        what_for=_("Legt den Zugang zum Sprachmodell im System ab."),
         kind="package",
         package="keyring",
         module="keyring",

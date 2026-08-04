@@ -75,7 +75,11 @@ class BoxParams(BaseParams):
     params=BoxParams,
     consumes=0,
     produces=1,
-    doc=_("Legt einen Quader an. Erst in der Bausteinbibliothek suchen (§39)."),
+    # „Erst in der Bausteinbibliothek suchen" stand hier und richtete sich an
+    # das Sprachmodell — eine Regel aus rules.toml, gelandet in dem Feld, das
+    # der Nutzer im Dialog liest. Wer auf „Quader anlegen" klickt, hat sich
+    # entschieden; die Regel steht dort, wo sie hingehört, und gilt weiter.
+    doc=_("Legt einen Quader an, mittig auf Z = 0 oder auf einer Ecke."),
 )
 def create_box(ctx: OpContext) -> OpResult:
     params = cast(BoxParams, ctx.params)
@@ -186,7 +190,7 @@ class ScadParams(BaseParams):
     source: str = param(
         title=_("Quelltext"),
         default="",
-        doc=_("OpenSCAD-Quelltext. Wird vor dem Lauf geprüft (§32)."),
+        doc=_("OpenSCAD-Quelltext. Wird vor dem Lauf geprüft."),
     )
     name: str = param(
         title=_("Name"),

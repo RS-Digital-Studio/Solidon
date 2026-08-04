@@ -66,6 +66,46 @@ def test_every_parameter_says_what_it_does(spec: OperationSpec) -> None:
 
 
 @pytest.mark.parametrize("spec", registered(), ids=ids)
+def test_no_user_text_carries_a_paragraph_number(spec: OperationSpec) -> None:
+    """Der Nutzer hat den Bauplan nicht.
+
+    „(§39)", „(§30)", „(§32)" standen in Dialogtexten und Befunden — für den
+    Leser Ballast, für den Suchenden ein Verweis auf ein Dokument, das er nicht
+    hat. Im Quelltext sind die Verweise richtig und bleiben; was durch ``_()``
+    geht, ist Oberfläche.
+    """
+    texts = [str(spec.title), str(spec.doc)]
+    texts.extend(str(entry.doc or "") for entry in spec.params.spec())
+    texts.extend(str(entry.title) for entry in spec.params.spec())
+    for text in texts:
+        assert "§" not in text, f"{spec.name}: §-Verweis im Nutzertext — {text[:60]}"
+
+
+@pytest.mark.parametrize("spec", registered(), ids=ids)
+def test_no_user_text_addresses_the_agent(spec: OperationSpec) -> None:
+    """Was die Operation dem Sprachmodell sagt, ist nicht, was sie dem Nutzer
+    sagt.
+
+    Im ``doc`` von *Quader anlegen* stand „Erst in der Bausteinbibliothek
+    suchen" — eine Regel aus ``rules.toml``, gelandet in dem Feld, das der
+    Nutzer im Dialog liest. Wer auf „Quader anlegen" klickt, hat sich
+    entschieden.
+
+    Geprüft wird gegen die Regelsammlung selbst: taucht ein ganzer Regelsatz in
+    einem Dialogtext auf, ist er dort falsch.
+    """
+    from app.core.knowledge.rules import load
+
+    doc = " ".join(str(spec.doc).split())
+    for rule in load().rules:
+        for sentence in rule.text.split("."):
+            trimmed = " ".join(sentence.split())
+            if len(trimmed) < 25:
+                continue
+            assert trimmed not in doc, f"{spec.name}: Agentenregel im Nutzertext — {trimmed[:60]}"
+
+
+@pytest.mark.parametrize("spec", registered(), ids=ids)
 def test_non_deterministic_operations_use_a_seed(spec: OperationSpec) -> None:
     if spec.deterministic:
         return

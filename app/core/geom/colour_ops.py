@@ -122,7 +122,7 @@ class SlotsFromTextureParams(BaseParams):
     deterministic=False,
     doc=_(
         "Rechnet die Textur eines Objekts auf die Anzahl eingelegter Filamente um "
-        "und legt das Ergebnis als Materialslots ab (§20)."
+        "und legt das Ergebnis als Materialslots ab."
     ),
 )
 def slots_from_texture(ctx: OpContext) -> OpResult:

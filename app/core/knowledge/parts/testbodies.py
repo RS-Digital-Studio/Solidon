@@ -190,7 +190,7 @@ class WallLadderParams(BaseParams):
     features=["face"],
     doc=_(
         "Wände von einer bis mehreren Extrusionsbreiten. Zeigt, ab wann der Drucker "
-        "wirklich noch Material legt — die Grundlage für die Mindestwandstärke (§39)."
+        "wirklich noch Material legt — die Grundlage für die Mindestwandstärke."
     ),
     changes=[FIRST_RELEASE],
 )

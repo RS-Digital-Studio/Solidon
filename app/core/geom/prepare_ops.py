@@ -280,7 +280,7 @@ class HollowParams(BaseParams):
         unit="mm",
         minimum=0.4,
         maximum=50.0,
-        doc=_("Was stehen bleibt. Zwei Extrusionsbreiten sind das Minimum (§39)."),
+        doc=_("Was stehen bleibt. Zwei Extrusionsbreiten sind das Minimum."),
     )
     vents: int = param(
         title=_("Entlüftungen"),
