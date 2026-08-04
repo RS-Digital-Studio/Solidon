@@ -407,7 +407,7 @@ class TextureParams(BaseParams):
             "gehört um den Griff, nicht als Fleck darauf."
         ),
     )
-    diameter: float = param(
+    wrap_diameter: float = param(
         title=_("Durchmesser"),
         default=0.0,
         unit="mm",
@@ -613,10 +613,10 @@ def apply_texture(ctx: OpContext) -> OpResult:
         # Zylinderfläche, und die Vereinigung fände dort keine gemeinsame
         # Fläche, sondern eine Berührung. Der Ausgleich ist die
         # Sehnenabweichung selbst.
-        lift -= sagitta(params.diameter, params.pitch)
+        lift -= sagitta(params.wrap_diameter, params.pitch)
     body = apply(body, translation((0.0, 0.0, lift)))
     if params.wrap == "cylinder":
-        body = wrapped(body, params.diameter)
+        body = wrapped(body, params.wrap_diameter)
         placed = place(body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz), 0.0)
     else:
         placed = place(

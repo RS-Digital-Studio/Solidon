@@ -172,7 +172,7 @@ class AgentSession:
         if name == READ_REPORT:
             return _report_text(scene, arguments.get("severity")), scene
         if name == FIND_PART:
-            return _find_part(arguments.get("description", "")), scene
+            return find_part_text(arguments.get("description", "")), scene
         return self._operation(call, proposal, working, history, scene)
 
     def _ask_user(self, arguments: dict[str, Any], proposal: Proposal) -> str:
@@ -356,7 +356,7 @@ def _from(severity: str) -> set[str]:
     return set(order[order.index(severity) :])
 
 
-def _find_part(description: str) -> str:
+def find_part_text(description: str) -> str:
     """§26.2: in der Bibliothek nachsehen, bevor Geometrie von Hand entsteht.
 
     Die Antwort nennt die Operation, nicht nur den Baustein: was das Modell mit

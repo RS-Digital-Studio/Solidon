@@ -1421,3 +1421,25 @@ def test_switching_it_on_binds_only_to_this_machine(window: MainWindow) -> None:
         window.settings.remote_enabled = False
         window._apply_remote()
     assert window._remote is None
+
+
+def test_dragging_a_face_reaches_the_document(window: MainWindow) -> None:
+    """Ein Signal ohne Empfänger fällt in keinem Review auf.
+
+    Der Viewport sendete `faceDragged`, seit es den Griff an der Fläche gibt,
+    und niemand hörte zu: der Griff ließ sich ziehen, das Modell blieb, wie es
+    war. Ein Test, der nur den Sender prüft, hätte das nicht gefunden — dieser
+    prüft, was im Dokument ankommt.
+    """
+    window.run_remote("create_box", {"width": 20.0, "depth": 20.0, "height": 20.0})
+    window.object_tree.tree.setCurrentItem(window.object_tree.tree.topLevelItem(0))
+    window.viewport.faceDragged.emit((0.0, 0.0, 1.0), 3.0)
+    window.session.wait_for_idle(60_000)
+
+    assert [entry.op for entry in window.session.project.document.ops] == [
+        "create_box",
+        "push_face",
+    ]
+    moved = window.session.project.document.ops[-1]
+    assert moved.params["distance"] == pytest.approx(3.0)
+    assert moved.params["nz"] == pytest.approx(1.0)

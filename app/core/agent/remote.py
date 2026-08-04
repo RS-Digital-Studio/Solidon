@@ -29,7 +29,7 @@ import json
 from typing import Any, Final, Protocol
 
 from app.branding import APP_NAME, APP_VERSION
-from app.core.agent.tools import tool_schemas
+from app.core.agent.tools import ASK_USER, tool_schemas
 from app.core.errors import AppError
 from app.core.registry import Registry
 from app.i18n import _
@@ -50,14 +50,20 @@ INVALID_REQUEST: Final = -32600
 METHOD_NOT_FOUND: Final = -32601
 INTERNAL_ERROR: Final = -32603
 
-#: Operationen, die nie fernbedienbar sind.
+#: Werkzeuge, die nie fernbedienbar sind.
 #:
 #: ``create_from_scad`` nimmt ausführbaren Quelltext entgegen. Über eine offene
 #: Schnittstelle wäre das die Ausführung fremden Codes auf diesem Rechner —
 #: unabhängig davon, wie gründlich die Quelltextprüfung aus §32 ist, denn sie
 #: prüft, was der Nutzer selbst eingegeben hat. Die Operation bleibt im Menü;
 #: sie ist nur nicht fernsteuerbar.
-DENIED: Final[frozenset[str]] = frozenset({"create_from_scad"})
+#:
+#: ``ask_user`` ist gesperrt, weil hier niemand zu fragen ist. Im Chat hält der
+#: Agent damit an und wartet auf eine Antwort aus dem Fenster (Leitprinzip 6);
+#: über die Leitung säße die Frage in einem Programm fest, das seinen eigenen
+#: Nutzer hat. Wer fern steuert, fragt ihn selbst — und tut es an der Stelle,
+#: an der er sitzt.
+DENIED: Final[frozenset[str]] = frozenset({"create_from_scad", ASK_USER})
 
 #: Adressen, die als „dieser Rechner" gelten.
 _LOOPBACK: Final[frozenset[str]] = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})

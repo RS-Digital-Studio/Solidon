@@ -242,7 +242,7 @@ def test_a_wrapped_texture_grows_the_shaft_all_the_way_around() -> None:
     result = _run_on_cylinder(
         pattern="knurl_diamond",
         wrap="cylinder",
-        diameter=20.0,
+        wrap_diameter=20.0,
         width=62.8,
         height=20.0,
         pitch=2.5,
@@ -259,7 +259,7 @@ def test_a_wrapped_texture_grows_the_shaft_all_the_way_around() -> None:
 def test_wrapping_without_a_diameter_says_what_is_missing() -> None:
     """Regel 17: ohne Durchmesser gibt es keinen Zylinder, um den etwas läuft."""
     with pytest.raises(ValidationError) as problem:
-        _run_on_cylinder(pattern="rib", wrap="cylinder", diameter=0.0, width=20.0, height=10.0)
+        _run_on_cylinder(pattern="rib", wrap="cylinder", wrap_diameter=0.0, width=20.0, height=10.0)
     assert problem.value.suggestions
 
 

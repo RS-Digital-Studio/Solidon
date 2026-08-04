@@ -59,6 +59,7 @@ from app.core.scene.project import (
 from app.core.split import SplitApplied, apply_planned, apply_split, plan_split
 from app.core.types import (
     Finding,
+    Fit,
     Origin,
     Parameter,
     PrintSettings,
@@ -437,6 +438,37 @@ class Session(QObject):
             self.history.apply(
                 f"{tr('Parameter')} {name}",
                 changes=change_for(self.project.document, parameters={name: changed}),
+            )
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+
+    def add_fit(self, fit: Fit) -> None:
+        """Eine Passungsbeziehung ins Dokument (§14, §15.5).
+
+        Wie ein Parameter reist sie als ``DocumentChange`` und ist damit
+        rücknehmbar, zählt als Änderung und überlebt das Schließen. Bis hierher
+        konnte sie nur der Agent anlegen — die Fernsteuerung bot das Werkzeug
+        an und hatte niemanden, der es ausführt.
+        """
+        document = self.project.document
+        if any(entry.name == fit.name for entry in document.fits):
+            self.failed.emit(
+                ValidationError(
+                    field="name",
+                    detail=tr("Diesen Namen gibt es schon."),
+                    constraint="duplicate",
+                    values={"name": fit.name},
+                )
+            )
+            return
+        try:
+            self.history.apply(
+                f"{tr('Passung')} {fit.name}",
+                changes=change_for(document, fits=[*document.fits, fit]),
             )
         except AppError as error:
             self.failed.emit(error)

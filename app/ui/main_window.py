@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import (
@@ -45,8 +45,11 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import examples, updates
+from app.core.agent.session import find_part_text
 from app.core.agent.tools import (
+    ADD_FIT,
     ADD_PARAMETER,
+    FIND_PART,
     OBJECTS_FIELD,
     READ_REPORT,
     SET_PARAMETER,
@@ -73,7 +76,16 @@ from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.tour import tour_for
-from app.core.types import Finding, ObjectId, Origin, Parameter, SliceResult
+from app.core.types import (
+    FeatureRef,
+    Finding,
+    Fit,
+    FitKind,
+    ObjectId,
+    Origin,
+    Parameter,
+    SliceResult,
+)
 from app.i18n import TranslatableText, _, tr
 from app.ui import first_run
 from app.ui.analysis_bar import AnalysisBar, LayerBar
@@ -296,6 +308,9 @@ def _sketch_param(op_name: str) -> str:
 #: steht. „user" und „agent" sind die einzigen Urheber, die das Format
 #: kennt (§26.4); ein dritter kostete eine Migration, und für die Frage
 #: „habe ich das getan?" reicht dieser Vermerk.
+#: Die Passungsarten, die eine Fernsteuerung nennen darf (§14).
+FIT_KINDS = ("clearance", "press", "thread", "flush")
+
 REMOTE_ORIGIN = "mcp"
 
 #: Wie lange ein Fernaufruf auf die Auswertung wartet. Länger als im
@@ -446,6 +461,7 @@ class MainWindow(QMainWindow):
         self.transform_bar.gizmoToggled.connect(self.viewport.set_gizmo)
         self.transform_bar.snappingChanged.connect(self.viewport.set_snapping)
         self.viewport.transformDragged.connect(self._on_transform_dragged)
+        self.viewport.faceDragged.connect(self._on_face_dragged)
         self.viewport.featurePicked.connect(self._on_feature_picked)
         self.viewport.objectPicked.connect(self._on_object_picked)
 
@@ -1883,6 +1899,37 @@ class MainWindow(QMainWindow):
             return
         self.run_operation(REGISTRY.get(name))
 
+    def _on_face_dragged(self, normal: Any, distance: float) -> None:
+        """Ein Zug am Flächengriff wird eine Operation (§18.11, Regel 2).
+
+        Der Viewport hat das Signal seit dem Gizmo an der Fläche gesendet, und
+        niemand hörte zu: der Griff ließ sich ziehen, das Modell blieb, wie es
+        war. Ein Signal ohne Empfänger fällt in keinem Review auf und in keinem
+        Test, der nur den Sender prüft.
+
+        Ein Zug, eine Transaktion — dieselbe Zusage wie beim Verschieben des
+        ganzen Körpers, nur dass hier die Fläche wandert und die Nachbarwände
+        mitwachsen.
+        """
+        selected = self.object_tree.selected()
+        if selected is None:
+            return
+        self.session.apply(
+            REGISTRY.get("push_face").title,
+            [
+                OperationDraft(
+                    op="push_face",
+                    inputs=(selected,),
+                    params={
+                        "nx": float(normal[0]),
+                        "ny": float(normal[1]),
+                        "nz": float(normal[2]),
+                        "distance": float(distance),
+                    },
+                )
+            ],
+        )
+
     def _on_transform_dragged(self, steps: Any) -> None:
         """Ein Ziehen, eine Transaktion — in einem Schritt zurückgenommen
         (§18.11, §15.5).
@@ -2326,6 +2373,10 @@ class MainWindow(QMainWindow):
             return self._remote_report(str(values.get("severity", "")))
         if name in (ADD_PARAMETER, SET_PARAMETER):
             return self._remote_parameter(name, values)
+        if name == ADD_FIT:
+            return self._remote_fit(values)
+        if name == FIND_PART:
+            return find_part_text(str(values.get("description", "")))
 
         spec = REGISTRY.get(name)
         chosen = [str(entry) for entry in values.pop(OBJECTS_FIELD, ()) or ()]
@@ -2368,6 +2419,37 @@ class MainWindow(QMainWindow):
         if not findings:
             return tr("Keine Befunde.")
         return "\n".join(f"{entry.severity}: {entry.code}: {entry.message}" for entry in findings)
+
+    def _remote_fit(self, values: Mapping[str, Any]) -> str:
+        """Eine Passung von außen (§14).
+
+        Wie im Chat: zwei Merkmale als ``obj_1:hole_2``, und die Toleranz kommt
+        aus dem Materialprofil statt als Zahl (Regel 7). Ohne diesen Zweig lief
+        der Aufruf in ``REGISTRY.get`` und endete als Programmfehler — ein
+        Werkzeug, das die Liste anbietet und niemand ausführt, ist schlimmer
+        als eines, das fehlt.
+        """
+        try:
+            first = FeatureRef.parse(str(values.get("a", "")))
+            second = FeatureRef.parse(str(values.get("b", "")))
+        except ValueError:
+            return tr("Ein Passungspaar braucht zwei Merkmale als obj_1:hole_2.")
+        # Die Art kommt von außen und wird geprüft, nicht geglaubt: eine
+        # unbekannte landete sonst als Zeichenkette im Dokument und fiele erst
+        # dem Prüfer auf, der die Passung auswerten will.
+        kind = str(values.get("kind", "clearance"))
+        if kind not in FIT_KINDS:
+            return tr("Diese Passungsart gibt es nicht: {kinds}").format(kinds=", ".join(FIT_KINDS))
+        document = self.session.project.document
+        fit = Fit(
+            name=str(values.get("name", "")) or f"fit_{len(document.fits) + 1}",
+            a=first,
+            b=second,
+            kind=cast(FitKind, kind),
+            tolerance=f"auto:{self.session.profile.material.id}",
+        )
+        self.session.add_fit(fit)
+        return f"{tr('Passung angelegt')}: {fit.name} ({fit.kind}, {fit.tolerance})"
 
     def _remote_parameter(self, tool: str, values: Mapping[str, Any]) -> str:
         """Ein Projektmaß von außen — dieselben Wege wie die Parameterleiste.

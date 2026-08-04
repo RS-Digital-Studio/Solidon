@@ -61,7 +61,7 @@ def test_the_tool_list_comes_from_the_registry() -> None:
     answer = remote.handle(request("tools/list"), _Bridge())
     listed = {entry["name"] for entry in answer["result"]["tools"]}
     assert "sketch_extrude" in listed
-    assert "ask_user" in listed
+    assert "read_report" in listed, "auch die Werkzeuge neben den Operationen"
     assert len(listed) > 40
 
 
@@ -184,3 +184,33 @@ def test_the_bridge_may_refuse_and_the_answer_stays_an_answer() -> None:
     )
     assert answer["result"]["isError"] is True
     assert "null" in answer["result"]["content"][0]["text"]
+
+
+def test_asking_a_question_over_the_wire_goes_nowhere_and_is_blocked() -> None:
+    """Hier ist niemand zu fragen.
+
+    Im Chat hält der Agent mit ``ask_user`` an und wartet auf eine Antwort aus
+    dem Fenster (Leitprinzip 6). Über die Leitung säße die Frage in einem
+    Programm fest, das seinen eigenen Nutzer hat — und der Aufruf lief bis
+    hierhin durch bis in einen Programmfehler, weil ``ask_user`` keine
+    Operation ist und das Register sie nicht kennt.
+    """
+    answer = remote.handle(request("tools/list"), _Bridge())
+    assert "ask_user" not in {entry["name"] for entry in answer["result"]["tools"]}
+
+    bridge = _Bridge()
+    answer = remote.handle(
+        request("tools/call", {"name": "ask_user", "arguments": {"question": "Welche?"}}), bridge
+    )
+    assert answer["result"]["isError"] is True
+    assert not bridge.calls
+
+
+def test_the_other_six_extra_tools_stay_reachable() -> None:
+    """Und die übrigen bleiben — eine Sperre, die aufräumt, nimmt zu viel mit."""
+    listed = {
+        entry["name"]
+        for entry in remote.handle(request("tools/list"), _Bridge())["result"]["tools"]
+    }
+    for name in ("undo_transaction", "add_parameter", "set_parameter", "add_fit", "read_report"):
+        assert name in listed, name

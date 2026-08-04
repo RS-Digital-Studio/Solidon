@@ -44,6 +44,19 @@ POSITION = ("x", "y", "z")
 #: Eine freie Richtung, für die Operationen, die eine nehmen (§25, Beschriftung).
 NORMAL = ("nx", "ny", "nz")
 
+#: Der Parameter, der eine Fläche als **Ziel** benennt statt als Ort — die Höhe
+#: einer Extrusion reicht bis dorthin (§30.1, D14). Wie ``at_feature`` eine
+#: Kennung, aber kein Ersatz für die Position: die Skizze liegt woanders.
+TARGET_FIELD = "up_to"
+
+#: Der Durchmesser, um den eine Textur läuft. **Nicht** ``diameter``: eine
+#: Senkung hat einen eigenen — den des Schraubenkopfs — und dürfte den der
+#: Bohrung darunter nicht erben. Der Name sagt deshalb, dass er ein Bezug ist
+#: und kein Maß; ihn am bloßen ``diameter`` festzumachen trug in
+#: ``countersink_hole`` eine falsche Zahl ein, die wie eine gemessene aussah.
+#: Der Test, der das verhindert, stand schon da.
+DIAMETER_FIELD = "wrap_diameter"
+
 #: Wie dominant eine Komponente sein muss, bevor die Richtung als Achse zählt.
 #: Darunter steht das Merkmal schräg, und ihm eine Achse zu nennen wäre eine
 #: Rundung, die jemand hinterher bemerken muss.
@@ -63,6 +76,15 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
         return {FEATURE_FIELD: feature.id}
 
     values: dict[str, Any] = {}
+    if TARGET_FIELD in names and feature.kind == "face":
+        # „Bis zu dieser Fläche" — die Kennung reicht, den Rahmen rechnet die
+        # Auswertung daraus (app.core.sketch.planes). Nur planare Flächen: bis
+        # zu einer Bohrung zu extrudieren hat keine Bedeutung.
+        values[TARGET_FIELD] = feature.id
+    if DIAMETER_FIELD in names and feature.kind == "hole":
+        diameter = feature.params.get("diameter")
+        if diameter is not None:
+            values[DIAMETER_FIELD] = round(float(diameter), 4)
     centre = _vector(feature.params.get("centre"))
     if centre is not None:
         for name, value in zip(POSITION, centre, strict=True):

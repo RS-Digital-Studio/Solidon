@@ -144,3 +144,40 @@ def test_only_a_face_looking_up_counts_as_an_opening() -> None:
     assert not faces_up(face(normal=(0.0, 0.0, -1.0))), "a ceiling is flat too"
     assert not faces_up(face(normal=(1.0, 0.0, 0.0)))
     assert not faces_up(hole())
+
+
+# --- Was seit P15 dazukam --------------------------------------------------------
+
+
+def test_a_clicked_face_becomes_the_target_of_an_extrusion() -> None:
+    """„Bis zur Fläche" — der doc-Satz versprach es, niemand löste es ein.
+
+    `up_to` nimmt eine Kennung und keine Zahl: den Rahmen rechnet die
+    Auswertung bei jedem Lauf aus der Fläche. Damit hält die Höhe auch dann,
+    wenn der Körper darunter morgen anders hoch ist.
+    """
+    values = values_for(REGISTRY.get("sketch_extrude"), face())
+
+    assert values["up_to"] == "face_1"
+
+
+def test_a_hole_is_no_target_for_an_extrusion() -> None:
+    """Bis zu einer Bohrung zu extrudieren hat keine Bedeutung.
+
+    Sie ist ein Zylinder, keine Ebene — es gäbe keine Höhe, bei der die
+    Extrusion „dort ankommt"."""
+    values = values_for(REGISTRY.get("sketch_extrude"), hole())
+
+    assert "up_to" not in values
+
+
+def test_a_cylinder_gives_the_texture_the_diameter_it_wraps_around() -> None:
+    """Und der Durchmesser kommt aus dem Zylinder, um den gewickelt wird.
+
+    Der Parameter heißt `wrap_diameter` und nicht `diameter` — sonst erbte
+    eine Senkung den der Bohrung, auf der sie sitzt. Der Test dafür stand
+    schon da und fing genau diesen Fehler.
+    """
+    values = values_for(REGISTRY.get("apply_texture"), hole(diameter=20.0))
+
+    assert values["wrap_diameter"] == 20.0
