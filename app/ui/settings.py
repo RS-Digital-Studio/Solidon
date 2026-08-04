@@ -50,6 +50,15 @@ class UiSettings:
     Registers; „fusion" legt einzelne Buchstaben darüber."""
     check_for_updates: bool = False
     """§37.2: a notice, never an automatic update — and off until it is switched on."""
+    remote_enabled: bool = False
+    """Ob die MCP-Schnittstelle läuft (Konzept P15 §7 Etappe 9).
+
+    Aus, bis jemand sie einschaltet. Eine offene Schnittstelle, die niemand
+    eingeschaltet hat, ist eine offene Tür — und sie stünde auf jedem Rechner
+    offen, auf dem die Anwendung installiert ist."""
+    remote_port: int = 8787
+    """Auf welchem Port. Nur an 127.0.0.1 gebunden; die Adresse ist keine
+    Einstellung."""
 
     def remember(self, path: Path) -> None:
         text = str(path)

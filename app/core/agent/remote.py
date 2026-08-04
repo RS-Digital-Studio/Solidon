@@ -1,0 +1,246 @@
+"""Die Schnittstelle nach außen: MCP über JSON-RPC (Bauplan §26, D19).
+
+Ein zweites Programm — Claude Code, ein Editor, ein Skript — soll dieselben
+Operationen aufrufen können wie das Menü. Der Weg dorthin ist derselbe wie beim
+Chat: das Register liefert die Werkzeuge (§10), die Sitzung macht daraus eine
+Transaktion, und ein Strg+Z im Fenster nimmt sie zurück. Es gibt keine zweite
+Liste und keinen zweiten Weg ins Dokument.
+
+**Vier Auflagen, und keine davon ist optional.**
+
+* Standardmäßig aus. Eine offene Schnittstelle, die niemand eingeschaltet hat,
+  ist eine offene Tür.
+* Nur ``127.0.0.1``. Zweimal geprüft — die Bindung und jede einzelne Anfrage.
+  Eine Bindung allein lässt sich durch eine Weiterleitung umgehen.
+* Kein ausführbarer Quelltext, kein Dateipfad. Beides wird abgewiesen, **bevor**
+  gerechnet wird; ein Aufruf, der erst rechnet und danach merkt, dass er nicht
+  durfte, hat schon getan, was er nicht sollte.
+* Jeder Aufruf eine Transaktion mit Herkunftsvermerk. Wer hinterher wissen
+  will, was von außen kam, sieht es im Verlauf.
+
+Ohne Netzbibliothek und ohne SDK: JSON-RPC ist ein Umschlag um einen Namen und
+ein Wörterbuch, und die Standardbibliothek trägt ihn. Eine Abhängigkeit dafür
+wäre eine Lizenzzeile für dreißig Zeilen Code (Regel 22).
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any, Final, Protocol
+
+from app.branding import APP_NAME, APP_VERSION
+from app.core.agent.tools import tool_schemas
+from app.core.errors import AppError
+from app.core.registry import Registry
+from app.i18n import _
+
+#: Die Fassung des Protokolls, auf die sich beide Seiten einigen.
+PROTOCOL_VERSION: Final = "2024-11-05"
+
+#: Woran gebunden wird. Keine Einstellung — wer von außen erreichbar sein will,
+#: baut sich einen Tunnel und weiß dann, was er tut.
+HOST: Final = "127.0.0.1"
+
+#: Voreingestellter Port. Über 1024, damit kein erhöhtes Recht nötig ist.
+DEFAULT_PORT: Final = 8787
+
+#: JSON-RPC-Fehlercodes, so wie die Spezifikation sie vergibt.
+PARSE_ERROR: Final = -32700
+INVALID_REQUEST: Final = -32600
+METHOD_NOT_FOUND: Final = -32601
+INTERNAL_ERROR: Final = -32603
+
+#: Operationen, die nie fernbedienbar sind.
+#:
+#: ``create_from_scad`` nimmt ausführbaren Quelltext entgegen. Über eine offene
+#: Schnittstelle wäre das die Ausführung fremden Codes auf diesem Rechner —
+#: unabhängig davon, wie gründlich die Quelltextprüfung aus §32 ist, denn sie
+#: prüft, was der Nutzer selbst eingegeben hat. Die Operation bleibt im Menü;
+#: sie ist nur nicht fernsteuerbar.
+DENIED: Final[frozenset[str]] = frozenset({"create_from_scad"})
+
+#: Adressen, die als „dieser Rechner" gelten.
+_LOOPBACK: Final[frozenset[str]] = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})
+
+
+class Bridge(Protocol):
+    """Was die Anwendung beisteuert: einen Aufruf ausführen.
+
+    Absichtlich schmal. Diese Schicht kennt kein Dokument, keine Sitzung und
+    kein Fenster — sie packt aus, prüft und reicht weiter. Alles Weitere
+    entscheidet die Seite, die das Dokument hält.
+    """
+
+    def call(self, name: str, arguments: dict[str, Any]) -> str: ...
+
+
+def allowed(address: str) -> bool:
+    """Ob diese Gegenstelle sprechen darf.
+
+    Nur der eigene Rechner. Die Prüfung steht zusätzlich zur Bindung, weil
+    eine Bindung sich weiterleiten lässt: ein Proxy davor, und die
+    Schnittstelle steht im Netz, ohne dass hier eine Zeile anders liefe.
+    """
+    return address in _LOOPBACK
+
+
+def remote_tools(registry: Registry | None = None) -> tuple[dict[str, Any], ...]:
+    """Die Werkzeuge, die über die Leitung erreichbar sind.
+
+    Dieselben wie im Chat, abzüglich der gesperrten. Aus dem Register, nicht
+    aus einer Liste — siehe ``tools.py``."""
+    return tuple(entry for entry in tool_schemas(registry) if entry["name"] not in DENIED)
+
+
+def looks_like_path(value: str) -> bool:
+    """Ob dieser Text ein Dateipfad sein könnte.
+
+    Am **Wert** geprüft und nicht am Namen des Parameters: ein Feld muss nicht
+    ``path`` heißen, um einen Pfad zu tragen — der Name eines Objekts ist Text,
+    und Text nimmt alles auf.
+
+    Absichtlich eng gefasst. „Deckel 2" ist ein Name, und eine Sperre, die zu
+    breit greift, macht die Schnittstelle unbrauchbar und sieht dabei sicher
+    aus. Erkannt wird, was ohne Zweifel ein Pfad ist: ein Laufwerksbuchstabe,
+    ein führender Trenner, ein Netzpfad, oder ein Schritt nach oben.
+    """
+    text = value.strip()
+    if not text:
+        return False
+    if text.startswith(("/", "\\", "~")):
+        return True
+    if len(text) > 1 and text[1] == ":" and text[0].isalpha():
+        return True
+    return ".." in text.replace("\\", "/").split("/")
+
+
+def check_call(name: str, arguments: dict[str, Any], registry: Registry | None = None) -> None:
+    """Wirft, wenn dieser Aufruf nicht über die Leitung kommen darf.
+
+    Vor der Rechnung, nicht danach. Die Reihenfolge ist die eigentliche
+    Zusage: gesperrte Operation, unbekannte Operation, verdächtiger Wert — und
+    erst wenn alle drei durch sind, sieht die Anwendung den Aufruf überhaupt.
+    """
+    if name in DENIED:
+        raise RemoteRefusedError(
+            _(
+                "Diese Operation ist über die Schnittstelle gesperrt: "
+                "sie führt fremden Quelltext aus."
+            )
+        )
+    known = {entry["name"] for entry in remote_tools(registry)}
+    if name not in known:
+        raise RemoteRefusedError(_("Diese Operation gibt es nicht."))
+    for key, value in arguments.items():
+        if isinstance(value, str) and looks_like_path(value):
+            refusal = _(
+                "Ein Wert sieht aus wie ein Dateipfad — über diese Schnittstelle geht das nicht."
+            )
+            raise RemoteRefusedError(f"{refusal} ({key})")
+
+
+class RemoteRefusedError(Exception):
+    """Ein Aufruf, der die Auflagen verletzt. Bleibt hier und wird zur
+    Fehlerantwort — der Kern sieht ihn nie."""
+
+
+def handle(payload: dict[str, Any], bridge: Bridge) -> dict[str, Any]:
+    """Eine JSON-RPC-Anfrage beantworten.
+
+    Rein rechnend: kein Netz, kein Zustand, keine Nebenwirkung außer der, die
+    die Brücke auslöst. Deshalb ist die ganze Protokollschicht ohne Server
+    prüfbar.
+    """
+    ident = payload.get("id")
+    method = payload.get("method")
+    params = payload.get("params") or {}
+
+    if method == "initialize":
+        return _result(
+            ident,
+            {
+                "protocolVersion": PROTOCOL_VERSION,
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": APP_NAME, "version": APP_VERSION},
+            },
+        )
+    if method in ("notifications/initialized", "ping"):
+        return _result(ident, {})
+    if method == "tools/list":
+        return _result(ident, {"tools": [dict(entry) for entry in remote_tools()]})
+    if method == "tools/call":
+        return _result(ident, _called(params, bridge))
+    return _error(ident, METHOD_NOT_FOUND, _("Diese Methode gibt es nicht."))
+
+
+def _called(params: dict[str, Any], bridge: Bridge) -> dict[str, Any]:
+    """Ein Werkzeugaufruf, mit allen Auflagen davor.
+
+    Auch ein Fehler ist ein Ergebnis: MCP unterscheidet zwischen einem
+    Protokollfehler (die Anfrage war unverständlich) und einem Werkzeugfehler
+    (das Werkzeug hat nicht gekonnt). Ein abgewiesener Aufruf ist das Zweite,
+    und deshalb liest die Gegenstelle den Handlungsvorschlag wie ein Nutzer im
+    Fenster (Regel 17).
+    """
+    name = str(params.get("name", ""))
+    arguments = params.get("arguments") or {}
+    if not isinstance(arguments, dict):
+        return _tool_error(str(_("Die Argumente sind ein Objekt.")))
+    try:
+        check_call(name, arguments)
+        answer = bridge.call(name, arguments)
+    except RemoteRefusedError as refused:
+        return _tool_error(str(refused))
+    except AppError as problem:
+        return _tool_error(_readable(problem))
+    return {"content": [{"type": "text", "text": answer}], "isError": False}
+
+
+def _readable(problem: AppError) -> str:
+    """Ein Fehler als Text, mit seinen Handlungsvorschlägen.
+
+    Dieselben drei Teile wie im Fenster: was nicht ging, warum, was jetzt
+    möglich ist (§2.7). Ein Ferngast hat keinen Knopf zum Anklicken, also
+    stehen die Vorschläge als Aufzählung darunter — weglassen hieße, ihm
+    genau das vorzuenthalten, was Regel 17 zusichert.
+    """
+    lines = [str(problem.title)]
+    if problem.detail is not None:
+        lines.append(str(problem.detail))
+    lines.extend(f"- {action.label}" for action in problem.suggestions)
+    return "\n".join(lines)
+
+
+def _tool_error(text: str) -> dict[str, Any]:
+    return {"content": [{"type": "text", "text": text}], "isError": True}
+
+
+def _result(ident: Any, result: dict[str, Any]) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "id": ident, "result": result}
+
+
+def _error(ident: Any, code: int, message: Any) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "id": ident, "error": {"code": code, "message": str(message)}}
+
+
+def answer_bytes(raw: bytes, bridge: Bridge) -> bytes:
+    """Von rohen Zeichen zur rohen Antwort — die Form, die ein Server braucht.
+
+    Ein abgeschnittener Datenstrom ist der Normalfall und keine Ausnahme; er
+    bekommt eine Antwort wie alles andere, statt den Server zu beenden.
+    """
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return _dumped(_error(None, PARSE_ERROR, _("Das war kein gültiges JSON.")))
+    if not isinstance(payload, dict):
+        return _dumped(_error(None, INVALID_REQUEST, _("Eine Anfrage ist ein Objekt.")))
+    try:
+        return _dumped(handle(payload, bridge))
+    except Exception:
+        # Ein Server, der bei einer kaputten Anfrage abbricht, ist keiner.
+        return _dumped(_error(payload.get("id"), INTERNAL_ERROR, _("Unerwarteter Fehler.")))
+
+
+def _dumped(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload, ensure_ascii=False).encode("utf-8")

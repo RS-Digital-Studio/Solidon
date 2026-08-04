@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QLabel,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -102,6 +103,23 @@ class SettingsDialog(QDialog):
             tr("Ein Hinweis mit einem Link. Es wird nichts geladen und nichts ersetzt.")
         )
 
+        # Konzept P15 §7 Etappe 9: aus, bis jemand sie einschaltet. Der
+        # Hinweis daneben nennt Adresse und Port, denn ohne die kann niemand
+        # sie eintragen — und wer sie liest, sieht zugleich, dass sie diesen
+        # Rechner nicht verlässt.
+        self.remote = QCheckBox(tr("Fernsteuerung über MCP zulassen"), self)
+        self.remote.setChecked(settings.remote_enabled)
+        self.remote_port = QSpinBox(self)
+        self.remote_port.setRange(1024, 65535)
+        self.remote_port.setValue(settings.remote_port)
+        self.remote.setToolTip(
+            tr(
+                "Ein anderes Programm auf diesem Rechner darf dieselben "
+                "Operationen aufrufen wie die Menüs. Nur über 127.0.0.1, und "
+                "jeder Aufruf ist eine Transaktion, die ein Strg+Z zurücknimmt."
+            )
+        )
+
         self.printer = _choices(
             self,
             {key: str(entry.title) for key, entry in sorted(profiles.printer_profiles().items())},
@@ -135,6 +153,8 @@ class SettingsDialog(QDialog):
         form.addRow(tr("Differenzansicht"), self.diff_palette)
         form.addRow(tr("Tastenbelegung"), self.shortcuts)
         form.addRow("", self.updates)
+        form.addRow("", self.remote)
+        form.addRow(tr("Port der Fernsteuerung"), self.remote_port)
         return box
 
     def _project_group(self) -> QWidget:
@@ -172,6 +192,8 @@ class SettingsDialog(QDialog):
         settings.diff_palette = str(self.diff_palette.currentData())
         settings.shortcut_scheme = str(self.shortcuts.currentData())
         settings.check_for_updates = self.updates.isChecked()
+        settings.remote_enabled = self.remote.isChecked()
+        settings.remote_port = int(self.remote_port.value())
         settings.printer = str(self.printer.currentData())
         settings.material = str(self.material.currentData())
         return settings

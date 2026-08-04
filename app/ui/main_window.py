@@ -45,6 +45,13 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import examples, updates
+from app.core.agent.tools import (
+    ADD_PARAMETER,
+    OBJECTS_FIELD,
+    READ_REPORT,
+    SET_PARAMETER,
+    UNDO_TRANSACTION,
+)
 from app.core.backends import llm
 from app.core.errors import AppError, InternalError
 from app.core.export.handover import SliceOutcome
@@ -66,7 +73,7 @@ from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.tour import tour_for
-from app.core.types import Finding, ObjectId, SliceResult
+from app.core.types import Finding, ObjectId, Origin, Parameter, SliceResult
 from app.i18n import TranslatableText, _, tr
 from app.ui import first_run
 from app.ui.analysis_bar import AnalysisBar, LayerBar
@@ -102,6 +109,7 @@ from app.ui.panels import (
     describe_selection,
 )
 from app.ui.print_settings_dialog import PrintSettingsDialog
+from app.ui.remote_server import RemoteServer, WindowBridge
 from app.ui.report_dialog import ErrorReportDialog
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
@@ -284,6 +292,18 @@ def _sketch_param(op_name: str) -> str:
     )
 
 
+#: Was im Herkunftsvermerk einer ferngesteuerten Transaktion als Modell
+#: steht. „user" und „agent" sind die einzigen Urheber, die das Format
+#: kennt (§26.4); ein dritter kostete eine Migration, und für die Frage
+#: „habe ich das getan?" reicht dieser Vermerk.
+REMOTE_ORIGIN = "mcp"
+
+#: Wie lange ein Fernaufruf auf die Auswertung wartet. Länger als im
+#: Fenster: dort sieht jemand den Fortschritt, am anderen Ende der Leitung
+#: sieht niemand etwas und braucht das fertige Ergebnis.
+REMOTE_WAIT_MS = 120_000
+
+
 def _needs_objects(count: int) -> str:
     """Der Satz, der sagt, wie viele Körper fehlen — nicht nur, dass welche
     fehlen.
@@ -427,6 +447,7 @@ class MainWindow(QMainWindow):
         self.transform_bar.snappingChanged.connect(self.viewport.set_snapping)
         self.viewport.transformDragged.connect(self._on_transform_dragged)
         self.viewport.featurePicked.connect(self._on_feature_picked)
+        self.viewport.objectPicked.connect(self._on_object_picked)
 
         self.analysis_bar = AnalysisBar(self)
         self.analysis_bar.mapChanged.connect(self._on_map_changed)
@@ -533,6 +554,8 @@ class MainWindow(QMainWindow):
         # gerade nicht neu gezeichnet.
         self.middle_stack = QStackedWidget(self)
         self.middle_stack.addWidget(self.viewport)
+        self._remote: RemoteServer | None = None
+        """Die MCP-Schnittstelle, solange sie läuft (Konzept P15 §7 Etappe 9)."""
         self._sketch_panel: SketchPanel | None = None
         self._sketch_target: str | None = None
         """Der Operationsname, für den gerade gezeichnet wird."""
@@ -1637,6 +1660,7 @@ class MainWindow(QMainWindow):
         dialog.apply_to(self.settings)
         save_settings(self.settings)
         self._apply_settings()
+        self._apply_remote()
 
     def _apply_settings(self) -> None:
         """Trägt die Einstellungen dorthin, wo sie wirken."""
@@ -2172,6 +2196,16 @@ class MainWindow(QMainWindow):
         if object_id is not None:
             self.object_tree.select_feature(object_id, feature_id)
 
+    def _on_object_picked(self, object_id: str) -> None:
+        """Ein Klick auf einen Körper wählt ihn im Baum aus; einer daneben hebt
+        die Auswahl auf.
+
+        Damit gilt endlich, was das Navigationsschema verspricht und das
+        Handbuch beschreibt: links wählt aus. Bis hierher ging Auswählen nur
+        über den Baum — und wer die Bohrung meinte, musste ihren Namen kennen.
+        """
+        self.object_tree.select_object(object_id or None)
+
     def _on_feature_selected(self, feature_id: str | None) -> None:
         """Das gewählte Merkmal, in der Ansicht und in der Statusleiste."""
         self.viewport.select_feature(feature_id)
@@ -2265,6 +2299,90 @@ class MainWindow(QMainWindow):
                 )
             ],
         )
+
+    # --- Fernsteuerung über MCP (Konzept P15 §7 Etappe 9, D19) ------------------
+
+    def run_remote(self, name: str, arguments: Mapping[str, Any]) -> str:
+        """Ein Fernaufruf, ausgeführt wie ein Menüklick.
+
+        Derselbe Weg durch ``session.apply``, also dieselbe Transaktion,
+        dieselbe Auswertung, dasselbe Undo. Was hier **nicht** steht, ist
+        genauso wichtig: kein eigener Zugriff auf das Dokument, keine zweite
+        Auswertung, kein Weg an der Prüfung vorbei.
+
+        Der Herkunftsvermerk trägt ``mcp`` als Modell. Ein eigener Urheber
+        neben „user" und „agent" wäre ehrlicher, kostete aber eine
+        Formatänderung samt Migration — und für die Frage „habe ich das
+        getan?" reicht der Vermerk, den der Verlauf ohnehin zeigt.
+
+        Antwortet in Worten, nicht in Zahlen: am anderen Ende sitzt ein
+        Modell, und ein Satz sagt ihm mehr als eine Objektkennung.
+        """
+        values = dict(arguments)
+        if name == UNDO_TRANSACTION:
+            self.session.undo()
+            return tr("Zurückgenommen.")
+        if name == READ_REPORT:
+            return self._remote_report(str(values.get("severity", "")))
+        if name in (ADD_PARAMETER, SET_PARAMETER):
+            return self._remote_parameter(name, values)
+
+        spec = REGISTRY.get(name)
+        chosen = [str(entry) for entry in values.pop(OBJECTS_FIELD, ()) or ()]
+        result = self.session.last_result
+        objects = list(result.scene.objects) if result else []
+        if spec.consumes and len(chosen) < spec.consumes:
+            return str(_needs_objects(spec.consumes))
+        self.session.apply(
+            spec.title,
+            [OperationDraft(op=name, inputs=inputs_for(spec, objects, chosen), params=values)],
+            origin=Origin(by="agent", model=REMOTE_ORIGIN),
+        )
+        self.session.wait_for_idle(REMOTE_WAIT_MS)
+        return self._remote_state(spec)
+
+    def _remote_state(self, spec: OperationSpec) -> str:
+        """Was nach einem Fernaufruf dasteht — Objekte und Befunde.
+
+        Ohne diese Rückmeldung müsste die Gegenstelle nach jedem Schritt
+        nachfragen, was geschehen ist. Sie bekommt dieselbe Auskunft, die im
+        Fenster im Objektbaum und im Prüfbericht steht.
+        """
+        result = self.session.last_result
+        if result is None:
+            return str(spec.title)
+        names = ", ".join(f"{entry.id} ({entry.name})" for entry in result.scene.objects.values())
+        warnings = [
+            finding for finding in result.scene.report.findings if finding.severity != "info"
+        ]
+        lines = [f"{spec.title}: {tr('fertig')}.", f"{tr('Objekte')}: {names or tr('keine')}"]
+        lines.extend(f"{finding.severity}: {finding.message}" for finding in warnings)
+        return "\n".join(lines)
+
+    def _remote_report(self, severity: str) -> str:
+        result = self.session.last_result
+        if result is None:
+            return tr("Es ist nichts geöffnet.")
+        wanted = {"info", "warning", "error"} if not severity else {severity}
+        findings = [entry for entry in result.scene.report.findings if entry.severity in wanted]
+        if not findings:
+            return tr("Keine Befunde.")
+        return "\n".join(f"{entry.severity}: {entry.code}: {entry.message}" for entry in findings)
+
+    def _remote_parameter(self, tool: str, values: Mapping[str, Any]) -> str:
+        """Ein Projektmaß von außen — dieselben Wege wie die Parameterleiste.
+
+        Und damit dieselbe Zusage: die Änderung ist eine Transaktion, sie gilt
+        als Änderung, und beim Schließen ist sie nicht weg."""
+        name = str(values.get("name", ""))
+        number = float(values.get("value", 0.0))
+        if tool == ADD_PARAMETER:
+            self.session.add_parameter(
+                Parameter(name=name, value=number, unit=str(values.get("unit", "mm")))
+            )
+            return f"{tr('Parameter angelegt')}: {name} = {number}"
+        self.session.change_parameter(name, number)
+        return f"{tr('Parameter gesetzt')}: {name} = {number}"
 
     def edit_operation(self, op_id: int) -> None:
         """Eine Operation des Stapels wieder öffnen und ihr andere Zahlen
@@ -2608,6 +2726,33 @@ class MainWindow(QMainWindow):
         self._offer_unsaved_recovery()
         if self.settings.check_for_updates:
             self._check_for_updates()
+        self._apply_remote()
+
+    def _apply_remote(self) -> None:
+        """Die MCP-Schnittstelle an- oder abschalten (Konzept P15 §7 Etappe 9).
+
+        Nach jeder Änderung der Einstellungen und einmal beim Start. Der Port
+        kann sich geändert haben, also wird bei jeder Änderung gestoppt und
+        neu gestartet — ein laufender Server auf dem alten Port wäre genau die
+        offene Tür, die niemand bestellt hat.
+
+        Ein belegter Port ist kein Grund, die Anwendung anzuhalten: die
+        Schnittstelle bleibt aus, und es steht im Protokoll. Ein modaler Fehler
+        beim Start wäre die schlechteste aller Antworten auf eine Einstellung,
+        die mit dem Konstruieren nichts zu tun hat.
+        """
+        if self._remote is not None:
+            self._remote.stop()
+            self._remote = None
+        if not self.settings.remote_enabled:
+            return
+        try:
+            server = RemoteServer(WindowBridge(self.run_remote, self), self.settings.remote_port)
+            server.start()
+        except OSError as problem:
+            _log.warning("mcp server did not start: %s", problem)
+            return
+        self._remote = server
 
     def _offer_unsaved_recovery(self) -> None:
         """§38: eine Sicherung, die nie einen Namen bekam, wird angeboten.
@@ -2785,6 +2930,9 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         self.wait_for_workers()
+        if self._remote is not None:
+            self._remote.stop()
+            self._remote = None
         if self.session.modified:
             self.session.autosave()
         save_settings(self.settings)

@@ -23,7 +23,7 @@ from app.core.registry import REGISTRY
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
 from app.core.types import Parameter
-from app.ui.main_window import MainWindow
+from app.ui.main_window import REMOTE_ORIGIN, MainWindow
 from app.ui.op_dialog import OperationDialog
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings
@@ -1350,3 +1350,74 @@ def test_a_plain_project_carries_no_tour(
     assert not _tour_tab_visible(window)
     assert not window.tour.active
     assert not session.busy, "kein Arbeiter überlebt den Test"
+
+
+# --- Fernsteuerung über MCP (Konzept P15 §7 Etappe 9, D19) ----------------------
+
+
+def test_a_remote_call_is_one_transaction_the_window_can_undo(window: MainWindow) -> None:
+    """Die vierte Auflage, und die einzige, die nur am Dokument prüfbar ist.
+
+    Ein Fernaufruf geht denselben Weg wie ein Menüklick: dieselbe Transaktion,
+    dieselbe Auswertung, dasselbe Undo. Wäre es ein zweiter Weg ins Dokument,
+    stünde hier ein Körper, den kein Strg+Z wegbekommt — und niemand wüsste,
+    woher er kam.
+    """
+    answer = window.run_remote("create_box", {"width": 20.0, "depth": 20.0, "height": 20.0})
+    assert "Objekte" in answer
+
+    document = window.session.project.document
+    assert [entry.op for entry in document.ops] == ["create_box"]
+    assert len(document.transactions) == 1
+
+    window.action_undo()
+    window.session.wait_for_idle()
+    assert window.session.project.document.ops == []
+
+
+def test_a_remote_call_says_where_it_came_from(window: MainWindow) -> None:
+    """Der Herkunftsvermerk (§26.4).
+
+    Wer hinterher fragt „habe ich das getan?", bekommt eine Antwort statt einer
+    Vermutung. Ohne den Vermerk sähe ein Fernaufruf im Verlauf aus wie ein
+    eigener Klick.
+    """
+    window.run_remote("create_box", {"width": 10.0, "depth": 10.0, "height": 10.0})
+    origin = window.session.project.document.transactions[0].origin
+    assert origin is not None
+    assert origin.by == "agent"
+    assert origin.model == REMOTE_ORIGIN
+
+
+def test_the_remote_interface_stays_off_unless_it_is_switched_on(window: MainWindow) -> None:
+    """Die erste Auflage: aus, bis jemand sie einschaltet.
+
+    Eine offene Schnittstelle, die niemand eingeschaltet hat, stünde auf jedem
+    Rechner offen, auf dem die Anwendung installiert ist. Geprüft an der
+    Vorgabe **und** am Fenster, denn eine Vorgabe, die beim Start überschrieben
+    wird, ist keine.
+    """
+    assert UiSettings().remote_enabled is False
+    window._apply_remote()
+    assert window._remote is None
+
+
+def test_switching_it_on_binds_only_to_this_machine(window: MainWindow) -> None:
+    """Und die zweite: nur 127.0.0.1.
+
+    Am gebundenen Sockel geprüft, nicht an der Absicht — eine Konstante sagt
+    nichts darüber, woran wirklich gebunden wurde.
+    """
+    window.settings.remote_enabled = True
+    window.settings.remote_port = 0
+    window._apply_remote()
+    try:
+        assert window._remote is not None
+        assert window._remote.running
+        server = window._remote._server
+        assert server is not None
+        assert server.server_address[0] == "127.0.0.1"
+    finally:
+        window.settings.remote_enabled = False
+        window._apply_remote()
+    assert window._remote is None
