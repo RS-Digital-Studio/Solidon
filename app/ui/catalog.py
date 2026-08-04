@@ -32,6 +32,7 @@ from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts.preview import SIZE, render
 from app.core.knowledge.parts.registry import PartSpec
 from app.i18n import tr
+from app.ui.style import NORMAL
 
 #: Wie viele Parameter ein Katalogeintrag zeigt. §24.3 verlangt die zwei
 #: wichtigsten — und das sind die zwei zuerst deklarierten, denn eine
@@ -74,7 +75,7 @@ class PartCatalog(QDialog):
         self.list.setMovement(QListView.Movement.Static)
         self.list.setResizeMode(QListView.ResizeMode.Adjust)
         self.list.setWrapping(True)
-        self.list.setSpacing(8)
+        self.list.setSpacing(NORMAL)
         self.list.setIconSize(QSize(TILE_ICON, TILE_ICON))
         self.list.setWordWrap(True)
         self.list.itemDoubleClicked.connect(self._chosen)

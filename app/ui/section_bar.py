@@ -30,6 +30,7 @@ from app.core.geom.section import AXIS_NORMALS, SectionPlane
 from app.core.units import DISPLAY_UNITS
 from app.i18n import tr
 from app.ui.labels import length
+from app.ui.style import NORMAL, TIGHT
 from app.ui.tool_strip import BarComboBox
 
 #: Der Schieber arbeitet in Zehntelmillimetern; EPS_DISPLAY ist feiner als
@@ -65,7 +66,7 @@ class MeasureBar(QWidget):
         clear.clicked.connect(self.clearRequested)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(self.mode)
         layout.addWidget(self.readout, stretch=1)
         layout.addWidget(clear)
@@ -134,7 +135,7 @@ class SectionBar(QWidget):
         self.warning.setWordWrap(True)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(self.axis)
         layout.addWidget(self.position, stretch=1)
         layout.addWidget(self.readout)

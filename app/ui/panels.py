@@ -42,6 +42,7 @@ from app.i18n import tr
 from app.ui.icons import icon
 from app.ui.labels import feature_label, length, volume
 from app.ui.palette import SEVERITY_ENCODING
+from app.ui.style import NORMAL, ROOMY, set_level
 
 #: Zeichen je Schweregrad, aus der gemeinsamen Kodierung — Farbe steht nie
 #: allein (§19.1).
@@ -461,7 +462,7 @@ class ParameterPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(6, 6, 6, 6)
+        outer.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         self._form = QFormLayout()
         self._form.setContentsMargins(0, 0, 0, 0)
         self._empty = QLabel(_empty_parameters_text(), self)
@@ -648,7 +649,7 @@ class ReportPanel(QWidget):
         filter_row.addWidget(self.severity)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         layout.addWidget(self.summary)
         layout.addLayout(filter_row)
         layout.addWidget(self.list)
@@ -775,7 +776,7 @@ class ChatPlaceholder(QWidget):
         hint.setWordWrap(True)
         hint.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
         layout.addWidget(hint)
         layout.addStretch(1)
 
@@ -819,13 +820,17 @@ def collapsible(title: str, content: QWidget) -> QWidget:
     """
     wrapper = QWidget()
     heading = QToolButton(wrapper)
+    # Eine Kopfzeile ist kein Umschalter im Sinne der Werkzeugzeile: sie steht
+    # dauerhaft auf „offen", und ein dauerhaft eingefärbter Balken wäre die
+    # lauteste Fläche im Fenster für die Aussage „hier ist nichts geschehen".
+    heading.setObjectName("sectionHeading")
     heading.setText(title)
     heading.setCheckable(True)
     heading.setChecked(True)
     heading.setAutoRaise(True)
     heading.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
     heading.setArrowType(Qt.ArrowType.DownArrow)
-    heading.setStyleSheet("font-weight: 600; text-align: left;")
+    set_level(heading, "section")
     heading.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def toggled(open_now: bool) -> None:

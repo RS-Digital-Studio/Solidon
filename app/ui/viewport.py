@@ -35,6 +35,7 @@ from app.core.units import EPS_DISPLAY, EPS_GEOM, EPS_MATCH_MINIMUM, EPS_MATCH_R
 from app.i18n import tr
 from app.ui.labels import feature_label
 from app.ui.palette import DIFF_PALETTES, ROLES, VIRIDIS, DiffPalette
+from app.ui.style import ROOMY, TIGHT
 from app.ui.theme import THEMES, viewport_colours
 
 _log = get_logger(__name__)
@@ -312,8 +313,8 @@ class PreviewBanner(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 5, 12, 5)
-        layout.setSpacing(10)
+        layout.setContentsMargins(ROOMY, TIGHT, ROOMY, TIGHT)
+        layout.setSpacing(ROOMY)
 
         self.note = QLabel("", self)
         self.legend = QLabel("", self)

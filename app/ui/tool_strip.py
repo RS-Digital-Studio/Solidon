@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 
 from app.i18n import TranslatableText, tr
 from app.ui.icons import icon
+from app.ui.style import NORMAL, TIGHT
 
 
 def list_top(field: QRect, height: int, window: QRect) -> int:
@@ -119,8 +120,8 @@ class ToolStrip(QWidget):
         self._active: str | None = None
 
         self._row = QHBoxLayout()
-        self._row.setContentsMargins(6, 3, 6, 3)
-        self._row.setSpacing(4)
+        self._row.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
+        self._row.setSpacing(TIGHT)
         self._row.addStretch(1)
 
         # Eine Gruppe ohne Zwang: der aktive Knopf lässt sich abwählen, und
@@ -136,7 +137,7 @@ class ToolStrip(QWidget):
         self._hint = QLabel(self)
         self._hint.setWordWrap(True)
         self._hint.setVisible(False)
-        self._hint.setContentsMargins(8, 0, 8, 3)
+        self._hint.setContentsMargins(NORMAL, 0, NORMAL, TIGHT)
         font = self._hint.font()
         font.setItalic(True)
         self._hint.setFont(font)

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from app.core.geom.paint import EDGE_ANGLE, MAX_SLOTS
 from app.core.units import DISPLAY_UNITS
 from app.i18n import tr
+from app.ui.style import NORMAL, TIGHT
 
 #: Die Einheit eines Winkels — in jeder Sprache, die dieses Programm
 #: mitbringt, dieselbe.
@@ -60,7 +61,7 @@ class PaintBar(QWidget):
         )
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(self.active)
         layout.addWidget(QLabel(tr("Slot"), self))
         layout.addWidget(self.slot)

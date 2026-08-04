@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 from app.core import install, tools
 from app.core.log import get_logger
 from app.i18n import tr
+from app.ui.style import TIGHT
 
 _log = get_logger(__name__)
 
@@ -102,7 +103,7 @@ class _Row(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
+        layout.setSpacing(TIGHT)
         layout.addLayout(head)
         layout.addWidget(self.where)
         self.refresh()

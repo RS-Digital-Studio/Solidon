@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSlider, QWidget
 
 from app.i18n import tr
 from app.ui.section_bar import SETTLE_MS
+from app.ui.style import NORMAL, TIGHT
 from app.ui.tool_strip import BarComboBox
 
 #: Der Schieber zählt in Zehnteln, 20 heißt also „doppelter Abstand zur
@@ -55,7 +56,7 @@ class ExplodeBar(QWidget):
         self.plates.currentIndexChanged.connect(self._on_plate)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(QLabel(tr("Explosionsansicht"), self))
         layout.addWidget(self.slider, stretch=1)
         layout.addWidget(self.reset)

@@ -32,6 +32,7 @@ from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.core.scene import expressions
 from app.i18n import tr
+from app.ui.style import set_level
 
 _log = get_logger(__name__)
 
@@ -438,7 +439,7 @@ class AboutDialog(QDialog):
         self.setMinimumSize(520, 460)
 
         heading = QLabel(f"{APP_NAME} {APP_VERSION}", self)
-        heading.setStyleSheet("font-size: 20px; font-weight: 600;")
+        set_level(heading, "title")
 
         rights = QLabel(f"{COPYRIGHT}. {tr('Alle Rechte vorbehalten.')}", self)
         rights.setWordWrap(True)

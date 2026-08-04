@@ -29,6 +29,7 @@ from app.core.brep.step import SUFFIXES as STEP_SUFFIXES
 from app.core.geom.mesh import READABLE_SUFFIXES
 from app.core.ingest.outline import OUTLINE_SUFFIXES
 from app.i18n import tr
+from app.ui.style import WIDE, set_level
 
 
 class DropArea(QFrame):
@@ -105,7 +106,7 @@ class StartScreen(QWidget):
         self.setAcceptDrops(True)
 
         title = QLabel(APP_NAME, self)
-        title.setStyleSheet("font-size: 24px; font-weight: 600;")
+        set_level(title, "title")
 
         self.recent_list = QListWidget(self)
         self.recent_list.itemActivated.connect(self._on_recent)
@@ -145,8 +146,8 @@ class StartScreen(QWidget):
         buttons.addWidget(self.manual_button)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(48, 48, 48, 48)
-        layout.setSpacing(16)
+        layout.setContentsMargins(WIDE * 3, WIDE * 3, WIDE * 3, WIDE * 3)
+        layout.setSpacing(WIDE)
         layout.addWidget(title)
         layout.addWidget(drop)
         layout.addLayout(buttons)

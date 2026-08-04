@@ -35,6 +35,7 @@ from app.core.types import Document
 from app.i18n import tr
 from app.ui.icons import icon
 from app.ui.session import Session
+from app.ui.style import NORMAL, TIGHT
 
 
 class TourPanel(QWidget):
@@ -95,7 +96,7 @@ class TourPanel(QWidget):
         steps_host = QWidget(self)
         self._steps_layout = QVBoxLayout(steps_host)
         self._steps_layout.setContentsMargins(0, 0, 0, 0)
-        self._steps_layout.setSpacing(8)
+        self._steps_layout.setSpacing(NORMAL)
         self._steps_layout.addStretch(1)
 
         scroll = QScrollArea(self)
@@ -131,8 +132,8 @@ class TourPanel(QWidget):
         buttons.addWidget(self.stop_button)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(8)
+        layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        layout.setSpacing(NORMAL)
         layout.addWidget(self.title)
         layout.addWidget(self.intro)
         layout.addWidget(self.progress)
@@ -190,7 +191,7 @@ class TourPanel(QWidget):
             text.setWordWrap(True)
             row = QHBoxLayout(host)
             row.setContentsMargins(0, 0, 0, 0)
-            row.setSpacing(4)
+            row.setSpacing(TIGHT)
             row.addWidget(marker)
             row.addWidget(text, stretch=1)
             self._steps_layout.insertWidget(self._steps_layout.count() - 1, host)

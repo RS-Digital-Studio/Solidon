@@ -31,11 +31,18 @@ _SELECTION = "#f0a54a"
 _ON_SELECTION = "#1c2026"
 
 #: Window, panel and text colours per theme, contrast checked against WCAG AA.
+#:
+#: ``line`` ist die Farbe jeder Trennung — Rahmen, Trenner, Kopfzeilenkante.
+#: Sie trägt keine Schrift und muss deshalb nicht AA erfüllen; sie muss
+#: *sichtbar* sein. Vorher stand dafür ``alternate``, die Farbe der Zebrazeile:
+#: im dunklen Thema 1,05 Kontrast zum Fenster, also nichts. Ein Knopf ohne
+#: sichtbaren Rahmen ist kein Knopf, sondern Text.
 THEMES: dict[Theme, dict[str, str]] = {
     "dark": {
         "window": "#23272e",
         "base": "#1b1f25",
         "alternate": "#262b33",
+        "line": "#39404a",
         "text": "#e6e9ee",
         "disabled": "#7c848f",
         "highlight": _SELECTION,
@@ -52,6 +59,7 @@ THEMES: dict[Theme, dict[str, str]] = {
         "window": "#f2f3f5",
         "base": "#ffffff",
         "alternate": "#e9ebee",
+        "line": "#c9ced6",
         "text": "#1c2026",
         "disabled": "#8b929b",
         "highlight": _SELECTION,
@@ -91,9 +99,17 @@ def build_palette(theme: Theme) -> QPalette:
 
 
 def apply_theme(application: QApplication, theme: Theme) -> None:
-    """Schaltet die ganze Anwendung um. Wirkt sofort."""
+    """Schaltet die ganze Anwendung um. Wirkt sofort.
+
+    Palette und Stylesheet gehören zusammen: die Palette trägt die Farben, das
+    Stylesheet die Form. Getrennt gesetzt wären sie zwei Wege, auf denen ein
+    Themenwechsel halb ankommen kann.
+    """
+    from app.ui.style import apply_style
+
     application.setStyle("Fusion")
     application.setPalette(build_palette(theme))
+    apply_style(application, theme)
 
 
 def viewport_colours(theme: Theme) -> dict[str, str]:

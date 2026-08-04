@@ -24,6 +24,20 @@ def test_text_has_enough_contrast_in_both_themes(theme: str) -> None:
 
 
 @pytest.mark.parametrize("theme", list(THEMES))
+def test_a_border_is_actually_visible(theme: str) -> None:
+    """Ein Knopf ohne sichtbaren Rahmen ist kein Knopf, sondern Text.
+
+    ``line`` trägt keine Schrift und muss deshalb nicht AA erfüllen — sie muss
+    zu sehen sein. Der erste Anlauf nahm dafür ``alternate``, die Farbe der
+    Zebrazeile: im dunklen Thema 1,05 gegen das Fenster, also nichts. Im Bild
+    fiel genau das auf, und es fällt nur im Bild auf.
+    """
+    colours = THEMES[theme]  # type: ignore[index]
+    assert contrast_ratio(colours["line"], colours["window"]) >= 1.3
+    assert contrast_ratio(colours["line"], colours["base"]) >= 1.3
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
 def test_the_viewport_follows_the_theme(theme: str) -> None:
     colours = viewport_colours(theme)  # type: ignore[arg-type]
     assert set(colours) == {"bottom", "top", "object", "bed", "bed_surface", "edge"}

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QCheckBox, QDoubleSpinBox, QHBoxLayout, QLabel, QW
 
 from app.core.units import DISPLAY_UNITS
 from app.i18n import tr
+from app.ui.style import NORMAL, TIGHT
 
 #: Sinnvolle Vorgaben: ein Millimeter Weg, fünfzehn Grad Drehung.
 DEFAULT_GRID_STEP = 1.0
@@ -44,7 +45,7 @@ class TransformBar(QWidget):
         self.angle.valueChanged.connect(self._emit_snapping)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(self.gizmo)
         layout.addWidget(QLabel(tr("Rasterfang"), self))
         layout.addWidget(self.grid)

@@ -132,6 +132,7 @@ from app.ui.settings_dialog import SettingsDialog
 from app.ui.shortcut_schemes import shortcut_for
 from app.ui.sketch_editor import SketchPanel
 from app.ui.start_screen import StartScreen, accepted_path
+from app.ui.style import NORMAL, TIGHT
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
 from app.ui.tour import TourPanel
@@ -471,7 +472,7 @@ class MainWindow(QMainWindow):
         left = QWidget(self)
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(4)
+        left_layout.setSpacing(TIGHT)
         left_layout.addWidget(collapsible(tr("Objekte"), self.object_tree), stretch=2)
         left_layout.addWidget(collapsible(tr("Parameter"), self.parameters), stretch=1)
         left_layout.addWidget(collapsible(tr("Verlauf"), self.history_panel), stretch=1)
@@ -610,7 +611,7 @@ class MainWindow(QMainWindow):
         # die Grenze aus Etappe 0 gerissen, ohne dass er hingehört.
         self.sketch_bar = QWidget(self)
         sketch_row = QHBoxLayout(self.sketch_bar)
-        sketch_row.setContentsMargins(6, 3, 6, 3)
+        sketch_row.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         self._sketch_hint = QLabel(
             tr("Zeichnen, dann Fertig — die Operation öffnet auf der Skizze."), self.sketch_bar
         )

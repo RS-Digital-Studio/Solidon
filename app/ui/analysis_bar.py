@@ -29,6 +29,7 @@ from app.i18n import tr
 from app.ui.labels import length
 from app.ui.palette import VIRIDIS, map_colour
 from app.ui.panels import origin_label
+from app.ui.style import NORMAL, TIGHT
 from app.ui.tool_strip import BarComboBox
 
 #: Reihenfolge der Karten im Wähler, passend zur Tabelle in §18.4.
@@ -55,7 +56,7 @@ class MapLegend(QWidget):
         super().__init__(parent)
         self._layout = QHBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(6)
+        self._layout.setSpacing(NORMAL)
         self.note = QLabel("", self)
         self.note.setWordWrap(True)
         self.entries: list[tuple[str, str]] = []
@@ -157,7 +158,7 @@ class AnalysisBar(QWidget):
         self.legend = MapLegend(self)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(self.selector)
         layout.addWidget(self.overlay)
         layout.addWidget(self.legend, stretch=1)
@@ -214,7 +215,7 @@ class LayerBar(QWidget):
         self.readout.setMinimumWidth(220)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(self.active)
         layout.addWidget(self.slider, stretch=1)
         layout.addWidget(self.readout)

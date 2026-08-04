@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 from app.core.agent.context import is_discarded
 from app.core.types import ChatEntry, Document
 from app.i18n import tr
+from app.ui.style import NORMAL
 
 #: Wie ein Beitrag markiert wird, damit die Rollen ohne Farbe
 #: auseinanderbleiben (§19.1).
@@ -115,7 +116,7 @@ class ChatPanel(QWidget):
         self.decision.setVisible(False)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         layout.addWidget(self.hint)
         layout.addWidget(self.notice)
         layout.addWidget(self.setup)
