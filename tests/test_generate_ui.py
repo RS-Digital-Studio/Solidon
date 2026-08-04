@@ -61,6 +61,12 @@ def test_the_button_waits_for_something_to_generate_from(
 
 
 def test_generating_hands_back_a_body(qt_app: QApplication, generator: ScriptedMeshBackend) -> None:
+    """Ein Wurf, und der Dialog bleibt offen (Konzept P15, E8).
+
+    Bis hierher schloss er sich beim ersten Ergebnis. Die Generierung enthält
+    Zufall, und der erste Wurf ist selten der beste — wer ihn nicht mag, musste
+    den Dialog neu öffnen und alles noch einmal eintippen.
+    """
     dialog = GenerateDialog(backend=generator)
     dialog.prompt.setText("eine kleine Figur")
     dialog.seed.setValue(12)
@@ -70,7 +76,42 @@ def test_generating_hands_back_a_body(qt_app: QApplication, generator: ScriptedM
     assert dialog.result_mesh is not None
     assert dialog.result_mesh.mesh.triangle_count == 12
     assert generator.calls == [("eine kleine Figur", 12)]
+    assert dialog.result() != GenerateDialog.DialogCode.Accepted, "er bleibt offen"
+    assert dialog.tries == [dialog.result_mesh], "der Wurf steht in der Reihe"
+
+    # Erst der zweite Griff übernimmt.
+    dialog._accept_or_start()
     assert dialog.result() == GenerateDialog.DialogCode.Accepted
+
+
+def test_a_second_try_counts_the_seed_up_and_keeps_the_first(
+    qt_app: QApplication, generator: ScriptedMeshBackend
+) -> None:
+    """Meshy rät, mehrere Varianten zu erzeugen und die sauberste zu nehmen.
+
+    Nacheinander und nicht zu viert gleichzeitig: ComfyUI läuft auf derselben
+    Grafikkarte, an der jemand sitzt, und vier parallele Läufe wären vierfache
+    Wartezeit für drei Ergebnisse, die niemand bestellt hat.
+
+    Der Startwert zählt hoch statt zu würfeln — derselbe Dialog zweimal
+    geöffnet liefert dieselbe Reihe (Regel 9).
+    """
+    dialog = GenerateDialog(backend=generator)
+    dialog.prompt.setText("eine kleine Figur")
+    dialog.seed.setValue(12)
+    finish(dialog, qt_app)
+
+    dialog._try_again()
+    dialog._worker.wait(5000)
+    qt_app.processEvents()
+
+    assert dialog.seed.value() == 13, "der nächste Startwert, nicht ein zufälliger"
+    assert len(dialog.tries) == 2, "der erste Wurf bleibt stehen"
+    assert generator.calls == [("eine kleine Figur", 12), ("eine kleine Figur", 13)]
+
+    # Gewählt wird über die Liste; ohne Auswahl gilt der letzte.
+    dialog.attempts.setCurrentRow(0)
+    assert dialog.chosen() is dialog.tries[0]
 
 
 def test_a_failure_stays_in_the_dialog(qt_app: QApplication) -> None:

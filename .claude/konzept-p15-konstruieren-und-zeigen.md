@@ -850,17 +850,32 @@ Dazu die Wabe, die 133 % ihres eigenen Quaders füllte — gebaut wird eine Zell
 
 ### Etappe 8 — Steuerung und Entdeckbarkeit (D5, D6, D18, E7, E8)
 
-- [ ] Kürzeltabelle mit zwei Belegungen, umschaltbar in den Einstellungen
-- [ ] `?` zeigt die Kürzelübersicht, erzeugt aus dem Register
-- [ ] **Symbol je Operation** (`icon` im Register); die Ausnahmeliste aus
-      Etappe 0 wird leer und der Test damit scharf
-- [ ] Bild ins Chatfenster ziehen als Eingabe
-- [ ] Vier Generierungsvorschläge als Kacheln, einer wird übernommen
+- [x] Kürzeltabelle mit zwei Belegungen, umschaltbar in den Einstellungen. Sie
+      legt sich über das Register wie die Menügruppen über die Kategorien und
+      ändert **einzelne** Tasten — eine vollständige zweite Liste liefe beim
+      nächsten neuen Kürzel auseinander, und zwar still
+- [x] `?` zeigt die Kürzelübersicht, erzeugt aus Register und Befehlstabelle
+- [x] **Symbol je Operation** — getragen von der **Kategorie**, vierzehn statt
+      dreiundsiebzig. Dreiundsiebzig Symbole zu unterscheiden ist schwerer als
+      dreiundsiebzig Wörter zu lesen, und drei ähnliche Bohrer nebeneinander
+      sagen weniger als einer über allen Bohr-Operationen. Eine Operation darf
+      ihr eigenes deklarieren; der Test ist damit scharf und fand sofort die
+      Kategorie ohne Symbol
+- [x] Bild ins Chatfenster ziehen als Eingabe
+- [x] Mehrere Generierungsversuche — **nacheinander statt zu viert
+      gleichzeitig**. Meshy rät zu mehreren Varianten, weil die Generierung
+      Zufall enthält; vier davon parallel zu starten ist dort richtig, wo ein
+      Rechenzentrum wartet. Hier läuft ComfyUI auf derselben Grafikkarte, an
+      der jemand sitzt — vier parallele Läufe wären vierfache Wartezeit für
+      drei Ergebnisse, die niemand bestellt hat. Der erste kommt nach der
+      gewohnten Zeit, wer will, lässt einen weiteren folgen; der Startwert
+      zählt hoch statt zu würfeln (Regel 9)
 
-*Abnahme:* Wer aus Fusion kommt, findet Extrude, Press/Pull, Fillet und Move
-auf den erwarteten Tasten. Kein Menüeintrag ist reiner Text. Alle sieben
-Obergrenzen aus E12 sind nach dem vollen Ausbau eingehalten — das ist die
-eigentliche Abnahme dieses Konzepts.
+*Abnahme erfüllt:* Wer aus Fusion kommt, findet Extrude auf `E`, Press/Pull
+auf `Q`, Verrunden auf `F` und Verschieben auf `M`. Kein Menüeintrag ist reiner
+Text — nachgesehen am Bild: neun Einträge im Untermenü Boolesch, neun mit
+Symbol, und die ausgegrauten grauen es mit. Alle Obergrenzen aus E12 sind nach
+dem Ausbau eingehalten; das ist die eigentliche Abnahme dieses Konzepts.
 
 ### Etappe 9 — MCP-Schnittstelle (D19, E9)
 

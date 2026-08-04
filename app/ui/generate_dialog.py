@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QProgressBar,
     QPushButton,
     QSpinBox,
@@ -99,6 +101,18 @@ class GenerateDialog(QDialog):
         self.result_mesh: GeneratedMesh | None = None
         self._image: bytes | None = None
         self._worker: _Worker | None = None
+        self.tries: list[GeneratedMesh] = []
+        """Was bisher entstanden ist (Konzept P15, E8).
+
+        Meshy rät, mehrere Varianten zu erzeugen und die sauberste zu nehmen —
+        die Generierung enthält Zufall, und der erste Wurf ist selten der
+        beste. Vier davon **gleichzeitig** zu starten ist dort richtig, wo ein
+        Rechenzentrum wartet; hier läuft ComfyUI auf derselben Grafikkarte, an
+        der jemand sitzt, und vier parallele Läufe wären vierfache Wartezeit
+        für drei Ergebnisse, die niemand bestellt hat.
+
+        Also nacheinander: der erste kommt nach der gewohnten Zeit, und wer
+        will, lässt einen weiteren folgen."""
 
         self.setWindowTitle(tr("Modell erzeugen"))
         self.setMinimumWidth(480)
@@ -132,12 +146,24 @@ class GenerateDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Erzeugen"))
-        self.buttons.accepted.connect(self._start)
+        self.buttons.accepted.connect(self._accept_or_start)
         self.buttons.rejected.connect(self.reject)
+
+        # Die Versuche und der Weg zu einem weiteren — beide unsichtbar, bis
+        # der erste da ist: ein leeres Feld über einem leeren Knopf sagt
+        # nichts (§2.5).
+        self.attempts = QListWidget(self)
+        self.attempts.setVisible(False)
+        self.attempts.setMaximumHeight(120)
+        self.again = QPushButton(tr("Noch ein Versuch"), self)
+        self.again.setVisible(False)
+        self.again.clicked.connect(self._try_again)
 
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(self.state)
+        layout.addWidget(self.attempts)
+        layout.addWidget(self.again)
         layout.addWidget(self.progress)
         layout.addWidget(self.buttons)
 
@@ -182,6 +208,19 @@ class GenerateDialog(QDialog):
 
     # --- running ----------------------------------------------------------------
 
+    def _accept_or_start(self) -> None:
+        """Derselbe Knopf: erst erzeugen, danach übernehmen.
+
+        Zwei Knöpfe nebeneinander, von denen immer einer tot ist, wären eine
+        Frage mehr als nötig — und welcher gilt, sagt der Zustand, nicht der
+        Benutzer.
+        """
+        if self.tries:
+            self.result_mesh = self.chosen()
+            self.accept()
+            return
+        self._start()
+
     def _start(self) -> None:
         if not self.available:
             return
@@ -204,9 +243,54 @@ class GenerateDialog(QDialog):
 
     def _on_done(self, result: object) -> None:
         assert isinstance(result, GeneratedMesh)
+        self.tries.append(result)
         self.result_mesh = result
         _log.info("generated %d triangles", result.mesh.triangle_count)
-        self.accept()
+        self.progress.setVisible(False)
+        self.buttons.setEnabled(True)
+        self._show_tries()
+
+    def _show_tries(self) -> None:
+        """Die Versuche mit den Zahlen, an denen man sie unterscheidet.
+
+        Dreiecke, Volumen und ob der Körper geschlossen ist — dieselben drei,
+        die auch der Steckbrief nennt. Sie entscheiden, welcher Wurf brauchbar
+        ist, und ein Bild daneben entschiede es nicht besser: ein offenes Netz
+        sieht aus wie ein geschlossenes.
+        """
+        self.attempts.clear()
+        for index, entry in enumerate(self.tries, start=1):
+            mesh = entry.mesh
+            closed = tr("geschlossen") if mesh.is_watertight else tr("offen")
+            item = QListWidgetItem(
+                f"{index}. {mesh.triangle_count} {tr('Dreiecke')} · "
+                f"{mesh.volume / 1000.0:.1f} cm³ · {closed}"
+            )
+            self.attempts.addItem(item)
+        self.attempts.setCurrentRow(len(self.tries) - 1)
+        self.attempts.setVisible(True)
+        self.again.setVisible(True)
+        self.state.setText(
+            tr("Der Zufall spielt mit — ein weiterer Versuch kostet nichts als Zeit.")
+        )
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Übernehmen"))
+
+    def _try_again(self) -> None:
+        """Noch einen Wurf, mit dem nächsten Startwert.
+
+        Der Startwert wird hochgezählt und nicht gewürfelt: derselbe Dialog
+        zweimal geöffnet soll dieselbe Reihe liefern (Regel 9).
+        """
+        self.seed.setValue(min(self.seed.value() + 1, MAX_SEED))
+        self._start()
+
+    def chosen(self) -> GeneratedMesh | None:
+        """Der ausgewählte Versuch — der zuletzt erzeugte, wenn keiner
+        angeklickt wurde."""
+        row = self.attempts.currentRow()
+        if 0 <= row < len(self.tries):
+            return self.tries[row]
+        return self.result_mesh
 
     def _on_failed(self, problem: object) -> None:
         self.progress.setVisible(False)
