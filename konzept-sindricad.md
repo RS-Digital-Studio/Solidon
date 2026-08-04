@@ -124,22 +124,27 @@ committet. Die Zahlen unten stehen auf dem Stand danach.
 | `ruff format --check` | 326 Dateien formatiert |
 | `mypy` | keine Beanstandung in 178 Quelldateien |
 | `ruff check` | grün |
-| `pytest` | **2579 grün, 1 rot** in 3:30 min — siehe 2.3 |
+| `pytest` | **2598 grün** in 3:35 min |
 
-### 2.3 Zwei Befunde aus der Kontrolle
+### 2.3 Zwei Befunde aus der Kontrolle — beide erledigt
 
-**Das Tor ist auf `main` rot, und es bleibt es.**
-`test_translations.py::test_every_text_is_translated[en]` meldet drei
-**verwaiste** englische Einträge: *Entfernt*, *Hinzugefügt*, *Unverändert*.
-Nicht fehlende Übersetzungen, sondern übrig gebliebene — die zugehörigen
-Oberflächentexte sind entfallen, der Katalog wurde nicht nachgezogen. Der
-Befund überlebte die beiden Commits der parallelen Sitzung, obwohl einer davon
-`en.json` angefasst hat. **Nicht behoben**, weil dieselbe Sitzung gerade in
-dieser Datei arbeitet und ein zweiter Zugriff nur einen Konflikt erzeugt. Der
-Fix ist das Streichen dreier Schlüssel in `app/i18n/locales/en.json`.
+**Der rote Übersetzungstest war kein Übersetzungsfehler.**
+`test_every_text_is_translated[en]` meldete drei **verwaiste** englische
+Einträge: *Entfernt*, *Hinzugefügt*, *Unverändert*. Der erste Verdacht — die
+Oberflächentexte seien entfallen und der Katalog nicht nachgezogen — war
+falsch. Die drei sind die Legende der Differenzansicht und werden sehr wohl
+benutzt, nur eben spät: `tr(encoding.label_key)` im Viewport, mit dem Schlüssel
+aus einem Feld. Der Einsammler zählt aber nur Literale, die unmittelbar an `_`
+oder `tr` gehen (§37.2) — für ihn kamen sie in keiner Quelle vor.
 
-Ein zweiter Befund derselben Herkunft — ein ungenutzter `QEvent`-Import in
-`app/ui/viewport.py` — hat sich mit `04c5e59` von selbst erledigt.
+Hätte man dem Wortlaut der Meldung geglaubt und die drei Schlüssel aus
+`en.json` gestrichen, wäre die Legende für englische Nutzer stumm deutsch
+geworden — ein Verstoß gegen Regel 20, herbeigeführt durch das Grünmachen
+eines Tests. Behoben in `app/ui/palette.py` (`1dcd855`): die drei sind jetzt
+einmal über `_` angemeldete Konstanten mit unveränderter Message-ID.
+
+Ein zweiter Befund — ein ungenutzter `QEvent`-Import in `app/ui/viewport.py` —
+hat sich mit `04c5e59` von selbst erledigt.
 
 **Ein erster Testlauf brach mit einem nativen Stapelabzug ab.** Kein
 Testfehler, sondern ein Absturz des Prozesses. Das ist das bekannte Bild aus
