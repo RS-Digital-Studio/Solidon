@@ -983,6 +983,13 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             help_menu,
+            tr("Tastenkürzel …"),
+            "?",
+            self.action_shortcuts,
+            tr("Alle belegten Tasten, erzeugt aus dem Register — nie veraltet."),
+        )
+        self._add_action(
+            help_menu,
             tr("Erste Schritte …"),
             None,
             self.action_first_run,
@@ -1298,6 +1305,16 @@ class MainWindow(QMainWindow):
     def action_install_extras(self) -> None:
         """§36: was fehlt, wofür es da ist, und ein Knopf, der es holt."""
         InstallDialog(self).exec()
+
+    def action_shortcuts(self) -> None:
+        """Die Kürzelübersicht (§19.2, D6).
+
+        Als Dialog und nicht als Fenster: anders als das Handbuch schlägt man
+        hier eine Taste nach und arbeitet weiter, statt daneben zu lesen.
+        """
+        from app.ui.shortcuts_window import ShortcutsWindow
+
+        ShortcutsWindow(self.window_commands(), self).exec()
 
     def action_manual(self) -> None:
         """Das Handbuch — ein Fenster, kein Dialog.

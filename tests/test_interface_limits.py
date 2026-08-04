@@ -243,3 +243,30 @@ def test_every_operation_has_exactly_one_menu_entry(window: MainWindow) -> None:
         "Eine Operation, ein Eintrag — alles Weitere ist Kontextmenü, "
         "Palette oder Kürzel."
     )
+
+
+# --- die Kürzelübersicht (Konzept P15 §7 Etappe 8, D6) --------------------------
+
+
+def test_the_shortcut_list_is_generated_from_both_sources(window: MainWindow) -> None:
+    """`?` zeigt, was es gibt — erzeugt, nicht gepflegt.
+
+    Eine von Hand geschriebene Liste wäre am Tag nach dem nächsten Kürzel
+    falsch, und niemand würde es merken. Diese liest das Register und die
+    Befehlstabelle des Fensters; damit steht sie auch in beiden Sprachen, ohne
+    dass jemand sie übersetzt.
+    """
+    from app.ui.shortcuts_window import entries
+
+    found = entries(window.window_commands())
+    assert found, "es gibt Kürzel, also steht etwas drin"
+
+    keys = {shortcut for _group, _title, shortcut in found}
+    assert "Ctrl+S" in keys, "die Fensterbefehle sind dabei"
+    from_registry = {spec.shortcut for spec in REGISTRY.all() if spec.shortcut}
+    assert from_registry <= keys, "und jede Operation, die eines führt"
+
+    assert all(shortcut for _group, _title, shortcut in found), (
+        "was kein Kürzel hat, gehört nicht in eine Kürzelübersicht — "
+        "die Liste aller Befehle ist die Palette"
+    )
