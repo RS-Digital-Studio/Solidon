@@ -357,6 +357,56 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         ),
     ),
     Page(
+        key="surfaces",
+        title=_("Oberflächen und Füllungen"),
+        body=_(
+            "Ein Rändel für den Griff, eine Wabe fürs Aussehen, ein Gitter "
+            "statt massiven Materials — beides ist echte Geometrie, keine "
+            "Textur im Bild. Was der Slicer bekommt, ist das, was Sie "
+            "sehen.\n\n"
+            "**Textur aufbringen** prägt ein Muster auf eine Fläche, erhaben "
+            "oder vertieft. Zwei Zahlen entscheiden, ob es druckbar ist: die "
+            "Teilung muss breiter sein als zwei Bahnen der Düse, die Tiefe "
+            "höher als eine Schicht. Beides prüft Formwerk, bevor es rechnet "
+            "— eine Prägung, die feiner ist als der Drucker, verschwindet, und "
+            "das merkt man sonst erst am fertigen Teil.\n\n"
+            "![](figure:texture)\n\n"
+            "Auf einem runden Teil wird das Muster **umlaufend** aufgelegt. "
+            "Flach aufgelegt träfe das Feld den Zylinder nur in seiner Mitte "
+            "und stünde an den Rändern in der Luft.\n\n"
+            "**Gitter füllen** ersetzt das Innere eines Körpers durch eine "
+            "Struktur — Gyroid, Wabe oder Würfelgitter. Das ist nicht "
+            "dasselbe wie die Füllung des Slicers: diese hier gehört zum "
+            "Modell, reist mit der Datei und lässt sich messen. Die Wandstärke "
+            "der Struktur wird gegen die Düse geprüft, so wie bei der "
+            "Textur."
+        ),
+    ),
+    Page(
+        key="remote",
+        title=_("Fernsteuerung"),
+        body=_(
+            "Ein anderes Programm auf demselben Rechner darf Formwerk "
+            "bedienen — über MCP, dieselbe Schnittstelle, mit der Claude Code "
+            "und ähnliche Werkzeuge arbeiten. Es ruft dabei genau die "
+            "Operationen auf, die auch in den Menüs stehen.\n\n"
+            "**Sie ist aus, bis Sie sie einschalten.** Der Schalter steht in "
+            "den Einstellungen, zusammen mit dem Port. Danach hört Formwerk "
+            "auf `127.0.0.1` und nur dort: von einem anderen Rechner ist die "
+            "Schnittstelle nicht erreichbar, auch nicht aus dem eigenen "
+            "Netz.\n\n"
+            "Was hereinkommt, ist eine Transaktion wie jede andere. Ein "
+            "Strg+Z im Fenster nimmt sie zurück, der Verlauf zeigt sie, und "
+            "am Eintrag steht, dass sie von außen kam.\n\n"
+            "Zwei Dinge gehen nicht durch die Leitung, und das ist Absicht: "
+            "OpenSCAD-Quelltext und alles, was wie ein Dateipfad aussieht. "
+            "Beides würde bedeuten, dass ein fremdes Programm bestimmt, was "
+            "auf diesem Rechner ausgeführt oder gelesen wird.\n\n"
+            "In der Gegenstelle wird sie als Server mit der Adresse "
+            "`http://127.0.0.1:8787/mcp` eingetragen."
+        ),
+    ),
+    Page(
         key="trouble",
         title=_("Wenn etwas nicht geht"),
         body=_(

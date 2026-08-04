@@ -112,3 +112,22 @@ ein blockierendes Fenster. Lange Rechnungen laufen nicht im Qt-Hauptthread.
 Oberflächentests laufen offscreen (`QT_QPA_PLATFORM=offscreen`, von
 `tests/conftest.py` gesetzt). Eine neue Ansicht ohne Test in `tests/test_ui.py`
 oder einer der spezielleren Dateien ist unfertig.
+
+## Die Ansicht
+
+Umgebungsverdeckung und Kontaktschatten weichen, solange eine Analysekarte
+läuft: beide dunkeln nach, und die Karte färbt nach Zahlen — der abgelesene
+Wert wäre ein anderer als der gemeldete. Beide hängen deshalb an einer
+Eigenschaft (`ambient_occlusion`, `contact_shadows`) und nicht am Zustand des
+Plotters: offscreen gibt es keinen, und ein Test, der sich dort überspringt,
+prüft nie etwas.
+
+Der Kontaktschatten ist **selbst projiziert**, nicht `enable_shadows`: VTKs
+Schattenwurf verschattet ganze Seitenflächen schwarz und lässt die Ränder der
+Platte auslaufen. Geworfen wird entlang einer festen Lichtrichtung — senkrecht
+projiziert liegt der Schatten unter dem Körper und ist von ihm verdeckt.
+
+Zahlen an Bildern werden **angesehen, nicht nur gerechnet**. Der Radius der
+Umgebungsverdeckung stand mit plausibler Begründung auf dem schwächsten Wert
+seiner Messreihe; der doppelte ViewCube fiel erst im neu aufgenommenen
+Handbuchbild auf.

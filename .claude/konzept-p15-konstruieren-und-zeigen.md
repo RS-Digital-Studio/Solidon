@@ -644,7 +644,20 @@ zu hängen, wird rot — nachgewiesen an einem Wegwerf-Eintrag.
       sonst verschöbe sie die Farbe genau dort, wo die Karte etwas aussagt.
       Der Radius ist an einer gebohrten Platte abgemessen (2 mm, nicht die
       zuerst geschätzten 8 — das war der schwächste Wert der Reihe)
-- [ ] Kontaktschatten auf der Druckplatte; Platte mit Raster und Maßstab
+- [x] **Kontaktschatten und Maßstab auf der Druckplatte.** Der Schatten kostete
+      sechs Anläufe und jeder war lehrreich. `enable_shadows` verschattet mit
+      drei Lichtern ganze Seitenflächen des Körpers schwarz, mit einem
+      einzelnen ebenso, und die Schattenkarte deckt die Platte nicht ab — ihre
+      Ränder laufen schwarz aus. Mit gefüllter Platte kam ein richtiger
+      Schatten heraus, die Ränder blieben. Also selbst projiziert: die konvexe
+      Hülle der Punkte, **entlang einer Lichtrichtung** geworfen — senkrecht
+      projiziert liegt der Schatten unter dem Körper und ist von ihm verdeckt,
+      im Bild war er nicht da. Der Versatz wächst mit der Höhe und beantwortet
+      damit genau die Frage, für die er gebaut ist: ein schwebendes Teil hat
+      seinen Schatten weiter weg. Damit er auf etwas fällt, hat die Platte
+      jetzt einen **gefüllten Grund** unter ihrem Raster; bis dahin war sie ein
+      Drahtgitter über dem Hintergrund. Der Maßstab steht alle 50 mm an beiden
+      Kanten — ein Raster ohne Zahlen sagt nur, dass es ein Raster gibt
 - [x] **Feature-Kanten statt Dreieckskanten** — über `extract_feature_edges`
       ab 30°, nur im massiven Modus; Farbe je Thema auf Kontrast 4,5 gerechnet
 - [x] **Materialdarstellung aus dem Dokument** (E3) — als **Filamentfarbe je
@@ -705,12 +718,21 @@ Schnittebene nimmt eine getippte Zahl. Beide Sprachen vollständig.
       auf jeder Ebene dasselbe Volumen
 - [x] **Bauraumgrenze auf der Zeichenfläche** (E1) — gestrichelt, beschriftet,
       und wer darüber hinauszeichnet, liest es neben dem Umriss
-- [ ] `feature:<id>` — die angeklickte planare Fläche als Skizzenebene. Sie
-      braucht die Ebene des Merkmals und die Rücktransformation und ist damit
-      ein eigener Schritt
-- [ ] Schichtrichtung auf der Zeichenfläche — auf XY zeigt sie aus dem Bild
-      heraus, auf XZ und YZ liegt sie darin; das ist eine Beschriftung, keine
-      Zeichnung, und gehört zur Ebenenwahl statt daneben
+- [x] `feature:<id>` — die angeklickte planare Fläche als Skizzenebene. Der
+      Rahmen wird bei jeder Auswertung aus der Fläche gerechnet, nicht
+      gespeichert: sonst hinge die Skizze an Zahlen von gestern und läge still
+      daneben, sobald sich der Körper unter ihr ändert. Zwei Fallen steckten
+      darin — die OpenCASCADE-Normale zeigt nicht verlässlich nach außen (der
+      Prüfquader meldet für die Wand bei x = -20 die Richtung +X, wer darauf
+      extrudiert, baut nach innen), und die erste Rahmenachse muss so gewählt
+      sein, dass eine waagerechte Fläche zur globalen XY-Ebene wird; jede
+      andere Regel drehte dieselbe Skizze auf dem Deckel um einen Winkel, den
+      niemand erklären kann
+- [x] Schichtrichtung an der Ebenenwahl — auf XY liegen die Schichten parallel
+      zur Zeichnung, auf XZ und YZ quer dazu, und bei einer angeklickten Fläche
+      entscheidet ihre Neigung. Eine Beschriftung, keine Zeichnung: die
+      Richtung ist ein Satz. Sie steht an der Wahl, wo sie jemanden erreicht,
+      **bevor** er zeichnet; im Prüfbericht stünde sie, wenn alles fertig ist
 
 *Abnahme:* Von der leeren Szene bis zum extrudierten Profil ohne einen
 modalen Dialog. Bestehende Skizzen aus Projektdateien öffnen unverändert.
@@ -758,9 +780,15 @@ Umriss und wird ein Körper.
       Gitter, keinen Griff. Rauten werden jetzt direkt gebaut
 - [x] **Einwärts oder auswärts** als Schalter — und beide messbar: was oben
       dazukommt, fehlt unten, dieselben Stege
-- [ ] Umlaufend auf Zylindern — heute liegt das Feld eben auf der Fläche.
-      Für einen Griff ist das der Normalfall; ein Rändel um einen ganzen
-      Zylinder braucht die Abwicklung und ist ein eigener Schritt
+- [x] **Umlaufend auf Zylindern** als Schalter *Auflegen* — flach oder um
+      einen Durchmesser. Die Abbildung ist einfach (x wird Umfang, z wird
+      Radius); die beiden Fallen lagen woanders. Erstens **spiegelte** sie:
+      die Determinante der Abbildung war negativ, das gebogene Feld hatte
+      Volumen −420 mm³, und die Boolesche Vereinigung floh auf die Voxelstufe
+      — 45 Sekunden statt 0,4, und der Körper wuchs um zwei Zehntel. Zweitens
+      behält ein gebogenes Prisma seinen **ebenen** Boden; die Sehne darunter
+      wird ausgeglichen, sonst berührt das Muster die Fläche, statt sie zu
+      schneiden
 - [x] **Druckbarkeitsprüfung** gegen Düse und Schichthöhe, **vor** dem Bauen:
       eine Rille schmaler als die Düse wird nicht gedruckt, eine Prägung
       flacher als eine Schicht auch nicht. Beide Meldungen tragen die Zahl,
@@ -769,7 +797,9 @@ Umriss und wird ein Körper.
       zwischen 10 und 95 % davon; erhaben und vertieft messen sich gegen den
       nackten Körper; Voronoi ist bei gleichem Startwert gleich
 - [x] Übersetzungen, beide Sprachen
-- [ ] Handbuchseite mit Abbildung
+- [x] Handbuchseite *Oberflächen und Füllungen* mit gezeichneter Abbildung —
+      sie trägt Textur und Gitterfüllung zusammen, weil beides dieselbe
+      Zusage macht: echte Geometrie, keine Textur im Bild
 
 *Abnahme erfüllt:* Ein Rändel auf einer Platte, mit 0,4-mm-Düse geprüft — 4492
 Dreiecke, geschlossen, Rauten erhaben mit Rillen dazwischen. Eine Teilung von
@@ -804,13 +834,26 @@ kommt aus `ctx.seed`, so wie Regel 9 es sagt.
       Kante. **Die Antwort auf die sechs von 68 Modellen, die nicht geschlossen
       sind** — bis hierher meldete der Prüfbericht sie richtig, und danach ging
       nichts mehr
-- [ ] `sketch_extrude` bekommt Zielfläche und Region (D14)
+- [x] `sketch_extrude` bekommt **Zielfläche** (`up_to`) und **Region**.
+      Die Höhe bis zu einer Fläche hält, wenn der Körper darunter wächst;
+      zwei Fälle enden mit einem Vorschlag statt einer Zahl. Die Region
+      brauchte mehr: `profile_of` kannte genau **einen** Umriss, eine Platte
+      mit einem Loch — der häufigste Fall im ganzen Katalog — war damit
+      nicht zeichenbar. `regions_of` verkettet jetzt mehrere Ringe und ordnet
+      verschachtelte als Löcher zu; der Kern setzt sie als innere Ringe
+      derselben Fläche ein. **Nicht gebaut:** eine Skizze, die sich selbst
+      schneidet, in Teilflächen zu zerlegen — das wäre eine planare
+      Arrangement-Rechnung, die jede Kurve polygonisieren müsste, um sie
+      danach als Kurve auszugeben
 - [x] Wandstärkenprüfung — **sie steht schon, und besser**: `slice/advise.py`
       misst die dünnste Stelle am ganzen Körper und schlägt die Linienbreite
       vor, mit der sie doch entsteht. Sie in `push_face` zu kopieren hieße, je
       Zug eine Schichtanalyse zu fahren — Sekunden für eine Zahl, die der
       Bericht danach ohnehin nennt. Sie war ungeprüft; jetzt nicht mehr
-- [ ] Gizmo greift die Fläche direkt; ein Zug ist **eine** Transaktion (§18.11)
+- [x] Gizmo greift die Fläche direkt; ein Zug ist **eine** Transaktion (§18.11).
+      Ist ein Merkmal gewählt, sitzt der Griff als Scheibe auf der Fläche, und
+      der Zug wird zu `push_face`. Was quer zur Normalen gezogen wurde, wird
+      verworfen — sonst wäre Press/Pull ein Verschieben mit anderem Namen
 
 *Abnahme teils erfüllt:* Ein Lochkreis aus einer Operation, sechs Kopien auf
 dem Teilkreis. Dreißig Kopien über den Bauraum hinaus werden abgelehnt, bevor
@@ -879,14 +922,25 @@ dem Ausbau eingehalten; das ist die eigentliche Abnahme dieses Konzepts.
 
 ### Etappe 9 — MCP-Schnittstelle (D19, E9)
 
-- [ ] Server auf `127.0.0.1`, standardmäßig aus, Schalter in den Einstellungen
-- [ ] Werkzeuge aus `agent/tools.py`, keine zweite Liste
-- [ ] Jeder Fernaufruf eine Transaktion mit Herkunftsvermerk
-- [ ] Sicherheitstests: kein Pfadparameter, kein Quelltext, kein Zugriff von
-      außerhalb — jeder abgewiesen, bevor gerechnet wird
+- [x] Server auf `127.0.0.1`, standardmäßig aus, Schalter in den Einstellungen.
+      **Ohne SDK und ohne Netzbibliothek** — JSON-RPC ist ein Umschlag um einen
+      Namen und ein Wörterbuch, und die Standardbibliothek trägt ihn. Eine
+      Abhängigkeit dafür wäre eine Lizenzzeile für dreißig Zeilen Code
+- [x] Werkzeuge aus `agent/tools.py`, keine zweite Liste
+- [x] Jeder Fernaufruf eine Transaktion mit Herkunftsvermerk. Der Aufruf reist
+      als Qt-Ereignis in den Hauptthread und geht denselben Weg wie ein
+      Menüklick: der Server wartet, und die Wartezeit trägt der Ferngast
+- [x] Sicherheitstests: kein Pfadparameter, kein Quelltext, kein Zugriff von
+      außerhalb — jeder abgewiesen, **bevor** gerechnet wird. Der Pfad wird am
+      **Wert** erkannt, nicht am Namen des Parameters: ein Feld muss nicht
+      `path` heißen, um einen zu tragen. Und eng gefasst, denn eine Sperre, die
+      „Deckel 2" verschluckt, macht die Schnittstelle unbrauchbar und sieht
+      dabei sicher aus
 
-*Abnahme:* Claude Code baut über MCP ein Gehäuse mit Deckel, und ein Strg+Z im
-Fenster nimmt jeden Schritt einzeln zurück.
+*Abnahme erfüllt:* Vierzehn Protokolltests und vier am laufenden Fenster. Ein
+Fernaufruf legt einen Körper an, das Dokument trägt genau eine Transaktion, ihr
+Herkunftsvermerk nennt `mcp`, und ein Strg+Z nimmt sie zurück. Der Sockel ist an
+`127.0.0.1` gebunden — geprüft am gebundenen Sockel, nicht an der Absicht.
 
 ### Nicht in P15, aber notiert
 

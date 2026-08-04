@@ -73,3 +73,25 @@ Nutzercode, keine Dateipfade, kein Zustand.
 `tools/run_agent_suite.py` ist **kein Testlauf** — er kostet Geld und braucht
 einen Schlüssel oder ein lokales Modell. Sein Ergebnis ist eine Quote, kein
 Bestanden. Er läuft auf Ansage, nicht nebenbei.
+
+## Die Schnittstelle nach außen (MCP)
+
+`app/core/agent/remote.py` spricht JSON-RPC und weiß nichts von Netz und
+Fenster; `app/ui/remote_server.py` bringt beides dazu. Vier Auflagen, und
+`tests/test_remote.py` prüft sie:
+
+- **Standardmäßig aus.** Eine offene Schnittstelle, die niemand eingeschaltet
+  hat, ist eine offene Tür.
+- **Nur `127.0.0.1`** — zweimal geprüft, an der Bindung und an jeder Anfrage.
+  Eine Bindung allein lässt sich durch eine Weiterleitung umgehen.
+- **Kein ausführbarer Quelltext, kein Dateipfad.** Beides wird abgewiesen,
+  **bevor** gerechnet wird. Der Pfad wird am **Wert** erkannt, nicht am Namen
+  des Parameters — und eng gefasst, denn eine Sperre, die „Deckel 2"
+  verschluckt, macht die Schnittstelle unbrauchbar und sieht dabei sicher aus.
+- **Jeder Aufruf eine Transaktion mit Herkunftsvermerk.** Der Aufruf reist als
+  Qt-Ereignis in den Hauptthread und geht denselben Weg wie ein Menüklick; der
+  Server wartet. Das Dokument gehört dem Fenster, und was nebenher
+  hineinschriebe, könnte weder Undo noch Prüfbericht erklären.
+
+Die Werkzeuge kommen aus `tools.py`, abzüglich `DENIED`. Eine zweite Liste gäbe
+es nicht — sie wäre am Tag nach der nächsten Operation falsch.

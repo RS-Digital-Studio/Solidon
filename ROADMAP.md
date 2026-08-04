@@ -1774,3 +1774,58 @@ laden", „Zeichnung extrudieren", „Drucker und Material") — nur die
 zusammengesetzten Parameter-Titel (`Parameter {name}`) bleiben wörtlich:
 eine Message-ID kennt keine Platzhalter, und der Nutzername im Titel gehört
 ohnehin nicht übersetzt.
+
+## P15 — Konstruieren und zeigen
+
+Der Vergleich mit SindriCAD, Meshy und dem, was 3Druck als Stand der Software
+meldet: zweiundzwanzig Lücken, davon vier abgelehnt. Formwerk lag bei
+Druckintelligenz und Dokumentlogik deutlich vorn und bei Konstruktions-
+werkzeugen, Bediensprache und Darstellung deutlich zurück. Das Konzept steht in
+`.claude/konzept-p15-konstruieren-und-zeigen.md` und ist vollständig abgearbeitet.
+
+**Die Grenzen kamen zuerst, nicht zuletzt.** Sieben prüfbare Obergrenzen in
+`tests/test_interface_limits.py` — höchstens neun Menüs, zwölf Zeilen je Menü,
+acht Umschalter, acht Felder auf der Vorderseite eines Dialogs, genau ein
+Menüeintrag je Operation. Sie wurden **vor** dem Wachstum eingezogen; installiert
+man sie danach, sind sie kein Riegel mehr, sondern eine Bestandsaufnahme. Der
+erste Lauf fand sofort ein Menü mit 23 Zeilen und eine Kategorie ohne Symbol.
+
+**Was dazukam.** Umgebungsverdeckung und Körperkanten in der Ansicht; die
+Druckplatte mit gefülltem Grund, Maßstab und Kontaktschatten; der Skizzenmodus
+ohne Dialog, mit Bauraumgrenze, Referenzmaß, Splines, Skizzenmustern und der
+angeklickten Fläche als Ebene; Texturen als echte Geometrie, flach und
+umlaufend; Gitterfüllungen; Muster, Press/Pull und Thicken; zwei
+Kürzelbelegungen und eine erzeugte Kürzelübersicht; mehrere Generierungs-
+versuche; und die MCP-Schnittstelle, mit der ein zweites Programm dieselben
+Operationen aufruft wie die Menüs.
+
+**Vier Dinge wurden begründet nicht gebaut** und stehen mit ihrem Grund im
+Konzept: Text als Skizzenkontur (die Zeichensatz-Abhängigkeit macht aus einer
+Projektdatei eine, die auf einem anderen Rechner anders aussieht),
+`offset_face` (dieselbe Operation wie `push_face` unter zweitem Namen),
+assoziative Skizzenmuster (sie verlangten einen zweiten Abhängigkeitsgraphen
+neben dem Op-Stack) und vier parallele Generierungsläufe (hier läuft ComfyUI auf
+derselben Grafikkarte, an der jemand sitzt).
+
+### Was die Arbeit gelehrt hat
+
+**Messen schlägt begründen.** Der Radius der Umgebungsverdeckung stand zuerst
+auf acht Millimetern, mit einer plausibel klingenden Begründung — die Messreihe
+zeigte ihn als schwächsten Wert der ganzen Reihe. Genommen sind zwei, und auch
+das nicht der rechnerisch beste Wert: bei einem Millimeter streifen ebene
+Flächen sichtbar, was die Zahl allein nicht sagt. Man muss hinsehen.
+
+**Ein Bild prüft, was ein Review nicht sieht.** Der doppelte ViewCube fiel erst
+im neu aufgenommenen Handbuchbild auf. Der Kontaktschatten brauchte sechs
+Anläufe, und die drei ersten sahen im Code richtig aus.
+
+**Ein negatives Volumen erklärt eine Voxelstufe.** Die Zylinder-Umlaufung der
+Texturen spiegelte: die Determinante der Abbildung war negativ, das gebogene
+Feld hatte −420 mm³, und die Boolesche Vereinigung floh auf Stufe 4 — 45
+Sekunden statt 0,4, der Körper zwei Zehntel zu groß. Wer eine langsame Boolesche
+Operation sieht, misst zuerst das Volumen ihrer Eingänge.
+
+**Der eigene Test findet den eigenen Irrtum.** Die Zahl der Operationen war um
+sechzehn falsch, weil ohne geladenes Register gemessen; die erste Fassung der
+Grenzprüfung zählte Registerkategorien statt Menüs und hätte damit die Lösung
+für das Problem gehalten.

@@ -413,6 +413,46 @@ def _wall(theme: Theme) -> str:
     return canvas.svg()
 
 
+def _texture(theme: Theme) -> str:
+    """Warum ein Rändel umlaufen muss und nicht aufliegen darf."""
+    canvas = Canvas(560, 240, theme)
+    colours = canvas.colours
+    canvas.background()
+    canvas.label(20, 26, str(_("Ein Muster auf einem runden Griff")), size=11, bold=True)
+
+    # Links: flach aufgelegt — das Feld trifft den Kreis nur in der Mitte.
+    canvas.caption(58, 62, str(_("flach")))
+    canvas.circle(110, 130, 46, fill=colours.fill, stroke=colours.ink)
+    canvas.line(64, 78, 156, 78, stroke=colours.warn, weight=2.0)
+    canvas.caption(46, 206, str(_("liegt auf, trägt nur in der Mitte")))
+
+    # Rechts: umlaufend — kurze Striche rund um den Kreis.
+    canvas.caption(392, 62, str(_("umlaufend")))
+    canvas.circle(410, 130, 46, fill=colours.fill, stroke=colours.ink)
+    for index in range(16):
+        angle = index * 2.0 * math.pi / 16.0
+        inner_x = 410 + 46 * math.cos(angle)
+        inner_y = 130 + 46 * math.sin(angle)
+        outer_x = 410 + 54 * math.cos(angle)
+        outer_y = 130 + 54 * math.sin(angle)
+        canvas.line(inner_x, inner_y, outer_x, outer_y, stroke=colours.accent, weight=2.0)
+    canvas.caption(360, 206, str(_("greift rundherum")))
+
+    canvas.wrapped(
+        190,
+        104,
+        str(
+            _(
+                "Der Schalter „Auflegen“ entscheidet darüber. Der Durchmesser "
+                "kommt aus der angeklickten Fläche."
+            )
+        ),
+        width=24,
+        colour=colours.muted,
+    )
+    return canvas.svg()
+
+
 def _ways(theme: Theme) -> str:
     """Die drei Hauptwege aus §2.2, als Ablauf."""
     canvas = Canvas(620, 260, theme)
@@ -636,6 +676,16 @@ FIGURES: Final[tuple[Figure, ...]] = (
         ),
         caption=_("Jeder Schritt bleibt eine Zahl — auch morgen noch."),
         build=_stack,
+    ),
+    Figure(
+        key="texture",
+        alt=_(
+            "Zwei Kreise nebeneinander. Links liegt ein gerader Strich oben auf dem "
+            "Kreis auf und berührt ihn nur in der Mitte; rechts stehen kurze Striche "
+            "rundherum vom Rand ab."
+        ),
+        caption=_("Ein Rändel gehört um den Griff, nicht als Fleck darauf."),
+        build=_texture,
     ),
     Figure(
         key="ways",

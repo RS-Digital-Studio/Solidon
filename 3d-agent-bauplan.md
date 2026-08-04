@@ -1236,6 +1236,21 @@ Passungen); der Befund geht zurück in den Kontext.
 Fragen vor Raten** — alle vier im Systemprompt verankert und in der Suite
 gemessen.
 
+### 26.6 Fernsteuerung über MCP
+Ein zweites Programm auf demselben Rechner ruft dieselben Operationen auf wie
+die Menüs — über JSON-RPC nach dem Model-Context-Protocol. Die Werkzeuge kommen
+aus derselben Liste wie die des Chats; es gibt keine zweite und keinen zweiten
+Weg ins Dokument.
+
+Vier Auflagen, jede mit Test:
+
+1. **Standardmäßig aus**, Schalter in den Einstellungen.
+2. **Nur `127.0.0.1`** — geprüft an der Bindung *und* an jeder Anfrage.
+3. **Kein ausführbarer Quelltext, kein Dateipfad**, abgewiesen vor der
+   Rechnung. Der Pfad wird am Wert erkannt, nicht am Parameternamen.
+4. **Jeder Aufruf eine Transaktion** mit Herkunftsvermerk (§26.4), rücknehmbar
+   wie jede andere.
+
 ---
 
 ## 27. Backends
