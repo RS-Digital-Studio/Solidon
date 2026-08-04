@@ -20,10 +20,12 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QLabel,
     QLineEdit,
     QListView,
     QListWidget,
     QListWidgetItem,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -42,6 +44,12 @@ SHOWN_PARAMETERS = 2
 
 OWN_MARKER = "*"
 
+#: Was „nimmt Material weg" auf einer Kachel anschreibt. Vorher trug das allein
+#: die Farbe des Vorschaubilds — orange subtraktiv, grau additiv, ohne Legende
+#: (Regel 18). Ein Minuszeichen und ein Wort sagen es auch dem, der die beiden
+#: Farben nicht unterscheidet.
+SUBTRACTIVE_MARKER = "−"
+
 #: Anzeigegröße des Vorschaubilds in einer Kachel. Gerendert wird weiter in
 #: ``SIZE`` — die Reserve zahlt sich auf HiDPI-Bildschirmen aus.
 TILE_ICON = 96
@@ -49,7 +57,11 @@ TILE_ICON = 96
 #: Grundfläche einer Kachel: breit genug für „Schraubenloch mit Senkung" in
 #: zwei Zeilen, hoch genug für Bild, Titel und die zwei Parameter darunter.
 TILE_WIDTH = 164
-TILE_HEIGHT = 176
+TILE_HEIGHT = 190
+
+#: Mindestbreite der Detailspalte. Schmaler wird aus zwei Sätzen eine
+#: Wortkolonne.
+DETAIL_WIDTH = 220
 
 
 class PartCatalog(QDialog):
@@ -60,7 +72,7 @@ class PartCatalog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Bausteine"))
-        self.resize(740, 640)
+        self.resize(980, 640)
 
         self.search = QLineEdit(self)
         self.search.setPlaceholderText(tr("Suchen — zum Beispiel Mutter, Magnet, Kabel"))
@@ -71,6 +83,7 @@ class PartCatalog(QDialog):
         # Kachelraster steht die ganze Gruppe auf einem Blick da, und die
         # Pfeiltasten laufen in beide Richtungen.
         self.list = QListWidget(self)
+        self.list.setObjectName("tileGrid")
         self.list.setViewMode(QListView.ViewMode.IconMode)
         self.list.setMovement(QListView.Movement.Static)
         self.list.setResizeMode(QListView.ResizeMode.Adjust)
@@ -83,6 +96,21 @@ class PartCatalog(QDialog):
         # Dialogs: dessen resizeEvent feuert, bevor das Layout der Liste ihre
         # Größe gegeben hat, und die Zeile bliebe eine Kachel breit.
         self.list.installEventFilter(self)
+        # Waagerecht wird nie gerollt: das Raster bricht um, und eine Leiste
+        # darunter hieße, dass es das nicht tut.
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.list.currentItemChanged.connect(lambda *_: self._show_detail())
+
+        # Die Detailspalte erklärt die gewählte Kachel in zwei Sätzen. Eine
+        # Kachel trägt so viel, wie auf eine Kachel passt; alles Weitere stand
+        # vorher in einem Tooltip, den man erst findet, wenn man weiß, dass er
+        # da ist.
+        self.detail = QLabel(self)
+        self.detail.setWordWrap(True)
+        self.detail.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.detail.setTextFormat(Qt.TextFormat.RichText)
+        self.detail.setMargin(NORMAL)
+        self.detail.setMinimumWidth(DETAIL_WIDTH)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -96,13 +124,20 @@ class PartCatalog(QDialog):
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 
+        split = QSplitter(Qt.Orientation.Horizontal, self)
+        split.addWidget(self.list)
+        split.addWidget(self.detail)
+        split.setStretchFactor(0, 1)
+        split.setStretchFactor(1, 0)
+
         layout = QVBoxLayout(self)
         layout.addWidget(self.search)
-        layout.addWidget(self.list, stretch=1)
+        layout.addWidget(split, stretch=1)
         layout.addWidget(buttons)
 
         self._previews: dict[str, QPixmap] = {}
         self.show_parts()
+        self._show_detail()
         QTimer.singleShot(0, self._render_pending)
 
     # --- content ----------------------------------------------------------------
@@ -186,7 +221,7 @@ class PartCatalog(QDialog):
         if missing is None:
             return
 
-        image = render(missing)
+        image = render(missing, edges=True)
         pixmap = QPixmap(_icon_size())
         pixmap.fill(Qt.GlobalColor.transparent)
         renderer = QSvgRenderer(QByteArray(image.svg.encode("utf-8")))
@@ -213,6 +248,12 @@ class PartCatalog(QDialog):
                 item.setIcon(QIcon(pixmap))
                 return
 
+    def _show_detail(self) -> None:
+        """Was rechts steht, folgt der Auswahl links."""
+        name = self.chosen()
+        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        self.detail.setText(detail(spec))
+
     # --- choosing ---------------------------------------------------------------
 
     def chosen(self) -> str | None:
@@ -237,7 +278,33 @@ def describe(spec: PartSpec) -> str:
     """Titel, die zwei wichtigsten Parameter, und woher der Baustein kommt."""
     parameters = ", ".join(str(entry.title) for entry in spec.params.spec()[:SHOWN_PARAMETERS])
     marker = f" {OWN_MARKER} {tr('eigener Baustein')}" if spec.own else ""
-    return f"{spec.title}{marker}\n{parameters}"
+    kind = f"\n{SUBTRACTIVE_MARKER} {tr('nimmt Material weg')}" if spec.subtractive else ""
+    return f"{spec.title}{marker}\n{parameters}{kind}"
+
+
+def detail(spec: PartSpec | None) -> str:
+    """Was die Detailspalte über den gewählten Baustein sagt.
+
+    Die Kachel trägt so viel, wie auf eine Kachel passt; alles Weitere gehört
+    daneben und nicht in einen Tooltip, den man erst findet, wenn man weiß,
+    dass er da ist.
+    """
+    if spec is None:
+        return tr("Wählen Sie einen Baustein — hier steht dann, was er tut.")
+
+    lines = [f"<b>{spec.title}</b>", "", str(spec.doc), ""]
+    if spec.subtractive:
+        lines.append(f"{SUBTRACTIVE_MARKER} {tr('nimmt Material weg')}")
+    if spec.own:
+        lines.append(f"{OWN_MARKER} {tr('eigener Baustein')}")
+    if spec.subtractive or spec.own:
+        lines.append("")
+
+    lines.append(f"<b>{tr('Parameter')}</b>")
+    for entry in spec.params.spec():
+        unit = f" [{entry.unit}]" if entry.unit else ""
+        lines.append(f"· {entry.title}{unit}")
+    return "<br>".join(lines)
 
 
 def _icon_size() -> Any:

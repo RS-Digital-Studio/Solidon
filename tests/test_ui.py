@@ -213,7 +213,7 @@ def test_the_right_panel_folds_away(window: MainWindow) -> None:
 def test_opening_a_model_leaves_the_start_screen(window: MainWindow) -> None:
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
-    assert window.stack.currentWidget() is window.splitter
+    assert window.stack.currentWidget() is window.overlay
     assert [entry.op for entry in window.session.project.document.ops] == ["load"]
 
 
@@ -1530,6 +1530,60 @@ def test_the_catalog_button_says_what_it_does(qt_app: QApplication) -> None:
     ok = box.button(QDialogButtonBox.StandardButton.Ok)
     assert ok is not None
     assert ok.text().replace("&", "") == "Einfügen"
+
+
+def test_the_catalog_says_in_words_what_takes_material_away(qt_app: QApplication) -> None:
+    """Regel 18: was subtraktiv ist, trug allein die Farbe des Vorschaubilds.
+
+    Orange nimmt weg, grau setzt hinzu — ohne Legende, und für jeden, der die
+    beiden Farben nicht unterscheidet, gar nicht.
+    """
+    from app.core.knowledge.parts import PARTS
+    from app.ui.catalog import SUBTRACTIVE_MARKER, describe
+
+    subtractive = [spec for spec in PARTS.all() if spec.subtractive]
+    additive = [spec for spec in PARTS.all() if not spec.subtractive]
+    assert subtractive and additive, "sonst prüft dieser Test nichts"
+
+    for spec in subtractive:
+        assert SUBTRACTIVE_MARKER in describe(spec)
+        assert tr("nimmt Material weg") in describe(spec)
+    for spec in additive:
+        assert tr("nimmt Material weg") not in describe(spec)
+
+
+def test_the_detail_column_explains_the_chosen_part(qt_app: QApplication) -> None:
+    """Eine Kachel trägt so viel, wie auf eine Kachel passt.
+
+    Alles Weitere stand in einem Tooltip, den man erst findet, wenn man weiß,
+    dass er da ist.
+    """
+    from app.core.knowledge.parts import PARTS
+    from app.ui.catalog import PartCatalog, detail
+
+    assert tr("Wählen Sie") in detail(None), "ohne Auswahl sagt sie, was zu tun ist"
+
+    spec = next(entry for entry in PARTS.all() if entry.subtractive)
+    text = detail(spec)
+    assert str(spec.title) in text
+    assert str(spec.doc) in text
+    assert tr("nimmt Material weg") in text
+    for entry in spec.params.spec():
+        assert str(entry.title) in text, "alle Parameter, nicht nur die zwei der Kachel"
+
+    catalog = PartCatalog()
+    assert catalog.detail.text() == detail(None), "beim Öffnen ist nichts gewählt"
+
+
+def test_the_catalog_grid_never_scrolls_sideways(qt_app: QApplication) -> None:
+    """Das Raster bricht um — eine Leiste darunter hieße, dass es das nicht
+    tut."""
+    from PySide6.QtCore import Qt
+
+    from app.ui.catalog import PartCatalog
+
+    catalog = PartCatalog()
+    assert catalog.list.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
 
 
 # --- Auto Split abseits des Hauptthreads (§2.8) ----------------------------------

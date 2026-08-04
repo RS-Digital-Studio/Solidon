@@ -206,6 +206,16 @@ QHeaderView::section {{
     font-weight: 600;
 }}
 
+/* Ein Kachelraster wählt über Rahmen **und** Hintergrund. Voll eingefärbt
+   verschwände das Vorschaubild in der Auswahlfarbe. */
+QListWidget#tileGrid::item:selected {{
+    background: {hover};
+    color: {text};
+    border: 2px solid {highlight};
+    border-radius: {SPACE}px;
+}}
+QListWidget#tileGrid::item:hover {{ background: {hover}; border-radius: {SPACE}px; }}
+
 /* --- Reiter ------------------------------------------------------------ */
 QTabWidget::pane {{ border: 1px solid {line}; border-radius: {SPACE}px; top: -1px; }}
 QTabBar::tab {{

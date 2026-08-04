@@ -36,7 +36,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QSplitter,
     QStackedWidget,
     QTabWidget,
     QToolBar,
@@ -111,6 +110,7 @@ from app.ui.install_dialog import InstallDialog
 from app.ui.labels import feature_label
 from app.ui.manual_window import ManualWindow
 from app.ui.op_dialog import OperationDialog
+from app.ui.overlay import OverlayHost, card_stylesheet
 from app.ui.paint_bar import PaintBar
 from app.ui.palette import ROLES
 from app.ui.panels import (
@@ -469,13 +469,18 @@ class MainWindow(QMainWindow):
         self.history_panel = HistoryPanel(self)
         self.history_panel.operationActivated.connect(self.edit_operation)
 
+        # Ohne Streckfaktoren: die Karte ist so hoch wie ihr Inhalt, nicht so
+        # hoch wie die Spalte. Ein Objektbaum mit einer Zeile soll eine Zeile
+        # hoch sein — gestreckt hinterließ er dreihundert Pixel leere Fläche
+        # über einem Modell, das daneben keinen Platz hatte.
         left = QWidget(self)
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(TIGHT)
-        left_layout.addWidget(collapsible(tr("Objekte"), self.object_tree), stretch=2)
-        left_layout.addWidget(collapsible(tr("Parameter"), self.parameters), stretch=1)
-        left_layout.addWidget(collapsible(tr("Verlauf"), self.history_panel), stretch=1)
+        left_layout.addWidget(collapsible(tr("Objekte"), self.object_tree))
+        left_layout.addWidget(collapsible(tr("Parameter"), self.parameters))
+        left_layout.addWidget(collapsible(tr("Verlauf"), self.history_panel))
+        left_layout.addStretch(1)
 
         self.viewport = Viewport(self)
         self.viewport.measurementTaken.connect(self._on_measurement)
@@ -624,13 +629,17 @@ class MainWindow(QMainWindow):
         sketch_row.addWidget(discard)
         self.sketch_bar.setVisible(False)
 
-        middle = QWidget(self)
-        middle_layout = QVBoxLayout(middle)
-        middle_layout.setContentsMargins(0, 0, 0, 0)
-        middle_layout.setSpacing(0)
-        middle_layout.addWidget(self.middle_stack, stretch=1)
-        middle_layout.addWidget(self.sketch_bar)
-        middle_layout.addWidget(self.tools)
+        # Werkzeugzeile und Skizzenleiste schweben zusammen unten in der Mitte.
+        # Zusammen, weil beide dasselbe meinen — was gerade in der Hand liegt —
+        # und weil zwei getrennt schwebende Bänder übereinander aussähen wie
+        # ein Versehen.
+        bottom = QWidget(self)
+        bottom.setObjectName("overlayCard")
+        bottom_layout = QVBoxLayout(bottom)
+        bottom_layout.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
+        bottom_layout.setSpacing(0)
+        bottom_layout.addWidget(self.sketch_bar)
+        bottom_layout.addWidget(self.tools)
 
         self.report = ReportPanel(self)
         self.report.findingActivated.connect(self._on_finding_activated)
@@ -659,14 +668,14 @@ class MainWindow(QMainWindow):
         self.right.addTab(self.tour, tr("Tour"))
         self.right.setTabVisible(self.right.indexOf(self.tour), False)
 
-        self.splitter = QSplitter(Qt.Orientation.Horizontal, self)
-        self.splitter.addWidget(left)
-        self.splitter.addWidget(middle)
-        self.splitter.addWidget(self.right)
-        self.splitter.setStretchFactor(0, 0)
-        self.splitter.setStretchFactor(1, 1)
-        self.splitter.setStretchFactor(2, 0)
-        self.splitter.setSizes([280, 720, 300])
+        # §2.5 nennt drei Zonen und sagt nicht, dass die äußeren der mittleren
+        # ihre Fläche nehmen. Sie liegen jetzt darüber: die Ansicht füllt das
+        # Fenster, und wo keine Karte steht, sieht man das Modell.
+        left.setObjectName("overlayCard")
+        self.right.setObjectName("overlayCard")
+        self.overlay = OverlayHost(self.middle_stack, self)
+        self.overlay.set_zones(left, self.right, bottom)
+        self._apply_card_style(self.settings.theme)
 
         self.start_screen = StartScreen(self)
         self.start_screen.newRequested.connect(self.action_new)
@@ -678,7 +687,7 @@ class MainWindow(QMainWindow):
 
         self.stack = QStackedWidget(self)
         self.stack.addWidget(self.start_screen)
-        self.stack.addWidget(self.splitter)
+        self.stack.addWidget(self.overlay)
         self.setCentralWidget(self.stack)
 
         self.object_tree.selectionChanged.connect(self._on_selection)
@@ -2408,9 +2417,19 @@ class MainWindow(QMainWindow):
         if application is not None:
             apply_theme(application, theme)  # type: ignore[arg-type]
         self.viewport.set_theme(theme)
+        self._apply_card_style(theme)
         self.settings.theme = theme
         save_settings(self.settings)
         _tick(self._theme_group, theme)
+
+    def _apply_card_style(self, theme: str) -> None:
+        """Die schwebenden Zonen decken, was hinter ihnen liegt.
+
+        Auf dem Fenster und nicht auf der Anwendung: das anwendungsweite
+        Stylesheet gehört ``style.py``, und zwei Stellen, die es setzen, wären
+        zwei Stellen, an denen ein Themenwechsel halb ankommt.
+        """
+        self.overlay.setStyleSheet(card_stylesheet(theme))  # type: ignore[arg-type]
 
     def action_navigation(self, scheme: str) -> None:
         self.viewport.set_navigation(scheme)  # type: ignore[arg-type]
@@ -3112,7 +3131,7 @@ class MainWindow(QMainWindow):
     # --- window -----------------------------------------------------------------
 
     def _show_start_screen(self, show: bool) -> None:
-        self.stack.setCurrentWidget(self.start_screen if show else self.splitter)
+        self.stack.setCurrentWidget(self.start_screen if show else self.overlay)
 
     def _focus_report(self) -> None:
         if not self.right.isVisible():
