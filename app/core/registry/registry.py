@@ -44,6 +44,7 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
     "export": _("Export"),
     "colour": _("Farbe"),
     "label": _("Beschriftung"),
+    "surface": _("Oberfläche"),
     "mesh": _("Netz"),
     "variants": _("Varianten"),
 }

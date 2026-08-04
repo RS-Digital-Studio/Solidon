@@ -238,7 +238,7 @@ def inputs_for(
 MENU_GROUPS: tuple[tuple[TranslatableText, tuple[str, ...]], ...] = (
     (_("Objekt"), ("scene",)),
     (_("Erzeugen"), ("import", "sketch", "label")),
-    (_("Ändern"), ("boolean", "transform", "shaping", "holes", "mesh", "repair")),
+    (_("Ändern"), ("boolean", "transform", "shaping", "holes", "surface", "mesh", "repair")),
     (_("Bausteine"), ("parts",)),
     (_("Vorbereiten"), ("prepare", "colour")),
 )

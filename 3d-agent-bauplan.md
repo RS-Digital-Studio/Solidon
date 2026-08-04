@@ -1166,6 +1166,14 @@ SVG und DXF mit Extrusion
 
 **Beschriftung** — Text oder Logo erhaben/vertieft auf eine gewählte Fläche
 
+**Oberfläche** — Textur auf eine gewählte Fläche prägen oder einschneiden:
+Rippe, Welle, Rändel gerade und gekreuzt, Wabe, Noppen, Voronoi, Rauschen. Als
+**echte Geometrie** und als exaktes Gitter, nicht als abgetastetes Höhenfeld —
+sonst druckt ein Rändel gerundeten Brei statt scharfer Rauten. Vor dem Bauen
+steht die Frage, ob das Muster auf dieser Maschine überhaupt entsteht: Stege
+schmaler als die Düse und Prägungen flacher als eine Schicht verschwinden beim
+Drucken und werden abgewiesen, nicht gerechnet.
+
 **Netz** — dezimieren, remeshen, glätten
 
 **Varianten** — dieselbe Op-Kette mit durchvariiertem Parameter (§28.3)

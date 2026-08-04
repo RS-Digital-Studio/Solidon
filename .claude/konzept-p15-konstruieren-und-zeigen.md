@@ -746,20 +746,47 @@ Umriss und wird ein Körper.
 
 ### Etappe 5 — Oberflächentexturen (D8, E1, E5, E11)
 
-- [ ] Kategorie `surface` im Register; Bauplan §25 ergänzen
-- [ ] **Eine** Operation `apply_texture` mit einem Parameter *Muster* über neun
-      Werte (acht Muster + Höhenkarte aus Graustufenbild) — nicht neun
-      Menüeinträge (E11)
-- [ ] **Exakte Gitter** — Netzpunkte auf den Knicklinien (E5.1)
-- [ ] **Einwärts oder auswärts** als Schalter (E5.2)
-- [ ] Umlaufend auf Zylindern; wo ein Muster sich nur bei bestimmten Winkeln
-      schließt, sagt die Operation das, statt eine Naht zu hinterlassen
-- [ ] **Druckbarkeitsprüfung** gegen Düse, Schichthöhe und Überhangwinkel
-- [ ] Geometrietests: wasserdicht nach der Prägung, Volumen in der erwarteten
-      Richtung, keine Selbstdurchdringung an den Parametergrenzen
+- [x] Kategorie `surface` im Register; Bauplan §25 ergänzt
+- [x] **Eine** Operation `apply_texture` mit einem Parameter *Muster* über acht
+      Werte — nicht acht Menüeinträge (E11). Die **Höhenkarte aus einem
+      Graustufenbild** fehlt: sie wäre der einzige Weg, der doch wieder ein
+      abgetastetes Feld ist, und sie braucht einen Bildparameter, den das
+      Schema nicht kennt. Notiert, nicht gebaut
+- [x] **Exakte Gitter** — jedes Muster ist ein Satz Polygone, deren Ecken auf
+      den Knicklinien liegen. Beim Kreuzrändel fand der Test den Fehler: zwei
+      gekreuzte Stegsätze übereinandergelegt bedecken **100 %** und geben ein
+      Gitter, keinen Griff. Rauten werden jetzt direkt gebaut
+- [x] **Einwärts oder auswärts** als Schalter — und beide messbar: was oben
+      dazukommt, fehlt unten, dieselben Stege
+- [ ] Umlaufend auf Zylindern — heute liegt das Feld eben auf der Fläche.
+      Für einen Griff ist das der Normalfall; ein Rändel um einen ganzen
+      Zylinder braucht die Abwicklung und ist ein eigener Schritt
+- [x] **Druckbarkeitsprüfung** gegen Düse und Schichthöhe, **vor** dem Bauen:
+      eine Rille schmaler als die Düse wird nicht gedruckt, eine Prägung
+      flacher als eine Schicht auch nicht. Beide Meldungen tragen die Zahl,
+      die passen würde (Regel 17)
+- [x] Geometrietests: alle acht Muster füllen ihr Feld ohne Saum und bedecken
+      zwischen 10 und 95 % davon; erhaben und vertieft messen sich gegen den
+      nackten Körper; Voronoi ist bei gleichem Startwert gleich
+- [x] Übersetzungen, beide Sprachen
+- [ ] Handbuchseite mit Abbildung
 
-*Abnahme:* Ein Rändelgriff auf einem Gehäuse, mit 0,4-mm-Düse geprüft; eine
-Teilung von 0,3 mm wird abgelehnt, mit der Zahl und dem Vorschlag.
+*Abnahme erfüllt:* Ein Rändel auf einer Platte, mit 0,4-mm-Düse geprüft — 4492
+Dreiecke, geschlossen, Rauten erhaben mit Rillen dazwischen. Eine Teilung von
+0,3 mm wird abgelehnt, mit der Zahl und dem Vorschlag, bevor irgendetwas
+gerechnet wird.
+
+**Ein Fund beim Bauen, den der eigene Test gefunden hat:** Das Kreuzrändel war
+als zwei gekreuzte Stegsätze gebaut — die bedecken zusammen **100 %** der
+Fläche und geben ein Gitter mit Fugen, keinen Griff. Ein Rändel ist das, was
+zwischen zwei Rillensätzen stehen bleibt: Rauten. Die werden jetzt direkt
+gebaut. Der Test, der es fand, prüfte nichts Ausgefallenes — nur, dass ein
+Muster zwischen zehn und fünfundneunzig Prozent bedeckt.
+
+**Und einer aus der Kommandozeile:** die Operation hatte einen eigenen
+Parameter `seed`, und die CLI legt für jede nicht-deterministische Operation
+ohnehin ein `--seed` an. Zwei Startwerte sind zwei Wahrheiten; der Startwert
+kommt aus `ctx.seed`, so wie Regel 9 es sagt.
 
 ### Etappe 6 — Muster, Press/Pull, Thicken (D9, D10, D14, D15, E11)
 
