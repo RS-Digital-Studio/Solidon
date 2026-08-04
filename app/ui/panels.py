@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.errors import AppError
 from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
@@ -68,6 +69,23 @@ def origin_label(source: str) -> str:
 #: Werte, die in der Zeile eines Befunds stehen — die, nach denen man beim
 #: Lesen zuerst fragt: welcher Körper, und wie viel.
 _LINE_VALUES = ("object", "a", "b", "excess", "shared")
+
+
+def _op_title(name: str) -> str:
+    """Der Titel einer Operation, wie das Menü ihn zeigt.
+
+    Der Verlauf schrieb den Registernamen: zwischen „Grundkörper" und
+    „Versteifung" stand `insert_screw_hole`. Beides sind dieselben Schritte,
+    nur kommt der eine Text aus der Transaktion und der andere aus dem Code.
+
+    Eine Operation, die das Register nicht kennt, behält ihren Namen — eine
+    Projektdatei aus einer neueren Fassung ist kein Grund, eine Zeile leer zu
+    lassen.
+    """
+    try:
+        return str(REGISTRY.get(name).title)
+    except AppError:
+        return name
 
 
 def _identity(finding: Finding) -> tuple[Any, ...]:
@@ -511,6 +529,8 @@ class HistoryPanel(QWidget):
         self.list = QListWidget(self)
         self.list.itemDoubleClicked.connect(self._on_activated)
         self.list.setToolTip(tr("Doppelklick öffnet die Operation und ihre Parameter."))
+        self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(self._on_context_menu)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.list)
@@ -530,7 +550,7 @@ class HistoryPanel(QWidget):
         aus demselben Grund: es ist passiert, es gilt nur gerade nicht (§26.3).
         """
         self.list.clear()
-        titles = {entry.id: entry.op for entry in document.ops}
+        titles = {entry.id: _op_title(entry.op) for entry in document.ops}
         for transaction in document.transactions:
             by = tr("Agent") if transaction.origin.by == "agent" else tr("Nutzer")
             item = QListWidgetItem(f"{transaction.title}  ({by})")
@@ -566,6 +586,25 @@ class HistoryPanel(QWidget):
         op_id = item.data(Qt.ItemDataRole.UserRole)
         if op_id is not None:
             self.operationActivated.emit(int(op_id))
+
+    def _on_context_menu(self, position: QPoint) -> None:
+        """Was man mit einem Schritt tun kann, dort, wo er steht.
+
+        Bisher gab es nur den Doppelklick, und den findet, wer ihn probiert.
+        Angeboten wird, was der Stapel wirklich kann: einen Schritt öffnen und
+        seine Zahlen ändern (§15.4). Einen Schritt aus der Mitte zu entfernen
+        steht nicht dabei — spätere Operationen bauen auf seinen Ausgaben auf,
+        und ein Menüeintrag, der manchmal geht, ist schlimmer als keiner.
+        """
+        item = self.list.itemAt(position)
+        op_id = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        if op_id is None:
+            return
+
+        menu = QMenu(self)
+        action = menu.addAction(tr("Parameter ändern …"))
+        action.triggered.connect(lambda _checked=False: self.operationActivated.emit(int(op_id)))
+        menu.exec(self.list.viewport().mapToGlobal(position))
 
 
 class ReportPanel(QWidget):

@@ -15,7 +15,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtGui import QAction, QShortcut
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QToolBar
 
 from app.core import errors
@@ -854,6 +855,56 @@ def test_a_click_without_a_dialog_changes_no_values(window: MainWindow) -> None:
     window.viewport.pointPicked.emit((8.0, 3.0, 1.5))  # darf nichts auslösen
 
     assert window._op_dialog is None
+
+
+def test_the_history_shows_titles_not_registry_names(qt_app: QApplication) -> None:
+    """§4.1: der Verlauf spricht deutsch, auch bei mehreren Ops je Schritt.
+
+    Zwischen „Grundkörper" und „Versteifung" stand ``insert_screw_hole``.
+    Beides sind dieselben Schritte — nur kam der eine Text aus der Transaktion
+    und der andere aus dem Code.
+    """
+    from app.ui.panels import _op_title
+
+    assert _op_title("drill_hole") == str(REGISTRY.get("drill_hole").title)
+    assert "_" not in _op_title("drill_hole"), "kein Registername"
+    # Eine Projektdatei aus einer neueren Fassung ist kein Grund für eine
+    # leere Zeile.
+    assert _op_title("gibt_es_nicht") == "gibt_es_nicht"
+
+
+def test_delete_only_bites_where_a_selection_is_visible(window: MainWindow) -> None:
+    """§2.6: „Entf" war fensterweit gebunden.
+
+    Wer im Verlauf einen Schritt markierte und die Taste drückte, verlor den
+    ausgewählten **Körper** — man drückt sie in der Erwartung, den Schritt
+    loszuwerden. Rücknehmbar, aber genau die Art Überraschung, die Vertrauen
+    kostet.
+
+    Geprüft wird der Geltungsbereich, nicht das Drücken: eine Taste, die nur
+    im Baum und in der Ansicht gilt, kann im Verlauf nichts anrichten.
+    """
+    delete = next(
+        action
+        for action in window.findChildren(QAction)
+        if action.shortcut() == QKeySequence("Del")
+    )
+
+    assert delete.shortcutContext() == Qt.ShortcutContext.WidgetWithChildrenShortcut
+    assert delete in window.object_tree.actions(), "im Baum gilt sie"
+    assert delete in window.viewport.actions(), "und in der Ansicht"
+    assert delete not in window.history_panel.actions(), "im Verlauf nicht"
+
+
+def test_shortcuts_with_a_modifier_stay_window_wide(window: MainWindow) -> None:
+    """Strg+B ist eindeutig gemeint, egal worauf der Fokus steht."""
+    drill = next(
+        action
+        for action in window.findChildren(QAction)
+        if action.shortcut() == QKeySequence("Ctrl+B")
+    )
+
+    assert drill.shortcutContext() == Qt.ShortcutContext.WindowShortcut
 
 
 def test_an_operation_without_parameters_asks_nothing(window: MainWindow) -> None:

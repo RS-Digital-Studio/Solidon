@@ -1149,6 +1149,7 @@ class MainWindow(QMainWindow):
         key = shortcut_for(spec.name, spec.shortcut, self.settings.shortcut_scheme)
         if key:
             action.setShortcut(QKeySequence(key))
+            self._scope_shortcut(action, key)
         action.setStatusTip(str(spec.doc))
         action.setToolTip(str(spec.doc))
         # Eine Operation mit Skizzenfeld führt in den Zeichenmodus statt in
@@ -1161,6 +1162,28 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _checked=False, entry=spec: self.run_operation(entry))
         menu.addAction(action)
         return action
+
+    #: Kürzel, die eine Taste ohne Zusatztaste sind und deshalb nur dort
+    #: gelten dürfen, wo eine Objektauswahl sichtbar ist.
+    _BARE_KEYS = frozenset({"Del", "Delete"})
+
+    def _scope_shortcut(self, action: QAction, key: str) -> None:
+        """Begrenzt nackte Tasten auf Objektbaum und Ansicht.
+
+        „Entf" war fensterweit gebunden und löschte deshalb den ausgewählten
+        Körper, auch wenn der Fokus im Verlauf lag und ein Schritt markiert war
+        — man drückt die Taste in der Erwartung, den Schritt loszuwerden, und
+        verliert das Teil. Rücknehmbar, aber genau die Art Überraschung, die
+        Vertrauen kostet.
+
+        Kürzel mit Zusatztaste bleiben, wo sie waren: Strg+B ist eindeutig
+        gemeint, egal worauf der Fokus steht.
+        """
+        if key not in self._BARE_KEYS:
+            return
+        action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        for widget in (self.object_tree, self.viewport):
+            widget.addAction(action)
 
     def _add_action(
         self, menu: Any, label: str, shortcut: Any, slot: Any, hint: str = ""
