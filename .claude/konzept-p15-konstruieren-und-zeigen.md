@@ -790,20 +790,29 @@ kommt aus `ctx.seed`, so wie Regel 9 es sagt.
 
 ### Etappe 6 — Muster, Press/Pull, Thicken (D9, D10, D14, D15, E11)
 
-- [ ] **Eine** Operation `pattern` mit einem Parameter *Art* — linear
-      (Richtung, Anzahl, Abstand) oder kreisförmig (Achse, Anzahl, Winkel),
-      mit Bauraum- und Kollisionsprüfung (E1)
-- [ ] `push_face` — gewählte Fläche entlang ihrer Normalen versetzen, exakt auf
-      B-Rep, als Extrusion auf dem Mesh-Kern; Wandstärkenprüfung danach
-- [ ] `offset_face` — mit folgenden Nachbarwänden
-- [ ] `thicken` — gibt einer offenen Fläche eine Wand; **das ist die Antwort
-      auf die sechs von 68 Modellen, die nicht geschlossen sind**
+- [x] **Eine** Operation `pattern` mit einem Parameter *Art* — linear oder
+      kreisförmig, mit Bauraumprüfung vor dem Kopieren (E1). Der volle Kranz
+      teilt durch die Anzahl, ein Teilbogen durch die Zwischenräume; ohne
+      diesen Unterschied fielen bei 360 Grad erste und letzte Kopie aufeinander
+- [x] `push_face` — die gewählte Fläche entlang ihrer Normalen versetzen, exakt
+      auf B-Rep. Über der Fläche entsteht ein Prisma ihres eigenen Umrisses,
+      nach außen vereinigt, nach innen abgezogen; damit wachsen die
+      Nachbarwände mit. **`offset_face` entfällt** — es wäre dieselbe
+      Operation unter einem zweiten Namen (E11)
+- [x] `thicken` — gibt einer offenen Fläche eine Wand. Kein boolescher Schnitt:
+      versetzte Kopie mit umgedrehten Dreiecken plus ein Viereck je offener
+      Kante. **Die Antwort auf die sechs von 68 Modellen, die nicht geschlossen
+      sind** — bis hierher meldete der Prüfbericht sie richtig, und danach ging
+      nichts mehr
 - [ ] `sketch_extrude` bekommt Zielfläche und Region (D14)
+- [ ] Wandstärkenprüfung nach `push_face` (E1) — die Zahl steht im
+      Materialprofil, gefragt wird noch nicht
 - [ ] Gizmo greift die Fläche direkt; ein Zug ist **eine** Transaktion (§18.11)
 
-*Abnahme:* Ein Lochbild aus einer Bohrung in zwei Klicks. Eine Fläche, deren
-Zug die Wand unter das Materialminimum bringt, meldet es vor dem Anwenden. Ein
-offenes Community-Modell wird durch `thicken` ein Körper.
+*Abnahme teils erfüllt:* Ein Lochkreis aus einer Operation, sechs Kopien auf
+dem Teilkreis. Dreißig Kopien über den Bauraum hinaus werden abgelehnt, bevor
+gerechnet wird. Eine offene Schale wird durch `thicken` ein geschlossener
+Körper. Offen: die Wandstärkenprüfung nach dem Zug und der Gizmo-Griff.
 
 ### Etappe 7 — Gitterfüllung (D17, E6, E11)
 
