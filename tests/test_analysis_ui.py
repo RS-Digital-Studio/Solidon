@@ -451,6 +451,25 @@ def test_switching_navigation_keeps_the_picking_alive(qt_app: QApplication) -> N
         viewport.deleteLater()
 
 
+def test_a_part_that_fits_gets_told_so(window: MainWindow) -> None:
+    """§2.7: eine Handlung endet in einer Aussage, auch wenn nichts zu tun war.
+
+    Der Kern sagt es sauber — ``transaction is None`` —, und das Fenster macht
+    daraus einen Satz. Getestet war er bis hierher nicht, hätte also jederzeit
+    verschwinden können; wer *Automatisch teilen* auf ein passendes Teil
+    anwendet, stünde dann vor einem unveränderten Fenster und müsste raten, ob
+    die Funktion kaputt ist oder das Teil in Ordnung.
+
+    Die geladene Platte ist 80 × 50 × 8 mm und passt auf jedes Bett dieser
+    Startbestückung.
+    """
+    window.action_auto_split("obj_1")
+    window.session.wait_for_idle()
+    window.wait_for_workers()
+
+    assert "passt bereits" in window.status_message.text()
+
+
 def test_a_right_click_opens_the_menu_and_a_drag_does_not() -> None:
     """§18.5: das Kontextmenü am Merkmal ist der Ort für Weg 1.
 

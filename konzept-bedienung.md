@@ -590,13 +590,23 @@ Dazu die Zustellung: **eine fehlgeschlagene Handlung meldet sich nirgends im
 Blickfeld.** Die einzige Spur ist eine Zeile im rechten Bereich, den man
 ausblenden kann.
 
-### 5.2 Eine Handlung ohne jede Rückmeldung
+### 5.2 Eine Handlung, deren Rückmeldung man übersieht
 
-*Bearbeiten → Automatisch teilen* auf ein Teil, das in den Bauraum passt: kein
-Dialog, kein Fortschritt, kein Verlaufseintrag, kein Befund, kein Fehler.
-Nichts. Zu erwarten wäre der Satz, den *Varianten erzeugen* an derselben Stelle
-vorbildlich formuliert: „Dieses Projekt hat keine Parameter — ohne einen gibt
-es nichts zu variieren."
+**Korrektur zur ersten Fassung dieses Abschnitts.** Dort stand, *Bearbeiten →
+Automatisch teilen* auf einem passenden Teil sage „nichts". Das war falsch:
+Formwerk schreibt „Dieses Objekt passt bereits auf das Bett." in die
+Statusleiste. Im Lauf ist mir das entgangen, weil ich nach einer Menüaktion
+Verlauf und Prüfbericht angesehen habe — und dort steht nichts, richtigerweise.
+
+Was bleibt, ist schwächer und trotzdem wahr: Die Statusleiste ist der Ort für
+Wartezeit (§2.8), nicht für das Ergebnis einer Handlung, die man gerade aus
+einem Menü ausgelöst hat. Der Blick ist dort, wo der Mauszeiger war. Zum
+Vergleich derselbe Fall, gut gelöst: *Varianten erzeugen* sperrt seinen Knopf
+und schreibt daneben „Dieses Projekt hat keine Parameter — ohne einen gibt es
+nichts zu variieren." Das sieht man, ohne es zu suchen.
+
+Getestet war die Zusage bis dahin nicht; jetzt hält
+`tests/test_split_ui.py::test_a_part_that_fits_gets_told_so` sie fest.
 
 ### 5.3 Befunde ohne Bezug, Befunde doppelt
 
@@ -646,7 +656,8 @@ mehr als eine Sitzung.
 2. Fehlschlag bleibt im Dialog sichtbar, statt ihn zu schließen.
 3. Jeder Befund nennt Objekte und Zahl und ist anklickbar (Auswahl + Kamera).
 4. Befunde zusammenfassen statt anhäufen.
-5. Jede Handlung endet in einer Aussage — auch „hier war nichts zu tun".
+5. Jede Handlung endet in einer Aussage — auch „hier war nichts zu tun", und
+   an einer Stelle, die man sieht, ohne sie zu suchen.
 6. Export prüft und bietet an; Exportdialog mit Umfang, Format und Namensschema.
 7. Entf gilt nach Fokus; Kontextmenü im Verlauf; Verlaufstitel immer
    übersetzt; Knopfbeschriftung nach Handlung.
@@ -873,7 +884,9 @@ Nach Wirkung je Aufwand.
 * **Ehrliche Sperren**: „Dieses Projekt hat keine Parameter — ohne einen gibt
   es nichts zu variieren." „Der Chat braucht einen Zugang zu einem
   Sprachmodell. Alles andere funktioniert ohne." „Es läuft kein Generator."
-  Genau so gehört es, und genau das fehlt bei *Automatisch teilen*.
+  „Dieses Objekt passt bereits auf das Bett." Jede dieser Stellen sagt, warum
+  gerade nichts passiert — die letzte nur an einem Ort, den man nach einer
+  Menüaktion nicht ansieht (5.2).
 * **Der Dialog *Ungesicherte Änderungen*** benennt seine Knöpfe nach der
   Handlung — die Vorlage für alle anderen.
 * **Zusätzliche Programme** sagt bei jedem Werkzeug, wofür es gut ist, und
