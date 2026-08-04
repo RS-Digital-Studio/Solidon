@@ -117,9 +117,22 @@ def _circle_edge(centre: Point2, radius: float, lift: _Lift) -> Any:
 
 
 def _face(profile: Profile, lift: _Lift) -> Any:
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    """Die Fläche des Umrisses, mit seinen Löchern als inneren Ringen.
 
-    return BRepBuilderAPI_MakeFace(_wire(profile, lift), True).Face()
+    Umgekehrt herum eingesetzt, wie OpenCASCADE es verlangt: ein innerer Ring
+    läuft gegen den äußeren, sonst gilt er als zweite Außenkontur und die
+    Fläche kommt leer heraus. ``Add`` sagt dazu nichts — der Fehler zeigt sich
+    erst am Volumen."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.TopoDS import TopoDS
+
+    maker = BRepBuilderAPI_MakeFace(_wire(profile, lift), True)
+    for hole in profile.holes:
+        # ``Reversed`` gibt eine Form zurück, keinen Draht — der Rückweg über
+        # ``TopoDS.Wire_s`` ist die Stelle, an der OpenCASCADE das wieder
+        # geradezieht.
+        maker.Add(TopoDS.Wire_s(_wire(hole, lift).Reversed()))
+    return maker.Face()
 
 
 def _lift_frame(frame: PlaneFrame) -> _Lift:

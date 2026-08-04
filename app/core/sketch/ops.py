@@ -20,11 +20,11 @@ from typing import cast
 from app.core.brep import edit, profiles
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
-from app.core.errors import ValidationError
+from app.core.errors import Action, ValidationError
 from app.core.registry import op_params, param, register_op
 from app.core.sketch import shapes
 from app.core.sketch.planes import frame_for, frame_of, height_to, is_feature_plane
-from app.core.sketch.profile import Profile, profile_of, shifted
+from app.core.sketch.profile import Profile, profile_of, regions_of, shifted
 from app.core.sketch.serialize import sketch_from_text
 from app.core.sketch.solver import solve_sketch
 from app.core.types import BaseParams, OpContext, OpResult, PlaneFrame, SceneObject
@@ -94,6 +94,45 @@ def _frame_of(ctx: OpContext, plane: str) -> PlaneFrame | None:
     return frame_for(plane, ctx.scene.objects.values())
 
 
+def _regions_for(
+    ctx: OpContext,
+    sketch_text: str,
+    shape: str,
+    length: float,
+    width: float,
+    corners: int,
+    region: int,
+) -> list[Profile]:
+    """Die Umrisse, die extrudiert werden — einer, oder alle nebeneinander.
+
+    Eine Grundform hat genau einen; eine gezeichnete Skizze kann mehrere
+    haben, und dann ist die Frage berechtigt, welcher gemeint ist. Null heißt
+    alle: zwei Stege eines Halters sind ein Körper, und wer sie einzeln
+    extrudieren müsste, hätte zwei Operationen für eine Handlung (E11).
+
+    Löcher sind keine Regionen — sie hängen an ihrer Außenkontur und wandern
+    mit ihr. Eine Nummer zählt deshalb nur die Umrisse, die für sich stehen.
+    """
+    if not sketch_text:
+        return [_sketch_profile(shape, length, width, corners)]
+    values = {name: entry.value for name, entry in ctx.scene.parameters.items()}
+    found = regions_of(solve_sketch(sketch_from_text(sketch_text), values))
+    if region == 0:
+        return list(found)
+    if region > len(found):
+        raise ValidationError(
+            "region",
+            _("So viele getrennte Umrisse hat diese Skizze nicht."),
+            value=region,
+            constraint="unknown_region",
+            values={"regions": len(found)},
+            suggestions=[
+                Action(id="sketch.use_all_regions", label=_("Alle Umrisse nehmen"), primary=True)
+            ],
+        )
+    return [found[region - 1]]
+
+
 def _height_of(
     ctx: OpContext,
     height: float,
@@ -111,12 +150,14 @@ def _height_of(
     """
     if not up_to:
         return height
-    # Die Normalen der drei Hauptebenen stehen in ``profiles.PLANES`` — sie
-    # hier noch einmal aufzuschreiben hieße, zwei Wahrheiten zu führen.
-    upright = profiles.PLANES[plane][1]
-    start = frame if frame is not None else frame_of(upright, (0.0, 0.0, 0.0))
+    if frame is None:
+        # Die Normalen der drei Hauptebenen stehen in ``profiles.PLANES`` — sie
+        # hier noch einmal aufzuschreiben hieße, zwei Wahrheiten zu führen.
+        # Nur in diesem Zweig nachschlagen: bei einer Flächenebene steht dort
+        # nichts, und ein Zugriff davor endete mit einem KeyError.
+        frame = frame_of(profiles.PLANES[plane][1], (0.0, 0.0, 0.0))
     target = frame_for(f"feature:{up_to}", ctx.scene.objects.values())
-    return height_to(start, target)
+    return height_to(frame, target)
 
 
 def _profile_for(
@@ -174,6 +215,17 @@ class SketchExtrudeParams(BaseParams):
         placement="advanced",
         doc=_CORNERS_DOC,
     )
+    region: int = param(
+        title=_("Region"),
+        default=0,
+        minimum=0,
+        maximum=64,
+        placement="advanced",
+        doc=_(
+            "Bei einer Skizze mit mehreren getrennten Umrissen: welcher davon. "
+            "Null heißt alle — sie werden zu einem Körper vereinigt."
+        ),
+    )
     up_to: str = param(
         title=_("Bis zur Fläche"),
         default="",
@@ -205,13 +257,14 @@ class SketchExtrudeParams(BaseParams):
 def sketch_extrude(ctx: OpContext) -> OpResult:
     params = cast(SketchExtrudeParams, ctx.params)
     require()
-    profile = _profile_for(
-        ctx, params.sketch, params.shape, params.length, params.width, params.corners
-    )
     plane = _plane_of(params.sketch)
     frame = _frame_of(ctx, plane)
     height = _height_of(ctx, params.height, plane, frame, params.up_to)
-    solid = profiles.extrude(profile, height, plane, frame)
+    chosen = _regions_for(
+        ctx, params.sketch, params.shape, params.length, params.width, params.corners, params.region
+    )
+    bodies = [profiles.extrude(one, height, plane, frame) for one in chosen]
+    solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
     return OpResult(outputs=[_created(params.name, str(_("Grundform")), solid)])
 
 

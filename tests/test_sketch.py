@@ -463,3 +463,106 @@ def test_a_spline_closes_a_profile_and_becomes_a_body() -> None:
     assert size[0] == pytest.approx(30.0, abs=1e-6), "so breit wie der Spline lang ist"
     assert size[2] == pytest.approx(5.0, abs=1e-6), "und fünf hoch"
     assert body.volume > 0.0
+
+
+# --- Mehrere Umrisse in einer Skizze (D14, „Region") ---------------------------
+
+
+def _square(size: float, at: tuple[float, float] = (0.0, 0.0)) -> tuple[object, ...]:
+    """Vier Linien um einen Mittelpunkt — als Elemente, nicht als Skizze.
+
+    Für diese Tests braucht es Skizzen, die aus mehreren solchen bestehen, und
+    ``shapes.rectangle`` liefert immer genau eine.
+    """
+    from app.core.types import SketchElement
+
+    half = size / 2.0
+    x, y = at
+    corners = [
+        (x - half, y - half),
+        (x + half, y - half),
+        (x + half, y + half),
+        (x - half, y + half),
+    ]
+    return tuple(
+        SketchElement(kind="line", points=(corners[index], corners[(index + 1) % 4]))
+        for index in range(4)
+    )
+
+
+def test_a_sketch_with_a_hole_becomes_one_region() -> None:
+    """Außenkontur und Loch sind zusammen ein Umriss, nicht zwei.
+
+    Bis hierher lehnte die Verkettung so etwas ab („der Umriss verzweigt sich"
+    kam nicht einmal — die zweite Kette blieb einfach übrig). Eine Platte mit
+    einem Loch ist der häufigste Fall überhaupt, und ihn nicht zu können hieß,
+    für jedes Loch eine zweite Operation zu brauchen.
+    """
+    from app.core.sketch.profile import regions_of
+    from app.core.sketch.solver import solve_sketch
+    from app.core.types import Sketch
+
+    sketch = Sketch(plane="plane:xy", elements=_square(40.0) + _square(10.0))
+    regions = regions_of(solve_sketch(sketch))
+
+    assert len(regions) == 1, "ein Außenumriss"
+    assert len(regions[0].holes) == 1, "und ein Loch darin"
+
+
+def test_two_separate_shapes_stay_two_regions() -> None:
+    """Nebeneinander ist nicht ineinander.
+
+    Der Unterschied entscheidet über alles Weitere: verschachtelt wird
+    abgezogen, nebeneinander wird nebeneinander gebaut. Wer nur zählt, wie
+    viele Ketten es gibt, kann beide nicht auseinanderhalten.
+    """
+    from app.core.sketch.profile import regions_of
+    from app.core.sketch.solver import solve_sketch
+    from app.core.types import Sketch
+
+    sketch = Sketch(
+        plane="plane:xy", elements=_square(10.0, (-20.0, 0.0)) + _square(10.0, (20.0, 0.0))
+    )
+    regions = regions_of(solve_sketch(sketch))
+
+    assert len(regions) == 2
+    assert all(not region.holes for region in regions)
+
+
+def test_a_plate_with_a_hole_has_the_volume_of_both() -> None:
+    """Und am Körper gemessen: 40 × 40 minus 10 × 10, fünf hoch.
+
+    Die Zahl ist der eigentliche Beweis. Eine Fläche mit einem inneren Ring,
+    den der Kern nicht als Loch nimmt, sieht in jeder Ansicht richtig aus und
+    wiegt trotzdem zu viel.
+    """
+    from app.core.brep import profiles as brep_profiles
+    from app.core.brep.kernel import available
+    from app.core.sketch.profile import regions_of
+    from app.core.sketch.solver import solve_sketch
+    from app.core.types import Sketch
+
+    if not available():
+        pytest.skip("ohne B-Rep-Kern gibt es keinen Körper")
+
+    sketch = Sketch(plane="plane:xy", elements=_square(40.0) + _square(10.0))
+    region = regions_of(solve_sketch(sketch))[0]
+    body = brep_profiles.extrude(region, 5.0)
+
+    assert body.volume == pytest.approx((40.0 * 40.0 - 10.0 * 10.0) * 5.0, rel=1e-6)
+
+
+def test_a_single_shape_still_comes_back_as_one_profile() -> None:
+    """Was vorher ging, geht unverändert.
+
+    ``profile_of`` ist der Weg jeder bestehenden Operation. Es gibt jetzt einen
+    zweiten daneben, und der erste darf sich davon nicht ändern — auch nicht
+    darin, was er bei einer mehrdeutigen Skizze tut.
+    """
+    from app.core.sketch import shapes
+    from app.core.sketch.profile import profile_of
+    from app.core.sketch.solver import solve_sketch
+
+    profile = profile_of(solve_sketch(shapes.rectangle(40.0, 20.0)))
+    assert len(profile.segments) == 4
+    assert not profile.holes

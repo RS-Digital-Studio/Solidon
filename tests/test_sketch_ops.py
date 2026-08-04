@@ -542,3 +542,50 @@ def test_a_target_behind_the_sketch_is_refused() -> None:
             up_to="face_5",
         )
     assert caught.value.suggestions
+
+
+def test_two_regions_become_one_body() -> None:
+    """Zwei Stege nebeneinander sind eine Handlung, nicht zwei.
+
+    Die Vorgabe nimmt alle Umrisse und vereinigt sie. Ohne das brauchte ein
+    Halter aus zwei Stegen zwei Operationen und eine Vereinigung — drei
+    Einträge im Stapel für etwas, das in einer Zeichnung steht.
+    """
+    from app.core.types import SketchElement
+
+    def square(size: float, at: tuple[float, float]) -> tuple[SketchElement, ...]:
+        half = size / 2.0
+        x, y = at
+        corners = [
+            (x - half, y - half),
+            (x + half, y - half),
+            (x + half, y + half),
+            (x - half, y + half),
+        ]
+        return tuple(
+            SketchElement(kind="line", points=(corners[i], corners[(i + 1) % 4])) for i in range(4)
+        )
+
+    drawn = Sketch(
+        plane="plane:xy", elements=square(10.0, (-20.0, 0.0)) + square(10.0, (20.0, 0.0))
+    )
+    both = run("sketch_extrude", sketch=sketch_to_text(drawn), height=4.0)
+    assert solid_of(both).volume == pytest.approx(2.0 * 100.0 * 4.0, rel=1e-6)
+
+    single = run("sketch_extrude", sketch=sketch_to_text(drawn), height=4.0, region=1)
+    assert solid_of(single).volume == pytest.approx(100.0 * 4.0, rel=1e-6)
+
+
+def test_asking_for_a_region_that_is_not_there_says_how_many_are() -> None:
+    """Regel 17: der Fehler nennt die Zahl, nach der niemand fragen musste."""
+    with pytest.raises(ValidationError) as caught:
+        run(
+            "sketch_extrude",
+            shape="rectangle",
+            length=10,
+            width=10,
+            region=7,
+            sketch=sketch_on("plane:xy"),
+        )
+    assert caught.value.suggestions
+    assert caught.value.values.get("regions") == 1

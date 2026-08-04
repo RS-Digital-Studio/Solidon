@@ -13,7 +13,7 @@ und wird mit einem Vorschlag zurückgewiesen — nicht stillschweigend geflickt
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 from app.core.errors import CORRECT_INPUT, Action, GeometryError
@@ -47,10 +47,17 @@ class ProfileSegment:
 
 @dataclass(frozen=True, slots=True)
 class Profile:
-    """Ein geschlossener Umriss: entweder eine Segmentkette oder ein Kreis."""
+    """Ein geschlossener Umriss: entweder eine Segmentkette oder ein Kreis.
+
+    ``holes`` sind Umrisse **innerhalb** dieses einen — eine Platte mit einem
+    Loch ist ein Umriss mit einem Loch, nicht zwei Umrisse. Der Kern setzt sie
+    als innere Ringe derselben Fläche ein; wer sie stattdessen als zweiten
+    Körper abzöge, bekäme dasselbe Ergebnis über eine Boolesche Operation, die
+    hier niemand braucht."""
 
     segments: tuple[ProfileSegment, ...] = ()
     circle: tuple[Point2, float] | None = None
+    holes: tuple[Profile, ...] = ()
 
     @property
     def is_circle(self) -> bool:
@@ -58,23 +65,59 @@ class Profile:
 
 
 def profile_of(solved: SolvedSketch) -> Profile:
-    """Verkettet die Elemente einer gelösten Skizze zu einem Umriss."""
+    """Verkettet die Elemente einer gelösten Skizze zu **einem** Umriss.
+
+    Der Weg jeder bestehenden Operation, und er bleibt streng: mehr als ein
+    getrennter Umriss ist hier ein Fehler, keine Auswahl. Wer Regionen will,
+    nimmt ``regions_of`` und entscheidet selbst, welche."""
+    found = regions_of(solved)
+    if len(found) > 1:
+        raise _broken(
+            _("Diese Skizze enthält mehrere getrennte Umrisse — diese Operation nimmt einen.")
+        )
+    return found[0]
+
+
+def regions_of(solved: SolvedSketch) -> tuple[Profile, ...]:
+    """Alle geschlossenen Umrisse einer Skizze, verschachtelte als Löcher.
+
+    Bis hierher gab es genau einen. Eine Platte mit einem Loch — der häufigste
+    Fall im ganzen Katalog — war damit nicht zeichenbar: die zweite Kette blieb
+    beim Verketten einfach übrig, und die Meldung sprach von einem offenen
+    Ende, obwohl beide Ketten geschlossen waren.
+
+    Verschachtelung wird über einen Punkt der inneren Kette gegen die äußere
+    entschieden, an einer Näherungspolylinie. Die Näherung betrifft nur die
+    **Einordnung**; die Geometrie, die in den Kern geht, bleibt exakt — ein
+    Bogen bleibt ein Bogen. Eine Kette, die eine andere schneidet statt sie zu
+    umschließen, wird nicht in Teilflächen zerlegt: das wäre eine planare
+    Arrangement-Rechnung, und sie müsste jede Kurve polygonisieren, um sie
+    danach als Kurve auszugeben.
+    """
     circles = [element for element in solved.elements if element.kind == "circle"]
     drawable = [element for element in solved.elements if element.kind in ("line", "arc", "spline")]
-
-    if circles and not drawable:
-        if len(circles) > 1:
-            raise _broken(_("Mehrere Kreise ergeben keinen einzelnen Umriss."))
-        centre, rim = circles[0].points
-        return Profile(circle=(centre, math.dist(centre, rim)))
-    if circles:
-        raise _broken(_("Ein Kreis und offene Elemente zusammen ergeben keinen Umriss."))
-    if not drawable:
+    if not circles and not drawable:
         raise _broken(_("Die Skizze enthält nichts, was einen Umriss ergeben könnte."))
 
+    loops: list[Profile] = [
+        Profile(circle=(element.points[0], math.dist(element.points[0], element.points[1])))
+        for element in circles
+    ]
     segments = [_segment(element.kind, element.points) for element in drawable]
-    chain = [segments.pop(0)]
     while segments:
+        loops.append(Profile(segments=_one_loop(segments)))
+    return _nested(loops)
+
+
+def _one_loop(segments: list[ProfileSegment]) -> tuple[ProfileSegment, ...]:
+    """Verkettet vom ersten Segment aus, bis der Ring schließt.
+
+    Verbraucht dabei aus ``segments``, was er nimmt — was übrig bleibt, ist der
+    nächste Ring. Die Kette endet, sobald sie zum Anfang zurückfindet, und
+    nicht erst, wenn nichts mehr da ist: sonst zöge ein Ring den nächsten über
+    einen zufällig benachbarten Punkt mit hinein."""
+    chain = [segments.pop(0)]
+    while not _joins(chain[-1].end, chain[0].start):
         tail = chain[-1].end
         matches = [
             (index, candidate)
@@ -88,9 +131,83 @@ def profile_of(solved: SolvedSketch) -> Profile:
         index, candidate = matches[0]
         segments.pop(index)
         chain.append(candidate if _joins(tail, candidate.start) else _flipped(candidate))
-    if not _joins(chain[-1].end, chain[0].start):
-        raise _broken(_("Der Umriss ist nicht geschlossen — ein Ende bleibt frei."))
-    return Profile(segments=tuple(chain))
+    return tuple(chain)
+
+
+def _outline(profile: Profile) -> list[Point2]:
+    """Eine Polylinie, die dem Umriss folgt — nur zum Einordnen.
+
+    Ein Kreis wird zu einem Zwölfeck: genau genug, um zu entscheiden, ob etwas
+    darin liegt, und nichts davon geht in den Kern."""
+    if profile.circle is not None:
+        centre, radius = profile.circle
+        steps = 12
+        return [
+            (
+                centre[0] + radius * math.cos(2.0 * math.pi * index / steps),
+                centre[1] + radius * math.sin(2.0 * math.pi * index / steps),
+            )
+            for index in range(steps)
+        ]
+    points: list[Point2] = []
+    for segment in profile.segments:
+        points.append(segment.start)
+        if segment.via is not None:
+            points.append(segment.via)
+        points.extend(segment.through[1:-1])
+    return points
+
+
+def _inside(point: Point2, outline: list[Point2]) -> bool:
+    """Strahlverfahren: ungerade Zahl von Schnitten heißt innen."""
+    x, y = point
+    within = False
+    count = len(outline)
+    for index in range(count):
+        ax, ay = outline[index]
+        bx, by = outline[(index + 1) % count]
+        if (ay > y) != (by > y) and x < (bx - ax) * (y - ay) / (by - ay) + ax:
+            within = not within
+    return within
+
+
+def _area(outline: list[Point2]) -> float:
+    """Der Betrag der Schuhbandformel — als Maß dafür, wer wen umschließt."""
+    total = 0.0
+    for index in range(len(outline)):
+        ax, ay = outline[index]
+        bx, by = outline[(index + 1) % len(outline)]
+        total += ax * by - bx * ay
+    return abs(total) / 2.0
+
+
+def _nested(loops: list[Profile]) -> tuple[Profile, ...]:
+    """Ordnet jeden Ring dem kleinsten zu, der ihn umschließt.
+
+    Dem **kleinsten**, nicht dem ersten: bei einem Kasten in einem Kasten in
+    einem Kasten gehört der innerste an den mittleren, und wer den erstbesten
+    Treffer nimmt, hängt ihn nach außen. Tiefer als eine Ebene wird nicht
+    gebohrt — ein Loch in einem Loch ist wieder Material und braucht eine
+    zweite Operation, die es auch gibt.
+    """
+    if len(loops) == 1:
+        return (loops[0],)
+    outlines = [_outline(loop) for loop in loops]
+    areas = [_area(outline) for outline in outlines]
+    parents: list[int | None] = []
+    for index, outline in enumerate(outlines):
+        probe = outline[0]
+        candidates = [
+            other
+            for other in range(len(loops))
+            if other != index and areas[other] > areas[index] and _inside(probe, outlines[other])
+        ]
+        parents.append(min(candidates, key=lambda other: areas[other]) if candidates else None)
+    return tuple(
+        replace(loop, holes=tuple(loops[i] for i, parent in enumerate(parents) if parent == index))
+        for index, loop in enumerate(loops)
+        if parents[index] is None
+    )
 
 
 def shifted(profile: Profile, dx: float, dy: float) -> Profile:
