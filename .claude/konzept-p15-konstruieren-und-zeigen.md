@@ -819,15 +819,34 @@ Körper. Offen: die Wandstärkenprüfung nach dem Zug und der Gizmo-Griff.
 
 ### Etappe 7 — Gitterfüllung (D17, E6, E11)
 
-- [ ] **Eine** Operation `lattice_fill` mit einem Parameter *Struktur* (Gyroid,
-      Wabe, Würfelgitter); Zellgröße und Wandstärke als Parameter,
+- [x] **Eine** Operation `lattice_fill` mit einem Parameter *Struktur* (Gyroid,
+      Wabe, Würfelgitter); Zellgröße und Stegstärke als Parameter, die
       Mindestwandstärke aus dem Materialprofil (Regel 7)
-- [ ] Kennzahl im Steckbrief: Volumenanteil, Masse gegen den vollen Körper
-- [ ] Zusammenspiel mit `hollow_object`: füllen setzt aushöhlen voraus, und die
-      Operation sagt das, statt es stillschweigend selbst zu tun
+- [x] Kennzahl im Steckbrief — als **Füllgrad** und nicht nur nach dem Füllen:
+      der Anteil des Hüllquaders, den der Körper wirklich einnimmt. Ein
+      Vollkörper liegt bei hundert Prozent, ein ausgehöhlter darunter. Die Zahl
+      stand schon in den beiden davor, aber niemand rechnet sie im Kopf
+- [x] Zusammenspiel mit `hollow_object`: füllen setzt aushöhlen voraus, und die
+      Operation sagt das mit dem Weg dorthin, statt es stillschweigend zu tun
 
-*Abnahme:* Ein 50-mm-Würfel, gefüllt, wiegt nachgerechnet weniger und bleibt
-geschlossen. Die Schichtanalyse findet keine Insel.
+*Abnahme erfüllt:* Der gefüllte Kasten bleibt von außen auf den Millimeter
+derselbe und wird innen schwerer. Jede der drei Strukturen ist für sich ein
+geschlossener Körper und füllt zwischen zwei und achtzig Prozent ihres
+Bereichs.
+
+**Zwei Fehler beim Bauen, beide dieselbe Klasse — ein Netz, das aussah wie ein
+Körper und keiner war:**
+
+* Der Gyroid war als zwei Isoflächen bei `+t` und `-t` gebaut. Das sind zwei
+  offene Flächen; die Boolesche Operation fiel bis auf die Voxelstufe durch,
+  und der Kasten wurde von außen 40,18 statt 40 Millimeter groß. Als
+  `|Feld| − t` ist die Wand **eine** Isofläche und damit ein Volumen — die
+  Tests laufen seither in anderthalb Sekunden statt in fünfzig.
+* Der Rand des Abtastgitters blieb offen: Marching Cubes zeichnet nur, wo das
+  Vorzeichen wechselt. Eine Lage „außen" ringsherum schließt ihn.
+
+Dazu die Wabe, die 133 % ihres eigenen Quaders füllte — gebaut wird eine Zelle
+über den Rand, damit dort keine halbe fehlt, und beschnitten wurde nicht.
 
 ### Etappe 8 — Steuerung und Entdeckbarkeit (D5, D6, D18, E7, E8)
 

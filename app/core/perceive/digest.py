@@ -67,6 +67,13 @@ def _object_lines(object_id: ObjectId, entry: SceneObject) -> list[str]:
         f"{entry.mesh.volume / 1000.0:.1f} cm³",
         closed,
     ]
+    solidity = _solidity(entry)
+    if solidity is not None:
+        # Wie massiv das Teil ist, gemessen am Quader, den es einnimmt. Ein
+        # Vollkörper liegt bei hundert Prozent, ein ausgehöhlter bei zwanzig,
+        # ein gefüllter dazwischen — die eine Zahl, die sagt, wie viel Material
+        # der Druck kostet, und sie steht schon in den beiden davor.
+        facts.append(f"{solidity:.0%} {tr('massiv')}")
     if on_bed:
         facts.append(on_bed)
     if entry.material:
@@ -78,6 +85,19 @@ def _object_lines(object_id: ObjectId, entry: SceneObject) -> list[str]:
     for feature_id, feature in entry.features.items():
         lines.append("  " + _feature_line(feature_id, feature))
     return lines
+
+
+def _solidity(entry: SceneObject) -> float | None:
+    """Der Anteil des Hüllquaders, den der Körper wirklich ausfüllt.
+
+    Nur, wo er etwas aussagt: ein offener Körper hat kein verlässliches
+    Volumen, und ein Quader, der in einer Achse null misst, keinen Nenner.
+    """
+    size = entry.mesh.bounds.size
+    box = size[0] * size[1] * size[2]
+    if not entry.mesh.is_watertight or box <= 0.0:
+        return None
+    return float(entry.mesh.volume / box)
 
 
 def _feature_line(feature_id: str, feature: Feature) -> str:

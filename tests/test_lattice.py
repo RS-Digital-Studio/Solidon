@@ -136,3 +136,27 @@ def test_filling_a_solid_body_says_it_needs_a_cavity() -> None:
 
     assert problem.value.field == "structure"
     assert problem.value.suggestions, "Regel 17: der Fehler nennt den Weg — erst aushöhlen"
+
+
+def test_the_digest_says_how_solid_a_body_is() -> None:
+    """Die Kennzahl, die sagt, wie viel Material der Druck kostet (§23).
+
+    Ein Vollkörper füllt seinen Hüllquader ganz, ein ausgehöhlter kaum, ein
+    gefüllter liegt dazwischen. Sie steht schon in den beiden Zahlen davor —
+    Maße und Volumen —, aber niemand rechnet sie im Kopf.
+
+    Ein offener Körper bekommt sie nicht: sein Volumen ist keine verlässliche
+    Zahl, und eine unverlässliche Prozentangabe ist schlimmer als keine.
+    """
+    from app.core.perceive.digest import digest
+    from app.core.types import Scene
+
+    solid = SceneObject(
+        id="obj_1", name="Klotz", mesh=MeshData.of(trimesh.creation.box(extents=(20.0,) * 3))
+    )
+    text = digest(Scene(objects={"obj_1": solid}, parameters={}))
+    assert "100%" in text.replace(" %", "%"), "ein Quader füllt seinen Hüllquader ganz"
+
+    box = hollow_cube(size=40.0, wall=2.0)
+    hollow_text = digest(Scene(objects={"obj_1": box}, parameters={}))
+    assert "100%" not in hollow_text, "ein ausgehöhlter Körper nicht"
