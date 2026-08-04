@@ -37,10 +37,10 @@ from app.core.errors import AppError
 from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
-from app.core.units import LengthUnit, format_length, format_volume
+from app.core.units import LengthUnit
 from app.i18n import tr
 from app.ui.icons import icon
-from app.ui.labels import feature_label
+from app.ui.labels import feature_label, length, volume
 from app.ui.palette import SEVERITY_ENCODING
 
 #: Zeichen je Schweregrad, aus der gemeinsamen Kodierung — Farbe steht nie
@@ -208,9 +208,7 @@ class ObjectTree(QWidget):
             # §19.3: die Einheit stand hier fest, obwohl sie eine Einstellung
             # ist. Umgerechnet wird nur für die Anzeige — im Netz bleibt jede
             # Zahl ein Millimeter.
-            measures = " × ".join(
-                format_length(value, self._unit, with_unit=False) for value in size
-            )
+            measures = " × ".join(length(value, self._unit, with_unit=False) for value in size)
             item = QTreeWidgetItem([entry.name, f"{measures} {self._unit}"])
             item.setData(0, Qt.ItemDataRole.UserRole, object_id)
             state = tr("geschlossen") if entry.mesh.is_watertight else tr("offen")
@@ -797,13 +795,13 @@ class MeasurementLabel(QLabel):
     def clear_selection(self) -> None:
         self.setText(tr("Keine Auswahl"))
 
-    def show_object(self, name: str, size: tuple[float, float, float], volume: float) -> None:
+    def show_object(self, name: str, size: tuple[float, float, float], content: float) -> None:
         self.setText(
             f"{name}   "
-            f"{format_length(size[0], self._unit, with_unit=False)} × "
-            f"{format_length(size[1], self._unit, with_unit=False)} × "
-            f"{format_length(size[2], self._unit)}   "
-            f"{format_volume(volume, self._unit)}"
+            f"{length(size[0], self._unit, with_unit=False)} × "
+            f"{length(size[1], self._unit, with_unit=False)} × "
+            f"{length(size[2], self._unit)}   "
+            f"{volume(content, self._unit)}"
         )
 
 

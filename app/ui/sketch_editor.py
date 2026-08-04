@@ -49,8 +49,8 @@ from app.core.types import (
     SketchElement,
     SolvedSketch,
 )
-from app.core.units import format_length
 from app.i18n import tr
+from app.ui.labels import length
 
 #: Fangradius in Pixeln: näher als das an einem Punkt heißt „dieser Punkt".
 SNAP_PX = 8.0
@@ -104,7 +104,7 @@ def readable_measure(expression: str) -> str:
         value = float(expression)
     except ValueError:
         return expression
-    return format_length(value, with_unit=False)
+    return length(value, with_unit=False)
 
 
 def measure_label(constraint: SketchConstraint, points: list[tuple[float, float]]) -> str:
@@ -122,7 +122,7 @@ def measure_label(constraint: SketchConstraint, points: list[tuple[float, float]
         return ""
     ax, ay = points[first]
     bx, by = points[second]
-    return f"({format_length(math.hypot(bx - ax, by - ay), with_unit=False)})"
+    return f"({length(math.hypot(bx - ax, by - ay), with_unit=False)})"
 
 
 def flat_offsets(sketch: Sketch) -> list[int]:
@@ -730,8 +730,8 @@ class SketchCanvas(QWidget):
             int(bottom_right.y() - top_left.y()),
         )
         label = tr("Bauraum {x} × {y}").format(
-            x=format_length(self._bed[0], with_unit=False),
-            y=format_length(self._bed[1], with_unit=False),
+            x=length(self._bed[0], with_unit=False),
+            y=length(self._bed[1], with_unit=False),
         )
         if outside:
             label = f"{label} — {tr('die Skizze ragt darüber hinaus')}"

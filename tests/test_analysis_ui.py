@@ -259,7 +259,7 @@ def test_a_measured_map_shows_its_range_and_its_origin(qt_app: QApplication) -> 
     assert labels[-1].startswith("4")
     # §22.5: woher eine Zahl kommt, gehört neben die Zahl.
     assert "intern" in legend.note.text()
-    assert "0.3" in legend.note.text(), "a sampled map says how fine it was sampled"
+    assert "0,3" in legend.note.text(), "a sampled map says how fine it was sampled"
 
 
 def test_the_report_names_the_origin_of_every_finding(window: MainWindow) -> None:

@@ -34,6 +34,12 @@ def install_qt_translations(application: QCoreApplication, language: str) -> QTr
     der Sprachtest sah es nicht, weil es keine eigene Zeichenkette ist
     (Regel 20 dem Geist nach, nicht dem Buchstaben).
     """
+    # Dieselbe Sprache auch für Zahlen und Daten: die Eingabefelder schreiben
+    # ihr Dezimaltrennzeichen aus QLocale, und ohne diese Zeile käme es vom
+    # Betriebssystem. Auf einem deutschen Windows mit englischer Oberfläche
+    # stünden dann Komma im Feld und Punkt im Text daneben.
+    QLocale.setDefault(QLocale(language))
+
     translator = QTranslator(application)
     directory = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
     if not translator.load(QLocale(language), "qtbase", "_", directory):

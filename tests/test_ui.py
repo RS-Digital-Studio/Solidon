@@ -232,7 +232,7 @@ def test_the_status_bar_describes_the_selection(window: MainWindow) -> None:
     window._on_scene(window.session.evaluate_now())
     window.object_tree.tree.setCurrentItem(window.object_tree.tree.topLevelItem(0))
 
-    assert "20.00" in window.measurements.text()
+    assert "20,00" in window.measurements.text()
     assert "cm³" in window.measurements.text()
 
 
@@ -857,6 +857,41 @@ def test_a_click_without_a_dialog_changes_no_values(window: MainWindow) -> None:
     assert window._op_dialog is None
 
 
+def test_numbers_are_written_the_way_the_input_fields_write_them(
+    qt_app: QApplication,
+) -> None:
+    """§19.3: zwei Schreibweisen derselben Zahl im selben Blick.
+
+    Im Objektbaum standen die Maße mit Punkt, vierzig Pixel neben einem
+    Eingabefeld mit Komma. Der Kern hat recht, wenn er mit Punkt rechnet — dort
+    ist eine Zahl ein Wert. Nur kam sie so auch beim Nutzer an.
+
+    Gefragt wird ``QLocale``, weil die Eingabefelder es ebenso tun: eine
+    Quelle, oder das Problem kommt an der nächsten Stelle wieder.
+    """
+    from PySide6.QtCore import QLocale
+    from PySide6.QtWidgets import QDoubleSpinBox
+
+    from app.ui.labels import length, localised
+
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale("de"))
+        spin = QDoubleSpinBox()
+        spin.setDecimals(2)
+        spin.setValue(60.0)
+
+        assert "," in spin.text(), "das Eingabefeld schreibt deutsch"
+        assert length(80.0) == "80,00 mm", "und der Text daneben auch"
+        assert localised("1.5 · 2.25") == "1,5 · 2,25"
+
+        QLocale.setDefault(QLocale("en"))
+        assert length(80.0) == "80.00 mm", "auf Englisch bleibt der Punkt"
+        spin.deleteLater()
+    finally:
+        QLocale.setDefault(before)
+
+
 def test_the_history_shows_titles_not_registry_names(qt_app: QApplication) -> None:
     """§4.1: der Verlauf spricht deutsch, auch bei mehreren Ops je Schritt.
 
@@ -1081,12 +1116,14 @@ def test_the_display_unit_reaches_everything_that_shows_a_length(window: MainWin
     window._on_scene(window.session.evaluate_now())
     window.object_tree.tree.setCurrentItem(window.object_tree.tree.topLevelItem(0))
 
-    assert "20.00" in window.measurements.text()
+    assert "20,00" in window.measurements.text()
     assert "cm³" in window.measurements.text()
 
     window.set_display_unit("in")
 
-    assert "0.7874" in window.measurements.text(), "20 mm sind 0,7874 Zoll"
+    # Die Einheit wechselt, die Schreibweise der Zahl folgt weiter der Sprache
+    # — ein Zoll auf einer deutschen Oberfläche schreibt sich mit Komma.
+    assert "0,7874" in window.measurements.text(), "20 mm sind 0,7874 Zoll"
     assert "in³" in window.measurements.text()
     assert "in" in window.object_tree.tree.topLevelItem(0).text(1)
 

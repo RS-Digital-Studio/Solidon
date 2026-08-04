@@ -26,8 +26,8 @@ from PySide6.QtWidgets import (
 
 from app.core.perceive.maps import AnalysisMap, MapKind
 from app.core.types import SliceResult
-from app.core.units import format_length
 from app.i18n import tr
+from app.ui.labels import length
 from app.ui.palette import VIRIDIS, map_colour
 from app.ui.panels import origin_label
 
@@ -83,7 +83,7 @@ class MapLegend(QWidget):
         # §22.5: woher eine Zahl kommt, gehört neben die Zahl.
         parts = [f"{tr('Herkunft')}: {origin_label(analysis.source)}"]
         if analysis.resolution is not None:
-            parts.append(f"{tr('Raster')} {format_length(analysis.resolution)}")
+            parts.append(f"{tr('Raster')} {length(analysis.resolution)}")
         if analysis.note is not None:
             parts.append(str(analysis.note))
         if analysis.unknown_count:
@@ -110,7 +110,7 @@ def _legend_entries(analysis: AnalysisMap) -> list[tuple[str, str]]:
     for step in range(LEGEND_STEPS):
         fraction = step / (LEGEND_STEPS - 1)
         value = low + (high - low) * fraction
-        text = format_length(value) if analysis.unit == "mm" else f"{value:.0f} {analysis.unit}"
+        text = length(value) if analysis.unit == "mm" else f"{value:.0f} {analysis.unit}"
         entries.append((text, map_colour(fraction, VIRIDIS)))
     return entries
 
@@ -250,7 +250,7 @@ class LayerBar(QWidget):
         layer = result.layers[min(self.slider.value(), len(result.layers) - 1)]
         parts = [
             f"{tr('Schicht')} {self.slider.value() + 1}/{len(result.layers)}",
-            f"z {format_length(layer.z)}",
+            f"z {length(layer.z)}",
             f"{layer.area:.0f} mm²",
         ]
         if layer.islands:

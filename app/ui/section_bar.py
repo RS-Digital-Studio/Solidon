@@ -28,8 +28,9 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
-from app.core.units import DISPLAY_UNITS, format_length
+from app.core.units import DISPLAY_UNITS
 from app.i18n import tr
+from app.ui.labels import length
 
 #: Der Schieber arbeitet in Zehntelmillimetern; EPS_DISPLAY ist feiner als
 #: das.
@@ -75,7 +76,7 @@ class MeasureBar(QWidget):
             "thickness": tr("Wandstärke"),
             "angle": tr("Winkel"),
         }.get(kind, kind)
-        self.readout.setText(f"{name}: {format_length(value)}   ({count})")
+        self.readout.setText(f"{name}: {length(value)}   ({count})")
 
 
 class SectionBar(QWidget):

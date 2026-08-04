@@ -253,7 +253,7 @@ def test_a_reference_measure_shows_what_is_there(qt_app: QApplication) -> None:
 
     points = [(0.0, 0.0), (30.0, 40.0)]
     reference = SketchConstraint(kind="reference", targets=(0, 1))
-    assert measure_label(reference, points) == "(50.00)", "drei, vier, fünf"
+    assert measure_label(reference, points) == "(50,00)", "drei, vier, fünf"
 
     driving = SketchConstraint(kind="distance", targets=(0, 1), value="=@width")
     assert measure_label(driving, points) == "=@width", "ein Ausdruck bleibt der Ausdruck"
@@ -326,8 +326,10 @@ def test_a_measure_is_shown_rounded_but_stored_exactly(qt_app: QApplication) -> 
     """
     from app.ui.sketch_editor import readable_measure
 
-    assert readable_measure("40.000000000") == "40.00"
-    assert readable_measure("12.345000000") == "12.35"
+    # Gelesen wird der gespeicherte Wert — der trägt einen Punkt, weil er eine
+    # Zahl ist. Geschrieben wird in der Schreibweise der Anzeigesprache.
+    assert readable_measure("40.000000000") == "40,00"
+    assert readable_measure("12.345000000") == "12,35"
     # Ein Ausdruck bleibt, was er ist: ihn auszurechnen verbärge den Parameter.
     assert readable_measure("=@width / 2") == "=@width / 2"
 
