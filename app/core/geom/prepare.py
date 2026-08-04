@@ -15,6 +15,7 @@ vergessen würden:
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -27,7 +28,7 @@ from app.core.geom.mesh import MeshData, concatenated
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
-from app.core.types import BoundingBox, Finding, Profile, Quality, SolverInfo, Vec3
+from app.core.types import BoundingBox, Finding, Mesh, Profile, Quality, SolverInfo, Vec3
 from app.core.units import EPS_GEOM, format_length
 from app.i18n import _
 
@@ -367,13 +368,18 @@ def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile) -> bo
 
 
 def check_build_volume(
-    meshes: list[MeshData], profile: Profile, plates: list[int] | None = None
+    meshes: Sequence[Mesh], profile: Profile, plates: list[int] | None = None
 ) -> list[Finding]:
     """Was über den Bauraum hinaussteht, wird gemeldet, nie still skaliert.
 
     Geprüft je Platte: zwei Objekte an derselben Stelle auf verschiedenen
     Platten sind kein Problem, und eine volle Platte neben einer leeren auch
     nicht.
+
+    Gefragt wird nur nach dem Hüllquader, also steht hier das Protokoll und
+    nicht ``MeshData``: ein exakter Körper aus dem B-Rep-Kern hat einen
+    Bauraum wie jeder andere, und eine zu enge Annotation hätte ihn
+    stillschweigend übersprungen.
     """
     width, depth, height = profile.printer.build_volume
     allowed = BoundingBox((-width / 2.0, -depth / 2.0, 0.0), (width / 2.0, depth / 2.0, height))

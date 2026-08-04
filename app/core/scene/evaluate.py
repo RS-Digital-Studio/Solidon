@@ -260,6 +260,15 @@ def evaluate(
     if stopped_at is None and scene.fits:
         findings.extend(check_fits(scene, profile))
         scene = dataclasses.replace(scene, report=Report(tuple(findings)))
+    # Und aus demselben Grund die Lage zum Bauraum: ein Körper, der halb unter
+    # der Bauplatte steckt, ist nicht druckbar, und die Schichtanalyse rechnet
+    # ihn trotzdem klaglos durch — bis dahin sagte das erst, wer „Kollisionen
+    # prüfen" von Hand aufrief.
+    if stopped_at is None and objects:
+        placement = check_placement(scene)
+        if placement:
+            findings.extend(placement)
+            scene = dataclasses.replace(scene, report=Report(tuple(findings)))
     if stopped_at is not None:
         _log.warning("evaluation stopped at op %s", stopped_at)
     return EvaluationResult(
@@ -492,6 +501,33 @@ def _object_count_finding(operation: Operation, produced: int) -> Finding:
         op_id=operation.id,
         values={"expected": len(operation.outputs), "produced": produced, "op": operation.op},
     )
+
+
+def check_placement(scene: Scene) -> list[Finding]:
+    """Steht jeder Körper im Bauraum — und auf der Platte statt darunter?
+
+    Die Prüfung selbst steht seit je in ``geom.prepare``; sie lief nur, wenn
+    jemand „Kollisionen prüfen" aufrief. Ein geladenes Modell sitzt aber
+    regelmäßig mittig auf ``z = 0`` und steckt damit zur Hälfte unter der
+    Bauplatte: die Schichtanalyse rechnet dann Schichten bei negativer Höhe,
+    die Druckvorbereitung meldet „nichts einzuwenden", und niemand sagt es.
+
+    Der Befund trägt den Körper, den er meint. ``check_build_volume`` kennt nur
+    die Reihenfolge seiner Liste — hier gibt es die Kennungen, also werden sie
+    nachgetragen; ein Bericht, der „ein Objekt" sagt, hilft bei zwanzig nicht.
+    """
+    from app.core.geom.prepare import check_build_volume
+
+    profile = scene.profile
+    if profile is None or not scene.objects:
+        return []
+    named: list[Finding] = []
+    for object_id, entry in scene.objects.items():
+        for finding in check_build_volume([entry.mesh], profile, [entry.plate]):
+            values = dict(finding.values)
+            values["name"] = entry.name
+            named.append(dataclasses.replace(finding, object_id=object_id, values=values))
+    return named
 
 
 def _finding_from(error: AppError, operation: Operation) -> Finding:

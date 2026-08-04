@@ -153,6 +153,38 @@ def test_what_sticks_out_of_the_build_volume_is_reported(profile: Profile) -> No
     assert findings[0].severity == "warning"
 
 
+def test_a_body_below_the_bed_is_reported_without_being_asked(profile: Profile) -> None:
+    """Die Lage zum Bauraum gehört zu jeder Auswertung, nicht auf Nachfrage.
+
+    Ein geladenes Modell sitzt regelmäßig mittig auf ``z = 0`` und steckt damit
+    zur Hälfte unter der Bauplatte. Die Schichtanalyse rechnet dann Schichten
+    bei negativer Höhe, die Druckvorbereitung meldet „nichts einzuwenden" — und
+    gesagt hat es bis dahin nur, wer „Kollisionen prüfen" von Hand aufrief.
+    """
+    from app.core.scene.evaluate import check_placement
+    from app.core.types import Scene, SceneObject
+
+    sunk = SceneObject(id=1, name="Halter", mesh=apply(cube(), translation((0.0, 0.0, -5.0))))
+    scene = Scene(objects={"obj_1": sunk}, profile=profile)
+
+    findings = check_placement(scene)
+
+    assert findings, "ein Körper unter der Platte ist ein Befund"
+    assert findings[0].code == "arrange.out_of_build_volume"
+    assert findings[0].object_id == "obj_1", "der Befund nennt den Körper, den er meint"
+    assert findings[0].values["name"] == "Halter"
+
+
+def test_a_body_on_the_bed_says_nothing(profile: Profile) -> None:
+    """Und wer richtig steht, bekommt keine Meldung — sonst wäre sie wertlos."""
+    from app.core.scene.evaluate import check_placement
+    from app.core.types import Scene, SceneObject
+
+    standing = SceneObject(id=1, name="Halter", mesh=apply(cube(), translation((0.0, 0.0, 10.0))))
+
+    assert not check_placement(Scene(objects={"obj_1": standing}, profile=profile))
+
+
 def test_overlapping_bodies_are_reported() -> None:
     findings = check_collisions([cube(), apply(cube(), translation((5.0, 0.0, 0.0)))])
 

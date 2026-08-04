@@ -245,7 +245,14 @@ def test_findings_of_the_input_stage_reach_the_report(profile: Profile) -> None:
 
     codes = {finding.code for finding in result.scene.report.findings}
     assert "ingest.small_components" in codes
-    assert all(finding.op_id == 1 for finding in result.scene.report.findings)
+    # Was aus einer Operation kommt, trägt ihre Nummer. Nicht jeder Befund tut
+    # das: die Prüfungen der Szene — Passungen (§14) und die Lage zum Bauraum —
+    # gehören keiner Operation, sondern dem Stand danach.
+    from_operations = [
+        finding for finding in result.scene.report.findings if finding.code.startswith("ingest.")
+    ]
+    assert from_operations
+    assert all(finding.op_id == 1 for finding in from_operations)
 
 
 def test_an_unknown_source_is_a_user_error(profile: Profile) -> None:
