@@ -101,7 +101,9 @@ Verkaufsargument**, kein Verzicht.
 
 ## Teil 2 — Kontrolle: der Stand von Formwerk
 
-Gemessen am 4. August 2026, Commit `088aefe`.
+Gemessen am 4. August 2026. Der Arbeitsbaum bewegte sich währenddessen — eine
+parallele Sitzung hat mitten in der Durchsicht `92b2063` und `04c5e59`
+committet. Die Zahlen unten stehen auf dem Stand danach.
 
 ### 2.1 Umfang
 
@@ -121,24 +123,23 @@ Gemessen am 4. August 2026, Commit `088aefe`.
 |---|---|
 | `ruff format --check` | 326 Dateien formatiert |
 | `mypy` | keine Beanstandung in 178 Quelldateien |
-| `ruff check` | **1 Befund** — siehe 2.3 |
+| `ruff check` | grün |
 | `pytest` | **2579 grün, 1 rot** in 3:30 min — siehe 2.3 |
 
-### 2.3 Drei Befunde aus der Kontrolle
+### 2.3 Zwei Befunde aus der Kontrolle
 
-**Der ruff-Befund gehört nicht uns.** `app/ui/viewport.py:17` importiert
-`QEvent`, ohne es zu benutzen. Die Datei ist ungestaged um 163 Zeilen
-gewachsen — eine **parallele Sitzung** arbeitet gerade daran. Nicht angefasst;
-sie räumt das mit ihrem eigenen Commit auf.
-
-**Der rote Test gehört ebenfalls nicht uns.**
+**Das Tor ist auf `main` rot, und es bleibt es.**
 `test_translations.py::test_every_text_is_translated[en]` meldet drei
 **verwaiste** englische Einträge: *Entfernt*, *Hinzugefügt*, *Unverändert*.
-Nicht fehlende Übersetzungen, sondern übrig gebliebene — die parallele Sitzung
-hat die zugehörigen Oberflächentexte entfernt und den Katalog noch nicht
-nachgezogen. Ebenfalls nicht angefasst. **Bis das behoben ist, ist das Tor
-rot** (`AGENTS.md`: rot heißt nicht fertig) — der Stand aus 2.1 und 2.2 ist
-davon unberührt, weil kein Sachtest betroffen ist.
+Nicht fehlende Übersetzungen, sondern übrig gebliebene — die zugehörigen
+Oberflächentexte sind entfallen, der Katalog wurde nicht nachgezogen. Der
+Befund überlebte die beiden Commits der parallelen Sitzung, obwohl einer davon
+`en.json` angefasst hat. **Nicht behoben**, weil dieselbe Sitzung gerade in
+dieser Datei arbeitet und ein zweiter Zugriff nur einen Konflikt erzeugt. Der
+Fix ist das Streichen dreier Schlüssel in `app/i18n/locales/en.json`.
+
+Ein zweiter Befund derselben Herkunft — ein ungenutzter `QEvent`-Import in
+`app/ui/viewport.py` — hat sich mit `04c5e59` von selbst erledigt.
 
 **Ein erster Testlauf brach mit einem nativen Stapelabzug ab.** Kein
 Testfehler, sondern ein Absturz des Prozesses. Das ist das bekannte Bild aus
