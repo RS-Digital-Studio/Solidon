@@ -14,8 +14,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import pairwise
-from typing import Literal
+from typing import Final, Literal
 
+from app.i18n import _
 from app.ui.theme import relative_luminance
 
 DiffPalette = Literal["blue_orange", "red_green", "greyscale"]
@@ -86,23 +87,32 @@ class DifferenceColours:
     unchanged: Encoding
 
 
+#: Die drei Beschriftungen der Legende. Aufgelöst werden sie erst dort, wo sie
+#: hingehören — ``tr(encoding.label_key)`` im Viewport. Der Einsammler sieht
+#: aber nur Literale, die unmittelbar an ``_`` oder ``tr`` gehen (§37.2), und
+#: ein Schlüssel, der nur als Feldwert dasteht, gilt ihm als aufgegeben. Also
+#: werden sie hier einmal angemeldet und behalten ihre Message-ID.
+ADDED_LABEL: Final = _("Hinzugefügt").msgid
+REMOVED_LABEL: Final = _("Entfernt").msgid
+UNCHANGED_LABEL: Final = _("Unverändert").msgid
+
 #: Blau und Orange als Vorgabe — unter jeder verbreiteten Farbschwäche
 #: unterscheidbar, und in Graustufen über die Helligkeit weiterhin auch.
 DIFF_PALETTES: dict[DiffPalette, DifferenceColours] = {
     "blue_orange": DifferenceColours(
-        added=Encoding("#3b82c4", "forward", "+", "Hinzugefügt"),
-        removed=Encoding("#e08a3c", "backward", "-", "Entfernt"),
-        unchanged=Encoding("#9aa3ae", "solid", "=", "Unverändert"),
+        added=Encoding("#3b82c4", "forward", "+", ADDED_LABEL),
+        removed=Encoding("#e08a3c", "backward", "-", REMOVED_LABEL),
+        unchanged=Encoding("#9aa3ae", "solid", "=", UNCHANGED_LABEL),
     ),
     "red_green": DifferenceColours(
-        added=Encoding("#2f9e44", "forward", "+", "Hinzugefügt"),
-        removed=Encoding("#c92a2a", "backward", "-", "Entfernt"),
-        unchanged=Encoding("#9aa3ae", "solid", "=", "Unverändert"),
+        added=Encoding("#2f9e44", "forward", "+", ADDED_LABEL),
+        removed=Encoding("#c92a2a", "backward", "-", REMOVED_LABEL),
+        unchanged=Encoding("#9aa3ae", "solid", "=", UNCHANGED_LABEL),
     ),
     "greyscale": DifferenceColours(
-        added=Encoding("#d9d9d9", "forward", "+", "Hinzugefügt"),
-        removed=Encoding("#4a4a4a", "backward", "-", "Entfernt"),
-        unchanged=Encoding("#9aa3ae", "solid", "=", "Unverändert"),
+        added=Encoding("#d9d9d9", "forward", "+", ADDED_LABEL),
+        removed=Encoding("#4a4a4a", "backward", "-", REMOVED_LABEL),
+        unchanged=Encoding("#9aa3ae", "solid", "=", UNCHANGED_LABEL),
     ),
 }
 
