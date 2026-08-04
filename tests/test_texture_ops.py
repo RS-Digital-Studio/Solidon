@@ -193,3 +193,83 @@ def test_the_same_seed_gives_the_same_voronoi_body() -> None:
 
     assert first.outputs[0].mesh.volume == pytest.approx(again.outputs[0].mesh.volume)
     assert first.outputs[0].mesh.volume != pytest.approx(other.outputs[0].mesh.volume)
+
+
+# --- umlaufend auf einem Zylinder (Konzept P15 §7 Etappe 5) ---------------------
+
+
+def _run_on_cylinder(**params: object) -> object:
+    """Dieselbe Operation, aber auf einem stehenden Zylinder Ø 20, 30 hoch."""
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshData
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Profile, Scene, SceneObject
+
+    load_operations()
+    spec = REGISTRY.get("apply_texture")
+    shaft = SceneObject(
+        id="obj_1",
+        name="Griff",
+        mesh=MeshData.of(trimesh.creation.cylinder(radius=10.0, height=30.0, sections=128)),
+    )
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={"obj_1": shaft}, parameters={}),
+            inputs=[shaft],
+            params=spec.params(**params),
+            profile=Profile(printer=NOZZLE, material=None),
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def test_a_wrapped_texture_grows_the_shaft_all_the_way_around() -> None:
+    """Ein Rändel gehört um den Griff, nicht als Fleck darauf.
+
+    Flach aufgelegt ragt das Feld an den Rändern in die Luft und trifft den
+    Zylinder nur in seiner Mitte — genau der Grund, warum ein Griff bis hierhin
+    nicht texturierbar war. Gemessen an der Hüllbox: sie muss in **beiden**
+    Querrichtungen wachsen, denn ein umlaufendes Muster steht auch dort, wo
+    das flache Feld nie hinkam.
+    """
+    result = _run_on_cylinder(
+        pattern="knurl_diamond",
+        wrap="cylinder",
+        diameter=20.0,
+        width=62.8,
+        height=20.0,
+        pitch=2.5,
+        depth=0.6,
+    )
+    mesh = result.outputs[0].mesh
+    size = mesh.bounds.size
+    assert size[0] > 20.0, "in X über den nackten Durchmesser hinaus"
+    assert size[1] > 20.0, "und in Y genauso — sonst klebt es auf einer Seite"
+    assert size[2] == pytest.approx(30.0, abs=0.05), "die Höhe bleibt die Höhe"
+    assert mesh.volume > math.pi * 100.0 * 30.0
+
+
+def test_wrapping_without_a_diameter_says_what_is_missing() -> None:
+    """Regel 17: ohne Durchmesser gibt es keinen Zylinder, um den etwas läuft."""
+    with pytest.raises(ValidationError) as problem:
+        _run_on_cylinder(pattern="rib", wrap="cylinder", diameter=0.0, width=20.0, height=10.0)
+    assert problem.value.suggestions
+
+
+def test_the_flat_way_is_untouched() -> None:
+    """Die Vorgabe bleibt flach, und flach bleibt, was es war.
+
+    Ein Umschalter, der die Vorgabe mitverändert, ist kein Umschalter, sondern
+    eine stille Migration jeder bestehenden Datei (§16.1)."""
+    from app.core.registry import REGISTRY
+
+    spec = REGISTRY.get("apply_texture")
+    wrap = next(entry for entry in spec.params.spec() if entry.name == "wrap")
+    assert wrap.default == "flat"

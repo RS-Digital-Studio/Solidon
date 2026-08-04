@@ -25,10 +25,12 @@ from typing import Any, Final, cast
 
 import numpy as np
 
-from app.core.errors import CORRECT_INPUT, ValidationError
+from app.core.errors import CORRECT_INPUT, Action, ValidationError
+from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, OpContext, OpResult, PrinterProfile
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -396,6 +398,26 @@ class TextureParams(BaseParams):
             "besser ist, entscheidet die Hand."
         ),
     )
+    wrap: str = param(
+        title=_("Auflegen"),
+        default="flat",
+        choices=("flat", "cylinder"),
+        doc=_(
+            "Flach auf eine Ebene oder umlaufend um einen Zylinder. Ein Rändel "
+            "gehört um den Griff, nicht als Fleck darauf."
+        ),
+    )
+    diameter: float = param(
+        title=_("Durchmesser"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        placement="advanced",
+        doc=_(
+            "Der Durchmesser, um den das Muster läuft. Nur beim Umlaufen. Eine "
+            "angeklickte Zylinderfläche trägt ihn selbst ein."
+        ),
+    )
     angle: float = param(
         title=_("Drehung"),
         default=0.0,
@@ -444,6 +466,76 @@ class TextureParams(BaseParams):
         placement="advanced",
         doc=_("Dritte Achse der Richtung. Vorgabe ist nach oben."),
     )
+
+
+def sagitta(diameter: float, pitch: float) -> float:
+    """Wie weit die Sehne unter dem Bogen zurückbleibt.
+
+    Ein Musterelement ist nach dem Biegen ein gerades Stück auf einem runden
+    Körper. Zwischen seinen Enden klafft in der Mitte genau dieser Abstand —
+    bei 2,5 mm Teilung auf zwanzig Millimeter Durchmesser sind es acht
+    Hundertstel, also mehr als die Überlappung, mit der die Vereinigung
+    gerechnet hätte.
+
+    Gemessen an der Teilung und nicht am einzelnen Element: die Teilung ist die
+    Obergrenze für die Breite jedes Elements, und eine Rechnung je Element
+    hieße, das Feld dafür auseinanderzunehmen.
+    """
+    radius = diameter / 2.0
+    if radius <= EPS_GEOM:
+        return 0.0
+    half = min(pitch / 2.0, radius)
+    return radius - math.sqrt(max(0.0, radius * radius - half * half))
+
+
+def wrapped(body: MeshData, diameter: float) -> MeshData:
+    """Biegt ein flaches Musterfeld um einen Zylinder.
+
+    Die x-Richtung des Feldes wird zum Umfang, y zur Zylinderachse, z bleibt die
+    Prägungshöhe: ein Punkt landet bei Winkel ``x / radius`` auf dem Radius
+    ``radius + z``. Damit läuft ein Rändel wirklich um den Griff, statt als
+    ebenes Feld darauf zu kleben und ihn nur in der Mitte zu treffen — das war
+    der Grund, warum ein Griff bis hierhin nicht texturierbar war.
+
+    Die Achse zeigt danach nach Z, und deshalb bedeutet die Richtung
+    ``(nx, ny, nz)`` beim Umlaufen die **Achse** des Zylinders statt der
+    Normalen einer Fläche: ``place`` dreht Z dorthin. Für den stehenden Griff
+    ist das die Vorgabe, und niemand muss etwas eintragen.
+
+    Verbogen wird das fertige Feld, nicht jedes Element einzeln. Die Prismen
+    eines Musters sind klein gegen den Umfang, ihre Kanten bleiben also gerade
+    genug; ein Element, das über einen nennenswerten Teil des Umfangs liefe,
+    wäre kein Muster mehr, sondern ein Bauteil.
+
+    Ein Feld breiter als der Umfang läuft mehrfach herum und überlagert sich
+    selbst. Das wird nicht abgeschnitten: die Boolesche Vereinigung danach räumt
+    es auf, und eine Abweisung hieße, jemanden zum Rechnen zu zwingen, wo die
+    Anwendung es kann.
+    """
+    import numpy as np
+    import trimesh
+
+    if diameter <= EPS_GEOM:
+        raise ValidationError(
+            "diameter",
+            _("Zum Umlaufen fehlt der Durchmesser des Zylinders."),
+            value=diameter,
+            constraint="needs_diameter",
+            suggestions=[
+                Action(
+                    id="texture.pick_cylinder",
+                    label=_("Eine Zylinderfläche anklicken"),
+                    primary=True,
+                ),
+                Action(id="texture.wrap_flat", label=_("Flach auflegen statt umlaufend")),
+            ],
+        )
+    radius = diameter / 2.0
+    points = np.asarray(body.raw.vertices, dtype=float)
+    theta = points[:, 0] / radius
+    reach = radius + points[:, 2]
+    turned = np.column_stack((reach * np.cos(theta), reach * np.sin(theta), points[:, 1]))
+    return MeshData.of(trimesh.Trimesh(vertices=turned, faces=body.raw.faces, process=False))
 
 
 @register_op(
@@ -515,10 +607,21 @@ def apply_texture(ctx: OpContext) -> OpResult:
     # hinein; vertieft andersherum — sonst nähme der Schnitt die Überlappung
     # weg und ließe das Muster als Kratzer zurück.
     lift = -OVERLAP if params.mode == "raised" else -params.depth
+    if params.wrap == "cylinder":
+        # Ein gebogenes Prisma behält seinen **ebenen** Boden: die Sehne unter
+        # dem Bogen. In der Mitte des Elements steht der Boden damit über der
+        # Zylinderfläche, und die Vereinigung fände dort keine gemeinsame
+        # Fläche, sondern eine Berührung. Der Ausgleich ist die
+        # Sehnenabweichung selbst.
+        lift -= sagitta(params.diameter, params.pitch)
     body = apply(body, translation((0.0, 0.0, lift)))
-    placed = place(
-        body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz), params.angle
-    )
+    if params.wrap == "cylinder":
+        body = wrapped(body, params.diameter)
+        placed = place(body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz), 0.0)
+    else:
+        placed = place(
+            body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz), params.angle
+        )
 
     kind: BooleanKind = "union" if params.mode == "raised" else "difference"
     outcome = boolean(kind, [as_mesh_data(source.mesh), placed], quality=ctx.quality, cut_slot=0)
