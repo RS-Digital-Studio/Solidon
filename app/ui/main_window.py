@@ -469,6 +469,7 @@ class MainWindow(QMainWindow):
         self.viewport.featurePicked.connect(self._on_feature_picked)
         self.viewport.objectPicked.connect(self._on_object_picked)
         self.viewport.contextMenuAt.connect(self._on_viewport_context_menu)
+        self.viewport.pointPicked.connect(self._on_point_picked)
 
         self.analysis_bar = AnalysisBar(self)
         self.analysis_bar.mapChanged.connect(self._on_map_changed)
@@ -2243,10 +2244,30 @@ class MainWindow(QMainWindow):
         self.status_message.setText(f"{len(hidden)} × {tr('ausgeblendet')}" if hidden else "")
 
     def _on_feature_picked(self, feature_id: str) -> None:
-        """Ein Klick in der Ansicht wählt das Merkmal auch im Baum aus (§18.5)."""
+        """Ein Klick in der Ansicht wählt das Merkmal auch im Baum aus (§18.5).
+
+        Steht ein Dialog offen, der nach einem Merkmal fragt, bekommt er es —
+        dann war der Klick eine Eingabe und keine Auswahl.
+        """
         object_id = self.object_tree.selected()
         if object_id is not None:
             self.object_tree.select_feature(object_id, feature_id)
+        dialog = self._op_dialog
+        if dialog is not None:
+            dialog.take_feature(feature_id, self._feature_names().get(feature_id, feature_id))
+
+    def _on_point_picked(self, point: Any) -> None:
+        """Ein Klick auf eine Stelle füllt die Positionsfelder eines offenen
+        Dialogs (§18.5).
+
+        *Bohrung setzen* öffnete mit X, Y und Z auf 0,00 — und der Ursprung
+        liegt bei einer geladenen Platte an einer Ecke. Wer dort bohrte,
+        kratzte einen Span von der Kante ab, und der Prüfbericht sagte nur, die
+        Bohrung sei um die Materialtoleranz vergrößert worden.
+        """
+        dialog = self._op_dialog
+        if dialog is not None:
+            dialog.take_point((float(point[0]), float(point[1]), float(point[2])))
 
     def _on_viewport_context_menu(self, x: int, y: int) -> None:
         """Zeigt am Zeiger dasselbe Menü, das der Objektbaum anbietet (§18.5).
@@ -2504,6 +2525,7 @@ class MainWindow(QMainWindow):
             values=entry.params,
             sources=self._source_names(),
             parameter_values=self._parameter_values(),
+            features=self._feature_names(),
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
@@ -2605,6 +2627,25 @@ class MainWindow(QMainWindow):
         return {
             source_id: Path(source.path).name or source_id
             for source_id, source in self.session.project.document.sources.items()
+        }
+
+    def _feature_names(self) -> dict[str, str]:
+        """Die Merkmale des gewählten Körpers, Kennung auf Beschriftung (§18.5).
+
+        Dieselbe Beschriftung wie im Objektbaum und über dem Modell: „hole_1 ·
+        Ø5,19 mm". Ohne Auswahl bleibt die Liste leer — welche Fläche gemeint
+        ist, entscheidet der Körper, an dem gearbeitet wird.
+        """
+        result = self.session.last_result
+        chosen = self.object_tree.selected()
+        if result is None or chosen is None:
+            return {}
+        entry = result.scene.objects.get(chosen)
+        if entry is None:
+            return {}
+        return {
+            feature_id: feature_label(feature_id, feature)
+            for feature_id, feature in entry.features.items()
         }
 
     def _from_selection(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:

@@ -247,6 +247,115 @@ def test_a_dialog_is_generated_from_the_parameter_schema(qt_app: QApplication) -
     assert values["weld"] is True
 
 
+def test_a_feature_parameter_offers_the_features(qt_app: QApplication) -> None:
+    """§18.5: „face_2" tippt niemand, der es nicht vorher abgelesen hat.
+
+    Der Parameter war ein leeres Textfeld, und sein eigener doc-Satz versprach,
+    er werde „beim Anklicken im Fenster eingetragen" — abzulesen war die
+    Kennung nur im Objektbaum, wo die Namen bei Standardbreite abgeschnitten
+    sind.
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    spec = REGISTRY.get("create_lid")
+    features = {"face_2": "face_2 · 3915 mm²", "hole_1": "hole_1 · Ø5,19 mm"}
+    dialog = OperationDialog(spec, ["obj_1"], features=features)
+    try:
+        editor = dialog._editors["at_feature"]
+        assert isinstance(editor, QComboBox), "eine Liste, kein Textfeld"
+
+        labels = [editor.itemText(index) for index in range(editor.count())]
+        assert "face_2 · 3915 mm²" in labels, "die Beschriftung, nicht die Kennung"
+        assert editor.itemData(0) == "", "ohne Merkmal geht es auch — der Parameter ist optional"
+        assert dialog.values()["at_feature"] == "", "und die Vorgabe bleibt leer"
+
+        editor.setCurrentIndex(labels.index("hole_1 · Ø5,19 mm"))
+        assert dialog.values()["at_feature"] == "hole_1", "die Kennung reist mit, nicht der Text"
+    finally:
+        dialog.deleteLater()
+
+
+def test_an_unknown_feature_is_shown_not_replaced(qt_app: QApplication) -> None:
+    """Ein gespeicherter Wert, den die Liste nicht kennt, bleibt stehen.
+
+    Wer eine Operation aus dem Verlauf öffnet, deren Merkmal seit einer
+    Umbenennung nicht mehr da ist, soll sehen, was dasteht — nicht
+    stillschweigend ein anderes bekommen.
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    spec = REGISTRY.get("create_lid")
+    dialog = OperationDialog(
+        spec, ["obj_1"], values={"at_feature": "face_9"}, features={"face_2": "face_2 · 100 mm²"}
+    )
+    try:
+        editor = dialog._editors["at_feature"]
+        assert isinstance(editor, QComboBox)
+        assert dialog.values()["at_feature"] == "face_9"
+    finally:
+        dialog.deleteLater()
+
+
+def test_clicking_a_feature_fills_the_field(qt_app: QApplication) -> None:
+    """Der ``doc``-Satz versprach es seit je: „wird beim Anklicken im Fenster
+    eingetragen".
+
+    Einzulösen war das nicht, solange der Dialog das Fenster sperrte — es gab
+    kein Anklicken, während er offen war. Jetzt ist der kürzeste Weg zu einer
+    Fläche wieder der, auf sie zu zeigen.
+    """
+    spec = REGISTRY.get("create_lid")
+    dialog = OperationDialog(spec, ["obj_1"], features={"face_2": "face_2 · 3915 mm²"})
+    try:
+        assert dialog.take_feature("face_2", "face_2 · 3915 mm²")
+        assert dialog.values()["at_feature"] == "face_2"
+
+        # Ein Merkmal, das die Liste nicht kennt, kommt trotzdem an: erkannt
+        # wird nach jeder Operation neu, der Dialog steht seit vorher offen.
+        assert dialog.take_feature("hole_7", "hole_7 · Ø3,20 mm")
+        assert dialog.values()["at_feature"] == "hole_7"
+    finally:
+        dialog.deleteLater()
+
+
+def test_a_dialog_without_a_feature_field_takes_nothing(qt_app: QApplication) -> None:
+    """Der Aufrufer weiß sonst nicht, ob sein Klick angekommen ist."""
+    dialog = OperationDialog(REGISTRY.get("drill_hole"), ["obj_1"])
+    try:
+        assert not dialog.take_feature("face_2", "face_2 · 100 mm²")
+    finally:
+        dialog.deleteLater()
+
+
+def test_clicking_a_spot_fills_the_position(qt_app: QApplication) -> None:
+    """§18.5: zeigen statt tippen — und §11 bleibt gewahrt.
+
+    *Bohrung setzen* öffnete mit X, Y und Z auf 0,00, und der Ursprung liegt
+    bei einer geladenen Platte an einer Ecke. Wer dort bohrte, kratzte einen
+    Span von der Kante ab. Was der Klick einträgt, steht danach lesbar da: die
+    Zahl ist die Wahrheit, das Zeigen nur die bequeme Eingabe.
+    """
+    dialog = OperationDialog(REGISTRY.get("drill_hole"), ["obj_1"])
+    try:
+        assert dialog.take_point((12.5, -7.25, 4.0))
+
+        values = dialog.values()
+        assert values["x"] == pytest.approx(12.5)
+        assert values["y"] == pytest.approx(-7.25)
+        assert values["z"] == pytest.approx(4.0)
+    finally:
+        dialog.deleteLater()
+
+
+def test_a_dialog_without_a_position_takes_no_point(qt_app: QApplication) -> None:
+    """Nicht jede Operation hat eine Stelle, an der sie arbeitet."""
+    dialog = OperationDialog(REGISTRY.get("load"), ["obj_1"])
+    try:
+        assert not dialog.take_point((1.0, 2.0, 3.0))
+    finally:
+        dialog.deleteLater()
+
+
 def test_the_dialog_keeps_out_of_the_middle_of_the_view(qt_app: QApplication) -> None:
     """§18.7: der Dialog trägt eine Live-Vorschau und darf sie nicht verdecken.
 
@@ -713,6 +822,38 @@ def test_a_second_dialog_closes_the_first(window: MainWindow) -> None:
     assert second is not None
     assert second is not first, "der zweite Dialog ist ein anderer"
     assert not first.isVisible(), "und der erste ist zu"
+
+
+def test_a_click_in_the_view_reaches_the_open_dialog(window: MainWindow) -> None:
+    """Der ganze Weg: Dialog offen, ins Bild geklickt, Feld gefüllt.
+
+    Drei Änderungen greifen hier ineinander — der Dialog sperrt nicht mehr, der
+    Klick kommt an, und der Dialog nimmt entgegen. Einzeln geprüft sind sie
+    schon; hier zählt, dass sie zusammen den Weg ergeben, den §18.5 meint.
+    """
+    _with_two_objects(window)
+    window.object_tree.tree.topLevelItem(0).setSelected(True)
+    window.run_operation(REGISTRY.get("drill_hole"))
+    dialog = window._op_dialog
+    assert dialog is not None
+
+    window.viewport.pointPicked.emit((8.0, 3.0, 1.5))
+
+    values = dialog.values()
+    assert values["x"] == pytest.approx(8.0)
+    assert values["y"] == pytest.approx(3.0)
+    assert values["z"] == pytest.approx(1.5)
+    dialog.reject()
+
+
+def test_a_click_without_a_dialog_changes_no_values(window: MainWindow) -> None:
+    """Ohne offenen Dialog ist ein Klick eine Auswahl und sonst nichts."""
+    _with_two_objects(window)
+    assert window._op_dialog is None
+
+    window.viewport.pointPicked.emit((8.0, 3.0, 1.5))  # darf nichts auslösen
+
+    assert window._op_dialog is None
 
 
 def test_an_operation_without_parameters_asks_nothing(window: MainWindow) -> None:

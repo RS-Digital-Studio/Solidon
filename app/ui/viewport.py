@@ -303,6 +303,11 @@ class Viewport(QWidget):
     contextMenuAt = Signal(int, int)
     """Ein Rechtsklick, der nichts gedreht hat — trägt die Position in VTKs
     Zählung (von unten). Das Fenster zeigt dort das Menü zur Auswahl."""
+    pointPicked = Signal(object)
+    """Ein Klick auf eine Stelle ohne Merkmal — trägt den Punkt in
+    Weltkoordinaten. Ein offener Dialog, der nach einer Position fragt, trägt
+    ihn ein; wer ein Merkmal anklickt, meint das Merkmal und bekommt
+    ``featurePicked``."""
     paintRequested = Signal(object)
     """A point on the surface to paint at (§20). The window turns it into an
     operation — the view never changes geometry itself."""
@@ -1047,6 +1052,7 @@ class Viewport(QWidget):
                 self.featurePicked.emit(feature_id)
                 return
             self.objectPicked.emit(self._object_at(picked) or "")
+            self.pointPicked.emit(picked)
             return
 
         mesh = self._nearest_mesh(picked)
