@@ -248,3 +248,40 @@ def qt_app_process(window: MainWindow) -> None:
         if window._proposal is not None:
             return
         time.sleep(0.01)
+
+
+# --- ein Bild als Eingabe (Konzept P15 §7 Etappe 8, E8) -------------------------
+
+
+def test_an_image_dropped_on_the_chat_becomes_a_request(qt_app: QApplication) -> None:
+    """Ein Foto oder eine Skizze ist eine Eingabe wie ein Satz.
+
+    Meshys eine Bedienidee, die ohne Cloud nachbaubar ist. Das Panel weiß
+    nichts von Generierung — es meldet den Pfad, und was daraus wird,
+    entscheidet das Fenster.
+
+    Geprüft wird die Auswahlregel, nicht das Ziehen: ein Bild wird angenommen,
+    ein Modell nicht. Die Endung entscheidet und nicht der angebotene Typ, weil
+    Dateimanager Dateien unterschiedlich beschriften und die Endung überall
+    dieselbe ist.
+    """
+    from PySide6.QtCore import QMimeData, QUrl
+
+    from app.ui.chat import _dropped_image
+
+    class _Event:
+        def __init__(self, data: QMimeData) -> None:
+            self._data = data
+
+        def mimeData(self) -> QMimeData:  # noqa: N802 - Qt gibt den Namen
+            return self._data
+
+    picture = QMimeData()
+    picture.setUrls([QUrl.fromLocalFile("C:/tmp/skizze.PNG")])
+    assert _dropped_image(_Event(picture)) is not None, "Groß- und Kleinschreibung egal"
+
+    model = QMimeData()
+    model.setUrls([QUrl.fromLocalFile("C:/tmp/teil.stl")])
+    assert _dropped_image(_Event(model)) is None, "ein Modell gehört auf den Viewport"
+
+    assert _dropped_image(_Event(QMimeData())) is None, "und Text ist kein Bild"

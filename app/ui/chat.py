@@ -47,9 +47,16 @@ class ChatPanel(QWidget):
     discarded = Signal()
     setupRequested = Signal()
     """Der Benutzer will den fehlenden Zugang einrichten (§2.7)."""
+    imageDropped = Signal(str)
+    """Ein Bild ist im Chatfenster gelandet — Pfad als Text (Konzept P15, E8).
+
+    Ein Foto oder eine Skizze ist eine Eingabe wie ein Satz; das ist Meshys
+    eine Bedienidee, die ohne Cloud nachbaubar ist. Was daraus wird,
+    entscheidet das Fenster — das Panel weiß nichts von Generierung."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setAcceptDrops(True)
 
         self.turns = QListWidget(self)
         self.turns.setWordWrap(True)
@@ -202,6 +209,41 @@ class ChatPanel(QWidget):
             return
         self.input.clear()
         self.requestSent.emit(text)
+
+    # --- ein Bild als Eingabe (Konzept P15, E8) ---------------------------------
+
+    def dragEnterEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        """Ein Bild darf hier landen, alles andere nicht.
+
+        Geprüft wird die Endung und nicht der angebotene Typ: ein Dateimanager
+        beschriftet Dateien unterschiedlich, die Endung ist überall dieselbe.
+        """
+        if _dropped_image(event) is not None:
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        path = _dropped_image(event)
+        if path is None:
+            return
+        event.acceptProposedAction()
+        self.imageDropped.emit(path)
+
+
+#: Was als Bild gilt. Dieselbe Liste wie im Generierungsdialog — sie steht
+#: dort, weil sie dort auch den Dateidialog füllt.
+def _dropped_image(event: Any) -> str | None:
+    """Der Pfad des abgelegten Bildes, oder ``None``."""
+    from app.ui.generate_dialog import IMAGE_FILTER
+
+    data = event.mimeData()
+    if not data.hasUrls():
+        return None
+    endings = tuple(part.strip("*") for part in IMAGE_FILTER.split("(")[1].rstrip(")").split())
+    for url in data.urls():
+        name = url.toLocalFile()
+        if name and name.lower().endswith(endings):
+            return str(name)
+    return None
 
 
 def _item(entry: ChatEntry, discarded: bool) -> QListWidgetItem:

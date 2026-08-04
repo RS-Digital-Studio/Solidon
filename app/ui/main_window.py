@@ -550,6 +550,7 @@ class MainWindow(QMainWindow):
         self.chat.accepted.connect(self._on_proposal_accepted)
         self.chat.discarded.connect(self._on_proposal_discarded)
         self.chat.setupRequested.connect(self.action_install_extras)
+        self.chat.imageDropped.connect(self.action_generate_from_image)
 
         # §37.2: die Beispiele sind auch Doku. Die Tour macht sie dazu — der
         # Reiter ist nur sichtbar, solange ein Beispiel offen ist.
@@ -1250,7 +1251,22 @@ class MainWindow(QMainWindow):
 
     def action_generate(self) -> None:
         """Weg 3 (§2.2): ein Satz oder ein Bild wird ein Körper in der Szene."""
+        self._generate(None)
+
+    def action_generate_from_image(self, path: str) -> None:
+        """Ein Bild, das im Chatfenster gelandet ist (Konzept P15, E8).
+
+        Meshys eine Bedienidee, die ohne Cloud nachbaubar ist: ein Foto oder
+        eine Kinderzeichnung ist eine Eingabe wie ein Satz. Der Dialog öffnet
+        mit dem Bild schon darin — noch einmal danach zu fragen wäre ein
+        Schritt zu viel für jemanden, der es gerade fallen gelassen hat.
+        """
+        self._generate(Path(path))
+
+    def _generate(self, image: Path | None) -> None:
         dialog = GenerateDialog(parent=self)
+        if image is not None:
+            dialog.set_image(image)
         if dialog.exec() != QDialog.DialogCode.Accepted or dialog.result_mesh is None:
             return
         self.session.add_generated(dialog.result_mesh)

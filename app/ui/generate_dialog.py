@@ -167,8 +167,17 @@ class GenerateDialog(QDialog):
         name, _filter = QFileDialog.getOpenFileName(self, tr("Bild wählen"), "", IMAGE_FILTER)
         if not name:
             return
-        self._image = Path(name).read_bytes()
-        self.picture_label.setText(Path(name).name)
+        self.set_image(Path(name))
+
+    def set_image(self, path: Path) -> None:
+        """Ein Bild vorbelegen, ohne den Dateidialog.
+
+        Der Weg für ein Bild, das jemand ins Chatfenster gezogen hat: es ist
+        schon gewählt, also wäre ein Dialog, der noch einmal danach fragt, ein
+        Schritt zu viel (Konzept P15, E8).
+        """
+        self._image = path.read_bytes()
+        self.picture_label.setText(path.name)
         self._update_state()
 
     # --- running ----------------------------------------------------------------
