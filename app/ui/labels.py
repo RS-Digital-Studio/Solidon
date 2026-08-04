@@ -9,11 +9,12 @@ Leitprinzip 5).
 from __future__ import annotations
 
 from PySide6.QtCore import QLocale
+from PySide6.QtGui import QColor
 
 from app.core.errors import AppError
 from app.core.types import Feature, FeatureId
 from app.core.units import LengthUnit, format_length, format_volume
-from app.i18n import tr
+from app.i18n import TranslatableText, _, tr
 
 
 def localised(text: str) -> str:
@@ -40,6 +41,65 @@ def length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = True) -> 
 def volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
     """Ein Volumen, wie die Oberfläche es schreibt."""
     return localised(format_volume(value_mm3, unit))
+
+
+#: Grundfarben nach Farbton, in Grad. Die Grenze gilt bis zu diesem Wert.
+#:
+#: Als ``_()`` und nicht als nackte Zeichenkette: der Sprachtest sammelt die
+#: Texte aus dem Quelltext, und was nur als Variable in ein ``tr()`` geht,
+#: findet er nicht — es stünde übersetzt im Katalog und gälte trotzdem als
+#: verwaist.
+_HUES: tuple[tuple[int, TranslatableText], ...] = (
+    (15, _("Rot")),
+    (45, _("Orange")),
+    (70, _("Gelb")),
+    (160, _("Grün")),
+    (200, _("Türkis")),
+    (260, _("Blau")),
+    (290, _("Violett")),
+    (345, _("Magenta")),
+    (360, _("Rot")),
+)
+
+_BLACK = _("Schwarz")
+_WHITE = _("Weiß")
+_GREY = _("Grau")
+_BROWN = _("Braun")
+
+
+def colour_name(value: str) -> str:
+    """Eine Farbe, wie man sie nennt — nicht, wie man sie schreibt.
+
+    Über dem Filamentfeld stand „#4A90D9". Das ist der genaue Wert und
+    beschreibt für niemanden eine Spule im Regal; wer sein Filament sucht, sucht
+    Blau.
+
+    Grob mit Absicht: Filamentfarben sind Regalfarben, und ein Name wie
+    „Kornblumenblau" wäre genauer und trotzdem nicht die Spule, die dasteht.
+    Der Hexwert bleibt daneben stehen, wo er hingehört — im Tooltip.
+    """
+    colour = QColor(value)
+    if not colour.isValid():
+        return value
+    hue = colour.hslHue()
+    saturation = colour.hslSaturation()
+    lightness = colour.lightness()
+    if lightness < 40:
+        return str(_BLACK)
+    if lightness > 225 and saturation < 40:
+        return str(_WHITE)
+    if saturation < 40:
+        return str(_GREY)
+    if hue < 0:
+        return value
+    for limit, name in _HUES:
+        if hue <= limit:
+            # Dunkles Orange heißt Braun, und nur dort — bei jeder anderen
+            # Farbe ist Dunkelheit kein eigener Name.
+            if name.msgid == "Orange" and lightness < 110:
+                return str(_BROWN)
+            return str(name)
+    return value
 
 
 def choice_label(value: str) -> str:

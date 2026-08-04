@@ -35,4 +35,4 @@ PROJECT_SUFFIX: Final = ".p3d"
 APP_VERSION: Final = "0.0.1"
 
 #: Copyright-Zeile für LICENSE, Über-Dialog und Installer.
-COPYRIGHT: Final = f"Copyright (c) 2026 {APP_VENDOR}"
+COPYRIGHT: Final = f"Copyright © 2026 {APP_VENDOR}"

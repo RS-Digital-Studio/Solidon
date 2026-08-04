@@ -761,10 +761,15 @@ class MainWindow(QMainWindow):
             tr("Eine Datei aus dem Slicer lesen und ihre Zahlen neben die eigenen stellen."),
         )
         file_menu.addSeparator()
+        # Ohne Kürzel: QKeySequence.StandardKey.Quit liefert auf Windows die
+        # Multimedia-Taste „Exit", und im Menü stand deshalb „Beenden ·
+        # Verlassen" — eine Taste, die kaum eine Tastatur hat, als Kürzel
+        # angeboten. Alt+F4 macht Windows selbst, Cmd+Q macht macOS über sein
+        # Anwendungsmenü. Ein falsches Kürzel ist schlechter als keines.
         self._add_action(
             file_menu,
             tr("Beenden"),
-            QKeySequence.StandardKey.Quit,
+            None,
             self.close,
             tr("Formwerk schließen. Ungesichertes wird vorher erfragt."),
         )

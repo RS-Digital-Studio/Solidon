@@ -66,6 +66,7 @@ from app.core.types import (
 )
 from app.i18n import tr
 from app.ui.dialogs import show_error
+from app.ui.labels import colour_name
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 
@@ -587,7 +588,11 @@ class _ColourButton(QPushButton):
     def _refresh(self) -> None:
         colour = QColor(self._value)
         readable = "#000000" if colour.lightnessF() > 0.55 else "#ffffff"
-        self.setText(self._value.upper())
+        # Der Name, nicht der Hexwert: „#4A90D9" beschreibt für niemanden eine
+        # Spule im Regal. Was Qt nicht benennen kann, behält seine Zahl — dann
+        # ist sie das Genaueste, was zu haben ist.
+        self.setText(colour_name(self._value))
+        self.setToolTip(self._value.upper())
         self.setStyleSheet(f"background-color: {self._value}; color: {readable};")
 
     def _choose(self) -> None:

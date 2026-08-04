@@ -113,13 +113,20 @@ def test_changing_the_quality_reloads_every_field(dialog: PrintSettingsDialog) -
     assert editor.value() == pytest.approx(dialog.settings.layers.layer_height)
 
 
-def test_the_colour_button_shows_its_value_as_text() -> None:
-    """Regel 18: die Farbe allein trägt die Bedeutung nicht."""
+def test_the_colour_button_says_which_colour_it_is() -> None:
+    """Regel 18: die Farbe allein trägt die Bedeutung nicht.
+
+    Getragen hat sie bisher der Hexwert — richtig als zweite Kodierung und
+    trotzdem schwach: „#4A90D9" beschreibt für niemanden eine Spule im Regal.
+    Der Name tut beides, und die Zahl steht im Tooltip, wo sie hingehört.
+    """
     button = _ColourButton("#3FAE6B")
-    assert "3FAE6B" in button.text().upper()
+    assert button.text() == "Grün"
+    assert "3FAE6B" in button.toolTip().upper(), "genau bleibt genau"
 
     button.set_value("#112233")
-    assert "112233" in button.text().upper()
+    assert button.text() == "Schwarz"
+    assert "112233" in button.toolTip().upper()
 
 
 def test_a_checkbox_writes_through(dialog: PrintSettingsDialog) -> None:

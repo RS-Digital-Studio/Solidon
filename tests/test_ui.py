@@ -857,6 +857,25 @@ def test_a_click_without_a_dialog_changes_no_values(window: MainWindow) -> None:
     assert window._op_dialog is None
 
 
+def test_a_filament_colour_is_named_not_numbered(qt_app: QApplication) -> None:
+    """§29: über dem Filamentfeld stand „#4A90D9".
+
+    Das ist der genaue Wert und beschreibt für niemanden eine Spule im Regal.
+    Grob mit Absicht: Filamentfarben sind Regalfarben, und „Kornblumenblau"
+    wäre genauer und trotzdem nicht die Spule, die dasteht.
+    """
+    from app.ui.labels import colour_name
+
+    assert colour_name("#4A90D9") == "Blau"
+    assert colour_name("#000000") == "Schwarz"
+    assert colour_name("#ffffff") == "Weiß"
+    assert colour_name("#808080") == "Grau"
+    assert colour_name("#d02020") == "Rot"
+    assert colour_name("#8b5a2b") == "Braun", "dunkles Orange heißt Braun"
+    assert colour_name("#ff9500") == "Orange"
+    assert colour_name("kein-farbwert") == "kein-farbwert"
+
+
 def test_a_standard_part_is_offered_by_its_name(qt_app: QApplication) -> None:
     """§24: „cable-5" erkennt niemand ohne die Normteiltabelle daneben.
 
