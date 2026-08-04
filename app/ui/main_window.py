@@ -111,6 +111,7 @@ from app.ui.labels import feature_label
 from app.ui.manual_window import ManualWindow
 from app.ui.op_dialog import OperationDialog
 from app.ui.paint_bar import PaintBar
+from app.ui.palette import ROLES
 from app.ui.panels import (
     HistoryPanel,
     MeasurementLabel,
@@ -140,6 +141,11 @@ from app.ui.viewport import Viewport
 _log = get_logger(__name__)
 
 AUTOSAVE_INTERVAL_MS = 120_000
+
+#: Wie lange der Rahmen steht, mit dem ein Tourschritt auf seinen Bereich
+#: zeigt. Lang genug, um den Blick dorthin zu ziehen, kurz genug, um nicht als
+#: Zustand gelesen zu werden.
+FLASH_MS = 1200
 
 PROJECT_FILTER = f"{APP_NAME} ({'*' + PROJECT_SUFFIX})"
 MODEL_FILTER = "Modelle (*.stl *.3mf *.obj *.glb *.gltf *.ply *.off *.step *.stp *.svg *.dxf)"
@@ -622,6 +628,8 @@ class MainWindow(QMainWindow):
         # Reiter ist nur sichtbar, solange ein Beispiel offen ist.
         self.tour = TourPanel(self.session, self)
         self.tour.closed.connect(self._remove_tour)
+        self.tour.pointsAt.connect(self._flash_area)
+        self.tour.followRequested.connect(self._open_example)
 
         self.right = QTabWidget(self)
         self.right.addTab(self.report, tr("Prüfbericht"))
@@ -3079,6 +3087,42 @@ class MainWindow(QMainWindow):
             save_settings(self.settings)
             self.right.setVisible(True)
         self.right.setCurrentWidget(self.tour)
+
+    def _open_example(self, example_id: str) -> None:
+        """Öffnet ein Beispiel über seine Kennung — der Weg vom Ende einer Tour
+        zur nächsten."""
+        from app.core import examples
+
+        path = examples.directory() / f"{example_id}.p3d"
+        if path.exists():
+            self.open_path(path)
+
+    def _flash_area(self, target: str) -> None:
+        """Lässt den Bereich aufleuchten, von dem ein Tourschritt spricht.
+
+        „Sehen Sie links in den Verlauf" nennt einen von vier Bereichen, und
+        wer den Satz zum ersten Mal liest, sucht ihn. Ein Rahmen für eine
+        Sekunde beantwortet die Frage, ohne sie gestellt zu haben.
+
+        Zeigt der Schritt auf den Prüfbericht, wird der Reiter gleich
+        mitgeholt: er teilt sich die Spalte mit der Tour, und ihn suchen zu
+        lassen hieße, die Tour aus dem Blick zu nehmen.
+        """
+        areas: dict[str, QWidget] = {
+            "tree": self.object_tree,
+            "parameters": self.parameters,
+            "history": self.history_panel,
+            "report": self.report,
+            "viewport": self.viewport,
+        }
+        area = areas.get(target)
+        if area is None:
+            return
+        if area is self.report:
+            self.right.setCurrentWidget(self.report)
+
+        area.setStyleSheet(f"border: 2px solid {ROLES['select']};")
+        QTimer.singleShot(FLASH_MS, lambda: area.setStyleSheet(""))
 
     def _remove_tour(self) -> None:
         """Blendet den Tour-Reiter aus — beim Beenden und beim Projektwechsel."""

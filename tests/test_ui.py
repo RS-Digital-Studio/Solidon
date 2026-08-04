@@ -1838,3 +1838,32 @@ def test_dragging_a_face_reaches_the_document(window: MainWindow) -> None:
     moved = window.session.project.document.ops[-1]
     assert moved.params["distance"] == pytest.approx(3.0)
     assert moved.params["nz"] == pytest.approx(1.0)
+
+
+def test_every_worker_survives_the_delivery_of_its_own_signal(session: Session) -> None:
+    """Die Regel gilt für alle drei Arbeiter, nicht nur den, bei dem es knallte.
+
+    ``_on_thread_done``, ``_on_agent_done`` und ``_on_split_done`` laufen als
+    Slots des ``finished``-Signals ihres eigenen Arbeiters. Wer die Referenz
+    dort loslässt, gibt den PySide-Wrapper mitsamt C++-QThread frei, während
+    Qt die Zustellung noch auf dem Stapel hat — der Absturz ohne Traceback, der
+    die Suite sporadisch riss.
+
+    Beim Auswerter wurde das behoben, weil dort jemand hämmerte. Agent und
+    Teilungssuche trugen denselben Fehler weiter; die Teilungssuche sogar in
+    einem Lambda, das ``None`` in genau das Feld schrieb, dessen Objekt es
+    gerade zustellte.
+
+    Geprüft am Slot statt am Absturz: einen Absturz zuverlässig auszulösen
+    braucht Last und Glück, die Regel dahinter ist eine Zeile.
+    """
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+
+    for name in ("_finished_worker", "_finished_agent", "_finished_split"):
+        assert hasattr(session, name), f"{name} fehlt — ein Arbeiter ohne Halteleine"
+
+    # Nach einem Lauf hält das Feld den ausgelaufenen Arbeiter, statt ihn
+    # freigegeben zu haben.
+    assert session._finished_worker is not None
+    assert session._worker is None

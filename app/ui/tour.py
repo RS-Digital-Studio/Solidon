@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import examples
 from app.core.examples import Example
 from app.core.tour import Tour
 from app.core.types import Document
@@ -40,6 +41,12 @@ class TourPanel(QWidget):
     """Führt durch ein Beispiel: erklärt, wartet, erkennt, schaltet weiter."""
 
     closed = Signal()
+    pointsAt = Signal(str)
+    followRequested = Signal(str)
+    """Das nächste Beispiel, wenn die Tour zu Ende ist und jemand weitermachen
+    will — trägt seine Kennung."""
+    """Wovon der aktuelle Schritt spricht — „history", „parameters", „report",
+    „tree" oder „viewport". Das Fenster lässt den Bereich kurz aufleuchten."""
     """Die Tour wurde beendet — das Fenster nimmt den Reiter weg."""
 
     def __init__(self, session: Session, parent: QWidget | None = None) -> None:
@@ -51,6 +58,11 @@ class TourPanel(QWidget):
         ``projectChanged`` auch beim Öffnen des nächsten Projekts — eine
         Erkennung auf einem fremden Dokument wäre ein geratener Fortschritt."""
         self._current = 0
+        self._example: Example | None = None
+        """Welches Beispiel läuft — für den Knopf, der auf das nächste führt."""
+        self._pointed_at: str | None = None
+        """Worauf zuletzt gezeigt wurde. Ein Rahmen, der bei jeder
+        Neuberechnung aufblinkt, ist ein Flackern und kein Hinweis."""
         self._already: set[int] = set()
         """Schritte, deren Erkennung schon beim Start zutraf. Sie zählen nicht
         als getan — der Nutzer hat sie nicht getan."""
@@ -101,12 +113,20 @@ class TourPanel(QWidget):
             tr("Schaltet zum nächsten Schritt — auch, wenn der aktuelle nicht gemacht wurde.")
         )
         self.next_button.clicked.connect(self.advance)
+        # Am Ende der Tour steht eine Frage, die vorher niemand beantwortet
+        # hat: und jetzt? Der Abschlusstext sagte, was man gelernt hat, und
+        # führte nirgendwohin — die übrigen sechs Beispiele fand nur, wer den
+        # Startbildschirm wiederzufinden wusste.
+        self.follow_button = QPushButton("", self)
+        self.follow_button.setVisible(False)
+        self.follow_button.clicked.connect(self._follow)
         self.stop_button = QPushButton(tr("Tour beenden"), self)
         self.stop_button.clicked.connect(self.stop)
 
         buttons = QHBoxLayout()
         buttons.setContentsMargins(0, 0, 0, 0)
         buttons.addWidget(self.next_button)
+        buttons.addWidget(self.follow_button)
         buttons.addStretch(1)
         buttons.addWidget(self.stop_button)
 
@@ -142,6 +162,7 @@ class TourPanel(QWidget):
         self._clear_rows()
         self._tour = tour
         self._document = self._session.project.document
+        self._example = example
         self._current = 0
         # Was beim Öffnen schon zutrifft, hat der Nutzer nicht getan. Ein
         # Schritt, dessen Erkennung von Anfang an wahr ist — „im Prüfbericht
@@ -261,6 +282,16 @@ class TourPanel(QWidget):
         return pixmap
 
     def _update_marks(self) -> None:
+        """Der aktuelle Schritt steht da, die übrigen sind eine Zeile.
+
+        Vorher standen alle fünf in voller Länge untereinander, der aktuelle
+        nur fett — eine Liste, keine Führung. Wer bei „Schritt 1 / 5" anfängt,
+        liest fünf Absätze und weiß nicht, welcher gerade dran ist.
+
+        Erledigtes und Kommendes bleibt sichtbar, nur eben einzeilig: eine
+        Tour, die verbirgt, was noch kommt, macht aus Schritten
+        Überraschungen.
+        """
         tour = self._tour
         if tour is None:
             return
@@ -269,21 +300,69 @@ class TourPanel(QWidget):
             body.setBold(index == self._current)
             text.setFont(body)
             text.setEnabled(index <= self._current)
+            # Nur der aktuelle Schritt bricht um; die anderen kürzt Qt auf
+            # ihre Zeile.
+            text.setWordWrap(index == self._current)
             if index < self._current:
                 marker.setPixmap(self._mark("done"))
             elif index == self._current:
                 marker.setPixmap(self._mark("step"))
             else:
                 marker.clear()
+        self._point_at_current()
 
         finished = self._current >= len(tour.steps)
         self.closing.setVisible(finished)
         self.next_button.setVisible(not finished)
+        following = self._next_example() if finished else None
+        self.follow_button.setVisible(following is not None)
+        if following is not None:
+            self.follow_button.setText(f"{tr('Weiter mit')}: {following.title}")
         self.progress.setText(
             tr("Tour abgeschlossen.")
             if finished
             else f"{tr('Schritt')} {self._current + 1} / {len(tour.steps)}"
         )
+
+    def _next_example(self) -> Example | None:
+        """Das Beispiel nach diesem, in der Reihenfolge des Startbildschirms.
+
+        Nach dem letzten kommt keines — dann steht dort nur der Abschluss, und
+        das ist ehrlicher als ein Knopf, der zurück an den Anfang führt.
+        """
+        if self._example is None:
+            return None
+        ids = [entry.id for entry in examples.EXAMPLES]
+        if self._example.id not in ids:
+            return None
+        position = ids.index(self._example.id) + 1
+        return examples.EXAMPLES[position] if position < len(ids) else None
+
+    def _follow(self) -> None:
+        following = self._next_example()
+        if following is not None:
+            self.followRequested.emit(following.id)
+
+    def _point_at_current(self) -> None:
+        """Sagt dem Fenster, wovon der aktuelle Schritt spricht.
+
+        „Sehen Sie links in den Verlauf" lässt vier Bereiche offen, und wer den
+        Satz zum ersten Mal liest, sucht. Gemeldet wird nur der Name — wo der
+        Bereich liegt und wie er aufleuchtet, weiß das Fenster.
+
+        Gemeldet wird auch nur bei einem Wechsel: ein Rahmen, der bei jeder
+        Neuberechnung aufblinkt, ist ein Flackern und kein Hinweis.
+        """
+        tour = self._tour
+        if tour is None or self._current >= len(tour.steps):
+            self._pointed_at = None
+            return
+        target = tour.steps[self._current].shows
+        if target == self._pointed_at:
+            return
+        self._pointed_at = target
+        if target is not None:
+            self.pointsAt.emit(target)
 
     def _clear_rows(self) -> None:
         # Das Panel-Layout vergisst ein zerstörtes Widget von selbst — mehr

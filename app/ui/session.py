@@ -294,7 +294,17 @@ class Session(QObject):
         einem schweren Dokument) riss das die Suite Tests später ohne eine
         Zeile Traceback ab."""
         self._agent: _AgentWorker | None = None
+        self._finished_agent: _AgentWorker | None = None
+        """Derselbe Grund wie bei ``_finished_worker``: ``_on_agent_done``
+        läuft als Slot des ``finished``-Signals seines eigenen Arbeiters, und
+        die Referenz dort loszulassen nimmt den Wrapper mitsamt C++-QThread mit,
+        während Qt die Zustellung noch auf dem Stapel hat. Beim Auswerter hat
+        genau das die Suite ohne eine Zeile Traceback abgerissen; hier hämmerte
+        bisher nur niemand darauf."""
         self._split: _SplitWorker | None = None
+        self._finished_split: _SplitWorker | None = None
+        """Und dasselbe für die Teilungssuche — sie ließ ihre Referenz sogar in
+        einem Lambda am ``finished``-Signal los."""
         self._split_discarded = False
         """Ob das laufende Split-Ergebnis verworfen wurde — der Arbeiter
         läuft dann aus, ohne dass jemand sein Ergebnis anwendet."""
@@ -717,7 +727,7 @@ class Session(QObject):
         worker = _SplitWorker(as_mesh_data(entry.mesh), object_id, self.profile)
         worker.done.connect(lambda plan: self._split_planned(plan, object_id, then))
         worker.failedWith.connect(self._split_failed)
-        worker.finished.connect(lambda: setattr(self, "_split", None))
+        worker.finished.connect(self._on_split_done)
         self._split = worker
         self.splitBusyChanged.emit(True)
         worker.start()
@@ -961,7 +971,17 @@ class Session(QObject):
 
     def _on_agent_done(self) -> None:
         self.agentBusyChanged.emit(False)
+        # Nicht einfach loslassen — siehe ``_finished_agent``.
+        self._finished_agent = self._agent
         self._agent = None
+
+    def _on_split_done(self) -> None:
+        """Die Teilungssuche ist ausgelaufen — ihr Arbeiter bleibt am Leben.
+
+        Als benannter Slot und nicht als Lambda: das Lambda schrieb ``None`` in
+        dasselbe Feld, dessen Objekt es gerade zustellte."""
+        self._finished_split = self._split
+        self._split = None
 
     def _on_thread_done(self) -> None:
         self.busyChanged.emit(False)

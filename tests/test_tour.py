@@ -270,3 +270,92 @@ class _FakeSession:
     def __init__(self, project: Project, history: History) -> None:
         self.project = project
         self.history = history
+
+
+def test_a_tour_names_parameters_the_way_the_window_shows_them() -> None:
+    """§4.1: der Text sagte „staerke", die Parameterleiste zeigt „Stärke".
+
+    Der Bezeichner ist ASCII, weil er ein Bezeichner ist; angezeigt wird der
+    Titel. Wer nach „staerke" sucht, findet nichts — und wer nach „breite"
+    sucht, findet „Breite" nur, wenn er die Groß- und Kleinschreibung übersieht.
+
+    Nach einem ``@`` bleibt der Bezeichner stehen: dort ist er kein Text,
+    sondern das, was in einen Ausdruck gehört.
+    """
+    import re
+
+    from app.core.scene.project import load
+
+    for entry in examples.EXAMPLES:
+        tour = tour_for(entry.id)
+        if tour is None:
+            continue
+        project = load(examples.directory() / f"{entry.id}.p3d")
+        texts = [str(tour.intro), str(tour.closing)]
+        texts.extend(str(step.text) for step in tour.steps)
+
+        for name, parameter in project.document.parameters.items():
+            title = parameter.title or name
+            if title == name:
+                continue  # ohne eigenen Titel gibt es nichts zu verwechseln
+            for text in texts:
+                # Der Name ohne @ davor — das ist die Stelle, an der ein
+                # Bezeichner als Text steht.
+                bare = re.search(rf"(?<!@)(?<!\w){re.escape(name)}(?!\w)", text)
+                assert bare is None, (
+                    f"{entry.id}: die Tour schreibt {name}, die Oberfläche zeigt {title}"
+                )
+
+
+def test_every_step_that_names_a_place_points_at_it() -> None:
+    """§2.6: „Sehen Sie links in den Verlauf" lässt vier Bereiche offen.
+
+    Wer den Satz zum ersten Mal liest, sucht. Ein Schritt, der einen Bereich
+    beim Namen nennt, sagt jetzt auch, welcher es ist — die Oberfläche lässt
+    ihn kurz aufleuchten.
+    """
+    places = {
+        "Verlauf": "history",
+        "Prüfbericht": "report",
+        "unter Parameter": "parameters",
+        "im Objektbaum": "tree",
+    }
+    for tour in TOURS:
+        for index, step in enumerate(tour.steps):
+            text = str(step.text)
+            named = [target for needle, target in places.items() if needle in text]
+            if not named:
+                continue
+            assert step.shows is not None, (
+                f"{tour.example_id}, Schritt {index + 1}: nennt {named[0]} und zeigt nirgendwohin"
+            )
+            assert step.shows in named, (
+                f"{tour.example_id}, Schritt {index + 1}: zeigt auf {step.shows}, "
+                f"spricht aber von {named}"
+            )
+
+
+def test_the_last_step_of_a_tour_leads_to_the_next_example() -> None:
+    """Am Ende steht eine Frage, die vorher niemand beantwortet hat: und jetzt?
+
+    Der Abschlusstext sagte, was man gelernt hat, und führte nirgendwohin. Die
+    übrigen sechs Beispiele fand nur, wer den Startbildschirm wiederzufinden
+    wusste — und der ist nach „Datei → Neu" nicht mehr zu haben.
+    """
+    import pytest
+
+    pytest.importorskip("PySide6")
+
+    from app.ui.tour import TourPanel
+
+    ids = [entry.id for entry in examples.EXAMPLES]
+    panel = TourPanel.__new__(TourPanel)
+
+    for position, entry in enumerate(examples.EXAMPLES):
+        panel._example = entry
+        following = panel._next_example()
+        if position + 1 < len(ids):
+            assert following is not None
+            assert following.id == ids[position + 1]
+        else:
+            assert following is None, "nach dem letzten kommt keines — kein Kreis"

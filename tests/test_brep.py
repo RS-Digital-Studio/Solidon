@@ -362,3 +362,33 @@ def test_a_mesh_cannot_pretend_to_be_a_step(profile: Profile) -> None:
         export_bytes(mesh, "step", None, "", mesh)
 
     assert problem.value.constraint == "needs_brep"
+
+
+def test_step_comes_back_addressable_and_stable() -> None:
+    """Ein STEP-Körper ist adressierbar, und zwar bei jedem Laden gleich.
+
+    Das Konzept P15 führte das als Lücke D16 („STEP-Import wird nicht
+    kanonisiert — Flächen kommen nicht adressierbar zurück"). Der Befund kam
+    aus dem Vergleich mit einer anderen Anwendung und wurde ungeprüft
+    übernommen; er trifft auf Formwerk nicht zu. `load_step` ruft `features_of`
+    wie jede andere B-Rep-Operation.
+
+    Geprüft wird trotzdem, und zwar das, worauf es ankommt: nicht nur *dass*
+    Flächen zurückkommen, sondern dass dieselbe Datei dieselben Namen ergibt.
+    Wäre die Reihenfolge zufällig, zeigte eine gespeicherte Skizzenebene
+    (`feature:face_3`) morgen auf eine andere Wand — und niemand sähe, warum.
+    """
+    if not available():
+        pytest.skip("ohne OpenCASCADE gibt es kein STEP")
+
+    payload = step.write(edit.box(40.0, 30.0, 20.0))
+    runs = [
+        {
+            key: (round(entry.params["area"], 4), tuple(round(v, 6) for v in entry.params["centre"]))
+            for key, entry in features_of(step.read(payload)).items()
+        }
+        for _ in range(3)
+    ]
+
+    assert len(runs[0]) == 6, "sechs Wände, sechs Namen"
+    assert runs[0] == runs[1] == runs[2], "und jedes Laden ergibt dieselben"

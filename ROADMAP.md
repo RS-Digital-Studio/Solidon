@@ -290,9 +290,11 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       Artefakt-Upload sonst die Ausführungsrechte verliert; Anwendung und
       Installer werden signiert, der Schritt überspringt sich ohne Zertifikat.
       **Ungeprüft**, weil dieses Repository noch nicht auf einem CI-Dienst
-      liegt; AppImage und Flatpak fehlen — beide brauchen zuerst ein
-      Anwendungssymbol, das es noch nicht gibt (auch Installer und exe zeigen
-      bis dahin Standardbilder)
+      liegt; AppImage und Flatpak fehlen. Der Grund, der hier stand — es gebe
+      kein Anwendungssymbol —, gilt nicht mehr: `app/images/icon/formwerk.svg`
+      ist die Quelle, `tools/make_icon.py` rastert daraus `packaging/formwerk.ico`
+      und `website/icon.svg`, und Installer wie exe tragen es. Offen sind allein
+      die beiden Linux-Formate
 - [x] Erstinbetriebnahme (§38) — Sprache, Drucker, Material, externe Programme;
       überspringbar, nachholbar, endet beim ersten Import
 - [x] Fehlerberichtsdialog mit Container-Anhang — legt einen Ordner an,

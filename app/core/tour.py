@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Literal
 
 from app.core.registry import REGISTRY
 from app.core.scene.history import History
@@ -33,6 +33,10 @@ from app.i18n import TranslatableText, _
 
 #: Liest Dokument und Verlauf und sagt, ob der Schritt getan ist.
 StepCheck = Callable[[Document, History], bool]
+
+#: Die Bereiche des Fensters, auf die ein Schritt zeigen kann. Der Kern nennt
+#: sie beim Namen und weiß nicht, wo sie liegen — das ist Sache der Oberfläche.
+TourTarget = Literal["tree", "parameters", "history", "report", "viewport"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +49,11 @@ class TourStep:
 
     text: TranslatableText | str
     done: StepCheck | None = None
+    shows: TourTarget | None = None
+    """Wovon der Schritt spricht. „Sehen Sie links in den Verlauf" ist eine
+    Anweisung, die vier Bereiche offenlässt; wer sie zum ersten Mal liest, sucht.
+    Die Oberfläche lässt den genannten Bereich kurz aufleuchten — der Kern sagt
+    nur, welcher es ist."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,13 +168,15 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         steps=(
             TourStep(
+                shows="history",
                 text=_(
                     "Sehen Sie links in den Verlauf: vier Schritte — laden, reparieren, "
                     "auf das Bett, bohren. Das Modell ist hier nicht das Netz, sondern "
                     "diese Liste, und jeder Schritt bleibt änderbar."
-                )
+                ),
             ),
             TourStep(
+                shows="history",
                 text=_(
                     "Öffnen Sie den letzten Schritt „Bohrung setzen“ mit einem "
                     "Doppelklick im Verlauf und ändern Sie den Durchmesser — etwa auf "
@@ -190,11 +201,12 @@ TOURS: Final[tuple[Tour, ...]] = (
                 done=_op_restored("drill_hole"),
             ),
             TourStep(
+                shows="report",
                 text=_(
                     "Rechts im Prüfbericht steht, was die Reparatur am Anfang gefunden "
                     "hat. Bei heruntergeladenen Modellen ist das die Regel, nicht die "
                     "Ausnahme."
-                )
+                ),
             ),
         ),
         closing=_(
@@ -211,15 +223,16 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         steps=(
             TourStep(
+                shows="history",
                 text=_(
-                    "Links unter Parameter stehen breite, tiefe und staerke. Die "
-                    "Schritte im Verlauf verweisen mit @breite darauf — eine Zahl, ein "
-                    "Name, viele Verwender."
-                )
+                    "Links unter Parameter stehen Breite, Tiefe und Stärke. Die "
+                    "Schritte im Verlauf verweisen mit @breite darauf — der Name "
+                    "unter dem Titel, eine Zahl, viele Verwender."
+                ),
             ),
             TourStep(
                 text=_(
-                    "Ändern Sie den Wert von breite — etwa auf 90. Das ganze Teil "
+                    "Ändern Sie den Wert von Breite — etwa auf 90. Das ganze Teil "
                     "folgt sofort, und die Schraubenlöcher bleiben, wo sie hingehören."
                 ),
                 done=_parameter_changed("breite", 60.0),
@@ -232,6 +245,7 @@ TOURS: Final[tuple[Tour, ...]] = (
                 )
             ),
             TourStep(
+                shows="tree",
                 text=_(
                     "Setzen Sie selbst einen Baustein: den Halter im Objektbaum "
                     "anklicken, dann im Menü Bausteine etwas wählen — zum Beispiel ein "
@@ -255,18 +269,20 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         steps=(
             TourStep(
+                shows="history",
                 text=_(
                     "Die ersten Schritte im Verlauf sind Erzeugen und Reparieren: "
                     "generierte Netze kommen mit Löchern und doppelten Flächen, und "
                     "die Kette schließt sie, bevor irgendetwas anderes passiert."
-                )
+                ),
             ),
             TourStep(
+                shows="report",
                 text=_(
                     "Rechts im Prüfbericht steht, was die Kette gefunden und "
                     "geschlossen hat — mit Herkunft: eine Schätzung wird nie als "
                     "Messung ausgegeben."
-                )
+                ),
             ),
             TourStep(
                 text=_(
@@ -299,11 +315,12 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         steps=(
             TourStep(
+                shows="history",
                 text=_(
                     "Der Verlauf zeigt sie als Transaktionen: Boden, Befestigung, "
                     "Kabel. Jeder Baustein sitzt an Zahlen, die Sie später noch "
                     "ändern können."
-                )
+                ),
             ),
             TourStep(
                 text=_(
@@ -314,12 +331,13 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
             TourStep(
                 text=_(
-                    "Ändern Sie links den Parameter wand — etwa auf 10. Boden und "
+                    "Ändern Sie links den Parameter Wandstärke — etwa auf 10. Boden und "
                     "Bausteine folgen; die Buchse sitzt weiter bündig."
                 ),
                 done=_parameter_changed("wand", 8.0),
             ),
             TourStep(
+                shows="history",
                 text=_(
                     "Öffnen Sie die Mutternfalle mit einem Doppelklick im Verlauf und "
                     "stellen Sie die Größe auf M4 um — alle Maße kommen aus der "
@@ -342,6 +360,7 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         steps=(
             TourStep(
+                shows="history",
                 text=_(
                     "Öffnen Sie „Beschriftung“ mit einem Doppelklick im Verlauf und "
                     "schreiben Sie Ihren eigenen Text. Die Schrift bleibt im zweiten "
@@ -428,11 +447,12 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         steps=(
             TourStep(
+                shows="history",
                 text=_(
                     "Erst teilen, dann aushöhlen — nicht umgekehrt: eine ausgehöhlte "
                     "Wand wäre an der Schnittfläche zu dünn für Passstifte. Deshalb "
                     "steht „Teilen und verstiften“ im Verlauf vor dem „Aushöhlen“."
-                )
+                ),
             ),
             TourStep(
                 text=_(
@@ -442,6 +462,7 @@ TOURS: Final[tuple[Tour, ...]] = (
                 )
             ),
             TourStep(
+                shows="history",
                 text=_(
                     "Öffnen Sie eines der beiden „Aushöhlen“ im Verlauf und stellen "
                     "Sie die Wandstärke um — etwa auf 5 mm. Die Entlüftungsbohrungen "
