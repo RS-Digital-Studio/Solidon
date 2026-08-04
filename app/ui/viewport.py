@@ -20,12 +20,17 @@ from app.branding import ENVIRONMENT_PREFIX
 from app.core.geom.measure import Measurement, MeasurementList, distance, snap, wall_thickness
 from app.core.geom.mesh_ops import decimate
 from app.core.geom.section import SectionPlane, cut
-from app.core.geom.transform import TransformSteps, decompose_transform, snap_to_step
+from app.core.geom.transform import (
+    TransformSteps,
+    along_normal,
+    decompose_transform,
+    snap_to_step,
+)
 from app.core.log import get_logger
 from app.core.perceive.maps import AnalysisMap
 from app.core.scene import EvaluationResult
 from app.core.types import Feature, FeatureId, LayerInfo, ObjectId, Profile, Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_DISPLAY, EPS_GEOM, EPS_MATCH_MINIMUM, EPS_MATCH_RELATIVE
 from app.i18n import tr
 from app.ui.labels import feature_label
 from app.ui.palette import DIFF_PALETTES, VIRIDIS, DiffPalette
@@ -103,6 +108,41 @@ SELECTED_COLOUR = "#f0a54a"
 BACKFACE_COLOUR = "#8b3a3a"
 BED_COLOUR = "#5a6472"
 
+#: Der gefüllte Grund der Platte — dunkler als das Raster darauf und heller
+#: als der Hintergrund, damit beides sichtbar bleibt.
+BED_SURFACE_COLOUR = "#2a303a"
+
+#: Abstand der Maßzahlen an der Platte, in Millimetern. Fünfzig, weil das
+#: Raster bei zehn liegt: eine Zahl an jeder Rasterlinie wäre ein Zaun aus
+#: Ziffern, und eine alle hundert ließe eine 220er-Platte mit zwei Zahlen
+#: zurück.
+BED_SCALE_STEP = 50.0
+
+#: Wie weit die Zahlen neben der Plattenkante stehen. Weit genug, dass sie
+#: nicht auf einem Teil liegen, das bis an den Rand geht.
+BED_SCALE_GAP = 8.0
+
+#: Wie hoch der Kontaktschatten über der Platte liegt. Ohne diesen Abstand
+#: streiten sich Schatten und Platte um dieselbe Tiefe, und das Bild flimmert
+#: beim Drehen.
+SHADOW_LIFT = 0.05
+
+#: Farbe und Deckkraft des Kontaktschattens. Dunkler als die Platte, aber
+#: nie schwarz: er soll den Ort zeigen, nicht ein Loch in die Platte
+#: schneiden.
+SHADOW_COLOUR = "#11151a"
+SHADOW_OPACITY = 0.35
+
+#: Wohin das Licht fällt, als waagerechter Anteil je Millimeter Höhe. Nach
+#: hinten rechts, weil die Standardansicht von vorn links kommt — so tritt
+#: der Schatten hinter dem Teil hervor statt davor, wo er die Sicht auf die
+#: Vorderkante nähme.
+SHADOW_DIRECTION = (0.35, 0.45)
+
+#: Wie weit der gefüllte Grund unter dem Raster liegt. Nur so viel, dass
+#: beide nicht um dieselbe Tiefe streiten.
+BED_SURFACE_DROP = 0.2
+
 
 #: Schalter für Maschinen und Testläufe ohne brauchbaren OpenGL-Kontext.
 HEADLESS_VARIABLE = f"{ENVIRONMENT_PREFIX}_NO_VIEWPORT"
@@ -137,6 +177,12 @@ MeasureMode = Literal["off", "distance", "thickness"]
 
 MEASURE_COLOUR = "#f0a54a"
 
+#: Der Griff auf einer Fläche, gemessen an der Diagonale des Objekts, und
+#: seine Untergrenze in Millimetern. Mitwachsend, weil ein fester Radius an
+#: einem Gehäuse verschwindet und einen Zapfen vollständig verdeckt.
+FACE_HANDLE_SHARE = 0.06
+FACE_HANDLE_MINIMUM = 2.0
+
 #: Layer analysis (§18.10): contour, island, unsupported region.
 LAYER_COLOUR = "#7fb2e5"
 ISLAND_COLOUR = "#e0a33c"
@@ -166,6 +212,59 @@ DISPLAY_DECIMATION_TARGET = 200_000
 FEATURE_EDGE_LIMIT = DISPLAY_DECIMATION_TARGET
 
 
+def shadow_points(points: Any) -> Any:
+    """Wohin die Punkte eines Körpers als Schatten fallen (§18.6).
+
+    Jeder Punkt fällt entlang des Lichts auf die Platte: der Versatz ist seine
+    Höhe mal der waagerechte Anteil der Lichtrichtung. Punkte unter der Platte
+    werfen keinen Schatten nach vorn — ihre Höhe zählt als null, sonst zöge ein
+    Teil, das zur Hälfte versunken ist, seinen Schatten in die falsche
+    Richtung.
+
+    Als eigene Funktion, damit die Rechnung ohne Plotter prüfbar bleibt.
+    """
+    import numpy as np
+
+    grid = np.asarray(points, dtype=float)
+    height = np.maximum(grid[:, 2], 0.0)
+    return np.column_stack(
+        (
+            grid[:, 0] + height * SHADOW_DIRECTION[0],
+            grid[:, 1] + height * SHADOW_DIRECTION[1],
+            np.zeros(len(grid)),
+        )
+    )
+
+
+def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, float], str]]:
+    """Die Maßzahlen an der vorderen und linken Plattenkante (§18.6).
+
+    Ein Raster ohne Zahlen sagt nur, dass es ein Raster gibt. Erst die Zahl
+    daneben macht daraus einen Maßstab, an dem man ein Teil einordnet, ohne
+    zu messen — und das ist der Zweck der Platte in echter Größe.
+
+    Als eigene Funktion und nicht im Zeichnen versteckt: offscreen gibt es
+    keinen Plotter, und eine Prüfung, die sich dort überspringt, prüft nie
+    etwas.
+    """
+    marks: list[tuple[tuple[float, float, float], str]] = []
+    half_width, half_depth = width / 2.0, depth / 2.0
+    step = BED_SCALE_STEP
+    position = step
+    while position <= half_width + EPS_GEOM:
+        for side in (-position, position):
+            marks.append(((side, -half_depth - BED_SCALE_GAP, 0.0), f"{abs(side):.0f}"))
+        position += step
+    position = step
+    while position <= half_depth + EPS_GEOM:
+        for side in (-position, position):
+            marks.append(((-half_width - BED_SCALE_GAP, side, 0.0), f"{abs(side):.0f}"))
+        position += step
+    # Der Nullpunkt einmal, nicht zweimal — er gehört beiden Kanten.
+    marks.append(((-half_width - BED_SCALE_GAP, -half_depth - BED_SCALE_GAP, 0.0), "0"))
+    return marks
+
+
 class Viewport(QWidget):
     """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn VTK fehlt."""
 
@@ -173,11 +272,16 @@ class Viewport(QWidget):
     """A finished measurement — carries a ``Measurement``."""
     transformDragged = Signal(object)
     """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
+    faceDragged = Signal(object, float)
+    """Ein Zug an einer Fläche — Normale und Weg entlang ihr (§18.11)."""
     featurePicked = Signal(str)
+    """A feature clicked in the view — carries its id (§18.5)."""
+    objectPicked = Signal(str)
+    """Ein angeklickter Körper — trägt seine Kennung. Leer heißt: daneben
+    geklickt, die Auswahl fällt weg."""
     paintRequested = Signal(object)
     """A point on the surface to paint at (§20). The window turns it into an
     operation — the view never changes geometry itself."""
-    """A feature clicked in the view — carries its id (§18.5)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -198,17 +302,21 @@ class Viewport(QWidget):
         """True when a cut could not be closed because the body is open (§18.2)."""
         self._object_colour = OBJECT_COLOUR
         self._bed_colour = BED_COLOUR
+        self._bed_surface = BED_SURFACE_COLOUR
         self._measure_mode: MeasureMode = "off"
         self._pending_point: Vec3 | None = None
         self.measurements = MeasurementList()
         self._measure_actors: list[Any] = []
         self._gizmo: Any | None = None
+        self._face_actor: Any | None = None
+        """Die Scheibe, an der der Gizmo hängt, wenn eine Fläche gewählt ist."""
         self._grid_step = 1.0
         self._angle_step = 15.0
         self._map: AnalysisMap | None = None
         self._map_object: ObjectId | None = None
         self._occlusion_applied = False
         self._edge_actors: list[Any] = []
+        self._shadow_actors: list[Any] = []
         self._edge_colour = "#4c5258"
         self._feature_overlay = False
         self._feature_actors: list[Any] = []
@@ -248,6 +356,7 @@ class Viewport(QWidget):
         self._apply_render_quality()
         self.set_theme("dark")
         self.set_navigation("slicer")
+        self._enable_picking()
 
     # --- Darstellungsqualität (§18.1) -------------------------------------------
 
@@ -331,6 +440,58 @@ class Viewport(QWidget):
             return
         self._occlusion_applied = wanted
 
+    @property
+    def contact_shadows(self) -> bool:
+        """Ob ein Kontaktschatten auf der Platte liegen soll.
+
+        Ein Körper ohne Schatten schwebt, und die Frage „steht das Teil auf der
+        Platte oder darüber?" ist genau die, die der Viewport beantworten soll
+        (§18.6).
+
+        Dieselbe Ausnahme wie bei der Umgebungsverdeckung: solange eine
+        Analysekarte läuft, bleibt er aus. Er dunkelt nach, und die Karte färbt
+        nach Zahlen — der abgelesene Wert wäre ein anderer als der gemeldete.
+        """
+        return self._map is None
+
+    def _shadow_outline_of(self, surface: Any) -> Any:
+        """Der Schatten eines Körpers auf der Platte, entlang der Lichtrichtung.
+
+        **Nicht** über ``enable_shadows``. Der VTK-Schattenwurf wurde in vier
+        Anläufen geprüft und in allen verworfen: mit drei Lichtern verschattet
+        er ganze Seitenflächen des Körpers schwarz, mit einem einzelnen
+        genauso, und die Schattenkarte deckt die Platte nicht ab — ihre Ränder
+        laufen schwarz aus. Mit gefüllter Platte kam ein richtiger Schatten
+        heraus, die schwarzen Ränder blieben.
+
+        Die Projektion kann alles, was hier gebraucht wird, und nichts davon
+        hängt am Treiber. **Schräg und nicht senkrecht:** senkrecht projiziert
+        liegt der Schatten exakt unter dem Körper und ist von ihm verdeckt — im
+        Bild war er schlicht nicht da. Entlang einer festen Lichtrichtung
+        geworfen tritt er seitlich hervor, und weil sein Versatz mit der Höhe
+        wächst, beantwortet er nebenbei die Frage, die er beantworten soll:
+        ein schwebendes Teil hat seinen Schatten weiter weg.
+
+        Die konvexe Hülle ist bewusst gröber als der echte Umriss — ein Schatten
+        zeigt den Ort, nicht die Form; wer die Form sucht, dreht die Ansicht.
+        """
+        import numpy as np
+        import pyvista as pv
+
+        points = np.asarray(surface.points, dtype=float)
+        if len(points) < 3:
+            return None
+        cast = shadow_points(points)
+        try:
+            hull = pv.PolyData(cast).delaunay_2d()
+        except Exception as problem:  # pragma: no cover - hängt an der Punktlage
+            _log.info("shadow outline unavailable: %s", problem)
+            return None
+        if hull.n_cells == 0:
+            return None
+        hull.points[:, 2] = SHADOW_LIFT
+        return hull
+
     # --- scene ------------------------------------------------------------------
 
     def show_scene(self, result: EvaluationResult | None) -> None:
@@ -344,6 +505,9 @@ class Viewport(QWidget):
         for actor in self._edge_actors:
             self.plotter.remove_actor(actor, render=False)
         self._edge_actors.clear()
+        for actor in self._shadow_actors:
+            self.plotter.remove_actor(actor, render=False)
+        self._shadow_actors.clear()
         self._uncapped = False
         if result is None:
             self.plotter.render()
@@ -392,6 +556,7 @@ class Viewport(QWidget):
             )
             self._actors[object_id] = actor
             self._draw_feature_edges(surface, object_id)
+            self._draw_shadow(surface, object_id)
 
         self.select(self._selected)
         self._redraw_features()
@@ -481,6 +646,25 @@ class Viewport(QWidget):
                 color=self._edge_colour,
                 line_width=FEATURE_EDGE_WIDTH,
                 name=f"edges:{object_id}",
+                render=False,
+                pickable=False,
+            )
+        )
+
+    def _draw_shadow(self, surface: Any, object_id: ObjectId) -> None:
+        """Den Kontaktschatten dieses Körpers auf die Platte legen."""
+        if self.plotter is None or not self.contact_shadows:
+            return
+        hull = self._shadow_outline_of(surface)
+        if hull is None:
+            return
+        self._shadow_actors.append(
+            self.plotter.add_mesh(
+                hull,
+                color=SHADOW_COLOUR,
+                opacity=SHADOW_OPACITY,
+                lighting=False,
+                name=f"shadow:{object_id}",
                 render=False,
                 pickable=False,
             )
@@ -627,6 +811,28 @@ class Viewport(QWidget):
         self._frame_actors.clear()
 
         width, depth, height = profile.printer.build_volume
+        # Ein gefüllter Grund unter dem Raster. Bis hierhin war die Platte ein
+        # Drahtgitter über dem Hintergrund — hübsch, aber ohne Fläche: ein
+        # Schatten darauf fiel auf nichts und war im Bild schlicht nicht da.
+        # Knapp unter null, damit er nicht mit dem Raster um dieselbe Tiefe
+        # streitet.
+        self._frame_actors.append(
+            self.plotter.add_mesh(
+                pv.Plane(
+                    center=(0.0, 0.0, -BED_SURFACE_DROP),
+                    direction=(0.0, 0.0, 1.0),
+                    i_size=width,
+                    j_size=depth,
+                ),
+                color=self._bed_surface,
+                ambient=0.45,
+                diffuse=0.55,
+                specular=0.0,
+                name="bed_surface",
+                render=False,
+                pickable=False,
+            )
+        )
         bed = pv.Plane(
             center=(0.0, 0.0, 0.0),
             direction=(0.0, 0.0, 1.0),
@@ -656,6 +862,23 @@ class Viewport(QWidget):
                 render=False,
             )
         )
+
+        import numpy as np
+
+        marks = bed_scale(width, depth)
+        self._frame_actors.append(
+            self.plotter.add_point_labels(
+                np.asarray([point for point, _text in marks], dtype=float),
+                [text for _point, text in marks],
+                text_color=self._bed_colour,
+                font_size=9,
+                show_points=False,
+                shape=None,
+                always_visible=True,
+                name="bed_scale",
+                render=False,
+            )
+        )
         self.plotter.render()
 
     # --- theme (§19.3) ----------------------------------------------------------
@@ -665,6 +888,7 @@ class Viewport(QWidget):
         colours = viewport_colours(theme)  # type: ignore[arg-type]
         self._object_colour = colours["object"]
         self._bed_colour = colours["bed"]
+        self._bed_surface = colours["bed_surface"]
         self._edge_colour = colours["edge"]
         if self.plotter is None:
             return
@@ -744,21 +968,6 @@ class Viewport(QWidget):
         """
         self._measure_mode = mode
         self._pending_point = None
-        if self.plotter is None:
-            return
-        if mode == "off":
-            # Das Messen gibt die Klicks an die Merkmals-Überlagerung zurück, falls
-            # sie an ist.
-            self.plotter.disable_picking()
-            self.set_feature_overlay(self._feature_overlay)
-            return
-        self.plotter.enable_point_picking(
-            callback=self._on_picked,
-            show_message=False,
-            show_point=False,
-            left_clicking=True,
-            picker="point",
-        )
 
     @property
     def measure_mode(self) -> MeasureMode:
@@ -781,19 +990,6 @@ class Viewport(QWidget):
         ein Undo behebt und Vertrauen nicht übersteht.
         """
         self._painting = active
-        if self.plotter is None:
-            return
-        if not active:
-            self.plotter.disable_picking()
-            self.set_feature_overlay(self._feature_overlay)
-            return
-        self.plotter.enable_point_picking(
-            callback=self._on_picked,
-            show_message=False,
-            show_point=False,
-            left_clicking=True,
-            picker="point",
-        )
 
     def _on_picked(self, point: Any) -> None:
         picked = (float(point[0]), float(point[1]), float(point[2]))
@@ -801,11 +997,15 @@ class Viewport(QWidget):
             self.paintRequested.emit(picked)
             return
         if self._measure_mode == "off":
-            # Nicht am Messen: ein Klick ist für das Merkmal darunter gemeint (§18.5).
+            # Nicht am Messen: erst das Merkmal darunter (§18.5), sonst der
+            # Körper. Ein Klick daneben hebt die Auswahl auf — sonst gäbe es
+            # keinen Weg, sie ohne den Baum wieder loszuwerden.
             feature_id = self._feature_at(picked)
             if feature_id is not None:
                 self.select_feature(feature_id)
                 self.featurePicked.emit(feature_id)
+                return
+            self.objectPicked.emit(self._object_at(picked) or "")
             return
 
         mesh = self._nearest_mesh(picked)
@@ -852,6 +1052,38 @@ class Viewport(QWidget):
                 best = entry.mesh
         return best
 
+    def _object_at(self, point: Vec3) -> ObjectId | None:
+        """Der Körper unter einem Klick, oder nichts.
+
+        Anders als ``_nearest_mesh`` antwortet das hier auch mit „daneben": wer
+        neben das Modell klickt, will die Auswahl loswerden, nicht das nächste
+        Objekt bekommen. Geprüft wird gegen den Hüllquader mit einer Toleranz in
+        der Größe der Fangweite — der Picker liefert einen Punkt auf der
+        Oberfläche, und der liegt bauartbedingt auf dem Rand des Quaders.
+
+        Bei mehreren Treffern gewinnt der kleinste Körper: eine Schraube in
+        einem Gehäuse ist das, was jemand meint, wenn er auf sie zeigt.
+        """
+        if self._result is None:
+            return None
+        best: ObjectId | None = None
+        best_volume = float("inf")
+        for object_id, entry in self._result.scene.objects.items():
+            bounds = entry.mesh.bounds
+            size = bounds.size
+            slack = max(EPS_MATCH_MINIMUM, max(size) * EPS_MATCH_RELATIVE)
+            inside = all(
+                low - slack <= value <= high + slack
+                for low, high, value in zip(bounds.minimum, bounds.maximum, point, strict=True)
+            )
+            if not inside:
+                continue
+            volume = size[0] * size[1] * size[2]
+            if volume < best_volume:
+                best_volume = volume
+                best = object_id
+        return best
+
     def _redraw_measurements(self) -> None:
         if self.plotter is None:
             return
@@ -895,7 +1127,8 @@ class Viewport(QWidget):
         """
         self._map = analysis
         self._map_object = object_id if analysis is not None else None
-        # Solange Farbe eine Zahl bedeutet, darf nichts sie nachdunkeln.
+        # Solange Farbe eine Zahl bedeutet, darf nichts sie nachdunkeln —
+        # weder die Verdeckung noch ein Schatten.
         self._apply_ambient_occlusion()
         self.show_scene(self._result)
 
@@ -939,24 +1172,16 @@ class Viewport(QWidget):
     # --- feature overlay (§18.5) ------------------------------------------------
 
     def set_feature_overlay(self, active: bool) -> None:
-        """Beschriftungen an den erkannten Merkmalen, und Klicken zum Auswählen.
+        """Schaltet die **Beschriftungen** an den erkannten Merkmalen um.
 
-        §18.5 nennt das die wichtigste Einzelfunktion: der Nutzer muss nicht
-        wissen, dass eine Bohrung ``hole_3`` heißt — er zeigt darauf.
+        Das Anklicken hängt nicht daran. §18.5 nennt das Zeigen auf ein Merkmal
+        die wichtigste Einzelfunktion — sie hinter einem Häkchen zu verstecken
+        hieße, sie für jeden abzuschalten, der das Häkchen nicht findet. Der
+        Klick trifft immer; was sichtbar wird, ist die Frage der Beschriftung.
         """
         self._feature_overlay = active
         if self.plotter is None:
             return
-        if active and self._measure_mode == "off":
-            self.plotter.enable_point_picking(
-                callback=self._on_picked,
-                show_message=False,
-                show_point=False,
-                left_clicking=True,
-                picker="point",
-            )
-        elif not active and self._measure_mode == "off":
-            self.plotter.disable_picking()
         self._redraw_features()
         self.plotter.render()
 
@@ -1015,13 +1240,21 @@ class Viewport(QWidget):
     def _feature_at(self, point: Vec3) -> FeatureId | None:
         """Das Merkmal nächst einem Klick — zeigen schlägt einen Namen
         tippen (§18.5).
+
+        Gesucht wird im Körper **unter** dem Zeiger, nicht im gerade
+        ausgewählten. Andersherum wäre es ein Ring: den Körper wählt man aus,
+        indem man ihn anklickt, und der Klick fände sein Merkmal erst, wenn er
+        schon ausgewählt wäre. Ohne Treffer bleibt der gewählte Körper die
+        Quelle — dann ist der Klick daneben gegangen, und die Merkmale, die man
+        vor Augen hat, sind seine.
         """
         import numpy as np
 
         target = np.asarray(point, dtype=float)
+        features = self._features_of(self._object_at(point)) or self._features_of_selection()
         best: FeatureId | None = None
         best_offset = float("inf")
-        for feature_id, feature in self._features_of_selection().items():
+        for feature_id, feature in features.items():
             centre = feature.params.get("centre")
             if centre is None:
                 continue
@@ -1030,6 +1263,13 @@ class Viewport(QWidget):
                 best_offset = offset
                 best = feature_id
         return best
+
+    def _features_of(self, object_id: ObjectId | None) -> dict[FeatureId, Feature]:
+        """Die Merkmale eines Körpers, oder nichts."""
+        if object_id is None or self._result is None:
+            return {}
+        entry = self._result.scene.objects.get(object_id)
+        return dict(entry.features) if entry is not None else {}
 
     # --- difference view (§18.7) ------------------------------------------------
 
@@ -1142,27 +1382,101 @@ class Viewport(QWidget):
         self._grid_step = grid_step
         self._angle_step = angle_step
 
+    def gizmo_target(self) -> Feature | None:
+        """Die Fläche, an der der Gizmo hängt — oder ``None`` für das Objekt.
+
+        Als eigene Auskunft und nicht als Zustand des Plotters, damit die
+        Regel prüfbar bleibt: offscreen gibt es keinen Plotter, und ein Test,
+        der sich dort überspringt, prüft nie etwas.
+        """
+        if self._selected_feature is None:
+            return None
+        feature = self._features_of_selection().get(self._selected_feature)
+        if feature is None or feature.kind != "face":
+            return None
+        if feature.params.get("normal") is None or feature.params.get("centre") is None:
+            return None
+        return feature
+
     def set_gizmo(self, active: bool) -> None:
-        """Hängt den Gizmo an das gewählte Objekt, oder nimmt ihn weg."""
+        """Hängt den Gizmo an die gewählte Fläche — sonst an das Objekt.
+
+        Ist ein Merkmal gewählt, ist es das Genauere von beidem: wer eine
+        Fläche angeklickt hat, will sie versetzen und nicht den Körper
+        verschieben (§18.11). Am Griff sieht man den Unterschied, denn er
+        sitzt dann auf der Fläche.
+        """
         if self.plotter is None:
             return
         if self._gizmo is not None:
             self._gizmo.Off()
             self._gizmo = None
+        self._drop_face_handle()
         if not active or self._selected is None:
             return
-        actor = self._actors.get(self._selected)
+        face = self.gizmo_target()
+        actor = self._face_handle(face) if face is not None else self._actors.get(self._selected)
         if actor is None:
             return
         self._gizmo = self.plotter.add_affine_transform_widget(
             actor, release_callback=self._on_gizmo_released
         )
 
+    def _face_handle(self, feature: Feature) -> Any:
+        """Ein Griff auf der Fläche, an dem der Gizmo sitzen kann.
+
+        Der Gizmo braucht einen Actor. Die Fläche selbst ist Teil des
+        Körperactors und lässt sich nicht einzeln greifen, also bekommt sie
+        eine kleine Scheibe an ihrem Mittelpunkt — sichtbar, damit klar ist,
+        woran gezogen wird, und flach, damit sie nichts verdeckt.
+        """
+        import numpy as np
+        import pyvista as pv
+
+        if self.plotter is None:
+            return None
+        centre = np.asarray(feature.params["centre"], dtype=float)
+        normal = np.asarray(feature.params["normal"], dtype=float)
+        span = float(np.linalg.norm(np.asarray(self.bounds_size(), dtype=float)))
+        radius = max(span * FACE_HANDLE_SHARE, FACE_HANDLE_MINIMUM)
+        disc = pv.Disc(center=centre, normal=normal, inner=0.0, outer=radius, c_res=24)
+        self._face_actor = self.plotter.add_mesh(
+            disc, color=MEASURE_COLOUR, opacity=0.6, name="face-handle", render=False
+        )
+        return self._face_actor
+
+    def _drop_face_handle(self) -> None:
+        if self._face_actor is not None and self.plotter is not None:
+            self.plotter.remove_actor(self._face_actor, render=False)
+        self._face_actor = None
+
+    def bounds_size(self) -> Vec3:
+        """Wie groß das gewählte Objekt ist — für Griffe, die mitwachsen."""
+        if self._result is None or self._selected is None:
+            return (100.0, 100.0, 100.0)
+        entry = self._result.scene.objects.get(self._selected)
+        if entry is None:
+            return (100.0, 100.0, 100.0)
+        size = entry.mesh.bounds.size
+        return (float(size[0]), float(size[1]), float(size[2]))
+
     def _on_gizmo_released(self, matrix: Any) -> None:
         """Ein Ziehen endet als Operationen, nicht als Matrix (§18.11, §2.1)."""
         import numpy as np
 
         steps = decompose_transform(np.asarray(matrix, dtype=float))
+        face = self.gizmo_target()
+        if face is not None:
+            # Eine Fläche wandert nur entlang ihrer Normalen. Was quer dazu
+            # gezogen wurde, ist keine Bewegung dieser Fläche — sonst wäre
+            # Press/Pull ein Verschieben mit anderem Namen.
+            normal = tuple(float(value) for value in face.params["normal"])
+            distance = snap_to_step(
+                along_normal(steps.offset, (normal[0], normal[1], normal[2])), self._grid_step
+            )
+            if abs(distance) > EPS_DISPLAY:
+                self.faceDragged.emit(normal, distance)
+            return
         snapped = TransformSteps(
             offset=(
                 snap_to_step(steps.offset[0], self._grid_step),
@@ -1214,6 +1528,27 @@ class Viewport(QWidget):
             return
         style = _InteractorStyle(self.plotter, scheme)
         self.plotter.interactor.SetInteractorStyle(style)
+        # Ein neuer Stil bringt seine eigenen Beobachter mit; das Picking hängt
+        # am alten und wäre sonst nach jedem Wechsel weg.
+        self._enable_picking()
+
+    def _enable_picking(self) -> None:
+        """Klicks kommen immer an — was sie bedeuten, entscheidet der Modus.
+
+        Vorher lief das Picking nur, wenn Messen, Bemalen oder die
+        Merkmalsbeschriftung eingeschaltet waren. Damit war „links wählt aus",
+        was das Schema verspricht und das Handbuch beschreibt, in der Vorgabe
+        nicht wahr: ein Klick auf einen Körper tat nichts.
+        """
+        if self.plotter is None:
+            return
+        self.plotter.enable_point_picking(
+            callback=self._on_picked,
+            show_message=False,
+            show_point=False,
+            left_clicking=True,
+            picker="point",
+        )
 
     @property
     def navigation(self) -> NavigationScheme:

@@ -26,8 +26,17 @@ def test_text_has_enough_contrast_in_both_themes(theme: str) -> None:
 @pytest.mark.parametrize("theme", list(THEMES))
 def test_the_viewport_follows_the_theme(theme: str) -> None:
     colours = viewport_colours(theme)  # type: ignore[arg-type]
-    assert set(colours) == {"bottom", "top", "object", "bed", "edge"}
+    assert set(colours) == {"bottom", "top", "object", "bed", "bed_surface", "edge"}
     assert contrast_ratio(colours["object"], colours["bottom"]) >= 1.8, "a body stands out"
+    # Der gefüllte Grund der Platte liegt zwischen Hintergrund und Raster: hebt
+    # er sich von keinem der beiden ab, ist entweder die Platte unsichtbar oder
+    # ihr Raster darauf.
+    assert contrast_ratio(colours["bed"], colours["bed_surface"]) >= 1.4, (
+        "das Raster muss auf seinem Grund zu sehen sein"
+    )
+    assert contrast_ratio(colours["bed_surface"], colours["bottom"]) >= 1.1, (
+        "und der Grund gegen den Hintergrund"
+    )
     # Eine Körperkante, die man suchen muss, hilft niemandem — dieselbe
     # Schwelle, die WCAG für lesbaren Text nennt, und aus demselben Grund.
     assert contrast_ratio(colours["edge"], colours["object"]) >= 4.0, (

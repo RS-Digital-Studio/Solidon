@@ -137,12 +137,14 @@ def test_ambient_occlusion_yields_to_a_map(qt_app: QApplication) -> None:
     viewport = Viewport()
     try:
         assert viewport.ambient_occlusion, "ohne Karte ist die Verdeckung an"
+        assert viewport.contact_shadows, "und der Kontaktschatten ebenso"
 
         viewport.set_analysis_map(
             maps.AnalysisMap(kind="wall", title="x", values=(1.0,), unit="mm", low=1.0, high=4.0),
             None,
         )
         assert not viewport.ambient_occlusion, "mit Karte ist sie aus"
+        assert not viewport.contact_shadows, "und der Schatten auch — er dunkelt genauso nach"
 
         viewport.set_analysis_map(None, None)
         assert viewport.ambient_occlusion, "danach wieder an"
@@ -372,6 +374,58 @@ def test_a_click_in_the_view_finds_the_feature_under_it(window: MainWindow) -> N
     assert picked == "hole_3"
 
 
+def test_a_click_on_the_body_selects_it(window: MainWindow) -> None:
+    """§2.9 und §18.5: „links wählt aus" muss ohne den Baum gelten.
+
+    Vorher lief das Picking nur, wenn Messen, Bemalen oder die
+    Merkmalsbeschriftung eingeschaltet waren — ein Klick auf einen Körper tat
+    in der Vorgabe nichts, obwohl Schema und Handbuch es versprechen.
+    """
+    window.viewport.show_scene(window.session.last_result)
+    entry = window.session.last_result.scene.objects["obj_1"]
+    centre = entry.mesh.bounds.centre
+
+    assert window.viewport._object_at(centre) == "obj_1"
+
+
+def test_a_click_beside_the_body_clears_the_selection(window: MainWindow) -> None:
+    """Ein Klick daneben ist eine Aussage, kein Beinahe-Treffer.
+
+    ``_nearest_mesh`` antwortet immer mit dem nächsten Körper; für die Auswahl
+    wäre das falsch — sonst gäbe es keinen Weg, sie ohne den Baum loszuwerden.
+    """
+    window.viewport.show_scene(window.session.last_result)
+    entry = window.session.last_result.scene.objects["obj_1"]
+    far = tuple(value + 500.0 for value in entry.mesh.bounds.centre)
+
+    assert window.viewport._object_at(far) is None
+
+
+def test_the_smallest_body_wins_when_several_overlap(window: MainWindow) -> None:
+    """Wer auf eine Schraube in einem Gehäuse zeigt, meint die Schraube."""
+    result = window.session.last_result
+    entry = result.scene.objects["obj_1"]
+    centre = entry.mesh.bounds.centre
+
+    # Der geladene Körper allein: er ist der kleinste und damit der Treffer.
+    assert window.viewport._object_at(centre) == "obj_1"
+
+
+def test_clicking_needs_no_overlay_switch(window: MainWindow) -> None:
+    """Die Merkmalsbeschriftung schaltet Beschriftungen, nicht das Anklicken.
+
+    §18.5 nennt das Zeigen auf ein Merkmal die wichtigste Einzelfunktion — sie
+    hinter einem Häkchen zu verstecken hieße, sie für jeden abzuschalten, der
+    das Häkchen nicht findet.
+    """
+    window.viewport.show_scene(window.session.last_result)
+    window.viewport.set_feature_overlay(False)
+    entry = window.session.last_result.scene.objects["obj_1"]
+    centre = entry.features["hole_3"].params["centre"]
+
+    assert window.viewport._feature_at(centre) == "hole_3"
+
+
 def test_the_label_names_the_feature_and_its_size(window: MainWindow) -> None:
     entry = window.session.last_result.scene.objects["obj_1"]
     label = feature_label("hole_1", entry.features["hole_1"])
@@ -426,3 +480,74 @@ def test_switching_it_off_clears_the_view(window: MainWindow) -> None:
 
     assert window.layer_bar.index() == -1
     assert window.layer_bar.readout.text() == ""
+
+
+# --- Maßstab an der Druckplatte (Konzept P15 §7 Etappe 1) ----------------------
+
+
+def test_the_bed_carries_numbers_not_just_lines() -> None:
+    """Ein Raster ohne Zahlen sagt nur, dass es ein Raster gibt.
+
+    Erst die Zahl daneben macht daraus einen Maßstab, an dem sich ein Teil
+    einordnen lässt, ohne es zu messen — und genau dafür steht die Platte in
+    echter Größe da.
+
+    Als reine Rechnung geprüft: offscreen gibt es keinen Plotter, und ein Test,
+    der sich dort überspringt, prüft nie etwas.
+    """
+    from app.ui.viewport import BED_SCALE_STEP, bed_scale
+
+    marks = bed_scale(256.0, 256.0)
+    labels = [text for _point, text in marks]
+
+    assert "50" in labels
+    assert "100" in labels
+    assert labels.count("0") == 1, "der Nullpunkt gehört beiden Kanten, steht aber einmal da"
+    # 128 mm je Seite, alle 50 mm: 50 und 100 in beide Richtungen, je Achse
+    # vier Zahlen, dazu die Null.
+    assert len(marks) == 2 * 4 + 1
+
+    steps = sorted({float(text) for text in labels if text != "0"})
+    assert steps == [BED_SCALE_STEP, 2 * BED_SCALE_STEP]
+
+
+def test_a_small_bed_still_gets_a_scale() -> None:
+    """Und eine Platte, die kleiner ist als ein Schritt, bekommt wenigstens
+    ihren Nullpunkt — statt einer leeren Beschriftungsliste, über die VTK
+    stolpert."""
+    from app.ui.viewport import bed_scale
+
+    marks = bed_scale(60.0, 60.0)
+    assert marks
+    assert [text for _point, text in marks] == ["0"]
+
+
+def test_a_shadow_falls_beside_the_body_not_under_it() -> None:
+    """Senkrecht projiziert ist ein Schatten unsichtbar.
+
+    Der erste Versuch legte ihn genau unter den Körper — dort verdeckt ihn der
+    Körper, und im Bild war schlicht kein Schatten. Er fällt deshalb entlang
+    einer festen Lichtrichtung, und sein Versatz wächst mit der Höhe: damit
+    beantwortet er nebenbei die Frage, für die er da ist, denn ein schwebendes
+    Teil hat seinen Schatten weiter weg.
+    """
+    import numpy as np
+
+    from app.ui.viewport import SHADOW_DIRECTION, shadow_points
+
+    standing = shadow_points(np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 40.0]]))
+    assert standing[0][0] == pytest.approx(0.0), "was aufliegt, wirft an Ort und Stelle"
+    assert standing[1][0] == pytest.approx(40.0 * SHADOW_DIRECTION[0])
+    assert standing[1][1] == pytest.approx(40.0 * SHADOW_DIRECTION[1])
+    assert all(point[2] == 0.0 for point in standing), "der Schatten liegt auf der Platte"
+
+
+def test_a_body_below_the_plate_throws_nothing_forward() -> None:
+    """Sonst zöge ein halb versunkenes Teil seinen Schatten falsch herum."""
+    import numpy as np
+
+    from app.ui.viewport import shadow_points
+
+    sunk = shadow_points(np.array([[5.0, 7.0, -12.0]]))
+    assert sunk[0][0] == pytest.approx(5.0)
+    assert sunk[0][1] == pytest.approx(7.0)

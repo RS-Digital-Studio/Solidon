@@ -31,6 +31,7 @@ THEMES: dict[Theme, dict[str, str]] = {
         "viewport_top": "#2c323c",
         "object": "#b9c4d0",
         "bed": "#5a6472",
+        "bed_surface": "#2a303a",
         "edge": "#4c5258",
     },
     "light": {
@@ -46,6 +47,7 @@ THEMES: dict[Theme, dict[str, str]] = {
         "viewport_top": "#f4f6f8",
         "object": "#7d8894",
         "bed": "#9aa3ae",
+        "bed_surface": "#cdd3da",
         "edge": "#1c2228",
     },
 }
@@ -90,6 +92,7 @@ def viewport_colours(theme: Theme) -> dict[str, str]:
         "top": colours["viewport_top"],
         "object": colours["object"],
         "bed": colours["bed"],
+        "bed_surface": colours["bed_surface"],
         "edge": colours["edge"],
     }
 

@@ -147,3 +147,21 @@ def snap_to_step(value: float, step: float) -> float:
     if step <= EPS_GEOM:
         return value
     return round(value / step) * step
+
+
+def along_normal(offset: Vec3, normal: Vec3) -> float:
+    """Wie weit ein Zug entlang einer Flächennormalen führt (§18.11).
+
+    Die Maus zieht in drei Richtungen, eine Fläche wandert nur in einer — was
+    quer dazu passiert, ist keine Bewegung dieser Fläche und wird verworfen.
+    Ohne diese Projektion hätte ein Griff an die Fläche denselben Effekt wie
+    ein Griff ans Objekt, und Press/Pull wäre nur ein Verschieben mit einem
+    anderen Namen.
+
+    Das Vorzeichen bleibt: nach außen ist positiv, nach innen negativ — genau
+    die Zählung, die ``push_face`` erwartet.
+    """
+    length = math.sqrt(normal[0] ** 2 + normal[1] ** 2 + normal[2] ** 2)
+    if length <= EPS_GEOM:
+        return 0.0
+    return (offset[0] * normal[0] + offset[1] * normal[1] + offset[2] * normal[2]) / length
