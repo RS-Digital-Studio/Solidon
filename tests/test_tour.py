@@ -220,3 +220,53 @@ def test_the_tours_are_translated() -> None:
         for text in (tour.intro, tour.closing, *(step.text for step in tour.steps)):
             key = getattr(text, "msgid", str(text))
             assert catalog.get(key), f"ohne englische Übersetzung: {key[:60]} …"
+
+
+def test_a_reading_step_does_not_hold_up_the_recognition() -> None:
+    """Fünf der sieben Touren beginnen mit einer Beobachtung.
+
+    „Sehen Sie links in den Verlauf", „Links unter Parameter stehen breite,
+    tiefe und stärke" — Hinsehen ändert nichts am Dokument, ein solcher Schritt
+    trägt also kein ``done``. Die Erkennung des Panels brach genau dort ab: wer
+    den Durchmesser änderte, das Teil folgen sah und auf die Tour blickte,
+    stand weiterhin auf Schritt 1 von 5. Die Handlung war getan, die Tour sagte
+    es nur nicht.
+
+    Geprüft wird das Panel, nicht die Erkennungsfunktionen — die stimmten die
+    ganze Zeit, und die Tests darüber waren grün, während die Oberfläche hing.
+    """
+    import pytest
+
+    pytest.importorskip("PySide6")
+
+    from app.ui.tour import TourPanel
+
+    project, history = _opened("weg1-halterung-anpassen")
+    document = project.document
+    tour = tour_for("weg1-halterung-anpassen")
+    assert tour is not None
+    assert tour.steps[0].done is None, "Schritt 1 ist eine Beobachtung"
+
+    panel = TourPanel.__new__(TourPanel)
+    panel._tour = tour
+    panel._document = document
+    panel._current = 0
+    panel._already = set()
+    panel._session = _FakeSession(project, history)
+    panel._update_marks = lambda: None  # type: ignore[method-assign]
+
+    # Schritt 2 der Tour: den Durchmesser der Bohrung ändern.
+    history.change_params(_op_id(document, "drill_hole"), {"diameter": 6.0})
+    panel._check()
+
+    assert panel._current > 1, (
+        "die getane Handlung schaltet weiter, obwohl der Schritt davor nur gelesen wird"
+    )
+
+
+class _FakeSession:
+    """Nur die zwei Dinge, die ``_check`` liest."""
+
+    def __init__(self, project: Project, history: History) -> None:
+        self.project = project
+        self.history = history

@@ -51,6 +51,9 @@ class TourPanel(QWidget):
         ``projectChanged`` auch beim Öffnen des nächsten Projekts — eine
         Erkennung auf einem fremden Dokument wäre ein geratener Fortschritt."""
         self._current = 0
+        self._already: set[int] = set()
+        """Schritte, deren Erkennung schon beim Start zutraf. Sie zählen nicht
+        als getan — der Nutzer hat sie nicht getan."""
         self._rows: list[tuple[QLabel, QLabel]] = []
         self._row_hosts: list[QWidget] = []
         """Ein Trägerwidget je Schrittzeile. Aufgeräumt wird über genau ein
@@ -140,6 +143,16 @@ class TourPanel(QWidget):
         self._tour = tour
         self._document = self._session.project.document
         self._current = 0
+        # Was beim Öffnen schon zutrifft, hat der Nutzer nicht getan. Ein
+        # Schritt, dessen Erkennung von Anfang an wahr ist — „im Prüfbericht
+        # steht, was die Reparatur gefunden hat" —, würde die Tour sonst
+        # überspringen, bevor sie begonnen hat.
+        self._already = {
+            index
+            for index, step in enumerate(tour.steps)
+            if step.done is not None
+            and step.done(self._session.project.document, self._session.history)
+        }
 
         self.title.setText(str(example.title))
         self.intro.setText(str(tour.intro))
@@ -193,20 +206,44 @@ class TourPanel(QWidget):
     def _check(self) -> None:
         """Erkennt getane Schritte und schaltet weiter.
 
-        In einer Schleife, nicht einmal: wer die Handlung eines späteren
-        Schritts schon vorweggenommen hat, soll ihn nicht noch einmal tun
-        müssen.
+        Geprüft wird die **ganze** Liste, nicht nur der aktuelle Schritt. Fünf
+        der sieben Touren beginnen mit einer Beobachtung — „Sehen Sie links in
+        den Verlauf", „Links unter Parameter stehen breite, tiefe und stärke" —,
+        und die trägt kein ``done``, weil Hinsehen nichts am Dokument ändert.
+        Vorher hielt genau das die Erkennung an: wer den Durchmesser änderte,
+        das Teil folgen sah und auf die Tour blickte, stand weiterhin auf
+        Schritt 1 von 5. Die Handlung war getan, die Tour sagte es nur nicht.
+
+        Der Stand rückt deshalb hinter den letzten erkannten Schritt. Wer die
+        Handlung eines späteren vorweggenommen hat, muss sie nicht noch einmal
+        tun, und ein Schritt, den man nur liest, hält niemanden auf. Rückwärts
+        geht es nie: ein Undo nimmt die Geometrie zurück, nicht das Gelesene.
         """
         tour = self._tour
         if tour is None or self._session.project.document is not self._document:
             return
 
+        document = self._session.project.document
+        history = self._session.history
+
+        def done(index: int) -> bool:
+            step = tour.steps[index]
+            return step.done is not None and bool(step.done(document, history))
+
         advanced = False
         while self._current < len(tour.steps):
-            step = tour.steps[self._current]
-            if step.done is None or not step.done(
-                self._session.project.document, self._session.history
-            ):
+            if tour.steps[self._current].done is not None:
+                if not done(self._current):
+                    break
+                self._current += 1
+                advanced = True
+                continue
+            # Ein Leseschritt hält nur auf, solange nichts dahinter geschehen
+            # ist. Wurde die Handlung eines späteren Schritts erkannt, ist auch
+            # dieser vorbei — sonst stünde die Tour auf „Schritt 1 von 5",
+            # während der Nutzer längst Schritt 2 getan hat.
+            ahead = range(self._current + 1, len(tour.steps))
+            if not any(index not in self._already and done(index) for index in ahead):
                 break
             self._current += 1
             advanced = True
