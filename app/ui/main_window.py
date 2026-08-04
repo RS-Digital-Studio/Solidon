@@ -15,7 +15,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
-from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QPoint, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -468,6 +468,7 @@ class MainWindow(QMainWindow):
         self.viewport.faceDragged.connect(self._on_face_dragged)
         self.viewport.featurePicked.connect(self._on_feature_picked)
         self.viewport.objectPicked.connect(self._on_object_picked)
+        self.viewport.contextMenuAt.connect(self._on_viewport_context_menu)
 
         self.analysis_bar = AnalysisBar(self)
         self.analysis_bar.mapChanged.connect(self._on_map_changed)
@@ -2246,6 +2247,22 @@ class MainWindow(QMainWindow):
         object_id = self.object_tree.selected()
         if object_id is not None:
             self.object_tree.select_feature(object_id, feature_id)
+
+    def _on_viewport_context_menu(self, x: int, y: int) -> None:
+        """Zeigt am Zeiger dasselbe Menü, das der Objektbaum anbietet (§18.5).
+
+        Gebaut wird es dort, weil es dort schon steht: dieselbe Sichtbarkeit,
+        dieselben Operationen aus ``applies_to``. Zwei Menüs mit derselben
+        Aufgabe wären zwei Gelegenheiten, auseinanderzulaufen.
+
+        VTK zählt seine Fensterkoordinaten von unten, Qt von oben — die
+        Umrechnung passiert hier, weil hier beide Seiten bekannt sind.
+        """
+        menu = self.object_tree.context_menu()
+        if menu is None:
+            return
+        local = QPoint(x, self.viewport.height() - y)
+        menu.exec(self.viewport.mapToGlobal(local))
 
     def _on_object_picked(self, object_id: str) -> None:
         """Ein Klick auf einen Körper wählt ihn im Baum aus; einer daneben hebt

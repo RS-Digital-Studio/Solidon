@@ -343,6 +343,25 @@ def test_a_feature_offers_the_operations_that_apply_to_it(window: MainWindow) ->
     assert all("face" in spec.applies_to for spec in entries)
 
 
+def test_the_view_and_the_tree_show_the_same_menu(window: MainWindow) -> None:
+    """Zwei Menüs mit derselben Aufgabe wären zwei Gelegenheiten,
+    auseinanderzulaufen.
+
+    Der Viewport baut deshalb keines: er lässt sich das des Objektbaums geben.
+    Ohne Auswahl gibt es nichts anzubieten — und dann geht auch nichts auf.
+    """
+    window.object_tree.tree.clearSelection()
+    assert window.object_tree.context_menu() is None
+
+    select_plate(window)
+    menu = window.object_tree.context_menu()
+
+    assert menu is not None
+    labels = {action.text() for action in menu.actions()}
+    assert any(str(spec.title) in labels for spec in window.object_tree.operations_for_object())
+    menu.deleteLater()
+
+
 def test_selecting_a_feature_reaches_the_viewport(window: MainWindow) -> None:
     window.object_tree.select_feature("obj_1", "hole_2")
 
@@ -421,6 +440,26 @@ def test_switching_navigation_keeps_the_picking_alive(qt_app: QApplication) -> N
     finally:
         viewport.plotter = None
         viewport.deleteLater()
+
+
+def test_a_right_click_opens_the_menu_and_a_drag_does_not() -> None:
+    """§18.5: das Kontextmenü am Merkmal ist der Ort für Weg 1.
+
+    Ein fremdes Modell wird angepasst, indem man auf die Stelle zeigt, die
+    stört. Bis hierher zeigte ein Rechtsklick auf einen Körper gar nichts — das
+    Menü gab es nur im Objektbaum, wo die Merkmale ``hole_3`` heißen.
+
+    In jedem Schema tut die rechte Taste aber auch etwas an der Kamera: ein Zug
+    meint sie, ein Klick meint das, worauf er zeigt. Sonst ginge nach jedem
+    Drehen ein Menü auf.
+    """
+    from app.ui.viewport import is_click
+
+    assert is_click((100, 200), (100, 200)), "stillgehalten ist ein Klick"
+    assert is_click((100, 200), (101, 199)), "eine Maus steht beim Drücken selten ganz still"
+    assert not is_click((100, 200), (160, 240)), "ein Zug öffnet kein Menü"
+    assert not is_click((100, 200), (100, 210)), "auch senkrecht gezogen ist gezogen"
+    assert not is_click(None, (100, 200)), "ohne Druck davor gibt es nichts zu beenden"
 
 
 def test_fitting_measures_the_bodies_not_the_build_volume(window: MainWindow) -> None:

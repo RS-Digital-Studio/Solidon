@@ -335,10 +335,17 @@ class ObjectTree(QWidget):
             return None
         return items[0].text(1)
 
-    def _on_context_menu(self, position: QPoint) -> None:
+    def context_menu(self) -> QMenu | None:
+        """Das Menü zur aktuellen Auswahl, oder nichts.
+
+        Gebaut wird es hier und nicht dort, wo es aufgeht: der Viewport zeigt
+        dasselbe Menü, wenn jemand mit rechts auf einen Körper klickt. §18.5
+        nennt das Kontextmenü am Merkmal den Ort für Weg 1 — zwei Menüs mit
+        derselben Aufgabe wären zwei Gelegenheiten, auseinanderzulaufen.
+        """
         chosen = self.selected_objects()
         if not chosen:
-            return
+            return None
 
         menu = QMenu(self)
         self._add_visibility(menu, chosen)
@@ -352,7 +359,12 @@ class ObjectTree(QWidget):
                 action.triggered.connect(
                     lambda _checked=False, entry=spec: self.operationRequested.emit(entry)
                 )
-        menu.exec(self.tree.viewport().mapToGlobal(position))
+        return menu
+
+    def _on_context_menu(self, position: QPoint) -> None:
+        menu = self.context_menu()
+        if menu is not None:
+            menu.exec(self.tree.viewport().mapToGlobal(position))
 
     def _add_visibility(self, menu: QMenu, chosen: tuple[ObjectId, ...]) -> None:
         """Ein- und ausblenden und isolieren (§18.8).

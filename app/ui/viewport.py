@@ -11,6 +11,7 @@ Die 3D-Ansicht braucht VTK. Lässt sich das auf einer Maschine nicht starten,
 from __future__ import annotations
 
 import os
+import weakref
 from typing import Any, Literal, cast
 
 from PySide6.QtCore import Signal
@@ -177,6 +178,26 @@ MeasureMode = Literal["off", "distance", "thickness"]
 
 MEASURE_COLOUR = "#f0a54a"
 
+#: Wie weit die Maus zwischen Drücken und Loslassen wandern darf, damit es noch
+#: als Klick zählt. In jedem Schema tut die rechte Taste auch etwas an der
+#: Kamera; ein Zug meint sie, ein Klick meint das, worauf er zeigt. Zwei Pixel,
+#: weil eine Maus beim Drücken selten ganz stillsteht.
+CLICK_SLACK = 2
+
+
+def is_click(start: tuple[int, int] | None, end: tuple[int, int]) -> bool:
+    """Ob zwischen Drücken und Loslassen genug stillgestanden wurde.
+
+    Als Funktion und nicht als Methode des Interaktionsstils: das ist eine
+    Rechnung über zwei Punkte, und ein Test dafür soll kein VTK-Objekt bauen
+    müssen. Ohne Anfang gab es keinen Druck, den dieses Loslassen beendet —
+    dann zählt es nicht.
+    """
+    if start is None:
+        return False
+    return abs(end[0] - start[0]) <= CLICK_SLACK and abs(end[1] - start[1]) <= CLICK_SLACK
+
+
 #: Der Griff auf einer Fläche, gemessen an der Diagonale des Objekts, und
 #: seine Untergrenze in Millimetern. Mitwachsend, weil ein fester Radius an
 #: einem Gehäuse verschwindet und einen Zapfen vollständig verdeckt.
@@ -279,6 +300,9 @@ class Viewport(QWidget):
     objectPicked = Signal(str)
     """Ein angeklickter Körper — trägt seine Kennung. Leer heißt: daneben
     geklickt, die Auswahl fällt weg."""
+    contextMenuAt = Signal(int, int)
+    """Ein Rechtsklick, der nichts gedreht hat — trägt die Position in VTKs
+    Zählung (von unten). Das Fenster zeigt dort das Menü zur Auswahl."""
     paintRequested = Signal(object)
     """A point on the surface to paint at (§20). The window turns it into an
     operation — the view never changes geometry itself."""
@@ -1580,11 +1604,61 @@ class Viewport(QWidget):
         self._scheme = scheme
         if self.plotter is None:
             return
-        style = _InteractorStyle(self.plotter, scheme)
+        # Schwach gehalten, mit Absicht: VTK hält den Stil, der Stil hielte
+        # sonst den Viewport, und der hält den Plotter, der den Interactor hält.
+        # Diese Schleife überlebt jedes Schließen — der Speicherbereiniger räumt
+        # sie später ab, und dann steht ein C++-Objekt hinter einer Python-
+        # Referenz, die es nicht mehr gibt. Das ist der Absturz ohne Zeile, den
+        # die Suite als Access Violation am Ende eines Laufs zeigt.
+        weak = weakref.ref(self)
+
+        def on_context(x: int, y: int) -> None:
+            view = weak()
+            if view is not None:
+                view._on_right_click(x, y)
+
+        style = _InteractorStyle(self.plotter, scheme, on_context)
         self.plotter.interactor.SetInteractorStyle(style)
         # Ein neuer Stil bringt seine eigenen Beobachter mit; das Picking hängt
         # am alten und wäre sonst nach jedem Wechsel weg.
         self._enable_picking()
+
+    def _on_right_click(self, x: int, y: int) -> None:
+        """Ein Rechtsklick wählt aus wie ein Linksklick und fragt nach dem Menü.
+
+        §18.5 nennt das Kontextmenü am Merkmal den Ort für Weg 1: ein fremdes
+        Modell wird angepasst, indem man auf die Stelle zeigt, die stört. Bis
+        hierher zeigte ein Rechtsklick auf einen Körper gar nichts — das Menü
+        gab es nur im Objektbaum, wo die Merkmale `hole_3` heißen.
+        """
+        point = self._world_at(x, y)
+        if point is None:
+            self.objectPicked.emit("")
+            return
+        feature_id = self._feature_at(point)
+        if feature_id is not None:
+            self.select_feature(feature_id)
+            self.featurePicked.emit(feature_id)
+        else:
+            self.objectPicked.emit(self._object_at(point) or "")
+        self.contextMenuAt.emit(x, y)
+
+    def _world_at(self, x: int, y: int) -> Vec3 | None:
+        """Der Punkt auf dem Körper unter einer Bildschirmposition.
+
+        VTK zählt von unten, Qt von oben — umgerechnet wird beim Aufrufer, denn
+        hier kommt die Position aus dem Interactor und ist schon in VTKs
+        Zählung.
+        """
+        if self.plotter is None:
+            return None
+        from vtkmodules.vtkRenderingCore import vtkPointPicker
+
+        picker = vtkPointPicker()
+        if not picker.Pick(float(x), float(y), 0.0, self.plotter.renderer):
+            return None
+        position = picker.GetPickPosition()
+        return (float(position[0]), float(position[1]), float(position[2]))
 
     def _enable_picking(self) -> None:
         """Klicks kommen immer an — was sie bedeuten, entscheidet der Modus.
@@ -1617,7 +1691,9 @@ class Viewport(QWidget):
         return self._scheme
 
 
-def _InteractorStyle(plotter: Any, scheme: NavigationScheme) -> Any:  # noqa: N802
+def _InteractorStyle(  # noqa: N802
+    plotter: Any, scheme: NavigationScheme, on_context: Any = None
+) -> Any:
     """Baut einen VTK-Interaktionsstil mit den Tasten des gewählten Schemas."""
     from vtkmodules.vtkInteractionStyle import vtkInteractorStyleTrackballCamera
 
@@ -1630,9 +1706,17 @@ def _InteractorStyle(plotter: Any, scheme: NavigationScheme) -> Any:  # noqa: N8
             self.AddObserver("LeftButtonReleaseEvent", self._left_up)
             self.AddObserver("RightButtonPressEvent", self._right_down)
             self.AddObserver("RightButtonReleaseEvent", self._right_up)
+            self._right_at: tuple[int, int] | None = None
+            """Wo die rechte Taste heruntergegangen ist. In jedem Schema tut
+            Rechts auch etwas an der Kamera — das Menü darf nur aufgehen, wenn
+            niemand gezogen hat."""
 
         def _shift(self) -> bool:
             return bool(self.GetInteractor().GetShiftKey())
+
+        def _position(self) -> tuple[int, int]:
+            x, y = self.GetInteractor().GetEventPosition()
+            return int(x), int(y)
 
         def _left_down(self, *_: Any) -> None:
             if scheme == "slicer":
@@ -1650,6 +1734,7 @@ def _InteractorStyle(plotter: Any, scheme: NavigationScheme) -> Any:  # noqa: N8
             self.EndRotate()
 
         def _right_down(self, *_: Any) -> None:
+            self._right_at = self._position()
             if scheme == "cad":
                 self.StartDolly()
                 return
@@ -1664,5 +1749,13 @@ def _InteractorStyle(plotter: Any, scheme: NavigationScheme) -> Any:  # noqa: N8
             self.EndRotate()
             self.EndDolly()
             self.EndPan()
+            started, self._right_at = self._right_at, None
+            if on_context is None:
+                return
+            # Ein Zug hat die Kamera bewegt und meint sie; ein Klick meint das,
+            # worauf er zeigt.
+            x, y = self._position()
+            if is_click(started, (x, y)):
+                on_context(x, y)
 
     return Style()
