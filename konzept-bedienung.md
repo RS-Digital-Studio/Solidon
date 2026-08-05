@@ -887,7 +887,7 @@ Nach Wirkung je Aufwand.
 
 ## Stand (5. August 2026, zweiter Eintrag)
 
-Dreiundfünfzig Commits, die Suite bei 2718 Tests. Was von der Reihenfolge oben
+Neunundfünfzig Commits, die Suite bei 2736 Tests. Was von der Reihenfolge oben
 erledigt ist und was nicht:
 
 **Erledigt** — 1 bis 4, 6 bis 14 einschließlich 9a–9d, 20, 22 bis 25.
@@ -964,13 +964,21 @@ Qt-Vorgaben — Kacheln ohne Rahmen, Knöpfe ohne Abstufung, der Titel in
 Fließtextgröße. Ein Handbuch, das etwas anderes zeigt als die Anwendung, ist
 an der Stelle falsch, an der man ihm am ehesten glaubt.
 
-**Offen** — die Vorschaubilder für die Beispielkacheln. `tools/make_figures.py`
-könnte sie rendern; sie müssten mitgeliefert und bei jeder Beispieländerung
-erneuert werden.
+**Die Vorschaubilder der Beispielkacheln gibt es auch.** Sie entstehen in
+`tools/make_examples.py`, aus demselben Lauf, der das Beispiel baut — eines,
+das jemand später von Hand nachzieht, zeigt irgendwann ein anderes Teil als
+die Datei daneben. Heruntergerechnet auf 1500 Dreiecke: ein ausgehöhltes Teil
+mit Gitterfüllung bringt zweihunderttausend mit, und das Bild davon wäre elf
+Megabyte für eine Kachel.
 
-Bis hierher waren es Fehler — Dinge, die etwas anderes taten, als sie sagten,
-und die Gestaltung, die keine war. Das Konzept ist damit abgearbeitet; was
-bleibt, ist der nächste Lauf durch die Anwendung.
+Ein Layout-Fund kam dabei heraus, der schon vorher dastand: im waagerechten
+Kachel-Layout lag eine Feder aus der Zeit, als es senkrecht war. Sie fraß
+hundertneunundsechzig Pixel, die dem Text gehörten.
+
+**Damit ist das Konzept abgearbeitet.** Bis hierher waren es Fehler — Dinge,
+die etwas anderes taten, als sie sagten —, und eine Gestaltung, die keine war.
+Was bleibt, ist der nächste Lauf durch die Anwendung: dieselbe Runde noch
+einmal, an einer Anwendung, die inzwischen anders aussieht.
 
 ---
 
