@@ -20,13 +20,41 @@ Ruhe (§29).
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Final, Literal
+from typing import Final, Literal, NamedTuple
 
 SlicerFlavour = Literal["prusa", "orca", "cura"]
 
-#: Ein Eintrag: Punktpfad in :class:`PrintSettings`, Name beim Slicer, und wie
-#: der Wert geschrieben wird.
-Entry = tuple[str, str, Callable[[object], str]]
+#: In welches Profil des Slicers ein Wert gehört.
+#:
+#: Die Orca-Familie führt getrennte Profile und nimmt einen Wert **nur an,
+#: wenn er im richtigen steht**. Eine Düsentemperatur im Prozessprofil wird
+#: stillschweigend übergangen: kein Fehler, keine Warnung, gedruckt wird mit
+#: dem, was zuletzt im Slicer eingestellt war. Für ``prusa`` und ``cura`` hat
+#: die Angabe keine Bedeutung — beide nehmen alles in einem Satz entgegen.
+#:
+#: Ein Maschinenprofil schreibt Formwerk nicht: dort steht die Kinematik, und
+#: was Formwerk von der Maschine berührt — der Rückzug — lässt sich über die
+#: ``filament_*``-Entsprechungen setzen, ohne in das Profil hineinzureden
+#: (§29). Das passt auch zur Herkunft: bei Formwerk kommt der Rückzug aus dem
+#: Material, nicht aus dem Drucker.
+ProfileSection = Literal["process", "filament"]
+
+
+class Entry(NamedTuple):
+    """Eine Zuordnung: Formwerk-Pfad, Name beim Slicer, Schreibweise, Profil."""
+
+    path: str
+    key: str
+    write: Callable[[object], str]
+    section: ProfileSection = "process"
+
+
+#: Wie die Tabellen unten geschrieben sind: das Profil darf fehlen, dann gilt
+#: ``process``. Das hält die Tabellen als das lesbar, was sie sind — Daten.
+Row = (
+    tuple[str, str, Callable[[object], str]]
+    | tuple[str, str, Callable[[object], str], ProfileSection]
+)
 
 
 def _plain(value: object) -> str:
@@ -95,7 +123,7 @@ _PRUSA_INFILL: Final = {
 
 _PRUSA_SUPPORT_STYLE: Final = {"grid": "grid", "tree": "organic", "none": "grid"}
 
-PRUSA: Final[tuple[Entry, ...]] = (
+PRUSA: Final[tuple[Row, ...]] = (
     ("layers.layer_height", "layer_height", _number),
     ("layers.first_layer_height", "first_layer_height", _number),
     ("layers.line_width", "extrusion_width", _number),
@@ -174,7 +202,7 @@ _ORCA_SEAM: Final = {
     "rear": "back",
 }
 
-ORCA: Final[tuple[Entry, ...]] = (
+ORCA: Final[tuple[Row, ...]] = (
     ("layers.layer_height", "layer_height", _number),
     ("layers.first_layer_height", "initial_layer_print_height", _number),
     ("layers.line_width", "line_width", _number),
@@ -191,16 +219,18 @@ ORCA: Final[tuple[Entry, ...]] = (
     ("infill.density", "sparse_infill_density", _percent_suffix),
     ("infill.pattern", "sparse_infill_pattern", _mapped(_ORCA_INFILL, "grid")),
     ("infill.angle", "infill_direction", _number),
-    ("temperature.nozzle", "nozzle_temperature", _integer),
-    ("temperature.nozzle_first_layer", "nozzle_temperature_initial_layer", _integer),
-    ("temperature.bed", "hot_plate_temp", _integer),
-    ("temperature.bed_first_layer", "hot_plate_temp_initial_layer", _integer),
-    ("temperature.chamber", "chamber_temperature", _integer),
-    ("cooling.fan_speed", "fan_max_speed", _percent),
-    ("cooling.fan_speed", "fan_min_speed", _percent),
-    ("cooling.bridge_fan_speed", "overhang_fan_speed", _percent),
-    ("cooling.disable_first_layers", "close_fan_the_first_x_layers", _integer),
-    ("cooling.minimum_layer_time", "slow_down_layer_time", _integer),
+    # Temperatur und Kühlung hängen am Filament, nicht am Prozess — das ist
+    # die Aufteilung des Slicers, nicht unsere Wahl.
+    ("temperature.nozzle", "nozzle_temperature", _integer, "filament"),
+    ("temperature.nozzle_first_layer", "nozzle_temperature_initial_layer", _integer, "filament"),
+    ("temperature.bed", "hot_plate_temp", _integer, "filament"),
+    ("temperature.bed_first_layer", "hot_plate_temp_initial_layer", _integer, "filament"),
+    ("temperature.chamber", "chamber_temperature", _integer, "filament"),
+    ("cooling.fan_speed", "fan_max_speed", _percent, "filament"),
+    ("cooling.fan_speed", "fan_min_speed", _percent, "filament"),
+    ("cooling.bridge_fan_speed", "overhang_fan_speed", _percent, "filament"),
+    ("cooling.disable_first_layers", "close_fan_the_first_x_layers", _integer, "filament"),
+    ("cooling.minimum_layer_time", "slow_down_layer_time", _integer, "filament"),
     ("speed.outer_wall", "outer_wall_speed", _number),
     ("speed.inner_wall", "inner_wall_speed", _number),
     ("speed.infill", "sparse_infill_speed", _number),
@@ -222,16 +252,20 @@ ORCA: Final[tuple[Entry, ...]] = (
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
     ("adhesion.raft_layers", "raft_layers", _integer),
-    ("retraction.length", "retraction_length", _number),
-    ("retraction.speed", "retraction_speed", _number),
-    ("retraction.z_hop", "z_hop", _number),
-    ("retraction.wipe", "wipe", _flag),
-    ("filament.diameter", "filament_diameter", _number),
-    ("filament.density", "filament_density", _number),
-    ("filament.flow_ratio", "filament_flow_ratio", _number),
-    ("filament.colour", "filament_colour", _plain),
-    ("filament.cost_per_kg", "filament_cost", _number),
-    ("filament.max_flow", "filament_max_volumetric_speed", _number),
+    # Der Rückzug steht in der Orca-Familie am Drucker, nicht am Prozess —
+    # ``retraction_length`` im Prozessprofil bleibt wirkungslos. Geschrieben
+    # wird deshalb die Filament-Entsprechung: sie überschreibt den Wert der
+    # Maschine, ohne dass Formwerk deren Profil anfassen muss.
+    ("retraction.length", "filament_retraction_length", _number, "filament"),
+    ("retraction.speed", "filament_retraction_speed", _number, "filament"),
+    ("retraction.z_hop", "filament_z_hop", _number, "filament"),
+    ("retraction.wipe", "filament_wipe", _flag, "filament"),
+    ("filament.diameter", "filament_diameter", _number, "filament"),
+    ("filament.density", "filament_density", _number, "filament"),
+    ("filament.flow_ratio", "filament_flow_ratio", _number, "filament"),
+    ("filament.colour", "filament_colour", _plain, "filament"),
+    ("filament.cost_per_kg", "filament_cost", _number, "filament"),
+    ("filament.max_flow", "filament_max_volumetric_speed", _number, "filament"),
 )
 
 # --- CuraEngine -----------------------------------------------------------------
@@ -245,7 +279,7 @@ _CURA_INFILL: Final = {
     "triangles": "triangles",
 }
 
-CURA: Final[tuple[Entry, ...]] = (
+CURA: Final[tuple[Row, ...]] = (
     ("layers.layer_height", "layer_height", _number),
     ("layers.first_layer_height", "layer_height_0", _number),
     ("layers.line_width", "line_width", _number),
@@ -292,6 +326,18 @@ CURA: Final[tuple[Entry, ...]] = (
 #: Welche Schlüssel zu welcher Haftungsart gehören. Die Slicer lesen sie als
 #: unabhängige Maße, gemeint ist aber genau eine Art: wer Skirt eingestellt hat
 #: und trotzdem ``raft_layers`` mitschickt, bekommt beides.
+#: Wie ein Material beim Slicer heißt. Fast immer die Formwerk-Kennung in
+#: Großbuchstaben — nur wo die Schreibweisen auseinandergehen, steht ein
+#: Eintrag. Ein unbekannter Typ ist kein Abbruch: der Slicer nimmt ihn als
+#: eigenen Namen und rechnet mit den Vorgaben seiner Familie.
+FILAMENT_TYPES: Final[dict[str, str]] = {"tpu-95a": "TPU"}
+
+
+def filament_type(material_id: str) -> str:
+    """Der Materialbezeichner in der Schreibweise des Slicers."""
+    return FILAMENT_TYPES.get(material_id, material_id.upper())
+
+
 ADHESION_KEYS: Final[dict[SlicerFlavour, dict[str, tuple[str, ...]]]] = {
     "prusa": {
         "skirt": ("skirts",),
@@ -310,10 +356,16 @@ ADHESION_KEYS: Final[dict[SlicerFlavour, dict[str, tuple[str, ...]]]] = {
     },
 }
 
+
+def _entries(rows: tuple[Row, ...]) -> tuple[Entry, ...]:
+    """Aus den Rohzeilen der Tabellen die benannten Einträge."""
+    return tuple(Entry(*row) for row in rows)
+
+
 TABLES: Final[dict[SlicerFlavour, tuple[Entry, ...]]] = {
-    "prusa": PRUSA,
-    "orca": ORCA,
-    "cura": CURA,
+    "prusa": _entries(PRUSA),
+    "orca": _entries(ORCA),
+    "cura": _entries(CURA),
 }
 
 #: Woran der Dateiname verrät, welche Familie da liegt. Die längeren Namen

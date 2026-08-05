@@ -87,12 +87,31 @@ def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str
 
     Ohne Datei und ohne Aufruf — die Oberfläche zeigt damit an, was übergeben
     würde, und die Tests prüfen die Zuordnung, ohne dass ein Slicer installiert
-    sein muss.
+    sein muss. Alle Profile zusammen, weil die Gegenprobe die Druckdatei als
+    Ganzes liest und dort nicht mehr steht, aus welchem Profil ein Wert kam.
     """
     written: dict[str, str] = {}
-    for path, key, convert in slicer_keys.TABLES[flavour]:
-        written[key] = convert(read_path(settings, path))
+    for entry in slicer_keys.TABLES[flavour]:
+        written[entry.key] = entry.write(read_path(settings, entry.path))
     return _only_chosen_adhesion(written, settings, flavour)
+
+
+def by_section(
+    settings: PrintSettings, flavour: SlicerFlavour
+) -> dict[slicer_keys.ProfileSection, dict[str, str]]:
+    """Dieselben Werte, getrennt nach dem Profil, in das sie gehören (§29).
+
+    Der Unterschied ist nicht kosmetisch: die Orca-Familie nimmt einen Wert
+    nur an, wenn er im richtigen Profil steht. Eine Düsentemperatur im
+    Prozessprofil wird stillschweigend übergangen — kein Fehler, keine
+    Warnung, gedruckt wird mit dem, was zuletzt im Slicer eingestellt war.
+    """
+    complete = as_mapping(settings, flavour)
+    split: dict[slicer_keys.ProfileSection, dict[str, str]] = {}
+    for entry in slicer_keys.TABLES[flavour]:
+        if entry.key in complete:
+            split.setdefault(entry.section, {})[entry.key] = complete[entry.key]
+    return split
 
 
 def _only_chosen_adhesion(
@@ -139,36 +158,64 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
     }
 
 
+@dataclass(frozen=True, slots=True)
+class SlicerConfig:
+    """Die Profildateien für einen Lauf.
+
+    ``process`` trägt bei ``prusa`` und ``cura`` alles; bei der Orca-Familie
+    steht daneben ``filament``, weil sie Werte nur aus dem Profil annimmt, in
+    das sie gehören.
+    """
+
+    process: Path
+    filament: Path | None = None
+
+
 def write_config(
     settings: PrintSettings,
     profile: Profile,
     setup: SlicerSetup,
     directory: Path,
-) -> Path:
-    """Schreibt das Profil, das der Slicer gleich lädt."""
-    values = as_mapping(settings, setup.flavour) | _machine_keys(profile, setup.flavour)
+) -> SlicerConfig:
+    """Schreibt die Profile, die der Slicer gleich lädt."""
+    split = by_section(settings, setup.flavour)
+    values = {key: value for section in split.values() for key, value in section.items()}
+    values |= _machine_keys(profile, setup.flavour)
 
     if setup.flavour == "prusa":
         target = directory / "formwerk.ini"
         lines = [f"# {settings.title} — von Formwerk geschrieben, nicht von Hand"]
         lines += [f"{key} = {value}" for key, value in sorted(values.items())]
         target.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        return target
+        return SlicerConfig(process=target)
 
     if setup.flavour == "orca":
         target = directory / "formwerk_process.json"
         target.write_text(
-            json.dumps(_orca_process(values, settings, setup), indent=2, ensure_ascii=False),
+            json.dumps(
+                _orca_process(split.get("process", {}), settings, setup),
+                indent=2,
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
-        return target
+        filament = directory / "formwerk_filament.json"
+        filament.write_text(
+            json.dumps(
+                _orca_filament(split.get("filament", {}), settings, profile),
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return SlicerConfig(process=target, filament=filament)
 
     target = directory / "formwerk_cura.txt"
     target.write_text(
         "\n".join(f"{key}={value}" for key, value in sorted(values.items())) + "\n",
         encoding="utf-8",
     )
-    return target
+    return SlicerConfig(process=target)
 
 
 def _orca_process(
@@ -207,10 +254,38 @@ def _orca_process(
     return document
 
 
+def _orca_filament(
+    values: dict[str, str],
+    settings: PrintSettings,
+    profile: Profile,
+) -> dict[str, object]:
+    """Das Filamentprofil für die Orca-Familie.
+
+    Zwei Dinge unterscheiden es vom Prozessprofil. Erstens stehen die Werte
+    dort als Liste, ein Eintrag je Filamentplatz — ein blanker String wird
+    nicht angenommen. Zweitens braucht es ``filament_type``, sonst weiß der
+    Slicer nicht, welche Grundannahmen gelten.
+
+    Ein Systemprofil als Unterlage gibt es hier noch nicht; das kommt mit der
+    nächsten Stufe, wenn Formwerk die Filamentprofile des Slicers liest. Bis
+    dahin erbt die Datei von der Familie des Materials, und was Formwerk nicht
+    setzt, kommt von dort.
+    """
+    document: dict[str, object] = {
+        "type": "filament",
+        "name": f"Formwerk {settings.title}",
+        "from": "User",
+        "instantiation": "true",
+        "filament_type": [slicer_keys.filament_type(profile.material.id)],
+    }
+    document.update({key: [value] for key, value in values.items()})
+    return document
+
+
 def _command(
     setup: SlicerSetup,
     models: Sequence[Path],
-    config: Path,
+    config: SlicerConfig,
     output: Path,
 ) -> list[str]:
     """Die Kommandozeile dieses Slicers. Eine Liste, nie eine Zeichenkette —
@@ -229,7 +304,7 @@ def _command(
             binary,
             "--export-gcode",
             "--load",
-            str(config),
+            str(config.process),
             "--output",
             str(output / "formwerk.gcode"),
             *files,
@@ -239,22 +314,24 @@ def _command(
         # Beide Profile, immer in dieser Reihenfolge: erst die Maschine, dann
         # der Prozess. Umgekehrt prüft der Slicer die Verträglichkeit gegen
         # einen Drucker, den er noch nicht kennt, und bricht ab.
-        profiles = f"{setup.machine_profile};{config}" if setup.machine_profile else str(config)
-        return [
-            binary,
-            "--load-settings",
-            profiles,
-            "--slice",
-            "0",
-            "--outputdir",
-            str(output),
-            *files,
-        ]
+        settings_arg = (
+            f"{setup.machine_profile};{config.process}"
+            if setup.machine_profile
+            else str(config.process)
+        )
+        arguments = [binary, "--load-settings", settings_arg]
+        # Das Filament kommt über einen eigenen Schalter. Es mit in
+        # ``--load-settings`` zu geben hilft nicht: der Slicer sortiert die
+        # Dateien nach ihrem ``type``, und ein Filamentprofil, das dort
+        # ankommt, wird verworfen statt geladen.
+        if config.filament is not None:
+            arguments += ["--load-filaments", str(config.filament)]
+        return [*arguments, "--slice", "0", "--outputdir", str(output), *files]
 
     arguments = [binary, "slice", "-v"]
     if setup.machine_profile:
         arguments += ["-j", setup.machine_profile]
-    for line in config.read_text(encoding="utf-8").splitlines():
+    for line in config.process.read_text(encoding="utf-8").splitlines():
         if line.strip():
             arguments += ["-s", line.strip()]
     for entry in files:
@@ -384,13 +461,14 @@ _SETTING_LINE = re.compile(r"^;\s*(?P<key>[a-z_0-9]+)\s*=\s*(?P<value>.*?)\s*$",
 #: Schlüssel, deren Wert der Slicer bewusst umrechnet oder ergänzt — eine
 #: Abweichung dort ist keine. ``filament_colour`` etwa wird zu einer Liste,
 #: weil ein Drucker mehrere Filamente führen kann.
+#:
+#: Die Filamentwerte standen hier lange mit derselben Begründung. Sie war
+#: falsch: der Slicer rechnete sie nicht um, er bekam sie nie — sie lagen im
+#: Prozessprofil, und dort liest er sie nicht. Seit sie im Filamentprofil
+#: stehen, gehören sie in die Gegenprobe wie alles andere.
 _RECOMPUTED: Final = frozenset(
     {
         "filament_colour",
-        "filament_diameter",
-        "filament_density",
-        "filament_cost",
-        "filament_max_volumetric_speed",
         "nozzle_diameter",
         "bed_shape",
         "first_layer_speed",

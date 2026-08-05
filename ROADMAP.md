@@ -274,6 +274,23 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       liest die Konfigurationskommentare der erzeugten Datei und meldet, was
       der Slicer anders übernommen hat. Damit prüft sich jeder Slicer selbst,
       auch einer, den beim Bauen der Tabelle niemand vorliegen hatte
+- [x] **Jeder Wert in das Profil, in das er gehört** (§29) — die Orca-Familie
+      führt Prozess und Filament getrennt und übergeht einen Wert im falschen
+      Profil stillschweigend. Achtzehn taten das: beide Düsen- und beide
+      Betttemperaturen, die ganze Kühlung, alle Filamentwerte und der Rückzug.
+      Sie standen im Prozessprofil und kamen nie an — gedruckt wurde mit dem,
+      was zuletzt im Slicer stand. `slicer_keys.Entry` trägt jetzt die
+      Profilart, `handover` schreibt zwei Dateien und lädt das Filament über
+      `--load-filaments`. Der Rückzug geht als `filament_*`-Entsprechung, damit
+      Formwerk nicht ins Maschinenprofil hineinredet — das passt auch zur
+      Herkunft, denn er kommt aus dem Material. `test_every_orca_setting_sits_in_the_profile_it_claims`
+      prüft die Zuordnung gegen den Bestand eines installierten Slicers und
+      wäre am alten Stand mit achtzehn Verstößen rot gewesen
+- [ ] Filamentprofile des Slicers lesen (Stufe 2 aus
+      `.claude/konzept-slicer-uebergabe.md`) — `slicer_profiles` kennt nur
+      `machine/` und `process/`. Damit lässt sich nicht sagen, welches PETG
+      gemeint ist, und Formwerks eigene Materialtabelle weicht von der des
+      Herstellers ab: 240/80 °C gegen 255/70 °C beim transluzenten Elegoo-PETG
 - [ ] Prusa- und Cura-Adapter am echten Programm laufen lassen — die
       Zuordnung steht und die Gegenprobe würde Abweichungen melden, aber
       gelaufen ist bisher nur die Orca-Familie (ElegooSlicer 1.5.2.2). Was

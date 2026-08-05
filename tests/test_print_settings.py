@@ -419,16 +419,16 @@ def test_applying_advice_changes_exactly_what_it_named() -> None:
 def test_every_setting_in_a_table_actually_exists(flavour: str) -> None:
     """Ein Tippfehler im Punktpfad wäre sonst erst beim Slicen zu sehen."""
     settings = print_settings.resolve(profiles.make_profile())
-    for path, key, _convert in slicer_keys.TABLES[flavour]:  # type: ignore[index]
-        print_settings.read_path(settings, path)
-        assert key, f"{path} hat keinen Namen beim Slicer"
+    for entry in slicer_keys.TABLES[flavour]:  # type: ignore[index]
+        print_settings.read_path(settings, entry.path)
+        assert entry.key, f"{entry.path} hat keinen Namen beim Slicer"
 
 
 @pytest.mark.parametrize("flavour", ["prusa", "orca", "cura"])
 def test_the_core_settings_reach_every_slicer(flavour: str) -> None:
     """Was die Oberfläche anbietet, muss überall ankommen — sonst stellt der
     Nutzer etwas ein, das für seinen Slicer folgenlos bleibt."""
-    covered = {path for path, _key, _convert in slicer_keys.TABLES[flavour]}  # type: ignore[index]
+    covered = {entry.path for entry in slicer_keys.TABLES[flavour]}  # type: ignore[index]
     for path in (
         "layers.layer_height",
         "shell.wall_count",
@@ -656,11 +656,13 @@ def test_a_prusa_config_stands_on_its_own(tmp_path: Path) -> None:
     setup = handover.SlicerSetup(executable=Path("PrusaSlicer.exe"), flavour="prusa")
 
     written = handover.write_config(settings, profile, setup, tmp_path)
-    text = written.read_text(encoding="utf-8")
+    text = written.process.read_text(encoding="utf-8")
 
+    assert written.filament is None, "PrusaSlicer nimmt alles in einer Datei"
     assert "bed_shape" in text
     assert "nozzle_diameter" in text
     assert f"layer_height = {settings.layers.layer_height:g}" in text
+    assert f"temperature = {settings.temperature.nozzle:d}" in text
 
 
 def test_an_orca_process_keeps_what_the_base_profile_knew(tmp_path: Path) -> None:
@@ -685,10 +687,103 @@ def test_an_orca_process_keeps_what_the_base_profile_knew(tmp_path: Path) -> Non
     )
 
     written = handover.write_config(settings, profile, setup, tmp_path)
-    document = json.loads(written.read_text(encoding="utf-8"))
+    document = json.loads(written.process.read_text(encoding="utf-8"))
 
     assert document["compatible_printers"] == ["Irgendein Drucker 0.4 nozzle"]
     assert document["wall_loops"] == str(settings.shell.wall_count)
+    # Was ins Filamentprofil gehört, hat im Prozessprofil nichts verloren —
+    # dort liest der Slicer es nicht.
+    assert "nozzle_temperature" not in document
+    assert "hot_plate_temp" not in document
+
+
+def test_the_orca_filament_profile_carries_what_hangs_on_the_filament(tmp_path: Path) -> None:
+    """Temperatur, Kühlung und Rückzug gehören ins Filamentprofil.
+
+    Standen sie im Prozessprofil, übernahm der Slicer sie nicht — geräuschlos,
+    und gedruckt wurde mit dem, was zuletzt bei ihm eingestellt war.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    written = handover.write_config(settings, profile, setup, tmp_path)
+    assert written.filament is not None
+    document = json.loads(written.filament.read_text(encoding="utf-8"))
+
+    assert document["type"] == "filament"
+    assert document["filament_type"] == [slicer_keys.filament_type(profile.material.id)]
+    # Werte stehen dort als Liste, ein Eintrag je Platz. Ein blanker String
+    # wird nicht angenommen.
+    assert document["nozzle_temperature"] == [str(settings.temperature.nozzle)]
+    assert document["hot_plate_temp"] == [str(settings.temperature.bed)]
+    assert document["filament_retraction_length"] == [f"{settings.retraction.length:g}"]
+    meta = {"type", "name", "from", "instantiation"}
+    assert all(isinstance(value, list) for key, value in document.items() if key not in meta)
+
+
+def test_the_orca_call_loads_the_filament_profile(tmp_path: Path) -> None:
+    """Ein eigener Schalter, nicht ``--load-settings``: dorthin gegeben würde
+    das Filamentprofil nach seinem ``type`` aussortiert statt geladen."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    config = handover.write_config(settings, profile, setup, tmp_path)
+    command = handover._command(setup, [tmp_path / "teil.stl"], config, tmp_path)
+
+    assert "--load-filaments" in command
+    assert command[command.index("--load-filaments") + 1] == str(config.filament)
+    assert str(config.filament) not in command[command.index("--load-settings") + 1]
+
+
+def _profile_keys(root: Path, kind: str) -> set[str]:
+    """Alle Schlüssel, die der Bestand eines Slicers unter dieser Art führt."""
+    found: set[str] = set()
+    for path in (root / kind).rglob("*.json"):
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(loaded, dict):
+            found |= set(loaded)
+    return found
+
+
+def _installed_orca_profiles() -> Path | None:
+    """Der Profilbestand eines installierten Slicers der Orca-Familie."""
+    for base in (Path("C:/Program Files"), Path("/usr/share"), Path("/opt")):
+        if not base.is_dir():
+            continue
+        for folder in base.iterdir():
+            root = folder / "resources" / "profiles"
+            if not root.is_dir():
+                continue
+            for vendor in root.iterdir():
+                if (vendor / "filament").is_dir() and (vendor / "process").is_dir():
+                    return vendor
+    return None
+
+
+def test_every_orca_setting_sits_in_the_profile_it_claims() -> None:
+    """Die Probe aufs Exempel: stimmt die Zuordnung gegen einen echten Bestand?
+
+    Ein Wert im falschen Profil wird von der Orca-Familie stillschweigend
+    übergangen. Genau das war lange der Fall — vierzehn Filamentwerte und der
+    Rückzug standen im Prozessprofil und kamen nie an. Auffallen konnte es
+    nicht, weil kein Test die Aufteilung kannte.
+    """
+    root = _installed_orca_profiles()
+    if root is None:
+        pytest.skip("kein Slicer der Orca-Familie installiert")
+
+    known = {kind: _profile_keys(root, kind) for kind in ("process", "filament", "machine")}
+    misplaced: list[str] = []
+    for entry in slicer_keys.TABLES["orca"]:
+        found = [kind for kind, keys in known.items() if entry.key in keys]
+        if found and entry.section not in found:
+            misplaced.append(f"{entry.key}: laut Tabelle {entry.section}, laut Slicer {found}")
+    assert not misplaced, "Werte im falschen Profil:\n  " + "\n  ".join(misplaced)
 
 
 def test_a_missing_model_says_so_before_starting_anything(tmp_path: Path) -> None:
