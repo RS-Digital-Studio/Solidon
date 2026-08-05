@@ -82,6 +82,62 @@ def test_a_blind_bore_does_not_go_through(profile: Profile) -> None:
     assert blind.mesh.is_watertight
 
 
+def test_a_bore_starts_where_it_was_placed(profile: Profile) -> None:
+    """§25: die Position ist die Mündung, und von dort geht es ins Material.
+
+    Der Würfel steht von -10 bis +10. Wer die Oberseite anklickt, bekommt
+    ``z = 10`` eingetragen und meint eine Bohrung, die dort anfängt: fünf
+    Millimeter tief heißt bis ``z = 5``. Vor Formatversion 7 lag die *Mitte*
+    dort — die Bohrung ging bis 7,5 und stand zur Hälfte in der Luft.
+    """
+    body = cube()
+    mouth = drill(
+        body, position=(0.0, 0.0, 10.0), axis="z", diameter=6.0, depth=5.0, profile=profile
+    )
+    centred = drill(
+        body,
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        diameter=6.0,
+        depth=5.0,
+        anchor="centre",
+        profile=profile,
+    )
+
+    area = math.pi * (mouth.diameter / 2.0) ** 2
+    assert body.volume - mouth.mesh.volume == pytest.approx(area * 5.0, rel=0.02)
+    assert body.volume - centred.mesh.volume == pytest.approx(area * 2.5, rel=0.02)
+
+
+def test_the_mouth_of_a_bore_finds_the_material_from_either_side(profile: Profile) -> None:
+    """Von unten angeklickt geht es nach oben — sonst bohrte eine Bohrung an
+    der Unterseite ins Nichts.
+    """
+    body = cube()
+    result = drill(
+        body, position=(0.0, 0.0, -10.0), axis="z", diameter=6.0, depth=5.0, profile=profile
+    )
+
+    area = math.pi * (result.diameter / 2.0) ** 2
+    assert body.volume - result.mesh.volume == pytest.approx(area * 5.0, rel=0.02)
+
+
+def test_a_through_bore_ignores_the_anchor(profile: Profile) -> None:
+    """Durch ist durch: bei Tiefe null darf der Bezugspunkt nichts ändern —
+    das ist es, was die Migration alter Dateien so einfach hält.
+    """
+    body = cube()
+    mouth = drill(body, position=(0.0, 0.0, 10.0), axis="z", diameter=6.0, profile=profile)
+    centred = drill(
+        body, position=(0.0, 0.0, 10.0), axis="z", diameter=6.0, anchor="centre", profile=profile
+    )
+
+    assert mouth.mesh.volume == pytest.approx(centred.mesh.volume, rel=1e-9)
+    assert mouth.mesh.volume == pytest.approx(
+        body.volume - math.pi * (mouth.diameter / 2.0) ** 2 * 20.0, rel=0.01
+    )
+
+
 @pytest.mark.parametrize("axis", ["x", "y", "z"])
 def test_a_bore_follows_its_axis(axis: str, profile: Profile) -> None:
     result = drill(

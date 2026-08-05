@@ -17,6 +17,7 @@ from app.core.scene.migrations import FORMAT_VERSION, Step, migrate
 from app.core.scene.project import (
     PROJECT_ENTRY,
     Project,
+    ProjectSources,
     autosave_path,
     clear_autosave,
     find_recovery,
@@ -415,6 +416,31 @@ def test_a_file_from_before_the_agent_gets_an_empty_conversation() -> None:
     project = load(Path(__file__).parent / "data" / "projects" / "example_v1.p3d")
 
     assert project.document.chat == []
+
+
+def test_a_bore_from_an_older_file_stays_where_it_was() -> None:
+    """6 → 7: die Position einer Bohrung ist seither ihre Mündung (§25).
+
+    Die eingecheckte Datei bohrt drei Millimeter tief auf die Oberseite einer
+    Platte. Bis Version 6 lag die *Mitte* der Bohrung dort, sie ging also nur
+    anderthalb Millimeter ins Material und der Rest stand in der Luft. Genau
+    das muss sie weiter tun: eine alte Datei rechnet, wie sie gerechnet hat.
+
+    Gemessen wird das Volumen, nicht der Parameter — dass ``anchor`` gesetzt
+    ist, sagt noch nicht, dass es wirkt.
+    """
+    from app.core.knowledge import profiles
+    from app.core.scene import evaluate
+
+    project = load(Path(__file__).parent / "data" / "projects" / "drilled_v6.p3d")
+
+    assert project.document.format_version == FORMAT_VERSION
+    assert project.document.ops[-1].params["anchor"] == "centre"
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(31276.892, abs=0.01)
 
 
 def test_a_file_from_before_the_print_settings_has_none() -> None:

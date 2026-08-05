@@ -121,6 +121,15 @@ def colour_name(value: str) -> str:
     return value
 
 
+#: Auswahlwerte, die selbst kein Name sind. Der Schlüssel bleibt englisch, weil
+#: er in der Projektdatei steht (§4.2); gezeigt wird der übersetzte Text. Was
+#: schon ein Name ist — „M4", „PLA", „z" — steht hier nicht.
+_CHOICE_NAMES: dict[str, TranslatableText] = {
+    "mouth": _("Mündung"),
+    "centre": _("Mitte"),
+}
+
+
 def choice_label(value: str) -> str:
     """Ein Auswahlwert, wie der Nutzer ihn lesen kann.
 
@@ -135,6 +144,9 @@ def choice_label(value: str) -> str:
     """
     from app.core.knowledge import standards
 
+    named = _CHOICE_NAMES.get(value)
+    if named is not None:
+        return str(named)
     try:
         tube = standards.tube(value)
     except AppError:

@@ -23,7 +23,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 6
+FORMAT_VERSION: Final = 7
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +110,29 @@ def _keep_transaction_titles_literal(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _keep_bores_centred(data: dict[str, Any]) -> dict[str, Any]:
+    """6 → 7: die Position einer Bohrung ist ihre Mündung (§25).
+
+    Bis Version 6 lag die *Mitte* der Bohrung auf der Position. Wer eine Fläche
+    anklickte, bekam ihre Höhe eingetragen — und damit eine Bohrung, die zur
+    Hälfte über dem Teil in der Luft stand und nur halb so tief ging wie
+    verlangt. Ab Version 7 fängt sie an der Position an und geht von dort ins
+    Material.
+
+    Für eine alte Datei ändert das die Maße, also wird sie nicht umgedeutet:
+    ihre Bohrungen bekommen ``anchor="centre"`` und rechnen weiter, wie sie
+    gerechnet haben. Umzurechnen wäre nichts — die Richtung ins Material
+    steckt in der Geometrie, und die liegt hier nicht vor.
+
+    Durchgehende Bohrungen (``depth`` null) trifft es ohnehin nicht: durch ist
+    durch, egal von wo aus gemessen.
+    """
+    for operation in data.get("ops", ()):
+        if operation.get("op") == "drill_hole":
+            operation.setdefault("params", {})["anchor"] = "centre"
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -117,6 +140,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=3, to_version=4, apply=_add_print_settings),
     Step(from_version=4, to_version=5, apply=_add_transaction_changes),
     Step(from_version=5, to_version=6, apply=_keep_transaction_titles_literal),
+    Step(from_version=6, to_version=7, apply=_keep_bores_centred),
 )
 
 

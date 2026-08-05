@@ -21,6 +21,7 @@ from app.core.geom.orient import orient_for_print
 from app.core.geom.pins import PIN_COUNT, PIN_MAX, PinnedPair, add_pins, plan_pins
 from app.core.geom.prepare import (
     MAX_PLATES,
+    BoreAnchor,
     arrange_on_bed,
     check_build_volume,
     check_collisions,
@@ -54,6 +55,11 @@ _ALONG = _(
     "Richtung, in die gebohrt wird. Z ist senkrecht von oben, X und Y bohren durch eine Seitenwand."
 )
 
+#: Was die Position bedeutet. „mouth" ist die Vorgabe, weil eine angeklickte
+#: Fläche die Mündung ist und nicht die Mitte des Lochs dahinter; „centre" gibt
+#: es, weil Dateien bis Formatversion 6 es so gemeint haben.
+_ANCHORS = ("mouth", "centre")
+
 
 @op_params
 class DrillParams(BaseParams):
@@ -79,6 +85,16 @@ class DrillParams(BaseParams):
         minimum=0.0,
         placement="advanced",
         doc=_("Null bohrt durch das ganze Teil."),
+    )
+    anchor: str = param(
+        title=_("Bezugspunkt"),
+        default="mouth",
+        choices=_ANCHORS,
+        placement="advanced",
+        doc=_(
+            "Was die Position bedeutet: die Mündung, an der die Bohrung anfängt, "
+            "oder ihre Mitte. Bei einer durchgehenden Bohrung ändert es nichts."
+        ),
     )
     compensate: bool = param(
         title=_("Materialtoleranz berücksichtigen"),
@@ -110,6 +126,7 @@ def drill_hole(ctx: OpContext) -> OpResult:
         axis=cast(Axis, params.axis),
         diameter=params.diameter,
         depth=params.depth,
+        anchor=cast(BoreAnchor, params.anchor),
         profile=ctx.profile,
         compensate=params.compensate,
         quality=ctx.quality,

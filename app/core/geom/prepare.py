@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import trimesh
@@ -38,6 +38,12 @@ BOOLEAN_OVERLAP = 0.01
 #: Segmente, aus denen ein Bohrzylinder gebaut wird. Fein genug, dass das
 #: gedruckte Loch rund ist, grob genug, um die Dreieckszahl nicht zu sprengen.
 BORE_SECTIONS = 48
+
+#: Welche Spalte einer Koordinate zu welcher Achse gehört.
+AXIS_INDEX: dict[Axis, int] = {"x": 0, "y": 1, "z": 2}
+
+#: Was die Position einer Bohrung bedeutet: ihre Mündung oder ihre Mitte.
+BoreAnchor = Literal["mouth", "centre"]
 
 
 @dataclass(slots=True)
@@ -63,19 +69,37 @@ def drill(
     axis: Axis,
     diameter: float,
     depth: float = 0.0,
+    anchor: BoreAnchor = "mouth",
     profile: Profile,
     compensate: bool = True,
     quality: Quality = "fine",
     seed: int | None = None,
 ) -> BoreResult:
-    """Schneidet eine zylindrische Bohrung. Tiefe null bohrt ganz durch."""
+    """Schneidet eine zylindrische Bohrung. Tiefe null bohrt ganz durch.
+
+    ``anchor`` sagt, was die Position bedeutet. ``mouth`` ist, was jemand
+    meint, der eine Fläche anklickt: dort fängt die Bohrung an und geht von da
+    ins Material. ``centre`` legt die Mitte der Bohrung auf die Position —
+    das taten alle Bohrungen bis Formatversion 7, und ein Klick auf die
+    Oberseite bohrte darum nur halb so tief wie verlangt.
+
+    Für eine durchgehende Bohrung macht es keinen Unterschied: „durch" ist
+    „durch", und der Zylinder ist lang genug, um von jeder Position aus in
+    beide Richtungen hinauszureichen.
+    """
     cut_diameter = bore_diameter(diameter, profile, compensate)
-    height = depth if depth > EPS_GEOM else _through_length(mesh, axis)
+    through = depth <= EPS_GEOM
+    height = _through_length(mesh, axis) * 2.0 if through else depth
     cylinder = trimesh.creation.cylinder(
         radius=cut_diameter / 2.0, height=height + BOOLEAN_OVERLAP * 2, sections=BORE_SECTIONS
     )
     cylinder.apply_transform(_axis_alignment(axis))
-    cylinder.apply_translation(np.asarray(position, dtype=float))
+    offset = np.asarray(position, dtype=float)
+    if not through and anchor == "mouth":
+        direction = np.zeros(3)
+        direction[AXIS_INDEX[axis]] = into_the_body(mesh, axis, position)
+        offset = offset + direction * (height / 2.0)
+    cylinder.apply_translation(offset)
 
     outcome = boolean("difference", [mesh, MeshData.of(cylinder)], quality=quality, seed=seed)
     findings = list(outcome.findings)
@@ -185,8 +209,23 @@ def _shell(mesh: MeshData) -> MeshData:
 def _through_length(mesh: MeshData, axis: Axis) -> float:
     """Lang genug, um den ganzen Körper entlang dieser Achse zu durchqueren."""
     size = mesh.bounds.size
-    index = {"x": 0, "y": 1, "z": 2}[axis]
+    index = AXIS_INDEX[axis]
     return float(size[index]) + BOOLEAN_OVERLAP * 4
+
+
+def into_the_body(mesh: MeshData, axis: Axis, position: Vec3) -> float:
+    """Wohin es von dieser Position aus ins Material geht: -1 oder +1.
+
+    Ein Werkzeug, das an der Mündung ansetzt, muss wissen, auf welcher Seite
+    der Körper liegt. Entschieden wird an der Hälfte des Hüllquaders: wer die
+    obere Fläche anklickt, meint nach unten, wer die untere anklickt, nach
+    oben. Für eine angeklickte Fläche ist das eindeutig — und mehr als eine
+    angeklickte Fläche gibt es an dieser Stelle nicht zu entscheiden.
+    """
+    index = AXIS_INDEX[axis]
+    low = float(mesh.bounds.minimum[index])
+    high = float(mesh.bounds.maximum[index])
+    return -1.0 if position[index] >= (low + high) / 2.0 else 1.0
 
 
 def _axis_alignment(axis: Axis) -> np.ndarray:
