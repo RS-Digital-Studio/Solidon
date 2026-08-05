@@ -166,6 +166,9 @@ class SketchCanvas(QWidget):
     sketchChanged = Signal()
     selectionChanged = Signal()
     statusChanged = Signal(str)
+    measuringChanged = Signal(float)
+    """Das Maß des angefangenen Elements, oder 0 — das Feld in der Leiste
+    folgt ihm, solange gezeichnet wird (E19)."""
 
     def __init__(
         self,
@@ -198,6 +201,14 @@ class SketchCanvas(QWidget):
         """Die Normalen der Flächen, auf denen gezeichnet werden darf.
 
         Nur für den Hinweis zur Schichtrichtung — siehe ``offer_faces``."""
+        self._pointer: tuple[float, float] = (0.0, 0.0)
+        """Wo der Zeiger zuletzt stand, in Weltkoordinaten."""
+        self.highlighted: frozenset[int] = frozenset()
+        """Punkte, die gerade aufleuchten sollen — die Ziele der Bedingung
+        unter dem Mauszeiger (E19).
+
+        „Deckung (1, 2)" ist ohne das nicht lesbar: welche zwei Punkte das
+        sind, weiß nur, wer die flache Nummerierung im Kopf hat."""
         self._bodies: list[Any] = []
         """Die Körper der Szene, für das Projizieren (E18).
 
@@ -262,6 +273,13 @@ class SketchCanvas(QWidget):
         Auswertung neu — hier etwas zu speichern hieße, es veralten zu lassen.
         """
         self._face_normals = dict(faces)
+
+    def highlight_points(self, points: frozenset[int]) -> None:
+        """Lässt die genannten Punkte aufleuchten — oder keinen mehr."""
+        if points == self.highlighted:
+            return
+        self.highlighted = points
+        self.update()
 
     def offer_bodies(self, meshes: Sequence[Any]) -> None:
         """Woraus projiziert werden kann — die Körper der Szene."""
@@ -690,6 +708,61 @@ class SketchCanvas(QWidget):
             self._pending.append(begin + 1)
             self._pending_world.append(kept)
 
+    def pending_measure(self) -> float:
+        """Wie lang die angefangene Linie gerade wäre — oder wie groß der
+        Kreis.
+
+        Null heißt: es ist nichts angefangen, für das ein Maß gilt. Die
+        Leiste schaltet ihr Feld danach.
+        """
+        if len(self._pending_world) != 1 or self.tool not in ("line", "circle"):
+            return 0.0
+        first = self._pending_world[0]
+        return math.hypot(self._pointer[0] - first[0], self._pointer[1] - first[1])
+
+    def place_measured(self, value: float) -> None:
+        """Schließt das angefangene Element auf ein eingetipptes Maß ab (E19).
+
+        In Fusion zeichnet man selten und bemaßt fast immer — das Maß beim
+        Zeichnen einzutippen ist dort der Normalweg, und Formwerk hatte
+        dafür gar nichts.
+
+        Die Richtung kommt vom Zeiger, die Länge aus dem Feld. Und das Maß
+        bleibt als Bedingung stehen, nicht nur als Koordinate: sonst wandert
+        die Linie beim nächsten Solverlauf, und die eingetippte Zahl wäre eine
+        Angabe gewesen, die nichts hält.
+        """
+        if value <= 0.0 or len(self._pending_world) != 1 or self.tool not in ("line", "circle"):
+            self.statusChanged.emit(tr("Erst einen Punkt setzen, dann das Maß eintippen."))
+            return
+
+        first = self._pending_world[0]
+        dx, dy = self._pointer[0] - first[0], self._pointer[1] - first[1]
+        span = math.hypot(dx, dy)
+        # Ohne Richtung nach rechts: eine Länge ohne Richtung ist keine Linie,
+        # und die Waagerechte ist die Antwort, die niemanden überrascht.
+        direction = (dx / span, dy / span) if span > EPS_DISPLAY else (1.0, 0.0)
+        second = (first[0] + direction[0] * value, first[1] + direction[1] * value)
+
+        begin = len(_flat_points(self.sketch))
+        element = SketchElement(self.tool, (first, second))  # type: ignore[arg-type]
+        snapped = tuple(
+            SketchConstraint("coincident", (flat, begin + local))
+            for local, flat in enumerate(self._pending)
+            if flat >= 0
+        )
+        measured = SketchConstraint("distance", (begin, begin + 1), value=f"{value:.9f}")
+        self._pending.clear()
+        self._pending_world.clear()
+        self._apply(
+            replace(
+                self.sketch,
+                elements=(*self.sketch.elements, element),
+                constraints=(*self.sketch.constraints, *snapped, measured),
+            )
+        )
+        self.measuringChanged.emit(0.0)
+
     def finish_spline(self) -> None:
         """Den gesammelten Spline abschließen.
 
@@ -729,9 +802,14 @@ class SketchCanvas(QWidget):
             )
             self.update()
             return
+        # Wo der Zeiger steht, entscheidet die **Richtung** eines eingetippten
+        # Maßes: die Länge kommt aus dem Feld, wohin es geht aus der Hand.
+        self._pointer = self._to_world(QPointF(event.position()))
         if self._dragging is not None and event.buttons() & Qt.MouseButton.LeftButton:
-            wx, wy = self._to_world(QPointF(event.position()))
-            self.move_point(self._dragging, wx, wy)
+            self.move_point(self._dragging, self._pointer[0], self._pointer[1])
+        elif self._pending_world:
+            self.measuringChanged.emit(self.pending_measure())
+            self.update()
 
     def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         if event.button() == Qt.MouseButton.MiddleButton:
@@ -816,13 +894,22 @@ class SketchCanvas(QWidget):
             painter.setPen(pen)
             self._paint_element(painter, element, points, begin)
 
+        marked = QColor(ROLES["measure"])
         for flat, (x, y) in enumerate(points):
             screen = self._to_screen(x, y)
             selected = flat in chosen_points
+            lit = flat in self.highlighted
             painter.setPen(QPen(chosen_colour if selected else line_colour, 1.0))
             painter.setBrush(chosen_colour if selected else palette.base().color())
             radius = 5.0 if selected else 3.5
             painter.drawEllipse(screen, radius, radius)
+            if lit:
+                # Ein Ring darum, nicht eine andere Füllung: die Auswahl hat
+                # die Füllung, und zwei Aussagen an derselben Stelle müssen
+                # sich unterscheiden lassen.
+                painter.setPen(QPen(marked, 2.0))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawEllipse(screen, radius + 4.0, radius + 4.0)
 
         self._paint_measures(painter, points)
         self._paint_pending(painter)
@@ -1312,11 +1399,30 @@ class SketchPanel(QWidget):
         project_button.setAutoRaise(True)
         project_button.clicked.connect(self.canvas.project_bodies)
 
+        # Das Maß beim Zeichnen (E19). In Fusion zeichnet man selten und bemaßt
+        # fast immer; hier gab es dafür gar nichts. Das Feld ist nur dann
+        # bedienbar, wenn ein Element angefangen ist — sonst hätte es nichts,
+        # worauf es sich bezieht.
+        self.measure_field = QDoubleSpinBox(self)
+        self.measure_field.setDecimals(2)
+        self.measure_field.setRange(0.0, 10_000.0)
+        self.measure_field.setSuffix(f" {DISPLAY_UNITS[0]}")
+        self.measure_field.setKeyboardTracking(False)
+        self.measure_field.setEnabled(False)
+        self.measure_field.setToolTip(
+            tr("Länge oder Durchmesser eintippen und mit der Eingabetaste setzen.")
+        )
+        self.measure_field.editingFinished.connect(
+            lambda: self.canvas.place_measured(self.measure_field.value())
+        )
+        self.canvas.measuringChanged.connect(self._show_pending_measure)
+
         tools.addWidget(offset_button)
         tools.addWidget(self.offset_distance)
         tools.addWidget(mirror_button)
         tools.addWidget(construction_button)
         tools.addWidget(project_button)
+        tools.addWidget(self.measure_field)
 
         undo_button = QToolButton(self)
         undo_button.setText(tr("Rückgängig"))
@@ -1340,6 +1446,12 @@ class SketchPanel(QWidget):
 
         self.constraint_list = QListWidget(self)
         self.constraint_list.setToolTip(tr("Entf entfernt die gewählte Bedingung."))
+        # Überfahren lässt die betroffene Geometrie aufleuchten (E19). Ohne das
+        # ist „Deckung (1, 2)" nicht lesbar: welche zwei Punkte das sind, weiß
+        # nur, wer die flache Nummerierung im Kopf hat.
+        self.constraint_list.setMouseTracking(True)
+        self.constraint_list.itemEntered.connect(self._point_at)
+        self.constraint_list.currentItemChanged.connect(lambda item, _old: self._point_at(item))
 
         self.status = QLabel(opening or self.canvas.status_text(), self)
         self.status.setWordWrap(True)
@@ -1452,7 +1564,25 @@ class SketchPanel(QWidget):
                 label = f"{label} {shown}"
             targets = ", ".join(str(target) for target in entry.targets)
             item = QListWidgetItem(f"{label}  ({targets})")
+            item.setData(Qt.ItemDataRole.UserRole, entry.targets)
             self.constraint_list.addItem(item)
+
+    def _show_pending_measure(self, value: float) -> None:
+        """Das Feld folgt dem, was gerade gezeichnet wird."""
+        self.measure_field.setEnabled(value > 0.0)
+        blocked = self.measure_field.blockSignals(True)
+        self.measure_field.setValue(value)
+        self.measure_field.blockSignals(blocked)
+
+    def _point_at(self, item: QListWidgetItem | None) -> None:
+        """Lässt die Punkte der überfahrenen Bedingung aufleuchten."""
+        targets = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        self.canvas.highlight_points(frozenset(targets or ()))
+
+    def leaveEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        """Der Zeiger ist weg — dann leuchtet auch nichts mehr."""
+        super().leaveEvent(event)
+        self.canvas.highlight_points(frozenset())
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
         from PySide6.QtCore import QEvent

@@ -670,3 +670,81 @@ def test_the_reference_tools_are_reachable(qt_app: QApplication) -> None:
     assert tr("Projizieren") in labels
     assert tr("Hilfsgeometrie") in labels
     assert ACTION_KEYS["construction"] == "X", "wie in Fusion"
+
+
+# --- Maß beim Zeichnen und lesbare Bedingungen (E19) ----------------------------
+
+
+def test_typing_a_measure_finishes_the_line(qt_app: QApplication) -> None:
+    """In Fusion zeichnet man selten und bemaßt fast immer — dafür gab es
+    hier gar nichts."""
+    canvas = SketchCanvas()
+    canvas.set_tool("line")
+    canvas.place(canvas._to_screen(0.0, 0.0))
+    canvas._pointer = (1.0, 0.0)
+
+    canvas.place_measured(25.0)
+
+    assert len(canvas.sketch.elements) == 1
+    line = canvas.sketch.elements[0]
+    assert line.points[1][0] == pytest.approx(25.0), "die Länge kommt aus dem Feld"
+    assert line.points[1][1] == pytest.approx(0.0), "die Richtung vom Zeiger"
+
+
+def test_a_typed_measure_stays_as_a_constraint(qt_app: QApplication) -> None:
+    """Sonst wandert die Linie beim nächsten Solverlauf, und die eingetippte
+    Zahl wäre eine Angabe gewesen, die nichts hält."""
+    canvas = SketchCanvas()
+    canvas.set_tool("line")
+    canvas.place(canvas._to_screen(0.0, 0.0))
+    canvas._pointer = (1.0, 0.0)
+
+    canvas.place_measured(25.0)
+
+    measures = [entry for entry in canvas.sketch.constraints if entry.kind == "distance"]
+    assert measures, "das Maß bleibt stehen"
+    assert float(measures[0].value) == pytest.approx(25.0)
+
+
+def test_a_measure_without_a_start_says_what_to_do(qt_app: QApplication) -> None:
+    canvas = SketchCanvas()
+    canvas.set_tool("line")
+    said: list[str] = []
+    canvas.statusChanged.connect(said.append)
+
+    canvas.place_measured(25.0)
+
+    assert said and "Punkt setzen" in said[-1]
+    assert not canvas.sketch.elements
+
+
+def test_the_measure_field_only_works_while_drawing(qt_app: QApplication) -> None:
+    """Ein Feld ohne Bezug ist eine Einladung zu einem Klick, der nichts
+    tut."""
+    panel = SketchPanel()
+    assert not panel.measure_field.isEnabled()
+
+    panel.canvas.set_tool("line")
+    panel.canvas.place(panel.canvas._to_screen(0.0, 0.0))
+    panel.canvas._pointer = (10.0, 0.0)
+    panel.canvas.measuringChanged.emit(panel.canvas.pending_measure())
+
+    assert panel.measure_field.isEnabled()
+    assert panel.measure_field.value() == pytest.approx(10.0)
+
+
+def test_hovering_a_constraint_lights_up_its_geometry(qt_app: QApplication) -> None:
+    """„Deckung (1, 2)" ist ohne das nicht lesbar: welche zwei Punkte das sind,
+    weiß nur, wer die flache Nummerierung im Kopf hat."""
+    panel = SketchPanel()
+    panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+
+    item = panel.constraint_list.item(0)
+    assert item is not None
+    panel._point_at(item)
+
+    assert panel.canvas.highlighted, "die Punkte der Bedingung leuchten"
+    assert panel.canvas.highlighted == frozenset(panel.canvas.sketch.constraints[0].targets)
+
+    panel._point_at(None)
+    assert not panel.canvas.highlighted, "und der Zeiger daneben nimmt es zurück"
