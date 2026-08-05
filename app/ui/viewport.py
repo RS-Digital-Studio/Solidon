@@ -1523,9 +1523,17 @@ class Viewport(QWidget):
                 font_size=11,
                 show_points=True,
                 point_color=MEASURE_COLOUR,
-                point_size=10,
+                point_size=8,
+                # **Auch was im Material steckt.** Eine Bohrung hat ihren
+                # Mittelpunkt auf halber Höhe im Körper; ohne das blieb ihre
+                # Beschriftung dahinter verborgen, und beschriftet waren nur
+                # die drei Flächen — bei einem Teil, das nach seinen vier
+                # Bohrungen benannt ist.
+                always_visible=True,
+                shape=None,
                 name="features",
                 render=False,
+                reset_camera=False,
             )
         )
 
