@@ -200,6 +200,12 @@ class ExampleTile(QFrame):
         layout.setSpacing(TIGHT)
         layout.addWidget(title)
         layout.addWidget(doc)
+        # Der Überschuss sammelt sich unten, nicht zwischen Titel und Satz.
+        # Eine Kachel wächst auf die Höhe ihrer Nachbarin (oben, MinimumExpanding);
+        # ohne diese Feder verteilte Qt die gewonnene Höhe auf beide Beschriftungen,
+        # und neben einer zweizeiligen Überschrift klaffte in der einzeiligen
+        # Kachel eine Lücke, die aussah wie ein vergessener Text.
+        layout.addStretch(1)
 
     def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         if event.button() == Qt.MouseButton.LeftButton:

@@ -757,13 +757,26 @@ def test_findings_carry_their_severity_as_a_shape(qt_app: QApplication) -> None:
 
 
 def test_the_first_run_says_found_and_missing_in_words(qt_app: QApplication) -> None:
-    """„+" und „−" waren die kryptischste Stelle im allerersten Dialog."""
-    from app.ui.first_run import _tool_text
+    """„+" und „−" waren die kryptischste Stelle im allerersten Dialog.
 
-    text = _tool_text()
+    Das Wort ist geblieben, das Zeichen steht jetzt daneben — nicht statt
+    seiner (Regel 18). Und der Installationspfad, der beim ersten Start keine
+    Frage beantwortet, steht im Hinweis statt in der Zeile.
+    """
+    from PySide6.QtWidgets import QLabel
 
-    assert "gefunden" in text or "fehlt" in text
-    assert not any(line.startswith(("+ ", "- ")) for line in text.splitlines())
+    from app.core import tools
+    from app.ui.first_run import ToolRow
+
+    states = tools.survey()
+    assert states, "ohne Programme prüft dieser Test nichts"
+
+    for state in states:
+        row = ToolRow(state)
+        words = [child.text() for child in row.findChildren(QLabel) if child.text()]
+        assert any(word in ("gefunden", "fehlt") for word in words), words
+        assert row.toolTip(), "wo es liegt, steht im Hinweis"
+        assert not any(word.startswith(("+ ", "- ")) for word in words)
 
 
 # --- Objektbaum (§18.8) ---------------------------------------------------------

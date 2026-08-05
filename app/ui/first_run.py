@@ -17,12 +17,13 @@ Modell zu öffnen.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QVBoxLayout,
@@ -34,13 +35,54 @@ from app.core import install, tools
 from app.core.backends import llm
 from app.core.knowledge import profiles
 from app.i18n import SUPPORTED_LANGUAGES, language_name, tr
+from app.ui.icons import icon
 from app.ui.settings import UiSettings
+from app.ui.style import NORMAL, TIGHT, set_level
 
 #: Der Zustand jedes Programms steht als Wort in der Zeile, damit sich die
 #: Liste auch ohne Farbe liest (§19.1). Vorher stand dort ein Plus- und ein
 #: ein Minuszeichen — beides kurz, beides zu raten. In der einzigen Liste,
 #: die jemand beim allerersten Start zu lesen bekommt, ist das ein schlechter
 #: Tausch für zwei gesparte Zeichen.
+#:
+#: Das Wort ist geblieben, und ein Zeichen steht jetzt daneben — nicht statt
+#: seiner. Beides zusammen ist, was Regel 18 verlangt: die Form trägt die
+#: Bedeutung mit, das Wort bleibt lesbar.
+
+
+class ToolRow(QWidget):
+    """Ein externes Programm: Zeichen, Zustand, Name, wofür es gut ist.
+
+    Vorher war die ganze Liste **ein** mehrzeiliges Label — zwanzig Zeilen
+    Fließtext mit vollständigen Installationspfaden, als Erstes, was ein neuer
+    Nutzer von der Anwendung zu lesen bekam. Der Pfad beantwortet keine Frage,
+    die beim ersten Start jemand hat; er steht jetzt im Hinweis darüber, wo er
+    denjenigen erreicht, der ihn sucht.
+    """
+
+    def __init__(self, state: tools.ToolState, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        symbol = QLabel(self)
+        name = "done" if state.available else "severity-info"
+        symbol.setPixmap(icon(name, self).pixmap(16, 16))
+
+        word = QLabel(tr("gefunden") if state.available else tr("fehlt"), self)
+        set_level(word, "caption")
+
+        what = QLabel(f"{state.tool.title} — {state.tool.what_for}", self)
+        what.setWordWrap(True)
+
+        # Der Pfad, oder der Satz, der sagt, was weiterhilft: ein Dienst muss
+        # laufen, ein Programm an ungewöhnlicher Stelle wird angegeben.
+        where = str(state.path) if state.available else str(state.explain())
+        self.setToolTip(where)
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(NORMAL)
+        row.addWidget(symbol)
+        row.addWidget(word)
+        row.addWidget(what, stretch=1)
 
 
 class FirstRunDialog(QDialog):
@@ -86,9 +128,11 @@ class FirstRunDialog(QDialog):
         form.addRow(tr("Drucker"), self.printer)
         form.addRow(tr("Material"), self.material)
 
-        self.tools = QLabel(_tool_text(), self)
-        self.tools.setWordWrap(True)
-        self.tools.setTextFormat(Qt.TextFormat.PlainText)
+        self.tools = QWidget(self)
+        self._tool_rows = QVBoxLayout(self.tools)
+        self._tool_rows.setContentsMargins(0, 0, 0, 0)
+        self._tool_rows.setSpacing(TIGHT)
+        self._fill_tools()
 
         self.install_button = QPushButton(
             f"{tr('Fehlendes installieren …')}  ·  {_missing_text()}", self
@@ -104,9 +148,14 @@ class FirstRunDialog(QDialog):
         self.open_button = QPushButton(tr("Modell öffnen …"), self)
         self.open_button.clicked.connect(self._open)
 
+        # Nach der Handlung benannt, wie der Dialog *Ungesicherte Änderungen*
+        # es vormacht. „Übernehmen" neben „Überspringen" ließ offen, was der
+        # Unterschied ist — beide schließen den Dialog, beide fragen nie
+        # wieder, und nur einer merkt sich die getroffene Auswahl. Wer sie
+        # geändert und dann „Überspringen" gedrückt hätte, hätte sie verloren.
         buttons = QDialogButtonBox(self)
-        buttons.addButton(tr("Übernehmen"), QDialogButtonBox.ButtonRole.AcceptRole)
-        buttons.addButton(tr("Überspringen"), QDialogButtonBox.ButtonRole.RejectRole)
+        buttons.addButton(tr("Los geht's"), QDialogButtonBox.ButtonRole.AcceptRole)
+        buttons.addButton(tr("Später einstellen"), QDialogButtonBox.ButtonRole.RejectRole)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
@@ -133,12 +182,26 @@ class FirstRunDialog(QDialog):
         settings.first_run_done = True
         return settings
 
+    def _fill_tools(self) -> None:
+        """Eine Zeile je Programm, neu gebaut statt neu beschriftet.
+
+        Was installiert wurde, ändert die Zeichen und die Hinweise; eine Zeile
+        einzeln nachzuziehen hieße, dieselbe Zuordnung zweimal zu schreiben.
+        """
+        while self._tool_rows.count():
+            item = self._tool_rows.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.deleteLater()
+        for state in tools.survey():
+            self._tool_rows.addWidget(ToolRow(state, self.tools))
+
     def _install(self) -> None:
         """§36: was fehlt, lässt sich von hier holen, statt aus einem README."""
         from app.ui.install_dialog import InstallDialog
 
         InstallDialog(self).exec()
-        self.tools.setText(_tool_text())
+        self._fill_tools()
         self.install_button.setText(f"{tr('Fehlendes installieren …')}  ·  {_missing_text()}")
         self.chat_state.setText(_chat_text())
 
@@ -192,23 +255,6 @@ def _missing_text() -> str:
     if not absent:
         return tr("Alles Zusätzliche ist vorhanden.")
     return f"{tr('Nicht gefunden')}: " + ", ".join(str(entry.title) for entry in absent)
-
-
-def _tool_text() -> str:
-    """Was installiert ist und wofür es gut wäre (§38).
-
-    Statt „nicht gefunden" steht hier der Satz, der sagt, was weiterhilft: ein
-    Dienst muss laufen, ein Programm an ungewöhnlicher Stelle wird angegeben.
-    Beides führt zu derselben Liste unter *Hilfe → Zusätzliche Programme*.
-    """
-    lines = []
-    for state in tools.survey():
-        marker = tr("gefunden") if state.available else tr("fehlt")
-        where = str(state.path) if state.path else state.tool.address()
-        if not state.available:
-            where = str(state.explain())
-        lines.append(f"{marker} — {state.tool.title}: {where}\n   {state.tool.what_for}")
-    return "\n".join(lines)
 
 
 def should_run(settings: UiSettings) -> bool:
