@@ -464,3 +464,33 @@ def test_a_remembered_choice_wins_over_the_match(qt_app: QApplication) -> None:
     dialog._profiles_found([machine, other])
 
     assert dialog.machine_choice.currentData() == str(other.path)
+
+
+def test_a_built_fit_counts_like_an_entered_one(session: Session, qt_app) -> None:
+    """§29: die Regeln für Passungen greifen auch ohne Eintrag im Dokument.
+
+    Der Deckel aus ``create_lid`` bekommt sein Spiel aus dem Materialprofil und
+    trägt es nirgends ein — im gedruckten Gewürzset liefen deshalb genau die
+    Regeln nicht, die es für Passungen gibt: genaue Außenwand, gebremste
+    Beschleunigung, Bügeln der Gleitfläche. Der Stapel weiß es trotzdem.
+    """
+    from app.core.scene import History, OperationDraft
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    try:
+        assert not dialog._fits_in_play(), "ein leeres Projekt hat keine Passung"
+
+        History(session.project.document).apply(
+            "Grundkörper",
+            [OperationDraft(op="create_cylinder", params={"diameter": 40.0, "height": 20.0})],
+        )
+        assert not dialog._fits_in_play(), "ein Zylinder ist noch keine"
+
+        History(session.project.document).apply(
+            "Deckel",
+            [OperationDraft(op="create_lid", inputs=("obj_1",), params={"thickness": 2.4})],
+        )
+        assert dialog._fits_in_play(), "ein Deckel legt zwei Flächen mit Spiel aufeinander"
+    finally:
+        dialog.deleteLater()

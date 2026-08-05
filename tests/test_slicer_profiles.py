@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from app.core.export import slicer_profiles as sp
+from app.core.knowledge import profiles
 from app.core.types import PrinterProfile
 
 
@@ -367,3 +368,25 @@ def test_the_filament_default_is_the_plain_one(slicer: Path) -> None:
     assert chosen.name == "Elegoo PETG @ECC2"
     assert sp.match_filament(found, machine, "PLA") is not None
     assert sp.match_filament(found, machine, "ABS") is None, "was fehlt, wird nicht geraten"
+
+
+# --- welchen Drucker der Slicer hat (§2.3, §29) ---------------------------------
+
+
+def test_the_machine_name_leads_to_the_printer_profile() -> None:
+    """Der Name des Slicers trägt die Düse, der von Formwerk nicht.
+
+    Verglichen wird deshalb am Anfang — und der längste Titel gewinnt, sonst
+    stünde „Elegoo Neptune 4" auch für den Plus.
+    """
+    known = profiles.printer_profiles()
+
+    assert sp.printer_for("Elegoo Centauri Carbon 2 0.4 nozzle", known) == ("centauri-carbon-2")
+    assert sp.printer_for("Elegoo Neptune 4 Plus 0.4 nozzle", known) == ("elegoo-neptune-4-plus")
+    assert sp.printer_for("Ratterkiste 3000", known) == "", "was nicht trifft, wird nicht geraten"
+
+
+def test_a_missing_configuration_is_no_suggestion(tmp_path: Path) -> None:
+    """Kein Slicer, keine Vorgabe — und kein Fehler."""
+    assert sp.chosen_machine("orca", tmp_path / "nirgends.exe") == ""
+    assert sp.chosen_machine("prusa", tmp_path / "nirgends.exe") == ""

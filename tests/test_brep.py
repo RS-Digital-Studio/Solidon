@@ -442,3 +442,32 @@ def test_step_comes_back_addressable_and_stable() -> None:
 
     assert len(runs[0]) == 6, "sechs Wände, sechs Namen"
     assert runs[0] == runs[1] == runs[2], "und jedes Laden ergibt dieselben"
+
+
+def test_a_round_stud_is_not_a_hole() -> None:
+    """Auf welcher Seite das Material liegt, entscheidet den Namen (§21).
+
+    Jede geschlossene Zylinderfläche galt als Bohrung. Ein Ø-8-Zapfen, in
+    Fusion gebaut und über STEP zurückgeholt, kam damit als „hole,
+    diameter 8.0, depth 40" an — und dasselbe galt für jede Säule, jeden Dom
+    und jeden Gewindekern. Das Vokabular aus §21 hat ``pin`` seit je; benutzt
+    wurde es nur von den Bausteinen, die ihre Merkmale selbst benennen.
+    """
+    stud = edit.cylinder(diameter=8.0, height=40.0)
+
+    kinds = {feature.kind for feature in features_of(stud).values()}
+
+    assert "pin" in kinds, "ein Vollzylinder ist ein Zapfen"
+    assert "hole" not in kinds, "und ganz sicher keine Bohrung"
+
+
+def test_a_bore_through_a_block_stays_a_hole() -> None:
+    """Die Gegenprobe — sonst wäre die Unterscheidung nur umgedreht."""
+    from app.core.brep import edit as brep_edit
+
+    drilled = brep_edit.boolean("difference", [block(), brep_edit.cylinder(8.0, 60.0)])
+
+    kinds = {feature.kind for feature in features_of(drilled).values()}
+
+    assert "hole" in kinds
+    assert "pin" not in kinds

@@ -98,6 +98,27 @@ class Field:
     ist schlicht falsch beschriftet (§19.3)."""
 
 
+#: Operationen, die eine Passung **herstellen**, ohne sie einzutragen.
+#:
+#: Jede von ihnen legt zwei Flächen mit einem gerechneten Spiel aufeinander —
+#: aus dem Materialprofil oder der Normteiltabelle. Für den Druck heißt das
+#: dasselbe wie eine eingetragene Passung: die Außenwand muss auf Maß, und
+#: schnell darf sie dabei nicht sein.
+FITTING_OPS: frozenset[str] = frozenset(
+    {
+        "create_lid",
+        "screw_lid",
+        "split_pinned",
+        "insert_snap_fit",
+        "insert_dowel",
+        "insert_magnet_pocket",
+        "insert_heatset_m4",
+        "insert_nut_trap",
+        "insert_printed_thread",
+        "thread_exact",
+    }
+)
+
 #: Gruppen in der Reihenfolge, in der sie erscheinen.
 GROUPS = ("layers", "shell", "infill", "temperature", "cooling", "speed", "support", "other")
 
@@ -1207,8 +1228,29 @@ class PrintSettingsDialog(QDialog):
             self.session.profile,
             self.slice_result,
             bounds=self._bounds(),
-            has_fits=bool(self.session.project.document.fits),
+            has_fits=self._fits_in_play(),
         )
+
+    def _fits_in_play(self) -> bool:
+        """Trägt dieses Projekt eine Passung — eingetragen oder gebaut?
+
+        Eingetragene Passungen stehen im Dokument. Gebaute stehen nirgends: der
+        Deckel aus ``create_lid`` bekommt sein Spiel aus dem Materialprofil, die
+        Mutternfalle ihres aus der Normteiltabelle, und keiner von beiden trägt
+        es ins Dokument ein. Damit liefen genau die Regeln nicht, die es für
+        Passungen gibt — genaue Außenwand, gebremste Beschleunigung, Bügeln der
+        Gleitfläche —, und der gedruckte Gewürzdeckel bekam keine davon.
+
+        Hier zählt deshalb auch, was im Stapel steht. Das ist die kleine Hälfte
+        der Sache: die Passung selbst gehört ins Dokument, damit auch die
+        Prüfung sie sieht und ein Nutzer sie ändern kann. Das ändert den
+        Vertrag aus §9 (eine Op müsste Passungen zurückgeben können) und ist
+        eine eigene Runde wert.
+        """
+        document = self.session.project.document
+        if document.fits:
+            return True
+        return any(entry.op in FITTING_OPS for entry in document.ops)
 
     def _bounds(self) -> BoundingBox | None:
         """Der Hüllquader über alles, was auf die Platte geht — daran hängt der

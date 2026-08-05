@@ -35,20 +35,15 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
     eingepasst.
     """
     found: dict[FeatureId, Feature] = {}
-    holes = 0
-    faces = 0
+    counts = {"hole": 0, "pin": 0, "face": 0}
 
     for index, face in enumerate(solid.faces()):
         described = _describe(face, index)
         if described is None:
             continue
         kind, params = described
-        if kind == "hole":
-            holes += 1
-            identifier = f"hole_{holes}"
-        else:
-            faces += 1
-            identifier = f"face_{faces}"
+        counts[kind] = counts.get(kind, 0) + 1
+        identifier = f"{kind}_{counts[kind]}"
         found[identifier] = Feature(
             id=identifier,
             kind=kind,
@@ -57,7 +52,12 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
             face_indices=(index,),
         )
 
-    _log.info("read %d hole(s) and %d face(s) off a B-Rep body", holes, faces)
+    _log.info(
+        "read %d hole(s), %d pin(s) and %d face(s) off a B-Rep body",
+        counts["hole"],
+        counts["pin"],
+        counts["face"],
+    )
     return found
 
 
@@ -95,7 +95,15 @@ def _describe(face: Any, index: int) -> tuple[FeatureKind, dict[str, Any]] | Non
         axis = cylinder.Axis().Direction()
         radius = float(cylinder.Radius())
         depth = abs(surface.LastVParameter() - surface.FirstVParameter())
-        return "hole", {
+        # Loch oder Zapfen — das entscheidet, auf welcher Seite das Material
+        # liegt, und das steht in der Orientierung der Fläche. Ohne diese
+        # Unterscheidung war jeder Rundstab eine Bohrung: ein Ø-8-Zapfen aus
+        # Fusion kam in Formwerk als „hole, diameter 8.0, depth 40" an, und
+        # dasselbe galt für jede Säule und jeden Dom.
+        from OCP.TopAbs import TopAbs_REVERSED
+
+        hollow = face.Orientation() == TopAbs_REVERSED
+        return "hole" if hollow else "pin", {
             "diameter": round(radius * 2.0, 4),
             "centre": middle,
             "axis": (axis.X(), axis.Y(), axis.Z()),

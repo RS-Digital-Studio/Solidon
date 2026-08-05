@@ -1598,6 +1598,7 @@ class MainWindow(QMainWindow):
         """Was der Slicer gemessen hat, geht in den Prüfbericht — als gemessen
         markiert, neben der Schätzung, nie an ihrer Stelle (Regel 14)."""
         self.report.add_findings(outcome.findings)
+        self._compare_totals(outcome.metrics)
         self._focus_report()
         self.status_message.setText(f"{tr('Geslicet')}: {outcome.gcode_path.name}")
 
@@ -1618,6 +1619,7 @@ class MainWindow(QMainWindow):
         findings = gcode.findings_for(metrics)
 
         self.report.add_findings(findings)
+        self._compare_totals(metrics)
         self._focus_report()
         self.status_message.setText(
             f"{tr('G-Code gelesen')}: {metrics.slicer or tr('unbekannter Slicer')}"
@@ -1642,6 +1644,39 @@ class MainWindow(QMainWindow):
         self.report.add_findings(
             gcode.compare(estimate.support_volume, measured, "support").findings
         )
+
+    def _compare_totals(self, metrics: gcode.GcodeMetrics) -> None:
+        """Geschätzte gegen gemessene Druckzeit und Materialmenge (§28.2).
+
+        Das Stützvolumen wurde schon immer gegengeprüft, Zeit und Material
+        nicht — dabei liegen beide Zahlen nebeneinander vor. Beim Gewürzhalter
+        standen 12 g gegen 10 g und 46 min gegen 37 min, also 17 und 20 Prozent
+        auseinander, und der Bericht meldete vier Hinweise und keine Warnung.
+        Die Schwelle von fünfzehn Prozent steht in :func:`gcode.compare` seit
+        je; gerufen wurde sie nur an einer Stelle.
+
+        Ersetzt wird nichts: beide Zahlen behalten ihre Herkunft (Regel 14).
+        Der Bericht sagt bloß, dass sie sich widersprechen — und genau das ist
+        das Signal, dass die Schichtanalyse Arbeit braucht.
+        """
+        result = self.session.last_result
+        if result is None or not result.scene.objects:
+            return
+        settings = self.session.project.document.print_settings or print_settings.resolve(
+            self.session.profile
+        )
+        bodies = [(entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()]
+        estimate = estimate_total(bodies, settings)
+
+        findings: list[Finding] = []
+        grams = metrics.grams(settings.filament.density)
+        if grams is not None and estimate.grams > 0.0:
+            findings += gcode.compare(estimate.grams, grams, "material").findings
+        if metrics.print_minutes is not None and estimate.seconds > 0.0:
+            findings += gcode.compare(
+                estimate.seconds / 60.0, metrics.print_minutes, "time"
+            ).findings
+        self.report.add_findings(findings)
 
     def action_export(self) -> None:
         """§29: die Körper als Datei — der Schritt, mit dem jeder der drei

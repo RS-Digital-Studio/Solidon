@@ -2362,3 +2362,66 @@ def test_the_sketch_editor_keeps_clear_of_the_cards(window: MainWindow) -> None:
     assert margins.left() >= LEFT_WIDTH + MARGIN, "unter der linken Karte liegt kein Werkzeug"
     assert margins.right() > 0, "und die Bedingungsliste bleibt lesbar"
     window.finish_sketch(keep=False)
+
+
+def _report_codes(window: MainWindow) -> list[str]:
+    """Die Codes der Befunde, die im Bericht stehen."""
+    from PySide6.QtCore import Qt as _Qt
+
+    listing = window.report.list
+    return [
+        listing.item(row).data(_Qt.ItemDataRole.UserRole).code for row in range(listing.count())
+    ]
+
+
+def test_time_and_material_are_cross_checked_too(window: MainWindow) -> None:
+    """§28.2 meint beide Zahlen, nicht nur das Stützvolumen.
+
+    Beim Gewürzhalter standen 12 g gegen 10 g und 46 min gegen 37 min — 17 und
+    20 Prozent auseinander —, und der Prüfbericht meldete vier Hinweise und
+    keine Warnung. ``gcode.compare`` kennt die Schwelle von fünfzehn Prozent
+    seit je; gerufen wurde sie nur für die Stützen.
+    """
+    from app.core.knowledge import print_settings as settings_table
+    from app.core.slice import gcode
+    from app.core.slice.estimate import total as estimate_total
+
+    _with_two_objects(window)
+    window.report.show_result(None)
+
+    # Was der Slicer geschrieben hat: gut ein Fünftel unter der Schätzung.
+    result = window.session.last_result
+    settings = settings_table.resolve(window.session.profile)
+    bodies = [(entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()]
+    estimate = estimate_total(bodies, settings)
+    measured = gcode.GcodeMetrics(
+        filament_grams=estimate.grams * 0.8,
+        print_seconds=estimate.seconds * 0.8,
+    )
+
+    window._compare_totals(measured)
+
+    codes = _report_codes(window)
+    assert codes.count("gcode.deviation") == 2, "Material und Zeit, beide"
+
+
+def test_a_close_estimate_stays_quiet(window: MainWindow) -> None:
+    """Fünf Prozent daneben ist keine Meldung wert — sonst stünde die Warnung
+    nach jedem Lauf da und wäre nach dem dritten unsichtbar."""
+    from app.core.knowledge import print_settings as settings_table
+    from app.core.slice import gcode
+    from app.core.slice.estimate import total as estimate_total
+
+    _with_two_objects(window)
+    window.report.show_result(None)
+
+    result = window.session.last_result
+    settings = settings_table.resolve(window.session.profile)
+    bodies = [(entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()]
+    estimate = estimate_total(bodies, settings)
+
+    window._compare_totals(
+        gcode.GcodeMetrics(filament_grams=estimate.grams * 0.95, print_seconds=estimate.seconds)
+    )
+
+    assert "gcode.deviation" not in _report_codes(window)

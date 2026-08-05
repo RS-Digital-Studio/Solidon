@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Literal
@@ -118,6 +118,65 @@ def user_roots(flavour: SlicerFlavour, executable: Path) -> list[Path]:
         if user.is_dir():
             found.extend(entry for entry in user.iterdir() if entry.is_dir())
     return found
+
+
+def chosen_machine(flavour: SlicerFlavour, executable: Path) -> str:
+    """Welche Maschine im Slicer zuletzt eingestellt war (§29, §2.3).
+
+    Die Orca-Familie schreibt sie in ihre Konfiguration neben die eigenen
+    Profile, als ``presets.machine`` — etwa „Elegoo Centauri Carbon 2 0.4
+    nozzle". Das ist die beste Auskunft darüber, vor welchem Drucker jemand
+    sitzt, und sie kostet eine Datei statt einer Frage.
+
+    Gebraucht wird sie bei der Ersteinrichtung: der Dialog meldete „Slicer
+    gefunden" und schlug im selben Fenster den allgemeinen 220er und PLA vor,
+    während der Bestand daneben den richtigen Drucker kannte.
+
+    Leer heißt: nicht herauszufinden. Dann bleibt es bei der Vorgabe — eine
+    falsche Vorauswahl sieht aus wie eine Entscheidung (§29).
+    """
+    if flavour != "orca":
+        return ""
+    for root in user_roots(flavour, executable):
+        # ``user/<Konto>`` — die Konfiguration liegt eine Ebene darüber.
+        config = root.parent.parent / f"{root.parent.parent.name}.conf"
+        if not config.is_file():
+            continue
+        try:
+            text = config.read_text(encoding="utf-8", errors="replace")
+            # Die Datei trägt mehr als ein JSON-Dokument hintereinander; das
+            # erste ist die Konfiguration, und ``raw_decode`` hört dort auf,
+            # wo es endet.
+            document, _end = json.JSONDecoder().raw_decode(text.lstrip())
+        except (OSError, ValueError) as problem:
+            _log.debug("could not read %s: %s", config.name, problem)
+            continue
+        presets = document.get("presets") if isinstance(document, dict) else None
+        if isinstance(presets, dict):
+            machine = presets.get("machine")
+            if isinstance(machine, str) and machine.strip():
+                _log.info("the slicer was last set to %s", machine)
+                return machine.strip()
+    return ""
+
+
+def printer_for(machine: str, known: Mapping[str, PrinterProfile]) -> str:
+    """Welches Druckerprofil dieser Maschinenname meint — oder nichts.
+
+    Der Name des Slicers trägt Düse und Zusätze („… 0.4 nozzle"), der von
+    Formwerk nicht; verglichen wird deshalb am Anfang. Trifft nichts, bleibt es
+    leer: geraten wird hier so wenig wie in :func:`match`.
+    """
+    wanted = machine.casefold()
+    hits = [
+        identifier
+        for identifier, profile in known.items()
+        if profile.title and wanted.startswith(profile.title.casefold())
+    ]
+    if not hits:
+        return ""
+    # Der längste Titel gewinnt: „Elegoo Neptune 4 Plus" vor „Elegoo Neptune 4".
+    return max(hits, key=lambda identifier: len(known[identifier].title))
 
 
 def _read(path: Path, kind: ProfileKind, from_user: bool) -> SlicerProfile | None:

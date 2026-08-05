@@ -33,11 +33,15 @@ from PySide6.QtWidgets import (
 from app.branding import APP_NAME
 from app.core import install, tools
 from app.core.backends import llm
+from app.core.export import slicer_keys, slicer_profiles
 from app.core.knowledge import profiles
+from app.core.log import get_logger
 from app.i18n import SUPPORTED_LANGUAGES, language_name, tr
 from app.ui.icons import icon
 from app.ui.settings import UiSettings
 from app.ui.style import NORMAL, TIGHT, set_level
+
+_log = get_logger(__name__)
 
 #: Der Zustand jedes Programms steht als Wort in der Zeile, damit sich die
 #: Liste auch ohne Farbe liest (§19.1). Vorher stand dort ein Plus- und ein
@@ -116,7 +120,8 @@ class FirstRunDialog(QDialog):
         self.printer = QComboBox(self)
         for identifier, printer in sorted(profiles.printer_profiles().items()):
             self.printer.addItem(str(printer.title), identifier)
-        _select(self.printer, settings.printer or profiles.DEFAULT_PRINTER)
+        chosen = settings.printer or _printer_from_slicer() or profiles.DEFAULT_PRINTER
+        _select(self.printer, chosen)
 
         self.material = QComboBox(self)
         for identifier, material in sorted(profiles.material_profiles().items()):
@@ -223,6 +228,32 @@ class FirstRunDialog(QDialog):
         self.apply_to(self.settings)
         self.importRequested.emit()
         self.accept()
+
+
+def _printer_from_slicer() -> str:
+    """Welchen Drucker der installierte Slicer zuletzt hatte (§2.3, §29).
+
+    Der Dialog meldet in derselben Zeile „Slicer gefunden" und schlug daneben
+    den allgemeinen 220er vor, während der Bestand des Slicers den richtigen
+    Drucker kannte — samt der Maschine, die dort zuletzt eingestellt war. Eine
+    gute Vorgabe ist mehr wert als eine gute Einstellmöglichkeit (§2.4).
+
+    Findet sich nichts, bleibt es bei der Vorgabe: eine falsche Vorauswahl
+    sähe aus wie eine Entscheidung.
+    """
+    slicer = tools.by_id("slicer")
+    found = slicer.path() if slicer is not None else None
+    if found is None:
+        return ""
+    try:
+        flavour = slicer_keys.flavour_of(found.name)
+        if flavour is None:
+            return ""
+        machine = slicer_profiles.chosen_machine(flavour, found)
+        return slicer_profiles.printer_for(machine, profiles.printer_profiles())
+    except OSError as problem:
+        _log.debug("could not ask the slicer which printer it has: %s", problem)
+        return ""
 
 
 def _select(box: QComboBox, identifier: str) -> None:
