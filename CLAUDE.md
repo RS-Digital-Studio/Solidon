@@ -117,27 +117,9 @@ Agentenschicht, Tests, Druckteile.
 
 ## Werkzeuge in diesem Projekt
 
-Agents (`.claude/agents/`) — die globalen .NET-Agents passen hier nicht:
-
-| Agent | Wofür |
-|---|---|
-| `formwerk-review` | Review gegen die 22 harten Regeln, vor jedem Commit |
-| `formwerk-op` | Neue oder geänderte Operation, ganze Checkliste |
-| `formwerk-baustein` | Bausteinbibliothek und Normteile |
-| `formwerk-geometrie` | Netz kaputt, Boolesche Op scheitert, Rückfallkette |
-| `formwerk-oberflaeche` | PySide6-Fenster, Viewport, Dialoge |
-| `formwerk-agentenschicht` | LLM-Schicht, Regelsammlung, Agenten-Suite |
-| `formwerk-schicht` | Schichtanalyse, Druckbarkeit, Leistungsbudget |
-| `formwerk-sprache` | Übersetzungen, Sprachregelung, tr() |
-| `formwerk-auslieferung` | Paket, Lizenzen, CI, Veröffentlichung |
-| `konzept` | Soll das überhaupt so gebaut werden? Bauplan-Treue |
-| `bedienlogik` | Interaktionsentwurf gegen §2 und §19 |
-| `oberflaechentexte` | Texte, Fehler als Vorschlag, Ton |
-| `druck-berater` | Material, Drucker, Druckeinstellungen |
-| `druckteil-konstrukteur` | Parametrische Teile für den Ordner `3D Drucker/` |
-
-Befehle (`.claude/skills/`): `/pruefen`, `/regelcheck`, `/neue-op`,
-`/neuer-baustein`, `/bauplan`, `/roadmap`, `/liefern`, `/neues-druckteil`.
+Agents (`.claude/agents/`) — die globalen .NET-Agents passen hier nicht.
+Befehle liegen in `.claude/skills/`. Beide Listen stehen bereits in der
+Auflistung der Sitzung; hier stünden sie ein drittes Mal.
 
 Wie die Sitzung selbst bedienbar sein soll, steht in
 `.claude/bedienkonzept-ueberblick.md` (die Sitzung als Ganzes) und
