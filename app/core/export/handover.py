@@ -31,10 +31,10 @@ from typing import Final
 from app.core.errors import OPEN_SETTINGS, Action, ExternalToolError
 from app.core.export import slicer_keys, slicer_profiles
 from app.core.export.slicer_keys import SlicerFlavour
-from app.core.knowledge.print_settings import read_path
+from app.core.knowledge.print_settings import read_path, with_path
 from app.core.log import get_logger
 from app.core.slice import gcode
-from app.core.types import Finding, PrintSettings, Profile
+from app.core.types import Finding, PrintSettings, Profile, SettingAdvice
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -118,6 +118,38 @@ def by_section(
         if entry.key in complete:
             split.setdefault(entry.section, {})[entry.key] = complete[entry.key]
     return split
+
+
+def object_keys(
+    settings: PrintSettings, advice: Sequence[SettingAdvice], flavour: SlicerFlavour
+) -> dict[str, str]:
+    """Die Abweichungen eines Teils in der Sprache des Slicers (§29).
+
+    Übernommen wird die ganze Gruppe, nicht nur der geänderte Wert. Wer die
+    Haftungsart auf Brim stellt, braucht auch dessen Breite — und die Maße der
+    Arten, die *nicht* gewählt sind, müssen auf null, sonst läuft unter dem
+    Teil zusätzlich ein Raft mit (siehe :func:`_only_chosen_adhesion`).
+    """
+    if not advice:
+        return {}
+    groups = {entry.path.partition(".")[0] for entry in advice}
+    keys = {
+        entry.key for entry in slicer_keys.TABLES[flavour] if entry.path.partition(".")[0] in groups
+    }
+    changed = as_mapping(_applied(settings, advice), flavour)
+    return {key: value for key, value in changed.items() if key in keys}
+
+
+def _applied(settings: PrintSettings, advice: Sequence[SettingAdvice]) -> PrintSettings:
+    """Die Einstellungen mit den Abweichungen dieses Teils darin.
+
+    Nicht über :func:`app.core.slice.advise.apply` — der Kern soll von hier
+    nach dort nicht abhängen, und es sind zwei Zeilen.
+    """
+    changed = settings
+    for entry in advice:
+        changed = with_path(changed, entry.path, entry.value)
+    return changed
 
 
 def _only_chosen_adhesion(

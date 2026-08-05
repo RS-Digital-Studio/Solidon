@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import zipfile
+from io import BytesIO
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 import pytest
+import trimesh
 
 from app.core.errors import ValidationError
 from app.core.export import threemf
@@ -16,7 +20,7 @@ from app.core.export.writer import (
     write_assembly,
     write_plan,
 )
-from app.core.geom.mesh import read_mesh
+from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.transform import apply, place_on_bed, translation
 from app.core.ingest.loader import normalise
 from app.core.types import Profile, SceneObject, Source, SourceOrigin
@@ -241,3 +245,51 @@ def test_the_assembly_reports_before_writing(tmp_path: Path, profile: Profile) -
 
     assert written.is_file(), "geschrieben wird trotzdem"
     assert findings, "aber der Befund steht dabei"
+
+
+# --- Einstellungen je Teil (§29, Stufe 4) -------------------------------------------
+
+
+def test_the_assembly_carries_the_part_names_where_the_slicer_reads_them() -> None:
+    """Der Standard hat ein ``name``-Attribut am Objekt, und Formwerk schreibt
+    es auch — aber die Orca-Familie schreibt es selbst nie und liest die Namen
+    aus ``model_settings.config``. Ohne diese Beilage kam eine Baugruppe als
+    „Object 1, Object 2" an, obwohl die Namen in der Datei standen.
+    """
+    parts = [
+        threemf.AssemblyPart(mesh=MeshData.of(trimesh.creation.box((10, 10, 10))), name="Behälter"),
+        threemf.AssemblyPart(mesh=MeshData.of(trimesh.creation.box((5, 5, 5))), name="Deckel"),
+    ]
+
+    payload = threemf.write_assembly(parts, "Gewürzset")
+
+    with zipfile.ZipFile(BytesIO(payload)) as container:
+        config = container.read(threemf.SETTINGS_PATH).decode("utf-8")
+    assert 'key="name" value="Behälter"' in config
+    assert 'key="name" value="Deckel"' in config
+
+
+def test_only_the_part_that_needs_it_gets_the_setting() -> None:
+    """Eine Platte hat einen Satz Werte, aber nicht jedes Teil darauf braucht
+    dasselbe — ohne diesen Ort gäbe es nur „alle" oder „keiner"."""
+    parts = [
+        threemf.AssemblyPart(mesh=MeshData.of(trimesh.creation.box((10, 10, 10))), name="gross"),
+        threemf.AssemblyPart(
+            mesh=MeshData.of(trimesh.creation.box((5, 5, 5))),
+            name="klein",
+            settings={"brim_type": "outer_only", "brim_width": "3"},
+        ),
+    ]
+
+    payload = threemf.write_assembly(parts, "")
+
+    with zipfile.ZipFile(BytesIO(payload)) as container:
+        root = ET.fromstring(container.read(threemf.SETTINGS_PATH))
+    by_name = {
+        node.find("metadata[@key='name']").get("value"): {  # type: ignore[union-attr]
+            entry.get("key"): entry.get("value") for entry in node.findall("metadata")
+        }
+        for node in root.findall("object")
+    }
+    assert by_name["klein"]["brim_type"] == "outer_only"
+    assert "brim_type" not in by_name["gross"]

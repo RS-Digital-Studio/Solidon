@@ -542,6 +542,39 @@ def _from_fits(settings: PrintSettings) -> list[SettingAdvice]:
     return advice
 
 
+def for_part(settings: PrintSettings, bounds: BoundingBox, footprint: float) -> list[SettingAdvice]:
+    """Was dieses eine Teil anders braucht als die Platte (§29).
+
+    Die Plattenhaftung ist die eine Einstellung, die je Teil zählt statt je
+    Auftrag: sie hängt daran, worauf ein Körper steht, und das ist bei jedem
+    ein anderer Wert. Beim Gewürzset stehen zwölf Behälter auf Ø 40 und drei
+    Streuscheiben auf je drei 1,1-mm-Federarmen — dieselbe Platte, und der
+    Brim gehört nur unter die Scheiben. Ohne diese Unterscheidung gäbe es nur
+    „alle bekommen einen" oder „keiner".
+
+    Temperatur, Kühlung und Stützen bleiben plattenweit: sie hängen am Material
+    oder an der Maschine, und je Teil verstellt wären sie ein Widerspruch, den
+    der Slicer auflösen müsste.
+    """
+    if settings.adhesion.kind != "skirt":
+        return []
+    if 0.0 < footprint < SMALL_FOOTPRINT:
+        reason = _("Dieses Teil steht auf zu wenig Fläche, um ohne Brim zu halten.")
+    elif _slender(bounds):
+        reason = _("Dieses Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen.")
+    else:
+        return []
+    return [
+        SettingAdvice(
+            path="adhesion.kind",
+            value="brim",
+            was=settings.adhesion.kind,
+            reason=reason,
+            severity="warning",
+        )
+    ]
+
+
 def _slender(bounds: BoundingBox) -> bool:
     size = bounds.size
     footprint = min(size[0], size[1])

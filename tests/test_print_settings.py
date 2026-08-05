@@ -1052,3 +1052,69 @@ def test_ironing_is_off_until_something_asks_for_it() -> None:
 
     ironed = print_settings.with_path(settings, "shell.ironing", True)
     assert handover.as_mapping(ironed, "orca")["ironing_type"] == "top"
+
+
+def test_a_part_on_little_ground_asks_for_a_brim_on_its_own() -> None:
+    """Die Plattenhaftung ist die eine Einstellung, die je Teil zählt.
+
+    Der Anlass ist das Gewürzset: zwölf Behälter auf Ø 40 und Streuscheiben,
+    die auf drei 1,1-mm-Federarmen stehen. Ein Brim gehört unter die Scheiben
+    und unter keinen Behälter — plattenweit gäbe es nur beides oder nichts.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+    weit = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(40.0, 40.0, 20.0))
+
+    viel = advise.for_part(settings, weit, footprint=1200.0)
+    wenig = advise.for_part(settings, weit, footprint=60.0)
+
+    assert viel == []
+    assert [entry.path for entry in wenig] == ["adhesion.kind"]
+    assert wenig[0].value == "brim"
+
+
+def test_a_tall_thin_part_asks_for_one_too() -> None:
+    settings = print_settings.resolve(profiles.make_profile())
+    schlank = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(10.0, 10.0, 90.0))
+
+    entries = advise.for_part(settings, schlank, footprint=900.0)
+
+    assert [entry.path for entry in entries] == ["adhesion.kind"]
+
+
+def test_a_part_keeps_quiet_when_the_plate_already_has_a_brim() -> None:
+    """Ein Vorschlag, der das vorschlägt, was schon eingestellt ist, ist keiner."""
+    settings = print_settings.resolve(profiles.make_profile())
+    settings = print_settings.with_path(settings, "adhesion.kind", "brim")
+    eng = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(40.0, 40.0, 20.0))
+
+    assert advise.for_part(settings, eng, footprint=60.0) == []
+
+
+def test_an_object_override_carries_the_measures_of_its_group() -> None:
+    """Wer die Haftungsart umstellt, braucht auch deren Maß — und die Maße der
+    Arten, die nicht gewählt sind, müssen auf null.
+
+    Sonst liefe unter dem einen Teil zusätzlich ein Raft mit, und das fällt
+    erst auf der Platte auf.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+    entries = advise.for_part(
+        settings,
+        BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(40.0, 40.0, 20.0)),
+        footprint=60.0,
+    )
+
+    keys = handover.object_keys(settings, entries, "orca")
+
+    assert keys["brim_type"] == "outer_only"
+    assert keys["brim_width"] == f"{settings.adhesion.brim_width:g}"
+    assert keys["raft_layers"] == "0"
+    assert keys["skirt_loops"] == "0"
+    # Nur die betroffene Gruppe — die Wandzahl des Teils ist die der Platte.
+    assert "wall_loops" not in keys
+
+
+def test_without_advice_a_part_gets_no_override() -> None:
+    settings = print_settings.resolve(profiles.make_profile())
+
+    assert handover.object_keys(settings, [], "orca") == {}

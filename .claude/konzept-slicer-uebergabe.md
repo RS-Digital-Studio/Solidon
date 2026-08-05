@@ -215,10 +215,26 @@ wie stark und mit welchem Abstand weiß der Slicer besser. Die Regel „Fläche,
 auf der etwas gleiten soll" aus dem `Fit` abzuleiten steht noch aus; heute ist
 es ein Schalter im Dialog.
 
-### Stufe 4 — Einstellungen je Objekt
-`PrintSettings` bleibt die Platte, dazu ein Satz Abweichungen je Objekt. Der
-3MF-Schreiber trägt sie als Metadaten ein, `handover` gibt sie mit. Damit
-bekommt die Streuscheibe ihren Brim, ohne dass zwölf Behälter einen bekommen.
+### Stufe 4 — Einstellungen je Objekt — **umgesetzt**
+`AssemblyPart.settings` trägt, was nur für ein Teil gilt; `write_assembly`
+schreibt dafür `model_settings.config`. `advise.for_part` entscheidet die
+Plattenhaftung je Teil, `handover.object_keys` übersetzt sie — und zwar die
+ganze Gruppe, weil zur Haftungsart ihr Maß gehört und die Maße der anderen
+Arten auf null müssen.
+
+Dabei kam ein zweiter Fund heraus: **die Objektnamen kamen im Slicer nie an.**
+Formwerk schrieb sie ins `name`-Attribut des Standards, aber die Orca-Familie
+schreibt das selbst nie und liest die Namen aus `model_settings.config`. Eine
+Baugruppe erschien deshalb als „Object 1, Object 2", obwohl die Namen in der
+Datei standen. Dieselbe Beilage löst beides.
+
+Die Grundfläche kommt aus einem Schnitt 0,2 mm über dem Boden, nicht aus der
+Bounding-Box: ein Teil auf drei schmalen Armen hat eine große Bounding-Box und
+kaum Halt — genau der Fall, für den die Unterscheidung da ist.
+
+Plattenweit bleiben Temperatur, Kühlung und Stützen: sie hängen am Material
+oder an der Maschine, und je Teil verstellt wären sie ein Widerspruch, den der
+Slicer auflösen müsste.
 
 ### Stufe 5 — Platten aus Materialgruppen
 `merge_slots` kennt die Slots bereits. Der Schritt davor fehlt: Teile nach

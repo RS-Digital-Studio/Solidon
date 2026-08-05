@@ -22,10 +22,20 @@ import trimesh
 
 from app.core.errors import ValidationError
 from app.core.export import threemf
+from app.core.export.slicer_keys import SlicerFlavour
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import check_build_volume
 from app.core.log import get_logger
-from app.core.types import BRepBody, Finding, MaterialSlot, Mesh, Profile, SceneObject, Source
+from app.core.types import (
+    BRepBody,
+    Finding,
+    MaterialSlot,
+    Mesh,
+    PrintSettings,
+    Profile,
+    SceneObject,
+    Source,
+)
 from app.core.units import format_length
 from app.i18n import _, tr
 
@@ -56,6 +66,11 @@ SINGLE_SCHEME = "{project}_{object}"
 PLATE_SCHEME = "{project}_platte{plate}_{object}_{index}von{count}"
 
 _UNSAFE = re.compile(r"[^\w\-. ]+", re.UNICODE)
+
+#: Höhe über dem Boden, in der die Standfläche eines Teils gemessen wird. Nicht
+#: bei null: dort liegt die Grundfläche selbst, und ein Schnitt genau in einer
+#: Fläche liefert je nach Netz alles oder nichts.
+FOOTPRINT_HEIGHT = 0.2
 
 
 def safe_name(text: str, fallback: str = "teil") -> str:
@@ -238,6 +253,31 @@ def write_plan(
     return written
 
 
+def _part_settings(
+    mesh: MeshData, settings: PrintSettings | None, flavour: SlicerFlavour
+) -> dict[str, str]:
+    """Was dieses Teil anders braucht als die Platte (§29).
+
+    Die Grundfläche kommt aus einem Schnitt knapp über dem Boden, nicht aus
+    der Bounding-Box: ein Teil, das auf drei schmalen Armen steht, hat eine
+    große Grundfläche und trotzdem kaum Halt. Genau dieser Fall ist der Grund
+    für die Unterscheidung.
+    """
+    if settings is None:
+        return {}
+    # Beide erst hier: `handover` zieht die G-Code-Auswertung mit, und ein
+    # Export soll nicht davon abhängen, dass ein Slicer im Spiel ist.
+    from app.core.export import handover
+    from app.core.slice import advise
+    from app.core.slice.analysis import cross_section
+
+    lowest = float(mesh.bounds.minimum[2])
+    section = cross_section(mesh, lowest + FOOTPRINT_HEIGHT)
+    footprint = 0.0 if section is None or section.is_empty else float(section.area)
+    advice = advise.for_part(settings, mesh.bounds, footprint)
+    return handover.object_keys(settings, advice, flavour)
+
+
 def write_assembly(
     objects: list[SceneObject],
     directory: Path,
@@ -246,6 +286,8 @@ def write_assembly(
     profile: Profile,
     plate: int | None = None,
     sources: dict[str, Source] | None = None,
+    settings: PrintSettings | None = None,
+    flavour: SlicerFlavour = "orca",
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in *eine* 3MF-Datei (§20, §29).
 
@@ -273,6 +315,7 @@ def write_assembly(
             mesh=as_mesh_data(entry.mesh),
             name=entry.name,
             slots=tuple(entry.material_slots),
+            settings=_part_settings(as_mesh_data(entry.mesh), settings, flavour),
         )
         for entry in chosen
     ]

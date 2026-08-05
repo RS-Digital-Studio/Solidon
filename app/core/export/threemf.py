@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import dataclasses
 import zipfile
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from io import BytesIO
 from xml.etree import ElementTree as ET
@@ -112,6 +112,14 @@ class AssemblyPart:
     mesh: MeshData
     name: str = ""
     slots: tuple[MaterialSlot, ...] = ()
+    settings: Mapping[str, str] = field(default_factory=dict)
+    """Was nur für dieses Teil gilt, in der Schreibweise des Slicers.
+
+    Eine Platte hat einen Satz Einstellungen, aber nicht jedes Teil darauf
+    braucht dasselbe: eine Streuscheibe steht auf drei 1,1-mm-Federarmen und
+    will einen Brim, die zwölf Behälter daneben stehen auf Ø 40 und wollen
+    keinen. Leer heißt: es gilt, was für die Platte gilt.
+    """
 
 
 def merge_slots(parts: Sequence[AssemblyPart]) -> list[MaterialSlot]:
@@ -162,8 +170,37 @@ def write_assembly(parts: Sequence[AssemblyPart], name: str = "") -> bytes:
         container.writestr("[Content_Types].xml", _content_types())
         container.writestr("_rels/.rels", _relationships())
         container.writestr(MODEL_PATH, model)
+        container.writestr(SETTINGS_PATH, _settings_xml(parts))
     _log.info("wrote 3MF assembly: %d part(s), %d material(s)", len(parts), len(materials))
     return buffer.getvalue()
+
+
+def _settings_xml(parts: Sequence[AssemblyPart]) -> bytes:
+    """Die Beilage, in der die Orca-Familie Namen und Objektwerte führt.
+
+    Zwei Dinge stehen hier, die sonst verloren gingen. Zum einen die **Namen**:
+    der Standard hat ein ``name``-Attribut am Objekt, und Formwerk schreibt es
+    auch — aber diese Slicer schreiben es selbst nie und lesen die Namen von
+    hier. Eine Baugruppe kam deshalb als „Object 1, Object 2" an, obwohl die
+    Namen in der Datei standen.
+
+    Zum anderen die **Einstellungen je Teil**. Eine Platte hat einen Satz
+    Werte, aber nicht jedes Teil darauf braucht dasselbe — und ohne diesen Ort
+    gäbe es nur die Wahl zwischen „alle bekommen es" und „keiner".
+
+    Für PrusaSlicer und CuraEngine hat die Datei keine Bedeutung; sie stört
+    dort auch nicht, denn was ein Programm nicht kennt, liest es nicht.
+    """
+    config = ET.Element("config")
+    for number, part in enumerate(parts, start=2):
+        node = ET.SubElement(config, "object", {"id": str(number)})
+        if part.name:
+            ET.SubElement(node, "metadata", {"key": "name", "value": part.name})
+        for key, value in part.settings.items():
+            ET.SubElement(node, "metadata", {"key": key, "value": value})
+    return b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(
+        ET.tostring(config, encoding="utf-8")
+    )
 
 
 @dataclass(frozen=True, slots=True)

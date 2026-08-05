@@ -1318,6 +1318,10 @@ class PrintSettingsDialog(QDialog):
                 project_name=name,
                 profile=self.session.profile,
                 plate=plates[0],
+                # Damit ein Teil bekommen kann, was nur es braucht — der Brim
+                # unter der Streuscheibe, nicht unter den zwölf Behältern.
+                settings=self.settings,
+                flavour=setup.flavour,
             )
         except AppError as problem:
             show_error(problem, self)

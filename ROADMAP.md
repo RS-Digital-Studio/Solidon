@@ -307,6 +307,16 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       für den ersten gibt es `compensate_elephant_foot` in der Geometrie, die
       zweite hat bisher gar keinen Anwender — beides zu übergeben hieße,
       doppelt zu rechnen
+- [x] **Einstellungen je Teil** (§29) — `AssemblyPart.settings` trägt, was nur
+      für ein Teil gilt, und `write_assembly` schreibt dafür
+      `model_settings.config`. `advise.for_part` entscheidet die Plattenhaftung
+      je Teil aus Bounding-Box und einem Schnitt 0,2 mm über dem Boden: ein
+      Körper auf drei schmalen Armen hat eine große Bounding-Box und kaum Halt.
+      Damit bekommt die Streuscheibe ihren Brim und keiner der zwölf Behälter.
+      Nebenbei kamen damit auch die **Objektnamen** erstmals im Slicer an — sie
+      standen im `name`-Attribut des Standards, das die Orca-Familie selbst nie
+      schreibt und folglich nicht liest; eine Baugruppe erschien als
+      „Object 1, Object 2"
 - [ ] Bügeln aus der Passung ableiten — wo ein `Fit` zwei Flächen aufeinander
       legt, ist die obere eine Gleitfläche und will gebügelt werden. Heute ist
       es ein Schalter im Dialog
