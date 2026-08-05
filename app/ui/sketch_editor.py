@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -39,7 +40,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.errors import AppError, SketchConflictError
-from app.core.sketch import shapes
+from app.core.sketch import edit, shapes
 from app.core.sketch.serialize import sketch_from_text, sketch_to_text
 from app.core.sketch.solver import solve_sketch
 from app.core.types import (
@@ -49,7 +50,7 @@ from app.core.types import (
     SketchElement,
     SolvedSketch,
 )
-from app.core.units import EPS_DISPLAY
+from app.core.units import DISPLAY_UNITS, EPS_DISPLAY
 from app.i18n import tr
 from app.ui.labels import length
 from app.ui.palette import ROLES
@@ -421,6 +422,29 @@ class SketchCanvas(QWidget):
         self._apply(replace(self.sketch, elements=elements, constraints=constraints))
         self.selectionChanged.emit()
 
+    def offset_selected(self, distance: float) -> None:
+        """Legt eine versetzte Kopie der gewählten Elemente daneben."""
+        self._change_selected(lambda indices: edit.offset(self.sketch, indices, distance))
+
+    def mirror_selected(self, axis: str) -> None:
+        """Spiegelt die gewählten Elemente an einer der beiden Achsen."""
+        self._change_selected(lambda indices: edit.mirror(self.sketch, indices, axis))
+
+    def _change_selected(self, run: Any) -> None:
+        """Der gemeinsame Weg für Versetzen und Spiegeln.
+
+        Beide arbeiten auf der Auswahl, beide melden ihren Fehler in die
+        Statuszeile, und beide sind ein Schritt für das Rückgängig.
+        """
+        indices = tuple(sorted({_located(self.sketch, entry[1][0])[0] for entry in self.selection}))
+        if not indices:
+            self.statusChanged.emit(tr("Erst Elemente auswählen."))
+            return
+        try:
+            self._apply(run(indices))
+        except AppError as error:
+            self.statusChanged.emit(str(error.detail or error.title))
+
     def move_point(self, flat: int, x: float, y: float) -> None:
         """Verschiebt einen Punkt und lässt den Solver den Rest ziehen."""
         element_index, local = _located(self.sketch, flat)
@@ -531,7 +555,40 @@ class SketchCanvas(QWidget):
                 self.update()
             return
 
+        if self.tool in ("trim", "extend"):
+            self.cut_or_grow(position)
+            return
+
         self.place(position)
+
+    def cut_or_grow(self, position: QPointF) -> None:
+        """Trimmen und Verlängern: ein Klick auf die Hälfte, die es betrifft.
+
+        Beide arbeiten am angeklickten Element und an derselben Geste — beim
+        Trimmen fällt die geklickte Hälfte weg, beim Verlängern wächst sie.
+        Gerechnet wird im Kern; hier steht nur, welches Element gemeint war.
+        """
+        hit = self._hit_element(position)
+        if hit is None:
+            self.statusChanged.emit(tr("Kein Element getroffen — auf eine Linie klicken."))
+            return
+        index = _located(self.sketch, hit[1][0])[0]
+        world = self._to_world(position)
+        try:
+            changed = (
+                edit.trim(self.sketch, index, world)
+                if self.tool == "trim"
+                else edit.extend(self.sketch, index, world)
+            )
+        except AppError as error:
+            # Ein Fehler endet nie mit „fehlgeschlagen" (Regel 17) — und er
+            # bleibt im Bild stehen, statt einen Dialog aufzumachen, den man
+            # wegklickt, bevor man ihn gelesen hat.
+            self.statusChanged.emit(str(error.detail or error.title))
+            return
+        self.selection.clear()
+        self._apply(changed)
+        self.selectionChanged.emit()
 
     def place(self, position: QPointF) -> None:
         """Ein Klick eines Zeichenwerkzeugs: Punkt setzen, Element schließen.
@@ -1013,12 +1070,14 @@ TOOL_KEYS: dict[str, str] = {
     "arc": "A",
     "point": "P",
     "spline": "S",
+    "trim": "T",
 }
 
 #: Kürzel, die kein Werkzeug wählen, sondern etwas tun.
 ACTION_KEYS: dict[str, str] = {
     "rectangle": "R",
     "distance": "D",
+    "offset": "O",
 }
 
 
@@ -1063,6 +1122,8 @@ class SketchPanel(QWidget):
             ("circle", tr("Kreis")),
             ("arc", tr("Bogen")),
             ("spline", tr("Spline")),
+            ("trim", tr("Trimmen")),
+            ("extend", tr("Verlängern")),
         ):
             button = QToolButton(self)
             key = TOOL_KEYS.get(name, "")
@@ -1122,7 +1183,11 @@ class SketchPanel(QWidget):
         self.plane_choice.currentIndexChanged.connect(
             lambda _index: self.canvas.set_plane(str(self.plane_choice.currentData()))
         )
-        tools.addWidget(self.plane_choice)
+        # Eigene Zeile: in der Werkzeugzeile bekam der Satz daneben so wenig
+        # Breite, dass er auf sieben Zeilen umbrach und die ganze Leiste hoch
+        # machte. Er gehört unter die Wahl, auf die er sich bezieht.
+        plane_row = QHBoxLayout()
+        plane_row.addWidget(self.plane_choice)
 
         # Was die Ebene für den Druck bedeutet, direkt daneben (E1). Ein Satz
         # an der Wahl erreicht jemanden, bevor er zeichnet; im Prüfbericht
@@ -1133,12 +1198,47 @@ class SketchPanel(QWidget):
         note_font.setItalic(True)
         self.layer_note.setFont(note_font)
         self.canvas.sketchChanged.connect(lambda: self.layer_note.setText(self.canvas.layer_note()))
-        tools.addWidget(self.layer_note)
+        plane_row.addWidget(self.layer_note, stretch=1)
         tools.addStretch(1)
 
         # Die drei Grundebenen stehen immer; die Flächen des Körpers kommen
         # dazu, sobald einer da ist. Deshalb hier keine feste Liste.
         self._plane_count = self.plane_choice.count()
+
+        # Die Ändern-Gruppe (E17). Trimmen und Verlängern sind Werkzeuge und
+        # stehen bei den anderen; Versetzen und Spiegeln sind Handlungen auf
+        # der Auswahl und brauchen je eine Angabe — den Abstand und die Achse.
+        self.offset_distance = QDoubleSpinBox(self)
+        self.offset_distance.setDecimals(2)
+        self.offset_distance.setRange(-1000.0, 1000.0)
+        self.offset_distance.setValue(2.0)
+        # Ein Einheitenzeichen ist keine Übersetzung — es kommt aus der
+        # Einheitentabelle (§11.1).
+        self.offset_distance.setSuffix(f" {DISPLAY_UNITS[0]}")
+        self.offset_distance.setToolTip(tr("Um wie viel versetzt wird. Negativ ist nach innen."))
+
+        offset_button = QToolButton(self)
+        offset_button.setText(f"{tr('Versetzen')}  {ACTION_KEYS['offset']}")
+        offset_button.setToolTip(tr("Versetzen"))
+        offset_button.setAutoRaise(True)
+        offset_button.clicked.connect(
+            lambda: self.canvas.offset_selected(self.offset_distance.value())
+        )
+
+        mirror_button = QToolButton(self)
+        mirror_button.setText(tr("Spiegeln"))
+        mirror_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        mirror_menu = QMenu(mirror_button)
+        for label, axis in ((tr("An der X-Achse"), "x"), (tr("An der Y-Achse"), "y")):
+            entry = mirror_menu.addAction(label)
+            entry.triggered.connect(
+                lambda _checked=False, chosen=axis: self.canvas.mirror_selected(chosen)
+            )
+        mirror_button.setMenu(mirror_menu)
+
+        tools.addWidget(offset_button)
+        tools.addWidget(self.offset_distance)
+        tools.addWidget(mirror_button)
 
         undo_button = QToolButton(self)
         undo_button.setText(tr("Rückgängig"))
@@ -1177,6 +1277,7 @@ class SketchPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(tools)
+        layout.addLayout(plane_row)
         layout.addLayout(constraints_row)
         layout.addLayout(middle, stretch=1)
         layout.addWidget(self.status)
@@ -1211,6 +1312,12 @@ class SketchPanel(QWidget):
         measure = QShortcut(QKeySequence(ACTION_KEYS["distance"]), self)
         measure.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         measure.activated.connect(lambda: self.request_constraint("distance"))
+
+        versetzen = QShortcut(QKeySequence(ACTION_KEYS["offset"]), self)
+        versetzen.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        versetzen.activated.connect(
+            lambda: self.canvas.offset_selected(self.offset_distance.value())
+        )
 
     def choose_tool(self, name: str) -> None:
         """Wählt ein Werkzeug — was ein Klick auf seinen Knopf tut.

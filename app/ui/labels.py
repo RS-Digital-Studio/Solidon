@@ -127,10 +127,14 @@ def choice_label(value: str) -> str:
 
 #: Wie eine Fläche heißt, deren Normale in diese Richtung zeigt. Die Reihenfolge
 #: ist die der Achsen; ein Vorzeichen entscheidet zwischen den beiden Namen.
-_SIDES: tuple[tuple[str, str], ...] = (
-    ("Rechte Seite", "Linke Seite"),
-    ("Rückseite", "Vorderseite"),
-    ("Oberseite", "Unterseite"),
+#:
+#: Als ``_()``-Literale und nicht als nackte Zeichenketten mit ``tr()``
+#: darüber: der Extraktor liest den Quelltext, und ``tr(variable)`` sieht er
+#: nicht. Sechs Namen wären stumm ins Englische durchgereicht worden.
+_SIDES: tuple[tuple[TranslatableText, TranslatableText], ...] = (
+    (_("Rechte Seite"), _("Linke Seite")),
+    (_("Rückseite"), _("Vorderseite")),
+    (_("Oberseite"), _("Unterseite")),
 )
 
 #: Ab wann eine Normale als achsparallel gilt. Darunter ist die Fläche schräg,
@@ -152,7 +156,7 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
             for axis, (positive, negative) in enumerate(_SIDES):
                 value = float(normal[axis])
                 if abs(value) >= _AXIS_ALIGNED:
-                    return tr(positive if value > 0 else negative)
+                    return str(positive if value > 0 else negative)
         return tr("Schrägfläche")
     if feature.kind == "hole":
         return f"{tr('Bohrung')} {feature_id.rsplit('_', 1)[-1]}"

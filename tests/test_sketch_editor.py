@@ -519,3 +519,98 @@ def test_the_drawing_keys_win_while_drawing(qt_app: QApplication) -> None:
         assert window._sketch_panel is None
     finally:
         window.deleteLater()
+
+
+# --- Die Ändern-Gruppe (Konzept Teil 4, E17) ------------------------------------
+
+
+def _cross_canvas() -> SketchCanvas:
+    from app.core.types import Sketch, SketchElement
+
+    canvas = SketchCanvas()
+    canvas.set_sketch(
+        Sketch(
+            plane="plane:xy",
+            elements=(
+                SketchElement(kind="line", points=((-10.0, 0.0), (10.0, 0.0))),
+                SketchElement(kind="line", points=((0.0, -10.0), (0.0, 10.0))),
+            ),
+        )
+    )
+    return canvas
+
+
+def test_trimming_takes_the_clicked_half(qt_app: QApplication) -> None:
+    """Ohne Trimmen ist jede Kontur Handarbeit, die nicht aus einer Grundform
+    kommt — der Befund aus dem Vergleich mit Fusion."""
+    canvas = _cross_canvas()
+    canvas.set_tool("trim")
+
+    canvas.cut_or_grow(canvas._to_screen(-5.0, 0.0))
+
+    line = canvas.sketch.elements[0]
+    assert line.points[0][0] == pytest.approx(0.0), "die geklickte Hälfte ist weg"
+
+
+def test_a_trim_that_cannot_work_says_why(qt_app: QApplication) -> None:
+    """Regel 17, und im Bild statt in einem Dialog: was man wegklickt, bevor
+    man es gelesen hat, hat nichts gesagt."""
+    from app.core.types import Sketch, SketchElement
+
+    canvas = SketchCanvas()
+    canvas.set_sketch(
+        Sketch(
+            plane="plane:xy",
+            elements=(SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),),
+        )
+    )
+    canvas.set_tool("trim")
+    said: list[str] = []
+    canvas.statusChanged.connect(said.append)
+
+    canvas.cut_or_grow(canvas._to_screen(5.0, 0.0))
+
+    assert said and "kreuzt" in said[-1]
+    assert len(canvas.sketch.elements) == 1, "und nichts ist passiert"
+
+
+def test_offsetting_needs_a_selection(qt_app: QApplication) -> None:
+    canvas = _cross_canvas()
+    said: list[str] = []
+    canvas.statusChanged.connect(said.append)
+
+    canvas.offset_selected(3.0)
+
+    assert said and "auswählen" in said[-1]
+    assert len(canvas.sketch.elements) == 2
+
+
+def test_offsetting_the_selection_adds_a_copy(qt_app: QApplication) -> None:
+    canvas = _cross_canvas()
+    canvas.selection = [("line", (0, 1))]
+
+    canvas.offset_selected(3.0)
+
+    assert len(canvas.sketch.elements) == 3, "die Vorlage bleibt, die Kopie kommt dazu"
+
+
+def test_mirroring_the_selection_adds_a_copy(qt_app: QApplication) -> None:
+    canvas = _cross_canvas()
+    canvas.selection = [("line", (0, 1))]
+
+    canvas.mirror_selected("y")
+
+    assert len(canvas.sketch.elements) == 3
+
+
+def test_the_modify_group_is_reachable_and_labelled(qt_app: QApplication) -> None:
+    """Fusion hat eine eigene Gruppe dafür; Formwerk hatte sie gar nicht."""
+    from app.ui.sketch_editor import ACTION_KEYS, TOOL_KEYS
+
+    panel = SketchPanel()
+
+    assert "trim" in panel._tool_buttons
+    assert "extend" in panel._tool_buttons
+    assert TOOL_KEYS["trim"] == "T", "wie in Fusion"
+    assert ACTION_KEYS["offset"] == "O"
+    assert panel.offset_distance.value() != 0.0, "ein Versatz um nichts wäre keiner"
