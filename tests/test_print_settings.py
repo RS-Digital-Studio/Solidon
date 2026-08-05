@@ -945,3 +945,110 @@ def test_a_filament_profile_that_agrees_says_nothing(tmp_path: Path) -> None:
     # Ohne gewähltes Profil gibt es nichts zu vergleichen — und keine Meldung.
     ohne = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
     assert handover.profile_differences(settings, ohne) == []
+
+
+# --- Stellschrauben aus Stufe 3 -----------------------------------------------------
+
+
+def test_a_narrow_wall_asks_for_the_variable_generator() -> None:
+    """Ein Steg, der auf keine ganze Zahl von Bahnen aufgeht, ist der Fall, für
+    den es den variablen Generator gibt.
+
+    Der Anlass steht im Gewürzset: Federarme von 1,1 mm und eine Rastzunge von
+    1,4 mm. Mit fester Linienbreite legt der Slicer zwei Bahnen à 0,42 und
+    schließt den Rest mit Lückenfüllung — die trägt nicht, und die Feder bricht
+    beim ersten Aufdrücken.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+    settings = print_settings.with_path(settings, "shell.wall_generator", "classic")
+    schmal = 2.5 * settings.layers.line_width
+    result = _layers(500.0, 500.0, 500.0, min_width=schmal)
+
+    entries = advise.advise(settings, profiles.make_profile(), result)
+
+    chosen = next(entry for entry in entries if entry.path == "shell.wall_generator")
+    assert chosen.value == "arachne"
+    assert chosen.severity == "warning"
+
+
+def test_a_wall_that_fits_whole_paths_keeps_the_generator() -> None:
+    """Ein Vorschlag, der bei jedem Teil erscheint, ist keiner."""
+    settings = print_settings.resolve(profiles.make_profile())
+    settings = print_settings.with_path(settings, "shell.wall_generator", "classic")
+    breit = 6.0 * settings.layers.line_width
+    result = _layers(500.0, 500.0, 500.0, min_width=breit)
+
+    entries = advise.advise(settings, profiles.make_profile(), result)
+
+    assert "shell.wall_generator" not in _paths(entries)
+
+
+def test_fits_ask_for_the_precise_wall_and_a_calmer_acceleration() -> None:
+    """Beides zielt auf dasselbe: das Maß, auf das die Passung gerechnet ist."""
+    settings = print_settings.resolve(profiles.make_profile())
+
+    entries = advise.advise(settings, profiles.make_profile(), has_fits=True)
+
+    precise = next(entry for entry in entries if entry.path == "shell.precise_outer_wall")
+    assert precise.value is True
+    calmer = next(entry for entry in entries if entry.path == "speed.outer_wall_acceleration")
+    assert calmer.value == advise.CAREFUL_ACCELERATION
+    assert calmer.value < settings.speed.outer_wall_acceleration
+
+
+def test_without_fits_nothing_is_slowed_down() -> None:
+    settings = print_settings.resolve(profiles.make_profile())
+
+    entries = advise.advise(settings, profiles.make_profile())
+
+    assert "shell.precise_outer_wall" not in _paths(entries)
+    assert "speed.outer_wall_acceleration" not in _paths(entries)
+
+
+def test_an_overhang_slows_the_bridge_down_to_the_outer_wall() -> None:
+    """Über einer Lücke trägt nichts von unten."""
+    settings = print_settings.resolve(profiles.make_profile())
+    settings = print_settings.with_path(settings, "speed.bridge", 120.0)
+    result = _layers(500.0, 500.0, 500.0, overhang=200.0)
+
+    entries = advise.advise(settings, profiles.make_profile(), result)
+
+    chosen = next(entry for entry in entries if entry.path == "speed.bridge")
+    assert chosen.value == settings.speed.outer_wall
+
+
+def test_the_new_settings_reach_the_slicers_that_know_them() -> None:
+    """Was ein Slicer nicht kennt, bekommt keinen Eintrag — eine Zuordnung auf
+    das Nächstbeste wäre eine Einstellung, die woanders landet.
+
+    CuraEngine hat keinen umschaltbaren Wandgenerator, PrusaSlicer keine
+    gesonderte genaue Außenwand. Beide rechnen ohnehin mit variabler
+    Bahnbreite.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+
+    orca = handover.as_mapping(settings, "orca")
+    assert orca["wall_generator"] == settings.shell.wall_generator
+    assert orca["bridge_speed"] == f"{settings.speed.bridge:g}"
+    assert orca["outer_wall_acceleration"] == f"{settings.speed.outer_wall_acceleration:g}"
+    assert orca["ironing_type"] == "no ironing"
+
+    prusa = handover.as_mapping(settings, "prusa")
+    assert prusa["perimeter_generator"] == settings.shell.wall_generator
+    assert "precise_outer_wall" not in prusa
+
+    cura = handover.as_mapping(settings, "cura")
+    assert cura["bridge_wall_speed"] == f"{settings.speed.bridge:g}"
+    assert "wall_generator" not in cura
+
+
+def test_ironing_is_off_until_something_asks_for_it() -> None:
+    """Bügeln kostet Zeit und nützt nur auf Flächen, die man sieht oder auf
+    denen etwas gleitet."""
+    settings = print_settings.resolve(profiles.make_profile())
+
+    assert settings.shell.ironing is False
+    assert handover.as_mapping(settings, "orca")["ironing_type"] == "no ironing"
+
+    ironed = print_settings.with_path(settings, "shell.ironing", True)
+    assert handover.as_mapping(ironed, "orca")["ironing_type"] == "top"

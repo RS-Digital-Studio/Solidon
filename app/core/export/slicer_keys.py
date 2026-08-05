@@ -133,6 +133,14 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("shell.bottom_layers", "bottom_solid_layers", _integer),
     ("shell.outer_wall_first", "external_perimeters_first", _flag),
     ("shell.seam_position", "seam_position", _plain),
+    ("shell.wall_generator", "perimeter_generator", _plain),
+    # PrusaSlicer kennt keine gesonderte „genaue Außenwand" — dort heißt die
+    # Sache Kompensation der Bahnbreite und ist immer an. Kein Eintrag ist
+    # hier richtiger als eine Zuordnung auf etwas Ähnliches.
+    ("shell.ironing", "ironing", _flag),
+    ("speed.bridge", "bridge_speed", _number),
+    ("speed.acceleration", "default_acceleration", _number),
+    ("speed.outer_wall_acceleration", "external_perimeter_acceleration", _number),
     ("infill.density", "fill_density", _percent_suffix),
     ("infill.pattern", "fill_pattern", _mapped(_PRUSA_INFILL, "grid")),
     ("infill.angle", "fill_angle", _number),
@@ -216,6 +224,14 @@ ORCA: Final[tuple[Row, ...]] = (
         _mapped({"True": "outer wall/inner wall"}, "inner wall/outer wall"),
     ),
     ("shell.seam_position", "seam_position", _mapped(_ORCA_SEAM, "aligned")),
+    ("shell.wall_generator", "wall_generator", _plain),
+    ("shell.precise_outer_wall", "precise_outer_wall", _flag),
+    # Orca kennt vier Stufen des Bügelns; Formwerk entscheidet nur, **ob** —
+    # wie stark und mit welchem Abstand weiß der Slicer besser.
+    ("shell.ironing", "ironing_type", _mapped({"True": "top"}, "no ironing")),
+    ("speed.bridge", "bridge_speed", _number),
+    ("speed.acceleration", "default_acceleration", _number),
+    ("speed.outer_wall_acceleration", "outer_wall_acceleration", _number),
     ("infill.density", "sparse_infill_density", _percent_suffix),
     ("infill.pattern", "sparse_infill_pattern", _mapped(_ORCA_INFILL, "grid")),
     ("infill.angle", "infill_direction", _number),
@@ -288,6 +304,14 @@ CURA: Final[tuple[Row, ...]] = (
     ("shell.top_layers", "top_layers", _integer),
     ("shell.bottom_layers", "bottom_layers", _integer),
     ("shell.outer_wall_first", "outer_inset_first", _boolean),
+    ("shell.ironing", "ironing_enabled", _boolean),
+    # CuraEngine hat keinen umschaltbaren Wandgenerator und keine gesonderte
+    # genaue Außenwand: es rechnet ohnehin mit variabler Bahnbreite. Was es
+    # nicht kennt, bekommt keinen Eintrag — eine Zuordnung auf das
+    # Nächstbeste wäre eine Einstellung, die woanders landet.
+    ("speed.bridge", "bridge_wall_speed", _number),
+    ("speed.acceleration", "acceleration_print", _number),
+    ("speed.outer_wall_acceleration", "acceleration_wall_0", _number),
     ("infill.density", "infill_sparse_density", _percent),
     ("infill.pattern", "infill_pattern", _mapped(_CURA_INFILL, "grid")),
     ("infill.angle", "infill_angles", _number),

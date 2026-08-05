@@ -42,6 +42,9 @@ speed_infill = 120.0
 speed_top_surface = 50.0
 speed_first_layer = 25.0
 minimum_layer_time = 5.0
+speed_bridge = 30.0
+acceleration = 10000.0
+outer_wall_acceleration = 8000.0
 
 [quality.standard]
 title = "Standard"
@@ -58,6 +61,9 @@ speed_infill = 80.0
 speed_top_surface = 40.0
 speed_first_layer = 20.0
 minimum_layer_time = 8.0
+speed_bridge = 25.0
+acceleration = 8000.0
+outer_wall_acceleration = 5000.0
 
 [quality.fine]
 title = "Fein"
@@ -74,6 +80,9 @@ speed_infill = 60.0
 speed_top_surface = 30.0
 speed_first_layer = 18.0
 minimum_layer_time = 12.0
+speed_bridge = 20.0
+acceleration = 5000.0
+outer_wall_acceleration = 2500.0
 # Dünne Schichten kühlen zu schnell aus, um sie auch noch schnell zu fahren.
 
 [quality.strong]
@@ -91,6 +100,9 @@ speed_infill = 70.0
 speed_top_surface = 35.0
 speed_first_layer = 20.0
 minimum_layer_time = 10.0
+speed_bridge = 25.0
+acceleration = 7000.0
+outer_wall_acceleration = 4000.0
 # Festigkeit kommt aus Wänden, nicht aus Füllung: fünf Wände tragen mehr als
 # vierzig Prozent Infill und kosten weniger Zeit.
 

@@ -364,6 +364,14 @@ InfillPattern = Literal["grid", "gyroid", "honeycomb", "cubic", "lines", "triang
 SupportStyle = Literal["none", "grid", "tree"]
 SupportPlacement = Literal["everywhere", "build_plate"]
 SeamPosition = Literal["aligned", "nearest", "random", "rear"]
+
+#: Wie die Wandbahnen erzeugt werden. ``classic`` legt feste Linienbreiten und
+#: füllt, was dazwischen übrig bleibt, mit Lückenfüllung; ``arachne`` verteilt
+#: die vorhandene Breite auf so viele Bahnen, wie hineinpassen. Der Unterschied
+#: zählt genau dort, wo eine Wand nicht auf ganze Linien aufgeht — bei einem
+#: 1,1 mm dicken Federarm etwa liegen zwei Bahnen à 0,55 statt zweier à 0,42
+#: mit einer Lücke dazwischen.
+WallGenerator = Literal["classic", "arachne"]
 AdhesionType = Literal["none", "skirt", "brim", "raft"]
 QualityPreset = Literal["draft", "standard", "fine", "strong"]
 
@@ -389,6 +397,16 @@ class ShellSettings:
     """Außenwand zuerst gibt die genauere Kontur, innen zuerst die bessere
     Haftung an Überhängen."""
     seam_position: SeamPosition = "aligned"
+    wall_generator: WallGenerator = "arachne"
+    """Vorgabe ist ``arachne``: es trifft schmale Stege, die auf keine ganze
+    Zahl von Bahnen aufgehen, statt eine Lücke zu lassen (§2.4)."""
+    precise_outer_wall: bool = False
+    """Rechnet die Außenwand auf das Sollmaß statt auf die Bahnmitte. Kostet
+    etwas Zeit und ist überall dort richtig, wo ein Maß eingehalten werden
+    muss — also bei Passungen."""
+    ironing: bool = False
+    """Bügelt die oberste Fläche nach. Für Sicht- und Gleitflächen; sonst
+    kostet es nur Zeit."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -434,6 +452,15 @@ class SpeedSettings:
     top_surface: float = 40.0
     first_layer: float = 20.0
     travel: float = 150.0
+    bridge: float = 25.0
+    """Über einer Lücke trägt nichts von unten — langsam gefahren hängt die
+    Bahn weniger durch."""
+    acceleration: float = 8000.0
+    """mm/s². Was die Maschine kann, ist nicht immer, was das Teil verträgt:
+    hohe Beschleunigung schwingt die Kontur aus, und das kostet genau die
+    Zehntelmillimeter, auf die eine Passung gerechnet ist."""
+    outer_wall_acceleration: float = 5000.0
+    """Für die Bahn, die man sieht und misst, gesondert und niedriger."""
 
 
 @dataclass(frozen=True, slots=True)

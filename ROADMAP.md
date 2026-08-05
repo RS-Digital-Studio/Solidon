@@ -296,6 +296,20 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       `profile_differences` meldet, wo Formwerks Tabelle und der Hersteller
       auseinandergehen — 240/80 °C gegen 255/70 °C beim transluzenten PETG —,
       übernimmt aber nichts davon
+- [x] **Die Stellschrauben, die für Passungen zählen** (§29) — `wall_generator`,
+      `precise_outer_wall`, `ironing`, Brückentempo und zwei Beschleunigungen,
+      mit Vorgaben je Qualitätsstufe. Dazu drei Regeln in `advise.py`:
+      schmalste Stelle unter drei Linienbreiten schaltet auf Arachne (mit
+      fester Linienbreite bleibt dort eine Lücke, die nur Lückenfüllung
+      schließt — der Bruch eines 1,1-mm-Federarms), Passungen holen die genaue
+      Außenwand und bremsen auf 2000 mm/s², Überhänge deckeln das Brückentempo
+      auf das der Außenwand. Elefantenfuß und Lochkorrektur blieben draußen:
+      für den ersten gibt es `compensate_elephant_foot` in der Geometrie, die
+      zweite hat bisher gar keinen Anwender — beides zu übergeben hieße,
+      doppelt zu rechnen
+- [ ] Bügeln aus der Passung ableiten — wo ein `Fit` zwei Flächen aufeinander
+      legt, ist die obere eine Gleitfläche und will gebügelt werden. Heute ist
+      es ein Schalter im Dialog
 - [ ] Prusa- und Cura-Adapter am echten Programm laufen lassen — die
       Zuordnung steht und die Gegenprobe würde Abweichungen melden, aber
       gelaufen ist bisher nur die Orca-Familie (ElegooSlicer 1.5.2.2). Was

@@ -58,6 +58,16 @@ TREE_FROM_ISLANDS = 8
 #: dass die vorige noch weich liegt.
 THIN_LAYER_AREA = 120.0
 
+#: Beschleunigung in mm/s² für eine Außenwand, deren Maß zählt. Der Wert ist
+#: nicht die Grenze der Maschine, sondern die, ab der die Kontur ausschwingt —
+#: und eine Passung ist auf Zehntelmillimeter gerechnet.
+CAREFUL_ACCELERATION = 2000.0
+
+#: Ab wie vielen Linienbreiten eine Wand auf ganze Bahnen aufgeht. Darunter
+#: bleibt beim klassischen Generator eine Lücke, die mit Lückenfüllung
+#: geschlossen wird — bei einem Federarm ist genau das der Bruch.
+LINES_FOR_CLASSIC = 3.0
+
 #: Mindestschichtzeit in Sekunden für solche Spitzen. Weniger, und der Turm
 #: kippt in sich zusammen; mehr, und die Düse kokelt auf der Stelle.
 THIN_LAYER_SECONDS = 15.0
@@ -416,6 +426,37 @@ def _from_geometry(
         )
 
     thin = narrowest(result)
+    if (
+        0.0 < thin < LINES_FOR_CLASSIC * settings.layers.line_width
+        and settings.shell.wall_generator == "classic"
+    ):
+        advice.append(
+            SettingAdvice(
+                path="shell.wall_generator",
+                value="arachne",
+                was=settings.shell.wall_generator,
+                reason=_(
+                    "Die schmalste Stelle geht auf keine ganze Zahl von Bahnen auf. "
+                    "Mit fester Linienbreite bleibt dort eine Lücke, die nur "
+                    "Lückenfüllung schließt — und die trägt nicht."
+                ),
+                severity="warning",
+            )
+        )
+
+    if overhang > 0.0 and settings.speed.bridge > settings.speed.outer_wall:
+        advice.append(
+            SettingAdvice(
+                path="speed.bridge",
+                value=settings.speed.outer_wall,
+                was=settings.speed.bridge,
+                reason=_(
+                    "Über einer Lücke trägt nichts von unten. Schneller als die "
+                    "Außenwand gefahren hängt die erste Bahn durch."
+                ),
+            )
+        )
+
     minimum = 2.0 * settings.layers.line_width
     if 0.0 < thin < minimum:
         advice.append(
@@ -450,6 +491,30 @@ def _from_fits(settings: PrintSettings) -> list[SettingAdvice]:
     """Wo Passungen im Spiel sind, entscheidet die Außenwand über das Maß."""
     advice: list[SettingAdvice] = []
     careful = 30.0
+    if not settings.shell.precise_outer_wall:
+        advice.append(
+            SettingAdvice(
+                path="shell.precise_outer_wall",
+                value=True,
+                was=settings.shell.precise_outer_wall,
+                reason=_(
+                    "Das Projekt hat Passungen. Die Außenwand auf das Sollmaß zu "
+                    "rechnen statt auf die Bahnmitte ist genau dafür da."
+                ),
+            )
+        )
+    if settings.speed.outer_wall_acceleration > CAREFUL_ACCELERATION:
+        advice.append(
+            SettingAdvice(
+                path="speed.outer_wall_acceleration",
+                value=CAREFUL_ACCELERATION,
+                was=settings.speed.outer_wall_acceleration,
+                reason=_(
+                    "Hohe Beschleunigung schwingt die Kontur aus. Das kostet die "
+                    "Zehntelmillimeter, auf die eine Passung gerechnet ist."
+                ),
+            )
+        )
     if settings.speed.outer_wall > careful:
         advice.append(
             SettingAdvice(

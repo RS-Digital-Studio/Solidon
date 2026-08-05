@@ -182,18 +182,38 @@ auseinandergehen. Übernommen wird nichts davon: die Einstellung ist die
 Entscheidung des Nutzers, das Profil die Unterlage für alles, was Formwerk
 nicht setzt.
 
-### Stufe 3 — die fehlenden Stellschrauben ins Modell
-Die Werte aus Abschnitt 3, jeweils mit Zuordnung in allen drei Tabellen. Dazu
-die passenden Regeln in `advise.py`:
+### Stufe 3 — die fehlenden Stellschrauben ins Modell — **umgesetzt**
+Neu in `PrintSettings`: `shell.wall_generator`, `shell.precise_outer_wall`,
+`shell.ironing`, `speed.bridge`, `speed.acceleration`,
+`speed.outer_wall_acceleration` — mit Vorgaben je Qualitätsstufe und Zuordnung
+in allen drei Tabellen, soweit ein Slicer die Sache kennt. Was er nicht kennt,
+bekommt keinen Eintrag: CuraEngine hat keinen umschaltbaren Wandgenerator,
+PrusaSlicer keine gesonderte genaue Außenwand, und beide rechnen ohnehin mit
+variabler Bahnbreite. Eine Zuordnung auf das Nächstbeste wäre eine Einstellung,
+die woanders landet.
 
-- schmalste Wand unter drei Linienbreiten → Arachne
-- Projekt hat Passungen → präzise Außenwand, gebremste Beschleunigung
-- Brückenweite über einem Schwellwert → Brückentempo und Lüfter
-- Fläche, auf der etwas gleiten oder dichten soll → Bügeln
+Regeln in `advise.py`:
 
-Die letzte Regel braucht Wissen, das die Schichtanalyse nicht hat. Sie kommt
-aus der Passung: Wo ein `Fit` zwei Flächen aufeinander legt, ist die obere
-eine Gleitfläche. Damit ist es eine Ableitung aus dem Dokument, keine Heuristik.
+- schmalste Stelle unter drei Linienbreiten → Arachne (Warnung)
+- Projekt hat Passungen → präzise Außenwand und Beschleunigung auf 2000 mm/s²
+- Überhänge im Teil → Brückentempo höchstens Außenwandtempo
+
+**Zwei Werte aus der Liste blieben bewusst draußen.** Beide hätte Formwerk
+doppelt gerechnet:
+
+- **Elefantenfuß.** Dafür gibt es die Op `compensate_elephant_foot`, die in der
+  Geometrie arbeitet und laut eigenem Docstring „genau das tut, was die
+  Elefantenfuß-Kompensation eines Slicers tut". Den Wert zusätzlich zu
+  übergeben hieße, zweimal einzuziehen.
+- **Lochkorrektur.** `MaterialProfile.hole_compensation` ist ein kalibrierter
+  Wert, der bisher nur in die Hashsumme eingeht — es gibt keine Op, die ihn
+  anwendet. Ihn an den Slicer zu geben würde die Sache nicht klären, sondern
+  die Frage verschieben, wer kompensiert. Das gehört erst entschieden.
+
+Bügeln ist an/aus, ohne Feinwerte: **ob** gebügelt wird, ist die Entscheidung —
+wie stark und mit welchem Abstand weiß der Slicer besser. Die Regel „Fläche,
+auf der etwas gleiten soll" aus dem `Fit` abzuleiten steht noch aus; heute ist
+es ein Schalter im Dialog.
 
 ### Stufe 4 — Einstellungen je Objekt
 `PrintSettings` bleibt die Platte, dazu ein Satz Abweichungen je Objekt. Der
