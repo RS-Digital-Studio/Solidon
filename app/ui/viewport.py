@@ -1031,14 +1031,23 @@ class Viewport(QWidget):
     def _sectioned(self, mesh: Any) -> Any:
         """Wendet die Schnittebene an. Schneiden ist Geometrie, also tut es der
         Kern (§18.2).
+
+        Die Schichtanalyse schneidet mit: „Durch die Höhe fahren und den
+        Querschnitt ansehen" versprach der Text, und das Modell blieb dabei
+        undurchsichtig stehen — sichtbar war nur eine dünne Kontur darunter.
+        Wer eine Schicht gewählt hat, will sehen, was auf dieser Höhe steht,
+        nicht was darüber liegt.
         """
-        if self._section is None:
+        plane = self._section
+        if plane is None and self._layer is not None:
+            plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=self._layer.z)
+        if plane is None:
             return mesh
         second = None
-        if self._slice_thickness is not None:
-            offset = self._section.position - self._slice_thickness
-            second = SectionPlane(normal=self._section.normal, position=offset).flipped()
-        result = cut(mesh, self._section, second)
+        if self._section is not None and self._slice_thickness is not None:
+            offset = plane.position - self._slice_thickness
+            second = SectionPlane(normal=plane.normal, position=offset).flipped()
+        result = cut(mesh, plane, second)
         self._uncapped = self._uncapped or not result.capped
         return result.mesh
 
@@ -1669,7 +1678,16 @@ class Viewport(QWidget):
         """Zeigt die Konturen einer Schicht. Geometrie, keine
         Werkzeugwege (§18.10).
         """
+        was = self._layer
         self._layer = layer
+        # Die Körper werden neu gebaut, weil sie jetzt anders geschnitten sind
+        # — aber nur, wenn sich das ändert. Beim Ziehen am Schieber ist das
+        # jeder Schritt; ohne die Prüfung wäre es auch jedes Ausschalten eines
+        # bereits ausgeschalteten Schiebers.
+        if (was is None) != (layer is None) or (
+            was is not None and layer is not None and was.z != layer.z
+        ):
+            self.show_scene(self._result)
         self._redraw_layer()
         if self.plotter is not None:
             self.plotter.render()

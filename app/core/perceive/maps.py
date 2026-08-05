@@ -55,6 +55,12 @@ MAP_LIMIT_TRIANGLES = 120_000
 #: zieht (§39).
 OVERHANG_LIMIT_DEGREES = 45.0
 
+#: Wie weit über der Mindestwandstärke die Skala der Wandstärkenkarte endet.
+#: Fünf mal zwei Extrusionsbreiten sind das Zehnfache einer Bahn — darüber
+#: lautet die Antwort ohnehin „dick genug", und jede Farbstufe, die dort
+#: verbraucht wird, fehlt unten, wo die Entscheidung fällt.
+WALL_SCALE_FACTOR = 5.0
+
 #: Flächenkategorien der Defektkarte, in der Reihenfolge ihrer Werte.
 DEFECT_LEVELS = ("in Ordnung", "offene Kante", "Non-Manifold")
 
@@ -88,6 +94,12 @@ class AnalysisMap:
     """One line for the legend when the number needs a caveat (§22.5)."""
     resolution: float | None = None
     """Grid width in mm where the map was sampled rather than measured exactly."""
+    unknown_note: TranslatableText | str | None = None
+    """Warum diese Karte an manchen Stellen nichts sagen kann — in drei Worten.
+
+    Die Fußzeile zählte sie („17 mal nicht bestimmbar") und ließ die Zahl
+    unerklärt stehen. Für jede Karte heißt es etwas anderes, also sagt es jede
+    selbst; kurz genug, damit es in dieselbe Zeile passt."""
 
     @property
     def known(self) -> tuple[float, ...]:
@@ -267,19 +279,33 @@ def wall_thickness_map(
             if not math.isnan(value) and value < minimum
         )
     known = [value for value in thickness if not math.isnan(value)]
+    top = max(known) if known else 0.0
+    # **Die Skala wird gedeckelt.** An einer Stirnfläche misst der Strahl quer
+    # durch das ganze Teil: bei einem Brett von 8 mm Dicke und 80 mm Länge
+    # spannte die Legende über 80 mm, und der Bereich, um den es beim Drucken
+    # geht — unter zwei Extrusionsbreiten —, fiel in eine einzige Farbstufe.
+    # Die Karte konnte ihre eigene Frage nicht beantworten. Alles über dem
+    # Deckel ist ohnehin dieselbe Aussage: dick genug.
+    capped = min(top, minimum * WALL_SCALE_FACTOR) if minimum else top
     return AnalysisMap(
         kind="wall",
         title=TITLES["wall"],
         values=tuple(thickness),
         unit="mm",
         low=min(known) if known else 0.0,
-        high=max(known) if known else 0.0,
+        high=capped if capped > 0.0 else top,
         highlighted=highlighted,
         threshold=minimum,
-        note=_("Untergrenze sind zwei Extrusionsbreiten.")
+        note=_(
+            "Untergrenze sind zwei Extrusionsbreiten. Die Skala endet weit darüber; "
+            "alles Dickere trägt dieselbe Farbe."
+        )
+        if minimum is not None and capped < top
+        else _("Untergrenze sind zwei Extrusionsbreiten.")
         if minimum is not None
         else _("Auf einem Raster abgetastet."),
         resolution=field.pitch,
+        unknown_note=_("kein Material gegenüber"),
     )
 
 

@@ -838,6 +838,40 @@ def test_scrubbing_shows_one_layer(window: MainWindow) -> None:
     assert "Schicht" in window.layer_bar.readout.text()
 
 
+def test_a_chosen_layer_cuts_away_what_lies_above(window: MainWindow) -> None:
+    """„Durch die Höhe fahren und den Querschnitt ansehen" versprach der Text.
+
+    Der Schieber lief, die Zahlen stimmten — und das Modell blieb vollständig
+    undurchsichtig stehen; sichtbar wurde nur eine dünne Kontur darunter. Wer
+    eine Schicht gewählt hat, will sehen, was auf dieser Höhe steht.
+    """
+    from app.core.types import LayerInfo
+
+    window.viewport.show_scene(window.session.last_result)
+    entry = window.session.last_result.scene.objects["obj_1"]
+    full = entry.mesh.bounds
+
+    window.viewport.set_layer(
+        LayerInfo(
+            z=full.minimum[2] + 1.0,
+            contours=(),
+            area=0.0,
+            overhang_area=0.0,
+            islands=(),
+            min_width=0.0,
+        )
+    )
+    cut_mesh = window.viewport._sectioned(entry.mesh)
+
+    assert cut_mesh.bounds.maximum[2] < full.maximum[2], "oben ist etwas weg"
+    assert cut_mesh.bounds.maximum[2] == pytest.approx(full.minimum[2] + 1.0, abs=0.2)
+
+    window.viewport.set_layer(None)
+    assert window.viewport._sectioned(entry.mesh).bounds.maximum[2] == pytest.approx(
+        full.maximum[2]
+    ), "und ohne Schicht steht wieder alles da"
+
+
 def test_switching_it_off_clears_the_view(window: MainWindow) -> None:
     select_plate(window)
     window.layer_bar.active.setCurrentIndex(1)

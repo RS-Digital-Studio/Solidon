@@ -88,7 +88,13 @@ class MapLegend(QWidget):
         if analysis.note is not None:
             parts.append(str(analysis.note))
         if analysis.unknown_count:
-            parts.append(f"{analysis.unknown_count} × {tr('nicht bestimmbar')}")
+            # Die Zahl stand unerklärt da. Was sie heißt, weiß nur die Karte,
+            # die sie erzeugt hat — also sagt sie es, und zwar in derselben
+            # Zeile: ein Tooltip findet nur, wer schon weiß, dass er da ist.
+            unknown = f"{analysis.unknown_count} × {tr('nicht bestimmbar')}"
+            if analysis.unknown_note:
+                unknown = f"{unknown} ({analysis.unknown_note})"
+            parts.append(unknown)
         self.note.setText(" · ".join(parts))
         self._layout.addWidget(self.note, stretch=1)
 

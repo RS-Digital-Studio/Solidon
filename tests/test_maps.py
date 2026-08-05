@@ -75,6 +75,34 @@ def test_the_wall_map_marks_what_is_too_thin(profile: Profile) -> None:
     assert analysis.highlighted, "half a millimetre is below two extrusion widths"
 
 
+def test_the_wall_scale_ends_where_the_question_ends(profile: Profile) -> None:
+    """An einer Stirnfläche misst der Strahl quer durch das ganze Teil.
+
+    Bei einem Brett von 8 mm Dicke und 80 mm Länge spannte die Legende damit
+    über 80 mm — und der Bereich, um den es beim Drucken geht (unter zwei
+    Extrusionsbreiten), fiel in eine einzige Farbstufe. Die Karte konnte ihre
+    eigene Frage nicht beantworten.
+    """
+    long_plate = MeshData.of(trimesh.creation.box(extents=(80.0, 50.0, 8.0)))
+    analysis = maps.build("wall", object_with(long_plate), profile=profile)
+
+    assert max(analysis.known) > 40.0, "gemessen wird weiterhin, was da ist"
+    assert analysis.high <= profile.minimum_wall_thickness * maps.WALL_SCALE_FACTOR
+    assert analysis.high < max(analysis.known), "die Skala endet vor dem Höchstwert"
+    assert "Skala" in str(analysis.note), "und sie sagt, dass sie das tut"
+
+
+def test_a_map_explains_what_it_cannot_say(profile: Profile) -> None:
+    """Die Fußzeile zählte sie („17 × nicht bestimmbar") und ließ die Zahl
+    unerklärt stehen."""
+    half = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    half.faces = half.faces[:6]
+    analysis = maps.wall_thickness_map(MeshData.of(half))
+
+    assert analysis.unknown_count, "sonst prüft dieser Test nichts"
+    assert analysis.unknown_note, "und wer nichts sagen kann, sagt warum"
+
+
 def test_an_open_body_says_it_cannot_say() -> None:
     """Eine halbe Box hat kein Innen — und keine Dicke. Null wäre eine Lüge."""
     open_body = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
