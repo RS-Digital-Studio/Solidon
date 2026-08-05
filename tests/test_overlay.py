@@ -17,12 +17,26 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
+from app.ui import overlay
 from app.ui.main_window import MainWindow
 from app.ui.overlay import LEFT_WIDTH, MARGIN, RIGHT_WIDTH, OverlayHost, card_stylesheet
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+
+
+@pytest.fixture(autouse=True)
+def _without_movement(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ohne Bewegung messen.
+
+    Die Karten gleiten an ihren Platz (``MOVE_MS``). Ein Test, der die
+    Geometrie prüft, während eine Animation läuft, misst einen Zwischenstand
+    und wird sporadisch rot — die schlechteste Sorte Test. Die Bewegung selbst
+    prüft ``test_a_card_glides_when_the_user_caused_it``.
+    """
+    monkeypatch.setattr(overlay, "MOVE_MS", 0)
 
 
 @pytest.fixture
@@ -138,3 +152,52 @@ def test_the_host_survives_zones_that_arrive_late(qt_app: QApplication) -> None:
     host.resize(500, 400)
     qt_app.processEvents()
     assert host.view.geometry().width() == 500
+
+
+def test_a_card_glides_when_the_user_caused_it(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Klappt ein Abschnitt zu, springen die darunter an eine neue Stelle.
+
+    Ohne Weg dazwischen muss man raten, welcher wohin gewandert ist — das ist
+    der ganze Zweck der Bewegung, und deshalb ist sie kein Schmuck.
+    """
+    monkeypatch.setattr(overlay, "MOVE_MS", 200)
+
+    host = OverlayHost(QLabel("Ansicht"))
+    left, right, bottom = QWidget(), QWidget(), QWidget()
+    host.set_zones(left, right, bottom)
+    host.show()
+    host.resize(800, 600)
+    qt_app.processEvents()
+
+    start = left.geometry()
+    host._move(left, QRect(start.x(), start.y(), start.width(), start.height() + 120), moving=True)
+
+    assert host._moves, "eine Bewegung läuft"
+    assert left.geometry() != QRect(start.x(), start.y(), start.width(), start.height() + 120), (
+        "und sie ist noch unterwegs"
+    )
+
+
+def test_dragging_the_window_lets_nothing_lag_behind(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wer am Fensterrand zieht, erwartet, dass alles folgt.
+
+    Eine Karte, die dabei hinterherläuft, sieht nicht nach Sorgfalt aus,
+    sondern nach einem langsamen Rechner.
+    """
+    monkeypatch.setattr(overlay, "MOVE_MS", 200)
+
+    host = OverlayHost(QLabel("Ansicht"))
+    left, right, bottom = QWidget(), QWidget(), QWidget()
+    host.set_zones(left, right, bottom)
+    host.show()
+    host.resize(800, 600)
+    qt_app.processEvents()
+
+    host.resize(1000, 700)
+
+    assert not host._moves, "ein Resize bewegt nichts, es setzt"
+    assert right.geometry().right() == 1000 - MARGIN - 1, "und sitzt sofort richtig"

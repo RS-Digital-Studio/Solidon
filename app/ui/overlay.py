@@ -23,11 +23,30 @@ schwebenden Karten hätte nichts zu teilen: sie nehmen einander nichts weg.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QModelIndex, QObject, Qt
+from PySide6.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QModelIndex,
+    QObject,
+    QPropertyAnimation,
+    QRect,
+    Qt,
+)
 from PySide6.QtWidgets import QAbstractItemView, QTreeView, QWidget
 
 from app.ui.style import ROOMY, SPACE
 from app.ui.theme import THEMES, Theme
+
+#: Wie lange eine Karte für ihren Weg braucht.
+#:
+#: Bewegung ist hier kein Schmuck, sondern eine Auskunft: klappt ein Abschnitt
+#: zu, springen die darunter an eine neue Stelle, und ohne Weg dazwischen muss
+#: man raten, welcher wohin gewandert ist. Kurz genug, dass niemand darauf
+#: wartet — deutlich unter der Schwelle, ab der eine Oberfläche träge wirkt.
+#:
+#: **Wo das hingehört:** nach ``style.py``, zu den übrigen Formregeln. Es steht
+#: hier aus demselben Grund wie ``card_stylesheet``.
+MOVE_MS = 160
 
 #: Breite der linken Zone. Breit genug für „Schraubenloch mit Senkung" in der
 #: Verlaufsliste, schmal genug, dass daneben noch ein Modell steht.
@@ -143,6 +162,9 @@ class OverlayHost(QWidget):
         self.left: QWidget | None = None
         self.right: QWidget | None = None
         self.bottom: QWidget | None = None
+        self._moves: dict[int, QPropertyAnimation] = {}
+        """Die laufende Bewegung je Zone — festgehalten, weil eine Animation,
+        die niemand hält, mitten im Weg eingesammelt wird."""
 
         self.view = view
         view.setParent(self)
@@ -178,14 +200,50 @@ class OverlayHost(QWidget):
             QEvent.Type.Hide,
             QEvent.Type.LayoutRequest,
         ):
-            self._place()
+            self._place(moving=True)
         return super().eventFilter(watched, event)
 
     def resizeEvent(self, event: object) -> None:  # noqa: N802 — Qt-Name
-        super().resizeEvent(event)  # type: ignore[arg-type]
-        self._place()
+        """Das Fenster zu ziehen ist keine Gelegenheit für Bewegung.
 
-    def _place(self) -> None:
+        Wer am Rand zieht, erwartet, dass alles folgt — nicht, dass es
+        hinterherläuft. Animiert wird nur, was der Nutzer *ausgelöst* hat: eine
+        Zone zuklappen, ein Ergebnis, das Zeilen bringt.
+        """
+        super().resizeEvent(event)  # type: ignore[arg-type]
+        self._place(moving=False)
+
+    def _move(self, zone: QWidget, target: QRect, moving: bool) -> None:
+        """Eine Zone an ihren Platz — sofort oder auf einem Weg dorthin.
+
+        Nicht animiert wird, was ohnehin schon stimmt, was gerade unsichtbar
+        ist (ein Weg, den niemand sieht, ist verlorene Zeit) und was aus einem
+        Fenster-Resize kommt. Eine laufende Bewegung wird abgebrochen und nicht
+        gestapelt: zwei Animationen auf derselben Geometrie streiten sich um
+        jedes Bild.
+        """
+        running = self._moves.pop(id(zone), None)
+        if running is not None:
+            running.stop()
+
+        if zone.geometry() == target:
+            return
+        if not moving or MOVE_MS <= 0 or not zone.isVisible():
+            zone.setGeometry(target)
+            return
+
+        move = QPropertyAnimation(zone, b"geometry", self)
+        move.setDuration(MOVE_MS)
+        # Schnell anfangen, sanft ankommen: eine Bewegung, die am Ziel abbremst,
+        # liest sich als „dorthin", eine gleichförmige als „irgendwohin".
+        move.setEasingCurve(QEasingCurve.Type.OutCubic)
+        move.setStartValue(zone.geometry())
+        move.setEndValue(target)
+        move.finished.connect(lambda: self._moves.pop(id(zone), None))
+        self._moves[id(zone)] = move
+        move.start()
+
+    def _place(self, moving: bool = False) -> None:
         """Ansicht auf die ganze Fläche, Karten an ihre Ränder."""
         self.view.setGeometry(0, 0, self.width(), self.height())
         if self.left is None or self.right is None or self.bottom is None:
@@ -201,19 +259,27 @@ class OverlayHost(QWidget):
 
         if self.left.isVisibleTo(self):
             wanted = min(natural_height(self.left), room)
-            self.left.setGeometry(MARGIN, MARGIN, LEFT_WIDTH, wanted)
+            self._move(self.left, QRect(MARGIN, MARGIN, LEFT_WIDTH, wanted), moving)
 
         if self.right.isVisibleTo(self):
             wanted = min(natural_height(self.right), room)
-            self.right.setGeometry(width - RIGHT_WIDTH - MARGIN, MARGIN, RIGHT_WIDTH, wanted)
+            self._move(
+                self.right,
+                QRect(width - RIGHT_WIDTH - MARGIN, MARGIN, RIGHT_WIDTH, wanted),
+                moving,
+            )
 
         # Die Werkzeugzeile sitzt mittig unten und ist so breit, wie sie sein
         # muss — nicht so breit wie das Fenster.
         if self.bottom.isVisibleTo(self):
             size = self.bottom.sizeHint()
             wanted = min(size.width(), width - 2 * MARGIN)
-            self.bottom.setGeometry(
-                (width - wanted) // 2, height - size.height() - MARGIN, wanted, size.height()
+            self._move(
+                self.bottom,
+                QRect(
+                    (width - wanted) // 2, height - size.height() - MARGIN, wanted, size.height()
+                ),
+                moving,
             )
 
     def _bottom_room(self) -> int:
