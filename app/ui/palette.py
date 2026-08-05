@@ -32,6 +32,8 @@ Role = Literal[
     "overhang",
     "feature",
     "backface",
+    "axis_x",
+    "axis_y",
 ]
 
 #: Die Farbe je Bedeutung — die eine Stelle, an der eine Rolle ihren Wert
@@ -59,6 +61,12 @@ ROLES: dict[Role, str] = {
     "overhang": "#d05a5a",
     "feature": "#cfe3f5",
     "backface": "#8b3a3a",
+    # Die Achsen einer Skizze. Rot für X, grün für Y — dieselbe Zuordnung wie
+    # im Viewport-Würfel und in jedem CAD, das jemand vorher benutzt hat. Sie
+    # tragen keine Bedeutung allein über die Farbe: an ihnen steht ihr
+    # Buchstabe (Regel 18).
+    "axis_x": "#d05a5a",
+    "axis_y": "#5aa564",
 }
 
 

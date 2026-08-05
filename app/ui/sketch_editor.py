@@ -49,8 +49,10 @@ from app.core.types import (
     SketchElement,
     SolvedSketch,
 )
+from app.core.units import EPS_DISPLAY
 from app.i18n import tr
 from app.ui.labels import length
+from app.ui.palette import ROLES
 
 #: Fangradius in Pixeln: näher als das an einem Punkt heißt „dieser Punkt".
 SNAP_PX = 8.0
@@ -146,6 +148,11 @@ def _located(sketch: Sketch, flat: int) -> tuple[int, int]:
         if flat >= offsets[index]:
             return index, flat - offsets[index]
     raise IndexError(flat)
+
+
+#: Radius des Ursprungsrings in Bildpunkten. Etwas größer als ein
+#: Skizzenpunkt, damit die beiden nicht zu verwechseln sind.
+ORIGIN_RADIUS = 5.0
 
 
 class SketchCanvas(QWidget):
@@ -758,11 +765,73 @@ class SketchCanvas(QWidget):
             painter.setPen(QPen(major if abs(y % 50.0) < 1e-9 else minor, 1.0))
             painter.drawLine(QPointF(0.0, screen.y()), QPointF(float(self.width()), screen.y()))
             y += step
-        axis = QPen(major, 1.4)
-        painter.setPen(axis)
+        self._paint_scale(painter, step, left, right, bottom, top)
+        self._paint_axes(painter)
+
+    def _paint_scale(
+        self, painter: QPainter, step: float, left: float, right: float, bottom: float, top: float
+    ) -> None:
+        """Zahlen an das Raster, alle fünfzig Millimeter.
+
+        Ein Raster ohne Zahlen sagt nur, dass es ein Raster gibt. Fusion
+        beschriftet seine Achsen, und ohne das weiß man beim Zeichnen nicht, ob
+        ein Kästchen einen Millimeter bedeutet oder zehn — der Maßstab ändert
+        sich mit jedem Rad am Zoom.
+        """
+        labelled = step * 5.0
+        painter.setPen(QPen(self.palette().text().color(), 1.0))
+        font = painter.font()
+        font.setPointSizeF(max(font.pointSizeF() - 1.0, 6.0))
+        painter.setFont(font)
+
+        metrics = painter.fontMetrics()
+        x = math.floor(left / labelled) * labelled
+        while x <= right:
+            if abs(x) > EPS_DISPLAY:
+                screen = self._to_screen(x, 0.0)
+                text = f"{x:.0f}"
+                # Nur, wenn die Zahl ganz hinpasst: eine abgeschnittene „1"
+                # am rechten Rand ist keine Angabe, sondern ein Fehler.
+                if screen.x() + 2.0 + metrics.horizontalAdvance(text) <= self.width():
+                    painter.drawText(QPointF(screen.x() + 2.0, self.height() - 4.0), text)
+            x += labelled
+        y = math.floor(bottom / labelled) * labelled
+        while y <= top:
+            if abs(y) > EPS_DISPLAY:
+                screen = self._to_screen(0.0, y)
+                if metrics.height() <= screen.y() - 2.0 <= self.height():
+                    painter.drawText(QPointF(4.0, screen.y() - 2.0), f"{y:.0f}")
+            y += labelled
+
+    def _paint_axes(self, painter: QPainter) -> None:
+        """Ursprung und Achsen, rot für X und grün für Y (E15).
+
+        Vorher lagen beide in der Rasterfarbe: zwei Linien unter vielen, und
+        wo der Nullpunkt liegt, musste man aus der Zeichnung erschließen. Die
+        Farben sind dieselben wie am Achsenkreuz des Viewports und in jedem
+        CAD, das jemand vorher benutzt hat — und weil Farbe nie allein trägt
+        (Regel 18), steht der Buchstabe am Ende der Achse.
+        """
         origin = self._to_screen(0.0, 0.0)
-        painter.drawLine(QPointF(0.0, origin.y()), QPointF(float(self.width()), origin.y()))
-        painter.drawLine(QPointF(origin.x(), 0.0), QPointF(origin.x(), float(self.height())))
+        for colour, name, line, label in (
+            (ROLES["axis_x"], "X", (0.0, origin.y(), float(self.width()), origin.y()), True),
+            (ROLES["axis_y"], "Y", (origin.x(), 0.0, origin.x(), float(self.height())), True),
+        ):
+            painter.setPen(QPen(QColor(colour), 1.6))
+            painter.drawLine(QPointF(line[0], line[1]), QPointF(line[2], line[3]))
+            if label:
+                spot = (
+                    QPointF(self.width() - 14.0, origin.y() - 6.0)
+                    if name == "X"
+                    else QPointF(origin.x() + 6.0, 14.0)
+                )
+                painter.drawText(spot, name)
+
+        # Der Ursprung selbst: ein Ring, kein Punkt — ein gefüllter Kreis wäre
+        # von einem Skizzenpunkt nicht zu unterscheiden.
+        painter.setPen(QPen(self.palette().text().color(), 1.6))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(origin, ORIGIN_RADIUS, ORIGIN_RADIUS)
 
     def _paint_element(
         self,
@@ -930,6 +999,29 @@ _NEEDS: dict[SketchConstraintKind, tuple[tuple[str, ...], ...]] = {
 }
 
 
+#: Die Zeichenkürzel, wie Fusion sie belegt (E16). Wer aus einem CAD kommt,
+#: hat sie in den Fingern, und wer nicht, lernt sie an den Knöpfen — dort
+#: steht jedes neben seinem Werkzeug (§19.2).
+#:
+#: Sie gelten **nur im Skizzenmodus**. Außerhalb liegen R und C auf Drehen und
+#: Fasen; kontextabhängig zu belegen ist genau das, was Fusion tut, und der
+#: einzige Weg, beide Sätze widerspruchsfrei zu haben.
+TOOL_KEYS: dict[str, str] = {
+    "select": "Esc",
+    "line": "L",
+    "circle": "C",
+    "arc": "A",
+    "point": "P",
+    "spline": "S",
+}
+
+#: Kürzel, die kein Werkzeug wählen, sondern etwas tun.
+ACTION_KEYS: dict[str, str] = {
+    "rectangle": "R",
+    "distance": "D",
+}
+
+
 class SketchPanel(QWidget):
     """Zeichenfläche, Werkzeugleiste, Bedingungsliste, Statuszeile (§30.1).
 
@@ -973,7 +1065,9 @@ class SketchPanel(QWidget):
             ("spline", tr("Spline")),
         ):
             button = QToolButton(self)
-            button.setText(label)
+            key = TOOL_KEYS.get(name, "")
+            button.setText(f"{label}  {key}" if key else label)
+            button.setToolTip(label)
             button.setCheckable(True)
             button.setAutoRaise(True)
             button.toggled.connect(lambda active, chosen=name: self._tool_chosen(chosen, active))
@@ -986,7 +1080,10 @@ class SketchPanel(QWidget):
         shapes_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         shapes_menu = QMenu(shapes_button)
         for label, factory in (
-            (tr("Rechteck 40 × 20"), lambda: shapes.rectangle(40.0, 20.0)),
+            (
+                f"{tr('Rechteck 40 × 20')}  {ACTION_KEYS['rectangle']}",
+                lambda: shapes.rectangle(40.0, 20.0),
+            ),
             (tr("Langloch 40 × 10"), lambda: shapes.slot(40.0, 10.0)),
             (tr("Kreis Ø 20"), lambda: shapes.circle(20.0)),
             (tr("Sechseck Ø 20"), lambda: shapes.polygon(20.0, 6)),
@@ -1052,7 +1149,10 @@ class SketchPanel(QWidget):
         constraints_row = QHBoxLayout()
         self._constraint_buttons: dict[SketchConstraintKind, QPushButton] = {}
         for kind in _NEEDS:
-            constraint_button = QPushButton(_constraint_label(kind), self)
+            key = ACTION_KEYS.get(kind, "")
+            label = _constraint_label(kind)
+            constraint_button = QPushButton(f"{label}  {key}" if key else label, self)
+            constraint_button.setToolTip(label)
             constraint_button.clicked.connect(
                 lambda _checked=False, chosen=kind: self.request_constraint(chosen)
             )
@@ -1086,8 +1186,41 @@ class SketchPanel(QWidget):
         self.canvas.selectionChanged.connect(self._refresh_buttons)
         self.canvas.statusChanged.connect(self.status.setText)
         self.constraint_list.installEventFilter(self)
+        self._install_shortcuts()
         self._refresh_constraints()
         self._refresh_buttons()
+
+    def _install_shortcuts(self) -> None:
+        """Die Zeichenkürzel, solange dieses Panel den Fokus hat (E16).
+
+        ``WidgetWithChildrenShortcut`` ist der Kontext, der aus einer Belegung
+        eine **kontextabhängige** macht: außerhalb des Skizzenmodus liegen R
+        und C auf Drehen und Fasen, hier auf Rechteck und Kreis. Genau so macht
+        es Fusion, und anders lassen sich die beiden Sätze nicht
+        widerspruchsfrei halten.
+        """
+        for name, key in TOOL_KEYS.items():
+            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(lambda chosen=name: self.choose_tool(chosen))
+
+        rectangle = QShortcut(QKeySequence(ACTION_KEYS["rectangle"]), self)
+        rectangle.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        rectangle.activated.connect(lambda: self.canvas.insert_shape(shapes.rectangle(40.0, 20.0)))
+
+        measure = QShortcut(QKeySequence(ACTION_KEYS["distance"]), self)
+        measure.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        measure.activated.connect(lambda: self.request_constraint("distance"))
+
+    def choose_tool(self, name: str) -> None:
+        """Wählt ein Werkzeug — was ein Klick auf seinen Knopf tut.
+
+        Über den Knopf und nicht über die Zeichenfläche: sonst stünde die
+        Leiste auf „Auswählen", während gezeichnet wird.
+        """
+        button = self._tool_buttons.get(name)
+        if button is not None:
+            button.setChecked(True)
 
     def _tool_chosen(self, name: str, active: bool) -> None:
         if not active:

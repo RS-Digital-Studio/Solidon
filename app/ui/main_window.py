@@ -66,7 +66,7 @@ from app.core.export.writer import (
     write_plan,
 )
 from app.core.geom.mesh import as_mesh_data
-from app.core.knowledge import calibration
+from app.core.knowledge import calibration, print_settings
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
@@ -75,6 +75,7 @@ from app.core.scene import EvaluationResult, OperationDraft, values_for
 from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
+from app.core.slice.estimate import total as estimate_total
 from app.core.tour import tour_for
 from app.core.types import (
     FeatureRef,
@@ -104,6 +105,7 @@ from app.ui.dialogs import (
     show_error,
 )
 from app.ui.explode_bar import ExplodeBar
+from app.ui.facts import PrintFacts
 from app.ui.generate_dialog import GenerateDialog
 from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
@@ -715,8 +717,14 @@ class MainWindow(QMainWindow):
         # Trennebenensuche, die ihr eigenes Verwerfen hat (§15.6).
         self.cancel_button.clicked.connect(self.session.cancel_split)
 
+        # §2.5 nennt für die Statusleiste „Maße · Auswahl · Fortschritt ·
+        # Warnungen". Material und Dauer gehören dazu: sie sind das Maß, das
+        # beim Drucken zählt, und standen bisher allein hinter Strg+P.
+        self.facts = PrintFacts(self)
+
         bar = self.statusBar()
         bar.addWidget(self.measurements, 1)
+        bar.addPermanentWidget(self.facts)
         bar.addPermanentWidget(self.status_message)
         bar.addPermanentWidget(self.progress)
         bar.addPermanentWidget(self.cancel_button)
@@ -1290,10 +1298,19 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         objects = len(result.scene.objects) if result else 0
         chosen = len(self.object_tree.selected_objects())
+        # **Im Skizzenmodus ist keine Operation dran.** Das ist nicht nur
+        # inhaltlich richtig — es ist die Bedingung dafür, dass die
+        # Zeichenkürzel überhaupt ankommen: `R` und `C` liegen im
+        # Fusion-Schema auf Drehen und Fasen, und Qt lässt bei zwei aktiven
+        # Kürzeln derselben Taste **keines** von beiden feuern. Fusion macht
+        # es genauso: im Skizzenmodus gilt der Zeichensatz.
+        drawing = self._sketch_panel is not None
 
         for name, action in self._op_actions.items():
             spec = REGISTRY.get(name)
-            if spec.takes_whole_scene:
+            if drawing:
+                action.setEnabled(False)
+            elif spec.takes_whole_scene:
                 action.setEnabled(objects > 0)
             elif spec.consumes:
                 action.setEnabled(chosen >= spec.consumes)
@@ -2881,6 +2898,34 @@ class MainWindow(QMainWindow):
             self.settings.display_unit,  # type: ignore[arg-type]
         )
         self.header.show_profile(self.session.profile)
+        self._update_facts()
+
+    def _update_facts(self) -> None:
+        """Material und Dauer aus dem, was ohnehin vorliegt.
+
+        Volumen und Oberfläche bringt jedes ausgewertete Netz mit; die
+        Schätzung darauf kostet nichts und darf deshalb nach jeder Auswertung
+        laufen (§31). Eine Schichtanalyse dürfte das nicht — sie braucht
+        Sekunden, und die Zeile stünde nach jedem gezogenen Parameter still.
+        """
+        result = self.session.last_result
+        if result is None or not result.scene.objects:
+            self.facts.show_estimate(None)
+            return
+        bodies = [(entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()]
+        settings = print_settings.resolve(self.session.profile)
+        self.facts.show_estimate(estimate_total(bodies, settings))
+
+    def _facts_key(self) -> str:
+        """Woran die Zahlenzeile ein Projekt wiedererkennt.
+
+        Der Pfad und nicht ``session.title``: der trägt einen Stern, sobald
+        etwas ungesichert ist, und wechselt damit bei der ersten Änderung. Die
+        Zeile hätte ihren Vergleich genau dann verloren, wenn er zum ersten Mal
+        etwas zu sagen hätte.
+        """
+        path = self.session.path
+        return str(path) if path else ""
 
     def _on_progress(self, fraction: float, text: str) -> None:
         self.progress.setValue(int(fraction * 100))

@@ -410,3 +410,112 @@ def test_the_drawn_sketch_reaches_the_operation(qt_app: QApplication) -> None:
         assert _sketch_param("sketch_extrude") == "sketch"
     finally:
         panel.deleteLater()
+
+
+# --- Orientierung und Kürzel (Konzept Teil 4, E15 und E16) ----------------------
+
+
+def test_the_axes_have_their_own_colours_and_letters() -> None:
+    """Fusion zeigt einen sichtbaren Ursprung und durchgezogene Achsen in Rot
+    und Grün; Formwerk zeichnete beide in der Rasterfarbe.
+
+    Wo der Nullpunkt liegt, musste man aus der Zeichnung erschließen. Die
+    Buchstaben stehen daneben, weil Farbe nie allein trägt (Regel 18).
+    """
+    from app.ui.palette import ROLES
+
+    assert ROLES["axis_x"] != ROLES["axis_y"]
+    assert ROLES["axis_x"] not in (ROLES["axis_y"], ROLES["select"])
+
+
+def test_every_drawing_tool_wears_its_key(qt_app: QApplication) -> None:
+    """„Die Kürzel stehen neben den Knöpfen, so lernt man sie nebenbei" (§19.2).
+
+    Nachgestellt hatten `L`, `R` und `C` im Editor gar nichts bewirkt —
+    „Auswählen" blieb aktiv.
+    """
+    from app.ui.sketch_editor import TOOL_KEYS
+
+    panel = SketchPanel()
+    for name, key in TOOL_KEYS.items():
+        button = panel._tool_buttons[name]
+        assert key in button.text(), f"{name} trägt sein Kürzel nicht"
+        assert button.toolTip(), "und der Tooltip bleibt der Klartext"
+
+
+def test_a_key_picks_the_tool_and_the_button_follows(qt_app: QApplication) -> None:
+    """Sonst stünde die Leiste auf „Auswählen", während gezeichnet wird."""
+    panel = SketchPanel()
+
+    panel.choose_tool("line")
+    assert panel.canvas.tool == "line"
+    assert panel._tool_buttons["line"].isChecked()
+    assert not panel._tool_buttons["select"].isChecked()
+
+    panel.choose_tool("select")
+    assert panel.canvas.tool == "select"
+    assert panel._tool_buttons["select"].isChecked()
+
+
+def test_the_drawing_keys_follow_fusion(qt_app: QApplication) -> None:
+    """Wer aus Fusion kommt, hat sie in den Fingern: L Linie, C Kreis,
+    A Bogen, R Rechteck, D Bemaßung, Esc beendet das Werkzeug."""
+    from app.ui.sketch_editor import ACTION_KEYS, TOOL_KEYS
+
+    assert TOOL_KEYS["line"] == "L"
+    assert TOOL_KEYS["circle"] == "C"
+    assert TOOL_KEYS["arc"] == "A"
+    assert TOOL_KEYS["select"] == "Esc"
+    assert ACTION_KEYS["rectangle"] == "R"
+    assert ACTION_KEYS["distance"] == "D"
+
+
+def test_the_keys_only_apply_while_drawing(qt_app: QApplication) -> None:
+    """Außerhalb des Skizzenmodus liegen R und C auf Drehen und Fasen.
+
+    Kontextabhängig zu belegen ist genau das, was Fusion tut, und der einzige
+    Weg, beide Sätze widerspruchsfrei zu haben.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QShortcut
+
+    panel = SketchPanel()
+    keys = {shortcut.key().toString() for shortcut in panel.findChildren(QShortcut)}
+    assert {"L", "C", "A", "R", "D"} <= keys
+
+    for shortcut in panel.findChildren(QShortcut):
+        assert shortcut.context() == Qt.ShortcutContext.WidgetWithChildrenShortcut
+
+
+def test_the_drawing_keys_win_while_drawing(qt_app: QApplication) -> None:
+    """`R` und `C` liegen im Fusion-Schema auf Drehen und Fasen.
+
+    Qt lässt bei zwei aktiven Kürzeln derselben Taste **keines** von beiden
+    feuern — die Zeichenkürzel wären also nicht nur zweitrangig gewesen,
+    sondern wirkungslos. Im Skizzenmodus ist deshalb keine Operation dran, und
+    das ist zugleich die inhaltlich richtige Aussage: wer zeichnet,
+    modelliert nicht.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings(shortcut_scheme="fusion"))
+    try:
+        colliding = [
+            action
+            for name, action in window._op_actions.items()
+            if any(sequence.toString() in {"R", "C", "P", "S"} for sequence in action.shortcuts())
+        ]
+        assert colliding, "sonst prüft dieser Test nichts"
+
+        window.start_sketch("sketch_extrude")
+        assert not any(action.isEnabled() for action in colliding), (
+            "im Skizzenmodus gilt der Zeichensatz"
+        )
+
+        window.finish_sketch(keep=False)
+        window.session.wait_for_idle()
+        assert window._sketch_panel is None
+    finally:
+        window.deleteLater()
