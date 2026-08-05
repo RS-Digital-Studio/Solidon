@@ -268,6 +268,43 @@ def test_a_small_flat_face_is_not_swallowed_by_the_curve_next_to_it() -> None:
     assert set(int(index) for index in top) <= planar
 
 
+def test_a_cylinder_has_three_faces_and_not_fifty() -> None:
+    """§21.1: „auf die Fläche zeigen" meint eine Fläche, keine Facette.
+
+    Ein Ø-50-Zylinder mit 48 Segmenten trug einundfünfzig Merkmale der Art
+    ``face`` — achtundvierzig Mantelstreifen, Deckel, Boden und die Bohrung.
+    Fusion zeigt für denselben Körper drei Flächen. Ein Merkmalsbaum von
+    ``face_1`` bis ``face_51`` ist keine Auswahl, sondern eine Liste.
+
+    Der Mantel wird jetzt als das gemeldet, was er ist: ein Zylinder, also ein
+    ``pin`` — dieselbe Erkennung, die auch die Bohrung findet.
+    """
+    import trimesh
+
+    body = trimesh.creation.cylinder(radius=25.0, height=20.0, sections=48)
+    bore = trimesh.creation.cylinder(radius=4.1, height=40.0, sections=48)
+    features = detect(MeshData.of(trimesh.boolean.difference([body, bore])))
+
+    kinds = [entry.kind for entry in features.values()]
+    assert sorted(kinds) == ["face", "face", "hole", "pin"], kinds
+
+
+def test_a_coarse_prism_keeps_its_sides() -> None:
+    """Die Grenze zwischen Rundung und Kante liegt bei dreißig Grad.
+
+    Ein Achteck-Prisma ist kein Zylinder — seine acht Seiten sind Flächen, an
+    denen jemand etwas ansetzt, und sie einzeln zu melden ist richtig. Erst ab
+    zwölf Segmenten (30 Grad) wird aus dem Vieleck eine Rundung.
+    """
+    import trimesh
+
+    prism = MeshData.of(trimesh.creation.cylinder(radius=25.0, height=20.0, sections=8))
+
+    faces = detect_faces(prism)
+
+    assert len(faces) == 10, "acht Seiten, Deckel und Boden"
+
+
 def test_components_are_counted() -> None:
     two = normalise(read_mesh((MESHES / "two_components.stl").read_bytes(), ".stl"), "mm").mesh
     assert component_count(two) == 2

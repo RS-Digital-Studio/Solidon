@@ -68,6 +68,27 @@ MIN_HOLE_DIAMETER = 0.5
 #: unterscheidet.
 MIN_FLAT_FACES = 8
 
+#: Ab welchem Knick zwischen zwei Dreiecken eine Kante eine Kante ist und keine
+#: Rundung mehr, in Grad.
+#:
+#: Ein Netz hat keine krummen Flächen, es hat viele gerade. Der Unterschied
+#: zwischen einem Zylinder und einem Prisma steht in genau dieser Zahl: bei 48
+#: Segmenten stehen benachbarte Mantelstreifen 7,5 Grad auseinander, bei zwölf
+#: sind es 30, bei acht 45. Unter der Grenze ist es eine Oberfläche, die
+#: jemand als *eine* Fläche anfasst; darüber sind es Seiten eines Vielecks,
+#: und die einzeln zu melden ist richtig.
+#:
+#: Ohne diese Unterscheidung galt jeder Mantelstreifen als eigene ebene
+#: Fläche: ein Ø-50-Zylinder mit einer Bohrung trug einundfünfzig Merkmale der
+#: Art ``face``. Fusion zeigt für denselben Körper drei Flächen, und ein
+#: Merkmalsbaum von ``face_1`` bis ``face_51`` ist keine Auswahl, sondern eine
+#: Liste.
+CURVATURE_LIMIT = 30.0
+
+#: Ab wann zwei Dreiecke nicht mehr in derselben Ebene liegen, in Grad. Ein
+#: Netz aus einer Booleschen Operation ist nie exakt koplanar.
+EPS_ANGLE = 0.01
+
 
 @dataclass(frozen=True, slots=True)
 class CylinderFit:
@@ -197,6 +218,23 @@ def detect_pins(mesh: MeshData) -> list[Feature]:
     ]
 
 
+def _curved_faces(body: trimesh.Trimesh) -> set[int]:
+    """Dreiecke, die auf einer gerundeten Oberfläche sitzen.
+
+    Erkannt an der Naht zu ihren Nachbarn: koplanar (null Grad) ist dieselbe
+    Fläche, ein deutlicher Knick ist eine Kante, und alles dazwischen ist die
+    Stufe einer Rundung, die das Netz nur nicht rund darstellen kann.
+    """
+    if not len(body.face_adjacency):
+        return set()
+    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+    rounded = (angles > EPS_ANGLE) & (angles < CURVATURE_LIMIT)
+    if not rounded.any():
+        return set()
+    pairs = np.asarray(body.face_adjacency)[rounded]
+    return {int(index) for index in pairs.ravel()}
+
+
 def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
     """Dreiecke, die zu einem ebenen Fleck gehören, der groß genug für eine
     eigene Fläche ist.
@@ -214,10 +252,16 @@ def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
         return set()
     areas = [float(body.area_faces[facet].sum()) for facet in facets]
     limit = max(areas) * MIN_FACE_SHARE
+    # Ein Mantelstreifen eines Zylinders ist groß genug für diese Schwelle und
+    # trotzdem keine eigene Fläche — die Naht zu seinen Nachbarn sagt es. Der
+    # zweite Weg bleibt davon unberührt: ein Fleck aus vielen koplanaren
+    # Dreiecken ist eine Fläche, auch wenn er auf einer Rundung sitzt.
+    curved = _curved_faces(body)
     return {
         int(index)
         for facet, area in zip(facets, areas, strict=True)
-        if area >= limit or len(facet) >= MIN_FLAT_FACES
+        if len(facet) >= MIN_FLAT_FACES
+        or (area >= limit and not any(int(index) in curved for index in facet))
         for index in facet
     }
 
@@ -341,11 +385,15 @@ def detect_faces(mesh: MeshData) -> list[Feature]:
     largest = max(areas)
     # Dieselbe Schwelle, die die Bohrungserkennung benutzt — ein Fleck ist also
     # entweder eine Fläche oder Teil einer gekrümmten Oberfläche, nie beides,
-    # nie keines.
+    # nie keines. Was auf einer Rundung sitzt, wird dort als Zylinder gemeldet
+    # und hier nicht noch einmal als achtundvierzig Rechtecke.
+    planar = _large_facet_faces(body)
     entries = [
         (facet, area)
         for facet, area in zip(facets, areas, strict=True)
-        if area >= largest * MIN_FACE_SHARE and area >= MIN_FACE_AREA
+        if area >= largest * MIN_FACE_SHARE
+        and area >= MIN_FACE_AREA
+        and all(int(index) in planar for index in facet)
     ]
     entries.sort(key=lambda entry: -entry[1])
 
