@@ -326,6 +326,22 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       Schichten und 220 Wechsel, wenn ein 68-mm-Behälter neben einem
       22-mm-Deckel steht. Die Spülmenge in Gramm bleibt draußen, sie steht im
       Profil des Slicers
+- [x] **Das Gewürzset aus Formwerk heraus gebaut** — die Probe auf die fünf
+      Stufen, gegen das von Hand entstandene Projekt. Plattenvorschlag,
+      Profilzuordnung und die Werte stimmten; die Automatik traf sogar die
+      bessere Entscheidung als die Handarbeit (Brim gehört unter die
+      Deckelbasis mit 282 mm² Standfläche, nicht unter die Streuscheibe mit
+      516). Gefunden wurden dabei drei Dinge: das Regal-STL liegt nicht
+      zentriert und stand über den Bauraum, `nil` wurde als Abweichung vom
+      Herstellerprofil gemeldet statt als Nicht-Aussage, und `arrange_bed`
+      kennt den Haftungsrand nicht. Die ersten beiden behoben, das dritte
+      unten
+- [ ] Anordnung und Plattenhaftung zusammenbringen — `arrange_bed` legt 5 mm
+      zwischen zwei Körper, bei 3 mm Skirt braucht es 6 und bei 5 mm Brim
+      zehn. Die Operation kann das nicht wissen: sie ist Teil des Dokuments,
+      die Haftung eine Druckeinstellung. Die Oberfläche kennt beides und
+      sollte den Abstand vorbelegen; `check_adhesion_clearance` nennt
+      solange die fehlende Zahl
 - [ ] Plattenvorschlag in der Oberfläche anbieten — `plates_by_material`
       rechnet ihn, gesetzt wird die Platte weiterhin von Hand
 - [ ] Bügeln aus der Passung ableiten — wo ein `Fit` zwei Flächen aufeinander

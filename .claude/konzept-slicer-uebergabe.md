@@ -267,6 +267,53 @@ schlechter als die Wechselzahl, die sich exakt ergibt.
 - **Keine Kalibrierung im Hintergrund.** Flussrate und Toleranzen kommen aus
   §28.3, gemessen am gedruckten Teil, nicht geschätzt.
 
+## 6a. Die Probe — das Gewürzset aus Formwerk heraus
+
+Gebaut wie ein Nutzer es täte: `new`, viermal `import`, `assign_slot` je Teil,
+`arrange_bed`, dann Platten, Einstellungen und Export über den Kern.
+
+**Was auf Anhieb stimmte.** Der Plattenvorschlag trennt nach Filament —
+Behälter transluzent auf die eine, Deckelteile und Regal auf die andere. Die
+Profile werden gefunden und zugeordnet (`Elegoo Centauri Carbon 2 0.4 nozzle`,
+`0.20mm Standard @Elegoo CC2 0.4 nozzle`, `Elegoo PETG @ECC2`), das
+Prozessprofil trägt Arachne und das Brückentempo, das Filamentprofil Temperatur
+und Pressure Advance des Herstellers.
+
+**Was Formwerk besser wusste als die Handarbeit.** Von Hand hatte die
+Streuscheibe den Brim bekommen — Intuition wegen der drei 1,1-mm-Federarme,
+ohne zu messen. Formwerk gibt ihn der Deckelbasis. Nachgemessen:
+
+| Teil | Standfläche | Höhe |
+|---|---|---|
+| Deckelbasis | **282 mm²** | 22,0 mm |
+| Streuscheibe | 516 mm² | 5,4 mm |
+| Behälter | 1256 mm² | 67,6 mm |
+
+Die Basis steht auf dem 2,75 mm breiten Gewindering und ist viermal so hoch wie
+die Scheibe, die auf einem 9,8 mm breiten Ring liegt. Die Automatik hatte
+recht, die Handentscheidung war eine Vermutung.
+
+**Was die Probe an Formwerk fand.**
+
+1. *Das Regal steht über den Bauraum.* Sein STL liegt nicht zentriert; der
+   Slicer ordnet still an, Formwerk sagt es. Behoben mit `arrange_bed`.
+2. *`nil` wurde als Abweichung gemeldet.* In einem Filamentprofil heißt es
+   „dazu sage ich nichts" — der Wert bleibt beim Drucker. Vier solche Zeilen
+   standen neben den echten Unterschieden; behoben, 17 Meldungen wurden 13.
+3. *Die Anordnung kennt den Haftungsrand nicht.* `arrange_bed` legt 5 mm
+   zwischen zwei Körper, bei 3 mm Skirt-Abstand braucht es 6.
+   `check_adhesion_clearance` meldet es mit der Zahl — aber die Anordnung
+   selbst kann es nicht wissen: sie ist eine Operation und Teil des Dokuments,
+   die Haftung eine Druckeinstellung, die zum Slicer reist. Zusammenbringen
+   kann das nur die Oberfläche; das steht in der Roadmap.
+
+**Was verschieden blieb und bleiben soll.** Formwerk wählt die
+Grundausführung `Elegoo PETG @ECC2`, von Hand stand dort Translucent und PRO —
+das ist die dokumentierte Vorgabe aus Stufe 2, und wer eine besondere Spule
+hat, wählt sie. Und Formwerks Materialtabelle weicht in dreizehn Werten vom
+Herstellerprofil ab, darunter 240 gegen 250 °C an der Düse und 80 gegen 70 °C
+am Bett. Genau dafür ist `profile_differences` da.
+
 ## 7. Abnahme
 
 1. Ein Lauf gegen ElegooSlicer, bei dem `handover.verify` **keine** Abweichung

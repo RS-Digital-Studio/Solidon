@@ -1118,3 +1118,41 @@ def test_without_advice_a_part_gets_no_override() -> None:
     settings = print_settings.resolve(profiles.make_profile())
 
     assert handover.object_keys(settings, [], "orca") == {}
+
+
+def test_a_profile_that_says_nothing_is_no_disagreement(tmp_path: Path) -> None:
+    """``nil`` heißt in einem Filamentprofil „dazu sage ich nichts" — der Wert
+    bleibt beim Drucker.
+
+    Das als Abweichung zu melden hieße, fünf Zeilen Rauschen neben die drei zu
+    stellen, auf die es ankommt: beim Elegoo-PETG waren es der ganze Rückzug
+    und das Wischen, alle vier auf ``nil``.
+    """
+    schweigend = tmp_path / "schweigend.json"
+    schweigend.write_text(
+        json.dumps(
+            {
+                "type": "filament",
+                "name": "Hersteller PETG",
+                "instantiation": "true",
+                "filament_retraction_length": ["nil"],
+                "filament_wipe": ["nil"],
+                "nozzle_temperature": ["250"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_path(settings, "temperature.nozzle", 240)
+    setup = handover.SlicerSetup(
+        executable=Path("orca-slicer.exe"), flavour="orca", base_filament=str(schweigend)
+    )
+
+    findings = handover.profile_differences(settings, setup)
+
+    assert len(findings) == 1
+    named = findings[0].values["settings"]
+    assert "nozzle_temperature" in named, "der echte Unterschied bleibt"
+    assert "retraction" not in named, "nil ist keine Gegenaussage"
+    assert "wipe" not in named

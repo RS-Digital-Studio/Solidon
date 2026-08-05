@@ -305,6 +305,15 @@ def arrange_on_bed(
     Bewusst einfach: ein Regal-Packen, das jeder vorhersagen kann, schlägt ein
     kluges, das Teile aus Gründen verschiebt, die niemand sieht.
 
+    ``spacing`` ist der Abstand zwischen zwei Körpern, **nicht** zwischen ihren
+    Plattenhaftungen. Ein Brim von 5 mm steht auf beiden Seiten über, also
+    braucht es dort 10 mm, wo hier 5 stehen. Die Anordnung kann das nicht von
+    allein wissen: sie ist eine Operation und damit Teil des Dokuments,
+    während die Haftung eine Druckeinstellung ist und zum Slicer reist (§15.5).
+    Wer beides zusammenbringt, ist die Oberfläche — und wenn es nicht reicht,
+    sagt es :func:`app.core.export.writer.check_adhesion_clearance` mit der
+    Zahl, die gebraucht würde.
+
     Was nicht passt, kommt auf die nächste Platte — bis zu ``plates`` davon.
     Mehr Teile als Platten sind kein Fehler zum Verstecken: die letzte Platte
     nimmt den Rest, und der Bericht sagt, dass sie übervoll ist — denn ein

@@ -46,6 +46,11 @@ TIMEOUT_SECONDS: Final = 300.0
 #: Wonach im Ausgabeordner gesucht wird — die Slicer benennen selbst.
 GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g")
 
+#: Was in einem Profil „dazu sage ich nichts" heißt. Ein Filamentprofil, das
+#: den Rückzug auf ``nil`` stellt, widerspricht Formwerk nicht — es überlässt
+#: den Wert dem Drucker.
+_NO_STATEMENT: Final = frozenset({"nil", "", "none"})
+
 
 @dataclass(frozen=True, slots=True)
 class SlicerSetup:
@@ -360,6 +365,11 @@ def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Fin
         if theirs is None:
             continue
         value = theirs[0] if isinstance(theirs, list) and theirs else theirs
+        # ``nil`` ist keine Gegenaussage, sondern eine Nicht-Aussage: der Wert
+        # bleibt dann beim Drucker. Das als Abweichung zu melden hieße, fünf
+        # Zeilen Rauschen neben die drei zu stellen, auf die es ankommt.
+        if str(value).strip().casefold() in _NO_STATEMENT:
+            continue
         if not _same(str(value), ours):
             apart.append(f"{key}: {ours} statt {value}")
 
