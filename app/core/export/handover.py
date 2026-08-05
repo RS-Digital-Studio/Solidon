@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Final
 
 from app.core.errors import OPEN_SETTINGS, Action, ExternalToolError
-from app.core.export import slicer_keys
+from app.core.export import slicer_keys, slicer_profiles
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.knowledge.print_settings import read_path
 from app.core.log import get_logger
@@ -60,6 +60,12 @@ class SlicerSetup:
     flavour: SlicerFlavour
     machine_profile: str = ""
     base_process: str = ""
+    base_filament: str = ""
+    """Das Filamentprofil des Slicers, auf das Formwerk seine Werte legt.
+
+    Ohne das kennt der Slicer nur „PETG"; mit ihm weiß er, *welches* — und
+    fährt die Werte des Herstellers für alles, was Formwerk nicht setzt.
+    """
 
     @property
     def name(self) -> str:
@@ -202,7 +208,7 @@ def write_config(
         filament = directory / "formwerk_filament.json"
         filament.write_text(
             json.dumps(
-                _orca_filament(split.get("filament", {}), settings, profile),
+                _orca_filament(split.get("filament", {}), settings, profile, setup),
                 indent=2,
                 ensure_ascii=False,
             ),
@@ -258,6 +264,7 @@ def _orca_filament(
     values: dict[str, str],
     settings: PrintSettings,
     profile: Profile,
+    setup: SlicerSetup,
 ) -> dict[str, object]:
     """Das Filamentprofil für die Orca-Familie.
 
@@ -266,10 +273,11 @@ def _orca_filament(
     nicht angenommen. Zweitens braucht es ``filament_type``, sonst weiß der
     Slicer nicht, welche Grundannahmen gelten.
 
-    Ein Systemprofil als Unterlage gibt es hier noch nicht; das kommt mit der
-    nächsten Stufe, wenn Formwerk die Filamentprofile des Slicers liest. Bis
-    dahin erbt die Datei von der Familie des Materials, und was Formwerk nicht
-    setzt, kommt von dort.
+    Wie beim Prozess (§29) legt Formwerk seine Werte auf das Profil des
+    Herstellers, statt eines zu erfinden. Der Unterschied zum Prozess: hier
+    wird die Erbkette vorher **aufgelöst**. Ein Filamentprofil bei Elegoo
+    setzt selbst drei Werte und erbt fünfzig; kopierte man nur die oberste
+    Datei, stünde in der Übergabe ein Bruchstück.
     """
     document: dict[str, object] = {
         "type": "filament",
@@ -278,8 +286,70 @@ def _orca_filament(
         "instantiation": "true",
         "filament_type": [slicer_keys.filament_type(profile.material.id)],
     }
+    if setup.base_filament:
+        base = Path(setup.base_filament)
+        if base.is_file():
+            inherited = slicer_profiles.resolve_values(base)
+            document.update({key: _as_slots(value) for key, value in inherited.items()})
     document.update({key: [value] for key, value in values.items()})
     return document
+
+
+def _as_slots(value: object) -> object:
+    """Filamentwerte stehen als Liste. Was aus einem Profil einzeln kommt,
+    wird dazu gemacht — sonst mischt die Datei zwei Schreibweisen."""
+    return value if isinstance(value, list) else [value]
+
+
+def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Finding]:
+    """Wo Formwerks Werte von denen des Filamentprofils abweichen (§29, §22.5).
+
+    Beide Seiten haben recht, und das ist der Punkt. Formwerks Tabelle sagt,
+    was PETG im Allgemeinen verträgt; das Profil des Herstellers sagt, was
+    *diese Spule* auf *diesem Drucker* verträgt. Beim transluzenten Elegoo-PETG
+    sind das 255 °C bei 70 °C Bett gegen 240 bei 80 — und ein Volumenstrom von
+    10 mm³/s statt 12.
+
+    Gemeldet, nicht stillschweigend übernommen: die Einstellung ist die
+    Entscheidung des Nutzers. Wer den Hinweis liest, kann ihr widersprechen —
+    und genau das soll er können (§2.7).
+    """
+    if setup.flavour != "orca" or not setup.base_filament:
+        return []
+    base = Path(setup.base_filament)
+    if not base.is_file():
+        return []
+
+    inherited = slicer_profiles.resolve_values(base)
+    written = by_section(settings, setup.flavour).get("filament", {})
+    apart: list[str] = []
+    for key, ours in written.items():
+        theirs = inherited.get(key)
+        if theirs is None:
+            continue
+        value = theirs[0] if isinstance(theirs, list) and theirs else theirs
+        if not _same(str(value), ours):
+            apart.append(f"{key}: {ours} statt {value}")
+
+    if not apart:
+        return []
+    _log.info("filament profile differs in %d value(s)", len(apart))
+    return [
+        Finding(
+            code="slicer.filament_differs",
+            severity="info",
+            message=_(
+                "Das Filamentprofil des Herstellers nennt andere Werte als die "
+                "Einstellungen. Übergeben werden die Einstellungen."
+            ),
+            values={
+                "profile": base.stem,
+                "count": len(apart),
+                "settings": "; ".join(sorted(apart)),
+            },
+            source="internal",
+        )
+    ]
 
 
 def _command(
@@ -434,7 +504,7 @@ def slice_model(
             kept.write_bytes(produced.read_bytes())
             produced = kept
 
-    findings = [*ignored, *gcode.findings_for(metrics)]
+    findings = [*profile_differences(settings, setup), *ignored, *gcode.findings_for(metrics)]
     findings.append(
         Finding(
             code="slicer.handover",

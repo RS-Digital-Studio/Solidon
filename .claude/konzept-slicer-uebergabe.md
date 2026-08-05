@@ -159,13 +159,28 @@ liest den Profilbestand eines installierten Slicers und vergleicht ihn mit der
 Tabelle. Am alten Stand wäre er mit achtzehn Verstößen rot gewesen, jetzt sind
 es null. Ohne installierten Slicer wird er übersprungen, nicht grün.
 
-### Stufe 2 — Filamentprofile lesen und benennen
-`PROFILE_DIRS` um `filament` erweitern; die `inherits`-Kette auflösen wie beim
-Gewürzset (vier Ebenen bis `fdm_filament_common`). Das Materialprofil bekommt
-ein Feld „Filamentprofil des Slicers". Die eigene Tabelle bleibt als Rückfall
-für alles, wozu kein Slicer-Profil existiert — sie ist dann Vorgabe, nicht
-Konkurrenz. Bei Abweichung über einer Schwelle: ein Befund, kein stilles
-Überschreiben (§22.5, Herkunft ausweisen).
+### Stufe 2 — Filamentprofile lesen und benennen — **umgesetzt**
+`slicer_profiles` kennt jetzt auch `filament/` und löst mit `resolve_values`
+die Erbkette auf — beim transluzenten Elegoo-PETG fünfundfünfzig Werte aus vier
+Dateien, wo die oberste nur drei nennt. `match_filament` wählt die
+Grundausführung des eingestellten Materials vor; der Dialog zeigt sie zur
+Auswahl und merkt sie sich. `handover` legt die Formwerk-Werte darauf, statt
+ein Profil zu erfinden.
+
+Zwei Dinge, die beim Bauen auffielen:
+
+- **Der Index der Erbkette läuft über den Profilnamen, nicht den Dateinamen.**
+  Bei Elegoo sind beide zufällig gleich; wo sie es nicht sind, bräche die Kette
+  nach der ersten Datei ab, ohne dass etwas zu fehlen scheint. Ein Test mit
+  abweichenden Dateinamen hat es gefunden.
+- **Filamente werden nur auf Verlangen gelesen** (`kinds`). Sie vervielfachen
+  den Bestand — 5962 gegen 3887 —, und der Dialog, der nur den Drucker sucht,
+  soll sie nicht mitlesen.
+
+`profile_differences` meldet, wo Formwerks Tabelle und das Herstellerprofil
+auseinandergehen. Übernommen wird nichts davon: die Einstellung ist die
+Entscheidung des Nutzers, das Profil die Unterlage für alles, was Formwerk
+nicht setzt.
 
 ### Stufe 3 — die fehlenden Stellschrauben ins Modell
 Die Werte aus Abschnitt 3, jeweils mit Zuordnung in allen drei Tabellen. Dazu

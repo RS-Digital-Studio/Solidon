@@ -97,8 +97,62 @@ def bestand(tmp_path: Path) -> Path:
         root / "Elegoo" / "process" / "fdm_process_common.json",
         {"type": "process", "name": "fdm_process_common"},
     )
-    # Filamente liegen daneben und gehen niemanden etwas an.
-    _write(root / "Elegoo" / "filament" / "pla.json", {"type": "filament", "name": "PLA"})
+    # Filamente in der Staffelung, die die Hersteller wirklich benutzen: das
+    # wählbare Profil setzt drei Werte, alles andere erbt es über zwei Stufen.
+    _write(
+        root / "Elegoo" / "filament" / "fdm_filament_common.json",
+        {
+            "type": "filament",
+            "name": "fdm_filament_common",
+            "filament_type": ["PLA"],
+            "nozzle_temperature": ["220"],
+            "hot_plate_temp": ["60"],
+            "filament_density": ["1.24"],
+        },
+    )
+    _write(
+        root / "Elegoo" / "filament" / "BASE" / "petg_base.json",
+        {
+            "type": "filament",
+            "name": "Elegoo PETG @base",
+            "inherits": "fdm_filament_common",
+            "filament_type": ["PETG"],
+            "nozzle_temperature": ["240"],
+            "hot_plate_temp": ["70"],
+        },
+    )
+    _write(
+        root / "Elegoo" / "filament" / "ECC2" / "petg.json",
+        {
+            "type": "filament",
+            "name": "Elegoo PETG @ECC2",
+            "inherits": "Elegoo PETG @base",
+            "instantiation": "true",
+            "compatible_printers": ["Elegoo Centauri Carbon 2 0.4 nozzle"],
+        },
+    )
+    _write(
+        root / "Elegoo" / "filament" / "ECC2" / "petg_trans.json",
+        {
+            "type": "filament",
+            "name": "Elegoo PETG Translucent @ECC2",
+            "inherits": "Elegoo PETG @base",
+            "instantiation": "true",
+            "compatible_printers": ["Elegoo Centauri Carbon 2 0.4 nozzle"],
+            "nozzle_temperature": ["255"],
+            "pressure_advance": ["0.052"],
+        },
+    )
+    _write(
+        root / "Elegoo" / "filament" / "ECC2" / "pla.json",
+        {
+            "type": "filament",
+            "name": "Elegoo PLA @ECC2",
+            "inherits": "fdm_filament_common",
+            "instantiation": "true",
+            "compatible_printers": ["Elegoo Centauri Carbon 2 0.4 nozzle"],
+        },
+    )
     return root
 
 
@@ -252,3 +306,64 @@ def test_the_title_says_it_in_words_not_in_a_symbol(slicer: Path) -> None:
     plain = next(entry for entry in found if not entry.from_user)
 
     assert plain.title("eigenes") == plain.name
+
+
+# --- Filamente ---------------------------------------------------------------------
+
+
+def test_filaments_stay_out_of_the_way_unless_asked_for(slicer: Path) -> None:
+    """Sie vervielfachen den Bestand — beim ElegooSlicer stehen 5962 Filamente
+    3887 Maschinen- und Prozessprofilen gegenüber. Der Dialog, der nur den
+    Drucker sucht, soll sie nicht mitlesen."""
+    ohne = sp.find_profiles(slicer, "orca")
+    assert not [entry for entry in ohne if entry.kind == "filament"]
+
+    mit = sp.find_profiles(slicer, "orca", kinds=("machine", "process", "filament"))
+    assert [entry for entry in mit if entry.kind == "filament"]
+
+
+def test_a_filament_profile_resolves_what_it_inherits(slicer: Path) -> None:
+    """Das wählbare Profil setzt drei Werte und erbt den Rest über zwei Stufen.
+
+    Wer nur die oberste Datei liest, übergibt ein Bruchstück — beim echten
+    Elegoo-PETG wären das drei Werte statt fünfundfünfzig.
+    """
+    found = sp.find_profiles(slicer, "orca", kinds=("filament",))
+    trans = next(entry for entry in found if entry.name == "Elegoo PETG Translucent @ECC2")
+
+    values = sp.resolve_values(trans.path)
+
+    assert values["nozzle_temperature"] == ["255"], "eigener Wert gewinnt"
+    assert values["hot_plate_temp"] == ["70"], "von @base geerbt"
+    assert values["filament_density"] == ["1.24"], "aus der Wurzel geerbt"
+    assert values["pressure_advance"] == ["0.052"]
+    assert "inherits" not in values, "beschreibende Felder erben sich nicht weiter"
+    assert "name" not in values
+
+
+def test_the_material_of_a_filament_profile_may_be_inherited(slicer: Path) -> None:
+    """``filament_type`` steht meist eine Ebene höher: von 42 verträglichen
+    Profilen des ElegooSlicer nennen ihn sieben selbst."""
+    found = sp.find_profiles(slicer, "orca", kinds=("filament",))
+    petg = next(entry for entry in found if entry.name == "Elegoo PETG @ECC2")
+
+    assert petg.filament_type == "", "die Datei selbst sagt nichts"
+    assert sp.type_of(petg) == "PETG", "die Kette schon"
+
+
+def test_the_filament_default_is_the_plain_one(slicer: Path) -> None:
+    """Von einem Material liegen mehrere Ausführungen im Bestand, und sie
+    fahren verschieden. Vorgewählt wird die Grundausführung — eine Vorgabe zu
+    raten, die genauer aussieht als sie ist, wäre schlechter als die
+    einfache."""
+    found = sp.find_profiles(slicer, "orca", kinds=("machine", "process", "filament"))
+    machine = next(
+        entry for entry in sp.machines(found) if entry.name.endswith("Carbon 2 0.4 nozzle")
+    )
+
+    chosen = sp.match_filament(found, machine, "PETG")
+
+    assert chosen is not None
+    assert chosen.name == "Elegoo PETG @ECC2"
+    assert sp.match_filament(found, machine, "PLA") is not None
+    assert sp.match_filament(found, machine, "ABS") is None, "was fehlt, wird nicht geraten"

@@ -722,6 +722,59 @@ def test_the_orca_filament_profile_carries_what_hangs_on_the_filament(tmp_path: 
     assert all(isinstance(value, list) for key, value in document.items() if key not in meta)
 
 
+def test_the_filament_profile_keeps_what_the_maker_knows(tmp_path: Path) -> None:
+    """Formwerk legt seine Werte auf das Profil des Herstellers, statt eines zu
+    erfinden — und löst dessen Erbkette vorher auf.
+
+    Der Unterschied ist keiner der Feinheit: ein Filamentprofil bei Elegoo
+    setzt selbst drei Werte und erbt zweiundfünfzig. Ohne Auflösung stünde in
+    der Übergabe ein Bruchstück, und der Slicer ergänzte den Rest aus dem, was
+    zufällig eingestellt war.
+    """
+    root = tmp_path / "filament"
+    root.mkdir()
+    (root / "grund.json").write_text(
+        json.dumps(
+            {
+                "type": "filament",
+                "name": "Hersteller PETG @base",
+                "filament_density": ["1.27"],
+                "pressure_advance": ["0.04"],
+                "nozzle_temperature": ["999"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    besonders = root / "besonders.json"
+    besonders.write_text(
+        json.dumps(
+            {
+                "type": "filament",
+                "name": "Hersteller PETG Transluzent",
+                "inherits": "Hersteller PETG @base",
+                "instantiation": "true",
+                "temperature_vitrification": ["70"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(
+        executable=Path("orca-slicer.exe"), flavour="orca", base_filament=str(besonders)
+    )
+
+    written = handover.write_config(settings, profile, setup, tmp_path)
+    assert written.filament is not None
+    document = json.loads(written.filament.read_text(encoding="utf-8"))
+
+    assert document["pressure_advance"] == ["0.04"], "geerbt, und Formwerk kennt es gar nicht"
+    assert document["temperature_vitrification"] == ["70"], "eigener Wert des Profils"
+    # Wo beide etwas sagen, gewinnt Formwerk: die Einstellung ist die
+    # Entscheidung des Nutzers, das Profil nur die Unterlage.
+    assert document["nozzle_temperature"] == [str(settings.temperature.nozzle)]
+
+
 def test_the_orca_call_loads_the_filament_profile(tmp_path: Path) -> None:
     """Ein eigener Schalter, nicht ``--load-settings``: dorthin gegeben würde
     das Filamentprofil nach seinem ``type`` aussortiert statt geladen."""
@@ -826,3 +879,69 @@ def test_the_newest_gcode_in_the_folder_wins(tmp_path: Path) -> None:
 
 def test_an_empty_folder_has_no_gcode(tmp_path: Path) -> None:
     assert handover._find_gcode(tmp_path) is None
+
+
+def test_a_filament_profile_that_disagrees_is_reported(tmp_path: Path) -> None:
+    """Beide Seiten haben recht: Formwerks Tabelle sagt, was PETG im
+    Allgemeinen verträgt, das Herstellerprofil, was diese Spule verträgt.
+
+    Beim transluzenten Elegoo-PETG liegen dazwischen fünfzehn Grad an der Düse
+    und zehn am Bett. Gemeldet wird es, übernommen nicht — die Einstellung ist
+    die Entscheidung des Nutzers.
+    """
+    besonders = tmp_path / "besonders.json"
+    besonders.write_text(
+        json.dumps(
+            {
+                "type": "filament",
+                "name": "Hersteller PETG Transluzent",
+                "instantiation": "true",
+                "nozzle_temperature": ["255"],
+                "hot_plate_temp": ["70"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_path(settings, "temperature.nozzle", 240)
+    settings = print_settings.with_path(settings, "temperature.bed", 80)
+    setup = handover.SlicerSetup(
+        executable=Path("orca-slicer.exe"), flavour="orca", base_filament=str(besonders)
+    )
+
+    findings = handover.profile_differences(settings, setup)
+
+    assert len(findings) == 1
+    assert findings[0].code == "slicer.filament_differs"
+    assert findings[0].source == "internal", "Regel 14: Herkunft ausweisen"
+    named = findings[0].values["settings"]
+    assert "nozzle_temperature: 240 statt 255" in named
+    assert "hot_plate_temp: 80 statt 70" in named
+
+
+def test_a_filament_profile_that_agrees_says_nothing(tmp_path: Path) -> None:
+    """Ein Hinweis, der bei jedem Lauf erscheint, wird nach dem dritten Mal
+    überlesen — also erscheint er nur, wenn wirklich etwas auseinandergeht."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    passend = tmp_path / "passend.json"
+    passend.write_text(
+        json.dumps(
+            {
+                "type": "filament",
+                "name": "Hersteller PETG",
+                "instantiation": "true",
+                "nozzle_temperature": [str(settings.temperature.nozzle)],
+            }
+        ),
+        encoding="utf-8",
+    )
+    setup = handover.SlicerSetup(
+        executable=Path("orca-slicer.exe"), flavour="orca", base_filament=str(passend)
+    )
+
+    assert handover.profile_differences(settings, setup) == []
+    # Ohne gewähltes Profil gibt es nichts zu vergleichen — und keine Meldung.
+    ohne = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+    assert handover.profile_differences(settings, ohne) == []

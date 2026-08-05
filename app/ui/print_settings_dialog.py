@@ -50,7 +50,7 @@ from PySide6.QtWidgets import (
 
 from app.core import discover, tools
 from app.core.errors import AppError
-from app.core.export import handover, slicer_profiles
+from app.core.export import handover, slicer_keys, slicer_profiles
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import write_assembly
 from app.core.knowledge import print_settings, profiles
@@ -653,7 +653,16 @@ class _ProfileWorker(QThread):
 
     def run(self) -> None:
         try:
-            self.done.emit(slicer_profiles.find_profiles(self._executable, self._flavour))
+            self.done.emit(
+                slicer_profiles.find_profiles(
+                    self._executable,
+                    self._flavour,
+                    # Filamente gehören dazu: ohne sie weiß der Slicer nur
+                    # „PETG" und nicht, welches — und fährt für alles, was
+                    # Formwerk nicht setzt, seine eigene Voreinstellung.
+                    kinds=("machine", "process", "filament"),
+                )
+            )
         except OSError as problem:
             # Ein unlesbarer Profilordner ist kein Grund, den Dialog zu
             # verlieren — die Auswahl bleibt dann eben leer.
@@ -839,9 +848,12 @@ class PrintSettingsDialog(QDialog):
         self.machine_choice.currentIndexChanged.connect(self._machine_chosen)
         self.process_choice = QComboBox(self.slicer_box)
         self.process_choice.setEnabled(False)
+        self.filament_choice = QComboBox(self.slicer_box)
+        self.filament_choice.setEnabled(False)
 
         form.addRow(tr("Drucker"), self.machine_choice)
         form.addRow(tr("Grundprofil"), self.process_choice)
+        form.addRow(tr("Filament"), self.filament_choice)
         self.profile_note = QLabel(tr("Der Profilbestand wird durchgesehen …"), self.slicer_box)
         self.profile_note.setWordWrap(True)
         form.addRow(self.profile_note)
@@ -889,6 +901,7 @@ class PrintSettingsDialog(QDialog):
         self.machine_choice.blockSignals(False)
         self.machine_choice.setEnabled(True)
         self.process_choice.setEnabled(True)
+        self.filament_choice.setEnabled(True)
 
         chosen, process = slicer_profiles.match(found, self.session.profile.printer)
         remembered = self.ui_settings.slicer_machine_profile
@@ -956,6 +969,30 @@ class PrintSettingsDialog(QDialog):
             if named:
                 index = self.process_choice.findData(str(named[0].path))
         self.process_choice.setCurrentIndex(max(index, 0))
+        self._fill_filaments(machine)
+
+    def _fill_filaments(self, machine: slicer_profiles.SlicerProfile | None) -> None:
+        """Die Filamentprofile zum gewählten Drucker, vorbelegt nach Material.
+
+        Die Vorgabe ist die Grundausführung des eingestellten Materials —
+        „Elegoo PETG", nicht „Elegoo PETG Translucent". Von einem Material
+        liegen mehrere Ausführungen im Bestand, und sie fahren verschieden:
+        das transluzente will 255 Grad, das PRO 240 bei halbem Volumenstrom.
+        Wer eine besondere Spule hat, stellt sie hier ein.
+        """
+        fitting = slicer_profiles.filaments(self._profiles, machine) if machine else []
+        self.filament_choice.clear()
+        for entry in fitting:
+            self.filament_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
+
+        wanted = self.ui_settings.slicer_base_filament
+        index = self.filament_choice.findData(wanted) if wanted else -1
+        if index < 0:
+            material = slicer_keys.filament_type(self.session.profile.material.id)
+            preferred = slicer_profiles.match_filament(self._profiles, machine, material)
+            if preferred is not None:
+                index = self.filament_choice.findData(str(preferred.path))
+        self.filament_choice.setCurrentIndex(max(index, 0))
 
     def _profile_search_finished(self) -> None:
         self._profile_worker = None
@@ -1216,6 +1253,7 @@ class PrintSettingsDialog(QDialog):
             setup,
             machine_profile=str(self.machine_choice.currentData() or ""),
             base_process=str(self.process_choice.currentData() or ""),
+            base_filament=str(self.filament_choice.currentData() or ""),
         )
         if setup.flavour != "prusa" and not setup.machine_profile:
             self.slicer_box.setChecked(True)
@@ -1225,6 +1263,7 @@ class PrintSettingsDialog(QDialog):
             return
         self.ui_settings.slicer_machine_profile = setup.machine_profile
         self.ui_settings.slicer_base_process = setup.base_process
+        self.ui_settings.slicer_base_filament = setup.base_filament
 
         self._temporary = TemporaryDirectory(prefix="formwerk-handover-")
         folder = Path(self._temporary.name)

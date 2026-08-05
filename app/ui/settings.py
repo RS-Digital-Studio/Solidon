@@ -44,6 +44,10 @@ class UiSettings:
     slicer_base_process: str = ""
     """Prozessprofil, auf das die Formwerk-Werte gelegt werden. Die Orca-Familie
     braucht es, sonst gilt der Prozess als unverträglich mit dem Drucker."""
+    slicer_base_filament: str = ""
+    """Filamentprofil, auf das die Formwerk-Werte gelegt werden. Ohne es kennt
+    der Slicer nur „PETG" und nicht, welches — und die Werte des Herstellers
+    für dieses Filament kämen gar nicht zum Tragen."""
     first_run_done: bool = False
     shortcut_scheme: str = "default"
     """Welche Kürzelbelegung gilt (Konzept P15, E7). Die Vorgabe ist die des

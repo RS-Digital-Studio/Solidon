@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Literal
@@ -30,7 +31,7 @@ from app.core.types import PrinterProfile
 
 _log = get_logger(__name__)
 
-ProfileKind = Literal["machine", "process"]
+ProfileKind = Literal["machine", "process", "filament"]
 
 #: Wie viele Dateien höchstens gelesen werden. Der ausgelieferte Bestand eines
 #: Slicers umfasst einige tausend Profile über alle Hersteller; eine Zahl weit
@@ -41,7 +42,11 @@ MAX_FILES: Final = 20_000
 #: elftausend JSON-Dateien, wovon viertausend Profile sind — der Rest sind
 #: Filamente, Modelle und Beschreibungen, und jede davon zu öffnen kostet
 #: Sekunden, die der Dialog nicht hat.
-PROFILE_DIRS: Final[dict[str, ProfileKind]] = {"machine": "machine", "process": "process"}
+PROFILE_DIRS: Final[dict[str, ProfileKind]] = {
+    "machine": "machine",
+    "process": "process",
+    "filament": "filament",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +60,9 @@ class SlicerProfile:
     nozzle: float = 0.0
     compatible_printers: tuple[str, ...] = ()
     default_process: str = ""
+    filament_type: str = ""
+    """Nur bei Filamentprofilen: ``PETG``, ``PLA``, … — daran hängt die
+    Zuordnung zum Material, das in Formwerk eingestellt ist."""
     from_user: bool = False
     """Selbst angelegt statt mitgeliefert — solche Profile gewinnen bei
     Gleichstand, weil jemand sie absichtlich gemacht hat."""
@@ -146,9 +154,17 @@ def _read(path: Path, kind: ProfileKind, from_user: bool) -> SlicerProfile | Non
         nozzle=_first_number(loaded.get("nozzle_diameter")),
         compatible_printers=tuple(_strings(loaded.get("compatible_printers"))),
         default_process=str(loaded.get("default_print_profile", "")),
+        filament_type=_first_string(loaded.get("filament_type")),
         from_user=from_user or own,
         inherits=str(loaded.get("inherits", "")),
     )
+
+
+def _first_string(value: Any) -> str:
+    """Filamentwerte stehen als Liste, ein Eintrag je Platz."""
+    if isinstance(value, list) and value:
+        value = value[0]
+    return str(value) if isinstance(value, str) else ""
 
 
 def _first_number(value: Any) -> float:
@@ -184,7 +200,19 @@ def _kind_of(path: Path, root: Path) -> ProfileKind | None:
     return None
 
 
-def find_profiles(executable: Path, flavour: SlicerFlavour) -> list[SlicerProfile]:
+#: Was gelesen wird, wenn nichts anderes verlangt ist. Filamentprofile bleiben
+#: draußen, weil sie den Bestand vervielfachen: bei ElegooSlicer stehen 5962
+#: Filamenten 3887 Maschinen- und Prozessprofile gegenüber, und das Lesen aller
+#: dauert fünfzehn statt sechs Sekunden. Wer sie braucht, fragt danach — beim
+#: Slicen fällt die Zeit neben dem Lauf selbst nicht auf.
+DEFAULT_KINDS: Final[tuple[ProfileKind, ...]] = ("machine", "process")
+
+
+def find_profiles(
+    executable: Path,
+    flavour: SlicerFlavour,
+    kinds: Sequence[ProfileKind] = DEFAULT_KINDS,
+) -> list[SlicerProfile]:
     """Alle benutzbaren Profile dieses Slicers, mitgelieferte und eigene.
 
     Für ``prusa`` bleibt die Liste leer, und das ist kein Mangel: eine
@@ -193,6 +221,7 @@ def find_profiles(executable: Path, flavour: SlicerFlavour) -> list[SlicerProfil
     """
     if flavour == "prusa":
         return []
+    wanted = frozenset(kinds)
 
     found: list[SlicerProfile] = []
     seen: set[str] = set()
@@ -210,7 +239,7 @@ def find_profiles(executable: Path, flavour: SlicerFlavour) -> list[SlicerProfil
             # Gesucht wird deshalb nach dem Ordner irgendwo im Pfad, nicht nach
             # einer festen Form.
             kind = _kind_of(path, root)
-            if kind is None:
+            if kind is None or kind not in wanted:
                 continue
             count += 1
             if count > MAX_FILES:
@@ -229,6 +258,92 @@ def find_profiles(executable: Path, flavour: SlicerFlavour) -> list[SlicerProfil
 
     _log.info("found %d slicer profiles", len(found))
     return found
+
+
+#: Felder, die das Profil beschreiben statt einen Wert zu setzen. Sie erben
+#: sich nicht weiter — ein Name gilt für ein Profil, nicht für seine Kinder.
+_DESCRIBING: Final = frozenset(
+    {
+        "type",
+        "name",
+        "inherits",
+        "from",
+        "instantiation",
+        "setting_id",
+        "filament_id",
+        "compatible_printers",
+        "compatible_printers_condition",
+        "renamed_from",
+        "description",
+        "version",
+    }
+)
+
+
+def _family(path: Path) -> Path:
+    """Der Ordner, unter dem die Vorfahren eines Profils zu finden sind.
+
+    Gesucht wird nicht im ganzen Bestand: die Erbkette eines Filamentprofils
+    bleibt innerhalb von ``filament/``, und dort sind es zweihundert Dateien
+    statt elftausend.
+    """
+    for parent in path.parents:
+        if parent.name.casefold() in PROFILE_DIRS:
+            return parent
+    return path.parent
+
+
+def resolve_values(path: Path) -> dict[str, Any]:
+    """Die Werte, mit denen dieses Profil tatsächlich fährt (§29).
+
+    Die Hersteller staffeln in mehreren Ebenen — bei Elegoo etwa
+    ``Elegoo PETG Translucent @ECC2`` → ``Elegoo PETG @base`` →
+    ``fdm_filament_pet`` → ``fdm_filament_common``. Wer nur die oberste Datei
+    liest, sieht drei Werte und hält den Rest für nicht gesetzt. Erst
+    zusammengelegt steht da, was der Slicer fährt: 255 °C Düse bei 70 °C Bett.
+
+    Die Zwischenstufen sind selbst nicht wählbar und tauchen deshalb in
+    :func:`find_profiles` nicht auf. Hier werden sie gebraucht, also werden sie
+    hier gelesen.
+    """
+    # Der Index läuft über den Profilnamen, nicht über den Dateinamen: darauf
+    # zeigt ``inherits``. Bei Elegoo sind beide zufällig gleich
+    # (`Elegoo PETG @base.json`), garantiert ist das nirgends — und wo es nicht
+    # gilt, bräche die Kette nach der ersten Datei ab, ohne dass etwas fehlt
+    # aussieht.
+    index: dict[str, Path] = {}
+    for entry in _family(path).rglob("*.json"):
+        try:
+            loaded = json.loads(entry.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(loaded, dict):
+            index.setdefault(str(loaded.get("name", entry.stem)), entry)
+
+    chain: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    current: Path | None = path
+    for _step in range(MAX_INHERITANCE):
+        if current is None or not current.is_file():
+            break
+        try:
+            loaded = json.loads(current.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as problem:
+            _log.debug("stopping at %s: %s", current.name, problem)
+            break
+        if not isinstance(loaded, dict):
+            break
+        chain.append(loaded)
+        parent = str(loaded.get("inherits", ""))
+        if not parent or parent in seen:
+            break
+        seen.add(parent)
+        current = index.get(parent)
+
+    values: dict[str, Any] = {}
+    for loaded in reversed(chain):  # von der Wurzel nach vorn, Spezielles gewinnt
+        values.update({key: value for key, value in loaded.items() if key not in _DESCRIBING})
+    return values
 
 
 def machines(profiles: list[SlicerProfile]) -> list[SlicerProfile]:
@@ -282,6 +397,52 @@ def processes(
     # ein selbst angelegtes Profil ohne Verträglichkeitsliste soll wählbar sein.
     chosen = fitting or [entry for entry in entries if not compatible_with(entry, known)]
     return sorted(chosen, key=lambda entry: entry.name)
+
+
+def filaments(
+    profiles: list[SlicerProfile], machine: SlicerProfile | None = None
+) -> list[SlicerProfile]:
+    """Die Filamentprofile, die zu diesem Drucker passen."""
+    entries = [entry for entry in profiles if entry.kind == "filament"]
+    if machine is None:
+        return sorted(entries, key=lambda entry: entry.name)
+    known = {entry.name: entry for entry in entries}
+    fitting = [entry for entry in entries if machine.name in compatible_with(entry, known)]
+    chosen = fitting or [entry for entry in entries if not compatible_with(entry, known)]
+    return sorted(chosen, key=lambda entry: entry.name)
+
+
+def match_filament(
+    profiles: list[SlicerProfile], machine: SlicerProfile | None, material_type: str
+) -> SlicerProfile | None:
+    """Das Filamentprofil zu einem Material — die Vorgabe, nicht das Urteil.
+
+    Von einem Material gibt es beim Hersteller mehrere Ausführungen: PETG
+    liegt als Standard, HF, PRO, Translucent und CF im Bestand, und sie fahren
+    verschieden — Translucent will 255 °C, PRO 240 °C bei halbem Volumenstrom.
+    Gewählt wird deshalb der schlichteste Name, also die Grundausführung; wer
+    eine besondere Spule hat, stellt sie ein. Eine Vorgabe zu raten, die
+    genauer aussieht als sie ist, wäre schlechter als die einfache.
+    """
+    wanted = material_type.casefold()
+    # Der Typ steht wie die Verträglichkeit meist nicht in der obersten Datei,
+    # sondern eine Ebene höher: von 42 verträglichen Filamentprofilen nennen
+    # ihn sieben selbst. Aufgelöst wird deshalb über die Kette — und erst
+    # nachdem die Verträglichkeit die Liste von tausenden auf Dutzende
+    # gebracht hat, sonst kostete es Sekunden statt Zehntel.
+    fitting = [
+        entry for entry in filaments(profiles, machine) if type_of(entry).casefold() == wanted
+    ]
+    if not fitting:
+        return None
+    return min(fitting, key=lambda entry: (not entry.from_user, len(entry.name), entry.name))
+
+
+def type_of(profile: SlicerProfile) -> str:
+    """Welches Material dieses Filamentprofil meint — eigene Angabe oder geerbte."""
+    if profile.filament_type:
+        return profile.filament_type
+    return _first_string(resolve_values(profile.path).get("filament_type"))
 
 
 def match(
