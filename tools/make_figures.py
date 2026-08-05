@@ -222,10 +222,17 @@ def take_all(app: QApplication, language: str) -> None:
 
 def main() -> int:
     from app.ui.app import install_qt_translations
+    from app.ui.theme import apply_theme
 
     load_operations()
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
+    # **Mit dem Thema, nicht nur mit der Palette.** Ohne diese Zeile nahmen
+    # die Bilder die Anwendung ohne ihr Stylesheet auf: Kacheln ohne Rahmen,
+    # Knöpfe ohne Abstufung, der Titel in Fließtextgröße. Ein Handbuch, das
+    # etwas anderes zeigt als die Anwendung, ist an der Stelle falsch, an der
+    # man ihm am ehesten glaubt.
+    apply_theme(app, "dark")
     qt_translator = None
     for language in SUPPORTED_LANGUAGES:
         install_catalog(language, read_catalog(language))
