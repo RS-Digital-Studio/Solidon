@@ -20,6 +20,7 @@ from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QToolBar
 
 from app.core import errors
+from app.core.geom.measure import Measurement
 from app.core.registry import REGISTRY
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
@@ -200,6 +201,51 @@ def test_the_start_screen_opens_the_manual(window: MainWindow) -> None:
 
     assert window._manual is not None
     assert window._manual.isVisible()
+
+
+def test_new_leads_back_to_the_examples(window: MainWindow) -> None:
+    """Nach dem ersten Start waren die sieben Beispiele unerreichbar.
+
+    *Neu* legte sofort eine leere Szene an; der Startbildschirm ist aber der
+    einzige Ort, an dem die Beispielprojekte samt ihren Touren stehen. Wer sie
+    danach sehen wollte, brauchte *Öffnen* und Pfadkenntnis.
+
+    Ein Klick mehr ist es nicht: „Neues Projekt" ist dort der Hauptknopf und
+    liegt auf der Eingabetaste.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    assert window.stack.currentWidget() is not window.start_screen
+
+    window.action_new()
+    assert window.stack.currentWidget() is window.start_screen
+
+    # Ohne das fragt der Knopf, ob das Geladene weg darf — zu Recht, aber
+    # ein Dialog offscreen wartet auf niemanden.
+    window.session._dirty = False
+    window.start_screen.new_button.click()
+    window.session.wait_for_idle()
+    assert window.stack.currentWidget() is not window.start_screen
+    assert not window.session.project.document.ops, "und das Projekt ist leer"
+
+
+def test_an_empty_scene_leaves_nothing_of_the_last_one(window: MainWindow) -> None:
+    """Nach *Neu* blieben die orangen Merkmalsmarkierungen des vorigen Objekts
+    im Bild stehen, während Objektbaum und Prüfbericht längst leer waren."""
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    viewport = window.viewport
+    viewport.select("obj_1")
+    viewport.set_feature_overlay(True)
+    viewport.measurements.add(
+        Measurement(kind="distance", value=10.0, points=((0.0, 0.0, 0.0), (10.0, 0.0, 0.0)))
+    )
+
+    viewport.show_scene(None)
+
+    assert viewport._selected is None
+    assert len(viewport.measurements) == 0
+    assert viewport._feature_actors == []
 
 
 def test_the_right_panel_folds_away(window: MainWindow) -> None:

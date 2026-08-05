@@ -734,6 +734,13 @@ class Viewport(QWidget):
         # keinen Plotter, und ein Test, der sich dort überspringt, prüft nie
         # etwas.
         self._fit_once_for(result)
+        if result is None:
+            # Eine leere Szene hat keine Auswahl, kein gewähltes Merkmal und
+            # keine Maße. Vor dem Plotter-Zweig, aus demselben Grund wie das
+            # Einpassen: das sind Aussagen über die Szene, nicht über VTK.
+            self._selected = None
+            self._selected_feature = None
+            self.measurements.clear()
         if self.plotter is None:
             return
         for actor in self._actors.values():
@@ -747,6 +754,14 @@ class Viewport(QWidget):
         self._shadow_actors.clear()
         self._uncapped = False
         if result is None:
+            # Und im Bild dasselbe: ohne dieses Aufräumen blieben die orangen
+            # Markierungen des vorigen Objekts stehen, während Objektbaum und
+            # Prüfbericht längst leer waren — die Anwendung sah aus, als hätte
+            # sie das Projekt halb behalten.
+            self._redraw_features()
+            self._redraw_measurements()
+            self._redraw_layer()
+            self.set_gizmo(False)
             self.plotter.render()
             return
 

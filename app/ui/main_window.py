@@ -678,7 +678,7 @@ class MainWindow(QMainWindow):
         self._apply_card_style(self.settings.theme)
 
         self.start_screen = StartScreen(self)
-        self.start_screen.newRequested.connect(self.action_new)
+        self.start_screen.newRequested.connect(self.start_empty)
         self.start_screen.browseRequested.connect(self.action_open)
         self.start_screen.openRequested.connect(self.open_path)
         self.start_screen.fileDropped.connect(self.open_path)
@@ -725,7 +725,7 @@ class MainWindow(QMainWindow):
             tr("Neu"),
             QKeySequence.StandardKey.New,
             self.action_new,
-            tr("Ein leeres Projekt anlegen — Drucker und Material kommen aus den Einstellungen."),
+            tr("Zum Startbildschirm: leeres Projekt, ein Beispiel, oder zuletzt Geöffnetes."),
         )
         self._add_action(
             file_menu,
@@ -1311,6 +1311,21 @@ class MainWindow(QMainWindow):
     # --- actions ----------------------------------------------------------------
 
     def action_new(self) -> None:
+        """Führt auf den Startbildschirm — dort steht, womit man anfangen kann.
+
+        Vorher legte *Neu* sofort eine leere Szene an, und damit waren die
+        sieben Beispielprojekte samt ihren Touren nach dem ersten Start nur
+        noch über *Öffnen* mit Pfadkenntnis zu erreichen. Der Startbildschirm
+        ist der einzige Ort, an dem sie stehen.
+
+        Ein Klick mehr ist es nicht: „Neues Projekt" ist dort der Hauptknopf
+        und liegt auf der Eingabetaste. Verworfen wird hier noch nichts —
+        gefragt wird erst, wenn wirklich etwas verloren ginge (Regel 19).
+        """
+        self._show_start_screen(True)
+
+    def start_empty(self) -> None:
+        """Ein leeres Projekt — was der Hauptknopf des Startbildschirms tut."""
         if not self._may_discard():
             return
         self.session.start_new(self.settings.printer, self.settings.material)
