@@ -770,6 +770,84 @@ def test_the_gizmo_is_big_enough_to_grab() -> None:
     assert GIZMO_LINE_RADIUS > 0.02, "und ihre Strichstärke"
 
 
+class _FakeRenderer:
+    """Ein Renderer, der nur rechnet, was für diese Prüfung nötig ist.
+
+    Offscreen gibt es kein VTK — ``_available`` verbietet es ausdrücklich,
+    weil ein fehlender OpenGL-Kontext den Prozess mitnähme. Ein Test, der sich
+    dort überspringt, prüft nie etwas; also wird die **Verwendung** der
+    VTK-Schnittstelle geprüft und nicht VTK selbst: die Reihenfolge der
+    Aufrufe und die homogene Division, die man vergessen kann.
+    """
+
+    def __init__(self, scale: float = 2.0) -> None:
+        self.scale = scale
+        """Wie viele Bildpunkte ein Millimeter bekommt."""
+        self._world = (0.0, 0.0, 0.0, 1.0)
+        self._display = (0.0, 0.0, 0.0)
+
+    def GetActiveCamera(self) -> object:  # noqa: N802 — VTK-Name
+        return self
+
+    def GetFocalPoint(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
+        return (0.0, 0.0, 0.0)
+
+    def SetWorldPoint(self, x: float, y: float, z: float, w: float) -> None:  # noqa: N802
+        self._world = (x, y, z, w)
+
+    def WorldToDisplay(self) -> None:  # noqa: N802 — VTK-Name
+        x, y, z, _w = self._world
+        self._display = (x * self.scale, y * self.scale, z)
+
+    def GetDisplayPoint(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
+        return self._display
+
+    def SetDisplayPoint(self, x: float, y: float, z: float) -> None:  # noqa: N802
+        self._display = (x, y, z)
+
+    def DisplayToWorld(self) -> None:  # noqa: N802 — VTK-Name
+        x, y, z = self._display
+        # Mit einem Gewicht ungleich eins: wer die Division vergisst, bekommt
+        # hier den doppelten Wert und fällt auf.
+        self._world = (x / self.scale * 2.0, y / self.scale * 2.0, z * 2.0, 2.0)
+
+    def GetWorldPoint(self) -> tuple[float, float, float, float]:  # noqa: N802
+        return self._world
+
+
+def test_the_point_under_the_pointer_is_computed_in_world_units() -> None:
+    """Handbuch und Code-Kommentar behaupteten beide, das Rad zoome dorthin,
+    wo der Zeiger steht. Nachgemessen wanderte der Punkt weg — VTKs
+    Trackball-Stil dollyt entlang der Kamera-Achse, und man zoomt an dem
+    vorbei, was man ansehen wollte.
+
+    Die Rechnung dahinter: Bildpunkt zurück in die Welt, auf der Tiefe des
+    Fokuspunkts, mit homogener Division. An der echten Kamera gemessen bleibt
+    der Punkt danach auf null Komma null Millimeter stehen; hier wird geprüft,
+    dass die Schnittstelle richtig benutzt wird.
+    """
+    from app.ui.viewport import _world_under
+
+    renderer = _FakeRenderer(scale=2.0)
+
+    point = _world_under(renderer, 100, 50)
+
+    assert point is not None
+    assert point == pytest.approx((50.0, 25.0, 0.0)), "geteilt, nicht nur umgerechnet"
+
+
+def test_a_pointer_without_a_world_point_says_nothing() -> None:
+    """Ein Gewicht von null hieße Division durch null — dann lieber kein
+    Punkt als eine Ausnahme mitten in einer Mausbewegung."""
+    from app.ui.viewport import _world_under
+
+    class _Degenerate(_FakeRenderer):
+        def DisplayToWorld(self) -> None:  # noqa: N802 — VTK-Name
+            self._world = (1.0, 1.0, 1.0, 0.0)
+
+    assert _world_under(_Degenerate(), 10, 10) is None
+
+
 def test_a_click_on_the_body_selects_it(window: MainWindow) -> None:
     """§2.9 und §18.5: „links wählt aus" muss ohne den Baum gelten.
 

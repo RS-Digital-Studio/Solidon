@@ -50,6 +50,17 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
     "variants": _("Varianten"),
 }
 
+#: Wie eine Merkmalsart heißt, wenn sie jemand liest. Im erzeugten
+#: Referenzteil stand „Features: face, hole" — die Schlüssel, mit denen
+#: ``applies_to`` rechnet, in einem deutschen Handbuch.
+FEATURE_TITLES: Final[dict[str, TranslatableText]] = {
+    "hole": _("Bohrung"),
+    "face": _("Fläche"),
+    "edge_loop": _("Offene Kante"),
+    "pin": _("Zapfen"),
+    "thread": _("Gewinde"),
+}
+
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 
 #: ``produces=VARIABLE``: so viele Objekte heraus wie hinein.

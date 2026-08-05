@@ -15,19 +15,21 @@ darstellt.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from app.core.registry.params import json_schema
 from app.core.registry.registry import (
     CATEGORIES,
+    FEATURE_TITLES,
     REGISTRY,
     MenuSection,
     OperationSpec,
     Registry,
 )
 from app.core.types import ParamSpec
-from app.i18n import TranslatableText
+from app.i18n import TranslatableText, _
 
 
 def menu_tree(registry: Registry | None = None) -> tuple[MenuSection, ...]:
@@ -151,6 +153,22 @@ def tool_schemas(registry: Registry | None = None) -> tuple[dict[str, Any], ...]
     )
 
 
+#: Welche Abbildung eine Kategorieseite eröffnet.
+#:
+#: Nicht je Operation — dreiundsiebzig Vorher-Nachher-Bilder wären
+#: dreiundsiebzig Aufbauten mit je eigenem Ausgangskörper, eigenen Werten und
+#: eigener Auswahl, und jedes davon veraltet für sich. Eine je Kategorie zeigt,
+#: worum es in dem Kapitel geht, und stammt aus demselben Katalog, den die
+#: geschriebenen Seiten benutzen. Wo keine passt, steht keine: ein Bild, das
+#: nur ungefähr dazugehört, kostet mehr Vertrauen, als es Verständnis bringt.
+CATEGORY_FIGURES: dict[str, str] = {
+    "holes": "drill",
+    "prepare": "split",
+    "surface": "texture",
+    "parts": "part-nut-trap",
+}
+
+
 def documentation(registry: Registry | None = None, category: str = "") -> str:
     """Der Referenzteil der Dokumentation — erzeugt, nie von Hand geschrieben.
 
@@ -164,6 +182,10 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
             continue
         lines.append(f"## {CATEGORIES[name]}")
         lines.append("")
+        opening = CATEGORY_FIGURES.get(name)
+        if opening:
+            lines.append(f"![](figure:{opening})")
+            lines.append("")
         for spec in entries:
             lines.append(f"### {spec.title} (`{spec.name}`)")
             lines.append("")
@@ -171,32 +193,82 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
                 lines.append(str(spec.doc))
                 lines.append("")
             facts = [
-                f"Objekte: {spec.consumes} → {spec.produces}",
-                "umkehrbar" if spec.reversible else "nicht umkehrbar",
-                "deterministisch" if spec.deterministic else "mit Startwert",
+                f"{_('Objekte')}: {spec.consumes} → {spec.produces}",
+                str(_("umkehrbar") if spec.reversible else _("nicht umkehrbar")),
+                str(_("deterministisch") if spec.deterministic else _("mit Startwert")),
             ]
             if spec.shortcut:
-                facts.append(f"Kürzel `{spec.shortcut}`")
+                facts.append(f"{_('Kürzel')} `{spec.shortcut}`")
             if spec.applies_to:
-                facts.append("Features: " + ", ".join(spec.applies_to))
+                # Die Merkmalsarten mit ihren Namen, nicht mit ihren
+                # Schlüsseln: „Features: face, hole" ist eine Zeile aus dem
+                # Register, keine aus einem Handbuch.
+                named = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to)
+                facts.append(f"{_('Gilt für')}: {named}")
             lines.append(" · ".join(facts))
             lines.append("")
             parameters = spec.params.spec()
             if parameters:
-                lines.append("| Parameter | Einheit | Vorgabe | Bereich | Bedeutung |")
-                lines.append("|---|---|---|---|---|")
-                for entry in parameters:
-                    span = ""
-                    if entry.minimum is not None or entry.maximum is not None:
-                        low = "" if entry.minimum is None else f"{entry.minimum:g}"
-                        high = "" if entry.maximum is None else f"{entry.maximum:g}"
-                        span = f"{low} … {high}"
-                    if entry.choices:
-                        span = ", ".join(entry.choices)
-                    default = "erforderlich" if entry.required else f"{entry.default}"
-                    lines.append(
-                        f"| `{entry.name}` | {entry.unit or ''} | {default} | {span} | "
-                        f"{entry.title} |"
-                    )
-                lines.append("")
+                lines.extend(parameter_table(parameters))
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _span_of(entry: ParamSpec) -> str:
+    """Der zulässige Bereich als Text, oder nichts."""
+    if entry.choices:
+        return ", ".join(entry.choices)
+    if entry.minimum is None and entry.maximum is None:
+        return ""
+    low = "" if entry.minimum is None else f"{entry.minimum:g}"
+    high = "" if entry.maximum is None else f"{entry.maximum:g}"
+    return f"{low} … {high}"
+
+
+def _default_of(entry: ParamSpec) -> str:
+    """Die Vorgabe, wie ein Mensch sie liest.
+
+    ``True`` und ``False`` standen so in der Tabelle — Pythons Schreibweise in
+    einem deutschen Handbuch, und für jeden, der nicht programmiert, zwei
+    Wörter ohne Bedeutung. Ein Schalter ist an oder aus.
+    """
+    if entry.required:
+        return str(_("erforderlich"))
+    if isinstance(entry.default, bool):
+        return str(_("an") if entry.default else _("aus"))
+    return "" if entry.default is None else f"{entry.default}"
+
+
+def parameter_table(parameters: tuple[ParamSpec, ...]) -> list[str]:
+    """Die Parametertabelle einer Operation, als Markdown-Zeilen.
+
+    **Der Titel steht vorn, der Schlüssel dahinter.** Vorher war es umgekehrt:
+    die Spalte „Parameter" trug ``fill_holes``, ``small_components``,
+    ``self_intersections`` — die internen englischen Namen, in Monospace, in
+    einem deutschen Handbuch —, und was sie bedeuten, stand ganz rechts. Der
+    Schlüssel bleibt stehen: Kommandozeile und Agent brauchen ihn, nur ist er
+    nicht das Erste, was man liest.
+
+    **Leere Spalten fallen weg.** Bei der Reparatur waren „Einheit" und
+    „Bereich" über die ganze Tabelle leer; eine Spalte, die nichts trägt, ist
+    kein Platzhalter für später, sondern eine Frage, die der Leser sich selbst
+    stellt.
+    """
+    columns: tuple[tuple[str, Callable[[ParamSpec], str]], ...] = (
+        (str(_("Parameter")), lambda entry: f"{entry.title} `{entry.name}`"),
+        (str(_("Einheit")), lambda entry: entry.unit or ""),
+        (str(_("Vorgabe")), _default_of),
+        (str(_("Bereich")), _span_of),
+        (str(_("Bedeutung")), lambda entry: str(entry.doc or "")),
+    )
+    shown = [
+        (title, value)
+        for index, (title, value) in enumerate(columns)
+        if index == 0 or any(value(entry) for entry in parameters)
+    ]
+
+    lines = ["| " + " | ".join(title for title, _value in shown) + " |"]
+    lines.append("|" + "---|" * len(shown))
+    for entry in parameters:
+        lines.append("| " + " | ".join(value(entry) for _title, value in shown) + " |")
+    lines.append("")
+    return lines

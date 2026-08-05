@@ -24,6 +24,7 @@ import pytest
 from app.core import figures, manual, markup
 from app.core.bootstrap import load_operations
 from app.core.registry.registry import CATEGORIES, REGISTRY
+from app.i18n import tr
 
 pytest.importorskip("PySide6")
 
@@ -214,3 +215,82 @@ def test_a_page_can_be_opened_by_name(qt_app: QApplication) -> None:
     window.show_page("tolerances")
 
     assert "Material" in window.contents.currentItem().text()
+
+
+# --- Der erzeugte Referenzteil (Konzept Teil 7) ---------------------------------
+
+
+def test_a_parameter_is_named_before_it_is_keyed() -> None:
+    """Die Spalte „Parameter" trug `fill_holes`, `small_components`,
+    `self_intersections` — die internen englischen Namen, in Monospace, in
+    einem deutschen Handbuch. Was sie bedeuten, stand ganz rechts.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.registry.surfaces import parameter_table
+
+    parameters = REGISTRY.get("repair").params.spec()
+    rows = parameter_table(parameters)
+
+    first = next(line for line in rows if "fill_holes" in line)
+    cell = first.split("|")[1].strip()
+    assert cell.startswith(str(parameters[0].title)), "der Titel steht vorn"
+    assert "`fill_holes`" in cell, "und der Schlüssel bleibt daneben"
+
+
+def test_a_switch_is_on_or_off_not_true_or_false() -> None:
+    """Pythons Schreibweise in einem deutschen Handbuch — für jeden, der nicht
+    programmiert, zwei Wörter ohne Bedeutung."""
+    from app.core.registry import REGISTRY
+    from app.core.registry.surfaces import parameter_table
+
+    rows = parameter_table(REGISTRY.get("repair").params.spec())
+    joined = "\n".join(rows)
+
+    assert "True" not in joined and "False" not in joined
+    assert tr("an") in joined and tr("aus") in joined
+
+
+def test_an_empty_column_is_left_out() -> None:
+    """Bei der Reparatur waren „Einheit" und „Bereich" über die ganze Tabelle
+    leer. Eine Spalte, die nichts trägt, ist kein Platzhalter für später,
+    sondern eine Frage, die der Leser sich selbst stellt.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.registry.surfaces import parameter_table
+
+    plain = parameter_table(REGISTRY.get("repair").params.spec())
+    assert tr("Einheit") not in plain[0]
+    assert tr("Bereich") not in plain[0]
+
+    measured = parameter_table(REGISTRY.get("drill_hole").params.spec())
+    assert tr("Einheit") in measured[0], "wo Einheiten stehen, steht die Spalte"
+    assert tr("Bereich") in measured[0]
+
+
+def test_the_reference_names_the_feature_kinds() -> None:
+    """„Features: face, hole" ist eine Zeile aus dem Register, keine aus einem
+    Handbuch."""
+    from app.core.registry.surfaces import documentation
+
+    text = documentation(category="holes")
+
+    assert f"{tr('Gilt für')}: {tr('Fläche')}" in text
+    assert "face" not in text.split("|")[0], "der Schlüssel steht nicht in der Faktenzeile"
+
+
+def test_every_category_page_that_has_a_figure_opens_with_it() -> None:
+    """Keine Abbildung im ganzen Referenzteil, obwohl der Katalog voll ist.
+
+    Nicht je Operation: dreiundsiebzig Vorher-Nachher-Bilder wären
+    dreiundsiebzig Aufbauten, jeder für sich veraltend. Eine je Kategorie
+    zeigt, worum es im Kapitel geht.
+    """
+    from app.core.registry.surfaces import CATEGORY_FIGURES, documentation
+
+    pages = set(REGISTRY.by_category())
+    for category, key in CATEGORY_FIGURES.items():
+        # Eine Kategorie ohne Operationen bekommt keine Seite (`by_category`
+        # lässt leere weg) — ein Eintrag darauf wäre ein toter Verweis.
+        assert category in pages, f"{category} hat keine Seite"
+        assert f"![](figure:{key})" in documentation(category=category), category
+        assert figures.find(key) is not None, f"{category} zeigt auf {key}"

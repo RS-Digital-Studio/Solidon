@@ -355,6 +355,10 @@ def volume_edges(
     return segments
 
 
+#: Wie weit ein Rasterschritt am Mausrad zoomt. VTKs Vorgabe für den
+#: Trackball-Stil, damit sich das Rad wie überall sonst anfühlt.
+WHEEL_STEP = 0.1
+
 #: Abstand des Vorschaubands von der Oberkante des Viewports.
 BANNER_TOP = 12
 
@@ -2054,6 +2058,25 @@ class Viewport(QWidget):
         return self._scheme
 
 
+def _world_under(renderer: Any, x: int, y: int) -> tuple[float, float, float] | None:
+    """Der Weltpunkt unter einer Bildschirmstelle, auf der Fokusebene.
+
+    Auf der Fokusebene und nicht auf der Geometrie: gezoomt wird auch über
+    leerem Hintergrund, und dort gäbe ein Picker nichts zurück.
+    """
+    camera = renderer.GetActiveCamera()
+    renderer.SetWorldPoint(*camera.GetFocalPoint(), 1.0)
+    renderer.WorldToDisplay()
+    depth = renderer.GetDisplayPoint()[2]
+
+    renderer.SetDisplayPoint(float(x), float(y), depth)
+    renderer.DisplayToWorld()
+    point = renderer.GetWorldPoint()
+    if abs(point[3]) < EPS_GEOM:
+        return None
+    return (point[0] / point[3], point[1] / point[3], point[2] / point[3])
+
+
 def _InteractorStyle(  # noqa: N802
     plotter: Any, scheme: NavigationScheme, on_context: Any = None
 ) -> Any:
@@ -2069,6 +2092,8 @@ def _InteractorStyle(  # noqa: N802
             self.AddObserver("LeftButtonReleaseEvent", self._left_up)
             self.AddObserver("RightButtonPressEvent", self._right_down)
             self.AddObserver("RightButtonReleaseEvent", self._right_up)
+            self.AddObserver("MouseWheelForwardEvent", self._wheel_in)
+            self.AddObserver("MouseWheelBackwardEvent", self._wheel_out)
             self._right_at: tuple[int, int] | None = None
             """Wo die rechte Taste heruntergegangen ist. In jedem Schema tut
             Rechts auch etwas an der Kamera — das Menü darf nur aufgehen, wenn
@@ -2095,6 +2120,42 @@ def _InteractorStyle(  # noqa: N802
         def _left_up(self, *_: Any) -> None:
             self.EndPan()
             self.EndRotate()
+
+        def _wheel_in(self, *_: Any) -> None:
+            self._zoom_at_pointer(1.0 + WHEEL_STEP)
+
+        def _wheel_out(self, *_: Any) -> None:
+            self._zoom_at_pointer(1.0 / (1.0 + WHEEL_STEP))
+
+        def _zoom_at_pointer(self, factor: float) -> None:
+            """Zoomt auf die Stelle unter dem Zeiger, nicht auf die Bildmitte.
+
+            VTKs Trackball-Stil dollyt entlang der Kamera-Achse — der Punkt
+            unter dem Zeiger wandert dabei weg, und man zoomt an dem vorbei,
+            was man ansehen wollte. Handbuch und Code-Kommentar behaupteten
+            beide das Gegenteil; nachgemessen stimmte keines von beiden.
+
+            Der Weg: den Weltpunkt unter dem Zeiger vorher merken, dollyn, ihn
+            danach neu bestimmen und die Kamera um die Differenz verschieben.
+            Damit bleibt genau dieser Punkt stehen, wo er war.
+            """
+            renderer = plotter.renderer
+            camera = renderer.GetActiveCamera()
+            x, y = self._position()
+
+            before = _world_under(renderer, x, y)
+            camera.Dolly(factor)
+            renderer.ResetCameraClippingRange()
+            after = _world_under(renderer, x, y)
+
+            if before is not None and after is not None:
+                shift = tuple(before[axis] - after[axis] for axis in range(3))
+                position = camera.GetPosition()
+                focus = camera.GetFocalPoint()
+                camera.SetPosition(*(position[axis] + shift[axis] for axis in range(3)))
+                camera.SetFocalPoint(*(focus[axis] + shift[axis] for axis in range(3)))
+                renderer.ResetCameraClippingRange()
+            plotter.render()
 
         def _right_down(self, *_: Any) -> None:
             self._right_at = self._position()
