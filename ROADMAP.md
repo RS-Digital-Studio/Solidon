@@ -1904,3 +1904,81 @@ Operation sieht, misst zuerst das Volumen ihrer Eingänge.
 sechzehn falsch, weil ohne geladenes Register gemessen; die erste Fassung der
 Grenzprüfung zählte Registerkategorien statt Menüs und hätte damit die Lösung
 für das Problem gehalten.
+
+## Live gegen Fusion und den ElegooSlicer
+
+Am 05.08.2026 lief die Anwendung gegen die beiden Programme, die auf dieser
+Maschine tatsächlich neben ihr stehen: **Autodesk Fusion 2704.1.36** als Maßstab
+fürs Konstruieren, **ElegooSlicer 1.5.3.4** als Empfänger des Ergebnisses.
+Fünfzehn Funde, alle gemessen; das Konzept mit Zahlen, Ursachen und Reihenfolge
+steht in `.claude/konzept-live-durchsicht-2026-08.md`.
+
+**Drei Dinge tragen besser, als das Repository sie darstellt.** Der STEP-Weg ist
+in beide Richtungen bitgenau — Volumen und Fläche stimmen auf fünfzehn Stellen
+mit Fusion überein, die Bohrung im zurückgeladenen Fusion-Körper wird erkannt.
+Die Slicer-Übergabe meldet gegen 1.5.3.4 — eine Fassung neuer als die, gegen die
+die Tabelle gebaut wurde — **null** übergangene Einstellungen; die Profilzuordnung
+trifft ohne Zutun aus 9849 gelesenen Profilen. Und der ganze Weg läuft aus dem
+Fenster heraus: Strg+P, Slicen, 0,8 Sekunden, Druckdatei.
+
+**Was zu tun ist**, nach Gewicht:
+
+- [ ] **Der Hüllquader eines exakten Körpers kommt aus seinen Dreiecken.**
+      `Solid.bounds` gibt `mesh.bounds` zurück; der Fehler ist konstant 0,025 mm
+      (halbe `DEFLECTION`), bei Ø 6 wie bei Ø 120. Fusion misst denselben Körper
+      mit 25,00 mm Radius, Formwerk mit 24,9755. Daran hängen Maßanzeige,
+      Bauraumprüfung, Anordnung, Haftungsrand, `advise.for_part` und jede
+      Passungsprüfung — ein Zehntel der Materialtoleranz, verloren vor dem ersten
+      Druck. Fix: `BRepBndLib` statt Tessellation
+- [ ] **Die angeklickte Fläche ist die Mitte des Werkzeugs, nicht sein Anfang.**
+      Klick auf eine 20-mm-Platte, Bohrung Tiefe 10 → 5 mm tief; Tiefe 0 („bohrt
+      durch") → 10 mm und **kein Durchbruch**; Magnettasche → gar nichts. In
+      Fusion ist der Klickpunkt die Mündung. Eigene Runde mit Formatversion und
+      Migration, sie ändert bestehende Dateien
+- [ ] **Eine Operation, die nichts abgetragen hat, schweigt.** Die Magnettasche
+      neben dem Körper erzeugt keinen Befund, keine Ausnahme, keinen Hinweis —
+      unterhalb dessen, was Regel 17 überhaupt erfasst. Volumen vorher/nachher
+      vergleichen, sonst Befund mit Vorschlag
+- [ ] **Formwerks Anordnung erreicht den Slicer nicht.** Zwei Läufe, einmal in
+      Modell- und einmal in Bettkoordinaten, ergeben denselben G-Code — der
+      Slicer ordnet neu an. Mit `--arrange 0` und Bettkoordinaten kommt die
+      Anordnung auf ein Zehntel an. Damit ist die ganze Plattenlogik für den
+      Slicer-Weg heute folgenlos, und der offene Punkt zum Haftungsrand hätte
+      einen Abstand berechnet, der nie ankommt
+- [ ] **`filament_cost = 0` überschreibt die 30 €/kg des Herstellers.** „0 heißt
+      unbekannt, nicht kostenlos" steht im eigenen Docstring — geschrieben wird
+      es trotzdem. Systematisch geprüft: der einzige Fall dieser Art
+- [ ] **Keine Operation legt eine Passung an.** `create_lid` baut den Deckel mit
+      0,25 mm Spiel aus dem Materialprofil und trägt keinen `Fit` ein; damit
+      greifen genaue Außenwand, gebremste Beschleunigung und Bügeln nie. Fits
+      entstehen nur aus Agent, Verstiften und Dialog
+- [ ] **Die Gegenprobe vergleicht nur das Stützvolumen.** Live: 12 g / 46 min
+      geschätzt gegen 10,0 g / 37 min gemessen — −17 % und −20 %, und kein Wort
+      im Prüfbericht. `gcode.compare` kennt die 15-%-Schwelle und wird an genau
+      einer Stelle gerufen
+- [ ] **`arrange_bed` ohne Eingaben hält die Auswertung an**, statt nichts zu
+      tun. Der Test dazu prüft die Positionen und nicht `result.complete` — und
+      deckt den Abbruch damit zu
+- [ ] **Im Viewport lässt sich nichts anklicken.** Links wählt nichts aus, rechts
+      öffnet kein Menü; Rad und Rechtsziehen bewegen die Kamera. Ursache:
+      gepickt wird mit `vtkPointPicker`, und der trifft Eckpunkte, keine Flächen.
+      Daran hängen Auswahl, Kontextmenü am Merkmal (§18.5), Messen, Bemalen und
+      die Flächenübernahme in Dialoge
+- [ ] **Ein Zylinder trägt einundfünfzig Flächenmerkmale**, in Fusion sind es
+      drei. Facetten gehören zusammengefasst, bevor IDs vergeben werden — mit
+      dem Zuordnungstest zusammen, nicht nebenbei
+- [ ] **Ein Rundstab meldet sich als Bohrung.** `brep/features.py` macht aus
+      jeder geschlossenen Zylinderfläche ein `hole`, ohne die Materialseite zu
+      prüfen. `boss` gehört zuerst in Bauplan §4.2
+- [ ] **Die Skizzenleiste liegt unter den Bereichen links und rechts** — verdeckt
+      sind die *ersten* Werkzeuge, also Linie und Rechteck. Kein Platzproblem:
+      bei 1296 wie bei 1900 Pixel. Die Kürzel selbst stimmen, `R` zeichnet ein
+      Rechteck und die Skizze meldet sich als bestimmt
+- [ ] **Der Ersteinrichtungsdialog fragt den gefundenen Slicer nicht.** Er meldet
+      „Slicer gefunden" und schlägt im selben Fenster den allgemeinen 220er und
+      PLA vor, während der Profilbestand den Centauri Carbon 2 kennt
+- [ ] **Der Objektname reist nicht ins STEP** — in Fusion heißt das Teil
+      „Körper1". Fürs 3MF war das schon einmal ein Fund und ist behoben
+- [ ] **Von der Aushöhlung zum Deckel fehlt ein Schritt.** `hollow_object`
+      schließt den Hohlraum, `create_lid` verlangt eine Öffnung; der Weg zur Dose
+      führt über zwei Zylinder und eine Differenz
