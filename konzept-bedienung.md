@@ -946,14 +946,31 @@ derselben Taste **keines** von beiden feuern. Die Zeichenkürzel wären also
 nicht zweitrangig gewesen, sondern wirkungslos. Gemessen mit einer Sonde, die
 vorher und nachher zählt, welche Kürzel auf welcher Taste aktiv sind.
 
-**Offen** — aus Teil 7 der erzeugte Referenzteil des Handbuchs (interne Namen,
-`True`/`False`, leere Spalten, keine Abbildungen) und die Fenster-Seite, die
-eine Navigation beschrieb, die es nicht gab: sie gibt es jetzt, also stimmt
-die Seite wieder und sollte gegengelesen werden. Dazu die Vorschaubilder für
-die Beispielkacheln.
+**Das Handbuch ist ebenfalls durch.** Der erzeugte Referenzteil nennt die
+Parameter bei ihrem Titel und führt den Schlüssel daneben; ein Schalter steht
+als „an" oder „aus"; leere Spalten fallen weg; jede Kategorieseite öffnet mit
+einer Abbildung aus demselben Katalog, den die geschriebenen Seiten benutzen.
+Die Faktenzeile nennt Merkmalsarten statt Registerschlüssel.
+
+Die Seite *Das Fenster* stimmt wieder — und zwar weil der Code nachgezogen
+hat, nicht weil der Satz weichgespült wurde: das Mausrad zoomt jetzt wirklich
+dorthin, wo der Zeiger steht. VTKs Trackball-Stil dollyt entlang der
+Kamera-Achse; an der echten Kamera gemessen bleibt der Punkt jetzt auf
+0,000000 mm stehen.
+
+**Und ein Fund am Ende, wieder nur im Bild sichtbar:** `make_figures.py` baute
+seine Anwendung ohne `apply_theme`. Die Bildschirmfotos zeigten Formwerk mit
+Qt-Vorgaben — Kacheln ohne Rahmen, Knöpfe ohne Abstufung, der Titel in
+Fließtextgröße. Ein Handbuch, das etwas anderes zeigt als die Anwendung, ist
+an der Stelle falsch, an der man ihm am ehesten glaubt.
+
+**Offen** — die Vorschaubilder für die Beispielkacheln. `tools/make_figures.py`
+könnte sie rendern; sie müssten mitgeliefert und bei jeder Beispieländerung
+erneuert werden.
 
 Bis hierher waren es Fehler — Dinge, die etwas anderes taten, als sie sagten,
-und die Gestaltung, die keine war. Was übrig ist, ist Dokumentation.
+und die Gestaltung, die keine war. Das Konzept ist damit abgearbeitet; was
+bleibt, ist der nächste Lauf durch die Anwendung.
 
 ---
 
