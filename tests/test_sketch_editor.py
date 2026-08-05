@@ -748,3 +748,44 @@ def test_hovering_a_constraint_lights_up_its_geometry(qt_app: QApplication) -> N
 
     panel._point_at(None)
     assert not panel.canvas.highlighted, "und der Zeiger daneben nimmt es zurück"
+
+
+def test_the_sketch_mode_hides_the_view_tools(qt_app: QApplication) -> None:
+    """Schnitt, Messen und Bemalen brauchen einen Körper und ein Bild.
+
+    Sie standen im Skizzenmodus als zweite Leiste unter der des Editors und
+    boten sieben Umschalter an, von denen keiner etwas bewirkte.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_extrude")
+        assert window.tools.isHidden()
+
+        window.finish_sketch(keep=False)
+        assert not window.tools.isHidden(), "und danach sind sie wieder da"
+    finally:
+        window.deleteLater()
+
+
+def test_finishing_a_sketch_looks_like_the_main_action(qt_app: QApplication) -> None:
+    """Fusion setzt dafür einen großen Haken oben rechts; hier stand ein
+    Textknopf unter den anderen und war von „Verwerfen" nicht zu
+    unterscheiden."""
+    from PySide6.QtWidgets import QPushButton
+
+    from app.i18n import tr
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        buttons = {button.text(): button for button in window.sketch_bar.findChildren(QPushButton)}
+        assert buttons[tr("Fertig")].isDefault()
+        assert not buttons[tr("Verwerfen")].isDefault()
+    finally:
+        window.deleteLater()

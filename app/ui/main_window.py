@@ -627,7 +627,12 @@ class MainWindow(QMainWindow):
             tr("Zeichnen, dann Fertig — die Operation öffnet auf der Skizze."), self.sketch_bar
         )
         sketch_row.addWidget(self._sketch_hint, stretch=1)
+        # Der Abschluss sieht aus wie einer. Fusion setzt dafür einen großen
+        # Haken oben rechts; hier stand ein Textknopf unter den anderen und
+        # war von „Verwerfen" nicht zu unterscheiden. Als Hauptknopf trägt er
+        # die Auswahlfarbe des Themas und liegt auf der Eingabetaste.
         done = QPushButton(tr("Fertig"), self.sketch_bar)
+        done.setDefault(True)
         done.clicked.connect(lambda: self.finish_sketch(keep=True))
         discard = QPushButton(tr("Verwerfen"), self.sketch_bar)
         discard.clicked.connect(lambda: self.finish_sketch(keep=False))
@@ -1999,6 +2004,11 @@ class MainWindow(QMainWindow):
         # Statusleiste den Modus, und zu sehen war der Startbildschirm.
         self._show_start_screen(False)
         self.tools.close_tool()
+        # Die Ansichtswerkzeuge tun im Skizzenmodus nichts — Schnitt, Messen
+        # und Bemalen brauchen einen Körper und ein Bild. Sie standen dort als
+        # zweite Leiste unter der des Editors und boten sieben Umschalter an,
+        # von denen keiner etwas bewirkte.
+        self.tools.setVisible(False)
         self.sketch_bar.setVisible(True)
         self._update_actions()
         self.statusBar().showMessage(
@@ -2021,6 +2031,7 @@ class MainWindow(QMainWindow):
         panel.deleteLater()
         self._sketch_panel = None
         self._sketch_target = None
+        self.tools.setVisible(True)
         self.sketch_bar.setVisible(False)
         self.statusBar().clearMessage()
         self._update_actions()
