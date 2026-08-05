@@ -302,6 +302,17 @@ Achse (zylindrisch) zu einem Merkmal zusammenfassen, bevor IDs vergeben werden.
 Das ist Arbeit an `perceive/features.py` und hat Folgen für die ID-Stabilität —
 also mit dem Zuordnungstest zusammen zu machen, nicht nebenbei.
 
+> **Erledigt.** Kleiner als befürchtet, weil die Zylindererkennung schon da war
+> — sie kam nur nie zum Zug. Ein Mantelstreifen hatte 3,4 Prozent der größten
+> Fläche und galt damit als eben. Die Trennlinie steht jetzt an der Naht
+> zwischen zwei Dreiecken: koplanar ist dieselbe Fläche, ein deutlicher Knick
+> ist eine Kante, alles dazwischen ist eine Rundung. Bei dreißig Grad, also ab
+> zwölf Segmenten — ein Achteck-Prisma behält seine acht Seiten.
+>
+> Zylinder mit Bohrung: **4 Merkmale statt 51** (Deckel, Boden, Mantel als
+> `pin`, Bohrung). Würfel 6, Platte mit Stift 7, Achteck 10, Kugel keines. Die
+> Zuordnung blieb unberührt — die 2809 Tests laufen durch.
+
 #### C3 — Ein Rundstab meldet sich als Bohrung
 
 Der Fusion-Zylinder Ø 8 × 40 kommt in Formwerk als
@@ -364,6 +375,13 @@ CAD-Anwender kennt, aber nicht der, den die Bausteine nahelegen.
 **Fix:** `hollow_object` bekommt einen Parameter „oben öffnen" (Fläche oder
 Höhe), oder der Katalog bekommt einen Baustein „Behälter". Kein großer Eingriff,
 aber er entscheidet darüber, ob „Dose mit Deckel" ein Zweiklick-Weg ist.
+
+> **Erledigt** als Schalter, nicht als Baustein. Das Werkzeug kommt aus dem
+> Raster, das für den Hohlraum ohnehin entsteht: sein oberster Querschnitt,
+> nach oben durchgezogen. Der oberste und nicht die Vereinigung aller — eine
+> Dose soll ihre Decke verlieren, nicht ihre Schulter. Die Entlüftung entfällt
+> dabei, denn eine offene Dose ist ihre eigene. Der Test sind beide Schritte
+> zusammen: aushöhlen, öffnen, und `create_lid` findet die Öffnung.
 
 ---
 

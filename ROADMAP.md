@@ -2079,6 +2079,19 @@ rechnete, aber nichts sagte. A2 stand bewusst außerhalb, weil es als einzige
       der jeden abziehenden Baustein auf eine Platte setzt und misst, ob sie
       leichter wird.
 
+- [x] **Ein Zylinder hatte einundfünfzig Flächen.** Jeder Mantelstreifen war
+      3,4 Prozent der größten Fläche und galt damit als eben — die
+      Zylindererkennung, die es längst gab, sah ihn nie. Die Trennlinie steht
+      jetzt an der Naht zwischen zwei Dreiecken: koplanar ist dieselbe Fläche,
+      ein deutlicher Knick eine Kante, alles unter dreißig Grad dazwischen eine
+      Rundung. Zylinder mit Bohrung: vier Merkmale statt einundfünfzig, und ein
+      Achteck-Prisma behält seine acht Seiten.
+- [x] **Der Weg zur Dose war ein Umweg.** *Aushöhlen* endete immer bei einem
+      geschlossenen Hohlraum, *Deckel erzeugen* verlangt eine Öffnung. Der
+      Schalter „Oben öffnen" nimmt die Decke weg — das Werkzeug ist der oberste
+      Querschnitt des Hohlraums, nach oben durchgezogen. Die Entlüftung
+      entfällt dabei: eine offene Dose ist ihre eigene.
+
 ### Was die Arbeit gelehrt hat
 
 **Eine Konvention, die nirgends geprüft wird, ist keine.** Dreizehn von
