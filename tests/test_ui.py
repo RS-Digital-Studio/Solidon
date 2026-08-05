@@ -2290,3 +2290,51 @@ def test_a_finding_writes_its_numbers_with_their_unit(qt_app: QApplication) -> N
 
     assert "2.0 mm" in line or "2,0 mm" in line, line
     assert "14.3 cm³" in line or "14,3 cm³" in line, line
+
+
+def test_the_arrangement_spacing_knows_the_plate_adhesion(window: MainWindow) -> None:
+    """§25, §29: die Operation kennt die Druckeinstellung nicht, das Fenster
+    beide.
+
+    Zwei Körper mit fünf Millimetern Luft und je fünf Millimetern Brim stehen
+    einander im Weg — der Haftungsrand zählt zwischen Nachbarn zweimal, und es
+    fällt erst auf der Platte auf. Beim Gewürzset war das die erste
+    Deckelplatte. Der Dialog öffnet deshalb mit dem Abstand, den die Haftung
+    verlangt; ändern lässt er sich weiterhin.
+    """
+    from dataclasses import replace as _replace
+
+    from app.core.knowledge import print_settings as settings_table
+
+    _with_two_objects(window)
+    settings = settings_table.resolve(window.session.profile)
+    adhesion = _replace(settings.adhesion, kind="brim", brim_width=5.0)
+    window.session.set_print_settings(_replace(settings, adhesion=adhesion))
+
+    window.run_operation(REGISTRY.get("arrange_bed"))
+
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert dialog.values()["spacing"] == pytest.approx(10.0), "zweimal fünf Millimeter Brim"
+    dialog.reject()
+    window.session.wait_for_idle()
+
+
+def test_without_plate_adhesion_the_spacing_stays_the_default(window: MainWindow) -> None:
+    """Ohne Rand kein Aufschlag — die Vorgabe der Operation bleibt stehen."""
+    from dataclasses import replace as _replace
+
+    from app.core.knowledge import print_settings as settings_table
+
+    _with_two_objects(window)
+    settings = settings_table.resolve(window.session.profile)
+    adhesion = _replace(settings.adhesion, kind="none")
+    window.session.set_print_settings(_replace(settings, adhesion=adhesion))
+
+    window.run_operation(REGISTRY.get("arrange_bed"))
+
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert dialog.values()["spacing"] == pytest.approx(5.0)
+    dialog.reject()
+    window.session.wait_for_idle()

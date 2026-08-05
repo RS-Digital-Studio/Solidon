@@ -358,11 +358,16 @@ Magnettasche erzeugt einen Befund mit Vorschlag; der Objektname steht in der
 STEP-Datei.
 
 **Paket 2 — Die Platte.** B1, B2, B5, danach der offene Roadmap-Punkt zum
-Haftungsrand.
+Haftungsrand. **Erledigt am 05.08.2026.**
 *Abnahme:* die Positionen im G-Code stimmen mit denen im Dokument überein
 (Toleranz eine Linienbreite, Bettursprung abgezogen); `filament_cost` steht im
 G-Code auf dem Wert des Herstellerprofils; `arrange_bed` ohne Eingaben lässt die
 Auswertung vollständig.
+*Gemessen:* drei Teile, Abweichung **0,00 mm** in X und Y nach Abzug des
+`extruder_offset` von 1,5 mm, den der Slicer selbst einrechnet — ohne die
+Änderung waren es bis 110 mm. Der Preis wird nicht mehr geschrieben, wenn er
+unbekannt ist. Die Auswertung läuft durch. Einzelheiten am Ende der
+`ROADMAP.md`.
 
 **Paket 3 — Zeigen und Auswählen.** C1, C4, dann C2.
 Der Flächenpicker zuerst — er schaltet Auswahl, Kontextmenü, Messen und

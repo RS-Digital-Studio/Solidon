@@ -13,6 +13,7 @@ import trimesh
 from app.core.errors import ValidationError
 from app.core.export import threemf
 from app.core.export.writer import (
+    arrangement_holds,
     check_adhesion_clearance,
     check_before_export,
     check_filament_changes,
@@ -404,3 +405,54 @@ def test_parts_without_a_named_filament_stay_together() -> None:
     ]
 
     assert set(plates_by_material(objects).values()) == {0}
+
+
+# --- die Anordnung geht nur mit, wenn sie eine ist (§29) ------------------------
+
+
+def at(x: float, y: float, size: float = 20.0) -> MeshData:
+    """Ein Würfel mit seiner Mitte auf (x, y), auf der Platte stehend."""
+    cube = trimesh.creation.box((size, size, size))
+    cube.apply_translation((x, y, size / 2.0))
+    return MeshData.of(cube)
+
+
+def test_two_parts_side_by_side_are_an_arrangement(profile: Profile) -> None:
+    assert arrangement_holds([at(-30.0, 0.0), at(30.0, 0.0)], profile)
+
+
+def test_parts_on_top_of_each_other_are_not(profile: Profile) -> None:
+    """Der Grund für die ganze Prüfung: ohne sie ginge ``--arrange 0`` auch
+    dann mit, wenn zwei Teile am selben Platz stehen — und der Slicer druckte
+    sie übereinander, statt sie zu retten."""
+    assert not arrangement_holds([at(0.0, 0.0), at(5.0, 0.0)], profile)
+
+
+def test_a_part_outside_the_bed_is_not(profile: Profile) -> None:
+    """Der Bauraum des Testprofils ist 256 mm; ein Würfel bei x = 200 ragt
+    über die Kante."""
+    assert not arrangement_holds([at(200.0, 0.0)], profile)
+
+
+def test_nothing_at_all_is_no_arrangement(profile: Profile) -> None:
+    assert not arrangement_holds([], profile)
+
+
+def test_the_handover_places_the_parts_the_export_does_not(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Zwei Zwecke, zwei Dateien: was zum Slicer geht, trägt die Platzierung;
+    was der Nutzer exportiert, bleibt im Koordinatensystem des Dokuments —
+    sonst läge eine zurückgelesene Platte um den halben Bauraum verschoben im
+    nächsten Dokument.
+    """
+    objects = [scene_object(), scene_object("obj_2", "Zweites")]
+
+    plain, _findings = write_assembly(objects, tmp_path, project_name="export", profile=profile)
+    placed, _more = write_assembly(
+        objects, tmp_path, project_name="uebergabe", profile=profile, place_on_bed=True
+    )
+
+    assert "transform" not in plain.read_bytes().decode("utf-8", errors="replace")
+    text = zipfile.ZipFile(BytesIO(placed.read_bytes())).read(threemf.MODEL_PATH).decode("utf-8")
+    assert 'transform="1 0 0 0 1 0 0 0 1 128 128 0"' in text

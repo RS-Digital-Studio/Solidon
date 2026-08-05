@@ -418,6 +418,7 @@ def _command(
     models: Sequence[Path],
     config: SlicerConfig,
     output: Path,
+    keep_arrangement: bool = False,
 ) -> list[str]:
     """Die Kommandozeile dieses Slicers. Eine Liste, nie eine Zeichenkette —
     ein Dateiname mit Leerzeichen ist sonst zwei Argumente.
@@ -457,6 +458,16 @@ def _command(
         # ankommt, wird verworfen statt geladen.
         if config.filament is not None:
             arguments += ["--load-filaments", str(config.filament)]
+        if keep_arrangement:
+            # Ohne diesen Schalter ordnet die Orca-Familie **immer** neu an,
+            # egal in welchen Koordinaten die Teile ankommen — gemessen an zwei
+            # Läufen derselben Szene, die denselben G-Code ergaben. Damit war
+            # alles folgenlos, was Formwerk über die Platte weiß: `arrange_bed`,
+            # der Haftungsrand, die Plattenzuordnung. Gesetzt wird er nur, wenn
+            # die Anordnung wirklich eine ist (siehe
+            # :func:`app.core.export.writer.arrangement_holds`) — sonst
+            # druckten zwei Teile übereinander.
+            arguments += ["--arrange", "0"]
         return [*arguments, "--slice", "0", "--outputdir", str(output), *files]
 
     arguments = [binary, "slice", "-v"]
@@ -489,6 +500,7 @@ def slice_model(
     *,
     output_dir: Path | None = None,
     timeout: float = TIMEOUT_SECONDS,
+    keep_arrangement: bool = False,
 ) -> SliceOutcome:
     """Slicen lassen und die Datei zurücklesen (§29, §28.1).
 
@@ -529,7 +541,7 @@ def slice_model(
         target.mkdir(parents=True, exist_ok=True)
 
         completed = subprocess.run(
-            _command(setup, models, config, target),
+            _command(setup, models, config, target, keep_arrangement),
             cwd=workspace,
             capture_output=True,
             timeout=timeout,

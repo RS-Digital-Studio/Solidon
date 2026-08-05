@@ -370,6 +370,15 @@ class History:
                 for _ in range(self._stated(spec, draft, spec.produces_from))
             )
         if spec.produces == VARIABLE and not draft.inputs:
+            if spec.takes_whole_scene:
+                # Anordnen und Kollisionsprüfung nehmen die ganze Szene und
+                # geben sie zurück. Ohne Eingaben ist das nichts — und ein
+                # geplanter Ausgang, den die Operation nicht liefert, hält die
+                # **ganze** Auswertung an: alles nach diesem Schritt wird nicht
+                # mehr gerechnet. Das Fenster reicht über ``inputs_for`` immer
+                # die Szene herein, über Kommandozeile, Agent und MCP ist der
+                # Aufruf ohne sie einen Tippfehler entfernt.
+                return ()
             # Nimmt nichts und macht eine unbekannte Anzahl: wie viele, kann
             # nur der Aufrufer wissen, und eins ist die ehrliche Vorgabe für
             # eine schlichte Datei.

@@ -147,7 +147,11 @@ def merge_slots(parts: Sequence[AssemblyPart]) -> list[MaterialSlot]:
     return merged
 
 
-def write_assembly(parts: Sequence[AssemblyPart], name: str = "") -> bytes:
+def write_assembly(
+    parts: Sequence[AssemblyPart],
+    name: str = "",
+    bed: tuple[float, float] | None = None,
+) -> bytes:
     """Mehrere Körper als eine 3MF-Baugruppe (§20, §29).
 
     Das ist der Unterschied zwischen „eine Datei je Teil" und „ein
@@ -158,12 +162,23 @@ def write_assembly(parts: Sequence[AssemblyPart], name: str = "") -> bytes:
 
     Die Materialien sind über alle Teile zusammengelegt (:func:`merge_slots`),
     denn genau diese Liste liest der Slicer als seine Extruderbelegung.
+
+    ``bed`` ist die Breite und Tiefe des Bauraums. Mit dieser Angabe bekommt
+    jedes Teil eine Platzierung auf der Platte — Formwerk rechnet um den
+    Nullpunkt, ein Slicer misst von der Ecke. Ohne die Umrechnung liegt die
+    ganze Szene im negativen Bereich, also außerhalb des Betts, und der Slicer
+    ordnet notgedrungen selbst an: was `arrange_bed` errechnet hat, ist dann
+    weg, samt Haftungsrand und Plattenzuordnung.
+
+    Verschoben wird über die Platzierungsmatrix des Standards, nicht über die
+    Punkte. Die Geometrie bleibt damit die, die im Dokument steht — dieselbe
+    Datei taugt weiter als Modell und nicht nur als Druckauftrag.
     """
     if not parts:
         raise ValueError("an assembly needs at least one part")
 
     materials = merge_slots(parts)
-    model = _assembly_xml(parts, materials, name)
+    model = _assembly_xml(parts, materials, name, bed)
 
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
@@ -678,7 +693,12 @@ def _write_geometry(
         )
 
 
-def _assembly_xml(parts: Sequence[AssemblyPart], materials: list[MaterialSlot], name: str) -> bytes:
+def _assembly_xml(
+    parts: Sequence[AssemblyPart],
+    materials: list[MaterialSlot],
+    name: str,
+    bed: tuple[float, float] | None = None,
+) -> bytes:
     """Das Modell-XML einer Baugruppe: ein ``object`` je Teil, ein ``item`` je
     Teil im Build.
     """
@@ -722,9 +742,24 @@ def _assembly_xml(parts: Sequence[AssemblyPart], materials: list[MaterialSlot], 
             },
         )
         _write_geometry(body, part.mesh, group_id, order)
-        ET.SubElement(build, "item", {"objectid": str(number)})
+        item = {"objectid": str(number)}
+        if bed is not None:
+            item["transform"] = _placement(bed)
+        ET.SubElement(build, "item", item)
 
     return b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(ET.tostring(root, encoding="utf-8"))
+
+
+def _placement(bed: tuple[float, float]) -> str:
+    """Die Platzierungsmatrix des Standards: neun Werte Drehung, drei
+    Verschiebung.
+
+    Gedreht wird nichts — verschoben um den halben Bauraum, denn dort liegt
+    Formwerks Nullpunkt. Dass ein Slicer der Orca-Familie diese Matrix wirklich
+    liest, ist gemessen und nicht angenommen: mit ihr und ``--arrange 0``
+    stehen die Teile im G-Code auf ein Zehntel dort, wo das Dokument sie hat.
+    """
+    return f"1 0 0 0 1 0 0 0 1 {bed[0] / 2.0:g} {bed[1] / 2.0:g} 0"
 
 
 def _model_xml(mesh: MeshData, slots: list[MaterialSlot], name: str) -> bytes:

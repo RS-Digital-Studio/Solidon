@@ -52,7 +52,8 @@ from app.core import discover, tools
 from app.core.errors import AppError
 from app.core.export import handover, slicer_keys, slicer_profiles
 from app.core.export.slicer_keys import SlicerFlavour
-from app.core.export.writer import write_assembly
+from app.core.export.writer import arrangement_holds, write_assembly
+from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import print_settings, profiles
 from app.core.log import get_logger
 from app.core.slice import advise
@@ -659,16 +660,24 @@ class _SliceWorker(QThread):
         settings: PrintSettings,
         profile: Profile,
         setup: handover.SlicerSetup,
+        keep_arrangement: bool = False,
     ) -> None:
         super().__init__()
         self._model = model
         self._settings = settings
         self._profile = profile
         self._setup = setup
+        self._keep_arrangement = keep_arrangement
 
     def run(self) -> None:
         try:
-            outcome = handover.slice_model(self._model, self._settings, self._profile, self._setup)
+            outcome = handover.slice_model(
+                self._model,
+                self._settings,
+                self._profile,
+                self._setup,
+                keep_arrangement=self._keep_arrangement,
+            )
         except AppError as problem:
             self.failed.emit(problem)
             return
@@ -1312,6 +1321,14 @@ class PrintSettingsDialog(QDialog):
         # damit einen Druckauftrag statt einer Handvoll Teile, über deren
         # Zusammengehörigkeit er selbst entscheiden müsste (§20, §29).
         plates = sorted({entry.plate for entry in objects})
+        # Hält die Anordnung, geht sie mit — und wird beim Aufruf auch
+        # durchgesetzt. Sonst ordnet der Slicer an, wie er es ohne uns täte:
+        # zwei Teile übereinander wären schlimmer als eine verworfene
+        # Anordnung (§29).
+        on_first_plate = [entry for entry in objects if entry.plate == plates[0]]
+        keep = arrangement_holds(
+            [as_mesh_data(entry.mesh) for entry in on_first_plate], self.session.profile
+        )
         try:
             written, findings = write_assembly(
                 objects,
@@ -1323,6 +1340,7 @@ class PrintSettingsDialog(QDialog):
                 # unter der Streuscheibe, nicht unter den zwölf Behältern.
                 settings=self.settings,
                 flavour=setup.flavour,
+                place_on_bed=keep,
             )
         except AppError as problem:
             show_error(problem, self)
@@ -1337,7 +1355,7 @@ class PrintSettingsDialog(QDialog):
         self.progress.setVisible(True)
         self.state.setText(tr("Der Slicer rechnet …"))
 
-        worker = _SliceWorker([written], self.settings, self.session.profile, setup)
+        worker = _SliceWorker([written], self.settings, self.session.profile, setup, keep)
         worker.done.connect(self._sliced)
         worker.failed.connect(self._slice_failed)
         worker.finished.connect(self._slice_finished)

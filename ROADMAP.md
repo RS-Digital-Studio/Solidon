@@ -336,12 +336,12 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       Herstellerprofil gemeldet statt als Nicht-Aussage, und `arrange_bed`
       kennt den Haftungsrand nicht. Die ersten beiden behoben, das dritte
       unten
-- [ ] Anordnung und Plattenhaftung zusammenbringen — `arrange_bed` legt 5 mm
-      zwischen zwei Körper, bei 3 mm Skirt braucht es 6 und bei 5 mm Brim
-      zehn. Die Operation kann das nicht wissen: sie ist Teil des Dokuments,
-      die Haftung eine Druckeinstellung. Die Oberfläche kennt beides und
-      sollte den Abstand vorbelegen; `check_adhesion_clearance` nennt
-      solange die fehlende Zahl
+- [x] Anordnung und Plattenhaftung zusammenbringen — der Dialog des Anordnens
+      öffnet mit dem Abstand, den die Haftung verlangt (zweimal den Rand),
+      vorbelegt und änderbar. Die Operation kennt die Druckeinstellung
+      weiterhin nicht und soll es nicht; das Fenster kennt beide Seiten.
+      **Vorher war das folgenlos**, siehe den nächsten Punkt: die Anordnung
+      kam beim Slicer gar nicht an
 - [ ] Plattenvorschlag in der Oberfläche anbieten — `plates_by_material`
       rechnet ihn, gesetzt wird die Platte weiterhin von Hand
 - [ ] Bügeln aus der Passung ableiten — wo ein `Fit` zwei Flächen aufeinander
@@ -1982,3 +1982,46 @@ Fenster heraus: Strg+P, Slicen, 0,8 Sekunden, Druckdatei.
 - [ ] **Von der Aushöhlung zum Deckel fehlt ein Schritt.** `hollow_object`
       schließt den Hohlraum, `create_lid` verlangt eine Öffnung; der Weg zur Dose
       führt über zwei Zylinder und eine Differenz
+
+## Paket 2 der Durchsicht: die Platte kommt an
+
+Aus dem Konzept zur Live-Durchsicht war das der zweite Satz Arbeiten — und der
+mit der unangenehmsten Voraussetzung: bevor irgendetwas an der Anordnung
+verbessert werden konnte, musste sie den Slicer überhaupt erreichen.
+
+**Sie erreichte ihn nicht.** Zwei Läufe derselben Szene, einmal in Modell- und
+einmal in Bettkoordinaten, ergaben denselben G-Code — die Orca-Familie ordnet
+in der Vorgabe immer neu an. Damit war alles folgenlos, was Formwerk über die
+Platte weiß: `arrange_bed`, der Haftungsrand aus `check_adhesion_clearance`,
+`plates_by_material`, die Plattennummer am Objekt.
+
+Drei Teile, alle am installierten ElegooSlicer 1.5.3.4 gemessen:
+
+- [x] **Die Platzierung reist im 3MF mit.** Über die Matrix am `<item>` des
+      Standards, nicht über die Punkte: die Geometrie in der Datei bleibt die
+      des Dokuments, und wer sie als Modell liest, bekommt das Modell. Dass
+      Orca diese Matrix wirklich liest, ist gemessen — mit ihr und
+      `--arrange 0` stehen drei Teile im G-Code auf **0,00 mm** genau dort, wo
+      das Dokument sie hat. Der verbleibende Versatz von 1,5 mm in Y ist der
+      `extruder_offset` der Maschine, den der Slicer selbst einrechnet.
+- [x] **`--arrange 0`, aber nur wenn die Anordnung eine ist.**
+      `writer.arrangement_holds` prüft in der Aufsicht: kein Teil über einem
+      anderen, keines außerhalb des Betts. Sonst bleibt es beim Anordnen des
+      Slicers — zwei Teile übereinander wären schlimmer als eine verworfene
+      Anordnung. Getragen wird die Entscheidung durch bis zum Aufruf, und die
+      Datei bekommt ihre Platzierung nur dann.
+- [x] **Der Abstand kennt die Haftung.** Der Dialog des Anordnens öffnet mit
+      dem doppelten Haftungsrand als Abstand, wenn der größer ist als die
+      Vorgabe der Operation.
+
+Dazu zwei Funde, die auf dem Weg lagen:
+
+- [x] **`arrange_bed` ohne Eingaben hielt die ganze Auswertung an.** Der Stapel
+      plante einen Ausgang, die Operation lieferte ohne Eingaben keinen, und
+      alles nach diesem Schritt wurde nicht mehr gerechnet. Der Test dazu
+      verglich Positionen statt `result.complete` und deckte den Abbruch zu —
+      eine abgebrochene Auswertung bewegt auch nichts.
+- [x] **Die Platzierung gehört nicht in jede Datei.** Beim Export einer 3MF
+      bleibt sie weg: ein von Hand geöffneter Slicer ordnet ohnehin neu an, und
+      eine zurückgelesene Platte läge sonst um den halben Bauraum verschoben im
+      nächsten Dokument. Zwei Zwecke, zwei Dateien — `place_on_bed` sagt welche.

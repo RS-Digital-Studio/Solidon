@@ -246,6 +246,37 @@ def check_adhesion_clearance(
     return findings
 
 
+def arrangement_holds(meshes: Sequence[MeshData], profile: Profile) -> bool:
+    """Ist die Anordnung dieser Teile eine, die der Slicer übernehmen darf?
+
+    Formwerks Anordnung geht nur dann mit (§29), wenn sie überhaupt eine ist:
+    kein Teil über dem anderen und keines außerhalb des Betts. Sonst bleibt es
+    beim Anordnen des Slicers — der druckte sie sonst übereinander, und das ist
+    schlimmer als eine verworfene Anordnung.
+
+    Geprüft wird in der Aufsicht und großzügig: die Ränder der Platte bleiben
+    frei, weil dort Rand, Düse und Reinigungsstelle liegen, und ein Teil, das
+    genau auf der Kante endet, ist kein Fall für eine Zusage.
+    """
+    if not meshes:
+        return False
+    width, depth, height = profile.printer.build_volume
+    half_width, half_depth = width / 2.0, depth / 2.0
+    for mesh in meshes:
+        box = mesh.bounds
+        if box.minimum[0] < -half_width or box.maximum[0] > half_width:
+            return False
+        if box.minimum[1] < -half_depth or box.maximum[1] > half_depth:
+            return False
+        if box.maximum[2] > height:
+            return False
+    for first in range(len(meshes)):
+        for second in range(first + 1, len(meshes)):
+            if _plane_gap(meshes[first].bounds, meshes[second].bounds) <= EPS_GEOM:
+                return False
+    return True
+
+
 def _plane_gap(first: BoundingBox, second: BoundingBox) -> float:
     """Der Abstand zweier Grundrisse. Null heißt: sie überlappen bereits."""
     along = [
@@ -443,6 +474,7 @@ def write_assembly(
     sources: dict[str, Source] | None = None,
     settings: PrintSettings | None = None,
     flavour: SlicerFlavour = "orca",
+    place_on_bed: bool = False,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in *eine* 3MF-Datei (§20, §29).
 
@@ -454,6 +486,12 @@ def write_assembly(
 
     ``plate`` schränkt auf eine Druckplatte ein; ohne Angabe geht alles hinein,
     was übergeben wurde.
+
+    ``place_on_bed`` legt die Teile in Bettkoordinaten — für die Übergabe an
+    den Slicer, die sie mit ``--arrange 0`` auch durchsetzt. Beim Export einer
+    Datei bleibt es aus, und zwar aus zwei Gründen: ein Slicer, den jemand von
+    Hand öffnet, ordnet ohnehin neu an, und eine zurückgelesene Platte läge
+    sonst um den halben Bauraum verschoben im nächsten Dokument.
     """
     chosen = objects if plate is None else [entry for entry in objects if entry.plate == plate]
     if not chosen:
@@ -482,7 +520,9 @@ def write_assembly(
     ]
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / (safe_name(project_name, "projekt") + ".3mf")
-    target.write_bytes(threemf.write_assembly(parts, project_name))
+    width, depth, _height = profile.printer.build_volume
+    bed = (width, depth) if place_on_bed else None
+    target.write_bytes(threemf.write_assembly(parts, project_name, bed=bed))
     _log.info("exported %d object(s) as one assembly to %s", len(parts), target.name)
     return target, findings
 

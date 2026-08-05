@@ -60,6 +60,7 @@ from app.core.errors import AppError, InternalError
 from app.core.export.handover import SliceOutcome
 from app.core.export.writer import (
     ExportFormat,
+    adhesion_margin,
     plan_export,
     safe_name,
     write_assembly,
@@ -2526,6 +2527,7 @@ class MainWindow(QMainWindow):
             return
 
         values = dict(self._from_selection(spec, chosen[0] if chosen else None))
+        values.update(self._spacing_for(spec))
         values.update(given or {})
         inputs = inputs_for(spec, objects, chosen)
 
@@ -2833,6 +2835,32 @@ class MainWindow(QMainWindow):
             feature_id: feature_label(feature_id, feature)
             for feature_id, feature in entry.features.items()
         }
+
+    def _spacing_for(self, spec: OperationSpec) -> dict[str, Any]:
+        """Der Abstand beim Anordnen kennt die Plattenhaftung (§25, §29).
+
+        Die Operation kann das nicht wissen: sie gehört dem Dokument, die
+        Haftung ist eine Druckeinstellung, und beides bleibt getrennt. Das
+        Fenster kennt beide Seiten — also belegt es hier vor.
+
+        Zwei Körper mit fünf Millimetern Luft und je fünf Millimetern Brim
+        stehen einander im Weg, und zwar erst auf der Platte: der Rand zählt
+        zwischen Nachbarn zweimal. Beim Gewürzset war genau das die erste
+        Deckelplatte. Vorbelegt, nicht erzwungen — im Dialog steht die Zahl und
+        lässt sich ändern.
+        """
+        if "spacing" not in {entry.name for entry in spec.params.spec()}:
+            return {}
+        settings = self.session.project.document.print_settings
+        if settings is None:
+            settings = print_settings.resolve(self.session.profile)
+        needed = 2.0 * adhesion_margin(settings)
+        if needed <= 0.0:
+            return {}
+        default = next(
+            (entry.default for entry in spec.params.spec() if entry.name == "spacing"), 0.0
+        )
+        return {"spacing": max(float(default or 0.0), needed)}
 
     def _from_selection(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
         """Was das angeklickte Merkmal darüber sagt, wohin diese Operation

@@ -53,6 +53,13 @@ def two_objects(project: Project) -> None:
 def test_arranging_without_inputs_changes_nothing(profile: Profile) -> None:
     """Der Fehler, um den es in dieser Datei geht — als Test gehalten, damit er
     nicht zurückkommen kann.
+
+    „Ändert nichts" heißt dabei auch: **die Auswertung läuft durch**. Genau das
+    stand hier nicht, und dahinter verbarg sich ein zweiter Fehler. Der Stapel
+    plante für die Operation einen Ausgang, sie lieferte ohne Eingaben keinen,
+    und die Auswertung hielt mit ``evaluate.object_count`` an — alles nach
+    diesem Schritt wurde nicht mehr gerechnet. Die Positionen zu vergleichen
+    reichte nicht: eine abgebrochene Auswertung bewegt auch nichts.
     """
     project = new_project("centauri-carbon-2", "petg")
     two_objects(project)
@@ -64,6 +71,7 @@ def test_arranging_without_inputs_changes_nothing(profile: Profile) -> None:
     )
     after = evaluate(project.document, profile, sources=ProjectSources(project))
 
+    assert after.complete, "eine Operation ohne Wirkung darf das Dokument nicht anhalten"
     assert {name: entry.mesh.bounds.centre for name, entry in after.scene.objects.items()} == places
 
 

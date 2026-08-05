@@ -12,6 +12,7 @@ Struktur, auf die es ankommt, in der Datei sichtbar ist, die sie prüft.
 
 from __future__ import annotations
 
+import re
 import zipfile
 from io import BytesIO
 
@@ -309,3 +310,46 @@ def test_a_single_part_assembly_is_just_an_assembly_of_one() -> None:
     payload = threemf.write_assembly([_part((10, 10, 10), "Allein")])
 
     assert threemf.count_objects(payload) == 1
+
+
+# --- die Platte reist mit (§29) -------------------------------------------------
+
+
+def test_without_a_bed_the_parts_stay_where_the_model_has_them() -> None:
+    """Ohne Bauraumangabe wird nichts platziert — der Slicer ordnet dann an."""
+    payload = threemf.write_assembly([_part((10, 10, 10), "A"), _part((10, 10, 10), "B")])
+
+    text = zipfile.ZipFile(BytesIO(payload)).read(threemf.MODEL_PATH).decode("utf-8")
+    assert "transform" not in text
+
+
+def test_with_a_bed_every_part_carries_its_place() -> None:
+    """Formwerk rechnet um den Nullpunkt, ein Slicer misst von der Ecke.
+
+    Ohne die Umrechnung liegt die ganze Szene außerhalb des Betts, und der
+    Slicer ordnet notgedrungen selbst an — womit alles verloren ist, was
+    ``arrange_bed`` errechnet hat. Gemessen an zwei Läufen derselben Szene, die
+    denselben G-Code ergaben.
+    """
+    payload = threemf.write_assembly(
+        [_part((10, 10, 10), "A"), _part((10, 10, 10), "B")], "Platte", bed=(256.0, 256.0)
+    )
+
+    text = zipfile.ZipFile(BytesIO(payload)).read(threemf.MODEL_PATH).decode("utf-8")
+    assert text.count('transform="1 0 0 0 1 0 0 0 1 128 128 0"') == 2
+
+
+def test_the_geometry_itself_stays_untouched() -> None:
+    """Verschoben wird über die Matrix, nicht über die Punkte.
+
+    Der Unterschied ist nicht kosmetisch: die Ecken in der Datei bleiben die
+    des Dokuments, und wer die Datei als Modell liest, bekommt das Modell. Erst
+    wer sie als Platte liest, bekommt die Platte — deshalb steht die
+    Verschiebung beim gelesenen Körper, nicht bei den Punkten im XML.
+    """
+    payload = threemf.write_assembly([_part((10, 10, 10), "A")], bed=(256.0, 256.0))
+    text = zipfile.ZipFile(BytesIO(payload)).read(threemf.MODEL_PATH).decode("utf-8")
+
+    coordinates = [float(value) for value in re.findall(r'x="(-?[0-9.]+)"', text)]
+    assert max(coordinates) <= 5.0, "die Punkte selbst bleiben, wo das Dokument sie hat"
+    assert threemf.read_objects(payload)[0].mesh.bounds.centre[0] == pytest.approx(128.0)
