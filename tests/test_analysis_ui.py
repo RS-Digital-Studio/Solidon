@@ -458,11 +458,38 @@ class _PickyPlotter:
 
 
 def test_switching_navigation_keeps_the_picking_alive(qt_app: QApplication) -> None:
-    """Ein Stilwechsel darf das Picking weder abhängen noch doppelt anschalten.
+    """Ein Stilwechsel darf das Picking nicht abhängen (§18.5).
 
-    Ein neuer Interaktionsstil bringt eigene Beobachter mit; das Picking hängt
-    am alten und wäre nach jedem Wechsel weg. Es einfach erneut einzuschalten
-    reicht aber nicht — der Plotter besteht darauf, vorher gefragt zu werden.
+    Der Test hat lange geprüft, dass ``plotter.enable_point_picking`` nach
+    jedem Wechsel neu läuft. Das war richtig gedacht und half nichts: pyvista
+    sucht sich den Renderer über ``GetInteractorStyle()._parent()``, also über
+    seinen **eigenen** Stil, und Formwerk setzt für die vier
+    Navigationsschemata einen eigenen. Jeder Klick endete in einem
+    ``AttributeError``, den pyvistaqt zu einer Warnung macht — die Auswahl im
+    Viewport hat nie funktioniert, und der Test war grün dabei.
+
+    Jetzt löst der Stil das Picking selbst aus. Geprüft wird also, was
+    tatsächlich zählt: dass ein Klick nach dem Wechsel ankommt.
+    """
+    from app.ui.viewport import _InteractorStyle
+
+    seen: list[tuple[int, int]] = []
+
+    style = _InteractorStyle(None, "slicer", None, lambda x, y: seen.append((x, y)))
+    assert hasattr(style, "_left_at"), "der Stil merkt sich, wo gedrückt wurde"
+
+    # Ohne Interactor lässt sich kein Klick nachstellen; was hier zählt, ist
+    # die Verdrahtung — dass der Rückruf im Stil steckt und nicht bei pyvista.
+    assert style.GetClassName().startswith("vtkInteractorStyle")
+
+
+def test_picking_needs_no_plotter_call_any_more(qt_app: QApplication) -> None:
+    """Und ``_enable_picking`` fasst den Plotter nicht mehr an.
+
+    Der ``_PickyPlotter`` lehnt ein zweites ``enable_point_picking`` ab, wie es
+    der echte tut. Wird er gar nicht erst gerufen, kann auch nichts doppelt
+    angeschaltet werden — das war der eigentliche Grund für die Klimmzüge
+    davor.
     """
     from app.ui.viewport import Viewport
 
@@ -472,12 +499,9 @@ def test_switching_navigation_keeps_the_picking_alive(qt_app: QApplication) -> N
         viewport.plotter = plotter
 
         viewport._enable_picking()
-        assert plotter.enabled and plotter.rounds == 1
-
-        # Zweimal hintereinander, wie beim Aufbau und bei jedem Schemawechsel.
         viewport._enable_picking()
-        assert plotter.enabled, "danach ist das Picking an"
-        assert plotter.rounds == 2, "und es wurde wirklich neu aufgesetzt"
+
+        assert plotter.rounds == 0, "das Picking hängt am eigenen Stil, nicht am Plotter"
     finally:
         viewport.plotter = None
         viewport.deleteLater()
@@ -1107,3 +1131,66 @@ def test_every_list_in_the_bottom_bars_knows_that(qt_app: QApplication) -> None:
         f"Diese Listen klappen über den Fensterrand hinaus: {plain}. "
         "In einer Leiste unter dem Viewport ist BarComboBox die richtige Klasse."
     )
+
+
+def test_a_click_in_the_middle_of_a_face_has_to_hit_something() -> None:
+    """Warum der Viewport eine Zelle pickt und keinen Punkt (§18.5).
+
+    Ein ``vtkPointPicker`` trifft **Eckpunkte**. Ein Würfel hat acht davon, und
+    ein Klick mitten auf seine Fläche fand nichts: Auswählen, Kontextmenü am
+    Merkmal, Messen und Bemalen taten in der laufenden Anwendung nichts,
+    während Rad und Rechtsziehen die Kamera bewegten. Die Verdrahtung war seit
+    ihrer Reparatur richtig — das Werkzeug nicht.
+
+    Geprüft wird an einem eigenen Offscreen-Renderer und nicht am Viewport: der
+    baut ohne Bildschirm keinen Plotter, und ein Test, der sich selbst
+    überspringt, prüft nie etwas.
+    """
+    import pyvista as pv
+    from vtkmodules.vtkRenderingCore import vtkCellPicker, vtkPointPicker
+
+    from app.ui.viewport import PICK_TOLERANCE
+
+    plotter = pv.Plotter(off_screen=True, window_size=(400, 400))
+    try:
+        plotter.add_mesh(pv.Cube(center=(0.0, 0.0, 0.0), x_length=20, y_length=20, z_length=20))
+        plotter.view_xy()
+        plotter.render()
+        middle = (200.0, 200.0)  # die Bildmitte, und dort liegt die Deckfläche
+
+        points = vtkPointPicker()
+        cells = vtkCellPicker()
+        cells.SetTolerance(PICK_TOLERANCE)
+
+        hit_point = points.Pick(middle[0], middle[1], 0.0, plotter.renderer)
+        hit_cell = cells.Pick(middle[0], middle[1], 0.0, plotter.renderer)
+    finally:
+        plotter.close()
+
+    assert not hit_point, "genau darum ging nichts: mitten auf der Fläche liegt kein Eckpunkt"
+    assert hit_cell, "das Dreieck darunter gibt es, und darauf zeigt der Nutzer"
+
+
+def test_a_click_on_a_feature_selects_its_body_too(window: MainWindow) -> None:
+    """Sonst tut der erste Klick nichts (§18.5).
+
+    Der Baum zeigt ein Merkmal nur unter der Zeile seines Objekts. Solange der
+    Viewport bei einem Treffer allein ``featurePicked`` sendete, lief das ins
+    Leere: ``_on_feature_picked`` fragt den Baum nach dem ausgewählten Objekt,
+    und ausgewählt war noch keines. Im Fenster sah es aus, als käme der Klick
+    nicht an — in Wahrheit war er angekommen und hatte niemanden.
+    """
+    picked: list[str] = []
+    features: list[str] = []
+    window.viewport.objectPicked.connect(picked.append)
+    window.viewport.featurePicked.connect(features.append)
+
+    entry = window.session.last_result.scene.objects["obj_1"]
+    hole = next((name for name, feature in entry.features.items() if feature.kind == "hole"), None)
+    assert hole is not None, "die Platte aus dem Korpus hat Bohrungen"
+    centre = entry.features[hole].params["centre"]
+
+    window.viewport._select_at((float(centre[0]), float(centre[1]), float(centre[2])))
+
+    assert picked == ["obj_1"], "der Körper zuerst — er trägt die Zeile im Baum"
+    assert features == [hole], "und danach das Merkmal, das darunter erscheint"

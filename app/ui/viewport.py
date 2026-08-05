@@ -105,6 +105,14 @@ FEATURE_EDGE_ANGLE = 30.0
 #: aus demselben Grund: eine Linie, die man suchen muss, hilft niemandem.
 FEATURE_EDGE_WIDTH = 1.5
 
+#: Wie weit ein Klick danebengehen darf, als Anteil der Bilddiagonale.
+#:
+#: VTKs Vorgabe ist ein Tausendstel — bei einem Fenster von 1300 Pixeln also
+#: knapp zwei Pixel, und ein Klick auf eine Kante trifft dann wieder nichts.
+#: Fünf Tausendstel sind rund acht Pixel: genug, um eine dünne Wand zu
+#: erwischen, zu wenig, um die falsche Fläche zu greifen.
+PICK_TOLERANCE = 0.005
+
 #: Was eine Bedeutung trägt, kommt aus ``palette.ROLES`` — dort steht die
 #: Auswahlfarbe einmal, und der Objektbaum färbt in derselben. Vorher standen
 #: hier neun eigene Werte, die kein Thema kannten und keine andere Stelle.
@@ -1295,10 +1303,8 @@ class Viewport(QWidget):
             # Nicht am Messen: erst das Merkmal darunter (§18.5), sonst der
             # Körper. Ein Klick daneben hebt die Auswahl auf — sonst gäbe es
             # keinen Weg, sie ohne den Baum wieder loszuwerden.
-            feature_id = self._feature_at(picked)
-            if feature_id is not None:
-                self.select_feature(feature_id)
-                self.featurePicked.emit(feature_id)
+            if self._feature_at(picked) is not None:
+                self._select_at(picked)
                 return
             self.objectPicked.emit(self._object_at(picked) or "")
             self.pointPicked.emit(picked)
@@ -1984,10 +1990,15 @@ class Viewport(QWidget):
             if view is not None:
                 view._on_right_click(x, y)
 
-        style = _InteractorStyle(self.plotter, scheme, on_context)
+        def on_pick(x: int, y: int) -> None:
+            view = weak()
+            if view is not None:
+                view._on_left_click(x, y)
+
+        style = _InteractorStyle(self.plotter, scheme, on_context, on_pick)
         self.plotter.interactor.SetInteractorStyle(style)
-        # Ein neuer Stil bringt seine eigenen Beobachter mit; das Picking hängt
-        # am alten und wäre sonst nach jedem Wechsel weg.
+        # Ein neuer Stil bringt seine eigenen Beobachter mit; was beim Wechsel
+        # sonst noch einzuschalten wäre, steht dort.
         self._enable_picking()
 
     def _on_right_click(self, x: int, y: int) -> None:
@@ -2002,13 +2013,23 @@ class Viewport(QWidget):
         if point is None:
             self.objectPicked.emit("")
             return
+        self._select_at(point)
+        self.contextMenuAt.emit(x, y)
+
+    def _select_at(self, point: Vec3) -> None:
+        """Was ein Klick auswählt: erst das Merkmal, dann der Körper darunter.
+
+        Beides, und in dieser Reihenfolge. Ein Merkmal gehört einem Objekt, und
+        der Baum kann es nur unter dessen Zeile zeigen — ohne die Auswahl des
+        Körpers tat ein Klick auf eine Bohrung nichts, weil noch nichts
+        ausgewählt war. Linksklick und Rechtsklick nehmen denselben Weg; das
+        Menü fragt danach nur noch, was zur Auswahl passt (§18.5).
+        """
         feature_id = self._feature_at(point)
+        self.objectPicked.emit(self._object_at(point) or "")
         if feature_id is not None:
             self.select_feature(feature_id)
             self.featurePicked.emit(feature_id)
-        else:
-            self.objectPicked.emit(self._object_at(point) or "")
-        self.contextMenuAt.emit(x, y)
 
     def _world_at(self, x: int, y: int) -> Vec3 | None:
         """Der Punkt auf dem Körper unter einer Bildschirmposition.
@@ -2016,42 +2037,56 @@ class Viewport(QWidget):
         VTK zählt von unten, Qt von oben — umgerechnet wird beim Aufrufer, denn
         hier kommt die Position aus dem Interactor und ist schon in VTKs
         Zählung.
+
+        Gepickt wird die **Zelle** und nicht der Punkt. Ein ``vtkPointPicker``
+        trifft nur Eckpunkte: der Halter aus dem Beispielprojekt hat acht davon,
+        und ein Klick mitten auf eine Fläche fand nichts. Auswählen,
+        Kontextmenü am Merkmal (§18.5), Messen und Bemalen hingen alle daran und
+        taten nichts — nachgestellt an der laufenden Anwendung, während Rad und
+        Rechtsziehen die Kamera bewegten. Ein ``vtkCellPicker`` trifft das
+        Dreieck und damit jede Stelle, auf die jemand zeigen kann.
         """
         if self.plotter is None:
             return None
-        from vtkmodules.vtkRenderingCore import vtkPointPicker
+        from vtkmodules.vtkRenderingCore import vtkCellPicker
 
-        picker = vtkPointPicker()
+        picker = vtkCellPicker()
+        # Die Toleranz ist ein Anteil der Bilddiagonale; die Vorgabe von VTK
+        # ist so klein, dass ein Klick an einer Kante wieder danebengeht.
+        picker.SetTolerance(PICK_TOLERANCE)
         if not picker.Pick(float(x), float(y), 0.0, self.plotter.renderer):
             return None
         position = picker.GetPickPosition()
         return (float(position[0]), float(position[1]), float(position[2]))
 
-    def _enable_picking(self) -> None:
-        """Klicks kommen immer an — was sie bedeuten, entscheidet der Modus.
+    def _on_left_click(self, x: int, y: int) -> None:
+        """Ein Linksklick, der keiner Kamerabewegung galt (§18.5).
 
-        Vorher lief das Picking nur, wenn Messen, Bemalen oder die
-        Merkmalsbeschriftung eingeschaltet waren. Damit war „links wählt aus",
-        was das Schema verspricht und das Handbuch beschreibt, in der Vorgabe
-        nicht wahr: ein Klick auf einen Körper tat nichts.
-
-        Erst abschalten, dann anschalten: pyvista lehnt ein zweites
-        ``enable_point_picking`` mit einer Ausnahme ab, und gerufen wird das
-        hier bei jedem Wechsel des Navigationsschemas. Ohne die Zeile davor
-        startete die Anwendung nicht mehr — offscreen gibt es keinen Plotter,
-        also führt kein Test diesen Zweig aus, und der Fehler kam erst beim
-        Öffnen des Fensters heraus.
+        Der Weg ist derselbe wie beim Rechtsklick, nur ohne Menü danach: erst
+        das Merkmal unter dem Zeiger, sonst der Körper, und ein Klick daneben
+        hebt die Auswahl auf.
         """
-        if self.plotter is None:
+        point = self._world_at(x, y)
+        if point is None:
+            self.objectPicked.emit("")
             return
-        self.plotter.disable_picking()
-        self.plotter.enable_point_picking(
-            callback=self._on_picked,
-            show_message=False,
-            show_point=False,
-            left_clicking=True,
-            picker="point",
-        )
+        self._on_picked(point)
+
+    def _enable_picking(self) -> None:
+        """Nichts mehr zu tun — der eigene Stil löst das Picking selbst aus.
+
+        Vorher stand hier ``plotter.enable_point_picking``. Das hat nie
+        funktioniert und es auch nie gesagt: pyvista sucht sich den Renderer
+        über ``GetInteractorStyle()._parent()``, also über seinen eigenen Stil,
+        und Formwerk setzt einen eigenen für die vier Navigationsschemata.
+        Jeder Klick endete in einem ``AttributeError``, den pyvistaqt zu einer
+        Warnung macht — im Fenster sah es aus, als käme der Klick nicht an, und
+        genau so stand es in zwei Durchsichten.
+
+        Die Methode bleibt als Ort für den Fall, dass doch wieder etwas beim
+        Wechsel des Schemas einzuschalten ist; gerufen wird sie von dort.
+        """
+        return
 
     @property
     def navigation(self) -> NavigationScheme:
@@ -2078,9 +2113,18 @@ def _world_under(renderer: Any, x: int, y: int) -> tuple[float, float, float] | 
 
 
 def _InteractorStyle(  # noqa: N802
-    plotter: Any, scheme: NavigationScheme, on_context: Any = None
+    plotter: Any, scheme: NavigationScheme, on_context: Any = None, on_pick: Any = None
 ) -> Any:
-    """Baut einen VTK-Interaktionsstil mit den Tasten des gewählten Schemas."""
+    """Baut einen VTK-Interaktionsstil mit den Tasten des gewählten Schemas.
+
+    ``on_pick`` bekommt einen Linksklick, der keiner Kamerabewegung galt. Das
+    steht hier und nicht bei pyvista, und dafür gibt es einen Grund: dessen
+    ``enable_point_picking`` sucht sich den Renderer über
+    ``GetInteractorStyle()._parent()``, also über seinen **eigenen** Stil. Mit
+    diesem hier scheiterte es bei jedem Klick an einem ``AttributeError``, den
+    pyvistaqt zu einer Warnung macht — die Auswahl im Viewport hat deshalb nie
+    funktioniert, und im Fenster sah es aus, als käme der Klick nicht an.
+    """
     from vtkmodules.vtkInteractionStyle import vtkInteractorStyleTrackballCamera
 
     base = vtkInteractorStyleTrackballCamera
@@ -2098,6 +2142,10 @@ def _InteractorStyle(  # noqa: N802
             """Wo die rechte Taste heruntergegangen ist. In jedem Schema tut
             Rechts auch etwas an der Kamera — das Menü darf nur aufgehen, wenn
             niemand gezogen hat."""
+            self._left_at: tuple[int, int] | None = None
+            """Dasselbe für links. In drei der vier Schemata dreht die linke
+            Taste; ausgewählt wird deshalb, wo niemand gezogen hat, und nicht
+            danach, welches Schema gerade gilt."""
 
         def _shift(self) -> bool:
             return bool(self.GetInteractor().GetShiftKey())
@@ -2107,6 +2155,7 @@ def _InteractorStyle(  # noqa: N802
             return int(x), int(y)
 
         def _left_down(self, *_: Any) -> None:
+            self._left_at = self._position()
             if scheme == "slicer":
                 # Left selects; panning is shift plus drag.
                 if self._shift():
@@ -2120,6 +2169,12 @@ def _InteractorStyle(  # noqa: N802
         def _left_up(self, *_: Any) -> None:
             self.EndPan()
             self.EndRotate()
+            started, self._left_at = self._left_at, None
+            if on_pick is None:
+                return
+            x, y = self._position()
+            if is_click(started, (x, y)):
+                on_pick(x, y)
 
         def _wheel_in(self, *_: Any) -> None:
             self._zoom_at_pointer(1.0 + WHEEL_STEP)

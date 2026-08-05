@@ -282,6 +282,34 @@ class OverlayHost(QWidget):
                 moving,
             )
 
+        self._tell_the_view_about_the_zones()
+
+    def _tell_the_view_about_the_zones(self) -> None:
+        """Die Ansicht darf sagen, dass sie den Zonen ausweichen will.
+
+        Für den Viewport ist das Übereinanderliegen richtig: man sieht das
+        Modell hinter den Karten, und das ist der Sinn der Anordnung. Für eine
+        Ansicht mit eigener Werkzeugleiste ist es falsch — im Skizzenmodus lagen
+        die **ersten** Werkzeuge unter der linken Karte, also Linie und
+        Rechteck, und die Bedingungsliste unter der rechten. Bei 1296 Pixeln
+        Breite ebenso wie bei 1900: kein Platzproblem, sondern die
+        Stapelreihenfolge.
+
+        Wer ausweichen will, bringt ``set_zone_margins`` mit; wer nichts
+        mitbringt, bekommt weiterhin die ganze Fläche.
+        """
+        inner = getattr(self.view, "currentWidget", None)
+        target = inner() if callable(inner) else self.view
+        setter = getattr(target, "set_zone_margins", None)
+        if not callable(setter):
+            return
+        showing_left = self.left is not None and self.left.isVisibleTo(self)
+        showing_right = self.right is not None and self.right.isVisibleTo(self)
+        setter(
+            LEFT_WIDTH + 2 * MARGIN if showing_left else 0,
+            RIGHT_WIDTH + 2 * MARGIN if showing_right else 0,
+        )
+
     def _bottom_room(self) -> int:
         """Wie viel Höhe die Werkzeugzeile unten für sich braucht."""
         if self.bottom is None or not self.bottom.isVisibleTo(self):

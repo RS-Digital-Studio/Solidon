@@ -1478,6 +1478,23 @@ class SketchPanel(QWidget):
         self.canvas.statusChanged.connect(self.status.setText)
         self.constraint_list.installEventFilter(self)
         self._install_shortcuts()
+
+    def set_zone_margins(self, left: int, right: int) -> None:
+        """Weicht den Karten des Fensters aus (§2.5).
+
+        Im Skizzenmodus füllt dieses Panel die Fläche, und Objektbaum und
+        Prüfbericht liegen darüber — die ersten Werkzeuge lagen damit unter der
+        linken Karte, also Linie und Rechteck. Im Dialog gibt es keine Karten,
+        dort bleibt der Rand null; gesetzt wird er von dem, der die Karten
+        platziert.
+        """
+        layout = self.layout()
+        if layout is None:
+            return
+        margins = layout.contentsMargins()
+        if margins.left() == left and margins.right() == right:
+            return
+        layout.setContentsMargins(left, margins.top(), right, margins.bottom())
         self._refresh_constraints()
         self._refresh_buttons()
 

@@ -2338,3 +2338,27 @@ def test_without_plate_adhesion_the_spacing_stays_the_default(window: MainWindow
     assert dialog.values()["spacing"] == pytest.approx(5.0)
     dialog.reject()
     window.session.wait_for_idle()
+
+
+def test_the_sketch_editor_keeps_clear_of_the_cards(window: MainWindow) -> None:
+    """§2.5: die Karten liegen über der Ansicht — die Skizze weicht ihnen aus.
+
+    Für den Viewport ist das Übereinanderliegen richtig: man sieht das Modell
+    hinter den Karten. Für eine Ansicht mit eigener Werkzeugleiste nicht — im
+    Skizzenmodus lagen die **ersten** Werkzeuge unter der linken Karte, also
+    Linie und Rechteck, und die Bedingungsliste unter der rechten. Bei 1296
+    Pixeln Breite ebenso wie bei 1900: kein Platzproblem, sondern die
+    Stapelreihenfolge.
+    """
+    from app.ui.overlay import LEFT_WIDTH, MARGIN
+
+    window.start_sketch("sketch_extrude", "")
+    panel = window._sketch_panel
+    assert panel is not None
+
+    window.overlay._place()
+    margins = panel.layout().contentsMargins()
+
+    assert margins.left() >= LEFT_WIDTH + MARGIN, "unter der linken Karte liegt kein Werkzeug"
+    assert margins.right() > 0, "und die Bedingungsliste bleibt lesbar"
+    window.finish_sketch(keep=False)
