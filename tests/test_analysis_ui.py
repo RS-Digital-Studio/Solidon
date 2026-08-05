@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.core.perceive import maps
 from app.core.types import Finding
+from app.i18n import tr
 from app.ui.analysis_bar import MAP_ORDER, AnalysisBar, LayerBar, MapLegend
 from app.ui.labels import feature_label
 from app.ui.main_window import MainWindow
@@ -336,11 +337,41 @@ def test_a_warning_without_a_map_still_finds_its_place(window: MainWindow) -> No
 
 
 def test_the_object_tree_lists_the_features(window: MainWindow) -> None:
+    """Name links, Maß rechts — und beides lesbar.
+
+    Vorher stand links die ganze Beschriftung und rechts der Typ („hole",
+    „face"): links war abgeschnitten, was rechts gefehlt hat.
+    """
     item = window.object_tree.tree.topLevelItem(0)
 
     assert item is not None and item.childCount() >= 4, "four bores and the faces"
-    labels = [item.child(index).text(0) for index in range(item.childCount())]
-    assert any(text.startswith("hole_1 · Ø") for text in labels)
+    names = [item.child(index).text(0) for index in range(item.childCount())]
+    measures = [item.child(index).text(1) for index in range(item.childCount())]
+
+    assert any(text.startswith(tr("Bohrung")) for text in names)
+    assert any(text.startswith("Ø") for text in measures), "das Maß gehört in die Maßspalte"
+    assert not any(text in ("hole", "face") for text in measures), "der Typ ist kein Maß"
+
+
+def test_a_face_is_named_by_where_it_looks() -> None:
+    """Im Baum stand `face_2` — die Kennung, mit der der Op-Stack rechnet, und
+    für einen Menschen eine Nummer ohne Aussage.
+
+    Eine ebene Fläche weiß, wohin sie zeigt. Die Kennung bleibt: sie steht im
+    Tooltip und in jedem Parameterfeld.
+    """
+    from app.core.types import Feature
+    from app.ui.labels import feature_name
+
+    def face(name: str, normal: tuple[float, float, float]) -> Feature:
+        return Feature(
+            id=name, kind="face", params={"normal": normal, "area": 100.0}, provenance="test"
+        )
+
+    assert feature_name("face_2", face("face_2", (0.0, 0.0, 1.0))) == tr("Oberseite")
+    assert feature_name("face_1", face("face_1", (0.0, 0.0, -1.0))) == tr("Unterseite")
+    assert feature_name("face_3", face("face_3", (0.0, -1.0, 0.0))) == tr("Vorderseite")
+    assert feature_name("face_9", face("face_9", (0.6, 0.0, 0.8))) == tr("Schrägfläche")
 
 
 def test_a_feature_offers_the_operations_that_apply_to_it(window: MainWindow) -> None:
@@ -795,7 +826,7 @@ def test_the_label_names_the_feature_and_its_size(window: MainWindow) -> None:
     entry = window.session.last_result.scene.objects["obj_1"]
     label = feature_label("hole_1", entry.features["hole_1"])
 
-    assert label.startswith("hole_1 · Ø")
+    assert label.startswith(f"{tr('Bohrung')} 1 · Ø"), "gelesen wird der Name, nicht die Kennung"
 
 
 # --- layer analysis (§18.10) ----------------------------------------------------

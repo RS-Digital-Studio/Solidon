@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -40,7 +41,7 @@ from app.core.types import Document, Finding, ObjectId
 from app.core.units import LengthUnit
 from app.i18n import tr
 from app.ui.icons import icon
-from app.ui.labels import feature_label, length, volume
+from app.ui.labels import feature_measure, feature_name, length, volume
 from app.ui.palette import SEVERITY_ENCODING
 from app.ui.style import NORMAL, ROOMY, set_level
 
@@ -159,6 +160,13 @@ class ObjectTree(QWidget):
         self.tree = QTreeWidget(self)
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels([tr("Objekt"), tr("Maße")])
+        # Die Maßspalte nimmt, was sie braucht; der Rest gehört den Namen.
+        # Vorher standen beide auf derselben festen Breite, und auf dreifache
+        # Fensterbreite gezogen blieb die Maßspalte schmal, während links
+        # jeder Merkmalsname abgeschnitten war.
+        header = self.tree.header()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         # §25: Vereinigen, Abziehen und Schnittmenge nehmen zwei Körper. Mit
         # Einfachauswahl war keine davon über das Menü ausführbar — die
         # Operation bekam einen Eingang, wo sie zwei erwartet, und lehnte ab.
@@ -242,7 +250,12 @@ class ObjectTree(QWidget):
                 # anderes Spiel will.
                 item.setText(1, f"{item.text(1)}  ·  {entry.material}")
             for feature_id, feature in entry.features.items():
-                child = QTreeWidgetItem([feature_label(feature_id, feature), feature.kind])
+                # Name links, Maß rechts. Vorher stand die ganze Beschriftung
+                # links und rechts der Typ („hole", „face") — links war damit
+                # abgeschnitten, was rechts gefehlt hat.
+                child = QTreeWidgetItem(
+                    [feature_name(feature_id, feature), feature_measure(feature)]
+                )
                 child.setData(0, Qt.ItemDataRole.UserRole, object_id)
                 child.setData(1, Qt.ItemDataRole.UserRole, feature_id)
                 child.setToolTip(0, f"{feature_id} · {feature.provenance}")

@@ -125,13 +125,66 @@ def choice_label(value: str) -> str:
     return f"{tr('Rundkabel')} Ø{length(tube.outer)}"
 
 
-def feature_label(feature_id: FeatureId, feature: Feature) -> str:
-    """``hole_3 · ⌀4,2`` — die Beschriftung, die §18.5 verlangt, Name zuerst."""
+#: Wie eine Fläche heißt, deren Normale in diese Richtung zeigt. Die Reihenfolge
+#: ist die der Achsen; ein Vorzeichen entscheidet zwischen den beiden Namen.
+_SIDES: tuple[tuple[str, str], ...] = (
+    ("Rechte Seite", "Linke Seite"),
+    ("Rückseite", "Vorderseite"),
+    ("Oberseite", "Unterseite"),
+)
+
+#: Ab wann eine Normale als achsparallel gilt. Darunter ist die Fläche schräg,
+#: und ein Seitenname wäre eine Behauptung.
+_AXIS_ALIGNED = 0.9
+
+
+def feature_name(feature_id: FeatureId, feature: Feature) -> str:
+    """Wie das Merkmal heißt, wenn man es jemandem zeigt.
+
+    Im Baum stand `face_2` — die Kennung, mit der der Op-Stack rechnet, und
+    für einen Menschen eine Nummer ohne Aussage. Eine ebene Fläche weiß, wohin
+    sie zeigt, und „Oberseite" ist dieselbe Auskunft in lesbar. Die Kennung
+    bleibt: sie steht im Tooltip und in jedem Parameterfeld.
+    """
+    if feature.kind == "face":
+        normal = feature.params.get("normal")
+        if isinstance(normal, tuple | list) and len(normal) == 3:
+            for axis, (positive, negative) in enumerate(_SIDES):
+                value = float(normal[axis])
+                if abs(value) >= _AXIS_ALIGNED:
+                    return tr(positive if value > 0 else negative)
+        return tr("Schrägfläche")
+    if feature.kind == "hole":
+        return f"{tr('Bohrung')} {feature_id.rsplit('_', 1)[-1]}"
+    if feature.kind == "edge_loop":
+        return tr("Offene Kante")
+    return feature_id
+
+
+def feature_measure(feature: Feature) -> str:
+    """Die eine Zahl, die dieses Merkmal ausmacht — ohne seinen Namen.
+
+    Getrennt vom Namen, weil der Objektbaum zwei Spalten hat: dort stand die
+    ganze Beschriftung links und rechts der Typ („hole", „face"). Links war
+    damit abgeschnitten, was rechts gefehlt hat.
+    """
     params = feature.params
     if feature.kind == "hole":
-        return f"{feature_id} · Ø{length(float(params.get('diameter', 0.0)))}"
+        return f"Ø{length(float(params.get('diameter', 0.0)))}"
     if feature.kind == "face":
-        return f"{feature_id} · {float(params.get('area', 0.0)):.0f} mm²"
+        return f"{float(params.get('area', 0.0)):.0f} mm²"
     if feature.kind == "edge_loop":
-        return f"{feature_id} · {params.get('open_edges', 0)} {tr('offene Kanten')}"
-    return feature_id
+        return f"{params.get('open_edges', 0)} {tr('offene Kanten')}"
+    return ""
+
+
+def feature_label(feature_id: FeatureId, feature: Feature) -> str:
+    """``Bohrung 3 · ⌀4,2`` — die Beschriftung, die §18.5 verlangt, Name
+    zuerst.
+
+    Für die Stellen, an denen nur eine Zeile Platz hat: Viewport-Beschriftung
+    und Statusleiste. Wo zwei Spalten stehen, gehören Name und Maß getrennt.
+    """
+    measure = feature_measure(feature)
+    name = feature_name(feature_id, feature)
+    return f"{name} · {measure}" if measure else name
