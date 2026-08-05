@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -27,6 +28,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import check_build_volume
 from app.core.log import get_logger
 from app.core.types import (
+    BoundingBox,
     BRepBody,
     Finding,
     MaterialSlot,
@@ -36,7 +38,7 @@ from app.core.types import (
     SceneObject,
     Source,
 )
-from app.core.units import format_length
+from app.core.units import EPS_GEOM, format_length
 from app.i18n import _, tr
 
 _log = get_logger(__name__)
@@ -180,6 +182,159 @@ def plan_export(
     )
 
 
+def adhesion_margin(settings: PrintSettings) -> float:
+    """Wie weit die Plattenhaftung über den Körper hinausreicht.
+
+    Der Wert entscheidet, wie eng zwei Teile nebeneinander stehen dürfen — und
+    er wurde beim Gewürzset zuerst vergessen: die Deckelplatte sah in der
+    Rechnung frei aus und war es nicht, weil zwölf Streuscheiben je 3 mm Brim
+    tragen und der zwischen zwei Nachbarn zweimal zählt.
+    """
+    kind = settings.adhesion.kind
+    if kind == "brim":
+        return settings.adhesion.brim_width
+    if kind == "skirt":
+        return settings.adhesion.skirt_distance
+    if kind == "raft":
+        # Ein Raft läuft ungefähr eine Brimbreite über den Körper hinaus; der
+        # genaue Wert steht im Slicer und ist keine Formwerk-Einstellung.
+        return settings.adhesion.brim_width
+    return 0.0
+
+
+def check_adhesion_clearance(
+    meshes: Sequence[MeshData],
+    settings: PrintSettings,
+    plates: Sequence[int] | None = None,
+) -> list[Finding]:
+    """Passen die Haftungsränder zwischen zwei Teilen noch nebeneinander?
+
+    Die Körper selbst können reichlich Luft haben und der Druck trotzdem
+    scheitern: Brim und Skirt stehen über den Körper hinaus, und zwischen zwei
+    Nachbarn zählt der Rand zweimal. Gemessen wird in der Aufsicht, denn dort
+    liegt die Haftung — was sich in der Höhe überlappt, ist eine andere Frage
+    (:func:`app.core.geom.prepare.check_collisions`).
+    """
+    margin = adhesion_margin(settings)
+    if margin <= 0.0:
+        return []
+
+    findings: list[Finding] = []
+    needed = 2.0 * margin
+    for first in range(len(meshes)):
+        for second in range(first + 1, len(meshes)):
+            if plates is not None and plates[first] != plates[second]:
+                continue
+            gap = _plane_gap(meshes[first].bounds, meshes[second].bounds)
+            if gap >= needed - EPS_GEOM:
+                continue
+            findings.append(
+                Finding(
+                    code="arrange.adhesion_too_close",
+                    severity="warning",
+                    message=_(
+                        "Zwei Teile stehen so dicht, dass ihre Plattenhaftung ineinanderläuft."
+                    ),
+                    values={
+                        "a": first,
+                        "b": second,
+                        "gap": format_length(gap),
+                        "needed": format_length(needed),
+                    },
+                )
+            )
+    return findings
+
+
+def _plane_gap(first: BoundingBox, second: BoundingBox) -> float:
+    """Der Abstand zweier Grundrisse. Null heißt: sie überlappen bereits."""
+    along = [
+        max(first.minimum[axis] - second.maximum[axis], second.minimum[axis] - first.maximum[axis])
+        for axis in (0, 1)
+    ]
+    # Getrennt sind sie, sobald es *eine* Achse gibt, die sie trennt — und der
+    # Abstand ist dann der dieser Achse.
+    return max(max(along), 0.0)
+
+
+def check_filament_changes(
+    objects: Sequence[SceneObject], settings: PrintSettings, plate: int | None = None
+) -> list[Finding]:
+    """Was es kostet, zwei Filamente auf eine Platte zu legen (§29).
+
+    Ein Wechsel ist nicht der Griff zur zweiten Spule, sondern ein Spülvorgang
+    je Schicht, in der beide Filamente vorkommen. Beim Gewürzset waren das
+    hundertzehn Schichten — der Behälter ist 68 mm hoch, der Deckel 22 —, also
+    rund zweihundertzwanzig Wechsel, und das Spülmaterial wog mehr als die
+    Deckel selbst.
+
+    Gemeldet wird die Zahl der Wechsel, weil sie sich aus den Höhen exakt
+    ergibt. Was ein einzelner davon an Material kostet, steht im Profil des
+    Slicers und nicht hier — die Größenordnung nennt der Bericht, die Zahl der
+    Slicer.
+    """
+    chosen = [entry for entry in objects if plate is None or entry.plate == plate]
+    slots_of = {entry.id: {slot.name for slot in entry.material_slots} or {""} for entry in chosen}
+    if len({name for names in slots_of.values() for name in names}) < 2:
+        return []
+
+    layer = settings.layers.layer_height
+    if layer <= 0.0:
+        return []
+    tallest = max((float(entry.mesh.bounds.maximum[2]) for entry in chosen), default=0.0)
+    shared = 0
+    for index in range(int(tallest / layer) + 1):
+        height = (index + 0.5) * layer
+        present = {
+            name
+            for entry in chosen
+            if float(entry.mesh.bounds.maximum[2]) >= height
+            for name in slots_of[entry.id]
+        }
+        if len(present) > 1:
+            shared += 1
+    if shared == 0:
+        return []
+
+    return [
+        Finding(
+            code="arrange.filament_changes",
+            severity="info",
+            message=_(
+                "Auf dieser Platte liegen mehrere Filamente übereinander. Jede "
+                "gemeinsame Schicht kostet einen Wechsel samt Spülgang."
+            ),
+            values={"layers": shared, "changes": shared * 2},
+        )
+    ]
+
+
+def plates_by_material(objects: Sequence[SceneObject]) -> dict[str, int]:
+    """Schlägt vor, welches Teil auf welche Platte gehört (§25, §29).
+
+    Ein Filament je Platte, denn zwei kosten je gemeinsamer Schicht einen
+    Spülgang (:func:`check_filament_changes`). Die Reihenfolge folgt dem ersten
+    Auftreten, damit derselbe Entwurf zweimal dieselbe Zuordnung ergibt —
+    eine Vorgabe, die zwischen zwei Aufrufen springt, ist keine.
+
+    Was mehrere Filamente in **einem** Teil trägt, bleibt zusammen: ein
+    zweifarbiges Schild ist ein Objekt und lässt sich nicht auf zwei Platten
+    legen. Es kommt zur Gruppe seines ersten Slots.
+
+    Zurück kommt ein Vorschlag, keine Änderung: die Platte eines Objekts ist
+    Teil des Dokuments und wird über eine Transaktion gesetzt, nicht hier.
+    """
+    order: list[str] = []
+    chosen: dict[str, int] = {}
+    for entry in objects:
+        names = [slot.name for slot in entry.material_slots] or [""]
+        first = names[0]
+        if first not in order:
+            order.append(first)
+        chosen[entry.id] = order.index(first)
+    return chosen
+
+
 def check_before_export(
     objects: list[SceneObject], profile: Profile, sources: dict[str, Source]
 ) -> list[Finding]:
@@ -310,6 +465,12 @@ def write_assembly(
         )
 
     findings = check_before_export(chosen, profile, sources or {})
+    if settings is not None:
+        # Was erst auf der Platte auffiele: Haftungsränder, die ineinander
+        # laufen, und der Preis zweier Filamente in einem Auftrag.
+        meshes = [as_mesh_data(entry.mesh) for entry in chosen]
+        findings += check_adhesion_clearance(meshes, settings, [entry.plate for entry in chosen])
+        findings += check_filament_changes(chosen, settings, plate)
     parts = [
         threemf.AssemblyPart(
             mesh=as_mesh_data(entry.mesh),

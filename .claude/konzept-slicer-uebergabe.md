@@ -236,13 +236,27 @@ Plattenweit bleiben Temperatur, Kühlung und Stützen: sie hängen am Material
 oder an der Maschine, und je Teil verstellt wären sie ein Widerspruch, den der
 Slicer auflösen müsste.
 
-### Stufe 5 — Platten aus Materialgruppen
-`merge_slots` kennt die Slots bereits. Der Schritt davor fehlt: Teile nach
-Filament gruppieren, je Gruppe eine Platte, und wenn eine Gruppe nicht auf eine
-Platte passt, mehrere. Die Anordnung rechnet den Haftungsrand mit — beim
-Gewürzset war die erste Belegung zu eng, weil der Brim nicht mitgezählt wurde.
-Wer zwei Filamente auf einer Platte will, bekommt die Rechnung genannt
-(Wechselzahl, Spülmenge, Zeit) und entscheidet.
+### Stufe 5 — Platten aus Materialgruppen — **umgesetzt**
+Drei Stücke, alle drei aus dem Gewürzset abgeleitet:
+
+- **`plates_by_material`** schlägt vor, welches Teil auf welche Platte gehört —
+  ein Filament je Platte. Die Reihenfolge folgt dem ersten Auftreten, damit
+  derselbe Entwurf zweimal dieselbe Zuordnung ergibt. Ein Objekt mit mehreren
+  Slots bleibt zusammen: ein zweifarbiges Schild lässt sich nicht auf zwei
+  Platten legen. Zurück kommt ein Vorschlag, keine Änderung — die Platte eines
+  Objekts gehört ins Dokument und wird über eine Transaktion gesetzt.
+- **`check_adhesion_clearance`** rechnet den Haftungsrand mit. Zwei Körper
+  können reichlich Luft haben und der Druck trotzdem scheitern: Brim und Skirt
+  stehen über den Körper hinaus, und zwischen zwei Nachbarn zählt der Rand
+  zweimal. Genau daran war die erste Deckelplatte zu eng.
+- **`check_filament_changes`** nennt den Preis, statt ihn zu verbieten: die
+  Zahl der Schichten, in denen beide Filamente vorkommen, und die Wechsel
+  daraus. Beim Gewürzset 110 Schichten und 220 Wechsel — der Behälter ist
+  68 mm hoch, der Deckel 22.
+
+Die Spülmenge in Gramm bleibt draußen. Sie steht im Profil des Slicers, nicht
+in Formwerk, und eine Zahl zu erfinden, die wie eine Messung aussieht, wäre
+schlechter als die Wechselzahl, die sich exakt ergibt.
 
 ## 6. Was nicht gebaut wird
 

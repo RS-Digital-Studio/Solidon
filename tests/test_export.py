@@ -13,9 +13,12 @@ import trimesh
 from app.core.errors import ValidationError
 from app.core.export import threemf
 from app.core.export.writer import (
+    check_adhesion_clearance,
     check_before_export,
+    check_filament_changes,
     export_bytes,
     plan_export,
+    plates_by_material,
     safe_name,
     write_assembly,
     write_plan,
@@ -23,7 +26,8 @@ from app.core.export.writer import (
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.transform import apply, place_on_bed, translation
 from app.core.ingest.loader import normalise
-from app.core.types import Profile, SceneObject, Source, SourceOrigin
+from app.core.knowledge import print_settings, profiles
+from app.core.types import MaterialSlot, Profile, SceneObject, Source, SourceOrigin
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -293,3 +297,110 @@ def test_only_the_part_that_needs_it_gets_the_setting() -> None:
     }
     assert by_name["klein"]["brim_type"] == "outer_only"
     assert "brim_type" not in by_name["gross"]
+
+
+def _boxed(
+    name: str, size: tuple[float, float, float], at: tuple[float, float], slot: str = ""
+) -> SceneObject:
+    """Ein Quader an einer Stelle der Platte, mit optionalem Materialnamen."""
+    raw = trimesh.creation.box(size)
+    raw.apply_translation((at[0], at[1], size[2] / 2.0))
+    return SceneObject(
+        id=name,
+        name=name,
+        mesh=MeshData.of(raw),
+        material_slots=[MaterialSlot(index=0, name=slot)] if slot else [],
+    )
+
+
+def test_two_parts_may_be_apart_and_their_brims_still_collide() -> None:
+    """Die Körper haben Luft, der Druck scheitert trotzdem.
+
+    Genau das passierte beim Gewürzset: die Deckelplatte sah in der Rechnung
+    frei aus, weil der Brim nicht mitzählte — und zwischen zwei Nachbarn zählt
+    er zweimal.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+    settings = print_settings.with_path(settings, "adhesion.kind", "brim")
+    settings = print_settings.with_path(settings, "adhesion.brim_width", 3.0)
+    meshes = [
+        (_boxed("links", (10.0, 10.0, 5.0), (0.0, 0.0)).mesh),
+        (_boxed("rechts", (10.0, 10.0, 5.0), (14.0, 0.0)).mesh),
+    ]
+
+    findings = check_adhesion_clearance(meshes, settings)
+
+    assert [entry.code for entry in findings] == ["arrange.adhesion_too_close"]
+    weit = [
+        meshes[0],
+        (_boxed("weit", (10.0, 10.0, 5.0), (30.0, 0.0)).mesh),
+    ]
+    assert check_adhesion_clearance(weit, settings) == []
+
+
+def test_parts_on_different_plates_never_crowd_each_other() -> None:
+    settings = print_settings.resolve(profiles.make_profile())
+    settings = print_settings.with_path(settings, "adhesion.kind", "brim")
+    meshes = [
+        (_boxed("a", (10.0, 10.0, 5.0), (0.0, 0.0)).mesh),
+        (_boxed("b", (10.0, 10.0, 5.0), (11.0, 0.0)).mesh),
+    ]
+
+    assert check_adhesion_clearance(meshes, settings, plates=[0, 1]) == []
+
+
+def test_two_filaments_on_one_plate_are_counted_not_forbidden() -> None:
+    """Ein Wechsel ist ein Spülgang je gemeinsamer Schicht. Beim Gewürzset
+    waren das hundertzehn — der Behälter 68 mm hoch, der Deckel 22."""
+    settings = print_settings.resolve(profiles.make_profile())
+    settings = print_settings.with_path(settings, "layers.layer_height", 0.2)
+    objects = [
+        _boxed("behaelter", (10.0, 10.0, 68.0), (0.0, 0.0), slot="transluzent"),
+        _boxed("deckel", (10.0, 10.0, 22.0), (30.0, 0.0), slot="grau"),
+    ]
+
+    findings = check_filament_changes(objects, settings)
+
+    assert [entry.code for entry in findings] == ["arrange.filament_changes"]
+    assert findings[0].severity == "info", "eine Rechnung, kein Verbot"
+    assert findings[0].values["layers"] == 110
+    assert findings[0].values["changes"] == 220
+
+
+def test_one_filament_costs_no_changes() -> None:
+    settings = print_settings.resolve(profiles.make_profile())
+    objects = [
+        _boxed("a", (10.0, 10.0, 60.0), (0.0, 0.0), slot="grau"),
+        _boxed("b", (10.0, 10.0, 20.0), (30.0, 0.0), slot="grau"),
+    ]
+
+    assert check_filament_changes(objects, settings) == []
+
+
+def test_a_plate_is_suggested_per_filament() -> None:
+    """Ein Filament je Platte: zwei kosten je gemeinsamer Schicht einen
+    Spülgang, und die Rechnung steht in check_filament_changes."""
+    objects = [
+        _boxed("behaelter", (10.0, 10.0, 68.0), (0.0, 0.0), slot="transluzent"),
+        _boxed("basis", (10.0, 10.0, 22.0), (30.0, 0.0), slot="grau"),
+        _boxed("scheibe", (10.0, 10.0, 5.0), (60.0, 0.0), slot="grau"),
+        _boxed("zweiter", (10.0, 10.0, 68.0), (90.0, 0.0), slot="transluzent"),
+    ]
+
+    plates = plates_by_material(objects)
+
+    assert plates["behaelter"] == plates["zweiter"]
+    assert plates["basis"] == plates["scheibe"]
+    assert plates["behaelter"] != plates["basis"]
+    # Reihenfolge nach erstem Auftreten — eine Vorgabe, die zwischen zwei
+    # Aufrufen springt, ist keine.
+    assert plates["behaelter"] == 0
+
+
+def test_parts_without_a_named_filament_stay_together() -> None:
+    objects = [
+        _boxed("a", (10.0, 10.0, 10.0), (0.0, 0.0)),
+        _boxed("b", (10.0, 10.0, 10.0), (30.0, 0.0)),
+    ]
+
+    assert set(plates_by_material(objects).values()) == {0}

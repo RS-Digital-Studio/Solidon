@@ -317,6 +317,17 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       standen im `name`-Attribut des Standards, das die Orca-Familie selbst nie
       schreibt und folglich nicht liest; eine Baugruppe erschien als
       „Object 1, Object 2"
+- [x] **Platten aus Materialgruppen** (§25, §29) — `plates_by_material`
+      schlägt ein Filament je Platte vor, `check_adhesion_clearance` rechnet
+      den Haftungsrand mit (zwei Körper können Luft haben und ihre Brims
+      trotzdem ineinanderlaufen — daran war die erste Deckelplatte des
+      Gewürzsets zu eng), und `check_filament_changes` nennt den Preis zweier
+      Filamente auf einer Platte, statt ihn zu verbieten: 110 gemeinsame
+      Schichten und 220 Wechsel, wenn ein 68-mm-Behälter neben einem
+      22-mm-Deckel steht. Die Spülmenge in Gramm bleibt draußen, sie steht im
+      Profil des Slicers
+- [ ] Plattenvorschlag in der Oberfläche anbieten — `plates_by_material`
+      rechnet ihn, gesetzt wird die Platte weiterhin von Hand
 - [ ] Bügeln aus der Passung ableiten — wo ein `Fit` zwei Flächen aufeinander
       legt, ist die obere eine Gleitfläche und will gebügelt werden. Heute ist
       es ein Schalter im Dialog
