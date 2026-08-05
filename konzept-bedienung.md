@@ -885,16 +885,33 @@ Nach Wirkung je Aufwand.
 
 ---
 
-## Stand (5. August 2026)
+## Stand (5. August 2026, zweiter Eintrag)
 
-Zweiundzwanzig Commits, die Suite bei 2558 Tests. Was von der Reihenfolge oben
+Vierundvierzig Commits, die Suite bei 2668 Tests. Was von der Reihenfolge oben
 erledigt ist und was nicht:
 
-**Erledigt** — 1, 2, 3, 4, 6, 9a, 9d, 20, 22, 23, 24, 25.
+**Erledigt** — 1 bis 4, 6 bis 14 einschließlich 9a–9d, 20, 22 bis 25.
 
-Damit ist die ganze Gruppe „Zuerst" durch, die Fehlerbehandlung, die Befunde,
-der Verlauf und die Texte. Der Op-Dialog steht am Rand und sperrt nicht mehr;
-die Farbrollen kommen aus einer Quelle.
+Damit sind die Gruppen „Zuerst", „Danach" und „Dann — Gestaltung" durch. Die
+Anwendung hat eine Formsprache (Stylesheet, vier Typografiestufen, ein
+Abstandsraster von 4 px), das helle Thema kommt überall an, der Startbildschirm
+ist einer, der Katalog erklärt seine Kacheln, und Bauraum, Gizmo und
+Schnittregler richten sich nach dem Teil statt nach der Kulisse.
+
+Zwei Funde entstanden erst beim Umsetzen, beide nur im Bild sichtbar: das
+Einpassen rechnete richtig und wurde von pyvista sofort wieder verworfen
+(`camera_set`), und die Panel-Kopfzeilen wurden vom neuen Stylesheet zu drei
+bernsteinfarbenen Balken. Wer Gestaltung ändert, muss sie ansehen.
+
+**Aus Teil 8 und 9 ebenfalls erledigt:** die Grundformen liegen unter
+*Erzeugen*, alle Menüs sind nach ihren Titeln sortiert statt nach den
+englischen Bezeichnern, die Druckerliste ist alphabetisch, Rückgängig steht
+oben, die Erstinbetriebnahme erreicht das offene Projekt, das Slicer-Profil
+belegt keinen fremden Drucker mehr vor, die Verwerfen-Frage nennt die
+Schritte, die Schwindung steht als Prozentwert da, der Objektbaum trennt Name
+und Maß und nennt Flächen nach ihrer Richtung, die Wandstärkenskala endet bei
+einem druckrelevanten Wert, die Schichtanalyse schneidet, und die
+Merkmalsüberlagerung beschriftet auch, was im Material steckt.
 
 **Teilweise**
 
@@ -907,19 +924,22 @@ die Farbrollen kommen aus einer Quelle.
 * **26** — die Absturzursache ist gefunden und behoben (eine Referenzschleife
   zwischen Python und VTK, siehe 5.5); ein Absturzprotokoll gibt es weiterhin
   nicht.
+* **11** — der Startbildschirm ist neu, die Beispiele sind Kacheln. Ohne
+  Vorschaubild: `tools/make_figures.py` könnte sie rendern, dann müssten sie
+  mitgeliefert und bei jeder Beispieländerung erneuert werden.
+* **Teil 9** — die Merkmalsbeschriftungen stehen dauerhaft, nicht beim
+  Überfahren. Sie sind ein Schalter, den man einschaltet, um sie zu sehen; ob
+  das reicht, zeigt der nächste Lauf.
 
-**Offen** — 7, 8, 9, 9b, 9c, 10, 11, 12, 13, 14 und die fünf Zeichenpunkte
-15 bis 19.
+**Offen** — die fünf Zeichenpunkte 15 bis 19: der Skizzeneditor gegen Fusion.
+Dazu aus Teil 7 der erzeugte Referenzteil des Handbuchs (interne Namen,
+`True`/`False`, leere Spalten, keine Abbildungen) und die Fenster-Seite, die
+eine Navigation beschrieb, die es nicht gab — sie gibt es jetzt, also stimmt
+die Seite wieder und sollte gegengelesen werden.
 
-Das ist der Gestaltungsteil: Stylesheet, Typografie, Abstandsraster, helles
-Thema, Startbildschirm, Katalog, Bauraum und Gizmo — und der Skizzeneditor
-gegen Fusion. Dazu aus Teil 8 und 9, die nicht in der Reihenfolge stehen: die
-Grundformen unter *Ändern → Boolesch*, die Erstinbetriebnahme, das vorbelegte
-Slicer-Profil, die Druckerliste, die Spalten des Objektbaums, die Skala der
-Wandstärkenkarte und die Schichtenvorschau, die nichts schneidet.
-
-Bis hierher waren es Fehler — Dinge, die etwas anderes taten, als sie sagten.
-Was übrig ist, ändert die Anwendung sichtbar.
+Bis hierher waren es Fehler — Dinge, die etwas anderes taten, als sie sagten,
+und die Gestaltung, die keine war. Was übrig ist, ist ein Werkzeug, das noch
+fehlt: zeichnen auf dem Niveau, das jeder kennt, der aus einem CAD kommt.
 
 ---
 
