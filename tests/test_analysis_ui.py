@@ -628,6 +628,80 @@ def test_the_camera_is_fitted_once_and_then_left_alone(window: MainWindow) -> No
     )
 
 
+class _CameraPlotter:
+    """Ein Plotter, der nur Buch führt.
+
+    Offscreen gibt es keinen echten — und genau dort spielt dieser Fehler:
+    ein Test, der sich ohne Plotter überspringt, hätte nie gemerkt, dass das
+    Einpassen wirkungslos war.
+    """
+
+    def __init__(self) -> None:
+        self.camera_set = False
+        self.fitted_to: list[object] = []
+
+    def reset_camera(self, bounds: object = None) -> None:
+        self.fitted_to.append(bounds)
+
+
+def test_fitting_tells_pyvista_that_it_is_done(window: MainWindow) -> None:
+    """Sonst passt pyvista gleich noch einmal ein — über alles.
+
+    ``reset_camera(bounds=…)`` lässt ``camera_set`` auf False stehen, und der
+    nächste Zugriff auf ``plotter.camera`` (beim Rendern, beim Stilwechsel, bei
+    jeder Achsansicht) setzt die Kamera daraufhin selbst — diesmal über *alle*
+    Aktoren. Der Bauraum gewann also jedes Mal, obwohl hier die Maße der Körper
+    standen: „Alles einpassen" tat sichtbar nichts.
+    """
+    window.viewport.show_scene(window.session.last_result)
+    plotter = _CameraPlotter()
+    window.viewport.plotter = plotter
+
+    window.viewport.reset_camera()
+
+    assert plotter.fitted_to == [window.viewport._object_bounds()], "auf die Körper"
+    assert plotter.camera_set, "und danach fasst pyvista die Kamera nicht mehr an"
+
+
+def test_an_empty_scene_still_fits_on_something(window: MainWindow) -> None:
+    """Ohne Körper bleibt der Bauraum das Maß — dann ist er das Einzige, was
+    es zu sehen gibt."""
+    window.viewport.show_scene(None)
+    plotter = _CameraPlotter()
+    window.viewport.plotter = plotter
+
+    window.viewport.reset_camera()
+
+    assert plotter.fitted_to == [None]
+    assert plotter.camera_set
+
+
+def test_the_build_volume_is_a_hint_not_a_cage() -> None:
+    """Als geschlossener Drahtkasten war die Oberkante aus der Vorgabeansicht
+    eine große Raute weit über dem Bett — und das Teil darunter ein Fleck.
+
+    Gebraucht wird zweierlei: wie hoch darf es werden, und wo hört die Fläche
+    auf. Vier senkrechte Ecken und je zwei kurze Winkel oben tragen beides.
+    """
+    from app.ui.viewport import CORNER_FRACTION, volume_edges
+
+    segments = volume_edges(200.0, 100.0, 250.0)
+    assert len(segments) == 12, "vier Ecken mit je einer Senkrechten und zwei Winkeln"
+
+    uprights = [pair for pair in segments if pair[0][2] != pair[1][2]]
+    assert len(uprights) == 4
+    for start, end in uprights:
+        assert (start[2], end[2]) == (0.0, 250.0), "vom Bett bis nach oben"
+
+    top = [pair for pair in segments if pair[0][2] == pair[1][2] == 250.0]
+    assert len(top) == 8, "zwei Arme je Ecke, keine durchgehende Kante"
+    for start, end in top:
+        length = max(abs(end[0] - start[0]), abs(end[1] - start[1]))
+        assert length in (200.0 * CORNER_FRACTION, 100.0 * CORNER_FRACTION)
+        # Nach innen: außerhalb der Fläche hätten sie nichts zu begrenzen.
+        assert abs(end[0]) <= abs(start[0]) and abs(end[1]) <= abs(start[1])
+
+
 def test_a_click_on_the_body_selects_it(window: MainWindow) -> None:
     """§2.9 und §18.5: „links wählt aus" muss ohne den Baum gelten.
 

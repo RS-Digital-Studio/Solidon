@@ -290,6 +290,43 @@ def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, floa
     return marks
 
 
+#: Wie weit die Eckwinkel an der Oberkante des Bauraums in die Kante
+#: hineinreichen, als Anteil ihrer Länge.
+CORNER_FRACTION = 0.08
+
+
+def volume_edges(
+    width: float, depth: float, height: float
+) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
+    """Die Kanten, mit denen der Bauraum angedeutet wird (§18.6).
+
+    **Nicht der ganze Quader.** Als geschlossener Drahtkasten war seine
+    Oberkante aus der Vorgabeansicht eine große Raute weit über dem Bett, und
+    das 80-mm-Teil darunter ein Fleck — die Kulisse war lauter als das Stück.
+
+    Gebraucht wird zweierlei: wie hoch darf es werden, und wo hört die Fläche
+    auf. Das erste tragen vier senkrechte Ecken, das zweite je zwei kurze
+    Winkel an der Oberkante. Was dazwischen läge, wäre eine Linie quer durchs
+    Bild, die nichts sagt, was der Boden nicht schon sagt.
+
+    Als eigene Funktion und nicht im Zeichnen versteckt: offscreen gibt es
+    keinen Plotter, und eine Prüfung, die sich dort überspringt, prüft nie
+    etwas.
+    """
+    half_width, half_depth = width / 2.0, depth / 2.0
+    arm_x = width * CORNER_FRACTION
+    arm_y = depth * CORNER_FRACTION
+    segments: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = []
+    for x in (-half_width, half_width):
+        for y in (-half_depth, half_depth):
+            segments.append(((x, y, 0.0), (x, y, height)))
+            # Die Winkel zeigen nach innen, sonst stünden sie außerhalb der
+            # Fläche, die sie begrenzen.
+            segments.append(((x, y, height), (x - arm_x if x > 0 else x + arm_x, y, height)))
+            segments.append(((x, y, height), (x, y - arm_y if y > 0 else y + arm_y, height)))
+    return segments
+
+
 #: Abstand des Vorschaubands von der Oberkante des Viewports.
 BANNER_TOP = 12
 
@@ -976,8 +1013,13 @@ class Viewport(QWidget):
         self.plotter.render()
 
     def show_build_volume(self, profile: Profile) -> None:
-        """Das Bett als Raster in echter Größe, der Bauraum als durchsichtiger
-        Kasten (§18.6).
+        """Das Bett als Raster in echter Größe, der Bauraum als Eckwinkel
+        (§18.6).
+
+        **Kein Aufruf hier setzt die Kamera.** Der Bauraum ist Kulisse, und
+        pyvista passt bei der ersten Netzfläche einer leeren Szene von selbst
+        ein — das machte jedes Einpassen auf die Körper wieder zunichte, weil
+        die Kulisse danach gezeichnet wurde.
         """
         if self.plotter is None:
             return
@@ -1007,6 +1049,7 @@ class Viewport(QWidget):
                 specular=0.0,
                 name="bed_surface",
                 render=False,
+                reset_camera=False,
                 pickable=False,
             )
         )
@@ -1026,21 +1069,26 @@ class Viewport(QWidget):
                 opacity=0.35,
                 name="bed",
                 render=False,
+                reset_camera=False,
             )
         )
-        box = pv.Box(bounds=(-width / 2, width / 2, -depth / 2, depth / 2, 0.0, height))
+        import numpy as np
+
+        segments = volume_edges(width, depth, height)
+        points = np.asarray([point for pair in segments for point in pair], dtype=float)
+        lines = np.hstack([[2, 2 * index, 2 * index + 1] for index in range(len(segments))])
         self._frame_actors.append(
             self.plotter.add_mesh(
-                box,
+                pv.PolyData(points, lines=lines),
                 color=self._bed_colour,
-                style="wireframe",
-                opacity=0.5,
+                opacity=0.35,
+                line_width=1,
                 name="build_volume",
                 render=False,
+                reset_camera=False,
+                pickable=False,
             )
         )
-
-        import numpy as np
 
         marks = bed_scale(width, depth)
         self._frame_actors.append(
@@ -1054,6 +1102,7 @@ class Viewport(QWidget):
                 always_visible=True,
                 name="bed_scale",
                 render=False,
+                reset_camera=False,
             )
         )
         self.plotter.render()
@@ -1733,8 +1782,15 @@ class Viewport(QWidget):
         bounds = self._object_bounds()
         if bounds is None:
             self.plotter.reset_camera()
-            return
-        self.plotter.reset_camera(bounds=bounds)
+        else:
+            self.plotter.reset_camera(bounds=bounds)
+        # **Ohne diese Zeile war das Einpassen wirkungslos.** pyvistas
+        # ``reset_camera`` lässt ``camera_set`` auf False stehen, und der
+        # nächste Zugriff auf ``plotter.camera`` — beim Rendern, beim
+        # Stilwechsel, bei jeder Achsansicht — passt dann von selbst noch
+        # einmal ein, diesmal über *alle* Aktoren. Der Bauraum gewann also
+        # jedes Mal, obwohl hier die Maße der Körper standen.
+        self.plotter.camera_set = True
 
     def _fit_once_for(self, result: EvaluationResult | None) -> None:
         """Passt ein, wenn die Ansicht zum ersten Mal etwas zu zeigen hat.

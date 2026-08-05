@@ -2804,14 +2804,12 @@ class MainWindow(QMainWindow):
         self._hidden &= set(result.scene.objects)
         self.viewport.set_hidden(self._hidden)
         self.object_tree.set_hidden(self._hidden)
-        # Der erste Körper einer leeren Szene wird eingepasst. Ohne das blieb
-        # die Kamera, wo sie war: ein importiertes Teil lag außerhalb des
-        # Bildes, und die Anwendung sah aus, als hätte sie nichts geladen.
-        was_empty = not self._seen_objects
+        # Eingepasst wird im Viewport (``_fit_once_for``), nicht hier: dort ist
+        # die neue Szene schon gesetzt. Von hier aus lief es mit den Maßen der
+        # *vorigen* — beim ersten Projekt also mit gar keinen, und dann passte
+        # es auf den Bauraum ein statt auf das Teil.
         self._seen_objects = bool(result.scene.objects)
         self.object_tree.show_scene(result, self.session.project.document)
-        if was_empty and self._seen_objects:
-            self.viewport.reset_camera()
         plates = {entry.plate for entry in result.scene.objects.values()}
         self.explode_bar.show_for(len(result.scene.objects), max(plates, default=0) + 1)
         self.report.show_result(result)
