@@ -38,6 +38,25 @@ def length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = True) -> 
     return localised(format_length(value_mm, unit, with_unit))
 
 
+def compact_length(value_mm: float, unit: LengthUnit = "mm") -> str:
+    """Dieselbe Länge, ohne Nachkommastellen, die nichts sagen.
+
+    „60,00" braucht Platz und trägt genau so viel Auskunft wie „60" — die
+    Nullen stehen dort, weil die Formatierung eine feste Stellenzahl hat,
+    nicht weil jemand sie gemessen hätte. Wo ein Maß wirklich krumm ist,
+    bleiben die Stellen stehen: „60,25" sagt etwas anderes als „60", und
+    genau diesen Unterschied darf eine Abkürzung nicht verschlucken.
+
+    Für Spalten und Zeilen, die eng sind. Wo Platz ist, gilt weiter
+    :func:`length` — eine Anzeige, die zwischen zwei Schreibweisen springt,
+    weil das Fenster schmaler wurde, ist schlimmer als eine lange.
+    """
+    text = format_length(value_mm, unit, with_unit=False)
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return localised(text or "0")
+
+
 def volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
     """Ein Volumen, wie die Oberfläche es schreibt."""
     return localised(format_volume(value_mm3, unit))

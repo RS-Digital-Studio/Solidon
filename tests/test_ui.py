@@ -2203,3 +2203,41 @@ def test_the_generator_dialog_puts_the_seed_out_of_the_way(qt_app: QApplication)
 
     assert not dialog.seed.isVisible(), "zugeklappt, nicht entfernt"
     assert dialog.advanced.isVisibleTo(dialog), "die Klappe selbst steht da"
+
+
+def test_a_measure_drops_zeros_it_never_measured(qt_app: QApplication) -> None:
+    """„60,00" trägt genau so viel Auskunft wie „60" und braucht mehr Platz.
+
+    Die Nullen stehen dort, weil die Formatierung eine feste Stellenzahl hat,
+    nicht weil jemand sie gemessen hätte. Ein krummes Maß behält seine Stellen
+    — genau diesen Unterschied darf eine Abkürzung nicht verschlucken.
+    """
+    from app.ui.labels import compact_length
+
+    assert compact_length(60.0) == "60"
+    assert compact_length(11.0) == "11"
+    assert compact_length(0.0) == "0"
+    assert compact_length(60.25) == "60,25"
+    assert compact_length(0.5) == "0,5"
+
+
+def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> None:
+    """Die linke Zone ist so breit wie ``LEFT_WIDTH``, seit sie über der
+    Ansicht liegt.
+
+    Mit fester Stellenzahl brauchten Name und Maße dreihundertdreiundvierzig
+    Pixel und bekamen zweihundertsechzig — die Spalte wurde abgeschnitten, und
+    zwar bei jedem Projekt, nicht nur bei langen Namen.
+    """
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.ui.overlay import LEFT_WIDTH
+    from app.ui.panels import ObjectTree
+
+    tree = ObjectTree()
+    QTreeWidgetItem(tree.tree, ["Halter", "60 × 40 × 11 mm"])
+    tree.tree.resizeColumnToContents(0)
+    tree.tree.resizeColumnToContents(1)
+
+    needed = tree.tree.columnWidth(0) + tree.tree.columnWidth(1)
+    assert needed <= LEFT_WIDTH, f"{needed} Pixel bei {LEFT_WIDTH} verfügbaren"

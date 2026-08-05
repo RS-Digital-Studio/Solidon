@@ -41,7 +41,7 @@ from app.core.types import Document, Finding, ObjectId
 from app.core.units import LengthUnit
 from app.i18n import tr
 from app.ui.icons import icon
-from app.ui.labels import feature_measure, feature_name, length, volume
+from app.ui.labels import compact_length, feature_measure, feature_name, length, volume
 from app.ui.palette import SEVERITY_ENCODING
 from app.ui.style import NORMAL, ROOMY, set_level
 
@@ -217,7 +217,12 @@ class ObjectTree(QWidget):
             # §19.3: die Einheit stand hier fest, obwohl sie eine Einstellung
             # ist. Umgerechnet wird nur für die Anzeige — im Netz bleibt jede
             # Zahl ein Millimeter.
-            measures = " × ".join(length(value, self._unit, with_unit=False) for value in size)
+            # Kompakt, weil die Spalte eng ist: mit fester Stellenzahl brauchte
+            # sie dreihundert Pixel und bekam zweihundertsechzig, seit die Zonen
+            # über der Ansicht liegen. Die Nullen standen dort, weil die
+            # Formatierung sie vorsieht — nicht weil jemand sie gemessen hätte.
+            # Krumme Maße behalten ihre Stellen.
+            measures = " × ".join(compact_length(value, self._unit) for value in size)
             item = QTreeWidgetItem([entry.name, f"{measures} {self._unit}"])
             item.setData(0, Qt.ItemDataRole.UserRole, object_id)
             state = tr("geschlossen") if entry.mesh.is_watertight else tr("offen")

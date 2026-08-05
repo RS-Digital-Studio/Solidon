@@ -159,6 +159,12 @@ class PartCatalog(QDialog):
             font = QFont(heading.font())
             font.setBold(True)
             heading.setFont(font)
+            # Links, nicht mittig: das Kachelraster zentriert seine
+            # Beschriftungen, und über einer Zeile voller Breite landete die
+            # Überschrift damit in der Bildmitte — bei einer Gruppe aus einem
+            # Baustein einen halben Bildschirm neben ihm. Sie gehört an den
+            # Anfang dessen, was sie überschreibt.
+            heading.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             self.list.addItem(heading)
             for spec in entries:
                 self.list.addItem(self._item(spec))
