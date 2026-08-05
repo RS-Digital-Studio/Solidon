@@ -23,10 +23,10 @@ schwebenden Karten hätte nichts zu teilen: sie nehmen einander nichts weg.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QEvent, QModelIndex, QObject, Qt
+from PySide6.QtWidgets import QAbstractItemView, QTreeView, QWidget
 
-from app.ui.style import ROOMY
+from app.ui.style import ROOMY, SPACE
 from app.ui.theme import THEMES, Theme
 
 #: Breite der linken Zone. Breit genug für „Schraubenloch mit Senkung" in der
@@ -60,6 +60,59 @@ QWidget#overlayCard {{
     border-radius: {ROOMY}px;
 }}
 """
+
+
+def rows_height(view: QAbstractItemView) -> int:
+    """Wie hoch die Zeilen dieser Liste zusammen sind, mit Kopf und Rahmen.
+
+    Qt gibt einer Liste eine Wunschhöhe, die mit ihrem Inhalt nichts zu tun hat
+    — rund zweihundert Pixel, ob eine Zeile darin steht oder hundert. Neben
+    einer Ansicht war das eine leere Spalte; über einer Ansicht ist es eine
+    Karte, die das Modell verdeckt, um nichts zu zeigen.
+
+    Gezählt werden die *sichtbaren* Zeilen: ein zugeklappter Ast zählt als eine
+    Zeile, nicht als seine Kinder.
+    """
+    model = view.model()
+    if model is None:
+        return 0
+
+    def visible_rows(parent: QModelIndex) -> int:
+        total = 0
+        for row in range(model.rowCount(parent)):
+            total += 1
+            index = model.index(row, 0, parent)
+            if isinstance(view, QTreeView) and view.isExpanded(index):
+                total += visible_rows(index)
+        return total
+
+    rows = visible_rows(QModelIndex())
+    # Eine Zeile Höhe auch dann, wenn keine da ist: eine Liste, die auf null
+    # zusammenfällt, sieht aus wie ein Fehler und nicht wie eine leere Liste.
+    line = view.sizeHintForRow(0) if rows else 0
+    if line <= 0:
+        line = view.fontMetrics().height() + 2 * SPACE
+    wanted = max(rows, 1) * line + 2 * view.frameWidth()
+
+    header = view.header() if isinstance(view, QTreeView) else None
+    if header is not None and not header.isHidden():
+        wanted += header.height()
+    return wanted
+
+
+def natural_height(zone: QWidget) -> int:
+    """Die Höhe, bei der der Inhalt einer Zone genau hineinpasst.
+
+    Qts eigene Wunschhöhe taugt dafür nicht, weil die Listen darin ihre
+    beisteuern (siehe ``rows_height``). Gerechnet wird deshalb: was die Zone
+    ohne ihre Listen bräuchte, plus das, was die Listen wirklich brauchen.
+    """
+    wanted = zone.sizeHint().height()
+    for view in zone.findChildren(QAbstractItemView):
+        if not view.isVisibleTo(zone):
+            continue
+        wanted += rows_height(view) - view.sizeHint().height()
+    return max(wanted, 0)
 
 
 class OverlayHost(QWidget):
@@ -100,8 +153,19 @@ class OverlayHost(QWidget):
         self._place()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
-        """Klappt eine Zone zu, wird neu gerechnet, nicht nur neu gezeichnet."""
-        if event.type() in (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.Hide):
+        """Ändert sich eine Zone, wird neu gerechnet, nicht nur neu gezeichnet.
+
+        ``LayoutRequest`` ist dabei der wichtigste Fall: Qt schickt ihn, wenn
+        eine Liste darin Zeilen bekommt oder verliert. Ohne ihn bliebe eine
+        Karte so hoch, wie sie beim Aufbau war — und der Objektbaum wäre nach
+        dem Öffnen eines Projekts genauso leer aussehend wie davor.
+        """
+        if event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+            QEvent.Type.Hide,
+            QEvent.Type.LayoutRequest,
+        ):
             self._place()
         return super().eventFilter(watched, event)
 
@@ -124,11 +188,11 @@ class OverlayHost(QWidget):
         room = max(height - 2 * MARGIN - self._bottom_room(), 0)
 
         if self.left.isVisibleTo(self):
-            wanted = min(self.left.sizeHint().height(), room)
+            wanted = min(natural_height(self.left), room)
             self.left.setGeometry(MARGIN, MARGIN, LEFT_WIDTH, wanted)
 
         if self.right.isVisibleTo(self):
-            wanted = min(self.right.sizeHint().height(), room)
+            wanted = min(natural_height(self.right), room)
             self.right.setGeometry(width - RIGHT_WIDTH - MARGIN, MARGIN, RIGHT_WIDTH, wanted)
 
         # Die Werkzeugzeile sitzt mittig unten und ist so breit, wie sie sein

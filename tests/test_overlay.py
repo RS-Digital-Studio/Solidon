@@ -11,6 +11,8 @@ entscheidet das Thema, aber *wo* sie liegt, entscheidet diese Datei.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -24,7 +26,7 @@ from app.ui.settings import UiSettings
 
 
 @pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
+def window(qt_app: QApplication) -> Iterator[MainWindow]:
     """Ein gezeigtes Fenster.
 
     Gezeigt, weil Qt ein Resize-Ereignis an ein verstecktes Widget erst beim
@@ -39,7 +41,13 @@ def window(qt_app: QApplication) -> MainWindow:
     # der Träger darunter keine Größe, und alle Zonen lägen auf 100 Pixeln.
     window._show_start_screen(False)
     qt_app.processEvents()
-    return window
+    yield window
+    # Aufräumen ist hier Pflicht und nicht Höflichkeit: ein gezeigtes Fenster,
+    # das stehen bleibt, bekommt weiter Ereignisse — und riss siebzehn Tests
+    # *nach* dieser Datei mit ``AttributeError`` aus dem Ereignisfilter.
+    window.close()
+    window.deleteLater()
+    qt_app.processEvents()
 
 
 def test_the_view_gets_the_whole_window(window: MainWindow) -> None:
