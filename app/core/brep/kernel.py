@@ -157,7 +157,38 @@ class Solid:
 
     @property
     def bounds(self) -> BoundingBox:
-        return self.mesh.bounds
+        """Aus der Form, nicht aus den Dreiecken — wie Volumen und Fläche.
+
+        Er kam aus der Tessellation und war damit konstant rund 0,025 mm zu
+        klein: die halbe Abweichung, die das Anzeigenetz haben darf. Bei Ø 50
+        stand 49,9755 mm, wo Fusion denselben Körper mit 25,00 mm Radius misst,
+        und bei Ø 6 fehlten dieselben 0,017 mm — der Fehler ist absolut, also
+        umso schlimmer, je kleiner das Maß.
+
+        Das war kein Anzeigefehler. An dieser Zahl hängen die Maße im
+        Objektbaum, die Bauraumprüfung, das Anordnen, der Haftungsrand und
+        jede Passungsprüfung; Regel 6 sagt, dass der Kern in doppelter
+        Genauigkeit rechnet und nur die Anzeige rundet.
+
+        ``AddOptimal_s`` statt ``Add_s``: das eine misst die Flächen, das
+        andere nimmt die Triangulation, wo es eine gibt — und die ist hier
+        genau das Problem.
+        """
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+
+        box = Bnd_Box()
+        # Ohne diese Zeile legt OpenCASCADE eine Sicherheitstoleranz um den
+        # Quader; ein Würfel von 40 mm hätte dann 40,00002.
+        box.SetGap(0.0)
+        BRepBndLib.AddOptimal_s(self.shape, box, False, False)
+        if box.IsVoid():
+            return self.mesh.bounds
+        low_x, low_y, low_z, high_x, high_y, high_z = box.Get()
+        return BoundingBox(
+            (float(low_x), float(low_y), float(low_z)),
+            (float(high_x), float(high_y), float(high_z)),
+        )
 
     @property
     def is_watertight(self) -> bool:

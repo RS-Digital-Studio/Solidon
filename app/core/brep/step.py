@@ -59,8 +59,15 @@ def read(payload: bytes) -> Solid:
     return body
 
 
-def write(solid: Solid) -> bytes:
-    """Ein Körper als STEP-Bytes, in Millimetern."""
+def write(solid: Solid, name: str = "") -> bytes:
+    """Ein Körper als STEP-Bytes, in Millimetern.
+
+    ``name`` ist der Name des Teils in der Datei. Ohne ihn steht dort, was der
+    Übersetzer von sich aus schreibt — „Open CASCADE STEP translator 7.9 1" —,
+    und in Fusion heißt das Teil danach „Körper1". Der Objektname ist im
+    Dokument vorhanden; er ging nur auf dem Weg verloren. Beim 3MF war das
+    schon einmal ein Fund, dort hieß eine Baugruppe „Object 1, Object 2".
+    """
     require()
     import tempfile
 
@@ -72,6 +79,9 @@ def write(solid: Solid) -> bytes:
         path = Path(folder) / "output.step"
         writer = STEPControl_Writer()
         Interface_Static.SetCVal_s("write.step.unit", "MM")
+        # Der Name gehört gesetzt, *bevor* übertragen wird: er wandert beim
+        # Transfer in das PRODUCT der Datei, nachher ist er wirkungslos.
+        Interface_Static.SetCVal_s("write.step.product.name", name or "Formwerk")
         writer.Transfer(solid.shape, STEPControl_AsIs)
         if writer.Write(str(path)) != IFSelect_RetDone:
             raise ValidationError(

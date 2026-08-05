@@ -542,7 +542,7 @@ def export_bytes(
     gibt (§30).
     """
     if export_format == "step":
-        return _step_bytes(body)
+        return _step_bytes(body, name)
     if export_format == "stl":
         return mesh.to_stl()
     if export_format == "3mf":
@@ -551,9 +551,12 @@ def export_bytes(
     return data if isinstance(data, bytes) else str(data).encode("utf-8")
 
 
-def _step_bytes(body: Mesh | None) -> bytes:
+def _step_bytes(body: Mesh | None, name: str = "") -> bytes:
     """STEP eines exakten Körpers — und ein klares Nein, wenn es keinen
     gibt (§30).
+
+    Der Name reist mit: ohne ihn hieß das Teil in Fusion „Körper1", während
+    er im Dokument die ganze Zeit dastand.
     """
     from app.core.brep import step as brep_step
 
@@ -565,7 +568,7 @@ def _step_bytes(body: Mesh | None) -> bytes:
             ),
             constraint="needs_brep",
         )
-    return brep_step.write(body)  # type: ignore[arg-type]
+    return brep_step.write(body, name)  # type: ignore[arg-type]
 
 
 def describe_plan(plan: ExportPlan) -> str:

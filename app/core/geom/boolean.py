@@ -323,3 +323,41 @@ def _findings_for(stage: SolverStage) -> list[Finding]:
             message=_("Über die Voxelstufe gelöst — die Maße sind gerundet."),
         )
     ]
+
+
+def without_effect(before: MeshData, after: MeshData, kind: BooleanKind) -> Finding | None:
+    """Hat die Operation am Körper überhaupt etwas geändert? (Regel 17, §2.7)
+
+    Eine Magnettasche, die neben dem Körper liegt, schnitt nichts und sagte
+    nichts: keine Ausnahme, kein Befund, kein Hinweis in der Statusleiste. Im
+    Verlauf stand ein Schritt, im Viewport lag dasselbe Teil wie vorher, und
+    der Nutzer sucht den Fehler in der Geometrie statt in der Position. Das
+    steht unterhalb dessen, was Regel 17 überhaupt erfasst — dort geht es um
+    Ausnahmen, und hier gab es keine.
+
+    Gemessen am Volumen und nicht an den Dreiecken: eine Differenz, die eine
+    Fläche nur streift, ändert die Vernetzung, ohne etwas abzutragen, und wäre
+    sonst eine Meldung wert, die niemanden weiterbringt.
+
+    Ein Befund und kein Fehler: die Operation ist gelaufen, sie hat nur nichts
+    bewirkt — und was daran falsch war, weiß der Nutzer besser als der Kern.
+    """
+    change = abs(after.volume - before.volume)
+    if change > EPS_GEOM:
+        return None
+    return Finding(
+        code="boolean.without_effect",
+        severity="warning",
+        message=(
+            _(
+                "Der Schnitt hat nichts abgetragen — das Werkzeug liegt neben dem Körper. "
+                "Position prüfen oder an einer Fläche ausrichten."
+            )
+            if kind == "difference"
+            else _(
+                "Die Vereinigung hat nichts hinzugefügt — der Körper steckt schon ganz im "
+                "anderen. Position prüfen."
+            )
+        ),
+        values={"volume_mm3": round(before.volume, 3)},
+    )

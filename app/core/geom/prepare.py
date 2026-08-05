@@ -23,7 +23,7 @@ import numpy as np
 import trimesh
 
 from app.core.errors import PROGRAMMING_ERRORS
-from app.core.geom.boolean import boolean, shared_volume
+from app.core.geom.boolean import boolean, shared_volume, without_effect
 from app.core.geom.mesh import MeshData, concatenated
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
@@ -79,6 +79,10 @@ def drill(
 
     outcome = boolean("difference", [mesh, MeshData.of(cylinder)], quality=quality, seed=seed)
     findings = list(outcome.findings)
+    # Eine Bohrung, die den Körper nicht getroffen hat, sagt das (§2.7).
+    nothing = without_effect(mesh, outcome.mesh, "difference")
+    if nothing is not None:
+        findings.append(nothing)
     if compensate and abs(cut_diameter - diameter) > EPS_GEOM:
         findings.append(
             Finding(

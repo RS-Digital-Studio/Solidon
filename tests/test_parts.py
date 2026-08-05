@@ -318,6 +318,63 @@ def test_every_part_operation_runs_on_a_body(name: str, profile: Profile) -> Non
     assert result.scene.objects["obj_1"].mesh.volume > 0.0
 
 
+def test_a_part_that_misses_the_body_says_so(profile: Profile) -> None:
+    """Der Fall, der einen Satz Deckel gekostet hat (Regel 17, §2.7).
+
+    Eine Magnettasche neben dem Körper schnitt nichts und meldete nichts: keine
+    Ausnahme, kein Befund, kein Hinweis. Im Verlauf stand ein Schritt, im
+    Viewport lag dasselbe Teil, und gesucht wurde der Fehler in der Geometrie
+    statt in der Position. Gemessen wurde es an einer Platte 60 × 60 × 20:
+    0,0 mm³ abgetragen, null Befunde.
+    """
+    project = project_with_plate()
+    History(project.document).apply(
+        "Daneben",
+        [
+            OperationDraft(
+                op="insert_magnet_pocket",
+                inputs=("obj_1",),
+                params={"size": "6x3", "x": 200.0, "y": 0.0, "z": 4.0},
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, "die Operation ist gelaufen — sie hat nur nichts bewirkt"
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert "boolean.without_effect" in codes
+
+
+def test_a_part_that_hits_the_body_stays_quiet(profile: Profile) -> None:
+    """Und der Normalfall meldet nichts — sonst stünde die Warnung unter jedem
+    Baustein und wäre nach dem dritten Mal unsichtbar.
+
+    Die Tasche sitzt auf z = 0, der Mitte der Platte. Auf ihrer Oberkante
+    (z = 4) träfe sie nichts, und das ist kein Zufall dieses Tests, sondern ein
+    eigener Fund: die Magnettasche und das Schlüsselloch werden **über** ihrem
+    Anker gebaut, das Schraubenloch darunter. Wer eine Fläche anklickt, trifft
+    also je nach Baustein oder nicht — das gehört zusammengeführt und steht
+    unter A2 im Konzept.
+    """
+    project = project_with_plate()
+    History(project.document).apply(
+        "Getroffen",
+        [
+            OperationDraft(
+                op="insert_magnet_pocket",
+                inputs=("obj_1",),
+                params={"size": "6x3", "x": 0.0, "y": 0.0, "z": 0.0},
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert "boolean.without_effect" not in codes
+
+
 # --- versioning (§24.4) -------------------------------------------------------------
 
 

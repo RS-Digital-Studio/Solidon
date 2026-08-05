@@ -25,6 +25,7 @@ from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Mesh, OpContext, Profile, Scene, SceneObject, Source, kind_of
+from app.core.units import EPS_GEOM
 
 pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
@@ -44,6 +45,27 @@ def test_the_body_answers_from_the_kernel_not_from_the_triangles() -> None:
     assert solid.volume == pytest.approx(WIDTH * DEPTH * HEIGHT, rel=1e-9)
     assert solid.area == pytest.approx(2 * (40 * 30 + 40 * 20 + 30 * 20), rel=1e-9)
     assert (solid.face_count, solid.edge_count) == (6, 12)
+
+
+def test_the_bounding_box_comes_from_the_shape_not_from_the_triangles() -> None:
+    """Der Hüllquader eines exakten Körpers ist exakt (§30, Regel 6).
+
+    Er kam aus der Tessellation und war damit konstant rund 0,025 mm zu klein —
+    die halbe Abweichung, die das Anzeigenetz haben darf. Bei Ø 50 stand
+    49,9755 mm, wo Fusion denselben Körper mit 25,00 mm Radius misst. Daran
+    hängen die Maße im Baum, die Bauraumprüfung, das Anordnen, der Haftungsrand
+    und jede Passungsprüfung: ein Zapfen Ø 6 verlor so ein Zehntel seines
+    Spiels, bevor jemand gedruckt hatte.
+    """
+    solid = edit.cylinder(diameter=50.0, height=40.0)
+    box = solid.bounds
+
+    assert box.size[0] == pytest.approx(50.0, abs=EPS_GEOM)
+    assert box.size[1] == pytest.approx(50.0, abs=EPS_GEOM)
+    assert box.size[2] == pytest.approx(40.0, abs=EPS_GEOM)
+    # Und die Tessellation bleibt, was sie ist: eine Annäherung, die es nicht
+    # trifft. Stünde hier dieselbe Zahl, käme der Hüllquader weiter von dort.
+    assert solid.to_mesh().bounds.size[0] < 50.0 - EPS_GEOM
 
 
 def test_a_fillet_on_a_reference_edge_is_geometrically_exact() -> None:
@@ -155,6 +177,31 @@ def test_step_makes_the_round_trip() -> None:
     assert again.volume == pytest.approx(solid.volume, rel=1e-9)
     assert again.face_count == solid.face_count
     assert again.edge_count == solid.edge_count
+
+
+def test_the_object_name_travels_into_the_step_file() -> None:
+    """Sonst heißt das Teil in Fusion „Körper1" (§29).
+
+    Der Übersetzer schreibt ohne Zutun seinen eigenen Namen in das PRODUCT —
+    „Open CASCADE STEP translator 7.9 1" —, und das ist der Name, den ein
+    fremdes Programm anzeigt. Der Objektname steht im Dokument die ganze Zeit
+    da; er ging nur auf dem Weg verloren. Beim 3MF war das schon einmal ein
+    Fund, dort kam eine Baugruppe als „Object 1, Object 2" an.
+    """
+    payload = step.write(block(), "Halteklotz").decode("utf-8", errors="replace")
+
+    assert "Halteklotz" in payload
+    assert "Open CASCADE STEP translator" not in payload.split("DATA;")[1].split("ENDSEC;")[0]
+
+
+def test_a_step_export_carries_the_name_from_the_scene(profile: Profile, tmp_path: Path) -> None:
+    """Und zwar über den ganzen Weg, nicht nur in der einen Funktion."""
+    entry = SceneObject(id="obj_1", name="Lagerbock", mesh=block(), kind="brep")
+
+    plan = plan_export([entry], project_name="Teil", profile=profile, export_format="step")
+    written = write_plan(plan, tmp_path, "step")
+
+    assert "Lagerbock" in written[0].read_text(encoding="utf-8", errors="replace")
 
 
 def test_a_broken_step_file_is_a_user_error() -> None:

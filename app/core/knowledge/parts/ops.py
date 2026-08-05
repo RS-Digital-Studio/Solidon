@@ -23,7 +23,7 @@ import dataclasses
 from typing import Any
 
 from app.core.errors import Action, AppError
-from app.core.geom.boolean import BooleanKind, boolean
+from app.core.geom.boolean import BooleanKind, boolean, without_effect
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.transform import rotation, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
@@ -231,10 +231,15 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     features = dict(source.features)
     features.update(_placed_features(produced, spec, ctx.params, anchor))
 
+    # Ein Baustein, der den Körper nicht getroffen hat, sagt das. Hier und
+    # nicht in jedem einzelnen: die Frage ist für alle dieselbe, und die
+    # Antwort steht im Volumen (§2.7).
+    nothing = without_effect(body, as_mesh_data(outcome.mesh), kind)
+
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features=features)],
         solver=outcome.solver,
-        findings=[*outcome.findings, *produced.findings],
+        findings=[*outcome.findings, *produced.findings, *([nothing] if nothing else [])],
     )
 
 
