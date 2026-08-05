@@ -253,7 +253,19 @@ def register_part(
 #: Version der Bibliothek als Ganzes. Geht in jede Projektdatei (§16.2) und
 #: wird erhöht, sobald ein Baustein sich auf eine Art ändert, die Maße
 #: verschiebt.
-LIBRARY_VERSION: Final = "1"
+LIBRARY_VERSION: Final = "2"
+
+#: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
+#: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt
+#: dreimal in den Bausteindateien — es ist dieselbe Änderung, nicht drei.
+MOUTH_AT_ORIGIN: Final = PartChange(
+    version="2",
+    date="2026-08-05",
+    reason="Der Ursprung ist die Mündung, das Werkzeug geht nach unten ins Material (§24.1).",
+    effect="Der Baustein liegt um seine eigene Tiefe tiefer. Alte Projekte "
+    "bekommen ihn an der Stelle, an der er vorher wirkungslos in der Luft "
+    "stand — die Position ist zu prüfen.",
+)
 
 
 def changed_since(before: dict[str, str], registry: PartRegistry | None = None) -> tuple[str, ...]:

@@ -14,7 +14,7 @@ from typing import cast
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, result, union
-from app.core.knowledge.parts.registry import PartChange, register_part
+from app.core.knowledge.parts.registry import MOUTH_AT_ORIGIN, PartChange, register_part
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
 from app.i18n import _
@@ -162,18 +162,21 @@ class CableGlandParams(BaseParams):
         "Durchführung für ein Rundkabel, mit einer Klemmstelle dahinter. Ohne die "
         "zieht jeder Ruck am Kabel direkt an der Lötstelle."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN],
 )
 def cable_gland(raw: BaseParams) -> PartResult:
     params = cast(CableGlandParams, raw)
     entry = standards.tube(params.size)
     diameter = entry.outer + params.play
 
+    # Der Ursprung ist die Mündung auf der Außenseite, das Loch geht nach unten
+    # durch die Wand (§24.1). Vorher wuchs es nach oben — wer die angeklickte
+    # Fläche als Position übernahm, bekam ein Loch in der Luft darüber.
     through = shapes.cylinder(diameter, params.wall + 2.0 * shapes.OVERLAP)
-    through = shapes.moved(through, (0.0, 0.0, -shapes.OVERLAP))
+    through = shapes.moved(through, (0.0, 0.0, -params.wall - shapes.OVERLAP))
     parts = [through]
     features = [
-        bore("bore_1", diameter, (0.0, 0.0, params.wall / 2.0), depth=params.wall, through=True)
+        bore("bore_1", diameter, (0.0, 0.0, -params.wall / 2.0), depth=params.wall, through=True)
     ]
 
     if params.strain_relief:
@@ -181,12 +184,12 @@ def cable_gland(raw: BaseParams) -> PartResult:
         # Der Kanal hinter der Wand, auf den Klemmspalt verengt: das Kabel geht
         # durch das runde Loch hinein und wird im Schlitz dahinter gehalten.
         channel = shapes.box(gap, diameter * 2.5, diameter)
-        parts.append(shapes.moved(channel, (0.0, 0.0, params.wall)))
+        parts.append(shapes.moved(channel, (0.0, 0.0, -params.wall - diameter)))
         features.append(
             face(
                 "relief_1",
                 gap * diameter,
-                (0.0, 0.0, params.wall + diameter / 2.0),
+                (0.0, 0.0, -params.wall - diameter / 2.0),
                 (1.0, 0.0, 0.0),
             )
         )

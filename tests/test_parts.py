@@ -15,8 +15,9 @@ from typing import Any
 
 import pytest
 
+from app.core.geom.boolean import boolean
 from app.core.knowledge import standards
-from app.core.knowledge.parts import LIBRARY_VERSION, PARTS, changed_since, missing_parts
+from app.core.knowledge.parts import LIBRARY_VERSION, PARTS, changed_since, missing_parts, shapes
 from app.core.knowledge.parts import ops as part_ops
 from app.core.knowledge.parts.registry import PartRegistry, PartSpec, register_part
 from app.core.registry import REGISTRY, op_params, param
@@ -144,6 +145,30 @@ def test_a_part_is_reproducible(spec: PartSpec) -> None:
 
     assert first.mesh.volume == pytest.approx(second.mesh.volume, rel=1e-9)
     assert first.mesh.triangle_count == second.mesh.triangle_count
+
+
+SUBTRACTIVE = [spec for spec in PARTS.all() if spec.subtractive]
+
+
+@pytest.mark.parametrize("spec", SUBTRACTIVE, ids=ids)
+def test_a_subtractive_part_reaches_into_the_material(spec: PartSpec) -> None:
+    """§24.1: der Ursprung ist die Mündung, das Werkzeug geht nach unten.
+
+    Wer eine Fläche anklickt, bekommt ihre Höhe in die Position eingetragen.
+    Ein Werkzeug, das von dort nach *oben* wächst, steht in der Luft und trägt
+    nichts ab — genau das taten Magnettasche, Schlüsselloch und
+    Kabeldurchführung, bis die Bibliothek auf Version 2 ging.
+
+    Gemessen wird an der Wirkung, nicht an den Koordinaten: der Baustein sitzt
+    auf der Oberseite einer Platte, und danach hat sie weniger Volumen.
+    """
+    plate = shapes.box(60.0, 60.0, 20.0)
+    tool = shapes.moved(spec.fn(spec.params()).mesh, (0.0, 0.0, 20.0))
+    cut = boolean("difference", [plate, tool])
+
+    assert cut.mesh.volume < plate.volume - 1.0, (
+        f"{spec.name} trägt an der angeklickten Fläche nichts ab"
+    )
 
 
 # --- the standard table ------------------------------------------------------------

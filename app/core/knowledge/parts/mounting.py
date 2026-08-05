@@ -13,7 +13,7 @@ from typing import cast
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, result, subtract, union
-from app.core.knowledge.parts.registry import PartChange, register_part
+from app.core.knowledge.parts.registry import MOUTH_AT_ORIGIN, PartChange, register_part
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
 from app.i18n import _
@@ -70,25 +70,27 @@ class MagnetPocketParams(BaseParams):
         "Tasche für einen Rundmagneten, auf Wunsch mit Deckschicht zum Überdrucken "
         "und einer Haltelippe am Rand."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN],
 )
 def magnet_pocket(raw: BaseParams) -> PartResult:
     params = cast(MagnetPocketParams, raw)
     entry = standards.magnet(params.size)
     diameter = entry.diameter + params.play
 
+    # Der Ursprung ist die Mündung, die Tasche liegt darunter (§24.1). Eine
+    # Decke schiebt sie tiefer hinein, statt sie anzuheben: über der Mündung
+    # ist die Luft, und dort trägt nichts ab.
+    mouth = -params.cover
     pocket = shapes.cylinder(diameter, entry.height)
-    parts = [shapes.moved(pocket, (0.0, 0.0, params.cover))]
+    parts = [shapes.moved(pocket, (0.0, 0.0, mouth - entry.height))]
 
     if params.cover <= 0.0:
         # Offene Tasche: ein Haar über die Fläche hinausreichen, damit der Schnitt
         # sauber wird (§39).
-        parts.append(
-            shapes.moved(shapes.cylinder(diameter, shapes.OVERLAP), (0.0, 0.0, entry.height))
-        )
+        parts.append(shapes.moved(shapes.cylinder(diameter, shapes.OVERLAP), (0.0, 0.0, mouth)))
     if params.press_lip and params.cover <= 0.0:
         lip = shapes.cone(diameter, diameter - 0.2, 0.4)
-        parts.append(shapes.moved(lip, (0.0, 0.0, entry.height - 0.4)))
+        parts.append(shapes.moved(lip, (0.0, 0.0, mouth - 0.4)))
 
     body = union(*parts)
     return result(
@@ -96,7 +98,7 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
         bore(
             "pocket_1",
             diameter,
-            (0.0, 0.0, params.cover + entry.height / 2.0),
+            (0.0, 0.0, mouth - entry.height / 2.0),
             depth=entry.height,
         ),
     )
@@ -243,23 +245,31 @@ class KeyholeParams(BaseParams):
         "Schlüssellochförmige Aussparung: der Kopf geht durch das runde Ende, "
         "der Schaft hält im Schlitz."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN],
 )
 def keyhole(raw: BaseParams) -> PartResult:
     params = cast(KeyholeParams, raw)
     screw = standards.screw(params.size)
 
-    # Die Tasche, in die der Kopf versinkt: unten rund, nach oben ein Schlitz.
+    # Der Ursprung ist die Mündung, die Tiefe geht nach unten ins Material
+    # (§24.1) — wie bei jedem anderen abziehenden Baustein. Vorher lag beides
+    # in Y: an eine Wand gesetzt zeigte der Schlitz nach unten statt nach oben,
+    # und auf eine waagerechte Fläche geklickt traf er gar nichts.
+    #
+    # Der Schlitz läuft in -Y, damit er nach dem Umlegen auf eine senkrechte
+    # Wand (``axis="y"``) aufwärts zeigt: das Teil fällt, die Schraube steht
+    # relativ dazu höher.
+    drop = -params.drop / 2.0
+
+    # Die Tasche, in die der Kopf versinkt: am Eingang rund, dann ein Schlitz.
     pocket = shapes.slot(screw.head + 0.6, screw.head + 0.6 + params.drop, params.head_room)
-    pocket = shapes.turned(pocket, 90.0, (1.0, 0.0, 0.0))
-    pocket = shapes.moved(pocket, (0.0, params.head_room, params.drop / 2.0))
+    pocket = shapes.moved(pocket, (0.0, drop, -params.head_room))
 
     # Der Schlitz, in den der Schaft gleitet, ganz hindurch.
     shaft = shapes.slot(
         screw.clearance, screw.clearance + params.drop, params.depth + 2.0 * shapes.OVERLAP
     )
-    shaft = shapes.turned(shaft, 90.0, (1.0, 0.0, 0.0))
-    shaft = shapes.moved(shaft, (0.0, params.depth + shapes.OVERLAP, params.drop / 2.0))
+    shaft = shapes.moved(shaft, (0.0, drop, -params.depth - shapes.OVERLAP))
 
     body = union(pocket, shaft)
     return result(
@@ -267,16 +277,14 @@ def keyhole(raw: BaseParams) -> PartResult:
         bore(
             "pocket_1",
             screw.head + 0.6,
-            (0.0, params.head_room / 2.0, 0.0),
+            (0.0, 0.0, -params.head_room / 2.0),
             depth=params.head_room,
-            axis=(0.0, 1.0, 0.0),
         ),
         bore(
             "bore_1",
             screw.clearance,
-            (0.0, params.depth / 2.0, params.drop),
+            (0.0, -params.drop, -params.depth / 2.0),
             depth=params.depth,
-            axis=(0.0, 1.0, 0.0),
             through=True,
         ),
     )
