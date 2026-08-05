@@ -70,6 +70,22 @@ def _integer(value: object) -> str:
     return str(int(value))  # type: ignore[call-overload]
 
 
+def _number_or_silent(value: object) -> str:
+    """Wie :func:`_number`, aber Null heißt „unbekannt" und wird nicht
+    geschrieben.
+
+    Der Preis je Kilogramm steht in Formwerk auf 0, wenn ihn niemand
+    eingetragen hat — der eigene Docstring sagt das so. Übergeben überschreibt
+    diese Null im Filamentprofil des Herstellers einen echten Wert, und der
+    Slicer rechnet den ganzen Druck als kostenlos. Eine Nicht-Aussage darf
+    keine Aussage werden; das ist dieselbe Unterscheidung, die
+    :func:`app.core.export.handover.profile_differences` beim ``nil`` des
+    Herstellers trifft, nur auf der Schreibseite.
+    """
+    number = float(value)  # type: ignore[arg-type]
+    return "" if abs(number) < 1e-9 else f"{number:g}"
+
+
 def _percent(value: object) -> str:
     """Anteil zu Prozentzahl. Formwerk rechnet in 0…1, die Slicer in 0…100."""
     return f"{float(value) * 100.0:g}"  # type: ignore[arg-type]
@@ -160,6 +176,7 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("speed.top_surface", "top_solid_infill_speed", _number),
     ("speed.first_layer", "first_layer_speed", _number),
     ("speed.travel", "travel_speed", _number),
+    ("retraction.avoid_crossing_walls", "avoid_crossing_perimeters", _flag),
     ("support.style", "support_material", _support_on),
     ("support.style", "support_material_style", _mapped(_PRUSA_SUPPORT_STYLE, "grid")),
     ("support.threshold_angle", "support_material_threshold", _integer),
@@ -178,7 +195,7 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("filament.density", "filament_density", _number),
     ("filament.flow_ratio", "extrusion_multiplier", _number),
     ("filament.colour", "filament_colour", _plain),
-    ("filament.cost_per_kg", "filament_cost", _number),
+    ("filament.cost_per_kg", "filament_cost", _number_or_silent),
     ("filament.max_flow", "filament_max_volumetric_speed", _number),
 )
 
@@ -272,6 +289,10 @@ ORCA: Final[tuple[Row, ...]] = (
     # ``retraction_length`` im Prozessprofil bleibt wirkungslos. Geschrieben
     # wird deshalb die Filament-Entsprechung: sie überschreibt den Wert der
     # Maschine, ohne dass Formwerk deren Profil anfassen muss.
+    # Fahrwege um die Wände herum statt quer über die Öffnung. Der Schalter
+    # heißt in der Orca-Familie „Wände nicht kreuzen" und steht im Prozess,
+    # nicht am Filament — er beschreibt den Weg, nicht das Material.
+    ("retraction.avoid_crossing_walls", "reduce_crossing_wall", _flag),
     ("retraction.length", "filament_retraction_length", _number, "filament"),
     ("retraction.speed", "filament_retraction_speed", _number, "filament"),
     ("retraction.z_hop", "filament_z_hop", _number, "filament"),
@@ -280,7 +301,7 @@ ORCA: Final[tuple[Row, ...]] = (
     ("filament.density", "filament_density", _number, "filament"),
     ("filament.flow_ratio", "filament_flow_ratio", _number, "filament"),
     ("filament.colour", "filament_colour", _plain, "filament"),
-    ("filament.cost_per_kg", "filament_cost", _number, "filament"),
+    ("filament.cost_per_kg", "filament_cost", _number_or_silent, "filament"),
     ("filament.max_flow", "filament_max_volumetric_speed", _number, "filament"),
 )
 
@@ -343,6 +364,10 @@ CURA: Final[tuple[Row, ...]] = (
     ("retraction.length", "retraction_amount", _number),
     ("retraction.speed", "retraction_speed", _number),
     ("retraction.z_hop", "retraction_hop", _number),
+    # CuraEngine nennt dasselbe „Combing": der Kopf kämmt innerhalb des Teils
+    # statt geradeaus zu fahren. ``noskin`` hält ihn zusätzlich von der
+    # Oberfläche fern, wo eine Schleifspur sichtbar bliebe.
+    ("retraction.avoid_crossing_walls", "retraction_combing", _mapped({"True": "noskin"}, "off")),
     ("filament.diameter", "material_diameter", _number),
     ("filament.flow_ratio", "material_flow", _percent),
 )

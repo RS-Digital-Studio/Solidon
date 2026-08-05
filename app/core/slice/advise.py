@@ -596,7 +596,9 @@ def _has_thin_layers(result: SliceResult) -> bool:
     return any(layer.area < THIN_LAYER_AREA for layer in upper)
 
 
-def warnings_for(settings: PrintSettings, profile: Profile) -> list[Finding]:
+def warnings_for(
+    settings: PrintSettings, profile: Profile, result: SliceResult | None = None
+) -> list[Finding]:
     """Was gesagt gehört, obwohl keine Einstellung es behebt (§17.3).
 
     Ein Vorschlag ändert einen Wert. Manches ändert kein Wert: ASA auf einem
@@ -654,7 +656,58 @@ def warnings_for(settings: PrintSettings, profile: Profile) -> list[Finding]:
                 },
             )
         )
+
+    findings += _from_spans(result)
     return findings
+
+
+#: Ab welcher freien Spannweite eine Decke gemeldet wird, in Millimetern.
+#:
+#: Zehn Millimeter überbrückt jeder Drucker, zwanzig hängen bei PETG sichtbar
+#: durch. Fünfzehn ist die Stelle dazwischen, an der ein Hinweis noch etwas
+#: ändern kann — gemessen wurde er an einem Satz Gewürzbehälter, deren
+#: Ringschulter der Slicer mit 27 mm freien Bahnen überspannte, und an dessen
+#: Deckeln mit 35 mm.
+SPAN_INTERESTING: Final = 15.0
+
+
+def _from_spans(result: SliceResult | None) -> list[Finding]:
+    """Decken, die quer durch die Luft spannen (§22.2).
+
+    Kein Vorschlag, sondern ein Befund: keine Einstellung macht aus einer
+    27-mm-Brücke eine tragende Fläche. Was hilft, ist die Geometrie — ein
+    Übergang unter 45 Grad statt einer waagerechten Schulter — oder eine
+    Stütze. Beides entscheidet der Nutzer, nicht die Regel.
+
+    Gemeldet wird die schlimmste Stelle mit ihrer Höhe, nicht jede einzelne:
+    ein Bericht mit dreißig Zeilen derselben Sache wird nicht gelesen.
+    """
+    if result is None:
+        return []
+    spanning = [layer for layer in result.layers if layer.bridge_width > SPAN_INTERESTING]
+    if not spanning:
+        return []
+
+    worst = max(spanning, key=lambda layer: layer.bridge_width)
+    _log.info("%d layer(s) span more than %.0f mm", len(spanning), SPAN_INTERESTING)
+    return [
+        Finding(
+            code="slice.long_bridge",
+            severity="warning",
+            message=_(
+                "Hier spannt eine Decke frei durch die Luft. Der Slicer legt dafür gerade "
+                "Bahnen quer über die Öffnung; sie hängen durch und bleiben als Fäden "
+                "stehen. Ein Übergang unter 45 Grad statt einer waagerechten Schulter "
+                "vermeidet das — sonst hilft nur eine Stütze."
+            ),
+            values={
+                "span_mm": round(worst.bridge_width, 1),
+                "z_mm": round(worst.z, 2),
+                "layers": len(spanning),
+            },
+            location=(0.0, 0.0, worst.z),
+        )
+    ]
 
 
 def apply(settings: PrintSettings, advice: list[SettingAdvice]) -> PrintSettings:

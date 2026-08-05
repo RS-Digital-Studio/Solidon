@@ -542,6 +542,7 @@ FIELDS: tuple[Field, ...] = (
         decimals=2,
     ),
     Field("retraction.wipe", tr("Abstreifen"), "other", kind="bool"),
+    Field("retraction.avoid_crossing_walls", tr("Wände nicht überfahren"), "other", kind="bool"),
     Field("filament.colour", tr("Farbe"), "other", kind="colour", front=True),
     Field(
         "filament.diameter",

@@ -55,6 +55,16 @@ WIDTH_SIMPLIFY = 0.01
 #: kostete mehr als alles andere zusammen.
 WIDTH_INTERESTING = 2.0
 
+#: Ab welcher Breite eine ungestützte Fläche als Brücke zählt und nicht mehr
+#: als Überhang.
+#:
+#: Darunter kragt die Wandlinie selbst vor und liegt zur Hälfte auf der Schicht
+#: darunter — das trägt sich. Darüber muss der Slicer die Fläche füllen, und
+#: dafür legt er gerade Bahnen, die er quer über die Öffnung spannt statt
+#: entlang der Kontur. Ein Millimeter sind zwei Bahnen einer 0,4er-Düse; das
+#: ist die Grenze, an der aus Vorkragen ein Überspannen wird.
+BRIDGE_FROM = 1.0
+
 #: Unter so vielen Schichten kostet das Auffächern mehr, als es spart — acht
 #: Threads für zwanzig Polygone zu starten ist reiner Verwaltungsaufwand.
 PARALLEL_FROM = 40
@@ -128,6 +138,7 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
                 overhangs=()
                 if metrics.overhang is None or metrics.overhang.is_empty
                 else _to_polygons(metrics.overhang),
+                bridge_width=metrics.bridge_width,
             )
         )
         previous = shape
@@ -491,6 +502,17 @@ def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERE
 def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> float:
     """Die längste freie Spannweite dieser Schicht — was überbrückt werden
     muss (§22.2).
+
+    Zwei Fragen, in dieser Reihenfolge. Erst: ist die ungestützte Fläche
+    überhaupt breiter als zwei Bahnen? Ein Kegel unter 45 Grad legt je Schicht
+    einen halben Millimeter frei, und der trägt sich selbst — das ist ein
+    Überhang und keine Brücke. Dann: wie weit hängen die Bahnen frei?
+
+    Das ist nicht die Ausdehnung der ungestützten Fläche. Eine Ringschulter um
+    eine Öffnung ist selbst nur drei Millimeter breit; frei hängt eine Bahn
+    über der **Öffnung**, die sie umschließt. Genau diese Zahl war beim
+    Gewürzbehälter der Schaden: eine 3-mm-Schulter, deren Bahnen 24 mm frei
+    quer über den Becher liefen.
     """
     if previous is None or previous.is_empty:
         return 0.0
@@ -500,8 +522,22 @@ def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> flo
     # welchem Winkel.
     if free.is_empty:
         return 0.0
-    low, left, high, right = free.bounds
-    return float(max(high - low, right - left))
+    # Eine einzelne Erosion statt einer Suche: gefragt ist nicht, wie breit die
+    # Fläche ist, sondern ob sie über der Grenze liegt.
+    if free.buffer(-BRIDGE_FROM / 2.0, quad_segs=1, join_style="mitre").is_empty:
+        return 0.0
+
+    widest = 0.0
+    for part in getattr(free, "geoms", [free]):
+        if part.is_empty or not hasattr(part, "exterior"):
+            continue
+        # Umschließt der ungestützte Bereich eine Öffnung, ist deren Weite die
+        # freie Spannweite; ist er selbst eine Fläche (eine Decke über einem
+        # Hohlraum), zählt seine eigene.
+        rings = [ring.bounds for ring in part.interiors] or [part.bounds]
+        for low, left, high, right in rings:
+            widest = max(widest, high - low, right - left)
+    return float(widest)
 
 
 def _contour_count(shape: ShapelyPolygon) -> int:

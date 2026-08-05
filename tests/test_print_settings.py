@@ -256,6 +256,52 @@ def test_the_same_material_in_a_closed_chamber_is_no_warning() -> None:
     assert "settings.warping_material_open_printer" not in codes
 
 
+def test_a_ceiling_spanning_free_air_is_reported() -> None:
+    """Der Fall, der einen Satz Gewürzbehälter gekostet hat (§22.2).
+
+    Eine waagerechte Ringschulter im Becher: der Slicer überspannte sie mit
+    geraden Bahnen quer über die Öffnung, 27 mm frei. Keine Einstellung behebt
+    das — also ein Befund, kein Vorschlag, und er nennt die Höhe, damit man
+    hinsehen kann.
+    """
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    spanning = _layers(100.0, 100.0, 100.0)
+    spanning = SliceResult(
+        layers=tuple(
+            replace(layer, bridge_width=26.8 if index == 2 else 0.0)
+            for index, layer in enumerate(spanning.layers)
+        ),
+        support_volume=spanning.support_volume,
+        first_layer_area=spanning.first_layer_area,
+    )
+
+    findings = advise.warnings_for(settings, profile, spanning)
+    spans = [finding for finding in findings if finding.code == "slice.long_bridge"]
+
+    assert spans, "27 mm free air has to be said out loud"
+    assert spans[0].values["span_mm"] == pytest.approx(26.8)
+    assert spans[0].values["z_mm"] == pytest.approx(0.4)
+    assert spans[0].severity == "warning"
+    assert all(finding.source == "internal" for finding in findings)
+
+
+def test_a_short_bridge_is_no_warning() -> None:
+    """Zehn Millimeter überbrückt jeder Drucker — sonst warnte der Bericht bei
+    jedem Schraubenloch."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    short = _layers(100.0, 100.0)
+    short = SliceResult(
+        layers=tuple(replace(layer, bridge_width=8.0) for layer in short.layers),
+        support_volume=0.0,
+        first_layer_area=100.0,
+    )
+
+    codes = {finding.code for finding in advise.warnings_for(settings, profile, short)}
+    assert "slice.long_bridge" not in codes
+
+
 def test_a_support_gap_under_one_layer_welds_itself_on() -> None:
     profile = profiles.make_profile()
     settings = print_settings.with_path(

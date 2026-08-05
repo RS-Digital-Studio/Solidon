@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -267,3 +268,61 @@ def test_a_hole_touching_its_own_wall_does_not_stop_the_slicer() -> None:
     assert section is not None
     assert section.is_valid, "a section that cannot be measured is worse than none"
     assert section.area == pytest.approx(1600.0 - 20.0 * 20.0, rel=TOLERANCE)
+
+
+# --- freie Spannweiten (§22.2) --------------------------------------------------
+
+
+def test_a_shelf_over_a_hollow_reports_its_free_span() -> None:
+    """Der Fall, der einen Satz Gewürzbehälter gekostet hat.
+
+    Ein Becher, dessen Innenraum sich auf einer Höhe sprunghaft verengt, hat
+    dort eine waagerechte Ringschulter. Der Slicer überspannt sie nicht entlang
+    des Rings, sondern mit geraden Bahnen quer über die ganze Öffnung — beim
+    Behälter waren das 24,7 mm frei hängender Faden. Die Zahl wurde gemessen
+    und nirgends aufgehoben; jetzt steht sie in der Schicht.
+    """
+    outer = trimesh.creation.cylinder(radius=20.0, height=40.0, sections=64)
+    outer.apply_translation((0.0, 0.0, 20.0))
+    wide = trimesh.creation.cylinder(radius=16.0, height=20.0, sections=64)
+    wide.apply_translation((0.0, 0.0, 12.0))
+    narrow = trimesh.creation.cylinder(radius=10.0, height=22.0, sections=64)
+    narrow.apply_translation((0.0, 0.0, 31.0))
+    body = MeshData.of(trimesh.boolean.difference([outer, wide, narrow]))
+
+    result = slice_body(body, 0.2)
+    spans = [layer for layer in result.layers if layer.bridge_width > 1.0]
+
+    assert spans, "the shoulder at z=22 spans free air and has to be measured"
+    worst = max(spans, key=lambda layer: layer.bridge_width)
+    assert worst.z == pytest.approx(22.0, abs=0.3)
+    # Frei hängt die Bahn über der Öffnung, die die Schulter umschließt — also
+    # über deren Durchmesser, nicht über der Breite der Schulter selbst.
+    assert worst.bridge_width == pytest.approx(20.0, rel=0.1)
+
+
+def test_a_forty_five_degree_transition_spans_nothing() -> None:
+    """Derselbe Becher mit kegeligem Übergang — die Zahl geht auf null.
+
+    Das ist die Gegenprobe zum Test darüber und zugleich der Nachweis, dass
+    die Änderung am Modell wirkt: bei 45 Grad kragt jede Schicht eine halbe
+    Linienbreite vor und trägt sich selbst.
+    """
+    outer = trimesh.creation.cylinder(radius=20.0, height=40.0, sections=64)
+    outer.apply_translation((0.0, 0.0, 20.0))
+    profile = np.array(
+        [
+            [0.0, 2.0],
+            [16.0, 2.0],
+            [16.0, 16.0],
+            [10.0, 22.0],
+            [10.0, 42.0],
+            [0.0, 42.0],
+        ]
+    )
+    cavity = trimesh.creation.revolve(profile, sections=64)
+    body = MeshData.of(trimesh.boolean.difference([outer, cavity]))
+
+    result = slice_body(body, 0.2)
+
+    assert max(layer.bridge_width for layer in result.layers) < 1.0

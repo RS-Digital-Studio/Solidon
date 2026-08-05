@@ -103,7 +103,13 @@ def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str
     """
     written: dict[str, str] = {}
     for entry in slicer_keys.TABLES[flavour]:
-        written[entry.key] = entry.write(read_path(settings, entry.path))
+        value = entry.write(read_path(settings, entry.path))
+        # Ein leerer Text heißt „dazu sagt Formwerk nichts" (siehe
+        # ``_number_or_silent``). Er darf weder in die Datei noch in die
+        # Gegenprobe: geschrieben überschriebe er den Wert des Herstellers,
+        # verglichen meldete er eine Abweichung von nichts.
+        if value != "":
+            written[entry.key] = value
     return _only_chosen_adhesion(written, settings, flavour)
 
 
@@ -294,6 +300,19 @@ def _orca_process(
             "instantiation": "true",
         }
     document.update(values)
+    # Objektmarken, unabhängig von den Einstellungen: Formwerk schickt eine
+    # Baugruppe mit benannten Teilen, und ohne die Marken im G-Code kann der
+    # Drucker keines davon einzeln ausschließen. Löst sich einer von zwölf
+    # Behältern nach sechs Stunden, ist sonst die ganze Platte verloren — der
+    # Satz, um den es hier geht, lief ohne sie.
+    document["gcode_label_objects"] = "1"
+    # Ein eigener Name, obwohl das Systemprofil die Grundlage war. Sonst steht
+    # im G-Code „0.20mm Standard @Elegoo CC2 0.4 nozzle", und wer die Datei
+    # hinterher liest, hält Formwerks Werte für die des Herstellers. Genau
+    # diese Verwechslung hat einen Satz Gewürzbehälter gekostet: die
+    # Projektdatei trug den Namen eines Systemprofils, der Slicer lud sein
+    # eigenes darunter, und zehn von elf Werten waren still weg.
+    document["name"] = f"Formwerk {settings.title}"
     return document
 
 

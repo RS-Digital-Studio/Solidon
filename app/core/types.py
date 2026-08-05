@@ -496,6 +496,13 @@ class RetractionSettings:
     speed: float = 35.0
     z_hop: float = 0.2
     wipe: bool = True
+    avoid_crossing_walls: bool = True
+    """Fahrwege um Wände herumführen, statt über offene Flächen zu ziehen.
+
+    Der Rückzug allein reicht nicht: eine Düse, die über einen Hohlraum fährt,
+    tropft auch ohne Druck nach, und der Faden fällt hinein statt sich am
+    nächsten Rand abzustreifen. Der Umweg kostet Zeit; einen Becher voller
+    Fäden kostet er nicht."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -969,6 +976,14 @@ class LayerInfo:
     Aufgehoben, weil Stützkarte (§18.4) und Schichtvorschau (§18.10) auf die
     Stelle zeigen müssen — sie aus den Konturen neu zu rechnen wäre dieselbe
     Arbeit zweimal."""
+    bridge_width: float = 0.0
+    """Die längste freie Spannweite dieser Schicht in Millimetern (§22.2).
+
+    Gemessen wurde sie schon immer; sie kam nur nie hier an. Genau diese Zahl
+    unterscheidet einen Überhang, der sich selbst trägt, von einer Decke, die
+    quer durch die Luft spannt — und dass niemand sie las, hat einen Satz
+    Behälter gekostet, deren Ringschulter der Slicer mit 24 mm freien Bahnen
+    überspannte."""
 
 
 @dataclass(frozen=True, slots=True)
