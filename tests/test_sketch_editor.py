@@ -614,3 +614,59 @@ def test_the_modify_group_is_reachable_and_labelled(qt_app: QApplication) -> Non
     assert TOOL_KEYS["trim"] == "T", "wie in Fusion"
     assert ACTION_KEYS["offset"] == "O"
     assert panel.offset_distance.value() != 0.0, "ein Versatz um nichts wäre keiner"
+
+
+def test_construction_geometry_is_a_toggle(qt_app: QApplication) -> None:
+    """Dieselbe Linie ist mal Kontur, mal Hilfslinie — wer sich vertut, klickt
+    noch einmal."""
+    canvas = _cross_canvas()
+    canvas.selection = [("line", (0, 1))]
+
+    canvas.toggle_construction()
+    assert canvas.sketch.elements[0].construction
+    assert not canvas.sketch.elements[1].construction, "nur die Auswahl"
+
+    canvas.toggle_construction()
+    assert not canvas.sketch.elements[0].construction
+
+
+def test_projecting_needs_a_body(qt_app: QApplication) -> None:
+    canvas = SketchCanvas()
+    said: list[str] = []
+    canvas.statusChanged.connect(said.append)
+
+    canvas.project_bodies()
+
+    assert said and "Körper" in said[-1]
+
+
+def test_projecting_brings_the_edges_in(qt_app: QApplication) -> None:
+    """Bei Weg 1 ist das der Normalfall, nicht die Ausnahme."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    canvas = SketchCanvas()
+    canvas.offer_bodies([MeshData.of(trimesh.creation.box(extents=(20.0, 10.0, 6.0)))])
+
+    canvas.project_bodies()
+
+    assert canvas.sketch.elements
+    assert all(element.construction for element in canvas.sketch.elements)
+
+
+def test_the_reference_tools_are_reachable(qt_app: QApplication) -> None:
+    """Projizieren und Konstruktionsgeometrie fehlten ganz — beide waren im
+    Vergleich mit Fusion eine leere Zeile."""
+    from app.i18n import tr
+    from app.ui.sketch_editor import ACTION_KEYS
+
+    panel = SketchPanel()
+    labels = {
+        button.text().split("  ")[0]
+        for button in panel.findChildren(type(panel._tool_buttons["line"]))
+    }
+
+    assert tr("Projizieren") in labels
+    assert tr("Hilfsgeometrie") in labels
+    assert ACTION_KEYS["construction"] == "X", "wie in Fusion"

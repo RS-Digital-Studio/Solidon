@@ -592,7 +592,12 @@ def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> S
             (float(solved_points[offset + i][0]), float(solved_points[offset + i][1]))
             for i in range(count)
         )
-        elements.append(SketchElement(kind=element.kind, points=points))
+        # Das Kennzeichen reist mit: der Solver rechnet Hilfsgeometrie wie
+        # jede andere — nur die Profilbildung übergeht sie, und die sieht
+        # ausschließlich das gelöste Ergebnis.
+        elements.append(
+            SketchElement(kind=element.kind, points=points, construction=element.construction)
+        )
         offset += count
 
     return SolvedSketch(

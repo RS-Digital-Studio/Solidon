@@ -94,8 +94,12 @@ def regions_of(solved: SolvedSketch) -> tuple[Profile, ...]:
     Arrangement-Rechnung, und sie müsste jede Kurve polygonisieren, um sie
     danach als Kurve auszugeben.
     """
-    circles = [element for element in solved.elements if element.kind == "circle"]
-    drawable = [element for element in solved.elements if element.kind in ("line", "arc", "spline")]
+    # Hilfsgeometrie trägt Bedingungen, aber keinen Umriss (§30.1). Eine
+    # Mittellinie, an der zwei Bohrungen symmetrisch hängen, soll nicht als
+    # Kante im extrudierten Körper landen.
+    shaping = [element for element in solved.elements if not element.construction]
+    circles = [element for element in shaping if element.kind == "circle"]
+    drawable = [element for element in shaping if element.kind in ("line", "arc", "spline")]
     if not circles and not drawable:
         raise _broken(_("Die Skizze enthält nichts, was einen Umriss ergeben könnte."))
 

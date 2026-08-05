@@ -988,6 +988,13 @@ class SketchElement:
 
     kind: SketchElementKind
     points: tuple[Point2, ...]
+    construction: bool = False
+    """Hilfsgeometrie: trägt Bedingungen, bildet aber kein Profil (§30.1).
+
+    Eine Mittellinie, an der zwei Bohrungen symmetrisch hängen, soll nicht als
+    Kante im extrudierten Körper landen. In jedem CAD ist das eine eigene
+    Sorte Linie; hier ist es ein Kennzeichen an derselben, denn für den Solver
+    ist sie dieselbe Geometrie — nur die Profilbildung übergeht sie."""
 
 
 @dataclass(frozen=True, slots=True)

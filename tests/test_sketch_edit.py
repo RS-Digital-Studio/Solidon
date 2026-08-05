@@ -240,3 +240,111 @@ def test_mirroring_an_arc_keeps_it_running_the_same_way() -> None:
 def test_mirroring_needs_an_axis_it_knows() -> None:
     with pytest.raises(ValidationError):
         edit.mirror(cross(), (0,), "diagonal")
+
+
+# --- Hilfsgeometrie und Projizieren (E18) ---------------------------------------
+
+
+def test_construction_geometry_carries_constraints_but_no_profile() -> None:
+    """Eine Mittellinie, an der zwei Bohrungen symmetrisch hängen, soll nicht
+    als Kante im extrudierten Körper landen."""
+    from app.core.sketch.profile import regions_of
+    from app.core.sketch.solver import solve_sketch
+
+    square = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((-5.0, -5.0), (5.0, -5.0))),
+            SketchElement(kind="line", points=((5.0, -5.0), (5.0, 5.0))),
+            SketchElement(kind="line", points=((5.0, 5.0), (-5.0, 5.0))),
+            SketchElement(kind="line", points=((-5.0, 5.0), (-5.0, -5.0))),
+            # Die Mittellinie quer durch — sie schlösse den Umriss nicht, sie
+            # verzweigte ihn, und ohne das Kennzeichen wäre die Skizze kaputt.
+            SketchElement(kind="line", points=((-5.0, 0.0), (5.0, 0.0)), construction=True),
+        ),
+    )
+
+    regions = regions_of(solve_sketch(square))
+
+    assert len(regions) == 1, "die Hilfslinie bildet keinen eigenen Umriss"
+
+
+def test_the_solver_keeps_the_construction_flag() -> None:
+    """Gerechnet wird sie wie jede andere Linie — nur die Profilbildung
+    übergeht sie, und die sieht ausschließlich das gelöste Ergebnis."""
+    from app.core.sketch.solver import solve_sketch
+
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0)), construction=True),),
+    )
+
+    assert solve_sketch(sketch).elements[0].construction
+
+
+def test_the_flag_survives_a_round_trip() -> None:
+    """Eine Skizze reist als Text im Op-Parameter; was der Text nicht trägt,
+    ist beim nächsten Öffnen weg."""
+    from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0)), construction=True),
+            SketchElement(kind="line", points=((0.0, 1.0), (10.0, 1.0))),
+        ),
+    )
+
+    again = sketch_from_text(sketch_to_text(sketch))
+
+    assert [element.construction for element in again.elements] == [True, False]
+
+
+def test_a_sketch_without_construction_writes_the_old_text() -> None:
+    """Jede bestehende Projektdatei liest sich unverändert — und schreibt sich
+    unverändert zurück."""
+    from app.core.sketch.serialize import sketch_to_text
+
+    plain = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),),
+    )
+
+    assert "construction" not in sketch_to_text(plain)
+
+
+def test_projecting_brings_the_body_edge_into_the_sketch() -> None:
+    """Bei Weg 1 ist das der Normalfall: eine Bohrung soll auf die vorhandene
+    Kante ausgerichtet werden, und ohne die Kante bleibt nur Abmessen."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    box = MeshData.of(trimesh.creation.box(extents=(20.0, 10.0, 6.0)))
+    empty = Sketch(plane="plane:xy", elements=())
+
+    projected = edit.project(empty, box)
+
+    assert projected.elements, "der Schnitt liefert Kanten"
+    assert all(element.construction for element in projected.elements), (
+        "als Hilfsgeometrie — was aus dem Körper kommt, ist zum Anlehnen da"
+    )
+    xs = [point[0] for element in projected.elements for point in element.points]
+    ys = [point[1] for element in projected.elements for point in element.points]
+    assert max(xs) == pytest.approx(10.0), "die halbe Breite des Quaders"
+    assert max(ys) == pytest.approx(5.0)
+
+
+def test_projecting_beside_the_body_says_so() -> None:
+    """Regel 17: ein Schnitt ins Leere ist eine Aussage, kein leeres
+    Ergebnis."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    box = MeshData.of(trimesh.creation.box(extents=(4.0, 4.0, 4.0)))
+    box.raw.apply_translation((0.0, 0.0, 50.0))
+    empty = Sketch(plane="plane:xy", elements=())
+
+    with pytest.raises(ValidationError):
+        edit.project(empty, box)

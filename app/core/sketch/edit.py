@@ -17,6 +17,7 @@ keine Bedingung mehr, sondern ein Absturz beim nächsten Lauf.
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import replace
 
@@ -346,3 +347,86 @@ def _replace_element(sketch: Sketch, index: int, fresh: tuple[SketchElement, ...
         if all(target in mapping for target in entry.targets)
     )
     return replace(sketch, elements=elements, constraints=constraints)
+
+
+# --- Projizieren -----------------------------------------------------------------
+
+#: Die drei Grundebenen als Ursprung und Normale. Feature-Ebenen bringen ihren
+#: Rahmen selbst mit — deshalb steht hier nur, was feststeht.
+BASE_PLANES: dict[str, tuple[tuple[float, float, float], tuple[float, float, float]]] = {
+    "plane:xy": ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+    "plane:xz": ((0.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+    "plane:yz": ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)),
+}
+
+
+def project(sketch: Sketch, mesh: object, frame: object = None) -> Sketch:
+    """Holt die Schnittkurve eines Körpers als Hilfsgeometrie in die Skizze.
+
+    Bei Weg 1 — fremdes Modell anpassen — ist das der Normalfall: eine Bohrung
+    soll auf die vorhandene Kante ausgerichtet werden, und ohne die Kante in
+    der Zeichnung bleibt nur Abmessen und Abtippen.
+
+    **Als Hilfsgeometrie**, nicht als Kontur. Was aus dem Körper kommt, ist
+    zum Anlehnen da; wer es extrudieren will, schaltet es um. Andersherum
+    stünde beim nächsten Extrudieren ein zweiter Umriss in der Skizze, den
+    niemand gezeichnet hat.
+
+    ``frame`` ist der Rahmen einer Flächenebene oder ``None`` für eine der
+    drei Grundebenen. ``mesh`` ist ein ``MeshData`` — nicht typisiert, weil
+    dieses Modul sonst die Geometrie-Schicht importieren müsste, nur um einen
+    Namen zu nennen.
+    """
+    import numpy as np
+
+    if frame is not None:
+        origin = tuple(float(value) for value in frame.origin)  # type: ignore[attr-defined]
+        normal = tuple(float(value) for value in frame.normal)  # type: ignore[attr-defined]
+        x_axis = tuple(float(value) for value in frame.x_axis)  # type: ignore[attr-defined]
+        y_axis = tuple(float(value) for value in frame.y_axis)  # type: ignore[attr-defined]
+    else:
+        origin, normal = BASE_PLANES.get(sketch.plane, BASE_PLANES["plane:xy"])
+        x_axis, y_axis = _axes_for(sketch.plane)
+
+    body = mesh.raw  # type: ignore[attr-defined]
+    section = body.section(plane_origin=np.asarray(origin), plane_normal=np.asarray(normal))
+    if section is None:
+        raise ValidationError(
+            "plane",
+            _("Diese Ebene schneidet den Körper nicht — dort gibt es keine Kante."),
+        )
+
+    added: list[SketchElement] = []
+    for entity in section.entities:
+        points = section.vertices[entity.points]
+        flat = [
+            (
+                float(np.dot(point - np.asarray(origin), np.asarray(x_axis))),
+                float(np.dot(point - np.asarray(origin), np.asarray(y_axis))),
+            )
+            for point in points
+        ]
+        for first, second in itertools.pairwise(flat):
+            if math.dist(first, second) > EPS_SKETCH:
+                added.append(SketchElement(kind="line", points=(first, second), construction=True))
+
+    if not added:
+        raise ValidationError(
+            "plane",
+            _("Der Schnitt ergibt keine Kante, an der sich zeichnen ließe."),
+        )
+    return replace(sketch, elements=(*sketch.elements, *added))
+
+
+def _axes_for(plane: str) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Die zwei Zeichenrichtungen einer Grundebene.
+
+    Dieselbe Wahl wie in ``planes.frame_of``: die waagerechte Fläche wird zur
+    globalen XY-Ebene, damit dieselbe Skizze auf dem Tisch und auf dem Deckel
+    gleich herum liegt.
+    """
+    if plane == "plane:xz":
+        return ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+    if plane == "plane:yz":
+        return ((0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    return ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))

@@ -1983,6 +1983,12 @@ class MainWindow(QMainWindow):
         volume = self.session.profile.printer.build_volume
         panel.set_bed((float(volume[0]), float(volume[1])))
         panel.offer_faces(self._drawable_faces())
+        # Woraus projiziert werden kann (E18). Die Netze, nicht die Szene: der
+        # Zeichenbereich braucht die Kante, nicht das Objekt drumherum.
+        result = self.session.last_result
+        panel.offer_bodies(
+            [entry.mesh for entry in result.scene.objects.values()] if result else []
+        )
         self._sketch_panel = panel
         self._sketch_target = op_name
         self.middle_stack.addWidget(panel)

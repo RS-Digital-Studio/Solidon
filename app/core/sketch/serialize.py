@@ -51,7 +51,14 @@ def sketch_to_text(sketch: Sketch) -> str:
     payload = {
         "plane": sketch.plane,
         "elements": [
-            {"kind": element.kind, "points": [list(point) for point in element.points]}
+            {
+                "kind": element.kind,
+                "points": [list(point) for point in element.points],
+                # Nur wenn gesetzt: eine Skizze ohne Hilfsgeometrie schreibt
+                # denselben Text wie vor diesem Feld, und jede bestehende
+                # Projektdatei liest sich unverändert.
+                **({"construction": True} if element.construction else {}),
+            }
             for element in sketch.elements
         ],
         "constraints": [
@@ -98,8 +105,13 @@ def sketch_from_text(text: str) -> Sketch:
             ):
                 raise _damaged(_("Ein Punkt besteht aus zwei Zahlen."), index=index)
             parsed.append((float(point[0]), float(point[1])))
+        construction = entry.get("construction", False)
+        if not isinstance(construction, bool):
+            raise _damaged(_("Ein Hilfsgeometrie-Kennzeichen ist wahr oder falsch."), index=index)
         element_kind: SketchElementKind = kind  # type: ignore[assignment]
-        elements.append(SketchElement(kind=element_kind, points=tuple(parsed)))
+        elements.append(
+            SketchElement(kind=element_kind, points=tuple(parsed), construction=construction)
+        )
 
     constraints: list[SketchConstraint] = []
     for index, entry in enumerate(_listed(payload.get("constraints", []), "constraints")):

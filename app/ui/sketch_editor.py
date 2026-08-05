@@ -198,6 +198,12 @@ class SketchCanvas(QWidget):
         """Die Normalen der Flächen, auf denen gezeichnet werden darf.
 
         Nur für den Hinweis zur Schichtrichtung — siehe ``offer_faces``."""
+        self._bodies: list[Any] = []
+        """Die Körper der Szene, für das Projizieren (E18).
+
+        Nur Netze, keine Szene: der Zeichenbereich braucht die Kante, nicht
+        das Objekt drumherum, und was er nicht kennt, kann er nicht
+        veralten lassen."""
         self._bed: tuple[float, float] | None = None
         """Breite und Tiefe des Druckbetts, oder ``None``.
 
@@ -256,6 +262,32 @@ class SketchCanvas(QWidget):
         Auswertung neu — hier etwas zu speichern hieße, es veralten zu lassen.
         """
         self._face_normals = dict(faces)
+
+    def offer_bodies(self, meshes: Sequence[Any]) -> None:
+        """Woraus projiziert werden kann — die Körper der Szene."""
+        self._bodies = list(meshes)
+
+    def project_bodies(self) -> None:
+        """Holt die Schnittkurven aller Körper als Hilfsgeometrie herein.
+
+        Bei Weg 1 — fremdes Modell anpassen — ist das der Normalfall: eine
+        Bohrung soll auf die vorhandene Kante ausgerichtet werden, und ohne
+        die Kante in der Zeichnung bleibt nur Abmessen und Abtippen.
+        """
+        if not self._bodies:
+            self.statusChanged.emit(tr("Es gibt keinen Körper, aus dem sich projizieren ließe."))
+            return
+        current = self.sketch
+        problems: list[str] = []
+        for mesh in self._bodies:
+            try:
+                current = edit.project(current, mesh)
+            except AppError as error:
+                problems.append(str(error.detail or error.title))
+        if current is self.sketch:
+            self.statusChanged.emit(problems[0] if problems else tr("Nichts zu projizieren."))
+            return
+        self._apply(current)
 
     def set_plane(self, plane: str) -> None:
         """Auf welcher Ebene die Skizze liegt (§30.1).
@@ -421,6 +453,26 @@ class SketchCanvas(QWidget):
         self.selection.clear()
         self._apply(replace(self.sketch, elements=elements, constraints=constraints))
         self.selectionChanged.emit()
+
+    def toggle_construction(self) -> None:
+        """Macht aus der Auswahl Hilfsgeometrie — und zurück (E18).
+
+        Eine Mittellinie, an der zwei Bohrungen symmetrisch hängen, soll
+        Bedingungen tragen und keine Kante im Körper werden. Umschalten statt
+        zweier Werkzeuge: dieselbe Linie ist mal das eine, mal das andere, und
+        wer sich vertut, klickt noch einmal.
+        """
+        indices = {_located(self.sketch, entry[1][0])[0] for entry in self.selection}
+        if not indices:
+            self.statusChanged.emit(tr("Erst Elemente auswählen."))
+            return
+        # Alle auf denselben Stand: sind sie gemischt, werden sie Hilfsgeometrie.
+        target = not all(self.sketch.elements[index].construction for index in indices)
+        elements = tuple(
+            replace(element, construction=target) if at in indices else element
+            for at, element in enumerate(self.sketch.elements)
+        )
+        self._apply(replace(self.sketch, elements=elements))
 
     def offset_selected(self, distance: float) -> None:
         """Legt eine versetzte Kopie der gewählten Elemente daneben."""
@@ -754,6 +806,13 @@ class SketchCanvas(QWidget):
             selected = index in chosen_elements
             pen = QPen(chosen_colour if selected else line_colour)
             pen.setWidthF(3.0 if selected else 1.6)
+            if element.construction:
+                # Gestrichelt und dünner: Hilfsgeometrie bildet kein Profil,
+                # und das muss man sehen, bevor man extrudiert. Strichart
+                # statt Farbe, damit die Aussage ohne Farbsehen ankommt
+                # (Regel 18).
+                pen.setStyle(Qt.PenStyle.DashLine)
+                pen.setWidthF(1.2)
             painter.setPen(pen)
             self._paint_element(painter, element, points, begin)
 
@@ -1078,6 +1137,7 @@ ACTION_KEYS: dict[str, str] = {
     "rectangle": "R",
     "distance": "D",
     "offset": "O",
+    "construction": "X",
 }
 
 
@@ -1236,9 +1296,27 @@ class SketchPanel(QWidget):
             )
         mirror_button.setMenu(mirror_menu)
 
+        construction_button = QToolButton(self)
+        construction_button.setText(f"{tr('Hilfsgeometrie')}  {ACTION_KEYS['construction']}")
+        construction_button.setToolTip(
+            tr("Trägt Bedingungen, bildet aber kein Profil. Nochmal drücken macht es rückgängig.")
+        )
+        construction_button.setAutoRaise(True)
+        construction_button.clicked.connect(self.canvas.toggle_construction)
+
+        project_button = QToolButton(self)
+        project_button.setText(tr("Projizieren"))
+        project_button.setToolTip(
+            tr("Die Kanten der vorhandenen Körper auf dieser Ebene in die Skizze holen.")
+        )
+        project_button.setAutoRaise(True)
+        project_button.clicked.connect(self.canvas.project_bodies)
+
         tools.addWidget(offset_button)
         tools.addWidget(self.offset_distance)
         tools.addWidget(mirror_button)
+        tools.addWidget(construction_button)
+        tools.addWidget(project_button)
 
         undo_button = QToolButton(self)
         undo_button.setText(tr("Rückgängig"))
@@ -1319,6 +1397,10 @@ class SketchPanel(QWidget):
             lambda: self.canvas.offset_selected(self.offset_distance.value())
         )
 
+        helper = QShortcut(QKeySequence(ACTION_KEYS["construction"]), self)
+        helper.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        helper.activated.connect(self.canvas.toggle_construction)
+
     def choose_tool(self, name: str) -> None:
         """Wählt ein Werkzeug — was ein Klick auf seinen Knopf tut.
 
@@ -1390,6 +1472,11 @@ class SketchPanel(QWidget):
     def set_bed(self, size: tuple[float, float] | None) -> None:
         """Den Bauraum an die Zeichenfläche weiterreichen (E1)."""
         self.canvas.set_bed(size)
+
+    def offer_bodies(self, meshes: Sequence[Any]) -> None:
+        """Woraus projiziert werden kann — weitergereicht an die
+        Zeichenfläche."""
+        self.canvas.offer_bodies(meshes)
 
     def offer_faces(self, faces: Sequence[tuple[str, str, tuple[float, float, float]]]) -> None:
         """Die planaren Flächen der Szene als weitere Ebenen anbieten (§30.1).
