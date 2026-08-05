@@ -299,12 +299,23 @@ class HollowParams(BaseParams):
         maximum=50.0,
         doc=_("Was stehen bleibt. Zwei Extrusionsbreiten sind das Minimum."),
     )
+    open_top: bool = param(
+        title=_("Oben öffnen"),
+        default=False,
+        doc=_(
+            "Nimmt die Decke über dem Hohlraum weg. Aus dem hohlen Körper wird "
+            "eine Dose, und *Deckel erzeugen* findet die Öffnung, die es braucht."
+        ),
+    )
     vents: int = param(
         title=_("Entlüftungen"),
         default=1,
         minimum=0,
         maximum=6,
-        doc=_("Null heißt geschlossener Hohlraum — beim FDM-Druck drückt der die Decke hoch."),
+        doc=_(
+            "Null heißt geschlossener Hohlraum — beim FDM-Druck drückt der die "
+            "Decke hoch. Eine offene Dose braucht keine."
+        ),
     )
     vent_diameter: float = param(
         title=_("Entlüftungsdurchmesser"),
@@ -337,6 +348,7 @@ def hollow_object(ctx: OpContext) -> OpResult:
         params.wall,
         vents=params.vents,
         vent_diameter=params.vent_diameter,
+        open_top=params.open_top,
     )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh, features={})],

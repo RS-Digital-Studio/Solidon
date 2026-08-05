@@ -63,14 +63,21 @@ def hollow(
     *,
     vents: int = 1,
     vent_diameter: float = VENT_DIAMETER,
+    open_top: bool = False,
 ) -> HollowResult:
     """Lässt eine Wand von ``wall`` Millimetern stehen und nimmt den Rest
     heraus.
+
+    ``open_top`` nimmt zusätzlich die Decke über dem Hohlraum weg. Damit ist
+    das Ergebnis eine Dose statt eines geschlossenen Körpers, und *Deckel
+    erzeugen* findet die Öffnung, die es verlangt — der Weg dorthin führte
+    sonst über zwei Zylinder und eine Differenz.
     """
     if wall <= EPS_GEOM:
         raise ValueError("a wall thickness has to be positive")
 
-    cavity = _cavity(mesh, wall)
+    field = _inner_field(mesh, wall)
+    cavity = _meshed(field[0], field[1], field[2], mesh) if field is not None else None
     if cavity is None or cavity.triangle_count == 0:
         return HollowResult(
             mesh=mesh,
@@ -89,8 +96,29 @@ def hollow(
     body = outcome.mesh
     findings = list(outcome.findings)
 
+    if open_top and field is not None:
+        opening = _mouth(field[0])
+        tool = _meshed(opening, field[1], field[2], mesh) if opening is not None else None
+        if tool is None:
+            findings.append(
+                Finding(
+                    code="hollow.no_opening",
+                    severity="warning",
+                    message=_(
+                        "Die Decke ließ sich nicht öffnen — der Hohlraum reicht "
+                        "nicht bis unter die Oberseite."
+                    ),
+                )
+            )
+        else:
+            opened = boolean("difference", [body, tool])
+            body = opened.mesh
+            findings.extend(opened.findings)
+
     placed: tuple[Vec3, ...] = ()
-    if vents > 0:
+    # Eine offene Dose ist ihre eigene Entlüftung. Ein Loch im Boden wäre dort
+    # kein Schutz vor der durchsackenden Decke, sondern ein Loch im Boden.
+    if vents > 0 and not open_top:
         body, placed = _vent(body, cavity, vent_diameter, vents)
         if not placed:
             findings.append(
@@ -121,8 +149,13 @@ def hollow(
     return HollowResult(mesh=body, removed=removed, vents=placed, findings=findings)
 
 
-def _cavity(mesh: MeshData, wall: float) -> MeshData | None:
-    """Das Innere des Körpers, eingezogen um die Wandstärke."""
+def _inner_field(mesh: MeshData, wall: float) -> tuple[np.ndarray, Vec3, float] | None:
+    """Das Raster des Körpers, eingezogen um die Wandstärke.
+
+    Getrennt von der Vernetzung, weil zwei Dinge daraus entstehen: der
+    Hohlraum, der herausgeschnitten wird, und die Öffnung, die ihn nach oben
+    freilegt. Zweimal zu rastern wäre derselbe Lauf über dieselben Dreiecke.
+    """
     from scipy import ndimage
 
     from app.core.perceive.maps import solid_field
@@ -133,10 +166,44 @@ def _cavity(mesh: MeshData, wall: float) -> MeshData | None:
     inner = ndimage.binary_erosion(field.filled, iterations=steps)
     if not inner.any():
         return None
+    return inner, field.origin, pitch
 
-    body = trimesh.voxel.ops.matrix_to_marching_cubes(matrix=inner, pitch=pitch)
-    body.apply_translation(np.asarray(field.origin, dtype=float))
-    return mesh.replacing(body) if len(body.faces) else None
+
+def _meshed(matrix: np.ndarray, origin: Vec3, pitch: float, like: MeshData) -> MeshData | None:
+    """Ein Rasterkörper als Netz, an seinem Platz."""
+    body = trimesh.voxel.ops.matrix_to_marching_cubes(matrix=matrix, pitch=pitch)
+    body.apply_translation(np.asarray(origin, dtype=float))
+    return like.replacing(body) if len(body.faces) else None
+
+
+def _cavity(mesh: MeshData, wall: float) -> MeshData | None:
+    """Das Innere des Körpers, eingezogen um die Wandstärke."""
+    inner = _inner_field(mesh, wall)
+    if inner is None:
+        return None
+    return _meshed(inner[0], inner[1], inner[2], mesh)
+
+
+def _mouth(matrix: np.ndarray) -> np.ndarray | None:
+    """Das Raster der Öffnung: der oberste Querschnitt des Hohlraums, nach oben
+    durchgezogen.
+
+    Der oberste und nicht die Vereinigung aller — eine Dose soll ihre Decke
+    verlieren, nicht ihre Schulter. Wo der Hohlraum nach oben zuläuft, wird die
+    Öffnung entsprechend enger; das ist bei einer Kugel wenig sinnvoll und bei
+    allem, was wie ein Behälter aussieht, genau richtig.
+
+    Nach oben bis an den Rand des Rasters, und der liegt eine Zelle über dem
+    Körper (``solid_field`` legt ihn dort hin). Damit ragt das Werkzeug hinaus,
+    statt eine Fläche mit dem Deckel zu teilen (§39).
+    """
+    levels = np.flatnonzero(matrix.any(axis=(0, 1)))
+    if not len(levels):
+        return None
+    top = int(levels[-1])
+    opening = np.zeros_like(matrix)
+    opening[:, :, top:] = matrix[:, :, top][:, :, None]
+    return opening if opening.any() else None
 
 
 def _vent(

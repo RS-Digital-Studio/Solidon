@@ -145,6 +145,53 @@ def test_hollowing_without_a_vent_is_possible_and_says_nothing_extra(profile: Pr
     assert "hollow.no_vent" not in {finding.code for finding in result.findings}
 
 
+def test_an_opened_body_is_a_tin(profile: Profile) -> None:
+    """§25: der Weg von der Aushöhlung zur Dose ist ein Schalter, kein Umweg.
+
+    Vorher endete *Aushöhlen* immer bei einem geschlossenen Hohlraum, und wer
+    eine Dose wollte, baute sie aus zwei Zylindern und einer Differenz — dem
+    Weg, den ein CAD-Anwender kennt und den die Bausteine nicht nahelegen.
+    """
+    closed = hollow(block(), 2.0)
+    opened = hollow(block(), 2.0, open_top=True)
+
+    assert opened.mesh.is_watertight
+    assert opened.mesh.component_count == 1
+    assert opened.mesh.volume < closed.mesh.volume, "die Decke ist weg"
+    assert not opened.vents, "eine offene Dose ist ihre eigene Entlüftung"
+
+
+def test_the_lid_finds_the_opening_that_hollowing_made(profile: Profile) -> None:
+    """Die zwei Schritte hintereinander — das ist der Punkt der Sache.
+
+    *Deckel erzeugen* verlangt eine Öffnung und meldete sonst „auf dieser Höhe
+    massiv". Ein ausgehöhlter und oben geöffneter Körper hat eine.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    tin = SceneObject(id="obj_1", name="Dose", mesh=hollow(block(), 3.0, open_top=True).mesh)
+    spec = REGISTRY.get("create_lid")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={tin.id: tin}),
+            inputs=[tin],
+            params=spec.params(thickness=2.4, collar=4.0),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+    lid = result.outputs[1].mesh
+    assert lid.is_watertight
+    assert lid.bounds.size[0] == pytest.approx(40.0, abs=0.5), "der Deckel deckt die Dose"
+
+
 def test_hollow_runs_as_an_operation(profile: Profile) -> None:
     entry = SceneObject(id="obj_1", name="Klotz", mesh=block())
 
