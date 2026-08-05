@@ -37,6 +37,7 @@ from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import AppError
 from app.core.log import get_logger
 from app.i18n import tr
+from app.ui.panels import collapsible
 
 _log = get_logger(__name__)
 
@@ -134,7 +135,16 @@ class GenerateDialog(QDialog):
         form.addRow(tr("Beschreibung"), self.prompt)
         form.addRow(tr("Bild"), self.picture)
         form.addRow("", self.picture_label)
-        form.addRow(tr("Startwert"), self.seed)
+
+        # §2.4: vorn die zwei Werte, die man ändert; hinten alles andere. Der
+        # Startwert stand an dritter Stelle über allem, was jemand hier tun
+        # will — er entscheidet nichts, solange man ihn nicht wiederholen
+        # will, und genau dafür ist er da.
+        advanced = QWidget(self)
+        advanced_form = QFormLayout(advanced)
+        advanced_form.setContentsMargins(0, 0, 0, 0)
+        advanced_form.addRow(tr("Startwert"), self.seed)
+        self.advanced = collapsible(tr("Weitere Einstellungen"), advanced, open_now=False)
 
         self.state = QLabel(self)
         self.state.setWordWrap(True)
@@ -161,6 +171,11 @@ class GenerateDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.addLayout(form)
+        layout.addWidget(self.advanced)
+        # Der Platz sammelt sich hier, nicht zwischen den Feldern: sonst
+        # stand der Hinweis, warum „Erzeugen“ gesperrt ist, dreihundert Pixel
+        # von dem Knopf entfernt, den er erklärt.
+        layout.addStretch(1)
         layout.addWidget(self.state)
         layout.addWidget(self.attempts)
         layout.addWidget(self.again)

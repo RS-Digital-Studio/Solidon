@@ -819,7 +819,7 @@ class MeasurementLabel(QLabel):
         )
 
 
-def collapsible(title: str, content: QWidget) -> QWidget:
+def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidget:
     """Ein Abschnitt, der sich zuklappen lässt — §2.5 verlangt genau das.
 
     Er hieß so und war keiner: eine fette Überschrift über dem Inhalt, ohne
@@ -839,10 +839,14 @@ def collapsible(title: str, content: QWidget) -> QWidget:
     heading.setObjectName("sectionHeading")
     heading.setText(title)
     heading.setCheckable(True)
-    heading.setChecked(True)
+    # ``open_now=False`` für alles, was hinter „Weitere Einstellungen" gehört
+    # (§2.4): die drei Abschnitte der linken Spalte stehen offen, ein
+    # Startwert in einem Erzeugungsdialog nicht.
+    heading.setChecked(open_now)
     heading.setAutoRaise(True)
     heading.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-    heading.setArrowType(Qt.ArrowType.DownArrow)
+    heading.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
+    content.setVisible(open_now)
     set_level(heading, "section")
     heading.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 

@@ -120,7 +120,12 @@ def test_the_first_run_asks_the_four_things(qt_app: QApplication) -> None:
     assert dialog.language.count() >= 2
     assert dialog.printer.count() >= 1
     assert dialog.material.count() >= 1
-    assert "OpenSCAD" in dialog.tools.text()
+    # Die Programme stehen als Zeilen da, nicht mehr als ein Textblock: eine
+    # je Programm, mit Zeichen, Zustand und Zweck.
+    from PySide6.QtWidgets import QLabel
+
+    shown = " ".join(label.text() for label in dialog.tools.findChildren(QLabel))
+    assert "OpenSCAD" in shown
     assert dialog.open_button.text().startswith("Modell")
 
 

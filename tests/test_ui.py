@@ -2171,3 +2171,35 @@ def test_the_discard_question_names_what_it_throws_away(window: MainWindow) -> N
     names = window._discarded_names()
     assert len(names) == window.session.history.discardable
     assert all(name.strip() for name in names), "und jeder Name sagt etwas"
+
+
+def test_the_question_button_carries_the_answer(qt_app: QApplication) -> None:
+    """Auf „Welchen soll ich abziehen?" ist „OK" keine Antwort.
+
+    Es ist die Aufforderung, sie sich aus der Liste danebenzudenken. Der Knopf
+    sagt, was er tut — derselbe Grundsatz wie im Dialog *Ungesicherte
+    Änderungen*, den das Konzept als Vorlage nennt.
+    """
+    from app.ui.dialogs import AskDialog
+
+    dialog = AskDialog("Welchen soll ich abziehen?", ["Klotz A", "Klotz B", "Keinen"])
+
+    assert dialog._accept.text() == "Klotz A", "die Vorauswahl steht auf dem Knopf"
+
+    dialog.list.setCurrentRow(2)
+    assert dialog._accept.text() == "Keinen", "und sie folgt der Auswahl"
+    assert dialog.chosen() == "Keinen"
+
+
+def test_the_generator_dialog_puts_the_seed_out_of_the_way(qt_app: QApplication) -> None:
+    """§2.4: vorn die zwei Werte, die man ändert.
+
+    Der Startwert stand an dritter Stelle über allem, was jemand hier tun
+    will — er entscheidet nichts, solange man ihn nicht wiederholen will.
+    """
+    from app.ui.generate_dialog import GenerateDialog
+
+    dialog = GenerateDialog(None)
+
+    assert not dialog.seed.isVisible(), "zugeklappt, nicht entfernt"
+    assert dialog.advanced.isVisibleTo(dialog), "die Klappe selbst steht da"

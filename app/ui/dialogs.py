@@ -57,6 +57,14 @@ class AskDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        # Der Knopf trägt die Antwort, nicht „OK". Auf die Frage „Welchen soll
+        # ich abziehen?" ist „OK" keine Antwort — es ist die Aufforderung, sie
+        # sich aus der Liste danebenzudenken. Derselbe Grundsatz wie im Dialog
+        # *Ungesicherte Änderungen*: der Knopf sagt, was er tut.
+        self._accept = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self.list.currentItemChanged.connect(lambda *_: self._name_the_choice())
+        self._name_the_choice()
+
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
@@ -64,6 +72,15 @@ class AskDialog(QDialog):
         layout.addWidget(prompt)
         layout.addWidget(self.list)
         layout.addWidget(buttons)
+
+    def _name_the_choice(self) -> None:
+        """Was gewählt ist, steht auf dem Knopf.
+
+        Ohne Auswahl bleibt es bei „OK": ein leerer Knopf wäre schlimmer als
+        ein nichtssagender.
+        """
+        chosen = self.chosen()
+        self._accept.setText(chosen or tr("OK"))
 
     def chosen(self) -> str | None:
         item = self.list.currentItem()
