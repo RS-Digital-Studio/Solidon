@@ -2025,3 +2025,69 @@ Dazu zwei Funde, die auf dem Weg lagen:
       bleibt sie weg: ein von Hand geöffneter Slicer ordnet ohnehin neu an, und
       eine zurückgelesene Platte läge sonst um den halben Bauraum verschoben im
       nächsten Dokument. Zwei Zwecke, zwei Dateien — `place_on_bed` sagt welche.
+
+## Paket 3 und 4 der Durchsicht — und die Bohrung, die daneben lag
+
+Der Rest des Konzepts, in drei Runden. Paket 3 waren die Stellen, an denen
+Formwerk gegen Fusion nachweisbar falsch lag; Paket 4 die, an denen es zwar
+rechnete, aber nichts sagte. A2 stand bewusst außerhalb, weil es als einzige
+Änderung bestehende Projektdateien anders rechnen lässt.
+
+- [x] **Der Hüllquader eines exakten Körpers kam aus den Dreiecken.** Der
+      B-Rep-Kern hat einen Körper und meldete trotzdem die Ausdehnung seiner
+      Vernetzung — konstant 0,025 mm zu groß gegen Fusion. `BRepBndLib`
+      `AddOptimal_s` mit `SetGap(0)` fragt die Fläche selbst, und die
+      Abweichung ist null.
+- [x] **Eine Boolesche Operation ohne Wirkung meldet das.** Eine Magnettasche
+      neben dem Teil war vorher nicht von einer im Teil zu unterscheiden:
+      kein Fehler, kein Befund, ein Verlaufseintrag über nichts.
+      `boolean.without_effect` vergleicht das Volumen und gibt eine Warnung
+      zurück — Regel 17 verlangt einen Handlungsvorschlag, und der stille
+      Fehlschlag stand darunter.
+- [x] **Der Objektname reist ins STEP.** Fusion zeigte jeden Import als
+      „Open CASCADE STEP translator". Der Name geht jetzt über
+      `write.step.product.name` mit, gesetzt *vor* dem Transfer — danach
+      gesetzt wirkt er nicht.
+- [x] **Der Viewport traf, was angeklickt wurde.** Drei Ursachen
+      hintereinander: pyvistas `enable_point_picking` scheiterte still an
+      einem fehlenden `_parent`, ein `vtkPointPicker` trifft nur Eckpunkte,
+      und ein Merkmal ohne vorher gewähltes Objekt hat niemanden. Jetzt ein
+      `vtkCellPicker` im eigenen Interaktionsstil, Objekt vor Merkmal.
+- [x] **Die Skizzenleiste lag unter den eingeklappten Bereichen.** Die
+      Überlagerung kennt ihre Ränder und sagt sie dem Widget.
+- [x] **Ein Rundstab war eine Bohrung.** Der B-Rep-Kern nannte jede
+      zylindrische Fläche `hole`, auch die außen liegende. Die Orientierung
+      der Fläche unterscheidet sie — `TopAbs_REVERSED` heißt hohl.
+- [x] **Der Bericht schwieg über zwanzig Prozent.** Schätzung und G-Code
+      liefen auseinander, ohne dass es jemand erfuhr; jetzt vergleicht
+      `_compare_totals` Zeit und Material und meldet die Abweichung.
+- [x] **Der Drucker kommt aus dem Slicer.** Beim ersten Start stand „Slicer
+      gefunden" neben einem vorgeschlagenen 220er, während der Bestand des
+      Slicers die eingestellte Maschine kannte.
+- [x] **Die Position einer Bohrung ist ihre Mündung** (§25, Formatversion 7).
+      `drill` legte den Zylinder mittig auf die Position — und ein Klick
+      liefert eine Oberfläche. „Null bohrt durch das ganze Teil" tat das
+      dadurch nicht. Der Parameter `anchor` unterscheidet `mouth` von
+      `centre`; die Richtung ins Material folgt aus der Hälfte des
+      Hüllquaders, damit auch eine von unten angeklickte Fläche stimmt.
+      Migration 6 → 7 trägt alten Dateien `centre` ein, `drilled_v6.p3d`
+      beweist an einem Volumen, dass sie weiter rechnen wie zuvor.
+- [x] **Drei Bausteine bauten über ihrem Ursprung.** `magnet_pocket`,
+      `keyhole` und `cable_gland` trugen an der angeklickten Fläche 0,0, 0,0
+      und 0,2 mm³ ab. Die anderen dreizehn hielten die Konvention. Jetzt alle:
+      Bibliotheksversion 2, Änderungseintrag `MOUTH_AT_ORIGIN`, und ein Test,
+      der jeden abziehenden Baustein auf eine Platte setzt und misst, ob sie
+      leichter wird.
+
+### Was die Arbeit gelehrt hat
+
+**Eine Konvention, die nirgends geprüft wird, ist keine.** Dreizehn von
+sechzehn Bausteinen bauten unter ihrem Ursprung, drei nicht — und niemand
+konnte es sehen, weil kein Test die Wirkung maß, sondern nur Wasserdichtheit
+und Wandstärke. Der neue Test prüft nichts Geometrisches, sondern eine
+Erwartung: was Material wegnehmen soll, muss weniger Material hinterlassen.
+
+**Eine Migration, die rechnen müsste, rechnet meistens falsch.** Die halbe
+Tiefe auf die Position zu addieren hätte die Richtung ins Material gebraucht,
+und die steckt in der Geometrie, nicht in der Datei. Ein Parameter, der die
+alte Bedeutung festhält, ist ehrlicher als eine Umrechnung, die rät.

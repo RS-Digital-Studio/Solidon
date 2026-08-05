@@ -121,6 +121,28 @@ meinen die Mittenlage: Formatversion erhöhen und beim Öffnen umrechnen (halbe
 Tiefe addieren) — nicht stillschweigend, sondern als Migration mit Beispieldatei
 nach der Checkliste in `AGENTS.md`.
 
+> **Erledigt.** Zwei Hälften, und die zweite fiel kleiner aus als hier
+> geschätzt.
+>
+> *Die Bausteine:* alle sechzehn nachgemessen. Dreizehn hielten die Konvention
+> schon (abziehend baut unter dem Ursprung), drei brachen sie —
+> `magnet_pocket`, `keyhole`, `cable_gland`. Sie bauen jetzt nach unten,
+> `keyhole` nicht mehr quer in Y. Die Bibliothek steht auf Version 2, der
+> Änderungseintrag `MOUTH_AT_ORIGIN` sagt, was das für alte Projekte heißt.
+> Der neue Test misst nicht Koordinaten, sondern Wirkung: jeder abziehende
+> Baustein auf die Oberseite einer Platte gesetzt, danach muss sie leichter
+> sein. Die drei trugen vorher 0,0 / 0,0 / 0,2 mm³ ab, jetzt 150 / 343 / 309.
+>
+> *Die Bohrung:* nur `drill` saß mittig. `countersink` verankerte schon an der
+> Mündung, `plug` füllt und darf mittig bleiben. `drill` bekam `anchor` mit den
+> Werten `mouth` (Vorgabe) und `centre`; die Richtung ins Material entscheidet
+> die Hälfte des Hüllquaders, damit auch eine von unten angeklickte Fläche
+> stimmt. Umgerechnet wird nichts: eine durchgehende Bohrung geht in beiden
+> Fällen durch, und für eine begrenzte trägt die Migration 6 → 7 den alten
+> Bezugspunkt ein. `tests/data/projects/drilled_v6.p3d` beweist es an einem
+> Volumen — 31 276,89 mm³ vorher wie nachher, gegen 31 231,74 mm³ mit der
+> neuen Bedeutung.
+
 #### A3 — Eine Operation, die nichts abgetragen hat, schweigt
 
 Die Magnettasche oben trifft den Körper nicht und meldet nichts: keine
