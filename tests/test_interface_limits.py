@@ -27,7 +27,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QMenu
 
-from app.ui.main_window import MainWindow
+from app.ui.main_window import MENU_GROUPS, MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 
@@ -434,3 +434,38 @@ def test_switching_moves_the_tick(window: MainWindow) -> None:
     window.action_navigation("blender")
     ticked = {action.data() for action in window._navigation_group.actions() if action.isChecked()}
     assert ticked == {"blender"}, "und der alte Haken geht weg"
+
+
+def test_a_menu_is_sorted_the_way_it_is_read() -> None:
+    """Sortiert wurde nach dem internen Namen, gelesen wird der Titel.
+
+    Unter *Grundformen* stand deshalb „Quader, Exakter Quader, Exakter
+    Zylinder, Zylinder, OpenSCAD, Kugel" — die Reihenfolge von ``create_box``,
+    ``create_brep_box``, ``create_brep_cylinder``, … Wer ein Menü aufklappt,
+    sucht in den Titeln, und alphabetisch ist die einzige Ordnung, die man
+    dabei voraussetzen darf.
+    """
+    from app.i18n import sort_key
+
+    for category, entries in REGISTRY.by_category().items():
+        titles = [str(spec.title) for spec in entries]
+        assert titles == sorted(titles, key=sort_key), f"{category} steht durcheinander: {titles}"
+
+
+def test_a_basic_shape_is_created_not_changed() -> None:
+    """Quader, Zylinder und Kugel standen unter *Ändern → Boolesch*.
+
+    In einem Menü, das *Ändern* heißt, in einer Gruppe, die *Boolesch* heißt,
+    obwohl nichts verschnitten wird — während *Erzeugen* Import, Skizze und
+    Beschriftung führte und keine einzige Grundform.
+    """
+    shapes = {"create_box", "create_cylinder", "create_sphere"}
+    for name in shapes:
+        assert REGISTRY.get(name).category == "primitive"
+
+    booleans = {spec.name for spec in REGISTRY.by_category()["boolean"]}
+    assert not booleans & shapes
+    assert booleans, "und übrig bleibt, was wirklich verschneidet"
+
+    creating = next(cats for title, cats in MENU_GROUPS if str(title) == "Erzeugen")
+    assert "primitive" in creating

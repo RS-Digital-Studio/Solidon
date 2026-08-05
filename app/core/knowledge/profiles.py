@@ -15,7 +15,7 @@ from __future__ import annotations
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, TypeVar
 
 from app.core.errors import ValidationError
 from app.core.log import get_logger
@@ -29,9 +29,13 @@ from app.core.types import (
     SceneObject,
     Tolerance,
 )
-from app.i18n import _
+from app.i18n import _, sort_key
 
 _log = get_logger(__name__)
+
+#: Profil-Art für :func:`_by_title` — Drucker und Material teilen sich nur den
+#: Titel, und der genügt zum Sortieren.
+_P = TypeVar("_P", PrinterProfile, MaterialProfile)
 
 DEFAULT_PRINTER: Final = "generic-220"
 DEFAULT_MATERIAL: Final = "pla"
@@ -99,7 +103,7 @@ def _load_printers() -> dict[str, PrinterProfile]:
             continue
         for identifier, table in _read_table(path).items():
             profiles[identifier] = _printer_from_table(identifier, table, path)
-    return profiles
+    return _by_title(profiles)
 
 
 def _load_materials() -> dict[str, MaterialProfile]:
@@ -109,7 +113,19 @@ def _load_materials() -> dict[str, MaterialProfile]:
             continue
         for identifier, table in _read_table(path).items():
             profiles[identifier] = _material_from_table(identifier, table, path)
-    return profiles
+    return _by_title(profiles)
+
+
+def _by_title(profiles: dict[str, _P]) -> dict[str, _P]:
+    """Nach dem Namen sortiert, den der Nutzer liest.
+
+    In Dateireihenfolge stand die Druckerliste fast alphabetisch, mit dem
+    Centauri an der Stelle, an der er nachgetragen wurde — und wer seinen
+    Drucker sucht, sucht ihn dort, wo er alphabetisch hingehört. Die Ordnung
+    hier statt in jeder Liste einzeln: es gibt vier, und eine davon vergisst
+    es sonst.
+    """
+    return dict(sorted(profiles.items(), key=lambda pair: sort_key(pair[1].title)))
 
 
 def printer_profiles() -> Mapping[str, PrinterProfile]:

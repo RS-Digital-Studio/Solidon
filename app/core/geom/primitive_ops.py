@@ -71,7 +71,7 @@ class BoxParams(BaseParams):
 @register_op(
     name="create_box",
     title=_("Quader anlegen"),
-    category="boolean",
+    category="primitive",
     params=BoxParams,
     consumes=0,
     produces=1,
@@ -126,7 +126,7 @@ class CylinderParams(BaseParams):
 @register_op(
     name="create_cylinder",
     title=_("Zylinder anlegen"),
-    category="boolean",
+    category="primitive",
     params=CylinderParams,
     consumes=0,
     produces=1,
@@ -167,7 +167,7 @@ class SphereParams(BaseParams):
 @register_op(
     name="create_sphere",
     title=_("Kugel anlegen"),
-    category="boolean",
+    category="primitive",
     params=SphereParams,
     consumes=0,
     produces=1,
@@ -203,7 +203,7 @@ class ScadParams(BaseParams):
 @register_op(
     name="create_from_scad",
     title=_("OpenSCAD-Teil anheften"),
-    category="boolean",
+    category="primitive",
     params=ScadParams,
     consumes=0,
     produces=1,

@@ -92,3 +92,21 @@ def install_catalog(language: str, catalog: dict[str, str]) -> None:
 def known_languages() -> tuple[str, ...]:
     """Sprachen mit installiertem Katalog, plus die Quellsprache."""
     return tuple(dict.fromkeys((SOURCE_LANGUAGE, *sorted(_catalogs))))
+
+
+#: Was beim Sortieren wie ein Grundbuchstabe zählt (DIN 5007-1). Ohne das
+#: landet „Ändern" hinter „Zylinder": Python sortiert nach Codepunkt, und
+#: „ä" steht dort hinter „z".
+_FOLDED = str.maketrans({"ä": "a", "ö": "o", "ü": "u", "Ä": "a", "Ö": "o", "Ü": "u", "ß": "ss"})
+
+
+def sort_key(text: object) -> str:
+    """Ein Schlüssel, nach dem sich Texte so ordnen, wie jemand sie liest.
+
+    Menüs und Listen wurden bisher nach dem internen Namen sortiert — im Menü
+    *Grundformen* stand deshalb „Quader, Exakter Quader, Exakter Zylinder,
+    Zylinder, OpenSCAD, Kugel", weil die englischen Bezeichner ``create_box``,
+    ``create_brep_box``, … in dieser Reihenfolge stehen. Der Nutzer liest die
+    Titel und sucht darin.
+    """
+    return str(text).casefold().translate(_FOLDED)

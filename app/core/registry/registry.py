@@ -15,7 +15,7 @@ from typing import Final, get_args
 
 from app.core.errors import InternalError
 from app.core.types import BaseParams, FeatureKind, OpFn
-from app.i18n import TranslatableText, _
+from app.i18n import TranslatableText, _, sort_key
 
 FEATURE_KINDS: Final[tuple[str, ...]] = get_args(FeatureKind)
 
@@ -34,6 +34,7 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
     "fits": _("Passungen"),
     "repair": _("Reparatur"),
     "transform": _("Transformation"),
+    "primitive": _("Grundformen"),
     "boolean": _("Boolesch"),
     "sketch": _("Skizze"),
     "shaping": _("Formgebung"),
@@ -183,11 +184,22 @@ class Registry:
         return tuple(self._ops[name] for name in sorted(self._ops))
 
     def by_category(self) -> dict[str, tuple[OperationSpec, ...]]:
-        """Operations grouped in catalogue order; empty categories are dropped."""
+        """Nach Kategorien gruppiert, **innerhalb nach dem Titel sortiert**.
+
+        Leere Kategorien fallen weg. Sortiert wird nach dem, was auf dem
+        Menüeintrag steht, nicht nach dem internen Namen: unter *Grundformen*
+        stand sonst „Quader, Exakter Quader, Exakter Zylinder, Zylinder,
+        OpenSCAD, Kugel", weil ``create_box``, ``create_brep_box``, … in dieser
+        Reihenfolge stehen. Wer ein Menü aufklappt, sucht in den Titeln.
+        """
         grouped: dict[str, list[OperationSpec]] = {name: [] for name in CATEGORIES}
         for spec in self.all():
             grouped[spec.category].append(spec)
-        return {name: tuple(entries) for name, entries in grouped.items() if entries}
+        return {
+            name: tuple(sorted(entries, key=lambda spec: sort_key(spec.title)))
+            for name, entries in grouped.items()
+            if entries
+        }
 
     def for_feature(self, kind: str) -> tuple[OperationSpec, ...]:
         """Was das Kontextmenü an einem Merkmal anbietet (§18.5)."""

@@ -68,7 +68,7 @@ class BrepBoxParams(BaseParams):
 @register_op(
     name="create_brep_box",
     title=_("Exakten Quader anlegen"),
-    category="boolean",
+    category="primitive",
     params=BrepBoxParams,
     consumes=0,
     produces=1,
@@ -113,7 +113,7 @@ class BrepCylinderParams(BaseParams):
 @register_op(
     name="create_brep_cylinder",
     title=_("Exakten Zylinder anlegen"),
-    category="boolean",
+    category="primitive",
     params=BrepCylinderParams,
     consumes=0,
     produces=1,

@@ -157,6 +157,15 @@ PATHS: Final[dict[str, str]] = {
     "category.boolean": (
         '<circle cx="9.5" cy="12" r="6" /><circle cx="14.5" cy="12" r="6" opacity="0.6" />'
     ),
+    # Grundformen: Würfel und Zylinder nebeneinander — die zwei, mit denen
+    # fast jede Konstruktion anfängt.
+    "category.primitive": (
+        '<path d="M3.5 8.5 8 6l4.5 2.5v5L8 16l-4.5-2.5z" />'
+        '<path d="M3.5 8.5 8 11l4.5-2.5" /><path d="M8 11v5" opacity="0.6" />'
+        '<ellipse cx="17" cy="8" rx="3.5" ry="1.6" />'
+        '<path d="M13.5 8v8" /><path d="M20.5 8v8" />'
+        '<path d="M13.5 16a3.5 1.6 0 0 0 7 0" />'
+    ),
     # Skizze: ein Umriss mit Punkten darauf.
     "category.sketch": (
         '<path d="M5 17l4-9 5 5 5-7" />'

@@ -190,7 +190,7 @@ def test_the_operation_checks_before_it_runs(monkeypatch: pytest.MonkeyPatch) ->
     from app.core.scene.project import ProjectSources, new_project
 
     spec = REGISTRY.get("create_from_scad")
-    assert spec.consumes == 0 and spec.category == "boolean"
+    assert spec.consumes == 0 and spec.category == "primitive"
 
     def never(*args: object, **kwargs: object) -> object:
         raise AssertionError("a refused source must not reach OpenSCAD")

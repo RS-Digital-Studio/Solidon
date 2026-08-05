@@ -105,6 +105,7 @@ from app.ui.dialogs import (
 )
 from app.ui.explode_bar import ExplodeBar
 from app.ui.generate_dialog import GenerateDialog
+from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import feature_label
@@ -278,7 +279,7 @@ def inputs_for(
 #: die Gruppen wären auf Deutsch stehen geblieben (Regel 20).
 MENU_GROUPS: tuple[tuple[TranslatableText, tuple[str, ...]], ...] = (
     (_("Objekt"), ("scene",)),
-    (_("Erzeugen"), ("import", "sketch", "label")),
+    (_("Erzeugen"), ("primitive", "import", "sketch", "label")),
     (_("Ändern"), ("boolean", "transform", "shaping", "holes", "surface", "mesh", "repair")),
     (_("Bausteine"), ("parts",)),
     (_("Vorbereiten"), ("prepare", "colour")),
@@ -433,6 +434,9 @@ class MainWindow(QMainWindow):
         self._build_central()
         self._build_status_bar()
         self._build_menus()
+        # Nach den Menüs, denn die Kopfzeile entsteht in der Werkzeugleiste:
+        # ein Aufruf aus ``_build_central`` heraus fände sie noch nicht.
+        self._apply_card_style(self.settings.theme)
         self._connect_session()
         self._update_actions()
 
@@ -675,7 +679,6 @@ class MainWindow(QMainWindow):
         self.right.setObjectName("overlayCard")
         self.overlay = OverlayHost(self.middle_stack, self)
         self.overlay.set_zones(left, self.right, bottom)
-        self._apply_card_style(self.settings.theme)
 
         self.start_screen = StartScreen(self)
         self.start_screen.newRequested.connect(self.start_empty)
@@ -809,6 +812,24 @@ class MainWindow(QMainWindow):
         )
 
         edit_menu = self._menu(tr("Bearbeiten"))
+        # Rückgängig und Wiederholen zuerst: sie sind die häufigsten Einträge
+        # des Menüs und stehen in jeder Anwendung oben. Vorher lagen sie unter
+        # den Spezialfunktionen, hinter „Zugang zum Sprachmodell".
+        self.undo_action = self._add_action(
+            edit_menu,
+            tr("Rückgängig"),
+            QKeySequence.StandardKey.Undo,
+            self.action_undo,
+            tr("Den letzten Schritt zurücknehmen — auch einen Vorschlag des Chats, ganz."),
+        )
+        self.redo_action = self._add_action(
+            edit_menu,
+            tr("Wiederholen"),
+            QKeySequence.StandardKey.Redo,
+            self.action_redo,
+            tr("Einen zurückgenommenen Schritt wieder anwenden."),
+        )
+        edit_menu.addSeparator()
         # Gemerkt, weil die Kürzelübersicht darauf verweist. Dort stand die
         # Taste als Text, und der war falsch.
         self._palette_action = self._add_action(
@@ -871,21 +892,6 @@ class MainWindow(QMainWindow):
                 "Schlüssel für den Chat hinterlegen. Er landet im Schlüsselbund, "
                 "nie in der Projektdatei."
             ),
-        )
-        edit_menu.addSeparator()
-        self.undo_action = self._add_action(
-            edit_menu,
-            tr("Rückgängig"),
-            QKeySequence.StandardKey.Undo,
-            self.action_undo,
-            tr("Den letzten Schritt zurücknehmen — auch einen Vorschlag des Chats, ganz."),
-        )
-        self.redo_action = self._add_action(
-            edit_menu,
-            tr("Wiederholen"),
-            QKeySequence.StandardKey.Redo,
-            self.action_redo,
-            tr("Einen zurückgenommenen Schritt wieder anwenden."),
         )
 
         # Alles darunter kommt aus dem Register (§10). Der Hinweis ist die
@@ -1151,6 +1157,13 @@ class MainWindow(QMainWindow):
             action = QAction(icon(symbol, toolbar), label, self)
             action.triggered.connect(slot)
             toolbar.addAction(action)
+
+        # Rechts neben den vier Knöpfen stand tausend Pixel nichts. Dort steht
+        # jetzt, was das Projekt gerade ist und worauf es gedruckt wird —
+        # Angaben, die jede Toleranz im Stapel bestimmen (§12) und für die man
+        # bisher einen Dialog öffnen musste.
+        self.header = HeaderBar(toolbar)
+        toolbar.addWidget(self.header)
 
     def _menu(self, title: str) -> QMenu:
         """Ein Menü der Leiste — festgehalten, damit es nicht eingesammelt wird."""
@@ -2445,6 +2458,7 @@ class MainWindow(QMainWindow):
         zwei Stellen, an denen ein Themenwechsel halb ankommt.
         """
         self.overlay.setStyleSheet(card_stylesheet(theme))  # type: ignore[arg-type]
+        self.header.setStyleSheet(header_stylesheet(theme))
 
     def action_navigation(self, scheme: str) -> None:
         self.viewport.set_navigation(scheme)  # type: ignore[arg-type]
@@ -2828,6 +2842,7 @@ class MainWindow(QMainWindow):
         plates = {entry.plate for entry in result.scene.objects.values()}
         self.explode_bar.show_for(len(result.scene.objects), max(plates, default=0) + 1)
         self.report.show_result(result)
+        self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_scene(result)
         self.section_bar.set_ranges(self.viewport.section_ranges())
@@ -2850,7 +2865,22 @@ class MainWindow(QMainWindow):
         self.history_panel.show_document(document, undone=self.session.history.undone)
         self.chat.show_document(document)
         self.setWindowTitle(f"{self.session.title} — {APP_NAME}")
+        self._update_header()
         self._update_actions()
+
+    def _update_header(self) -> None:
+        """Was oben rechts steht, kommt aus Dokument und Profil.
+
+        An beiden Stellen aufgerufen, an denen sich etwas davon ändert: das
+        Profil hängt am Dokument (Drucker und Material stehen darin), das
+        Außenmaß am Ergebnis der Auswertung.
+        """
+        self.header.show_project(
+            self.session.title,
+            self.session.last_result,
+            self.settings.display_unit,  # type: ignore[arg-type]
+        )
+        self.header.show_profile(self.session.profile)
 
     def _on_progress(self, fraction: float, text: str) -> None:
         self.progress.setValue(int(fraction * 100))
