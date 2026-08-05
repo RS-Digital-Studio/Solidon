@@ -2476,7 +2476,7 @@ class MainWindow(QMainWindow):
         lässt sich dort ändern.
         """
         if self.session.history.discardable and not confirm_discard(
-            self.session.history.discardable, self
+            self.session.history.discardable, self._discarded_names(), self
         ):
             return
 
@@ -3036,7 +3036,7 @@ class MainWindow(QMainWindow):
         nein, springt die Leiste auf den Stand des Dokuments zurück.
         """
         if self.session.history.discardable and not confirm_discard(
-            self.session.history.discardable, self
+            self.session.history.discardable, self._discarded_names(), self
         ):
             self.parameters.show_document(self.session.project.document)
             return
@@ -3122,6 +3122,7 @@ class MainWindow(QMainWindow):
         dialog.importRequested.connect(self.action_import)
         if dialog.exec() == first_run.FirstRunDialog.DialogCode.Accepted:
             dialog.apply_to(self.settings)
+            self._adopt_defaults()
         else:
             # Überspringen zählt als erledigt: beim nächsten Mal wieder zu fragen
             # wäre Nörgeln.
@@ -3131,6 +3132,34 @@ class MainWindow(QMainWindow):
         # einem Neustart bekommen — derselbe Weckruf wie in action_llm_key.
         self.session.set_agent_backend(None)
         self._refresh_chat_availability(probe_local=True)
+
+    def _discarded_names(self) -> list[str]:
+        """Wie die zurückgenommenen Schritte heißen, jüngster zuerst.
+
+        Die Frage nannte nur ihre Zahl. „Diese Änderung verwirft 2
+        zurückgenommene Schritte" sagt, wie viel weg ist, nicht was — und
+        genau das entscheidet, ob man Ja sagt.
+        """
+        return [str(entry.title) for entry in reversed(self.session.history.undone)]
+
+    def _adopt_defaults(self) -> None:
+        """Ein leeres Projekt übernimmt die eben gewählten Vorgaben.
+
+        Die Erstinbetriebnahme fragt nach Drucker und Material, und die
+        Einstellungen sagen zu Recht, dass diese Werte „für das nächste neue
+        Projekt" gelten. Beim ersten Start ist das offene Projekt aber genau
+        das, mit dem weitergearbeitet wird: gewählt war Centauri Carbon 2 und
+        PETG, in den Druckeinstellungen stand danach „Allgemeiner FDM-Drucker"
+        und PLA.
+
+        Nur bei leerem Dokument. In ein Projekt mit Inhalt greift eine
+        Einstellung nicht hinein — dafür gibt es die Druckeinstellungen, und
+        ein stiller Profilwechsel unter einer fertigen Konstruktion wäre eine
+        Geometrieänderung ohne Operation.
+        """
+        if self.session.project.document.ops:
+            return
+        self.session.start_new(self.settings.printer, self.settings.material)
 
     def _check_for_updates(self) -> None:
         """§37.2: ein Hinweis mit einem Link. Nichts wird heruntergeladen, nichts

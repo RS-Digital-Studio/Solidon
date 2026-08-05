@@ -7,7 +7,7 @@ nie in den Dialog.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from PySide6.QtCore import Qt
@@ -92,7 +92,10 @@ class CalibrationDialog(QDialog):
             f"{material} — {state}\n\n"
             + tr(
                 "Gemessene Werte gehören ins Materialprofil, nicht ins Modell. "
-                "Alle bestehenden Projekte rechnen danach mit den neuen Werten."
+                "Alle bestehenden Projekte rechnen danach mit den neuen Werten.\n\n"
+                "Gemessen wird an einem gedruckten Prüfkörper: der Toleranz-Testkörper "
+                "aus dem Bausteinkatalog bringt Zapfen und Bohrungen mit gestaffeltem "
+                "Spiel auf eine Platte."
             ),
             self,
         )
@@ -108,11 +111,17 @@ class CalibrationDialog(QDialog):
             ("shrinkage", tr("Schwindung")),
         ):
             editor = QDoubleSpinBox(self)
-            editor.setDecimals(3)
-            editor.setRange(-1.0, 5.0)
-            editor.setSingleStep(0.01)
-            editor.setSuffix(" mm" if name != "shrinkage" else "")
-            editor.setValue(float(getattr(current, name)))
+            # Die Schwindung ist ein Anteil, kein Maß: „0,004" trug deshalb
+            # als Einziges keine Einheit und sagte niemandem etwas. Als
+            # Prozentwert liest sie sich — 0,4 % ist eine Zahl, die man aus
+            # einem Datenblatt kennt.
+            percent = name == "shrinkage"
+            editor.setDecimals(2 if percent else 3)
+            editor.setRange(-100.0 if percent else -1.0, 500.0 if percent else 5.0)
+            editor.setSingleStep(0.1 if percent else 0.01)
+            editor.setSuffix(" %" if percent else " mm")
+            value = float(getattr(current, name))
+            editor.setValue(value * 100.0 if percent else value)
             self.editors[name] = editor
             form.addRow(title, editor)
 
@@ -128,9 +137,17 @@ class CalibrationDialog(QDialog):
         layout.addWidget(buttons)
 
     def measured(self) -> calibration.Calibration:
-        """Was eingetragen wurde, als anwendungsfertige Kalibrierung."""
+        """Was eingetragen wurde, als anwendungsfertige Kalibrierung.
+
+        Die Schwindung steht im Feld als Prozentwert und im Profil als Anteil —
+        umgerechnet wird hier, an der einen Stelle, an der beide sich treffen.
+        """
         return calibration.from_measurements(
-            self.material, **{name: editor.value() for name, editor in self.editors.items()}
+            self.material,
+            **{
+                name: editor.value() / 100.0 if name == "shrinkage" else editor.value()
+                for name, editor in self.editors.items()
+            },
         )
 
 
@@ -512,19 +529,30 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     return "discard" if clicked is discard else "cancel"
 
 
-def confirm_discard(count: int, parent: QWidget | None = None) -> bool:
+def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | None = None) -> bool:
     """Die eine Frage, die sich zu stellen lohnt: mehr als einen Schritt
     wegzuwerfen (§15.4).
+
+    Die Knöpfe heißen nach ihrer Handlung und nicht „Ja"/„Nein" — wie der
+    Dialog *Ungesicherte Änderungen* es an derselben Stelle vorbildlich macht.
+    „Ja" verlangt, die Frage im Kopf zu behalten; „Verwerfen" nicht.
+
+    Und die Schritte werden benannt. Eine Zahl sagt, wie viel weg ist, nicht
+    was.
     """
     if count <= 1:
         return True
-    answer = QMessageBox.question(
-        parent,
-        tr("Abgeschnittene Schritte verwerfen?"),
+    box = QMessageBox(parent)
+    box.setWindowTitle(tr("Abgeschnittene Schritte verwerfen?"))
+    box.setText(
         tr("Diese Änderung verwirft {count} zurückgenommene Schritte.").replace(
             "{count}", str(count)
-        ),
-        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        QMessageBox.StandardButton.Yes,
+        )
     )
-    return answer == QMessageBox.StandardButton.Yes
+    if names:
+        box.setInformativeText("\n".join(f"· {name}" for name in names))
+    discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
+    box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    box.setDefaultButton(discard)
+    box.exec()
+    return box.clickedButton() is discard

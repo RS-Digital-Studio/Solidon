@@ -895,7 +895,18 @@ class PrintSettingsDialog(QDialog):
         index = self.machine_choice.findData(remembered) if remembered else -1
         if index < 0 and chosen is not None:
             index = self.machine_choice.findData(str(chosen.path))
-        self.machine_choice.setCurrentIndex(max(index, 0))
+        # **Kein Rückfall auf den ersten Eintrag.** Der war „Afinia H+1(HS) 0.4
+        # nozzle" — der erste des installierten Bestands, und mit ihm hätte
+        # gesliced, wer den Hinweis darunter überliest. Passt nichts, steht
+        # hier nichts; leer ist eine ehrliche Antwort, ein fremder Drucker
+        # nicht.
+        #
+        # Ausnahme: steht genau einer zur Wahl, ist er die Wahl. Eine Liste mit
+        # einem Eintrag leer zu lassen wäre keine Vorsicht, sondern ein
+        # zusätzlicher Klick ohne Entscheidung.
+        if index < 0 and len(machines) == 1:
+            index = 0
+        self.machine_choice.setCurrentIndex(index)
         self._fill_processes(process)
 
         if chosen is None:
@@ -927,7 +938,11 @@ class PrintSettingsDialog(QDialog):
         warum.
         """
         machine = self._current_machine()
-        fitting = slicer_profiles.processes(self._profiles, machine)
+        # Ohne gewählten Drucker bleibt die Liste leer statt vollständig. Ein
+        # Grundprofil ohne Drucker gibt es nicht — zweitausend Einträge, von
+        # denen der Slicer jeden ablehnt, sind keine Auswahl, sondern eine
+        # Einladung zum falschen Klick.
+        fitting = slicer_profiles.processes(self._profiles, machine) if machine else []
         self.process_choice.clear()
         for entry in fitting:
             self.process_choice.addItem(entry.title(tr("eigenes")), str(entry.path))

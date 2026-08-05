@@ -1373,8 +1373,14 @@ def test_the_toolbar_buttons_carry_a_symbol_and_keep_their_words(
     for name in ("new", "open", "save", "import"):
         assert name in icons.known(), f"{name} fehlt im Symbolkatalog"
 
+    from PySide6.QtWidgets import QWidgetAction
+
     toolbar = window.findChildren(QToolBar)[0]
     for action in toolbar.actions():
+        # Eingehängte Widgets sind keine Knöpfe: sie tragen ihre Beschriftung
+        # selbst, und ein leerer ``text()`` ist bei ihnen kein Befund.
+        if isinstance(action, QWidgetAction) or action.isSeparator():
+            continue
         assert action.text(), "das Wort bleibt"
         assert not action.icon().isNull(), f"{action.text()} ohne Zeichen"
 
@@ -2103,3 +2109,52 @@ def test_a_held_key_is_not_a_flicker(window: MainWindow) -> None:
     )
     assert not window.viewport._compare.eventFilter(window, repeat)
     assert window.viewport.difference_held, "die Wiederholung ändert nichts"
+
+
+# --- Einrichtung: was gewählt wurde, muss auch gelten (Konzept Teil 8) -----------
+
+
+def test_the_first_run_reaches_the_project_that_is_open(window: MainWindow) -> None:
+    """Gewählt war Centauri Carbon 2 und PETG — in den Druckeinstellungen stand
+    danach „Allgemeiner FDM-Drucker" und PLA.
+
+    Die Einstellungen sagen zu Recht, dass die Werte „für das nächste neue
+    Projekt" gelten. Beim ersten Start ist das offene Projekt aber genau das,
+    mit dem weitergearbeitet wird.
+    """
+    window.settings.printer = "centauri-carbon-2"
+    window.settings.material = "petg"
+
+    window._adopt_defaults()
+    window.session.wait_for_idle()
+
+    assert window.session.profile.printer.id == "centauri-carbon-2"
+    assert window.session.profile.material.id == "petg"
+
+
+def test_a_project_with_content_keeps_its_profile(window: MainWindow) -> None:
+    """In ein Projekt mit Inhalt greift eine Einstellung nicht hinein — das
+    wäre eine Geometrieänderung ohne Operation."""
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    before = window.session.profile.printer.id
+    window.settings.printer = "centauri-carbon-2"
+
+    window._adopt_defaults()
+
+    assert window.session.profile.printer.id == before
+
+
+def test_the_discard_question_names_what_it_throws_away(window: MainWindow) -> None:
+    """„Diese Änderung verwirft 2 zurückgenommene Schritte" sagt, wie viel weg
+    ist, nicht was — und genau das entscheidet, ob man Ja sagt."""
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    assert not window._discarded_names(), "nichts zurückgenommen, nichts zu nennen"
+
+    window.action_undo()
+    window.session.wait_for_idle()
+
+    names = window._discarded_names()
+    assert len(names) == window.session.history.discardable
+    assert all(name.strip() for name in names), "und jeder Name sagt etwas"
