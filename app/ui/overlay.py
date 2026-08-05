@@ -74,29 +74,41 @@ def rows_height(view: QAbstractItemView) -> int:
     Zeile, nicht als seine Kinder.
     """
     model = view.model()
-    if model is None:
-        return 0
+    tree = view if isinstance(view, QTreeView) else None
 
-    def visible_rows(parent: QModelIndex) -> int:
+    def rows_in(parent: QModelIndex) -> int:
+        """Die echte Höhe der Zeilen unter ``parent``, nicht ihre Zahl.
+
+        Gerechnet wird mit ``rowHeight`` statt mit „Zeilen mal Zeilenhöhe": ein
+        umgebrochener Befund im Prüfbericht ist zwei Zeilen hoch, und eine
+        Rechnung, die ihn für eine hält, schneidet ihn ab. Genau das ließ die
+        Karte einen Rollbalken zeigen, wo alles hineingepasst hätte.
+        """
         total = 0
         for row in range(model.rowCount(parent)):
-            total += 1
             index = model.index(row, 0, parent)
-            if isinstance(view, QTreeView) and view.isExpanded(index):
-                total += visible_rows(index)
+            if tree is not None:
+                total += tree.rowHeight(index)
+                if tree.isExpanded(index):
+                    total += rows_in(index)
+            else:
+                total += view.sizeHintForRow(row)
         return total
 
-    rows = visible_rows(QModelIndex())
-    # Eine Zeile Höhe auch dann, wenn keine da ist: eine Liste, die auf null
-    # zusammenfällt, sieht aus wie ein Fehler und nicht wie eine leere Liste.
-    line = view.sizeHintForRow(0) if rows else 0
-    if line <= 0:
-        line = view.fontMetrics().height() + 2 * SPACE
-    wanted = max(rows, 1) * line + 2 * view.frameWidth()
+    wanted = rows_in(QModelIndex())
+    if wanted <= 0:
+        # Eine Zeile Höhe auch dann, wenn keine da ist: eine Liste, die auf
+        # null zusammenfällt, sieht aus wie ein Fehler und nicht wie eine
+        # leere Liste.
+        wanted = view.fontMetrics().height() + 2 * SPACE
 
-    header = view.header() if isinstance(view, QTreeView) else None
-    if header is not None and not header.isHidden():
-        wanted += header.height()
+    # Was die Liste über ihren Zeilen noch braucht — Rahmen und, beim Baum,
+    # die Spaltenköpfe. Aus der Differenz gelesen und nicht aus einzelnen
+    # Zahlen zusammengesetzt: das Stylesheet darf beides ändern, ohne dass
+    # hier jemand nachzieht.
+    viewport = view.viewport()
+    if viewport is not None:
+        wanted += view.height() - viewport.height()
     return wanted
 
 
