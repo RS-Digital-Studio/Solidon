@@ -117,3 +117,69 @@ def test_an_empty_recent_list_is_a_line_not_a_box(screen: StartScreen) -> None:
     assert screen.recent_empty.isHidden()
     assert not screen.recent_list.isHidden()
     assert screen.recent_list.count() == 2
+
+
+# --- Vorschaubilder (Konzept Teil 2.1, Punkt 3) ---------------------------------
+
+
+def test_every_example_brings_a_preview() -> None:
+    """Die Kacheln zeigten Titel und Satz und sonst nichts.
+
+    Das Bild entsteht aus demselben Lauf, der das Beispiel baut
+    (`tools/make_examples.py`) — eines, das jemand später von Hand nachzieht,
+    zeigt irgendwann ein anderes Teil als die Datei daneben. Dieselbe
+    Begründung, aus der auch die Bausteinvorschauen gerendert und nicht
+    gepflegt werden (§24.3).
+    """
+    for path in examples.paths():
+        entry = examples.by_path(path)
+        assert entry is not None
+        picture = examples.preview_of(entry)
+        assert picture.startswith("<svg"), f"{entry.id} hat kein Vorschaubild"
+        assert len(picture) < 400_000, f"{entry.id}: {len(picture) / 1024:.0f} kB sind zu viel"
+
+
+def test_a_preview_draws_all_bodies_of_the_example() -> None:
+    """Eine Kachel zeigt, was das Beispiel enthält — bei „Aushöhlen und
+    teilen" sind das zwei Hälften, die nebeneinanderliegen."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    one = MeshData.of(trimesh.creation.box(extents=(20.0, 10.0, 6.0)))
+    other = MeshData.of(trimesh.creation.box(extents=(8.0, 8.0, 8.0)))
+    other.raw.apply_translation((30.0, 0.0, 0.0))
+
+    single = examples.render_preview([one])
+    both = examples.render_preview([one, other])
+
+    assert single.startswith("<svg") and both.startswith("<svg")
+    assert len(both) > len(single), "der zweite Körper steht mit im Bild"
+
+
+def test_a_preview_of_nothing_is_nothing() -> None:
+    """Ein Beispiel ohne Körper ist keiner — und kein leeres SVG."""
+    assert examples.render_preview([]) == ""
+
+
+def test_the_tile_shows_the_picture(screen: StartScreen) -> None:
+    tiles = screen.findChildren(ExampleTile)
+    assert tiles
+
+    for tile in tiles:
+        assert not tile.preview.isHidden(), f"{tile.entry.id} zeigt sein Bild nicht"
+        assert not tile.preview.pixmap().isNull()
+
+
+def test_a_missing_picture_leaves_the_tile_standing(qt_app: QApplication) -> None:
+    """Ein frisch ausgecheckter Baum hat die Bilder erst, wenn das Werkzeug
+    gelaufen ist — eine leere Fläche wäre schlimmer als keine."""
+    from pathlib import Path
+
+    from app.core.examples import Example
+
+    unknown = Example(id="gibt-es-nicht", title="Kein Beispiel", way="", doc="Ohne Bild.")
+    tile = ExampleTile(unknown, Path("gibt-es-nicht.p3d"))
+
+    assert tile.preview.isHidden()
+    assert unknown.title in [label.text() for label in tile.findChildren(type(tile.preview))]

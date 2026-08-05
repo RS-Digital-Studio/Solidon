@@ -17,6 +17,7 @@ Eines je Weg aus §2.2:
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -26,6 +27,20 @@ from app.i18n import TranslatableText, _
 
 #: Wo die Beispiele in der Installation liegen.
 EXAMPLES_DIRNAME: Final = "examples"
+
+#: Kantenlänge eines Vorschaubildes. Größer als eine Bausteinvorschau: eine
+#: Kachel auf dem Startbildschirm ist keine Zeile in einer Liste.
+PREVIEW_SIZE: Final = 220
+
+#: Auf so viele Dreiecke wird vor dem Zeichnen heruntergerechnet. Ein
+#: ausgehöhltes Teil mit Gitterfüllung bringt zweihunderttausend mit, und das
+#: Bild davon wäre elf Megabyte für eine Kachel von zweihundert Pixeln.
+#:
+#: Gemessen: bei 1500 Dreiecken liegt ein Bild bei gut hundertfünfzig
+#: Kilobyte, bei 4000 beim Anderthalbfachen und bei 800 fällt die Form
+#: sichtbar auseinander — ein Kalibrierteil besteht aus Zapfen und Bohrungen,
+#: und beide brauchen ihre Rundung.
+PREVIEW_TRIANGLES: Final = 1500
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +55,12 @@ class Example:
     @property
     def filename(self) -> str:
         return f"{self.id}{PROJECT_SUFFIX}"
+
+    @property
+    def preview_name(self) -> str:
+        """Wie das Vorschaubild heißt — dieselbe Antwort für den, der es
+        schreibt, und den, der es zeigt."""
+        return f"{self.id}.svg"
 
 
 EXAMPLES: Final[tuple[Example, ...]] = (
@@ -123,6 +144,50 @@ def paths() -> tuple[Path, ...]:
     folder = directory()
     return tuple(
         folder / example.filename for example in EXAMPLES if (folder / example.filename).is_file()
+    )
+
+
+def preview_of(example: Example) -> str:
+    """Das Vorschaubild eines Beispiels, oder ein leerer Text.
+
+    Ein fehlendes Bild ist kein Fehler: die Beispiele entstehen aus
+    `tools/make_examples.py`, und wer das Repository frisch auscheckt, hat
+    sie, bevor er es laufen lässt. Die Kachel zeigt dann eben nur Titel und
+    Satz — so, wie sie es vorher immer tat.
+    """
+    path = directory() / example.preview_name
+    return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+
+def render_preview(meshes: Iterable[object], theme: str = "light") -> str:
+    """Zeichnet die Körper eines Beispiels als ein Vorschaubild.
+
+    Alle zusammen und nicht einzeln: eine Kachel zeigt, was das Beispiel
+    enthält, und bei „Aushöhlen und teilen" sind das zwei Hälften, die
+    nebeneinanderliegen. Getrennt gerendert wäre jede für sich richtig und die
+    Aussage falsch.
+
+    Heruntergerechnet, bevor gezeichnet wird — siehe ``PREVIEW_TRIANGLES``.
+    Das Ergebnis fließt nirgends zurück; es ist ein Bild, keine Geometrie.
+    """
+    import trimesh
+
+    from app.core import drawing
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.mesh_ops import decimate
+
+    raw = [mesh.raw for mesh in meshes]  # type: ignore[attr-defined]
+    if not raw:
+        return ""
+    body = trimesh.util.concatenate(raw) if len(raw) > 1 else raw[0]
+    reduced = decimate(MeshData.of(body), PREVIEW_TRIANGLES)
+    tone = drawing.palette(theme).solid  # type: ignore[arg-type]
+    return drawing.project(
+        reduced.raw,
+        PREVIEW_SIZE,
+        tone,
+        theme=theme,  # type: ignore[arg-type]
+        edges=True,
     )
 
 

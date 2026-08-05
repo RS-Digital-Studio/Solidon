@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.backends.mesh import ScriptedMeshBackend
 from app.core.bootstrap import load_operations
-from app.core.examples import directory
+from app.core.examples import directory, render_preview
 from app.core.generate import from_text
 from app.core.knowledge import profiles
 from app.core.scene import History, OperationDraft, evaluate
@@ -409,11 +409,21 @@ def main() -> int:
             return 1
 
         path = save(project, target / example.filename)
+
+        # Das Vorschaubild entsteht aus demselben Lauf, der das Beispiel baut.
+        # Ein Bild, das jemand später von Hand nachzieht, zeigt irgendwann ein
+        # anderes Teil als die Datei daneben — dieselbe Begründung, aus der
+        # auch die Bausteinvorschauen gerendert und nicht gepflegt werden
+        # (§24.3).
+        preview = render_preview(entry.mesh for entry in result.scene.objects.values())
+        picture = target / example.preview_name
+        picture.write_text(preview, encoding="utf-8")
+
         objects = ", ".join(
             f"{entry.name} {entry.mesh.volume / 1000.0:.1f} cm3"
             for entry in result.scene.objects.values()
         )
-        print(f"ok {path.name}: {objects}")
+        print(f"ok {path.name}: {objects}  [{len(preview) / 1024:.0f} kB Vorschau]")
     return 0
 
 

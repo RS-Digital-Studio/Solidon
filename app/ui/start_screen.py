@@ -20,8 +20,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDragLeaveEvent, QDropEvent
+from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, Signal
+from PySide6.QtGui import (
+    QDragEnterEvent,
+    QDragLeaveEvent,
+    QDropEvent,
+    QImage,
+    QPainter,
+    QPixmap,
+)
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -55,9 +63,8 @@ from app.ui.theme import THEMES
 #: zusammen.
 COLUMN_WIDTH = 900
 
-#: Kacheln je Zeile. Zwei bei 900 Pixel heißt gut 430 pro Kachel — genug für
-#: einen Titel und zwei Zeilen Beschreibung, ohne dass eine dritte Spalte
-#: beides zu Schnipseln macht.
+#: Kacheln je Zeile. Zwei bei 900 Pixel heißt gut 430 pro Kachel: das
+#: Vorschaubild links, daneben Titel und Satz.
 TILE_COLUMNS = 2
 
 
@@ -165,6 +172,35 @@ def current_theme() -> str:
     return "light" if application.palette().window().color().lightness() > 127 else "dark"
 
 
+#: Wie hoch ein Vorschaubild in der Kachel steht. Groß genug, um die Form zu
+#: erkennen, klein genug, dass Titel und Satz ihre Zeilen behalten.
+PREVIEW_HEIGHT = 88
+
+
+def _preview_pixmap(entry: Example) -> QPixmap | None:
+    """Das Vorschaubild eines Beispiels als Pixmap, oder nichts.
+
+    Gerastert wird beim Aufbau der Kachel: das SVG ist ein Bild und kein
+    Zustand, und es steht in derselben Größe, solange der Startbildschirm
+    offen ist.
+    """
+    source = examples.preview_of(entry)
+    if not source:
+        return None
+    renderer = QSvgRenderer(QByteArray(source.encode("utf-8")))
+    if not renderer.isValid():
+        return None
+    image = QImage(
+        QSize(PREVIEW_HEIGHT, PREVIEW_HEIGHT) * 2, QImage.Format.Format_ARGB32_Premultiplied
+    )
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    renderer.render(painter)
+    painter.end()
+    image.setDevicePixelRatio(2.0)
+    return QPixmap.fromImage(image)
+
+
 class ExampleTile(QFrame):
     """Ein Beispielprojekt als Kachel: Titel, ein Satz, und klickbar.
 
@@ -195,17 +231,51 @@ class ExampleTile(QFrame):
         doc.setWordWrap(True)
         set_level(doc, "caption")
 
-        layout = QVBoxLayout(self)
+        # Das Bild kommt aus dem Beispiel selbst, gerendert von
+        # `tools/make_examples.py` beim Bauen. Fehlt es, steht die Kachel wie
+        # vorher da: ein frisch ausgecheckter Baum hat die Bilder erst, wenn
+        # das Werkzeug gelaufen ist, und eine leere Fläche wäre schlimmer als
+        # keine.
+        self.preview = QLabel(self)
+        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        picture = _preview_pixmap(entry)
+        self.preview.setVisible(picture is not None)
+        if picture is not None:
+            self.preview.setPixmap(picture)
+
+        # Der Text sitzt in einem eigenen Widget, nicht in einem Layout im
+        # Layout: ein umbrechendes Label meldet seine bevorzugte Breite, und
+        # ein verschachteltes Layout gibt ihm nicht mehr. Der Satz brach nach
+        # fünf Wörtern um, während rechts dreihundert Pixel frei blieben.
+        words = QWidget(self)
+        # ``setHeightForWidth`` ist der Teil, ohne den nichts davon greift: ein
+        # umbrechendes Label bestimmt seine Höhe aus seiner Breite, und ein
+        # Layout, dem diese Abhängigkeit nicht angemeldet ist, rechnet mit der
+        # bevorzugten Breite und lässt den Rest der Kachel leer stehen.
+        policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        policy.setHeightForWidth(True)
+        words.setSizePolicy(policy)
+        text = QVBoxLayout(words)
+        text.setContentsMargins(0, 0, 0, 0)
+        text.setSpacing(TIGHT)
+        text.addWidget(title)
+        text.addWidget(doc)
+        # Der Überschuss sammelt sich unten, nicht zwischen Titel und Satz:
+        # eine Kachel wächst auf die Höhe ihrer Nachbarin, und ohne diese
+        # Feder verteilte Qt die gewonnene Höhe auf beide Beschriftungen.
+        #
+        # Sie steht hier und nicht im waagerechten Layout darunter. Dort war
+        # sie es, die den Satz auf hundertachtundsechzig Pixel zusammendrückte
+        # — beim Umbau von einer Spalte auf Bild-und-Text wurde aus einer
+        # senkrechten Feder eine waagerechte, und die frisst, was der Text
+        # gebraucht hätte.
+        text.addStretch(1)
+
+        layout = QHBoxLayout(self)
         layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
-        layout.setSpacing(TIGHT)
-        layout.addWidget(title)
-        layout.addWidget(doc)
-        # Der Überschuss sammelt sich unten, nicht zwischen Titel und Satz.
-        # Eine Kachel wächst auf die Höhe ihrer Nachbarin (oben, MinimumExpanding);
-        # ohne diese Feder verteilte Qt die gewonnene Höhe auf beide Beschriftungen,
-        # und neben einer zweizeiligen Überschrift klaffte in der einzeiligen
-        # Kachel eine Lücke, die aussah wie ein vergessener Text.
-        layout.addStretch(1)
+        layout.setSpacing(ROOMY)
+        layout.addWidget(self.preview)
+        layout.addWidget(words, stretch=1)
 
     def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         if event.button() == Qt.MouseButton.LeftButton:
