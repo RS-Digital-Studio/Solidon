@@ -97,7 +97,7 @@ class SectionBar(QWidget):
         self.axis.addItem(tr("Kein Schnitt"), userData=None)
         for axis, label in (("x", tr("Schnitt X")), ("y", tr("Schnitt Y")), ("z", tr("Schnitt Z"))):
             self.axis.addItem(label, userData=axis)
-        self.axis.currentIndexChanged.connect(self._emit)
+        self.axis.currentIndexChanged.connect(self._axis_changed)
 
         self.position = QSlider(Qt.Orientation.Horizontal, self)
         self.position.setMinimum(-1000)
@@ -134,6 +134,8 @@ class SectionBar(QWidget):
         self.warning = QLabel("", self)
         self.warning.setWordWrap(True)
 
+        self._ranges: dict[str, tuple[float, float]] = {}
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(self.axis)
@@ -144,14 +146,38 @@ class SectionBar(QWidget):
         layout.addWidget(self.warning)
         self._update_enabled()
 
+    def _axis_changed(self) -> None:
+        """Andere Achse, anderer Weg — und dann erst rechnen."""
+        self._apply_range()
+        self._emit()
+
     # --- state ------------------------------------------------------------------
 
-    def set_range(self, low: float, high: float) -> None:
-        """Folgt der Größe der Szene, mit etwas Luft auf beiden Seiten."""
+    def set_ranges(self, ranges: dict[str, tuple[float, float]]) -> None:
+        """Je Achse ihr eigener Weg.
+
+        Vorher galt eine Spanne für alle drei. Bei einem flachen Brett lief
+        der Z-Regler über dessen Länge statt über seine Dicke, und ein Zug in
+        die Mitte landete weit über dem Teil — kein Schnitt zu sehen, obwohl
+        der Regler sich bewegt hatte.
+        """
+        self._ranges = dict(ranges)
+        self._apply_range()
+
+    def _apply_range(self) -> None:
+        """Setzt den Weg auf die gewählte Achse, mit etwas Luft an den Enden."""
+        axis = self.axis.currentData()
+        low, high = self._ranges.get(axis, (-100.0, 100.0))
         margin = max(1.0, (high - low) * 0.05)
+        was = self.readout.value()
         self.position.setMinimum(int((low - margin) * STEPS_PER_MM))
         self.position.setMaximum(int((high + margin) * STEPS_PER_MM))
         self.readout.setRange(low - margin, high + margin)
+        # Die Achse zu wechseln heißt, an einer anderen Stelle zu schneiden —
+        # der alte Wert gehörte zur alten Achse. In die Mitte, das ist die
+        # Stelle, an der ein Schnitt am ehesten etwas zeigt.
+        if not (low - margin <= was <= high + margin):
+            self.readout.setValue((low + high) / 2.0)
 
     def plane(self) -> SectionPlane | None:
         axis = self.axis.currentData()

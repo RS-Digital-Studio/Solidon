@@ -2815,8 +2815,7 @@ class MainWindow(QMainWindow):
         self.report.show_result(result)
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_scene(result)
-        low, high = self.viewport.section_range()
-        self.section_bar.set_range(low, high)
+        self.section_bar.set_ranges(self.viewport.section_ranges())
         self.section_bar.show_capping_state(self.viewport.section_uncapped)
         self.history_panel.show_document(
             self.session.project.document, result.stopped_at, self.session.history.undone

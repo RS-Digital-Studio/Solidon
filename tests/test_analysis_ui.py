@@ -702,6 +702,43 @@ def test_the_build_volume_is_a_hint_not_a_cage() -> None:
         assert abs(end[0]) <= abs(start[0]) and abs(end[1]) <= abs(start[1])
 
 
+def test_the_gizmo_axes_say_which_is_which() -> None:
+    """Regel 18: Rot, Grün und Blau waren die einzige Unterscheidung.
+
+    Wer die drei Farben nicht trennt, sah drei gleiche Pfeile — und der Gizmo
+    ist das Werkzeug, mit dem man ein Teil bewegt, also ist „welche Achse" die
+    einzige Frage, die er beantworten muss.
+    """
+    from app.ui.viewport import GIZMO_LABEL_GAP, gizmo_labels
+
+    marks = gizmo_labels((10.0, 20.0, 30.0), 50.0)
+    assert [text for _point, text in marks] == ["X", "Y", "Z"]
+
+    reach = 50.0 * GIZMO_LABEL_GAP
+    assert marks[0][0] == (10.0 + reach, 20.0, 30.0)
+    assert marks[1][0] == (10.0, 20.0 + reach, 30.0)
+    assert marks[2][0] == (10.0, 20.0, 30.0 + reach)
+    assert reach > 50.0, "hinter der Spitze, nicht auf ihr — dort will man greifen"
+
+
+def test_the_gizmo_labels_follow_the_body() -> None:
+    """Der Griff sitzt am Objekt, also auch seine Beschriftung."""
+    from app.ui.viewport import gizmo_labels
+
+    near = gizmo_labels((0.0, 0.0, 0.0), 10.0)
+    far = gizmo_labels((100.0, 0.0, 0.0), 10.0)
+    assert far[0][0][0] - near[0][0][0] == 100.0
+
+
+def test_the_gizmo_is_big_enough_to_grab() -> None:
+    """pyvistas Vorgaben ergaben auf einem 80-mm-Teil ein Gebilde aus dünnen
+    Linien von etwa vierzig Bildpunkten."""
+    from app.ui.viewport import GIZMO_LINE_RADIUS, GIZMO_SCALE
+
+    assert GIZMO_SCALE > 0.15, "die Vorgabe von pyvista"
+    assert GIZMO_LINE_RADIUS > 0.02, "und ihre Strichstärke"
+
+
 def test_a_click_on_the_body_selects_it(window: MainWindow) -> None:
     """§2.9 und §18.5: „links wählt aus" muss ohne den Baum gelten.
 

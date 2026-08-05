@@ -294,6 +294,34 @@ def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, floa
 #: hineinreichen, als Anteil ihrer Länge.
 CORNER_FRACTION = 0.08
 
+#: Länge der Gizmo-Pfeile als Anteil der Körperdiagonale, und die Dicke ihrer
+#: Schäfte im selben Maß. pyvistas Vorgaben (0.15 und 0.02) ergaben auf einem
+#: 80-mm-Teil ein Gebilde aus dünnen Linien von etwa vierzig Bildpunkten — zu
+#: klein, um es mit der Maus zu treffen.
+GIZMO_SCALE = 0.3
+GIZMO_LINE_RADIUS = 0.035
+
+#: Wie weit hinter der Pfeilspitze die Achsenbeschriftung steht, als Anteil der
+#: Pfeillänge.
+GIZMO_LABEL_GAP = 1.2
+
+
+def gizmo_labels(
+    origin: tuple[float, float, float], length: float
+) -> list[tuple[tuple[float, float, float], str]]:
+    """Wo X, Y und Z am Gizmo stehen (Regel 18).
+
+    Die drei Achsen unterschied allein Rot, Grün und Blau — für jeden, der die
+    nicht trennt, waren es drei gleiche Pfeile. Ein Buchstabe an der Spitze
+    trägt dieselbe Aussage ohne Farbe.
+    """
+    reach = length * GIZMO_LABEL_GAP
+    return [
+        ((origin[0] + reach, origin[1], origin[2]), "X"),
+        ((origin[0], origin[1] + reach, origin[2]), "Y"),
+        ((origin[0], origin[1], origin[2] + reach), "Z"),
+    ]
+
 
 def volume_edges(
     width: float, depth: float, height: float
@@ -500,6 +528,8 @@ class Viewport(QWidget):
         self.measurements = MeasurementList()
         self._measure_actors: list[Any] = []
         self._gizmo: Any | None = None
+        self._gizmo_labels: Any | None = None
+        """Die Buchstaben an den Gizmo-Achsen. Sie gehen mit ihm."""
         self._face_actor: Any | None = None
         """Die Scheibe, an der der Gizmo hängt, wenn eine Fläche gewählt ist."""
         self._grid_step = 1.0
@@ -1175,17 +1205,27 @@ class Viewport(QWidget):
         """
         return self._uncapped
 
-    def section_range(self) -> tuple[float, float]:
-        """Sinnvoller Weg für den Schnittschieber: die Ausdehnung der Szene."""
+    def section_ranges(self) -> dict[str, tuple[float, float]]:
+        """Der Weg des Schnittschiebers, **je Achse einzeln**.
+
+        Vorher galt eine Spanne für alle drei, gebildet aus dem kleinsten und
+        größten Wert über sämtliche Achsen. Bei einem Brett von 80 auf 50 auf 8
+        lief der Z-Regler damit über achtzig Millimeter, und das Teil belegte
+        ein Zehntel seiner Länge: ein Zug in die Mitte landete auf 23 mm, weit
+        über dem Brett, und man sah keinen Schnitt.
+        """
+        empty = {"x": (-100.0, 100.0), "y": (-100.0, 100.0), "z": (-100.0, 100.0)}
         if self._result is None or not self._result.scene.objects:
-            return (-100.0, 100.0)
-        lows: list[float] = []
-        highs: list[float] = []
-        for entry in self._result.scene.objects.values():
-            bounds = entry.mesh.bounds
-            lows.append(min(bounds.minimum))
-            highs.append(max(bounds.maximum))
-        return (min(lows), max(highs))
+            return empty
+
+        boxes = [entry.mesh.bounds for entry in self._result.scene.objects.values()]
+        return {
+            axis: (
+                min(box.minimum[index] for box in boxes),
+                max(box.maximum[index] for box in boxes),
+            )
+            for index, axis in enumerate(("x", "y", "z"))
+        }
 
     # --- measuring (§18.3) ------------------------------------------------------
 
@@ -1687,6 +1727,7 @@ class Viewport(QWidget):
         if self._gizmo is not None:
             self._gizmo.Off()
             self._gizmo = None
+        self._drop_gizmo_labels()
         self._drop_face_handle()
         if not active or self._selected is None:
             return
@@ -1695,8 +1736,47 @@ class Viewport(QWidget):
         if actor is None:
             return
         self._gizmo = self.plotter.add_affine_transform_widget(
-            actor, release_callback=self._on_gizmo_released
+            actor,
+            release_callback=self._on_gizmo_released,
+            scale=GIZMO_SCALE,
+            line_radius=GIZMO_LINE_RADIUS,
         )
+        self._label_gizmo(actor)
+
+    def _label_gizmo(self, actor: Any) -> None:
+        """Schreibt X, Y und Z an die Achsen (Regel 18).
+
+        Der Gizmo unterschied sie allein über Rot, Grün und Blau. Die
+        Buchstaben sitzen etwas hinter den Spitzen — auf ihnen läge die
+        Beschriftung dort, wo man greifen will.
+        """
+        if self.plotter is None:
+            return
+        import numpy as np
+
+        length = float(actor.GetLength()) * GIZMO_SCALE * 1.15
+        marks = gizmo_labels(tuple(float(value) for value in actor.center), length)  # type: ignore[arg-type]
+        self._gizmo_labels = self.plotter.add_point_labels(
+            np.asarray([point for point, _text in marks], dtype=float),
+            [text for _point, text in marks],
+            # In der Körperfarbe des Themas: hell im dunklen, dunkel im
+            # hellen. Die Kantenfarbe war für Text auf dem Hintergrund zu
+            # leise — im Bild kaum zu lesen.
+            text_color=self._object_colour,
+            font_size=13,
+            bold=True,
+            show_points=False,
+            shape=None,
+            always_visible=True,
+            name="gizmo_labels",
+            render=False,
+            reset_camera=False,
+        )
+
+    def _drop_gizmo_labels(self) -> None:
+        if self._gizmo_labels is not None and self.plotter is not None:
+            self.plotter.remove_actor(self._gizmo_labels, render=False)
+        self._gizmo_labels = None
 
     def _face_handle(self, feature: Feature) -> Any:
         """Ein Griff auf der Fläche, an dem der Gizmo sitzen kann.

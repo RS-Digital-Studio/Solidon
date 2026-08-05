@@ -563,7 +563,7 @@ def test_a_typed_cut_height_moves_the_plane(qt_app: QApplication) -> None:
     """
     window = MainWindow(Session(), UiSettings())
     bar = window.section_bar
-    bar.set_range(-40.0, 40.0)
+    bar.set_ranges({"x": (-40.0, 40.0), "y": (-40.0, 40.0), "z": (-40.0, 40.0)})
     bar.axis.setCurrentIndex(1)
 
     bar.readout.setValue(12.5)
@@ -575,6 +575,40 @@ def test_a_typed_cut_height_moves_the_plane(qt_app: QApplication) -> None:
     # Und andersherum: der Regler führt das Feld nach.
     bar.position.setValue(-70)
     assert bar.readout.value() == pytest.approx(-7.0)
+
+
+def test_the_cut_slider_runs_along_its_own_axis(qt_app: QApplication) -> None:
+    """Ein flaches Brett schneidet man in Z über acht Millimeter, nicht über
+    achtzig.
+
+    Vorher galt eine Spanne für alle drei Achsen, gebildet aus dem kleinsten
+    und größten Wert über sämtliche. Ein Zug in die Reglermitte landete damit
+    weit über dem Teil — der Regler hatte sich bewegt, und es war kein Schnitt
+    zu sehen.
+    """
+    window = MainWindow(Session(), UiSettings())
+    bar = window.section_bar
+    bar.set_ranges({"x": (-40.0, 40.0), "y": (-25.0, 25.0), "z": (0.0, 8.0)})
+
+    bar.axis.setCurrentIndex(bar.axis.findData("z"))
+    assert bar.readout.minimum() < 0.0 <= 8.0 < bar.readout.maximum()
+    assert bar.readout.maximum() < 20.0, "der Z-Weg gehört zur Dicke, nicht zur Länge"
+
+    bar.axis.setCurrentIndex(bar.axis.findData("x"))
+    assert bar.readout.maximum() > 40.0, "und der X-Weg zur Länge"
+
+
+def test_switching_the_axis_keeps_the_cut_on_the_body(qt_app: QApplication) -> None:
+    """Eine Position außerhalb des neuen Weges wäre ein Schnitt neben dem Teil."""
+    window = MainWindow(Session(), UiSettings())
+    bar = window.section_bar
+    bar.set_ranges({"x": (-40.0, 40.0), "y": (-25.0, 25.0), "z": (0.0, 8.0)})
+
+    bar.axis.setCurrentIndex(bar.axis.findData("x"))
+    bar.readout.setValue(35.0)
+
+    bar.axis.setCurrentIndex(bar.axis.findData("z"))
+    assert 0.0 <= bar.readout.value() <= 8.0, "in die Mitte des neuen Weges"
 
 
 def test_every_tool_button_carries_a_label(qt_app: QApplication) -> None:
