@@ -887,7 +887,7 @@ Nach Wirkung je Aufwand.
 
 ## Stand (5. August 2026, zweiter Eintrag)
 
-Vierundvierzig Commits, die Suite bei 2668 Tests. Was von der Reihenfolge oben
+Dreiundfünfzig Commits, die Suite bei 2718 Tests. Was von der Reihenfolge oben
 erledigt ist und was nicht:
 
 **Erledigt** — 1 bis 4, 6 bis 14 einschließlich 9a–9d, 20, 22 bis 25.
@@ -931,15 +931,29 @@ Merkmalsüberlagerung beschriftet auch, was im Material steckt.
   Überfahren. Sie sind ein Schalter, den man einschaltet, um sie zu sehen; ob
   das reicht, zeigt der nächste Lauf.
 
-**Offen** — die fünf Zeichenpunkte 15 bis 19: der Skizzeneditor gegen Fusion.
-Dazu aus Teil 7 der erzeugte Referenzteil des Handbuchs (interne Namen,
+**Die fünf Zeichenpunkte 15 bis 19 sind ebenfalls durch.** Der Skizzeneditor
+hat Ursprung, Achsen und Maßstab; die Kürzel liegen wie in Fusion und gelten
+nur im Skizzenmodus; Trimmen, Verlängern, Versetzen und Spiegeln gibt es;
+Projizieren holt die Kanten des Körpers herein, und Hilfsgeometrie trägt
+Bedingungen, ohne ein Profil zu bilden; ein Maß lässt sich beim Zeichnen
+eintippen, und die Bedingungsliste zeigt beim Überfahren, wovon sie spricht.
+Dazu die beiden letzten Punkte aus Teil 4: die Ansichtswerkzeuge sind im
+Skizzenmodus weg, und „Fertig" sieht aus wie der Abschluss.
+
+Auch hier kam der wichtigste Fund erst beim Umsetzen. `R` und `C` liegen im
+Fusion-Schema auf Drehen und Fasen — und Qt lässt bei zwei aktiven Kürzeln
+derselben Taste **keines** von beiden feuern. Die Zeichenkürzel wären also
+nicht zweitrangig gewesen, sondern wirkungslos. Gemessen mit einer Sonde, die
+vorher und nachher zählt, welche Kürzel auf welcher Taste aktiv sind.
+
+**Offen** — aus Teil 7 der erzeugte Referenzteil des Handbuchs (interne Namen,
 `True`/`False`, leere Spalten, keine Abbildungen) und die Fenster-Seite, die
-eine Navigation beschrieb, die es nicht gab — sie gibt es jetzt, also stimmt
-die Seite wieder und sollte gegengelesen werden.
+eine Navigation beschrieb, die es nicht gab: sie gibt es jetzt, also stimmt
+die Seite wieder und sollte gegengelesen werden. Dazu die Vorschaubilder für
+die Beispielkacheln.
 
 Bis hierher waren es Fehler — Dinge, die etwas anderes taten, als sie sagten,
-und die Gestaltung, die keine war. Was übrig ist, ist ein Werkzeug, das noch
-fehlt: zeichnen auf dem Niveau, das jeder kennt, der aus einem CAD kommt.
+und die Gestaltung, die keine war. Was übrig ist, ist Dokumentation.
 
 ---
 
