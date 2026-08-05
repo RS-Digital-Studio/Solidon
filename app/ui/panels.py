@@ -8,7 +8,7 @@ Regel 2).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from PySide6.QtCore import QPoint, Qt, Signal
@@ -41,7 +41,14 @@ from app.core.types import Document, Finding, ObjectId
 from app.core.units import LengthUnit
 from app.i18n import tr
 from app.ui.icons import icon
-from app.ui.labels import compact_length, feature_measure, feature_name, length, volume
+from app.ui.labels import (
+    compact_length,
+    feature_measure,
+    feature_name,
+    length,
+    localised,
+    volume,
+)
 from app.ui.palette import SEVERITY_ENCODING
 from app.ui.style import NORMAL, ROOMY, set_level
 
@@ -70,7 +77,24 @@ def origin_label(source: str) -> str:
 
 #: Werte, die in der Zeile eines Befunds stehen — die, nach denen man beim
 #: Lesen zuerst fragt: welcher Körper, und wie viel.
-_LINE_VALUES = ("object", "a", "b", "excess", "shared")
+#:
+#: Der Wert dahinter ist die Einheit, die dazugehört, oder ``""`` für Zahlen,
+#: die für sich stehen. Sie steht **hier** und nicht im Kern: dort ist eine
+#: Zahl ein Wert, und wie sie geschrieben wird, entscheidet die Anzeige —
+#: dieselbe Trennung wie zwischen ``format_length`` und ``length``.
+_LINE_VALUES: dict[str, str] = {
+    "object": "",
+    "a": "",
+    "b": "",
+    "excess": "",
+    "shared": "",
+    # Aushöhlen sagte „Die Wandstärke stimmt im Rahmen des Rasters", ohne die
+    # Wandstärke zu nennen — und wie viel Material dabei gespart wurde, also
+    # die Frage, für die man die Operation überhaupt aufruft, stand nur im
+    # Tooltip.
+    "wall_mm": "mm",
+    "removed_cm3": "cm³",
+}
 
 
 def _op_title(name: str) -> str:
@@ -105,7 +129,7 @@ def _identity(finding: Finding) -> tuple[Any, ...]:
     )
 
 
-def _line_for(finding: Finding) -> str:
+def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
     """Die Zeile eines Befunds: die Meldung und wovon sie handelt.
 
     „Zwei Objekte überschneiden sich" — welche zwei? „Ein Objekt steht über den
@@ -115,8 +139,25 @@ def _line_for(finding: Finding) -> str:
 
     Nur die fünf Felder, nach denen man beim Lesen zuerst fragt. Alle wären
     wieder ein Tooltip, nur breiter — und der bleibt ohnehin daneben stehen.
+
+    Dazu ``object_id``, wenn der Befund eines trägt und es nicht ohnehin unter
+    den Werten steht. Das ist der Fall, den die Liste bis hierher nicht sah:
+    ein Befund je Körper, zweimal derselbe Satz, und nichts daran
+    unterscheidbar — zwei ausgehöhlte Klötze meldeten „Ausgehöhlt. Die
+    Wandstärke stimmt im Rahmen des Rasters." als zwei Zeilen, die aussahen wie
+    ein Fehler in der Anwendung.
+
+    ``names`` löst die Kennung zum Namen auf. Ohne die Zuordnung bleibt die
+    Kennung stehen: „obj_2" ist weniger als „Klotz B", aber mehr als nichts.
     """
-    extra = [str(finding.values[key]) for key in _LINE_VALUES if key in finding.values]
+    extra = [
+        f"{localised(str(finding.values[key]))} {unit}".strip()
+        for key, unit in _LINE_VALUES.items()
+        if key in finding.values
+    ]
+    if finding.object_id and "object" not in finding.values:
+        identifier = str(finding.object_id)
+        extra.insert(0, (names or {}).get(identifier, identifier))
     if not extra:
         return str(finding.message)
     return f"{finding.message} — {' · '.join(extra)}"
@@ -631,6 +672,8 @@ class ReportPanel(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._names: Mapping[str, str] = {}
+        """Kennung zu Namen, aus der zuletzt gezeigten Szene."""
         self.list = QListWidget(self)
         # §2.7 schreibt die Sätze, die hier stehen — im schmalen rechten
         # Bereich endeten sie mitten im Wort hinter einer horizontalen
@@ -690,6 +733,12 @@ class ReportPanel(QWidget):
             item.setHidden(not matches)
 
     def show_result(self, result: EvaluationResult | None) -> None:
+        # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.
+        # Sie stehen im Ergebnis, das ohnehin hereinkommt — die Kennung „obj_2"
+        # wäre die zweitbeste Antwort auf „welcher denn".
+        self._names = (
+            {str(key): entry.name for key, entry in result.scene.objects.items()} if result else {}
+        )
         self.list.clear()
         for finding in result.scene.report.findings if result else ():
             self._append(finding)
@@ -731,7 +780,7 @@ class ReportPanel(QWidget):
     def _append(self, finding: Finding) -> None:
         """Einen Befund als Eintrag anhängen."""
         encoding = SEVERITY_ENCODING[finding.severity]
-        item = QListWidgetItem(_line_for(finding))
+        item = QListWidgetItem(_line_for(finding, self._names))
         # Die Form trägt den Schweregrad, die Farbe verstärkt ihn nur: ein
         # Dreieck bleibt ein Dreieck, auch wo die Farbe nicht ankommt.
         item.setIcon(

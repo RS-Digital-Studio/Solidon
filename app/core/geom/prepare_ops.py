@@ -323,7 +323,11 @@ def hollow_object(ctx: OpContext) -> OpResult:
     )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh, features={})],
-        findings=result.findings,
+        # Die Geometriefunktion kennt keine Kennungen — sie rechnet auf einem
+        # Netz. Verorten kann die Operation, und sie muss es: zwei ausgehöhlte
+        # Körper meldeten zweimal denselben Satz, und im Bericht standen zwei
+        # Zeilen, die aussahen wie ein Fehler in der Anwendung.
+        findings=[dataclasses.replace(entry, object_id=source.id) for entry in result.findings],
     )
 
 

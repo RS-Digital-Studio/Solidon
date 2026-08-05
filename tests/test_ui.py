@@ -2241,3 +2241,52 @@ def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> 
 
     needed = tree.tree.columnWidth(0) + tree.tree.columnWidth(1)
     assert needed <= LEFT_WIDTH, f"{needed} Pixel bei {LEFT_WIDTH} verfügbaren"
+
+
+def test_a_finding_says_which_body_it_means(qt_app: QApplication) -> None:
+    """Zwei ausgehöhlte Körper meldeten zweimal denselben Satz.
+
+    Im Bericht standen zwei Zeilen, Wort für Wort gleich — das sieht aus wie
+    ein Fehler in der Anwendung und nicht wie zwei Befunde. Die Kennung stand
+    im Befund, nur nie in der Zeile.
+    """
+    from app.core.types import Finding
+    from app.ui.panels import _line_for
+
+    finding = Finding(
+        code="hollow.done",
+        severity="info",
+        message="Ausgehöhlt.",
+        object_id="obj_2",
+        values={"wall_mm": 2.0, "removed_cm3": 14.3},
+    )
+
+    plain = _line_for(finding)
+    assert "obj_2" in plain, "ohne Namensliste bleibt die Kennung stehen"
+
+    named = _line_for(finding, {"obj_2": "Klotz B"})
+    assert "Klotz B" in named, "mit Namensliste der Name"
+    assert "obj_2" not in named
+
+
+def test_a_finding_writes_its_numbers_with_their_unit(qt_app: QApplication) -> None:
+    """„Die Wandstärke stimmt im Rahmen des Rasters" nannte die Wandstärke
+    nicht.
+
+    Und wie viel Material gespart wurde — die Frage, für die man die Operation
+    aufruft — stand ausschließlich im Tooltip.
+    """
+    from app.core.types import Finding
+    from app.ui.panels import _line_for
+
+    line = _line_for(
+        Finding(
+            code="hollow.done",
+            severity="info",
+            message="Ausgehöhlt.",
+            values={"wall_mm": 2.0, "removed_cm3": 14.3},
+        )
+    )
+
+    assert "2.0 mm" in line or "2,0 mm" in line, line
+    assert "14.3 cm³" in line or "14,3 cm³" in line, line
