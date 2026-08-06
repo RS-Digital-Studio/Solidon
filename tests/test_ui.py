@@ -2554,3 +2554,37 @@ def test_a_close_estimate_stays_quiet(window: MainWindow) -> None:
     )
 
     assert "gcode.deviation" not in _report_codes(window)
+
+
+def test_no_worker_hands_its_field_to_a_blind_lambda() -> None:
+    """Kein ``finished``-Signal räumt eine Arbeiter-Referenz per ``setattr``.
+
+    Das Muster war fünfmal richtig und zweimal falsch, und niemand konnte es
+    sehen: die drei Slots der Sitzung und die Update-Abfrage tragen sogar den
+    Kommentar, warum ein Lambda hier nicht geht — der Schnitt-Arbeiter und die
+    Ollama-Abfrage benutzten trotzdem eines.
+
+    ``lambda: setattr(self, "_worker", None)`` schreibt in das *Feld*, nicht
+    zum *Arbeiter*: Wird ein Vorgänger fertig, nachdem sein Nachfolger im Feld
+    steht, verliert der laufende Nachfolger seine einzige Referenz. Dazu kommt
+    ``finished`` ohnehin zu früh — Qt räumt den Thread danach noch ab.
+
+    Ein Test über den Quelltext und nicht über das Verhalten, weil der Absturz
+    am Timing hängt und sich nicht verlässlich herbeiführen lässt. Eine
+    Konvention, die nirgends geprüft wird, ist keine.
+    """
+    import re
+
+    ui = Path(__file__).parent.parent / "app" / "ui"
+    pattern = re.compile(r"finished\.connect\(\s*lambda[^)]*setattr", re.MULTILINE)
+
+    culprits = [
+        path.relative_to(ui.parent.parent)
+        for path in sorted(ui.glob("*.py"))
+        if pattern.search(path.read_text(encoding="utf-8"))
+    ]
+
+    assert not culprits, (
+        f"{culprits}: ein benannter Slot prüft die Identität seines Arbeiters, "
+        "ein Lambda trifft blind das Feld — siehe .claude/rules/oberflaeche.md"
+    )

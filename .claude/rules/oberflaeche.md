@@ -95,6 +95,42 @@ eine Palette, die aussortiert, wäre eine Betriebsart mit anderem Namen.
 Die letzte gültige Darstellung bleibt sichtbar — nie ein leerer Viewport, nie
 ein blockierendes Fenster. Lange Rechnungen laufen nicht im Qt-Hauptthread.
 
+### Wer einen Arbeiter startet, hält ihn fest
+
+Ein `QThread` bekommt hier keinen Qt-Elternteil; ihn hält allein die
+Python-Referenz. Fällt sie weg, während der Thread noch läuft, zerstört der
+Speicherbereiniger das C++-Objekt unter ihm — eine Zugriffsverletzung ohne
+Zeile, irgendwann später und selten reproduzierbar.
+
+**Nie als Lambda, das blind `None` schreibt:**
+
+```python
+worker.finished.connect(lambda: setattr(self, "_worker", None))  # falsch
+```
+
+Das geht zweimal schief. `finished` kommt, während Qt den Thread noch abräumt —
+zu früh zum Loslassen. Und es trifft das Feld, nicht den Arbeiter: wird ein
+Vorgänger fertig, nachdem sein Nachfolger im Feld steht, löscht er dessen
+Referenz.
+
+**Richtig** ist ein benannter Slot, der seinen *eigenen* Arbeiter erkennt und
+ihn danach der gemeinsamen Halteleine übergibt:
+
+```python
+worker.finished.connect(lambda done=worker: self._worker_done(done))
+
+
+def _worker_done(self, worker: Any) -> None:
+    if self._worker is worker:
+        self._worker = None
+    self._hold_until_done(worker)
+```
+
+`_hold_until_done` legt ihn in `_retired` und lässt ihn erst los, wenn
+`isRunning()` nein sagt. Ein ersetzter Arbeiter geht denselben Weg über
+`_retire`. `wait_for_workers` wartet am Ende auf alle — auch auf die in
+`_retired`, sonst überlebt einer sein Fenster und nimmt den Prozess mit.
+
 ## Barrierefreiheit
 
 - **Keine Bedeutung allein über Farbe** (Regel 18). Immer eine zweite

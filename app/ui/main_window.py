@@ -1894,9 +1894,15 @@ class MainWindow(QMainWindow):
             return
         worker = _OllamaSizeWorker(backend.model)
         worker.done.connect(self._ollama_size_answered)
-        worker.finished.connect(lambda: setattr(self, "_ollama_size_worker", None))
+        self._retire(self._ollama_size_worker)
         self._ollama_size_worker = worker
+        worker.finished.connect(lambda done=worker: self._ollama_size_worker_done(done))
         worker.start()
+
+    def _ollama_size_worker_done(self, worker: Any) -> None:
+        if self._ollama_size_worker is worker:
+            self._ollama_size_worker = None
+        self._hold_until_done(worker)
 
     def _ollama_size_answered(self, warning: Any) -> None:
         if warning is not None:
@@ -2277,8 +2283,13 @@ class MainWindow(QMainWindow):
         # tatsächlich ausgelaufen ist.
         self._retire(self._map_worker)
         self._map_worker = worker
-        worker.finished.connect(lambda done=worker: self._hold_until_done(done))
+        worker.finished.connect(lambda done=worker: self._map_worker_done(done))
         worker.start()
+
+    def _map_worker_done(self, worker: Any) -> None:
+        if self._map_worker is worker:
+            self._map_worker = None
+        self._hold_until_done(worker)
 
     def _hold_until_done(self, worker: Any) -> None:
         """Den fertigen Arbeiter halten, bis Qt mit ihm durch ist.
@@ -2286,9 +2297,11 @@ class MainWindow(QMainWindow):
         ``finished`` heißt „``run`` ist zurück", nicht „das Objekt darf weg".
         Erst wenn ``isRunning`` nein sagt, ist es sicher — und bis dahin hält
         ihn dieselbe Liste, die auch ersetzte Arbeiter hält.
+
+        Wer sein Feld leeren will, tut das im eigenen Slot davor und **nur für
+        seinen eigenen Arbeiter**: ein Lambda, das blind ``None`` schreibt,
+        trifft den Nachfolger, wenn der Vorgänger später fertig wird.
         """
-        if self._map_worker is worker:
-            self._map_worker = None
         if worker not in self._retired:
             self._retired.append(worker)
         QTimer.singleShot(0, lambda: self._release(worker))
@@ -2362,11 +2375,22 @@ class MainWindow(QMainWindow):
         self.status_message.setText(tr("Die Schichtanalyse läuft …"))
         worker = _SliceWorker(entry, self.session.profile.printer.layer_height)
         worker.done.connect(lambda outcome, key=key: self._slice_ready(outcome, key, then))
-        worker.finished.connect(lambda: setattr(self, "_slice_worker", None))
+        # Dieselbe Halteleine wie bei der Analysekarte, und aus demselben
+        # Grund: hier stand ein Lambda, das ``None`` in das Feld schrieb,
+        # sobald *irgendein* Schnitt-Arbeiter fertig war. Wer durch die
+        # Schichten schiebt, startet einen zweiten, während der erste noch
+        # läuft — und dessen ``finished`` löschte dann die Referenz auf den
+        # laufenden zweiten. Ein QThread ohne Referenz wird eingesammelt.
         self._retire(self._slice_worker)
         self._slice_worker = worker
+        worker.finished.connect(lambda done=worker: self._slice_worker_done(done))
         worker.start()
         return None
+
+    def _slice_worker_done(self, worker: Any) -> None:
+        if self._slice_worker is worker:
+            self._slice_worker = None
+        self._hold_until_done(worker)
 
     def _slice_ready(self, outcome: SliceResult, key: tuple[Any, ...], then: Any) -> None:
         self._slice_cache = outcome

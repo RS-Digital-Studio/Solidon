@@ -971,6 +971,36 @@ def test_scrubbing_shows_one_layer(window: MainWindow) -> None:
     assert "Schicht" in window.layer_bar.readout.text()
 
 
+def test_a_finished_worker_never_drops_its_successor(window: MainWindow) -> None:
+    """Ein auslaufender Arbeiter räumt seine eigene Referenz weg — und nur die.
+
+    Hier stand ein ``lambda: setattr(self, "_slice_worker", None)``. Wer durch
+    die Schichten schiebt, startet einen zweiten Schnitt, während der erste
+    noch rechnet; dessen ``finished`` löschte dann die Referenz auf den
+    **laufenden zweiten**. Einen ``QThread``, den niemand mehr hält, sammelt
+    der Speicherbereiniger mitsamt C++-Objekt ein — die Zugriffsverletzung ohne
+    Zeile, gegen die weiter oben schon ``_retired`` geschrieben wurde.
+
+    Geprüft wird die Identitätsprüfung, nicht das Aufräumen: gestartet wird
+    keiner der beiden, sonst hinge der Test am Timing des Absturzes, den er
+    verhindern soll.
+    """
+    from app.ui.main_window import _SliceWorker
+
+    entry = window.session.last_result.scene.objects["obj_1"]
+    first = _SliceWorker(entry, 0.2)
+    second = _SliceWorker(entry, 0.2)
+    window._slice_worker = second
+
+    window._slice_worker_done(first)
+
+    assert window._slice_worker is second, "der Vorgänger hat den Nachfolger gelöscht"
+
+    window._slice_worker_done(second)
+
+    assert window._slice_worker is None, "seinen eigenen räumt er sehr wohl weg"
+
+
 def test_a_chosen_layer_cuts_away_what_lies_above(window: MainWindow) -> None:
     """„Durch die Höhe fahren und den Querschnitt ansehen" versprach der Text.
 
