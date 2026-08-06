@@ -102,9 +102,16 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         if not remote.allowed(self.client_address[0]):
-            # Die zweite der beiden Prüfungen. Die erste ist die Bindung; wer
+            # Die zweite der drei Prüfungen. Die erste ist die Bindung; wer
             # trotzdem hier ankommt, kam über eine Weiterleitung.
             _log.warning("remote call refused from %s", self.client_address[0])
+            self._send(403, b"")
+            return
+        origin = self.headers.get("Origin")
+        if not remote.origin_allowed(origin):
+            # Die dritte, und die einzige, die einen Browser aufhält: der sitzt
+            # auf diesem Rechner und besteht die Adressprüfung.
+            _log.warning("remote call refused, origin %s", origin)
             self._send(403, b"")
             return
         length = int(self.headers.get("Content-Length") or 0)

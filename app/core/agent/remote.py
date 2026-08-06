@@ -10,8 +10,10 @@ Liste und keinen zweiten Weg ins Dokument.
 
 * Standardmäßig aus. Eine offene Schnittstelle, die niemand eingeschaltet hat,
   ist eine offene Tür.
-* Nur ``127.0.0.1``. Zweimal geprüft — die Bindung und jede einzelne Anfrage.
-  Eine Bindung allein lässt sich durch eine Weiterleitung umgehen.
+* Nur ``127.0.0.1``. Dreimal geprüft — die Bindung, die Absenderadresse jeder
+  Anfrage und ihr ``Origin``. Eine Bindung allein lässt sich durch eine
+  Weiterleitung umgehen, und die Adresse allein sagt beim Browser nichts: der
+  läuft auf diesem Rechner, ganz gleich, welche Seite ihn geschickt hat.
 * Kein ausführbarer Quelltext, kein Dateipfad. Beides wird abgewiesen, **bevor**
   gerechnet wird; ein Aufruf, der erst rechnet und danach merkt, dass er nicht
   durfte, hat schon getan, was er nicht sollte.
@@ -27,6 +29,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Final, Protocol
+from urllib.parse import urlsplit
 
 from app.branding import APP_NAME, APP_VERSION
 from app.core.agent.tools import ASK_USER, tool_schemas
@@ -68,6 +71,9 @@ DENIED: Final[frozenset[str]] = frozenset({"create_from_scad", ASK_USER})
 #: Adressen, die als „dieser Rechner" gelten.
 _LOOPBACK: Final[frozenset[str]] = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})
 
+#: Rechnernamen, die in einem ``Origin`` als „dieser Rechner" gelten.
+_LOOPBACK_HOSTS: Final[frozenset[str]] = frozenset({"127.0.0.1", "localhost", "::1"})
+
 
 class Bridge(Protocol):
     """Was die Anwendung beisteuert: einen Aufruf ausführen.
@@ -88,6 +94,32 @@ def allowed(address: str) -> bool:
     Schnittstelle steht im Netz, ohne dass hier eine Zeile anders liefe.
     """
     return address in _LOOPBACK
+
+
+def origin_allowed(origin: str | None) -> bool:
+    """Ob eine Anfrage mit diesem ``Origin`` sprechen darf.
+
+    Die dritte Prüfung zur zweiten Auflage — und die einzige, die den Browser
+    erfasst. Er läuft auf demselben Rechner, kommt also von ``127.0.0.1`` und
+    besteht :func:`allowed` mühelos. Eine beliebige aufgerufene Webseite kann
+    ihn per ``fetch`` zu einem POST hierher bewegen: die **Antwort** bekommt
+    sie durch CORS nie zu sehen, der Aufruf wäre trotzdem **ausgeführt**. Bei
+    einer Schnittstelle, die Operationen am offenen Dokument auslöst, ist das
+    der Unterschied zwischen Mitlesen und Mitschreiben.
+
+    Ohne Kopfzeile: erlaubt. Ein MCP-Client ist kein Browser und schickt
+    keine — und gerade darin liegt der Wert dieser Prüfung: ``Origin`` hängt
+    der Browser von sich aus an, und Seiten-Code kann ihn nicht fälschen.
+
+    ``Origin: null`` (aus einer ``file://``-Seite oder einem abgeschotteten
+    Rahmen) hat keinen Rechnernamen und fällt damit durch.
+    """
+    if origin is None:
+        return True
+    parts = urlsplit(origin)
+    if parts.scheme not in ("http", "https"):
+        return False
+    return (parts.hostname or "") in _LOOPBACK_HOSTS
 
 
 def remote_tools(registry: Registry | None = None) -> tuple[dict[str, Any], ...]:

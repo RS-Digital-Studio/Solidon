@@ -82,8 +82,14 @@ Fenster; `app/ui/remote_server.py` bringt beides dazu. Vier Auflagen, und
 
 - **Standardmäßig aus.** Eine offene Schnittstelle, die niemand eingeschaltet
   hat, ist eine offene Tür.
-- **Nur `127.0.0.1`** — zweimal geprüft, an der Bindung und an jeder Anfrage.
-  Eine Bindung allein lässt sich durch eine Weiterleitung umgehen.
+- **Nur `127.0.0.1`** — dreimal geprüft: an der Bindung, an der Absenderadresse
+  jeder Anfrage und an ihrem `Origin`. Eine Bindung allein lässt sich durch
+  eine Weiterleitung umgehen. Die Adresse allein hält keinen Browser auf: der
+  läuft auf diesem Rechner, gleich welche Seite ihn geschickt hat, und eine
+  beliebige Seite kann ihn per `fetch` zu einem POST hierher bewegen. Die
+  Antwort verbirgt CORS vor ihr — **ausgeführt** wäre der Aufruf trotzdem.
+  `origin_allowed` lässt durch, was keinen `Origin` schickt (ein MCP-Client ist
+  kein Browser) und was von `localhost` kommt.
 - **Kein ausführbarer Quelltext, kein Dateipfad.** Beides wird abgewiesen,
   **bevor** gerechnet wird. Der Pfad wird am **Wert** erkannt, nicht am Namen
   des Parameters — und eng gefasst, denn eine Sperre, die „Deckel 2"

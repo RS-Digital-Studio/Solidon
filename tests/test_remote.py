@@ -145,9 +145,10 @@ def test_an_ordinary_name_still_gets_through() -> None:
 def test_only_the_loopback_address_may_talk() -> None:
     """Die dritte Auflage: nur dieser Rechner.
 
-    Zweimal geprüft — der Server bindet an 127.0.0.1, und jede Anfrage nennt
-    ihre Herkunft. Eine Bindung allein reicht nicht: sie kann durch eine
-    Weiterleitung umgangen werden, und dann steht die Schnittstelle im Netz.
+    Dreimal geprüft — der Server bindet an 127.0.0.1, jede Anfrage nennt ihre
+    Herkunft, und ihr ``Origin`` wird gelesen. Eine Bindung allein reicht
+    nicht: sie kann durch eine Weiterleitung umgangen werden, und dann steht
+    die Schnittstelle im Netz.
     """
     assert remote.HOST == "127.0.0.1"
     assert remote.allowed("127.0.0.1")
@@ -155,6 +156,29 @@ def test_only_the_loopback_address_may_talk() -> None:
     assert not remote.allowed("192.168.1.40")
     assert not remote.allowed("10.0.0.1")
     assert not remote.allowed("")
+
+
+def test_a_web_page_cannot_drive_the_interface() -> None:
+    """Die Adressprüfung allein hält keinen Browser auf.
+
+    Er läuft auf diesem Rechner und kommt damit von 127.0.0.1 — welche Seite
+    ihn geschickt hat, steht allein im ``Origin``. Eine beliebige aufgerufene
+    Seite kann per ``fetch`` einen einfachen POST hierher absetzen; die Antwort
+    verbirgt CORS vor ihr, **ausgeführt** wäre der Aufruf trotzdem. Bei einer
+    Schnittstelle, die Operationen am offenen Dokument auslöst, ist das der
+    Unterschied zwischen Mitlesen und Mitschreiben.
+    """
+    assert remote.origin_allowed(None), "ein MCP-Client ist kein Browser und schickt keinen"
+    assert remote.origin_allowed("http://127.0.0.1:8787")
+    assert remote.origin_allowed("http://localhost:3000")
+    assert remote.origin_allowed("https://localhost")
+    assert remote.origin_allowed("http://[::1]:8787")
+
+    assert not remote.origin_allowed("https://beispiel.de")
+    assert not remote.origin_allowed("http://127.0.0.1.angreifer.de"), "der Name endet woanders"
+    assert not remote.origin_allowed("null"), "file:// und abgeschottete Rahmen"
+    assert not remote.origin_allowed(""), "kein Schema, kein Rechnername"
+    assert not remote.origin_allowed("chrome-extension://abcdef")
 
 
 def test_calling_an_operation_that_does_not_exist_says_so() -> None:
