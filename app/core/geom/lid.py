@@ -25,6 +25,7 @@ from app.core.errors import ValidationError
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import BOOLEAN_OVERLAP
+from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import RIDGE_SHARE, thread_body
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
@@ -53,6 +54,46 @@ MIN_CAVITY = 100.0
 #: Wie weit der Kragen über das Spiel hinaus eingezogen wird, damit der Deckel
 #: nicht auf dem Kragen sitzt statt auf dem Rand.
 COLLAR_RELIEF = 0.2
+
+#: Die beiden Merkmale, die ein Deckel und seine Schachtel teilen. Sie tragen
+#: feste Namen, weil eine Passung auf Namen zeigt und nicht auf Geometrie
+#: (§14): der Ablauf kann das Paar damit anlegen, bevor irgendetwas gerechnet
+#: ist. Ohne sie gäbe es nichts, worauf ein ``Fit`` verweisen könnte — und
+#: genau deshalb trug ein Deckel bisher keine Passung.
+COLLAR_FEATURE = "lid_collar"
+CAVITY_FEATURE = "lid_cavity"
+
+
+def _area_of(cavities: list[Any]) -> float:
+    """Wie viel Öffnung der Kragen ausfüllt."""
+    return float(sum(cavity.area for cavity in cavities))
+
+
+def _centre_of(cavities: list[Any], z: float) -> tuple[float, float, float]:
+    """Die Mitte der Öffnung, auf Höhe des Schnitts.
+
+    Bei mehreren Fächern der flächengewichtete Schwerpunkt — es ist eine
+    Passung über die ganze Öffnung, nicht eine je Fach.
+    """
+    total = _area_of(cavities)
+    if total <= EPS_GEOM:
+        return (0.0, 0.0, z)
+    x = sum(cavity.centroid.x * cavity.area for cavity in cavities) / total
+    y = sum(cavity.centroid.y * cavity.area for cavity in cavities) / total
+    return (float(x), float(y), float(z))
+
+
+def _with_cavity(source: SceneObject, cavities: list[Any], z: float) -> dict[str, Any]:
+    """Die Merkmale der Schachtel plus dem, auf das der Deckel passt.
+
+    Die Öffnung war bis hierher namenlos: die Erkennung sieht einen Hohlraum,
+    aber kein Merkmal, das eine Passung benennen könnte. Der Deckel weiß es
+    besser — er hat gerade hineingeschnitten.
+    """
+    features = dict(source.features)
+    key, feature = face(CAVITY_FEATURE, _area_of(cavities), _centre_of(cavities, z))
+    features[key] = feature
+    return features
 
 
 def opening(mesh: MeshData, z: float) -> tuple[Any, list[Any]]:
@@ -297,12 +338,13 @@ def create_lid(ctx: OpContext) -> OpResult:
     # direkt auf und sahen es nie; der Ende-zu-Ende-Weg von P13 sah es sofort.
     return OpResult(
         outputs=[
-            source,
+            dataclasses.replace(source, features=_with_cavity(source, cavities, z)),
             SceneObject(
                 id="",
                 name=params.name or f"{source.name} {_('Deckel').translate()}",
                 mesh=body,
                 material=source.material,
+                features=dict([face(COLLAR_FEATURE, _area_of(cavities), _centre_of(cavities, z))]),
             ),
         ],
         findings=[

@@ -271,6 +271,7 @@
   "Deckel": "Lid",
   "Deckel erzeugen": "Create lid",
   "Deckel erzeugt — das Spiel kommt aus dem Materialprofil.": "Lid created — the clearance comes from the material profile.",
+  "Deckel und Schachtel sind als Passung eingetragen — der Slicer bekommt dafür die genauere Außenwand.": "Lid and box are recorded as a fit — the slicer gets the more precise outer wall for it.",
   "Deckelstärke": "Lid thickness",
   "Deckschicht": "Cover layer",
   "Deckschichten": "Top layers",

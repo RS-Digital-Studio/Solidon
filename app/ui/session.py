@@ -34,6 +34,7 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.ingest.outline import is_outline
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
+from app.core.lid_flow import LidApplied, apply_lid
 from app.core.log import get_logger
 from app.core.scene import (
     CancelSignal,
@@ -676,6 +677,20 @@ class Session(QObject):
             self._dirty = True
             self.projectChanged.emit()
             self.evaluate_async()
+        return applied
+
+    def create_lid(self, object_id: str, params: dict[str, Any]) -> LidApplied:
+        """Deckel erzeugen — als Ablauf, damit die Passung mitkommt (§14).
+
+        Die Operation allein baut nur den Körper. Erst der Ablauf trägt das
+        Paar aus Öffnung und Kragen ins Dokument ein, und daran hängen im
+        Slicer die genaue Außenwand, die gebremste Beschleunigung und das
+        Bügeln — die drei Werte, die über eine Passung entscheiden.
+        """
+        applied = apply_lid(self.project.document, object_id, params, self.profile)
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
         return applied
 
     def preview_async(

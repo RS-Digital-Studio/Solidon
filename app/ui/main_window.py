@@ -187,6 +187,11 @@ MODEL_SUFFIXES: Final = (
 )
 GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g", ".nc")
 
+#: Operationen, die einen Deckel bauen und deshalb über ihren Ablauf laufen —
+#: er trägt die Passung ein, die die Operation allein nicht eintragen darf
+#: (§14, §15.1).
+LID_OPS: Final = frozenset({"create_lid", "create_screw_lid"})
+
 
 def _filter_for(label: str, suffixes: tuple[str, ...]) -> str:
     """Ein Dateifilter in der Sprache des Nutzers.
@@ -2603,6 +2608,14 @@ class MainWindow(QMainWindow):
         inputs = inputs_for(spec, objects, chosen)
 
         def run(params: Mapping[str, Any]) -> None:
+            if spec.name in LID_OPS and inputs:
+                # Der Deckel geht über seinen Ablauf, nicht über die nackte
+                # Operation: erst der trägt das Paar aus Öffnung und Kragen als
+                # Passung ein (§14), und daran hängen im Slicer die genaue
+                # Außenwand, die gebremste Beschleunigung und das Bügeln.
+                applied = self.session.create_lid(inputs[0], dict(params))
+                self.report.add_findings(applied.findings)
+                return
             self.session.apply(
                 spec.title,
                 [OperationDraft(op=spec.name, inputs=inputs, params=dict(params))],
