@@ -49,9 +49,20 @@ from app.core.types import Finding
 from app.i18n import SUPPORTED_LANGUAGES, install_catalog, set_language
 from app.i18n.catalog import read_catalog
 
-#: Welches Beispielprojekt im Hauptfenster steht. Weg 1 ist der häufigste Fall
-#: und der einzige, auf dem der Prüfbericht etwas zu sagen hat.
-EXAMPLE = "weg1-halterung-anpassen.p3d"
+#: Welches Beispielprojekt im Hauptfenster steht.
+#:
+#: Das Gehäuse und nicht die Halterung aus Weg 1. Beide zeigen dasselbe
+#: Fenster, aber nicht dasselbe Programm: die Halterung ist eine Platte mit
+#: fünf gebohrten Löchern, und der Objektbaum, die Parameterliste und der
+#: Verlauf stehen daneben fast leer. Das Gehäuse trägt drei benannte Maße,
+#: vier Bausteine — Mutternfalle, Heat-Set-Buchse, Schraubenloch,
+#: Kabeldurchführung — und ein Prüfstück daneben. Wer das Bild ansieht,
+#: soll sehen, was die Anwendung kann, und nicht, dass sie ein Loch bohren
+#: kann.
+#:
+#: Die Befunde im Prüfbericht sind ohnehin gestellt (:func:`sample_findings`),
+#: das Projekt muss also keine mitbringen.
+EXAMPLE = "gehaeuse-mit-bausteinen.p3d"
 
 #: Wie groß die Fenster für die Aufnahme sind. Breiter als nötig wäre auf einer
 #: Handbuchseite nur kleiner zu sehen.

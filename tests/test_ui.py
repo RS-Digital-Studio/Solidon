@@ -540,6 +540,76 @@ def test_a_report_without_findings_says_so(qt_app: QApplication) -> None:
     assert "Keine Befunde" in panel.summary.text()
 
 
+def test_every_tool_bar_gets_the_room_it_needs(window: MainWindow) -> None:
+    """Ein geöffnetes Werkzeug darf nicht über den Umschaltern liegen.
+
+    Die untere Zone hängt in einer Überlagerung: sie bekommt ihre Geometrie
+    gesetzt, statt sie von einem Layout rechnen zu lassen. Solange niemand
+    meldete, dass eine Leiste dazugekommen ist, blieb sie auf der Höhe der
+    Knopfreihe — einunddreißig Pixel für einen Bedarf von siebenundneunzig.
+    Regler, Felder und Knöpfe lagen dann über den Umschaltern, und zwar bei
+    **jedem** der sieben Werkzeuge. Gesehen wurde es an einem
+    Bildschirmfoto fürs Handbuch.
+    """
+    window._show_start_screen(False)
+    qt_app = QApplication.instance()
+    assert qt_app is not None
+    for _ in range(20):
+        qt_app.processEvents()
+
+    zone = window.overlay.bottom
+    assert zone is not None
+
+    too_small = []
+    for key in ("section", "measure", "transform", "analysis", "layers", "explode", "paint"):
+        window.tools.activate(key)
+        for _ in range(10):
+            qt_app.processEvents()
+        if zone.height() < zone.sizeHint().height():
+            too_small.append(f"{key}: {zone.height()} statt {zone.sizeHint().height()}")
+        window.tools.activate(None)
+
+    assert not too_small, "die untere Zone bleibt zu niedrig:\n" + "\n".join(too_small)
+
+
+def test_a_bar_never_shows_itself_past_its_switch(window: MainWindow) -> None:
+    """Die Sichtbarkeit einer Leiste gehört der Werkzeugzeile — nur ihr.
+
+    Die Explosionsleiste machte sich in ``show_for`` selbst sichtbar, sobald
+    eine Szene zwei Körper hatte. Zwei Stellen steuerten damit dasselbe: die
+    eine klappte auf, was die andere zugeklappt hielt, und die Leiste lag über
+    den Umschaltern. Sie sagt jetzt nur noch, ob sie etwas zu bieten hat —
+    gezeigt wird sie, wenn jemand ihren Knopf drückt.
+    """
+    window._show_start_screen(False)
+    qt_app = QApplication.instance()
+    assert qt_app is not None
+
+    assert window.explode_bar.show_for(3, 1) is True, "drei Körper sind etwas zum Auseinanderziehen"
+    assert window.explode_bar.show_for(1, 1) is False
+    for _ in range(10):
+        qt_app.processEvents()
+
+    # ``isVisibleTo`` und nicht ``isVisible``: das Fenster im Test ist selbst
+    # nicht auf dem Bildschirm, und dann ist alles darin unsichtbar — auch
+    # das, was aufgeklappt wäre.
+    strip = window.tools
+    assert not window.explode_bar.isVisibleTo(strip), "ohne Knopfdruck bleibt sie zu"
+
+    window.tools.set_available("explode", True)
+    window.tools.activate("explode")
+    for _ in range(10):
+        qt_app.processEvents()
+    assert window.explode_bar.isVisibleTo(strip), "mit Knopfdruck geht sie auf"
+
+    # Und fällt das Werkzeug weg, geht sie mit.
+    window.tools.set_available("explode", False)
+    for _ in range(10):
+        qt_app.processEvents()
+    assert not window.explode_bar.isVisibleTo(strip)
+    assert window.tools.active() is None
+
+
 def test_the_report_puts_the_heavy_findings_first(qt_app: QApplication) -> None:
     """Die Zählzeile verspricht eine Rangfolge — die Liste muss sie halten.
 

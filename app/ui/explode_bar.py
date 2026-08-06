@@ -75,15 +75,22 @@ class ExplodeBar(QWidget):
         value = self.plates.currentData()
         return ALL_PLATES if value is None else int(value)
 
-    def show_for(self, objects: int, plates: int = 1) -> None:
-        """Sichtbar ab zwei Körpern; klappt wieder zusammen, wenn sie
-        verschwindet.
+    def show_for(self, objects: int, plates: int = 1) -> bool:
+        """Bereitet die Leiste vor und sagt, ob sie überhaupt etwas zu bieten
+        hat.
+
+        Ab zwei Körpern gibt es etwas auseinanderzuziehen, darunter nicht.
+
+        Die Leiste macht sich dabei **nicht** selbst sichtbar. Das tut die
+        Werkzeugzeile, der sie gehört — sonst steuern zwei Stellen dieselbe
+        Sichtbarkeit, und die eine öffnet, was die andere zugeklappt hält. Der
+        Aufrufer gibt die Antwort an ``ToolStrip.set_available`` weiter.
         """
         wanted = objects > 1
         if not wanted and self.slider.value():
             self.slider.setValue(0)
         self._show_plates(plates)
-        self.setVisible(wanted)
+        return wanted
 
     def _show_plates(self, plates: int) -> None:
         """Baut den Wähler neu und behält die Platte, die betrachtet wurde."""

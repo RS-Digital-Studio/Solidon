@@ -30,8 +30,10 @@ from PySide6.QtCore import (
     QObject,
     QPropertyAnimation,
     QRect,
+    QRectF,
     Qt,
 )
+from PySide6.QtGui import QPainterPath, QRegion
 from PySide6.QtWidgets import QAbstractItemView, QTreeView, QWidget
 
 from app.ui.style import ROOMY, SPACE
@@ -81,6 +83,29 @@ QWidget#overlayCard {{
 """
 
 
+def _round_corners(zone: QWidget) -> None:
+    """Die vier Zwickel neben den runden Ecken freistellen.
+
+    Das Stylesheet rundet die Karte, aber das Widget bleibt ein Rechteck —
+    außerhalb der Rundung malt Qt den Elternhintergrund, und der ist hier das
+    OpenGL-Fenster. Dort standen schwarze Zipfel, wo die Ansicht durchscheinen
+    sollte.
+
+    Über eine Maske und nicht über ``WA_TranslucentBackground``: das nimmt dem
+    Widget auch das Löschen seiner Fläche, und dann steht jede Beschriftung
+    doppelt übereinander — ausprobiert, sah schlimmer aus als die Zipfel.
+
+    Der Preis ist eine harte Kante an der Rundung: eine Maske kennt nur ganz
+    oder gar nicht. Bei zwölf Pixeln Radius fällt das weniger auf als vier
+    schwarze Ecken auf hellem Modell.
+    """
+    if zone.width() <= 0 or zone.height() <= 0:
+        return
+    shape = QPainterPath()
+    shape.addRoundedRect(QRectF(zone.rect()), float(ROOMY), float(ROOMY))
+    zone.setMask(QRegion(shape.toFillPolygon().toPolygon()))
+
+
 def rows_height(view: QAbstractItemView) -> int:
     """Wie hoch die Zeilen dieser Liste zusammen sind, mit Kopf und Rahmen.
 
@@ -93,6 +118,11 @@ def rows_height(view: QAbstractItemView) -> int:
     Zeile, nicht als seine Kinder.
     """
     model = view.model()
+    if model is None:
+        # Die Stubs behaupten, das könne nicht sein — eine Liste, die gerade
+        # aufgebaut wird, hat aber keines. Eine Höhe von null ließe die Karte
+        # zusammenfallen; dieselbe Antwort wie für eine leere Liste.
+        return int(view.fontMetrics().height() + 2 * SPACE)  # type: ignore[unreachable]
     tree = view if isinstance(view, QTreeView) else None
 
     def rows_in(parent: QModelIndex) -> int:
@@ -178,13 +208,34 @@ class OverlayHost(QWidget):
             # ist hier das OpenGL-Fenster — die Karte bekäme ein schwarzes
             # Rechteck statt der Ansicht hinter ihren runden Ecken.
             zone.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            # Die vier Zwickel neben den runden Ecken gehören der Ansicht
+            # dahinter, nicht dem Elternhintergrund — sonst stehen dort
+            # schwarze Zipfel. Gelöst wird das mit einer Maske in ``_move``
+            # und **nicht** mit ``WA_TranslucentBackground``: das nimmt dem
+            # Widget auch das Löschen seiner Fläche, und dann steht jede
+            # Beschriftung doppelt übereinander.
         self.left, self.right, self.bottom = left, right, bottom
         # Eine zugeklappte Zone soll ihre Fläche zurückgeben. Qt meldet die
         # neue Wunschhöhe erst, wenn jemand danach fragt — also fragen wir bei
         # jeder Änderung an einem Kind nach.
+        #
+        # **Und zwar an jedem Kind, nicht nur an der Zone selbst.** Eine
+        # Werkzeugleiste wird auf zwei Wegen sichtbar: über den Umschalter der
+        # Zeile und über ``show_for``, das die Ansicht selbst aufruft, wenn
+        # eine Szene mehrere Körper bekommt. Der zweite Weg meldete sich
+        # nirgends — die untere Zone blieb auf der Höhe der Knopfreihe, und
+        # die Explosionsleiste lag über den Umschaltern. Auf einem
+        # Bildschirmfoto fürs Handbuch war es zu sehen, im Fenster daneben
+        # ebenso.
         for zone in (left, right, bottom):
-            zone.installEventFilter(self)
+            self._watch(zone)
         self._place()
+
+    def _watch(self, zone: QWidget) -> None:
+        """Auf diese Zone und alles darin hören."""
+        zone.installEventFilter(self)
+        for child in zone.findChildren(QWidget):
+            child.installEventFilter(self)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
         """Ändert sich eine Zone, wird neu gerechnet, nicht nur neu gezeichnet.
@@ -202,6 +253,18 @@ class OverlayHost(QWidget):
         ):
             self._place(moving=True)
         return super().eventFilter(watched, event)
+
+    def reflow(self) -> None:
+        """Die Zonen neu setzen, weil eine von ihnen anders hoch sein will.
+
+        Für den Fall, dass es niemand von selbst meldet: eine Zone, die von
+        außen ihre Geometrie bekommt, rechnet ihre Wunschhöhe nicht mehr
+        selbst durch, und das ``LayoutRequest`` ihres Layouts kommt entweder
+        gar nicht oder einen Takt zu spät. Wer weiß, dass sich etwas geändert
+        hat, sagt es hier — das ist ehrlicher als ein Ereignis, auf dessen
+        Zustellung man hofft.
+        """
+        self._place(moving=False)
 
     def resizeEvent(self, event: object) -> None:  # noqa: N802 — Qt-Name
         """Das Fenster zu ziehen ist keine Gelegenheit für Bewegung.
@@ -230,6 +293,7 @@ class OverlayHost(QWidget):
             return
         if not moving or MOVE_MS <= 0 or not zone.isVisible():
             zone.setGeometry(target)
+            _round_corners(zone)
             return
 
         move = QPropertyAnimation(zone, b"geometry", self)
@@ -240,6 +304,7 @@ class OverlayHost(QWidget):
         move.setStartValue(zone.geometry())
         move.setEndValue(target)
         move.finished.connect(lambda: self._moves.pop(id(zone), None))
+        move.finished.connect(lambda: _round_corners(zone))
         self._moves[id(zone)] = move
         move.start()
 

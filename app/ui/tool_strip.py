@@ -29,8 +29,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PySide6.QtCore import QPoint, QRect, Qt, Signal
+from PySide6.QtCore import QEvent, QPoint, QRect, Qt, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QComboBox,
     QHBoxLayout,
@@ -212,7 +213,55 @@ class ToolStrip(QWidget):
         else:
             self._hint.clear()
             self._hint.setVisible(False)
+
+        # Die Zeile sagt an, dass sie jetzt anders hoch sein will.
+        #
+        # Sie steckt in einer Überlagerung: der Container um sie herum bekommt
+        # seine Geometrie gesetzt und rechnet sie nicht selbst aus. Wer sie
+        # setzt, muss also erfahren, dass sich die Wunschhöhe geändert hat —
+        # und er hört am **Container**, nicht an dieser Zeile. Ohne die
+        # Meldung blieb unten alles auf den einunddreißig Pixeln der
+        # Knopfreihe stehen, während die Leiste darunter neunzig verlangte:
+        # Regler, Felder und Knöpfe lagen über den Umschaltern. Betroffen war
+        # **jedes** der sieben Werkzeuge — Schnitt, Messen, Bewegen, Analyse,
+        # Schichten, Explosion, Bemalen.
+        # Erst rechnen, dann melden: ``sizeHint`` liefert sonst noch den Wert
+        # von vorhin, und wer daraufhin platziert, setzt die alte Höhe. Genau
+        # das war zu sehen — beim ersten Öffnen eines Werkzeugs bekam die
+        # Zeile neununddreißig Pixel statt siebenundneunzig, und erst das
+        # nächste Ereignis rückte sie zurecht.
+        own = self.layout()
+        if own is not None:
+            own.activate()
+        self.updateGeometry()
+
+        parent = self.parentWidget()
+        if parent is not None:
+            box = parent.layout()
+            if box is not None:
+                box.activate()
+            parent.updateGeometry()
+            QApplication.sendEvent(parent, QEvent(QEvent.Type.LayoutRequest))
+
         self.toolChanged.emit(key)
+
+    def set_available(self, key: str, available: bool) -> None:
+        """Ein Werkzeug anbieten oder verbergen.
+
+        Nicht jedes Werkzeug ist immer sinnvoll: die Explosionsansicht braucht
+        zwei Körper, sonst zieht sie nichts auseinander. Der Umschalter
+        verschwindet dann — und mit ihm, falls es gerade offen war, seine
+        Leiste.
+
+        Der Weg führt bewusst hierher und nicht an der Leiste vorbei: Wer sie
+        selbst sichtbar macht, hat zwei Stellen, die dasselbe steuern, und die
+        gewinnen abwechselnd. Genau daran lag die Leiste über den Umschaltern.
+        """
+        if key not in self._tools:
+            return
+        self._buttons[key].setVisible(available)
+        if not available and self._active == key:
+            self.activate(None)
 
     def active(self) -> str | None:
         return self._active

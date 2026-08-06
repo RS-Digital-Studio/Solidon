@@ -728,6 +728,14 @@ class MainWindow(QMainWindow):
         self.right.setObjectName("overlayCard")
         self.overlay = OverlayHost(self.middle_stack, self)
         self.overlay.set_zones(left, self.right, bottom)
+        # Ein geöffnetes Werkzeug macht die untere Zone dreimal so hoch. Die
+        # Überlagerung setzt Geometrien, statt sie von einem Layout rechnen zu
+        # lassen — sie muss also erfahren, dass sich der Bedarf geändert hat.
+        # Ohne diese Verbindung blieb die Zone auf der Höhe der Knopfreihe,
+        # und die Leiste des Werkzeugs lag über den Umschaltern: bei allen
+        # sieben, von Schnitt bis Bemalen.
+        self.tools.toolChanged.connect(lambda _key: self.overlay.reflow())
+        self.sketch_bar.installEventFilter(self.overlay)
 
         self.start_screen = StartScreen(self)
         self.start_screen.newRequested.connect(self.start_empty)
@@ -2986,7 +2994,10 @@ class MainWindow(QMainWindow):
         self._seen_objects = bool(result.scene.objects)
         self.object_tree.show_scene(result, self.session.project.document)
         plates = {entry.plate for entry in result.scene.objects.values()}
-        self.explode_bar.show_for(len(result.scene.objects), max(plates, default=0) + 1)
+        self.tools.set_available(
+            "explode",
+            self.explode_bar.show_for(len(result.scene.objects), max(plates, default=0) + 1),
+        )
         self.report.show_result(result)
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)

@@ -161,13 +161,17 @@ def test_the_export_check_knows_which_plate_complains(profile: Profile) -> None:
 
 
 def test_the_selector_appears_from_two_plates_on(qt_app: QApplication) -> None:
+    """``isVisibleTo`` und nicht ``isVisible``: die Leiste selbst zeigt sich
+    nicht mehr — das tut die Werkzeugzeile, wenn jemand ihren Knopf drückt.
+    Gefragt ist hier, ob der Wähler *innerhalb* der Leiste dazugehört.
+    """
     bar = ExplodeBar()
 
     bar.show_for(3, plates=1)
-    assert not bar.plates.isVisible()
+    assert not bar.plates.isVisibleTo(bar)
 
     bar.show_for(3, plates=3)
-    assert bar.plates.isVisible()
+    assert bar.plates.isVisibleTo(bar)
     assert bar.plates.count() == 4, "all plus three"
 
 

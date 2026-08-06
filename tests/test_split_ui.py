@@ -33,16 +33,21 @@ def loaded(session: Session, name: str) -> None:
     session.wait_for_idle()
 
 
-def test_the_bar_only_shows_up_when_there_is_something_to_pull_apart(
+def test_the_bar_says_when_there_is_something_to_pull_apart(
     qt_app: QApplication,
 ) -> None:
+    """``show_for`` **antwortet**, es zeigt nicht.
+
+    Sichtbar macht die Leiste allein die Werkzeugzeile, der sie gehört. Solange
+    sie sich selbst zeigte, steuerten zwei Stellen dasselbe: die eine klappte
+    auf, was die andere zugeklappt hielt, und die Leiste landete über den
+    Umschaltern.
+    """
     bar = ExplodeBar()
 
-    bar.show_for(1)
-    assert not bar.isVisible()
-
-    bar.show_for(3)
-    assert bar.isVisible()
+    assert bar.show_for(1) is False
+    assert bar.show_for(3) is True
+    assert not bar.isVisible(), "gezeigt wird sie erst auf Knopfdruck"
 
 
 def test_folding_back_together_resets_the_slider(qt_app: QApplication) -> None:
