@@ -20,6 +20,7 @@ from app.core.bootstrap import load_operations
 from app.core.examples import directory, render_preview
 from app.core.generate import from_text
 from app.core.knowledge import profiles
+from app.core.lid_flow import apply_lid
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project, save
 from app.core.types import Parameter, Source, SourceKind
@@ -382,6 +383,111 @@ def hollow_and_split() -> Project:
     return project
 
 
+def box_with_lid() -> Project:
+    """Eine Dose mit Deckel — das Stück, an dem alles zusammenkommt.
+
+    Die anderen Beispiele zeigen je einen Weg. Dieses zeigt, was daraus wird,
+    wenn man sie hintereinander legt: benannte Maße, ein ausgehöhlter Körper
+    mit offener Oberseite, Bausteine in der Wand, ein Deckel, der aus der
+    Öffnung geschnitten und nicht nachgezeichnet ist (§14), eine Beschriftung
+    darauf und beides nebeneinander auf dem Bett.
+
+    Es ist zugleich das Bild, das auf dem Startbildschirm und im Handbuch
+    steht. Ein Beispiel, das aussieht wie eine Platte mit fünf Löchern, zeigt
+    ein Programm, das Löcher bohren kann.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    document.parameters["breite"] = Parameter(name="breite", value=80.0, unit="mm", title="Breite")
+    document.parameters["tiefe"] = Parameter(name="tiefe", value=55.0, unit="mm", title="Tiefe")
+    document.parameters["hoehe"] = Parameter(name="hoehe", value=40.0, unit="mm", title="Höhe")
+    document.parameters["wand"] = Parameter(name="wand", value=2.4, unit="mm", title="Wandstärke")
+
+    history = History(document)
+    history.apply(
+        _("Körper"),
+        [
+            OperationDraft(
+                op="create_box",
+                params={
+                    "width": "=@breite",
+                    "depth": "=@tiefe",
+                    "height": "=@hoehe",
+                    "name": "Dose",
+                },
+            )
+        ],
+    )
+    # Oben offen: erst dadurch hat der Deckel eine Öffnung, an der er sich
+    # abnehmen kann. Eine geschlossene Aushöhlung wäre ein Hohlraum, kein Fach.
+    history.apply(
+        _("Aushöhlen"),
+        [
+            OperationDraft(
+                op="hollow_object",
+                inputs=("obj_1",),
+                params={"wall": "=@wand", "open_top": True},
+            )
+        ],
+    )
+    history.apply(
+        _("Kabel und Befestigung"),
+        [
+            OperationDraft(
+                op="insert_cable_gland",
+                inputs=("obj_1",),
+                params={"size": "cable-5", "wall": "=@wand", "x": -40.0, "y": 0.0, "z": 26.0},
+            ),
+            OperationDraft(
+                op="insert_heatset_m4",
+                inputs=("obj_1",),
+                params={"size": "M3", "x": 30.0, "y": 20.0, "z": "=@hoehe"},
+            ),
+        ],
+    )
+
+    # Die Beschriftung kommt **vor** den Deckel und sitzt auf der Dose.
+    #
+    # Nach dem Deckel ginge sie schief, und zwar sichtbar: eine Passung zeigt
+    # auf Merkmale (§14), eine Boolesche Operation danach baut den Körper neu,
+    # und der Kragen heißt dann nicht mehr ``lid_collar``. Beim Öffnen fragt
+    # die Verwaisungsprüfung, welches Merkmal gemeint war (§21.3) — richtig
+    # gefragt, aber nichts, was in einem Beispiel stehen sollte.
+    history.apply(
+        _("Beschriftung"),
+        [
+            OperationDraft(
+                op="label_text",
+                inputs=("obj_1",),
+                params={"text": "FORMWERK", "size": 6.0, "depth": 0.6, "slot": 1},
+            )
+        ],
+    )
+
+    # Der Deckel geht über seinen Ablauf und nicht über die nackte Operation:
+    # nur so entsteht das Passungspaar zwischen Öffnung und Kragen (§14), und
+    # daran hängen beim Slicen die genaue Außenwand und das gebremste Tempo.
+    applied = apply_lid(
+        document,
+        "obj_1",
+        {"thickness": 3.0, "collar": 5.0},
+        profiles.make_profile("centauri-carbon-2", "petg"),
+    )
+    # ``create_lid`` verbraucht seine Eingabe und legt zwei Ausgänge an: die
+    # Dose kommt als erste zurück, der Deckel als zweite. Ab hier heißt die
+    # Dose deshalb nicht mehr ``obj_1``.
+    box, lid = applied.object_ids[0], applied.object_ids[1]
+
+    # Anordnen ist eine Transformation und meldet seine Bewegung
+    # (``OpResult.transform``) — die Merkmale überstehen das, und damit auch
+    # die Passung.
+    history.apply(
+        _("Anordnen"),
+        [OperationDraft(op="arrange_bed", inputs=(box, lid), params={"spacing": 8.0})],
+    )
+    return project
+
+
 def main() -> int:
     load_operations()
     profile = profiles.make_profile("centauri-carbon-2", "petg")
@@ -398,6 +504,7 @@ def main() -> int:
         "schild-zweifarbig": two_colour_sign,
         "drucker-kalibrieren": calibration_plate,
         "aushoehlen-und-teilen": hollow_and_split,
+        "dose-mit-deckel": box_with_lid,
     }
     for example in EXAMPLES:
         project = builders[example.id]()

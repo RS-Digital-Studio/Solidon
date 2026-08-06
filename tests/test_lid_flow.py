@@ -105,6 +105,30 @@ def test_both_features_exist_after_evaluation(profile: Profile) -> None:
     assert COLLAR_FEATURE in result.scene.objects[lid_id].features
 
 
+def test_the_fit_is_actually_measurable(profile: Profile) -> None:
+    """Eine Passung, die nur dasteht, ist die halbe Zusicherung.
+
+    Sie wirkt auf den Slicer — genaue Außenwand, gebremstes Tempo — und sagte
+    trotzdem nichts darüber, ob der Deckel passt: ``fits.check`` sucht bei
+    einer Spielpassung zwei Durchmesser und meldete „lässt sich nicht messen".
+    Beide Merkmale tragen deshalb ihre engste Weite, und ihr Unterschied ist
+    genau das doppelte Spiel plus die Entlastung.
+    """
+    from app.core.scene.fits import check as check_fits
+
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    box = _box_with_cavity(document, profile)
+    apply_lid(document, box, {"thickness": 3.0, "collar": 4.0}, profile)
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+    findings = check_fits(result.scene, profile)
+
+    assert "fit.not_measurable" not in {entry.code for entry in findings}, (
+        "die Passung muss prüfbar sein, nicht nur eingetragen"
+    )
+
+
 def test_undo_takes_the_fit_with_it(profile: Profile) -> None:
     """§15.5: was zur Transaktion gehört, geht mit ihr zurück.
 

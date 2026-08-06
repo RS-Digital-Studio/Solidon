@@ -32,7 +32,7 @@ from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.scene.placement import faces_up
 from app.core.slice.analysis import cross_section
-from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
+from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult, SceneObject
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -83,6 +83,37 @@ def _centre_of(cavities: list[Any], z: float) -> tuple[float, float, float]:
     return (float(x), float(y), float(z))
 
 
+def _narrowest(cavities: list[Any]) -> float:
+    """Die engste Weite der Öffnung — das Maß, an dem eine Passung hängt.
+
+    Ein Deckel klemmt nicht an der Fläche, sondern an der schmalsten Stelle:
+    dort sitzt der Kragen am nächsten an der Wand. Genommen wird die kürzere
+    Seite des Hüllrechtecks, bei mehreren Fächern die kleinste davon.
+    """
+    widths: list[float] = []
+    for cavity in cavities:
+        left, bottom, right, top = cavity.bounds
+        widths.append(min(right - left, top - bottom))
+    return float(min(widths)) if widths else 0.0
+
+
+def _measurable(
+    identifier: str, area: float, centre: tuple[float, float, float], width: float
+) -> tuple[str, Feature]:
+    """Ein Flächenmerkmal, das zusätzlich seine Weite kennt.
+
+    Ohne die Weite ist die Passung zwar eingetragen, aber nicht prüfbar:
+    ``fits.check`` sucht bei einer Spielpassung zwei Durchmesser und meldet
+    sonst „lässt sich nicht messen". Eine Passung, die nur dasteht, ist die
+    halbe Zusicherung — sie wirkt auf den Slicer und sagt nichts darüber, ob
+    der Deckel passt.
+    """
+    key, feature = face(identifier, area, centre)
+    params = dict(feature.params)
+    params["diameter"] = round(width, 4)
+    return key, dataclasses.replace(feature, params=params)
+
+
 def _with_cavity(source: SceneObject, cavities: list[Any], z: float) -> dict[str, Any]:
     """Die Merkmale der Schachtel plus dem, auf das der Deckel passt.
 
@@ -91,7 +122,9 @@ def _with_cavity(source: SceneObject, cavities: list[Any], z: float) -> dict[str
     besser — er hat gerade hineingeschnitten.
     """
     features = dict(source.features)
-    key, feature = face(CAVITY_FEATURE, _area_of(cavities), _centre_of(cavities, z))
+    key, feature = _measurable(
+        CAVITY_FEATURE, _area_of(cavities), _centre_of(cavities, z), _narrowest(cavities)
+    )
     features[key] = feature
     return features
 
@@ -344,7 +377,20 @@ def create_lid(ctx: OpContext) -> OpResult:
                 name=params.name or f"{source.name} {_('Deckel').translate()}",
                 mesh=body,
                 material=source.material,
-                features=dict([face(COLLAR_FEATURE, _area_of(cavities), _centre_of(cavities, z))]),
+                features=dict(
+                    [
+                        _measurable(
+                            COLLAR_FEATURE,
+                            _area_of(cavities),
+                            _centre_of(cavities, z),
+                            # Der Kragen ist genau um Spiel und Entlastung
+                            # schmaler als die Öffnung — beidseitig, also
+                            # zweimal. Dieselbe Rechnung, die ``build`` mit
+                            # ``buffer`` an der Kontur macht.
+                            _narrowest(cavities) - 2.0 * (clearance + COLLAR_RELIEF),
+                        )
+                    ]
+                ),
             ),
         ],
         findings=[

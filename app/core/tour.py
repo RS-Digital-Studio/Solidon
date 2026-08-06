@@ -482,6 +482,53 @@ TOURS: Final[tuple[Tour, ...]] = (
             "Zug: Trennebene suchen, schneiden, verstiften."
         ),
     ),
+    Tour(
+        example_id="dose-mit-deckel",
+        intro=_(
+            "Eine Dose mit Deckel — und darin steckt alles, was die anderen "
+            "Beispiele einzeln zeigen: benannte Maße, ein ausgehöhlter Körper, "
+            "Bausteine in der Wand, ein Deckel und eine Beschriftung."
+        ),
+        steps=(
+            TourStep(
+                shows="parameters",
+                text=_(
+                    "Links stehen vier Maße mit Namen. Stellen Sie die Höhe auf "
+                    "60 mm — die Dose wächst, der Deckel bleibt, wo er hingehört, "
+                    "und die Kabeldurchführung wandert mit der Wand."
+                ),
+                done=_parameter_changed("hoehe", 40.0),
+            ),
+            TourStep(
+                shows="history",
+                text=_(
+                    "Im Verlauf steht „Aushöhlen“ mit dem Schalter *Oben öffnen*. "
+                    "Er ist der Grund, warum es überhaupt einen Deckel geben kann: "
+                    "ein geschlossener Hohlraum ist ein Hohlraum, kein Fach."
+                ),
+            ),
+            TourStep(
+                text=_(
+                    "Der Deckel ist nicht nachgezeichnet, sondern aus der Öffnung "
+                    "geschnitten. Sein Kragen ist der Hohlraum, geschrumpft um das "
+                    "Spiel aus dem Materialprofil — dieselbe Zahl, die über jede "
+                    "andere Passung entscheidet."
+                )
+            ),
+            TourStep(
+                shows="report",
+                text=_(
+                    "Deshalb steht die Passung auch im Prüfbericht. Wer sein "
+                    "Material einmal kalibriert, verbessert damit diesen Deckel, "
+                    "ohne ihn anzufassen."
+                ),
+            ),
+        ),
+        closing=_(
+            "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der "
+            "Öffnung anklicken, Bausteine → Deckel erzeugen."
+        ),
+    ),
 )
 
 

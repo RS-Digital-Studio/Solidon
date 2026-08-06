@@ -62,7 +62,7 @@ from app.i18n.catalog import read_catalog
 #:
 #: Die Befunde im Prüfbericht sind ohnehin gestellt (:func:`sample_findings`),
 #: das Projekt muss also keine mitbringen.
-EXAMPLE = "gehaeuse-mit-bausteinen.p3d"
+EXAMPLE = "dose-mit-deckel.p3d"
 
 #: Wie groß die Fenster für die Aufnahme sind. Breiter als nötig wäre auf einer
 #: Handbuchseite nur kleiner zu sehen.

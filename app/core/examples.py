@@ -130,6 +130,20 @@ EXAMPLES: Final[tuple[Example, ...]] = (
             "beide Hälften auf das Bett legen."
         ),
     ),
+    # Das letzte ist keine achte Sorte, sondern die Summe: es legt hintereinander,
+    # was die anderen einzeln zeigen. Es steht auch auf dem Startbildschirm und
+    # im Handbuch — ein Beispiel, das nach einer Platte mit Löchern aussieht,
+    # zeigt ein Programm, das Löcher bohren kann.
+    Example(
+        id="dose-mit-deckel",
+        title=_("Alles zusammen — Dose mit Deckel"),
+        way="",
+        doc=_(
+            "Benannte Maße, ausgehöhlt und oben offen, Kabeldurchführung und "
+            "Einpressbuchse in der Wand, ein Deckel aus der Öffnung geschnitten "
+            "statt nachgezeichnet, beschriftet und neben die Dose gelegt."
+        ),
+    ),
 )
 
 
