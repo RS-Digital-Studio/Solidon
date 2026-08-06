@@ -149,7 +149,14 @@ def test_the_report_learns_about_scripted_content(qt_app: object) -> None:
     received: list[object] = []
     worker = _EvaluationWorker(session)
     worker.finishedWith.connect(received.append)
-    worker.run()
+    try:
+        worker.run()
+    finally:
+        # Die Verbindung zeigt auf eine Liste dieser Funktion. Bleibt sie
+        # stehen, während der Wrapper eingesammelt wird, hängt ein
+        # C++-Signal an etwas, das es nicht mehr gibt — dieselbe Falle, vor
+        # der ``session.py`` an drei Stellen warnt.
+        worker.finishedWith.disconnect()
 
     assert received, "die Auswertung hält nicht an, sie meldet nur"
     codes = {finding.code for finding in received[0].scene.report.findings}  # type: ignore[attr-defined]
@@ -169,8 +176,11 @@ def test_the_hint_comes_once_and_not_at_every_run(qt_app: object) -> None:
     received: list[object] = []
     worker = _EvaluationWorker(session)
     worker.finishedWith.connect(received.append)
-    worker.run()
-    worker.run()
+    try:
+        worker.run()
+        worker.run()
+    finally:
+        worker.finishedWith.disconnect()
 
     assert not session.pending_foreign_check
     second = {finding.code for finding in received[1].scene.report.findings}  # type: ignore[attr-defined]

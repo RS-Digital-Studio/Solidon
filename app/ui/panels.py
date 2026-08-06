@@ -8,7 +8,7 @@ Regel 2).
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from PySide6.QtCore import QPoint, Qt, Signal
@@ -55,6 +55,23 @@ from app.ui.style import NORMAL, ROOMY, set_level
 #: Zeichen je Schweregrad, aus der gemeinsamen Kodierung — Farbe steht nie
 #: allein (§19.1).
 SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items()}
+
+#: In welcher Reihenfolge die Schweregrade stehen. Die Zeile über der Liste
+#: zählt Fehler, Warnungen und Hinweise getrennt — sie verspricht damit eine
+#: Rangfolge, und die Liste darunter hielt sie nicht: sie hängte an, wie es
+#: kam, also stand bei zwei Warnungen und vier Hinweisen zuoberst ein Hinweis.
+#: Wer einen Fehler suchte, musste ihn filtern statt lesen.
+SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
+
+
+def _by_severity(findings: Iterable[Finding]) -> list[Finding]:
+    """Schweres zuerst, sonst in der Reihenfolge, in der es entstanden ist.
+
+    Stabil sortiert: innerhalb eines Grades bleibt die Kette der Operationen
+    lesbar, und die erzählt, an welcher Stelle etwas schiefging.
+    """
+    return sorted(findings, key=lambda entry: SEVERITY_ORDER.get(entry.severity, 3))
+
 
 #: Farbe der zurückgenommenen Schritte im Verlauf — dieselbe wie für einen
 #: verworfenen Chatbeitrag, und aus demselben Grund.
@@ -610,8 +627,13 @@ class HistoryPanel(QWidget):
         self.list.clear()
         titles = {entry.id: _op_title(entry.op) for entry in document.ops}
         for transaction in document.transactions:
-            by = tr("Agent") if transaction.origin.by == "agent" else tr("Nutzer")
-            item = QListWidgetItem(f"{transaction.title}  ({by})")
+            # Nur was abweicht, wird ausgeschrieben (§26.4). „(Nutzer)" stand
+            # vorher an jeder Zeile — in einem Projekt ohne Agenten also
+            # überall, und was überall steht, liest niemand mehr. Dieselbe
+            # Überlegung wie beim Material im Steckbrief: genannt wird, was
+            # nicht die Regel ist.
+            by = f"  ({tr('Agent')})" if transaction.origin.by == "agent" else ""
+            item = QListWidgetItem(f"{transaction.title}{by}")
             if stopped_at is not None and stopped_at in transaction.ops:
                 # §15.3: die betroffenen Operationen werden im Verlauf markiert.
                 item.setText(f"! {item.text()}")
@@ -740,7 +762,7 @@ class ReportPanel(QWidget):
             {str(key): entry.name for key, entry in result.scene.objects.items()} if result else {}
         )
         self.list.clear()
-        for finding in result.scene.report.findings if result else ():
+        for finding in _by_severity(result.scene.report.findings if result else ()):
             self._append(finding)
         self._count_up()
         self._refilter()
@@ -757,18 +779,44 @@ class ReportPanel(QWidget):
         Zähler daneben wäre eine Zahl, die etwas anderes behauptet.
         """
         known = self._known()
-        added = False
+        fresh = []
         for finding in findings:
             key = _identity(finding)
             if key in known:
                 continue
             known.add(key)
             self._append(finding)
-            added = True
+            fresh.append(key)
+        self._resort()
         self._count_up()
         self._refilter()
-        if added:
-            self.list.scrollToBottom()
+        if fresh:
+            # Nach dem Ordnen steht der neue Befund nicht mehr unten, sondern
+            # dort, wo sein Gewicht ihn hinstellt — also wird er gesucht und
+            # nicht die Liste ans Ende gefahren.
+            self._show_first_of(fresh)
+
+    def _resort(self) -> None:
+        """Die ganze Liste nach Schwere ordnen.
+
+        Nach jedem Anhängen und nicht nur beim Aufbau: ein Fehler, der über
+        ``add_findings`` nachkommt, gehört nach oben und nicht ans Ende
+        dessen, was schon dasteht.
+        """
+        findings = [
+            self.list.item(row).data(Qt.ItemDataRole.UserRole) for row in range(self.list.count())
+        ]
+        self.list.clear()
+        for finding in _by_severity(findings):
+            self._append(finding)
+
+    def _show_first_of(self, keys: list[tuple[Any, ...]]) -> None:
+        """Zum obersten der genannten Befunde scrollen."""
+        for row in range(self.list.count()):
+            item = self.list.item(row)
+            if _identity(item.data(Qt.ItemDataRole.UserRole)) in keys:
+                self.list.scrollToItem(item)
+                return
 
     def _known(self) -> set[tuple[Any, ...]]:
         """Woran die Liste einen Befund wiedererkennt."""

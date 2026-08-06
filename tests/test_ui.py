@@ -540,6 +540,59 @@ def test_a_report_without_findings_says_so(qt_app: QApplication) -> None:
     assert "Keine Befunde" in panel.summary.text()
 
 
+def test_the_report_puts_the_heavy_findings_first(qt_app: QApplication) -> None:
+    """Die Zählzeile verspricht eine Rangfolge — die Liste muss sie halten.
+
+    Vorher hängte sie an, wie es kam: bei zwei Warnungen und vier Hinweisen
+    stand zuoberst ein Hinweis, und der Fehler an sechster Stelle. Sichtbar
+    war das am Bildschirmfoto des Hauptfensters, wo über einer Liste mit zwei
+    Hinweisen „2 Warnung" stand.
+    """
+    from PySide6.QtCore import Qt
+
+    from app.core.types import Finding
+    from app.ui.panels import ReportPanel
+
+    panel = ReportPanel()
+    panel.add_findings(
+        [
+            Finding(code="a.info", severity="info", message="zuerst entstanden"),
+            Finding(code="b.error", severity="error", message="der Fehler"),
+            Finding(code="c.info", severity="info", message="noch ein Hinweis"),
+            Finding(code="d.warning", severity="warning", message="die Warnung"),
+        ]
+    )
+
+    order = [
+        panel.list.item(row).data(Qt.ItemDataRole.UserRole).severity
+        for row in range(panel.list.count())
+    ]
+    assert order == ["error", "warning", "info", "info"]
+
+
+def test_the_history_names_only_what_differs(qt_app: QApplication) -> None:
+    """§26.4: die Herkunft steht dran, wo sie vom Üblichen abweicht.
+
+    „(Nutzer)" an jeder Zeile ist in einem Projekt ohne Agenten an jeder
+    Zeile — und was überall steht, liest niemand. Der Agent wird genannt.
+    """
+    from app.core.types import Document, Origin, Transaction
+    from app.ui.panels import HistoryPanel
+
+    document = Document(format_version=7, app_version="0.0.1")
+    document.transactions.append(Transaction(id=1, title="Bohrung setzen", ops=(1,)))
+    document.transactions.append(
+        Transaction(id=2, title="Deckel erzeugen", ops=(2,), origin=Origin(by="agent"))
+    )
+
+    panel = HistoryPanel()
+    panel.show_document(document)
+
+    lines = [panel.list.item(row).text() for row in range(panel.list.count())]
+    assert lines[0] == "Bohrung setzen", "der Regelfall bleibt unkommentiert"
+    assert "Agent" in lines[1]
+
+
 def test_report_findings_wrap_instead_of_scrolling(qt_app: QApplication) -> None:
     """§2.7: die Sätze des Prüfberichts müssen ganz lesbar sein.
 
@@ -1438,7 +1491,11 @@ def test_the_fourth_navigation_scheme_exists_without_changing_the_default() -> N
 
 
 def test_the_report_can_be_filtered(window: MainWindow) -> None:
-    """Ein Bericht mit hundert Hinweisen und zwei Fehlern versteckt die zwei."""
+    """Ein Bericht mit hundert Hinweisen und zwei Fehlern versteckt die zwei.
+
+    Die Liste steht nach Schwere: der Fehler ist die erste Zeile, der Hinweis
+    die zweite — auch wenn der Hinweis zuerst gemeldet wurde.
+    """
     from app.core.types import Finding
 
     window.report.add_findings(
@@ -1451,12 +1508,12 @@ def test_the_report_can_be_filtered(window: MainWindow) -> None:
 
     window.report.severity.setCurrentIndex(window.report.severity.findData("error"))
     hidden = [window.report.list.item(row).isHidden() for row in range(window.report.list.count())]
-    assert hidden == [True, False]
+    assert hidden == [False, True]
 
     window.report.severity.setCurrentIndex(0)
     window.report.search.setText("wandstärke")
     hidden = [window.report.list.item(row).isHidden() for row in range(window.report.list.count())]
-    assert hidden == [False, True], "der Text filtert unabhängig vom Schweregrad"
+    assert hidden == [True, False], "der Text filtert unabhängig vom Schweregrad"
 
     assert "1 × Fehler" in window.report.summary.text(), "gezählt wird der ganze Bericht"
 
