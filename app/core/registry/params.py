@@ -18,14 +18,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import MISSING, dataclass, field, fields
-from typing import Any, TypeVar
+from typing import Any
 
 from app.core.errors import InternalError, ValidationError
 from app.core.types import BaseParams, ParamKind, ParamPlacement, ParamSpec
 from app.core.units import EPS_GEOM, is_greater, is_less
 from app.i18n import TranslatableText, _
-
-P = TypeVar("P", bound=BaseParams)
 
 _METADATA_KEY = "param"
 
@@ -84,7 +82,7 @@ def _kind_of(annotation: Any, declared: ParamKind | None, choices: tuple[str, ..
     return kind
 
 
-def op_params(cls: type[P]) -> type[P]:
+def op_params[P: BaseParams](cls: type[P]) -> type[P]:
     """Macht aus einer Deklaration einen eingefrorenen Parametersatz mit
     abgeleitetem Schema.
 
@@ -188,7 +186,7 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
     return value
 
 
-def validate(params_class: type[P], values: Mapping[str, Any]) -> P:
+def validate[P: BaseParams](params_class: type[P], values: Mapping[str, Any]) -> P:
     """Baut einen validierten Parametersatz — oder scheitert mit einem
     korrigierbaren Fehler.
     """

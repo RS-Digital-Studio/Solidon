@@ -15,7 +15,7 @@ from __future__ import annotations
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Final, TypeVar
+from typing import Any, Final
 
 from app.core.errors import ValidationError
 from app.core.log import get_logger
@@ -32,10 +32,6 @@ from app.core.types import (
 from app.i18n import _, sort_key
 
 _log = get_logger(__name__)
-
-#: Profil-Art für :func:`_by_title` — Drucker und Material teilen sich nur den
-#: Titel, und der genügt zum Sortieren.
-_P = TypeVar("_P", PrinterProfile, MaterialProfile)
 
 DEFAULT_PRINTER: Final = "generic-220"
 DEFAULT_MATERIAL: Final = "pla"
@@ -116,7 +112,8 @@ def _load_materials() -> dict[str, MaterialProfile]:
     return _by_title(profiles)
 
 
-def _by_title(profiles: dict[str, _P]) -> dict[str, _P]:
+# Drucker und Material teilen sich nur den Titel, und der genügt zum Sortieren.
+def _by_title[P: (PrinterProfile, MaterialProfile)](profiles: dict[str, P]) -> dict[str, P]:
     """Nach dem Namen sortiert, den der Nutzer liest.
 
     In Dateireihenfolge stand die Druckerliste fast alphabetisch, mit dem
