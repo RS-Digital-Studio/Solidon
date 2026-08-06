@@ -107,20 +107,47 @@ class _Handler(BaseHTTPRequestHandler):
             _log.warning("remote call refused from %s", self.client_address[0])
             self._send(403, b"")
             return
+        length = int(self.headers.get("Content-Length") or 0)
         if self.path.rstrip("/") != ENDPOINT:
+            self._drain(length)
             self._send(404, b"")
             return
-        length = int(self.headers.get("Content-Length") or 0)
         if length > MAX_BODY:
+            self._drain(length)
             self._send(413, b"")
             return
         payload = self.rfile.read(length)
         self._send(200, remote.answer_bytes(payload, self.bridge))
 
+    def _drain(self, length: int) -> None:
+        """Den Rumpf einer abgelehnten Anfrage wegwerfen, statt ihn liegen zu
+        lassen.
+
+        Ungelesen bleibt er im Sockel stehen; der Client schreibt weiter, und
+        die Gegenseite bricht ab, bevor er die Antwort gelesen hat — er sieht
+        einen Verbindungsabbruch statt „zu groß" und weiß nicht, warum. Gelesen
+        wird höchstens :data:`MAX_BODY`: wer mehr schickt, bekommt seine
+        Antwort und danach eine geschlossene Leitung.
+        """
+        remaining = min(length, MAX_BODY)
+        while remaining > 0:
+            chunk = self.rfile.read(min(remaining, 64 * 1024))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+
     def _send(self, status: int, body: bytes) -> None:
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        if status >= 400:
+            # Bei einer Ablehnung liegt der Rumpf der Anfrage ungelesen im
+            # Sockel — bei 413 mit Absicht. Unter HTTP/1.1 hält die Leitung
+            # danach offen, der Client schreibt weiter, und Windows bricht
+            # die Verbindung ab, bevor er die Antwort gelesen hat: er sieht
+            # einen Abbruch statt „zu groß" und weiß nicht, warum.
+            self.send_header("Connection", "close")
+            self.close_connection = True
         self.end_headers()
         if body:
             self.wfile.write(body)
