@@ -2186,3 +2186,73 @@ Erwartung: was Material wegnehmen soll, muss weniger Material hinterlassen.
 Tiefe auf die Position zu addieren hätte die Richtung ins Material gebraucht,
 und die steckt in der Geometrie, nicht in der Datei. Ein Parameter, der die
 alte Bedeutung festhält, ist ehrlicher als eine Umrechnung, die rät.
+
+## Das Audit vom 06.08.2026 — und was unter dem Code lag
+
+Anlass war eine Durchsicht der ganzen Anwendung. Der Befund zur Sache ist
+kurz: der Code ist in Ordnung. Kein `eval`, kein `shell=True`, keine
+GPL-Abhängigkeit, kein absoluter Pfad in einer Projektdatei, **kein einziges
+TODO oder FIXME** in achtundfünfzigtausend Zeilen, Migrationen v1 bis v7
+lückenlos mit eingecheckter Beispieldatei, keine feste Zeichenkette in der
+Oberfläche. Vier von fünf Funden lagen deshalb nicht im Code, sondern
+darunter.
+
+- [x] **Die Umgebung fuhr Python 3.11, das Projekt verlangt 3.13.** Die `.venv`
+      war am 27.07. mit 3.11.9 angelegt, `requires-python` stand längst auf
+      3.13, und auf der Maschine gab es kein 3.13. Solange kein 3.12-Feature im
+      Code stand, fiel das nicht auf; mit den ersten PEP-695-Typparametern
+      (087e321) brach der Import der Anwendung, und damit starben pytest, mypy,
+      die Kommandozeile und das Fenster. **`ruff` blieb grün** — es bringt einen
+      eigenen Parser mit `target-version` mit und sieht den Interpreter nie an.
+      3.13.14 installiert, Umgebung gegen `constraints.txt` neu aufgebaut; dabei
+      kamen auch `pypdf` und die sechs Fassungen nach, die von der Datei
+      abwichen.
+- [x] **Das Tor konnte still durchfallen.** `mypy` meldete „1 error ... errors
+      prevented further checking" und prüfte dabei **null** Projektdateien —
+      dieselbe Mechanik wie beim numpy-2.5-Vorfall zwei Tage zuvor, nur mit
+      anderer Ursache. Zweimal in einer Woche, und nichts im Repository
+      unterschied einen Abbruch von einem grünen Lauf.
+      `tests/test_toolchain.py` prüft jetzt den laufenden Interpreter gegen
+      `requires-python` und die Zielversionen von mypy und ruff gegen dieselbe
+      Angabe. Danach: 190 Dateien geprüft statt keiner.
+- [x] **Zwei Arbeiter räumten das Feld ihres Nachfolgers.** Das Muster stand
+      fünfmal richtig im Haus — mit Kommentar, warum ein Lambda hier nicht geht
+      — und zweimal falsch. Siehe Commit; die Regel steht jetzt in
+      `.claude/rules/oberflaeche.md`, und ein Test sucht das falsche Muster im
+      Quelltext der ganzen Oberfläche.
+- [x] **Eine Webseite durfte am offenen Dokument arbeiten.** Bindung und
+      Absenderadresse halten keinen Browser auf: der läuft auf diesem Rechner.
+      `origin_allowed` kam dazu, die zweite Auflage heißt jetzt „dreimal
+      geprüft".
+- [x] **Die Zonen setzten sich gegenseitig, bis der Stapel überlief.** Fiel
+      erst auf, als die Suite wieder lief — `tests/test_overlay.py` starb beim
+      ersten Test, reproduzierbar. Kein reines Testartefakt: `resizeEvent` geht
+      denselben Weg, und am Fensterrand zu ziehen ist derselbe Fall.
+
+Stand danach: 2949 Tests grün, `ruff`, `ruff format` und `mypy` grün.
+
+### Was das Audit gelernt hat
+
+**Ein grüner Lauf sagt nur etwas, wenn er auf dem Richtigen lief.** Drei der
+vier Werkzeuge des Tors sagten „in Ordnung", während zwei davon gar nichts
+prüften und das dritte auf einer Interpreterversion lief, die das Projekt nicht
+mehr unterstützt. Was das Tor über sich selbst behauptet, gehört genauso
+geprüft wie das, was es über den Code behauptet.
+
+**Eine Lehre, die nur an der Fundstelle gezogen wird, ist halb gezogen.** Der
+Absturz durch die verlorene Arbeiter-Referenz war dreimal in `session.py`
+behoben, einmal bei der Update-Abfrage, einmal bei der Analysekarte — jedes Mal
+mit ausführlichem Kommentar. Zwei Stellen daneben machten weiter den alten
+Fehler, und niemand konnte es sehen, weil nichts danach suchte. Dieselbe
+Erkenntnis wie bei den drei Bausteinen über ihrem Ursprung, eine Etage höher.
+
+### Offen aus dem Audit
+
+- [ ] **Rund fünfundachtzig englische Docstrings** stehen noch in
+      `app/`, verteilt auf etwa fünfundzwanzig Dateien — meist einzeilige
+      Attribut-Beschreibungen (`viewport.py`, `session.py`, `maps.py`,
+      `matching.py`, `registry.py`, `settings.py`). `CLAUDE.md` führt den
+      Bestand als vollständig nachgezogen; das stimmt für die mehrzeiligen
+      Docstrings und nicht für diese. Entweder übersetzen oder die Behauptung
+      zurücknehmen — die Sprachprüfung sieht sie nicht, sie gilt den
+      Bezeichnern.
