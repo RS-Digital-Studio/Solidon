@@ -86,12 +86,22 @@
            color: var(--accent); }
       h3 { break-after: avoid; }
       figure { break-inside: avoid; margin: 1.2rem auto; }
-      /* Höher als das hier passt ein Bild kaum je noch neben Text auf ein
-         Blatt — es rutscht dann allein auf die nächste Seite und lässt die
-         vorige halb leer. Zwölf Zentimeter sind der Wert, bei dem ein
-         Bildschirmfoto noch lesbar ist und ein Absatz daneben Platz hat. */
+      /* Höher als das hier passt ein Bildschirmfoto kaum je noch neben Text
+         auf ein Blatt — es rutscht dann allein auf die nächste Seite und
+         lässt die vorige halb leer. */
       figure img { max-width: 100%; max-height: 11cm; width: auto; }
       figcaption { break-before: avoid; }
+
+      /* Die gezeichneten Abbildungen stehen im Text statt über ihm: der
+         Absatz füllt, was das Bild übrig lässt, und es entsteht keine halbe
+         Leerseite. Genau dafür gibt es den Satzspiegel. */
+      figure.drawing { float: right; width: 40%; margin: .2rem 0 .8rem 1.6rem;
+                       text-align: center; }
+      figure.drawing img { max-height: 7.5cm; }
+      figure.drawing + p { margin-top: 0; }
+      /* Eine Überschrift beginnt wieder an der vollen Breite — sonst
+         schmiegt sich das nächste Kapitel an eine Zeichnung des vorigen. */
+      h2, h3 { clear: both; }
       table, pre, li { break-inside: avoid; }
       p { orphans: 3; widows: 3; }
       a { color: var(--fg); text-decoration: none; }
@@ -124,13 +134,13 @@
 <p><strong>6. Enter the diameter and apply.</strong> Position and direction are already filled in, because the face was selected. Everything else — tolerance, resolution — sits behind <em>More settings</em> and is left alone as a rule.</p>
 <figure><img src="../handbuch/en/op-dialog.png" alt="An operation dialog: at the front the two or three values you actually change, below them the collapsed “More settings” section."><figcaption>Staged depth: a good default is worth more than a good setting.</figcaption></figure>
 <p>The result: the same body, one hole more.</p>
-<figure><img src="../handbuch/en/drill.svg" alt="The same plate twice: on the left without a hole, on the right with a through hole of 8 mm."><figcaption>Both pictures are computed by the same operation that sits in the menu.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/drill.svg" alt="The same plate twice: on the left without a hole, on the right with a through hole of 8 mm."><figcaption>Both pictures are computed by the same operation that sits in the menu.</figcaption></figure>
 <p><strong>7. If the hole sits wrong, it is moved, not drilled again.</strong> A double-click on the step in the history reopens it. Change the number, apply, done. That still works next week.</p>
 <p><strong>8. Export.</strong> <em>File → Export</em>, then 3MF if your slicer can read it — otherwise STL. That file goes into the slicer, and the slicer turns it into G-code.</p>
 <p>The first run needs no more than this. Everything else in this manual builds on it.</p>
 <h3 id="window">The window</h3>
 <p>Three zones, and none of them hides.</p>
-<figure><img src="../handbuch/en/window.svg" alt="The window: the toolbar at the top, on the left the object tree, parameters and history one below the other, in the middle the viewport with the model, on the right either the chat or the report, at the bottom the status bar."><figcaption>Three zones, no modes. The right-hand column can be hidden entirely.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/window.svg" alt="The window: the toolbar at the top, on the left the object tree, parameters and history one below the other, in the middle the viewport with the model, on the right either the chat or the report, at the bottom the status bar."><figcaption>Three zones, no modes. The right-hand column can be hidden entirely.</figcaption></figure>
 <p><strong>On the left</strong> sit the object tree, the parameters and the history one below the other, each section collapsible. The object tree shows what is in the scene; the parameter list the named dimensions of the project; the history every step that led to the current state.</p>
 <p><strong>In the middle</strong> the model. The left mouse button selects, the right or middle one rotates, shift and drag pans, the wheel zooms towards the pointer. Anyone used to something else from another program can switch to CAD or Blender bindings in the settings.</p>
 <p><strong>On the right</strong> either the chat or the report — never both, because nobody reads both at once. When a warning appears, the view switches to the report by itself. One key hides the whole column, and then the model is full screen.</p>
@@ -139,13 +149,13 @@
 <p><strong>When you are looking for something, open the command palette.</strong> It finds every operation by name and shows the keyboard shortcut right beside it. That way you learn the shortcuts in passing instead of memorising them.</p>
 <h3 id="ways">The three ways</h3>
 <p>Almost every task takes one of three ways. Each has an example project ready — on the start screen, and each opens with a tour: on the right it says, step by step, what to try, and the tour notices by itself when a step is done.</p>
-<figure><img src="../handbuch/en/ways.svg" alt="Three sequences one below the other: adapting a foreign model (import, repair, drill, export), building from scratch (name dimensions, primitives, parts, export) and preparing a generated mesh (generate, repair chain, check, export)."><figcaption>Each way has an example project waiting on the start screen.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/ways.svg" alt="Three sequences one below the other: adapting a foreign model (import, repair, drill, export), building from scratch (name dimensions, primitives, parts, export) and preparing a generated mesh (generate, repair chain, check, export)."><figcaption>Each way has an example project waiting on the start screen.</figcaption></figure>
 <p><strong>Way 1 — adapting a foreign model.</strong> Something downloaded that almost fits: import, repair, drill, export. The most common way, and the one where the repair counts.</p>
 <p><strong>Way 2 — building from scratch.</strong> Something new out of primitives and parts, with named parameters: width, depth, thickness. Change a number and the part changes.</p>
 <p><strong>Way 3 — preparing a generated model.</strong> What an image model delivers is a surface, not a construction. It goes through the repair chain, and holes come afterwards as steps of their own — not by measuring the mesh.</p>
 <h3 id="history">The history</h3>
 <p>Every operation sits in the history, and there it stays changeable. That is the difference everything else hangs on: a model here is not a mesh of triangles but the list of steps it came about through.</p>
-<figure><img src="../handbuch/en/stack.svg" alt="Four steps one below the other — load model, repair, hole Ø 4.2 mm, place on bed. An arrow points at the third step: a double-click reopens it, and only the steps below it are recomputed."><figcaption>Every step stays a number — tomorrow as well.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/stack.svg" alt="Four steps one below the other — load model, repair, hole Ø 4.2 mm, place on bed. An arrow points at the third step: a double-click reopens it, and only the steps below it are recomputed."><figcaption>Every step stays a number — tomorrow as well.</figcaption></figure>
 <p><strong>A double-click on a step</strong> reopens it — with the values that are in the file. To move a hole two millimetres, change the number; only what hangs below is recomputed.</p>
 <p><strong>Undo takes back a whole transaction</strong>, not half a step. A proposal from the chat is exactly one transaction — an undo takes it back completely.</p>
 <p>Two limits are deliberate. Steps taken back fall away as soon as a new one arrives: there are no branches. And a change that alters the <em>number</em> of objects while later steps work with them is refused — the new bodies are not the old ones, and an error at the end about a number at the beginning is one nobody can trace.</p>
@@ -159,39 +169,39 @@
 <p>The piece that sets Formwerk apart from a slicer.</p>
 <p>A printed part is never as large as drawn. Plastic shrinks as it cools, a hole of 5 mm comes out narrower, and the bottom layer is squashed wider than all the others. Anyone who wants to push two parts together has to allow for that — and that is exactly what Formwerk takes off your hands.</p>
 <p><strong>The clearance is in the material profile, not in the model.</strong> To put a pin into a hole you do not enter 0.2 — you say <em>fit</em>, and the number comes from the profile of the material being printed.</p>
-<figure><img src="../handbuch/en/fit.svg" alt="Section through a part: a peg sits in a hole, the gap between them is dimensioned. The number comes from the material profile and is not typed into the dialog."><figcaption>Calibrating also improves parts that were built earlier.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/fit.svg" alt="Section through a part: a peg sits in a hole, the gap between them is dimensioned. The number comes from the material profile and is not typed into the dialog."><figcaption>Calibrating also improves parts that were built earlier.</figcaption></figure>
 <p><strong>That is why calibrating works backwards.</strong> Under <em>Edit → Calibrate material</em> the measured value is entered. From then on it applies to every fit — including those in projects that existed before.</p>
 <p><strong>Measured is printed, not guessed.</strong> The <em>tolerance ladder</em> puts pins and holes with stepped clearance on one plate: print once, try, and the value stands. The <em>wall ladder</em> and the <em>overhang fan</em> do the same for the minimum wall thickness and for the angle at which this printer really needs supports — instead of the rule of thumb of 45 degrees.</p>
-<figure><img src="../handbuch/en/part-fit-ladder.svg" alt="The tolerance test body: several pegs and holes with graded clearance on one plate."><figcaption>Print once, try it, enter the value — every fit is right from then on.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/part-fit-ladder.svg" alt="The tolerance test body: several pegs and holes with graded clearance on one plate."><figcaption>Print once, try it, enter the value — every fit is right from then on.</figcaption></figure>
 <p><strong>The first layer is a special case.</strong> It is pressed against the bed and spreads outwards as it goes. For a fit that sits at the bottom of the part, that is the difference between “goes in” and “does not go in”.</p>
-<figure><img src="../handbuch/en/elephant-foot.svg" alt="A stack of layers on the print bed. The lowest is wider than all the others because it is pressed down — the elephant foot."><figcaption>For fits on the first layer, Formwerk allows for it.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/elephant-foot.svg" alt="A stack of layers on the print bed. The lowest is wider than all the others because it is pressed down — the elephant foot."><figcaption>For fits on the first layer, Formwerk allows for it.</figcaption></figure>
 <p><strong>The test piece</strong> cuts a cube out around one spot instead of rebuilding it. What gets printed is the real geometry with the real tolerance: two minutes instead of two hours, and the result holds for the part.</p>
 <p><strong>A scene may have several materials.</strong> A TPU gasket in a PETG housing shrinks differently and wants more clearance. With <em>set material</em> the single body gets its own profile, and tolerances, elephant foot and fit checking compute with it.</p>
 <h3 id="parts">The parts</h3>
 <p>Sinking a hexagon into a wall so deep that an M4 nut fits and the screw still bites is half an hour of work — the first time. The part library takes it off your hands: pick a part, pick a size, place it on the face.</p>
 <p><strong>The dimensions come from a table, not from memory.</strong> What across-flats an M4 hexagon has, how deep a heat-set insert sits, how wide a living hinge may be — that is looked up, not estimated.</p>
 <p><strong>Nut trap</strong> — the pocket for a hex nut that is dropped in during printing. The most common way to get a load-bearing thread on a printed part.</p>
-<figure><img src="../handbuch/en/part-nut-trap.svg" alt="A nut trap: the hexagonal pocket into which a hex nut is dropped during printing."><figcaption>One click instead of half an hour — and the dimension comes from the table.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/part-nut-trap.svg" alt="A nut trap: the hexagonal pocket into which a hex nut is dropped during printing."><figcaption>One click instead of half an hour — and the dimension comes from the table.</figcaption></figure>
 <p><strong>Heat-set insert</strong> — the stepped bore for a brass insert that is melted in with a soldering iron. More work than the nut trap, but it can be undone as often as you like.</p>
-<figure><img src="../handbuch/en/part-heatset.svg" alt="A heat-set insert bore: the stepped channel into which a threaded insert is melted with a soldering iron."><figcaption>The thread holds in metal, not in plastic.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/part-heatset.svg" alt="A heat-set insert bore: the stepped channel into which a threaded insert is melted with a soldering iron."><figcaption>The thread holds in metal, not in plastic.</figcaption></figure>
 <p><strong>Snap fit</strong> — the springy arm that gives way when joined and latches afterwards. A lid that holds without a screw.</p>
-<figure><img src="../handbuch/en/part-snap-fit.svg" alt="A snap fit: the springy arm with the angled lug that gives way when joined and snaps back afterwards."></figure>
+<figure class="drawing"><img src="../handbuch/en/part-snap-fit.svg" alt="A snap fit: the springy arm with the angled lug that gives way when joined and snaps back afterwards."></figure>
 <p><strong>Living hinge</strong> — a section so thin that it bends instead of breaking. The joint is printed along with the part, there is nothing to assemble.</p>
-<figure><img src="../handbuch/en/part-hinge.svg" alt="A living hinge: the thin section between two plates that acts as a joint because it bends instead of breaking."></figure>
+<figure class="drawing"><img src="../handbuch/en/part-hinge.svg" alt="A living hinge: the thin section between two plates that acts as a joint because it bends instead of breaking."></figure>
 <p>Then there are the screw hole, magnet pocket, cable gland, rib, keyhole, printed thread and the test bodies from the previous chapter. The catalogue shows a picture for each — a library you cannot see does not exist for the user.</p>
 <figure><img src="../handbuch/en/catalog.png" alt="The part catalogue: preview images instead of a list of names, ordered by group."></figure>
 <p><strong>Every part stays as changeable as any other operation.</strong> It sits in the history, its dimensions can be corrected later, and the places it attaches to keep their names.</p>
 <h3 id="printing">Onto the plate and out</h3>
 <p><strong>Arrange on the bed</strong> lays the objects out side by side and starts a new plate as soon as the current one is full. Whatever does not fit even then is not left out but reported.</p>
 <p><strong>Too large for the bed?</strong> <em>Split automatically</em> cuts until every piece fits. The cut plane is searched for rather than guessed, two dowel pins go into every cut face, and each cut stays a number you can change afterwards.</p>
-<figure><img src="../handbuch/en/split.svg" alt="On the left an object reaching past the edge of the print bed. On the right the same object cut in two, with two dowel pins in the cut face."><figcaption>The dowel pins make sure the halves only go together one way round.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/split.svg" alt="On the left an object reaching past the edge of the print bed. On the right the same object cut in two, with two dowel pins in the cut face."><figcaption>The dowel pins make sure the halves only go together one way round.</figcaption></figure>
 <p><strong>Whatever grows outwards at an angle needs supports at some point.</strong> How much of an angle depends on the printer and not on a rule of thumb — which is why the overhang fan measures it.</p>
-<figure><img src="../handbuch/en/overhang.svg" alt="Two overhangs side by side: 40 degrees prints unsupported, 65 degrees needs supports. Measured against the vertical."></figure>
+<figure class="drawing"><img src="../handbuch/en/overhang.svg" alt="Two overhangs side by side: 40 degrees prints unsupported, 65 degrees needs supports. Measured against the vertical."></figure>
 <p><strong>Walls that are too thin do not print.</strong> Less than two beads side by side carries nothing and tears as soon as you take the supports off.</p>
-<figure><img src="../handbuch/en/wall.svg" alt="A wall in section, made of two extrusion beads side by side — the thinnest wall that carries. The width comes from the printer profile."><figcaption>A single bead carries nothing and tears when the supports come off.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/wall.svg" alt="A wall in section, made of two extrusion beads side by side — the thinnest wall that carries. The width comes from the printer profile."><figcaption>A single bead carries nothing and tears when the supports come off.</figcaption></figure>
 <p><strong>Export goes to STL, 3MF or STEP.</strong> 3MF is what slicers prefer, and it carries the material slots along as colour groups; STL knows no colour and loses them accordingly. STEP is there for exact bodies, with real faces and edges.</p>
 <p><strong>The slicer stays outside.</strong> The layer analysis finds and judges — islands, spans, thin spots, the best orientation — but the slicer writes the print file. Where both give numbers, it is always stated which came from where.</p>
-<figure><img src="../handbuch/en/layers.svg" alt="A bridge between two piers with its span dimensioned, and beside it a small block hanging in mid-air — an island."><figcaption>Analysed here, sliced as before in the slicer.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/layers.svg" alt="A bridge between two piers with its span dimensioned, and beside it a small block hanging in mid-air — an island."><figcaption>Analysed here, sliced as before in the slicer.</figcaption></figure>
 <h3 id="chat">The chat</h3>
 <p>The chat calls the same operations that stand in the menus — it is a second hand on the same tool, not a second way past it.</p>
 <p>Two things follow. <strong>Every proposal is exactly one transaction</strong>: an undo takes it back completely, never half. And <strong>the chat computes no geometry</strong> — it picks operations and values, the computing happens in the program.</p>
@@ -200,7 +210,7 @@
 <h3 id="surfaces">Surfaces and fills</h3>
 <p>A knurl for the grip, a honeycomb for looks, a lattice instead of solid material — all of it is real geometry, not a texture in the picture. What the slicer gets is what you see.</p>
 <p><strong>Apply texture</strong> embosses a pattern onto a face, raised or engraved. Two numbers decide whether it can be printed: the pitch must be wider than two nozzle lines, the depth higher than one layer. Formwerk checks both before it computes — an embossing finer than the printer simply disappears, and otherwise you notice that on the finished part.</p>
-<figure><img src="../handbuch/en/texture.svg" alt="Two circles side by side. On the left a straight line rests on top of the circle and touches it only at the middle; on the right short lines stand out from the rim all the way around."><figcaption>A knurl belongs around the grip, not as a patch on it.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/texture.svg" alt="Two circles side by side. On the left a straight line rests on top of the circle and touches it only at the middle; on the right short lines stand out from the rim all the way around."><figcaption>A knurl belongs around the grip, not as a patch on it.</figcaption></figure>
 <p>On a round part the pattern is applied <strong>wrapped</strong>. Laid on flat, the field would meet the cylinder only at its middle and stand in the air at the edges.</p>
 <p><strong>Fill with lattice</strong> replaces the inside of a body with a structure — gyroid, honeycomb or cubic. This is not the same as the slicer&#x27;s infill: this one belongs to the model, travels with the file and can be measured. The wall thickness of the structure is checked against the nozzle, just like the texture.</p>
 <h3 id="remote">Remote control</h3>
@@ -388,7 +398,7 @@
 <p>Objects: 1 → 1 · reversible · deterministic · Applies to: Face</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td>Distance <code>distance</code></td><td>mm</td><td>2.0</td><td>How far the face travels. Positive outwards, negative inwards — the same tool for both.</td></tr><tr><td>Direction X <code>nx</code></td><td></td><td>0.0</td><td>Which faces move: those whose normal points this way. A clicked face fills the direction in by itself.</td></tr><tr><td>Direction Y <code>ny</code></td><td></td><td>0.0</td><td>Second axis of the direction — see Direction X.</td></tr><tr><td>Direction Z <code>nz</code></td><td></td><td>1.0</td><td>Third axis of the direction. Up by default.</td></tr></tbody></table>
 <h3 id="holes">Holes</h3>
-<figure><img src="../handbuch/en/drill.svg" alt="The same plate twice: on the left without a hole, on the right with a through hole of 8 mm."><figcaption>Both pictures are computed by the same operation that sits in the menu.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/drill.svg" alt="The same plate twice: on the left without a hole, on the right with a through hole of 8 mm."><figcaption>Both pictures are computed by the same operation that sits in the menu.</figcaption></figure>
 <h4>Countersink (<code>countersink_hole</code>)</h4>
 <p>Opens the mouth of a bore so a screw head sits flush.</p>
 <p>Objects: 1 → 1 · reversible · deterministic · Applies to: Hole</p>
@@ -402,7 +412,7 @@
 <p>Objects: 1 → 1 · reversible · deterministic · Applies to: Hole</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Diameter <code>diameter</code></td><td>mm</td><td>5.0</td><td>0.2 … 200</td><td>Diameter of the hole being closed — slightly more does no harm.</td></tr><tr><td>Position X <code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Centre of the hole in the object&#x27;s coordinates. A clicked face fills in all three values itself.</td></tr><tr><td>Position Y <code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Second axis of the position — see Position X.</td></tr><tr><td>Position Z <code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Third axis of the position — see Position X.</td></tr><tr><td>Axis <code>axis</code></td><td></td><td>z</td><td>x, y, z</td><td>The direction to drill in. Z goes straight down from above, X and Y through a side wall.</td></tr><tr><td>Depth <code>depth</code></td><td>mm</td><td>0.0</td><td>0 … 1000</td><td>Zero fills through the whole part.</td></tr></tbody></table>
 <h3 id="parts">Parts</h3>
-<figure><img src="../handbuch/en/part-nut-trap.svg" alt="A nut trap: the hexagonal pocket into which a hex nut is dropped during printing."><figcaption>One click instead of half an hour — and the dimension comes from the table.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/part-nut-trap.svg" alt="A nut trap: the hexagonal pocket into which a hex nut is dropped during printing."><figcaption>One click instead of half an hour — and the dimension comes from the table.</figcaption></figure>
 <h4>Cable gland with strain relief (<code>insert_cable_gland</code>)</h4>
 <p>Gland for a round cable with a clamping point behind it. Without it every tug on the cable pulls straight at the solder joint.</p>
 <p>Objects: 1 → 1 · reversible · deterministic · Applies to: Face</p>
@@ -476,7 +486,7 @@
 <p>Objects: 1 → 1 · reversible · deterministic</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Extrusion width <code>extrusion</code></td><td>mm</td><td>0.42</td><td>0.2 … 1.2</td><td>How wide this printer lays a bead — usually a little more than the nozzle. Each step of the ladder is one bead thicker than the last.</td></tr><tr><td>Steps <code>steps</code></td><td></td><td>6</td><td>2 … 10</td><td>How many walls stand side by side, each one bead thicker than the last.</td></tr><tr><td>Height <code>height</code></td><td>mm</td><td>15.0</td><td>3 … 60</td><td>Height of the walls. Tall enough that a wall too thin actually falls over.</td></tr><tr><td>Length <code>length</code></td><td>mm</td><td>25.0</td><td>5 … 120</td><td>Length of each wall.</td></tr><tr><td>Position X <code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Where the part sits, measured in the object&#x27;s coordinates. A clicked face fills the value in itself.</td></tr><tr><td>Position Y <code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Second axis of the position — see Position X.</td></tr><tr><td>Position Z <code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Height above the base of the object.</td></tr><tr><td>Axis <code>axis</code></td><td></td><td>z</td><td>x, y, z</td><td>The direction the part points in.</td></tr><tr><td>Rotation <code>angle</code></td><td>grad</td><td>0.0</td><td>-360 … 360</td><td>Turns the part about its own axis. It matters for anything that is not round — a nut trap has to line up with the wall the nut slides in through.</td></tr><tr><td>At feature <code>at_feature</code></td><td></td><td></td><td></td><td>Name of a recognised feature, for example hole_1. Its place then counts, and the position above is taken as an offset.</td></tr></tbody></table>
 <h3 id="prepare">Print preparation</h3>
-<figure><img src="../handbuch/en/split.svg" alt="On the left an object reaching past the edge of the print bed. On the right the same object cut in two, with two dowel pins in the cut face."><figcaption>The dowel pins make sure the halves only go together one way round.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/split.svg" alt="On the left an object reaching past the edge of the print bed. On the right the same object cut in two, with two dowel pins in the cut face."><figcaption>The dowel pins make sure the halves only go together one way round.</figcaption></figure>
 <h4>Compensate the elephant foot (<code>compensate_first_layer</code>)</h4>
 <p>Pulls the first layers in by what they spread out while printing. The value comes from the material profile.</p>
 <p>Objects: 1 → 1 · reversible · deterministic</p>
@@ -537,7 +547,7 @@
 <p>Objects: 1 → 1 · reversible · deterministic · Applies to: Face</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Text <code>text</code></td><td></td><td></td><td></td><td>What it should say. Empty means nothing to do.</td></tr><tr><td>Font size <code>size</code></td><td>mm</td><td>8.0</td><td>3 … 200</td><td>Height of the capitals. Below three millimetres the print loses the shape.</td></tr><tr><td>Depth <code>depth</code></td><td>mm</td><td>0.6</td><td>0.1 … 10</td><td>How far raised or how deep engraved.</td></tr><tr><td>Kind <code>mode</code></td><td></td><td>raised</td><td>raised, engraved</td><td>Raised prints better, engraved survives sanding.</td></tr><tr><td>Material slot <code>slot</code></td><td></td><td>0</td><td>0 … 7</td><td>Puts the lettering into a slot of its own — the 3MF export turns that into the colour change, without a second file.</td></tr><tr><td>Font <code>font</code></td><td></td><td>DejaVu Sans</td><td>DejaVu Sans, DejaVu Serif, DejaVu Sans Mono</td><td>DejaVu ships with Formwerk, so a project looks the same on every machine.</td></tr><tr><td>Position X <code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Where the text sits. A clicked face fills in place and direction itself.</td></tr><tr><td>Position Y <code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Another axis of the position — see Position X.</td></tr><tr><td>Position Z <code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Another axis of the position — see Position X.</td></tr><tr><td>Normal X <code>nx</code></td><td></td><td>0.0</td><td></td><td>The direction the text faces. A clicked face supplies it; by hand, 0/0/1 is up.</td></tr><tr><td>Normal Y <code>ny</code></td><td></td><td>0.0</td><td></td><td>Another axis of the direction — see Normal X.</td></tr><tr><td>Normal Z <code>nz</code></td><td></td><td>1.0</td><td></td><td>Another axis of the direction — see Normal X.</td></tr><tr><td>Rotation <code>angle</code></td><td>grad</td><td>0.0</td><td>-360 … 360</td><td>Turns the text within the face it sits on.</td></tr></tbody></table>
 <h3 id="surface">Top surface</h3>
-<figure><img src="../handbuch/en/texture.svg" alt="Two circles side by side. On the left a straight line rests on top of the circle and touches it only at the middle; on the right short lines stand out from the rim all the way around."><figcaption>A knurl belongs around the grip, not as a patch on it.</figcaption></figure>
+<figure class="drawing"><img src="../handbuch/en/texture.svg" alt="Two circles side by side. On the left a straight line rests on top of the circle and touches it only at the middle; on the right short lines stand out from the rim all the way around."><figcaption>A knurl belongs around the grip, not as a patch on it.</figcaption></figure>
 <h4>Apply texture (<code>apply_texture</code>)</h4>
 <p>Presses a pattern into a face as real geometry — knurling for grip, hexagon or rib for looks. What the slicer gets is what you see.</p>
 <p>Objects: 1 → 1 · reversible · with a seed · Applies to: Face</p>

@@ -131,12 +131,22 @@ STYLE = """
            color: var(--accent); }
       h3 { break-after: avoid; }
       figure { break-inside: avoid; margin: 1.2rem auto; }
-      /* Höher als das hier passt ein Bild kaum je noch neben Text auf ein
-         Blatt — es rutscht dann allein auf die nächste Seite und lässt die
-         vorige halb leer. Zwölf Zentimeter sind der Wert, bei dem ein
-         Bildschirmfoto noch lesbar ist und ein Absatz daneben Platz hat. */
+      /* Höher als das hier passt ein Bildschirmfoto kaum je noch neben Text
+         auf ein Blatt — es rutscht dann allein auf die nächste Seite und
+         lässt die vorige halb leer. */
       figure img { max-width: 100%; max-height: 11cm; width: auto; }
       figcaption { break-before: avoid; }
+
+      /* Die gezeichneten Abbildungen stehen im Text statt über ihm: der
+         Absatz füllt, was das Bild übrig lässt, und es entsteht keine halbe
+         Leerseite. Genau dafür gibt es den Satzspiegel. */
+      figure.drawing { float: right; width: 40%; margin: .2rem 0 .8rem 1.6rem;
+                       text-align: center; }
+      figure.drawing img { max-height: 7.5cm; }
+      figure.drawing + p { margin-top: 0; }
+      /* Eine Überschrift beginnt wieder an der vollen Breite — sonst
+         schmiegt sich das nächste Kapitel an eine Zeichnung des vorigen. */
+      h2, h3 { clear: both; }
       table, pre, li { break-inside: avoid; }
       p { orphans: 3; widows: 3; }
       a { color: var(--fg); text-decoration: none; }
@@ -231,8 +241,27 @@ def anchored(html: str) -> str:
     return html
 
 
+def _classify(html: str) -> str:
+    """Jeder Abbildung ansehen, wie breit sie gesetzt werden will.
+
+    Die gezeichneten Abbildungen sind schmal und hochkant — ein Filmscharnier
+    braucht keine ganze Textbreite. Über die volle Spalte gesetzt reißen sie
+    ein Loch: passt eine nicht mehr auf die Seite, rutscht sie als Ganzes auf
+    die nächste und lässt die halbe davor leer.
+
+    Als schmale Abbildung mit Text daneben passiert das nicht — der Absatz
+    füllt, was das Bild übrig lässt. Bildschirmfotos bleiben breit; die sind
+    kleiner als lesbar, sobald man sie halbiert.
+    """
+    return re.sub(
+        r'<figure><img src="([^"]+\.svg)"',
+        r'<figure class="drawing"><img src="\1"',
+        html,
+    )
+
+
 def page_html(language: str, prefix: str) -> str:
-    body = manual.as_html(figure_source=lambda key: f"{prefix}/{key}.{_suffix(key)}")
+    body = _classify(manual.as_html(figure_source=lambda key: f"{prefix}/{key}.{_suffix(key)}"))
     title = f"{tr('Handbuch')} — {APP_NAME}"
     # Die Startseite liegt in beiden Sprachen neben ihrem Handbuch.
     home = "index.html"
