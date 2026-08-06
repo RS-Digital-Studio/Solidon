@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from PySide6.QtCore import QPoint, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import (
@@ -165,9 +165,45 @@ def _tick(group: QActionGroup, value: str) -> None:
         action.setChecked(action.data() == value)
 
 
+#: Der eigene Container. Sein Name ist der der Anwendung und wird nicht
+#: übersetzt.
 PROJECT_FILTER = f"{APP_NAME} ({'*' + PROJECT_SUFFIX})"
-MODEL_FILTER = "Modelle (*.stl *.3mf *.obj *.glb *.gltf *.ply *.off *.step *.stp *.svg *.dxf)"
-GCODE_FILTER = "G-Code (*.gcode *.gco *.g *.nc)"
+
+#: Was die Eingangsstufe liest, und was ein Slicer schreibt. Die Endungen
+#: stehen für sich; die Beschriftung davor ist ein Text wie jeder andere und
+#: geht durch ``tr()`` (Regel 20).
+MODEL_SUFFIXES: Final = (
+    ".stl",
+    ".3mf",
+    ".obj",
+    ".glb",
+    ".gltf",
+    ".ply",
+    ".off",
+    ".step",
+    ".stp",
+    ".svg",
+    ".dxf",
+)
+GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g", ".nc")
+
+
+def _filter_for(label: str, suffixes: tuple[str, ...]) -> str:
+    """Ein Dateifilter in der Sprache des Nutzers.
+
+    Als Funktion und nicht als Konstante: ``tr()`` löst sofort auf, und eine
+    Konstante auf Modulebene bliebe in der Sprache stehen, die beim Import
+    galt — hier hieß es „Modelle" auch in der englischen Oberfläche.
+    """
+    return f"{label} ({' '.join('*' + suffix for suffix in suffixes)})"
+
+
+def model_filter() -> str:
+    return _filter_for(tr("Modelle"), MODEL_SUFFIXES)
+
+
+def gcode_filter() -> str:
+    return _filter_for(tr("G-Code"), GCODE_SUFFIXES)
 
 
 class _MapWorker(QThread):
@@ -1443,7 +1479,7 @@ class MainWindow(QMainWindow):
         self.status_message.setText(tr("Gespeichert"))
 
     def action_import(self) -> None:
-        name, _filter = QFileDialog.getOpenFileName(self, tr("Modell einfügen"), "", MODEL_FILTER)
+        name, _filter = QFileDialog.getOpenFileName(self, tr("Modell einfügen"), "", model_filter())
         if name:
             self.session.import_model(Path(name))
 
@@ -1610,7 +1646,7 @@ class MainWindow(QMainWindow):
         interne Schätzung bleibt, wo sie war. Nichts wird still ersetzt (§22.5).
         """
         name, _filter = QFileDialog.getOpenFileName(
-            self, tr("G-Code gegenprüfen"), "", GCODE_FILTER
+            self, tr("G-Code gegenprüfen"), "", gcode_filter()
         )
         if not name:
             return

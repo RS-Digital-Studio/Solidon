@@ -230,16 +230,20 @@ class ChatPanel(QWidget):
         self.imageDropped.emit(path)
 
 
-#: Was als Bild gilt. Dieselbe Liste wie im Generierungsdialog — sie steht
-#: dort, weil sie dort auch den Dateidialog füllt.
 def _dropped_image(event: Any) -> str | None:
-    """Der Pfad des abgelegten Bildes, oder ``None``."""
-    from app.ui.generate_dialog import IMAGE_FILTER
+    """Der Pfad des abgelegten Bildes, oder ``None``.
+
+    Was als Bild gilt, steht im Generierungsdialog — dort füllt dieselbe Liste
+    auch den Dateidialog. Genommen werden die Endungen selbst und nicht der
+    Filtertext: der ist übersetzt, und ein abgelegtes Bild in einer englischen
+    Oberfläche wäre sonst keines mehr.
+    """
+    from app.ui.generate_dialog import IMAGE_SUFFIXES
 
     data = event.mimeData()
     if not data.hasUrls():
         return None
-    endings = tuple(part.strip("*") for part in IMAGE_FILTER.split("(")[1].rstrip(")").split())
+    endings = IMAGE_SUFFIXES
     for url in data.urls():
         name = url.toLocalFile()
         if name and name.lower().endswith(endings):

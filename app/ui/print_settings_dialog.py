@@ -1440,7 +1440,7 @@ class PrintSettingsDialog(QDialog):
             self,
             tr("Druckdatei speichern"),
             str(start / f"{stem}.gcode"),
-            "G-Code (*.gcode)",
+            f"{tr('G-Code')} (*.gcode)",
         )
         if not chosen:
             return

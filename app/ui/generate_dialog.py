@@ -15,6 +15,7 @@ sieht aus wie ein Fehler; eine, die sich erklärt, nicht.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Final
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
@@ -41,8 +42,20 @@ from app.ui.panels import collapsible
 
 _log = get_logger(__name__)
 
-#: Was sich als Ausgangsbild hineinziehen lässt.
-IMAGE_FILTER = "Bilder (*.png *.jpg *.jpeg *.webp)"
+#: Was sich als Ausgangsbild hineinziehen lässt. Die Endungen stehen für sich,
+#: getrennt von der Beschriftung: der Dateidialog zeigt einen übersetzten Text,
+#: das Erkennen einer abgelegten Datei darf davon nicht abhängen.
+IMAGE_SUFFIXES: Final = (".png", ".jpg", ".jpeg", ".webp")
+
+
+def image_filter() -> str:
+    """Der Filter für den Dateidialog, in der Sprache des Nutzers (Regel 20).
+
+    Als Funktion und nicht als Konstante: ``tr()`` löst sofort auf, und eine
+    Konstante auf Modulebene stünde in der Sprache, die beim Import galt.
+    """
+    return f"{tr('Bilder')} ({' '.join('*' + suffix for suffix in IMAGE_SUFFIXES)})"
+
 
 #: Obergrenze des Startwerts, den der Dialog anbietet. Derselbe Wert liefert
 #: dasselbe Ergebnis, soweit das Modell auf der anderen Seite es zulässt
@@ -205,7 +218,7 @@ class GenerateDialog(QDialog):
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(ready)
 
     def _choose_image(self) -> None:
-        name, _filter = QFileDialog.getOpenFileName(self, tr("Bild wählen"), "", IMAGE_FILTER)
+        name, _filter = QFileDialog.getOpenFileName(self, tr("Bild wählen"), "", image_filter())
         if not name:
             return
         self.set_image(Path(name))

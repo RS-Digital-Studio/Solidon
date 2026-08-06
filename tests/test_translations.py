@@ -5,6 +5,7 @@ vollständig (§4.1, §37.2).
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -89,6 +90,77 @@ def test_qt_standard_buttons_speak_the_application_language(qt_app: object) -> N
         assert cancel.text().replace("&", "") == "Abbrechen"
     finally:
         qt_app.removeTranslator(translator)  # type: ignore[attr-defined]
+
+
+#: Ein Dateifilter für Qt: eine Beschriftung, dann die Endungen in Klammern.
+FILE_FILTER = re.compile(r"^(?P<label>[^(]*)\(\s*\*\.")
+
+#: Eine Beschriftung, die keine ist: ein Formatname wie „STL" oder „3MF".
+#: Großbuchstaben, Ziffern, Punkt und Bindestrich — sonst nichts. So etwas
+#: heißt in jeder Sprache gleich und braucht keine Übersetzung.
+FORMAT_NAME = re.compile(r"^[A-Z0-9.\- ]*$")
+
+
+class _Literals(ast.NodeVisitor):
+    """Sammelt Zeichenketten, die **nicht** durch ``tr()`` oder ``_()`` gehen."""
+
+    def __init__(self) -> None:
+        self.depth = 0
+        self.free: list[ast.Constant] = []
+
+    def visit_Call(self, node: ast.Call) -> None:
+        name = ""
+        if isinstance(node.func, ast.Name):
+            name = node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            name = node.func.attr
+        translated = name in {"tr", "_", "translate", "TranslatableText"}
+        self.depth += int(translated)
+        self.generic_visit(node)
+        self.depth -= int(translated)
+
+    def visit_Constant(self, node: ast.Constant) -> None:
+        if not self.depth and isinstance(node.value, str):
+            self.free.append(node)
+
+
+@pytest.mark.parametrize("path", sorted(UI_DIR.rglob("*.py")), ids=lambda path: path.name)
+def test_no_hard_wired_file_filter(path: Path) -> None:
+    """AGENTS.md Regel 20 gilt auch für Dateifilter — und für Konstanten.
+
+    ``test_no_hard_wired_text_in_the_surface`` sieht nur Argumente von
+    Anzeige-Aufrufen. ``MODEL_FILTER = "Modelle (*.stl …)"`` stand daneben, auf
+    Modulebene, und erschien deshalb auch in der englischen Oberfläche deutsch.
+    Ein Filter ist ein Text wie jeder andere: alles vor der Klammer liest ein
+    Mensch.
+
+    Ein reiner Formatname („STL (*.stl)") bleibt draußen — er heißt überall so.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    visitor = _Literals()
+    visitor.visit(tree)
+
+    offenders = []
+    for node in visitor.free:
+        match = FILE_FILTER.match(node.value)
+        if match is None:
+            continue
+        label = match.group("label").strip()
+        if FORMAT_NAME.match(label):
+            continue
+        offenders.append(f"{path.name}:{node.lineno} {node.value!r}")
+
+    assert not offenders, "file filter that never reaches tr():\n" + "\n".join(offenders)
+
+
+def test_the_filter_check_would_catch_a_violation() -> None:
+    """Ein Wächter für die Prüfung darüber: ein grüner Lauf soll etwas heißen."""
+    assert FILE_FILTER.match("Modelle (*.stl *.3mf)")
+    assert not FORMAT_NAME.match("Modelle")
+    assert FORMAT_NAME.match("STL"), "ein Formatname bleibt draußen"
+    assert FORMAT_NAME.match("3MF")
+    assert FILE_FILTER.match("Bilder (*.png)")
+    assert not FILE_FILTER.match("Ein Satz ohne Endung."), "kein Filter, kein Fund"
 
 
 def surface_files() -> list[Path]:
