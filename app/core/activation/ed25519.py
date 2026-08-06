@@ -40,6 +40,9 @@ SIGNATURE_BYTES: Final = 64
 #: Punktaddition ohne Inversion auskommt.
 Point = tuple[int, int, int, int]
 
+#: Das neutrale Element der Gruppe.
+IDENTITY: Point = (0, 1, 1, 0)
+
 
 def _inverse(value: int) -> int:
     """Multiplikatives Inverses im Körper, über den kleinen Satz von Fermat."""
@@ -69,7 +72,7 @@ def multiply(scalar: int, point: Point) -> Point:
     Die Laufzeit hängt am Skalar — das ist hier gleichgültig, weil der Skalar
     aus der Signatur kommt und öffentlich ist (siehe Modulkopf).
     """
-    result: Point = (0, 1, 1, 0)
+    result: Point = IDENTITY
     remaining = scalar
     running = point
     while remaining > 0:
@@ -139,6 +142,23 @@ def _hash_to_scalar(*parts: bytes) -> int:
     return int.from_bytes(hashlib.sha512(b"".join(parts)).digest(), "little")
 
 
+def has_small_order(point: Point) -> bool:
+    """Ob der Punkt in der Torsionsuntergruppe liegt, also die Ordnung 1, 2, 4
+    oder 8 hat.
+
+    Solche Punkte sind gültige Kurvenpunkte, taugen aber nicht als
+    öffentlicher Schlüssel: ``[k]A`` nimmt dann nur acht Werte an, und wer
+    ``s`` frei wählt, trifft die Prüfgleichung durch bloßes Probieren. Genau
+    das passiert mit den zweiunddreißig Nullbytes — sie sind ein Punkt der
+    Ordnung 4, kein Nicht-Punkt.
+
+    Drei Verdopplungen, mehr kostet die Prüfung nicht.
+    """
+    doubled = add(point, point)
+    doubled = add(doubled, doubled)
+    return _same_point(add(doubled, doubled), IDENTITY)
+
+
 def verify(public_key: bytes, message: bytes, signature: bytes) -> bool:
     """Ob ``signature`` zu ``message`` und diesem öffentlichen Schlüssel passt.
 
@@ -149,7 +169,7 @@ def verify(public_key: bytes, message: bytes, signature: bytes) -> bool:
     if len(public_key) != POINT_BYTES or len(signature) != SIGNATURE_BYTES:
         return False
     signer = decompress(public_key)
-    if signer is None:
+    if signer is None or has_small_order(signer):
         return False
     packed_r = signature[:POINT_BYTES]
     point_r = decompress(packed_r)

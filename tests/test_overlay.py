@@ -71,6 +71,39 @@ def test_the_view_gets_the_whole_window(window: MainWindow) -> None:
     assert host.view.geometry().height() == host.height()
 
 
+def test_placing_the_zones_never_runs_into_itself(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Durchlauf setzt jede sichtbare Zone genau einmal.
+
+    ``_move`` weist die Geometrie sofort zu, sobald nicht animiert wird — und
+    ``setGeometry`` stellt sein ``Resize`` sofort zu, nicht über die
+    Warteschlange. Der Ereignisfilter fängt es und ruft ``_place`` erneut,
+    mitten in den Aufruf, aus dem es stammt.
+
+    Getragen hat das die Bremse in ``_move``: steht die Zone schon am Ziel,
+    passiert nichts mehr. Sie hält nur, solange das Ziel dasselbe bleibt.
+    ``natural_height`` misst die Listen in einer Zone über deren *aktuelle*
+    Höhe — die das ``setGeometry`` gerade geändert hat. Zwei Werte, die sich
+    abwechseln, genügen, und der Stapel läuft über. Die ganze Datei starb
+    daran, beim ersten Test.
+
+    Hier wird das Schwanken erzwungen, statt auf die Gelegenheit zu warten, bei
+    der es von selbst auftritt.
+    """
+    seen: list[object] = []
+
+    def alternating(zone: object) -> int:
+        seen.append(zone)
+        return 200 if len(seen) % 2 else 400
+
+    monkeypatch.setattr(overlay, "natural_height", alternating)
+
+    window.overlay._place(moving=True)
+
+    assert len(seen) <= 2, f"{len(seen)} Messungen für zwei Zonen — der Aufruf lief in sich selbst"
+
+
 def test_the_zones_sit_on_top_and_take_nothing_away(window: MainWindow) -> None:
     """Links oben, rechts oben, Werkzeuge unten mittig — und alle innerhalb."""
     width = window.overlay.width()

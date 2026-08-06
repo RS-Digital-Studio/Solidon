@@ -14,13 +14,16 @@ nirgends zumutet. Die Frist ist eine Erinnerung; die Schwelle für den
 dauerhaften Gebrauch ist die Signatur, und die hält.
 
 Eine zurückgestellte Systemuhr verlängert trotzdem nichts: gespeichert wird
-auch der höchste je gesehene Tag, und die Frist läuft nie rückwärts.
+auch der höchste je gesehene Tag, und die Frist läuft nie rückwärts. Ein Tag
+weit jenseits des ersten Starts wird dabei verworfen und nicht festgeschrieben
+— sonst nähme ein einziger Start mit falsch gestellter Uhr den Testlauf
+dauerhaft weg, auch nachdem die Uhr wieder stimmt.
 """
 
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Final
 
@@ -38,6 +41,12 @@ KEY_FILE: Final = "licence.key"
 #: Dateiname des Testlaufmarkers.
 TRIAL_FILE: Final = "trial.json"
 
+#: Ab welchem Abstand zum ersten Start ein gespeicherter Tag keine verstrichene
+#: Zeit mehr sein kann, sondern eine falsch gestellte Uhr. Ein Jahr ist
+#: großzügig genug, dass ein Nutzer, der Formwerk nach Monaten wieder öffnet,
+#: den Rückwärtsschutz behält.
+CLOCK_HORIZON_DAYS: Final = 365
+
 
 def key_path() -> Path:
     return user_config_dir() / KEY_FILE
@@ -48,27 +57,49 @@ def trial_path() -> Path:
 
 
 def read_key() -> str | None:
-    """Der abgelegte Schlüsseltext, oder ``None``."""
+    """Der abgelegte Schlüsseltext, oder ``None``.
+
+    ``ValueError`` fängt den ``UnicodeDecodeError`` einer beschädigten Datei
+    mit ab. Ohne ihn schlägt eine unlesbare ``licence.key`` bis in jede
+    Dokumentänderung durch — und bis in den Dialog, mit dem sie zu ersetzen
+    wäre.
+    """
     path = key_path()
     try:
         text = path.read_text(encoding="utf-8").strip()
-    except OSError:
+    except (OSError, ValueError):
         return None
     return text or None
 
 
-def write_key(text: str) -> None:
-    """Legt den Schlüssel ab. Geprüft wird vorher, nicht hier."""
-    ensure_dir(user_config_dir())
-    key_path().write_text(text.strip(), encoding="utf-8")
+def write_key(text: str) -> bool:
+    """Legt den Schlüssel ab. Geprüft wird vorher, nicht hier.
+
+    ``False`` heißt: das Profil ist nicht beschreibbar. Kein Abbruch — der
+    Schlüssel gilt dann für diese Sitzung, und der Dialog sagt, dass er beim
+    nächsten Start wieder gebraucht wird. Ein Absturz beim Eintragen des
+    bezahlten Schlüssels wäre die falsche Richtung des Fehlers.
+    """
+    try:
+        ensure_dir(user_config_dir())
+        key_path().write_text(text.strip(), encoding="utf-8")
+    except OSError as problem:
+        _log.warning("licence key could not be written: %s", problem)
+        return False
     _log.info("licence key stored")
+    return True
 
 
 def forget_key() -> bool:
     """Entfernt den Schlüssel — das eine, was ein Einstellungsdialog können
-    muss, etwa vor dem Verkauf des Rechners."""
+    muss, etwa vor dem Verkauf des Rechners.
+
+    ``missing_ok``, weil „es lag keiner da" das Ziel erreicht und kein
+    Fehlschlag ist. ``False`` bleibt dem Fall vorbehalten, dass die Datei da
+    ist und sich nicht entfernen lässt.
+    """
     try:
-        key_path().unlink()
+        key_path().unlink(missing_ok=True)
     except OSError:
         return False
     return True
@@ -108,10 +139,19 @@ def trial_days_left(today: date | None = None) -> int:
         _write_trial(now, now)
         return TRIAL_DAYS
     first_run, last_seen = stored
+    # Ein Tag jenseits des Horizonts ist keine verstrichene Zeit, sondern eine
+    # leere BIOS-Batterie. Er wird verworfen statt festgeschrieben — sonst
+    # kostet ein einziger Start mit falscher Uhr den ganzen Testlauf, und zwar
+    # dauerhaft, weil er unten als höchster gesehener Tag zurückkäme. Wer die
+    # Uhr absichtlich verstellt, kommt damit nicht weiter als der, der
+    # ``trial.json`` löscht — und das ist oben ausdrücklich zugestanden.
+    if last_seen > first_run + timedelta(days=CLOCK_HORIZON_DAYS):
+        _log.warning("trial marker holds an implausible date, ignoring it: %s", last_seen)
+        last_seen = max(now, first_run)
     # Die Uhr darf vorgehen, aber nicht zurück: sonst verlängert ein
     # zurückgedrehtes Systemdatum die Frist beliebig.
     effective = max(now, last_seen)
-    if effective > last_seen:
+    if effective != stored[1]:
         _write_trial(first_run, effective)
     used = (effective - first_run).days
     return max(0, TRIAL_DAYS - used)

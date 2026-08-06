@@ -403,6 +403,10 @@ class ActivationDialog(QDialog):
             tr("Eintragen"), QDialogButtonBox.ButtonRole.AcceptRole
         )
         self.check_button.clicked.connect(self._remember)
+        self.forget_button = buttons.addButton(
+            tr("Schlüssel entfernen"), QDialogButtonBox.ButtonRole.DestructiveRole
+        )
+        self.forget_button.clicked.connect(self._forget)
         self.buy_button = buttons.addButton(
             tr("Formwerk kaufen"), QDialogButtonBox.ButtonRole.HelpRole
         )
@@ -444,6 +448,13 @@ class ActivationDialog(QDialog):
                 )
             )
             set_level(self.state_label, "warning")
+        if state.licence is None and (problem := activation.stored_problem()) is not None:
+            # Ein abgelegter Schlüssel steht im Feld und zählt trotzdem nicht —
+            # ohne den Grund daneben bliebe das unerklärt.
+            self.state_label.setText(
+                f"{self.state_label.text()}\n\n{problem.detail or problem.title}"
+            )
+            set_level(self.state_label, "warning")
 
     def _remember(self) -> None:
         text = self.field.toPlainText().strip()
@@ -453,14 +464,26 @@ class ActivationDialog(QDialog):
         try:
             activation.remember(text)
         except activation.LicenceKeyError as problem:
+            # Über show_error, damit „Formwerk kaufen" mitkommt: die Vorschläge
+            # des Fehlers sind die halbe Regel 17.
+            show_error(problem, self)
+            return
+        if activation.read_key() is None:
             QMessageBox.information(
                 self,
                 tr("Formwerk freischalten"),
-                str(problem.detail or problem.title),
+                tr(
+                    "Der Schlüssel gilt für diese Sitzung, ließ sich aber nicht "
+                    "ablegen — beim nächsten Start wird er wieder gebraucht."
+                ),
             )
-            return
-        self._show_state()
         self.accept()
+
+    def _forget(self) -> None:
+        """Nimmt den abgelegten Schlüssel weg — vor dem Verkauf des Rechners."""
+        activation.forget_key()
+        self.field.clear()
+        self._show_state()
 
 
 def open_website() -> None:

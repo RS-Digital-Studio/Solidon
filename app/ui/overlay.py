@@ -195,6 +195,8 @@ class OverlayHost(QWidget):
         self._moves: dict[int, QPropertyAnimation] = {}
         """Die laufende Bewegung je Zone — festgehalten, weil eine Animation,
         die niemand hält, mitten im Weg eingesammelt wird."""
+        self._placing = False
+        """Ob gerade gesetzt wird — siehe ``_place``."""
 
         self.view = view
         view.setParent(self)
@@ -309,7 +311,35 @@ class OverlayHost(QWidget):
         move.start()
 
     def _place(self, moving: bool = False) -> None:
-        """Ansicht auf die ganze Fläche, Karten an ihre Ränder."""
+        """Ansicht auf die ganze Fläche, Karten an ihre Ränder.
+
+        **Läuft nie in sich selbst.** ``_move`` setzt eine Geometrie, sobald
+        nicht animiert wird — und ``setGeometry`` stellt sein ``Resize`` sofort
+        zu, nicht über die Warteschlange. Der Filter oben fängt es und ruft
+        hierher zurück, mitten in den Aufruf, aus dem es stammt.
+
+        Die Bremse dafür war ``zone.geometry() == target`` in ``_move``: beim
+        zweiten Mal steht die Zone schon richtig, also passiert nichts mehr.
+        Sie trägt nur, solange das Ziel dasselbe bleibt — und das tut es nicht.
+        ``natural_height`` misst die Listen in der Zone über ihre *aktuelle*
+        Höhe, und die hat sich durch das ``setGeometry`` gerade geändert. Zwei
+        Werte, die sich abwechseln, reichen: dann ist das Ziel jedes Mal ein
+        anderes, die Bremse greift nie, und der Stapel läuft über.
+
+        Wer während des Setzens noch einmal setzen will, will nichts Neues —
+        die Werte, die er läse, entstehen gerade erst. Ein späteres, echtes
+        ``LayoutRequest`` kommt danach durch wie zuvor.
+        """
+        if self._placing:
+            return
+        self._placing = True
+        try:
+            self._lay_out(moving)
+        finally:
+            self._placing = False
+
+    def _lay_out(self, moving: bool) -> None:
+        """Das eigentliche Setzen. Nur aus ``_place``, nie von außen."""
         self.view.setGeometry(0, 0, self.width(), self.height())
         if self.left is None or self.right is None or self.bottom is None:
             return

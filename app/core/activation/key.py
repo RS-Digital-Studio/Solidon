@@ -11,10 +11,13 @@ nicht scheitern. Der Preis ist Länge, und die ist bei einem personalisierten
 Offline-Schlüssel unvermeidlich: 64 Bytes Signatur sind 64 Bytes Signatur.
 
 Was in der Nutzlast steht, steht dort mit Absicht knapp. Die Käuferkennung
-trägt sie, weil der Über-Dialog „Lizenziert für …" zeigt — ein Schlüssel, der
-den Namen seines Käufers nennt, wird seltener weitergegeben als eine anonyme
-Zeichenkette. Mehr als das braucht niemand zu wissen, und was nicht darin
-steht, kann auch nicht verloren gehen.
+trägt sie, damit ein Schlüssel den Namen seines Käufers nennen kann — das wird
+seltener weitergegeben als eine anonyme Zeichenkette. Mehr als das braucht
+niemand zu wissen, und was nicht darin steht, kann auch nicht verloren gehen.
+
+Gezeigt wird der Name bisher nur im Freischaltdialog. Der Über-Dialog soll ihn
+als „Lizenziert für …" nennen (Konzept §2 I H2), tut es aber noch nicht — das
+gehört zu V4b und ist dort als offen vermerkt.
 """
 
 from __future__ import annotations
@@ -42,18 +45,31 @@ EPOCH: Final = date(2026, 1, 1)
 #: Wie viele Base32-Zeichen zwischen zwei Bindestrichen stehen.
 GROUP_SIZE: Final = 8
 
-#: Das Alphabet von Base32 nach RFC 4648 — alles andere wird beim Lesen
-#: weggeworfen.
+#: Das Alphabet von Base32 nach RFC 4648.
 ALPHABET: Final = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
+
+#: Was beim Lesen wegfällt: die Gruppentrenner und der Weißraum, den ein
+#: Schlüssel aus einer E-Mail mitbringt.
+SEPARATORS: Final = frozenset("- \t\r\n")
+
+#: Die drei Verwechslungen, gegen die Base32 überhaupt gewählt wurde. Wer
+#: abtippt, schreibt sie — also werden sie zurückgebogen statt abgelehnt.
+CONFUSABLE: Final = {"0": "O", "1": "I", "8": "B"}
 
 #: Der öffentliche Schlüssel, gegen den geprüft wird.
 #:
-#: **Noch nicht gesetzt.** Zweiunddreißig Nullbytes sind kein Punkt auf der
-#: Kurve, also lehnt die Prüfung damit jeden Schlüssel ab — die sichere
-#: Vorgabe. Vor der Veröffentlichung tritt hier der echte öffentliche Schlüssel
-#: an die Stelle; erzeugt wird das Paar mit ``tools/make_licence_keys.py``, und
-#: der private Teil verlässt den Passwortmanager nie.
-PUBLIC_KEY: Final = bytes(32)
+#: **Noch nicht gesetzt.** Alle Bits gesetzt heißt y >= 2^255 - 19, und das ist
+#: kein Punkt auf der Kurve — ``decompress`` gibt ``None`` zurück und die
+#: Prüfung lehnt damit jeden Schlüssel ab. Zweiunddreißig **Null**bytes wären
+#: das Gegenteil einer sicheren Vorgabe: sie sind ein gültiger Punkt der
+#: Ordnung 4, und gegen einen solchen lässt sich zu jeder Nutzlast in
+#: Millisekunden eine gültige Signatur schmieden. Dagegen steht seit
+#: ``ed25519.has_small_order`` zusätzlich die Prüfung selbst.
+#:
+#: Vor der Veröffentlichung tritt hier der echte öffentliche Schlüssel an die
+#: Stelle; erzeugt wird das Paar mit ``tools/make_licence_keys.py``, und der
+#: private Teil verlässt den Passwortmanager nie.
+PUBLIC_KEY: Final = b"\xff" * 32
 
 
 class LicenceKeyError(UserError):
@@ -77,8 +93,8 @@ class Licence:
     eingeschlossen (das ist das Versprechen „alle 1.x-Updates inklusive")."""
     purchased_on: date
     order: str
-    """Bestellkennung des Zahlungsanbieters. Steht im Über-Dialog und macht
-    einen Schlüssel im Support-Fall zuordenbar."""
+    """Bestellkennung des Zahlungsanbieters. Macht einen Schlüssel im
+    Support-Fall zuordenbar; gezeigt wird sie im Freischaltdialog."""
     holder: str
     """Auf wen er lautet."""
 
@@ -88,12 +104,31 @@ def _normalise(text: str) -> str:
 
     Zeilenumbrüche, Leerzeichen und Bindestriche fallen weg — ein Schlüssel,
     der über drei Zeilen einer E-Mail kam, soll sich einfügen lassen.
+
+    Alles andere fällt **nicht** weg. Ein stillschweigend verschlucktes Zeichen
+    verschiebt die Nutzlast um fünf Bit, und der Nutzer bekommt „die Signatur
+    passt nicht" statt eines Hinweises auf die Stelle. Die drei klassischen
+    Vertipper werden zurückgebogen, der Rest wird benannt.
     """
     upper = text.strip().upper()
     head = f"{PREFIX}-{FORMAT_VERSION}-"
     if not upper.startswith(head):
-        raise LicenceKeyError(detail=_("Der Schlüssel beginnt nicht mit „FORMWERK-1-“."))
-    return "".join(character for character in upper[len(head) :] if character in ALPHABET)
+        raise LicenceKeyError(
+            detail=_("Der Schlüssel beginnt nicht mit „FORMWERK-1-“."),
+            values={"expected_prefix": head},
+        )
+    body = []
+    for character in upper[len(head) :]:
+        if character in SEPARATORS:
+            continue
+        corrected = CONFUSABLE.get(character, character)
+        if corrected not in ALPHABET:
+            raise LicenceKeyError(
+                detail=_("Der Schlüssel enthält ein Zeichen, das im Schlüsselalphabet fehlt."),
+                values={"character": character},
+            )
+        body.append(corrected)
+    return "".join(body)
 
 
 def _decode(body: str) -> bytes:

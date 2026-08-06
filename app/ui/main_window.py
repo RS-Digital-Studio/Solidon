@@ -1200,6 +1200,13 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         self._add_action(
             help_menu,
+            tr("Formwerk freischalten …"),
+            None,
+            self.action_activate,
+            tr("Testzeitraum, Lizenzschlüssel eintragen, und was nach Ablauf offen bleibt."),
+        )
+        self._add_action(
+            help_menu,
             tr("Über Formwerk"),
             None,
             self.action_about,
@@ -3184,6 +3191,10 @@ class MainWindow(QMainWindow):
 
     def action_activate(self) -> None:
         """Öffnet den Freischaltdialog (Konzept §2 B).
+
+        Steht im Hilfe-Menü und nicht nur hinter der Fehlerhandlung
+        ``enter_licence_key``: wer während des Testlaufs kauft, braucht einen
+        Weg, seinen Schlüssel einzutragen, **bevor** ihn etwas aufhält.
 
         Den gehaltenen Zustand räumt der Dialog selbst weg. Hier bleibt, die
         Aktionen nachzuziehen — mit einem eingetragenen Schlüssel steht wieder

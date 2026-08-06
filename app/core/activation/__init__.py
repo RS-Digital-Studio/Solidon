@@ -8,8 +8,13 @@ speichern, zurücknehmen. Wer nichts mehr ändern kann, kann auch nichts kaputt
 speichern; die Freigabe kostet nichts und nimmt dem Ablauf die Härte an der
 einen Stelle, an der sie niemandem nützt.
 
-Geprüft wird an vier Stellen, und alle vier liegen im **Datenpfad**, nicht an
-der Oberfläche:
+**Die Grenze greift noch nicht.** :func:`require` steht, hat aber keinen
+Aufrufer: ein abgelaufener Testlauf sperrt heute nichts. Das ist der
+Zwischenstand nach Konzept §7 V3; der Schnitt ist V4. Bis dahin ist alles
+unterhalb dieser Zeile Plan und keine Beschreibung des laufenden Programms.
+
+Geprüft werden soll an vier Stellen, und alle vier liegen im **Datenpfad**,
+nicht an der Oberfläche:
 
 ======================  ==============================================
 ``History.apply``       jede Dokumentänderung — nichts schreibt daran
@@ -19,9 +24,9 @@ der Oberfläche:
 ``agent.session``       der Chat
 ======================  ==============================================
 
-Jede holt den Zustand selbst und wirft selbst. Die Oberfläche graut gesperrte
-Einträge vorher aus — sie ist Freundlichkeit, nicht die Hürde. Ein Patch an
-einem Menüeintrag bringt darum nichts.
+Jede soll den Zustand selbst holen und selbst werfen. Die Oberfläche graut
+gesperrte Einträge vorher aus — sie ist Freundlichkeit, nicht die Hürde. Ein
+Patch an einem Menüeintrag bringt darum nichts.
 
 Es gibt **keine Hintertür**: keine Umgebungsvariable, keinen Schalter, keine
 Freigabedatei. Die Suite setzt den Zustand über eine Fixture, die dieses Modul
@@ -33,20 +38,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+from app.core.activation import store
 from app.core.activation.key import Licence, LicenceKeyError, parse
-from app.core.activation.store import (
-    TRIAL_DAYS,
-    forget_key,
-    read_key,
-    trial_days_left,
-    write_key,
-)
+from app.core.activation.store import TRIAL_DAYS, read_key, trial_days_left
 from app.core.errors import LicenceRequired
 from app.core.log import get_logger
 
 _log = get_logger(__name__)
 
 __all__ = [
+    "CHANGE",
+    "CHAT",
+    "EXPORT",
+    "SLICER",
     "TRIAL_DAYS",
     "Activation",
     "Licence",
@@ -58,6 +62,7 @@ __all__ = [
     "remember",
     "require",
     "state",
+    "stored_problem",
 ]
 
 #: Die vier Handlungen, die einen Schlüssel brauchen. Der Name reist in die
@@ -121,9 +126,26 @@ def _determine() -> Activation:
         except LicenceKeyError as problem:
             # Ein abgelegter Schlüssel, der nicht mehr passt: nach einem
             # Hauptversionswechsel der normale Fall. Der Testlauf entscheidet
-            # dann weiter — und der Dialog sagt, was mit dem Schlüssel ist.
+            # dann weiter, und der Dialog holt sich den Grund über
+            # stored_problem().
             _log.info("stored licence key not accepted: %s", problem.detail)
     return Activation(days_left=trial_days_left())
+
+
+def stored_problem() -> LicenceKeyError | None:
+    """Warum der abgelegte Schlüssel nicht zählt — oder ``None``.
+
+    Damit der Freischaltdialog den Grund nennen kann, statt einen sichtbaren
+    Schlüssel neben einer Testlaufmeldung unerklärt stehen zu lassen.
+    """
+    stored = read_key()
+    if stored is None:
+        return None
+    try:
+        parse(stored)
+    except LicenceKeyError as problem:
+        return problem
+    return None
 
 
 def remember(text: str) -> Activation:
@@ -131,11 +153,29 @@ def remember(text: str) -> Activation:
 
     Wirft :class:`LicenceKeyError` mit Grund, wenn er nicht passt — der Dialog
     zeigt den Grund, nicht ein „ungültig".
+
+    Der Zustand wird aus der eben geprüften Lizenz gesetzt und nicht über
+    :func:`state` neu ermittelt: das läse die Datei ein zweites Mal und
+    rechnete dieselbe Signaturprüfung noch einmal. Es hält den Schlüssel auch
+    dann für diese Sitzung gültig, wenn das Profil nicht beschreibbar war.
     """
-    parse(text)  # wirft, wenn er nicht passt — abgelegt wird nur Geprüftes
-    write_key(text)
+    global _cached
+    licence = parse(text)  # wirft, wenn er nicht passt — abgelegt wird nur Geprüftes
+    store.write_key(text)
+    _cached = Activation(licence=licence)
+    return _cached
+
+
+def forget_key() -> bool:
+    """Entfernt den abgelegten Schlüssel und den gehaltenen Zustand mit ihm.
+
+    Der gehaltene Zustand gehört dazu: ohne ihn bliebe die Anwendung bis zum
+    Neustart freigeschaltet, und ein Dialog zeigte weiter „Freigeschaltet für
+    …" zu einem Schlüssel, den es nicht mehr gibt.
+    """
+    removed = store.forget_key()
     forget_cache()
-    return state()
+    return removed
 
 
 def require(action: str) -> None:

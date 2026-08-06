@@ -13,6 +13,7 @@ bestätigen.
 
 from __future__ import annotations
 
+import ast
 from collections.abc import Iterator
 from datetime import date, timedelta
 from pathlib import Path
@@ -52,11 +53,16 @@ RFC_8032_VECTORS = [
 
 def _vector(index: int) -> tuple[bytes, bytes, bytes, bytes]:
     secret, public, message, signature = RFC_8032_VECTORS[index]
+    # Die Länge wird zugesichert, nicht aufgefüllt. Ein zfill(128) polsterte
+    # links — also in den Punkt R und nicht in den Skalar s — und machte aus
+    # einem beim Kopieren verschluckten Zeichen eine unerklärliche Ablehnung
+    # in genau dem Test, der die Krypto absichern soll.
+    assert len(signature) == 128, "eine Ed25519-Signatur sind 64 Bytes, also 128 Hexzeichen"
     return (
         bytes.fromhex(secret),
         bytes.fromhex(public),
         bytes.fromhex(message),
-        bytes.fromhex(signature.zfill(128)),
+        bytes.fromhex(signature),
     )
 
 
@@ -99,6 +105,56 @@ def test_nonsense_is_rejected_without_raising() -> None:
     assert not ed25519.verify(b"", b"", b"")
     assert not ed25519.verify(bytes(32), b"", bytes(64))
     assert not ed25519.verify(b"\xff" * 32, b"", bytes(64))
+
+
+def test_zero_bytes_are_a_point_of_small_order() -> None:
+    """Zweiunddreißig Nullbytes sind **kein** Nicht-Punkt.
+
+    Sie sind ein gültiger Kurvenpunkt der Ordnung 4 (y = 0, x = ±sqrt(-1)).
+    Der Irrtum stand als Begründung am Platzhalter für ``PUBLIC_KEY`` — und
+    gegen einen solchen Punkt lässt sich zu jeder Nutzlast eine gültige
+    Signatur schmieden, weil ``[k]A`` nur vier Werte annimmt.
+    """
+    point = ed25519.decompress(bytes(32))
+    assert point is not None, "die Nullbytes sind entgegen dem alten Kommentar ein Punkt"
+    assert ed25519.has_small_order(point)
+    assert not ed25519.has_small_order(ed25519.base_point())
+
+
+def test_a_forged_signature_against_a_small_order_key_is_rejected() -> None:
+    """Die Fälschung, die vorher durchging, geht nicht mehr durch.
+
+    Nachgestellt wird der Angriff selbst: s frei wählen, R = [s]B - [j]A für
+    j in 0..3 setzen und das j nehmen, für das die Prüfgleichung aufgeht. Ohne
+    die Ordnungsprüfung nimmt ``verify`` das an.
+    """
+    packed = bytes(32)
+    signer = ed25519.decompress(packed)
+    assert signer is not None
+    message = b"beliebige Nutzlast"
+
+    forged = b""
+    for attempt in range(1, 40):
+        scalar_s = attempt * 7919 % ed25519.GROUP_ORDER
+        base = ed25519.multiply(scalar_s, ed25519.base_point())
+        for j in range(4):
+            multiple = ed25519.multiply(j, signer)
+            negated = (
+                (ed25519.FIELD_PRIME - multiple[0]) % ed25519.FIELD_PRIME,
+                multiple[1],
+                multiple[2],
+                (ed25519.FIELD_PRIME - multiple[3]) % ed25519.FIELD_PRIME,
+            )
+            packed_r = ed25519.compress(ed25519.add(base, negated))
+            challenge = ed25519._hash_to_scalar(packed_r, packed, message) % ed25519.GROUP_ORDER
+            if challenge % 4 == j:
+                forged = packed_r + scalar_s.to_bytes(32, "little")
+                break
+        if forged:
+            break
+
+    assert forged, "der Angriff selbst muss aufgehen, sonst prüft der Test nichts"
+    assert not ed25519.verify(packed, message, forged)
 
 
 # --- Das Schlüsselformat ---------------------------------------------------------
@@ -170,14 +226,39 @@ def test_a_foreign_string_is_rejected_by_its_prefix() -> None:
         key.parse("SOMETHING-ELSE-ABCDEFGH", public_key=TEST_PUBLIC, major=MAJOR)
 
 
+def test_the_three_classic_typos_are_bent_back() -> None:
+    """0 gegen O, 1 gegen I, 8 gegen B — genau die Verwechslungen, wegen derer
+    Base32 gewählt wurde. Sie dürfen den Schlüssel nicht kosten."""
+    text = make_key(TEST_SEED, a_licence())
+    head = f"{key.PREFIX}-{key.FORMAT_VERSION}-"
+    body = text[len(head) :].replace("O", "0").replace("I", "1").replace("B", "8")
+    assert key.parse(head + body, public_key=TEST_PUBLIC, major=MAJOR) == a_licence()
+
+
+def test_a_stray_character_is_named_and_not_swallowed() -> None:
+    """Ein stillschweigend verschlucktes Zeichen verschiebt die Nutzlast um
+    fünf Bit, und der Nutzer bekommt „die Signatur passt nicht" statt eines
+    Hinweises auf die Stelle."""
+    text = make_key(TEST_SEED, a_licence())
+    with pytest.raises(key.LicenceKeyError) as raised:
+        key.parse(f"{text[:20]}§{text[20:]}", public_key=TEST_PUBLIC, major=MAJOR)
+    assert raised.value.values["character"] == "§"
+
+
 def test_the_shipped_public_key_accepts_nothing_yet() -> None:
     """Solange ``PUBLIC_KEY`` nicht gesetzt ist, gilt kein Schlüssel.
 
-    Die sichere Vorgabe: zweiunddreißig Nullbytes sind kein Punkt auf der
-    Kurve. Fällt dieser Test aus, ist der echte Schlüssel eingetragen — dann
-    wird er umgeschrieben, nicht gelöscht.
+    Die sichere Vorgabe ist ein Wert, der **kein** Punkt ist: alle Bits
+    gesetzt heißt y jenseits der Körperprimzahl, und ``decompress`` gibt
+    ``None`` zurück. Nullbytes wären das Gegenteil — die sind ein Punkt der
+    Ordnung 4, gegen den sich jede Nutzlast signieren lässt.
+
+    Fällt dieser Test aus, ist der echte Schlüssel eingetragen — dann wird er
+    umgeschrieben, nicht gelöscht.
     """
-    assert not any(key.PUBLIC_KEY), "der echte öffentliche Schlüssel steht noch nicht darin"
+    assert ed25519.decompress(key.PUBLIC_KEY) is None, (
+        "der Platzhalter muss ein Nicht-Punkt sein, nicht bloß unbenutzt aussehen"
+    )
     with pytest.raises(key.LicenceKeyError):
         key.parse(make_key(TEST_SEED, a_licence()), major=MAJOR)
 
@@ -226,6 +307,28 @@ def test_turning_the_clock_back_does_not_extend_it(own_config: Path) -> None:
     store.trial_days_left(start)
     store.trial_days_left(start + timedelta(days=13))
     assert store.trial_days_left(start - timedelta(days=365)) == 1
+
+
+def test_a_wildly_wrong_clock_does_not_burn_the_trial(own_config: Path) -> None:
+    """Eine leere BIOS-Batterie darf keine vierzehn Tage kosten.
+
+    Ein Start mit einem Datum weit in der Zukunft schrieb den Tag als höchsten
+    je gesehenen fest — und weil die Frist nie rückwärts läuft, blieb der
+    Testlauf auch nach dem Richtigstellen der Uhr für immer abgelaufen.
+    """
+    start = date(2026, 8, 6)
+    store.trial_days_left(start)
+    assert store.trial_days_left(date(2030, 1, 1)) == 0, "mit falscher Uhr abgelaufen — richtig"
+    assert store.trial_days_left(start + timedelta(days=1)) == store.TRIAL_DAYS - 1
+
+
+def test_a_plausible_gap_still_blocks_the_clock_going_back(own_config: Path) -> None:
+    """Der Deckel darf den Rückwärtsschutz nicht aushebeln: wer Formwerk nach
+    Monaten wieder öffnet, bekommt seine Frist nicht zurück."""
+    start = date(2026, 8, 6)
+    store.trial_days_left(start)
+    store.trial_days_left(start + timedelta(days=200))
+    assert store.trial_days_left(start + timedelta(days=2)) == 0
 
 
 def test_a_missing_marker_starts_over(own_config: Path) -> None:
@@ -292,19 +395,85 @@ def test_a_stored_key_for_the_wrong_major_falls_back_to_the_trial(
     store.write_key(make_key(TEST_SEED, a_licence(major=99)))
     activation.forget_cache()
     assert activation.state().in_trial
+    # Und der Grund ist abrufbar: der Dialog zeigt den Schlüssel im Feld und
+    # muss danebenschreiben können, warum er nicht zählt.
+    problem = activation.stored_problem()
+    assert problem is not None
+    assert problem.values["key_major"] == 99
 
 
 def test_forgetting_the_key_returns_to_the_trial(
     own_config: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Ohne ein ``forget_cache`` von Hand — das ist der Punkt.
+
+    Vergäße ``forget_key`` den gehaltenen Zustand nicht mit, bliebe die
+    Anwendung bis zum Neustart freigeschaltet und der Dialog zeigte weiter
+    „Freigeschaltet für …" zu einem Schlüssel, den es nicht mehr gibt.
+    """
     monkeypatch.setattr(key, "PUBLIC_KEY", TEST_PUBLIC)
     activation.remember(make_key(TEST_SEED, a_licence()))
     assert activation.forget_key()
-    activation.forget_cache()
     assert activation.state().licence is None
 
 
+def test_forgetting_a_key_that_was_never_there_is_no_failure(own_config: Path) -> None:
+    """„Es lag keiner da" erreicht das Ziel und ist kein Fehlschlag —
+    sonst meldete ein Dialog „konnte nicht entfernt werden" für einen
+    erfolgreichen Zustand."""
+    assert store.read_key() is None
+    assert activation.forget_key()
+
+
+def test_an_unreadable_key_file_does_not_break_the_state(own_config: Path) -> None:
+    """Eine beschädigte ``licence.key`` darf nicht jede Dokumentänderung
+    mitreißen — und erst recht nicht den Dialog, mit dem sie zu ersetzen wäre.
+    """
+    store.key_path().write_bytes(b"\xff\xfe kein gueltiges UTF-8")
+    assert store.read_key() is None
+    assert activation.state().in_trial
+
+
+def test_a_read_only_profile_still_unlocks_the_session(
+    own_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein nicht beschreibbares Profil kostet die Ablage, nicht die Sitzung.
+
+    Ein Absturz genau beim Eintragen des bezahlten Schlüssels wäre die
+    falsche Richtung des Fehlers.
+    """
+    monkeypatch.setattr(key, "PUBLIC_KEY", TEST_PUBLIC)
+
+    def refuse(*_arguments: object, **_keywords: object) -> None:
+        raise OSError("read-only profile")
+
+    monkeypatch.setattr(store, "ensure_dir", refuse)
+    state = activation.remember(make_key(TEST_SEED, a_licence()))
+    assert state.unlocked
+    assert store.read_key() is None, "abgelegt wurde nichts — der Dialog sagt das auch"
+
+
 # --- Haltung --------------------------------------------------------------------
+
+
+def _sources() -> list[Path]:
+    return sorted(Path(activation.__file__).parent.glob("*.py"))
+
+
+def _imported_modules(source: Path) -> set[str]:
+    """Jedes Modul, das diese Datei importiert — über den Syntaxbaum.
+
+    Eine Textsuche nach ``import urllib`` ginge an ``from urllib.request
+    import urlopen`` vorbei, und das ist die Form, in der jemand es
+    tatsächlich schriebe.
+    """
+    modules: set[str] = set()
+    for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+    return modules
 
 
 def test_the_activation_never_asks_the_network() -> None:
@@ -314,12 +483,11 @@ def test_the_activation_never_asks_the_network() -> None:
     Prüfung über das Netz wäre der Bruch dieses Satzes — also wird hier
     gemessen, dass keine Zeile davon in Reichweite ist.
     """
-    folder = Path(activation.__file__).parent
-    forbidden = ("socket", "urllib", "http.client", "requests", "ssl")
-    for source in folder.glob("*.py"):
-        text = source.read_text(encoding="utf-8")
-        for name in forbidden:
-            assert f"import {name}" not in text, f"{source.name} reaches for {name}"
+    forbidden = {"socket", "urllib", "http", "requests", "ssl", "ftplib", "asyncio"}
+    for source in _sources():
+        for module in _imported_modules(source):
+            root = module.split(".")[0]
+            assert root not in forbidden, f"{source.name} reaches for {module}"
 
 
 def test_there_is_no_switch_to_flip() -> None:
@@ -328,8 +496,22 @@ def test_there_is_no_switch_to_flip() -> None:
     Ein eingebauter Umschalter wäre genau das, was ein Angreifer sucht — und
     das erste, wonach er greift. Die Suite setzt den Zustand über eine
     Fixture, die das Modul patcht; im Paket gibt es diesen Weg nicht.
+
+    Gemessen wird am Syntaxbaum und nicht am Text: ``from os import environ``
+    enthält die gesuchte Zeichenkette an einer Stelle, an der eine Textsuche
+    sie erst nach dem Umschreiben fände. Die Zusicherung gilt diesen Modulen —
+    dass ``paths.user_config_dir`` weiter unten ``APPDATA`` liest, ist der
+    Ablageort und kein Schalter.
     """
-    folder = Path(activation.__file__).parent
-    for source in folder.glob("*.py"):
-        text = source.read_text(encoding="utf-8")
-        assert "environ" not in text, f"{source.name} reads the environment"
+    for source in _sources():
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            reached = (
+                node.attr
+                if isinstance(node, ast.Attribute)
+                else node.id
+                if isinstance(node, ast.Name)
+                else ""
+            )
+            assert reached not in {"environ", "getenv"}, f"{source.name} reads the environment"
+        assert "os" not in _imported_modules(source), f"{source.name} imports os"
