@@ -45,6 +45,8 @@ SPLIT_MODEL = Action("split_model", _("Modell teilen"), primary=True)
 CHOOSE_PRINTER = Action("choose_printer", _("Anderes Druckerprofil wählen"))
 OPEN_SETTINGS = Action("open_settings", _("Einstellungen öffnen"), primary=True)
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
+ENTER_LICENCE_KEY = Action("enter_licence_key", _("Lizenzschlüssel eintragen"), primary=True)
+BUY_LICENCE = Action("buy_licence", _("Formwerk kaufen"))
 
 
 class OperationCancelled(Exception):
@@ -319,6 +321,41 @@ class ExternalToolError(AppError):
         super().__init__(detail=detail, **_with_values(kwargs, tool=tool, exit_code=exit_code))
         self.tool = tool
         self.exit_code = exit_code
+
+
+# --- Freischaltung ---------------------------------------------------------------
+
+
+class LicenceRequired(AppError):
+    """Der Testlauf ist abgelaufen, und diese Handlung braucht einen Schlüssel.
+
+    Kein Bedienfehler — es gibt nichts zu korrigieren — und kein
+    Programmfehler. Ein Zustand, wie ``ExternalToolError`` einer ist, mit
+    demselben Bau: sagen, was jetzt möglich ist. Die beiden Wege heißen
+    Schlüssel eintragen und kaufen, und mehr Wege gibt es nicht.
+
+    **Was liest, wirft das nie.** Öffnen, Ansehen, Messen, Prüfbericht,
+    Schichtanalyse, Speichern und Undo laufen nach Ablauf weiter — eine
+    Testfassung, die gespeicherte Arbeit einschließt, erzeugt einen
+    verärgerten Nicht-Käufer statt eines späteren.
+    """
+
+    default_title: ClassVar[TranslatableText] = _(
+        "Der Testzeitraum ist abgelaufen — dafür braucht Formwerk einen Lizenzschlüssel."
+    )
+    default_suggestions: ClassVar[tuple[Action, ...]] = (ENTER_LICENCE_KEY, BUY_LICENCE, CANCEL)
+
+    def __init__(
+        self,
+        action: str = "",
+        detail: TranslatableText | str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(detail=detail, **_with_values(kwargs, action=action))
+        self.action = action
+        """Was versucht wurde — ``change``, ``export``, ``slicer`` oder
+        ``chat``. Geht ins Protokoll, damit sich später sagen lässt, an welcher
+        Grenze Leute tatsächlich anstoßen."""
 
 
 # --- Intern --------------------------------------------------------------------

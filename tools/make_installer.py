@@ -20,15 +20,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.branding import APP_ID, APP_NAME, APP_VENDOR, APP_VERSION
+from app.branding import APP_ID, APP_NAME, APP_VENDOR, APP_VERSION, WEBSITE_URL
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = ROOT / "dist" / APP_NAME
 OUTPUT_DIR = ROOT / "dist"
 SCRIPT = ROOT / "packaging" / "formwerk.iss"
-
-#: Die Produktseite — dieselbe Subdomain, die auch der Update-Hinweis fragt.
-APP_URL = "https://formwerk.rsdigital.de/"
 
 #: Wo ISCC üblicherweise liegt, wenn es nicht auf dem PATH steht.
 COMPILER_CANDIDATES = (
@@ -63,7 +60,7 @@ def main() -> int:
             f"/DAppVersion={APP_VERSION}",
             f"/DAppVendor={APP_VENDOR}",
             f"/DAppId={APP_ID}",
-            f"/DAppUrl={APP_URL}",
+            f"/DAppUrl={WEBSITE_URL}",
             f"/DSourceDir={SOURCE_DIR}",
             f"/DOutputDir={OUTPUT_DIR}",
             f"/DLicenseFile={ROOT / 'LICENSE'}",

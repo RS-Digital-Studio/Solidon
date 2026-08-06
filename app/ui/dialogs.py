@@ -10,7 +10,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -20,12 +21,14 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QMessageBox,
+    QPlainTextEdit,
     QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
 
-from app.branding import APP_NAME, APP_VERSION, COPYRIGHT, SUPPORT_ADDRESS
+from app.branding import APP_NAME, APP_VERSION, COPYRIGHT, SUPPORT_ADDRESS, WEBSITE_URL
+from app.core import activation
 from app.core.backends import keys
 from app.core.errors import CANCEL, REPORT_ERROR, SHOW_DETAILS, Action, AppError
 from app.core.knowledge import calibration, licences, profiles
@@ -366,6 +369,103 @@ class KeyDialog(QDialog):
         keys.forget(self.account)
         self.field.clear()
         self.accept()
+
+
+class ActivationDialog(QDialog):
+    """Wo ein Lizenzschlüssel eingetragen wird (Konzept §2 B, §2 C).
+
+    Anders als beim Schlüssel des Sprachmodells ist das Feld **kein**
+    Passwortfeld und der Dialog zeigt den abgelegten Schlüssel: er ist nicht
+    geheim, er ist personalisiert. Wer ihn sehen will, um ihn auf einen zweiten
+    Rechner zu übertragen, soll ihn sehen.
+
+    Er ist mehrzeilig, weil ein personalisierter Offline-Schlüssel lang ist und
+    aus einer E-Mail über mehrere Zeilen kommt. Das Lesen räumt Umbrüche,
+    Leerzeichen und Kleinschreibung selbst weg.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(tr("Formwerk freischalten"))
+        self.setMinimumWidth(520)
+
+        self.state_label = QLabel(self)
+        self.state_label.setWordWrap(True)
+
+        self.field = QPlainTextEdit(self)
+        self.field.setPlaceholderText(tr("FORMWERK-1-…"))
+        self.field.setFixedHeight(90)
+        if stored := activation.read_key():
+            self.field.setPlainText(stored)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        self.check_button = buttons.addButton(
+            tr("Eintragen"), QDialogButtonBox.ButtonRole.AcceptRole
+        )
+        self.check_button.clicked.connect(self._remember)
+        self.buy_button = buttons.addButton(
+            tr("Formwerk kaufen"), QDialogButtonBox.ButtonRole.HelpRole
+        )
+        self.buy_button.clicked.connect(open_website)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.state_label)
+        layout.addWidget(self.field)
+        layout.addWidget(buttons)
+        self._show_state()
+
+    def _show_state(self) -> None:
+        state = activation.state()
+        if state.licence is not None:
+            self.state_label.setText(
+                tr("Freigeschaltet für {holder} (Bestellung {order}).").format(
+                    holder=state.licence.holder or tr("diesen Rechner"),
+                    order=state.licence.order,
+                )
+            )
+            set_level(self.state_label, "info")
+        elif state.in_trial:
+            self.state_label.setText(
+                tr("Testzeitraum: noch {days} Tage.").format(days=state.days_left)
+                + " "
+                + tr(
+                    "Danach bleiben Öffnen, Ansehen, Messen und Speichern nutzbar; "
+                    "Ändern, Exportieren und die Übergabe an den Slicer brauchen "
+                    "einen Schlüssel."
+                )
+            )
+            set_level(self.state_label, "info")
+        else:
+            self.state_label.setText(
+                tr(
+                    "Der Testzeitraum ist abgelaufen. Projekte lassen sich weiter "
+                    "öffnen und ansehen."
+                )
+            )
+            set_level(self.state_label, "warning")
+
+    def _remember(self) -> None:
+        text = self.field.toPlainText().strip()
+        if not text:
+            self.reject()
+            return
+        try:
+            activation.remember(text)
+        except activation.LicenceKeyError as problem:
+            QMessageBox.information(
+                self,
+                tr("Formwerk freischalten"),
+                str(problem.detail or problem.title),
+            )
+            return
+        self._show_state()
+        self.accept()
+
+
+def open_website() -> None:
+    """Öffnet die Produktseite — dieselbe Adresse, die auch der Installer nennt."""
+    QDesktopServices.openUrl(QUrl(WEBSITE_URL))
 
 
 def handlers_of(widget: QWidget | None) -> Mapping[str, Callable[[AppError], None]]:

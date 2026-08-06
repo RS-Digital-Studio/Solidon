@@ -28,6 +28,11 @@ ENVIRONMENT_PREFIX: Final = "FORMWERK"
 #: Fehlerbericht und auf der Website.
 SUPPORT_ADDRESS: Final = "admin@rs-digital.org"
 
+#: Die Produktseite: Download, Handbuch, Kauf. Von hier lesen der Installer
+#: (``tools/make_installer.py``), der Update-Hinweis und der Knopf „Formwerk
+#: kaufen" — sie stand vorher an zwei Stellen getrennt.
+WEBSITE_URL: Final = "https://formwerk.rsdigital.de/"
+
 #: Endung des Projektcontainers (Bauplan §16.1).
 PROJECT_SUFFIX: Final = ".p3d"
 

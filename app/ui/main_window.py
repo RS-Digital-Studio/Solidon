@@ -96,12 +96,14 @@ from app.ui.chat import ChatPanel
 from app.ui.command_palette import CommandPalette
 from app.ui.dialogs import (
     AboutDialog,
+    ActivationDialog,
     AskDialog,
     CalibrationDialog,
     KeyDialog,
     ParameterDialog,
     confirm_discard,
     confirm_unsaved,
+    open_website,
     show_details,
     show_error,
 )
@@ -3152,7 +3154,19 @@ class MainWindow(QMainWindow):
             "split_model": self._split_after_error,
             "scale_to_fit": self._scale_after_error,
             "open_settings": lambda _error: self.action_install_extras(),
+            "enter_licence_key": lambda _error: self.action_activate(),
+            "buy_licence": lambda _error: open_website(),
         }
+
+    def action_activate(self) -> None:
+        """Öffnet den Freischaltdialog (Konzept §2 B).
+
+        Den gehaltenen Zustand räumt der Dialog selbst weg. Hier bleibt, die
+        Aktionen nachzuziehen — mit einem eingetragenen Schlüssel steht wieder
+        offen, was der abgelaufene Testlauf zugemacht hat.
+        """
+        ActivationDialog(self).exec()
+        self._update_actions()
 
     def _object_of(self, error: AppError) -> ObjectId | None:
         """Der Körper, um den es geht — aus dem Fehler oder aus der Auswahl."""

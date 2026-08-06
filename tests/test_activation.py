@@ -1,0 +1,335 @@
+"""Freischaltung: Signatur, Schlüsselformat, Testlauf, Grenze.
+
+Der wichtigste Teil steht ganz oben: die **Testvektoren aus RFC 8032 §7.1**.
+Eine eigene Krypto-Umsetzung ohne sie wäre unverantwortlich — sie kann für jede
+selbst erzeugte Signatur richtig aussehen und trotzdem eine andere Kurve
+rechnen als der Rest der Welt.
+
+Geprüft werden beide Richtungen mit denselben Vektoren: die Anwendung prüft
+(``ed25519.verify``), das Werkzeug signiert (``make_licence_keys.sign``). Wäre
+nur eine Seite geprüft, könnten beide gemeinsam falsch sein und einander
+bestätigen.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from datetime import date, timedelta
+from pathlib import Path
+
+import pytest
+
+from app.core import activation
+from app.core.activation import ed25519, key, store
+from app.core.errors import LicenceRequired
+from tools.make_licence_keys import make_key, public_key, sign
+
+# RFC 8032, §7.1 — (privater Schlüssel, öffentlicher Schlüssel, Nachricht, Signatur)
+RFC_8032_VECTORS = [
+    (
+        "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+        "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "",
+        "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555"
+        "fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b",
+    ),
+    (
+        "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb",
+        "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+        "72",
+        "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da0"
+        "85ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00",
+    ),
+    (
+        "c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7",
+        "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025",
+        "af82",
+        "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac"
+        "18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a",
+    ),
+]
+
+
+def _vector(index: int) -> tuple[bytes, bytes, bytes, bytes]:
+    secret, public, message, signature = RFC_8032_VECTORS[index]
+    return (
+        bytes.fromhex(secret),
+        bytes.fromhex(public),
+        bytes.fromhex(message),
+        bytes.fromhex(signature.zfill(128)),
+    )
+
+
+# --- Die Kurve ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("index", range(len(RFC_8032_VECTORS)))
+def test_verify_accepts_the_rfc_vectors(index: int) -> None:
+    """Die Prüfung nimmt an, was die Norm als gültig ausweist."""
+    _secret, public, message, signature = _vector(index)
+    assert ed25519.verify(public, message, signature)
+
+
+@pytest.mark.parametrize("index", range(len(RFC_8032_VECTORS)))
+def test_signing_reproduces_the_rfc_vectors(index: int) -> None:
+    """Und das Werkzeug erzeugt genau dieselben Bytes.
+
+    Damit ist beides an der Norm festgemacht, nicht aneinander.
+    """
+    secret, public, message, signature = _vector(index)
+    assert public_key(secret) == public
+    assert sign(secret, message) == signature
+
+
+def test_a_changed_message_fails() -> None:
+    """Eine Signatur gilt der Nachricht, nicht dem Absender allein."""
+    _secret, public, _message, signature = _vector(1)
+    assert not ed25519.verify(public, b"\x73", signature)
+
+
+def test_a_changed_signature_fails() -> None:
+    _secret, public, message, signature = _vector(1)
+    broken = bytearray(signature)
+    broken[0] ^= 0x01
+    assert not ed25519.verify(public, message, bytes(broken))
+
+
+def test_nonsense_is_rejected_without_raising() -> None:
+    """Ein halb kopierter Schlüssel ist ungültig, kein Programmfehler."""
+    assert not ed25519.verify(b"", b"", b"")
+    assert not ed25519.verify(bytes(32), b"", bytes(64))
+    assert not ed25519.verify(b"\xff" * 32, b"", bytes(64))
+
+
+# --- Das Schlüsselformat ---------------------------------------------------------
+
+TEST_SEED = bytes.fromhex("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+TEST_PUBLIC = public_key(TEST_SEED)
+
+#: Die Hauptversion, für die ein Schlüssel hier gelten muss. Aus der Anwendung
+#: gelesen, nicht als 1 hingeschrieben: sie steigt mit der Veröffentlichung von
+#: 0 auf 1, und ein Test, der das nicht mitmacht, wird an diesem Tag rot, ohne
+#: dass etwas kaputt ist.
+MAJOR = key.current_major()
+
+
+def a_licence(**changes: object) -> key.Licence:
+    values: dict[str, object] = {
+        "major": MAJOR,
+        "purchased_on": date(2026, 8, 6),
+        "order": "A-1234",
+        "holder": "kaeufer@beispiel.de",
+    }
+    values.update(changes)
+    return key.Licence(**values)  # type: ignore[arg-type]
+
+
+def test_a_signed_key_reads_back_exactly() -> None:
+    """Der Rundgang: erzeugen, lesen, und dieselben Angaben zurückbekommen."""
+    licence = a_licence()
+    text = make_key(TEST_SEED, licence)
+    assert key.parse(text, public_key=TEST_PUBLIC, major=MAJOR) == licence
+
+
+def test_the_key_survives_being_pasted_from_an_email() -> None:
+    """Zeilenumbrüche, Leerzeichen und Kleinschreibung dürfen den Schlüssel
+    nicht ungültig machen — so kommt er aus einer Mail zurück."""
+    text = make_key(TEST_SEED, a_licence())
+    mangled = f"  {text[:40].lower()}\n {text[40:]}  \n"
+    assert key.parse(mangled, public_key=TEST_PUBLIC, major=MAJOR) == a_licence()
+
+
+def test_one_changed_character_is_rejected() -> None:
+    """Der Kern der Sache: ohne den privaten Schlüssel gibt es keinen
+    gültigen Schlüssel, auch keinen fast gültigen."""
+    text = make_key(TEST_SEED, a_licence())
+    swapped = "B" if text[-1] != "B" else "C"
+    with pytest.raises(key.LicenceKeyError):
+        key.parse(text[:-1] + swapped, public_key=TEST_PUBLIC, major=MAJOR)
+
+
+def test_a_key_for_another_major_version_is_rejected() -> None:
+    """„Alle 1.x-Updates inklusive" heißt: 2.0 braucht einen neuen Schlüssel."""
+    text = make_key(TEST_SEED, a_licence(major=MAJOR + 1))
+    with pytest.raises(key.LicenceKeyError) as raised:
+        key.parse(text, public_key=TEST_PUBLIC, major=MAJOR)
+    assert raised.value.values["key_major"] == MAJOR + 1
+
+
+def test_a_key_from_another_signer_is_rejected() -> None:
+    """Ein selbst erzeugtes Schlüsselpaar hilft nicht: geprüft wird gegen
+    unseren öffentlichen Schlüssel."""
+    other = bytes.fromhex("c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7")
+    text = make_key(other, a_licence())
+    with pytest.raises(key.LicenceKeyError):
+        key.parse(text, public_key=TEST_PUBLIC, major=MAJOR)
+
+
+def test_a_foreign_string_is_rejected_by_its_prefix() -> None:
+    with pytest.raises(key.LicenceKeyError):
+        key.parse("SOMETHING-ELSE-ABCDEFGH", public_key=TEST_PUBLIC, major=MAJOR)
+
+
+def test_the_shipped_public_key_accepts_nothing_yet() -> None:
+    """Solange ``PUBLIC_KEY`` nicht gesetzt ist, gilt kein Schlüssel.
+
+    Die sichere Vorgabe: zweiunddreißig Nullbytes sind kein Punkt auf der
+    Kurve. Fällt dieser Test aus, ist der echte Schlüssel eingetragen — dann
+    wird er umgeschrieben, nicht gelöscht.
+    """
+    assert not any(key.PUBLIC_KEY), "der echte öffentliche Schlüssel steht noch nicht darin"
+    with pytest.raises(key.LicenceKeyError):
+        key.parse(make_key(TEST_SEED, a_licence()), major=MAJOR)
+
+
+def test_every_rejection_carries_a_way_out() -> None:
+    """Regel 17 gilt auch hier: kein Fehler endet mit „ungültig"."""
+    with pytest.raises(key.LicenceKeyError) as raised:
+        key.parse("FORMWERK-1-AAAA", public_key=TEST_PUBLIC, major=MAJOR)
+    assert raised.value.suggestions
+    assert raised.value.detail is not None
+
+
+# --- Der Testlauf ---------------------------------------------------------------
+
+
+@pytest.fixture
+def own_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Path]:
+    """Ein eigener Einstellungsordner je Test — sonst trägt der Marker des
+    einen in den nächsten hinein."""
+    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path)
+    activation.forget_cache()
+    yield tmp_path
+    activation.forget_cache()
+
+
+def test_the_trial_starts_at_first_run(own_config: Path) -> None:
+    assert store.trial_days_left(date(2026, 8, 6)) == store.TRIAL_DAYS
+    assert store.trial_path().is_file()
+
+
+def test_the_trial_counts_down_and_ends(own_config: Path) -> None:
+    start = date(2026, 8, 6)
+    store.trial_days_left(start)
+    assert store.trial_days_left(start + timedelta(days=1)) == store.TRIAL_DAYS - 1
+    assert store.trial_days_left(start + timedelta(days=store.TRIAL_DAYS)) == 0
+    assert store.trial_days_left(start + timedelta(days=99)) == 0
+
+
+def test_turning_the_clock_back_does_not_extend_it(own_config: Path) -> None:
+    """Sonst verlängert ein zurückgedrehtes Systemdatum die Frist beliebig.
+
+    Gespeichert wird auch der höchste je gesehene Tag; die Frist läuft nie
+    rückwärts.
+    """
+    start = date(2026, 8, 6)
+    store.trial_days_left(start)
+    store.trial_days_left(start + timedelta(days=13))
+    assert store.trial_days_left(start - timedelta(days=365)) == 1
+
+
+def test_a_missing_marker_starts_over(own_config: Path) -> None:
+    """Bewusst so: der Marker liegt offen im Nutzerprofil, und wer ihn löscht,
+    hat wieder vierzehn Tage. Ihn zu verstecken bräuchte Verstecke im System.
+    """
+    start = date(2026, 8, 6)
+    store.trial_days_left(start)
+    store.trial_days_left(start + timedelta(days=13))
+    store.trial_path().unlink()
+    assert store.trial_days_left(start + timedelta(days=13)) == store.TRIAL_DAYS
+
+
+# --- Der Zustand ----------------------------------------------------------------
+
+
+def test_a_fresh_machine_is_in_trial(own_config: Path) -> None:
+    state = activation.state()
+    assert state.in_trial
+    assert state.unlocked
+    assert not state.expired
+
+
+def test_an_expired_trial_locks_the_writing_side(own_config: Path) -> None:
+    store.trial_path().write_text(
+        '{"first_run": "2026-01-01", "last_seen": "2026-08-06"}', encoding="utf-8"
+    )
+    state = activation.state()
+    assert state.expired
+    assert not state.unlocked
+    with pytest.raises(LicenceRequired) as raised:
+        activation.require(activation.EXPORT)
+    assert raised.value.suggestions
+    assert raised.value.values["action"] == activation.EXPORT
+
+
+def test_a_stored_key_unlocks_it(own_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(key, "PUBLIC_KEY", TEST_PUBLIC)
+    store.trial_path().write_text(
+        '{"first_run": "2026-01-01", "last_seen": "2026-08-06"}', encoding="utf-8"
+    )
+    activation.forget_cache()
+    state = activation.remember(make_key(TEST_SEED, a_licence()))
+    assert state.unlocked
+    assert state.licence is not None
+    assert state.licence.holder == "kaeufer@beispiel.de"
+    activation.require(activation.CHANGE)
+
+
+def test_a_rejected_key_is_not_stored(own_config: Path) -> None:
+    """Abgelegt wird nur Geprüftes — sonst stünde beim nächsten Start Unsinn
+    im Profil und die Anwendung müsste ihn jedes Mal neu verwerfen."""
+    with pytest.raises(key.LicenceKeyError):
+        activation.remember("FORMWERK-1-AAAAAAAA")
+    assert store.read_key() is None
+
+
+def test_a_stored_key_for_the_wrong_major_falls_back_to_the_trial(
+    own_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach einem Hauptversionswechsel der normale Fall: der alte Schlüssel
+    bleibt liegen, entscheidet aber nichts mehr."""
+    monkeypatch.setattr(key, "PUBLIC_KEY", TEST_PUBLIC)
+    store.write_key(make_key(TEST_SEED, a_licence(major=99)))
+    activation.forget_cache()
+    assert activation.state().in_trial
+
+
+def test_forgetting_the_key_returns_to_the_trial(
+    own_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(key, "PUBLIC_KEY", TEST_PUBLIC)
+    activation.remember(make_key(TEST_SEED, a_licence()))
+    assert activation.forget_key()
+    activation.forget_cache()
+    assert activation.state().licence is None
+
+
+# --- Haltung --------------------------------------------------------------------
+
+
+def test_the_activation_never_asks_the_network() -> None:
+    """Offline ist eine Zusicherung, keine Eigenschaft des heutigen Codes.
+
+    ``datenschutz.html`` sagt „sendet von sich aus keine Daten". Eine
+    Prüfung über das Netz wäre der Bruch dieses Satzes — also wird hier
+    gemessen, dass keine Zeile davon in Reichweite ist.
+    """
+    folder = Path(activation.__file__).parent
+    forbidden = ("socket", "urllib", "http.client", "requests", "ssl")
+    for source in folder.glob("*.py"):
+        text = source.read_text(encoding="utf-8")
+        for name in forbidden:
+            assert f"import {name}" not in text, f"{source.name} reaches for {name}"
+
+
+def test_there_is_no_switch_to_flip() -> None:
+    """Keine Umgebungsvariable, keine Freigabedatei, kein Schalter.
+
+    Ein eingebauter Umschalter wäre genau das, was ein Angreifer sucht — und
+    das erste, wonach er greift. Die Suite setzt den Zustand über eine
+    Fixture, die das Modul patcht; im Paket gibt es diesen Weg nicht.
+    """
+    folder = Path(activation.__file__).parent
+    for source in folder.glob("*.py"):
+        text = source.read_text(encoding="utf-8")
+        assert "environ" not in text, f"{source.name} reads the environment"
