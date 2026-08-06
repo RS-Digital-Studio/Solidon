@@ -1,0 +1,88 @@
+# Der Versionssatz, gegen den die Suite grün ist.
+#
+# Warum es die Datei gibt: die Abhängigkeiten in `pyproject.toml` haben offene
+# Untergrenzen, damit neue Fassungen von selbst einziehen. Ohne einen festen
+# Satz installiert jeder frische Klon etwas anderes als die Maschine, auf der
+# es zuletzt grün war — genau das ist am 2026-08-06 passiert: ein Klon zog
+# numpy 2.5, und sechzehn Tests fielen um, ohne dass eine Zeile Code sich
+# geändert hatte.
+#
+# Constraints, nicht Requirements: die Datei sagt, *in welcher* Fassung ein
+# Paket installiert wird, nicht *dass* es installiert wird. Der
+# Windows-Eintrag (pywin32-ctypes) greift auf Linux deshalb einfach nicht.
+#
+# Erzeugt unter Windows mit Python 3.14; die Fassungen selbst hängen nicht an
+# der Interpreterversion, die CI fährt sie unter 3.13.
+#
+# Erneuern: Umgebung neu aufbauen, Suite grün fahren, dann
+#   .venv\Scripts\python.exe -m pip freeze --exclude-editable
+# Wann es lohnt, sagt der wöchentliche Lauf „Neueste Fassungen" in der CI.
+
+ast_serialize==0.6.0
+attrs==26.1.0
+cadquery-ocp-novtk==7.9.3.1.1
+cadquery-ocp-proxy==7.9.3.1.1
+certifi==2026.7.22
+charset-normalizer==3.4.9
+colorama==0.4.6
+contourpy==1.3.3
+cycler==0.12.1
+cyclopts==4.22.5
+docstring_parser==0.18.0
+fast_simplification==0.1.13
+fonttools==4.63.0
+idna==3.18
+ImageIO==2.37.4
+iniconfig==2.3.0
+jaraco.classes==3.4.0
+jaraco.context==6.1.2
+jaraco.functools==4.6.0
+keyring==25.7.0
+kiwisolver==1.5.0
+lazy-loader==0.5
+librt==0.13.0
+lxml==6.1.1
+manifold3d==3.5.2
+markdown-it-py==4.2.0
+matplotlib==3.11.1
+mdurl==0.1.2
+more-itertools==11.1.0
+mypy==2.3.0
+mypy_extensions==1.1.0
+networkx==3.6.1
+numpy==2.5.1
+packaging==26.3
+pathspec==1.1.1
+pillow==12.3.0
+platformdirs==4.11.0
+pluggy==1.6.0
+pooch==1.9.0
+Pygments==2.20.0
+pyparsing==3.3.2
+PySide6==6.11.1
+PySide6_Addons==6.11.1
+PySide6_Essentials==6.11.1
+pytest==9.1.1
+python-dateutil==2.9.0.post0
+pyvista==0.48.4
+pyvistaqt==0.12.0
+pywin32-ctypes==0.2.3
+QtPy==2.4.3
+requests==2.34.2
+rich==15.0.0
+rich-rst==2.1.0
+rtree==1.4.1
+ruff==0.16.1
+scikit-image==0.26.0
+scipy==1.18.0
+scooby==0.11.2
+shapely==2.1.2
+shiboken6==6.11.1
+six==1.17.0
+svg.path==7.1
+tifffile==2026.7.31
+trimesh==4.12.2
+typing_extensions==4.16.0
+urllib3==2.7.0
+vhacdx==0.0.10
+vtk==9.6.2

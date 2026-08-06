@@ -5,7 +5,7 @@ cd /d "%~dp0.."
 if not exist ".venv\Scripts\python.exe" (
     echo Die virtuelle Umgebung fehlt. Einmalig anlegen:
     echo   python -m venv .venv
-    echo   .venv\Scripts\python.exe -m pip install -e ".[dev,geom,ui]"
+    echo   .venv\Scripts\python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui]"
     pause
     exit /b 1
 )

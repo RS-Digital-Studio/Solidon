@@ -35,8 +35,21 @@ Ergebnis heraus: ein Entwicklerrechner mit installiertem OpenSCAD sieht sonst
 etwas anderes als ein Bauserver ohne. Wer diese Fixtures umgeht, prüft nicht,
 was er zu prüfen vorgibt.
 
+Dasselbe gilt eine Ebene tiefer, bei den Paketfassungen: die Umgebung wird
+gegen `constraints.txt` aufgebaut, sonst installiert ein frischer Klon andere
+Fassungen als der letzte grüne Lauf — und die Suite wird rot, ohne dass sich
+eine Zeile Code geändert hat.
+
 `filterwarnings = ["error"]` ist gesetzt: eine Warnung bricht den Lauf. Das ist
 Absicht — sie wird behoben, nicht unterdrückt.
+
+Für eine Warnung aus **Fremdcode**, die sich nicht beheben lässt, stehen
+darunter Ausnahmen — eng, und nur unter drei Bedingungen: sie nennen den
+Meldungstext *und* das auslösende Modul, nicht bloß die Kategorie; der eigene
+Code löst die Warnung nachweislich nicht aus; und der Kommentar sagt, wann die
+Ausnahme wieder wegfällt. Eine Ausnahme ohne Modulangabe verdeckt irgendwann
+einen eigenen Fehler. Wann eine überflüssig geworden ist, zeigt der
+wöchentliche CI-Lauf gegen die neuesten Fassungen.
 
 ## Marker
 

@@ -8,7 +8,7 @@ meine globalen Vorgaben auf dieses Projekt nicht passen.
 
 ## Was dieses Projekt ist
 
-Formwerk — eine Desktop-Anwendung in **Python 3.11 mit PySide6**, kein
+Formwerk — eine Desktop-Anwendung in **Python 3.13 mit PySide6**, kein
 Avalonia/.NET. Die globale `~/.claude/CLAUDE.md` beschreibt meine Haltung und
 Arbeitsweise; ihre Stack-Angaben (Avalonia, `dotnet build`, MVVM, RESX,
 Android) gelten hier **nicht**. Wo sie sich widersprechen, gewinnt für den
@@ -74,7 +74,9 @@ und jede Beschriftung in jedem Bild wird zu einem leeren Kästchen. Wer ein
 erzeugtes Bild prüft, prüft es aus demselben Grund unter der echten Plattform.
 
 Erstaufbau: `python -m venv .venv` und
-`.venv\Scripts\python.exe -m pip install -e ".[dev,geom,ui,agent,brep]"`.
+`.venv\Scripts\python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"`.
+Das `-c` ist kein Beiwerk: ohne es zieht ein frischer Klon andere Fassungen als
+die CI, und die Suite wird rot, ohne dass eine Zeile Code sich geändert hat.
 
 Qt-Tests brauchen kein Bild: `QT_QPA_PLATFORM=offscreen` setzt
 `tests/conftest.py` selbst. Dieselbe Datei biegt die Nutzerverzeichnisse in

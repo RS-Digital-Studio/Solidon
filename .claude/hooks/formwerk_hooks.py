@@ -86,7 +86,7 @@ def sitzungsstart() -> None:
     eingabe()
     melden(
         "SessionStart",
-        "Projekt Formwerk: Python 3.11 mit PySide6, kein Avalonia und kein MVVM — "
+        "Projekt Formwerk: Python 3.13 mit PySide6, kein Avalonia und kein MVVM — "
         "die Stack-Angaben der globalen Konfiguration gelten hier nicht. "
         "Bezeichner, Dateinamen und Modulnamen auf Englisch; Docstrings, Kommentare, "
         "Doku, Commits und Gespräch auf Deutsch mit echten Umlauten. "
