@@ -127,22 +127,34 @@ STYLE = """
       /* Eine Überschrift steht nie allein am Fuß, und ein Bild wird nie
          zwischen zwei Blättern zerschnitten — das war der auffälligste
          Fehler des alten Satzes. */
-      h2 { break-before: page; break-after: avoid; margin-top: 0;
-           color: var(--accent); }
+      /* Nur der Referenzteil beginnt je Kapitel auf einem neuen Blatt: dort
+         schlägt jemand nach, und ein Kapitel, das mitten auf der Seite
+         anfängt, findet er nicht. Die Einführung liest man am Stück —
+         achtundzwanzig erzwungene Umbrüche wären achtundzwanzig halb leere
+         Seiten für nichts. */
+      h2 { break-after: avoid; margin-top: 2.2rem; color: var(--accent); }
+      h2.chapter { break-before: page; margin-top: 0; }
       h3 { break-after: avoid; }
       figure { break-inside: avoid; margin: 1.2rem auto; }
       /* Höher als das hier passt ein Bildschirmfoto kaum je noch neben Text
          auf ein Blatt — es rutscht dann allein auf die nächste Seite und
          lässt die vorige halb leer. */
-      figure img { max-width: 100%; max-height: 11cm; width: auto; }
+      /* Neun Zentimeter für ein Bildschirmfoto: hoch genug, dass die Leiste
+         und der Prüfbericht lesbar bleiben, und niedrig genug, dass Text
+         darüber und darunter auf dasselbe Blatt passt. Bei elf blieb unter
+         zwei Absätzen kein Platz mehr für das nächste Bild, und die halbe
+         Seite blieb leer. */
+      figure img { max-width: 100%; max-height: 9cm; width: auto; }
       figcaption { break-before: avoid; }
 
       /* Die gezeichneten Abbildungen stehen im Text statt über ihm: der
          Absatz füllt, was das Bild übrig lässt, und es entsteht keine halbe
-         Leerseite. Genau dafür gibt es den Satzspiegel. */
-      figure.drawing { float: right; width: 40%; margin: .2rem 0 .8rem 1.6rem;
+         Leerseite. Genau dafür gibt es den Satzspiegel. Achtundvierzig
+         Prozent, nicht vierzig — bei vierzig war die Bemaßung mancher
+         Zeichnung nicht mehr zu entziffern. */
+      figure.drawing { float: right; width: 48%; margin: .2rem 0 .8rem 1.6rem;
                        text-align: center; }
-      figure.drawing img { max-height: 7.5cm; }
+      figure.drawing img { max-height: 8.5cm; }
       figure.drawing + p { margin-top: 0; }
       /* Eine Überschrift beginnt wieder an der vollen Breite — sonst
          schmiegt sich das nächste Kapitel an eine Zeichnung des vorigen. */
@@ -230,10 +242,14 @@ def anchored(html: str) -> str:
     Inhaltsverzeichnis führt nirgendwohin, ohne dass es jemand sieht.
     """
     for page in manual.pages():
+        # Erzeugte Kapitel bekommen zusätzlich eine Klasse: im Druck fängt
+        # der Referenzteil je Kapitel auf einem neuen Blatt an, die
+        # Einführung liest man am Stück (siehe ``@media print``).
+        css = ' class="chapter"' if page.generated else ""
         pattern = re.compile(rf"<h([1-6])>{re.escape(str(page.title))}</h\1>")
         html = pattern.sub(
-            lambda match, key=page.key: (  # type: ignore[misc]
-                f'<h{match.group(1)} id="{key}">{match.group(0)[4:-5]}</h{match.group(1)}>'
+            lambda match, key=page.key, css=css: (  # type: ignore[misc]
+                f'<h{match.group(1)} id="{key}"{css}>{match.group(0)[4:-5]}</h{match.group(1)}>'
             ),
             html,
             count=1,
@@ -412,13 +428,20 @@ def _chapter_of_each_page(pdf: Path) -> list[str]:
     titles = [str(entry.title) for entry in manual.pages()]
 
     running = ""
+    ahead = 0
     found: list[str] = []
     for number in range(document.pageCount()):
-        text = document.getAllText(number).text()
-        for title in titles:
-            if title in text[:400]:
-                running = title
-                break
+        lines = {line.strip() for line in document.getAllText(number).text().splitlines()}
+        # Gesucht wird der **nächste erwartete** Titel, und er muss eine
+        # eigene Zeile sein. Beides zusammen trifft: irgendwo im Fließtext zu
+        # suchen setzte „Netz" über die Anleitung zum ersten Loch, weil ein
+        # Satz darunter von einem offenen Netz sprach. Nur die erste Zeile zu
+        # nehmen ging am anderen Ende daneben — ein Kapitel, das nicht oben
+        # auf dem Blatt beginnt, wurde nie erkannt, und der Kolumnentitel
+        # blieb Seiten später beim vorigen stehen.
+        while ahead < len(titles) and titles[ahead] in lines:
+            running = titles[ahead]
+            ahead += 1
         found.append(running)
     return found
 

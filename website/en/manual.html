@@ -82,22 +82,34 @@
       /* Eine Überschrift steht nie allein am Fuß, und ein Bild wird nie
          zwischen zwei Blättern zerschnitten — das war der auffälligste
          Fehler des alten Satzes. */
-      h2 { break-before: page; break-after: avoid; margin-top: 0;
-           color: var(--accent); }
+      /* Nur der Referenzteil beginnt je Kapitel auf einem neuen Blatt: dort
+         schlägt jemand nach, und ein Kapitel, das mitten auf der Seite
+         anfängt, findet er nicht. Die Einführung liest man am Stück —
+         achtundzwanzig erzwungene Umbrüche wären achtundzwanzig halb leere
+         Seiten für nichts. */
+      h2 { break-after: avoid; margin-top: 2.2rem; color: var(--accent); }
+      h2.chapter { break-before: page; margin-top: 0; }
       h3 { break-after: avoid; }
       figure { break-inside: avoid; margin: 1.2rem auto; }
       /* Höher als das hier passt ein Bildschirmfoto kaum je noch neben Text
          auf ein Blatt — es rutscht dann allein auf die nächste Seite und
          lässt die vorige halb leer. */
-      figure img { max-width: 100%; max-height: 11cm; width: auto; }
+      /* Neun Zentimeter für ein Bildschirmfoto: hoch genug, dass die Leiste
+         und der Prüfbericht lesbar bleiben, und niedrig genug, dass Text
+         darüber und darunter auf dasselbe Blatt passt. Bei elf blieb unter
+         zwei Absätzen kein Platz mehr für das nächste Bild, und die halbe
+         Seite blieb leer. */
+      figure img { max-width: 100%; max-height: 9cm; width: auto; }
       figcaption { break-before: avoid; }
 
       /* Die gezeichneten Abbildungen stehen im Text statt über ihm: der
          Absatz füllt, was das Bild übrig lässt, und es entsteht keine halbe
-         Leerseite. Genau dafür gibt es den Satzspiegel. */
-      figure.drawing { float: right; width: 40%; margin: .2rem 0 .8rem 1.6rem;
+         Leerseite. Genau dafür gibt es den Satzspiegel. Achtundvierzig
+         Prozent, nicht vierzig — bei vierzig war die Bemaßung mancher
+         Zeichnung nicht mehr zu entziffern. */
+      figure.drawing { float: right; width: 48%; margin: .2rem 0 .8rem 1.6rem;
                        text-align: center; }
-      figure.drawing img { max-height: 7.5cm; }
+      figure.drawing img { max-height: 8.5cm; }
       figure.drawing + p { margin-top: 0; }
       /* Eine Überschrift beginnt wieder an der vollen Breite — sonst
          schmiegt sich das nächste Kapitel an eine Zeichnung des vorigen. */
@@ -259,7 +271,7 @@
 <p><strong>STEP</strong> — a format with real faces and edges instead of triangles. What classical CAD programs exchange.</p>
 <p><strong>Report</strong> — the list of what stands out about the scene, each entry with an action that fixes it.</p>
 <p><strong>Material slot</strong> — the assignment of a face to a material or a colour for multi-material printing.</p>
-<h3 id="scene">Scene</h3>
+<h3 id="scene" class="chapter">Scene</h3>
 <h4>Arrange on the bed (<code>arrange_bed</code>)</h4>
 <p>Lays all objects out side by side on the build plate.</p>
 <p>Objects: 0 → -1 · reversible · deterministic</p>
@@ -279,12 +291,12 @@
 <p>Gives an object a different name. The geometry is untouched.</p>
 <p>Objects: 1 → 1 · reversible · deterministic · Shortcut <code>F2</code></p>
 <table><thead><tr><th>Parameters</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td>Name <code>name</code></td><td>required</td><td>New name of the object.</td></tr></tbody></table>
-<h3 id="repair">Repair</h3>
+<h3 id="repair" class="chapter">Repair</h3>
 <h4>Repair (<code>repair</code>)</h4>
 <p>Closes holes, removes degenerate triangles and lines the faces up.</p>
 <p>Objects: 1 → 1 · reversible · deterministic</p>
 <table><thead><tr><th>Parameters</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td>Close open places <code>fill_holes</code></td><td>on</td><td>Closes small holes. It cannot replace a missing wall.</td></tr><tr><td>Welding vertices <code>weld</code></td><td>on</td><td>Merges points that practically coincide. The most common reason a mesh appears to consist of several parts.</td></tr><tr><td>Remove degenerate triangles <code>degenerate</code></td><td>on</td><td>Triangles with no area. They disturb every later computation and carry nothing.</td></tr><tr><td>Unifying normals <code>normals</code></td><td>on</td><td>Settles which side is outside. Without it faces appear dark or vanish.</td></tr><tr><td>Delete stray fragments <code>small_components</code></td><td>off</td><td>Off by default: only what is explicitly asked for gets deleted.</td></tr><tr><td>Resolve self-intersections <code>self_intersections</code></td><td>off</td><td>Recomputes faces that pass through each other. It helps with generated meshes and costs accuracy — hence off until it is needed.</td></tr></tbody></table>
-<h3 id="transform">Transformation</h3>
+<h3 id="transform" class="chapter">Transformation</h3>
 <h4>Align to feature (<code>align_to_feature</code>)</h4>
 <p>Brings a bore axis or a face into line with a second one.</p>
 <p>Objects: 1 → 1 · reversible · deterministic · Applies to: Hole, Face</p>
@@ -316,7 +328,7 @@
 <p>Scales an object uniformly or per axis.</p>
 <p>Objects: 1 → 1 · reversible · deterministic</p>
 <table><thead><tr><th>Parameters</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Factor <code>factor</code></td><td>1.0</td><td>0.01 … 100</td><td>Uniform scaling. Per-axis values are on the back side.</td></tr><tr><td>Factor X <code>fx</code></td><td>0.0</td><td>0 …</td><td>This axis only. Zero means the uniform factor above applies.</td></tr><tr><td>Factor Y <code>fy</code></td><td>0.0</td><td>0 …</td><td>Zero means the uniform factor above applies.</td></tr><tr><td>Factor Z <code>fz</code></td><td>0.0</td><td>0 …</td><td>Zero means the uniform factor above applies. Scaling per axis distorts holes — they turn oval.</td></tr><tr><td>Reference point <code>about</code></td><td>centre</td><td>centre, origin, bed</td><td>The point that stays put: centre of mass, origin or footprint.</td></tr></tbody></table>
-<h3 id="primitive">Basic shapes</h3>
+<h3 id="primitive" class="chapter">Basic shapes</h3>
 <h4>Add a box (<code>create_box</code>)</h4>
 <p>Adds a box, centred on Z = 0 or standing on a corner.</p>
 <p>Objects: 0 → 1 · reversible · deterministic</p>
@@ -341,7 +353,7 @@
 <p>Creates a cylinder as a B-Rep body, standing on Z = 0.</p>
 <p>Objects: 0 → 1 · reversible · deterministic</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Diameter <code>diameter</code></td><td>mm</td><td>20.0</td><td>0.1 … 1000</td><td>Outer diameter. As an exact body it is really round, not many-sided.</td></tr><tr><td>Height <code>height</code></td><td>mm</td><td>20.0</td><td>0.1 … 1000</td><td>Height upwards, from the standing face.</td></tr><tr><td>Name <code>name</code></td><td></td><td></td><td></td><td>What the object is called in the tree. Empty means Formwerk picks a name.</td></tr></tbody></table>
-<h3 id="boolean">Boolean</h3>
+<h3 id="boolean" class="chapter">Boolean</h3>
 <h4>Intersection (<code>intersect_objects</code>)</h4>
 <p>Keeps only what both objects have in common.</p>
 <p>Objects: 2 → 1 · reversible · with a seed</p>
@@ -351,7 +363,7 @@
 <h4>Unite (<code>union_objects</code>)</h4>
 <p>Merges two objects into one.</p>
 <p>Objects: 2 → 1 · reversible · with a seed</p>
-<h3 id="sketch">Sketch</h3>
+<h3 id="sketch" class="chapter">Sketch</h3>
 <h4>Cut pocket (<code>sketch_pocket</code>)</h4>
 <p>Cuts a base shape into a B-rep body as a pocket — straight down from the top edge, through the body on request. Clicking a face fills in the position beforehand.</p>
 <p>Objects: 1 → 1 · reversible · deterministic · Applies to: Face</p>
@@ -372,7 +384,7 @@
 <p>Sweeps a cross-section along a bend: starting upright, tilting sideways with the bend radius — a pipe elbow in one step.</p>
 <p>Objects: 0 → 1 · reversible · deterministic</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Basic shape <code>shape</code></td><td></td><td>circle</td><td>rectangle, slot, circle, polygon</td><td>Rectangle, slot, circle or polygon — the dimensions sit below.</td></tr><tr><td>Length <code>length</code></td><td>mm</td><td>10.0</td><td>0.1 … 1000</td><td>Length in X. For the circle and the polygon this is the diameter, for the slot the overall length across the round ends.</td></tr><tr><td>Width <code>width</code></td><td>mm</td><td>10.0</td><td>0.1 … 1000</td><td>Width in Y. Has no effect on the circle and the polygon.</td></tr><tr><td>Bend radius <code>bend_radius</code></td><td>mm</td><td>20.0</td><td>0.1 … 1000</td><td>Radius of the path the cross-section follows. It must be larger than half the cross-section, or the inside kinks.</td></tr><tr><td>Bend angle <code>bend_angle</code></td><td>°</td><td>90.0</td><td>1 … 180</td><td>How far the bend goes — 90 degrees is a right-angle pipe elbow.</td></tr><tr><td>Name <code>name</code></td><td></td><td></td><td></td><td>What the object is called in the tree. Empty means Formwerk picks a name.</td></tr><tr><td>Corners <code>corners</code></td><td></td><td>6</td><td>3 … 64</td><td>Number of corners, polygon only.</td></tr><tr><td>Sketch <code>sketch</code></td><td></td><td></td><td></td><td>A drawn sketch instead of the base shape. Empty means: the base shape above applies.</td></tr></tbody></table>
-<h3 id="shaping">Shaping</h3>
+<h3 id="shaping" class="chapter">Shaping</h3>
 <h4>Add a chamfer (<code>chamfer_edges</code>)</h4>
 <p>Breaks edges of a B-Rep body at 45 degrees.</p>
 <p>Objects: 1 → 1 · reversible · deterministic</p>
@@ -397,7 +409,7 @@
 <p>Grabs a face and moves it along its normal; the neighbouring walls follow. The way to change a wall without hunting for the operation that made it — an imported STEP has none.</p>
 <p>Objects: 1 → 1 · reversible · deterministic · Applies to: Face</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td>Distance <code>distance</code></td><td>mm</td><td>2.0</td><td>How far the face travels. Positive outwards, negative inwards — the same tool for both.</td></tr><tr><td>Direction X <code>nx</code></td><td></td><td>0.0</td><td>Which faces move: those whose normal points this way. A clicked face fills the direction in by itself.</td></tr><tr><td>Direction Y <code>ny</code></td><td></td><td>0.0</td><td>Second axis of the direction — see Direction X.</td></tr><tr><td>Direction Z <code>nz</code></td><td></td><td>1.0</td><td>Third axis of the direction. Up by default.</td></tr></tbody></table>
-<h3 id="holes">Holes</h3>
+<h3 id="holes" class="chapter">Holes</h3>
 <figure class="drawing"><img src="../handbuch/en/drill.svg" alt="The same plate twice: on the left without a hole, on the right with a through hole of 8 mm."><figcaption>Both pictures are computed by the same operation that sits in the menu.</figcaption></figure>
 <h4>Countersink (<code>countersink_hole</code>)</h4>
 <p>Opens the mouth of a bore so a screw head sits flush.</p>
@@ -411,7 +423,7 @@
 <p>Fills a bore back in — for instance when a foreign part has one too many.</p>
 <p>Objects: 1 → 1 · reversible · deterministic · Applies to: Hole</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Diameter <code>diameter</code></td><td>mm</td><td>5.0</td><td>0.2 … 200</td><td>Diameter of the hole being closed — slightly more does no harm.</td></tr><tr><td>Position X <code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Centre of the hole in the object&#x27;s coordinates. A clicked face fills in all three values itself.</td></tr><tr><td>Position Y <code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Second axis of the position — see Position X.</td></tr><tr><td>Position Z <code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Third axis of the position — see Position X.</td></tr><tr><td>Axis <code>axis</code></td><td></td><td>z</td><td>x, y, z</td><td>The direction to drill in. Z goes straight down from above, X and Y through a side wall.</td></tr><tr><td>Depth <code>depth</code></td><td>mm</td><td>0.0</td><td>0 … 1000</td><td>Zero fills through the whole part.</td></tr></tbody></table>
-<h3 id="parts">Parts</h3>
+<h3 id="parts" class="chapter">Parts</h3>
 <figure class="drawing"><img src="../handbuch/en/part-nut-trap.svg" alt="A nut trap: the hexagonal pocket into which a hex nut is dropped during printing."><figcaption>One click instead of half an hour — and the dimension comes from the table.</figcaption></figure>
 <h4>Cable gland with strain relief (<code>insert_cable_gland</code>)</h4>
 <p>Gland for a round cable with a clamping point behind it. Without it every tug on the cable pulls straight at the solder joint.</p>
@@ -485,7 +497,7 @@
 <p>Walls from one to several extrusion widths. Shows where the printer still lays down material — the basis for the minimum wall thickness.</p>
 <p>Objects: 1 → 1 · reversible · deterministic</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Extrusion width <code>extrusion</code></td><td>mm</td><td>0.42</td><td>0.2 … 1.2</td><td>How wide this printer lays a bead — usually a little more than the nozzle. Each step of the ladder is one bead thicker than the last.</td></tr><tr><td>Steps <code>steps</code></td><td></td><td>6</td><td>2 … 10</td><td>How many walls stand side by side, each one bead thicker than the last.</td></tr><tr><td>Height <code>height</code></td><td>mm</td><td>15.0</td><td>3 … 60</td><td>Height of the walls. Tall enough that a wall too thin actually falls over.</td></tr><tr><td>Length <code>length</code></td><td>mm</td><td>25.0</td><td>5 … 120</td><td>Length of each wall.</td></tr><tr><td>Position X <code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Where the part sits, measured in the object&#x27;s coordinates. A clicked face fills the value in itself.</td></tr><tr><td>Position Y <code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Second axis of the position — see Position X.</td></tr><tr><td>Position Z <code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Height above the base of the object.</td></tr><tr><td>Axis <code>axis</code></td><td></td><td>z</td><td>x, y, z</td><td>The direction the part points in.</td></tr><tr><td>Rotation <code>angle</code></td><td>grad</td><td>0.0</td><td>-360 … 360</td><td>Turns the part about its own axis. It matters for anything that is not round — a nut trap has to line up with the wall the nut slides in through.</td></tr><tr><td>At feature <code>at_feature</code></td><td></td><td></td><td></td><td>Name of a recognised feature, for example hole_1. Its place then counts, and the position above is taken as an offset.</td></tr></tbody></table>
-<h3 id="prepare">Print preparation</h3>
+<h3 id="prepare" class="chapter">Print preparation</h3>
 <figure class="drawing"><img src="../handbuch/en/split.svg" alt="On the left an object reaching past the edge of the print bed. On the right the same object cut in two, with two dowel pins in the cut face."><figcaption>The dowel pins make sure the halves only go together one way round.</figcaption></figure>
 <h4>Compensate the elephant foot (<code>compensate_first_layer</code>)</h4>
 <p>Pulls the first layers in by what they spread out while printing. The value comes from the material profile.</p>
@@ -511,7 +523,7 @@
 <p>Splits an object at a plane into two halves with closed cut faces.</p>
 <p>Objects: 1 → 2 · reversible · deterministic</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Axis <code>axis</code></td><td></td><td>z</td><td>x, y, z</td><td>Which axis the cut is perpendicular to. Z makes a horizontal cut.</td></tr><tr><td>Position <code>position</code></td><td>mm</td><td>0.0</td><td></td><td>Where the cutting plane lies, measured on that axis. The number stays editable: a double-click on the step moves the cut.</td></tr></tbody></table>
-<h3 id="import">Import</h3>
+<h3 id="import" class="chapter">Import</h3>
 <h4>Extrude a drawing (<code>load_outline</code>)</h4>
 <p>Reads an SVG or DXF drawing and gives it a height. Inner contours become holes.</p>
 <p>Objects: 0 → 1 · reversible · deterministic</p>
@@ -524,7 +536,7 @@
 <p>Reads a STEP file as a B-Rep body. STEP carries its own unit — the unit question does not arise.</p>
 <p>Objects: 0 → 1 · reversible · deterministic</p>
 <table><thead><tr><th>Parameters</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td>Source <code>source</code></td><td>required</td><td>The embedded STEP file in the project.</td></tr><tr><td>Name <code>name</code></td><td></td><td>Leave empty to use the file name.</td></tr></tbody></table>
-<h3 id="colour">Colour</h3>
+<h3 id="colour" class="chapter">Colour</h3>
 <h4>Assign slot (<code>assign_slot</code>)</h4>
 <p>Puts the whole object into one material slot. A part becomes multi-coloured by uniting bodies with different assignments.</p>
 <p>Objects: 1 → 1 · reversible · deterministic</p>
@@ -537,7 +549,7 @@
 <p>Paints a material slot onto the face around a point. The brush travels over the surface and stops at edges instead of painting round the corner.</p>
 <p>Objects: 1 → 1 · reversible · deterministic · Applies to: Face</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Slot <code>slot</code></td><td></td><td>1</td><td>0 … 7</td><td>Which material slot the brush paints into.</td></tr><tr><td>Radius <code>radius</code></td><td>mm</td><td>10.0</td><td>0.1 … 500</td><td>How far the stroke reaches around the clicked point.</td></tr><tr><td>Position X <code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Where the click landed. When painting, the click fills in all three values itself.</td></tr><tr><td>Position Y <code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Second axis of the clicked point.</td></tr><tr><td>Position Z <code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Third axis of the clicked point.</td></tr><tr><td>Edge angle <code>edge_angle</code></td><td>grad</td><td>30.0</td><td>1 … 180</td><td>The brush stops at this angle. 180 degrees means: over everything.</td></tr><tr><td>Name <code>name</code></td><td></td><td></td><td></td><td>Name of the slot, the filament for instance. It appears in the 3MF at the colour change.</td></tr></tbody></table>
-<h3 id="label">Lettering</h3>
+<h3 id="label" class="chapter">Lettering</h3>
 <h4>Lettering as a body (<code>create_label</code>)</h4>
 <p>Creates lettering as an object of its own — for two-colour printing with two files, and for letters that get glued on.</p>
 <p>Objects: 0 → 1 · reversible · deterministic</p>
@@ -546,7 +558,7 @@
 <p>Puts text raised or engraved on a face. The font is processed as an outline, not as a picture — the edges stay clean at any size.</p>
 <p>Objects: 1 → 1 · reversible · deterministic · Applies to: Face</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Text <code>text</code></td><td></td><td></td><td></td><td>What it should say. Empty means nothing to do.</td></tr><tr><td>Font size <code>size</code></td><td>mm</td><td>8.0</td><td>3 … 200</td><td>Height of the capitals. Below three millimetres the print loses the shape.</td></tr><tr><td>Depth <code>depth</code></td><td>mm</td><td>0.6</td><td>0.1 … 10</td><td>How far raised or how deep engraved.</td></tr><tr><td>Kind <code>mode</code></td><td></td><td>raised</td><td>raised, engraved</td><td>Raised prints better, engraved survives sanding.</td></tr><tr><td>Material slot <code>slot</code></td><td></td><td>0</td><td>0 … 7</td><td>Puts the lettering into a slot of its own — the 3MF export turns that into the colour change, without a second file.</td></tr><tr><td>Font <code>font</code></td><td></td><td>DejaVu Sans</td><td>DejaVu Sans, DejaVu Serif, DejaVu Sans Mono</td><td>DejaVu ships with Formwerk, so a project looks the same on every machine.</td></tr><tr><td>Position X <code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Where the text sits. A clicked face fills in place and direction itself.</td></tr><tr><td>Position Y <code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Another axis of the position — see Position X.</td></tr><tr><td>Position Z <code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Another axis of the position — see Position X.</td></tr><tr><td>Normal X <code>nx</code></td><td></td><td>0.0</td><td></td><td>The direction the text faces. A clicked face supplies it; by hand, 0/0/1 is up.</td></tr><tr><td>Normal Y <code>ny</code></td><td></td><td>0.0</td><td></td><td>Another axis of the direction — see Normal X.</td></tr><tr><td>Normal Z <code>nz</code></td><td></td><td>1.0</td><td></td><td>Another axis of the direction — see Normal X.</td></tr><tr><td>Rotation <code>angle</code></td><td>grad</td><td>0.0</td><td>-360 … 360</td><td>Turns the text within the face it sits on.</td></tr></tbody></table>
-<h3 id="surface">Top surface</h3>
+<h3 id="surface" class="chapter">Top surface</h3>
 <figure class="drawing"><img src="../handbuch/en/texture.svg" alt="Two circles side by side. On the left a straight line rests on top of the circle and touches it only at the middle; on the right short lines stand out from the rim all the way around."><figcaption>A knurl belongs around the grip, not as a patch on it.</figcaption></figure>
 <h4>Apply texture (<code>apply_texture</code>)</h4>
 <p>Presses a pattern into a face as real geometry — knurling for grip, hexagon or rib for looks. What the slicer gets is what you see.</p>
@@ -556,7 +568,7 @@
 <p>Fills the cavity of a hollowed body with a lattice as real geometry. It travels in the 3MF and stays the same, whoever slices the part.</p>
 <p>Objects: 1 → 1 · reversible · deterministic</p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Structure <code>structure</code></td><td></td><td>gyroid</td><td>gyroid, honeycomb, cubic</td><td>Gyroid carries in every direction and traps nothing, honeycomb stiffens a plate, the cubic grid is the stiffest and the heaviest.</td></tr><tr><td>Cell size <code>cell</code></td><td>mm</td><td>8.0</td><td>1 …</td><td>From cell to cell. Smaller means more struts and more material.</td></tr><tr><td>Strut thickness <code>wall</code></td><td>mm</td><td>1.0</td><td>0.1 …</td><td>How thick the struts become. Below two extrusion widths the machine will not print them — then the operation says so instead of trying.</td></tr></tbody></table>
-<h3 id="mesh">Mesh</h3>
+<h3 id="mesh" class="chapter">Mesh</h3>
 <h4>Convert to a mesh (<code>brep_to_mesh</code>)</h4>
 <p>Turns a B-Rep body into a triangle mesh. There is no way back — the edges are gone afterwards.</p>
 <p>Objects: 1 → 1 · reversible · deterministic</p>
