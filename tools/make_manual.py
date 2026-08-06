@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from app.branding import APP_NAME
+from app.branding import APP_NAME, APP_VENDOR, APP_VERSION, COPYRIGHT
 from app.core import figures, manual
 from app.core.bootstrap import load_operations
 from app.i18n import SUPPORTED_LANGUAGES, install_catalog, set_language, tr
@@ -57,7 +57,11 @@ STYLE = """
        Spaltenbreite gestaucht zeigt Beschriftungen, die niemand mehr liest. */
     main { max-width: 74rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
     main > :not(figure) { max-width: 52rem; margin-left: auto; margin-right: auto; }
-    h2 { margin-top: 3rem; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+    /* Die Kapitelüberschrift trägt die Akzentfarbe — dieselbe, die in der
+       Anwendung den Hauptknopf und die aktive Karte kennzeichnet. Sie ist
+       das, woran man beim Blättern die Gliederung erkennt. */
+    h2 { margin-top: 3rem; color: var(--accent); border-bottom: 1px solid var(--line);
+         padding-bottom: .4rem; }
     h3 { margin-top: 2rem; }
     figure { margin: 2rem auto; text-align: center; max-width: 72rem; }
     figure img { max-width: 100%; height: auto; border-radius: 6px; }
@@ -67,10 +71,76 @@ STYLE = """
     th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; }
     th { background: var(--card); }
     code { background: var(--card); padding: .1rem .3rem; border-radius: 3px; }
+    /* Das Verzeichnis: gezählt, zweispaltig, ohne Aufzählungspunkte. Die
+       Nummer trägt die Akzentfarbe und steht auf fester Breite, damit die
+       Titel eine gemeinsame Kante haben — daran liest man eine Liste
+       entlang, nicht an achtundzwanzig einzelnen Zeilen. */
     nav.toc { background: var(--card); border: 1px solid var(--line);
-              border-radius: 8px; padding: 1rem 1.5rem; margin: 2rem 0; }
-    nav.toc ul { columns: 2; margin: 0; padding-left: 1.2rem; }
-    @media (max-width: 40rem) { nav.toc ul { columns: 1; } }
+              border-radius: 10px; padding: 1.4rem 1.8rem 1.6rem; margin: 2.5rem 0; }
+    nav.toc .toc-title { margin: 0 0 1rem; border: none; padding: 0;
+                         font-size: 1.1rem; letter-spacing: .02em; }
+    nav.toc ol { columns: 2; column-gap: 2.5rem; margin: 0; padding: 0;
+                 list-style: none; counter-reset: none; }
+    nav.toc li { break-inside: avoid; margin: 0; }
+    nav.toc a { display: flex; gap: .7rem; align-items: baseline;
+                padding: .28rem 0; border-bottom: 1px solid var(--line);
+                text-decoration: none; color: var(--fg); font-size: .95rem; }
+    nav.toc li:last-child a { border-bottom: none; }
+    nav.toc a:hover { color: var(--accent); }
+    nav.toc .num { color: var(--accent); font-size: .82rem; font-weight: 600;
+                   min-width: 1.6rem; font-variant-numeric: tabular-nums; }
+    @media (max-width: 40rem) { nav.toc ol { columns: 1; } }
+
+    /* Das Deckblatt gehört dem Papier. Auf der Website steht der Titel schon
+       in der Kopfzeile, ein zweiter wäre eine Dopplung. */
+    .cover { display: none; }
+
+    /* --- Papier ---------------------------------------------------------
+       Dieselbe Seite, gedruckt. Chromium setzt sie über diese Regeln; was
+       hier steht, ist der Unterschied zwischen Bildschirm und Blatt und
+       nicht eine zweite Gestaltung. */
+    @page { size: A4; margin: 18mm 16mm; }
+
+    @media print {
+      /* Gedruckt wird auf Weiß, auch wenn der Leser dunkel eingestellt hat. */
+      :root { --bg: #ffffff; --fg: #1c1b1a; --muted: #5f5b55;
+              --accent: #a4551e; --card: #f7f6f3; --line: #e0ddd7; }
+      body { background: #fff; color: var(--fg); font-size: 10.5pt; line-height: 1.45; }
+      main { max-width: none; padding: 0; }
+      main > :not(figure) { max-width: none; }
+      .no-print { display: none !important; }
+
+      .cover { display: flex; flex-direction: column; justify-content: center;
+               min-height: 84vh; break-after: page; }
+      .cover h1 { font-size: 40pt; margin: 0 0 .2em; border: none; }
+      .cover .subtitle { font-size: 20pt; color: var(--accent); margin: 0 0 1.2rem; }
+      .cover hr { border: none; border-top: 2px solid var(--line); margin: 0 0 1.2rem; }
+      .cover .claim { font-size: 11pt; color: var(--muted); margin: 0; }
+      .cover .imprint { margin-top: auto; font-size: 9.5pt; color: var(--muted); }
+
+      nav.toc { break-after: page; background: none; border: none;
+                border-radius: 0; padding: 0; margin: 0; }
+      nav.toc .toc-title { font-size: 18pt; margin-bottom: 1.2rem; }
+      nav.toc ol { columns: 2; column-gap: 2rem; }
+      nav.toc a { color: var(--fg); font-size: 9.5pt; padding: .22rem 0; }
+
+      /* Eine Überschrift steht nie allein am Fuß, und ein Bild wird nie
+         zwischen zwei Blättern zerschnitten — das war der auffälligste
+         Fehler des alten Satzes. */
+      h2 { break-before: page; break-after: avoid; margin-top: 0;
+           color: var(--accent); }
+      h3 { break-after: avoid; }
+      figure { break-inside: avoid; margin: 1.2rem auto; }
+      /* Höher als das hier passt ein Bild kaum je noch neben Text auf ein
+         Blatt — es rutscht dann allein auf die nächste Seite und lässt die
+         vorige halb leer. Zwölf Zentimeter sind der Wert, bei dem ein
+         Bildschirmfoto noch lesbar ist und ein Absatz daneben Platz hat. */
+      figure img { max-width: 100%; max-height: 11cm; width: auto; }
+      figcaption { break-before: avoid; }
+      table, pre, li { break-inside: avoid; }
+      p { orphans: 3; widows: 3; }
+      a { color: var(--fg); text-decoration: none; }
+    }
 """
 
 
@@ -102,15 +172,43 @@ def write_figures(target: Path, language: str) -> dict[str, str]:
 #: immer als unübersetzbar herum.
 CONTENTS = {"de": "Inhalt", "en": "Contents"}
 
+#: Die Texte des Deckblatts, aus demselben Grund nicht über ``tr()``.
+COVER = {
+    "de": ("Handbuch", "Konstruieren, Erzeugen und Bearbeiten für den 3D-Druck", "Version"),
+    "en": ("Manual", "Design, generate and prepare for 3D printing", "Version"),
+}
+
+#: Seitenränder des Drucks in Millimetern. Sie stehen hier und nicht im CSS:
+#: ``printToPdf`` mit einem Layout schlägt jedes ``@page`` im Stylesheet.
+PDF_MARGIN_SIDE = 18.0
+PDF_MARGIN_TOP = 16.0
+
+#: Wie die Fußzeile die Seite zählt.
+PAGE_OF = {"de": "Seite {page} von {total}", "en": "Page {page} of {total}"}
+
+#: Die Farben des hellen Themas (``website/style.css``). Gedruckt wird auf
+#: Papier, also gilt hell — und es sind dieselben Werte, mit denen die
+#: Anwendung arbeitet, kein zweiter Satz daneben.
+PDF_MUTED = "#5f5b55"
+PDF_ACCENT = "#a4551e"
+PDF_LINE = "#d8d4cd"
+
 
 def contents(language: str) -> str:
-    """Ein Inhaltsverzeichnis — bei fünfundzwanzig Kapiteln kein Luxus.
+    """Ein Inhaltsverzeichnis — bei achtundzwanzig Kapiteln kein Luxus.
+
+    Mit gezählten Kapiteln und zweispaltig: eine Punktliste über achtundzwanzig
+    Zeilen ist eine Aufzählung, kein Verzeichnis — man findet darin nichts
+    wieder, weil nichts eine Stelle hat. Die Nummer gibt jedem Kapitel eine.
 
     Die Anker dazu setzt `anchored`; hier steht nur die Liste.
     """
-    items = "".join(f'<li><a href="#{page.key}">{page.title}</a></li>' for page in manual.pages())
+    items = "".join(
+        f'<li><a href="#{page.key}"><span class="num">{number:02d}</span>{page.title}</a></li>'
+        for number, page in enumerate(manual.pages(), start=1)
+    )
     heading = CONTENTS.get(language, CONTENTS["de"])
-    return f'<nav class="toc"><strong>{heading}</strong><ul>{items}</ul></nav>'
+    return f'<nav class="toc"><h2 class="toc-title">{heading}</h2><ol>{items}</ol></nav>'
 
 
 def anchored(html: str) -> str:
@@ -147,11 +245,31 @@ def page_html(language: str, prefix: str) -> str:
         f'type="image/svg+xml">\n'
         f'<link rel="stylesheet" href="{"style.css" if language == "de" else "../style.css"}">\n'
         f"<style>{STYLE}</style>\n</head>\n<body>\n<main>\n"
-        f'<p><a href="{home}">← {APP_NAME}</a></p>\n'
-        f"<h1>{title}</h1>\n"
+        f'<p class="no-print"><a href="{home}">← {APP_NAME}</a></p>\n'
+        f"{_cover_block(language)}\n"
+        f'<h1 class="no-print">{title}</h1>\n'
         f"{contents(language)}\n"
         f"{anchored(body)}\n"
         f"</main>\n</body>\n</html>\n"
+    )
+
+
+def _cover_block(language: str) -> str:
+    """Das Deckblatt — im Druck die erste Seite, am Bildschirm ausgeblendet.
+
+    Es steht im HTML und nicht in einem eigenen Setzlauf, weil es sonst eine
+    zweite Quelle wäre: ein Titel, der sich ändert, müsste an zwei Stellen
+    nachgezogen werden, und die zweite vergisst man.
+    """
+    title, subtitle, version_word = COVER.get(language, COVER["de"])
+    return (
+        f'<section class="cover">'
+        f"<h1>{APP_NAME}</h1>"
+        f'<p class="subtitle">{title}</p>'
+        f"<hr>"
+        f'<p class="claim">{subtitle}</p>'
+        f'<p class="imprint">{version_word} {APP_VERSION}<br>{COPYRIGHT}</p>'
+        f"</section>"
     )
 
 
@@ -160,66 +278,241 @@ def _suffix(key: str) -> str:
     return "png" if figure is not None and figure.kind == "shot" else "svg"
 
 
-#: Auflösung, in der das PDF gesetzt wird. Nicht die höchstmögliche, sondern
-#: die, in der eine Schriftgröße dasselbe bedeutet wie auf dem Bildschirm:
-#: ``QTextDocument`` rechnet in Pixeln, und bei 1200 dpi ist eine
-#: Zwölf-Pixel-Schrift auf einer A4-Seite ein Staubkorn. Der erste Versuch
-#: brachte das ganze Handbuch auf zwei Seiten unter, lesbar unter der Lupe.
-PDF_RESOLUTION = 96
+def write_pdf(language: str, page_file: Path) -> Path:
+    """Das Handbuch als PDF — gedruckt aus derselben Seite, die im Web steht.
 
-#: Seitenrand in Millimetern.
-PDF_MARGIN = 18.0
+    **Warum nicht mit** ``QTextDocument``. Das war der Weg bis hierher, und er
+    hat drei Dinge nicht hinbekommen, die ein Handbuch braucht. ``<figure>``
+    ist HTML5, Qt kennt es nicht und hängt das Bild an den Textfluss daneben —
+    im PDF stand mitten in einem Satz eine Zeichnung. Ein Bild, das nicht mehr
+    auf die Seite passt, wird nicht umbrochen, sondern überschritt den Rand.
+    Und beim seitenweisen Zeichnen landete das Inhaltsverzeichnis zwar im
+    Text des PDF, aber außerhalb des gezeichneten Ausschnitts: lesbar für die
+    Textsuche, unsichtbar auf dem Blatt.
 
+    Chromium kann all das, und es kann es mit **demselben** Stylesheet, das
+    die Website benutzt. Damit ist das PDF keine zweite Gestaltung mehr, die
+    hinter der ersten herhinkt, sondern dieselbe Seite auf Papier.
 
-def write_pdf(language: str, folder: Path) -> Path:
-    """Das Handbuch setzen und als PDF ablegen."""
-    from PySide6.QtCore import QMarginsF, QSizeF
-    from PySide6.QtGui import QPageLayout, QPageSize, QPdfWriter, QTextDocument
+    Was dabei verloren geht, sind **Seitenzahlen**: die gehören in CSS Paged
+    Media, und das setzt Chromium nicht um. Dafür trägt jede Seite ihre
+    Ordnung im Inhaltsverzeichnis und in den Kapitelüberschriften — und der
+    Leser sieht die Zahl in seinem Betrachter.
+    """
+    from PySide6.QtCore import QEventLoop, QMarginsF, QTimer, QUrl
+    from PySide6.QtGui import QPageLayout, QPageSize
+    from PySide6.QtWebEngineCore import QWebEnginePage
     from PySide6.QtWidgets import QApplication
 
     QApplication.instance() or QApplication([])
     RELEASES.mkdir(parents=True, exist_ok=True)
     target = RELEASES / f"{APP_NAME}-Handbuch-{language}.pdf"
 
-    writer = QPdfWriter(str(target))
-    writer.setResolution(PDF_RESOLUTION)
-    writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
-    writer.setPageMargins(
-        QMarginsF(PDF_MARGIN, PDF_MARGIN, PDF_MARGIN, PDF_MARGIN),
+    # Die Ränder stehen hier und nicht im ``@page`` des Stylesheets: bekommt
+    # ``printToPdf`` ein Layout, gewinnt dessen Rand, und das CSS daneben ist
+    # wirkungslos. Der erste Druck stand deshalb am Blattrand.
+    layout = QPageLayout(
+        QPageSize(QPageSize.PageSizeId.A4),
+        QPageLayout.Orientation.Portrait,
+        QMarginsF(PDF_MARGIN_SIDE, PDF_MARGIN_TOP, PDF_MARGIN_SIDE, PDF_MARGIN_TOP),
         QPageLayout.Unit.Millimeter,
     )
-    writer.setTitle(f"{tr('Handbuch')} — {APP_NAME}")
 
-    document = QTextDocument()
-    # Damit die Bilder gefunden werden: die Verweise im HTML sind relativ.
-    document.setBaseUrl(folder.as_uri() + "/")
-    document.setPageSize(QSizeF(writer.width(), writer.height()))
-    body = manual.as_html(figure_source=lambda key: f"{key}.{_suffix(key)}")
-    document.setHtml(
-        f"<h1>{tr('Handbuch')} — {APP_NAME}</h1>" + _sized(body, folder, writer.width())
-    )
-    document.print_(writer)
+    def attempt(settle: int) -> bool:
+        """Ein Druckversuch. ``settle`` ist die Ruhezeit vor dem Druck."""
+        page = QWebEnginePage()
+        loop = QEventLoop()
+        done: list[bool] = []
+
+        def printed(data: bytes) -> None:
+            if data:
+                target.write_bytes(bytes(data))
+            done.append(bool(data))
+            loop.quit()
+
+        def loaded(ok: bool) -> None:
+            if not ok:
+                done.append(False)
+                loop.quit()
+                return
+            # Ein Lidschlag, damit die Bilder wirklich im Layout stehen:
+            # gedruckt wird, was in dem Moment gesetzt ist, und ein Bild ohne
+            # Maße reißt sonst eine Lücke, wo es hingehört.
+            QTimer.singleShot(settle, lambda: page.printToPdf(printed, layout))
+
+        page.loadFinished.connect(loaded)
+        page.load(QUrl.fromLocalFile(str(page_file.resolve())))
+        QTimer.singleShot(120_000, loop.quit)
+        loop.exec()
+        page.deleteLater()
+        return bool(done) and done[0]
+
+    # Zwei Anläufe, der zweite mit mehr Ruhe. Chromium bringt seinen eigenen
+    # Prozess mit, und der ist unter Last gelegentlich noch nicht bereit,
+    # wenn ``loadFinished`` schon kam — ein Handbuch deswegen gar nicht zu
+    # drucken wäre die schlechtere Antwort.
+    if not attempt(400) and not attempt(2500):
+        raise RuntimeError(f"das Handbuch {language} ließ sich nicht drucken")
+
+    _stamp(target, language)
     return target
 
 
-def _sized(html: str, folder: Path, page_width: int) -> str:
-    """Jedem Bild eine Breite geben, die auf die Seite passt.
+#: Wo Kopf- und Fußzeile sitzen, in Punkt vom oberen bzw. unteren Blattrand.
+#: Sie liegen im Seitenrand, den ``printToPdf`` freigelassen hat — deshalb
+#: rückt der Text darüber und darunter nicht zusammen.
+HEADER_BASELINE = 30.0
+FOOTER_BASELINE = 32.0
 
-    ``QTextDocument`` versteht kein ``max-width``: ohne Angabe zeichnet es
-    jedes Bild in seiner natürlichen Größe, und ein Bildschirmfoto von 1180
-    Pixeln steht dann zur Hälfte außerhalb der Seite. Kleinere Bilder werden
-    nicht aufgeblasen — eine gestreckte Vorschau wäre schlechter als eine
-    kleine.
+#: Seitenrand links und rechts in Punkt, passend zu :data:`PDF_MARGIN_SIDE`.
+STAMP_INSET = PDF_MARGIN_SIDE * 72.0 / 25.4
+
+
+def _chapter_of_each_page(pdf: Path) -> list[str]:
+    """Welches Kapitel auf welcher Seite läuft.
+
+    Aus dem gesetzten PDF gelesen und nicht aus dem Quelltext gerechnet: erst
+    der Satz weiß, wo ein Kapitel anfängt. Weil jedes auf einer neuen Seite
+    beginnt (``break-before: page``), genügt der erste Titel, der auf einer
+    Seite auftaucht; die Seiten danach führen ihn weiter.
     """
-    from PySide6.QtGui import QImageReader
+    from PySide6.QtPdf import QPdfDocument
 
-    def add_width(match: re.Match[str]) -> str:
-        name = match.group(1)
-        natural = QImageReader(str(folder / name)).size().width()
-        width = min(natural, page_width) if natural > 0 else page_width
-        return f'<img width="{width}" src="{name}"'
+    document = QPdfDocument()
+    document.load(str(pdf))
+    titles = [str(entry.title) for entry in manual.pages()]
 
-    return re.sub(r'<img src="([^"]+)"', add_width, html)
+    running = ""
+    found: list[str] = []
+    for number in range(document.pageCount()):
+        text = document.getAllText(number).text()
+        for title in titles:
+            if title in text[:400]:
+                running = title
+                break
+        found.append(running)
+    return found
+
+
+def _stamp(pdf: Path, language: str) -> None:
+    """Kopf- und Fußzeile auf jede Seite legen.
+
+    Chromium druckt keine — CSS Paged Media kennt Randboxen mit Seitenzähler,
+    Chromium setzt sie nicht um. Also wird eine zweite, durchsichtige Lage
+    gezeichnet und darübergelegt: oben das laufende Kapitel und der Name,
+    unten Version und Seitenzahl.
+
+    Deckblatt und Inhaltsverzeichnis bleiben frei — ein Titelblatt mit
+    Kolumnentitel sieht aus wie eine Seite, die verrutscht ist.
+    """
+    from pypdf import PdfReader, PdfWriter
+
+    chapters = _chapter_of_each_page(pdf)
+    reader = PdfReader(str(pdf))
+    total = len(reader.pages)
+    overlay = _overlay(pdf.with_suffix(".stamp.pdf"), chapters, total, language)
+
+    writer = PdfWriter()
+    marks = PdfReader(str(overlay))
+    for number, page in enumerate(reader.pages):
+        if number >= SKIP_STAMP:
+            page.merge_page(marks.pages[number])
+        writer.add_page(page)
+    writer.add_metadata(
+        {
+            "/Title": f"{tr('Handbuch')} — {APP_NAME}",
+            "/Author": APP_VENDOR,
+            "/Creator": f"{APP_NAME} {APP_VERSION}",
+        }
+    )
+    with pdf.open("wb") as stream:
+        writer.write(stream)
+    overlay.unlink(missing_ok=True)
+
+
+#: Wie viele Seiten am Anfang ohne Kolumnentitel bleiben: Deckblatt und
+#: Inhaltsverzeichnis.
+SKIP_STAMP = 2
+
+
+def _overlay(target: Path, chapters: list[str], total: int, language: str) -> Path:
+    """Die Lage mit Kopf- und Fußzeilen, eine Seite je Seite des Handbuchs."""
+    from PySide6.QtCore import QMarginsF, QRectF, Qt
+    from PySide6.QtGui import (
+        QColor,
+        QFont,
+        QPageLayout,
+        QPageSize,
+        QPainter,
+        QPdfWriter,
+        QPen,
+    )
+
+    writer = QPdfWriter(str(target))
+    # Zweiundsiebzig dpi und keine Ränder: dann ist eine Einheit ein Punkt,
+    # und die Lage deckt sich mit dem, worüber sie liegt.
+    writer.setResolution(72)
+    writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+    writer.setPageMargins(QMarginsF(0, 0, 0, 0), QPageLayout.Unit.Millimeter)
+
+    width = writer.width()
+    height = writer.height()
+    label = PAGE_OF.get(language, PAGE_OF["de"])
+
+    painter = QPainter(writer)
+    try:
+        font = QFont(painter.font())
+        font.setPointSizeF(8.0)
+        painter.setFont(font)
+        for number in range(total):
+            if number:
+                writer.newPage()
+            if number < SKIP_STAMP:
+                continue
+
+            box = QRectF(STAMP_INSET, 0, width - 2 * STAMP_INSET, HEADER_BASELINE)
+            painter.setPen(QPen(QColor(PDF_MUTED)))
+            painter.drawText(
+                box, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom), APP_NAME
+            )
+            painter.setPen(QPen(QColor(PDF_ACCENT)))
+            painter.drawText(
+                box,
+                int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom),
+                chapters[number],
+            )
+            painter.setPen(QPen(QColor(PDF_LINE), 0.6))
+            painter.drawLine(
+                int(STAMP_INSET),
+                int(HEADER_BASELINE + 5),
+                int(width - STAMP_INSET),
+                int(HEADER_BASELINE + 5),
+            )
+
+            foot = QRectF(
+                STAMP_INSET, height - FOOTER_BASELINE, width - 2 * STAMP_INSET, FOOTER_BASELINE
+            )
+            painter.setPen(QPen(QColor(PDF_LINE), 0.6))
+            painter.drawLine(
+                int(STAMP_INSET),
+                int(height - FOOTER_BASELINE),
+                int(width - STAMP_INSET),
+                int(height - FOOTER_BASELINE),
+            )
+            painter.setPen(QPen(QColor(PDF_MUTED)))
+            painter.drawText(
+                foot,
+                int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+                f"{tr('Handbuch')} · {APP_NAME} {APP_VERSION}",
+            )
+            painter.drawText(
+                foot,
+                int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop),
+                label.format(page=number + 1, total=total),
+            )
+    finally:
+        painter.end()
+    return target
 
 
 def main() -> int:
@@ -242,7 +535,7 @@ def main() -> int:
         target.write_text(page_html(language, prefix), encoding="utf-8")
         print(f"  Seite → {target.relative_to(ROOT)}")
 
-        pdf = write_pdf(language, folder)
+        pdf = write_pdf(language, target)
         if pdf is not None:
             size = pdf.stat().st_size / 1024
             print(f"  PDF → {pdf.relative_to(ROOT)} ({size:.0f} kB)")

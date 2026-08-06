@@ -12,7 +12,11 @@
        Spaltenbreite gestaucht zeigt Beschriftungen, die niemand mehr liest. */
     main { max-width: 74rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
     main > :not(figure) { max-width: 52rem; margin-left: auto; margin-right: auto; }
-    h2 { margin-top: 3rem; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+    /* Die Kapitelüberschrift trägt die Akzentfarbe — dieselbe, die in der
+       Anwendung den Hauptknopf und die aktive Karte kennzeichnet. Sie ist
+       das, woran man beim Blättern die Gliederung erkennt. */
+    h2 { margin-top: 3rem; color: var(--accent); border-bottom: 1px solid var(--line);
+         padding-bottom: .4rem; }
     h3 { margin-top: 2rem; }
     figure { margin: 2rem auto; text-align: center; max-width: 72rem; }
     figure img { max-width: 100%; height: auto; border-radius: 6px; }
@@ -22,17 +26,84 @@
     th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; }
     th { background: var(--card); }
     code { background: var(--card); padding: .1rem .3rem; border-radius: 3px; }
+    /* Das Verzeichnis: gezählt, zweispaltig, ohne Aufzählungspunkte. Die
+       Nummer trägt die Akzentfarbe und steht auf fester Breite, damit die
+       Titel eine gemeinsame Kante haben — daran liest man eine Liste
+       entlang, nicht an achtundzwanzig einzelnen Zeilen. */
     nav.toc { background: var(--card); border: 1px solid var(--line);
-              border-radius: 8px; padding: 1rem 1.5rem; margin: 2rem 0; }
-    nav.toc ul { columns: 2; margin: 0; padding-left: 1.2rem; }
-    @media (max-width: 40rem) { nav.toc ul { columns: 1; } }
+              border-radius: 10px; padding: 1.4rem 1.8rem 1.6rem; margin: 2.5rem 0; }
+    nav.toc .toc-title { margin: 0 0 1rem; border: none; padding: 0;
+                         font-size: 1.1rem; letter-spacing: .02em; }
+    nav.toc ol { columns: 2; column-gap: 2.5rem; margin: 0; padding: 0;
+                 list-style: none; counter-reset: none; }
+    nav.toc li { break-inside: avoid; margin: 0; }
+    nav.toc a { display: flex; gap: .7rem; align-items: baseline;
+                padding: .28rem 0; border-bottom: 1px solid var(--line);
+                text-decoration: none; color: var(--fg); font-size: .95rem; }
+    nav.toc li:last-child a { border-bottom: none; }
+    nav.toc a:hover { color: var(--accent); }
+    nav.toc .num { color: var(--accent); font-size: .82rem; font-weight: 600;
+                   min-width: 1.6rem; font-variant-numeric: tabular-nums; }
+    @media (max-width: 40rem) { nav.toc ol { columns: 1; } }
+
+    /* Das Deckblatt gehört dem Papier. Auf der Website steht der Titel schon
+       in der Kopfzeile, ein zweiter wäre eine Dopplung. */
+    .cover { display: none; }
+
+    /* --- Papier ---------------------------------------------------------
+       Dieselbe Seite, gedruckt. Chromium setzt sie über diese Regeln; was
+       hier steht, ist der Unterschied zwischen Bildschirm und Blatt und
+       nicht eine zweite Gestaltung. */
+    @page { size: A4; margin: 18mm 16mm; }
+
+    @media print {
+      /* Gedruckt wird auf Weiß, auch wenn der Leser dunkel eingestellt hat. */
+      :root { --bg: #ffffff; --fg: #1c1b1a; --muted: #5f5b55;
+              --accent: #a4551e; --card: #f7f6f3; --line: #e0ddd7; }
+      body { background: #fff; color: var(--fg); font-size: 10.5pt; line-height: 1.45; }
+      main { max-width: none; padding: 0; }
+      main > :not(figure) { max-width: none; }
+      .no-print { display: none !important; }
+
+      .cover { display: flex; flex-direction: column; justify-content: center;
+               min-height: 84vh; break-after: page; }
+      .cover h1 { font-size: 40pt; margin: 0 0 .2em; border: none; }
+      .cover .subtitle { font-size: 20pt; color: var(--accent); margin: 0 0 1.2rem; }
+      .cover hr { border: none; border-top: 2px solid var(--line); margin: 0 0 1.2rem; }
+      .cover .claim { font-size: 11pt; color: var(--muted); margin: 0; }
+      .cover .imprint { margin-top: auto; font-size: 9.5pt; color: var(--muted); }
+
+      nav.toc { break-after: page; background: none; border: none;
+                border-radius: 0; padding: 0; margin: 0; }
+      nav.toc .toc-title { font-size: 18pt; margin-bottom: 1.2rem; }
+      nav.toc ol { columns: 2; column-gap: 2rem; }
+      nav.toc a { color: var(--fg); font-size: 9.5pt; padding: .22rem 0; }
+
+      /* Eine Überschrift steht nie allein am Fuß, und ein Bild wird nie
+         zwischen zwei Blättern zerschnitten — das war der auffälligste
+         Fehler des alten Satzes. */
+      h2 { break-before: page; break-after: avoid; margin-top: 0;
+           color: var(--accent); }
+      h3 { break-after: avoid; }
+      figure { break-inside: avoid; margin: 1.2rem auto; }
+      /* Höher als das hier passt ein Bild kaum je noch neben Text auf ein
+         Blatt — es rutscht dann allein auf die nächste Seite und lässt die
+         vorige halb leer. Zwölf Zentimeter sind der Wert, bei dem ein
+         Bildschirmfoto noch lesbar ist und ein Absatz daneben Platz hat. */
+      figure img { max-width: 100%; max-height: 11cm; width: auto; }
+      figcaption { break-before: avoid; }
+      table, pre, li { break-inside: avoid; }
+      p { orphans: 3; widows: 3; }
+      a { color: var(--fg); text-decoration: none; }
+    }
 </style>
 </head>
 <body>
 <main>
-<p><a href="index.html">← Formwerk</a></p>
-<h1>Handbuch — Formwerk</h1>
-<nav class="toc"><strong>Inhalt</strong><ul><li><a href="#what">Was Formwerk ist</a></li><li><a href="#start">Die ersten fünfzehn Minuten</a></li><li><a href="#window">Das Fenster</a></li><li><a href="#ways">Die drei Wege</a></li><li><a href="#history">Der Verlauf</a></li><li><a href="#parameters">Parameter und Ausdrücke</a></li><li><a href="#tolerances">Material, Toleranzen, Passungen</a></li><li><a href="#parts">Die Bausteine</a></li><li><a href="#printing">Auf die Platte und hinaus</a></li><li><a href="#chat">Der Chat</a></li><li><a href="#surfaces">Oberflächen und Füllungen</a></li><li><a href="#remote">Fernsteuerung</a></li><li><a href="#trouble">Wenn etwas nicht geht</a></li><li><a href="#glossary">Wörterbuch</a></li><li><a href="#scene">Szene</a></li><li><a href="#repair">Reparatur</a></li><li><a href="#transform">Transformation</a></li><li><a href="#primitive">Grundformen</a></li><li><a href="#boolean">Boolesch</a></li><li><a href="#sketch">Skizze</a></li><li><a href="#shaping">Formgebung</a></li><li><a href="#holes">Bohrungen</a></li><li><a href="#parts">Bausteine</a></li><li><a href="#prepare">Druckvorbereitung</a></li><li><a href="#import">Import</a></li><li><a href="#colour">Farbe</a></li><li><a href="#label">Beschriftung</a></li><li><a href="#surface">Oberfläche</a></li><li><a href="#mesh">Netz</a></li></ul></nav>
+<p class="no-print"><a href="index.html">← Formwerk</a></p>
+<section class="cover"><h1>Formwerk</h1><p class="subtitle">Handbuch</p><hr><p class="claim">Konstruieren, Erzeugen und Bearbeiten für den 3D-Druck</p><p class="imprint">Version 0.0.1<br>Copyright © 2026 RS Digital</p></section>
+<h1 class="no-print">Handbuch — Formwerk</h1>
+<nav class="toc"><h2 class="toc-title">Inhalt</h2><ol><li><a href="#what"><span class="num">01</span>Was Formwerk ist</a></li><li><a href="#start"><span class="num">02</span>Die ersten fünfzehn Minuten</a></li><li><a href="#window"><span class="num">03</span>Das Fenster</a></li><li><a href="#ways"><span class="num">04</span>Die drei Wege</a></li><li><a href="#history"><span class="num">05</span>Der Verlauf</a></li><li><a href="#parameters"><span class="num">06</span>Parameter und Ausdrücke</a></li><li><a href="#tolerances"><span class="num">07</span>Material, Toleranzen, Passungen</a></li><li><a href="#parts"><span class="num">08</span>Die Bausteine</a></li><li><a href="#printing"><span class="num">09</span>Auf die Platte und hinaus</a></li><li><a href="#chat"><span class="num">10</span>Der Chat</a></li><li><a href="#surfaces"><span class="num">11</span>Oberflächen und Füllungen</a></li><li><a href="#remote"><span class="num">12</span>Fernsteuerung</a></li><li><a href="#trouble"><span class="num">13</span>Wenn etwas nicht geht</a></li><li><a href="#glossary"><span class="num">14</span>Wörterbuch</a></li><li><a href="#scene"><span class="num">15</span>Szene</a></li><li><a href="#repair"><span class="num">16</span>Reparatur</a></li><li><a href="#transform"><span class="num">17</span>Transformation</a></li><li><a href="#primitive"><span class="num">18</span>Grundformen</a></li><li><a href="#boolean"><span class="num">19</span>Boolesch</a></li><li><a href="#sketch"><span class="num">20</span>Skizze</a></li><li><a href="#shaping"><span class="num">21</span>Formgebung</a></li><li><a href="#holes"><span class="num">22</span>Bohrungen</a></li><li><a href="#parts"><span class="num">23</span>Bausteine</a></li><li><a href="#prepare"><span class="num">24</span>Druckvorbereitung</a></li><li><a href="#import"><span class="num">25</span>Import</a></li><li><a href="#colour"><span class="num">26</span>Farbe</a></li><li><a href="#label"><span class="num">27</span>Beschriftung</a></li><li><a href="#surface"><span class="num">28</span>Oberfläche</a></li><li><a href="#mesh"><span class="num">29</span>Netz</a></li></ol></nav>
 <h3 id="what">Was Formwerk ist</h3>
 <p>Formwerk baut, ändert und druckreif macht — Modelle für den 3D-Drucker.</p>
 <p>Drei Dinge unterscheiden es von dem, was sonst offen ist:</p>
@@ -321,7 +392,7 @@
 <h4>Bohrung setzen (<code>drill_hole</code>)</h4>
 <p>Bohrt ein rundes Loch — auf Wunsch um die Materialtoleranz vergrößert.</p>
 <p>Objekte: 1 → 1 · umkehrbar · mit Startwert · Kürzel <code>Ctrl+B</code> · Gilt für: Fläche</p>
-<table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Durchmesser <code>diameter</code></td><td>mm</td><td>5.0</td><td>0.2 … 200</td><td>Nenndurchmesser der Bohrung. Für eine Schraube gibt es <em>Schraubenloch</em> in den Bausteinen — dort kommen die Maße aus der Normteiltabelle.</td></tr><tr><td>Position X <code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Mitte der Bohrung im Koordinatensystem des Objekts. Eine angeklickte Fläche trägt die drei Werte selbst ein.</td></tr><tr><td>Position Y <code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Zweite Achse der Position — siehe Position X.</td></tr><tr><td>Position Z <code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Dritte Achse der Position — siehe Position X.</td></tr><tr><td>Achse <code>axis</code></td><td></td><td>z</td><td>x, y, z</td><td>Richtung, in die gebohrt wird. Z ist senkrecht von oben, X und Y bohren durch eine Seitenwand.</td></tr><tr><td>Tiefe <code>depth</code></td><td>mm</td><td>0.0</td><td>0 …</td><td>Null bohrt durch das ganze Teil.</td></tr><tr><td>Materialtoleranz berücksichtigen <code>compensate</code></td><td></td><td>an</td><td></td><td>Vergrößert die Bohrung um den Wert aus dem Materialprofil.</td></tr></tbody></table>
+<table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Durchmesser <code>diameter</code></td><td>mm</td><td>5.0</td><td>0.2 … 200</td><td>Nenndurchmesser der Bohrung. Für eine Schraube gibt es <em>Schraubenloch</em> in den Bausteinen — dort kommen die Maße aus der Normteiltabelle.</td></tr><tr><td>Position X <code>x</code></td><td>mm</td><td>0.0</td><td></td><td>Mitte der Bohrung im Koordinatensystem des Objekts. Eine angeklickte Fläche trägt die drei Werte selbst ein.</td></tr><tr><td>Position Y <code>y</code></td><td>mm</td><td>0.0</td><td></td><td>Zweite Achse der Position — siehe Position X.</td></tr><tr><td>Position Z <code>z</code></td><td>mm</td><td>0.0</td><td></td><td>Dritte Achse der Position — siehe Position X.</td></tr><tr><td>Achse <code>axis</code></td><td></td><td>z</td><td>x, y, z</td><td>Richtung, in die gebohrt wird. Z ist senkrecht von oben, X und Y bohren durch eine Seitenwand.</td></tr><tr><td>Tiefe <code>depth</code></td><td>mm</td><td>0.0</td><td>0 …</td><td>Null bohrt durch das ganze Teil.</td></tr><tr><td>Bezugspunkt <code>anchor</code></td><td></td><td>mouth</td><td>mouth, centre</td><td>Was die Position bedeutet: die Mündung, an der die Bohrung anfängt, oder ihre Mitte. Bei einer durchgehenden Bohrung ändert es nichts.</td></tr><tr><td>Materialtoleranz berücksichtigen <code>compensate</code></td><td></td><td>an</td><td></td><td>Vergrößert die Bohrung um den Wert aus dem Materialprofil.</td></tr></tbody></table>
 <h4>Bohrung verschließen (<code>plug_hole</code>)</h4>
 <p>Füllt eine Bohrung wieder auf — etwa wenn ein fremdes Teil eine zu viel hat.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch · Gilt für: Bohrung</p>
@@ -413,7 +484,7 @@
 <h4>Aushöhlen (<code>hollow_object</code>)</h4>
 <p>Höhlt ein Objekt aus und setzt Entlüftungen. Spart Material und Zeit; die Wandstärke stimmt im Rahmen des Rasters.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>
-<table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Wandstärke <code>wall</code></td><td>mm</td><td>2.0</td><td>0.4 … 50</td><td>Was stehen bleibt. Zwei Extrusionsbreiten sind das Minimum.</td></tr><tr><td>Entlüftungen <code>vents</code></td><td></td><td>1</td><td>0 … 6</td><td>Null heißt geschlossener Hohlraum — beim FDM-Druck drückt der die Decke hoch.</td></tr><tr><td>Entlüftungsdurchmesser <code>vent_diameter</code></td><td>mm</td><td>4.0</td><td>1 … 20</td><td>Weite der Öffnungen. Groß genug, dass nicht verbrauchtes Material herauskommt.</td></tr></tbody></table>
+<table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Wandstärke <code>wall</code></td><td>mm</td><td>2.0</td><td>0.4 … 50</td><td>Was stehen bleibt. Zwei Extrusionsbreiten sind das Minimum.</td></tr><tr><td>Oben öffnen <code>open_top</code></td><td></td><td>aus</td><td></td><td>Nimmt die Decke über dem Hohlraum weg. Aus dem hohlen Körper wird eine Dose, und <em>Deckel erzeugen</em> findet die Öffnung, die es braucht.</td></tr><tr><td>Entlüftungen <code>vents</code></td><td></td><td>1</td><td>0 … 6</td><td>Null heißt geschlossener Hohlraum — beim FDM-Druck drückt der die Decke hoch. Eine offene Dose braucht keine.</td></tr><tr><td>Entlüftungsdurchmesser <code>vent_diameter</code></td><td>mm</td><td>4.0</td><td>1 … 20</td><td>Weite der Öffnungen. Groß genug, dass nicht verbrauchtes Material herauskommt.</td></tr></tbody></table>
 <h4>Elefantenfuß ausgleichen (<code>compensate_first_layer</code>)</h4>
 <p>Zieht die ersten Schichten um den Betrag ein, um den sie beim Drucken breitlaufen. Der Wert kommt aus dem Materialprofil.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>

@@ -19,6 +19,8 @@ einem modalen Meldungsfenster.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.core import figures, manual, markup
@@ -32,10 +34,74 @@ from PySide6.QtWidgets import QApplication
 
 from app.ui.manual_window import ManualWindow
 
+#: Die erzeugten Handbuchseiten der Website. Sie sind eingecheckt, weil sie
+#: hochgeladen werden — und veralten, sobald jemand am Handbuchtext dreht,
+#: ohne ``tools/make_manual.py`` laufen zu lassen.
+WEBSITE_PAGES = {
+    "de": Path(__file__).parent.parent / "website" / "handbuch.html",
+    "en": Path(__file__).parent.parent / "website" / "en" / "manual.html",
+}
+
 
 @pytest.fixture(autouse=True)
 def _operations() -> None:
     load_operations()
+
+
+# --- und die erzeugten Seiten bleiben am Stand -----------------------------------
+
+
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_the_website_page_carries_every_chapter(language: str) -> None:
+    """Die eingecheckte Seite muss zum Handbuch passen, nicht zu einem alten.
+
+    ``website/handbuch.html`` und ``website/en/manual.html`` werden
+    hochgeladen; das PDF entsteht aus genau derselben Datei. Wer ein Kapitel
+    ergänzt und ``tools/make_manual.py`` nicht laufen lässt, hat danach ein
+    Programm, eine Website und ein PDF, die drei verschiedene Handbücher
+    zeigen — und niemand merkt es, denn keines davon ist kaputt.
+
+    Geprüft werden die Kapitelüberschriften und nicht der ganze Wortlaut: eine
+    Datei Zeichen für Zeichen zu vergleichen hieße, sie im Test noch einmal zu
+    erzeugen, und dann prüfte er sich selbst.
+    """
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    page = WEBSITE_PAGES[language]
+    assert page.is_file(), f"{page.name} fehlt — tools/make_manual.py läuft nicht?"
+
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        html = page.read_text(encoding="utf-8")
+        missing = [str(entry.title) for entry in manual.pages() if str(entry.title) not in html]
+    finally:
+        set_language("de")
+
+    assert not missing, (
+        f"{page.name} kennt diese Kapitel nicht:\n"
+        + "\n".join(missing)
+        + "\n\nNeu erzeugen: .venv\\Scripts\\python.exe tools/make_manual.py"
+    )
+
+
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_every_figure_of_the_website_page_is_there(language: str) -> None:
+    """Jede Abbildung, die die Seite nennt, liegt auch daneben.
+
+    Ein fehlendes Bild ist im Browser ein Rahmen mit Kreuz und im PDF eine
+    Lücke — beides sieht man erst, wenn es jemand liest.
+    """
+    import re
+
+    folder = WEBSITE_PAGES[language].parent
+    html = WEBSITE_PAGES[language].read_text(encoding="utf-8")
+    sources = re.findall(r'<img src="([^"]+)"', html)
+
+    assert sources, "eine Handbuchseite ohne eine einzige Abbildung ist keine"
+    missing = [name for name in sources if not (folder / name).is_file()]
+    assert not missing, f"{WEBSITE_PAGES[language].name} verweist ins Leere:\n" + "\n".join(missing)
 
 
 # --- was drinsteht ---------------------------------------------------------------
