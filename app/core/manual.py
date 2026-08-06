@@ -162,6 +162,50 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         ),
     ),
     Page(
+        key="looking",
+        title=_("Hinsehen, bevor gedruckt wird"),
+        body=_(
+            "Ein Modell sieht auf dem Bildschirm fast immer gut aus. Ob es sich "
+            "drucken lässt, steht woanders — in der Wandstärke an der dünnsten "
+            "Stelle, im Überhang über der Grenze, in der Insel, die in der Luft "
+            "anfängt. Fünf Werkzeuge in der Leiste unter der Ansicht "
+            "beantworten das, und keines davon ändert etwas am Modell.\n\n"
+            "**Messen** (Werkzeugleiste, *Messen*) legt zwei Punkte fest und "
+            "zeigt den Abstand. Der Zeiger fängt dabei auf Ecken und Kanten, "
+            "man muss also nicht treffen, sondern nur in die Nähe kommen. Für "
+            "die **Wandstärke** genügt ein Klick auf eine Fläche: Formwerk "
+            "schickt einen Strahl nach innen und misst, wo er wieder "
+            "herauskommt. Eine gemessene Strecke bleibt als **Bemaßung** "
+            "stehen, bis Sie sie wegnehmen — so lassen sich drei Maße "
+            "nebeneinander vergleichen, statt sie sich zu merken.\n\n"
+            "**Der Schnitt** (*Schnitt*) legt eine Ebene durch das Modell und "
+            "zeigt, was dahinter liegt. Die Schnittfläche wird dabei "
+            "geschlossen dargestellt, nicht als offenes Loch — ein Hohlraum "
+            "ist damit als Hohlraum zu erkennen und nicht als Fehler in der "
+            "Anzeige. Die Ebene lässt sich mit dem Regler durchziehen.\n\n"
+            "**Die Analysekarten** (*Analyse*) färben das Modell nach einer "
+            "Zahl ein. Sieben gibt es: Wandstärke, Überhangwinkel, "
+            "Stützbedarf, Krümmung, Dicke der ersten Schicht, Abstand zum "
+            "Bauraumrand und Materialverteilung. Die Legende nennt immer den "
+            "Zahlenbereich **und** die Herkunft der Werte — eine Karte ohne "
+            "Maßstab ist ein hübsches Bild. Ein Klick auf eine Warnung im "
+            "Prüfbericht fährt die Kamera an die Stelle.\n\n"
+            "**Die Schichtvorschau** (*Schichten*) zeigt das Modell so, wie es "
+            "in Schichten zerfällt. Der Regler fährt hindurch; was Sie sehen, "
+            "ist Formwerks eigene Schichtanalyse und **nicht** das, was der "
+            "Slicer später rechnet. Beide Zahlenwelten bleiben getrennt "
+            "ausgewiesen, damit niemand eine Schätzung für eine Messung hält.\n\n"
+            "![](figure:layers)\n\n"
+            "**Die Explosionsansicht** (*Explosion*) zieht mehrere Körper "
+            "auseinander, damit man sieht, was ineinandergreift. Sie "
+            "verschiebt nur die Anzeige — der Stapel und der Export bleiben "
+            "unberührt.\n\n"
+            "Keines dieser Werkzeuge erzeugt eine Operation. Sie sind eine "
+            "Brille, kein Werkzeug: Sie können nichts damit kaputt machen, und "
+            "ein Undo hat hier nichts zurückzunehmen."
+        ),
+    ),
+    Page(
         key="ways",
         title=_("Die drei Wege"),
         body=_(

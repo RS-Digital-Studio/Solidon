@@ -260,20 +260,26 @@ def anchored(html: str) -> str:
 def _classify(html: str) -> str:
     """Jeder Abbildung ansehen, wie breit sie gesetzt werden will.
 
-    Die gezeichneten Abbildungen sind schmal und hochkant — ein Filmscharnier
-    braucht keine ganze Textbreite. Über die volle Spalte gesetzt reißen sie
-    ein Loch: passt eine nicht mehr auf die Seite, rutscht sie als Ganzes auf
-    die nächste und lässt die halbe davor leer.
+    Die Unterscheidung steht schon im Katalog, sie muss nur benutzt werden.
+    Ein **gerendertes** Bild zeigt einen Körper — eine Mutternfalle, ein
+    Filmscharnier, eine Bohrung vorher und nachher. Das ist kompakt und
+    verträgt die halbe Spalte; der Absatz fließt daneben, und es entsteht
+    keine halbe Leerseite.
 
-    Als schmale Abbildung mit Text daneben passiert das nicht — der Absatz
-    füllt, was das Bild übrig lässt. Bildschirmfotos bleiben breit; die sind
-    kleiner als lesbar, sobald man sie halbiert.
+    Eine **Zeichnung** ist ein Schema mit Beschriftung — die drei Zonen des
+    Fensters, die drei Wege, der Stapel. Halbiert wird ihre Schrift zu klein,
+    und ein Schema, dessen Beschriftung man nicht liest, erklärt nichts.
+    Ebenso die Bildschirmfotos. Beide bleiben über die volle Textbreite.
     """
-    return re.sub(
-        r'<figure><img src="([^"]+\.svg)"',
-        r'<figure class="drawing"><img src="\1"',
-        html,
-    )
+    compact = {entry.key for entry in figures.FIGURES if entry.kind == "rendered"}
+
+    def widen(match: re.Match[str]) -> str:
+        name = match.group(1)
+        key = name.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+        css = ' class="drawing"' if key in compact else ""
+        return f'<figure{css}><img src="{name}"'
+
+    return re.sub(r'<figure><img src="([^"]+)"', widen, html)
 
 
 def page_html(language: str, prefix: str) -> str:

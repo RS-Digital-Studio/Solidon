@@ -46,7 +46,7 @@ from app.core import figures
 from app.core.bootstrap import load_operations
 from app.core.registry.registry import REGISTRY
 from app.core.types import Finding
-from app.i18n import SUPPORTED_LANGUAGES, _, install_catalog, set_language
+from app.i18n import SUPPORTED_LANGUAGES, install_catalog, set_language
 from app.i18n.catalog import read_catalog
 
 #: Welches Beispielprojekt im Hauptfenster steht. Weg 1 ist der häufigste Fall
@@ -121,36 +121,55 @@ def prepared(widget: QWidget, size: tuple[int, int], *, hidden: bool = True) -> 
     return widget
 
 
-def sample_findings() -> list[Finding]:
+#: Die Texte der gestellten Befunde, je Sprache ausgeschrieben.
+#:
+#: **Nicht über ``_()``.** Der Textsammler liest ``app/``, und was hier steht,
+#: käme deshalb nie in den Katalog: ``translate()`` fiele auf die Message-ID
+#: zurück, also auf Deutsch. Genau das war im englischen Handbuch zu sehen —
+#: ein Bildschirmfoto des Prüfberichts mit deutschen Befunden mitten im
+#: englischen Text.
+SAMPLE_FINDINGS: dict[str, tuple[str, str, str, str]] = {
+    "de": (
+        "Das Modell ist an drei Stellen offen.",
+        "14 Dreiecke zeigen nach innen.",
+        "Eine Wand ist dünner als zwei Extrusionsbahnen.",
+        "Die Einheit stand nicht in der Datei; angenommen wurden Millimeter.",
+    ),
+    "en": (
+        "The model is open in three places.",
+        "14 triangles face inwards.",
+        "A wall is thinner than two extrusion paths.",
+        "The file did not state a unit; millimetres were assumed.",
+    ),
+}
+
+#: Der Name des Körpers im Operationsdialog, aus demselben Grund ausgeschrieben.
+SAMPLE_OBJECT = {"de": "Halterung", "en": "Bracket"}
+
+
+def sample_findings(language: str) -> list[Finding]:
     """Befunde, wie sie ein eingelesenes Fremdmodell erzeugt.
 
     Gestellt und nicht gerechnet: der Prüfbericht soll auf dem Bild die Sorten
     zeigen, die es gibt — Hinweis, Warnung, Fehler —, und ein Beispielprojekt,
     das zufällig gerade alle drei hat, gibt es nicht.
     """
+    open_body, flipped, thin, unit = SAMPLE_FINDINGS.get(language, SAMPLE_FINDINGS["de"])
     return [
         Finding(
             code="ingest.not_watertight",
             severity="warning",
-            message=_("Das Modell ist an drei Stellen offen."),
+            message=open_body,
             values={"holes": 3},
         ),
         Finding(
             code="ingest.flipped_faces",
             severity="warning",
-            message=_("14 Dreiecke zeigen nach innen."),
+            message=flipped,
             values={"faces": 14},
         ),
-        Finding(
-            code="slice.thin_wall",
-            severity="info",
-            message=_("Eine Wand ist dünner als zwei Extrusionsbahnen."),
-        ),
-        Finding(
-            code="ingest.unit_guessed",
-            severity="info",
-            message=_("Die Einheit stand nicht in der Datei; angenommen wurden Millimeter."),
-        ),
+        Finding(code="slice.thin_wall", severity="info", message=thin),
+        Finding(code="ingest.unit_guessed", severity="info", message=unit),
     ]
 
 
@@ -185,7 +204,7 @@ def take_all(app: QApplication, language: str) -> None:
     window._show_start_screen(False)
     if not await_result(app, session):
         raise SystemExit("Die Auswertung wurde nicht fertig — kein Bild vom Hauptfenster")
-    window.report.add_findings(sample_findings())
+    window.report.add_findings(sample_findings(language))
     window.raise_()
     window.activateWindow()
     settle(app, 60)
@@ -196,7 +215,7 @@ def take_all(app: QApplication, language: str) -> None:
     # Reiter und ist genau so hoch wie der Reiter, was ein Bild von zwölf Pixeln
     # Höhe ergibt.
     report = prepared(ReportPanel(), REPORT)
-    report.add_findings(sample_findings())
+    report.add_findings(sample_findings(language))
     settle(app)
     shoot(report, "report", language)
     report.close()
@@ -204,7 +223,7 @@ def take_all(app: QApplication, language: str) -> None:
     dialog = prepared(
         OperationDialog(
             REGISTRY.get("drill_hole"),
-            [_("Halterung")],
+            [SAMPLE_OBJECT.get(language, SAMPLE_OBJECT["de"])],
             values={"diameter": 4.2, "x": 20.0, "y": 0.0},
         ),
         DIALOG,
