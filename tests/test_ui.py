@@ -42,6 +42,8 @@ def session(qt_app: QApplication) -> Session:
 
 @pytest.fixture
 def window(qt_app: QApplication, session: Session) -> MainWindow:
+    # Aufgeräumt wird zentral: ``tests/conftest.py`` wartet nach jedem Test
+    # auf die Arbeiter jedes offenen Fensters.
     return MainWindow(session, UiSettings())
 
 

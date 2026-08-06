@@ -2260,10 +2260,41 @@ class MainWindow(QMainWindow):
                 tr("Für eine Analysekarte ist dieses Modell zu groß.")
             )
         )
-        worker.finished.connect(lambda: setattr(self, "_map_worker", None))
+        # **Nicht** auf ``None`` setzen, wenn der Arbeiter fertig ist.
+        #
+        # ``finished`` kommt, während Qt den Thread noch abräumt. Wer die
+        # Referenz in diesem Moment löscht, überlässt das QThread-Objekt dem
+        # Speicherbereiniger — und der zerstört das C++-Objekt unter einem
+        # Thread, der gerade zu Ende geht. Das ist genau die Falle, vor der
+        # ``_retired`` weiter oben warnt, hier nur von der anderen Seite.
+        #
+        # Der Absturz war eine Zugriffsverletzung ohne Zeile, in etwa jedem
+        # achten Lauf von ``test_analysis_ui.py`` und in etwa jedem vierten
+        # Lauf der ganzen Suite. Der Arbeiter wandert jetzt in dieselbe
+        # Halteleine wie ein ersetzter und wird dort gelöst, wenn er
+        # tatsächlich ausgelaufen ist.
         self._retire(self._map_worker)
         self._map_worker = worker
+        worker.finished.connect(lambda done=worker: self._hold_until_done(done))
         worker.start()
+
+    def _hold_until_done(self, worker: Any) -> None:
+        """Den fertigen Arbeiter halten, bis Qt mit ihm durch ist.
+
+        ``finished`` heißt „``run`` ist zurück", nicht „das Objekt darf weg".
+        Erst wenn ``isRunning`` nein sagt, ist es sicher — und bis dahin hält
+        ihn dieselbe Liste, die auch ersetzte Arbeiter hält.
+        """
+        if self._map_worker is worker:
+            self._map_worker = None
+        if worker not in self._retired:
+            self._retired.append(worker)
+        QTimer.singleShot(0, lambda: self._release(worker))
+
+    def _release(self, worker: Any) -> None:
+        """Einen ausgelaufenen Arbeiter loslassen — und keinen, der noch läuft."""
+        if worker in self._retired and not worker.isRunning():
+            self._retired.remove(worker)
 
     def _retire(self, worker: Any) -> None:
         """Hält einen ersetzten Arbeiter fest, bis er ausgelaufen ist.

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 
 import pytest
@@ -51,6 +51,36 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(discover, "find_program", only_what_was_set)
     discover.forget_cache()
+
+
+@pytest.fixture(autouse=True)
+def _no_worker_outlives_its_window() -> Iterator[None]:
+    """Nach jedem Test warten die Fenster auf ihre Arbeiter.
+
+    ``MainWindow.wait_for_workers`` sagt selbst, warum es das gibt: **ein
+    Thread, der sein Fenster überlebt, nimmt den Prozess mit.** Im Programm
+    ruft der ``closeEvent`` es. In der Suite gibt es diesen Weg nicht — dort
+    wird ein Fenster weggeräumt, nicht geschlossen, und wann der
+    Speicherbereiniger das tut, entscheidet er.
+
+    Das war der Absturz, der etwa jeden vierten Lauf mit einer
+    Zugriffsverletzung statt eines Ergebnisses beendete: kein Testfehler, kein
+    Name im Protokoll, jedes Mal an einer anderen Stelle — mal in
+    ``test_analysis_ui``, mal in ``test_ui``, dazwischen grüne Läufe.
+
+    Zentral und nicht in jedem ``window``-Fixture: es gibt neun davon, und das
+    zehnte vergisst es.
+    """
+    yield
+    from PySide6.QtWidgets import QApplication
+
+    application = QApplication.instance()
+    if application is None:
+        return
+    for widget in list(application.topLevelWidgets()):
+        waiter = getattr(widget, "wait_for_workers", None)
+        if callable(waiter):
+            waiter()
 
 
 @dataclass(frozen=True, slots=True)
