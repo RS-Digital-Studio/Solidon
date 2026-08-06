@@ -1850,6 +1850,87 @@ zusammengesetzten Parameter-Titel (`Parameter {name}`) bleiben wörtlich:
 eine Message-ID kennt keine Platzhalter, und der Nutzername im Titel gehört
 ohnehin nicht übersetzt.
 
+## Ein frischer Klon war rot, ohne dass sich Code geändert hatte
+
+Ein am 2026-08-06 neu geklontes Arbeitsverzeichnis, Umgebung frisch aufgebaut:
+**16 Tests rot, `mypy` gar nicht erst durchgelaufen** — bei einem Stand, der
+auf der Maschine daneben grün war. Kein Fehler lag im eigenen Code.
+
+Die Ursache ist eine einzige. Alle Abhängigkeiten in `pyproject.toml` haben
+offene Untergrenzen, also zog `pip` überall das Neueste; **numpy 2.5 hat
+`arr.shape = ...` als veraltet markiert**, VTK 9.6 und scikit-image 0.26
+benutzen es noch, und `filterwarnings = ["error"]` macht aus jeder solchen
+Warnung einen Fehler. Zwölf Tests fielen direkt darüber.
+
+**Die Voxelstufe der Booleschen Kette fiel als Folgeschaden komplett aus.**
+`trimesh.voxel.ops` ruft `skimage.marching_cubes`, dort löste dieselbe Warnung
+aus, damit war Stufe 4 tot — und weil die Kette danach zu Ende ist, kam
+`BooleanFailedError` heraus: „auf allen Stufen gescheitert" für eine Operation,
+an der nichts falsch war. Vier Tests, alle mit `voxel` im Namen.
+
+**Der `mypy`-Abbruch traf auch die CI, unabhängig von dieser Maschine.**
+`numpy/__init__.pyi` benutzt die `type`-Anweisung (PEP 695), und geprüft wurde
+gegen Zielversion 3.11 — Abbruch mit `errors prevented further checking`, also
+keine einzige Projektdatei geprüft. `python_version` ist die Zielversion der
+Prüfung, nicht der Interpreter; der CI-Lauf auf 3.11 landet im gleichen
+Abbruch. Das Tor war vermutlich rot, seit numpy 2.5 erschien.
+
+**Was den Sprung überlebt hat, ist die eigentliche Nachricht.** manifold3d
+ging von 2.5 auf 3.5.2 — der Geometriekern, zwei Hauptversionen — ohne eine
+einzige Beanstandung. Ebenso `pytest` 8→9, `ruff` 0.6→0.16 (zehn Nebenversionen
+ohne neue Regelverstöße), `PySide6` 6.7→6.11, `lxml` 5→6, `svg.path` 6→7. Und
+`mypy` 2.3 mit `strict = true` und den neuen strengeren Vorgaben
+(`local-partial-types`, `strict-bytes`) findet in 184 Dateien nichts.
+
+### Was daraus wurde
+
+* **Python-Untergrenze auf 3.13**, an allen sieben Stellen zugleich:
+  `requires-python`, `ruff target-version`, `mypy python_version`, beide
+  CI-Jobs, `CLAUDE.md` und der Sitzungsstart-Hook. Das löst den Stub-Konflikt
+  an der Wurzel, statt numpy zu deckeln — eine Obergrenze hätte das Projekt
+  auf einer alten Fassung festgehalten.
+* **Die Fremdwarnung eng ausgeklammert**, auf `vtkmodules.*` und `skimage.*`
+  begrenzt und mit Entfernungsbedingung kommentiert. Der eigene Kern kommt
+  ohne die Zuweisung aus, geprüft — es wird also nichts Eigenes verdeckt.
+* **`constraints.txt`**, der Versionssatz, gegen den die Suite grün ist. Suite
+  und Paketierung bauen dagegen, ebenso der Erstaufbau in `README.md` und
+  `CLAUDE.md`. Ohne ihn installiert jeder Klon etwas anderes, und genau das
+  ist hier passiert.
+* **Ein wöchentlicher CI-Job „Neueste Fassungen"** löst bewusst ohne
+  Constraints auf und protokolliert, was er installiert. Wird er rot, während
+  die Suite grün bleibt, liegt es an einer neuen Fassung — die Frühwarnung, die
+  hier gefehlt hat. Nur Ubuntu, nur montags: private Minuten sind gezählt.
+* Nebenprodukt der Zielversion: `ruff` verlangte mit `py313` drei
+  Umschreibungen auf PEP-695-Generics (`op_params`, `validate`, `_by_title`).
+  Die modulweiten `TypeVar` und ihre Importe sind damit weg.
+
+### Anzusehen
+
+**manifold3d 3.x bringt vier Dinge, die auf offene Stellen hier passen.** Der
+Kern läuft schon darauf, benutzt wird davon noch nichts:
+
+* `ExecutionContext` (3.5) trägt Fortschritt und Abbruch **in** die Boolesche
+  Operation. Heute reicht `app/core/geom/` `ctx.cancelled` an genau einer
+  Stelle weiter (`prepare_ops.py:725`) — eine laufende Boolesche Op ist nicht
+  abbrechbar, obwohl §2.8 das verlangt.
+* Plattformübergreifend deterministisches Rechnen in doppelter Genauigkeit
+  (3.5) — trifft Regel 6 und die Determinismus-Testart, bei Windows, macOS und
+  Linux-Runnern im Spiel.
+* Strahlschnitt über Kernel12 (3.5) — genau der Bereich der letzten Funde zum
+  Anklicken von Flächen.
+* `MinkowskiSum`/`MinkowskiDifference` (3.4) — echte Offsets für Passungsspiel
+  und Dichtnuten, statt sie nachzubauen. Die Release-Notiz warnt selbst: bei
+  komplexen Netzen langsam und speicherhungrig.
+
+**`MeshIO` ist in manifold3d 3.4 aus der öffentlichen API verschwunden**;
+Netz-Ein-/Ausgabe soll über trimesh laufen. Hier unkritisch, sonst wären die
+Geometrietests nicht grün — aber es ist eine Stelle, die bei einer künftigen
+Umstellung zu prüfen ist.
+
+**trimesh 5.0 ist am 2026-08-01 erschienen** und bleibt gepinnt (`<5`). Der
+Sprung ist weiter eine eigene Migration, und die Voxelkette über
+`trimesh.voxel.ops` ist gerade die empfindlichste Stelle daran.
+
 ## P15 — Konstruieren und zeigen
 
 Der Vergleich mit SindriCAD, Meshy und dem, was 3Druck als Stand der Software
@@ -1921,65 +2002,66 @@ die Tabelle gebaut wurde — **null** übergangene Einstellungen; die Profilzuor
 trifft ohne Zutun aus 9849 gelesenen Profilen. Und der ganze Weg läuft aus dem
 Fenster heraus: Strg+P, Slicen, 0,8 Sekunden, Druckdatei.
 
-**Was zu tun ist**, nach Gewicht:
+**Was zu tun war**, nach Gewicht — abgearbeitet in den drei Paketen darunter,
+mit Ausnahme der fehlenden Passung:
 
-- [ ] **Der Hüllquader eines exakten Körpers kommt aus seinen Dreiecken.**
+- [x] **Der Hüllquader eines exakten Körpers kommt aus seinen Dreiecken.**
       `Solid.bounds` gibt `mesh.bounds` zurück; der Fehler ist konstant 0,025 mm
       (halbe `DEFLECTION`), bei Ø 6 wie bei Ø 120. Fusion misst denselben Körper
       mit 25,00 mm Radius, Formwerk mit 24,9755. Daran hängen Maßanzeige,
       Bauraumprüfung, Anordnung, Haftungsrand, `advise.for_part` und jede
       Passungsprüfung — ein Zehntel der Materialtoleranz, verloren vor dem ersten
       Druck. Fix: `BRepBndLib` statt Tessellation
-- [ ] **Die angeklickte Fläche ist die Mitte des Werkzeugs, nicht sein Anfang.**
+- [x] **Die angeklickte Fläche ist die Mitte des Werkzeugs, nicht sein Anfang.**
       Klick auf eine 20-mm-Platte, Bohrung Tiefe 10 → 5 mm tief; Tiefe 0 („bohrt
       durch") → 10 mm und **kein Durchbruch**; Magnettasche → gar nichts. In
       Fusion ist der Klickpunkt die Mündung. Eigene Runde mit Formatversion und
       Migration, sie ändert bestehende Dateien
-- [ ] **Eine Operation, die nichts abgetragen hat, schweigt.** Die Magnettasche
+- [x] **Eine Operation, die nichts abgetragen hat, schweigt.** Die Magnettasche
       neben dem Körper erzeugt keinen Befund, keine Ausnahme, keinen Hinweis —
       unterhalb dessen, was Regel 17 überhaupt erfasst. Volumen vorher/nachher
       vergleichen, sonst Befund mit Vorschlag
-- [ ] **Formwerks Anordnung erreicht den Slicer nicht.** Zwei Läufe, einmal in
+- [x] **Formwerks Anordnung erreicht den Slicer nicht.** Zwei Läufe, einmal in
       Modell- und einmal in Bettkoordinaten, ergeben denselben G-Code — der
       Slicer ordnet neu an. Mit `--arrange 0` und Bettkoordinaten kommt die
       Anordnung auf ein Zehntel an. Damit ist die ganze Plattenlogik für den
       Slicer-Weg heute folgenlos, und der offene Punkt zum Haftungsrand hätte
       einen Abstand berechnet, der nie ankommt
-- [ ] **`filament_cost = 0` überschreibt die 30 €/kg des Herstellers.** „0 heißt
+- [x] **`filament_cost = 0` überschreibt die 30 €/kg des Herstellers.** „0 heißt
       unbekannt, nicht kostenlos" steht im eigenen Docstring — geschrieben wird
       es trotzdem. Systematisch geprüft: der einzige Fall dieser Art
 - [ ] **Keine Operation legt eine Passung an.** `create_lid` baut den Deckel mit
       0,25 mm Spiel aus dem Materialprofil und trägt keinen `Fit` ein; damit
       greifen genaue Außenwand, gebremste Beschleunigung und Bügeln nie. Fits
       entstehen nur aus Agent, Verstiften und Dialog
-- [ ] **Die Gegenprobe vergleicht nur das Stützvolumen.** Live: 12 g / 46 min
+- [x] **Die Gegenprobe vergleicht nur das Stützvolumen.** Live: 12 g / 46 min
       geschätzt gegen 10,0 g / 37 min gemessen — −17 % und −20 %, und kein Wort
       im Prüfbericht. `gcode.compare` kennt die 15-%-Schwelle und wird an genau
       einer Stelle gerufen
-- [ ] **`arrange_bed` ohne Eingaben hält die Auswertung an**, statt nichts zu
+- [x] **`arrange_bed` ohne Eingaben hält die Auswertung an**, statt nichts zu
       tun. Der Test dazu prüft die Positionen und nicht `result.complete` — und
       deckt den Abbruch damit zu
-- [ ] **Im Viewport lässt sich nichts anklicken.** Links wählt nichts aus, rechts
+- [x] **Im Viewport lässt sich nichts anklicken.** Links wählt nichts aus, rechts
       öffnet kein Menü; Rad und Rechtsziehen bewegen die Kamera. Ursache:
       gepickt wird mit `vtkPointPicker`, und der trifft Eckpunkte, keine Flächen.
       Daran hängen Auswahl, Kontextmenü am Merkmal (§18.5), Messen, Bemalen und
       die Flächenübernahme in Dialoge
-- [ ] **Ein Zylinder trägt einundfünfzig Flächenmerkmale**, in Fusion sind es
+- [x] **Ein Zylinder trägt einundfünfzig Flächenmerkmale**, in Fusion sind es
       drei. Facetten gehören zusammengefasst, bevor IDs vergeben werden — mit
       dem Zuordnungstest zusammen, nicht nebenbei
-- [ ] **Ein Rundstab meldet sich als Bohrung.** `brep/features.py` macht aus
+- [x] **Ein Rundstab meldet sich als Bohrung.** `brep/features.py` macht aus
       jeder geschlossenen Zylinderfläche ein `hole`, ohne die Materialseite zu
       prüfen. `boss` gehört zuerst in Bauplan §4.2
-- [ ] **Die Skizzenleiste liegt unter den Bereichen links und rechts** — verdeckt
+- [x] **Die Skizzenleiste liegt unter den Bereichen links und rechts** — verdeckt
       sind die *ersten* Werkzeuge, also Linie und Rechteck. Kein Platzproblem:
       bei 1296 wie bei 1900 Pixel. Die Kürzel selbst stimmen, `R` zeichnet ein
       Rechteck und die Skizze meldet sich als bestimmt
-- [ ] **Der Ersteinrichtungsdialog fragt den gefundenen Slicer nicht.** Er meldet
+- [x] **Der Ersteinrichtungsdialog fragt den gefundenen Slicer nicht.** Er meldet
       „Slicer gefunden" und schlägt im selben Fenster den allgemeinen 220er und
       PLA vor, während der Profilbestand den Centauri Carbon 2 kennt
-- [ ] **Der Objektname reist nicht ins STEP** — in Fusion heißt das Teil
+- [x] **Der Objektname reist nicht ins STEP** — in Fusion heißt das Teil
       „Körper1". Fürs 3MF war das schon einmal ein Fund und ist behoben
-- [ ] **Von der Aushöhlung zum Deckel fehlt ein Schritt.** `hollow_object`
+- [x] **Von der Aushöhlung zum Deckel fehlt ein Schritt.** `hollow_object`
       schließt den Hohlraum, `create_lid` verlangt eine Öffnung; der Weg zur Dose
       führt über zwei Zylinder und eine Differenz
 

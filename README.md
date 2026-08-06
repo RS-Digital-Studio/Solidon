@@ -14,10 +14,12 @@ Projektdateien tragen die Endung `.p3d`.
 
 Damit niemand das Falsche erwartet:
 
-* **Kein CAD-Ersatz.** Es gibt keine Skizzen, keine Zwangsbedingungen, keine
-  Historie aus parametrischen Features im Sinne von Fusion oder SolidWorks.
-  Formwerk arbeitet auf Netzen; Verrundungen und Fasen auf beliebigen Kanten
-  bleiben deshalb hart, bis der B-Rep-Kern kommt (§30).
+* **Kein CAD-Ersatz.** Es gibt Skizzen mit Zwangsbedingungen und einen exakten
+  Kern für Verrundungen, Fasen und STEP — aber keine Historie aus
+  parametrischen Features im Sinne von Fusion oder SolidWorks, und keine
+  Baugruppenverwaltung. Der Hauptweg bleibt der Operationsstack auf Netzen;
+  der exakte Kern ist der zweite Weg daneben, nicht der Ersatz für ein
+  CAD-Programm.
 * **Keine Passungen aus erzeugten Meshes.** Was ein Bildmodell erzeugt, ist eine
   Oberfläche, keine Konstruktion. Bohrungen und Passungen entstehen danach als
   eigene Operationen — nicht dadurch, dass man das erzeugte Netz vermisst.
@@ -74,7 +76,7 @@ Auf der Kommandozeile gibt `formwerk docs --manual` denselben Text aus.
 
 ```
 python -m venv .venv
-.venv/Scripts/python.exe -m pip install -e ".[dev,geom,ui]"
+.venv/Scripts/python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui]"
 ```
 
 | Befehl | Zweck |
@@ -232,7 +234,7 @@ Exportiert wird ein solcher Körper als `STEP` mit Flächen und Kanten; STL und
 Der Kern ist optional:
 
 ```bash
-.venv/Scripts/python.exe -m pip install -e ".[brep]"
+.venv/Scripts/python.exe -m pip install -c constraints.txt -e ".[brep]"
 ```
 
 Ohne ihn sagen die betroffenen Operationen das in einem Satz, und alles andere
