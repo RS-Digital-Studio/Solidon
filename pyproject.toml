@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "formwerk"
 version = "0.0.1"
 description = "Desktop application for building, generating and editing printable models"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 license = { file = "LICENSE" }
 authors = [{ name = "RS Digital" }]
 dependencies = []
@@ -87,7 +87,17 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-filterwarnings = ["error"]
+filterwarnings = [
+  "error",
+  # numpy 2.5 hat `arr.shape = ...` als veraltet markiert; VTK 9.6 und
+  # scikit-image 0.26 benutzen es noch, beides Fremdcode. Der eigene Kern kommt
+  # ohne diese Zuweisung aus, deshalb eng auf die zwei Module begrenzt statt
+  # numpy nach oben zu deckeln — eine Obergrenze hielte das ganze Projekt auf
+  # einer alten Fassung fest. Fällt weg, sobald beide nachgezogen haben; der
+  # wöchentliche Lauf gegen die neuesten Fassungen meldet es.
+  'ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:vtkmodules\..*',
+  'ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:skimage\..*',
+]
 markers = [
   "performance: misst gegen das Budget aus Bauplan §31",
   "slow: dauert spürbar länger als ein Unit-Test",
@@ -95,7 +105,7 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
@@ -128,7 +138,7 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 "tests/*" = ["RUF001", "RUF002"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 files = ["app"]
 strict = true
 warn_unreachable = true
@@ -148,8 +158,9 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # Plattformzweige sind auf jeder Plattform außer einer unerreichbar — genau
-# dafür sind sie da.
-module = ["app.core.paths", "app.core.discover"]
+# dafür sind sie da. Bei OpenSCAD ist es die Speichergrenze aus §32: RLIMIT_AS
+# auf POSIX, ein Job-Objekt auf Windows.
+module = ["app.core.paths", "app.core.discover", "app.core.backends.openscad"]
 warn_unreachable = false
 
 [[tool.mypy.overrides]]

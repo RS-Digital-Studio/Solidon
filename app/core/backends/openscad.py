@@ -28,6 +28,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,6 +52,13 @@ _INCLUDE_PATTERN = re.compile(
 #: Wie lange ein Lauf dauern darf. Ein Modell, das länger braucht, ist kein
 #: Rückfall, sondern ein Fehler (§31).
 TIMEOUT_SECONDS = 60.0
+
+#: Wie viel Speicher ein Lauf nehmen darf (§32). Das Zeitlimit allein genügt
+#: nicht: ein ``for (i = [0 : 2000000])`` aus einem Sprachmodell füllt den
+#: Arbeitsspeicher lange bevor eine Minute um ist, und was dann anfängt zu
+#: swappen, ist der Rechner des Nutzers und nicht dieser Unterprozess.
+#: Zwei Gigabyte sind großzügig für das, wofür diese Rückfallebene da ist.
+MEMORY_LIMIT_BYTES = 2 * 1024**3
 
 #: Namen, unter denen OpenSCAD installiert wird.
 EXECUTABLES = ("openscad", "openscad-nightly", "OpenSCAD")
@@ -168,6 +176,155 @@ class RenderResult:
     seconds: float = 0.0
 
 
+def _limit_this_process(limit: int) -> None:  # pragma: no cover - läuft im Kindprozess
+    """Setzt die Speichergrenze, nachdem der Kindprozess abgespalten ist.
+
+    Nur auf POSIX; Windows kennt ``RLIMIT_AS`` nicht und bekommt weiter unten
+    ein Job-Objekt.
+    """
+    if sys.platform == "win32":
+        return
+    import resource
+
+    resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+
+
+def _memory_capped_job(limit: int) -> int | None:
+    """Ein Windows-Job-Objekt, das seinen Prozessen ``limit`` Bytes zugesteht.
+
+    Das Gegenstück zu ``RLIMIT_AS``. Ein Prozess in einem solchen Job bekommt
+    bei einer Anforderung darüber hinaus eine Fehlschlagsmeldung statt des
+    Speichers — dieselbe Wirkung, anderer Weg.
+
+    ``None``, wenn das System keinen Job hergibt. Dann läuft der Lauf ohne
+    Speichergrenze weiter: eine Rückfallebene, die gar nicht startet, wäre der
+    schlechtere Tausch, und das Zeitlimit greift weiterhin.
+    """
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    class _BasicLimits(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.POINTER(ctypes.c_ulong)),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        ]
+
+    class _IoCounters(ctypes.Structure):
+        _fields_ = [
+            ("ReadOperationCount", ctypes.c_uint64),
+            ("WriteOperationCount", ctypes.c_uint64),
+            ("OtherOperationCount", ctypes.c_uint64),
+            ("ReadTransferCount", ctypes.c_uint64),
+            ("WriteTransferCount", ctypes.c_uint64),
+            ("OtherTransferCount", ctypes.c_uint64),
+        ]
+
+    class _ExtendedLimits(ctypes.Structure):
+        _fields_ = [
+            ("BasicLimitInformation", _BasicLimits),
+            ("IoInfo", _IoCounters),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
+
+    job_memory_limit = 0x00000100
+    extended_information_class = 9
+
+    kernel = ctypes.windll.kernel32
+    handle = int(kernel.CreateJobObjectW(None, None))
+    if not handle:
+        return None
+
+    information = _ExtendedLimits()
+    information.BasicLimitInformation.LimitFlags = job_memory_limit
+    information.ProcessMemoryLimit = limit
+    stored = kernel.SetInformationJobObject(
+        handle,
+        extended_information_class,
+        ctypes.byref(information),
+        ctypes.sizeof(information),
+    )
+    if not stored:
+        kernel.CloseHandle(handle)
+        return None
+    return handle
+
+
+def _join_job(job: int, pid: int) -> None:
+    """Nimmt den frisch gestarteten Prozess in den Job auf."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    set_quota_and_terminate = 0x0100 | 0x0001
+    kernel = ctypes.windll.kernel32
+    process = int(kernel.OpenProcess(set_quota_and_terminate, False, pid))
+    if not process:
+        return
+    try:
+        kernel.AssignProcessToJobObject(job, process)
+    finally:
+        kernel.CloseHandle(process)
+
+
+def run_guarded(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout: float,
+    memory: int = MEMORY_LIMIT_BYTES,
+) -> subprocess.CompletedProcess[bytes]:
+    """Führt ein fremdes Programm mit Zeit- **und** Speichergrenze aus (§32).
+
+    Beides steht in §32 nebeneinander, und die Zeit allein reicht nicht: was in
+    einer Minute den Arbeitsspeicher füllt, hat den Rechner schon geholt, bevor
+    das Zeitlimit zuschlägt.
+
+    Zwei Wege, weil die Systeme zwei anbieten — ``RLIMIT_AS`` im abgespaltenen
+    Kind, ein Job-Objekt auf Windows. Der Job wird nach dem Start zugewiesen;
+    in dem Augenblick dazwischen hat der Prozess noch nichts angefordert.
+    """
+    on_windows = sys.platform == "win32"
+    job = _memory_capped_job(memory) if on_windows else None
+
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        preexec_fn=None if on_windows else (lambda: _limit_this_process(memory)),
+    )
+    try:
+        if job is not None:
+            _join_job(job, process.pid)
+        try:
+            out, err = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            raise
+    finally:
+        if job is not None and sys.platform == "win32":
+            import ctypes
+
+            ctypes.windll.kernel32.CloseHandle(job)
+
+    return subprocess.CompletedProcess(command, process.returncode, out, err)
+
+
 def render(source: str, *, timeout: float = TIMEOUT_SECONDS) -> RenderResult:
     """Führt einen Quelltext aus und gibt das Netz zurück — nach der Prüfung,
     nie davor.
@@ -192,13 +349,11 @@ def render(source: str, *, timeout: float = TIMEOUT_SECONDS) -> RenderResult:
         stl_file = workspace / "model.stl"
         scad_file.write_text(source, encoding="utf-8")
 
-        completed = subprocess.run(
+        completed = run_guarded(
             [binary, "-o", str(stl_file), str(scad_file)],
             cwd=workspace,
-            capture_output=True,
-            timeout=timeout,
             env=_environment(workspace),
-            check=False,
+            timeout=timeout,
         )
         if completed.returncode != 0 or not stl_file.is_file():
             raise AppError(

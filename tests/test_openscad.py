@@ -90,7 +90,7 @@ def test_refused_source_is_never_executed(monkeypatch: pytest.MonkeyPatch) -> No
         started.append(args)
         raise AssertionError("a refused source must not reach OpenSCAD")
 
-    monkeypatch.setattr(openscad.subprocess, "run", never)
+    monkeypatch.setattr(openscad, "run_guarded", never)
     monkeypatch.setattr(openscad, "executable", lambda: "openscad")
 
     with pytest.raises(openscad.UnsafeSource):
@@ -132,7 +132,7 @@ def test_a_run_gets_its_own_folder_and_no_network(monkeypatch: pytest.MonkeyPatc
         return Completed()
 
     monkeypatch.setattr(openscad, "executable", lambda: "openscad")
-    monkeypatch.setattr(openscad.subprocess, "run", fake_run)
+    monkeypatch.setattr(openscad, "run_guarded", fake_run)
 
     result = openscad.render(SAFE)
 
@@ -161,7 +161,7 @@ def test_a_render_says_where_the_body_came_from(monkeypatch: pytest.MonkeyPatch)
         return Completed()
 
     monkeypatch.setattr(openscad, "executable", lambda: "openscad")
-    monkeypatch.setattr(openscad.subprocess, "run", fake_run)
+    monkeypatch.setattr(openscad, "run_guarded", fake_run)
 
     result = openscad.render(SAFE)
 
@@ -174,7 +174,7 @@ def test_a_failed_render_is_an_error_with_the_output(monkeypatch: pytest.MonkeyP
         stderr = b"ERROR: syntax error"
 
     monkeypatch.setattr(openscad, "executable", lambda: "openscad")
-    monkeypatch.setattr(openscad.subprocess, "run", lambda *a, **k: Completed())
+    monkeypatch.setattr(openscad, "run_guarded", lambda *a, **k: Completed())
 
     with pytest.raises(AppError) as raised:
         openscad.render("cube(")
@@ -195,7 +195,7 @@ def test_the_operation_checks_before_it_runs(monkeypatch: pytest.MonkeyPatch) ->
     def never(*args: object, **kwargs: object) -> object:
         raise AssertionError("a refused source must not reach OpenSCAD")
 
-    monkeypatch.setattr(openscad.subprocess, "run", never)
+    monkeypatch.setattr(openscad, "run_guarded", never)
     monkeypatch.setattr(openscad, "executable", lambda: "openscad")
 
     project = new_project("centauri-carbon-2", "petg")
@@ -232,7 +232,7 @@ def test_a_checked_source_becomes_a_body(monkeypatch: pytest.MonkeyPatch) -> Non
         return Completed()
 
     monkeypatch.setattr(openscad, "executable", lambda: "openscad")
-    monkeypatch.setattr(openscad.subprocess, "run", fake_run)
+    monkeypatch.setattr(openscad, "run_guarded", fake_run)
 
     project = new_project("centauri-carbon-2", "petg")
     History(project.document).apply(
@@ -247,6 +247,70 @@ def test_a_checked_source_becomes_a_body(monkeypatch: pytest.MonkeyPatch) -> Non
     assert result.complete
     assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(1000.0, rel=0.01)
     assert "scad.rendered" in {finding.code for finding in result.scene.report.findings}
+
+
+# --- Die Grenzen des Unterprozesses (§32) -----------------------------------------
+
+
+def _environment() -> dict[str, str]:
+    """So viel Umgebung, wie ein Python-Start braucht — mehr nicht."""
+    import os
+
+    keep = ("PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "HOME", "USERPROFILE")
+    return {name: os.environ[name] for name in keep if name in os.environ}
+
+
+def test_the_memory_limit_actually_bites(tmp_path: Path) -> None:
+    """§32 verlangt Zeit **und** Speicher. Geprüft wird die Wirkung.
+
+    Ein Zeitlimit allein lässt einen Quelltext, der in Schleifen Geometrie
+    aufhäuft, erst nach einer Minute los — und bis dahin hat er den
+    Arbeitsspeicher. Der Beweis ist deshalb ein echter Unterprozess, der mehr
+    verlangt als er darf, und daran scheitert.
+
+    Gemessen an Python statt an OpenSCAD: die Grenze gehört dem Aufruf, nicht
+    dem Programm, und OpenSCAD ist auf einem Bauserver nicht installiert.
+    """
+    import sys
+
+    completed = openscad.run_guarded(
+        [sys.executable, "-c", "bytearray(1024**3)"],
+        cwd=tmp_path,
+        env=_environment(),
+        timeout=120.0,
+        memory=384 * 1024**2,
+    )
+
+    assert completed.returncode != 0, "ein Gigabyte unter einer 384-MB-Grenze muss scheitern"
+
+
+def test_the_limit_leaves_a_reasonable_run_alone(tmp_path: Path) -> None:
+    """Die Gegenprobe: eine Grenze, die alles erschlägt, wäre keine."""
+    import sys
+
+    completed = openscad.run_guarded(
+        [sys.executable, "-c", "bytearray(8 * 1024**2)"],
+        cwd=tmp_path,
+        env=_environment(),
+        timeout=120.0,
+        memory=384 * 1024**2,
+    )
+
+    assert completed.returncode == 0
+
+
+def test_a_run_over_its_time_is_stopped(tmp_path: Path) -> None:
+    """Das Zeitlimit bleibt, was es war — und der Prozess überlebt es nicht."""
+    import subprocess
+    import sys
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        openscad.run_guarded(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            cwd=tmp_path,
+            env=_environment(),
+            timeout=1.0,
+        )
 
 
 def test_no_core_path_needs_openscad() -> None:

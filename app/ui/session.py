@@ -42,6 +42,7 @@ from app.core.scene import (
     OperationDraft,
     ResultCache,
     expressions,
+    foreign,
     orphans,
 )
 from app.core.scene.evaluate import evaluate
@@ -107,7 +108,16 @@ class _EvaluationWorker(QThread):
     def run(self) -> None:
         session = self._session
         try:
+            # §32: was diese Datei außer Geometrie mitbringt, wird am Dokument
+            # abgelesen — vor der Auswertung, damit der Hinweis nicht von dem
+            # abhängt, was die Auswertung daraus macht.
+            outside: list[Finding] = []
+            if session.pending_foreign_check:
+                session.pending_foreign_check = False
+                outside = foreign.findings_for(session.project.document)
+
             result = session.run_evaluation()
+            result = _with_findings(result, outside)
             if session.pending_part_check:
                 # §24.4: was die Bibliothek geändert hat, seit diese Datei gespeichert
                 # wurde, wird einmal gesagt — beim Öffnen, nicht bei jeder
@@ -284,6 +294,11 @@ class Session(QObject):
         """Set when a file was opened: §21.3 checks its references once, not always."""
         self.pending_part_check = False
         """The same for the part library (§24.4): once on opening, not on every run."""
+        self.pending_foreign_check = False
+        """Und dasselbe für das, was §32 den Warnhinweis nennt: Quelltext und
+        Verweise nach außen werden beim Öffnen einmal gemeldet. Bei jeder
+        Auswertung wäre es eine Zeile, die immer dasteht und die deshalb
+        niemand mehr liest."""
         self._worker: _EvaluationWorker | None = None
         self._finished_worker: _EvaluationWorker | None = None
         """Der zuletzt ausgelaufene Auswertungs-Arbeiter, festgehalten bis ihn
@@ -365,6 +380,7 @@ class Session(QObject):
         self.project = load(path)
         self.pending_orphan_check = True
         self.pending_part_check = True
+        self.pending_foreign_check = True
         self._reset_for(path)
 
     def recover(self, path: Path) -> None:
@@ -377,6 +393,7 @@ class Session(QObject):
         self.project = load(path)
         self.pending_orphan_check = True
         self.pending_part_check = True
+        self.pending_foreign_check = True
         self._reset_for(None)
         self._dirty = True
         self.projectChanged.emit()
