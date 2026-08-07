@@ -2267,14 +2267,12 @@ Erkenntnis wie bei den drei Bausteinen über ihrem Ursprung, eine Etage höher.
 
 ### Offen aus dem Audit
 
-- [ ] **Rund fünfundachtzig englische Docstrings** stehen noch in
-      `app/`, verteilt auf etwa fünfundzwanzig Dateien — meist einzeilige
-      Attribut-Beschreibungen (`viewport.py`, `session.py`, `maps.py`,
-      `matching.py`, `registry.py`, `settings.py`). `CLAUDE.md` führt den
-      Bestand als vollständig nachgezogen; das stimmt für die mehrzeiligen
-      Docstrings und nicht für diese. Entweder übersetzen oder die Behauptung
-      zurücknehmen — die Sprachprüfung sieht sie nicht, sie gilt den
-      Bezeichnern.
+- [x] **Die englischen Docstrings sind übersetzt.** Es waren 56 in `app/`
+      über 27 Dateien, dazu acht in `tests/` und `tools/` — fast alles
+      einzeilige Attribut-Beschreibungen, die die Sprachprüfung nicht sieht,
+      weil sie den Bezeichnern gilt. Erledigt in „Die letzten englischen
+      Docstrings zogen nach" (5709245); der Suchlauf, der sie gefunden hat,
+      findet jetzt nichts mehr.
 
 ## Durchsicht: was außerhalb der Anwendung läuft (07.08.2026)
 
@@ -2411,23 +2409,38 @@ Platz, an dem die echten stehen.
 
 ### Offen
 
-- [ ] **Native Bibliotheken zerlegen den Speicher unter uns.** Das ist kein
-      Einzelfall mehr, sondern eine Familie, und sie erklärt jeden sporadischen
-      roten Lauf dieser Sitzung:
+- [ ] **`rtree` zerlegt den Speicher, und niemand ruft es auf.** Die Diagnose
+      steht, die Ursache liegt außerhalb. Schicht für Schicht an derselben
+      63-MB-Modelldatei eingegrenzt:
 
-      | Fundstelle | Symptom |
+      | Aufbau | Ergebnis |
       |---|---|
-      | `rtree.index.intersection` | Zugriffsverletzung, 1 von 20 — behoben durch Wiederholung |
-      | `threemf._mesh_from` | ab dem vierten Lauf im selben Prozess still falsche Teilzahl, dann `OverflowError` |
-      | `_elementtree` in `test_real_models` | `SystemError: error return without exception set` |
-      | Prozessende nach Testläufen | Faulthandler-Stack ohne roten Test |
+      | nur XML lesen | 12/12 |
+      | XML + numpy | 12/12 |
+      | XML + numpy + Trimesh | 8/12 |
+      | dieselbe Runde ohne XML | 12/12 |
 
-      Belegt: reines XML-Parsen derselben Datei läuft achtmal sauber durch;
-      erst mit trimesh im selben Prozess kippt es. Die Wiederholung bei rtree
-      ist ein Pflaster, keine Ursache. Nächster Schritt wäre, die Fassungen
-      von `rtree`, `trimesh` und `numpy` gegen `constraints.txt` zu prüfen und
-      einzeln zu tauschen — bis dahin sagt ein einzelner roter Lauf von
-      `test_real_models.py` nichts.
+      Es liegt **nicht** am XML-Leser: `lxml` verhält sich genauso. Es liegt
+      **nicht** an der Umwandlung: Pythons `int()` statt NumPys Parser stürzt
+      an derselben Stelle. Es liegt am geladenen `rtree`, das in diesen Läufen
+      nicht einmal benutzt wird:
+
+      | Fassung | Verhalten |
+      |---|---|
+      | 1.4.1 / 1.4.0 | Prozess stirbt an einer Zugriffsverletzung |
+      | 1.3.0 | kein Absturz, sechs Fehler von dreißig |
+      | gesperrt | einer von dreißig |
+
+      Neuinstallation ändert nichts; die Fassungen stimmen mit
+      `constraints.txt`. Das schönste Symptom: `ValueError: invalid literal
+      for int() with base 10: '98968'` — über eine gültige Zahl.
+
+      Zwei Stellen tragen jetzt ein Pflaster (`mesh.on_surface`,
+      `threemf._numbers_from`): einmal wiederholen, beim zweiten Fehlschlag
+      durchlassen. Das reicht für den Betrieb, nicht als Antwort. Offen bleibt
+      die Frage nach oben — ein Fehlerbericht bei `rtree`/`libspatialindex`
+      mit dieser Messreihe, und die Prüfung, ob `trimesh` sich ohne `rtree`
+      betreiben lässt (`nearby_faces` ist der einzige Nutzer).
 - [ ] **Der Agent greift nicht zu den Bausteinen** (0/13). Die Vorrangregel
       „Bausteine vor Primitiven" steht im Systemprompt und trägt bei einem
       lokalen 14B-Modell nicht. Eine Regeländerung dazu wird vorher und
