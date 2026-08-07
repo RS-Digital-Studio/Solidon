@@ -341,7 +341,16 @@ def repair(
             Finding(
                 code="repair.still_open",
                 severity="warning",
-                message=_("Das Modell ist weiterhin nicht geschlossen."),
+                # Was jetzt geht, gehört dazu (§2.7). Bei einem erzeugten Netz
+                # ist das der Normalfall und nicht die Ausnahme: ein
+                # Bildmodell liefert eine Hülle, keinen Körper, und Löcher
+                # füllen reicht dafür nicht. Neu vernetzen schließt es
+                # zuverlässig und kostet Feinheit — eine Abwägung, die dem
+                # Nutzer gehört, nicht der Reparatur.
+                message=_(
+                    "Das Modell ist weiterhin nicht geschlossen. "
+                    "Neu vernetzen schließt es, kostet aber Feinheit."
+                ),
                 values={"open_edges": open_edge_count(result.mesh)},
             )
         )

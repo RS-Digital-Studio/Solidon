@@ -46,6 +46,15 @@ GENERATED_REPAIR: dict[str, bool] = {
     "self_intersections": True,
 }
 
+#: Auf welche längste Kante ein erzeugter Körper gebracht wird.
+#:
+#: Ein Bildmodell liefert seine Ausgabe auf einem Einheitswürfel — als
+#: Millimeter gelesen ein Krümel von ein bis zwei Millimetern. Hundert ist
+#: keine Vorhersage, wie groß das Teil werden soll, sondern der Punkt, von dem
+#: aus jede Richtung gleich weit ist: ein Möbel im Puppenhausmaßstab liegt
+#: darunter, ein Gehäuse darüber, und beides ist ein Schritt.
+WORKING_SIZE_MM = 100.0
+
 
 def _silent(fraction: float, text: str) -> None:
     del fraction, text
@@ -137,6 +146,31 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     repairing = history.apply(
         _("Reparaturkette"),
         [OperationDraft(op="repair", inputs=(object_id,), params=dict(GENERATED_REPAIR))],
+        origin,
+    )
+
+    # Auf eine Größe bringen, mit der sich arbeiten lässt.
+    #
+    # Ein Bildmodell normiert seine Ausgabe auf einen Einheitswürfel — was
+    # herauskommt, misst ein bis zwei Einheiten, und als Millimeter gelesen
+    # ist das ein Krümel. Vier erzeugte Möbel maßen 0,6 bis 2,0 mm; im
+    # Viewport war nichts zu sehen, und der Weg zurück führte über einen
+    # Skalierfaktor von 140, den ``scale_object`` gar nicht annahm.
+    #
+    # Geraten wird dabei nichts (Regel 21): dass ein Stuhl 75 mm hoch werden
+    # soll und ein Schrank 250, weiß nur der Nutzer. Was hier entsteht, ist
+    # eine Ausgangsgröße, von der aus er in einem Schritt auf sein Maß kommt —
+    # und weil es eine eigene Transaktion ist, nimmt ein Undo sie zurück.
+    history.apply(
+        _("Auf Arbeitsgröße bringen"),
+        [
+            OperationDraft(
+                op="fit_to_size",
+                inputs=(object_id,),
+                outputs=(object_id,),
+                params={"largest": WORKING_SIZE_MM},
+            )
+        ],
         origin,
     )
     _log.info("generated %s into %s via %s", object_id, source_id, result.backend)

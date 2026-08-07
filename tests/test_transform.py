@@ -215,3 +215,80 @@ def test_the_transformations_are_registered_completely() -> None:
         assert spec.category == "transform"
         assert (spec.consumes, spec.produces) == (1, 1)
         assert str(spec.doc)
+
+
+def test_fit_to_size_reaches_the_given_edge(profile: Profile) -> None:
+    """Der Fall, für den die Operation entstand: ein erzeugtes Netz kommt auf
+    einem Einheitswürfel an und soll ein Maß bekommen, nicht einen Faktor.
+
+    Gerechnet gegen cube_clean.stl: zwanzig Millimeter Kante, Ziel achtzig.
+    """
+    body = normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
+    assert max(body.bounds.size) == pytest.approx(20.0, abs=1e-6)
+
+    project = new_project("centauri-carbon-2", "pla")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/cube_clean.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "cube_clean.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        "Auf Maß",
+        [
+            OperationDraft(
+                op="fit_to_size", inputs=("obj_1",), outputs=("obj_1",), params={"largest": 80.0}
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    bodies = [entry for entry in result.scene.objects.values() if entry.mesh is not None]
+
+    assert len(bodies) == 1
+    assert max(bodies[0].mesh.bounds.size) == pytest.approx(80.0, abs=1e-6)
+    # Gleichmäßig: ein Würfel bleibt ein Würfel.
+    assert min(bodies[0].mesh.bounds.size) == pytest.approx(80.0, abs=1e-6)
+    said = [f for f in result.scene.report.findings if f.code == "transform.fitted"]
+    assert said, "die Operation sagt, worauf sie gebracht hat"
+    assert said[0].values["from_mm"] == pytest.approx(20.0, abs=1e-3)
+
+
+def test_fit_to_size_refuses_a_body_without_extent() -> None:
+    """Ein Maß braucht etwas, worauf es sich bezieht — sonst teilt die
+    Rechnung durch null.
+
+    Der Körper wird direkt gebaut: über eine Skalierung ginge es nicht, denn
+    der Faktor null wird schon eine Ebene tiefer abgelehnt.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.errors import GeometryError
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.ops import fit_to_size
+    from app.core.types import OpContext, SceneObject
+
+    punkt = trimesh.Trimesh(
+        vertices=np.zeros((3, 3), dtype=float), faces=np.array([[0, 1, 2]]), process=False
+    )
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import Scene
+
+    spec = REGISTRY.get("fit_to_size")
+    entry = SceneObject(id="obj_1", name="Nichts", mesh=MeshData(raw=punkt))
+    context = OpContext(
+        scene=Scene(objects={entry.id: entry}),
+        inputs=[entry],
+        params=spec.params(largest=80.0),
+        profile=None,
+        quality="fine",
+        seed=None,
+        progress=lambda fraction, text: None,
+        ask=lambda question, choices: choices[0],
+        cancelled=NeverCancelled(),
+    )
+
+    with pytest.raises(GeometryError) as problem:
+        fit_to_size(context)
+    assert problem.value.suggestions, "und nennt, was jetzt zu tun ist"

@@ -479,3 +479,35 @@ def test_a_bore_through_a_block_stays_a_hole() -> None:
 
     assert "hole" in kinds
     assert "pin" not in kinds
+
+
+def test_losing_the_exact_body_is_said_where_it_happens(profile: Profile) -> None:
+    """Der Weg von B-Rep zu Netz ist erlaubt, aber eine Einbahnstraße.
+
+    Vorher ging man sie unbemerkt: „Aushöhlen" auf einem exakten Quader gibt
+    Dreiecke zurück, und erst drei Schritte später lehnte „Tasche schneiden"
+    mit „hier liegt ein Netz" ab — neben einer Operation, die nichts dafür
+    kann. Gesagt wird es jetzt bei der Operation, die es verursacht.
+    """
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Exakter Quader",
+        [OperationDraft(op="create_brep_box", params={"width": 40, "depth": 40, "height": 40})],
+    )
+
+    before = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert [entry.kind for entry in before.scene.objects.values()] == ["brep"]
+    assert not [f for f in before.scene.report.findings if f.code == "evaluate.exact_became_mesh"]
+
+    history.apply(
+        "Aushöhlen",
+        [OperationDraft(op="hollow_object", inputs=("obj_1",), outputs=("obj_1",), params={})],
+    )
+    after = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert [entry.kind for entry in after.scene.objects.values()] == ["mesh"]
+    said = [f for f in after.scene.report.findings if f.code == "evaluate.exact_became_mesh"]
+    assert said, "der Verlust der Exaktheit gehört in den Bericht"
+    assert said[0].severity == "info", "es ist ein erlaubter Weg, keine Warnung"
+    assert said[0].values["op"] == "hollow_object", "und er nennt, wer ihn gegangen ist"

@@ -203,6 +203,10 @@ def evaluate(
             stopped_at = operation.id
             break
 
+        # Welcher Art die Eingänge waren, bevor sie verschwinden — gleich
+        # darunter wird gefragt, ob aus einem exakten Körper ein Netz wurde.
+        art_vorher = {entry: objects[entry].kind for entry in operation.inputs if entry in objects}
+
         for entry in operation.inputs:
             if entry not in operation.outputs:
                 objects.pop(entry, None)
@@ -213,11 +217,37 @@ def evaluate(
             # nicht aus dem, was die Operation behauptet hat. Eine Mesh-Op auf
             # einem exakten Teil gibt Dreiecke zurück, und der Objektbaum muss
             # das sagen.
+            geworden = kind_of(produced_object.mesh)
+            # Der Weg von exakt zu Netz steht jederzeit offen und ist keine
+            # Störung — aber er ist eine Einbahnstraße, und bisher ging man
+            # sie, ohne es zu merken. „Aushöhlen" auf einem exakten Quader
+            # liefert Dreiecke zurück; drei Schritte später lehnt „Tasche
+            # schneiden" ab, und der Satz „hier liegt ein Netz" steht dann
+            # neben einer Operation, die nichts dafür kann.
+            war = art_vorher.get(operation.inputs[index] if index < len(operation.inputs) else "")
+            if war is None and operation.inputs:
+                war = art_vorher.get(operation.inputs[0])
+            if war == "brep" and geworden == "mesh":
+                findings.append(
+                    Finding(
+                        code="evaluate.exact_became_mesh",
+                        severity="info",
+                        message=_(
+                            "Aus einem exakten Körper wurde ein Netz. "
+                            "Verrundung, Fase und Skizzen-Operationen stehen darauf nicht mehr "
+                            "zur Verfügung."
+                        ),
+                        values={"op": operation.op, "object": object_id},
+                        object_id=object_id,
+                        op_id=operation.id,
+                        source="internal",
+                    )
+                )
             placed = dataclasses.replace(
                 produced_object,
                 id=object_id,
                 created_by=operation.id,
-                kind=kind_of(produced_object.mesh),
+                kind=geworden,
             )
             objects[object_id] = _with_features(
                 placed,

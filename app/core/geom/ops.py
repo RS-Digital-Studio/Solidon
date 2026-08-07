@@ -10,7 +10,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, cast
 
-from app.core.errors import Action, AppError
+from app.core.errors import Action, AppError, GeometryError
 from app.core.geom.align import align_matrix
 from app.core.geom.boolean import BooleanKind, boolean
 from app.core.geom.mesh import as_mesh_data
@@ -27,7 +27,8 @@ from app.core.geom.transform import (
     translation,
 )
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, FeatureRef, OpContext, OpResult, Transform
+from app.core.types import BaseParams, FeatureRef, Finding, OpContext, OpResult, Transform
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _AXES = tuple(AXIS_VECTORS)
@@ -195,6 +196,73 @@ def scale_object(ctx: OpContext) -> OpResult:
     scaled = apply(as_mesh_data(source.mesh), matrix)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=scaled)], transform=as_transform(matrix)
+    )
+
+
+@op_params
+class FitToSizeParams(BaseParams):
+    largest: float = param(
+        title=_("Größte Kante"),
+        default=100.0,
+        minimum=0.1,
+        maximum=1000.0,
+        unit="mm",
+        doc=_("Auf dieses Maß wächst die längste Kante; die anderen folgen im Verhältnis."),
+    )
+    about: str = param(
+        title=_("Bezug"),
+        default="centre",
+        choices=_ANCHORS,
+        placement="advanced",
+        doc=_("Welcher Punkt beim Skalieren stehen bleibt."),
+    )
+
+
+@register_op(
+    name="fit_to_size",
+    title=_("Auf Maß bringen"),
+    category="transform",
+    params=FitToSizeParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Skaliert ein Objekt so, dass seine längste Kante das angegebene Maß hat. "
+        "Für alles, dessen Größe man kennt, aber dessen Faktor man erst ausrechnen müsste."
+    ),
+)
+def fit_to_size(ctx: OpContext) -> OpResult:
+    """Die Zielgröße ist bekannt, der Faktor nicht — also rechnet ihn die Op.
+
+    Der Fall, für den sie entstand: ein Bildmodell normiert seine Ausgabe auf
+    einen Einheitswürfel. Was ankommt, misst ein bis zwei Millimeter, und der
+    Weg zurück führt über einen Faktor von hundertvierzig — eine Zahl, die
+    niemand im Kopf hat und die ``scale_object`` obendrein ablehnte.
+    """
+    params = cast(FitToSizeParams, ctx.params)
+    source = ctx.inputs[0]
+    body = as_mesh_data(source.mesh)
+    current = max(body.bounds.size)
+    if current <= EPS_GEOM:
+        raise GeometryError(
+            _("Dieser Körper hat keine Ausdehnung."),
+            detail=_("Ein Maß lässt sich nur auf etwas beziehen, das eine Größe hat."),
+            suggestions=(Action(id="check_input", label=_("Eingangsobjekt prüfen.")),),
+        )
+    factor = params.largest / current
+    pivot = anchor_point(body, cast(Anchor, params.about))
+    matrix = scaling((factor, factor, factor), pivot)
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=apply(body, matrix))],
+        transform=as_transform(matrix),
+        findings=[
+            Finding(
+                code="transform.fitted",
+                severity="info",
+                message=_("Auf Maß gebracht."),
+                values={"from_mm": round(current, 3), "to_mm": params.largest},
+                source="internal",
+            )
+        ],
     )
 
 
