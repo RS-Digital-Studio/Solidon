@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from app.core.backends import keys
+from app.core.backends import keys, llm
 from app.core.backends.llm import (
     AnthropicBackend,
     BackendUnavailable,
@@ -237,7 +237,15 @@ def test_a_local_server_that_is_not_running_is_not_available() -> None:
     assert time.perf_counter() - started < 2.0
 
 
-def test_without_any_backend_there_is_no_chat() -> None:
+def test_without_any_backend_there_is_no_chat(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ohne Schlüssel und ohne lokales Modell gibt es keinen Chat (§27).
+
+    Die Abwesenheit wird hergestellt, nicht vorausgesetzt: auf einem Rechner
+    mit laufendem Ollama fand dieser Test eines und ging trotzdem durch, weil
+    er die Maschine für den Prüfling hielt.
+    """
+    monkeypatch.setattr(llm, "backends", tuple)
+
     assert first_available() is None
 
 
