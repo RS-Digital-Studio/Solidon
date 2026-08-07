@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
-from app.core.errors import AppError
+from app.core.errors import CANCEL, AppError
 from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.panels import collapsible
@@ -321,10 +321,27 @@ class GenerateDialog(QDialog):
         return self.result_mesh
 
     def _on_failed(self, problem: object) -> None:
+        """Was nicht ging, warum, und was jetzt hilft — alle drei (§2.7).
+
+        Der Titel allein sagt „konnte nicht starten" und lässt den Nutzer
+        stehen; erst das Detail nennt den Grund, und erst der Vorschlag nennt
+        den Ausweg. Modal wird hier nichts: ein Fehlerdialog über einem Dialog
+        ist eine Sackgasse mit Vorgeschichte.
+        """
         self.progress.setVisible(False)
         self.buttons.setEnabled(True)
-        text = str(problem.title) if isinstance(problem, AppError) else str(problem)
-        self.state.setText(text)
+        if not isinstance(problem, AppError):
+            self.state.setText(str(problem))
+            return
+
+        lines = [str(problem.title)]
+        if problem.detail is not None:
+            lines.append(str(problem.detail))
+        # „Abbrechen" ist der Ausgang, kein Rat — genannt wird, was weiterhilft.
+        ways = [str(action.label) for action in problem.suggestions if action.id != CANCEL.id]
+        if ways:
+            lines.append(" · ".join(ways))
+        self.state.setText("\n".join(lines))
 
     def _on_thread_done(self) -> None:
         self._worker = None

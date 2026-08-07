@@ -344,7 +344,7 @@ class KeyDialog(QDialog):
         }[keys.source(account)]
 
         explanation = QLabel(
-            f"{state}\n\n"
+            f"{state} {self._what_answers()}\n\n"
             + tr(
                 "Der Schlüssel wird im Schlüsselbund des Systems abgelegt und reist "
                 "nicht mit der Projektdatei mit. Ohne Schlüssel bleibt alles außer "
@@ -373,6 +373,21 @@ class KeyDialog(QDialog):
         layout.addWidget(self.field)
         layout.addWidget(self._local_model_section())
         layout.addWidget(buttons)
+
+    def _what_answers(self) -> str:
+        """Was gerade antwortet — die Frage, mit der jemand herkommt.
+
+        „Es ist kein Schlüssel hinterlegt" allein liest sich wie „der Chat geht
+        nicht", und das kann falsch sein: läuft ein Modell auf diesem Rechner,
+        geht er. Der Satz nennt darum den Weg, der gerade trägt, nicht bloß den
+        Zustand des Schlüssels.
+        """
+        backend = llm.first_available()
+        if backend is None:
+            return tr("Der Chat ist damit abgeschaltet — es antwortet gerade nichts.")
+        if backend.id == "ollama":
+            return tr("Der Chat läuft trotzdem: über das lokale Modell.")
+        return tr("Der Chat läuft darüber.")
 
     def _local_model_section(self) -> QWidget:
         """Der zweite Weg: ein Modell auf diesem Rechner, statt eines Schlüssels."""

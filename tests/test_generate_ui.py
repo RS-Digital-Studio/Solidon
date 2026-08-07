@@ -128,6 +128,32 @@ def test_a_failure_stays_in_the_dialog(qt_app: QApplication) -> None:
     assert "Mesh" in dialog.state.text()
 
 
+def test_a_failure_says_why_and_what_helps(qt_app: QApplication) -> None:
+    """§2.7 verlangt drei Dinge, und der Dialog zeigte nur eines.
+
+    Der Titel allein — „Die Mesh-Erzeugung konnte nicht starten" — lässt den
+    Nutzer stehen. Der Grund steht im Detail, der Ausweg im Vorschlag; beide
+    gehören in die Zeile, denn modal geht hier nichts.
+    """
+    from app.core.backends.mesh import GenerationFailed
+    from app.core.errors import CANCEL, OPEN_SETTINGS
+
+    dialog = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
+    dialog._on_failed(
+        GenerationFailed(
+            title="Die Mesh-Erzeugung konnte nicht starten.",
+            detail="ComfyUI antwortet nicht.",
+            suggestions=(OPEN_SETTINGS, CANCEL),
+        )
+    )
+
+    text = dialog.state.text()
+    assert "konnte nicht starten" in text, "was nicht ging"
+    assert "antwortet nicht" in text, "warum"
+    assert str(OPEN_SETTINGS.label) in text, "was jetzt hilft"
+    assert str(CANCEL.label) not in text, "der Ausgang ist kein Rat"
+
+
 def test_the_session_puts_a_generated_body_on_the_stack(
     qt_app: QApplication, generator: ScriptedMeshBackend
 ) -> None:
