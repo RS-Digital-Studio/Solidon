@@ -2762,3 +2762,69 @@ Modell einfügen, Druckeinstellungen öffnen, Slicen drücken.
 Der Weg über die Oberfläche war nie vom Namen-gegen-Pfad-Fehler betroffen: der
 Dialog legt `str(entry.path)` in die Auswahl, also von jeher die Datei. Wen es
 traf, war jeder andere Aufrufer — die Kommandozeile, ein Skript, der Agent.
+
+## Aus Kundensicht vollständig nachgefahren (08.08.2026)
+
+Zehn Bedienläufe am echten Programm, **im Vollbild** (2560 × 1369 px), über den
+Qt-Ereignisweg und den VTK-Interactor. Ergebnis:
+**`konzept-kundensicht-2026-08.md`** im Projektwurzelverzeichnis.
+
+Durchgegangen: Erstinbetriebnahme mit frischem Nutzerverzeichnis · alle neun
+Menüs mit 127 Einträgen · alle 77 Operationen, davon 72 Dialoge einzeln
+vermessen · Viewport mit Auswahl, Merkmalen, Kontextmenü, beiden Messarten ·
+alle sieben Analysekarten · Schichtenvorschau · alle sechs Zonen · Katalog ·
+Skizzeneditor · sieben weitere Dialoge · Druckeinstellungen mit Profilsuche ·
+Export in vier Formate und zurück · Handbuch · Auto Split · Rückgängig ·
+Übersetzungskatalog · alle 14 Fehlerklassen.
+
+### Die drei Befunde, aus denen die Arbeit folgt
+
+1. **Die Karten wachsen nicht mit dem Fenster.** Im Vollbild bei 1188 px
+   verfügbarer Höhe: Objektbaum 321 px statt 751 (Rollbalken, während unter
+   der Karte 300 px leer bleiben), Prüfbericht 316 px mit Rollbalken bei
+   **fünf** Befunden, Chat 170 px, Tour schneidet jeden Schritt ab. Zwei
+   Ursachen: der feste Zeilendeckel `MAX_ROWS = 12` (`panels.py:981`, gesetzt
+   über `setFixedHeight`) und `natural_height` (`overlay.py:160`), das für
+   umbrechende Listen mit `sizeHintForRow` rechnet — ein zweizeiliger Befund
+   gilt ihm als einer.
+2. **Eine Parameteränderung kostet 9–15 s statt der 2 s aus §31.** Gemessen an
+   `dose-mit-deckel.p3d`, sieben Ops: `hoehe` 40 → 60 braucht 14,75 s, 60 → 45
+   dann 9,49 s, 45 → 40 nur 0,75 s — der letzte Wert lag im Cache. Jeder
+   **neue** Wert kostet also zweistellig, und genau die sind es, um die es beim
+   Drehen an einem Maß geht. Ohne Fremdlast gemessen (1 % CPU).
+3. **Der Prozess stirbt gelegentlich.** Einmal in zehn Läufen: rtree-Zugriffs-
+   verletzung, unmittelbar danach `SystemError: setobject.c:2676` beim
+   Set-Zugriff in `features.py:261`, dann Segfault. Der Wiederholversuch in
+   `mesh.py:180` heilt den Aufruf, nicht den Speicher.
+
+### Weiteres
+
+- Das Kontextmenü im Bild bietet zwei Einträge („Ausblenden", „Alles andere
+  ausblenden") — §18.5 sieht dort `applies_to` vor.
+- „Bohrung setzen" öffnet auf X/Y/Z = 0,00. Bei `weg1-halterung` liegt der
+  Ursprung im Teil und es greift; bei `dose-mit-deckel` liegt er **65 mm
+  daneben**, und die Operation meldet „Der Schnitt hat nichts abgetragen".
+  Sobald „Auf dem Bett anordnen" gelaufen ist, ist das der Normalfall.
+- Im Druckeinstellungs-Dialog ist die Spalte „Grund" in jeder Zeile
+  abgeschnitten (561 px Dialogbreite auf 2560 px Bildschirm).
+- `dose-mit-deckel.p3d` öffnet mit zwei Warnungen, darunter eine wirkungslose
+  Boolesche, die keine Tour erklärt.
+- STEP steht im Exportdialog und scheitert bei Netzen — mit vorbildlicher
+  Meldung, aber erst nach der Formatwahl.
+- Erstes Öffnen in einer Sitzung: 7,9–8,3 s; jedes weitere 0,2–0,4 s. Das sind
+  die nachgeladenen Bibliotheken, nicht die Auswertung.
+- Sechs von 77 Operationen tragen ein Tastenkürzel.
+
+### Was trägt
+
+Erstinbetriebnahme vollständig und vorbelegt, alle vier externen Programme
+richtig erkannt · 77 Operationen, alle in Menüs, 72 Dialoge fehlerfrei, keiner
+über 427 px · **der Viewport nimmt Klicks an** (`obj_2` und `face_7`, Baum
+folgt) — der Fund aus `konzept-bedienung.md` ist erledigt · **beide Messarten
+tragen** (Abstand 48,91 mm, Wandstärke 2,0 mm; eine erste Gegenmessung war ein
+Klick daneben) · sieben Analysekarten je 1,4–1,5 s bei 3 s Budget ·
+Schichtenvorschau 2,67 s · Auto Split 1,77 s · Druckeinstellungen belegen
+Maschine, Prozess und Filament von selbst richtig vor (1001 / 7 / 42 Einträge)
+· STL, 3MF und OBJ schreiben und lesen zurück · 1986 Übersetzungen, keine
+leer, kein Registertext ohne englische Entsprechung · alle 14 Fehlerklassen
+mit Handlungsvorschlag · Rückgängig stellt den Stapel wieder her.
