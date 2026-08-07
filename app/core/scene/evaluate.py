@@ -61,7 +61,7 @@ from app.core.types import (
     kind_of,
 )
 from app.core.units import EPS_DISPLAY
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -571,14 +571,29 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
 
     Der Titel geht dabei nicht verloren: er steht in ``values`` und damit im
     Bericht wie im Fehlercontainer.
+
+    **Nur ein übersetztes Detail** wandert nach vorn, und daran hängt mehr als
+    die Sprache: ein ``TranslatableText`` wurde für jemanden geschrieben, eine
+    blanke Zeichenkette ist die Notiz daneben. Ohne diese Unterscheidung stand
+    im Bericht ``malformed target ''`` statt „Das Ziel muss ein Merkmal eines
+    Objekts benennen", und beim OpenSCAD-Aufruf eine halbe Seite roher
+    Programmausgabe — während der lesbare Satz beide Male in ``values``
+    versteckt lag.
     """
     values = {key: str(value) for key, value in error.values.items()}
-    if error.detail is not None:
+    detail = error.detail
+    message: TranslatableText | str
+    if isinstance(detail, TranslatableText):
         values["kind"] = str(error.title)
+        message = detail
+    else:
+        if detail is not None:
+            values["detail"] = str(detail)
+        message = error.title if error.title is not None else type(error).__name__
     return Finding(
         code=f"op.{operation.op}.{type(error).__name__}",
         severity="error",
-        message=error.detail if error.detail is not None else error.title,
+        message=message,
         object_id=error.object_id,
         op_id=operation.id,
         values=values,

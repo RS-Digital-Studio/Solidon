@@ -263,6 +263,33 @@ def test_a_missing_input_stops_the_chain(
     assert "evaluate.missing_input" in [f.code for f in result.scene.report.findings]
 
 
+def test_a_technical_detail_stays_behind_the_readable_sentence(
+    history: History, document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Ein Detail für Menschen darf nach vorn, eine Notiz für Entwickler nicht.
+
+    Der Bericht zeigt das Detail, weil der Titel oft die Art des Fehlers nennt
+    statt seines Grundes. Bei einer blanken Zeichenkette schlug das um: dort
+    stand ``malformed target ''``, und beim OpenSCAD-Aufruf eine halbe Seite
+    roher Programmausgabe — während der lesbare Satz in ``values`` lag.
+    """
+    from app.core.errors import AppError
+    from app.core.scene.evaluate import _finding_from
+    from app.core.types import Operation
+
+    operation = Operation(id=1, op="make_object", inputs=(), outputs=("obj_1",), params={})
+
+    technisch = AppError(_("Das Ziel muss ein Merkmal benennen."), detail="malformed target ''")
+    zeile = _finding_from(technisch, operation)
+    assert "Merkmal" in str(zeile.message), "der lesbare Satz steht vorn"
+    assert zeile.values["detail"] == "malformed target ''", "die Notiz bleibt daneben"
+
+    gesprochen = AppError(_("Ein Wert liegt daneben."), detail=_("Die Wand ist zu dünn."))
+    zeile = _finding_from(gesprochen, operation)
+    assert "Wand" in str(zeile.message), "ein übersetztes Detail sagt mehr als der Titel"
+    assert zeile.values["kind"] == "Ein Wert liegt daneben."
+
+
 def test_an_operation_without_any_input_stops_instead_of_crashing(
     history: History, document: Document, profile: Profile, registry: Registry
 ) -> None:
