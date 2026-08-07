@@ -2726,3 +2726,54 @@ def test_no_worker_hands_its_field_to_a_blind_lambda() -> None:
         f"{culprits}: ein benannter Slot prüft die Identität seines Arbeiters, "
         "ein Lambda trifft blind das Feld — siehe .claude/rules/oberflaeche.md"
     )
+
+
+def test_the_splash_screen_prints_the_mark_along_the_real_progress(qt_app: object) -> None:
+    """Der Ladebildschirm zeigt den gemessenen Fortschritt, nicht eine Uhr.
+
+    Geprüft wird die Zusicherung aus dem Modul: ``step`` setzt das Ziel, und
+    die gezeigte Höhe nähert sich ihm an, statt zu springen. Ein Balken, der
+    unabhängig vom Laden läuft, wäre eine Behauptung — dieser hier ist eine
+    Anzeige.
+    """
+    from app.ui.splash import SplashScreen
+
+    splash = SplashScreen()
+    try:
+        assert splash._shown == 0.0, "vor dem ersten Schritt ist nichts gedruckt"
+
+        splash.step("Operationen werden geladen …", 0.5)
+        assert splash._target == 0.5
+        assert splash._message == "Operationen werden geladen …"
+        # Angenähert, nicht gesprungen: nach einem Schritt liegt die Anzeige
+        # zwischen Start und Ziel.
+        assert 0.0 <= splash._shown < 0.5
+
+        # Ausreißer nach oben und unten werden auf den gültigen Bereich
+        # geklemmt — ein Aufrufer, der sich verzählt, verzerrt das Bild nicht.
+        splash.step("zu weit", 1.8)
+        assert splash._target == 1.0
+        splash.step("zu wenig", -0.3)
+        assert splash._target == 0.0
+    finally:
+        splash.finish()
+
+
+def test_the_splash_screen_survives_a_missing_icon_source(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne SVG-Quelle zeichnet er nichts, statt den Start zu verlieren.
+
+    Das Startbild ist Zierde; ein Start scheitert nie daran. Dieselbe Haltung
+    hat ``application_icon`` — fehlt die Datei, gibt es ein leeres Symbol.
+    """
+    from app.ui import splash as splash_module
+
+    monkeypatch.setattr(splash_module, "application_icon_source", lambda: "")
+    splash = splash_module.SplashScreen()
+    try:
+        splash.step("ohne Bild", 0.4)
+        assert not splash._renderer.isValid()
+        splash.repaint()  # darf nicht werfen
+    finally:
+        splash.finish()

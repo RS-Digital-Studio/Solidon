@@ -8,6 +8,7 @@ Startet das Protokoll, füllt das Register, installiert den Sprachkatalog und
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 
 from PySide6.QtCore import QCoreApplication, QLibraryInfo, QLocale, QTranslator
 from PySide6.QtWidgets import QApplication
@@ -15,12 +16,13 @@ from PySide6.QtWidgets import QApplication
 from app.branding import APP_ID, APP_NAME, APP_VERSION
 from app.core.bootstrap import load_operations
 from app.core.log import configure, get_logger
-from app.i18n import set_language
+from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
 from app.ui.icons import application_icon
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import load_settings
+from app.ui.splash import SplashScreen
 from app.ui.theme import apply_theme, enable_hidpi
 
 _log = get_logger(__name__)
@@ -49,10 +51,23 @@ def install_qt_translations(application: QCoreApplication, language: str) -> QTr
     return translator
 
 
-def build_application(argv: list[str] | None = None) -> tuple[QApplication, MainWindow]:
+def build_application(
+    argv: list[str] | None = None,
+    progress: Callable[[str, float], None] | None = None,
+) -> tuple[QApplication, MainWindow]:
     """Baut Anwendung und Fenster zusammen, ohne die Ereignisschleife zu
     starten.
+
+    ``progress`` bekommt nach jedem Abschnitt Text und Anteil — der
+    Ladebildschirm hängt daran. Ohne ihn verhält sich alles wie zuvor; die
+    Suite baut die Anwendung so, und ein Fenster, das nur für einen Test
+    entsteht, braucht kein Startbild.
     """
+
+    def report(text: str, done: float) -> None:
+        if progress is not None:
+            progress(text, done)
+
     enable_hidpi()
     existing = QApplication.instance()
     application = existing if isinstance(existing, QApplication) else QApplication(argv or sys.argv)
@@ -61,13 +76,16 @@ def build_application(argv: list[str] | None = None) -> tuple[QApplication, Main
     application.setOrganizationDomain(APP_ID)
     application.setWindowIcon(application_icon())
 
+    report(tr("Einstellungen werden gelesen …"), 0.45)
     settings = load_settings()
     install_language(settings.language)
     set_language(settings.language)
     install_qt_translations(application, settings.language)
 
+    report(tr("Das Erscheinungsbild wird gesetzt …"), 0.6)
     apply_theme(application, settings.theme)  # type: ignore[arg-type]
 
+    report(tr("Das Fenster wird aufgebaut …"), 0.72)
     session = Session()
     window = MainWindow(session, settings)
     # Eine Stelle für alle gespeicherten Werte. Vorher standen hier zwei, und
@@ -79,9 +97,26 @@ def build_application(argv: list[str] | None = None) -> tuple[QApplication, Main
 
 def main(argv: list[str] | None = None) -> int:
     configure(to_console=False)
+
+    # Qt muss vor dem Ladebildschirm stehen, und das Register danach: sonst
+    # sieht niemand die Sekunden, die das Füllen des Registers kostet. Deshalb
+    # ist ``load_operations`` hierher gewandert und läuft nicht mehr vor
+    # ``build_application``.
+    enable_hidpi()
+    existing = QApplication.instance()
+    application = existing if isinstance(existing, QApplication) else QApplication(argv or sys.argv)
+    application.setWindowIcon(application_icon())
+
+    splash = SplashScreen()
+    splash.show()
+    splash.step(tr("Operationen werden geladen …"), 0.12)
     load_operations()
-    application, window = build_application(argv)
+
+    application, window = build_application(argv, progress=splash.step)
+    splash.step(tr("Bereit."), 1.0)
+
     window.show()
+    splash.finish(window)
     # Der erste Start und der Update-Hinweis gehören hinter das sichtbare
     # Fenster (§38) — und nur hierher, wo wirklich ein Mensch hinsieht.
     window.start()

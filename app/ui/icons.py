@@ -390,6 +390,26 @@ def known() -> tuple[str, ...]:
 APPLICATION_ICON_SIZES: Final = (16, 24, 32, 48, 64, 128, 256)
 
 
+#: Wo die Quelle des Anwendungssymbols liegt. Eine Datei, drei Abnehmer:
+#: dieses Modul für das Fenster, ``tools/make_icon.py`` für ICO und Favicon,
+#: und der Ladebildschirm, der sie schichtweise zeichnet.
+ICON_SOURCE: Final = Path(__file__).resolve().parent.parent / "images" / "icon" / "solidon3d.svg"
+
+
+def application_icon_source() -> str:
+    """Die SVG-Quelle des Anwendungssymbols als Text.
+
+    Für alles, was das Symbol nicht als fertiges :class:`QIcon` braucht,
+    sondern selbst zeichnet — der Ladebildschirm beschneidet es beim Rendern.
+    Fehlt die Datei, kommt eine leere Zeichenkette; der Aufrufer bekommt einen
+    ungültigen Renderer und zeichnet nichts, statt zu scheitern.
+    """
+    try:
+        return ICON_SOURCE.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
 def application_icon() -> QIcon:
     """Das Anwendungssymbol, zur Laufzeit aus seiner SVG-Quelle gerastert.
 
@@ -398,9 +418,8 @@ def application_icon() -> QIcon:
     Bild, drei Abnehmer. Fehlt die Datei, gibt es ein leeres Symbol und die
     Plattform zeigt ihr Standardbild; ein Start scheitert daran nicht.
     """
-    source = Path(__file__).resolve().parent.parent / "images" / "icon" / "solidon3d.svg"
     try:
-        data = source.read_bytes()
+        data = ICON_SOURCE.read_bytes()
     except OSError:
         return QIcon()
     renderer = QSvgRenderer(QByteArray(data))
