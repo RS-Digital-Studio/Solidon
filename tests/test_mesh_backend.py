@@ -72,14 +72,27 @@ def test_a_prompt_goes_through_the_shipped_workflow() -> None:
 def test_the_placeholders_arrive_with_their_type() -> None:
     """ComfyUI prüft den Typ jedes Eingangs — ein Startwert als Text wird
     abgelehnt.
+
+    Geprüft wird der Graph als Ganzes, nicht eine Knotennummer: welcher Knoten
+    den Text bekommt, hängt am mitgelieferten Workflow und darf sich ändern,
+    ohne dass dieser Test etwas anderes zu prüfen beginnt.
     """
     server = Comfy()
 
     backend(server).text_to_mesh("ein Halter", seed=17)
 
     graph = server.graphs[0]
-    assert graph["2"]["inputs"]["text"] == "ein Halter"
-    assert graph["3"]["inputs"]["seed"] == 17, 'a number, not the string "17"'
+    texts = [
+        node["inputs"]["text"]
+        for node in graph.values()
+        if isinstance(node["inputs"].get("text"), str)
+    ]
+    assert any("ein Halter" in entry for entry in texts), "der Prompt steht im Graphen"
+
+    seeds = [node["inputs"]["seed"] for node in graph.values() if "seed" in node["inputs"]]
+    assert seeds, "irgendwo wird ein Startwert gesetzt"
+    assert all(entry == 17 for entry in seeds), 'a number, not the string "17"'
+    assert all(isinstance(entry, int) for entry in seeds)
 
 
 def test_a_picture_is_uploaded_before_the_job() -> None:
@@ -88,7 +101,12 @@ def test_a_picture_is_uploaded_before_the_job() -> None:
     backend(server).image_to_mesh(b"\x89PNG fake", seed=3)
 
     assert any(entry.endswith("/upload/image") for entry in server.requests)
-    assert server.graphs[0]["2"]["inputs"]["image"] == "uploaded.png"
+    names = [
+        node["inputs"]["image"]
+        for node in server.graphs[0].values()
+        if isinstance(node["inputs"].get("image"), str)
+    ]
+    assert names == ["uploaded.png"], "der hochgeladene Name steht im Graphen"
 
 
 def test_the_job_is_polled_until_it_is_done() -> None:
@@ -114,6 +132,35 @@ def test_an_empty_prompt_never_reaches_the_backend() -> None:
         backend(server).text_to_mesh("   ")
 
     assert server.requests == []
+
+
+def test_an_output_that_is_a_bare_path_is_found_too() -> None:
+    """Die 3D-Vorschau meldet einen blanken Pfad, keinen Eintrag mit Feldern.
+
+    Das ist keine Theorie: gegen eine echte Installation ist genau das die
+    einzige Ausgabe eines erfolgreichen Auftrags. Wer nur Einträge mit Feldern
+    liest, meldet nach einer gelungenen Erzeugung „kein Modell geliefert".
+    """
+
+    class Preview(Comfy):
+        def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+            if "/history/" in url:
+                return json.dumps(
+                    {
+                        "job-1": {
+                            "outputs": {"8": {"result": ["formwerk\\text_00001_.stl", None, None]}}
+                        }
+                    }
+                ).encode()
+            return super().__call__(url, body, headers)
+
+    server = Preview()
+    result = backend(server).text_to_mesh("ein Halter")
+
+    assert result.mesh.triangle_count == 12
+    holt = [entry for entry in server.requests if "/view?" in entry][-1]
+    assert "filename=text_00001_.stl" in holt
+    assert "subfolder=formwerk" in holt, "der Ordner wird vom Namen getrennt"
 
 
 def test_a_job_without_a_mesh_file_says_so() -> None:

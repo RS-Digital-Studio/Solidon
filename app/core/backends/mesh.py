@@ -10,6 +10,17 @@ hinein, eine Auftrags-ID kommt zurück, das Ergebnis wird geholt, wenn es
 fertig ist. Der Graph ist eine Datendatei, kein Code — wer einen anderen
 Generator installiert hat, tauscht die Datei aus, statt Python zu flicken.
 
+Woran die mitgelieferten Graphen hängen, steht deshalb hier und nicht im Code:
+an der Knotensammlung ``ComfyUI-Hunyuan3d-2-1`` samt ihren beiden Gewichten
+(``hunyuan3d-dit-v2-1-fp16`` und die zugehörige VAE), an ``ComfyUI-RMBG`` fürs
+Freistellen, und ``text_to_mesh`` zusätzlich an einem SDXL-Modell. Letzteres
+ist kein Umweg, sondern die Sache selbst: Hunyuan3D kennt keinen Texteingang,
+Text wird erst zu einem Bild und das Bild zum Körper. Fehlt eines davon, sagt
+ComfyUI beim Abschicken, welcher Knoten fehlt — die Meldung reicht bis zum
+Nutzer durch. Über die HTTP-API muss dabei **jeder** Eingang gesetzt sein, auch
+ein als ``optional`` deklarierter: die Oberfläche schickt sie immer alle mit,
+und mancher Knoten liest sie ungeprüft.
+
 Was herauskommt, wird nie geglaubt — Generatoren erzeugen Netze mit Löchern,
 losen Komponenten und umgedrehten Normalen als Normalfall. Die Reparaturkette,
 die sich darum kümmert, steht aber nicht hier: sie gehört auf den Stapel, wo
@@ -29,7 +40,7 @@ import urllib.request
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
 from app.core.errors import AppError
@@ -277,19 +288,10 @@ class ComfyBackend:
         for node in outputs.values():
             for key in ("meshes", "3d", "result", "files"):
                 for entry in node.get(key, ()) or ():
-                    if not isinstance(entry, dict):
+                    located = _located(entry)
+                    if located is None:
                         continue
-                    name = str(entry.get("filename", ""))
-                    suffix = Path(name).suffix.lower()
-                    if suffix not in (".glb", ".obj", ".ply", ".stl"):
-                        continue
-                    query = urllib.parse.urlencode(
-                        {
-                            "filename": name,
-                            "subfolder": entry.get("subfolder", ""),
-                            "type": entry.get("type", "output"),
-                        }
-                    )
+                    query, suffix = located
                     return self.transport(f"{self.url}/view?{query}", None, {}), suffix
         raise GenerationFailed(detail="the job produced no mesh file")
 
@@ -346,6 +348,41 @@ class ScriptedMeshBackend:
             prompt=prompt,
             seed=seed,
         )
+
+
+#: Endungen, unter denen ein Körper unter den Ausgaben erkannt wird. Ein
+#: Auftrag legt neben ihm auch Bilder ab — die gehören nicht uns.
+MESH_SUFFIXES = (".glb", ".obj", ".ply", ".stl")
+
+
+def _located(entry: Any) -> tuple[str, str] | None:
+    """Aus einem Ausgabeeintrag die Abfrage für ``/view`` und die Endung.
+
+    Zwei Schreibweisen kommen wirklich vor, und beide müssen ankommen: ein
+    Eintrag mit Feldern, wie ihn die Bildknoten liefern, und ein blanker Pfad
+    relativ zum Ausgabeordner, wie ihn die 3D-Vorschau zurückgibt. Wer nur die
+    erste liest, findet nach einem erfolgreichen Auftrag nichts und meldet, es
+    sei kein Modell erzeugt worden.
+
+    ``None`` heißt „nicht unsere Datei" — kein Fehler, der Aufrufer sieht weiter.
+    """
+    if isinstance(entry, str):
+        path = PurePosixPath(entry.replace("\\", "/"))
+        name = path.name
+        subfolder = "" if str(path.parent) == "." else str(path.parent)
+        kind = "output"
+    elif isinstance(entry, dict):
+        name = str(entry.get("filename", ""))
+        subfolder = str(entry.get("subfolder", ""))
+        kind = str(entry.get("type", "output"))
+    else:
+        return None
+
+    suffix = PurePosixPath(name).suffix.lower()
+    if suffix not in MESH_SUFFIXES:
+        return None
+    query = urllib.parse.urlencode({"filename": name, "subfolder": subfolder, "type": kind})
+    return query, suffix
 
 
 def _filled(node: Any, values: dict[str, Any]) -> Any:
