@@ -3571,18 +3571,55 @@ class MainWindow(QMainWindow):
         self.tour.reset()
         self.right.setTabVisible(self.right.indexOf(self.tour), False)
 
+    @staticmethod
+    def _when(path: Path) -> str:
+        """Wann diese Datei zuletzt geschrieben wurde, in Worten des Nutzers.
+
+        Nicht als Zeitstempel: „vor 4 Minuten" beantwortet die Frage, die im
+        Wiederherstellungsdialog wirklich gestellt wird, und „2026-08-07
+        15:41:02" verlangt, sie selbst auszurechnen.
+        """
+        from datetime import datetime
+
+        try:
+            geschrieben = datetime.fromtimestamp(path.stat().st_mtime)
+        except OSError:
+            return tr("unbekannt")
+        minuten = int((datetime.now() - geschrieben).total_seconds() // 60)
+        if minuten < 1:
+            return tr("gerade eben")
+        if minuten < 60:
+            return tr("vor {n} Minuten").format(n=minuten)
+        if minuten < 60 * 24:
+            return tr("vor {n} Stunden").format(n=minuten // 60)
+        return geschrieben.strftime("%d.%m.%Y %H:%M")
+
     def _offer_recovery(self, path: Path) -> None:
+        """Eine Sicherung anbieten, die neuer ist als die Datei (§38).
+
+        Zwei Dinge, die die Frage vorher nicht leistete. Sie stand auf „Ja"
+        und „Nein" — dieselbe Stelle, an der ``confirm_discard`` begründet,
+        warum das nicht taugt: wer „Ja" liest, muss die Frage im Kopf behalten,
+        um zu wissen, was er auslöst. Und sie sagte nicht, *wie* neu die
+        Sicherung ist. Zwischen „von vor fünf Minuten" und „von vor drei
+        Wochen" liegt die ganze Entscheidung.
+        """
         candidate = find_recovery(path)
         if candidate is None:
             return
-        answer = QMessageBox.question(
-            self,
-            tr("Wiederherstellung"),
-            tr("Es gibt eine neuere automatische Sicherung. Diese öffnen?"),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("Wiederherstellung"))
+        box.setText(tr("Es gibt eine automatische Sicherung, die neuer ist als die Datei."))
+        box.setInformativeText(
+            tr("Sicherung: {backup}\nGespeicherter Stand: {saved}").format(
+                backup=self._when(candidate), saved=self._when(path)
+            )
         )
-        if answer == QMessageBox.StandardButton.Yes:
+        restore = box.addButton(tr("Sicherung öffnen"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr("Gespeicherten Stand behalten"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(restore)
+        box.exec()
+        if box.clickedButton() is restore:
             self.session.open_project(candidate)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
