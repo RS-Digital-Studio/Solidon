@@ -2441,7 +2441,28 @@ Platz, an dem die echten stehen.
       die Frage nach oben — ein Fehlerbericht bei `rtree`/`libspatialindex`
       mit dieser Messreihe, und die Prüfung, ob `trimesh` sich ohne `rtree`
       betreiben lässt (`nearby_faces` ist der einzige Nutzer).
-- [ ] **Der Agent greift nicht zu den Bausteinen** (0/13). Die Vorrangregel
-      „Bausteine vor Primitiven" steht im Systemprompt und trägt bei einem
-      lokalen 14B-Modell nicht. Eine Regeländerung dazu wird vorher und
-      nachher gemessen (Checkliste in `AGENTS.md`), nicht geraten.
+- [ ] **Der Agent greift nicht zu den Bausteinen (0/13) — und die Regel ist
+      nicht schuld.** Das war die erste Vermutung und sie war falsch.
+      Nachgemessen wurde stattdessen die Werkzeugmenge, mit demselben Fall und
+      demselben Modell (`qwen3:14b`):
+
+      | Angebot | wall_holder | magnet_lid | spacer |
+      |---|---|---|---|
+      | 10 Werkzeuge | `find_part` | `find_part` | `find_part` |
+      | 25 Werkzeuge | `create_box` … | `create_from_scad` | `create_brep_cylinder` ×4 |
+      | 83 Werkzeuge | `sketch_sweep` … | Prosa | Prosa |
+
+      Bei zehn Werkzeugen folgt das Modell der Vorrangregel dreimal von drei —
+      `find_part` ist genau der erste Schritt, den „Bausteine vor Primitiven"
+      verlangt. Bei fünfundzwanzig bricht sie, bei dreiundachtzig antwortet es
+      gar nicht mehr strukturiert. Der Systemprompt wird also gelesen und
+      verstanden; was fehlt, ist die Fähigkeit, ihn unter voller Werkzeuglast
+      in Aufrufe zu übersetzen.
+
+      Damit ist es keine Regelfrage mehr, sondern eine Bauplanfrage: §26.2
+      schreibt „alle Ops aus dem Register" vor. Eine Auswahl nach `applies_to`
+      wäre die naheliegende Antwort, ist aber genau das, was §2 für die
+      Oberfläche ausschließt („eine Palette, die aussortiert, wäre eine
+      Betriebsart mit anderem Namen"). Ob das für den Agenten anders gilt,
+      entscheidet der Bauplan, nicht dieser Eintrag — und bis dahin bleibt
+      der Weg über ein größeres Modell.
