@@ -510,6 +510,80 @@ def test_a_second_stumble_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> N
         on_surface(body, np.array([[0.0, 0.0, 20.0]], dtype=float))
 
 
+def test_arranging_by_material_keeps_the_filaments_apart(
+    document: Document, profile: Profile
+) -> None:
+    """Zwei Filamente auf einer Platte kosten je gemeinsamer Schicht einen
+    Wechsel samt Spülgang.
+
+    `plates_by_material` rechnete den Vorschlag seit jeher und war von nirgends
+    aus erreichbar. Jetzt ist er ein Umschalter an derselben Operation — es ist
+    dieselbe Handlung mit einer anderen Vorgabe, wer neben wem liegt.
+    """
+    project, history = loaded(document, count=3)
+    history.apply(
+        _("Material"),
+        [
+            OperationDraft(
+                op="assign_slot", inputs=("obj_2",), outputs=("obj_2",), params={"slot": 1}
+            )
+        ],
+    )
+    history.apply(
+        _("Anordnen"),
+        [
+            OperationDraft(
+                op="arrange_bed",
+                inputs=("obj_1", "obj_2", "obj_3"),
+                params={"by_material": True, "plates": 4},
+            )
+        ],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    platten = {name: entry.plate for name, entry in result.scene.objects.items()}
+    assert platten["obj_1"] == platten["obj_3"], "gleiches Filament, gleiche Platte"
+    assert platten["obj_2"] != platten["obj_1"], "anderes Filament, andere Platte"
+
+
+def test_arranging_by_material_respects_the_plate_limit(
+    document: Document, profile: Profile
+) -> None:
+    """Die Grenze gilt der Szene, nicht je Gruppe.
+
+    Sonst hätte ein Projekt mit drei Filamenten unversehens dreimal so viele
+    Platten, wie jemand eingestellt hat.
+    """
+    project, history = loaded(document, count=3)
+    for name, slot in (("obj_1", 0), ("obj_2", 1), ("obj_3", 2)):
+        history.apply(
+            _("Material"),
+            [
+                OperationDraft(
+                    op="assign_slot", inputs=(name,), outputs=(name,), params={"slot": slot}
+                )
+            ],
+        )
+    history.apply(
+        _("Anordnen"),
+        [
+            OperationDraft(
+                op="arrange_bed",
+                inputs=("obj_1", "obj_2", "obj_3"),
+                params={"by_material": True, "plates": 2},
+            )
+        ],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    benutzt = {entry.plate for entry in result.scene.objects.values()}
+    assert max(benutzt) <= 1, f"höchstens zwei Platten, benutzt wurden {sorted(benutzt)}"
+
+
 def test_the_preparation_operations_are_registered_completely() -> None:
     assert REGISTRY.get("drill_hole").applies_to == ("face",)
     assert REGISTRY.get("drill_hole").requires_seed, "it uses the boolean fallback chain"

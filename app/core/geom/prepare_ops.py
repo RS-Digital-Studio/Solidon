@@ -16,11 +16,12 @@ from app.core.errors import InternalError, ValidationError
 from app.core.geom.autosplit import Candidate
 from app.core.geom.boolean import boolean
 from app.core.geom.hollow import VENT_DIAMETER, hollow
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.orient import orient_for_print
 from app.core.geom.pins import PIN_COUNT, PIN_MAX, PinnedPair, add_pins, plan_pins
 from app.core.geom.prepare import (
     MAX_PLATES,
+    Arrangement,
     BoreAnchor,
     arrange_on_bed,
     check_build_volume,
@@ -756,6 +757,70 @@ class ArrangeParams(BaseParams):
         maximum=MAX_PLATES,
         doc=_("Passt nicht alles auf eine Platte, wandert der Rest auf die nächste."),
     )
+    by_material: bool = param(
+        title=_("Nach Filament trennen"),
+        default=False,
+        doc=_(
+            "Legt Teile aus verschiedenen Filamenten auf verschiedene Platten. "
+            "Zwei Filamente auf einer Platte kosten je gemeinsamer Schicht "
+            "einen Wechsel samt Spülgang."
+        ),
+    )
+
+
+def _arranged_by_material(ctx: OpContext, params: ArrangeParams) -> Arrangement:
+    """Erst nach Filament gruppieren, dann jede Gruppe für sich anordnen.
+
+    Den Vorschlag rechnet :func:`app.core.export.writer.plates_by_material`
+    schon lange — er war nur von nirgends aus erreichbar. Hier wird er zu einer
+    Handlung, und zwar als Umschalter an der bestehenden Operation statt als
+    zweite daneben: es ist dieselbe Handlung mit einer anderen Vorgabe, wer
+    neben wem liegt.
+
+    Jede Gruppe bekommt ihre eigenen Platten, hintereinander weg. Die Grenze
+    aus ``plates`` gilt dabei für die ganze Szene, nicht je Gruppe — sonst
+    hätte ein Projekt mit drei Filamenten unversehens dreimal so viele
+    Platten, wie jemand eingestellt hat.
+    """
+    from app.core.export.writer import plates_by_material
+
+    groups = plates_by_material(list(ctx.inputs))
+    order: list[int] = []
+    for entry in ctx.inputs:
+        group = groups[entry.id]
+        if group not in order:
+            order.append(group)
+
+    meshes: dict[str, MeshData] = {}
+    assigned: dict[str, int] = {}
+    findings: list[Finding] = []
+    next_plate = 0
+
+    for group in order:
+        members = [entry for entry in ctx.inputs if groups[entry.id] == group]
+        # Sind die Platten aufgebraucht, teilt sich diese Gruppe die letzte mit
+        # der vorigen — dieselbe Regel, die `arrange_on_bed` innerhalb einer
+        # Gruppe befolgt: die letzte Platte nimmt den Rest, und der Bericht
+        # sagt, dass sie übervoll ist. Ein Teil, das still aus der Anordnung
+        # fiele, wäre ein Teil, das nie gedruckt wird.
+        start = min(next_plate, params.plates - 1)
+        arranged = arrange_on_bed(
+            [as_mesh_data(entry.mesh) for entry in members],
+            ctx.profile,
+            params.spacing,
+            params.plates - start,
+        )
+        findings.extend(arranged.findings)
+        for entry, mesh, plate in zip(members, arranged.meshes, arranged.plates, strict=True):
+            meshes[entry.id] = mesh
+            assigned[entry.id] = start + plate
+        next_plate = start + arranged.plate_count
+
+    return Arrangement(
+        meshes=[meshes[entry.id] for entry in ctx.inputs],
+        plates=[assigned[entry.id] for entry in ctx.inputs],
+        findings=findings,
+    )
 
 
 @register_op(
@@ -771,7 +836,10 @@ class ArrangeParams(BaseParams):
 def arrange_bed(ctx: OpContext) -> OpResult:
     params = cast(ArrangeParams, ctx.params)
     meshes = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
-    result = arrange_on_bed(meshes, ctx.profile, params.spacing, params.plates)
+    if params.by_material:
+        result = _arranged_by_material(ctx, params)
+    else:
+        result = arrange_on_bed(meshes, ctx.profile, params.spacing, params.plates)
     findings = list(result.findings)
 
     # Kollisionen werden je Platte geprüft: zwei Teile an derselben Stelle auf
