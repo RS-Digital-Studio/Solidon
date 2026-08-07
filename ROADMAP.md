@@ -2353,8 +2353,52 @@ Zeilen darunterhängt. In der Oberfläche ist derselbe Platzhalter richtig, dort
 steht ein `.format` dahinter. `tests/test_errors.py` sucht im ganzen Kern
 danach.
 
+## Die Wege einmal von Hand gefahren (07.08.2026)
+
+Nicht die Suite, sondern die Anwendung: Weg 1 und 2 über die Kommandozeile,
+die Übergabe an den echten ElegooSlicer, der Agent gegen ein lokales Modell,
+dazu der Korpus mit seinen kaputten Dateien. Sechs Funde, alle auf dem
+geradesten Weg, den es gibt.
+
+- [x] **„Ein Objekt steht über den Bauraum hinaus"** bei einem 8 mm hohen Teil
+      auf einem 256er Drucker. Es stand nicht hinaus, es lag halb unter der
+      Platte — ein heruntergeladenes STL ist um den Ursprung zentriert. Der
+      Satz schickt zum Skalieren, nötig war ein Aufsetzen.
+- [x] **„Ein Merkmal hat keinen Nachfolger mehr"** als Warnung nach jedem
+      Aushöhlen mit offener Decke. §21.3 knüpft das Melden an einen Verweis;
+      ohne Verweis ist es eine Feststellung.
+- [x] **`import` ohne `--unit` stürzte mit einem Stapelabzug ab**, sobald
+      niemand antworten kann — in einer Pipe, einem Skript, auf einem
+      Bauserver.
+- [x] **`new --material PETG` legte eine kaputte Datei an.** Der Fehler kam
+      erst beim nächsten Befehl. Die Falle ist eingebaut: `profiles` zeigt den
+      Titel `PETG`, die Kennung ist `petg`.
+- [x] **Die Slicer-Übergabe verlangte nur eines der zwei nötigen Profile.**
+      Ohne Prozessprofil lehnt die Orca-Familie Formwerks Prozessdatei ab.
+      Mit beiden läuft der ganze Weg bis zu den G-Code-Kennzahlen.
+- [x] **`tools/run_agent_suite.py` lief überhaupt nicht** — kein
+      `load_operations()`, also leeres Register. Derselbe fehlende Aufruf in
+      `check_local_model.py` hat die Modellwahl vom Vortag verdorben: gemessen
+      wurde mit sieben Werkzeugen, der Agent bietet dreiundachtzig an.
+
+### Was diese Begehung gelernt hat
+
+**Ein leeres Register wirft keinen Fehler, es liefert nur weniger.** Beide
+Werkzeuge außerhalb von Anwendung und CLI hatten denselben fehlenden Aufruf;
+eines starb daran sichtbar, das andere lieferte still eine Zahl, die eine
+Entscheidung getragen hat.
+
+**Der Normalfall bekommt die schlechtesten Meldungen.** Beide Warnungstexte
+oben standen nicht bei einem Fehler, sondern nach einer gelungenen Handlung —
+und je häufiger eine Warnung zu Unrecht steht, desto weniger wert ist der
+Platz, an dem die echten stehen.
+
 ### Offen
 
+- [ ] **Die Agenten-Suite steht bei 1/33** (llama3.1:8b, vor dem Wechsel der
+      Vorgabe). Ob `qwen3:14b` mit dem vollen Register über die Quote kommt,
+      ist noch nicht gemessen — der Läufer war bis eben kaputt. Das ist der
+      nächste Schritt, und er kostet nur Zeit.
 - [ ] **Der Fortschritt steht eine Minute lang auf 50 %.** Ein Lauf dauert
       hier 40 bis 70 Sekunden, und die ganze Zeit steht „Modell wird erzeugt"
       am selben Punkt — von „rechnet" nicht zu unterscheiden. §2.8 verlangt ab
