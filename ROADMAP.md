@@ -2715,3 +2715,26 @@ misst die Geometrie und weiß nichts von der Füllung, die der Slicer später
 hineinlegt. Ein gemeldeter Überhang über gefülltem Volumen ist deshalb kein
 Befund, einer über einem Hohlraum schon. Wer die Zahl allein liest, hält das
 Regal für schlimmer als den Deckel — und es ist umgekehrt.
+
+### Und von Hand, über beide Oberflächen
+
+Derselbe Deckel noch einmal, aber über die Bedienung statt über die Verträge:
+Modell einfügen, Druckeinstellungen öffnen, Slicen drücken.
+
+- **Modell einfügen** über `session.import_model`: ein Körper, 40 × 40 × 22 mm,
+  9,12 cm³, geschlossen. Ein Befund, und der stimmt („Doppelte Punkte wurden
+  verschweißt").
+- **Die Profilsuche braucht 1,3 s** und läuft in einem Arbeiter-Thread; solange
+  steht der Hinweis „Automatisch zugeordnet …" im Dialog. Danach: 1001
+  Maschinen, 7 passende Prozesse, 42 Filamente — jede Liste **von selbst
+  richtig vorbelegt** (Centauri Carbon 2 · 0.20mm Standard · Elegoo PETG),
+  und alle drei tragen Pfade, die es gibt.
+- **Der Dialog misst 561 × 867 px und braucht genau so viel** — nichts
+  abgeschnitten.
+- **Slicen** endet nach einer Sekunde mit „Druckzeit: 73 min · Material:
+  10.6 g · Schichten: 110" in der Statuszeile. Der G-Code ist da (4657 KB),
+  fördert Material, und von vier Befunden ist keiner eine Warnung.
+
+Der Weg über die Oberfläche war nie vom Namen-gegen-Pfad-Fehler betroffen: der
+Dialog legt `str(entry.path)` in die Auswahl, also von jeher die Datei. Wen es
+traf, war jeder andere Aufrufer — die Kommandozeile, ein Skript, der Agent.
