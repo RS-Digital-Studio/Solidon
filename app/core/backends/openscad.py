@@ -49,6 +49,16 @@ _INCLUDE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+#: Dieselben Anweisungen, aber ohne Anspruch, ihr Ziel zu lesen.
+#:
+#: ``_INCLUDE_PATTERN`` erkennt nur die Schreibweise mit Zeichenkette. OpenSCAD
+#: nimmt an dieser Stelle aber jeden Ausdruck: ``p = str("/e", "tc"); import(p);``
+#: ist gültig und stand für die Literal-Suche gar nicht da — sie fand keinen
+#: Verweis und gab den Lauf frei. Eine Prüfung, die man mit einer
+#: Zeichenkettenverkettung umgeht, ist keine. Also wird jede Anweisung gezählt,
+#: und was die Literal-Suche nicht erklären kann, gilt als nicht prüfbar.
+_ANY_INCLUDE_PATTERN = re.compile(r"\b(include|use|import|surface)\s*[<(]", re.IGNORECASE)
+
 #: Wie lange ein Lauf dauern darf. Ein Modell, das länger braucht, ist kein
 #: Rückfall, sondern ein Fehler (§31).
 TIMEOUT_SECONDS = 60.0
@@ -111,11 +121,20 @@ def check_source(source: str) -> SourceCheck:
     references: list[str] = []
     refused: list[str] = []
 
+    readable = set()
     for match in _INCLUDE_PATTERN.finditer(source):
         path = match.group(2) if match.group(2) is not None else match.group(4)
         if path is None:
             continue
+        readable.add(match.start())
         (references if _is_local(path) else refused).append(path.strip())
+
+    # Jede Anweisung, die keine lesbare Zeichenkette dabeihat, führt irgendwohin
+    # — nur wohin, steht erst zur Laufzeit fest. Sie wird abgelehnt statt
+    # übersehen: der Nutzer sieht die Stelle und kann sie ausschreiben.
+    for match in _ANY_INCLUDE_PATTERN.finditer(source):
+        if match.start() not in readable:
+            refused.append(match.group(0).strip())
 
     findings = tuple(
         Finding(

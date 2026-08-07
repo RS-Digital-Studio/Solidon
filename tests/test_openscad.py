@@ -322,3 +322,31 @@ def test_no_core_path_needs_openscad() -> None:
     for spec in PARTS.all():
         result = spec.fn(spec.params())
         assert result.mesh.is_watertight, spec.name
+
+
+def test_a_computed_path_is_refused() -> None:
+    """§32: OpenSCAD nimmt an dieser Stelle jeden Ausdruck, nicht nur eine
+    Zeichenkette.
+
+    Die Literal-Suche fand einen berechneten Pfad gar nicht — sie meldete
+    „kein Verweis" und gab den Lauf frei. Eine Prüfung, die eine
+    Zeichenkettenverkettung umgeht, ist keine.
+    """
+    check = openscad.check_source('p = str("/e", "tc/passwd"); surface(file = p);')
+
+    assert not check.allowed
+    assert check.refused
+
+
+def test_a_computed_import_is_refused() -> None:
+    check = openscad.check_source("import(concat(a, b));")
+
+    assert not check.allowed
+
+
+def test_a_written_out_path_still_works() -> None:
+    """Die Sperre darf den geraden Weg nicht mitnehmen."""
+    check = openscad.check_source('import("teil.stl");\ninclude <lib.scad>\ncube(10);')
+
+    assert check.allowed
+    assert set(check.references) == {"teil.stl", "lib.scad"}

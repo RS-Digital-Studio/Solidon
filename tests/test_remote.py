@@ -238,3 +238,25 @@ def test_the_other_six_extra_tools_stay_reachable() -> None:
     }
     for name in ("undo_transaction", "add_parameter", "set_parameter", "add_fit", "read_report"):
         assert name in listed, name
+
+
+def test_a_path_inside_a_list_is_refused() -> None:
+    """Die Zusage lautet „am Wert erkannt" (§32).
+
+    Flach zu prüfen genügte nicht: jedes Operationswerkzeug trägt seine Objekte
+    als Liste, und derselbe Text, der als Zeichenkette abgewiesen wird, kam
+    darin durch.
+    """
+    with pytest.raises(remote.RemoteRefusedError):
+        remote.check_call("translate_object", {"objects": ["C:/Windows/system.ini"], "dx": 1.0})
+
+
+def test_a_path_inside_a_nested_object_is_refused() -> None:
+    with pytest.raises(remote.RemoteRefusedError):
+        remote.check_call("translate_object", {"objects": ["obj_1"], "meta": {"file": "../../x"}})
+
+
+def test_an_ordinary_call_still_passes() -> None:
+    """Eine Sperre, die „Deckel 2" verschluckt, macht die Schnittstelle
+    unbrauchbar und sieht dabei sicher aus."""
+    remote.check_call("translate_object", {"objects": ["obj_1"], "dx": 1.0})

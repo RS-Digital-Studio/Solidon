@@ -28,6 +28,7 @@ wäre eine Lizenzzeile für dreißig Zeilen Code (Regel 22).
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import Any, Final, Protocol
 from urllib.parse import urlsplit
 
@@ -152,6 +153,23 @@ def looks_like_path(value: str) -> bool:
     return ".." in text.replace("\\", "/").split("/")
 
 
+def _holds_path(value: Any) -> bool:
+    """Ob irgendwo in diesem Wert ein Pfad steckt.
+
+    Flach zu prüfen genügte nicht: jedes Operationswerkzeug trägt seine Objekte
+    als Liste, und derselbe Text, der als Zeichenkette abgewiesen wird, käme in
+    einer Liste durch. Die Zusage lautet „am Wert erkannt" — dann muss auch
+    hineingesehen werden, wo Werte ineinander liegen.
+    """
+    if isinstance(value, str):
+        return looks_like_path(value)
+    if isinstance(value, Mapping):
+        return any(_holds_path(entry) for entry in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_holds_path(entry) for entry in value)
+    return False
+
+
 def check_call(name: str, arguments: dict[str, Any], registry: Registry | None = None) -> None:
     """Wirft, wenn dieser Aufruf nicht über die Leitung kommen darf.
 
@@ -170,7 +188,7 @@ def check_call(name: str, arguments: dict[str, Any], registry: Registry | None =
     if name not in known:
         raise RemoteRefusedError(_("Diese Operation gibt es nicht."))
     for key, value in arguments.items():
-        if isinstance(value, str) and looks_like_path(value):
+        if _holds_path(value):
             refusal = _(
                 "Ein Wert sieht aus wie ein Dateipfad — über diese Schnittstelle geht das nicht."
             )
