@@ -1,9 +1,13 @@
-"""Die drei Beispielprojekte (Bauplan §37.2, §2.2).
+"""Die Beispielprojekte (Bauplan §37.2, §2.2).
 
 „Dokumentation, Abnahmetest und Startbildschirm-Inhalt zugleich." Sie sind
 also kein Ordner mit Dateien, die jemand irgendwann exportiert hat — sie
 entstehen aus denselben Operationen wie alles andere, gebaut von
-:mod:`tools.make_examples`, und die Suite öffnet und rechnet alle drei.
+:mod:`tools.make_examples`, und die Suite öffnet und rechnet jedes davon.
+
+Die ersten drei beantworten „wie fange ich an" — eines je Weg aus §2.2 —, die
+übrigen „was kann das eigentlich". Ihre Zahl steht in :data:`EXAMPLES` und
+sonst nirgends: eine zweite Stelle wäre nach dem nächsten Beispiel falsch.
 
 Eines je Weg aus §2.2:
 

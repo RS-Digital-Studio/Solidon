@@ -52,9 +52,9 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Import-Obergrenzen mit klarer Meldung (§32)
 
 ### Testkorpus
-- [~] `tests/data/` nach §34 anlegen, `README.md` mit Erwartungswerten — sechs
-      Meshes und eine Projektdatei stehen; die übrigen brauchen Bausteine aus
-      P2/P3 und sind in der README namentlich vermerkt
+- [x] `tests/data/` nach §34 anlegen, `README.md` mit Erwartungswerten — der
+      Rest kam mit den Bausteinen aus P2/P3 nach, siehe „Referenzkorpus und
+      Passungen vervollständigt"
 - [x] Alle Dateien selbst erzeugt oder frei lizenziert (`make_corpus.py`)
 
 ### Oberfläche
@@ -147,15 +147,16 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Schichtenvorschau im Viewport (§18.10), ehrlich beschriftet
 - [x] Herkunft jeder Kennzahl ausweisen (`internal`), nie mit G-Code vermischt —
       Legende und Prüfbericht weisen sie aus
-- [~] Leistungsziele §31 für die Schichtanalyse — **nicht erreicht**, gemessen in
-      `tests/test_performance.py`. Der Schnitt läuft jetzt über eine
-      Dreiecks-Einsortierung nach Höhe statt Ebene für Ebene über das ganze Netz
-      (7,6 s → 2,3 s bei 328 000 Dreiecken), das Ziel sind 300 ms bei 200 000.
-      Es fehlt rund das Fünffache; die Zeit steckt in den Shapely-Aufrufen
-      (Erosion für die Minimalbreite, Polygonaufbau) und ist ohne kompilierten
-      Kern nicht zu holen. Gleiches Bild bei der Orientierungssuche (32 s statt
-      20 s, weil sie nichts anderes tut als schneiden) und bei der Karte
-      Wandstärke (8 s statt 3 s, und im Vordergrund statt im Hintergrund)
+- [~] Leistungsziele §31 für die Schichtanalyse — **zwei von dreien offen**,
+      gemessen in `tests/test_performance.py`. Die Orientierungssuche (16,5 s)
+      liegt im Ziel; die Wandstärkenkarte steht bei 3,08 s im Hintergrund und
+      damit knapp über den drei Sekunden aus §31 — der Assert dort greift erst
+      bei acht, hält also nur die Regression auf, nicht das Ziel. Die
+      Schichtanalyse steht bei 1,05 s auf 328 000 Dreiecken, wo §31 für 200 000
+      dreihundert Millisekunden nennt. Die Zahlen und die vier Änderungen, die
+      dorthin führten, stehen unter „Leistung (§31) — Stand nach der
+      Durchsicht". Was übrig ist, ist der Polygonaufbau in GEOS und braucht
+      einen kompilierten Kern, keine weitere Python-Idee
 
 ## P4 — Agent auf Säule C
 - [x] `LLMBackend`, Schlüssel im Schlüsselbund, lokal über Ollama — kein
@@ -524,6 +525,10 @@ und Umriss-Extrusion sind die zwei häufigsten Gründe, ein zweites Programm zu
 * **CI nie gelaufen.** Es gibt kein Remote — die Datei ist geprüft (YAML
   geparst, Bedingungen nachgerechnet), aber nicht ausgeführt. Beim ersten Push
   auf einen Server ist damit zu rechnen, dass Kleinigkeiten auftauchen.
+  *Überholt am 02.08.2026: das Repository liegt auf GitHub, die CI ist
+  gelaufen — siehe „Der erste echte CI-Lauf". Der Satz bleibt stehen, weil er
+  richtig vorhergesagt hat, was dann passierte: es waren vier Kleinigkeiten.
+  Offen ist allein der `workflow_dispatch`-Lauf über alle drei Plattformen.*
 * **Keine Website** (§37.3). Marketing, kein Programmteil; kommt, wenn es
   etwas zu veröffentlichen gibt.
 * **Der Slicer bleibt außen** (§22.5, §28). Ein eigener G-Code-Generator wäre
@@ -1087,12 +1092,22 @@ laufen parallel und stehen weiter oben unter „Bewusst offen".
 
 ## Website
 
-Entschieden am 31.07.2026: statische Seite auf dem rsdigital.de-Webspace,
-Subdomain `formwerk.rsdigital.de` — dort liegen auch die `version.json`
-(§37.2, `core/updates.py`) und der Installer. Die Quelldateien liegen in
-`website/`, die Schrittliste für DNS und Upload in `website/README.md`.
-Impressum und Datenschutz sind Entwürfe und vor der Veröffentlichung zu
-prüfen.
+Entschieden am 31.07.2026: statische Seite auf einem Webspace, Subdomain
+`formwerk.rs-digital.org` — dort liegen auch die `version.json` (§37.2,
+`core/updates.py`) und der Installer. Die Quelldateien liegen in `website/`,
+die Schrittliste für DNS und Upload in `website/README.md`. Impressum und
+Datenschutz sind Entwürfe und vor der Veröffentlichung zu prüfen.
+
+**Berichtigt am 06.08.2026: die Domain war erfunden.** Hier stand bis dahin
+`formwerk.rsdigital.de`, und die Adresse reiste von hier aus in
+`branding.py`, `updates.py` und `version.json`. Diese Domain gibt es nicht
+und gab es nie — es gibt genau eine, `rs-digital.org`, die primäre Domain des
+Google Workspace. Der Vermerk weiter unten, es stünden „zwei Schreibweisen
+nebeneinander, bewusst so entschieden oder zu vereinheitlichen", war die
+richtige Beobachtung mit der falschen Erklärung: es waren nicht zwei
+Schreibweisen einer Sache, sondern eine echte Adresse und eine angenommene.
+Dass eine Annahme als „entschieden" in die Roadmap kam, ist der eigentliche
+Fehler — Regel 21 gilt auch für Adressen.
 
 ## Aus der Frage nach dem Handbuch
 
@@ -1767,6 +1782,8 @@ Nutzern — 2100 Tests sagen, dass der Code tut, was gemeint war, nicht, dass
 ein Fremder ihn bedienen kann. Anzumerken: die Web-Domain ist
 formwerk.rsdigital.de, die Mail-Domain rs-digital.org — zwei Schreibweisen
 nebeneinander, bewusst so entschieden oder zu vereinheitlichen.
+*Aufgelöst am 06.08.2026: die erste Domain existierte nicht. Alles läuft
+jetzt über `formwerk.rs-digital.org`, siehe „Website".*
 
 ## Der erste echte CI-Lauf
 
@@ -2030,10 +2047,12 @@ mit Ausnahme der fehlenden Passung:
 - [x] **`filament_cost = 0` überschreibt die 30 €/kg des Herstellers.** „0 heißt
       unbekannt, nicht kostenlos" steht im eigenen Docstring — geschrieben wird
       es trotzdem. Systematisch geprüft: der einzige Fall dieser Art
-- [ ] **Keine Operation legt eine Passung an.** `create_lid` baut den Deckel mit
-      0,25 mm Spiel aus dem Materialprofil und trägt keinen `Fit` ein; damit
-      greifen genaue Außenwand, gebremste Beschleunigung und Bügeln nie. Fits
-      entstehen nur aus Agent, Verstiften und Dialog
+- [x] **Keine Operation legt eine Passung an.** `create_lid` baute den Deckel mit
+      0,25 mm Spiel aus dem Materialprofil und trug keinen `Fit` ein; damit
+      griffen genaue Außenwand, gebremste Beschleunigung und Bügeln nie. Der
+      Deckelablauf legt sie jetzt an (`core/lid_flow.py`), über ein `fits`-Feld
+      an `OpResult` — nachgetragen und nicht mitgegeben, weil erst der Verlauf
+      die Objekt-IDs vergibt
 - [x] **Die Gegenprobe vergleicht nur das Stützvolumen.** Live: 12 g / 46 min
       geschätzt gegen 10,0 g / 37 min gemessen — −17 % und −20 %, und kein Wort
       im Prüfbericht. `gcode.compare` kennt die 15-%-Schwelle und wird an genau

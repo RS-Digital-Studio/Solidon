@@ -815,7 +815,7 @@ FIGURES: Final[tuple[Figure, ...]] = (
     Figure(
         key="start-screen",
         alt=_(
-            "Der Startbildschirm: zuletzt geöffnete Projekte, die drei Beispielprojekte "
+            "Der Startbildschirm: zuletzt geöffnete Projekte, die Beispielprojekte "
             "und ein großes Feld, auf das man eine Datei ziehen kann."
         ),
         caption=_("Kein leerer Startbildschirm — es gibt immer etwas zum Anfangen."),
