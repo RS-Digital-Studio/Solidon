@@ -23,11 +23,23 @@ from app.core.log import get_logger
 _log = get_logger(__name__)
 
 #: Wo die Versionsdatei liegt. Eine Adresse, ein JSON-Objekt.
-VERSION_URL: Final = "https://formwerk.rsdigital.de/version.json"
+VERSION_URL: Final = "https://formwerk.rs-digital.org/version.json"
 
 #: Wie lange die Prüfung dauern darf. Sie läuft beim Start; niemand wartet
 #: auf sie.
 TIMEOUT_SECONDS: Final = 4.0
+
+#: Wie viel von der Antwort überhaupt gelesen wird.
+#:
+#: Das Zeitlimit deckelt die einzelne Socket-Operation, nicht die Menge: eine
+#: Gegenstelle, die zügig und endlos liefert, füllte sonst beim Start den
+#: Arbeitsspeicher. Die Datei trägt drei kurze Felder; alles darüber ist keine
+#: Versionsdatei mehr.
+MAX_ANSWER_BYTES: Final = 64 * 1024
+
+#: Wie lang die einzelnen Felder werden dürfen. Sie landen in der Statusleiste,
+#: und was dort steht, kommt von einem Server — nicht aus diesem Programm.
+MAX_FIELD_LENGTH: Final = 200
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,14 +74,23 @@ def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | N
         _log.info("update check did not answer: %s", problem)
         return None
 
-    version = str(payload.get("version", "")).strip()
+    version = _field(payload.get("version"))
     if not version:
         return None
+    url = _field(payload.get("url"))
     return Release(
         version=version,
-        url=str(payload.get("url", "")),
-        notes=str(payload.get("notes", "")),
+        # Angezeigt wird nur, was auch anklickbar wäre. Ein „url", das keine
+        # ist, war entweder nie eine oder soll etwas anderes sein als eine
+        # Adresse — beides gehört nicht in die Statusleiste.
+        url=url if url.startswith("https://") else "",
+        notes=_field(payload.get("notes")),
     )
+
+
+def _field(value: object) -> str:
+    """Ein Feld aus der Antwort, gestutzt auf das, was hineinpasst."""
+    return str(value if value is not None else "").strip()[:MAX_FIELD_LENGTH]
 
 
 def _get(url: str, headers: dict[str, str], _payload: dict[str, Any]) -> dict[str, Any]:
@@ -77,4 +98,9 @@ def _get(url: str, headers: dict[str, str], _payload: dict[str, Any]) -> dict[st
 
     request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as answer:
-        return dict(json.loads(answer.read().decode("utf-8")))
+        # Ein Byte mehr als erlaubt wird noch gelesen, damit „zu lang" von
+        # „gerade noch" unterscheidbar bleibt.
+        raw = answer.read(MAX_ANSWER_BYTES + 1)
+    if len(raw) > MAX_ANSWER_BYTES:
+        raise ValueError("version file is too large")
+    return dict(json.loads(raw.decode("utf-8")))
