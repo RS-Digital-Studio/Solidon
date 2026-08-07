@@ -28,6 +28,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 # Vor allem, was Qt anfasst: die echte Plattform, siehe Modulkopf.
 os.environ.pop("QT_QPA_PLATFORM", None)
@@ -115,6 +116,31 @@ def shoot(widget: QWidget, key: str, language: str, *, from_screen: bool = False
         shot = widget.grab()
     shot.save(str(target))
     print(f"  {key:14s} → {target.relative_to(Path.cwd()) if target.is_absolute() else target}")
+
+
+def release_viewport(window: Any) -> None:
+    """Den OpenGL-Kontext des Hauptfensters freigeben, bevor das nächste kommt.
+
+    ``close()`` allein tut das nicht: das ``QtInteractor`` bleibt am Fenster
+    hängen, und mit ihm sein Renderfenster. **Die Anwendung merkt das nie** —
+    sie baut ein Hauptfenster und dann keins mehr. Dieses Werkzeug baut je
+    Sprache eines, und das zweite bekommt einen Kontext, der dem ersten noch
+    gehört.
+
+    Sichtbar wurde es am Orientierungswürfel: im ersten Durchgang saß er, wo er
+    hingehört, im zweiten lag er als handtellergroßes Achsenkreuz quer über dem
+    Modell. Das englische Handbuchbild zeigte statt des Gehäuses ein X, ein Y
+    und ein Z. Ein Bild mit einem Fehler, den die Anwendung nicht hat, ist
+    schlimmer als gar keines — ihm glaubt man.
+    """
+    plotter = getattr(getattr(window, "viewport", None), "plotter", None)
+    if plotter is None:
+        return
+    try:
+        plotter.close()
+    except Exception as problem:  # pragma: no cover - hängt am Treiber
+        print(f"  (Viewport ließ sich nicht schließen: {problem})")
+    window.viewport.plotter = None
 
 
 def prepared(widget: QWidget, size: tuple[int, int], *, hidden: bool = True) -> QWidget:
@@ -221,6 +247,7 @@ def take_all(app: QApplication, language: str) -> None:
     settle(app, 60)
     shoot(window, "main-window", language, from_screen=True)
     window.close()
+    release_viewport(window)
 
     # Der Prüfbericht als eigenes Fenster: im Hauptfenster steckt er in einem
     # Reiter und ist genau so hoch wie der Reiter, was ein Bild von zwölf Pixeln
