@@ -2478,10 +2478,29 @@ Platz, an dem die echten stehen.
       verstanden; was fehlt, ist die Fähigkeit, ihn unter voller Werkzeuglast
       in Aufrufe zu übersetzen.
 
-      Damit ist es keine Regelfrage mehr, sondern eine Bauplanfrage: §26.2
-      schreibt „alle Ops aus dem Register" vor. Eine Auswahl nach `applies_to`
-      wäre die naheliegende Antwort, ist aber genau das, was §2 für die
-      Oberfläche ausschließt („eine Palette, die aussortiert, wäre eine
-      Betriebsart mit anderem Namen"). Ob das für den Agenten anders gilt,
-      entscheidet der Bauplan, nicht dieser Eintrag — und bis dahin bleibt
-      der Weg über ein größeres Modell.
+      Damit ist es keine Regelfrage mehr. Und auch keine Bauplanfrage: §26.2
+      schreibt „alle Ops aus dem Register" vor, und **das kann bleiben** —
+      `qwen3:30b-a3b` trifft mit allen dreiundachtzig Werkzeugen fünf von
+      fünf, wo `qwen3:14b` in Prosa fällt. Eine Auswahl nach `applies_to`
+      wäre also nicht nötig, und sie wäre auch das, was §2 für die Oberfläche
+      ausschließt.
+
+      Nur nützt das auf **dieser** Maschine nichts: Das Modell belegt 19 GB,
+      die Karte hat 16, es läuft zu einem Viertel auf der CPU — und die volle
+      Suite endete bei 4/33, davon **17 Zeitüberschreitungen**. Gemessen wurde
+      damit die Wartezeit, nicht die Fähigkeit. `qwen3:14b` passt in den
+      Speicher und bleibt mit 8/33 die bessere Wahl, also auch die Vorgabe.
+
+      | Modell | Werkzeugtest | Suite | Anmerkung |
+      |---|---|---|---|
+      | `qwen3:14b` | 4/5 | **8/33** | 9,3 GB, passt in den Speicher |
+      | `qwen3:30b-a3b` | **5/5** | 4/33 | 19 GB, 17 Zeitüberschreitungen |
+
+      Beide erfüllen die eine Zahl, die §40 als Regel führt: 3/3 bei
+      Mehrdeutigkeit gefragt.
+
+      Offen bleibt damit nicht die Regel, sondern die Ausstattung — und
+      nebenbei ein Wert: `llm.TIMEOUT_SECONDS` steht auf 120, und ein lokales
+      Modell mit CPU-Anteil braucht bei vollem Kontext länger. Ihn pauschal
+      hochzusetzen verlängert aber die Wartezeit im Chat für alle; das will
+      eigens entschieden werden.
