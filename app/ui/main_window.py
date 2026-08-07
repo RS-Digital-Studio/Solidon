@@ -56,7 +56,7 @@ from app.core.agent.tools import (
     UNDO_TRANSACTION,
 )
 from app.core.backends import llm
-from app.core.errors import AppError, InternalError
+from app.core.errors import AppError, InternalError, UserError
 from app.core.export.handover import SliceOutcome
 from app.core.export.writer import (
     ExportFormat,
@@ -1680,7 +1680,29 @@ class MainWindow(QMainWindow):
         if not name:
             return
 
-        metrics = gcode.parse(Path(name).read_text(encoding="utf-8", errors="replace"))
+        try:
+            text = Path(name).read_text(encoding="utf-8", errors="replace")
+        except OSError as problem:
+            # Zwischen Auswählen und Lesen kann eine Datei verschwinden, und
+            # auf einem getrennten Netzlaufwerk oder ohne Leserecht gelingt
+            # der Zugriff gar nicht. Ungefangen lief die Ausnahme in Qts
+            # Ereignisverteiler: kein Dialog, keine Zeile, die Handlung tat
+            # nichts — genau der stille Ausfall, den Regel 17 ausschließt.
+            show_error(
+                UserError(
+                    title=tr("Diese G-Code-Datei ließ sich nicht lesen."),
+                    detail=tr(
+                        "Sie ist vielleicht verschoben worden, oder das Laufwerk "
+                        "ist gerade nicht erreichbar. Wählen Sie die Datei noch "
+                        "einmal aus."
+                    ),
+                    values={"path": Path(name).name, "reason": str(problem)},
+                ),
+                self,
+            )
+            return
+
+        metrics = gcode.parse(text)
         findings = gcode.findings_for(metrics)
 
         self.report.add_findings(findings)

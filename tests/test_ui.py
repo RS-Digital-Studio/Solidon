@@ -1622,6 +1622,37 @@ def test_a_recent_entry_can_be_forgotten(window: MainWindow, tmp_path: Path) -> 
 # --- Export aus dem Fenster (§29, §2.2) ------------------------------------------
 
 
+def test_an_unreadable_gcode_file_says_so(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 17: keine Handlung endet stumm.
+
+    ``action_check_gcode`` las die Datei ohne Netz darunter. Zwischen Auswählen
+    und Lesen kann sie verschwinden, auf einem getrennten Laufwerk liegen oder
+    ohne Leserecht dastehen — die Ausnahme lief dann ungefangen in Qts
+    Ereignisverteiler: kein Dialog, keine Zeile, die Handlung tat nichts.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.ui import dialogs
+
+    gezeigt: list[object] = []
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(tmp_path / "weg.gcode"), "")),
+    )
+    monkeypatch.setattr(dialogs, "show_error", lambda error, *args, **kwargs: gezeigt.append(error))
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error", lambda error, *args, **kwargs: gezeigt.append(error)
+    )
+
+    window.action_check_gcode()
+
+    assert gezeigt, "die fehlende Datei wurde stillschweigend übergangen"
+    assert gezeigt[0].suggestions, "und der Fehler trägt keinen Handlungsvorschlag"
+
+
 def test_export_writes_the_selected_format(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
