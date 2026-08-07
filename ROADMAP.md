@@ -2680,3 +2680,38 @@ die konstruktive Frage, nicht die Diagnose.
       eingestellte Maschine erkannt, sieben passende Prozesse dazu.
 - [x] Der Rücklauf stimmt: Formwerk liest seinen eigenen G-Code mit 10,38 g,
       72 min, 110 Schichten, 0,2 mm — und `extrudes()` sagt ja.
+
+## Vollständige Verifikation des Gewürzsets (07.08.2026)
+
+Alle vier Teile durch alle drei Ebenen: Formwerks Schichtanalyse, die Übergabe
+an den ElegooSlicer über Formwerks eigenen Weg, und der zurückgelesene G-Code.
+
+| Teil | Überhang schlimmste Schicht | Übergabe | G-Code |
+|---|---|---|---|
+| Deckelbasis | **845,6 mm² bei z 13,10** | ok | 10,38 g · 72 min |
+| Streuscheibe | 0,0 mm² | ok | 2,46 g · 13 min |
+| Behälter | 3,7 mm² | ok | 24,26 g · 97 min |
+| Wandregal | 3253,6 mm² bei z 46,10 | ok | 139,32 g · 493 min |
+
+Die Gegenprobe (`handover.verify`) meldet bei allen vier **null Abweichungen**:
+der Slicer übernimmt jeden Wert, den Formwerk schreibt. Alle vier fördern
+Material.
+
+### Der Unterschied zwischen Deckel und Regal
+
+Beide melden einen 90-Grad-Überhang, und beim Regal ist er viermal so groß —
+gemessen nachgeprüft: bei z 46,00 springt die Fläche in zwei Hundertsteln
+Millimeter um 250 %, und dort liegen vier Dreiecke mit der Normalen genau nach
+unten. Trotzdem fährt der Slicer dort nur **108 Brückensegmente**, am Deckel
+aber **4909**.
+
+Der Grund ist nicht die Geometrie, sondern was darunter liegt. Im Regal steht
+Füllung (`Sparse infill` über die ganzen Schichten darunter), und die trägt.
+Unter der Lochplatte des Deckels ist die Gewindebohrung — ein echter
+Hohlraum, in dem nichts steht.
+
+**Das ist eine Grenze von Formwerks Schichtanalyse, die man kennen muss:** sie
+misst die Geometrie und weiß nichts von der Füllung, die der Slicer später
+hineinlegt. Ein gemeldeter Überhang über gefülltem Volumen ist deshalb kein
+Befund, einer über einem Hohlraum schon. Wer die Zahl allein liest, hält das
+Regal für schlimmer als den Deckel — und es ist umgekehrt.
