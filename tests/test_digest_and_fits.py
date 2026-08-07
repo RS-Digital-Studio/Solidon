@@ -387,3 +387,17 @@ def test_the_digest_says_where_a_feature_is(profile: Profile) -> None:
 
     assert "bei (" in text
     assert "-25, -15" in text or "-25, 15" in text, "the bores of plate_holes sit at ±25/±15"
+
+
+def test_a_zero_in_the_digest_reads_as_zero() -> None:
+    """Ein zentrierter Körper landet rechnerisch auf -1.11022e-16, nicht auf 0.
+
+    Der Agent liest den Steckbrief als Text. Steht dort eine Zehn-hoch-minus-
+    sechzehn, nimmt er sie für einen Wert, der etwas bedeutet — er hat keine
+    andere Quelle als diesen Satz.
+    """
+    from app.core.perceive.digest import _place
+
+    assert _place((-1.11022e-16, 4.14329e-17, 10.0)) == ", bei (0, 0, 10)"
+    # Was oberhalb des Rauschens liegt, bleibt unangetastet.
+    assert _place((0.5, -15.0, 10.0)) == ", bei (0.5, -15, 10)"

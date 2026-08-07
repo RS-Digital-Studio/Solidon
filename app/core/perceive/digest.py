@@ -135,10 +135,24 @@ def _place(centre: object) -> str:
     if not isinstance(centre, list | tuple) or len(centre) != 3:
         return ""
     try:
-        numbers = ", ".join(f"{float(value):g}" for value in centre)
+        numbers = ", ".join(_rounded(float(value)) for value in centre)
     except (TypeError, ValueError):
         return ""
     return f", {tr('bei')} ({numbers})"
+
+
+def _rounded(value: float) -> str:
+    """Eine Null bleibt eine Null.
+
+    Die Mittelpunkte kommen aus einer Rechnung, und ein zentrierter Quader
+    landet dabei nicht auf 0, sondern auf -1.11022e-16. Für den Steckbrief ist
+    das schädlich: der Agent liest ihn als Text und nimmt eine
+    Zehn-hoch-minus-sechzehn für einen Wert, der etwas bedeutet — er ist
+    darauf angewiesen, dass dasteht, was gemeint ist. Ein Zehntausendstel
+    Millimeter unterschreitet jede Fertigungstoleranz, die dieses Gerät
+    einhalten kann; darunter ist es Rechenrauschen.
+    """
+    return f"{0.0 if abs(value) < 1e-4 else value:g}"
 
 
 def _axis_name(vector: tuple[float, float, float]) -> str:
