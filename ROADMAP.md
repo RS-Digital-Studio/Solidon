@@ -2320,14 +2320,51 @@ Parameterzahl, weil §27 das so sagt, und 14,8 Milliarden liegen weit über der
 Grenze. Die Eigenschaft, an der die ganze Agentenschicht hängt, misst sie
 nicht — und Ollamas eigene Fähigkeitsangabe auch nicht.
 
-### Offen aus dieser Durchsicht
+### Nachgezogen, gleiche Sitzung
 
-- [ ] **Die Graphen hängen an konkreten Modellnamen** (`Juggernaut-X-v10`,
-      `hunyuan3d-dit-v2-1-fp16`). Auf einer fremden Maschine scheitern sie mit
-      ComfyUIs Meldung, welcher Knoten fehlt. Das ist besser als vorher und
-      trotzdem nicht gut: die Erstinbetriebnahme könnte die vorhandenen Modelle
-      abfragen (`/object_info`) und den Graphen darauf einstellen, statt zu
-      raten.
-- [ ] **`ollama_tool_check` wird noch nirgends angeboten.** Die Funktion und
-      ihr Läufer sind da; im Einstellungsdialog fehlt der Knopf, der sie
-      anstößt — und genau dort steht jemand, der ein Modell eingetragen hat.
+- [x] **Die Graphen hängen nicht mehr an konkreten Modellnamen.** Sie nennen
+      Rollen (`{model:image}`, `{model:shape}`, `{model:shape_vae}`), und
+      `/object_info` sagt, was der Eingang zur Auswahl stellt. Die
+      Ausschlussmuster sind der Kern: der Formkern liegt unter denselben
+      Checkpoints wie die Bildmodelle. Passt kein Muster, wird genommen was da
+      ist; fehlt die Datei ganz, sagt die Meldung genau das.
+- [x] **Die Werkzeugprobe hat jetzt ein Feld, das sie prüfen kann.** Dahinter
+      lag der größere Mangel: das lokale Modell ließ sich überhaupt nicht
+      einstellen. „Zugang zum Sprachmodell" trägt jetzt beide Wege aus §27.
+- [x] **Die letzten englischen Docstrings sind übersetzt** — 56 Stellen in 27
+      Dateien unter `app/`, acht in `tests/` und `tools/`. Der Punkt oben aus
+      dem Audit ist damit erledigt.
+
+### Aus Kundensicht durchgegangen
+
+Nicht der Code, sondern was jemand liest. Zwei Funde, beide auf demselben Weg:
+
+- [x] **Fällt ComfyUI weg, stand dort ein Windows-Fehlercode.** Falscher Titel,
+      roher Fremdtext als Grund, „Abbrechen" als einziger Vorschlag.
+- [x] **Und selbst der gute Text kam nicht an.** Der Erzeugen-Dialog zeigte nur
+      `problem.title`; Grund und Ausweg fielen still unter den Tisch.
+- [x] **„Es ist kein Schlüssel hinterlegt"** stand im Zugangsdialog, während
+      der Chat über das lokale Modell lief — es liest sich wie „geht nicht".
+
+Dazu eine Lehre mit eigenem Wächter: **einen Fehlertext formatiert niemand
+nach.** Ein `{platzhalter}` in `detail` oder `title` bleibt wörtlich stehen,
+weil `show_details` den Text zeigt, wie er ist, und die `values` als eigene
+Zeilen darunterhängt. In der Oberfläche ist derselbe Platzhalter richtig, dort
+steht ein `.format` dahinter. `tests/test_errors.py` sucht im ganzen Kern
+danach.
+
+### Offen
+
+- [ ] **Der Fortschritt steht eine Minute lang auf 50 %.** Ein Lauf dauert
+      hier 40 bis 70 Sekunden, und die ganze Zeit steht „Modell wird erzeugt"
+      am selben Punkt — von „rechnet" nicht zu unterscheiden. §2.8 verlangt ab
+      zehn Sekunden eine Schätzung. ComfyUI meldet echten Fortschritt über
+      seinen Websocket; über `/history` gibt es ihn nicht. Bis dahin wäre schon
+      die verstrichene Zeit ehrlicher als ein stehender Balken.
+- [ ] **`tests/test_examples.py::…[dose-mit-deckel]` ist flaky.** Dreimal
+      allein gefahren: zweimal grün, einmal rot, ohne Änderung dazwischen. Der
+      Fehler kommt aus `trimesh/proximity.py` — `nearby_faces` liefert
+      sporadisch nichts, das leere Ergebnis ist `float64`, und der Zugriff
+      damit scheitert. Dieselbe Ecke wie die Abstürze im langen Lauf, und
+      dieselbe Frage: liegt es an rtree auf dieser Maschine? Bis das geklärt
+      ist, sagt ein einzelner roter Lauf dieses Tests nichts.
