@@ -2632,3 +2632,51 @@ lief damit mit.
 - [ ] **Was ComfyUI liefert, ist nirgends wasserdicht.** Alle vier Möbel kamen
       offen an, mit 625 000 bis 1 229 000 Dreiecken. `repair` schloss drei von
       vier nicht. Für Weg 3 ist das der Normalfall, nicht die Ausnahme.
+
+## Gewürzdeckel: der Fehler saß im Deckel, nicht im Becher (07.08.2026)
+
+Fotos vom gedruckten Deckel zeigten das Innere voller Fäden. Nachgemessen mit
+Formwerks Schichtanalyse und mit dem ElegooSlicer, beide am selben Teil.
+
+### Der Befund
+
+`deckel_basis.stl` hat bei **z = 13,10 einen Überhang von 845,6 mm²** auf einer
+einzigen Schicht — vier Fünftel des gesamten Überhangs des Teils. Die
+Lochplatte sitzt auf einem Vollzylinder, dessen Bohrung bei z = 13 endet: sie
+fängt über der ganzen Gewindebohrung in der Luft an.
+
+Der ElegooSlicer bestätigt es aus seiner Sicht. Auf dieser Höhe fährt er
+**4909 Segmente `Bridge` und 12552 `Overhang wall`**.
+
+Das ist derselbe Fehlertyp, den die Spezifikation als Nr. 5 führt — die
+waagerechte Ringschulter im Becher, dort mit 2328 Brückensegmenten gemessen
+und mit einem 45-Grad-Kegel behoben. Am Deckel wurde er nie gesucht, und er
+ist **doppelt so groß**. Der Becher selbst ist sauber: höchstens 3,7 mm² je
+Schicht.
+
+Nicht die Ursache war dagegen das Profil (Nr. 6): der G-Code trägt
+`print_settings_id = Gewuerzset @ECC2`, das eigene Profil wird geladen.
+
+### Was eine Fase davon einfängt
+
+Gemessen an vier Varianten: eine Hohlkehle unter der Platte halbiert es auf
+404,8 mm², mehr gibt die Geometrie nicht her — die Platte muss über den
+Behälterhals spannen, und der ist Ø 28 bis 35. Ein Trichter *in* der Platte
+misst zwar besser, zerstört sie aber (23 % Volumenverlust). Offen bleibt damit
+die konstruktive Frage, nicht die Diagnose.
+
+### Zusammenspiel mit dem ElegooSlicer
+
+- [ ] **`machine_profile` und `base_process` müssen Pfade sein, nicht Namen.**
+      Der Docstring von `SlicerSetup` sagt das Gegenteil: „Namen aus dem
+      Bestand des Slicers, keine Pfade — sie reisen so auch in eine
+      Projektdatei, ohne gegen Regel 12 zu verstoßen." Mit Namen bricht der
+      Lauf ab (`can not find setting file`), und das geschriebene Prozessprofil
+      hat 42 Schlüssel ohne `inherits` und ohne `compatible_printers`. Mit
+      Pfaden sind es 62 mit beidem, und der Lauf endet mit Rückgabe 0.
+      Beides zugleich geht nicht: die Datei braucht den Namen, der Aufruf den
+      Pfad. Die Auflösung gehört zwischen beide — heute fehlt sie.
+- [x] Gefunden werden die Profile einwandfrei: 3887 Stück, die im Slicer
+      eingestellte Maschine erkannt, sieben passende Prozesse dazu.
+- [x] Der Rücklauf stimmt: Formwerk liest seinen eigenen G-Code mit 10,38 g,
+      72 min, 110 Schichten, 0,2 mm — und `extrudes()` sagt ja.
