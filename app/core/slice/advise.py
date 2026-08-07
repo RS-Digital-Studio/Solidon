@@ -19,6 +19,7 @@ Werten aus dem G-Code wird es nie vermischt (Regel 14, §22.5).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import Final
 
@@ -104,7 +105,7 @@ def advise(
     result: SliceResult | None = None,
     *,
     bounds: BoundingBox | None = None,
-    has_fits: bool = False,
+    fit_kinds: Sequence[str] = (),
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -117,8 +118,8 @@ def advise(
     advice += _from_material(settings, profile)
     if result is not None:
         advice += _from_geometry(settings, profile, result, bounds)
-    if has_fits:
-        advice += _from_fits(settings)
+    if fit_kinds:
+        advice += _from_fits(settings, fit_kinds)
 
     # Der Volumenstrom hängt an Schichthöhe, Bahnbreite und Tempo — und an
     # genau diesen Werten haben die Vorschläge oben womöglich gedreht. Er wird
@@ -487,10 +488,28 @@ def _from_geometry(
     return advice
 
 
-def _from_fits(settings: PrintSettings) -> list[SettingAdvice]:
-    """Wo Passungen im Spiel sind, entscheidet die Außenwand über das Maß."""
+def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdvice]:
+    """Wo Passungen im Spiel sind, entscheidet die Außenwand über das Maß.
+
+    Die Art zählt mit, und nicht nur das Ob: eine bündige Passung legt zwei
+    Flächen aufeinander, und die obere ist dann eine Gleitfläche. Die will
+    gebügelt werden — bei einem Schiebesitz oder einem Gewinde wäre dasselbe
+    nur verlorene Zeit auf einer Fläche, die nichts berührt.
+    """
     advice: list[SettingAdvice] = []
     careful = 30.0
+    if "flush" in kinds and not settings.shell.ironing:
+        advice.append(
+            SettingAdvice(
+                path="shell.ironing",
+                value=True,
+                was=settings.shell.ironing,
+                reason=_(
+                    "Eine bündige Passung legt zwei Flächen aufeinander. Gebügelt "
+                    "gleitet die obere, statt auf den Bahnkanten zu sitzen."
+                ),
+            )
+        )
     if not settings.shell.precise_outer_wall:
         advice.append(
             SettingAdvice(

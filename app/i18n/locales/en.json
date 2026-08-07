@@ -751,6 +751,7 @@
   "Eine andere Fläche wählen": "Pick a different face",
   "Eine andere Sprache erscheint beim nächsten Start.": "Another language takes effect at the next start.",
   "Eine bündige Passung braucht zwei Flächen.": "A flush fit needs two faces.",
+  "Eine bündige Passung legt zwei Flächen aufeinander. Gebügelt gleitet die obere, statt auf den Bahnkanten zu sitzen.": "A flush fit lays two faces on each other. Ironed, the upper one slides instead of sitting on the edges of the extrusion paths.",
   "Eine eingebettete Quelle fehlt im Container.": "An embedded source is missing from the container.",
   "Eine eingebettete Quelle hat keinen Inhalt.": "An embedded source has no content.",
   "Eine einzelne Bahn trägt nichts und reißt beim Entfernen der Stützen.": "A single bead carries nothing and tears when the supports come off.",

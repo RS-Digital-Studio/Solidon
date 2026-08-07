@@ -404,9 +404,36 @@ def test_no_setting_gets_two_suggestions() -> None:
     profile = profiles.make_profile("prusa-mk4s", "tpu-95a")
     settings = print_settings.resolve(profile, "draft")
 
-    paths = [entry.path for entry in advise.advise(settings, profile, has_fits=True)]
+    paths = [entry.path for entry in advise.advise(settings, profile, fit_kinds=("clearance",))]
 
     assert len(paths) == len(set(paths))
+
+
+def test_a_flush_fit_asks_for_ironing() -> None:
+    """Eine bündige Passung legt zwei Flächen aufeinander — die obere gleitet.
+
+    Gebügelt sitzt sie auf einer geschlossenen Fläche statt auf den Kanten der
+    Bahnen. Bisher war das ein Schalter im Dialog, den man kennen musste.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", False)
+
+    paths = [entry.path for entry in advise.advise(settings, profile, fit_kinds=("flush",))]
+
+    assert "shell.ironing" in paths
+
+
+def test_a_sliding_fit_does_not_ask_for_ironing() -> None:
+    """Bei einem Schiebesitz oder einem Gewinde wäre Bügeln verlorene Zeit auf
+    einer Fläche, die nichts berührt — die Art zählt, nicht nur das Ob.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", False)
+
+    for kind in ("clearance", "press", "thread"):
+        paths = [entry.path for entry in advise.advise(settings, profile, fit_kinds=(kind,))]
+        assert "shell.ironing" not in paths, kind
+        assert "shell.precise_outer_wall" in paths, f"die anderen Regeln gelten weiter ({kind})"
 
 
 def test_a_heated_chamber_gets_used_when_it_is_there() -> None:
@@ -433,7 +460,7 @@ def test_fits_slow_the_outer_wall_down() -> None:
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
 
-    entries = advise.advise(settings, profile, has_fits=True)
+    entries = advise.advise(settings, profile, fit_kinds=("clearance",))
 
     assert "speed.outer_wall" in _paths(entries)
     assert "shell.outer_wall_first" in _paths(entries)
@@ -1033,7 +1060,7 @@ def test_fits_ask_for_the_precise_wall_and_a_calmer_acceleration() -> None:
     """Beides zielt auf dasselbe: das Maß, auf das die Passung gerechnet ist."""
     settings = print_settings.resolve(profiles.make_profile())
 
-    entries = advise.advise(settings, profiles.make_profile(), has_fits=True)
+    entries = advise.advise(settings, profiles.make_profile(), fit_kinds=("clearance",))
 
     precise = next(entry for entry in entries if entry.path == "shell.precise_outer_wall")
     assert precise.value is True

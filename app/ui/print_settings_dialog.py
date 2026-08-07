@@ -1228,11 +1228,11 @@ class PrintSettingsDialog(QDialog):
             self.session.profile,
             self.slice_result,
             bounds=self._bounds(),
-            has_fits=self._fits_in_play(),
+            fit_kinds=self._fits_in_play(),
         )
 
-    def _fits_in_play(self) -> bool:
-        """Trägt dieses Projekt eine Passung — eingetragen oder gebaut?
+    def _fits_in_play(self) -> tuple[str, ...]:
+        """Welche Passungen trägt dieses Projekt — eingetragene und gebaute?
 
         Eingetragene Passungen stehen im Dokument. Gebaute stehen nirgends: der
         Deckel aus ``create_lid`` bekommt sein Spiel aus dem Materialprofil, die
@@ -1246,11 +1246,19 @@ class PrintSettingsDialog(QDialog):
         Prüfung sie sieht und ein Nutzer sie ändern kann. Das ändert den
         Vertrag aus §9 (eine Op müsste Passungen zurückgeben können) und ist
         eine eigene Runde wert.
+
+        Zurück kommen die **Arten**, nicht bloß ein Ja: eine bündige Passung
+        verlangt eine Einstellung mehr als ein Schiebesitz, und die Regel
+        nebenan kann das nur unterscheiden, wenn sie es erfährt. Was aus dem
+        Stapel kommt, zählt als Schiebesitz — welche Flächen ein Baustein
+        aufeinanderlegt, steht nirgends, und eine geratene Art wäre schlechter
+        als keine.
         """
         document = self.session.project.document
-        if document.fits:
-            return True
-        return any(entry.op in FITTING_OPS for entry in document.ops)
+        kinds = [entry.kind for entry in document.fits]
+        if any(entry.op in FITTING_OPS for entry in document.ops):
+            kinds.append("clearance")
+        return tuple(dict.fromkeys(kinds))
 
     def _bounds(self) -> BoundingBox | None:
         """Der Hüllquader über alles, was auf die Platte geht — daran hängt der
