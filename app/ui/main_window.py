@@ -116,6 +116,7 @@ from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import feature_label
 from app.ui.manual_window import ManualWindow
+from app.ui.motion import switch
 from app.ui.op_dialog import OperationDialog
 from app.ui.overlay import OverlayHost, card_stylesheet
 from app.ui.paint_bar import PaintBar
@@ -2161,7 +2162,7 @@ class MainWindow(QMainWindow):
         self._sketch_panel = panel
         self._sketch_target = op_name
         self.middle_stack.addWidget(panel)
-        self.middle_stack.setCurrentWidget(panel)
+        switch(self.middle_stack, panel)
         # Der Startbildschirm liegt vor dem Arbeitsbereich, solange nichts
         # offen ist — und zu zeichnen beginnen ist genau der Fall, in dem noch
         # nichts offen ist (Weg 2, §2.2). Ohne diese Zeile meldete die
@@ -2190,7 +2191,7 @@ class MainWindow(QMainWindow):
         if panel is None:
             return
         text = panel.sketch_text() if keep else ""
-        self.middle_stack.setCurrentWidget(self.viewport)
+        switch(self.middle_stack, self.viewport)
         self.middle_stack.removeWidget(panel)
         panel.deleteLater()
         self._sketch_panel = None
@@ -2585,7 +2586,7 @@ class MainWindow(QMainWindow):
 
     def _focus_chat(self) -> None:
         if self.right.isVisible():
-            self.right.setCurrentWidget(self.chat)
+            switch(self.right, self.chat)
 
     def _on_paint(self, point: Any) -> None:
         """§20: ein Klick, eine Operation — ein Undo nimmt also einen Strich
@@ -3555,7 +3556,10 @@ class MainWindow(QMainWindow):
     # --- window -----------------------------------------------------------------
 
     def _show_start_screen(self, show: bool) -> None:
-        self.stack.setCurrentWidget(self.start_screen if show else self.overlay)
+        # Der härteste Schnitt, den die Anwendung hat: der ganze Inhalt wird
+        # ein anderer. Mit Blende liest das Auge „dasselbe Fenster, andere
+        # Ansicht" statt von vorn (``app/ui/motion.py``).
+        switch(self.stack, self.start_screen if show else self.overlay)
 
     def _focus_report(self) -> None:
         if not self.right.isVisible():
@@ -3564,7 +3568,7 @@ class MainWindow(QMainWindow):
             # Die Tour zeigt selbst auf den Prüfbericht, wenn er dran ist —
             # ein Reiterwechsel unter der Anleitung weg wäre ihr Ende.
             return
-        self.right.setCurrentWidget(self.report)
+        switch(self.right, self.report)
 
     def _offer_tour(self, path: Path) -> None:
         """§37.2: ein Beispiel öffnet sich mit seiner Tour — jedes andere

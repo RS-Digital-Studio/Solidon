@@ -1382,6 +1382,33 @@ def test_a_saved_project_closes_without_a_question(window: MainWindow, tmp_path:
     assert window._may_discard(), "nichts Ungesichertes, nichts zu fragen"
 
 
+def test_cancelling_the_question_keeps_the_window_open(window: MainWindow, monkeypatch) -> None:
+    """Abbrechen heißt abbrechen, nicht „gleich trotzdem".
+
+    Geprüft war bisher nur, dass ``_may_discard`` bei *Abbrechen* nein sagt.
+    Ob der ``closeEvent`` diese Antwort auch befolgt, stand nirgends — und
+    genau das ist die Frage, die jemand stellt, der vor dem Dialog steht.
+    Deshalb geht dieser Test über ``close()`` und sieht dem Fenster danach an,
+    dass es noch da ist.
+    """
+    import app.ui.main_window as module
+
+    answers = ["cancel"]
+    monkeypatch.setattr(module, "confirm_unsaved", lambda title, parent: answers[0])
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.show()
+    assert window.session.modified
+
+    assert not window.close(), "der Schließversuch wird abgelehnt"
+    assert window.isVisible(), "das Fenster steht noch"
+    assert window.session.modified, "und die Arbeit ist unberührt"
+
+    answers[0] = "discard"
+    assert window.close(), "mit Verwerfen geht es dann"
+
+
 # --- Einstellungen an einem Ort (§19.3, §38) ------------------------------------
 
 
@@ -2777,3 +2804,61 @@ def test_the_splash_screen_survives_a_missing_icon_source(
         splash.repaint()  # darf nicht werfen
     finally:
         splash.finish()
+
+
+def test_motion_is_off_where_nobody_watches(qt_app: object) -> None:
+    """Offscreen wird nicht animiert — sonst prüft ein Test die Uhr.
+
+    Die Suite läuft unter ``QT_QPA_PLATFORM=offscreen`` (conftest, §38). Dort
+    darf keine Animation starten: ein Widget, das erst nach 140 ms sichtbar
+    ist, macht aus jeder Zusicherung eine Wette auf das Timing.
+    """
+    from app.ui import motion
+
+    assert not motion.animations_enabled()
+
+
+def test_switching_a_stack_arrives_immediately(qt_app: object) -> None:
+    """Der Wechsel gilt sofort, animiert wird nur das Auftauchen.
+
+    Das ist die Zusicherung, auf der alle Aufrufer stehen: Wer direkt nach
+    ``switch`` auf ``currentWidget`` sieht, bekommt die neue Seite — nicht die
+    alte, weil eine Blende noch läuft.
+    """
+    from PySide6.QtWidgets import QStackedWidget, QWidget
+
+    from app.ui.motion import switch
+
+    stack = QStackedWidget()
+    first, second = QWidget(), QWidget()
+    stack.addWidget(first)
+    stack.addWidget(second)
+    stack.setCurrentWidget(first)
+
+    switch(stack, second)
+    assert stack.currentWidget() is second
+
+    # Zweimal dasselbe Ziel ist kein Wechsel und löst auch keine Blende aus.
+    switch(stack, second)
+    assert stack.currentWidget() is second
+
+
+def test_fading_leaves_no_effect_behind(qt_app: object) -> None:
+    """Nach der Blende hängt kein Deckkraft-Effekt mehr am Widget.
+
+    Ein ``QGraphicsOpacityEffect`` kostet bei jedem Zeichnen eine eigene
+    Zwischenfläche. Bliebe er stehen, zahlte der Viewport ihn für den Rest der
+    Sitzung — und zwei übereinander machen das Widget dauerhaft blasser.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    from app.ui.motion import fade_in, fade_out
+
+    widget = QWidget()
+    fade_in(widget)
+    assert widget.isVisible() or widget.isHidden() is False
+    assert widget.graphicsEffect() is None
+
+    fade_out(widget)
+    assert not widget.isVisible()
+    assert widget.graphicsEffect() is None
