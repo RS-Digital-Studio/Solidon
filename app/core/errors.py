@@ -85,7 +85,14 @@ class AppError(Exception):
         self.values: dict[str, Any] = values or {}
         self.object_id = object_id
         self.op_id = op_id
-        super().__init__(str(self.title))
+        # Titel *und* Detail. Der Titel nennt die Art des Fehlers und ist
+        # darum je Klasse gleich — „Ein Wert liegt außerhalb des zulässigen
+        # Bereichs" steht über jedem ValidationError, ob es um eine Wandstärke
+        # geht oder um ein fehlendes @ vor einem Parameternamen. Wer nur ihn
+        # sieht, weiß nichts. Die Oberfläche liest beide Felder einzeln und
+        # merkt davon nichts; Protokoll und Traceback zeigen bisher allein
+        # diesen Text, und dort ist der Unterschied der ganze Inhalt.
+        super().__init__(f"{self.title}: {self.detail}" if self.detail else str(self.title))
 
     def as_dict(self) -> dict[str, Any]:
         """Serialisierbare Form für Protokoll, Prüfbericht und

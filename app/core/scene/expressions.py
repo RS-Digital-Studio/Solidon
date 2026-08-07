@@ -65,7 +65,11 @@ class _Token:
 
 
 def _fail(detail: str, source: str, position: int) -> ValidationError:
+    # Der Vorgabetitel von ValidationError spricht von einem Wert außerhalb
+    # seines Bereichs. Hier ist nichts außerhalb eines Bereichs — hier steht
+    # ein Zeichen an einer Stelle, an der der Auswerter keines lesen kann.
     return ValidationError(
+        title=_("Dieser Ausdruck lässt sich nicht lesen."),
         field="expression",
         detail=detail,
         value=source,
