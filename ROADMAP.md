@@ -362,13 +362,22 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       Kette hat drei Stufen, und eine davon steht:
       - [x] Der Aufruf ging an `UltiMaker-Cura.exe`, also an die Oberfläche.
             Die Kommandozeile hat nur `CuraEngine.exe` daneben
-      - [ ] `CuraEngine` liest **kein 3MF** — die 3MF-Seite sitzt im Frontend.
-            Für Cura müsste die Übergabe STL schreiben
-      - [ ] Es braucht eine konkrete Maschinendefinition samt Extruder;
-            `fdmprinter.def.json` allein ist die abstrakte Basis und liefert
-            null Bytes. `slicer_profiles` kennt Curas Bestand nicht — er
-            liegt als `share/cura/resources/definitions/*.def.json`, nicht in
-            der Orca-Struktur
+      - [x] `CuraEngine` liest **kein 3MF** — die 3MF-Seite sitzt im Frontend.
+            Für Cura schreibt die Übergabe STL
+      - [x] `fdmprinter.def.json` als Basis reicht, wenn die Werte mitkommen,
+            die es ohne Vorgabe lässt. Gefunden durch Zufüttern, bis der
+            Rückgabewert 0 war: Bauraum, Düse, `machine_center_is_zero`,
+            `roofing_layer_count`, `flooring_layer_count`. `_cura_base()` sucht
+            die Datei unter `share/cura/resources/definitions`
+      - [ ] **Der Lauf endet, fördert aber nichts.** 8,6 MB Leerfahrten,
+            `Filament used: 0m`, alle Bettgrenzen auf `2.14748e+06` — das
+            Modell wird nicht platziert. `machine_center_is_zero` ist es
+            nicht, beide Stellungen liefern dasselbe. Offen bleibt, welche
+            Einstellung CuraEngine als „nichts drucken" auslegt; das Frontend
+            löst mehr auf als die Basisdefinition hergibt.
+            Abgesichert ist es: `gcode.extrudes()` lässt eine Datei ohne eine
+            einzige Bahn nicht mehr als Erfolg durch — das galt für **alle**
+            Slicer, nicht nur für Cura
 
 ## P8 — Erste Veröffentlichung
 - [x] Name entschieden, überall durchgezogen — alles Namensbezogene steht in
