@@ -344,6 +344,7 @@
   "Der Slicer hat Einstellungen anders übernommen, als Formwerk sie geschrieben hat.": "The slicer took settings differently from how Formwerk wrote them.",
   "Der Slicer hat gewarnt.": "The slicer warned.",
   "Der Slicer hat keine Druckdatei geschrieben.": "The slicer wrote no print file.",
+  "Die Druckdatei enthält keine einzige Materialbahn — der Slicer hat das Modell nicht verarbeitet.": "The print file contains not a single extrusion path — the slicer did not process the model.",
   "Der Slicer rechnet …": "The slicer is working …",
   "Der Startbildschirm: zuletzt geöffnete Projekte, die Beispielprojekte und ein großes Feld, auf das man eine Datei ziehen kann.": "The start screen: recently opened projects, the example projects and a large area to drop a file onto.",
   "Der Stift selbst oder die Bohrung dazu.": "The pin itself or the bore for it.",
