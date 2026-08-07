@@ -39,7 +39,12 @@ class PaintBar(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self.active = QCheckBox(tr("Bemalen"), self)
+        # Nicht „Bemalen": so heißt der Umschalter, der diese Leiste öffnet,
+        # und beide standen mit demselben Wort direkt übereinander. Der
+        # Umschalter holt das Werkzeug hervor, dieses Häkchen macht den Pinsel
+        # scharf — zwei Dinge, die man auseinanderhalten muss, sobald man
+        # einmal geklickt hat, ohne dass etwas passierte.
+        self.active = QCheckBox(tr("Pinsel scharf"), self)
         self.active.setToolTip(tr("Klicks im Modell malen den gewählten Slot."))
         self.active.toggled.connect(self.paintingToggled)
 

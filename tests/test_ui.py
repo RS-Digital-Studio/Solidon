@@ -2439,6 +2439,27 @@ def test_the_empty_parameter_note_is_readable(qt_app: QApplication) -> None:
     )
 
 
+def test_the_parameter_card_survives_getting_parameters(qt_app: QApplication) -> None:
+    """Der leere Zustand hinterlässt eine tote Referenz, wenn man ihn misst.
+
+    ``show_document`` räumt die Zeilen des Formulars weg; danach ist das
+    C++-Objekt des Labels fort, während die Python-Referenz noch steht. Wer es
+    danach vermäße, stürbe an genau dem — beim ersten Projekt mit Parametern,
+    also bei jedem Weg 2.
+    """
+    from app.core.types import Document, Parameter
+    from app.ui.panels import ParameterPanel
+
+    panel = ParameterPanel()
+    panel.show_document(Document(format_version=1, app_version="0.0.1"))
+
+    document = Document(format_version=1, app_version="0.0.1")
+    document.parameters["breite"] = Parameter(name="breite", value=60.0)
+    panel.show_document(document)
+
+    assert "breite" in panel._editors
+
+
 def test_a_very_long_list_stops_growing(qt_app: QApplication) -> None:
     """Sonst schöbe ein Baum mit fünfzig Teilen den Verlauf aus dem Fenster."""
     from PySide6.QtWidgets import QTreeWidgetItem

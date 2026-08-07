@@ -569,6 +569,7 @@ class ParameterPanel(QWidget):
         self._form.setContentsMargins(0, 0, 0, 0)
         self._empty = QLabel(_empty_parameters_text(), self)
         self._empty.setWordWrap(True)
+        fit_wrapped(self._empty)
         self._form.addRow(self._empty)
         self._editors: dict[str, QDoubleSpinBox] = {}
         # §2.3: das Anlegen war ein Agentenwerkzeug und sonst nichts — wer
@@ -586,8 +587,12 @@ class ParameterPanel(QWidget):
         Der Streckfaktor am Ende ist weg: er beanspruchte Restplatz in einer
         Spalte, die keinen verteilt, und der umbrochene Satz des leeren
         Zustands wurde stattdessen gestaucht, bis er unter dem Knopf lag.
+
+        Das Label wird hier **nicht** angefasst: ``show_document`` räumt die
+        Zeilen des Formulars weg, und damit ist das C++-Objekt des alten
+        Labels fort, während die Python-Referenz noch steht. Wer es hier
+        vermäße, stürbe an genau dem — beim ersten Projekt mit Parametern.
         """
-        fit_wrapped(self._empty)
         self.setMinimumHeight(self._outer.sizeHint().height())
         self.updateGeometry()
 
@@ -599,6 +604,7 @@ class ParameterPanel(QWidget):
         if not document.parameters:
             self._empty = QLabel(_empty_parameters_text(), self)
             self._empty.setWordWrap(True)
+            fit_wrapped(self._empty)
             self._form.addRow(self._empty)
             self._fit()
             return

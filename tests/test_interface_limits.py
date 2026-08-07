@@ -162,6 +162,29 @@ def test_every_tool_says_what_it_expects(window: MainWindow) -> None:
     assert not too_short, f"Diese Hinweise wiederholen nur den Titel: {too_short}."
 
 
+def test_no_tool_shares_its_name_with_its_own_controls(window: MainWindow) -> None:
+    """Der Umschalter holt das Werkzeug hervor, die Leiste bedient es.
+
+    Beim Bemalen trugen beide dasselbe Wort und standen direkt übereinander:
+    der Umschalter „Bemalen" öffnete die Leiste, und darin fragte ein Häkchen
+    „Bemalen" noch einmal. Wer den Umschalter drückte und ins Modell klickte,
+    malte nicht — und sah nur ein zweites Feld mit demselben Namen.
+    """
+    from PySide6.QtWidgets import QAbstractButton
+
+    doppelt = []
+    for key, tool in window.tools.tools().items():
+        title = str(tool.title).strip().casefold()
+        for control in tool.bar.findChildren(QAbstractButton):
+            if control.text().strip().casefold() == title:
+                doppelt.append((key, control.text()))
+
+    assert not doppelt, (
+        f"Diese Bedienelemente heißen wie ihr eigener Umschalter: {doppelt}. "
+        "Der Umschalter nennt das Werkzeug, das Element seine Handlung."
+    )
+
+
 def test_a_tool_hint_appears_and_goes_with_the_tool(window: MainWindow) -> None:
     """Der Hinweis gehört dem Werkzeug, nicht dem Fenster."""
     window.tools.activate("section")
