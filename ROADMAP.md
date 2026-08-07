@@ -343,15 +343,21 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       weiterhin nicht und soll es nicht; das Fenster kennt beide Seiten.
       **Vorher war das folgenlos**, siehe den nächsten Punkt: die Anordnung
       kam beim Slicer gar nicht an
-- [ ] Plattenvorschlag in der Oberfläche anbieten — `plates_by_material`
-      rechnet ihn, gesetzt wird die Platte weiterhin von Hand
-- [ ] Bügeln aus der Passung ableiten — wo ein `Fit` zwei Flächen aufeinander
-      legt, ist die obere eine Gleitfläche und will gebügelt werden. Heute ist
-      es ein Schalter im Dialog
+- [x] Plattenvorschlag angeboten — `arrange_bed` trägt jetzt den Umschalter
+      *Nach Filament trennen*, nicht eine zweite Operation daneben. Die
+      Plattengrenze gilt der ganzen Szene; sind die Platten aufgebraucht,
+      teilt sich die letzte Gruppe die letzte, wie `arrange_on_bed` es
+      innerhalb einer Gruppe hält
+- [x] Bügeln aus der Passung abgeleitet — `advise` bekam ein `has_fits: bool`,
+      obwohl das Dokument die Arten führt. Jetzt reicht der Dialog sie durch,
+      und nur `flush` löst den Vorschlag aus: bei Schiebesitz, Presssitz oder
+      Gewinde wäre Bügeln verlorene Zeit auf einer Fläche, die nichts berührt
 - [ ] Prusa- und Cura-Adapter am echten Programm laufen lassen — die
       Zuordnung steht und die Gegenprobe würde Abweichungen melden, aber
-      gelaufen ist bisher nur die Orca-Familie (ElegooSlicer 1.5.2.2). Was
-      die Gegenprobe nicht sieht: einen Aufruf, der gar nicht erst startet
+      gelaufen ist bisher nur die Orca-Familie (ElegooSlicer 1.5.3.4, am
+      07.08.2026 Ende zu Ende: 1,1 MB G-Code, 150 Schichten, 23,4 g).
+      Weder PrusaSlicer noch Cura sind auf dieser Maschine installiert —
+      der Punkt braucht sie, nicht mehr Code
 
 ## P8 — Erste Veröffentlichung
 - [x] Name entschieden, überall durchgezogen — alles Namensbezogene steht in
