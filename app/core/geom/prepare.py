@@ -28,7 +28,16 @@ from app.core.geom.mesh import MeshData, concatenated, on_surface
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
-from app.core.types import BoundingBox, Finding, Mesh, Profile, Quality, SolverInfo, Vec3
+from app.core.types import (
+    BoundingBox,
+    Finding,
+    Mesh,
+    Profile,
+    Quality,
+    Severity,
+    SolverInfo,
+    Vec3,
+)
 from app.core.units import EPS_GEOM, format_length, format_volume
 from app.i18n import TranslatableText, _
 
@@ -459,12 +468,31 @@ def check_build_volume(
             findings.append(
                 Finding(
                     code="arrange.out_of_build_volume",
-                    severity="warning",
+                    severity=_severity_for(bounds, allowed),
                     message=_message_for(bounds, allowed, outside),
                     values=values,
                 )
             )
     return findings
+
+
+def _severity_for(bounds: BoundingBox, allowed: BoundingBox) -> Severity:
+    """Wiegt die Platzierungsfrage leichter als die Größenfrage.
+
+    Beides stand bisher als Warnung da, und dadurch warnte fast jede geladene
+    Datei: ein heruntergeladenes Teil ist meist um den Ursprung zentriert und
+    steckt damit zur Hälfte unter der Platte. Dreizehn Warnungen bei vierzehn
+    Dateien sind keine Warnung mehr, sondern Grundrauschen — und die eine
+    Datei, die wirklich zu groß ist, geht darin unter.
+
+    Die Trennlinie ist, ob das Teil nach dem Aufsetzen hineinpasst. Wenn ja,
+    ist es eine Frage der Lage: ein Klick behebt sie, und das ist ein Hinweis.
+    Wenn nein, hilft kein Verschieben, und die Warnung bleibt.
+    """
+    passt = all(
+        size <= limit + EPS_GEOM for size, limit in zip(bounds.size, allowed.size, strict=True)
+    )
+    return "info" if passt else "warning"
 
 
 def _message_for(

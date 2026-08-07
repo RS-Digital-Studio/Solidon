@@ -208,7 +208,25 @@ def test_what_sticks_out_of_the_build_volume_is_reported(profile: Profile) -> No
 
     assert findings
     assert findings[0].code == "arrange.out_of_build_volume"
-    assert findings[0].severity == "warning"
+
+
+def test_a_misplaced_body_weighs_less_than_one_that_does_not_fit(profile: Profile) -> None:
+    """Die Lage ist ein Hinweis, die Größe eine Warnung.
+
+    Vorher stand beides als Warnung da, und damit warnte fast jede geladene
+    Datei: ein heruntergeladenes Teil ist meist um den Ursprung zentriert und
+    steckt zur Hälfte unter der Platte. Bei dreizehn Warnungen auf vierzehn
+    Dateien liest sie niemand mehr — und die eine Datei, die wirklich zu groß
+    ist, verschwindet zwischen den anderen.
+    """
+    daneben = apply(cube(), translation((400.0, 0.0, 0.0)))
+    zu_gross = normalise(read_mesh((MESHES / "oversized.stl").read_bytes(), ".stl"), "mm").mesh
+
+    zur_lage = check_build_volume([daneben], profile)
+    zur_groesse = check_build_volume([zu_gross], profile)
+
+    assert zur_lage[0].severity == "info", "ein Verschieben behebt es"
+    assert zur_groesse[0].severity == "warning", "hier hilft kein Verschieben"
 
 
 def test_a_body_below_the_bed_is_reported_without_being_asked(profile: Profile) -> None:
