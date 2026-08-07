@@ -137,3 +137,12 @@ Domains — was `app/branding.py:35` ausdrücklich vermeiden wollte. Vor der
 Umbenennung ist zu entscheiden, ob die Support-Adresse mitzieht
 (`support@solidon.de`) oder ob die Firmenadresse bleibt. Beide Postfächer sind
 im netcup-Paket enthalten.
+
+**Entschieden am 08.08.2026: sie zieht mit.** Die Domain heißt mit dem Namen
+`solidon3d.de`, die Adresse `support@solidon3d.de`; `rs-digital.org` bleibt
+Firmendomain und trägt die Geschäftspost. Damit stehen `SUPPORT_ADDRESS` und
+`WEBSITE_URL` wieder auf demselben Namen, und zwar auf dem, der auch auf dem
+Fenstertitel steht. Die Anleitung in `website/README.md` ist entsprechend neu
+geschrieben — sie wird dabei kürzer, nicht länger: eine eigene Domain beim
+Webspace-Anbieter braucht weder Verifizierung noch einen Eintrag in fremder
+Zone.

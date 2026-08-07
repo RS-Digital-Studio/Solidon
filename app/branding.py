@@ -33,20 +33,17 @@ ENVIRONMENT_PREFIX: Final = "SOLIDON3D"
 #: Wohin sich Kunden wenden — Fehlerberichte, Fragen, Interesse vor dem
 #: Erscheinen. Ein Kanal, eine Adresse; sie steht im Über-Dialog, im
 #: Fehlerbericht und auf der Website.
-SUPPORT_ADDRESS: Final = "admin@rs-digital.org"
+#:
+#: Sie liegt auf derselben Domain wie :data:`WEBSITE_URL`, entschieden am
+#: 08.08.2026. Wer eine Setup-Datei von der einen Adresse lädt und im Programm
+#: eine Support-Adresse einer anderen findet, hat zwei Namen vor sich und
+#: keinen Grund zu glauben, dass sie zusammengehören. ``rs-digital.org`` bleibt
+#: Firmendomain und trägt die Geschäftspost, aber nicht mehr den Produktkanal.
+SUPPORT_ADDRESS: Final = "support@solidon3d.de"
 
 #: Die Produktseite: Download, Handbuch, Kauf. Von hier lesen der Installer
 #: (``tools/make_installer.py``), der Update-Hinweis und der Knopf „Solidon
 #: kaufen" — sie stand vorher an zwei Stellen getrennt.
-#:
-#: **Offener Punkt:** Produktseite und :data:`SUPPORT_ADDRESS` liegen seit der
-#: Umbenennung auf verschiedenen Domains. Solange „Formwerk" galt, war beides
-#: ``rs-digital.org``, und das war Absicht: wer eine Setup-Datei von der einen
-#: Adresse lädt und im Programm eine Support-Adresse der anderen findet, hat
-#: zwei Namen vor sich und keinen Grund zu glauben, dass sie zusammengehören.
-#: Zu entscheiden ist, ob die Support-Adresse mitzieht
-#: (``support@solidon3d.de``) oder die Firmenadresse bleibt; beide Postfächer
-#: sind im Webhosting-Paket enthalten.
 WEBSITE_URL: Final = "https://solidon3d.de/"
 
 #: Endung des Projektcontainers (Bauplan §16.1).

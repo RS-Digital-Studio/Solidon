@@ -29,7 +29,7 @@ Damit niemand das Falsche erwartet:
 * **Keine Cloud.** Kein Konto, keine Telemetrie, keine Projektablage im Netz.
   Ein Sprachmodell wird nur gefragt, wenn ein Schlüssel hinterlegt ist.
 
-**Support** läuft über einen Kanal: **admin@rs-digital.org**. Ein
+**Support** läuft über einen Kanal: **support@solidon3d.de**. Ein
 Fehlerbericht entsteht im Programm unter *Hilfe → Fehlerbericht erstellen* und
 bleibt so lange auf dem Rechner, bis jemand ihn selbst an diese Adresse
 schickt. Für die Entwicklung bleiben daneben die Issues dieses Repositories.

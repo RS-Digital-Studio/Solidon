@@ -1135,6 +1135,28 @@ Schreibweisen einer Sache, sondern eine echte Adresse und eine angenommene.
 Dass eine Annahme als „entschieden" in die Roadmap kam, ist der eigentliche
 Fehler — Regel 21 gilt auch für Adressen.
 
+**Entschieden am 08.08.2026: eine eigene Domain, `solidon3d.de`.** Damit
+entfällt die Subdomain und mit ihr der teuerste Teil der Einrichtung. Die
+Zone von `rs-digital.org` liegt in Google Cloud DNS, während Squarespace die
+Registrierung hält — beide Häuser verweisen für einen freien Record
+aufeinander, und einen A-Eintrag hätte dort niemand setzen können, ohne die
+Workspace-Mail zu gefährden. Die eigene Domain wird beim Webspace-Anbieter
+registriert und dort verwaltet: kein TXT-Token für eine externe Domain, kein
+A-Record in fremder Zone, keine Subdomain mit eigenem Dokumentenstamm in
+Plesk. `rs-digital.org` bleibt Firmendomain und trägt die Geschäftspost,
+unberührt.
+
+**Und die Support-Adresse zieht mit: `support@solidon3d.de`.** Der offene
+Punkt stand in `branding.py` — Produktseite und Support lagen seit der
+Umbenennung auf verschiedenen Domains, und wer eine Setup-Datei von der einen
+Adresse lädt und im Programm eine Adresse der anderen findet, hat zwei Namen
+vor sich und keinen Grund zu glauben, dass sie zusammengehören. Jetzt ist es
+ein Name: Website, Download, `version.json`, Update-Hinweis, Über-Dialog,
+Fehlerbericht, Impressum und beide Startseiten stehen unter `solidon3d.de`.
+Die Schrittliste in `website/README.md` ist entsprechend neu geschrieben; sie
+nennt jetzt auch SPF und DMARC für die neue Zone, die auf der Firmendomain
+seit jeher fehlen.
+
 ## Aus der Frage nach dem Handbuch
 
 Anlass war eine Feststellung, keine Fehlermeldung: „Wir wollen Geld dafür."
@@ -1764,7 +1786,7 @@ Behoben in dieser Runde:
 
 * **Es gab keinen Weg, Kunde zu werden.** Kein Preis, kein Kontakt — der
   einzige angebotene Weg („Adresse im Impressum") führte auf einen
-  Platzhalter. Jetzt: **Support-Adresse admin@rs-digital.org** als Konstante
+  Platzhalter. Jetzt: **eine Support-Adresse** als Konstante
   in `app/branding.py`, gelesen von Über-Dialog, Fehlerbericht-Dialog,
   README, Impressum und beiden Startseiten. Der Fehlerbericht sagt jetzt
   auch, wohin der abgelegte Ordner kann — er verschickt weiter nichts.
@@ -1801,7 +1823,7 @@ Behoben in dieser Runde:
   Bildschirmfoto auf der Startseite; eines, das fertig danebenlag.
 
 **Weiterhin offen, weil es niemand von hier aus erledigen kann:** das
-Postfach admin@rs-digital.org anlegen; Anschrift ins Impressum; Zertifikat
+Postfach support@solidon3d.de anlegen; Anschrift ins Impressum; Zertifikat
 gegen SmartScreen; CI nie gelaufen; Zahlungsanbieter und
 Lizenzschlüssel-Mechanik für Testphase und Kauf; ein Betatest mit fremden
 Nutzern — 2100 Tests sagen, dass der Code tut, was gemeint war, nicht, dass
@@ -1809,7 +1831,9 @@ ein Fremder ihn bedienen kann. Anzumerken: die Web-Domain ist
 solidon3d.rsdigital.de, die Mail-Domain rs-digital.org — zwei Schreibweisen
 nebeneinander, bewusst so entschieden oder zu vereinheitlichen.
 *Aufgelöst am 06.08.2026: die erste Domain existierte nicht. Alles läuft
-jetzt über `solidon3d.rs-digital.org`, siehe „Website".*
+jetzt über `solidon3d.rs-digital.org`, siehe „Website".* — *Und am 08.08.2026
+endgültig: eigene Domain `solidon3d.de`, Support `support@solidon3d.de`. Aus
+zwei Domains ist wieder eine geworden, diesmal die des Produkts.*
 
 ## Der erste echte CI-Lauf
 

@@ -287,7 +287,7 @@ Update-Hinweis vergleicht gegen sie.
 
 ### H — Auslieferung der Datei über den eigenen Webspace
 
-Die Setup-Datei liegt auf `solidon3d.rs-digital.org`, nicht als
+Die Setup-Datei liegt auf `solidon3d.de`, nicht als
 GitHub-Release-Artefakt. Grund: Das Repository ist privat und soll es bleiben —
 ein Release-Anhang daraus wäre nicht öffentlich abrufbar. Die CI hebt das Paket
 sieben Tage als Artefakt auf (`build.yml:179`); von dort geht es von Hand auf
@@ -304,6 +304,15 @@ Produktseite und Support-Adresse einen Namen, was für den Käufer der
 eigentliche Gewinn ist: zwei Domains nebeneinander lesen sich wie Phishing,
 besonders bei einer Anwendung, die beim ersten Start ohnehin eine Warnung
 auslöst.
+
+**Nachgezogen am 08.08.2026: es wird `solidon3d.de`.** Eine eigene Domain
+statt einer Subdomain der Firmendomain — der Gedanke oben bleibt richtig, die
+Ausführung wird nur einfacher. Die Zone von `rs-digital.org` liegt in Google
+Cloud DNS, die Registrierung bei Squarespace, und keines der beiden Häuser
+bietet eine Oberfläche für einen freien A-Record; die Subdomain hätte an
+dieser Stelle festgesteckt. Die eigene Domain wird beim Webspace-Anbieter
+registriert und dort verwaltet. Die Support-Adresse zieht mit
+(`support@solidon3d.de`) — geteilter Name, jetzt der des Produkts.
 
 **Google Workspace liefert keine Dateien aus.** Es ist Mail und
 Zusammenarbeit — kein Webspace, kein FTP, kein Ort für eigene HTML-Dateien.
@@ -380,7 +389,7 @@ beide Artefakte (Setup-Datei und tar.gz) heruntergeladen und geöffnet.
    liegt auf der Website
 4. **AGB und Widerrufsbelehrung** für den Verkauf. Bei einem MoR gelten
    überwiegend dessen Bedingungen — was davon bleibt, ist mit ihm zu klären
-5. `admin@rs-digital.org` anlegen bzw. Zustellung prüfen. Die Adresse steht an
+5. `support@solidon3d.de` anlegen bzw. Zustellung prüfen. Die Adresse steht an
    fünf Stellen (`branding.py:29`, Über-Dialog, Fehlerbericht, beide
    Startseiten)
 6. Die Texte fachlich prüfen lassen (§2 D, Warnkasten)
@@ -532,7 +541,7 @@ Beispielprojekte sind da und rechnen · das Handbuch öffnet mit F1.
 6. Handbuch neu erzeugen (`tools/make_manual.py`) — die Bilder haben sich
    geändert, und mit dem achten Beispiel auch der Text
 
-**Verifikation:** `https://solidon3d.rs-digital.org/` und `/en/` laden ·
+**Verifikation:** `https://solidon3d.de/` und `/en/` laden ·
 `/version.json` liefert rohes JSON · Download startet und die Prüfsumme stimmt ·
 alle Links in beiden Sprachen angeklickt · Update-Hinweis in einer Anwendung mit
 `APP_VERSION` 0.9 zeigt 1.0.0 an.
@@ -667,7 +676,7 @@ anlaufen.
 
 3. **Webspace** (§2 H, neu am 06.08.2026): Google Workspace liefert nichts aus,
    und einen Hoster für `rs-digital.org` gibt es bisher nicht nachweislich.
-   Gebraucht wird gewöhnlicher Webspace mit SFTP, HTTPS für die Subdomain und
+   Gebraucht wird gewöhnlicher Webspace mit SFTP, HTTPS für die Domain und
    Platz für rund 255 MB je Fassung. Die 255 MB schließen die üblichen
    Statik-Dienste aus — Cloudflare Pages deckelt bei 25 MB je Datei, Netlify
    ähnlich. Klassischer Webspace kann es; sonst Seite und Setup-Datei trennen
