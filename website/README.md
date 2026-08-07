@@ -25,14 +25,21 @@ Google Workspace. Gemessen am 07.08.2026:
 | | |
 |---|---|
 | Registrar | **Squarespace Domains II LLC** (RDAP) — registriert 24.01.2026, läuft 24.01.2027 ab |
-| Nameserver | `ns-cloud-b1..b4.googledomains.com` — Erbe der Google-Domains-Übernahme, betrieben für Squarespace |
+| Nameserver | `ns-cloud-b1..b4.googledomains.com` — bei Squarespace als benutzerdefinierte Nameserver eingetragen |
+| Zone | **Google Cloud DNS** — SOA nennt `ns-cloud-b1.googledomains.com`, Hostmaster `cloud-dns-hostmaster.google.com` |
 | A-Records | `198.185.159.144/145`, `198.49.23.144/145` — Squarespace |
 | MX | `smtp.google.com` — Workspace-Mail |
 
-**Die DNS-Einträge werden bei Squarespace verwaltet, nicht im Google-Admin.**
-Die Admin-Konsole führt die Domain als primäre Domain und bestätigt, bietet
-aber keine Record-Verwaltung. Wer den A-Record im Google-Admin sucht, sucht
-vergeblich.
+**Registrar und DNS sind zwei verschiedene Häuser.** Squarespace hält die
+Registrierung, delegiert die Zone aber an Google und bietet deshalb **keine**
+Record-Verwaltung an: unter *DNS → DNS-Einstellungen* steht statt einer
+Eintragsliste nur „Diese Domain wird von Google Workspace verwaltet". Es gibt
+dort nur Voreinstellungen und die Nameserver-Liste.
+
+Der A-Record und der TXT-Token gehören damit auf die Google-Seite. **Wo genau
+in der Admin-Konsole, ist noch nicht belegt** — die Domain-Übersicht unter
+*Konto → Domains → Domains verwalten* zeigt nur Zuordnung und Status. Vor
+Schritt 4 einmal *Details ansehen* bei der Domain öffnen und nachsehen.
 
 **Weder Workspace noch Squarespace liefern eigene Dateien aus.** Kein SFTP,
 keine beliebigen Pfade, kein `version.json` als rohes JSON, und 255 MB
@@ -70,12 +77,10 @@ Google — bleibt unberührt. Es kommt genau *ein* Eintrag hinzu.
 3. **IP des Webservers ablesen.** Im CCP unter *Allgemeine Verwaltung und
    Konfiguration des Webhostings* stehen IPv4 und IPv6
    ([Anleitung](https://www.netcup.com/de/helpcenter/documentation/web-hosting/interface)).
-4. **A-Record setzen** — bei **Squarespace**, geprüft am 07.08.2026:
-   [account.squarespace.com/domains](https://account.squarespace.com/domains)
-   → *DNS → DNS Settings → Custom Records*
-   ([Anleitung](https://support.squarespace.com/hc/en-us/articles/360002101888-Edit-your-domain-s-DNS-records)).
-   Nicht im Google-Admin suchen — dort steht die Domain zwar, aber ohne
-   Record-Verwaltung. Dort:
+4. **A-Record setzen** — **auf der Google-Seite**, nicht bei Squarespace
+   (geprüft am 07.08.2026, siehe *Ausgangslage*). Squarespace verwaltet keine
+   Einträge dieser Domain; die Zone liegt in Google Cloud DNS. Der Eintrag
+   lautet:
 
    ```
    Typ: A     Host: formwerk     Wert: <IPv4 aus Schritt 3>
