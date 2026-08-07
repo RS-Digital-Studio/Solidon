@@ -1,13 +1,15 @@
-"""Bores, splitting, arranging and collisions (Bauplan §25, §39, §18.6)."""
+"""Bohren, Teilen, Anordnen und Kollisionen (Bauplan §25, §39, §18.6)."""
 
 from __future__ import annotations
 
 import math
 from pathlib import Path
 
+import numpy as np
 import pytest
 
-from app.core.geom.mesh import MeshData, read_mesh
+from app.core.geom import mesh as mesh_module
+from app.core.geom.mesh import MeshData, on_surface, read_mesh
 from app.core.geom.prepare import (
     BOOLEAN_OVERLAP,
     arrange_on_bed,
@@ -444,6 +446,68 @@ def test_the_collision_check_only_reports(document: Document, profile: Profile) 
     assert result.complete
     assert "arrange.collision" in {finding.code for finding in result.scene.report.findings}
     assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(8000.0)
+
+
+# --- die Abstandsanfrage und ihr wackliger Unterbau ---------------------------------
+
+
+def test_the_surface_query_answers_what_it_is_asked() -> None:
+    """Erst das Normale: der nächste Ort auf der Oberfläche, sein Abstand,
+    sein Dreieck — und zwar in Typen, mit denen sich indizieren lässt.
+    """
+    body = read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl").raw
+    points = np.array([[0.0, 0.0, 20.0], [0.0, 0.0, 0.0]], dtype=float)
+
+    closest, distance, triangle = on_surface(body, points)
+
+    assert closest.shape == (2, 3)
+    assert distance[0] == pytest.approx(10.0), "20 mm Kante, Mitte auf Null, Deckel bei z=10"
+    assert triangle.dtype == np.int64, "damit lässt sich ein Slot-Feld indizieren"
+
+
+def test_a_stumbling_index_is_asked_a_second_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``rtree`` greift auf dieser Maschine in etwa jedem zwanzigsten Lauf
+    daneben — eine Zugriffsverletzung, die als ``OSError`` ankommt.
+
+    Gemessen an ``dose-mit-deckel``: zwanzig Auswertungen derselben Datei ohne
+    eine Zeile Änderung, eine davon rot, im Stapel ``rtree/index.py:832 in
+    intersection``. Der Index hängt am Zwischenspeicher des Netzes, also
+    bekommt der zweite Versuch eine Kopie und damit einen frischen.
+    """
+    body = read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl").raw
+    points = np.array([[0.0, 0.0, 20.0]], dtype=float)
+    echt = mesh_module._asked
+    versuche: list[int] = []
+
+    def erst_daneben(target: object, asked: object) -> object:
+        versuche.append(1)
+        if len(versuche) == 1:
+            raise OSError("exception: access violation reading 0x000002C920F4EDE8")
+        return echt(target, asked)
+
+    monkeypatch.setattr(mesh_module, "_asked", erst_daneben)
+    _closest, distance, _triangle = on_surface(body, points)
+
+    assert len(versuche) == 2, "einmal gestolpert, einmal wiederholt"
+    assert distance[0] == pytest.approx(10.0), "und die Antwort stimmt trotzdem"
+
+
+def test_a_second_stumble_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wiederholen heißt nicht verschlucken: was zweimal scheitert, fliegt.
+
+    Ein stiller Rückfall auf irgendein Ergebnis wäre hier das Schlimmste — die
+    Zahl entscheidet, welche Farbe eine Fläche behält und wie weit eine
+    Dezimierung die Oberfläche verschoben hat.
+    """
+    body = read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl").raw
+
+    def immer_daneben(target: object, asked: object) -> object:
+        raise OSError("access violation")
+
+    monkeypatch.setattr(mesh_module, "_asked", immer_daneben)
+
+    with pytest.raises(OSError):
+        on_surface(body, np.array([[0.0, 0.0, 20.0]], dtype=float))
 
 
 def test_the_preparation_operations_are_registered_completely() -> None:

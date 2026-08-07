@@ -20,7 +20,7 @@ import numpy as np
 import trimesh
 
 from app.core.errors import CANCEL, ValidationError
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, on_surface
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, Severity
@@ -47,8 +47,9 @@ def deviation(before: MeshData, after: MeshData) -> float:
     """
     if not after.triangle_count or not before.triangle_count:
         return 0.0
-    query = trimesh.proximity.ProximityQuery(before.raw)
-    _closest, distance, _triangle = query.on_surface(np.asarray(after.raw.vertices, dtype=float))
+    _closest, distance, _triangle = on_surface(
+        before.raw, np.asarray(after.raw.vertices, dtype=float)
+    )
     return float(np.max(distance)) if len(distance) else 0.0
 
 

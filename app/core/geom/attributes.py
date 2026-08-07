@@ -93,12 +93,11 @@ def _nearest(mesh: MeshData, points: np.ndarray) -> tuple[np.ndarray, np.ndarray
     landen weit von dem der Fläche entfernt, aus der sie kamen — so gemessen
     verlöre ein Körper seine Farbe an die eigene Neuvernetzung.
     """
-    import trimesh
+    from app.core.geom.mesh import on_surface
 
     slots = np.asarray(mesh.slots, dtype=np.int32)
-    query = trimesh.proximity.ProximityQuery(mesh.raw)
-    _closest, distance, triangle = query.on_surface(points)
-    return slots[np.asarray(triangle, dtype=np.int64)], np.asarray(distance, dtype=float)
+    _closest, distance, triangle = on_surface(mesh.raw, points)
+    return slots[triangle], distance
 
 
 def with_slot(mesh: MeshData, slot: int) -> MeshData:

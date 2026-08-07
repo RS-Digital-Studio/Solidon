@@ -24,7 +24,7 @@ import trimesh
 
 from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.boolean import boolean, shared_volume, without_effect
-from app.core.geom.mesh import MeshData, concatenated
+from app.core.geom.mesh import MeshData, concatenated, on_surface
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
@@ -595,8 +595,9 @@ def _really_overlap(first: MeshData, second: MeshData, clearance: float) -> bool
     # Auseinander, aber vielleicht nicht weit genug. Gemessen ab der
     # Oberfläche — das ist es, was ein Abstand auf der Platte bedeutet.
     try:
-        query = trimesh.proximity.ProximityQuery(first.raw)
-        _closest, distance, _face = query.on_surface(np.asarray(second.raw.vertices, dtype=float))
+        _closest, distance, _face = on_surface(
+            first.raw, np.asarray(second.raw.vertices, dtype=float)
+        )
     except PROGRAMMING_ERRORS:
         raise
     except Exception:  # eine Abstandsanfrage an einen kaputten Körper scheitert auf eigene Arten

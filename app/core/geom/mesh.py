@@ -21,8 +21,11 @@ import numpy as np
 import trimesh
 
 from app.core.errors import PROGRAMMING_ERRORS, GeometryError, ValidationError
+from app.core.log import get_logger
 from app.core.types import BoundingBox, Mesh
 from app.i18n import _
+
+_log = get_logger(__name__)
 
 #: Endungen, die die Eingangsstufe lesen kann (§25, „Import").
 READABLE_SUFFIXES: tuple[str, ...] = (".stl", ".obj", ".ply", ".off", ".glb", ".gltf", ".3mf")
@@ -152,6 +155,41 @@ def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
         trimesh.graph.connected_components(
             mesh.face_adjacency, nodes=np.arange(count), engine="scipy"
         )
+    )
+
+
+def on_surface(
+    body: trimesh.Trimesh, points: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Für jeden Punkt der nächste Ort auf der Oberfläche, sein Abstand und
+    sein Dreieck.
+
+    Warum das hier steht und nicht dreimal beim Aufrufer: Der Weg dorthin
+    führt durch ``rtree``, und ``rtree`` greift auf dieser Maschine
+    reproduzierbar daneben — eine Zugriffsverletzung in etwa jedem
+    zwanzigsten Lauf, gemessen an derselben Datei ohne eine Zeile Änderung
+    dazwischen. Sie kommt als ``OSError`` zurück, und darunter liegt der
+    Index, den ``trimesh`` am Netz zwischenspeichert.
+
+    Also wird sie einmal wiederholt, und zwar an einer **Kopie**: die bringt
+    einen frischen Zwischenspeicher und damit einen frisch gebauten Index
+    mit. Das ist kein Verschlucken — scheitert auch der zweite Versuch, fliegt
+    der Fehler. Es nimmt nur dem einen Lauf von zwanzig die Schuld daran, dass
+    eine Fremdbibliothek in den falschen Speicher greift.
+    """
+    try:
+        return _asked(body, points)
+    except OSError as stumble:
+        _log.warning("proximity query stumbled over its index, asking again: %s", stumble)
+        return _asked(body.copy(), points)
+
+
+def _asked(body: trimesh.Trimesh, points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    closest, distance, triangle = trimesh.proximity.ProximityQuery(body).on_surface(points)
+    return (
+        np.asarray(closest, dtype=float),
+        np.asarray(distance, dtype=float),
+        np.asarray(triangle, dtype=np.int64),
     )
 
 
