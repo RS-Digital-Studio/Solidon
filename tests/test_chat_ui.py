@@ -216,6 +216,62 @@ def test_the_key_dialog_names_the_state(
     assert "Schlüsselbund" in text
 
 
+def test_the_key_dialog_offers_the_local_model_too(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§27 nennt zwei Wege zum Sprachmodell. Bisher stand hier nur einer, und
+    das lokale Modell ließ sich überhaupt nicht einstellen.
+    """
+    from app.core.backends import keys, llm
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+
+    assert dialog.model_field.text() == llm.configured_ollama_model()
+    assert dialog.probe_button.isEnabled()
+
+
+def test_the_key_dialog_remembers_the_model_without_a_key(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wer nur das Modell wechselt, hat keinen Schlüssel einzutragen — und der
+    Dialog darf seine Eingabe darüber nicht wegwerfen.
+    """
+    from app.core.backends import keys, llm
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+    dialog.model_field.setText("qwen3:14b")
+    dialog._save()
+
+    assert llm.configured_ollama_model() == "qwen3:14b"
+    llm.remember_ollama_model("")
+
+
+def test_the_probe_says_what_a_useless_model_means(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„False" ist kein Ergebnis, mit dem jemand etwas anfangen kann — der Satz
+    muss sagen, was passiert und was hilft.
+    """
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+
+    dialog._probe_done(False)
+    assert "führt aber nichts aus" in dialog.probe_result.text()
+
+    dialog._probe_done(True)
+    assert "brauchbar" in dialog.probe_result.text()
+
+    dialog._probe_done(None)
+    assert "ollama serve" in dialog.probe_result.text(), "kein Ergebnis ist kein Urteil"
+
+
 def test_the_summary_names_what_would_change(qt_app: QApplication) -> None:
     from app.core.agent.proposal import Proposal
     from app.core.geom.difference import Difference, SceneDifference

@@ -10,18 +10,20 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
     QMessageBox,
     QPlainTextEdit,
+    QPushButton,
     QTextBrowser,
     QVBoxLayout,
     QWidget,
@@ -29,7 +31,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, APP_VERSION, COPYRIGHT, SUPPORT_ADDRESS, WEBSITE_URL
 from app.core import activation
-from app.core.backends import keys
+from app.core.backends import keys, llm
 from app.core.errors import CANCEL, REPORT_ERROR, SHOW_DETAILS, Action, AppError
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
@@ -296,20 +298,44 @@ class ParameterDialog(QDialog):
         )
 
 
-class KeyDialog(QDialog):
-    """Wo der Nutzer seinen eigenen Schlüssel hinlegt (Bauplan §27).
+class _ToolProbeWorker(QThread):
+    """Die Werkzeugprobe, abseits des Oberflächen-Threads.
 
-    Der Schlüssel geht in den System-Schlüsselbund und sonst nirgends — nicht
-    in die Einstellungen, nicht ins Projekt. Das Feld ist ein Passwortfeld, und
-    der Dialog zeigt einen gespeicherten Schlüssel nie zurück: er sagt, ob
-    einer da ist.
+    Sie macht einen echten Zug gegen das Modell und lädt es dabei — Sekunden
+    bis Minuten. Genau deshalb steht sie hier und nicht im Dialog selbst.
+    """
+
+    done = Signal(object)
+
+    def __init__(self, model: str) -> None:
+        super().__init__()
+        self._model = model
+
+    def run(self) -> None:
+        self.done.emit(llm.ollama_tool_check(self._model))
+
+
+class KeyDialog(QDialog):
+    """Wo der Nutzer seinen Zugang zum Sprachmodell einrichtet (Bauplan §27).
+
+    Zwei Wege, ein Dialog: der eigene Schlüssel gegen ein gehostetes Modell,
+    und das lokale Modell über Ollama. Der Schlüssel geht in den
+    System-Schlüsselbund und sonst nirgends — nicht in die Einstellungen, nicht
+    ins Projekt. Das Feld ist ein Passwortfeld, und der Dialog zeigt einen
+    gespeicherten Schlüssel nie zurück: er sagt, ob einer da ist.
+
+    Der Modellname dagegen ist kein Geheimnis und steht offen da. Neben ihm
+    steht die Probe, und sie steht dort aus einem Grund: ob ein Modell
+    Werkzeuge wirklich aufruft, sieht man ihm nicht an. Weder seine Größe noch
+    die Fähigkeit, die Ollama meldet, sagen es — nur ein Zug.
     """
 
     def __init__(self, account: str = "anthropic", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.account = account
         self.setWindowTitle(tr("Zugang zum Sprachmodell"))
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(460)
+        self._probe: _ToolProbeWorker | None = None
 
         state = {
             "keychain": tr("Ein Schlüssel liegt im Schlüsselbund."),
@@ -345,12 +371,87 @@ class KeyDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(explanation)
         layout.addWidget(self.field)
+        layout.addWidget(self._local_model_section())
         layout.addWidget(buttons)
 
+    def _local_model_section(self) -> QWidget:
+        """Der zweite Weg: ein Modell auf diesem Rechner, statt eines Schlüssels."""
+        section = QWidget(self)
+        note = QLabel(
+            tr(
+                "Statt eines Schlüssels geht auch ein Modell über Ollama. Ob es "
+                "Werkzeuge wirklich aufruft, sagt weder seine Größe noch der "
+                "Anbieter — nur die Probe."
+            ),
+            section,
+        )
+        note.setWordWrap(True)
+
+        self.model_field = QLineEdit(llm.configured_ollama_model(), section)
+        self.model_field.setPlaceholderText(llm.DEFAULT_OLLAMA_MODEL)
+
+        self.probe_button = QPushButton(tr("Werkzeuge prüfen"), section)
+        self.probe_button.clicked.connect(self._probe_tools)
+
+        self.probe_result = QLabel("", section)
+        self.probe_result.setWordWrap(True)
+
+        row = QHBoxLayout()
+        row.addWidget(self.model_field)
+        row.addWidget(self.probe_button)
+
+        inner = QVBoxLayout(section)
+        inner.setContentsMargins(0, 12, 0, 0)
+        inner.addWidget(note)
+        inner.addLayout(row)
+        inner.addWidget(self.probe_result)
+        return section
+
+    def _probe_tools(self) -> None:
+        model = self.model_field.text().strip() or llm.DEFAULT_OLLAMA_MODEL
+        self.probe_button.setEnabled(False)
+        self.probe_result.setText(tr("Das Modell wird geladen und gefragt — das dauert."))
+        set_level(self.probe_result, "info")
+
+        worker = _ToolProbeWorker(model)
+        worker.done.connect(self._probe_done)
+        worker.finished.connect(lambda done=worker: self._probe_finished(done))
+        self._probe = worker
+        worker.start()
+
+    def _probe_done(self, usable: object) -> None:
+        self.probe_button.setEnabled(True)
+        if usable is None:
+            self.probe_result.setText(
+                tr("Ollama hat nicht geantwortet. Läuft es? „ollama serve“ startet es.")
+            )
+            set_level(self.probe_result, "warning")
+            return
+        if usable:
+            self.probe_result.setText(tr("Das Modell ruft Werkzeuge auf. Es ist brauchbar."))
+            set_level(self.probe_result, "ok")
+            return
+        self.probe_result.setText(
+            tr(
+                "Das Modell schreibt seine Aufrufe als Text, statt sie zu tun — der "
+                "Chat antwortet damit, führt aber nichts aus. Ein anderes Modell hilft."
+            )
+        )
+        set_level(self.probe_result, "warning")
+
+    def _probe_finished(self, worker: object) -> None:
+        # Wer einen Arbeiter startet, hält ihn fest, bis er wirklich fertig ist:
+        # `finished` kommt, während Qt ihn noch abräumt.
+        if self._probe is worker:
+            self._probe = None
+
     def _save(self) -> None:
+        llm.remember_ollama_model(self.model_field.text())
         key = self.field.text().strip()
         if not key:
-            self.reject()
+            # Kein Schlüssel heißt nicht „nichts zu tun": der Modellname
+            # darüber ist eine eigene Einstellung und gilt schon.
+            self.accept()
             return
         if not keys.store(self.account, key):
             QMessageBox.information(
@@ -369,6 +470,13 @@ class KeyDialog(QDialog):
         keys.forget(self.account)
         self.field.clear()
         self.accept()
+
+    def closeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
+        """Kein Arbeiter überlebt seinen Dialog."""
+        if self._probe is not None:
+            self._probe.wait()
+            self._probe = None
+        super().closeEvent(event)
 
 
 class ActivationDialog(QDialog):

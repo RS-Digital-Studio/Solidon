@@ -267,6 +267,12 @@ DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
 OLLAMA_URL = "http://localhost:11434/api/chat"
 
 
+#: Unter welchem Namen der gewählte Modellname gemerkt wird. Neben der Adresse
+#: des Dienstes, weil es dieselbe Art Angabe ist: etwas, das von diesem Rechner
+#: abhängt und nie in ein Projekt gehört (§38).
+OLLAMA_MODEL_SETTING = "ollama_model"
+
+
 def _configured_ollama_url() -> str:
     """Die eingetragene Ollama-Adresse, sonst die auf dieser Maschine.
 
@@ -278,13 +284,32 @@ def _configured_ollama_url() -> str:
     return discover.service_url("ollama", OLLAMA_URL)
 
 
+def configured_ollama_model() -> str:
+    """Das eingetragene Modell, sonst die Vorgabe.
+
+    Öffentlich, anders als die Adresse nebenan: der Einstellungsdialog zeigt
+    diesen Wert an und schreibt ihn zurück, und beides über dieselbe Stelle,
+    damit die Vorgabe genau einmal im Programm steht.
+    """
+    from app.core import discover
+
+    return discover.remembered(OLLAMA_MODEL_SETTING) or DEFAULT_OLLAMA_MODEL
+
+
+def remember_ollama_model(model: str) -> None:
+    """Ein Modell merken. Leer heißt „wieder die Vorgabe", nicht „keines"."""
+    from app.core import discover
+
+    discover.remember(OLLAMA_MODEL_SETTING, model.strip())
+
+
 @dataclass(slots=True)
 class OllamaBackend:
     """Ein lokales Modell. §27: Werkzeugaufrufe brauchen ein hinreichend
     großes Modell — kleine scheitern daran, und der Fehler sagt das.
     """
 
-    model: str = DEFAULT_OLLAMA_MODEL
+    model: str = field(default_factory=lambda: configured_ollama_model())
     # Wie bei ComfyUI: die Adresse darf woanders hinzeigen, wenn das Modell auf
     # einem zweiten Rechner läuft (§38).
     url: str = field(default_factory=lambda: _configured_ollama_url())
