@@ -2541,3 +2541,52 @@ Platz, an dem die echten stehen.
       Modell mit CPU-Anteil braucht bei vollem Kontext länger. Ihn pauschal
       hochzusetzen verlängert aber die Wartezeit im Chat für alle; das will
       eigens entschieden werden.
+
+## Jeden Weg einzeln durchgespielt (07.08.2026, zweiter Durchgang)
+
+Nicht über die Kommandozeile wie beim ersten Mal, sondern über die Verträge
+selbst: Weg 1 gegen alle vierzehn Korpusdateien, Weg 2 über neunundfünfzig
+Operationen mit ihren Vorgabewerten, Weg 3 gegen Werkzeugschemata,
+Transaktionsregel und Quelltextprüfung. Vier Funde, und der größte davon
+betrifft jede Fehlermeldung der Anwendung.
+
+- [x] **Dreizehn von vierzehn Korpusdateien bekamen eine Bauraumwarnung.**
+      `_message_for` unterschied längst drei Fälle — unter der Platte, neben
+      der Platte, größer als der Bauraum —, die Schwere nicht. Damit warnte
+      fast jede geladene Datei, denn ein heruntergeladenes Teil ist um den
+      Ursprung zentriert. Die Trennlinie ist jetzt, ob das Teil nach dem
+      Verschieben hineinpasst: dann ist es ein Hinweis. Über den Korpus
+      gemessen bleibt eine Warnung übrig — `oversized.stl`, die einzige, auf
+      die sie zutrifft.
+- [x] **Jede Ausnahme nannte ihre Art und verschwieg ihren Grund.**
+      `AppError.__init__` übergab nur den Titel an `Exception`. Der ist je
+      Klasse gleich: über jedem `ValidationError` stand „Ein Wert liegt
+      außerhalb des zulässigen Bereichs", ob es um eine Wandstärke ging oder
+      um ein fehlendes `@` vor einem Parameternamen. Die Oberfläche liest
+      beide Felder einzeln und merkte nichts; Protokoll und Traceback zeigten
+      allein diesen Satz.
+- [x] **Der Titel für Grammatikfehler war der falsche.** Bei einem unlesbaren
+      Ausdruck liegt nichts außerhalb eines Bereichs.
+- [x] **Der Steckbrief bot dem Agenten `-1.11022e-16` als Ort an.** Ein
+      zentrierter Quader landet rechnerisch knapp neben null. Der Agent hat
+      keine andere Quelle als diesen Text und liest die Zahl als Wert, der
+      etwas bedeutet. Nebenbei wurde der Steckbrief um 64 Zeichen kürzer —
+      bei jedem Aufruf.
+
+### Was dieser Durchgang gelernt hat
+
+**Eine Warnung, die fast immer dasteht, ist keine Warnung mehr.** Dasselbe
+Muster wie beim ersten Durchgang, nur an anderer Stelle: der Platz, an dem die
+echten Warnungen stehen, verliert seinen Wert mit jeder unberechtigten.
+
+**Was die Oberfläche richtig zeigt, kann anderswo falsch ankommen.** Die drei
+Fehlertext-Funde lagen alle daran, dass `title` und `detail` in der Oberfläche
+getrennt gelesen werden und überall sonst nicht. Ein Fehlerpfad ist erst
+geprüft, wenn er auch außerhalb des Dialogs gelesen wurde.
+
+**Nicht jeder rote Befund ist ein Fund.** Vier Alarme dieses Durchgangs waren
+Fehler im Prüfskript: eine Op, die anders heißt, ein Parameter, der `@`
+braucht, eine Quelle, die zweimal eingetragen werden will, und eine
+Sicherheitsprüfung, die ein Ergebnis zurückgibt statt zu werfen. Die
+Quelltextprüfung nach §32 lehnt absolute Pfade, Schritte nach oben, URLs und
+sogar `import(variable)` zuverlässig ab.
