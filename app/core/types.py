@@ -20,7 +20,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import Any, Final, Literal, Protocol, get_args, runtime_checkable
 
 from app.i18n import TranslatableText
 
@@ -55,6 +55,14 @@ Provenance = Literal["detected", "generated"]
 ObjectKind = Literal["mesh", "brep"]
 Quality = Literal["draft", "fine"]
 FitKind = Literal["clearance", "press", "thread", "flush"]
+FIT_KINDS: Final[tuple[str, ...]] = get_args(FitKind)
+"""Dieselben Arten, zur Laufzeit prüfbar.
+
+Aus dem Typ abgeleitet und nicht daneben geschrieben: eine zweite Liste wäre
+am Tag nach der nächsten Passungsart falsch, und wer sie prüft, prüfte dann
+gegen den alten Stand. Die Oberfläche liest sie hier, der Agent auch — was von
+außen kommt, ist geprüft, bevor es in ein Dokument gelangt."""
+
 Severity = Literal["info", "warning", "error"]
 Authorship = Literal["user", "agent"]
 

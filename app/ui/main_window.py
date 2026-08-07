@@ -79,6 +79,7 @@ from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import total as estimate_total
 from app.core.tour import tour_for
 from app.core.types import (
+    FIT_KINDS,
     FeatureRef,
     Finding,
     Fit,
@@ -375,9 +376,6 @@ def _sketch_param(op_name: str) -> str:
 #: steht. „user" und „agent" sind die einzigen Urheber, die das Format
 #: kennt (§26.4); ein dritter kostete eine Migration, und für die Frage
 #: „habe ich das getan?" reicht dieser Vermerk.
-#: Die Passungsarten, die eine Fernsteuerung nennen darf (§14).
-FIT_KINDS = ("clearance", "press", "thread", "flush")
-
 REMOTE_ORIGIN = "mcp"
 
 #: Wie lange ein Fernaufruf auf die Auswertung wartet. Länger als im
@@ -2328,9 +2326,12 @@ class MainWindow(QMainWindow):
         if worker is None or not worker.isRunning():
             return
         self._retired.append(worker)
-        worker.finished.connect(
-            lambda done=worker: self._retired.remove(done) if done in self._retired else None
-        )
+        # Nicht beim Signal selbst loslassen: ``finished`` heißt „``run`` ist
+        # zurück", nicht „das Objekt darf weg" — dieselbe Begründung wie in
+        # ``_hold_until_done``, und derselbe Weg hinaus, damit es nur einen
+        # gibt. Wer hier direkt aus ``_retired`` entfernte, gäbe die letzte
+        # Referenz frei, während Qt den Thread noch abräumt.
+        worker.finished.connect(lambda done=worker: self._hold_until_done(done))
 
     def _map_ready(self, analysis: Any, key: tuple[Any, ...], object_id: ObjectId) -> None:
         self._map_cache = {key: analysis}

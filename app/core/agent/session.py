@@ -23,7 +23,8 @@ from __future__ import annotations
 import copy
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from math import isfinite
+from typing import Any, cast
 
 from app.core.agent import checks
 from app.core.agent.context import build_messages
@@ -48,10 +49,12 @@ from app.core.registry import REGISTRY, Registry, validate
 from app.core.scene.evaluate import EvaluationResult, evaluate
 from app.core.scene.history import History, OperationDraft
 from app.core.types import (
+    FIT_KINDS,
     CancelToken,
     Document,
     FeatureRef,
     Fit,
+    FitKind,
     ObjectId,
     Origin,
     Parameter,
@@ -163,16 +166,28 @@ class AgentSession:
 
         if name == ASK_USER:
             return self._ask_user(arguments, proposal), scene
-        if name == UNDO_TRANSACTION:
-            return self._undo(arguments, proposal, working), scene
-        if name in (ADD_PARAMETER, SET_PARAMETER):
-            return self._parameter(name, arguments, proposal, working), scene
-        if name == ADD_FIT:
-            return self._fit(arguments, proposal, working), scene
         if name == READ_REPORT:
             return _report_text(scene, arguments.get("severity")), scene
         if name == FIND_PART:
             return find_part_text(arguments.get("description", "")), scene
+        if name == UNDO_TRANSACTION:
+            return self._undo(arguments, proposal, working), scene
+        if proposal.undo_of is not None:
+            # Die Annahme lehnt die Mischung ohnehin ab (§15.4, Regel 16);
+            # hier erfährt es das Modell früh genug, um sie gar nicht erst zu
+            # bauen — und in Worten, aus denen der nächste Zug folgt.
+            return (
+                tr(
+                    "Dieser Vorschlag nimmt bereits eine Transaktion zurück. "
+                    "Zurücknehmen und Anlegen gehören in zwei Vorschläge — "
+                    "erst diesen abschließen, dann den nächsten."
+                ),
+                scene,
+            )
+        if name in (ADD_PARAMETER, SET_PARAMETER):
+            return self._parameter(name, arguments, proposal, working), scene
+        if name == ADD_FIT:
+            return self._fit(arguments, proposal, working), scene
         return self._operation(call, proposal, working, history, scene)
 
     def _ask_user(self, arguments: dict[str, Any], proposal: Proposal) -> str:
@@ -193,6 +208,14 @@ class AgentSession:
         known = {entry.id for entry in working.transactions}
         if wanted not in known:
             return f"{tr('Diese Transaktion gibt es nicht')}: {wanted}"
+        if proposal.drafts or proposal.parameters or proposal.fits:
+            # Andere Richtung derselben Schranke aus ``_run`` (§15.4, Regel 16):
+            # was schon angelegt ist, ließe sich nach einem Undo nicht mehr
+            # vollständig zurücknehmen.
+            return tr(
+                "Dieser Vorschlag legt bereits etwas an. Zurücknehmen gehört in "
+                "einen eigenen Vorschlag — erst diesen abschließen, dann zurücknehmen."
+            )
         proposal.undo_of = wanted
         return f"{tr('Zum Zurücknehmen vorgemerkt')}: {wanted}"
 
@@ -206,9 +229,20 @@ class AgentSession:
         if name == SET_PARAMETER and existing is None:
             return f"{tr('Diesen Parameter gibt es nicht')}: {key}"
 
+        # Diese Werkzeuge sind keine Register-Ops, ``validate`` sieht sie also
+        # nie: was hier ungeprüft durchginge, wäre entweder ein ValueError im
+        # Arbeiter — der ist kein AppError und ließe den Thread ohne Meldung
+        # sterben — oder ein NaN, das bis in die Geometrieauswertung reist.
+        try:
+            value = float(arguments.get("value", 0.0))
+        except (TypeError, ValueError):
+            return f"{tr('Dieser Wert ist keine Zahl')}: {arguments.get('value')!r}"
+        if not isfinite(value):
+            return f"{tr('Dieser Wert ist keine endliche Zahl')}: {value}"
+
         parameter = Parameter(
             name=key,
-            value=float(arguments.get("value", 0.0)),
+            value=value,
             unit=str(arguments.get("unit", existing.unit if existing else "mm")),
             title=str(arguments.get("title", existing.title if existing else "")),
         )
@@ -223,11 +257,19 @@ class AgentSession:
         except ValueError:
             return tr("Ein Passungspaar braucht zwei Merkmale als obj_1:hole_2.")
 
+        # Der Enum steht im Werkzeugschema, aber ein Schema ist eine Bitte,
+        # keine Zusage: eine unbekannte Art landete sonst in der Projektdatei
+        # und erst bei der nächsten Auswertung als KeyError in ``_FIT_FIELD``.
+        kind = str(arguments.get("kind", "clearance"))
+        if kind not in FIT_KINDS:
+            known = ", ".join(FIT_KINDS)
+            return f"{tr('Diese Passungsart gibt es nicht')}: {kind} ({known})"
+
         fit = Fit(
             name=str(arguments.get("name", "")) or f"fit_{len(working.fits) + 1}",
             a=first,
             b=second,
-            kind=arguments.get("kind", "clearance"),
+            kind=cast(FitKind, kind),
             tolerance=f"auto:{self.profile.material.id}",
         )
         proposal.fits.append(fit)

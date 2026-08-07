@@ -26,10 +26,11 @@ from __future__ import annotations
 import secrets
 
 from app.core.agent.proposal import Proposal
+from app.core.errors import ValidationError
 from app.core.log import get_logger
 from app.core.scene.history import History, change_for
 from app.core.types import ChatEntry, Document, DocumentChange, Transaction
-from app.i18n import tr
+from app.i18n import _, tr
 
 _log = get_logger(__name__)
 
@@ -43,6 +44,7 @@ def accept(proposal: Proposal, history: History) -> Transaction | None:
     document = history.document
 
     if proposal.undo_of is not None:
+        _refuse_mixed(proposal)
         _undo_named(history, proposal.undo_of)
 
     # Die Vorher-Seite kommt aus dem Dokument, in das wirklich geschrieben
@@ -92,12 +94,51 @@ def record(
     return question, answer
 
 
+def _refuse_mixed(proposal: Proposal) -> None:
+    """Zurücknehmen und Anlegen gehören nicht in denselben Vorschlag (§15.4,
+    Regel 16).
+
+    Verzweigungen gibt es nicht: wer nach einem Undo etwas anwendet, verwirft
+    den abgeschnittenen Zweig, und ``History.apply`` tut das über
+    ``_forget_undone`` endgültig. Ein Vorschlag, der beides in einem Zug täte,
+    ließe sich nicht mehr vollständig zurücknehmen — ein Undo brächte nur das
+    Neue weg, das Zurückgenommene bliebe verloren. Die Oberfläche fragt in
+    dieser Lage über ``History.discardable`` nach; der Agent kann das nicht,
+    also macht er zwei Vorschläge daraus.
+    """
+    if not (proposal.drafts or proposal.parameters or proposal.fits):
+        return
+    raise ValidationError(
+        field="undo",
+        detail=_(
+            "Ein Vorschlag nimmt entweder zurück oder legt an — beides in einem Zug "
+            "ließe sich nicht mehr vollständig zurücknehmen."
+        ),
+        constraint="undo_with_changes",
+        values={"transaction": proposal.undo_of or ""},
+    )
+
+
 def _undo_named(history: History, transaction_id: str) -> None:
     """Nimmt zurück bis einschließlich einer Transaktion. Undo ist ein
     Stapel: zu einem älteren Eintrag zu kommen heißt, die neueren mitzunehmen —
     und das zu sagen ist besser, als so zu tun, als ließe sich ein einzelner
     Eintrag aus der Mitte herauspflücken.
+
+    Vorher wird gefragt, ob es den Eintrag überhaupt noch gibt. Zwischen
+    Vorschlag und Annahme liegt eine Entscheidung des Nutzers, und in der Zeit
+    kann er selbst zurückgenommen haben — die Sitzung prüfte nur gegen die
+    Arbeitskopie von damals. Ohne die Frage hieße „bis einschließlich" bis zum
+    leeren Stapel: die Schleife nähme das ganze Projekt zurück, und das
+    folgende ``apply`` würfe den Redo-Stapel hinterher.
     """
+    if all(entry.id != transaction_id for entry in history.document.transactions):
+        raise ValidationError(
+            field="transaction",
+            detail=_("Diese Transaktion steht nicht mehr im Verlauf."),
+            constraint="unknown_transaction",
+            values={"transaction": transaction_id},
+        )
     while history.document.transactions:
         last = history.document.transactions[-1]
         history.undo()
