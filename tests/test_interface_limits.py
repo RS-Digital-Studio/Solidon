@@ -162,6 +162,25 @@ def test_every_tool_says_what_it_expects(window: MainWindow) -> None:
     assert not too_short, f"Diese Hinweise wiederholen nur den Titel: {too_short}."
 
 
+def test_the_printer_list_is_sorted_the_way_it_is_read(window: MainWindow) -> None:
+    """Sortiert wurde nach der Kennung, gelesen wird der Titel.
+
+    In der Druckerliste stand „Elegoo Centauri Carbon 2" zwischen Bambu und
+    Creality — seine Kennung ist ``centauri-carbon-2``. „Allgemeiner
+    FDM-Drucker 220 mm" stand zwischen Elegoo und Prusa, denn er heißt
+    ``generic-220``. Für den, der die Liste liest, war sie unsortiert.
+
+    Geprüft am Dialog und nicht an der Hilfsfunktion: die Frage ist, was in der
+    Auswahl steht, und dorthin führen drei verschiedene Wege.
+    """
+    from app.ui.first_run import FirstRunDialog
+
+    dialog = FirstRunDialog(window.settings, window)
+    for auswahl, name in ((dialog.printer, "Drucker"), (dialog.material, "Material")):
+        titles = [auswahl.itemText(index) for index in range(auswahl.count())]
+        assert titles == sorted(titles, key=str.casefold), f"{name}: {titles}"
+
+
 def test_no_tool_shares_its_name_with_its_own_controls(window: MainWindow) -> None:
     """Der Umschalter holt das Werkzeug hervor, die Leiste bedient es.
 

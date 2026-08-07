@@ -38,6 +38,7 @@ from app.core.knowledge import profiles
 from app.core.log import get_logger
 from app.i18n import SUPPORTED_LANGUAGES, language_name, tr
 from app.ui.icons import icon
+from app.ui.labels import by_title
 from app.ui.settings import UiSettings
 from app.ui.style import NORMAL, TIGHT, set_level
 
@@ -118,13 +119,13 @@ class FirstRunDialog(QDialog):
         self.language.setCurrentIndex(self.language.findData(settings.language))
 
         self.printer = QComboBox(self)
-        for identifier, printer in sorted(profiles.printer_profiles().items()):
+        for identifier, printer in by_title(profiles.printer_profiles()):
             self.printer.addItem(str(printer.title), identifier)
         chosen = settings.printer or _printer_from_slicer() or profiles.DEFAULT_PRINTER
         _select(self.printer, chosen)
 
         self.material = QComboBox(self)
-        for identifier, material in sorted(profiles.material_profiles().items()):
+        for identifier, material in by_title(profiles.material_profiles()):
             self.material.addItem(str(material.title), identifier)
         _select(self.material, settings.material or profiles.DEFAULT_MATERIAL)
 

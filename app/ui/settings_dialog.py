@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 from app.core.knowledge import profiles
 from app.core.units import DISPLAY_UNITS
 from app.i18n import SUPPORTED_LANGUAGES, language_name, tr
+from app.ui.labels import by_title
 from app.ui.palette import DIFF_PALETTES
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import SCHEMES
@@ -122,12 +123,12 @@ class SettingsDialog(QDialog):
 
         self.printer = _choices(
             self,
-            {key: str(entry.title) for key, entry in sorted(profiles.printer_profiles().items())},
+            {key: str(entry.title) for key, entry in by_title(profiles.printer_profiles())},
         )
         _select(self.printer, settings.printer or profiles.DEFAULT_PRINTER)
         self.material = _choices(
             self,
-            {key: str(entry.title) for key, entry in sorted(profiles.material_profiles().items())},
+            {key: str(entry.title) for key, entry in by_title(profiles.material_profiles())},
         )
         _select(self.material, settings.material or profiles.DEFAULT_MATERIAL)
 

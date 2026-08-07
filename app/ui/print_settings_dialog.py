@@ -67,7 +67,7 @@ from app.core.types import (
 )
 from app.i18n import tr
 from app.ui.dialogs import show_error
-from app.ui.labels import colour_name
+from app.ui.labels import by_title, colour_name
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 
@@ -822,13 +822,13 @@ class PrintSettingsDialog(QDialog):
         # arbeitete für immer gegen deren Bauraum (§12).
         document = self.session.project.document
         self.printer_choice = QComboBox(self)
-        for key, entry in sorted(profiles.printer_profiles().items()):
+        for key, entry in by_title(profiles.printer_profiles()):
             self.printer_choice.addItem(str(entry.title), key)
         _select_data(self.printer_choice, document.printer or profiles.DEFAULT_PRINTER)
         self.printer_choice.currentIndexChanged.connect(self._scene_profile_changed)
 
         self.material_choice = QComboBox(self)
-        for key, material in sorted(profiles.material_profiles().items()):
+        for key, material in by_title(profiles.material_profiles()):
             self.material_choice.addItem(str(material.title), key)
         _select_data(self.material_choice, document.material or profiles.DEFAULT_MATERIAL)
         self.material_choice.currentIndexChanged.connect(self._scene_profile_changed)

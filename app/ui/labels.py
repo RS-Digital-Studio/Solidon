@@ -8,6 +8,9 @@ Leitprinzip 5).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from PySide6.QtCore import QLocale
 from PySide6.QtGui import QColor
 
@@ -128,6 +131,19 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "mouth": _("Mündung"),
     "centre": _("Mitte"),
 }
+
+
+def by_title(entries: Mapping[str, Any]) -> list[tuple[str, Any]]:
+    """Profile in der Reihenfolge, in der sie gelesen werden.
+
+    Sortiert wurde nach der Kennung, angezeigt wird der Titel — und die beiden
+    laufen auseinander, sobald ein Hersteller anders heißt als sein Schlüssel.
+    In der Druckerliste stand „Elegoo Centauri Carbon 2" zwischen Bambu und
+    Creality (``centauri-carbon-2``) und „Allgemeiner FDM-Drucker 220 mm"
+    zwischen Elegoo und Prusa (``generic-220``). Für den, der die Liste liest,
+    war sie unsortiert.
+    """
+    return sorted(entries.items(), key=lambda pair: str(pair[1].title).casefold())
 
 
 def choice_label(value: str) -> str:
