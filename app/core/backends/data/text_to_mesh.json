@@ -1,34 +1,124 @@
 {
   "1": {
-    "class_type": "Hy3DModelLoader",
+    "class_type": "CheckpointLoaderSimple",
     "inputs": {
-      "model": "hunyuan3d-dit-v2-mini-turbo",
-      "attention_mode": "sdpa"
+      "ckpt_name": "Juggernaut-X-v10.safetensors"
     }
   },
   "2": {
     "class_type": "CLIPTextEncode",
     "inputs": {
-      "text": "{prompt}",
+      "text": "{prompt}, single object, centered, plain background, product photo",
       "clip": ["1", 1]
     }
   },
   "3": {
-    "class_type": "Hy3DGenerateMesh",
+    "class_type": "CLIPTextEncode",
     "inputs": {
-      "pipeline": ["1", 0],
-      "conditioning": ["2", 0],
-      "seed": "{seed}",
-      "steps": 30,
-      "guidance_scale": 5.0
+      "text": "blurry, multiple objects, cropped, text, watermark",
+      "clip": ["1", 1]
     }
   },
   "4": {
-    "class_type": "Hy3DExportMesh",
+    "class_type": "EmptyLatentImage",
     "inputs": {
-      "trimesh": ["3", 0],
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    }
+  },
+  "5": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["1", 0],
+      "positive": ["2", 0],
+      "negative": ["3", 0],
+      "latent_image": ["4", 0],
+      "seed": "{seed}",
+      "steps": 25,
+      "cfg": 6.0,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1.0
+    }
+  },
+  "6": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["5", 0],
+      "vae": ["1", 2]
+    }
+  },
+  "7": {
+    "class_type": "RMBG",
+    "inputs": {
+      "image": ["6", 0],
+      "model": "RMBG-2.0",
+      "sensitivity": 1.0,
+      "process_res": 1024,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "refine_foreground": false,
+      "background": "Alpha",
+      "background_color": "#222222"
+    }
+  },
+  "8": {
+    "class_type": "Hy3DMeshGenerator",
+    "inputs": {
+      "model": "hunyuan3d-dit-v2-1-fp16.ckpt",
+      "image": ["7", 0],
+      "steps": 25,
+      "guidance_scale": 5.0,
+      "seed": "{seed}",
+      "attention_mode": "sdpa"
+    }
+  },
+  "9": {
+    "class_type": "Hy3D21VAELoader",
+    "inputs": {
+      "model_name": "Hunyuan3D-vae-v2-1-fp16.ckpt"
+    }
+  },
+  "10": {
+    "class_type": "Hy3D21VAEDecode",
+    "inputs": {
+      "vae": ["9", 0],
+      "latents": ["8", 0],
+      "box_v": 1.01,
+      "octree_resolution": 384,
+      "num_chunks": 8000,
+      "mc_level": 0.0,
+      "mc_algo": "mc",
+      "enable_flash_vdm": true,
+      "force_offload": false
+    }
+  },
+  "11": {
+    "class_type": "Hy3D21PostprocessMesh",
+    "inputs": {
+      "trimesh": ["10", 0],
+      "remove_floaters": true,
+      "remove_degenerate_faces": true,
+      "reduce_faces": false,
+      "max_facenum": 200000,
+      "smooth_normals": false
+    }
+  },
+  "12": {
+    "class_type": "Hy3D21ExportMesh",
+    "inputs": {
+      "trimesh": ["11", 0],
       "filename_prefix": "formwerk/text",
-      "file_format": "glb"
+      "file_format": "glb",
+      "save_file": true
+    }
+  },
+  "13": {
+    "class_type": "Preview3D",
+    "inputs": {
+      "model_file": ["12", 0]
     }
   }
 }

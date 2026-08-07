@@ -1,34 +1,81 @@
 {
   "1": {
-    "class_type": "Hy3DModelLoader",
-    "inputs": {
-      "model": "hunyuan3d-dit-v2-mini-turbo",
-      "attention_mode": "sdpa"
-    }
-  },
-  "2": {
     "class_type": "LoadImage",
     "inputs": {
       "image": "{image}",
       "upload": "image"
     }
   },
-  "3": {
-    "class_type": "Hy3DGenerateMesh",
+  "2": {
+    "class_type": "RMBG",
     "inputs": {
-      "pipeline": ["1", 0],
+      "image": ["1", 0],
+      "model": "RMBG-2.0",
+      "sensitivity": 1.0,
+      "process_res": 1024,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "refine_foreground": false,
+      "background": "Alpha",
+      "background_color": "#222222"
+    }
+  },
+  "3": {
+    "class_type": "Hy3DMeshGenerator",
+    "inputs": {
+      "model": "hunyuan3d-dit-v2-1-fp16.ckpt",
       "image": ["2", 0],
+      "steps": 25,
+      "guidance_scale": 5.0,
       "seed": "{seed}",
-      "steps": 30,
-      "guidance_scale": 5.0
+      "attention_mode": "sdpa"
     }
   },
   "4": {
-    "class_type": "Hy3DExportMesh",
+    "class_type": "Hy3D21VAELoader",
     "inputs": {
-      "trimesh": ["3", 0],
+      "model_name": "Hunyuan3D-vae-v2-1-fp16.ckpt"
+    }
+  },
+  "5": {
+    "class_type": "Hy3D21VAEDecode",
+    "inputs": {
+      "vae": ["4", 0],
+      "latents": ["3", 0],
+      "box_v": 1.01,
+      "octree_resolution": 384,
+      "num_chunks": 8000,
+      "mc_level": 0.0,
+      "mc_algo": "mc",
+      "enable_flash_vdm": true,
+      "force_offload": false
+    }
+  },
+  "6": {
+    "class_type": "Hy3D21PostprocessMesh",
+    "inputs": {
+      "trimesh": ["5", 0],
+      "remove_floaters": true,
+      "remove_degenerate_faces": true,
+      "reduce_faces": false,
+      "max_facenum": 200000,
+      "smooth_normals": false
+    }
+  },
+  "7": {
+    "class_type": "Hy3D21ExportMesh",
+    "inputs": {
+      "trimesh": ["6", 0],
       "filename_prefix": "formwerk/image",
-      "file_format": "glb"
+      "file_format": "glb",
+      "save_file": true
+    }
+  },
+  "8": {
+    "class_type": "Preview3D",
+    "inputs": {
+      "model_file": ["7", 0]
     }
   }
 }
