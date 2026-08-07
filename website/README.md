@@ -36,10 +36,35 @@ Record-Verwaltung an: unter *DNS → DNS-Einstellungen* steht statt einer
 Eintragsliste nur „Diese Domain wird von Google Workspace verwaltet". Es gibt
 dort nur Voreinstellungen und die Nameserver-Liste.
 
-Der A-Record und der TXT-Token gehören damit auf die Google-Seite. **Wo genau
-in der Admin-Konsole, ist noch nicht belegt** — die Domain-Übersicht unter
-*Konto → Domains → Domains verwalten* zeigt nur Zuordnung und Status. Vor
-Schritt 4 einmal *Details ansehen* bei der Domain öffnen und nachsehen.
+Google verweist seinerseits zurück: die Domain-Details in der Admin-Konsole
+sagen, `admin@rs-digital.org` könne „sich in das Portal des Domainanbieters
+einloggen und erweiterte Einstellungen wie WHOIS- oder DNS-Einträge
+bearbeiten", und der Knopf *Domain verwalten* führt nach Squarespace — in
+dieselbe Ansicht, die keine Einträge zeigt. **Beide Häuser verweisen
+aufeinander; eine Oberfläche für einen freien A-Record hat derzeit keines.**
+Google Domains, wo das früher lief, ist abgeschaltet.
+
+### Der Bestand, bevor jemand etwas umstellt
+
+Aufgenommen am 07.08.2026 gegen `8.8.8.8`. Wer die Zone verlegt, muss genau
+das nachbauen — vollständig, sonst fällt Mail oder Website aus:
+
+```
+SOA     @                   ns-cloud-b1.googledomains.com / cloud-dns-hostmaster.google.com
+NS      @                   ns-cloud-b1..b4.googledomains.com
+A       @                   198.185.159.144  198.185.159.145  198.49.23.144  198.49.23.145
+MX      @                   1 smtp.google.com
+TXT     @                   v=spf1 include:_spf.google.com ~all
+A       www                 198.185.159.144/145, 198.49.23.144/145
+CNAME   www                 ext-sq.squarespace.com
+CNAME   _domainconnect      _domainconnect.domains.squarespace.com
+TXT     _domainconnect      domains.squarespace.com
+TXT     google._domainkey   v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsqpu73YCiQ0O7je2AHdEBbUKkuUtpu+qc0fph0rwIoHPBHMYJqvOkE7TmwCxh5nS48yWN+k/7lda3p/FGqPocE9u0ZGWSfWzO1SCYh5p42L/MVtVea7STIq5mQb8Hd7W7mHdQy9zR8HtkMmHvGHAy0yTq6ZiJWx4BKjnmK+L5cZ2mu4QG+IXAHjNEw/t1px/K/tpvWoUzmUgPVtxPDKbXDFUXwIxfw4ZT9mCIc7yulCo+7pcXQH7y+oGg9JpC7vykztkl6ZJj9TwhXfYzQgqHfup5fupXtZdz5yxy54Kx7UfYbcI/vNEFosqxEio3NMeY99OwWWBlqgAJ/1G5Vbo9wIDAQAB
+```
+
+`_dmarc` ist **nicht gesetzt** — unabhängig vom Webspace einen Blick wert,
+wenn die Domain Verkaufsmails tragen soll. Ein `formwerk`-Eintrag existiert
+erwartungsgemäß noch nicht.
 
 **Weder Workspace noch Squarespace liefern eigene Dateien aus.** Kein SFTP,
 keine beliebigen Pfade, kein `version.json` als rohes JSON, und 255 MB
