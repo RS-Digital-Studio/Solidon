@@ -2393,22 +2393,42 @@ oben standen nicht bei einem Fehler, sondern nach einer gelungenen Handlung —
 und je häufiger eine Warnung zu Unrecht steht, desto weniger wert ist der
 Platz, an dem die echten stehen.
 
+### Nachgezogen
+
+- [x] **Der flaky Beispieltest war rtree**, das in fremden Speicher greift —
+      eine Zugriffsverletzung in etwa jedem zwanzigsten Lauf, im Stapel
+      `rtree/index.py:832`. `mesh.on_surface` fragt jetzt für alle drei
+      Aufrufer und wiederholt einmal an einer Kopie des Netzes. Vorher 1 von
+      20 rot, danach 0 von 40.
+- [x] **Der Fortschritt trägt die verstrichene Zeit** und, wer wartet, seine
+      Position in der Warteschlange.
+- [x] **Die Agenten-Suite läuft und steht bei 8/33** (qwen3:14b, volles
+      Register). Die eine Zahl, die §40 nicht als Quote führt, sondern als
+      Regel, ist erreicht: **3/3 bei Mehrdeutigkeit gefragt**. Schwach bleibt
+      „Baustein statt eigener Geometrie" mit 0/13.
+- [x] **Eine Operation ohne Eingangsobjekt** stürzte mit einem `IndexError`
+      ab, statt anzuhalten — `example_v1.p3d` ließ sich damit gar nicht öffnen.
+
 ### Offen
 
-- [ ] **Die Agenten-Suite steht bei 1/33** (llama3.1:8b, vor dem Wechsel der
-      Vorgabe). Ob `qwen3:14b` mit dem vollen Register über die Quote kommt,
-      ist noch nicht gemessen — der Läufer war bis eben kaputt. Das ist der
-      nächste Schritt, und er kostet nur Zeit.
-- [ ] **Der Fortschritt steht eine Minute lang auf 50 %.** Ein Lauf dauert
-      hier 40 bis 70 Sekunden, und die ganze Zeit steht „Modell wird erzeugt"
-      am selben Punkt — von „rechnet" nicht zu unterscheiden. §2.8 verlangt ab
-      zehn Sekunden eine Schätzung. ComfyUI meldet echten Fortschritt über
-      seinen Websocket; über `/history` gibt es ihn nicht. Bis dahin wäre schon
-      die verstrichene Zeit ehrlicher als ein stehender Balken.
-- [ ] **`tests/test_examples.py::…[dose-mit-deckel]` ist flaky.** Dreimal
-      allein gefahren: zweimal grün, einmal rot, ohne Änderung dazwischen. Der
-      Fehler kommt aus `trimesh/proximity.py` — `nearby_faces` liefert
-      sporadisch nichts, das leere Ergebnis ist `float64`, und der Zugriff
-      damit scheitert. Dieselbe Ecke wie die Abstürze im langen Lauf, und
-      dieselbe Frage: liegt es an rtree auf dieser Maschine? Bis das geklärt
-      ist, sagt ein einzelner roter Lauf dieses Tests nichts.
+- [ ] **Native Bibliotheken zerlegen den Speicher unter uns.** Das ist kein
+      Einzelfall mehr, sondern eine Familie, und sie erklärt jeden sporadischen
+      roten Lauf dieser Sitzung:
+
+      | Fundstelle | Symptom |
+      |---|---|
+      | `rtree.index.intersection` | Zugriffsverletzung, 1 von 20 — behoben durch Wiederholung |
+      | `threemf._mesh_from` | ab dem vierten Lauf im selben Prozess still falsche Teilzahl, dann `OverflowError` |
+      | `_elementtree` in `test_real_models` | `SystemError: error return without exception set` |
+      | Prozessende nach Testläufen | Faulthandler-Stack ohne roten Test |
+
+      Belegt: reines XML-Parsen derselben Datei läuft achtmal sauber durch;
+      erst mit trimesh im selben Prozess kippt es. Die Wiederholung bei rtree
+      ist ein Pflaster, keine Ursache. Nächster Schritt wäre, die Fassungen
+      von `rtree`, `trimesh` und `numpy` gegen `constraints.txt` zu prüfen und
+      einzeln zu tauschen — bis dahin sagt ein einzelner roter Lauf von
+      `test_real_models.py` nichts.
+- [ ] **Der Agent greift nicht zu den Bausteinen** (0/13). Die Vorrangregel
+      „Bausteine vor Primitiven" steht im Systemprompt und trägt bei einem
+      lokalen 14B-Modell nicht. Eine Regeländerung dazu wird vorher und
+      nachher gemessen (Checkliste in `AGENTS.md`), nicht geraten.
