@@ -250,6 +250,38 @@ def test_slicing_without_a_scene_says_what_is_missing(dialog: PrintSettingsDialo
     assert dialog.state.text()
 
 
+def test_both_orca_profiles_are_asked_for_before_the_run(qt_app: QApplication) -> None:
+    """Die Orca-Familie braucht zwei Profile, geprüft wurde nur eines.
+
+    Ohne Prozessprofil hat Formwerks Datei kein Systemprofil, auf das sie sich
+    legen kann (siehe `handover._orca_process`), und der Slicer bricht ab,
+    bevor er das Modell ansieht. Gemessen gegen ElegooSlicer 1.5.3.4: mit dem
+    Systemprofil darunter läuft derselbe Aufruf durch, ohne es endet er in
+    „Der Slicer hat keine Druckdatei geschrieben" — ein Satz über das Ende,
+    nicht über die Ursache.
+    """
+    import ast
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parent.parent / "app" / "ui" / "print_settings_dialog.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+
+    guarded: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        condition = ast.unparse(node.test)
+        if "setup.flavour" not in condition:
+            continue
+        for field in ("machine_profile", "base_process"):
+            if f"setup.{field}" in condition:
+                guarded.add(field)
+
+    assert guarded == {"machine_profile", "base_process"}, (
+        f"nur diese Profile werden vor dem Lauf verlangt: {sorted(guarded)}"
+    )
+
+
 # --- was bleibt, wenn der Dialog zugeht ---------------------------------------------
 
 

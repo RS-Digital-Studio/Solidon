@@ -1352,6 +1352,19 @@ class PrintSettingsDialog(QDialog):
                 tr("Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen.")
             )
             return
+        # Das Prozessprofil ist genauso wenig verzichtbar, nur fiel es später
+        # auf: die Orca-Familie nimmt kein Prozessprofil an, das nicht zum
+        # Drucker passt, und ohne ein Systemprofil darunter hat Formwerks
+        # Datei nichts, wozu sie passen könnte (siehe `_orca_process`). Der
+        # Lauf lief bis dahin los und endete in „Der Slicer hat keine
+        # Druckdatei geschrieben" — ein Satz über das Ende, nicht über die
+        # Ursache.
+        if setup.flavour == "orca" and not setup.base_process:
+            self.slicer_box.setChecked(True)
+            self.state.setText(
+                tr("Dieser Slicer braucht auch ein Prozessprofil — bitte eines auswählen.")
+            )
+            return
         self.ui_settings.slicer_machine_profile = setup.machine_profile
         self.ui_settings.slicer_base_process = setup.base_process
         self.ui_settings.slicer_base_filament = setup.base_filament
