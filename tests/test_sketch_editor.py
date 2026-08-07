@@ -429,18 +429,24 @@ def test_the_axes_have_their_own_colours_and_letters() -> None:
 
 
 def test_every_drawing_tool_wears_its_key(qt_app: QApplication) -> None:
-    """„Die Kürzel stehen neben den Knöpfen, so lernt man sie nebenbei" (§19.2).
+    """Jedes Zeichenwerkzeug nennt sein Kürzel — im Tooltip, samt Klartext.
 
-    Nachgestellt hatten `L`, `R` und `C` im Editor gar nichts bewirkt —
-    „Auswählen" blieb aktiv.
+    Vierzehn beschriftete Knöpfe passten nicht in die Zeile: Qt kürzte sie auf
+    „Tri… T" und „Ver…ern", und ein abgeschnittenes Wort ist schlechter zu
+    lesen als ein Bild. Seitdem tragen sie nur das Zeichen.
+
+    §19.2 steht dem nicht entgegen: er verlangt ein eindeutiges Kürzel je
+    Operation und die Befehlspalette als Universalzugang, nicht ein Wort neben
+    dem Knopf. Beides gilt weiter — hier wird geprüft, dass das Kürzel
+    dennoch am Werkzeug selbst ablesbar bleibt.
     """
     from app.ui.sketch_editor import TOOL_KEYS
 
     panel = SketchPanel()
     for name, key in TOOL_KEYS.items():
         button = panel._tool_buttons[name]
-        assert key in button.text(), f"{name} trägt sein Kürzel nicht"
-        assert button.toolTip(), "und der Tooltip bleibt der Klartext"
+        assert key in button.toolTip(), f"{name} nennt sein Kürzel nicht"
+        assert not button.icon().isNull(), f"{name} hat kein Zeichen"
 
 
 def test_a_key_picks_the_tool_and_the_button_follows(qt_app: QApplication) -> None:
@@ -662,13 +668,14 @@ def test_the_reference_tools_are_reachable(qt_app: QApplication) -> None:
     from app.ui.sketch_editor import ACTION_KEYS
 
     panel = SketchPanel()
-    labels = {
-        button.text().split("  ")[0]
-        for button in panel.findChildren(type(panel._tool_buttons["line"]))
-    }
+    # Seit die Leiste Zeichen statt Wörter trägt, steht der Klartext im
+    # Tooltip. Erreichbar heißt weiterhin: benannt und anklickbar.
+    hinweise = " | ".join(
+        button.toolTip() for button in panel.findChildren(type(panel._tool_buttons["line"]))
+    )
 
-    assert tr("Projizieren") in labels
-    assert tr("Hilfsgeometrie") in labels
+    assert tr("Projizieren") in hinweise
+    assert tr("Hilfsgeometrie") in hinweise
     assert ACTION_KEYS["construction"] == "X", "wie in Fusion"
 
 

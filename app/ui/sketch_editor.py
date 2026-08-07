@@ -52,6 +52,7 @@ from app.core.types import (
 )
 from app.core.units import DISPLAY_UNITS, EPS_DISPLAY
 from app.i18n import tr
+from app.ui import icons
 from app.ui.labels import length
 from app.ui.palette import ROLES
 
@@ -1274,8 +1275,14 @@ class SketchPanel(QWidget):
         ):
             button = QToolButton(self)
             key = TOOL_KEYS.get(name, "")
-            button.setText(f"{label}  {key}" if key else label)
-            button.setToolTip(label)
+            # Nur das Zeichen, ohne Beschriftung — die einzige Stelle der
+            # Oberfläche, an der das gilt. Warum es hier trägt und sonst nicht,
+            # steht bei den Symbolen selbst (``app/ui/icons.py``, Abschnitt
+            # Zeichenwerkzeuge). Vierzehn beschriftete Knöpfe passten nicht in
+            # die Zeile: Qt kürzte sie auf „Tri… T" und „Ver…ern", und ein
+            # abgeschnittenes Wort ist schlechter zu lesen als ein Bild.
+            button.setIcon(icons.icon(f"sketch_{name}", button))
+            button.setToolTip(f"{label}  ({key})" if key else label)
             button.setCheckable(True)
             button.setAutoRaise(True)
             button.toggled.connect(lambda active, chosen=name: self._tool_chosen(chosen, active))
@@ -1365,15 +1372,16 @@ class SketchPanel(QWidget):
         self.offset_distance.setToolTip(tr("Um wie viel versetzt wird. Negativ ist nach innen."))
 
         offset_button = QToolButton(self)
-        offset_button.setText(f"{tr('Versetzen')}  {ACTION_KEYS['offset']}")
-        offset_button.setToolTip(tr("Versetzen"))
+        offset_button.setIcon(icons.icon("sketch_offset", offset_button))
+        offset_button.setToolTip(f"{tr('Versetzen')}  ({ACTION_KEYS['offset']})")
         offset_button.setAutoRaise(True)
         offset_button.clicked.connect(
             lambda: self.canvas.offset_selected(self.offset_distance.value())
         )
 
         mirror_button = QToolButton(self)
-        mirror_button.setText(tr("Spiegeln"))
+        mirror_button.setIcon(icons.icon("sketch_mirror", mirror_button))
+        mirror_button.setToolTip(tr("Spiegeln"))
         mirror_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         mirror_menu = QMenu(mirror_button)
         for label, axis in ((tr("An der X-Achse"), "x"), (tr("An der Y-Achse"), "y")):
@@ -1384,17 +1392,19 @@ class SketchPanel(QWidget):
         mirror_button.setMenu(mirror_menu)
 
         construction_button = QToolButton(self)
-        construction_button.setText(f"{tr('Hilfsgeometrie')}  {ACTION_KEYS['construction']}")
+        construction_button.setIcon(icons.icon("sketch_construction", construction_button))
         construction_button.setToolTip(
-            tr("Trägt Bedingungen, bildet aber kein Profil. Nochmal drücken macht es rückgängig.")
+            f"{tr('Hilfsgeometrie')}  ({ACTION_KEYS['construction']}) — "
+            + tr("Trägt Bedingungen, bildet aber kein Profil.")
         )
         construction_button.setAutoRaise(True)
         construction_button.clicked.connect(self.canvas.toggle_construction)
 
         project_button = QToolButton(self)
-        project_button.setText(tr("Projizieren"))
+        project_button.setIcon(icons.icon("sketch_project", project_button))
         project_button.setToolTip(
-            tr("Die Kanten der vorhandenen Körper auf dieser Ebene in die Skizze holen.")
+            f"{tr('Projizieren')} — "
+            + tr("Die Kanten der vorhandenen Körper auf dieser Ebene in die Skizze holen.")
         )
         project_button.setAutoRaise(True)
         project_button.clicked.connect(self.canvas.project_bodies)
@@ -1425,7 +1435,8 @@ class SketchPanel(QWidget):
         tools.addWidget(self.measure_field)
 
         undo_button = QToolButton(self)
-        undo_button.setText(tr("Rückgängig"))
+        undo_button.setIcon(icons.icon("sketch_undo", undo_button))
+        undo_button.setToolTip(tr("Rückgängig"))
         undo_button.setAutoRaise(True)
         undo_button.clicked.connect(self.canvas.undo)
         tools.addWidget(undo_button)

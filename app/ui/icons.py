@@ -127,6 +127,66 @@ PATHS: Final[dict[str, str]] = {
     "done": ('<path d="M4.5 12.5l4.5 4.5L19.5 7" />'),
     # Ein Pfeil auf den aktuellen Schritt der Tour.
     "step": ('<path d="M4 12h12.5" /><path d="M11.5 6.5 17 12l-5.5 5.5" />'),
+    # --- Zeichenwerkzeuge ------------------------------------------------------
+    #
+    # Hier tragen die Symbole **allein**, ohne Beschriftung — als einzige Stelle
+    # der Oberfläche. Der Grund ist nicht Platzmangel, sondern dass die Regel
+    # oben ihre Voraussetzung verliert: „Schnitt" und „Explosion" haben kein
+    # Bild, auf das sich die Welt geeinigt hat, Linie, Kreis und Bogen schon.
+    # Jedes CAD zeigt sie seit dreißig Jahren gleich, und wer je eines bedient
+    # hat, liest sie ohne Wort. Das Kürzel steht im Tooltip, wo es sich beim
+    # Verweilen von selbst zeigt.
+    #
+    # Ein Punkt: kein Kreis, sondern ein Kreuz mit Mitte — ein gefüllter Kreis
+    # sähe neben dem Kreiswerkzeug aus wie dessen kleiner Bruder.
+    "sketch_select": ('<path d="M5 3.5l6.5 15.5 2.2-6.3 6.3-2.2z" />'),
+    "sketch_point": (
+        '<path d="M12 6.5v11" /><path d="M6.5 12h11" /><circle cx="12" cy="12" r="2.2" />'
+    ),
+    "sketch_line": (
+        '<path d="M5.5 18.5 18.5 5.5" /><circle cx="5.5" cy="18.5" r="1.8" />'
+        '<circle cx="18.5" cy="5.5" r="1.8" />'
+    ),
+    "sketch_circle": ('<circle cx="12" cy="12" r="7.5" /><circle cx="12" cy="12" r="1.4" />'),
+    "sketch_arc": (
+        '<path d="M4.5 17.5a9 9 0 0 1 15 0" /><circle cx="4.5" cy="17.5" r="1.8" />'
+        '<circle cx="19.5" cy="17.5" r="1.8" />'
+    ),
+    # Die S-Kurve mit ihren Stützpunkten — das Bild jeder Spline-Bedienung.
+    "sketch_spline": (
+        '<path d="M4 17c3.5 0 4-10 8-10s4.5 10 8 10" />'
+        '<circle cx="4" cy="17" r="1.6" /><circle cx="12" cy="12" r="1.6" />'
+        '<circle cx="20" cy="17" r="1.6" />'
+    ),
+    # Trimmen: die Schere schneidet das gestrichelte Reststück weg.
+    "sketch_trim": (
+        '<path d="M4 12h9" /><path d="M13 12h7" stroke-dasharray="2.5 2" />'
+        '<path d="M15.5 5.5 20 10" /><path d="M15.5 18.5 20 14" />'
+    ),
+    # Verlängern: die durchgezogene Linie wächst in die gestrichelte hinein.
+    "sketch_extend": (
+        '<path d="M4 12h8" /><path d="M12 12h5" stroke-dasharray="2.5 2" />'
+        '<path d="M16 8.5 20 12l-4 3.5" /><path d="M20.5 6v12" />'
+    ),
+    # Versatz: dieselbe Kontur ein zweites Mal daneben.
+    "sketch_offset": (
+        '<path d="M4 16.5 9 7h6l5 9.5" /><path d="M7 19.5 11 12h2l4 7.5" stroke-dasharray="3 2" />'
+    ),
+    # Spiegeln: zwei Formen, dazwischen die Achse.
+    "sketch_mirror": (
+        '<path d="M12 3.5v17" stroke-dasharray="3 2.5" />'
+        '<path d="M9.5 6.5 4 12l5.5 5.5z" /><path d="M14.5 6.5 20 12l-5.5 5.5z" />'
+    ),
+    # Hilfslinie: durchweg gestrichelt, denn genau das ist ihr Wesen.
+    "sketch_construction": ('<path d="M4 18.5 20 5.5" stroke-dasharray="3 2.5" />'),
+    # Projizieren: aus dem Körper fällt seine Kante auf die Zeichenebene.
+    "sketch_project": (
+        '<path d="M5 4.5h9v9H5z" /><path d="M10 19.5h9" />'
+        '<path d="M5 13.5 10 19.5" stroke-dasharray="2.5 2" />'
+        '<path d="M14 13.5 19 19.5" stroke-dasharray="2.5 2" />'
+    ),
+    # Rückgängig: der Pfeil, der zurück in seinen Bogen zeigt.
+    "sketch_undo": ('<path d="M4 9.5h10a5 5 0 0 1 0 10h-6" /><path d="M8 5 4 9.5 8 14" />'),
     # --- je Kategorie eines (Konzept P15 §7 Etappe 8, D5) ----------------------
     #
     # **Nicht je Operation.** Dreiundsiebzig Symbole zu unterscheiden ist
