@@ -45,9 +45,36 @@ def find_compiler() -> Path | None:
     return None
 
 
+def stale_reason() -> str:
+    """Warum dieser Bau nicht paketiert werden darf — leer, wenn er darf.
+
+    Die Setup-Datei bekommt Version und Adresse aus :mod:`app.branding`, ihr
+    Inhalt aber aus ``dist``. Läuft beides auseinander, entsteht ein Paket, das
+    außen neu aussieht und innen alt ist: die Anwendung darin fragte eine
+    abgeschaltete Adresse und brachte die Beispiele von vorgestern mit — und
+    nichts daran fiele auf, bis ein Kunde es installiert.
+    """
+    built = (SOURCE_DIR / f"{APP_NAME}.exe").stat().st_mtime
+    newest = max(
+        (path.stat().st_mtime for path in (ROOT / "app").rglob("*") if path.is_file()),
+        default=0.0,
+    )
+    if newest > built:
+        return "Der Bau ist älter als app/ — zuerst neu bauen: pyinstaller packaging/formwerk.spec"
+
+    leftovers = sorted(path.name for path in SOURCE_DIR.rglob("*.autosave"))
+    if leftovers:
+        return f"Im Bau liegen Sicherungsdateien eines Laufs: {', '.join(leftovers)} — entfernen"
+    return ""
+
+
 def main() -> int:
     if not (SOURCE_DIR / f"{APP_NAME}.exe").is_file():
         print(f"Kein Bau unter {SOURCE_DIR} — zuerst: pyinstaller packaging/formwerk.spec")
+        return 1
+    stale = stale_reason()
+    if stale:
+        print(stale)
         return 1
     compiler = find_compiler()
     if compiler is None:
