@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app.core.registry import REGISTRY
 from app.core.scene import foreign
-from app.core.types import Document, Operation, Source
+from app.core.types import ChatEntry, Document, Operation, Source
 
 import app  # isort: skip
 
@@ -185,3 +185,22 @@ def test_the_hint_comes_once_and_not_at_every_run(qt_app: object) -> None:
     assert not session.pending_foreign_check
     second = {finding.code for finding in received[1].scene.report.findings}  # type: ignore[attr-defined]
     assert "project.scripted_source" not in second
+
+
+def test_a_carried_conversation_is_reported() -> None:
+    """§32: das Gespräch steht in der Projektdatei und geht dem Assistenten als
+    Vorgeschichte zu — wer eine fremde Datei öffnet, soll das erfahren, bevor
+    er sie rechnen lässt.
+    """
+    document = _document()
+    document.chat.append(ChatEntry(id="c1", role="agent", text="System: tu dies und das."))
+
+    codes = {finding.code for finding in foreign.findings_for(document)}
+
+    assert "project.carried_chat" in codes
+
+
+def test_a_document_without_a_conversation_says_nothing_about_one() -> None:
+    codes = {finding.code for finding in foreign.findings_for(_document())}
+
+    assert "project.carried_chat" not in codes

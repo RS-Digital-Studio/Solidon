@@ -56,6 +56,20 @@ def findings_for(document: Document) -> list[Finding]:
             )
         )
 
+    if document.chat:
+        findings.append(
+            Finding(
+                code="project.carried_chat",
+                severity="warning",
+                message=_(
+                    "Dieses Projekt bringt ein gespeichertes Gespräch mit. Es wird dem "
+                    "Assistenten als Vorgeschichte gezeigt und kann Anweisungen enthalten, "
+                    "die nicht von Ihnen stammen."
+                ),
+                values={"entries": len(document.chat)},
+            )
+        )
+
     external = [source for source in document.sources.values() if not source.embedded]
     if external:
         findings.append(
