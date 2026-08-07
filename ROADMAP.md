@@ -352,12 +352,23 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       obwohl das Dokument die Arten führt. Jetzt reicht der Dialog sie durch,
       und nur `flush` löst den Vorschlag aus: bei Schiebesitz, Presssitz oder
       Gewinde wäre Bügeln verlorene Zeit auf einer Fläche, die nichts berührt
-- [ ] Prusa- und Cura-Adapter am echten Programm laufen lassen — die
-      Zuordnung steht und die Gegenprobe würde Abweichungen melden, aber
-      gelaufen ist bisher nur die Orca-Familie (ElegooSlicer 1.5.3.4, am
-      07.08.2026 Ende zu Ende: 1,1 MB G-Code, 150 Schichten, 23,4 g).
-      Weder PrusaSlicer noch Cura sind auf dieser Maschine installiert —
-      der Punkt braucht sie, nicht mehr Code
+- [x] **PrusaSlicer läuft Ende zu Ende** (2.9.6, am 07.08.2026: 1,01 MB
+      G-Code, 22,6 g, 110 min). Beide Funde davor waren unsichtbar, solange
+      das Programm fehlte: die Programmsuche ging eine Ebene zu flach für
+      `Prusa3D\PrusaSlicer\`, und die Bettform stand von 0 bis 256, während
+      Formwerk um den Ursprung rechnet — „All objects are outside of the
+      print volume", ohne dass irgendwo stand, warum
+- [ ] **Cura ist angebunden, aber noch nicht durchgelaufen** (5.13.0). Die
+      Kette hat drei Stufen, und eine davon steht:
+      - [x] Der Aufruf ging an `UltiMaker-Cura.exe`, also an die Oberfläche.
+            Die Kommandozeile hat nur `CuraEngine.exe` daneben
+      - [ ] `CuraEngine` liest **kein 3MF** — die 3MF-Seite sitzt im Frontend.
+            Für Cura müsste die Übergabe STL schreiben
+      - [ ] Es braucht eine konkrete Maschinendefinition samt Extruder;
+            `fdmprinter.def.json` allein ist die abstrakte Basis und liefert
+            null Bytes. `slicer_profiles` kennt Curas Bestand nicht — er
+            liegt als `share/cura/resources/definitions/*.def.json`, nicht in
+            der Orca-Struktur
 
 ## P8 — Erste Veröffentlichung
 - [x] Name entschieden, überall durchgezogen — alles Namensbezogene steht in
