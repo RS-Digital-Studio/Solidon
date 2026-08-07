@@ -91,7 +91,9 @@ def test_the_generated_file_is_a_source_and_not_an_operation(project: Project) -
     assert source.origin.seed == 7
     assert source.origin.author == "scripted"
     assert project.sources[result.source_id] == result.result.payload
-    assert [entry.op for entry in project.document.ops] == ["load", "repair"]
+    # Drei Schritte: laden, reparieren, auf Arbeitsgröße bringen. Der dritte
+    # kam dazu, weil ein Bildmodell auf einen Einheitswürfel normiert liefert.
+    assert [entry.op for entry in project.document.ops] == ["load", "repair", "fit_to_size"]
 
 
 def test_the_repair_chain_runs_without_being_asked(project: Project, profile: Profile) -> None:
@@ -114,7 +116,13 @@ def test_the_repair_is_one_step_that_can_be_taken_back(project: Project, profile
     object_id = next(iter(with_repair.scene.objects))
     repaired = with_repair.scene.objects[object_id].mesh.triangle_count
 
-    History(project.document).undo()
+    # Zwei Undo: das Auf-Maß-Bringen und die Reparatur. Seit die Generierung
+    # ihren Körper auf Arbeitsgröße bringt, liegt zwischen dem Laden und dem
+    # Ergebnis ein Schritt mehr — und nur einer zurückzunehmen ließe die
+    # Reparatur stehen, um die es hier geht.
+    history = History(project.document)
+    history.undo()
+    history.undo()
     without = evaluated(project, profile)
 
     assert without.complete
