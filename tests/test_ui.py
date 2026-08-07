@@ -2862,3 +2862,67 @@ def test_fading_leaves_no_effect_behind(qt_app: object) -> None:
     fade_out(widget)
     assert not widget.isVisible()
     assert widget.graphicsEffect() is None
+
+
+def test_the_application_icon_uses_the_small_source_where_it_matters(qt_app: object) -> None:
+    """Bis 32 Pixel kommt die vereinfachte Fassung, darüber die ausgearbeitete.
+
+    Das ist die Größe von Titelleiste, Taskleiste, Alt-Tab — und dieselbe in
+    jedem Dialog, weil das Symbol einmal auf der ``QApplication`` steht und
+    jedes Fenster es erbt. Die ausgearbeitete Fassung trägt dort Schichtlinien
+    von 0,3 Pixeln Breite und kommt als grauer Schleier an.
+
+    Die beiden Fassungen sind **dieselbe Form** — gleiche Punkte, gleiche
+    Farben. Der einzige Unterschied sind die Schichtlinien, und genau darauf
+    prüft dieser Test: Wer die kleine Fassung neu gestaltet statt sie zu
+    vereinfachen, bekommt zwei Symbole für ein Produkt.
+    """
+    from PySide6.QtCore import QSize
+
+    from app.ui.icons import ICON_SOURCE, ICON_SOURCE_SMALL, SMALL_ICON_LIMIT, application_icon
+
+    assert ICON_SOURCE.exists(), "die ausgearbeitete Quelle fehlt"
+    assert ICON_SOURCE_SMALL.exists(), "die vereinfachte Quelle fehlt"
+
+    icon = application_icon()
+    assert not icon.isNull()
+    assert not icon.pixmap(QSize(16, 16)).isNull()
+    assert SMALL_ICON_LIMIT == 32
+
+    large = ICON_SOURCE.read_text(encoding="utf-8")
+    small = ICON_SOURCE_SMALL.read_text(encoding="utf-8")
+
+    # Die Schichtlinien sind das Einzige, was fehlen darf — sie stehen als
+    # <path> da, alles andere als <polygon> oder <ellipse>.
+    assert "<path" in large, "die große Fassung hat ihre Schichtlinien verloren"
+    assert "<path" not in small, "die kleine Fassung trägt Linien, die bei 16 px zu Schleier werden"
+
+    # Dieselben Flächen, dieselben Farben: Was hier auseinanderläuft, sieht der
+    # Nutzer als zwei verschiedene Symbole.
+    for shape in ('points="64,18 104,41 64,64 24,41"', 'fill="#e08b4e"', 'fill="#7c3a10"'):
+        assert shape in large and shape in small, f"{shape} steht nicht in beiden Fassungen"
+
+
+def test_no_window_overrides_the_application_icon() -> None:
+    """Das Fenstersymbol wird einmal gesetzt, und alle erben es.
+
+    Setzte ein Dialog ein eigenes, hätte er in seiner Titelleiste ein anderes
+    Bild als das Hauptfenster — und die Korrektur an der einen Stelle ginge an
+    ihm vorbei. Ein Test über den Quelltext, weil sich das Erben nicht
+    offscreen nachstellen lässt.
+    """
+    import re
+
+    ui = Path(__file__).parent.parent / "app" / "ui"
+    pattern = re.compile(r"^\s*(?!application\b)\w+\.setWindowIcon\(", re.MULTILINE)
+
+    culprits = [
+        path.relative_to(ui.parent.parent)
+        for path in sorted(ui.glob("*.py"))
+        if pattern.search(path.read_text(encoding="utf-8"))
+    ]
+
+    assert not culprits, (
+        f"{culprits}: das Fenstersymbol gehört einmal auf die QApplication "
+        "(app/ui/app.py), nicht an einzelne Fenster"
+    )

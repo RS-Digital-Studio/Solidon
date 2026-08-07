@@ -8,7 +8,7 @@
 ;
 ;     python tools/make_installer.py
 ;
-; Das Anwendungssymbol kommt als Define herein (packaging/solidon.ico,
+; Das Anwendungssymbol kommt als Define herein (packaging/solidon3d.ico,
 ; erzeugt von tools/make_icon.py aus der SVG-Quelle).
 
 [Setup]

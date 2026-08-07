@@ -395,6 +395,29 @@ APPLICATION_ICON_SIZES: Final = (16, 24, 32, 48, 64, 128, 256)
 #: und der Ladebildschirm, der sie schichtweise zeichnet.
 ICON_SOURCE: Final = Path(__file__).resolve().parent.parent / "images" / "icon" / "solidon3d.svg"
 
+#: Die vereinfachte Fassung für kleine Größen. Warum es sie gibt, steht in der
+#: Datei selbst — kurz: was bei 128 Pixeln Struktur ist, ist bei 16 Schleier.
+ICON_SOURCE_SMALL: Final = ICON_SOURCE.with_name("solidon3d-small.svg")
+
+#: Bis zu welcher Kantenlänge die vereinfachte Fassung genommen wird.
+#: 32 ist die Grenze, ab der die Schichtlinien wieder als Linien ankommen —
+#: nachgesehen, nicht geschätzt.
+SMALL_ICON_LIMIT: Final = 32
+
+
+def _renderer_for(source: Path) -> QSvgRenderer | None:
+    """Ein geprüfter Renderer für eine SVG-Datei, oder ``None``.
+
+    Fasst zusammen, was sonst dreimal danebenstünde: lesen, was fehlen kann,
+    und prüfen, was ungültig sein kann.
+    """
+    try:
+        data = source.read_bytes()
+    except OSError:
+        return None
+    renderer = QSvgRenderer(QByteArray(data))
+    return renderer if renderer.isValid() else None
+
 
 def application_icon_source() -> str:
     """Die SVG-Quelle des Anwendungssymbols als Text.
@@ -411,22 +434,33 @@ def application_icon_source() -> str:
 
 
 def application_icon() -> QIcon:
-    """Das Anwendungssymbol, zur Laufzeit aus seiner SVG-Quelle gerastert.
+    """Das Anwendungssymbol, zur Laufzeit aus seinen SVG-Quellen gerastert.
 
-    Die Quelle liegt in ``app/images/icon/solidon3d.svg`` und ist dieselbe,
-    aus der ``tools/make_icon.py`` die ICO für exe und Installer baut — ein
-    Bild, drei Abnehmer. Fehlt die Datei, gibt es ein leeres Symbol und die
-    Plattform zeigt ihr Standardbild; ein Start scheitert daran nicht.
+    **Zwei Quellen, nicht eine.** Bis 32 Pixel kommt die vereinfachte Fassung
+    zum Zug (``solidon3d-small.svg``), darüber die ausgearbeitete. Der Grund
+    steht im kleinen SVG: Bei sechzehn Pixeln — Titelleiste, Taskleiste,
+    Alt-Tab, und dieselbe Größe in jedem Dialog — sind die Schichtlinien der
+    großen Fassung 0,3 Pixel breit und ergeben einen grauen Schleier, aus dem
+    kein Körper mehr zu lesen ist.
+
+    Das gilt für **alle** Fenster: Gesetzt wird das Symbol einmal auf der
+    ``QApplication`` (``app/ui/app.py``), und jedes Fenster erbt es — kein
+    Dialog vergibt ein eigenes.
+
+    Fehlt eine Datei, springt die andere ein; fehlen beide, gibt es ein leeres
+    Symbol und die Plattform zeigt ihr Standardbild. Ein Start scheitert daran
+    nicht.
     """
-    try:
-        data = ICON_SOURCE.read_bytes()
-    except OSError:
+    large = _renderer_for(ICON_SOURCE)
+    small = _renderer_for(ICON_SOURCE_SMALL) or large
+    if large is None:
+        large = small
+    if large is None or small is None:
         return QIcon()
-    renderer = QSvgRenderer(QByteArray(data))
-    if not renderer.isValid():
-        return QIcon()
+
     result = QIcon()
     for size in APPLICATION_ICON_SIZES:
+        renderer = small if size <= SMALL_ICON_LIMIT else large
         image = QImage(QSize(size, size), QImage.Format.Format_ARGB32_Premultiplied)
         image.fill(Qt.GlobalColor.transparent)
         painter = QPainter(image)

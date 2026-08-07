@@ -56,7 +56,7 @@ def test_the_notice_file_names_every_runtime_package() -> None:
 
     ``notices()`` gegen sich selbst zu prüfen beweist nichts: die Liste ist
     per Bauart vollständig. Was mit dem Paket ausgeliefert wird, ist
-    ``THIRD-PARTY-NOTICES.md`` — sie steht in ``packaging/solidon.spec`` und
+    ``THIRD-PARTY-NOTICES.md`` — sie steht in ``packaging/solidon3d.spec`` und
     ist der Hinweis, den BSD und MIT bei einer Binärverteilung verlangen. Sie
     war elf Pakete hinterher, weil niemand sie mit dem Baum verglichen hat.
 

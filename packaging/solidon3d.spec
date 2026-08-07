@@ -8,7 +8,7 @@
 # GPL und werden nur aufgerufen; Ollama und ComfyUI werden angegeben. Die
 # Anwendung prüft alle vier beim Start und sagt, was fehlt.
 #
-#     pyinstaller packaging/solidon.spec
+#     pyinstaller packaging/solidon3d.spec
 
 from pathlib import Path
 
@@ -81,8 +81,8 @@ executable = EXE(
     exclude_binaries=True,
     name="Solidon",
     console=False,
-    # Erzeugt von tools/make_icon.py aus app/images/icon/solidon.svg.
-    icon=str(ROOT / "packaging" / "solidon.ico"),
+    # Erzeugt von tools/make_icon.py aus app/images/icon/solidon3d.svg.
+    icon=str(ROOT / "packaging" / "solidon3d.ico"),
     # Signiert wird nach dem Bauen, in der CI (§37.2). Hier stünde sonst das
     # Zertifikat auf jeder Entwicklermaschine.
 )
