@@ -548,14 +548,7 @@ def _mesh_from(node: ET.Element) -> MeshData | None:
     if vertices is None or triangles is None or not len(triangles):
         return None
     try:
-        points = np.array(
-            [(entry.get("x"), entry.get("y"), entry.get("z")) for entry in vertices],
-            dtype=np.float64,
-        )
-        faces = np.array(
-            [(entry.get("v1"), entry.get("v2"), entry.get("v3")) for entry in triangles],
-            dtype=np.int64,
-        )
+        points, faces = _numbers_from(vertices, triangles)
     except (TypeError, ValueError) as problem:
         _log.info("3MF mesh has unreadable coordinates: %s", problem)
         return None
@@ -574,6 +567,41 @@ def _mesh_from(node: ET.Element) -> MeshData | None:
         )
         return None
     return MeshData.of(trimesh.Trimesh(vertices=points, faces=faces, process=False))
+
+
+def _numbers_from(vertices: ET.Element, triangles: ET.Element) -> tuple[np.ndarray, np.ndarray]:
+    """Punkte und Dreiecke als Zahlenfelder — und einmal wiederholt, wenn nicht.
+
+    Dieselbe Wunde wie bei :func:`app.core.geom.mesh.on_surface`, an der
+    zweiten Stelle: Wer diese Datei dreißigmal im selben Prozess liest, bekommt
+    sporadisch ``OverflowError``, ``SystemError`` oder — am hässlichsten — ein
+    ``ValueError`` über eine Zeichenkette, die eine völlig gültige Zahl ist.
+    Gemessen und eingegrenzt: es liegt weder am XML-Leser (``lxml`` verhält
+    sich gleich) noch an der Art der Umwandlung, sondern am geladenen
+    ``rtree`` — ohne es fällt die Rate von sechs auf eins von dreißig, mit
+    seiner Fassung 1.4 stirbt der Prozess ganz.
+
+    Ein zweiter Anlauf trägt fast immer. Er ist kein Verschlucken: was zweimal
+    scheitert, fliegt weiter, und der Aufrufer verwirft den Körper dann mit
+    einer Zeile im Protokoll statt schweigend.
+    """
+    try:
+        return _read_numbers(vertices, triangles)
+    except (OverflowError, SystemError, ValueError) as stumble:
+        _log.warning("3MF numbers came back damaged, reading them again: %s", stumble)
+        return _read_numbers(vertices, triangles)
+
+
+def _read_numbers(vertices: ET.Element, triangles: ET.Element) -> tuple[np.ndarray, np.ndarray]:
+    points = np.array(
+        [(entry.get("x"), entry.get("y"), entry.get("z")) for entry in vertices],
+        dtype=np.float64,
+    )
+    faces = np.array(
+        [(entry.get("v1"), entry.get("v2"), entry.get("v3")) for entry in triangles],
+        dtype=np.int64,
+    )
+    return points, faces
 
 
 def _groups_of(

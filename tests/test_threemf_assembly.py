@@ -353,3 +353,57 @@ def test_the_geometry_itself_stays_untouched() -> None:
     coordinates = [float(value) for value in re.findall(r'x="(-?[0-9.]+)"', text)]
     assert max(coordinates) <= 5.0, "die Punkte selbst bleiben, wo das Dokument sie hat"
     assert threemf.read_objects(payload)[0].mesh.bounds.centre[0] == pytest.approx(128.0)
+
+
+# --- wenn die Zahlen beschädigt zurückkommen ----------------------------------------
+
+
+def test_damaged_numbers_are_read_a_second_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dieselbe Wunde wie bei ``mesh.on_surface``, an der zweiten Stelle.
+
+    Dieselbe Datei dreißigmal im selben Prozess gelesen, und sporadisch kommt
+    ``OverflowError``, ``SystemError`` oder ein ``ValueError`` über eine
+    Zeichenkette, die eine gültige Zahl ist. Eingegrenzt: nicht der XML-Leser
+    (lxml verhält sich gleich), nicht die Art der Umwandlung — das geladene
+    ``rtree``. Ein zweiter Anlauf trägt.
+    """
+    payload = threemf.write_assembly([_part((10, 10, 10), "A")], bed=(256.0, 256.0))
+    echt = threemf._read_numbers
+    versuche: list[int] = []
+
+    def erst_beschädigt(vertices: object, triangles: object) -> object:
+        versuche.append(1)
+        if len(versuche) == 1:
+            raise OverflowError("int too big to convert")
+        return echt(vertices, triangles)
+
+    monkeypatch.setattr(threemf, "_read_numbers", erst_beschädigt)
+    parts = threemf.read_objects(payload)
+
+    assert len(versuche) == 2, "einmal beschädigt, einmal wiederholt"
+    assert len(parts) == 1, "und der Körper ist trotzdem da"
+    assert parts[0].mesh.triangle_count == 12
+
+
+def test_numbers_damaged_twice_are_not_silently_dropped(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Wiederholen heißt nicht verschlucken.
+
+    Ein Körper, der zweimal beschädigt zurückkommt, fällt aus der Baugruppe —
+    das ist richtig. Wortlos zu verschwinden ist es nicht: siebzehn Teile
+    kamen als sechzehn zurück, und keine Zeile sagte warum.
+    """
+    payload = threemf.write_assembly([_part((10, 10, 10), "A")], bed=(256.0, 256.0))
+
+    def immer_beschädigt(vertices: object, triangles: object) -> object:
+        raise ValueError("invalid literal for int() with base 10: '98968'")
+
+    monkeypatch.setattr(threemf, "_read_numbers", immer_beschädigt)
+    with caplog.at_level("INFO"):
+        parts = threemf.read_objects(payload)
+
+    assert parts == [], "der Körper fällt aus"
+    assert any(
+        "unreadable" in entry.message or "damaged" in entry.message for entry in caplog.records
+    ), "und er sagt es"
