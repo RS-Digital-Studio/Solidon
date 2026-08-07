@@ -2368,6 +2368,34 @@ Zeilen darunterhängt. In der Oberfläche ist derselbe Platzhalter richtig, dort
 steht ein `.format` dahinter. `tests/test_errors.py` sucht im ganzen Kern
 danach.
 
+## Jeder Workflow einzeln durchgefahren (07.08.2026)
+
+Nicht die Suite, sondern jeder Weg mit echten Läufen. Was dabei herauskam:
+
+| Bereich | Umfang | Ergebnis |
+|---|---|---|
+| Operationsregister | alle 76, je ein Lauf | 62 durch, 12 begründete Ablehnungen, **2 Funde** |
+| Bausteine | alle 18 über ihren Parameterbereich, 7–23 Proben je | alle sauber, jede Ablehnung begründet |
+| Export | STL, 3MF, OBJ, PLY, STEP | vier rund und zurücklesbar; STEP lehnt Netze richtig ab |
+| Schichtanalyse | 0,1 / 0,2 / 0,3 mm | 55 ms bei 0,2 mm — weit im Budget aus §31 |
+| Oberfläche | Aufbau, Projekt laden, schließen | 0,47 s, **9 Menüs** (die Grenze), sauber zu |
+| Handbuch | `manual.as_markdown()` | 102 730 Zeichen, 109 Abschnitte, 0,02 s |
+| Erstinbetriebnahme | `tools.survey()` | alle vier Programme gefunden |
+| Schnittstelle nach außen | `origin_allowed` in acht Fällen | hält, auch gegen `evil.localhost.attacker.com` |
+| Auto Split | 300-mm-Körper auf 256er Bett | Befund, dann verstiftet in zwei geschlossene Körper |
+
+Die beiden Funde waren derselbe, und er betraf **jede** Operation: Im
+Prüfbericht stand die Entwicklernotiz statt des Satzes — `malformed target ''`
+und eine halbe Seite roher OpenSCAD-Ausgabe, während „Das Ziel muss ein
+Merkmal eines Objekts benennen" in `values` lag. Behoben, indem nur ein
+übersetztes Detail nach vorn darf.
+
+**Was dabei auffiel und keiner Änderung bedurfte:** die Ablehnungen. „Dieser
+Körper ist schon geschlossen — eine zweite Haut darüber", „Der Körper ist auf
+dieser Höhe massiv", „Die Wand ist für diese Steigung zu dünn". Zwölfmal
+sagte das Programm genau, warum es nicht weitermacht. Das ist der Teil, den
+ein Durchlauf wie dieser sonst nicht sichtbar macht.
+
 ## Die Wege einmal von Hand gefahren (07.08.2026)
 
 Nicht die Suite, sondern die Anwendung: Weg 1 und 2 über die Kommandozeile,
