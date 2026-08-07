@@ -460,6 +460,9 @@ class MainWindow(QMainWindow):
         self._hidden: frozenset[str] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
         Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
+        self._announcement = ""
+        """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
+        Fortschritt legt sich darüber und gibt es danach wieder frei."""
         self._menus: list[QMenu] = []
         """Jedes Menü der Leiste, festgehalten.
 
@@ -1421,6 +1424,7 @@ class MainWindow(QMainWindow):
         """Ein leeres Projekt — was der Hauptknopf des Startbildschirms tut."""
         if not self._may_discard():
             return
+        self.announce("")
         self.session.start_new(self.settings.printer, self.settings.material)
         self._remove_tour()
         self._show_start_screen(False)
@@ -1462,6 +1466,10 @@ class MainWindow(QMainWindow):
             return
         try:
             if path.suffix.lower() == PROJECT_SUFFIX:
+                # Was zum vorigen Projekt zu sagen war, gilt für dieses nicht:
+                # „Exportiert: dose.3mf" über einer gerade geöffneten Datei
+                # wäre eine Auskunft über etwas anderes.
+                self.announce("")
                 self.session.open_project(path)
                 self.settings.remember(path)
                 save_settings(self.settings)
@@ -1497,7 +1505,7 @@ class MainWindow(QMainWindow):
             return
         self.settings.remember(saved)
         save_settings(self.settings)
-        self.status_message.setText(tr("Gespeichert"))
+        self.announce(tr("Gespeichert"))
 
     def action_import(self) -> None:
         name, _filter = QFileDialog.getOpenFileName(self, tr("Modell einfügen"), "", model_filter())
@@ -1549,9 +1557,9 @@ class MainWindow(QMainWindow):
     def _split_done(self, applied: Any) -> None:
         self.report.add_findings(applied.findings)
         if applied.transaction is None:
-            self.status_message.setText(tr("Dieses Objekt passt bereits auf das Bett."))
+            self.announce(tr("Dieses Objekt passt bereits auf das Bett."))
             return
-        self.status_message.setText(
+        self.announce(
             f"{tr('Geteilt')}: {len(applied.object_ids)} · {len(applied.fits)} {tr('Passungen')}"
         )
 
@@ -1657,7 +1665,7 @@ class MainWindow(QMainWindow):
         self.report.add_findings(outcome.findings)
         self._compare_totals(outcome.metrics)
         self._focus_report()
-        self.status_message.setText(f"{tr('Geslicet')}: {outcome.gcode_path.name}")
+        self.announce(f"{tr('Geslicet')}: {outcome.gcode_path.name}")
 
     def action_check_gcode(self) -> None:
         """§28.1: eine geslicete Datei zurücklesen und gegen die Schätzung
@@ -1678,9 +1686,7 @@ class MainWindow(QMainWindow):
         self.report.add_findings(findings)
         self._compare_totals(metrics)
         self._focus_report()
-        self.status_message.setText(
-            f"{tr('G-Code gelesen')}: {metrics.slicer or tr('unbekannter Slicer')}"
-        )
+        self.announce(f"{tr('G-Code gelesen')}: {metrics.slicer or tr('unbekannter Slicer')}")
 
         # Die Gegenprobe zum Stützvolumen braucht die eigene Schätzung. Sie
         # wird geholt, nicht erzwungen: liegt sie noch nicht vor, rechnet der
@@ -1825,7 +1831,7 @@ class MainWindow(QMainWindow):
             show_error(error, self)
             return
 
-        self.status_message.setText(
+        self.announce(
             f"{tr('Exportiert')}: {written[0].name}"
             if len(written) == 1
             else f"{tr('Exportiert')}: {len(written)} {tr('Dateien')} → {target.parent}"
@@ -1862,7 +1868,7 @@ class MainWindow(QMainWindow):
         except AppError as error:
             show_error(error, self)
             return
-        self.status_message.setText(
+        self.announce(
             f"{tr('Kalibriert')}: {calibrated.id} · {tr('Spiel')} {calibrated.clearance:.2f} mm"
         )
         # Toleranzen sind Verweise (§12), die Szene muss also neu gebaut werden.
@@ -2405,7 +2411,7 @@ class MainWindow(QMainWindow):
         self._slice_cache = outcome
         self._slice_key = key
         self.layer_bar.show_result(outcome)
-        self.status_message.setText("")
+        self.status_message.setText(self._announcement)
         if then is not None:
             then(outcome)
 
@@ -2457,7 +2463,7 @@ class MainWindow(QMainWindow):
         das Schließen des Fensters zu beenden.
         """
         self.chat.set_busy(busy)
-        self.status_message.setText(tr("Der Agent denkt nach.") if busy else "")
+        self.status_message.setText(tr("Der Agent denkt nach.") if busy else self._announcement)
         self.cancel_button.setVisible(busy or self.progress.isVisible())
         if busy:
             # Wie viele Schritte ein Zug braucht, steht vorher nicht fest —
@@ -2471,7 +2477,9 @@ class MainWindow(QMainWindow):
     def _on_split_busy(self, busy: bool) -> None:
         """Die Trennebenensuche läuft — Fortschritt und Abbrechen wie bei
         jedem anderen Lauf über zwei Sekunden (§2.8)."""
-        self.status_message.setText(tr("Die Trennebenen werden gesucht …") if busy else "")
+        self.status_message.setText(
+            tr("Die Trennebenen werden gesucht …") if busy else self._announcement
+        )
         self.cancel_button.setVisible(busy or self.progress.isVisible())
         if busy:
             # Wie viele Ebenen die Suche prüft, steht vorher nicht fest —
@@ -2526,7 +2534,7 @@ class MainWindow(QMainWindow):
         """
         object_id = self.object_tree.selected()
         if not object_id:
-            self.status_message.setText(tr("Bitte zuerst ein Objekt auswählen."))
+            self.announce(tr("Bitte zuerst ein Objekt auswählen."))
             return
 
         params = {**self.paint_bar.values(), "x": point[0], "y": point[1], "z": point[2]}
@@ -2555,7 +2563,7 @@ class MainWindow(QMainWindow):
         self._hidden = hidden
         self.viewport.set_hidden(hidden)
         self.object_tree.set_hidden(hidden)
-        self.status_message.setText(f"{len(hidden)} × {tr('ausgeblendet')}" if hidden else "")
+        self.announce(f"{len(hidden)} × {tr('ausgeblendet')}" if hidden else "")
 
     def _on_feature_picked(self, feature_id: str) -> None:
         """Ein Klick in der Ansicht wählt das Merkmal auch im Baum aus (§18.5).
@@ -3077,7 +3085,7 @@ class MainWindow(QMainWindow):
         if result.stopped_at is not None:
             # §15.3: der letzte vollständige Zustand bleibt sichtbar, die
             # Statusleiste sagt warum.
-            self.status_message.setText(tr("Die Kette hält an — siehe Prüfbericht."))
+            self.announce(tr("Die Kette hält an — siehe Prüfbericht."))
             self._focus_report()
         elif self.report.worst_severity(result) in ("warning", "error"):
             self._focus_report()
@@ -3133,11 +3141,32 @@ class MainWindow(QMainWindow):
         path = self.session.path
         return str(path) if path else ""
 
+    def announce(self, text: str) -> None:
+        """Eine Meldung, die einen Lauf überlebt (§2.8).
+
+        Die Statuszeile trug zweierlei und behandelte es gleich: den
+        Fortschrittstext eines Laufs, der mit ihm verschwinden soll, und das
+        Ergebnis einer Handlung, das stehenbleiben muss. Weil das Ende jedes
+        Laufs die Zeile leerte, gewann immer der Lauf.
+
+        Am deutlichsten beim automatischen Teilen: „Geteilt: 2 · 2 Passungen"
+        stand nie da. ``_split_done`` schrieb es, und das ``busy``-Signal
+        desselben Arbeiters löschte es unmittelbar danach — die einzige
+        Auskunft darüber, wie viele Teile und wie viele Passungen entstanden
+        sind, hat nie jemand gesehen. Ein Export direkt nach einer Änderung
+        verlor seine Bestätigung an die nachlaufende Auswertung.
+
+        Gemerkt wird deshalb, was zuletzt zu *sagen* war; die Laufanzeige legt
+        sich nur darüber und gibt sie danach wieder frei.
+        """
+        self._announcement = text
+        self.status_message.setText(text)
+
     def _on_progress(self, fraction: float, text: str) -> None:
         self.progress.setValue(int(fraction * 100))
-        # Ein leerer Text heißt, der Lauf ist vorbei; die Zeile geht mit
-        # ihm weg (§2.8).
-        self.status_message.setText(text)
+        # Ein leerer Text heißt, der Lauf ist vorbei; dann kommt zurück, was
+        # zuletzt zu sagen war (§2.8).
+        self.status_message.setText(text or self._announcement)
 
     def _on_busy(self, busy: bool) -> None:
         # Agent und Trennebenensuche können gleichzeitig laufen; dann bleiben
@@ -3148,7 +3177,7 @@ class MainWindow(QMainWindow):
         if busy:
             self.progress.setRange(0, 100)
         if not busy and not others:
-            self.status_message.setText("")
+            self.status_message.setText(self._announcement)
 
     def _on_ask(self, request: AskRequest) -> None:
         """Der Arbeiter wartet, solange dieser Dialog offen ist (§21.3)."""
@@ -3449,9 +3478,7 @@ class MainWindow(QMainWindow):
     def _update_answered(self, release: Any) -> None:
         if release is None or not release.newer_than():
             return
-        self.status_message.setText(
-            f"{tr('Neue Fassung verfügbar')}: {release.version} — {release.url}"
-        )
+        self.announce(f"{tr('Neue Fassung verfügbar')}: {release.version} — {release.url}")
 
     def report_error(self, error: BaseException, summary: str = "") -> None:
         """§33.1: ein Programmfehler bekommt ein Berichtsangebot, keinen

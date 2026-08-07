@@ -95,6 +95,47 @@ def test_the_session_splits_an_oversized_part(qt_app: QApplication) -> None:
     assert set(session.last_result.scene.objects) == set(applied.object_ids)
 
 
+def test_the_result_of_the_split_stays_readable(qt_app: QApplication) -> None:
+    """„Geteilt: 2 · 2 Passungen" stand nie da (§2.8).
+
+    ``_split_done`` schrieb die Zeile, und das ``busy``-Signal desselben
+    Arbeiters leerte sie unmittelbar danach. Wie viele Teile und wie viele
+    Passungen entstanden sind, sagt sonst nichts im Fenster — im Objektbaum
+    stehen die Teile, die Passungen stehen nirgends.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    loaded(window.session, "oversized.stl")
+    QApplication.processEvents()
+
+    window._split_done(window.session.auto_split("obj_1"))
+    window.session.wait_for_idle()
+    # Genau der Schlag, der die Meldung bisher löschte: das Ende des Laufs.
+    window._on_busy(False)
+    window._on_split_busy(False)
+    QApplication.processEvents()
+
+    assert "2" in window.status_message.text(), (
+        f"die Meldung des Teilens ist weg: {window.status_message.text()!r}"
+    )
+
+
+def test_a_new_project_drops_the_old_message(qt_app: QApplication) -> None:
+    """Eine Meldung überlebt ihren Lauf, aber nicht ihr Projekt."""
+    from app.ui.main_window import MainWindow
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    window.announce("Exportiert: dose.3mf")
+
+    window.start_empty()
+    QApplication.processEvents()
+
+    assert window.status_message.text() == ""
+
+
 def test_a_part_that_fits_is_left_alone(qt_app: QApplication) -> None:
     session = Session()
     loaded(session, "cube_clean.stl")
