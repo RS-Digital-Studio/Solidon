@@ -47,8 +47,29 @@ def test_a_program_that_is_not_there_stays_not_there(install_folder: Path) -> No
     assert discover._from_folders(("definitely-not-installed",)) is None
 
 
+def test_a_folder_for_the_vendor_and_one_for_the_program_is_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prusa installiert nach ``Prusa3D\\PrusaSlicer\\`` — Firma, dann Programm.
+
+    Eine Ebene tief gesucht, war PrusaSlicer auf dieser Maschine installiert
+    und für Formwerk trotzdem nicht vorhanden: die Übergabe an den Slicer bot
+    ihn schlicht nicht an, und keine Meldung sagte warum.
+    """
+    root = tmp_path / "root"
+    (root / "Prusa3D" / "PrusaSlicer").mkdir(parents=True)
+    (root / "Prusa3D" / "PrusaSlicer" / "prusa-slicer").write_text("")
+    monkeypatch.setattr(discover, "_install_roots", lambda: (root,))
+    discover.forget_cache()
+
+    found = discover._from_folders(("prusa-slicer",))
+
+    assert found is not None
+    assert found.parent.name == "PrusaSlicer"
+
+
 def test_the_walk_stays_shallow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Eine Ebene und ``bin`` — kein Lauf über eine ganze Festplatte."""
+    """Zwei Ebenen und ``bin`` — kein Lauf über eine ganze Festplatte."""
     root = tmp_path / "root"
     deep = root / "vendor" / "product" / "nested"
     deep.mkdir(parents=True)

@@ -90,6 +90,11 @@ SLICERS: Final = (
     "BambuStudio",
     "SuperSlicer",
     "superslicer",
+    # Cura vor seiner Oberfläche: neben ``UltiMaker-Cura.exe`` liegt
+    # ``CuraEngine.exe``, und nur die zweite hat eine Kommandozeile. Die erste
+    # startet das Fenster, beendet sich mit Code 2 und schreibt nichts — was
+    # als „Der Slicer hat keine Druckdatei geschrieben" ankam.
+    "CuraEngine",
     "Ultimaker-Cura",
     "cura",
 )

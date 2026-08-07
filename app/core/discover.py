@@ -179,27 +179,48 @@ def _from_registry(names: tuple[str, ...]) -> Path | None:
 
 
 def _from_folders(names: tuple[str, ...]) -> Path | None:
-    """Eine Ebene unter den üblichen Installationsordnern — kein rekursiver Lauf.
+    """Zwei Ebenen unter den üblichen Installationsordnern — kein rekursiver Lauf.
 
     Ein Installationsprogramm legt seine Dateien in einen eigenen Ordner; wie
     der heißt, ist seine Sache (``ElegooSlicer``, ``OpenSCAD``, ``Ultimaker
     Cura 5.7``). Deshalb wird jeder Ordner angesehen und die ausführbare Datei
     beim Namen gefragt — eine Handvoll ``is_file``-Aufrufe statt eines Laufs
     über eine ganze Festplatte.
+
+    **Zwei** Ebenen, nicht eine, und das ist keine Vorsichtsmaßnahme: Prusa
+    installiert nach ``Program Files\\Prusa3D\\PrusaSlicer\\``, ein Ordner für
+    die Firma und einer für das Programm. Eine Ebene tief gesucht, war
+    PrusaSlicer auf dieser Maschine installiert und für Formwerk trotzdem
+    nicht vorhanden — die Übergabe an den Slicer bot ihn schlicht nicht an.
     """
     for root in _install_roots():
-        try:
-            folders = [entry for entry in root.iterdir() if entry.is_dir()]
-        except OSError:
-            continue
-        for folder in folders:
-            for name in names:
-                for suffix in _SUFFIXES:
-                    stem = f"{name}{suffix}"
-                    for candidate in (folder / stem, folder / "bin" / stem):
-                        if candidate.is_file():
-                            return candidate
+        for folder in _folders_in(root):
+            for candidate in _below(folder, names):
+                if candidate.is_file():
+                    return candidate
+            for inner in _folders_in(folder):
+                for candidate in _below(inner, names):
+                    if candidate.is_file():
+                        return candidate
     return None
+
+
+def _folders_in(root: Path) -> list[Path]:
+    """Die Unterordner, oder nichts — ein Pfad ohne Leserecht hält nicht auf."""
+    try:
+        return [entry for entry in root.iterdir() if entry.is_dir()]
+    except OSError:
+        return []
+
+
+def _below(folder: Path, names: tuple[str, ...]) -> list[Path]:
+    """Wo eine ausführbare Datei in diesem Ordner liegen könnte."""
+    return [
+        folder / part / f"{name}{suffix}"
+        for name in names
+        for suffix in _SUFFIXES
+        for part in (".", "bin")
+    ]
 
 
 # --- Dienste --------------------------------------------------------------------

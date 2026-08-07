@@ -200,9 +200,20 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
         return {}
     printer = profile.printer
     width, depth, height = printer.build_volume
+    # Um den Ursprung, nicht ab der Ecke: Formwerk rechnet zentriert — die
+    # Anordnung beginnt bei ``-width/2`` (siehe ``arrange_on_bed``), und ein
+    # exportierter Körper steht bei x -30..30. Ein Bett von 0 bis 256 liegt
+    # daneben, und PrusaSlicer sagte dazu „All objects are outside of the
+    # print volume" und schrieb nichts. Die Bettform beschreibt hier dieselbe
+    # Welt wie die Koordinaten, die mit ihr kommen.
+    half_width, half_depth = width / 2.0, depth / 2.0
+    corners = (
+        f"{-half_width:g}x{-half_depth:g},{half_width:g}x{-half_depth:g},"
+        f"{half_width:g}x{half_depth:g},{-half_width:g}x{half_depth:g}"
+    )
     return {
         "nozzle_diameter": f"{printer.nozzle_diameter:g}",
-        "bed_shape": f"0x0,{width:g}x0,{width:g}x{depth:g},0x{depth:g}",
+        "bed_shape": corners,
         "max_print_height": f"{height:g}",
     }
 
@@ -707,7 +718,13 @@ def _find_gcode(directory: Path) -> Path | None:
     candidates = [
         entry
         for entry in directory.iterdir()
-        if entry.is_file() and entry.suffix.casefold() in GCODE_SUFFIXES
+        # Leer zählt nicht als geschrieben. CuraEngine legt die Datei an,
+        # bevor es rechnet, und lässt sie liegen, wenn ihm die Maschine nicht
+        # reicht — der Lauf meldete dann Erfolg über null Bytes, und die
+        # Kennzahlen daraus waren sämtlich ``None``.
+        if entry.is_file()
+        and entry.suffix.casefold() in GCODE_SUFFIXES
+        and entry.stat().st_size > 0
     ]
     if not candidates:
         return None
