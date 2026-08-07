@@ -24,7 +24,7 @@
   "3": {
     "class_type": "Hy3DMeshGenerator",
     "inputs": {
-      "model": "hunyuan3d-dit-v2-1-fp16.ckpt",
+      "model": "{model:shape}",
       "image": ["2", 0],
       "steps": 25,
       "guidance_scale": 5.0,
@@ -35,7 +35,7 @@
   "4": {
     "class_type": "Hy3D21VAELoader",
     "inputs": {
-      "model_name": "Hunyuan3D-vae-v2-1-fp16.ckpt"
+      "model_name": "{model:shape_vae}"
     }
   },
   "5": {

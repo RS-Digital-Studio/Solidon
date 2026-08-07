@@ -27,6 +27,30 @@ def stl(name: str = "cube_clean.stl") -> bytes:
     return (MESHES / name).read_bytes()
 
 
+#: Was ein Rechner mit dieser Ausstattung zur Auswahl stellt, samt der Fallen:
+#: der Formkern liegt unter denselben Checkpoints wie die Bildmodelle, und im
+#: VAE-Ordner liegt nicht nur die eine, die gemeint ist.
+OFFERED: dict[str, list[str]] = {
+    "CheckpointLoaderSimple.ckpt_name": [
+        "hunyuan_3d_v2.1.safetensors",
+        "Juggernaut-X-v10.safetensors",
+        "animagine-xl-4.0-opt.safetensors",
+    ],
+    "Hy3DMeshGenerator.model": ["hunyuan3d-dit-v2-1-fp16.ckpt"],
+    "Hy3D21VAELoader.model_name": ["sdxl_vae.safetensors", "Hunyuan3D-vae-v2-1-fp16.ckpt"],
+}
+
+
+def described(class_type: str) -> bytes:
+    """Die Antwort von ``/object_info/<knoten>``, so aufgebaut wie die echte."""
+    required: dict[str, object] = {}
+    for key, names in OFFERED.items():
+        node, field = key.split(".")
+        if node == class_type:
+            required[field] = [names, {}]
+    return json.dumps({class_type: {"input": {"required": required}}}).encode("utf-8")
+
+
 class Comfy:
     """Ein ComfyUI, das aus einem Skript antwortet statt von einer Grafikkarte."""
 
@@ -41,6 +65,8 @@ class Comfy:
         if url.endswith("/prompt"):
             self.graphs.append(json.loads((body or b"{}").decode("utf-8"))["prompt"])
             return b'{"prompt_id": "job-1"}'
+        if "/object_info/" in url:
+            return described(url.rsplit("/", 1)[1])
         if "/history/" in url:
             asked = sum(1 for entry in self.requests if "/history/" in entry)
             if asked < self.ready_after:
@@ -189,6 +215,89 @@ def test_the_shipped_workflows_are_valid_graphs(name: str) -> None:
 
     assert all("class_type" in node for node in graph.values())
     assert any("{seed}" in json.dumps(node) for node in graph.values())
+
+
+def test_the_models_come_from_the_machine_it_runs_on() -> None:
+    """Ein Graph mit fest eingetragenen Dateinamen läuft nur auf einem Rechner.
+
+    Der mitgelieferte nennt deshalb Rollen, und was sie ausfüllt, entscheidet
+    sich gegen den laufenden Server.
+    """
+    server = Comfy()
+
+    backend(server).text_to_mesh("ein Halter")
+
+    graph = server.graphs[0]
+    chosen = {
+        node["class_type"]: node["inputs"]
+        for node in graph.values()
+        if node["class_type"] in ("CheckpointLoaderSimple", "Hy3DMeshGenerator", "Hy3D21VAELoader")
+    }
+    assert chosen["Hy3DMeshGenerator"]["model"] == "hunyuan3d-dit-v2-1-fp16.ckpt"
+    assert chosen["Hy3D21VAELoader"]["model_name"] == "Hunyuan3D-vae-v2-1-fp16.ckpt", (
+        "nicht die sdxl_vae, die im selben Ordner liegt"
+    )
+    assert chosen["CheckpointLoaderSimple"]["ckpt_name"] == "Juggernaut-X-v10.safetensors", (
+        "nicht der Formkern, der unter denselben Checkpoints liegt"
+    )
+    assert not any("{model:" in json.dumps(node) for node in graph.values())
+
+
+def test_an_unknown_model_is_better_than_none() -> None:
+    """Wer ein Bildmodell hat, das wir nicht kennen, soll trotzdem erzeugen
+    können — geraten wird hier nichts, es gibt schlicht nur eines.
+    """
+
+    class Exotic(Comfy):
+        def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+            if "/object_info/CheckpointLoaderSimple" in url:
+                return json.dumps(
+                    {
+                        "CheckpointLoaderSimple": {
+                            "input": {"required": {"ckpt_name": [["eigenbau_v3.safetensors"], {}]}}
+                        }
+                    }
+                ).encode()
+            return super().__call__(url, body, headers)
+
+    server = Exotic()
+    backend(server).text_to_mesh("ein Halter")
+
+    names = [
+        node["inputs"]["ckpt_name"]
+        for node in server.graphs[0].values()
+        if node["class_type"] == "CheckpointLoaderSimple"
+    ]
+    assert names == ["eigenbau_v3.safetensors"]
+
+
+def test_a_missing_model_names_the_role_not_the_setting() -> None:
+    """Fehlt die Datei, hilft „Einstellungen öffnen" niemandem — es fehlt das
+    Modell, und der Satz muss das sagen.
+    """
+
+    class Empty(Comfy):
+        def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+            if "/object_info/" in url:
+                node = url.rsplit("/", 1)[1]
+                return json.dumps({node: {"input": {"required": {}}}}).encode()
+            return super().__call__(url, body, headers)
+
+    with pytest.raises(GenerationFailed) as problem:
+        backend(Empty()).text_to_mesh("ein Halter")
+
+    assert problem.value.suggestions, "jede Ausnahme trägt einen Vorschlag"
+    assert "Modelldatei" in str(problem.value.detail)
+
+
+def test_the_machine_is_asked_once_per_input_not_once_per_node() -> None:
+    """Drei Rollen heißen drei Fragen, nicht eine je Knoten des Graphen."""
+    server = Comfy()
+
+    backend(server).text_to_mesh("ein Halter")
+
+    asked = [entry for entry in server.requests if "/object_info/" in entry]
+    assert len(asked) == len(set(asked)) == 3
 
 
 def test_nothing_running_means_not_available() -> None:

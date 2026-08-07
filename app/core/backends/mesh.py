@@ -41,13 +41,13 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any, Protocol
+from typing import Any, Final, Protocol
 
 from app.core.errors import AppError
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.log import get_logger
 from app.core.types import ProgressFn
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -69,6 +69,38 @@ DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
 WORKFLOW_DIR = Path(__file__).parent / "data"
 
 _PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
+
+#: Ein Modellplatzhalter nennt nicht die Datei, sondern die Rolle:
+#: ``{model:shape}``. Aufgelöst wird er erst gegen den Rechner, auf dem es
+#: läuft — siehe :data:`MODEL_ROLES`.
+_MODEL_PLACEHOLDER = re.compile(r"^\{model:([a-z_]+)\}$")
+
+
+@dataclass(frozen=True, slots=True)
+class ModelRole:
+    """Woran ein Modell für seine Aufgabe erkannt wird.
+
+    ``prefer`` ist eine Rangfolge, nicht eine Menge: das erste Muster, auf das
+    etwas passt, gewinnt. ``avoid`` schließt vorher aus, denn manche Namen
+    liegen im selben Ordner und sehen nur ähnlich aus — der Formkern und die
+    Bildmodelle wohnen beide unter ``checkpoints``.
+    """
+
+    prefer: tuple[str, ...]
+    avoid: tuple[str, ...] = ()
+
+
+#: Die Rollen, die ein mitgelieferter Graph benennen darf. Wer einen eigenen
+#: Graphen einsetzt, benutzt dieselben Namen — oder trägt die Datei fest ein,
+#: was weiterhin erlaubt ist und dann eben nicht mitwandert.
+MODEL_ROLES: Final[dict[str, ModelRole]] = {
+    "image": ModelRole(
+        prefer=("juggernaut", "dreamshaper", "sd_xl", "sdxl", "xl"),
+        avoid=("hunyuan", "3d", "vae", "refiner", "inpaint", "turbo"),
+    ),
+    "shape": ModelRole(prefer=("hunyuan3d-dit", "hunyuan3d", "hunyuan"), avoid=("vae",)),
+    "shape_vae": ModelRole(prefer=("hunyuan3d-vae", "hunyuan3d", "vae"), avoid=("dit",)),
+}
 
 
 def _silent(fraction: float, text: str) -> None:
@@ -130,8 +162,16 @@ class GenerationFailed(AppError):
 
     default_title = _("Die Mesh-Erzeugung hat kein Modell geliefert.")
 
-    def __init__(self, detail: str = "") -> None:
-        super().__init__(detail=detail or None)
+    def __init__(
+        self,
+        detail: TranslatableText | str = "",
+        *,
+        title: TranslatableText | str | None = None,
+        values: dict[str, Any] | None = None,
+    ) -> None:
+        # Ein anderer Titel ist nicht Zierde: „hat kein Modell geliefert" ist
+        # falsch, wenn der Lauf nie begonnen hat, weil eine Modelldatei fehlt.
+        super().__init__(title=title, detail=detail or None, values=values or {})
 
 
 # --- Transporte -------------------------------------------------------------------
@@ -223,7 +263,90 @@ class ComfyBackend:
             text = path.read_text(encoding="utf-8")
         except OSError as problem:
             raise GenerationFailed(detail=f"workflow {name} is missing") from problem
-        return dict(_filled(json.loads(text), values))
+        graph = self._with_models(json.loads(text))
+        return dict(_filled(graph, values))
+
+    def _with_models(self, graph: dict[str, Any]) -> dict[str, Any]:
+        """Setzt für jede Modellrolle ein, was auf diesem Rechner wirklich liegt.
+
+        Ein Graph mit fest eingetragenen Dateinamen läuft nur dort, wo genau
+        diese Dateien liegen — überall sonst bricht er mit einer Meldung über
+        einen Wert, den der Nutzer nie gesetzt hat. Deshalb nennt der Graph die
+        Rolle, und welche Datei sie ausfüllt, entscheidet sich hier gegen den
+        laufenden Server.
+
+        Gefragt wird nur, wenn wirklich eine Rolle im Graphen steht: ein
+        Graph mit festen Namen kostet weiterhin keine einzige Anfrage.
+        """
+        offered: dict[str, list[str]] = {}
+        for node in graph.values():
+            if not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs")
+            if not isinstance(inputs, dict):
+                continue
+            for key, value in list(inputs.items()):
+                if not isinstance(value, str):
+                    continue
+                found = _MODEL_PLACEHOLDER.match(value)
+                if found is None:
+                    continue
+                inputs[key] = self._pick(
+                    found.group(1), str(node.get("class_type", "")), key, offered
+                )
+        return graph
+
+    def _pick(self, role: str, class_type: str, field: str, offered: dict[str, list[str]]) -> str:
+        """Die Datei, die diese Rolle auf diesem Rechner ausfüllt."""
+        wanted = MODEL_ROLES.get(role)
+        if wanted is None:
+            raise GenerationFailed(detail=f"the workflow asks for an unknown model role {role!r}")
+
+        key = f"{class_type}.{field}"
+        if key not in offered:
+            offered[key] = self._offered(class_type, field)
+        options = offered[key]
+        if not options:
+            raise GenerationFailed(
+                detail=_(
+                    "ComfyUI hat für „{role}“ kein Modell anzubieten. Es fehlt "
+                    "die Modelldatei, nicht die Einstellung."
+                ),
+                values={"role": role, "node": class_type},
+            )
+
+        usable = [
+            entry for entry in options if not any(bad in entry.lower() for bad in wanted.avoid)
+        ] or options
+        for hint in wanted.prefer:
+            for entry in usable:
+                if hint in entry.lower():
+                    return entry
+        # Keines der Muster passte. Das ist kein Fehler: der Nutzer hat ein
+        # Modell, das wir nicht kennen, und eines ist besser als keines.
+        _log.info("no model matched role %s, taking %s", role, usable[0])
+        return usable[0]
+
+    def _offered(self, class_type: str, field: str) -> list[str]:
+        """Was ComfyUI für diesen Eingang zur Auswahl stellt."""
+        answer = self.transport(
+            f"{self.url}/object_info/{urllib.parse.quote(class_type)}", None, {}
+        )
+        try:
+            described = json.loads(answer.decode("utf-8"))
+        except ValueError as problem:
+            raise GenerationFailed(
+                detail=f"ComfyUI described {class_type} in a way we cannot read"
+            ) from problem
+
+        inputs = described.get(class_type, {}).get("input", {})
+        for group in ("required", "optional"):
+            entry = (inputs.get(group) or {}).get(field)
+            # Eine Auswahlliste steht als erstes Element der Beschreibung —
+            # ein Typname wie "INT" steht an derselben Stelle und ist keine.
+            if isinstance(entry, list) and entry and isinstance(entry[0], list):
+                return [str(name) for name in entry[0]]
+        return []
 
     def _upload(self, image: bytes) -> str:
         """Legt das Bild dorthin, wo ComfyUI es sehen kann, und gibt den Namen

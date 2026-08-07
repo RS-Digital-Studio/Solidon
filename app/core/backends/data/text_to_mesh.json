@@ -2,7 +2,7 @@
   "1": {
     "class_type": "CheckpointLoaderSimple",
     "inputs": {
-      "ckpt_name": "Juggernaut-X-v10.safetensors"
+      "ckpt_name": "{model:image}"
     }
   },
   "2": {
@@ -67,7 +67,7 @@
   "8": {
     "class_type": "Hy3DMeshGenerator",
     "inputs": {
-      "model": "hunyuan3d-dit-v2-1-fp16.ckpt",
+      "model": "{model:shape}",
       "image": ["7", 0],
       "steps": 25,
       "guidance_scale": 5.0,
@@ -78,7 +78,7 @@
   "9": {
     "class_type": "Hy3D21VAELoader",
     "inputs": {
-      "model_name": "Hunyuan3D-vae-v2-1-fp16.ckpt"
+      "model_name": "{model:shape_vae}"
     }
   },
   "10": {
