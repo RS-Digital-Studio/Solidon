@@ -2275,3 +2275,59 @@ Erkenntnis wie bei den drei Bausteinen über ihrem Ursprung, eine Etage höher.
       Docstrings und nicht für diese. Entweder übersetzen oder die Behauptung
       zurücknehmen — die Sprachprüfung sieht sie nicht, sie gilt den
       Bezeichnern.
+
+## Durchsicht: was außerhalb der Anwendung läuft (07.08.2026)
+
+Anlass war eine einfache Frage — läuft die Erzeugung, läuft der Chat? — gegen
+eine echte Installation statt gegen die Suite. Von den vier externen Programmen
+waren zwei in Ordnung, eines fehlte, und eines lief, während das, was Formwerk
+ihm schickte, nie gegen etwas Laufendes gehalten worden war.
+
+- [x] **Die Graphen riefen Knoten, die es nirgends gibt.** Beide mitgelieferten
+      Workflows nannten `Hy3DModelLoader`, `Hy3DGenerateMesh` und
+      `Hy3DExportMesh` — Namen aus einem anderen Wrapper als dem installierten.
+      ComfyUI wies sie beim Abschicken ab. `text_to_mesh` hängte zusätzlich
+      einen `CLIPTextEncode` an einen Kern ohne Texteingang: Hunyuan3D kann
+      kein Text-zu-3D, Text wird erst zu einem Bild. Beide Graphen laufen jetzt
+      gegen `ComfyUI-Hunyuan3d-2-1`, mit SDXL und Freistellen davor.
+- [x] **Ein gelungener Auftrag meldete, er habe nichts geliefert.** Die
+      3D-Vorschau gibt den Pfad als blanken String zurück, `_download` verlangte
+      einen Eintrag mit Feldern und übersprang ihn — die Datei lag auf der
+      Platte, die Meldung sagte „kein Modell geliefert".
+- [x] **Das empfohlene Modell schrieb seine Aufrufe hin, statt sie zu tun.**
+      `qwen2.5-coder:14b` traf null von fünf Anfragen, weil es die Aufrufe als
+      Fließtext ausgibt. Vorgabe ist jetzt `llama3.1:8b` (5/5), und
+      `tools/check_local_model.py` hält die Messung nachfahrbar.
+- [x] **Ollama fehlte ganz.** Installiert, Vorgabemodell geladen, Chat verifiziert:
+      Kaltstart 31 s, warme Antwort 2,4 s.
+- [x] **OpenSCAD und der Slicer waren in Ordnung.** OpenSCAD rendert,
+      ElegooSlicer wird als Orca-Variante erkannt.
+
+Gegengeprüft gegen die Installation: `text_to_mesh` 67 s auf 1,28 Mio Dreiecke,
+`image_to_mesh` 40 s auf 550 Tsd, beide wasserdicht und über `read_mesh`
+einlesbar. Stand danach: 2967 Tests grün, `ruff`, `ruff format` und `mypy` grün.
+
+### Was diese Durchsicht gelernt hat
+
+**Eine Datendatei ist Code, den niemand testet.** Die beiden Workflow-Graphen
+lagen seit ihrer Entstehung im Repository, waren von der Suite abgedeckt — sie
+prüfte, dass es gültiges JSON mit `class_type` und einem Platzhalter ist — und
+hätten auf keiner Maschine der Welt funktioniert. Was nur gegen sich selbst
+geprüft wird, ist nicht geprüft.
+
+**Groß genug heißt nicht werkzeugfähig.** Die Modellwarnung misst
+Parameterzahl, weil §27 das so sagt, und 14,8 Milliarden liegen weit über der
+Grenze. Die Eigenschaft, an der die ganze Agentenschicht hängt, misst sie
+nicht — und Ollamas eigene Fähigkeitsangabe auch nicht.
+
+### Offen aus dieser Durchsicht
+
+- [ ] **Die Graphen hängen an konkreten Modellnamen** (`Juggernaut-X-v10`,
+      `hunyuan3d-dit-v2-1-fp16`). Auf einer fremden Maschine scheitern sie mit
+      ComfyUIs Meldung, welcher Knoten fehlt. Das ist besser als vorher und
+      trotzdem nicht gut: die Erstinbetriebnahme könnte die vorhandenen Modelle
+      abfragen (`/object_info`) und den Graphen darauf einstellen, statt zu
+      raten.
+- [ ] **`ollama_tool_check` wird noch nirgends angeboten.** Die Funktion und
+      ihr Läufer sind da; im Einstellungsdialog fehlt der Knopf, der sie
+      anstößt — und genau dort steht jemand, der ein Modell eingetragen hat.
