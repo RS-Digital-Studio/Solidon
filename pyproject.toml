@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "formwerk"
+name = "solidon3d"
 version = "0.0.1"
 description = "Desktop application for building, generating and editing printable models"
 requires-python = ">=3.13"
@@ -72,7 +72,7 @@ dev = [
 ]
 
 [project.scripts]
-formwerk = "app.cli.main:main"
+solidon3d = "app.cli.main:main"
 
 [tool.setuptools.packages.find]
 include = ["app*"]

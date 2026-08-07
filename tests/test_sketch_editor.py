@@ -417,7 +417,7 @@ def test_the_drawn_sketch_reaches_the_operation(qt_app: QApplication) -> None:
 
 def test_the_axes_have_their_own_colours_and_letters() -> None:
     """Fusion zeigt einen sichtbaren Ursprung und durchgezogene Achsen in Rot
-    und Grün; Formwerk zeichnete beide in der Rasterfarbe.
+    und Grün; Solidon zeichnete beide in der Rasterfarbe.
 
     Wo der Nullpunkt liegt, musste man aus der Zeichnung erschließen. Die
     Buchstaben stehen daneben, weil Farbe nie allein trägt (Regel 18).
@@ -610,7 +610,7 @@ def test_mirroring_the_selection_adds_a_copy(qt_app: QApplication) -> None:
 
 
 def test_the_modify_group_is_reachable_and_labelled(qt_app: QApplication) -> None:
-    """Fusion hat eine eigene Gruppe dafür; Formwerk hatte sie gar nicht."""
+    """Fusion hat eine eigene Gruppe dafür; Solidon hatte sie gar nicht."""
     from app.ui.sketch_editor import ACTION_KEYS, TOOL_KEYS
 
     panel = SketchPanel()

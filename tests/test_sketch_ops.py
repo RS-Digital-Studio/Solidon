@@ -357,7 +357,7 @@ def test_pushing_a_face_moves_the_wall_and_the_neighbours_follow() -> None:
     """Press/Pull: eine Fläche greifen und versetzen, ohne den Rest neu zu
     zeichnen.
 
-    Das Standardwerkzeug jedes CAD, und Formwerk hatte es nicht: eine Wand
+    Das Standardwerkzeug jedes CAD, und Solidon hatte es nicht: eine Wand
     zwei Millimeter herauszuziehen hieß, die Operation zu suchen, die sie
     erzeugt hat, und ihre Zahl zu ändern — wenn es eine gab. Bei einem
     importierten STEP gibt es keine.

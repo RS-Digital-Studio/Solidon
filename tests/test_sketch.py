@@ -332,7 +332,7 @@ def test_a_bolt_circle_places_its_holes_on_the_pitch_diameter() -> None:
     auszurechnen — mit einem Rechenfehler je Gelegenheit.
 
     Das Muster ist **nicht assoziativ**: es erzeugt echte Elemente mit echten
-    Bedingungen. Die Parametrik liegt in Formwerk eine Ebene höher — Maße sind
+    Bedingungen. Die Parametrik liegt in Solidon eine Ebene höher — Maße sind
     Ausdrücke, und ein Projektparameter dreht den Teilkreis. Ein zweiter
     Mechanismus daneben wäre der Fehler, den SindriCADs eigenes Audit als
     Datenkorruption führt: dort backt jede Bearbeitung die abgeleiteten Kopien

@@ -118,7 +118,7 @@ jobs:
         run: python tools/make_examples.py
 
       - name: Bauen
-        run: pyinstaller packaging/formwerk.spec --noconfirm
+        run: pyinstaller packaging/solidon3d.spec --noconfirm
 
       - name: Signieren (Windows)
         # Erst die Anwendung, dann unten der Installer — was in die Setup-Datei
@@ -131,7 +131,7 @@ jobs:
           [IO.File]::WriteAllBytes($pfx, $bytes)
           & signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 `
             /tr http://timestamp.digicert.com /td SHA256 `
-            "dist/Formwerk/Formwerk.exe"
+            "dist/Solidon/Solidon.exe"
 
       - name: Inno Setup sicherstellen (Windows)
         # Auf den GitHub-Runnern vorinstalliert; die Prüfung hält den Lauf
@@ -155,7 +155,7 @@ jobs:
           $bytes = [Convert]::FromBase64String($env:SIGN_CERTIFICATE)
           $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
           [IO.File]::WriteAllBytes($pfx, $bytes)
-          $setup = Get-ChildItem dist -Filter "Formwerk-Setup-*.exe" | Select-Object -First 1
+          $setup = Get-ChildItem dist -Filter "Solidon-Setup-*.exe" | Select-Object -First 1
           & signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 `
             /tr http://timestamp.digicert.com /td SHA256 `
             $setup.FullName
@@ -166,14 +166,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           version=$(python -c "from app.branding import APP_VERSION; print(APP_VERSION)")
-          tar -czf "dist/Formwerk-${version}-linux-x86_64.tar.gz" -C dist Formwerk
+          tar -czf "dist/Solidon-${version}-linux-x86_64.tar.gz" -C dist Solidon
 
       - name: Installer hochladen (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: formwerk-setup-windows
-          path: dist/Formwerk-Setup-*.exe
+          name: solidon3d-setup-windows
+          path: dist/Solidon-Setup-*.exe
           # Der private Speicher fasst 500 MB, ein Paket rund 250 — was
           # veröffentlicht wird, liegt danach auf der Website, nicht hier.
           retention-days: 7
@@ -182,8 +182,8 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: formwerk-linux
-          path: dist/Formwerk-*-linux-x86_64.tar.gz
+          name: solidon3d-linux
+          path: dist/Solidon-*-linux-x86_64.tar.gz
           retention-days: 7
 
   latest:

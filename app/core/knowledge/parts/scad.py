@@ -1,7 +1,7 @@
 """Bausteine als OpenSCAD-Quelltext (Bauplan §24.1).
 
 ``to_scad()`` bleibt ein *Ausgabeformat*: wer einen OpenSCAD-Arbeitsablauf hat,
-kann einen Baustein ohne Formwerk mitnehmen. Was es nicht ist, ist eine zweite
+kann einen Baustein ohne Solidon mitnehmen. Was es nicht ist, ist eine zweite
 Umsetzung — die Geometrie kommt aus derselben Funktion, die die Anwendung
 benutzt, und wird als ``polyhedron`` geschrieben.
 
@@ -21,7 +21,7 @@ from app.core.types import BaseParams
 #: In jede Datei geschrieben, damit niemand sie für ein parametrisches
 #: Modell hält.
 HEADER = """// {title} ({name}, Version {version})
-// Erzeugt von Formwerk. Die Werte unten sind zum Nachlesen da: das Modell
+// Erzeugt von Solidon. Die Werte unten sind zum Nachlesen da: das Modell
 // darunter ist ein festes Netz, kein parametrischer Nachbau.
 """
 

@@ -61,7 +61,7 @@ class BrepBoxParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
     )
 
 
@@ -106,7 +106,7 @@ class BrepCylinderParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
     )
 
 
@@ -358,7 +358,7 @@ class ThreadParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
     )
 
 

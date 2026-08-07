@@ -838,7 +838,7 @@ class Viewport(QWidget):
     def _slot_colours(self, surface: Any, mesh: Any, entry: Any, face_count: int) -> dict[str, Any]:
         """Ein bemalter Körper wird in seinen Filamentfarben gezeichnet (§20).
 
-        Formwerk kennt Materialslots seit P9: ``paint_slot`` setzt sie,
+        Solidon kennt Materialslots seit P9: ``paint_slot`` setzt sie,
         ``slots_from_texture`` leitet sie ab, der 3MF-Export macht daraus den
         Farbwechsel für den Drucker. Die Ansicht malte trotzdem alles grau —
         wer ein Teil zweifarbig bemalte, sah das Ergebnis zum ersten Mal im
@@ -2079,7 +2079,7 @@ class Viewport(QWidget):
         Vorher stand hier ``plotter.enable_point_picking``. Das hat nie
         funktioniert und es auch nie gesagt: pyvista sucht sich den Renderer
         über ``GetInteractorStyle()._parent()``, also über seinen eigenen Stil,
-        und Formwerk setzt einen eigenen für die vier Navigationsschemata.
+        und Solidon setzt einen eigenen für die vier Navigationsschemata.
         Jeder Klick endete in einem ``AttributeError``, den pyvistaqt zu einer
         Warnung macht — im Fenster sah es aus, als käme der Klick nicht an, und
         genau so stand es in zwei Durchsichten.

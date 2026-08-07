@@ -22,7 +22,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # (§38). Ohne das ändert ein kalibriertes Material auf dem Entwicklerrechner,
 # was die Tests sehen — und schlimmer: ein Testlauf hinterließe Kalibrierungen
 # in seinem Profilordner.
-_ISOLATED = tempfile.mkdtemp(prefix="formwerk-tests-")
+_ISOLATED = tempfile.mkdtemp(prefix="solidon-tests-")
 for _variable in ("APPDATA", "LOCALAPPDATA", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
     os.environ[_variable] = _ISOLATED
 

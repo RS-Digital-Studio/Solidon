@@ -393,12 +393,12 @@ APPLICATION_ICON_SIZES: Final = (16, 24, 32, 48, 64, 128, 256)
 def application_icon() -> QIcon:
     """Das Anwendungssymbol, zur Laufzeit aus seiner SVG-Quelle gerastert.
 
-    Die Quelle liegt in ``app/images/icon/formwerk.svg`` und ist dieselbe,
+    Die Quelle liegt in ``app/images/icon/solidon3d.svg`` und ist dieselbe,
     aus der ``tools/make_icon.py`` die ICO für exe und Installer baut — ein
     Bild, drei Abnehmer. Fehlt die Datei, gibt es ein leeres Symbol und die
     Plattform zeigt ihr Standardbild; ein Start scheitert daran nicht.
     """
-    source = Path(__file__).resolve().parent.parent / "images" / "icon" / "formwerk.svg"
+    source = Path(__file__).resolve().parent.parent / "images" / "icon" / "solidon3d.svg"
     try:
         data = source.read_bytes()
     except OSError:

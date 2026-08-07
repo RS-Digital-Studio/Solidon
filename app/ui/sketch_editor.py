@@ -725,7 +725,7 @@ class SketchCanvas(QWidget):
         """Schließt das angefangene Element auf ein eingetipptes Maß ab (E19).
 
         In Fusion zeichnet man selten und bemaßt fast immer — das Maß beim
-        Zeichnen einzutippen ist dort der Normalweg, und Formwerk hatte
+        Zeichnen einzutippen ist dort der Normalweg, und Solidon hatte
         dafür gar nichts.
 
         Die Richtung kommt vom Zeiger, die Länge aus dem Feld. Und das Maß

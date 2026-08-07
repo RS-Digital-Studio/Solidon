@@ -8,7 +8,7 @@
 # GPL und werden nur aufgerufen; Ollama und ComfyUI werden angegeben. Die
 # Anwendung prüft alle vier beim Start und sagt, was fehlt.
 #
-#     pyinstaller packaging/formwerk.spec
+#     pyinstaller packaging/solidon.spec
 
 from pathlib import Path
 
@@ -79,10 +79,10 @@ executable = EXE(
     analysis.scripts,
     [],
     exclude_binaries=True,
-    name="Formwerk",
+    name="Solidon",
     console=False,
-    # Erzeugt von tools/make_icon.py aus app/images/icon/formwerk.svg.
-    icon=str(ROOT / "packaging" / "formwerk.ico"),
+    # Erzeugt von tools/make_icon.py aus app/images/icon/solidon.svg.
+    icon=str(ROOT / "packaging" / "solidon.ico"),
     # Signiert wird nach dem Bauen, in der CI (§37.2). Hier stünde sonst das
     # Zertifikat auf jeder Entwicklermaschine.
 )
@@ -91,5 +91,5 @@ collected = COLLECT(
     executable,
     analysis.binaries,
     analysis.datas,
-    name="Formwerk",
+    name="Solidon",
 )

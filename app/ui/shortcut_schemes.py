@@ -7,7 +7,7 @@ Kategorien legen: sie erfindet nichts, sie ordnet um.
 **Warum überhaupt zwei.** Wer aus Fusion, Onshape oder SolidWorks kommt, hat
 `E` für Extrudieren und `F` für Verrunden in den Fingern; ihn zu zwingen,
 `Strg+B` zu lernen, kostet ihn bei jedem Griff eine Zehntelsekunde und uns den
-Satz „fühlt sich fremd an". Wer von Formwerk kommt, will das Gegenteil. Beide
+Satz „fühlt sich fremd an". Wer von Solidon kommt, will das Gegenteil. Beide
 zu bedienen ist eine Tabelle, keine Weltanschauung.
 
 Die Vorgabe bleibt die heutige. Eine Umstellung ist eine Einstellung, kein
@@ -41,7 +41,7 @@ FUSION: Final[dict[str, str]] = {
 #: Register steht, und eine Tabelle, die es abschreibt, wäre eine zweite
 #: Wahrheit.
 SCHEMES: Final[dict[str, tuple[TranslatableText, dict[str, str]]]] = {
-    "default": (_("Formwerk"), {}),
+    "default": (_("Solidon"), {}),
     "fusion": (_("Wie Fusion und Onshape"), FUSION),
 }
 

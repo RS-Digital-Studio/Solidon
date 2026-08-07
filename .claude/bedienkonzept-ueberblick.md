@@ -12,11 +12,11 @@ Entscheidung.
 
 ## 1. Die Analogie, aus der alles folgt
 
-**Eine Agentensitzung ist eine Auswertung.** Formwerk hat für genau dieses
+**Eine Agentensitzung ist eine Auswertung.** Solidon hat für genau dieses
 Problem schon Regeln — `.claude/rules/oberflaeche.md`, aus Bauplan §2.8 und
 §15.3 — und sie übertragen sich eins zu eins:
 
-| Formwerk | Claude Code |
+| Solidon | Claude Code |
 |---|---|
 | Der Stapel wird ausgewertet | Die Sitzung läuft |
 | Lange Rechnungen laufen nicht im Hauptthread | Der Nutzer bleibt eingabefähig |
@@ -239,7 +239,7 @@ eine Ebene höher.
 
 Zwei Sitzungen auf einem Arbeitsbaum sind hier der Normalfall, nicht die
 Ausnahme. Das steht schon als Erfahrung im Gedächtnis dieses Projekts
-(`parallele-sitzungen-formwerk.md`): *nur eigene Pfade stagen*.
+(`parallele-sitzungen-solidon3d.md`): *nur eigene Pfade stagen*.
 
 ### Ablauf
 

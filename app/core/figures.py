@@ -552,7 +552,7 @@ def _layers(theme: Theme) -> str:
     canvas.wrapped(
         390,
         70,
-        str(_("Formwerk sucht und bewertet: Inseln, Spannweiten, dünne Stellen, die beste Lage.")),
+        str(_("Solidon sucht und bewertet: Inseln, Spannweiten, dünne Stellen, die beste Lage.")),
         width=22,
         colour=colours.ink,
     )
@@ -722,7 +722,7 @@ FIGURES: Final[tuple[Figure, ...]] = (
             "Ein Stapel Schichten auf dem Druckbett. Die unterste ist breiter als alle "
             "darüber, weil sie angedrückt wird — der Elefantenfuß."
         ),
-        caption=_("Bei Passungen an der ersten Schicht rechnet Formwerk ihn mit ein."),
+        caption=_("Bei Passungen an der ersten Schicht rechnet Solidon ihn mit ein."),
         build=_elephant_foot,
     ),
     Figure(

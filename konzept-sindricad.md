@@ -5,7 +5,7 @@ CAD-Programm für den 3D-Druck, das am 2. August 2026 als öffentliche Beta
 erschienen ist. Die Frage dahinter: *sowas wollen wir auch.*
 
 Dieses Dokument beantwortet sie in drei Schritten — was SindriCAD wirklich
-ist, was Formwerk heute wirklich ist, und was aus dem Unterschied folgt. Es
+ist, was Solidon heute wirklich ist, und was aus dem Unterschied folgt. Es
 ist eine Konzeptvorlage, keine Arbeitsliste: was daraus beschlossen wird,
 wandert nach `ROADMAP.md`.
 
@@ -37,7 +37,7 @@ kommt von Sindri, dem Zwergenschmied der nordischen Mythologie.
 
 Bemerkenswert an der Technik: SindriCAD **ist** im Kern das, was der Bauplan
 als zweiten Konstruktionskern beschreibt (§30) — build123d über OpenCASCADE,
-genau die dort genannte Option. Formwerk hat diesen Kern seit P12, aber als
+genau die dort genannte Option. Solidon hat diesen Kern seit P12, aber als
 *zweiten* neben dem Mesh-Kern. SindriCAD hat nur diesen einen.
 
 ### 1.2 Funktionsumfang, wie beworben
@@ -65,7 +65,7 @@ Drei Sätze tragen den ganzen Auftritt, und keiner davon ist eine Funktion:
    Fusion kennt, kennt das hier.
 2. **„Es ist für den Druck gebaut, nicht für technische Zeichnungen."**
    Skizzieren → Volumen ziehen → Kanten runden → Textur eindrücken → an den
-   Slicer. Das ist derselbe Satz, den Formwerks §2.2 als Weg 2 beschreibt.
+   Slicer. Das ist derselbe Satz, den Solidons §2.2 als Weg 2 beschreibt.
 3. **„Es kann dir nicht weggenommen werden."** AGPL, kein Konto, kein Abo.
 
 Dazu eine radikal offene Finanzierung: 335 $ im Monat Sockelkosten, 19 % des
@@ -92,14 +92,14 @@ kein Alleinstellungsmerkmal mehr** — FreeCAD hat sie, wenn auch angeflanscht.
 Der Bericht nennt die Grenze deutlich: Primitive, Booleans und Muster gehen,
 stark bedingte Skizzen und Verrundungsketten kaum; brauchbar als schneller
 Entwurfspartner, nicht bei toleranzkritischen Teilen. Genau diese Grenze
-adressiert Formwerks Leitprinzip 5 (die KI erzeugt niemals Koordinaten,
+adressiert Solidons Leitprinzip 5 (die KI erzeugt niemals Koordinaten,
 sondern verweist auf Features, Parameter und geprüfte Bausteine) — aber das
 weiß nur, wer es liest. Zweitens: **lokal und ohne Abo ist gerade ein
 Verkaufsargument**, kein Verzicht.
 
 ---
 
-## Teil 2 — Kontrolle: der Stand von Formwerk
+## Teil 2 — Kontrolle: der Stand von Solidon
 
 Gemessen am 4. August 2026. Der Arbeitsbaum bewegte sich währenddessen — eine
 parallele Sitzung hat mitten in der Durchsicht `92b2063` und `04c5e59`
@@ -158,12 +158,12 @@ festhält, steht dort ohnehin noch offen.
 
 ## Teil 3 — Der Abgleich
 
-### 3.1 Wo Formwerk gleichauf oder weiter ist
+### 3.1 Wo Solidon gleichauf oder weiter ist
 
 Das ist der größere Teil der Tabelle, und er ist die eigentliche Nachricht
 dieses Dokuments.
 
-| SindriCAD | Formwerk |
+| SindriCAD | Solidon |
 |---|---|
 | Extrudieren, Rotieren, Loften | `sketch_extrude`, `sketch_revolve`, `sketch_loft` — dazu `sketch_sweep`, das SindriCAD nicht nennt |
 | Verrunden, Fasen, Aushöhlen | `fillet_edges`, `chamfer_edges`, `shell_exact` gegen den B-Rep-Kern, dazu `draft_faces`, `thread_exact` |
@@ -195,14 +195,14 @@ Vier Punkte. Drei davon sind keine Geometriefragen.
 4. **Es gibt SindriCAD in der Öffentlichkeit.** Binnen eines Tages: 3Druck.com
    deutsch und englisch, TinkerAtlas, Tao of Mac, mehrere Fachkonten.
 
-### 3.3 Was Formwerk hat, das SindriCAD nicht hat
+### 3.3 Was Solidon hat, das SindriCAD nicht hat
 
 Der Vollständigkeit halber, weil es die Größenordnung klarstellt:
 
 * **Die Agentenschicht** (§26) — Vorschlag als eine Transaktion, Prüfungen
   nach jeder Op, Regelsammlung, Agenten-Suite. FreeCAD hat MCP angeflanscht;
   hier ist es der Aufbau.
-* **MCP-Server im Fenster** — Formwerk lässt sich fernsteuern, jeder Fernaufruf
+* **MCP-Server im Fenster** — Solidon lässt sich fernsteuern, jeder Fernaufruf
   geht denselben Weg durch `History.apply` und trägt seine Herkunft.
 * **Die Schichtanalyse** (§22) — Überhänge, Inseln, Stützvolumen,
   Brückenweiten, Orientierungssuche. SindriCAD hat davon nichts.
@@ -215,7 +215,7 @@ Der Vollständigkeit halber, weil es die Größenordnung klarstellt:
 * **Handbuch, sieben Touren, Website, Installationsdatei.**
 
 **Fazit des Abgleichs:** SindriCAD ist funktional weitgehend eine Teilmenge
-von Formwerk. Es gewinnt dort, wo Formwerk seine eigene Substanz nicht
+von Solidon. Es gewinnt dort, wo Solidon seine eigene Substanz nicht
 einlöst — in der Bedienung, in der Sichtbarkeit, in der letzten Meile zum
 Drucker.
 
@@ -236,7 +236,7 @@ Sie gehören nach oben.
 
 ### B2 — Acht Texturmuster, die niemand sieht
 
-Formwerk hat **doppelt so viele Muster wie SindriCAD** und behandelt sie als
+Solidon hat **doppelt so viele Muster wie SindriCAD** und behandelt sie als
 Parameter einer Operation. SindriCAD hat vier und macht daraus ein
 Alleinstellungsmerkmal mit Bild, Absatz und Bewegtbild.
 
@@ -245,7 +245,7 @@ gleichwertiger Substanz das teurere.
 
 ### B3 — Die letzte Meile zum Drucker fehlt
 
-Formwerk kommt weit: Exportprüfung, Slicer-Profil, Aufruf von Prusa, Orca oder
+Solidon kommt weit: Exportprüfung, Slicer-Profil, Aufruf von Prusa, Orca oder
 Cura, Rückprüfung der geschriebenen Werte, G-Code zurücklesen (§28.1). Dann
 hört es auf. Die Datei liegt im Ordner.
 
@@ -266,7 +266,7 @@ ohne CAD-Programm. Kleiner Punkt, kleine Arbeit.
 ### B5 — Es gibt uns nicht, solange niemand über uns schreibt
 
 SindriCAD stand binnen eines Tages in der deutschen und englischen Fachpresse.
-Formwerk ist fertiger und unbekannt. Dieser Befund ist keine Technikfrage, und
+Solidon ist fertiger und unbekannt. Dieser Befund ist keine Technikfrage, und
 er hängt an einer Entscheidung, die nicht in diesem Dokument fällt — siehe
 Teil 8.
 
@@ -292,7 +292,7 @@ Baustein A ist bereits beschlossene Arbeit und wird hier nur eingeordnet.
 
 ### Baustein A — Die Skizze fertig bedienen
 
-**Ziel:** Wer aus Fusion kommt, zeichnet in Formwerk eine Kontur, ohne
+**Ziel:** Wer aus Fusion kommt, zeichnet in Solidon eine Kontur, ohne
 nachzuschlagen.
 
 **Umfang:** unverändert die neun Punkte aus `konzept-bedienung.md` Teil 4. Sie
@@ -365,7 +365,7 @@ erreichbaren Drucker verhält sich alles wie heute.
 **Umfang:** `glb` in die Formattabelle von `writer.py`, Farbgruppen mitgeben,
 soweit das Format sie trägt. Ein Format, kein Konzept.
 
-**Abnahme:** Export als GLB, Rückimport in Formwerk, gleiche Objektzahl und
+**Abnahme:** Export als GLB, Rückimport in Solidon, gleiche Objektzahl und
 Maße innerhalb `EPS_GEOM`.
 
 ---
@@ -391,7 +391,7 @@ Alles oben ist Technik und liegt in unserer Hand. Befund **B5** liegt es
 nicht.
 
 SindriCAD wirbt mit drei Sätzen: **kein Konto, kein Abo, AGPL — es kann dir
-nicht weggenommen werden.** Formwerk erfüllt die ersten beiden mühelos
+nicht weggenommen werden.** Solidon erfüllt die ersten beiden mühelos
 (Leitprinzip 8: vollständig ohne Konto und ohne Netz nutzbar). Beim dritten
 steht in `LICENSE`: *Copyright (c) 2026 RS Digital. Alle Rechte vorbehalten.*
 Proprietär, mit zwei MIT-Ausnahmen für die Bausteinbibliothek und den
@@ -401,7 +401,7 @@ Nutzer landet.
 Das ist kein Fehler und wird hier nicht als einer behandelt. Aber es
 entscheidet, was „sowas wollen wir auch" heißen kann:
 
-* **Bleibt Formwerk proprietär**, sind die Bausteine A bis D die vollständige
+* **Bleibt Solidon proprietär**, sind die Bausteine A bis D die vollständige
   Antwort. Die Fachpresse berichtet dann über ein gutes Programm, nicht über
   ein freies — das geht, verlangt aber einen anderen Aufhänger. Der stärkste
   wäre: *lokal, ohne Abo, mit Agent, der keine Koordinaten erfindet* — genau

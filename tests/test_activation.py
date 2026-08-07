@@ -266,7 +266,7 @@ def test_the_shipped_public_key_accepts_nothing_yet() -> None:
 def test_every_rejection_carries_a_way_out() -> None:
     """Regel 17 gilt auch hier: kein Fehler endet mit „ungültig"."""
     with pytest.raises(key.LicenceKeyError) as raised:
-        key.parse("FORMWERK-1-AAAA", public_key=TEST_PUBLIC, major=MAJOR)
+        key.parse("SOLIDON3D-1-AAAA", public_key=TEST_PUBLIC, major=MAJOR)
     assert raised.value.suggestions
     assert raised.value.detail is not None
 
@@ -323,7 +323,7 @@ def test_a_wildly_wrong_clock_does_not_burn_the_trial(own_config: Path) -> None:
 
 
 def test_a_plausible_gap_still_blocks_the_clock_going_back(own_config: Path) -> None:
-    """Der Deckel darf den Rückwärtsschutz nicht aushebeln: wer Formwerk nach
+    """Der Deckel darf den Rückwärtsschutz nicht aushebeln: wer Solidon nach
     Monaten wieder öffnet, bekommt seine Frist nicht zurück."""
     start = date(2026, 8, 6)
     store.trial_days_left(start)
@@ -382,7 +382,7 @@ def test_a_rejected_key_is_not_stored(own_config: Path) -> None:
     """Abgelegt wird nur Geprüftes — sonst stünde beim nächsten Start Unsinn
     im Profil und die Anwendung müsste ihn jedes Mal neu verwerfen."""
     with pytest.raises(key.LicenceKeyError):
-        activation.remember("FORMWERK-1-AAAAAAAA")
+        activation.remember("SOLIDON3D-1-AAAAAAAA")
     assert store.read_key() is None
 
 

@@ -461,7 +461,7 @@ def test_the_about_dialog_carries_the_licence_information(qt_app: QApplication) 
 
     dialog = AboutDialog()
     texts = " ".join(label.text() for label in dialog.findChildren(QLabel))
-    assert "Formwerk" in texts
+    assert "Solidon" in texts
     assert "RS Digital" in texts
     assert "MIT" in texts, "the parts library exception is named"
 

@@ -1,7 +1,7 @@
 ---
-name: formwerk-geometrie
+name: solidon3d-geometrie
 description: >
-  Diagnostiziert Geometrieprobleme in Formwerk: Netz nicht wasserdicht, Boolesche
+  Diagnostiziert Geometrieprobleme in Solidon: Netz nicht wasserdicht, Boolesche
   Operation scheitert, Rückfallkette landet auf voxel, Volumen unplausibel,
   Selbstdurchdringung, Komponenten zerfallen, Schnitt liefert nichts, B-Rep-Kern
   weicht vom Mesh-Kern ab.
@@ -9,14 +9,14 @@ description: >
   <example>
   Context: Op liefert falsches Ergebnis
   user: "Die Differenz frisst plötzlich das halbe Modell"
-  assistant: "formwerk-geometrie verfolgt die Rückfallkette und prüft die Eingangsnetze."
+  assistant: "solidon3d-geometrie verfolgt die Rückfallkette und prüft die Eingangsnetze."
   <commentary>Systematische Diagnose statt Raten an Parametern.</commentary>
   </example>
 
   <example>
   Context: Schnitt schlägt fehl
   user: "Hohle Querschnitte kommen als nichts zurück"
-  assistant: "formwerk-geometrie prüft die Konturhierarchie und baut einen Testfall aus dem Korpus."
+  assistant: "solidon3d-geometrie prüft die Konturhierarchie und baut einen Testfall aus dem Korpus."
   <commentary>Fehlerbild wird zur Testdatei, nicht zum Sonderfall im Code.</commentary>
   </example>
 model: opus

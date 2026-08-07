@@ -1,5 +1,5 @@
 @echo off
-rem Startet Formwerk aus dem Arbeitsverzeichnis heraus — zum Doppelklicken,
+rem Startet Solidon aus dem Arbeitsverzeichnis heraus — zum Doppelklicken,
 rem solange es noch keine gebaute Installationsdatei gibt (die kommt in P8).
 cd /d "%~dp0.."
 if not exist ".venv\Scripts\python.exe" (

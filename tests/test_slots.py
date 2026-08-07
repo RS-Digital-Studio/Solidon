@@ -200,7 +200,7 @@ def test_3mf_keeps_the_geometry_and_the_unit() -> None:
 
 
 def test_3mf_written_here_can_be_read_here_again() -> None:
-    """§20, Import: eine aus Formwerk exportierte Datei darf ihre Farben nicht
+    """§20, Import: eine aus Solidon exportierte Datei darf ihre Farben nicht
     verlieren.
     """
     body = boolean("union", [with_slot(cube(), 1), with_slot(cube(offset=(20, 0, 0)), 2)]).mesh

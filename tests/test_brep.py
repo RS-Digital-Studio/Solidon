@@ -425,7 +425,7 @@ def test_step_comes_back_addressable_and_stable() -> None:
     Das Konzept P15 führte das als Lücke D16 („STEP-Import wird nicht
     kanonisiert — Flächen kommen nicht adressierbar zurück"). Der Befund kam
     aus dem Vergleich mit einer anderen Anwendung und wurde ungeprüft
-    übernommen; er trifft auf Formwerk nicht zu. `load_step` ruft `features_of`
+    übernommen; er trifft auf Solidon nicht zu. `load_step` ruft `features_of`
     wie jede andere B-Rep-Operation.
 
     Geprüft wird trotzdem, und zwar das, worauf es ankommt: nicht nur *dass*

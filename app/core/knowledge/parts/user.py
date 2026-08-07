@@ -32,7 +32,7 @@ _log = get_logger(__name__)
 
 #: Präfix der Modulnamen, unter denen eigene Bausteine importiert werden —
 #: damit sie mit nichts kollidieren können, was die Anwendung mitbringt.
-MODULE_PREFIX = "formwerk_user_parts"
+MODULE_PREFIX = "solidon_user_parts"
 
 
 @dataclass(slots=True)

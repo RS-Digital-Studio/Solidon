@@ -227,7 +227,7 @@ def test_an_output_that_is_a_bare_path_is_found_too() -> None:
                 return json.dumps(
                     {
                         "job-1": {
-                            "outputs": {"8": {"result": ["formwerk\\text_00001_.stl", None, None]}}
+                            "outputs": {"8": {"result": ["solidon\\text_00001_.stl", None, None]}}
                         }
                     }
                 ).encode()
@@ -239,7 +239,7 @@ def test_an_output_that_is_a_bare_path_is_found_too() -> None:
     assert result.mesh.triangle_count == 12
     holt = [entry for entry in server.requests if "/view?" in entry][-1]
     assert "filename=text_00001_.stl" in holt
-    assert "subfolder=formwerk" in holt, "der Ordner wird vom Namen getrennt"
+    assert "subfolder=solidon" in holt, "der Ordner wird vom Namen getrennt"
 
 
 def test_a_job_without_a_mesh_file_says_so() -> None:

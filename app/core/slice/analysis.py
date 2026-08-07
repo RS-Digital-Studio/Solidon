@@ -579,6 +579,21 @@ def total_overhang(result: SliceResult) -> float:
     return float(sum(layer.overhang_area for layer in result.layers))
 
 
+def worst_overhang(result: SliceResult) -> float:
+    """Die größte Überhangfläche, die auf **einer** Schicht anfängt.
+
+    Die Summe allein sagt zu wenig, und der Unterschied entscheidet über
+    Stützen. Ein Becher mit dreihundertachtunddreißig Schichten sammelt
+    zweihundertvierzig Quadratmillimeter, von denen keine Schicht mehr als
+    knapp vier trägt — jede Wand fängt das in sich auf. Ein Deckel, dessen
+    Lochplatte über der Gewindebohrung beginnt, hat achthundertfünfundvierzig
+    auf einmal, und die hängen durch.
+
+    Beide lösten dieselbe Warnung aus, solange nur summiert wurde.
+    """
+    return float(max((layer.overhang_area for layer in result.layers), default=0.0))
+
+
 def island_layers(result: SliceResult) -> tuple[float, ...]:
     """Höhen, auf denen eine Kontur in der Luft beginnt (§22.2)."""
     return tuple(layer.z for layer in result.layers if layer.islands)

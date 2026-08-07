@@ -67,7 +67,7 @@
     "class_type": "Hy3D21ExportMesh",
     "inputs": {
       "trimesh": ["6", 0],
-      "filename_prefix": "formwerk/image",
+      "filename_prefix": "solidon/image",
       "file_format": "glb",
       "save_file": true
     }

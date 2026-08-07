@@ -1,6 +1,6 @@
 """Druckeinstellungen, Empfehlung und Slicer-Übergabe (Bauplan §29, §28).
 
-Drei Sachen, die zusammengehören: Formwerk hält die Einstellungen, die
+Drei Sachen, die zusammengehören: Solidon hält die Einstellungen, die
 Geometrie ändert sie, und der Slicer bekommt sie in seiner eigenen Sprache
 geschrieben. Getestet wird ohne installierten Slicer — was einen Fremdprozess
 braucht, steht ausdrücklich dabei.
@@ -448,7 +448,7 @@ def test_a_heated_chamber_gets_used_when_it_is_there() -> None:
 
 def test_the_flow_limit_reaches_the_slicer() -> None:
     """Die Zahl gehört ins Filamentprofil — dort setzt der Slicer sie durch,
-    auch für die Wege, die Formwerk nicht einzeln einstellt."""
+    auch für die Wege, die Solidon nicht einzeln einstellt."""
     settings = print_settings.resolve(profiles.make_profile("prusa-mk4s", "tpu-95a"))
 
     for flavour in ("prusa", "orca"):
@@ -517,7 +517,7 @@ def test_the_core_settings_reach_every_slicer(flavour: str) -> None:
 
 
 def test_shares_are_written_as_percentages() -> None:
-    """Formwerk rechnet in 0…1, die Slicer in 0…100 — die Stelle, an der ein
+    """Solidon rechnet in 0…1, die Slicer in 0…100 — die Stelle, an der ein
     Fehler fünfzehn Prozent Füllung zu fünfzehn Hundertsteln macht."""
     settings = print_settings.resolve(profiles.make_profile())
     written = handover.as_mapping(settings, "prusa")
@@ -739,7 +739,7 @@ def test_a_prusa_config_stands_on_its_own(tmp_path: Path) -> None:
 
 
 def test_an_orca_process_keeps_what_the_base_profile_knew(tmp_path: Path) -> None:
-    """Die Orca-Familie prüft Verträglichkeit gegen den Drucker. Was Formwerk
+    """Die Orca-Familie prüft Verträglichkeit gegen den Drucker. Was Solidon
     nicht anfasst, muss deshalb stehen bleiben."""
     base = tmp_path / "base.json"
     base.write_text(
@@ -796,7 +796,7 @@ def test_the_orca_filament_profile_carries_what_hangs_on_the_filament(tmp_path: 
 
 
 def test_the_filament_profile_keeps_what_the_maker_knows(tmp_path: Path) -> None:
-    """Formwerk legt seine Werte auf das Profil des Herstellers, statt eines zu
+    """Solidon legt seine Werte auf das Profil des Herstellers, statt eines zu
     erfinden — und löst dessen Erbkette vorher auf.
 
     Der Unterschied ist keiner der Feinheit: ein Filamentprofil bei Elegoo
@@ -841,9 +841,9 @@ def test_the_filament_profile_keeps_what_the_maker_knows(tmp_path: Path) -> None
     assert written.filament is not None
     document = json.loads(written.filament.read_text(encoding="utf-8"))
 
-    assert document["pressure_advance"] == ["0.04"], "geerbt, und Formwerk kennt es gar nicht"
+    assert document["pressure_advance"] == ["0.04"], "geerbt, und Solidon kennt es gar nicht"
     assert document["temperature_vitrification"] == ["70"], "eigener Wert des Profils"
-    # Wo beide etwas sagen, gewinnt Formwerk: die Einstellung ist die
+    # Wo beide etwas sagen, gewinnt Solidon: die Einstellung ist die
     # Entscheidung des Nutzers, das Profil nur die Unterlage.
     assert document["nozzle_temperature"] == [str(settings.temperature.nozzle)]
 
@@ -955,7 +955,7 @@ def test_an_empty_folder_has_no_gcode(tmp_path: Path) -> None:
 
 
 def test_a_filament_profile_that_disagrees_is_reported(tmp_path: Path) -> None:
-    """Beide Seiten haben recht: Formwerks Tabelle sagt, was PETG im
+    """Beide Seiten haben recht: Solidons Tabelle sagt, was PETG im
     Allgemeinen verträgt, das Herstellerprofil, was diese Spule verträgt.
 
     Beim transluzenten Elegoo-PETG liegen dazwischen fünfzehn Grad an der Düse
@@ -1285,7 +1285,7 @@ def test_a_profile_name_finds_its_file(tmp_path, monkeypatch) -> None:
     daten = json.loads(written.process.read_text(encoding="utf-8"))
     assert daten["inherits"] == "fdm_process_common", "die Erbschaft bleibt erhalten"
     assert daten["compatible_printers"] == ["Elegoo Centauri Carbon 2 0.4 nozzle"]
-    assert daten["name"].startswith("Formwerk"), "aber der Name ist Formwerks eigener"
+    assert daten["name"].startswith("Solidon"), "aber der Name ist Solidons eigener"
 
 
 def test_an_unknown_profile_name_is_no_crash(tmp_path) -> None:
@@ -1296,3 +1296,43 @@ def test_an_unknown_profile_name_is_no_crash(tmp_path) -> None:
     setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
     assert handover.profile_file("gibt es nicht", setup, "process") is None
     assert handover.profile_file("", setup, "machine") is None
+
+
+def test_a_spread_overhang_is_no_reason_for_supports() -> None:
+    """Die Summe allein sprach ein Fehlurteil.
+
+    Ein Becher verteilt seinen Überhang über dreihundert Schichten — keine
+    trägt mehr als ein paar Quadratmillimeter, und jede Wand fängt das in sich
+    auf. Gemessen am echten Teil: 239,8 mm² Summe, 3,7 mm² auf der schlimmsten
+    Schicht. Er bekam trotzdem dieselbe Stützenwarnung wie ein Deckel, dessen
+    Lochplatte mit 845,6 mm² auf einmal über einem Hohlraum beginnt.
+    """
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    assert settings.support.style == "none", "die Vorgabe kommt ohne Stützen"
+
+    # Dreihundert Schichten à 0,8 mm² — Summe 240, keine einzelne kritisch.
+    verteilt = _layers(*([200.0] * 300), overhang=0.8)
+    # Zwei Schichten, davon eine mit 400 mm² auf einmal.
+    geballt = _layers(200.0, 200.0, overhang=400.0)
+
+    zu_verteilt = advise.advise(settings, profile, verteilt)
+    zu_geballt = advise.advise(settings, profile, geballt)
+
+    assert not [a for a in zu_verteilt if a.path == "support.style"], (
+        "was sich über dreihundert Schichten verteilt, trägt sich selbst"
+    )
+    assert [a for a in zu_geballt if a.path == "support.style"], (
+        "was auf einer Schicht anfängt, braucht Stützen"
+    )
+
+
+def test_the_worst_layer_is_reported_separately() -> None:
+    """Summe und Spitze sind zwei Zahlen, und nur die zweite entscheidet."""
+    from app.core.slice.analysis import total_overhang, worst_overhang
+
+    result = _layers(200.0, 200.0, 200.0, overhang=50.0)
+
+    assert total_overhang(result) == pytest.approx(150.0)
+    assert worst_overhang(result) == pytest.approx(50.0)
+    assert worst_overhang(_layers()) == 0.0, "ohne Schichten kein Überhang"

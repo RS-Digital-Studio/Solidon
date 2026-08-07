@@ -35,7 +35,7 @@ def read(payload: bytes) -> Solid:
     from OCP.IFSelect import IFSelect_RetDone
     from OCP.STEPControl import STEPControl_Reader
 
-    with tempfile.TemporaryDirectory(prefix="formwerk-step-") as folder:
+    with tempfile.TemporaryDirectory(prefix="solidon-step-") as folder:
         path = Path(folder) / "input.step"
         path.write_bytes(payload)
         reader = STEPControl_Reader()
@@ -75,13 +75,13 @@ def write(solid: Solid, name: str = "") -> bytes:
     from OCP.Interface import Interface_Static
     from OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
 
-    with tempfile.TemporaryDirectory(prefix="formwerk-step-") as folder:
+    with tempfile.TemporaryDirectory(prefix="solidon-step-") as folder:
         path = Path(folder) / "output.step"
         writer = STEPControl_Writer()
         Interface_Static.SetCVal_s("write.step.unit", "MM")
         # Der Name gehört gesetzt, *bevor* übertragen wird: er wandert beim
         # Transfer in das PRODUCT der Datei, nachher ist er wirkungslos.
-        Interface_Static.SetCVal_s("write.step.product.name", name or "Formwerk")
+        Interface_Static.SetCVal_s("write.step.product.name", name or "Solidon")
         writer.Transfer(solid.shape, STEPControl_AsIs)
         if writer.Write(str(path)) != IFSelect_RetDone:
             raise ValidationError(

@@ -8,20 +8,27 @@ from __future__ import annotations
 
 from typing import Final
 
-#: Produktname. Entschieden am 27.07.2026.
-APP_NAME: Final = "Formwerk"
+#: Produktname. Entschieden am 27.07.2026 als „Formwerk", geändert am
+#: 07.08.2026 — siehe ``.claude/namensentscheidung-solidon.md``: eine
+#: Wort-/Bildmarke „3D FORMWERK" ist seit dem 03.08.2026 für „Entwurf von
+#: 3D-Modellen für den 3D-Druck" bestandskräftig, also für genau das, was
+#: diese Anwendung tut.
+#:
+#: Der volle Name steht auf Fenstertitel, Website, Installer und
+#: Lizenzschlüssel. In Fließtext und Docstrings heißt es kurz „Solidon".
+APP_NAME: Final = "Solidon3D"
 
 #: Distributionsname auf PyPI und in den Paket-Metadaten.
-DISTRIBUTION_NAME: Final = "formwerk"
+DISTRIBUTION_NAME: Final = "solidon3d"
 
 #: Rechteinhaber, wie er in LICENSE und im Über-Dialog steht.
 APP_VENDOR: Final = "RS Digital"
 
 #: Reverse-Domain-Kennung für Schlüsselbund-Einträge und Plattform-Integration.
-APP_ID: Final = "de.rsdigital.formwerk"
+APP_ID: Final = "de.rsdigital.solidon3d"
 
 #: Präfix der Umgebungsvariablen, die zu dieser Anwendung gehören.
-ENVIRONMENT_PREFIX: Final = "FORMWERK"
+ENVIRONMENT_PREFIX: Final = "SOLIDON3D"
 
 #: Wohin sich Kunden wenden — Fehlerberichte, Fragen, Interesse vor dem
 #: Erscheinen. Ein Kanal, eine Adresse; sie steht im Über-Dialog, im
@@ -29,9 +36,18 @@ ENVIRONMENT_PREFIX: Final = "FORMWERK"
 SUPPORT_ADDRESS: Final = "admin@rs-digital.org"
 
 #: Die Produktseite: Download, Handbuch, Kauf. Von hier lesen der Installer
-#: (``tools/make_installer.py``), der Update-Hinweis und der Knopf „Formwerk
+#: (``tools/make_installer.py``), der Update-Hinweis und der Knopf „Solidon
 #: kaufen" — sie stand vorher an zwei Stellen getrennt.
-WEBSITE_URL: Final = "https://formwerk.rsdigital.de/"
+#:
+#: **Offener Punkt:** Produktseite und :data:`SUPPORT_ADDRESS` liegen seit der
+#: Umbenennung auf verschiedenen Domains. Solange „Formwerk" galt, war beides
+#: ``rs-digital.org``, und das war Absicht: wer eine Setup-Datei von der einen
+#: Adresse lädt und im Programm eine Support-Adresse der anderen findet, hat
+#: zwei Namen vor sich und keinen Grund zu glauben, dass sie zusammengehören.
+#: Zu entscheiden ist, ob die Support-Adresse mitzieht
+#: (``support@solidon3d.de``) oder die Firmenadresse bleibt; beide Postfächer
+#: sind im Webhosting-Paket enthalten.
+WEBSITE_URL: Final = "https://solidon3d.de/"
 
 #: Endung des Projektcontainers (Bauplan §16.1).
 PROJECT_SUFFIX: Final = ".p3d"

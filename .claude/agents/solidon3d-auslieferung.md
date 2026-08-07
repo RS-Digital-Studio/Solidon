@@ -1,5 +1,5 @@
 ---
-name: formwerk-auslieferung
+name: solidon3d-auslieferung
 description: >
   Kümmert sich um Paket, Lizenzen und Veröffentlichung: PyInstaller-Spec,
   Installationsdateien, CI-Workflow, Lizenzprüfung gegen die Freigabeliste,
@@ -8,14 +8,14 @@ description: >
   <example>
   Context: Neue Abhängigkeit
   user: "Ich will shapely durch etwas anderes ersetzen"
-  assistant: "formwerk-auslieferung prüft die Lizenz gegen die Freigabeliste, bevor irgendetwas eingebaut wird."
+  assistant: "solidon3d-auslieferung prüft die Lizenz gegen die Freigabeliste, bevor irgendetwas eingebaut wird."
   <commentary>GPL ist ausgeschlossen — das entscheidet sich vorher, nicht nachher.</commentary>
   </example>
 
   <example>
   Context: Release vorbereiten
   user: "Können wir eine Installationsdatei bauen?"
-  assistant: "formwerk-auslieferung prüft Suite, Version, Beispielprojekte und die Spec, dann baut es."
+  assistant: "solidon3d-auslieferung prüft Suite, Version, Beispielprojekte und die Spec, dann baut es."
   <commentary>Aus einem roten Lauf wird nichts paketiert.</commentary>
   </example>
 model: sonnet
@@ -45,7 +45,7 @@ Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.
 
 ## Paket
 
-`packaging/formwerk.spec` mit PyInstaller. Vor dem Bauen:
+`packaging/solidon3d.spec` mit PyInstaller. Vor dem Bauen:
 
 ```
 .venv\Scripts\python.exe -m pytest -q

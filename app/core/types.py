@@ -362,7 +362,7 @@ class Profile:
 
 # --- Druckeinstellungen (§29) --------------------------------------------------
 #
-# Formwerk hält die Einstellungen, der externe Slicer führt sie aus (§22, §29).
+# Solidon hält die Einstellungen, der externe Slicer führt sie aus (§22, §29).
 # Das hier ist also kein Slicer-Format, sondern das eine Modell, aus dem
 # ``export.handover`` die Konfiguration jedes unterstützten Slicers schreibt.
 # Gruppiert statt flach, weil die Oberfläche in denselben Gruppen fragt und die

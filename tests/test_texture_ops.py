@@ -1,7 +1,7 @@
 """Oberflächentexturen (Konzept P15 §7 Etappe 5, D8).
 
 SindriCADs beworbenes Kernfeature, und das einzige aus ihrer Liste, das
-Formwerk gar nicht hatte. Zwei Dinge übernehmen wir ausdrücklich, weil sie
+Solidon gar nicht hatte. Zwei Dinge übernehmen wir ausdrücklich, weil sie
 richtig sind: die Muster werden als **exakte Gitter** gebaut statt aus einem
 abgetasteten Höhenfeld — sonst druckt ein Rändel gerundeten Brei statt
 scharfer Rauten — und sie können **einwärts schneiden statt auswärts prägen**.

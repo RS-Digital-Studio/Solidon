@@ -60,9 +60,9 @@ FIGURE_PATTERN: Final = re.compile(r"!\[\]\(figure:([a-z0-9-]+)\)")
 INTRODUCTION: Final[tuple[Page, ...]] = (
     Page(
         key="what",
-        title=_("Was Formwerk ist"),
+        title=_("Was Solidon ist"),
         body=_(
-            "Formwerk baut, ändert und druckreif macht — Modelle für den "
+            "Solidon baut, ändert und druckreif macht — Modelle für den "
             "3D-Drucker.\n\n"
             "Drei Dinge unterscheiden es von dem, was sonst offen ist:\n\n"
             "* **Jeder Schritt bleibt eine Zahl.** Eine Bohrung, die zwei "
@@ -78,7 +78,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "eines Bogens geführt, und jedes Maß darf ein Projektparameter "
             "sein.\n\n"
             "**Was es nicht ist:** kein Slicer — die Druckdatei kommt weiter "
-            "aus dem Slicer, Formwerk sucht und bewertet nur. Keine Cloud — kein "
+            "aus dem Slicer, Solidon sucht und bewertet nur. Keine Cloud — kein "
             "Konto, keine Telemetrie, nichts, was den Rechner verlässt.\n\n"
             "Ohne Netz, ohne Konto und ohne Sprachmodell bleibt alles außer dem "
             "Chat benutzbar."
@@ -98,7 +98,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "dann gelten Vorgaben.\n\n"
             "![](figure:start-screen)\n\n"
             "**2. Eine Datei auf das Fenster ziehen.** STL, 3MF, STEP, OBJ. Ist "
-            "in der Datei keine Einheit vermerkt — bei STL nie —, fragt Formwerk "
+            "in der Datei keine Einheit vermerkt — bei STL nie —, fragt Solidon "
             "nach, statt zu raten. Im Zweifel Millimeter: fast alles im Netz ist "
             "in Millimetern.\n\n"
             "**3. In den Prüfbericht schauen.** Rechts steht, was mit dem Modell "
@@ -173,7 +173,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Messen** (Werkzeugleiste, *Messen*) legt zwei Punkte fest und "
             "zeigt den Abstand. Der Zeiger fängt dabei auf Ecken und Kanten, "
             "man muss also nicht treffen, sondern nur in die Nähe kommen. Für "
-            "die **Wandstärke** genügt ein Klick auf eine Fläche: Formwerk "
+            "die **Wandstärke** genügt ein Klick auf eine Fläche: Solidon "
             "schickt einen Strahl nach innen und misst, wo er wieder "
             "herauskommt. Eine gemessene Strecke bleibt als **Bemaßung** "
             "stehen, bis Sie sie wegnehmen — so lassen sich drei Maße "
@@ -192,7 +192,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Prüfbericht fährt die Kamera an die Stelle.\n\n"
             "**Die Schichtvorschau** (*Schichten*) zeigt das Modell so, wie es "
             "in Schichten zerfällt. Der Regler fährt hindurch; was Sie sehen, "
-            "ist Formwerks eigene Schichtanalyse und **nicht** das, was der "
+            "ist Solidons eigene Schichtanalyse und **nicht** das, was der "
             "Slicer später rechnet. Beide Zahlenwelten bleiben getrennt "
             "ausgewiesen, damit niemand eine Schätzung für eine Messung hält.\n\n"
             "![](figure:layers)\n\n"
@@ -285,7 +285,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "steht, darf nichts ausführen. Daran ändert auch ein "
             "Sprachmodell nichts, das den Ausdruck geschrieben hat.\n\n"
             "**Ringschlüsse werden erkannt und benannt.** Wenn `a` auf `b` "
-            "zeigt und `b` auf `a`, sagt Formwerk das, statt bis zum "
+            "zeigt und `b` auf `a`, sagt Solidon das, statt bis zum "
             "Anschlag zu rechnen.\n\n"
             "Gerechnet wird durchgehend in Millimetern und doppelter "
             "Genauigkeit. Gerundet wird nur, was angezeigt wird — was Sie "
@@ -296,12 +296,12 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         key="tolerances",
         title=_("Material, Toleranzen, Passungen"),
         body=_(
-            "Das Stück, das Formwerk von einem Slicer unterscheidet.\n\n"
+            "Das Stück, das Solidon von einem Slicer unterscheidet.\n\n"
             "Ein gedrucktes Teil ist nie so groß wie gezeichnet. Kunststoff "
             "schwindet beim Abkühlen, ein Loch von 5 mm kommt enger heraus, und "
             "die unterste Schicht wird breiter gedrückt als alle darüber. Wer "
             "zwei Teile ineinanderstecken will, muss das einrechnen — und genau "
-            "das nimmt Formwerk ab.\n\n"
+            "das nimmt Solidon ab.\n\n"
             "**Das Spiel steht im Materialprofil, nicht im Modell.** Wer einen "
             "Stift in ein Loch stecken will, trägt keine 0,2 ein — er sagt "
             "*Passung*, und die Zahl kommt aus dem Profil des Materials, mit "
@@ -503,7 +503,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Schlüsselbund des Systems, nie in der Projektdatei) oder ein "
             "lokales Ollama. Für die Werkzeugaufrufe muss es groß genug sein; "
             "unter 7B scheitern sie reproduzierbar.\n\n"
-            "Alles andere in Formwerk kommt ohne Sprachmodell aus. Ohne "
+            "Alles andere in Solidon kommt ohne Sprachmodell aus. Ohne "
             "Schlüssel ist der Chat ausgegraut und sagt in einem Satz warum — "
             "mehr passiert nicht."
         ),
@@ -515,7 +515,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Der dritte Weg (§2.2): Sie beschreiben ein Teil oder legen ein "
             "Bild hin, und ein Generator macht daraus ein Netz. **Datei → "
             "Modell erzeugen.**\n\n"
-            "Gerechnet wird das nicht in Formwerk, sondern in einem lokalen "
+            "Gerechnet wird das nicht in Solidon, sondern in einem lokalen "
             "**ComfyUI** auf Port 8188. Läuft keines, bleibt der Eintrag "
             "ausgegraut und sagt warum; alles andere funktioniert weiter. "
             "Welche Knoten benutzt werden, steht in zwei Dateien neben dem "
@@ -555,7 +555,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Textur aufbringen** prägt ein Muster auf eine Fläche, erhaben "
             "oder vertieft. Zwei Zahlen entscheiden, ob es druckbar ist: die "
             "Teilung muss breiter sein als zwei Bahnen der Düse, die Tiefe "
-            "höher als eine Schicht. Beides prüft Formwerk, bevor es rechnet "
+            "höher als eine Schicht. Beides prüft Solidon, bevor es rechnet "
             "— eine Prägung, die feiner ist als der Drucker, verschwindet, und "
             "das merkt man sonst erst am fertigen Teil.\n\n"
             "![](figure:texture)\n\n"
@@ -574,12 +574,12 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         key="remote",
         title=_("Fernsteuerung"),
         body=_(
-            "Ein anderes Programm auf demselben Rechner darf Formwerk "
+            "Ein anderes Programm auf demselben Rechner darf Solidon "
             "bedienen — über MCP, dieselbe Schnittstelle, mit der Claude Code "
             "und ähnliche Werkzeuge arbeiten. Es ruft dabei genau die "
             "Operationen auf, die auch in den Menüs stehen.\n\n"
             "**Sie ist aus, bis Sie sie einschalten.** Der Schalter steht in "
-            "den Einstellungen, zusammen mit dem Port. Danach hört Formwerk "
+            "den Einstellungen, zusammen mit dem Port. Danach hört Solidon "
             "auf `127.0.0.1` und nur dort: von einem anderen Rechner ist die "
             "Schnittstelle nicht erreichbar, auch nicht aus dem eigenen "
             "Netz.\n\n"
@@ -607,7 +607,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "ganze Wand, kann das keine Reparatur erraten — dann ist die Datei "
             "kaputt und eine andere Quelle der kürzere Weg.\n\n"
             "**Eine Verknüpfung schlägt fehl oder frisst zu viel.**\n"
-            "Boolesche Operationen brauchen saubere Eingangskörper. Formwerk "
+            "Boolesche Operationen brauchen saubere Eingangskörper. Solidon "
             "versucht es der Reihe nach mit mehreren Verfahren und sagt "
             "hinterher, welches getragen hat. Steht dort *voxel*, wurde grob "
             "gerechnet und Genauigkeit ist verloren gegangen — dann erst "
@@ -646,16 +646,16 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Beim Arbeiten läuft die Entwurfsqualität; die feine Rechnung "
             "kommt erst beim Export. Bei sehr großen Netzen hilft es, früh zu "
             "vereinfachen — die Dreieckszahl steht im Objektbaum.\n\n"
-            "**Grundsätzlich gilt:** Kein Fehler in Formwerk endet bei der "
+            "**Grundsätzlich gilt:** Kein Fehler in Solidon endet bei der "
             "Feststellung. Steht keine Handlung dabei, mit der es weitergeht, "
-            "ist das ein Fehler in Formwerk und einen Bericht wert."
+            "ist das ein Fehler in Solidon und einen Bericht wert."
         ),
     ),
     Page(
         key="glossary",
         title=_("Wörterbuch"),
         body=_(
-            "Die Wörter, die in Formwerk, in Slicern und in Druckforen "
+            "Die Wörter, die in Solidon, in Slicern und in Druckforen "
             "vorkommen — kurz erklärt.\n\n"
             "**Netz (Mesh)** — ein Körper als Hülle aus Dreiecken. STL und OBJ "
             "enthalten nichts anderes: keine Kreise, keine Maße, nur Dreiecke.\n\n"
@@ -663,7 +663,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "außen sind eindeutig. Nur ein geschlossener Körper lässt sich "
             "zuverlässig verknüpfen und drucken.\n\n"
             "**Operation** — ein Arbeitsschritt: bohren, verrunden, teilen, "
-            "einen Baustein setzen. In Formwerk entsteht Geometrie nur so.\n\n"
+            "einen Baustein setzen. In Solidon entsteht Geometrie nur so.\n\n"
             "**Transaktion** — alles, was ein Rückgängig auf einmal zurücknimmt. "
             "Ein Vorschlag des Chats ist genau eine, auch wenn er aus fünf "
             "Operationen besteht.\n\n"
@@ -702,7 +702,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Schichthöhe** — wie dick eine Lage ist, meist 0,2 mm. Kleiner "
             "heißt feiner und langsamer.\n\n"
             "**Slicer** — das Programm, das aus dem Modell die Druckdatei "
-            "macht. Formwerk ist keiner und ersetzt keinen.\n\n"
+            "macht. Solidon ist keiner und ersetzt keinen.\n\n"
             "**G-Code** — die fertige Anweisungsliste für den Drucker. Sie "
             "kommt aus dem Slicer.\n\n"
             "**STL** — das verbreitetste Format: nur Dreiecke, keine Einheit, "

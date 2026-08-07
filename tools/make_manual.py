@@ -14,7 +14,7 @@ Was entsteht:
 * ``website/handbuch/`` mit den Abbildungen. Gezeichnetes und Gerendertes als
   SVG, weil es dann in jeder Größe scharf bleibt; die Bildschirmfotos als PNG,
   weil sie nun einmal Pixel sind.
-* ``Releases/Formwerk-Handbuch-<sprache>.pdf`` — über Qt gesetzt, damit dafür
+* ``Releases/Solidon-Handbuch-<sprache>.pdf`` — über Qt gesetzt, damit dafür
   keine Abhängigkeit dazukommt, deren Lizenz erst geprüft werden müsste (§36).
 
 Das PDF braucht Qt und damit die echte Plattform; zu den Schriften unter

@@ -208,7 +208,7 @@ class GenerateDialog(QDialog):
         if not self.available:
             self.state.setText(
                 tr(
-                    "Es läuft kein Generator. Formwerk spricht lokal mit ComfyUI — "
+                    "Es läuft kein Generator. Solidon spricht lokal mit ComfyUI — "
                     "ohne das bleibt dieser Weg zu, alles andere funktioniert weiter."
                 )
             )

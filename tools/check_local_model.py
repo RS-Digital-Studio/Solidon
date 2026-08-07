@@ -1,4 +1,4 @@
-"""Prüft, ob ein lokales Modell Formwerks Werkzeuge wirklich aufruft.
+"""Prüft, ob ein lokales Modell Solidons Werkzeuge wirklich aufruft.
 
 Die Agenten-Suite nebenan misst die Güte der Antworten. Dieser Läufer misst die
 Stufe davor, ohne die keine Antwort etwas nützt: **kommt ein strukturierter

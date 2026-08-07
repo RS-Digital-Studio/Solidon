@@ -147,7 +147,7 @@ def _as_toml(table: dict[str, dict[str, Any]]) -> str:
     """
     lines = [
         "# Kalibrierte Materialwerte (Bauplan §28.3).",
-        "# Von Formwerk geschrieben. Die mitgelieferten Startwerte bleiben unberührt;",
+        "# Von Solidon geschrieben. Die mitgelieferten Startwerte bleiben unberührt;",
         "# was hier steht, gilt vor ihnen.",
         "",
     ]

@@ -18,7 +18,7 @@ Ein Programm wird deshalb an vier Stellen gesucht, die billigste zuerst:
 4. die üblichen Installationsordner, eine Ebene tief — dort liegen die Dateien
    auch dann, wenn sich nichts angemeldet hat.
 
-Dienste sind eine andere Frage und bekommen eine andere Antwort. Formwerk
+Dienste sind eine andere Frage und bekommen eine andere Antwort. Solidon
 startet ComfyUI und Ollama nie, es redet über HTTP mit ihnen — es zählt also,
 ob auf dem Port etwas antwortet, und nicht, ob irgendwo eine Datei liegt. Ein
 nach ``D:\\AI`` entpacktes ComfyUI hat keine ausführbare Datei zum Finden und
@@ -190,7 +190,7 @@ def _from_folders(names: tuple[str, ...]) -> Path | None:
     **Zwei** Ebenen, nicht eine, und das ist keine Vorsichtsmaßnahme: Prusa
     installiert nach ``Program Files\\Prusa3D\\PrusaSlicer\\``, ein Ordner für
     die Firma und einer für das Programm. Eine Ebene tief gesucht, war
-    PrusaSlicer auf dieser Maschine installiert und für Formwerk trotzdem
+    PrusaSlicer auf dieser Maschine installiert und für Solidon trotzdem
     nicht vorhanden — die Übergabe an den Slicer bot ihn schlicht nicht an.
     """
     for root in _install_roots():

@@ -1,6 +1,6 @@
 """Fehlendes installieren, aus der Anwendung heraus (Bauplan §36, §38).
 
-Formwerk kommt ohne OpenSCAD, ohne Slicer und ohne B-Rep-Kern — bei den ersten
+Solidon kommt ohne OpenSCAD, ohne Slicer und ohne B-Rep-Kern — bei den ersten
 beiden aus Lizenzgründen, beim Rest wegen der Größe (§36). Das ist eine gute
 Entscheidung und eine schlechte Erfahrung: wer eine Verrundung will, soll kein
 README lesen müssen, um herauszufinden, welches Paket zu installieren ist.
@@ -13,7 +13,7 @@ Regeln, die nicht verhandelbar sind:
   übergeben.
 * **Nur offizielle Quellen.** Python-Pakete aus dem Index, für den der
   Interpreter ohnehin eingerichtet ist, Programme über die Paketverwaltung des
-  Systems. Formwerk lädt keine eigenen Installer herunter.
+  Systems. Solidon lädt keine eigenen Installer herunter.
 * **Nie ungefragt.** Die Liste wird gezeigt, den Knopf drückt ein Mensch. Eine
   Anwendung, die Software installiert, weil sie glaubt, sie zu brauchen, hat
   eine Entscheidung getroffen, die nicht ihre war.
@@ -54,7 +54,7 @@ def _silent(line: str) -> None:
 
 @dataclass(frozen=True, slots=True)
 class Requirement:
-    """Eine Sache, die Formwerk benutzen kann, und wie sie auf den Rechner kommt."""
+    """Eine Sache, die Solidon benutzen kann, und wie sie auf den Rechner kommt."""
 
     id: str
     title: TranslatableText | str
@@ -256,7 +256,7 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
             requirement=requirement,
             installed=False,
             output=output[-2000:],
-            reason=_("Installiert — nach einem Neustart von Formwerk ist es zu sehen."),
+            reason=_("Installiert — nach einem Neustart von Solidon ist es zu sehen."),
         )
     _log.info("install of %s finished: %s", requirement.id, done)
     return InstallResult(requirement=requirement, installed=done, output=output[-2000:])

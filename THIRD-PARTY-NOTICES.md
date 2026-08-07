@@ -6,7 +6,7 @@ Erzeugt aus den tatsächlich installierten Laufzeit-Abhängigkeiten
 `tests/test_licences.py` — dort verlangt
 `test_the_notice_file_names_every_runtime_package` auch, dass jedes Paket des
 Laufzeitbaums hier namentlich steht. Diese Datei reist mit dem Paket
-(`packaging/formwerk.spec`), sie ist also der Hinweis, den BSD und MIT
+(`packaging/solidon3d.spec`), sie ist also der Hinweis, den BSD und MIT
 verlangen, und nicht nur eine Übersicht.
 
 Neu erzeugen:

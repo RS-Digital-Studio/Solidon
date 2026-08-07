@@ -64,7 +64,7 @@ class ExternalTool:
 
     @property
     def available(self) -> bool:
-        """Kann Formwerk das gerade benutzen?
+        """Kann Solidon das gerade benutzen?
 
         Bei einem Dienst heißt das „antwortet", bei einem Programm „liegt da".
         Ein installiertes, aber nicht gestartetes Ollama ist für den Chat

@@ -19,7 +19,7 @@ eine Wand, die aufgeht.
 | Rippen und Gussets | 2 Bahnen, dafür hoch statt dick |
 
 Unter etwa 1 mm bleibt jede Struktur fragil — das gilt auch für das, was
-Formwerk selbst erzeugt.
+Solidon selbst erzeugt.
 
 ## Überhänge und Brücken
 

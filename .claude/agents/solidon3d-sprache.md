@@ -1,21 +1,21 @@
 ---
-name: formwerk-sprache
+name: solidon3d-sprache
 description: >
-  Hält die Sprachregelung von Formwerk ein: englische Bezeichner, deutsche Docstrings im
+  Hält die Sprachregelung von Solidon ein: englische Bezeichner, deutsche Docstrings im
   Code, deutsche und englische Oberflächentexte über tr(), vollständige
   Sprachdateien, einheitliche Begriffszuordnung aus Bauplan §4.2.
 
   <example>
   Context: Nach neuen Ansichten
   user: "Sind die Übersetzungen vollständig?"
-  assistant: "formwerk-sprache vergleicht die Sprachdateien und sucht feste Zeichenketten."
+  assistant: "solidon3d-sprache vergleicht die Sprachdateien und sucht feste Zeichenketten."
   <commentary>Vollständigkeitsprüfung über beide Sprachen.</commentary>
   </example>
 
   <example>
   Context: Sprachprüfung rot
   user: "test_language_rules meckert"
-  assistant: "formwerk-sprache findet die deutschen Stämme in Bezeichnern und benennt sie um."
+  assistant: "solidon3d-sprache findet die deutschen Stämme in Bezeichnern und benennt sie um."
   <commentary>Die Sprachregel ist ein Test, keine Geschmacksfrage.</commentary>
   </example>
 model: sonnet

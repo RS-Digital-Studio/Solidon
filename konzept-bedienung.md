@@ -273,7 +273,7 @@ Legende, kein Umschalter Vorher/Nachher.
 
 ### 2.1 Der Startbildschirm
 
-Bei 1920 × 1150 sieht er so aus: „Formwerk" klein oben links. Darunter
+Bei 1920 × 1150 sieht er so aus: „Solidon" klein oben links. Darunter
 1000 Pixel Nichts. In der Bildmitte schwebt der Satz „Modell oder Projekt hier
 ablegen / STL · 3MF · OBJ · GLB · .p3d" — **ohne Rahmen, ohne Feld, ohne
 Symbol.** Man sieht nicht, dass das eine Ablagefläche ist. Zwei
@@ -293,7 +293,7 @@ Satz plus Knopf**: „Noch keine Daten vorhanden. / Erstellen oder öffnen Sie
 zunächst ein Dokument."
 
 Der Unterschied ist nicht Geschmack. Fusion macht den leeren Zustand zu etwas,
-das aussieht wie Absicht; Formwerk sieht aus wie ein Formular, dem die Felder
+das aussieht wie Absicht; Solidon sieht aus wie ein Formular, dem die Felder
 fehlen.
 
 **Zu tun**
@@ -372,7 +372,7 @@ Die vier Farbwelten stammen aus vier Quellen, die einander nicht kennen:
 
 Dazu eine fünfte, die gar nicht mitspielt: **Das Anwendungssymbol** trägt ein
 gebranntes Orange (`#3a1c06` → `#b96428` → `#e08b4e`), das in der Oberfläche
-**an keiner Stelle vorkommt**. Formwerk hat damit keine sichtbare Markenfarbe —
+**an keiner Stelle vorkommt**. Solidon hat damit keine sichtbare Markenfarbe —
 der Ton, der im Startmenü und in der Taskleiste für die Anwendung steht, taucht
 im Programm nie wieder auf.
 
@@ -399,7 +399,7 @@ Tests halten das fest.
 2. **Eine Auswahlfarbe.** Entweder der Baum färbt in der Viewport-Auswahlfarbe
    oder umgekehrt — aber nicht blau hier und orange dort.
 3. **Die Markenfarbe in die Oberfläche holen.** Das Bernstein des Symbols ist
-   ein guter Akzent: er unterscheidet Formwerk vom Qt-Standardblau, das jede
+   ein guter Akzent: er unterscheidet Solidon vom Qt-Standardblau, das jede
    zweite Desktop-Anwendung trägt. Er passt zu warmem Filament, und die
    Auswahl im Viewport benutzt ihn bereits — er müsste nur überall gelten:
    Primärknopf, Fokusrahmen, aktiver Reiter, Fortschritt.
@@ -518,7 +518,7 @@ Rechteck trug elf Bedingungen und war sofort vollbestimmt. Die Substanz stimmt.
 
 Nebeneinandergelegt mit Fusions Skizzenmodus fehlt vor allem Orientierung:
 
-| | Fusion | Formwerk |
+| | Fusion | Solidon |
 |---|---|---|
 | Ursprung | sichtbarer Punkt, rote X- und grüne Y-Achse durchgezogen | nichts |
 | Maßstab | beschriftete Achsen (−125 … 75) am Raster | nichts |
@@ -537,7 +537,7 @@ klappt zudem nach links weg statt am Zeiger auf.
 **Der Widerspruch in der Fusion-Belegung.** `app/ui/shortcut_schemes.py` bietet
 seit dem letzten Commit eine Fusion-nahe Tastenbelegung — sie deckt aber nur
 Modellieren ab (E, Q, F, C, M, R, H, P, S). Bei Fusion sind `R` und `C`
-**Rechteck** und **Kreis** im Skizzenmodus; Formwerk vergibt sie an Drehen und
+**Rechteck** und **Kreis** im Skizzenmodus; Solidon vergibt sie an Drehen und
 Fasen, und für die Zeichenwerkzeuge hat die Tabelle gar nichts. Wer aus Fusion
 kommt, greift beim Zeichnen ins Leere und löst beim Modellieren etwas anderes
 aus als erwartet.
@@ -594,7 +594,7 @@ ausblenden kann.
 
 **Korrektur zur ersten Fassung dieses Abschnitts.** Dort stand, *Bearbeiten →
 Automatisch teilen* auf einem passenden Teil sage „nichts". Das war falsch:
-Formwerk schreibt „Dieses Objekt passt bereits auf das Bett." in die
+Solidon schreibt „Dieses Objekt passt bereits auf das Bett." in die
 Statusleiste. Im Lauf ist mir das entgangen, weil ich nach einer Menüaktion
 Verlauf und Prüfbericht angesehen habe — und dort steht nichts, richtigerweise.
 
@@ -657,7 +657,7 @@ Getestet war die Zusage bis dahin nicht; jetzt hält
 ### 5.5 Ein Absturz, nicht reproduzierbar
 
 Nach längerer Arbeit (Themenwechsel, Skizzeneditor, mehrere Beispiele) ist
-Formwerk beim Ändern eines Projektparameters **ohne Meldung verschwunden** —
+Solidon beim Ändern eines Projektparameters **ohne Meldung verschwunden** —
 kein Fenster, kein Prozess. In einer frischen Sitzung ließ sich derselbe
 Ablauf nicht wiederholen; die Parameteränderung lief dort sauber durch (Halter
 folgte von 60 auf 90 mm), mit einer Qt-Warnung `QLineEdit::setSelection:
@@ -736,7 +736,7 @@ voneinander entfernt** „Halter 60.00 × 40.00 × 11.00 mm" und das Eingabefeld
 ## Teil 7 — Handbuch
 
 Die geschriebenen Seiten sind **das Beste an der Anwendung**: klar, kurz,
-ehrlich auch bei dem, was Formwerk nicht kann („kein Slicer", „keine Cloud"),
+ehrlich auch bei dem, was Solidon nicht kann („kein Slicer", „keine Cloud"),
 mit Sätzen wie „Jeder Schritt bleibt eine Zahl". Die Seite *Das Fenster* hat ein
 gezeichnetes Schema. Zwei Dinge trüben das:
 
@@ -959,7 +959,7 @@ Kamera-Achse; an der echten Kamera gemessen bleibt der Punkt jetzt auf
 0,000000 mm stehen.
 
 **Und ein Fund am Ende, wieder nur im Bild sichtbar:** `make_figures.py` baute
-seine Anwendung ohne `apply_theme`. Die Bildschirmfotos zeigten Formwerk mit
+seine Anwendung ohne `apply_theme`. Die Bildschirmfotos zeigten Solidon mit
 Qt-Vorgaben — Kacheln ohne Rahmen, Knöpfe ohne Abstufung, der Titel in
 Fließtextgröße. Ein Handbuch, das etwas anderes zeigt als die Anwendung, ist
 an der Stelle falsch, an der man ihm am ehesten glaubt.

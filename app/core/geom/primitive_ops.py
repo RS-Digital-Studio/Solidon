@@ -64,7 +64,7 @@ class BoxParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
     )
 
 
@@ -119,7 +119,7 @@ class CylinderParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
     )
 
 
@@ -160,7 +160,7 @@ class SphereParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
     )
 
 
@@ -196,7 +196,7 @@ class ScadParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen."),
+        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
     )
 
 

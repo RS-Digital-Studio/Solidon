@@ -25,7 +25,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/formwerk_hooks.py\" sitzungsstart",
+            "command": "\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" sitzungsstart",
             "timeout": 20
           }
         ]
@@ -38,7 +38,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/formwerk_hooks.py\" vor-bash",
+            "command": "\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" vor-bash",
             "timeout": 20
           }
         ]
@@ -51,7 +51,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/formwerk_hooks.py\" nach-aenderung",
+            "command": "\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" nach-aenderung",
             "timeout": 90,
             "statusMessage": "Formatiere und prüfe die Datei"
           }
@@ -63,7 +63,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/formwerk_hooks.py\" testlauf",
+            "command": "\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" testlauf",
             "timeout": 20
           }
         ]
@@ -75,7 +75,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/formwerk_hooks.py\" abschluss",
+            "command": "\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" abschluss",
             "timeout": 30
           }
         ]

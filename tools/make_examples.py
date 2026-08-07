@@ -459,7 +459,7 @@ def box_with_lid() -> Project:
             OperationDraft(
                 op="label_text",
                 inputs=("obj_1",),
-                params={"text": "FORMWERK", "size": 6.0, "depth": 0.6, "slot": 1},
+                params={"text": "SOLIDON3D", "size": 6.0, "depth": 0.6, "slot": 1},
             )
         ],
     )

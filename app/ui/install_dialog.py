@@ -1,6 +1,6 @@
 """Was fehlt, und ein Knopf, der es holt (Bauplan §36, §38).
 
-Eine Zeile je Sache, die Formwerk benutzen kann, mit dem Zweck und dem
+Eine Zeile je Sache, die Solidon benutzen kann, mit dem Zweck und dem
 Zustand. Wo sich etwas von hier installieren lässt, hat die Zeile einen Knopf;
 wo nicht, den Grund und die offizielle Seite.
 
@@ -177,7 +177,7 @@ class _Row(QWidget):
 
 
 class InstallDialog(QDialog):
-    """Die Liste dessen, was Formwerk benutzen kann, und was davon da ist."""
+    """Die Liste dessen, was Solidon benutzen kann, und was davon da ist."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -188,7 +188,7 @@ class InstallDialog(QDialog):
         intro = QLabel(
             tr(
                 "Keines davon ist Pflicht — ohne sie fehlen einzelne Funktionen, "
-                "der Rest von Formwerk arbeitet unverändert."
+                "der Rest von Solidon arbeitet unverändert."
             ),
             self,
         )

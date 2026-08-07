@@ -281,7 +281,7 @@ def test_the_assembly_reports_before_writing(tmp_path: Path, profile: Profile) -
 
 
 def test_the_assembly_carries_the_part_names_where_the_slicer_reads_them() -> None:
-    """Der Standard hat ein ``name``-Attribut am Objekt, und Formwerk schreibt
+    """Der Standard hat ein ``name``-Attribut am Objekt, und Solidon schreibt
     es auch — aber die Orca-Familie schreibt es selbst nie und liest die Namen
     aus ``model_settings.config``. Ohne diese Beilage kam eine Baugruppe als
     „Object 1, Object 2" an, obwohl die Namen in der Datei standen.

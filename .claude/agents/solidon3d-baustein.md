@@ -1,5 +1,5 @@
 ---
-name: formwerk-baustein
+name: solidon3d-baustein
 description: >
   Baut und pflegt die Bausteinbibliothek und die Normteiltabelle (Bauplan §24) —
   register_part gegen manifold3d, benannte Features, to_scad, Vorschaubild,
@@ -9,14 +9,14 @@ description: >
   <example>
   Context: Neuer Baustein
   user: "Wir brauchen eine Magnettasche für 6x3-Magnete"
-  assistant: "formwerk-baustein legt sie an — Schema, Geometrie, Features, Test über den Bereich."
+  assistant: "solidon3d-baustein legt sie an — Schema, Geometrie, Features, Test über den Bereich."
   <commentary>Neuer Baustein nach der Checkliste aus AGENTS.md.</commentary>
   </example>
 
   <example>
   Context: Maß stimmt nicht
   user: "Das Gewindepaar greift nicht"
-  assistant: "formwerk-baustein prüft Flankenspiel und Steigung und zieht parts_version nach."
+  assistant: "solidon3d-baustein prüft Flankenspiel und Steigung und zieht parts_version nach."
   <commentary>Maßänderung an einem bestehenden Baustein hat Folgen für alte Projekte.</commentary>
   </example>
 model: opus

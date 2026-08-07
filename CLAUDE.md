@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# Formwerk — Anweisungen für Claude Code
+# Solidon — Anweisungen für Claude Code
 
 `AGENTS.md` oben ist die Hausordnung und gilt vollständig. Diese Datei ergänzt,
 was nur Claude Code betrifft: Befehle, Werkzeuge, und die Stellen, an denen
@@ -8,7 +8,7 @@ meine globalen Vorgaben auf dieses Projekt nicht passen.
 
 ## Was dieses Projekt ist
 
-Formwerk — eine Desktop-Anwendung in **Python 3.13 mit PySide6**, kein
+Solidon — eine Desktop-Anwendung in **Python 3.13 mit PySide6**, kein
 Avalonia/.NET. Die globale `~/.claude/CLAUDE.md` beschreibt meine Haltung und
 Arbeitsweise; ihre Stack-Angaben (Avalonia, `dotnet build`, MVVM, RESX,
 Android) gelten hier **nicht**. Wo sie sich widersprechen, gewinnt für den
@@ -65,7 +65,7 @@ zusammen. Weiteres:
 .venv\Scripts\python.exe tools/make_figures.py                  # Bildschirmfotos fürs Handbuch
 .venv\Scripts\python.exe tools/make_manual.py                   # Handbuch als Website und PDF
 .venv\Scripts\python.exe tools/make_icon.py                     # Anwendungssymbol rastern: ICO und Website-Favicon
-.venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Formwerk, braucht Inno Setup 6
+.venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Solidon, braucht Inno Setup 6
 ```
 
 Die letzten beiden laufen **nicht** offscreen und dürfen es nicht: unter

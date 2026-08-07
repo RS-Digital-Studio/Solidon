@@ -90,7 +90,7 @@ class HeaderBar(QWidget):
     def show_project(self, name: str, result: EvaluationResult | None, unit: LengthUnit) -> None:
         """Name und Außenmaß des offenen Projekts.
 
-        Die Dateiendung fällt weg: dass ein Formwerk-Projekt ``.p3d`` heißt,
+        Die Dateiendung fällt weg: dass ein Solidon-Projekt ``.p3d`` heißt,
         weiß der Dateidialog, und in einer Überschrift ist es Rauschen. Der
         Stern für Ungesichertes bleibt — er ist eine Aussage.
         """

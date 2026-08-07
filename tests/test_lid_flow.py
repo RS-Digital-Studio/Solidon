@@ -4,7 +4,7 @@ Der Deckel holt sein Spiel seit jeher aus dem Materialprofil — und trug
 trotzdem keinen ``Fit``. Damit liefen die drei Regeln aus ``slice/advise.py``
 ins Leere, die genau für Passungen da sind: genaue Außenwand, gebremste
 Beschleunigung, Bügeln. Ausgerechnet dort, wo das Zusammenspiel zweier Teile
-der Zweck ist, druckte Formwerk wie an einer beliebigen Wand.
+der Zweck ist, druckte Solidon wie an einer beliebigen Wand.
 """
 
 from __future__ import annotations

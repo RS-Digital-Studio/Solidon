@@ -324,7 +324,7 @@ def test_without_a_bed_the_parts_stay_where_the_model_has_them() -> None:
 
 
 def test_with_a_bed_every_part_carries_its_place() -> None:
-    """Formwerk rechnet um den Nullpunkt, ein Slicer misst von der Ecke.
+    """Solidon rechnet um den Nullpunkt, ein Slicer misst von der Ecke.
 
     Ohne die Umrechnung liegt die ganze Szene außerhalb des Betts, und der
     Slicer ordnet notgedrungen selbst an — womit alles verloren ist, was

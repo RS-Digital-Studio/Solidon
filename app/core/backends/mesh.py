@@ -381,7 +381,7 @@ class ComfyBackend:
         """Legt das Bild dorthin, wo ComfyUI es sehen kann, und gibt den Namen
         zurück, den es bekommen hat.
         """
-        name = f"formwerk_{uuid.uuid4().hex}.png"
+        name = f"solidon_{uuid.uuid4().hex}.png"
         boundary = uuid.uuid4().hex
         body = b"".join(
             [

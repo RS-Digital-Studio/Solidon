@@ -49,7 +49,7 @@ class BRepUnavailable(AppError):
             detail=detail
             or _(
                 "Fasen, Verrundungen und STEP brauchen OpenCASCADE. "
-                "Alles andere in Formwerk funktioniert ohne."
+                "Alles andere in Solidon funktioniert ohne."
             )
         )
 
@@ -77,7 +77,7 @@ def _quieten() -> None:
 
     Der STEP-Schreiber meldet seinen Fortschritt auf der Standardausgabe, und
     die landet auf der Kommandozeile mitten in dem, was gerade geschrieben
-    wird, und in der paketierten Anwendung nirgendwo Nützlichem. Formwerk
+    wird, und in der paketierten Anwendung nirgendwo Nützlichem. Solidon
     protokolliert (§33.2); der Kern bekommt keinen eigenen Kanal.
     """
     global _quiet

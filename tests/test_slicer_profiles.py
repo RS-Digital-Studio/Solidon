@@ -374,7 +374,7 @@ def test_the_filament_default_is_the_plain_one(slicer: Path) -> None:
 
 
 def test_the_machine_name_leads_to_the_printer_profile() -> None:
-    """Der Name des Slicers trägt die Düse, der von Formwerk nicht.
+    """Der Name des Slicers trägt die Düse, der von Solidon nicht.
 
     Verglichen wird deshalb am Anfang — und der längste Titel gewinnt, sonst
     stünde „Elegoo Neptune 4" auch für den Plus.

@@ -2,7 +2,7 @@
 name: konzept
 description: >
   Denkt Features und Änderungen konzeptionell durch, bevor gebaut wird: Gehört das
-  in Formwerk? Passt es zu den neun Leitprinzipien? Wo steht es im Bauplan, und was
+  in Solidon? Passt es zu den neun Leitprinzipien? Wo steht es im Bauplan, und was
   kostet es an anderer Stelle? Liefert einen belastbaren Entwurf mit Abgrenzung,
   Risiken und Abnahmekriterien — oder eine begründete Ablehnung.
 

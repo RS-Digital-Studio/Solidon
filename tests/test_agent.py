@@ -68,7 +68,7 @@ def test_the_context_carries_scene_report_and_rules(project: Project, profile: P
     system = messages[0].content
     world = messages[1].content
 
-    assert "Formwerk" in system
+    assert "Solidon" in system
     assert f"Version {rules.version()}" in system, "§26.4: the prompt names the rule version"
     assert "Mindestwandstärke" in system
     assert "hole_1" in world, "the digest travels along (§23)"

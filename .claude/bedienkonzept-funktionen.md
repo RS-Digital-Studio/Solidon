@@ -231,12 +231,12 @@ Nutzer nennt einen Agenten oder bittet um Delegation
 
 **Was schiefging** — Fünfzehn definierte Agenten, null Einsätze. Das ist
 richtig so: die Anweisung ist eindeutig, ohne Auftrag wird nicht delegiert. Aber
-`formwerk-sprache` beschreibt exakt die Arbeit dieser Sitzung.
+`solidon3d-sprache` beschreibt exakt die Arbeit dieser Sitzung.
 
 **Regel** — Ein Agentenroster, den nie jemand öffnet, ist eine Speisekarte ohne
 Kellner. **Wenn eine Aufgabe wörtlich der Beschreibung eines Agenten
 entspricht, wird das gesagt** — einmal, als Angebot, nicht als Rückfrage: „Das
-ist die Arbeit von `formwerk-sprache` — ich mache es hier inline, sag Bescheid,
+ist die Arbeit von `solidon3d-sprache` — ich mache es hier inline, sag Bescheid,
 wenn du es lieber delegiert hättest."
 
 ---
@@ -344,7 +344,7 @@ Server verbindet sich
 **Was schiefging** — Das lauteste Nichts der Sitzung. Ankündigungen über
 verbindende, getrennte, wiederverbundene und anmeldepflichtige Server kamen
 mindestens **sechsmal**, mit langen Listen (`amplitude`, `asana`, `bigquery`,
-`pagerduty` …). Benutzt wurde **kein einziges** dieser Werkzeuge. Formwerk ist
+`pagerduty` …). Benutzt wurde **kein einziges** dieser Werkzeuge. Solidon ist
 eine Desktop-Anwendung ohne Netzanbindung — keiner dieser Server wird hier je
 gebraucht.
 

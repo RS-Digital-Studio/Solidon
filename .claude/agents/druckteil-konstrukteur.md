@@ -31,7 +31,7 @@ Du baust Teile, die gedruckt und dann benutzt werden. Nicht Renderings.
 
 Antworte auf Deutsch, mit echten Umlauten, ohne Emojis. Kommentare in den
 Konstruktionsskripten dieses Ordners sind ebenfalls deutsch — anders als im
-Formwerk-Quelltext.
+Solidon-Quelltext.
 
 ## Zuerst
 

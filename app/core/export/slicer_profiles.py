@@ -1,6 +1,6 @@
 """Die Profile finden, die ein installierter Slicer mitbringt (Bauplan §29).
 
-Formwerk schreibt die Druckeinstellungen, aber nicht das Maschinenwissen:
+Solidon schreibt die Druckeinstellungen, aber nicht das Maschinenwissen:
 Bettform, Anfahrwege, Start- und Endcode, die Eigenheiten einer Kinematik
 stehen im Profilbestand des Slicers und bleiben dort (§29). Was fehlte, war
 der Zeiger darauf — die Orca-Familie bricht ohne beide Profile mit „process
@@ -62,7 +62,7 @@ class SlicerProfile:
     default_process: str = ""
     filament_type: str = ""
     """Nur bei Filamentprofilen: ``PETG``, ``PLA``, … — daran hängt die
-    Zuordnung zum Material, das in Formwerk eingestellt ist."""
+    Zuordnung zum Material, das in Solidon eingestellt ist."""
     from_user: bool = False
     """Selbst angelegt statt mitgeliefert — solche Profile gewinnen bei
     Gleichstand, weil jemand sie absichtlich gemacht hat."""
@@ -164,7 +164,7 @@ def printer_for(machine: str, known: Mapping[str, PrinterProfile]) -> str:
     """Welches Druckerprofil dieser Maschinenname meint — oder nichts.
 
     Der Name des Slicers trägt Düse und Zusätze („… 0.4 nozzle"), der von
-    Formwerk nicht; verglichen wird deshalb am Anfang. Trifft nichts, bleibt es
+    Solidon nicht; verglichen wird deshalb am Anfang. Trifft nichts, bleibt es
     leer: geraten wird hier so wenig wie in :func:`match`.
     """
     wanted = machine.casefold()
@@ -276,7 +276,7 @@ def find_profiles(
 
     Für ``prusa`` bleibt die Liste leer, und das ist kein Mangel: eine
     PrusaSlicer-``.ini`` läuft eigenständig, sobald Düse und Bettform darin
-    stehen, und die schreibt Formwerk selbst (§29).
+    stehen, und die schreibt Solidon selbst (§29).
     """
     if flavour == "prusa":
         return []

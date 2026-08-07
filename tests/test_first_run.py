@@ -45,7 +45,7 @@ def test_a_missing_tool_is_not_an_error() -> None:
 def test_a_service_is_asked_on_its_port_not_looked_for_on_the_disk() -> None:
     """ComfyUI kann portabel in ``D:\\AI`` liegen — dort findet es keine Suche.
 
-    Formwerk startet es ohnehin nie, es redet über HTTP mit ihm. Die Frage ist
+    Solidon startet es ohnehin nie, es redet über HTTP mit ihm. Die Frage ist
     also, ob etwas antwortet, und nicht, ob eine Datei existiert.
     """
     service = tools.ExternalTool(
@@ -213,7 +213,7 @@ def test_a_window_does_not_open_a_dialog_by_itself(qt_app: QApplication) -> None
 def test_a_report_carries_the_versions() -> None:
     entry = reports.environment()
 
-    assert entry["app"].startswith("Formwerk")
+    assert entry["app"].startswith("Solidon")
     assert entry["python"]
     assert "trimesh" in entry
 

@@ -153,7 +153,7 @@ def _holes(centres: list[Point2], diameter: float) -> Sketch:
     Jedes Loch bekommt seinen eigenen Radius als Maß und seinen eigenen
     Festpunkt — damit ist die Skizze bestimmt, ohne dass ein Loch am anderen
     hängt. Das ist die Entscheidung gegen ein assoziatives Muster: die
-    Parametrik liegt in Formwerk eine Ebene höher (§13, Maße sind Ausdrücke),
+    Parametrik liegt in Solidon eine Ebene höher (§13, Maße sind Ausdrücke),
     und ein zweiter Mechanismus daneben wäre einer, der mit dem ersten
     auseinanderlaufen kann.
     """

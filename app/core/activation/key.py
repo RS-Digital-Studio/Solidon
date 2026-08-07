@@ -2,7 +2,7 @@
 
 Ein Schlüssel ist eine signierte Nutzlast, in Base32 geschrieben:
 
-    FORMWERK-1-ABCDEFGH-IJKLMNOP-...
+    SOLIDON3D-1-ABCDEFGH-IJKLMNOP-...
 
 Base32 (RFC 4648) statt Base64, weil sein Alphabet keine verwechselbaren
 Zeichen enthält — kein 0 gegen O, kein 1 gegen l. Ein Schlüssel wird
@@ -33,7 +33,7 @@ from app.i18n import TranslatableText, _
 
 #: Was vor der Nutzlast steht. Wird beim Lesen verlangt, damit eine
 #: hineingerutschte Zeichenkette anderer Herkunft sofort auffällt.
-PREFIX: Final = "FORMWERK"
+PREFIX: Final = "SOLIDON3D"
 
 #: Fassung des Schlüsselformats. Steht im Text **und** signiert in der
 #: Nutzlast: nur der Text wäre umdeutbar, sobald es eine Fassung 2 gibt.
@@ -114,7 +114,7 @@ def _normalise(text: str) -> str:
     head = f"{PREFIX}-{FORMAT_VERSION}-"
     if not upper.startswith(head):
         raise LicenceKeyError(
-            detail=_("Der Schlüssel beginnt nicht mit „FORMWERK-1-“."),
+            detail=_("Der Schlüssel beginnt nicht mit „SOLIDON3D-1-“."),
             values={"expected_prefix": head},
         )
     body = []
@@ -221,7 +221,7 @@ def parse(text: str, public_key: bytes | None = None, major: int | None = None) 
     expected = current_major() if major is None else major
     if licence.major != expected:
         raise LicenceKeyError(
-            detail=_("Dieser Schlüssel gilt für eine andere Hauptversion von Formwerk."),
+            detail=_("Dieser Schlüssel gilt für eine andere Hauptversion von Solidon."),
             values={"key_major": licence.major, "app_major": expected},
         )
     return licence

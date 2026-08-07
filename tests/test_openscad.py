@@ -138,7 +138,7 @@ def test_a_run_gets_its_own_folder_and_no_network(monkeypatch: pytest.MonkeyPatc
 
     assert result.stl.startswith(b"solid")
     workspace = Path(str(seen["cwd"]))
-    assert workspace.name.startswith("formwerk-scad-")
+    assert workspace.name.startswith("solidon-scad-")
     environment = seen["env"]
     assert isinstance(environment, dict)
     assert environment["OPENSCADPATH"] == str(workspace)

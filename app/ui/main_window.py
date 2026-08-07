@@ -151,6 +151,16 @@ _log = get_logger(__name__)
 
 AUTOSAVE_INTERVAL_MS = 120_000
 
+#: Wie lange die Druckeinstellungen auf eine nachgerechnete Schichtanalyse
+#: warten, bevor sie ohne sie aufgehen.
+#:
+#: Zwei Sekunden sind das Zehnfache dessen, was §31 für zweihunderttausend
+#: Dreiecke zulässt, und das Zehnfache dessen, was die Teile eines Gewürzsets
+#: tatsächlich brauchten. Wer ein Netz mitbringt, das darüber liegt, bekommt
+#: den Dialog trotzdem — nur ohne die Vorschläge zur Geometrie, so wie vorher
+#: immer.
+SLICE_WAIT_MS = 2000
+
 #: Wie lange der Rahmen steht, mit dem ein Tourschritt auf seinen Bereich
 #: zeigt. Lang genug, um den Blick dorthin zu ziehen, kurz genug, um nicht als
 #: Zustand gelesen zu werden.
@@ -875,7 +885,7 @@ class MainWindow(QMainWindow):
             tr("Beenden"),
             None,
             self.close,
-            tr("Formwerk schließen. Ungesichertes wird vorher erfragt."),
+            tr("Solidon schließen. Ungesichertes wird vorher erfragt."),
         )
 
         edit_menu = self._menu(tr("Bearbeiten"))
@@ -1176,7 +1186,7 @@ class MainWindow(QMainWindow):
             tr("Zusätzliche Programme …"),
             None,
             self.action_install_extras,
-            tr("Was Formwerk außerdem benutzen kann, wo es liegt und wie es dazukommt."),
+            tr("Was Solidon außerdem benutzen kann, wo es liegt und wie es dazukommt."),
         )
         self._add_action(
             help_menu,
@@ -1202,14 +1212,14 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         self._add_action(
             help_menu,
-            tr("Formwerk freischalten …"),
+            tr("Solidon freischalten …"),
             None,
             self.action_activate,
             tr("Testzeitraum, Lizenzschlüssel eintragen, und was nach Ablauf offen bleibt."),
         )
         self._add_action(
             help_menu,
-            tr("Über Formwerk"),
+            tr("Über Solidon"),
             None,
             self.action_about,
             tr("Version, Rechteinhaber und die verwendeten Fremdbibliotheken."),
@@ -1622,17 +1632,20 @@ class MainWindow(QMainWindow):
         """§29: die Einstellungen, mit denen gedruckt wird — hier, nicht im
         anderen Programm.
 
-        Der Dialog nimmt die Schichtanalyse mit, wo eine vorliegt: die
-        Vorschläge über Stützen, Haftung und Mindestschichtzeit hängen an der
-        Geometrie und nicht am Material allein.
+        Der Dialog bekommt die Schichtanalyse, und wo keine vorliegt, wird sie
+        vorher gerechnet: die Vorschläge über Stützen, Haftung und
+        Mindestschichtzeit hängen an der Geometrie und nicht am Material
+        allein. Ohne sie ging der Dialog mit null Vorschlägen auf — bei einem
+        Teil, dem Solidon 845 mm² Überhang auf einer Schicht ansieht.
         """
         # Eine knappe halbe Sekunde, die zum größten Teil auf die Suche nach dem
         # Slicer geht — unter der Grenze aus §2.8, aber nicht unter der, ab der
-        # ein Zeiger dazugehört.
+        # ein Zeiger dazugehört. Die Schichtanalyse kommt jetzt dazu und kostet
+        # zwei Zehntel.
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             dialog = PrintSettingsDialog(
-                self.session, self.settings, self, slice_result=self._current_slice()
+                self.session, self.settings, self, slice_result=self._current_slice(wait=True)
             )
         finally:
             QApplication.restoreOverrideCursor()
@@ -1646,18 +1659,42 @@ class MainWindow(QMainWindow):
         self.settings.print_quality = dialog.settings.quality
         save_settings(self.settings)
 
-    def _current_slice(self) -> SliceResult | None:
-        """Die Schichtanalyse des gewählten Körpers, **wenn sie schon vorliegt**.
+    def _current_slice(self, wait: bool = False) -> SliceResult | None:
+        """Die Schichtanalyse des gewählten Körpers.
 
-        Der Dialog beschreibt genau diesen Vertrag: „die Schichtanalyse, wenn
-        das Fenster schon eine hat". Sie hier zu erzwingen hieß, den Weg zu den
-        Druckeinstellungen an einer Rechnung aufzuhalten, die niemand bestellt
-        hat — ohne sie bleiben die Vorschläge aus Material und Maschine (§29).
+        ``wait`` rechnet sie nach, wenn sie fehlt. Das war lange umgekehrt: sie
+        zu erzwingen hieße, den Weg zu den Druckeinstellungen an einer Rechnung
+        aufzuhalten, die niemand bestellt hat.
+
+        Die Annahme hinter dem Satz stimmt nicht. Gemessen an den Teilen eines
+        Gewürzsets kostet die Analyse zwei Zehntelsekunden, und §31 deckelt sie
+        bei dreihundert Millisekunden für zweihunderttausend Dreiecke — die
+        Profilsuche im selben Dialog braucht 1,3 Sekunden und läuft
+        selbstverständlich. Was der Verzicht dagegen kostete, ist der ganze
+        Zweck: **ohne Analyse gibt es keinen einzigen Vorschlag zur
+        Geometrie.** Der Dialog ging mit null Vorschlägen und ausgegrautem
+        „Übernehmen" auf, und die Warnung „Die Überhänge sind zu groß, um sich
+        selbst zu tragen" erschien erst danach — wenn überhaupt.
+
+        Genau daran ist ein Satz Gewürzdeckel gescheitert: 845 mm² Überhang auf
+        einer Schicht, gemessen hätte Solidon es sofort, gefragt hat es
+        niemand.
         """
         object_id = self.object_tree.selected()
         if object_id is None:
             return None
-        return self._slice_of(object_id)
+        found = self._slice_of(object_id)
+        if found is not None or not wait:
+            return found
+        # Nachrechnen und darauf warten: der Dialog geht gleich auf, und ohne
+        # das Ergebnis wäre seine Vorschlagsliste leer. Der Wartezeiger steht
+        # währenddessen schon.
+        self._slice_of(object_id, then=lambda _result: None)
+        worker = self._slice_worker
+        if worker is not None:
+            worker.wait(SLICE_WAIT_MS)
+            QApplication.processEvents()
+        return self._slice_cache if self._slice_key is not None else None
 
     def _gcode_returned(self, outcome: SliceOutcome) -> None:
         """Was der Slicer gemessen hat, geht in den Prüfbericht — als gemessen

@@ -1,4 +1,4 @@
-# Konzept: Erste Veröffentlichung (Formwerk 1.0)
+# Konzept: Erste Veröffentlichung (Solidon 1.0)
 
 Stand 06.08.2026. Deckt ROADMAP-P8 ab und geht darüber hinaus: die Website
 nennt seit ihrer Entstehung ein Bezahlmodell, für das im Code nichts existiert.
@@ -16,8 +16,8 @@ am Code belegt — die Belegstelle steht dabei.
 | Bereich | Stand | Beleg |
 |---|---|---|
 | Anwendung | P0–P12 abgeschlossen, drei Hauptwege als Ende-zu-Ende-Tests | `ROADMAP.md` |
-| Paketierung | PyInstaller-Spec vollständig, optionale Kerne als `hiddenimports` | `packaging/formwerk.spec` |
-| Installer | Inno-Setup-Skript ohne eigene Werte, Defines aus `branding.py` | `packaging/formwerk.iss`, `tools/make_installer.py` |
+| Paketierung | PyInstaller-Spec vollständig, optionale Kerne als `hiddenimports` | `packaging/solidon3d.spec` |
+| Installer | Inno-Setup-Skript ohne eigene Werte, Defines aus `branding.py` | `packaging/solidon3d.iss`, `tools/make_installer.py` |
 | Symbol | SVG-Quelle, rastert nach ICO und Website-Favicon | `tools/make_icon.py` |
 | CI | drei Jobs, Matrix nur bei Tag und Handstart, Signierschritt vorhanden | `.github/workflows/build.yml` |
 | Lizenzprüfung | Abhängigkeiten gegen Freigabeliste, Drittlizenzen gepflegt | `tests/test_licences.py`, `THIRD-PARTY-NOTICES.md` |
@@ -28,7 +28,7 @@ am Code belegt — die Belegstelle steht dabei.
 | Handbuch | achtzehn Seiten, Referenzhälfte aus dem Register | `app/core/manual.py` |
 | Das Tor | **grün am 06.08.2026**: 2872 Tests, 10 übersprungen, 11 abgewählt; ruff, format und mypy ohne Fund | eigener Lauf |
 
-Das Repository liegt auf GitHub: `RS-Digital-Studio/Formwerk`. **Damit ist die
+Das Repository liegt auf GitHub: `RS-Digital-Studio/Solidon`. **Damit ist die
 ROADMAP-Aussage „es gibt kein Remote" veraltet** (`ROADMAP.md:526`). 13 lokale
 Commits sind nicht gepusht; `origin/main` steht auf `4700309`. Ob die CI dort je
 grün gelaufen ist, ließ sich von dieser Maschine aus nicht feststellen — `gh`
@@ -68,7 +68,7 @@ Ebenso fehlt der rechtliche Rahmen eines Verkaufs:
   Endnutzer-Lizenzvertrag**. Was der Käufer für 49 € erwirbt — auf wie vielen
   Geräten, übertragbar oder nicht, welche Updates inbegriffen sind — steht
   nirgends. Der Installer zeigt genau diesen Text als Lizenzseite
-  (`formwerk.iss:27`).
+  (`solidon3d.iss:27`).
 * `website/impressum.html` ist ein Entwurf mit `[STRASSE UND HAUSNUMMER]` und
   `[PLZ UND ORT]`. Eine Anschrift ist nach § 5 DDG Pflicht.
 * `website/datenschutz.html` hat `[HOSTER EINTRAGEN]` und kennt keine
@@ -112,7 +112,7 @@ Der Käufer bekommt eine Zeichenkette. Er trägt sie einmal ein. Die Anwendung
 prüft die Signatur **auf dem Rechner** und fragt niemanden.
 
 ```
-FORMWERK-1-<base32(nutzlast)>-<base32(signatur)>
+SOLIDON3D-1-<base32(nutzlast)>-<base32(signatur)>
 Nutzlast: Hauptversion · Kaufdatum · Bestellkennung · Käuferkennung
 ```
 
@@ -139,7 +139,7 @@ ohne die ist unverantwortlich.
 
 ### C — Nach Ablauf bleibt, was liest. Was schreibt, braucht einen Schlüssel
 
-14 Tage ab erstem Start. Danach ist Formwerk ein vollständiger Betrachter seiner
+14 Tage ab erstem Start. Danach ist Solidon ein vollständiger Betrachter seiner
 eigenen Projekte und nichts weiter.
 
 **Die Linie in einem Satz:** *Was das Dokument ändert oder ein Ergebnis
@@ -174,7 +174,7 @@ und ein Betrachter, der nicht messen darf, ist ein schlechter Betrachter.
 **Wie es sich anfühlt (Regel 17, Regel 19):** Die Oberfläche graut gesperrte
 Einträge aus und sagt im Hinweistext, warum. Wer es trotzdem auslöst, bekommt
 keinen Abbruch, sondern `LicenceRequired` mit zwei Handlungen — „Schlüssel
-eintragen" und „Formwerk kaufen". Kein Dialog beim Start, keine Zählung im
+eintragen" und „Solidon kaufen". Kein Dialog beim Start, keine Zählung im
 Fenstertitel, keine Erinnerung am dritten Tag: **einmal** eine Zeile in der
 Statusleiste, wenn weniger als drei Tage übrig sind.
 
@@ -216,7 +216,7 @@ seinen eigenen Nutzer täuscht, tut es an einer Stelle nicht zum letzten Mal.
 
 **Der Testlaufmarker bleibt umgehbar.** Er liegt im Nutzerprofil, und wer ihn
 löscht, hat wieder 14 Tage. Das zu verhindern bräuchte Verstecke im System —
-also genau das Verhalten, das Formwerk nirgends zeigt. Die Frist ist eine
+also genau das Verhalten, das Solidon nirgends zeigt. Die Frist ist eine
 Erinnerung; die Schwelle für den *dauerhaften* Gebrauch ist H1, und die hält.
 
 ### D — Zahlungsabwicklung über einen Merchant of Record
@@ -287,7 +287,7 @@ Update-Hinweis vergleicht gegen sie.
 
 ### H — Auslieferung der Datei über den eigenen Webspace
 
-Die Setup-Datei liegt auf `formwerk.rsdigital.de`, nicht als
+Die Setup-Datei liegt auf `solidon3d.rs-digital.org`, nicht als
 GitHub-Release-Artefakt. Grund: Das Repository ist privat und soll es bleiben —
 ein Release-Anhang daraus wäre nicht öffentlich abrufbar. Die CI hebt das Paket
 sieben Tage als Artefakt auf (`build.yml:179`); von dort geht es von Hand auf
@@ -295,6 +295,23 @@ den Webspace.
 
 **Bei rund 255 MB je Fassung ist der Platz auf dem Webspace zu prüfen**, bevor
 die zweite Fassung dazukommt.
+
+**Berichtigt am 06.08.2026: die Domain existierte nicht.** Der Plan nannte hier
+`solidon3d.rsdigital.de` — eine Adresse, die nie jemandem gehört hat. Es gibt
+genau eine Domain, `rs-digital.org`, zugleich die primäre Domain des Google
+Workspace. Alles läuft jetzt über `solidon3d.rs-digital.org`; damit teilen
+Produktseite und Support-Adresse einen Namen, was für den Käufer der
+eigentliche Gewinn ist: zwei Domains nebeneinander lesen sich wie Phishing,
+besonders bei einer Anwendung, die beim ersten Start ohnehin eine Warnung
+auslöst.
+
+**Google Workspace liefert keine Dateien aus.** Es ist Mail und
+Zusammenarbeit — kein Webspace, kein FTP, kein Ort für eigene HTML-Dateien.
+Google Sites (in Workspace enthalten) scheidet ebenfalls aus: es nimmt kein
+fertiges HTML entgegen, das erzeugte Handbuch müsste bei jeder Neuerzeugung von
+Hand übertragen werden, `version.json` ließe sich nicht unter fester Adresse als
+rohes JSON ausliefern, und 255 MB sind kein Anhang. **Ein Webspace ist damit
+eine offene Anschaffung, kein vorhandenes Mittel** — siehe §7.
 
 ---
 
@@ -436,7 +453,7 @@ Suite bleibt grün.
 
 ### V4b — Lizenzierung an der Oberfläche (M)
 
-1. Dialog „Formwerk freischalten": Feld, Einfügen, Prüfen. Texte über `tr()`,
+1. Dialog „Solidon freischalten": Feld, Einfügen, Prüfen. Texte über `tr()`,
    beide Sprachen
 2. Gesperrte Menüeinträge und Werkzeuge ausgegraut, mit Grund im Hinweistext —
    **vor** dem Klick, nicht danach (§2 C)
@@ -460,7 +477,7 @@ H5 aus §2 I. Steht bewusst nach V4b: erst richtig, dann hart.
 
 1. Cython als Bauabhängigkeit (`dev`-Extra), `licence/` als Erweiterung
    übersetzt
-2. `packaging/formwerk.spec` nimmt die Erweiterung statt der Python-Quellen; die
+2. `packaging/solidon3d.spec` nimmt die Erweiterung statt der Python-Quellen; die
    `.py`-Dateien dürfen **nicht** zusätzlich im Paket landen
 3. Manifest beim Bau erzeugen und signieren (H4)
 
@@ -515,7 +532,7 @@ Beispielprojekte sind da und rechnen · das Handbuch öffnet mit F1.
 6. Handbuch neu erzeugen (`tools/make_manual.py`) — die Bilder haben sich
    geändert, und mit dem achten Beispiel auch der Text
 
-**Verifikation:** `https://formwerk.rsdigital.de/` und `/en/` laden ·
+**Verifikation:** `https://solidon3d.rs-digital.org/` und `/en/` laden ·
 `/version.json` liefert rohes JSON · Download startet und die Prüfsumme stimmt ·
 alle Links in beiden Sprachen angeklickt · Update-Hinweis in einer Anwendung mit
 `APP_VERSION` 0.9 zeigt 1.0.0 an.
@@ -540,7 +557,7 @@ alle Links in beiden Sprachen angeklickt · Update-Hinweis in einer Anwendung mi
    Freischaltung
 
 **Verifikation:** der Kaufweg einmal vollständig von außen gegangen, mit einem
-Rechner, der Formwerk nie gesehen hat.
+Rechner, der Solidon nie gesehen hat.
 
 ### V10 — Danach (nicht Teil von 1.0)
 
@@ -617,14 +634,46 @@ anlaufen.
   Speichern und Undo. Was das Dokument ändert oder ein Ergebnis herausgibt,
   braucht einen Schlüssel.
 
+**Entschieden am 06.08.2026, nach einer erwogenen und verworfenen Beta-Stufe:**
+
+* **Keine Beta-Fassung. 1.0 ist die erste öffentliche Fassung.** Erwogen war
+  eine 0.9 mit Schlüsseln auf Hauptversion 0 — der Riegel dafür wäre gratis
+  gewesen, weil `key.parse` die Hauptversion ohnehin prüft und ein 0er-Schlüssel
+  in 1.0.0 von selbst abgelehnt worden wäre. Verworfen aus zwei Gründen. Erstens:
+  **der Testlauf ist die Beta schon** — vierzehn Tage kostenlos, danach
+  Betrachter; jeder Erstnutzer ist zwei Wochen lang ein Tester, der nichts
+  gezahlt hat. Eine eigene Stufe wäre eine zweite Umsetzung derselben Idee, mit
+  eigenem Bau, eigener Version und eigenem Schlüsselkreis. Zweitens: Sobald die
+  Beta öffentlich über die Website läuft — und anders wollte sie niemand —,
+  werden Impressum, Datenschutz und die Signierfrage ohnehin fällig. Gespart
+  hätte sie damit nur V5, und dafür den Verkauf um Wochen verschoben.
+* **Was die Beta geleistet hätte, leistet stattdessen ein leiser Start.** Seite
+  online, Verkauf scharf, aber die ersten Wochen nicht beworben: gezielt ein
+  paar Leute darauf, zusehen, 1.0.1 nachschieben, erst dann in die Foren. Das
+  fängt genau das ab, was 2913 Tests nicht abdecken — ob jemand anderes die
+  Anwendung bedienen kann — und kostet nichts.
+
 **Noch offen:**
 
 1. **Zahlungsanbieter** (§2 D): Paddle, Lemon Squeezy — oder Verkauf auf Anfrage
    für die erste Fassung? *Blockiert V5 und den Kaufknopf in V7.*
 2. **Signierung** (§2 E): Azure Trusted Signing, OV-Zertifikat auf Token — oder
-   1.0 unsigniert mit Prüfsumme und Erklärung? *Blockiert V6.*
+   1.0 unsigniert mit Prüfsumme und Erklärung? *Blockiert V6.* **Dringlicher als
+   zunächst angenommen:** SmartScreen-Reputation baut sich über Zeit und
+   Downloadzahl auf. Wer erst zum Verkaufsstart signiert, fängt bei null an,
+   genau wenn Geld fließt — und die Vorsichtigen, deren Urteil am meisten wert
+   ist, brechen an „Unbekannter Herausgeber" ab. Bei rund 10 $/Monat für Azure
+   Trusted Signing ist das die günstigste Fassung dieser Entscheidung.
 
-Beide sind Einkaufsentscheidungen, keine technischen — die Umsetzung V0–V4c
+3. **Webspace** (§2 H, neu am 06.08.2026): Google Workspace liefert nichts aus,
+   und einen Hoster für `rs-digital.org` gibt es bisher nicht nachweislich.
+   Gebraucht wird gewöhnlicher Webspace mit SFTP, HTTPS für die Subdomain und
+   Platz für rund 255 MB je Fassung. Die 255 MB schließen die üblichen
+   Statik-Dienste aus — Cloudflare Pages deckelt bei 25 MB je Datei, Netlify
+   ähnlich. Klassischer Webspace kann es; sonst Seite und Setup-Datei trennen
+   und letztere in einen Objektspeicher legen. *Blockiert V7.*
+
+Alle drei sind Einkaufsentscheidungen, keine technischen — die Umsetzung V0–V4c
 läuft ohne sie.
 
 ---
@@ -650,12 +699,12 @@ Hauptversion mit neuem öffentlichen Schlüssel.
 
 | Paket | Status | Commit |
 |---|---|---|
-| V0 Hausputz | teilweise — `constraints.txt` liegt im Repository, README und ROADMAP fehlen noch | |
+| V0 Hausputz | **fertig** — `constraints.txt` und das achte Beispiel liegen im Repository, README auf acht gezogen, vier ROADMAP-Stellen berichtigt | |
 | V1 CI grün | offen | |
 | V2 Rechtstexte | offen | |
 | V3 Prüfkern | **fertig**, Tor grün (2913 Tests) | |
 | V4 Grenze im Datenpfad | offen — **die vier Prüfstellen rufen `require` noch nicht** | |
-| V4b Oberfläche | angefangen: Dialog und die zwei Fehlerhandlungen stehen; ausgegraute Einträge, Statusleiste und Über-Dialog fehlen | |
+| V4b Oberfläche | angefangen: Dialog mit Menüeintrag, Löschknopf und Grund zum abgelegten Schlüssel, dazu die zwei Fehlerhandlungen; ausgegraute Einträge, Statusleiste und Über-Dialog fehlen | |
 | V4c Kompiliert ausliefern | offen | |
 | V5 Kaufabwicklung | offen | |
 | V6 Bauen und Installer | offen — dabei `PUBLIC_KEY` setzen und Version auf 1.0.0 | |

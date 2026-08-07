@@ -1,21 +1,21 @@
 ---
-name: formwerk-oberflaeche
+name: solidon3d-oberflaeche
 description: >
-  Baut und prüft die PySide6-Oberfläche von Formwerk: Fenster, Viewport, Dialoge,
+  Baut und prüft die PySide6-Oberfläche von Solidon: Fenster, Viewport, Dialoge,
   Objektbaum, Parameterleiste, Verlauf, Chat, Prüfbericht. Achtet auf
   Kerntrennung, tr(), Barrierefreiheit, Wartezeitverhalten und Offscreen-Tests.
 
   <example>
   Context: Neue Ansicht
   user: "Der Prüfbericht braucht eine Filterzeile"
-  assistant: "formwerk-oberflaeche baut sie mit tr()-Texten und Offscreen-Test."
+  assistant: "solidon3d-oberflaeche baut sie mit tr()-Texten und Offscreen-Test."
   <commentary>Oberflächenarbeit inklusive Übersetzung und Test.</commentary>
   </example>
 
   <example>
   Context: Bedienung hakt
   user: "Beim Berechnen friert das Fenster ein"
-  assistant: "formwerk-oberflaeche prüft, was im Qt-Hauptthread läuft, und zieht es heraus."
+  assistant: "solidon3d-oberflaeche prüft, was im Qt-Hauptthread läuft, und zieht es heraus."
   <commentary>Wartezeitverhalten nach §2.8.</commentary>
   </example>
 model: opus

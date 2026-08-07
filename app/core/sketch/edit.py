@@ -1,7 +1,7 @@
 """Skizzen ändern: Trimmen, Verlängern, Versetzen, Spiegeln (Bauplan §30.1).
 
 Die vier Werkzeuge, ohne die jede Kontur Handarbeit ist, die nicht aus einer
-Grundform kommt. Fusion hat sie in einer eigenen Gruppe; Formwerk hatte sie
+Grundform kommt. Fusion hat sie in einer eigenen Gruppe; Solidon hatte sie
 gar nicht — man konnte zeichnen und bemaßen, aber nichts kürzen.
 
 **Hier und nicht in der Oberfläche.** Jede dieser Handlungen rechnet

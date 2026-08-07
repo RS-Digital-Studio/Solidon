@@ -362,7 +362,7 @@ def render(source: str, *, timeout: float = TIMEOUT_SECONDS) -> RenderResult:
     import time
 
     started = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="formwerk-scad-") as directory:
+    with tempfile.TemporaryDirectory(prefix="solidon-scad-") as directory:
         workspace = Path(directory)
         scad_file = workspace / "model.scad"
         stl_file = workspace / "model.stl"

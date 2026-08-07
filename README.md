@@ -1,4 +1,4 @@
-# Formwerk
+# Solidon
 
 Desktop-Anwendung zum **Konstruieren, Generieren und Bearbeiten** druckbarer
 Modelle. Kern ist ein non-destruktiver Operationsstack über einer Szene mit
@@ -10,7 +10,7 @@ bleibt alles außer dem Chat benutzbar.
 
 Projektdateien tragen die Endung `.p3d`.
 
-## Was Formwerk nicht ist
+## Was Solidon nicht ist
 
 Damit niemand das Falsche erwartet:
 
@@ -61,7 +61,7 @@ jedem Wert und jedem Bereich. Die zweite Hälfte kommt aus demselben Register
 wie die Menüs — sie kann nicht veralten. Gesucht wird über den Text, nicht nur
 über die Überschriften.
 
-Auf der Kommandozeile gibt `formwerk docs --manual` denselben Text aus.
+Auf der Kommandozeile gibt `solidon3d docs --manual` denselben Text aus.
 
 ---
 
@@ -92,17 +92,17 @@ python -m venv .venv
 | `.venv/Scripts/python.exe tools/make_examples.py` | Beispielprojekte erzeugen |
 | `.venv/Scripts/python.exe tools/run_agent_suite.py` | Agenten-Suite gegen ein echtes Modell |
 
-Zum Starten per Doppelklick liegt unter `tools/start-formwerk.cmd` eine
+Zum Starten per Doppelklick liegt unter `tools/start-solidon3d.cmd` eine
 Verknüpfung.
 
 ## Paketieren
 
 ```
 .venv/Scripts/python.exe -m pip install pyinstaller
-.venv/Scripts/pyinstaller.exe packaging/formwerk.spec --noconfirm
+.venv/Scripts/pyinstaller.exe packaging/solidon3d.spec --noconfirm
 ```
 
-Ergebnis ist ein Ordner unter `dist/Formwerk`. Die Bauläufe für Windows und
+Ergebnis ist ein Ordner unter `dist/Solidon`. Die Bauläufe für Windows und
 Linux stehen in `.github/workflows/build.yml`; sie laufen erst, wenn die Suite
 auf allen drei Plattformen grün ist. Die Windows-Signierung braucht ein
 Zertifikat als Repository-Secret — ohne das entsteht ein unsigniertes Paket
@@ -113,7 +113,7 @@ konfiguriert (§36, §38). Beim ersten Start zeigt die Anwendung, welche davon
 gefunden wurden; Pflicht ist keines.
 
 Unter **Hilfe → Zusätzliche Programme** steht dieselbe Liste mit einem Knopf
-daneben. Python-Pakete (B-Rep-Kern, V-HACD, Schlüsselbund) holt Formwerk über
+daneben. Python-Pakete (B-Rep-Kern, V-HACD, Schlüsselbund) holt Solidon über
 `pip` in die eigene Umgebung, Programme über `winget`. Drei Regeln gelten dabei:
 die Paketnamen stehen als Konstanten im Quelltext und kommen nie von außen,
 installiert wird nur aus den offiziellen Quellen, und nichts läuft ungefragt —
@@ -122,14 +122,14 @@ Anwendung ohne `pip`, System ohne `winget`), steht die Begründung und die
 offizielle Seite daneben.
 
 Ohne funktionierendes OpenGL startet die Anwendung ohne 3D-Ansicht; erzwingen
-lässt sich das mit `FORMWERK_NO_VIEWPORT=1`.
+lässt sich das mit `SOLIDON3D_NO_VIEWPORT=1`.
 
 ## Sprachmodell für den Chat
 
-Der Chat braucht ein Modell; alles andere in Formwerk kommt ohne aus. Der
+Der Chat braucht ein Modell; alles andere in Solidon kommt ohne aus. Der
 Schlüssel wird über **Bearbeiten → Zugang zum Sprachmodell** im Schlüsselbund
 des Systems abgelegt und reist nie mit der Projektdatei mit. Auf einem
-Bauserver geht auch die Umgebungsvariable `FORMWERK_LLM_KEY`.
+Bauserver geht auch die Umgebungsvariable `SOLIDON3D_LLM_KEY`.
 
 | Weg | Voraussetzung | Anmerkung |
 |---|---|---|
@@ -164,7 +164,7 @@ Wie gut es dann mit den Referenzanfragen zurechtkommt, misst
 
 **Datei → Modell erzeugen** spricht lokal mit einem laufenden ComfyUI auf Port
 8188. Läuft keines, bleibt der Eintrag ausgegraut und sagt warum; alles andere
-in Formwerk funktioniert weiter.
+in Solidon funktioniert weiter.
 
 Was zurückkommt, wird als Quelle ins Projekt eingebettet und danach im Stack
 geladen und repariert — zwei Schritte, beide sichtbar, beide zurücknehmbar.
@@ -177,10 +177,10 @@ mit einem anderen Generator wird die Datei ersetzt, nicht der Quelltext.
 
 ## Was ohne zweites Programm geht
 
-Der Grundsatz: was Formwerk selbst kann, wird nicht ausgelagert. Externe
+Der Grundsatz: was Solidon selbst kann, wird nicht ausgelagert. Externe
 Programme bleiben für das, wo sie wirklich besser sind.
 
-| Aufgabe | In Formwerk | Sonst üblich |
+| Aufgabe | In Solidon | Sonst üblich |
 |---|---|---|
 | Text und Logo auf einer Fläche | **Beschriftung → Text aufbringen** | OpenSCAD, Blender |
 | Logo oder Umriss als Körper | **Import → Zeichnung extrudieren** (SVG, DXF) | Inkscape + Blender |
@@ -252,7 +252,7 @@ Der Kern ist optional:
 ```
 
 Ohne ihn sagen die betroffenen Operationen das in einem Satz, und alles andere
-in Formwerk funktioniert unverändert.
+in Solidon funktioniert unverändert.
 
 ## Mehr Teile als auf eine Platte passen
 
@@ -303,7 +303,7 @@ Farbe und verliert sie folgerichtig.
 
 ## Lizenz
 
-Formwerk ist proprietär — Copyright (c) 2026 RS Digital, alle Rechte
+Solidon ist proprietär — Copyright (c) 2026 RS Digital, alle Rechte
 vorbehalten. Der vollständige Text steht in [LICENSE](LICENSE).
 
 Zwei Teile stehen bewusst unter MIT, weil ihr Inhalt in den Ergebnissen der

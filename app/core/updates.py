@@ -23,7 +23,7 @@ from app.core.log import get_logger
 _log = get_logger(__name__)
 
 #: Wo die Versionsdatei liegt. Eine Adresse, ein JSON-Objekt.
-VERSION_URL: Final = "https://formwerk.rs-digital.org/version.json"
+VERSION_URL: Final = "https://solidon3d.de/version.json"
 
 #: Wie lange die Prüfung dauern darf. Sie läuft beim Start; niemand wartet
 #: auf sie.

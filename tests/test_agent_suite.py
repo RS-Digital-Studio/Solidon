@@ -179,7 +179,7 @@ def test_every_request_reaches_the_model_with_its_context(
     system = " ".join(entry.content for entry in first if entry.role == "system")
     world = first[1].content
 
-    assert "Formwerk" in system
+    assert "Solidon" in system
     assert "Mindestwandstärke" in system, "the rule set travels along (§39)"
     assert "obj_1" in world
     assert first[-1].content == case.request

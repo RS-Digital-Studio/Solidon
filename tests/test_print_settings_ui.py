@@ -253,7 +253,7 @@ def test_slicing_without_a_scene_says_what_is_missing(dialog: PrintSettingsDialo
 def test_both_orca_profiles_are_asked_for_before_the_run(qt_app: QApplication) -> None:
     """Die Orca-Familie braucht zwei Profile, geprüft wurde nur eines.
 
-    Ohne Prozessprofil hat Formwerks Datei kein Systemprofil, auf das sie sich
+    Ohne Prozessprofil hat Solidons Datei kein Systemprofil, auf das sie sich
     legen kann (siehe `handover._orca_process`), und der Slicer bricht ab,
     bevor er das Modell ansieht. Gemessen gegen ElegooSlicer 1.5.3.4: mit dem
     Systemprofil darunter läuft derselbe Aufruf durch, ohne es endet er in

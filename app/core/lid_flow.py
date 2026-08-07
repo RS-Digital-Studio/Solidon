@@ -5,7 +5,7 @@ die Schachtel, in die er gehört, sind eine **Passung** — und die lebt im
 Dokument, nicht in der Geometrie (§14). Ohne sie greifen die drei Regeln aus
 ``slice/advise.py`` nie, die genau für Passungen da sind: genaue Außenwand,
 gebremste Beschleunigung, Bügeln. Ausgerechnet am Deckel, wo das Zusammenspiel
-der Zweck ist, druckte Formwerk also wie an jeder beliebigen Wand.
+der Zweck ist, druckte Solidon also wie an jeder beliebigen Wand.
 
 **Warum ein Ablauf und nicht die Operation selbst.** Eine Op bekommt ihre
 Szene nur lesend (Regel 3), und die Auswertung ist eine reine Funktion

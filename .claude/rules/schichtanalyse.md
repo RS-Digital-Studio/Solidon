@@ -8,7 +8,7 @@ paths:
 
 ## Die Abgrenzung, die nicht verhandelbar ist
 
-Formwerk baut **keinen G-Code-Slicer**. Die Datei, die auf den Drucker geht,
+Solidon baut **keinen G-Code-Slicer**. Die Datei, die auf den Drucker geht,
 kommt vom externen Slicer. Was hier entsteht, ist Analyse: Ebene-Mesh-Schnitt,
 Konturen, Kennzahlen — in Millisekunden, ohne Fremdprozess.
 
@@ -35,8 +35,8 @@ Drei Sachen, die dabei nicht verhandelbar sind:
   dieser Reihenfolge. Die Düse skaliert die Schichthöhe, die Maschinengrenzen
   deckeln die Temperatur, ein offener Bauraum bekommt keine Kammertemperatur.
 - **Das Maschinenprofil wird nicht erfunden.** Bettform, Anfahrwege, Start-
-  und Endcode kennt Formwerk nicht; sie kommen aus dem Bestand des Slicers.
-  Bei der Orca-Familie gilt das auch für das Prozessprofil: Formwerk liest das
+  und Endcode kennt Solidon nicht; sie kommen aus dem Bestand des Slicers.
+  Bei der Orca-Familie gilt das auch für das Prozessprofil: Solidon liest das
   benannte Systemprofil und legt seine Werte darüber, sonst bricht der Lauf
   mit „process not compatible with printer" ab, bevor er das Modell ansieht.
 - **Ein neuer Slicer kostet eine Tabelle**, keinen Eingriff — `slicer_keys.py`
@@ -114,7 +114,7 @@ Was zusammen gedruckt wird, geht als **eine 3MF-Baugruppe** hinaus
 (`threemf.write_assembly`), nicht als eine Datei je Objekt. Der Unterschied
 ist nicht das Format: ein Slicer, der eine Baugruppe bekommt, ordnet sie als
 Ganzes an und schreibt eine Druckdatei. Bekommt er fünf Dateien, entscheidet
-er über ihre Zusammengehörigkeit selbst, und was Formwerk über die Platte
+er über ihre Zusammengehörigkeit selbst, und was Solidon über die Platte
 weiß, ist verloren.
 
 Die Materialslots werden dabei über **alle** Teile zusammengelegt
@@ -125,7 +125,7 @@ Reihenfolge der zusammengelegten Liste *ist* die Extruderbelegung.
 ## Die Gegenprobe ersetzt die Dokumentation
 
 `handover.verify` liest die Konfigurationskommentare der erzeugten Druckdatei
-und meldet, was der Slicer anders übernommen hat, als Formwerk es schrieb.
+und meldet, was der Slicer anders übernommen hat, als Solidon es schrieb.
 Das ist die einzige Auskunft, die vom Programm selbst kommt statt aus einer
 Beschreibung, die für die installierte Fassung gelten mag oder nicht — und
 damit prüft sich auch ein Slicer, den beim Bauen der Tabelle niemand vorliegen

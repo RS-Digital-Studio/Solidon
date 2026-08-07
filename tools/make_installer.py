@@ -1,12 +1,12 @@
 """Baut den Windows-Installer aus dem PyInstaller-Ordner (Bauplan §37.2).
 
-Das Inno-Setup-Skript in packaging/formwerk.iss trägt keine eigenen Werte:
+Das Inno-Setup-Skript in packaging/solidon.iss trägt keine eigenen Werte:
 Name, Version, Hersteller und Kennung liegen in app/branding.py fest — der
 einen Stelle, an der sie festliegen. Dieses Werkzeug liest sie dort und ruft
 ISCC mit den passenden Defines auf.
 
-Voraussetzungen: ein Bau unter dist/Formwerk (pyinstaller
-packaging/formwerk.spec) und ein installiertes Inno Setup 6.
+Voraussetzungen: ein Bau unter dist/Solidon (pyinstaller
+packaging/solidon.spec) und ein installiertes Inno Setup 6.
 
     python tools/make_installer.py
 """
@@ -25,7 +25,7 @@ from app.branding import APP_ID, APP_NAME, APP_VENDOR, APP_VERSION, WEBSITE_URL
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = ROOT / "dist" / APP_NAME
 OUTPUT_DIR = ROOT / "dist"
-SCRIPT = ROOT / "packaging" / "formwerk.iss"
+SCRIPT = ROOT / "packaging" / "solidon.iss"
 
 #: Wo ISCC üblicherweise liegt, wenn es nicht auf dem PATH steht.
 COMPILER_CANDIDATES = (
@@ -60,7 +60,7 @@ def stale_reason() -> str:
         default=0.0,
     )
     if newest > built:
-        return "Der Bau ist älter als app/ — zuerst neu bauen: pyinstaller packaging/formwerk.spec"
+        return "Der Bau ist älter als app/ — zuerst neu bauen: pyinstaller packaging/solidon.spec"
 
     leftovers = sorted(path.name for path in SOURCE_DIR.rglob("*.autosave"))
     if leftovers:
@@ -70,7 +70,7 @@ def stale_reason() -> str:
 
 def main() -> int:
     if not (SOURCE_DIR / f"{APP_NAME}.exe").is_file():
-        print(f"Kein Bau unter {SOURCE_DIR} — zuerst: pyinstaller packaging/formwerk.spec")
+        print(f"Kein Bau unter {SOURCE_DIR} — zuerst: pyinstaller packaging/solidon.spec")
         return 1
     stale = stale_reason()
     if stale:
@@ -91,7 +91,7 @@ def main() -> int:
             f"/DSourceDir={SOURCE_DIR}",
             f"/DOutputDir={OUTPUT_DIR}",
             f"/DLicenseFile={ROOT / 'LICENSE'}",
-            f"/DSetupIconFile={ROOT / 'packaging' / 'formwerk.ico'}",
+            f"/DSetupIconFile={ROOT / 'packaging' / 'solidon.ico'}",
             str(SCRIPT),
         ],
         check=False,

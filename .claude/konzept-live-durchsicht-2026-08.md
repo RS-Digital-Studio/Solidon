@@ -21,16 +21,16 @@ AGENTS.md Regel 6, 14, 17.
 Damit die Befundliste nicht falsch gelesen wird — drei Dinge sind stärker,
 als sie im Repository klingen:
 
-**Der STEP-Weg ist bitgenau.** Ein exakter Zylinder Ø 50 × 40 aus Formwerk,
+**Der STEP-Weg ist bitgenau.** Ein exakter Zylinder Ø 50 × 40 aus Solidon,
 in Fusion geladen:
 
-| | Formel | Formwerk | Fusion |
+| | Formel | Solidon | Fusion |
 |---|---|---|---|
 | Volumen | 78539,81634 mm³ | 78539,81634 | 78539,81634 |
 | Fläche | 10210,17612 mm² | 10210,17612 | 10210,17612 |
 | Flächen | 3 | 3 | 3 |
 
-Fünfzehn übereinstimmende Stellen, und der Rückweg (Fusion-STEP in Formwerk)
+Fünfzehn übereinstimmende Stellen, und der Rückweg (Fusion-STEP in Solidon)
 ebenso: 2010,619298 mm³ auf beiden Seiten, Bohrung erkannt, Durchmesser und
 Achse richtig. Der zweite Kern aus §30 hält, was er verspricht.
 
@@ -45,7 +45,7 @@ wirklich zu Hause.
 
 **Der ganze Weg läuft aus der Oberfläche.** Strg+P, Slicen, 0,8 Sekunden,
 „Druckzeit: 37 min · Material: 10,0 g · Schichten: 55", Druckdatei speicherbar,
-vier Hinweise im Prüfbericht. Das ist der Weg, für den es Formwerk gibt.
+vier Hinweise im Prüfbericht. Das ist der Weg, für den es Solidon gibt.
 
 ---
 
@@ -161,16 +161,16 @@ die Regel überhaupt erfasst.
 
 ### B. Der Weg zur Platte
 
-#### B1 — Formwerks Anordnung erreicht den Slicer nicht
+#### B1 — Solidons Anordnung erreicht den Slicer nicht
 
-Zwei Läufe, dieselbe Szene: einmal in Formwerks Koordinaten (Mitte bei null),
+Zwei Läufe, dieselbe Szene: einmal in Solidons Koordinaten (Mitte bei null),
 einmal in Bettkoordinaten verschoben. Der G-Code ist **beide Male identisch** —
 Behälter (137,83 / 136,33), Deckel (108,19 / 106,69). Der Slicer wirft die
 Anordnung weg und legt selbst.
 
 Der Gegenbeweis mit `--arrange 0` und Bettkoordinaten:
 
-| | Formwerk ordnet an | im G-Code |
+| | Solidon ordnet an | im G-Code |
 |---|---|---|
 | Behälter | 30,00 / 30,00 | 30,00 / 28,50 |
 | Deckel | 75,00 / 20,00 | 75,00 / 18,50 |
@@ -179,7 +179,7 @@ Auf ein Zehntel, der Versatz von 1,5 mm in Y ist der Bettursprung der Maschine.
 Der Schalter existiert im installierten Programm (`arrange`, `ensure_on_bed`,
 `orient` stehen in seiner Bibliothek).
 
-Damit ist alles, was Formwerk über die Platte weiß, für den Slicer-Weg
+Damit ist alles, was Solidon über die Platte weiß, für den Slicer-Weg
 folgenlos: `arrange_bed`, der Haftungsrand aus `check_adhesion_clearance`,
 `plates_by_material`, die Plattennummer am Objekt. Der offene Roadmap-Punkt
 „Anordnung und Plattenhaftung zusammenbringen" hätte, so gelöst wie geplant,
@@ -192,12 +192,12 @@ für die Orca-Familie. (3) Danach erst der Haftungsrand in `arrange_bed`, denn
 jetzt hat er eine Wirkung. Prüfbar mit genau der Messung oben: Positionen aus
 dem G-Code gegen die Positionen im Dokument, Toleranz eine Linienbreite.
 
-#### B2 — Formwerks „unbekannt" wird im Slicer zu „kostenlos"
+#### B2 — Solidons „unbekannt" wird im Slicer zu „kostenlos"
 
 `FilamentSettings.cost_per_kg` ist 0 mit dem Kommentar „0 heißt unbekannt,
 nicht kostenlos — die Kostenschätzung schweigt dann". Übergeben wird die Null
 trotzdem, und sie überschreibt im Filamentprofil des Herstellers die 30 €/kg;
-im G-Code steht `filament_cost = 0`. Formwerks Nicht-Aussage wird zur Aussage
+im G-Code steht `filament_cost = 0`. Solidons Nicht-Aussage wird zur Aussage
 des Slicers.
 
 Systematisch geprüft (alle geschriebenen Nullen gegen den aufgelösten
@@ -228,7 +228,7 @@ nimmt `changes` bereits entgegen; die Ops müssen sie nur füllen dürfen (§15.
 
 #### B4 — Die Gegenprobe vergleicht nur das Stützvolumen
 
-Der Live-Lauf: Formwerks Schätzung **12 g / 46 min**, der G-Code **10,0 g /
+Der Live-Lauf: Solidons Schätzung **12 g / 46 min**, der G-Code **10,0 g /
 37 min**. Das sind −17 % und −20 %. Der Prüfbericht meldet vier Hinweise, keine
 Warnung.
 
@@ -294,7 +294,7 @@ die kompensierten 8,2 — Tiefe 20,01, `through: False`, was A2 unabhängig
 bestätigt).
 
 Für die Bedienung heißt das: „auf die Fläche zeigen" meint in Fusion eine
-Fläche und in Formwerk eine Facette. Ein Merkmalsbaum mit `face_1` bis
+Fläche und in Solidon eine Facette. Ein Merkmalsbaum mit `face_1` bis
 `face_51` ist keine Auswahl, sondern eine Liste.
 
 **Fix:** benachbarte Facetten mit gleicher Normale (eben) oder gemeinsamer
@@ -315,7 +315,7 @@ also mit dem Zuordnungstest zusammen zu machen, nicht nebenbei.
 
 #### C3 — Ein Rundstab meldet sich als Bohrung
 
-Der Fusion-Zylinder Ø 8 × 40 kommt in Formwerk als
+Der Fusion-Zylinder Ø 8 × 40 kommt in Solidon als
 `hole {diameter: 8.0, depth: 40.0}` an. `brep/features.py:_describe` macht aus
 jeder geschlossenen Zylinderfläche ein `hole`, ohne zu prüfen, auf welcher Seite
 das Material liegt. Jeder Zapfen, jede Säule, jeder Dom ist damit eine Bohrung.
@@ -348,7 +348,7 @@ zu diesem Zeitpunkt, welche Maschine eingestellt ist; `slicer_profiles.match`
 ordnet in die andere Richtung bereits zu.
 
 **Fix:** Beim ersten Start aus dem Slicer-Bestand vorbelegen — die zuletzt dort
-gewählte Maschine auf Formwerks Druckerprofil abbilden und, wo der Name trifft,
+gewählte Maschine auf Solidons Druckerprofil abbilden und, wo der Name trifft,
 vorschlagen. Trifft nichts, bleibt der allgemeine Drucker stehen; eine falsche
 Vorauswahl wäre schlimmer (dieselbe Regel, die `slicer_profiles.match` schon
 befolgt).
@@ -356,7 +356,7 @@ befolgt).
 #### C6 — Der Name des Teils reist nicht ins STEP
 
 In Fusion heißt das importierte Teil „Körper1"; der STEP-Header nennt „Open
-CASCADE STEP translator 7.9 1". Der Objektname aus Formwerk steht nirgends. Fürs
+CASCADE STEP translator 7.9 1". Der Objektname aus Solidon steht nirgends. Fürs
 3MF war das schon einmal ein Fund („Object 1, Object 2") und ist behoben; STEP
 hat dieselbe Lücke.
 
@@ -437,7 +437,7 @@ tiefen Loch ist ein weggeworfener Druck.
 
 ## 4. Was nicht gebaut wird
 
-* **Kein eigenes Anordnen im Slicer-Format.** Formwerk schreibt seine
+* **Kein eigenes Anordnen im Slicer-Format.** Solidon schreibt seine
   Positionen und schaltet das Anordnen des Slicers ab; die Plattendaten der
   Orca-Familie (`plate`-Blöcke in `model_settings.config`) nachzubauen hieße,
   ein fremdes internes Format zu pflegen. Kommen die Koordinaten an, ist die
@@ -468,6 +468,6 @@ Alle Zahlen stammen aus Läufen auf dieser Maschine am 5. August 2026.
 * **Fusion:** 2704.1.36, gemessen über ein Add-In, das STEP und STL lädt,
   Volumen, Fläche, Flächenzahl und Hüllquader ausliest und einen eigenen Körper
   zurückexportiert. Das Add-In ist nach der Messung wieder entfernt worden.
-* **Formwerk:** aus dem Arbeitsbaum, `.venv`, ohne Änderungen am Code. Die
+* **Solidon:** aus dem Arbeitsbaum, `.venv`, ohne Änderungen am Code. Die
   Oberfläche wurde mit echter Maus und Tastatur bedient (synthetische Eingaben
   auf Fensterebene), die Bilder sind Aufnahmen des laufenden Fensters.

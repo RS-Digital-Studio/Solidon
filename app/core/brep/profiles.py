@@ -5,7 +5,7 @@ extrudiert, rotiert, entlang eines Bogens geführt oder zwischen zwei Umrissen
 aufgespannt. Bögen und Kreise reisen als Kurven, nicht als Segmentfolgen — das
 ist der Grund, warum die Skizzen-Operationen gegen diesen Kern rechnen (§30).
 
-Dazu die zwei Formwerkzeuge auf fertigen Körpern, die ohne echte Flächen nicht
+Dazu die zwei Solidonzeuge auf fertigen Körpern, die ohne echte Flächen nicht
 gehen: die exakte Schale und die Formschräge.
 """
 

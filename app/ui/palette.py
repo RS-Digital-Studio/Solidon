@@ -48,7 +48,7 @@ Role = Literal[
 #: **Bernstein ist die Auswahl, und das mit Absicht.** Der Objektbaum färbte
 #: blau (Qts Vorgabe), der Viewport orange: dieselbe Handlung, zwei Farben,
 #: nichts verband sie. Genommen ist der Ton des Anwendungssymbols — er
-#: unterscheidet Formwerk vom Qt-Standardblau, das jede zweite Desktop-
+#: unterscheidet Solidon vom Qt-Standardblau, das jede zweite Desktop-
 #: Anwendung trägt, und er passt zu warmem Filament.
 ROLES: dict[Role, str] = {
     "select": "#f0a54a",

@@ -1,4 +1,4 @@
-# Website — formwerk.rs-digital.org
+# Website — solidon3d.rs-digital.org
 
 Statische Seite, kein JavaScript, keine externen Ressourcen. Alles in diesem
 Ordner wird unverändert hochgeladen; einen Build-Schritt gibt es nicht.
@@ -63,7 +63,7 @@ TXT     google._domainkey   v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMI
 ```
 
 `_dmarc` ist **nicht gesetzt** — unabhängig vom Webspace einen Blick wert,
-wenn die Domain Verkaufsmails tragen soll. Ein `formwerk`-Eintrag existiert
+wenn die Domain Verkaufsmails tragen soll. Ein `solidon3d`-Eintrag existiert
 erwartungsgemäß noch nicht.
 
 **Weder Workspace noch Squarespace liefern eigene Dateien aus.** Kein SFTP,
@@ -108,13 +108,13 @@ Google — bleibt unberührt. Es kommt genau *ein* Eintrag hinzu.
    lautet:
 
    ```
-   Typ: A     Host: formwerk     Wert: <IPv4 aus Schritt 3>
+   Typ: A     Host: solidon3d     Wert: <IPv4 aus Schritt 3>
    ```
 
    Optional zusätzlich `AAAA` auf die IPv6. Nichts löschen, nichts ändern.
 5. **Subdomain in Plesk anlegen.** Im CCP *WCP Auto-Login* öffnet Plesk. Unter
-   *Websites & Domains* → *Subdomain hinzufügen*: `formwerk`, eigener
-   Dokumentenstamm (etwa `/httpdocs/formwerk`). Fünf bis zehn Minuten, bis
+   *Websites & Domains* → *Subdomain hinzufügen*: `solidon3d`, eigener
+   Dokumentenstamm (etwa `/httpdocs/solidon3d`). Fünf bis zehn Minuten, bis
    es greift.
 6. **HTTPS einschalten.** In Plesk bei der Subdomain der Reiter *Let's
    Encrypt* → *Installieren*. Das Zertifikat erneuert sich selbst.
@@ -124,8 +124,8 @@ Google — bleibt unberührt. Es kommt genau *ein* Eintrag hinzu.
    setzen, dann den Inhalt dieses Ordners (ohne diese README) in den
    Dokumentenstamm legen. Die Ordnerstruktur beibehalten — `en/` bleibt ein
    Unterordner.
-8. **Prüfen.** `https://formwerk.rs-digital.org/` zeigt die Startseite,
-   `https://formwerk.rs-digital.org/version.json` liefert das rohe JSON.
+8. **Prüfen.** `https://solidon3d.rs-digital.org/` zeigt die Startseite,
+   `https://solidon3d.rs-digital.org/version.json` liefert das rohe JSON.
    Und zur Sicherheit eine Testmail an `admin@rs-digital.org` — sie muss
    ankommen wie vorher.
 
@@ -144,8 +144,8 @@ Google — bleibt unberührt. Es kommt genau *ein* Eintrag hinzu.
 - Den Installer in das Verzeichnis legen und den Download-Kasten in beiden
   `index.html` auf den echten Link umstellen. Die Dateien kommen aus der CI
   (oder lokal aus `tools/make_installer.py`) und heißen
-  `Formwerk-Setup-<Version>.exe` für Windows und
-  `Formwerk-<Version>-linux-x86_64.tar.gz` für Linux.
+  `Solidon3D-Setup-<Version>.exe` für Windows und
+  `Solidon3D-<Version>-linux-x86_64.tar.gz` für Linux.
 - `version.json` führen: `version` ist die veröffentlichte Version,
   `url` die Download-Seite, `notes` ein Satz zur Neuerung. Die Anwendung
   vergleicht gegen `APP_VERSION` in `app/branding.py` und zeigt nur einen

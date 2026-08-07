@@ -157,14 +157,14 @@ def write_assembly(
     Das ist der Unterschied zwischen „eine Datei je Teil" und „ein
     Druckauftrag": ein Slicer, der eine Baugruppe bekommt, ordnet sie als
     Ganzes an und schreibt eine Druckdatei. Bekommt er einzelne Dateien,
-    entscheidet er über die Zusammengehörigkeit selbst — und was Formwerk über
+    entscheidet er über die Zusammengehörigkeit selbst — und was Solidon über
     die Platte weiß, ist verloren.
 
     Die Materialien sind über alle Teile zusammengelegt (:func:`merge_slots`),
     denn genau diese Liste liest der Slicer als seine Extruderbelegung.
 
     ``bed`` ist die Breite und Tiefe des Bauraums. Mit dieser Angabe bekommt
-    jedes Teil eine Platzierung auf der Platte — Formwerk rechnet um den
+    jedes Teil eine Platzierung auf der Platte — Solidon rechnet um den
     Nullpunkt, ein Slicer misst von der Ecke. Ohne die Umrechnung liegt die
     ganze Szene im negativen Bereich, also außerhalb des Betts, und der Slicer
     ordnet notgedrungen selbst an: was `arrange_bed` errechnet hat, ist dann
@@ -194,7 +194,7 @@ def _settings_xml(parts: Sequence[AssemblyPart]) -> bytes:
     """Die Beilage, in der die Orca-Familie Namen und Objektwerte führt.
 
     Zwei Dinge stehen hier, die sonst verloren gingen. Zum einen die **Namen**:
-    der Standard hat ein ``name``-Attribut am Objekt, und Formwerk schreibt es
+    der Standard hat ein ``name``-Attribut am Objekt, und Solidon schreibt es
     auch — aber diese Slicer schreiben es selbst nie und lesen die Namen von
     hier. Eine Baugruppe kam deshalb als „Object 1, Object 2" an, obwohl die
     Namen in der Datei standen.
@@ -795,7 +795,7 @@ def _placement(bed: tuple[float, float]) -> str:
     Verschiebung.
 
     Gedreht wird nichts — verschoben um den halben Bauraum, denn dort liegt
-    Formwerks Nullpunkt. Dass ein Slicer der Orca-Familie diese Matrix wirklich
+    Solidons Nullpunkt. Dass ein Slicer der Orca-Familie diese Matrix wirklich
     liest, ist gemessen und nicht angenommen: mit ihr und ``--arrange 0``
     stehen die Teile im G-Code auf ein Zehntel dort, wo das Dokument sie hat.
     """

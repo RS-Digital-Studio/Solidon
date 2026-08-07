@@ -44,13 +44,13 @@ Tauri-Rahmen (Rust)  →  Fenster, Dateidialoge, Sidecar-Aufsicht
 ```
 
 Also: **Python mit OpenCASCADE für die Geometrie** — derselbe Kern wie
-Formwerks B-Rep-Hälfte — mit einer Web-Oberfläche davor. Ein Rust-Kern wurde
+Solidons B-Rep-Hälfte — mit einer Web-Oberfläche davor. Ein Rust-Kern wurde
 2026 geprüft und verworfen: er schlug OCCT weder in Robustheit noch in Tempo.
 
 **Harte Invariante mit Folgen:** *„Stateless full rebuild."* Bei jeder Änderung
 geht das ganze Dokument zum Sidecar, der von vorn rechnet. Es gibt keinen
 serverseitigen Zustand und keinen Cache über Zwischenstände. **Das ist
-Formwerks größter struktureller Vorsprung** — §15 rechnet aus dem Cache über
+Solidons größter struktureller Vorsprung** — §15 rechnet aus dem Cache über
 Op-Hash und rührt nur den Zweig unter der Änderung an (0,3 ms aus dem Cache).
 
 **Was der Quelltext an Funktionen nennt und die Werbeseite verschweigt:**
@@ -116,7 +116,7 @@ Rendering — es ist die **Bediensprache**.
 * *„Raw internal exceptions reach the user verbatim."*
 * `main.ts` mit 1710 Zeilen, `SketchMode` mit 1615 Zeilen und ~100 Methoden.
 
-Das ist genau die Fehlerklasse, gegen die Formwerks 22 harte Regeln geschrieben
+Das ist genau die Fehlerklasse, gegen die Solidons 22 harte Regeln geschrieben
 sind — Regel 17 (jede Ausnahme trägt einen Handlungsvorschlag) gegen „rohe
 OCCT-Ausnahmen im Toast". Ihr `docs/EDGE-CASES.md` zeigt allerdings, dass sie
 dieselbe Lektion gerade lernen und 63 Fälle systematisch durchgegangen sind.
@@ -142,7 +142,7 @@ parametrischen Werkzeugen vorbehalten; Kanten werden geglättet, Details unter
 enthält Zufall — man solle mehrere Varianten erzeugen und die sauberste
 nehmen.
 
-Das ist wörtlich Bauplan §42. Formwerks Weg 3 endet nicht dort, er fängt dort
+Das ist wörtlich Bauplan §42. Solidons Weg 3 endet nicht dort, er fängt dort
 an: Reparaturkette, Prüfbericht, Zerlegen, Verstiften, Export.
 
 ### 1.3 Der Ticker — wohin sich der Markt bewegt
@@ -150,7 +150,7 @@ an: Reparaturkette, Prüfbericht, Zerlegen, Verstiften, Export.
 | Meldung | Was es für uns heißt |
 |---|---|
 | **FreeCAD über MCP von Claude/ChatGPT steuerbar** | KI-Steuerung wandert von der eingebauten Schicht zur **offenen Schnittstelle**. Zwei Umsetzungen, Installation über einen Ordner in `/Mod` |
-| **FilaSim** — quelloffene FEM **und Infill-Optimierung** im Browser, von Stefan Hermann (CNC Kitchen) | Der eigentliche Wert ist nicht der Spannungsplot: das Werkzeug **verteilt Material dorthin, wo Kräfte wirken, und gibt ein 3MF-Projekt für den Slicer aus**. Das ist Formwerks Ausgabeweg |
+| **FilaSim** — quelloffene FEM **und Infill-Optimierung** im Browser, von Stefan Hermann (CNC Kitchen) | Der eigentliche Wert ist nicht der Spannungsplot: das Werkzeug **verteilt Material dorthin, wo Kräfte wirken, und gibt ein 3MF-Projekt für den Slicer aus**. Das ist Solidons Ausgabeweg |
 | **Spherene NXT** — adaptive Minimalflächen (ADMS), dazu TPMS | Innenstrukturen wandern vom Slicer ins Modell; Dichte, Zellgröße, Wandstärke ortsabhängig |
 | **Meshy 400 M$**, **Tripo 150 M$**, **Hi3D**, **Modly** | Generierung ist kapitalisiert; **lokal** (Modly) ist das verbleibende Unterscheidungsmerkmal |
 | **Prusa EasyPrint-Abo sorgt für Kritik** | Zahlbereitschaft ja, Abo nein — bestätigt den Einmalkauf |
@@ -160,13 +160,13 @@ an: Reparaturkette, Prüfbericht, Zerlegen, Verstiften, Export.
 **Die CAD-Übersicht von 3Druck** listet zehn kostenlose Programme (FreeCAD,
 OpenSCAD, M4 Personal, BRL-CAD, BlocksCAD, Tinkercad, Figuro, SelfCAD, trCAD,
 Shapr3D) mit einer festen Merkmalstabelle — darunter die Spalte
-**„Deutschsprachig"**. Tinkercad steht dort auf „Nein". Formwerk ist zweisprachig
+**„Deutschsprachig"**. Tinkercad steht dort auf „Nein". Solidon ist zweisprachig
 bis in die Handbuchabbildungen; das ist im DACH-Markt ein Verkaufsargument, das
 sich niemand sonst leistet.
 
 ---
 
-## 2. Ist-Stand Formwerk — gemessen, nicht behauptet
+## 2. Ist-Stand Solidon — gemessen, nicht behauptet
 
 Erhoben am 03.08.2026 gegen den Arbeitsbaum:
 
@@ -188,7 +188,7 @@ Erhoben am 03.08.2026 gegen den Arbeitsbaum:
 * Kein Anti-Aliasing, keine Umgebungsverdeckung, keine Schatten, kein Studiolicht
 * Keine Druckerverbindung
 
-### 2.1 Was Formwerk hat und in keiner der Quellen vorkommt
+### 2.1 Was Solidon hat und in keiner der Quellen vorkommt
 
 Der Vergleich beginnt nicht bei null:
 
@@ -220,7 +220,7 @@ gepflegt · sieben Beispielprojekte, jedes mit Tour · Erstinbetriebnahme ·
 zweisprachig bis in die Bilder · Lizenzprüfung gegen eine Freigabeliste · CI
 auf drei Plattformen.
 
-**Befund:** In Druckintelligenz und Dokumentlogik spielt Formwerk in einer
+**Befund:** In Druckintelligenz und Dokumentlogik spielt Solidon in einer
 anderen Liga. In **Konstruktionswerkzeugen, Bediensprache und Darstellung**
 liegt SindriCAD vorn — und zwar deutlicher, als die Werbeseite vermuten ließ.
 
@@ -284,7 +284,7 @@ Zielgruppe) und die Snapmaker-U1-Bindung (ein Gerät, das Robert nicht hat).
 
 ### E1 — Jede übernommene Funktion bekommt die Druckintelligenz, die schon da ist
 
-**Der Kern des ganzen Konzepts, und er kostet fast nichts.** Formwerk kennt
+**Der Kern des ganzen Konzepts, und er kostet fast nichts.** Solidon kennt
 Düse, Schichthöhe, Material, Volumenstrom, Bauraum und die Schichtanalyse. Jede
 Funktion, die wir übernehmen, weiß damit etwas, das dort niemand weiß:
 
@@ -323,7 +323,7 @@ SindriCAD nicht ist.
 
 ### E3 — Die Optik kommt aus Daten, nicht aus Dekoration
 
-Formwerk weiß, aus welchem Material jeder Körper ist (`SceneObject.material`)
+Solidon weiß, aus welchem Material jeder Körper ist (`SceneObject.material`)
 und welche Filamentfarbe die Druckeinstellungen tragen. Die Ansicht malt
 trotzdem alles grau.
 
@@ -398,7 +398,7 @@ braucht ein Lastmodell, und das ist §6.
 
 ### E7 — Ein Kürzelsatz, zwei Belegungen, eine Übersicht
 
-Nicht „Formwerk-Kürzel gegen Fusion-Kürzel" als Weltanschauung, sondern eine
+Nicht „Solidon-Kürzel gegen Fusion-Kürzel" als Weltanschauung, sondern eine
 Tabelle in den Einstellungen mit zwei Voreinstellungen. Die Vorgabe bleibt die
 heutige; wer aus Fusion oder Onshape kommt, schaltet um.
 
@@ -424,9 +424,9 @@ Kein Widerspruch zu Leitprinzip 4: jeder Vorschlag trägt seinen Startwert, und
 der ausgewählte reist in die Quelle wie bisher. Und kein Widerspruch zu §41
 (keine Verzweigungen im Stack): die anderen drei waren nie Objekte.
 
-### E9 — MCP: Formwerk als Werkzeug für fremde KI
+### E9 — MCP: Solidon als Werkzeug für fremde KI
 
-Die FreeCAD-Meldung beschreibt genau das, was Formwerk fast fertig hat:
+Die FreeCAD-Meldung beschreibt genau das, was Solidon fast fertig hat:
 `app/core/agent/tools.py` erzeugt die Werkzeugschemata **aus dem Register**. Ein
 MCP-Server ist eine dünne Schicht darum plus Transport.
 
@@ -450,7 +450,7 @@ steuert sie fern — dieselben Ops wie ein Menüeintrag, Leitprinzip 1.
 * **Dokument als nacktes JSON.** Der `.p3d`-Container mit Prüfsummen,
   `format_version` und Migrationen bleibt (§16).
 * **Ein Gerät als Druckpipeline.** Ihre U1-Bindung ist eine Wette auf eine
-  Maschine; Formwerks Slicer-Familien und Materialprofile sind die allgemeinere
+  Maschine; Solidons Slicer-Familien und Materialprofile sind die allgemeinere
   Antwort.
 * **SpaceMouse.** Nischengerät, kleine Zielgruppe, eigene Treiberprobleme je
   Plattform.
@@ -491,7 +491,7 @@ haben will.
 
 ### E12 — Die Einfachheit bekommt Tests, so wie die Regeln sie haben
 
-Eine Absichtserklärung hält keine zwei Phasen. Was Formwerk gegen Regelbrüche
+Eine Absichtserklärung hält keine zwei Phasen. Was Solidon gegen Regelbrüche
 tut, tut es ab jetzt gegen Überfüllung: **Obergrenzen, die rot werden.**
 
 | Grenze | Wert | Warum diese Zahl |
@@ -549,7 +549,7 @@ wollen": alles ist **da**, aber nicht alles ist **vorn**.
 
 Gewünscht war ein herausstechender blauer Ton als Akzent der Anwendung.
 Das geht — aber nicht, indem man einen Hexwert hinschreibt, denn Blau ist in
-Formwerk **bereits dreifach belegt**: „hinzugefügtes Volumen" in der
+Solidon **bereits dreifach belegt**: „hinzugefügtes Volumen" in der
 Differenzansicht (`#3b82c4`), „Hinweis" im Prüfbericht (`#6da3d6`) und die
 Auswahlfarbe der Oberfläche (`#3d6ea5` / `#2f6fb0`). Das Anwendungssymbol ist
 heute **kupfer** (`#e08b4e`).
@@ -603,7 +603,7 @@ Bedeutung, und Bedeutung bekommt keine Markenfarbe.
 ### Das Anwendungssymbol geht mit
 
 Es ist heute kupfer, und eine Marke mit zwei Leitfarben ohne Grund ist keine
-Marke. Die SVG-Quelle (`app/images/icon/formwerk.svg`) bekommt die neue
+Marke. Die SVG-Quelle (`app/images/icon/solidon3d.svg`) bekommt die neue
 Familie; `tools/make_icon.py` rastert wie bisher nach ICO und Website-Favicon,
 und alle Website-Köpfe folgen automatisch, weil sie dieselbe Quelle lesen.
 
@@ -746,7 +746,7 @@ modalen Dialog. Bestehende Skizzen aus Projektdateien öffnen unverändert.
 - [x] **Skizzenmuster** — `bolt_circle` und `hole_grid` als Grundformen,
       **nicht assoziativ**. SindriCADs eigenes Audit führt genau diese Funktion
       als Datenkorruption: dort backt jede Bearbeitung die abgeleiteten Kopien
-      in die gespeicherten Elemente. Formwerks Parametrik liegt eine Ebene
+      in die gespeicherten Elemente. Solidons Parametrik liegt eine Ebene
       höher — Maße sind Ausdrücke (§13), ein Projektparameter dreht den
       Teilkreis
 - [x] **Spline** als Element — die einzige Art ohne feste Punktzahl; der Kern
@@ -965,7 +965,7 @@ Zugangsdaten — das ist ein eigenes Vorhaben mit eigener Entscheidung, kein
 Rest dieser Runde.
 
 **Die Lehre daraus gehört zum Konzept.** Zweiundzwanzig Lücken kamen aus dem
-Vergleich mit anderen Anwendungen; zwei davon hatte Formwerk längst
+Vergleich mit anderen Anwendungen; zwei davon hatte Solidon längst
 geschlossen, und niemand hatte nachgesehen. Ein Vergleich sagt, was die anderen
 können — nicht, was man selbst nicht kann.
 
@@ -1016,7 +1016,7 @@ Nichts davon wird ohne Ansage geändert. Was zu ändern wäre:
 
 SindriCAD kann ein Teil bauen — nach sechs Wochen erstaunlich gut, und in der
 Bedienung heute besser als wir. Meshy kann ein Teil erfinden und sagt selbst,
-wo seine Grenze liegt. **Formwerk kann sagen, ob es druckbar ist** — und ist
+wo seine Grenze liegt. **Solidon kann sagen, ob es druckbar ist** — und ist
 das einzige der drei, das beides andere auch kann.
 
 Was fehlt, ist nicht die Substanz. Es sind Konstruktionswerkzeuge, ein

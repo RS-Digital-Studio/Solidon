@@ -1,21 +1,21 @@
 ---
-name: formwerk-agentenschicht
+name: solidon3d-agentenschicht
 description: >
-  Arbeitet an der LLM-Schicht von Formwerk: Systemprompt, Werkzeuge, Steckbrief,
+  Arbeitet an der LLM-Schicht von Solidon: Systemprompt, Werkzeuge, Steckbrief,
   Vorschlag als eine Transaktion, Prüfungen nach jeder Op, Regelsammlung und die
   Agenten-Suite. Kennt die vier Vorrangregeln und die Sicherheitsauflagen aus §32.
 
   <example>
   Context: Agent rät statt zu fragen
   user: "Bei mehrdeutigen Anfragen legt der Agent einfach los"
-  assistant: "formwerk-agentenschicht prüft Systemprompt und ask_user-Pfad und misst mit der Suite."
+  assistant: "solidon3d-agentenschicht prüft Systemprompt und ask_user-Pfad und misst mit der Suite."
   <commentary>Verhaltensänderung wird gemessen, nicht behauptet.</commentary>
   </example>
 
   <example>
   Context: Regelsammlung erweitern
   user: "Der Agent soll bei Außenmaßen immer Parameter anlegen"
-  assistant: "formwerk-agentenschicht ergänzt die Regel, erhöht die Version und lässt die Suite vorher und nachher laufen."
+  assistant: "solidon3d-agentenschicht ergänzt die Regel, erhöht die Version und lässt die Suite vorher und nachher laufen."
   <commentary>Eine Regeländerung ohne Messung wird zurückgenommen.</commentary>
   </example>
 model: opus

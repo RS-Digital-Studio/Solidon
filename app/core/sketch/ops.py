@@ -38,7 +38,7 @@ _LENGTH_DOC = _(
 _WIDTH_DOC = _("Breite in Y. Beim Kreis und beim Vieleck ohne Wirkung.")
 _SHAPE_DOC = _("Rechteck, Langloch, Kreis oder Vieleck — die Maße stehen darunter.")
 _CORNERS_DOC = _("Zahl der Ecken, nur beim Vieleck.")
-_NAME_DOC = _("Wie das Objekt im Baum heißt. Leer heißt: Formwerk vergibt einen.")
+_NAME_DOC = _("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen.")
 _SKETCH_DOC = _(
     "Eine gezeichnete Skizze anstelle der Grundform. Leer heißt: die Grundform oben gilt."
 )

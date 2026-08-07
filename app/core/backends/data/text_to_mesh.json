@@ -110,7 +110,7 @@
     "class_type": "Hy3D21ExportMesh",
     "inputs": {
       "trimesh": ["11", 0],
-      "filename_prefix": "formwerk/text",
+      "filename_prefix": "solidon/text",
       "file_format": "glb",
       "save_file": true
     }

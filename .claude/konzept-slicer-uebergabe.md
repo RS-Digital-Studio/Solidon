@@ -2,14 +2,14 @@
 
 Anlass: das Gewürzset (Projekt 08 im Ordner `3D Drucker`) wurde von Hand für
 den ElegooSlicer eingerichtet. Alles, was dabei per Hand nötig war, ist die
-Prüfliste für diese Frage — kann Formwerk das, und soll es das von allein tun?
+Prüfliste für diese Frage — kann Solidon das, und soll es das von allein tun?
 
 Bezug: Bauplan §29 (Export und Slicer-Übergabe), §28 (Rückkopplung), §22.5
 (Herkunft der Kennzahlen), §2.7 (Fehler als Vorschlag).
 
 ---
 
-## 1. Was Formwerk heute schon kann
+## 1. Was Solidon heute schon kann
 
 Mehr als erwartet. Der Weg steht vollständig:
 
@@ -32,7 +32,7 @@ wegen der Passung, Mindestschichtzeit wegen der kleinen Deckelfläche.
 
 ### 2.1 Achtzehn von fünfzig Werten landen im falschen Profil
 
-Die Orca-Familie verteilt ihre Einstellungen auf drei Profiltypen. Formwerk
+Die Orca-Familie verteilt ihre Einstellungen auf drei Profiltypen. Solidon
 schreibt alles in **ein** Prozessprofil und lädt `--load-settings machine;process`.
 Abgeglichen mit dem echten Profilbestand des installierten ElegooSlicer:
 
@@ -68,7 +68,7 @@ einen echten Lauf macht; in der Suite gibt es keinen.
 `filament` wird nicht durchsucht, und `handover._command` übergibt kein
 Filamentprofil. Damit lässt sich nicht ausdrücken, was beim Gewürzset der
 Kern der Sache war: **transluzentes** PETG für den Behälter, graues für den
-Deckel. Formwerk kann heute „PETG" sagen, nicht „`Elegoo PETG Translucent
+Deckel. Solidon kann heute „PETG" sagen, nicht „`Elegoo PETG Translucent
 @ECC2`".
 
 ### 2.3 Materialwerte werden doppelt gepflegt und weichen ab
@@ -76,12 +76,12 @@ Deckel. Formwerk kann heute „PETG" sagen, nicht „`Elegoo PETG Translucent
 `knowledge/data/print_settings.toml` führt eigene Materialwerte. Gegen den
 Bestand des installierten Slicers:
 
-| | Formwerk `material.petg` | `Elegoo PETG Translucent` | `Elegoo PETG PRO` |
+| | Solidon `material.petg` | `Elegoo PETG Translucent` | `Elegoo PETG PRO` |
 |---|---|---|---|
 | Düse | 240 / 245 °C | **255 / 255 °C** | 240 / 240 °C |
 | Bett | 80 / 80 °C | **70 / 70 °C** | 70 / 70 °C |
 | Volumenstrom | 12 mm³/s | 10 mm³/s | **5 mm³/s** |
-| Pressure Advance | kennt Formwerk nicht | 0,052 | 0,1 |
+| Pressure Advance | kennt Solidon nicht | 0,052 | 0,1 |
 
 Das Bett liegt 10 °C daneben, der Volumenstrom beim PRO um mehr als das
 Doppelte. Keine dieser Zahlen ist falsch geraten — sie sind für „PETG im
@@ -139,7 +139,7 @@ Bügeln, Brim je Objekt, Bridging-Tempo, Plattenaufteilung. Genau der Weg, den
 `advise.py` schon geht.
 
 Für die Übergabe heißt das: **ein Blick vor dem Lauf**, der zeigt, was gilt und
-was Formwerk geändert hat — kein Dialog, der nach jedem Wert fragt (Regel 19:
+was Solidon geändert hat — kein Dialog, der nach jedem Wert fragt (Regel 19:
 das Slicen ist rücknehmbar, es entsteht nur eine Datei).
 
 ## 5. Vorschlag in fünf Stufen
@@ -149,9 +149,9 @@ das Slicen ist rücknehmbar, es entsteht nur eine Datei).
 die Orca-Familie Prozess- und Filamentprofil getrennt, `_command` lädt das
 Filament über den eigenen Schalter `--load-filaments`.
 
-Ein Maschinenprofil schreibt Formwerk **nicht**: der Rückzug geht über die
+Ein Maschinenprofil schreibt Solidon **nicht**: der Rückzug geht über die
 `filament_*`-Entsprechungen, die Orca dafür vorsieht. Das erspart den Eingriff
-in ein Profil, das die Kinematik trägt, und passt zur Herkunft — bei Formwerk
+in ein Profil, das die Kinematik trägt, und passt zur Herkunft — bei Solidon
 kommt der Rückzug aus dem Material.
 
 Abgesichert durch `test_every_orca_setting_sits_in_the_profile_it_claims`: er
@@ -164,7 +164,7 @@ es null. Ohne installierten Slicer wird er übersprungen, nicht grün.
 die Erbkette auf — beim transluzenten Elegoo-PETG fünfundfünfzig Werte aus vier
 Dateien, wo die oberste nur drei nennt. `match_filament` wählt die
 Grundausführung des eingestellten Materials vor; der Dialog zeigt sie zur
-Auswahl und merkt sie sich. `handover` legt die Formwerk-Werte darauf, statt
+Auswahl und merkt sie sich. `handover` legt die Solidon-Werte darauf, statt
 ein Profil zu erfinden.
 
 Zwei Dinge, die beim Bauen auffielen:
@@ -177,9 +177,9 @@ Zwei Dinge, die beim Bauen auffielen:
   den Bestand — 5962 gegen 3887 —, und der Dialog, der nur den Drucker sucht,
   soll sie nicht mitlesen.
 
-`profile_differences` meldet, wo Formwerks Tabelle und das Herstellerprofil
+`profile_differences` meldet, wo Solidons Tabelle und das Herstellerprofil
 auseinandergehen. Übernommen wird nichts davon: die Einstellung ist die
-Entscheidung des Nutzers, das Profil die Unterlage für alles, was Formwerk
+Entscheidung des Nutzers, das Profil die Unterlage für alles, was Solidon
 nicht setzt.
 
 ### Stufe 3 — die fehlenden Stellschrauben ins Modell — **umgesetzt**
@@ -198,7 +198,7 @@ Regeln in `advise.py`:
 - Projekt hat Passungen → präzise Außenwand und Beschleunigung auf 2000 mm/s²
 - Überhänge im Teil → Brückentempo höchstens Außenwandtempo
 
-**Zwei Werte aus der Liste blieben bewusst draußen.** Beide hätte Formwerk
+**Zwei Werte aus der Liste blieben bewusst draußen.** Beide hätte Solidon
 doppelt gerechnet:
 
 - **Elefantenfuß.** Dafür gibt es die Op `compensate_elephant_foot`, die in der
@@ -223,7 +223,7 @@ ganze Gruppe, weil zur Haftungsart ihr Maß gehört und die Maße der anderen
 Arten auf null müssen.
 
 Dabei kam ein zweiter Fund heraus: **die Objektnamen kamen im Slicer nie an.**
-Formwerk schrieb sie ins `name`-Attribut des Standards, aber die Orca-Familie
+Solidon schrieb sie ins `name`-Attribut des Standards, aber die Orca-Familie
 schreibt das selbst nie und liest die Namen aus `model_settings.config`. Eine
 Baugruppe erschien deshalb als „Object 1, Object 2", obwohl die Namen in der
 Datei standen. Dieselbe Beilage löst beides.
@@ -255,19 +255,19 @@ Drei Stücke, alle drei aus dem Gewürzset abgeleitet:
   68 mm hoch, der Deckel 22.
 
 Die Spülmenge in Gramm bleibt draußen. Sie steht im Profil des Slicers, nicht
-in Formwerk, und eine Zahl zu erfinden, die wie eine Messung aussieht, wäre
+in Solidon, und eine Zahl zu erfinden, die wie eine Messung aussieht, wäre
 schlechter als die Wechselzahl, die sich exakt ergibt.
 
 ## 6. Was nicht gebaut wird
 
 - **Kein eigener Slicer** (§22) — auch keine Nachbildung seiner Profillogik.
   Gelesen wird, was da ist; erfunden wird nichts.
-- **Kein Überschreiben des Herstellerprofils.** Formwerk legt seine Werte
+- **Kein Überschreiben des Herstellerprofils.** Solidon legt seine Werte
   darüber, wie es §29 vorsieht. Was es nicht anfasst, bleibt stehen.
 - **Keine Kalibrierung im Hintergrund.** Flussrate und Toleranzen kommen aus
   §28.3, gemessen am gedruckten Teil, nicht geschätzt.
 
-## 6a. Die Probe — das Gewürzset aus Formwerk heraus
+## 6a. Die Probe — das Gewürzset aus Solidon heraus
 
 Gebaut wie ein Nutzer es täte: `new`, viermal `import`, `assign_slot` je Teil,
 `arrange_bed`, dann Platten, Einstellungen und Export über den Kern.
@@ -279,9 +279,9 @@ Profile werden gefunden und zugeordnet (`Elegoo Centauri Carbon 2 0.4 nozzle`,
 Prozessprofil trägt Arachne und das Brückentempo, das Filamentprofil Temperatur
 und Pressure Advance des Herstellers.
 
-**Was Formwerk besser wusste als die Handarbeit.** Von Hand hatte die
+**Was Solidon besser wusste als die Handarbeit.** Von Hand hatte die
 Streuscheibe den Brim bekommen — Intuition wegen der drei 1,1-mm-Federarme,
-ohne zu messen. Formwerk gibt ihn der Deckelbasis. Nachgemessen:
+ohne zu messen. Solidon gibt ihn der Deckelbasis. Nachgemessen:
 
 | Teil | Standfläche | Höhe |
 |---|---|---|
@@ -293,10 +293,10 @@ Die Basis steht auf dem 2,75 mm breiten Gewindering und ist viermal so hoch wie
 die Scheibe, die auf einem 9,8 mm breiten Ring liegt. Die Automatik hatte
 recht, die Handentscheidung war eine Vermutung.
 
-**Was die Probe an Formwerk fand.**
+**Was die Probe an Solidon fand.**
 
 1. *Das Regal steht über den Bauraum.* Sein STL liegt nicht zentriert; der
-   Slicer ordnet still an, Formwerk sagt es. Behoben mit `arrange_bed`.
+   Slicer ordnet still an, Solidon sagt es. Behoben mit `arrange_bed`.
 2. *`nil` wurde als Abweichung gemeldet.* In einem Filamentprofil heißt es
    „dazu sage ich nichts" — der Wert bleibt beim Drucker. Vier solche Zeilen
    standen neben den echten Unterschieden; behoben, 17 Meldungen wurden 13.
@@ -307,10 +307,10 @@ recht, die Handentscheidung war eine Vermutung.
    die Haftung eine Druckeinstellung, die zum Slicer reist. Zusammenbringen
    kann das nur die Oberfläche; das steht in der Roadmap.
 
-**Was verschieden blieb und bleiben soll.** Formwerk wählt die
+**Was verschieden blieb und bleiben soll.** Solidon wählt die
 Grundausführung `Elegoo PETG @ECC2`, von Hand stand dort Translucent und PRO —
 das ist die dokumentierte Vorgabe aus Stufe 2, und wer eine besondere Spule
-hat, wählt sie. Und Formwerks Materialtabelle weicht in dreizehn Werten vom
+hat, wählt sie. Und Solidons Materialtabelle weicht in dreizehn Werten vom
 Herstellerprofil ab, darunter 240 gegen 250 °C an der Düse und 80 gegen 70 °C
 am Bett. Genau dafür ist `profile_differences` da.
 
@@ -321,7 +321,7 @@ am Bett. Genau dafür ist `profile_differences` da.
 2. Ein Testfall, der die Profilart jedes Eintrags in `slicer_keys` gegen den
    Bestand eines installierten Slicers prüft und rot wird, sobald ein Wert im
    falschen Profil landet. Ohne installierten Slicer übersprungen, nicht grün.
-3. Das Gewürzset als Referenz: aus Formwerk heraus dieselben drei Platten mit
+3. Das Gewürzset als Referenz: aus Solidon heraus dieselben drei Platten mit
    denselben Werten, die jetzt von Hand entstanden sind.
 
 Punkt 3 ist der eigentliche Maßstab. Was ein Mensch für ein Projekt von Hand

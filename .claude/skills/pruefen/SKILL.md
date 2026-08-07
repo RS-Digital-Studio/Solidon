@@ -1,7 +1,7 @@
 ---
 name: pruefen
 description: >
-  Führt das vollständige Tor von Formwerk aus — pytest, ruff check, ruff format
+  Führt das vollständige Tor von Solidon aus — pytest, ruff check, ruff format
   --check und mypy über die virtuelle Umgebung — und meldet das Ergebnis
   zusammengefasst. Benutzen, bevor etwas als fertig gilt, vor jedem Commit und
   nach jedem Arbeitsschritt an app/ oder tests/.

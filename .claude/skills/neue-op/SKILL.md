@@ -1,7 +1,7 @@
 ---
 name: neue-op
 description: >
-  Führt durch das vollständige Anlegen einer neuen Operation in Formwerk:
+  Führt durch das vollständige Anlegen einer neuen Operation in Solidon:
   Registereintrag, Parameterschema, Umsetzung gegen manifold3d/trimesh,
   Rückfallkette, Geometrietest gegen den Korpus und Übersetzungen in beiden
   Sprachen.

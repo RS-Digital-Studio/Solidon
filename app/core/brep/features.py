@@ -98,7 +98,7 @@ def _describe(face: Any, index: int) -> tuple[FeatureKind, dict[str, Any]] | Non
         # Loch oder Zapfen — das entscheidet, auf welcher Seite das Material
         # liegt, und das steht in der Orientierung der Fläche. Ohne diese
         # Unterscheidung war jeder Rundstab eine Bohrung: ein Ø-8-Zapfen aus
-        # Fusion kam in Formwerk als „hole, diameter 8.0, depth 40" an, und
+        # Fusion kam in Solidon als „hole, diameter 8.0, depth 40" an, und
         # dasselbe galt für jede Säule und jeden Dom.
         from OCP.TopAbs import TopAbs_REVERSED
 

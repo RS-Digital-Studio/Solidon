@@ -1,6 +1,6 @@
-"""Wie eine Formwerk-Einstellung in jedem Slicer heißt (Bauplan §29).
+"""Wie eine Solidon-Einstellung in jedem Slicer heißt (Bauplan §29).
 
-Formwerk hält die Einstellungen an einer Stelle (:class:`PrintSettings`), die
+Solidon hält die Einstellungen an einer Stelle (:class:`PrintSettings`), die
 Slicer nennen dieselbe Sache verschieden: die Wandzahl ist bei PrusaSlicer
 ``perimeters``, bei Orca ``wall_loops`` und bei CuraEngine
 ``wall_line_count``. Diese Datei ist das Wörterbuch dazwischen — Daten, keine
@@ -13,7 +13,7 @@ Drei Familien decken die verbreiteten Programme ab:
 ``cura``    CuraEngine — ``-s key=value`` auf der Kommandozeile
 
 Was in einer Tabelle fehlt, bleibt beim Grundprofil des Slicers stehen. Das
-ist Absicht: Formwerk überschreibt, was es versteht, und lässt den Rest in
+ist Absicht: Solidon überschreibt, was es versteht, und lässt den Rest in
 Ruhe (§29).
 """
 
@@ -32,16 +32,16 @@ SlicerFlavour = Literal["prusa", "orca", "cura"]
 #: dem, was zuletzt im Slicer eingestellt war. Für ``prusa`` und ``cura`` hat
 #: die Angabe keine Bedeutung — beide nehmen alles in einem Satz entgegen.
 #:
-#: Ein Maschinenprofil schreibt Formwerk nicht: dort steht die Kinematik, und
-#: was Formwerk von der Maschine berührt — der Rückzug — lässt sich über die
+#: Ein Maschinenprofil schreibt Solidon nicht: dort steht die Kinematik, und
+#: was Solidon von der Maschine berührt — der Rückzug — lässt sich über die
 #: ``filament_*``-Entsprechungen setzen, ohne in das Profil hineinzureden
-#: (§29). Das passt auch zur Herkunft: bei Formwerk kommt der Rückzug aus dem
+#: (§29). Das passt auch zur Herkunft: bei Solidon kommt der Rückzug aus dem
 #: Material, nicht aus dem Drucker.
 ProfileSection = Literal["process", "filament"]
 
 
 class Entry(NamedTuple):
-    """Eine Zuordnung: Formwerk-Pfad, Name beim Slicer, Schreibweise, Profil."""
+    """Eine Zuordnung: Solidon-Pfad, Name beim Slicer, Schreibweise, Profil."""
 
     path: str
     key: str
@@ -74,7 +74,7 @@ def _number_or_silent(value: object) -> str:
     """Wie :func:`_number`, aber Null heißt „unbekannt" und wird nicht
     geschrieben.
 
-    Der Preis je Kilogramm steht in Formwerk auf 0, wenn ihn niemand
+    Der Preis je Kilogramm steht in Solidon auf 0, wenn ihn niemand
     eingetragen hat — der eigene Docstring sagt das so. Übergeben überschreibt
     diese Null im Filamentprofil des Herstellers einen echten Wert, und der
     Slicer rechnet den ganzen Druck als kostenlos. Eine Nicht-Aussage darf
@@ -87,7 +87,7 @@ def _number_or_silent(value: object) -> str:
 
 
 def _percent(value: object) -> str:
-    """Anteil zu Prozentzahl. Formwerk rechnet in 0…1, die Slicer in 0…100."""
+    """Anteil zu Prozentzahl. Solidon rechnet in 0…1, die Slicer in 0…100."""
     return f"{float(value) * 100.0:g}"  # type: ignore[arg-type]
 
 
@@ -243,7 +243,7 @@ ORCA: Final[tuple[Row, ...]] = (
     ("shell.seam_position", "seam_position", _mapped(_ORCA_SEAM, "aligned")),
     ("shell.wall_generator", "wall_generator", _plain),
     ("shell.precise_outer_wall", "precise_outer_wall", _flag),
-    # Orca kennt vier Stufen des Bügelns; Formwerk entscheidet nur, **ob** —
+    # Orca kennt vier Stufen des Bügelns; Solidon entscheidet nur, **ob** —
     # wie stark und mit welchem Abstand weiß der Slicer besser.
     ("shell.ironing", "ironing_type", _mapped({"True": "top"}, "no ironing")),
     ("speed.bridge", "bridge_speed", _number),
@@ -288,7 +288,7 @@ ORCA: Final[tuple[Row, ...]] = (
     # Der Rückzug steht in der Orca-Familie am Drucker, nicht am Prozess —
     # ``retraction_length`` im Prozessprofil bleibt wirkungslos. Geschrieben
     # wird deshalb die Filament-Entsprechung: sie überschreibt den Wert der
-    # Maschine, ohne dass Formwerk deren Profil anfassen muss.
+    # Maschine, ohne dass Solidon deren Profil anfassen muss.
     # Fahrwege um die Wände herum statt quer über die Öffnung. Der Schalter
     # heißt in der Orca-Familie „Wände nicht kreuzen" und steht im Prozess,
     # nicht am Filament — er beschreibt den Weg, nicht das Material.
@@ -375,7 +375,7 @@ CURA: Final[tuple[Row, ...]] = (
 #: Welche Schlüssel zu welcher Haftungsart gehören. Die Slicer lesen sie als
 #: unabhängige Maße, gemeint ist aber genau eine Art: wer Skirt eingestellt hat
 #: und trotzdem ``raft_layers`` mitschickt, bekommt beides.
-#: Wie ein Material beim Slicer heißt. Fast immer die Formwerk-Kennung in
+#: Wie ein Material beim Slicer heißt. Fast immer die Solidon-Kennung in
 #: Großbuchstaben — nur wo die Schreibweisen auseinandergehen, steht ein
 #: Eintrag. Ein unbekannter Typ ist kein Abbruch: der Slicer nimmt ihn als
 #: eigenen Namen und rechnet mit den Vorgaben seiner Familie.

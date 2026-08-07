@@ -14,7 +14,7 @@ geprüfte Ausführung ist immer noch eine Ausführung, und wer eine Datei aus
 einer E-Mail öffnet, soll nicht erst im Verlauf entdecken, dass darin ein
 Programm steckt.
 
-Der Hinweis ist ein Befund, kein Riegel: Formwerk stellt sich nicht zwischen
+Der Hinweis ist ein Befund, kein Riegel: Solidon stellt sich nicht zwischen
 den Nutzer und seine eigene Datei (Regel 19). Er sagt, was drin ist und wo.
 """
 

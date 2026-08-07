@@ -509,14 +509,14 @@ class ActivationDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Formwerk freischalten"))
+        self.setWindowTitle(tr("Solidon freischalten"))
         self.setMinimumWidth(520)
 
         self.state_label = QLabel(self)
         self.state_label.setWordWrap(True)
 
         self.field = QPlainTextEdit(self)
-        self.field.setPlaceholderText(tr("FORMWERK-1-…"))
+        self.field.setPlaceholderText(tr("SOLIDON3D-1-…"))
         self.field.setFixedHeight(90)
         if stored := activation.read_key():
             self.field.setPlainText(stored)
@@ -531,7 +531,7 @@ class ActivationDialog(QDialog):
         )
         self.forget_button.clicked.connect(self._forget)
         self.buy_button = buttons.addButton(
-            tr("Formwerk kaufen"), QDialogButtonBox.ButtonRole.HelpRole
+            tr("Solidon kaufen"), QDialogButtonBox.ButtonRole.HelpRole
         )
         self.buy_button.clicked.connect(open_website)
         buttons.rejected.connect(self.reject)
@@ -587,14 +587,14 @@ class ActivationDialog(QDialog):
         try:
             activation.remember(text)
         except activation.LicenceKeyError as problem:
-            # Über show_error, damit „Formwerk kaufen" mitkommt: die Vorschläge
+            # Über show_error, damit „Solidon kaufen" mitkommt: die Vorschläge
             # des Fehlers sind die halbe Regel 17.
             show_error(problem, self)
             return
         if activation.read_key() is None:
             QMessageBox.information(
                 self,
-                tr("Formwerk freischalten"),
+                tr("Solidon freischalten"),
                 tr(
                     "Der Schlüssel gilt für diese Sitzung, ließ sich aber nicht "
                     "ablegen — beim nächsten Start wird er wieder gebraucht."

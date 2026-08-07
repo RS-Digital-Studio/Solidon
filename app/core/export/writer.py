@@ -197,7 +197,7 @@ def adhesion_margin(settings: PrintSettings) -> float:
         return settings.adhesion.skirt_distance
     if kind == "raft":
         # Ein Raft läuft ungefähr eine Brimbreite über den Körper hinaus; der
-        # genaue Wert steht im Slicer und ist keine Formwerk-Einstellung.
+        # genaue Wert steht im Slicer und ist keine Solidon-Einstellung.
         return settings.adhesion.brim_width
     return 0.0
 
@@ -249,7 +249,7 @@ def check_adhesion_clearance(
 def arrangement_holds(meshes: Sequence[MeshData], profile: Profile) -> bool:
     """Ist die Anordnung dieser Teile eine, die der Slicer übernehmen darf?
 
-    Formwerks Anordnung geht nur dann mit (§29), wenn sie überhaupt eine ist:
+    Solidons Anordnung geht nur dann mit (§29), wenn sie überhaupt eine ist:
     kein Teil über dem anderen und keines außerhalb des Betts. Sonst bleibt es
     beim Anordnen des Slicers — der druckte sie sonst übereinander, und das ist
     schlimmer als eine verworfene Anordnung.
@@ -481,7 +481,7 @@ def write_assembly(
     Der Unterschied zu :func:`write_plan` ist nicht das Format, sondern die
     Zahl der Dateien: ein Slicer, der eine Baugruppe bekommt, ordnet sie als
     Ganzes an und schreibt eine Druckdatei. Bekommt er fünf Dateien,
-    entscheidet er über ihre Zusammengehörigkeit selbst — und was Formwerk
+    entscheidet er über ihre Zusammengehörigkeit selbst — und was Solidon
     über die Platte weiß, ist verloren.
 
     ``plate`` schränkt auf eine Druckplatte ein; ohne Angabe geht alles hinein,

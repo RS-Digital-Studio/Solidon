@@ -73,7 +73,7 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Lizenzprüfung gegen Freigabeliste (§36) — `tests/test_licences.py`,
       Freigabeliste in `app/core/knowledge/data/licences.toml`,
       Drittlizenzen in `THIRD-PARTY-NOTICES.md`
-- [x] Lizenzentscheidung getroffen, Name entschieden (§37.1) — **Formwerk**,
+- [x] Lizenzentscheidung getroffen, Name entschieden (§37.1) — **Solidon**,
       proprietär (RS Digital, 2026), Bausteinbibliothek und Testkorpus MIT;
       alles Namensbezogene steht in `app/branding.py`
 - [x] Alle Abnahmekriterien P0 aus §40 grün — `tests/test_acceptance_p0.py`
@@ -283,7 +283,7 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       was zuletzt im Slicer stand. `slicer_keys.Entry` trägt jetzt die
       Profilart, `handover` schreibt zwei Dateien und lädt das Filament über
       `--load-filaments`. Der Rückzug geht als `filament_*`-Entsprechung, damit
-      Formwerk nicht ins Maschinenprofil hineinredet — das passt auch zur
+      Solidon nicht ins Maschinenprofil hineinredet — das passt auch zur
       Herkunft, denn er kommt aus dem Material. `test_every_orca_setting_sits_in_the_profile_it_claims`
       prüft die Zuordnung gegen den Bestand eines installierten Slicers und
       wäre am alten Stand mit achtzehn Verstößen rot gewesen
@@ -292,9 +292,9 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       transluzenten Elegoo-PETG 55 Werte aus vier Dateien, wo die oberste drei
       nennt) und wählt über `match_filament` die Grundausführung des
       eingestellten Materials vor. Der Dialog zeigt sie zur Auswahl, `handover`
-      legt die Formwerk-Werte darauf. Gelesen werden Filamente nur auf
+      legt die Solidon-Werte darauf. Gelesen werden Filamente nur auf
       Verlangen: sie vervielfachen den Bestand, 5962 gegen 3887.
-      `profile_differences` meldet, wo Formwerks Tabelle und der Hersteller
+      `profile_differences` meldet, wo Solidons Tabelle und der Hersteller
       auseinandergehen — 240/80 °C gegen 255/70 °C beim transluzenten PETG —,
       übernimmt aber nichts davon
 - [x] **Die Stellschrauben, die für Passungen zählen** (§29) — `wall_generator`,
@@ -327,7 +327,7 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       Schichten und 220 Wechsel, wenn ein 68-mm-Behälter neben einem
       22-mm-Deckel steht. Die Spülmenge in Gramm bleibt draußen, sie steht im
       Profil des Slicers
-- [x] **Das Gewürzset aus Formwerk heraus gebaut** — die Probe auf die fünf
+- [x] **Das Gewürzset aus Solidon heraus gebaut** — die Probe auf die fünf
       Stufen, gegen das von Hand entstandene Projekt. Plattenvorschlag,
       Profilzuordnung und die Werte stimmten; die Automatik traf sogar die
       bessere Entscheidung als die Handarbeit (Brim gehört unter die
@@ -356,7 +356,7 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       G-Code, 22,6 g, 110 min). Beide Funde davor waren unsichtbar, solange
       das Programm fehlte: die Programmsuche ging eine Ebene zu flach für
       `Prusa3D\PrusaSlicer\`, und die Bettform stand von 0 bis 256, während
-      Formwerk um den Ursprung rechnet — „All objects are outside of the
+      Solidon um den Ursprung rechnet — „All objects are outside of the
       print volume", ohne dass irgendwo stand, warum
 - [ ] **Cura ist angebunden, aber noch nicht durchgelaufen** (5.13.0). Die
       Kette hat drei Stufen, und eine davon steht:
@@ -384,15 +384,15 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       `app/branding.py`
 - [~] CI-Bauläufe, Signierung Windows, AppImage/Flatpak — `.github/workflows/`
       baut Windows und Linux, erst nachdem die Suite auf allen drei Plattformen
-      grün ist. Windows wird zu einer Setup-Datei (`packaging/formwerk.iss`,
+      grün ist. Windows wird zu einer Setup-Datei (`packaging/solidon3d.iss`,
       gebaut von `tools/make_installer.py`, das die Werte aus
       `app/branding.py` liest), Linux zu einem tar.gz, weil der
       Artefakt-Upload sonst die Ausführungsrechte verliert; Anwendung und
       Installer werden signiert, der Schritt überspringt sich ohne Zertifikat.
       **Ungeprüft**, weil dieses Repository noch nicht auf einem CI-Dienst
       liegt; AppImage und Flatpak fehlen. Der Grund, der hier stand — es gebe
-      kein Anwendungssymbol —, gilt nicht mehr: `app/images/icon/formwerk.svg`
-      ist die Quelle, `tools/make_icon.py` rastert daraus `packaging/formwerk.ico`
+      kein Anwendungssymbol —, gilt nicht mehr: `app/images/icon/solidon3d.svg`
+      ist die Quelle, `tools/make_icon.py` rastert daraus `packaging/solidon3d.ico`
       und `website/icon.svg`, und Installer wie exe tragen es. Offen sind allein
       die beiden Linux-Formate
 - [x] Erstinbetriebnahme (§38) — Sprache, Drucker, Material, externe Programme;
@@ -648,7 +648,7 @@ Anmerkungen zu P12:
 ## Aus dem Modellordner abgeleitet
 
 Nicht aus dem Plan, sondern aus dem, was 68 echte Modelle zeigen. Zwei Dinge
-kamen vor, für die man bisher aus Formwerk heraus musste:
+kamen vor, für die man bisher aus Solidon heraus musste:
 
 * **Prüfstück erzeugen** (`test_piece`). Ein Würfel um die Stelle, die man
   ausprobieren will, herausgeschnitten — nicht nachgebaut. Ausgeschnitten
@@ -967,7 +967,7 @@ ASCII-Zeile war es, die zerstörte. `Boîtier` behält jetzt auch seinen Zirkumf
 
 **Die Kommandozeile konnte gar nicht exportieren.** Laden, reparieren,
 beschreiben — und das Ergebnis blieb im Projekt. Der Schreiber aus §29 stand seit
-P2 und war von außen nicht erreichbar. `formwerk export` gibt es jetzt, mit
+P2 und war von außen nicht erreichbar. `solidon3d export` gibt es jetzt, mit
 Objektauswahl, Namensschema und der Vorabprüfung vor dem ersten Byte.
 
 **Und die Undichtigkeit war keine.** Der Turm hatte genau drei offene Kanten über
@@ -996,7 +996,7 @@ kennt nur den PATH, und Windows-Installationsprogramme tragen dort nichts ein:
 OpenSCAD unter `C:\Program Files\OpenSCAD` und ein installierter Slicer galten
 als fehlend, mit dem Angebot, sie ein zweites Mal zu installieren. Gesucht wird
 jetzt an vier Stellen, und Dienste werden gefragt statt gesucht — ComfyUI
-startet Formwerk ohnehin nie, es redet über HTTP mit ihm. Wo alles das nichts
+startet Solidon ohnehin nie, es redet über HTTP mit ihm. Wo alles das nichts
 findet, gibt es den Weg, der immer geht: den Ort selbst angeben.
 
 **201 von 325 Parametern hatten keinen Hilfetext.** Ein Zahlenfeld mit einer
@@ -1045,7 +1045,7 @@ Prüfstück, das absichtlich 22 mm aus einem 70er Gehäuse schneidet.
 Beschlossen am 31.07.2026, Bauplan v10 (§30.1, §40): **die Veröffentlichung
 wartet auf diese Phase** — der Launch führt die Skizzen als Kernargument. Das
 Ziel dahinter: so wenig Fremdprogramme wie möglich; das fremde CAD vor dem
-Import ist der größte verbliebene Grund, Formwerk zu verlassen. Der Slicer
+Import ist der größte verbliebene Grund, Solidon zu verlassen. Der Slicer
 bleibt bewusst außen (§22.5), OpenSCAD bleibt Rückfallebene. Die
 Veröffentlichungsreste aus P8 (Remote/CI, Zertifikat, Vertrieb, Betatest)
 laufen parallel und stehen weiter oben unter „Bewusst offen".
@@ -1119,13 +1119,13 @@ laufen parallel und stehen weiter oben unter „Bewusst offen".
 ## Website
 
 Entschieden am 31.07.2026: statische Seite auf einem Webspace, Subdomain
-`formwerk.rs-digital.org` — dort liegen auch die `version.json` (§37.2,
+`solidon3d.rs-digital.org` — dort liegen auch die `version.json` (§37.2,
 `core/updates.py`) und der Installer. Die Quelldateien liegen in `website/`,
 die Schrittliste für DNS und Upload in `website/README.md`. Impressum und
 Datenschutz sind Entwürfe und vor der Veröffentlichung zu prüfen.
 
 **Berichtigt am 06.08.2026: die Domain war erfunden.** Hier stand bis dahin
-`formwerk.rsdigital.de`, und die Adresse reiste von hier aus in
+`solidon3d.rsdigital.de`, und die Adresse reiste von hier aus in
 `branding.py`, `updates.py` und `version.json`. Diese Domain gibt es nicht
 und gab es nie — es gibt genau eine, `rs-digital.org`, die primäre Domain des
 Google Workspace. Der Vermerk weiter unten, es stünden „zwei Schreibweisen
@@ -1139,7 +1139,7 @@ Fehler — Regel 21 gilt auch für Adressen.
 
 Anlass war eine Feststellung, keine Fehlermeldung: „Wir wollen Geld dafür."
 Das Handbuch hatte achtzehn Seiten, kein einziges Bild, und seine sieben
-geschriebenen Seiten erklärten Begriffe statt Handgriffe. Wer Formwerk zum
+geschriebenen Seiten erklärten Begriffe statt Handgriffe. Wer Solidon zum
 ersten Mal öffnete, fand nichts, was ihn vom Startbildschirm bis zur
 exportierten Datei führt.
 
@@ -1788,9 +1788,9 @@ Behoben in dieser Runde:
   Einrichtung, nicht bei jedem Start. Ein Server, der nicht antwortet,
   bleibt Schweigen statt Warnung.
 * **Ein Anwendungssymbol existiert.** Gestaltete SVG-Quelle
-  (`app/images/icon/formwerk.svg`: isometrischer Körper, Bohrung,
+  (`app/images/icon/solidon3d.svg`: isometrischer Körper, Bohrung,
   Schichtlinien, Markenfarbe), gerastert von `tools/make_icon.py` zu
-  `packaging/formwerk.ico` (DIB + 256er-PNG, ohne neue Abhängigkeit) und
+  `packaging/solidon3d.ico` (DIB + 256er-PNG, ohne neue Abhängigkeit) und
   `website/icon.svg`; das Fenster rastert die Quelle zur Laufzeit
   (`icons.application_icon`). Eingebunden in Spec, Installer-Skript und
   alle Website-Köpfe. Damit ist die Vorbedingung für AppImage/Flatpak da.
@@ -1806,15 +1806,15 @@ gegen SmartScreen; CI nie gelaufen; Zahlungsanbieter und
 Lizenzschlüssel-Mechanik für Testphase und Kauf; ein Betatest mit fremden
 Nutzern — 2100 Tests sagen, dass der Code tut, was gemeint war, nicht, dass
 ein Fremder ihn bedienen kann. Anzumerken: die Web-Domain ist
-formwerk.rsdigital.de, die Mail-Domain rs-digital.org — zwei Schreibweisen
+solidon3d.rsdigital.de, die Mail-Domain rs-digital.org — zwei Schreibweisen
 nebeneinander, bewusst so entschieden oder zu vereinheitlichen.
 *Aufgelöst am 06.08.2026: die erste Domain existierte nicht. Alles läuft
-jetzt über `formwerk.rs-digital.org`, siehe „Website".*
+jetzt über `solidon3d.rs-digital.org`, siehe „Website".*
 
 ## Der erste echte CI-Lauf
 
 Am 02.08.2026 ging das Repository auf GitHub (privat, `RS-Digital-Studio/
-Formwerk`), und die CI lief zum ersten Mal wirklich — mit vier Funden, von
+Solidon`), und die CI lief zum ersten Mal wirklich — mit vier Funden, von
 denen keiner auf dieser Maschine sichtbar war:
 
 * **Ein frisches Environment zieht trimesh 5.0.0**, und der Major-Sprung
@@ -1977,7 +1977,7 @@ Sprung ist weiter eine eigene Migration, und die Voxelkette über
 ## P15 — Konstruieren und zeigen
 
 Der Vergleich mit SindriCAD, Meshy und dem, was 3Druck als Stand der Software
-meldet: zweiundzwanzig Lücken, davon vier abgelehnt. Formwerk lag bei
+meldet: zweiundzwanzig Lücken, davon vier abgelehnt. Solidon lag bei
 Druckintelligenz und Dokumentlogik deutlich vorn und bei Konstruktions-
 werkzeugen, Bediensprache und Darstellung deutlich zurück. Das Konzept steht in
 `.claude/konzept-p15-konstruieren-und-zeigen.md` und ist vollständig abgearbeitet.
@@ -2051,7 +2051,7 @@ mit Ausnahme der fehlenden Passung:
 - [x] **Der Hüllquader eines exakten Körpers kommt aus seinen Dreiecken.**
       `Solid.bounds` gibt `mesh.bounds` zurück; der Fehler ist konstant 0,025 mm
       (halbe `DEFLECTION`), bei Ø 6 wie bei Ø 120. Fusion misst denselben Körper
-      mit 25,00 mm Radius, Formwerk mit 24,9755. Daran hängen Maßanzeige,
+      mit 25,00 mm Radius, Solidon mit 24,9755. Daran hängen Maßanzeige,
       Bauraumprüfung, Anordnung, Haftungsrand, `advise.for_part` und jede
       Passungsprüfung — ein Zehntel der Materialtoleranz, verloren vor dem ersten
       Druck. Fix: `BRepBndLib` statt Tessellation
@@ -2064,7 +2064,7 @@ mit Ausnahme der fehlenden Passung:
       neben dem Körper erzeugt keinen Befund, keine Ausnahme, keinen Hinweis —
       unterhalb dessen, was Regel 17 überhaupt erfasst. Volumen vorher/nachher
       vergleichen, sonst Befund mit Vorschlag
-- [x] **Formwerks Anordnung erreicht den Slicer nicht.** Zwei Läufe, einmal in
+- [x] **Solidons Anordnung erreicht den Slicer nicht.** Zwei Läufe, einmal in
       Modell- und einmal in Bettkoordinaten, ergeben denselben G-Code — der
       Slicer ordnet neu an. Mit `--arrange 0` und Bettkoordinaten kommt die
       Anordnung auf ein Zehntel an. Damit ist die ganze Plattenlogik für den
@@ -2118,7 +2118,7 @@ verbessert werden konnte, musste sie den Slicer überhaupt erreichen.
 
 **Sie erreichte ihn nicht.** Zwei Läufe derselben Szene, einmal in Modell- und
 einmal in Bettkoordinaten, ergaben denselben G-Code — die Orca-Familie ordnet
-in der Vorgabe immer neu an. Damit war alles folgenlos, was Formwerk über die
+in der Vorgabe immer neu an. Damit war alles folgenlos, was Solidon über die
 Platte weiß: `arrange_bed`, der Haftungsrand aus `check_adhesion_clearance`,
 `plates_by_material`, die Plattennummer am Objekt.
 
@@ -2156,7 +2156,7 @@ Dazu zwei Funde, die auf dem Weg lagen:
 ## Paket 3 und 4 der Durchsicht — und die Bohrung, die daneben lag
 
 Der Rest des Konzepts, in drei Runden. Paket 3 waren die Stellen, an denen
-Formwerk gegen Fusion nachweisbar falsch lag; Paket 4 die, an denen es zwar
+Solidon gegen Fusion nachweisbar falsch lag; Paket 4 die, an denen es zwar
 rechnete, aber nichts sagte. A2 stand bewusst außerhalb, weil es als einzige
 Änderung bestehende Projektdateien anders rechnen lässt.
 
@@ -2304,7 +2304,7 @@ Erkenntnis wie bei den drei Bausteinen über ihrem Ursprung, eine Etage höher.
 
 Anlass war eine einfache Frage — läuft die Erzeugung, läuft der Chat? — gegen
 eine echte Installation statt gegen die Suite. Von den vier externen Programmen
-waren zwei in Ordnung, eines fehlte, und eines lief, während das, was Formwerk
+waren zwei in Ordnung, eines fehlte, und eines lief, während das, was Solidon
 ihm schickte, nie gegen etwas Laufendes gehalten worden war.
 
 - [x] **Die Graphen riefen Knoten, die es nirgends gibt.** Beide mitgelieferten
@@ -2426,7 +2426,7 @@ geradesten Weg, den es gibt.
       erst beim nächsten Befehl. Die Falle ist eingebaut: `profiles` zeigt den
       Titel `PETG`, die Kennung ist `petg`.
 - [x] **Die Slicer-Übergabe verlangte nur eines der zwei nötigen Profile.**
-      Ohne Prozessprofil lehnt die Orca-Familie Formwerks Prozessdatei ab.
+      Ohne Prozessprofil lehnt die Orca-Familie Solidons Prozessdatei ab.
       Mit beiden läuft der ganze Weg bis zu den G-Code-Kennzahlen.
 - [x] **`tools/run_agent_suite.py` lief überhaupt nicht** — kein
       `load_operations()`, also leeres Register. Derselbe fehlende Aufruf in
@@ -2636,7 +2636,7 @@ lief damit mit.
 ## Gewürzdeckel: der Fehler saß im Deckel, nicht im Becher (07.08.2026)
 
 Fotos vom gedruckten Deckel zeigten das Innere voller Fäden. Nachgemessen mit
-Formwerks Schichtanalyse und mit dem ElegooSlicer, beide am selben Teil.
+Solidons Schichtanalyse und mit dem ElegooSlicer, beide am selben Teil.
 
 ### Der Befund
 
@@ -2678,13 +2678,13 @@ die konstruktive Frage, nicht die Diagnose.
       Pfad. Die Auflösung gehört zwischen beide — heute fehlt sie.
 - [x] Gefunden werden die Profile einwandfrei: 3887 Stück, die im Slicer
       eingestellte Maschine erkannt, sieben passende Prozesse dazu.
-- [x] Der Rücklauf stimmt: Formwerk liest seinen eigenen G-Code mit 10,38 g,
+- [x] Der Rücklauf stimmt: Solidon liest seinen eigenen G-Code mit 10,38 g,
       72 min, 110 Schichten, 0,2 mm — und `extrudes()` sagt ja.
 
 ## Vollständige Verifikation des Gewürzsets (07.08.2026)
 
-Alle vier Teile durch alle drei Ebenen: Formwerks Schichtanalyse, die Übergabe
-an den ElegooSlicer über Formwerks eigenen Weg, und der zurückgelesene G-Code.
+Alle vier Teile durch alle drei Ebenen: Solidons Schichtanalyse, die Übergabe
+an den ElegooSlicer über Solidons eigenen Weg, und der zurückgelesene G-Code.
 
 | Teil | Überhang schlimmste Schicht | Übergabe | G-Code |
 |---|---|---|---|
@@ -2694,7 +2694,7 @@ an den ElegooSlicer über Formwerks eigenen Weg, und der zurückgelesene G-Code.
 | Wandregal | 3253,6 mm² bei z 46,10 | ok | 139,32 g · 493 min |
 
 Die Gegenprobe (`handover.verify`) meldet bei allen vier **null Abweichungen**:
-der Slicer übernimmt jeden Wert, den Formwerk schreibt. Alle vier fördern
+der Slicer übernimmt jeden Wert, den Solidon schreibt. Alle vier fördern
 Material.
 
 ### Der Unterschied zwischen Deckel und Regal
@@ -2710,7 +2710,7 @@ Füllung (`Sparse infill` über die ganzen Schichten darunter), und die trägt.
 Unter der Lochplatte des Deckels ist die Gewindebohrung — ein echter
 Hohlraum, in dem nichts steht.
 
-**Das ist eine Grenze von Formwerks Schichtanalyse, die man kennen muss:** sie
+**Das ist eine Grenze von Solidons Schichtanalyse, die man kennen muss:** sie
 misst die Geometrie und weiß nichts von der Füllung, die der Slicer später
 hineinlegt. Ein gemeldeter Überhang über gefülltem Volumen ist deshalb kein
 Befund, einer über einem Hohlraum schon. Wer die Zahl allein liest, hält das

@@ -3,7 +3,7 @@ name: bauplan
 description: >
   Schlägt einen Abschnitt im Bauplan nach und fasst zusammen, was dort verbindlich
   festgelegt ist — per §-Nummer oder Stichwort. Benutzen, bevor eine Behauptung
-  über das Sollverhalten von Formwerk aufgestellt wird.
+  über das Sollverhalten von Solidon aufgestellt wird.
 argument-hint: "[§-Nummer oder Stichwort]"
 allowed-tools: Read, Grep, Bash
 ---

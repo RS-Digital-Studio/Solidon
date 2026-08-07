@@ -1,6 +1,6 @@
 """Druckeinstellungen laden und auflösen (Bauplan §29).
 
-Formwerk hält die Einstellungen, der externe Slicer führt sie aus. Damit das
+Solidon hält die Einstellungen, der externe Slicer führt sie aus. Damit das
 ohne doppelte Pflege geht, entsteht ein :class:`PrintSettings` aus drei
 Ebenen, die übereinander gelegt werden — dieselbe Aufteilung, die die
 verbreiteten Slicer als Prozess-, Filament- und Druckerprofil führen:

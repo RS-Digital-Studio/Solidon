@@ -1,14 +1,14 @@
 """Übergabe an den Slicer (Bauplan §29, §28.1).
 
-Formwerk baut keinen G-Code-Slicer (§22) — es bedient einen. Der Unterschied
+Solidon baut keinen G-Code-Slicer (§22) — es bedient einen. Der Unterschied
 zum Wechseln in ein anderes Programm ist, dass die Einstellungen hier bleiben:
-Formwerk schreibt sie als Profil, ruft den Slicer im Konsolenmodus, und liest
+Solidon schreibt sie als Profil, ruft den Slicer im Konsolenmodus, und liest
 die entstandene Datei mit :mod:`app.core.slice.gcode` wieder ein. Wer das
 benutzt, sieht den Slicer nicht mehr.
 
-Was Formwerk **nicht** mitbringt, ist das Maschinenwissen: Bettform,
+Was Solidon **nicht** mitbringt, ist das Maschinenwissen: Bettform,
 Anfahrwege, Start- und Endcode, die Eigenheiten einer Kinematik. Das steht in
-den Profilen, die der Slicer mitbringt, und genau dort bleibt es. Formwerk
+den Profilen, die der Slicer mitbringt, und genau dort bleibt es. Solidon
 setzt sein Profil darauf — es überschreibt, es ersetzt nicht.
 
 Ein Lauf ist abgesichert wie der OpenSCAD-Lauf (§32): feste Argumentliste,
@@ -39,7 +39,7 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Slicen dauert länger als alles andere, was Formwerk außer Haus gibt. Fünf
+#: Slicen dauert länger als alles andere, was Solidon außer Haus gibt. Fünf
 #: Minuten sind großzügig für ein Teil und immer noch eine Grenze.
 TIMEOUT_SECONDS: Final = 300.0
 
@@ -47,7 +47,7 @@ TIMEOUT_SECONDS: Final = 300.0
 GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g")
 
 #: Was in einem Profil „dazu sage ich nichts" heißt. Ein Filamentprofil, das
-#: den Rückzug auf ``nil`` stellt, widerspricht Formwerk nicht — es überlässt
+#: den Rückzug auf ``nil`` stellt, widerspricht Solidon nicht — es überlässt
 #: den Wert dem Drucker.
 _NO_STATEMENT: Final = frozenset({"nil", "", "none"})
 
@@ -68,10 +68,10 @@ class SlicerSetup:
     machine_profile: str = ""
     base_process: str = ""
     base_filament: str = ""
-    """Das Filamentprofil des Slicers, auf das Formwerk seine Werte legt.
+    """Das Filamentprofil des Slicers, auf das Solidon seine Werte legt.
 
     Ohne das kennt der Slicer nur „PETG"; mit ihm weiß er, *welches* — und
-    fährt die Werte des Herstellers für alles, was Formwerk nicht setzt.
+    fährt die Werte des Herstellers für alles, was Solidon nicht setzt.
     """
 
     @property
@@ -119,7 +119,7 @@ def detect(executable: Path | str) -> SlicerSetup:
     if flavour is None:
         raise ExternalToolError(
             tool=path.name,
-            detail=_("Formwerk kennt die Kommandozeile dieses Programms nicht."),
+            detail=_("Solidon kennt die Kommandozeile dieses Programms nicht."),
             suggestions=(
                 Action(id="choose_slicer", label=_("Einen anderen Slicer auswählen.")),
                 Action(id="export_only", label=_("Nur exportieren und selbst slicen.")),
@@ -139,7 +139,7 @@ def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str
     written: dict[str, str] = {}
     for entry in slicer_keys.TABLES[flavour]:
         value = entry.write(read_path(settings, entry.path))
-        # Ein leerer Text heißt „dazu sagt Formwerk nichts" (siehe
+        # Ein leerer Text heißt „dazu sagt Solidon nichts" (siehe
         # ``_number_or_silent``). Er darf weder in die Datei noch in die
         # Gegenprobe: geschrieben überschriebe er den Wert des Herstellers,
         # verglichen meldete er eine Abweichung von nichts.
@@ -246,7 +246,7 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
             "machine_depth": f"{depth:g}",
             "machine_height": f"{height:g}",
             "machine_nozzle_size": f"{profile.printer.nozzle_diameter:g}",
-            # Formwerk rechnet um den Ursprung, hier wie bei Prusa.
+            # Solidon rechnet um den Ursprung, hier wie bei Prusa.
             "machine_center_is_zero": "true",
             # Zwei Einstellungen aus `fdmprinter.def.json` tragen keinen
             # Vorgabewert — das Fenster füllt sie aus dem Qualitätsprofil.
@@ -259,7 +259,7 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
         return {}
     printer = profile.printer
     width, depth, height = printer.build_volume
-    # Um den Ursprung, nicht ab der Ecke: Formwerk rechnet zentriert — die
+    # Um den Ursprung, nicht ab der Ecke: Solidon rechnet zentriert — die
     # Anordnung beginnt bei ``-width/2`` (siehe ``arrange_on_bed``), und ein
     # exportierter Körper steht bei x -30..30. Ein Bett von 0 bis 256 liegt
     # daneben, und PrusaSlicer sagte dazu „All objects are outside of the
@@ -302,14 +302,14 @@ def write_config(
     values |= _machine_keys(profile, setup.flavour)
 
     if setup.flavour == "prusa":
-        target = directory / "formwerk.ini"
-        lines = [f"# {settings.title} — von Formwerk geschrieben, nicht von Hand"]
+        target = directory / "solidon.ini"
+        lines = [f"# {settings.title} — von Solidon geschrieben, nicht von Hand"]
         lines += [f"{key} = {value}" for key, value in sorted(values.items())]
         target.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return SlicerConfig(process=target)
 
     if setup.flavour == "orca":
-        target = directory / "formwerk_process.json"
+        target = directory / "solidon_process.json"
         target.write_text(
             json.dumps(
                 _orca_process(split.get("process", {}), settings, setup),
@@ -318,7 +318,7 @@ def write_config(
             ),
             encoding="utf-8",
         )
-        filament = directory / "formwerk_filament.json"
+        filament = directory / "solidon_filament.json"
         filament.write_text(
             json.dumps(
                 _orca_filament(split.get("filament", {}), settings, profile, setup),
@@ -329,7 +329,7 @@ def write_config(
         )
         return SlicerConfig(process=target, filament=filament)
 
-    target = directory / "formwerk_cura.txt"
+    target = directory / "solidon_cura.txt"
     target.write_text(
         "\n".join(f"{key}={value}" for key, value in sorted(values.items())) + "\n",
         encoding="utf-8",
@@ -347,11 +347,11 @@ def _orca_process(
     Diese Slicer nehmen kein Prozessprofil an, das nicht zum Drucker passt —
     sie brechen mit „process not compatible with printer" ab, bevor sie das
     Modell überhaupt ansehen. Die Kompatibilität steht in Feldern, die
-    Formwerk nicht kennt und nicht erfinden sollte (``compatible_printers``,
+    Solidon nicht kennt und nicht erfinden sollte (``compatible_printers``,
     ``inherits``, die Düsenbindung).
 
     Also wird nichts erfunden: das benannte Systemprofil wird gelesen und die
-    Formwerk-Werte kommen darüber. Was Formwerk nicht anfasst, bleibt genau so
+    Solidon-Werte kommen darüber. Was Solidon nicht anfasst, bleibt genau so
     stehen, wie der Hersteller es abgestimmt hat — das ist die Aufteilung aus
     §29 in einer Datei.
     """
@@ -364,12 +364,12 @@ def _orca_process(
     if not document:
         document = {
             "type": "process",
-            "name": f"Formwerk {settings.title}",
+            "name": f"Solidon {settings.title}",
             "from": "User",
             "instantiation": "true",
         }
     document.update(values)
-    # Objektmarken, unabhängig von den Einstellungen: Formwerk schickt eine
+    # Objektmarken, unabhängig von den Einstellungen: Solidon schickt eine
     # Baugruppe mit benannten Teilen, und ohne die Marken im G-Code kann der
     # Drucker keines davon einzeln ausschließen. Löst sich einer von zwölf
     # Behältern nach sechs Stunden, ist sonst die ganze Platte verloren — der
@@ -377,11 +377,11 @@ def _orca_process(
     document["gcode_label_objects"] = "1"
     # Ein eigener Name, obwohl das Systemprofil die Grundlage war. Sonst steht
     # im G-Code „0.20mm Standard @Elegoo CC2 0.4 nozzle", und wer die Datei
-    # hinterher liest, hält Formwerks Werte für die des Herstellers. Genau
+    # hinterher liest, hält Solidons Werte für die des Herstellers. Genau
     # diese Verwechslung hat einen Satz Gewürzbehälter gekostet: die
     # Projektdatei trug den Namen eines Systemprofils, der Slicer lud sein
     # eigenes darunter, und zehn von elf Werten waren still weg.
-    document["name"] = f"Formwerk {settings.title}"
+    document["name"] = f"Solidon {settings.title}"
     return document
 
 
@@ -398,7 +398,7 @@ def _orca_filament(
     nicht angenommen. Zweitens braucht es ``filament_type``, sonst weiß der
     Slicer nicht, welche Grundannahmen gelten.
 
-    Wie beim Prozess (§29) legt Formwerk seine Werte auf das Profil des
+    Wie beim Prozess (§29) legt Solidon seine Werte auf das Profil des
     Herstellers, statt eines zu erfinden. Der Unterschied zum Prozess: hier
     wird die Erbkette vorher **aufgelöst**. Ein Filamentprofil bei Elegoo
     setzt selbst drei Werte und erbt fünfzig; kopierte man nur die oberste
@@ -406,7 +406,7 @@ def _orca_filament(
     """
     document: dict[str, object] = {
         "type": "filament",
-        "name": f"Formwerk {settings.title}",
+        "name": f"Solidon {settings.title}",
         "from": "User",
         "instantiation": "true",
         "filament_type": [slicer_keys.filament_type(profile.material.id)],
@@ -427,9 +427,9 @@ def _as_slots(value: object) -> object:
 
 
 def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Finding]:
-    """Wo Formwerks Werte von denen des Filamentprofils abweichen (§29, §22.5).
+    """Wo Solidons Werte von denen des Filamentprofils abweichen (§29, §22.5).
 
-    Beide Seiten haben recht, und das ist der Punkt. Formwerks Tabelle sagt,
+    Beide Seiten haben recht, und das ist der Punkt. Solidons Tabelle sagt,
     was PETG im Allgemeinen verträgt; das Profil des Herstellers sagt, was
     *diese Spule* auf *diesem Drucker* verträgt. Beim transluzenten Elegoo-PETG
     sind das 255 °C bei 70 °C Bett gegen 240 bei 80 — und ein Volumenstrom von
@@ -507,7 +507,7 @@ def _command(
             "--load",
             str(config.process),
             "--output",
-            str(output / "formwerk.gcode"),
+            str(output / "solidon.gcode"),
             *files,
         ]
 
@@ -531,7 +531,7 @@ def _command(
             # Ohne diesen Schalter ordnet die Orca-Familie **immer** neu an,
             # egal in welchen Koordinaten die Teile ankommen — gemessen an zwei
             # Läufen derselben Szene, die denselben G-Code ergaben. Damit war
-            # alles folgenlos, was Formwerk über die Platte weiß: `arrange_bed`,
+            # alles folgenlos, was Solidon über die Platte weiß: `arrange_bed`,
             # der Haftungsrand, die Plattenzuordnung. Gesetzt wird er nur, wenn
             # die Anordnung wirklich eine ist (siehe
             # :func:`app.core.export.writer.arrangement_holds`) — sonst
@@ -548,7 +548,7 @@ def _command(
             arguments += ["-s", line.strip()]
     for entry in files:
         arguments += ["-l", entry]
-    arguments += ["-o", str(output / "formwerk.gcode")]
+    arguments += ["-o", str(output / "solidon.gcode")]
     return arguments
 
 
@@ -558,7 +558,7 @@ def _cura_base(executable: Path) -> str:
     ``CuraEngine`` braucht mindestens eine Definition, sonst kennt es keinen
     einzigen Einstellungsnamen. ``fdmprinter.def.json`` ist die Wurzel, von
     der alle Druckerdefinitionen erben — die Maschine selbst beschreibt
-    Formwerk daneben über :func:`_machine_keys`, statt eine der
+    Solidon daneben über :func:`_machine_keys`, statt eine der
     zwölfhundert Herstellerdefinitionen zu wählen und deren Vererbungskette
     nachzubauen. Die kennt nur das Fenster.
 
@@ -627,7 +627,7 @@ def slice_model(
         )
 
     started = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="formwerk-slice-") as directory:
+    with tempfile.TemporaryDirectory(prefix="solidon-slice-") as directory:
         workspace = Path(directory)
         config = write_config(settings, profile, setup, workspace)
         target = output_dir if output_dir is not None else workspace
@@ -697,7 +697,7 @@ def slice_model(
             code="slicer.handover",
             severity="info",
             message=_(
-                "Diese Datei kommt aus dem externen Slicer, gerechnet mit den Werten aus Formwerk."
+                "Diese Datei kommt aus dem externen Slicer, gerechnet mit den Werten aus Solidon."
             ),
             values={"slicer": metrics.slicer or setup.name, "settings": settings.title},
             source="gcode",
@@ -737,7 +737,7 @@ _RECOMPUTED: Final = frozenset(
 
 
 def verify(text: str, written: Mapping[str, str]) -> list[Finding]:
-    """Kam an, was Formwerk geschrieben hat? (§28.2)
+    """Kam an, was Solidon geschrieben hat? (§28.2)
 
     Die Slicer schreiben ihre wirksame Konfiguration als Kommentare in die
     Druckdatei. Das ist die einzige Auskunft darüber, ob eine Zuordnung
@@ -772,7 +772,7 @@ def verify(text: str, written: Mapping[str, str]) -> list[Finding]:
             code="slicer.setting_ignored",
             severity="warning",
             message=_(
-                "Der Slicer hat Einstellungen anders übernommen, als Formwerk sie geschrieben hat."
+                "Der Slicer hat Einstellungen anders übernommen, als Solidon sie geschrieben hat."
             ),
             values={"count": len(ignored), "settings": "; ".join(sorted(ignored)[:10])},
             source="gcode",

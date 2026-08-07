@@ -25,7 +25,7 @@ from typing import Final
 
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
-from app.core.slice.analysis import island_layers, narrowest, total_overhang
+from app.core.slice.analysis import island_layers, narrowest, total_overhang, worst_overhang
 from app.core.types import (
     BoundingBox,
     Finding,
@@ -50,6 +50,20 @@ SLENDER_RATIO = 4.0
 #: Überhangfläche in mm², ab der Stützen mehr nützen als kosten. Darunter
 #: trägt die Schicht darunter genug, dass ein Absacken in der Wand verschwindet.
 OVERHANG_WORTH_SUPPORT = 150.0
+
+#: Und wie viel davon auf **einer** Schicht anfangen muss.
+#:
+#: Die Summe allein sprach ein Fehlurteil: ein Becher verteilt seine
+#: zweihundertvierzig Quadratmillimeter über dreihundertachtunddreißig
+#: Schichten, keine davon trägt mehr als knapp vier, und jede Wand fängt das in
+#: sich auf — er bekam trotzdem dieselbe Stützenwarnung wie ein Deckel, dessen
+#: Lochplatte mit achthundertfünfundvierzig auf einmal über einem Hohlraum
+#: beginnt.
+#:
+#: Hundert ist die Fläche, die eine Düse nicht mehr überspannt: ein Kreis von
+#: gut elf Millimetern, also das Doppelte dessen, was die Slicer als längste
+#: freie Brücke zulassen.
+OVERHANG_LAYER_WORTH_SUPPORT = 100.0
 
 #: So viele Schichten mit Inseln machen aus Gitterstützen Baumstützen: viele
 #: verteilte Ansatzpunkte sind genau der Fall, für den Bäume gebaut wurden.
@@ -168,7 +182,7 @@ def _from_flow(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]
     an den Einstellungen sieht man nichts.
 
     Zwei Wege heraus, und beide werden genannt: heißer, solange die Maschine
-    das kann, sonst langsamer. Welcher richtig ist, weiß Formwerk nicht —
+    das kann, sonst langsamer. Welcher richtig ist, weiß Solidon nicht —
     darum entscheidet es das nicht.
     """
     advice: list[SettingAdvice] = []
@@ -341,7 +355,17 @@ def _from_geometry(
 
     islands = island_layers(result)
     overhang = total_overhang(result)
-    needs_support = bool(islands) or overhang > OVERHANG_WORTH_SUPPORT
+    worst = worst_overhang(result)
+    # Die Summe allein reicht nicht, und der Unterschied entscheidet: ein
+    # Becher sammelte über dreihundertachtunddreißig Schichten
+    # zweihundertvierzig Quadratmillimeter und bekam dieselbe Warnung wie ein
+    # Deckel, dessen Lochplatte mit achthundertfünfundvierzig auf einmal
+    # anfängt. Beim Becher trägt jede Wand ihren Anteil selbst; beim Deckel
+    # hängt eine ganze Fläche über einem Hohlraum. Gefragt ist deshalb beides
+    # — wie viel insgesamt, und wie viel davon auf einmal.
+    needs_support = bool(islands) or (
+        overhang > OVERHANG_WORTH_SUPPORT and worst > OVERHANG_LAYER_WORTH_SUPPORT
+    )
 
     if needs_support and settings.support.style == "none":
         style = "tree" if len(islands) >= TREE_FROM_ISLANDS else "grid"

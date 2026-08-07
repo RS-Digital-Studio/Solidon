@@ -463,7 +463,7 @@ def test_switching_navigation_keeps_the_picking_alive(qt_app: QApplication) -> N
     Der Test hat lange geprüft, dass ``plotter.enable_point_picking`` nach
     jedem Wechsel neu läuft. Das war richtig gedacht und half nichts: pyvista
     sucht sich den Renderer über ``GetInteractorStyle()._parent()``, also über
-    seinen **eigenen** Stil, und Formwerk setzt für die vier
+    seinen **eigenen** Stil, und Solidon setzt für die vier
     Navigationsschemata einen eigenen. Jeder Klick endete in einem
     ``AttributeError``, den pyvistaqt zu einer Warnung macht — die Auswahl im
     Viewport hat nie funktioniert, und der Test war grün dabei.

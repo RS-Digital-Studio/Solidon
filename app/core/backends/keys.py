@@ -20,7 +20,7 @@ from app.core.log import get_logger
 _log = get_logger(__name__)
 
 #: Unter welchem Namen der Schlüssel im Schlüsselbund abgelegt ist.
-SERVICE = "formwerk-llm"
+SERVICE = "solidon-llm"
 
 #: Rückfall für Rechner ohne Schlüsselbund, etwa einen Bauserver.
 ENVIRONMENT_VARIABLE = f"{ENVIRONMENT_PREFIX}_LLM_KEY"

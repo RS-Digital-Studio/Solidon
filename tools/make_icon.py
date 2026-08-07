@@ -1,10 +1,10 @@
 """Rastert das Anwendungssymbol aus seiner SVG-Quelle (Bauplan §37.2).
 
-Die Quelle ist eine gestaltete Form und liegt in ``app/images/icon/formwerk.svg``
+Die Quelle ist eine gestaltete Form und liegt in ``app/images/icon/solidon.svg``
 — sie wird von Hand gestaltet und hier nur gerastert, nie umgekehrt. Erzeugt
 werden die zwei Ablagen, die nicht selbst rendern können:
 
-* ``packaging/formwerk.ico`` — für die exe (PyInstaller) und den Installer
+* ``packaging/solidon.ico`` — für die exe (PyInstaller) und den Installer
   (Inno Setup). Kleine Größen als DIB, die 256er als PNG, wie Windows es
   vorsieht; geschrieben ohne neue Abhängigkeit.
 * ``website/icon.svg`` — das Favicon der Website, eine Kopie der Quelle.
@@ -27,8 +27,8 @@ from PySide6.QtGui import QGuiApplication, QImage, QPainter
 from PySide6.QtSvg import QSvgRenderer
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "app" / "images" / "icon" / "formwerk.svg"
-ICO_TARGET = ROOT / "packaging" / "formwerk.ico"
+SOURCE = ROOT / "app" / "images" / "icon" / "solidon.svg"
+ICO_TARGET = ROOT / "packaging" / "solidon.ico"
 WEBSITE_TARGET = ROOT / "website" / "icon.svg"
 
 #: Die Größenreihe der ICO — was Windows in Taskleiste, Explorer und

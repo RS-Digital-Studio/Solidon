@@ -729,7 +729,7 @@ class _ProfileWorker(QThread):
                     self._flavour,
                     # Filamente gehören dazu: ohne sie weiß der Slicer nur
                     # „PETG" und nicht, welches — und fährt für alles, was
-                    # Formwerk nicht setzt, seine eigene Voreinstellung.
+                    # Solidon nicht setzt, seine eigene Voreinstellung.
                     kinds=("machine", "process", "filament"),
                 )
             )
@@ -900,7 +900,7 @@ class PrintSettingsDialog(QDialog):
         self.adjustSize()
 
     def _build_slicer(self) -> QWidget:
-        """Auf welche Profile des Slicers Formwerk seine Werte legt (§29).
+        """Auf welche Profile des Slicers Solidon seine Werte legt (§29).
 
         Zwei Auswahlen, aber im Regelfall keine Entscheidung: das
         Maschinenprofil sagt selbst, welchen Drucker und welche Düse es meint,
@@ -941,10 +941,10 @@ class PrintSettingsDialog(QDialog):
             return
         if flavour == "prusa":
             # §29: eine PrusaSlicer-ini läuft eigenständig, sobald Düse und
-            # Bettform darin stehen — und die schreibt Formwerk selbst.
+            # Bettform darin stehen — und die schreibt Solidon selbst.
             self.profile_note.setText(
                 tr(
-                    "Dieser Slicer braucht kein Grundprofil — Formwerk schreibt eine vollständige "
+                    "Dieser Slicer braucht kein Grundprofil — Solidon schreibt eine vollständige "
                     "Konfiguration."
                 )
             )
@@ -1000,7 +1000,7 @@ class PrintSettingsDialog(QDialog):
         else:
             self.profile_note.setText(
                 tr(
-                    "Automatisch zugeordnet. Was hier steht, bringt der Slicer mit; Formwerk legt "
+                    "Automatisch zugeordnet. Was hier steht, bringt der Slicer mit; Solidon legt "
                     "seine Werte darauf."
                 )
             )
@@ -1362,7 +1362,7 @@ class PrintSettingsDialog(QDialog):
             return
         # Das Prozessprofil ist genauso wenig verzichtbar, nur fiel es später
         # auf: die Orca-Familie nimmt kein Prozessprofil an, das nicht zum
-        # Drucker passt, und ohne ein Systemprofil darunter hat Formwerks
+        # Drucker passt, und ohne ein Systemprofil darunter hat Solidons
         # Datei nichts, wozu sie passen könnte (siehe `_orca_process`). Der
         # Lauf lief bis dahin los und endete in „Der Slicer hat keine
         # Druckdatei geschrieben" — ein Satz über das Ende, nicht über die
@@ -1377,9 +1377,9 @@ class PrintSettingsDialog(QDialog):
         self.ui_settings.slicer_base_process = setup.base_process
         self.ui_settings.slicer_base_filament = setup.base_filament
 
-        self._temporary = TemporaryDirectory(prefix="formwerk-handover-")
+        self._temporary = TemporaryDirectory(prefix="solidon-handover-")
         folder = Path(self._temporary.name)
-        name = self.session.path.stem if self.session.path else "formwerk"
+        name = self.session.path.stem if self.session.path else "solidon"
         # Eine Baugruppe und nicht eine Datei je Objekt: der Slicer bekommt
         # damit einen Druckauftrag statt einer Handvoll Teile, über deren
         # Zusammengehörigkeit er selbst entscheiden müsste (§20, §29).
@@ -1456,7 +1456,7 @@ class PrintSettingsDialog(QDialog):
         if self._gcode is None or not self._gcode.is_file():
             return
         start = self.session.path.parent if self.session.path else Path.home()
-        stem = self.session.path.stem if self.session.path else "formwerk"
+        stem = self.session.path.stem if self.session.path else "solidon"
         chosen, _filter = QFileDialog.getSaveFileName(
             self,
             tr("Druckdatei speichern"),

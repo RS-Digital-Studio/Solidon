@@ -53,7 +53,7 @@ def test_a_folder_for_the_vendor_and_one_for_the_program_is_found(
     """Prusa installiert nach ``Prusa3D\\PrusaSlicer\\`` — Firma, dann Programm.
 
     Eine Ebene tief gesucht, war PrusaSlicer auf dieser Maschine installiert
-    und für Formwerk trotzdem nicht vorhanden: die Übergabe an den Slicer bot
+    und für Solidon trotzdem nicht vorhanden: die Übergabe an den Slicer bot
     ihn schlicht nicht an, und keine Meldung sagte warum.
     """
     root = tmp_path / "root"

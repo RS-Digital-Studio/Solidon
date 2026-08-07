@@ -39,13 +39,13 @@ class UiSettings:
     print_quality: str = ""
     """Zuletzt gewählte Qualitätsstufe (§29). Leer heißt: die Vorgabe."""
     slicer_machine_profile: str = ""
-    """Maschinenprofil aus dem Bestand des Slicers. Formwerk kennt Bettform und
+    """Maschinenprofil aus dem Bestand des Slicers. Solidon kennt Bettform und
     Startcode nicht und schreibt sie deshalb nicht — es zeigt darauf (§29)."""
     slicer_base_process: str = ""
-    """Prozessprofil, auf das die Formwerk-Werte gelegt werden. Die Orca-Familie
+    """Prozessprofil, auf das die Solidon-Werte gelegt werden. Die Orca-Familie
     braucht es, sonst gilt der Prozess als unverträglich mit dem Drucker."""
     slicer_base_filament: str = ""
-    """Filamentprofil, auf das die Formwerk-Werte gelegt werden. Ohne es kennt
+    """Filamentprofil, auf das die Solidon-Werte gelegt werden. Ohne es kennt
     der Slicer nur „PETG" und nicht, welches — und die Werte des Herstellers
     für dieses Filament kämen gar nicht zum Tragen."""
     first_run_done: bool = False

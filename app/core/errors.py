@@ -46,7 +46,7 @@ CHOOSE_PRINTER = Action("choose_printer", _("Anderes Druckerprofil wählen"))
 OPEN_SETTINGS = Action("open_settings", _("Einstellungen öffnen"), primary=True)
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
 ENTER_LICENCE_KEY = Action("enter_licence_key", _("Lizenzschlüssel eintragen"), primary=True)
-BUY_LICENCE = Action("buy_licence", _("Formwerk kaufen"))
+BUY_LICENCE = Action("buy_licence", _("Solidon kaufen"))
 
 
 class OperationCancelled(Exception):
@@ -348,7 +348,7 @@ class LicenceRequired(AppError):
     """
 
     default_title: ClassVar[TranslatableText] = _(
-        "Der Testzeitraum ist abgelaufen — dafür braucht Formwerk einen Lizenzschlüssel."
+        "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen Lizenzschlüssel."
     )
     default_suggestions: ClassVar[tuple[Action, ...]] = (ENTER_LICENCE_KEY, BUY_LICENCE, CANCEL)
 

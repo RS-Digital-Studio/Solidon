@@ -9,7 +9,7 @@ einem Passwort, und ein Lizenzschlüssel ist der falsche Anlass für diese Frage
 
 Der Testlaufmarker ist **absichtlich nicht versteckt**. Wer ihn löscht, hat
 wieder vierzehn Tage. Ihn zu verstecken bräuchte Streuung über Registry und
-verborgene Dateien — also genau das Verhalten, das Formwerk seinen Nutzern
+verborgene Dateien — also genau das Verhalten, das Solidon seinen Nutzern
 nirgends zumutet. Die Frist ist eine Erinnerung; die Schwelle für den
 dauerhaften Gebrauch ist die Signatur, und die hält.
 
@@ -43,7 +43,7 @@ TRIAL_FILE: Final = "trial.json"
 
 #: Ab welchem Abstand zum ersten Start ein gespeicherter Tag keine verstrichene
 #: Zeit mehr sein kann, sondern eine falsch gestellte Uhr. Ein Jahr ist
-#: großzügig genug, dass ein Nutzer, der Formwerk nach Monaten wieder öffnet,
+#: großzügig genug, dass ein Nutzer, der Solidon nach Monaten wieder öffnet,
 #: den Rückwärtsschutz behält.
 CLOCK_HORIZON_DAYS: Final = 365
 

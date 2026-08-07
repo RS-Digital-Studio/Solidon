@@ -2,7 +2,7 @@
 
 Die Grenze in einem Satz: **was das Dokument ändert oder ein Ergebnis
 herausgibt, braucht einen Schlüssel — was nur liest, nicht.** Nach Ablauf des
-Testlaufs bleibt Formwerk damit ein vollständiger Betrachter seiner eigenen
+Testlaufs bleibt Solidon damit ein vollständiger Betrachter seiner eigenen
 Projekte: öffnen, drehen, messen, Prüfbericht lesen, Schichtanalyse ansehen,
 speichern, zurücknehmen. Wer nichts mehr ändern kann, kann auch nichts kaputt
 speichern; die Freigabe kostet nichts und nimmt dem Ablauf die Härte an der

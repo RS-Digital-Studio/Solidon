@@ -1349,7 +1349,7 @@ ID-Problem weitgehend, weil Flächen und Kanten benannte Entitäten sind.
 
 Der Grund für diese Stufe ist eine Produktentscheidung: **so wenig
 Fremdprogramme wie möglich.** Das fremde CAD vor dem Import ist der größte
-verbliebene Anlass, Formwerk zu verlassen — mit Skizzen entsteht ein
+verbliebene Anlass, Solidon zu verlassen — mit Skizzen entsteht ein
 Druckteil von der ersten Linie bis zum Export im selben Programm.
 
 - **Eine Skizze ist ein Datenmodell im Kern** (Verträge in §9): Ebene aus
@@ -1573,7 +1573,7 @@ Abhängigkeiten gegen die Freigabeliste.
 Wird für Paketnamen, Domain, Dateiendung, Übersetzungen und Signierung
 gebraucht — früh entscheiden. Kriterien: als Paketname und Domain frei, keine
 Markenkollision, in beiden Sprachen aussprechbar, kein „3D" im Namen.
-Anregungen: *Formwerk*, *Passform*, *Werkbank*. Bis zur Entscheidung steht der
+Anregungen: *Solidon*, *Passform*, *Werkbank*. Bis zur Entscheidung steht der
 Name an **einer** Stelle im Code.
 
 ### 37.2 Auslieferung

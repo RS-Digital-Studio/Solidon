@@ -86,7 +86,7 @@ def sitzungsstart() -> None:
     eingabe()
     melden(
         "SessionStart",
-        "Projekt Formwerk: Python 3.13 mit PySide6, kein Avalonia und kein MVVM — "
+        "Projekt Solidon: Python 3.13 mit PySide6, kein Avalonia und kein MVVM — "
         "die Stack-Angaben der globalen Konfiguration gelten hier nicht. "
         "Bezeichner, Dateinamen und Modulnamen auf Englisch; Docstrings, Kommentare, "
         "Doku, Commits und Gespräch auf Deutsch mit echten Umlauten. "
@@ -233,7 +233,7 @@ AUFGABEN = {
 
 
 def main() -> int:
-    if os.environ.get("FORMWERK_HOOKS") == "aus":
+    if os.environ.get("SOLIDON3D_HOOKS") == "aus":
         return 0
     aufgabe = AUFGABEN.get(sys.argv[1] if len(sys.argv) > 1 else "")
     if aufgabe is None:
