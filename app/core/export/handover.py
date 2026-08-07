@@ -191,11 +191,35 @@ def _only_chosen_adhesion(
 def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
     """Was der Slicer über die Maschine wissen muss, wenn kein Profil greift.
 
-    Nur für ``prusa``: dort ist eine ``.ini`` eigenständig lauffähig, sobald
-    Düse und Bettform darin stehen. Orca und Cura laden ohnehin ein
-    Maschinenprofil, und dem hier hineinzureden hieße, ihre Anfahrwege und
-    ihren Startcode zu überschreiben.
+    Für ``prusa`` ist eine ``.ini`` eigenständig lauffähig, sobald Düse und
+    Bettform darin stehen. Orca lädt ein Maschinenprofil aus seinem Bestand,
+    und dem hier hineinzureden hieße, seine Anfahrwege und seinen Startcode
+    zu überschreiben.
+
+    ``cura`` stand lange bei Orca, und das war falsch: ``CuraEngine`` ist
+    nicht die Kommandozeile eines Slicers, sondern die Rechenmaschine hinter
+    dem Fenster. Sie löst keine Vererbung auf — was das Fenster sonst aus
+    Definition, Qualität, Material und Variante zusammenrechnet, muss ihr
+    einzeln mitgegeben werden. Ohne Bettmaße rechnete sie einen G-Code, in
+    dessen Kopf ``MINX:2.14748e+06`` stand: der Grenzwert eines Ganzzahltyps,
+    also gar keine Angabe.
     """
+    if flavour == "cura":
+        width, depth, height = profile.printer.build_volume
+        return {
+            "machine_width": f"{width:g}",
+            "machine_depth": f"{depth:g}",
+            "machine_height": f"{height:g}",
+            "machine_nozzle_size": f"{profile.printer.nozzle_diameter:g}",
+            # Formwerk rechnet um den Ursprung, hier wie bei Prusa.
+            "machine_center_is_zero": "true",
+            # Zwei Einstellungen aus `fdmprinter.def.json` tragen keinen
+            # Vorgabewert — das Fenster füllt sie aus dem Qualitätsprofil.
+            # Ohne sie bricht der Lauf mit „Trying to retrieve setting with
+            # no value given" ab, bevor er die erste Schicht ansieht.
+            "roofing_layer_count": "0",
+            "flooring_layer_count": "0",
+        }
     if flavour != "prusa":
         return {}
     printer = profile.printer
@@ -482,8 +506,9 @@ def _command(
         return [*arguments, "--slice", "0", "--outputdir", str(output), *files]
 
     arguments = [binary, "slice", "-v"]
-    if setup.machine_profile:
-        arguments += ["-j", setup.machine_profile]
+    basis = setup.machine_profile or _cura_base(setup.executable)
+    if basis:
+        arguments += ["-j", basis]
     for line in config.process.read_text(encoding="utf-8").splitlines():
         if line.strip():
             arguments += ["-s", line.strip()]
@@ -491,6 +516,29 @@ def _command(
         arguments += ["-l", entry]
     arguments += ["-o", str(output / "formwerk.gcode")]
     return arguments
+
+
+def _cura_base(executable: Path) -> str:
+    """Die Grunddefinition neben ``CuraEngine``, sofern sie dort liegt.
+
+    ``CuraEngine`` braucht mindestens eine Definition, sonst kennt es keinen
+    einzigen Einstellungsnamen. ``fdmprinter.def.json`` ist die Wurzel, von
+    der alle Druckerdefinitionen erben — die Maschine selbst beschreibt
+    Formwerk daneben über :func:`_machine_keys`, statt eine der
+    zwölfhundert Herstellerdefinitionen zu wählen und deren Vererbungskette
+    nachzubauen. Die kennt nur das Fenster.
+
+    Nichts, wenn sie nicht daliegt: dann scheitert der Lauf und sagt das,
+    statt einen Pfad zu erfinden.
+    """
+    for folder in (
+        executable.parent / "share" / "cura" / "resources" / "definitions",
+        executable.parent / "resources" / "definitions",
+    ):
+        found = folder / "fdmprinter.def.json"
+        if found.is_file():
+            return str(found)
+    return ""
 
 
 @dataclass(slots=True)
@@ -576,6 +624,27 @@ def slice_model(
             )
 
         payload = produced.read_text(encoding="utf-8", errors="replace")
+        if not gcode.extrudes(payload):
+            # Eine große Datei ohne eine einzige Förderbewegung. Der Slicer ist
+            # durchgelaufen und hat den Rückgabewert 0 gemeldet, aber das
+            # Modell nicht verarbeitet — meist, weil ihm eine Einstellung
+            # fehlte, die er stillschweigend als „nichts drucken" auslegt. Das
+            # als Erfolg durchzulassen wäre schlimmer als der Abbruch: der
+            # Nutzer schickte eine leere Datei an den Drucker.
+            raise ExternalToolError(
+                tool=setup.name,
+                exit_code=completed.returncode,
+                detail=_(
+                    "Die Druckdatei enthält keine einzige Materialbahn — "
+                    "der Slicer hat das Modell nicht verarbeitet."
+                ),
+                values={"output": _tail(completed.stdout, completed.stderr)},
+                suggestions=(
+                    Action(id="check_profile", label=_("Maschinenprofil prüfen.")),
+                    Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
+                    Action(id="export_only", label=_("Nur exportieren und selbst slicen.")),
+                ),
+            )
         metrics = gcode.parse(payload)
         # Die Gegenprobe: hat der Slicer übernommen, was ihm geschrieben wurde?
         # Das ist die einzige Auskunft, die von ihm selbst kommt statt aus einer

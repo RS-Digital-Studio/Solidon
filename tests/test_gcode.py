@@ -166,3 +166,20 @@ def test_an_internal_finding_stays_internal() -> None:
     result = slice_body(body, 0.2)
 
     assert result.source == "internal"
+
+
+def test_a_file_without_a_single_extrusion_is_not_a_print() -> None:
+    """Cura schreibt bei fehlender Einstellung eine große Datei voller
+    Leerfahrten und meldet trotzdem Erfolg. Gefragt wird an der Bewegung,
+    nicht am Kommentar — sonst hinge die Antwort am Slicer.
+    """
+    leerlauf = """
+;FLAVOR:Marlin
+;TIME:6666
+;Filament used: 0m
+G0 X10 Y10
+G1 X20 Y10 E0
+G0 X30 Y10
+"""
+    assert not gcode.extrudes(leerlauf)
+    assert gcode.extrudes(PRUSA)

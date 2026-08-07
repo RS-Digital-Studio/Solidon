@@ -122,6 +122,24 @@ def parse(text: str) -> GcodeMetrics:
     return metrics
 
 
+def extrudes(text: str) -> bool:
+    """Fördert diese Datei überhaupt Material?
+
+    Format-unabhängig gefragt: nicht am Kommentar, den jeder Slicer anders
+    schreibt, sondern an der Bewegung selbst. Eine Datei ohne eine einzige
+    Bahn mit Vorschub ist kein Druck — sie ist ein Leerlauf über die Platte,
+    und sie entsteht, wenn der Slicer das Modell nicht gefunden oder
+    verworfen hat. Groß ist sie trotzdem, und ohne diese Frage sähe sie aus
+    wie ein geglückter Lauf.
+    """
+    return any(_EXTRUSION.match(line) and float(_e_value(line)) > 0.0 for line in text.splitlines())
+
+
+def _e_value(line: str) -> str:
+    found = _EXTRUSION.match(line)
+    return "0" if found is None else found.group("e")
+
+
 def _set(metrics: GcodeMetrics, name: str, value: str) -> None:
     if name == "slicer":
         metrics.slicer = value
