@@ -93,7 +93,7 @@ def test_the_generated_file_is_a_source_and_not_an_operation(project: Project) -
     assert project.sources[result.source_id] == result.result.payload
     # Drei Schritte: laden, reparieren, auf Arbeitsgröße bringen. Der dritte
     # kam dazu, weil ein Bildmodell auf einen Einheitswürfel normiert liefert.
-    assert [entry.op for entry in project.document.ops] == ["load", "repair", "fit_to_size"]
+    assert [entry.op for entry in project.document.ops] == ["load", "fit_to_size", "repair"]
 
 
 def test_the_repair_chain_runs_without_being_asked(project: Project, profile: Profile) -> None:
@@ -232,3 +232,33 @@ def test_the_way_ends_in_a_file(project: Project, profile: Profile, tmp_path: Pa
 
     assert written[0].exists()
     assert written[0].name.endswith(".stl")
+
+
+def test_a_tiny_generated_body_survives_the_chain(project: Project, profile: Profile) -> None:
+    """Ein erzeugtes Netz kommt geschlossen an und muss es bleiben.
+
+    Es kam geschlossen an und wurde es hier nicht mehr: Verschweißen und
+    Entarten messen beide absolut, und ein Bildmodell misst auf einem
+    Einheitswürfel ein bis zwei Millimeter. Unter der Toleranz lag dann nicht
+    der Doppelpunkt, sondern die halbe Lehne — vier von vier Möbeln gingen
+    auf, ohne dass sich ein Dreieck geändert hätte.
+
+    Die Reihenfolge behebt es: erst auf Maß, dann bereinigen. Neu vernetzen
+    hätte es auch geschlossen und die Feinheit gekostet.
+    """
+    # Ein Würfel von zwei Millimetern, fein vernetzt: die Größe, in der ein
+    # Bildmodell ankommt, und die Feinheit, die es mitbringt. Das geskriptete
+    # Standardnetz taugt hier nicht — es ist mit Absicht kaputt.
+    winzig = trimesh.creation.icosphere(subdivisions=4, radius=1.0)
+    assert winzig.is_watertight, "die Vorlage selbst ist geschlossen"
+    tiny = ScriptedMeshBackend(
+        fallback=bytes(trimesh.exchange.export.export_mesh(winzig, None, file_type="ply")),
+        suffix=".ply",
+    )
+
+    result = from_text(project, tiny, "eine kleine Figur", seed=7)
+    scene = evaluated(project, profile)
+
+    body = scene.scene.objects[result.object_id].mesh
+    assert body.is_watertight, "was geschlossen ankam, geht auf dem Weg nicht auf"
+    assert max(body.bounds.size) == pytest.approx(100.0, abs=1e-3), "und steht auf Arbeitsgröße"

@@ -136,31 +136,57 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
         [
             OperationDraft(
                 op="load",
-                params={"source": source_id, "unit": "mm", "name": short},
+                params={
+                    "source": source_id,
+                    "unit": "mm",
+                    "name": short,
+                    # Beim Laden nichts bereinigen, solange das Modell winzig
+                    # ist. Die Reparaturkette unten holt jeden dieser Schritte
+                    # nach — dann aber auf hundert Millimetern, wo dieselben
+                    # Toleranzen das Richtige treffen.
+                    #
+                    # Beide Stufen messen absolut: das Verschweißen sucht
+                    # Punkte, deren Abstand unter der Toleranz liegt, das
+                    # Entarten sucht Dreiecke, deren Fläche darunter liegt. Bei
+                    # zwei Millimetern Modellgröße ist das nicht der
+                    # Doppelpunkt und nicht die Nadel, sondern die halbe Lehne
+                    # und achtundachtzig Dreiecke, die die Hülle schließen.
+                    # Vier von vier erzeugten Netzen gingen hier auf, ohne dass
+                    # jemand eine Absicht hatte — und danach half nichts mehr:
+                    # Löcher füllen schließt eine Naht, aber keine, die quer
+                    # durch das Modell läuft.
+                    "weld": False,
+                    "remove_degenerate": False,
+                    "unify_normals": False,
+                },
             )
         ],
         origin,
     )
     object_id = document.ops[-1].outputs[0]
 
-    repairing = history.apply(
-        _("Reparaturkette"),
-        [OperationDraft(op="repair", inputs=(object_id,), params=dict(GENERATED_REPAIR))],
-        origin,
-    )
-
-    # Auf eine Größe bringen, mit der sich arbeiten lässt.
+    # Erst die Größe, dann die Reparatur — und diese Reihenfolge ist das
+    # Gegenteil einer Geschmacksfrage.
     #
-    # Ein Bildmodell normiert seine Ausgabe auf einen Einheitswürfel — was
-    # herauskommt, misst ein bis zwei Einheiten, und als Millimeter gelesen
-    # ist das ein Krümel. Vier erzeugte Möbel maßen 0,6 bis 2,0 mm; im
-    # Viewport war nichts zu sehen, und der Weg zurück führte über einen
-    # Skalierfaktor von 140, den ``scale_object`` gar nicht annahm.
+    # Ein Bildmodell normiert seine Ausgabe auf einen Einheitswürfel: was
+    # ankommt, misst ein bis zwei Millimeter. Die vier Möbel fürs Puppenhaus
+    # kamen dabei **geschlossen** an — und wurden es erst hier nicht mehr. Das
+    # Verschweißen sucht Punkte, die zusammenfallen, und seine Toleranz hängt
+    # an der Diagonale; bei zwei Millimetern liegt darunter nicht der
+    # Doppelpunkt, sondern die halbe Lehne. Vier von vier Netzen gingen auf,
+    # ohne dass sich ein Dreieck geändert hätte, und danach half nichts mehr:
+    # Löcher füllen kann eine Naht schließen, aber keine, die quer durchs
+    # Modell läuft.
     #
-    # Geraten wird dabei nichts (Regel 21): dass ein Stuhl 75 mm hoch werden
-    # soll und ein Schrank 250, weiß nur der Nutzer. Was hier entsteht, ist
-    # eine Ausgangsgröße, von der aus er in einem Schritt auf sein Maß kommt —
-    # und weil es eine eigene Transaktion ist, nimmt ein Undo sie zurück.
+    # In dieser Reihenfolge bleiben alle vier dicht und behalten 99,9 % ihrer
+    # Dreiecke. Neu vernetzen — der andere Weg, ein Netz zu schließen — hätte
+    # sie gekostet.
+    #
+    # Geraten wird beim Maß nichts (Regel 21): dass ein Stuhl 75 mm hoch
+    # werden soll und ein Schrank 250, weiß nur der Nutzer. Was hier entsteht,
+    # ist eine Ausgangsgröße, von der aus er in einem Schritt auf sein Maß
+    # kommt — und weil es eine eigene Transaktion ist, nimmt ein Undo sie
+    # zurück.
     history.apply(
         _("Auf Arbeitsgröße bringen"),
         [
@@ -171,6 +197,12 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
                 params={"largest": WORKING_SIZE_MM},
             )
         ],
+        origin,
+    )
+
+    repairing = history.apply(
+        _("Reparaturkette"),
+        [OperationDraft(op="repair", inputs=(object_id,), params=dict(GENERATED_REPAIR))],
         origin,
     )
     _log.info("generated %s into %s via %s", object_id, source_id, result.backend)
