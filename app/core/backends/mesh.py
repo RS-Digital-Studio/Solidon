@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Final, Protocol
 
-from app.core.errors import AppError
+from app.core.errors import CANCEL, OPEN_SETTINGS, Action, AppError
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.log import get_logger
 from app.core.types import ProgressFn
@@ -168,10 +168,17 @@ class GenerationFailed(AppError):
         *,
         title: TranslatableText | str | None = None,
         values: dict[str, Any] | None = None,
+        suggestions: tuple[Action, ...] = (),
     ) -> None:
         # Ein anderer Titel ist nicht Zierde: „hat kein Modell geliefert" ist
-        # falsch, wenn der Lauf nie begonnen hat, weil eine Modelldatei fehlt.
-        super().__init__(title=title, detail=detail or None, values=values or {})
+        # falsch, wenn der Lauf nie begonnen hat — weil eine Modelldatei fehlt
+        # oder weil ComfyUI gar nicht antwortet.
+        super().__init__(
+            title=title,
+            detail=detail or None,
+            values=values or {},
+            suggestions=suggestions,
+        )
 
 
 # --- Transporte -------------------------------------------------------------------
@@ -192,7 +199,29 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
             detail=f"{error.code}: {error.read().decode('utf-8', errors='replace')[:300]}"
         ) from error
     except urllib.error.URLError as error:
-        raise GenerationFailed(detail=str(error.reason)) from error
+        # Hier endet der häufigste Fall überhaupt: ComfyUI läuft nicht mehr.
+        # Ohne eigenen Satz stünde davon „[WinError 10061] Es konnte keine
+        # Verbindung hergestellt werden" im Dialog — Fremdtext, technisch, und
+        # ohne einen Hinweis, was jetzt hilft. Der Titel ist derselbe Fehler:
+        # geliefert hat der Generator nichts, weil er nie angefangen hat.
+        raise GenerationFailed(
+            title=_("Die Mesh-Erzeugung konnte nicht starten."),
+            # Die Adresse gehört in die Werte daneben, nicht als Platzhalter in
+            # den Satz: einen Fehlertext formatiert niemand nach, er wird
+            # angezeigt wie er ist.
+            detail=_(
+                "ComfyUI antwortet nicht. Läuft es? Steht es auf einem anderen "
+                "Rechner, gehört seine Adresse in die Einstellungen."
+            ),
+            values={"url": _origin(url), "reason": str(error.reason)},
+            suggestions=(OPEN_SETTINGS, CANCEL),
+        ) from error
+
+
+def _origin(url: str) -> str:
+    """Nur Rechner und Port — der Pfad dahinter sagt einem Nutzer nichts."""
+    parts = urllib.parse.urlparse(url)
+    return f"{parts.scheme}://{parts.netloc}" if parts.netloc else url
 
 
 def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:
@@ -309,8 +338,8 @@ class ComfyBackend:
         if not options:
             raise GenerationFailed(
                 detail=_(
-                    "ComfyUI hat für „{role}“ kein Modell anzubieten. Es fehlt "
-                    "die Modelldatei, nicht die Einstellung."
+                    "ComfyUI hat für diese Aufgabe kein Modell anzubieten. Es "
+                    "fehlt die Modelldatei, nicht die Einstellung."
                 ),
                 values={"role": role, "node": class_type},
             )

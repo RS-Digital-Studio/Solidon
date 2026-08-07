@@ -8,6 +8,10 @@ durchrutschen.
 
 from __future__ import annotations
 
+import ast
+import re
+from pathlib import Path
+
 import pytest
 
 from app.core import errors
@@ -31,6 +35,42 @@ def all_error_classes() -> list[type[AppError]]:
         found.append(current)
         stack.extend(current.__subclasses__())
     return found
+
+
+def core_sources() -> list[Path]:
+    return sorted((Path(__file__).resolve().parent.parent / "app" / "core").rglob("*.py"))
+
+
+@pytest.mark.parametrize("path", core_sources(), ids=lambda entry: entry.name)
+def test_no_error_text_carries_a_placeholder_nobody_fills(path: Path) -> None:
+    """Ein ``{platzhalter}`` in einem Fehlertext bleibt wörtlich stehen.
+
+    Anderswo ist er richtig: die Oberfläche setzt ihre Texte mit ``.format``
+    zusammen, und ``tr("{grams} g").format(...)`` ist der übliche Weg. Einen
+    Fehler formatiert dagegen niemand nach — ``show_details`` zeigt
+    ``str(error.detail)``, wie es ist, und hängt die ``values`` als eigene
+    Zeilen darunter. Wer den Wert in den Satz schreibt, zeigt dem Nutzer
+    geschweifte Klammern.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    placeholder = re.compile(r"\{[a-z_]+\}")
+    offenders: list[str] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        for keyword in node.keywords:
+            if keyword.arg not in ("detail", "title"):
+                continue
+            for text in ast.walk(keyword.value):
+                if (
+                    isinstance(text, ast.Constant)
+                    and isinstance(text.value, str)
+                    and placeholder.search(text.value)
+                ):
+                    offenders.append(f"{path.name}:{text.lineno} {text.value[:60]}")
+
+    assert not offenders, "Fehlertexte mit unersetztem Platzhalter:\n" + "\n".join(offenders)
 
 
 @pytest.mark.parametrize("error_class", all_error_classes(), ids=lambda cls: cls.__name__)
