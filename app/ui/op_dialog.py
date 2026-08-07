@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QSpinBox,
@@ -34,10 +35,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.errors import AppError
 from app.core.registry import OperationSpec
+from app.core.scene import expressions
 from app.core.types import ParamSpec
 from app.i18n import tr
 from app.ui.labels import choice_label
+from app.ui.style import TIGHT, set_level
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
 #: von 0,075 mm wurde bei zwei Nachkommastellen beim Öffnen des Dialogs zu 0,08
@@ -60,6 +64,160 @@ def _decimals_for(entry: ParamSpec) -> int:
     if bounds and max(bounds) <= _FINE_BELOW:
         return 3
     return 2
+
+
+class ValueField(QWidget):
+    """Ein Zahlenfeld, das auch einen Parameterausdruck tragen kann (§13).
+
+    Der Kern kennt Ausdrücke in Operationsparametern seit je — das
+    Weg-2-Beispiel bindet ``create_box`` an ``=@breite``, und die Auswertung
+    löst sie bei jedem Lauf auf. Der Dialog kannte sie nicht: sein Feld war
+    eine ``QDoubleSpinBox``, und ``float("=@breite")`` beendete den Aufbau des
+    Dialogs mit einer Ausnahme, die niemand fing. Wer im Verlauf auf eine
+    gebundene Operation doppelklickte, sah deshalb gar nichts — kein Dialog,
+    keine Meldung, nichts.
+
+    Damit fehlte zugleich der Weg *hin* zu einer Bindung: anlegen ließ sich ein
+    Parameter, ihn an ein Maß zu hängen aber nur über den Agenten oder von Hand
+    in der Datei. Weg 2 aus §2.2 endete im Fenster auf halber Strecke.
+
+    Der Umschalter macht beides gehbar. Aus steht eine Zahl mit Grenzen und
+    Drehknöpfen — der häufige Fall bleibt der bequeme. An steht der Ausdruck
+    wörtlich da, so wie ihn der Skizzeneditor an einer Bemaßung zeigt: ihn
+    auszurechnen würde verbergen, dass hier ein Parameter hängt. Was daraus
+    gerade wird, sagt der Hinweis daneben.
+    """
+
+    changed = Signal()
+
+    #: Was auf dem Umschalter steht. Kein Emoji (Sprachregelung), kein Symbol
+    #: aus dem Icon-Satz: „fx" ist in jedem CAD dasselbe Zeichen für „hier
+    #: rechnet eine Formel", und es braucht keine Übersetzung.
+    TOGGLE_TEXT = "fx"
+
+    def __init__(
+        self,
+        entry: ParamSpec,
+        start: Any = None,
+        parameter_values: Mapping[str, float] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._entry = entry
+        self._parameter_values = dict(parameter_values or {})
+
+        self.spin = QDoubleSpinBox(self)
+        self.spin.setDecimals(_decimals_for(entry))
+        self.spin.setMinimum(entry.minimum if entry.minimum is not None else -1_000_000.0)
+        self.spin.setMaximum(entry.maximum if entry.maximum is not None else 1_000_000.0)
+
+        self.text = QLineEdit(self)
+        self.text.setPlaceholderText(tr("zum Beispiel =@breite / 2"))
+        self.text.setVisible(False)
+
+        self.toggle = QToolButton(self)
+        self.toggle.setText(self.TOGGLE_TEXT)
+        self.toggle.setCheckable(True)
+        self.toggle.setAutoRaise(True)
+        self.toggle.setToolTip(tr("Statt einer Zahl einen Parameterausdruck eintragen."))
+        # Ein Umschalter, der nur anders aussieht, wäre Bedeutung allein über
+        # Farbe (Regel 18). Der gedrückte Zustand *und* das sichtbar andere
+        # Feld sagen dasselbe, und der Hinweis darunter sagt es ein drittes Mal.
+        self.toggle.setAccessibleName(tr("Parameterausdruck"))
+
+        self.hint = QLabel("", self)
+        self.hint.setVisible(False)
+        set_level(self.hint, "caption")
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(TIGHT)
+        row.addWidget(self.spin, 1)
+        row.addWidget(self.text, 1)
+        row.addWidget(self.toggle)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addLayout(row)
+        layout.addWidget(self.hint)
+
+        self.set_value(entry.default if start is None else start)
+
+        self.toggle.toggled.connect(self._switch)
+        self.spin.valueChanged.connect(self.changed)
+        self.text.textChanged.connect(self._on_text)
+
+    # --- Wert -------------------------------------------------------------------
+
+    def set_value(self, value: Any) -> None:
+        """Trägt Zahl oder Ausdruck ein und stellt das Feld passend."""
+        if expressions.is_expression(value):
+            self.text.setText(str(value))
+            self.toggle.setChecked(True)
+            self._switch(True)
+            return
+        if value is not None:
+            try:
+                self.spin.setValue(float(value))
+            except (TypeError, ValueError):
+                # Ein Wert, der weder Zahl noch Ausdruck ist, gehört trotzdem
+                # gezeigt statt verschluckt — sonst stünde im Dialog etwas
+                # anderes, als im Dokument steht.
+                self.text.setText(str(value))
+                self.toggle.setChecked(True)
+                self._switch(True)
+
+    def value(self) -> float | str:
+        """Die Zahl, oder der Ausdruck wörtlich.
+
+        Ein leer geräumtes Ausdrucksfeld gibt die Zahl zurück, die daneben
+        stand. Ein leerer Text wäre weder das eine noch das andere, und der
+        Stapel bekäme einen Parameter, den keine Auswertung lesen kann.
+        """
+        if self.toggle.isChecked() and (entered := self.text.text().strip()):
+            return entered
+        return float(self.spin.value())
+
+    # --- Umschalten -------------------------------------------------------------
+
+    def _switch(self, to_expression: bool) -> None:
+        self.spin.setVisible(not to_expression)
+        self.text.setVisible(to_expression)
+        self.hint.setVisible(to_expression)
+        if to_expression and not self.text.text().strip():
+            # Aus der stehenden Zahl wird der Anfang des Ausdrucks: wer
+            # umschaltet, will meist dieselbe Größe anders ausdrücken.
+            self.text.setText(f"={self.spin.value():g}")
+        self._describe()
+        self.changed.emit()
+
+    def _on_text(self) -> None:
+        self._describe()
+        self.changed.emit()
+
+    def _describe(self) -> None:
+        """Sagt unter dem Feld, was der Ausdruck gerade ergibt — oder woran er
+        hängt.
+
+        Ohne das wäre der Ausdruck eine Behauptung bis zum Übernehmen. §2.7
+        will Fehler als Vorschlag, und der billigste Vorschlag ist der, der
+        kommt, bevor etwas schiefgeht.
+        """
+        if not self.toggle.isChecked():
+            return
+        entered = self.text.text().strip()
+        if not entered:
+            self.hint.setText(str(tr("Noch kein Ausdruck — er beginnt mit =")))
+            return
+        try:
+            expressions.check(entered)
+            value = expressions.evaluate(entered, self._parameter_values)
+        except AppError as problem:
+            self.hint.setText(str(problem.detail or problem.title))
+            return
+        unit = f" {self._entry.unit}" if self._entry.unit else ""
+        self.hint.setText(f"= {value:g}{unit}")
 
 
 class OperationDialog(QDialog):
@@ -168,7 +326,7 @@ class OperationDialog(QDialog):
         """
         from app.ui.sketch_editor import SketchField
 
-        if isinstance(editor, SketchField):
+        if isinstance(editor, ValueField | SketchField):
             editor.changed.connect(self.valuesChanged)
         elif isinstance(editor, QCheckBox):
             editor.toggled.connect(self.valuesChanged)
@@ -198,13 +356,10 @@ class OperationDialog(QDialog):
                 spin.setValue(int(start))
             return spin
         if entry.kind == "float":
-            number = QDoubleSpinBox(self)
-            number.setDecimals(_decimals_for(entry))
-            number.setMinimum(entry.minimum if entry.minimum is not None else -1_000_000.0)
-            number.setMaximum(entry.maximum if entry.maximum is not None else 1_000_000.0)
-            if start is not None:
-                number.setValue(float(start))
-            return number
+            # Kein nacktes ``QDoubleSpinBox`` mehr: ein Maß darf an einem
+            # Projektparameter hängen (§13), und ``float("=@breite")`` war der
+            # Grund, warum sich eine gebundene Operation nicht öffnen ließ.
+            return ValueField(entry, start, self._parameter_values, self)
         if entry.kind == "enum" or entry.choices:
             # Der Wert bleibt der Schlüssel, gezeigt wird der Name: „cable-5"
             # stand als Beschriftung im Dialog, und das erkennt niemand ohne die
@@ -308,8 +463,8 @@ class OperationDialog(QDialog):
             return False
         for name, value in zip(("x", "y", "z"), point, strict=True):
             editor = self._editors.get(name)
-            if isinstance(editor, QDoubleSpinBox):
-                editor.setValue(float(value))
+            if isinstance(editor, ValueField):
+                editor.set_value(float(value))
         return True
 
     def place_beside(self, anchor: QWidget | None) -> None:
@@ -342,7 +497,12 @@ class OperationDialog(QDialog):
         collected: dict[str, Any] = {}
         for entry in self.spec.params.spec():
             editor = self._editors[entry.name]
-            if isinstance(editor, SketchField):
+            if isinstance(editor, ValueField):
+                # Zahl oder Ausdruck — und der Ausdruck bleibt wörtlich. Ihn
+                # hier aufzulösen hieße, die Bindung beim ersten Öffnen des
+                # Dialogs zu verlieren, ohne dass es jemand sähe.
+                collected[entry.name] = editor.value()
+            elif isinstance(editor, SketchField):
                 collected[entry.name] = editor.text()
             elif isinstance(editor, QCheckBox):
                 collected[entry.name] = editor.isChecked()

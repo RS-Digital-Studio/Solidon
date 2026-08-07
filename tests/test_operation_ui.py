@@ -161,6 +161,127 @@ def test_a_filled_in_value_is_not_hidden_behind_the_advanced_box(qt_app: QApplic
     assert dialog.values()["depth"] == pytest.approx(4.0)
 
 
+# --- Ein Maß, das an einem Projektparameter hängt (§13) ---------------------------
+
+
+def test_a_bound_operation_opens_at_all(qt_app: QApplication) -> None:
+    """Ein Ausdruck im Schema-Feld darf den Dialog nicht mitreißen.
+
+    Er tat es: ``float("=@breite")`` warf eine ``ValueError`` mitten im Aufbau,
+    und weil der Aufbau in einem Slot lief, sah der Nutzer davon nichts — kein
+    Dialog, keine Meldung, ein Doppelklick, der nichts tut. Betroffen war jede
+    Operation des Weg-2-Beispiels, also genau die, auf die dessen Tour zeigt.
+    """
+    spec = REGISTRY.get("create_box")
+
+    dialog = OperationDialog(spec, [], None, values={"width": "=@breite"})
+
+    assert dialog.values()["width"] == "=@breite"
+
+
+def test_the_binding_survives_the_dialog(qt_app: QApplication) -> None:
+    """Wer eine gebundene Operation öffnet und bestätigt, behält die Bindung.
+
+    Den Ausdruck beim Öffnen aufzulösen wäre die stillste Art, ihn zu
+    verlieren: im Feld stünde eine plausible Zahl, und beim nächsten Drehen am
+    Parameter bliebe das Modell stehen.
+    """
+    spec = REGISTRY.get("create_box")
+
+    dialog = OperationDialog(
+        spec,
+        [],
+        None,
+        values={"width": "=@breite", "depth": 30.0},
+        parameter_values={"breite": 60.0},
+    )
+
+    assert dialog.values()["width"] == "=@breite", "der Ausdruck, nicht die 60"
+    assert dialog.values()["depth"] == pytest.approx(30.0)
+
+
+def test_a_number_can_be_bound_in_the_dialog(qt_app: QApplication) -> None:
+    """Weg 2 endete im Fenster auf halber Strecke: Parameter ließen sich
+    anlegen, aber an kein Maß hängen.
+    """
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(spec, [], None, parameter_values={"breite": 60.0})
+    field = dialog._editors["width"]
+    assert isinstance(field, ValueField)
+
+    field.toggle.setChecked(True)
+    field.text.setText("=@breite / 2")
+
+    assert dialog.values()["width"] == "=@breite / 2"
+    assert "30" in field.hint.text(), f"der Hinweis rechnet mit: {field.hint.text()!r}"
+
+
+def test_an_emptied_expression_falls_back_to_the_number(qt_app: QApplication) -> None:
+    """Ein leeres Ausdrucksfeld darf keinen unlesbaren Parameter erzeugen."""
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(spec, [], None, values={"width": 42.0})
+    field = dialog._editors["width"]
+    assert isinstance(field, ValueField)
+
+    field.toggle.setChecked(True)
+    field.text.clear()
+
+    assert dialog.values()["width"] == pytest.approx(42.0)
+
+
+def test_a_wrong_expression_says_so_before_it_is_confirmed(qt_app: QApplication) -> None:
+    """§2.7: der billigste Vorschlag ist der, der kommt, bevor etwas
+    schiefgeht."""
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(spec, [], None, parameter_values={"breite": 60.0})
+    field = dialog._editors["width"]
+    assert isinstance(field, ValueField)
+
+    field.toggle.setChecked(True)
+    field.text.setText("=@gibtsnicht * 2")
+
+    assert field.hint.text(), "der Hinweis bleibt stumm"
+    assert not field.hint.text().startswith("="), (
+        f"ein Ergebnis, wo eine Erklärung stehen müsste: {field.hint.text()!r}"
+    )
+
+
+def test_every_operation_of_the_weg2_example_can_be_opened(qt_app: QApplication) -> None:
+    """Der Fund aus der Durchsicht, am Original: im Weg-2-Beispiel ließ sich
+    keine der vier Operationen im Verlauf öffnen.
+
+    Ein eigenes Fenster, nicht das Fixture: dessen Projekt ist geändert, und
+    ``open_path`` fragt dann modal nach dem Speichern — in einem Testlauf ist
+    das ein Fenster, auf das niemand klickt.
+    """
+    from app.core import examples
+
+    window = MainWindow(Session(), UiSettings())
+    window.open_path(examples.directory() / "weg2-halter-konstruieren.p3d")
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    bound = [
+        operation
+        for operation in window.session.project.document.ops
+        if any(str(value).startswith("=") for value in operation.params.values())
+    ]
+    assert bound, "das Beispiel bindet nichts mehr — dann prüft dieser Test nichts"
+
+    for operation in bound:
+        window.edit_operation(operation.id)
+        QApplication.processEvents()
+        assert window._op_dialog is not None, f"Op {operation.id} ({operation.op}) öffnet nicht"
+        window._op_dialog.reject()
+        QApplication.processEvents()
+
+
 # --- correcting an operation ----------------------------------------------------
 
 
