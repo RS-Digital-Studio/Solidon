@@ -559,7 +559,19 @@ def _mesh_from(node: ET.Element) -> MeshData | None:
     except (TypeError, ValueError) as problem:
         _log.info("3MF mesh has unreadable coordinates: %s", problem)
         return None
-    if not len(points) or not len(faces) or int(faces.max()) >= len(points):
+    # Ein Körper, der hier ausfällt, verschwindet aus der Baugruppe — und das
+    # ist genau die Sorte Verlust, die niemandem auffällt: siebzehn Teile
+    # kommen als sechzehn zurück, und keine Zeile sagt warum. Er wird deshalb
+    # nicht bloß übersprungen, sondern benannt.
+    if not len(points) or not len(faces):
+        _log.warning("3MF mesh is empty: %d point(s), %d triangle(s)", len(points), len(faces))
+        return None
+    if int(faces.max()) >= len(points):
+        _log.warning(
+            "3MF mesh points past its own vertices: highest index %d of %d point(s)",
+            int(faces.max()),
+            len(points),
+        )
         return None
     return MeshData.of(trimesh.Trimesh(vertices=points, faces=faces, process=False))
 
