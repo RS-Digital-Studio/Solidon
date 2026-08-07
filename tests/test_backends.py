@@ -19,6 +19,7 @@ from app.core.backends.llm import (
     ToolCall,
     first_available,
     ollama_size_warning,
+    ollama_tool_check,
     parse_parameter_count,
 )
 from app.core.backends.scripted import ScriptedBackend
@@ -295,6 +296,52 @@ def test_parameter_sizes_are_read_in_billions() -> None:
     assert parse_parameter_count("780M") == pytest.approx(0.78)
     assert parse_parameter_count("unfug") is None
     assert parse_parameter_count("") is None
+
+
+def test_a_model_that_calls_the_tool_passes_the_probe() -> None:
+    """Die Probe fragt genau eines: kam ein Aufruf zurück oder Fließtext."""
+    assert ollama_tool_check("llama3.1:8b", transport=Recorder(ollama_answer())) is True
+
+
+def test_a_model_that_writes_the_call_as_text_fails_the_probe() -> None:
+    """Das reale Fehlerbild: das Modell gibt den Aufruf als JSON im Inhalt aus.
+
+    Ollama kann ihn dann nicht auslesen, `tool_calls` bleibt leer, und die
+    Agentenschicht sieht Prosa, wo sie eine Operation erwartet. Weder die
+    Parameterzahl noch die gemeldete Fähigkeit verrät das vorher — nur ein
+    echter Zug.
+    """
+    prosa = {
+        "model": "qwen2.5-coder:14b",
+        "message": {
+            "role": "assistant",
+            "content": '{"name": "set_length", "arguments": {"value": 20}}',
+        },
+    }
+
+    assert ollama_tool_check("qwen2.5-coder:14b", transport=Recorder(prosa)) is False
+
+
+def test_a_probe_without_an_answer_claims_nothing() -> None:
+    """Ein Server, der schweigt, meldet sich über `available` ab — eine
+    Behauptung obendrauf wäre geraten.
+    """
+
+    def fail(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+        raise OSError("no route to host")
+
+    assert ollama_tool_check("llama3.1:8b", transport=fail) is None
+
+
+def test_the_probe_asks_with_a_tool_that_has_a_required_field() -> None:
+    """Ohne Pflichtfeld könnte ein leeres Objekt als Aufruf durchgehen."""
+    recorder = Recorder(ollama_answer())
+
+    ollama_tool_check("llama3.1:8b", transport=recorder)
+
+    _url, _headers, payload = recorder.calls[0]
+    schema = payload["tools"][0]["function"]["parameters"]
+    assert schema["required"] == ["value"]
 
 
 def test_a_small_model_gets_the_sentence_from_the_spec() -> None:

@@ -11,7 +11,7 @@ hält an. Er ist nicht Teil der Testsuite: er kostet Geld, und sein Ergebnis ist
 eine Quote, kein Bestanden.
 
     python tools/run_agent_suite.py
-    python tools/run_agent_suite.py --backend ollama --model qwen2.5-coder:14b
+    python tools/run_agent_suite.py --backend ollama --model llama3.1:8b
 """
 
 from __future__ import annotations

@@ -38,7 +38,7 @@ schickt. Für die Entwicklung bleiben daneben die Issues dieses Repositories.
 
 ## Die drei Wege
 
-Beim Start liegen sieben Beispielprojekte bereit — sie sind gleichzeitig
+Beim Start liegen acht Beispielprojekte bereit — sie sind gleichzeitig
 Dokumentation und Abnahmeprüfung (§37.2). Die ersten drei beantworten „wie
 fange ich an", die übrigen „was kann das eigentlich":
 
@@ -51,6 +51,7 @@ fange ich an", die übrigen „was kann das eigentlich":
 | `schild-zweifarbig.p3d` | Schrift im Materialslot und Lettern als eigener Körper |
 | `drucker-kalibrieren.p3d` | Toleranzleiter, Wandstärkenleiter, Überhangfächer |
 | `aushoehlen-und-teilen.p3d` | teilen, verstiften, aushöhlen, anordnen |
+| `dose-mit-deckel.p3d` | alles zusammen: benannte Maße, Bausteine, Deckel aus der Öffnung |
 
 ## Hilfe im Programm
 
@@ -136,11 +137,20 @@ Bauserver geht auch die Umgebungsvariable `FORMWERK_LLM_KEY`.
 | Lokal über Ollama | `ollama serve` auf Port 11434 | kein Schlüssel nötig |
 
 Für den lokalen Weg braucht es ein Modell, das Werkzeugaufrufe zuverlässig
-beherrscht — kleine Modelle scheitern daran reproduzierbar (§27). Bewährt haben
-sich `qwen2.5-coder:14b` und größer; alles unter 7B ist für die Op-Aufrufe
-erfahrungsgemäß zu wenig.
+beherrscht — kleine Modelle scheitern daran reproduzierbar (§27). Alles unter
+7B ist für die Op-Aufrufe erfahrungsgemäß zu wenig, aber **Größe allein sagt es
+nicht**: manches große Modell gibt den Aufruf als Fließtext aus statt als
+Aufruf, und dann sieht der Chat aus, als arbeite er, während nichts geschieht.
+Vorgabe ist `llama3.1:8b`, das in der Messung jede Anfrage traf; `qwen3:14b`
+geht auch, braucht aber rund die dreifache Zeit.
 
-Wie gut ein Modell mit den Referenzanfragen zurechtkommt, misst
+Ob ein Modell die Werkzeuge wirklich aufruft, misst
+
+```
+.venv/Scripts/python.exe tools/check_local_model.py llama3.1:8b
+```
+
+Wie gut es dann mit den Referenzanfragen zurechtkommt, misst
 
 ```
 .venv/Scripts/python.exe tools/run_agent_suite.py --backend ollama

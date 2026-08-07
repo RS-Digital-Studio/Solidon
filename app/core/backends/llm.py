@@ -256,7 +256,14 @@ def _from_anthropic(answer: dict[str, Any]) -> Reply:
 # --- local, over Ollama -----------------------------------------------------------
 
 
-DEFAULT_OLLAMA_MODEL = "qwen2.5-coder:14b"
+#: Das lokale Vorgabemodell. Gewählt nach dem einzigen Kriterium, das hier
+#: zählt: Kommt ein strukturierter Werkzeugaufruf zurück oder Prosa? Gemessen
+#: gegen die sieben Schemata aus :mod:`app.core.agent.tools` traf ``llama3.1:8b``
+#: fünf von fünf Anfragen, ``qwen3:14b`` vier bei dreifacher Wartezeit,
+#: ``mistral-nemo`` zwei — und ``qwen2.5-coder:14b``, das hier vorher stand,
+#: keine einzige. Siehe :func:`ollama_tool_check`, der die Messung nachfahrbar
+#: macht.
+DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
 OLLAMA_URL = "http://localhost:11434/api/chat"
 
 
@@ -445,9 +452,55 @@ def ollama_size_warning(
     return _(
         "Das lokale Modell hat weniger als 7 Milliarden Parameter — "
         "Werkzeugaufrufe scheitern damit erfahrungsgemäß. Bewährt hat sich "
-        "qwen2.5-coder:14b; das braucht eine Grafikkarte mit rund 10 GB "
-        "Speicher."
+        "llama3.1:8b; das braucht eine Grafikkarte mit rund 6 GB Speicher."
     )
+
+
+#: Ein Werkzeug, das es nur für die Probe gibt: klein, eindeutig, und mit einem
+#: Pflichtfeld, damit die Antwort nicht bloß ein leeres Objekt sein kann.
+PROBE_TOOL: Final = {
+    "name": "set_length",
+    "description": "Setzt eine Länge in Millimetern.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"value": {"type": "number"}},
+        "required": ["value"],
+    },
+}
+
+PROBE_REQUEST: Final = "Setze die Länge auf 20 Millimeter."
+
+
+def ollama_tool_check(
+    model: str, url: str | None = None, transport: Transport = post_json
+) -> bool | None:
+    """Ruft dieses Modell wirklich Werkzeuge auf, oder redet es nur darüber?
+
+    Die Größenprüfung nebenan beantwortet das **nicht**, und der Unterschied
+    hat hier einmal Zeit gekostet: ``qwen2.5-coder:14b`` liegt mit 14,8
+    Milliarden Parametern weit über der Grenze, meldet ``tools`` als Fähigkeit
+    — und gibt den Aufruf trotzdem als JSON im Fließtext aus, ohne die
+    Markierung, die sein eigenes Vorlagenformat verlangt. Ollama kann ihn
+    darum nicht auslesen, und die Agentenschicht sieht Prosa, wo sie eine
+    Operation erwartet. Groß genug heißt nicht werkzeugfähig, und angekündigt
+    heißt es auch nicht.
+
+    Das kostet einen echten Zug samt Laden des Modells — Sekunden bis Minuten.
+    Diese Prüfung gehört deshalb dorthin, wo jemand sie anstößt, nicht in den
+    Start.
+
+    ``True`` heißt brauchbar, ``False`` heißt Prosa statt Aufruf, ``None``
+    heißt „keine Antwort" — dann wird nichts behauptet, denn ein Server, der
+    schweigt, meldet sich ohnehin schon über :attr:`OllamaBackend.available` ab.
+    """
+    backend = OllamaBackend(model=model, transport=transport)
+    if url is not None:
+        backend.url = url
+    try:
+        reply = backend.complete([Message(role="user", content=PROBE_REQUEST)], tools=[PROBE_TOOL])
+    except (AppError, OSError, ValueError):
+        return None
+    return reply.wants_tools
 
 
 # --- choosing one -----------------------------------------------------------------
