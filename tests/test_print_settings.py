@@ -1229,3 +1229,70 @@ def test_a_profile_that_says_nothing_is_no_disagreement(tmp_path: Path) -> None:
     assert "nozzle_temperature" in named, "der echte Unterschied bleibt"
     assert "retraction" not in named, "nil ist keine Gegenaussage"
     assert "wipe" not in named
+
+
+def test_a_profile_name_finds_its_file(tmp_path, monkeypatch) -> None:
+    """Der Name gehört in die Projektdatei, die Datei braucht der Slicer.
+
+    Beides muss gehen, und dazwischen fehlte die Auflösung: ``base_process``
+    trug einen Namen, ``Path(name).is_file()`` sagte nein, und das
+    geschriebene Prozessprofil hatte zweiundvierzig Schlüssel statt
+    zweiundsechzig — ohne ``inherits``, ohne ``compatible_printers``. Genau an
+    denen prüft die Orca-Familie die Verträglichkeit, und der Lauf brach mit
+    „can not find setting file" ab, bevor das Modell an die Reihe kam.
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    echte = tmp_path / "0.20mm Standard.json"
+    echte.write_text(
+        json.dumps(
+            {
+                "type": "process",
+                "name": "0.20mm Standard",
+                "inherits": "fdm_process_common",
+                "compatible_printers": ["Elegoo Centauri Carbon 2 0.4 nozzle"],
+                "layer_height": "0.2",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class Eintrag:
+        name = "0.20mm Standard"
+        kind = "process"
+        path = echte
+
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_: [Eintrag()])
+    setup = handover.SlicerSetup(
+        executable=Path("elegoo-slicer.exe"), flavour="orca", base_process="0.20mm Standard"
+    )
+
+    gefunden = handover.profile_file("0.20mm Standard", setup, "process")
+    assert gefunden == echte, "der Name führt zur Datei"
+
+    # Ein Pfad geht weiterhin unverändert durch
+    assert handover.profile_file(str(echte), setup, "process") == echte
+
+    # Und was das Prozessprofil trägt, kommt aus dem Systemprofil
+    settings = print_settings.resolve(
+        profiles.make_profile("centauri-carbon-2", "petg"), "standard"
+    )
+    written = handover.write_config(
+        settings, profiles.make_profile("centauri-carbon-2", "petg"), setup, tmp_path
+    )
+    daten = json.loads(written.process.read_text(encoding="utf-8"))
+    assert daten["inherits"] == "fdm_process_common", "die Erbschaft bleibt erhalten"
+    assert daten["compatible_printers"] == ["Elegoo Centauri Carbon 2 0.4 nozzle"]
+    assert daten["name"].startswith("Formwerk"), "aber der Name ist Formwerks eigener"
+
+
+def test_an_unknown_profile_name_is_no_crash(tmp_path) -> None:
+    """Ein Name, den dieser Slicer nicht kennt, liefert nichts — und keinen
+    Stapelabzug."""
+    from pathlib import Path
+
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+    assert handover.profile_file("gibt es nicht", setup, "process") is None
+    assert handover.profile_file("", setup, "machine") is None

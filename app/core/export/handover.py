@@ -56,9 +56,11 @@ _NO_STATEMENT: Final = frozenset({"nil", "", "none"})
 class SlicerSetup:
     """Welcher Slicer, und worauf seine Profile aufsetzen.
 
-    ``machine_profile`` und ``base_process`` sind Namen aus dem Bestand des
-    Slicers, keine Pfade — sie reisen so auch in eine Projektdatei, ohne gegen
-    Regel 12 zu verstoßen.
+    ``machine_profile`` und ``base_process`` tragen bevorzugt **Namen** aus
+    dem Bestand des Slicers — so reisen sie in eine Projektdatei, ohne gegen
+    Regel 12 zu verstoßen, und zeigen auf einem zweiten Rechner nicht ins
+    Leere. Ein Pfad wird ebenso angenommen; :func:`profile_file` löst beides
+    zur Datei auf, denn der Slicer nimmt nur die.
     """
 
     executable: Path
@@ -75,6 +77,39 @@ class SlicerSetup:
     @property
     def name(self) -> str:
         return self.executable.stem
+
+
+def profile_file(chosen: str, setup: SlicerSetup, kind: str) -> Path | None:
+    """Die Datei zu einem Profil, gleich ob ein Name oder ein Pfad ankam.
+
+    Beides muss gehen, und das ist kein Entgegenkommen, sondern die Folge aus
+    zwei Anforderungen, die auseinanderziehen: in die Projektdatei gehört der
+    **Name** — ein Pfad dort verstößt gegen Regel 12 und zeigt auf einem
+    zweiten Rechner ins Leere. Der Slicer dagegen nimmt nur die **Datei**; wer
+    ihm den Namen reicht, bekommt „can not find setting file" und einen
+    Abbruch, bevor das Modell angesehen wird.
+
+    Ohne diese Auflösung dazwischen war das Ergebnis stiller: ``base_process``
+    trug einen Namen, ``Path(name).is_file()`` sagte nein, und das
+    geschriebene Prozessprofil hatte zweiundvierzig Schlüssel statt
+    zweiundsechzig — ohne ``inherits``, ohne ``compatible_printers``. Genau
+    die beiden, an denen die Orca-Familie die Verträglichkeit prüft.
+    """
+    if not chosen:
+        return None
+    direkt = Path(chosen)
+    if direkt.is_file():
+        return direkt
+    # ``kind`` und nicht ``type_of``: das eine ist der Ordner, aus dem das
+    # Profil stammt, das andere sein ``type``-Feld — und das steht in den
+    # mitgelieferten Profilen der Orca-Familie durchweg leer.
+    for entry in slicer_profiles.find_profiles(setup.executable, setup.flavour):
+        if entry.name == chosen and entry.kind == kind:
+            found = Path(entry.path)
+            if found.is_file():
+                return found
+    _log.warning("no %s profile named %r in this slicer", kind, chosen)
+    return None
 
 
 def detect(executable: Path | str) -> SlicerSetup:
@@ -321,12 +356,11 @@ def _orca_process(
     §29 in einer Datei.
     """
     document: dict[str, object] = {}
-    if setup.base_process:
-        base = Path(setup.base_process)
-        if base.is_file():
-            loaded = json.loads(base.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                document.update(loaded)
+    base = profile_file(setup.base_process, setup, "process")
+    if base is not None:
+        loaded = json.loads(base.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            document.update(loaded)
     if not document:
         document = {
             "type": "process",
@@ -481,11 +515,11 @@ def _command(
         # Beide Profile, immer in dieser Reihenfolge: erst die Maschine, dann
         # der Prozess. Umgekehrt prüft der Slicer die Verträglichkeit gegen
         # einen Drucker, den er noch nicht kennt, und bricht ab.
-        settings_arg = (
-            f"{setup.machine_profile};{config.process}"
-            if setup.machine_profile
-            else str(config.process)
-        )
+        # Auch hier die Datei, nicht der Name: der Slicer sucht keinen Bestand
+        # ab, er öffnet einen Pfad. Steht dort ein Name, endet der Lauf mit
+        # „can not find setting file", noch bevor das Modell an die Reihe kommt.
+        machine = profile_file(setup.machine_profile, setup, "machine")
+        settings_arg = f"{machine};{config.process}" if machine else str(config.process)
         arguments = [binary, "--load-settings", settings_arg]
         # Das Filament kommt über einen eigenen Schalter. Es mit in
         # ``--load-settings`` zu geben hilft nicht: der Slicer sortiert die
