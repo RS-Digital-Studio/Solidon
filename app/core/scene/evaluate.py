@@ -29,7 +29,7 @@ from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.perceive.features import detect
 from app.core.perceive.matching import apply_mapping, match, moved_features, question_for
-from app.core.registry import REGISTRY, Registry, validate
+from app.core.registry import REGISTRY, OperationSpec, Registry, validate
 from app.core.scene import expressions
 from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
@@ -133,7 +133,7 @@ def evaluate(
         spec = source.get(operation.op)
         progress(position / total, str(spec.title))
 
-        problem = _missing_inputs(operation, objects)
+        problem = _missing_inputs(operation, objects, spec)
         if problem is not None:
             findings.append(problem)
             stopped_at = operation.id
@@ -487,18 +487,41 @@ def _evaluated_parameters(
 
 
 def _missing_inputs(
-    operation: Operation, objects: Mapping[ObjectId, SceneObject]
+    operation: Operation, objects: Mapping[ObjectId, SceneObject], spec: OperationSpec
 ) -> Finding | None:
+    """Hat diese Operation, worauf sie arbeiten soll?
+
+    Zwei Arten, das zu verfehlen, und lange sah die Prüfung nur die erste: ein
+    Verweis auf ein Objekt, das es nicht mehr gibt. Die zweite ist, gar keinen
+    zu tragen — dann greift die Operation selbst nach ``ctx.inputs[0]`` und
+    stirbt an einem ``IndexError``, der als Stapelabzug beim Nutzer landet.
+    Eine Projektdatei, in der das steht, ließ sich damit überhaupt nicht mehr
+    öffnen.
+    """
     missing = [entry for entry in operation.inputs if entry not in objects]
-    if not missing:
-        return None
-    return Finding(
-        code="evaluate.missing_input",
-        severity="error",
-        message=_("Diese Operation verweist auf ein Objekt, das es nicht mehr gibt."),
-        op_id=operation.id,
-        values={"missing": ", ".join(missing), "op": operation.op},
-    )
+    if missing:
+        return Finding(
+            code="evaluate.missing_input",
+            severity="error",
+            message=_("Diese Operation verweist auf ein Objekt, das es nicht mehr gibt."),
+            op_id=operation.id,
+            values={"missing": ", ".join(missing), "op": operation.op},
+        )
+
+    # ``VARIABLE`` heißt „so viele wie da sind" und kann auch null sein.
+    if spec.consumes > 0 and len(operation.inputs) < spec.consumes:
+        return Finding(
+            code="evaluate.too_few_inputs",
+            severity="error",
+            message=_("Dieser Operation fehlt das Objekt, auf dem sie arbeiten soll."),
+            op_id=operation.id,
+            values={
+                "op": operation.op,
+                "erwartet": spec.consumes,
+                "vorhanden": len(operation.inputs),
+            },
+        )
+    return None
 
 
 def _object_count_finding(operation: Operation, produced: int) -> Finding:

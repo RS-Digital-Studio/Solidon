@@ -263,6 +263,36 @@ def test_a_missing_input_stops_the_chain(
     assert "evaluate.missing_input" in [f.code for f in result.scene.report.findings]
 
 
+def test_an_operation_without_any_input_stops_instead_of_crashing(
+    history: History, document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Kein Verweis ist etwas anderes als ein toter Verweis — und war lange
+    schlimmer.
+
+    Die Prüfung sah nur, ob die *genannten* Objekte existieren. Nennt eine
+    Operation gar keines, obwohl sie eines verbraucht, griff sie selbst nach
+    ``ctx.inputs[0]`` und starb an einem ``IndexError`` — als Stapelabzug beim
+    Nutzer, und die Projektdatei ließ sich damit gar nicht mehr öffnen. Genau
+    das steht in `tests/data/projects/example_v1.p3d`.
+    """
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(
+        _("Ändern"), [OperationDraft(op="resize_object", inputs=("obj_1",), outputs=("obj_1",))]
+    )
+    document.ops[-1] = dataclasses.replace(document.ops[-1], inputs=())
+
+    result = evaluate(document, profile, registry=registry)
+
+    assert result.stopped_at == 2, "sie hält an, statt zu stürzen"
+    finding = next(
+        entry for entry in result.scene.report.findings if entry.code == "evaluate.too_few_inputs"
+    )
+    assert finding.severity == "error"
+    assert finding.values["erwartet"] == 1
+    assert finding.values["vorhanden"] == 0
+    assert "obj_1" in result.scene.objects, "was gerechnet war, bleibt sichtbar"
+
+
 def test_a_failing_operation_stops_the_chain_with_its_error(
     history: History, document: Document, profile: Profile, registry: Registry
 ) -> None:

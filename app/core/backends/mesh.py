@@ -423,17 +423,55 @@ class ComfyBackend:
         )
 
     def _wait(self, job: str, progress: ProgressFn) -> dict[str, Any]:
-        """Fragt, bis der Auftrag im Verlauf steht. Es gibt kein Push zum Zuhören."""
-        deadline = time.monotonic() + self.timeout_seconds
+        """Fragt, bis der Auftrag im Verlauf steht. Es gibt kein Push zum Zuhören.
+
+        Der Satz dazu sagt die verstrichene Zeit, und das ist keine Zierde: ein
+        Lauf dauert hier vierzig bis siebzig Sekunden, und „Modell wird
+        erzeugt" allein steht die ganze Zeit unbewegt da — von einem Programm,
+        das hängt, ist das nicht zu unterscheiden (§2.8). Eine erfundene
+        Prozentzahl wäre die schlechtere Antwort: ComfyUI meldet echten
+        Fortschritt nur über seinen Websocket, und was hier zählbar ist, ist
+        die Zeit.
+
+        Wartet der Auftrag noch hinter anderen, steht das dort statt der Zeit —
+        wer eine Warteschlange vor sich hat, wartet auf etwas anderes als auf
+        seine eigene Rechnung.
+        """
+        started = time.monotonic()
+        deadline = started + self.timeout_seconds
         while time.monotonic() < deadline:
             answer = self.transport(f"{self.url}/history/{job}", None, {})
             history = json.loads(answer.decode("utf-8"))
             entry = history.get(job)
             if entry and entry.get("outputs"):
                 return dict(entry["outputs"])
-            progress(0.5, str(_("Modell wird erzeugt")))
+            progress(0.5, self._waiting_text(job, time.monotonic() - started))
             time.sleep(self.poll_seconds)
         raise GenerationFailed(detail="the generation ran into its time limit")
+
+    def _waiting_text(self, job: str, seconds: float) -> str:
+        ahead = self._ahead_in_queue(job)
+        if ahead:
+            return f"{_('Wartet auf den Generator')} ({ahead})"
+        return f"{_('Modell wird erzeugt')} ({seconds:.0f} s)"
+
+    def _ahead_in_queue(self, job: str) -> int:
+        """Wie viele Aufträge vor diesem liegen. Null heißt: er ist an der Reihe.
+
+        Ein Fehlschlag hier ist keiner — die Warteschlange ist eine Zugabe zum
+        Text, und ein Lauf soll nicht daran scheitern, dass sie sich nicht
+        abfragen ließ.
+        """
+        try:
+            answer = self.transport(f"{self.url}/queue", None, {})
+            queue = json.loads(answer.decode("utf-8"))
+        except (AppError, OSError, ValueError):
+            return 0
+        pending = queue.get("queue_pending") or ()
+        for index, entry in enumerate(pending):
+            if isinstance(entry, list) and job in [str(field) for field in entry]:
+                return index + 1
+        return 0
 
     def _download(self, outputs: dict[str, Any]) -> tuple[bytes, str]:
         """Findet das Netz unter den Ausgaben und holt es."""

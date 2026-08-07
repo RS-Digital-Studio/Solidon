@@ -143,6 +143,59 @@ def test_the_job_is_polled_until_it_is_done() -> None:
     assert sum(1 for entry in server.requests if "/history/" in entry) == 3
 
 
+def test_the_wait_says_how_long_it_has_been_waiting() -> None:
+    """Ein Lauf dauert vierzig bis siebzig Sekunden, und der Satz stand die
+    ganze Zeit unbewegt da — von einem Programm, das hängt, nicht zu
+    unterscheiden (§2.8).
+    """
+    server = Comfy(ready_after=4)
+    seen: list[str] = []
+
+    backend(server).text_to_mesh("ein Halter", progress=lambda _f, text: seen.append(text))
+
+    waiting = [text for text in seen if "erzeugt" in text]
+    assert waiting, "während des Wartens wird etwas gesagt"
+    assert all("s)" in text for text in waiting), "und zwar mit der Zeit darin"
+
+
+def test_a_queued_job_says_that_it_is_queued() -> None:
+    """Wer hinter zwei anderen wartet, wartet auf etwas anderes als auf seine
+    eigene Rechnung — und soll das lesen können.
+    """
+
+    class Busy(Comfy):
+        def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+            if url.endswith("/queue"):
+                return json.dumps(
+                    {"queue_running": [], "queue_pending": [[0, "other"], [1, "job-1"]]}
+                ).encode()
+            return super().__call__(url, body, headers)
+
+    server = Busy(ready_after=3)
+    seen: list[str] = []
+
+    backend(server).text_to_mesh("ein Halter", progress=lambda _f, text: seen.append(text))
+
+    assert any("Wartet auf den Generator" in text for text in seen)
+    assert any("(2)" in text for text in seen), "die Position steht dabei"
+
+
+def test_a_queue_that_cannot_be_asked_costs_nothing() -> None:
+    """Die Warteschlange ist eine Zugabe zum Text. Ein Lauf scheitert nicht
+    daran, dass sie sich nicht abfragen ließ.
+    """
+
+    class NoQueue(Comfy):
+        def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+            if url.endswith("/queue"):
+                raise OSError("kein Weg dorthin")
+            return super().__call__(url, body, headers)
+
+    result = backend(NoQueue(ready_after=2)).text_to_mesh("ein Halter")
+
+    assert result.mesh.triangle_count == 12
+
+
 def test_a_job_that_never_finishes_gives_up() -> None:
     server = Comfy(ready_after=10_000)
     generator = ComfyBackend(transport=server, poll_seconds=0.0, timeout_seconds=0.05)
