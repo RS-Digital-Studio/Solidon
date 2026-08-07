@@ -3588,10 +3588,19 @@ class MainWindow(QMainWindow):
         minuten = int((datetime.now() - geschrieben).total_seconds() // 60)
         if minuten < 1:
             return tr("gerade eben")
+        # Die Einzahl steht daneben, sie wird nicht gebildet: „vor 1 Stunden"
+        # liest sich wie ein Fehler in der Anwendung, und im Englischen fiele
+        # das gebildete „1 hours" genauso auf. Zwei Formen je Einheit sind
+        # billiger als eine Regel, die für jede Sprache anders lautet.
         if minuten < 60:
-            return tr("vor {n} Minuten").format(n=minuten)
-        if minuten < 60 * 24:
-            return tr("vor {n} Stunden").format(n=minuten // 60)
+            return (
+                tr("vor einer Minute") if minuten == 1 else tr("vor {n} Minuten").format(n=minuten)
+            )
+        stunden = minuten // 60
+        if stunden < 24:
+            return (
+                tr("vor einer Stunde") if stunden == 1 else tr("vor {n} Stunden").format(n=stunden)
+            )
         return geschrieben.strftime("%d.%m.%Y %H:%M")
 
     def _offer_recovery(self, path: Path) -> None:
