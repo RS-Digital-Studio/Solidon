@@ -141,13 +141,17 @@ beherrscht — kleine Modelle scheitern daran reproduzierbar (§27). Alles unter
 7B ist für die Op-Aufrufe erfahrungsgemäß zu wenig, aber **Größe allein sagt es
 nicht**: manches große Modell gibt den Aufruf als Fließtext aus statt als
 Aufruf, und dann sieht der Chat aus, als arbeite er, während nichts geschieht.
-Vorgabe ist `llama3.1:8b`, das in der Messung jede Anfrage traf; `qwen3:14b`
-geht auch, braucht aber rund die dreifache Zeit.
+
+Entscheidend ist dabei, wie viele Werkzeuge im Spiel sind. Der Agent bietet
+alle Operationen an — dreiundachtzig Schemata, rund 96 KB —, und daran fallen
+kleinere Modelle, die mit einer Handvoll noch alles treffen. Vorgabe ist
+darum `qwen3:14b`; `llama3.1:8b` ist schneller und kleiner, gibt unter der
+vollen Last aber die Mehrzahl der Aufrufe als Text aus.
 
 Ob ein Modell die Werkzeuge wirklich aufruft, misst
 
 ```
-.venv/Scripts/python.exe tools/check_local_model.py llama3.1:8b
+.venv/Scripts/python.exe tools/check_local_model.py qwen3:14b
 ```
 
 Wie gut es dann mit den Referenzanfragen zurechtkommt, misst

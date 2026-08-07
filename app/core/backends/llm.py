@@ -257,13 +257,20 @@ def _from_anthropic(answer: dict[str, Any]) -> Reply:
 
 
 #: Das lokale Vorgabemodell. Gewählt nach dem einzigen Kriterium, das hier
-#: zählt: Kommt ein strukturierter Werkzeugaufruf zurück oder Prosa? Gemessen
-#: gegen die sieben Schemata aus :mod:`app.core.agent.tools` traf ``llama3.1:8b``
-#: fünf von fünf Anfragen, ``qwen3:14b`` vier bei dreifacher Wartezeit,
-#: ``mistral-nemo`` zwei — und ``qwen2.5-coder:14b``, das hier vorher stand,
-#: keine einzige. Siehe :func:`ollama_tool_check`, der die Messung nachfahrbar
-#: macht.
-DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
+#: zählt: Kommt ein strukturierter Werkzeugaufruf zurück oder Prosa?
+#:
+#: Gemessen wird das mit **allen** Werkzeugen, die der Agent anbietet — das
+#: sind die dreiundachtzig aus dem geladenen Register, rund 96 KB Schema, und
+#: nicht die sieben Zusatzwerkzeuge allein. Der Unterschied entscheidet die
+#: Wahl und hat sie einmal falsch entschieden: mit sieben Schemata trifft
+#: ``llama3.1:8b`` fünf von fünf, mit dem vollen Register zwei. Es kennt die
+#: richtige Antwort auch dann — es schreibt sie als Fließtext hin, statt sie
+#: aufzurufen, und Ollama kann sie nicht auslesen.
+#:
+#: Mit dem vollen Register: ``qwen3:14b`` vier von fünf, ``llama3.1:8b`` zwei,
+#: ``qwen2.5-coder:14b`` keine. :func:`ollama_tool_check` und
+#: ``tools/check_local_model.py`` fahren die Messung nach.
+DEFAULT_OLLAMA_MODEL = "qwen3:14b"
 OLLAMA_URL = "http://localhost:11434/api/chat"
 
 
@@ -477,7 +484,7 @@ def ollama_size_warning(
     return _(
         "Das lokale Modell hat weniger als 7 Milliarden Parameter — "
         "Werkzeugaufrufe scheitern damit erfahrungsgemäß. Bewährt hat sich "
-        "llama3.1:8b; das braucht eine Grafikkarte mit rund 6 GB Speicher."
+        "qwen3:14b; das braucht eine Grafikkarte mit rund 10 GB Speicher."
     )
 
 

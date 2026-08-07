@@ -19,6 +19,7 @@ den Speicher und dauert Minuten.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -31,6 +32,7 @@ from app.core.backends.llm import (
     Message,
     OllamaBackend,
 )
+from app.core.bootstrap import load_operations
 
 SYSTEM = (
     "Du steuerst ein CAD-Programm über Werkzeuge. Benutze für jede Anfrage ein "
@@ -104,7 +106,14 @@ def main() -> int:
         print("Ollama antwortet nicht — „ollama serve“ starten, dann noch einmal.")
         return 2
 
-    print(f"Werkzeuge: {[entry['name'] for entry in tool_schemas()]}\n")
+    # Ohne das stünden hier sieben Werkzeuge statt dreiundachtzig, und die
+    # Messung sagte etwas über eine Lage aus, in der der Agent nie ist. Genau
+    # daran hat diese Prüfung beim ersten Anlauf vorbeigemessen: dasselbe
+    # Modell trifft mit sieben Schemata fünf von fünf und fällt mit dem
+    # vollständigen Register in Fließtext.
+    load_operations()
+    schemas = tool_schemas()
+    print(f"Werkzeuge: {len(schemas)} ({len(json.dumps(schemas)) // 1024} KB Schema)\n")
     good = [model for model in chosen if check(model)]
 
     print(f"Brauchbar: {', '.join(good) if good else 'keines'}")

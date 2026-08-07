@@ -11,7 +11,7 @@ hält an. Er ist nicht Teil der Testsuite: er kostet Geld, und sein Ergebnis ist
 eine Quote, kein Bestanden.
 
     python tools/run_agent_suite.py
-    python tools/run_agent_suite.py --backend ollama --model llama3.1:8b
+    python tools/run_agent_suite.py --backend ollama --model qwen3:14b
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ from app.core.backends.llm import (
     OllamaBackend,
     first_available,
 )
+from app.core.bootstrap import load_operations
 from app.core.knowledge import profiles
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import Project, ProjectSources, new_project
@@ -127,6 +128,13 @@ def main() -> int:
         "--pillar", default="", choices=["", "A", "C"], help="Nur eine Säule laufen lassen"
     )
     arguments = parser.parse_args()
+
+    # Ohne das ist das Register leer, und der erste Fall stirbt an einem
+    # `load`, das es angeblich nicht gibt. Die Anwendung und die Kommandozeile
+    # tun das beim Start; dieser Läufer hat es nie getan und lief deshalb seit
+    # der Umstellung auf explizites Laden überhaupt nicht mehr — er ist kein
+    # Testlauf, also hat es niemandem etwas gesagt.
+    load_operations()
 
     backend = pick(arguments.backend, arguments.model)
     if backend is None or not backend.available:
