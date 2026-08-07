@@ -21,7 +21,7 @@ from typing import Literal
 
 import trimesh
 
-from app.core.errors import ValidationError
+from app.core.errors import NeedsSolidError, ValidationError
 from app.core.export import threemf
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -561,12 +561,16 @@ def _step_bytes(body: Mesh | None, name: str = "") -> bytes:
     from app.core.brep import step as brep_step
 
     if body is None or not isinstance(body, BRepBody):
-        raise ValidationError(
-            field="format",
+        # Kein ``ValidationError``: dessen Titel lautet „Ein Wert liegt
+        # außerhalb des zulässigen Bereichs", und im Dialog stand er über der
+        # richtigen Erklärung — hier ist kein Wert außerhalb eines Bereichs,
+        # hier hat der Körper die falsche Art. Denselben Weg ist
+        # ``NeedsSolidError`` schon einmal gegangen (siehe dort).
+        raise NeedsSolidError(
             detail=_(
                 "STEP hält Flächen und Kanten fest. Ein Netz hat keine — dafür bleiben STL und 3MF."
             ),
-            constraint="needs_brep",
+            values={"field": "format", "constraint": "needs_brep"},
         )
     return brep_step.write(body, name)  # type: ignore[arg-type]
 

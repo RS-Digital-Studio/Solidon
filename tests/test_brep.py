@@ -403,12 +403,20 @@ def test_a_brep_object_exports_as_step(profile: Profile, tmp_path: Path) -> None
 
 
 def test_a_mesh_cannot_pretend_to_be_a_step(profile: Profile) -> None:
+    """Und der Fehler sagt, worum es geht.
+
+    Er war eine ``ValidationError``, und deren Titel lautet „Ein Wert liegt
+    außerhalb des zulässigen Bereichs" — im Dialog stand er über der richtigen
+    Erklärung. Hier ist kein Wert außerhalb eines Bereichs; hier hat der Körper
+    die falsche Art.
+    """
     mesh = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
 
-    with pytest.raises(ValidationError) as problem:
+    with pytest.raises(NeedsSolidError) as problem:
         export_bytes(mesh, "step", None, "", mesh)
 
-    assert problem.value.constraint == "needs_brep"
+    assert problem.value.values["constraint"] == "needs_brep"
+    assert "STEP" in str(problem.value.detail)
 
 
 def test_step_comes_back_addressable_and_stable() -> None:
