@@ -86,14 +86,14 @@ class AnalysisMap:
     highlighted: tuple[int, ...] = ()
     """Triangles the map wants to point at: too thin, too steep, broken."""
     threshold: float | None = None
-    """Where the highlight starts, in the unit of the map."""
+    """Ab wo hervorgehoben wird, in der Einheit der Karte."""
     categories: tuple[str, ...] = ()
-    """For maps whose values are levels rather than measurements."""
+    """Für Karten, deren Werte Stufen sind und keine Messwerte."""
     source: MetricSource = "internal"
     note: TranslatableText | str | None = None
-    """One line for the legend when the number needs a caveat (§22.5)."""
+    """Eine Zeile für die Legende, wenn die Zahl einen Vorbehalt braucht (§22.5)."""
     resolution: float | None = None
-    """Grid width in mm where the map was sampled rather than measured exactly."""
+    """Rasterweite in mm, wo die Karte abgetastet statt genau gemessen wurde."""
     unknown_note: TranslatableText | str | None = None
     """Warum diese Karte an manchen Stellen nichts sagen kann — in drei Worten.
 

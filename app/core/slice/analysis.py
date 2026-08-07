@@ -90,7 +90,7 @@ class LayerMetrics:
     bridge_width: float
     contour_count: int
     overhang: ShapelyPolygon | None = None
-    """The unsupported region itself — the support map needs the place, not the number."""
+    """Der ungestützte Bereich selbst — die Stützkarte braucht den Ort, nicht die Zahl."""
 
 
 def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full") -> SliceResult:

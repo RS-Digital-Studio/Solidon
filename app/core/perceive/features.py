@@ -98,9 +98,9 @@ class CylinderFit:
     centre: Vec3
     radius: float
     residual: float
-    """Mean deviation from the fitted radius, relative to the radius."""
+    """Mittlere Abweichung vom eingepassten Radius, bezogen auf den Radius."""
     inward: bool
-    """True when the normals point at the axis — that is a bore, not a pin."""
+    """Wahr, wenn die Normalen zur Achse zeigen — das ist eine Bohrung, kein Zapfen."""
 
     @property
     def good(self) -> bool:

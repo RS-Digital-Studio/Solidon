@@ -77,7 +77,7 @@ class PartChange:
     date: str
     reason: str
     effect: str = ""
-    """What it does to the dimensions — the part that matters for old projects."""
+    """Was sie an den Maßen ändert — das, worauf es für alte Projekte ankommt."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,13 +91,13 @@ class PartSpec:
     fn: PartFn
     version: str = "1"
     subtractive: bool = False
-    """True for a shape that is subtracted: a hole, a pocket, a trap."""
+    """Wahr für eine Form, die abgezogen wird: Bohrung, Tasche, Mutternfalle."""
     features: tuple[str, ...] = ()
     """Provenance features the part promises to name (§24.1)."""
     doc: TranslatableText | str = ""
     changes: tuple[PartChange, ...] = ()
     source: str = "shipped"
-    """``shipped`` or ``user`` — the catalogue marks the difference (§24.5)."""
+    """``shipped`` oder ``user`` — der Katalog weist den Unterschied aus (§24.5)."""
 
     @property
     def own(self) -> bool:

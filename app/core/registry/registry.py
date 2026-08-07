@@ -85,7 +85,7 @@ class OperationSpec:
     """How many it returns. ``VARIABLE`` means as many as it took — for
     operations like arranging, which change every object and create none."""
     applies_to: tuple[str, ...] = ()
-    """Feature kinds this operation offers itself for — drives the context menu."""
+    """Merkmalsarten, für die sich diese Operation anbietet — steuert das Kontextmenü."""
     whole_scene: bool = False
     """Works on every object at once — see :attr:`takes_whole_scene`."""
     produces_from: str | None = None

@@ -1,4 +1,4 @@
-"""Feature references that lost their feature (Bauplan §21.3)."""
+"""Merkmalsverweise, die ihr Merkmal verloren haben (Bauplan §21.3)."""
 
 from __future__ import annotations
 

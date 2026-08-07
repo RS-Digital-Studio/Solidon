@@ -84,7 +84,7 @@ class SectionBar(QWidget):
     """Achse, Position und Dicke des Schnitts."""
 
     sectionChanged = Signal(object, object)
-    """Carries the plane (or None) and the slice thickness (or None)."""
+    """Trägt die Ebene (oder None) und die Scheibendicke (oder None)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)

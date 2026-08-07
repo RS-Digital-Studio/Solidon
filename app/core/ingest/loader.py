@@ -49,7 +49,8 @@ HEAVY_TRIANGLES: Final = 500_000
 PLAUSIBLE_MIN_MM: Final = 10.0
 PLAUSIBLE_MAX_MM: Final = 300.0
 
-#: Units a file might have been written in, most likely first.
+#: Einheiten, in denen eine Datei geschrieben sein könnte — die
+#: wahrscheinlichste zuerst.
 CANDIDATE_UNITS: Final[tuple[LengthUnit, ...]] = ("mm", "cm", "in", "m")
 
 #: Eine Komponente unter diesem Anteil der größten zählt als loses Fragment.

@@ -266,14 +266,14 @@ class Session(QObject):
     progressChanged = Signal(float, str)
     busyChanged = Signal(bool)
     askRequested = Signal(object)
-    """A question for the user — carries an ``AskRequest``."""
+    """Eine Frage an den Nutzer — trägt einen ``AskRequest``."""
     proposalReady = Signal(object)
     """An agent turn finished — carries a ``ProposalPreview`` (§26.5)."""
     agentBusyChanged = Signal(bool)
     splitBusyChanged = Signal(bool)
     """Die Trennebenensuche läuft oder ist fertig (§2.8)."""
     projectChanged = Signal()
-    """Stack, path or title changed; panels reload from the document."""
+    """Stapel, Pfad oder Titel haben sich geändert; die Leisten laden neu."""
     failed = Signal(object)
     """An ``AppError`` the surface shows as a suggestion (§2.7)."""
 
@@ -289,12 +289,15 @@ class Session(QObject):
         Berechnung mitreißen (§15.6)."""
         self.path: Path | None = None
         self.quality: Quality = "draft"
-        """Draft while iterating; the export and the final report switch to fine (§31)."""
+        """Entwurf, solange gearbeitet wird; Export und Abschlussbericht schalten
+    auf fein (§31)."""
         self.last_result: EvaluationResult | None = None
         self.pending_orphan_check = False
-        """Set when a file was opened: §21.3 checks its references once, not always."""
+        """Gesetzt, wenn eine Datei geöffnet wurde: §21.3 prüft ihre Verweise
+    einmal, nicht immer."""
         self.pending_part_check = False
-        """The same for the part library (§24.4): once on opening, not on every run."""
+        """Dasselbe für die Bausteinbibliothek (§24.4): beim Öffnen, nicht bei
+    jedem Lauf."""
         self.pending_foreign_check = False
         """Und dasselbe für das, was §32 den Warnhinweis nennt: Quelltext und
         Verweise nach außen werden beim Öffnen einmal gemeldet. Bei jeder

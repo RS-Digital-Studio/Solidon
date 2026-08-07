@@ -49,7 +49,7 @@ class Screw:
 class Nut:
     size: str
     width: float
-    """Across the flats — the dimension a nut trap is built from."""
+    """Schlüsselweite — das Maß, aus dem eine Mutternfalle gebaut wird."""
     height: float
 
 

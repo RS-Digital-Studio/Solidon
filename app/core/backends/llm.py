@@ -60,7 +60,7 @@ class Message:
     content: str = ""
     tool_calls: tuple[ToolCall, ...] = ()
     tool_call_id: str | None = None
-    """Set on a ``tool`` message: which call this is the answer to."""
+    """Bei einer ``tool``-Nachricht gesetzt: auf welchen Aufruf sie antwortet."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,8 +108,8 @@ class LLMBackend(Protocol):
 
 
 Transport = Callable[[str, dict[str, str], dict[str, Any]], dict[str, Any]]
-"""``url, headers, payload -> answer``. Replaceable, which is what makes the
-agent testable without a network."""
+"""``url, headers, payload -> answer``. Austauschbar — genau das macht den
+Agenten ohne Netz prüfbar."""
 
 
 def post_json(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
@@ -253,7 +253,7 @@ def _from_anthropic(answer: dict[str, Any]) -> Reply:
     )
 
 
-# --- local, over Ollama -----------------------------------------------------------
+# --- Lokal, über Ollama -----------------------------------------------------------
 
 
 #: Das lokale Vorgabemodell. Gewählt nach dem einzigen Kriterium, das hier

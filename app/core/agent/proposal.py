@@ -40,13 +40,13 @@ class Proposal:
     undo_of: TransactionId | None = None
     questions: list[Question] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
-    """What the check after each operation found (§26.5)."""
+    """Was die Prüfung nach jeder Operation gefunden hat (§26.5)."""
     origin: Origin = field(default_factory=lambda: Origin(by="agent"))
     steps: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
     stopped: str = ""
-    """Set when a limit ended the run: ``steps`` or ``tokens`` (§26.5)."""
+    """Gesetzt, wenn eine Grenze den Lauf beendet hat: ``steps`` oder ``tokens`` (§26.5)."""
 
     @property
     def changes_geometry(self) -> bool:

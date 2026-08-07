@@ -35,7 +35,7 @@ class SnapResult:
     kind: str
     """``vertex``, ``edge`` or ``free``."""
     distance: float = 0.0
-    """How far the click was moved."""
+    """Wie weit der Klick gewandert ist."""
 
 
 @dataclass(frozen=True, slots=True)

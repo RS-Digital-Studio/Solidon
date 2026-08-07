@@ -42,7 +42,7 @@ MESHES = Path(__file__).resolve().parent.parent / "tests" / "data" / "meshes"
 TARGET_ASKED = 1.0
 """Jede mehrdeutige Anfrage muss fragen. Das hier ist keine Quote, das ist eine Regel."""
 TARGET_VALID = 0.95
-"""Share of operations that were schema-valid on the first attempt."""
+"""Anteil der Operationen, die schon im ersten Versuch schemagültig waren."""
 
 
 @dataclass(slots=True)

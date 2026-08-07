@@ -28,7 +28,7 @@ class ScriptedBackend:
     answers: list[Answer] = field(default_factory=list)
     model: str = "scripted"
     seen: list[list[Message]] = field(default_factory=list)
-    """Every request, in order — the suite reads the context out of this."""
+    """Jede Anfrage der Reihe nach — hieraus liest die Suite den Kontext."""
     tools_seen: list[tuple[str, ...]] = field(default_factory=list)
 
     @property

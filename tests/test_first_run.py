@@ -1,4 +1,4 @@
-"""First run, error report and update notice (Bauplan §38, §37.2)."""
+"""Erstinbetriebnahme, Fehlerbericht und Aktualisierungshinweis (Bauplan §38, §37.2)."""
 
 from __future__ import annotations
 

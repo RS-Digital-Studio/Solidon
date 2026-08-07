@@ -50,7 +50,7 @@ DisplayMode = Literal["solid", "solid_edges", "wireframe", "transparent"]
 
 Shading = Literal["flat", "smooth"]
 Projection = Literal["perspective", "orthographic"]
-"""Orthographic is mandatory for measuring (§18.1)."""
+"""Zum Messen ist die orthographische Ansicht Pflicht (§18.1)."""
 
 #: Display modes as pyvista arguments: style, edges, opacity.
 DISPLAY_MODES: dict[DisplayMode, dict[str, Any]] = {
@@ -495,7 +495,7 @@ class Viewport(QWidget):
     faceDragged = Signal(object, float)
     """Ein Zug an einer Fläche — Normale und Weg entlang ihr (§18.11)."""
     featurePicked = Signal(str)
-    """A feature clicked in the view — carries its id (§18.5)."""
+    """Ein in der Ansicht angeklicktes Merkmal — trägt seine ID (§18.5)."""
     objectPicked = Signal(str)
     """Ein angeklickter Körper — trägt seine Kennung. Leer heißt: daneben
     geklickt, die Auswahl fällt weg."""
@@ -531,7 +531,7 @@ class Viewport(QWidget):
         self._slice_thickness: float | None = None
         self._result: EvaluationResult | None = None
         self._uncapped = False
-        """True when a cut could not be closed because the body is open (§18.2)."""
+        """Wahr, wenn ein Schnitt offen blieb, weil der Körper es ist (§18.2)."""
         self._object_colour = OBJECT_COLOUR
         self._bed_colour = BED_COLOUR
         self._bed_surface = BED_SURFACE_COLOUR
@@ -564,11 +564,12 @@ class Viewport(QWidget):
         self._diff_palette: DiffPalette = "blue_orange"
         self._ghost: EvaluationResult | None = None
         self._explosion = 0.0
-        """§18.8: how far split parts are drawn apart. Display only, never geometry."""
+        """§18.8: wie weit geteilte Stücke auseinandergezogen gezeichnet werden.
+        Nur Darstellung, nie Geometrie."""
         self._plate = -1
-        """Which build plate is shown; -1 is all of them (§25)."""
+        """Welche Druckplatte gezeigt wird; -1 heißt alle (§25)."""
         self._painting = False
-        """§20: clicks are brush strokes while this is on."""
+        """§20: solange das an ist, sind Klicks Pinselstriche."""
         self._hidden: frozenset[ObjectId] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansicht, nicht Szene — die
         Körper werden weiter gerechnet, geprüft und exportiert."""

@@ -45,7 +45,7 @@ class OutlineResult:
     mesh: MeshData
     contours: int
     width: float
-    """Width of the outline before scaling, in the file's own numbers."""
+    """Breite des Umrisses vor dem Skalieren, in den Zahlen der Datei selbst."""
 
 
 def is_outline(suffix: str) -> bool:

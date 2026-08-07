@@ -106,13 +106,13 @@ class ExportEntry:
     filename: str
     mesh: MeshData
     slots: tuple[MaterialSlot, ...] = ()
-    """The material slots of the object — 3MF carries them as colour groups (§20)."""
+    """Die Materialslots des Objekts — 3MF trägt sie als Farbgruppen (§20)."""
     name: str = ""
     body: Mesh | None = None
     """The object as it is in the scene. STEP needs the exact body, not the
     triangles it was tessellated into (§30)."""
     plate: int = 0
-    """Which build plate this file belongs to (§25)."""
+    """Zu welcher Druckplatte diese Datei gehört (§25)."""
 
 
 @dataclass(frozen=True, slots=True)

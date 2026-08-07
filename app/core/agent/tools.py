@@ -47,7 +47,7 @@ EXTRA_TOOLS: Final[tuple[str, ...]] = (
 
 
 def tool_schemas(registry: Registry | None = None) -> tuple[dict[str, Any], ...]:
-    """Everything the model may call, operations first."""
+    """Alles, was das Modell aufrufen darf — die Operationen zuerst."""
     return (*operation_tools(registry), *extra_tools())
 
 

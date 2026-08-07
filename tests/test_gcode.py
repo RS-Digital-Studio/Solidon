@@ -136,7 +136,7 @@ def test_a_far_estimate_becomes_a_finding() -> None:
 
 
 def test_the_estimate_is_never_replaced_by_the_measurement() -> None:
-    """§22.5: both stay, both keep their origin. Nothing is quietly overwritten."""
+    """§22.5: beide bleiben, beide behalten ihre Herkunft. Nichts wird still überschrieben."""
     check = gcode.compare(estimated=500.0, measured=1000.0)
 
     assert check.estimated == 500.0

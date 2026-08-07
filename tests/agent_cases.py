@@ -25,10 +25,10 @@ class Case:
     ambiguous: bool = False
     """Deliberately unclear — a good answer asks instead of guessing (§26.2)."""
     expects_ops: tuple[str, ...] = ()
-    """Operations a good answer uses. Empty means: none is needed."""
+    """Operationen, die eine gute Antwort benutzt. Leer heißt: es braucht keine."""
     expects_parameter: bool = False
     expects_answer_only: bool = False
-    """A question about the model, not a change to it."""
+    """Eine Frage zum Modell, keine Änderung daran."""
     selection: tuple[str, str] | None = None
     note: str = ""
     forbids_ops: tuple[str, ...] = field(default_factory=tuple)

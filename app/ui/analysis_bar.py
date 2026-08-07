@@ -60,7 +60,7 @@ class MapLegend(QWidget):
         self.note = QLabel("", self)
         self.note.setWordWrap(True)
         self.entries: list[tuple[str, str]] = []
-        """Label and colour of every swatch, kept for the test and the tooltip."""
+        """Beschriftung und Farbe jedes Feldes — für den Test und den Kurzhinweis."""
 
     def show_map(self, analysis: AnalysisMap | None) -> None:
         while self._layout.count():
@@ -135,9 +135,9 @@ class AnalysisBar(QWidget):
     """Welche Karte zeigt, plus ihre Legende (§18.4)."""
 
     mapChanged = Signal(object)
-    """The chosen ``MapKind``, or None for no map."""
+    """Die gewählte ``MapKind``, oder None für keine Karte."""
     overlayToggled = Signal(bool)
-    """Whether the feature overlay is showing (§18.5)."""
+    """Ob die Merkmalsauflage gezeigt wird (§18.5)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -202,7 +202,7 @@ class LayerBar(QWidget):
     """
 
     layerChanged = Signal(int)
-    """Index of the chosen layer, or -1 when the preview is off."""
+    """Nummer der gewählten Schicht, oder -1, wenn die Vorschau aus ist."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)

@@ -80,7 +80,7 @@ class SearchResult:
     best: Candidate
     tried: int
     baseline: Candidate
-    """How the body stood before — so the gain can be stated, not claimed."""
+    """Wie der Körper vorher stand — damit der Gewinn belegt und nicht behauptet wird."""
     findings: list[Finding]
 
     @property

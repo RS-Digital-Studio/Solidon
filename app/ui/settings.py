@@ -29,7 +29,7 @@ class UiSettings:
     navigation: str = "slicer"
     theme: str = "dark"
     diff_palette: str = "blue_orange"
-    """Colours of the difference view (§19.1). Red/green is available, not default."""
+    """Farben der Differenzansicht (§19.1). Rot/Grün gibt es, es ist nicht die Vorgabe."""
     display_unit: str = "mm"
     """Shown unit (§19.3). The core stays on millimetres either way."""
     language: str = SOURCE_LANGUAGE
@@ -53,7 +53,8 @@ class UiSettings:
     """Welche Kürzelbelegung gilt (Konzept P15, E7). Die Vorgabe ist die des
     Registers; „fusion" legt einzelne Buchstaben darüber."""
     check_for_updates: bool = False
-    """§37.2: a notice, never an automatic update — and off until it is switched on."""
+    """§37.2: ein Hinweis, nie eine selbsttätige Aktualisierung — und aus, bis
+    es eingeschaltet wird."""
     remote_enabled: bool = False
     """Ob die MCP-Schnittstelle läuft (Konzept P15 §7 Etappe 9).
 

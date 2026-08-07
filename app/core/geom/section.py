@@ -39,7 +39,7 @@ class SectionPlane:
 
     normal: Vec3 = (0.0, 0.0, 1.0)
     position: float = 0.0
-    """Distance of the plane from the origin along its normal, in millimetres."""
+    """Abstand der Ebene vom Ursprung entlang ihrer Normalen, in Millimetern."""
 
     @classmethod
     def along(cls, axis: Axis, position: float = 0.0) -> SectionPlane:
@@ -69,7 +69,7 @@ class SectionResult:
 
     mesh: MeshData
     capped: bool
-    """False when the body was not closed to begin with — then a cap is impossible."""
+    """Falsch, wenn der Körper von vornherein offen war — dann gibt es keinen Deckel."""
 
 
 def cut(mesh: MeshData, plane: SectionPlane, second: SectionPlane | None = None) -> SectionResult:

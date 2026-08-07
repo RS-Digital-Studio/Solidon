@@ -430,8 +430,9 @@ class MainWindow(QMainWindow):
         self.resize(1280, 820)
         self._map_cache: dict[tuple[str, str, int], Any] = {}
         self._map_worker: Any = None
-        """The map being computed (§18.9). A newer request replaces it."""
-        """Only the last map is kept: they are cheap to rebuild and large to hold."""
+        """Die Karte, die gerade gerechnet wird (§18.9). Eine neuere Anfrage ersetzt sie."""
+        """Nur die letzte Karte wird gehalten: neu zu rechnen ist billig, sie zu
+    halten teuer."""
         self._slice_cache: SliceResult | None = None
         self._slice_key: tuple[str, int] | None = None
         self._slice_worker: Any = None
@@ -449,7 +450,7 @@ class MainWindow(QMainWindow):
         laufender QThread ohne Referenz wird vom Speicherbereiniger mitsamt
         C++-Objekt zerstört. Ein Absturz ohne Zeile, irgendwann später."""
         self._proposal: Any = None
-        """The agent turn waiting for a decision (§26.5)."""
+        """Der Agentenzug, der auf eine Entscheidung wartet (§26.5)."""
         self._manual: ManualWindow | None = None
         """Das Handbuchfenster, einmal gebaut und danach wiederverwendet."""
         self._op_dialog: OperationDialog | None = None

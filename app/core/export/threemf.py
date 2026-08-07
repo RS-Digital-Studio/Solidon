@@ -223,7 +223,7 @@ class Groups:
     """Die Farbgruppen, die eine 3MF-Datei trägt (§20, Import)."""
 
     slots: tuple[int, ...]
-    """One slot index per triangle, in the order the file lists them."""
+    """Ein Slot-Index je Dreieck, in der Reihenfolge der Datei."""
     materials: tuple[MaterialSlot, ...]
 
 

@@ -81,7 +81,7 @@ class Encoding:
     symbol: str
     """A single character shown in legends and labels."""
     label_key: str
-    """Message id of the caption, so the legend is readable without colours."""
+    """Message-ID der Beschriftung — so bleibt die Legende ohne Farbe lesbar."""
 
 
 @dataclass(frozen=True, slots=True)

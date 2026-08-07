@@ -77,7 +77,7 @@ def test_the_context_carries_scene_report_and_rules(project: Project, profile: P
 
 
 def test_the_selection_reaches_the_agent(project: Project, profile: Profile) -> None:
-    """§26.1: without the selection "make that hole bigger" points at nothing."""
+    """§26.1: ohne die Auswahl zeigt „mach das Loch größer" auf nichts."""
     scene = scene_of(project, profile)
     messages = context.build_messages(
         "größer", project.document, scene, selection=("obj_1", "hole_2")

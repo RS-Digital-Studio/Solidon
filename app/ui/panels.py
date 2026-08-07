@@ -205,9 +205,9 @@ class ObjectTree(QWidget):
 
     selectionChanged = Signal(object)
     featureSelected = Signal(object)
-    """A feature picked in the tree — carries its id, or None."""
+    """Ein im Baum gewähltes Merkmal — trägt seine ID, oder None."""
     operationRequested = Signal(object)
-    """An operation picked from the context menu — carries its ``OperationSpec``."""
+    """Eine aus dem Kontextmenü gewählte Operation — trägt ihre ``OperationSpec``."""
     visibilityRequested = Signal(object, bool)
     """Ein- oder ausblenden (§18.8) — trägt die Kennungen und den Wunsch."""
     isolateRequested = Signal(object)
@@ -597,7 +597,7 @@ class HistoryPanel(QWidget):
     """
 
     operationActivated = Signal(int)
-    """An operation was double-clicked — carries its id, for editing (§15.4)."""
+    """Eine Operation wurde doppelt angeklickt — trägt ihre ID, zum Ändern (§15.4)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)

@@ -102,7 +102,7 @@ class Solid:
     """
 
     shape: Any
-    """``TopoDS_Shape``. Typed loosely on purpose — the binding is optional."""
+    """``TopoDS_Shape``. Absichtlich lose typisiert — die Anbindung ist optional."""
     deflection: float = DEFLECTION
     _cache: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
 

@@ -49,11 +49,11 @@ AMBIGUITY_FLOOR = 0.05
 #: eigene Toleranz geteilt — eine Kostenzahl von 1.0 heißt also „so weit
 #: daneben, wie wir gerade noch annehmen", egal aus welchem Teil sie kam.
 POSITION_TOLERANCE = 0.08
-"""Share of the model diagonal a feature may have travelled."""
+"""Anteil der Modelldiagonale, um den ein Merkmal gewandert sein darf."""
 DIAMETER_TOLERANCE = 0.15
 """Relative change in diameter — a bore can be widened and stay itself."""
 AXIS_TOLERANCE = 0.3
-"""Length of the difference between the unit axes, roughly 17 degrees."""
+"""Länge der Differenz zwischen den Einheitsachsen, rund 17 Grad."""
 
 #: Alles darunter zählt als dasselbe Merkmal.
 MATCH_THRESHOLD = 1.0
@@ -72,7 +72,7 @@ class MatchResult:
     orphaned: tuple[FeatureId, ...] = ()
     """Old features with no partner (§21.2)."""
     ambiguous: dict[FeatureId, tuple[FeatureId, ...]] = field(default_factory=dict)
-    """Old features with several equally good candidates — these get asked about."""
+    """Alte Merkmale mit mehreren gleich guten Kandidaten — nach denen wird gefragt."""
     fresh: tuple[FeatureId, ...] = ()
     """New features nobody was expecting."""
 

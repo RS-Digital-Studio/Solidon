@@ -52,7 +52,7 @@ def test_identifiers_survive_an_operation_that_changes_nothing() -> None:
 
 
 def test_moving_the_whole_body_does_not_orphan_its_features() -> None:
-    """§21.2: position counts in the object's own frame, not the world's."""
+    """§21.2: die Lage zählt im eigenen Bezug des Objekts, nicht im Weltbezug."""
     mesh = body("plate_holes.stl")
     moved = apply(mesh, translation((120.0, -40.0, 15.0)))
 
