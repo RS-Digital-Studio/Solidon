@@ -2590,3 +2590,45 @@ braucht, eine Quelle, die zweimal eingetragen werden will, und eine
 Sicherheitsprüfung, die ein Ergebnis zurückgibt statt zu werfen. Die
 Quelltextprüfung nach §32 lehnt absolute Pfade, Schritte nach oben, URLs und
 sogar `import(variable)` zuverlässig ab.
+
+## Puppenhaus: beide Wege an einem Stück (07.08.2026)
+
+Ein Puppenhaus für ein Kind — Architektur gezeichnet, Einrichtung erzeugt.
+Gebaut wurde live in der Anwendung über Menüeinträge, Zeichenfläche und
+Dialoge, nicht über die Session-API: was zwischen Menü und Geometrie liegt,
+lief damit mit.
+
+### Was trägt
+
+- **Der Zeichenmodus trägt.** Rechteck 180 × 120 eingesetzt, elf
+  Zwangsbedingungen, „Bestimmt — alle Freiheitsgrade sind vergeben", Fertig,
+  Dialog, Körper. Boden 86,4 cm³ auf den Millimeter.
+- **Speichern und Öffnen tragen.** Titel wechselt, `modified` wird falsch,
+  Volumen vor und nach dem Neustart identisch bis auf drei Nachkommastellen.
+- **Die Generierung trägt.** Vier Möbel über `ComfyBackend`, 16 bis 51
+  Sekunden je Stück, alle vier angekommen.
+
+### Was nicht trägt
+
+- [x] **Vierzehn Werkzeuge in einer Zeile, jedes zweite Wort abgeschnitten.**
+      Gemessen 1165 px nötig, 70 px je Knopf zugeteilt, 1800 px vorhanden.
+      Behoben mit Zeichen statt Beschriftung.
+- [x] **Objektbaum elf Pixel hoch, nötig hundertdrei.** `fit_to_rows` bemisst
+      die Liste, nicht die Karte. Der Verlauf ebenso.
+- [x] **Die Wiederherstellung fragte mit Ja und Nein** und verschwieg, wie alt
+      die Sicherung ist.
+- [ ] **Aushöhlen macht aus einem exakten Körper ein Netz.** Danach lehnt
+      „Tasche schneiden" ab: „braucht einen B-Rep-Körper; hier liegt ein
+      Netz." Für ein Haus mit Fenstern heißt das: erst die Öffnungen, dann
+      aushöhlen — oder `shell_exact` statt `hollow_object`. Beide stehen im
+      selben Menü, und nichts sagt, welche zu welchem Körper gehört. Der
+      Fehler kommt erst drei Schritte später.
+- [ ] **`scale_object` deckelt bei Faktor 100, Weg 3 braucht mehr.** Was aus
+      ComfyUI kommt, ist auf einen Einheitswürfel normiert: die vier Möbel
+      maßen 0,6 bis 2,0 mm. Der Schrank hätte 141,7 gebraucht und blieb
+      1,3 mm groß — die Op lehnte ab, und im Prüfbericht stand nichts davon.
+      Zu klären ist beides: die Grenze und die Frage, ob ein erzeugtes Mesh
+      nicht schon beim Laden auf ein plausibles Maß gehört.
+- [ ] **Was ComfyUI liefert, ist nirgends wasserdicht.** Alle vier Möbel kamen
+      offen an, mit 625 000 bis 1 229 000 Dreiecken. `repair` schloss drei von
+      vier nicht. Für Weg 3 ist das der Normalfall, nicht die Ausnahme.
