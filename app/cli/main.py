@@ -15,13 +15,14 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from app.branding import APP_NAME, APP_VERSION, DISTRIBUTION_NAME, PROJECT_SUFFIX
 from app.core import manual
 from app.core.bootstrap import load_operations
-from app.core.errors import AppError, OperationCancelled, ValidationError
+from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
 from app.core.export import threemf
 from app.core.export.writer import plan_export, write_plan
 from app.core.geom.mesh import read_mesh
@@ -82,12 +83,29 @@ class TerminalProgress:
 def terminal_ask(question: str, choices: list[str]) -> str:
     """Mehrdeutigkeit wird eine nummerierte Frage — nie eine
     Vermutung (Leitprinzip 6).
+
+    Niemand am anderen Ende ist kein Sonderfall: in einer Pipe, einem Skript
+    oder auf einem Bauserver liest ``input`` sofort EOF. Ungefangen endete das
+    in einem Stapelabzug — die eine Sorte Ausgabe, die §33.1 dem Nutzer
+    ausdrücklich erspart, und ausgerechnet für eine Frage, die sich auf der
+    Kommandozeile beantworten lässt.
     """
     print(f"\n{question}")
     for index, choice in enumerate(choices, start=1):
         print(f"  {index}) {choice}")
     while True:
-        answer = input(f"{tr('Auswahl')} [1-{len(choices)}]: ").strip()
+        try:
+            answer = input(f"{tr('Auswahl')} [1-{len(choices)}]: ").strip()
+        except EOFError as end:
+            raise UserError(
+                title=_("Diese Frage braucht eine Antwort, und hier ist niemand."),
+                detail=_(
+                    "Der Lauf hat keine Eingabe. Die Antwort lässt sich vorab "
+                    "mitgeben — beim Einlesen etwa über „--unit“."
+                ),
+                values={"question": question, "choices": ", ".join(choices)},
+                suggestions=(CANCEL,),
+            ) from end
         if answer.isdigit() and 1 <= int(answer) <= len(choices):
             return choices[int(answer) - 1]
         if answer in choices:
@@ -165,10 +183,33 @@ def command_profiles(args: argparse.Namespace) -> int:
 
 
 def command_new(args: argparse.Namespace) -> int:
+    # Geprüft wird hier, nicht erst beim Rechnen. Ohne das nimmt „new" jeden
+    # Namen an und legt eine Datei an, die beim nächsten Befehl mit „Dieses
+    # Materialprofil ist nicht bekannt" stehen bleibt — eine Fehlermeldung
+    # über einen Tippfehler, der zwei Befehle zurückliegt. Die Falle ist
+    # zudem eingebaut: „profiles" zeigt den Titel PETG, die Kennung ist petg.
+    _known("Material", args.material, profiles.material_profiles())
+    _known("Drucker", args.printer, profiles.printer_profiles())
     project = new_project(printer=args.printer, material=args.material)
     path = save(project, Path(args.path))
     print(f"{tr('Neues Projekt')}: {path}")
     return 0
+
+
+def _known(what: str, chosen: str, known: Mapping[str, Any]) -> None:
+    """Hält an, wenn es das Profil nicht gibt — und nennt die, die es gibt."""
+    if not chosen or chosen in known:
+        return
+    near = [name for name in known if name.lower() == chosen.lower()]
+    raise ValidationError(
+        title=_("Dieses Profil gibt es nicht."),
+        detail=(
+            _("Profilkennungen werden kleingeschrieben — der Titel daneben nicht.")
+            if near
+            else _("„profiles“ zeigt, was zur Auswahl steht.")
+        ),
+        values={what.lower(): chosen, "gemeint": near[0] if near else ", ".join(sorted(known))},
+    )
 
 
 def command_info(args: argparse.Namespace) -> int:

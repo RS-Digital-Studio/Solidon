@@ -84,6 +84,41 @@ def test_an_ambiguous_unit_is_asked_once_and_then_stored(
     assert "101.6" in capsys.readouterr().out
 
 
+def test_a_question_nobody_can_answer_ends_in_a_sentence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """In einer Pipe, einem Skript oder auf einem Bauserver liest ``input``
+    sofort EOF — und das ist der Normalfall, nicht die Ausnahme.
+
+    Ungefangen endete die Einheitenfrage dort in einem Stapelabzug, also genau
+    der Ausgabe, die §33.1 dem Nutzer erspart. Der Ausweg steht direkt daneben:
+    „--unit" beantwortet dieselbe Frage vorab.
+    """
+
+    def no_one(prompt: str = "") -> str:
+        raise EOFError
+
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path)])
+    monkeypatch.setattr("builtins.input", no_one)
+
+    assert main(["import", str(path), str(MESHES / "bracket_inch.stl")]) != 0
+
+    said = capsys.readouterr()
+    text = said.out + said.err
+    assert "--unit" in text, "der Ausweg wird genannt"
+    assert "Traceback" not in text
+
+
+def test_the_same_import_works_when_the_unit_is_given(tmp_path: Path) -> None:
+    """Und derselbe Aufruf geht durch, sobald die Antwort mitkommt."""
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path)])
+
+    assert main(["import", str(path), str(MESHES / "bracket_inch.stl"), "--unit", "in"]) == 0
+    assert load(path).document.ops[0].params["unit"] == "in"
+
+
 def test_info_describes_the_evaluated_scene(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
