@@ -30,7 +30,7 @@ from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
 from app.core.types import BoundingBox, Finding, Mesh, Profile, Quality, SolverInfo, Vec3
 from app.core.units import EPS_GEOM, format_length, format_volume
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 #: §39: Boolesche Ops überlappen immer leicht, nie teilen sie exakt eine Fläche.
 BOOLEAN_OVERLAP = 0.01
@@ -460,11 +460,34 @@ def check_build_volume(
                 Finding(
                     code="arrange.out_of_build_volume",
                     severity="warning",
-                    message=_("Ein Objekt steht über den Bauraum hinaus."),
+                    message=_message_for(bounds, allowed, outside),
                     values=values,
                 )
             )
     return findings
+
+
+def _message_for(
+    bounds: BoundingBox, allowed: BoundingBox, outside: Sequence[int]
+) -> TranslatableText:
+    """Der Satz, der zum tatsächlichen Fall passt.
+
+    „Steht über den Bauraum hinaus" liest sich als „zu groß", und beim
+    häufigsten Fall von Weg 1 ist das falsch: ein heruntergeladenes Teil ist
+    meist um den Ursprung zentriert, liegt also zur Hälfte unter der
+    Druckplatte. Wer den Satz wörtlich nimmt, sucht das Skalieren, obwohl ein
+    Aufsetzen genügt — ein Achtelmillimeter Text, der jemanden auf die falsche
+    Fährte schickt.
+    """
+    only_below = all(
+        allowed.minimum[axis] - bounds.minimum[axis] > bounds.maximum[axis] - allowed.maximum[axis]
+        for axis in outside
+    )
+    if not only_below:
+        return _("Ein Objekt steht über den Bauraum hinaus.")
+    if tuple(outside) == (2,):
+        return _("Ein Objekt steckt unter der Druckplatte.")
+    return _("Ein Objekt liegt außerhalb der Druckplatte.")
 
 
 #: Welche Felder eines Befunds Indizes in die geprüfte Liste sind. ``object``

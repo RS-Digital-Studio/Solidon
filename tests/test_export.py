@@ -107,6 +107,31 @@ def test_a_part_below_the_bed_is_reported(profile: Profile) -> None:
     assert "arrange.out_of_build_volume" in {finding.code for finding in findings}
 
 
+def test_a_part_below_the_bed_is_not_called_too_big(profile: Profile) -> None:
+    """Der häufigste Fall von Weg 1 bekam den irreführendsten Satz.
+
+    Ein heruntergeladenes Teil ist meist um den Ursprung zentriert und liegt
+    darum zur Hälfte unter der Platte — ein 8 mm hohes Teil auf einem
+    256-mm-Drucker. „Steht über den Bauraum hinaus" schickt den Nutzer zum
+    Skalieren, obwohl ein Aufsetzen genügt.
+    """
+    sunk = normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
+    findings = check_before_export([scene_object(mesh=sunk)], profile, {})
+
+    said = str(next(f.message for f in findings if f.code == "arrange.out_of_build_volume"))
+    assert "unter der Druckplatte" in said
+    assert "hinaus" not in said, "das ist der Satz für zu groß"
+
+
+def test_a_part_that_really_is_too_big_still_says_so(profile: Profile) -> None:
+    """Die Unterscheidung darf den echten Fall nicht verschlucken."""
+    huge = read_mesh((MESHES / "oversized.stl").read_bytes(), ".stl")
+    findings = check_before_export([scene_object(mesh=place_on_bed(huge))], profile, {})
+
+    said = str(next(f.message for f in findings if f.code == "arrange.out_of_build_volume"))
+    assert "hinaus" in said
+
+
 def test_an_open_part_is_reported_but_not_blocked(profile: Profile) -> None:
     """§29: wer trotzdem exportieren will, kann das — er weiß dann nur, was er
     tut.

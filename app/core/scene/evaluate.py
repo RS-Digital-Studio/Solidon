@@ -422,10 +422,20 @@ def _with_features(
         # zu melden, sagt dem Nutzer das Gegenteil von dem, was passiert ist —
         # und lässt jeden Weg-3-Bericht wie ein Fehlschlag aussehen.
         defect = getattr(old_feature, "kind", "") == "edge_loop"
+        # Dieselbe Überlegung ein drittes Mal, und diesmal für den Regelfall:
+        # ohne einen Verweis darauf ist eine Verwaisung keine Warnung. §21.2
+        # führt „kein Partner" als Zuordnungsfall, und §21.3 knüpft das Melden
+        # ausdrücklich daran, dass eine spätere Op auf die ID *verweist* —
+        # dann hält die Auswertung an und fragt, und dafür gibt es
+        # `feature.orphaned` in `orphans.py`. Hier bleibt eine Feststellung:
+        # jedes Aushöhlen mit offener Decke verliert die Deckfläche, jede
+        # formende Op verliert irgendein erkanntes Merkmal. Als Warnung
+        # gezählt, schickt das den Prüfbericht bei gelungener Arbeit nach vorn,
+        # bis niemand mehr hinsieht.
         findings.append(
             Finding(
                 code="perceive.mended" if defect else "perceive.orphaned",
-                severity="info" if defect else "warning",
+                severity="info",
                 message=(
                     _("Eine offene Stelle ist geschlossen und damit fort.")
                     if defect

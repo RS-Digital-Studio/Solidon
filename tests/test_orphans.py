@@ -1,4 +1,11 @@
-"""Merkmalsverweise, die ihr Merkmal verloren haben (Bauplan §21.3)."""
+"""Merkmalsverweise, die ihr Merkmal verloren haben (Bauplan §21.3).
+
+Die Trennung ist der Kern: **ein Verweis**, der ins Leere zeigt, hält die
+Auswertung an und fragt (`feature.orphaned`). Ein erkanntes Merkmal, das
+niemand benutzt und das eine Operation nebenbei verliert, ist dagegen der
+Regelfall jeder Formänderung und bleibt eine Feststellung
+(`perceive.orphaned`, `info`).
+"""
 
 from __future__ import annotations
 
@@ -231,3 +238,31 @@ def test_dropping_it_clears_the_name_and_keeps_the_step(scene: Scene) -> None:
 def test_an_operation_the_registry_does_not_know_is_skipped() -> None:
     """Eine Datei aus einer neueren Version, oder ein nicht geladenes Plugin."""
     assert orphans.references(document_with_op("hole_1", op="op_from_the_future")) == []
+
+
+def test_a_feature_nobody_refers_to_is_not_a_warning() -> None:
+    """§21.3 knüpft das Melden an einen Verweis, und das aus gutem Grund.
+
+    Beim Aushöhlen mit offener Decke verschwindet die Deckfläche — genau das
+    war die Absicht. Als Warnung gezählt, steht sie im Bericht jeder gelungenen
+    Dose, schiebt ihn in der Oberfläche nach vorn und macht den Platz wertlos,
+    an dem echte Warnungen stehen. Was einen Verweis bricht, meldet weiterhin
+    `feature.orphaned`, und zwar als Fehler.
+    """
+    import ast
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parent.parent / "app" / "core" / "scene" / "evaluate.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+
+    severities: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or getattr(node.func, "id", "") != "Finding":
+            continue
+        fields = {kw.arg: kw.value for kw in node.keywords}
+        code = fields.get("code")
+        mentions = code is not None and "perceive.orphaned" in ast.unparse(code)
+        if mentions and "severity" in fields:
+            severities.append(ast.unparse(fields["severity"]))
+
+    assert severities == ["'info'"], f"perceive.orphaned ist keine Warnung: {severities}"
