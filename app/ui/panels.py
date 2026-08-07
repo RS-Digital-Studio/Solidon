@@ -49,8 +49,9 @@ from app.ui.labels import (
     localised,
     volume,
 )
+from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING
-from app.ui.style import NORMAL, ROOMY, set_level
+from app.ui.style import NORMAL, ROOMY, TIGHT, set_level
 
 #: Zeichen je Schweregrad, aus der gemeinsamen Kodierung — Farbe steht nie
 #: allein (§19.1).
@@ -240,6 +241,10 @@ class ObjectTree(QWidget):
         """Das Zuletzt-Gezeigte, damit sich der Baum ohne neue Auswertung
         neu zeichnen kann — beim Ausblenden ändert sich nur die Anzeige."""
         self.tree.itemSelectionChanged.connect(self._on_selection)
+        # Wer einen Körper aufklappt, will seine Merkmale sehen und nicht in
+        # einem Feld von zwei Zeilen danach scrollen.
+        self.tree.itemExpanded.connect(self._fit)
+        self.tree.itemCollapsed.connect(self._fit)
         self.tree.setAcceptDrops(True)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._on_context_menu)
@@ -327,6 +332,27 @@ class ObjectTree(QWidget):
             item.setExpanded(object_id in selected)
         self.tree.resizeColumnToContents(0)
         self._restore(selected, selected_feature)
+        self._fit()
+
+    def _fit(self) -> None:
+        """So hoch wie der Inhalt — aufgeklappte Merkmale zählen mit.
+
+        Die zweite Zeile ist die entscheidende: ``fit_to_rows`` bemisst den
+        Baum, nicht die Karte um ihn herum. Ohne sie meldete die Karte ihre
+        nackte Mindesthöhe, und die Spalte drückte sie auf elf Pixel — ein
+        leerer Rahmen über einem angeschnittenen Wort, während der Baum
+        darunter seine hundert Pixel für sich behielt und nichts davon zu
+        sehen war.
+        """
+        rows = 0
+        for index in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(index)
+            if item is None:
+                continue
+            rows += 1 + (item.childCount() if item.isExpanded() else 0)
+        fit_to_rows(self.tree, rows)
+        self.setMinimumHeight(self.sizeHint().height())
+        self.updateGeometry()
 
     def _restore(self, objects: Sequence[ObjectId], feature_id: str | None) -> None:
         """Behält die Auswahl über eine Neuauswertung hinweg — sie zu verlieren
@@ -551,7 +577,19 @@ class ParameterPanel(QWidget):
         self.add_button.clicked.connect(self.addRequested)
         outer.addLayout(self._form)
         outer.addWidget(self.add_button, alignment=Qt.AlignmentFlag.AlignLeft)
-        outer.addStretch(1)
+        self._outer = outer
+        self._fit()
+
+    def _fit(self) -> None:
+        """So hoch wie der Inhalt — wie die beiden Karten darüber und darunter.
+
+        Der Streckfaktor am Ende ist weg: er beanspruchte Restplatz in einer
+        Spalte, die keinen verteilt, und der umbrochene Satz des leeren
+        Zustands wurde stattdessen gestaucht, bis er unter dem Knopf lag.
+        """
+        fit_wrapped(self._empty)
+        self.setMinimumHeight(self._outer.sizeHint().height())
+        self.updateGeometry()
 
     def show_document(self, document: Document) -> None:
         while self._form.rowCount():
@@ -562,6 +600,7 @@ class ParameterPanel(QWidget):
             self._empty = QLabel(_empty_parameters_text(), self)
             self._empty.setWordWrap(True)
             self._form.addRow(self._empty)
+            self._fit()
             return
 
         for name, parameter in document.parameters.items():
@@ -584,6 +623,7 @@ class ParameterPanel(QWidget):
             )
             self._editors[name] = editor
             self._form.addRow(f"{parameter.title or name}", editor)
+        self._fit()
 
 
 class HistoryPanel(QWidget):
@@ -660,6 +700,12 @@ class HistoryPanel(QWidget):
             item.setToolTip(tr("Ein Wiederholen holt diesen Schritt zurück."))
             self.list.addItem(item)
 
+        fit_to_rows(self.list, self.list.count())
+        # Dieselbe Stelle wie im Objektbaum: die Liste ist bemessen, die Karte
+        # um sie herum meldete weiter ihre Mindesthöhe und wurde auf zehn Pixel
+        # gedrückt.
+        self.setMinimumHeight(self.sizeHint().height())
+        self.updateGeometry()
         self.list.scrollToBottom()
 
     def _on_activated(self, item: QListWidgetItem) -> None:
@@ -919,6 +965,52 @@ class MeasurementLabel(QLabel):
             f"{length(size[2], self._unit)}   "
             f"{volume(content, self._unit)}"
         )
+
+
+#: Wie viele Zeilen eine Karte der linken Spalte mindestens und höchstens hoch
+#: wird. Unten drei, damit der leere Zustand seinen Satz zeigen kann; oben
+#: zwölf, damit ein Baum mit fünfzig Teilen nicht die ganze Spalte nimmt und
+#: den Verlauf darunter aus dem Fenster schiebt. Dazwischen wächst sie mit.
+MIN_ROWS = 3
+MAX_ROWS = 12
+
+
+def fit_wrapped(label: QLabel) -> None:
+    """Gibt einem umbrochenen Text die Höhe, die er wirklich braucht.
+
+    Ein ``QLabel`` mit Zeilenumbruch meldet seine Höhe über
+    ``heightForWidth``, und diese Kette reißt in einem Layout ohne
+    Streckfaktor: der Satz „Noch keine Parameter …" bekam siebzehn Pixel und
+    war nach anderthalb Zeilen abgeschnitten. Die Breite steht fest — die
+    linke Spalte ist so breit, wie das Überlagerungsschema sie macht.
+    """
+    inner = LEFT_WIDTH - 2 * NORMAL
+    label.setMinimumHeight(label.heightForWidth(inner))
+
+
+def fit_to_rows(view: QAbstractItemView, rows: int) -> None:
+    """Setzt die Höhe einer Liste oder eines Baums auf ihren Inhalt.
+
+    Die linke Spalte baut ihre Karten ohne Streckfaktor, „so hoch wie ihr
+    Inhalt" — gemeint war das seit je, umgesetzt war es nicht: Qt gab jeder
+    Ansicht ihre eigene Mindesthöhe von etwa zwei Zeilen und ließ es dabei.
+    Der Objektbaum scrollte damit ab dem zweiten Körper, während unter der
+    Spalte sechshundert Pixel leer blieben — und der zweite Körper ist genau
+    das, was nach einer Teilung entsteht.
+    """
+    row_height = view.sizeHintForRow(0) if rows else 0
+    if row_height <= 0:
+        row_height = view.fontMetrics().height() + 2 * TIGHT
+    header = 0
+    if isinstance(view, QTreeWidget) and not view.isHeaderHidden():
+        head = view.header()
+        header = head.height() if head is not None else 0
+    frame = 2 * view.frameWidth()
+    shown = max(MIN_ROWS, min(MAX_ROWS, rows))
+    # Zwei Pixel Luft: ohne sie endet die letzte Zeile genau auf der Kante des
+    # Sichtfelds, und eine Zeile, die auf den Rahmen stößt, sieht abgeschnitten
+    # aus, auch wenn sie vollständig da ist.
+    view.setFixedHeight(header + frame + shown * row_height + 2)
 
 
 def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidget:

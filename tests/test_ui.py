@@ -2372,6 +2372,92 @@ def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> 
     assert needed <= LEFT_WIDTH, f"{needed} Pixel bei {LEFT_WIDTH} verfügbaren"
 
 
+def test_the_object_tree_grows_with_its_content(qt_app: QApplication) -> None:
+    """§2.5: die Karten der linken Spalte sind so hoch wie ihr Inhalt.
+
+    Gemeint war das seit je, umgesetzt war es nicht. Qt gab jeder Ansicht ihre
+    eigene Mindesthöhe von etwa zwei Zeilen und ließ es dabei — der Objektbaum
+    scrollte ab dem zweiten Körper, während unter der Spalte sechshundert Pixel
+    leer blieben. Der zweite Körper ist genau das, was nach einer Teilung
+    entsteht.
+    """
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.ui.panels import ObjectTree
+
+    tree = ObjectTree()
+    for name in ("Teil A", "Teil B", "Teil C", "Teil D", "Teil E", "Teil F"):
+        QTreeWidgetItem(tree.tree, [name, "20 × 20 × 20 mm"])
+    tree._fit()
+
+    row = tree.tree.sizeHintForRow(0)
+    assert row > 0
+    assert tree.tree.height() >= 6 * row, (
+        f"sechs Zeilen brauchen {6 * row} px, die Ansicht ist {tree.tree.height()} px hoch"
+    )
+
+
+def test_the_history_grows_with_its_content(qt_app: QApplication) -> None:
+    """Dasselbe für den Verlauf — bei vier Schritten waren zwei zu sehen."""
+    from app.core.types import Document, Operation, Transaction
+    from app.ui.panels import HistoryPanel
+
+    document = Document(format_version=1, app_version="0.0.1")
+    for number in range(1, 5):
+        document.ops.append(Operation(id=number, op="drill_hole", inputs=(), params={}))
+        document.transactions.append(
+            Transaction(id=f"t{number}", title=f"Schritt {number}", ops=(number,))
+        )
+
+    panel = HistoryPanel()
+    panel.show_document(document)
+
+    row = panel.list.sizeHintForRow(0)
+    assert row > 0
+    assert panel.list.height() >= 4 * row, (
+        f"vier Schritte brauchen {4 * row} px, die Liste ist {panel.list.height()} px hoch"
+    )
+
+
+def test_the_empty_parameter_note_is_readable(qt_app: QApplication) -> None:
+    """Der Satz im leeren Zustand war nach anderthalb Zeilen abgeschnitten.
+
+    Ein Label mit Umbruch meldet seine Höhe über ``heightForWidth``, und diese
+    Kette reißt in einem Layout ohne Streckfaktor: siebzehn Pixel für vier
+    Zeilen Text.
+    """
+    from app.core.types import Document
+    from app.ui.panels import ParameterPanel
+
+    panel = ParameterPanel()
+    panel.show_document(Document(format_version=1, app_version="0.0.1"))
+
+    label = panel._empty
+    line = label.fontMetrics().height()
+    assert label.minimumHeight() >= 2 * line, (
+        f"{label.minimumHeight()} px für einen Satz von {label.text()!r}"
+    )
+
+
+def test_a_very_long_list_stops_growing(qt_app: QApplication) -> None:
+    """Sonst schöbe ein Baum mit fünfzig Teilen den Verlauf aus dem Fenster."""
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.ui.panels import MAX_ROWS, ObjectTree
+
+    tree = ObjectTree()
+    for number in range(50):
+        QTreeWidgetItem(tree.tree, [f"Teil {number}", "10 × 10 × 10 mm"])
+    tree._fit()
+
+    row = tree.tree.sizeHintForRow(0)
+    header = tree.tree.header().height() + 2 * tree.tree.frameWidth() + 2
+    assert tree.tree.height() <= header + MAX_ROWS * row, (
+        f"{tree.tree.height()} px bei fünfzig Zeilen à {row} px"
+    )
+    assert tree.tree.height() < 50 * row, "die Deckelung greift nicht"
+
+
 def test_a_finding_says_which_body_it_means(qt_app: QApplication) -> None:
     """Zwei ausgehöhlte Körper meldeten zweimal denselben Satz.
 
