@@ -2415,38 +2415,40 @@ Platz, an dem die echten stehen.
 
 ### Offen
 
-- [ ] **`rtree` zerlegt den Speicher, und niemand ruft es auf.** Die Diagnose
-      steht, die Ursache liegt außerhalb. Schicht für Schicht an derselben
-      63-MB-Modelldatei eingegrenzt:
+- [ ] **Diese Maschine rechnet sporadisch falsch — es ist keine Bibliothek.**
+      Der Verdacht lag zuerst auf `rtree`; **das war falsch**, und die
+      Korrektur ist der eigentliche Ertrag. Weiter eingegrenzt, jede Variante
+      im eigenen Prozess:
 
       | Aufbau | Ergebnis |
       |---|---|
-      | nur XML lesen | 12/12 |
-      | XML + numpy | 12/12 |
-      | XML + numpy + Trimesh | 8/12 |
-      | dieselbe Runde ohne XML | 12/12 |
+      | fertige Zahlenfelder + Trimesh, `rtree` geladen | 30/30 |
+      | XML lesen + `np.array`, `rtree` geladen | 29/30 |
+      | dasselbe, **`rtree` gesperrt** | 27/30 |
+      | `np.array` über reine Python-Zeichenketten, **ohne XML** | 39/40 |
+      | `np.fromiter` über Pythons eigenes `int()` | 57/60 |
+      | reine Gleitkommaarbeit über SIMD | 40/40 |
+      | reine Python-Arithmetik auf 32 Kernen | 72/72 |
 
-      Es liegt **nicht** am XML-Leser: `lxml` verhält sich genauso. Es liegt
-      **nicht** an der Umwandlung: Pythons `int()` statt NumPys Parser stürzt
-      an derselben Stelle. Es liegt am geladenen `rtree`, das in diesen Läufen
-      nicht einmal benutzt wird:
+      Damit fallen alle Verdächtigen der Reihe nach aus: nicht `rtree` (ohne
+      es bleibt es rot, mit ihm und fertigen Feldern grün), nicht der
+      XML-Leser (`lxml` verhält sich gleich, und ohne XML bleibt es rot),
+      nicht NumPys Parser (Pythons `int()` ist genauso betroffen). Was übrig
+      bleibt, ist die Kombination aus **vielen Speicherobjekten und ihrer
+      Umwandlung** — und einmal kam dabei still eine falsche Summe heraus:
+      `9.599.875.422` statt `9.599.880.000`, ohne jede Ausnahme.
 
-      | Fassung | Verhalten |
-      |---|---|
-      | 1.4.1 / 1.4.0 | Prozess stirbt an einer Zugriffsverletzung |
-      | 1.3.0 | kein Absturz, sechs Fehler von dreißig |
-      | gesperrt | einer von dreißig |
+      Die Maschine: i9-13900K (Raptor Lake, die Familie mit dem bekannten
+      Instabilitätsproblem), Microcode 0x12F, 2×32 GB DDR5 auf 4800 MHz,
+      zwei unerwartete Neustarts in dreißig Tagen, keine WHEA-Einträge, nie
+      eine Speicherdiagnose gelaufen.
 
-      Neuinstallation ändert nichts; die Fassungen stimmen mit
-      `constraints.txt`. Das schönste Symptom: `ValueError: invalid literal
-      for int() with base 10: '98968'` — über eine gültige Zahl.
-
-      Zwei Stellen tragen jetzt ein Pflaster (`mesh.on_surface`,
-      `threemf._numbers_from`): einmal wiederholen, beim zweiten Fehlschlag
-      durchlassen. Das reicht für den Betrieb, nicht als Antwort. Offen bleibt
-      die Frage nach oben — ein Fehlerbericht bei `rtree`/`libspatialindex`
-      mit dieser Messreihe, und die Prüfung, ob `trimesh` sich ohne `rtree`
-      betreiben lässt (`nearby_faces` ist der einzige Nutzer).
+      **Nächster Schritt ist keiner am Code**, sondern MemTest86 oder die
+      Windows-Speicherdiagnose über Nacht. Bis dahin bleiben die zwei
+      Pflaster (`mesh.on_surface`, `threemf._numbers_from`): einmal
+      wiederholen, beim zweiten Fehlschlag durchlassen. Sie sind gegen ein
+      Symptom gebaut, nicht gegen eine Ursache — und wenn die Maschine der
+      Grund ist, sind sie genau richtig, denn dagegen hilft kein Code.
 - [ ] **Der Agent greift nicht zu den Bausteinen (0/13) — und die Regel ist
       nicht schuld.** Das war die erste Vermutung und sie war falsch.
       Nachgemessen wurde stattdessen die Werkzeugmenge, mit demselben Fall und
