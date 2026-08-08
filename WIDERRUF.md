@@ -19,8 +19,8 @@ Um Ihr Widerrufsrecht auszuüben, müssen Sie uns
 
 > RS Digital  
 > Robert Schneider  
-> [STRASSE UND HAUSNUMMER]  
-> [PLZ UND ORT]  
+> Aufbaustraße 10  
+> 96049 Bamberg  
 > Deutschland  
 > E-Mail: support@solidon3d.de
 
@@ -82,7 +82,7 @@ vorgeschrieben — eine formlose Erklärung genügt.*
 
 An
 RS Digital, Robert Schneider,
-[STRASSE UND HAUSNUMMER], [PLZ UND ORT], Deutschland
+Aufbaustraße 10, 96049 Bamberg, Deutschland
 E-Mail: support@solidon3d.de
 
 Hiermit widerrufe(n) ich/wir (\*) den von mir/uns (\*) abgeschlossenen Vertrag
