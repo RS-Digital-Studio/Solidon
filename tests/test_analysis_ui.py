@@ -1582,18 +1582,18 @@ def test_a_shadow_falls_beside_the_body_not_under_it() -> None:
 
     Der erste Versuch legte ihn genau unter den Körper — dort verdeckt ihn der
     Körper, und im Bild war schlicht kein Schatten. Er fällt deshalb entlang
-    einer festen Lichtrichtung, und sein Versatz wächst mit der Höhe: damit
-    beantwortet er nebenbei die Frage, für die er da ist, denn ein schwebendes
-    Teil hat seinen Schatten weiter weg.
+    der Lichtrichtung, und sein Versatz wächst mit der Höhe: damit beantwortet
+    er nebenbei die Frage, für die er da ist, denn ein schwebendes Teil hat
+    seinen Schatten weiter weg.
     """
     import numpy as np
 
-    from app.ui.viewport import SHADOW_DIRECTION, shadow_points
+    from app.ui.viewport import shadow_points
 
-    standing = shadow_points(np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 40.0]]))
+    standing = shadow_points(np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 40.0]]), (0.3, 0.4))
     assert standing[0][0] == pytest.approx(0.0), "was aufliegt, wirft an Ort und Stelle"
-    assert standing[1][0] == pytest.approx(40.0 * SHADOW_DIRECTION[0])
-    assert standing[1][1] == pytest.approx(40.0 * SHADOW_DIRECTION[1])
+    assert standing[1][0] == pytest.approx(40.0 * 0.3)
+    assert standing[1][1] == pytest.approx(40.0 * 0.4)
     assert all(point[2] == 0.0 for point in standing), "der Schatten liegt auf der Platte"
 
 
@@ -1603,9 +1603,142 @@ def test_a_body_below_the_plate_throws_nothing_forward() -> None:
 
     from app.ui.viewport import shadow_points
 
-    sunk = shadow_points(np.array([[5.0, 7.0, -12.0]]))
+    sunk = shadow_points(np.array([[5.0, 7.0, -12.0]]), (0.3, 0.4))
     assert sunk[0][0] == pytest.approx(5.0)
     assert sunk[0][1] == pytest.approx(7.0)
+
+
+def test_the_shadow_always_falls_away_from_the_viewer() -> None:
+    """Der Kern der Sache: das Licht hängt an der Kamera, der Schatten auch.
+
+    Hier stand eine feste Weltrichtung, und die passte zu keinem Blickwinkel.
+    In der Ansicht, mit der die Anwendung startete, fiel der Schatten mit 0,81
+    seiner Länge **auf den Betrachter zu** — genau davor, wo der Kommentar an
+    der Konstante versprach, er falle dahinter.
+    """
+    import numpy as np
+
+    from app.ui.viewport import VIEW_DIRECTIONS, shadow_direction
+
+    for name, (position, _up) in VIEW_DIRECTIONS.items():
+        if name in {"top", "bottom"}:
+            continue  # Senkrecht von oben gibt es kein Hinten; siehe unten.
+        direction = np.array([*shadow_direction(position, (0.0, 0.0, 0.0)), 0.0])
+        forward = np.array([-position[0], -position[1], 0.0])
+        forward /= np.linalg.norm(forward)
+        away = float(np.dot(direction / np.linalg.norm(direction), forward))
+        assert away > 0.9, f"in der Ansicht {name!r} läuft der Schatten nicht nach hinten"
+
+
+def test_looking_straight_down_the_shadow_still_has_a_direction() -> None:
+    """Eine Draufsicht hat kein Hinten, aber eine Oberkante.
+
+    Ohne diesen Fall teilte die Rechnung durch null, und der Schatten wäre in
+    der Ansicht verschwunden, in der man ihn zum Anordnen am ehesten braucht.
+    """
+    from app.ui.viewport import SHADOW_REACH, SHADOW_SIDE, shadow_direction
+
+    assert shadow_direction((0.0, 0.0, 100.0), (0.0, 0.0, 0.0)) == (SHADOW_SIDE, SHADOW_REACH)
+
+
+def test_the_shadow_keeps_its_length_whatever_the_view() -> None:
+    """Ein Teil darf beim Drehen nicht zu wachsen scheinen."""
+    import numpy as np
+
+    from app.ui.viewport import VIEW_DIRECTIONS, shadow_direction
+
+    lengths = [
+        float(np.linalg.norm(shadow_direction(position, (0.0, 0.0, 0.0))))
+        for position, _up in VIEW_DIRECTIONS.values()
+    ]
+    assert max(lengths) - min(lengths) < 1e-9
+
+
+def test_the_shadow_hull_holds_the_corners_and_drops_the_rest(qt_app: QApplication) -> None:
+    """Die Hülle wird einmal je Körper gerechnet, der Umriss je Ansicht.
+
+    Vorher lief eine Triangulierung über **jeden** Punkt des Anzeigenetzes, und
+    zwar bei jedem Szenenaufbau: 31 ms bei zwanzigtausend Dreiecken, 127 ms bei
+    zweiundachtzigtausend, je Körper und im Qt-Hauptthread. Für den Umriss
+    zählen nur die Punkte der konvexen Hülle — bei einem Quader acht von
+    Hunderten.
+    """
+    pv = pytest.importorskip("pyvista")
+    import numpy as np
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        body = pv.Box(bounds=(0.0, 20.0, 0.0, 20.0, 0.0, 30.0)).triangulate().subdivide(3)
+        hull = viewport._shadow_hull_of(body)
+        assert len(hull) == 8, "ein Quader hat acht Ecken, wie fein er auch vernetzt ist"
+        assert len(hull) < body.n_points / 10
+
+        outline = viewport._shadow_outline_of(hull, (0.5, 0.0))
+        assert outline is not None and outline.n_cells > 0
+        assert np.allclose(outline.points[:, 2], 0.05), "der Schatten liegt auf der Platte"
+        # 30 mm hoch, halber Versatz je Millimeter: der Umriss reicht 15 mm
+        # weiter als der Körper.
+        assert outline.points[:, 0].max() == pytest.approx(35.0)
+        assert outline.points[:, 1].max() == pytest.approx(20.0)
+    finally:
+        viewport.deleteLater()
+
+
+def test_thinning_a_dense_body_keeps_its_corners() -> None:
+    """Die Stichprobe hält die Form, die Stützpunkte halten die Ecken.
+
+    Bei einer feinen Kugel liegt jeder Punkt auf der Hülle — dort kostete die
+    Hüllenrechnung mehr als die Triangulierung, die sie ersetzen sollte. Sie
+    bekommt deshalb einen Deckel. Nur darf der die Ecken nicht wegwerfen: ein
+    gescannter Halter würfe sonst einen Schatten, der um Millimeter zu klein
+    ist.
+    """
+    import numpy as np
+
+    from app.ui.viewport import SHADOW_HULL_POINTS, _thinned_for_hull
+
+    rng = np.random.default_rng(7)
+    cloud = rng.uniform(-10.0, 10.0, size=(SHADOW_HULL_POINTS * 4, 3))
+    corners = np.array([[-40.0, -40.0, 0.0], [40.0, -40.0, 0.0], [0.0, 40.0, 30.0]])
+    # Die Ecken in die Mitte, wo keine Stichprobe sie zufällig erwischt.
+    points = np.vstack((cloud[: len(cloud) // 2], corners, cloud[len(cloud) // 2 :]))
+
+    thinned = _thinned_for_hull(points)
+    assert len(thinned) < len(points) / 3, "ausgedünnt wurde"
+    for corner in corners:
+        assert np.any(np.all(np.isclose(thinned, corner), axis=1)), f"{corner} fehlt"
+
+
+def test_a_small_body_is_not_thinned_at_all() -> None:
+    """Unter dem Deckel bleibt die Hülle exakt — sie ist dort ohnehin billig."""
+    import numpy as np
+
+    from app.ui.viewport import SHADOW_HULL_POINTS, _thinned_for_hull
+
+    points = np.zeros((SHADOW_HULL_POINTS, 3))
+    assert _thinned_for_hull(points) is points
+
+
+def test_a_body_too_thin_for_a_hull_still_gets_one(qt_app: QApplication) -> None:
+    """Ein ebener Körper hat keine räumliche Hülle — er wirft trotzdem.
+
+    Qhull gibt bei entarteten Punktwolken auf. Sein Fehler darf nicht der
+    Fehler der Ansicht werden: die paar Punkte gehen dann unverändert weiter.
+    """
+    pv = pytest.importorskip("pyvista")
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        flat = pv.PolyData([[0.0, 0.0, 5.0], [10.0, 0.0, 5.0], [10.0, 10.0, 5.0], [0.0, 10.0, 5.0]])
+        hull = viewport._shadow_hull_of(flat)
+        assert hull is not None and len(hull) == 4
+        assert viewport._shadow_outline_of(hull, (0.5, 0.5)) is not None
+    finally:
+        viewport.deleteLater()
 
 
 def test_a_list_in_the_bottom_bar_opens_upwards_when_it_has_to() -> None:

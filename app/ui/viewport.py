@@ -10,6 +10,7 @@ Die 3D-Ansicht braucht VTK. Lässt sich das auf einer Maschine nicht starten,
 
 from __future__ import annotations
 
+import math
 import os
 import weakref
 from typing import Any, Literal, cast
@@ -154,11 +155,55 @@ SHADOW_LIFT = 0.05
 SHADOW_COLOUR = "#11151a"
 SHADOW_OPACITY = 0.35
 
-#: Wohin das Licht fällt, als waagerechter Anteil je Millimeter Höhe. Nach
-#: hinten rechts, weil die Standardansicht von vorn links kommt — so tritt
-#: der Schatten hinter dem Teil hervor statt davor, wo er die Sicht auf die
-#: Vorderkante nähme.
-SHADOW_DIRECTION = (0.35, 0.45)
+#: Wie weit der Schatten je Millimeter Höhe vom Betrachter weg läuft, und wie
+#: weit dabei zur Seite.
+#:
+#: **Nicht in Weltkoordinaten, sondern zur Kamera.** Hier stand eine feste
+#: Richtung (0,35 / 0,45) mit der Begründung, die Standardansicht komme von
+#: vorn links und der Schatten trete deshalb hinter dem Teil hervor. Beides
+#: war falsch: die eigene Iso-Vorgabe steht vorn **rechts**, und die Ansicht,
+#: mit der die Anwendung startete, war ohnehin eine dritte — der Schatten fiel
+#: dort mit 0,81 seiner Länge auf den Betrachter zu, also genau davor.
+#:
+#: Der eigentliche Grund liegt tiefer: pyvistas Lichtsatz hängt an der Kamera.
+#: Ein Körper ist in jeder Ansicht von vorn beleuchtet, und eine feste
+#: Weltrichtung für den Schatten passt deshalb zu **keinem** Blickwinkel. Die
+#: Richtung folgt jetzt der Kamera (:func:`shadow_direction`), und damit tritt
+#: er in jeder Ansicht hinter dem Teil hervor — was der alte Kommentar
+#: versprach und keine Ansicht einlöste.
+#:
+#: Die Länge ist die alte: 0,57 mm Versatz je Millimeter Höhe.
+SHADOW_REACH = 0.54
+SHADOW_SIDE = 0.18
+
+#: Ab wann für die Schattenhülle nur noch eine Stichprobe gerechnet wird.
+#:
+#: Die Zahl ist ein Kostendeckel, keine Genauigkeitsgrenze: darunter ist die
+#: Hülle exakt und billig, darüber wäre sie teurer als das, was sie ersetzt.
+#: Siehe :func:`_thinned_for_hull`.
+SHADOW_HULL_POINTS = 4096
+
+#: Die vierzehn Hauptrichtungen — sechs Achsen und acht Raumdiagonalen.
+#:
+#: In jeder davon wird der äußerste Punkt gesucht und behalten, egal wie fein
+#: die Stichprobe ist. Damit überlebt jede Ecke eines kantigen Körpers das
+#: Ausdünnen, und der Schatten bleibt so groß wie das Teil.
+SUPPORT_DIRECTIONS: tuple[tuple[float, float, float], ...] = (
+    (1.0, 0.0, 0.0),
+    (-1.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0),
+    (0.0, -1.0, 0.0),
+    (0.0, 0.0, 1.0),
+    (0.0, 0.0, -1.0),
+    (1.0, 1.0, 1.0),
+    (1.0, 1.0, -1.0),
+    (1.0, -1.0, 1.0),
+    (1.0, -1.0, -1.0),
+    (-1.0, 1.0, 1.0),
+    (-1.0, 1.0, -1.0),
+    (-1.0, -1.0, 1.0),
+    (-1.0, -1.0, -1.0),
+)
 
 #: Wie weit der gefüllte Grund unter dem Raster liegt. Nur so viel, dass
 #: beide nicht um dieselbe Tiefe streiten.
@@ -253,7 +298,57 @@ DISPLAY_DECIMATION_TARGET = 200_000
 FEATURE_EDGE_LIMIT = DISPLAY_DECIMATION_TARGET
 
 
-def shadow_points(points: Any) -> Any:
+def shadow_direction(position: Any, focal_point: Any) -> tuple[float, float]:
+    """Wohin der Schatten aus dieser Kamerastellung fällt (§18.6).
+
+    Vom Betrachter weg und ein Stück nach rechts. Der Lichtsatz von pyvista
+    hängt an der Kamera — ein Körper ist also in jeder Ansicht von vorn
+    beleuchtet, und ein Schatten, der das nicht mitmacht, sieht in jeder
+    Ansicht falsch aus. Er macht es jetzt mit.
+
+    Steht die Kamera senkrecht darüber, gibt es kein Hinten. Dann fällt der
+    Schatten nach hinten rechts, denn eine Draufsicht hat eine Oberkante, und
+    die ist dort, wo bei jeder anderen Ansicht das Hinten liegt.
+
+    Als eigene Funktion, damit die Rechnung ohne Plotter prüfbar bleibt.
+    """
+    import numpy as np
+
+    forward = np.asarray(focal_point, dtype=float)[:2] - np.asarray(position, dtype=float)[:2]
+    length = float(np.linalg.norm(forward))
+    if length < EPS_GEOM:
+        return (SHADOW_SIDE, SHADOW_REACH)
+    forward /= length
+    # Nach rechts im Bild: die Blickrichtung um 90 Grad gedreht.
+    side = np.array([-forward[1], forward[0]])
+    step = forward * SHADOW_REACH + side * SHADOW_SIDE
+    return (float(step[0]), float(step[1]))
+
+
+def _thinned_for_hull(points: Any) -> Any:
+    """So viele Punkte, wie die Schattenhülle braucht — nicht mehr.
+
+    Bei einem Quader ist die Hülle billiger als die Triangulierung, die sie
+    ersetzt: acht Punkte statt Tausender. Bei einer feinen Kugel liegt **jeder**
+    Punkt auf der Hülle, und die Rechnung kostete mehr als der alte Weg (59 ms
+    gegen 33 bei zwanzigtausend Dreiecken). Ein Körper mit so vielen Punkten
+    ist rund oder gescannt; für ihn genügt eine Stichprobe.
+
+    Die Stichprobe hält die Form, die Stützpunkte halten die Ecken: was in
+    einer der vierzehn Hauptrichtungen am weitesten außen liegt, kommt immer
+    mit. Ohne sie fiele der Schatten eines gescannten Halters um Millimeter zu
+    klein aus, weil die Stichprobe seine Ecken verfehlt.
+    """
+    import numpy as np
+
+    if len(points) <= SHADOW_HULL_POINTS:
+        return points
+    step = len(points) // SHADOW_HULL_POINTS + 1
+    corners = np.unique(np.argmax(points @ np.asarray(SUPPORT_DIRECTIONS).T, axis=0))
+    return np.vstack((points[::step], points[corners]))
+
+
+def shadow_points(points: Any, direction: tuple[float, float]) -> Any:
     """Wohin die Punkte eines Körpers als Schatten fallen (§18.6).
 
     Jeder Punkt fällt entlang des Lichts auf die Platte: der Versatz ist seine
@@ -270,8 +365,8 @@ def shadow_points(points: Any) -> Any:
     height = np.maximum(grid[:, 2], 0.0)
     return np.column_stack(
         (
-            grid[:, 0] + height * SHADOW_DIRECTION[0],
-            grid[:, 1] + height * SHADOW_DIRECTION[1],
+            grid[:, 0] + height * direction[0],
+            grid[:, 1] + height * direction[1],
             np.zeros(len(grid)),
         )
     )
@@ -685,6 +780,13 @@ class Viewport(QWidget):
         self._occlusion_applied = False
         self._edge_actors: list[Any] = []
         self._shadow_actors: list[Any] = []
+        self._shadow_hulls: dict[ObjectId, Any] = {}
+        """Je Körper die konvexe Hülle seiner Punkte, für den Schattenwurf.
+        Einmal je Szenenaufbau gerechnet — ein Ansichtswechsel projiziert nur
+        noch daraus (§18.6)."""
+        self._shadow_cast: tuple[float, float] = (SHADOW_SIDE, SHADOW_REACH)
+        """Die Lichtrichtung, mit der die Schatten im Bild stehen. Sie folgt
+        der Kamera; wer sie schon getroffen hat, zeichnet nicht neu."""
         self._edge_colour = "#4c5258"
         self._feature_overlay = False
         self._feature_actors: list[Any] = []
@@ -742,6 +844,35 @@ class Viewport(QWidget):
         # Schaltet das Picking gleich mit ein — ein Stilwechsel und der erste
         # Aufbau sind für die Ansicht dasselbe.
         self.set_navigation("slicer")
+        self._watch_camera()
+        # **Die eigene Iso, nicht die von pyvista.** Ohne diese Zeile erbte die
+        # Anwendung pyvistas Stellung über (1, 1, 1) — und ihre eigene Vorgabe
+        # aus `VIEW_DIRECTIONS` bekam nur zu sehen, wer „Isometrisch" im Menü
+        # wählte. Wer das tat, sprang aus einer Ansicht in eine andere, obwohl
+        # er die zu sehen glaubte, in der er stand.
+        self.view_from("iso")
+
+    def _watch_camera(self) -> None:
+        """Am Ende jeder Kamerabewegung die Schatten nachziehen (§18.6).
+
+        Am Interactor und nicht am Interaktionsstil: den Stil tauscht jeder
+        Schemawechsel aus, und der Orientierungswürfel dreht die Kamera an ihm
+        vorbei. ``EndInteractionEvent`` bekommt beides mit.
+
+        Schwach gehalten wie bei :meth:`set_navigation` — VTK hält den
+        Beobachter, und eine starke Referenz von dort auf den Viewport überlebt
+        jedes Schließen.
+        """
+        if self.plotter is None:
+            return
+        weak = weakref.ref(self)
+
+        def on_end(*_: Any) -> None:
+            view = weak()
+            if view is not None:
+                view._redraw_shadows()
+
+        self.plotter.interactor.AddObserver("EndInteractionEvent", on_end)
 
     # --- Darstellungsqualität (§18.1) -------------------------------------------
 
@@ -839,7 +970,39 @@ class Viewport(QWidget):
         """
         return self._map is None
 
-    def _shadow_outline_of(self, surface: Any) -> Any:
+    def _shadow_direction(self) -> tuple[float, float]:
+        """Die Lichtrichtung, die zur aktuellen Kamerastellung gehört."""
+        if self.plotter is None:
+            return (SHADOW_SIDE, SHADOW_REACH)
+        camera = self.plotter.camera
+        return shadow_direction(camera.position, camera.focal_point)
+
+    def _shadow_hull_of(self, surface: Any) -> Any:
+        """Die Punkte, aus denen ein Körper seinen Schatten wirft.
+
+        Die konvexe Hülle in **drei** Dimensionen, und zwar einmal je Körper und
+        Szenenaufbau. Sie hängt nicht an der Lichtrichtung: welcher Punkt den
+        Umriss des Schattens bestimmt, wechselt mit ihr, aber es ist immer
+        einer von diesen. Damit kostet ein Ansichtswechsel nur noch die
+        Projektion und die ebene Hülle darüber — statt einer Triangulierung
+        über jeden Punkt des Anzeigenetzes (gemessen: 31 ms bei zwanzigtausend
+        Dreiecken, 127 ms bei zweiundachtzigtausend, je Körper).
+        """
+        import numpy as np
+        from scipy.spatial import ConvexHull, QhullError
+
+        points = _thinned_for_hull(np.asarray(surface.points, dtype=float))
+        if len(points) < 4:
+            return points if len(points) >= 3 else None
+        try:
+            return points[ConvexHull(points).vertices]
+        except QhullError as problem:
+            # Ein ebener oder entarteter Körper hat keine räumliche Hülle. Seine
+            # Punkte sind dann ohnehin wenige — sie gehen unverändert weiter.
+            _log.info("shadow hull unavailable: %s", problem)
+            return points
+
+    def _shadow_outline_of(self, hull_points: Any, direction: tuple[float, float]) -> Any:
         """Der Schatten eines Körpers auf der Platte, entlang der Lichtrichtung.
 
         **Nicht** über ``enable_shadows``. Der VTK-Schattenwurf wurde in vier
@@ -852,21 +1015,19 @@ class Viewport(QWidget):
         Die Projektion kann alles, was hier gebraucht wird, und nichts davon
         hängt am Treiber. **Schräg und nicht senkrecht:** senkrecht projiziert
         liegt der Schatten exakt unter dem Körper und ist von ihm verdeckt — im
-        Bild war er schlicht nicht da. Entlang einer festen Lichtrichtung
-        geworfen tritt er seitlich hervor, und weil sein Versatz mit der Höhe
-        wächst, beantwortet er nebenbei die Frage, die er beantworten soll:
-        ein schwebendes Teil hat seinen Schatten weiter weg.
+        Bild war er schlicht nicht da. Entlang der Lichtrichtung geworfen tritt
+        er seitlich hervor, und weil sein Versatz mit der Höhe wächst,
+        beantwortet er nebenbei die Frage, die er beantworten soll: ein
+        schwebendes Teil hat seinen Schatten weiter weg.
 
         Die konvexe Hülle ist bewusst gröber als der echte Umriss — ein Schatten
         zeigt den Ort, nicht die Form; wer die Form sucht, dreht die Ansicht.
         """
-        import numpy as np
         import pyvista as pv
 
-        points = np.asarray(surface.points, dtype=float)
-        if len(points) < 3:
+        if hull_points is None or len(hull_points) < 3:
             return None
-        cast = shadow_points(points)
+        cast = shadow_points(hull_points, direction)
         try:
             hull = pv.PolyData(cast).delaunay_2d()
         except Exception as problem:  # pragma: no cover - hängt an der Punktlage
@@ -905,6 +1066,11 @@ class Viewport(QWidget):
         for actor in self._shadow_actors:
             self.plotter.remove_actor(actor, render=False)
         self._shadow_actors.clear()
+        # Die Hüllen gehören zu den Körpern, die gerade weggeräumt wurden. Ein
+        # Rest davon hieße: ein gelöschter Körper wirft beim nächsten Drehen
+        # weiter seinen Schatten.
+        self._shadow_hulls.clear()
+        self._shadow_cast = self._shadow_direction()
         self._uncapped = False
         if result is None:
             # Und im Bild dasselbe: ohne dieses Aufräumen blieben die orangen
@@ -1070,12 +1236,19 @@ class Viewport(QWidget):
         """Den Kontaktschatten dieses Körpers auf die Platte legen."""
         if self.plotter is None or not self.contact_shadows:
             return
-        hull = self._shadow_outline_of(surface)
-        if hull is None:
+        self._shadow_hulls[object_id] = self._shadow_hull_of(surface)
+        self._place_shadow(object_id, self._shadow_direction())
+
+    def _place_shadow(self, object_id: ObjectId, direction: tuple[float, float]) -> None:
+        """Den Schatten eines Körpers aus seiner gemerkten Hülle setzen."""
+        if self.plotter is None:
+            return
+        outline = self._shadow_outline_of(self._shadow_hulls.get(object_id), direction)
+        if outline is None:
             return
         self._shadow_actors.append(
             self.plotter.add_mesh(
-                hull,
+                outline,
                 color=SHADOW_COLOUR,
                 opacity=SHADOW_OPACITY,
                 lighting=False,
@@ -1084,6 +1257,29 @@ class Viewport(QWidget):
                 pickable=False,
             )
         )
+
+    def _redraw_shadows(self) -> None:
+        """Die Schatten der neuen Kamerastellung anpassen (§18.6).
+
+        Am Ende einer Drehung, nicht während ihr: die Hüllen liegen bereit, die
+        Projektion darüber kostet Bruchteile einer Millisekunde — aber sie je
+        Bild zu rechnen wäre Arbeit für eine Zwischenstellung, die niemand
+        ansieht.
+        """
+        # Läuft eine Analysekarte, steht hier ohnehin nichts: `_draw_shadow`
+        # legt dann keine Hülle ab, und `show_scene` räumt die alten weg.
+        if self.plotter is None or not self._shadow_hulls:
+            return
+        direction = self._shadow_direction()
+        if math.dist(self._shadow_cast, direction) < EPS_GEOM:
+            return
+        self._shadow_cast = direction
+        for actor in self._shadow_actors:
+            self.plotter.remove_actor(actor, render=False)
+        self._shadow_actors.clear()
+        for object_id in self._shadow_hulls:
+            self._place_shadow(object_id, direction)
+        self.plotter.render()
 
     def set_hidden(self, hidden: frozenset[ObjectId]) -> None:
         """Welche Körper nicht gezeichnet werden (§18.8).
@@ -2333,6 +2529,7 @@ class Viewport(QWidget):
         position, up = VIEW_DIRECTIONS[direction]
         self.plotter.camera_position = [position, (0.0, 0.0, 0.0), up]
         self.plotter.reset_camera()
+        self._redraw_shadows()
 
     # --- navigation (§2.9) ------------------------------------------------------
 

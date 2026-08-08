@@ -180,13 +180,40 @@ prüft nie etwas.
 
 Der Kontaktschatten ist **selbst projiziert**, nicht `enable_shadows`: VTKs
 Schattenwurf verschattet ganze Seitenflächen schwarz und lässt die Ränder der
-Platte auslaufen. Geworfen wird entlang einer festen Lichtrichtung — senkrecht
-projiziert liegt der Schatten unter dem Körper und ist von ihm verdeckt.
+Platte auslaufen. Geworfen wird schräg — senkrecht projiziert liegt der
+Schatten unter dem Körper und ist von ihm verdeckt.
+
+**Der Schatten folgt der Kamera, weil das Licht es tut.** pyvistas Lichtsatz
+hängt an der Kamera: ein Körper ist in jeder Ansicht von vorn beleuchtet. Eine
+feste Weltrichtung für den Schatten passt deshalb zu *keinem* Blickwinkel —
+sie stand hier, mit einer Begründung, die auf eine Standardansicht verwies, die
+es so nicht gab. `shadow_direction` leitet sie aus der Kamerastellung ab,
+`_redraw_shadows` zieht sie bei jedem Ansichtswechsel nach. Der Beobachter
+hängt am **Interactor** (`EndInteractionEvent`) und nicht am Interaktionsstil:
+den tauscht jeder Schemawechsel aus, und der Orientierungswürfel dreht an ihm
+vorbei.
+
+**Die Anwendung setzt ihre Startkamera selbst.** Ohne `view_from("iso")` beim
+Aufbau erbt sie pyvistas Stellung über (1, 1, 1), und die eigene Vorgabe aus
+`VIEW_DIRECTIONS` sieht nur, wer „Isometrisch" im Menü wählt — ein Sprung aus
+einer Ansicht in eine andere, die man zu sehen glaubte.
+
+**Was je Bild neu gerechnet wird, wird je Körper vorbereitet.** Der
+Schattenumriss lief als Triangulierung über jeden Punkt des Anzeigenetzes: 129
+ms bei zweiundachtzigtausend Dreiecken, je Körper und Szenenaufbau, im
+Qt-Hauptthread. Die konvexe Hülle steht einmal (`_shadow_hull_of`), ein
+Ansichtswechsel projiziert nur noch daraus. Und sie bekommt einen Kostendeckel:
+bei einer feinen Kugel liegt *jeder* Punkt auf der Hülle, und die Rechnung wäre
+teurer als das, was sie ersetzt. Über `SHADOW_HULL_POINTS` genügt eine
+Stichprobe — plus die äußersten Punkte in vierzehn Hauptrichtungen, sonst
+verliert ein gescannter Halter seine Ecken.
 
 Zahlen an Bildern werden **angesehen, nicht nur gerechnet**. Der Radius der
 Umgebungsverdeckung stand mit plausibler Begründung auf dem schwächsten Wert
 seiner Messreihe; der doppelte ViewCube fiel erst im neu aufgenommenen
-Handbuchbild auf.
+Handbuchbild auf. Beim Schatten war es dieselbe Sorte Fehler: der Kommentar
+beschrieb, wohin er fallen sollte, und niemand hatte nachgesehen, wohin er
+fiel.
 
 **pyvista-Widgets werden nie weiterbenutzt, immer frisch gebaut.** Das
 `AffineWidget3D` rechnet gegen die `user_matrix` seines Actors und merkt sie
