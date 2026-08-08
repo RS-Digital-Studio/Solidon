@@ -103,15 +103,13 @@ eigenes Produkt: **netcup Webhosting 2000**.
 
 ## Einrichtung — einmalig
 
-1. **Webhosting bestellen, Domain gleich mit.**
+1. **Webhosting bestellen, Domain gleich mit.** ✓ Bestellt am 08.08.2026.
    [Webhosting 2000](https://www.netcup.com/de/hosting/webhosting/webhosting-2000-nue)
    — Stand 07.08.2026: **75 GB** SSD, SSH/SFTP, unbegrenzt
    Let's-Encrypt-Zertifikate, **12 Monate Mindestlaufzeit**, rund 3–4 €/Monat
-   je nach Aktion. netcup hat die Preise im Mai 2026 erhöht und die Pakete
-   umgeschnitten — die Zahlen vor der Bestellung am Warenkorb gegenprüfen.
-   `solidon3d.de` dabei als **Inklusiv- oder Zusatzdomain des Pakets**
-   registrieren, nicht als externe Domain: dann verwaltet netcup die Zone
-   selbst, und Schritt 2 bis 4 der alten Anleitung entfallen ersatzlos.
+   je nach Aktion. `solidon3d.de` dabei als **Inklusiv- oder Zusatzdomain des
+   Pakets** registrieren, nicht als externe Domain: dann verwaltet netcup die
+   Zone selbst, und Schritt 2 bis 4 der alten Anleitung entfallen ersatzlos.
 2. **Domain dem Webhosting zuweisen.** Im
    [CCP](https://www.customercontrolpanel.de/) beim Paket unter *Domains*.
    Weil die Domain dort registriert ist, zeigen ihre Nameserver bereits auf
@@ -150,10 +148,11 @@ eigenes Produkt: **netcup Webhosting 2000**.
 ## Vor der Veröffentlichung
 
 - Platzhalter ersetzen: Anschrift in `impressum.html` und `WIDERRUF.md`,
-  Hoster in `datenschutz.html`, Zahlungsdienstleister in `AGB.md` (die
-  Kontaktadresse support@solidon3d.de steht schon). Danach
-  `tools/make_legal.py` laufen lassen — die Entwurfshinweise fallen dann von
-  selbst weg.
+  Zahlungsdienstleister in `AGB.md` (die Kontaktadresse support@solidon3d.de
+  steht schon; der Hoster in `datenschutz.html` ist seit der Bestellung
+  eingetragen — netcup). Danach `tools/make_legal.py` laufen lassen — die
+  Entwurfshinweise fallen dann von selbst weg. Der dort zugesagte Vertrag
+  über Auftragsverarbeitung (Art. 28 DSGVO) wird im netcup-CCP abgeschlossen.
 - **Die Rechtstexte fachlich prüfen lassen.** `EULA.md`, `AGB.md` und
   `WIDERRUF.md` sind sorgfältig geschriebene Entwürfe und keine
   Rechtsberatung. Vor dem ersten Verkauf gehören sie einem Anwalt vorgelegt,

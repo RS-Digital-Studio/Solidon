@@ -2949,8 +2949,12 @@ Konzeptpapiere und die Roadmap — gegen den Code, nicht gegen die Erinnerung.
 
 ### Offen
 
-- **Anschrift, Hoster, Zahlungsdienstleister.** Drei Platzhalter, drei
-  Entwurfshinweise. Ohne sie geht die Seite nicht online.
+- **Anschrift und Zahlungsdienstleister.** Der Hoster steht seit dem
+  08.08.2026: netcup Webhosting samt Domain sind bestellt, der Platzhalter in
+  `datenschutz.html` ist ersetzt (netcup GmbH, Emmy-Noether-Straße 10,
+  76131 Karlsruhe — die aktuelle Anschrift, nicht mehr die Daimlerstraße).
+  Es bleiben die Anschrift in Impressum und Widerruf und der
+  Zahlungsdienstleister in den AGB. Ohne sie geht die Seite nicht online.
 - **Die Rechtstexte fachlich prüfen lassen.** Sie sind sorgfältige Entwürfe
   und keine Rechtsberatung. Die Widerrufsbelehrung wirkt nur, wenn der
   Bestellvorgang die Zustimmung nach § 356 Abs. 5 BGB abfragt — der Text
@@ -2993,8 +2997,9 @@ beiden Themen über WCAG AA · `prefers-reduced-motion` schaltet alles ab ·
 die sechs Zahlen der Startseite testgedeckt · beide PDFs mit richtigem
 Deckblatt.
 
-**Weiterhin offen und nicht von hier zu lösen:** Anschrift, Hoster und
-Zahlungsdienstleister · die fachliche Prüfung der Rechtstexte · und der
+**Weiterhin offen und nicht von hier zu lösen:** Anschrift und
+Zahlungsdienstleister (der Hoster ist seit der netcup-Bestellung am
+08.08.2026 eingetragen) · die fachliche Prüfung der Rechtstexte · und der
 Punkt, der vor den ersten Verkauf gehört: `require()` in
 `app/core/activation` hat noch keinen Aufrufer, ein abgelaufener Testlauf
 sperrt heute nichts.
