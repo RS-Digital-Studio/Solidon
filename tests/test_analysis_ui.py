@@ -1741,6 +1741,132 @@ def test_a_body_too_thin_for_a_hull_still_gets_one(qt_app: QApplication) -> None
         viewport.deleteLater()
 
 
+def test_a_body_standing_on_another_throws_its_shadow_onto_it(qt_app: QApplication) -> None:
+    """Sonst löst sich der Schatten von dem ab, was ihn wirft.
+
+    Ein Turm auf einer zwölf Millimeter hohen Grundplatte warf seinen Schatten
+    auf die Druckplatte: gemessen ab null statt ab der Fläche, auf der er
+    steht, und damit um die volle Bauhöhe versetzt. Im Bild tauchte er erst
+    neben der Grundplatte auf — ein Fleck ohne Verbindung zu dem, was ihn
+    wirft.
+    """
+    pytest.importorskip("pyvista")
+    import numpy as np
+
+    from app.ui.viewport import Viewport, outline_of
+
+    viewport = Viewport()
+    try:
+        plate = np.array(
+            [[x, y, z] for x in (-40.0, 40.0) for y in (-40.0, 40.0) for z in (0.0, 12.0)]
+        )
+        tower = np.array(
+            [[x, y, z] for x in (0.0, 10.0) for y in (0.0, 10.0) for z in (12.0, 52.0)]
+        )
+        viewport._shadow_ground["plate"] = (0.0, 12.0, outline_of(plate))
+        viewport._shadow_ground["tower"] = (12.0, 52.0, outline_of(tower))
+
+        catchers = viewport._shadow_catchers("tower")
+        assert [ground for ground, _window in catchers] == [0.0, 12.0], (
+            "die Grundplatte fängt, die Druckplatte fängt daneben"
+        )
+
+        ground, window = catchers[1]
+        outline = viewport._shadow_outline_of(tower, (0.5, 0.0), ground, window)
+        assert outline is not None
+        assert np.allclose(outline.points[:, 2], 12.05), "er liegt auf der Grundplatte"
+        # 40 mm über ihr, halber Versatz je Millimeter: 20 mm weiter als der
+        # Turm, nicht 26 wie bei der Rechnung ab null.
+        assert outline.points[:, 0].max() == pytest.approx(30.0)
+    finally:
+        viewport.deleteLater()
+
+
+def test_a_body_on_the_plate_has_only_the_plate_below_it(qt_app: QApplication) -> None:
+    """Ein Körper daneben ist kein Boden, solange er nicht darunter liegt."""
+    pytest.importorskip("pyvista")
+    import numpy as np
+
+    from app.ui.viewport import Viewport, outline_of
+
+    viewport = Viewport()
+    try:
+        neighbour = np.array(
+            [[x, y, z] for x in (50.0, 60.0) for y in (0.0, 10.0) for z in (0.0, 30.0)]
+        )
+        viewport._shadow_ground["neighbour"] = (0.0, 30.0, outline_of(neighbour))
+        viewport._shadow_ground["mine"] = (0.0, 20.0, outline_of(neighbour + 100.0))
+        assert [ground for ground, _window in viewport._shadow_catchers("mine")] == [0.0]
+    finally:
+        viewport.deleteLater()
+
+
+def test_the_shadow_is_cut_at_the_edge_of_the_plate(qt_app: QApplication) -> None:
+    """Außerhalb der Platte liegt er auf blankem Hintergrund.
+
+    Bei aufgezogener Explosion oder einem Körper weit vom Ursprung war das ein
+    dunkler Umriss ohne Fläche darunter — die einzige Stelle, an der die
+    Ansicht Boden behauptete, wo keiner ist.
+    """
+    pytest.importorskip("pyvista")
+    import numpy as np
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        viewport._bed_extent = (100.0, 100.0)
+        body = np.array([[x, y, z] for x in (40.0, 80.0) for y in (0.0, 10.0) for z in (0.0, 20.0)])
+        ground, window = viewport._shadow_catchers("body")[0]
+        outline = viewport._shadow_outline_of(body, (0.5, 0.0), ground, window)
+        assert outline is not None
+        assert outline.points[:, 0].max() == pytest.approx(50.0), "an der Kante ist Schluss"
+
+        far = body + np.array([200.0, 0.0, 0.0])
+        assert viewport._shadow_outline_of(far, (0.5, 0.0), ground, window) is None, (
+            "was ganz daneben fällt, wirft gar keinen Schatten"
+        )
+    finally:
+        viewport.deleteLater()
+
+
+def test_without_a_build_volume_nothing_is_cut(qt_app: QApplication) -> None:
+    """Ohne gezeigten Bauraum gibt es keine Kante, an der zu schneiden wäre."""
+    pytest.importorskip("pyvista")
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        assert viewport._shadow_catchers("body") == [(0.0, None)]
+    finally:
+        viewport.deleteLater()
+
+
+def test_clipping_keeps_the_part_inside_and_cuts_the_rest() -> None:
+    """Sutherland und Hodgman, an einem Fall mit bekannter Antwort.
+
+    Ein Quadrat, das zur Hälfte über das Fenster hinausragt, wird an dessen
+    Kante abgeschnitten — nicht weggelassen und nicht ganz behalten.
+    """
+    import numpy as np
+
+    from app.ui.viewport import bed_outline, clip_polygon
+
+    window = bed_outline(100.0, 100.0)
+    half_out = np.array([[30.0, -10.0], [70.0, -10.0], [70.0, 10.0], [30.0, 10.0]])
+    clipped = clip_polygon(half_out, window)
+    assert len(clipped) >= 3
+    assert clipped[:, 0].max() == pytest.approx(50.0)
+    assert clipped[:, 0].min() == pytest.approx(30.0)
+
+    inside = np.array([[-10.0, -10.0], [10.0, -10.0], [10.0, 10.0], [-10.0, 10.0]])
+    assert np.allclose(clip_polygon(inside, window), inside), "was drin liegt, bleibt wie es ist"
+
+    outside = inside + 200.0
+    assert len(clip_polygon(outside, window)) == 0
+
+
 def test_a_list_in_the_bottom_bar_opens_upwards_when_it_has_to() -> None:
     """Qt hält eine Aufklappliste am Bildschirm, nicht am Fenster.
 

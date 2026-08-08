@@ -348,27 +348,130 @@ def _thinned_for_hull(points: Any) -> Any:
     return np.vstack((points[::step], points[corners]))
 
 
-def shadow_points(points: Any, direction: tuple[float, float]) -> Any:
+def shadow_points(points: Any, direction: tuple[float, float], ground: float = 0.0) -> Any:
     """Wohin die Punkte eines Körpers als Schatten fallen (§18.6).
 
-    Jeder Punkt fällt entlang des Lichts auf die Platte: der Versatz ist seine
-    Höhe mal der waagerechte Anteil der Lichtrichtung. Punkte unter der Platte
-    werfen keinen Schatten nach vorn — ihre Höhe zählt als null, sonst zöge ein
-    Teil, das zur Hälfte versunken ist, seinen Schatten in die falsche
-    Richtung.
+    Jeder Punkt fällt entlang des Lichts auf die auffangende Fläche: der
+    Versatz ist sein Abstand zu ihr mal der waagerechte Anteil der
+    Lichtrichtung. Punkte unterhalb der Fläche werfen keinen Schatten nach
+    vorn — ihr Abstand zählt als null, sonst zöge ein Teil, das zur Hälfte
+    versunken ist, seinen Schatten in die falsche Richtung.
+
+    ``ground`` ist die Höhe dieser Fläche. Null ist die Platte; steht ein
+    Körper auf einem anderen, ist es dessen Oberkante — sonst rutschte der
+    Schatten um die volle Bauhöhe weg und läge neben dem Körper, der ihn
+    auffängt.
 
     Als eigene Funktion, damit die Rechnung ohne Plotter prüfbar bleibt.
     """
     import numpy as np
 
     grid = np.asarray(points, dtype=float)
-    height = np.maximum(grid[:, 2], 0.0)
+    height = np.maximum(grid[:, 2] - ground, 0.0)
     return np.column_stack(
         (
             grid[:, 0] + height * direction[0],
             grid[:, 1] + height * direction[1],
-            np.zeros(len(grid)),
+            np.full(len(grid), ground),
         )
+    )
+
+
+def outline_of(points: Any) -> Any:
+    """Der geordnete Umriss einer ebenen Punktwolke — oder ``None``.
+
+    Die konvexe Hülle in zwei Dimensionen, gegen den Uhrzeigersinn. Sie ersetzt
+    die frühere Triangulierung: gebraucht wird ein Rand, den sich beschneiden
+    lässt, und den gibt Qhull geordnet heraus. Eine Triangulierung gibt Dreiecke
+    in beliebiger Folge, und aus denen einen Rand zurückzugewinnen wäre Arbeit
+    für ein Ergebnis, das hier schon vorliegt.
+    """
+    import numpy as np
+    from scipy.spatial import ConvexHull, QhullError
+
+    grid = np.asarray(points, dtype=float)[:, :2]
+    if len(grid) < 3:
+        return None
+    try:
+        return grid[ConvexHull(grid).vertices]
+    except QhullError as problem:
+        # Alle Punkte auf einer Linie: das ist kein Umriss, und ein Schatten
+        # ohne Fläche ist keiner.
+        _log.info("outline unavailable: %s", problem)
+        return None
+
+
+def _edge_crossing(start: Any, end: Any, corner: Any, edge: Any) -> Any:
+    """Wo die Strecke von ``start`` nach ``end`` die Gerade durch ``corner``
+    kreuzt."""
+    import numpy as np
+
+    along = end - start
+    denominator = edge[0] * along[1] - edge[1] * along[0]
+    if abs(denominator) < EPS_GEOM:
+        return np.asarray(start, dtype=float)
+    offset = corner - start
+    share = (edge[0] * offset[1] - edge[1] * offset[0]) / denominator
+    return start + share * along
+
+
+def clip_polygon(polygon: Any, window: Any) -> Any:
+    """Was von einem konvexen Polygon innerhalb eines zweiten übrig bleibt.
+
+    Sutherland und Hodgman: gegen jede Kante des Fensters wird das Polygon
+    einmal beschnitten, und was hinter einer Kante liegt, wird an ihr
+    abgeschnitten statt weggelassen. Beide Polygone müssen konvex und gegen den
+    Uhrzeigersinn geordnet sein — beides liefert :func:`outline_of`.
+
+    Wozu: ein Schatten, der über die Kante seiner Fläche hinausläuft, liegt auf
+    nichts. Bei aufgezogener Explosion oder einem Körper weit vom Ursprung war
+    das ein dunkler Fleck auf blankem Hintergrund — sichtbar falsch, und der
+    einzige Ort, an dem die Ansicht behauptete, es gebe dort Boden.
+
+    Leer heraus heißt: der Schatten fällt ganz daneben. Dann wird keiner
+    gezeichnet, und das ist die richtige Aussage.
+    """
+    import numpy as np
+
+    current = np.asarray(polygon, dtype=float)
+    frame = np.asarray(window, dtype=float)
+    for index in range(len(frame)):
+        if len(current) < 3:
+            return np.empty((0, 2))
+        corner = frame[index]
+        edge = frame[(index + 1) % len(frame)] - corner
+        inside = (
+            edge[0] * (current[:, 1] - corner[1]) - edge[1] * (current[:, 0] - corner[0])
+        ) >= -EPS_GEOM
+        if inside.all():
+            continue
+        kept: list[Any] = []
+        for position, point in enumerate(current):
+            following = (position + 1) % len(current)
+            if inside[position]:
+                kept.append(point)
+            if bool(inside[position]) != bool(inside[following]):
+                kept.append(_edge_crossing(point, current[following], corner, edge))
+        current = np.asarray(kept, dtype=float) if len(kept) >= 3 else np.empty((0, 2))
+    return current
+
+
+def bed_outline(width: float, depth: float) -> Any:
+    """Die vier Ecken der Druckplatte, gegen den Uhrzeigersinn.
+
+    Solidon rechnet um den Ursprung, die Platte liegt also mittig — dieselbe
+    Annahme wie in :func:`bed_scale` und beim Zeichnen.
+    """
+    import numpy as np
+
+    half_width, half_depth = width / 2.0, depth / 2.0
+    return np.array(
+        [
+            [-half_width, -half_depth],
+            [half_width, -half_depth],
+            [half_width, half_depth],
+            [-half_width, half_depth],
+        ]
     )
 
 
@@ -784,6 +887,14 @@ class Viewport(QWidget):
         """Je Körper die konvexe Hülle seiner Punkte, für den Schattenwurf.
         Einmal je Szenenaufbau gerechnet — ein Ansichtswechsel projiziert nur
         noch daraus (§18.6)."""
+        self._shadow_ground: dict[ObjectId, tuple[float, float, Any]] = {}
+        """Je Körper Unterkante, Oberkante und sein Umriss von oben. Damit
+        steht fest, wer auf wem steht — und damit, welche Fläche den Schatten
+        auffängt."""
+        self._bed_extent: tuple[float, float] | None = None
+        """Breite und Tiefe der Druckplatte, sobald ein Bauraum gezeigt wurde.
+        Der Schatten wird an ihrer Kante geschnitten; ohne Bauraum gibt es
+        nichts zu schneiden."""
         self._shadow_cast: tuple[float, float] = (SHADOW_SIDE, SHADOW_REACH)
         """Die Lichtrichtung, mit der die Schatten im Bild stehen. Sie folgt
         der Kamera; wer sie schon getroffen hat, zeichnet nicht neu."""
@@ -1002,7 +1113,45 @@ class Viewport(QWidget):
             _log.info("shadow hull unavailable: %s", problem)
             return points
 
-    def _shadow_outline_of(self, hull_points: Any, direction: tuple[float, float]) -> Any:
+    def _shadow_catchers(self, object_id: ObjectId) -> list[tuple[float, Any]]:
+        """Die Flächen, die den Schatten dieses Körpers auffangen (§18.6).
+
+        Immer die Platte, und dazu jeder Körper, dessen Oberkante nicht höher
+        liegt als die Unterkante dieses hier. Ohne das fiel jeder Schatten auf
+        die Platte, auch der eines Turms auf einer zwölf Millimeter hohen
+        Grundplatte: er tauchte erst neben ihr auf, als Fleck ohne Verbindung
+        zu dem, was ihn wirft.
+
+        Beides zusammen ist kein Widerspruch. Licht, das an der Grundplatte
+        vorbeigeht, trifft die Druckplatte — und weil das Stück auf der
+        Druckplatte am Umriss der Grundplatte geschnitten wird, verdeckt diese
+        genau den Teil, der sonst doppelt läge.
+
+        Zurück kommt je Fläche ihre Höhe und ihr Umriss von oben; ``None`` als
+        Umriss heißt „unbeschnitten" und tritt nur auf, wenn kein Bauraum
+        gezeigt wurde — dann gibt es keine Kante, an der zu schneiden wäre.
+        """
+        mine = self._shadow_ground.get(object_id)
+        catchers: list[tuple[float, Any]] = [
+            (0.0, bed_outline(*self._bed_extent) if self._bed_extent is not None else None)
+        ]
+        if mine is None:
+            return catchers
+        floor = mine[0]
+        for other, (_low, high, outline) in self._shadow_ground.items():
+            if other == object_id or outline is None:
+                continue
+            if EPS_GEOM < high <= floor + EPS_GEOM:
+                catchers.append((high, outline))
+        return catchers
+
+    def _shadow_outline_of(
+        self,
+        hull_points: Any,
+        direction: tuple[float, float],
+        ground: float = 0.0,
+        window: Any = None,
+    ) -> Any:
         """Der Schatten eines Körpers auf der Platte, entlang der Lichtrichtung.
 
         **Nicht** über ``enable_shadows``. Der VTK-Schattenwurf wurde in vier
@@ -1022,21 +1171,29 @@ class Viewport(QWidget):
 
         Die konvexe Hülle ist bewusst gröber als der echte Umriss — ein Schatten
         zeigt den Ort, nicht die Form; wer die Form sucht, dreht die Ansicht.
+
+        ``window`` ist der Rand der auffangenden Fläche. Was darüber hinausläuft,
+        wird abgeschnitten: ein Schatten neben der Platte lag auf blankem
+        Hintergrund und behauptete Boden, wo keiner ist.
         """
+        import numpy as np
         import pyvista as pv
 
         if hull_points is None or len(hull_points) < 3:
             return None
-        cast = shadow_points(hull_points, direction)
-        try:
-            hull = pv.PolyData(cast).delaunay_2d()
-        except Exception as problem:  # pragma: no cover - hängt an der Punktlage
-            _log.info("shadow outline unavailable: %s", problem)
+        cast = shadow_points(hull_points, direction, ground)
+        outline = outline_of(cast)
+        if outline is None:
             return None
-        if hull.n_cells == 0:
-            return None
-        hull.points[:, 2] = SHADOW_LIFT
-        return hull
+        if window is not None:
+            outline = clip_polygon(outline, window)
+            if len(outline) < 3:
+                return None
+        corners = np.column_stack((outline, np.full(len(outline), ground + SHADOW_LIFT)))
+        # Ein einziges konvexes Vieleck statt einer Triangulierung: die Punkte
+        # liegen bereits in der Reihenfolge des Randes, und VTK zeichnet es als
+        # Fläche. Delaunay darüber wäre dieselbe Fläche aus mehr Zellen.
+        return pv.PolyData(corners, faces=np.hstack(([len(corners)], np.arange(len(corners)))))
 
     # --- scene ------------------------------------------------------------------
 
@@ -1070,6 +1227,7 @@ class Viewport(QWidget):
         # Rest davon hieße: ein gelöschter Körper wirft beim nächsten Drehen
         # weiter seinen Schatten.
         self._shadow_hulls.clear()
+        self._shadow_ground.clear()
         self._shadow_cast = self._shadow_direction()
         self._uncapped = False
         if result is None:
@@ -1137,8 +1295,11 @@ class Viewport(QWidget):
             )
             self._actors[object_id] = actor
             self._draw_feature_edges(surface, object_id)
-            self._draw_shadow(surface, object_id)
+            self._remember_shadow(surface, object_id)
 
+        # Erst jetzt: ein Schatten fällt auf die Fläche, auf der sein Körper
+        # steht, und welche das ist, weiß nur die vollständige Szene.
+        self._place_shadows(self._shadow_direction())
         self.select(self._selected)
         self._redraw_features()
         self._redraw_layer()
@@ -1232,31 +1393,49 @@ class Viewport(QWidget):
             )
         )
 
-    def _draw_shadow(self, surface: Any, object_id: ObjectId) -> None:
-        """Den Kontaktschatten dieses Körpers auf die Platte legen."""
+    def _remember_shadow(self, surface: Any, object_id: ObjectId) -> None:
+        """Was dieser Körper zum Schattenwurf beiträgt — geworfen wird später.
+
+        Getrennt vom Setzen, weil ein Schatten wissen muss, worauf er fällt:
+        welcher Körper unter welchem steht, steht erst fest, wenn alle
+        gezeichnet sind.
+        """
         if self.plotter is None or not self.contact_shadows:
             return
-        self._shadow_hulls[object_id] = self._shadow_hull_of(surface)
-        self._place_shadow(object_id, self._shadow_direction())
+        hull = self._shadow_hull_of(surface)
+        self._shadow_hulls[object_id] = hull
+        if hull is None or len(hull) < 3:
+            return
 
-    def _place_shadow(self, object_id: ObjectId, direction: tuple[float, float]) -> None:
-        """Den Schatten eines Körpers aus seiner gemerkten Hülle setzen."""
+        import numpy as np
+
+        heights = np.asarray(hull, dtype=float)[:, 2]
+        self._shadow_ground[object_id] = (
+            float(heights.min()),
+            float(heights.max()),
+            outline_of(hull),
+        )
+
+    def _place_shadows(self, direction: tuple[float, float]) -> None:
+        """Die Schatten aller Körper aus den gemerkten Hüllen setzen."""
         if self.plotter is None:
             return
-        outline = self._shadow_outline_of(self._shadow_hulls.get(object_id), direction)
-        if outline is None:
-            return
-        self._shadow_actors.append(
-            self.plotter.add_mesh(
-                outline,
-                color=SHADOW_COLOUR,
-                opacity=SHADOW_OPACITY,
-                lighting=False,
-                name=f"shadow:{object_id}",
-                render=False,
-                pickable=False,
-            )
-        )
+        for object_id, hull in self._shadow_hulls.items():
+            for index, (ground, window) in enumerate(self._shadow_catchers(object_id)):
+                outline = self._shadow_outline_of(hull, direction, ground, window)
+                if outline is None:
+                    continue
+                self._shadow_actors.append(
+                    self.plotter.add_mesh(
+                        outline,
+                        color=SHADOW_COLOUR,
+                        opacity=SHADOW_OPACITY,
+                        lighting=False,
+                        name=f"shadow:{object_id}:{index}",
+                        render=False,
+                        pickable=False,
+                    )
+                )
 
     def _redraw_shadows(self) -> None:
         """Die Schatten der neuen Kamerastellung anpassen (§18.6).
@@ -1277,8 +1456,7 @@ class Viewport(QWidget):
         for actor in self._shadow_actors:
             self.plotter.remove_actor(actor, render=False)
         self._shadow_actors.clear()
-        for object_id in self._shadow_hulls:
-            self._place_shadow(object_id, direction)
+        self._place_shadows(direction)
         self.plotter.render()
 
     def set_hidden(self, hidden: frozenset[ObjectId]) -> None:
@@ -1441,6 +1619,8 @@ class Viewport(QWidget):
         self._frame_actors.clear()
 
         width, depth, height = profile.printer.build_volume
+        # Gemerkt, weil der Kontaktschatten an dieser Kante geschnitten wird.
+        self._bed_extent = (width, depth)
         # Ein gefüllter Grund unter dem Raster. Bis hierhin war die Platte ein
         # Drahtgitter über dem Hintergrund — hübsch, aber ohne Fläche: ein
         # Schatten darauf fiel auf nichts und war im Bild schlicht nicht da.

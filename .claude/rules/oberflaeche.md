@@ -198,6 +198,20 @@ Aufbau erbt sie pyvistas Stellung über (1, 1, 1), und die eigene Vorgabe aus
 `VIEW_DIRECTIONS` sieht nur, wer „Isometrisch" im Menü wählt — ein Sprung aus
 einer Ansicht in eine andere, die man zu sehen glaubte.
 
+**Ein Schatten fällt auf die Fläche, auf der sein Körper steht.** Nicht immer
+auf die Platte: `_shadow_catchers` sucht zu jedem Körper die Flächen unter ihm
+— die Druckplatte und jeden Körper, dessen Oberkante nicht höher liegt als
+seine Unterkante. Ohne das löst sich der Schatten eines Turms auf einer 12 mm
+hohen Grundplatte von ihm ab und taucht erst daneben auf. Beide Stücke werden
+gezeichnet, und das ist kein Widerspruch: Licht, das an der Grundplatte
+vorbeigeht, trifft die Druckplatte, und weil jedes Stück am Umriss seiner
+Fläche geschnitten wird (`clip_polygon`, Sutherland-Hodgman), verdeckt die
+Grundplatte genau den Teil, der sonst doppelt läge. Dasselbe Schneiden hält den
+Schatten auf der Platte: außerhalb lag er auf blankem Hintergrund und
+behauptete Boden, wo keiner ist. Die Plattenkante kommt aus `_bed_extent`,
+gemerkt in `show_build_volume` — ohne gezeigten Bauraum gibt es nichts zu
+schneiden.
+
 **Was je Bild neu gerechnet wird, wird je Körper vorbereitet.** Der
 Schattenumriss lief als Triangulierung über jeden Punkt des Anzeigenetzes: 129
 ms bei zweiundachtzigtausend Dreiecken, je Körper und Szenenaufbau, im

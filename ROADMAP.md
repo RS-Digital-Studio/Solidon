@@ -3143,13 +3143,22 @@ Quader kommt dabei exakt heraus, eine Kugel auf fünf Hundertstel Millimeter.
   das Gegenteil; nachgemessen an der Streuung im Bild (3,50 im Schatten gegen
   4,89 daneben, bei 0,35 Deckkraft) scheint es korrekt gedämpft durch.
 
-### Offen, festgehalten und nicht behoben
+### Die beiden offenen Punkte sind zu
 
-- **Steht ein Körper auf einem anderen, löst sich sein Schatten ab.** Er wird
-  immer auf die Platte geworfen, nie auf den Körper darunter. Ein Turm auf
-  einer 12 mm hohen Platte hat einen Schatten, der erst neben ihr auftaucht —
-  ein Fleck ohne Verbindung zu dem, was ihn wirft.
-- **Außerhalb der Platte fällt er ins Nichts.** Bei aufgezogener Explosion oder
-  einem Körper weit vom Ursprung liegt der dunkle Umriss auf blankem
-  Hintergrund, ohne Fläche darunter. Ein Schnitt gegen den Plattenrand wäre die
-  Abhilfe; er stand zur Wahl und wurde zurückgestellt.
+- [x] **Steht ein Körper auf einem anderen, löst sich sein Schatten ab.** Er
+      wurde immer auf die Platte geworfen, nie auf den Körper darunter. Ein
+      Turm auf einer 12 mm hohen Platte hatte einen Schatten, der erst neben
+      ihr auftauchte — ein Fleck ohne Verbindung zu dem, was ihn wirft.
+      `_shadow_catchers` sucht jetzt zu jedem Körper die Flächen unter ihm, und
+      `shadow_points` misst die Höhe ab der auffangenden Fläche statt ab null.
+- [x] **Außerhalb der Platte fiel er ins Nichts.** Bei aufgezogener Explosion
+      oder einem Körper weit vom Ursprung lag der dunkle Umriss auf blankem
+      Hintergrund, ohne Fläche darunter. Der Schnitt gegen den Plattenrand ist
+      gebaut (`clip_polygon`, Sutherland-Hodgman) und trägt beide Punkte: jedes
+      Schattenstück wird am Umriss seiner Fläche beschnitten. Damit verdeckt
+      eine Grundplatte genau den Teil des Plattenschattens, der sonst doppelt
+      läge — die beiden Stücke überlappen sich nirgends sichtbar.
+
+Der Umriss ist dabei von `delaunay_2d` auf die ebene konvexe Hülle
+umgestellt (`outline_of`): beschneiden lässt sich ein Rand, keine Menge von
+Dreiecken — und die Hülle ist zugleich billiger.
