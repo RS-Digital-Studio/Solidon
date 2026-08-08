@@ -44,17 +44,30 @@ extra.
 **Was Sie mit Solidon3D erzeugen, gehört Ihnen.** An Ihren Modellen,
 Projektdateien und exportierten Dateien haben wir keinerlei Rechte — Sie
 dürfen sie verkaufen, verschenken, veröffentlichen und lizenzieren, wie Sie
-wollen. Das gilt auch für Ergebnisse, in die mitgelieferte Bausteine aus der
-Bibliothek eingeflossen sind: diese Bibliothek
-(`app/core/knowledge/parts/`) steht deshalb ausdrücklich unter der
-MIT-Lizenz, ebenso der Referenzkorpus (`tests/data/`).
+wollen.
+
+Das gilt auch dann, wenn mitgelieferte Bausteine darin stecken: eine
+Mutternfalle, ein Gewinde, ein Filmscharnier aus der Bibliothek. Diese
+Bibliothek steht ausdrücklich unter der MIT-Lizenz, damit an Ihrem Ergebnis
+keine Frage offenbleibt. Wir erheben daran keinen Anspruch und verlangen
+keine Nennung.
 
 ## 4. Testlauf
 
 Vor dem Kauf läuft Solidon3D **vierzehn Tage vollständig und ohne
-Einschränkung**. Nach Ablauf dieser Frist brauchen Sie einen Lizenzschlüssel,
-um weiterzuarbeiten. Ihre bis dahin erzeugten Dateien bleiben Ihre Dateien und
-lassen sich mit jeder späteren Lizenz weiter öffnen.
+Einschränkung** — keine Wasserzeichen, keine Exportsperre, keine gesperrten
+Funktionen.
+
+Nach Ablauf der Frist brauchen Sie einen Lizenzschlüssel für alles, was ein
+Projekt **ändert oder ein Ergebnis herausgibt**: Operationen anwenden,
+exportieren, an den Slicer übergeben, den Chat benutzen.
+
+**Was nur liest, bleibt frei.** Solidon3D ist auch nach Ablauf ein
+vollständiger Betrachter Ihrer eigenen Projekte: öffnen, drehen, messen,
+Prüfbericht lesen, Schichtanalyse ansehen, speichern und zurücknehmen gehen
+weiter. Ihre Dateien bleiben damit zugänglich, ohne dass Sie etwas kaufen
+müssen — und sie lassen sich mit jeder späteren Lizenz unverändert
+weiterbearbeiten.
 
 ## 5. Updates
 

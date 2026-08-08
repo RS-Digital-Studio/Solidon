@@ -1233,3 +1233,17 @@ a { color: var(--accent); }
   .fig-half-left { transform: translateX(-46px); }
   .fig-half-right { transform: translateX(46px); }
 }
+
+/* Der Sprachhinweis auf den Rechtstextseiten. Zurückhaltender als der
+   Entwurfsbanner: er warnt nicht, er ordnet ein. */
+main.legal p.lang-note {
+  background: var(--bg-alt);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.8rem 1.1rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+
+main.legal p.lang-note b { color: var(--fg); }

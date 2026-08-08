@@ -219,6 +219,20 @@ DRAFT_NOTE = (
     "Angaben und ist vor der Veröffentlichung fachlich zu prüfen.</p>"
 )
 
+#: Die englische Startseite verlinkt hierher, und wer von dort kommt, steht
+#: unangekündigt vor einem deutschen Vertrag. Die AGB sagen in § 3, dass die
+#: Vertragssprache Deutsch ist — nur liest das niemand, der auf „Licence
+#: agreement" geklickt hat. Der Hinweis steht deshalb oben und in der Sprache,
+#: in der die Frage entsteht.
+LANGUAGE_NOTE = (
+    '<p class="lang-note" lang="en"><b>This document is in German.</b> '
+    "German is the contract language for every purchase from this site; a "
+    "translation would be a courtesy, not the agreement. If anything here "
+    "matters to your decision, write to "
+    '<a href="mailto:support@solidon3d.de">support@solidon3d.de</a> and we '
+    "will explain it in English before you buy.</p>"
+)
+
 
 def draft_banner(markdown: str) -> str:
     """Der Entwurfshinweis, solange ein Platzhalter im Text steht.
@@ -232,16 +246,14 @@ def draft_banner(markdown: str) -> str:
 
 
 def body_html(markdown: str) -> str:
-    """Der Rumpf einer Seite: Überschrift, gegebenenfalls Entwurfshinweis, Text.
+    """Der Rumpf einer Seite: Überschrift, Hinweise, Text.
 
-    Der Hinweis steht unter der Überschrift und nicht darüber — sonst liest
+    Die Hinweise stehen unter der Überschrift und nicht darüber — sonst liest
     man zuerst eine Warnung und danach erst, wozu sie gehört.
     """
-    banner = draft_banner(markdown)
-    if not banner:
-        return to_html(markdown)
+    notes = "\n".join(filter(None, (draft_banner(markdown), LANGUAGE_NOTE)))
     heading, _, rest = to_html(markdown).partition("\n")
-    return f"{heading}\n{banner}\n{rest}"
+    return f"{heading}\n{notes}\n{rest}"
 
 
 def page(title: str, body: str, siblings: str) -> str:
