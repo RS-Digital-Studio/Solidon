@@ -213,6 +213,46 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         ),
     ),
     Page(
+        key="moving",
+        title=_("Bewegen und Bemalen"),
+        body=_(
+            "Zwei Werkzeuge derselben Leiste ändern das Modell wirklich: "
+            "*Bewegen* und *Bemalen*. Beide halten das Versprechen des "
+            "Verlaufs — jeder Zug und jeder Strich ist ein eigener Schritt, "
+            "den Strg+Z einzeln zurücknimmt.\n\n"
+            "**Bewegen** schaltet den Griff im Bild ein, das *Gizmo*: drei "
+            "Pfeile zum Verschieben, drei Ringe zum Drehen, hinter den "
+            "Spitzen mit X, Y und Z beschriftet. Beim Loslassen steht der "
+            "Zug als *Verschieben* oder *Drehen* im Verlauf, mit Zahlen, die "
+            "sich dort nachträglich ändern lassen wie jede andere. "
+            "**Rasterfang** und **Winkelfang** runden jeden Zug auf den "
+            "eingestellten Schritt — ein Millimeter und fünfzehn Grad sind "
+            "die Vorgabe, null heißt: kein Einrasten.\n\n"
+            "**Ist eine Fläche gewählt, sitzt der Griff auf der Fläche.** "
+            "Ein Zug an ihr versetzt die Fläche in ihrer Richtung, und die "
+            "Nachbarwände wachsen mit (*Fläche versetzen*) — aus dem "
+            "20-mm-Klotz wird ein 25-mm-Klotz, keine verschobene Kiste. Was "
+            "quer zur Fläche gezogen wird, verfällt: eine Fläche kennt nur "
+            "vor und zurück.\n\n"
+            "Die Größe ändert der Griff nicht — dafür gibt es *Skalieren* "
+            "und *Auf Maß bringen*. Und wer zwei Teile aneinandersetzen "
+            "will, zieht nicht pixelgenau, sondern nimmt *An Merkmal "
+            "ausrichten*: Fläche auf Fläche, Bohrung auf Bohrung. Der Griff "
+            "ist für das Ungefähre; wer 12,5 mm meint, tippt sie in den "
+            "Dialog.\n\n"
+            "**Bemalen** macht Klicks zu Pinselstrichen. *Pinsel scharf* "
+            "schalten, Slot und Radius wählen, auf das Modell klicken — das "
+            "ändert Materialslots und damit das Modell, nicht bloß das "
+            "Bild. Beim 3MF-Export wird daraus der Filamentwechsel für den "
+            "Drucker. Der **Kantenwinkel** hält den Pinsel an Kanten an, "
+            "damit eine Farbe nicht um die Ecke läuft; 180 Grad heißt: über "
+            "alles hinweg.\n\n"
+            "Beides sieht der Verlauf genauso wie einen Menüeintrag: "
+            "dieselben Operationen, dasselbe Undo, dieselbe Möglichkeit, es "
+            "sich anders zu überlegen."
+        ),
+    ),
+    Page(
         key="ways",
         title=_("Die drei Wege"),
         body=_(
