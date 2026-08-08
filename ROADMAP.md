@@ -406,9 +406,14 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [~] Doku, Website, Lizenzhinweise — README mit Erwartungsmanagement, den drei
       Wegen, Paketierung und einem Supportkanal; Lizenzhinweise vollständig.
       Die Adresse in `core/updates.py` steht seit der Subdomain-Entscheidung.
-      **Hochgeladen ist nichts** — die Quelldateien liegen in `website/`, die
-      Schrittliste in `website/README.md`, Impressum und Datenschutz sind
-      Entwürfe mit Platzhaltern
+      **Hochgeladen seit dem 08.08.2026**: netcup Webhosting samt Domain
+      bestellt, 86 Dateien nach `solidon3d.de/httpdocs`, Auslieferung per
+      Host-Header geprüft (Startseite, `en/`, Handbuch, `version.json` als
+      JSON — alle 200). Impressum, Datenschutz und Widerruf tragen echte
+      Angaben statt Platzhaltern. Offen: DNS-Propagation abwarten, dann
+      Let's Encrypt in Plesk (mit `www.`), Postfach `support@solidon3d.de`
+      samt SPF/DMARC, der Auftragsverarbeitungsvertrag im CCP — und der
+      Zahlungsdienstleister in den AGB, die als einzige Seite Entwurf bleiben
 - [x] Update-Hinweis beim Start — fragt eine Versionsdatei, lädt nichts, und ist
       aus, bis ihn jemand einschaltet
 
@@ -2949,12 +2954,12 @@ Konzeptpapiere und die Roadmap — gegen den Code, nicht gegen die Erinnerung.
 
 ### Offen
 
-- **Anschrift und Zahlungsdienstleister.** Der Hoster steht seit dem
-  08.08.2026: netcup Webhosting samt Domain sind bestellt, der Platzhalter in
-  `datenschutz.html` ist ersetzt (netcup GmbH, Emmy-Noether-Straße 10,
-  76131 Karlsruhe — die aktuelle Anschrift, nicht mehr die Daimlerstraße).
-  Es bleiben die Anschrift in Impressum und Widerruf und der
-  Zahlungsdienstleister in den AGB. Ohne sie geht die Seite nicht online.
+- **Nur noch der Zahlungsdienstleister.** Hoster (netcup GmbH,
+  Emmy-Noether-Straße 10, 76131 Karlsruhe — die aktuelle Anschrift, nicht
+  mehr die Daimlerstraße) und Anschrift (Aufbaustraße 10, 96049 Bamberg)
+  stehen seit dem 08.08.2026 in den Seiten; Impressum und Widerruf sind
+  keine Entwürfe mehr. Die AGB bleiben einer, bis der Zahlungsdienstleister
+  entschieden ist.
 - **Die Rechtstexte fachlich prüfen lassen.** Sie sind sorgfältige Entwürfe
   und keine Rechtsberatung. Die Widerrufsbelehrung wirkt nur, wenn der
   Bestellvorgang die Zustimmung nach § 356 Abs. 5 BGB abfragt — der Text
@@ -2997,12 +3002,11 @@ beiden Themen über WCAG AA · `prefers-reduced-motion` schaltet alles ab ·
 die sechs Zahlen der Startseite testgedeckt · beide PDFs mit richtigem
 Deckblatt.
 
-**Weiterhin offen und nicht von hier zu lösen:** Anschrift und
-Zahlungsdienstleister (der Hoster ist seit der netcup-Bestellung am
-08.08.2026 eingetragen) · die fachliche Prüfung der Rechtstexte · und der
-Punkt, der vor den ersten Verkauf gehört: `require()` in
-`app/core/activation` hat noch keinen Aufrufer, ein abgelaufener Testlauf
-sperrt heute nichts.
+**Weiterhin offen und nicht von hier zu lösen:** der Zahlungsdienstleister
+in den AGB (Hoster und Anschrift stehen seit dem 08.08.2026) · die fachliche
+Prüfung der Rechtstexte · und der Punkt, der vor den ersten Verkauf gehört:
+`require()` in `app/core/activation` hat noch keinen Aufrufer, ein
+abgelaufener Testlauf sperrt heute nichts.
 
 ## Gizmo und Direktmanipulation durchgesehen (08.08.2026)
 

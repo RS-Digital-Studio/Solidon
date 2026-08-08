@@ -110,14 +110,15 @@ eigenes Produkt: **netcup Webhosting 2000**.
    je nach Aktion. `solidon3d.de` dabei als **Inklusiv- oder Zusatzdomain des
    Pakets** registrieren, nicht als externe Domain: dann verwaltet netcup die
    Zone selbst, und Schritt 2 bis 4 der alten Anleitung entfallen ersatzlos.
-2. **Domain dem Webhosting zuweisen.** Im
+2. **Domain dem Webhosting zuweisen.** ✓ Erledigt am 08.08.2026. Im
    [CCP](https://www.customercontrolpanel.de/) beim Paket unter *Domains*.
    Weil die Domain dort registriert ist, zeigen ihre Nameserver bereits auf
    netcup — kein TXT-Token, keine Verifizierung, kein A-Record von Hand.
-3. **Als Hauptdomain in Plesk anlegen.** Im CCP öffnet *WCP Auto-Login* Plesk.
-   Die zugewiesene Domain erscheint unter *Websites & Domains* mit dem
-   Dokumentenstamm `/httpdocs`. Keine Subdomain, kein eigener Stamm. Fünf bis
-   zehn Minuten, bis es greift.
+3. **Als Hauptdomain in Plesk anlegen.** ✓ Erledigt am 08.08.2026. Im CCP
+   öffnet *WCP Auto-Login* Plesk. **Der Dokumentenstamm liegt je Domain**,
+   nicht an der Wurzel des Zugangs: `solidon3d.de/httpdocs` — auf dem Paket
+   liegen mehrere Domains nebeneinander (auch `rs-3dware.de`), jede mit
+   eigenem `httpdocs`.
 4. **HTTPS einschalten.** In Plesk bei der Domain der Reiter *Let's Encrypt* →
    *Installieren*, dabei `www.solidon3d.de` mit einschließen. Das Zertifikat
    erneuert sich selbst. `core/updates.py` fragt über `https://` an; ohne
@@ -136,9 +137,12 @@ eigenes Produkt: **netcup Webhosting 2000**.
    DKIM aktiviert Plesk auf Wunsch bei der Domain selbst. Die genaue
    SPF-Include-Kennung steht im netcup-Helpcenter — vor dem Setzen ablesen,
    nicht aus dieser Datei abschreiben.
-6. **Hochladen.** Passwort für SSH/SFTP im CCP unter *Webhosting-Zugang*
-   setzen, dann den Inhalt dieses Ordners (ohne diese README) nach `/httpdocs`
+6. **Hochladen.** ✓ Erstmals erledigt am 08.08.2026 (86 Dateien per SFTP).
+   Passwort für SSH/SFTP im CCP unter *Webhosting-Zugang* setzen, dann den
+   Inhalt dieses Ordners (ohne diese README) nach `solidon3d.de/httpdocs`
    legen. Die Ordnerstruktur beibehalten — `en/` bleibt ein Unterordner.
+   Eine früher versehentlich mit hochgeladene README lag dort öffentlich und
+   wurde entfernt — sie gehört nicht auf den Server.
 7. **Prüfen.** `https://solidon3d.de/` zeigt die Startseite,
    `https://solidon3d.de/version.json` liefert das rohe JSON, und eine
    Testmail an `support@solidon3d.de` kommt an. Zusätzlich eine an
