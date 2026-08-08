@@ -32,7 +32,13 @@
   "inLanguage": ["de", "en"],
   "description": "Desktop-Anwendung zum Konstruieren, Generieren und Bearbeiten druckbarer 3D-Modelle. Non-destruktiver Operationsstack, Schichtanalyse, Passungen aus kalibrierbaren Materialprofilen. Läuft lokal, ohne Konto und ohne Telemetrie.",
   "author": { "@type": "Organization", "name": "RS Digital" },
-  "publisher": { "@type": "Organization", "name": "RS Digital" }
+  "publisher": { "@type": "Organization", "name": "RS Digital" },
+  "offers": {
+    "@type": "Offer",
+    "price": "49",
+    "priceCurrency": "EUR",
+    "category": "Einmalkauf"
+  }
 }
 </script>
 </head>
@@ -40,14 +46,26 @@
 
 <header class="site">
   <div class="wrap">
-    <a class="brand" href="/">Solidon<span>3D</span></a>
-    <nav class="lang"><a href="/handbuch.html">Handbuch</a> · <a href="/en/">English</a></nav>
+    <a class="brand" href="/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>
+        <path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>
+      </svg>
+      Solidon<span>3D</span>
+    </a>
+    <nav class="lang">
+      <a class="hide-small" href="#funktionen">Funktionen</a>
+      <a class="hide-small" href="#preis">Preis</a>
+      <a href="/handbuch.html">Handbuch</a>
+      <a href="/en/">English</a>
+      <a class="cta" href="#preis">Testen</a>
+    </nav>
   </div>
 </header>
 
 <main>
-  <div class="wrap">
 
+  <div class="wrap">
     <div class="hero">
       <div class="hero-text">
         <h1>Beschreibe das Teil. Bekomme ein maßhaltiges, druckbares Modell.</h1>
@@ -62,17 +80,96 @@
           <b>49 € zur Einführung</b>, später 79 € — kein Abo, kein Konto,
           alle 1.x-Updates inklusive.</p>
           <p>Für Windows und Linux. Diese Seite ist dann auch die
-          Download-Adresse — wer früher hineinschauen will, schreibt an
-          <a href="mailto:support@solidon3d.de">support@solidon3d.de</a>.</p>
+          Download-Adresse.</p>
+          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20fr%C3%BCher%20hineinschauen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
+            </svg>
+            Früher hineinschauen
+          </a>
+          <ul class="assure">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Läuft offline
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Kein Konto
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Keine Telemetrie
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Deine Dateien bleiben deine
+            </li>
+          </ul>
         </div>
       </div>
 
-      <img class="screenshot" src="handbuch/de/main-window.png" width="1180" height="760"
-           alt="Das Hauptfenster von Solidon3D: links der Objektbaum mit Parametern und Verlauf, in der Mitte die 3D-Ansicht, rechts der Prüfbericht">
+      <div class="shot">
+        <div class="stage">
+          <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+          <img src="handbuch/de/main-window.png" width="1180" height="760" fetchpriority="high"
+               alt="Das Hauptfenster von Solidon3D: links der Objektbaum mit Parametern und Verlauf, in der Mitte die 3D-Ansicht, rechts der Prüfbericht">
+        </div>
+      </div>
     </div>
+  </div>
 
-    <section id="wege">
+  <section class="tint">
+    <div class="wrap">
+      <div class="stats">
+        <div><b>77</b><span>Operationen im Register</span></div>
+        <div><b>16</b><span>geprüfte Bausteine</span></div>
+        <div><b>40</b><span>Normteilmaße hinterlegt</span></div>
+        <div><b>16</b><span>Druckerprofile ab Werk</span></div>
+        <div><b>8</b><span>Beispielprojekte dabei</span></div>
+        <div><b>0</b><span>Konten, Cloud, Telemetrie</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="warum">
+    <div class="wrap">
+      <h2>Kennst du das?</h2>
+      <p class="sub">Die vier Sätze, die beim Drucken am häufigsten fallen —
+      und was Solidon3D daraus macht.</p>
+      <ul class="pains">
+        <li>
+          <q>Das Loch ist 0,2 mm zu klein, und ich habe kein CAD.</q>
+          <p><b>Fläche anklicken, Maß ändern.</b> Auch in einer fremden
+          STL-Datei — Bohrungen, Taschen und Wandstärken sind benannte
+          Merkmale, keine Dreieckswolke.</p>
+        </li>
+        <li>
+          <q>Der Druck ist bei 80 % abgebrochen, wegen einer Insel.</q>
+          <p><b>Die Schichtanalyse zeigt sie vorher.</b> Überhänge, Inseln,
+          zu dünne Wände und der Stützbedarf — bevor der Slicer die Zeit
+          verbraucht.</p>
+        </li>
+        <li>
+          <q>Der Deckel klemmt. Beim dritten Versuch passte er.</q>
+          <p><b>Passungen aus dem Materialprofil.</b> Spiel, Presssitz oder
+          bündig werden aus einer einmal gedruckten Kalibrierleiter
+          abgeleitet, nicht geschätzt.</p>
+        </li>
+        <li>
+          <q>Das Teil ist 40 mm zu groß fürs Bett.</q>
+          <p><b>Teilen und verstiften in einem Schritt.</b> Auto-Split legt
+          Passstifte, Bohrungen und die zugehörigen Passungen gleich mit
+          an.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="wege">
+    <div class="wrap">
       <h2>Drei Wege zum Teil</h2>
+      <p class="sub">Alle drei führen in dieselbe Szene, denselben Verlauf und
+      denselben Prüfbericht. Du entscheidest je Teil, nicht je Programm.</p>
       <div class="ways">
         <div class="way">
           <span class="tag">Weg 1 — Anpassen</span>
@@ -99,33 +196,277 @@
           nutzbar.</p>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section id="funktionen">
-      <h2>Was drinsteckt</h2>
+  <section id="funktionen" class="tint">
+    <div class="wrap">
+      <h2>Sechs Dinge, die den Unterschied machen</h2>
+      <p class="sub">Alles hier ist ein Bildschirmfoto aus der laufenden
+      Anwendung oder zeigt genau, was sie tut.</p>
+
+      <div class="showcase">
+        <div>
+          <span class="kicker">Prüfbericht</span>
+          <h3>Du erfährst vor dem Druck, was schiefgehen wird</h3>
+          <p>Jede geöffnete Datei bekommt einen Bericht: offene Stellen,
+          falsch orientierte Dreiecke, Wände unter zwei Extrusionsbahnen,
+          fehlende Einheiten. Sortiert nach Fehler, Warnung und Hinweis —
+          und jeder Eintrag springt im Modell an die Stelle, die er
+          meint.</p>
+          <p class="note">Jeder Befund trägt einen Handlungsvorschlag.
+          <b>Ein Fehler endet hier nie mit „fehlgeschlagen“.</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <img src="handbuch/de/report.png" width="460" height="292" loading="lazy" decoding="async"
+                 alt="Der Prüfbericht: null Fehler, zwei Warnungen und zwei Hinweise, darunter „Das Modell ist an drei Stellen offen“ und „Eine Wand ist dünner als zwei Extrusionsbahnen“">
+          </div>
+          <figcaption>Der Prüfbericht einer eingelesenen Fremddatei.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip">
+        <div>
+          <span class="kicker">Parametrisch</span>
+          <h3>Eine Zahl ändern — nicht das Modell neu bauen</h3>
+          <p>Der Verlauf ist non-destruktiv: jeder Schritt bleibt änderbar,
+          jede Zahl nachträglich drehbar. Wandstärke von 2,40 auf 3,60?
+          Aushöhlen, Deckel, Bohrungen und Passungen rechnen sich neu — in
+          derselben Reihenfolge, mit demselben Ergebnis.</p>
+          <p class="note">Benannte Projektparameter statt Streuzahlen:
+          <b>eine Änderung an einer Stelle, nicht an sieben.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 250" role="img"
+               aria-label="Eine Zeichnung: das Feld „Wandstärke“ wechselt von 2,40 auf 3,60 Millimeter, der Querschnitt der Dose bekommt dickere Wände und einen dickeren Boden, der Verlauf darunter bleibt unverändert.">
+            <text class="ink" x="24" y="30" font-weight="600">An der Zahl drehen</text>
+
+            <rect class="field" x="24" y="52" width="216" height="38" rx="4"/>
+            <text class="dim" x="38" y="76">Wandstärke</text>
+            <text class="value anim fig-value-thin" x="222" y="76" text-anchor="end">2,40 mm</text>
+            <text class="value anim fig-value-thick" x="222" y="76" text-anchor="end">3,60 mm</text>
+
+            <text class="dim" x="24" y="122">Verlauf — unverändert</text>
+            <g class="rule" stroke-linecap="round">
+              <line x1="26" y1="140" x2="26" y2="212"/>
+            </g>
+            <circle class="hot" cx="26" cy="146" r="4"/>
+            <circle class="hot" cx="26" cy="176" r="4"/>
+            <circle class="hot" cx="26" cy="206" r="4"/>
+            <text class="ink" x="42" y="151" font-size="12">Körper</text>
+            <text class="ink" x="42" y="181" font-size="12">Aushöhlen</text>
+            <text class="ink" x="42" y="211" font-size="12">Deckel erzeugen</text>
+
+            <text class="dim" x="300" y="42">Querschnitt</text>
+            <rect class="body" x="300" y="60" width="230" height="140"/>
+            <rect class="anim fig-cavity" x="316" y="60" width="198" height="124" fill="#16181c"/>
+            <rect class="hot anim fig-wall-bar" x="300" y="212" width="16" height="5" rx="2"/>
+            <text class="dim" x="300" y="238">Wandstärke</text>
+          </svg>
+          <figcaption>Wandstärke gedreht — der Verlauf bleibt derselbe.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase">
+        <div>
+          <span class="kicker">Bausteine</span>
+          <h3>Mutternfalle in vier Klicks statt vier halben Stunden</h3>
+          <p>Sechzehn geprüfte Bausteine — Schraubenloch mit Senkung,
+          Mutternfalle, Heat-Set-Einpressbuchse, Gewinde, Passstift,
+          Filmscharnier, Schnappverbindung, Magnettasche. Die Maße kommen
+          aus einer Normteiltabelle mit 40 Einträgen, nicht aus dem
+          Bauchgefühl.</p>
+          <p class="note">Jeder Baustein ist über seinen ganzen
+          Parameterbereich getestet: <b>wasserdicht, Mindestwandstärke,
+          keine Selbstdurchdringung.</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <img src="handbuch/de/catalog.png" width="1180" height="760" loading="lazy" decoding="async"
+                 alt="Der Bausteinkatalog mit den Gruppen Verbindungen, Einlegeteile und Mechanik: Mutternfalle, Gewinde, Schraubenloch mit Senkung, Heat-Set-Einpressbuchse, Passstift, Rastnase, Filmscharnier und Schnappverbindung">
+          </div>
+          <figcaption>Der Katalog — jedes Vorschaubild ist gerendert, nicht gezeichnet.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip">
+        <div>
+          <span class="kicker">Schichtanalyse</span>
+          <h3>Sehen, was der Drucker sehen wird</h3>
+          <p>Solidon3D schneidet das Modell in Schichten und misst, was
+          daraus folgt: Überhangwinkel, freischwebende Inseln, Wände unter
+          zwei Bahnen, Brückenweiten und das Stützvolumen. Die
+          Orientierungssuche schlägt die Lage vor, die am wenigsten davon
+          erzeugt.</p>
+          <p class="note">Kein eigener Slicer — und keine gemischten Zahlen:
+          <b>was aus der Analyse stammt und was aus dem G-Code, steht
+          dabei.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 250" role="img"
+               aria-label="Eine Zeichnung: eine Analyselinie fährt von der Bauplatte durch ein Teil nach oben; nacheinander erscheinen drei Befunde — Überhang 78 Grad, freischwebende Insel und eine Wand unter zwei Bahnen.">
+            <text class="ink" x="24" y="30" font-weight="600">Schichtanalyse</text>
+
+            <rect class="body" x="60" y="80" width="48" height="120"/>
+            <rect class="body" x="108" y="80" width="120" height="28"/>
+            <rect class="body" x="252" y="140" width="48" height="20"/>
+            <rect class="body" x="225" y="180" width="6" height="20"/>
+            <line class="rule" x1="40" y1="200" x2="320" y2="200" stroke-width="2.5" stroke-linecap="round"/>
+            <text class="dim" x="40" y="220">Bauplatte</text>
+
+            <g class="anim fig-scan">
+              <line class="hot-stroke" x1="44" y1="196" x2="316" y2="196" stroke-dasharray="5 4"/>
+              <path class="hot" d="M44 196 l-8 -5 v10 z"/>
+            </g>
+
+            <g class="anim fig-find-1">
+              <path class="warn" d="M368 88 l9 16 h-18 z"/>
+              <text class="ink" x="386" y="103" font-size="12">Überhang 78°</text>
+            </g>
+            <g class="anim fig-find-2">
+              <path class="warn" d="M368 128 l9 16 h-18 z"/>
+              <text class="ink" x="386" y="143" font-size="12">Insel, ohne Anbindung</text>
+            </g>
+            <g class="anim fig-find-3">
+              <path class="warn" d="M368 168 l9 16 h-18 z"/>
+              <text class="ink" x="386" y="183" font-size="12">Wand &lt; 2 Bahnen</text>
+            </g>
+          </svg>
+          <figcaption>Drei Befunde, die der Slicer erst nach dem Slicen kennt.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase">
+        <div>
+          <span class="kicker">Auto-Split</span>
+          <h3>Zu groß fürs Bett ist kein Grund mehr, es zu lassen</h3>
+          <p>Solidon3D sucht die Schnittebene, teilt das Teil und setzt
+          Passstifte samt Bohrungen. Das Spiel dazwischen kommt aus dem
+          Materialprofil — kein Nachfeilen, kein zweiter Versuch. Die
+          Passung bleibt als Beziehung im Projekt und wird bei jeder
+          späteren Änderung mitgeprüft.</p>
+          <p class="note">Der Bauraum kommt aus dem Druckerprofil.
+          <b>Sechzehn sind ab Werk hinterlegt</b>, eigene lassen sich
+          anlegen.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 250" role="img"
+               aria-label="Eine Zeichnung: ein 320 Millimeter breites Teil ragt über einen Bauraum von 220 Millimetern hinaus; es teilt sich in zwei Hälften von je 160 Millimetern, zwischen denen drei Passstifte und ihre Bohrungen sichtbar werden.">
+            <text class="ink" x="24" y="30" font-weight="600">Zu breit fürs Bett</text>
+
+            <g class="anim fig-verdict-no">
+              <rect x="170" y="66" width="220" height="118" rx="4" fill="none"
+                    stroke="#575e69" stroke-width="1.4" stroke-dasharray="6 5"/>
+              <text class="dim" x="280" y="58" text-anchor="middle">Bauraum 220 mm</text>
+            </g>
+
+            <g class="anim fig-half-left">
+              <rect class="body" x="120" y="100" width="158" height="52" rx="2"/>
+              <g class="anim fig-pins">
+                <rect class="hot" x="276" y="108" width="30" height="8" rx="2"/>
+                <rect class="hot" x="276" y="122" width="30" height="8" rx="2"/>
+                <rect class="hot" x="276" y="136" width="30" height="8" rx="2"/>
+                <text class="dim" x="199" y="172" text-anchor="middle">160 mm</text>
+              </g>
+            </g>
+            <g class="anim fig-half-right">
+              <rect class="body" x="282" y="100" width="158" height="52" rx="2"/>
+              <g class="anim fig-pins">
+                <rect x="284" y="108" width="30" height="8" rx="2" fill="#16181c"/>
+                <rect x="284" y="122" width="30" height="8" rx="2" fill="#16181c"/>
+                <rect x="284" y="136" width="30" height="8" rx="2" fill="#16181c"/>
+                <text class="dim" x="361" y="172" text-anchor="middle">160 mm</text>
+              </g>
+            </g>
+
+            <g class="anim fig-verdict-no">
+              <path class="warn" d="M186 200 l9 16 h-18 z"/>
+              <text class="ink" x="204" y="215" font-size="12">320 mm &gt; 220 mm — passt nicht</text>
+            </g>
+            <g class="anim fig-verdict-yes">
+              <path class="hot" d="m178 209 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="204" y="215" font-size="12">2 × 160 mm — passt, verstiftet</text>
+            </g>
+          </svg>
+          <figcaption>Geteilt und verstiftet — das Spiel kommt aus dem Materialprofil.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip">
+        <div>
+          <span class="kicker">Jede Zahl eine Formel</span>
+          <h3>Dialoge, die mitrechnen</h3>
+          <p>Hinter jedem Zahlenfeld steht ein <b>fx</b>: statt 4,20 darf dort
+          <code>schraube_m4 + spiel</code> stehen. Toleranzen holen sich ihren
+          Wert aus dem Materialprofil, statt als Konstante im Modell zu
+          verschwinden. Vorne stehen die drei Zahlen, die man braucht — der
+          Rest liegt unter „Weitere Einstellungen“.</p>
+          <p class="note">77 Operationen, alle nach demselben Muster:
+          <b>Menü, Kontextmenü, Kommandozeile und Chat sehen dieselbe
+          Deklaration.</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <img class="crop-top" src="handbuch/de/op-dialog.png" width="520" height="460" loading="lazy" decoding="async"
+                 alt="Der Dialog „Bohrung setzen“ mit Durchmesser, Position X, Y und Z, Achse, einem fx-Knopf hinter jedem Zahlenfeld und dem zugeklappten Bereich „Weitere Einstellungen“">
+          </div>
+          <figcaption>Der Dialog einer Operation — vorne drei Zahlen, hinten alles andere.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase">
+        <div>
+          <span class="kicker">Erster Start</span>
+          <h3>Du fängst nicht bei null an</h3>
+          <p>Acht fertige Beispielprojekte liegen bei — eines je Weg, dazu
+          Bausteine, zweifarbige Beschriftung, Kalibrierung,
+          Druckvorbereitung und eine Dose mit Deckel, an der alles
+          zusammenkommt. Jedes ist ein echtes Projekt mit Verlauf, nicht ein
+          Bild in einem Handbuch.</p>
+          <p class="note">Und ein Handbuch, das die ersten fünfzehn Minuten
+          erklärt — <b>in derselben Sprache wie die Oberfläche.</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <img src="handbuch/de/start-screen.png" width="1180" height="760" loading="lazy" decoding="async"
+                 alt="Der Startbildschirm: ein Ablagefeld für Modelle und Projekte, die Knöpfe „Neues Projekt“ und „Projekt öffnen“, darunter acht Beispielprojekte mit Vorschaubild und Beschreibung">
+          </div>
+          <figcaption>Der Startbildschirm mit den acht Beispielen.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="drin">
+    <div class="wrap">
+      <h2>Was sonst noch drinsteckt</h2>
       <ul class="features">
-        <li><b>Non-destruktiver Verlauf.</b> Jeder Schritt bleibt änderbar,
-        jede Zahl nachträglich drehbar — nichts wird überschrieben.</li>
-        <li><b>Schichtanalyse vor dem Slicen.</b> Überhänge, Inseln,
-        Stützvolumen und Wandstärken, bevor der Slicer sie teuer macht.</li>
-        <li><b>Passungen und Toleranzen.</b> Spiel, Presssitz, bündig — aus
-        kalibrierbaren Materialprofilen statt aus Erfahrungswerten.</li>
-        <li><b>Bausteinbibliothek mit Normteilen.</b> Schraubenlöcher,
-        Mutternfallen, Gewinde, Magnettaschen — geprüft über den ganzen
-        Parameterbereich.</li>
-        <li><b>Zu groß fürs Bett? Auto-Split.</b> Zerlegen mit Passstiften
-        und automatisch angelegten Passungen.</li>
         <li><b>Exakte Kanten.</b> B-Rep-Kern für Fasen, Verrundungen und
         rundreisefähiges STEP.</li>
         <li><b>Zwei Farben ohne zweites Programm.</b> Beschriftung erhaben,
         vertieft oder als Farbwechsel in einer 3MF-Datei.</li>
+        <li><b>Übergabe an deinen Slicer.</b> Direkt, mit den passenden
+        Einstellungen — und sein G-Code kommt zur Gegenprobe zurück.</li>
+        <li><b>Kalibrieren statt raten.</b> Toleranzleiter, Wandstärkenleiter
+        und Überhangfächer auf einer Platte; die gemessenen Werte gehen ins
+        Materialprofil.</li>
+        <li><b>Reparaturkette für fremde Dateien.</b> Löcher schließen,
+        Normalen richten, Komponenten trennen — bevor irgendetwas gerechnet
+        wird.</li>
+        <li><b>Messen, Schneiden, Explosion.</b> Werkzeuge in der Ansicht,
+        ohne die Geometrie anzufassen.</li>
+        <li><b>Skizzen mit Zwängen.</b> Zeichnen, bemaßen, extrudieren — für
+        die Fälle, in denen ein Satz nicht reicht.</li>
         <li><b>KI lokal oder mit eigenem Schlüssel.</b> Ollama auf dem
         eigenen Rechner oder ein API-Schlüssel — und ohne beides läuft
         alles außer dem Chat.</li>
       </ul>
-    </section>
+    </div>
+  </section>
 
-    <section id="ehrlich">
+  <section id="ehrlich" class="tint">
+    <div class="wrap">
       <h2>Was Solidon3D nicht ist</h2>
       <div class="honest">
         Lieber vorher gesagt als nachher bereut:
@@ -146,9 +487,74 @@
           Speicher.</li>
         </ul>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section id="voraussetzungen">
+  <section id="preis">
+    <div class="wrap">
+      <h2>Einmal kaufen, behalten</h2>
+      <p class="sub">Kein Abo, kein Konto, keine Funktion, die nach zwölf
+      Monaten aufhört zu funktionieren.</p>
+      <div class="price">
+        <div class="price-card">
+          <div class="amount">
+            <b>49 €</b>
+            <s>79 €</s>
+            <em>zur Einführung</em>
+          </div>
+          <p class="terms">Einmalig, inklusive aller 1.x-Updates.
+          Version 1.0 erscheint 2026.</p>
+          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20fr%C3%BCher%20hineinschauen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
+            </svg>
+            Früher hineinschauen
+          </a>
+        </div>
+        <div>
+          <ul class="price-list">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>14 Tage vollständig testen.</b> Ohne Einschränkung: keine
+              Wasserzeichen, keine Exportsperre, keine gesperrten
+              Funktionen.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Eine Lizenz, alle deine Rechner.</b> Sie ist an dich
+              gebunden, nicht an ein Gerät — Arbeitsplatz, Notebook,
+              Werkstattrechner.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Keine Aktivierung über das Netz, kein Konto.</b> Der
+              Schlüssel wird auf deinem Rechner geprüft. Wir erfahren nicht,
+              wann und wo du arbeitest.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Gewerbliche Nutzung inklusive.</b> Was du erzeugst,
+              gehört dir — verkaufen, veröffentlichen, lizenzieren. Auch mit
+              Bausteinen aus der Bibliothek.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Deine Projekte bleiben lesbar.</b> Offenes Dateiformat,
+              Export nach STL, 3MF und STEP.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>14 Tage Widerrufsrecht.</b> Wie es sich für einen Kauf in
+              Deutschland gehört.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="voraussetzungen" class="tint">
+    <div class="wrap">
       <h2>Systemvoraussetzungen</h2>
       <table class="req">
         <tr><td>Betriebssystem</td><td>Windows 10/11 (64 Bit) oder Linux</td></tr>
@@ -162,9 +568,82 @@
         <tr><td>Weiteres (optional)</td><td>OpenSCAD, ein Slicer — alles
         wird gefunden oder angegeben, nichts davon ist Pflicht</td></tr>
       </table>
-    </section>
+    </div>
+  </section>
 
-  </div>
+  <section id="fragen">
+    <div class="wrap">
+      <h2>Häufige Fragen</h2>
+      <div class="faq">
+        <details>
+          <summary>Brauche ich CAD-Erfahrung?</summary>
+          <p>Nein. Weg 1 kommt mit Anklicken und einem Satz im Chat aus, Weg 2
+          mit Beschreiben und Zahlendrehen. Wer Skizzen mit Zwängen zeichnen
+          will, kann das — muss es aber nicht.</p>
+        </details>
+        <details>
+          <summary>Muss ich eine KI benutzen?</summary>
+          <p>Nein. Der Chat ist ein Weg von dreien. Ohne Schlüssel und ohne
+          Ollama bleibt alles außer dem Chat vollständig benutzbar — Menüs,
+          Kontextmenüs, Kommandozeile und alle 77 Operationen.</p>
+        </details>
+        <details>
+          <summary>Rechnet die KI meine Geometrie?</summary>
+          <p>Nein, und das ist der wichtigste Satz auf dieser Seite. Das
+          Sprachmodell wählt Operationen und Parameter aus — gerechnet wird
+          jede Geometrie von Code. Jeder Vorschlag des Agenten ist genau eine
+          Transaktion, die ein einziges Undo vollständig zurücknimmt.</p>
+        </details>
+        <details>
+          <summary>Gehen meine Modelle irgendwohin?</summary>
+          <p>Nur wenn du den Chat mit einem fremden API-Schlüssel benutzt —
+          dann geht der Steckbrief des Modells an diesen Anbieter, Maße und
+          Merkmale, keine Dateien. Mit Ollama bleibt auch das lokal. Ohne
+          Chat verlässt nichts den Rechner: keine Konten, keine Ablage im
+          Netz, keine Telemetrie.</p>
+        </details>
+        <details>
+          <summary>Welche Formate liest und schreibt Solidon3D?</summary>
+          <p>Gelesen werden STL, 3MF (auch als Baugruppe), OBJ und GLB.
+          Geschrieben werden STL, 3MF — mit Farbwechsel und Plattenbelegung —
+          und STEP, wo der B-Rep-Kern es trägt. Projekte liegen in einem
+          offenen, dokumentierten Format.</p>
+        </details>
+        <details>
+          <summary>Funktioniert das mit meinem Drucker?</summary>
+          <p>Sechzehn Profile sind ab Werk hinterlegt, darunter Elegoo,
+          Bambu Lab, Prusa, Creality, Anycubic und Sovol. Eigene lassen sich
+          anlegen — gebraucht werden Bauraum, Düse und Schichthöhe. Für die
+          Passungen kommt einmal Kalibrieren dazu.</p>
+        </details>
+        <details>
+          <summary>Was passiert nach Version 1.x?</summary>
+          <p>Alle 1.x-Updates sind im Kauf enthalten. Eine spätere
+          Hauptversion wäre ein neuer Kauf — deine gekaufte Fassung läuft
+          weiter, sie hört nicht auf zu funktionieren, und deine Projekte
+          bleiben lesbar.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="closing">
+        <h2>Das nächste Teil, das passt</h2>
+        <p>Version 1.0 erscheint 2026. Wer früher hineinschauen möchte,
+        schreibt eine Zeile — es antwortet ein Mensch.</p>
+        <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20fr%C3%BCher%20hineinschauen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
+          </svg>
+          support@solidon3d.de
+        </a>
+        <a class="btn ghost" href="/handbuch.html">Erst das Handbuch lesen</a>
+      </div>
+    </div>
+  </section>
+
 </main>
 
 <footer class="site">
