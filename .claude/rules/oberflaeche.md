@@ -187,3 +187,14 @@ Zahlen an Bildern werden **angesehen, nicht nur gerechnet**. Der Radius der
 Umgebungsverdeckung stand mit plausibler Begründung auf dem schwächsten Wert
 seiner Messreihe; der doppelte ViewCube fiel erst im neu aufgenommenen
 Handbuchbild auf.
+
+**pyvista-Widgets werden nie weiterbenutzt, immer frisch gebaut.** Das
+`AffineWidget3D` rechnet gegen die `user_matrix` seines Actors und merkt sie
+sich über Züge hinweg — ein stehen gelassener Griff wendet den vorigen Zug
+beim nächsten doppelt an, und nach einer Auswertung hängt er an einem Actor,
+der nicht mehr im Bild ist. Und die API vor dem Aufruf lesen: `Off()` gab es
+dort nie (`remove()`, `disable()`, `enable()` sind die Methoden), der
+AttributeError verschwand in Qts Slot-Behandlung und fiel nirgends auf. Ein
+Fake im Test spiegelt deshalb die **echte** API-Oberfläche, nicht die
+vermutete — ein Fake mit `Off()` hätte den Absturz genau so versteckt wie
+die Suite.
