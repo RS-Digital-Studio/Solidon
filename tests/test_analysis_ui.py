@@ -1145,6 +1145,122 @@ def test_a_scale_drag_becomes_an_operation(qt_app: QApplication) -> None:
         viewport.deleteLater()
 
 
+def test_the_drag_shows_its_number_while_it_runs(qt_app: QApplication) -> None:
+    """§18.11: die Zahl zum Zug — lesbar, während gezogen wird.
+
+    Wie weit man gezogen hatte, stand bis dahin erst hinterher im Verlauf.
+    Jetzt füttert jedes Move-Ereignis das Feld über dem Bild: Achse und
+    Millimeter beim Verschieben, Achse und Grad beim Drehen, der Faktor am
+    Würfel — und solange niemand tippt, folgt das Feld dem Zeiger.
+    """
+    from app.core.geom.transform import rotation, translation
+
+    viewport, _plotter = _gizmo_viewport()
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+
+        viewport._on_gizmo_interacted(translation((3.4, 0.0, 0.0)))
+        assert viewport._drag_kind == "move"
+        assert viewport._drag_axis == "x"
+        # isHidden statt isVisible: offscreen ist der Viewport selbst nie
+        # sichtbar, und ein Kind erbt das — gefragt ist, ob das Feld gezeigt
+        # würde, nicht ob der Testlauf ein Fenster hat.
+        assert not viewport.drag_bar.isHidden()
+        assert viewport.drag_bar.value.text() == "3,40"
+
+        viewport._on_gizmo_interacted(rotation("z", 30.0))
+        assert viewport._drag_kind == "turn"
+        assert viewport.drag_bar.value.text() == "30,0"
+        assert viewport.drag_bar.unit.text() == "°"
+
+        viewport._on_scale_interacted(1.375)
+        assert viewport._drag_kind == "scale"
+        assert viewport.drag_bar.value.text() == "1,375"
+
+        # Sobald getippt wurde, gehört das Feld der Tastatur.
+        viewport.drag_bar.typing = True
+        viewport.drag_bar.value.setText("2")
+        viewport._on_scale_interacted(1.8)
+        assert viewport.drag_bar.value.text() == "2", "der Zeiger überschreibt keine Eingabe"
+    finally:
+        viewport.deleteLater()
+
+
+def test_a_typed_number_is_applied_exactly(qt_app: QApplication) -> None:
+    """§18.11 „Zahleneingabe während des Ziehens": Enter wendet genau die
+    getippte Zahl an — ohne Rasterfang, denn wer tippt, meint es exakt.
+    """
+    from app.core.geom.transform import translation
+
+    viewport, _plotter = _gizmo_viewport()
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+        viewport.set_snapping(1.0, 15.0)
+        dragged: list[object] = []
+        viewport.transformDragged.connect(dragged.append)
+
+        viewport._on_gizmo_interacted(translation((3.4, 0.0, 0.0)))
+        viewport.drag_bar.typing = True
+        viewport.drag_bar.value.setText("12,5")
+        viewport._apply_typed()
+
+        assert len(dragged) == 1
+        assert dragged[0].offset == pytest.approx((12.5, 0.0, 0.0)), (
+            "exakt, kein Fang auf 12 oder 13"
+        )
+        assert viewport._drag_kind is None, "der Zug ist damit zu Ende"
+        assert viewport.drag_bar.isHidden()
+
+        # Loslassen während des Tippens wendet nichts an — die Zahl gilt.
+        viewport._on_gizmo_interacted(translation((3.4, 0.0, 0.0)))
+        viewport.drag_bar.typing = True
+        viewport._on_gizmo_released(translation((3.4, 0.0, 0.0)))
+        assert len(dragged) == 1, "das Release hat nicht zusätzlich angewandt"
+        assert viewport._drag_kind == "move", "und der getippte Zug läuft weiter"
+
+        # Eine Zahl, mit der sich nichts anfangen lässt, wendet nichts an.
+        viewport.drag_bar.value.setText("keine Zahl")
+        viewport._apply_typed()
+        assert len(dragged) == 1
+        assert viewport._drag_kind == "move", "der Zug bleibt offen, das Feld markiert sich"
+
+        # Esc verwirft: nichts angewandt, Zustand weg.
+        viewport._end_drag()
+        assert viewport._drag_kind is None
+        assert len(dragged) == 1
+    finally:
+        viewport.deleteLater()
+
+
+def test_a_typed_scale_factor_becomes_the_operation(qt_app: QApplication) -> None:
+    """Auch am Würfel gilt: die getippte Zahl schlägt den Mausweg — und ein
+    Faktor, der nichts ändert oder nichts übrig ließe, wird nicht angewandt.
+    """
+    viewport, _plotter = _gizmo_viewport()
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+        factors: list[float] = []
+        viewport.scaleDragged.connect(factors.append)
+
+        viewport._on_scale_interacted(1.4)
+        viewport.drag_bar.typing = True
+        viewport.drag_bar.value.setText("2,0")
+        viewport._apply_typed()
+        assert factors == [2.0]
+
+        viewport._on_scale_interacted(1.4)
+        viewport.drag_bar.typing = True
+        viewport.drag_bar.value.setText("0")
+        viewport._apply_typed()
+        assert factors == [2.0], "auf null schrumpfen gibt es nicht"
+        assert viewport._drag_kind == "scale", "der Zug bleibt offen"
+    finally:
+        viewport.deleteLater()
+
+
 def test_a_drag_gives_the_navigation_back(qt_app: QApplication) -> None:
     """Nach dem Loslassen gilt wieder das gewählte Schema.
 

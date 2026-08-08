@@ -1824,6 +1824,7 @@
   "Y": "Y",
   "Z-Sprung": "Z hop",
   "Zahl der Ecken, nur beim Vieleck.": "Number of corners, polygon only.",
+  "Zahl tippen: die Eingabetaste übernimmt genau diesen Wert, Esc verwirft den Zug.": "Type a number: Enter applies exactly this value, Esc discards the drag.",
   "Zapfen": "peg",
   "Zapfen und Bohrungen mit gestaffeltem Spiel. Einmal drucken, ausprobieren, und der Wert steht — er gehört danach ins Materialprofil, nicht ins Modell.": "Pins and bores with staggered play. Print once, try, and the value is settled — it belongs in the material profile afterwards, not in the model.",
   "Zeichnen …": "Draw …",

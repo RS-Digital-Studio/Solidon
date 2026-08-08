@@ -15,13 +15,14 @@ import weakref
 from typing import Any, Literal, cast
 
 from PySide6.QtCore import QEvent, Qt, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
 
 from app.branding import ENVIRONMENT_PREFIX
 from app.core.geom.measure import Measurement, MeasurementList, distance, snap, wall_thickness
 from app.core.geom.mesh_ops import decimate
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import (
+    Axis,
     TransformSteps,
     along_normal,
     decompose_transform,
@@ -31,7 +32,13 @@ from app.core.log import get_logger
 from app.core.perceive.maps import AnalysisMap
 from app.core.scene import EvaluationResult
 from app.core.types import Feature, FeatureId, LayerInfo, ObjectId, Profile, Vec3
-from app.core.units import EPS_DISPLAY, EPS_GEOM, EPS_MATCH_MINIMUM, EPS_MATCH_RELATIVE
+from app.core.units import (
+    DISPLAY_UNITS,
+    EPS_DISPLAY,
+    EPS_GEOM,
+    EPS_MATCH_MINIMUM,
+    EPS_MATCH_RELATIVE,
+)
 from app.i18n import tr
 from app.ui.labels import feature_label
 from app.ui.palette import DIFF_PALETTES, ROLES, VIRIDIS, DiffPalette
@@ -459,6 +466,92 @@ class PreviewBanner(QFrame):
         self.move(max((parent.width() - self.width()) // 2, 0), BANNER_TOP)
 
 
+class DragValueBar(QFrame):
+    """Die Zahl zum Zug — lesbar während des Ziehens, tippbar statt zu zielen
+    (§18.11 „Zahleneingabe während des Ziehens").
+
+    Solange die Maus zieht, zeigt das Feld den Live-Wert. Sobald jemand eine
+    Ziffer tippt, gehört der Zug der Tastatur: das Feld hört auf, dem Zeiger
+    zu folgen, die Eingabetaste wendet genau die getippte Zahl an — ohne
+    Rasterfang, denn wer tippt, meint es exakt —, und Esc verwirft den Zug.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("dragValueBar")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(ROOMY, TIGHT, ROOMY, TIGHT)
+        layout.setSpacing(TIGHT)
+
+        self.label = QLabel("", self)
+        self.value = QLineEdit(self)
+        self.value.setFixedWidth(88)
+        self.value.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.value.setToolTip(
+            tr("Zahl tippen: die Eingabetaste übernimmt genau diesen Wert, Esc verwirft den Zug.")
+        )
+        self.unit = QLabel("", self)
+        layout.addWidget(self.label)
+        layout.addWidget(self.value)
+        layout.addWidget(self.unit)
+
+        self.typing = False
+        """Ob die Tastatur den Zug übernommen hat — dann folgt das Feld nicht
+        mehr dem Zeiger."""
+        self.value.textEdited.connect(self._took_over)
+        self.set_theme("dark")
+        self.hide()
+
+    def _took_over(self, _text: str) -> None:
+        self.typing = True
+
+    def set_theme(self, theme: str) -> None:
+        """Dieselbe Zeichnung wie das Vorschauband — beides sind Aussagen über
+        einen Zwischenstand, nicht über das Ergebnis."""
+        colours = THEMES["light" if theme == "light" else "dark"]
+        self.setStyleSheet(
+            f"#dragValueBar {{ background: {colours['window']};"
+            f" border: 1px dashed {colours['disabled']}; border-radius: 4px; }}"
+            f"#dragValueBar QLabel {{ color: {colours['text']}; background: transparent; }}"
+        )
+
+    def follow(self, label: str, amount: float, unit: str, decimals: int) -> None:
+        """Der Live-Wert des Zugs — solange niemand tippt."""
+        self.label.setText(label)
+        self.unit.setText(unit)
+        if not self.typing:
+            self.value.setText(f"{amount:.{decimals}f}".replace(".", ","))
+        if not self.isVisible():
+            self.show()
+        self.adjustSize()
+        self.place()
+
+    def typed_value(self) -> float | None:
+        """Die getippte Zahl — oder nichts, wenn dort keine steht."""
+        try:
+            return float(self.value.text().strip().replace(",", "."))
+        except ValueError:
+            return None
+
+    def dismiss(self) -> None:
+        """Der Zug ist vorbei — auf welche Art auch immer."""
+        self.typing = False
+        self.value.clearFocus()
+        self.hide()
+
+    def place(self) -> None:
+        """Oben mittig, unterhalb des Vorschaubands, wenn eines steht."""
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        top = BANNER_TOP
+        banner = getattr(parent, "banner", None)
+        if banner is not None and banner.isVisible():
+            top = banner.geometry().bottom() + TIGHT
+        self.move(max((parent.width() - self.width()) // 2, 0), top)
+
+
 def types_text(widget: QWidget | None) -> bool:
     """Ob in diesem Feld ein Leerzeichen ein Leerzeichen ist."""
     from PySide6.QtWidgets import QAbstractSpinBox, QComboBox, QLineEdit, QTextEdit
@@ -577,6 +670,14 @@ class Viewport(QWidget):
         self._scale_handle: ScaleHandle | None = None
         """Der Würfel zum Skalieren (§18.11) — nur am Objekt-Gizmo. Eine
         Fläche kennt nur vor und zurück, sie hat keine Größe zu ändern."""
+        self._drag_kind: str | None = None
+        """Was gerade gezogen wird — ``move``, ``turn``, ``face`` oder
+        ``scale``, ``None`` heißt kein Zug. Entscheidet, was eine getippte
+        Zahl bedeutet (§18.11)."""
+        self._drag_axis: Axis | None = None
+        """Die Achse des laufenden Zugs, sobald sie sich gezeigt hat."""
+        self._drag_normal: Vec3 | None = None
+        """Die Flächennormale, wenn der Zug an einer Fläche hängt."""
         self._grid_step = 1.0
         self._angle_step = 15.0
         self._map: AnalysisMap | None = None
@@ -612,6 +713,9 @@ class Viewport(QWidget):
 
         self.banner = PreviewBanner(self)
         """Das Band über dem Bild, wenn eine Vorschau läuft."""
+        self.drag_bar = DragValueBar(self)
+        """Die Zahl zum Zug (§18.11): lesen beim Ziehen, tippen statt zielen."""
+        self.drag_bar.value.installEventFilter(self)
         self._compare = HoldToCompare(self)
         """Der Filter für die Leertaste. Er hängt an der Anwendung, solange das
         Band steht — nicht länger, sonst schluckt er anderswo Leerzeichen."""
@@ -629,6 +733,9 @@ class Viewport(QWidget):
         # überleben das nicht.
         self.plotter = cast(Any, QtInteractor(self))
         self._layout.addWidget(self.plotter.interactor)
+        # Während eines Zugs gehören Ziffern dem Wertfeld, nicht VTK — der
+        # Filter sitzt deshalb auf dem Fenster, das die Tasten bekommt.
+        self.plotter.interactor.installEventFilter(self)
         self._add_orientation_widget()
         self._apply_render_quality()
         self.set_theme("dark")
@@ -1225,6 +1332,7 @@ class Viewport(QWidget):
         self._bed_surface = colours["bed_surface"]
         self._edge_colour = colours["edge"]
         self.banner.set_theme(theme)
+        self.drag_bar.set_theme(theme)
         if self.plotter is None:
             return
         self.plotter.set_background(colours["bottom"], top=colours["top"])
@@ -1735,6 +1843,7 @@ class Viewport(QWidget):
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         super().resizeEvent(event)
         self.banner.place()
+        self.drag_bar.place()
 
     # --- layer analysis (§18.10) ------------------------------------------------
 
@@ -1851,6 +1960,7 @@ class Viewport(QWidget):
                 actor,
                 colour=MEASURE_COLOUR,
                 release_callback=self._on_scale_released,
+                interact_callback=self._on_scale_interacted,
             )
         self._label_gizmo(actor)
 
@@ -1938,17 +2048,49 @@ class Viewport(QWidget):
         self._gizmo_label_base = None
 
     def _on_gizmo_interacted(self, matrix: Any) -> None:
-        """Während des Zugs reisen die Achsbuchstaben mit (Regel 18).
+        """Während des Zugs reisen Achsbuchstaben und Zahl mit (Regel 18, §18.11).
 
-        pyvista bewegt Griff und Körper, aber die Beschriftung ist unsere —
-        sie stand fest an der Startposition, und je weiter man zog, desto
-        weiter lag das X von dem Pfeil weg, den es benennt. Gerendert wird
-        nicht hier: pyvistas Move-Callback rendert am Ende ohnehin, und die
-        Matrix hinkt seinem Ereignis um eines hinterher — beim Loslassen
-        stellt das Neuanhängen alles exakt.
+        pyvista bewegt Griff und Körper, aber Beschriftung und Wertfeld sind
+        unsere: die Buchstaben standen fest an der Startposition, und die Zahl
+        zum Zug gab es gar nicht — wie weit man gezogen hatte, stand erst
+        hinterher im Verlauf. Gerendert wird nicht hier: pyvistas Move-Callback
+        rendert am Ende ohnehin, und die Matrix hinkt seinem Ereignis um eines
+        hinterher — beim Loslassen stellt das Neuanhängen alles exakt.
         """
         if self._gizmo_label_data is not None and self._gizmo_label_base is not None:
             self._gizmo_label_data.points = moved_marks(self._gizmo_label_base, matrix)
+
+        import numpy as np
+
+        steps = decompose_transform(np.asarray(matrix, dtype=float))
+        face = self.gizmo_target()
+        if face is not None:
+            normal = face.params["normal"]
+            self._drag_kind = "face"
+            self._drag_normal = (float(normal[0]), float(normal[1]), float(normal[2]))
+            self.drag_bar.follow(
+                tr("Fläche"),
+                along_normal(steps.offset, self._drag_normal),
+                DISPLAY_UNITS[0],
+                2,
+            )
+        elif steps.turns and steps.axis is not None:
+            self._drag_kind = "turn"
+            self._drag_axis = steps.axis
+            self.drag_bar.follow(f"{tr('Winkel')} {steps.axis.upper()}", steps.angle, "°", 1)
+        elif steps.moves:
+            index = max(range(3), key=lambda axis: abs(steps.offset[axis]))
+            dominant: Axis = ("x", "y", "z")[index]
+            self._drag_kind = "move"
+            self._drag_axis = dominant
+            self.drag_bar.follow(dominant.upper(), steps.offset[index], DISPLAY_UNITS[0], 2)
+        # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
+        # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
+
+    def _on_scale_interacted(self, factor: float) -> None:
+        """Der Zwischenstand am Skalierwürfel — die Zahl zum Zug (§18.11)."""
+        self._drag_kind = "scale"
+        self.drag_bar.follow(tr("Faktor"), factor, "", 3)
 
     def _face_handle(self, feature: Feature) -> Any:
         """Ein Griff auf der Fläche, an dem der Gizmo sitzen kann.
@@ -2005,6 +2147,14 @@ class Viewport(QWidget):
         nach dem ersten Zug Auswahl-Klick, Kontextmenü und das gewählte Schema
         verschwunden.
         """
+        if self.drag_bar.typing:
+            # Der Zug gehört der Tastatur (§18.11): das Loslassen wendet
+            # nichts an, die Eingabetaste wird es tun. Griff frisch, Stil
+            # zurück — das Feld bleibt mit der getippten Zahl stehen.
+            self.set_navigation(self._scheme)
+            self.set_gizmo(self._gizmo_wanted)
+            return
+
         import numpy as np
 
         steps = decompose_transform(np.asarray(matrix, dtype=float))
@@ -2019,8 +2169,7 @@ class Viewport(QWidget):
             )
             if abs(distance) > EPS_DISPLAY:
                 self.faceDragged.emit(normal, distance)
-            self.set_navigation(self._scheme)
-            self.set_gizmo(self._gizmo_wanted)
+            self._end_drag()
             return
         snapped = TransformSteps(
             offset=(
@@ -2034,8 +2183,7 @@ class Viewport(QWidget):
         )
         if snapped.moves or snapped.turns or snapped.resizes:
             self.transformDragged.emit(snapped)
-        self.set_navigation(self._scheme)
-        self.set_gizmo(self._gizmo_wanted)
+        self._end_drag()
 
     def _on_scale_released(self, factor: float) -> None:
         """Ein Zug am Skalierwürfel endet als Operation (§18.11, §2.1).
@@ -2044,10 +2192,79 @@ class Viewport(QWidget):
         Gründen: die Zahl melden, den Navigationsstil zurückholen, den Griff
         frisch anhängen — die Vorschau am alten Actor verschwindet mit ihm.
         """
+        if self.drag_bar.typing:
+            self.set_navigation(self._scheme)
+            self.set_gizmo(self._gizmo_wanted)
+            return
         if abs(factor - 1.0) > 1e-4:
             self.scaleDragged.emit(float(factor))
+        self._end_drag()
+
+    def _end_drag(self) -> None:
+        """Der Zug ist vorbei: Zahl weg, Zustand weg, Stil zurück, Griff frisch."""
+        self._drag_kind = None
+        self._drag_axis = None
+        self._drag_normal = None
+        self.drag_bar.dismiss()
         self.set_navigation(self._scheme)
         self.set_gizmo(self._gizmo_wanted)
+
+    def _apply_typed(self) -> None:
+        """Die Eingabetaste wendet die getippte Zahl an — genau die (§18.11).
+
+        Ohne Rasterfang, denn wer tippt, meint es exakt. Eine Zahl, mit der
+        sich nichts anfangen lässt, bleibt markiert im Feld stehen — angewandt
+        wird dann nichts.
+        """
+        value = self.drag_bar.typed_value()
+        kind = self._drag_kind
+        if value is None or kind is None or (kind == "scale" and value <= 0.0):
+            self.drag_bar.value.selectAll()
+            return
+        if kind == "face" and self._drag_normal is not None:
+            if abs(value) > EPS_DISPLAY:
+                self.faceDragged.emit(self._drag_normal, float(value))
+        elif kind == "turn" and self._drag_axis is not None:
+            if abs(value) > EPS_DISPLAY:
+                self.transformDragged.emit(TransformSteps(axis=self._drag_axis, angle=float(value)))
+        elif kind == "move" and self._drag_axis is not None:
+            if abs(value) > EPS_DISPLAY:
+                index = ("x", "y", "z").index(self._drag_axis)
+                offset = [0.0, 0.0, 0.0]
+                offset[index] = float(value)
+                self.transformDragged.emit(TransformSteps(offset=(offset[0], offset[1], offset[2])))
+        elif kind == "scale" and abs(value - 1.0) > 1e-4:
+            self.scaleDragged.emit(float(value))
+        self._end_drag()
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 — Qt-Name
+        """Während eines Zugs gehören Ziffern dem Wertfeld, nicht VTK (§18.11).
+
+        Der Filter sitzt auf dem Interactor-Fenster und auf dem Feld selbst:
+        die erste Ziffer holt den Fokus ins Feld, Eingabetaste und Esc wirken
+        von beiden Seiten. VTKs eigene Tastenkürzel bleiben unangetastet —
+        geschluckt wird nur, was zum Zug gehört, und nur solange einer läuft.
+        """
+        if self._drag_kind is None or event.type() != QEvent.Type.KeyPress:
+            return False
+        key = event.key()
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._apply_typed()
+            return True
+        if key == Qt.Key.Key_Escape:
+            # Esc verwirft den Zug: nichts angewandt, das Bild zurück zur Szene.
+            self._end_drag()
+            return True
+        if watched is self.drag_bar.value:
+            return False
+        text = str(event.text())
+        if text and (text.isdigit() or text in "-,."):
+            self.drag_bar.typing = True
+            self.drag_bar.value.setText(text)
+            self.drag_bar.value.setFocus()
+            self.drag_bar.value.setCursorPosition(len(text))
+            return True
+        return False
 
     def reset_camera(self) -> None:
         """Passt auf die Körper ein — nicht auf den Bauraum.
