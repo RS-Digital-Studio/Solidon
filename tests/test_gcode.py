@@ -68,13 +68,64 @@ def test_a_cura_file_gives_up_its_numbers() -> None:
 def test_what_is_not_in_the_file_stays_unknown() -> None:
     """Ein fehlender Wert fehlt, er ist nicht null — genau darum wird die
     Datei gelesen.
+
+    Die Materiallänge steht hier trotzdem: eine Bahn mit Vorschub *ist* eine
+    Aussage der Datei über das Filament, das durch sie ging. Zeit und
+    Schichtzahl sagt nur der Kopf, und der schweigt.
     """
     metrics = gcode.parse("G1 X10 Y10 E1.0\n")
 
     assert metrics.print_seconds is None
-    assert metrics.filament_mm is None
+    assert metrics.filament_mm == pytest.approx(1.0), "die Bahn sagt es, auch ohne Kopf"
     assert metrics.layer_count is None
     assert metrics.support_mm3 is None, "no type comments, no measured support"
+
+
+def test_a_file_without_any_move_says_nothing_about_material() -> None:
+    """Ohne Bahn und ohne Kopf bleibt die Länge unbekannt — nicht null."""
+    metrics = gcode.parse(";FLAVOR:Marlin\nG28\nM104 S200\n")
+
+    assert metrics.filament_mm is None
+
+
+def test_curas_empty_header_does_not_become_a_measurement() -> None:
+    """`CuraEngine` schreibt den Kopf, bevor es rechnet.
+
+    Im Fenster füllt Cura „Filament used" nachträglich aus; von der
+    Kommandozeile aus bleibt dort die Vorlage stehen. Gemessen an einem echten
+    Lauf (5.13.0, 20-mm-Würfel): 1,8 MB Bahnen mit Vorschub, und im Kopf
+    `Filament used: 0m`. Solidon meldete daraufhin null Meter und rechnete
+    Kosten von null — die Datei selbst weiß es besser.
+    """
+    metrics = gcode.parse(
+        ";Filament used: 0m\n;LAYER_COUNT:2\nM82\nG1 X10 Y10 E2.0\nG1 X20 Y10 E5.5\n"
+    )
+
+    assert metrics.filament_mm == pytest.approx(5.5)
+    assert metrics.layer_count == 2, "was der Kopf sagt, gilt weiter"
+
+
+def test_the_last_layer_mark_beats_the_header_time() -> None:
+    """`;TIME:6666` ist Curas Vorlage, keine Zeit.
+
+    Sie sieht mit 111 Minuten plausibel aus und steht für jedes Modell gleich
+    da — auch für einen halb so hohen Würfel. Am Ende der Datei steht die
+    gerechnete Zeit: gemessen 20,8 Minuten für einen 20-mm-Würfel, gegen 21 bei
+    PrusaSlicer mit denselben Einstellungen.
+    """
+    metrics = gcode.parse(
+        ";TIME:6666\n;LAYER:0\n;TIME_ELAPSED:45.96\n;LAYER:1\n;TIME_ELAPSED:1249.49\n"
+    )
+
+    assert metrics.print_seconds == pytest.approx(1249.49)
+
+
+def test_a_stated_length_beats_the_moves() -> None:
+    """Der Kopf kennt, was keine Bahn zeigt: Vorschieben, Reinigungsturm,
+    Werkzeugwechsel. Wo er etwas sagt, gilt er."""
+    metrics = gcode.parse(";filament used [mm] = 4000\nM82\nG1 X10 Y10 E2.0\n")
+
+    assert metrics.filament_mm == pytest.approx(4000.0)
 
 
 def test_the_support_volume_is_measured_not_guessed() -> None:

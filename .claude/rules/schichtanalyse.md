@@ -42,6 +42,21 @@ Drei Sachen, die dabei nicht verhandelbar sind:
 - **Ein neuer Slicer kostet eine Tabelle**, keinen Eingriff — `slicer_keys.py`
   ist das Wörterbuch, `handover.py` der Ablauf.
 
+**Bei `CuraEngine` gehen die Werte zweimal hinaus.** Es hält zwei Ebenen —
+global und Extruder-Zug —, und das meiste, was einen Druck ausmacht, liest es
+vom Zug. Was nur global steht, wird nicht übernommen, sondern von der Vorgabe
+der Definition überschrieben; was nur auf dem Zug steht, fehlt der
+Zeitrechnung. Beide Male dasselbe zu setzen kommt am selben Ort heraus und
+spart es, `settable_per_extruder` aus der Definition zu lesen.
+
+**Was der Kopf einer Cura-Datei sagt, ist keine Messung.** `Filament used`,
+`MINX` und `TIME` schreibt CuraEngine, *bevor* es rechnet; im Fenster werden
+sie ersetzt, von der Kommandozeile aus bleiben sie stehen — `;TIME:6666` sieht
+mit 111 Minuten plausibel aus und gilt für jedes Modell. Gelesen wird deshalb
+die Datei selbst: die E-Achse für das Material, die letzte `TIME_ELAPSED` für
+die Zeit. Ein Kopfwert gilt weiter, wo er einen trägt — er kennt Vorgänge, die
+keine Bahn zeigt.
+
 ## Vorschlag oder Befund
 
 `slice/advise.py` schließt aus Geometrie, Material und Maschine auf

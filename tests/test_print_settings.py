@@ -1288,6 +1288,62 @@ def test_a_profile_name_finds_its_file(tmp_path, monkeypatch) -> None:
     assert daten["name"].startswith("Solidon"), "aber der Name ist Solidons eigener"
 
 
+def test_cura_gets_its_values_on_the_extruder_too(tmp_path) -> None:
+    """``CuraEngine`` liest das meiste vom Extruder-Zug, nicht global.
+
+    Was nur global steht, wird nicht übernommen, sondern von der Vorgabe der
+    Definition überschrieben. Gemessen an einem 20-mm-Würfel gegen PrusaSlicer
+    mit denselben Einstellungen: 748 mm Filament statt 1410, weil Wandzahl,
+    Bahnbreite und Füllung nie beim Extruder ankamen. Nur auf dem Zug ist
+    ebenso falsch — dann fehlen der Zeitrechnung die Geschwindigkeiten (38,4
+    Minuten statt 20,9).
+    """
+    from pathlib import Path
+
+    setup = handover.SlicerSetup(executable=Path("CuraEngine.exe"), flavour="cura")
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    config = handover.write_config(print_settings.resolve(profile), profile, setup, tmp_path)
+
+    command = handover._command(setup, [tmp_path / "cube.stl"], config, tmp_path)
+    assert "-e0" in command, "ohne Extruder-Zug kommt kein Wert dort an"
+    wall = [index for index, entry in enumerate(command) if entry.startswith("wall_line_count=")]
+    assert len(wall) == 2, "einmal global, einmal auf dem Zug"
+    assert wall[0] < command.index("-e0") < wall[1], "und in dieser Reihenfolge"
+
+
+def test_curas_first_line_width_is_a_share_not_a_size() -> None:
+    """``initial_layer_line_width_factor`` will Prozent von ``line_width``.
+
+    Solidon schrieb den Millimeterwert hinein: 0,449 wurde zu 0,449 Prozent,
+    und die erste Schicht bekam ein Zweihundertstel der Breite, die sie haben
+    sollte. Bei PrusaSlicer ist dasselbe Feld ein Maß — deshalb fiel es nur
+    gegen einen echten Lauf auf.
+    """
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    written = handover.as_mapping(settings, "cura")
+
+    share = float(written["initial_layer_line_width_factor"])
+    expected = settings.layers.first_layer_line_width / settings.layers.line_width * 100.0
+    # Geschrieben wird mit sechs geltenden Ziffern, wie jede andere Zahl auch.
+    assert share == pytest.approx(expected, abs=1e-3)
+    assert share > 50.0, "ein Anteil, kein Millimeterwert"
+
+
+def test_cura_switches_acceleration_on_before_using_it(tmp_path) -> None:
+    """Ohne den Schalter rechnet ``CuraEngine`` mit ``machine_acceleration``
+    weiter und übergeht, was daneben steht."""
+    from pathlib import Path
+
+    setup = handover.SlicerSetup(executable=Path("CuraEngine.exe"), flavour="cura")
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    config = handover.write_config(print_settings.resolve(profile), profile, setup, tmp_path)
+    lines = config.process.read_text(encoding="utf-8").splitlines()
+
+    assert "acceleration_enabled=true" in lines
+    assert any(line.startswith("acceleration_print=") for line in lines)
+
+
 def test_an_unknown_profile_name_is_no_crash(tmp_path) -> None:
     """Ein Name, den dieser Slicer nicht kennt, liefert nichts — und keinen
     Stapelabzug."""

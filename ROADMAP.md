@@ -358,8 +358,7 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       `Prusa3D\PrusaSlicer\`, und die Bettform stand von 0 bis 256, während
       Solidon um den Ursprung rechnet — „All objects are outside of the
       print volume", ohne dass irgendwo stand, warum
-- [ ] **Cura ist angebunden, aber noch nicht durchgelaufen** (5.13.0). Die
-      Kette hat drei Stufen, und eine davon steht:
+- [x] **Cura läuft Ende zu Ende** (5.13.0). Die Kette hatte fünf Stufen:
       - [x] Der Aufruf ging an `UltiMaker-Cura.exe`, also an die Oberfläche.
             Die Kommandozeile hat nur `CuraEngine.exe` daneben
       - [x] `CuraEngine` liest **kein 3MF** — die 3MF-Seite sitzt im Frontend.
@@ -369,15 +368,38 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
             Rückgabewert 0 war: Bauraum, Düse, `machine_center_is_zero`,
             `roofing_layer_count`, `flooring_layer_count`. `_cura_base()` sucht
             die Datei unter `share/cura/resources/definitions`
-      - [ ] **Der Lauf endet, fördert aber nichts.** 8,6 MB Leerfahrten,
-            `Filament used: 0m`, alle Bettgrenzen auf `2.14748e+06` — das
-            Modell wird nicht platziert. `machine_center_is_zero` ist es
-            nicht, beide Stellungen liefern dasselbe. Offen bleibt, welche
-            Einstellung CuraEngine als „nichts drucken" auslegt; das Frontend
-            löst mehr auf als die Basisdefinition hergibt.
-            Abgesichert ist es: `gcode.extrudes()` lässt eine Datei ohne eine
-            einzige Bahn nicht mehr als Erfolg durch — das galt für **alle**
-            Slicer, nicht nur für Cura
+      - [x] **Der Lauf fördert — er sagte es nur nicht.** Der Befund
+            „8,6 MB Leerfahrten" war eine Fehldeutung des Kopfes: die Datei
+            enthält Bahnen mit Vorschub, und `gcode.extrudes()` bestätigt das.
+            `Filament used: 0m` und `MINX:2.14748e+06` sind **Vorlagen**, die
+            CuraEngine vor dem Rechnen schreibt und das Fenster nachträglich
+            ersetzt; von der Kommandozeile aus bleiben sie stehen. Dasselbe
+            gilt für `;TIME:6666` — 111 Minuten für jedes Modell, auch für
+            einen halb so hohen Würfel. Solidon liest die Länge jetzt aus der
+            E-Achse und die Zeit aus der letzten `TIME_ELAPSED`.
+      - [x] **Die Werte erreichten den Extruder nicht.** CuraEngine hält zwei
+            Ebenen, und das meiste, was einen Druck ausmacht, liest es vom
+            Extruder-Zug. Was nur global stand, wurde von der Vorgabe der
+            Definition überschrieben. Dazu zwei Einzelfehler: die erste
+            Bahnbreite ist dort ein **Anteil** (0,449 mm wurden zu 0,449 %),
+            und Beschleunigungswerte gelten erst mit `acceleration_enabled`.
+
+            Gemessen am 20-mm-Würfel gegen PrusaSlicer, dieselben
+            Einstellungen:
+
+            | Stand | Filament | Volumen | Zeit |
+            |---|---|---|---|
+            | vorher | 748 mm | 1,80 cm³ | 111 min (Vorlage) |
+            | jetzt | 1998 mm | 4,81 cm³ | 20,9 min |
+            | PrusaSlicer | 1410 mm | 3,39 cm³ | 21 min |
+            | Handrechnung | — | rund 3,3 cm³ | — |
+
+            Die Zeit trifft jetzt auf die Minute. Was an Material bleibt, ist
+            **Curas Rechnung, nicht Solidons Fehler**: mit `infill_pattern=lines`
+            statt `grid` kommen 3,70 cm³ heraus, also neun Prozent neben
+            PrusaSlicer — der Rest steckt in Curas Gitter-Muster bei 15 %
+            Dichte. Nur auf dem Zug zu setzen ist ebenso falsch wie nur global:
+            dann fehlen der Zeitrechnung die Geschwindigkeiten (38,4 min).
 
 ## P8 — Erste Veröffentlichung
 - [x] Name entschieden, überall durchgezogen — alles Namensbezogene steht in

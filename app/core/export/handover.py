@@ -146,7 +146,7 @@ def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str
         # verglichen meldete er eine Abweichung von nichts.
         if value != "":
             written[entry.key] = value
-    return _only_chosen_adhesion(written, settings, flavour)
+    return _cura_dependants(_only_chosen_adhesion(written, settings, flavour), flavour)
 
 
 def by_section(
@@ -224,6 +224,38 @@ def _only_chosen_adhesion(
     return written
 
 
+def _cura_dependants(written: dict[str, str], flavour: SlicerFlavour) -> dict[str, str]:
+    """Was bei ``CuraEngine`` von einem anderen Wert abhängt (§29).
+
+    Zwei Fälle, beide an einem echten Lauf gegen PrusaSlicer gemessen — derselbe
+    Würfel, dieselben Einstellungen:
+
+    **Die erste Bahnbreite ist dort ein Anteil, kein Maß.**
+    ``initial_layer_line_width_factor`` will Prozent von ``line_width``.
+    Solidon schrieb den Millimeterwert hinein: 0,449 wurde zu 0,449 Prozent,
+    und die erste Schicht bekam ein Zweihundertstel der Breite, die sie haben
+    sollte.
+
+    Der Schalter, ohne den die Beschleunigungswerte nicht gelten, steht
+    daneben in :func:`_machine_keys` — hier fiele er durch, weil
+    :func:`by_section` nur behält, was in der Zuordnungstabelle steht.
+    """
+    if flavour != "cura":
+        return written
+    width = _as_float(written.get("line_width"))
+    first = _as_float(written.get("initial_layer_line_width_factor"))
+    if width and first:
+        written["initial_layer_line_width_factor"] = f"{first / width * 100.0:g}"
+    return written
+
+
+def _as_float(value: str | None) -> float | None:
+    try:
+        return float(value) if value else None
+    except ValueError:
+        return None
+
+
 def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
     """Was der Slicer über die Maschine wissen muss, wenn kein Profil greift.
 
@@ -255,6 +287,11 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
             # no value given" ab, bevor er die erste Schicht ansieht.
             "roofing_layer_count": "0",
             "flooring_layer_count": "0",
+            # Und einer, ohne den zwei geschriebene Werte nicht gelten:
+            # ``CuraEngine`` rechnet ohne ihn mit ``machine_acceleration``
+            # weiter und übergeht `acceleration_print` und
+            # `acceleration_wall_0`, die daneben stehen.
+            "acceleration_enabled": "true",
         }
     if flavour != "prusa":
         return {}
@@ -544,9 +581,25 @@ def _command(
     basis = setup.machine_profile or _cura_base(setup.executable)
     if basis:
         arguments += ["-j", basis]
+    values: list[str] = []
     for line in config.process.read_text(encoding="utf-8").splitlines():
         if line.strip():
-            arguments += ["-s", line.strip()]
+            values += ["-s", line.strip()]
+    arguments += values
+    # **Und dieselben Werte noch einmal auf dem Extruder.** ``CuraEngine`` hält
+    # zwei Ebenen: was global gilt, und was der Extruder-Zug sagt — und das
+    # meiste, was einen Druck ausmacht, liest es vom Zug. Was nur global steht,
+    # wird nicht etwa übernommen, sondern von der Vorgabe der Definition
+    # überschrieben. Gemessen an einem 20-mm-Würfel gegen PrusaSlicer: 748 mm
+    # Filament statt 1410, weil Wandzahl, Bahnbreite und Füllung nie ankamen.
+    # Das Fenster sortiert die Werte nach ``settable_per_extruder``; sie beide
+    # Male zu setzen kommt am selben Ort heraus und braucht die Definition
+    # nicht zu lesen.
+    arguments += ["-e0"]
+    extruder = _cura_extruder_base(setup.executable)
+    if extruder:
+        arguments += ["-j", extruder]
+    arguments += values
     for entry in files:
         arguments += ["-l", entry]
     arguments += ["-o", str(output / "solidon.gcode")]
@@ -566,11 +619,26 @@ def _cura_base(executable: Path) -> str:
     Nichts, wenn sie nicht daliegt: dann scheitert der Lauf und sagt das,
     statt einen Pfad zu erfinden.
     """
+    return _cura_definition(executable, "fdmprinter.def.json")
+
+
+def _cura_extruder_base(executable: Path) -> str:
+    """Die Grunddefinition des Extruder-Zugs, neben der des Druckers.
+
+    Sie gibt dem Zug die Werte, die keine Einstellung von Solidon setzt —
+    Düsenversatz, Startposition, Kühlung im Ruhezustand. Ohne sie bleibt der
+    Zug leer, und eine Abfrage darauf endet mit „Trying to retrieve setting
+    with no value given".
+    """
+    return _cura_definition(executable, "fdmextruder.def.json")
+
+
+def _cura_definition(executable: Path, filename: str) -> str:
     for folder in (
         executable.parent / "share" / "cura" / "resources" / "definitions",
         executable.parent / "resources" / "definitions",
     ):
-        found = folder / "fdmprinter.def.json"
+        found = folder / filename
         if found.is_file():
             return str(found)
     return ""

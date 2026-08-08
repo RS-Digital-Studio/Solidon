@@ -116,7 +116,30 @@ def parse(text: str) -> GcodeMetrics:
         if found:
             warnings.append(found.group("text").strip())
 
-    metrics.support_mm3 = _support_volume(text, metrics.layer_height or 0.2)
+    # Die letzte Schichtmarke schlägt den Kopf. ``CuraEngine`` schreibt dort
+    # ``;TIME:6666`` — eine Vorlage, die im Fenster ersetzt wird und von der
+    # Kommandozeile aus stehen bleibt. Sie sieht aus wie eine Zeit (111
+    # Minuten), ist aber für jedes Modell dieselbe. Am Ende der Datei steht die
+    # gerechnete: gemessen 20,8 Minuten für einen 20-mm-Würfel, gegen 21 bei
+    # PrusaSlicer mit denselben Einstellungen.
+    elapsed = re.findall(r";\s*TIME_ELAPSED:\s*([0-9.]+)", text, re.IGNORECASE)
+    if elapsed:
+        metrics.print_seconds = float(elapsed[-1])
+
+    total, support = _extruded(text)
+    metrics.support_mm3 = None if support is None else support * FILAMENT_AREA
+    # Was der Kopf nicht sagt, sagen die Bahnen. Der Kopf hat trotzdem Vorrang:
+    # er ist die Aussage des Slicers über seinen eigenen Lauf, und die kennt
+    # Vorgänge, die keine Bahn zeigt — Vorschieben, Reinigungsturm,
+    # Werkzeugwechsel.
+    #
+    # Die Null ist dabei keine Aussage. ``CuraEngine`` schreibt den Kopf,
+    # **bevor** es rechnet, und füllt „Filament used" im Fenster nachträglich
+    # aus; von der Kommandozeile aus bleibt dort eine Vorlage stehen. Solidon
+    # meldete deshalb null Meter zu einer Datei, die 1,8 MB Bahnen mit Vorschub
+    # enthielt — und der Prüfbericht rechnete Kosten von null.
+    if metrics.filament_mm is None or (metrics.filament_mm <= 0.0 and total > 0.0):
+        metrics.filament_mm = total or None
     metrics.warnings = tuple(warnings)
     _log.info("read g-code of %s", metrics.slicer or "unknown slicer")
     return metrics
@@ -181,19 +204,23 @@ def _seconds(value: str) -> float | None:
     return total if found else None
 
 
-def _support_volume(text: str, layer_height: float) -> float | None:
-    """Extrudiertes Filament, während das Werkzeug Stützen gedruckt
-    hat (§28.1).
+def _extruded(text: str) -> tuple[float, float | None]:
+    """Wie viel Filament durch die Düse ging — insgesamt und für Stützen (§28.1).
 
-    Gemessen, nicht geschätzt: die Datei sagt, welche Abschnitte Stützen sind,
-    und die E-Achse sagt, wie viel Material in sie ging. Slicer, die den Typ
-    nicht schreiben, lassen das unbekannt — und das ist besser als eine Zahl,
-    die niemand prüfen kann.
+    Gemessen, nicht geschätzt: die E-Achse sagt, wie viel Material in eine Bahn
+    ging, und die Typkommentare sagen, wofür. Ein Slicer, der den Typ nicht
+    schreibt, lässt den Stützanteil unbekannt — und das ist besser als eine
+    Zahl, die niemand prüfen kann. Die Gesamtlänge steht davon unabhängig, denn
+    sie braucht keinen Typ.
+
+    Ein Durchlauf für beide Zahlen: es ist dasselbe Band, dieselbe Achse und
+    dieselbe Buchführung über absolut und relativ.
     """
     active = False
     seen_type = False
-    extruded = 0.0
-    previous: float | None = None
+    total = 0.0
+    support = 0.0
+    previous = 0.0
     absolute = ";" not in text or "M83" not in text
 
     for line in text.splitlines():
@@ -210,22 +237,33 @@ def _support_volume(text: str, layer_height: float) -> float | None:
             absolute = True
             continue
         if stripped.upper().startswith("G92") and " E" in stripped.upper():
-            previous = 0.0
+            # Auf den genannten Wert, nicht auf null: ``G92 E0`` ist zwar der
+            # Regelfall, aber die Gesamtsumme hängt an jedem Rücksetzpunkt —
+            # ein angenommener wäre ein Fehler, der sich über die ganze Datei
+            # fortschreibt.
+            previous = _reset_value(stripped)
             continue
 
         found = _EXTRUSION.match(stripped)
         if found is None:
             continue
         value = float(found.group("e"))
-        step = value - (previous or 0.0) if absolute else value
+        step = value - previous if absolute else value
         if absolute:
             previous = value
+        # Für die Gesamtmenge zählt auch ein Rückschritt: was zurückgezogen
+        # wurde, ist nicht gefördert. Für die Stützen bleibt es beim positiven
+        # Anteil — ein Rückzug gehört keinem Abschnitt.
+        total += step
         if active and step > 0.0:
-            extruded += step
+            support += step
 
-    if not seen_type:
-        return None
-    return extruded * FILAMENT_AREA
+    return max(total, 0.0), support if seen_type else None
+
+
+def _reset_value(line: str) -> float:
+    found = re.search(r"\bE(-?[0-9.]+)", line, re.IGNORECASE)
+    return 0.0 if found is None else float(found.group(1))
 
 
 @dataclass(slots=True)
