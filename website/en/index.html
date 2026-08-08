@@ -19,6 +19,8 @@
 <meta property="og:image" content="https://solidon3d.de/handbuch/en/main-window.png">
 <meta property="og:image:alt" content="The Solidon3D main window: object tree, 3D view and inspection report side by side">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../style.css">
 <script type="application/ld+json">
@@ -37,7 +39,8 @@
     "@type": "Offer",
     "price": "49",
     "priceCurrency": "EUR",
-    "category": "One-time purchase"
+    "url": "https://solidon3d.de/en/#pricing",
+    "availability": "https://schema.org/PreOrder"
   }
 }
 </script>
@@ -217,7 +220,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="../handbuch/en/report.png" width="460" height="292" loading="lazy" decoding="async"
+            <img src="../handbuch/en/report.png" width="460" height="300" loading="lazy" decoding="async"
                  alt="The inspection report: zero errors, two warnings and two hints, among them “The model is open in three places” and “A wall is thinner than two extrusion widths”">
           </div>
           <figcaption>The report for an imported third-party file.</figcaption>
@@ -318,7 +321,7 @@
 
             <g class="anim fig-find-1">
               <path class="warn" d="M368 88 l9 16 h-18 z"/>
-              <text class="ink" x="386" y="103" font-size="12">Overhang 78°</text>
+              <text class="ink" x="386" y="103" font-size="12">Overhang 90°</text>
             </g>
             <g class="anim fig-find-2">
               <path class="warn" d="M368 128 l9 16 h-18 z"/>
@@ -445,8 +448,9 @@
         <li><b>Calibrate instead of guess.</b> Tolerance ladder, wall
         thickness ladder and overhang fan on one plate; the measured values
         go into the material profile.</li>
-        <li><b>A repair chain for foreign files.</b> Close holes, fix
-        normals, separate components — before anything is computed.</li>
+        <li><b>A repair chain for foreign files.</b> Close holes, fix normals,
+        remove degenerate triangles and stray fragments — before anything is
+        computed.</li>
         <li><b>Measure, section, explode.</b> Tools in the view that never
         touch the geometry.</li>
         <li><b>Sketches with constraints.</b> Draw, dimension, extrude — for
@@ -530,13 +534,16 @@
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span><b>Your projects stay readable.</b> An open file format,
-              export to STL, 3MF and STEP.</span>
+              <span><b>Your projects stay readable.</b> A ZIP file with JSON
+              inside, export to STL, 3MF, OBJ, PLY and STEP.</span>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span><b>14-day right of withdrawal.</b> As a purchase in
-              Germany ought to be.</span>
+              <span><b>You decide before you pay.</b> Fourteen days of full
+              testing first. On top of that the statutory
+              <a href="/widerruf.html">right of withdrawal</a> — waived if you
+              want the key released straight away, as with any digital
+              purchase.</span>
             </li>
           </ul>
         </div>
@@ -589,17 +596,19 @@
         <details>
           <summary>Do my models go anywhere?</summary>
           <p>Only if you use the chat with a third-party API key — then a
-          digest of the model goes to that provider: dimensions and features,
-          no files. With Ollama even that stays local. Without the chat,
-          nothing leaves the machine: no accounts, no storage on someone
-          else's server, no telemetry.</p>
+          digest of the scene goes to that provider: objects with their
+          dimensions, the names of the features, the parameters and the
+          history in brief. No geometry, no files. With Ollama even that stays
+          local. Without the chat, nothing leaves the machine: no accounts, no
+          storage on someone else's server, no telemetry.</p>
         </details>
         <details>
           <summary>Which formats does Solidon3D read and write?</summary>
-          <p>It reads STL, 3MF (including assemblies), OBJ and GLB. It writes
-          STL, 3MF — with colour changes and plate layout — and STEP wherever
-          the B-rep kernel can carry it. Projects are stored in an open,
-          documented format.</p>
+          <p>It reads STL, 3MF (including assemblies), OBJ and GLB, plus STEP
+          through the B-rep kernel. It writes STL, 3MF — with colour changes
+          and plate layout —, OBJ, PLY and STEP; STEP appears in the export
+          dialog as soon as a solid can carry it. A project is a ZIP file with
+          <code>project.json</code> inside: openable without Solidon3D.</p>
         </details>
         <details>
           <summary>Will it work with my printer?</summary>

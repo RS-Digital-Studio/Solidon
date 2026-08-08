@@ -19,6 +19,8 @@
 <meta property="og:image" content="https://solidon3d.de/handbuch/de/main-window.png">
 <meta property="og:image:alt" content="Das Hauptfenster von Solidon3D: Objektbaum, 3D-Ansicht und Prüfbericht nebeneinander">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 <script type="application/ld+json">
@@ -37,7 +39,8 @@
     "@type": "Offer",
     "price": "49",
     "priceCurrency": "EUR",
-    "category": "Einmalkauf"
+    "url": "https://solidon3d.de/#preis",
+    "availability": "https://schema.org/PreOrder"
   }
 }
 </script>
@@ -219,7 +222,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="handbuch/de/report.png" width="460" height="292" loading="lazy" decoding="async"
+            <img src="handbuch/de/report.png" width="460" height="300" loading="lazy" decoding="async"
                  alt="Der Prüfbericht: null Fehler, zwei Warnungen und zwei Hinweise, darunter „Das Modell ist an drei Stellen offen“ und „Eine Wand ist dünner als zwei Extrusionsbahnen“">
           </div>
           <figcaption>Der Prüfbericht einer eingelesenen Fremddatei.</figcaption>
@@ -322,7 +325,7 @@
 
             <g class="anim fig-find-1">
               <path class="warn" d="M368 88 l9 16 h-18 z"/>
-              <text class="ink" x="386" y="103" font-size="12">Überhang 78°</text>
+              <text class="ink" x="386" y="103" font-size="12">Überhang 90°</text>
             </g>
             <g class="anim fig-find-2">
               <path class="warn" d="M368 128 l9 16 h-18 z"/>
@@ -452,8 +455,8 @@
         und Überhangfächer auf einer Platte; die gemessenen Werte gehen ins
         Materialprofil.</li>
         <li><b>Reparaturkette für fremde Dateien.</b> Löcher schließen,
-        Normalen richten, Komponenten trennen — bevor irgendetwas gerechnet
-        wird.</li>
+        Normalen richten, entartete Dreiecke und Splitter entfernen — bevor
+        irgendetwas gerechnet wird.</li>
         <li><b>Messen, Schneiden, Explosion.</b> Werkzeuge in der Ansicht,
         ohne die Geometrie anzufassen.</li>
         <li><b>Skizzen mit Zwängen.</b> Zeichnen, bemaßen, extrudieren — für
@@ -539,13 +542,16 @@
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span><b>Deine Projekte bleiben lesbar.</b> Offenes Dateiformat,
-              Export nach STL, 3MF und STEP.</span>
+              <span><b>Deine Projekte bleiben lesbar.</b> Eine ZIP-Datei mit
+              JSON darin, Export nach STL, 3MF, OBJ, PLY und STEP.</span>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span><b>14 Tage Widerrufsrecht.</b> Wie es sich für einen Kauf in
-              Deutschland gehört.</span>
+              <span><b>Entschieden wird vor dem Kauf.</b> Vierzehn Tage
+              vollständig testen, dann zahlen. Dazu das gesetzliche
+              <a href="/widerruf.html">Widerrufsrecht</a> — wer den Schlüssel
+              sofort einlösen will, verzichtet darauf, wie bei jedem digitalen
+              Kauf.</span>
             </li>
           </ul>
         </div>
@@ -597,17 +603,20 @@
         <details>
           <summary>Gehen meine Modelle irgendwohin?</summary>
           <p>Nur wenn du den Chat mit einem fremden API-Schlüssel benutzt —
-          dann geht der Steckbrief des Modells an diesen Anbieter, Maße und
-          Merkmale, keine Dateien. Mit Ollama bleibt auch das lokal. Ohne
-          Chat verlässt nichts den Rechner: keine Konten, keine Ablage im
-          Netz, keine Telemetrie.</p>
+          dann geht der Steckbrief der Szene an diesen Anbieter: Objekte mit
+          ihren Maßen, die Namen der Merkmale, die Parameter und der Verlauf
+          in Kurzform. Keine Geometrie, keine Dateien. Mit Ollama bleibt auch
+          das lokal. Ohne Chat verlässt nichts den Rechner: keine Konten,
+          keine Ablage im Netz, keine Telemetrie.</p>
         </details>
         <details>
           <summary>Welche Formate liest und schreibt Solidon3D?</summary>
-          <p>Gelesen werden STL, 3MF (auch als Baugruppe), OBJ und GLB.
-          Geschrieben werden STL, 3MF — mit Farbwechsel und Plattenbelegung —
-          und STEP, wo der B-Rep-Kern es trägt. Projekte liegen in einem
-          offenen, dokumentierten Format.</p>
+          <p>Gelesen werden STL, 3MF (auch als Baugruppe), OBJ und GLB, dazu
+          STEP über den B-Rep-Kern. Geschrieben werden STL, 3MF — mit
+          Farbwechsel und Plattenbelegung —, OBJ, PLY und STEP; STEP steht im
+          Exportdialog, sobald ein Körper es tragen kann. Ein Projekt ist eine
+          ZIP-Datei mit <code>project.json</code> darin: auch ohne Solidon3D
+          zu öffnen.</p>
         </details>
         <details>
           <summary>Funktioniert das mit meinem Drucker?</summary>
