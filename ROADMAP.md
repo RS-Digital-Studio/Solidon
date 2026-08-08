@@ -432,12 +432,22 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       bestellt, 86 Dateien nach `solidon3d.de/httpdocs`, Auslieferung per
       Host-Header geprüft (Startseite, `en/`, Handbuch, `version.json` als
       JSON — alle 200). Impressum, Datenschutz und Widerruf tragen echte
-      Angaben statt Platzhaltern. Offen: DNS-Propagation abwarten, dann
-      Let's Encrypt in Plesk (mit `www.`), Postfach `support@solidon3d.de`
-      samt SPF/DMARC und der Auftragsverarbeitungsvertrag im CCP. Der
-      Zahlungsdienstleister in den AGB ist seit dem 08.08.2026 eingetragen
-      (Paddle); Entwurf bleiben die Rechtstexte nur noch bis zur fachlichen
-      Prüfung
+      Angaben statt Platzhaltern. **Seit dem 08.08.2026 auch verschlüsselt**:
+      Let's Encrypt für `solidon3d.de` und `www.solidon3d.de` (ein Zertifikat,
+      beide Namen im SAN, bis 06.11.2026), HTTP antwortet für beide mit 301 auf
+      HTTPS. Die DNS-Propagation ist durch — beide A-Records auf 188.68.47.33,
+      Zone bei netcup.
+
+      Ein Umweg war dabei zu vermeiden: Plesk hatte ein **Platzhalter**-
+      zertifikat angeboten, und nur dafür verlangt Let's Encrypt die
+      DNS-Challenge samt TXT-Eintrag. Für die zwei Namen genügt HTTP-01, und
+      das läuft ohne jeden Eintrag. Eine Datei `_acme-challenge.txt` im
+      Webspace hilft dabei nicht — eine DNS-Challenge wird im DNS abgefragt.
+
+      Offen: Postfach `support@solidon3d.de` samt SPF/DMARC und der
+      Auftragsverarbeitungsvertrag im CCP. Der Zahlungsdienstleister in den AGB
+      ist seit dem 08.08.2026 eingetragen (Paddle); Entwurf bleiben die
+      Rechtstexte nur noch bis zur fachlichen Prüfung
 - [x] Update-Hinweis beim Start — fragt eine Versionsdatei, lädt nichts, und ist
       aus, bis ihn jemand einschaltet
 
