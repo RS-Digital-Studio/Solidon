@@ -10,7 +10,12 @@
   --fg: #1c1b1a;
   --muted: #5f5b55;
   --accent: #a4551e;
-  --accent-soft: #f4e4d5;
+
+  /* Trägt den Kicker und die Einführungsmarke — beides kleiner, fetter Text
+     in ``--accent``. Bei #f4e4d5 kam das auf 4,34:1 und blieb damit knapp
+     unter den 4,5:1, die WCAG für Text unter 18,66 px verlangt; heller
+     gemischt sind es 4,71. */
+  --accent-soft: #faefe4;
   --card: #ffffff;
   --line: #e0ddd7;
   --shadow: 0 1px 2px rgb(28 27 26 / 6%), 0 8px 24px -12px rgb(28 27 26 / 18%);
@@ -46,7 +51,22 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+/* Die Kopfzeile steht und ist rund 66 px hoch. Ohne das Polster landet jede
+   Sprungmarke — „Funktionen“, „Preis“ — mit ihrer Überschrift genau
+   darunter, und es sieht aus, als wäre der Sprung danebengegangen. */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem;
+}
+
+/* Der Browser-Standardring verschwindet auf den Knöpfen, die selbst einen
+   Hintergrund tragen. Wer mit der Tastatur bedient, sieht sonst nicht, wo er
+   steht. ``:focus-visible`` heißt: nur bei Tastatur, nicht bei jedem Klick. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 0.3rem;
+}
 
 body {
   margin: 0;
@@ -105,6 +125,11 @@ header.site .wrap {
   flex-wrap: wrap;
 }
 
+/* Kein ``gap`` hier, und das ist der Punkt: in einem Flex-Container wird jeder
+   Textknoten zu einem eigenen Element. „Solidon" und ``<span>3D</span>`` waren
+   damit zwei davon, und der Abstand dazwischen schrieb den Markennamen als
+   „Solidon 3D" — mit Lücke, gegen Fenstertitel, Domain und branding.py. Der
+   Abstand gehört an das Symbol, nicht zwischen die Silben. */
 .brand {
   font-size: 1.35rem;
   font-weight: 700;
@@ -113,7 +138,6 @@ header.site .wrap {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
 }
 
 .brand span { color: var(--accent); }
@@ -121,6 +145,7 @@ header.site .wrap {
 .brand svg {
   width: 1.5rem;
   height: 1.5rem;
+  margin-right: 0.5rem;
   transition: transform 0.5s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
@@ -463,8 +488,10 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   margin-bottom: 0.7rem;
 }
 
-.pains q::before { content: "„"; }
-.pains q::after { content: "\201C"; }
+/* Die Anführungszeichen setzt der Browser selbst — er kennt die Sprache aus
+   dem ``lang`` des Dokuments und nimmt „…“ für Deutsch und “…” für Englisch.
+   Fest eingetragen standen hier vorher die deutschen, auch auf der
+   englischen Seite. */
 
 .pains p {
   margin: 0;
@@ -1145,6 +1172,40 @@ a { color: var(--accent); }
 .fig-pins { animation-name: fig-pins; }
 .fig-verdict-no { animation-name: fig-verdict-no; }
 .fig-verdict-yes { animation-name: fig-verdict-yes; }
+
+/* ── Papier ────────────────────────────────────────────────────────────── */
+
+/* Die Widerrufsbelehrung und die AGB sind Dokumente, die jemand ausdruckt.
+   Seit die Kopfzeile steht, gehört sie auf Papier gelöst — sonst klebt sie
+   im besten Fall oben auf der ersten Seite und wiederholt sich im
+   schlechtesten auf jeder. Flächen und Schatten kosten nur Toner. */
+@media print {
+  header.site {
+    position: static;
+    backdrop-filter: none;
+    background: none;
+  }
+
+  nav.lang,
+  .stage::after { display: none; }
+
+  body { background: #fff; color: #000; }
+
+  .download,
+  .price-card,
+  .closing,
+  .honest,
+  .faq details,
+  .way,
+  .pains li {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  .faq details { border: 1px solid #ccc; }
+
+  a { text-decoration: underline; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
