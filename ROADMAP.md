@@ -3085,3 +3085,71 @@ Sprachen, Website und PDFs neu erzeugt. §18.11 ist damit vollständig:
 Verschieben, Drehen, Skalieren, Raster- und Winkelfang, Zahleneingabe
 während des Ziehens — und der Fang auf Fläche und Bohrungsachse über
 `align_to_feature`, wie seit P3.
+
+## Der Schatten im Viewport durchgesehen (08.08.2026)
+
+Anlass war ein Satz ohne Fehlermeldung: „irgendwie sieht das komisch aus."
+Nachgemessen an der laufenden Anwendung, mit Kamerastellungen statt mit
+Eindrücken — und der Eindruck stimmte, aus einem Grund, den kein Test hätte
+finden können, weil keiner die Kamera kannte.
+
+### Was falsch war und jetzt stimmt
+
+- **Der Schatten fiel auf den Betrachter zu.** `SHADOW_DIRECTION` war eine
+  feste Weltrichtung (0,35 / 0,45), begründet mit „nach hinten rechts, weil
+  die Standardansicht von vorn links kommt — so tritt der Schatten hinter dem
+  Teil hervor statt davor, wo er die Sicht auf die Vorderkante nähme". Kein
+  Teil dieses Satzes stimmte. Gemessen als Anteil an der Blickrichtung:
+  Startansicht **−0,81** (also 0,81 nach vorn), eigene Iso +0,11. Jetzt in
+  jeder Ansicht +0,95.
+- **Der Grund lag tiefer als die Zahl.** Die Anwendung setzt kein eigenes
+  Licht; pyvistas Lichtsatz hängt an der Kamera. Ein Körper ist damit in jeder
+  Ansicht von vorn beleuchtet — und eine feste Weltrichtung für den Schatten
+  passt deshalb zu **keinem** Blickwinkel, nicht nur zu einem falschen. Die
+  Richtung folgt jetzt der Kamera (`shadow_direction`), nachgezogen bei jedem
+  Ansichtswechsel und am Ende jeder Drehung. Der Beobachter hängt am
+  Interactor und nicht am Interaktionsstil: den tauscht jeder Schemawechsel
+  aus, und der Orientierungswürfel dreht an ihm vorbei.
+- **Die Anwendung startete nicht in ihrer eigenen Ansicht.** `VIEW_DIRECTIONS`
+  führt eine Iso-Vorgabe (1, −1, 0,8), gesetzt hat sie niemand — beim Start
+  stand die Kamera auf pyvistas (1, 1, 1). Wer „Isometrisch" im Menü wählte,
+  sprang also aus einer Ansicht in eine andere, obwohl er die zu sehen
+  glaubte, in der er stand. Das war zugleich die Ursache dafür, dass die
+  Richtung der Konstante gegen die falsche Ansicht gedacht war.
+- **Der Umriss kostete zu viel und zu oft.** Er lief als Triangulierung über
+  jeden Punkt des Anzeigenetzes, je Körper und Szenenaufbau, im
+  Qt-Hauptthread: 5,2 ms bei dreitausend Dreiecken, 129 bei
+  zweiundachtzigtausend, 528 bei dreihundertsiebenundzwanzigtausend. Jetzt
+  steht die konvexe Hülle einmal je Körper, und ein Ansichtswechsel projiziert
+  nur noch daraus.
+
+| Körper | vorher | Aufbau | Ansichtswechsel | Abweichung |
+|---|---|---|---|---|
+| Quader, 3 072 Dreiecke | 5,2 ms | 1,8 ms | 0,65 ms | 0,000 mm |
+| Kugel, 20 480 | 31,6 ms | 19,3 ms | 10,9 ms | 0,023 mm |
+| Kugel, 81 920 | 128,8 ms | 21,7 ms | 11,2 ms | 0,028 mm |
+| Kugel, 327 680 | 528,4 ms | 30,1 ms | 12,1 ms | 0,045 mm |
+
+Der erste Anlauf war dabei ein Rückschritt und wurde als solcher gemessen: bei
+einer feinen Kugel liegt **jeder** Punkt auf der Hülle, und die Rechnung kostete
+59 ms statt 33. Die Hülle hat deshalb einen Kostendeckel
+(`SHADOW_HULL_POINTS`) — eine Stichprobe, dazu die äußersten Punkte in
+vierzehn Hauptrichtungen, damit ein kantiger Körper seine Ecken behält. Ein
+Quader kommt dabei exakt heraus, eine Kugel auf fünf Hundertstel Millimeter.
+
+### Was geprüft war und stimmte
+
+- **Der Schatten löscht das Bettraster nicht aus.** Der erste Eindruck sagte
+  das Gegenteil; nachgemessen an der Streuung im Bild (3,50 im Schatten gegen
+  4,89 daneben, bei 0,35 Deckkraft) scheint es korrekt gedämpft durch.
+
+### Offen, festgehalten und nicht behoben
+
+- **Steht ein Körper auf einem anderen, löst sich sein Schatten ab.** Er wird
+  immer auf die Platte geworfen, nie auf den Körper darunter. Ein Turm auf
+  einer 12 mm hohen Platte hat einen Schatten, der erst neben ihr auftaucht —
+  ein Fleck ohne Verbindung zu dem, was ihn wirft.
+- **Außerhalb der Platte fällt er ins Nichts.** Bei aufgezogener Explosion oder
+  einem Körper weit vom Ursprung liegt der dunkle Umriss auf blankem
+  Hintergrund, ohne Fläche darunter. Ein Schnitt gegen den Plattenrand wäre die
+  Abhilfe; er stand zur Wahl und wurde zurückgestellt.
