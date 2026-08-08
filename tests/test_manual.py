@@ -239,6 +239,27 @@ def test_the_html_carries_headings_lists_and_tables() -> None:
         assert tag in html, tag
 
 
+def test_a_drawn_figure_offers_its_dark_version() -> None:
+    """Wo eine dunkle Fassung existiert, steht sie als zweite Quelle daneben.
+
+    Die Zeichnungen konnten beide Themen von Anfang an — ``figures.svg`` nimmt
+    das Thema entgegen. Benutzt wurde nur ``light``, und weil die Seite dem
+    System folgt, standen im Dunkelmodus zwanzig weiße Kästen mit schwarzer
+    Schrift in einer dunklen Seite.
+    """
+    html = manual.as_html(
+        figure_source=lambda key: f"bilder/{key}.svg",
+        dark_source=lambda key: f"bilder/{key}-dark.svg",
+    )
+
+    assert "<picture>" in html
+    assert 'media="(prefers-color-scheme: dark)"' in html
+    assert "-dark.svg" in html
+    # Ohne dunkle Quelle bleibt es ein gewöhnliches Bild.
+    plain = manual.as_html(figure_source=lambda key: f"bilder/{key}.svg")
+    assert "<picture>" not in plain
+
+
 def test_a_figure_without_a_source_falls_back_to_its_text() -> None:
     """Wer keine Bildadresse liefert, bekommt den Alt-Text — kein leeres Kästchen."""
     html = manual.as_html()

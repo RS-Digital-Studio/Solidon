@@ -166,10 +166,17 @@ STYLE = """
 """
 
 
-def write_figures(target: Path, language: str) -> dict[str, str]:
-    """Jede Abbildung als Datei ablegen. Liefert die Adressen je Schlüssel."""
+def write_figures(target: Path, language: str) -> tuple[dict[str, str], dict[str, str]]:
+    """Jede Abbildung als Datei ablegen. Liefert die Adressen je Schlüssel.
+
+    Zurück kommen zwei Zuordnungen: die gewöhnlichen Quellen und die für ein
+    dunkles Farbschema. Gezeichnet wird beides, weil ``core.drawing`` beide
+    Paletten kennt — die dunkle Fassung blieb bis dahin ungenutzt, und im
+    Dunkelmodus standen zwanzig weiße Kästen in einer dunklen Seite.
+    """
     target.mkdir(parents=True, exist_ok=True)
     sources: dict[str, str] = {}
+    dark_sources: dict[str, str] = {}
     for figure in figures.FIGURES:
         if figure.kind == "shot":
             source = figure.path(language)
@@ -185,7 +192,12 @@ def write_figures(target: Path, language: str) -> dict[str, str]:
             continue
         (target / f"{figure.key}.svg").write_text(svg, encoding="utf-8")
         sources[figure.key] = f"{figure.key}.svg"
-    return sources
+
+        dark = figures.svg(figure.key, "dark")
+        if dark is not None:
+            (target / f"{figure.key}-dark.svg").write_text(dark, encoding="utf-8")
+            dark_sources[figure.key] = f"{figure.key}-dark.svg"
+    return sources, dark_sources
 
 
 #: Die Überschrift des Inhaltsverzeichnisses. Nicht über ``tr()``: der
@@ -274,16 +286,24 @@ def _classify(html: str) -> str:
     compact = {entry.key for entry in figures.FIGURES if entry.kind == "rendered"}
 
     def widen(match: re.Match[str]) -> str:
-        name = match.group(1)
-        key = name.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+        opening, name = match.group(1), match.group(2)
+        key = name.rsplit("/", 1)[-1].rsplit(".", 1)[0].removesuffix("-dark")
         css = ' class="drawing"' if key in compact else ""
-        return f'<figure{css}><img src="{name}"'
+        return f"<figure{css}>{opening}"
 
-    return re.sub(r'<figure><img src="([^"]+)"', widen, html)
+    # Eine themenfähige Abbildung steht als ``<figure><picture><source …>``
+    # da; der Schlüssel ist dann in der ersten Quelle zu finden, nicht im
+    # ``<img>``. Beide Formen werden erkannt.
+    return re.sub(r'<figure>(<(?:picture><source srcset|img src)="([^"]+)")', widen, html)
 
 
 def page_html(language: str, prefix: str) -> str:
-    body = _classify(manual.as_html(figure_source=lambda key: f"{prefix}/{key}.{_suffix(key)}"))
+    body = _classify(
+        manual.as_html(
+            figure_source=lambda key: f"{prefix}/{key}.{_suffix(key)}",
+            dark_source=lambda key: "" if _suffix(key) == "png" else f"{prefix}/{key}-dark.svg",
+        )
+    )
     title = f"{tr('Handbuch')} — {APP_NAME}"
     # Die Startseite liegt in beiden Sprachen neben ihrem Handbuch.
     home = "index.html"
@@ -585,8 +605,11 @@ def main() -> int:
         # Je Sprache ein eigener Ordner: die Beschriftungen stecken in den
         # Zeichnungen, also ist ein deutsches Bild kein englisches.
         folder = WEBSITE / "handbuch" / language
-        sources = write_figures(folder, language)
-        print(f"  {len(sources)} Abbildungen → {folder.relative_to(ROOT)}")
+        sources, dark_sources = write_figures(folder, language)
+        print(
+            f"  {len(sources)} Abbildungen ({len(dark_sources)} auch dunkel) "
+            f"→ {folder.relative_to(ROOT)}"
+        )
 
         target = WEBSITE / name
         target.parent.mkdir(parents=True, exist_ok=True)

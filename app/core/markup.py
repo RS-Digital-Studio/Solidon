@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from html import escape
-from typing import Final
+from typing import Final, NamedTuple
 
 #: Was in einer Zeile ausgezeichnet werden kann. Reihenfolge zählt: Code
 #: zuerst, damit ein Sternchen in einem Codeschnipsel keins bleibt.
@@ -30,8 +30,27 @@ _FIGURE: Final = re.compile(r"^!\[\]\(figure:([a-z0-9-]+)\)$")
 _ROW: Final = re.compile(r"^\|(.+)\|$")
 _SEPARATOR: Final = re.compile(r"^\|[\s:|-]+\|$")
 
-#: Was aus einem Bildverweis wird: die Quelle, der Alt-Text, die Unterschrift.
-FigureResolver = Callable[[str], tuple[str, str, str] | None]
+
+class FigureSource(NamedTuple):
+    """Was aus einem Bildverweis wird.
+
+    ``dark`` ist die Quelle für ein dunkles Farbschema und darf leer bleiben.
+    Gezeichnete Abbildungen entstehen in beiden Fassungen — eine Zeichnung mit
+    weißem Grund stand sonst als greller Block in einer dunklen Seite, während
+    der Text um sie herum dem System folgte. Bildschirmfotos haben keine zweite
+    Fassung: sie zeigen die Anwendung, wie sie eingestellt ist.
+    """
+
+    source: str
+    alt: str
+    caption: str
+    dark: str = ""
+
+
+#: Was aus einem Bildverweis wird: die Quelle, der Alt-Text, die Unterschrift —
+#: als Tupel oder als :class:`FigureSource`, das zusätzlich die dunkle Fassung
+#: kennt.
+FigureResolver = Callable[[str], FigureSource | tuple[str, str, str] | None]
 
 
 def inline(text: str) -> str:
@@ -139,11 +158,18 @@ def _figure_html(key: str, resolve: FigureResolver | None) -> str:
     found = resolve(key) if resolve else None
     if found is None:
         return ""
-    source, alt, caption = found
+    source, alt, caption, dark = found if isinstance(found, FigureSource) else (*found, "")
     if not source:
         # Kein Bild vorhanden: der Alt-Text tritt an seine Stelle, statt dass
         # die Aussage ersatzlos verschwindet (Regel 18).
         return f'<p class="figure-text">{inline(alt)}</p>'
     text = f"<figcaption>{inline(caption)}</figcaption>" if caption else ""
     image = f'<img src="{escape(source, quote=True)}" alt="{escape(alt, quote=True)}">'
+    if dark:
+        # ``<picture>`` und nicht zwei Bilder mit CSS: der Browser lädt genau
+        # eine Datei, und beim Drucken greift die helle — Papier ist hell.
+        image = (
+            f'<picture><source srcset="{escape(dark, quote=True)}" '
+            f'media="(prefers-color-scheme: dark)">{image}</picture>'
+        )
     return f"<figure>{image}{text}</figure>"

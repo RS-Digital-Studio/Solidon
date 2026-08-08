@@ -773,6 +773,7 @@ def as_html(
     registry: Registry | None = None,
     *,
     figure_source: Callable[[str], str] | None = None,
+    dark_source: Callable[[str], str] | None = None,
 ) -> str:
     """Das ganze Handbuch als HTML-Rumpf — für die Website und für das PDF.
 
@@ -780,16 +781,21 @@ def as_html(
     wer nichts liefert, bekommt an ihrer Stelle den Alt-Text. Wo die Datei
     liegt, entscheidet damit der Aufrufer und nicht der Kern — hier soll keine
     Ablagestruktur festgeschrieben werden.
+
+    ``dark_source`` beantwortet dieselbe Frage für ein dunkles Farbschema. Wer
+    für einen Schlüssel nichts liefert, bekommt dort ein gewöhnliches Bild —
+    ein Bildschirmfoto hat keine zweite Fassung, eine Zeichnung schon.
     """
     from app.core import figures
-    from app.core.markup import to_html
+    from app.core.markup import FigureSource, to_html
 
-    def resolve(key: str) -> tuple[str, str, str] | None:
+    def resolve(key: str) -> FigureSource | None:
         figure = figures.find(key)
         if figure is None:
             return None
         source = figure_source(key) if figure_source else ""
-        return source, str(figure.alt), str(figure.caption)
+        dark = dark_source(key) if dark_source else ""
+        return FigureSource(source, str(figure.alt), str(figure.caption), dark)
 
     return to_html(as_markdown(registry, with_figures=True), resolve)
 
