@@ -54,9 +54,10 @@ Die Vertragssprache ist Deutsch.
 Alle Preise sind Endpreise. Ob und in welcher Höhe Umsatzsteuer ausgewiesen
 wird, ergibt sich aus der Bestellübersicht und der Rechnung.
 
-Die Zahlung wird über Paddle (Paddle.com Market Ltd, Vereinigtes Königreich)
-abgewickelt. Welche Zahlungsarten zur Verfügung stehen, wird im Bestellvorgang
-angezeigt. Der Kaufpreis ist mit Vertragsschluss fällig.
+Die Zahlung wird über Paddle abgewickelt — Paddle.com Market Limited,
+30 Old Bailey, London EC4M 7AU, Vereinigtes Königreich (Companies House
+Nr. 08172165). Welche Zahlungsarten zur Verfügung stehen, wird im
+Bestellvorgang angezeigt. Der Kaufpreis ist mit Vertragsschluss fällig.
 
 Paddle tritt dabei als *Merchant of Record* auf und wird selbst
 Vertragspartner des Kaufs. Für den Kauf gelten damit die Bedingungen von
