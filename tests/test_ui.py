@@ -192,6 +192,37 @@ def test_the_window_starts_on_the_start_screen(window: MainWindow) -> None:
     assert window.stack.currentWidget() is window.start_screen
 
 
+def test_the_start_screen_shows_only_menus_that_do_something_there(window: MainWindow) -> None:
+    """Auf dem Startbildschirm stehen nur Menüs, die dort etwas tun (§2.6).
+
+    Bearbeiten, die Operationsgruppen und Ansicht setzen eine offene Szene
+    voraus — als Leiste voller ausgegrauter Einträge waren sie Kulisse, keine
+    Auskunft. Datei und Hilfe bleiben: Öffnen, Beenden, Handbuch und
+    Freischalten sind genau dort sinnvoll.
+    """
+
+    def shown() -> list[str]:
+        return [
+            entry.text()
+            for entry in window.menuBar().actions()
+            if entry.menu() is not None and entry.isVisible()
+        ]
+
+    assert window.stack.currentWidget() is window.start_screen
+    for menu in window._workspace_menus:
+        assert not menu.menuAction().isVisible(), menu.title()
+    assert len(shown()) == 2, shown()
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    for menu in window._workspace_menus:
+        assert menu.menuAction().isVisible(), menu.title()
+
+    window.session._dirty = False
+    window.action_new()
+    assert len(shown()) == 2, "zurück auf dem Startbildschirm gilt wieder die kurze Leiste"
+
+
 def test_the_start_screen_opens_the_manual(window: MainWindow) -> None:
     """§2.3: das Handbuch dort, wo es gebraucht wird.
 

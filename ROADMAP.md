@@ -3324,3 +3324,55 @@ Quader kommt dabei exakt heraus, eine Kugel auf fünf Hundertstel Millimeter.
 Der Umriss ist dabei von `delaunay_2d` auf die ebene konvexe Hülle
 umgestellt (`outline_of`): beschneiden lässt sich ein Rand, keine Menge von
 Dreiecken — und die Hülle ist zugleich billiger.
+
+## Drei Meldungen aus der Bedienung (08.08.2026)
+
+Robert meldete drei Dinge aus dem laufenden Gebrauch: die linke Spalte sei
+beim Einklappen „recht buggy, wird abgeschnitten, zeigt die Hälfte", die
+Schichtanalyse hänge an einer texturierten Fläche sehr, und auf dem
+Startbildschirm stehe eine Menüleiste, deren meiste Einträge dort nichts tun.
+Alle drei sind zu, und jede hatte einen messbaren Grund.
+
+- **Die linke Spalte rechnete sich um zweihundert Pixel zu kurz.**
+  `natural_height` zog für jede sichtbare Liste deren *rohe* Qt-Wunschhöhe ab
+  — pauschal 192 Pixel, egal wie hoch die Liste wirklich ist. Die Listen der
+  Spalte stehen aber per `fit_to_rows` auf festen Höhen weit darunter, und
+  das Layout rechnet mit der geklemmten Zahl. Offscreen nachgemessen: die
+  Zone bekam 159 Pixel für 371 Pixel Inhalt — Parameter und Verlauf hingen
+  unterhalb der Kartenkante, und genau das sah man als „zeigt die Hälfte".
+  Solange die Spalte voller ist als das Fenster hoch, deckelt `room` den
+  Fehler zu; er wurde sichtbar, sobald Einklappen den Inhalt unter die
+  Fensterhöhe brachte. Abgezogen wird jetzt der geklemmte Beitrag. Dazu
+  wächst die Rundeck-Maske während der Bewegung mit statt erst am Ziel —
+  eine unterwegs ersetzte Animation ließ sie sonst dauerhaft zu klein stehen,
+  denn `stop()` sendet kein `finished`.
+- **Die Schichtanalyse stand an der Textur aus drei Gründen zugleich.**
+  Gemessen an einer 60×40-Platte mit feinem Rändel (46 000 Dreiecke, 2 898
+  Ringe je Schicht in der Texturzone):
+  1. `_polygon_from` stellte die Verschachtelungsfrage — wer ist Loch von
+     wem — als n² einzelne `contains`-Aufrufe: 16,8 Millionen Stück, 63 von
+     66 Sekunden des ganzen Laufs. Über `STRtree` sind es dieselben Paare in
+     Millisekunden; `slice_body` fiel von 37 auf 4 Sekunden, bei
+     unveränderten Kennzahlen. Der Fall steht als Budget in
+     `test_performance.py`: viele Konturen sind der Härtefall, nicht viele
+     Dreiecke.
+  2. Jeder Schieberschritt startete einen **weiteren** Arbeiter, solange der
+     erste noch rechnete — dreißig Schritte, dreißig parallele Läufe.
+     `_slice_of` führt jetzt eine Warteschlange je Schlüssel: ein Arbeiter je
+     Körper, wer das Ergebnis will, stellt sich an, die Schichtansicht nur
+     einmal. Ein abgelöster Arbeiter wird beim Eintreffen verworfen, und eine
+     neue Auswertung löst den laufenden ab — sein Schlüssel (Objekt und
+     Dreieckszahl) überlebt eine Verschiebung, sein Ergebnis nicht.
+  3. Der Viewport schnitt bei jedem Schritt die Körper an der neuen Höhe —
+     ein echter `cut()` mit Deckel, an der Rändelplatte rund eine Sekunde,
+     im Qt-Hauptthread, und zeichnete dazu je Ring einen eigenen
+     `add_lines`-Actor, an einer Rändelschicht 2 898 Stück. Beim Fahren
+     folgen jetzt nur noch die Konturen (ein Actor je Rolle); der
+     Körperschnitt kommt nach 200 ms Ruhe (`LAYER_REBUILD_DELAY_MS`), bis
+     dahin bleibt die letzte Darstellung stehen (§2.8).
+- **Der Startbildschirm zeigt nur noch Menüs, die dort etwas tun.**
+  Bearbeiten, die Operationsgruppen und Ansicht setzen eine offene Szene
+  voraus und verschwinden mit ihr (§2.6); Datei und Hilfe bleiben, denn
+  Öffnen, Beenden, Handbuch und Freischalten sind genau dort sinnvoll. Die
+  Kürzel bleiben gültig — Qt registriert sie am Fenster, nicht an der
+  Sichtbarkeit des Menüs.

@@ -813,6 +813,12 @@ class MainWindow(QMainWindow):
         bar.addPermanentWidget(self.cancel_button)
 
     def _build_menus(self) -> None:
+        self._workspace_menus: list[QMenu] = []
+        """Menüs, die eine offene Szene voraussetzen. Auf dem Startbildschirm
+        werden sie ausgeblendet statt ausgegraut: siebzig Einträge, von denen
+        dort keiner etwas tut, sind keine Auskunft, sondern Kulisse (§2.6).
+        Datei und Hilfe bleiben — Öffnen, Beenden, Handbuch und Freischalten
+        sind genau dort sinnvoll."""
         file_menu = self._menu(tr("Datei"))
         self._add_action(
             file_menu,
@@ -903,6 +909,7 @@ class MainWindow(QMainWindow):
         )
 
         edit_menu = self._menu(tr("Bearbeiten"))
+        self._workspace_menus.append(edit_menu)
         # Rückgängig und Wiederholen zuerst: sie sind die häufigsten Einträge
         # des Menüs und stehen in jeder Anwendung oben. Vorher lagen sie unter
         # den Spezialfunktionen, hinter „Zugang zum Sprachmodell".
@@ -994,6 +1001,7 @@ class MainWindow(QMainWindow):
             if not present:
                 continue
             group = self._menu(str(title))
+            self._workspace_menus.append(group)
             for section in present:
                 # Eine Gruppe aus einer Kategorie braucht kein Untermenü — es
                 # hieße genauso wie das Menü darüber.
@@ -1019,10 +1027,12 @@ class MainWindow(QMainWindow):
             if section.category in grouped:
                 continue
             menu = self._menu(str(section.title))
+            self._workspace_menus.append(menu)
             for spec in section.entries:
                 self._op_actions[spec.name] = self._operation_action(menu, spec)
 
         view_menu = self._menu(tr("Ansicht"))
+        self._workspace_menus.append(view_menu)
         self._add_action(
             view_menu,
             tr("Alles einpassen"),
@@ -3748,6 +3758,12 @@ class MainWindow(QMainWindow):
         # ein anderer. Mit Blende liest das Auge „dasselbe Fenster, andere
         # Ansicht" statt von vorn (``app/ui/motion.py``).
         switch(self.stack, self.start_screen if show else self.overlay)
+        # Die Menüleiste folgt dem Schnitt: was eine offene Szene voraussetzt,
+        # steht auf dem Startbildschirm nicht herum. Die Kürzel der Einträge
+        # bleiben gültig — Qt registriert sie am Fenster, nicht an der
+        # Sichtbarkeit des Menüs.
+        for menu in self._workspace_menus:
+            menu.menuAction().setVisible(not show)
 
     def _focus_report(self) -> None:
         if not self.right.isVisible():
