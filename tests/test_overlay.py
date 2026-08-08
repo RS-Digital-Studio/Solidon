@@ -267,6 +267,51 @@ def test_a_wrapped_finding_is_measured_at_its_real_height(window: MainWindow) ->
     assert measured > naive, "der Umbruch muss in der Höhe ankommen"
 
 
+def test_findings_that_arrive_later_make_the_card_grow(window: MainWindow) -> None:
+    """Ein ``QListWidget`` meldet sein Wachstum nicht — es muss es sagen.
+
+    Nach der Auswertung kommen Befunde nach: die G-Code-Gegenprobe (§28.2),
+    die Kollisionsprüfung, die Exportprüfung. Die Karte blieb dabei auf der
+    Höhe, die sie beim Auswerten bekommen hatte, weil die Wunschgröße eines
+    ``QListWidget`` an seiner Größenrichtlinie hängt und nicht an seinem
+    Inhalt — und weil die Karte in keinem Layout steckt, das ein
+    ``LayoutRequest`` weiterreichen könnte.
+
+    Aufgefallen ist es am Handbuchbild: acht Befunde im Kopf gezählt, zwei
+    davon zu sehen, darunter vierhundert Pixel frei.
+    """
+    from app.core.types import Finding
+
+    report = window.report
+    window.right.setCurrentIndex(window.right.indexOf(report))
+    report.list.clear()
+    QApplication.processEvents()
+    window.overlay.reflow()
+    QApplication.processEvents()
+    before = report.height()
+
+    report.add_findings(
+        [
+            Finding(
+                code=f"probe.{number}",
+                severity="info",
+                message=f"Ein nachgereichter Befund Nummer {number}, mit einem Satz, "
+                f"der über mehrere Zeilen läuft.",
+            )
+            for number in range(8)
+        ]
+    )
+    QApplication.processEvents()
+
+    assert report.height() > before, (
+        "die Karte muss wachsen, wenn Befunde nach der Auswertung dazukommen"
+    )
+    assert report.list.verticalScrollBar().maximum() == 0, (
+        "acht Befunde passen in die Spalte — ein Rollbalken hier heißt, "
+        "die Karte hat ihren Platz nicht genommen"
+    )
+
+
 def test_a_card_uses_the_room_a_tall_window_offers(window: MainWindow) -> None:
     """Der Deckel kommt aus der Fensterhöhe, nicht aus einer Konstante.
 

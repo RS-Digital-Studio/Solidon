@@ -833,6 +833,17 @@ class ReportPanel(QWidget):
 
     findingActivated = Signal(object)
 
+    contentGrew = Signal()
+    """Die Liste hat Zeilen bekommen und will mehr Platz.
+
+    Ein ``QListWidget`` meldet das von sich aus nicht — seine Wunschgröße
+    hängt an der Größenrichtlinie, nicht am Inhalt. Und die Karte hängt in
+    keinem Layout, das ein ``LayoutRequest`` weiterreichen könnte: sie bekommt
+    ihre Geometrie von ``OverlayHost`` zugewiesen. Wer weiß, dass sich etwas
+    geändert hat, sagt es — das ist der Weg, den ``OverlayHost.reflow``
+    ausdrücklich vorsieht.
+    """
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._names: Mapping[str, str] = {}
@@ -907,6 +918,7 @@ class ReportPanel(QWidget):
             self._append(finding)
         self._count_up()
         self._refilter()
+        self._grew()
 
     def add_findings(self, findings: list[Finding]) -> None:
         """Hängt Befunde an, die nicht aus der Auswertung kamen — die
@@ -931,11 +943,27 @@ class ReportPanel(QWidget):
         self._resort()
         self._count_up()
         self._refilter()
+        self._grew()
         if fresh:
             # Nach dem Ordnen steht der neue Befund nicht mehr unten, sondern
             # dort, wo sein Gewicht ihn hinstellt — also wird er gesucht und
             # nicht die Liste ans Ende gefahren.
             self._show_first_of(fresh)
+
+    def _grew(self) -> None:
+        """Melden, dass die Liste jetzt mehr Platz will — siehe ``contentGrew``.
+
+        Die Karte blieb sonst so hoch, wie sie beim Auswerten war, und Befunde,
+        die danach nachkamen (G-Code-Gegenprobe §28.2, Kollisionsprüfung,
+        Exportprüfung), verschwanden hinter einem Rollbalken, während neben der
+        Karte hunderte Pixel frei blieben.
+
+        Aufgefallen ist es am Handbuchbild: acht Befunde im Kopf gezählt, zwei
+        zu sehen.
+        """
+        self.list.updateGeometry()
+        self.updateGeometry()
+        self.contentGrew.emit()
 
     def _resort(self) -> None:
         """Die ganze Liste nach Schwere ordnen.

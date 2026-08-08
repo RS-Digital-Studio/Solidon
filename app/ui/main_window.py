@@ -736,6 +736,9 @@ class MainWindow(QMainWindow):
         # und die Leiste des Werkzeugs lag über den Umschaltern: bei allen
         # sieben, von Schnitt bis Bemalen.
         self.tools.toolChanged.connect(lambda _key: self.overlay.reflow())
+        # Dasselbe für Befunde, die nach der Auswertung nachkommen: die Liste
+        # meldet ihr Wachstum, weil ein QListWidget es nicht von selbst tut.
+        self.report.contentGrew.connect(self.overlay.reflow)
         self.sketch_bar.installEventFilter(self.overlay)
 
         # §2.8: eine Wartezeit gehört dorthin, wo hingesehen wird. Der Balken

@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from app.branding import APP_NAME, APP_VENDOR, APP_VERSION, COPYRIGHT
+from app.branding import APP_NAME, APP_VENDOR, APP_VERSION, COPYRIGHT, WEBSITE_URL
 from app.core import figures, manual
 from app.core.bootstrap import load_operations
 from app.i18n import SUPPORTED_LANGUAGES, install_catalog, set_language, tr
@@ -206,6 +206,22 @@ def write_figures(target: Path, language: str) -> tuple[dict[str, str], dict[str
 #: immer als unübersetzbar herum.
 CONTENTS = {"de": "Inhalt", "en": "Contents"}
 
+#: Die Adresse, unter der die Seiten liegen — für canonical, hreflang und die
+#: Vorschau beim Teilen. Aus ``branding.WEBSITE_URL``, damit sie an einer
+#: Stelle steht.
+SITE = WEBSITE_URL
+
+#: Was eine Suchmaschine und eine geteilte Vorschau vom Handbuch zeigen. Nicht
+#: über ``tr()``, aus demselben Grund wie ``CONTENTS``.
+DESCRIPTION = {
+    "de": "Das Handbuch zu Solidon3D: {pages} Kapitel von den ersten fünfzehn Minuten "
+    "bis zu jeder Operation mit ihren Werten und Bereichen. Die Referenzhälfte "
+    "kommt aus demselben Register wie die Menüs.",
+    "en": "The Solidon3D manual: {pages} chapters, from the first fifteen minutes to "
+    "every operation with its values and ranges. The reference half comes from "
+    "the same registry as the menus.",
+}
+
 #: Die Texte des Deckblatts, aus demselben Grund nicht über ``tr()``.
 COVER = {
     "de": ("Handbuch", "Konstruieren, Erzeugen und Bearbeiten für den 3D-Druck", "Version"),
@@ -324,11 +340,29 @@ def page_html(language: str, prefix: str) -> str:
     title = f"{tr('Handbuch')} — {APP_NAME}"
     # Die Startseite liegt in beiden Sprachen neben ihrem Handbuch.
     home = "index.html"
+    pages = len(manual.pages())
+    description = DESCRIPTION[language].format(pages=pages)
+    canonical = f"{SITE}handbuch.html" if language == "de" else f"{SITE}en/manual.html"
     return (
         f'<!doctype html>\n<html lang="{language}">\n<head>\n'
         f'<meta charset="utf-8">\n'
         f'<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         f"<title>{title}</title>\n"
+        # Das Handbuch ist die zweitwichtigste Seite und war die einzige ohne
+        # Auszeichnung: geteilt wurde sie als nackter Link, und eine Suche fand
+        # sie über nichts als ihren Titel.
+        f'<meta name="description" content="{description}">\n'
+        f'<link rel="canonical" href="{canonical}">\n'
+        f'<link rel="alternate" hreflang="de" href="{SITE}handbuch.html">\n'
+        f'<link rel="alternate" hreflang="en" href="{SITE}en/manual.html">\n'
+        f'<link rel="alternate" hreflang="x-default" href="{SITE}handbuch.html">\n'
+        f'<meta property="og:type" content="article">\n'
+        f'<meta property="og:site_name" content="{APP_NAME}">\n'
+        f'<meta property="og:url" content="{canonical}">\n'
+        f'<meta property="og:title" content="{title}">\n'
+        f'<meta property="og:description" content="{description}">\n'
+        f'<meta property="og:image" content="{SITE}handbuch/{language}/main-window.png">\n'
+        f'<meta name="twitter:card" content="summary_large_image">\n'
         f'<link rel="icon" href="{"icon.svg" if language == "de" else "../icon.svg"}" '
         f'type="image/svg+xml">\n'
         f'<link rel="stylesheet" href="{"style.css" if language == "de" else "../style.css"}">\n'
