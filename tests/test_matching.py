@@ -161,6 +161,87 @@ def test_renaming_carries_the_old_identifiers_over() -> None:
         assert feature.id == identifier
 
 
+def test_a_bore_axis_has_no_sign() -> None:
+    """Zweiter Fund vom 08.08.2026, freigelegt vom ersten: nach einer
+    25°-Drehung erkennt die Suche die Zylinderachsen mal als ``+v``, mal als
+    ``-v`` — eine Bohrungsachse ist eine Linie, keine Richtung. Der
+    vorzeichenempfindliche Vergleich verwaiste die Hälfte der Löcher, und die
+    stille Namens-Wiederverwendung kaschierte es, bis sie fiel.
+    """
+    mesh = body("plate_holes.stl")
+    hole = next(iter(holes_of(mesh).values()))
+    flipped = Feature(
+        id="flipped",
+        kind="hole",
+        provenance="detected",
+        params={
+            **hole.params,
+            "axis": tuple(-value for value in hole.params["axis"]),
+        },
+    )
+
+    centre = mesh.bounds.centre
+    same = cost(hole, flipped, centre, centre, mesh.bounds.diagonal)
+    assert same < 1.0, "dieselbe Bohrung, nur mit umgekehrt gelesener Achse"
+
+
+def test_a_face_normal_keeps_its_sign() -> None:
+    """Die Gegenprobe: eine Flächennormale trägt Bedeutung — innen ist nicht
+    außen, und zwei entgegengesetzte Flächen sind zwei Flächen.
+    """
+    face = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"centre": (0.0, 0.0, 8.0), "normal": (0.0, 0.0, 1.0), "area": 100.0},
+    )
+    opposite = Feature(
+        id="face_2",
+        kind="face",
+        provenance="detected",
+        params={"centre": (0.0, 0.0, 8.0), "normal": (0.0, 0.0, -1.0), "area": 100.0},
+    )
+
+    assert cost(face, opposite, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 100.0) > 1.0
+
+
+def test_a_new_feature_does_not_swallow_a_survivor() -> None:
+    """Das Fehlerbild vom 08.08.2026: eine neue Bohrung sortiert sich in der
+    Erkennung vor die bestehenden, deren Nummern rutschen um eins — und beim
+    Umbenennen kollidierte das unzugeordnete neue Merkmal mit dem vergebenen
+    Namen eines Überlebenden. Eines von beiden verschwand wortlos aus der
+    Szene: ``drill_hole`` bohrte ein Loch, das nie ein Merkmal wurde, und
+    niemand konnte je darauf zeigen.
+    """
+    mesh = body("plate_holes.stl")
+    old = holes_of(mesh)
+    survivors = list(old.values())
+    first_centre = survivors[0].params["centre"]
+    fresh_centre = (first_centre[0] + 17.3, first_centre[1] - 4.2, first_centre[2])
+    drilled = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={**survivors[0].params, "centre": fresh_centre},
+    )
+    # Die Erkennung nummeriert nach Lage: das neue Loch zuerst, alle
+    # Überlebenden rutschen um eine Nummer nach hinten.
+    new = {"hole_1": drilled}
+    for index, feature in enumerate(survivors, start=2):
+        new[f"hole_{index}"] = feature
+
+    result = match(old, new, mesh.bounds.centre, mesh.bounds.diagonal)
+    renamed = apply_mapping(new, result)
+
+    assert len(renamed) == len(old) + 1, "kein Merkmal geht verloren"
+    assert set(old) <= set(renamed), "die Überlebenden behalten ihre Namen"
+    added = set(renamed) - set(old)
+    assert len(added) == 1
+    fresh_id = added.pop()
+    assert renamed[fresh_id].params["centre"] == fresh_centre
+    assert renamed[fresh_id].id == fresh_id
+
+
 def test_matching_against_nothing_is_not_a_crash() -> None:
     mesh = body("plate_holes.stl")
     holes = holes_of(mesh)

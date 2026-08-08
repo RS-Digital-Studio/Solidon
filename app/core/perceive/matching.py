@@ -112,7 +112,15 @@ def cost(
     two = feature_vector(second, second_centre, diagonal)
 
     position = float(np.linalg.norm(one[:3] - two[:3])) / POSITION_TOLERANCE
-    axis = float(np.linalg.norm(one[3:6] - two[3:6])) / AXIS_TOLERANCE
+    # Eine Bohrungs- oder Stiftachse ist eine Linie, keine Richtung: die
+    # Erkennung liefert sie nach einer Drehung mal als +v, mal als -v, und
+    # beides ist dasselbe Merkmal. Eine Flächennormale trägt ihr Vorzeichen
+    # dagegen zu Recht — innen ist nicht außen. Unterschieden am Parameter,
+    # nicht an einer Artenliste: was eine ``axis`` hat, ist richtungslos.
+    delta = float(np.linalg.norm(one[3:6] - two[3:6]))
+    if "axis" in first.params:
+        delta = min(delta, float(np.linalg.norm(one[3:6] + two[3:6])))
+    axis = delta / AXIS_TOLERANCE
     scale = max(abs(float(one[6])), abs(float(two[6])), EPS_GEOM)
     diameter = abs(float(one[6]) - float(two[6])) / scale / DIAMETER_TOLERANCE
     return float(position + axis + diameter)
@@ -192,11 +200,24 @@ def match(
 def apply_mapping(new: dict[FeatureId, Feature], result: MatchResult) -> dict[FeatureId, Feature]:
     """Benennt die neuen Merkmale auf die alten Bezeichner um, die überlebt
     haben.
+
+    Ein Merkmal ohne Partner behält seinen Namen nur, wenn der frei ist.
+    Sortiert sich eine neue Bohrung in der Erkennung vor die bestehenden,
+    rutschen deren Nummern — und der Name des neuen Merkmals ist zugleich der
+    vergebene Name eines Überlebenden. Ohne Ausweichen überschrieb hier eines
+    das andere und verschwand wortlos aus der Szene: ``drill_hole`` bohrte
+    ein Loch, das nie ein Merkmal wurde. Verwaiste Namen bleiben ebenfalls
+    gesperrt — eine ID, die eben noch etwas anderes hieß, sofort neu zu
+    vergeben, ließe Passungen und Ops auf das falsche Merkmal zeigen.
     """
     renamed: dict[FeatureId, Feature] = {}
     reverse = {value: key for key, value in result.mapping.items()}
+    taken: set[FeatureId] = set(result.mapping) | set(result.orphaned)
     for identifier, feature in new.items():
-        target = reverse.get(identifier, identifier)
+        target = reverse.get(identifier)
+        if target is None:
+            target = identifier if identifier not in taken else _fresh_id(identifier, taken)
+        taken.add(target)
         renamed[target] = Feature(
             id=target,
             kind=feature.kind,
@@ -205,6 +226,16 @@ def apply_mapping(new: dict[FeatureId, Feature], result: MatchResult) -> dict[Fe
             face_indices=feature.face_indices,
         )
     return renamed
+
+
+def _fresh_id(identifier: FeatureId, taken: set[FeatureId]) -> FeatureId:
+    """Der nächste freie Name derselben Art: ``hole_5``, wenn bis ``hole_4``
+    alles vergeben ist."""
+    stem = identifier.rstrip("0123456789")
+    number = 1
+    while f"{stem}{number}" in taken:
+        number += 1
+    return f"{stem}{number}"
 
 
 def question_for(old_id: FeatureId, candidates: tuple[FeatureId, ...]) -> tuple[str, list[str]]:
