@@ -1986,6 +1986,10 @@ class MainWindow(QMainWindow):
         if application is not None:
             apply_theme(application, self.settings.theme)  # type: ignore[arg-type]
         self.viewport.set_theme(self.settings.theme)
+        # Der Einstellungsdialog kann das Thema wechseln, und die schwebenden
+        # Karten hingen bisher an ``action_theme`` allein: über den Dialog
+        # gewechselt, behielten sie die Farben des alten Themas.
+        self._apply_card_style(self.settings.theme)
         self.viewport.set_navigation(self.settings.navigation)  # type: ignore[arg-type]
         self.viewport.set_difference_palette(self.settings.diff_palette)  # type: ignore[arg-type]
         self.set_display_unit(self.settings.display_unit)
