@@ -21,6 +21,7 @@ from typing import Literal
 
 import trimesh
 
+from app.core import activation
 from app.core.errors import NeedsSolidError, ValidationError
 from app.core.export import threemf
 from app.core.export.slicer_keys import SlicerFlavour
@@ -427,6 +428,8 @@ def write_plan(
     plan: ExportPlan, directory: Path, export_format: ExportFormat = "stl"
 ) -> list[Path]:
     """Schreibt die geplanten Dateien und gibt zurück, was geschrieben wurde."""
+    # §2 C: Planen und Prüfen sind Lesen, das Herausgeben einer Datei nicht.
+    activation.require(activation.EXPORT)
     directory.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for entry in plan.entries:
@@ -493,6 +496,8 @@ def write_assembly(
     Hand öffnet, ordnet ohnehin neu an, und eine zurückgelesene Platte läge
     sonst um den halben Bauraum verschoben im nächsten Dokument.
     """
+    # §2 C: auch die Baugruppe ist ein Export — dieselbe Grenze wie write_plan.
+    activation.require(activation.EXPORT)
     chosen = objects if plate is None else [entry for entry in objects if entry.plate == plate]
     if not chosen:
         raise ValidationError(

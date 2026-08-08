@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from math import isfinite
 from typing import Any, cast
 
+from app.core import activation
 from app.core.agent import checks
 from app.core.agent.context import build_messages
 from app.core.agent.prompt import PROMPT_VERSION
@@ -104,6 +105,9 @@ class AgentSession:
         """Beantwortet eine Anfrage mit einem Vorschlag. Am Dokument wird nichts
         angewandt.
         """
+        # §2 C: der Chat braucht die Freischaltung — schon der Vorschlag, nicht
+        # erst das Übernehmen, denn er kostet Modellaufrufe und liefert Arbeit.
+        activation.require(activation.CHAT)
         active = self.rule_set or rules.load()
         proposal = Proposal(request=request, origin=self._origin(active))
 

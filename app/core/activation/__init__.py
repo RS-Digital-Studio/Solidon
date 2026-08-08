@@ -8,12 +8,7 @@ speichern, zurücknehmen. Wer nichts mehr ändern kann, kann auch nichts kaputt
 speichern; die Freigabe kostet nichts und nimmt dem Ablauf die Härte an der
 einen Stelle, an der sie niemandem nützt.
 
-**Die Grenze greift noch nicht.** :func:`require` steht, hat aber keinen
-Aufrufer: ein abgelaufener Testlauf sperrt heute nichts. Das ist der
-Zwischenstand nach Konzept §7 V3; der Schnitt ist V4. Bis dahin ist alles
-unterhalb dieser Zeile Plan und keine Beschreibung des laufenden Programms.
-
-Geprüft werden soll an vier Stellen, und alle vier liegen im **Datenpfad**,
+Geprüft wird an vier Stellen, und alle vier liegen im **Datenpfad**,
 nicht an der Oberfläche:
 
 ======================  ==============================================
@@ -24,9 +19,11 @@ nicht an der Oberfläche:
 ``agent.session``       der Chat
 ======================  ==============================================
 
-Jede soll den Zustand selbst holen und selbst werfen. Die Oberfläche graut
+Jede holt den Zustand selbst und wirft selbst. Die Oberfläche graut
 gesperrte Einträge vorher aus — sie ist Freundlichkeit, nicht die Hürde. Ein
-Patch an einem Menüeintrag bringt darum nichts.
+Patch an einem Menüeintrag bringt darum nichts. Was die vier Dateien selbst
+schützt, ist das signierte Manifest aus :mod:`integrity` (H4) — es wird beim
+ersten Zustandsabruf geprüft.
 
 Es gibt **keine Hintertür**: keine Umgebungsvariable, keinen Schalter, keine
 Freigabedatei. Die Suite setzt den Zustand über eine Fixture, die dieses Modul
@@ -38,7 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from app.core.activation import store
+from app.core.activation import integrity, store
 from app.core.activation.key import Licence, LicenceKeyError, parse
 from app.core.activation.store import TRIAL_DAYS, read_key, trial_days_left
 from app.core.errors import LicenceRequired
@@ -119,6 +116,11 @@ def forget_cache() -> None:
 
 
 def _determine() -> Activation:
+    if not integrity.intact():
+        # H4: Eine veränderte Grenzdatei nimmt der Freischaltung die
+        # Grundlage. Gesperrt wie ein abgelaufener Testlauf — nicht
+        # abgestürzt, und der ehrliche Nutzer sieht diesen Zweig nie.
+        return Activation()
     stored = read_key()
     if stored is not None:
         try:

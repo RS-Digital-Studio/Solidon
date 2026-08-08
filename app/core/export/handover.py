@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
+from app.core import activation
 from app.core.errors import OPEN_SETTINGS, Action, ExternalToolError
 from app.core.export import slicer_keys, slicer_profiles
 from app.core.export.slicer_keys import SlicerFlavour
@@ -606,6 +607,8 @@ def slice_model(
     Ein einzelner Pfad ist dabei der Sonderfall mit einem Eintrag, nicht ein
     anderer Weg.
     """
+    # §2 C: die Druckdatei ist ein herausgegebenes Ergebnis — wie der Export.
+    activation.require(activation.SLICER)
     models = [model] if isinstance(model, Path) else list(model)
     if not models:
         raise ExternalToolError(

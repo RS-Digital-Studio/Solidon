@@ -23,6 +23,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
+from app.core import activation
 from app.core.errors import ValidationError
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, VARIABLE, Registry
@@ -215,6 +216,9 @@ class History:
         kein Schritt dazukommt, und ohne Transaktion wäre sie nicht
         rücknehmbar.
         """
+        # §2 C: jede Dokumentänderung braucht die Freischaltung — hier, weil
+        # keine Dokumentänderung an dieser Funktion vorbeikommt (H3).
+        activation.require(activation.CHANGE)
         if not drafts and changes is None:
             raise ValidationError(
                 field="ops",
