@@ -273,6 +273,34 @@ def _from_anthropic(answer: dict[str, Any]) -> Reply:
 DEFAULT_OLLAMA_MODEL = "qwen3:14b"
 OLLAMA_URL = "http://localhost:11434/api/chat"
 
+#: Wie groß das Kontextfenster sein muss, das Ollama für einen Aufruf öffnet.
+#:
+#: **Ohne diese Angabe schneidet Ollama den Prompt ab**, und zwar stillschweigend:
+#: sein Vorgabefenster ist 4096 Token, das Register bringt allein 84
+#: Werkzeugschemata mit rund 99 000 Zeichen — gemessen 21 162 Token. Was nicht
+#: hineinpasst, fällt weg, und mit ihm der Systemprompt samt der vier
+#: Vorrangregeln. Genau das war der Befund „der Agent greift nicht zu den
+#: Bausteinen (0/13)": nicht die Regel, nicht das Modell, sondern ein Fenster,
+#: in das die Regel nie gelangte.
+#:
+#: Gemessen mit ``qwen3:14b`` an drei Anfragen, für die ein Baustein die
+#: richtige Antwort ist:
+#:
+#: ====== ============= =========== =========
+#: Fenster verarbeitet   je Frage    Baustein
+#: ====== ============= =========== =========
+#: 4096    2050 (Rest weg)  30,1 s   0 von 3
+#: 8192    4098 (Rest weg)  34,1 s   0 von 3
+#: 16384   8194 (Rest weg)  36,1 s   0 von 3
+#: 32768  21162 (ganz)      21,2 s   3 von 3
+#: ====== ============= =========== =========
+#:
+#: Das volle Fenster ist dabei nicht nur richtiger, sondern **schneller** — ein
+#: Modell, das den Auftrag kennt, rät nicht herum. Es kostet Speicher: mit
+#: 32768 belegt ``qwen3:14b`` 14 GB und bleibt damit vollständig auf einer
+#: 16-GB-Karte. Wer ein größeres Modell fährt, zahlt hier zuerst.
+OLLAMA_CONTEXT_TOKENS = 32768
+
 
 #: Unter welchem Namen der gewählte Modellname gemerkt wird. Neben der Adresse
 #: des Dienstes, weil es dieselbe Art Angabe ist: etwas, das von diesem Rechner
@@ -358,7 +386,10 @@ class OllamaBackend:
         payload: dict[str, Any] = {
             "model": self.model,
             "stream": False,
-            "options": {"temperature": temperature},
+            # ``num_ctx`` ist keine Feineinstellung, sondern die Bedingung
+            # dafür, dass der Auftrag überhaupt ankommt — siehe
+            # :data:`OLLAMA_CONTEXT_TOKENS`.
+            "options": {"temperature": temperature, "num_ctx": OLLAMA_CONTEXT_TOKENS},
             "messages": [_as_ollama(entry) for entry in messages],
         }
         if tools:

@@ -2538,19 +2538,73 @@ Platz, an dem die echten stehen.
       `9.599.875.422` statt `9.599.880.000`, ohne jede Ausnahme.
 
       Die Maschine: i9-13900K (Raptor Lake, die Familie mit dem bekannten
-      Instabilitätsproblem), Microcode 0x12F, 2×32 GB DDR5 auf 4800 MHz,
-      zwei unerwartete Neustarts in dreißig Tagen, keine WHEA-Einträge, nie
-      eine Speicherdiagnose gelaufen.
+      Instabilitätsproblem), 2×32 GB DDR5 auf 4800 MHz, zwei unerwartete
+      Neustarts (14.07. und 20.07.2026), nie eine Speicherdiagnose gelaufen.
 
-      **Nächster Schritt ist keiner am Code**, sondern MemTest86 oder die
-      Windows-Speicherdiagnose über Nacht. Bis dahin bleiben die zwei
-      Pflaster (`mesh.on_surface`, `threemf._numbers_from`): einmal
+      **Am 08.08.2026 nachgemessen, und zwei Angaben oben stimmten nicht:**
+
+      - **Es gibt einen WHEA-Eintrag.** 03.06.2026, ID 19: „Behobener
+        Hardwarefehler, gemeldet von Komponente Prozessorkern, Fehlerquelle
+        Corrected Machine Check, Fehlertyp **Translation Lookaside Buffer
+        Error**, APIC-ID 40." Das zeigt auf die **CPU**, nicht auf den
+        Speicher — und es ist genau das Fehlerbild, für das Raptor Lake
+        bekannt ist. Er steht zudem *nach* dem BIOS vom 01.04.2026. Weiter
+        zurück als der 29.04.2026 reicht das Protokoll nicht; ältere Einträge
+        sind rotiert.
+      - **Der Microcode ist nicht 0x12F, sondern 0x133** (Registry,
+        `Update Revision`), also neuer als notiert.
+      - **Der Rechenfehler ließ sich heute nicht reproduzieren.** 300 Runden
+        derselben Bauart (17,7 MB XML, 200 000 Punkte und Dreiecke, `rtree`
+        geladen): null Ausnahmen, null stille Abweichungen. Bei der gemessenen
+        Rate von eins zu dreißig wären rund zehn Fehlschläge zu erwarten
+        gewesen; dass keiner kam, ist mit 0,004 % Wahrscheinlichkeit
+        Zufall. Das heißt nicht „behoben" — es heißt, dass die Bedingung
+        fehlt, unter der er auftrat.
+
+      **Nächster Schritt ist keiner am Code.** Wegen des TLB-Befunds zuerst
+      die CPU: Intel Processor Diagnostic Tool, und bei Auffälligkeiten die
+      verlängerte Garantie für 13./14. Generation. Der Speichertest bleibt
+      daneben richtig, ist aber nicht mehr der erste Verdacht. Die zwei
+      Pflaster (`mesh.on_surface`, `threemf._numbers_from`) bleiben: einmal
       wiederholen, beim zweiten Fehlschlag durchlassen. Sie sind gegen ein
       Symptom gebaut, nicht gegen eine Ursache — und wenn die Maschine der
       Grund ist, sind sie genau richtig, denn dagegen hilft kein Code.
-- [ ] **Der Agent greift nicht zu den Bausteinen (0/13) — und die Regel ist
-      nicht schuld.** Das war die erste Vermutung und sie war falsch.
-      Nachgemessen wurde stattdessen die Werkzeugmenge, mit demselben Fall und
+- [x] **Der Agent greift nicht zu den Bausteinen (0/13) — es war das
+      Kontextfenster.** Am 08.08.2026 gefunden, und es macht die ganze
+      Untersuchung darunter zur Vorgeschichte: **Ollama schneidet den Prompt
+      stillschweigend ab.** Sein Vorgabefenster ist 4096 Token, Solidon setzte
+      `num_ctx` nicht, und allein die 84 Werkzeugschemata sind rund 99 000
+      Zeichen — gemessen 21 162 Token. Was nicht hineinpasste, fiel weg, und
+      mit ihm der Systemprompt samt der vier Vorrangregeln. Das Modell war
+      nicht ungehorsam; es hat den Auftrag nie gesehen.
+
+      Gemessen mit `qwen3:14b` an drei Anfragen, für die ein Baustein die
+      richtige Antwort ist:
+
+      | Fenster | verarbeitet | je Frage | Baustein |
+      |---|---|---|---|
+      | 4096 (Vorgabe) | 2 050, Rest weg | 30,1 s | 0 von 3 |
+      | 8 192 | 4 098, Rest weg | 34,1 s | 0 von 3 |
+      | 16 384 | 8 194, Rest weg | 36,1 s | 0 von 3 |
+      | **32 768** | **21 162, ganz** | **21,2 s** | **3 von 3** |
+
+      Das volle Fenster ist nicht nur richtiger, sondern **schneller** — ein
+      Modell, das den Auftrag kennt, rät nicht herum. Es kostet Speicher: mit
+      32 768 belegt `qwen3:14b` 14 GB und bleibt zu 100 % auf der Karte.
+      `OLLAMA_CONTEXT_TOKENS` in `backends/llm.py` hält Wert und Messreihe.
+
+      **Was daraus für die Vorgeschichte folgt:** Jede Zahl unten entstand
+      unter abgeschnittenem Prompt. Die Werkzeugmengen-Tabelle misst nicht,
+      wie gut ein Modell mit vielen Werkzeugen umgeht, sondern **ab wann sie
+      nicht mehr ins Fenster passen** — bei zehn taten sie es, bei
+      dreiundachtzig nicht. Und der Modellvergleich (`qwen3:30b-a3b` fünf von
+      fünf gegen `qwen3:14b` in Prosa) verglich zwei Modelle, von denen
+      keines den Systemprompt vollständig bekam. Er gehört wiederholt, bevor
+      jemand daraus eine Anschaffung ableitet.
+
+      <details><summary>Die Untersuchung, die zur falschen Fährte führte</summary>
+
+      Nachgemessen wurde die Werkzeugmenge, mit demselben Fall und
       demselben Modell (`qwen3:14b`):
 
       | Angebot | wall_holder | magnet_lid | spacer |
@@ -2592,6 +2646,13 @@ Platz, an dem die echten stehen.
       Modell mit CPU-Anteil braucht bei vollem Kontext länger. Ihn pauschal
       hochzusetzen verlängert aber die Wartezeit im Chat für alle; das will
       eigens entschieden werden.
+
+      </details>
+
+      Der Wert daneben hat sich damit auch geklärt: `llm.TIMEOUT_SECONDS`
+      bleibt bei 120. Mit vollem Fenster antwortet `qwen3:14b` in 21 Sekunden
+      und vollständig auf der Karte — die Zeitüberschreitungen kamen vom
+      CPU-Anteil eines Modells, das nicht hineinpasste, nicht von der Grenze.
 
 ## Jeden Weg einzeln durchgespielt (07.08.2026, zweiter Durchgang)
 
@@ -2985,20 +3046,39 @@ Konzeptpapiere und die Roadmap — gegen den Code, nicht gegen die Erinnerung.
 - [x] **Der Zahlungsdienstleister ist entschieden: Paddle.** Als *Merchant of
       Record* wird er selbst Vertragspartner des Kaufs und trägt die
       Umsatzsteuer — § 4 der AGB war auf genau diesen Fall geschrieben und
-      nennt ihn jetzt beim Namen. Die Datenschutzerklärung hat dazu einen
-      eigenen Abschnitt bekommen: sie schwieg zum Kauf, obwohl dort die
-      einzigen personenbezogenen Daten anfallen, die es überhaupt gibt.
-      **Nachzutragen bleibt die vollständige Firmierung** aus dem
-      Paddle-Vertrag; hier steht Name und Sitzland, keine erfundene Anschrift.
+      nennt ihn jetzt beim Namen: Paddle.com Market Limited, 30 Old Bailey,
+      London EC4M 7AU (Companies House 08172165; die Anschrift hat am
+      07.07.2026 gewechselt, die alte in Mora Street steht noch überall im
+      Netz). Die Datenschutzerklärung hat dazu einen eigenen Abschnitt
+      bekommen: sie schwieg zum Kauf, obwohl dort die einzigen
+      personenbezogenen Daten anfallen, die es überhaupt gibt — samt dem
+      Angemessenheitsbeschluss für das Vereinigte Königreich.
 - **Die Rechtstexte fachlich prüfen lassen.** Sie sind sorgfältige Entwürfe
-  und keine Rechtsberatung. Die Widerrufsbelehrung wirkt nur, wenn der
-  Bestellvorgang die Zustimmung nach § 356 Abs. 5 BGB abfragt — der Text
-  allein genügt nicht.
+  und keine Rechtsberatung. Der Entwurfshinweis hing bis hierhin am
+  Platzhalter, und mit Paddle wäre er gefallen: ein ungeprüfter Vertrag hätte
+  ohne jeden Vorbehalt dagestanden. Er hängt jetzt an
+  `make_legal.REVIEW_PENDING` und fällt erst, wenn die Prüfung stattgefunden
+  hat — `tests/test_legal.py` hält das fest.
 
-  Der Entwurfshinweis hing bis hierhin am Platzhalter, und mit Paddle wäre er
-  gefallen: ein ungeprüfter Vertrag hätte ohne jeden Vorbehalt dagestanden.
-  Er hängt jetzt an `make_legal.REVIEW_PENDING` und fällt erst, wenn die
-  Prüfung stattgefunden hat — `tests/test_legal.py` hält das fest.
+  **Was der Prüfung vorzulegen ist**, gesammelt statt „einmal drübersehen":
+
+  1. **Die Rolle zieht weiter als § 4.** Ist Paddle Merchant of Record, ist
+     Paddle der Verkäufer — und §§ 3, 5, 6 und 7 der AGB sind auf einen
+     Direktvertrag geschrieben („Der Vertrag kommt zustande, wenn **wir** die
+     Bestellung annehmen"). Zu klären, welche Teile für die Softwarenutzung
+     bleiben und welche Paddles Bedingungen überlassen werden.
+  2. **Paddles Rückgaberegel nennt sieben Tage** für digitale Inhalte, die
+     Widerrufsbelehrung vierzehn. Beides kann nebeneinander richtig sein —
+     nachgeprüft ist es nicht.
+  3. **§ 356 Abs. 5 BGB im Bestellvorgang.** Die Belehrung wirkt nur, wenn
+     Zustimmung *und* Kenntnisnahme dort abgefragt und auf dauerhaftem
+     Datenträger bestätigt werden. Paddles Checkout kennt den Fall (Art. 16
+     lit. m der Verbraucherrechte-Richtlinie); dass er für diesen Shop
+     eingeschaltet und deutsch formuliert ist, muss beim Einrichten geprüft
+     werden.
+  4. **Der Testlauf von vierzehn Tagen** steht neben dem Widerrufsrecht und
+     soll es nicht ersetzen — § 6 sagt das ausdrücklich, und genau dieser Satz
+     gehört gelesen.
 
 ### Dritter Durchgang, gleicher Tag
 

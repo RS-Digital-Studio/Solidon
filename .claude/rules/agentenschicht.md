@@ -43,6 +43,25 @@ Undo mit einem Zustand, den es nicht mehr gibt.
 Jede Transaktion trägt `origin`: Urheber, bei Agenten zusätzlich Modell,
 Version des Systemprompts, Version der Regelsammlung, Temperatur.
 
+## Das Kontextfenster ist die Bedingung, nicht die Feineinstellung
+
+**Ollama schneidet den Prompt stillschweigend ab.** Sein Vorgabefenster ist
+4096 Token; allein die 84 Werkzeugschemata aus dem Register sind rund 99 000
+Zeichen, gemessen 21 162 Token. Was nicht hineinpasst, fällt weg — und mit ihm
+der Systemprompt samt der vier Vorrangregeln. Das Modell ist dann nicht
+ungehorsam, es hat den Auftrag nie gesehen.
+
+Genau das war der Befund „der Agent greift nicht zu den Bausteinen (0/13)".
+Gemessen mit `qwen3:14b` an drei Anfragen, für die ein Baustein die richtige
+Antwort ist: 0 von 3 bei 4096, 8192 und 16384 (jedes Mal abgeschnitten), 3 von
+3 bei 32768 — und dabei **schneller** (21,2 s gegen 30–36 s je Frage), weil ein
+Modell, das den Auftrag kennt, nicht herumrät. `OLLAMA_CONTEXT_TOKENS` in
+`backends/llm.py` hält den Wert samt Messreihe.
+
+Wer die Werkzeugmenge ändert, prüft diese Zahl nach: `prompt_eval_count` in
+Ollamas Antwort sagt, wie viel wirklich ankam. Liegt es bei etwa der Hälfte des
+Fensters, wurde gekürzt.
+
 ## Sicherheit (§32)
 
 Projektdateien wandern zwischen Leuten — eine fremde Datei darf nichts
