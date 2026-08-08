@@ -2955,3 +2955,46 @@ Konzeptpapiere und die Roadmap — gegen den Code, nicht gegen die Erinnerung.
   und keine Rechtsberatung. Die Widerrufsbelehrung wirkt nur, wenn der
   Bestellvorgang die Zustimmung nach § 356 Abs. 5 BGB abfragt — der Text
   allein genügt nicht.
+
+### Dritter Durchgang, gleicher Tag
+
+Nochmal durchgesehen, diesmal gegen den Stand nach der Überarbeitung der
+Startseite. Acht Funde, alle behoben:
+
+- **Der Markenname stand mit Lücke da.** `.brand` ist ein Flex-Container mit
+  `gap`, und in einem Flex-Container wird jeder Textknoten ein eigenes
+  Element — „Solidon" und `<span>3D</span>` waren zwei davon. In der
+  Kopfzeile stand deshalb „Solidon 3D", gegen Fenstertitel, Domain und
+  `branding.py`. Der Abstand gehört an das Symbol, nicht zwischen die Silben.
+- **„14 Tage Widerrufsrecht" widersprach der eigenen Belehrung.** Bei
+  digitalen Inhalten erlischt es vorzeitig, wenn der Käufer der sofortigen
+  Ausführung zustimmt — die Zusage stand ohne diesen Vorbehalt auf der Seite,
+  die den Preis nennt.
+- **Der Lizenzvertrag war strenger als das Programm.** §4 sagte, nach der
+  Frist brauche man einen Schlüssel zum Weiterarbeiten. Die Grenze in
+  `app/core/activation` verläuft anders: was liest, bleibt frei — Solidon
+  ist danach ein vollständiger Betrachter der eigenen Projekte.
+- **Die englische Seite verlinkte unangekündigt auf deutsche Verträge.**
+  Jetzt steht der Hinweis oben auf allen drei Seiten, auf Englisch.
+- **Zwei Konzepte sagten „Entwurf", während die ROADMAP sie abhakte** — P15
+  und die Live-Durchsicht gegen Fusion.
+- **Das Veröffentlichungskonzept nannte `app/core/licence/`**; gebaut wurde
+  `app/core/activation/`.
+- **Zwei Handbuch-PDFs unter dem alten Markennamen** lagen im
+  Releases-Ordner. Entfernt.
+- **Ein Repository-Pfad stand im Endnutzervertrag.** Der Käufer sieht
+  `app/core/knowledge/parts/` nie; jetzt stehen dort Mutternfalle, Gewinde
+  und Filmscharnier.
+
+**Geprüft und in Ordnung:** alle 77 Operationen mit Erklärsatz, jeder
+Parameter mit Beschreibung, kein englischer Rest, keine Vorgabe außerhalb
+ihres Bereichs · das Register vollständig übersetzt · zehn Kontrastpaare in
+beiden Themen über WCAG AA · `prefers-reduced-motion` schaltet alles ab ·
+die sechs Zahlen der Startseite testgedeckt · beide PDFs mit richtigem
+Deckblatt.
+
+**Weiterhin offen und nicht von hier zu lösen:** Anschrift, Hoster und
+Zahlungsdienstleister · die fachliche Prüfung der Rechtstexte · und der
+Punkt, der vor den ersten Verkauf gehört: `require()` in
+`app/core/activation` hat noch keinen Aufrufer, ein abgelaufener Testlauf
+sperrt heute nichts.
