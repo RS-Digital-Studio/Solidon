@@ -3497,10 +3497,20 @@ Konzept:
       die Oberfläche leitet weiter), Prompt-Version 3 verlangt, ihn bei
       Wie-Fragen zu nennen. Die Suite-Messung der Promptänderung steht
       gesammelt mit den neuen Fällen aus Schritt 3 an.
-- [ ] **3 — Handlungsraum:** `read_analysis` (Schichtanalyse, Schätzung,
-      Einstellungsrat, Karten, Orientierung — Herkunft ausgewiesen,
-      Zeitdeckel), `set_print_setting`, `set_print_target`. Braucht die
-      §26.2-Ansage aus Konzept-Abschnitt 6.
+- [x] **3 — Handlungsraum:** `read_analysis` liest Druckbarkeit (Überhang,
+      Inseln, Brücken, Stützvolumen), Zeit- und Materialschätzung,
+      Einstellungsrat und Orientierungssuche — Herkunft je Antwort
+      ausgewiesen (Regel 14), harter Dreiecksdeckel statt Zeitgewalt, die
+      Orientierungssuche mit festem Startwert und kleiner Kandidatenzahl.
+      `set_print_target` wechselt Drucker/Material als `DocumentChange` in
+      der einen Transaktion — Undo stellt beide wieder her. **Eine
+      Konzeptkorrektur dabei:** `set_print_setting` wird nicht gebaut —
+      Einstellungen reisen nicht in Transaktionen (§15.5), und §28.2 sagt
+      „Übernommen wird auf Klick"; der Agent liest die `advise`-Vorschläge
+      und nennt sie samt Grund (Begründung in Konzept 5.1 und §26.2). Die
+      Suite wächst auf **39 Fälle** (nachsehen statt raten, Druckziel,
+      Menüort — gemessen über `proposal.readings`), §35 und die
+      Testarten-Tabellen sind fortgeschrieben.
 - [ ] **4 — Augen und Autopilot:** gerenderte Ansichten an bildfähige
       Backends (§23), automatische Übernahme eindeutig umkehrbarer
       Vorschläge (§26.5, vier Bedingungen, abschaltbar).

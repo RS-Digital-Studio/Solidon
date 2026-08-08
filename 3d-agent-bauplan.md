@@ -1207,9 +1207,15 @@ Alle Ops aus dem Register, dazu:
 | `find_part(beschreibung)` | passenden Baustein suchen, bevor gebaut wird |
 | `read_digest(objekte)` | den Steckbrief mitten im Zug neu lesen — nach mehreren Ops kennt der Agent sonst die IDs nicht, die er selbst erzeugt hat |
 | `read_standard(art, größe)` | Normteilmaße nachschlagen statt raten (§24.2) |
-| `read_analysis(art, objekte)` | Schichtanalyse, Zeit- und Materialschätzung, Einstellungsrat, Analysekarten, Orientierung — nur lesend, mit Zeitdeckel, Herkunft immer ausgewiesen (§22.5) |
-| `set_print_setting(pfad, wert, grund)` | eine Druckeinstellung ändern (§29) — reist als Dokumentänderung in der Transaktion, die Begründung ist Pflicht |
+| `read_analysis(art, objekte)` | Schichtanalyse, Zeit- und Materialschätzung, Einstellungsrat, Orientierung — nur lesend, mit hartem Größendeckel, Herkunft immer ausgewiesen (§22.5) |
 | `set_print_target(drucker, material)` | Projektdrucker und -material wechseln — Toleranzen bleiben Verweise (`auto:<material>`) und rechnen sich mit um |
+
+Ein Werkzeug, das Druckeinstellungen **setzt**, gibt es mit Absicht nicht:
+Einstellungen reisen nicht in Transaktionen (§15.5 zieht die Grenze an der
+Auswertung), ein Undo nähme sie also nicht mit zurück — und Regel 16 gilt
+auch für den Agenten. §28.2 bleibt dabei: „Übernommen wird auf Klick, nie
+von allein." Der Agent liest die Vorschläge über `read_analysis`, nennt sie
+samt Begründung, und der Klick bleibt im Druckdialog.
 
 `ask_user` ist Pflicht, keine Höflichkeit: Die Agenten-Suite enthält absichtlich
 mehrdeutige Anfragen und misst, ob gefragt statt geraten wird.
@@ -1540,7 +1546,7 @@ Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 | Leistung | Zielwerte §31, Regressionsschwelle 25 % |
 | Lizenzen | installierte Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die drei Wege aus §2.2 laufen als Ende-zu-Ende-Test |
-| Agenten-Suite | 33 Referenzanfragen |
+| Agenten-Suite | 39 Referenzanfragen — 21 zu Säule C (sechs seit der Agent-Vertiefung: nachsehen statt raten, Druckziel, Menüort), 18 zu Säule A |
 
 Die Agenten-Suite misst zusätzlich: Wird ein vorhandener Baustein statt eigener
 Geometrie benutzt? Werden Hauptabmessungen zu Parametern? Wird bei

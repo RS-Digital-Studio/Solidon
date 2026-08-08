@@ -37,6 +37,12 @@ class Proposal:
     parameters: dict[ParameterName, Parameter] = field(default_factory=dict)
     """Parameters the proposal wants to add or change."""
     fits: list[Fit] = field(default_factory=list)
+    print_target: tuple[str, str] | None = None
+    """(Drucker, Material) nach einem Wechsel über ``set_print_target`` —
+    reist als ``DocumentChange`` in der Transaktion, wie Parameter auch."""
+    readings: list[str] = field(default_factory=list)
+    """Welche lesenden Werkzeuge der Zug benutzt hat — die Suite misst
+    daran, ob eine Frage nachgesehen oder geraten wurde (§40)."""
     undo_of: TransactionId | None = None
     questions: list[Question] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
@@ -64,7 +70,9 @@ class Proposal:
         """Ein Vorschlag, der nur geantwortet hat — nichts anzunehmen, nichts
         zurückzunehmen.
         """
-        return not (self.drafts or self.parameters or self.fits or self.undo_of)
+        return not (
+            self.drafts or self.parameters or self.fits or self.print_target or self.undo_of
+        )
 
     @property
     def asked(self) -> bool:

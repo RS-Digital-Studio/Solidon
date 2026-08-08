@@ -38,6 +38,14 @@ class Case:
     """Pillar A starts on an empty project, pillar C on the plate."""
     expects_part: bool = False
     """§35: is an existing part used instead of own geometry?"""
+    expects_reading: tuple[str, ...] = ()
+    """Lesende Werkzeuge, die eine gute Antwort benutzt — nachsehen statt
+    raten (§26.2, Konzept Agent-Vertiefung 3.3/3.4)."""
+    expects_target: bool = False
+    """Eine gute Antwort wechselt Drucker oder Material (``set_print_target``)."""
+    expects_mention: tuple[str, ...] = ()
+    """Wörter, die in der Antwort stehen müssen — §2.6: der Chat ist auch ein
+    Suchfeld, und eine Wie-Frage bekommt den Menüort genannt."""
 
 
 #: Weg 1 aus §2.2, auf der Platte mit vier Bohrungen aus dem Korpus.
@@ -105,6 +113,48 @@ CASES: tuple[Case, ...] = (
         request="Wie dick ist die Platte?",
         expects_answer_only=True,
         note="A question about the model changes nothing.",
+    ),
+    # --- nachsehen statt raten (Konzept Agent-Vertiefung, Schritt 3) ----------
+    Case(
+        id="printable",
+        request="Lässt sich das Teil so gut drucken?",
+        expects_answer_only=True,
+        expects_reading=("read_analysis",),
+        note="Overhang, islands, bridges — the layer analysis knows, the model does not.",
+    ),
+    Case(
+        id="how_long",
+        request="Wie lange dauert der Druck ungefähr?",
+        expects_answer_only=True,
+        expects_reading=("read_analysis",),
+        note="Time and material come from the estimate, never from the model's gut.",
+    ),
+    Case(
+        id="core_hole",
+        request="Welches Kernloch braucht ein M4-Gewinde?",
+        expects_answer_only=True,
+        expects_reading=("read_standard",),
+        note="A question for the table (§24.2), not for the model's memory.",
+    ),
+    Case(
+        id="switch_material",
+        request="Stell das Projekt auf PLA um.",
+        expects_target=True,
+        note="Printer and material travel as a DocumentChange — undo takes them back.",
+    ),
+    Case(
+        id="where_menu",
+        request="Wie kann ich eine Bohrung größer machen, ohne den Chat zu benutzen?",
+        expects_answer_only=True,
+        expects_mention=("Menü",),
+        note="§2.6: the chat is also a search box — the answer names the menu place.",
+    ),
+    Case(
+        id="where_hollow",
+        request="Wo finde ich das Aushöhlen im Programm?",
+        expects_answer_only=True,
+        expects_mention=("Menü",),
+        note="A pure where-question: no operation, just the place in the window.",
     ),
     # --- the three ambiguous ones ---------------------------------------------
     Case(

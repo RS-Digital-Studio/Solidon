@@ -28,6 +28,7 @@ from typing import Any, cast
 
 from app.core import activation
 from app.core.agent import checks
+from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
 from app.core.agent.context import build_messages
 from app.core.agent.prompt import PROMPT_VERSION
 from app.core.agent.proposal import Proposal, Question
@@ -37,10 +38,12 @@ from app.core.agent.tools import (
     ASK_USER,
     FIND_PART,
     OBJECTS_FIELD,
+    READ_ANALYSIS,
     READ_DIGEST,
     READ_REPORT,
     READ_STANDARD,
     SET_PARAMETER,
+    SET_PRINT_TARGET,
     STANDARD_KINDS,
     UNDO_TRANSACTION,
     tool_schemas,
@@ -192,6 +195,10 @@ class AgentSession:
 
         if name == ASK_USER:
             return self._ask_user(arguments, proposal), scene
+        if name in (READ_REPORT, FIND_PART, READ_DIGEST, READ_STANDARD, READ_ANALYSIS):
+            # §40: die Suite misst, ob eine Frage nachgesehen oder geraten
+            # wurde — dafür merkt sich der Vorschlag jeden lesenden Aufruf.
+            proposal.readings.append(name)
         if name == READ_REPORT:
             return report_text(scene, arguments.get("severity")), scene
         if name == FIND_PART:
@@ -203,6 +210,8 @@ class AgentSession:
             return digest(scene, working, self.selection, only=wanted or None), scene
         if name == READ_STANDARD:
             return self._standard(arguments, proposal), scene
+        if name == READ_ANALYSIS:
+            return self._analysis(arguments, proposal, working, scene), scene
         if name == UNDO_TRANSACTION:
             return self._undo(arguments, proposal, working), scene
         if proposal.undo_of is not None:
@@ -221,6 +230,8 @@ class AgentSession:
             return self._parameter(name, arguments, proposal, working), scene
         if name == ADD_FIT:
             return self._fit(arguments, proposal, working), scene
+        if name == SET_PRINT_TARGET:
+            return self._print_target(arguments, proposal, working), scene
         return self._operation(call, proposal, working, history, scene)
 
     def _ask_user(self, arguments: dict[str, Any], proposal: Proposal) -> str:
@@ -284,6 +295,49 @@ class AgentSession:
         proposal.parameters[key] = parameter
         working.parameters[key] = parameter
         return f"{tr('Parameter gesetzt')}: {key} = {parameter.value:g} {parameter.unit}"
+
+    def _analysis(
+        self, arguments: dict[str, Any], proposal: Proposal, working: Document, scene: Scene
+    ) -> str:
+        """§26.2: Analysen lesbar machen — auf der Arbeitskopie, nur lesend."""
+        kind = str(arguments.get("kind", ""))
+        if kind not in ANALYSIS_KINDS:
+            proposal.invalid_calls += 1
+            return f"{tr('Diese Analyse gibt es nicht')}: {kind} ({', '.join(ANALYSIS_KINDS)})"
+        wanted = tuple(str(entry) for entry in arguments.get(OBJECTS_FIELD, ()) or ())
+        return analysis_text(
+            kind, scene, working, self.profile, objects=wanted, cancelled=self.cancelled
+        )
+
+    def _print_target(
+        self, arguments: dict[str, Any], proposal: Proposal, working: Document
+    ) -> str:
+        """Drucker oder Material des Projekts wechseln (§12, §15.5).
+
+        Beides reist als ``DocumentChange`` in der Transaktion des Vorschlags
+        — ein Undo nimmt es mit zurück (Regel 16). Die Auswertung im
+        laufenden Zug rechnet noch mit dem alten Profil; die Übernahme wertet
+        mit dem neuen aus, und die Verweis-Toleranzen (`auto:<material>`)
+        rechnen sich dabei von selbst um (Regel 7).
+        """
+        from app.core.knowledge import profiles
+
+        wanted_printer = str(arguments.get("printer", "")).strip() or working.printer
+        wanted_material = str(arguments.get("material", "")).strip() or working.material
+        try:
+            profiles.printer(wanted_printer)
+            profiles.material(wanted_material)
+        except AppError as error:
+            proposal.invalid_calls += 1
+            return f"{error.title} {error.detail or ''}".strip()
+        if (wanted_printer, wanted_material) == (working.printer, working.material):
+            return tr("Drucker und Material sind schon so eingestellt.")
+        working.printer = wanted_printer
+        working.material = wanted_material
+        proposal.print_target = (wanted_printer, wanted_material)
+        return f"{tr('Druckziel geändert')}: {wanted_printer} / {wanted_material} — " + tr(
+            "gilt mit der Übernahme des Vorschlags."
+        )
 
     def _standard(self, arguments: dict[str, Any], proposal: Proposal) -> str:
         """§24.2 als Werkzeug: nachschlagen statt raten.
@@ -400,6 +454,8 @@ class AgentSession:
             FIND_PART: tr("Sucht in der Bausteinbibliothek"),
             READ_DIGEST: tr("Liest den Steckbrief"),
             READ_STANDARD: tr("Schlägt in der Normteiltabelle nach"),
+            READ_ANALYSIS: tr("Rechnet eine Analyse"),
+            SET_PRINT_TARGET: tr("Wechselt Drucker oder Material"),
         }
         if name in extras:
             return extras[name]

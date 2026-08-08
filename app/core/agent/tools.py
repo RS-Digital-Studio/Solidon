@@ -36,6 +36,8 @@ READ_REPORT: Final = "read_report"
 FIND_PART: Final = "find_part"
 READ_DIGEST: Final = "read_digest"
 READ_STANDARD: Final = "read_standard"
+READ_ANALYSIS: Final = "read_analysis"
+SET_PRINT_TARGET: Final = "set_print_target"
 
 #: Welche Tabellen der Normteilkatalog kennt (§24.2) — das Enum im Schema und
 #: die Prüfung in der Sitzung lesen dieselbe Liste.
@@ -60,6 +62,8 @@ EXTRA_TOOLS: Final[tuple[str, ...]] = (
     FIND_PART,
     READ_DIGEST,
     READ_STANDARD,
+    READ_ANALYSIS,
+    SET_PRINT_TARGET,
 )
 
 
@@ -251,6 +255,49 @@ def extra_tools() -> tuple[dict[str, Any], ...]:
                     },
                 },
                 "required": ["kind", "size"],
+            },
+        },
+        {
+            "name": READ_ANALYSIS,
+            "description": str(
+                _(
+                    "Lies eine Analyse: Druckbarkeit (Überhang, Inseln, Brücken), "
+                    "Zeit- und Materialschätzung, Einstellungsrat oder "
+                    "Orientierungssuche. Nur lesend, Herkunft wird ausgewiesen."
+                )
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["printability", "estimate", "advice", "orientation"],
+                    },
+                    OBJECTS_FIELD: {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": str(
+                            _("Nur diese Objekte rechnen; ohne Angabe die ganze Szene.")
+                        ),
+                    },
+                },
+                "required": ["kind"],
+            },
+        },
+        {
+            "name": SET_PRINT_TARGET,
+            "description": str(
+                _(
+                    "Wechsle Drucker oder Material des Projekts. Toleranzen sind "
+                    "Verweise ins Materialprofil und rechnen sich mit um."
+                )
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "printer": {"type": "string"},
+                    "material": {"type": "string"},
+                },
             },
         },
     )

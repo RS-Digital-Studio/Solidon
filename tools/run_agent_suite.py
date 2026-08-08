@@ -55,6 +55,9 @@ class Outcome:
     calls: int = 0
     invalid: int = 0
     steps: int = 0
+    readings: tuple[str, ...] = ()
+    target: bool = False
+    answer: str = ""
     error: str = ""
 
     @property
@@ -63,6 +66,16 @@ class Outcome:
             return False
         if self.case.ambiguous:
             return self.asked
+        if self.case.expects_target:
+            return self.target
+        if self.case.expects_reading and not (set(self.case.expects_reading) & set(self.readings)):
+            # Nachsehen statt raten: eine Antwort ohne den Blick in Analyse
+            # oder Tabelle ist geraten, auch wenn die Zahl zufällig stimmt.
+            return False
+        if self.case.expects_mention and not all(
+            word in self.answer for word in self.case.expects_mention
+        ):
+            return False
         if self.case.expects_parameter:
             return self.parameters > 0
         if self.case.expects_answer_only:
@@ -110,6 +123,9 @@ def run_case(case: Case, backend: LLMBackend) -> Outcome:
     outcome.calls = proposal.tool_calls
     outcome.invalid = proposal.invalid_calls
     outcome.steps = proposal.steps
+    outcome.readings = tuple(proposal.readings)
+    outcome.target = proposal.print_target is not None
+    outcome.answer = proposal.answer
     outcome.asked = outcome.asked or bool(proposal.questions)
     return outcome
 

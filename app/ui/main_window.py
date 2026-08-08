@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import activation, examples, updates
+from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
 from app.core.agent.session import (
     MAX_STEPS,
     build_fit,
@@ -58,10 +59,12 @@ from app.core.agent.tools import (
     ADD_PARAMETER,
     FIND_PART,
     OBJECTS_FIELD,
+    READ_ANALYSIS,
     READ_DIGEST,
     READ_REPORT,
     READ_STANDARD,
     SET_PARAMETER,
+    SET_PRINT_TARGET,
     STANDARD_KINDS,
     UNDO_TRANSACTION,
 )
@@ -77,7 +80,7 @@ from app.core.export.writer import (
     write_plan,
 )
 from app.core.geom.mesh import as_mesh_data
-from app.core.knowledge import calibration, print_settings
+from app.core.knowledge import calibration, print_settings, profiles
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
@@ -3004,6 +3007,36 @@ class MainWindow(QMainWindow):
                     kinds=", ".join(STANDARD_KINDS)
                 )
             return standard_text(kind, str(values.get("size", "")).strip())
+        if name == READ_ANALYSIS:
+            result = self.session.last_result
+            if result is None:
+                return tr("Es ist nichts geöffnet.")
+            kind = str(values.get("kind", ""))
+            if kind not in ANALYSIS_KINDS:
+                return tr("Diese Analyse gibt es nicht: {kinds}").format(
+                    kinds=", ".join(ANALYSIS_KINDS)
+                )
+            wanted = tuple(str(entry) for entry in values.get(OBJECTS_FIELD, ()) or ())
+            return analysis_text(
+                kind,
+                result.scene,
+                self.session.project.document,
+                self.session.profile,
+                objects=wanted,
+            )
+        if name == SET_PRINT_TARGET:
+            printer = str(values.get("printer", "")).strip()
+            material = str(values.get("material", "")).strip()
+            document = self.session.project.document
+            try:
+                profiles.printer(printer or document.printer)
+                profiles.material(material or document.material)
+            except AppError as error:
+                return f"{error.title} {error.detail or ''}".strip()
+            self.session.change_scene_profile(
+                printer or document.printer, material or document.material
+            )
+            return f"{tr('Druckziel geändert')}: {document.printer} / {document.material}"
 
         spec = REGISTRY.get(name)
         chosen = [str(entry) for entry in values.pop(OBJECTS_FIELD, ()) or ()]

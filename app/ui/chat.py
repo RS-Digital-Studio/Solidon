@@ -386,6 +386,9 @@ def describe(preview: Any) -> str:
         parts.append(_named(list(proposal.parameters), tr("Parameter")))
     if proposal.fits:
         parts.append(f"{len(proposal.fits)} × {tr('Passung')}")
+    if proposal.print_target:
+        printer, material = proposal.print_target
+        parts.append(f"{tr('Druckziel')} {printer} / {material}")
     if proposal.undo_of:
         parts.append(f"{tr('Rücknahme')} {proposal.undo_of}")
 

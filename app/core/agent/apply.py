@@ -52,11 +52,14 @@ def accept(proposal: Proposal, history: History) -> Transaction | None:
     # zwischen Vorschlag und Annahme liegt eine Entscheidung des Nutzers, und
     # in der Zeit kann sich etwas geändert haben.
     changes: DocumentChange | None = None
-    if proposal.parameters or proposal.fits:
+    if proposal.parameters or proposal.fits or proposal.print_target:
+        printer, material = proposal.print_target or (None, None)
         changes = change_for(
             document,
             parameters=proposal.parameters or None,
             fits=[*document.fits, *proposal.fits] if proposal.fits else None,
+            printer=printer,
+            material=material,
         )
 
     transaction: Transaction | None = None
@@ -106,7 +109,7 @@ def _refuse_mixed(proposal: Proposal) -> None:
     dieser Lage über ``History.discardable`` nach; der Agent kann das nicht,
     also macht er zwei Vorschläge daraus.
     """
-    if not (proposal.drafts or proposal.parameters or proposal.fits):
+    if not (proposal.drafts or proposal.parameters or proposal.fits or proposal.print_target):
         return
     raise ValidationError(
         field="undo",

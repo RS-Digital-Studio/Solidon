@@ -267,17 +267,22 @@ aber das Modell weiß, dass es Vorgeschichte gibt, und rät nicht.
 
 ## 5. Handlungsraum: der Agent erreicht dieselben Hebel wie die Menüs
 
-### 5.1 Druckeinstellungen: lesen über den Steckbrief, ändern als Werkzeug
+### 5.1 Druckeinstellungen: lesen ja, setzen nein
 
-Lesen kommt aus 3.2 (Steckbriefzeile) und 3.3 (`advice`). Ändern:
-**`set_print_setting(path, value, reason)`** — die Änderung reist als
-`DocumentChange` in der Transaktion des Vorschlags, genau wie Parameter und
-Passungen; ein Undo nimmt sie mit zurück. `reason` ist Pflicht und landet
-im Chatbeitrag: eine Einstellungsänderung ohne Begründung ist ein Rat, dem
-niemand folgen kann. Damit schließt sich der Kreis mit `advise.py`: der
-Agent kann aus der Geometrie auf Einstellungen schließen (§-Auftrag von
-`slice/advise.py`) und den Schluss auch anwenden — bislang endet er an der
-Dialoggrenze.
+**Korrigiert bei der Umsetzung (08.08.2026).** Der ursprüngliche Entwurf sah
+`set_print_setting(path, value, reason)` als `DocumentChange` vor — das
+kollidiert mit zwei geltenden Festlegungen, die der Entwurf übersehen hat:
+Druckeinstellungen reisen **nicht** in Transaktionen (§15.5 zieht die Grenze
+an der Auswertung — Einstellungen reisen zum Slicer), und §28.2 sagt
+„Übernommen wird auf Klick, nie von allein". Ein setzendes Werkzeug hätte
+entweder Regel 16 gebrochen (ein Undo nähme die Einstellung nicht zurück)
+oder eine Formatänderung samt Migration verlangt, um eine Grenze aufzuweichen,
+die mit Absicht dort verläuft.
+
+Es bleibt beim Lesen, und das schließt den Kreis trotzdem: die
+Steckbriefzeile (3.2) sagt, was gilt, `read_analysis("advice")` (3.3) liefert
+die begründeten Vorschläge aus `advise.py`, der Agent nennt sie samt Grund —
+und der Klick bleibt im Druckdialog, wo er hingehört.
 
 ### 5.2 Projektdrucker und -material: `set_print_target`
 
@@ -406,7 +411,7 @@ Schritt 3 — die neuen Werkzeuge entstehen nur einmal.
 | Agent kennt neue Feature-IDs nach einer Op nicht | 3.1 |
 | Kein Werkzeug für frischen Steckbrief | 3.1 |
 | Passungen nicht im Steckbrief | 3.2 |
-| Druckeinstellungen unsichtbar | 3.2, 5.1 |
+| Druckeinstellungen unsichtbar | 3.2, 5.1 — lesen, nicht setzen (korrigiert) |
 | Quellen/Dateinamen unsichtbar | 3.2 |
 | Op-Parameter im Verlauf fehlen | 3.2 |
 | Schichtanalyse/Karten/Schätzung/Orientierung unerreichbar | 3.3 |

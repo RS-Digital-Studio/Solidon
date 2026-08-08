@@ -66,6 +66,29 @@ def good_answer(case: Case) -> list[Reply]:
             ),
             Reply(text="Ich nehme hole_1."),
         ]
+    if case.expects_target:
+        return [
+            Reply(
+                tool_calls=(
+                    ToolCall(id="1", name=tools.SET_PRINT_TARGET, arguments={"material": "pla"}),
+                )
+            ),
+            Reply(text="Das Projekt druckt jetzt PLA."),
+        ]
+    if case.expects_reading:
+        reading = case.expects_reading[0]
+        arguments: dict[str, object] = (
+            {"kind": "estimate"}
+            if reading == tools.READ_ANALYSIS
+            else {"kind": "screw", "size": "M4"}
+        )
+        closing = "Nachgesehen." + (" Steht im Menü." if case.expects_mention else "")
+        return [
+            Reply(tool_calls=(ToolCall(id="1", name=reading, arguments=arguments),)),
+            Reply(text=closing),
+        ]
+    if case.expects_mention:
+        return [Reply(text="Das steht im Menü Ändern → Bohrung setzen.")]
     if case.expects_parameter:
         return [
             Reply(
@@ -131,15 +154,16 @@ def run(case: Case, project: Project, profile: Profile) -> tuple[AgentSession, o
 
 
 def test_the_suite_has_the_size_the_plan_asks_for() -> None:
-    """§35: 33 Referenzanfragen — 15 zu Säule C, 18 zu Säule A seit den
-    Skizzenfällen aus P13. §40 zu P4: drei davon mehrdeutig."""
+    """§35: 39 Referenzanfragen — 21 zu Säule C (sechs davon seit der
+    Agent-Vertiefung: nachsehen statt raten, Druckziel, Menüort), 18 zu
+    Säule A seit den Skizzenfällen aus P13. §40 zu P4: drei mehrdeutig."""
     from tests.agent_cases import ALL_CASES, CASES_A
 
-    assert len(CASES) == 15
+    assert len(CASES) == 21
     assert len(CASES_A) == 18
-    assert len(ALL_CASES) == 33, "§35 nennt 33 Referenzanfragen"
+    assert len(ALL_CASES) == 39, "§35 nennt 39 Referenzanfragen"
     assert len(AMBIGUOUS) == 3
-    assert len({case.id for case in ALL_CASES}) == 33
+    assert len({case.id for case in ALL_CASES}) == 39
 
 
 def test_every_expected_operation_exists() -> None:
@@ -206,7 +230,10 @@ def test_a_good_answer_becomes_one_transaction(
     transaction = agent_apply.accept(proposal, history)  # type: ignore[arg-type]
 
     changes_something = bool(
-        proposal.drafts or proposal.parameters or proposal.fits  # type: ignore[attr-defined]
+        proposal.drafts  # type: ignore[attr-defined]
+        or proposal.parameters  # type: ignore[attr-defined]
+        or proposal.fits  # type: ignore[attr-defined]
+        or proposal.print_target  # type: ignore[attr-defined]
     )
     if changes_something:
         assert transaction is not None
@@ -499,6 +526,43 @@ def test_the_prompt_makes_the_chat_a_search_box() -> None:
     assert "Suchfeld" in text
     assert "Menü" in text
     assert PROMPT_VERSION == "3"
+
+
+def test_a_lookup_case_reads_instead_of_guessing(project: Project, profile: Profile) -> None:
+    """Konzept Agent-Vertiefung 3.3: „Ist das druckbar?" wird nachgesehen,
+    nicht gefühlt — der Vorschlag hält fest, welche lesenden Werkzeuge der
+    Zug benutzt hat, und die Suite misst daran.
+    """
+    from tests.agent_cases import by_id
+
+    _agent, proposal = run(by_id("printable"), project, profile)
+
+    assert "read_analysis" in proposal.readings  # type: ignore[attr-defined]
+    assert proposal.empty, "nachsehen ändert nichts"  # type: ignore[attr-defined]
+
+
+def test_a_print_target_travels_in_the_transaction_and_back(
+    project: Project, profile: Profile
+) -> None:
+    """Konzept Agent-Vertiefung 5.2: Drucker und Material reisen als
+    ``DocumentChange`` in der einen Transaktion des Vorschlags — ein Undo
+    stellt beide wieder her (Regel 16, Regel 7 bleibt gewahrt: die
+    Toleranzen sind Verweise und rechnen sich mit um).
+    """
+    from tests.agent_cases import by_id
+
+    material_before = project.document.material
+    _agent, proposal = run(by_id("switch_material"), project, profile)
+
+    assert proposal.print_target == (project.document.printer, "pla")  # type: ignore[attr-defined]
+
+    history = History(project.document)
+    transaction = agent_apply.accept(proposal, history)  # type: ignore[arg-type]
+    assert transaction is not None
+    assert project.document.material == "pla"
+
+    history.undo()
+    assert project.document.material == material_before
 
 
 def test_a_geometry_refusal_is_not_an_invalid_call(project: Project, profile: Profile) -> None:
