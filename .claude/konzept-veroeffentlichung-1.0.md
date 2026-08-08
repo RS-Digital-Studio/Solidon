@@ -7,6 +7,19 @@ Dieses Dokument ist die fachliche SSOT der Veröffentlichung. Der Umsetzungsplan
 in §4 referenziert die §§, statt sie zu wiederholen. Jede Ist-Aussage in §1 ist
 am Code belegt — die Belegstelle steht dabei.
 
+> **Nachgetragen am 08.08.2026.** Drei Aussagen des Ist-Zustands sind
+> überholt, und zwar zum Guten. Sie stehen unten im Wortlaut, damit die
+> Begründung nachvollziehbar bleibt; was sich geändert hat, steht als Marke
+> daneben.
+>
+> | §1 sagt | Stand 08.08.2026 |
+> |---|---|
+> | `constraints.txt` ist nicht im Repository (§1.2) | **erledigt** — versioniert, die CI findet sie |
+> | Bezahlung, Testlauf, Aktivierung: es gibt nichts davon (§1.3) | **erledigt** — `app/core/activation/`, `b5b5096`, `TRIAL_DAYS = 14` |
+> | Kein EULA, keine AGB, keine Widerrufsbelehrung (§1.3) | **erledigt** — `EULA.md`, `AGB.md`, `WIDERRUF.md`, `6456a95` |
+> | Handbuch: achtzehn Seiten (§1.1) | jetzt dreiunddreißig, achtundzwanzig Abbildungen |
+> | Anschrift, Hoster, Zahlungsdienstleister fehlen | **weiterhin offen** — die drei Platzhalter tragen einen Entwurfshinweis, den ein Test erzwingt |
+
 ---
 
 ## §1 Ist-Zustand

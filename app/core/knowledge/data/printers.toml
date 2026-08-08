@@ -1,11 +1,11 @@
-# Starting set of printer profiles (Bauplan §38).
+# Startbestand an Druckerprofilen (Bauplan §38).
 #
-# A data table, maintained like the standard parts table (§24.2): figures taken
-# from freely available manufacturer specifications, never copied from standards
-# documents. Nobody should have to type build volumes on first start; own
-# profiles are derived from these.
+# Eine Datentabelle, gepflegt wie die Normteiltabelle (§24.2): die Zahlen
+# stammen aus frei zugänglichen Herstellerangaben, nie aus Normtexten. Beim
+# ersten Start soll niemand Bauraummaße abtippen; eigene Profile werden hiervon
+# abgeleitet.
 #
-# All lengths in millimetres. extrusion_width defaults to nozzle * 1.05.
+# Alle Längen in Millimetern. extrusion_width ist ohne Angabe Düse * 1,05.
 
 [generic-220]
 title = "Allgemeiner FDM-Drucker 220 mm"

@@ -6,6 +6,23 @@ und den VTK-Interactor — also über dieselben Wege, die eine Maus nimmt. Alles
 unten ist gemessen oder fotografiert, nicht abgeleitet. Wo eine erste Messung
 falsch war, steht die Korrektur dabei.
 
+> **Stand 08.08.2026, nachgetragen.** Vier der neun Befunde sind behoben; die
+> Marke steht bei jedem. Ein Konzept ohne Fortschreibung schickt den nächsten
+> Leser an Arbeit, die längst getan ist.
+>
+> | Befund | Stand |
+> |---|---|
+> | 1.1 Karten wachsen nicht mit | **behoben** — `b017fde` |
+> | 1.2 Parameteränderung 9–15 s | **behoben** — `b3de01e` |
+> | 1.3 rtree reißt den Prozess | offen |
+> | 2.1 Kontextmenü mit zwei Einträgen | **behoben** — `0c80417` |
+> | 2.2 Bohrung öffnet auf dem Ursprung | **behoben** — `06e5e56` |
+> | 2.3 Grund-Spalte abgeschnitten | offen |
+> | 2.4 Vorzeigebeispiel mit zwei Warnungen | offen |
+> | 2.5 STEP im Exportdialog | offen |
+> | 2.6 Erstes Öffnen dauert acht Sekunden | offen |
+> | 2.7 Sechs von 77 mit Tastenkürzel | offen |
+
 **Durchgegangen:** Erstinbetriebnahme mit frischem Nutzerverzeichnis ·
 Startbildschirm mit allen acht Beispielen · alle neun Menüs mit 127 Einträgen ·
 alle 77 registrierten Operationen, davon 72 Dialoge einzeln geöffnet und
@@ -22,6 +39,10 @@ Rückgängig · Übersetzungskatalog · alle 14 Fehlerklassen.
 ## Teil 1 — Die drei Befunde, aus denen die Arbeit folgt
 
 ### 1.1 Die Karten wachsen nicht mit dem Fenster — überall wird Text abgeschnitten
+
+> **Behoben am 08.08.2026** (`b017fde`). Beide Rechnungen fragten nach der
+> Höhe und bekamen eine Antwort, die den Inhalt nicht kannte: `sizeHintForRow`
+> kennt den Wortumbruch nicht, und der Zeilendeckel war eine Konstante.
 
 Das ist der Befund, den man auf jedem Bildschirmfoto sieht, und er trifft jede
 Zone des Fensters gleichzeitig. Gemessen im Vollbild, also dort, wo am meisten
@@ -79,6 +100,10 @@ kein Chatfenster, das ist ein Briefschlitz.
 ---
 
 ### 1.2 An einem Maß zu drehen kostet neun bis fünfzehn Sekunden
+
+> **Behoben am 08.08.2026** (`b3de01e`). 14,6 von 15,9 Sekunden lagen in
+> `trimesh.proximity.on_surface`, gerufen aus der Slot-Übertragung — 113168
+> Anfragen an einen rtree-Index für eine Beschriftung.
 
 §31 setzt für „Parameteränderung → sichtbares Ergebnis" **unter 2 s, nur
 betroffene Zweige". §2.2 beschreibt Weg 2 mit „an den Hauptmaßen drehen, das
@@ -154,6 +179,10 @@ laufende Sitzung ist trotzdem fort.
 
 ### 2.1 Das Kontextmenü im Bild bietet zwei Einträge
 
+> **Behoben am 08.08.2026** (`0c80417`). `_feature_kind` las die Spalte mit
+> dem Maß statt der mit der Art; ein Durchmesser als Merkmalsart findet
+> zuverlässig keine Operation.
+
 Rechtsklick auf einen Körper, mit und ohne Auswahl, öffnet ein Menü mit
 **„Ausblenden"** und **„Alles andere ausblenden"**. Sonst nichts.
 
@@ -164,6 +193,9 @@ etwas tut, ohne den Namen des Merkmals zu kennen. Das Menü wird korrekt aus
 Wer eine Bohrung senken will, geht weiter über die Menüleiste.
 
 ### 2.2 „Bohrung setzen" öffnet auf einem Punkt neben dem Teil
+
+> **Behoben am 08.08.2026** (`06e5e56`). Die Vorgabe ist jetzt die Mitte der
+> obersten Fläche des gewählten Körpers; ein angeklicktes Merkmal gewinnt.
 
 Der Dialog kommt mit `x = 0,00 · y = 0,00 · z = 0,00 · depth = 0,00` — auch
 wenn ein Körper ausgewählt und vorher eine Fläche angeklickt wurde. Ob das
