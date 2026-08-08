@@ -117,6 +117,14 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python tools/make_examples.py
 
+      - name: Prüfmodul kompilieren und Manifest signieren
+        # V4c (Konzept §2 I H4/H5): das Prüfmodul reist als Maschinencode,
+        # das Manifest deckt die vier Grenzdateien. Cython und setuptools
+        # sind reine Bau-Abhängigkeiten und landen nicht im Paket.
+        run: |
+          python -m pip install -c constraints.txt cython setuptools
+          python tools/build_licence_module.py
+
       - name: Bauen
         run: pyinstaller packaging/solidon3d.spec --noconfirm
 

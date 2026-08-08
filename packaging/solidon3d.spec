@@ -16,7 +16,21 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 ROOT = Path(SPECPATH).resolve().parent
 
+# V4c (Konzept §2 I H4/H5): das Prüfmodul reist kompiliert, das Manifest
+# signiert. Beides baut tools/build_licence_module.py — ohne den Schritt gibt
+# es keinen Bau, sonst entstünde ein Paket, in dem die Lizenzgrenze als
+# dekompilierbarer Bytecode läge.
+LICENCE_BUILD = ROOT / "packaging" / "build"
+if not (LICENCE_BUILD / "licence.manifest").is_file() or not list(
+    (LICENCE_BUILD / "activation").glob("*")
+):
+    raise SystemExit(
+        "Das kompilierte Prüfmodul fehlt — erst: python tools/build_licence_module.py"
+    )
+
 datas = [
+    # Neben app/, wo integrity.manifest_path() es sucht.
+    (str(LICENCE_BUILD / "licence.manifest"), "."),
     (str(ROOT / "app" / "core" / "knowledge" / "data"), "app/core/knowledge/data"),
     (str(ROOT / "app" / "core" / "knowledge" / "parts" / "LICENSE"), "app/core/knowledge/parts"),
     (str(ROOT / "app" / "core" / "backends" / "data"), "app/core/backends/data"),
@@ -31,6 +45,14 @@ datas = [
 datas += collect_data_files("trimesh")
 datas += collect_data_files("pyvista")
 
+binaries = [
+    # Die kompilierten Erweiterungen des Prüfmoduls, an der Stelle des
+    # Python-Pakets. Der Import findet sie über den Paketpfad im
+    # Dateisystem; im PYZ liegt von app.core.activation nichts (H5).
+    (str(entry), "app/core/activation")
+    for entry in sorted((LICENCE_BUILD / "activation").glob("*"))
+]
+
 hiddenimports = [
     # Die Operationen registrieren sich beim Import selbst (§10); PyInstaller
     # sieht keinen Import, der nur über eine Zeichenkette im Bootstrap
@@ -38,7 +60,13 @@ hiddenimports = [
     # handgepflegte Teilmenge, die hier stand, ist mit dem Bootstrap
     # auseinandergedriftet — die Skizzen-Ops fehlten, und der Bau endete
     # beim Start mit einem ModuleNotFoundError statt eines Fensters.
-    *collect_submodules("app.core"),
+    # Ausgenommen ist das Prüfmodul: das reist kompiliert (oben) und darf
+    # nicht zusätzlich als Bytecode ins Archiv.
+    *[
+        name
+        for name in collect_submodules("app.core")
+        if name != "app.core.activation" and not name.startswith("app.core.activation.")
+    ],
     "vtkmodules.all",
     "vtkmodules.util.data_model",
     "vtkmodules.util.execution_model",
@@ -65,11 +93,21 @@ hiddenimports = [
 analysis = Analysis(
     [str(ROOT / "app" / "ui" / "app.py")],
     pathex=[str(ROOT)],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
-    excludes=["tkinter", "pytest", "mypy", "ruff"],
+    # app.core.activation: siehe oben — kompiliert statt Bytecode (H5).
+    excludes=["tkinter", "pytest", "mypy", "ruff", "app.core.activation"],
+    # Die vier Grenzdateien aus §2 C reisen als Quelltext, nicht im Archiv:
+    # integrity.intact() hasht genau die Datei, aus der Python sie lädt —
+    # ein von Hand verändertes writer.py im Paket fällt damit auf (H4).
+    module_collection_mode={
+        "app.core.scene.history": "py",
+        "app.core.export.writer": "py",
+        "app.core.export.handover": "py",
+        "app.core.agent.session": "py",
+    },
     noarchive=False,
 )
 pyz = PYZ(analysis.pure)

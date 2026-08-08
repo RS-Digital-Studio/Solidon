@@ -69,6 +69,11 @@ dev = [
   # Lage darüber entsteht mit Qt und wird hiermit aufgelegt. BSD-3, und nur ein
   # Werkzeug — in der Anwendung steckt es nicht (§36).
   "pypdf>=5.0",
+  # Übersetzt das Prüfmodul für die Auslieferung nach C (Konzept §2 I H5,
+  # tools/build_licence_module.py). Bau-, keine Laufzeitabhängigkeit: die
+  # Anwendung und die Suite laufen gegen die Python-Quellen. Apache-2.0/MIT.
+  "cython>=3.0",
+  "setuptools>=75",
 ]
 
 [project.scripts]
