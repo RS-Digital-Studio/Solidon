@@ -29,7 +29,7 @@ from app.core.registry.registry import (
     Registry,
 )
 from app.core.types import ParamSpec
-from app.i18n import TranslatableText, _
+from app.i18n import TranslatableText, _, format_decimal
 
 
 def menu_tree(registry: Registry | None = None) -> tuple[MenuSection, ...]:
@@ -219,8 +219,8 @@ def _span_of(entry: ParamSpec) -> str:
         return ", ".join(entry.choices)
     if entry.minimum is None and entry.maximum is None:
         return ""
-    low = "" if entry.minimum is None else f"{entry.minimum:g}"
-    high = "" if entry.maximum is None else f"{entry.maximum:g}"
+    low = "" if entry.minimum is None else format_decimal(entry.minimum)
+    high = "" if entry.maximum is None else format_decimal(entry.maximum)
     return f"{low} … {high}"
 
 
@@ -230,12 +230,22 @@ def _default_of(entry: ParamSpec) -> str:
     ``True`` und ``False`` standen so in der Tabelle — Pythons Schreibweise in
     einem deutschen Handbuch, und für jeden, der nicht programmiert, zwei
     Wörter ohne Bedeutung. Ein Schalter ist an oder aus.
+
+    Für Zahlen galt dasselbe und blieb übersehen: ``f"{0.2}"`` schreibt einen
+    Punkt, und der stand 252-mal im deutschen Handbuch neben einer Anwendung,
+    die ``2,40 mm`` anzeigt. :func:`format_decimal` entscheidet das jetzt nach
+    der aktiven Sprache — und kürzt dabei ``5.0`` auf ``5``, weil eine
+    Nachkommastelle ohne Aussage nur Platz kostet.
     """
     if entry.required:
         return str(_("erforderlich"))
     if isinstance(entry.default, bool):
         return str(_("an") if entry.default else _("aus"))
-    return "" if entry.default is None else f"{entry.default}"
+    if entry.default is None:
+        return ""
+    if isinstance(entry.default, (int, float)):
+        return format_decimal(entry.default)
+    return f"{entry.default}"
 
 
 def parameter_table(parameters: tuple[ParamSpec, ...]) -> list[str]:

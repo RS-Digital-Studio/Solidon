@@ -115,7 +115,7 @@ def test_every_category_has_a_chapter() -> None:
 
 
 def test_every_operation_appears_by_name() -> None:
-    """62 Operationen, 62 Einträge. Ohne das wäre das Handbuch eine Auswahl."""
+    """So viele Einträge wie Operationen. Sonst wäre das Handbuch eine Auswahl."""
     text = manual.as_markdown()
 
     for spec in REGISTRY.all():
@@ -152,6 +152,33 @@ def test_a_chapter_can_be_asked_for_on_its_own() -> None:
     assert holes is not None
     assert str(CATEGORIES["holes"]) in str(holes.body)
     assert "drill_hole" in str(holes.body)
+
+
+def test_the_reference_writes_numbers_the_way_the_language_does() -> None:
+    """Vorgabe und Bereich stehen im Trennzeichen der jeweiligen Sprache.
+
+    Die erzeugte Hälfte lieferte ``0.2 … 200`` und ``8.4`` in ein deutsches
+    Handbuch — neben eine Anwendung, die im selben Bild ``2,40 mm`` anzeigt.
+    Der Leser tippt danach ein, was er gelesen hat, und trifft ein Feld, das
+    das Komma erwartet.
+    """
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    german = manual.find("holes")
+    assert german is not None
+    assert "0,2 … 200" in str(german.body)
+    assert "0.2 … 200" not in str(german.body)
+
+    install_catalog("en", read_catalog("en"))
+    set_language("en")
+    try:
+        english = manual.find("holes")
+        assert english is not None
+        assert "0.2 … 200" in str(english.body)
+        assert "0,2 … 200" not in str(english.body)
+    finally:
+        set_language("de")
 
 
 # --- die Abbildungen --------------------------------------------------------------

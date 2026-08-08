@@ -110,3 +110,23 @@ def sort_key(text: object) -> str:
     Titel und sucht darin.
     """
     return str(text).casefold().translate(_FOLDED)
+
+
+#: Sprachen, die das Komma als Dezimaltrennzeichen schreiben.
+_DECIMAL_COMMA: Final = frozenset({"de"})
+
+
+def format_decimal(value: float | int, digits: int | None = None) -> str:
+    """Eine Zahl so geschrieben, wie die aktive Sprache sie schreibt.
+
+    ``format_length`` im Kern lässt den Punkt ausdrücklich stehen, weil sein
+    Ergebnis durch die Oberfläche geht und dort lokalisiert wird. Für Text, den
+    der Kern **fertig** ausliefert, gilt das nicht: die erzeugte Hälfte des
+    Handbuchs ging so mit 252 Zahlen der Form ``0.2`` in ein deutsches
+    Handbuch, neben eine Anwendung, die im selben Bild ``2,40 mm`` anzeigt.
+
+    ``digits`` gibt die Nachkommastellen vor; ohne Angabe steht die Zahl so
+    kurz da, wie sie exakt ist — ``5`` bleibt ``5``, nicht ``5,0``.
+    """
+    text = f"{value:.{digits}f}" if digits is not None else f"{value:g}"
+    return text.replace(".", ",") if _language in _DECIMAL_COMMA else text
