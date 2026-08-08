@@ -32,8 +32,16 @@ def check(result: EvaluationResult, before: Scene | None = None) -> list[Finding
     """
     findings: list[Finding] = []
     scene = result.scene
+    reasons: list[Finding] = []
 
     if result.stopped_at is not None:
+        # Der Grund steht im Bericht, an derselben Operation — und er ist das
+        # Einzige, womit das Modell etwas anfangen kann. „Die Auswertung hält
+        # an" allein sagt nicht, *warum*: gemessen an `pocket_plate` rief das
+        # Modell danach viermal dieselbe Operation mit anderen Zahlen auf,
+        # während der Bericht die ganze Zeit „Der gewählte Körper ist ein Netz"
+        # sagte. Mit dem Satz wechselt es stattdessen den Körpertyp.
+        reasons = [entry for entry in scene.report.findings if entry.op_id == result.stopped_at]
         findings.append(
             Finding(
                 code="agent.stopped",
@@ -42,11 +50,16 @@ def check(result: EvaluationResult, before: Scene | None = None) -> list[Finding
                 op_id=result.stopped_at,
             )
         )
+        findings.extend(reasons)
 
     for object_id, entry in scene.objects.items():
         findings.extend(_check_object(object_id, entry, before))
 
-    findings.extend(finding for finding in scene.report.findings if finding.code in PASSED_THROUGH)
+    findings.extend(
+        finding
+        for finding in scene.report.findings
+        if finding.code in PASSED_THROUGH and finding not in reasons
+    )
     return findings
 
 
