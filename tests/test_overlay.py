@@ -296,3 +296,68 @@ def test_a_card_uses_the_room_a_tall_window_offers(window: MainWindow) -> None:
         "ein hohes Fenster muss dem Baum mehr als den Vorgabedeckel geben"
     )
     assert tree.tree.height() <= tree.wanted_height(), "aber nie mehr, als er braucht"
+
+
+def test_one_action_moves_a_card_once(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eine Handlung, eine Bewegung — nicht neunhundertfünf.
+
+    Die Zuteilung der Höhe las einmal die Höhen, die sie gerade selbst
+    gesetzt hatte. Damit bekam sie beim nächsten Durchlauf andere Zahlen,
+    setzte wieder, und weil ``_move`` eine laufende Animation abbrach und neu
+    begann, sobald die Geometrie nicht schon am Ziel war, kam die Karte nie
+    an: sie lief bei jeder Aktion auf und ab. Gemessen an einem einzigen
+    Aufklappen waren es neunhundertfünf Geometriewechsel.
+    """
+    from PySide6.QtCore import QPropertyAnimation
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    monkeypatch.setattr(overlay, "MOVE_MS", 160)
+    left = window.overlay.left
+    started: list[int] = []
+
+    original = QPropertyAnimation.start
+
+    def counting(self: QPropertyAnimation, *args: object, **kwargs: object) -> None:
+        if self.targetObject() is left:
+            started.append(1)
+        original(self, *args, **kwargs)
+
+    monkeypatch.setattr(QPropertyAnimation, "start", counting)
+
+    tree = window.object_tree
+    for number in range(20):
+        item = QTreeWidgetItem([f"Körper {number}", "10 × 10 × 10 mm"])
+        item.addChild(QTreeWidgetItem([f"Bohrung {number}", "Ø4 mm"]))
+        tree.tree.addTopLevelItem(item)
+    tree._fit()
+    QApplication.processEvents()
+
+    started.clear()
+    tree.tree.expandAll()
+    QApplication.processEvents()
+
+    # Eine Handvoll statt einer einzigen: Qt legt einen Baum mit zwanzig
+    # Ästen in Etappen, und jede Etappe ist eine echte Änderung des Bedarfs.
+    # Die Grenze hütet die Größenordnung — vor dem Fix waren es
+    # neunhundertfünf, am laufenden Fenster ist es heute eine.
+    assert len(started) <= 3, f"{len(started)} Bewegungen für ein Aufklappen"
+
+
+def test_sharing_the_room_settles_on_one_answer(window: MainWindow) -> None:
+    """Zweimal zuteilen ergibt dasselbe — sonst schaukelt es sich auf.
+
+    Die Bedingung dafür ist, dass weder ``room`` noch ``wanted_height`` an der
+    Höhe hängen, die gerade gesetzt wurde.
+    """
+    host = window.overlay
+    room = host.height() - 2 * MARGIN - host._bottom_room()
+
+    host._share_room(host.left, room)
+    QApplication.processEvents()
+    first = (window.object_tree.tree.height(), window.history_panel.list.height())
+
+    host._share_room(host.left, room)
+    QApplication.processEvents()
+    second = (window.object_tree.tree.height(), window.history_panel.list.height())
+
+    assert first == second

@@ -39,6 +39,16 @@ ROLE_MARKER = {"user": ">", "agent": "*"}
 
 DISCARDED_COLOUR = "#7a828c"
 
+#: Wie hoch der Gesprächsverlauf mindestens ist, auch wenn nichts darin steht.
+#:
+#: Die Karten der rechten Spalte sind so hoch wie ihr Inhalt, und das ist für
+#: einen Bericht richtig: fünf Befunde brauchen den Platz für fünf Befunde. Ein
+#: Gespräch ist etwas anderes — es ist ein Arbeitsbereich, und seine Höhe sagt,
+#: wofür er gedacht ist. Ungefähr ein halbes Dutzend Zeilen: genug, dass eine
+#: Antwort mit Begründung hineinpasst, ohne dass der leere Zustand die halbe
+#: Ansicht verdeckt.
+EMPTY_TURNS_HEIGHT = 190
+
 
 class ChatPanel(QWidget):
     """Gespräch, Eingabezeile, und die zwei Knöpfe, die ein Vorschlag braucht."""
@@ -62,6 +72,12 @@ class ChatPanel(QWidget):
         self.turns = QListWidget(self)
         self.turns.setWordWrap(True)
         self.turns.setAlternatingRowColors(False)
+        # Ein Gespräch ist ein Arbeitsbereich und kein Text: seine Höhe folgt
+        # nicht dem, was schon darin steht. Ohne diese Zeile war die Karte im
+        # leeren Zustand hundertsiebzig Pixel hoch — neben tausendzweihundert
+        # freien —, und was hineinkam, hatte neunundvierzig Pixel Platz. Wer
+        # den Reiter öffnet, sieht so nicht, wofür er gedacht ist.
+        self.turns.setMinimumHeight(EMPTY_TURNS_HEIGHT)
 
         self.hint = QLabel("", self)
         self.hint.setWordWrap(True)

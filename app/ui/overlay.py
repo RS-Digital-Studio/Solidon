@@ -36,7 +36,7 @@ from PySide6.QtCore import (
     Qt,
 )
 from PySide6.QtGui import QPainterPath, QRegion
-from PySide6.QtWidgets import QAbstractItemView, QTreeView, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QScrollArea, QTreeView, QWidget
 
 from app.ui.style import ROOMY, SPACE
 from app.ui.theme import THEMES, Theme
@@ -208,7 +208,29 @@ def natural_height(zone: QWidget) -> int:
     for view in zone.findChildren(QAbstractItemView):
         if not view.isVisibleTo(zone):
             continue
-        wanted += rows_height(view) - view.sizeHint().height()
+        # Eine gesetzte Mindesthöhe ist eine Aussage über den Zweck und nicht
+        # über den Inhalt: der Gesprächsverlauf des Chats ist ein
+        # Arbeitsbereich, und leer bleibt er es. Ohne dieses ``max`` zog die
+        # Zeilenrechnung ihn auf eine Zeile zurück, und die Karte stand auf
+        # hundertsiebzig Pixeln neben tausendzweihundert freien.
+        needs = max(rows_height(view), view.minimumHeight())
+        wanted += needs - view.sizeHint().height()
+    for area in zone.findChildren(QScrollArea):
+        if isinstance(area, QAbstractItemView) or not area.isVisibleTo(zone):
+            continue
+        inner = area.widget()
+        viewport = area.viewport()
+        if inner is None or viewport is None:
+            continue
+        # Ein Rollbereich meldet eine Wunschhöhe, die mit dem, was in ihm
+        # steht, nichts zu tun hat — er ist ja dafür gebaut, weniger zu zeigen
+        # als er hat. In der Tour hieß das: jeder Schritt endete auf „…", auf
+        # dreizehn fehlenden Pixeln, während neben der Karte achthundert frei
+        # blieben. Gefragt wird deshalb das Widget darin, und zwar nach seiner
+        # tatsächlichen Höhe: bei umbrechendem Text steht die im Layout, nicht
+        # im ``sizeHint``.
+        needs = max(inner.height(), inner.sizeHint().height())
+        wanted += max(needs - viewport.height(), 0)
     return max(wanted, 0)
 
 
@@ -345,6 +367,14 @@ class OverlayHost(QWidget):
         gestapelt: zwei Animationen auf derselben Geometrie streiten sich um
         jedes Bild.
         """
+        running = self._moves.get(id(zone))
+        if running is not None and running.endValue() == target:
+            # Schon auf dem Weg genau dorthin. Sie abzubrechen und neu zu
+            # starten hieße, bei jedem eingehenden ``LayoutRequest`` wieder
+            # von vorn zu beginnen — die Karte käme nie an, und weil sie
+            # unterwegs ist, stimmt ihre Geometrie auch nie mit dem Ziel
+            # überein, was den nächsten Neustart auslöst.
+            return
         running = self._moves.pop(id(zone), None)
         if running is not None:
             running.stop()
@@ -493,21 +523,25 @@ class OverlayHost(QWidget):
         if not takers:
             return
 
-        # Was die Zone außer den Karten noch trägt: Überschriften, die
-        # Parameterleiste, Ränder. Aus der aktuellen Wunschhöhe gelesen und
-        # nicht zusammengezählt — sonst zieht hier niemand nach, wenn oben
-        # ein Abschnitt dazukommt.
-        others = zone.sizeHint().height() - sum(child.height() for child in takers)
-        free = max(room - others, 0)
+        # Gerechnet wird ausschließlich mit ``room`` und dem Bedarf — beide
+        # hängen **nicht** an der aktuellen Höhe der Karten. Das ist keine
+        # Feinheit, sondern die ganze Bedingung dafür, dass die Spalte
+        # stillsteht: eine Zuteilung, die die Höhen liest, die sie gerade
+        # selbst gesetzt hat, bekommt beim nächsten Durchlauf andere Zahlen,
+        # setzt wieder, und die Karte läuft auf und ab. Bei einem einzigen
+        # Aufklappen waren es neunhundertfünf Geometriewechsel.
+        #
+        # Der Preis ist, dass Überschriften und Parameterleiste in ``room``
+        # nicht abgezogen sind: bei Überfüllung rollt eine Karte ein paar
+        # Zeilen früher als nötig. Das ist der bessere Tausch.
         wants = [max(child.wanted_height(), 1) for child in takers]
         total = sum(wants)
-
-        if total <= free:
+        if total <= room:
             for child, want in zip(takers, wants, strict=True):
                 child.set_room(want)
             return
         for child, want in zip(takers, wants, strict=True):
-            child.set_room(max(free * want // total, 1))
+            child.set_room(max(room * want // total, 1))
 
     def _bottom_room(self) -> int:
         """Wie viel Höhe die Werkzeugzeile unten für sich braucht."""
