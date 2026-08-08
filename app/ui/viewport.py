@@ -15,7 +15,7 @@ import os
 import weakref
 from typing import Any, Literal, cast
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
 
 from app.branding import ENVIRONMENT_PREFIX
@@ -283,6 +283,12 @@ DISPLAY_DECIMATION_ABOVE = 500_000
 #: Worauf. Genug, dass eine Fläche noch eine Fläche ist, wenig genug, dass ein
 #: Zug am Schnittschieber nicht durch eine Million Dreiecke geht.
 DISPLAY_DECIMATION_TARGET = 200_000
+
+#: Wie lange der Schichtschieber stehen muss, bevor die Körper an der neuen
+#: Höhe gekappt werden. Der Schnitt ist echte Geometrie und kostet an einem
+#: texturierten Netz um die Sekunde — kurz genug, dass er nach dem Loslassen
+#: sofort wirkt, lang genug, dass er beim Fahren nie dazwischenkommt.
+LAYER_REBUILD_DELAY_MS = 200
 
 #: Ab wie vielen Dreiecken ein Körper keine Kantenlinien mehr bekommt.
 #:
@@ -904,6 +910,16 @@ class Viewport(QWidget):
         self._selected_feature: FeatureId | None = None
         self._layer_actors: list[Any] = []
         self._layer: LayerInfo | None = None
+        self._layer_rebuild = QTimer(self)
+        """Der Körperschnitt zum Schieber, aufgeschoben bis zur Ruhe: die
+        Körper an der Schichthöhe zu kappen ist ein echter Geometrieschnitt
+        und kostet an einem texturierten Netz um die Sekunde — je Schritt im
+        Hauptthread wäre das die Blockade, die §2.8 ausschließt. Beim Fahren
+        folgen nur die Konturen; der Schnitt kommt, sobald der Schieber
+        stehen bleibt, und bis dahin bleibt die letzte Darstellung stehen."""
+        self._layer_rebuild.setSingleShot(True)
+        self._layer_rebuild.setInterval(LAYER_REBUILD_DELAY_MS)
+        self._layer_rebuild.timeout.connect(lambda: self.show_scene(self._result))
         self._difference: Any | None = None
         self._difference_actors: list[Any] = []
         self._difference_held = False
@@ -1199,6 +1215,10 @@ class Viewport(QWidget):
 
     def show_scene(self, result: EvaluationResult | None) -> None:
         """Baut die Ansicht aus der letzten vollständigen Auswertung neu (§15.3)."""
+        # Ein voller Neuaufbau schneidet an der aktuellen Schichthöhe mit —
+        # ein noch ausstehender Schnitt vom Schieber wäre danach derselbe
+        # noch einmal.
+        self._layer_rebuild.stop()
         self._result = result
         # Vor dem Plotter-Zweig: ob ein Projekt schon einmal im Bild stand, ist
         # eine Aussage über die Szene und nicht über VTK — offscreen gibt es
@@ -2230,13 +2250,16 @@ class Viewport(QWidget):
         was = self._layer
         self._layer = layer
         # Die Körper werden neu gebaut, weil sie jetzt anders geschnitten sind
-        # — aber nur, wenn sich das ändert. Beim Ziehen am Schieber ist das
-        # jeder Schritt; ohne die Prüfung wäre es auch jedes Ausschalten eines
-        # bereits ausgeschalteten Schiebers.
-        if (was is None) != (layer is None) or (
-            was is not None and layer is not None and was.z != layer.z
-        ):
+        # — aber nicht bei jedem Schritt: der Schnitt ist echte Geometrie und
+        # kostet an einem texturierten Netz um die Sekunde. Sofort geschnitten
+        # wird nur beim Ein- und Ausschalten des Werkzeugs; beim Fahren folgen
+        # die Konturen sofort, und die Körper folgen, sobald der Schieber
+        # stehen bleibt.
+        if (was is None) != (layer is None):
+            self._layer_rebuild.stop()
             self.show_scene(self._result)
+        elif was is not None and layer is not None and was.z != layer.z:
+            self._layer_rebuild.start()
         self._redraw_layer()
         if self.plotter is not None:
             self.plotter.render()
@@ -2251,26 +2274,49 @@ class Viewport(QWidget):
         if layer is None:
             return
 
-        for index, polygon in enumerate(layer.contours):
-            self._add_ring(polygon.outline, layer.z, LAYER_COLOUR, f"layer:{index}")
-            for hole_index, ring in enumerate(polygon.holes):
-                self._add_ring(ring, layer.z, LAYER_COLOUR, f"layer:{index}:{hole_index}")
-        for index, polygon in enumerate(layer.islands):
-            self._add_ring(polygon.outline, layer.z, ISLAND_COLOUR, f"island:{index}", width=3)
-        for index, polygon in enumerate(layer.overhangs):
-            self._add_ring(polygon.outline, layer.z, OVERHANG_COLOUR, f"overhang:{index}", width=3)
+        # Ein Actor je Rolle, nicht je Ring: eine texturierte Schicht hat
+        # tausende Konturen, und ebenso viele einzelne ``add_lines``-Aufrufe
+        # machten aus einem Schieberschritt Sekunden — VTK zahlt je Actor,
+        # nicht je Linie.
+        contours = [
+            ring for polygon in layer.contours for ring in (polygon.outline, *polygon.holes)
+        ]
+        self._add_rings(contours, layer.z, LAYER_COLOUR, "layer")
+        self._add_rings(
+            [polygon.outline for polygon in layer.islands],
+            layer.z,
+            ISLAND_COLOUR,
+            "island",
+            width=3,
+        )
+        self._add_rings(
+            [polygon.outline for polygon in layer.overhangs],
+            layer.z,
+            OVERHANG_COLOUR,
+            "overhang",
+            width=3,
+        )
 
-    def _add_ring(self, ring: Any, z: float, colour: str, name: str, width: int = 2) -> None:
-        if self.plotter is None or len(ring) < 2:
+    def _add_rings(
+        self, rings: list[Any], z: float, colour: str, name: str, width: int = 2
+    ) -> None:
+        if self.plotter is None:
             return
         import numpy as np
 
-        points = np.array([[float(x), float(y), z] for x, y in ring], dtype=float)
-        # add_lines will Punktpaare; ein geschlossener Ring ist jeder Punkt
-        # zweimal, bis auf die Enden.
-        segments = np.repeat(points, 2, axis=0)[1:-1]
+        pieces = []
+        for ring in rings:
+            if len(ring) < 2:
+                continue
+            flat = np.asarray(ring, dtype=float)
+            points = np.column_stack([flat, np.full(len(flat), z)])
+            # add_lines will Punktpaare; ein geschlossener Ring ist jeder Punkt
+            # zweimal, bis auf die Enden — und Ringe hängen nicht aneinander.
+            pieces.append(np.repeat(points, 2, axis=0)[1:-1])
+        if not pieces:
+            return
         self._layer_actors.append(
-            self.plotter.add_lines(segments, color=colour, width=width, name=name)
+            self.plotter.add_lines(np.vstack(pieces), color=colour, width=width, name=name)
         )
 
     # --- direct manipulation (§18.11) -------------------------------------------

@@ -433,6 +433,12 @@ class MainWindow(QMainWindow):
         self._slice_cache: SliceResult | None = None
         self._slice_key: tuple[str, int] | None = None
         self._slice_worker: Any = None
+        self._slice_pending: tuple[str, int] | None = None
+        """Der Schlüssel, an dem der laufende Schnitt-Arbeiter rechnet — damit
+        derselbe Körper nicht je Schieberschritt einen weiteren bekommt."""
+        self._slice_waiters: list[Any] = []
+        """Wer auf das laufende Ergebnis wartet. Ein Rückruf, der schon in der
+        Reihe steht, wird nicht doppelt eingereiht."""
         self._update_worker: Any = None
         self._finished_update_worker: Any = None
         """Die ausgelaufene Abfrage, festgehalten bis zur nächsten — dieselbe
@@ -2520,7 +2526,15 @@ class MainWindow(QMainWindow):
         if index < 0 or object_id is None:
             self.viewport.set_layer(None)
             return
-        self._slice_of(object_id, lambda result: self._show_layer(result, index))
+        # Eine gebundene Methode statt eines Lambdas je Schritt: sie ist bei
+        # jedem Aufruf dieselbe, also reiht die Warteliste sie nur einmal ein —
+        # und sie liest den Schieber erst, wenn das Ergebnis da ist. Gezeigt
+        # wird die Schicht, auf der der Schieber jetzt steht, nicht die, auf
+        # der er beim Start des Arbeiters stand.
+        self._slice_of(object_id, self._show_current_layer)
+
+    def _show_current_layer(self, result: SliceResult | None) -> None:
+        self._show_layer(result, self.layer_bar.index())
 
     def _show_layer(self, result: SliceResult | None, index: int) -> None:
         if result is None or not result.layers:
@@ -2550,9 +2564,25 @@ class MainWindow(QMainWindow):
                 then(self._slice_cache)
             return self._slice_cache
 
+        if self._slice_worker is not None and self._slice_pending == key:
+            # Für diesen Körper rechnet schon ein Arbeiter. Ein zweiter täte
+            # exakt dieselbe Arbeit noch einmal — und beim Ziehen durch die
+            # Schichten hieße das: je Schritt ein weiterer, an einem
+            # texturierten Netz jeder davon mit Sekunden an Rechenzeit, alle
+            # gleichzeitig. Wer etwas vom Ergebnis will, stellt sich an; ein
+            # Rückruf, der schon in der Reihe steht (die Schichtansicht bei
+            # jedem Schritt), wird nicht doppelt eingereiht.
+            if then is not None and all(waiter != then for waiter in self._slice_waiters):
+                self._slice_waiters.append(then)
+            return None
+
         self.status_message.setText(tr("Die Schichtanalyse läuft …"))
         worker = _SliceWorker(entry, self.session.profile.printer.layer_height)
-        worker.done.connect(lambda outcome, key=key: self._slice_ready(outcome, key, then))
+        self._slice_pending = key
+        self._slice_waiters = [] if then is None else [then]
+        worker.done.connect(
+            lambda outcome, key=key, worker=worker: self._slice_ready(outcome, key, worker)
+        )
         # Dieselbe Halteleine wie bei der Analysekarte, und aus demselben
         # Grund: hier stand ein Lambda, das ``None`` in das Feld schrieb,
         # sobald *irgendein* Schnitt-Arbeiter fertig war. Wer durch die
@@ -2570,13 +2600,21 @@ class MainWindow(QMainWindow):
             self._slice_worker = None
         self._hold_until_done(worker)
 
-    def _slice_ready(self, outcome: SliceResult, key: tuple[Any, ...], then: Any) -> None:
+    def _slice_ready(self, outcome: SliceResult, key: tuple[Any, ...], worker: Any) -> None:
+        if worker is not self._slice_worker:
+            # Ein abgelöster Arbeiter — inzwischen rechnet ein neuer an einem
+            # anderen Körper. Sein Ergebnis jetzt zu übernehmen zeigte die
+            # Schichten des falschen Körpers und riefe Rückrufe, die auf den
+            # neuen warten.
+            return
         self._slice_cache = outcome
         self._slice_key = key
+        self._slice_pending = None
+        waiters, self._slice_waiters = self._slice_waiters, []
         self.layer_bar.show_result(outcome)
         self.status_message.setText(self._announcement)
-        if then is not None:
-            then(outcome)
+        for waiter in waiters:
+            waiter(outcome)
 
     def _on_finding_activated(self, finding: Finding) -> None:
         """Eine Warnung anklicken, die Stelle sehen: der kürzeste Weg vom Problem
@@ -3226,6 +3264,16 @@ class MainWindow(QMainWindow):
         # Neue Geometrie heißt: jede Karte und jeder Schnitt sind veraltet.
         self._map_cache.clear()
         self._slice_key = None
+        # Auch der Arbeiter, der noch an der alten rechnet, wird abgelöst:
+        # sein Schlüssel — Objekt und Dreieckszahl — überlebt eine
+        # Verschiebung, sein Ergebnis nicht. Ließe man ihn stehen, reihte
+        # sich der nächste Schieberzug bei ihm ein und bekäme die Schichten
+        # der Geometrie von vorhin.
+        self._slice_pending = None
+        self._slice_waiters = []
+        if self._slice_worker is not None:
+            self._retire(self._slice_worker)
+            self._slice_worker = None
         self.layer_bar.show_result(None)
         self.viewport.set_analysis_map(None, None)
         self.viewport.set_layer(None)

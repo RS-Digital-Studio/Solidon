@@ -17,6 +17,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import QThread
 from PySide6.QtWidgets import QApplication
 
 from app.core.perceive import maps
@@ -1492,6 +1493,118 @@ def test_a_finished_worker_never_drops_its_successor(window: MainWindow) -> None
     window._slice_worker_done(second)
 
     assert window._slice_worker is None, "seinen eigenen räumt er sehr wohl weg"
+
+
+def test_scrubbing_starts_one_worker_per_body_not_one_per_step(window: MainWindow) -> None:
+    """Beim Ziehen durch die Schichten rechnet genau ein Arbeiter je Körper.
+
+    Vorher startete jeder Schieberschritt einen weiteren, solange das Ergebnis
+    noch nicht im Cache lag — an einem texturierten Netz rechnete jeder davon
+    Sekunden, alle gleichzeitig, und die Anwendung stand. Wer etwas vom
+    laufenden Ergebnis will, stellt sich an; die Schichtansicht steht dabei nur
+    einmal in der Reihe, egal wie oft geschoben wird.
+    """
+    entry = window.session.last_result.scene.objects["obj_1"]
+    key = ("obj_1", entry.mesh.triangle_count)
+    sentinel = object()
+    window._slice_key = None
+    window._slice_worker = sentinel
+    window._slice_pending = key
+    window._slice_waiters = []
+    try:
+        assert window._slice_of("obj_1", window._show_current_layer) is None
+        assert window._slice_of("obj_1", window._show_current_layer) is None
+
+        assert window._slice_worker is sentinel, "es wurde ein zweiter Arbeiter gestartet"
+        assert window._slice_waiters == [window._show_current_layer], (
+            "die Schichtansicht steht genau einmal in der Reihe"
+        )
+    finally:
+        # Von Hand gesetzt, von Hand weggeräumt: das Platzhalter-Objekt hat
+        # kein ``wait``, und die Fixture wartet am Ende auf alle Arbeiter.
+        window._slice_worker = None
+        window._slice_pending = None
+        window._slice_waiters = []
+
+
+def test_a_superseded_workers_result_is_dropped(window: MainWindow) -> None:
+    """Das Ergebnis eines abgelösten Arbeiters gilt nicht mehr.
+
+    Inzwischen rechnet ein neuer an einem anderen Körper — das alte Ergebnis
+    jetzt zu übernehmen zeigte dessen Schichten und riefe Rückrufe, die auf
+    den neuen warten.
+    """
+    from app.core.types import SliceResult
+
+    outcome = SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0, source="internal")
+    window._slice_cache = None
+    window._slice_key = None
+    window._slice_worker = None
+
+    window._slice_ready(outcome, ("obj_1", 12), object())
+
+    assert window._slice_cache is None, "ein abgelöster Arbeiter schreibt keinen Cache"
+    assert window._slice_key is None
+
+
+def test_when_the_slice_arrives_every_waiter_is_served_once(window: MainWindow) -> None:
+    """Wer sich angestellt hat, bekommt das Ergebnis — und die Reihe ist danach leer."""
+    from app.core.types import SliceResult
+
+    outcome = SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0, source="internal")
+    served: list[object] = []
+    current = object()
+    window._slice_worker = current
+    window._slice_pending = ("obj_1", 12)
+    window._slice_waiters = [served.append]
+    try:
+        window._slice_ready(outcome, ("obj_1", 12), current)
+
+        assert served == [outcome]
+        assert window._slice_cache is outcome
+        assert window._slice_pending is None
+        assert window._slice_waiters == []
+    finally:
+        window._slice_worker = None
+
+
+def test_scrubbing_defers_the_body_cut_until_the_slider_rests(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Beim Fahren folgen die Konturen sofort, der Körperschnitt erst zur Ruhe.
+
+    Die Körper an der Schichthöhe zu kappen ist echte Geometrie und kostet an
+    einem texturierten Netz um die Sekunde — je Schieberschritt im Hauptthread
+    war das die Blockade, die §2.8 ausschließt. Ein- und Ausschalten schneiden
+    weiterhin sofort; nur der Schritt von Höhe zu Höhe wartet, bis der Schieber
+    stehen bleibt.
+    """
+    from app.core.types import LayerInfo
+
+    viewport = window.viewport
+    first = LayerInfo(z=1.0, contours=(), area=0.0, overhang_area=0.0, islands=(), min_width=0.0)
+    second = LayerInfo(z=2.0, contours=(), area=0.0, overhang_area=0.0, islands=(), min_width=0.0)
+
+    viewport.set_layer(first)
+    assert not viewport._layer_rebuild.isActive(), "Einschalten schneidet sofort"
+
+    rebuilt: list[object] = []
+    monkeypatch.setattr(viewport, "show_scene", rebuilt.append)
+    viewport.set_layer(second)
+    assert viewport._layer_rebuild.isActive(), "beim Fahren wird aufgeschoben"
+    assert rebuilt == [], "und zwar wirklich: kein Schnitt im selben Atemzug"
+
+    application = QApplication.instance()
+    assert application is not None
+    deadline = 200
+    while not rebuilt and deadline > 0:
+        application.processEvents()
+        QThread.msleep(25)
+        deadline -= 1
+    assert rebuilt, "sobald der Schieber ruht, kommt der Schnitt nach"
+
+    viewport.set_layer(None)
+    assert not viewport._layer_rebuild.isActive(), "Ausschalten lässt nichts nachhängen"
 
 
 def test_a_chosen_layer_cuts_away_what_lies_above(window: MainWindow) -> None:
