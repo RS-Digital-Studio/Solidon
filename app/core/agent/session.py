@@ -123,7 +123,13 @@ class AgentSession:
         while True:
             if self.cancelled is not None:
                 self.cancelled.raise_if_cancelled()
-            reply = self.backend.complete(messages, tools, temperature=self.temperature)
+            # §26.5: das Zugbudget deckelt auch die einzelne Antwort — was vom
+            # Budget übrig ist, ist das Meiste, das dieser Schritt noch
+            # ausgeben darf.
+            remaining = self.max_tokens - (proposal.input_tokens + proposal.output_tokens)
+            reply = self.backend.complete(
+                messages, tools, temperature=self.temperature, max_output_tokens=remaining
+            )
             proposal.steps += 1
             proposal.input_tokens += reply.input_tokens
             proposal.output_tokens += reply.output_tokens

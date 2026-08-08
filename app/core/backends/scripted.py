@@ -45,6 +45,7 @@ class ScriptedBackend:
         tools: Sequence[dict[str, Any]] = (),
         *,
         temperature: float = 0.0,
+        max_output_tokens: int | None = None,
     ) -> Reply:
         self.seen.append(list(messages))
         self.tools_seen.append(tuple(str(entry.get("name", "")) for entry in tools))

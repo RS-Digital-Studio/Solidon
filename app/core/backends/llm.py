@@ -104,7 +104,14 @@ class LLMBackend(Protocol):
         tools: Sequence[dict[str, Any]] = (),
         *,
         temperature: float = 0.0,
-    ) -> Reply: ...
+        max_output_tokens: int | None = None,
+    ) -> Reply:
+        """``max_output_tokens`` ist eine Obergrenze für diese eine Antwort,
+        keine Zusage: die Sitzung reicht ihr verbleibendes Zugbudget herein
+        (§26.5), und ein Backend, für das die Grenze nichts bedeutet — lokal
+        kostet eine Antwort kein Geld — darf sie ignorieren.
+        """
+        ...
 
 
 Transport = Callable[[str, dict[str, str], dict[str, Any]], dict[str, Any]]
@@ -157,7 +164,11 @@ class AnthropicBackend:
 
     model: str = DEFAULT_ANTHROPIC_MODEL
     transport: Transport = post_json
-    max_tokens: int = 4096
+    max_tokens: int = 8192
+    """Obergrenze je Antwort. Ein Parameter, keine Konstante: 4096 fest
+    verdrahtet neben einem Zugbudget von 120 000 war unbegründet knapp —
+    ein abgeschnittener Antworttext ist ein eigener Fehlerfall, den niemand
+    braucht. Das Zugbudget deckelt zusätzlich über ``max_output_tokens``."""
 
     @property
     def id(self) -> str:
@@ -173,22 +184,37 @@ class AnthropicBackend:
         tools: Sequence[dict[str, Any]] = (),
         *,
         temperature: float = 0.0,
+        max_output_tokens: int | None = None,
     ) -> Reply:
         key = keys.read(self.id)
         if key is None:
             raise BackendUnavailable(detail="no key stored")
 
+        limit = self.max_tokens
+        if max_output_tokens is not None:
+            limit = max(1, min(limit, max_output_tokens))
+
         system = " ".join(entry.content for entry in messages if entry.role == "system")
         payload: dict[str, Any] = {
             "model": self.model,
-            "max_tokens": self.max_tokens,
+            "max_tokens": limit,
             "temperature": temperature,
             "messages": [_as_anthropic(entry) for entry in messages if entry.role != "system"],
         }
         if system:
-            payload["system"] = system
+            # Der Systemblock ist über alle Schritte eines Zuges identisch —
+            # die Markierung lässt ihn im Zwischenspeicher der Gegenseite
+            # liegen, statt ihn je Schritt neu zu verrechnen.
+            payload["system"] = [
+                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+            ]
         if tools:
             payload["tools"] = [_as_anthropic_tool(entry) for entry in tools]
+            # Die Werkzeugschemata sind das teuerste stabile Stück des Prompts
+            # (~99 KB je Schritt, bis zu acht Schritte je Zug). Die Markierung
+            # auf dem letzten Schema spannt den Zwischenspeicher über die
+            # ganze Liste — Schritt zwei bis acht zahlen sie nicht noch einmal.
+            payload["tools"][-1]["cache_control"] = {"type": "ephemeral"}
 
         answer = self.transport(
             ANTHROPIC_URL,
@@ -382,7 +408,11 @@ class OllamaBackend:
         tools: Sequence[dict[str, Any]] = (),
         *,
         temperature: float = 0.0,
+        max_output_tokens: int | None = None,
     ) -> Reply:
+        # ``max_output_tokens`` wird hier bewusst nicht angewandt: lokal
+        # kostet eine Antwort kein Geld, und ``num_predict`` schnitte sie
+        # mitten im Satz ab, statt etwas zu sparen.
         payload: dict[str, Any] = {
             "model": self.model,
             "stream": False,

@@ -150,9 +150,59 @@ def test_the_system_prompt_travels_apart(monkeypatch: pytest.MonkeyPatch) -> Non
     )
 
     _url, headers, payload = transport.calls[0]
-    assert payload["system"] == "Regeln"
+    assert payload["system"][0]["text"] == "Regeln"
     assert [entry["role"] for entry in payload["messages"]] == ["user"]
     assert headers["x-api-key"] == "geheim"
+
+
+def test_the_stable_prefix_is_marked_for_caching(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Systemprompt und Werkzeugschemata sind über alle Schritte eines Zuges
+    identisch — rund 99 KB, bis zu acht Mal je Zug. Die ``cache_control``-
+    Markierung auf dem Systemblock und dem letzten Schema lässt die Gegenseite
+    das ganze stabile Präfix zwischenspeichern, statt es je Schritt neu zu
+    verrechnen (Konzept Agent-Vertiefung 2.3).
+    """
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
+    transport = Recorder(anthropic_answer())
+
+    AnthropicBackend(transport=transport).complete(
+        [Message(role="system", content="Regeln"), Message(role="user", content="Bohr das")],
+        tools=[
+            {"name": "drill_hole", "input_schema": {"type": "object"}},
+            {"name": "ask_user", "input_schema": {"type": "object"}},
+        ],
+    )
+
+    _url, _headers, payload = transport.calls[0]
+    assert payload["system"][-1]["cache_control"] == {"type": "ephemeral"}
+    assert "cache_control" not in payload["tools"][0], "eine Markierung je Präfix genügt"
+    assert payload["tools"][-1]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_the_answer_budget_is_a_parameter_capped_by_the_turn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``max_tokens`` war eine Konstante (4096) neben einem Zugbudget von
+    120 000. Jetzt ist es ein Parameter mit Vorgabe 8192, und das verbleibende
+    Zugbudget deckelt ihn je Aufruf — nie umgekehrt.
+    """
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
+
+    transport = Recorder(anthropic_answer())
+    AnthropicBackend(transport=transport).complete([Message(role="user", content="x")])
+    assert transport.calls[0][2]["max_tokens"] == 8192
+
+    transport = Recorder(anthropic_answer())
+    AnthropicBackend(transport=transport).complete(
+        [Message(role="user", content="x")], max_output_tokens=500
+    )
+    assert transport.calls[0][2]["max_tokens"] == 500
+
+    transport = Recorder(anthropic_answer())
+    AnthropicBackend(transport=transport).complete(
+        [Message(role="user", content="x")], max_output_tokens=999_999
+    )
+    assert transport.calls[0][2]["max_tokens"] == 8192, "das Budget hebt die Vorgabe nie an"
 
 
 def test_a_tool_result_goes_back_as_a_result(monkeypatch: pytest.MonkeyPatch) -> None:
