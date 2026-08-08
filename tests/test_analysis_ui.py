@@ -839,11 +839,16 @@ def test_the_gizmo_is_big_enough_to_grab() -> None:
 
 
 class _GizmoActor:
-    """Ein Actor mit genau dem, was Auswahl und Beschriftung anfassen."""
+    """Ein Actor mit genau dem, was Auswahl, Beschriftung und Griffe anfassen."""
 
     def __init__(self) -> None:
         self.prop = SimpleNamespace(color=None)
         self.center = (0.0, 0.0, 0.0)
+        self.mapper = SimpleNamespace(
+            SetResolveCoincidentTopologyToPolygonOffset=lambda: None,
+            SetRelativeCoincidentTopologyPolygonOffsetParameters=lambda *_args: None,
+        )
+        self.user_matrix = None
 
     def GetLength(self) -> float:  # noqa: N802 — VTK-Name
         return 10.0
@@ -862,11 +867,48 @@ class _GizmoWidget:
         self.removed = True
 
 
+class _GizmoInteractor:
+    """Verbucht, wer den Interaktionsstil setzt."""
+
+    def __init__(self) -> None:
+        self.styles: list[object] = []
+
+    def SetInteractorStyle(self, style: object) -> None:  # noqa: N802 — VTK-Name
+        self.styles.append(style)
+
+
+class _GizmoObservers:
+    """Der ``iren`` des Fakes: zählt Beobachter an und wieder ab.
+
+    Der Skaliergriff meldet drei an und muss alle drei wieder loswerden —
+    ein vergessener zieht am Griff der vorigen Auswahl weiter.
+    """
+
+    def __init__(self) -> None:
+        self.active: dict[int, str] = {}
+        self._next = 0
+
+    def add_observer(
+        self,
+        event: str,
+        _call: object,
+        interactor_style_fallback: bool = True,
+    ) -> int:
+        self._next += 1
+        self.active[self._next] = event
+        return self._next
+
+    def remove_observer(self, identifier: int) -> None:
+        del self.active[identifier]
+
+
 class _GizmoPlotter:
     """Ein Plotter, der Griffe und Beschriftungen nur verbucht."""
 
     def __init__(self) -> None:
         self.widgets: list[_GizmoWidget] = []
+        self.interactor = _GizmoInteractor()
+        self.iren = _GizmoObservers()
 
     def add_affine_transform_widget(self, actor: object, **_kwargs: object) -> _GizmoWidget:
         widget = _GizmoWidget(actor)
@@ -879,8 +921,8 @@ class _GizmoPlotter:
     def remove_actor(self, _actor: object, render: bool = True) -> None:
         pass
 
-    def add_mesh(self, *_args: object, **_kwargs: object) -> object:
-        return object()
+    def add_mesh(self, *_args: object, **_kwargs: object) -> _GizmoActor:
+        return _GizmoActor()
 
     def render(self) -> None:
         pass
@@ -976,6 +1018,155 @@ def test_a_drag_below_the_snap_leaves_no_ghost(qt_app: QApplication) -> None:
         viewport._on_gizmo_released(translation((5.0, 0.0, 0.0)))
         assert len(dragged) == 1, "ein echter Zug kommt als Schritte an"
         assert second.removed and viewport._gizmo is not second
+    finally:
+        viewport.deleteLater()
+
+
+def test_the_axis_letters_travel_with_the_drag(qt_app: QApplication) -> None:
+    """Regel 18 gilt auch während des Zugs, nicht nur davor und danach.
+
+    Die Buchstaben standen fest an der Startposition — je weiter man zog,
+    desto weiter lag das X von dem Pfeil weg, den es benennt. Jetzt hängen
+    sie an einem lebenden PolyData, und jedes Move-Ereignis versetzt dessen
+    Punkte um die Matrix des Zugs.
+    """
+    import numpy as np
+
+    from app.core.geom.transform import rotation, translation
+    from app.ui.viewport import moved_marks
+
+    # Die reine Rechnung: verschieben verschiebt, drehen dreht um den Ursprung.
+    base = np.array([[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]])
+    shifted = moved_marks(base, translation((5.0, 0.0, 0.0)))
+    assert shifted[0] == pytest.approx((15.0, 0.0, 0.0))
+    turned = moved_marks(base, rotation("z", 90.0))
+    assert turned[0] == pytest.approx((0.0, 10.0, 0.0), abs=1e-9), "X-Marke wandert auf die Y-Achse"
+
+    # Und am Griff: die Punkte hinter der Beschriftung folgen dem Ereignis.
+    viewport, _plotter = _gizmo_viewport()
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+        assert viewport._gizmo_label_data is not None
+        assert viewport._gizmo_label_data.n_points == 4, "X, Y, Z und das S des Würfels"
+        before = viewport._gizmo_label_data.points.copy()
+
+        viewport._on_gizmo_interacted(translation((7.0, 0.0, 0.0)))
+        after = viewport._gizmo_label_data.points
+        assert after[:, 0] == pytest.approx(before[:, 0] + 7.0)
+
+        viewport.set_gizmo(False)
+        assert viewport._gizmo_label_data is None, "mit dem Griff geht auch das Dataset"
+    finally:
+        viewport.deleteLater()
+
+
+def test_the_scale_factor_is_the_ratio_of_distances() -> None:
+    """§18.11 nennt Verschieben, Drehen und Skalieren — der Faktor eines
+    Zugs ist Ist-Abstand durch Start-Abstand, eingespannt gegen Ausrutscher.
+    """
+    from app.ui.scale_widget import FACTOR_RANGE, dragged_factor, ray_plane_hit
+
+    centre = (0.0, 0.0, 0.0)
+    assert dragged_factor(centre, (10.0, 0.0, 0.0), (15.0, 0.0, 0.0)) == pytest.approx(1.5)
+    assert dragged_factor(centre, (10.0, 0.0, 0.0), (5.0, 0.0, 0.0)) == pytest.approx(0.5)
+    assert dragged_factor(centre, (10.0, 0.0, 0.0), (10.0, 0.0, 0.0)) == pytest.approx(1.0)
+
+    # Eingespannt: durchs Zentrum gezogen heißt nicht „auf null geschrumpft".
+    assert dragged_factor(centre, (10.0, 0.0, 0.0), (0.0, 0.0, 0.0)) == FACTOR_RANGE[0]
+    assert dragged_factor(centre, (0.1, 0.0, 0.0), (1000.0, 0.0, 0.0)) == FACTOR_RANGE[1]
+    # Ein Start im Zentrum wäre eine Division durch null — er zieht nichts.
+    assert dragged_factor(centre, (0.0, 0.0, 0.0), (5.0, 0.0, 0.0)) == 1.0
+
+    # Der Strahl auf die Kameraebene: senkrecht getroffen, parallel nichts.
+    hit = ray_plane_hit((0.0, 0.0, 10.0), (0.0, 0.0, -1.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+    assert hit == pytest.approx((0.0, 0.0, 0.0))
+    assert (
+        ray_plane_hit((0.0, 0.0, 10.0), (1.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)) is None
+    )
+
+
+def test_the_scale_handle_lives_and_dies_with_the_gizmo(qt_app: QApplication) -> None:
+    """Der Würfel gehört zum Griffsatz: er kommt am Objekt, fehlt an der
+    Fläche, und beim Abschalten meldet er seine Beobachter wieder ab.
+
+    Ein vergessener Beobachter zöge am Griff der vorigen Auswahl weiter —
+    dieselbe Familie Fehler wie das Widget, das nie abgeschaltet wurde.
+    """
+    from app.core.types import Feature
+
+    viewport, plotter = _gizmo_viewport()
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+        assert viewport._scale_handle is not None, "am Objekt gibt es den Würfel"
+        assert len(plotter.iren.active) == 3, "drei Beobachter: Bewegen, Drücken, Loslassen"
+        assert viewport._gizmo_label_data.n_points == 4, "X, Y, Z — und S"
+
+        viewport.set_gizmo(False)
+        assert viewport._scale_handle is None
+        assert plotter.iren.active == {}, "alle Beobachter sind wieder abgemeldet"
+
+        # An der Fläche gibt es keinen Würfel: sie kennt nur vor und zurück.
+        face = Feature(
+            id="face_1",
+            kind="face",
+            provenance="detected",
+            params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 5.0)},
+        )
+        viewport.gizmo_target = lambda: face  # type: ignore[method-assign]
+        viewport.set_gizmo(True)
+        assert viewport._scale_handle is None, "eine Fläche hat keine Größe zu ändern"
+        assert viewport._gizmo_label_data.n_points == 3
+    finally:
+        viewport.deleteLater()
+
+
+def test_a_scale_drag_becomes_an_operation(qt_app: QApplication) -> None:
+    """Loslassen am Würfel meldet den Faktor — ein Zug, eine Operation,
+    ein Undo (§18.11, §2.1). Ein Faktor von eins meldet nichts.
+    """
+    viewport, plotter = _gizmo_viewport()
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+        first = viewport._gizmo
+        factors: list[float] = []
+        viewport.scaleDragged.connect(factors.append)
+
+        viewport._on_scale_released(1.00001)
+        assert factors == [], "wer nicht gezogen hat, hat nichts skaliert"
+        assert first.removed and viewport._gizmo is not first, "der Griffsatz ist frisch"
+
+        viewport._on_scale_released(1.5)
+        assert factors == [1.5]
+        assert len(plotter.interactor.styles) == 2, "und das Schema ist beide Male zurück"
+    finally:
+        viewport.deleteLater()
+
+
+def test_a_drag_gives_the_navigation_back(qt_app: QApplication) -> None:
+    """Nach dem Loslassen gilt wieder das gewählte Schema.
+
+    pyvistas Widget schaltet beim Greifen auf seinen Trackball-Stil um und
+    stellt beim Loslassen *seinen* Standard wieder her — nicht unseren. Ohne
+    die Wiederherstellung waren nach dem ersten Zug Auswahl-Klick,
+    Kontextmenü und das Navigationsschema verschwunden, und kein Test sah
+    es, weil keiner je einen Zug zu Ende fuhr.
+    """
+    from app.core.geom.transform import translation
+
+    viewport, plotter = _gizmo_viewport()
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+        assert plotter.interactor.styles == [], "bis hierhin hat niemand den Stil angefasst"
+
+        viewport._on_gizmo_released(translation((5.0, 0.0, 0.0)))
+        assert len(plotter.interactor.styles) == 1, "der eigene Stil ist zurück"
+
+        viewport._on_gizmo_released(translation((0.2, 0.0, 0.0)))
+        assert len(plotter.interactor.styles) == 2, "auch ein Zug unter der Fangschwelle"
     finally:
         viewport.deleteLater()
 

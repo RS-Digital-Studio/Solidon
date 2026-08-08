@@ -543,6 +543,7 @@ class MainWindow(QMainWindow):
         self.transform_bar.snappingChanged.connect(self.viewport.set_snapping)
         self.viewport.transformDragged.connect(self._on_transform_dragged)
         self.viewport.faceDragged.connect(self._on_face_dragged)
+        self.viewport.scaleDragged.connect(self._on_scale_dragged)
         self.viewport.featurePicked.connect(self._on_feature_picked)
         self.viewport.objectPicked.connect(self._on_object_picked)
         self.viewport.contextMenuAt.connect(self._on_viewport_context_menu)
@@ -2297,6 +2298,26 @@ class MainWindow(QMainWindow):
             )
         if drafts:
             self.session.apply(_("Direkt bewegt"), drafts)
+
+    def _on_scale_dragged(self, factor: float) -> None:
+        """Ein Zug am Skalierwürfel wird eine Operation (§18.11, Regel 2).
+
+        Gleichmäßig und um den Schwerpunkt — genau das, was die Vorschau
+        während des Zugs gezeigt hat. Wer achsweise oder um einen anderen
+        Punkt skalieren will, nimmt den Dialog; der Zug ist für das
+        Gleichmäßige da.
+        """
+        selected = self.object_tree.selected()
+        if selected is None:
+            return
+        self.session.apply(
+            REGISTRY.get("scale_object").title,
+            [
+                OperationDraft(
+                    op="scale_object", inputs=(selected,), params={"factor": float(factor)}
+                )
+            ],
+        )
 
     def _on_measurement(self, measurement: Any) -> None:
         self.measure_bar.show_measurement(

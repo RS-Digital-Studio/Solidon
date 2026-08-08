@@ -35,6 +35,7 @@ from app.core.units import EPS_DISPLAY, EPS_GEOM, EPS_MATCH_MINIMUM, EPS_MATCH_R
 from app.i18n import tr
 from app.ui.labels import feature_label
 from app.ui.palette import DIFF_PALETTES, ROLES, VIRIDIS, DiffPalette
+from app.ui.scale_widget import ScaleHandle
 from app.ui.style import ROOMY, TIGHT
 from app.ui.theme import THEMES, viewport_colours
 
@@ -331,6 +332,21 @@ def gizmo_labels(
     ]
 
 
+def moved_marks(points: Any, matrix: Any) -> Any:
+    """Wohin Beschriftungspunkte unter der Matrix eines Zugs wandern.
+
+    Die Buchstaben standen fest an der Startposition, und je weiter man zog,
+    desto weiter lag das X von dem Pfeil weg, den es benennt — die zweite
+    Kodierung (Regel 18) löste sich beim Benutzen von der ersten. Als eigene
+    Funktion, weil die Rechnung das ist, was ein Test offscreen prüfen kann.
+    """
+    import numpy as np
+
+    m = np.asarray(matrix, dtype=float)
+    base = np.asarray(points, dtype=float)
+    return base @ m[:3, :3].T + m[:3, 3]
+
+
 def volume_edges(
     width: float, depth: float, height: float
 ) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
@@ -494,6 +510,9 @@ class Viewport(QWidget):
     """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
     faceDragged = Signal(object, float)
     """Ein Zug an einer Fläche — Normale und Weg entlang ihr (§18.11)."""
+    scaleDragged = Signal(float)
+    """Ein Zug am Skalierwürfel — trägt den Faktor (§18.11). Das Fenster
+    macht daraus die Operation; die Ansicht ändert nie selbst Geometrie."""
     featurePicked = Signal(str)
     """Ein in der Ansicht angeklicktes Merkmal — trägt seine ID (§18.5)."""
     objectPicked = Signal(str)
@@ -546,8 +565,18 @@ class Viewport(QWidget):
         Szenenwechsel neu angehängt; dieser Schalter sagt, ob überhaupt."""
         self._gizmo_labels: Any | None = None
         """Die Buchstaben an den Gizmo-Achsen. Sie gehen mit ihm."""
+        self._gizmo_label_data: Any | None = None
+        """Die Punkte hinter den Buchstaben, als lebendes PolyData: wer sie
+        setzt, bewegt die Beschriftung — so reisen die Buchstaben während
+        des Zugs mit."""
+        self._gizmo_label_base: Any | None = None
+        """Die Startpositionen der Buchstaben, auf die jede Zug-Matrix
+        angewandt wird."""
         self._face_actor: Any | None = None
         """Die Scheibe, an der der Gizmo hängt, wenn eine Fläche gewählt ist."""
+        self._scale_handle: ScaleHandle | None = None
+        """Der Würfel zum Skalieren (§18.11) — nur am Objekt-Gizmo. Eine
+        Fläche kennt nur vor und zurück, sie hat keine Größe zu ändern."""
         self._grid_step = 1.0
         self._angle_step = 15.0
         self._map: AnalysisMap | None = None
@@ -1809,9 +1838,20 @@ class Viewport(QWidget):
         self._gizmo = self.plotter.add_affine_transform_widget(
             actor,
             release_callback=self._on_gizmo_released,
+            interact_callback=self._on_gizmo_interacted,
             scale=GIZMO_SCALE,
             line_radius=GIZMO_LINE_RADIUS,
         )
+        if face is None:
+            # Das dritte Drittel von §18.11: pyvistas Widget verschiebt und
+            # dreht, der Würfel skaliert. Nur am Objekt — eine Fläche kennt
+            # nur vor und zurück.
+            self._scale_handle = ScaleHandle(
+                self.plotter,
+                actor,
+                colour=MEASURE_COLOUR,
+                release_callback=self._on_scale_released,
+            )
         self._label_gizmo(actor)
 
     def _detach_gizmo(self) -> None:
@@ -1827,6 +1867,9 @@ class Viewport(QWidget):
         if self._gizmo is not None:
             self._gizmo.remove()
             self._gizmo = None
+        if self._scale_handle is not None:
+            self._scale_handle.remove()
+            self._scale_handle = None
         self._drop_gizmo_labels()
         self._drop_face_handle()
 
@@ -1840,12 +1883,39 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
         import numpy as np
+        import pyvista as pv
 
         length = float(actor.GetLength()) * GIZMO_SCALE * 1.15
-        marks = gizmo_labels(tuple(float(value) for value in actor.center), length)  # type: ignore[arg-type]
+        centre = (float(actor.center[0]), float(actor.center[1]), float(actor.center[2]))
+        marks = gizmo_labels(centre, length)
+        if self._scale_handle is not None:
+            # Das S hinter dem Würfel, im selben Abstand wie X, Y und Z
+            # hinter ihren Spitzen — ein Griffsatz, eine Schreibweise.
+            grip = self._scale_handle.grip_position
+            marks.append(
+                (
+                    (
+                        centre[0] + (grip[0] - centre[0]) * GIZMO_LABEL_GAP,
+                        centre[1] + (grip[1] - centre[1]) * GIZMO_LABEL_GAP,
+                        centre[2] + (grip[2] - centre[2]) * GIZMO_LABEL_GAP,
+                    ),
+                    "S",
+                )
+            )
+        # Als lebendes PolyData mit dem Textarray darin, nicht als Punktliste:
+        # nur so geht das Dataset selbst in die Label-Pipeline ein (eine
+        # Punktliste kopiert pyvista), und nur dann folgt die Beschriftung,
+        # wenn `_on_gizmo_interacted` die Punkte während des Zugs versetzt.
+        base = np.asarray([point for point, _text in marks], dtype=float)
+        data = pv.PolyData(base.copy())
+        # pyvistas Stubs kennen nur Zahlenarrays; Textarrays nimmt das
+        # Dataset trotzdem — als vtkStringArray, genau was die Labels wollen.
+        data["labels"] = [text for _point, text in marks]  # type: ignore[type-var]
+        self._gizmo_label_base = base
+        self._gizmo_label_data = data
         self._gizmo_labels = self.plotter.add_point_labels(
-            np.asarray([point for point, _text in marks], dtype=float),
-            [text for _point, text in marks],
+            data,
+            "labels",
             # In der Körperfarbe des Themas: hell im dunklen, dunkel im
             # hellen. Die Kantenfarbe war für Text auf dem Hintergrund zu
             # leise — im Bild kaum zu lesen.
@@ -1864,6 +1934,21 @@ class Viewport(QWidget):
         if self._gizmo_labels is not None and self.plotter is not None:
             self.plotter.remove_actor(self._gizmo_labels, render=False)
         self._gizmo_labels = None
+        self._gizmo_label_data = None
+        self._gizmo_label_base = None
+
+    def _on_gizmo_interacted(self, matrix: Any) -> None:
+        """Während des Zugs reisen die Achsbuchstaben mit (Regel 18).
+
+        pyvista bewegt Griff und Körper, aber die Beschriftung ist unsere —
+        sie stand fest an der Startposition, und je weiter man zog, desto
+        weiter lag das X von dem Pfeil weg, den es benennt. Gerendert wird
+        nicht hier: pyvistas Move-Callback rendert am Ende ohnehin, und die
+        Matrix hinkt seinem Ereignis um eines hinterher — beim Loslassen
+        stellt das Neuanhängen alles exakt.
+        """
+        if self._gizmo_label_data is not None and self._gizmo_label_base is not None:
+            self._gizmo_label_data.points = moved_marks(self._gizmo_label_base, matrix)
 
     def _face_handle(self, feature: Feature) -> Any:
         """Ein Griff auf der Fläche, an dem der Gizmo sitzen kann.
@@ -1913,6 +1998,12 @@ class Viewport(QWidget):
         der Fangschwelle erzeugt keine Operation; ohne das Neuanhängen bliebe
         der Körper im Bild dort stehen, wohin gezogen wurde, während die Szene
         ihn nie bewegt hat.
+
+        Und der Navigationsstil wird wiederhergestellt: pyvistas Widget schaltet
+        beim Greifen auf seinen Trackball-Stil um und stellt beim Loslassen
+        *seinen* Standard wieder her, nicht unseren — ohne diesen Aufruf waren
+        nach dem ersten Zug Auswahl-Klick, Kontextmenü und das gewählte Schema
+        verschwunden.
         """
         import numpy as np
 
@@ -1928,6 +2019,7 @@ class Viewport(QWidget):
             )
             if abs(distance) > EPS_DISPLAY:
                 self.faceDragged.emit(normal, distance)
+            self.set_navigation(self._scheme)
             self.set_gizmo(self._gizmo_wanted)
             return
         snapped = TransformSteps(
@@ -1942,6 +2034,19 @@ class Viewport(QWidget):
         )
         if snapped.moves or snapped.turns or snapped.resizes:
             self.transformDragged.emit(snapped)
+        self.set_navigation(self._scheme)
+        self.set_gizmo(self._gizmo_wanted)
+
+    def _on_scale_released(self, factor: float) -> None:
+        """Ein Zug am Skalierwürfel endet als Operation (§18.11, §2.1).
+
+        Derselbe Dreischritt wie beim Loslassen des Gizmos, aus denselben
+        Gründen: die Zahl melden, den Navigationsstil zurückholen, den Griff
+        frisch anhängen — die Vorschau am alten Actor verschwindet mit ihm.
+        """
+        if abs(factor - 1.0) > 1e-4:
+            self.scaleDragged.emit(float(factor))
+        self.set_navigation(self._scheme)
         self.set_gizmo(self._gizmo_wanted)
 
     def reset_camera(self) -> None:
