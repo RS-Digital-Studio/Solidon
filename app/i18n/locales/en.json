@@ -952,7 +952,7 @@
   "Gitter": "Grid",
   "Gitter füllen": "Fill with lattice",
   "Gizmo": "Gizmo",
-  "Gleichmäßige Skalierung. Achsweise Werte stehen hinten.": "Uniform scaling. Per-axis values are on the back side.",
+  "Gleichmäßige Skalierung. Achsweise Werte stehen hinten. Wenn das Zielmaß bekannt ist, ist „Auf Maß bringen“ der kürzere Weg.": "Uniform scaling. Per-axis values are on the back side. When the target size is known, “Fit to size” is the shorter way.",
   "Glätten": "Smooth",
   "Grau": "Grey",
   "Graustufen": "Greyscale",

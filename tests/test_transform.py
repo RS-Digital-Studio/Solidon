@@ -217,6 +217,24 @@ def test_the_transformations_are_registered_completely() -> None:
         assert str(spec.doc)
 
 
+def test_scaling_reaches_from_a_unit_cube_to_a_build_volume() -> None:
+    """Hundert war zu wenig, und die Ablehnung kam an der falschen Stelle an.
+
+    Was ein Bildmodell liefert, ist auf einen Einheitswürfel normiert: die vier
+    Möbel eines Puppenhauses maßen 0,6 bis 2,0 mm. Der Schrank hätte den Faktor
+    141,7 gebraucht, `scale_object` deckelte bei hundert — und im Chat blieb
+    ein Körper von 1,3 mm stehen.
+    """
+    from app.core.errors import ValidationError
+    from app.core.registry.params import validate
+
+    spec = REGISTRY.get("scale_object")
+    assert validate(spec.params, {"factor": 141.7}).factor == pytest.approx(141.7)
+    with pytest.raises(ValidationError) as raised:
+        validate(spec.params, {"factor": 1001.0})
+    assert raised.value.values["maximum"] == 1000.0
+
+
 def test_fit_to_size_reaches_the_given_edge(profile: Profile) -> None:
     """Der Fall, für den die Operation entstand: ein erzeugtes Netz kommt auf
     einem Einheitswürfel an und soll ein Maß bekommen, nicht einen Faktor.

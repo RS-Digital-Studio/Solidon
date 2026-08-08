@@ -2646,21 +2646,27 @@ lief damit mit.
       die Liste, nicht die Karte. Der Verlauf ebenso.
 - [x] **Die Wiederherstellung fragte mit Ja und Nein** und verschwieg, wie alt
       die Sicherung ist.
-- [ ] **Aushöhlen macht aus einem exakten Körper ein Netz.** Danach lehnt
+- [x] **Aushöhlen macht aus einem exakten Körper ein Netz.** Danach lehnte
       „Tasche schneiden" ab: „braucht einen B-Rep-Körper; hier liegt ein
-      Netz." Für ein Haus mit Fenstern heißt das: erst die Öffnungen, dann
-      aushöhlen — oder `shell_exact` statt `hollow_object`. Beide stehen im
-      selben Menü, und nichts sagt, welche zu welchem Körper gehört. Der
-      Fehler kommt erst drei Schritte später.
-- [ ] **`scale_object` deckelt bei Faktor 100, Weg 3 braucht mehr.** Was aus
+      Netz." Der Fehler kam erst drei Schritte später, und der Satz stand
+      neben einer Operation, die nichts dafür konnte. Die Auswertung sagt es
+      jetzt sofort (`evaluate.exact_became_mesh`) — an einer Stelle, und
+      damit für **jede** Netz-Operation auf einem exakten Körper, nicht nur
+      fürs Aushöhlen.
+- [x] **`scale_object` deckelt bei Faktor 100, Weg 3 braucht mehr.** Was aus
       ComfyUI kommt, ist auf einen Einheitswürfel normiert: die vier Möbel
       maßen 0,6 bis 2,0 mm. Der Schrank hätte 141,7 gebraucht und blieb
-      1,3 mm groß — die Op lehnte ab, und im Prüfbericht stand nichts davon.
-      Zu klären ist beides: die Grenze und die Frage, ob ein erzeugtes Mesh
-      nicht schon beim Laden auf ein plausibles Maß gehört.
-- [ ] **Was ComfyUI liefert, ist nirgends wasserdicht.** Alle vier Möbel kamen
-      offen an, mit 625 000 bis 1 229 000 Dreiecken. `repair` schloss drei von
-      vier nicht. Für Weg 3 ist das der Normalfall, nicht die Ausnahme.
+      1,3 mm groß. Beides ist beantwortet: `fit_to_size` nimmt das Zielmaß
+      statt eines Faktors und steht in der Generierungskette (`load`,
+      `fit_to_size`, `repair`) — und der Faktor selbst reicht jetzt von einem
+      Tausendstel bis Tausend. Hundert war willkürlich; tausend deckt den Weg
+      vom Einheitswürfel bis an jeden Bauraum ab.
+- [x] **Was ComfyUI liefert, ist nirgends wasserdicht.** Alle vier Möbel kamen
+      offen an, mit 625 000 bis 1 229 000 Dreiecken. Sie kamen **geschlossen**
+      an und wurden es hier nicht mehr: Verschweißen und Entarten messen
+      absolut, und auf einem Einheitswürfel lag nicht der Doppelpunkt unter
+      der Toleranz, sondern die halbe Lehne. Erst auf Maß, dann bereinigen —
+      alle vier bleiben dicht und behalten 99,9 % ihrer Dreiecke.
 
 ## Gewürzdeckel: der Fehler saß im Deckel, nicht im Becher (07.08.2026)
 

@@ -133,12 +133,21 @@ def rotate_object(ctx: OpContext) -> OpResult:
 
 @op_params
 class ScaleParams(BaseParams):
+    # Der Faktor reicht über drei Zehnerpotenzen in beide Richtungen. Hundert
+    # war zu wenig: was ein Bildmodell liefert, ist auf einen Einheitswürfel
+    # normiert und misst ein bis zwei Millimeter — ein Schrank daraus braucht
+    # den Faktor 141, und die Op lehnte ab. Tausend deckt den Weg vom
+    # Einheitswürfel bis an jeden Bauraum ab; darüber ist keine Skalierung
+    # mehr gemeint, sondern ein Tippfehler.
     factor: float = param(
         title=_("Faktor"),
         default=1.0,
-        minimum=0.01,
-        maximum=100.0,
-        doc=_("Gleichmäßige Skalierung. Achsweise Werte stehen hinten."),
+        minimum=0.001,
+        maximum=1000.0,
+        doc=_(
+            "Gleichmäßige Skalierung. Achsweise Werte stehen hinten. "
+            "Wenn das Zielmaß bekannt ist, ist „Auf Maß bringen“ der kürzere Weg."
+        ),
     )
     fx: float = param(
         title=_("Faktor X"),
