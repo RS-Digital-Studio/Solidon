@@ -37,8 +37,11 @@ from app.core.agent.tools import (
     ASK_USER,
     FIND_PART,
     OBJECTS_FIELD,
+    READ_DIGEST,
     READ_REPORT,
+    READ_STANDARD,
     SET_PARAMETER,
+    STANDARD_KINDS,
     UNDO_TRANSACTION,
     tool_schemas,
 )
@@ -46,6 +49,7 @@ from app.core.backends.llm import LLMBackend, Message, ToolCall
 from app.core.errors import AppError
 from app.core.knowledge import rules
 from app.core.log import get_logger
+from app.core.perceive.digest import digest, new_feature_lines
 from app.core.registry import REGISTRY, Registry, validate
 from app.core.scene.evaluate import EvaluationResult, evaluate
 from app.core.scene.history import History, OperationDraft
@@ -181,6 +185,13 @@ class AgentSession:
             return _report_text(scene, arguments.get("severity")), scene
         if name == FIND_PART:
             return find_part_text(arguments.get("description", "")), scene
+        if name == READ_DIGEST:
+            # Der Steckbrief der Arbeitskopie — mit allem, was die bisherigen
+            # Schritte dieses Zuges erzeugt haben (Konzept Agent-Vertiefung 3.1).
+            wanted = tuple(str(entry) for entry in arguments.get(OBJECTS_FIELD, ()) or ())
+            return digest(scene, working, self.selection, only=wanted or None), scene
+        if name == READ_STANDARD:
+            return self._standard(arguments, proposal), scene
         if name == UNDO_TRANSACTION:
             return self._undo(arguments, proposal, working), scene
         if proposal.undo_of is not None:
@@ -265,6 +276,20 @@ class AgentSession:
         proposal.parameters[key] = parameter
         working.parameters[key] = parameter
         return f"{tr('Parameter gesetzt')}: {key} = {parameter.value:g} {parameter.unit}"
+
+    def _standard(self, arguments: dict[str, Any], proposal: Proposal) -> str:
+        """§24.2 als Werkzeug: nachschlagen statt raten.
+
+        Eine unbekannte Tabelle ist ein Schemaverstoß gegen das Enum und
+        zählt als ungültig; eine unbekannte Größe ist eine Fachauskunft —
+        die Antwort nennt, was es gibt, wie ``find_part`` bei einem leeren
+        Fund.
+        """
+        kind = str(arguments.get("kind", ""))
+        if kind not in STANDARD_KINDS:
+            proposal.invalid_calls += 1
+            return f"{tr('Diese Tabelle gibt es nicht')}: {kind} ({', '.join(STANDARD_KINDS)})"
+        return standard_text(kind, str(arguments.get("size", "")).strip())
 
     def _fit(self, arguments: dict[str, Any], proposal: Proposal, working: Document) -> str:
         try:
@@ -356,9 +381,14 @@ class AgentSession:
 
         proposal.drafts.append(draft)
 
+        # Konzept Agent-Vertiefung 3.1: die IDs der neuen Merkmale gehören in
+        # die Antwort — sonst kennt das Modell die Bohrung nicht, die es
+        # gerade gesetzt hat, und der nächste Schritt zeigt ins Leere.
+        created = new_feature_lines(before, result.scene)
         return (
             f"{tr('Ausgeführt')}: {spec.name}. {checks.as_lines(findings)}\n"
-            f"{_objects_text(result.scene)}",
+            + ("\n".join(created) + "\n" if created else "")
+            + f"{_objects_text(result.scene)}",
             result.scene,
         )
 
@@ -417,6 +447,44 @@ def _from(severity: str) -> set[str]:
     if severity not in order:
         return set(order)
     return set(order[order.index(severity) :])
+
+
+#: Welches Feld der Normteiltabellen zu welcher Werkzeug-Art gehört.
+_STANDARD_TABLES = {
+    "screw": "screws",
+    "nut": "nuts",
+    "washer": "washers",
+    "insert": "inserts",
+    "magnet": "magnets",
+    "bearing": "bearings",
+    "profile": "profiles",
+    "tube": "tubes",
+}
+
+
+def standard_text(kind: str, size: str) -> str:
+    """Ein Normteil in einer Zeile (§24.2) — für Sitzung und Fernsteuerung.
+
+    Nichts hier interpretiert, wie im Modul selbst: die Antwort nennt die
+    Maße mit ihren Feldnamen, was ein Baustein daraus macht, bleibt beim
+    Baustein. Eine unbekannte Größe nennt die bekannten, statt zu scheitern —
+    für das Modell ist die Liste die nützlichere Antwort.
+    """
+    from dataclasses import asdict
+
+    from app.core.knowledge import standards
+
+    table: dict[str, Any] = getattr(standards.load(), _STANDARD_TABLES[kind])
+    entry = table.get(size) or table.get(size.upper())
+    if entry is None:
+        known = ", ".join(sorted(table))
+        return f"{tr('Diese Größe steht nicht in der Normteiltabelle')}: {size}. {known}"
+    facts = ", ".join(
+        f"{key}={value:g} mm" if isinstance(value, float) else f"{key}={value}"
+        for key, value in asdict(entry).items()
+        if key != "size" and value
+    )
+    return f"{kind} {entry.size}: {facts}"
 
 
 def find_part_text(description: str) -> str:

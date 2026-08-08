@@ -119,6 +119,32 @@ def test_a_turn_of_an_active_transaction_stays(project: Project, profile: Profil
     assert context.conversation(document.chat, document)[0].content == "Geladen"
 
 
+def test_a_capped_conversation_says_what_it_dropped(project: Project, profile: Profile) -> None:
+    """Konzept Agent-Vertiefung 4.5: ältere Beiträge verschwanden wortlos aus
+    dem Kontext, und der Agent widersprach sich scheinbar grundlos. Jetzt
+    steht am Anfang, dass es Vorgeschichte gibt — eine Zeile, kein Inhalt.
+    """
+    document = project.document
+    for index in range(context.HISTORY_LIMIT + 2):
+        document.chat.append(ChatEntry(id=f"c{index}", role="user", text=f"Beitrag {index}"))
+
+    turns = context.conversation(document.chat, document)
+
+    assert len(turns) == context.HISTORY_LIMIT + 1
+    assert "[2 " in turns[0].content and "nicht mitgesendet" in turns[0].content
+    assert turns[1].content == "Beitrag 2", "die jüngsten Beiträge bleiben vollständig"
+
+
+def test_a_short_conversation_claims_nothing(project: Project, profile: Profile) -> None:
+    document = project.document
+    document.chat.append(ChatEntry(id="c1", role="user", text="Hallo"))
+
+    turns = context.conversation(document.chat, document)
+
+    assert len(turns) == 1
+    assert "nicht mitgesendet" not in turns[0].content
+
+
 # --- tools (§26.2) ----------------------------------------------------------------
 
 

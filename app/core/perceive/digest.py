@@ -12,7 +12,10 @@ nachsieht, was dem Modell gesagt wurde.
 
 from __future__ import annotations
 
-from app.core.types import Document, Feature, ObjectId, Scene, SceneObject
+from collections.abc import Collection
+from pathlib import PurePosixPath
+
+from app.core.types import Document, Feature, ObjectId, Operation, Scene, SceneObject
 from app.core.units import format_length, round_display
 from app.i18n import tr
 
@@ -21,8 +24,15 @@ def digest(
     scene: Scene,
     document: Document | None = None,
     selection: tuple[ObjectId, str] | None = None,
+    only: Collection[ObjectId] | None = None,
 ) -> str:
-    """Die ganze Szene in der Form, die §23 beschreibt."""
+    """Die ganze Szene in der Form, die §23 beschreibt.
+
+    ``only`` schränkt die Objektzeilen ein — für das Werkzeug ``read_digest``,
+    das mitten im Zug nach einem einzelnen Objekt fragen kann. Alles andere
+    (Parameter, Passungen, Quellen, Verlauf) bleibt vollständig: es gehört
+    zur Szene, nicht zu einem Objekt.
+    """
     lines: list[str] = [_scene_line(scene)]
 
     if scene.parameters:
@@ -36,13 +46,77 @@ def digest(
         object_id, feature_id = selection
         lines.append(f"{tr('Auswahl')}: {object_id}" + (f" · {feature_id}" if feature_id else ""))
 
+    if document is not None:
+        lines.extend(_fit_lines(document, scene))
+        lines.extend(_print_settings_line(document))
+        lines.extend(_source_lines(document))
+
     for object_id, entry in scene.objects.items():
+        if only is not None and object_id not in only:
+            continue
         lines.extend(_object_lines(object_id, entry))
 
     lines.extend(_finding_lines(scene))
     if document is not None:
         lines.extend(_stack_lines(document))
     return "\n".join(lines)
+
+
+def _fit_lines(document: Document, scene: Scene) -> list[str]:
+    """Die Passungen des Projekts, mit ihrem Zustand (§14, §26.1).
+
+    Der Agent konnte Passungen anlegen, aber nie nachsehen, welche es gibt —
+    er sah nur die Verletzungen, die es bis in den Prüfbericht schafften.
+    Verletzt oder nicht steht dabei: die Angabe kommt aus denselben Befunden,
+    ausgewiesen am Namen der Passung.
+    """
+    if not document.fits:
+        return []
+    violated = {
+        str(finding.values.get("fit", ""))
+        for finding in scene.report.findings
+        if finding.code == "fit.violated"
+    }
+    parts = []
+    for fit in document.fits:
+        state = f" — {tr('verletzt')}" if fit.name in violated else ""
+        parts.append(f"{fit.name} {fit.a} ↔ {fit.b} ({fit.kind}, {fit.tolerance}){state}")
+    return [f"{tr('Passungen')}: " + " · ".join(parts)]
+
+
+def _print_settings_line(document: Document) -> list[str]:
+    """Was eingestellt ist, in einer Zeile (§29, §26.1).
+
+    Nur wenn das Projekt eigene Einstellungen trägt — ``None`` heißt, die
+    Auflösung aus Stufe, Material und Drucker gilt, und Drucker wie Material
+    stehen schon in der Szenenzeile. Nicht das ganze Profil: die Zeile sagt,
+    was gilt; was einzustellen wäre, ist Sache der Analyse.
+    """
+    settings = document.print_settings
+    if settings is None:
+        return []
+    walls = settings.shell.wall_count
+    width = settings.layers.line_width
+    return [
+        f'{tr("Druckeinstellungen")}: "{settings.title}" ({settings.quality}), '
+        f"{walls} {tr('Wände')} × {width:g} mm = {settings.wall_thickness:g} mm {tr('Wand')}"
+    ]
+
+
+def _source_lines(document: Document) -> list[str]:
+    """Woher die Netze kommen (§16.3, §26.1).
+
+    „Mach es wie beim importierten Deckel" scheitert sonst daran, dass der
+    Agent nie erfährt, was importiert wurde. Nur der Dateiname — der Pfad ist
+    relativ zur Projektdatei und sagt dem Modell nichts.
+    """
+    if not document.sources:
+        return []
+    parts = [
+        f"{source_id} {PurePosixPath(source.path).name} ({source.kind})"
+        for source_id, source in document.sources.items()
+    ]
+    return [f"{tr('Quellen')}: " + " · ".join(parts)]
 
 
 def _scene_line(scene: Scene) -> str:
@@ -176,12 +250,70 @@ def _finding_lines(scene: Scene) -> list[str]:
     return lines
 
 
+#: Wie viele Parameter eine Op in der Verlaufszeile höchstens nennt. Der
+#: Verlauf ist eine Zeile je Projekt, keine zweite Projektdatei.
+_STACK_PARAM_LIMIT = 3
+
+
 def _stack_lines(document: Document) -> list[str]:
+    """Der Stapel in Kurzform — mit den gesetzten Hauptwerten (§26.1).
+
+    Nur Titel und Op-Nummern trugen nichts: der Agent konnte aus dem Verlauf
+    weder lernen, mit welchem Durchmesser gebohrt wurde, noch, was „t3"
+    eigentlich getan hat. Jetzt steht die Op mit ihren wichtigsten Werten da;
+    Objektlisten und Skizzen bleiben draußen, die stehen im Steckbrief selbst.
+    """
     if not document.transactions:
         return []
+    operations = {operation.id: operation for operation in document.ops}
     parts = []
     for transaction in document.transactions:
-        numbers = ", ".join(str(entry) for entry in transaction.ops)
+        calls = ", ".join(
+            _op_call(operations[entry]) if entry in operations else str(entry)
+            for entry in transaction.ops
+        )
         by = tr("Agent") if transaction.origin.by == "agent" else tr("Nutzer")
-        parts.append(f'{transaction.id} "{transaction.title}" ({tr("Ops")} {numbers}, {by})')
+        parts.append(f'{transaction.id} "{transaction.title}" ({calls}, {by})')
     return [f"{tr('Verlauf')}: " + " · ".join(parts)]
+
+
+def _op_call(operation: Operation) -> str:
+    """``drill_hole(diameter=6, z=8)`` — die Op als lesbarer Aufruf."""
+    shown: list[str] = []
+    for key, value in operation.params.items():
+        if len(shown) >= _STACK_PARAM_LIMIT:
+            shown.append("…")
+            break
+        if isinstance(value, bool):
+            shown.append(f"{key}={tr('ja') if value else tr('nein')}")
+        elif isinstance(value, int | float):
+            shown.append(f"{key}={round_display(float(value)):g}")
+        elif isinstance(value, str) and value:
+            shown.append(f"{key}={value}")
+    return f"{operation.op}({', '.join(shown)})"
+
+
+def new_feature_lines(before: Scene, after: Scene) -> list[str]:
+    """Was eine Operation an Merkmalen erzeugt hat — mit den IDs, auf die der
+    nächste Schritt zeigen kann (Konzept Agent-Vertiefung 3.1).
+
+    Ohne diese Zeilen arbeitete der Agent halbblind: nach ``drill_hole``
+    kannte er die ID der neuen Bohrung nicht und musste raten, worauf ein
+    Baustein oder eine Passung zeigen soll.
+    """
+    seen = {feature_id for entry in before.objects.values() for feature_id in entry.features}
+    lines: list[str] = []
+    for object_id, entry in after.objects.items():
+        fresh = {
+            feature_id: feature
+            for feature_id, feature in entry.features.items()
+            if feature_id not in seen
+        }
+        if object_id not in before.objects:
+            lines.append(f'{tr("Neues Objekt")}: {object_id} "{entry.name}"')
+        for feature_id, feature in fresh.items():
+            lines.append(
+                f"{tr('Neues Merkmal')}: {_feature_line(feature_id, feature)} "
+                f"({tr('auf')} {object_id})"
+            )
+    return lines

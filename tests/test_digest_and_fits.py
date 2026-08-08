@@ -8,7 +8,7 @@ from app.core.geom.mesh import read_mesh
 from app.core.geom.transform import place_on_bed
 from app.core.ingest.loader import normalise
 from app.core.knowledge import profiles
-from app.core.perceive.digest import digest
+from app.core.perceive.digest import digest, new_feature_lines
 from app.core.perceive.features import detect
 from app.core.scene import fits as fit_check
 from app.core.types import (
@@ -17,12 +17,15 @@ from app.core.types import (
     FeatureRef,
     Finding,
     Fit,
+    Operation,
     Origin,
     Parameter,
+    PrintSettings,
     Profile,
     Report,
     Scene,
     SceneObject,
+    Source,
     Transaction,
 )
 
@@ -110,6 +113,126 @@ def test_the_digest_summarises_the_stack(profile: Profile) -> None:
 
     assert 't1 "Import und Reparatur"' in text
     assert "Nutzer" in text and "Agent" in text
+
+
+def test_the_stack_carries_the_values_of_its_ops(profile: Profile) -> None:
+    """Konzept Agent-Vertiefung 3.2: nur Titel und Op-Nummern trugen nichts —
+    der Agent konnte aus dem Verlauf nicht lernen, mit welchem Durchmesser
+    gebohrt wurde. Gedeckelt, damit der Verlauf eine Zeile bleibt.
+    """
+    document = Document(format_version=1, app_version="0.0.1")
+    document.ops.append(
+        Operation(
+            id=1,
+            op="drill_hole",
+            params={"diameter": 6.0, "x": 25.0, "y": -15.0, "z": 8.0, "axis": "z"},
+        )
+    )
+    document.transactions.append(
+        Transaction(id="t1", title="Bohren", ops=(1,), origin=Origin(by="agent"))
+    )
+
+    text = digest(plate_scene(profile), document)
+
+    assert "drill_hole(diameter=6, x=25, y=-15, …)" in text
+
+
+def test_the_digest_lists_fits_with_their_state(profile: Profile) -> None:
+    """Konzept Agent-Vertiefung 3.2: der Agent konnte Passungen anlegen, aber
+    nie nachsehen, welche es gibt. Verletzt oder nicht steht dabei — aus den
+    Befunden, am Namen der Passung ausgewiesen.
+    """
+    document = Document(format_version=1, app_version="0.0.1")
+    document.fits.append(clearance_fit())
+    document.fits.append(
+        Fit(
+            name="deckel_1",
+            a=FeatureRef("obj_1", "hole_2"),
+            b=FeatureRef("obj_2", "pin_2"),
+            kind="press",
+            tolerance="auto:petg",
+        )
+    )
+    scene = plate_scene(profile)
+    scene.report = Report(
+        (
+            Finding(
+                code="fit.violated",
+                severity="warning",
+                message="zu eng",
+                values={"fit": "deckel_1"},
+            ),
+        )
+    )
+
+    text = digest(scene, document)
+
+    assert "Passungen: stift_1 obj_1:hole_1 ↔ obj_2:pin_1 (clearance, auto:)" in text
+    assert "deckel_1 obj_1:hole_2 ↔ obj_2:pin_2 (press, auto:petg) — verletzt" in text
+
+
+def test_the_digest_names_print_settings_when_the_project_has_them(profile: Profile) -> None:
+    """Konzept Agent-Vertiefung 3.2: die Zeile sagt, was eingestellt ist.
+    ``None`` heißt Auflösung aus Stufe, Material und Drucker — dann sagt sie
+    nichts, denn Drucker und Material stehen schon in der Szenenzeile.
+    """
+    document = Document(format_version=1, app_version="0.0.1")
+    assert "Druckeinstellungen" not in digest(plate_scene(profile), document)
+
+    document.print_settings = PrintSettings()
+    text = digest(plate_scene(profile), document)
+
+    assert 'Druckeinstellungen: "Standard" (standard)' in text
+    assert "mm Wand" in text
+
+
+def test_the_digest_names_the_sources(profile: Profile) -> None:
+    """Konzept Agent-Vertiefung 3.2: „mach es wie beim importierten Deckel"
+    scheitert sonst daran, dass der Agent nie erfährt, was importiert wurde.
+    """
+    document = Document(format_version=1, app_version="0.0.1")
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+
+    text = digest(plate_scene(profile), document)
+
+    assert "Quellen: src_1 plate_holes.stl (import)" in text
+
+
+def test_the_digest_can_narrow_to_named_objects(profile: Profile) -> None:
+    """Für ``read_digest`` mitten im Zug: nur die gefragten Objektzeilen,
+    alles Szenenweite bleibt.
+    """
+    text = digest(plate_scene(profile), only=("obj_99",))
+
+    assert "Szene: 1 Objekte" in text
+    assert 'obj_1  "Halterung"' not in text
+
+
+def test_new_features_are_named_with_their_ids(profile: Profile) -> None:
+    """Konzept Agent-Vertiefung 3.1: nach ``drill_hole`` muss der Agent die ID
+    der neuen Bohrung kennen — sonst zeigt der nächste Schritt ins Leere.
+    """
+    before = plate_scene(profile)
+    after = plate_scene(profile)
+    grown = dict(after.objects["obj_1"].features)
+    grown["hole_99"] = Feature(
+        id="hole_99",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 6.0, "axis": (0.0, 0.0, 1.0), "through": True},
+    )
+    after.objects["obj_1"] = SceneObject(
+        id="obj_1", name="Halterung", mesh=after.objects["obj_1"].mesh, features=grown
+    )
+
+    lines = new_feature_lines(before, after)
+
+    assert len(lines) == 1
+    assert "Neues Merkmal" in lines[0]
+    assert "hole_99" in lines[0] and "Ø 6" in lines[0] and "auf obj_1" in lines[0]
+    assert new_feature_lines(before, before) == []
 
 
 # --- fits -----------------------------------------------------------------------

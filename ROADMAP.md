@@ -3459,13 +3459,34 @@ alldem nur einen endlosen Balken.
 Sechs Schritte, jeder einzeln lieferbar, Abnahmekriterien je Schritt im
 Konzept:
 
-- [ ] **0 — Messgrundlage:** Suite-Basislinie mit vollem Fenster (die
-      8/33 oben sind unter abgeschnittenem Prompt gemessen und gelten
-      nicht), `invalid`-Kennzahl beleben, Prompt-Zwischenspeicherung und
-      `max_tokens` im Anthropic-Backend.
-- [ ] **1 — Wahrnehmung Text:** Op-Ergebnisse nennen neue Feature-IDs,
-      `read_digest`, Steckbrief-Blöcke (Passungen, Druckeinstellungen,
-      Quellen, Verlauf mit Werten), `read_standard`, Verlaufsdeckel-Hinweis.
+- [x] **0 — Messgrundlage:** Suite-Basislinie mit vollem Fenster steht
+      (17/33, gemessen von der parallelen Durchsicht — siehe oben), die
+      `invalid`-Kennzahl zählt jetzt wirklich (Vorschlag führt `tool_calls`
+      und `invalid_calls`, der Läufer weist die Quote aus), das stabile
+      Präfix aus Systemprompt und Werkzeugschemata liegt per `cache_control`
+      im Zwischenspeicher, `max_tokens` ist ein Parameter (8192) und das
+      Zugbudget deckelt jede Antwort.
+- [x] **1 — Wahrnehmung Text:** Op-Ergebnisse nennen die neuen Merkmale mit
+      IDs, `read_digest` liest den Steckbrief der Arbeitskopie mitten im
+      Zug, der Steckbrief führt Passungen (mit Verletzt-Zustand),
+      Druckeinstellungen, Quellen und den Verlauf mit den gesetzten Werten,
+      `read_standard` schlägt die Normteiltabelle nach, und ein gedeckelter
+      Chatverlauf sagt, wie viele ältere Beiträge fehlen. Beide neuen
+      Werkzeuge auch über die Fernsteuerung.
+
+      **Zwei Kernfehler dabei freigelegt, beide zu.** Ein gebohrtes Loch
+      wurde nie ein Merkmal: sortiert sich die neue Bohrung in der Erkennung
+      vor die bestehenden, rutschen deren Nummern, und in `apply_mapping`
+      überschrieb das unzugeordnete neue Merkmal einen Überlebenden — eines
+      von beiden verschwand wortlos aus der Szene. Unzugeordnete Merkmale
+      bekommen jetzt eine frische ID, verwaiste Namen bleiben gesperrt. Und
+      der zweite lag darunter, kaschiert von der stillen Wiederverwendung:
+      nach einer 25°-Drehung liest die Erkennung Zylinderachsen mal als
+      `+v`, mal als `-v`, und der vorzeichenempfindliche Vergleich in `cost`
+      verwaiste die Hälfte der Löcher. Eine Bohrungsachse ist eine Linie,
+      keine Richtung — verglichen wird jetzt das Minimum beider Vorzeichen;
+      Flächennormalen behalten ihres, innen ist nicht außen
+      (`tests/test_matching.py` hält beide Fälle fest).
 - [ ] **2 — Sichtbarkeit:** Fortschritt je Schritt im Chat, Kosten und
       Rückfragen am Vorschlag, §2.6-Suchfeld-Absatz im Prompt.
 - [ ] **3 — Handlungsraum:** `read_analysis` (Schichtanalyse, Schätzung,

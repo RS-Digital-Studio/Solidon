@@ -1,8 +1,8 @@
 """Was der Agent tun kann (Bauplan §26.2).
 
-Jede Operation aus dem Register, plus sieben Werkzeuge, die über Geometrie
-hinausreichen: fragen, zurücknehmen, Parameter, Passungen, der Prüfbericht und
-die Bausteinbibliothek.
+Jede Operation aus dem Register, plus die Zusatzwerkzeuge, die über Geometrie
+hinausreichen: fragen, zurücknehmen, Parameter, Passungen, der Prüfbericht,
+die Bausteinbibliothek, der Steckbrief mitten im Zug und die Normteiltabelle.
 
 Die Operationen stehen auch hier nicht ausgeschrieben — sie kommen aus dem
 Register, wie Menü und Kommandozeile (§10). Eine Operation, die heute
@@ -34,6 +34,21 @@ SET_PARAMETER: Final = "set_parameter"
 ADD_FIT: Final = "add_fit"
 READ_REPORT: Final = "read_report"
 FIND_PART: Final = "find_part"
+READ_DIGEST: Final = "read_digest"
+READ_STANDARD: Final = "read_standard"
+
+#: Welche Tabellen der Normteilkatalog kennt (§24.2) — das Enum im Schema und
+#: die Prüfung in der Sitzung lesen dieselbe Liste.
+STANDARD_KINDS: Final[tuple[str, ...]] = (
+    "screw",
+    "nut",
+    "washer",
+    "insert",
+    "magnet",
+    "bearing",
+    "profile",
+    "tube",
+)
 
 EXTRA_TOOLS: Final[tuple[str, ...]] = (
     ASK_USER,
@@ -43,6 +58,8 @@ EXTRA_TOOLS: Final[tuple[str, ...]] = (
     ADD_FIT,
     READ_REPORT,
     FIND_PART,
+    READ_DIGEST,
+    READ_STANDARD,
 )
 
 
@@ -83,7 +100,7 @@ def operation_tools(registry: Registry | None = None) -> tuple[dict[str, Any], .
 
 
 def extra_tools() -> tuple[dict[str, Any], ...]:
-    """Die sieben aus der Tabelle in §26.2."""
+    """Die Zusatzwerkzeuge aus der Tabelle in §26.2."""
     return (
         {
             "name": ASK_USER,
@@ -189,6 +206,47 @@ def extra_tools() -> tuple[dict[str, Any], ...]:
                 "type": "object",
                 "properties": {"description": {"type": "string"}},
                 "required": ["description"],
+            },
+        },
+        {
+            "name": READ_DIGEST,
+            "description": str(
+                _(
+                    "Lies den Steckbrief der Szene neu — mit den Merkmalen und "
+                    "IDs, die deine bisherigen Schritte erzeugt haben."
+                )
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    OBJECTS_FIELD: {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": str(
+                            _("Nur diese Objekte zeigen; ohne Angabe die ganze Szene.")
+                        ),
+                    }
+                },
+            },
+        },
+        {
+            "name": READ_STANDARD,
+            "description": str(
+                _(
+                    "Schlage Normteilmaße nach: Kernloch, Durchgangsloch, "
+                    "Schlüsselweite und mehr — statt sie zu raten."
+                )
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": list(STANDARD_KINDS)},
+                    "size": {
+                        "type": "string",
+                        "description": str(_("Die Größe, zum Beispiel M4 oder 6x3.")),
+                    },
+                },
+                "required": ["kind", "size"],
             },
         },
     )

@@ -1205,9 +1205,20 @@ Alle Ops aus dem Register, dazu:
 | `add_fit` | Passungspaar anlegen |
 | `read_report` | Prüfbericht gezielt nachlesen |
 | `find_part(beschreibung)` | passenden Baustein suchen, bevor gebaut wird |
+| `read_digest(objekte)` | den Steckbrief mitten im Zug neu lesen — nach mehreren Ops kennt der Agent sonst die IDs nicht, die er selbst erzeugt hat |
+| `read_standard(art, größe)` | Normteilmaße nachschlagen statt raten (§24.2) |
+| `read_analysis(art, objekte)` | Schichtanalyse, Zeit- und Materialschätzung, Einstellungsrat, Analysekarten, Orientierung — nur lesend, mit Zeitdeckel, Herkunft immer ausgewiesen (§22.5) |
+| `set_print_setting(pfad, wert, grund)` | eine Druckeinstellung ändern (§29) — reist als Dokumentänderung in der Transaktion, die Begründung ist Pflicht |
+| `set_print_target(drucker, material)` | Projektdrucker und -material wechseln — Toleranzen bleiben Verweise (`auto:<material>`) und rechnen sich mit um |
 
 `ask_user` ist Pflicht, keine Höflichkeit: Die Agenten-Suite enthält absichtlich
 mehrdeutige Anfragen und misst, ob gefragt statt geraten wird.
+
+Diese Liste ist abschließend — was hier nicht steht, gibt es nicht. Die fünf
+Werkzeuge ab `read_digest` kamen mit der Agent-Vertiefung dazu
+(`konzept-agent-vertiefung.md`); sie öffnen keinen zweiten Weg ins Dokument:
+die lesenden rechnen auf der Arbeitskopie, die schreibenden reisen als Teil
+der einen Transaktion des Vorschlags (§26.5, Regel 16).
 
 ### 26.3 Chat und Verlauf
 **Jeder Chatbeitrag verweist auf die Transaktion, die er erzeugt hat.** Wird

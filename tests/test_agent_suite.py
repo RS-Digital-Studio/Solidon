@@ -337,6 +337,120 @@ def test_invalid_calls_are_counted(project: Project, profile: Profile) -> None:
     assert [draft.op for draft in proposal.drafts] == ["rotate_object"]
 
 
+def _drill() -> ToolCall:
+    return ToolCall(
+        id="1",
+        name="drill_hole",
+        arguments={
+            "objects": ["obj_1"],
+            "diameter": 6.0,
+            "x": 10.0,
+            "y": 10.0,
+            "z": 4.0,
+            "axis": "z",
+        },
+    )
+
+
+def test_an_operation_names_the_features_it_created(project: Project, profile: Profile) -> None:
+    """Konzept Agent-Vertiefung 3.1: nach ``drill_hole`` muss das Modell die
+    ID der neuen Bohrung kennen — sie steht im Werkzeugergebnis, nicht erst
+    im nächsten Steckbrief.
+    """
+    agent = AgentSession(
+        backend=ScriptedBackend(answers=[Reply(tool_calls=(_drill(),)), Reply(text="Gebohrt.")]),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    agent.propose("Bohr ein 6er Loch bei 10, 10")
+
+    backend = agent.backend
+    assert isinstance(backend, ScriptedBackend)
+    answer = next(entry for entry in backend.seen[-1] if entry.role == "tool")
+    assert "Neues Merkmal" in answer.content
+    assert "hole_" in answer.content and "Ø 6" in answer.content
+
+
+def test_read_digest_shows_the_state_mid_turn(project: Project, profile: Profile) -> None:
+    """Konzept Agent-Vertiefung 3.1: der Steckbrief der Arbeitskopie, nicht
+    des Nutzerdokuments — mit dem, was dieser Zug schon getan hat.
+    """
+    agent = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(tool_calls=(_drill(),)),
+                Reply(tool_calls=(ToolCall(id="2", name="read_digest", arguments={}),)),
+                Reply(text="Fertig."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    agent.propose("Bohr und sieh nach")
+
+    backend = agent.backend
+    assert isinstance(backend, ScriptedBackend)
+    drilled = next(entry for entry in backend.seen[1] if entry.role == "tool")
+    fresh_hole = next(
+        word for word in drilled.content.replace(",", " ").split() if word.startswith("hole_")
+    )
+    summary = [entry for entry in backend.seen[-1] if entry.role == "tool"][-1]
+    assert "Szene" in summary.content
+    assert fresh_hole in summary.content, "die neue Bohrung steht im nachgelesenen Steckbrief"
+
+
+def test_read_standard_answers_from_the_table(project: Project, profile: Profile) -> None:
+    """Konzept Agent-Vertiefung 3.4: „welches Kernloch für M4?" ist eine
+    Frage an die Tabelle (§24.2), nicht ans Gedächtnis des Modells.
+    """
+    from app.core.agent.session import standard_text
+    from app.core.knowledge import standards
+
+    text = standard_text("screw", "M4")
+
+    wanted = standards.screw("M4")
+    assert "M4" in text
+    assert f"clearance={wanted.clearance:g} mm" in text
+    assert f"tap={wanted.tap:g} mm" in text
+
+    unknown = standard_text("screw", "M99")
+    assert "M99" in unknown
+    assert "M4" in unknown, "eine unbekannte Größe nennt die bekannten"
+
+
+def test_an_unknown_standard_table_counts_as_invalid(project: Project, profile: Profile) -> None:
+    """Die Tabelle steht als Enum im Schema — sie zu erfinden ist ein
+    Schemaverstoß und zählt für die Kennzahl aus §40.
+    """
+    agent = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        ToolCall(
+                            id="1",
+                            name="read_standard",
+                            arguments={"kind": "bolt", "size": "M4"},
+                        ),
+                    )
+                ),
+                Reply(text="Verstanden."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Was braucht eine M4?")
+
+    assert proposal.invalid_calls == 1
+
+
 def test_a_geometry_refusal_is_not_an_invalid_call(project: Project, profile: Profile) -> None:
     """Die Kennzahl trennt Schema von Geometrie: ein Aufruf, der gültig ist,
     aber geometrisch nicht anwendbar (§15.2), zählt nicht als ungültig —

@@ -45,14 +45,17 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import activation, examples, updates
-from app.core.agent.session import find_part_text
+from app.core.agent.session import find_part_text, standard_text
 from app.core.agent.tools import (
     ADD_FIT,
     ADD_PARAMETER,
     FIND_PART,
     OBJECTS_FIELD,
+    READ_DIGEST,
     READ_REPORT,
+    READ_STANDARD,
     SET_PARAMETER,
+    STANDARD_KINDS,
     UNDO_TRANSACTION,
 )
 from app.core.backends import llm
@@ -71,6 +74,7 @@ from app.core.knowledge import calibration, print_settings
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
+from app.core.perceive.digest import digest
 from app.core.registry import REGISTRY, OperationSpec, PaletteEntry, menu_tree, palette_entries
 from app.core.scene import (
     EvaluationResult,
@@ -2971,6 +2975,19 @@ class MainWindow(QMainWindow):
             return self._remote_fit(values)
         if name == FIND_PART:
             return find_part_text(str(values.get("description", "")))
+        if name == READ_DIGEST:
+            result = self.session.last_result
+            if result is None:
+                return tr("Es ist nichts geöffnet.")
+            wanted = tuple(str(entry) for entry in values.get(OBJECTS_FIELD, ()) or ())
+            return digest(result.scene, self.session.project.document, only=wanted or None)
+        if name == READ_STANDARD:
+            kind = str(values.get("kind", ""))
+            if kind not in STANDARD_KINDS:
+                return tr("Diese Tabelle gibt es nicht: {kinds}").format(
+                    kinds=", ".join(STANDARD_KINDS)
+                )
+            return standard_text(kind, str(values.get("size", "")).strip())
 
         spec = REGISTRY.get(name)
         chosen = [str(entry) for entry in values.pop(OBJECTS_FIELD, ()) or ()]

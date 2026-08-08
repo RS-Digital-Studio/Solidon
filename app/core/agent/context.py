@@ -109,6 +109,17 @@ def conversation(entries: Sequence[ChatEntry], document: Document) -> list[Messa
     """
     active = {transaction.id for transaction in document.transactions}
     messages: list[Message] = []
+    skipped = len(entries) - HISTORY_LIMIT
+    if skipped > 0:
+        # Ohne diese Zeile verschwindet Vorgeschichte wortlos, und der Agent
+        # widerspricht sich scheinbar grundlos — er weiß jetzt, dass es mehr
+        # gab, statt zu raten (Konzept Agent-Vertiefung 4.5).
+        messages.append(
+            Message(
+                role="user",
+                content=f"[{skipped} " + tr("ältere Beiträge nicht mitgesendet") + "]",
+            )
+        )
     for entry in list(entries)[-HISTORY_LIMIT:]:
         discarded = entry.transaction_id is not None and entry.transaction_id not in active
         if discarded:
