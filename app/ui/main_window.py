@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Final, cast
+from typing import Any, Final
 
 from PySide6.QtCore import QPoint, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import (
@@ -45,7 +45,14 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import activation, examples, updates
-from app.core.agent.session import MAX_STEPS, find_part_text, standard_text
+from app.core.agent.session import (
+    MAX_STEPS,
+    build_fit,
+    find_part_text,
+    parse_number,
+    report_text,
+    standard_text,
+)
 from app.core.agent.tools import (
     ADD_FIT,
     ADD_PARAMETER,
@@ -88,11 +95,7 @@ from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import total as estimate_total
 from app.core.tour import tour_for
 from app.core.types import (
-    FIT_KINDS,
-    FeatureRef,
     Finding,
-    Fit,
-    FitKind,
     ObjectId,
     Origin,
     Parameter,
@@ -3035,43 +3038,31 @@ class MainWindow(QMainWindow):
         return "\n".join(lines)
 
     def _remote_report(self, severity: str) -> str:
+        """Der Prüfbericht von außen — dieselbe Funktion wie im Chat.
+
+        Hier stand ein zweiter Filter, und er filterte anders: exakt statt
+        „ab dieser Schwere", wie das Werkzeugschema es sagt. Auf ``warning``
+        kamen keine Fehler — dieselbe Frage, zwei Antworten, je nachdem,
+        woher sie kam (Konzept Agent-Vertiefung 2.4).
+        """
         result = self.session.last_result
         if result is None:
             return tr("Es ist nichts geöffnet.")
-        wanted = {"info", "warning", "error"} if not severity else {severity}
-        findings = [entry for entry in result.scene.report.findings if entry.severity in wanted]
-        if not findings:
-            return tr("Keine Befunde.")
-        return "\n".join(f"{entry.severity}: {entry.code}: {entry.message}" for entry in findings)
+        return report_text(result.scene, severity or None)
 
     def _remote_fit(self, values: Mapping[str, Any]) -> str:
         """Eine Passung von außen (§14).
 
-        Wie im Chat: zwei Merkmale als ``obj_1:hole_2``, und die Toleranz kommt
-        aus dem Materialprofil statt als Zahl (Regel 7). Ohne diesen Zweig lief
-        der Aufruf in ``REGISTRY.get`` und endete als Programmfehler — ein
-        Werkzeug, das die Liste anbietet und niemand ausführt, ist schlimmer
-        als eines, das fehlt.
+        Wie im Chat, und seit der Konsolidierung (Konzept 2.4) wörtlich: den
+        Fit baut ``build_fit``, dieselbe Funktion wie in der Sitzung. Ohne
+        diesen Zweig lief der Aufruf in ``REGISTRY.get`` und endete als
+        Programmfehler.
         """
-        try:
-            first = FeatureRef.parse(str(values.get("a", "")))
-            second = FeatureRef.parse(str(values.get("b", "")))
-        except ValueError:
-            return tr("Ein Passungspaar braucht zwei Merkmale als obj_1:hole_2.")
-        # Die Art kommt von außen und wird geprüft, nicht geglaubt: eine
-        # unbekannte landete sonst als Zeichenkette im Dokument und fiele erst
-        # dem Prüfer auf, der die Passung auswerten will.
-        kind = str(values.get("kind", "clearance"))
-        if kind not in FIT_KINDS:
-            return tr("Diese Passungsart gibt es nicht: {kinds}").format(kinds=", ".join(FIT_KINDS))
         document = self.session.project.document
-        fit = Fit(
-            name=str(values.get("name", "")) or f"fit_{len(document.fits) + 1}",
-            a=first,
-            b=second,
-            kind=cast(FitKind, kind),
-            tolerance=f"auto:{self.session.profile.material.id}",
-        )
+        try:
+            fit = build_fit(dict(values), self.session.profile.material.id, len(document.fits))
+        except ValueError as error:
+            return str(error)
         self.session.add_fit(fit)
         return f"{tr('Passung angelegt')}: {fit.name} ({fit.kind}, {fit.tolerance})"
 
@@ -3079,9 +3070,16 @@ class MainWindow(QMainWindow):
         """Ein Projektmaß von außen — dieselben Wege wie die Parameterleiste.
 
         Und damit dieselbe Zusage: die Änderung ist eine Transaktion, sie gilt
-        als Änderung, und beim Schließen ist sie nicht weg."""
+        als Änderung, und beim Schließen ist sie nicht weg. Den Wert prüft
+        ``parse_number`` wie in der Sitzung — ``float()`` stand hier ungeprüft,
+        und ein „abc" von außen war ein Programmfehler statt einer Meldung
+        (Konzept 2.4).
+        """
         name = str(values.get("name", ""))
-        number = float(values.get("value", 0.0))
+        try:
+            number = parse_number(values.get("value", 0.0))
+        except ValueError as error:
+            return str(error)
         if tool == ADD_PARAMETER:
             self.session.add_parameter(
                 Parameter(name=name, value=number, unit=str(values.get("unit", "mm")))

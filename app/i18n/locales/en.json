@@ -539,7 +539,6 @@
   "Diese Passung lässt sich nicht messen — es fehlt ein Durchmesser.": "This fit cannot be measured - a diameter is missing.",
   "Diese Passung lässt sich nicht messen — es fehlt eine Fläche.": "This fit cannot be measured — a face is missing.",
   "Diese Passungsart gibt es nicht": "This kind of fit does not exist",
-  "Diese Passungsart gibt es nicht: {kinds}": "There is no such fit kind: {kinds}",
   "Diese Projektdatei gibt es nicht.": "There is no such project file.",
   "Diese Prägung ist flacher als eine Schicht und verschwindet beim Drucken. Die Schichthöhe steht in „layer_mm“.": "This relief is shallower than one layer and disappears when printed. The layer height is given in “layer_mm”.",
   "Diese Qualitätsstufe ist nicht bekannt.": "This quality preset is not known.",

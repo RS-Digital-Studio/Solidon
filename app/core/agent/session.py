@@ -193,7 +193,7 @@ class AgentSession:
         if name == ASK_USER:
             return self._ask_user(arguments, proposal), scene
         if name == READ_REPORT:
-            return _report_text(scene, arguments.get("severity")), scene
+            return report_text(scene, arguments.get("severity")), scene
         if name == FIND_PART:
             return find_part_text(arguments.get("description", "")), scene
         if name == READ_DIGEST:
@@ -270,13 +270,10 @@ class AgentSession:
         # Arbeiter — der ist kein AppError und ließe den Thread ohne Meldung
         # sterben — oder ein NaN, das bis in die Geometrieauswertung reist.
         try:
-            value = float(arguments.get("value", 0.0))
-        except (TypeError, ValueError):
+            value = parse_number(arguments.get("value", 0.0))
+        except ValueError as error:
             proposal.invalid_calls += 1
-            return f"{tr('Dieser Wert ist keine Zahl')}: {arguments.get('value')!r}"
-        if not isfinite(value):
-            proposal.invalid_calls += 1
-            return f"{tr('Dieser Wert ist keine endliche Zahl')}: {value}"
+            return str(error)
 
         parameter = Parameter(
             name=key,
@@ -304,28 +301,10 @@ class AgentSession:
 
     def _fit(self, arguments: dict[str, Any], proposal: Proposal, working: Document) -> str:
         try:
-            first = FeatureRef.parse(str(arguments.get("a", "")))
-            second = FeatureRef.parse(str(arguments.get("b", "")))
-        except ValueError:
+            fit = build_fit(arguments, self.profile.material.id, len(working.fits))
+        except ValueError as error:
             proposal.invalid_calls += 1
-            return tr("Ein Passungspaar braucht zwei Merkmale als obj_1:hole_2.")
-
-        # Der Enum steht im Werkzeugschema, aber ein Schema ist eine Bitte,
-        # keine Zusage: eine unbekannte Art landete sonst in der Projektdatei
-        # und erst bei der nächsten Auswertung als KeyError in ``_FIT_FIELD``.
-        kind = str(arguments.get("kind", "clearance"))
-        if kind not in FIT_KINDS:
-            proposal.invalid_calls += 1
-            known = ", ".join(FIT_KINDS)
-            return f"{tr('Diese Passungsart gibt es nicht')}: {kind} ({known})"
-
-        fit = Fit(
-            name=str(arguments.get("name", "")) or f"fit_{len(working.fits) + 1}",
-            a=first,
-            b=second,
-            kind=cast(FitKind, kind),
-            tolerance=f"auto:{self.profile.material.id}",
-        )
+            return str(error)
         proposal.fits.append(fit)
         working.fits.append(fit)
         return f"{tr('Passung angelegt')}: {fit.name} ({fit.kind}, {fit.tolerance})"
@@ -469,12 +448,63 @@ def _objects_text(scene: Scene) -> str:
     return " · ".join(parts)
 
 
-def _report_text(scene: Scene, severity: str | None) -> str:
+def report_text(scene: Scene, severity: str | None) -> str:
+    """Der Prüfbericht als Text — für Sitzung und Fernsteuerung dieselbe
+    Funktion (Konzept Agent-Vertiefung 2.4).
+
+    ``severity`` heißt „ab dieser Schwere", nicht „genau diese": so steht es
+    im Werkzeugschema. Die Fernsteuerung filterte exakt und lieferte auf
+    ``warning`` keine Fehler — dieselbe Frage, zwei Antworten, je nachdem,
+    woher sie kam.
+    """
     wanted = {"info", "warning", "error"} if not severity else _from(severity)
     findings = [entry for entry in scene.report.findings if entry.severity in wanted]
     if not findings:
         return tr("Keine Befunde.")
     return "\n".join(f"{entry.severity}: {entry.code}: {entry.message}" for entry in findings)
+
+
+def parse_number(value: Any) -> float:
+    """Eine Zahl aus einem Werkzeugargument — oder ein ``ValueError``, dessen
+    Text direkt als Antwort taugt.
+
+    Für Sitzung und Fernsteuerung dieselbe Prüfung (Konzept 2.4): die
+    Fernsteuerung rief ``float()`` ungeprüft, und ein „abc" als Wert war dort
+    ein Programmfehler statt einer Meldung.
+    """
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{tr('Dieser Wert ist keine Zahl')}: {value!r}") from None
+    if not isfinite(number):
+        raise ValueError(f"{tr('Dieser Wert ist keine endliche Zahl')}: {number}")
+    return number
+
+
+def build_fit(arguments: dict[str, Any], material_id: str, taken: int) -> Fit:
+    """Ein Passungspaar aus Werkzeugargumenten — geprüft, mit Verweis-Toleranz.
+
+    Der Enum steht im Werkzeugschema, aber ein Schema ist eine Bitte, keine
+    Zusage: eine unbekannte Art landete sonst in der Projektdatei und erst
+    bei der nächsten Auswertung als KeyError. Sitzung und Fernsteuerung
+    bauten diesen Fit je einmal — jetzt einmal hier (Konzept 2.4).
+    """
+    try:
+        first = FeatureRef.parse(str(arguments.get("a", "")))
+        second = FeatureRef.parse(str(arguments.get("b", "")))
+    except ValueError:
+        raise ValueError(tr("Ein Passungspaar braucht zwei Merkmale als obj_1:hole_2.")) from None
+    kind = str(arguments.get("kind", "clearance"))
+    if kind not in FIT_KINDS:
+        known = ", ".join(FIT_KINDS)
+        raise ValueError(f"{tr('Diese Passungsart gibt es nicht')}: {kind} ({known})")
+    return Fit(
+        name=str(arguments.get("name", "")) or f"fit_{taken + 1}",
+        a=first,
+        b=second,
+        kind=cast(FitKind, kind),
+        tolerance=f"auto:{material_id}",
+    )
 
 
 def _from(severity: str) -> set[str]:

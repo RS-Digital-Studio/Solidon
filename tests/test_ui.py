@@ -2157,6 +2157,45 @@ def test_a_remote_call_says_where_it_came_from(window: MainWindow) -> None:
     assert origin.model == REMOTE_ORIGIN
 
 
+def test_a_remote_value_that_is_no_number_is_an_answer_not_a_crash(window: MainWindow) -> None:
+    """Konzept Agent-Vertiefung 2.4: die Fernsteuerung rief ``float()``
+    ungeprüft — ein „abc" von außen war ein Programmfehler statt einer
+    Meldung. Jetzt prüft ``parse_number``, dieselbe Funktion wie im Chat.
+    """
+    from app.core.agent.tools import ADD_PARAMETER
+
+    answer = window.run_remote(ADD_PARAMETER, {"name": "breite", "value": "abc"})
+
+    assert "keine Zahl" in answer
+    assert window.session.project.document.transactions == []
+    assert "breite" not in window.session.project.document.parameters
+
+
+def test_the_remote_report_filters_from_a_severity_upwards(window: MainWindow) -> None:
+    """Konzept Agent-Vertiefung 2.4: „ab dieser Schwere", wie das
+    Werkzeugschema sagt — die Fernsteuerung filterte exakt und lieferte auf
+    ``warning`` keine Fehler. Jetzt antwortet ``report_text``, dieselbe
+    Funktion wie im Chat.
+    """
+    from app.core.agent.session import report_text
+    from app.core.types import Finding, Report, Scene
+
+    scene = Scene()
+    scene.report = Report(
+        (
+            Finding(code="a", severity="info", message="Hinweis"),
+            Finding(code="b", severity="warning", message="Warnung"),
+            Finding(code="c", severity="error", message="Fehler"),
+        )
+    )
+
+    text = report_text(scene, "warning")
+
+    assert "Warnung" in text
+    assert "Fehler" in text, "eine Frage nach Warnungen unterschlägt keine Fehler"
+    assert "Hinweis" not in text
+
+
 def test_the_remote_interface_stays_off_unless_it_is_switched_on(window: MainWindow) -> None:
     """Die erste Auflage: aus, bis jemand sie einschaltet.
 
