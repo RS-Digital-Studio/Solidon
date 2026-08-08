@@ -14,8 +14,15 @@ Ordner wird unverändert hochgeladen; einen Build-Schritt gibt es nicht.
 | `icon.svg` | Anwendungssymbol als Favicon — erzeugt von `tools/make_icon.py` |
 | `impressum.html` | Impressum — **Entwurf, Anschrift fehlt noch** |
 | `datenschutz.html` | Datenschutzerklärung — **Entwurf mit Platzhaltern** |
+| `eula.html`, `agb.html`, `widerruf.html` | Rechtstexte — erzeugt von `tools/make_legal.py` aus `EULA.md`, `AGB.md` und `WIDERRUF.md`, nie von Hand ändern |
 | `style.css` | Gestaltung, hell und dunkel über `prefers-color-scheme` |
 | `version.json` | Versionsdatei für den Update-Hinweis (`core/updates.py`) |
+
+Die drei Rechtstexte tragen ihren Entwurfshinweis automatisch, solange ein
+Platzhalter darin steht — `tools/make_legal.py` setzt ihn, und er verschwindet
+beim nächsten Lauf von selbst, sobald die Angabe da ist. `tests/test_legal.py`
+lässt keine Seite durch, die einen Platzhalter trägt und sich nicht als
+Entwurf ausweist.
 
 ## Die Ausgangslage
 
@@ -116,9 +123,19 @@ eigenes Produkt: **netcup Webhosting 2000**.
 
 ## Vor der Veröffentlichung
 
-- Platzhalter in `impressum.html` und `datenschutz.html` ersetzen
-  (Anschrift, Hoster; die Kontaktadresse support@solidon3d.de steht schon)
-  und beide Texte prüfen — sie sind Entwürfe, keine Rechtsberatung.
+- Platzhalter ersetzen: Anschrift in `impressum.html` und `WIDERRUF.md`,
+  Hoster in `datenschutz.html`, Zahlungsdienstleister in `AGB.md` (die
+  Kontaktadresse support@solidon3d.de steht schon). Danach
+  `tools/make_legal.py` laufen lassen — die Entwurfshinweise fallen dann von
+  selbst weg.
+- **Die Rechtstexte fachlich prüfen lassen.** `EULA.md`, `AGB.md` und
+  `WIDERRUF.md` sind sorgfältig geschriebene Entwürfe und keine
+  Rechtsberatung. Vor dem ersten Verkauf gehören sie einem Anwalt vorgelegt,
+  zusammen mit der Frage nach Kleinunternehmerregelung und Umsatzsteuer. Die
+  Widerrufsbelehrung folgt dem gesetzlichen Muster; ihre Wirkung hängt aber
+  daran, dass der Bestellvorgang die Zustimmung nach § 356 Abs. 5 BGB
+  ausdrücklich abfragt — ohne diese Abfrage im Kaufprozess nützt der beste
+  Text nichts.
 - Das Postfach `support@solidon3d.de` muss zustellen, bevor die Adresse
   ausgeliefert wird — sie steht auf beiden Startseiten, im Impressum, im
   Über-Dialog und im Fehlerbericht der Anwendung. Eine Adresse, die im

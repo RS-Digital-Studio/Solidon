@@ -68,6 +68,22 @@ def stale_reason() -> str:
     return ""
 
 
+def _licence_file() -> Path:
+    """Die Lizenzseite des Installers: der Endnutzer-Lizenzvertrag.
+
+    Bis hierher stand dort ``LICENSE`` — eine Urheberrechtsnotiz („alle Rechte
+    vorbehalten"), die nicht sagt, was der Käufer erwirbt. Der Vertrag steht in
+    ``EULA.md``; ``tools/make_legal.py`` legt die Textfassung daneben, weil
+    Inno Setup die Datei roh anzeigt und Markdown-Zeichen dort als Zeichen
+    stünden.
+    """
+    text = ROOT / "packaging" / "eula.txt"
+    if not text.is_file():
+        print("packaging/eula.txt fehlt — zuerst: .venv\\Scripts\\python.exe tools/make_legal.py")
+        raise SystemExit(1)
+    return text
+
+
 def main() -> int:
     if not (SOURCE_DIR / f"{APP_NAME}.exe").is_file():
         print(f"Kein Bau unter {SOURCE_DIR} — zuerst: pyinstaller packaging/solidon3d.spec")
@@ -90,7 +106,7 @@ def main() -> int:
             f"/DAppUrl={WEBSITE_URL}",
             f"/DSourceDir={SOURCE_DIR}",
             f"/DOutputDir={OUTPUT_DIR}",
-            f"/DLicenseFile={ROOT / 'LICENSE'}",
+            f"/DLicenseFile={_licence_file()}",
             f"/DSetupIconFile={ROOT / 'packaging' / 'solidon3d.ico'}",
             str(SCRIPT),
         ],

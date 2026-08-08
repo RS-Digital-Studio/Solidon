@@ -251,9 +251,38 @@ footer.site a { color: var(--muted); }
 
 footer.site a:hover { color: var(--accent); }
 
-main.legal { padding: 3rem 0; max-width: 44rem; }
+/* Ohne das ``margin`` klebt eine Rechtstextseite am linken Rand — bei 76rem
+   Seitenbreite steht der Text dann in einem Drittel und zwei Drittel bleiben
+   leer. Die Breite selbst bleibt schmal: das sind lange Sätze. */
+main.legal { padding: 3rem 0; max-width: 46rem; margin: 0 auto; }
 
 main.legal h1 { font-size: 1.8rem; }
+
+main.legal h2 { font-size: 1.3rem; margin-top: 2.5rem; }
+
+main.legal h3 { font-size: 1.05rem; margin-top: 1.8rem; }
+
+main.legal hr { border: none; border-top: 1px solid var(--line); margin: 2rem 0; }
+
+main.legal blockquote {
+  margin: 1rem 0;
+  padding: 0.8rem 1.2rem;
+  background: var(--card);
+  border-left: 3px solid var(--line);
+  border-radius: 0.35rem;
+}
+
+main.legal blockquote p { margin: 0; }
+
+main.legal ol, main.legal ul { padding-left: 1.4rem; }
+
+main.legal li { margin: 0.35rem 0; }
+
+/* Die Leerzeilen des Widerrufsformulars — sie sind zum Ausfüllen da. */
+main.legal p.blank {
+  border-bottom: 1px solid var(--line);
+  margin: 0.2rem 0 1.4rem;
+}
 
 .draft {
   background: var(--card);

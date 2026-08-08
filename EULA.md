@@ -1,0 +1,186 @@
+# Endnutzer-Lizenzvertrag für Solidon3D
+
+Stand: 8. August 2026 · Fassung 1.0
+
+Dieser Vertrag regelt, was Sie mit Solidon3D tun dürfen. Er kommt zustande,
+wenn Sie die Software installieren oder benutzen. Vertragspartner ist
+RS Digital, Robert Schneider (Anschrift im Impressum unter
+<https://solidon3d.de/impressum.html>) — im Folgenden „wir".
+
+Wenn Sie mit diesen Bedingungen nicht einverstanden sind, benutzen Sie die
+Software nicht und löschen Sie sie.
+
+---
+
+## 1. Was Sie bekommen
+
+Sie erwerben ein **einfaches, nicht ausschließliches Nutzungsrecht** an
+Solidon3D. Sie kaufen keine Rechte am Programm selbst; Urheberrecht und alle
+weiteren Rechte bleiben bei uns.
+
+Das Nutzungsrecht ist **zeitlich unbegrenzt**. Es endet nicht, wenn wir die
+Weiterentwicklung einstellen, und es endet nicht mit einer neuen Hauptversion.
+
+## 2. Auf wie vielen Geräten
+
+Die Lizenz ist **an Sie als Person gebunden, nicht an ein Gerät**. Sie dürfen
+Solidon3D auf allen Geräten installieren und benutzen, die Sie selbst nutzen —
+Arbeitsplatz, Notebook, Werkstattrechner.
+
+Was nicht erlaubt ist: dass mehrere Personen mit **einer** Lizenz arbeiten.
+Für jede weitere Person, die die Software benutzt, wird eine weitere Lizenz
+gebraucht. Innerhalb eines Betriebs zählt also nicht die Zahl der Rechner,
+sondern die Zahl der Menschen, die damit konstruieren.
+
+Es gibt **keine Aktivierungspflicht über das Netz und kein Nutzerkonto**. Der
+Lizenzschlüssel wird auf Ihrem Rechner geprüft; wir erfahren nicht, wann und
+wo Sie die Software benutzen.
+
+## 3. Gewerbliche Nutzung und Ihre Ergebnisse
+
+Die gewerbliche Nutzung ist ausdrücklich eingeschlossen und kostet nichts
+extra.
+
+**Was Sie mit Solidon3D erzeugen, gehört Ihnen.** An Ihren Modellen,
+Projektdateien und exportierten Dateien haben wir keinerlei Rechte — Sie
+dürfen sie verkaufen, verschenken, veröffentlichen und lizenzieren, wie Sie
+wollen. Das gilt auch für Ergebnisse, in die mitgelieferte Bausteine aus der
+Bibliothek eingeflossen sind: diese Bibliothek
+(`app/core/knowledge/parts/`) steht deshalb ausdrücklich unter der
+MIT-Lizenz, ebenso der Referenzkorpus (`tests/data/`).
+
+## 4. Testlauf
+
+Vor dem Kauf läuft Solidon3D **vierzehn Tage vollständig und ohne
+Einschränkung**. Nach Ablauf dieser Frist brauchen Sie einen Lizenzschlüssel,
+um weiterzuarbeiten. Ihre bis dahin erzeugten Dateien bleiben Ihre Dateien und
+lassen sich mit jeder späteren Lizenz weiter öffnen.
+
+## 5. Updates
+
+Im Kaufpreis enthalten sind **alle Aktualisierungen der Hauptversion 1** —
+also jede Fassung 1.0, 1.1, 1.2 und so fort. Ob es eine Version 2 geben wird
+und was sie kostet, ist heute nicht entschieden; ein Anspruch darauf entsteht
+aus diesem Vertrag nicht.
+
+Updates sind ein Angebot, keine Pflicht. Sie dürfen bei der Fassung bleiben,
+die Sie haben.
+
+## 6. Weitergabe
+
+Sie dürfen Ihre Lizenz **dauerhaft an eine andere Person weitergeben** — etwa
+beim Verkauf Ihres Betriebs oder wenn Sie die Software nicht mehr brauchen.
+Bedingung ist, dass Sie danach selbst keine Kopie mehr benutzen und alle
+Installationen entfernen. Die erwerbende Person tritt dann in diesen Vertrag
+ein.
+
+Eine Vermietung, ein Verleih oder eine Unterlizenzierung sind nicht erlaubt.
+
+## 7. Was Sie nicht dürfen
+
+* Die Software oder Teile davon **weiterverkaufen, veröffentlichen oder
+  verbreiten** — ausgenommen die Weitergabe nach Nummer 6.
+* Den **Lizenzschlüssel weitergeben** oder öffentlich zugänglich machen.
+* Die Software **zurückentwickeln, dekompilieren oder disassemblieren**,
+  soweit das Gesetz es nicht ausdrücklich erlaubt. Zwingende Rechte —
+  insbesondere § 69d und § 69e UrhG zur Fehlerbehebung und zur Herstellung
+  von Interoperabilität — bleiben unberührt.
+* Die **Lizenzprüfung umgehen, entfernen oder unwirksam machen**.
+
+## 8. Fremde Bestandteile
+
+Solidon3D verwendet fremde Programmbibliotheken, die ihren eigenen Lizenzen
+unterliegen. Die Übersicht liegt der Installation als
+`THIRD-PARTY-NOTICES.md` bei und steht im Über-Dialog.
+
+Besonders zu nennen: **PySide6 steht unter der LGPL-3.0** und wird dynamisch
+gebunden und unverändert weitergegeben. Die LGPL gibt Ihnen das Recht, diese
+Bibliothek durch eine eigene, veränderte Fassung zu ersetzen. Bei der
+Windows-Installation liegen die betreffenden Dateien dafür unverschlüsselt im
+Programmordner; auf Anfrage an <support@solidon3d.de> nennen wir Ihnen die
+genauen Fassungen und den Bezugsort des Quelltexts.
+
+OpenSCAD, Slicer, Ollama und ComfyUI werden **nicht mitgeliefert**. Sie
+werden, wenn vorhanden, als eigenständig installierte Programme aufgerufen und
+unterliegen ausschließlich ihren eigenen Lizenzen.
+
+## 9. Keine Cloud, keine Telemetrie
+
+Solidon3D läuft vollständig auf Ihrem Rechner. Es gibt kein Nutzerkonto, keine
+Projektablage im Netz und keine Telemetrie. Zwei Verbindungen kann es geben,
+beide unter Ihrer Kontrolle und beide abschaltbar:
+
+* der **Update-Hinweis**, der eine Versionsdatei auf unserer Website abfragt —
+  standardmäßig aus;
+* der **KI-Chat**, sofern Sie einen eigenen API-Schlüssel hinterlegen. Dann
+  gehen Ihre Chat-Eingaben an den von Ihnen gewählten Anbieter, nach dessen
+  Bedingungen. Mit einem lokalen Modell verlässt nichts den Rechner.
+
+Näheres regelt die Datenschutzerklärung unter
+<https://solidon3d.de/datenschutz.html>.
+
+## 10. Was wir nicht zusichern
+
+Solidon3D ist ein Konstruktionswerkzeug, kein Prüfinstitut. Die Software
+berechnet, analysiert und schlägt vor — **die Verantwortung für das, was Sie
+drucken und wofür Sie es einsetzen, bleibt bei Ihnen.**
+
+Das gilt besonders für:
+
+* **Maßhaltigkeit.** Schwund, Elefantenfuß und Passungen werden aus
+  Materialprofilen gerechnet. Diese Profile sind Erfahrungswerte, bis Sie sie
+  an Ihrem eigenen Drucker kalibrieren. Ein gedrucktes Teil kann trotz
+  korrekter Rechnung nicht passen.
+* **Druckbarkeit.** Die Schichtanalyse ist Solidon3Ds eigene Rechnung und
+  nicht die Ihres Slicers. Beide Zahlenwelten werden getrennt ausgewiesen;
+  die Druckdatei erzeugt weiterhin Ihr Slicer.
+* **Erzeugte Modelle.** Was ein Bildmodell liefert, ist eine Oberfläche und
+  keine Konstruktion. Maßhaltigkeit wird dabei ausdrücklich nicht zugesichert.
+* **Vorschläge des KI-Chats.** Er wählt Operationen und Werte; er ist keine
+  fachliche Beratung und kann irren.
+
+**Nicht geeignet** ist Solidon3D für Bauteile, deren Versagen Menschen
+gefährden kann — tragende Teile, Medizinprodukte, Luft- und Raumfahrt,
+Fahrzeugtechnik und Ähnliches. Wer die Software dennoch dafür einsetzt, tut
+das auf eigene Verantwortung und hat die Ergebnisse eigenständig zu prüfen.
+
+## 11. Haftung
+
+Wir haften unbeschränkt bei Vorsatz und grober Fahrlässigkeit, bei
+arglistigem Verschweigen eines Mangels, für Schäden aus der Verletzung des
+Lebens, des Körpers oder der Gesundheit sowie nach dem Produkthaftungsgesetz.
+
+Bei einfacher Fahrlässigkeit haften wir nur bei der Verletzung einer
+wesentlichen Vertragspflicht — also einer Pflicht, deren Erfüllung die
+ordnungsgemäße Durchführung des Vertrags überhaupt erst ermöglicht und auf
+deren Einhaltung Sie regelmäßig vertrauen dürfen. In diesem Fall ist die
+Haftung auf den vertragstypischen, vorhersehbaren Schaden begrenzt.
+
+Eine weitergehende Haftung ist ausgeschlossen. Insbesondere haften wir bei
+einfacher Fahrlässigkeit nicht für Material- und Druckkosten, Maschinenzeit,
+entgangenen Gewinn oder mittelbare Schäden aus fehlerhaften Modellen.
+
+Die gesetzlichen Mängelrechte beim Kauf bleiben davon unberührt.
+
+## 12. Laufzeit und Ende
+
+Der Vertrag läuft unbefristet. Wir dürfen ihn außerordentlich kündigen, wenn
+Sie in erheblicher Weise gegen die Nummern 6 oder 7 verstoßen — etwa indem Sie
+den Lizenzschlüssel veröffentlichen oder die Prüfung umgehen. In diesem Fall
+haben Sie die Nutzung einzustellen und alle Installationen zu entfernen.
+
+## 13. Schlussbestimmungen
+
+Es gilt deutsches Recht unter Ausschluss des UN-Kaufrechts. Sind Sie
+Verbraucher, gilt zusätzlich das zwingende Recht Ihres Wohnsitzstaats, soweit
+es Ihnen mehr Schutz gibt.
+
+Sollte eine Bestimmung dieses Vertrags unwirksam sein, bleibt der übrige
+Vertrag wirksam.
+
+Für den Verkauf selbst gelten ergänzend unsere Allgemeinen
+Geschäftsbedingungen unter <https://solidon3d.de/agb.html>.
+
+---
+
+**Fragen zu diesem Vertrag:** <support@solidon3d.de>
