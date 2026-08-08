@@ -228,17 +228,33 @@ PDF_ACCENT = "#a4551e"
 PDF_LINE = "#d8d4cd"
 
 
-def contents(language: str) -> str:
-    """Ein Inhaltsverzeichnis — bei achtundzwanzig Kapiteln kein Luxus.
+def _anchor(page: manual.Page) -> str:
+    """Der Anker einer Seite — für erzeugte Kapitel mit Vorsatz.
 
-    Mit gezählten Kapiteln und zweispaltig: eine Punktliste über achtundzwanzig
-    Zeilen ist eine Aufzählung, kein Verzeichnis — man findet darin nichts
-    wieder, weil nichts eine Stelle hat. Die Nummer gibt jedem Kapitel eine.
+    Der Seitenschlüssel allein reicht nicht: die geschriebene Seite „Die
+    Bausteine" und das erzeugte Kapitel „Bausteine" heißen beide ``parts``,
+    und zwei gleiche ``id`` in einer Seite sind ungültiges HTML. Der Browser
+    springt dann bei beiden Verzeichniseinträgen an dieselbe Stelle — auf
+    die erste, und das ist die falsche.
+
+    Der Vorsatz sitzt am Anker und nicht am Schlüssel: ``manual.find`` führt
+    von einer Operation in ihr Kapitel und erwartet den Kategorienamen.
+    """
+    return f"ref-{page.key}" if page.generated else page.key
+
+
+def contents(language: str) -> str:
+    """Ein Inhaltsverzeichnis — bei dreiunddreißig Kapiteln kein Luxus.
+
+    Mit gezählten Kapiteln und zweispaltig: eine Punktliste über
+    dreiunddreißig Zeilen ist eine Aufzählung, kein Verzeichnis — man findet
+    darin nichts wieder, weil nichts eine Stelle hat. Die Nummer gibt jedem
+    Kapitel eine.
 
     Die Anker dazu setzt `anchored`; hier steht nur die Liste.
     """
     items = "".join(
-        f'<li><a href="#{page.key}"><span class="num">{number:02d}</span>{page.title}</a></li>'
+        f'<li><a href="#{_anchor(page)}"><span class="num">{number:02d}</span>{page.title}</a></li>'
         for number, page in enumerate(manual.pages(), start=1)
     )
     heading = CONTENTS.get(language, CONTENTS["de"])
@@ -258,9 +274,10 @@ def anchored(html: str) -> str:
         # der Referenzteil je Kapitel auf einem neuen Blatt an, die
         # Einführung liest man am Stück (siehe ``@media print``).
         css = ' class="chapter"' if page.generated else ""
+        anchor = _anchor(page)
         pattern = re.compile(rf"<h([1-6])>{re.escape(str(page.title))}</h\1>")
         html = pattern.sub(
-            lambda match, key=page.key, css=css: (  # type: ignore[misc]
+            lambda match, key=anchor, css=css: (  # type: ignore[misc]
                 f'<h{match.group(1)} id="{key}"{css}>{match.group(0)[4:-5]}</h{match.group(1)}>'
             ),
             html,

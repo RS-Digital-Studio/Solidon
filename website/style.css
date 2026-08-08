@@ -32,8 +32,12 @@ body {
   font-size: 1.05rem;
 }
 
+/* 76rem sind 1216 px. Bei 62rem blieben auf einem 1920er Bildschirm 464 px
+   Rand je Seite stehen, und der Hero-Text nutzte 32 % der Breite — die
+   häufigste Auflösung sah eine Seite, die für ein Notebook gebaut war.
+   Fließtext bleibt trotzdem schmal; begrenzt wird er dort, wo er steht. */
 .wrap {
-  max-width: 62rem;
+  max-width: 76rem;
   margin: 0 auto;
   padding: 0 1.25rem;
 }
@@ -77,14 +81,43 @@ nav.lang a:hover { color: var(--accent); }
   font-size: clamp(1.9rem, 4.5vw, 3rem);
   line-height: 1.15;
   margin: 0 0 1rem;
-  max-width: 40rem;
+  max-width: 20ch;
 }
 
 .hero p.lead {
   font-size: 1.2rem;
   color: var(--muted);
-  max-width: 38rem;
+  max-width: 40ch;
   margin: 0 0 2rem;
+}
+
+/* Ab hier ist Platz für zwei Spalten. Vorher stand das Bildschirmfoto unter
+   dem Preiskasten: auf 1920 × 1080 begann es bei 770 px und war an der
+   Bildschirmkante abgeschnitten — das beste Verkaufsargument lag unter der
+   Falz. Nebeneinander steht beides über ihr. */
+@media (min-width: 68rem) {
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(21rem, 0.85fr) minmax(0, 1.25fr);
+    gap: 3rem;
+    align-items: center;
+  }
+
+  /* In der Spalte begrenzt die Spalte. Eine zusätzliche Zeichenbreite
+     bräche die Überschrift ein zweites Mal um — vier Zeilen aus vier
+     Wörtern lesen sich wie eine Liste. */
+  .hero h1 {
+    font-size: clamp(2rem, 2.6vw, 2.9rem);
+    max-width: none;
+  }
+
+  .hero p.lead {
+    max-width: none;
+  }
+
+  .hero .screenshot {
+    margin-top: 0;
+  }
 }
 
 .download {
@@ -104,7 +137,6 @@ nav.lang a:hover { color: var(--accent); }
 img.screenshot {
   display: block;
   width: 100%;
-  max-width: 56rem;
   height: auto;
   margin-top: 2.5rem;
   border: 1px solid var(--line);
@@ -175,12 +207,16 @@ ul.features li::before {
 
 ul.features b { display: inline; }
 
+/* Der einzige Block der Seite, der aus langen Sätzen besteht. Über die volle
+   Breite gezogen wären das Zeilen von 150 Zeichen — die Augen finden den
+   Zeilenanfang nicht wieder. */
 .honest {
   background: var(--card);
   border: 1px solid var(--line);
   border-left: 4px solid var(--accent);
   border-radius: 0.5rem;
   padding: 1.25rem 1.5rem;
+  max-width: 58rem;
 }
 
 .honest ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
