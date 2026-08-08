@@ -1572,9 +1572,29 @@ Abhängigkeiten gegen die Freigabeliste.
 ### 37.1 Name
 Wird für Paketnamen, Domain, Dateiendung, Übersetzungen und Signierung
 gebraucht — früh entscheiden. Kriterien: als Paketname und Domain frei, keine
-Markenkollision, in beiden Sprachen aussprechbar, kein „3D" im Namen.
-Anregungen: *Solidon*, *Passform*, *Werkbank*. Bis zur Entscheidung steht der
-Name an **einer** Stelle im Code.
+Markenkollision, in beiden Sprachen aussprechbar. Der Name steht an **einer**
+Stelle im Code (`app/branding.py`), damit ein Wechsel eine Ein-Zeilen-Änderung
+bleibt.
+
+**Entschieden: „Solidon3D".** Der volle Name steht auf Fenstertitel, Website,
+Installer und Lizenzschlüssel; im Fließtext und in Docstrings heißt es kurz
+„Solidon". Die Begründung führt `.claude/namensentscheidung-solidon.md`.
+
+Hier stand bis zum 08.08.2026 zusätzlich „kein ‚3D' im Namen". Das Kriterium
+war gegen einen beschreibenden Namen gerichtet und hat sich gegen zwei Dinge
+nicht gehalten. Erstens die Marke: der Vorgänger „Formwerk" fiel, weil eine
+Wort-/Bildmarke „3D FORMWERK" für „Entwurf von 3D-Modellen für den 3D-Druck"
+bestandskräftig wurde — geprägt hat dabei *Formwerk*, das „3D" trat als
+beschreibend zurück. Genau diese Beschreibungsschwäche macht das Kürzel als
+Zusatz zu einem eigenen, kennzeichnungskräftigen Wortstamm unbedenklich.
+Zweitens die Domain: `solidon3d.de` war frei, und Website, Support-Postfach,
+Update-Datei und Fenstertitel sollen denselben Namen tragen — wer eine
+Setup-Datei von der einen Adresse lädt und im Programm eine andere findet, hat
+zwei Namen vor sich und keinen Grund zu glauben, dass sie zusammengehören.
+
+Das Muster ist nicht neu: Shapr3D und Simplify3D führen dasselbe Kürzel. Es
+kostet nichts, solange der Stamm allein trägt — und „Solidon baut keinen
+G-Code-Slicer" liest sich besser als die Langfassung.
 
 ### 37.2 Auslieferung
 - **Signierung.** Windows zuerst, Linux als AppImage oder Flatpak, macOS

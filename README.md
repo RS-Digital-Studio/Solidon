@@ -55,11 +55,14 @@ fange ich an", die übrigen „was kann das eigentlich":
 
 ## Hilfe im Programm
 
-**Hilfe → Handbuch** (F1) öffnet achtzehn Seiten: sieben geschriebene über
-Verlauf, Parameter, Toleranzen und den Chat, elf erzeugte mit jeder Operation,
-jedem Wert und jedem Bereich. Die zweite Hälfte kommt aus demselben Register
-wie die Menüs — sie kann nicht veralten. Gesucht wird über den Text, nicht nur
-über die Überschriften.
+**Hilfe → Handbuch** (F1) öffnet dreiunddreißig Seiten: achtzehn geschriebene
+über die ersten fünfzehn Minuten, das Fenster, Verlauf, Parameter, Toleranzen,
+Bausteine, den Chat und ein Wörterbuch, dazu fünfzehn erzeugte mit jeder
+Operation, jedem Wert und jedem Bereich. Die zweite Hälfte kommt aus demselben
+Register wie die Menüs — sie kann nicht veralten, und eine neue Operation kann
+nicht dazukommen, ohne dort aufzutauchen. Gesucht wird über den Text, nicht nur
+über die Überschriften. Achtundzwanzig Abbildungen gehören dazu; keine davon
+wird von Hand gepflegt.
 
 Auf der Kommandozeile gibt `solidon3d docs --manual` denselben Text aus.
 
@@ -143,7 +146,7 @@ nicht**: manches große Modell gibt den Aufruf als Fließtext aus statt als
 Aufruf, und dann sieht der Chat aus, als arbeite er, während nichts geschieht.
 
 Entscheidend ist dabei, wie viele Werkzeuge im Spiel sind. Der Agent bietet
-alle Operationen an — dreiundachtzig Schemata, rund 96 KB —, und daran fallen
+alle Operationen an — vierundachtzig Schemata, rund 97 KB —, und daran fallen
 kleinere Modelle, die mit einer Handvoll noch alles treffen. Vorgabe ist
 darum `qwen3:14b`; `llama3.1:8b` ist schneller und kleiner, gibt unter der
 vollen Last aber die Mehrzahl der Aufrufe als Text aus.
