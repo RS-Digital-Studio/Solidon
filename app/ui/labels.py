@@ -19,6 +19,44 @@ from app.core.types import Feature, FeatureId
 from app.core.units import LengthUnit, format_length, format_volume
 from app.i18n import TranslatableText, _, tr
 
+#: Wie die dreizehn Kategorien des Registers auf Menüs der Leiste fallen (§2.5).
+#:
+#: Vier eigene Menüs plus dreizehn aus dem Register waren siebzehn — bei 1280
+#: Pixeln Fensterbreite läuft das über, und selbst wo es passt, ist es keine
+#: Leiste mehr, sondern eine Liste. Die Kategorie im Register bleibt, wie
+#: Bauplan §25 sie festlegt; hier liegt nur eine Zuordnung darüber. Eine
+#: Gruppe mit einer einzigen Kategorie steht flach, sonst bekommt jede
+#: Kategorie ihr Untermenü.
+#:
+#: Die Titel sind mit ``_()`` markiert, nicht mit ``tr()``: der Abgleich der
+#: Sprachdateien liest literale Aufrufe, und ``tr(variable)`` sieht er nicht —
+#: die Gruppen wären auf Deutsch stehen geblieben (Regel 20).
+#:
+#: Sie steht hier und nicht im Fenster, weil zwei Stellen sie brauchen: die
+#: Menüleiste und das Kontextmenü am Körper. Dort standen einmal die rohen
+#: Kategorienamen — „colour", „holes", „mesh" —, weil das Fenster sie nicht
+#: hergeben konnte, ohne dass die Leiste sie von ihm importiert.
+MENU_GROUPS: tuple[tuple[TranslatableText, tuple[str, ...]], ...] = (
+    (_("Objekt"), ("scene",)),
+    (_("Erzeugen"), ("primitive", "import", "sketch", "label")),
+    (_("Ändern"), ("boolean", "transform", "shaping", "holes", "surface", "mesh", "repair")),
+    (_("Bausteine"), ("parts",)),
+    (_("Vorbereiten"), ("prepare", "colour")),
+)
+
+
+def group_title(category: str) -> str:
+    """Der Menütitel, unter dem diese Kategorie steht.
+
+    Kennt die Tabelle sie nicht, ist der Kategoriename die ehrlichste Antwort
+    — eine neue Kategorie soll auftauchen und nicht verschwinden, so hält es
+    auch die Menüleiste.
+    """
+    for title, categories in MENU_GROUPS:
+        if category in categories:
+            return str(title)
+    return category
+
 
 def localised(text: str) -> str:
     """Setzt das Dezimaltrennzeichen der Anzeigesprache ein.

@@ -94,7 +94,7 @@ from app.core.types import (
     Parameter,
     SliceResult,
 )
-from app.i18n import TranslatableText, _, tr
+from app.i18n import _, tr
 from app.ui import first_run
 from app.ui.analysis_bar import AnalysisBar, LayerBar
 from app.ui.catalog import PartCatalog
@@ -119,7 +119,7 @@ from app.ui.generate_dialog import GenerateDialog
 from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
-from app.ui.labels import feature_label
+from app.ui.labels import MENU_GROUPS, feature_label
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
 from app.ui.op_dialog import OperationDialog
@@ -327,26 +327,6 @@ def inputs_for(
     if spec.takes_whole_scene:
         return tuple(objects)
     return tuple(selected[: spec.consumes]) if spec.consumes else ()
-
-
-#: Wie die dreizehn Kategorien des Registers auf Menüs der Leiste fallen (§2.5).
-#:
-#: Vier eigene Menüs plus dreizehn aus dem Register waren siebzehn — bei 1280
-#: Pixeln Fensterbreite läuft das über, und selbst wo es passt, ist es keine
-#: Leiste mehr, sondern eine Liste. Die Kategorie im Register bleibt, wie
-#: Bauplan §25 sie festlegt; hier liegt nur eine Zuordnung darüber. Eine
-#: Gruppe mit einer einzigen Kategorie steht flach, sonst bekommt jede
-#: Kategorie ihr Untermenü.
-#: Die Titel sind mit ``_()`` markiert, nicht mit ``tr()``: der Abgleich der
-#: Sprachdateien liest literale Aufrufe, und ``tr(variable)`` sieht er nicht —
-#: die Gruppen wären auf Deutsch stehen geblieben (Regel 20).
-MENU_GROUPS: tuple[tuple[TranslatableText, tuple[str, ...]], ...] = (
-    (_("Objekt"), ("scene",)),
-    (_("Erzeugen"), ("primitive", "import", "sketch", "label")),
-    (_("Ändern"), ("boolean", "transform", "shaping", "holes", "surface", "mesh", "repair")),
-    (_("Bausteine"), ("parts",)),
-    (_("Vorbereiten"), ("prepare", "colour")),
-)
 
 
 def _format_of(target: Path, chosen_filter: str) -> ExportFormat:

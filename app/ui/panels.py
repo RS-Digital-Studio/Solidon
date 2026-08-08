@@ -45,6 +45,7 @@ from app.ui.labels import (
     compact_length,
     feature_measure,
     feature_name,
+    group_title,
     length,
     localised,
     volume,
@@ -56,6 +57,12 @@ from app.ui.style import NORMAL, ROOMY, TIGHT, set_level
 #: Zeichen je Schweregrad, aus der gemeinsamen Kodierung — Farbe steht nie
 #: allein (§19.1).
 SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items()}
+
+#: Wie viele Operationen ein Kontextmenü flach zeigt, bevor es nach Kategorie
+#: gruppiert. Dieselbe Zahl, die ``MAX_SUBMENU_ENTRIES`` in
+#: ``tests/test_interface_limits.py`` der Menüleiste zieht, und aus demselben
+#: Grund: darüber liest niemand mehr, er sucht.
+MAX_MENU_ROWS = 12
 
 #: In welcher Reihenfolge die Schweregrade stehen. Die Zeile über der Liste
 #: zählt Fehler, Warnungen und Hinweise getrennt — sie verspricht damit eine
@@ -504,10 +511,22 @@ class ObjectTree(QWidget):
         return REGISTRY.for_feature(kind)
 
     def _feature_kind(self) -> str | None:
-        items = self.tree.selectedItems()
-        if not items or self.selected_feature() is None:
+        """Die Art des gewählten Merkmals — ``hole``, ``face``, ``edge``.
+
+        Gelesen wurde sie aus der zweiten Spalte des Baums, und dort steht das
+        Maß: „Ø3,22 mm" für eine Bohrung, „4334 mm²" für eine Fläche. Als Art
+        an ``for_feature`` gereicht, fand die Anfrage nie eine Operation, und
+        das Kontextmenü an einem Merkmal bestand aus Ausblenden und Alles
+        andere ausblenden — an genau dem Ort, den §18.5 „die wichtigste
+        Einzelfunktion" nennt.
+        """
+        feature_id = self.selected_feature()
+        object_id = self.selected()
+        if feature_id is None or object_id is None or self._result is None:
             return None
-        return items[0].text(1)
+        entry = self._result.scene.objects.get(object_id)
+        feature = entry.features.get(feature_id) if entry is not None else None
+        return feature.kind if feature is not None else None
 
     def context_menu(self) -> QMenu | None:
         """Das Menü zur aktuellen Auswahl, oder nichts.
@@ -528,12 +547,47 @@ class ObjectTree(QWidget):
         entries = self.operations_for_feature(kind) if kind else self.operations_for_object()
         if entries:
             menu.addSeparator()
-            for spec in entries:
-                action = menu.addAction(str(spec.title))
-                action.triggered.connect(
-                    lambda _checked=False, entry=spec: self.operationRequested.emit(entry)
-                )
+            self._add_operations(menu, entries)
         return menu
+
+    def _add_operations(self, menu: QMenu, entries: Sequence[Any]) -> None:
+        """Die Operationen ins Menü — flach, solange man sie überblickt.
+
+        An einem Merkmal sind es eine Handvoll, und die stehen direkt da: der
+        kurze Weg vom Sehen zum Tun (§2.6) verträgt kein Aufklappen. An einem
+        ganzen Körper sind es siebenundfünfzig, und eine Liste dieser Länge ist
+        kein Menü mehr, sondern ein Register ohne Suchfeld — dieselbe Grenze,
+        die `tests/test_interface_limits.py` für die Menüleiste zieht.
+
+        Gruppiert wird dann nach derselben Kategorie, nach der auch die
+        Menüleiste gruppiert. Beides kommt aus dem Register, kann also nicht
+        auseinanderlaufen.
+        """
+        if len(entries) <= MAX_MENU_ROWS:
+            for spec in entries:
+                self._add_operation(menu, spec)
+            return
+
+        groups: dict[str, list[Any]] = {}
+        for spec in entries:
+            groups.setdefault(group_title(str(spec.category)), []).append(spec)
+        # Mit dem Menü als Elternteil erzeugt, nicht über ``addMenu(titel)``:
+        # sonst hält nichts auf der Python-Seite das Untermenü, und sein
+        # C++-Objekt wird eingesammelt, während es noch im Menü hängt —
+        # dieselbe Falle wie in der Menüleiste.
+        for title in sorted(groups):
+            submenu = QMenu(title, menu)
+            for spec in groups[title]:
+                self._add_operation(submenu, spec)
+            menu.addMenu(submenu)
+
+    def _add_operation(self, menu: QMenu, spec: Any) -> None:
+        action = menu.addAction(str(spec.title))
+        action.setStatusTip(str(spec.doc))
+        action.setToolTip(str(spec.doc))
+        action.triggered.connect(
+            lambda _checked=False, entry=spec: self.operationRequested.emit(entry)
+        )
 
     def _on_context_menu(self, position: QPoint) -> None:
         menu = self.context_menu()

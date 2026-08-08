@@ -398,8 +398,51 @@ def test_the_view_and_the_tree_show_the_same_menu(window: MainWindow) -> None:
     menu = window.object_tree.context_menu()
 
     assert menu is not None
+    offered = {
+        action.text()
+        for entry in menu.actions()
+        for action in (entry.menu().actions() if entry.menu() else [entry])
+    }
+    assert any(str(spec.title) in offered for spec in window.object_tree.operations_for_object())
+    menu.deleteLater()
+
+
+def test_a_feature_menu_names_the_operations_of_its_kind(window: MainWindow) -> None:
+    """Der Ort, den §18.5 „die wichtigste Einzelfunktion" nennt.
+
+    Die Art des Merkmals wurde aus der zweiten Spalte des Baums gelesen, und
+    dort steht das Maß: „Ø3,22 mm" für eine Bohrung. An ``for_feature``
+    gereicht fand das nie eine Operation, und das Menü an einer angeklickten
+    Bohrung bestand aus Ausblenden und Alles andere ausblenden.
+    """
+    window.object_tree.select_feature("obj_1", "hole_2")
+    menu = window.object_tree.context_menu()
+
+    assert menu is not None
     labels = {action.text() for action in menu.actions()}
-    assert any(str(spec.title) in labels for spec in window.object_tree.operations_for_object())
+    expected = {str(spec.title) for spec in window.object_tree.operations_for_feature("hole")}
+
+    assert expected, "an einer Bohrung gibt es etwas zu tun"
+    assert expected <= labels, "und es steht direkt da, ohne Aufklappen"
+    menu.deleteLater()
+
+
+def test_a_body_menu_stays_short_enough_to_read(window: MainWindow) -> None:
+    """Siebenundfünfzig Zeilen sind kein Menü, sondern ein Register.
+
+    Am ganzen Körper passt fast alles, was das Register kennt. Gruppiert wird
+    dann nach derselben Kategorie wie in der Menüleiste — flach bleibt es nur,
+    solange man es überblickt.
+    """
+    from app.ui.panels import MAX_MENU_ROWS
+
+    select_plate(window)
+    menu = window.object_tree.context_menu()
+
+    assert menu is not None
+    rows = [action for action in menu.actions() if not action.isSeparator()]
+    assert len(rows) <= MAX_MENU_ROWS, [action.text() for action in rows]
+    assert any(action.menu() is not None for action in rows), "gruppiert, nicht gekürzt"
     menu.deleteLater()
 
 
