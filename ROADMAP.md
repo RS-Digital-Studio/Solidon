@@ -2998,3 +2998,52 @@ Zahlungsdienstleister · die fachliche Prüfung der Rechtstexte · und der
 Punkt, der vor den ersten Verkauf gehört: `require()` in
 `app/core/activation` hat noch keinen Aufrufer, ein abgelaufener Testlauf
 sperrt heute nichts.
+
+## Gizmo und Direktmanipulation durchgesehen (08.08.2026)
+
+Anlass war die Frage, ob §18.11 hält, was der Bauplan verspricht. Die
+Antwort: die Zerlegung eines Zugs in Operationen war richtig und getestet —
+aber das Widget darüber hatte einen Lebenszyklus, den kein Test je angefasst
+hat. Die Gizmo-Tests prüften reine Funktionen: Beschriftung, Größe,
+Zerlegung. Das Widget selbst, sein Anhängen und Abnehmen, prüfte niemand.
+
+### Was falsch war und jetzt stimmt
+
+- **Der Gizmo ließ sich einschalten, aber nie abschalten.** `set_gizmo` rief
+  `Off()` auf einem `AffineWidget3D` — eine Methode, die es dort nicht gibt
+  (die API hat `remove()`, `disable()`, `enable()`). Der `AttributeError`
+  verschwand in Qts Slot-Behandlung: der Griff blieb stehen, obwohl der
+  Schalter aus war, und mit ihm Beschriftung und Flächenscheibe.
+- **Nach jedem Zug hing der Griff an einem toten Actor.** Ein Zug erzeugt
+  Operationen, die Auswertung baut alle Actors neu — und niemand hängte den
+  Griff um. Schlimmer: pyvistas Widget merkt sich die Matrix über Züge
+  hinweg, der zweite Zug hätte den ersten also noch einmal angewandt. Jetzt
+  wird der Griff nach jedem Loslassen und bei jedem Szenenaufbau frisch
+  angehängt — mit leerer Matrix, am aktuellen Actor.
+- **Ein Zug unter der Fangschwelle hinterließ ein Bild ohne Szene.** 0,4 mm
+  bei 1 mm Raster ergibt zu Recht keine Operation — aber das Widget hatte
+  den Körper im Bild längst verschoben, und nichts stellte ihn zurück.
+- **Der Griff folgte der Auswahl nicht.** Wer bei aktivem Gizmo ein anderes
+  Objekt oder eine Fläche wählte, behielt den Griff am vorigen Ziel; das
+  Versprechen „gewählte Fläche bekommt den Griff auf die Fläche" galt nur im
+  Moment des Einschaltens. Jetzt wandert er mit — und eine leere Szene nimmt
+  den Griff weg, aber nicht die Entscheidung, dass einer gewünscht ist.
+- **Das Handbuch kannte weder Bewegen noch Bemalen.** Achtzehn Seiten, und
+  die zwei Werkzeuge der Leiste, die das Modell wirklich ändern, kamen in
+  keiner vor — „Hinsehen" beschreibt ausdrücklich nur die fünf, die nichts
+  ändern. Neue Seite „Bewegen und Bemalen" dazwischen: Griff, Fang,
+  Flächenzug, was der Griff absichtlich nicht kann, Pinsel und
+  Filamentwechsel. Beide Sprachen, Website und PDFs neu erzeugt.
+
+### Offen, mit Absicht festgehalten
+
+- **Skalieren am Griff gibt es nicht.** §18.11 nennt es; pyvistas Widget
+  kann nur Verschieben und Drehen. Der Weg über *Skalieren* und *Auf Maß
+  bringen* deckt den Bedarf, das Handbuch sagt das jetzt ehrlich — aber es
+  bleibt eine Abweichung vom Bauplan, keine Erfüllung.
+- **Zahleneingabe während des Ziehens fehlt.** §18.11 verspricht sie; heute
+  gibt es Zahlen nur vorher (Dialog) oder nachher (Verlauf). Wäre der
+  nächste Schritt, wenn die Direktmanipulation wieder drankommt.
+- **Die Achsbuchstaben wandern beim Ziehen nicht mit.** Sie sitzen nach
+  jedem Zug wieder richtig (das Neuanhängen nimmt sie mit), aber während
+  des Zugs bleiben sie stehen. Kosmetisch, nicht falsch.
