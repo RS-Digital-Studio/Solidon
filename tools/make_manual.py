@@ -55,17 +55,53 @@ STYLE = """
     /* Der Text bleibt schmal, weil sich lange Zeilen schlecht lesen. Die
        Abbildungen dürfen darüber hinausragen: ein Bildschirmfoto auf halbe
        Spaltenbreite gestaucht zeigt Beschriftungen, die niemand mehr liest. */
-    main { max-width: 74rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+    main { max-width: 74rem; margin: 0 auto; padding: 2rem 1.25rem 5rem;
+           counter-reset: chapter; }
     main > :not(figure) { max-width: 52rem; margin-left: auto; margin-right: auto; }
+    /* Der Einstieg: derselbe Ton wie der Aufmacher der Startseite, eine
+       Nummer kleiner — das Handbuch verkauft nicht, es empfängt. */
+    main > h1 { font-size: clamp(2rem, 4vw, 2.6rem); letter-spacing: -0.015em;
+                margin: 1.6rem auto 0.4rem; }
+    p.lede { color: var(--muted); font-size: 1.12rem; margin-bottom: 2rem; }
     /* Die Kapitelüberschrift trägt die Akzentfarbe — dieselbe, die in der
        Anwendung den Hauptknopf und die aktive Karte kennzeichnet. Sie ist
-       das, woran man beim Blättern die Gliederung erkennt. */
-    h2 { margin-top: 3rem; color: var(--accent); border-bottom: 1px solid var(--line);
-         padding-bottom: .4rem; }
+       das, woran man beim Blättern die Gliederung erkennt. Die Nummer davor
+       ist dieselbe wie im Verzeichnis: was dort eine Stelle hat, hat sie
+       auch im Text.
+
+       Erkannt wird ein Kapitel an seinem Anker, nicht an der Ebene:
+       ``core.markup`` rückt Überschriften eine Stufe nach unten, die Kapitel
+       stehen als ``<h3>`` da — ein Stil, der auf ``h2`` festgenagelt wäre,
+       griffe ins Leere, und genau das tat der alte (siehe ``anchored``). */
+    main > h2[id], main > h3[id] {
+      margin-top: 3.2rem; color: var(--accent); font-size: 1.45rem;
+      border-bottom: 1px solid var(--line); padding-bottom: .4rem;
+      counter-increment: chapter;
+    }
+    main > h2[id]::before, main > h3[id]::before {
+      content: counter(chapter, decimal-leading-zero);
+      font-size: .68em; font-weight: 600; color: var(--muted);
+      margin-right: .8rem; font-variant-numeric: tabular-nums;
+    }
     h3 { margin-top: 2rem; }
     figure { margin: 2rem auto; text-align: center; max-width: 72rem; }
     figure img { max-width: 100%; height: auto; border-radius: 6px; }
     figcaption { color: var(--muted); font-size: .9rem; margin-top: .5rem; }
+    /* Die Bildschirmfotos liegen auf derselben dunklen Bühne wie auf der
+       Startseite — ``.stage`` samt Streiflicht kommt aus ``style.css``, hier
+       steht nur, was im Handbuch anders ist: ``figure`` zentriert schon,
+       also braucht die Bühne keinen eigenen Abstand nach oben. */
+    figure.screenshot .stage { margin: 0; }
+
+    /* Die Abbildungen steigen beim Lesen ein Stück auf — dieselbe Geste wie
+       auf der Startseite, hinter demselben ``@supports``: wo der Browser die
+       Zeitachse nicht kennt, steht alles vollständig da. */
+    @supports (animation-timeline: view()) {
+      @media (prefers-reduced-motion: no-preference) {
+        main figure { animation: rise linear both; animation-timeline: view();
+                      animation-range: entry 5% cover 18%; }
+      }
+    }
     .figure-text { color: var(--muted); font-style: italic; }
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92rem; }
     th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; }
@@ -110,6 +146,16 @@ STYLE = """
       main > :not(figure) { max-width: none; }
       .no-print { display: none !important; }
 
+      /* Die dunkle Bühne bleibt am Bildschirm: gedruckt wäre sie eine
+         Tonerfläche um jedes Bildschirmfoto. */
+      figure.screenshot .stage { background: none; border: none; padding: 0;
+                                 box-shadow: none; border-radius: 0; }
+      /* Die Kapitelnummer bleibt ebenfalls am Bildschirm: der Kolumnentitel
+         des PDF erkennt ein Kapitel an seiner Titelzeile, und eine Nummer
+         davor macht aus „Die drei Wege" eine Zeile, die niemand erwartet
+         (siehe ``_chapter_of_each_page``). */
+      main > h2[id]::before, main > h3[id]::before { content: none; }
+
       .cover { display: flex; flex-direction: column; justify-content: center;
                min-height: 84vh; break-after: page; }
       .cover h1 { font-size: 40pt; margin: 0 0 .2em; border: none; }
@@ -133,7 +179,9 @@ STYLE = """
          achtundzwanzig erzwungene Umbrüche wären achtundzwanzig halb leere
          Seiten für nichts. */
       h2 { break-after: avoid; margin-top: 2.2rem; color: var(--accent); }
-      h2.chapter { break-before: page; margin-top: 0; }
+      /* Beide Ebenen, aus demselben Grund wie am Bildschirm: die Kapitel
+         stehen als ``<h3>`` da, und ein ``h2.chapter`` allein griffe nie. */
+      h2.chapter, h3.chapter { break-before: page; margin-top: 0; }
       h3 { break-after: avoid; }
       figure { break-inside: avoid; margin: 1.2rem auto; }
       /* Höher als das hier passt ein Bildschirmfoto kaum je noch neben Text
@@ -228,6 +276,53 @@ COVER = {
     "en": ("Manual", "Design, generate and prepare for 3D printing", "Version"),
 }
 
+#: Die Kopfzeile der Seite — dieselbe wie auf der Startseite, damit das
+#: Handbuch als Teil des Auftritts gelesen wird und nicht als Anhang. Je
+#: Sprache: Verzeichnis-Link, Sprachwechsel (Text und Ziel) und der Knopf
+#: zur Startseite mit ihrer Preis-Sprungmarke. Nicht über ``tr()``, aus
+#: demselben Grund wie ``CONTENTS``.
+HEADER_NAV = {
+    "de": ("Inhalt", "English", "en/manual.html", "Testen", "index.html#preis"),
+    "en": ("Contents", "Deutsch", "../handbuch.html", "Try it", "index.html#pricing"),
+}
+
+#: Der Satz unter dem Titel. Er sagt in einer Zeile, was die Seite ist und
+#: woher sie kommt — nicht über ``tr()``, wie alles hier.
+LEDE = {
+    "de": "{pages} Kapitel — von den ersten fünfzehn Minuten bis zur Referenz "
+    "jeder Operation, erzeugt aus derselben Quelle wie das Handbuch in der "
+    "Anwendung.",
+    "en": "{pages} chapters — from the first fifteen minutes to the reference "
+    "of every operation, generated from the same source as the manual inside "
+    "the application.",
+}
+
+#: Das Markenzeichen der Kopfzeile, identisch mit der Startseite.
+BRAND_MARK = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" '
+    'aria-hidden="true">'
+    '<path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>'
+    '<path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>'
+    "</svg>"
+)
+
+
+def _header(language: str) -> str:
+    """Die Kopfzeile — am Bildschirm klebt sie oben, im Druck fehlt sie."""
+    toc_label, other_label, other_target, cta_label, cta_target = HEADER_NAV.get(
+        language, HEADER_NAV["de"]
+    )
+    return (
+        '<header class="site no-print"><div class="wrap">'
+        f'<a class="brand" href="index.html">{BRAND_MARK}Solidon<span>3D</span></a>'
+        '<nav class="lang">'
+        f'<a href="#toc">{toc_label}</a>'
+        f'<a href="{other_target}">{other_label}</a>'
+        f'<a class="cta" href="{cta_target}">{cta_label}</a>'
+        "</nav></div></header>"
+    )
+
+
 #: Seitenränder des Drucks in Millimetern. Sie stehen hier und nicht im CSS:
 #: ``printToPdf`` mit einem Layout schlägt jedes ``@page`` im Stylesheet.
 PDF_MARGIN_SIDE = 18.0
@@ -274,7 +369,7 @@ def contents(language: str) -> str:
         for number, page in enumerate(manual.pages(), start=1)
     )
     heading = CONTENTS.get(language, CONTENTS["de"])
-    return f'<nav class="toc"><h2 class="toc-title">{heading}</h2><ol>{items}</ol></nav>'
+    return f'<nav class="toc" id="toc"><h2 class="toc-title">{heading}</h2><ol>{items}</ol></nav>'
 
 
 def anchored(html: str) -> str:
@@ -337,11 +432,19 @@ def page_html(language: str, prefix: str) -> str:
             dark_source=lambda key: "" if _suffix(key) == "png" else f"{prefix}/{key}-dark.svg",
         )
     )
+    # Die Bildschirmfotos bekommen die Bühne der Startseite. Erkannt werden
+    # sie an ihrer Endung: nur Aufnahmen sind PNG, alles Gezeichnete und
+    # Gerenderte reist als SVG und bleibt ohne Bühne — ein Schema auf
+    # dunklem Grund hat seinen Grund schon selbst.
+    body = re.sub(
+        r'<figure><img (src="[^"]+\.png"[^>]*)>',
+        r'<figure class="screenshot"><div class="stage"><img \1></div>',
+        body,
+    )
     title = f"{tr('Handbuch')} — {APP_NAME}"
-    # Die Startseite liegt in beiden Sprachen neben ihrem Handbuch.
-    home = "index.html"
     pages = len(manual.pages())
     description = DESCRIPTION[language].format(pages=pages)
+    lede = LEDE.get(language, LEDE["de"]).format(pages=pages)
     canonical = f"{SITE}handbuch.html" if language == "de" else f"{SITE}en/manual.html"
     return (
         f'<!doctype html>\n<html lang="{language}">\n<head>\n'
@@ -366,10 +469,11 @@ def page_html(language: str, prefix: str) -> str:
         f'<link rel="icon" href="{"icon.svg" if language == "de" else "../icon.svg"}" '
         f'type="image/svg+xml">\n'
         f'<link rel="stylesheet" href="{"style.css" if language == "de" else "../style.css"}">\n'
-        f"<style>{STYLE}</style>\n</head>\n<body>\n<main>\n"
-        f'<p class="no-print"><a href="{home}">← {APP_NAME}</a></p>\n'
+        f"<style>{STYLE}</style>\n</head>\n<body>\n"
+        f"{_header(language)}\n<main>\n"
         f"{_cover_block(language)}\n"
-        f'<h1 class="no-print">{title}</h1>\n'
+        f'<h1 class="no-print">{tr("Handbuch")}</h1>\n'
+        f'<p class="lede no-print">{lede}</p>\n'
         f"{contents(language)}\n"
         f"{anchored(body)}\n"
         f"</main>\n</body>\n</html>\n"

@@ -22,17 +22,53 @@
     /* Der Text bleibt schmal, weil sich lange Zeilen schlecht lesen. Die
        Abbildungen dürfen darüber hinausragen: ein Bildschirmfoto auf halbe
        Spaltenbreite gestaucht zeigt Beschriftungen, die niemand mehr liest. */
-    main { max-width: 74rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+    main { max-width: 74rem; margin: 0 auto; padding: 2rem 1.25rem 5rem;
+           counter-reset: chapter; }
     main > :not(figure) { max-width: 52rem; margin-left: auto; margin-right: auto; }
+    /* Der Einstieg: derselbe Ton wie der Aufmacher der Startseite, eine
+       Nummer kleiner — das Handbuch verkauft nicht, es empfängt. */
+    main > h1 { font-size: clamp(2rem, 4vw, 2.6rem); letter-spacing: -0.015em;
+                margin: 1.6rem auto 0.4rem; }
+    p.lede { color: var(--muted); font-size: 1.12rem; margin-bottom: 2rem; }
     /* Die Kapitelüberschrift trägt die Akzentfarbe — dieselbe, die in der
        Anwendung den Hauptknopf und die aktive Karte kennzeichnet. Sie ist
-       das, woran man beim Blättern die Gliederung erkennt. */
-    h2 { margin-top: 3rem; color: var(--accent); border-bottom: 1px solid var(--line);
-         padding-bottom: .4rem; }
+       das, woran man beim Blättern die Gliederung erkennt. Die Nummer davor
+       ist dieselbe wie im Verzeichnis: was dort eine Stelle hat, hat sie
+       auch im Text.
+
+       Erkannt wird ein Kapitel an seinem Anker, nicht an der Ebene:
+       ``core.markup`` rückt Überschriften eine Stufe nach unten, die Kapitel
+       stehen als ``<h3>`` da — ein Stil, der auf ``h2`` festgenagelt wäre,
+       griffe ins Leere, und genau das tat der alte (siehe ``anchored``). */
+    main > h2[id], main > h3[id] {
+      margin-top: 3.2rem; color: var(--accent); font-size: 1.45rem;
+      border-bottom: 1px solid var(--line); padding-bottom: .4rem;
+      counter-increment: chapter;
+    }
+    main > h2[id]::before, main > h3[id]::before {
+      content: counter(chapter, decimal-leading-zero);
+      font-size: .68em; font-weight: 600; color: var(--muted);
+      margin-right: .8rem; font-variant-numeric: tabular-nums;
+    }
     h3 { margin-top: 2rem; }
     figure { margin: 2rem auto; text-align: center; max-width: 72rem; }
     figure img { max-width: 100%; height: auto; border-radius: 6px; }
     figcaption { color: var(--muted); font-size: .9rem; margin-top: .5rem; }
+    /* Die Bildschirmfotos liegen auf derselben dunklen Bühne wie auf der
+       Startseite — ``.stage`` samt Streiflicht kommt aus ``style.css``, hier
+       steht nur, was im Handbuch anders ist: ``figure`` zentriert schon,
+       also braucht die Bühne keinen eigenen Abstand nach oben. */
+    figure.screenshot .stage { margin: 0; }
+
+    /* Die Abbildungen steigen beim Lesen ein Stück auf — dieselbe Geste wie
+       auf der Startseite, hinter demselben ``@supports``: wo der Browser die
+       Zeitachse nicht kennt, steht alles vollständig da. */
+    @supports (animation-timeline: view()) {
+      @media (prefers-reduced-motion: no-preference) {
+        main figure { animation: rise linear both; animation-timeline: view();
+                      animation-range: entry 5% cover 18%; }
+      }
+    }
     .figure-text { color: var(--muted); font-style: italic; }
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92rem; }
     th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; }
@@ -77,6 +113,16 @@
       main > :not(figure) { max-width: none; }
       .no-print { display: none !important; }
 
+      /* Die dunkle Bühne bleibt am Bildschirm: gedruckt wäre sie eine
+         Tonerfläche um jedes Bildschirmfoto. */
+      figure.screenshot .stage { background: none; border: none; padding: 0;
+                                 box-shadow: none; border-radius: 0; }
+      /* Die Kapitelnummer bleibt ebenfalls am Bildschirm: der Kolumnentitel
+         des PDF erkennt ein Kapitel an seiner Titelzeile, und eine Nummer
+         davor macht aus „Die drei Wege" eine Zeile, die niemand erwartet
+         (siehe ``_chapter_of_each_page``). */
+      main > h2[id]::before, main > h3[id]::before { content: none; }
+
       .cover { display: flex; flex-direction: column; justify-content: center;
                min-height: 84vh; break-after: page; }
       .cover h1 { font-size: 40pt; margin: 0 0 .2em; border: none; }
@@ -100,7 +146,9 @@
          achtundzwanzig erzwungene Umbrüche wären achtundzwanzig halb leere
          Seiten für nichts. */
       h2 { break-after: avoid; margin-top: 2.2rem; color: var(--accent); }
-      h2.chapter { break-before: page; margin-top: 0; }
+      /* Beide Ebenen, aus demselben Grund wie am Bildschirm: die Kapitel
+         stehen als ``<h3>`` da, und ein ``h2.chapter`` allein griffe nie. */
+      h2.chapter, h3.chapter { break-before: page; margin-top: 0; }
       h3 { break-after: avoid; }
       figure { break-inside: avoid; margin: 1.2rem auto; }
       /* Höher als das hier passt ein Bildschirmfoto kaum je noch neben Text
@@ -133,11 +181,12 @@
 </style>
 </head>
 <body>
+<header class="site no-print"><div class="wrap"><a class="brand" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/><path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/></svg>Solidon<span>3D</span></a><nav class="lang"><a href="#toc">Contents</a><a href="../handbuch.html">Deutsch</a><a class="cta" href="index.html#pricing">Try it</a></nav></div></header>
 <main>
-<p class="no-print"><a href="index.html">← Solidon3D</a></p>
 <section class="cover"><h1>Solidon3D</h1><p class="subtitle">Manual</p><hr><p class="claim">Design, generate and prepare for 3D printing</p><p class="imprint">Version 0.0.1<br>Copyright © 2026 RS Digital</p></section>
-<h1 class="no-print">Manual — Solidon3D</h1>
-<nav class="toc"><h2 class="toc-title">Contents</h2><ol><li><a href="#what"><span class="num">01</span>What Solidon is</a></li><li><a href="#start"><span class="num">02</span>The first fifteen minutes</a></li><li><a href="#window"><span class="num">03</span>The window</a></li><li><a href="#looking"><span class="num">04</span>Looking before printing</a></li><li><a href="#moving"><span class="num">05</span>Moving and painting</a></li><li><a href="#ways"><span class="num">06</span>The three ways</a></li><li><a href="#history"><span class="num">07</span>The history</a></li><li><a href="#parameters"><span class="num">08</span>Parameters and expressions</a></li><li><a href="#tolerances"><span class="num">09</span>Material, tolerances, fits</a></li><li><a href="#parts"><span class="num">10</span>The parts</a></li><li><a href="#printing"><span class="num">11</span>Onto the plate and out</a></li><li><a href="#splitting"><span class="num">12</span>When the part does not fit the plate</a></li><li><a href="#variants"><span class="num">13</span>Trying instead of guessing: variants and calibration</a></li><li><a href="#chat"><span class="num">14</span>The chat</a></li><li><a href="#generating"><span class="num">15</span>Having a model generated</a></li><li><a href="#surfaces"><span class="num">16</span>Surfaces and fills</a></li><li><a href="#remote"><span class="num">17</span>Remote control</a></li><li><a href="#trouble"><span class="num">18</span>When something goes wrong</a></li><li><a href="#glossary"><span class="num">19</span>Glossary</a></li><li><a href="#ref-scene"><span class="num">20</span>Scene</a></li><li><a href="#ref-repair"><span class="num">21</span>Repair</a></li><li><a href="#ref-transform"><span class="num">22</span>Transformation</a></li><li><a href="#ref-primitive"><span class="num">23</span>Basic shapes</a></li><li><a href="#ref-boolean"><span class="num">24</span>Boolean</a></li><li><a href="#ref-sketch"><span class="num">25</span>Sketch</a></li><li><a href="#ref-shaping"><span class="num">26</span>Shaping</a></li><li><a href="#ref-holes"><span class="num">27</span>Holes</a></li><li><a href="#ref-parts"><span class="num">28</span>Parts</a></li><li><a href="#ref-prepare"><span class="num">29</span>Print preparation</a></li><li><a href="#ref-import"><span class="num">30</span>Import</a></li><li><a href="#ref-colour"><span class="num">31</span>Colour</a></li><li><a href="#ref-label"><span class="num">32</span>Lettering</a></li><li><a href="#ref-surface"><span class="num">33</span>Top surface</a></li><li><a href="#ref-mesh"><span class="num">34</span>Mesh</a></li></ol></nav>
+<h1 class="no-print">Manual</h1>
+<p class="lede no-print">34 chapters — from the first fifteen minutes to the reference of every operation, generated from the same source as the manual inside the application.</p>
+<nav class="toc" id="toc"><h2 class="toc-title">Contents</h2><ol><li><a href="#what"><span class="num">01</span>What Solidon is</a></li><li><a href="#start"><span class="num">02</span>The first fifteen minutes</a></li><li><a href="#window"><span class="num">03</span>The window</a></li><li><a href="#looking"><span class="num">04</span>Looking before printing</a></li><li><a href="#moving"><span class="num">05</span>Moving and painting</a></li><li><a href="#ways"><span class="num">06</span>The three ways</a></li><li><a href="#history"><span class="num">07</span>The history</a></li><li><a href="#parameters"><span class="num">08</span>Parameters and expressions</a></li><li><a href="#tolerances"><span class="num">09</span>Material, tolerances, fits</a></li><li><a href="#parts"><span class="num">10</span>The parts</a></li><li><a href="#printing"><span class="num">11</span>Onto the plate and out</a></li><li><a href="#splitting"><span class="num">12</span>When the part does not fit the plate</a></li><li><a href="#variants"><span class="num">13</span>Trying instead of guessing: variants and calibration</a></li><li><a href="#chat"><span class="num">14</span>The chat</a></li><li><a href="#generating"><span class="num">15</span>Having a model generated</a></li><li><a href="#surfaces"><span class="num">16</span>Surfaces and fills</a></li><li><a href="#remote"><span class="num">17</span>Remote control</a></li><li><a href="#trouble"><span class="num">18</span>When something goes wrong</a></li><li><a href="#glossary"><span class="num">19</span>Glossary</a></li><li><a href="#ref-scene"><span class="num">20</span>Scene</a></li><li><a href="#ref-repair"><span class="num">21</span>Repair</a></li><li><a href="#ref-transform"><span class="num">22</span>Transformation</a></li><li><a href="#ref-primitive"><span class="num">23</span>Basic shapes</a></li><li><a href="#ref-boolean"><span class="num">24</span>Boolean</a></li><li><a href="#ref-sketch"><span class="num">25</span>Sketch</a></li><li><a href="#ref-shaping"><span class="num">26</span>Shaping</a></li><li><a href="#ref-holes"><span class="num">27</span>Holes</a></li><li><a href="#ref-parts"><span class="num">28</span>Parts</a></li><li><a href="#ref-prepare"><span class="num">29</span>Print preparation</a></li><li><a href="#ref-import"><span class="num">30</span>Import</a></li><li><a href="#ref-colour"><span class="num">31</span>Colour</a></li><li><a href="#ref-label"><span class="num">32</span>Lettering</a></li><li><a href="#ref-surface"><span class="num">33</span>Top surface</a></li><li><a href="#ref-mesh"><span class="num">34</span>Mesh</a></li></ol></nav>
 <h3 id="what">What Solidon is</h3>
 <p>Solidon builds, changes and print-readies models for the 3D printer.</p>
 <p>Three things set it apart from what else is open:</p>
@@ -148,15 +197,15 @@
 <h3 id="start">The first fifteen minutes</h3>
 <p>Anyone who has never worked with a construction program starts here. A downloaded model gets a hole and goes on to the slicer afterwards — the most common case of all, in eight steps.</p>
 <p><strong>1. Answer three questions at first start.</strong> Language, printer, material. If your own printer is not in the list, a similar one will do — the dimensions can be changed later. <em>Set up later</em> works too, and then the defaults apply.</p>
-<figure><img src="../handbuch/en/start-screen.png" alt="The start screen: recently opened projects, the example projects and a large area to drop a file onto."><figcaption>No empty start screen — there is always something to begin with.</figcaption></figure>
+<figure class="screenshot"><div class="stage"><img src="../handbuch/en/start-screen.png" alt="The start screen: recently opened projects, the example projects and a large area to drop a file onto."></div><figcaption>No empty start screen — there is always something to begin with.</figcaption></figure>
 <p><strong>2. Drag a file onto the window.</strong> STL, 3MF, OBJ, GLB, PLY, OFF and STEP; plus SVG and DXF for drawings meant to be extruded. If the file records no unit — and STL never does — Solidon asks instead of guessing. When in doubt, millimetres: almost everything on the internet is in millimetres.</p>
 <p><strong>3. Look at the report.</strong> On the right it says what is wrong with the model. Holes, duplicate faces, triangles facing the wrong way — with downloaded models that is the rule, not the exception. Every finding has a button that fixes it.</p>
-<figure><img src="../handbuch/en/report.png" alt="The report with its findings, each with severity, location and a clickable action."><figcaption>A finding never stops at the observation.</figcaption></figure>
+<figure class="screenshot"><div class="stage"><img src="../handbuch/en/report.png" alt="The report with its findings, each with severity, location and a clickable action."></div><figcaption>A finding never stops at the observation.</figcaption></figure>
 <p><strong>4. Repair.</strong> Usually the action suggested in the report is enough. The model stays what it was — the repair is a step in the history and can be taken back.</p>
-<figure><img src="../handbuch/en/main-window.png" alt="The main window with a loaded model in the viewport, the object tree on the left and the report on the right."></figure>
+<figure class="screenshot"><div class="stage"><img src="../handbuch/en/main-window.png" alt="The main window with a loaded model in the viewport, the object tree on the left and the report on the right."></div></figure>
 <p><strong>5. Click the face the hole should go into.</strong> It highlights. A right-click offers exactly those operations that suit this face — on a flat face, for instance, <em>drill hole</em>.</p>
 <p><strong>6. Enter the diameter and apply.</strong> Position and direction are already filled in, because the face was selected. Everything else — tolerance, resolution — sits behind <em>More settings</em> and is left alone as a rule.</p>
-<figure><img src="../handbuch/en/op-dialog.png" alt="An operation dialog: at the front the two or three values you actually change, below them the collapsed “More settings” section."><figcaption>Staged depth: a good default is worth more than a good setting.</figcaption></figure>
+<figure class="screenshot"><div class="stage"><img src="../handbuch/en/op-dialog.png" alt="An operation dialog: at the front the two or three values you actually change, below them the collapsed “More settings” section."></div><figcaption>Staged depth: a good default is worth more than a good setting.</figcaption></figure>
 <p>The result: the same body, one hole more.</p>
 <figure class="drawing"><picture><source srcset="../handbuch/en/drill-dark.svg" media="(prefers-color-scheme: dark)"><img src="../handbuch/en/drill.svg" alt="The same plate twice: on the left without a hole, on the right with a through hole of 8 mm."></picture><figcaption>Both pictures are computed by the same operation that sits in the menu.</figcaption></figure>
 <p><strong>7. If the hole sits wrong, it is moved, not drilled again.</strong> A double-click on the step in the history reopens it. Change the number, apply, done. That still works next week.</p>
@@ -233,7 +282,7 @@
 <p><strong>Living hinge</strong> — a section so thin that it bends instead of breaking. The joint is printed along with the part, there is nothing to assemble.</p>
 <figure class="drawing"><picture><source srcset="../handbuch/en/part-hinge-dark.svg" media="(prefers-color-scheme: dark)"><img src="../handbuch/en/part-hinge.svg" alt="A living hinge: the thin section between two plates that acts as a joint because it bends instead of breaking."></picture></figure>
 <p>Then there are the screw hole, magnet pocket, cable gland, rib, keyhole, printed thread and the test bodies from the previous chapter. The catalogue shows a picture for each — a library you cannot see does not exist for the user.</p>
-<figure><img src="../handbuch/en/catalog.png" alt="The part catalogue: preview images instead of a list of names, ordered by group."></figure>
+<figure class="screenshot"><div class="stage"><img src="../handbuch/en/catalog.png" alt="The part catalogue: preview images instead of a list of names, ordered by group."></div></figure>
 <p><strong>Every part stays as changeable as any other operation.</strong> It sits in the history, its dimensions can be corrected later, and the places it attaches to keep their names.</p>
 <h3 id="printing">Onto the plate and out</h3>
 <p><strong>Arrange on the bed</strong> lays the objects out side by side and starts a new plate as soon as the current one is full. Whatever does not fit even then is not left out but reported.</p>
