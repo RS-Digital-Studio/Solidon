@@ -52,6 +52,7 @@ class Outcome:
     asked: bool = False
     operations: tuple[str, ...] = ()
     parameters: int = 0
+    calls: int = 0
     invalid: int = 0
     steps: int = 0
     error: str = ""
@@ -106,6 +107,8 @@ def run_case(case: Case, backend: LLMBackend) -> Outcome:
 
     outcome.operations = tuple(draft.op for draft in proposal.drafts)
     outcome.parameters = len(proposal.parameters)
+    outcome.calls = proposal.tool_calls
+    outcome.invalid = proposal.invalid_calls
     outcome.steps = proposal.steps
     outcome.asked = outcome.asked or bool(proposal.questions)
     return outcome
@@ -155,7 +158,10 @@ def main() -> int:
         outcomes.append(outcome)
         marker = "ok " if outcome.good else "-- "
         detail = outcome.error or ", ".join(outcome.operations) or "keine Operation"
-        print(f"{marker}{case.id:20} {detail}" + ("  [gefragt]" if outcome.asked else ""))
+        notes = ("  [gefragt]" if outcome.asked else "") + (
+            f"  [{outcome.invalid} ungültig]" if outcome.invalid else ""
+        )
+        print(f"{marker}{case.id:20} {detail}{notes}")
 
     ambiguous = [entry for entry in outcomes if entry.case.ambiguous]
     asked = sum(1 for entry in ambiguous if entry.asked)
@@ -165,6 +171,16 @@ def main() -> int:
     print(f"gut beantwortet: {good}/{len(outcomes)}")
     if ambiguous:
         print(f"bei Mehrdeutigkeit gefragt: {asked}/{len(ambiguous)} (Ziel {TARGET_ASKED:.0%})")
+
+    # §40: Anteil der Aufrufe, die schon im ersten Versuch schemagültig waren.
+    calls = sum(entry.calls for entry in outcomes)
+    invalid = sum(entry.invalid for entry in outcomes)
+    if calls:
+        ratio = (calls - invalid) / calls
+        print(
+            f"schemagültig im ersten Versuch: {calls - invalid}/{calls}"
+            f" = {ratio:.0%} (Ziel {TARGET_VALID:.0%})"
+        )
 
     # §35 für Säule A: wurde ein Baustein statt eigener Geometrie benutzt, und
     # wurden die Hauptmaße zu Parametern?

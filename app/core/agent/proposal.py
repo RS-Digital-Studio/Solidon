@@ -45,6 +45,13 @@ class Proposal:
     steps: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    tool_calls: int = 0
+    """Alle Werkzeugaufrufe des Zuges — der Nenner der Kennzahl aus §40."""
+    invalid_calls: int = 0
+    """Aufrufe, die die Mechanik ablehnen musste, bevor gerechnet wurde:
+    unbekanntes Werkzeug, schemaungültige Werte, geratene Skizzenparameter,
+    unbekannte Referenzen. Geometrische Ablehnungen (§15.2) zählen nicht —
+    die Quote misst das Modell, nicht das Netz."""
     stopped: str = ""
     """Gesetzt, wenn eine Grenze den Lauf beendet hat: ``steps`` oder ``tokens`` (§26.5)."""
 

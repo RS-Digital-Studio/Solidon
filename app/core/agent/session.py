@@ -137,6 +137,7 @@ class AgentSession:
                 Message(role="assistant", content=reply.text, tool_calls=reply.tool_calls)
             )
             for call in reply.tool_calls:
+                proposal.tool_calls += 1
                 answer, scene = self._run(call, proposal, working, history, scene)
                 messages.append(Message(role="tool", tool_call_id=call.id, content=answer))
 
@@ -211,6 +212,7 @@ class AgentSession:
         wanted = str(arguments.get("transaction", ""))
         known = {entry.id for entry in working.transactions}
         if wanted not in known:
+            proposal.invalid_calls += 1
             return f"{tr('Diese Transaktion gibt es nicht')}: {wanted}"
         if proposal.drafts or proposal.parameters or proposal.fits:
             # Andere Richtung derselben Schranke aus ``_run`` (§15.4, Regel 16):
@@ -228,9 +230,11 @@ class AgentSession:
     ) -> str:
         key = str(arguments.get("name", "")).strip()
         if not key:
+            proposal.invalid_calls += 1
             return tr("Ein Parameter braucht einen Namen.")
         existing = working.parameters.get(key)
         if name == SET_PARAMETER and existing is None:
+            proposal.invalid_calls += 1
             return f"{tr('Diesen Parameter gibt es nicht')}: {key}"
 
         # Diese Werkzeuge sind keine Register-Ops, ``validate`` sieht sie also
@@ -240,8 +244,10 @@ class AgentSession:
         try:
             value = float(arguments.get("value", 0.0))
         except (TypeError, ValueError):
+            proposal.invalid_calls += 1
             return f"{tr('Dieser Wert ist keine Zahl')}: {arguments.get('value')!r}"
         if not isfinite(value):
+            proposal.invalid_calls += 1
             return f"{tr('Dieser Wert ist keine endliche Zahl')}: {value}"
 
         parameter = Parameter(
@@ -259,6 +265,7 @@ class AgentSession:
             first = FeatureRef.parse(str(arguments.get("a", "")))
             second = FeatureRef.parse(str(arguments.get("b", "")))
         except ValueError:
+            proposal.invalid_calls += 1
             return tr("Ein Passungspaar braucht zwei Merkmale als obj_1:hole_2.")
 
         # Der Enum steht im Werkzeugschema, aber ein Schema ist eine Bitte,
@@ -266,6 +273,7 @@ class AgentSession:
         # und erst bei der nächsten Auswertung als KeyError in ``_FIT_FIELD``.
         kind = str(arguments.get("kind", "clearance"))
         if kind not in FIT_KINDS:
+            proposal.invalid_calls += 1
             known = ", ".join(FIT_KINDS)
             return f"{tr('Diese Passungsart gibt es nicht')}: {kind} ({known})"
 
@@ -294,6 +302,7 @@ class AgentSession:
         try:
             spec = self.registry.get(call.name)
         except AppError:
+            proposal.invalid_calls += 1
             return f"{tr('Dieses Werkzeug gibt es nicht')}: {call.name}", scene
 
         arguments = dict(call.arguments)
@@ -309,6 +318,7 @@ class AgentSession:
             # §26, Leitprinzip 5: Skizzen entstehen beim Nutzer, nie als rohe
             # Punktliste aus dem Modell. Das Schema bietet den Parameter nicht
             # an — und hier wird er auch abgelehnt, wenn das Modell ihn rät.
+            proposal.invalid_calls += 1
             return (
                 tr("Skizzen zeichnet der Nutzer selbst — benutze die Grundformen und Maße."),
                 scene,
@@ -317,6 +327,7 @@ class AgentSession:
             # P4 acceptance: schema-valid before anything is computed.
             validate(spec.params, arguments)
         except AppError as error:
+            proposal.invalid_calls += 1
             return f"{tr('Ungültige Werte')}: {error.title} {error.detail or ''}".strip(), scene
 
         before = scene

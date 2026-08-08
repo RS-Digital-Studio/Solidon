@@ -289,6 +289,88 @@ def test_an_invalid_operation_never_reaches_the_geometry(
     assert len(project.document.ops) == 1, "only the load operation, nothing added"
 
 
+def test_invalid_calls_are_counted(project: Project, profile: Profile) -> None:
+    """§40: „Anteil der Operationen, die im ersten Versuch schemagültig waren"
+    ist eine der drei Kennzahlen des Modelllaufs — und sie war nie messbar:
+    ``TARGET_VALID`` stand deklariert in ``tools/run_agent_suite.py``, aber
+    kein Zähler füllte sie. Der Vorschlag zählt jetzt beides: alle
+    Werkzeugaufrufe und die, die die Mechanik ablehnen musste, bevor
+    gerechnet wurde.
+    """
+    agent = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        # Schemaungültig: die Achse q gibt es nicht.
+                        ToolCall(
+                            id="1",
+                            name="rotate_object",
+                            arguments={"objects": ["obj_1"], "axis": "q", "angle": 90.0},
+                        ),
+                        # Unbekanntes Werkzeug: auch das ist ein ungültiger Aufruf.
+                        ToolCall(id="2", name="explode_object", arguments={}),
+                    )
+                ),
+                Reply(
+                    tool_calls=(
+                        # Der korrigierte Aufruf ist gültig und zählt nicht.
+                        ToolCall(
+                            id="3",
+                            name="rotate_object",
+                            arguments={"objects": ["obj_1"], "axis": "z", "angle": 90.0},
+                        ),
+                    )
+                ),
+                Reply(text="Korrigiert und gedreht."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Dreh das Teil")
+
+    assert proposal.tool_calls == 3
+    assert proposal.invalid_calls == 2
+    assert [draft.op for draft in proposal.drafts] == ["rotate_object"]
+
+
+def test_a_geometry_refusal_is_not_an_invalid_call(project: Project, profile: Profile) -> None:
+    """Die Kennzahl trennt Schema von Geometrie: ein Aufruf, der gültig ist,
+    aber geometrisch nicht anwendbar (§15.2), zählt nicht als ungültig —
+    sonst bestrafte die Quote das Modell für eine Eigenschaft des Netzes.
+    """
+    agent = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        # Gültig nach Schema, aber das Objekt gibt es nicht —
+                        # das lehnt die Anwendung ab, nicht die Schemaprüfung.
+                        ToolCall(
+                            id="1",
+                            name="rotate_object",
+                            arguments={"objects": ["obj_99"], "axis": "z", "angle": 90.0},
+                        ),
+                    )
+                ),
+                Reply(text="Das Objekt fehlt."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Dreh obj_99")
+
+    assert proposal.tool_calls == 1
+    assert proposal.invalid_calls == 0
+    assert proposal.drafts == []
+
+
 # --- Säule A (§40 für P6) ---------------------------------------------------------
 
 
