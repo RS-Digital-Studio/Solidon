@@ -362,3 +362,56 @@ der Qt-Painter weiß nichts von dem, was OpenGL in den Viewport gezeichnet hat.
 Ohne Fremdlast gemessen — 1 % CPU-Last über alle Läufe, kein anderes Programm.
 Das war hier schon einmal die Ursache falscher Leistungsbefunde und wurde
 deshalb vorher geprüft.
+
+---
+
+## Nachtrag — was daraus wurde (08.08.2026, derselbe Tag)
+
+Alle Punkte aus Teil 1 bis 2.6 sind behoben, jeder mit Test und jeder am
+laufenden Fenster nachgemessen. Was sich geändert hat, in Zahlen:
+
+| Gemessen | vorher | nachher |
+|---|---|---|
+| Prüfbericht, 5 Befunde | 316 px, Rollbalken | 322 px, kein Rollbalken |
+| Objektbaum aufgeklappt | 321 px bei 751 Bedarf | 873 px bei 871 Bedarf |
+| Chat, Zone / Verlauf | 170 / 49 px | 334 / 203 px |
+| Tour, Rollbereich | 139 von 152 px | 139 von 139 px |
+| Parameteränderung | 8,3 s (9–15 s je neuem Wert) | **1,47 s** |
+| Erstes Öffnen einer Sitzung | 8,0 s | **1,55 s** |
+| rtree-Anfragen je Auswertung | 113 168 | **1 180** |
+| rtree-Fehlgriffe in 60 Läufen | ~3 erwartet | **0** |
+| Kontextmenü am Merkmal | 2 Einträge | 6 (die vier aus `applies_to`) |
+| Kontextmenü am Körper | 59 Einträge | 7 (nach Kategorie gruppiert) |
+| „Bohrung setzen" an der Dose | 0,00 / 0,00 / 0,00 | −82,23 / −93,06 / 40,05 |
+| Beispiele mit Warnung | 2 | 1 (das Reparatur-Beispiel, gewollt) |
+
+**Die eine Ursache hinter dreien.** 1.2 (Wartezeit), 1.3 (Absturz) und 2.6
+(erstes Öffnen) hingen an derselben Stelle: die Slot-Übertragung suchte für
+jedes Dreieck des Ergebnisses den Abstand zu jeder Quelle. Bei der Dose waren
+das vierzigtausend Dreiecke gegen eine Beschriftung aus sechshundert — und die
+Grenze, ab der ein Dreieck nicht mehr auf einer Oberfläche liegt, sind zwei
+Zehntel Millimeter. Für fast alle stand das Ergebnis vorher fest. Der
+Vorfilter ist keine Näherung: über vier Beispielprojekte und dreiunddreißig
+Aufrufe stimmt jedes Dreieck mit der alten Rechnung überein.
+
+**Eine Regression, gemeldet und behoben.** Die erste Fassung der Raumzuteilung
+las die Höhen, die sie gerade selbst gesetzt hatte. Die linke Spalte lief
+daraufhin bei jeder Aktion auf und ab — neunhundertfünf Geometriewechsel für
+ein einziges Aufklappen. Gerechnet wird jetzt nur mit dem verfügbaren Raum und
+dem Bedarf; beide hängen nicht an der gesetzten Höhe. Gemessen: Auswahl null
+Bewegungen, Aufklappen eine, Parameteränderung null.
+
+**Nicht geändert: die Tastenkürzel (2.7).** Sechs in der Vorgabe ist eine
+Entscheidung und keine Lücke — die Belegung ist umschaltbar, und „Wie Fusion
+und Onshape" bringt elf Ein-Tasten-Kürzel für alle, die aus einem CAD kommen.
+Wer die Vorgabe erweitern will, entscheidet damit, welche Operationen ein
+Kürzel *verdienen*; das ist eine Design-Frage und keine Reparatur.
+
+**Nebenbei aufgefallen:** `test_the_slider_reports_a_factor` legte ein
+`processEvents` zwischen die Reglerstufen und das Auslösen von Hand. Dauerte
+das länger als die 120 ms der Entprellung — und unter der vollen Suite tut es
+das —, feuerte der Zeitgeber dort schon und das Signal kam zweimal. Allein
+grün, in der Suite rot. Er prüft jetzt, dass etwas angemeldet ist, nicht wie
+lange es dauert.
+
+Stand danach: **3168 Tests grün**, ruff und mypy sauber.

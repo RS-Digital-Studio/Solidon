@@ -2847,3 +2847,46 @@ mit Handlungsvorschlag · Rückgängig stellt den Stapel wieder her.
       nicht.** `action_theme` zog `_apply_card_style` nach, `_apply_settings`
       nicht — über den Dialog gewechselt, behielten die schwebenden Zonen die
       Farben des alten Themas.
+
+### Behoben, am selben Tag
+
+Alle Punkte bis auf die Tastenkürzel, jeder mit Test und am laufenden Fenster
+nachgemessen. Der Nachtrag in `konzept-kundensicht-2026-08.md` führt die
+Zahlen; die wichtigsten:
+
+- **Die Karten wachsen mit.** `MAX_ROWS` ist kein Deckel mehr, sondern eine
+  Rückfallzahl: die Überlagerung teilt den Raum nach Bedarf zu (`_share_room`).
+  `rows_height` fragt `visualRect` statt `sizeHintForRow`, `natural_height`
+  achtet auf Rollbereiche und gesetzte Mindesthöhen. Prüfbericht 316 → 322 px
+  ohne Rollbalken, Objektbaum 321 → 873 bei 871 Bedarf, Chat 170 → 334,
+  Tour zeigt 139 von 139 statt von 152.
+- **Eine Parameteränderung kostet 1,47 s statt 8,3.** Die Ursache lag nicht in
+  der Auswertung, sondern in der Slot-Übertragung: sie suchte für jedes der
+  vierzigtausend Dreiecke den Abstand zu jeder Quelle, auch zu einer
+  Beschriftung aus sechshundert. Der Vorfilter in `geom.attributes` ist exakt
+  — dreiunddreißig Aufrufe über vier Beispiele, kein einziges abweichendes
+  Dreieck.
+- **Dasselbe löste zwei weitere Funde.** Erstes Öffnen 8,0 → 1,55 s. Und die
+  rtree-Anfragen je Auswertung fielen von 113168 auf 1180: sechzig
+  Auswertungen hintereinander ohne einen Fehlgriff, wo etwa drei zu erwarten
+  gewesen wären.
+- **Das Kontextmenü am Merkmal** las den Durchmesser als Art des Merkmals.
+  Jetzt stehen dort die Operationen aus `applies_to`; am ganzen Körper wird
+  über zwölf Einträgen nach Kategorie gruppiert (`MENU_GROUPS` ist dafür nach
+  `labels.py` gewandert).
+- **„Bohrung setzen"** öffnet auf der obersten Fläche des gewählten Körpers
+  statt auf dem Ursprung (`values_for_object`).
+- **Kleineres:** die Spalte „Grund" im Druckdialog bricht um statt abzubrechen,
+  STEP steht nur im Exportdialog, wenn ein Körper es tragen kann, und die
+  Einpressbuchse im Dose-Beispiel sitzt auf dem Boden statt über dem Hohlraum
+  — von acht Beispielen warnt nur noch das, dessen Zweck das Warnen ist.
+
+**Eine Regression dabei, gemeldet und behoben:** Die erste Fassung der
+Raumzuteilung las die Höhen, die sie gerade selbst gesetzt hatte, und die
+linke Spalte lief bei jeder Aktion auf und ab — neunhundertfünf
+Geometriewechsel für ein Aufklappen. Gerechnet wird jetzt nur mit dem
+verfügbaren Raum und dem Bedarf, und eine Animation, die schon dorthin
+unterwegs ist, wird nicht neu gestartet. Gemessen: eine Bewegung je Aktion.
+
+**Offen:** die Tastenkürzel. Sechs in der Vorgabe ist eine Entscheidung und
+keine Lücke — welche Operationen eine Taste verdienen, ist eine Design-Frage.
