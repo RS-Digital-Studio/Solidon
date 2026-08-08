@@ -2619,10 +2619,39 @@ Platz, an dem die echten stehen.
       die Auswahl beschnitten, und `ask_user` blieb übrig — die 3/3 waren
       also kein Gehorsam, sondern Mangel an Alternativen. Es bleibt
       trotzdem ein Verstoß gegen Regel 21 und gegen ein Abnahmekriterium.
-      **Nächster Schritt ist der Systemprompt:** „Fragen vor Raten" muss so
-      tragen, dass es gegen vierundachtzig Angebote besteht. Das ist eine
-      Regeländerung und braucht die Suite vorher und nachher — das „vorher"
-      steht mit dieser Messung.
+
+      **Behoben im Systemprompt, Version 2.** „Fragen vor Raten" stand als
+      vierte von vier Gewohnheiten — anleitend, nicht verhindernd. Davor steht
+      jetzt eine Vorbedingung mit drei Prüfungen, von denen jede einzelne für
+      eine Rückfrage genügt: Ziel eindeutig (ein Merkmal, das mehrfach
+      vorkommt, und keines ausgewählt), Maß genannt (ein Vergleich ist kein
+      Maß), Bezug vorhanden (mehr Objekte genannt als im Steckbrief). Dazu der
+      Satz gegen das Herumprobieren — `which_hole` hatte zwanzig Aufrufe
+      hintereinander abgesetzt: „Trifft eine der drei zu, rufe ask_user auf und
+      sonst nichts."
+
+      Die drei Prüfungen sind allgemein formuliert und nicht als Sonderfälle
+      der drei Testanfragen. Auf die Suite hin zu optimieren hieße, sie als
+      Maßstab zu verlieren.
+
+      | Maß | vor `num_ctx` | Prompt v1 | **Prompt v2** |
+      |---|---|---|---|
+      | gut beantwortet | 8/33 | 17/33 | **22/33** |
+      | Baustein statt eigener Geometrie | 0/13 | 6/13 | **8/13** |
+      | bei Mehrdeutigkeit gefragt (§40) | 3/3 | 1/3 | **3/3** |
+      | Hauptmaße als Parameter | — | 2/3 | 2/3 |
+      | Schritte im Mittel | — | 4,1 | 4,4 |
+
+      Kein Maß ist gefallen, also bleibt die Änderung — die Rücknahmeregel aus
+      `AGENTS.md` greift nicht. Gewonnen haben `on_bed`, `orient` (vorher
+      Zeitüberschreitung) und `split`; verloren `pocket_plate` und
+      `handrail_bend`, die jetzt Geometrie zusammensetzen, wo eine Skizze
+      gereicht hätte.
+
+      **Wogegen gemessen wurde**, weil es sonst später niemand zuordnen kann:
+      der Stand vor `b8829c3` und `ecf4544`. Beide ändern Kontextaufbau,
+      Werkzeuge und Steckbrief — also genau das, was diese Messung als
+      Umgebung hatte. Wer die Zahlen fortschreibt, misst neu.
 
       **Das ändert eine Angabe, die dem Kunden gemacht wird.** Beide
       Startseiten und der Hinweis im Modelldialog nannten „rund 10 GB

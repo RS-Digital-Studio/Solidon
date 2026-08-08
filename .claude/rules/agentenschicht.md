@@ -29,6 +29,22 @@ gemessen. Wer eine davon lockert, misst vorher und nachher.
 `ask_user` ist Pflicht, keine Höflichkeit: Die Suite enthält absichtlich
 mehrdeutige Anfragen und zählt, ob gefragt statt geraten wurde.
 
+**„Fragen vor Raten" trägt nur als Vorbedingung, nicht als Gewohnheit.** Als
+vierter Punkt einer Liste war sie anleitend, und das hielt gegen 84 Werkzeuge
+nicht: sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
+1/3 — wer genug Angebote hat, findet immer eines, das plausibel aussieht.
+Prompt-Version 2 stellt deshalb drei Prüfungen *vor* den ersten
+Werkzeugaufruf, jede einzeln hinreichend für eine Rückfrage: Ziel eindeutig,
+Maß genannt, Bezug vorhanden. Dazu der Satz, der das Herumprobieren abstellt
+(„und sonst nichts") — ein Fall hatte zwanzig Aufrufe hintereinander
+abgesetzt.
+
+Wer daran schreibt, formuliert **allgemein** und nicht nach den drei
+Testanfragen. Eine Regel, die auf die Suite hin optimiert ist, macht sie als
+Maßstab wertlos. Und `PROMPT_VERSION` steigt mit jeder Textänderung, sonst
+behauptet eine Projektdatei, unter einem Prompt entstanden zu sein, den es
+nicht mehr gibt (§26.4).
+
 ## Kontext
 
 Der Agent sieht Steckbrief (mit Projektparametern und **aktueller Auswahl**),
