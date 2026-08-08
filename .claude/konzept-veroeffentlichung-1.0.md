@@ -413,15 +413,29 @@ Urheberrechtsnotiz.
 
 ### V3 — Der Prüfkern (M)
 
-Neues Modul `app/core/licence/`. Kein Qt, keine Dialoge, keine Netzanfrage —
+> **Gebaut am 08.08.2026** (`b5b5096`), mit drei Abweichungen von diesem Plan:
+>
+> * Das Modul heißt **`app/core/activation/`**, nicht `licence/`. Eine
+>   Begründung dafür ist nirgends festgehalten; naheliegend ist die Nähe zu
+>   `knowledge/licences.py`, das die *Abhängigkeits*-Lizenzen nach §36 prüft.
+> * **`integrity.py` (H4) fehlt** — es stand von Anfang an unter „Aufwand".
+> * Der Testlauf liegt in `tests/test_activation.py`, nicht `test_licence.py`.
+>
+> **Und die Grenze greift noch nicht.** `require()` steht, hat aber keinen
+> Aufrufer: ein abgelaufener Testlauf sperrt heute nichts. Das sagt der
+> Modulkopf offen, und es ist der Punkt, der vor dem ersten Verkauf zu
+> schließen ist — die Startseite verspricht „14 Tage kostenlos testen, danach
+> Einmalkauf".
+
+Neues Modul `app/core/activation/`. Kein Qt, keine Dialoge, keine Netzanfrage —
 die Kernregeln gelten unverändert.
 
 ```
-app/core/licence/__init__.py    state(), Licence, LicenceRequired
-app/core/licence/ed25519.py     Verifikation nach RFC 8032, reines Python
-app/core/licence/key.py         Schlüsselformat: lesen, prüfen, zerlegen
-app/core/licence/store.py       Ablage und Testlaufmarker
-app/core/licence/integrity.py   signiertes Manifest über die Auslieferung (H4)
+app/core/activation/__init__.py    state(), Licence, LicenceRequired
+app/core/activation/ed25519.py     Verifikation nach RFC 8032, reines Python
+app/core/activation/key.py         Schlüsselformat: lesen, prüfen, zerlegen
+app/core/activation/store.py       Ablage und Testlaufmarker
+app/core/activation/integrity.py   signiertes Manifest über die Auslieferung (H4)
 ```
 
 1. **Ed25519-Verifikation** nach §2 B, gegen die RFC-8032-Testvektoren

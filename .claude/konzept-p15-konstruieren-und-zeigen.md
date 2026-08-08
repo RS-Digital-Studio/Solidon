@@ -1,9 +1,14 @@
 # Konzept P15 — Konstruieren und Zeigen
 
-Entwurf, noch nicht beschlossen. Anlass: vier Quellen (SindriCAD, Meshy 3D
-Agent, der Software-Ticker von 3Druck.com, die CAD-Übersicht) und der Auftrag,
-sie in **Logik, Steuerung, Aussehen, Optik und Funktionen** nicht einzuholen,
-sondern zu übertreffen.
+> **Erledigt.** Dieser Satz stand hier bis zum 08.08.2026 als „Entwurf, noch
+> nicht beschlossen" — beschlossen und gebaut wurde er längst. Die ROADMAP
+> führt P15 als „vollständig abgearbeitet"; von zweiundzwanzig Lücken sind
+> vier begründet abgelehnt, der Rest umgesetzt. Was hier steht, ist damit die
+> Begründung und nicht die Arbeitsliste.
+
+Anlass: vier Quellen (SindriCAD, Meshy 3D Agent, der Software-Ticker von
+3Druck.com, die CAD-Übersicht) und der Auftrag, sie in **Logik, Steuerung,
+Aussehen, Optik und Funktionen** nicht einzuholen, sondern zu übertreffen.
 
 **Zweite Fassung.** Die erste stützte sich auf die Produktseite von SindriCAD.
 Deren Quelltext ist öffentlich (`github.com/MakerViking/sindricad`), und was

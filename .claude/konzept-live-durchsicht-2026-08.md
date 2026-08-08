@@ -7,6 +7,12 @@ Konstruieren und **ElegooSlicer 1.5.3.4** als Empfänger des Ergebnisses.
 Nicht die Suite, nicht der Quelltext — die Programme selbst, mit Zahlen aus
 beiden.
 
+> **Stand 08.08.2026: abgearbeitet.** Die fünfzehn Funde sind in drei Paketen
+> erledigt — die ROADMAP führt sie unter „Live gegen Fusion und den
+> ElegooSlicer" einzeln mit Haken. Offen blieb allein die fehlende Passung,
+> die dort ebenfalls vermerkt ist. Was hier steht, sind die Messwerte und die
+> Begründungen, nicht die Arbeitsliste.
+
 Ausgangslage: `pytest -m "not performance"` grün, 2756 Tests in 267 s.
 
 Bezug: Bauplan §11 (Zahlen), §17 (Eingangsstufe), §21 (Wahrnehmung), §25
