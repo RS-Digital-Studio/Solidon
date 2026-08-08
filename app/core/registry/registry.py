@@ -50,6 +50,44 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
     "variants": _("Varianten"),
 }
 
+#: Wie die Kategorien des Registers auf Menüs der Leiste fallen (§2.5).
+#:
+#: Vier eigene Menüs plus dreizehn aus dem Register waren siebzehn — bei 1280
+#: Pixeln Fensterbreite läuft das über. Die Kategorie im Register bleibt, wie
+#: Bauplan §25 sie festlegt; hier liegt nur eine Zuordnung darüber. Eine
+#: Gruppe mit einer einzigen Kategorie steht flach, sonst bekommt jede
+#: Kategorie ihr Untermenü.
+#:
+#: Die Titel sind mit ``_()`` markiert, nicht mit ``tr()``: der Abgleich der
+#: Sprachdateien liest literale Aufrufe, und ``tr(variable)`` sieht er nicht —
+#: die Gruppen wären auf Deutsch stehen geblieben (Regel 20).
+#:
+#: Sie stand in der Oberfläche und lebt seit der Agent-Vertiefung (4.3) hier,
+#: weil drei Stellen sie brauchen und eine der Kern ist: Menüleiste,
+#: Kontextmenü am Körper — und die Werkzeugbeschreibungen des Agenten, die
+#: den Menüort nennen, damit der Chat als Suchfeld taugt (§2.6).
+MENU_GROUPS: Final[tuple[tuple[TranslatableText, tuple[str, ...]], ...]] = (
+    (_("Objekt"), ("scene",)),
+    (_("Erzeugen"), ("primitive", "import", "sketch", "label")),
+    (_("Ändern"), ("boolean", "transform", "shaping", "holes", "surface", "mesh", "repair")),
+    (_("Bausteine"), ("parts",)),
+    (_("Vorbereiten"), ("prepare", "colour")),
+)
+
+
+def group_title(category: str) -> str:
+    """Der Menütitel, unter dem diese Kategorie steht.
+
+    Kennt die Tabelle sie nicht, ist der Kategoriename die ehrlichste Antwort
+    — eine neue Kategorie soll auftauchen und nicht verschwinden, so hält es
+    auch die Menüleiste.
+    """
+    for title, categories in MENU_GROUPS:
+        if category in categories:
+            return str(title)
+    return category
+
+
 #: Wie eine Merkmalsart heißt, wenn sie jemand liest. Im erzeugten
 #: Referenzteil stand „Features: face, hole" — die Schlüssel, mit denen
 #: ``applies_to`` rechnet, in einem deutschen Handbuch.

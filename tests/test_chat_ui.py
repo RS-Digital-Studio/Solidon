@@ -290,6 +290,50 @@ def test_the_summary_names_what_would_change(qt_app: QApplication) -> None:
     assert "-0.50 cm³" in text
 
 
+def test_the_proposal_shows_its_costs_and_questions(qt_app: QApplication) -> None:
+    """Konzept Agent-Vertiefung 4.2: Schritte, Token und Rückfragen werden
+    längst gezählt — die Entscheidung zeigt sie jetzt auch. Eine erreichte
+    Grenze steht ausgeschrieben da, nicht als zwei Worte.
+    """
+    from app.core.agent.proposal import Proposal, Question
+    from app.ui.chat import ChatPanel, costs
+
+    proposal = Proposal(request="x")
+    proposal.steps = 8
+    proposal.input_tokens = 24512
+    proposal.output_tokens = 1830
+    proposal.stopped = "steps"
+    proposal.questions.append(Question(text="Welches Loch?", options=(), answer="hole_1"))
+
+    line = costs(proposal)
+    assert "8 Schritte" in line
+    assert "24512 → 1830 Token" in line
+    assert "Nach 8 Schritten angehalten" in line
+
+    panel = ChatPanel()
+    panel.show_proposal(ProposalPreview(proposal=proposal))
+    assert "8 Schritte" in panel.cost_line.text()
+    assert panel.questions_toggle.text() == "Rückfragen (1) …"
+    assert not panel.questions_view.isVisible()
+    panel.questions_toggle.setChecked(True)
+    assert "Welches Loch?" in panel.questions_view.text()
+    assert "→ hole_1" in panel.questions_view.text()
+
+    panel.show_proposal(None)
+    assert panel.cost_line.text() == ""
+
+
+def test_a_token_stop_is_spelled_out(qt_app: QApplication) -> None:
+    from app.core.agent.proposal import Proposal
+    from app.ui.chat import costs
+
+    proposal = Proposal(request="x")
+    proposal.steps = 3
+    proposal.stopped = "tokens"
+
+    assert "Tokenbudget" in costs(proposal)
+
+
 def qt_app_process(window: MainWindow) -> None:
     """Die Signale des Arbeiters ankommen lassen — der Agent läuft in seinem
     eigenen Thread.

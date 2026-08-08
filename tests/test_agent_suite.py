@@ -451,6 +451,56 @@ def test_an_unknown_standard_table_counts_as_invalid(project: Project, profile: 
     assert proposal.invalid_calls == 1
 
 
+def test_the_turn_reports_its_progress(project: Project, profile: Profile) -> None:
+    """Konzept Agent-Vertiefung 4.1: ein Zug dauert zehn bis sechzig Sekunden,
+    und „Der Agent denkt nach." war die ganze Auskunft. Die Sitzung meldet
+    jetzt je Schritt, was läuft — über einen Rückruf, wie ``ask``, damit der
+    Kern nichts vom Fenster weiß.
+    """
+    seen: list[tuple[int, str]] = []
+
+    agent = AgentSession(
+        backend=ScriptedBackend(answers=[Reply(tool_calls=(_drill(),)), Reply(text="Gebohrt.")]),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+        progress=lambda step, label: seen.append((step, label)),
+    )
+
+    agent.propose("Bohr ein Loch")
+
+    labels = [label for _step, label in seen]
+    assert any("Modell" in label for label in labels), "der Modellaufruf meldet sich"
+    assert any("Bohrung setzen" in label for label in labels), (
+        "das laufende Werkzeug meldet sich mit seinem Titel, nicht seinem Namen"
+    )
+    assert seen[0][0] == 1, "die Schrittzählung beginnt bei eins"
+
+
+def test_tool_descriptions_carry_the_menu_place() -> None:
+    """§2.6: der Chat ist auch ein Suchfeld. Der Menüort steht in der
+    Werkzeugbeschreibung — das Modell hat sonst keine Quelle, um zu sagen,
+    wo eine Funktion im Fenster liegt.
+    """
+    described = {schema["name"]: schema["description"] for schema in tools.operation_tools()}
+
+    assert "Menü: Ändern → Bohrung setzen." in described["drill_hole"]
+    assert "Menü: Erzeugen → Quader anlegen." in described["create_box"]
+
+
+def test_the_prompt_makes_the_chat_a_search_box() -> None:
+    """§2.6, eingelöst in Prompt-Version 3: eine Wie-Frage bekommt neben dem
+    Vorschlag den Menüort. Die Version steigt mit dem Text (§26.4).
+    """
+    from app.core.agent.prompt import PROMPT_VERSION, system_prompt
+
+    text = system_prompt()
+
+    assert "Suchfeld" in text
+    assert "Menü" in text
+    assert PROMPT_VERSION == "3"
+
+
 def test_a_geometry_refusal_is_not_an_invalid_call(project: Project, profile: Profile) -> None:
     """Die Kennzahl trennt Schema von Geometrie: ein Aufruf, der gültig ist,
     aber geometrisch nicht anwendbar (§15.2), zählt nicht als ungültig —

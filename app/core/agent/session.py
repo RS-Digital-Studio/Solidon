@@ -77,6 +77,13 @@ MAX_TOKENS = 120_000
 
 AskFn = Callable[[str, list[str]], str]
 
+ProgressFn = Callable[[int, str], None]
+"""``(schritt, beschriftung)`` — was der Zug gerade tut, für die Statuszeile.
+
+Dasselbe Muster wie ``ask``: ein Rückruf statt Qt, damit der Kern nichts vom
+Fenster weiß (§7). Ohne ihn sieht der Nutzer bis zu acht Schritte lang nur
+einen endlosen Balken (Konzept Agent-Vertiefung 4.1)."""
+
 
 def _refuse(question: str, options: list[str]) -> str:
     """Ohne jemanden zum Fragen lässt sich eine mehrdeutige Anfrage nicht
@@ -104,6 +111,8 @@ class AgentSession:
     """§15.6: ein Zug dauert zehn bis sechzig Sekunden, und so lange muss er
     sich abbrechen lassen. Geprüft wird zwischen den Schritten — mitten in
     einer Antwort des Modells gibt es keine Stelle dafür."""
+    progress: ProgressFn | None = None
+    """Meldet je Schritt, was gerade läuft — siehe :data:`ProgressFn`."""
 
     def propose(self, request: str) -> Proposal:
         """Beantwortet eine Anfrage mit einem Vorschlag. Am Dokument wird nichts
@@ -127,6 +136,7 @@ class AgentSession:
         while True:
             if self.cancelled is not None:
                 self.cancelled.raise_if_cancelled()
+            self._progress(proposal.steps + 1, tr("Das Modell antwortet …"))
             # §26.5: das Zugbudget deckelt auch die einzelne Antwort — was vom
             # Budget übrig ist, ist das Meiste, das dieser Schritt noch
             # ausgeben darf.
@@ -148,6 +158,7 @@ class AgentSession:
             )
             for call in reply.tool_calls:
                 proposal.tool_calls += 1
+                self._progress(proposal.steps, self._label_for(call.name))
                 answer, scene = self._run(call, proposal, working, history, scene)
                 messages.append(Message(role="tool", tool_call_id=call.id, content=answer))
 
@@ -393,6 +404,30 @@ class AgentSession:
         )
 
     # --- helpers ----------------------------------------------------------------
+
+    def _progress(self, step: int, label: str) -> None:
+        if self.progress is not None:
+            self.progress(step, label)
+
+    def _label_for(self, name: str) -> str:
+        """Was in der Statuszeile steht, während dieses Werkzeug läuft."""
+        extras = {
+            ASK_USER: tr("Rückfrage an dich"),
+            UNDO_TRANSACTION: tr("Merkt eine Rücknahme vor"),
+            ADD_PARAMETER: tr("Legt einen Parameter an"),
+            SET_PARAMETER: tr("Ändert einen Parameter"),
+            ADD_FIT: tr("Legt eine Passung an"),
+            READ_REPORT: tr("Liest den Prüfbericht"),
+            FIND_PART: tr("Sucht in der Bausteinbibliothek"),
+            READ_DIGEST: tr("Liest den Steckbrief"),
+            READ_STANDARD: tr("Schlägt in der Normteiltabelle nach"),
+        }
+        if name in extras:
+            return extras[name]
+        try:
+            return str(self.registry.get(name).title)
+        except AppError:
+            return name
 
     def _evaluate(self, document: Document) -> EvaluationResult:
         """§26.5: der Agent arbeitet in Entwurfsqualität und schaltet erst am

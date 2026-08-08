@@ -18,9 +18,9 @@ from __future__ import annotations
 
 from typing import Any, Final
 
-from app.core.registry import REGISTRY, Registry
+from app.core.registry import REGISTRY, Registry, group_title
 from app.core.registry import tool_schemas as op_schemas
-from app.i18n import _
+from app.i18n import _, tr
 
 #: Name der Zusatz-Eigenschaft, die jedes Operationswerkzeug trägt: auf welche
 #: Objekte es wirkt. Das Parameterschema weiß nichts von der Szene, also kommt
@@ -89,10 +89,14 @@ def operation_tools(registry: Registry | None = None) -> tuple[dict[str, Any], .
             required = [*parameters.get("required", []), OBJECTS_FIELD]
             parameters["required"] = required
         parameters["properties"] = properties
+        # §2.6: der Chat ist auch ein Suchfeld. Der Menüort steht in der
+        # Beschreibung, damit das Modell bei einer Wie-Frage sagen kann, wo
+        # die Funktion im Fenster liegt — es hat sonst keine Quelle dafür.
+        place = f"{group_title(spec.category)} → {spec.title}"
         schemas.append(
             {
                 "name": schema["name"],
-                "description": schema["description"],
+                "description": f"{schema['description']} {tr('Menü')}: {place}.",
                 "input_schema": parameters,
             }
         )

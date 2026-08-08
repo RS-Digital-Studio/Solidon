@@ -47,9 +47,20 @@ nicht mehr gibt (§26.4).
 
 ## Kontext
 
-Der Agent sieht Steckbrief (mit Projektparametern und **aktueller Auswahl**),
-Prüfbericht samt verwendeter Rückfallstufen, Verlauf in Kurzform, die gültigen
-Chatbeiträge und die Regelsammlung in ihrer Version. Nicht den rohen Verlauf.
+Der Agent sieht Steckbrief (mit Projektparametern, **aktueller Auswahl**,
+Passungen samt Verletzt-Zustand, Druckeinstellungszeile, Quellen und dem
+Verlauf mit den gesetzten Werten), Prüfbericht samt verwendeter
+Rückfallstufen, die gültigen Chatbeiträge und die Regelsammlung in ihrer
+Version. Nicht den rohen Verlauf; ein gedeckelter sagt, wie viele ältere
+Beiträge fehlen. Jedes Op-Ergebnis nennt die **neuen Merkmale mit IDs**;
+`read_digest` liest den Steckbrief der Arbeitskopie mitten im Zug neu, und
+`read_standard` schlägt die Normteiltabelle nach (§26.2 führt die
+abschließende Werkzeugliste). Die Werkzeugbeschreibungen tragen den Menüort
+(„Menü: …") — daran hängt §2.6, der Chat als Suchfeld (Prompt-Version 3).
+
+Die Sitzung meldet Fortschritt je Schritt über einen Rückruf (`progress`,
+wie `ask` — kein Qt im Kern); Vorschläge zeigen Schritte, Token und
+Rückfragen in der Entscheidungszeile, eine erreichte Grenze ausgeschrieben.
 
 **Jeder Chatbeitrag verweist auf die Transaktion, die er erzeugt hat.** Wird
 sie zurückgenommen, gilt der Beitrag als verworfen und geht höchstens als

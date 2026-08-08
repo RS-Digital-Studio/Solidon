@@ -3487,8 +3487,16 @@ Konzept:
       keine Richtung — verglichen wird jetzt das Minimum beider Vorzeichen;
       Flächennormalen behalten ihres, innen ist nicht außen
       (`tests/test_matching.py` hält beide Fälle fest).
-- [ ] **2 — Sichtbarkeit:** Fortschritt je Schritt im Chat, Kosten und
-      Rückfragen am Vorschlag, §2.6-Suchfeld-Absatz im Prompt.
+- [x] **2 — Sichtbarkeit:** Die Sitzung meldet je Schritt, was läuft
+      (Rückruf wie `ask`, kein Qt im Kern), die Statuszeile zeigt
+      „Schritt 3/8 — Bohrung setzen" statt nur „Der Agent denkt nach.";
+      die Entscheidungszeile nennt Schritte, Token und die Rückfragen samt
+      Antworten (aufklappbar), eine erreichte Grenze steht ausgeschrieben
+      da. §2.6 ist eingelöst: jede Werkzeugbeschreibung trägt ihren
+      Menüort (die Zuordnung Kategorie → Menü lebt dafür im Register,
+      die Oberfläche leitet weiter), Prompt-Version 3 verlangt, ihn bei
+      Wie-Fragen zu nennen. Die Suite-Messung der Promptänderung steht
+      gesammelt mit den neuen Fällen aus Schritt 3 an.
 - [ ] **3 — Handlungsraum:** `read_analysis` (Schichtanalyse, Schätzung,
       Einstellungsrat, Karten, Orientierung — Herkunft ausgewiesen,
       Zeitdeckel), `set_print_setting`, `set_print_target`. Braucht die

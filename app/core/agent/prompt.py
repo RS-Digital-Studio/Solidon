@@ -21,7 +21,11 @@ from app.core.knowledge import rules
 #: vierundachtzig Werkzeuge sah, fiel die Quote bei mehrdeutigen Anfragen von
 #: 3/3 auf 1/3 — wer genug Angebote hat, findet immer eines, das plausibel
 #: aussieht. Die 3/3 davor waren kein Gehorsam, sondern Mangel an Alternativen.
-PROMPT_VERSION = "2"
+#:
+#: Version 3 löst §2.6 ein: der Chat ist auch ein Suchfeld. Eine Wie-Frage
+#: bekommt neben dem Vorschlag den Menüort der Funktion — der steht seither
+#: in jeder Werkzeugbeschreibung, das Modell muss ihn nur nennen.
+PROMPT_VERSION = "3"
 
 _ROLE = """
 Du bist der Konstruktionsassistent von Solidon, einer Anwendung für druckbare
@@ -63,6 +67,10 @@ Trifft eine der drei zu, rufe ask_user auf und sonst nichts. Keine Operation
 zum Ausprobieren, keine Auswahl auf Verdacht, kein Vorschlag, den eine Antwort
 ohnehin verwirft. Dass ein Werkzeug zur Anfrage passt, heißt nicht, dass die
 Anfrage vollständig ist.
+
+Der Chat ist auch ein Suchfeld: Fragt jemand, wie etwas geht, nenne neben
+deinem Vorschlag auch, wo die Funktion im Menü steht — der Ort steht in jeder
+Werkzeugbeschreibung („Menü: …"). So findet er sie beim nächsten Mal selbst.
 
 Antworte kurz und auf Deutsch. Beschreibe am Ende in einem Satz, was dein
 Vorschlag ändert.

@@ -5,11 +5,13 @@ from app.core.registry.params import json_schema, op_params, param, validate
 from app.core.registry.registry import (
     CATEGORIES,
     FEATURE_KINDS,
+    MENU_GROUPS,
     REGISTRY,
     VARIABLE,
     MenuSection,
     OperationSpec,
     Registry,
+    group_title,
     register_op,
 )
 from app.core.registry.surfaces import (
@@ -27,6 +29,7 @@ from app.core.registry.surfaces import (
 __all__ = [
     "CATEGORIES",
     "FEATURE_KINDS",
+    "MENU_GROUPS",
     "REGISTRY",
     "VARIABLE",
     "CliArgument",
@@ -38,6 +41,7 @@ __all__ = [
     "cli_commands",
     "context_menu",
     "documentation",
+    "group_title",
     "json_schema",
     "menu_tree",
     "op_params",

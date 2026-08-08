@@ -121,6 +121,32 @@ class ChatPanel(QWidget):
 
         self.summary = QLabel("", self)
         self.summary.setWordWrap(True)
+
+        # Konzept Agent-Vertiefung 4.2: der Vorschlag zeigt seine Kosten. Der
+        # Zug zählt Schritte und Token längst — sie nicht zu zeigen machte den
+        # harten Deckel aus §26.5 unsichtbar, und einen Abbruch an der Grenze
+        # gab es nur als zwei Worte.
+        self.cost_line = QLabel("", self)
+        self.cost_line.setWordWrap(True)
+        small = QFont(self.cost_line.font())
+        small.setPointSizeF(small.pointSizeF() * 0.9)
+        self.cost_line.setFont(small)
+        # Gedämpft ist hier Stil, nicht Bedeutung (Regel 18): dieselbe
+        # Auskunft steht vollständig im Text.
+        self.cost_line.setStyleSheet(f"color: {DISCARDED_COLOUR};")
+
+        # Die Rückfragen samt Antworten sind Teil der Begründung des
+        # Vorschlags — aufklappbar, nicht immer offen: wer sie gestellt
+        # bekam, kennt sie schon.
+        self.questions_toggle = QPushButton("", self)
+        self.questions_toggle.setCheckable(True)
+        self.questions_toggle.setFlat(True)
+        self.questions_toggle.setVisible(False)
+        self.questions_view = QLabel("", self)
+        self.questions_view.setWordWrap(True)
+        self.questions_view.setVisible(False)
+        self.questions_toggle.toggled.connect(self.questions_view.setVisible)
+
         self.accept_button = QPushButton(tr("Übernehmen"), self)
         self.accept_button.clicked.connect(self.accepted)
         self.discard_button = QPushButton(tr("Verwerfen"), self)
@@ -136,6 +162,9 @@ class ChatPanel(QWidget):
         decision_layout = QVBoxLayout(self.decision)
         decision_layout.setContentsMargins(0, 0, 0, 0)
         decision_layout.addWidget(self.summary)
+        decision_layout.addWidget(self.cost_line)
+        decision_layout.addWidget(self.questions_toggle)
+        decision_layout.addWidget(self.questions_view)
         decision_layout.addLayout(decision_row)
         self.decision.setVisible(False)
 
@@ -227,8 +256,23 @@ class ChatPanel(QWidget):
         if preview is None:
             self.decision.setVisible(False)
             self.summary.setText("")
+            self.cost_line.setText("")
+            self.questions_toggle.setVisible(False)
+            self.questions_view.setVisible(False)
             return
+        proposal = preview.proposal
         self.summary.setText(describe(preview))
+        self.cost_line.setText(costs(proposal))
+        questions = list(proposal.questions)
+        self.questions_toggle.setChecked(False)
+        self.questions_toggle.setText(f"{tr('Rückfragen')} ({len(questions)}) …")
+        self.questions_toggle.setVisible(bool(questions))
+        self.questions_view.setVisible(False)
+        self.questions_view.setText(
+            "\n".join(
+                f"? {entry.text}\n→ {entry.answer or tr('ohne Antwort')}" for entry in questions
+            )
+        )
         self.decision.setVisible(True)
 
     # --- input ------------------------------------------------------------------
@@ -351,6 +395,28 @@ def describe(preview: Any) -> str:
             f"+{difference.added_volume / 1000.0:.2f} cm³ / "
             f"-{difference.removed_volume / 1000.0:.2f} cm³"
         )
-    if proposal.stopped:
-        parts.append(tr("Grenze erreicht"))
     return " · ".join(parts) or tr("Keine Änderung")
+
+
+def costs(proposal: Any) -> str:
+    """Schritte, Token und — ausgeschrieben — eine erreichte Grenze (§26.5).
+
+    „Grenze erreicht" stand als zwei Worte in der Zusammenfassung; was für
+    eine Grenze und was das für den Vorschlag heißt, stand nirgends. Jetzt
+    steht es hier, und die Kosten daneben machen den Deckel sichtbar, bevor
+    er greift.
+    """
+    steps = f"{proposal.steps} {tr('Schritte') if proposal.steps != 1 else tr('Schritt')}"
+    parts = [steps]
+    if proposal.input_tokens or proposal.output_tokens:
+        parts.append(f"{proposal.input_tokens} → {proposal.output_tokens} {tr('Token')}")
+    text = " · ".join(parts)
+    if proposal.stopped == "steps":
+        text += "\n" + tr(
+            "Nach {n} Schritten angehalten — der Vorschlag zeigt den Stand bis hierhin."
+        ).format(n=proposal.steps)
+    elif proposal.stopped == "tokens":
+        text += "\n" + tr(
+            "Das Tokenbudget ist erreicht — der Vorschlag zeigt den Stand bis hierhin."
+        )
+    return text

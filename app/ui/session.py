@@ -269,6 +269,11 @@ class Session(QObject):
     """Eine Frage an den Nutzer — trägt einen ``AskRequest``."""
     proposalReady = Signal(object)
     """An agent turn finished — carries a ``ProposalPreview`` (§26.5)."""
+    agentProgress = Signal(int, str)
+    """Was der laufende Zug gerade tut — Schritt und Beschriftung (§2.8).
+
+    Emittiert aus dem Arbeiter-Thread; Qt stellt das als queued Signal im
+    Hauptthread zu, wie bei ``progressChanged`` auch."""
     agentBusyChanged = Signal(bool)
     splitBusyChanged = Signal(bool)
     """Die Trennebenensuche läuft oder ist fertig (§2.8)."""
@@ -902,6 +907,7 @@ class Session(QObject):
             ask=self.ask_from_worker,
             selection=self._selection,
             cancelled=self.agent_cancel,
+            progress=self.agentProgress.emit,
         )
         proposal = agent.propose(request)
         preview = ProposalPreview(proposal=proposal)

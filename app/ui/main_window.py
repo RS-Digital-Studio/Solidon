@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import activation, examples, updates
-from app.core.agent.session import find_part_text, standard_text
+from app.core.agent.session import MAX_STEPS, find_part_text, standard_text
 from app.core.agent.tools import (
     ADD_FIT,
     ADD_PARAMETER,
@@ -1507,6 +1507,7 @@ class MainWindow(QMainWindow):
         self.session.failed.connect(self._on_error)
         self.session.proposalReady.connect(self._on_proposal)
         self.session.agentBusyChanged.connect(self._on_agent_busy)
+        self.session.agentProgress.connect(self._on_agent_progress)
         self.session.splitBusyChanged.connect(self._on_split_busy)
         self._refresh_chat_availability()
 
@@ -2688,6 +2689,18 @@ class MainWindow(QMainWindow):
         elif not self.session.busy:
             self.progress.setRange(0, 100)
             self.progress.setVisible(False)
+
+    def _on_agent_progress(self, step: int, label: str) -> None:
+        """Was der Zug gerade tut, statt nur dass er läuft (§2.8).
+
+        „Der Agent denkt nach." war die ganze Auskunft über zehn bis sechzig
+        Sekunden — jetzt steht da, welcher Schritt läuft und welches Werkzeug
+        (Konzept Agent-Vertiefung 4.1). Der Deckel dahinter, damit erkennbar
+        ist, dass die Zahl nicht ins Leere wächst.
+        """
+        if not self.chat.busy:
+            return
+        self.status_message.setText(f"{tr('Schritt')} {step}/{MAX_STEPS} — {label}")
 
     def _on_split_busy(self, busy: bool) -> None:
         """Die Trennebenensuche läuft — Fortschritt und Abbrechen wie bei
