@@ -72,7 +72,12 @@ from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
 from app.core.registry import REGISTRY, OperationSpec, PaletteEntry, menu_tree, palette_entries
-from app.core.scene import EvaluationResult, OperationDraft, values_for
+from app.core.scene import (
+    EvaluationResult,
+    OperationDraft,
+    values_for,
+    values_for_object,
+)
 from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
@@ -3096,14 +3101,23 @@ class MainWindow(QMainWindow):
         öffnete auf seinen Vorgaben, und wer eine Bohrung in der eben
         angeklickten Fläche wollte, las ihre Koordinaten von der Analysekarte ab
         und tippte sie ein.
+
+        Ist nur der Körper gewählt und kein Merkmal darin, zählt seine oberste
+        Fläche. Die Vorgabe war sonst der Ursprung, und ob der im Material
+        liegt, ist Zufall: bei einem Teil, das auf dem Bett angeordnet ist,
+        liegt er daneben, und die Bohrung trägt nichts ab.
         """
-        feature_id = self.object_tree.selected_feature()
         result = self.session.last_result
-        if not feature_id or selected is None or result is None:
+        if selected is None or result is None:
             return {}
         entry = result.scene.objects.get(selected)
-        feature = entry.features.get(feature_id) if entry else None
-        return dict(values_for(spec, feature)) if feature is not None else {}
+        if entry is None:
+            return {}
+        feature_id = self.object_tree.selected_feature()
+        feature = entry.features.get(feature_id) if feature_id else None
+        if feature is not None:
+            return dict(values_for(spec, feature))
+        return dict(values_for_object(spec, entry.features))
 
     # --- session replies --------------------------------------------------------
 

@@ -25,6 +25,7 @@ in der Datei, und die Operation schlägt es bei jedem Rechnen der Szene nach.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from app.core.log import get_logger
@@ -113,6 +114,56 @@ def dominant_axis(direction: Vec3) -> str | None:
     shares = [abs(value) / length for value in direction]
     best = max(range(3), key=lambda index: shares[index])
     return "xyz"[best] if shares[best] >= AXIS_CLARITY else None
+
+
+def top_face(features: Mapping[str, Feature]) -> Feature | None:
+    """Die oberste nach oben schauende Fläche eines Körpers.
+
+    Sie ist die Antwort auf „wohin, wenn niemand gezeigt hat". Ohne diese
+    Antwort war es der Ursprung: ``drill_hole`` öffnete auf X/Y/Z = 0,00, und
+    ob das traf, hing daran, wo das Teil zufällig lag. Bei einer Platte um den
+    Nullpunkt ging es gut; bei einem Körper, der auf dem Bett angeordnet ist —
+    und das ist jede Druckvorbereitung — lag der Ursprung fünfundsechzig
+    Millimeter daneben, und die Operation meldete hinterher, dass der Schnitt
+    nichts abgetragen hat. Ein richtiger Hinweis, eine Operation zu spät.
+
+    Gewählt wird die höchste; bei gleicher Höhe die größere. Die höchste,
+    weil eine Bohrung von oben kommt, und nicht die größte, weil das bei
+    einem Deckel mit Kragen der Boden wäre.
+    """
+    candidates = [entry for entry in features.values() if faces_up(entry)]
+    if not candidates:
+        return None
+
+    def rank(entry: Feature) -> tuple[float, float]:
+        centre = _vector(entry.params.get("centre"))
+        height = centre[2] if centre is not None else float("-inf")
+        area = entry.params.get("area")
+        return (height, float(area) if isinstance(area, int | float) else 0.0)
+
+    return max(candidates, key=rank)
+
+
+def values_for_object(spec: OperationSpec, features: Mapping[str, Feature]) -> dict[str, Any]:
+    """Was ein Körper ohne angeklicktes Merkmal über die Position sagt.
+
+    Dieselbe Herleitung wie bei einem gewählten Merkmal — es wird nur eines
+    dafür gewählt, statt zu fragen. Das hält die zwei Wege auf einer Rechnung:
+    was hier herauskommt, ließe sich durch einen Klick auf dieselbe Fläche
+    genauso erzeugen.
+
+    Die Kennung des Merkmals wird dabei **nicht** eingetragen. Ein
+    ``at_feature``, das niemand gewählt hat, wäre eine Behauptung über eine
+    Absicht; eine Position ist ein Vorschlag, den man im Feld sieht und
+    ändern kann.
+    """
+    face = top_face(features)
+    if face is None:
+        return {}
+    values = values_for(spec, face)
+    values.pop(FEATURE_FIELD, None)
+    values.pop(TARGET_FIELD, None)
+    return values
 
 
 def faces_up(feature: Feature) -> bool:

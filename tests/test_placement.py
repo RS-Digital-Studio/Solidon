@@ -16,7 +16,13 @@ import pytest
 
 from app.core.bootstrap import load_operations
 from app.core.registry import REGISTRY
-from app.core.scene.placement import dominant_axis, faces_up, values_for
+from app.core.scene.placement import (
+    dominant_axis,
+    faces_up,
+    top_face,
+    values_for,
+    values_for_object,
+)
 from app.core.types import Feature
 
 load_operations()
@@ -181,3 +187,73 @@ def test_a_cylinder_gives_the_texture_the_diameter_it_wraps_around() -> None:
     values = values_for(REGISTRY.get("apply_texture"), hole(diameter=20.0))
 
     assert values["wrap_diameter"] == 20.0
+
+
+# --- ohne angeklicktes Merkmal ---------------------------------------------------
+
+
+def test_a_body_without_a_picked_feature_offers_its_top_face() -> None:
+    """Die Vorgabe war der Ursprung, und ob der im Material liegt, ist Zufall.
+
+    Bei einer Platte um den Nullpunkt ging es gut. Bei einem Körper, der auf
+    dem Bett angeordnet ist — und das ist jede Druckvorbereitung — lag der
+    Ursprung fünfundsechzig Millimeter daneben: gemessen am Beispielprojekt,
+    dessen Dose von x −120 bis −40 reicht. Die Bohrung trug nichts ab, und
+    die Operation sagte es hinterher.
+    """
+    features = {
+        "face_top": face(centre=(-82.0, -93.0, 40.0)),
+        "face_bottom": face(centre=(-82.0, -93.0, 0.0), normal=(0.0, 0.0, -1.0)),
+    }
+
+    values = values_for_object(REGISTRY.get("drill_hole"), features)
+
+    assert values["x"] == pytest.approx(-82.0)
+    assert values["y"] == pytest.approx(-93.0)
+    assert values["z"] == pytest.approx(40.0), "die obere Fläche, nicht die untere"
+
+
+def test_the_highest_upward_face_wins() -> None:
+    """Eine Bohrung kommt von oben — also die höchste, nicht die größte.
+
+    Bei einem Deckel mit Kragen wäre die größte der Boden.
+    """
+    features = {
+        "face_wide": Feature(
+            id="face_wide",
+            kind="face",
+            provenance="detected",
+            params={"area": 4000.0, "centre": (0.0, 0.0, 2.0), "normal": (0.0, 0.0, 1.0)},
+        ),
+        "face_high": Feature(
+            id="face_high",
+            kind="face",
+            provenance="detected",
+            params={"area": 100.0, "centre": (0.0, 0.0, 30.0), "normal": (0.0, 0.0, 1.0)},
+        ),
+    }
+
+    assert top_face(features) is features["face_high"]
+
+
+def test_a_body_without_an_upward_face_suggests_nothing() -> None:
+    """Lieber keine Zahl als eine geratene — der Dialog behält seine Vorgabe."""
+    features = {"face_side": face(normal=(1.0, 0.0, 0.0))}
+
+    assert values_for_object(REGISTRY.get("drill_hole"), features) == {}
+
+
+def test_the_body_never_claims_a_feature_was_picked() -> None:
+    """``at_feature`` ist eine Behauptung über eine Absicht.
+
+    Eine Position ist ein Vorschlag, den man im Feld sieht und ändern kann;
+    eine eingetragene Merkmalskennung ist eine Bindung, die niemand gewählt
+    hat — und die spätere Läufe an einer Fläche festmacht, auf die nie
+    jemand gezeigt hat.
+    """
+    features = {"face_top": face(centre=(1.0, 2.0, 3.0))}
+
+    for spec in REGISTRY.all():
+        values = values_for_object(spec, features)
+        assert "at_feature" not in values, spec.name
+        assert "up_to" not in values, spec.name

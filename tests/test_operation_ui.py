@@ -71,10 +71,22 @@ def select(window: MainWindow, feature_id: str | None = None) -> str:
 # --- Die Auswahl erreicht den Dialog ----------------------------------------------
 
 
-def test_without_a_feature_nothing_is_filled_in(window: MainWindow) -> None:
+def test_without_a_feature_the_body_offers_its_top(window: MainWindow) -> None:
+    """Kein Merkmal gewählt heißt nicht „keine Ahnung, wohin".
+
+    Vorher stand hier, dass nichts eingetragen wird — der Dialog öffnete dann
+    auf X/Y/Z = 0,00. Ob der Ursprung im Material liegt, ist Zufall: bei
+    dieser Platte um den Nullpunkt ging es gut, bei einem Körper, der auf dem
+    Bett angeordnet ist, lag er fünfundsechzig Millimeter daneben, und die
+    Bohrung trug nichts ab.
+    """
     object_id = select(window)
 
-    assert window._from_selection(REGISTRY.get("drill_hole"), object_id) == {}
+    values = window._from_selection(REGISTRY.get("drill_hole"), object_id)
+
+    assert set(values) >= {"x", "y", "z"}
+    assert values["z"] == pytest.approx(4.0), "die Oberseite der Platte"
+    assert "at_feature" not in values, "geraten ist nicht gezeigt"
 
 
 def test_a_selected_bore_fills_in_where_it_is(window: MainWindow) -> None:
@@ -103,12 +115,22 @@ def test_a_part_is_told_the_name_of_the_feature(window: MainWindow) -> None:
     assert values == {"at_feature": "hole_1"}
 
 
-def test_a_feature_that_is_gone_fills_in_nothing(window: MainWindow) -> None:
-    """Kein Fehler: Baum und Szene dürfen einen Moment auseinander sein."""
-    object_id = select(window)
-    window._on_feature_picked("hole_99")
+def test_a_feature_that_is_gone_falls_back_to_the_body(window: MainWindow) -> None:
+    """Kein Fehler: Baum und Szene dürfen einen Moment auseinander sein.
 
-    assert window._from_selection(REGISTRY.get("drill_hole"), object_id) == {}
+    Was danach zählt, ist der Körper — dieselbe Antwort wie für eine Auswahl,
+    in der nie ein Merkmal stand. Eine verschwundene Kennung darf nicht
+    schlechter dastehen als gar keine.
+    """
+    object_id = select(window)
+    spec = REGISTRY.get("drill_hole")
+    without_any = window._from_selection(spec, object_id)
+
+    window._on_feature_picked("hole_99")
+    after_a_ghost = window._from_selection(spec, object_id)
+
+    assert after_a_ghost == without_any
+    assert after_a_ghost["z"] == pytest.approx(4.0), "die Oberseite, nicht der Ursprung"
 
 
 # --- Der Dialog öffnet auf Werten statt auf Vorgaben ------------------------------
