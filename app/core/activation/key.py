@@ -58,18 +58,21 @@ CONFUSABLE: Final = {"0": "O", "1": "I", "8": "B"}
 
 #: Der öffentliche Schlüssel, gegen den geprüft wird.
 #:
-#: **Noch nicht gesetzt.** Alle Bits gesetzt heißt y >= 2^255 - 19, und das ist
-#: kein Punkt auf der Kurve — ``decompress`` gibt ``None`` zurück und die
-#: Prüfung lehnt damit jeden Schlüssel ab. Zweiunddreißig **Null**bytes wären
-#: das Gegenteil einer sicheren Vorgabe: sie sind ein gültiger Punkt der
-#: Ordnung 4, und gegen einen solchen lässt sich zu jeder Nutzlast in
-#: Millisekunden eine gültige Signatur schmieden. Dagegen steht seit
-#: ``ed25519.has_small_order`` zusätzlich die Prüfung selbst.
+#: Der echte, für Hauptversion 1 — erzeugt mit ``tools/make_licence_keys.py``.
+#: Der private Teil liegt im Passwortmanager und auf Papier an einem zweiten
+#: Ort (§8) und verlässt beide nie; gebraucht wird er nur zum Ausstellen von
+#: Schlüsseln, nie beim Bauen. Dieser öffentliche Teil darf überall stehen.
 #:
-#: Vor der Veröffentlichung tritt hier der echte öffentliche Schlüssel an die
-#: Stelle; erzeugt wird das Paar mit ``tools/make_licence_keys.py``, und der
-#: private Teil verlässt den Passwortmanager nie.
-PUBLIC_KEY: Final = b"\xff" * 32
+#: Wer hier je wieder einen Platzhalter braucht (neue Hauptversion, neues
+#: Paar): ``b"\xff" * 32`` ist der sichere — alle Bits gesetzt heißt
+#: y >= 2^255 - 19, kein Punkt auf der Kurve, ``decompress`` gibt ``None``
+#: und die Prüfung lehnt jeden Schlüssel ab. Zweiunddreißig **Null**bytes
+#: wären das Gegenteil: ein Punkt der Ordnung 4, gegen den sich zu jeder
+#: Nutzlast in Millisekunden eine Signatur schmieden lässt. Dagegen steht
+#: seit ``ed25519.has_small_order`` zusätzlich die Prüfung selbst.
+PUBLIC_KEY: Final = bytes.fromhex(
+    "c1a6c906ff05f935ae99e71ea3bea79919021077fbd763a9f31475b56e6d714d"
+)
 
 
 class LicenceKeyError(UserError):

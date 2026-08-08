@@ -245,20 +245,19 @@ def test_a_stray_character_is_named_and_not_swallowed() -> None:
     assert raised.value.values["character"] == "§"
 
 
-def test_the_shipped_public_key_accepts_nothing_yet() -> None:
-    """Solange ``PUBLIC_KEY`` nicht gesetzt ist, gilt kein Schlüssel.
+def test_the_shipped_public_key_is_sound_and_accepts_no_stranger() -> None:
+    """Der echte Schlüssel ist eingetragen — und taugt.
 
-    Die sichere Vorgabe ist ein Wert, der **kein** Punkt ist: alle Bits
-    gesetzt heißt y jenseits der Körperprimzahl, und ``decompress`` gibt
-    ``None`` zurück. Nullbytes wären das Gegenteil — die sind ein Punkt der
-    Ordnung 4, gegen den sich jede Nutzlast signieren lässt.
-
-    Fällt dieser Test aus, ist der echte Schlüssel eingetragen — dann wird er
-    umgeschrieben, nicht gelöscht.
+    Drei Zusicherungen: er ist ein gültiger Punkt der Kurve (kein Platzhalter
+    mehr), er hat keine kleine Ordnung (gegen einen solchen ließe sich jede
+    Nutzlast signieren), und ein mit einem fremden Paar signierter Schlüssel
+    wird gegen ihn abgelehnt. Ob der passende private Teil Schlüssel erzeugt,
+    die er annimmt, lässt sich hier nicht prüfen — der liegt absichtlich
+    nicht im Repository (§8).
     """
-    assert ed25519.decompress(key.PUBLIC_KEY) is None, (
-        "der Platzhalter muss ein Nicht-Punkt sein, nicht bloß unbenutzt aussehen"
-    )
+    point = ed25519.decompress(key.PUBLIC_KEY)
+    assert point is not None, "der eingetragene Schlüssel muss ein Punkt der Kurve sein"
+    assert not ed25519.has_small_order(point)
     with pytest.raises(key.LicenceKeyError):
         key.parse(make_key(TEST_SEED, a_licence()), major=MAJOR)
 
