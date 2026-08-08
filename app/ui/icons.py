@@ -26,7 +26,16 @@ from pathlib import Path
 from typing import Final
 
 from PySide6.QtCore import QByteArray, QRect, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QIcon, QIconEngine, QImage, QPainter, QPalette, QPixmap
+from PySide6.QtGui import (
+    QColor,
+    QIcon,
+    QIconEngine,
+    QImage,
+    QPainter,
+    QPalette,
+    QPen,
+    QPixmap,
+)
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -431,6 +440,60 @@ def application_icon_source() -> str:
         return ICON_SOURCE.read_text(encoding="utf-8")
     except OSError:
         return ""
+
+
+#: Die Farbe der Aufbaukante — der Druckkopf, der über dem Gedruckten steht.
+#: Heller als die Fortschrittsfarbe darunter, damit die Linie auf dem fertigen
+#: Körper steht, statt in ihm zu verschwinden.
+BUILD_EDGE: Final = "#f0b070"
+
+
+def paint_printed_mark(
+    painter: QPainter, renderer: QSvgRenderer, area: QRectF, done: float, ghost: float = 0.0
+) -> None:
+    """Zeichnet das Anwendungssymbol so weit, wie es „gedruckt" ist.
+
+    Der Beschnitt wandert von unten nach oben: unterhalb der Kante steht der
+    fertige Körper, oberhalb noch nichts. An der Kante läuft eine helle Linie
+    mit — der Druckkopf. Sie verschwindet, sobald nichts mehr zu drucken ist;
+    ein Druckkopf über einem fertigen Teil wäre eine Lüge.
+
+    ``ghost`` ist die Deckkraft, mit der das *ganze* Zeichen darunter liegt —
+    was noch nicht gedruckt ist, als Andeutung. Auf einer großen Fläche ist
+    das der Unterschied zwischen einem Fleck und einem Körper, der entsteht:
+    bei 40 Prozent ist von der Marke sonst nur ein Streifen zu sehen, aus dem
+    niemand liest, was da wächst. Vorgabe ist null — der Ladebildschirm zeigt
+    das Zeichen auf einer kleinen Karte und braucht es nicht.
+
+    Zwei Stellen zeigen das: der Ladebildschirm beim Start (``splash.py``) und
+    die Ladeanzeige über der Ansicht (``loading.py``). Beide meinen dasselbe,
+    also zeichnet es dieselbe Funktion.
+
+    Ein ungültiger Renderer — die SVG-Datei fehlt — zeichnet nichts. Der
+    Aufrufer behält seine übrigen Anzeigen; ein Ladebildschirm ohne Symbol ist
+    besser als keiner.
+    """
+    if not renderer.isValid():
+        return
+
+    if ghost > 0.0:
+        painter.save()
+        painter.setOpacity(ghost)
+        renderer.render(painter, area)
+        painter.restore()
+
+    built = area.height() * max(0.0, min(1.0, done))
+    painter.save()
+    painter.setClipRect(QRectF(area.left(), area.bottom() - built, area.width(), built))
+    renderer.render(painter, area)
+    painter.restore()
+
+    if 0.0 < done < 1.0:
+        edge = area.bottom() - built
+        painter.save()
+        painter.setPen(QPen(QColor(BUILD_EDGE), 2.0))
+        painter.drawLine(int(area.left() - 6), int(edge), int(area.right() + 6), int(edge))
+        painter.restore()
 
 
 def application_icon() -> QIcon:

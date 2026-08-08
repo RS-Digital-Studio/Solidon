@@ -15,7 +15,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QToolBar
 
@@ -2804,6 +2804,91 @@ def test_the_splash_screen_survives_a_missing_icon_source(
         splash.repaint()  # darf nicht werfen
     finally:
         splash.finish()
+
+
+# --- die Wartezeit beim Öffnen (§2.8) --------------------------------------------
+
+
+def test_the_veil_covers_the_view_only_while_it_shows_nothing(window: MainWindow) -> None:
+    """§2.8: die letzte gültige Darstellung bleibt stehen.
+
+    Der Balken unten rechts war beim Öffnen eines Projekts die einzige
+    Auskunft, und er steht dort, wo beim Warten niemand hinsieht. Über die
+    leere Ansicht gehört eine Anzeige — über ein Modell nicht: was man gerade
+    ansieht, wird nicht verdeckt, nur weil dahinter gerechnet wird.
+    """
+    window._on_busy(True)
+    assert window.veil.showing, "die leere Ansicht bekommt die Anzeige"
+
+    window._on_busy(False)
+    assert not window.veil.showing, "und gibt sie nach dem Lauf wieder her"
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window._on_scene(window.session.evaluate_now())
+
+    window._on_busy(True)
+    assert not window.veil.showing, "über einem Körper bleibt die Ansicht die Ansicht"
+
+
+def test_the_veil_shows_the_measured_progress(window: MainWindow) -> None:
+    """Bauhöhe, Linie und Zahl sagen dasselbe — die Zahl das Gemessene.
+
+    Regel 18 gilt auch für eine Wartezeit: die Höhe des gedruckten Symbols
+    ist die eine Kodierung, die Länge der Linie die zweite, die Prozentzahl
+    die dritte. Angenähert wird nur die Anzeige, nie die Auskunft.
+    """
+    window._on_busy(True)
+    window._on_progress(0.5, "Bohrung")
+
+    assert window.veil._target == 0.5
+    assert window.veil._detail == "Bohrung"
+    # Offscreen wird nicht animiert, sonst prüfte der Test die Uhr.
+    assert window.veil._shown == 0.5
+
+    window._on_progress(1.8, "verzählt")
+    assert window.veil._target == 1.0, "ein Ausreißer verzerrt das Bild nicht"
+
+
+def test_the_veil_leaves_the_toolbar_reachable(window: MainWindow) -> None:
+    """Verdeckt wird die Ansicht, nicht die Bedienung.
+
+    Über den Karten wäre der Schleier ein Vorhang ohne Ausgang: die
+    Werkzeugzeile läge darunter, und wer den Lauf abbrechen oder das Fenster
+    weiterbedienen will, käme nicht hin. Gemessen wird das wie beim Umbau auf
+    schwebende Karten — mit ``childAt`` an der Stelle, an der die Zeile steht.
+    """
+    from app.ui.overlay import MARGIN
+
+    window.overlay.setGeometry(0, 0, 1200, 800)
+    window.overlay._place()
+    window._on_busy(True)
+    assert window.veil.showing
+
+    bottom = window.overlay.bottom
+    assert bottom is not None
+    on_the_bar = bottom.geometry().center()
+    assert window.overlay.childAt(on_the_bar) is not window.veil
+
+    # Und dort, wo nur die Ansicht liegt, steht er.
+    empty = QPoint(600, 800 - MARGIN - bottom.height() - 40)
+    assert window.overlay.childAt(empty) is window.veil
+
+    window._on_busy(False)
+
+
+def test_the_veil_can_be_cancelled(window: MainWindow) -> None:
+    """Regel 17: keine Sackgasse. Der Knopf hält an, was läuft.
+
+    Derselbe Doppelgriff wie in der Statusleiste — die Trennebenensuche hat
+    ihr eigenes Verwerfen und würde sonst weiterlaufen, während davor
+    „Abbrechen" steht.
+    """
+    window._on_busy(True)
+    window.veil.cancel.click()
+
+    assert window.session.cancel_signal.is_cancelled
+    window._on_busy(False)
 
 
 def test_motion_is_off_where_nobody_watches(qt_app: object) -> None:

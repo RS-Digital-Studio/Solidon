@@ -95,6 +95,26 @@ eine Palette, die aussortiert, wäre eine Betriebsart mit anderem Namen.
 Die letzte gültige Darstellung bleibt sichtbar — nie ein leerer Viewport, nie
 ein blockierendes Fenster. Lange Rechnungen laufen nicht im Qt-Hauptthread.
 
+**Wo nichts steht, steht die Ladeanzeige.** Der Balken in der Statusleiste ist
+für die Fälle richtig, in denen ein Modell im Bild bleibt; beim Öffnen eines
+Projekts bleibt keines, und dann liegt er als einzige Auskunft dort, wo beim
+Warten niemand hinsieht. `LoadingVeil` (`app/ui/loading.py`) legt sich deshalb
+über die Ansicht — das Anwendungssymbol wird gedruckt wie beim Start,
+darunter Linie, Prozentzahl, laufender Schritt und *Abbrechen*.
+
+Drei Bedingungen, alle drei tragend:
+
+* **Nur bei leerem Bild.** Steht ein Körper da, bleibt er stehen; wer
+  entscheidet das, ist `MainWindow._update_veil`.
+* **Unter den Karten, nicht darüber** (`OverlayHost.set_veil`). Über ihnen wäre
+  es ein Vorhang ohne Ausgang.
+* **Erst nach 200 ms.** Ein leeres Projekt ist schneller gerechnet, und eine
+  Anzeige, die dabei aufblitzt, ist Unruhe ohne Auskunft.
+
+Deckend gezeichnet, mit dem Verlauf aus `viewport_colours` — ein
+halbdurchsichtiges Qt-Widget über dem OpenGL-Fenster zeigt die Fensterfarbe,
+nicht die Ansicht dahinter.
+
 ### Wer einen Arbeiter startet, hält ihn fest
 
 Ein `QThread` bekommt hier keinen Qt-Elternteil; ihn hält allein die

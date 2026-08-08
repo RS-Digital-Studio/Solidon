@@ -438,10 +438,17 @@ def box_with_lid() -> Project:
                 inputs=("obj_1",),
                 params={"size": "cable-5", "wall": "=@wand", "x": -40.0, "y": 0.0, "z": 26.0},
             ),
+            # Auf den Boden, nicht auf die Oberkante. Sie stand auf
+            # ``z = "=@hoehe"``, und dort war einmal ein Deckel — seit die
+            # Dose oben offen ist, liegt über dem Innenraum nichts mehr, in
+            # das sich eine Buchse setzen ließe. Der Prüfbericht sagte es bei
+            # jedem Öffnen des Beispiels („Der Schnitt hat nichts abgetragen"),
+            # und ein Beispiel ist Dokumentation: was darin warnt, ist eine
+            # Aussage über die Anwendung.
             OperationDraft(
                 op="insert_heatset_m4",
                 inputs=("obj_1",),
-                params={"size": "M3", "x": 30.0, "y": 20.0, "z": "=@hoehe"},
+                params={"size": "M3", "x": 30.0, "y": 20.0, "z": "=@wand"},
             ),
         ],
     )

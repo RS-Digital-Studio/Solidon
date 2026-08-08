@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QProgressBar,
     QPushButton,
@@ -1076,6 +1077,14 @@ class PrintSettingsDialog(QDialog):
         self.advice_view.setHeaderLabels([tr("Einstellung"), tr("Vorschlag"), tr("Grund")])
         self.advice_view.setRootIsDecorated(False)
         self.advice_view.setMaximumHeight(150)
+        # Die Gründe bekommen, was die beiden ersten Spalten übrig lassen, und
+        # brechen darin um, statt auf „…" zu enden. Bei drei Spalten mit
+        # gleichem Anteil stand in jeder Zeile ein angefangener Satz.
+        header = self.advice_view.header()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.advice_view.setWordWrap(True)
         inner.addWidget(self.advice_view)
 
         self.apply_button = QPushButton(tr("Vorschläge übernehmen"), box)
@@ -1307,6 +1316,14 @@ class PrintSettingsDialog(QDialog):
             # einen unpassenden Vorschlag die übrigen mit aufgäbe.
             item.setCheckState(0, Qt.CheckState.Checked)
             item.setData(0, Qt.ItemDataRole.UserRole, entry.path)
+            # Der Grund ist der Satz, der den Vorschlag rechtfertigt, und er
+            # ist länger als jede Spalte, die neben zwei anderen Platz hat.
+            # In der Zeile stand deshalb „Das Projekt hat Passungen. …" — der
+            # Teil, den man liest, wenn man wissen will, ob der Vorschlag zum
+            # eigenen Teil passt, war genau der abgeschnittene. Er steht jetzt
+            # zusätzlich am ganzen Eintrag.
+            for column in range(3):
+                item.setToolTip(column, str(entry.reason))
             self.advice_view.addTopLevelItem(item)
         if not entries:
             self.advice_view.addTopLevelItem(QTreeWidgetItem([tr("Nichts einzuwenden."), "", ""]))

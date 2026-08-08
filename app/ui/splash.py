@@ -22,7 +22,7 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.branding import APP_NAME, APP_VERSION
-from app.ui.icons import application_icon_source
+from app.ui.icons import application_icon_source, paint_printed_mark
 
 #: Maße des Fensters in logischen Pixeln. Breit genug für den Namen, flach
 #: genug, dass es nicht wie ein Dialog wirkt.
@@ -136,28 +136,10 @@ class SplashScreen(QWidget):
 
     def _paint_mark(self, painter: QPainter) -> None:
         """Zeichnet das Symbol so weit, wie es „gedruckt" ist."""
-        if not self._renderer.isValid():
-            return
         left = (WIDTH - MARK_SIZE) / 2
-        top = 46.0
-        area = QRectF(left, top, MARK_SIZE, MARK_SIZE)
-
-        # Der Beschnitt wandert von unten nach oben. Unterhalb der Kante steht
-        # der fertige Körper, oberhalb noch nichts.
-        built = area.height() * self._shown
-        painter.save()
-        painter.setClipRect(QRectF(left, top + area.height() - built, MARK_SIZE, built))
-        self._renderer.render(painter, area)
-        painter.restore()
-
-        # Die Aufbaukante: eine helle Linie, die mitwandert. Sie verschwindet,
-        # wenn nichts mehr zu drucken ist — ein Druckkopf über einem fertigen
-        # Teil wäre eine Lüge.
-        if 0.0 < self._shown < 1.0:
-            y = top + area.height() - built
-            pen = QPen(QColor("#f0b070"), 2.0)
-            painter.setPen(pen)
-            painter.drawLine(int(left - 6), int(y), int(left + MARK_SIZE + 6), int(y))
+        paint_printed_mark(
+            painter, self._renderer, QRectF(left, 46.0, MARK_SIZE, MARK_SIZE), self._shown
+        )
 
     def _paint_texts(self, painter: QPainter, colour: QColor) -> None:
         name_font = QFont(self.font())

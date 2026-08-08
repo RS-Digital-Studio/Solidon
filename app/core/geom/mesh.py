@@ -165,17 +165,28 @@ def on_surface(
     sein Dreieck.
 
     Warum das hier steht und nicht dreimal beim Aufrufer: Der Weg dorthin
-    führt durch ``rtree``, und ``rtree`` greift auf dieser Maschine
-    reproduzierbar daneben — eine Zugriffsverletzung in etwa jedem
-    zwanzigsten Lauf, gemessen an derselben Datei ohne eine Zeile Änderung
-    dazwischen. Sie kommt als ``OSError`` zurück, und darunter liegt der
-    Index, den ``trimesh`` am Netz zwischenspeichert.
+    führt durch ``rtree``, und ``rtree`` greift auf dieser Maschine daneben —
+    eine Zugriffsverletzung, die als ``OSError`` zurückkommt und unter der der
+    Index liegt, den ``trimesh`` am Netz zwischenspeichert.
 
     Also wird sie einmal wiederholt, und zwar an einer **Kopie**: die bringt
     einen frischen Zwischenspeicher und damit einen frisch gebauten Index
     mit. Das ist kein Verschlucken — scheitert auch der zweite Versuch, fliegt
-    der Fehler. Es nimmt nur dem einen Lauf von zwanzig die Schuld daran, dass
-    eine Fremdbibliothek in den falschen Speicher greift.
+    der Fehler.
+
+    **Der Wiederholversuch heilt den Aufruf, nicht den Speicher.** Wo die
+    Bibliothek in fremde Seiten greift, fällt kurz darauf etwas anderes um: im
+    Audit vom 08.08.2026 ein gewöhnliches Python-Set in
+    ``perceive.features``, unmittelbar gefolgt von einem Segmentation Fault.
+    Die einzige verlässliche Gegenmaßnahme ist deshalb, *weniger* zu fragen.
+
+    Genau das ist geschehen. Die Slot-Übertragung stellte je Auswertung
+    113168 Anfragen an den Index, weil sie für jedes Dreieck des Ergebnisses
+    den Abstand zu jeder Quelle suchte; mit dem Vorfilter in
+    ``geom.attributes`` sind es 1180. Gemessen danach: sechzig Auswertungen
+    hintereinander, kein einziger Fehlgriff — vorher wären bei dieser Zahl
+    etwa drei zu erwarten gewesen. Das ist kein Beweis, dass es nie wieder
+    passiert; es ist zwei Größenordnungen weniger Gelegenheit.
     """
     try:
         return _asked(body, points)

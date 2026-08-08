@@ -2828,3 +2828,22 @@ Maschine, Prozess und Filament von selbst richtig vor (1001 / 7 / 42 Einträge)
 · STL, 3MF und OBJ schreiben und lesen zurück · 1986 Übersetzungen, keine
 leer, kein Registertext ohne englische Entsprechung · alle 14 Fehlerklassen
 mit Handlungsvorschlag · Rückgängig stellt den Stapel wieder her.
+
+### Nachgezogen, gleiche Sitzung
+
+- [x] **Acht Sekunden auf ein leeres Fenster.** Das erste Öffnen einer Sitzung
+      dauert 7,9–8,3 s, und in dieser Zeit stand die Ansicht leer: kein
+      Objektbaum, kein Körper, und als einzige Auskunft ein 180 px breiter
+      Balken unten rechts — an der Stelle, an der beim Warten niemand hinsieht.
+      Jetzt liegt `LoadingVeil` (`app/ui/loading.py`) über der Ansicht: das
+      Anwendungssymbol wird gedruckt wie auf dem Ladebildschirm, darunter
+      Fortschrittslinie, Prozentzahl, laufender Operationstitel und
+      *Abbrechen*. Drei Kodierungen für dieselbe Zahl (Regel 18). Sie kommt
+      erst nach 200 ms, sie liegt **unter** den schwebenden Karten, und sie
+      kommt nur, wenn kein Körper im Bild steht — §2.8 lässt die letzte
+      gültige Darstellung stehen. Das Zeichnen des halb gedruckten Zeichens
+      teilt sie sich mit `splash.py` (`icons.paint_printed_mark`).
+- [x] **Der Themenwechsel aus dem Einstellungsdialog erreichte die Karten
+      nicht.** `action_theme` zog `_apply_card_style` nach, `_apply_settings`
+      nicht — über den Dialog gewechselt, behielten die schwebenden Zonen die
+      Farben des alten Themas.

@@ -120,6 +120,7 @@ from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import MENU_GROUPS, feature_label
+from app.ui.loading import LoadingVeil
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
 from app.ui.op_dialog import OperationDialog
@@ -736,6 +737,18 @@ class MainWindow(QMainWindow):
         # sieben, von Schnitt bis Bemalen.
         self.tools.toolChanged.connect(lambda _key: self.overlay.reflow())
         self.sketch_bar.installEventFilter(self.overlay)
+
+        # §2.8: eine Wartezeit gehört dorthin, wo hingesehen wird. Der Balken
+        # unten rechts ist richtig, solange ein Modell im Bild steht — beim
+        # Öffnen eines Projekts steht dort nichts, und dann war er die einzige
+        # Auskunft an der Stelle, an der niemand hinsieht.
+        self.veil = LoadingVeil(self)
+        self.veil.set_theme(self.settings.theme)
+        # Derselbe Doppelgriff wie am Knopf der Statusleiste: abgebrochen wird,
+        # was gerade läuft, und die Trennebenensuche hat ihr eigenes Verwerfen.
+        self.veil.cancelRequested.connect(self.session.cancel)
+        self.veil.cancelRequested.connect(self.session.cancel_split)
+        self.overlay.set_veil(self.veil)
 
         self.start_screen = StartScreen(self)
         self.start_screen.newRequested.connect(self.start_empty)
@@ -1812,15 +1825,16 @@ class MainWindow(QMainWindow):
         ]
 
         stem = safe_name(Path(self.session.title.rstrip("*")).stem, "projekt")
-        filters = ";;".join(
-            (
-                "STL (*.stl)",
-                "3MF (*.3mf)",
-                "OBJ (*.obj)",
-                "PLY (*.ply)",
-                "STEP (*.step)",
-            )
-        )
+        offered = ["STL (*.stl)", "3MF (*.3mf)", "OBJ (*.obj)", "PLY (*.ply)"]
+        # STEP hält Flächen und Kanten fest, und ein Netz hat keine. Der
+        # Schreiber sagt das mit einem guten Satz — nur sagte er ihn erst,
+        # nachdem der Nutzer Format, Ordner und Namen gewählt hatte. Bei
+        # Mesh-Projekten, und das sind die meisten, konnte der Eintrag nie zu
+        # etwas führen. Angeboten wird er jetzt, wenn wenigstens ein Körper
+        # ihn tragen kann.
+        if any(entry.kind == "brep" for entry in objects):
+            offered.append("STEP (*.step)")
+        filters = ";;".join(offered)
         name, chosen_filter = QFileDialog.getSaveFileName(
             self, tr("Exportieren"), f"{stem}.stl", filters
         )
@@ -2701,6 +2715,9 @@ class MainWindow(QMainWindow):
         """
         self.overlay.setStyleSheet(card_stylesheet(theme))  # type: ignore[arg-type]
         self.header.setStyleSheet(header_stylesheet(theme))
+        # Der Schleier zeichnet den Verlauf der Ansicht nach und braucht
+        # dieselben Farben wie sie.
+        self.veil.set_theme(theme)
 
     def action_navigation(self, scheme: str) -> None:
         self.viewport.set_navigation(scheme)  # type: ignore[arg-type]
@@ -3222,6 +3239,7 @@ class MainWindow(QMainWindow):
 
     def _on_progress(self, fraction: float, text: str) -> None:
         self.progress.setValue(int(fraction * 100))
+        self.veil.step(fraction, text)
         # Ein leerer Text heißt, der Lauf ist vorbei; dann kommt zurück, was
         # zuletzt zu sagen war (§2.8).
         self.status_message.setText(text or self._announcement)
@@ -3234,8 +3252,30 @@ class MainWindow(QMainWindow):
         self.cancel_button.setVisible(busy or others)
         if busy:
             self.progress.setRange(0, 100)
+        self._update_veil(busy)
         if not busy and not others:
             self.status_message.setText(self._announcement)
+
+    def _update_veil(self, busy: bool) -> None:
+        """Die Ladeanzeige gilt dem leeren Bild, nicht jeder Rechnung.
+
+        Steht ein Körper da, bleibt er stehen (§15.3, §2.8): dann sagen Balken
+        und Statuszeile, dass gerechnet wird, und die Ansicht bleibt die
+        Ansicht. Etwas darüberzulegen, das man ohnehin gerade ansieht, wäre
+        eine Verschlechterung.
+
+        Verdeckt wird nur, wo nichts zu verdecken ist — beim Öffnen eines
+        Projekts, beim Wiederherstellen einer Sicherung und beim ersten Lauf
+        eines neuen Dokuments. Die Verzögerung in ``LoadingVeil`` sorgt dafür,
+        dass der letzte Fall nichts aufblitzen lässt.
+        """
+        result = self.session.last_result
+        if not busy or (result is not None and result.scene.objects):
+            self.veil.end()
+            return
+        # Ein Projekt ohne Ergebnis wird geladen; eines mit leerem Ergebnis
+        # rechnet an etwas, das noch keinen Körper hat.
+        self.veil.begin(tr("Projekt wird geladen …") if result is None else tr("Wird berechnet …"))
 
     def _on_ask(self, request: AskRequest) -> None:
         """Der Arbeiter wartet, solange dieser Dialog offen ist (§21.3)."""

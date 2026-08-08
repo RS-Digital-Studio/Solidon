@@ -228,6 +228,7 @@ class OverlayHost(QWidget):
         self.left: QWidget | None = None
         self.right: QWidget | None = None
         self.bottom: QWidget | None = None
+        self.veil: QWidget | None = None
         self._moves: dict[int, QPropertyAnimation] = {}
         """Die laufende Bewegung je Zone — festgehalten, weil eine Animation,
         die niemand hält, mitten im Weg eingesammelt wird."""
@@ -267,6 +268,27 @@ class OverlayHost(QWidget):
         # ebenso.
         for zone in (left, right, bottom):
             self._watch(zone)
+        self._place()
+
+    def set_veil(self, veil: QWidget) -> None:
+        """Eine Fläche, die die Ansicht verdeckt, solange sie nichts zeigt.
+
+        Sie liegt über der Ansicht und **unter** den drei Karten. Über den
+        Karten wäre sie ein modaler Vorhang: das Menü bliebe erreichbar, die
+        Werkzeugzeile nicht, und wer den Ladevorgang vom Startbildschirm aus
+        angestoßen hat, säße bis zum Ende fest. Verdeckt wird nur, was
+        ohnehin leer ist.
+
+        Sie bekommt **keinen** Ereignisfilter wie die Zonen: sie hat keine
+        Wunschhöhe, die sich ändern könnte, und ein ``Resize``, das nach
+        ``_place`` zurückruft, wäre nur der Weg in den eigenen Stapel.
+        """
+        veil.setParent(self)
+        # Die Reihenfolge macht die Stapelung: erst den Schleier nach ganz
+        # unten, dann die Ansicht unter ihn. Was oben steht, sind die Karten.
+        veil.lower()
+        self.view.lower()
+        self.veil = veil
         self._place()
 
     def _watch(self, zone: QWidget) -> None:
@@ -377,6 +399,10 @@ class OverlayHost(QWidget):
     def _lay_out(self, moving: bool) -> None:
         """Das eigentliche Setzen. Nur aus ``_place``, nie von außen."""
         self.view.setGeometry(0, 0, self.width(), self.height())
+        # Vor dem Zonen-Zweig: der Schleier deckt die Ansicht, und die gibt es
+        # auch dann, wenn noch keine Karte angemeldet ist.
+        if self.veil is not None:
+            self.veil.setGeometry(0, 0, self.width(), self.height())
         if self.left is None or self.right is None or self.bottom is None:
             return
 
