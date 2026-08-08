@@ -2890,3 +2890,68 @@ unterwegs ist, wird nicht neu gestartet. Gemessen: eine Bewegung je Aktion.
 
 **Offen:** die Tastenkürzel. Sechs in der Vorgabe ist eine Entscheidung und
 keine Lücke — welche Operationen eine Taste verdienen, ist eine Design-Frage.
+
+---
+
+## Handbuch, Website und Rechtstexte durchgesehen (08.08.2026)
+
+Anlass war eine Frage, keine Fehlermeldung: „Ist die Doku vollständig,
+seriös, aktuell?" Geprüft wurden Handbuch, Website, README, Bauplan, die
+Konzeptpapiere und die Roadmap — gegen den Code, nicht gegen die Erinnerung.
+
+### Was falsch war und jetzt stimmt
+
+- **Die Startseite trug „Formwerk".** In vier Seiten, jeweils Zeile 15, als
+  `Form<span>werk</span>` — deshalb hat der Umbenennungs-Commit sie nicht
+  gefunden, und deshalb findet keine Suche nach dem Namen sie. Der Name war
+  gefallen, weil eine Wort-/Bildmarke „3D FORMWERK" für „Entwurf von
+  3D-Modellen für den 3D-Druck" bestandskräftig wurde.
+- **Drei der sieben Analysekarten hießen im Handbuch anders als im
+  Programm.** „Dicke der ersten Schicht", „Abstand zum Bauraumrand" und
+  „Materialverteilung" gibt es nicht; die drei heißen Netzfehler,
+  Feature-Zuordnung und Passungen.
+- **Die Toleranzleiter stand unter einem Menüeintrag, den es nicht gibt**
+  („Passungsleiter" statt „Toleranz-Testkörper"), mit einem Bereich, den die
+  Vorgaben nicht ergeben (0,10–0,40 statt 0,10–0,25 mm).
+- **252 Zahlen im deutschen Handbuch schrieben einen Punkt.** Die erzeugte
+  Referenz formatierte mit `:g`, neben einer Anwendung, die „2,40 mm" zeigt.
+  `format_decimal` entscheidet das jetzt nach der Sprache.
+- **Zwanzig Zeichnungen hatten weißen Grund** in einer Seite, die dem
+  Systemthema folgt. Die dunkle Fassung gab es die ganze Zeit —
+  `make_manual` rief nur `svg(key, "light")`.
+- **Der Bauplan verbot den eigenen Namen.** §37.1 führte „kein ‚3D' im
+  Namen" als Kriterium, und die Anwendung heißt Solidon3D. Das Kriterium ist
+  gefallen, mit Begründung.
+- **`.wrap` stand auf 62rem.** Auf 1920 × 1080 blieben 464 px Rand je Seite,
+  der Hero-Text nutzte 32 % der Breite, und das Bildschirmfoto lag unter der
+  Falz. Jetzt 76rem und ab 68rem zwei Spalten.
+- **Der README beschrieb das Handbuch von vorgestern** („achtzehn Seiten:
+  sieben geschriebene, elf erzeugte" statt 33 aus 18 und 15).
+- **Die Bildschirmfotos zeigten behobene Fehler** — fünf UI-Commits lagen
+  zwischen Aufnahme und heute. Dabei fiel auf, dass die Prüfbericht-Karte
+  weiterhin nicht wächst, wenn Befunde **nach** der Auswertung dazukommen:
+  ein `QListWidget` meldet sein Wachstum nicht, und die Karte hängt in
+  keinem Layout, das es weiterreichen könnte (`contentGrew` → `reflow`).
+
+### Neu
+
+- **`EULA.md`, `AGB.md`, `WIDERRUF.md`.** Die Seite nennt seit ihrer
+  Entstehung 49 €; es gab weder Endnutzer-Lizenzvertrag noch AGB noch
+  Widerrufsbelehrung — die letzten beiden sind bei einem Verkauf an
+  Verbraucher Pflicht. `tools/make_legal.py` macht daraus die Website-Seiten
+  und die Lizenzseite des Installers, der bis dahin die Urheberrechtsnotiz
+  zeigte. Der Entwurfshinweis hängt an den Platzhaltern und verschwindet von
+  selbst, sobald sie ersetzt sind; `tests/test_legal.py` lässt keine Seite
+  durch, die einen trägt und schweigt.
+- **Auszeichnung für beide Startseiten und das Handbuch**: canonical,
+  hreflang, Open Graph, JSON-LD. Geteilt wurden sie bis hierhin als nackte
+  Links.
+
+### Offen
+
+- **Anschrift, Hoster, Zahlungsdienstleister.** Drei Platzhalter, drei
+  Entwurfshinweise. Ohne sie geht die Seite nicht online.
+- **Die Rechtstexte fachlich prüfen lassen.** Sie sind sorgfältige Entwürfe
+  und keine Rechtsberatung. Die Widerrufsbelehrung wirkt nur, wenn der
+  Bestellvorgang die Zustimmung nach § 356 Abs. 5 BGB abfragt — der Text
+  allein genügt nicht.

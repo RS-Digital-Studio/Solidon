@@ -6,22 +6,28 @@ und den VTK-Interactor — also über dieselben Wege, die eine Maus nimmt. Alles
 unten ist gemessen oder fotografiert, nicht abgeleitet. Wo eine erste Messung
 falsch war, steht die Korrektur dabei.
 
-> **Stand 08.08.2026, nachgetragen.** Vier der neun Befunde sind behoben; die
-> Marke steht bei jedem. Ein Konzept ohne Fortschreibung schickt den nächsten
-> Leser an Arbeit, die längst getan ist.
+> **Stand 08.08.2026.** Die Befunde 1.1 bis 2.6 sind behoben, jeder mit Test
+> und am laufenden Fenster nachgemessen; die Zahlen dazu stehen im
+> [Nachtrag](#nachtrag--was-daraus-wurde-08082026-derselbe-tag) am Ende dieser
+> Datei. Offen bleibt allein 2.7, und zwar als Entscheidung: welche
+> Operationen ein Tastenkürzel verdienen, ist eine Design-Frage.
 >
 > | Befund | Stand |
 > |---|---|
-> | 1.1 Karten wachsen nicht mit | **behoben** — `b017fde` |
-> | 1.2 Parameteränderung 9–15 s | **behoben** — `b3de01e` |
-> | 1.3 rtree reißt den Prozess | offen |
-> | 2.1 Kontextmenü mit zwei Einträgen | **behoben** — `0c80417` |
-> | 2.2 Bohrung öffnet auf dem Ursprung | **behoben** — `06e5e56` |
-> | 2.3 Grund-Spalte abgeschnitten | offen |
-> | 2.4 Vorzeigebeispiel mit zwei Warnungen | offen |
-> | 2.5 STEP im Exportdialog | offen |
-> | 2.6 Erstes Öffnen dauert acht Sekunden | offen |
-> | 2.7 Sechs von 77 mit Tastenkürzel | offen |
+> | 1.1 Karten wachsen nicht mit | behoben — `b017fde` |
+> | 1.2 Parameteränderung 9–15 s | behoben — `b3de01e` |
+> | 1.3 rtree reißt den Prozess | behoben — dieselbe Ursache wie 1.2 und 2.6 |
+> | 2.1 Kontextmenü mit zwei Einträgen | behoben — `0c80417` |
+> | 2.2 Bohrung öffnet auf dem Ursprung | behoben — `06e5e56` |
+> | 2.3 Grund-Spalte abgeschnitten | behoben |
+> | 2.4 Vorzeigebeispiel mit zwei Warnungen | behoben — `22ce4c6` |
+> | 2.5 STEP im Exportdialog | behoben |
+> | 2.6 Erstes Öffnen dauert acht Sekunden | behoben — 8,0 → 1,55 s |
+> | 2.7 Sechs von 77 mit Tastenkürzel | **offen, als Entscheidung** |
+>
+> Nachgereicht am selben Tag: die Karte wuchs weiterhin nicht, wenn Befunde
+> **nach** der Auswertung dazukamen — im Handbuchbild acht im Kopf gezählt,
+> zwei zu sehen (`f49a7fa`).
 
 **Durchgegangen:** Erstinbetriebnahme mit frischem Nutzerverzeichnis ·
 Startbildschirm mit allen acht Beispielen · alle neun Menüs mit 127 Einträgen ·
