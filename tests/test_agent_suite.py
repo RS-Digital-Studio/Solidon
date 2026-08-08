@@ -674,6 +674,82 @@ def test_every_operation_pillar_a_expects_exists() -> None:
             assert name in known, f"{case.id} expects {name}"
 
 
+def test_the_sketch_parameter_stays_locked_but_shapes_pass(
+    project: Project, profile: Profile
+) -> None:
+    """§30.1, beide Ebenen: eine rohe Punktliste wird abgelehnt, auch wenn
+    das Modell sie rät — und dieselbe Op läuft über die benannten
+    Grundformen. Die Sperre stand seit P13 ohne Test; die Behauptung, der
+    Weg über die Formen sei ungewinnbar, stand ungeprüft im Konzept. Beides
+    hält dieser Test fest.
+    """
+    guessed = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        ToolCall(
+                            id="1",
+                            name="sketch_extrude",
+                            arguments={"sketch": '{"plane": "plane:xy"}', "height": 6.0},
+                        ),
+                    )
+                ),
+                Reply(text="Ich versuche es anders."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+    proposal = guessed.propose("Zeichne mir etwas")
+    assert proposal.drafts == [], "eine geratene Punktliste erreicht die Geometrie nie"
+    assert proposal.invalid_calls == 1
+
+    shaped = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        ToolCall(
+                            id="1",
+                            name="sketch_extrude",
+                            arguments={
+                                "shape": "rectangle",
+                                "length": 60.0,
+                                "width": 40.0,
+                                "height": 6.0,
+                            },
+                        ),
+                    )
+                ),
+                Reply(text="Gebaut."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+    proposal = shaped.propose("Bau eine Platte 60 auf 40, 6 stark")
+    assert [draft.op for draft in proposal.drafts] == ["sketch_extrude"]
+    assert proposal.invalid_calls == 0
+
+
+def test_the_sketch_cases_are_structurally_winnable() -> None:
+    """Die vier Skizzenfälle der Säule A galten als ungewinnbar — zu Unrecht:
+    jede erwartete Op bietet dem Agenten die Grundform-Parameter an, und nur
+    die rohe Skizze bleibt draußen (§30.1, Leitprinzip 5).
+    """
+    from tests.agent_cases import by_id
+
+    offered = {schema["name"]: schema for schema in tools.operation_tools()}
+    for case_id in ("free_shape", "hex_base", "pocket_plate", "handrail_bend"):
+        for name in by_id(case_id).expects_ops:
+            fields = offered[name]["input_schema"]["properties"]
+            assert "shape" in fields, f"{name} bietet die Grundformen an"
+            assert "sketch" not in fields, f"{name} bietet keine rohe Skizze an"
+
+
 def test_the_free_shape_no_longer_needs_the_fallback() -> None:
     """Der Trichter war der Vorzeigefall des OpenSCAD-Rückfalls (§24.1).
 

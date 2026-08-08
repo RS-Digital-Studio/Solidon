@@ -62,6 +62,25 @@ Die Sitzung meldet Fortschritt je Schritt über einen Rückruf (`progress`,
 wie `ask` — kein Qt im Kern); Vorschläge zeigen Schritte, Token und
 Rückfragen in der Entscheidungszeile, eine erreichte Grenze ausgeschrieben.
 
+`read_analysis` (`agent/analysis.py`) macht Schichtanalyse, Schätzung,
+Einstellungsrat und Orientierungssuche lesbar — jede Antwort beginnt mit
+ihrer Herkunft (Regel 14), ein harter Dreiecksdeckel ersetzt Zeitgewalt.
+Druckeinstellungen werden **nie gesetzt**: sie reisen nicht in Transaktionen
+(§15.5), der Agent nennt die `advise`-Vorschläge samt Grund. Drucker und
+Material wechselt `set_print_target` — als `DocumentChange`, Undo nimmt
+beide zurück. Die gerenderten Ansichten (§23) liefert die Oberfläche
+(`app/ui/snapshots.py`) als beschriftete PNG; nur ein Backend mit
+`supports_images` bekommt sie. Skizzen entstehen über die
+Grundform-Parameter der Skizzen-Ops (§30.1) — die rohe Punktliste bleibt
+zweifach gesperrt und zählt als ungültiger Aufruf.
+
+**Eindeutig umkehrbare Vorschläge laufen automatisch** (§26.5, Regel 19):
+vier Bedingungen in `agent_apply.auto_acceptable`, die Leiste wird zur
+Übernommen-Leiste mit Rückgängig-Knopf, `auto_accept_reversible` (Vorgabe:
+an) schaltet es ab. Die Suite misst über `proposal.readings`, ob eine Frage
+nachgesehen oder geraten wurde — 39 Referenzanfragen seit der
+Agent-Vertiefung.
+
 **Jeder Chatbeitrag verweist auf die Transaktion, die er erzeugt hat.** Wird
 sie zurückgenommen, gilt der Beitrag als verworfen und geht höchstens als
 „wurde verworfen" mit. Ohne diese Kopplung argumentiert der Agent nach jedem

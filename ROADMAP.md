@@ -3522,9 +3522,15 @@ Konzept:
       `create_from_scad`, keine Warnungen, keine Rückfrage/kein Abbruch),
       die Leiste wird zur Übernommen-Leiste mit Rückgängig-Knopf, und die
       Einstellung `auto_accept_reversible` (Vorgabe: an) schaltet sie ab.
-- [ ] **5 — Grundform-Skizzen:** das `shape`-Schema für die fünf
-      Skizzen-Ops (§30.1) — damit werden die vier heute ungewinnbaren
-      Suite-Fälle gewinnbar.
+- [x] **5 — Grundform-Skizzen:** aufgelöst statt gebaut — der Weg
+      existierte seit P13. Die Ist-Aufnahme sah die `sketch`-Sperre und
+      übersah die Grundform-Parameter daneben; die vier Skizzenfälle waren
+      nie strukturell ungewinnbar. Was fehlte, war der Beweis, und der
+      steht jetzt als Test: die geratene Punktliste wird abgelehnt und
+      zählt als ungültig, dieselbe Op läuft über `shape` durch, und jede
+      erwartete Op bietet die Formen an (Konzept 5.3 trägt die Korrektur
+      samt Lehre: eine Aussage ohne §-Beleg ist eine Vermutung, auch die
+      eigene).
 
 Begleitend: die doppelt implementierten Zusatzwerkzeuge aus
 `main_window.run_remote` auf eine gemeinsame Werkzeuglogik zusammenziehen,

@@ -299,27 +299,22 @@ Materialwechsel von selbst um — genau dafür ist die Verweisform da.
 
 ### 5.3 Skizzen über benannte Grundformen (§30.1)
 
-Die größte strukturelle Lücke: §30.1 sagt, der Agent erzeugt Skizzen
-**ausschließlich über benannte Grundformen** — gebaut ist nur die Sperre
-des rohen `sketch`-Parameters, der vorgesehene Weg fehlt ganz. Vier
-Suite-Fälle (`free_shape`, `hex_base`, `pocket_plate`, `handrail_bend`)
-erwarten Skizzen-Ops, die der Agent strukturell nicht gewinnen kann.
+**Aufgelöst bei der Umsetzung (08.08.2026): der Weg existierte bereits.**
+Die Ist-Aufnahme, auf der dieses Konzept fußt, sah die Sperre des rohen
+`sketch`-Parameters und schloss daraus, der vorgesehene Weg fehle ganz —
+sie hat die Grundform-Parameter daneben übersehen. Tatsächlich tragen die
+Skizzen-Ops seit P13 `shape`, `length`, `width`, `corners` und Verwandte
+als reguläre Parameter (`app/core/sketch/shapes.py`: Rechteck, Langloch,
+Kreis, Vieleck — exakt konstruiert, vom Solver bestätigt), und genau diese
+Felder stehen im Werkzeugschema des Agenten. Die vier Suite-Fälle waren
+nie strukturell ungewinnbar; was fehlte, war der Beweis.
 
-Festlegung:
-
-- Die fünf Skizzen-Ops akzeptieren alternativ zum `sketch`-Verweis eine
-  **`shape`-Beschreibung**: Grundform (`rect`, `circle`, `slot`,
-  `polygon_regular`, `arc_path`), Maße als Parameter oder Zahlen, Lage
-  über einen Anker (Feature-ID plus Versatz entlang benannter Achsen).
-  Keine Punktliste, nirgends — die Grammatik kennt nur Formen und Anker,
-  Leitprinzip 5 bleibt unverletzt.
-- Der Kern übersetzt die Beschreibung deterministisch in eine Skizze; im
-  Verlauf steht die Op wie jede andere, der Nutzer kann die erzeugte
-  Skizze im Skizzeneditor öffnen und weiterbearbeiten.
-- Der rohe `sketch`-Parameter bleibt für den Agenten gesperrt
-  (`session.py`-Sperre unverändert); `shape` ist der einzige Weg.
-- Das Schema von `shape` wird in §30.1 festgeschrieben (Ansage, Abschnitt
-  6), die vier Suite-Fälle bekommen ihre Erwartungen präzisiert.
+Der steht jetzt als Test: eine geratene Punktliste wird abgelehnt und
+zählt als ungültiger Aufruf, dieselbe Op läuft über die Grundformen durch,
+und jede von den vier Fällen erwartete Op bietet `shape` an und `sketch`
+nicht (`tests/test_agent_suite.py`). Eine Bauplan-Ansage braucht es nicht —
+§30.1 beschreibt genau diesen Stand. Die Lehre gehört ins Konzept: eine
+Aussage ohne §-Beleg ist eine Vermutung, auch die eigene.
 
 ### 5.4 Was bewusst nicht in den Handlungsraum kommt
 
