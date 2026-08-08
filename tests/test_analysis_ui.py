@@ -11,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -835,6 +836,148 @@ def test_the_gizmo_is_big_enough_to_grab() -> None:
 
     assert GIZMO_SCALE > 0.15, "die Vorgabe von pyvista"
     assert GIZMO_LINE_RADIUS > 0.02, "und ihre Strichstärke"
+
+
+class _GizmoActor:
+    """Ein Actor mit genau dem, was Auswahl und Beschriftung anfassen."""
+
+    def __init__(self) -> None:
+        self.prop = SimpleNamespace(color=None)
+        self.center = (0.0, 0.0, 0.0)
+
+    def GetLength(self) -> float:  # noqa: N802 — VTK-Name
+        return 10.0
+
+
+class _GizmoWidget:
+    """Spiegelt die echte API: ``AffineWidget3D`` hat ``remove()`` — und
+    kein ``Off()``. Ein Fake mit ``Off`` hätte den Absturz beim Abschalten
+    genau so versteckt, wie die Suite ihn versteckt hat."""
+
+    def __init__(self, actor: object) -> None:
+        self.actor = actor
+        self.removed = False
+
+    def remove(self) -> None:
+        self.removed = True
+
+
+class _GizmoPlotter:
+    """Ein Plotter, der Griffe und Beschriftungen nur verbucht."""
+
+    def __init__(self) -> None:
+        self.widgets: list[_GizmoWidget] = []
+
+    def add_affine_transform_widget(self, actor: object, **_kwargs: object) -> _GizmoWidget:
+        widget = _GizmoWidget(actor)
+        self.widgets.append(widget)
+        return widget
+
+    def add_point_labels(self, *_args: object, **_kwargs: object) -> object:
+        return object()
+
+    def remove_actor(self, _actor: object, render: bool = True) -> None:
+        pass
+
+    def add_mesh(self, *_args: object, **_kwargs: object) -> object:
+        return object()
+
+    def render(self) -> None:
+        pass
+
+
+def _gizmo_viewport() -> tuple[object, _GizmoPlotter]:
+    """Ein Viewport mit Buchführungs-Plotter und zwei Körpern im Bild."""
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    plotter = _GizmoPlotter()
+    viewport.plotter = plotter
+    viewport._actors = {"obj_1": _GizmoActor(), "obj_2": _GizmoActor()}
+    return viewport, plotter
+
+
+def test_the_gizmo_comes_off_again(qt_app: QApplication) -> None:
+    """Abschalten nimmt den Griff aus dem Bild.
+
+    ``AffineWidget3D`` hat kein ``Off()`` — der alte Aufruf endete als
+    ``AttributeError``, den Qt verschluckte: der Griff blieb stehen, obwohl
+    der Schalter aus war. Die Gizmo-Tests prüften bis dahin nur die reinen
+    Funktionen, nie das Widget selbst.
+    """
+    viewport, plotter = _gizmo_viewport()
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+        assert viewport._gizmo is plotter.widgets[-1]
+
+        viewport.set_gizmo(False)
+        assert viewport._gizmo is None
+        assert plotter.widgets[-1].removed, "über remove(), die Methode, die es gibt"
+    finally:
+        viewport.deleteLater()
+
+
+def test_the_gizmo_follows_the_selection(qt_app: QApplication) -> None:
+    """§18.11: wer ein anderes Objekt wählt, will es auch bewegen.
+
+    Der Griff hing bis dahin an der Auswahl zum Zeitpunkt des Einschaltens —
+    ein Wechsel im Objektbaum ließ ihn am vorigen Körper stehen, und nach
+    jeder Auswertung sogar an einem Actor, der gar nicht mehr im Bild war.
+    """
+    viewport, _plotter = _gizmo_viewport()
+    try:
+        viewport.set_gizmo(True)
+        assert viewport._gizmo is None, "ohne Auswahl gibt es nichts zu greifen"
+
+        viewport.select("obj_1")
+        assert viewport._gizmo is not None, "die Auswahl bringt den Griff mit"
+        first = viewport._gizmo
+        assert first.actor is viewport._actors["obj_1"]
+
+        viewport.select("obj_2")
+        assert first.removed, "der alte Griff geht weg"
+        assert viewport._gizmo.actor is viewport._actors["obj_2"], "der neue sitzt am neuen"
+
+        viewport.select(None)
+        assert viewport._gizmo is None
+        assert viewport._gizmo_wanted, "die Entscheidung bleibt — nur der Griff geht"
+    finally:
+        viewport.deleteLater()
+
+
+def test_a_drag_below_the_snap_leaves_no_ghost(qt_app: QApplication) -> None:
+    """Ein Zug unter der Fangschwelle erzeugt keine Operation — dann darf er
+    auch kein Bild hinterlassen.
+
+    pyvistas Widget verschiebt den Actor schon während des Ziehens und merkt
+    sich die Matrix für den nächsten Zug. Ohne Neuanhängen stand der Körper
+    im Bild versetzt, während die Szene ihn nie bewegt hat — und der nächste
+    Zug hätte den vorigen gleich noch einmal angewandt.
+    """
+    from app.core.geom.transform import translation
+
+    viewport, _plotter = _gizmo_viewport()
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+        viewport.set_snapping(1.0, 15.0)
+        first = viewport._gizmo
+        dragged: list[object] = []
+        viewport.transformDragged.connect(dragged.append)
+
+        viewport._on_gizmo_released(translation((0.4, 0.0, 0.0)))
+        assert dragged == [], "0,4 mm bei 1 mm Raster ist kein Zug"
+        assert first.removed, "der Griff wird frisch angehängt"
+        assert viewport._gizmo is not None
+        assert viewport._gizmo is not first, "mit leerer Matrix statt der alten"
+
+        second = viewport._gizmo
+        viewport._on_gizmo_released(translation((5.0, 0.0, 0.0)))
+        assert len(dragged) == 1, "ein echter Zug kommt als Schritte an"
+        assert second.removed and viewport._gizmo is not second
+    finally:
+        viewport.deleteLater()
 
 
 class _FakeRenderer:

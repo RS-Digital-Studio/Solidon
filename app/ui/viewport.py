@@ -540,6 +540,10 @@ class Viewport(QWidget):
         self.measurements = MeasurementList()
         self._measure_actors: list[Any] = []
         self._gizmo: Any | None = None
+        self._gizmo_wanted = False
+        """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
+        im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
+        Szenenwechsel neu angehängt; dieser Schalter sagt, ob überhaupt."""
         self._gizmo_labels: Any | None = None
         """Die Buchstaben an den Gizmo-Achsen. Sie gehen mit ihm."""
         self._face_actor: Any | None = None
@@ -774,7 +778,10 @@ class Viewport(QWidget):
             self._redraw_features()
             self._redraw_measurements()
             self._redraw_layer()
-            self.set_gizmo(False)
+            # Nur den Griff wegnehmen, nicht die Entscheidung: der Schalter in
+            # der Leiste bleibt an, und das nächste Projekt bekommt den Griff
+            # wieder, sobald etwas ausgewählt ist.
+            self._detach_gizmo()
             self.plotter.render()
             return
 
@@ -1077,6 +1084,11 @@ class Viewport(QWidget):
                 # stattdessen im Objektbaum und in der Statusleiste (§19.1).
                 continue
             actor.prop.color = SELECTED_COLOUR if identifier == object_id else self._object_colour
+        # Der Griff folgt der Auswahl (§18.11): wer ein anderes Objekt wählt,
+        # will es auch bewegen — nicht das vorige. Und weil `show_scene` hier
+        # durchkommt, hängt der Griff nach jeder Auswertung am neuen Actor
+        # statt am entfernten der letzten.
+        self.set_gizmo(self._gizmo_wanted)
         self.plotter.render()
 
     def show_build_volume(self, profile: Profile) -> None:
@@ -1492,6 +1504,10 @@ class Viewport(QWidget):
         self._selected_feature = feature_id
         self._redraw_features()
         if self.plotter is not None:
+            # Auch der Griff wechselt mit: eine gewählte Fläche bekommt ihn
+            # auf die Fläche, eine abgewählte gibt ihn ans Objekt zurück
+            # (§18.11) — nicht erst beim nächsten Umschalten.
+            self.set_gizmo(self._gizmo_wanted)
             self.plotter.render()
 
     @property
@@ -1773,14 +1789,17 @@ class Viewport(QWidget):
         Fläche angeklickt hat, will sie versetzen und nicht den Körper
         verschieben (§18.11). Am Griff sieht man den Unterschied, denn er
         sitzt dann auf der Fläche.
+
+        Der Griff wird hier immer frisch gebaut, nie weiterbenutzt: pyvistas
+        Widget rechnet gegen die ``user_matrix`` seines Actors und merkt sie
+        sich über Züge hinweg — ein weitergereichter Griff trüge den vorigen
+        Zug in den nächsten hinein, und einer am Actor der letzten Auswertung
+        zöge an einem Körper, der längst nicht mehr im Bild ist.
         """
+        self._gizmo_wanted = active
         if self.plotter is None:
             return
-        if self._gizmo is not None:
-            self._gizmo.Off()
-            self._gizmo = None
-        self._drop_gizmo_labels()
-        self._drop_face_handle()
+        self._detach_gizmo()
         if not active or self._selected is None:
             return
         face = self.gizmo_target()
@@ -1794,6 +1813,22 @@ class Viewport(QWidget):
             line_radius=GIZMO_LINE_RADIUS,
         )
         self._label_gizmo(actor)
+
+    def _detach_gizmo(self) -> None:
+        """Nimmt Griff, Beschriftung und Flächenscheibe aus dem Bild.
+
+        Über ``remove()`` — eine ``Off``-Methode hat pyvistas
+        ``AffineWidget3D`` nicht, der Aufruf endete als ``AttributeError``,
+        den Qt schluckte: der Griff blieb stehen, obwohl der Schalter aus
+        war. Anders als :meth:`set_gizmo` lässt das den Schalterzustand in
+        Ruhe — eine leere Szene nimmt den Griff weg, aber nicht die
+        Entscheidung, dass einer gewünscht ist.
+        """
+        if self._gizmo is not None:
+            self._gizmo.remove()
+            self._gizmo = None
+        self._drop_gizmo_labels()
+        self._drop_face_handle()
 
     def _label_gizmo(self, actor: Any) -> None:
         """Schreibt X, Y und Z an die Achsen (Regel 18).
@@ -1869,7 +1904,16 @@ class Viewport(QWidget):
         return (float(size[0]), float(size[1]), float(size[2]))
 
     def _on_gizmo_released(self, matrix: Any) -> None:
-        """Ein Ziehen endet als Operationen, nicht als Matrix (§18.11, §2.1)."""
+        """Ein Ziehen endet als Operationen, nicht als Matrix (§18.11, §2.1).
+
+        Am Ende wird der Griff immer neu angehängt, ob ein Zug herauskam oder
+        nicht. Zweierlei hängt daran: pyvista reicht beim nächsten Zug die
+        Matrix *einschließlich* des vorigen mit — ein stehen gelassener Griff
+        wendete jede Bewegung beim zweiten Mal doppelt an. Und ein Zug unter
+        der Fangschwelle erzeugt keine Operation; ohne das Neuanhängen bliebe
+        der Körper im Bild dort stehen, wohin gezogen wurde, während die Szene
+        ihn nie bewegt hat.
+        """
         import numpy as np
 
         steps = decompose_transform(np.asarray(matrix, dtype=float))
@@ -1884,6 +1928,7 @@ class Viewport(QWidget):
             )
             if abs(distance) > EPS_DISPLAY:
                 self.faceDragged.emit(normal, distance)
+            self.set_gizmo(self._gizmo_wanted)
             return
         snapped = TransformSteps(
             offset=(
@@ -1897,6 +1942,7 @@ class Viewport(QWidget):
         )
         if snapped.moves or snapped.turns or snapped.resizes:
             self.transformDragged.emit(snapped)
+        self.set_gizmo(self._gizmo_wanted)
 
     def reset_camera(self) -> None:
         """Passt auf die Körper ein — nicht auf den Bauraum.
