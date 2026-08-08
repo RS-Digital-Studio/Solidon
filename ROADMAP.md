@@ -3405,3 +3405,42 @@ Alle drei sind zu, und jede hatte einen messbaren Grund.
   Öffnen, Beenden, Handbuch und Freischalten sind genau dort sinnvoll. Die
   Kürzel bleiben gültig — Qt registriert sie am Fenster, nicht an der
   Sichtbarkeit des Menüs.
+
+## Agent und Chat vertiefen (08.08.2026) — Konzept steht
+
+Aus einer vollständigen Gegenüberstellung von Ist (`app/core/agent/`,
+`app/ui/chat.py`, Backends) und Soll (Bauplan, diese Liste):
+**`konzept-agent-vertiefung.md`** im Projektwurzelverzeichnis. Der Befund in
+einem Satz: der Unterbau ist richtig, aber der Agent arbeitet halbblind
+(keine Feature-IDs nach einer Op, keine Passungen, keine Analysen, keine
+Ansichten nach §23), erreicht die Hebel der Menüs nicht (Druckeinstellungen,
+Projektdrucker, Grundform-Skizzen nach §30.1), und der Nutzer sieht von
+alldem nur einen endlosen Balken.
+
+Sechs Schritte, jeder einzeln lieferbar, Abnahmekriterien je Schritt im
+Konzept:
+
+- [ ] **0 — Messgrundlage:** Suite-Basislinie mit vollem Fenster (die
+      8/33 oben sind unter abgeschnittenem Prompt gemessen und gelten
+      nicht), `invalid`-Kennzahl beleben, Prompt-Zwischenspeicherung und
+      `max_tokens` im Anthropic-Backend.
+- [ ] **1 — Wahrnehmung Text:** Op-Ergebnisse nennen neue Feature-IDs,
+      `read_digest`, Steckbrief-Blöcke (Passungen, Druckeinstellungen,
+      Quellen, Verlauf mit Werten), `read_standard`, Verlaufsdeckel-Hinweis.
+- [ ] **2 — Sichtbarkeit:** Fortschritt je Schritt im Chat, Kosten und
+      Rückfragen am Vorschlag, §2.6-Suchfeld-Absatz im Prompt.
+- [ ] **3 — Handlungsraum:** `read_analysis` (Schichtanalyse, Schätzung,
+      Einstellungsrat, Karten, Orientierung — Herkunft ausgewiesen,
+      Zeitdeckel), `set_print_setting`, `set_print_target`. Braucht die
+      §26.2-Ansage aus Konzept-Abschnitt 6.
+- [ ] **4 — Augen und Autopilot:** gerenderte Ansichten an bildfähige
+      Backends (§23), automatische Übernahme eindeutig umkehrbarer
+      Vorschläge (§26.5, vier Bedingungen, abschaltbar).
+- [ ] **5 — Grundform-Skizzen:** das `shape`-Schema für die fünf
+      Skizzen-Ops (§30.1) — damit werden die vier heute ungewinnbaren
+      Suite-Fälle gewinnbar.
+
+Begleitend: die doppelt implementierten Zusatzwerkzeuge aus
+`main_window.run_remote` auf eine gemeinsame Werkzeuglogik zusammenziehen,
+bevor Schritt 3 neue Werkzeuge anlegt. Bewusst nicht im Handlungsraum:
+Export/Slicer-Start und Redo — Begründung in Konzept-Abschnitt 5.4.
