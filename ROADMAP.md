@@ -2595,6 +2595,35 @@ Platz, an dem die echten stehen.
       32 768 belegt `qwen3:14b` 14 GB und bleibt zu 100 % auf der Karte.
       `OLLAMA_CONTEXT_TOKENS` in `backends/llm.py` hält Wert und Messreihe.
 
+      **Die volle Suite dazu, und sie hat zwei Seiten.** 33 Anfragen,
+      `qwen3:14b`, gegen den Stand vor der Änderung:
+
+      | Maß | vorher | nachher |
+      |---|---|---|
+      | gut beantwortet | 8/33 | **17/33** |
+      | Baustein statt eigener Geometrie | **0/13** | **6/13** |
+      | bei Mehrdeutigkeit gefragt (§40) | **3/3** | **1/3** |
+      | Hauptmaße als Parameter | — | 2/3 |
+      | Zeitüberschreitungen | 17 (mit 30b) | 2 |
+
+      Die Gesamtquote verdoppelt sich, der gemeldete Befund ist weg — und
+      **eine Zahl ist gefallen, und zwar die, die §40 als Regel führt.** Von
+      den drei mehrdeutigen Anfragen fragt nur noch `join_what`;
+      `which_hole` („Mach das Loch größer" bei vier Bohrungen) und
+      `how_much_thinner` („Mach das Teil dünner") raten stattdessen —
+      `which_hole` mit zwanzig Aufrufen von `drill_hole` und `plug_hole`
+      hintereinander.
+
+      Das ist die Kehrseite desselben Fundes: Wer alle vierundachtzig
+      Werkzeuge sieht, findet immer eines, das plausibel aussieht. Vorher war
+      die Auswahl beschnitten, und `ask_user` blieb übrig — die 3/3 waren
+      also kein Gehorsam, sondern Mangel an Alternativen. Es bleibt
+      trotzdem ein Verstoß gegen Regel 21 und gegen ein Abnahmekriterium.
+      **Nächster Schritt ist der Systemprompt:** „Fragen vor Raten" muss so
+      tragen, dass es gegen vierundachtzig Angebote besteht. Das ist eine
+      Regeländerung und braucht die Suite vorher und nachher — das „vorher"
+      steht mit dieser Messung.
+
       **Das ändert eine Angabe, die dem Kunden gemacht wird.** Beide
       Startseiten und der Hinweis im Modelldialog nannten „rund 10 GB
       Grafikspeicher" — das galt für das Modell allein (9,3 GB). Mit dem
