@@ -3056,3 +3056,32 @@ Zerlegung. Das Widget selbst, sein Anhängen und Abnehmen, prüfte niemand.
 - **Die Achsbuchstaben wandern beim Ziehen nicht mit.** Sie sitzen nach
   jedem Zug wieder richtig (das Neuanhängen nimmt sie mit), aber während
   des Zugs bleiben sie stehen. Kosmetisch, nicht falsch.
+
+### Nachgezogen, gleiche Sitzung
+
+Die drei offenen Punkte der Gizmo-Durchsicht sind keine mehr, und beim
+Abarbeiten kam ein vierter Fund dazu:
+
+- **Skalieren am Griff gibt es jetzt** — ein Würfel auf der Raumdiagonale,
+  beschriftet mit S, Interaktion pyvistas Widget nachgebaut
+  (`app/ui/scale_widget.py`). Ziehen skaliert live um die Mitte, das
+  Loslassen wird eine `scale_object`-Operation, der Faktor ist gegen
+  Ausrutscher eingespannt. Achsweise bleibt Sache des Dialogs.
+- **Zahleneingabe während des Ziehens gibt es jetzt** — die Zahl zum Zug
+  steht über dem Bild, die erste Ziffer übernimmt den Zug, die
+  Eingabetaste wendet genau den getippten Wert an (ohne Fang), Esc
+  verwirft. Gilt für Pfeile, Ringe, Flächengriff und Würfel.
+- **Die Achsbuchstaben reisen mit** — die Beschriftung hängt an einem
+  lebenden PolyData, jedes Move-Ereignis versetzt die Punkte um die
+  Matrix des Zugs.
+- **Der vierte Fund:** pyvistas Widget stellt beim Loslassen *seinen*
+  Trackball-Stil wieder her, nicht unseren — nach dem ersten Zug waren
+  Auswahl-Klick, Kontextmenü und das Navigationsschema weg, und kein Test
+  sah es, weil keiner je einen Zug zu Ende fuhr. Jetzt holt jedes
+  Zugende den eigenen Stil zurück.
+
+Handbuchseite „Bewegen und Bemalen" entsprechend fortgeschrieben, beide
+Sprachen, Website und PDFs neu erzeugt. §18.11 ist damit vollständig:
+Verschieben, Drehen, Skalieren, Raster- und Winkelfang, Zahleneingabe
+während des Ziehens — und der Fang auf Fläche und Bohrungsachse über
+`align_to_feature`, wie seit P3.

@@ -198,3 +198,11 @@ AttributeError verschwand in Qts Slot-Behandlung und fiel nirgends auf. Ein
 Fake im Test spiegelt deshalb die **echte** API-Oberfläche, nicht die
 vermutete — ein Fake mit `Off()` hätte den Absturz genau so versteckt wie
 die Suite.
+
+Zwei Nachbarn derselben Falle: pyvistas Widget schaltet beim Greifen auf
+seinen Trackball-Stil um und stellt beim Loslassen **seinen** Standard
+wieder her, nicht unseren — jedes Zugende ruft deshalb `set_navigation`,
+sonst sind Auswahl-Klick, Kontextmenü und Schema nach dem ersten Zug weg.
+Und der Skaliergriff (`app/ui/scale_widget.py`) ist diesem Widget
+absichtlich Zeile für Zeile nachgebaut — wer dort etwas am
+Interaktionsmuster ändert, ändert es an beiden Stellen.
