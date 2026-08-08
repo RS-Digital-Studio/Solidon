@@ -168,6 +168,60 @@ def test_the_layer_analysis_stays_under_the_budget() -> None:
     assert taken < 2.5
 
 
+def knurled_plate() -> MeshData:
+    """Eine Platte mit feinem Rändel aus der Textur-Op — wenige Dreiecke,
+    aber tausende getrennte Konturen je Schicht in der Texturzone.
+    """
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, PrinterProfile, Scene, SceneObject
+
+    load_operations()
+    spec = REGISTRY.get("apply_texture")
+    plate = SceneObject(
+        id="obj_1",
+        name="Platte",
+        mesh=MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 6.0))),
+    )
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={"obj_1": plate}, parameters={}),
+            inputs=[plate],
+            params=spec.params(
+                pattern="knurl_diamond", width=56.0, height=36.0, pitch=1.2, depth=0.5, z=3.0
+            ),
+            profile=Profile(
+                printer=PrinterProfile(id="test", title="Test", build_volume=(220.0, 220.0, 250.0)),
+                material=None,
+            ),
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    return result.outputs[0].mesh
+
+
+def test_the_layer_analysis_survives_a_knurled_surface() -> None:
+    """Viele Konturen sind der eigentliche Härtefall, nicht viele Dreiecke.
+
+    Die Rändel-Platte hat 46 000 Dreiecke — ein Bruchteil des §31-Körpers —
+    und stand trotzdem bei 37 Sekunden: die Verschachtelungsanalyse in
+    ``_polygon_from`` stellte je Schicht n² einzelne contains-Fragen, bei
+    2 898 Ringen also 8,4 Millionen. Über den räumlichen Index sind es vier
+    Sekunden; die Schranke hier fängt die Größenordnung, die 25-%-Schwelle
+    des Vergleichslaufs den Rest.
+    """
+    mesh = knurled_plate()
+    taken = measure("slice_knurl", lambda: slice_body(mesh, 0.2))
+    assert taken < 12.0
+
+
 def test_the_wall_thickness_map_stays_under_the_bound() -> None:
     """§31 nennt drei Sekunden für diese Karte, im Hintergrund.
 

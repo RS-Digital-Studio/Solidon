@@ -355,14 +355,19 @@ def _polygon_from(points: Any) -> ShapelyPolygon | None:
     # als gar nichts zurück.
     shells = [ShapelyPolygon(part.exterior) for part in parts]
     points = [part.representative_point() for part in parts]
-    inside = [
-        [
-            other
-            for other in range(len(shells))
-            if other != index and shells[other].contains(points[index])
-        ]
-        for index in range(len(shells))
-    ]
+    # Wer in wem liegt, beantwortet ein räumlicher Index in einem Aufruf.
+    # Paarweise gefragt („liegt Punkt i in Hülle j?") sind es n² einzelne
+    # Prädikate durch den Python-Umweg — eine Rändel-Schicht mit 2 898 Ringen
+    # stellte die Frage 8,4 Millionen Mal und brauchte dafür knapp zwei
+    # Sekunden, je Schicht. Der Baum liefert dieselben Paare in Millisekunden.
+    inside: list[list[int]] = [[] for _ in shells]
+    if shells:
+        held, holder = shapely.STRtree(shells).query(points, predicate="within")
+        for index, container in zip(held.tolist(), holder.tolist(), strict=True):
+            # Der Musterpunkt eines Teils liegt immer auch in dessen eigener
+            # Hülle — das Teil ist sein eigener Behälter aber nicht.
+            if index != container:
+                inside[index].append(container)
     solids = []
     for index, containers in enumerate(inside):
         if len(containers) % 2:
