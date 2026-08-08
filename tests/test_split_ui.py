@@ -66,6 +66,13 @@ def test_folding_back_together_resets_the_slider(qt_app: QApplication) -> None:
 def test_the_slider_reports_a_factor(qt_app: QApplication) -> None:
     """Der Faktor kommt entprellt: jede Stufe baut die ganze Ansicht neu, und
     ein Zug über den Regler soll eine Rechnung auslösen statt zwanzig.
+
+    Geprüft wird, **dass** der Zeitgeber läuft, nicht wie lange. Vorher stand
+    hier ein ``processEvents`` zwischen den Reglerstufen und dem Auslösen von
+    Hand: liefen dazwischen mehr als die hundertzwanzig Millisekunden der
+    Entprellung — und unter der vollen Suite tun sie das —, feuerte er dort
+    schon, und das Signal kam zweimal. Ein Test, der bei belasteter Maschine
+    rot wird, misst die Maschine.
     """
     bar = ExplodeBar()
     seen: list[float] = []
@@ -74,8 +81,9 @@ def test_the_slider_reports_a_factor(qt_app: QApplication) -> None:
     bar.slider.setValue(4)
     bar.slider.setValue(10)
     assert seen == [], "während der Zeiger unterwegs ist, wird nicht gerechnet"
+    assert bar._pending.isActive(), "aber es ist etwas angemeldet"
 
-    qt_app.processEvents()
+    bar._pending.stop()
     bar._settled()
 
     assert seen == [1.0]
