@@ -9,8 +9,9 @@ ganze Block steht in `style.css` hinter einem `@supports` — kennt ein Browser
 die Zeitachse nicht, greift keine Regel davon, und die Seite steht vollständig
 da. Nichts wird über `opacity: 0` versteckt, was ohne Animation nie wieder
 auftaucht. `prefers-reduced-motion: reduce` schaltet alles ab und setzt die
-drei erklärenden Zeichnungen von Hand auf ihren Endzustand; ohne das lägen
-beide Zustände übereinander („2,40 mm“ über „3,60 mm“).
+erklärenden Zeichnungen — vier große in den Beweiszeilen, drei Vignetten über
+den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
+übereinander („2,40 mm“ über „3,60 mm“).
 
 ## Dateien
 

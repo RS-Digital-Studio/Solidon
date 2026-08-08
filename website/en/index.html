@@ -175,6 +175,24 @@
       same inspection report. You decide per part, not per program.</p>
       <div class="ways">
         <div class="way">
+          <svg class="figure art" viewBox="0 0 320 140" role="img"
+               aria-label="A drawing: a pointer clicks the hole of a faceted part, the hole is marked as a feature, and its dimension changes from 5.0 to 5.2 millimetres.">
+            <path class="body" d="M20 24 H150 V70 H96 V118 H20 Z"/>
+            <g class="rule">
+              <line x1="150" y1="24" x2="96" y2="70"/>
+              <line x1="20" y1="118" x2="96" y2="70"/>
+            </g>
+            <g class="anim fig-w1-hole">
+              <circle cx="58" cy="88" r="14" fill="#16181c"/>
+            </g>
+            <circle class="hot-stroke anim fig-w1-ring" cx="58" cy="88" r="19" fill="none"/>
+            <path class="ink anim fig-w1-cursor" d="M58 88 l17 6.5 -7.5 3 -3 7.5 z"/>
+            <text class="dim" x="180" y="38">Face clicked</text>
+            <rect class="field" x="180" y="46" width="122" height="32" rx="4"/>
+            <text class="dim" x="190" y="67">ø</text>
+            <text class="value anim fig-w1-d50" x="292" y="67" text-anchor="end">5.0 mm</text>
+            <text class="value anim fig-w1-d52" x="292" y="67" text-anchor="end">5.2 mm</text>
+          </svg>
           <span class="tag">Way 1 — Edit</span>
           <h3>Change a downloaded model</h3>
           <p>Drop the file, read the inspection report, click a face or a
@@ -182,6 +200,19 @@
           the context menu. Compare before/after, apply, export.</p>
         </div>
         <div class="way">
+          <svg class="figure art" viewBox="0 0 320 140" role="img"
+               aria-label="A drawing: the parameter “width” changes from 80 to 110 millimetres, the body below grows with it, and the nut pocket inside stays where it is.">
+            <text class="dim" x="20" y="34">Parameter</text>
+            <rect class="field" x="20" y="42" width="132" height="32" rx="4"/>
+            <text class="dim" x="30" y="63">width</text>
+            <text class="value anim fig-w2-v80" x="142" y="63" text-anchor="end">80 mm</text>
+            <text class="value anim fig-w2-v110" x="142" y="63" text-anchor="end">110 mm</text>
+            <g class="anim fig-w2-grow">
+              <rect class="body" x="20" y="90" width="160" height="34" rx="2"/>
+            </g>
+            <polygon fill="#16181c" points="60,98 67.8,102.5 67.8,111.5 60,116 52.2,111.5 52.2,102.5"/>
+            <text class="dim" x="20" y="136">Building block: M4 nut pocket</text>
+          </svg>
           <span class="tag">Way 2 — Design</span>
           <h3>Build new, with dimensions</h3>
           <p>Describe what you need. The agent creates parameters and
@@ -189,6 +220,20 @@
           hinges. Turn the numbers, the model follows instantly.</p>
         </div>
         <div class="way">
+          <svg class="figure art" viewBox="0 0 320 140" role="img"
+               aria-label="A drawing: on the left a jagged, open mesh shape from generation; an arrow leads right, where the same shape stands closed and smoothed on the build plate, with a check mark and the word printable.">
+            <text class="dim" x="20" y="34">generated</text>
+            <path fill="none" stroke="#98a0ab" stroke-width="1.4" stroke-dasharray="4 3"
+                  d="M28 112 l4 -30 8 -14 6 6 8 -14 12 2 6 10 8 -4 4 14 -6 12 8 8 -10 10 -24 4 -16 -4 z"/>
+            <g class="anim fig-w3-fixed">
+              <path class="hot" d="M150 88 h24 v-6 l14 10 -14 10 v-6 h-24 z"/>
+              <text class="dim" x="208" y="34">repaired and checked</text>
+              <line class="rule" x1="204" y1="114" x2="306" y2="114" stroke-width="2" stroke-linecap="round"/>
+              <path class="body" d="M216 114 V74 q0 -24 24 -24 h14 q24 0 24 24 v40 z"/>
+              <path class="hot" d="m230 124 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="254" y="136" font-size="11">printable</text>
+            </g>
+          </svg>
           <span class="tag">Way 3 — Generate</span>
           <h3>From text or image</h3>
           <p>A generated mesh runs through the repair chain automatically,
@@ -203,11 +248,67 @@
 
   <section id="features" class="tint">
     <div class="wrap">
-      <h2>Six things that make the difference</h2>
+      <h2>What makes the difference</h2>
       <p class="sub">Everything here is a screenshot from the running
       application, or shows exactly what it does.</p>
 
       <div class="showcase">
+        <div>
+          <span class="kicker">AI agent</span>
+          <h3>One sentence in the chat, one proposal, one undo</h3>
+          <p>The agent drives the same operations as the menus — there is
+          no shortcut past the geometry. Every proposal shows what it will
+          do before it does it, and is applied as a whole: exactly one
+          transaction, taken back completely by a single undo.</p>
+          <p class="note">Geometry is computed by code, never by the language
+          model. <b>Every dimension in a proposal is exact — nothing is
+          “roughly generated”.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="A drawing: “Countersink the four screws — M4, flush.” types itself into a chat field; the agent answers with a proposal of three operations, in the cross-section next to it the hole widens to 4.5 millimetres and receives a 90 degree countersink, and below it says: applied — one transaction, a single undo takes it all back.">
+            <text class="ink" x="24" y="30" font-weight="600">One sentence — three operations</text>
+
+            <text class="dim" x="24" y="64">You</text>
+            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
+            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Countersink the four screws — M4, flush.</text>
+
+            <g class="anim fig-chat-card">
+              <text class="dim" x="24" y="110">Agent</text>
+              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
+              <text class="value" x="90" y="112">Proposal — 3 operations</text>
+            </g>
+            <g class="anim fig-chat-op-1">
+              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="136" font-size="12">Adjust hole: ø 4.2 → 4.5 mm</text>
+            </g>
+            <g class="anim fig-chat-op-2">
+              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="160" font-size="12">Countersink 90°, ø 8.6 mm — flush</text>
+            </g>
+            <g class="anim fig-chat-op-3">
+              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="184" font-size="12">Applied to all four holes</text>
+            </g>
+
+            <text class="dim" x="380" y="64">Cross-section</text>
+            <rect class="body" x="380" y="96" width="150" height="53"/>
+            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
+            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
+            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
+            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4.2 mm</text>
+            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4.5 mm</text>
+
+            <g class="anim fig-chat-done">
+              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="48" y="258" font-size="12">Applied — one transaction. A single undo takes it all back.</text>
+            </g>
+          </svg>
+          <figcaption>The proposal changes nothing until it is applied — and then as a whole.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip">
         <div>
           <span class="kicker">Inspection report</span>
           <h3>You learn what will go wrong before you print</h3>
@@ -227,7 +328,7 @@
         </figure>
       </div>
 
-      <div class="showcase flip">
+      <div class="showcase">
         <div>
           <span class="kicker">Parametric</span>
           <h3>Change a number — not rebuild the model</h3>
@@ -269,7 +370,7 @@
         </figure>
       </div>
 
-      <div class="showcase">
+      <div class="showcase flip">
         <div>
           <span class="kicker">Building blocks</span>
           <h3>A nut pocket in four clicks instead of half an hour</h3>
@@ -290,7 +391,7 @@
         </figure>
       </div>
 
-      <div class="showcase flip">
+      <div class="showcase">
         <div>
           <span class="kicker">Layer analysis</span>
           <h3>See what the printer is going to see</h3>
@@ -336,7 +437,7 @@
         </figure>
       </div>
 
-      <div class="showcase">
+      <div class="showcase flip">
         <div>
           <span class="kicker">Auto split</span>
           <h3>Too big for the bed is no longer a reason to skip it</h3>
@@ -391,7 +492,7 @@
         </figure>
       </div>
 
-      <div class="showcase flip">
+      <div class="showcase">
         <div>
           <span class="kicker">Every number a formula</span>
           <h3>Dialogs that do the arithmetic</h3>
@@ -413,7 +514,7 @@
         </figure>
       </div>
 
-      <div class="showcase">
+      <div class="showcase flip">
         <div>
           <span class="kicker">First launch</span>
           <h3>You don't start from nothing</h3>

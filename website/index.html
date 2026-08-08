@@ -175,6 +175,24 @@
       denselben Prüfbericht. Du entscheidest je Teil, nicht je Programm.</p>
       <div class="ways">
         <div class="way">
+          <svg class="figure art" viewBox="0 0 320 140" role="img"
+               aria-label="Eine Zeichnung: ein Zeiger klickt auf die Bohrung eines facettierten Teils, sie wird als Merkmal markiert, und ihr Maß wechselt von 5,0 auf 5,2 Millimeter.">
+            <path class="body" d="M20 24 H150 V70 H96 V118 H20 Z"/>
+            <g class="rule">
+              <line x1="150" y1="24" x2="96" y2="70"/>
+              <line x1="20" y1="118" x2="96" y2="70"/>
+            </g>
+            <g class="anim fig-w1-hole">
+              <circle cx="58" cy="88" r="14" fill="#16181c"/>
+            </g>
+            <circle class="hot-stroke anim fig-w1-ring" cx="58" cy="88" r="19" fill="none"/>
+            <path class="ink anim fig-w1-cursor" d="M58 88 l17 6.5 -7.5 3 -3 7.5 z"/>
+            <text class="dim" x="180" y="38">Fläche angeklickt</text>
+            <rect class="field" x="180" y="46" width="122" height="32" rx="4"/>
+            <text class="dim" x="190" y="67">ø</text>
+            <text class="value anim fig-w1-d50" x="292" y="67" text-anchor="end">5,0 mm</text>
+            <text class="value anim fig-w1-d52" x="292" y="67" text-anchor="end">5,2 mm</text>
+          </svg>
           <span class="tag">Weg 1 — Anpassen</span>
           <h3>Fremdes Modell ändern</h3>
           <p>Datei ablegen, Prüfbericht lesen, Fläche oder Bohrung anklicken —
@@ -182,6 +200,19 @@
           wählen. Vorher/Nachher ansehen, übernehmen, exportieren.</p>
         </div>
         <div class="way">
+          <svg class="figure art" viewBox="0 0 320 140" role="img"
+               aria-label="Eine Zeichnung: der Parameter „breite“ wechselt von 80 auf 110 Millimeter, der Körper darunter wächst mit, und die Mutternfalle darin bleibt, wo sie ist.">
+            <text class="dim" x="20" y="34">Parameter</text>
+            <rect class="field" x="20" y="42" width="132" height="32" rx="4"/>
+            <text class="dim" x="30" y="63">breite</text>
+            <text class="value anim fig-w2-v80" x="142" y="63" text-anchor="end">80 mm</text>
+            <text class="value anim fig-w2-v110" x="142" y="63" text-anchor="end">110 mm</text>
+            <g class="anim fig-w2-grow">
+              <rect class="body" x="20" y="90" width="160" height="34" rx="2"/>
+            </g>
+            <polygon fill="#16181c" points="60,98 67.8,102.5 67.8,111.5 60,116 52.2,111.5 52.2,102.5"/>
+            <text class="dim" x="20" y="136">Baustein: Mutternfalle M4</text>
+          </svg>
           <span class="tag">Weg 2 — Konstruieren</span>
           <h3>Neu bauen mit Maßen</h3>
           <p>Beschreiben, was gebraucht wird. Der Agent legt Parameter an und
@@ -189,6 +220,20 @@
           An den Zahlen drehen, das Modell folgt sofort.</p>
         </div>
         <div class="way">
+          <svg class="figure art" viewBox="0 0 320 140" role="img"
+               aria-label="Eine Zeichnung: links eine zerklüftete, offene Netzform aus der Generierung; ein Pfeil führt nach rechts, wo dieselbe Form geschlossen und geglättet auf der Bauplatte steht, mit einem Häkchen und dem Wort druckbar.">
+            <text class="dim" x="20" y="34">generiert</text>
+            <path fill="none" stroke="#98a0ab" stroke-width="1.4" stroke-dasharray="4 3"
+                  d="M28 112 l4 -30 8 -14 6 6 8 -14 12 2 6 10 8 -4 4 14 -6 12 8 8 -10 10 -24 4 -16 -4 z"/>
+            <g class="anim fig-w3-fixed">
+              <path class="hot" d="M150 88 h24 v-6 l14 10 -14 10 v-6 h-24 z"/>
+              <text class="dim" x="208" y="34">repariert und geprüft</text>
+              <line class="rule" x1="204" y1="114" x2="306" y2="114" stroke-width="2" stroke-linecap="round"/>
+              <path class="body" d="M216 114 V74 q0 -24 24 -24 h14 q24 0 24 24 v40 z"/>
+              <path class="hot" d="m230 124 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="254" y="136" font-size="11">druckbar</text>
+            </g>
+          </svg>
           <span class="tag">Weg 3 — Generieren</span>
           <h3>Aus Text oder Bild</h3>
           <p>Ein generiertes Mesh durchläuft automatisch die Reparaturkette,
@@ -204,11 +249,68 @@
 
   <section id="funktionen" class="tint">
     <div class="wrap">
-      <h2>Sechs Dinge, die den Unterschied machen</h2>
+      <h2>Was den Unterschied macht</h2>
       <p class="sub">Alles hier ist ein Bildschirmfoto aus der laufenden
       Anwendung oder zeigt genau, was sie tut.</p>
 
       <div class="showcase">
+        <div>
+          <span class="kicker">KI-Agent</span>
+          <h3>Ein Satz im Chat, ein Vorschlag, ein Undo</h3>
+          <p>Der Agent bedient dieselben Operationen wie die Menüs — es gibt
+          keine Abkürzung an der Geometrie vorbei. Jeder Vorschlag zeigt,
+          was er tun wird, bevor er es tut, und wird als Ganzes übernommen:
+          genau eine Transaktion, die ein einziges Undo vollständig
+          zurücknimmt.</p>
+          <p class="note">Die Geometrie rechnet Code, nie das Sprachmodell.
+          <b>Jedes Maß im Vorschlag ist exakt — nichts ist „ungefähr
+          generiert“.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="Eine Zeichnung: in ein Chatfeld schreibt sich „Senke die vier Schrauben — M4, bündig.“; der Agent antwortet mit einem Vorschlag aus drei Operationen, im Querschnitt daneben weitet sich die Bohrung auf 4,5 Millimeter und bekommt einen 90-Grad-Senkkegel, darunter steht: übernommen — eine Transaktion, ein Undo nimmt alles zurück.">
+            <text class="ink" x="24" y="30" font-weight="600">Ein Satz — drei Operationen</text>
+
+            <text class="dim" x="24" y="64">Du</text>
+            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
+            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Senke die vier Schrauben — M4, bündig.</text>
+
+            <g class="anim fig-chat-card">
+              <text class="dim" x="24" y="110">Agent</text>
+              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
+              <text class="value" x="90" y="112">Vorschlag — 3 Operationen</text>
+            </g>
+            <g class="anim fig-chat-op-1">
+              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="136" font-size="12">Bohrung anpassen: ø 4,2 → 4,5 mm</text>
+            </g>
+            <g class="anim fig-chat-op-2">
+              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="160" font-size="12">Senkung 90°, ø 8,6 mm — bündig</text>
+            </g>
+            <g class="anim fig-chat-op-3">
+              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="184" font-size="12">Auf alle vier Bohrungen übertragen</text>
+            </g>
+
+            <text class="dim" x="380" y="64">Querschnitt</text>
+            <rect class="body" x="380" y="96" width="150" height="53"/>
+            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
+            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
+            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
+            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4,2 mm</text>
+            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4,5 mm</text>
+
+            <g class="anim fig-chat-done">
+              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="48" y="258" font-size="12">Übernommen — eine Transaktion. Ein Undo nimmt alles zurück.</text>
+            </g>
+          </svg>
+          <figcaption>Der Vorschlag ändert nichts, bis er übernommen ist — und dann als Ganzes.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip">
         <div>
           <span class="kicker">Prüfbericht</span>
           <h3>Du erfährst vor dem Druck, was schiefgehen wird</h3>
@@ -229,7 +331,7 @@
         </figure>
       </div>
 
-      <div class="showcase flip">
+      <div class="showcase">
         <div>
           <span class="kicker">Parametrisch</span>
           <h3>Eine Zahl ändern — nicht das Modell neu bauen</h3>
@@ -271,7 +373,7 @@
         </figure>
       </div>
 
-      <div class="showcase">
+      <div class="showcase flip">
         <div>
           <span class="kicker">Bausteine</span>
           <h3>Mutternfalle in vier Klicks statt vier halben Stunden</h3>
@@ -293,7 +395,7 @@
         </figure>
       </div>
 
-      <div class="showcase flip">
+      <div class="showcase">
         <div>
           <span class="kicker">Schichtanalyse</span>
           <h3>Sehen, was der Drucker sehen wird</h3>
@@ -340,7 +442,7 @@
         </figure>
       </div>
 
-      <div class="showcase">
+      <div class="showcase flip">
         <div>
           <span class="kicker">Auto-Split</span>
           <h3>Zu groß fürs Bett ist kein Grund mehr, es zu lassen</h3>
@@ -396,7 +498,7 @@
         </figure>
       </div>
 
-      <div class="showcase flip">
+      <div class="showcase">
         <div>
           <span class="kicker">Jede Zahl eine Formel</span>
           <h3>Dialoge, die mitrechnen</h3>
@@ -418,7 +520,7 @@
         </figure>
       </div>
 
-      <div class="showcase">
+      <div class="showcase flip">
         <div>
           <span class="kicker">Erster Start</span>
           <h3>Du fängst nicht bei null an</h3>
