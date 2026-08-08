@@ -236,6 +236,9 @@ class ObjectTree(QWidget):
         minus A", und die Reihenfolge im Baum weiß davon nichts."""
         self._hidden: frozenset[ObjectId] = frozenset()
         self._unit: LengthUnit = "mm"
+        self._room: int | None = None
+        """Die Höhe, die diese Karte haben darf — von der Überlagerung
+        zugeteilt (§2.5). ``None`` heißt: noch niemand hat es gesagt."""
         self._result: EvaluationResult | None = None
         self._document: Document | None = None
         """Das Zuletzt-Gezeigte, damit sich der Baum ohne neue Auswertung
@@ -334,6 +337,27 @@ class ObjectTree(QWidget):
         self._restore(selected, selected_feature)
         self._fit()
 
+    def _rows(self) -> int:
+        """Die sichtbaren Zeilen — ein zugeklappter Ast zählt als eine."""
+        rows = 0
+        for index in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(index)
+            if item is None:
+                continue
+            rows += 1 + (item.childCount() if item.isExpanded() else 0)
+        return rows
+
+    def wanted_height(self) -> int:
+        """Die Höhe, bei der jede Zeile zu sehen wäre."""
+        return view_chrome(self.tree) + self._rows() * row_height_of(self.tree)
+
+    def set_room(self, pixels: int) -> None:
+        """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
+        if pixels == self._room:
+            return
+        self._room = pixels
+        self._fit()
+
     def _fit(self) -> None:
         """So hoch wie der Inhalt — aufgeklappte Merkmale zählen mit.
 
@@ -344,13 +368,7 @@ class ObjectTree(QWidget):
         darunter seine hundert Pixel für sich behielt und nichts davon zu
         sehen war.
         """
-        rows = 0
-        for index in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(index)
-            if item is None:
-                continue
-            rows += 1 + (item.childCount() if item.isExpanded() else 0)
-        fit_to_rows(self.tree, rows)
+        fit_to_rows(self.tree, self._rows(), room=self._room)
         self.setMinimumHeight(self.sizeHint().height())
         self.updateGeometry()
 
@@ -652,9 +670,31 @@ class HistoryPanel(QWidget):
         self.list.setToolTip(tr("Doppelklick öffnet die Operation und ihre Parameter."))
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._on_context_menu)
+        self._room: int | None = None
+        """Wie beim Objektbaum: die zugeteilte Höhe, ``None`` bis sie kommt."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.list)
+
+    def wanted_height(self) -> int:
+        """Die Höhe, bei der jeder Schritt zu sehen wäre."""
+        return view_chrome(self.list) + self.list.count() * row_height_of(self.list)
+
+    def set_room(self, pixels: int) -> None:
+        """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
+        if pixels == self._room:
+            return
+        self._room = pixels
+        self._fit()
+
+    def _fit(self) -> None:
+        """So hoch wie der Inhalt, höchstens so hoch wie zugeteilt."""
+        fit_to_rows(self.list, self.list.count(), room=self._room)
+        # Dieselbe Stelle wie im Objektbaum: die Liste ist bemessen, die Karte
+        # um sie herum meldete weiter ihre Mindesthöhe und wurde auf zehn Pixel
+        # gedrückt.
+        self.setMinimumHeight(self.sizeHint().height())
+        self.updateGeometry()
 
     def show_document(
         self,
@@ -706,12 +746,7 @@ class HistoryPanel(QWidget):
             item.setToolTip(tr("Ein Wiederholen holt diesen Schritt zurück."))
             self.list.addItem(item)
 
-        fit_to_rows(self.list, self.list.count())
-        # Dieselbe Stelle wie im Objektbaum: die Liste ist bemessen, die Karte
-        # um sie herum meldete weiter ihre Mindesthöhe und wurde auf zehn Pixel
-        # gedrückt.
-        self.setMinimumHeight(self.sizeHint().height())
-        self.updateGeometry()
+        self._fit()
         self.list.scrollToBottom()
 
     def _on_activated(self, item: QListWidgetItem) -> None:
@@ -973,11 +1008,19 @@ class MeasurementLabel(QLabel):
         )
 
 
-#: Wie viele Zeilen eine Karte der linken Spalte mindestens und höchstens hoch
-#: wird. Unten drei, damit der leere Zustand seinen Satz zeigen kann; oben
-#: zwölf, damit ein Baum mit fünfzig Teilen nicht die ganze Spalte nimmt und
-#: den Verlauf darunter aus dem Fenster schiebt. Dazwischen wächst sie mit.
+#: Wie viele Zeilen eine Karte der linken Spalte mindestens hoch wird — drei,
+#: damit der leere Zustand seinen Satz zeigen kann.
 MIN_ROWS = 3
+
+#: Der Deckel, solange niemand gesagt hat, wie viel Platz da ist.
+#:
+#: Er war einmal die ganze Antwort auf „ein Baum mit fünfzig Teilen darf nicht
+#: die Spalte nehmen und den Verlauf hinausschieben". Die Sorge ist richtig,
+#: eine Konstante ist die falsche Antwort darauf: im Vollbild stand der Baum
+#: bei dreißig sichtbaren Zeilen auf zwölf und rollte, während unter der Karte
+#: dreihundert Pixel leer blieben. Wie viel Platz da ist, weiß nur die
+#: Überlagerung — sie teilt ihn über ``set_room`` zu, und dann gilt ihre Zahl
+#: statt dieser.
 MAX_ROWS = 12
 
 
@@ -994,7 +1037,29 @@ def fit_wrapped(label: QLabel) -> None:
     label.setMinimumHeight(label.heightForWidth(inner))
 
 
-def fit_to_rows(view: QAbstractItemView, rows: int) -> None:
+def view_chrome(view: QAbstractItemView) -> int:
+    """Was eine Liste über ihren Zeilen braucht: Rahmen, Spaltenkopf, Luft.
+
+    Die zwei Pixel Luft am Ende sind nicht Zierde: ohne sie endet die letzte
+    Zeile genau auf der Kante des Sichtfelds, und eine Zeile, die auf den
+    Rahmen stößt, sieht abgeschnitten aus, auch wenn sie vollständig da ist.
+    """
+    header = 0
+    if isinstance(view, QTreeWidget) and not view.isHeaderHidden():
+        head = view.header()
+        header = head.height() if head is not None else 0
+    return header + 2 * view.frameWidth() + 2
+
+
+def row_height_of(view: QAbstractItemView) -> int:
+    """Wie hoch eine Zeile dieser Liste ist — notfalls geschätzt."""
+    height = view.sizeHintForRow(0) if view.model() is not None else 0
+    if height <= 0:
+        height = view.fontMetrics().height() + 2 * TIGHT
+    return height
+
+
+def fit_to_rows(view: QAbstractItemView, rows: int, *, room: int | None = None) -> None:
     """Setzt die Höhe einer Liste oder eines Baums auf ihren Inhalt.
 
     Die linke Spalte baut ihre Karten ohne Streckfaktor, „so hoch wie ihr
@@ -1003,20 +1068,19 @@ def fit_to_rows(view: QAbstractItemView, rows: int) -> None:
     Der Objektbaum scrollte damit ab dem zweiten Körper, während unter der
     Spalte sechshundert Pixel leer blieben — und der zweite Körper ist genau
     das, was nach einer Teilung entsteht.
+
+    ``room`` ist die Höhe, die diese Liste haben darf. Sie kommt von der
+    Überlagerung, die als einzige weiß, wie hoch das Fenster ist und wie viele
+    Karten sich darin teilen müssen. Ohne sie gilt ``MAX_ROWS`` — für einen
+    Aufruf, der von außerhalb der Spalte kommt, und für den Augenblick vor dem
+    ersten Zuteilen.
     """
-    row_height = view.sizeHintForRow(0) if rows else 0
-    if row_height <= 0:
-        row_height = view.fontMetrics().height() + 2 * TIGHT
-    header = 0
-    if isinstance(view, QTreeWidget) and not view.isHeaderHidden():
-        head = view.header()
-        header = head.height() if head is not None else 0
-    frame = 2 * view.frameWidth()
-    shown = max(MIN_ROWS, min(MAX_ROWS, rows))
-    # Zwei Pixel Luft: ohne sie endet die letzte Zeile genau auf der Kante des
-    # Sichtfelds, und eine Zeile, die auf den Rahmen stößt, sieht abgeschnitten
-    # aus, auch wenn sie vollständig da ist.
-    view.setFixedHeight(header + frame + shown * row_height + 2)
+    chrome = view_chrome(view)
+    row_height = row_height_of(view)
+    wanted = chrome + max(rows, 0) * row_height
+    floor = chrome + MIN_ROWS * row_height
+    ceiling = room if room is not None else chrome + MAX_ROWS * row_height
+    view.setFixedHeight(max(floor, min(wanted, ceiling)))
 
 
 def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidget:

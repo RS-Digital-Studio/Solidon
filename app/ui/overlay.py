@@ -23,6 +23,8 @@ schwebenden Karten hätte nichts zu teilen: sie nehmen einander nichts weg.
 
 from __future__ import annotations
 
+from typing import Protocol, runtime_checkable
+
 from PySide6.QtCore import (
     QEasingCurve,
     QEvent,
@@ -38,6 +40,28 @@ from PySide6.QtWidgets import QAbstractItemView, QTreeView, QWidget
 
 from app.ui.style import ROOMY, SPACE
 from app.ui.theme import THEMES, Theme
+
+
+@runtime_checkable
+class RoomTaker(Protocol):
+    """Eine Karte, der die Überlagerung Höhe zuteilen kann.
+
+    Wer diese beiden Methoden mitbringt, wird beim Setzen der Zonen gefragt,
+    wie hoch er gern wäre, und bekommt gesagt, wie hoch er sein darf. Wer sie
+    nicht mitbringt, behält seine eigene Höhe — die Parameterleiste etwa, die
+    so hoch ist wie ihre Zeilen und nichts zu verteilen hat.
+    """
+
+    def height(self) -> int: ...
+
+    def wanted_height(self) -> int:
+        """Die Höhe, bei der alles zu sehen wäre."""
+        ...
+
+    def set_room(self, pixels: int) -> None:
+        """Die Höhe, die zur Verfügung steht."""
+        ...
+
 
 #: Wie lange eine Karte für ihren Weg braucht.
 #:
@@ -132,6 +156,18 @@ def rows_height(view: QAbstractItemView) -> int:
         umgebrochener Befund im Prüfbericht ist zwei Zeilen hoch, und eine
         Rechnung, die ihn für eine hält, schneidet ihn ab. Genau das ließ die
         Karte einen Rollbalken zeigen, wo alles hineingepasst hätte.
+
+        Bei einer Liste ist die Quelle ``visualRect`` und **nicht**
+        ``sizeHintForRow``. Der zweite kennt den Wortumbruch nicht: für die
+        fünf Befunde, mit denen das Beispielprojekt öffnet, meldet er
+        fünfmal 34 Pixel, während die Zeilen 58, 34, 42, 58 und 42 hoch
+        sind — 170 gegen 234. Die Karte bekam die 170, und bei fünf
+        Befunden stand ein Rollbalken in einer Spalte, neben der
+        achthundert Pixel frei blieben.
+
+        ``visualRect`` kennt die Wahrheit erst, wenn die Liste einmal
+        gelegt wurde; solange sie das nicht ist, ist die Schätzung besser
+        als eine Null. Deshalb der größere der beiden Werte.
         """
         total = 0
         for row in range(model.rowCount(parent)):
@@ -141,7 +177,7 @@ def rows_height(view: QAbstractItemView) -> int:
                 if tree.isExpanded(index):
                     total += rows_in(index)
             else:
-                total += view.sizeHintForRow(row)
+                total += max(view.visualRect(index).height(), view.sizeHintForRow(row))
         return total
 
     wanted = rows_in(QModelIndex())
@@ -353,10 +389,12 @@ class OverlayHost(QWidget):
         room = max(height - 2 * MARGIN - self._bottom_room(), 0)
 
         if self.left.isVisibleTo(self):
+            self._share_room(self.left, room)
             wanted = min(natural_height(self.left), room)
             self._move(self.left, QRect(MARGIN, MARGIN, LEFT_WIDTH, wanted), moving)
 
         if self.right.isVisibleTo(self):
+            self._share_room(self.right, room)
             wanted = min(natural_height(self.right), room)
             self._move(
                 self.right,
@@ -404,6 +442,46 @@ class OverlayHost(QWidget):
             LEFT_WIDTH + 2 * MARGIN if showing_left else 0,
             RIGHT_WIDTH + 2 * MARGIN if showing_right else 0,
         )
+
+    def _share_room(self, zone: QWidget, room: int) -> None:
+        """Den Karten einer Zone sagen, wie hoch sie werden dürfen.
+
+        Sie können es nicht selbst wissen. Eine Karte kennt ihren Inhalt,
+        aber nicht das Fenster und nicht die anderen Karten, die sich die
+        Spalte mit ihr teilen — und wer das nicht weiß, kann nur eine
+        Konstante nehmen. Genau die stand hier: zwölf Zeilen, ob das Fenster
+        achthundert Pixel hoch war oder vierzehnhundert. Im Vollbild rollte
+        der Objektbaum bei dreißig Zeilen, während unter ihm dreihundert
+        Pixel leer blieben.
+
+        Passt alles, bekommt jede Karte ihren vollen Bedarf und der Deckel
+        ist wirkungslos. Passt es nicht, wird nach Bedarf geteilt: eine Karte
+        mit dreißig Zeilen bekommt mehr als eine mit dreien, aber keine
+        bekommt alles.
+        """
+        takers: list[RoomTaker] = [
+            child
+            for child in zone.findChildren(QWidget)
+            if isinstance(child, RoomTaker) and child.isVisibleTo(zone)
+        ]
+        if not takers:
+            return
+
+        # Was die Zone außer den Karten noch trägt: Überschriften, die
+        # Parameterleiste, Ränder. Aus der aktuellen Wunschhöhe gelesen und
+        # nicht zusammengezählt — sonst zieht hier niemand nach, wenn oben
+        # ein Abschnitt dazukommt.
+        others = zone.sizeHint().height() - sum(child.height() for child in takers)
+        free = max(room - others, 0)
+        wants = [max(child.wanted_height(), 1) for child in takers]
+        total = sum(wants)
+
+        if total <= free:
+            for child, want in zip(takers, wants, strict=True):
+                child.set_room(want)
+            return
+        for child, want in zip(takers, wants, strict=True):
+            child.set_room(max(free * want // total, 1))
 
     def _bottom_room(self) -> int:
         """Wie viel Höhe die Werkzeugzeile unten für sich braucht."""

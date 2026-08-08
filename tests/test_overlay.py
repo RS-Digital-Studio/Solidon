@@ -234,3 +234,65 @@ def test_dragging_the_window_lets_nothing_lag_behind(
 
     assert not host._moves, "ein Resize bewegt nichts, es setzt"
     assert right.geometry().right() == 1000 - MARGIN - 1, "und sitzt sofort richtig"
+
+
+def test_a_wrapped_finding_is_measured_at_its_real_height(window: MainWindow) -> None:
+    """``sizeHintForRow`` kennt den Wortumbruch nicht — ``visualRect`` schon.
+
+    Der Prüfbericht bricht seine Sätze um (§2.7 schreibt Sätze, keine
+    Stichworte). Gerechnet wurde die Kartenhöhe trotzdem über
+    ``sizeHintForRow``, und der meldet für jede Zeile dieselbe Zahl, ob dort
+    ein Wort steht oder drei Zeilen. Bei den fünf Befunden, mit denen das
+    Beispielprojekt öffnet, waren das 170 Pixel gegen 234 echte — und die
+    Karte bekam die 170, also stand bei fünf Befunden ein Rollbalken in
+    einer Spalte, neben der achthundert Pixel frei blieben.
+    """
+    from PySide6.QtWidgets import QListWidgetItem
+
+    report = window.report
+    window.right.setCurrentIndex(window.right.indexOf(report))
+    report.list.clear()
+    for number in range(4):
+        report.list.addItem(
+            QListWidgetItem(
+                f"Befund {number}: ein Satz, der in einer schmalen Karte über "
+                f"mehrere Zeilen läuft, so wie die echten es tun."
+            )
+        )
+    QApplication.processEvents()
+
+    naive = sum(report.list.sizeHintForRow(row) for row in range(report.list.count()))
+    measured = overlay.rows_height(report.list)
+
+    assert measured > naive, "der Umbruch muss in der Höhe ankommen"
+
+
+def test_a_card_uses_the_room_a_tall_window_offers(window: MainWindow) -> None:
+    """Der Deckel kommt aus der Fensterhöhe, nicht aus einer Konstante.
+
+    ``MAX_ROWS`` stand auf zwölf, gesetzt über ``setFixedHeight``. Im
+    Vollbild rollte der Objektbaum bei dreißig sichtbaren Zeilen, während
+    unter der Karte dreihundert Pixel leer blieben. Wie viel Platz da ist,
+    weiß nur die Überlagerung — sie teilt ihn zu.
+    """
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.ui.panels import MAX_ROWS
+
+    tree = window.object_tree
+    tree.tree.clear()
+    for number in range(MAX_ROWS * 3):
+        tree.tree.addTopLevelItem(QTreeWidgetItem([f"Körper {number}", "10 × 10 × 10 mm"]))
+    tree._fit()
+    QApplication.processEvents()
+
+    window.resize(1200, 1400)
+    QApplication.processEvents()
+    window.overlay.reflow()
+    QApplication.processEvents()
+
+    row = tree.tree.sizeHintForRow(0)
+    assert tree.tree.height() > MAX_ROWS * row, (
+        "ein hohes Fenster muss dem Baum mehr als den Vorgabedeckel geben"
+    )
+    assert tree.tree.height() <= tree.wanted_height(), "aber nie mehr, als er braucht"
