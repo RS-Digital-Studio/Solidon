@@ -3063,14 +3063,19 @@ Paket steht in `.claude/konzept-veroeffentlichung-1.0.md` §9.
   Hinweistext aus, der Chat sagt es in einer Zeile mit Freischalten-Knopf,
   Statuszeile unter drei Resttagen, „Lizenziert für …" im Über-Dialog, ein
   Satz zum Testlauf in der Ersteinrichtung.
-- **V4c — kompilierte Auslieferung.** `tools/build_licence_module.py`
-  übersetzt das Prüfmodul mit Cython und signiert das Manifest mit einem je
-  Bau frischen Paar; die Spec nimmt die Erweiterungen statt des Bytecodes
-  und legt die vier Grenzdateien als Quelltext, `build.yml` ruft das
-  Werkzeug vor dem Paketieren. Lokal fehlt die C++-Workload von Visual
-  Studio — die Übersetzung nach C ist geprüft (`tests/test_licence_build.py`),
-  der Maschinencode-Schritt läuft in der CI; der gebaute Ordner wird in V6
-  auf einem fremden Rechner geprüft.
+- **V4c — kompilierte Auslieferung, am Paket belegt.**
+  `tools/build_licence_module.py` übersetzt das Prüfmodul mit Cython und
+  signiert das Manifest mit einem je Bau frischen Paar; die Spec nimmt die
+  Erweiterungen statt des Bytecodes und legt die vier Grenzdateien als
+  Quelltext, `build.yml` ruft das Werkzeug vor dem Paketieren
+  (`tests/test_licence_build.py` hält Spec, Werkzeug und CI zusammen).
+  Ein vollständiger lokaler PyInstaller-Bau hat es bewiesen: kein
+  `activation`-Python im Ordner oder PYZ, das Manifest deckt die vier
+  Grenzdateien, die Anwendung startet aus dem Paket — und mit einem von
+  Hand veränderten `writer.py` startet sie gesperrt (kein Testlaufmarker
+  entsteht). Der Compiler steckt übrigens in Visual Studio 18; setuptools
+  findet ihn dort nicht von allein — der Weg über `vcvars64.bat` steht im
+  Docstring des Werkzeugs.
 
 ## Gizmo und Direktmanipulation durchgesehen (08.08.2026)
 

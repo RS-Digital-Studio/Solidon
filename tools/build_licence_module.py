@@ -1,4 +1,4 @@
-"""Baut das Prüfmodul für die Auslieferung (Konzept §2 I H4/H5, V4c).
+r"""Baut das Prüfmodul für die Auslieferung (Konzept §2 I H4/H5, V4c).
 
 Zwei Dinge entstehen, beide unter ``packaging/build/``:
 
@@ -28,6 +28,16 @@ Braucht Cython und einen C-Compiler — beides Bau-, keine
 Laufzeitabhängigkeit. Die Entwicklung und die Suite laufen weiter gegen die
 Python-Quellen; dieses Werkzeug fasst ``app/`` nie an, es arbeitet auf einer
 Kopie.
+
+Findet setuptools den Compiler nicht, obwohl er installiert ist („Microsoft
+Visual C++ 14.0 or greater is required" bei vorhandenem Visual Studio 18):
+dessen ``vswhere`` kennt die Installation nicht. Dann die Umgebung von Hand
+aktivieren und darin bauen::
+
+    call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat"
+    set DISTUTILS_USE_SDK=1
+    set MSSdk=1
+    .venv\Scripts\python.exe tools\build_licence_module.py
 """
 
 from __future__ import annotations

@@ -741,21 +741,24 @@ Hauptversion mit neuem öffentlichen Schlüssel.
 | V3 Prüfkern | **fertig**, Tor grün (2913 Tests) | |
 | V4 Grenze im Datenpfad | **fertig** — die vier Prüfstellen rufen `require`, Fall für Fall in `tests/test_licence_boundary.py`; `integrity.py` prüft das Manifest beim ersten Zustandsabruf | c6b5eea |
 | V4b Oberfläche | **fertig** — ausgegraute Einträge mit Grund, Chat-Sperre mit Freischalten-Knopf, Statuszeile unter drei Tagen, Über-Dialog „Lizenziert für …", ein Satz in der Ersteinrichtung | 7fe8cb9 |
-| V4c Kompiliert ausliefern | **gebaut** — `tools/build_licence_module.py` (Cython + Bau-Manifest), Spec nimmt die Erweiterungen und legt die Grenzdateien als Quelltext, `build.yml` ruft es vor dem Paketieren. Der Maschinencode-Schritt läuft in der CI (lokal fehlt die C++-Workload); der gebaute Ordner wird in V6 geprüft | |
+| V4c Kompiliert ausliefern | **fertig, am Paket belegt** — `tools/build_licence_module.py` (Cython + Bau-Manifest), Spec nimmt die Erweiterungen und legt die Grenzdateien als Quelltext, `build.yml` ruft es vor dem Paketieren. Lokaler PyInstaller-Bau geprüft: kein `activation`-Python im Paket oder PYZ, Manifest deckt die vier Grenzdateien, die Anwendung startet — und ein von Hand verändertes `writer.py` startet gesperrt (kein Testlaufmarker entsteht) | |
 | V5 Kaufabwicklung | offen | |
 | V6 Bauen und Installer | offen — Version auf 1.0.0; `PUBLIC_KEY` ist seit dem 08.08.2026 gesetzt, der private Teil liegt nach §8 | 19fe09b |
 | V7 Website | offen | |
 | V8 Doku | offen | |
 | V9 Veröffentlichen | offen | |
 
-**Stand nach V4c (08.08.2026):** Die Grenze greift. Ein Schlüssel lässt sich
-erzeugen, eintragen und prüfen; ein abgelaufener Testlauf sperrt die vier
-Stellen im Datenpfad und lässt alles Lesende offen — beides Fall für Fall in
-`tests/test_licence_boundary.py`. Der echte öffentliche Schlüssel steht im
-Quelltext, der private liegt nach §8 außerhalb. Was aussteht, ist der Beweis
-am gebauten Paket: der erste CI-Bau mit kompiliertem Prüfmodul, und in V6 die
-Verifikation auf einem fremden Rechner (kein `activation/*.py` im Paket, ein
-verändertes `writer.py` führt zur Ablehnung).
+**Stand nach V4c (08.08.2026):** Die Grenze greift, und sie hält am gebauten
+Paket. Ein Schlüssel lässt sich erzeugen, eintragen und prüfen; ein
+abgelaufener Testlauf sperrt die vier Stellen im Datenpfad und lässt alles
+Lesende offen — beides Fall für Fall in `tests/test_licence_boundary.py`. Der
+echte öffentliche Schlüssel steht im Quelltext, der private liegt nach §8
+außerhalb. Der Beweis am Paket ist lokal erbracht: kein `activation`-Python
+im Ordner oder PYZ, das Manifest deckt die vier Grenzdateien, die Anwendung
+startet aus dem Paket — und mit einem von Hand veränderten `writer.py`
+startet sie gesperrt, messbar daran, dass kein Testlaufmarker entsteht. Was
+bleibt, ist V6 auf einem fremden Rechner ohne Python — der Test der
+Paketierung, nicht mehr der Lizenzgrenze.
 
 Zwei Dinge, die beim Bauen aufgefallen sind und im Code als Kommentar stehen:
 
