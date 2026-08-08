@@ -284,3 +284,81 @@ def test_export_writes_3mf_with_the_slots_of_the_object(profile: Profile) -> Non
     assert plan.entries[0].filename == "Test_Zweifarbig.3mf"
     base = model_of(data).find(".//c:basematerials/c:base", NAMESPACE)
     assert base is not None and base.get("displaycolor") == "#FF0000"
+
+
+# --- Der Vorfilter, mit dem die Übertragung bezahlbar wurde ----------------------
+
+
+def _without_the_shortcut(
+    result: MeshData, sources: list[MeshData], *, cut_slot: int = 0
+) -> tuple[int, ...]:
+    """Die Übertragung, wie sie vor dem Vorfilter lief: jedes Dreieck gegen
+    jede Quelle."""
+    import numpy as np
+
+    from app.core.geom.attributes import NEAR_LIMIT, _nearest
+
+    centres = np.asarray(result.raw.triangles_center, dtype=float)
+    slots = np.full(len(centres), cut_slot, dtype=np.int32)
+    distance = np.full(len(centres), np.inf)
+    for mesh in sources:
+        if not mesh.slots:
+            continue
+        found, offset = _nearest(mesh, centres)
+        closer = offset < distance
+        slots[closer] = found[closer]
+        distance[closer] = offset[closer]
+    limit = max(result.bounds.diagonal, 1.0) * NEAR_LIMIT
+    slots[distance > limit] = cut_slot
+    return tuple(int(entry) for entry in slots)
+
+
+def test_the_shortcut_changes_nothing_about_the_result() -> None:
+    """Der Vorfilter ist derselbe Wert auf kürzerem Weg, keine Näherung.
+
+    Ein Dreieck, das zu keiner Quelle mit eigener Farbe nah genug liegt,
+    bekommt am Ende den Schnittslot — ob eine Quelle, die ohnehin nur den
+    Schnittslot trägt, näher liegt, ändert daran nichts. Für die Dose aus dem
+    Beispielprojekt hieß das: sechseinhalb der siebeneinhalb Sekunden einer
+    Auswertung gingen darauf, für vierzigtausend Dreiecke den Abstand zu einer
+    sechshundert Dreiecke großen Beschriftung zu suchen.
+    """
+    body = with_slot(cube(20.0), 0)
+    label = with_slot(cube(4.0, offset=(0.0, 0.0, 10.0)), 1)
+    merged = boolean("union", [body, label]).mesh
+
+    expected = _without_the_shortcut(merged, [body, label])
+    actual = transfer(merged, [body, label])
+
+    assert tuple(actual.slots) == expected
+
+
+@pytest.mark.parametrize(
+    ("offset", "size"),
+    [
+        ((0.0, 0.0, 10.0), 4.0),
+        ((0.0, 0.0, 8.0), 6.0),
+        ((0.0, 0.0, 0.0), 30.0),
+        ((6.0, 6.0, 6.0), 12.0),
+    ],
+    ids=["aufgesetzt", "eingesenkt", "umschliessend", "ueberlappend"],
+)
+def test_the_shortcut_holds_where_the_bodies_meet(
+    offset: tuple[float, float, float], size: float
+) -> None:
+    """Auch dort, wo beide Quellen demselben Dreieck nah sind.
+
+    Eine Quelle, die nur den Schnittslot trägt, darf nicht übersprungen
+    werden: an der Naht entscheidet, welche näher liegt, und dort trägt der
+    farblose Körper seine Fläche zu Recht. Der Vorfilter lässt deshalb die
+    Suche über *alle* Quellen laufen — er wählt nur die Dreiecke aus, für die
+    sie etwas ändern kann.
+    """
+    body = with_slot(cube(20.0), 0)
+    label = with_slot(cube(size, offset=offset), 1)
+    merged = boolean("union", [body, label]).mesh
+
+    expected = _without_the_shortcut(merged, [body, label])
+    actual = transfer(merged, [body, label])
+
+    assert tuple(actual.slots) == expected
