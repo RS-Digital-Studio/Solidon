@@ -3,6 +3,15 @@
 Statische Seite, kein JavaScript, keine externen Ressourcen. Alles in diesem
 Ordner wird unverändert hochgeladen; einen Build-Schritt gibt es nicht.
 
+Bewegung entsteht ausschließlich aus CSS: Übergänge beim Zeigen und
+scroll-gesteuerte Zeitachsen (`animation-timeline: view()`) beim Lesen. Der
+ganze Block steht in `style.css` hinter einem `@supports` — kennt ein Browser
+die Zeitachse nicht, greift keine Regel davon, und die Seite steht vollständig
+da. Nichts wird über `opacity: 0` versteckt, was ohne Animation nie wieder
+auftaucht. `prefers-reduced-motion: reduce` schaltet alles ab und setzt die
+drei erklärenden Zeichnungen von Hand auf ihren Endzustand; ohne das lägen
+beide Zustände übereinander („2,40 mm“ über „3,60 mm“).
+
 ## Dateien
 
 | Datei | Zweck |
@@ -23,6 +32,22 @@ Platzhalter darin steht — `tools/make_legal.py` setzt ihn, und er verschwindet
 beim nächsten Lauf von selbst, sobald die Angabe da ist. `tests/test_legal.py`
 lässt keine Seite durch, die einen Platzhalter trägt und sich nicht als
 Entwurf ausweist.
+
+## Zwei Kopplungen, die man sehen muss
+
+**Die Startseite lebt von `handbuch/`.** Sie bindet fünf Abbildungen daraus
+ein — `main-window.png`, `report.png`, `catalog.png`, `op-dialog.png` und
+`start-screen.png`, je Sprache aus dem eigenen Ordner. Erzeugt werden sie von
+`tools/make_figures.py`; wer dort einen Namen ändert, ändert ihn hier mit.
+`tests/test_website.py` prüft jeden Verweis beider Seiten auf Existenz.
+
+**Die Startseite führt Zahlen aus dem Register.** In der Leiste unter dem
+Aufmacher stehen die Anzahl der Operationen, der Bausteine, der Normteilmaße,
+der Druckerprofile und der Beispielprojekte. Sie sind abgelesen und werden
+falsch, sobald eine Operation dazukommt. `tests/test_website.py` rechnet sie
+gegen `REGISTRY`, `PARTS`, `standards.toml`, `printers.toml` und
+`app/examples/` nach und verlangt, dass beide Sprachfassungen dieselben Zahlen
+führen. Wird der Test rot, ist nicht der Test veraltet, sondern die Seite.
 
 ## Die Ausgangslage
 
