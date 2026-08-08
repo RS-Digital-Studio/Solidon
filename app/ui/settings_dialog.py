@@ -104,6 +104,21 @@ class SettingsDialog(QDialog):
             tr("Ein Hinweis mit einem Link. Es wird nichts geladen und nichts ersetzt.")
         )
 
+        # §26.5: die automatische Übernahme ist die Vorgabe — Regel 19 kennt
+        # keine Bestätigung vor rücknehmbaren Handlungen. Abschaltbar, weil
+        # sie das gefühlte Verhalten des Chats ändert.
+        self.auto_accept = QCheckBox(
+            tr("Umkehrbare Chat-Vorschläge ohne Nachfrage übernehmen"), self
+        )
+        self.auto_accept.setChecked(settings.auto_accept_reversible)
+        self.auto_accept.setToolTip(
+            tr(
+                "Nur wenn jede Operation des Vorschlags umkehrbar ist, keine "
+                "Warnung entstand und keine Rückfrage offen war. Ein Undo "
+                "nimmt alles zurück."
+            )
+        )
+
         # Konzept P15 §7 Etappe 9: aus, bis jemand sie einschaltet. Der
         # Hinweis daneben nennt Adresse und Port, denn ohne die kann niemand
         # sie eintragen — und wer sie liest, sieht zugleich, dass sie diesen
@@ -154,6 +169,7 @@ class SettingsDialog(QDialog):
         form.addRow(tr("Differenzansicht"), self.diff_palette)
         form.addRow(tr("Tastenbelegung"), self.shortcuts)
         form.addRow("", self.updates)
+        form.addRow("", self.auto_accept)
         form.addRow("", self.remote)
         form.addRow(tr("Port der Fernsteuerung"), self.remote_port)
         return box
@@ -193,6 +209,7 @@ class SettingsDialog(QDialog):
         settings.diff_palette = str(self.diff_palette.currentData())
         settings.shortcut_scheme = str(self.shortcuts.currentData())
         settings.check_for_updates = self.updates.isChecked()
+        settings.auto_accept_reversible = self.auto_accept.isChecked()
         settings.remote_enabled = self.remote.isChecked()
         settings.remote_port = int(self.remote_port.value())
         settings.printer = str(self.printer.currentData())

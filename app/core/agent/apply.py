@@ -26,13 +26,40 @@ from __future__ import annotations
 import secrets
 
 from app.core.agent.proposal import Proposal
-from app.core.errors import ValidationError
+from app.core.errors import AppError, ValidationError
 from app.core.log import get_logger
+from app.core.registry import REGISTRY, Registry
 from app.core.scene.history import History, change_for
 from app.core.types import ChatEntry, Document, DocumentChange, Transaction
 from app.i18n import _, tr
 
 _log = get_logger(__name__)
+
+
+def auto_acceptable(proposal: Proposal, registry: Registry | None = None) -> bool:
+    """Ob ein Vorschlag ohne Nachfrage übernommen werden darf (§26.5).
+
+    §26.5 sagt „kann automatisch laufen", Regel 19 sagt „keine Bestätigung
+    vor rücknehmbaren Handlungen" — vier enge Bedingungen entscheiden:
+    ausschließlich umkehrbare Operationen, kein ``create_from_scad``, keine
+    Warnungen oder Fehler in den Befunden, keine Rückfrage und kein
+    angehaltener Lauf. Parameter, Passungen und das Druckziel sind
+    unschädlich: sie reisen als ``DocumentChange``, ein Undo nimmt sie mit.
+    """
+    source = registry or REGISTRY
+    if proposal.empty or proposal.questions or proposal.stopped or proposal.undo_of:
+        return False
+    if any(finding.severity != "info" for finding in proposal.findings):
+        return False
+    for draft in proposal.drafts:
+        if draft.op == "create_from_scad":
+            return False
+        try:
+            if not source.get(draft.op).reversible:
+                return False
+        except AppError:
+            return False
+    return True
 
 
 def accept(proposal: Proposal, history: History) -> Transaction | None:

@@ -528,6 +528,35 @@ def test_the_prompt_makes_the_chat_a_search_box() -> None:
     assert PROMPT_VERSION == "3"
 
 
+def test_views_reach_only_a_backend_that_can_see(project: Project, profile: Profile) -> None:
+    """§23 mit Leitprinzip 8: die Ansichten erreichen ein bildfähiges Backend
+    neben dem Steckbrief — und entfallen sonst ersatzlos, der Text trägt
+    allein.
+    """
+    png = (("Ansicht von oben", b"\x89PNG\r\n\x1a\nfake"),)
+
+    seeing = ScriptedBackend(answers=[Reply(text="Gesehen.")], images_supported=True)
+    AgentSession(
+        backend=seeing,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+        views=png,
+    ).propose("Was siehst du?")
+    world = seeing.seen[0][1]
+    assert world.images == png, "die Ansichten hängen an der Weltbild-Nachricht"
+
+    blind = ScriptedBackend(answers=[Reply(text="Gelesen.")])
+    AgentSession(
+        backend=blind,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+        views=png,
+    ).propose("Was liest du?")
+    assert blind.seen[0][1].images == (), "ohne Bildfähigkeit reist kein Bild"
+
+
 def test_a_lookup_case_reads_instead_of_guessing(project: Project, profile: Profile) -> None:
     """Konzept Agent-Vertiefung 3.3: „Ist das druckbar?" wird nachgesehen,
     nicht gefühlt — der Vorschlag hält fest, welche lesenden Werkzeuge der

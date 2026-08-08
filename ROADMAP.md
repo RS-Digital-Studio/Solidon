@@ -3511,9 +3511,17 @@ Konzept:
       Suite wächst auf **39 Fälle** (nachsehen statt raten, Druckziel,
       Menüort — gemessen über `proposal.readings`), §35 und die
       Testarten-Tabellen sind fortgeschrieben.
-- [ ] **4 — Augen und Autopilot:** gerenderte Ansichten an bildfähige
-      Backends (§23), automatische Übernahme eindeutig umkehrbarer
-      Vorschläge (§26.5, vier Bedingungen, abschaltbar).
+- [x] **4 — Augen und Autopilot:** Die gerenderten Ansichten aus §23
+      erreichen den Agenten — zwei beschriftete PNG (schräg oben, von
+      oben), offscreen gerendert von der Oberfläche (`app/ui/snapshots.py`;
+      der Kern rastert nicht, seine Projektion ist SVG — Konzept 3.5
+      entsprechend korrigiert). Nur ein Backend mit `supports_images`
+      bekommt sie; Ollama bleibt fest ohne, bis ein Vision-Modell gemessen
+      ist. Die automatische Übernahme (§26.5) läuft unter vier Bedingungen
+      (`agent_apply.auto_acceptable`: nur umkehrbare Ops, kein
+      `create_from_scad`, keine Warnungen, keine Rückfrage/kein Abbruch),
+      die Leiste wird zur Übernommen-Leiste mit Rückgängig-Knopf, und die
+      Einstellung `auto_accept_reversible` (Vorgabe: an) schaltet sie ab.
 - [ ] **5 — Grundform-Skizzen:** das `shape`-Schema für die fünf
       Skizzen-Ops (§30.1) — damit werden die vier heute ungewinnbaren
       Suite-Fälle gewinnbar.

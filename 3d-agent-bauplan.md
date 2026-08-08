@@ -1043,7 +1043,11 @@ Stack: t1 "Import und Reparatur" (Ops 1–2, Nutzer) ·
        t2 "Teilen und verstiften" (Ops 3–6, Agent)
 ```
 
-Dazu die gerenderten Ansichten. Der Agent referenziert ausschließlich diese
+Dazu die gerenderten Ansichten — beschriftete PNG-Bilder (schräg oben und
+von oben), gerendert von der Oberfläche, denn der Kern rastert nicht. Sie
+erreichen nur ein Backend, das Bilder versteht; an jedes andere entfallen
+sie ersatzlos, und der Steckbrief trägt allein — Bilder sind Zugabe, nie
+Voraussetzung (Leitprinzip 8). Der Agent referenziert ausschließlich diese
 Namen.
 
 ---

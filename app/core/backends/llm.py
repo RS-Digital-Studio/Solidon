@@ -18,6 +18,7 @@ frischen Rechner.
 
 from __future__ import annotations
 
+import base64
 import json
 import urllib.error
 import urllib.request
@@ -61,6 +62,10 @@ class Message:
     tool_calls: tuple[ToolCall, ...] = ()
     tool_call_id: str | None = None
     """Bei einer ``tool``-Nachricht gesetzt: auf welchen Aufruf sie antwortet."""
+    images: tuple[tuple[str, bytes], ...] = ()
+    """Beschriftete PNG-Ansichten (§23): „das Loch vorne links" ist im Text
+    mehrdeutig, im Bild nicht. Nur ein Backend mit ``supports_images`` bekommt
+    sie — der Textpfad bleibt für jedes Modell vollständig (Leitprinzip 8)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +96,13 @@ class LLMBackend(Protocol):
 
     @property
     def model(self) -> str: ...
+
+    @property
+    def supports_images(self) -> bool:
+        """Ob ``Message.images`` dieses Modell erreichen (§23). ``False``
+        heißt: die Bilder entfallen, der Text trägt allein — Bilder sind
+        Zugabe, nie Voraussetzung (Leitprinzip 8)."""
+        ...
 
     @property
     def available(self) -> bool:
@@ -178,6 +190,10 @@ class AnthropicBackend:
     def available(self) -> bool:
         return keys.read(self.id) is not None
 
+    @property
+    def supports_images(self) -> bool:
+        return True
+
     def complete(
         self,
         messages: Sequence[Message],
@@ -239,6 +255,21 @@ def _as_anthropic(message: Message) -> dict[str, Any]:
     blocks: list[dict[str, Any]] = []
     if message.content:
         blocks.append({"type": "text", "text": message.content})
+    for label, image in message.images:
+        # §23: die Ansichten reisen neben dem Steckbrief, jede mit ihrer
+        # Beschriftung — ein Bild ohne Namen lässt sich nicht ansprechen.
+        if label:
+            blocks.append({"type": "text", "text": label})
+        blocks.append(
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": base64.b64encode(image).decode("ascii"),
+                },
+            }
+        )
     for call in message.tool_calls:
         blocks.append(
             {"type": "tool_use", "id": call.id, "name": call.name, "input": call.arguments}
@@ -379,6 +410,14 @@ class OllamaBackend:
     @property
     def id(self) -> str:
         return "ollama"
+
+    @property
+    def supports_images(self) -> bool:
+        """Fest ``False``: das Vorgabemodell (``qwen3:14b``) ist kein
+        Vision-Modell, und ein installiertes, gemessenes gibt es nicht.
+        Zieht eines ein, gehört hier eine Prüfung wie ``ollama_tool_check``
+        hin — angekündigte Fähigkeit heißt auch bei Bildern nichts."""
+        return False
 
     @property
     def available(self) -> bool:

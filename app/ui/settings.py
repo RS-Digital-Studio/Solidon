@@ -64,6 +64,11 @@ class UiSettings:
     remote_port: int = 8787
     """Auf welchem Port. Nur an 127.0.0.1 gebunden; die Adresse ist keine
     Einstellung."""
+    auto_accept_reversible: bool = True
+    """§26.5: ein Vorschlag aus eindeutig umkehrbaren Operationen wird ohne
+    Nachfrage übernommen — Regel 19 kennt keine Bestätigung vor rücknehmbaren
+    Handlungen. Abschaltbar, denn es ändert das gefühlte Verhalten des Chats;
+    die vier Bedingungen prüft ``agent_apply.auto_acceptable``."""
 
     def remember(self, path: Path) -> None:
         text = str(path)

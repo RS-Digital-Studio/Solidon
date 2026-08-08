@@ -113,9 +113,10 @@ def test_a_turn_names_its_transaction(window: MainWindow) -> None:
 
 
 def test_a_proposal_waits_for_a_decision(window: MainWindow) -> None:
-    """§26.5: Vorschlag, Differenzansicht, dann annehmen oder verwerfen — nie
-    von selbst.
+    """§26.5 mit abgeschalteter Übernahme: Vorschlag, Differenzansicht, dann
+    annehmen oder verwerfen — die Präferenz stellt das alte Verhalten her.
     """
+    window.settings.auto_accept_reversible = False
     scripted(
         window,
         Reply(
@@ -140,6 +141,7 @@ def test_a_proposal_waits_for_a_decision(window: MainWindow) -> None:
 
 
 def test_accepting_makes_it_one_transaction(window: MainWindow) -> None:
+    window.settings.auto_accept_reversible = False
     scripted(
         window,
         Reply(
@@ -164,6 +166,92 @@ def test_accepting_makes_it_one_transaction(window: MainWindow) -> None:
     assert document.transactions[-1].origin.by == "agent"
     assert window._proposal is None
     assert [entry.role for entry in document.chat] == ["user", "agent"]
+
+
+def test_a_reversible_proposal_is_applied_without_asking(window: MainWindow) -> None:
+    """§26.5, Regel 19: eindeutig umkehrbare Vorschläge laufen automatisch —
+    die Leiste wird zur Übernommen-Leiste mit dem Weg zurück, und der eine
+    Knopf nimmt dieselbe Transaktion wie Strg+Z.
+    """
+    import time
+
+    assert window.settings.auto_accept_reversible, "die Vorgabe ist an"
+    scripted(
+        window,
+        Reply(
+            tool_calls=(
+                ToolCall(
+                    id="1", name="translate_object", arguments={"objects": ["obj_1"], "dx": 5.0}
+                ),
+            )
+        ),
+        Reply(text="Verschoben."),
+    )
+    transactions_before = len(window.session.project.document.transactions)
+
+    window.chat.input.setPlainText("Schieb die Platte 5 mm")
+    window.chat._send()
+    application = QApplication.instance()
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        if application is not None:
+            application.processEvents()
+        if len(window.session.project.document.transactions) > transactions_before:
+            break
+        time.sleep(0.01)
+    window.session.wait_for_idle()
+
+    document = window.session.project.document
+    assert len(document.transactions) == transactions_before + 1
+    assert window._proposal is None, "es gibt nichts mehr zu entscheiden"
+    assert window.chat.undo_button.isVisible() or not window.right.isVisible()
+    assert not window.chat.accept_button.isVisible()
+    assert "Übernommen" in window.chat.summary.text()
+
+    window.chat.undoRequested.emit()
+    window.session.wait_for_idle()
+    assert len(window.session.project.document.transactions) == transactions_before
+
+
+def test_only_harmless_proposals_run_by_themselves(window: MainWindow) -> None:
+    """Die vier Bedingungen aus §26.5, am Kern geprüft: nicht umkehrbar,
+    Warnung, Rückfrage, angehaltener Lauf oder eine Rücknahme — jede einzelne
+    verhindert die automatische Übernahme.
+    """
+    from app.core.agent import apply as agent_apply
+    from app.core.agent.proposal import Proposal, Question
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Finding
+
+    good = Proposal(request="x")
+    good.drafts.append(OperationDraft(op="translate_object", params={"dx": 1.0}))
+    assert agent_apply.auto_acceptable(good)
+
+    empty = Proposal(request="x")
+    assert not agent_apply.auto_acceptable(empty), "nichts anzuwenden heißt nichts übernehmen"
+
+    asked = Proposal(request="x")
+    asked.drafts.append(OperationDraft(op="translate_object", params={"dx": 1.0}))
+    asked.questions.append(Question(text="Welches?"))
+    assert not agent_apply.auto_acceptable(asked), "wer fragte, dessen Ergebnis wird angesehen"
+
+    warned = Proposal(request="x")
+    warned.drafts.append(OperationDraft(op="translate_object", params={"dx": 1.0}))
+    warned.findings.append(Finding(code="a", severity="warning", message="dünn"))
+    assert not agent_apply.auto_acceptable(warned)
+
+    stopped = Proposal(request="x")
+    stopped.drafts.append(OperationDraft(op="translate_object", params={"dx": 1.0}))
+    stopped.stopped = "steps"
+    assert not agent_apply.auto_acceptable(stopped), "ein halber Vorschlag braucht den Blick"
+
+    scad = Proposal(request="x")
+    scad.drafts.append(OperationDraft(op="create_from_scad", params={"source": "cube(1);"}))
+    assert not agent_apply.auto_acceptable(scad), "Quelltext läuft nie ungesehen"
+
+    undo = Proposal(request="x")
+    undo.undo_of = "t1"
+    assert not agent_apply.auto_acceptable(undo), "eine Rücknahme bleibt eine Entscheidung"
 
 
 def test_discarding_keeps_the_conversation(window: MainWindow) -> None:

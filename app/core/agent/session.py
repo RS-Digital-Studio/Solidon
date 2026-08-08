@@ -116,6 +116,10 @@ class AgentSession:
     einer Antwort des Modells gibt es keine Stelle dafür."""
     progress: ProgressFn | None = None
     """Meldet je Schritt, was gerade läuft — siehe :data:`ProgressFn`."""
+    views: tuple[tuple[str, bytes], ...] = ()
+    """Gerenderte Ansichten der Szene (§23), beschriftete PNG-Bilder. Sie
+    erreichen nur ein Backend mit ``supports_images`` — der Textpfad bleibt
+    vollständig, Bilder sind Zugabe (Leitprinzip 8)."""
 
     def propose(self, request: str) -> Proposal:
         """Beantwortet eine Anfrage mit einem Vorschlag. Am Dokument wird nichts
@@ -132,7 +136,12 @@ class AgentSession:
         scene = self._evaluate(working).scene
 
         messages = build_messages(
-            request, working, scene, selection=self.selection, rule_set=active
+            request,
+            working,
+            scene,
+            selection=self.selection,
+            rule_set=active,
+            views=self.views if self.backend.supports_images else (),
         )
         tools = list(tool_schemas(self.registry))
 

@@ -69,6 +69,7 @@ from app.core.types import (
     Quality,
     Report,
     Source,
+    Transaction,
 )
 from app.core.units import is_close
 from app.i18n import TranslatableText, _, tr
@@ -899,6 +900,18 @@ class Session(QObject):
         if backend is None:  # pragma: no cover - vor dem Start des Arbeiters abgesichert
             raise AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell."))
 
+        views: tuple[tuple[str, bytes], ...] = ()
+        if backend.supports_images and self.last_result is not None:
+            # §23: die Ansichten reisen neben dem Steckbrief — aber sie sind
+            # Zugabe (Leitprinzip 8): scheitert das Offscreen-Rendern, läuft
+            # der Zug ohne Bilder statt gar nicht.
+            from app.ui.snapshots import scene_views
+
+            try:
+                views = scene_views(self.last_result.scene)
+            except Exception:
+                _log.warning("scene views failed, proposing without images", exc_info=True)
+
         agent = AgentSession(
             backend=backend,
             document=self.project.document,
@@ -908,6 +921,7 @@ class Session(QObject):
             selection=self._selection,
             cancelled=self.agent_cancel,
             progress=self.agentProgress.emit,
+            views=views,
         )
         proposal = agent.propose(request)
         preview = ProposalPreview(proposal=proposal)
@@ -963,13 +977,18 @@ class Session(QObject):
         difference = compare_scenes(before, result.scene) if before is not None else None
         return result.scene, difference
 
-    def accept_proposal(self, preview: ProposalPreview) -> None:
-        """Legt den Vorschlag als eine Transaktion ins Dokument (§26.5)."""
+    def accept_proposal(self, preview: ProposalPreview) -> Transaction | None:
+        """Legt den Vorschlag als eine Transaktion ins Dokument (§26.5).
+
+        Gibt die Transaktion zurück — die automatische Übernahme (§26.5)
+        zeigt ihre Kennung in der Übernommen-Leiste.
+        """
         transaction = agent_apply.accept(preview.proposal, self.history)
         self._accepted[preview.proposal.request] = transaction.id if transaction else None
         self._dirty = True
         self.projectChanged.emit()
         self.evaluate_async()
+        return transaction
 
     def discard_proposal(self, preview: ProposalPreview) -> None:
         """Wirft ihn weg — das Gespräch behält beide Beiträge (§26.3)."""

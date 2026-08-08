@@ -58,11 +58,18 @@ def build_messages(
     *,
     selection: tuple[ObjectId, str] | None = None,
     rule_set: rules.RuleSet | None = None,
+    views: tuple[tuple[str, bytes], ...] = (),
 ) -> list[Message]:
-    """Der ganze Kontext, so wie das Backend ihn nimmt."""
+    """Der ganze Kontext, so wie das Backend ihn nimmt.
+
+    ``views`` sind die gerenderten Ansichten aus §23 — beschriftete
+    PNG-Bilder neben dem Steckbrief. Sie kommen vom Aufrufer, denn der Kern
+    rendert keine Rasterbilder: das Fenster kann es, die Kommandozeile lässt
+    es weg, und beides ist richtig (Leitprinzip 8).
+    """
     messages = [
         Message(role="system", content=system_prompt(rule_set)),
-        Message(role="user", content=world_text(document, scene, selection)),
+        Message(role="user", content=world_text(document, scene, selection), images=views),
     ]
     history = conversation(document.chat, document)
     if history:

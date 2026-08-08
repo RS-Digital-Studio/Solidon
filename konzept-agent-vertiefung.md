@@ -186,12 +186,17 @@ Ausbau, in drei Teilen entlang der bestehenden Schnitte:
    **`OllamaBackend`** füllt das `images`-Feld, aber nur wenn das gewählte
    Modell Vision beherrscht — die Fähigkeit wird wie `ollama_tool_check`
    einmal geprüft, nicht vermutet.
-3. **Gerendert wird im Kern**, nicht in der UI: `app/core/figures.py`
-   rendert bereits ohne Qt. Zum Zugbeginn entstehen zwei Ansichten der
-   Arbeitskopie (isometrisch, von oben); nach geometrieändernden Ops wird
-   für den nächsten Modellschritt eine Ansicht aufgefrischt. Auflösung
-   klein (Steckbrief-Begleitbild, kein Poster), Kostenwirkung über die
-   Suite und die Tokenzählung gemessen.
+3. **Gerendert wird in der Oberfläche, nicht im Kern** — korrigiert bei der
+   Umsetzung (08.08.2026): `figures.py` rendert SVG (die Netzprojektion aus
+   `drawing.py`), und die Modelle nehmen PNG; ein Rasterweg im Kern wäre
+   ein zweiter Renderweg gegen die eigene Doktrin. Die UI rendert zum
+   Zugbeginn zwei kleine Ansichten offscreen (`app/ui/snapshots.py`,
+   isometrisch und von oben) und reicht sie als beschriftete Bytes herein;
+   die Kommandozeile lässt es weg, und beides ist richtig. Eine
+   Auffrischung mitten im Zug gibt es nicht — der Zwischenzustand ist
+   Sache von `read_digest`. Ollama bleibt vorerst fest ohne Bilder: das
+   Vorgabemodell ist kein Vision-Modell, und eine ungemessene Fähigkeit
+   wird nicht behauptet.
 
 Der Nutzen ist konkret: „das Loch vorne links" ist im Text mehrdeutig, im
 Bild nicht — und die drei absichtlich mehrdeutigen Suite-Fälle messen genau

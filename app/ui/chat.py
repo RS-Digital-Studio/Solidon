@@ -56,6 +56,10 @@ class ChatPanel(QWidget):
     requestSent = Signal(str)
     accepted = Signal()
     discarded = Signal()
+    undoRequested = Signal()
+    """Der eine Knopf der Übernommen-Leiste (§26.5): ein automatisch
+    übernommener Vorschlag braucht keine Entscheidung mehr, nur den Weg
+    zurück."""
     setupRequested = Signal()
     """Der Benutzer will den fehlenden Zugang einrichten (§2.7)."""
     unlockRequested = Signal()
@@ -151,11 +155,15 @@ class ChatPanel(QWidget):
         self.accept_button.clicked.connect(self.accepted)
         self.discard_button = QPushButton(tr("Verwerfen"), self)
         self.discard_button.clicked.connect(self.discarded)
+        self.undo_button = QPushButton(tr("Rückgängig"), self)
+        self.undo_button.clicked.connect(self.undoRequested)
+        self.undo_button.setVisible(False)
 
         decision_row = QHBoxLayout()
         decision_row.setContentsMargins(0, 0, 0, 0)
         decision_row.addWidget(self.accept_button)
         decision_row.addWidget(self.discard_button)
+        decision_row.addWidget(self.undo_button)
         decision_row.addStretch(1)
 
         self.decision = QWidget(self)
@@ -249,10 +257,31 @@ class ChatPanel(QWidget):
             self.turns.addItem(_item(entry, is_discarded(entry, document)))
         self.turns.scrollToBottom()
 
+    def show_applied(self, preview: Any, transaction_id: str) -> None:
+        """Die Übernommen-Leiste (§26.5): der Vorschlag ist schon angewandt,
+        es bleibt der Weg zurück.
+
+        Regel 19 rückwärts gelesen: was rücknehmbar ist, braucht keine
+        Bestätigung — aber es braucht die Auskunft, dass es passiert ist,
+        und einen Knopf, der es ungeschehen macht.
+        """
+        self.show_proposal(preview)
+        marker = f" ({transaction_id})" if transaction_id else ""
+        self.summary.setText(
+            f"{tr('Übernommen')}{marker}: {describe(preview)} — "
+            + tr("Rückgängig nimmt alles zurück.")
+        )
+        self.accept_button.setVisible(False)
+        self.discard_button.setVisible(False)
+        self.undo_button.setVisible(True)
+
     def show_proposal(self, preview: Any | None) -> None:
         """Bietet die Entscheidung an, mit dem, was sich änderte, in
         Zahlen (§18.7).
         """
+        self.accept_button.setVisible(True)
+        self.discard_button.setVisible(True)
+        self.undo_button.setVisible(False)
         if preview is None:
             self.decision.setVisible(False)
             self.summary.setText("")

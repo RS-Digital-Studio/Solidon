@@ -205,6 +205,32 @@ def test_the_answer_budget_is_a_parameter_capped_by_the_turn(
     assert transport.calls[0][2]["max_tokens"] == 8192, "das Budget hebt die Vorgabe nie an"
 
 
+def test_views_travel_as_image_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """§23: die Ansichten reisen neben dem Steckbrief — als base64-PNG mit
+    ihrer Beschriftung davor, denn ein Bild ohne Namen lässt sich nicht
+    ansprechen.
+    """
+    import base64
+
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
+    transport = Recorder(anthropic_answer())
+    png = b"\x89PNG\r\n\x1a\nfake"
+
+    AnthropicBackend(transport=transport).complete(
+        [Message(role="user", content="Steckbrief", images=(("Ansicht von oben", png),))]
+    )
+
+    _url, _headers, payload = transport.calls[0]
+    blocks = payload["messages"][0]["content"]
+    assert blocks[0] == {"type": "text", "text": "Steckbrief"}
+    assert blocks[1] == {"type": "text", "text": "Ansicht von oben"}
+    assert blocks[2]["type"] == "image"
+    assert blocks[2]["source"]["media_type"] == "image/png"
+    assert base64.b64decode(blocks[2]["source"]["data"]) == png
+    assert AnthropicBackend().supports_images
+    assert not OllamaBackend(transport=transport).supports_images
+
+
 def test_a_tool_result_goes_back_as_a_result(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
     transport = Recorder(anthropic_answer())

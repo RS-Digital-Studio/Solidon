@@ -2157,6 +2157,29 @@ def test_a_remote_call_says_where_it_came_from(window: MainWindow) -> None:
     assert origin.model == REMOTE_ORIGIN
 
 
+def test_scene_views_render_labelled_pngs(window: MainWindow) -> None:
+    """§23: zwei beschriftete Ansichten als PNG — gerendert von einem
+    kurzlebigen Offscreen-Plotter, der den sichtbaren Viewport nicht anfasst.
+    """
+    from app.ui.snapshots import scene_views
+
+    window.run_remote("create_box", {"width": 20.0, "depth": 20.0, "height": 20.0})
+    result = window.session.last_result
+    assert result is not None
+
+    views = scene_views(result.scene)
+
+    assert len(views) == 2
+    labels = [label for label, _image in views]
+    assert any("oben" in label for label in labels)
+    for _label, image in views:
+        assert image.startswith(b"\x89PNG"), "echte PNG-Bytes, kein rohes Array"
+
+    from app.core.types import Scene
+
+    assert scene_views(Scene()) == (), "eine leere Szene hat nichts zu zeigen"
+
+
 def test_a_remote_value_that_is_no_number_is_an_answer_not_a_crash(window: MainWindow) -> None:
     """Konzept Agent-Vertiefung 2.4: die Fernsteuerung rief ``float()``
     ungeprüft — ein „abc" von außen war ein Programmfehler statt einer

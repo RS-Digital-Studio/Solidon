@@ -30,6 +30,8 @@ class ScriptedBackend:
     seen: list[list[Message]] = field(default_factory=list)
     """Jede Anfrage der Reihe nach — hieraus liest die Suite den Kontext."""
     tools_seen: list[tuple[str, ...]] = field(default_factory=list)
+    images_supported: bool = False
+    """Einstellbar, damit ein Test beide Wege fährt: mit Bildern und ohne."""
 
     @property
     def id(self) -> str:
@@ -38,6 +40,10 @@ class ScriptedBackend:
     @property
     def available(self) -> bool:
         return True
+
+    @property
+    def supports_images(self) -> bool:
+        return self.images_supported
 
     def complete(
         self,

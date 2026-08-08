@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import activation, examples, updates
+from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
 from app.core.agent.session import (
     MAX_STEPS,
@@ -722,6 +723,7 @@ class MainWindow(QMainWindow):
         self.chat.requestSent.connect(self._on_request_sent)
         self.chat.accepted.connect(self._on_proposal_accepted)
         self.chat.discarded.connect(self._on_proposal_discarded)
+        self.chat.undoRequested.connect(self._on_applied_undone)
         self.chat.setupRequested.connect(self.action_install_extras)
         self.chat.unlockRequested.connect(self.action_activate)
         self.chat.imageDropped.connect(self.action_generate_from_image)
@@ -2726,9 +2728,24 @@ class MainWindow(QMainWindow):
             self.cancel_button.setVisible(False)
 
     def _on_proposal(self, preview: Any) -> None:
-        """Ein Vorschlag ist da: zeigen, was er änderte, dann den Nutzer
-        entscheiden lassen.
+        """Ein Vorschlag ist da: zeigen, was er änderte — und entscheiden
+        lassen, wo eine Entscheidung nötig ist.
+
+        §26.5 lässt die Übernahme bei eindeutig umkehrbaren Operationen
+        automatisch laufen, und Regel 19 kennt keine Bestätigung vor
+        rücknehmbaren Handlungen. Die vier Bedingungen prüft der Kern
+        (``agent_apply.auto_acceptable``); die Leiste wird dann zur
+        Übernommen-Leiste mit dem Weg zurück — ein Klick, derselbe Effekt
+        wie vorher zwei.
         """
+        if self.settings.auto_accept_reversible and agent_apply.auto_acceptable(preview.proposal):
+            transaction = self.session.accept_proposal(preview)
+            self._proposal = None
+            self.chat.show_applied(preview, transaction.id if transaction else "")
+            self.chat.show_document(self.session.project.document)
+            self.viewport.mark_preview("")
+            self._focus_chat()
+            return
         self._proposal = preview
         self.chat.show_proposal(preview)
         if preview.difference is not None:
@@ -2749,6 +2766,12 @@ class MainWindow(QMainWindow):
         if self._proposal is None:
             return
         self.session.discard_proposal(self._proposal)
+        self._clear_proposal()
+
+    def _on_applied_undone(self) -> None:
+        """Der Rückgängig-Knopf der Übernommen-Leiste (§26.5) — derselbe Weg
+        wie Strg+Z, denn es ist dieselbe Transaktion."""
+        self.session.undo()
         self._clear_proposal()
 
     def _clear_proposal(self) -> None:
