@@ -14,6 +14,7 @@ dass jede eingebundene Datei existiert.
 from __future__ import annotations
 
 import re
+import struct
 import tomllib
 from pathlib import Path
 
@@ -93,6 +94,45 @@ def test_every_file_the_page_refers_to_exists(page: str) -> None:
         if not (base / target.lstrip("/")).exists():
             missing.append(target)
     assert not missing, f"{page} verweist auf {missing}"
+
+
+@pytest.mark.parametrize("page", PAGES)
+def test_every_picture_states_the_size_it_actually_has(page: str) -> None:
+    """Falsche Maße lassen die Seite beim Laden springen.
+
+    ``width`` und ``height`` reservieren den Platz, bevor das Bild da ist.
+    Stimmen sie nicht, rutscht alles darunter im Moment des Ladens — und
+    geschätzt hatte hier schon einmal jemand.
+    """
+    source = WEBSITE / page
+    wrong = []
+    for match in re.finditer(
+        r'<img[^>]*src="([^"]+)"[^>]*width="(\d+)"[^>]*height="(\d+)"',
+        source.read_text(encoding="utf-8"),
+    ):
+        path, stated = match.group(1), (int(match.group(2)), int(match.group(3)))
+        # Die Maße stehen im IHDR-Block, gleich hinter der PNG-Signatur.
+        header = (source.parent / path).read_bytes()[16:24]
+        actual = struct.unpack(">II", header)
+        if actual != stated:
+            wrong.append(f"{path}: angegeben {stated}, tatsächlich {actual}")
+    assert not wrong, wrong
+
+
+@pytest.mark.parametrize("page", PAGES)
+def test_every_jump_mark_the_navigation_offers_has_a_target(page: str) -> None:
+    """Ein Sprung ins Leere merkt niemand beim Schreiben.
+
+    Die Kopfzeile springt zu ``#funktionen`` und ``#preis``, das Angebot in
+    der Auszeichnung für Suchmaschinen ebenfalls. Beide Sprachfassungen
+    benennen ihre Abschnitte verschieden — genau deshalb wird hier geprüft
+    und nicht verglichen.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    ids = set(re.findall(r'id="([^"]+)"', text))
+    marks = {m.lstrip("#") for m in re.findall(r'href="(#[^"]+)"', text)}
+    marks |= {m for m in re.findall(r'"https://solidon3d\.de[^"]*#([^"]+)"', text)}
+    assert marks <= ids, f"{page} springt auf {sorted(marks - ids)}"
 
 
 @pytest.mark.parametrize("page", PAGES)
