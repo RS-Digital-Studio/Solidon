@@ -3536,3 +3536,30 @@ Begleitend: die doppelt implementierten Zusatzwerkzeuge aus
 `main_window.run_remote` auf eine gemeinsame Werkzeuglogik zusammenziehen,
 bevor Schritt 3 neue Werkzeuge anlegt. Bewusst nicht im Handlungsraum:
 Export/Slicer-Start und Redo — Begründung in Konzept-Abschnitt 5.4.
+
+**Die Nachher-Messung (08.08.2026, 39 Anfragen, `qwen3:14b`, volles
+Fenster)** — gegen die Basislinie vom Mittag:
+
+| Maß | vorher (33 Fälle) | nachher (39 Fälle) |
+|---|---|---|
+| gut beantwortet | 17/33 (52 %) | **28/39 (72 %)** — auf den 33 alten Fällen 25/33 (76 %) |
+| bei Mehrdeutigkeit gefragt (§40) | **1/3** | **3/3** — die Kehrseite des Kontextfenster-Fundes ist geheilt |
+| schemagültig im ersten Versuch | nie gemessen | **156/160 = 98 %** (Ziel 95 %, erstmals gemessen, erfüllt) |
+| Baustein statt eigener Geometrie | 6/13 | 7/13 |
+| Hauptmaße als Parameter | 2/3 | 2/3 |
+| Zeitüberschreitungen | 2 | 1 |
+
+Prompt-Version 3, die vollständige Werkzeugliste (86 Schemata samt
+Menüort) und der größere Steckbrief passen weiter ins 32768er-Fenster —
+die Quote wäre sonst eingebrochen statt gestiegen. Zwei der vier
+Skizzenfälle (`hex_base`, `handrail_bend`) sind jetzt gewonnen,
+`how_long` und `core_hole` wurden wirklich **nachgesehen** (gemessen über
+`proposal.readings`), und `switch_material` setzt das Druckziel um.
+
+Was `qwen3:14b` liegen lässt, hat ein Muster: die reinen
+Auskunftsfälle verführen es zum Handeln (`where_menu` bohrte viermal,
+statt den Menüort zu nennen; `printable` ordnete an, statt zu
+analysieren). Das ist Stoff für die Regelsammlung oder den Prompt —
+eine Regeländerung mit Messung vorher/nachher, nicht für heute
+nebenbei. Gegen Anthropic ist die Suite noch nicht gefahren (kein
+Schlüssel hinterlegt); der Lauf steht aus, sobald einer da ist.
