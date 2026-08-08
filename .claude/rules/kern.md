@@ -68,6 +68,23 @@ Die Grenze verläuft an der Auswertung: was sie beeinflusst, gehört in die
 Transaktion. Druckeinstellungen und Sichtbarkeit tun das nicht — die
 Einstellungen reisen zum Slicer, die Sichtbarkeit gehört der Ansicht.
 
+## Die Lizenzgrenze
+
+Was das Dokument ändert oder ein Ergebnis herausgibt, ruft
+`activation.require(<handlung>)` — was nur liest, nie (Konzept §2 C). Die
+vier Stellen sind `History.apply` (CHANGE), `export/writer.py` (EXPORT),
+`export/handover.py` (SLICER) und `agent/session.py` (CHAT); jede holt den
+Zustand selbst und wirft selbst (H3). Eine **neue** Stelle, die schreibt oder
+herausgibt, ohne durch eine der vier zu gehen, braucht ihren eigenen
+`require`-Aufruf — und einen Fall in `tests/test_licence_boundary.py`, in
+beide Richtungen: gesperrt lehnt ab, lesend läuft weiter.
+
+Die Oberfläche graut nur vorher aus, sie ist nie die Hürde. Kein Schalter,
+keine Umgebungsvariable, keine Freigabedatei — die Suite patcht
+`activation._cached` über monkeypatch. Wer eine der vier Grenzdateien
+umbenennt oder verschiebt, zieht `integrity.BOUNDARY_FILES` und die
+PyInstaller-Spec nach (`tests/test_licence_build.py` hält beide zusammen).
+
 ## Pfade
 
 Keine absoluten Pfade in Projektdateien. Nutzerverzeichnisse kommen aus

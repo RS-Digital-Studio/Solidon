@@ -3039,9 +3039,38 @@ Deckblatt.
 
 **Weiterhin offen und nicht von hier zu lösen:** der Zahlungsdienstleister
 in den AGB (Hoster und Anschrift stehen seit dem 08.08.2026) · die fachliche
-Prüfung der Rechtstexte · und der Punkt, der vor den ersten Verkauf gehört:
-`require()` in `app/core/activation` hat noch keinen Aufrufer, ein
-abgelaufener Testlauf sperrt heute nichts.
+Prüfung der Rechtstexte. Der dritte Punkt, der hier stand, ist seit dem
+08.08.2026 erledigt: die vier Grenzstellen rufen `require()`, ein
+abgelaufener Testlauf sperrt die schreibende Seite — siehe „Die Lizenzgrenze
+greift" weiter unten.
+
+## Die Lizenzgrenze greift (08.08.2026)
+
+V4, V4b und V4c aus dem Veröffentlichungskonzept in einem Zug; der Stand je
+Paket steht in `.claude/konzept-veroeffentlichung-1.0.md` §9.
+
+- **V4 — die Grenze im Datenpfad.** `History.apply`, `write_plan`,
+  `write_assembly`, `slice_model` und `AgentSession.propose` rufen
+  `activation.require()`; was liest, bleibt frei. Fall für Fall in
+  `tests/test_licence_boundary.py`. Dazu `integrity.py` (H4): beim ersten
+  Zustandsabruf werden die vier Grenzdateien gegen das signierte Manifest
+  geprüft — in der Entwicklung prüft es nichts, der Schlüssel dafür entsteht
+  je Bau.
+- **Der echte öffentliche Schlüssel steht in `key.py`.** Der private Teil
+  liegt außerhalb des Repositorys (§8: Passwortmanager und Papier); der
+  Rundlauf erzeugen→prüfen ist gegen den eingebauten Schlüssel belegt.
+- **V4b — die Oberfläche.** Schreibende Einträge grauen mit Grund im
+  Hinweistext aus, der Chat sagt es in einer Zeile mit Freischalten-Knopf,
+  Statuszeile unter drei Resttagen, „Lizenziert für …" im Über-Dialog, ein
+  Satz zum Testlauf in der Ersteinrichtung.
+- **V4c — kompilierte Auslieferung.** `tools/build_licence_module.py`
+  übersetzt das Prüfmodul mit Cython und signiert das Manifest mit einem je
+  Bau frischen Paar; die Spec nimmt die Erweiterungen statt des Bytecodes
+  und legt die vier Grenzdateien als Quelltext, `build.yml` ruft das
+  Werkzeug vor dem Paketieren. Lokal fehlt die C++-Workload von Visual
+  Studio — die Übersetzung nach C ist geprüft (`tests/test_licence_build.py`),
+  der Maschinencode-Schritt läuft in der CI; der gebaute Ordner wird in V6
+  auf einem fremden Rechner geprüft.
 
 ## Gizmo und Direktmanipulation durchgesehen (08.08.2026)
 
