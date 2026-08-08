@@ -515,7 +515,7 @@ def ollama_size_warning(
     return _(
         "Das lokale Modell hat weniger als 7 Milliarden Parameter — "
         "Werkzeugaufrufe scheitern damit erfahrungsgemäß. Bewährt hat sich "
-        "qwen3:14b; das braucht eine Grafikkarte mit rund 10 GB Speicher."
+        "qwen3:14b; das braucht eine Grafikkarte mit 16 GB Speicher."
     )
 
 

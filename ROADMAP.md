@@ -434,8 +434,10 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       JSON — alle 200). Impressum, Datenschutz und Widerruf tragen echte
       Angaben statt Platzhaltern. Offen: DNS-Propagation abwarten, dann
       Let's Encrypt in Plesk (mit `www.`), Postfach `support@solidon3d.de`
-      samt SPF/DMARC, der Auftragsverarbeitungsvertrag im CCP — und der
-      Zahlungsdienstleister in den AGB, die als einzige Seite Entwurf bleiben
+      samt SPF/DMARC und der Auftragsverarbeitungsvertrag im CCP. Der
+      Zahlungsdienstleister in den AGB ist seit dem 08.08.2026 eingetragen
+      (Paddle); Entwurf bleiben die Rechtstexte nur noch bis zur fachlichen
+      Prüfung
 - [x] Update-Hinweis beim Start — fragt eine Versionsdatei, lädt nichts, und ist
       aus, bis ihn jemand einschaltet
 
@@ -2593,6 +2595,16 @@ Platz, an dem die echten stehen.
       32 768 belegt `qwen3:14b` 14 GB und bleibt zu 100 % auf der Karte.
       `OLLAMA_CONTEXT_TOKENS` in `backends/llm.py` hält Wert und Messreihe.
 
+      **Das ändert eine Angabe, die dem Kunden gemacht wird.** Beide
+      Startseiten und der Hinweis im Modelldialog nannten „rund 10 GB
+      Grafikspeicher" — das galt für das Modell allein (9,3 GB). Mit dem
+      Kontextfenster kommt der Schlüssel-Wert-Zwischenspeicher dazu, gemessen
+      14 GB für das Modell und 15,7 GB belegt insgesamt. Die
+      Systemvoraussetzung steht deshalb jetzt bei **16 GB**, in beiden
+      Sprachen. Eine Karte mit zwölf würde auf die CPU auslagern — also genau
+      die Zeitüberschreitungen zurückholen, die oben als Ausstattungsfrage
+      standen.
+
       **Was daraus für die Vorgeschichte folgt:** Jede Zahl unten entstand
       unter abgeschnittenem Prompt. Die Werkzeugmengen-Tabelle misst nicht,
       wie gut ein Modell mit vielen Werkzeugen umgeht, sondern **ab wann sie
@@ -3117,12 +3129,13 @@ beiden Themen über WCAG AA · `prefers-reduced-motion` schaltet alles ab ·
 die sechs Zahlen der Startseite testgedeckt · beide PDFs mit richtigem
 Deckblatt.
 
-**Weiterhin offen und nicht von hier zu lösen:** der Zahlungsdienstleister
-in den AGB (Hoster und Anschrift stehen seit dem 08.08.2026) · die fachliche
-Prüfung der Rechtstexte. Der dritte Punkt, der hier stand, ist seit dem
+**Weiterhin offen und nicht von hier zu lösen:** die fachliche Prüfung der
+Rechtstexte — was ihr vorzulegen ist, steht oben unter „Offen" als vier
+benannte Fragen. Die beiden anderen Punkte, die hier standen, sind seit dem
 08.08.2026 erledigt: die vier Grenzstellen rufen `require()`, ein
-abgelaufener Testlauf sperrt die schreibende Seite — siehe „Die Lizenzgrenze
-greift" weiter unten.
+abgelaufener Testlauf sperrt die schreibende Seite (siehe „Die Lizenzgrenze
+greift" weiter unten), und der Zahlungsdienstleister steht mit vollständiger
+Firmierung in den AGB.
 
 ## Die Lizenzgrenze greift (08.08.2026)
 
