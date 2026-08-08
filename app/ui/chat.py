@@ -58,6 +58,8 @@ class ChatPanel(QWidget):
     discarded = Signal()
     setupRequested = Signal()
     """Der Benutzer will den fehlenden Zugang einrichten (§2.7)."""
+    unlockRequested = Signal()
+    """Der Benutzer will nach Ablauf des Testlaufs freischalten (§2 C)."""
     imageDropped = Signal(str)
     """Ein Bild ist im Chatfenster gelandet — Pfad als Text (Konzept P15, E8).
 
@@ -87,6 +89,12 @@ class ChatPanel(QWidget):
         self.setup = QPushButton(tr("Zugang einrichten …"), self)
         self.setup.clicked.connect(self.setupRequested)
         self.setup.setVisible(False)
+
+        # Der Knopf für die andere fehlende Sache: nicht das Modell, der
+        # Schlüssel. Beide führen dorthin, wo es behoben wird (§2.7).
+        self.unlock = QPushButton(tr("Solidon freischalten …"), self)
+        self.unlock.clicked.connect(self.unlockRequested)
+        self.unlock.setVisible(False)
 
         # §27, ohne zu nörgeln: ein Satz, wenn das lokale Modell zu klein ist
         # oder fehlt — einmal sichtbar, solange es gilt, sonst gar nicht.
@@ -136,12 +144,14 @@ class ChatPanel(QWidget):
         layout.addWidget(self.hint)
         layout.addWidget(self.notice)
         layout.addWidget(self.setup)
+        layout.addWidget(self.unlock)
         layout.addWidget(self.turns, stretch=1)
         layout.addWidget(self.decision)
         layout.addLayout(entry_row)
 
         self._available = False
         self._busy = False
+        self._locked = False
         self.set_available(False)
 
     # --- state ------------------------------------------------------------------
@@ -167,6 +177,24 @@ class ChatPanel(QWidget):
         self.notice.setText(text)
         self.notice.setVisible(bool(text))
 
+    def set_locked(self, locked: bool) -> None:
+        """§2 C: nach Ablauf des Testlaufs zählt der Chat zur schreibenden
+        Seite — das Panel sagt es in einer Zeile mit dem Weg zurück und hält
+        sich sonst heraus (§27).
+
+        Wird nach :meth:`set_available` gerufen und überschreibt dessen
+        Hinweis; beim Entsperren stellt der nächste ``set_available``-Lauf
+        ihn wieder her.
+        """
+        self._locked = locked
+        self.unlock.setVisible(locked)
+        if locked:
+            self.hint.setText(
+                tr("Der Testzeitraum ist abgelaufen — der Chat braucht einen Lizenzschlüssel.")
+            )
+            self.setup.setVisible(False)
+        self._update_enabled()
+
     def set_busy(self, busy: bool) -> None:
         """Während das Modell denkt, wird nichts weiter gesendet — ein Zug nach
         dem anderen.
@@ -179,7 +207,7 @@ class ChatPanel(QWidget):
         return self._busy
 
     def _update_enabled(self) -> None:
-        usable = self._available and not self._busy
+        usable = self._available and not self._busy and not self._locked
         self.input.setEnabled(usable)
         self.send.setEnabled(usable)
 

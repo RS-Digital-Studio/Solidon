@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME
 from app.core import install, tools
+from app.core.activation import TRIAL_DAYS
 from app.core.backends import llm
 from app.core.export import slicer_keys, slicer_profiles
 from app.core.knowledge import profiles
@@ -101,15 +102,23 @@ class FirstRunDialog(QDialog):
         self.setWindowTitle(tr("Erste Schritte"))
         self.setMinimumWidth(520)
 
-        greeting = QLabel(
+        # Der Testlauf steht hier in einem Satz und mehr nicht: die
+        # Ersteinrichtung fragt nach keinem Schlüssel — das wäre eine Hürde
+        # vor dem ersten Blick (Konzept V4b).
+        self.greeting = QLabel(
             f"{APP_NAME} — "
             + tr(
                 "Konstruieren, erzeugen und anpassen für den 3D-Druck. Diese Angaben "
                 "stehen später unter Bearbeiten, Einstellungen; überspringen geht auch."
-            ),
+            )
+            + " "
+            + tr(
+                "Die ersten {days} Tage ist alles frei; danach bleiben Öffnen, "
+                "Ansehen und Messen es."
+            ).format(days=TRIAL_DAYS),
             self,
         )
-        greeting.setWordWrap(True)
+        self.greeting.setWordWrap(True)
 
         self.language = QComboBox(self)
         # Der Name, nicht das Kürzel: „de" stand hier als allererste Angabe, die
@@ -166,7 +175,7 @@ class FirstRunDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(greeting)
+        layout.addWidget(self.greeting)
         layout.addLayout(form)
         layout.addWidget(QLabel(tr("Externe Programme — keines davon ist Pflicht:"), self))
         layout.addWidget(self.tools)

@@ -15,9 +15,8 @@ trägt sie, damit ein Schlüssel den Namen seines Käufers nennen kann — das w
 seltener weitergegeben als eine anonyme Zeichenkette. Mehr als das braucht
 niemand zu wissen, und was nicht darin steht, kann auch nicht verloren gehen.
 
-Gezeigt wird der Name bisher nur im Freischaltdialog. Der Über-Dialog soll ihn
-als „Lizenziert für …" nennen (Konzept §2 I H2), tut es aber noch nicht — das
-gehört zu V4b und ist dort als offen vermerkt.
+Gezeigt wird der Name im Freischaltdialog und im Über-Dialog, dort als
+„Lizenziert für …" (Konzept §2 I H2).
 """
 
 from __future__ import annotations

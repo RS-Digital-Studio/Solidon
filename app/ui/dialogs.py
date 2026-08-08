@@ -727,6 +727,12 @@ class AboutDialog(QDialog):
         support = QLabel(f"{tr('Support und Kontakt')}: {SUPPORT_ADDRESS}", self)
         support.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
+        # §2 I H2: der Über-Dialog nennt den Freischaltzustand beim Namen.
+        # Wer einen personalisierten Schlüssel weitergibt, gibt seinen Namen
+        # mit — und der steht hier, nicht versteckt in einem Untermenü.
+        licensed = QLabel(_licence_line(), self)
+        licensed.setWordWrap(True)
+
         exceptions = QLabel(
             tr(
                 "Bausteinbibliothek und Referenzkorpus stehen unter der MIT-Lizenz, "
@@ -747,10 +753,24 @@ class AboutDialog(QDialog):
         layout.addWidget(heading)
         layout.addWidget(rights)
         layout.addWidget(support)
+        layout.addWidget(licensed)
         layout.addWidget(exceptions)
         layout.addWidget(QLabel(tr("Fremde Bestandteile"), self))
         layout.addWidget(third_party, stretch=1)
         layout.addWidget(buttons)
+
+
+def _licence_line() -> str:
+    """Der Freischaltzustand als ein Satz — für den Über-Dialog (H2)."""
+    state = activation.state()
+    if state.licence is not None:
+        return tr("Lizenziert für {holder} (Bestellung {order}).").format(
+            holder=state.licence.holder or tr("diesen Rechner"),
+            order=state.licence.order,
+        )
+    if state.in_trial:
+        return tr("Testzeitraum: noch {days} Tage.").format(days=state.days_left)
+    return tr("Der Testzeitraum ist abgelaufen — Änderungen brauchen einen Lizenzschlüssel.")
 
 
 def _third_party_text() -> str:

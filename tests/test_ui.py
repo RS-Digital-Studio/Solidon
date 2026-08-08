@@ -3011,3 +3011,193 @@ def test_no_window_overrides_the_application_icon() -> None:
         f"{culprits}: das Fenstersymbol gehört einmal auf die QApplication "
         "(app/ui/app.py), nicht an einzelne Fenster"
     )
+
+
+# --- Lizenzierung an der Oberfläche (Konzept V4b) ---------------------------------
+
+
+def _expired(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core import activation
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
+
+
+def test_an_expired_trial_greys_the_writing_side_out(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2 C: gesperrt sieht man **vor** dem Klick — ausgegraut, mit Grund im
+    Hinweistext. Die Hürde selbst liegt im Kern; hier steht die Freundlichkeit
+    davor."""
+    _expired(monkeypatch)
+    window = MainWindow(Session(), UiSettings())
+
+    assert not window.import_action.isEnabled()
+    assert not window.generate_action.isEnabled()
+    assert not window.export_action.isEnabled()
+    assert not window._toolbar_import.isEnabled()
+    assert all(not action.isEnabled() for action in window._op_actions.values())
+    assert "Lizenzschlüssel" in window.import_action.statusTip(), (
+        "der Hinweistext nennt den Grund, nicht nur den Zustand"
+    )
+    # Rückgängig und Wiederholen gehören zur lesenden Seite: ihr Zustand
+    # folgt dem Verlauf, nicht der Lizenz — hier leer, also aus, aber nicht
+    # wegen der Sperre (der Hinweistext bleibt ihr eigener).
+    assert "Lizenzschlüssel" not in window.undo_action.statusTip()
+
+    assert not window.chat.input.isEnabled()
+    assert window.chat.unlock.isVisibleTo(window.chat)
+    assert "Lizenzschlüssel" in window.chat.hint.text()
+
+
+def test_entering_a_key_puts_everything_back(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach dem Eintragen steht wieder offen, was der Ablauf zugemacht hatte —
+    samt der eigenen Hinweistexte, nicht mit dem Sperrgrund als Fossil."""
+    from datetime import date
+
+    from app.core import activation
+    from app.core.activation import key
+
+    _expired(monkeypatch)
+    window = MainWindow(Session(), UiSettings())
+    hint_before = str(window.import_action.property("tip_before_lock"))
+
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 8, 6),
+        order="A-1",
+        holder="kaeufer@beispiel.de",
+    )
+    monkeypatch.setattr(activation, "_cached", activation.Activation(licence=licence))
+    window._update_actions()
+    window._refresh_chat_availability()
+
+    assert window.import_action.isEnabled()
+    assert window.generate_action.isEnabled()
+    assert window.import_action.statusTip() == hint_before
+    assert not window.chat.unlock.isVisibleTo(window.chat)
+
+
+def test_the_last_trial_days_show_up_once_in_the_status_bar(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2 C: einmal eine Zeile, wenn weniger als drei Tage übrig sind — kein
+    Startdialog, keine Zählung im Titel."""
+    from app.core import activation
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=2))
+    window = MainWindow(Session(), UiSettings())
+
+    assert "2" in window.statusBar().currentMessage()
+    assert "freischalten" in window.statusBar().currentMessage()
+
+
+def test_a_comfortable_trial_rest_stays_quiet(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core import activation
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=14))
+    window = MainWindow(Session(), UiSettings())
+
+    assert window.statusBar().currentMessage() == ""
+
+
+def test_the_about_dialog_names_the_activation_state(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2 I H2: „Lizenziert für …" steht im Über-Dialog — wer seinen Schlüssel
+    weitergibt, gibt seinen Namen mit."""
+    from datetime import date
+
+    from PySide6.QtWidgets import QLabel
+
+    from app.core import activation
+    from app.core.activation import key
+    from app.ui.dialogs import AboutDialog
+
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 8, 6),
+        order="A-77",
+        holder="kaeufer@beispiel.de",
+    )
+    monkeypatch.setattr(activation, "_cached", activation.Activation(licence=licence))
+    dialog = AboutDialog()
+    texts = " ".join(label.text() for label in dialog.findChildren(QLabel))
+    assert "kaeufer@beispiel.de" in texts
+    assert "A-77" in texts
+
+
+def test_the_activation_dialog_accepts_a_valid_key(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """V4b: der Dialog nimmt an, was gilt — und legt es ab."""
+    from app.core import activation
+    from app.core.activation import key, store
+    from app.ui.dialogs import ActivationDialog
+    from tools.make_licence_keys import make_key, public_key
+
+    # Der erste Testvektor aus RFC 8032 — dasselbe Paar wie in
+    # test_licence_boundary.py, das kein importierbares Paket ist.
+    test_seed = bytes.fromhex("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+
+    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(key, "PUBLIC_KEY", public_key(test_seed))
+    activation.forget_cache()
+    try:
+        from datetime import date
+
+        licence = key.Licence(
+            major=key.current_major(),
+            purchased_on=date(2026, 8, 6),
+            order="A-1",
+            holder="kaeufer@beispiel.de",
+        )
+        dialog = ActivationDialog()
+        dialog.field.setPlainText(make_key(test_seed, licence))
+        dialog._remember()
+
+        assert activation.state().licence == licence
+        assert store.read_key() is not None, "geprüft und abgelegt"
+    finally:
+        activation.forget_cache()
+
+
+def test_the_activation_dialog_rejects_with_a_reason(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """V4b: abgelehnt wird mit Grund und Handlungen, nie mit „ungültig" —
+    der Fehlerdialog ist modal, also wird er hier abgefangen statt geöffnet."""
+    from app.core import activation
+    from app.core.activation import store
+    from app.ui import dialogs
+    from app.ui.dialogs import ActivationDialog
+
+    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path)
+    activation.forget_cache()
+    shown: list[object] = []
+    monkeypatch.setattr(dialogs, "show_error", lambda error, *a, **kw: shown.append(error))
+    try:
+        dialog = ActivationDialog()
+        dialog.field.setPlainText("SOLIDON3D-1-AAAAAAAA")
+        dialog._remember()
+
+        assert len(shown) == 1
+        assert getattr(shown[0], "suggestions", ()), "Regel 17: mit Handlungen"
+        assert store.read_key() is None, "abgelegt wird nur Geprüftes"
+    finally:
+        activation.forget_cache()
+
+
+def test_the_first_run_dialog_mentions_the_trial_in_one_sentence(
+    qt_app: QApplication,
+) -> None:
+    """V4b: die Ersteinrichtung erwähnt den Testlauf — und fragt nicht nach
+    einem Schlüssel, das wäre eine Hürde vor dem ersten Blick."""
+    from app.ui.first_run import FirstRunDialog
+
+    dialog = FirstRunDialog(UiSettings())
+    assert "14" in dialog.greeting.text()
+    assert "frei" in dialog.greeting.text()

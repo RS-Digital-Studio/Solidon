@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
-from app.core import examples, updates
+from app.core import activation, examples, updates
 from app.core.agent.session import find_part_text
 from app.core.agent.tools import (
     ADD_FIT,
@@ -475,6 +475,9 @@ class MainWindow(QMainWindow):
         """Die Menüeinträge der Operationen, damit sie sich ausgrauen lassen.
         Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
         etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten."""
+        self._trial_message = ""
+        """Die Testlauf-Zeile der Statusleiste — gemerkt, damit das
+        Freischalten genau sie wegräumt und keine fremde Meldung."""
 
         self._build_central()
         self._build_status_bar()
@@ -484,6 +487,7 @@ class MainWindow(QMainWindow):
         self._apply_card_style(self.settings.theme)
         self._connect_session()
         self._update_actions()
+        self._trial_status_line()
 
         # §2.6: das offene Werkzeug schließen. ``close_tool`` gab es dafür seit
         # jeher und niemanden, der es rief — Escape tat nichts.
@@ -703,6 +707,7 @@ class MainWindow(QMainWindow):
         self.chat.accepted.connect(self._on_proposal_accepted)
         self.chat.discarded.connect(self._on_proposal_discarded)
         self.chat.setupRequested.connect(self.action_install_extras)
+        self.chat.unlockRequested.connect(self.action_activate)
         self.chat.imageDropped.connect(self.action_generate_from_image)
 
         # §37.2: die Beispiele sind auch Doku. Die Tour macht sie dazu — der
@@ -832,14 +837,14 @@ class MainWindow(QMainWindow):
             tr("Das Projekt unter einem anderen Namen ablegen."),
         )
         file_menu.addSeparator()
-        self._add_action(
+        self.import_action = self._add_action(
             file_menu,
             tr("Modell einfügen …"),
             "Ctrl+I",
             self.action_import,
             tr("Eine Modelldatei laden (STL, 3MF, OBJ, STEP). Eine Baugruppe kommt einzeln an."),
         )
-        self._add_action(
+        self.generate_action = self._add_action(
             file_menu,
             tr("Modell erzeugen …"),
             "Ctrl+G",
@@ -1244,6 +1249,10 @@ class MainWindow(QMainWindow):
             action = QAction(icon(symbol, toolbar), label, self)
             action.triggered.connect(slot)
             toolbar.addAction(action)
+            if symbol == "import":
+                # Der eine Knopf der Zeile, der eine Transaktion auslöst —
+                # nach Ablauf des Testlaufs graut er mit den Menüs aus (§2 C).
+                self._toolbar_import = action
 
         # Rechts neben den vier Knöpfen stand tausend Pixel nichts. Dort steht
         # jetzt, was das Projekt gerade ist und worauf es gedruckt wird —
@@ -1384,10 +1393,14 @@ class MainWindow(QMainWindow):
         # Kürzeln derselben Taste **keines** von beiden feuern. Fusion macht
         # es genauso: im Skizzenmodus gilt der Zeichensatz.
         drawing = self._sketch_panel is not None
+        # §2 C: nach Ablauf des Testlaufs graut die schreibende Seite aus —
+        # vor dem Klick, mit Grund im Hinweistext. Die Hürde selbst liegt im
+        # Kern; das hier ist die Freundlichkeit davor.
+        locked = not activation.state().unlocked
 
         for name, action in self._op_actions.items():
             spec = REGISTRY.get(name)
-            if drawing:
+            if locked or drawing:
                 action.setEnabled(False)
             elif spec.takes_whole_scene:
                 action.setEnabled(objects > 0)
@@ -1395,15 +1408,75 @@ class MainWindow(QMainWindow):
                 action.setEnabled(chosen >= spec.consumes)
             else:
                 action.setEnabled(True)
+            self._lock_hint(action, locked)
 
+        # Rückgängig und Wiederholen bleiben nach Ablauf offen (§2 C): wer
+        # nichts mehr ändern kann, darf trotzdem zurück und wieder vor.
         self.undo_action.setEnabled(self.session.history.can_undo)
         self.redo_action.setEnabled(self.session.history.can_redo)
         # Dieselbe Regel für die zwei Einträge, die keine Operationen sind und
         # trotzdem einen Körper brauchen: ausgegraut statt einer modalen
         # Sackgasse nach dem Klick.
-        self.auto_split_action.setEnabled(chosen >= 1)
-        self.variants_action.setEnabled(objects > 0)
-        self.export_action.setEnabled(objects > 0)
+        self.auto_split_action.setEnabled(chosen >= 1 and not locked)
+        self.variants_action.setEnabled(objects > 0 and not locked)
+        self.export_action.setEnabled(objects > 0 and not locked)
+        self.import_action.setEnabled(not locked)
+        self.generate_action.setEnabled(not locked)
+        self._toolbar_import.setEnabled(not locked)
+        for action in (
+            self.auto_split_action,
+            self.variants_action,
+            self.export_action,
+            self.import_action,
+            self.generate_action,
+            self._toolbar_import,
+        ):
+            self._lock_hint(action, locked)
+
+    def _lock_hint(self, action: QAction, locked: bool) -> None:
+        """Schreibt den Grund der Sperre in den Hinweistext — und stellt den
+        eigenen wieder her, sobald ein Schlüssel eingetragen ist.
+
+        Der Grund steht dort, wo der Eintrag ihn **vor** dem Klick zeigt:
+        Statusleiste und Tooltip (§2 C). Der ursprüngliche Satz reist als
+        Qt-Property mit, weil er je Eintrag ein anderer ist.
+        """
+        stored = action.property("tip_before_lock")
+        if locked:
+            if stored is None:
+                action.setProperty("tip_before_lock", action.statusTip())
+            reason = tr(
+                "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen "
+                "Lizenzschlüssel (Hilfe → Solidon freischalten …)."
+            )
+            action.setStatusTip(reason)
+            action.setToolTip(reason)
+        elif stored is not None:
+            action.setStatusTip(str(stored))
+            action.setToolTip(str(stored))
+            action.setProperty("tip_before_lock", None)
+
+    def _trial_status_line(self) -> None:
+        """§2 C: **einmal** eine Zeile in der Statusleiste, wenn weniger als
+        drei Tage übrig sind.
+
+        Kein Startdialog, keine Zählung im Fenstertitel, keine Erinnerung am
+        dritten Tag — die Zeile steht da, bis die nächste Statusmeldung sie
+        ablöst, und das ist genug. Nach dem Eintragen eines Schlüssels räumt
+        derselbe Aufruf sie weg, aber nur sie: eine fremde Meldung, die
+        inzwischen dort steht, bleibt stehen.
+        """
+        state = activation.state()
+        message = ""
+        if state.in_trial and state.days_left < 3:
+            message = tr("Testzeitraum: noch {days} Tage — Hilfe → Solidon freischalten …").format(
+                days=state.days_left
+            )
+        if message:
+            self.statusBar().showMessage(message)
+        elif self._trial_message and self.statusBar().currentMessage() == self._trial_message:
+            self.statusBar().clearMessage()
+        self._trial_message = message
 
     def _connect_session(self) -> None:
         self.session.sceneChanged.connect(self._on_scene)
@@ -1965,6 +2038,9 @@ class MainWindow(QMainWindow):
             backend is not None, f"{backend.id}:{backend.model}" if backend else ""
         )
         self.chat.set_notice("")
+        # Nach set_available, denn die Sperre überschreibt dessen Hinweis:
+        # §2 C zählt den Chat zur schreibenden Seite, mit oder ohne Modell.
+        self.chat.set_locked(not activation.state().unlocked)
         if not probe_local or backend is None or backend.id != "ollama":
             return
         worker = _OllamaSizeWorker(backend.model)
@@ -3355,6 +3431,8 @@ class MainWindow(QMainWindow):
         """
         ActivationDialog(self).exec()
         self._update_actions()
+        self._refresh_chat_availability()
+        self._trial_status_line()
 
     def _object_of(self, error: AppError) -> ObjectId | None:
         """Der Körper, um den es geht — aus dem Fehler oder aus der Auswahl."""
