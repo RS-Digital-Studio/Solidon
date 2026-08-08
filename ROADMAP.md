@@ -2982,16 +2982,23 @@ Konzeptpapiere und die Roadmap — gegen den Code, nicht gegen die Erinnerung.
 
 ### Offen
 
-- **Nur noch der Zahlungsdienstleister.** Hoster (netcup GmbH,
-  Emmy-Noether-Straße 10, 76131 Karlsruhe — die aktuelle Anschrift, nicht
-  mehr die Daimlerstraße) und Anschrift (Aufbaustraße 10, 96049 Bamberg)
-  stehen seit dem 08.08.2026 in den Seiten; Impressum und Widerruf sind
-  keine Entwürfe mehr. Die AGB bleiben einer, bis der Zahlungsdienstleister
-  entschieden ist.
+- [x] **Der Zahlungsdienstleister ist entschieden: Paddle.** Als *Merchant of
+      Record* wird er selbst Vertragspartner des Kaufs und trägt die
+      Umsatzsteuer — § 4 der AGB war auf genau diesen Fall geschrieben und
+      nennt ihn jetzt beim Namen. Die Datenschutzerklärung hat dazu einen
+      eigenen Abschnitt bekommen: sie schwieg zum Kauf, obwohl dort die
+      einzigen personenbezogenen Daten anfallen, die es überhaupt gibt.
+      **Nachzutragen bleibt die vollständige Firmierung** aus dem
+      Paddle-Vertrag; hier steht Name und Sitzland, keine erfundene Anschrift.
 - **Die Rechtstexte fachlich prüfen lassen.** Sie sind sorgfältige Entwürfe
   und keine Rechtsberatung. Die Widerrufsbelehrung wirkt nur, wenn der
   Bestellvorgang die Zustimmung nach § 356 Abs. 5 BGB abfragt — der Text
   allein genügt nicht.
+
+  Der Entwurfshinweis hing bis hierhin am Platzhalter, und mit Paddle wäre er
+  gefallen: ein ungeprüfter Vertrag hätte ohne jeden Vorbehalt dagestanden.
+  Er hängt jetzt an `make_legal.REVIEW_PENDING` und fällt erst, wenn die
+  Prüfung stattgefunden hat — `tests/test_legal.py` hält das fest.
 
 ### Dritter Durchgang, gleicher Tag
 

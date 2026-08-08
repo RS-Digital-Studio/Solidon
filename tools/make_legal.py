@@ -219,6 +219,15 @@ DRAFT_NOTE = (
     "Angaben und ist vor der Veröffentlichung fachlich zu prüfen.</p>"
 )
 
+#: Ob die Texte fachlich geprüft sind. Auf ``False`` stellen, sobald sie es
+#: sind — dann fällt der Vorbehalt, und nur dann.
+REVIEW_PENDING = True
+
+REVIEW_NOTE = (
+    '<p class="draft">Sorgfältiger Entwurf, aber keine Rechtsberatung — vor '
+    "der Veröffentlichung fachlich zu prüfen.</p>"
+)
+
 #: Die englische Startseite verlinkt hierher, und wer von dort kommt, steht
 #: unangekündigt vor einem deutschen Vertrag. Die AGB sagen in § 3, dass die
 #: Vertragssprache Deutsch ist — nur liest das niemand, der auf „Licence
@@ -235,14 +244,24 @@ LANGUAGE_NOTE = (
 
 
 def draft_banner(markdown: str) -> str:
-    """Der Entwurfshinweis, solange ein Platzhalter im Text steht.
+    """Der Entwurfshinweis — aus zwei Gründen, die nicht zusammenfallen.
 
-    Er wird nicht von Hand gesetzt und nicht von Hand entfernt: sobald die
-    Anschrift eingetragen ist, verschwindet er beim nächsten Lauf von selbst.
-    Ein Hinweis, den jemand wegnehmen muss, bleibt sonst stehen, wenn er nicht
-    mehr stimmt — oder er steht noch da, wenn er längst falsch ist.
+    Der erste ist der Platzhalter. Er wird nicht von Hand gesetzt und nicht von
+    Hand entfernt: sobald die Anschrift eingetragen ist, verschwindet er beim
+    nächsten Lauf von selbst. Ein Hinweis, den jemand wegnehmen muss, bleibt
+    sonst stehen, wenn er nicht mehr stimmt — oder er steht noch da, wenn er
+    längst falsch ist.
+
+    Der zweite ist die fachliche Prüfung, und sie hängt an keinem Platzhalter.
+    Beides an einen Satz zu hängen war zu wenig: mit dem Namen des
+    Zahlungsdienstleisters fiel der letzte Platzhalter, und ein ungeprüfter
+    Vertrag hätte ohne jeden Vorbehalt dagestanden. Diese Zeile fällt erst,
+    wenn jemand :data:`REVIEW_PENDING` umstellt — also wenn die Prüfung
+    wirklich stattgefunden hat.
     """
-    return DRAFT_NOTE if PLACEHOLDER.search(markdown) else ""
+    if PLACEHOLDER.search(markdown):
+        return DRAFT_NOTE
+    return REVIEW_NOTE if REVIEW_PENDING else ""
 
 
 def body_html(markdown: str) -> str:

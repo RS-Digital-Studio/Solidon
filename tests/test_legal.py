@@ -106,3 +106,22 @@ def test_a_page_with_a_placeholder_says_that_it_is_a_draft() -> None:
     assert not silent, (
         "Platzhalter ohne Entwurfshinweis — hier hält jemand sie für Angaben:\n" + "\n".join(silent)
     )
+
+
+def test_an_unreviewed_contract_keeps_its_reservation() -> None:
+    """Die fachliche Prüfung hängt an keinem Platzhalter.
+
+    Beides an einem Satz zu führen war zu wenig: mit dem Namen des
+    Zahlungsdienstleisters fiel der letzte Platzhalter aus den AGB, und ein
+    ungeprüfter Vertrag hätte ohne jeden Vorbehalt dagestanden. Der Hinweis
+    fällt erst, wenn jemand `REVIEW_PENDING` umstellt — also wenn die Prüfung
+    stattgefunden hat.
+    """
+    import tools.make_legal as make_legal
+
+    if not make_legal.REVIEW_PENDING:
+        pytest.skip("die Texte sind geprüft, der Vorbehalt gehört weg")
+
+    for _source, target, _label in make_legal.DOCUMENTS:
+        html = (WEBSITE / target).read_text(encoding="utf-8")
+        assert 'class="draft"' in html, f"{target} trägt keinen Vorbehalt"

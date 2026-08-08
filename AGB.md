@@ -54,13 +54,14 @@ Die Vertragssprache ist Deutsch.
 Alle Preise sind Endpreise. Ob und in welcher Höhe Umsatzsteuer ausgewiesen
 wird, ergibt sich aus der Bestellübersicht und der Rechnung.
 
-Die Zahlung wird über [ZAHLUNGSDIENSTLEISTER] abgewickelt. Welche
-Zahlungsarten zur Verfügung stehen, wird im Bestellvorgang angezeigt. Der
-Kaufpreis ist mit Vertragsschluss fällig.
+Die Zahlung wird über Paddle (Paddle.com Market Ltd, Vereinigtes Königreich)
+abgewickelt. Welche Zahlungsarten zur Verfügung stehen, wird im Bestellvorgang
+angezeigt. Der Kaufpreis ist mit Vertragsschluss fällig.
 
-Tritt der Zahlungsdienstleister als *Merchant of Record* auf, wird er selbst
-Vertragspartner des Kaufs. Dann gelten für den Kauf seine Bedingungen und
-diese hier ergänzend für die Nutzung der Software.
+Paddle tritt dabei als *Merchant of Record* auf und wird selbst
+Vertragspartner des Kaufs. Für den Kauf gelten damit die Bedingungen von
+Paddle, diese hier ergänzend für die Nutzung der Software. Rechnung und
+Umsatzsteuerausweis kommen von Paddle.
 
 ## § 5 Lieferung
 
