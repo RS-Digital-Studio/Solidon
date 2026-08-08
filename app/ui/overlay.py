@@ -214,7 +214,15 @@ def natural_height(zone: QWidget) -> int:
         # Zeilenrechnung ihn auf eine Zeile zurück, und die Karte stand auf
         # hundertsiebzig Pixeln neben tausendzweihundert freien.
         needs = max(rows_height(view), view.minimumHeight())
-        wanted += needs - view.sizeHint().height()
+        # Abgezogen wird, was die Liste zu ``zone.sizeHint()`` beigetragen
+        # hat — und das ist nicht ihre rohe Wunschhöhe: das Layout klemmt sie
+        # zwischen Mindest- und Höchsthöhe. Die Listen der linken Spalte sind
+        # per ``fit_to_rows`` auf feste Höhen gesetzt, meist deutlich unter
+        # Qts pauschalen 192 Pixeln — die rohe Zahl abzuziehen rechnete die
+        # Zone um gut hundert Pixel je Liste zu kurz, und Parameter und
+        # Verlauf hingen unterhalb der Kartenkante.
+        contributed = min(max(view.sizeHint().height(), view.minimumHeight()), view.maximumHeight())
+        wanted += needs - contributed
     for area in zone.findChildren(QScrollArea):
         if isinstance(area, QAbstractItemView) or not area.isVisibleTo(zone):
             continue
@@ -394,6 +402,11 @@ class OverlayHost(QWidget):
         move.setStartValue(zone.geometry())
         move.setEndValue(target)
         move.finished.connect(lambda: self._moves.pop(id(zone), None))
+        # Die Maske wächst mit, nicht erst am Ziel: eine wachsende Zone unter
+        # der alten Maske zeigt ihren neuen Teil sonst erst nach 160 ms — und
+        # gar nicht, wenn eine neue Bewegung diese hier unterwegs ersetzt,
+        # denn ``stop()`` sendet kein ``finished``.
+        move.valueChanged.connect(lambda _value, zone=zone: _round_corners(zone))
         move.finished.connect(lambda: _round_corners(zone))
         self._moves[id(zone)] = move
         move.start()

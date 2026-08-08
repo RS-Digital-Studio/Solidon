@@ -406,3 +406,33 @@ def test_sharing_the_room_settles_on_one_answer(window: MainWindow) -> None:
     second = (window.object_tree.tree.height(), window.history_panel.list.height())
 
     assert first == second
+
+
+def test_a_list_pinned_below_qts_default_hint_does_not_shrink_its_zone(
+    qt_app: QApplication,
+) -> None:
+    """Die linke Spalte rechnete sich um die Qt-Pauschale zu kurz.
+
+    Ihre Listen stehen per ``fit_to_rows`` auf festen Höhen, meist weit unter
+    Qts pauschaler Wunschhöhe von 192 Pixeln — das Layout rechnet mit der
+    geklemmten Zahl, ``natural_height`` zog aber die Pauschale ab. Je Liste
+    fehlten der Zone damit gut hundert Pixel: gemessen bekam sie 159 für 371
+    Pixel Inhalt, und Parameter und Verlauf hingen unterhalb der Kartenkante —
+    „zeigt die Hälfte". Sichtbar wurde das beim Einklappen, denn erst dann lag
+    der Bedarf unter der Fensterhöhe und der Deckel ``room`` verdeckte den
+    Fehler nicht mehr.
+    """
+    from PySide6.QtWidgets import QListWidget, QVBoxLayout
+
+    zone = QWidget()
+    layout = QVBoxLayout(zone)
+    listing = QListWidget(zone)
+    listing.addItem("eine Zeile")
+    listing.setFixedHeight(60)
+    layout.addWidget(QLabel("Überschrift", zone))
+    layout.addWidget(listing)
+    zone.adjustSize()
+
+    assert overlay.natural_height(zone) >= zone.sizeHint().height(), (
+        "die Zone muss mindestens bekommen, was ihr Layout braucht"
+    )
