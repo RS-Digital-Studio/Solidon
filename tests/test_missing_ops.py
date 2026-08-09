@@ -9,6 +9,7 @@ nachrechnen lässt, nicht auf einem Bild angeschaut.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -18,8 +19,9 @@ from app.core.errors import ValidationError
 from app.core.geom import mesh_ops
 from app.core.geom.hollow import hollow
 from app.core.geom.label_ops import outlines
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
 from app.core.geom.prepare import compensate_elephant_foot, countersink, plug
+from app.core.ingest.loader import normalise
 from app.core.ingest.outline import extrude, is_outline
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
@@ -29,6 +31,8 @@ SVG = (
     b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
     b'<path d="M10,10 L90,10 L90,90 L10,90 Z M30,30 L30,70 L70,70 L70,30 Z"/></svg>'
 )
+
+MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def block(width: float = 40.0, depth: float = 40.0, height: float = 40.0) -> MeshData:
@@ -107,6 +111,57 @@ def test_smoothing_does_not_shrink_the_body(profile: Profile) -> None:
     assert result.outputs[0].mesh.volume == pytest.approx(sphere.volume, rel=0.02)
 
 
+def test_smoothing_a_thin_wall_refuses_instead_of_turning_it_inside_out(
+    profile: Profile,
+) -> None:
+    """Ein negatives Volumen ist kein Ergebnis, sondern ein umgestülpter Körper.
+
+    Aushöhlen, dann glätten: die Innenwand wandert an der Außenwand vorbei, und
+    heraus kommt ein Netz, das sich wasserdicht nennt und −19 318 mm³ misst.
+    Jede Kennzahl danach ist falsch — Materialverbrauch, Massivität, der ganze
+    Prüfbericht — und exportieren ließ es sich auch.
+    """
+    box = trimesh.creation.box(extents=(40.0, 40.0, 30.0))
+    box.apply_translation((0.0, 0.0, 15.0))
+    hollowed = hollow(MeshData.of(box), 2.0, vents=1).mesh
+    entry = SceneObject(id="obj_1", name="Schale", mesh=hollowed)
+
+    with pytest.raises(ValidationError) as raised:
+        run("smooth_mesh", entry, profile, iterations=5)
+
+    assert raised.value.suggestions
+
+
+def test_smoothing_says_how_much_body_it_cost(profile: Profile) -> None:
+    """„Ohne den Körper zu schrumpfen" gilt für ein feines Netz, nicht für ein
+    grobes.
+
+    Ein Quader aus zwölf Dreiecken hat nichts als Ecken, und Taubin zieht sie
+    zusammen: aus 48 000 mm³ werden 3 315, also sieben Prozent. Die
+    Abweichungswarnung sagt dazu „die Fläche hat sich spürbar verschoben" —
+    richtig und viel zu leise.
+    """
+    entry = SceneObject(id="obj_1", name="Quader", mesh=block(40.0, 40.0, 30.0))
+
+    result = run("smooth_mesh", entry, profile, iterations=5)
+
+    codes = {finding.code for finding in result.findings}
+    assert "mesh.smooth_shrank" in codes
+    warning = next(f for f in result.findings if f.code == "mesh.smooth_shrank")
+    assert warning.severity == "warning"
+    assert float(warning.values["lost"]) > 0.5
+
+
+def test_smoothing_a_fine_mesh_stays_quiet(profile: Profile) -> None:
+    """Die Gegenprobe — sonst warnt jedes Glätten und keine Warnung zählt."""
+    sphere = MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=20.0))
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=sphere)
+
+    result = run("smooth_mesh", entry, profile, iterations=5)
+
+    assert "mesh.smooth_shrank" not in {finding.code for finding in result.findings}
+
+
 def test_remeshing_splits_edges_without_moving_anything(profile: Profile) -> None:
     entry = SceneObject(id="obj_1", name="Würfel", mesh=block(20.0, 20.0, 20.0))
 
@@ -163,6 +218,47 @@ def test_a_torn_remesh_says_so_instead_of_claiming_the_shape_is_fine(profile: Pr
     codes = {finding.code for finding in result.findings}
     assert "mesh.remesh_open" in codes
     assert any(finding.severity == "warning" for finding in result.findings)
+
+
+def test_remeshing_an_imported_part_keeps_it_closed_and_says_the_price(
+    profile: Profile,
+) -> None:
+    """Beide Wege haben einen Haken, und der Kunde erfährt, welcher ihn traf.
+
+    ``plate_holes`` hat winzige Bohrungsfacetten neben großen Grundflächen. Der
+    bedarfsgerechte Weg schafft 5 mm mit 63 040 Dreiecken, zerreißt das Netz
+    dabei aber; der gleichmäßige hält es geschlossen und braucht 815 104, weil
+    er die winzigen Facetten mitzerteilt. Geschlossen wiegt schwerer — und der
+    Sprung von 796 auf über achthunderttausend gehört gesagt, denn danach ist
+    jede Operation langsamer.
+    """
+    mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh)
+
+    result = run("remesh_mesh", entry, profile, edge=5.0)
+
+    after = result.outputs[0].mesh
+    assert after.is_watertight, "geschlossen bleibt die Bedingung, nicht der Wunsch"
+    assert after.component_count == 1
+    assert max(mesh_ops.edge_lengths(as_mesh_data(after))) <= 5.0 + 1e-9
+    assert "mesh.remesh_dense" in {finding.code for finding in result.findings}
+
+
+def test_an_edge_length_beyond_reach_names_one_that_works(profile: Profile) -> None:
+    """Eine Ablehnung ohne Zahl schickt den Nutzer ins Raten.
+
+    Er hat eine Kantenlänge eingetippt, sie ist zu klein, und die einzige
+    Auskunft war „ergäbe mehr Dreiecke, als sich noch rechnen lassen". Welche
+    ginge, stand nirgends — dabei weiß es die Operation.
+    """
+    mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh)
+
+    with pytest.raises(ValidationError) as raised:
+        run("remesh_mesh", entry, profile, edge=0.05)
+
+    assert raised.value.suggestions
+    assert "reachable" in raised.value.values or "erreichbar" in str(raised.value.detail)
 
 
 # --- hollowing ------------------------------------------------------------------

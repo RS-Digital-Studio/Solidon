@@ -249,16 +249,30 @@ def evaluate(
                 created_by=operation.id,
                 kind=geworden,
             )
-            objects[object_id] = _with_features(
-                placed,
-                previous_features.get(object_id, {}),
-                operation,
-                ask,
-                findings,
-                result.transform,
-                previous_bounds.get(object_id),
-            )
+            try:
+                objects[object_id] = _with_features(
+                    placed,
+                    previous_features.get(object_id, {}),
+                    operation,
+                    ask,
+                    findings,
+                    result.transform,
+                    previous_bounds.get(object_id),
+                )
+            except AppError as error:
+                # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
+                # (§21.2) — und wo niemand antwortet, wirft ``ask``. Das stand
+                # außerhalb dieses Fangs: die Ausnahme flog aus ``evaluate``
+                # heraus, und wer keinen Frage-Dialog hat (Kommandozeile,
+                # Fernsteuerung, Agent) bekam einen leeren Prüfbericht statt
+                # der beiden Bohrungen, zwischen denen zu wählen war.
+                findings.append(_finding_from(error, operation))
+                stopped_at = operation.id
+                break
             hashes[object_id] = object_hash(key, index)
+
+        if stopped_at is not None:
+            break
 
         findings.extend(
             dataclasses.replace(

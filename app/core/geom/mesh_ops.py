@@ -14,12 +14,13 @@ schlimmer als eine, die es sagt.
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import cast
 
 import numpy as np
 import trimesh
 
-from app.core.errors import CANCEL, ValidationError
+from app.core.errors import CANCEL, Action, ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data, on_surface
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -45,6 +46,16 @@ MAX_SUBDIVISIONS = 12
 #: Und die harte Decke davor. Erreicht sie jemand, ist die Kantenlänge falsch
 #: gewählt und nicht das Netz zu grob — die Meldung sagt genau das.
 MAX_REMESH_TRIANGLES = 8_000_000
+
+#: Ab welchem Zuwachs das Neuvernetzen sagt, was es gekostet hat. Ein Faktor
+#: hundert ist kein Feinschliff mehr, sondern ein anderes Netz — und der Grund,
+#: warum alles danach langsamer läuft.
+DENSE_FACTOR = 100
+
+#: Wie viel Volumen das Glätten kosten darf, bevor es das sagt. Ein Zehntel ist
+#: an einer gescannten Oberfläche normal; ein Viertel heißt, dass der Körper
+#: nicht mehr der ist, den jemand geglättet haben wollte.
+SMOOTH_LOSS_WARN = 0.25
 
 
 def deviation(before: MeshData, after: MeshData) -> float:
@@ -88,26 +99,31 @@ def edge_lengths(mesh: MeshData) -> np.ndarray:
     return np.asarray(mesh.raw.edges_unique_length, dtype=float)
 
 
-def remesh(mesh: MeshData, edge: float) -> MeshData:
-    """Teilt jede Kante, die länger als ``edge`` ist, bis keine mehr übrig ist.
+def _subdivided_on_demand(mesh: MeshData, edge: float) -> MeshData:
+    """Jedes Dreieck so oft geteilt, wie **seine** Kanten es verlangen.
 
-    Kein vollwertiger Remesher — er unterteilt nur. Das ist, was eine Analyse
-    braucht (eine gleichmäßige Abtastung der Oberfläche), und er verschiebt nie
-    einen Punkt, es geht also nichts verloren. Dreiecke dort *gröber* zu
-    machen, wo sie dicht sind, ist die Aufgabe der Dezimierung.
+    Der billige Weg, und der einzige, der die Zusage genau erfüllt statt sie zu
+    übererfüllen. Er hat einen Haken: an der Naht zwischen zwei verschieden oft
+    geteilten Flächen bleibt ein Punkt auf einer Kante liegen, die ihn nicht
+    kennt — der Körper ist danach oft nicht mehr geschlossen. Ob er es ist,
+    entscheidet der Aufrufer.
+    """
+    vertices, faces = trimesh.remesh.subdivide_to_size(
+        np.asarray(mesh.raw.vertices, dtype=float),
+        np.asarray(mesh.raw.faces, dtype=np.int64),
+        max_edge=edge,
+    )
+    body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    body.merge_vertices()
+    return mesh.replacing(body)
 
-    **Gleichmäßig geteilt, nicht nach Bedarf.** ``subdivide_to_size`` teilt
-    jedes Dreieck so oft, wie *seine* Kanten es verlangen — und lässt an der
-    Naht zwischen zwei verschieden oft geteilten Flächen einen Punkt auf einer
-    Kante liegen, die ihn nicht kennt. Bei einem Quader 40 x 30 x 10 waren das
-    192 solcher Kanten: der Körper war danach nicht mehr geschlossen und
-    zerfiel in drei Komponenten, und die nächste boolesche Operation fiel
-    darauf auf die Voxelstufe und rundete die Maße. Ein Würfel fiel nie auf,
-    weil bei gleich langen Kanten alle Flächen gleich oft geteilt werden.
 
-    ``trimesh.remesh.subdivide`` teilt dagegen jedes Dreieck in vier und lässt
-    keine solche Naht entstehen. Der Preis sind Dreiecke, wo es schon fein
-    genug war; ein geschlossener Körper ist ihn wert.
+def _subdivided_evenly(mesh: MeshData, edge: float) -> MeshData:
+    """Jedes Dreieck in vier, so oft, bis auch die längste Kante kurz genug ist.
+
+    Konform: es entsteht keine Naht, der Körper bleibt geschlossen. Der Preis
+    sind Dreiecke, wo es längst fein genug war — bei einem Netz mit winzigen
+    Bohrungsfacetten neben großen Grundflächen wird das teuer.
     """
     vertices = np.asarray(mesh.raw.vertices, dtype=float)
     faces = np.asarray(mesh.raw.faces, dtype=np.int64)
@@ -117,17 +133,100 @@ def remesh(mesh: MeshData, edge: float) -> MeshData:
         if not len(lengths) or float(lengths.max()) <= edge:
             break
         if len(faces) * 4 > MAX_REMESH_TRIANGLES:
-            raise ValidationError(
-                field="edge",
-                detail=_("Diese Kantenlänge ergäbe mehr Dreiecke, als sich noch rechnen lassen."),
-                constraint="maximum",
-                values={"triangles": len(faces) * 4, "limit": MAX_REMESH_TRIANGLES},
-            )
+            raise _too_fine(mesh, edge, len(faces) * 4)
         vertices, faces = trimesh.remesh.subdivide(vertices, faces)
     body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     body.merge_vertices()
-    _log.info("remeshed %d to %d triangles", mesh.triangle_count, len(body.faces))
     return mesh.replacing(body)
+
+
+def estimated_triangles(mesh: MeshData, edge: float) -> int:
+    """Wie viele Dreiecke eine Kantenlänge ungefähr ergibt.
+
+    Ein gleichseitiges Dreieck der Kantenlänge ``edge`` deckt
+    ``√3/4 · edge²`` ab; die Oberfläche geteilt durch diese Fläche ist die
+    Zahl, um die es geht. Grob, und das genügt: gefragt ist, ob eine Eingabe
+    in der Größenordnung des Machbaren liegt.
+
+    Gebraucht wird sie **vor** dem ersten Schnitt. Ohne die Schätzung lief die
+    Operation erst minutenlang und scheiterte dann — der teure Weg wurde
+    gegangen, um festzustellen, dass er zu teuer ist.
+    """
+    if edge <= 0.0:
+        return MAX_REMESH_TRIANGLES + 1
+    per_triangle = math.sqrt(3.0) / 4.0 * edge * edge
+    return int(float(mesh.raw.area) / max(per_triangle, 1e-12))
+
+
+def _too_fine(mesh: MeshData, edge: float, would_be: int) -> ValidationError:
+    """Sagt, welche Kantenlänge noch ginge — die Zahl kennt nur die Operation.
+
+    „Ergäbe mehr Dreiecke, als sich noch rechnen lassen" allein schickt den
+    Nutzer ins Raten: er hat eine Zahl eingetippt, sie war zu klein, und die
+    nächste ist auch nur geraten. Jede Halbierung der Kantenlänge vervierfacht
+    die Dreiecke, also lässt sich die erreichbare Länge ausrechnen.
+    """
+    growth = would_be / max(MAX_REMESH_TRIANGLES, 1)
+    reachable = edge * math.sqrt(growth)
+    return ValidationError(
+        field="edge",
+        detail=_("Diese Kantenlänge ergäbe mehr Dreiecke, als sich noch rechnen lassen."),
+        constraint="maximum",
+        values={
+            "triangles": would_be,
+            "limit": MAX_REMESH_TRIANGLES,
+            "reachable": round(reachable, 2),
+        },
+        suggestions=(
+            Action(id="use_reachable", label=_("Die kleinste Kantenlänge nehmen, die noch geht.")),
+            Action(id="decimate_first", label=_("Vorher dezimieren.")),
+        ),
+    )
+
+
+def remesh(mesh: MeshData, edge: float) -> MeshData:
+    """Teilt jede Kante, die länger als ``edge`` ist, bis keine mehr übrig ist.
+
+    Kein vollwertiger Remesher — er unterteilt nur. Das ist, was eine Analyse
+    braucht (eine gleichmäßige Abtastung der Oberfläche), und er verschiebt nie
+    einen Punkt, es geht also nichts verloren. Dreiecke dort *gröber* zu
+    machen, wo sie dicht sind, ist die Aufgabe der Dezimierung.
+
+    **Zwei Wege, in dieser Reihenfolge** — wie die Rückfallkette der booleschen
+    Operationen, und aus demselben Grund: der billige zuerst, der teure, wenn
+    er muss.
+
+    ``subdivide_to_size`` teilt nach Bedarf und ist damit sowohl billiger als
+    auch genauer am Ziel. Er lässt aber an der Naht zwischen zwei verschieden
+    oft geteilten Flächen einen Punkt auf einer Kante liegen, die ihn nicht
+    kennt: bei einem Quader 40 x 30 x 10 waren das 192 offene Kanten und drei
+    Komponenten, und die nächste boolesche Operation fiel darauf auf die
+    Voxelstufe und rundete die Maße.
+
+    ``trimesh.remesh.subdivide`` teilt jedes Dreieck in vier und lässt keine
+    solche Naht entstehen — dafür zerteilt es die winzigen mit. Bei
+    ``plate_holes`` (796 Dreiecke, feine Bohrungsfacetten neben großen Flächen)
+    sind das 815 104 Dreiecke statt 63 040 für dasselbe Ziel.
+
+    Also: nach Bedarf teilen, und nur wenn das Ergebnis aufgeht, gleichmäßig
+    nachziehen. Ein Körper, der schon vorher offen war, kann dabei nichts
+    verlieren — für ihn bleibt es beim billigen Weg.
+    """
+    wanted = estimated_triangles(mesh, edge)
+    if wanted > MAX_REMESH_TRIANGLES:
+        raise _too_fine(mesh, edge, wanted)
+
+    on_demand = _subdivided_on_demand(mesh, edge)
+    if on_demand.is_watertight or not mesh.is_watertight:
+        _log.info("remeshed %d to %d triangles", mesh.triangle_count, on_demand.triangle_count)
+        return on_demand
+    even = _subdivided_evenly(mesh, edge)
+    _log.info(
+        "remeshed %d to %d triangles (evenly, on demand tore the mesh)",
+        mesh.triangle_count,
+        even.triangle_count,
+    )
+    return even
 
 
 # --- operations -------------------------------------------------------------------
@@ -195,10 +294,60 @@ def smooth_mesh(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
     after = smooth(before, params.iterations)
-    return OpResult(
-        outputs=[dataclasses.replace(source, mesh=after)],
-        findings=_deviation_findings(before, after, source.id),
-    )
+    findings = _deviation_findings(before, after, source.id)
+    findings.extend(_smoothing_cost(before, after, source.id, params.iterations))
+    return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
+
+
+def _smoothing_cost(
+    before: MeshData, after: MeshData, object_id: str, iterations: int
+) -> list[Finding]:
+    """Was das Glätten am Körper selbst gekostet hat.
+
+    Die Abweichungsmessung daneben sagt, wie weit die *Oberfläche* gewandert
+    ist. Sie sagt nicht, dass vom Körper kaum etwas übrig ist — und genau das
+    passiert an groben Netzen und dünnen Wänden.
+    """
+    old, new = float(before.volume), float(after.volume)
+    if old <= 0.0:
+        return []
+
+    if new <= 0.0:
+        # Umgestülpt: die Innenwand ist an der Außenwand vorbeigewandert. Das
+        # Netz nennt sich weiter wasserdicht und misst minus neunzehntausend
+        # Kubikmillimeter; jede Kennzahl danach ist falsch, und exportieren
+        # ließ es sich auch. Kein Befund, ein Abbruch.
+        raise ValidationError(
+            field="iterations",
+            detail=_(
+                "Der Körper hat sich beim Glätten umgestülpt — für so viele Durchgänge "
+                "ist seine Wand zu dünn."
+            ),
+            value=iterations,
+            constraint="inverted",
+            suggestions=(
+                Action(id="fewer_iterations", label=_("Weniger Durchgänge nehmen.")),
+                Action(
+                    id="remesh_first", label=_("Vorher neu vernetzen — feiner glättet sanfter.")
+                ),
+            ),
+        )
+
+    lost = 1.0 - new / old
+    if lost <= SMOOTH_LOSS_WARN:
+        return []
+    return [
+        Finding(
+            code="mesh.smooth_shrank",
+            severity="warning",
+            message=_(
+                "Das Glätten hat den Körper deutlich verkleinert — an einem groben Netz "
+                "zieht es die Ecken zusammen. Erst neu vernetzen, dann glätten."
+            ),
+            object_id=object_id,
+            values={"lost": round(lost, 3), "before": round(old, 1), "after": round(new, 1)},
+        )
+    ]
 
 
 @op_params
@@ -236,6 +385,23 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
             values={"before": before.triangle_count, "after": after.triangle_count},
         )
     ]
+    # Was der zweite Weg kostet, gehört gesagt. Er wird nur gegangen, wenn der
+    # erste das Netz zerrissen hätte, und er zerteilt dabei auch die Dreiecke,
+    # die längst fein genug waren: aus 796 wurden bei einer Lochplatte 815 104.
+    # Danach ist jede weitere Operation langsamer, und niemand wüsste warum.
+    if after.triangle_count > before.triangle_count * DENSE_FACTOR:
+        findings.append(
+            Finding(
+                code="mesh.remesh_dense",
+                severity="info",
+                message=_(
+                    "Das Netz musste gleichmäßig geteilt werden, um geschlossen zu "
+                    "bleiben — es trägt jetzt deutlich mehr Dreiecke."
+                ),
+                object_id=source.id,
+                values={"before": before.triangle_count, "after": after.triangle_count},
+            )
+        )
     # Der Satz oben ist eine Zusicherung, und eine Zusicherung wird geprüft.
     # Solange sie nur dastand, hat sie einen zerrissenen Körper als heil
     # gemeldet — und der Fehler fiel erst zwei Operationen später auf, als die

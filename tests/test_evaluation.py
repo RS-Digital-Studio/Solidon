@@ -457,3 +457,39 @@ def test_an_empty_document_evaluates_to_an_empty_scene(
     assert result.complete
     assert result.scene.objects == {}
     assert result.scene.profile is profile
+
+
+def test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping(
+    profile: Profile,
+) -> None:
+    """Die Merkmalszuordnung fragt — und wenn niemand da ist, muss sie anhalten
+    wie jeder andere Fehler auch.
+
+    Sie stand außerhalb des Fehler-Fangs: die ``AmbiguityError`` flog aus
+    ``evaluate`` heraus, statt ein Befund zu werden. Wer keinen Frage-Dialog
+    hat — die Kommandozeile, die Fernsteuerung, der Agent —, bekam eine
+    Ausnahme und einen leeren Prüfbericht, statt zu erfahren, welche zwei
+    Bohrungen gemeint sein könnten.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Aufbau",
+        [
+            OperationDraft(op="create_box", params={"width": 40.0, "depth": 40.0, "height": 30.0}),
+            OperationDraft(op="hollow_object", inputs=("obj_1",), params={"wall": 2.0}),
+        ],
+    )
+    History(project.document).apply(
+        "Elefantenfuß",
+        [OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={})],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert not result.complete, "raten wäre schlimmer, aber die Auswertung gibt es weiter"
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert any("Ambiguity" in code for code in codes), codes
