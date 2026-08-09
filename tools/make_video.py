@@ -107,7 +107,39 @@ EXAMPLE = "gehaeuse-mit-bausteinen.p3d"
 VOICE_PYTHON = Path(__file__).resolve().parent.parent / ".venv-tts" / "Scripts" / "python.exe"
 VOICE_SCRIPT = Path(__file__).resolve().parent / "speak_chatterbox.py"
 
-#: Das Drehbuch: je Szene ein Satz, und der Satz bestimmt die Länge.
+#: Das Einstiegsvideo — kurz, und es beginnt beim Problem, nicht beim Programm.
+#:
+#: Für jemanden, der Solidon nicht kennt. Es nennt zuerst den Ärger, den die
+#: Zielgruppe kennt (das Teil passt nicht, und in den meisten Programmen heißt
+#: das: von vorne), zeigt dann die Antwort und endet mit einem Schritt, den man
+#: sofort gehen kann.
+#:
+#: **Kürzer als das Parametrik-Video und in anderer Reihenfolge.** Dort dreht
+#: sich zehn Sekunden lang ein Gehäuse, bevor irgendetwas passiert — für ein
+#: erstes Video ist das zu lang: auf beiden Plattformen entscheidet sich in den
+#: ersten Sekunden, ob jemand bleibt.
+OPENING: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        ("hook", "Zwei Millimeter zu schmal. Und du fängst wieder von vorne an."),
+        (
+            "morph",
+            "In Solidon nicht. Du änderst eine Zahl — "
+            "und Bohrungen, Buchsen und Deckel wandern mit.",
+        ),
+        ("closing", "Solidon. Vierzehn Tage kostenlos testen."),
+    ),
+    "en": (
+        ("hook", "Two millimetres too narrow. And you start over."),
+        (
+            "morph",
+            "Not in Solidon. You change one number — "
+            "and the holes, the inserts and the lid all follow.",
+        ),
+        ("closing", "Solidon. Free for fourteen days."),
+    ),
+}
+
+#: Das Parametrik-Video: je Szene ein Satz, und der Satz bestimmt die Länge.
 #:
 #: Erzählt wird das, was diese Anwendung von einem Netzbetrachter
 #: unterscheidet — ein Maß ändern, und Bohrungen, Bausteine und Deckel wandern
@@ -116,6 +148,9 @@ VOICE_SCRIPT = Path(__file__).resolve().parent / "speak_chatterbox.py"
 #: einzige Operation; ein Video, das „Satz eintippen, Bauteil herausbekommen"
 #: verspricht, wäre ein Versprechen auf etwas, das die Installation hier nicht
 #: einlöst.
+#:
+#: Es setzt voraus, dass der Zuschauer weiß, was Solidon ist — deshalb ist
+#: :data:`OPENING` das erste Video und dieses das zweite.
 STORYBOARD: dict[str, tuple[tuple[str, str], ...]] = {
     "de": (
         (
@@ -159,6 +194,12 @@ STORYBOARD: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
+#: Die Drehbücher unter ihren Namen. Vorgabe ist das Einstiegsvideo.
+SCRIPTS = {
+    "einstieg": OPENING,
+    "parametrik": STORYBOARD,
+}
+
 #: Von wo nach wo die Breite läuft, und über wie viele Bilder.
 #:
 #: Der Wert wird bei jedem Schritt wirklich gesetzt und die Szene wirklich neu
@@ -197,6 +238,22 @@ READOUT_LABEL = {"de": "breite", "en": "width"}
 #: Stelle, an der man es richtigstellt — nur für das Modell, nie für den
 #: Zuschauer.
 PRONUNCIATION: dict[str, str] = {}
+
+#: Das Anwendungszeichen für die Schlusskarte.
+#:
+#: Dieselbe Datei, die auch die Anwendung und die Website tragen — ein zweites,
+#: nur fürs Video gepflegtes Zeichen wäre in einem halben Jahr ein anderes.
+ICON_FILE = Path(__file__).resolve().parent.parent / "app" / "images" / "icon" / "solidon3d.svg"
+
+#: Was auf der Schlusskarte steht.
+#:
+#: Wortlaut von der Website übernommen und nicht erfunden: dort steht „14 Tage
+#: kostenlos testen". Ein Video, das etwas anderes verspricht als die Seite,
+#: auf die es schickt, verliert genau dort seinen Zuschauer.
+OUTRO_CALL = {
+    "de": "14 Tage kostenlos testen",
+    "en": "Free for 14 days",
+}
 
 #: Die feste Beschriftung des Hochformats, je Sprache.
 #:
@@ -300,6 +357,12 @@ class Shot:
     #: Maßen spricht und dabei nur einen Körper zeigt, behauptet etwas, das der
     #: Zuschauer nicht sehen kann.
     readout: tuple[str, ...] = ()
+    #: Ab welchem Bild die Schlusskarte steht — ``count``, wenn es keine gibt.
+    #:
+    #: Die feste Beschriftung des Hochformats endet dort. Ohne das lag sie über
+    #: der Karte: Überschrift und Adresse standen doppelt im Bild, einmal von
+    #: der Karte und einmal darüber.
+    card_from: int = -1
 
 
 def settle(app: QApplication, rounds: int = 12) -> None:
@@ -532,14 +595,16 @@ def polish(source: Path, target: Path) -> None:
     )
 
 
-def speak_storyboard(language: str, out: Path) -> list[tuple[str, Path, float]]:
+def speak_storyboard(
+    language: str, out: Path, script: dict[str, tuple[tuple[str, str], ...]]
+) -> list[tuple[str, Path, float]]:
     """Jede Szene einmal sprechen und sagen, wie lange sie dauert.
 
     Vor jeder Aufnahme, aus demselben Grund wie beim einzelnen Satz: die
     Sprache bestimmt die Länge der Szene, nicht eine geratene Sekundenzahl.
     """
     spoken: list[tuple[str, Path, float]] = []
-    for key, text in STORYBOARD[language]:
+    for key, text in script[language]:
         raw = out / "audio" / f"{key}-{language}-roh.wav"
         ready = out / "audio" / f"{key}-{language}.wav"
         stamp = ready.with_suffix(".txt")
@@ -712,6 +777,104 @@ def orbit(
     return Shot(frames=frames, count=total, viewport=viewport_rect(window))
 
 
+def outro_card(size: tuple[int, int], inner: tuple[int, int, int, int], language: str) -> Any:
+    """Die Schlusskarte zeichnen: Zeichen, Marke, Aufruf.
+
+    Kein Bildschirmfoto, sondern gezeichnet — sie zeigt ja nichts aus der
+    Anwendung. Gerendert wird in **Aufnahmegröße**, und alles Wesentliche
+    liegt innerhalb von ``inner``: das ist der Ausschnitt, den das Hochformat
+    später herausschneidet. Wer die Karte mittig auf das ganze Bild setzt,
+    findet sie dort angeschnitten wieder.
+
+    Ein Vorspann mit demselben Inhalt wäre der naheliegende Gegenpart und
+    wäre falsch. Vorne kostet ein Zeichen genau die Sekunden, in denen der
+    Zuschauer entscheidet, ob er bleibt — Markenerinnerung baut man am Ende
+    auf, wenn er schon zugesehen hat.
+    """
+    from PySide6.QtCore import QRectF, Qt
+    from PySide6.QtGui import QColor, QFont, QImage, QPainter
+    from PySide6.QtSvg import QSvgRenderer
+
+    width, height = size
+    left, top, inner_width, inner_height = inner
+    image = QImage(width, height, QImage.Format.Format_RGB32)
+    image.fill(QColor("#14161a"))
+
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+
+    # Bezugsgröße ist die kürzere Seite des Ausschnitts: dieselbe Karte trägt
+    # damit quer wie hoch, ohne zwei Sätze von Zahlen.
+    unit = min(inner_width, inner_height)
+    centre_x = left + inner_width / 2
+    centre_y = top + inner_height / 2
+
+    logo = ICON_FILE
+    if logo.is_file():
+        renderer = QSvgRenderer(str(logo))
+        side = unit * 0.26
+        renderer.render(
+            painter,
+            QRectF(centre_x - side / 2, centre_y - side * 1.05, side, side),
+        )
+
+    painter.setPen(QColor("#e6edf3"))
+    brand = QFont()
+    brand.setPixelSize(int(unit * 0.115))
+    brand.setWeight(QFont.Weight.DemiBold)
+    painter.setFont(brand)
+    painter.drawText(
+        QRectF(left, centre_y + unit * 0.10, inner_width, unit * 0.18),
+        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
+        "Solidon",
+    )
+
+    painter.setPen(QColor("#9aa4b2"))
+    call = QFont()
+    call.setPixelSize(int(unit * 0.055))
+    painter.setFont(call)
+    painter.drawText(
+        QRectF(left, centre_y + unit * 0.27, inner_width, unit * 0.12),
+        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
+        OUTRO_CALL[language],
+    )
+
+    painter.setPen(QColor("#e08b4e"))
+    address = QFont()
+    address.setPixelSize(int(unit * 0.062))
+    address.setWeight(QFont.Weight.DemiBold)
+    painter.setFont(address)
+    painter.drawText(
+        QRectF(left, centre_y + unit * 0.40, inner_width, unit * 0.12),
+        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
+        "solidon3d.de",
+    )
+    painter.end()
+    return image
+
+
+def write_outro(
+    frames: Path,
+    start: int,
+    count: int,
+    size: tuple[int, int],
+    inner: tuple[int, int, int, int],
+    language: str,
+) -> int:
+    """Die Schlusskarte als Bildfolge in denselben Ordner schreiben.
+
+    Sie läuft damit durch dieselbe Kodierung wie alles andere — ein zweites
+    Video anzuhängen hieße, Auflösung, Bildrate und Farbraum ein zweites Mal
+    zusammenpassen zu lassen.
+    """
+    frames.mkdir(parents=True, exist_ok=True)
+    card = outro_card(size, inner, language)
+    for index in range(count):
+        card.save(str(frames / f"{start + index:05d}.png"))
+    return start + count
+
+
 def record(
     window: QWidget,
     app: QApplication,
@@ -861,6 +1024,7 @@ def shoot_storyboard(
     spoken: list[tuple[str, Path, float]],
     zoom: float = 1.0,
     label: str = "",
+    language: str = "de",
 ) -> Shot:
     """Alle Szenen des Drehbuchs hintereinander aufnehmen.
 
@@ -874,9 +1038,20 @@ def shoot_storyboard(
     """
     reset_morph(session)
     total = 0
+    card_from = -1
     readout: list[str] = []
     for key, _path, seconds in spoken:
         count = max(1, round(seconds * FPS))
+        if key == "closing":
+            # Die Schlusskarte kommt aus dem Zeichenprogramm, nicht aus dem
+            # Fenster — sie zeigt nichts aus der Anwendung.
+            readout.extend([""] * (total - len(readout)))
+            card_from = total
+            size = (window.width(), window.height())
+            total = write_outro(frames, total, count, size, viewport_rect(window), language)
+            readout.extend([""] * (total - len(readout)))
+            print(f"  {key:12s} {count:4d} Bilder (Schlusskarte)")
+            continue
         if key == "morph":
             # Die Bilder vor dieser Szene tragen keinen Wert — aufgefüllt wird
             # bis hierher, damit der Index im Bandwurm der Wert des Bildes
@@ -900,6 +1075,7 @@ def shoot_storyboard(
         count=total,
         viewport=viewport_rect(window),
         readout=tuple(readout),
+        card_from=card_from if card_from >= 0 else total,
     )
 
 
@@ -960,16 +1136,20 @@ def encode_portrait(
     # Die Schrift sitzt an festen Stellen des **Zielbildes**, nicht an
     # Bruchteilen des Randes: sonst wandern Titel und Marke bei jeder anderen
     # Aufnahmehöhe mit, und die Reihe der Videos steht nicht mehr bündig.
+    # Die feste Beschriftung endet, wo die Schlusskarte beginnt. Ohne diese
+    # Bedingung lag sie über der Karte: Überschrift und Adresse standen doppelt
+    # im Bild, einmal aus der Karte und einmal darüber.
+    until = f":enable='lt(n,{shot.card_from})'"
     chain = (
         f"crop={width}:{height}:{left}:{top},"
         f"scale=1080:{scaled_height}:flags=lanczos,"
         f"pad=1080:1920:0:{pad_top}:color=0x14161a,"
         f"drawtext=fontfile='{font}':text='{headline}':fontcolor=white:fontsize=72:"
-        f"x=(w-text_w)/2:y=150,"
+        f"x=(w-text_w)/2:y=150{until},"
         f"drawtext=fontfile='{font}':text='{sub}':fontcolor=0x9aa4b2:fontsize=40:"
-        f"x=(w-text_w)/2:y=258,"
+        f"x=(w-text_w)/2:y=258{until},"
         f"drawtext=fontfile='{font}':text='solidon3d.de':fontcolor=0x6ea8fe:fontsize=46:"
-        f"x=(w-text_w)/2:y=1750"
+        f"x=(w-text_w)/2:y=1750{until}"
     )
     chain += readout_filters(shot, font, pad_top)
     run_ffmpeg(
@@ -1076,11 +1256,18 @@ def main() -> int:
     require_screen(app)
     apply_theme(app, "dark")
 
-    wanted = sys.argv[2:] or list(STORYBOARD)
+    # Erstes Argument nach dem Ziel ist das Drehbuch, alles Weitere sind
+    # Sprachen: ``make_video.py ziel einstieg de``.
+    arguments = sys.argv[2:]
+    name = arguments[0] if arguments and arguments[0] in SCRIPTS else "einstieg"
+    script = SCRIPTS[name]
+    wanted = [entry for entry in arguments if entry not in SCRIPTS] or list(script)
+    print(f"Drehbuch: {name}")
+
     qt_translator = None
     for language in wanted:
-        if language not in STORYBOARD:
-            raise SystemExit(f"Kein Drehbuch für {language!r} — vorhanden: {', '.join(STORYBOARD)}")
+        if language not in script:
+            raise SystemExit(f"Kein Drehbuch für {language!r} — vorhanden: {', '.join(script)}")
         print(f"\n=== {language} ===")
         install_catalog(language, read_catalog(language))
         set_language(language)
@@ -1089,13 +1276,19 @@ def main() -> int:
         if qt_translator is not None:
             app.removeTranslator(qt_translator)
         qt_translator = install_qt_translations(app, language)
-        shoot_language(app, language, out, frames / language)
+        shoot_language(app, language, out, frames / f"{name}-{language}", script)
 
     print(f"\nFertig: {out}")
     return 0
 
 
-def shoot_language(app: QApplication, language: str, out: Path, frames: Path) -> None:
+def shoot_language(
+    app: QApplication,
+    language: str,
+    out: Path,
+    frames: Path,
+    script: dict[str, tuple[tuple[str, str], ...]],
+) -> None:
     """Ein vollständiger Durchgang für eine Sprache: sprechen, filmen, kodieren.
 
     Je Sprache ein eigenes Hauptfenster — und deshalb am Ende
@@ -1114,7 +1307,7 @@ def shoot_language(app: QApplication, language: str, out: Path, frames: Path) ->
     # etwas an ihr fehlt, soll das auffallen, bevor zweimal achthundert Bilder
     # gerechnet sind.
     print("Sprachausgabe:")
-    spoken = speak_storyboard(language, out)
+    spoken = speak_storyboard(language, out, script)
     audio = out / f"stimme-{language}.wav"
     join_audio(spoken, audio)
     print(f"  zusammen {sum(entry[2] for entry in spoken):.1f} s")
@@ -1137,7 +1330,9 @@ def shoot_language(app: QApplication, language: str, out: Path, frames: Path) ->
 
     # Zwei Formate an **einem** Fenster, aus demselben Grund wie oben.
     print("Aufnahme quer:")
-    landscape = shoot_storyboard(window, app, session, frames / "landscape", spoken)
+    landscape = shoot_storyboard(
+        window, app, session, frames / "landscape", spoken, language=language
+    )
 
     print("Aufnahme hoch:")
     show_panels(window, False)
