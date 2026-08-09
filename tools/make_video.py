@@ -182,6 +182,16 @@ MORPH = (70.0, 96.0)
 #: Parameternamen dem Nutzer gehören und nicht dem Code.
 MORPH_PARAMETER = "breite"
 
+#: Die feste Beschriftung des Hochformats, je Sprache.
+#:
+#: **Nicht über** ``tr()``: der Textsammler liest ``app/``, und was hier steht,
+#: käme nie in den Katalog — ``translate()`` fiele auf die Message-ID zurück,
+#: also auf Deutsch. Im englischen Video stünde dann eine deutsche Überschrift.
+PORTRAIT_TEXT = {
+    "de": ("Ein Maß ändern", "Alles andere wandert mit."),
+    "en": ("Change one dimension", "Everything else follows."),
+}
+
 #: Pause hinter jedem Satz, in Sekunden.
 #:
 #: Sie steht im Ton **und** im Bild, sonst wechselt die Szene, während noch
@@ -523,11 +533,23 @@ def speak_storyboard(language: str, out: Path) -> list[tuple[str, Path, float]]:
     for key, text in STORYBOARD[language]:
         raw = out / "audio" / f"{key}-{language}-roh.wav"
         ready = out / "audio" / f"{key}-{language}.wav"
-        speak(text, language, raw)
-        polish(raw, ready)
-        seconds = audio_duration(ready) + SCENE_TAIL
-        spoken.append((key, ready, seconds))
-        print(f"  {key:12s} {seconds:5.1f} s")
+        stamp = ready.with_suffix(".txt")
+        # Was schon gesprochen ist, wird nicht neu gesprochen.
+        #
+        # Das spart nicht nur Zeit — es macht die Tonspur überhaupt erst
+        # wiederholbar. piper hat keinen Startwert und würfelt bei jedem Lauf
+        # neu; zwei Aufnahmen desselben Satzes klingen messbar verschieden.
+        # Wer nach einer Bildkorrektur neu rendert, bekäme sonst nebenbei eine
+        # andere Stimme.
+        cached = stamp.is_file() and stamp.read_text(encoding="utf-8") == text
+        if cached and ready.is_file():
+            print(f"  {key:12s} {audio_duration(ready) + SCENE_TAIL:5.1f} s (unverändert)")
+        else:
+            speak(text, language, raw)
+            polish(raw, ready)
+            stamp.write_text(text, encoding="utf-8")
+            print(f"  {key:12s} {audio_duration(ready) + SCENE_TAIL:5.1f} s")
+        spoken.append((key, ready, audio_duration(ready) + SCENE_TAIL))
     return spoken
 
 
@@ -1027,12 +1049,8 @@ def run_ffmpeg(arguments: list[str]) -> None:
 
 
 def main() -> int:
-    from app.core import examples
     from app.core.bootstrap import load_operations
     from app.ui.app import install_qt_translations
-    from app.ui.main_window import MainWindow
-    from app.ui.session import Session
-    from app.ui.settings import UiSettings
     from app.ui.theme import apply_theme
 
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd() / "video-test"
@@ -1041,24 +1059,54 @@ def main() -> int:
     if frames.exists():
         shutil.rmtree(frames)
 
-    # **Zuerst die Stimme.** Sie bestimmt, wie lang das Video wird — und wenn
-    # etwas an ihr fehlt, soll das auffallen, bevor zweimal 240 Bilder
-    # gerechnet sind.
-    language = "de"
-    print("Sprachausgabe:")
-    spoken = speak_storyboard(language, out)
-    audio = out / f"stimme-{language}.wav"
-    join_audio(spoken, audio)
-    print(f"  zusammen {sum(entry[2] for entry in spoken):.1f} s")
-
     load_operations()
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     require_screen(app)
     apply_theme(app, "dark")
-    install_catalog(language, read_catalog(language))
-    set_language(language)
-    install_qt_translations(app, language)
+
+    wanted = sys.argv[2:] or list(STORYBOARD)
+    qt_translator = None
+    for language in wanted:
+        if language not in STORYBOARD:
+            raise SystemExit(f"Kein Drehbuch für {language!r} — vorhanden: {', '.join(STORYBOARD)}")
+        print(f"\n=== {language} ===")
+        install_catalog(language, read_catalog(language))
+        set_language(language)
+        # Auch Qt selbst spricht die Sprache der Aufnahme, sonst steht
+        # „Cancel" auf einem Dialog, der in der Anwendung „Abbrechen" sagt.
+        if qt_translator is not None:
+            app.removeTranslator(qt_translator)
+        qt_translator = install_qt_translations(app, language)
+        shoot_language(app, language, out, frames / language)
+
+    print(f"\nFertig: {out}")
+    return 0
+
+
+def shoot_language(app: QApplication, language: str, out: Path, frames: Path) -> None:
+    """Ein vollständiger Durchgang für eine Sprache: sprechen, filmen, kodieren.
+
+    Je Sprache ein eigenes Hauptfenster — und deshalb am Ende
+    :func:`release_viewport`. Ohne das behält das ``QtInteractor`` des ersten
+    Fensters seinen OpenGL-Kontext, und im zweiten Durchgang liegt der
+    Orientierungswürfel als handtellergroßes Achsenkreuz quer über dem Modell.
+    Die Anwendung merkt das nie, sie baut ein Hauptfenster und dann keins mehr;
+    dieses Werkzeug baut zwei.
+    """
+    from app.core import examples
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    # **Zuerst die Stimme.** Sie bestimmt, wie lang jede Szene wird — und wenn
+    # etwas an ihr fehlt, soll das auffallen, bevor zweimal achthundert Bilder
+    # gerechnet sind.
+    print("Sprachausgabe:")
+    spoken = speak_storyboard(language, out)
+    audio = out / f"stimme-{language}.wav"
+    join_audio(spoken, audio)
+    print(f"  zusammen {sum(entry[2] for entry in spoken):.1f} s")
 
     session = Session()
     window = MainWindow(session, UiSettings())
@@ -1076,10 +1124,7 @@ def main() -> int:
     window.activateWindow()
     settle(app, 60)
 
-    # Zwei Durchgänge an **einem** Fenster. Ein zweites zu bauen wäre der
-    # naheliegende Weg und der falsche: der OpenGL-Kontext des ersten bliebe
-    # am ``QtInteractor`` hängen, und der Orientierungswürfel läge im zweiten
-    # Durchgang quer über dem Modell (siehe ``release_viewport``).
+    # Zwei Formate an **einem** Fenster, aus demselben Grund wie oben.
     print("Aufnahme quer:")
     landscape = shoot_storyboard(window, app, session, frames / "landscape", spoken)
 
@@ -1093,20 +1138,19 @@ def main() -> int:
     )
     show_panels(window, True)
 
+    headline, sub = PORTRAIT_TEXT[language]
     print("Kodierung:")
-    encode_landscape(landscape, out / "solidon3d-quer-1080p.mp4", audio)
+    encode_landscape(landscape, out / f"solidon3d-{language}-quer-1080p.mp4", audio)
     encode_portrait(
         portrait,
-        out / "solidon3d-hoch-1080x1920.mp4",
-        headline="Ein Maß ändern",
-        sub="Alles andere wandert mit.",
+        out / f"solidon3d-{language}-hoch-1080x1920.mp4",
+        headline=headline,
+        sub=sub,
         audio=audio,
     )
 
     window.close()
     release_viewport(window)
-    print(f"\nFertig: {out}")
-    return 0
 
 
 if __name__ == "__main__":
