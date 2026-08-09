@@ -33,7 +33,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.core.errors import Action, AppError
+from app.core.errors import Action, AppError, ExternalToolError
 from app.core.log import get_logger
 from app.core.types import Finding
 from app.i18n import _
@@ -368,12 +368,31 @@ def render(source: str, *, timeout: float = TIMEOUT_SECONDS) -> RenderResult:
         stl_file = workspace / "model.stl"
         scad_file.write_text(source, encoding="utf-8")
 
-        completed = run_guarded(
-            [binary, "-o", str(stl_file), str(scad_file)],
-            cwd=workspace,
-            env=_environment(workspace),
-            timeout=timeout,
-        )
+        try:
+            completed = run_guarded(
+                [binary, "-o", str(stl_file), str(scad_file)],
+                cwd=workspace,
+                env=_environment(workspace),
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as expired:
+            # Das Zeitlimit aus §32 ist kein Sonderfall, sondern der erwartete
+            # Ausgang bei einer zu feinen Auflösung — ``sphere(r = 50,
+            # $fn = 2000)`` genügt. Ungefangen kam ein Stapelabzug heraus, wo
+            # ein Satz mit Ausweg hingehört (Regel 17).
+            raise ExternalToolError(
+                tool="OpenSCAD",
+                detail=_(
+                    "OpenSCAD hat länger gebraucht als erlaubt und wurde beendet. "
+                    "Meist liegt es an einer sehr feinen Auflösung ($fn)."
+                ),
+                values={"seconds": timeout},
+                suggestions=(
+                    Action(id="lower_resolution", label=_("Die Auflösung verringern ($fn).")),
+                    Action(id="show_source", label=_("Quelltext ansehen.")),
+                    Action(id="use_parts", label=_("Stattdessen einen Baustein verwenden.")),
+                ),
+            ) from expired
         if completed.returncode != 0 or not stl_file.is_file():
             raise AppError(
                 _("OpenSCAD konnte den Quelltext nicht übersetzen."),

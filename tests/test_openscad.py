@@ -427,3 +427,29 @@ def _context(spec: object, **params: object) -> object:
         ask=lambda question, choices: choices[0],
         cancelled=NeverCancelled(),
     )
+
+
+def test_a_run_that_takes_too_long_is_an_error_with_a_way_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Das Zeitlimit aus §32 greift — und muss ankommen wie jeder andere Fehler.
+
+    ``sphere(r = 50, $fn = 2000)`` ist keine Bosheit, sondern ein Vertipper,
+    und OpenSCAD rechnet daran länger als die Minute, die es bekommt. Heraus
+    kam ``subprocess.TimeoutExpired``: kein ``AppError``, kein Titel, kein
+    Vorschlag — ein Stapelabzug für einen Fall, den die Anwendung erwartet
+    (Regel 17).
+    """
+    import subprocess
+
+    def zu_langsam(*args: object, **kwargs: object) -> object:
+        raise subprocess.TimeoutExpired(cmd="openscad", timeout=60.0)
+
+    monkeypatch.setattr(openscad, "executable", lambda: "openscad")
+    monkeypatch.setattr(openscad, "run_guarded", zu_langsam)
+
+    with pytest.raises(AppError) as raised:
+        openscad.render(SAFE)
+
+    assert raised.value.suggestions
+    assert "60" in str(raised.value.values.get("seconds", ""))

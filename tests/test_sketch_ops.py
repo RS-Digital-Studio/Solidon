@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from app.core.brep.kernel import Solid, available
-from app.core.errors import ValidationError
+from app.core.errors import AppError, ValidationError
 from app.core.registry import REGISTRY
 from app.core.scene import ResultCache, evaluate
 from app.core.scene.cancel import NeverCancelled
@@ -298,6 +298,49 @@ def test_the_exact_thread_is_a_core_plus_a_helical_ridge() -> None:
 def test_the_thread_pitch_needs_a_core() -> None:
     with pytest.raises(ValidationError):
         run("thread_exact", diameter=3.0, pitch=3.0, length=12.0)
+
+
+def test_a_thread_that_did_not_close_is_refused_instead_of_handed_over() -> None:
+    """Der Bolzen entsteht als Vereinigung von Kern und Gang, und die gelingt
+    nicht bei jeder Kombination.
+
+    Das Schema erlaubt 2 bis 100 mm und 0,25 bis 8 mm Steigung; verlässlich
+    geschlossen ist nur ein Teil davon. Ab 50 mm kam **nie** ein geschlossener
+    Körper heraus, bei 100 mm und 1 mm Steigung sogar einer mit null Volumen
+    und null Komponenten — und keiner sagte etwas. Ein offener B-Rep-Körper
+    trägt keinen STEP-Export und keine weitere Operation.
+    """
+    with pytest.raises(AppError) as raised:
+        run("thread_exact", diameter=100.0, pitch=1.5, length=12.0)
+
+    assert raised.value.suggestions
+
+
+def test_a_thread_too_fine_for_its_diameter_is_refused() -> None:
+    """Dieselbe Prüfung von der anderen Seite: eine feine Steigung auf einem
+    großen Durchmesser ergibt neunzehn Bruchstücke."""
+    with pytest.raises(AppError):
+        run("thread_exact", diameter=10.0, pitch=0.25, length=12.0)
+
+
+def test_a_thread_keeps_the_diameter_it_was_asked_for() -> None:
+    """M2 mit 1,5 mm Steigung ergab einen Bolzen von 0,16 mm.
+
+    Die Kernprüfung fragte nur, ob überhaupt ein Kern übrig bleibt — bei 2 mm
+    Außendurchmesser und 1,5 mm Steigung sind das 0,08 mm, formal mehr als
+    null und praktisch kein Bolzen. Herausgekommen ist ein Faden, der den
+    versprochenen Durchmesser um den Faktor zwölf verfehlt.
+    """
+    with pytest.raises(ValidationError):
+        run("thread_exact", diameter=2.0, pitch=1.5, length=12.0)
+
+
+def test_a_sound_thread_still_goes_through() -> None:
+    """Die Gegenprobe — die üblichen Maße dürfen die Prüfung nicht treffen."""
+    for major, pitch in ((6.0, 1.0), (10.0, 1.5), (20.0, 2.5)):
+        body = solid_of(run("thread_exact", diameter=major, pitch=pitch, length=12.0))
+        assert body.is_watertight, (major, pitch)
+        assert body.bounds.size[0] == pytest.approx(major, rel=0.01)
 
 
 def test_the_draft_angle_matches_the_closed_form() -> None:

@@ -16,7 +16,7 @@ from collections.abc import Callable
 from typing import Any, Final
 
 from app.core.brep.kernel import Solid, require
-from app.core.errors import PROGRAMMING_ERRORS, GeometryError, ValidationError
+from app.core.errors import PROGRAMMING_ERRORS, Action, GeometryError, ValidationError
 from app.core.log import get_logger
 from app.core.sketch.profile import Profile
 from app.core.types import PlaneFrame, Point2
@@ -326,6 +326,14 @@ _THREAD_DEPTH_SHARE: Final = 0.6134
 #: damit zwischen zwei Umläufen Grund bleibt.
 _THREAD_FOOT_SHARE: Final = 0.375
 
+#: Wie viel vom Außendurchmesser der Kern mindestens behalten muss.
+#:
+#: Die Prüfung fragte nur, ob überhaupt ein Kern übrig bleibt. Bei M2 mit
+#: 1,5 mm Steigung sind das 0,08 mm Radius — formal mehr als null, und
+#: herausgekommen ist ein Faden von 0,16 mm, wo jemand zwei Millimeter bestellt
+#: hatte. Ein Bolzen, dessen Kern unter einem Drittel liegt, ist keiner mehr.
+_THREAD_MIN_CORE_SHARE: Final = 0.33
+
 
 def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     """Ein Bolzen mit exaktem Außengewinde: Kern plus helikaler Gang.
@@ -347,12 +355,13 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
 
     ridge = _THREAD_DEPTH_SHARE * pitch
     core_radius = major / 2.0 - ridge
-    if core_radius <= EPS_GEOM:
+    if core_radius <= major / 2.0 * _THREAD_MIN_CORE_SHARE:
         raise ValidationError(
             "pitch",
-            _("Die Steigung ist für diesen Durchmesser zu groß — es bliebe kein Kern."),
+            _("Die Steigung ist für diesen Durchmesser zu groß — es bliebe kaum ein Kern."),
             value=pitch,
             constraint="no_core",
+            values={"core": round(core_radius * 2.0, 3), "major": major},
         )
     if length <= 2.0 * pitch:
         raise ValidationError(
@@ -401,7 +410,34 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     slab = Solid(BRepPrimAPI_MakeCylinder(major / 2.0 + 1.0, length).Shape())
     trimmed = _fuzzy_boolean("intersection", ridge_solid, slab)
     core = Solid(BRepPrimAPI_MakeCylinder(core_radius, length).Shape())
-    return _fuzzy_boolean("union", core, trimmed)
+    return _checked_rod(_fuzzy_boolean("union", core, trimmed), major, pitch)
+
+
+def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
+    """Nachsehen, was die Vereinigung von Kern und Gang wirklich ergeben hat.
+
+    Sie gelingt nicht bei jeder Kombination, und das Schema verspricht mehr,
+    als sie hält: zwischen 2 und 100 mm Durchmesser und 0,25 bis 8 mm Steigung
+    ist nur ein Teil verlässlich. Ab 50 mm kam **nie** ein geschlossener Körper
+    heraus, bei 100 mm und 1 mm Steigung einer mit null Volumen und null
+    Komponenten — und niemand sagte etwas. Ein offener B-Rep-Körper trägt
+    weder den STEP-Export noch eine weitere Operation; er ist kein Ergebnis,
+    das man jemandem in die Hand gibt.
+    """
+    if solid.volume <= EPS_GEOM or not solid.is_watertight or solid.component_count != 1:
+        raise GeometryError(
+            detail=_(
+                "Aus diesem Durchmesser und dieser Steigung entsteht kein "
+                "geschlossener Bolzen — der Gang trifft den Kern nicht sauber."
+            ),
+            values={"diameter": major, "pitch": pitch},
+            suggestions=(
+                Action(id="coarser_pitch", label=_("Eine gröbere Steigung nehmen.")),
+                Action(id="smaller_diameter", label=_("Einen kleineren Durchmesser nehmen.")),
+                Action(id="use_parts", label=_("Stattdessen den Gewinde-Baustein verwenden.")),
+            ),
+        )
+    return solid
 
 
 def _fuzzy_boolean(kind: str, first: Solid, second: Solid) -> Solid:
