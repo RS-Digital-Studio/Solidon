@@ -2217,6 +2217,25 @@ def test_the_sketch_bar_says_what_finishing_does(window: MainWindow) -> None:
         window.finish_sketch(keep=False)
 
 
+def test_the_sketch_use_dialog_preselects_extruding() -> None:
+    """Vorausgewählt ist der Normalfall, nicht die erste Zeile.
+
+    Die Liste kommt alphabetisch nach Titel aus dem Register, und damit stand
+    „Entlang eines Bogens führen" oben — ein Rohrbogen, der seltenste der
+    fünf Fälle. Wer nach dem Zeichnen auf „Weiter" drückt, ohne zu lesen,
+    bekam ihn; aus einer gezeichneten Fläche wird im Normalfall ein Körper,
+    indem man sie aufzieht.
+    """
+    from app.ui.op_dialog import SketchUseDialog
+
+    dialog = SketchUseDialog()
+    assert dialog.chosen() == "sketch_extrude"
+    # Die Reihenfolge der Liste bleibt, wie das Register sie liefert — geprüft
+    # wird die Markierung, nicht das Sortieren.
+    assert dialog._list.count() == 5
+    assert dialog._list.item(0).data(Qt.ItemDataRole.UserRole) == "sketch_sweep"
+
+
 def test_a_free_sketch_asks_what_it_becomes(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -570,6 +570,20 @@ class OperationDialog(QDialog):
         return collected
 
 
+#: Was vorausgewählt ist, wenn die Skizze fertig ist.
+#:
+#: **Nicht die erste Zeile.** Die Liste kommt alphabetisch nach Titel aus dem
+#: Register, und damit stand „Entlang eines Bogens führen" ganz oben — ein
+#: Rohrbogen, also der seltenste der fünf Fälle. Wer nach dem Zeichnen auf
+#: „Weiter" drückt, ohne die Liste zu lesen, bekam ihn.
+#:
+#: Aus einer gezeichneten Fläche wird im Normalfall ein Körper, indem man sie
+#: aufzieht. Steht der Eintrag einmal nicht im Register, bleibt es bei der
+#: ersten Zeile — eine Vorauswahl, die ins Leere zeigt, wäre schlimmer als
+#: eine unpassende.
+DEFAULT_SKETCH_USE = "sketch_extrude"
+
+
 class SketchUseDialog(QDialog):
     """Was soll aus der gezeichneten Skizze werden? (§2.2, Weg 2)
 
@@ -593,8 +607,7 @@ class SketchUseDialog(QDialog):
             item = QListWidgetItem(f"{spec.title}\n    {spec.doc}")
             item.setData(Qt.ItemDataRole.UserRole, spec.name)
             self._list.addItem(item)
-        if self._list.count():
-            self._list.setCurrentRow(0)
+        self._preselect(DEFAULT_SKETCH_USE)
         self._list.itemDoubleClicked.connect(lambda _item: self.accept())
 
         buttons = QDialogButtonBox(self)
@@ -609,6 +622,16 @@ class SketchUseDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(self._list)
         layout.addWidget(buttons)
+
+    def _preselect(self, name: str) -> None:
+        """Den Normalfall markieren, nicht den ersten Eintrag."""
+        if not self._list.count():
+            return
+        for row in range(self._list.count()):
+            if self._list.item(row).data(Qt.ItemDataRole.UserRole) == name:
+                self._list.setCurrentRow(row)
+                return
+        self._list.setCurrentRow(0)
 
     def chosen(self) -> str:
         """Der Name der gewählten Skizzen-Operation, oder leer."""
