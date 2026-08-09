@@ -265,6 +265,9 @@ class OperationDialog(QDialog):
 
         front = QFormLayout()
         advanced = QFormLayout()
+        self._rows: dict[str, QFormLayout] = {}
+        """In welchem der beiden Formulare ein Feld steht — ``switch_variant``
+        blendet Zeilen darüber aus."""
         for entry in spec.params.spec():
             editor = self._editor_for(entry, names, given.get(entry.name))
             self._editors[entry.name] = editor
@@ -276,14 +279,17 @@ class OperationDialog(QDialog):
             # nach hinten legt: er ist der, der gerade entschieden wurde.
             target = front if entry.placement == "front" or entry.name in given else advanced
             target.addRow(label, editor)
+            self._rows[entry.name] = target
             if entry.doc:
                 editor.setToolTip(str(entry.doc))
 
         layout = QVBoxLayout(self)
+        self._description: QLabel | None = None
         if spec.doc:
             description = QLabel(str(spec.doc), self)
             description.setWordWrap(True)
             layout.addWidget(description)
+            self._description = description
         layout.addLayout(front)
 
         if extra is not None:
@@ -475,6 +481,30 @@ class OperationDialog(QDialog):
             if isinstance(editor, ValueField):
                 editor.set_value(float(value))
         return True
+
+    def switch_variant(self, spec: OperationSpec) -> None:
+        """Der Dialog gehört jetzt einer anderen Variante derselben Handlung.
+
+        Die zusammengelegten Zwillinge (``MENU_TWINS``) rechnen je nach
+        Umschalter im Mesh- oder im exakten Kern, und die beiden Schemata sind
+        nicht dieselben. Bis hierher wurden die überzähligen Werte **beim
+        Anwenden** weggefiltert — im Dialog standen sie weiter da: wer „Exakt"
+        ankreuzte und den Bezugspunkt auf „Ecke" stellte, bekam einen mittigen
+        Quader und keinen Ton dazu. Ein Feld ohne Wirkung ist ein Versprechen,
+        das niemand hält; es verschwindet, statt zu lügen.
+
+        Die Beschreibung wechselt mit: die des Mesh-Quaders nennt eine Wahl
+        („mittig auf Z = 0 oder auf einer Ecke"), die es im exakten Kern nicht
+        gibt.
+        """
+        allowed = {entry.name for entry in spec.params.spec()}
+        for name, form in self._rows.items():
+            editor = self._editors.get(name)
+            if editor is not None:
+                form.setRowVisible(editor, name in allowed)
+        if self._description is not None and spec.doc:
+            self._description.setText(str(spec.doc))
+        self.adjustSize()
 
     def place_beside(self, anchor: QWidget | None) -> None:
         """Setzt den Dialog an den Rand statt in die Bildmitte.

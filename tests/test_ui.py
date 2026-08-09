@@ -2193,6 +2193,30 @@ def test_the_toolbar_has_a_drawing_entry_for_way_two(window: MainWindow) -> None
         window.finish_sketch(keep=False)
 
 
+def test_the_sketch_bar_says_what_finishing_does(window: MainWindow) -> None:
+    """Der Hinweis über „Fertig" zeigte auf eine Operation, die es beim
+    freien Zeichnen noch nicht gibt.
+
+    Beide Wege enden auf demselben Knopf, aber nicht am selben Ort: mit
+    festgelegter Op öffnet sie sich auf der Skizze, ohne fragt erst der
+    Dialog. Wer „die Operation" liest und keine gewählt hat, sucht nach
+    etwas, das nirgends steht.
+    """
+    window.action_sketch_free()
+    try:
+        assert "Operation" not in window._sketch_hint.text()
+        assert "Freies Zeichnen" in window.statusBar().currentMessage()
+    finally:
+        window.finish_sketch(keep=False)
+
+    window.start_sketch("sketch_extrude")
+    try:
+        assert "Operation" in window._sketch_hint.text()
+        assert str(REGISTRY.get("sketch_extrude").title) in window.statusBar().currentMessage()
+    finally:
+        window.finish_sketch(keep=False)
+
+
 def test_a_free_sketch_asks_what_it_becomes(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2263,6 +2287,46 @@ def test_the_exact_twin_runs_through_the_partner_dialog(window: MainWindow) -> N
     ops = window.session.project.document.ops
     assert [entry.op for entry in ops] == ["create_brep_box"]
     assert "anchor" not in ops[-1].params, "gefiltert auf das Schema des exakten Kerns"
+
+
+@pytest.mark.parametrize(
+    ("shown", "hidden", "gone"),
+    [
+        ("create_box", "create_brep_box", "anchor"),
+        ("create_cylinder", "create_brep_cylinder", "segments"),
+    ],
+)
+def test_the_exact_twin_hides_what_it_cannot_do(
+    window: MainWindow, shown: str, hidden: str, gone: str
+) -> None:
+    """Ein Feld ohne Wirkung ist ein Versprechen, das niemand hält.
+
+    Gefiltert wurden bis dahin nur die Werte beim Anwenden; im Dialog stand
+    der Bezugspunkt weiter da — und er steht in derselben aufgeklappten
+    Gruppe wie der Umschalter, an der also jeder vorbeikommt, der „Exakt"
+    sucht. Wer ihn auf „Ecke" stellte, bekam einen mittigen Quader und keinen
+    Ton dazu. Mit dem Umschalter verschwindet die Zeile, und die Beschreibung
+    oben wechselt mit: die des Netz-Quaders nennt eine Wahl, die es im
+    exakten Kern nicht gibt.
+    """
+    from PySide6.QtWidgets import QCheckBox
+
+    window.run_operation(REGISTRY.get(shown))
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    dialog.advanced.setChecked(True)
+    exact = next(box for box in dialog.findChildren(QCheckBox) if "B-Rep" in box.text())
+
+    assert dialog._editors[gone].isVisibleTo(dialog), "im Netzkern hat das Feld seine Wirkung"
+    exact.setChecked(True)
+    assert not dialog._editors[gone].isVisibleTo(dialog), f"{gone} wirkt in {hidden} nicht"
+    assert dialog._description is not None
+    assert dialog._description.text() == str(REGISTRY.get(hidden).doc)
+
+    # Und zurück: der Umschalter ist keine Einbahnstraße.
+    exact.setChecked(False)
+    assert dialog._editors[gone].isVisibleTo(dialog)
+    assert dialog._description.text() == str(REGISTRY.get(shown).doc)
+    dialog.reject()
 
 
 def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWindow) -> None:

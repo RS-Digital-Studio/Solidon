@@ -3656,3 +3656,29 @@ Menü stehen zu viele ähnliche Einträge. Beides behoben:
   Verlauf. Die Zusicherung „genau ein Menüeintrag je Operation" heißt jetzt
   „höchstens einer, und jede bleibt erreichbar" (Grenzen-Tabelle in
   `.claude/rules/oberflaeche.md` nachgezogen).
+
+## Nachgesehen, was davon stimmt (09.08.2026)
+
+Die Oberfläche von Hand durchgefahren — Werkzeugzeile, freies Zeichnen samt
+Rückweg, beide Zwillingsdialoge, Weg 1 von der Datei bis zur Schichtanalyse —
+und dabei drei Stellen gefunden, an denen der Bau seinem eigenen Text
+hinterherhinkte:
+
+- **„Gefiltert auf das Schema des gewählten Kerns" galt für die Werte, nicht
+  für die Felder.** Bezugspunkt (Quader) und Segmentzahl (Zylinder) standen
+  weiter da, wenn „Exakt" angekreuzt war — in derselben aufgeklappten Gruppe
+  wie der Umschalter, also genau dort, wo jeder vorbeikommt, der ihn sucht.
+  Auf „Ecke" gestellt kam ein mittiger Quader, ohne einen Ton dazu.
+  `OperationDialog.switch_variant` blendet die Zeile jetzt aus und tauscht die
+  Beschreibung mit (die des Netz-Quaders nennt eine Wahl, die es exakt nicht
+  gibt).
+- **Die Skizzenleiste sagte „die Operation öffnet auf der Skizze"**, auch beim
+  freien Zeichnen, wo keine gewählt ist. Beide Texte — Leiste und Statuszeile
+  — unterscheiden die zwei Wege jetzt.
+
+Was die Durchsicht **bestätigt** hat: die vier Funde vom 05.08. sind zu.
+`Solid.bounds` misst 40 × 30 × 10 und Ø 6 wie Ø 120 auf neun Stellen exakt
+(`AddOptimal_s`), die Slicer-Übergabe schickt `--arrange 0`, `drill` verankert
+am Mund der Bohrung, und gepickt wird mit `vtkCellPicker`. Die Suite läuft
+grün (3393), Lint und Typprüfung ebenso; der Abriss im Lauf am Stück ist
+weiter der bekannte native, kein Testfehler.

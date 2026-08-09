@@ -72,6 +72,14 @@ Rechenkernen: ein Eintrag, „Exakt (B-Rep)" ist ein Umschalter hinten im
 Dialog, und `MENU_TWINS` im Register hält die Zuordnung — auch für den
 Menüort, den der Agent nennt (§2.6).
 
+**Ein Umschalter zwischen Varianten schaltet den ganzen Dialog um**, nicht nur
+die Rechnung: `OperationDialog.switch_variant` blendet aus, was die gewählte
+Variante nicht kennt, und tauscht die Beschreibung. Die Werte beim Anwenden zu
+filtern genügt nicht — was stehen bleibt, verspricht eine Wirkung. Der
+Bezugspunkt des Netz-Quaders stand in derselben aufgeklappten Gruppe wie der
+Umschalter selbst, also genau dort, wo jeder vorbeikommt; auf „Ecke" gestellt
+kam ein mittiger Quader und kein Ton dazu.
+
 **Jede neue Funktion nennt ihren Hauptweg** (§2.2), bevor sie einen Platz
 bekommt:
 

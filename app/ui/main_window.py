@@ -2317,10 +2317,25 @@ class MainWindow(QMainWindow):
         self.tools.setVisible(False)
         self.sketch_bar.setVisible(True)
         self._update_actions()
-        named = str(REGISTRY.get(op_name).title) if op_name else tr("freies Zeichnen")
-        self.statusBar().showMessage(
-            tr("Skizze für {op} — Escape verlässt den Modus.").format(op=named)
+        # Beide Texte sagten „die Operation", auch wenn es noch keine gab: der
+        # Zeichnen-Knopf startet ohne festgelegte Op, und was aus der Skizze
+        # wird, entscheidet der Dialog bei „Fertig". Ein Hinweis, der auf eine
+        # Operation zeigt, die niemand gewählt hat, lässt den Nutzer suchen,
+        # wo nichts ist.
+        if op_name:
+            self._sketch_hint.setText(
+                tr("Zeichnen, dann Fertig — die Operation öffnet auf der Skizze.")
+            )
+            self.statusBar().showMessage(
+                tr("Skizze für {op} — Escape verlässt den Modus.").format(
+                    op=str(REGISTRY.get(op_name).title)
+                )
+            )
+            return
+        self._sketch_hint.setText(
+            tr("Zeichnen, dann Fertig — dann fragt Solidon, was daraus wird.")
         )
+        self.statusBar().showMessage(tr("Freies Zeichnen — Escape verlässt den Modus."))
 
     def finish_sketch(self, keep: bool = True) -> None:
         """Den Modus verlassen. Mit ``keep`` öffnet die Operation auf der
@@ -3091,7 +3106,13 @@ class MainWindow(QMainWindow):
             )
             if exact is not None:
                 # Die Live-Vorschau (§18.7) muss den Kernwechsel mitmachen —
-                # eine Vorschau der falschen Variante wäre gelogen.
+                # eine Vorschau der falschen Variante wäre gelogen. Und der
+                # Dialog zeigt danach nur noch, was die gewählte Variante
+                # kennt: die Werte wurden schon vorher gefiltert, die Felder
+                # standen weiter da und versprachen eine Wirkung, die es nicht
+                # gab (Bezugspunkt beim exakten Quader, Segmentzahl beim
+                # exakten Zylinder).
+                exact.toggled.connect(lambda: dialog.switch_variant(chosen_spec()))
                 exact.toggled.connect(dialog.valuesChanged)
             # §18.7: der Dialog zeigt, was er täte, während getippt wird —
             # dieselbe Differenzansicht wie beim Agentenvorschlag.
