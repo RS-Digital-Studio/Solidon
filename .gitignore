@@ -10,6 +10,13 @@ dist/
 .venv/
 venv/
 
+# --- Videowerkzeug -----------------------------------------------------------
+# Eigene Umgebung, damit espeak-ng (GPL) hinter piper nicht in derselben venv
+# liegt, aus der das Paket gebaut wird — dasselbe Muster wie bei OpenSCAD und
+# den Slicern. Die Stimmen sind je 114 MB und werden geladen, nicht versioniert.
+/.venv-video/
+/.voices/
+
 # --- Werkzeuge ---------------------------------------------------------------
 .pytest_cache/
 .mypy_cache/

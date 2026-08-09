@@ -93,6 +93,46 @@ FPS = 30
 #: dass sie ein Loch bohren kann.
 EXAMPLE = "gehaeuse-mit-bausteinen.p3d"
 
+#: Die eigene Umgebung für die Sprachausgabe.
+#:
+#: **Nicht die Projektumgebung.** piper zerlegt Text über espeak-ng, und das
+#: steht unter der GPL. In derselben venv, aus der PyInstaller das Paket baut,
+#: hat es nichts zu suchen — dasselbe Muster wie bei OpenSCAD und den Slicern
+#: (Regel 15). Getrennt ist die Grenze per Bauart da statt per Vorsatz.
+VOICE_PYTHON = Path(__file__).resolve().parent.parent / ".venv-video" / "Scripts" / "python.exe"
+VOICE_DIR = Path(__file__).resolve().parent.parent / ".voices"
+
+#: Welche Stimme je Sprache spricht.
+#:
+#: Beide Lizenzen sind nachgesehen und erlauben ausdrücklich den kommerziellen
+#: Gebrauch — thorsten steht unter CC0, ljspeech ist gemeinfrei. Das ist bei
+#: den Stimmen von piper **nicht** selbstverständlich: mehrere der besser
+#: klingenden hängen an Datensätzen, die nur für Forschung freigegeben sind,
+#: und ein Werbevideo ist das Gegenteil davon.
+VOICES = {
+    "de": "de_DE-thorsten-high",
+    "en": "en_US-ljspeech-high",
+}
+
+#: Was gesprochen wird. Ein Satz je Sprache — die Länge des Videos richtet
+#: sich danach, nicht umgekehrt.
+SCRIPT = {
+    "de": (
+        "Solidon baut druckbare Bauteile aus einem Satz. Parametrisch, offline, ohne CAD-Studium."
+    ),
+    "en": (
+        "Solidon turns a sentence into a printable part. "
+        "Parametric, offline, no CAD degree required."
+    ),
+}
+
+#: Ziellautheit in LUFS.
+#:
+#: Beide Plattformen normalisieren selbst, und zwar auf ungefähr diesen Wert.
+#: Wer lauter anliefert, wird heruntergeregelt — mitsamt der Dynamik, die die
+#: Stimme trägt. Wer es selbst macht, behält sie.
+LOUDNESS = -14.0
+
 
 @dataclass(frozen=True, slots=True)
 class Shot:
@@ -259,6 +299,99 @@ def settle_resize(window: Any, app: QApplication, seconds: float = 1.5) -> None:
     settle(app, 30)
 
 
+def speak(text: str, language: str, target: Path) -> float:
+    """Den Satz sprechen lassen und sagen, wie lange er dauert.
+
+    Der Rückgabewert ist der Grund, warum das **vor** der Aufnahme läuft: die
+    Länge des Videos richtet sich nach der Stimme, nicht die Stimme nach einer
+    geratenen Länge. Wer es andersherum macht, hat am Ende einen Satz, der
+    mitten im Wort abgeschnitten wird, oder vier Sekunden, in denen sich ein
+    Modell schweigend weiterdreht.
+    """
+    voice = VOICE_DIR / f"{VOICES[language]}.onnx"
+    if not VOICE_PYTHON.is_file():
+        raise SystemExit(
+            f"Die Umgebung für die Sprachausgabe fehlt: {VOICE_PYTHON}\n"
+            f"Anlegen mit: python -m venv .venv-video && "
+            f".venv-video\\Scripts\\python.exe -m pip install piper-tts"
+        )
+    if not voice.is_file():
+        raise SystemExit(
+            f"Die Stimme fehlt: {voice}\n"
+            f".venv-video\\Scripts\\python.exe -m piper.download_voices "
+            f"{VOICES[language]} --data-dir .voices"
+        )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    finished = subprocess.run(
+        [str(VOICE_PYTHON), "-m", "piper", "-m", str(voice), "-f", str(target)],
+        input=text,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if finished.returncode != 0:
+        raise SystemExit(f"piper brach ab:\n{finished.stderr.strip()}")
+    return audio_duration(target)
+
+
+def audio_duration(path: Path) -> float:
+    """Wie lang eine Tondatei ist, in Sekunden."""
+    binary = shutil.which("ffprobe")
+    if binary is None:
+        raise SystemExit("ffprobe fehlt — es kommt zusammen mit ffmpeg.")
+    finished = subprocess.run(
+        [
+            binary,
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "csv=p=0",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if finished.returncode != 0:
+        raise SystemExit(f"ffprobe brach ab:\n{finished.stderr.strip()}")
+    return float(finished.stdout.strip())
+
+
+def audio_arguments(audio: Path | None) -> list[str]:
+    """Die Tonspur anhängen, auf Sendelautheit gebracht.
+
+    ``loudnorm`` bringt sie auf :data:`LOUDNESS`, das Umtasten auf 48 kHz
+    stereo ist das, was beide Plattformen erwarten. piper liefert 22 kHz mono
+    mit Spitzen bis an die Aussteuerungsgrenze — brauchbar, aber roh. Wer es
+    so hochlädt, bekommt es normalisiert zurück, und zwar ohne Rücksicht auf
+    die Dynamik, die die Stimme trägt.
+    """
+    if audio is None:
+        return []
+    return [
+        "-i",
+        str(audio),
+        # ``apad`` hängt Stille an, bis das Bild fertig ist, und ``-shortest``
+        # schneidet dann dort — nicht am Ton.
+        #
+        # **Ohne das Auffüllen macht ``-shortest`` das Gegenteil von dem, was
+        # hier gebraucht wird:** es kürzt auf die kürzeste Spur, und das ist
+        # der Ton. Der Nachlauf, der verhindern soll, dass das Bild auf der
+        # letzten Silbe endet, war damit exakt wieder abgeschnitten — aus 6,6
+        # Sekunden wurden 5,4.
+        "-af",
+        f"loudnorm=I={LOUDNESS}:TP=-1.5:LRA=11,aresample=48000,apad",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-ac",
+        "2",
+        "-shortest",
+    ]
+
+
 def orbit(
     window: QWidget,
     app: QApplication,
@@ -317,7 +450,7 @@ def orbit(
     return Shot(frames=frames, count=total, viewport=viewport_rect(window))
 
 
-def encode_landscape(shot: Shot, target: Path) -> None:
+def encode_landscape(shot: Shot, target: Path, audio: Path | None = None) -> None:
     """Das Querformat: die Bilder, wie sie sind."""
     run_ffmpeg(
         [
@@ -325,6 +458,7 @@ def encode_landscape(shot: Shot, target: Path) -> None:
             str(FPS),
             "-i",
             str(shot.frames / "%05d.png"),
+            *audio_arguments(audio),
             "-c:v",
             "libx264",
             "-pix_fmt",
@@ -339,7 +473,13 @@ def encode_landscape(shot: Shot, target: Path) -> None:
     print(f"  quer  → {target.name}")
 
 
-def encode_portrait(shot: Shot, target: Path, headline: str, sub: str) -> None:
+def encode_portrait(
+    shot: Shot,
+    target: Path,
+    headline: str,
+    sub: str,
+    audio: Path | None = None,
+) -> None:
     """Das Hochformat: Viewport freigestellt, Text darüber und darunter.
 
     Der Ausschnitt kommt aus der Aufnahme, nicht aus einer Tabelle — wo der
@@ -371,6 +511,7 @@ def encode_portrait(shot: Shot, target: Path, headline: str, sub: str) -> None:
             str(FPS),
             "-i",
             str(shot.frames / "%05d.png"),
+            *audio_arguments(audio),
             "-vf",
             chain,
             "-c:v",
@@ -437,14 +578,25 @@ def main() -> int:
     if frames.exists():
         shutil.rmtree(frames)
 
+    # **Zuerst die Stimme.** Sie bestimmt, wie lang das Video wird — und wenn
+    # etwas an ihr fehlt, soll das auffallen, bevor zweimal 240 Bilder
+    # gerechnet sind.
+    language = "de"
+    print("Sprachausgabe:")
+    audio = out / f"stimme-{language}.wav"
+    spoken = speak(SCRIPT[language], language, audio)
+    # Ein Nachlauf, damit das Bild nicht auf der letzten Silbe endet.
+    seconds = spoken + 1.2
+    print(f"  {spoken:.1f} s gesprochen, {seconds:.1f} s Video")
+
     load_operations()
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     require_screen(app)
     apply_theme(app, "dark")
-    install_catalog("de", read_catalog("de"))
-    set_language("de")
-    install_qt_translations(app, "de")
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    install_qt_translations(app, language)
 
     session = Session()
     window = MainWindow(session, UiSettings())
@@ -467,23 +619,24 @@ def main() -> int:
     # am ``QtInteractor`` hängen, und der Orientierungswürfel läge im zweiten
     # Durchgang quer über dem Modell (siehe ``release_viewport``).
     print("Aufnahme quer:")
-    landscape = orbit(window, app, frames / "landscape")
+    landscape = orbit(window, app, frames / "landscape", seconds=seconds)
 
     print("Aufnahme hoch:")
     show_panels(window, False)
     hide_orientation_widget(window)
     window.resize(*PORTRAIT)
     settle_resize(window, app)
-    portrait = orbit(window, app, frames / "portrait", zoom=PORTRAIT_ZOOM)
+    portrait = orbit(window, app, frames / "portrait", seconds=seconds, zoom=PORTRAIT_ZOOM)
     show_panels(window, True)
 
     print("Kodierung:")
-    encode_landscape(landscape, out / "solidon3d-quer-1080p.mp4")
+    encode_landscape(landscape, out / "solidon3d-quer-1080p.mp4", audio)
     encode_portrait(
         portrait,
         out / "solidon3d-hoch-1080x1920.mp4",
         headline="Vom Chat zum Bauteil",
         sub="Parametrisch. Offline. Ohne CAD-Studium.",
+        audio=audio,
     )
 
     window.close()
