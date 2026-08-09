@@ -1451,6 +1451,12 @@ class MainWindow(QMainWindow):
         # Kern; das hier ist die Freundlichkeit davor.
         locked = not activation.state().unlocked
 
+        # Welcher Bauart die Auswahl ist — das Menü fragte bisher nur, wie
+        # viele Objekte darin liegen. „Verrunden" war damit bei einem Netz
+        # anklickbar, und der Satz „Der gewählte Körper ist ein Netz" kam erst
+        # nach dem ausgefüllten Dialog (Regel 19: keine Sackgassen).
+        kinds = self._kinds_of_selection(result)
+
         for name, action in self._op_actions.items():
             spec = REGISTRY.get(name)
             if locked or drawing:
@@ -1458,10 +1464,12 @@ class MainWindow(QMainWindow):
             elif spec.takes_whole_scene:
                 action.setEnabled(objects > 0)
             elif spec.consumes:
-                action.setEnabled(chosen >= spec.consumes)
+                fits = not spec.requires_kind or all(kind == spec.requires_kind for kind in kinds)
+                action.setEnabled(chosen >= spec.consumes and fits)
             else:
                 action.setEnabled(True)
             self._lock_hint(action, locked)
+            self._kind_hint(action, spec, kinds, locked)
 
         # Rückgängig und Wiederholen bleiben nach Ablauf offen (§2 C): wer
         # nichts mehr ändern kann, darf trotzdem zurück und wieder vor.
@@ -1487,6 +1495,41 @@ class MainWindow(QMainWindow):
             self._toolbar_sketch,
         ):
             self._lock_hint(action, locked)
+
+    def _kinds_of_selection(self, result: Any) -> list[str]:
+        """Die Bauart jedes gewählten Körpers — Netz oder exakt."""
+        if result is None:
+            return []
+        objects = result.scene.objects
+        return [
+            objects[entry].kind for entry in self.object_tree.selected_objects() if entry in objects
+        ]
+
+    def _kind_hint(
+        self, action: QAction, spec: OperationSpec, kinds: list[str], locked: bool
+    ) -> None:
+        """Sagt am ausgegrauten Eintrag, *warum* er ausgegraut ist.
+
+        Ausgrauen allein wäre die halbe Antwort: der Nutzer sieht, dass es
+        nicht geht, und sucht den Grund bei sich. Der Satz ist derselbe, den
+        der Kern wirft, nur kommt er hier vor dem Klick statt nach dem Dialog.
+        """
+        if locked or not spec.requires_kind:
+            return
+        stored = action.property("tip_before_kind")
+        passt = bool(kinds) and all(kind == spec.requires_kind for kind in kinds)
+        if not passt and kinds:
+            if stored is None:
+                action.setProperty("tip_before_kind", action.statusTip())
+            reason = tr(
+                "Diese Operation braucht einen exakten Körper (B-Rep). Exakte Körper "
+                "kommen aus einer STEP-Datei oder aus den Grundformen mit „Exakt“."
+            )
+            action.setStatusTip(reason)
+            action.setToolTip(reason)
+        elif stored is not None:
+            action.setStatusTip(str(stored))
+            action.setToolTip(str(stored))
 
     def _lock_hint(self, action: QAction, locked: bool) -> None:
         """Schreibt den Grund der Sperre in den Hinweistext — und stellt den

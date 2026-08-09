@@ -335,6 +335,7 @@ class SketchPocketParams(BaseParams):
 
 @register_op(
     name="sketch_pocket",
+    requires_kind="brep",
     title=_("Tasche schneiden"),
     category="sketch",
     params=SketchPocketParams,
@@ -628,6 +629,7 @@ class PushFaceParams(BaseParams):
 
 @register_op(
     name="push_face",
+    requires_kind="brep",
     title=_("Fläche versetzen"),
     category="shaping",
     params=PushFaceParams,

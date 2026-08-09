@@ -552,6 +552,7 @@
   "Diese Operation arbeitet nur auf Netzen.": "This operation only works on meshes.",
   "Diese Operation arbeitet nur auf einem exakten Körper.": "This operation only works on an exact solid.",
   "Diese Operation braucht einen B-Rep-Körper; hier liegt ein Netz.": "This operation needs a B-Rep body; this one is a mesh.",
+  "Diese Operation braucht einen exakten Körper (B-Rep). Exakte Körper kommen aus einer STEP-Datei oder aus den Grundformen mit „Exakt“.": "This operation needs an exact body (B-Rep). Exact bodies come from a STEP file or from the primitives marked “Exact”.",
   "Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.": "This operation needs two objects. Ctrl-click to add the second one.",
   "Diese Operation gibt es im Verlauf nicht.": "This operation is not in the history.",
   "Diese Operation gibt es nicht.": "There is no such operation.",

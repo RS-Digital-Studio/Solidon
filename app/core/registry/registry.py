@@ -140,6 +140,18 @@ class OperationSpec:
     operations like arranging, which change every object and create none."""
     applies_to: tuple[str, ...] = ()
     """Merkmalsarten, für die sich diese Operation anbietet — steuert das Kontextmenü."""
+    requires_kind: str = ""
+    """Bauart, die die Eingabe haben muss — ``"brep"`` oder leer für beides.
+
+    Die fünf Operationen des exakten Kerns können mit einem Netz nichts
+    anfangen und sagen das seit je in einem guten Satz. Nur kam er zu spät:
+    das Menü fragte allein, *wie viele* Objekte gewählt sind, nie welcher Art
+    sie sind — also war „Verrunden" bei einem Netz anklickbar, und der Nutzer
+    erfuhr erst nach dem ausgefüllten Dialog, dass es hier nie ging.
+
+    Deklariert statt in der Oberfläche aufgezählt, denn eine Liste in der
+    Oberfläche wäre beim nächsten Zuwachs des exakten Kerns unvollständig —
+    und dieselbe Auskunft braucht auch der Agent (§10, Leitprinzip 3)."""
     whole_scene: bool = False
     """Works on every object at once — see :attr:`takes_whole_scene`."""
     produces_from: str | None = None
@@ -295,6 +307,7 @@ def register_op(
     consumes: int = 1,
     produces: int = 1,
     applies_to: Iterable[str] = (),
+    requires_kind: str = "",
     whole_scene: bool = False,
     produces_from: str | None = None,
     touches_features: bool = False,
@@ -320,6 +333,7 @@ def register_op(
                 consumes=consumes,
                 produces=produces,
                 applies_to=tuple(applies_to),
+                requires_kind=requires_kind,
                 whole_scene=whole_scene,
                 produces_from=produces_from,
                 touches_features=touches_features,

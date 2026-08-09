@@ -370,3 +370,58 @@ def test_every_operation_of_the_history_can_be_opened(window: MainWindow) -> Non
     }
 
     assert {entry.id for entry in window.session.project.document.ops} <= reachable
+
+
+# --- Was zur Bauart der Auswahl passt ---------------------------------------------
+
+
+BREP_ONLY = ("fillet_edges", "chamfer_edges", "draft_faces", "shell_exact", "brep_to_mesh")
+
+
+def test_the_exact_operations_are_greyed_out_on_a_mesh(window: MainWindow) -> None:
+    """Sie waren anklickbar, und der Satz „Der gewählte Körper ist ein Netz"
+    kam erst nach dem ausgefüllten Dialog.
+
+    Das Menü fragte allein, wie viele Objekte gewählt sind — die Bauart stand
+    die ganze Zeit daneben in ``SceneObject.kind``. Regel 19 verlangt keine
+    Sackgassen, und eine Operation, die hier nie gehen kann, ist eine.
+    """
+    select(window)
+    window._update_actions()
+
+    for name in BREP_ONLY:
+        action = window._op_actions[name]
+        assert not action.isEnabled(), name
+
+
+def test_the_greyed_out_entry_says_why(window: MainWindow) -> None:
+    """Ausgrauen allein ist die halbe Antwort — der Nutzer sucht den Grund
+    sonst bei sich."""
+    select(window)
+    window._update_actions()
+
+    hint = window._op_actions["fillet_edges"].toolTip()
+    assert "B-Rep" in hint or "exakt" in hint.casefold()
+
+
+def test_the_same_operations_are_available_on_an_exact_body(window: MainWindow) -> None:
+    """Die Gegenprobe: ausgegraut wird nach der Bauart, nicht immer."""
+    window.session.start_new("centauri-carbon-2", "petg")
+    window.session.history.apply(
+        "Exakter Quader", [OperationDraft(op="create_brep_box", params={})]
+    )
+    window.session.evaluate_now()
+    select(window)
+    window._update_actions()
+
+    for name in BREP_ONLY:
+        assert window._op_actions[name].isEnabled(), name
+
+
+def test_the_register_says_which_operations_need_an_exact_body() -> None:
+    """Die Auskunft steht im Register, nicht in einer Liste in der Oberfläche
+    — sonst fehlt die nächste Operation des exakten Kerns darin."""
+    for name in (*BREP_ONLY, "push_face", "sketch_pocket"):
+        assert REGISTRY.get(name).requires_kind == "brep", name
+    for name in ("drill_hole", "hollow_object", "repair"):
+        assert not REGISTRY.get(name).requires_kind, name

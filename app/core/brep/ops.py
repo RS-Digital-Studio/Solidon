@@ -205,6 +205,7 @@ class FilletParams(BaseParams):
 
 @register_op(
     name="fillet_edges",
+    requires_kind="brep",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
@@ -242,6 +243,7 @@ class ChamferParams(BaseParams):
 
 @register_op(
     name="chamfer_edges",
+    requires_kind="brep",
     title=_("Fase anbringen"),
     category="shaping",
     params=ChamferParams,
@@ -273,6 +275,7 @@ class ShellParams(BaseParams):
 
 @register_op(
     name="shell_exact",
+    requires_kind="brep",
     title=_("Exakt aushöhlen"),
     category="shaping",
     params=ShellParams,
@@ -308,6 +311,7 @@ class DraftParams(BaseParams):
 
 @register_op(
     name="draft_faces",
+    requires_kind="brep",
     title=_("Formschräge anstellen"),
     category="shaping",
     params=DraftParams,
@@ -397,6 +401,7 @@ class ToMeshParams(BaseParams):
 
 @register_op(
     name="brep_to_mesh",
+    requires_kind="brep",
     title=_("In ein Netz umwandeln"),
     category="mesh",
     params=ToMeshParams,
