@@ -24,7 +24,7 @@ import trimesh
 from app.core import activation
 from app.core.errors import NeedsSolidError, ValidationError
 from app.core.export import threemf
-from app.core.export.slicer_keys import SlicerFlavour
+from app.core.export.slicer_keys import SlicerFlavour, wants_bed_coordinates
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import check_build_volume
 from app.core.log import get_logger
@@ -495,6 +495,14 @@ def write_assembly(
     Datei bleibt es aus, und zwar aus zwei Gründen: ein Slicer, den jemand von
     Hand öffnet, ordnet ohnehin neu an, und eine zurückgelesene Platte läge
     sonst um den halben Bauraum verschoben im nächsten Dokument.
+
+    Und es gilt nur für die Orca-Familie: sie misst von der Ecke der Platte.
+    Cura und PrusaSlicer bekommen von Solidon eine Maschine, die um den
+    Ursprung rechnet (``machine_center_is_zero`` beim einen, eine Bettform von
+    ``-128`` bis ``128`` beim anderen) — verschoben landeten die Teile dort um
+    den halben Bauraum daneben. Gemessen: ein Würfel, den das Dokument bei
+    -10 bis 10 hat, lag in Curas G-Code bei 110,9 bis 137,8, und PrusaSlicer
+    lehnte ihn mit „All objects are outside of the print volume" ganz ab.
     """
     # §2 C: auch die Baugruppe ist ein Export — dieselbe Grenze wie write_plan.
     activation.require(activation.EXPORT)
@@ -514,6 +522,16 @@ def write_assembly(
         meshes = [as_mesh_data(entry.mesh) for entry in chosen]
         findings += check_adhesion_clearance(meshes, settings, [entry.plate for entry in chosen])
         findings += check_filament_changes(chosen, settings, plate)
+    directory.mkdir(parents=True, exist_ok=True)
+    width, depth, _height = profile.printer.build_volume
+    bed = (width, depth) if place_on_bed and wants_bed_coordinates(flavour) else None
+
+    if flavour == "cura":
+        target = directory / (safe_name(project_name, "projekt") + ".stl")
+        target.write_bytes(_cura_assembly(chosen, bed))
+        _log.info("exported %d object(s) as one STL to %s", len(chosen), target.name)
+        return target, findings
+
     parts = [
         threemf.AssemblyPart(
             mesh=as_mesh_data(entry.mesh),
@@ -523,13 +541,38 @@ def write_assembly(
         )
         for entry in chosen
     ]
-    directory.mkdir(parents=True, exist_ok=True)
     target = directory / (safe_name(project_name, "projekt") + ".3mf")
-    width, depth, _height = profile.printer.build_volume
-    bed = (width, depth) if place_on_bed else None
     target.write_bytes(threemf.write_assembly(parts, project_name, bed=bed))
     _log.info("exported %d object(s) as one assembly to %s", len(parts), target.name)
     return target, findings
+
+
+def _cura_assembly(objects: Sequence[SceneObject], bed: tuple[float, float] | None) -> bytes:
+    """Dieselbe Platte als ein STL — der einzige Weg zu ``CuraEngine``.
+
+    Die 3MF-Seite von Cura sitzt in seiner Oberfläche, nicht in der Maschine
+    dahinter: ``CuraEngine`` liest STL und OBJ, und eine 3MF-Baugruppe lehnt es
+    mit einer Meldung ab, die den Dateinamen nennt und sonst nichts. Jeder
+    Slicen-Lauf mit Cura endete deshalb in „Der Slicer hat keine Druckdatei
+    geschrieben".
+
+    Ein STL kennt keine Baugruppe, also werden die Körper zu einem
+    zusammengelegt. Verloren geht dabei nichts, was auf diesem Weg ankäme:
+    Namen und Materialslots liest ``CuraEngine`` ohnehin nicht, und die
+    Einstellungen kommen bei ihm über die Kommandozeile.
+
+    ``bed`` bleibt bei Cura leer (siehe :func:`wants_bed_coordinates`) — steht
+    doch einmal etwas darin, wird über die Punkte verschoben, denn ein STL hat
+    keine Platzierungsmatrix.
+    """
+    bodies = []
+    for entry in objects:
+        body = as_mesh_data(entry.mesh).raw.copy()
+        if bed is not None:
+            body.apply_translation((bed[0] / 2.0, bed[1] / 2.0, 0.0))
+        bodies.append(body)
+    joined = trimesh.util.concatenate(bodies) if len(bodies) > 1 else bodies[0]
+    return MeshData.of(joined).to_stl()
 
 
 def export_bytes(

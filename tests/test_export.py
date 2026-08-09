@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import zipfile
+from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -480,4 +481,101 @@ def test_the_handover_places_the_parts_the_export_does_not(
 
     assert "transform" not in plain.read_bytes().decode("utf-8", errors="replace")
     text = zipfile.ZipFile(BytesIO(placed.read_bytes())).read(threemf.MODEL_PATH).decode("utf-8")
+    assert 'transform="1 0 0 0 1 0 0 0 1 128 128 0"' in text
+
+
+def test_the_handover_to_cura_is_stl_because_curaengine_reads_no_3mf(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """CuraEngine liest kein 3MF — die 3MF-Seite sitzt in Curas Oberfläche.
+
+    Der Slicen-Knopf schrieb trotzdem immer eine 3MF-Baugruppe und reichte sie
+    weiter: jeder Lauf endete in „Der Slicer hat keine Druckdatei
+    geschrieben", ohne dass irgendwo stand, warum. Derselbe Körper als STL
+    läuft durch.
+    """
+    written, _findings = write_assembly(
+        [scene_object()], tmp_path, project_name="uebergabe", profile=profile, flavour="cura"
+    )
+
+    assert written.suffix == ".stl"
+    assert read_mesh(written.read_bytes(), ".stl").volume > 0.0
+
+
+def test_the_cura_handover_carries_every_part_of_the_plate(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Ein Druckauftrag bleibt einer, auch wenn das Format keine Baugruppe kennt."""
+    first = scene_object()
+    second = scene_object("obj_2", "Zweites")
+    second = replace(second, mesh=apply(second.mesh, translation((60.0, 0.0, 0.0))))
+
+    written, _findings = write_assembly(
+        [first, second], tmp_path, project_name="uebergabe", profile=profile, flavour="cura"
+    )
+
+    joined = read_mesh(written.read_bytes(), ".stl")
+    assert joined.volume == pytest.approx(first.mesh.volume + second.mesh.volume, rel=1e-6)
+    assert joined.bounds.size[0] > first.mesh.bounds.size[0], "beide Teile, nicht eines"
+
+
+def test_the_cura_handover_keeps_the_coordinates_of_the_document(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Ein STL trägt keine Platzierungsmatrix — es hat nur seine Punkte.
+
+    Umso wichtiger ist, dass sie unverschoben bleiben: ``CuraEngine`` bekommt
+    ``machine_center_is_zero``, rechnet also dieselbe Welt wie Solidon.
+    """
+    written, _findings = write_assembly(
+        [scene_object()],
+        tmp_path,
+        project_name="uebergabe",
+        profile=profile,
+        flavour="cura",
+        place_on_bed=True,
+    )
+
+    before = scene_object().mesh.bounds.centre
+    centre = read_mesh(written.read_bytes(), ".stl").bounds.centre
+    assert centre[0] == pytest.approx(before[0], abs=0.01)
+    assert centre[1] == pytest.approx(before[1], abs=0.01)
+
+
+def test_only_the_orca_family_wants_bed_coordinates(tmp_path: Path, profile: Profile) -> None:
+    """Wer um den Ursprung rechnet, darf die Teile nicht ans Bett schieben.
+
+    Solidon rechnet zentriert, und für Cura wie für PrusaSlicer schreibt die
+    Übergabe genau das: ``machine_center_is_zero`` beim einen, eine Bettform
+    von ``-128`` bis ``128`` beim anderen. Die Verschiebung um den halben
+    Bauraum kam trotzdem — gemessen im G-Code lag ein Würfel, den das Dokument
+    bei −10 … 10 hat, bei 110,9 … 137,8. PrusaSlicer lehnte ihn gleich ganz ab
+    („All objects are outside of the print volume"), Cura druckte ihn
+    schweigend woanders. Nur die Orca-Familie misst von der Ecke.
+    """
+    for flavour in ("cura", "prusa"):
+        written, _findings = write_assembly(
+            [scene_object()],
+            tmp_path / flavour,
+            project_name="uebergabe",
+            profile=profile,
+            flavour=flavour,  # type: ignore[arg-type]
+            place_on_bed=True,
+        )
+        if flavour == "cura":
+            centre = read_mesh(written.read_bytes(), ".stl").bounds.centre
+            assert centre[0] == pytest.approx(0.0, abs=0.01), flavour
+        else:
+            text = zipfile.ZipFile(BytesIO(written.read_bytes())).read(threemf.MODEL_PATH)
+            assert b"transform" not in text, flavour
+
+    orca, _findings = write_assembly(
+        [scene_object()],
+        tmp_path / "orca",
+        project_name="uebergabe",
+        profile=profile,
+        flavour="orca",
+        place_on_bed=True,
+    )
+    text = zipfile.ZipFile(BytesIO(orca.read_bytes())).read(threemf.MODEL_PATH).decode("utf-8")
     assert 'transform="1 0 0 0 1 0 0 0 1 128 128 0"' in text

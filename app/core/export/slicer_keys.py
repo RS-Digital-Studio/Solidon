@@ -448,3 +448,16 @@ def flavour_of(name: str) -> SlicerFlavour | None:
         if fragment in lowered:
             return flavour
     return None
+
+
+def wants_bed_coordinates(flavour: SlicerFlavour) -> bool:
+    """Misst dieser Slicer von der Ecke der Platte statt von ihrer Mitte?
+
+    Nur die Orca-Familie tut das. Solidon rechnet um den Ursprung, und für die
+    beiden anderen schreibt die Übergabe genau diese Welt: Cura bekommt
+    ``machine_center_is_zero``, PrusaSlicer eine Bettform von ``-128`` bis
+    ``128``. Wer ihnen trotzdem Bettkoordinaten schickt, verschiebt den Druck
+    um den halben Bauraum — gemessen im G-Code, und bei PrusaSlicer endet es
+    in „All objects are outside of the print volume".
+    """
+    return flavour == "orca"
