@@ -44,6 +44,7 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -59,6 +60,9 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from app.i18n import install_catalog, set_language
 from app.i18n.catalog import read_catalog
+
+#: Was eine Szene je Bild tut: Nummer und Gesamtzahl herein, Welt eingestellt.
+StepFn = Callable[[int, int], None]
 
 #: Aufnahmegröße fürs Querformat. Nativ Full HD — der Bildschirm hier ist
 #: breit genug, und alles, was skaliert werden muss, verliert an den
@@ -114,8 +118,78 @@ VOICES = {
     "en": "en_US-ljspeech-high",
 }
 
-#: Was gesprochen wird. Ein Satz je Sprache — die Länge des Videos richtet
-#: sich danach, nicht umgekehrt.
+#: Das Drehbuch: je Szene ein Satz, und der Satz bestimmt die Länge.
+#:
+#: Erzählt wird das, was diese Anwendung von einem Netzbetrachter
+#: unterscheidet — ein Maß ändern, und Bohrungen, Bausteine und Deckel wandern
+#: mit. **Nicht der Chat.** Der lokale Agent brauchte im Versuch 75 Sekunden
+#: für eine Antwort, lief zweimal in die Zeitgrenze und erzeugte dabei keine
+#: einzige Operation; ein Video, das „Satz eintippen, Bauteil herausbekommen"
+#: verspricht, wäre ein Versprechen auf etwas, das die Installation hier nicht
+#: einlöst.
+STORYBOARD: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        (
+            "intro",
+            "Das ist ein Gehäuse aus Solidon. Siebzig Millimeter breit, "
+            "mit Mutternfallen, Einpressbuchsen und einer Kabeldurchführung.",
+        ),
+        (
+            "parameters",
+            "Seine Maße stehen nicht im Modell. Sie sind benannte Parameter.",
+        ),
+        (
+            "morph",
+            "Wird die Breite größer, wandern Bohrungen, Bausteine und Deckel mit. "
+            "Jedes Bild ist neu gerechnet, nicht gedehnt.",
+        ),
+        (
+            "outro",
+            "Solidon. Parametrisch konstruieren, offline, ohne CAD-Studium.",
+        ),
+    ),
+    "en": (
+        (
+            "intro",
+            "This is an enclosure built in Solidon. Seventy millimetres wide, "
+            "with nut traps, heat-set inserts and a cable gland.",
+        ),
+        (
+            "parameters",
+            "Its dimensions are not baked into the model. They are named parameters.",
+        ),
+        (
+            "morph",
+            "Widen it, and the holes, the inserts and the lid all follow. "
+            "Every frame is recomputed, not stretched.",
+        ),
+        (
+            "outro",
+            "Solidon. Parametric design, offline, no CAD degree required.",
+        ),
+    ),
+}
+
+#: Von wo nach wo die Breite läuft, und über wie viele Bilder.
+#:
+#: Der Wert wird bei jedem Schritt wirklich gesetzt und die Szene wirklich neu
+#: gerechnet — gemessene 0,08 Sekunden je Durchgang, deshalb ist das als
+#: Bewegung überhaupt zeigbar. Gedehnt würde man sofort sehen: die Bohrungen
+#: würden oval.
+MORPH = (70.0, 96.0)
+
+#: Welcher Parameter dabei läuft. Er heißt im Beispielprojekt deutsch, weil
+#: Parameternamen dem Nutzer gehören und nicht dem Code.
+MORPH_PARAMETER = "breite"
+
+#: Pause hinter jedem Satz, in Sekunden.
+#:
+#: Sie steht im Ton **und** im Bild, sonst wechselt die Szene, während noch
+#: gesprochen wird. Ein Satz, der auf dem letzten Wort abgeschnitten wird,
+#: klingt nach Fehler, auch wenn nichts fehlt.
+SCENE_TAIL = 0.7
+
+#: Was gesprochen wird, wenn das Werkzeug ohne Drehbuch läuft (``--kurz``).
 SCRIPT = {
     "de": (
         "Solidon baut druckbare Bauteile aus einem Satz. Parametrisch, offline, ohne CAD-Studium."
@@ -432,6 +506,51 @@ def polish(source: Path, target: Path) -> None:
     )
 
 
+def speak_storyboard(language: str, out: Path) -> list[tuple[str, Path, float]]:
+    """Jede Szene einmal sprechen und sagen, wie lange sie dauert.
+
+    Vor jeder Aufnahme, aus demselben Grund wie beim einzelnen Satz: die
+    Sprache bestimmt die Länge der Szene, nicht eine geratene Sekundenzahl.
+    """
+    spoken: list[tuple[str, Path, float]] = []
+    for key, text in STORYBOARD[language]:
+        raw = out / "audio" / f"{key}-{language}-roh.wav"
+        ready = out / "audio" / f"{key}-{language}.wav"
+        speak(text, language, raw)
+        polish(raw, ready)
+        seconds = audio_duration(ready) + SCENE_TAIL
+        spoken.append((key, ready, seconds))
+        print(f"  {key:12s} {seconds:5.1f} s")
+    return spoken
+
+
+def join_audio(pieces: list[tuple[str, Path, float]], target: Path) -> None:
+    """Die Tonspuren der Szenen hintereinanderlegen.
+
+    Jede bekommt hinten :data:`SCENE_TAIL` Sekunden Stille — dieselbe Pause,
+    die auch im Bild steht. Ohne sie stößt der nächste Satz an den letzten, und
+    die Szene wechselt genau dann, wenn noch gesprochen wird.
+    """
+    listing = target.parent / "tonfolge.txt"
+    lines = []
+    for index, (key, path, seconds) in enumerate(pieces):
+        padded = path.parent / f"{index:02d}-{key}-mit-pause.wav"
+        run_ffmpeg(
+            [
+                "-i",
+                str(path),
+                "-af",
+                f"apad=pad_dur={SCENE_TAIL}",
+                "-t",
+                f"{seconds:.3f}",
+                str(padded),
+            ]
+        )
+        lines.append(f"file '{padded.as_posix()}'")
+    listing.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy", str(target)])
+
+
 def audio_duration(path: Path) -> float:
     """Wie lang eine Tondatei ist, in Sekunden."""
     binary = shutil.which("ffprobe")
@@ -553,6 +672,192 @@ def orbit(
 
     print(f"  {total} Bilder aufgenommen")
     return Shot(frames=frames, count=total, viewport=viewport_rect(window))
+
+
+def record(
+    window: QWidget,
+    app: QApplication,
+    frames: Path,
+    start: int,
+    count: int,
+    step: Callable[[int, int], None],
+) -> int:
+    """``count`` Bilder aufnehmen und dabei je Bild ``step`` aufrufen.
+
+    Der gemeinsame Kern aller Szenen. ``step`` bekommt Nummer und Gesamtzahl
+    und stellt die Welt für dieses eine Bild ein — Kamera, Parameter, was auch
+    immer die Szene bewegt. Zurück kommt die nächste freie Bildnummer, damit
+    die Szenen fortlaufend in **einen** Ordner schreiben und ffmpeg am Ende
+    einen einzigen Aufruf braucht.
+    """
+    frames.mkdir(parents=True, exist_ok=True)
+    screen = window.screen() or QApplication.primaryScreen()
+    for index in range(count):
+        step(index, count)
+        app.processEvents()
+        window.screen()
+        screen.grabWindow(window.winId()).save(str(frames / f"{start + index:05d}.png"))
+    return start + count
+
+
+def orbit_step(window: QWidget, app: QApplication, zoom: float, turns: float) -> StepFn:
+    """Eine Kreisbahn um den Blickpunkt, als Schrittfunktion für :func:`record`.
+
+    Dieselbe Rechnung wie in :func:`orbit`, nur portionsweise: die Kamera wird
+    gesetzt statt gedreht, damit sich über hundert Bilder nichts aufsummiert.
+    """
+    viewport = window.viewport  # type: ignore[attr-defined]
+    plotter = viewport.plotter
+    viewport.reset_camera()
+    settle(app, 20)
+    camera = plotter.camera
+    focal = tuple(float(value) for value in camera.focal_point)
+    position = tuple(float(value) for value in camera.position)
+    offset_x, offset_y = position[0] - focal[0], position[1] - focal[1]
+    radius = math.hypot(offset_x, offset_y) * zoom
+    height = focal[2] + (position[2] - focal[2]) * zoom
+    start_angle = math.atan2(offset_y, offset_x)
+
+    def step(index: int, total: int) -> None:
+        angle = start_angle + 2.0 * math.pi * turns * index / max(1, total)
+        camera.position = (
+            focal[0] + radius * math.cos(angle),
+            focal[1] + radius * math.sin(angle),
+            height,
+        )
+        redraw = getattr(viewport, "_redraw_shadows", None)
+        if callable(redraw):
+            redraw()
+        plotter.render()
+
+    return step
+
+
+def morph_step(
+    window: QWidget,
+    app: QApplication,
+    session: Any,
+    name: str,
+    span: tuple[float, float],
+) -> StepFn:
+    """Einen Parameter über die Szene laufen lassen — und wirklich rechnen.
+
+    Der Wert wird gesetzt, das Dokument neu ausgewertet und erst dann das Bild
+    genommen. **Kein Dehnen**: eine skalierte Aufnahme würde man an den
+    Bohrungen sofort erkennen, die dabei oval werden. Gemessene 0,08 Sekunden
+    je Durchgang machen das als Bewegung überhaupt erst möglich.
+
+    Ausgewertet wird synchron über ``evaluate_now`` und nicht über den
+    Arbeitsfaden: bei dreißig Bildern in der Sekunde wäre sonst jedes zweite
+    aufgenommen, bevor die Szene fertig gerechnet ist. Der Parameter wandert
+    dabei direkt ins Dokument statt über ``change_parameter``, weil jeder
+    Zwischenwert sonst eine eigene Transaktion wäre — der Verlauf stünde am
+    Ende der Szene mit hundert Einträgen da, die niemand je zurücknehmen will.
+    Gezeigt wird dasselbe, was beim Drehen am Wertfeld zu sehen ist.
+    """
+    import dataclasses
+
+    document = session.project.document
+    low, high = span
+    viewport = window.viewport  # type: ignore[attr-defined]
+    plotter = viewport.plotter
+    camera = plotter.camera
+    focal = tuple(float(value) for value in camera.focal_point)
+    start = tuple(float(value) for value in camera.position)
+
+    def step(index: int, total: int) -> None:
+        # Sinus statt linear: die Bewegung beginnt und endet ruhig, statt
+        # anzuspringen und abrupt zu stehen.
+        share = 0.5 - 0.5 * math.cos(math.pi * index / max(1, total - 1))
+        value = low + (high - low) * share
+        parameters = document.parameters
+        existing = parameters.get(name)
+        if existing is None:
+            return
+        parameters[name] = dataclasses.replace(existing, value=value)
+        session.projectChanged.emit()
+        session.evaluate_now()
+        # Die Kamera weicht mit, sonst wächst das Teil aus dem Bild.
+        #
+        # **Nicht über ``reset_camera``**: das passt bei jedem Bild neu ein und
+        # springt dabei, weil der Hüllquader sich sprunghaft ändert, sobald ein
+        # Baustein umzieht. Ein glatter Faktor auf den Abstand hält das Teil im
+        # Bild und die Bewegung ruhig. Im Hochformat ist es der Unterschied
+        # zwischen einem Gehäuse und einem angeschnittenen Gehäuse.
+        away = 1.0 + (value / low - 1.0) * 0.8
+        camera.position = (
+            focal[0] + (start[0] - focal[0]) * away,
+            focal[1] + (start[1] - focal[1]) * away,
+            focal[2] + (start[2] - focal[2]) * away,
+        )
+        redraw = getattr(viewport, "_redraw_shadows", None)
+        if callable(redraw):
+            redraw()
+        plotter.render()
+
+    return step
+
+
+def hold_step(window: QWidget, app: QApplication) -> StepFn:
+    """Stehen bleiben — für Szenen, in denen der Text die Arbeit macht."""
+    plotter = getattr(getattr(window, "viewport", None), "plotter", None)
+
+    def step(index: int, total: int) -> None:
+        if plotter is not None:
+            plotter.render()
+
+    return step
+
+
+def shoot_storyboard(
+    window: QWidget,
+    app: QApplication,
+    session: Any,
+    frames: Path,
+    spoken: list[tuple[str, Path, float]],
+    zoom: float = 1.0,
+) -> Shot:
+    """Alle Szenen des Drehbuchs hintereinander aufnehmen.
+
+    Die Bilder landen fortlaufend nummeriert in **einem** Ordner — ffmpeg
+    bekommt am Ende eine einzige Folge und muss nichts zusammensetzen.
+
+    Am Schluss steht der Parameter wieder auf seinem Anfangswert. Ohne das
+    beginnt der zweite Durchgang dort, wo der erste aufgehört hat, und das
+    Hochformat zeigte ein Gehäuse, das schon breit ist und dann noch breiter
+    wird.
+    """
+    reset_morph(session)
+    total = 0
+    for key, _path, seconds in spoken:
+        count = max(1, round(seconds * FPS))
+        if key == "morph":
+            step = morph_step(window, app, session, MORPH_PARAMETER, MORPH)
+        elif key == "parameters":
+            step = hold_step(window, app)
+        else:
+            # Aufmacher und Abspann drehen, aber nur ein Stück weit: eine volle
+            # Umdrehung in vier Sekunden sieht aus wie ein Ausstellungsstück im
+            # Schaufenster.
+            step = orbit_step(window, app, zoom, turns=0.35)
+        total = record(window, app, frames, total, count, step)
+        print(f"  {key:12s} {count:4d} Bilder")
+    reset_morph(session)
+    settle(app, 20)
+    return Shot(frames=frames, count=total, viewport=viewport_rect(window))
+
+
+def reset_morph(session: Any) -> None:
+    """Den bewegten Parameter auf seinen Anfangswert zurückstellen."""
+    import dataclasses
+
+    parameters = session.project.document.parameters
+    existing = parameters.get(MORPH_PARAMETER)
+    if existing is None:
+        return
+    parameters[MORPH_PARAMETER] = dataclasses.replace(existing, value=MORPH[0])
+    session.projectChanged.emit()
+    session.evaluate_now()
 
 
 def encode_landscape(shot: Shot, target: Path, audio: Path | None = None) -> None:
@@ -688,13 +993,10 @@ def main() -> int:
     # gerechnet sind.
     language = "de"
     print("Sprachausgabe:")
-    raw = out / f"stimme-{language}-roh.wav"
+    spoken = speak_storyboard(language, out)
     audio = out / f"stimme-{language}.wav"
-    spoken = speak(SCRIPT[language], language, raw)
-    polish(raw, audio)
-    # Ein Nachlauf, damit das Bild nicht auf der letzten Silbe endet.
-    seconds = spoken + 1.2
-    print(f"  {spoken:.1f} s gesprochen, {seconds:.1f} s Video")
+    join_audio(spoken, audio)
+    print(f"  zusammen {sum(entry[2] for entry in spoken):.1f} s")
 
     load_operations()
     app = QApplication.instance() or QApplication([])
@@ -726,14 +1028,16 @@ def main() -> int:
     # am ``QtInteractor`` hängen, und der Orientierungswürfel läge im zweiten
     # Durchgang quer über dem Modell (siehe ``release_viewport``).
     print("Aufnahme quer:")
-    landscape = orbit(window, app, frames / "landscape", seconds=seconds)
+    landscape = shoot_storyboard(window, app, session, frames / "landscape", spoken)
 
     print("Aufnahme hoch:")
     show_panels(window, False)
     hide_orientation_widget(window)
     window.resize(*PORTRAIT)
     settle_resize(window, app)
-    portrait = orbit(window, app, frames / "portrait", seconds=seconds, zoom=PORTRAIT_ZOOM)
+    portrait = shoot_storyboard(
+        window, app, session, frames / "portrait", spoken, zoom=PORTRAIT_ZOOM
+    )
     show_panels(window, True)
 
     print("Kodierung:")
@@ -741,8 +1045,8 @@ def main() -> int:
     encode_portrait(
         portrait,
         out / "solidon3d-hoch-1080x1920.mp4",
-        headline="Vom Chat zum Bauteil",
-        sub="Parametrisch. Offline. Ohne CAD-Studium.",
+        headline="Ein Maß ändern",
+        sub="Alles andere wandert mit.",
         audio=audio,
     )
 
