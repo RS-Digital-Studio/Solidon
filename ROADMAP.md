@@ -3682,3 +3682,95 @@ Was die Durchsicht **bestätigt** hat: die vier Funde vom 05.08. sind zu.
 am Mund der Bohrung, und gepickt wird mit `vtkCellPicker`. Die Suite läuft
 grün (3393), Lint und Typprüfung ebenso; der Abriss im Lauf am Stück ist
 weiter der bekannte native, kein Testfehler.
+
+## Alle Operationen und die fremden Programme aus Kundensicht (09.08.2026)
+
+Jede der 77 registrierten Operationen einmal so gefahren, wie ein Kunde sie
+startet: Menüeintrag, Dialog mit seiner Vorbelegung, bestätigen — 92 Läufe
+über den echten Stapel, die kritischen davon noch einmal durch die laufende
+Oberfläche. Dazu die vier fremden Programme mit den Installationen dieser
+Maschine.
+
+**73 Läufe liefen vollständig durch, 19 hielten an** — fünfzehn davon zu Recht
+und mit einem Satz, der weiterhilft („Der gewählte Körper ist ein Netz. Exakte
+Körper kommen aus einer STEP-Datei …"). Was übrig bleibt:
+
+- [ ] **Neu vernetzen zerstört das Netz und meldet, die Form sei unverändert.**
+      Aus 12 Dreiecken werden 36 864, und der Quader ist danach nicht mehr
+      geschlossen und zerfällt in drei Komponenten: `remesh` baut das Ergebnis
+      von `subdivide_to_size` mit `process=False` zusammen, die Punkte werden
+      also nie verschweißt. Der einzige Befund lautet „Das Netz wurde feiner
+      unterteilt; die Form ist unverändert" — geprüft hat das niemand.
+      Die Folge ist gemessen: die nächste Differenz fällt auf die Voxelstufe,
+      und aus 40 × 30 × 10 werden 40,18 × 30,39 × 10,20. Wer danach eine
+      Passung baut, baut sie um bis zu vier Zehntel daneben.
+- [ ] **`split_plane` legt ein leeres Objekt an, wenn die Ebene nicht
+      schneidet.** Der Dialog belegt `position = 0.0` vor, der Quader steht auf
+      z = 0 — bestätigen ergibt „Quader A" mit 0 mm³ und null Dreiecken im
+      Objektbaum, ohne einen Ton. Der Zwilling `split_pinned` hält bei
+      derselben Lage mit „Diese Ebene teilt das Objekt nicht" an. Zwei
+      Operationen, eine Lage, gegensätzliche Antwort.
+- [ ] **`create_from_scad` umgeht die Aufbereitung der Eingangsstufe.** Was
+      OpenSCAD liefert, ist ein STL mit doppelten Punkten; über `load` wird es
+      verschweißt und gemeldet („Doppelte Punkte wurden verschweißt"), über
+      diesen Weg nicht. Ein Ø-12-Zylinder kommt als **252 lose Dreiecke** in
+      die Szene, nicht geschlossen. Aufgefangen wird das erst von der
+      Rückfallkette der nächsten Booleschen („gelang erst nach dem
+      Verschweißen"); wer stattdessen exportiert, exportiert den Scherbenhaufen.
+- [ ] **`plug_hole` auf einem Körper ohne Bohrung tut nichts und sagt nichts.**
+      Dieselbe Lage bei den Bausteinen meldet „Die Vereinigung hat nichts
+      hinzugefügt — Position prüfen". Auch `repair` an einem gesunden Netz
+      bleibt stumm.
+- [ ] **Sieben Operationen für exakte Körper sind bei einem Netz anklickbar.**
+      Verrunden, Fase, Formschräge, Exakt aushöhlen, Fläche versetzen, In ein
+      Netz umwandeln, Tasche schneiden. `_refresh_actions` fragt nur, wie viele
+      Objekte gewählt sind, nie welcher Bauart sie sind — dabei steht
+      `SceneObject.kind` daneben. Der Kunde füllt den Dialog aus und erfährt
+      danach, dass die Operation hier nie ging.
+- [ ] **Leerer OpenSCAD-Quelltext meldet einen Übersetzungsfehler.** „OpenSCAD
+      konnte den Quelltext nicht übersetzen" für ein leeres Feld; die
+      Beschriftungs-Operationen sagen an derselben Stelle „Ohne Text gibt es
+      nichts anzulegen".
+
+### Die fremden Programme, alle vier real aufgerufen
+
+| Programm | Stand |
+|---|---|
+| OpenSCAD 2021.01 | gefunden, Quelltextprüfung greift, Rendern in 0,2 s — aber siehe oben |
+| PrusaSlicer 2.9.6 | Ende zu Ende: 21,0 min · 4,17 g · 1367 mm, mit 3MF wie mit STL |
+| ElegooSlicer 1.5.3.4 | Ende zu Ende: 21,6 min · 4,88 g · 100 Schichten — **nur mit Pfaden** |
+| CuraEngine 5.13.0 | **scheitert immer** über Solidons eigenen Weg |
+| Ollama qwen3:14b | Chat Ende zu Ende in 71 s, Vorschlag als eine Transaktion |
+| ComfyUI | nicht gestartet; `reachable()` meldet es sauber, nichts hängt |
+
+- [ ] **CuraEngine bekommt ein 3MF und kann keines lesen.** Der
+      Druckeinstellungs-Dialog schreibt über `write_assembly` immer eine
+      3MF-Baugruppe, unabhängig von `setup.flavour`, und `slice_model` reicht
+      sie unverändert weiter. Derselbe Würfel als STL läuft durch (20,9 min,
+      1998 mm). Der Roadmap-Punkt „Für Cura schreibt die Übergabe STL" aus der
+      Cura-Kette ist damit nicht mehr erfüllt — die Umstellung auf die
+      Baugruppe hat ihn überfahren. Die Tests decken es nicht ab: sie prüfen
+      `slice_model` nur gegen Attrappen.
+- [x] Der offene Punkt „`machine_profile` muss ein Pfad sein" ist bestätigt und
+      erklärt den ganzen Rest: mit Namen endet der Lauf in
+      `Slic3r::CLI::run found error`, mit Pfaden aus der Profilsuche läuft er.
+      Die Oberfläche gibt Pfade, deshalb trifft es nur, wer die Verträge direkt
+      benutzt.
+
+### Und was das Modell beim Chatten anrichtet
+
+Die Anfrage „Quader 30 × 20 × 10 und ein 5-mm-Loch mittig durch" ergab drei
+Schritte, zwei Operationen, eine Transaktion — und ein Loch **an der Ecke**.
+`create_box` legt den Quader um den Ursprung (−15 … 15), das Modell rechnete
+mit einer Ecke im Ursprung und schickte `x = 15, y = 10`. Abgetragen wurden
+53 statt 212 mm³, also ein Viertel. Danach schrieb der Agent: „Das Loch ist
+durchgehend und mittig positioniert."
+
+- [ ] **Keine Prüfung schlägt an, wenn ein Schnittwerkzeug den Körper nur
+      streift.** `checks.check` meldete zwei verwaiste Merkmale und sonst
+      nichts. Bei der Vereinigung gibt es den Fall längst („hat nichts
+      hinzugefügt"); bei der Differenz fehlt er.
+- [ ] **Der Steckbrief nennt keine Grenzen des Hüllquaders**, nur Flächenmitten
+      — aus `face_5 bei (−15, 0, 5)` muss das Modell selbst schließen, wo die
+      Mitte liegt. Ein Satz „liegt von … bis …" je Objekt kostet nichts.
+      Danach die Agenten-Suite, vorher und nachher, wie es die Regel verlangt.
