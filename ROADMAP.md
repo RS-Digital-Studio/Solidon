@@ -3593,3 +3593,42 @@ analysieren). Das ist Stoff für die Regelsammlung oder den Prompt —
 eine Regeländerung mit Messung vorher/nachher, nicht für heute
 nebenbei. Gegen Anthropic ist die Suite noch nicht gefahren (kein
 Schlüssel hinterlegt); der Lauf steht aus, sobald einer da ist.
+
+## Die Agent-Vertiefung durchgesehen und behoben (09.08.2026)
+
+Zwei Reviewer über die zwölf Commits, gegen die 22 Regeln und den Bauplan —
+über vierzig Funde, alle behoben oder begründet vertagt. Die vier schweren:
+
+- **Der Rückgängig-Knopf der Übernommen-Leiste nahm die falsche Transaktion
+  zurück.** `History.undo` kennt nur „die oberste"; lag inzwischen etwas
+  anderes obenauf, zerstörte der Knopf fremde Arbeit und ließ die
+  versprochene stehen — und die Leiste überlebte sogar den Projektwechsel.
+  Sie hängt jetzt am Dokument (`_refresh_applied_bar`), der Knopf prüft
+  selbst und sagt sonst an, statt zu löschen.
+- **VTK rendert nie wieder im Arbeiter-Thread.** Die Ansichten entstehen in
+  `propose_async` im Hauptthread, der Arbeiter liest nur Bytes — die
+  Absturzfamilie aus dem Projektgedächtnis bekommt keinen dritten Fall.
+- **Ein Zug aus Druckziel und Rücknahme war unannehmbar.** Die
+  Misch-Schranke kannte `print_target` nicht; jetzt tragen alle drei
+  Stellen dieselbe Bedingung (`Proposal.creates_something`).
+- **Der genannte Menüort stimmte für 72 von 77 Operationen nicht** — es
+  fehlten die Untermenü-Ebenen. `menu_path` im Register baut den vollen
+  Weg, und ein Test hält ihn Ebene für Ebene an der wirklich gebauten
+  Leiste fest.
+
+Dazu die Auskunftsfunde (Herkunftszeile je Analyseart statt einer für alle,
+die Kurzsuche rechnet auf derselben Skala wie die Op, Profil zieht beim
+Druckzielwechsel mit, unbekannte Objekt-IDs werden benannt und gezählt),
+die Fernsteuerung trägt jetzt bei allen schreibenden Zusatzwerkzeugen den
+Herkunftsvermerk und behauptet keinen Erfolg mehr, den es nicht gab, die
+Orientierungssuche ist dort abgelehnt, bis sie einen Arbeiter hat (5,3 s im
+Hauptthread, gemessen), reine Auskunftszüge bekommen keine
+Übernehmen/Verwerfen-Leiste über „Keine Änderung" mehr, und drei
+Zusicherungen der Tests waren offscreen Tautologien (`isVisible` →
+`isVisibleTo`). Ein gemeinsamer Topf in `new_feature_lines` verschluckte
+neue Merkmale auf einem zweiten Körper — je Objekt verglichen, mit Test.
+
+Vertagt mit Begründung: die Orientierungssuche der Fernsteuerung in einen
+Arbeiter legen; die englischen Bestands-Docstrings in fünf berührten
+Dateien (nicht aus diesem Diff — CLAUDE.md verspricht mehr, als der
+Bestand hält, eine der beiden Seiten gehört nachgezogen).

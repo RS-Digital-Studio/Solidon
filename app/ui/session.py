@@ -346,6 +346,9 @@ class Session(QObject):
         Antwort auf eine ältere wird verworfen statt gezeigt."""
         self._backend: LLMBackend | None = None
         self._selection: tuple[str, str] | None = None
+        self._pending_views: tuple[tuple[str, bytes], ...] = ()
+        """Die Ansichten des nächsten Zuges (§23) — im Hauptthread gerendert,
+        vom Arbeiter nur gelesen; VTK gehört nie in einen zweiten Thread."""
         self._accepted: dict[str, str | None] = {}
         self._rerun_pending = False
         self._dirty = False
@@ -454,42 +457,49 @@ class Session(QObject):
         self.projectChanged.emit()
         self.evaluate_async()
 
-    def change_parameter(self, name: str, value: float) -> None:
+    def change_parameter(self, name: str, value: float, origin: Origin | None = None) -> bool:
         """Eine gedrehte Zahl der Parameterleiste (§13, §15.5).
 
         Sie war lange keine Transaktion: die Leiste schrieb geradewegs ins
         Dokument. Damit war die Änderung weder rücknehmbar — ein Strg+Z nahm
         stattdessen die letzte Operation zurück — noch als Änderung erkennbar,
         und weil das Schließen nur sichert, was als geändert gilt, ging sie
-        dabei verloren.
+        dabei verloren. ``origin`` und Rückgabewert: siehe :meth:`add_fit`.
         """
         import dataclasses
 
         parameters = self.project.document.parameters
         existing = parameters.get(name)
         if existing is None or is_close(existing.value, value):
-            return
+            return False
 
         changed = dataclasses.replace(existing, value=value)
         try:
             self.history.apply(
                 f"{tr('Parameter')} {name}",
                 changes=change_for(self.project.document, parameters={name: changed}),
+                origin=origin or Origin(by="user"),
             )
         except AppError as error:
             self.failed.emit(error)
-            return
+            return False
         self._dirty = True
         self.projectChanged.emit()
         self.evaluate_async()
+        return True
 
-    def add_fit(self, fit: Fit) -> None:
+    def add_fit(self, fit: Fit, origin: Origin | None = None) -> bool:
         """Eine Passungsbeziehung ins Dokument (§14, §15.5).
 
         Wie ein Parameter reist sie als ``DocumentChange`` und ist damit
         rücknehmbar, zählt als Änderung und überlebt das Schließen. Bis hierher
         konnte sie nur der Agent anlegen — die Fernsteuerung bot das Werkzeug
         an und hatte niemanden, der es ausführt.
+
+        ``origin`` trägt die Herkunft (§26.4, §26.6 Auflage 4): ein Fernaufruf
+        ohne sie sah im Verlauf aus wie ein eigener Klick. Der Rückgabewert
+        sagt, ob wirklich etwas geschah — eine Antwort, die Erfolg behauptet,
+        während ``failed`` feuerte, ist eine Lüge an die Gegenstelle.
         """
         document = self.project.document
         if any(entry.name == fit.name for entry in document.fits):
@@ -501,27 +511,30 @@ class Session(QObject):
                     values={"name": fit.name},
                 )
             )
-            return
+            return False
         try:
             self.history.apply(
                 f"{tr('Passung')} {fit.name}",
                 changes=change_for(document, fits=[*document.fits, fit]),
+                origin=origin or Origin(by="user"),
             )
         except AppError as error:
             self.failed.emit(error)
-            return
+            return False
         self._dirty = True
         self.projectChanged.emit()
         self.evaluate_async()
+        return True
 
-    def add_parameter(self, parameter: Parameter) -> None:
+    def add_parameter(self, parameter: Parameter, origin: Origin | None = None) -> bool:
         """Ein neues Projektmaß von Hand (§13, §2.3, §15.5).
 
         Anlegen konnte bisher nur der Agent über sein Werkzeug — wer ohne
         Sprachmodell arbeitet, hatte kein Gegenstück, obwohl §2.3 verspricht,
         dass ohne KI alles außer dem Chat funktioniert. Die Leiste ändert
         Werte; das hier vergibt den Namen. Ein Undo entfernt den Parameter
-        wieder, weil er als ``DocumentChange`` reist.
+        wieder, weil er als ``DocumentChange`` reist. ``origin`` und
+        Rückgabewert: siehe :meth:`add_fit`.
         """
         parameters = self.project.document.parameters
         if parameter.name in parameters:
@@ -533,7 +546,7 @@ class Session(QObject):
                     values={"name": parameter.name},
                 )
             )
-            return
+            return False
         try:
             # Der Dialog prüft dasselbe, aber der Weg hierher ist nicht der
             # einzige — was die Grammatik nicht kennt oder im Kreis liest,
@@ -544,15 +557,19 @@ class Session(QObject):
             self.history.apply(
                 f"{tr('Parameter')} {parameter.name}",
                 changes=change_for(self.project.document, parameters={parameter.name: parameter}),
+                origin=origin or Origin(by="user"),
             )
         except AppError as error:
             self.failed.emit(error)
-            return
+            return False
         self._dirty = True
         self.projectChanged.emit()
         self.evaluate_async()
+        return True
 
-    def change_scene_profile(self, printer: str, material: str) -> None:
+    def change_scene_profile(
+        self, printer: str, material: str, origin: Origin | None = None
+    ) -> bool:
         """Drucker und Material des offenen Projekts (§12, §15.5).
 
         Beide wurden bisher genau einmal gesetzt — beim Anlegen — und danach
@@ -563,21 +580,24 @@ class Session(QObject):
         Eine Transaktion, keine Operation: es entsteht keine Geometrie. Sie
         ändert sich trotzdem — Toleranzen sind Verweise ins Materialprofil
         (§12) —, und was die Auswertung beeinflusst, gehört in den Verlauf.
+        ``origin`` und Rückgabewert: siehe :meth:`add_fit`.
         """
         document = self.project.document
         if (document.printer, document.material) == (printer, material):
-            return
+            return False
         try:
             self.history.apply(
                 _("Drucker und Material"),
                 changes=change_for(document, printer=printer, material=material),
+                origin=origin or Origin(by="user"),
             )
         except AppError as error:
             self.failed.emit(error)
-            return
+            return False
         self._dirty = True
         self.projectChanged.emit()
         self.evaluate_async()
+        return True
 
     def change_params(self, op_id: int, params: dict[str, Any]) -> None:
         """Andere Parameter für eine Operation, die schon im Stapel steht (§15.4)."""
@@ -885,6 +905,20 @@ class Session(QObject):
         if self._agent is not None and self._agent.isRunning():
             return
         self._selection = selection
+        # §23: die Ansichten entstehen HIER, im Hauptthread — VTK ist nicht
+        # threadsicher, und ein zweiter OpenGL-Kontext im Arbeiter neben dem
+        # lebenden Viewport ist genau die Familie von Abstürzen, die dieses
+        # Projekt schon zweimal gejagt hat. Zwei kleine Bilder kosten deutlich
+        # unter 200 ms (§2.8); scheitert das Rendern, läuft der Zug ohne
+        # Bilder statt gar nicht (Leitprinzip 8).
+        self._pending_views = ()
+        if backend.supports_images and self.last_result is not None:
+            from app.ui.snapshots import scene_views
+
+            try:
+                self._pending_views = scene_views(self.last_result.scene)
+            except Exception:
+                _log.warning("scene views failed, proposing without images", exc_info=True)
         self.agent_cancel.reset()
         self.agentBusyChanged.emit(True)
         worker = _AgentWorker(self, request)
@@ -900,18 +934,6 @@ class Session(QObject):
         if backend is None:  # pragma: no cover - vor dem Start des Arbeiters abgesichert
             raise AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell."))
 
-        views: tuple[tuple[str, bytes], ...] = ()
-        if backend.supports_images and self.last_result is not None:
-            # §23: die Ansichten reisen neben dem Steckbrief — aber sie sind
-            # Zugabe (Leitprinzip 8): scheitert das Offscreen-Rendern, läuft
-            # der Zug ohne Bilder statt gar nicht.
-            from app.ui.snapshots import scene_views
-
-            try:
-                views = scene_views(self.last_result.scene)
-            except Exception:
-                _log.warning("scene views failed, proposing without images", exc_info=True)
-
         agent = AgentSession(
             backend=backend,
             document=self.project.document,
@@ -921,7 +943,7 @@ class Session(QObject):
             selection=self._selection,
             cancelled=self.agent_cancel,
             progress=self.agentProgress.emit,
-            views=views,
+            views=self._pending_views,
         )
         proposal = agent.propose(request)
         preview = ProposalPreview(proposal=proposal)

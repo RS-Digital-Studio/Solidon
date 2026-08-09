@@ -364,6 +364,48 @@ def test_invalid_calls_are_counted(project: Project, profile: Profile) -> None:
     assert [draft.op for draft in proposal.drafts] == ["rotate_object"]
 
 
+def test_a_refusal_tells_the_model_the_numbers(project: Project, profile: Profile) -> None:
+    """Die Fehlertexte des Kerns tragen keine Platzhalter (§33.1).
+
+    „Der Wert liegt über dem zulässigen Höchstwert" ist der ganze Satz; was er
+    meint, steht daneben in ``values``. Die Oberfläche setzt beides zusammen,
+    die Antwort ans Modell tat es nicht — und damit war der Fehlgriff
+    unkorrigierbar: dieselbe Operation kam mit demselben Wert zurück.
+
+    Gemessen an einem echten Lauf, nachdem die Zahlen mitreisen: das Modell
+    setzte die Breite auf genau den genannten Mindestwert und schrieb dazu,
+    es habe sie „aufgrund der Systemgrenzen" gewählt.
+    """
+    agent = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        ToolCall(
+                            id="1",
+                            name="scale_object",
+                            arguments={"objects": ["obj_1"], "factor": 5000.0},
+                        ),
+                    )
+                ),
+                Reply(text="Zu groß."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    agent.propose("Mach es fünftausendmal so groß")
+
+    backend = agent.backend
+    assert isinstance(backend, ScriptedBackend)
+    answer = next(entry for entry in backend.seen[-1] if entry.role == "tool")
+    # Die Grenze gehört in die Antwort — den eigenen Wert kennt das Modell,
+    # es hat ihn geschickt.
+    assert "1000" in answer.content, "die Grenze selbst fehlte, und ohne sie rät der nächste Zug"
+
+
 def _drill() -> ToolCall:
     return ToolCall(
         id="1",
@@ -511,8 +553,13 @@ def test_tool_descriptions_carry_the_menu_place() -> None:
     """
     described = {schema["name"]: schema["description"] for schema in tools.operation_tools()}
 
-    assert "Menü: Ändern → Bohrung setzen." in described["drill_hole"]
-    assert "Menü: Erzeugen → Quader anlegen." in described["create_box"]
+    # Der volle Weg mit allen Ebenen, die die Leiste einzieht — nur Gruppe
+    # und Titel zu nennen schickte den Nutzer für 72 von 77 Ops an den
+    # falschen Ort.
+    assert "Menü: Ändern → Bohrungen → Bohrung setzen." in described["drill_hole"]
+    assert "Menü: Erzeugen → Grundformen → Quader anlegen." in described["create_box"]
+    assert "Menü: Bausteine → Verbindungen → Schraubenloch" in described["insert_screw_hole"]
+    assert "Menü: Objekt → Objekt umbenennen." in described["rename_object"]
 
 
 def test_the_prompt_makes_the_chat_a_search_box() -> None:
@@ -570,6 +617,69 @@ def test_a_lookup_case_reads_instead_of_guessing(project: Project, profile: Prof
     assert proposal.empty, "nachsehen ändert nichts"  # type: ignore[attr-defined]
 
 
+def test_a_print_target_refuses_to_mix_with_an_undo(project: Project, profile: Profile) -> None:
+    """Regel 16, beide Richtungen derselben Schranke: auch ein gewechseltes
+    Druckziel sperrt das Zurücknehmen im selben Vorschlag. Die Schranke
+    kannte das Druckziel nicht — der Zug baute einen Vorschlag, den die
+    Annahme nur noch mit einer Ausnahme quittieren konnte.
+    """
+    known = project.document.transactions[0].id
+    agent = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        ToolCall(id="1", name="set_print_target", arguments={"material": "pla"}),
+                        ToolCall(id="2", name="undo_transaction", arguments={"transaction": known}),
+                    )
+                ),
+                Reply(text="Verstanden, zwei Vorschläge."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Wechsle auf PLA und nimm das Laden zurück")
+
+    assert proposal.undo_of is None, "die Mischung wird abgelehnt, nicht gebaut"
+    assert proposal.invalid_calls == 1
+    assert agent_apply.accept(proposal, History(project.document)) is not None
+
+
+def test_an_unknown_object_id_is_an_answer_and_counts(project: Project, profile: Profile) -> None:
+    """„obj_9" war nicht von „Objekt ist weg" zu unterscheiden: der
+    Steckbrief kam schlicht leer zurück. Jetzt nennt die Antwort die
+    falschen IDs samt den vorhandenen, und der Aufruf zählt als ungültig —
+    gelesen hat er nichts.
+    """
+    agent = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        ToolCall(id="1", name="read_digest", arguments={"objects": ["obj_9"]}),
+                    )
+                ),
+                Reply(text="Dann eben nicht."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Zeig mir obj_9")
+
+    assert proposal.invalid_calls == 1
+    assert proposal.readings == [], "ein abgelehnter Aufruf hat nichts gelesen"
+    backend = agent.backend
+    assert isinstance(backend, ScriptedBackend)
+    answer = next(entry for entry in backend.seen[-1] if entry.role == "tool")
+    assert "obj_9" in answer.content and "obj_1" in answer.content
+
+
 def test_a_print_target_travels_in_the_transaction_and_back(
     project: Project, profile: Profile
 ) -> None:
@@ -594,10 +704,19 @@ def test_a_print_target_travels_in_the_transaction_and_back(
     assert project.document.material == material_before
 
 
-def test_a_geometry_refusal_is_not_an_invalid_call(project: Project, profile: Profile) -> None:
-    """Die Kennzahl trennt Schema von Geometrie: ein Aufruf, der gültig ist,
-    aber geometrisch nicht anwendbar (§15.2), zählt nicht als ungültig —
-    sonst bestrafte die Quote das Modell für eine Eigenschaft des Netzes.
+def test_an_invented_object_is_an_invalid_call(project: Project, profile: Profile) -> None:
+    """Ein Objekt, das es nicht gibt, hat das Modell erfunden — das zählt.
+
+    Hier stand die umgekehrte Erwartung, unter dem Namen „geometry refusal".
+    Die Absicht war richtig und ist es geblieben (siehe den Test darunter):
+    ein Aufruf, der an der *Geometrie* scheitert, darf die Quote nicht
+    belasten. Nur ist `obj_99` keine Eigenschaft des Netzes, sondern ein
+    Fehlgriff des Aufrufers — und weil beide denselben Pfad nahmen, zählte
+    gar keiner.
+
+    Was das kostete, zeigte `pocket_plate`: `sketch_pocket` ohne das
+    Pflichtfeld ``objects`` lief hier hindurch, und der Läufer meldete „0
+    ungültig" zu einem Zug, in dem nichts angewandt wurde.
     """
     agent = AgentSession(
         backend=ScriptedBackend(
@@ -624,7 +743,52 @@ def test_a_geometry_refusal_is_not_an_invalid_call(project: Project, profile: Pr
     proposal = agent.propose("Dreh obj_99")
 
     assert proposal.tool_calls == 1
-    assert proposal.invalid_calls == 0
+    assert proposal.invalid_calls == 1
+    assert proposal.drafts == []
+
+
+def test_a_geometry_refusal_is_not_an_invalid_call(
+    project: Project, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Kennzahl trennt Bedienfehler von Geometrie (§15.2).
+
+    Ein `GeometryError` ist ein Ergebnis der Rechnung, kein Fehlgriff des
+    Aufrufers: dass eine Boolesche Operation an einem Netz scheitert, sagt
+    nichts über das Modell. Er darf die Quote deshalb nicht belasten, auch
+    wenn er denselben Weg nimmt wie eine abgelehnte Eingabe.
+    """
+    from app.core.errors import GeometryError
+    from app.core.scene.history import History as RealHistory
+
+    def refuse(self: RealHistory, title: object, drafts: object = (), **rest: object) -> None:
+        raise GeometryError("Die Körper überschneiden sich nicht.")
+
+    monkeypatch.setattr(RealHistory, "apply", refuse)
+
+    agent = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        ToolCall(
+                            id="1",
+                            name="rotate_object",
+                            arguments={"objects": ["obj_1"], "axis": "z", "angle": 90.0},
+                        ),
+                    )
+                ),
+                Reply(text="Das ging nicht."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Dreh das Teil")
+
+    assert proposal.tool_calls == 1
+    assert proposal.invalid_calls == 0, "die Geometrie hat abgelehnt, nicht das Modell"
     assert proposal.drafts == []
 
 

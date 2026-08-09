@@ -235,6 +235,28 @@ def test_new_features_are_named_with_their_ids(profile: Profile) -> None:
     assert new_feature_lines(before, before) == []
 
 
+def test_new_features_are_compared_per_object(profile: Profile) -> None:
+    """Die IDs werden je Körper vergeben — ein gemeinsamer Topf verschluckte
+    ein frisches hole_1 auf obj_2 hinter dem gleichnamigen Bestand von obj_1.
+    """
+    bore = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 4.0, "axis": (0.0, 0.0, 1.0), "through": True},
+    )
+    first = SceneObject(id="obj_1", name="Platte", mesh=_dummy(), features={"hole_1": bore})
+    second_before = SceneObject(id="obj_2", name="Deckel", mesh=_dummy(), features={})
+    second_after = SceneObject(id="obj_2", name="Deckel", mesh=_dummy(), features={"hole_1": bore})
+    before = Scene(objects={"obj_1": first, "obj_2": second_before}, profile=profile)
+    after = Scene(objects={"obj_1": first, "obj_2": second_after}, profile=profile)
+
+    lines = new_feature_lines(before, after)
+
+    assert len(lines) == 1
+    assert "hole_1" in lines[0] and "auf obj_2" in lines[0]
+
+
 # --- fits -----------------------------------------------------------------------
 
 

@@ -23,10 +23,12 @@ from app.core.registry.params import json_schema
 from app.core.registry.registry import (
     CATEGORIES,
     FEATURE_TITLES,
+    MENU_GROUPS,
     REGISTRY,
     MenuSection,
     OperationSpec,
     Registry,
+    group_title,
 )
 from app.core.types import ParamSpec
 from app.i18n import TranslatableText, _, format_decimal
@@ -39,6 +41,46 @@ def menu_tree(registry: Registry | None = None) -> tuple[MenuSection, ...]:
         MenuSection(category=category, title=CATEGORIES[category], entries=entries)
         for category, entries in source.by_category().items()
     )
+
+
+def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
+    """Der vollständige Menüweg eines Eintrags — mit denselben Ebenen, die
+    die Menüleiste einzieht (§2.6).
+
+    Drei Staffelungen, alle aus Kern-Daten: die Gruppe aus ``MENU_GROUPS``,
+    ein Kategorie-Untermenü, wenn die Gruppe mehr als eine besetzte Kategorie
+    hat, und die Bausteingruppe aus dem Katalog. Die Werkzeugbeschreibungen
+    des Agenten nannten nur Gruppe und Titel — der Chat schickte den Nutzer
+    nach „Ändern → Bohrung setzen", während der Eintrag unter
+    „Ändern → Bohrungen → Bohrung setzen" steht; das traf 72 von 77 Ops.
+    Ein Test hält Leiste und Pfad aneinander fest.
+    """
+    source = registry or REGISTRY
+    steps = [group_title(spec.category)]
+
+    populated = {entry.category for entry in source.all()}
+    in_group = next(
+        (categories for _title, categories in MENU_GROUPS if spec.category in categories),
+        (),
+    )
+    if sum(1 for category in in_group if category in populated) > 1:
+        steps.append(str(CATEGORIES.get(spec.category, spec.category)))
+
+    # Die Bausteingruppe ist dieselbe, nach welcher der Katalog seine Kacheln
+    # ordnet — lazy importiert, weil die Bausteine ihrerseits das Register
+    # laden.
+    from app.core.knowledge.parts import GROUPS, PARTS
+    from app.core.knowledge.parts.ops import op_name
+
+    part_group = next(
+        (part.group for part in PARTS.all() if op_name(part.name) == spec.name),
+        None,
+    )
+    if part_group is not None and part_group in GROUPS:
+        steps.append(str(GROUPS[part_group]))
+
+    steps.append(str(spec.title))
+    return " → ".join(steps)
 
 
 def context_menu(feature_kind: str, registry: Registry | None = None) -> tuple[OperationSpec, ...]:

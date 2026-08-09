@@ -301,9 +301,12 @@ def new_feature_lines(before: Scene, after: Scene) -> list[str]:
     kannte er die ID der neuen Bohrung nicht und musste raten, worauf ein
     Baustein oder eine Passung zeigen soll.
     """
-    seen = {feature_id for entry in before.objects.values() for feature_id in entry.features}
     lines: list[str] = []
     for object_id, entry in after.objects.items():
+        # Je Objekt verglichen, nicht über einen gemeinsamen Topf: die IDs
+        # werden je Körper vergeben, und ein frisches hole_1 auf obj_2
+        # verschwand sonst hinter dem gleichnamigen Bestand von obj_1.
+        seen = before.objects[object_id].features if object_id in before.objects else {}
         fresh = {
             feature_id: feature
             for feature_id, feature in entry.features.items()

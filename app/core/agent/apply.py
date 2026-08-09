@@ -136,7 +136,7 @@ def _refuse_mixed(proposal: Proposal) -> None:
     dieser Lage über ``History.discardable`` nach; der Agent kann das nicht,
     also macht er zwei Vorschläge daraus.
     """
-    if not (proposal.drafts or proposal.parameters or proposal.fits or proposal.print_target):
+    if not proposal.creates_something:
         return
     raise ValidationError(
         field="undo",

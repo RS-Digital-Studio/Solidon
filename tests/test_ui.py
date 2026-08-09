@@ -2157,6 +2157,39 @@ def test_a_remote_call_says_where_it_came_from(window: MainWindow) -> None:
     assert origin.model == REMOTE_ORIGIN
 
 
+def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWindow) -> None:
+    """§2.6: der Menüort in den Werkzeugbeschreibungen kommt aus
+    ``menu_path`` — dieser Test hält ihn an der wirklich gebauten Leiste
+    fest, Ebene für Ebene. Ohne die Kopplung nannte der Chat für 72 von 77
+    Operationen einen Ort ohne die Untermenüs, die die Leiste einzieht.
+    """
+    from PySide6.QtWidgets import QMenu
+
+    from app.core.registry import REGISTRY, menu_path
+
+    def paths_of(menu: QMenu, trail: tuple[str, ...]) -> dict[QAction, str]:
+        found: dict[QAction, str] = {}
+        for action in menu.actions():
+            submenu = action.menu()
+            if submenu is not None:
+                found.update(paths_of(submenu, (*trail, submenu.title())))
+            else:
+                found[action] = " → ".join((*trail, action.text()))
+        return found
+
+    built: dict[QAction, str] = {}
+    for group in window._workspace_menus:
+        built.update(paths_of(group, (group.title(),)))
+
+    checked = 0
+    for name, action in window._op_actions.items():
+        if action not in built:
+            continue
+        checked += 1
+        assert built[action] == menu_path(REGISTRY.get(name)), name
+    assert checked >= 70, "die Kopplung deckt praktisch das ganze Register"
+
+
 def test_scene_views_render_labelled_pngs(window: MainWindow) -> None:
     """§23: zwei beschriftete Ansichten als PNG — gerendert von einem
     kurzlebigen Offscreen-Plotter, der den sichtbaren Viewport nicht anfasst.

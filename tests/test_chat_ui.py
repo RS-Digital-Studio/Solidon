@@ -136,7 +136,9 @@ def test_a_proposal_waits_for_a_decision(window: MainWindow) -> None:
     qt_app_process(window)
 
     assert window._proposal is not None
-    assert window.chat.decision.isVisible() or not window.right.isVisible()
+    # isVisibleTo statt isVisible: offscreen ohne show() ist isVisible()
+    # konstant False, und die Zusicherung wäre eine Tautologie.
+    assert window.chat.decision.isVisibleTo(window.chat)
     assert len(window.session.project.document.ops) == ops_before, "nothing applied yet"
 
 
@@ -204,8 +206,9 @@ def test_a_reversible_proposal_is_applied_without_asking(window: MainWindow) -> 
     document = window.session.project.document
     assert len(document.transactions) == transactions_before + 1
     assert window._proposal is None, "es gibt nichts mehr zu entscheiden"
-    assert window.chat.undo_button.isVisible() or not window.right.isVisible()
-    assert not window.chat.accept_button.isVisible()
+    # isVisibleTo statt isVisible — siehe oben: offscreen wäre alles False.
+    assert window.chat.undo_button.isVisibleTo(window.chat)
+    assert not window.chat.accept_button.isVisibleTo(window.chat)
     assert "Übernommen" in window.chat.summary.text()
 
     window.chat.undoRequested.emit()
@@ -254,18 +257,77 @@ def test_only_harmless_proposals_run_by_themselves(window: MainWindow) -> None:
     assert not agent_apply.auto_acceptable(undo), "eine Rücknahme bleibt eine Entscheidung"
 
 
-def test_discarding_keeps_the_conversation(window: MainWindow) -> None:
+def test_an_answer_only_turn_needs_no_decision(window: MainWindow) -> None:
+    """Regel 19 im Geist: ein reiner Auskunftszug bekommt keine
+    Übernehmen/Verwerfen-Leiste über „Keine Änderung" — er wird sofort
+    aufgezeichnet, das Gespräch behält beide Beiträge, und es gibt nichts
+    zu entscheiden.
+    """
+    import time
+
     scripted(window, Reply(text="Ich würde nichts ändern."))
 
     window.chat.input.setPlainText("Was meinst du?")
     window.chat._send()
-    qt_app_process(window)
-    window.chat.discarded.emit()
-
     document = window.session.project.document
+    application = QApplication.instance()
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        if application is not None:
+            application.processEvents()
+        if len(document.chat) >= 2:
+            break
+        time.sleep(0.01)
+    window.session.wait_for_idle()
+
     assert len(document.chat) == 2
     assert document.chat[-1].transaction_id is None
+    assert window._proposal is None, "es gibt nichts zu entscheiden"
+    assert not window.chat.decision.isVisibleTo(window.chat)
     assert window.viewport.difference is None
+
+
+def test_the_applied_bar_clears_when_something_newer_is_on_top(window: MainWindow) -> None:
+    """§26.5: die Übernommen-Leiste hängt am Dokument. Liegt eine neuere
+    Transaktion obenauf, hat ihr Rückgängig-Knopf sein Versprechen verloren —
+    die Leiste verschwindet, statt auf Klick fremde Arbeit zurückzunehmen.
+    Und ein zu spät gedrückter Knopf nimmt nie die falsche Transaktion.
+    """
+    window._applied_transaction = "t1"
+    window.chat.decision.setVisible(True)
+
+    # Ein Fernaufruf legt etwas obenauf — projectChanged räumt die Leiste.
+    window.run_remote("create_box", {"width": 10.0, "depth": 10.0, "height": 10.0})
+    assert window._applied_transaction is None
+    assert not window.chat.decision.isVisibleTo(window.chat)
+
+    # Der Selbstschutz des Knopfs selbst: die gemerkte Transaktion existiert,
+    # ist aber nicht mehr die oberste — kein Undo, nur eine Ansage.
+    window.run_remote("create_box", {"width": 12.0, "depth": 12.0, "height": 12.0})
+    transactions = window.session.project.document.transactions
+    assert len(transactions) >= 2
+    window._applied_transaction = transactions[0].id
+    before = len(transactions)
+
+    window._on_applied_undone()
+
+    assert len(window.session.project.document.transactions) == before, (
+        "der Knopf nimmt nie eine andere als die versprochene Transaktion"
+    )
+    assert window._applied_transaction is None
+
+
+def test_the_applied_bar_does_not_survive_a_new_project(window: MainWindow) -> None:
+    """Die Leiste überlebte sogar den Projektwechsel und stand mit aktivem
+    Rückgängig über einem leeren Projekt.
+    """
+    window._applied_transaction = "t1"
+    window.chat.decision.setVisible(True)
+
+    window.session.start_new()
+
+    assert window._applied_transaction is None
+    assert not window.chat.decision.isVisibleTo(window.chat)
 
 
 def test_the_key_dialog_never_shows_a_stored_key(
@@ -402,7 +464,7 @@ def test_the_proposal_shows_its_costs_and_questions(qt_app: QApplication) -> Non
     panel.show_proposal(ProposalPreview(proposal=proposal))
     assert "8 Schritte" in panel.cost_line.text()
     assert panel.questions_toggle.text() == "Rückfragen (1) …"
-    assert not panel.questions_view.isVisible()
+    assert not panel.questions_view.isVisibleTo(panel)
     panel.questions_toggle.setChecked(True)
     assert "Welches Loch?" in panel.questions_view.text()
     assert "→ hole_1" in panel.questions_view.text()

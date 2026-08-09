@@ -49,7 +49,7 @@ from app.core.agent.tools import (
     tool_schemas,
 )
 from app.core.backends.llm import LLMBackend, Message, ToolCall
-from app.core.errors import AppError
+from app.core.errors import AppError, UserError
 from app.core.knowledge import rules
 from app.core.log import get_logger
 from app.core.perceive.digest import digest, new_feature_lines
@@ -88,11 +88,31 @@ Fenster weiß (§7). Ohne ihn sieht der Nutzer bis zu acht Schritte lang nur
 einen endlosen Balken (Konzept Agent-Vertiefung 4.1)."""
 
 
+#: Unter so vielen Rest-Token geht keine Anfrage mehr hinaus: die Antwort
+#: würde mitten in einem Werkzeugaufruf abgeschnitten, und ein halber
+#: JSON-Block ist ein eigener Fehlerfall statt eines sauberen Halts.
+MIN_ANSWER_TOKENS = 512
+
+
 def _refuse(question: str, options: list[str]) -> str:
     """Ohne jemanden zum Fragen lässt sich eine mehrdeutige Anfrage nicht
     beantworten.
     """
     raise AppError(tr("Für diese Rückfrage ist niemand da."), detail=question)
+
+
+def _unknown_objects(wanted: tuple[str, ...], scene: Scene) -> str:
+    """Eine Meldung, wenn genannte Objekt-IDs nicht existieren — sonst leer.
+
+    Ohne sie war „obj_9" nicht von „Objekt ist weg" zu unterscheiden: der
+    Steckbrief kam schlicht ohne Objektzeilen zurück, und das Modell erfuhr
+    nie, dass seine ID falsch war.
+    """
+    missing = [entry for entry in wanted if entry not in scene.objects]
+    if not missing:
+        return ""
+    known = ", ".join(scene.objects) or tr("keine")
+    return f"{tr('Diese Objekte gibt es nicht')}: {', '.join(missing)}. {tr('Vorhanden')}: {known}"
 
 
 @dataclass(slots=True)
@@ -153,6 +173,9 @@ class AgentSession:
             # Budget übrig ist, ist das Meiste, das dieser Schritt noch
             # ausgeben darf.
             remaining = self.max_tokens - (proposal.input_tokens + proposal.output_tokens)
+            if remaining < MIN_ANSWER_TOKENS:
+                proposal.stopped = "tokens"
+                break
             reply = self.backend.complete(
                 messages, tools, temperature=self.temperature, max_output_tokens=remaining
             )
@@ -202,20 +225,26 @@ class AgentSession:
         name = call.name
         arguments = dict(call.arguments)
 
+        # §40: die Suite misst über ``readings``, ob eine Frage nachgesehen
+        # oder geraten wurde. Eingetragen wird erst NACH der Prüfung des
+        # jeweiligen Zweigs — ein abgelehnter Aufruf hat nichts gelesen.
         if name == ASK_USER:
             return self._ask_user(arguments, proposal), scene
-        if name in (READ_REPORT, FIND_PART, READ_DIGEST, READ_STANDARD, READ_ANALYSIS):
-            # §40: die Suite misst, ob eine Frage nachgesehen oder geraten
-            # wurde — dafür merkt sich der Vorschlag jeden lesenden Aufruf.
-            proposal.readings.append(name)
         if name == READ_REPORT:
+            proposal.readings.append(name)
             return report_text(scene, arguments.get("severity")), scene
         if name == FIND_PART:
+            proposal.readings.append(name)
             return find_part_text(arguments.get("description", "")), scene
         if name == READ_DIGEST:
             # Der Steckbrief der Arbeitskopie — mit allem, was die bisherigen
             # Schritte dieses Zuges erzeugt haben (Konzept Agent-Vertiefung 3.1).
             wanted = tuple(str(entry) for entry in arguments.get(OBJECTS_FIELD, ()) or ())
+            unknown = _unknown_objects(wanted, scene)
+            if unknown:
+                proposal.invalid_calls += 1
+                return unknown, scene
+            proposal.readings.append(name)
             return digest(scene, working, self.selection, only=wanted or None), scene
         if name == READ_STANDARD:
             return self._standard(arguments, proposal), scene
@@ -226,7 +255,10 @@ class AgentSession:
         if proposal.undo_of is not None:
             # Die Annahme lehnt die Mischung ohnehin ab (§15.4, Regel 16);
             # hier erfährt es das Modell früh genug, um sie gar nicht erst zu
-            # bauen — und in Worten, aus denen der nächste Zug folgt.
+            # bauen — und in Worten, aus denen der nächste Zug folgt. Der
+            # Aufruf zählt als ungültig: die Mechanik lehnt ihn ab, bevor
+            # gerechnet wird.
+            proposal.invalid_calls += 1
             return (
                 tr(
                     "Dieser Vorschlag nimmt bereits eine Transaktion zurück. "
@@ -262,10 +294,11 @@ class AgentSession:
         if wanted not in known:
             proposal.invalid_calls += 1
             return f"{tr('Diese Transaktion gibt es nicht')}: {wanted}"
-        if proposal.drafts or proposal.parameters or proposal.fits:
+        if proposal.creates_something:
             # Andere Richtung derselben Schranke aus ``_run`` (§15.4, Regel 16):
             # was schon angelegt ist, ließe sich nach einem Undo nicht mehr
             # vollständig zurücknehmen.
+            proposal.invalid_calls += 1
             return tr(
                 "Dieser Vorschlag legt bereits etwas an. Zurücknehmen gehört in "
                 "einen eigenen Vorschlag — erst diesen abschließen, dann zurücknehmen."
@@ -303,7 +336,12 @@ class AgentSession:
         )
         proposal.parameters[key] = parameter
         working.parameters[key] = parameter
-        return f"{tr('Parameter gesetzt')}: {key} = {parameter.value:g} {parameter.unit}"
+        # Der Steckbrief liest die ausgewertete Szene, und die entsteht erst
+        # mit der nächsten Operation — ohne den Zusatz meldete genau die
+        # Prüfschleife „setzen, nachsehen" einen Misserfolg.
+        return f"{tr('Parameter gesetzt')}: {key} = {parameter.value:g} {parameter.unit} — " + tr(
+            "im Steckbrief sichtbar ab der nächsten Operation."
+        )
 
     def _analysis(
         self, arguments: dict[str, Any], proposal: Proposal, working: Document, scene: Scene
@@ -314,6 +352,11 @@ class AgentSession:
             proposal.invalid_calls += 1
             return f"{tr('Diese Analyse gibt es nicht')}: {kind} ({', '.join(ANALYSIS_KINDS)})"
         wanted = tuple(str(entry) for entry in arguments.get(OBJECTS_FIELD, ()) or ())
+        unknown = _unknown_objects(wanted, scene)
+        if unknown:
+            proposal.invalid_calls += 1
+            return unknown
+        proposal.readings.append(READ_ANALYSIS)
         return analysis_text(
             kind, scene, working, self.profile, objects=wanted, cancelled=self.cancelled
         )
@@ -324,10 +367,12 @@ class AgentSession:
         """Drucker oder Material des Projekts wechseln (§12, §15.5).
 
         Beides reist als ``DocumentChange`` in der Transaktion des Vorschlags
-        — ein Undo nimmt es mit zurück (Regel 16). Die Auswertung im
-        laufenden Zug rechnet noch mit dem alten Profil; die Übernahme wertet
-        mit dem neuen aus, und die Verweis-Toleranzen (`auto:<material>`)
-        rechnen sich dabei von selbst um (Regel 7).
+        — ein Undo nimmt es mit zurück (Regel 16). Das Profil der Sitzung
+        zieht sofort mit: sonst widersprechen sich zwei Antworten desselben
+        Zuges — der Steckbrief nennte weiter das alte Material, und
+        ``read_analysis`` rechnete mit der alten Düse. Die Verweis-Toleranzen
+        (`auto:<material>`) lösen sich damit schon im Zug richtig um
+        (Regel 7).
         """
         from app.core.knowledge import profiles
 
@@ -343,6 +388,7 @@ class AgentSession:
             return tr("Drucker und Material sind schon so eingestellt.")
         working.printer = wanted_printer
         working.material = wanted_material
+        self.profile = profiles.make_profile(wanted_printer, wanted_material)
         proposal.print_target = (wanted_printer, wanted_material)
         return f"{tr('Druckziel geändert')}: {wanted_printer} / {wanted_material} — " + tr(
             "gilt mit der Übernahme des Vorschlags."
@@ -360,6 +406,7 @@ class AgentSession:
         if kind not in STANDARD_KINDS:
             proposal.invalid_calls += 1
             return f"{tr('Diese Tabelle gibt es nicht')}: {kind} ({', '.join(STANDARD_KINDS)})"
+        proposal.readings.append(READ_STANDARD)
         return standard_text(kind, str(arguments.get("size", "")).strip())
 
     def _fit(self, arguments: dict[str, Any], proposal: Proposal, working: Document) -> str:
@@ -412,14 +459,25 @@ class AgentSession:
             validate(spec.params, arguments)
         except AppError as error:
             proposal.invalid_calls += 1
-            return f"{tr('Ungültige Werte')}: {error.title} {error.detail or ''}".strip(), scene
+            return f"{tr('Ungültige Werte')}: {_error_text(error)}", scene
 
         before = scene
         draft = OperationDraft(op=spec.name, inputs=inputs, params=arguments)
         try:
             history.apply(spec.title, [draft])
         except AppError as error:
-            return f"{tr('Nicht anwendbar')}: {error.title} {error.detail or ''}".strip(), scene
+            # Ein Bedienfehler ist ein Aufruf, den das Modell hätte vermeiden
+            # können — er zählt wie ein ungültiger. Ein `GeometryError` nicht:
+            # dass eine Boolesche Operation an der Geometrie scheitert, ist ein
+            # Ergebnis der Rechnung und kein Fehlgriff des Aufrufers.
+            #
+            # Ohne diese Zeile unterschlug die Messung genau die häufigste
+            # Klasse: `sketch_pocket` ohne das Pflichtfeld ``objects`` lief hier
+            # hindurch, und der Läufer meldete „0 ungültig" zu einem Zug, in dem
+            # nichts angewandt wurde.
+            if isinstance(error, UserError):
+                proposal.invalid_calls += 1
+            return f"{tr('Nicht anwendbar')}: {_error_text(error)}", scene
 
         result = self._evaluate(working)
         findings = checks.check(result, before)
@@ -604,6 +662,11 @@ def standard_text(kind: str, size: str) -> str:
 
     from app.core.knowledge import standards
 
+    if kind not in _STANDARD_TABLES:
+        # Die Funktion ist öffentlich, und beide heutigen Aufrufer prüfen
+        # vorher — der dritte wird es vergessen, und ein KeyError trägt
+        # keinen Vorschlag (Regel 17).
+        return f"{tr('Diese Tabelle gibt es nicht')}: {kind} ({', '.join(_STANDARD_TABLES)})"
     table: dict[str, Any] = getattr(standards.load(), _STANDARD_TABLES[kind])
     entry = table.get(size) or table.get(size.upper())
     if entry is None:
@@ -615,6 +678,44 @@ def standard_text(kind: str, size: str) -> str:
         if key != "size" and value
     )
     return f"{kind} {entry.size}: {facts}"
+
+
+#: Was aus einem Fehler nicht in die Antwort ans Modell gehört: der Name der
+#: Operation steht schon im Aufruf, und ``constraint`` ist die Kennung der
+#: Regel, nicht ihr Inhalt.
+#:
+#: ``field`` stand hier zuerst mit dabei — als „Schemaangabe für die
+#: Oberfläche". Das war falsch, und die Messung sagte es sofort: das Modell
+#: schickte `corners=0` und las „Der Wert liegt unter dem zulässigen
+#: Mindestwert (minimum=3)", ohne zu erfahren, **welcher** Wert gemeint war.
+#: Es korrigierte daraufhin dreimal die Tiefe. Ohne den Feldnamen ist eine
+#: Grenze kein Hinweis, sondern ein Rätsel.
+_SILENT_VALUES = frozenset({"op", "constraint"})
+
+
+def _error_text(error: AppError) -> str:
+    """Ein Fehler, wie das Modell ihn braucht — mit den Zahlen darin.
+
+    Die Fehlertexte des Kerns tragen **keine Platzhalter**: „Die Operation
+    erwartet eine andere Anzahl an Objekten" ist der ganze Satz, und was er
+    meint, steht daneben in ``values`` (``expected: 1, given: 0``). Die
+    Oberfläche setzt beides zusammen; die Antwort ans Modell tat es nicht und
+    schickte nur Titel und Detail.
+
+    Damit war der häufigste Fehlgriff unkorrigierbar: `sketch_pocket` ohne das
+    Pflichtfeld ``objects`` bekam „erwartet eine andere Anzahl" zurück — ohne
+    die Auskunft, dass eines erwartet wurde und keines kam. Das Modell rief
+    danach dieselbe Operation genauso wieder auf.
+    """
+    parts = [str(error.title)]
+    if error.detail:
+        parts.append(str(error.detail))
+    facts = ", ".join(
+        f"{key}={value}" for key, value in error.values.items() if key not in _SILENT_VALUES
+    )
+    if facts:
+        parts.append(f"({facts})")
+    return " ".join(parts).strip()
 
 
 def find_part_text(description: str) -> str:

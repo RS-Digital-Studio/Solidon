@@ -57,6 +57,11 @@ ORIENTATION_CANDIDATES: Final = 24
 #: hat keinen ``ctx.seed``, also steht der Wert hier mit Namen).
 ORIENTATION_SEED: Final = 7
 
+#: Ab so viel eingespartem Stützvolumen (Anteil) gilt eine Lage als besser.
+#: Unter fünf Prozent ist der Unterschied Rauschen der groben Kurzsuche —
+#: eine „bessere Lage", die keiner ist, kostet einen umsonst gedrehten Druck.
+ORIENTATION_GAIN: Final = 0.05
+
 
 def analysis_text(
     kind: str,
@@ -80,16 +85,33 @@ def analysis_text(
         return tr("Dazu gibt es kein Objekt in der Szene.")
 
     settings = document.print_settings or resolve(profile)
-    source = tr("Herkunft: Schichtanalyse (geschätzt), nicht G-Code.")
 
+    # Regel 14 verlangt die Herkunft — und zwar die richtige: die Schätzung
+    # schneidet nie, sie ist eine Formel aus Volumen und Oberfläche, und der
+    # Rat mischt Regelwissen mit einem Geometrieanteil aus der Analyse. Eine
+    # Zeile für alle vier nannte für zwei die falsche Quelle.
+    sliced = tr("Herkunft: Schichtanalyse (geschätzt), nicht G-Code.")
     if kind == "printability":
-        return "\n".join([source, *_printability(chosen, profile)])
+        return "\n".join([sliced, *_printability(chosen, profile)])
     if kind == "estimate":
-        return "\n".join([source, _estimate(chosen, settings)])
+        return "\n".join(
+            [
+                tr("Herkunft: Formel aus Volumen und Oberfläche (intern), nicht G-Code."),
+                _estimate(chosen, settings),
+            ]
+        )
     if kind == "advice":
-        return "\n".join([source, *_advice(chosen, document, profile, settings)])
+        return "\n".join(
+            [
+                tr(
+                    "Herkunft: Regeln aus Material und Maschine, "
+                    "Geometrieanteil aus der Schichtanalyse — nicht G-Code."
+                ),
+                *_advice(chosen, document, profile, settings),
+            ]
+        )
     if kind == "orientation":
-        return "\n".join([source, *_orientation(chosen, profile, cancelled)])
+        return "\n".join([sliced, *_orientation(chosen, profile, cancelled)])
     known = ", ".join(ANALYSIS_KINDS)
     return f"{tr('Diese Analyse gibt es nicht')}: {kind} ({known})"
 
@@ -159,12 +181,17 @@ def _advice(
     ``kern.md``), also gäbe es kein Undo, das einen gesetzten Wert mitnimmt —
     der Agent nennt den Vorschlag samt Grund, der Klick bleibt beim Nutzer.
     """
-    first = next(iter(chosen.values()))
-    result = (
-        None
-        if _too_large(first)
-        else slice_body(as_mesh_data(first.mesh), layer_height=profile.printer.layer_height)
-    )
+    first_id, first = next(iter(chosen.items()))
+    lines: list[str] = []
+    if len(chosen) > 1:
+        # Der Rat gilt einem Körper, nicht der Szene — das still zu lassen
+        # hieße, dem Modell eine Projektauskunft unterzuschieben.
+        lines.append(f"{tr('Rat für')} {first_id} — {tr('weitere Körper einzeln erfragen.')}")
+    if _too_large(first):
+        lines.append(_skipped(first_id))
+        result = None
+    else:
+        result = slice_body(as_mesh_data(first.mesh), layer_height=profile.printer.layer_height)
     advice = advise_module.advise(
         settings,
         profile,
@@ -173,8 +200,9 @@ def _advice(
         fit_kinds=[fit.kind for fit in document.fits],
     )
     if not advice:
-        return [tr("Die Einstellungen passen zu Teil, Material und Drucker.")]
-    lines = [f"{entry.path}: {entry.was} → {entry.value} — {entry.reason}" for entry in advice]
+        lines.append(tr("Die Einstellungen passen zu Teil, Material und Drucker."))
+        return lines
+    lines.extend(f"{entry.path}: {entry.was} → {entry.value} — {entry.reason}" for entry in advice)
     lines.append(tr("Nenne die Vorschläge samt Grund — geändert wird über den Druckdialog."))
     return lines
 
@@ -190,16 +218,19 @@ def _orientation(
         if _too_large(entry):
             lines.append(_skipped(object_id))
             continue
+        # Ohne ``layer_height``: die Kurzsuche fährt mit derselben groben
+        # Vorgabe wie ``orient_for_print`` (SEARCH_LAYER_HEIGHT) — sonst
+        # nennt der Zug eine feinere Zahl, als der Befund der Op danach
+        # meldet, und braucht dafür das Vier- bis Fünffache der Zeit.
         found = search(
             as_mesh_data(entry.mesh),
             count=ORIENTATION_CANDIDATES,
             seed=ORIENTATION_SEED,
-            layer_height=profile.printer.layer_height,
             cancelled=cancelled,
         )
         best = found.best
         current = found.baseline
-        if best.support_volume >= current.support_volume * 0.95:
+        if best.support_volume >= current.support_volume * (1.0 - ORIENTATION_GAIN):
             lines.append(f"{object_id}: " + tr("die aktuelle Lage ist schon gut."))
             continue
         direction = ", ".join(f"{value:.2f}" for value in best.direction)
@@ -208,6 +239,6 @@ def _orientation(
             f"{best.support_volume / 1000.0:.1f} cm³ {tr('statt')} "
             f"{current.support_volume / 1000.0:.1f} cm³ "
             f"({tr('Richtung')} ({direction}), {found.tried} {tr('Kandidaten')}). "
-            + tr("Anwenden über orient_for_print.")
+            + tr("Druckoptimal ausrichten sucht selbst und kann eine andere Lage wählen.")
         )
     return lines

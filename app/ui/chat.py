@@ -6,8 +6,10 @@ Transaktion er erzeugt hat, und ein Beitrag, dessen Transaktion zurückgenommen
 wurde, wird ausgegraut statt gelöscht — er ist passiert, er gilt nur nicht
 mehr.
 
-Ein Vorschlag wird nie von selbst angewandt. Er kommt an, der Viewport zeigt,
-was sich ändern würde (§18.7), und zwei Knöpfe entscheiden. Ohne Schlüssel sagt
+Ein Vorschlag aus eindeutig umkehrbaren Operationen wird ohne Nachfrage
+übernommen (§26.5, Regel 19) — die Leiste wird dann zur Übernommen-Leiste
+mit dem einen Knopf zurück. Alles andere wartet: der Viewport zeigt, was
+sich ändern würde (§18.7), und zwei Knöpfe entscheiden. Ohne Schlüssel sagt
 das ganze Panel das in einer Zeile und hält sich heraus (§27).
 """
 
@@ -31,7 +33,7 @@ from PySide6.QtWidgets import (
 from app.core.agent.context import is_discarded
 from app.core.types import ChatEntry, Document
 from app.i18n import tr
-from app.ui.style import NORMAL
+from app.ui.style import NORMAL, set_level
 
 #: Wie ein Beitrag markiert wird, damit die Rollen ohne Farbe
 #: auseinanderbleiben (§19.1).
@@ -132,12 +134,11 @@ class ChatPanel(QWidget):
         # gab es nur als zwei Worte.
         self.cost_line = QLabel("", self)
         self.cost_line.setWordWrap(True)
-        small = QFont(self.cost_line.font())
-        small.setPointSizeF(small.pointSizeF() * 0.9)
-        self.cost_line.setFont(small)
-        # Gedämpft ist hier Stil, nicht Bedeutung (Regel 18): dieselbe
-        # Auskunft steht vollständig im Text.
-        self.cost_line.setStyleSheet(f"color: {DISCARDED_COLOUR};")
+        # Gedämpft über die Stilstufe, nicht von Hand: ``caption`` setzt
+        # Größe und die themenabhängige Farbe — eine feste Farbe ignorierte
+        # das Thema und unterlief auf hellem Grund den Kontrast. Gedämpft ist
+        # Stil, nicht Bedeutung (Regel 18): die Auskunft steht im Text.
+        set_level(self.cost_line, "caption")
 
         # Die Rückfragen samt Antworten sind Teil der Begründung des
         # Vorschlags — aufklappbar, nicht immer offen: wer sie gestellt
@@ -438,7 +439,10 @@ def costs(proposal: Any) -> str:
     steht es hier, und die Kosten daneben machen den Deckel sichtbar, bevor
     er greift.
     """
-    steps = f"{proposal.steps} {tr('Schritte') if proposal.steps != 1 else tr('Schritt')}"
+    # Eigene Schlüssel statt des Worts „Schritt": das teilte sich seinen
+    # Katalogeintrag mit dem Satzanfang der Statuszeile („Step 3/8"), und
+    # eine der beiden Stellen las zwangsläufig die falsche Schreibung.
+    steps = tr("1 Schritt") if proposal.steps == 1 else tr("{n} Schritte").format(n=proposal.steps)
     parts = [steps]
     if proposal.input_tokens or proposal.output_tokens:
         parts.append(f"{proposal.input_tokens} → {proposal.output_tokens} {tr('Token')}")

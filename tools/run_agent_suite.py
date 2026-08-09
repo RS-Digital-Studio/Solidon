@@ -66,8 +66,11 @@ class Outcome:
             return False
         if self.case.ambiguous:
             return self.asked
-        if self.case.expects_target:
-            return self.target
+        if self.case.expects_target and not self.target:
+            # Ein Veto wie die Nachbarn darunter, kein früher Erfolg: ein
+            # Fall, der Druckziel UND Erwähnung erwartet, überspränge sonst
+            # die zweite Prüfung stillschweigend.
+            return False
         if self.case.expects_reading and not (set(self.case.expects_reading) & set(self.readings)):
             # Nachsehen statt raten: eine Antwort ohne den Blick in Analyse
             # oder Tabelle ist geraten, auch wenn die Zahl zufällig stimmt.

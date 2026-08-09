@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Final
 
-from app.core.registry import REGISTRY, Registry, group_title
+from app.core.registry import REGISTRY, Registry, menu_path
 from app.core.registry import tool_schemas as op_schemas
 from app.i18n import _, tr
 
@@ -96,11 +96,12 @@ def operation_tools(registry: Registry | None = None) -> tuple[dict[str, Any], .
         # §2.6: der Chat ist auch ein Suchfeld. Der Menüort steht in der
         # Beschreibung, damit das Modell bei einer Wie-Frage sagen kann, wo
         # die Funktion im Fenster liegt — es hat sonst keine Quelle dafür.
-        place = f"{group_title(spec.category)} → {spec.title}"
+        # ``menu_path`` staffelt wie die Leiste; nur Gruppe und Titel zu
+        # nennen traf für 72 von 77 Ops den falschen Ort.
         schemas.append(
             {
                 "name": schema["name"],
-                "description": f"{schema['description']} {tr('Menü')}: {place}.",
+                "description": f"{schema['description']} {tr('Menü')}: {menu_path(spec, source)}.",
                 "input_schema": parameters,
             }
         )

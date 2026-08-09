@@ -464,6 +464,9 @@ class MainWindow(QMainWindow):
         laufender QThread ohne Referenz wird vom Speicherbereiniger mitsamt
         C++-Objekt zerstört. Ein Absturz ohne Zeile, irgendwann später."""
         self._proposal: Any = None
+        self._applied_transaction: str | None = None
+        """Die Transaktion hinter der Übernommen-Leiste (§26.5) — nur solange
+        sie die oberste ist, hält der Rückgängig-Knopf sein Versprechen."""
         """Der Agentenzug, der auf eine Entscheidung wartet (§26.5)."""
         self._manual: ManualWindow | None = None
         """Das Handbuchfenster, einmal gebaut und danach wiederverwendet."""
@@ -2738,11 +2741,26 @@ class MainWindow(QMainWindow):
         Übernommen-Leiste mit dem Weg zurück — ein Klick, derselbe Effekt
         wie vorher zwei.
         """
+        if preview.proposal.empty:
+            # Regel 19 im Geist: ein reiner Auskunftszug ist keine
+            # Entscheidung. Übernehmen/Verwerfen über „Keine Änderung"
+            # anzubieten war eine Wahl ohne Gegenstand — der Beitrag wird
+            # sofort aufgezeichnet, und nur das Gespräch bleibt.
+            self.session.discard_proposal(preview)
+            self._proposal = None
+            self.chat.show_proposal(None)
+            self.chat.show_document(self.session.project.document)
+            self._focus_chat()
+            return
         if self.settings.auto_accept_reversible and agent_apply.auto_acceptable(preview.proposal):
             transaction = self.session.accept_proposal(preview)
             self._proposal = None
+            self._applied_transaction = transaction.id if transaction else None
             self.chat.show_applied(preview, transaction.id if transaction else "")
             self.chat.show_document(self.session.project.document)
+            # Eine wartende Differenz eines abgelösten Vorschlags bliebe sonst
+            # unbeschriftet über der neuen Szene stehen.
+            self.viewport.show_difference(None)
             self.viewport.mark_preview("")
             self._focus_chat()
             return
@@ -2769,9 +2787,27 @@ class MainWindow(QMainWindow):
         self._clear_proposal()
 
     def _on_applied_undone(self) -> None:
-        """Der Rückgängig-Knopf der Übernommen-Leiste (§26.5) — derselbe Weg
-        wie Strg+Z, denn es ist dieselbe Transaktion."""
-        self.session.undo()
+        """Der Rückgängig-Knopf der Übernommen-Leiste (§26.5).
+
+        Er nimmt genau die Transaktion zurück, die die Leiste verspricht —
+        und nur, wenn sie noch die oberste ist. ``History.undo`` kennt nur
+        „die letzte": läge inzwischen etwas anderes obenauf, zerstörte der
+        Knopf fremde Arbeit und ließe die versprochene stehen. Der Fall ist
+        durch :meth:`_refresh_applied_bar` selten, aber nicht unmöglich —
+        ein Fernaufruf läuft ohne ``projectChanged``-Lücke dazwischen.
+        """
+        applied = self._applied_transaction
+        self._applied_transaction = None
+        transactions = self.session.project.document.transactions
+        if applied and transactions and transactions[-1].id == applied:
+            self.session.undo()
+        elif applied and any(entry.id == applied for entry in transactions):
+            self.announce(
+                tr(
+                    "Inzwischen liegt Neueres obenauf — das Rückgängig im Menü "
+                    "nimmt Schritt für Schritt zurück."
+                )
+            )
         self._clear_proposal()
 
     def _clear_proposal(self) -> None:
@@ -3039,6 +3075,17 @@ class MainWindow(QMainWindow):
                 return tr("Diese Analyse gibt es nicht: {kinds}").format(
                     kinds=", ".join(ANALYSIS_KINDS)
                 )
+            if kind == "orientation":
+                # Der Fernaufruf läuft im Qt-Hauptthread (WindowBridge stellt
+                # per postEvent zu), und die Orientierungssuche kostet dort
+                # Sekunden ohne Fortschritt und ohne Abbrechen — gemessen
+                # 5,3 s an der kleinen Referenzplatte. Bis sie einen Arbeiter
+                # hat, wird sie hier abgelehnt; die drei anderen Analysen
+                # bleiben unter 0,1 s (§2.8: darunter braucht es nichts).
+                return tr(
+                    "Die Orientierungssuche hielte das Fenster an — sie läuft "
+                    "über den Chat oder den Dialog „Druckoptimal ausrichten“."
+                )
             wanted = tuple(str(entry) for entry in values.get(OBJECTS_FIELD, ()) or ())
             return analysis_text(
                 kind,
@@ -3056,9 +3103,13 @@ class MainWindow(QMainWindow):
                 profiles.material(material or document.material)
             except AppError as error:
                 return f"{error.title} {error.detail or ''}".strip()
-            self.session.change_scene_profile(
-                printer or document.printer, material or document.material
+            changed = self.session.change_scene_profile(
+                printer or document.printer,
+                material or document.material,
+                origin=Origin(by="agent", model=REMOTE_ORIGIN),
             )
+            if not changed:
+                return tr("Drucker und Material sind schon so eingestellt.")
             return f"{tr('Druckziel geändert')}: {document.printer} / {document.material}"
 
         spec = REGISTRY.get(name)
@@ -3119,7 +3170,8 @@ class MainWindow(QMainWindow):
             fit = build_fit(dict(values), self.session.profile.material.id, len(document.fits))
         except ValueError as error:
             return str(error)
-        self.session.add_fit(fit)
+        if not self.session.add_fit(fit, origin=Origin(by="agent", model=REMOTE_ORIGIN)):
+            return tr("Die Passung wurde nicht angelegt — den Grund zeigt das Fenster.")
         return f"{tr('Passung angelegt')}: {fit.name} ({fit.kind}, {fit.tolerance})"
 
     def _remote_parameter(self, tool: str, values: Mapping[str, Any]) -> str:
@@ -3136,12 +3188,19 @@ class MainWindow(QMainWindow):
             number = parse_number(values.get("value", 0.0))
         except ValueError as error:
             return str(error)
+        remote = Origin(by="agent", model=REMOTE_ORIGIN)
         if tool == ADD_PARAMETER:
-            self.session.add_parameter(
-                Parameter(name=name, value=number, unit=str(values.get("unit", "mm")))
+            made = self.session.add_parameter(
+                Parameter(name=name, value=number, unit=str(values.get("unit", "mm"))),
+                origin=remote,
             )
+            if not made:
+                return tr("Der Parameter wurde nicht angelegt — den Grund zeigt das Fenster.")
             return f"{tr('Parameter angelegt')}: {name} = {number}"
-        self.session.change_parameter(name, number)
+        if name not in self.session.project.document.parameters:
+            return f"{tr('Diesen Parameter gibt es nicht')}: {name}"
+        if not self.session.change_parameter(name, number, origin=remote):
+            return tr("Der Wert ist schon so eingestellt.")
         return f"{tr('Parameter gesetzt')}: {name} = {number}"
 
     def edit_operation(self, op_id: int) -> None:
@@ -3412,9 +3471,25 @@ class MainWindow(QMainWindow):
         self.parameters.show_document(document)
         self.history_panel.show_document(document, undone=self.session.history.undone)
         self.chat.show_document(document)
+        self._refresh_applied_bar()
         self.setWindowTitle(f"{self.session.title} — {APP_NAME}")
         self._update_header()
         self._update_actions()
+
+    def _refresh_applied_bar(self) -> None:
+        """Die Übernommen-Leiste hängt am Dokument, nicht an der Zeit (§26.5).
+
+        Sobald ihre Transaktion nicht mehr die oberste ist — ein Strg+Z, ein
+        Menüklick danach, ein Projektwechsel —, hat der Rückgängig-Knopf sein
+        Versprechen verloren und die Leiste verschwindet. Ohne das überlebte
+        sie sogar ein neues Projekt und nahm auf Klick fremde Arbeit zurück.
+        """
+        if self._applied_transaction is None:
+            return
+        transactions = self.session.project.document.transactions
+        if not transactions or transactions[-1].id != self._applied_transaction:
+            self._applied_transaction = None
+            self.chat.show_proposal(None)
 
     def _update_header(self) -> None:
         """Was oben rechts steht, kommt aus Dokument und Profil.

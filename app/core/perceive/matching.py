@@ -212,7 +212,12 @@ def apply_mapping(new: dict[FeatureId, Feature], result: MatchResult) -> dict[Fe
     """
     renamed: dict[FeatureId, Feature] = {}
     reverse = {value: key for key, value in result.mapping.items()}
-    taken: set[FeatureId] = set(result.mapping) | set(result.orphaned)
+    # Auch die mehrdeutigen alten Namen bleiben gesperrt: wer eine
+    # Mehrdeutigkeit mit „Verwerfen" beantwortet, hat den Namen aufgegeben —
+    # ihn sofort neu zu vergeben ließe eine Passung auf das falsche Merkmal
+    # zeigen. Aufgelöste stehen ohnehin schon im mapping, der Zusatz ist
+    # dann folgenlos.
+    taken: set[FeatureId] = set(result.mapping) | set(result.orphaned) | set(result.ambiguous)
     for identifier, feature in new.items():
         target = reverse.get(identifier)
         if target is None:
@@ -230,8 +235,11 @@ def apply_mapping(new: dict[FeatureId, Feature], result: MatchResult) -> dict[Fe
 
 def _fresh_id(identifier: FeatureId, taken: set[FeatureId]) -> FeatureId:
     """Der nächste freie Name derselben Art: ``hole_5``, wenn bis ``hole_4``
-    alles vergeben ist."""
+    alles vergeben ist. Ein Name ohne Endziffer bekommt ein Trennzeichen —
+    aus ``face_top`` wird ``face_top_1``, nicht ``face_top1``."""
     stem = identifier.rstrip("0123456789")
+    if not stem.endswith("_"):
+        stem = f"{stem}_"
     number = 1
     while f"{stem}{number}" in taken:
         number += 1

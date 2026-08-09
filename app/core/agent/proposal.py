@@ -54,10 +54,16 @@ class Proposal:
     tool_calls: int = 0
     """Alle Werkzeugaufrufe des Zuges — der Nenner der Kennzahl aus §40."""
     invalid_calls: int = 0
-    """Aufrufe, die die Mechanik ablehnen musste, bevor gerechnet wurde:
+    """Aufrufe, die die Mechanik ablehnen musste, bevor gerechnet wurde.
+
+    Die Linie: **alles, was ohne Rechnung abgelehnt wird, zählt** —
     unbekanntes Werkzeug, schemaungültige Werte, geratene Skizzenparameter,
-    unbekannte Referenzen. Geometrische Ablehnungen (§15.2) zählen nicht —
-    die Quote misst das Modell, nicht das Netz."""
+    unbekannte Referenzen (Transaktion, Parameter, Objekt-ID, Tabelle,
+    Analyseart, Profil), die Misch-Schranke aus Regel 16 und Bedienfehler
+    beim Anwenden (``UserError``). Geometrische Ablehnungen zählen nicht:
+    dass eine Boolesche Operation am Netz scheitert, ist ein Ergebnis der
+    Rechnung und kein Fehlgriff des Aufrufers — die Quote misst das Modell,
+    nicht das Netz."""
     stopped: str = ""
     """Gesetzt, wenn eine Grenze den Lauf beendet hat: ``steps`` oder ``tokens`` (§26.5)."""
 
@@ -66,13 +72,24 @@ class Proposal:
         return bool(self.drafts)
 
     @property
+    def creates_something(self) -> bool:
+        """Ob der Vorschlag etwas anlegt oder ändert — die eine Bedingung für
+        die Misch-Schranke aus Regel 16 (§15.4).
+
+        Sie stand dreimal ausgeschrieben, und die dritte Stelle driftete ab:
+        die Schranke in der Sitzung kannte das Druckziel nicht, und ein Zug
+        aus ``set_print_target`` und ``undo_transaction`` baute einen
+        Vorschlag, den die Annahme nur noch mit einer Ausnahme quittieren
+        konnte.
+        """
+        return bool(self.drafts or self.parameters or self.fits or self.print_target)
+
+    @property
     def empty(self) -> bool:
         """Ein Vorschlag, der nur geantwortet hat — nichts anzunehmen, nichts
         zurückzunehmen.
         """
-        return not (
-            self.drafts or self.parameters or self.fits or self.print_target or self.undo_of
-        )
+        return not (self.creates_something or self.undo_of)
 
     @property
     def asked(self) -> bool:
