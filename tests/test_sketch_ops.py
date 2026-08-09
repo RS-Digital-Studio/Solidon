@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from app.core.brep.kernel import Solid, available
-from app.core.errors import AppError, ValidationError
+from app.core.errors import AppError, NeedsSolidError, ValidationError
 from app.core.registry import REGISTRY
 from app.core.scene import ResultCache, evaluate
 from app.core.scene.cancel import NeverCancelled
@@ -116,8 +116,15 @@ def test_a_pocket_on_a_mesh_says_it_needs_a_brep_body() -> None:
 
     cube = MeshData.of(trimesh.creation.box(extents=(10, 10, 10)))
     entry = SceneObject(id="obj_1", name="mesh cube", mesh=cube)
-    with pytest.raises(ValidationError):
+    # ``NeedsSolidError`` und nicht ``ValidationError``: der Titel des einen
+    # lautet „Ein Wert liegt außerhalb des zulässigen Bereichs", und hier ist
+    # kein Wert außerhalb eines Bereichs — der Körper hat die falsche Art. Im
+    # Prüfbericht von ``puppenhaus_fertig`` stand deshalb eine Meldung über
+    # Zahlen, wo keine Zahl schuld war.
+    with pytest.raises(NeedsSolidError) as raised:
         run("sketch_pocket", entry, shape="rectangle", length=5, width=5, depth=2)
+    # Regel 17: der Satz muss einen Weg nennen, nicht nur den Zustand.
+    assert "Exakt aushöhlen" in str(raised.value)
 
 
 # --- Rotieren -------------------------------------------------------------------

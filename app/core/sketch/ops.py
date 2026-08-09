@@ -20,7 +20,7 @@ from typing import cast
 from app.core.brep import edit, profiles
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
-from app.core.errors import Action, ValidationError
+from app.core.errors import Action, NeedsSolidError, ValidationError
 from app.core.registry import op_params, param, register_op
 from app.core.sketch import shapes
 from app.core.sketch.planes import frame_for, frame_of, height_to, is_feature_plane
@@ -176,14 +176,33 @@ def _created(name: str, fallback: str, solid: Solid) -> SceneObject:
 
 
 def _brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
+    """Die Eingabe und ihr exakter Körper — oder ein Satz, der weiterhilft.
+
+    Kein ``ValidationError``: dessen Titel lautet „Ein Wert liegt außerhalb des
+    zulässigen Bereichs", und hier ist kein Wert außerhalb eines Bereichs —
+    hier hat der Körper die falsche Art. Im Prüfbericht stand deshalb eine
+    Fehlermeldung über Zahlen an einer Stelle, an der keine Zahl schuld war.
+    Denselben Weg sind ``brep/ops.py`` und ``export/writer.py`` schon gegangen;
+    diese Stelle war beim Umstellen übersehen worden.
+
+    Aufgefallen an ``puppenhaus_fertig``: dort höhlt ``hollow_object`` den
+    exakten Körper aus und gibt ein Netz zurück, und die drei Taschen danach
+    liefen ins Leere. Der Satz nennt jetzt den Ausweg — ``shell_exact`` hätte
+    den Körper exakt gelassen.
+    """
     require()
     source = ctx.inputs[0]
     if not isinstance(source.mesh, Solid):
-        raise ValidationError(
-            field="in",
-            detail=_("Diese Operation braucht einen B-Rep-Körper; hier liegt ein Netz."),
-            value=source.id,
-            constraint="needs_brep",
+        raise NeedsSolidError(
+            # Ohne Platzhalter: TranslatableText löst nur den Katalog auf und
+            # formatiert nicht. Der Name reist wie überall in ``values``.
+            detail=_(
+                "Der gewählte Körper ist ein Netz. Exakte Körper kommen aus einer "
+                "STEP-Datei oder aus den Grundformen, deren Name mit Exakt beginnt; "
+                "wer aushöhlen muss, nimmt Exakt aushöhlen statt Aushöhlen."
+            ),
+            values={"name": source.name, "field": "in", "constraint": "needs_brep"},
+            object_id=source.id,
         )
     return source, source.mesh
 
