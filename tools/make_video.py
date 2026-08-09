@@ -182,6 +182,18 @@ MORPH = (70.0, 96.0)
 #: Parameternamen dem Nutzer gehören und nicht dem Code.
 MORPH_PARAMETER = "breite"
 
+#: Wie er in der Einblendung heißt.
+#:
+#: Übersetzt, obwohl der Parameter selbst deutsch heißt: im englischen
+#: Hochformat stand sonst „breite = 83 mm" unter einer Überschrift, die
+#: „Change one dimension" sagt. Die Zahl ist echt, nur ihre Beschriftung ist
+#: für den Zuschauer geschrieben — und der liest im englischen Video Englisch.
+#:
+#: Die Parameterleiste im **Querformat** bleibt davon unberührt; dort steht
+#: weiter, was im Beispielprojekt steht. Das ist kein Fehler dieses Werkzeugs,
+#: sondern der Umstand, dass es nur ein deutsches Beispielprojekt gibt.
+READOUT_LABEL = {"de": "breite", "en": "width"}
+
 #: Die feste Beschriftung des Hochformats, je Sprache.
 #:
 #: **Nicht über** ``tr()``: der Textsammler liest ``app/``, und was hier steht,
@@ -769,6 +781,7 @@ def morph_step(
     name: str,
     span: tuple[float, float],
     readout: list[str] | None = None,
+    label: str = "",
 ) -> StepFn:
     """Einen Parameter über die Szene laufen lassen — und wirklich rechnen.
 
@@ -810,7 +823,7 @@ def morph_step(
         if readout is not None:
             # Auf ganze Millimeter: eine Zahl mit zwei Nachkommastellen, die
             # dreißigmal in der Sekunde springt, ist im Video nicht zu lesen.
-            readout.append(f"{name} = {value:.0f} mm")
+            readout.append(f"{label or name} = {value:.0f} mm")
         # Die Kamera weicht mit, sonst wächst das Teil aus dem Bild.
         #
         # **Nicht über ``reset_camera``**: das passt bei jedem Bild neu ein und
@@ -850,6 +863,7 @@ def shoot_storyboard(
     frames: Path,
     spoken: list[tuple[str, Path, float]],
     zoom: float = 1.0,
+    label: str = "",
 ) -> Shot:
     """Alle Szenen des Drehbuchs hintereinander aufnehmen.
 
@@ -871,7 +885,7 @@ def shoot_storyboard(
             # bis hierher, damit der Index im Bandwurm der Wert des Bildes
             # bleibt und nicht der Wert des Bildes minus einer Szene.
             readout.extend([""] * (total - len(readout)))
-            step = morph_step(window, app, session, MORPH_PARAMETER, MORPH, readout)
+            step = morph_step(window, app, session, MORPH_PARAMETER, MORPH, readout, label)
         elif key == "parameters":
             step = hold_step(window, app)
         else:
@@ -1134,7 +1148,13 @@ def shoot_language(app: QApplication, language: str, out: Path, frames: Path) ->
     window.resize(*PORTRAIT)
     settle_resize(window, app)
     portrait = shoot_storyboard(
-        window, app, session, frames / "portrait", spoken, zoom=PORTRAIT_ZOOM
+        window,
+        app,
+        session,
+        frames / "portrait",
+        spoken,
+        zoom=PORTRAIT_ZOOM,
+        label=READOUT_LABEL.get(language, MORPH_PARAMETER),
     )
     show_panels(window, True)
 
