@@ -163,7 +163,7 @@ from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.shortcut_schemes import shortcut_for
-from app.ui.sketch_editor import SketchPanel
+from app.ui.sketch_editor import SketchPanel, Surroundings
 from app.ui.start_screen import StartScreen, accepted_path
 from app.ui.style import NORMAL, TIGHT
 from app.ui.theme import apply_theme
@@ -1473,8 +1473,14 @@ class MainWindow(QMainWindow):
 
         # Rückgängig und Wiederholen bleiben nach Ablauf offen (§2 C): wer
         # nichts mehr ändern kann, darf trotzdem zurück und wieder vor.
-        self.undo_action.setEnabled(self.session.history.can_undo)
-        self.redo_action.setEnabled(self.session.history.can_redo)
+        #
+        # Im Skizzenmodus aber nicht: dort meint Strg+Z den letzten Zug auf
+        # dem Blatt und nicht den letzten Schritt im Verlauf. Beide Kürzel
+        # gleichzeitig aktiv zu lassen wäre die schlechtere Hälfte der Wahl —
+        # Qt lässt bei zwei aktiven Belegungen derselben Taste **keine**
+        # feuern, dieselbe Falle wie bei R und C oben.
+        self.undo_action.setEnabled(self.session.history.can_undo and not drawing)
+        self.redo_action.setEnabled(self.session.history.can_redo and not drawing)
         # Dieselbe Regel für die zwei Einträge, die keine Operationen sind und
         # trotzdem einen Körper brauchen: ausgegraut statt einer modalen
         # Sackgasse nach dem Klick.
@@ -2313,6 +2319,28 @@ class MainWindow(QMainWindow):
         """Ob gerade gezeichnet wird statt betrachtet."""
         return self._sketch_panel is not None
 
+    def _sketch_surroundings(self) -> Surroundings:
+        """Was eine Zeichenfläche von der Szene wissen soll (§30.1, E1, E18).
+
+        Eine Stelle für beide Wege: den Skizzenmodus und das Skizzenfeld im
+        Operationsdialog. Getrennt gepflegt war das Feld ärmer als der Modus —
+        ohne Bauraumrand, ohne die Flächen der Körper in der Ebenenwahl, und
+        *Projizieren* meldete „kein Körper" an einem Modell, das im Fenster
+        stand.
+
+        Der Bauraum steht im Profil, es braucht also keine Rechnung — nur die
+        Zahl an der richtigen Stelle. Von den Objekten reisen die Netze mit und
+        nicht die Szene: der Zeichenbereich braucht die Kante, nicht das Objekt
+        darum.
+        """
+        volume = self.session.profile.printer.build_volume
+        result = self.session.last_result
+        return Surroundings(
+            bed=(float(volume[0]), float(volume[1])),
+            faces=tuple(self._drawable_faces()),
+            bodies=tuple(entry.mesh for entry in result.scene.objects.values()) if result else (),
+        )
+
     def start_sketch(self, op_name: str, text: str = "") -> None:
         """In den Skizzenmodus wechseln, für die Operation, die sie verbraucht.
 
@@ -2328,19 +2356,7 @@ class MainWindow(QMainWindow):
         """
         if self._sketch_panel is not None:
             return
-        panel = SketchPanel(text, self._parameter_values(), self)
-        # Die Zeichenfläche ist der früheste Ort, an dem ein zu großes Teil
-        # auffallen kann (E1). Der Bauraum steht im Profil, also braucht es
-        # dafür keine neue Rechnung — nur die Zahl an die richtige Stelle.
-        volume = self.session.profile.printer.build_volume
-        panel.set_bed((float(volume[0]), float(volume[1])))
-        panel.offer_faces(self._drawable_faces())
-        # Woraus projiziert werden kann (E18). Die Netze, nicht die Szene: der
-        # Zeichenbereich braucht die Kante, nicht das Objekt drumherum.
-        result = self.session.last_result
-        panel.offer_bodies(
-            [entry.mesh for entry in result.scene.objects.values()] if result else []
-        )
+        panel = SketchPanel(text, self._parameter_values(), self, self._sketch_surroundings())
         self._sketch_panel = panel
         self._sketch_target = op_name
         """Leer beim freien Zeichnen über den Werkzeugzeilen-Knopf — die
@@ -3146,6 +3162,7 @@ class MainWindow(QMainWindow):
                 sources=self._source_names(),
                 parameter_values=self._parameter_values(),
                 extra=exact,
+                surroundings=self._sketch_surroundings(),
             )
             if exact is not None:
                 # Die Live-Vorschau (§18.7) muss den Kernwechsel mitmachen —
@@ -3389,6 +3406,7 @@ class MainWindow(QMainWindow):
             sources=self._source_names(),
             parameter_values=self._parameter_values(),
             features=self._feature_names(),
+            surroundings=self._sketch_surroundings(),
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —

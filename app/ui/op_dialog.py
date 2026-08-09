@@ -238,11 +238,19 @@ class OperationDialog(QDialog):
         parameter_values: Mapping[str, float] | None = None,
         features: Mapping[str, str] | None = None,
         extra: QWidget | None = None,
+        surroundings: Any = None,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
         ihren „Exakt"-Umschalter, ohne dass der Dialog seine Generik aus
-        dem Schema verliert."""
+        dem Schema verliert.
+
+        ``surroundings`` reicht die Szene an ein Skizzenfeld weiter
+        (:class:`app.ui.sketch_editor.Surroundings`) — Bauraum, Zeichenebenen
+        und Projektionsvorlagen. Ohne sie war der Editor auf diesem Weg ärmer
+        als derselbe Editor im Skizzenmodus. Als ``Any`` gehalten, damit der
+        Dialog nichts aus dem Skizzenmodul importieren muss, das er nur
+        durchreicht."""
         super().__init__(parent)
         self.spec = spec
         self.setWindowTitle(str(spec.title))
@@ -251,6 +259,9 @@ class OperationDialog(QDialog):
         self._parameter_values = dict(parameter_values or {})
         """Aufgelöste Projektparameter — der Skizzeneditor rechnet
         Maßausdrücke damit (§13, §30.1)."""
+        self._surroundings = surroundings
+        """Bauraum, Zeichenebenen und Projektionsvorlagen für ein
+        Skizzenfeld — durchgereicht, nicht benutzt."""
         given = dict(values or {})
         # Der Dialog spricht in Namen, das Dokument in Kennungen. Wer nur eine
         # Liste übergibt, bekommt die Kennungen zu sehen.
@@ -391,7 +402,7 @@ class OperationDialog(QDialog):
             # Eingabe — gezeichnet wird im Editor, das Feld fasst zusammen.
             from app.ui.sketch_editor import SketchField
 
-            return SketchField(str(start or ""), self._parameter_values, self)
+            return SketchField(str(start or ""), self._parameter_values, self, self._surroundings)
         if entry.kind == "feature":
             # Aus demselben Grund wie unten eine Liste, nur mit dem schärferen
             # Fall: „face_2" tippt niemand, der es nicht vorher irgendwo

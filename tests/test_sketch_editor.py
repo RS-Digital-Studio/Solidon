@@ -225,6 +225,50 @@ def test_a_spline_is_drawn_with_as_many_clicks_as_you_like(qt_app: QApplication)
     assert len(element.points) == 4, "so viele Punkte, wie geklickt wurde"
 
 
+def test_a_second_click_on_the_same_point_closes_the_spline(qt_app: QApplication) -> None:
+    """Der dritte Weg, einen Spline zu schließen — versprochen und nicht da.
+
+    Der Kommentar in ``place`` nannte ihn seit je („Doppelklick, Eingabetaste
+    oder ein zweiter Klick auf denselben Punkt"), und die Wirkung war eine
+    andere: der Klick hängte einen weiteren, deckungsgleichen Punkt an die
+    Kurve. Still, ohne Meldung, und wer den Griff aus einem CAD mitbringt,
+    holte sich damit einen doppelten Punkt in seinen Spline.
+
+    Gemessen wird in Bildschirmpunkten wie beim Fang: derselbe Klick liegt bei
+    einem herausgezoomten Blatt weiter weg, aber nicht anders auf dem Schirm.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+    canvas.set_tool("spline")
+
+    for x, y in ((0.0, 0.0), (20.0, 0.0), (20.0, 20.0)):
+        canvas.place(canvas._to_screen(x, y))
+    assert not canvas.sketch.elements
+
+    canvas.place(canvas._to_screen(20.0, 20.0))
+
+    assert len(canvas.sketch.elements) == 1, "der Klick schließt, statt zu sammeln"
+    assert len(canvas.sketch.elements[0].points) == 3, "und legt keinen vierten Punkt an"
+    assert not canvas._pending_world, "nichts bleibt offen"
+
+
+def test_a_click_elsewhere_keeps_the_spline_collecting(qt_app: QApplication) -> None:
+    """Die Gegenprobe: nur der Klick auf denselben Punkt schließt.
+
+    Sonst wäre aus dem einen Griff ein Spline geworden, der sich bei jedem
+    dritten Klick von selbst beendet.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+    canvas.set_tool("spline")
+
+    for x, y in ((0.0, 0.0), (20.0, 0.0), (40.0, 10.0)):
+        canvas.place(canvas._to_screen(x, y))
+
+    assert not canvas.sketch.elements
+    assert len(canvas._pending_world) == 3
+
+
 def test_a_spline_with_one_point_is_dropped(qt_app: QApplication) -> None:
     """Ein Spline durch einen Punkt ist ein Punkt — und den gibt es als
     eigenes Werkzeug. Die gesammelten Klicks fallen weg, statt eine ungültige

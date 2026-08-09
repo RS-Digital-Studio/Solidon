@@ -2268,6 +2268,78 @@ def test_the_sketch_use_dialog_lists_the_five_kinds(window: MainWindow) -> None:
     assert dialog.chosen() in names, "eine Vorauswahl steht, Eingabe genügt"
 
 
+def test_undo_in_the_sketch_mode_means_the_last_stroke(window: MainWindow) -> None:
+    """Strg+Z gehört im Skizzenmodus dem Blatt, nicht dem Verlauf.
+
+    Das Kürzel hing am Dialog um das Panel — und den Dialog gibt es nur auf
+    einem der beiden Wege. Im Skizzenmodus des Fensters lag Strg+Z damit beim
+    Verlauf und nahm die letzte **Operation** zurück, während vor dem Nutzer
+    eine Zeichenfläche stand. Aufgefallen beim Beschreiben des Kapitels, nicht
+    beim Bedienen: der Editor hat einen Rückgängig-Knopf, und wer den nimmt,
+    merkt nie etwas.
+
+    Zwei Hälften, beide nötig: das Panel bringt das Kürzel mit, und das
+    Fenster graut seine zwei Einträge im Modus aus. Ohne die zweite Hälfte
+    feuert **keine** von beiden Belegungen — Qt lässt bei zweien derselben
+    Taste keine gelten, dieselbe Falle wie bei R und C.
+    """
+    from PySide6.QtGui import QKeySequence, QShortcut
+
+    from app.ui.sketch_editor import SketchPanel
+
+    panel_keys = [
+        entry.key().toString() for entry in SketchPanel("", parent=window).findChildren(QShortcut)
+    ]
+    assert QKeySequence(QKeySequence.StandardKey.Undo).toString() in panel_keys
+
+    window.run_operation(REGISTRY.get("create_box"))
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    dialog.accept()
+    window.session.wait_for_idle()
+    assert window.session.history.can_undo, "sonst prüft das Folgende nichts"
+    assert window.undo_action.isEnabled()
+
+    window.action_sketch_free()
+    try:
+        assert not window.undo_action.isEnabled(), "im Modus gehört Strg+Z dem Blatt"
+        assert not window.redo_action.isEnabled()
+    finally:
+        window.finish_sketch(keep=False)
+
+    assert window.undo_action.isEnabled(), "und danach wieder dem Verlauf"
+
+
+def test_the_sketch_field_knows_as_much_as_the_sketch_mode(window: MainWindow) -> None:
+    """Beide Wege zum Editor bringen die Szene mit — sonst ist einer ärmer.
+
+    Der Docstring von ``SketchPanel`` sagt seit je, dass keiner der beiden Wege
+    ein Werkzeug bekommt, das der andere nicht hat. Er stimmte nicht: der
+    Skizzenmodus reichte Bauraum, Flächen und Netze herein, das Skizzenfeld im
+    Operationsdialog nichts davon. Wer aus dem Verlauf eine Skizze wieder
+    öffnete, hatte keinen Bauraumrand, keine Fläche des Körpers in der
+    Ebenenwahl — und *Projizieren* antwortete „kein Körper" an einem Modell,
+    das im Fenster stand.
+    """
+    from app.ui.sketch_editor import SketchEditorDialog, SketchField
+
+    _with_two_objects(window)
+    surroundings = window._sketch_surroundings()
+    assert surroundings.bed is not None, "der Bauraum kommt aus dem Profil"
+    assert len(surroundings.bodies) == 2, "beide Körper sind Vorlage für die Projektion"
+
+    field = SketchField("", {}, window, surroundings)
+    dialog = SketchEditorDialog("", {}, field, field._surroundings)
+    try:
+        canvas = dialog.canvas
+        assert canvas._bed == surroundings.bed
+        assert len(canvas._bodies) == 2
+        # Die drei Grundebenen stehen immer; die Flächen der Körper kommen
+        # dazu, sobald einer da ist.
+        assert dialog.panel.plane_choice.count() > 3
+    finally:
+        dialog.reject()
+
+
 def test_the_exact_twin_runs_through_the_partner_dialog(window: MainWindow) -> None:
     """Die zusammengelegten Zwillinge: derselbe Dialog, ein Umschalter, und
     erst er entscheidet den Rechenkern. Die Parameter werden auf das Schema

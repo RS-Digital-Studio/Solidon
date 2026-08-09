@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 from PySide6.QtCore import QPoint, QPointF, Qt, Signal
@@ -578,6 +578,19 @@ class SketchCanvas(QWidget):
             -(position.y() - self.height() / 2.0) / self._scale + self._centre.y(),
         )
 
+    def _on_last_pending(self, position: QPointF) -> bool:
+        """Ob der Klick auf dem zuletzt gesetzten, noch offenen Punkt liegt.
+
+        Nicht über ``_hit_point``: die angefangenen Punkte stehen noch nicht in
+        der Skizze, und gefangen wird nur, was darin steht. Gemessen wird in
+        Bildschirmpunkten und mit derselben Toleranz wie der Fang — bei einem
+        weit herausgezoomten Blatt wäre ein Weltabstand etwas anderes.
+        """
+        if not self._pending_world:
+            return False
+        screen = self._to_screen(*self._pending_world[-1])
+        return math.hypot(screen.x() - position.x(), screen.y() - position.y()) <= SNAP_PX
+
     def _hit_point(self, position: QPointF) -> int | None:
         best: tuple[float, int] | None = None
         for flat, (x, y) in enumerate(self.points()):
@@ -685,13 +698,23 @@ class SketchCanvas(QWidget):
         """
         snapped = self._hit_point(position)
         world = self.points()[snapped] if snapped is not None else self._to_world(position)
+
+        # Ein Spline endet nicht bei einer Punktzahl, sondern wenn jemand sagt,
+        # dass er fertig ist: Doppelklick, Eingabetaste oder ein zweiter Klick
+        # auf denselben Punkt. Bis dahin sammelt er.
+        #
+        # Der dritte Weg stand hier lange als Versprechen und war keiner: der
+        # Klick hängte einen weiteren, deckungsgleichen Punkt an die Kurve —
+        # still, ohne Ton, und wer den Griff aus einem CAD mitbringt, holte
+        # sich damit einen doppelten Punkt.
+        if self.tool == "spline" and self._on_last_pending(position):
+            self.finish_spline()
+            return
+
         self._pending.append(snapped if snapped is not None else -1)
         self._pending_world.append(world)
 
         if self.tool == "spline":
-            # Ein Spline endet nicht bei einer Punktzahl, sondern wenn jemand
-            # sagt, dass er fertig ist: Doppelklick, Eingabetaste oder ein
-            # zweiter Klick auf denselben Punkt. Bis dahin sammelt er.
             self.update()
             return
 
@@ -1243,13 +1266,40 @@ ACTION_KEYS: dict[str, str] = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class Surroundings:
+    """Was die Zeichenfläche von der Szene um sie herum erfährt.
+
+    Drei Angaben, drei Zwecke: der Bauraum wird als Rand eingezeichnet (E1),
+    die ebenen Flächen der Körper kommen als weitere Ebenen in die Wahl
+    (§30.1), und die Netze sind das, woraus *Projizieren* seine Kanten holt
+    (E18).
+
+    Sie stehen zusammen in einem Träger, weil sie zusammen gehören und zusammen
+    weitergereicht werden. Ohne ihn hatte der Weg über das Operationsfeld
+    nichts von allem dreien: kein Bauraum, keine Fläche des Körpers in der
+    Liste, und *Projizieren* antwortete „Es gibt keinen Körper, aus dem sich
+    projizieren ließe" — an einem Modell, das im Fenster stand. Der Docstring
+    von :class:`SketchPanel` sagt seit je, dass keiner der beiden Wege ein
+    Werkzeug bekommt, das der andere nicht hat; erst das hier macht ihn wahr.
+    """
+
+    bed: tuple[float, float] | None = None
+    """Die Grundfläche des Bauraums in Millimetern."""
+    faces: tuple[tuple[str, str, tuple[float, float, float]], ...] = ()
+    """Ebene Flächen als Zeichenebenen: Kennung, Beschriftung, Normale."""
+    bodies: tuple[Any, ...] = ()
+    """Die Netze der Szene — Vorlage für die Projektion, nicht Geometrie."""
+
+
 class SketchPanel(QWidget):
     """Zeichenfläche, Werkzeugleiste, Bedingungsliste, Statuszeile (§30.1).
 
     Der Inhalt ohne den Rahmen darum. Zwei Stellen benutzen ihn: der Dialog
     aus dem Operationsfeld und der Skizzenmodus im Fenster — und weil es
     derselbe ist, kann keiner der beiden ein Werkzeug bekommen, das der andere
-    nicht hat.
+    nicht hat. Was von der Szene dazugehört, reisen beide über
+    :class:`Surroundings` herein.
     """
 
     sketchChanged = Signal()
@@ -1260,6 +1310,7 @@ class SketchPanel(QWidget):
         text: str = "",
         parameter_values: Mapping[str, float] | None = None,
         parent: QWidget | None = None,
+        surroundings: Surroundings | None = None,
     ) -> None:
         super().__init__(parent)
         self._params = dict(parameter_values or {})
@@ -1504,6 +1555,16 @@ class SketchPanel(QWidget):
         self.constraint_list.installEventFilter(self)
         self._install_shortcuts()
 
+        # Zuletzt, weil die Flächen in die eben gebaute Ebenenwahl kommen.
+        if surroundings is not None:
+            self.set_surroundings(surroundings)
+
+    def set_surroundings(self, surroundings: Surroundings) -> None:
+        """Bauraum, Zeichenebenen und Projektionsvorlagen auf einmal setzen."""
+        self.set_bed(surroundings.bed)
+        self.offer_faces(surroundings.faces)
+        self.offer_bodies(surroundings.bodies)
+
     def set_zone_margins(self, left: int, right: int) -> None:
         """Weicht den Karten des Fensters aus (§2.5).
 
@@ -1550,6 +1611,15 @@ class SketchPanel(QWidget):
         versetzen.activated.connect(
             lambda: self.canvas.offset_selected(self.offset_distance.value())
         )
+
+        # Rückgängig gehört an das Panel und nicht an einen Rahmen darum: den
+        # Rahmen gibt es nur auf einem der beiden Wege. Im Skizzenmodus des
+        # Fensters lag Strg+Z damit beim Verlauf — es nahm die letzte
+        # Operation zurück, während vor dem Nutzer eine Zeichenfläche stand.
+        # Das Fenster graut seine beiden Einträge im Modus dafür aus.
+        undo = QShortcut(QKeySequence(QKeySequence.StandardKey.Undo), self)
+        undo.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        undo.activated.connect(self.canvas.undo)
 
         helper = QShortcut(QKeySequence(ACTION_KEYS["construction"]), self)
         helper.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
@@ -1694,12 +1764,13 @@ class SketchEditorDialog(QDialog):
         text: str = "",
         parameter_values: Mapping[str, float] | None = None,
         parent: QWidget | None = None,
+        surroundings: Surroundings | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Skizze zeichnen"))
         self.resize(860, 560)
 
-        self.panel = SketchPanel(text, parameter_values, self)
+        self.panel = SketchPanel(text, parameter_values, self, surroundings)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -1715,8 +1786,8 @@ class SketchEditorDialog(QDialog):
         layout.addWidget(self.panel, stretch=1)
         layout.addWidget(buttons)
 
-        # Undo gilt überall, auch hier (§19.2) — derselbe Griff wie im Fenster.
-        QShortcut(QKeySequence.StandardKey.Undo, self, self.panel.canvas.undo)
+        # Undo gilt überall (§19.2) — das Kürzel dafür bringt das Panel
+        # selbst mit, weil es auch ohne diesen Rahmen benutzt wird.
 
     @property
     def canvas(self) -> SketchCanvas:
@@ -1752,10 +1823,12 @@ class SketchField(QWidget):
         text: str = "",
         parameter_values: Mapping[str, float] | None = None,
         parent: QWidget | None = None,
+        surroundings: Surroundings | None = None,
     ) -> None:
         super().__init__(parent)
         self._text = text
         self._params = dict(parameter_values or {})
+        self._surroundings = surroundings
 
         self.summary = QLabel(self)
         self.summary.setWordWrap(True)
@@ -1793,7 +1866,7 @@ class SketchField(QWidget):
         self.summary.setText(f"{len(sketch.elements)} {tr('Elemente')} · {state}")
 
     def _edit(self) -> None:
-        dialog = SketchEditorDialog(self._text, self._params, self)
+        dialog = SketchEditorDialog(self._text, self._params, self, self._surroundings)
         if dialog.exec() != SketchEditorDialog.DialogCode.Accepted:
             return
         self.set_text(dialog.sketch_text())
