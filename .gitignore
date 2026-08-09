@@ -17,6 +17,10 @@ venv/
 /.venv-video/
 /.voices/
 
+# Die erzeugten Videos. Sie entstehen aus tools/make_video.py neu, und ein
+# Repository ist kein Ablageort für Megabytes, die ein Aufruf wiederherstellt.
+/marketing/video/
+
 # --- Werkzeuge ---------------------------------------------------------------
 .pytest_cache/
 .mypy_cache/
