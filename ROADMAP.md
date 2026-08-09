@@ -2654,9 +2654,39 @@ Platz, an dem die echten stehen.
 
       Kein Maß ist gefallen, also bleibt die Änderung — die Rücknahmeregel aus
       `AGENTS.md` greift nicht. Gewonnen haben `on_bed`, `orient` (vorher
-      Zeitüberschreitung) und `split`; verloren `pocket_plate` und
-      `handrail_bend`, die jetzt Geometrie zusammensetzen, wo eine Skizze
-      gereicht hätte.
+      Zeitüberschreitung) und `split`.
+
+      **Nachgesehen bei den zwei, die als verloren dastanden** — und eine der
+      beiden Aussagen war falsch:
+
+      - `handrail_bend` fiel nur unter Prompt 2 und wählt seither wieder
+        `sketch_sweep` mit `shape=circle, length=12, bend_radius=60,
+        bend_angle=90`. Das ist richtig; bei einem Kreis ist `length` das
+        Querschnittsmaß. Und der Ausrutscher davor war geometrisch nicht
+        einmal falsch: `sketch_revolve` hat einen Winkel und einen
+        Achsabstand, ein Ø12-Kreis bei 54 mm und 90° ergibt denselben Bogen.
+        Der Fall akzeptiert nur `sketch_sweep`, was vertretbar ist.
+      - `pocket_plate` war **nie gewonnen** — es stand schon vorher rot, und
+        die Ursache lag nicht bei der Op-Wahl. Ein Mitschnitt des Zuges zeigte
+        sie: `create_box` erzeugt ein Netz, `sketch_pocket` scheitert daran
+        viermal, und die einzige Auskunft lautete „Die Auswertung hält bei
+        dieser Operation an". Der Grund stand die ganze Zeit im Prüfbericht —
+        „Der gewählte Körper ist ein Netz" — und kam nur nicht an. Das Modell
+        drehte deshalb an den Zahlen statt am Körpertyp.
+
+      Behoben an zwei Stellen. `checks.check` reicht die Befunde der
+      anhaltenden Operation durch. Und die Antwort ans Modell nimmt die
+      `values` mit: die Fehlertexte des Kerns tragen keine Platzhalter, „Der
+      Wert liegt unter dem zulässigen Mindestwert" ist der ganze Satz, und was
+      er meint, stand daneben. Der Feldname gehört dabei ausdrücklich dazu —
+      ohne ihn korrigierte das Modell dreimal die Tiefe, während `corners` die
+      Grenze riss.
+
+      Danach fährt derselbe Fall so: `create_brep_box` beim ersten Versuch
+      exakt, `corners=0` → „field=corners, minimum=3" → korrigiert, ein
+      Objektname statt einer ID → „missing=['deckel']" → korrigiert, und
+      `sketch_pocket` läuft. Vier Schritte statt fünf, und jede Meldung führt
+      zu einer gezielten Korrektur statt zu einem neuen Versuch.
 
       **Wogegen gemessen wurde**, weil es sonst später niemand zuordnen kann:
       der Stand vor `b8829c3` und `ecf4544`. Beide ändern Kontextaufbau,

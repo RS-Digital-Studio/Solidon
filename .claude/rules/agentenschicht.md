@@ -108,6 +108,27 @@ Wer die Werkzeugmenge ändert, prüft diese Zahl nach: `prompt_eval_count` in
 Ollamas Antwort sagt, wie viel wirklich ankam. Liegt es bei etwa der Hälfte des
 Fensters, wurde gekürzt.
 
+## Eine Ablehnung muss sagen, was zu ändern ist
+
+Das Modell korrigiert nur, was es erfährt. Zwei Stellen haben das lange
+verschluckt, und beide sahen aus wie Fehlerbehandlung:
+
+- **Die Kette hält an, und der Grund bleibt im Bericht.** `checks.check`
+  meldete „Die Auswertung hält bei dieser Operation an" — der Satz, der
+  weiterhilft („Der gewählte Körper ist ein Netz"), stand daneben und ging
+  nicht mit. Gemessen an `pocket_plate`: viermal dieselbe Operation mit
+  anderen Zahlen, statt einmal den Körpertyp zu wechseln. Die Befunde der
+  anhaltenden Operation reisen jetzt mit.
+- **Die Fehlertexte des Kerns tragen keine Platzhalter** (§33.1). „Der Wert
+  liegt unter dem zulässigen Mindestwert" ist der ganze Satz; die Zahlen
+  stehen in `values`. Die Oberfläche setzt beides zusammen, die Antwort ans
+  Modell tat es nicht. **Der Feldname gehört ausdrücklich dazu** — ohne ihn
+  korrigierte das Modell dreimal die Tiefe, während `corners` die Grenze riss.
+
+Wer eine neue Meldung ans Modell schreibt, prüft sie an derselben Frage: Steht
+darin, *welcher* Wert *welche* Grenze reißt? Ein Satz ohne diese zwei Angaben
+erzeugt einen zweiten Versuch, keinen besseren.
+
 ## Sicherheit (§32)
 
 Projektdateien wandern zwischen Leuten — eine fremde Datei darf nichts
