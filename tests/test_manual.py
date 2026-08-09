@@ -284,6 +284,50 @@ def test_markup_leaves_asterisks_inside_code_alone() -> None:
     assert markup.to_html("`a * b`") == "<p><code>a * b</code></p>"
 
 
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_no_page_prints_its_own_markup(language: str) -> None:
+    """Keine Auszeichnung darf als Sternchenpaar im Handbuch landen.
+
+    Die Auszeichnung ist absichtlich flach (``markup._STRONG`` lässt kein
+    Sternchen im Inneren zu): ``**fett mit *kursiv* darin**`` wird nicht
+    umgesetzt, sondern gedruckt — mit den Sternchen. Der Umsetzer sagt dazu
+    nichts, weil aus seiner Sicht nichts fehlt, und im Fenster fällt es nur
+    dem auf, der die Stelle liest.
+
+    Drei Absätze des Zeichnen-Kapitels standen so in der erzeugten Seite,
+    bevor sie jemand ansah.
+
+    Gesucht wird das Paar und nicht das einzelne Sternchen: in der Referenz
+    steht „Darf ein Ausdruck sein, etwa =breite*2" aus einem
+    Parameterschema, und dort ist es ein Malzeichen. In Code darf es ohnehin
+    stehen, deshalb fällt ``<code>`` vorher heraus.
+
+    Beide Sprachen, und die zweite ist der Grund: die englische Fassung ist
+    ein Eintrag im Katalog. Wer dort einen Absatz von Hand nachzieht, hat
+    keinen Umsetzer, der ihn korrigiert, und keine Seite, die er danach
+    ansieht.
+    """
+    import re
+
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        offenders: list[str] = []
+        for page in manual.pages():
+            html = markup.to_html(str(page.body))
+            without_code = re.sub(r"<code>.*?</code>", "", html, flags=re.S)
+            for line in without_code.splitlines():
+                if "**" in line:
+                    offenders.append(f"{page.key}: {line.strip()[:110]}")
+    finally:
+        set_language("de")
+
+    assert not offenders, f"{language}: unumgesetzte Auszeichnung:\n" + "\n".join(offenders)
+
+
 # --- das Fenster ------------------------------------------------------------------
 
 

@@ -71,6 +71,12 @@ WINDOW = (1180, 760)
 DIALOG = (520, 460)
 REPORT = (460, 300)
 
+#: Der Skizzenmodus braucht Breite: links die Zeichenfläche, rechts die
+#: Bedingungsliste, und die Werkzeugzeile darüber hat vierzehn Knöpfe. Schmäler
+#: bricht die Bedingungszeile um, und das Bild zeigte einen Editor, der eng
+#: aussieht, obwohl er es nicht ist.
+SKETCH = (980, 620)
+
 
 def settle(app: QApplication, rounds: int = 12) -> None:
     """Der Oberfläche Zeit geben, fertig zu werden, bevor abgedrückt wird."""
@@ -213,12 +219,15 @@ def sample_findings(language: str) -> list[Finding]:
 def take_all(app: QApplication, language: str) -> None:
     """Alle fünf Aufnahmen einer Sprache."""
     from app.core import examples
+    from app.core.sketch import shapes
+    from app.core.sketch.serialize import sketch_to_text
     from app.ui.catalog import PartCatalog
     from app.ui.main_window import MainWindow
     from app.ui.op_dialog import OperationDialog
     from app.ui.panels import ReportPanel
     from app.ui.session import Session
     from app.ui.settings import UiSettings
+    from app.ui.sketch_editor import SketchPanel
     from app.ui.start_screen import StartScreen
 
     print(f"{language}:")
@@ -274,6 +283,26 @@ def take_all(app: QApplication, language: str) -> None:
     settle(app, 30)
     shoot(catalog, "catalog", language)
     catalog.close()
+
+    # Der Skizzenmodus mit einer Zeichnung darin. Ein leerer Editor zeigt
+    # vierzehn Knöpfe und eine leere Fläche — zu sehen sein soll, dass eine
+    # gelöste Skizze Bedingungen trägt, die rechts einzeln nachlesbar sind.
+    # Ein Kreis gehört dazu, weil eine Skizze aus Geraden allein nicht zeigt,
+    # dass ein Kreis hier wirklich rund bleibt.
+    #
+    # Die Maße sind groß gewählt, und beides hat einen Grund: die Zeichenfläche
+    # bringt ihren Maßstab mit, und ein 40er Rechteck lag als Briefmarke in der
+    # Bildmitte. Ein Lochkreis stand hier zuerst — vier Löcher von 4 mm, deren
+    # acht Maßzahlen übereinanderlagen, und daneben eine Bedingungsliste aus
+    # neun mal „Abstand 2,00".
+    sketch = prepared(SketchPanel(sketch_to_text(shapes.rectangle(120.0, 60.0))), SKETCH)
+    sketch.canvas.insert_shape(shapes.circle(40.0))
+    volume = session.profile.printer.build_volume
+    sketch.set_bed((float(volume[0]), float(volume[1])))
+    settle(app, 30)
+    shoot(sketch, "sketch-mode", language)
+    sketch.close()
+
     window.close()
 
 

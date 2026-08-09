@@ -307,6 +307,34 @@ def test_a_plug_fills_a_bore_and_stays_inside_the_part(profile: Profile) -> None
     assert filled.mesh.bounds.size[2] == pytest.approx(10.0, abs=0.01), "no plug sticking out"
 
 
+def test_a_plug_with_nothing_to_fill_says_so(profile: Profile) -> None:
+    """„Bohrung verschließen" auf einem Körper ohne Bohrung tat nichts und
+    sagte nichts.
+
+    Der Kunde sieht denselben Körper wie vorher und einen Schritt im Verlauf.
+    Beim Bohren gibt es den Satz seit je („Der Schnitt hat nichts abgetragen");
+    beim Verschließen fehlte die Gegenseite.
+    """
+    result = plug(block(40.0, 40.0, 10.0), position=(0.0, 0.0, 5.0), axis="z", diameter=6.0)
+
+    assert "boolean.without_effect" in {finding.code for finding in result.findings}
+
+
+def test_repairing_a_healthy_body_says_there_was_nothing_to_do(profile: Profile) -> None:
+    """Ein Lauf ohne Wirkung ist ein Ergebnis und muss eines bleiben.
+
+    Ohne diesen Satz sieht „Reparieren" auf einem gesunden Netz genauso aus
+    wie ein Reparieren, das nicht gelaufen ist.
+    """
+    entry = SceneObject(id="obj_1", name="Würfel", mesh=block(20.0, 20.0, 20.0))
+
+    result = run(
+        "repair", entry, profile, weld=True, degenerate=True, normals=True, fill_holes=True
+    )
+
+    assert "repair.nothing_to_do" in {finding.code for finding in result.findings}
+
+
 def test_the_hole_operations_are_in_the_register() -> None:
     for name in ("countersink_hole", "plug_hole"):
         assert REGISTRY.get(name).category == "holes"

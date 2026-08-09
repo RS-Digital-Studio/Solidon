@@ -92,6 +92,18 @@ def _constraint_label(kind: SketchConstraintKind) -> str:
     }[kind]
 
 
+def free_dof_phrase(free: int) -> str:
+    """Wie viele Freiheitsgrade offen sind, als Halbsatz hinter einem Trenner.
+
+    Mit Singular, weil es ihn gibt: „1 Freiheitsgrade frei" stand in der
+    Statuszeile und wäre mit dem ersten Handbuchbild des Skizzenmodus
+    gedruckt worden.
+    """
+    if free == 1:
+        return tr("ein Freiheitsgrad frei")
+    return tr("{count} Freiheitsgrade frei").format(count=free)
+
+
 def readable_measure(expression: str) -> str:
     """Ein Maß, wie es dastehen soll — nicht, wie es gespeichert ist.
 
@@ -399,7 +411,9 @@ class SketchCanvas(QWidget):
             return tr("Leere Skizze — zeichnen oder eine Grundform einfügen.")
         if self.solved.free_dof == 0:
             return tr("Bestimmt — alle Freiheitsgrade sind vergeben.")
-        return f"{self.solved.free_dof} {tr('Freiheitsgrade frei')}"
+        if self.solved.free_dof == 1:
+            return tr("Ein Freiheitsgrad ist noch frei.")
+        return tr("{count} Freiheitsgrade sind noch frei.").format(count=self.solved.free_dof)
 
     # --- Bearbeitung (auch für Tests) ---------------------------------------------
 
@@ -1775,11 +1789,7 @@ class SketchField(QWidget):
         except AppError as error:
             self.summary.setText(str(error.detail or error.title))
             return
-        state = (
-            tr("bestimmt")
-            if solved.free_dof == 0
-            else f"{solved.free_dof} {tr('Freiheitsgrade frei')}"
-        )
+        state = tr("bestimmt") if solved.free_dof == 0 else free_dof_phrase(solved.free_dof)
         self.summary.setText(f"{len(sketch.elements)} {tr('Elemente')} · {state}")
 
     def _edit(self) -> None:

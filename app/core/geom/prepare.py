@@ -196,11 +196,18 @@ def plug(
     # den er füllt.
     inner = boolean("intersection", [mesh.replacing(cylinder), _shell(mesh)], quality=quality)
     outcome = boolean("union", [mesh, inner.mesh], quality=quality)
+    findings = list(outcome.findings)
+    # Dieselbe Auskunft wie beim Bohren, nur andersherum: ein Stopfen an einer
+    # Stelle ohne Bohrung ändert nichts, und das stand nirgends. Zurück blieb
+    # ein Schritt im Verlauf und ein unveränderter Körper.
+    nothing = without_effect(mesh, outcome.mesh, "union")
+    if nothing is not None:
+        findings.append(nothing)
     return BoreResult(
         mesh=outcome.mesh,
         solver=outcome.solver,
         diameter=diameter,
-        findings=list(outcome.findings),
+        findings=findings,
     )
 
 

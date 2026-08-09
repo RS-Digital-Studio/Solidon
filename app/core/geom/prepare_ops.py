@@ -159,6 +159,25 @@ class SplitPlaneParams(BaseParams):
     )
 
 
+def _both_halves_or_stop(first: MeshData, second: MeshData, position: float) -> None:
+    """Hält an, wenn die Ebene den Körper gar nicht getroffen hat.
+
+    Ohne das kam eine Hälfte mit null Dreiecken heraus, und der Stapel legte
+    sie als Objekt an: ein Eintrag im Baum, den man ansehen, umbenennen und
+    exportieren kann und der nichts ist. Der Fall ist häufiger als er klingt —
+    der Dialog belegt ``position = 0`` vor, und ein Körper steht mit seiner
+    Unterseite oft genau dort.
+    """
+    if first.triangle_count and second.triangle_count:
+        return
+    raise ValidationError(
+        field="position",
+        detail=_("Diese Ebene teilt das Objekt nicht."),
+        value=position,
+        constraint="no_split",
+    )
+
+
 @register_op(
     name="split_plane",
     title=_("An Ebene teilen"),
@@ -173,6 +192,7 @@ def split_plane(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     plane = SectionPlane(normal=AXIS_NORMALS[cast(Axis, params.axis)], position=params.position)
     first, second, findings = split_at_plane(as_mesh_data(source.mesh), plane)
+    _both_halves_or_stop(first, second, params.position)
     return OpResult(
         outputs=[
             dataclasses.replace(source, mesh=first, name=f"{source.name} A"),
@@ -638,13 +658,7 @@ def split_pinned(ctx: OpContext) -> OpResult:
     )
 
     first, second, findings = split_at_plane(mesh, candidate.plane)
-    if not (first.triangle_count and second.triangle_count):
-        raise ValidationError(
-            field="position",
-            detail=_("Diese Ebene teilt das Objekt nicht."),
-            value=params.position,
-            constraint="no_split",
-        )
+    _both_halves_or_stop(first, second, params.position)
 
     plan = plan_pins(mesh, candidate, count=params.pins) if params.pins else None
     if plan is not None and params.diameter:

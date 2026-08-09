@@ -1074,6 +1074,18 @@ FIGURES: Final[tuple[Figure, ...]] = (
         ),
         kind="shot",
     ),
+    Figure(
+        key="sketch-mode",
+        alt=_(
+            "Der Skizzenmodus im Fenster: die Zeichenwerkzeuge als Symbolzeile, darunter "
+            "die Ebenenwahl, die Reihe der Bedingungsknöpfe und die Zeichenfläche mit "
+            "einem Rechteck, bemaßt auf 120 und 60 mm, und einem Kreis darin. Rechts "
+            "stehen die dreizehn Bedingungen der Zeichnung einzeln aufgelistet, unten "
+            "die Zahl der freien Freiheitsgrade."
+        ),
+        caption=_("Dieselbe Fläche trägt die Zeichnung, die sonst das Modell zeigt."),
+        kind="shot",
+    ),
 )
 
 _BY_KEY: Final[dict[str, Figure]] = {figure.key: figure for figure in FIGURES}

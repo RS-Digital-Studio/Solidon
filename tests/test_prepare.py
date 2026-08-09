@@ -436,6 +436,35 @@ def test_splitting_runs_as_an_operation(document: Document, profile: Profile) ->
         assert entry.mesh.volume == pytest.approx(4000.0, rel=1e-6)
 
 
+def test_a_plane_beside_the_body_stops_instead_of_making_a_ghost(
+    document: Document, profile: Profile
+) -> None:
+    """Der Dialog belegt ``position = 0`` vor, und ein geladener Körper steht
+    oft genau dort auf der Platte.
+
+    Bestätigen ergab dann „Teil A" mit null Dreiecken und 0 mm³ — ein Eintrag
+    im Objektbaum, den man ansehen, umbenennen und exportieren kann und der
+    nichts ist. Der Zwilling ``split_pinned`` hielt an derselben Stelle längst
+    an; hier fehlte der Satz.
+    """
+    project, history = loaded(document)
+    history.apply(
+        _("Teilen"),
+        [
+            OperationDraft(
+                op="split_plane", inputs=("obj_1",), params={"axis": "z", "position": 60.0}
+            )
+        ],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert not result.complete, "eine Ebene, die nichts trifft, ist ein Fehler und kein Ergebnis"
+    findings = [finding for finding in result.scene.report.findings if finding.severity == "error"]
+    assert findings
+    assert "teilt das Objekt nicht" in str(findings[0].message)
+
+
 def test_arranging_runs_over_every_object(document: Document, profile: Profile) -> None:
     """Eine Operation mit variabler Objektzahl: so viele heraus wie hinein."""
     project, history = loaded(document, count=3)

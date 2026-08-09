@@ -398,9 +398,23 @@ def repair_object(ctx: OpContext) -> OpResult:
         small_components=params.small_components,
         self_intersections=params.self_intersections,
     )
+    findings = list(result.findings)
+    if not result.changed:
+        # Ein gesundes Netz sah bisher aus wie eine Reparatur, die nicht
+        # gelaufen ist: keine Meldung, kein Unterschied, ein Schritt im
+        # Verlauf. Das Ergebnis „nichts zu tun" ist ein gutes und gehört
+        # gesagt (§2.7).
+        findings.append(
+            Finding(
+                code="repair.nothing_to_do",
+                severity="info",
+                message=_("An diesem Netz war nichts zu reparieren."),
+                object_id=source.id,
+            )
+        )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh)],
-        findings=result.findings,
+        findings=findings,
     )
 
 
