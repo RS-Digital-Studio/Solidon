@@ -273,6 +273,13 @@ class Shot:
     frames: Path
     count: int
     viewport: tuple[int, int, int, int]
+    #: Je Bild der Wert, der darin stand — leer, wo nichts läuft.
+    #:
+    #: Gebraucht fürs Hochformat: dort sind die Bedienzonen ausgeblendet, also
+    #: ist die Parameterleiste nicht im Bild. Eine Szene, die von benannten
+    #: Maßen spricht und dabei nur einen Körper zeigt, behauptet etwas, das der
+    #: Zuschauer nicht sehen kann.
+    readout: tuple[str, ...] = ()
 
 
 def settle(app: QApplication, rounds: int = 12) -> None:
@@ -739,6 +746,7 @@ def morph_step(
     session: Any,
     name: str,
     span: tuple[float, float],
+    readout: list[str] | None = None,
 ) -> StepFn:
     """Einen Parameter über die Szene laufen lassen — und wirklich rechnen.
 
@@ -777,6 +785,10 @@ def morph_step(
         parameters[name] = dataclasses.replace(existing, value=value)
         session.projectChanged.emit()
         session.evaluate_now()
+        if readout is not None:
+            # Auf ganze Millimeter: eine Zahl mit zwei Nachkommastellen, die
+            # dreißigmal in der Sekunde springt, ist im Video nicht zu lesen.
+            readout.append(f"{name} = {value:.0f} mm")
         # Die Kamera weicht mit, sonst wächst das Teil aus dem Bild.
         #
         # **Nicht über ``reset_camera``**: das passt bei jedem Bild neu ein und
@@ -829,10 +841,15 @@ def shoot_storyboard(
     """
     reset_morph(session)
     total = 0
+    readout: list[str] = []
     for key, _path, seconds in spoken:
         count = max(1, round(seconds * FPS))
         if key == "morph":
-            step = morph_step(window, app, session, MORPH_PARAMETER, MORPH)
+            # Die Bilder vor dieser Szene tragen keinen Wert — aufgefüllt wird
+            # bis hierher, damit der Index im Bandwurm der Wert des Bildes
+            # bleibt und nicht der Wert des Bildes minus einer Szene.
+            readout.extend([""] * (total - len(readout)))
+            step = morph_step(window, app, session, MORPH_PARAMETER, MORPH, readout)
         elif key == "parameters":
             step = hold_step(window, app)
         else:
@@ -844,7 +861,13 @@ def shoot_storyboard(
         print(f"  {key:12s} {count:4d} Bilder")
     reset_morph(session)
     settle(app, 20)
-    return Shot(frames=frames, count=total, viewport=viewport_rect(window))
+    readout.extend([""] * (total - len(readout)))
+    return Shot(
+        frames=frames,
+        count=total,
+        viewport=viewport_rect(window),
+        readout=tuple(readout),
+    )
 
 
 def reset_morph(session: Any) -> None:
@@ -915,6 +938,7 @@ def encode_portrait(
         f"drawtext=fontfile='{font}':text='solidon3d.de':fontcolor=0x6ea8fe:fontsize=46:"
         f"x=(w-text_w)/2:y=1750"
     )
+    chain += readout_filters(shot, font, pad_top)
     run_ffmpeg(
         [
             "-framerate",
@@ -936,6 +960,35 @@ def encode_portrait(
         ]
     )
     print(f"  hoch  → {target.name}")
+
+
+def readout_filters(shot: Shot, font: str, pad_top: int) -> str:
+    """Den laufenden Parameterwert einblenden, solange er sich ändert.
+
+    Ein ``drawtext`` je Bild wären hier 268 Filter. Gleiche aufeinanderfolgende
+    Werte werden deshalb zu einem Abschnitt zusammengefasst — auf ganze
+    Millimeter gerundet bleiben von 70 bis 96 knapp dreißig übrig, und jeder
+    steht so lange, wie er gilt.
+    """
+    if not any(shot.readout):
+        return ""
+    spans: list[tuple[int, int, str]] = []
+    for index, text in enumerate(shot.readout):
+        if not text:
+            continue
+        if spans and spans[-1][2] == text and spans[-1][1] == index - 1:
+            spans[-1] = (spans[-1][0], index, text)
+        else:
+            spans.append((index, index, text))
+    parts = []
+    for first, last, text in spans:
+        safe = text.replace(":", r"\:")
+        parts.append(
+            f",drawtext=fontfile='{font}':text='{safe}':fontcolor=0xe6edf3:fontsize=52:"
+            f"box=1:boxcolor=0x14161a@0.85:boxborderw=18:"
+            f"x=(w-text_w)/2:y={pad_top + 46}:enable='between(n,{first},{last})'"
+        )
+    return "".join(parts)
 
 
 def font_file() -> str:
