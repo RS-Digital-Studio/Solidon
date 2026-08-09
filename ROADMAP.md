@@ -3868,3 +3868,59 @@ Operationen, jeweils mit der Vorbelegung des Dialogs):
 | angehalten | 19 | 20 (An Ebene teilen hält jetzt an, statt ein leeres Objekt anzulegen) |
 
 Suite 3423 grün, Lint und Typprüfung ebenso.
+
+## Das Zeichnen-Kapitel Satz für Satz gegen den Code (09.08.2026)
+
+Zweiter Durchgang, auf die Bitte, alles gründlicher durchzugehen. Jede
+Behauptung des neuen Kapitels gegen die Stelle im Code, die sie beschreibt —
+und dabei kam heraus, dass zwei der Abweichungen keine Textfehler waren,
+sondern Fehler im Editor. Vier Funde, alle behoben:
+
+- **Strg+Z lag im Skizzenmodus beim Verlauf.** Das Kürzel hing am
+  `SketchEditorDialog`, und den Dialog gibt es nur auf einem der beiden Wege.
+  Im Skizzenmodus des Fensters nahm Strg+Z damit die letzte **Operation**
+  zurück, während vor dem Nutzer eine Zeichenfläche stand. Jetzt bringt das
+  Panel das Kürzel mit, und `_update_actions` graut Rückgängig/Wiederholen im
+  Modus aus — beide Hälften nötig, denn bei zwei aktiven Belegungen derselben
+  Taste feuert Qt keine (dieselbe Falle wie bei R und C).
+- **Der Weg über das Operationsfeld war ärmer als der Skizzenmodus.** Kein
+  Bauraumrand, keine Fläche des Körpers in der Ebenenwahl, und *Projizieren*
+  antwortete „Es gibt keinen Körper, aus dem sich projizieren ließe" — an
+  einem Modell, das im Fenster stand. Der Docstring von `SketchPanel`
+  verspricht seit je, dass keiner der beiden Wege ein Werkzeug bekommt, das
+  der andere nicht hat. `Surroundings` (Bauraum, Zeichenebenen,
+  Projektionsvorlagen) trägt die drei Angaben jetzt zusammen,
+  `MainWindow._sketch_surroundings()` ist die eine Quelle, und der
+  Operationsdialog reicht sie an sein Skizzenfeld durch.
+- **Der dritte Weg, einen Spline zu schließen, stand nur im Kommentar.**
+  „Doppelklick, Eingabetaste oder ein zweiter Klick auf denselben Punkt" — den
+  letzten gab es nicht: der Klick hängte einen weiteren, deckungsgleichen
+  Punkt an die Kurve, still und ohne Ton. Wer den Griff aus einem CAD
+  mitbringt, holte sich einen doppelten Punkt. `_on_last_pending` prüft jetzt
+  in Bildschirmpunkten, mit derselben Toleranz wie der Fang.
+- **Der README nannte die Seitenzahl des Handbuchs** — „dreiunddreißig
+  Seiten: achtzehn geschriebene" — und lag zum dritten Mal daneben (der
+  zweite Fall steht oben unter „Handbuch, Website und Rechtstexte
+  durchgesehen"). Die Zahlen sind heraus, die Aussage bleibt: eine erzeugte
+  Seite pro Kategorie. Was gezählt werden kann, zählt das Programm; der
+  Vorspann der erzeugten Handbuchseite nennt die Zahl.
+
+Und was im Kapitel schlicht **fehlte**, weil der Editor mehr kann, als beim
+Schreiben in Erinnerung war: zoomen und schieben, das Ziehen eines Punktes mit
+nachziehendem Solver, **Strg zum Sammeln** (ohne das kommt niemand auf
+*Parallel*, das zwei Linien braucht), die zwei Bedeutungen von `Entf` je nach
+Fokus, die zählende Klickreihenfolge. Dazu zwei zu grob formulierte Stellen:
+das Maßfeld gilt nur für Linie und Kreis, nicht „nach dem ersten Klick"
+allgemein, und bei einer angeklickten Fläche entscheidet deren Neigung über
+die Schichtrichtung — nicht die Unterscheidung liegend/stehend.
+
+Offen, als Vorschlag und nicht als Fund:
+
+- [ ] **Der Skizzeneditor kennt kein Einpassen.** Der Maßstab startet fest auf
+      4 Punkte je Millimeter und bleibt, wo er ist; `set_sketch` rührt ihn
+      nicht an. Eine geöffnete Skizze von 300 mm liegt damit zur Hälfte
+      außerhalb des Bildes, und der Bauraumrahmen von 220 × 220 ist beim Start
+      gar nicht zu sehen — ausgerechnet der, der die früheste Warnung tragen
+      soll (E1). Vorschlag: beim Setzen einer Skizze den Maßstab so wählen,
+      dass Zeichnung und Bauraum hineinpassen. Eine gute Vorgabe statt eines
+      weiteren Knopfes.

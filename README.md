@@ -55,14 +55,14 @@ fange ich an", die übrigen „was kann das eigentlich":
 
 ## Hilfe im Programm
 
-**Hilfe → Handbuch** (F1) öffnet dreiunddreißig Seiten: achtzehn geschriebene
-über die ersten fünfzehn Minuten, das Fenster, Verlauf, Parameter, Toleranzen,
-Bausteine, den Chat und ein Wörterbuch, dazu fünfzehn erzeugte mit jeder
-Operation, jedem Wert und jedem Bereich. Die zweite Hälfte kommt aus demselben
-Register wie die Menüs — sie kann nicht veralten, und eine neue Operation kann
-nicht dazukommen, ohne dort aufzutauchen. Gesucht wird über den Text, nicht nur
-über die Überschriften. Achtundzwanzig Abbildungen gehören dazu; keine davon
-wird von Hand gepflegt.
+**Hilfe → Handbuch** (F1) öffnet zwei Sorten Seiten. Geschriebene über die
+ersten fünfzehn Minuten, das Fenster, das Zeichnen, Verlauf, Parameter,
+Toleranzen, Bausteine, den Chat und ein Wörterbuch — dazu je eine erzeugte
+Seite pro Kategorie des Registers, mit jeder Operation, jedem Wert und jedem
+Bereich. Die zweite Hälfte kommt aus demselben Register wie die Menüs — sie
+kann nicht veralten, und eine neue Operation kann nicht dazukommen, ohne dort
+aufzutauchen. Gesucht wird über den Text, nicht nur über die Überschriften.
+Abbildungen gehören dazu; keine davon wird von Hand gepflegt.
 
 Auf der Kommandozeile gibt `solidon3d docs --manual` denselben Text aus.
 
