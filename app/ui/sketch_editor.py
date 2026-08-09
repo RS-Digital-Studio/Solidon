@@ -62,6 +62,29 @@ SNAP_PX = 8.0
 #: Trefferabstand für Linien und Ränder, in Pixeln.
 PICK_PX = 5.0
 
+#: Der Maßstab in Pixeln je Millimeter, solange nichts einzupassen ist.
+START_SCALE = 4.0
+
+#: Wie weit sich der Maßstab drehen lässt. Die Grenzen gelten für das Mausrad
+#: und fürs Einpassen: eine Ansicht, aus der kein Zoomschritt herausführt, wäre
+#: eine Sackgasse mit Zahlen.
+MIN_SCALE = 0.5
+MAX_SCALE = 100.0
+
+#: Luft zwischen dem Eingepassten und dem Rand der Fläche, in Pixeln. Ohne sie
+#: klebt der äußerste Punkt am Rahmen, und der Bauraumrand liegt genau darauf.
+#:
+#: Bemessen nicht an der Geometrie, sondern an ihrer Beschriftung: die Maßzahlen
+#: stehen **außerhalb** der Kontur, die eingepasst wird. Bei vierundzwanzig
+#: Punkten stand im Handbuchbild „60,0(" am rechten Rand — die Zahl war da, das
+#: Bild hörte vorher auf.
+FIT_MARGIN_PX = 48.0
+
+#: Worauf sich das Einpassen mindestens bezieht, in Millimetern. Ein einzelner
+#: Punkt und eine waagerechte Linie haben in einer Richtung keine Ausdehnung —
+#: ohne Untergrenze wäre der Maßstab dort unendlich.
+MIN_FIT_MM = 20.0
+
 #: Eine leere Skizze beginnt auf der XY-Ebene — die Ops setzen sie über
 #: ihren Flächenparameter dorthin, wo sie hingehört (§30.1).
 EMPTY = Sketch(plane="plane:xy", elements=())
@@ -207,8 +230,18 @@ class SketchCanvas(QWidget):
         parallel A"."""
         self._undo: list[Sketch] = []
         self._dragging: int | None = None
-        self._scale = 4.0
+        self._scale = START_SCALE
         self._centre = QPointF(0.0, 0.0)
+        self._fitting = False
+        """Ob die Ansicht der Einpassung folgt, statt dem eigenen Maßstab.
+
+        Bleibt gesetzt, bis jemand selbst zoomt oder schiebt — dann gehört die
+        Ansicht ihm. *Einpassen* schaltet es wieder ein.
+
+        Nicht bloß ein „einmal beim Öffnen": das Layout verteilt in mehreren
+        Durchgängen, und der erste bringt oft noch die Mindestgröße. Beim
+        leeren Blatt stand der Maßstab danach auf der Größe von vorher, und der
+        Bauraumrand — der Grund für das Ganze — lag zur Hälfte daneben."""
         self._panning: QPoint | None = None
         self._face_normals: dict[str, tuple[float, float, float]] = {}
         """Die Normalen der Flächen, auf denen gezeichnet werden darf.
@@ -340,6 +373,56 @@ class SketchCanvas(QWidget):
             return False
         half_x, half_y = self._bed[0] / 2.0, self._bed[1] / 2.0
         return any(abs(x) > half_x or abs(y) > half_y for x, y in self.points())
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        """Solange die Ansicht der Einpassung folgt, folgt sie auch der Größe."""
+        super().resizeEvent(event)
+        if self._fitting:
+            self.fit_view(keep_following=True)
+
+    def fit_view(self, *, keep_following: bool = True) -> None:
+        """Maßstab und Mitte so setzen, dass alles Wesentliche im Bild liegt.
+
+        Der Maßstab stand fest auf :data:`START_SCALE` und blieb dort: eine
+        geöffnete Skizze von 300 mm lag zur Hälfte außerhalb, und der
+        Bauraumrahmen — der die früheste Warnung tragen soll (E1) — war beim
+        Öffnen überhaupt nicht zu sehen. Eine gute Vorgabe statt eines Knopfes,
+        den man erst finden muss; den Knopf gibt es trotzdem, weil man sich
+        verzoomt.
+
+        **Was eingepasst wird, hängt davon ab, was da ist.** Eine vorhandene
+        Zeichnung gibt das Maß: an ihr wird gearbeitet, und ragt sie über die
+        Platte, kommt der Rahmen von selbst mit ins Bild. Ein leeres Blatt
+        zeigt den Bauraum — dann sieht man, wohin man zeichnet, bevor der erste
+        Strich sitzt. Ohne beides bleibt es beim Startmaßstab.
+
+        ``keep_following`` lässt die Ansicht an der Einpassung hängen: sie geht
+        bei jeder Größenänderung mit, bis jemand selbst zoomt oder schiebt.
+        """
+        if keep_following:
+            self._fitting = True
+        points = self.points()
+        if points:
+            xs = [x for x, _y in points]
+            ys = [y for _x, y in points]
+            span_x, span_y = max(xs) - min(xs), max(ys) - min(ys)
+            centre = ((max(xs) + min(xs)) / 2.0, (max(ys) + min(ys)) / 2.0)
+        elif self._bed is not None:
+            span_x, span_y = self._bed
+            centre = (0.0, 0.0)
+        else:
+            return
+
+        span_x = max(span_x, MIN_FIT_MM)
+        span_y = max(span_y, MIN_FIT_MM)
+        room_x = max(self.width() - 2 * FIT_MARGIN_PX, FIT_MARGIN_PX)
+        room_y = max(self.height() - 2 * FIT_MARGIN_PX, FIT_MARGIN_PX)
+        self._scale = min(
+            max(min(room_x / span_x, room_y / span_y), MIN_SCALE),
+            MAX_SCALE,
+        )
+        self._centre = QPointF(*centre)
+        self.update()
 
     # --- Modell -----------------------------------------------------------------
 
@@ -626,6 +709,8 @@ class SketchCanvas(QWidget):
     def mousePressEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         position = QPointF(event.position())
         if event.button() == Qt.MouseButton.MiddleButton:
+            # Wie beim Zoomen: wer schiebt, will seinen Ausschnitt behalten.
+            self._fitting = False
             self._panning = event.position().toPoint()
             return
         if event.button() == Qt.MouseButton.RightButton:
@@ -856,8 +941,11 @@ class SketchCanvas(QWidget):
             self._dragging = None
 
     def wheelEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        # Wer selbst zoomt, hat die Ansicht: von hier an folgt sie keiner
+        # Einpassung mehr, bis er sie über den Knopf zurückholt.
+        self._fitting = False
         factor = 1.25 if event.angleDelta().y() > 0 else 0.8
-        self._scale = min(max(self._scale * factor, 0.5), 100.0)
+        self._scale = min(max(self._scale * factor, MIN_SCALE), MAX_SCALE)
         self.update()
 
     def keyPressEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
@@ -1265,6 +1353,12 @@ ACTION_KEYS: dict[str, str] = {
     "construction": "X",
 }
 
+#: Kürzel, die nur die Ansicht bewegen und nichts an der Zeichnung ändern.
+#: Getrennt gehalten, weil sie das auch bei gesperrter Lizenz dürfen — und
+#: weil ``Pos1`` dieselbe Taste ist, die in FreeCAD und im Browser „zurück
+#: zum Anfang" heißt.
+VIEW_KEYS: dict[str, str] = {"fit": "Home"}
+
 
 @dataclass(frozen=True, slots=True)
 class Surroundings:
@@ -1499,6 +1593,17 @@ class SketchPanel(QWidget):
         tools.addWidget(project_button)
         tools.addWidget(self.measure_field)
 
+        # Einpassen gehört zu den Ansichtsgriffen und nicht zu den Werkzeugen,
+        # steht deshalb hinten bei Rückgängig. Als Knopf und nicht nur als
+        # Kürzel: eine Belegung, zu der kein sichtbares Ziel gehört, findet
+        # niemand (§19.2, Regel 18).
+        fit_button = QToolButton(self)
+        fit_button.setIcon(icons.icon("sketch_fit", fit_button))
+        fit_button.setToolTip(f"{tr('Einpassen')}  ({VIEW_KEYS['fit']})")
+        fit_button.setAutoRaise(True)
+        fit_button.clicked.connect(self.canvas.fit_view)
+        tools.addWidget(fit_button)
+
         undo_button = QToolButton(self)
         undo_button.setIcon(icons.icon("sketch_undo", undo_button))
         undo_button.setToolTip(tr("Rückgängig"))
@@ -1558,6 +1663,12 @@ class SketchPanel(QWidget):
         # Zuletzt, weil die Flächen in die eben gebaute Ebenenwahl kommen.
         if surroundings is not None:
             self.set_surroundings(surroundings)
+
+        # Und dann einpassen — auf die Zeichnung, wenn eine mitkam, sonst auf
+        # den Bauraum. Die Ansicht bleibt daran hängen, bis jemand selbst zoomt:
+        # das Layout bemisst die Fläche erst nach diesem Aufruf, und in mehreren
+        # Durchgängen.
+        self.canvas.fit_view()
 
     def set_surroundings(self, surroundings: Surroundings) -> None:
         """Bauraum, Zeichenebenen und Projektionsvorlagen auf einmal setzen."""
@@ -1620,6 +1731,10 @@ class SketchPanel(QWidget):
         undo = QShortcut(QKeySequence(QKeySequence.StandardKey.Undo), self)
         undo.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         undo.activated.connect(self.canvas.undo)
+
+        fit = QShortcut(QKeySequence(VIEW_KEYS["fit"]), self)
+        fit.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        fit.activated.connect(self.canvas.fit_view)
 
         helper = QShortcut(QKeySequence(ACTION_KEYS["construction"]), self)
         helper.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)

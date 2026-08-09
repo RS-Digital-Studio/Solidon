@@ -362,6 +362,190 @@ def test_the_canvas_knows_when_a_sketch_leaves_the_build_volume(qt_app: QApplica
     assert not canvas.outside_bed()
 
 
+def _sized(panel: SketchPanel, qt_app: QApplication) -> SketchPanel:
+    """Ein Panel mit wirklicher Größe — sonst passt es nicht ein.
+
+    Ohne ``show`` verteilt das Layout nichts, die Zeichenfläche bleibt auf
+    ihrer Mindestgröße, und ihr ``resizeEvent`` kommt nie. In der Anwendung
+    wird sie immer gezeigt; hier muss man es sagen.
+    """
+    panel.resize(900, 560)
+    panel.show()
+    qt_app.processEvents()
+    return panel
+
+
+def _visible_span(panel: SketchPanel) -> tuple[float, float]:
+    """Wie viele Millimeter die Fläche gerade zeigt, waagerecht und senkrecht."""
+    canvas = panel.canvas
+    left, top = canvas._to_world(canvas.rect().topLeft())
+    right, bottom = canvas._to_world(canvas.rect().bottomRight())
+    return (right - left, top - bottom)
+
+
+def test_an_opened_sketch_is_fitted_into_the_view(qt_app: QApplication) -> None:
+    """Eine geöffnete Zeichnung liegt im Bild, nicht halb daneben (E1).
+
+    Der Maßstab startete fest auf vier Punkte je Millimeter und blieb dort:
+    ``set_sketch`` rührte ihn nicht an. Eine Skizze von 300 mm lag damit zur
+    Hälfte außerhalb, und wer sie öffnete, sah einen Ausschnitt und musste
+    raten, wie weit er herauszoomen muss.
+    """
+    panel = _sized(SketchPanel(sketch_to_text(shapes.rectangle(300.0, 200.0))), qt_app)
+    try:
+        wide, high = _visible_span(panel)
+        assert wide > 300.0, f"300 mm müssen hineinpassen, sichtbar sind {wide:.0f}"
+        assert high > 200.0, f"200 mm ebenso, sichtbar sind {high:.0f}"
+        # Und nicht beliebig weit heraus: eingepasst heißt auch, dass die
+        # Zeichnung die Fläche füllt.
+        assert wide < 3 * 300.0, "sonst ist es keine Einpassung, sondern eine Übersicht"
+    finally:
+        panel.deleteLater()
+
+
+def test_an_empty_sheet_starts_on_the_build_volume(qt_app: QApplication) -> None:
+    """Ohne Zeichnung gibt der Bauraum das Maß — dann sieht man, wohin man
+    zeichnet, bevor der erste Strich sitzt.
+
+    Der Rahmen soll die früheste Warnung tragen (E1) und lag beim Start
+    außerhalb des Bildes: 220 mm bei vier Punkten je Millimeter sind das
+    Vierfache der Fläche.
+    """
+    from app.ui.sketch_editor import Surroundings
+
+    panel = _sized(SketchPanel("", None, None, Surroundings(bed=(220.0, 220.0))), qt_app)
+    try:
+        wide, high = _visible_span(panel)
+        assert wide > 220.0 and high > 220.0, f"sichtbar {wide:.0f} × {high:.0f} mm"
+    finally:
+        panel.deleteLater()
+
+
+def test_a_small_sketch_beats_the_build_volume(qt_app: QApplication) -> None:
+    """Ist eine Zeichnung da, gibt sie das Maß und nicht die Platte.
+
+    Sonst wäre jede Ansicht eine Plattenübersicht, und an einem 40er Teil
+    arbeitet niemand in einem Maßstab, der 220 mm zeigt. Ragt die Zeichnung
+    über den Bauraum, kommt der Rahmen von selbst mit ins Bild — dafür braucht
+    es keine zweite Regel.
+    """
+    from app.ui.sketch_editor import Surroundings
+
+    small = _sized(
+        SketchPanel(
+            sketch_to_text(shapes.rectangle(40.0, 20.0)),
+            None,
+            None,
+            Surroundings(bed=(220.0, 220.0)),
+        ),
+        qt_app,
+    )
+    try:
+        wide, _high = _visible_span(small)
+        assert wide < 220.0, f"die Zeichnung gibt das Maß, sichtbar sind {wide:.0f} mm"
+        assert wide > 40.0, "und sie passt hinein"
+    finally:
+        small.deleteLater()
+
+
+def _zoom(canvas: SketchCanvas) -> None:
+    """Einen Mausradschritt auslösen — den Weg, den die Hand nimmt."""
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+
+    canvas.wheelEvent(
+        QWheelEvent(
+            QPointF(10.0, 10.0),
+            QPointF(10.0, 10.0),
+            QPoint(0, 0),
+            QPoint(0, 120),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        )
+    )
+
+
+def test_fitting_comes_back_after_zooming_away(qt_app: QApplication) -> None:
+    """Der Knopf holt zurück, wer sich verzoomt hat — mit Kürzel am Werkzeug.
+
+    Eine Belegung ohne sichtbares Ziel findet niemand, deshalb steht sie im
+    Hinweistext des Knopfes (§19.2, Regel 18).
+    """
+    from PySide6.QtGui import QKeySequence, QShortcut
+
+    from app.ui.sketch_editor import VIEW_KEYS
+
+    panel = _sized(SketchPanel(sketch_to_text(shapes.rectangle(40.0, 20.0))), qt_app)
+    try:
+        fitted = panel.canvas._scale
+        _zoom(panel.canvas)
+        assert panel.canvas._scale != pytest.approx(fitted)
+
+        panel.canvas.fit_view()
+        assert panel.canvas._scale == pytest.approx(fitted)
+
+        keys = [entry.key().toString() for entry in panel.findChildren(QShortcut)]
+        assert QKeySequence(VIEW_KEYS["fit"]).toString() in keys
+    finally:
+        panel.deleteLater()
+
+
+def test_the_view_belongs_to_whoever_zoomed_it(qt_app: QApplication) -> None:
+    """Nach eigenem Zoom bleibt der Maßstab, auch wenn sich die Größe ändert.
+
+    Die Einpassung hängt an der Fläche und nicht an einem einmaligen Moment:
+    das Layout verteilt in mehreren Durchgängen, und der erste bringt oft die
+    Mindestgröße — einmalig eingepasst stand der Maßstab danach auf der Größe
+    von vorher. Sie mitzuziehen heißt aber auch, sie loszulassen, sobald
+    jemand selbst am Rad dreht.
+    """
+    panel = _sized(SketchPanel("", None, None, None), qt_app)
+    try:
+        panel.canvas.set_sketch(sketch_from_text(sketch_to_text(shapes.rectangle(40.0, 20.0))))
+        panel.canvas.fit_view()
+        followed = panel.canvas._scale
+
+        panel.resize(1200, 700)
+        qt_app.processEvents()
+        assert panel.canvas._scale != pytest.approx(followed), "eingepasst zieht mit"
+
+        own = panel.canvas._scale
+        _zoom(panel.canvas)
+        mine = panel.canvas._scale
+        panel.resize(900, 560)
+        qt_app.processEvents()
+        assert panel.canvas._scale == pytest.approx(mine), "eigener Zoom bleibt"
+        assert mine != pytest.approx(own)
+    finally:
+        panel.deleteLater()
+
+
+def test_a_single_point_does_not_zoom_to_infinity(qt_app: QApplication) -> None:
+    """Ein Punkt hat keine Ausdehnung, und der Maßstab bleibt endlich.
+
+    Dasselbe gilt für eine waagerechte Linie: in einer Richtung ist ihre
+    Ausdehnung null, und ohne Untergrenze wäre der Quotient unendlich.
+    """
+    from app.core.types import Sketch, SketchElement
+    from app.ui.sketch_editor import MAX_SCALE
+
+    for element in (
+        SketchElement(kind="point", points=((5.0, 5.0),)),
+        SketchElement(kind="line", points=((0.0, 0.0), (30.0, 0.0))),
+    ):
+        panel = _sized(SketchPanel(), qt_app)
+        try:
+            panel.canvas.set_sketch(Sketch(plane="plane:xy", elements=(element,)))
+            panel.canvas.fit_view()
+            assert 0.0 < panel.canvas._scale <= MAX_SCALE
+            wide, high = _visible_span(panel)
+            assert wide > 0.0 and high > 0.0
+        finally:
+            panel.deleteLater()
+
+
 def test_a_measure_is_shown_rounded_but_stored_exactly(qt_app: QApplication) -> None:
     """§11.2: gerundet wird in der Anzeige, nie im Wert.
 

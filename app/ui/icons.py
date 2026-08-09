@@ -196,6 +196,14 @@ PATHS: Final[dict[str, str]] = {
     ),
     # Rückgängig: der Pfeil, der zurück in seinen Bogen zeigt.
     "sketch_undo": ('<path d="M4 9.5h10a5 5 0 0 1 0 10h-6" /><path d="M8 5 4 9.5 8 14" />'),
+    # Einpassen: vier Ecken, die sich um das Gezeichnete zusammenziehen. Die
+    # Pfeile zeigen nach innen — ein Rahmen allein sähe aus wie ein Auswahl-
+    # rechteck, und genau das tut dieser Knopf nicht.
+    "sketch_fit": (
+        '<path d="M4 8.5V4.5h4" /><path d="M20 8.5V4.5h-4" />'
+        '<path d="M4 15.5v4h4" /><path d="M20 15.5v4h-4" />'
+        '<path d="M9 12h6" /><path d="M12 9v6" />'
+    ),
     # --- je Kategorie eines (Konzept P15 §7 Etappe 8, D5) ----------------------
     #
     # **Nicht je Operation.** Dreiundsiebzig Symbole zu unterscheiden ist
