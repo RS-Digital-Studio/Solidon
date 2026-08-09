@@ -3774,3 +3774,45 @@ durchgehend und mittig positioniert."
       — aus `face_5 bei (−15, 0, 5)` muss das Modell selbst schließen, wo die
       Mitte liegt. Ein Satz „liegt von … bis …" je Objekt kostet nichts.
       Danach die Agenten-Suite, vorher und nachher, wie es die Regel verlangt.
+
+## Das Zeichnen im Handbuch und auf der Website (09.08.2026)
+
+Auf die Frage, ob das Zeichnen sauber und detailliert beschrieben ist, war die
+Antwort nein. Zwanzig geschriebene Seiten, und der Skizzeneditor kam in keiner
+vor: ein Halbsatz auf Seite eins und die sechs Skizzen-Ops in der erzeugten
+Referenz, die sagen, was aus einer fertigen Zeichnung wird — nicht, wie eine
+entsteht. Auf der Website zwei Zeilen, ein Listenpunkt unter „Was sonst noch
+drinsteckt". Behoben, und dabei fünf Stellen gefunden, an denen die Unterlagen
+dem Programm widersprachen:
+
+- **Das englische Handbuch behauptete auf Seite eins das Gegenteil.** „no CAD
+  replacement — there are no sketches and no constraints" stand weiter mitten
+  im Satz über den Slicer; auf Deutsch war er längst berichtigt, im Katalog
+  nicht. Ein Kapitel später beschreibt dasselbe Handbuch die Bedingungen.
+- **„Das Fenster" kannte nur eine Werkzeugleiste.** Der neue Absatz machte
+  daraus eine Zeile mit „links hinsehen, rechts ändern" — das neu aufgenommene
+  Bild zeigte zwei Leisten: oben Neu, Öffnen, Speichern, *Zeichnen*, unter dem
+  Modell Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Bemalen. Dem
+  Fensterschema fehlte die zweite ganz, deshalb stand sie in keinem Text.
+- **„Weg 2 — selbst konstruieren" nannte Grundkörper und Bausteine**, und die
+  Abbildung der drei Wege ebenso. Die Skizzen sind das Kernargument des
+  Launches.
+- **Die Statuszeile des Editors hatte keinen Singular.** „1 Freiheitsgrade
+  frei" — aufgefallen, weil es sonst mit dem ersten Handbuchbild gedruckt
+  worden wäre.
+- **Drei Absätze druckten ihre eigenen Sternchen.** `**fett mit *kursiv*
+  darin**` setzt `markup._STRONG` nicht um (das Muster lässt kein Sternchen im
+  Inneren zu), und der Umsetzer schweigt dazu. `test_no_page_prints_its_own_markup`
+  prüft es jetzt in **beiden** Sprachen — die englische Fassung ist ein
+  Katalogeintrag, den kein Umsetzer korrigiert.
+
+Neu: Kapitel „Zeichnen" vor den drei Wegen, mit drei Abbildungen — dem
+aufgenommenen Skizzenmodus, dem Schema aus Werkzeugen, Bedingungsliste und
+Statuszeile, und demselben Umriss als drei Körpern. Das Bildschirmfoto kam
+zweimal untauglich aus dem Werkzeug, bevor es taugte: ein Lochkreis legte acht
+Maßzahlen übereinander und füllte die Liste mit neun mal „Abstand 2,00", und
+die 40-mm-Grundform lag als Briefmarke in der Bildmitte.
+
+Auf der Website ist daraus der zweite Block im Funktionen-Abschnitt geworden,
+gleich hinter dem Agenten, mit demselben Bildschirmfoto. Der Listenpunkt ist
+weg.
