@@ -56,3 +56,19 @@ echte Flächen, aber keine Farbe.
 
 Dreieckszahl und Dateigröße sind beim Import gedeckelt — mit klarer Meldung
 statt Speicherüberlauf.
+
+## Was welcher Slicer bekommt
+
+`write_assembly` schreibt eine 3MF-Baugruppe — außer für `cura`. `CuraEngine`
+liest kein 3MF (die 3MF-Seite sitzt in Curas Fenster, nicht in der
+Rechenmaschine dahinter), und ein 3MF endete dort in „Der Slicer hat keine
+Druckdatei geschrieben", ohne dass irgendwo stand, warum. Cura bekommt ein STL
+mit allen Teilen der Platte; Namen und Materialslots liest es ohnehin nicht,
+und die Einstellungen kommen bei ihm über die Kommandozeile.
+
+**Bettkoordinaten nur für die Orca-Familie** (`wants_bed_coordinates`). Solidon
+rechnet um den Ursprung, und für Cura wie für PrusaSlicer schreibt die
+Übergabe genau diese Welt: `machine_center_is_zero` beim einen, eine Bettform
+von `-128` bis `128` beim anderen. Verschoben landete der Druck um den halben
+Bauraum daneben — gemessen im G-Code, und bei PrusaSlicer endete es in „All
+objects are outside of the print volume".

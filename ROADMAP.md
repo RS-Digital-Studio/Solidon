@@ -3695,7 +3695,7 @@ Maschine.
 und mit einem Satz, der weiterhilft („Der gewählte Körper ist ein Netz. Exakte
 Körper kommen aus einer STEP-Datei …"). Was übrig bleibt:
 
-- [ ] **Neu vernetzen zerstört das Netz und meldet, die Form sei unverändert.**
+- [x] **Neu vernetzen zerstört das Netz und meldet, die Form sei unverändert.**
       Aus 12 Dreiecken werden 36 864, und der Quader ist danach nicht mehr
       geschlossen und zerfällt in drei Komponenten: `remesh` baut das Ergebnis
       von `subdivide_to_size` mit `process=False` zusammen, die Punkte werden
@@ -3704,30 +3704,30 @@ Körper kommen aus einer STEP-Datei …"). Was übrig bleibt:
       Die Folge ist gemessen: die nächste Differenz fällt auf die Voxelstufe,
       und aus 40 × 30 × 10 werden 40,18 × 30,39 × 10,20. Wer danach eine
       Passung baut, baut sie um bis zu vier Zehntel daneben.
-- [ ] **`split_plane` legt ein leeres Objekt an, wenn die Ebene nicht
+- [x] **`split_plane` legt ein leeres Objekt an, wenn die Ebene nicht
       schneidet.** Der Dialog belegt `position = 0.0` vor, der Quader steht auf
       z = 0 — bestätigen ergibt „Quader A" mit 0 mm³ und null Dreiecken im
       Objektbaum, ohne einen Ton. Der Zwilling `split_pinned` hält bei
       derselben Lage mit „Diese Ebene teilt das Objekt nicht" an. Zwei
       Operationen, eine Lage, gegensätzliche Antwort.
-- [ ] **`create_from_scad` umgeht die Aufbereitung der Eingangsstufe.** Was
+- [x] **`create_from_scad` umgeht die Aufbereitung der Eingangsstufe.** Was
       OpenSCAD liefert, ist ein STL mit doppelten Punkten; über `load` wird es
       verschweißt und gemeldet („Doppelte Punkte wurden verschweißt"), über
       diesen Weg nicht. Ein Ø-12-Zylinder kommt als **252 lose Dreiecke** in
       die Szene, nicht geschlossen. Aufgefangen wird das erst von der
       Rückfallkette der nächsten Booleschen („gelang erst nach dem
       Verschweißen"); wer stattdessen exportiert, exportiert den Scherbenhaufen.
-- [ ] **`plug_hole` auf einem Körper ohne Bohrung tut nichts und sagt nichts.**
+- [x] **`plug_hole` auf einem Körper ohne Bohrung tut nichts und sagt nichts.**
       Dieselbe Lage bei den Bausteinen meldet „Die Vereinigung hat nichts
       hinzugefügt — Position prüfen". Auch `repair` an einem gesunden Netz
       bleibt stumm.
-- [ ] **Sieben Operationen für exakte Körper sind bei einem Netz anklickbar.**
+- [x] **Sieben Operationen für exakte Körper sind bei einem Netz anklickbar.**
       Verrunden, Fase, Formschräge, Exakt aushöhlen, Fläche versetzen, In ein
       Netz umwandeln, Tasche schneiden. `_refresh_actions` fragt nur, wie viele
       Objekte gewählt sind, nie welcher Bauart sie sind — dabei steht
       `SceneObject.kind` daneben. Der Kunde füllt den Dialog aus und erfährt
       danach, dass die Operation hier nie ging.
-- [ ] **Leerer OpenSCAD-Quelltext meldet einen Übersetzungsfehler.** „OpenSCAD
+- [x] **Leerer OpenSCAD-Quelltext meldet einen Übersetzungsfehler.** „OpenSCAD
       konnte den Quelltext nicht übersetzen" für ein leeres Feld; die
       Beschriftungs-Operationen sagen an derselben Stelle „Ohne Text gibt es
       nichts anzulegen".
@@ -3743,7 +3743,7 @@ Körper kommen aus einer STEP-Datei …"). Was übrig bleibt:
 | Ollama qwen3:14b | Chat Ende zu Ende in 71 s, Vorschlag als eine Transaktion |
 | ComfyUI | nicht gestartet; `reachable()` meldet es sauber, nichts hängt |
 
-- [ ] **CuraEngine bekommt ein 3MF und kann keines lesen.** Der
+- [x] **CuraEngine bekommt ein 3MF und kann keines lesen.** Der
       Druckeinstellungs-Dialog schreibt über `write_assembly` immer eine
       3MF-Baugruppe, unabhängig von `setup.flavour`, und `slice_model` reicht
       sie unverändert weiter. Derselbe Würfel als STL läuft durch (20,9 min,
@@ -3766,11 +3766,11 @@ mit einer Ecke im Ursprung und schickte `x = 15, y = 10`. Abgetragen wurden
 53 statt 212 mm³, also ein Viertel. Danach schrieb der Agent: „Das Loch ist
 durchgehend und mittig positioniert."
 
-- [ ] **Keine Prüfung schlägt an, wenn ein Schnittwerkzeug den Körper nur
+- [x] **Keine Prüfung schlägt an, wenn ein Schnittwerkzeug den Körper nur
       streift.** `checks.check` meldete zwei verwaiste Merkmale und sonst
       nichts. Bei der Vereinigung gibt es den Fall längst („hat nichts
       hinzugefügt"); bei der Differenz fehlt er.
-- [ ] **Der Steckbrief nennt keine Grenzen des Hüllquaders**, nur Flächenmitten
+- [x] **Der Steckbrief nennt keine Grenzen des Hüllquaders**, nur Flächenmitten
       — aus `face_5 bei (−15, 0, 5)` muss das Modell selbst schließen, wo die
       Mitte liegt. Ein Satz „liegt von … bis …" je Objekt kostet nichts.
       Danach die Agenten-Suite, vorher und nachher, wie es die Regel verlangt.
@@ -3816,3 +3816,36 @@ die 40-mm-Grundform lag als Briefmarke in der Bildmitte.
 Auf der Website ist daraus der zweite Block im Funktionen-Abschnitt geworden,
 gleich hinter dem Agenten, mit demselben Bildschirmfoto. Der Listenpunkt ist
 weg.
+
+### Und dann alles behoben (09.08.2026)
+
+Neun Punkte, sechs Commits, 3417 grüne Tests. Was dabei über die Meldung
+hinausging:
+
+- **Neu vernetzen teilt jetzt gleichmäßig.** `subdivide_to_size` war die
+  falsche Wahl, nicht ein Fehler in seiner Anwendung: es teilt jede Fläche
+  nach *ihren* Kanten und lässt an der Naht zwischen zwei verschieden oft
+  geteilten Flächen einen Punkt auf einer Kante liegen, die ihn nicht kennt.
+  Verschweißen behebt die Komponenten, nicht die 192 offenen Kanten.
+  `trimesh.remesh.subdivide` in Schritten bis zur Zielkantenlänge lässt keine
+  solche Naht entstehen; der Preis sind Dreiecke, wo es schon fein genug war.
+  Decke bei acht Millionen, sonst frisst eine kleine Kantenlänge den Speicher.
+- **Zwei Slicer-Funde statt einem.** Dass Cura ein STL braucht, war der
+  gesuchte; beim Nachmessen fiel der zweite auf, und er war der stillere:
+  die Bettverschiebung galt für alle drei Familien, obwohl nur die
+  Orca-Familie von der Ecke misst. Cura druckte 128 mm daneben, ohne zu
+  klagen. **Wer eine Übergabe prüft, misst die Position im G-Code** — ein
+  Lauf mit Rückgabe 0 sagt nichts darüber, wo das Teil landet.
+- **Der Agentenfund brauchte drei Änderungen, nicht eine.** Ein Befund für das
+  streifende Werkzeug, seine Durchreichung in `checks.PASSED_THROUGH` — und
+  die Lage des Körpers im Steckbrief. Die ersten beiden allein hätten dem
+  Modell gesagt, dass etwas falsch ist; erst die dritte sagt ihm, was.
+  Nachgefahren mit qwen3:14b: dieselbe Anfrage ergibt jetzt x=0, y=0 und
+  5804,21 mm³ gegen die Handrechnung 5803,65.
+- **Was die Oberfläche ausgraut, sagt jetzt warum.** Ausgrauen allein ist die
+  halbe Antwort — der Nutzer sieht, dass es nicht geht, und sucht den Grund
+  bei sich.
+
+Offen bleibt eine Messung: die Agenten-Suite vorher und nachher gegen die
+Steckbrief-Erweiterung. Sie kostet Geld und rund anderthalb Stunden je Lauf und
+läuft auf Ansage, nicht nebenbei.

@@ -21,6 +21,13 @@ führt sie durch. Der Registereintrag braucht `name`, `title`, `category`,
 `tests/test_registry_consistency.py` parametrisiert über das Register: eine
 unvollständige Op fällt dort auf, ein doppeltes Kürzel auch.
 
+**Was die Operation von ihrer Eingabe verlangt, steht im Register.** Eine Op
+des exakten Kerns trägt `requires_kind="brep"`; das Menü graut sie bei einem
+Netz aus und schreibt den Grund in den Tooltip, statt sie anzubieten und nach
+dem ausgefüllten Dialog abzulehnen (Regel 19). Der gute Satz im Kern bleibt —
+er ist die zweite Hürde, nicht die erste. Eine Aufzählung in der Oberfläche
+wäre beim nächsten Zuwachs des exakten Kerns unvollständig.
+
 ## Parameter
 
 Jeder Parameter hat Titel, Vorgabe, Einheit, Grenzen und einen `doc`-Satz, der
