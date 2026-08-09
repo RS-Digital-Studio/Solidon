@@ -87,7 +87,7 @@ class Figure:
 
 def _window(theme: Theme) -> str:
     """Das Fensterschema aus §2.5 — drei Zonen, nicht sechs."""
-    canvas = Canvas(600, 300, theme)
+    canvas = Canvas(600, 330, theme)
     colours = canvas.colours
     canvas.background()
 
@@ -128,8 +128,14 @@ def _window(theme: Theme) -> str:
         colour=colours.muted,
     )
 
-    canvas.box(10, 258, 580, 26, fill=colours.fill)
-    canvas.label(20, 276, str(_("Statusleiste: Maße · Auswahl · Fortschritt · Warnungen")), size=10)
+    # Die zweite Leiste, unter dem Modell. Sie fehlte hier, und der Text des
+    # Kapitels nannte sie deshalb auch nicht — dabei liegen in ihr die
+    # Werkzeuge, mit denen man hinsieht, und die zwei, die etwas ändern.
+    canvas.box(170, 254, 260, 24, fill=colours.fill)
+    canvas.label(180, 270, str(_("Schnitt · Messen · Bewegen · Analyse · Bemalen")), size=9)
+
+    canvas.box(10, 288, 580, 26, fill=colours.fill)
+    canvas.label(20, 306, str(_("Statusleiste: Maße · Auswahl · Fortschritt · Warnungen")), size=10)
     return canvas.svg()
 
 
@@ -851,8 +857,9 @@ FIGURES: Final[tuple[Figure, ...]] = (
         key="window",
         alt=_(
             "Das Fenster: oben die Werkzeugleiste, links Objektbaum, Parameter und "
-            "Verlauf untereinander, in der Mitte der Viewport mit dem Modell, rechts "
-            "wahlweise Chat oder Prüfbericht, unten die Statusleiste."
+            "Verlauf untereinander, in der Mitte der Viewport mit dem Modell und "
+            "darunter die Werkzeugzeile, rechts wahlweise Chat oder Prüfbericht, unten "
+            "die Statusleiste."
         ),
         caption=_("Drei Zonen, keine Betriebsarten. Rechts lässt sich ganz ausblenden."),
         build=_window,
