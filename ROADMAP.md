@@ -3849,3 +3849,22 @@ hinausging:
 Offen bleibt eine Messung: die Agenten-Suite vorher und nachher gegen die
 Steckbrief-Erweiterung. Sie kostet Geld und rund anderthalb Stunden je Lauf und
 läuft auf Ansage, nicht nebenbei.
+
+Der zehnte Fund kam erst beim Nachmessen: **die Rastnase wurde nie ein Körper
+mit ihrem Träger.** Sie steht mit 6 mal 1 mm auf der Fläche auf, und zwei
+Volumen, die sich nur in einer Fläche berühren, brechen jede boolesche
+Operation — wasserdicht, aber zwei Komponenten, nach der nächsten Bohrung drei.
+Die breiteren Bausteine fielen nie auf, weil manifold sie verschmolz. Additive
+Bausteine sinken jetzt in der Platzierung um den Überlappungswert ein.
+
+**Bilanz des Reihendurchlaufs, vorher und nachher** (92 Läufe über 77
+Operationen, jeweils mit der Vorbelegung des Dialogs):
+
+| | vorher | nachher |
+|---|---|---|
+| Ergebnis nicht geschlossen oder Volumen ≤ 0 | 2 | **0** |
+| Ergebnis in mehreren Komponenten | 2 | **0** |
+| ohne Wirkung und ohne ein Wort dazu | 7 | **0** |
+| angehalten | 19 | 20 (An Ebene teilen hält jetzt an, statt ein leeres Objekt anzulegen) |
+
+Suite 3423 grün, Lint und Typprüfung ebenso.
