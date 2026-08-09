@@ -3914,16 +3914,26 @@ das Maßfeld gilt nur für Linie und Kreis, nicht „nach dem ersten Klick"
 allgemein, und bei einer angeklickten Fläche entscheidet deren Neigung über
 die Schichtrichtung — nicht die Unterscheidung liegend/stehend.
 
-Offen, als Vorschlag und nicht als Fund:
+Aus dem Vorschlag wurde derselbe Tag noch eine Umsetzung:
 
-- [ ] **Der Skizzeneditor kennt kein Einpassen.** Der Maßstab startet fest auf
-      4 Punkte je Millimeter und bleibt, wo er ist; `set_sketch` rührt ihn
-      nicht an. Eine geöffnete Skizze von 300 mm liegt damit zur Hälfte
-      außerhalb des Bildes, und der Bauraumrahmen von 220 × 220 ist beim Start
-      gar nicht zu sehen — ausgerechnet der, der die früheste Warnung tragen
-      soll (E1). Vorschlag: beim Setzen einer Skizze den Maßstab so wählen,
-      dass Zeichnung und Bauraum hineinpassen. Eine gute Vorgabe statt eines
-      weiteren Knopfes.
+- [x] **Der Skizzeneditor kannte kein Einpassen.** Der Maßstab stand fest auf
+      4 Punkte je Millimeter, und niemand rührte ihn an; eine geöffnete Skizze
+      von 300 mm lag zur Hälfte außerhalb, der Bauraumrahmen von 220 × 220 beim
+      Start gar nicht im Bild — ausgerechnet der, der die früheste Warnung
+      tragen soll (E1). `fit_view` passt jetzt ein: eine vorhandene Zeichnung
+      gibt das Maß (ragt sie über die Platte, kommt der Rahmen von selbst mit),
+      ein leeres Blatt zeigt den Bauraum. Als Vorgabe **und** als Knopf mit
+      `Pos1`, weil man sich verzoomt.
+
+      Zwei Dinge kamen erst beim Nachmessen heraus. **Einmal einpassen genügt
+      nicht:** der erste Versuch tat es beim ersten `resizeEvent` und
+      verbrauchte sich — das Layout verteilt in mehreren Durchgängen, der erste
+      bringt die Mindestgröße, und im Fenster fehlte danach ein Sechstel des
+      Bauraums. Die Ansicht hängt jetzt an der Einpassung und zieht mit, bis
+      jemand selbst zoomt oder schiebt. Und **der Rand ist an der Beschriftung
+      bemessen, nicht an der Geometrie:** die Maßzahlen stehen außerhalb der
+      Kontur, bei vierundzwanzig Punkten stand im Handbuchbild „60,0(" am
+      rechten Rand.
 
 ## Dasselbe noch einmal, gründlicher (09.08.2026)
 
