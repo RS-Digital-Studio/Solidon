@@ -3924,3 +3924,64 @@ Offen, als Vorschlag und nicht als Fund:
       soll (E1). Vorschlag: beim Setzen einer Skizze den Maßstab so wählen,
       dass Zeichnung und Bauraum hineinpassen. Eine gute Vorgabe statt eines
       weiteren Knopfes.
+
+## Dasselbe noch einmal, gründlicher (09.08.2026)
+
+Der erste Durchgang fuhr jede Operation einmal mit ihren Vorgaben gegen einen
+Quader. Das findet, was immer bricht. Dieser fragte weiter: gegen **fünf
+Körperarten** (Netz, exakter Körper, importiertes STL, ausgehöhlt, Paar), an
+**jeder Parametergrenze** des Schemas, und danach die vier Fragen, die eine
+Anwendung beantworten muss — rechnet sie zweimal dasselbe, nimmt ein Undo sie
+zurück, übersteht sie das Speichern, läuft die Entwurfsqualität.
+
+712 Läufe. Was dabei herauskam:
+
+- [x] **Neu vernetzen war nach dem letzten Commit für importierte Teile
+      unbrauchbar.** Gleichmäßiges Teilen hält das Netz geschlossen und
+      zerteilt dabei die winzigen Bohrungsfacetten mit: aus 796 Dreiecken
+      wurden 815 104 bei fünf Millimetern, dreizehn Millionen bei einem —
+      abgelehnt. Jetzt eine Kette wie bei den booleschen Operationen: erst
+      nach Bedarf teilen, gleichmäßig nur, wenn das Netz sonst aufginge. Wer
+      die Decke reißt, erfährt die Kantenlänge, die noch geht.
+- [x] **Glätten stülpte einen ausgehöhlten Körper um** — minus 19 318 mm³,
+      wasserdicht, exportierbar, und jede Kennzahl danach falsch. Und ein
+      Vollquader aus zwölf Dreiecken schrumpfte auf sieben Prozent, während
+      der Docstring „ohne den Körper zu schrumpfen" versprach.
+- [x] **Die Merkmalszuordnung fragte ins Leere.** Sie stand außerhalb des
+      Fehler-Fangs der Auswertung: wer keinen Frage-Dialog hat — Kommandozeile,
+      Fernsteuerung, Agent —, bekam eine Ausnahme aus `evaluate` und einen
+      leeren Prüfbericht statt der zwei Bohrungen, zwischen denen zu wählen war.
+- [x] **Der exakte Gewindebolzen hielt nur ein Fünftel seines Schemas.** Ab
+      50 mm Durchmesser kam nie ein geschlossener Körper heraus, bei 100 mm und
+      1 mm Steigung einer mit null Volumen und null Komponenten, bei 0,25 mm
+      Steigung neunzehn Bruchstücke — stumm. M2 mit 1,5 mm Steigung ergab einen
+      Faden von 0,16 mm, weil die Kernprüfung nur fragte, ob überhaupt etwas
+      übrig bleibt. Beides wird jetzt geprüft, bevor der Körper die Operation
+      verlässt.
+- [x] **Das OpenSCAD-Zeitlimit kam als `subprocess.TimeoutExpired`** heraus
+      statt als Fehler mit Ausweg. `sphere(r = 50, $fn = 2000)` genügt dafür —
+      ein Vertipper, kein Angriff.
+
+### Was der Durchgang bestätigt hat
+
+Das ist der andere Teil des Ergebnisses, und der größere:
+
+| Frage | Läufe | Befund |
+|---|---|---|
+| Wirft je etwas anderes als ein `AppError`? | 712 | keiner |
+| Zweite Auswertung gleich der ersten? | 74 | alle |
+| Undo stellt den Vorzustand her? | 74 | alle |
+| Speichern und Laden ändert nichts? | 74 | alle |
+| Entwurfsqualität läuft, wo die feine läuft? | 74 | alle |
+| Öffnet jeder Operationsdialog? | 77 | 71, die sechs anderen haben keine Parameter oder sind zu Recht ausgegraut |
+| Felder auf der Vorderseite ≤ 8, Titel, Einheit, Erklärung? | 71 Dialoge | vollständig |
+| Kommandozeile: alle Operationen, Fehler ohne Stapelabzug? | 77 + 7 Fehlerfälle | vollständig |
+
+Suite 3438 grün (in zwei Portionen — der Abriss im Lauf am Stück ist weiter
+der bekannte native, `test_chat_ui.py` läuft allein durch).
+
+**Beobachtung ohne Fix:** `scale_object` mit Faktor 0,001 und `fit_to_size` mit
+0,1 mm liefern einen Körper, den man nicht mehr sieht und nicht drucken kann —
+mathematisch richtig, verlangt, und ohne ein Wort dazu. Eine Warnung „kleiner
+als die Düse" wäre eine Erweiterung, kein Fehler; sie steht hier, damit die
+Entscheidung eine ist.
