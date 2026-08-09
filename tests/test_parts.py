@@ -424,3 +424,56 @@ def test_the_change_log_says_what_moved() -> None:
     for spec in PARTS.all():
         for change in spec.changes:
             assert change.date and change.reason
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["insert_latch", "insert_rib", "insert_snap_fit", "insert_wall_mount", "insert_overhang_fan"],
+)
+def test_an_added_part_grows_together_with_the_body(name: str, profile: Profile) -> None:
+    """Ein aufgesetzter Baustein muss **ein** Körper mit seinem Träger werden.
+
+    Die Rastnase wurde es nicht: sie sitzt mit 6 × 1 mm auf der Fläche auf, und
+    zwei Volumen, die sich nur in einer Fläche berühren, sind das eine, woran
+    eine boolesche Operation zuverlässig scheitert (§39). Heraus kam ein
+    wasserdichtes Netz aus zwei Komponenten — beim nächsten Bohren waren es
+    drei. Die breiteren Bausteine fielen nie auf, weil manifold sie verschmolz.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    History(project.document).apply(
+        name,
+        [OperationDraft(op=name, inputs=("obj_1",), params={"at_feature": "face_top"})],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [f.message for f in result.scene.report.findings]
+    body = result.scene.objects["obj_1"].mesh
+    assert body.component_count == 1, name
+    assert body.is_watertight, name
+
+
+def test_the_part_keeps_the_size_it_promises(profile: Profile) -> None:
+    """Eingesenkt wird um den Überlappungswert, nicht um einen Millimeter.
+
+    Die Nase steht 3 mm hoch über der Fläche; was im Körper verschwindet, ist
+    ein Hundertstel und liegt unter dem, was die Anzeige unterscheidet.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    History(project.document).apply(
+        "Nase",
+        [
+            OperationDraft(
+                op="insert_latch",
+                inputs=("obj_1",),
+                params={"at_feature": "face_top", "height": 3.0},
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    top = result.scene.objects["obj_1"].mesh.bounds.maximum[2]
+    assert top == pytest.approx(13.0, abs=0.02), "10 mm Quader plus 3 mm Nase"

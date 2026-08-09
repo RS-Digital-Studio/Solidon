@@ -25,6 +25,7 @@ from typing import Any
 from app.core.errors import Action, AppError
 from app.core.geom.boolean import BooleanKind, boolean, without_effect
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.prepare import BOOLEAN_OVERLAP
 from app.core.geom.transform import rotation, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
 from app.core.log import get_logger
@@ -223,13 +224,22 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     produced = spec.fn(spec.params(**values))
 
     anchor = _anchor(source, ctx.params)
-    placed = _place(as_mesh_data(produced.mesh), ctx.params, anchor)
+    # Ein aufgesetzter Baustein sinkt ein Hundertstel ein. Zwei Volumen, die
+    # sich nur in einer Fläche berühren, sind das eine, woran eine boolesche
+    # Operation zuverlässig scheitert (§39) — die Rastnase steht mit 6 mal 1 mm
+    # auf, und heraus kam ein wasserdichtes Netz aus zwei Komponenten, beim
+    # nächsten Bohren drei. Die breiteren Bausteine fielen nie auf, weil
+    # manifold sie verschmolz; die Frage ist für alle dieselbe und steht darum
+    # hier und nicht in jedem einzelnen. Ein subtraktiver braucht es nicht: sein
+    # Werkzeug reicht ohnehin über die Fläche hinaus.
+    sink = 0.0 if spec.subtractive else BOOLEAN_OVERLAP
+    placed = _place(as_mesh_data(produced.mesh), ctx.params, anchor, sink)
     body = as_mesh_data(source.mesh)
     kind: BooleanKind = "difference" if spec.subtractive else "union"
     outcome = boolean(kind, [body, placed], quality=ctx.quality)
 
     features = dict(source.features)
-    features.update(_placed_features(produced, spec, ctx.params, anchor))
+    features.update(_placed_features(produced, spec, ctx.params, anchor, sink))
 
     # Ein Baustein, der den Körper nicht getroffen hat, sagt das. Hier und
     # nicht in jedem einzelnen: die Frage ist für alle dieselbe, und die
@@ -283,12 +293,19 @@ def _anchor(source: SceneObject, params: Any) -> Vec3:
     return (float(centre[0]), float(centre[1]), float(centre[2]))
 
 
-def _place(mesh: MeshData, params: Any, anchor: Vec3 = (0.0, 0.0, 0.0)) -> MeshData:
+def _place(
+    mesh: MeshData, params: Any, anchor: Vec3 = (0.0, 0.0, 0.0), sink: float = 0.0
+) -> MeshData:
     from app.core.geom.transform import apply
 
     axis = getattr(params, "axis", "z")
     angle = float(getattr(params, "angle", 0.0))
     body = mesh
+    if sink:
+        # In seinem **eigenen** System, vor jeder Drehung: dort zeigt +Z aus
+        # dem Träger heraus, also geht -Z hinein, gleich an welche Achse er
+        # danach gelegt wird.
+        body = apply(body, translation((0.0, 0.0, -sink)))
     if axis != "z":
         # Den Baustein so umlegen, dass sein eigenes +Z entlang der gewählten Achse
         # zeigt.
@@ -304,7 +321,11 @@ def _place(mesh: MeshData, params: Any, anchor: Vec3 = (0.0, 0.0, 0.0)) -> MeshD
 
 
 def _placed_features(
-    produced: PartResult, spec: PartSpec, params: Any, anchor: Vec3 = (0.0, 0.0, 0.0)
+    produced: PartResult,
+    spec: PartSpec,
+    params: Any,
+    anchor: Vec3 = (0.0, 0.0, 0.0),
+    sink: float = 0.0,
 ) -> dict[str, Feature]:
     """Die Merkmale des Bausteins, mitbewegt und so benannt, dass sie nicht
     kollidieren können.
@@ -315,7 +336,7 @@ def _placed_features(
     """
     from app.core.perceive.matching import moved_features
 
-    matrix = _matrix(params, anchor)
+    matrix = _matrix(params, anchor, sink)
     moved = moved_features(dict(produced.features), matrix)
     return {
         f"{spec.name}_{name}": dataclasses.replace(feature, id=f"{spec.name}_{name}")
@@ -323,7 +344,7 @@ def _placed_features(
     }
 
 
-def _matrix(params: Any, anchor: Vec3 = (0.0, 0.0, 0.0)) -> Any:
+def _matrix(params: Any, anchor: Vec3 = (0.0, 0.0, 0.0), sink: float = 0.0) -> Any:
     import numpy as np
 
     from app.core.geom.ops import as_transform
@@ -331,6 +352,8 @@ def _matrix(params: Any, anchor: Vec3 = (0.0, 0.0, 0.0)) -> Any:
     axis = getattr(params, "axis", "z")
     angle = float(getattr(params, "angle", 0.0))
     matrix = np.eye(4)
+    if sink:
+        matrix = translation((0.0, 0.0, -sink)) @ matrix
     if axis != "z":
         matrix = (rotation("y", 90.0) if axis == "x" else rotation("x", -90.0)) @ matrix
     if angle:
