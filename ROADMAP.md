@@ -3632,3 +3632,27 @@ Vertagt mit Begründung: die Orientierungssuche der Fernsteuerung in einen
 Arbeiter legen; die englischen Bestands-Docstrings in fünf berührten
 Dateien (nicht aus diesem Diff — CLAUDE.md verspricht mehr, als der
 Bestand hält, eine der beiden Seiten gehört nachgezogen).
+
+## Der Erzeugen-Einstieg, aufgeräumt (09.08.2026)
+
+Roberts Beobachtung aus der Bedienung: das Zeichnen liegt zu tief, und im
+Menü stehen zu viele ähnliche Einträge. Beides behoben:
+
+- **„Zeichnen" steht jetzt oben neben „Modell einfügen".** Die
+  Hauptwege-Tabelle nannte die Werkzeugzeile seit je als Ort für Weg 2 —
+  belegt war er nie. Der Knopf startet den Skizzenmodus ohne festgelegte
+  Operation; bei „Fertig" fragt ein Dialog, was aus der Skizze wird (die
+  fünf Arten aus dem Register, mit der Zeichnung vor Augen statt vorab aus
+  fünf Menüeinträgen). „Zurück zum Zeichnen" vernichtet nichts — es öffnet
+  den Modus mit derselben Zeichnung wieder. Die fünf Menüeinträge bleiben
+  als Direktwege.
+- **Die Mesh/B-Rep-Zwillinge sind zusammengelegt.** „Quader anlegen" und
+  „Exakten Quader anlegen" waren zwei Einträge für einen Quader (Zylinder
+  ebenso). Jetzt: ein Eintrag, „Exakt (B-Rep)" als Umschalter hinten im
+  Dialog, die Parameter gefiltert auf das Schema des gewählten Kerns, die
+  Live-Vorschau wechselt mit. `MENU_TWINS` im Register hält die Zuordnung —
+  auch `menu_path` und damit der Menüort, den der Agent nennt, sagen den
+  Umschalter dazu. Beide Ops bleiben im Register, in der Palette und im
+  Verlauf. Die Zusicherung „genau ein Menüeintrag je Operation" heißt jetzt
+  „höchstens einer, und jede bleibt erreichbar" (Grenzen-Tabelle in
+  `.claude/rules/oberflaeche.md` nachgezogen).

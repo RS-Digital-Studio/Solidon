@@ -171,9 +171,23 @@ def test_the_menubar_stays_a_bar(window: MainWindow) -> None:
 
 
 def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
+    """Jede Operation bleibt erreichbar — im Menü, oder als zusammengelegter
+    Zwilling über den Umschalter im Dialog ihres Partners plus die Palette.
+    Zwei Menüeinträge für einen Quader waren „eine Operation je Variante",
+    und das Hausprinzip sagt das Gegenteil.
+    """
+    from app.core.registry import MENU_TWINS, palette_entries
+
     labels = {action.text() for action in all_menu_actions(window)}
+    offered = {entry.name for entry in palette_entries()}
 
     for spec in REGISTRY.all():
+        if spec.name in MENU_TWINS:
+            assert str(spec.title) not in labels, f"{spec.name} soll kein eigener Eintrag sein"
+            assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
+            partner = REGISTRY.get(MENU_TWINS[spec.name])
+            assert str(partner.title) in labels, "der sichtbare Zwilling trägt den Eintrag"
+            continue
         assert str(spec.title) in labels, f"{spec.name} is missing from the menu"
 
 
@@ -2155,6 +2169,100 @@ def test_a_remote_call_says_where_it_came_from(window: MainWindow) -> None:
     assert origin is not None
     assert origin.by == "agent"
     assert origin.model == REMOTE_ORIGIN
+
+
+def test_the_toolbar_has_a_drawing_entry_for_way_two(window: MainWindow) -> None:
+    """§2.2: Weg 2 (neu konstruieren) nennt die Werkzeugzeile als Ort — der
+    Platz war nie belegt, und das Zeichnen lag drei Ebenen tief im Menü. Der
+    Knopf startet den Skizzenmodus ohne festgelegte Operation; die
+    Erzeugungsart kommt bei „Fertig".
+    """
+    from PySide6.QtWidgets import QToolBar
+
+    toolbar = window.findChild(QToolBar)
+    assert toolbar is not None
+    labels = [action.text() for action in toolbar.actions() if action.text()]
+    assert "Zeichnen" in labels
+    assert labels.index("Modell einfügen") < labels.index("Zeichnen")
+
+    window.action_sketch_free()
+    try:
+        assert window.sketching()
+        assert window._sketch_target == ""
+    finally:
+        window.finish_sketch(keep=False)
+
+
+def test_a_free_sketch_asks_what_it_becomes(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Fluss hinter dem Zeichnen-Knopf: „Fertig" fragt, was aus der
+    Skizze wird — und „Zurück zum Zeichnen" vernichtet nichts, es öffnet den
+    Skizzenmodus mit derselben Zeichnung wieder (§2.1, keine Sackgassen).
+    """
+    from app.ui import main_window as window_module
+    from app.ui.op_dialog import SketchUseDialog
+
+    # Der Weiter-Weg: die Wahl landet als vorbefüllte Skizze in der Operation.
+    ran: list[tuple[str, str]] = []
+    monkeypatch.setattr(SketchUseDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(SketchUseDialog, "chosen", lambda self: "sketch_extrude")
+    monkeypatch.setattr(
+        type(window),
+        "run_operation",
+        lambda self, spec, given=None: ran.append((spec.name, next(iter(given.values())))),
+    )
+    window._offer_sketch_use('{"plane": "plane:xy"}')
+    assert ran == [("sketch_extrude", '{"plane": "plane:xy"}')]
+
+    # Der Zurück-Weg: kein Verlust, der Modus öffnet mit der Zeichnung.
+    monkeypatch.setattr(SketchUseDialog, "exec", lambda self: QDialog.DialogCode.Rejected)
+    kept: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        type(window), "start_sketch", lambda self, op, text="": kept.append((op, text))
+    )
+    window._offer_sketch_use('{"plane": "plane:xy"}')
+    assert kept == [("", '{"plane": "plane:xy"}')]
+    assert window_module is not None
+
+
+def test_the_sketch_use_dialog_lists_the_five_kinds(window: MainWindow) -> None:
+    from app.ui.op_dialog import SketchUseDialog
+
+    dialog = SketchUseDialog(window)
+    names = {
+        str(dialog._list.item(index).data(Qt.ItemDataRole.UserRole))
+        for index in range(dialog._list.count())
+    }
+    assert names == {
+        "sketch_extrude",
+        "sketch_pocket",
+        "sketch_revolve",
+        "sketch_loft",
+        "sketch_sweep",
+    }
+    assert dialog.chosen() in names, "eine Vorauswahl steht, Eingabe genügt"
+
+
+def test_the_exact_twin_runs_through_the_partner_dialog(window: MainWindow) -> None:
+    """Die zusammengelegten Zwillinge: derselbe Dialog, ein Umschalter, und
+    erst er entscheidet den Rechenkern. Die Parameter werden auf das Schema
+    der gewählten Op gefiltert — der exakte Quader kennt kein ``anchor``.
+    """
+    from PySide6.QtWidgets import QCheckBox
+
+    window.run_operation(REGISTRY.get("create_box"))
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    exact = next(box for box in dialog.findChildren(QCheckBox) if "B-Rep" in box.text())
+    exact.setChecked(True)
+    # ``accept`` wendet an und räumt den Dialog selbst ab — danach gehört
+    # das C++-Objekt niemandem mehr, auch keinem ``finally``.
+    dialog.accept()
+    window.session.wait_for_idle()
+
+    ops = window.session.project.document.ops
+    assert [entry.op for entry in ops] == ["create_brep_box"]
+    assert "anchor" not in ops[-1].params, "gefiltert auf das Schema des exakten Kerns"
 
 
 def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWindow) -> None:

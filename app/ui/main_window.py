@@ -27,6 +27,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -86,7 +87,14 @@ from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
 from app.core.perceive.digest import digest
-from app.core.registry import REGISTRY, OperationSpec, PaletteEntry, menu_tree, palette_entries
+from app.core.registry import (
+    MENU_TWINS,
+    REGISTRY,
+    OperationSpec,
+    PaletteEntry,
+    menu_tree,
+    palette_entries,
+)
 from app.core.scene import (
     EvaluationResult,
     OperationDraft,
@@ -134,7 +142,7 @@ from app.ui.labels import MENU_GROUPS, feature_label
 from app.ui.loading import LoadingVeil
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
-from app.ui.op_dialog import OperationDialog
+from app.ui.op_dialog import OperationDialog, SketchUseDialog
 from app.ui.overlay import OverlayHost, card_stylesheet
 from app.ui.paint_bar import PaintBar
 from app.ui.palette import ROLES
@@ -1032,6 +1040,12 @@ class MainWindow(QMainWindow):
                     self._menus.append(target)
                 subgroups: dict[str, QMenu] = {}
                 for spec in section.entries:
+                    if spec.name in MENU_TWINS:
+                        # Zusammengelegte Zwillinge (MENU_TWINS): der B-Rep-
+                        # Zwilling hat keinen eigenen Eintrag — sein Weg ist
+                        # der Umschalter im Dialog des Mesh-Zwillings, und
+                        # erreichbar bleibt er über Palette und Verlauf.
+                        continue
                     place = self._subgroup_for(spec, target, subgroups)
                     self._op_actions[spec.name] = self._operation_action(place, spec)
 
@@ -1276,14 +1290,22 @@ class MainWindow(QMainWindow):
             ("open", tr("Öffnen"), self.action_open),
             ("save", tr("Speichern"), self.action_save),
             ("import", tr("Modell einfügen"), self.action_import),
+            # Weg 2 aus §2.2 bekommt seinen vorgesehenen Platz: die
+            # Hauptwege-Tabelle nennt für „neu konstruieren" ausdrücklich die
+            # Werkzeugzeile — belegt war er nie, und das Zeichnen lag drei
+            # Ebenen tief im Menü. Erst zeichnen, die Erzeugungsart kommt bei
+            # „Fertig".
+            ("category.sketch", tr("Zeichnen"), self.action_sketch_free),
         ):
             action = QAction(icon(symbol, toolbar), label, self)
             action.triggered.connect(slot)
             toolbar.addAction(action)
             if symbol == "import":
-                # Der eine Knopf der Zeile, der eine Transaktion auslöst —
-                # nach Ablauf des Testlaufs graut er mit den Menüs aus (§2 C).
+                # Zwei Knöpfe der Zeile lösen Transaktionen aus — nach Ablauf
+                # des Testlaufs grauen sie mit den Menüs aus (§2 C).
                 self._toolbar_import = action
+            if symbol == "category.sketch":
+                self._toolbar_sketch = action
 
         # Rechts neben den vier Knöpfen stand tausend Pixel nichts. Dort steht
         # jetzt, was das Projekt gerade ist und worauf es gedruckt wird —
@@ -1454,6 +1476,7 @@ class MainWindow(QMainWindow):
         self.import_action.setEnabled(not locked)
         self.generate_action.setEnabled(not locked)
         self._toolbar_import.setEnabled(not locked)
+        self._toolbar_sketch.setEnabled(not locked)
         for action in (
             self.auto_split_action,
             self.variants_action,
@@ -1461,6 +1484,7 @@ class MainWindow(QMainWindow):
             self.import_action,
             self.generate_action,
             self._toolbar_import,
+            self._toolbar_sketch,
         ):
             self._lock_hint(action, locked)
 
@@ -2276,6 +2300,8 @@ class MainWindow(QMainWindow):
         )
         self._sketch_panel = panel
         self._sketch_target = op_name
+        """Leer beim freien Zeichnen über den Werkzeugzeilen-Knopf — die
+        Erzeugungsart kommt dann bei „Fertig" (§2.2, Weg 2)."""
         self.middle_stack.addWidget(panel)
         switch(self.middle_stack, panel)
         # Der Startbildschirm liegt vor dem Arbeitsbereich, solange nichts
@@ -2291,10 +2317,9 @@ class MainWindow(QMainWindow):
         self.tools.setVisible(False)
         self.sketch_bar.setVisible(True)
         self._update_actions()
+        named = str(REGISTRY.get(op_name).title) if op_name else tr("freies Zeichnen")
         self.statusBar().showMessage(
-            tr("Skizze für {op} — Escape verlässt den Modus.").format(
-                op=str(REGISTRY.get(op_name).title)
-            )
+            tr("Skizze für {op} — Escape verlässt den Modus.").format(op=named)
         )
 
     def finish_sketch(self, keep: bool = True) -> None:
@@ -2315,8 +2340,34 @@ class MainWindow(QMainWindow):
         self.sketch_bar.setVisible(False)
         self.statusBar().clearMessage()
         self._update_actions()
-        if keep and target and text:
-            self.run_operation(REGISTRY.get(target), given={_sketch_param(target): text})
+        if keep and text:
+            if target:
+                self.run_operation(REGISTRY.get(target), given={_sketch_param(target): text})
+            else:
+                # Freies Zeichnen (Weg 2): erst jetzt fällt die Entscheidung,
+                # was aus der Skizze wird — mit der fertigen Zeichnung vor
+                # Augen statt vorab aus fünf Menüeinträgen.
+                self._offer_sketch_use(text)
+
+    def action_sketch_free(self) -> None:
+        """Der Zeichnen-Knopf der Werkzeugzeile: Skizzenmodus ohne
+        festgelegte Operation (§2.2, Weg 2)."""
+        self.start_sketch("")
+
+    def _offer_sketch_use(self, text: str) -> None:
+        """Was soll aus der Skizze werden? — die fünf Arten, mit der
+        Zeichnung vor Augen.
+
+        Abbrechen wirft nichts weg: es geht zurück in den Skizzenmodus, die
+        Zeichnung bleibt. Ein „Abbrechen", das gezeichnete Arbeit vernichtet,
+        wäre die Sackgasse, die §2.1 verbietet.
+        """
+        dialog = SketchUseDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.chosen():
+            name = dialog.chosen()
+            self.run_operation(REGISTRY.get(name), given={_sketch_param(name): text})
+            return
+        self.start_sketch("", text)
 
     def action_command_palette(self) -> None:
         """Eine Taste, alles — und die Kürzel lernen sich nebenbei (§2.6)."""
@@ -3000,6 +3051,35 @@ class MainWindow(QMainWindow):
             )
 
         if spec.params.spec():
+            # Zusammengelegte Zwillinge (MENU_TWINS): derselbe Dialog trägt
+            # hinten einen Umschalter, und erst er entscheidet, welche der
+            # beiden Ops rechnet — Mesh oder exakter Kern. Die Parameter
+            # werden auf das Schema der gewählten Op gefiltert (der exakte
+            # Quader kennt kein ``anchor``, der exakte Zylinder keine
+            # ``segments``).
+            hidden_twin = next(
+                (hidden for hidden, shown in MENU_TWINS.items() if shown == spec.name), None
+            )
+            exact: QCheckBox | None = None
+            if hidden_twin is not None:
+                exact = QCheckBox(tr("Exakter Körper (B-Rep) — echte Flächen und Kanten"), self)
+                exact.setToolTip(
+                    tr(
+                        "Rechnet im exakten Kern statt als Netz: STEP-Export und "
+                        "spätere Verrundungen bleiben möglich. Netz-Feinheiten "
+                        "wie Verankerung oder Segmentzahl entfallen."
+                    )
+                )
+
+            def chosen_spec() -> OperationSpec:
+                if exact is not None and exact.isChecked() and hidden_twin is not None:
+                    return REGISTRY.get(hidden_twin)
+                return spec
+
+            def fitted(entered: Mapping[str, Any]) -> dict[str, Any]:
+                allowed = {entry.name for entry in chosen_spec().params.spec()}
+                return {key: value for key, value in entered.items() if key in allowed}
+
             dialog = OperationDialog(
                 spec,
                 self._object_names(),
@@ -3007,15 +3087,33 @@ class MainWindow(QMainWindow):
                 values=values,
                 sources=self._source_names(),
                 parameter_values=self._parameter_values(),
+                extra=exact,
             )
+            if exact is not None:
+                # Die Live-Vorschau (§18.7) muss den Kernwechsel mitmachen —
+                # eine Vorschau der falschen Variante wäre gelogen.
+                exact.toggled.connect(dialog.valuesChanged)
             # §18.7: der Dialog zeigt, was er täte, während getippt wird —
             # dieselbe Differenzansicht wie beim Agentenvorschlag.
             self._wire_preview(
                 dialog,
-                lambda entered: [OperationDraft(op=spec.name, inputs=inputs, params=entered)],
+                lambda entered: [
+                    OperationDraft(op=chosen_spec().name, inputs=inputs, params=fitted(entered))
+                ],
             )
             dialog.place_beside(self.viewport)
-            self._open_operation_dialog(dialog, lambda: run(dialog.values()))
+
+            def run_chosen() -> None:
+                picked = chosen_spec()
+                if picked is spec:
+                    run(dialog.values())
+                    return
+                self.session.apply(
+                    picked.title,
+                    [OperationDraft(op=picked.name, inputs=inputs, params=fitted(dialog.values()))],
+                )
+
+            self._open_operation_dialog(dialog, run_chosen)
             return
         # Ohne Parameter gibt es nichts zu fragen, und ein Fenster mit nur „OK"
         # wäre die Bestätigung vor einer rücknehmbaren Handlung, die Regel 19

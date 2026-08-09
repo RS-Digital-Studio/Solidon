@@ -88,6 +88,22 @@ def group_title(category: str) -> str:
     return category
 
 
+#: Zusammengelegte Menü-Zwillinge: dieselbe Handlung in zwei Rechenkernen.
+#:
+#: „Quader anlegen" und „Exakten Quader anlegen" waren zwei Menüeinträge für
+#: einen Quader — gegen das Hausprinzip „eine Operation je Handlung, nicht je
+#: Variante". Die Ops bleiben im Register getrennt (Verlauf und Provenienz
+#: brauchen das); zusammengelegt ist nur die Bedienung: der Eintrag des
+#: Mesh-Zwillings trägt einen Umschalter „Exakt (B-Rep)", und der Dialog
+#: wählt die Op. Schlüssel ist der versteckte B-Rep-Zwilling, Wert der
+#: sichtbare Eintrag. Erreichbar bleiben beide — über die Befehlspalette und
+#: über den Verlauf.
+MENU_TWINS: Final[dict[str, str]] = {
+    "create_brep_box": "create_box",
+    "create_brep_cylinder": "create_cylinder",
+}
+
+
 #: Wie eine Merkmalsart heißt, wenn sie jemand liest. Im erzeugten
 #: Referenzteil stand „Features: face, hole" — die Schlüssel, mit denen
 #: ``applies_to`` rechnet, in einem deutschen Handbuch.

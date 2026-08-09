@@ -29,6 +29,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QSpinBox,
     QToolButton,
     QVBoxLayout,
@@ -235,7 +237,12 @@ class OperationDialog(QDialog):
         sources: Mapping[str, str] | None = None,
         parameter_values: Mapping[str, float] | None = None,
         features: Mapping[str, str] | None = None,
+        extra: QWidget | None = None,
     ) -> None:
+        """``extra`` hängt ein Widget des Aufrufers unter „Weitere
+        Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
+        ihren „Exakt"-Umschalter, ohne dass der Dialog seine Generik aus
+        dem Schema verliert."""
         super().__init__(parent)
         self.spec = spec
         self.setWindowTitle(str(spec.title))
@@ -279,6 +286,8 @@ class OperationDialog(QDialog):
             layout.addWidget(description)
         layout.addLayout(front)
 
+        if extra is not None:
+            advanced.addRow("", extra)
         if advanced.rowCount():
             # Eine ankreuzbare Gruppe graut ihre Felder aus, statt sie
             # wegzuklappen — die gestufte Tiefe aus §2.4 war damit gedacht und
@@ -518,3 +527,49 @@ class OperationDialog(QDialog):
             elif isinstance(editor, QLineEdit):
                 collected[entry.name] = editor.text()
         return collected
+
+
+class SketchUseDialog(QDialog):
+    """Was soll aus der gezeichneten Skizze werden? (§2.2, Weg 2)
+
+    Der Zeichnen-Knopf der Werkzeugzeile startet den Skizzenmodus ohne
+    festgelegte Operation — die Entscheidung fällt hier, mit der fertigen
+    Zeichnung vor Augen, statt vorab aus fünf Menüeinträgen. Die Liste kommt
+    aus dem Register: eine neue Skizzen-Op taucht von selbst auf.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        from app.core.registry import REGISTRY, menu_tree
+
+        super().__init__(parent)
+        self.setWindowTitle(tr("Was soll daraus werden?"))
+        self.setMinimumWidth(380)
+
+        self._list = QListWidget(self)
+        self._list.setWordWrap(True)
+        section = next((entry for entry in menu_tree(REGISTRY) if entry.category == "sketch"), None)
+        for spec in section.entries if section else ():
+            item = QListWidgetItem(f"{spec.title}\n    {spec.doc}")
+            item.setData(Qt.ItemDataRole.UserRole, spec.name)
+            self._list.addItem(item)
+        if self._list.count():
+            self._list.setCurrentRow(0)
+        self._list.itemDoubleClicked.connect(lambda _item: self.accept())
+
+        buttons = QDialogButtonBox(self)
+        use = buttons.addButton(tr("Weiter"), QDialogButtonBox.ButtonRole.AcceptRole)
+        use.setDefault(True)
+        # Kein „Abbrechen", das Arbeit vernichtet: der Weg zurück führt in
+        # den Skizzenmodus, die Zeichnung bleibt (§2.1, keine Sackgassen).
+        buttons.addButton(tr("Zurück zum Zeichnen"), QDialogButtonBox.ButtonRole.RejectRole)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self._list)
+        layout.addWidget(buttons)
+
+    def chosen(self) -> str:
+        """Der Name der gewählten Skizzen-Operation, oder leer."""
+        item = self._list.currentItem()
+        return str(item.data(Qt.ItemDataRole.UserRole)) if item else ""

@@ -24,6 +24,7 @@ from app.core.registry.registry import (
     CATEGORIES,
     FEATURE_TITLES,
     MENU_GROUPS,
+    MENU_TWINS,
     REGISTRY,
     MenuSection,
     OperationSpec,
@@ -56,6 +57,12 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
     Ein Test hält Leiste und Pfad aneinander fest.
     """
     source = registry or REGISTRY
+    if spec.name in MENU_TWINS:
+        # Der B-Rep-Zwilling hat keinen eigenen Eintrag mehr (MENU_TWINS):
+        # sein Ort ist der Eintrag des Mesh-Zwillings samt Umschalter — alles
+        # andere schickte Nutzer und Agent an eine Stelle, die es nicht gibt.
+        twin = source.get(MENU_TWINS[spec.name])
+        return f"{menu_path(twin, source)} ({_('Umschalter „Exakt“')})"
     steps = [group_title(spec.category)]
 
     populated = {entry.category for entry in source.all()}

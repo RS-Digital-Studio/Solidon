@@ -60,13 +60,17 @@ gerissen werden:
 | Zeilen in einem Menü (ein Untermenü zählt als eine) | ≤ 12 |
 | Umschalter in der Werkzeugzeile | ≤ 8 |
 | Felder auf der Vorderseite eines Operationsdialogs | ≤ 8 |
-| Menüeinträge je Operation | genau 1 |
+| Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben als Umschalter im Dialog ihres Partners, erreichbar über Palette und Verlauf |
 
 Wer eine Zahl erhöhen will, tut das mit Absicht und begründet es im Commit.
 
 **Eine Operation je Handlung, nicht je Variante.** Neun Texturmuster sind ein
 Menüeintrag mit einem Auswahlparameter, nicht neun Einträge. Rechteck aus zwei
-Ecken oder aus Mitte und Maß ist dasselbe Werkzeug mit einem Umschalter.
+Ecken oder aus Mitte und Maß ist dasselbe Werkzeug mit einem Umschalter. Die
+Mesh/B-Rep-Zwillinge (Quader, Zylinder) sind dieselbe Handlung in zwei
+Rechenkernen: ein Eintrag, „Exakt (B-Rep)" ist ein Umschalter hinten im
+Dialog, und `MENU_TWINS` im Register hält die Zuordnung — auch für den
+Menüort, den der Agent nennt (§2.6).
 
 **Jede neue Funktion nennt ihren Hauptweg** (§2.2), bevor sie einen Platz
 bekommt:
@@ -74,7 +78,7 @@ bekommt:
 | Weg | Ort an der Oberfläche |
 |---|---|
 | Weg 1 — fremdes Modell anpassen | Kontextmenü am Merkmal, Vorschlag im Prüfbericht |
-| Weg 2 — neu konstruieren | Werkzeugzeile, Menü *Erzeugen* / *Ändern* |
+| Weg 2 — neu konstruieren | Werkzeugzeile („Zeichnen": erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig"), Menü *Erzeugen* / *Ändern* |
 | Weg 3 — generieren | Chat und Generierungsdialog |
 | keiner der drei | Untermenü und Befehlspalette, sonst nichts |
 
