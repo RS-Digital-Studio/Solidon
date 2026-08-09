@@ -16,12 +16,14 @@ from __future__ import annotations
 from typing import cast
 
 from app.core.backends import openscad
+from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData, read_mesh
+from app.core.geom.repair import merge_vertices
 from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import SEGMENTS, box, cylinder
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, Feature, OpContext, OpResult, SceneObject
+from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult, SceneObject
 from app.i18n import _
 
 _ANCHORS = ("centre", "corner")
@@ -217,10 +219,31 @@ def create_from_scad(ctx: OpContext) -> OpResult:
     ausgeführt wird.
     """
     params = cast(ScadParams, ctx.params)
+    if not params.source.strip():
+        raise ValidationError(
+            field="source",
+            detail=_("Ohne Quelltext gibt es nichts anzulegen."),
+            constraint="empty",
+        )
     result = openscad.render(params.source)
-    mesh = read_mesh(result.stl, ".stl")
+    # OpenSCAD schreibt STL, und STL kennt keine gemeinsamen Punkte: jedes
+    # Dreieck bringt seine eigenen drei mit. Über ``load`` verschweißt die
+    # Eingangsstufe sie (§17.1) und sagt es; dieser Weg ging daran vorbei, und
+    # ein Ø-12-Zylinder kam als 252 lose Dreiecke in der Szene an. Bemerkt hat
+    # das erst die nächste boolesche Operation, die ihn retten musste.
+    mesh, removed = merge_vertices(read_mesh(result.stl, ".stl"))
     entry = _object(params.name or "OpenSCAD", mesh, float(mesh.bounds.size[2]))
-    return OpResult(outputs=[entry], findings=result.findings)
+    findings = list(result.findings)
+    if removed:
+        findings.append(
+            Finding(
+                code="ingest.welded",
+                severity="info",
+                message=_("Doppelte Punkte wurden verschweißt."),
+                values={"removed": removed},
+            )
+        )
+    return OpResult(outputs=[entry], findings=findings)
 
 
 def _object(name: str, mesh: MeshData, height: float) -> SceneObject:

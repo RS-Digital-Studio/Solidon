@@ -350,3 +350,80 @@ def test_a_written_out_path_still_works() -> None:
 
     assert check.allowed
     assert set(check.references) == {"teil.stl", "lib.scad"}
+
+
+# --- was der Körper wert ist, wenn er ankommt ---------------------------------------
+
+
+def test_a_body_from_openscad_arrives_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OpenSCAD schreibt STL, und STL kennt keine gemeinsamen Punkte.
+
+    Über ``load`` verschweißt die Eingangsstufe sie und sagt es; dieser Weg
+    ging daran vorbei. Ein Ø-12-Zylinder kam als 252 einzelne Dreiecke in der
+    Szene an — nicht geschlossen, und die nächste boolesche Operation musste
+    ihn erst retten.
+    """
+    import trimesh
+
+    from app.core.registry import REGISTRY
+
+    body = trimesh.creation.cylinder(radius=6.0, height=12.0, sections=64)
+
+    class Completed:
+        returncode = 0
+        stderr = b""
+
+    def fake_run(command: list[str], **kwargs: object) -> Completed:
+        Path(command[2]).write_bytes(body.export(file_type="stl"))
+        return Completed()
+
+    monkeypatch.setattr(openscad, "executable", lambda: "openscad")
+    monkeypatch.setattr(openscad, "run_guarded", fake_run)
+
+    spec = REGISTRY.get("create_from_scad")
+    result = spec.fn(_context(spec, source="cylinder(h = 12, r = 6);"))
+
+    mesh = result.outputs[0].mesh
+    assert mesh.is_watertight, (
+        "ein offener Körper zwingt die nächste Operation auf die Rückfallkette"
+    )
+    assert mesh.component_count == 1
+    assert mesh.volume == pytest.approx(body.volume, rel=1e-6)
+
+
+def test_an_empty_source_says_what_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Dialog geht mit leerem Feld auf; wer bestätigt, hat nichts
+    geschrieben — und keinen Übersetzungsfehler gemacht.
+    """
+    from app.core.registry import REGISTRY
+
+    def never(*args: object, **kwargs: object) -> object:
+        raise AssertionError("ohne Quelltext gibt es nichts zu übersetzen")
+
+    monkeypatch.setattr(openscad, "executable", lambda: "openscad")
+    monkeypatch.setattr(openscad, "run_guarded", never)
+
+    spec = REGISTRY.get("create_from_scad")
+    with pytest.raises(AppError) as raised:
+        spec.fn(_context(spec, source="   "))
+
+    assert raised.value.suggestions
+    assert "übersetzen" not in str(raised.value.detail)
+
+
+def _context(spec: object, **params: object) -> object:
+    from app.core.knowledge import profiles
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    return OpContext(
+        scene=Scene(),
+        inputs=[],
+        params=spec.params(**params),  # type: ignore[attr-defined]
+        profile=profiles.make_profile(),
+        quality="fine",
+        seed=None,
+        progress=lambda fraction, text: None,
+        ask=lambda question, choices: choices[0],
+        cancelled=NeverCancelled(),
+    )

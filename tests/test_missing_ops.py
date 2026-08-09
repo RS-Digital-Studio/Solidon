@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -17,7 +18,7 @@ from app.core.errors import ValidationError
 from app.core.geom import mesh_ops
 from app.core.geom.hollow import hollow
 from app.core.geom.label_ops import outlines
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import compensate_elephant_foot, countersink, plug
 from app.core.ingest.outline import extrude, is_outline
 from app.core.registry import REGISTRY
@@ -115,6 +116,53 @@ def test_remeshing_splits_edges_without_moving_anything(profile: Profile) -> Non
     assert after.triangle_count > 12
     assert after.volume == pytest.approx(8000.0), "the shape is untouched"
     assert after.is_watertight
+
+
+def test_remeshing_an_uneven_body_keeps_it_closed(profile: Profile) -> None:
+    """Der Würfel oben ging immer gut, weil alle seine Kanten gleich lang sind.
+
+    Bei ungleichen Kanten wird jede Fläche verschieden oft geteilt, und an den
+    Nähten dazwischen stand ein Punkt auf einer Kante, die ihn nicht kannte:
+    192 Kanten mit nur einem Nachbarn, drei Komponenten, kein geschlossener
+    Körper. Der Befund sagte trotzdem „die Form ist unverändert", und die
+    nächste boolesche Operation fiel auf die Voxelstufe und rundete die Maße.
+    """
+    entry = SceneObject(id="obj_1", name="Platte", mesh=block(40.0, 30.0, 10.0))
+
+    result = run("remesh_mesh", entry, profile, edge=5.0)
+
+    after = result.outputs[0].mesh
+    assert after.is_watertight, "ein zerrissenes Netz bricht alles, was danach kommt"
+    assert after.component_count == 1
+    assert after.volume == pytest.approx(12_000.0)
+    assert after.triangle_count > 12
+
+
+def test_remeshing_reaches_the_edge_length_it_promises(profile: Profile) -> None:
+    """„Teilt lange Kanten, bis das Netz gleichmäßig ist" — nachgemessen."""
+    entry = SceneObject(id="obj_1", name="Platte", mesh=block(40.0, 30.0, 10.0))
+
+    result = run("remesh_mesh", entry, profile, edge=5.0)
+
+    longest = max(mesh_ops.edge_lengths(as_mesh_data(result.outputs[0].mesh)))
+    assert longest <= 5.0 + 1e-9
+
+
+def test_a_torn_remesh_says_so_instead_of_claiming_the_shape_is_fine(profile: Profile) -> None:
+    """Was die Operation über ihr Ergebnis sagt, muss sie geprüft haben.
+
+    Ein offener Körper kommt hier nicht aus dem Unterteilen, sondern aus dem
+    Eingang — und dann darf die Meldung nicht behaupten, alles sei in Ordnung.
+    """
+    open_body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    open_body.update_faces(np.arange(len(open_body.faces)) > 1)
+    entry = SceneObject(id="obj_1", name="Offen", mesh=MeshData.of(open_body))
+
+    result = run("remesh_mesh", entry, profile, edge=2.0)
+
+    codes = {finding.code for finding in result.findings}
+    assert "mesh.remesh_open" in codes
+    assert any(finding.severity == "warning" for finding in result.findings)
 
 
 # --- hollowing ------------------------------------------------------------------
