@@ -3995,3 +3995,55 @@ der bekannte native, `test_chat_ui.py` läuft allein durch).
 mathematisch richtig, verlangt, und ohne ein Wort dazu. Eine Warnung „kleiner
 als die Düse" wäre eine Erweiterung, kein Fehler; sie steht hier, damit die
 Entscheidung eine ist.
+
+## Der ganze Bestand durch die laufende Oberfläche (09.08.2026)
+
+`tools/run_ui_audit.py` schickt alles, was auf dieser Maschine liegt, durch das
+echte Fenster: 14 Projektdateien, 88 Modelle aus den Druckordnern und dem
+Korpus, dazu den Weg von der leeren Szene bis zum geschriebenen Paket. Nicht
+gegen den Kern — den prüft die Suite —, sondern mit Arbeitsfäden, Signalen und
+Viewport, also dort, wo ein Fehler erst auftritt, wenn jemand davorsitzt.
+
+**Ergebnis: 103 Stück, keins gestolpert.** Langsamstes Projekt
+`puppenhaus_fertig` mit 7,1 s, langsamstes Modell die gähnende Katze mit 29 s,
+der Aufbau von Null in 0,6 s.
+
+Die Befunde sind die erwarteten für heruntergeladenes Fremdmaterial: 208-mal
+„unter der Druckplatte" (Hinweis, nicht Warnung — heruntergeladene Teile sind
+meist um den Ursprung zentriert), 86-mal verschweißte Punkte, 30-mal entartete
+Dreiecke entfernt, 17-mal nicht wasserdicht, zehn Rückfragen nach der Einheit.
+
+### Der eine Fehler, der dabei herauskam
+
+`sketch_pocket` warf einen `ValidationError`, wenn der Körper ein Netz ist.
+Dessen Titel lautet „Ein Wert liegt außerhalb des zulässigen Bereichs" — im
+Prüfbericht stand damit eine Meldung über Zahlen, wo keine Zahl schuld war.
+Für diesen Fall gibt es `NeedsSolidError`; `brep/ops.py` und `export/writer.py`
+waren den Weg schon gegangen, diese Stelle war übersehen worden. Die Meldung
+nennt jetzt den Ausweg (Regel 17): `shell_exact` statt `hollow_object`.
+
+Sichtbar wurde es an `puppenhaus_fertig` und `puppenhaus_exakt`: dort höhlt
+`hollow_object` den exakten Körper aus und gibt ein Netz zurück, worauf die
+drei Taschen danach ins Leere laufen und die Auswertung bei Operation 4
+stehenbleibt. **Die beiden Projekte sind damit nicht repariert** — ihre
+Operationsreihenfolge kann so nicht funktionieren. Sie stehen im Bericht
+weiter als `ABBRUCH@op4`, jetzt mit einer Meldung, die sagt, was zu tun wäre.
+
+### Was der Durchgang über das Prüfen gelehrt hat
+
+Sieben Fehler steckten im Prüfwerkzeug, einer in der Anwendung. Vier davon
+waren geratene Signaturen (`result.findings` statt `scene.report.findings`,
+`write_plan` mit einem Argument zu viel, `completed` — ein Tupel von Op-IDs —
+statt der Property `complete`). Die teureren zwei waren Zeitfragen: wer nach
+`start_new` nur auf `not busy` wartet, kommt durch, bevor der Arbeitsfaden
+angelaufen ist, misst den Stand von vorher und bricht mit dem nächsten Aufruf
+die laufende Auswertung ab. Elf von fünfzehn Modellen standen daraufhin als
+„0 Objekte" im Bericht — sie luden alle. Im Sekundentakt wiederholt zerlegte
+dasselbe Abbrechen den Prozess ohne Ausnahme; das sah lange nach einem
+Absturz der Anwendung aus und war einer der Messung.
+
+Der letzte Hänger kostete vier Minuten je Lauf und drei falsche Vermutungen:
+`closeEvent` → `_may_discard` → `confirm_unsaved`. Das Fenster fragte beim
+Schließen nach ungespeicherten Änderungen, und niemand antwortete. Ein
+Stapelabzug hat das in einem Versuch beantwortet, wo Raten es dreimal nicht
+tat — `faulthandler` bleibt deshalb über den ganzen Lauf scharf.
