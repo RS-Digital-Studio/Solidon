@@ -85,7 +85,13 @@ def settle(app: QApplication, rounds: int = 10) -> None:
         app.processEvents()
 
 
-def await_result(app: QApplication, session: Any, previous: Any, seconds: float = BUDGET) -> bool:
+def await_result(
+    app: QApplication,
+    session: Any,
+    previous: Any,
+    seconds: float = BUDGET,
+    failed: list[str] | None = None,
+) -> bool:
     """Warten, bis **ein neues** Ergebnis da ist — nicht bloß irgendeins.
 
     Der Unterschied ist kein Feinschliff, sondern der zwischen Messen und
@@ -104,6 +110,12 @@ def await_result(app: QApplication, session: Any, previous: Any, seconds: float 
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         app.processEvents()
+        # Eine abgelehnte Operation erzeugt kein Ergebnis. Ohne diesen Zweig
+        # wartet der Lauf die volle Zeitgrenze auf etwas ab, das nie kommt —
+        # drei Schritte ergaben sechs Minuten Stillstand, die aussahen wie ein
+        # Hänger der Anwendung und einer der Prüfung waren.
+        if failed:
+            return False
         current = session.last_result
         if current is not None and current is not previous and not session.busy:
             settle(app)
@@ -366,13 +378,19 @@ def build_from_nothing(app: QApplication, window: Any, session: Any, out: Path) 
     from app.core.scene.history import OperationDraft
 
     outcome = Outcome(name="Neues Projekt", kind="Aufbau")
+    failures: list[str] = []
+    session.failed.connect(lambda error: failures.append(str(error)[:120]), window)
     started = time.monotonic()
     try:
         session.start_new("centauri-carbon-2", "petg")
         window._show_start_screen(False)
         until_quiet(app, session)
 
-        steps = [
+        # Die Eingabe steht in ``inputs`` und nicht in den Parametern: eine Op
+        # mit Eingang zählt sie, und ohne sie meldet sie „andere Anzahl an
+        # Objekten" — was hier wie ein Hänger aussah, weil danach kein
+        # Ergebnis mehr kommt, auf das sich warten ließe.
+        steps: list[tuple[str, Any]] = [
             (
                 "Grundkörper",
                 OperationDraft(
@@ -381,20 +399,29 @@ def build_from_nothing(app: QApplication, window: Any, session: Any, out: Path) 
             ),
             (
                 "Bohrung",
-                OperationDraft(op="drill_hole", params={"diameter": 4.2, "x": 15.0, "y": 10.0}),
+                OperationDraft(
+                    op="drill_hole",
+                    inputs=("obj_1",),
+                    params={"diameter": 4.2, "x": 15.0, "y": 10.0},
+                ),
             ),
             (
                 "Schraubenloch",
                 OperationDraft(
-                    op="insert_screw_hole", params={"size": "M4", "x": -15.0, "y": -10.0}
+                    op="insert_screw_hole",
+                    inputs=("obj_1",),
+                    params={"size": "M4", "x": -15.0, "y": -10.0},
                 ),
             ),
         ]
         for title, draft in steps:
+            print(f"   .. {title}", flush=True)
             before = session.last_result
+            failures.clear()
             session.apply(title, [draft])
-            if not await_result(app, session, before):
-                outcome.error = f"Schritt {title} wurde nicht fertig"
+            if not await_result(app, session, before, seconds=20.0, failed=failures):
+                reason = failures[0] if failures else f"nicht fertig in {BUDGET:.0f} s"
+                outcome.error = f"Schritt {title}: {reason}"
                 break
         else:
             result = session.last_result
