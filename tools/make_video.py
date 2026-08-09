@@ -128,10 +128,68 @@ SCRIPT = {
 
 #: Ziellautheit in LUFS.
 #:
-#: Beide Plattformen normalisieren selbst, und zwar auf ungefähr diesen Wert.
-#: Wer lauter anliefert, wird heruntergeregelt — mitsamt der Dynamik, die die
-#: Stimme trägt. Wer es selbst macht, behält sie.
+#: **Nicht -14.** Das ist die Schwelle, ab der beide Plattformen absenken —
+#: kein Sollwert, den man treffen müsste. Gemessen erreicht diese Stimme sie
+#: nicht, ohne dass die Dynamik dabei draufgeht: bei einer Spitzengrenze von
+#: -1,5 dBTP landete jede Kompressionsstufe zwischen -15,6 und -16,8 LUFS,
+#: und die Spitze lag jedes Mal exakt auf der Grenze. Nicht die Kompression
+#: war zu schwach, die Grenze war bindend.
+#:
+#: Ziellautheit in LUFS — das **Ziel**, nicht das Ergebnis.
+#:
+#: Erreicht wird es nicht, und das ist Absicht. Bei einer Spitzengrenze von
+#: -1,5 dBTP landet diese Stimme bei rund -16 LUFS, egal wie fest man
+#: komprimiert; die Spitze liegt jedes Mal exakt auf der Grenze, nicht die
+#: Kompression ist zu schwach. Für ein Sprachvideo ist -16 ohnehin der
+#: übliche Ort, und -14 ist die Schwelle, ab der die Plattformen absenken —
+#: kein Sollwert.
+#:
+#: Stehen bleibt die -14 trotzdem, weil der Abstand dorthin das dynamische
+#: Nachregeln von ``loudnorm`` auslöst (siehe :func:`polish`). Wer hier -16
+#: einträgt, bekommt eine Stimme, die die Zahl trifft und dumpfer klingt.
 LOUDNESS = -14.0
+
+#: Wie piper sprechen soll.
+#:
+#: Langsamer als die Vorgabe und mit weniger Streuung in Klang und
+#: Phonemdauer. Aus fünf gegeneinander gehörten Fassungen desselben Satzes
+#: gewählt: das Vorgabetempo wirkt gehetzt, und die volle Streuung lässt
+#: einzelne Silben herausfallen. Die Werte sind Vorgabe mal 1,15 in der Länge
+#: und deutlich unter Vorgabe im Rauschen (0,667 und 0,8).
+DELIVERY = [
+    "--length-scale",
+    "1.15",
+    "--noise-scale",
+    "0.5",
+    "--noise-w-scale",
+    "0.6",
+]
+
+#: Die Kette, die aus der Sprachausgabe einen Sendeton macht.
+#:
+#: Gemessen an der Verteilung der Klangenergie bringt sie die Präsenz (2 bis
+#: 6 kHz) von 1,4 auf 5,1 Prozent und die Brillanz (6 bis 11 kHz) von 0,6 auf
+#: 4,7 — die beiden Bänder, an denen Verständlichkeit hängt. Roh klingt piper
+#: dumpf, weil dort fast nichts liegt.
+#:
+#: **Oberhalb von 11 kHz ändert das nichts**, und keine Einstellung tut das:
+#: piper liefert 22,05 kHz, damit ist bei der halben Abtastrate Schluss. Der
+#: ``aexciter`` erfindet Obertöne unterhalb dieser Grenze, nicht darüber.
+#:
+#: Die Reihenfolge ist nicht beliebig: ``aresample`` steht **vor** dem
+#: Exciter, weil der bei 22 kHz keinen Platz für Obertöne hätte.
+#:
+#: Die Lautheit ist hier absichtlich **nicht** dabei — sie läuft in zwei
+#: Durchgängen und hängt hinten an (:func:`polish`).
+POLISH_FILTERS = (
+    "aresample=48000,"
+    "highpass=f=75,"
+    "equalizer=f=200:t=q:w=1.2:g=-2.5,"
+    "equalizer=f=2800:t=q:w=1.4:g=2.5,"
+    "deesser=i=0.4,"
+    "aexciter=amount=2.5:drive=7:freq=7000:ceil=15000:blend=0,"
+    "acompressor=threshold=-18dB:ratio=3:attack=8:release=120:makeup=1.5"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,7 +381,16 @@ def speak(text: str, language: str, target: Path) -> float:
         )
     target.parent.mkdir(parents=True, exist_ok=True)
     finished = subprocess.run(
-        [str(VOICE_PYTHON), "-m", "piper", "-m", str(voice), "-f", str(target)],
+        [
+            str(VOICE_PYTHON),
+            "-m",
+            "piper",
+            "-m",
+            str(voice),
+            "-f",
+            str(target),
+            *DELIVERY,
+        ],
         input=text,
         capture_output=True,
         text=True,
@@ -332,6 +399,37 @@ def speak(text: str, language: str, target: Path) -> float:
     if finished.returncode != 0:
         raise SystemExit(f"piper brach ab:\n{finished.stderr.strip()}")
     return audio_duration(target)
+
+
+def polish(source: Path, target: Path) -> None:
+    """Aus der rohen Sprachausgabe die fertige Tonspur machen.
+
+    **Einmal für beide Videos**, nicht je Video einmal. ``loudnorm`` ist keine
+    reine Funktion des Eingangs — es misst und regelt —, und zweimal gerechnet
+    ergibt zweimal leicht anderes. Quer und hoch sollen denselben Ton haben,
+    nicht zwei ähnliche.
+
+    ``loudnorm`` läuft hier **im Einzeldurchlauf und bewusst nicht in zwei
+    Durchgängen.** Das sieht nach der schlechteren Wahl aus und ist die
+    richtige: ohne vorher gemessene Werte regelt der Filter dynamisch, und
+    dieses Nachregeln ist Teil des Klangs, der ausgewählt wurde. Der
+    Zwei-Durchlauf mit ``linear=true`` skaliert bloß — er trifft die
+    Ziellautheit genauer und drückt dabei die Brillanz von 4,7 auf 2,5
+    Prozent. Die genauere Zahl war das dumpfere Ergebnis.
+
+    Das Ziel bleibt aus demselben Grund bei :data:`LOUDNESS`, obwohl es nicht
+    erreicht wird: der Abstand dorthin ist es, der das Nachregeln auslöst.
+    Herauskommen rund -16 LUFS, und das ist für ein Sprachvideo genau richtig.
+    """
+    run_ffmpeg(
+        [
+            "-i",
+            str(source),
+            "-af",
+            f"{POLISH_FILTERS},loudnorm=I={LOUDNESS}:TP=-1.5:LRA=11,aresample=48000",
+            str(target),
+        ]
+    )
 
 
 def audio_duration(path: Path) -> float:
@@ -381,11 +479,18 @@ def audio_arguments(audio: Path | None) -> list[str]:
         # letzten Silbe endet, war damit exakt wieder abgeschnitten — aus 6,6
         # Sekunden wurden 5,4.
         "-af",
-        f"loudnorm=I={LOUDNESS}:TP=-1.5:LRA=11,aresample=48000,apad",
+        "apad",
         "-c:a",
         "aac",
         "-b:a",
-        "192k",
+        "256k",
+        # Der Encoder wirft oberhalb seiner Trennfrequenz alles weg, und seine
+        # Vorgabe liegt unter dem, was der Exciter erzeugt hat. Bei 192 kbit/s
+        # und Vorgabe kam die Brillanz mit 2,8 statt 4,7 Prozent im Video an —
+        # ein Teil der Politur wurde also erst aufgetragen und dann wieder
+        # abgeschliffen.
+        "-cutoff",
+        "18000",
         "-ac",
         "2",
         "-shortest",
@@ -583,8 +688,10 @@ def main() -> int:
     # gerechnet sind.
     language = "de"
     print("Sprachausgabe:")
+    raw = out / f"stimme-{language}-roh.wav"
     audio = out / f"stimme-{language}.wav"
-    spoken = speak(SCRIPT[language], language, audio)
+    spoken = speak(SCRIPT[language], language, raw)
+    polish(raw, audio)
     # Ein Nachlauf, damit das Bild nicht auf der letzten Silbe endet.
     seconds = spoken + 1.2
     print(f"  {spoken:.1f} s gesprochen, {seconds:.1f} s Video")
