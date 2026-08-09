@@ -466,7 +466,7 @@ def _ways(theme: Theme) -> str:
         ),
         (
             _("Selbst konstruieren"),
-            (_("Maße benennen"), _("Grundkörper"), _("Bausteine"), _("exportieren")),
+            (_("Maße benennen"), _("Grundkörper · Skizze"), _("Bausteine"), _("exportieren")),
         ),
         (
             _("Erzeugtes aufbereiten"),
@@ -482,6 +482,196 @@ def _ways(theme: Theme) -> str:
             canvas.label(left + 59, top + 32, str(step), anchor="middle", size=10)
             if index < len(steps) - 1:
                 canvas.arrow(left + 118, top + 27, left + 148, top + 27, stroke=colours.muted)
+    return canvas.svg()
+
+
+def _sketch_editor(theme: Theme) -> str:
+    """Der Skizzenmodus: Werkzeuge, Zeichenfläche, Bedingungen, Freiheitsgrade.
+
+    Ein Schema und kein Bildschirmfoto, aus demselben Grund wie beim Fenster:
+    die Beschriftung bleibt Text, also übersetzt, und die Zeichnung veraltet
+    nicht mit dem nächsten Symbolsatz. Die Kürzel stehen dran, weil sie im
+    Bild dieselben sind wie in der Anwendung — sie kommen aus
+    ``app/ui/sketch_editor.py`` und sind hier nachgetragen, nicht erfunden.
+    """
+    canvas = Canvas(620, 340, theme)
+    colours = canvas.colours
+    canvas.background()
+
+    # Die Werkzeugzeile. Sechs von acht Werkzeugen — Auswählen liegt auf Esc
+    # und Verlängern neben Trimmen; beide stehen im Text, nicht im Bild, sonst
+    # wird die Zeile zur Aufzählung.
+    canvas.box(10, 10, 600, 32, fill=colours.fill)
+    for index, (name, key) in enumerate(
+        ((_("Linie"), "L"), (_("Kreis"), "C"), (_("Bogen"), "A"), (_("Spline"), "S"))
+    ):
+        left = 20 + index * 92
+        canvas.box(left, 16, 84, 20, stroke=colours.muted, radius=2.0)
+        canvas.label(left + 8, 31, str(name), size=10)
+        canvas.label(left + 76, 31, key, anchor="end", size=10, bold=True, colour=colours.muted)
+    canvas.box(388, 16, 96, 20, stroke=colours.muted, radius=2.0)
+    canvas.label(396, 31, str(_("Grundform")), size=10)
+    canvas.box(492, 16, 108, 20, stroke=colours.muted, radius=2.0)
+    canvas.label(500, 31, str(_("Trimmen · Versetzen")), size=10)
+
+    # Die Ebene gehört vor das Zeichnen: sie entscheidet, wohin extrudiert
+    # wird — und wie die Schichten zur Zeichnung liegen.
+    canvas.box(10, 50, 168, 22, fill=colours.fill, radius=2.0)
+    canvas.label(20, 65, str(_("Ebene XY — liegend")), size=10, bold=True)
+    canvas.caption(
+        188, 65, str(_("Schichten liegen parallel zur Zeichnung — sie wächst nach oben heraus."))
+    )
+
+    # Die Zeichenfläche mit Raster.
+    canvas.box(10, 82, 424, 208, fill=colours.paper)
+    for step in range(1, 11):
+        x = 10 + step * 38
+        canvas.line(x, 82, x, 290, stroke=colours.muted, weight=0.4)
+    for step in range(1, 6):
+        y = 82 + step * 34
+        canvas.line(10, y, 434, y, stroke=colours.muted, weight=0.4)
+
+    # Der Rand des Bauraums, wie ihn die Zeichenfläche selbst zeigt: die
+    # früheste Stelle, an der ein zu großes Teil auffällt.
+    canvas.box(22, 94, 400, 184, stroke=colours.muted, dashed=True, weight=1.0, radius=0.0)
+    canvas.caption(28, 110, str(_("Rand des Bauraums")))
+
+    # Der Umriss: das Rechteck der Grundform, mit einem Kreis darin. Die Maße
+    # sind die Vorgaben des Grundform-Menüs, nicht erfundene Zahlen.
+    canvas.polygon(
+        [(80, 140), (300, 140), (300, 200), (80, 200)], stroke=colours.ink, fill=colours.fill
+    )
+    canvas.circle(250, 170, 20, stroke=colours.ink, fill=colours.paper)
+    canvas.tick(80, 210)
+    canvas.tick(300, 210)
+    canvas.dimension(80, 224, 300, 224, "40 mm", stroke=colours.accent)
+    canvas.label(312, 144, str(_("gefangen")), size=10, colour=colours.accent)
+    canvas.circle(300, 140, 5, stroke=colours.accent, weight=2.0)
+
+    # Die Bedingungsliste. Die Nummern in Klammern sind die Punkte, die eine
+    # Bedingung hält — überfahren lässt sie in der Zeichnung aufleuchten.
+    canvas.box(444, 82, 166, 208, fill=colours.fill)
+    canvas.label(454, 100, str(_("Bedingungen")), size=11, bold=True)
+    entries = (
+        (_("Waagerecht"), "(0, 1)"),
+        (_("Rechtwinklig"), "(1, 2)"),
+        (_("Abstand 40 mm"), "(0, 1)"),
+        (_("Deckung"), "(3, 4)"),
+        (_("Tangential"), "(4, 5)"),
+    )
+    for index, (kind, targets) in enumerate(entries):
+        top = 120 + index * 24
+        canvas.line(454, top + 4, 600, top + 4, stroke=colours.muted, weight=0.5)
+        canvas.label(454, top, str(kind), size=10)
+        canvas.label(600, top, targets, anchor="end", size=10, colour=colours.muted)
+    canvas.caption(454, 276, str(_("Entf entfernt die gewählte.")))
+
+    # Die Statuszeile — die eigentliche Auskunft des Editors.
+    canvas.box(10, 300, 600, 30, fill=colours.fill)
+    canvas.label(
+        20, 320, str(_("Bestimmt — alle Freiheitsgrade sind vergeben.")), size=11, bold=True
+    )
+    return canvas.svg()
+
+
+def _sketch_uses(theme: Theme) -> str:
+    """Ein Umriss, drei Arten Körper — und die Wahl fällt am Ende.
+
+    Der Grund für dieses Bild steht in §2.2, Weg 2: die Entscheidung, was aus
+    einer Zeichnung wird, fällt bei „Fertig" und nicht vorab in einem Menü.
+    Wer sie vorab treffen soll, muss wissen, was zur Auswahl steht — und fünf
+    Menüeinträge sagen das nicht.
+    """
+    canvas = Canvas(620, 320, theme)
+    colours = canvas.colours
+    canvas.background()
+
+    canvas.label(20, 26, str(_("Derselbe Umriss, drei Arten")), size=11, bold=True)
+
+    # Der Umriss links, in derselben Form wie im Editorschema — und wirklich
+    # bemaßt, weil die Unterschrift das behauptet.
+    canvas.polygon(
+        [(30, 108), (150, 108), (150, 168), (30, 168)], stroke=colours.ink, fill=colours.fill
+    )
+    canvas.circle(120, 138, 14, stroke=colours.ink, fill=colours.paper)
+    canvas.tick(30, 178)
+    canvas.tick(150, 178)
+    canvas.dimension(30, 190, 150, 190, "40 mm", stroke=colours.accent)
+    canvas.caption(30, 214, str(_("bemaßt und bestimmt")))
+    canvas.arrow(162, 138, 196, 138, stroke=colours.accent)
+
+    # Drei Zeilen und nicht drei Spalten: die Titel kommen aus dem Register und
+    # sind Sätze, keine Wörter — nebeneinander lief der dritte aus dem Bild.
+    rows = (
+        (60.0, _("Grundform extrudieren"), _("gerade nach oben")),
+        (140.0, _("Rotationskörper aufziehen"), _("um die senkrechte Achse")),
+        (220.0, _("Entlang eines Bogens führen"), _("Rohrbogen in einem Schritt")),
+    )
+    for top, title, note in rows:
+        canvas.label(350, top + 24, str(title), size=11, bold=True)
+        canvas.caption(350, top + 40, str(note))
+
+    # Extrudiert: dieselbe Fläche, nach hinten oben versetzt und verbunden.
+    depth = 14.0
+    left, top = 224.0, 66.0
+    canvas.polygon(
+        [(left, top + depth), (left + 76, top + depth), (left + 76, top + 44), (left, top + 44)],
+        stroke=colours.ink,
+        fill=colours.fill,
+    )
+    canvas.polygon(
+        [
+            (left + depth, top),
+            (left + 76 + depth, top),
+            (left + 76 + depth, top + 44 - depth),
+            (left + depth, top + 44 - depth),
+        ],
+        stroke=colours.muted,
+    )
+    for corner_x, corner_y in (
+        (left, top + depth),
+        (left + 76, top + depth),
+        (left + 76, top + 44),
+    ):
+        canvas.line(
+            corner_x, corner_y, corner_x + depth, corner_y - depth, stroke=colours.muted, weight=1.0
+        )
+
+    # Gedreht: der Querschnitt links und rechts der Achse, Drehpfeil darüber.
+    axis_x = 262.0
+    canvas.line(axis_x, 146, axis_x, 210, stroke=colours.muted, dashed=True, weight=1.0)
+    for side in (-1.0, 1.0):
+        near = axis_x + side * 38
+        far = axis_x + side * 16
+        canvas.polygon(
+            [(near, 166), (far, 166), (far, 206), (near, 206)],
+            stroke=colours.ink,
+            fill=colours.fill,
+        )
+    # Der Drehpfeil bleibt über den Querschnitten: quer durch einen von ihnen
+    # hindurch sah er aus wie eine Kante des Körpers.
+    canvas.arc(axis_x, 150, 14.0, 150.0, stroke=colours.accent)
+
+    # Geführt: ein Band entlang eines Viertelbogens, an beiden Enden geschlossen.
+    pivot_x, pivot_y = 232.0, 284.0
+    canvas.arc(pivot_x, pivot_y, 56.0, 90.0, stroke=colours.ink)
+    canvas.arc(pivot_x, pivot_y, 34.0, 90.0, stroke=colours.ink)
+    canvas.line(pivot_x + 34, pivot_y, pivot_x + 56, pivot_y, stroke=colours.ink)
+    canvas.line(pivot_x, pivot_y - 56, pivot_x, pivot_y - 34, stroke=colours.ink)
+
+    canvas.wrapped(
+        20,
+        258,
+        str(
+            _(
+                "Dazu Tasche schneiden und zwischen zwei Umrissen aufspannen. "
+                "Gewählt wird bei „Fertig“, mit der Zeichnung vor Augen — und "
+                "„Zurück zum Zeichnen“ wirft nichts weg."
+            )
+        ),
+        width=44,
+        colour=colours.muted,
+    )
     return canvas.svg()
 
 
@@ -692,11 +882,39 @@ FIGURES: Final[tuple[Figure, ...]] = (
         alt=_(
             "Drei Abläufe untereinander: ein fremdes Modell anpassen (einlesen, "
             "reparieren, bohren, exportieren), selbst konstruieren (Maße benennen, "
-            "Grundkörper, Bausteine, exportieren) und Erzeugtes aufbereiten (erzeugen, "
-            "Reparaturkette, prüfen, exportieren)."
+            "Grundkörper oder Skizze, Bausteine, exportieren) und Erzeugtes aufbereiten "
+            "(erzeugen, Reparaturkette, prüfen, exportieren)."
         ),
         caption=_("Zu jedem Weg liegt ein Beispielprojekt auf dem Startbildschirm."),
         build=_ways,
+    ),
+    Figure(
+        key="sketch-editor",
+        alt=_(
+            "Der Skizzenmodus: oben die Zeichenwerkzeuge mit ihren Kürzeln — Linie L, "
+            "Kreis C, Bogen A, Spline S —, darunter die Ebenenwahl mit dem Hinweis, wie "
+            "die Schichten dazu liegen. In der Zeichenfläche ein bemaßtes Rechteck von "
+            "40 mm mit einem Kreis darin, der Rand des Bauraums gestrichelt, ein "
+            "gefangener Punkt markiert. Rechts die Liste der Bedingungen — waagerecht, "
+            "rechtwinklig, Abstand, Deckung, tangential — mit den Punkten, die jede "
+            "hält. Unten die Statuszeile: bestimmt, alle Freiheitsgrade sind vergeben."
+        ),
+        caption=_(
+            "Die Statuszeile ist die eigentliche Auskunft: was noch frei ist, wandert "
+            "beim nächsten Zug."
+        ),
+        build=_sketch_editor,
+    ),
+    Figure(
+        key="sketch-uses",
+        alt=_(
+            "Links ein bemaßter Umriss, ein Pfeil führt nach rechts zu drei Körpern "
+            "daraus: derselbe Umriss gerade nach oben extrudiert, um eine senkrechte "
+            "Achse zu einer Hülse gedreht, und als Band entlang eines Viertelbogens "
+            "geführt."
+        ),
+        caption=_("Was aus der Zeichnung wird, entscheidet sich nach dem Zeichnen."),
+        build=_sketch_uses,
     ),
     Figure(
         key="fit",
