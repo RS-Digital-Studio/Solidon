@@ -99,24 +99,13 @@ EXAMPLE = "gehaeuse-mit-bausteinen.p3d"
 
 #: Die eigene Umgebung für die Sprachausgabe.
 #:
-#: **Nicht die Projektumgebung.** piper zerlegt Text über espeak-ng, und das
-#: steht unter der GPL. In derselben venv, aus der PyInstaller das Paket baut,
-#: hat es nichts zu suchen — dasselbe Muster wie bei OpenSCAD und den Slicern
-#: (Regel 15). Getrennt ist die Grenze per Bauart da statt per Vorsatz.
-VOICE_PYTHON = Path(__file__).resolve().parent.parent / ".venv-video" / "Scripts" / "python.exe"
-VOICE_DIR = Path(__file__).resolve().parent.parent / ".voices"
-
-#: Welche Stimme je Sprache spricht.
-#:
-#: Beide Lizenzen sind nachgesehen und erlauben ausdrücklich den kommerziellen
-#: Gebrauch — thorsten steht unter CC0, ljspeech ist gemeinfrei. Das ist bei
-#: den Stimmen von piper **nicht** selbstverständlich: mehrere der besser
-#: klingenden hängen an Datensätzen, die nur für Forschung freigegeben sind,
-#: und ein Werbevideo ist das Gegenteil davon.
-VOICES = {
-    "de": "de_DE-thorsten-high",
-    "en": "en_US-ljspeech-high",
-}
+#: **Nicht die Projektumgebung.** Chatterbox bringt PyTorch mit; das in der
+#: venv zu haben, aus der PyInstaller das Paket baut, wäre eine
+#: Abhängigkeitskette, die mit Solidon nichts zu tun hat. Aufgerufen wird es
+#: deshalb wie ffmpeg — als fremdes Programm, siehe
+#: ``tools/speak_chatterbox.py``.
+VOICE_PYTHON = Path(__file__).resolve().parent.parent / ".venv-tts" / "Scripts" / "python.exe"
+VOICE_SCRIPT = Path(__file__).resolve().parent / "speak_chatterbox.py"
 
 #: Das Drehbuch: je Szene ein Satz, und der Satz bestimmt die Länge.
 #:
@@ -194,6 +183,21 @@ MORPH_PARAMETER = "breite"
 #: sondern der Umstand, dass es nur ein deutsches Beispielprojekt gibt.
 READOUT_LABEL = {"de": "breite", "en": "width"}
 
+#: Wörter, die das Modell anders geschrieben bekommt, als sie geschrieben
+#: werden — **leer, und das mit Absicht.**
+#:
+#: Chatterbox ist mehrsprachig mit englischem Schwerpunkt, und ein leichter
+#: englischer Einschlag bleibt hörbar. Der naheliegende Gegenzug war, dem
+#: Modell die schwierigen Wörter zu buchstabieren („Solidonn", „Einpress-
+#: Buchsen"). Im Gegenhören war kein Unterschied festzustellen; der Eintrag
+#: ist deshalb wieder heraus, statt als gelöst zu gelten, was nicht gelöst
+#: ist.
+#:
+#: Der Haken bleibt: kommt einmal ein Wort erkennbar falsch, steht hier die
+#: Stelle, an der man es richtigstellt — nur für das Modell, nie für den
+#: Zuschauer.
+PRONUNCIATION: dict[str, str] = {}
+
 #: Die feste Beschriftung des Hochformats, je Sprache.
 #:
 #: **Nicht über** ``tr()``: der Textsammler liest ``app/``, und was hier steht,
@@ -245,22 +249,6 @@ SCRIPT = {
 #: einträgt, bekommt eine Stimme, die die Zahl trifft und dumpfer klingt.
 LOUDNESS = -14.0
 
-#: Wie piper sprechen soll.
-#:
-#: Langsamer als die Vorgabe und mit weniger Streuung in Klang und
-#: Phonemdauer. Aus fünf gegeneinander gehörten Fassungen desselben Satzes
-#: gewählt: das Vorgabetempo wirkt gehetzt, und die volle Streuung lässt
-#: einzelne Silben herausfallen. Die Werte sind Vorgabe mal 1,15 in der Länge
-#: und deutlich unter Vorgabe im Rauschen (0,667 und 0,8).
-DELIVERY = [
-    "--length-scale",
-    "1.15",
-    "--noise-scale",
-    "0.5",
-    "--noise-w-scale",
-    "0.6",
-]
-
 #: Die Kette, die aus der Sprachausgabe einen Sendeton macht.
 #:
 #: Gemessen an der Verteilung der Klangenergie bringt sie die Präsenz (2 bis
@@ -273,17 +261,27 @@ DELIVERY = [
 #: ``aexciter`` erfindet Obertöne unterhalb dieser Grenze, nicht darüber.
 #:
 #: Die Reihenfolge ist nicht beliebig: ``aresample`` steht **vor** dem
-#: Exciter, weil der bei 22 kHz keinen Platz für Obertöne hätte.
+#: Exciter, damit der Platz für Obertöne oberhalb der Quellrate hat.
 #:
-#: Die Lautheit ist hier absichtlich **nicht** dabei — sie läuft in zwei
-#: Durchgängen und hängt hinten an (:func:`polish`).
+#: Die Werte gelten für Chatterbox und **nicht mehr für piper**. Die alte
+#: Kette musste ein dumpfes 22-kHz-Signal von 0,6 Prozent Präsenz hochziehen;
+#: Chatterbox liefert 4,5 Prozent bei 24 kHz. Dieselbe Anhebung darübergelegt
+#: ergab 8,7 Prozent — anderthalbmal so viel wie das, was bei piper gut klang,
+#: und in dem Bereich wird eine Stimme scharf und zischend.
+#:
+#: Deshalb: keine Präsenzanhebung mehr bei 2,8 kHz, die Absenkung bei 200 Hz
+#: nur noch halb so tief (Chatterbox hat 39 statt 64 Prozent Fundament), und
+#: der Exciter trägt die Brillanz allein. Er ist der einzige Regler, der sie
+#: bewegt, und bei 3,0 liegen Präsenz und Brillanz auf rund 6 und 3 Prozent.
+#:
+#: Die Lautheit ist absichtlich **nicht** dabei — sie hängt hinten an
+#: (:func:`polish`).
 POLISH_FILTERS = (
     "aresample=48000,"
     "highpass=f=75,"
-    "equalizer=f=200:t=q:w=1.2:g=-2.5,"
-    "equalizer=f=2800:t=q:w=1.4:g=2.5,"
-    "deesser=i=0.4,"
-    "aexciter=amount=2.5:drive=7:freq=7000:ceil=15000:blend=0,"
+    "equalizer=f=200:t=q:w=1.2:g=-1.5,"
+    "deesser=i=0.45,"
+    "aexciter=amount=3.0:drive=6:freq=6500:ceil=16000:blend=0,"
     "acompressor=threshold=-18dB:ratio=3:attack=8:release=120:makeup=1.5"
 )
 
@@ -469,39 +467,38 @@ def speak(text: str, language: str, target: Path) -> float:
     mitten im Wort abgeschnitten wird, oder vier Sekunden, in denen sich ein
     Modell schweigend weiterdreht.
     """
-    voice = VOICE_DIR / f"{VOICES[language]}.onnx"
     if not VOICE_PYTHON.is_file():
         raise SystemExit(
             f"Die Umgebung für die Sprachausgabe fehlt: {VOICE_PYTHON}\n"
-            f"Anlegen mit: python -m venv .venv-video && "
-            f".venv-video\\Scripts\\python.exe -m pip install piper-tts"
-        )
-    if not voice.is_file():
-        raise SystemExit(
-            f"Die Stimme fehlt: {voice}\n"
-            f".venv-video\\Scripts\\python.exe -m piper.download_voices "
-            f"{VOICES[language]} --data-dir .voices"
+            f"Anlegen mit: python -m venv .venv-tts && "
+            f'.venv-tts\\Scripts\\python.exe -m pip install chatterbox-tts "setuptools<81"\n'
+            f"Das setuptools ist kein Beiwerk: das Wasserzeichen-Modul von "
+            f"Chatterbox importiert pkg_resources, und das ist ab 81 nicht mehr dabei."
         )
     target.parent.mkdir(parents=True, exist_ok=True)
     finished = subprocess.run(
-        [
-            str(VOICE_PYTHON),
-            "-m",
-            "piper",
-            "-m",
-            str(voice),
-            "-f",
-            str(target),
-            *DELIVERY,
-        ],
-        input=text,
+        [str(VOICE_PYTHON), str(VOICE_SCRIPT), str(target), language, spoken_form(text)],
         capture_output=True,
         text=True,
         encoding="utf-8",
     )
     if finished.returncode != 0:
-        raise SystemExit(f"piper brach ab:\n{finished.stderr.strip()}")
+        raise SystemExit(f"Die Sprachausgabe brach ab:\n{finished.stderr.strip()}")
     return audio_duration(target)
+
+
+def spoken_form(text: str) -> str:
+    """Was das Modell liest — nicht, was der Zuschauer liest.
+
+    Chatterbox ist mehrsprachig mit englischem Schwerpunkt, und das hört man
+    an einzelnen Wörtern. „Solidon" liest es englisch; die Doppelkonsonante
+    hält den Vokal kurz und rückt es zurück ins Deutsche. Der Zuschauer
+    bekommt diese Schreibweise nie zu sehen — sie steht ausschließlich in der
+    Eingabe an das Modell.
+    """
+    for written, spoken in PRONUNCIATION.items():
+        text = text.replace(written, spoken)
+    return text
 
 
 def polish(source: Path, target: Path) -> None:
