@@ -71,6 +71,49 @@ def bore_diameter(nominal: float, profile: Profile, compensate: bool) -> float:
     return nominal + resolve_tolerance("auto:", "thread", profile)
 
 
+def _over_the_edge(mesh: MeshData, position: Vec3, axis: Axis, diameter: float) -> list[Finding]:
+    """Ragt die Bohrung seitlich über den Körper hinaus?
+
+    „Nichts abgetragen" gibt es seit je (:func:`without_effect`); dies ist der
+    Fall dazwischen, und er ist der gefährlichere: es wird etwas abgetragen,
+    also schweigt jede Prüfung, und heraus kommt eine Bohrung mit offener
+    Flanke. Der Agent hat ihn gebaut — auf „5 mm mittig durch" kam die Ecke,
+    weil das Modell mit einem Quader ab dem Ursprung rechnete statt mit einem
+    um ihn herum. Abgetragen wurde ein Viertel, und die Antwort lautete
+    trotzdem „durchgehend und mittig".
+
+    Gemessen am Hüllquader und nicht an der wirklichen Form: eine Bohrung, die
+    innerhalb der Hülle liegt und trotzdem ins Leere geht, trifft entweder
+    einen Hohlraum — den kann sie treffen sollen — oder gar nichts, und dann
+    greift ``without_effect``.
+    """
+    radius = diameter / 2.0
+    lower, upper = mesh.bounds.minimum, mesh.bounds.maximum
+    over: list[str] = []
+    for index, name in enumerate("xyz"):
+        if index == AXIS_INDEX[axis]:
+            continue
+        outside = (
+            position[index] - radius < lower[index] - EPS_GEOM
+            or position[index] + radius > upper[index] + EPS_GEOM
+        )
+        if outside:
+            over.append(name)
+    if not over:
+        return []
+    return [
+        Finding(
+            code="bore.over_the_edge",
+            severity="warning",
+            message=_(
+                "Die Bohrung ragt seitlich über den Körper hinaus — sie trägt nur "
+                "teilweise ab und lässt eine offene Flanke zurück."
+            ),
+            values={"axes": ", ".join(over), "diameter": format_length(diameter)},
+        )
+    ]
+
+
 def drill(
     mesh: MeshData,
     *,
@@ -116,6 +159,7 @@ def drill(
     nothing = without_effect(mesh, outcome.mesh, "difference")
     if nothing is not None:
         findings.append(nothing)
+    findings.extend(_over_the_edge(mesh, position, axis, cut_diameter))
     if compensate and abs(cut_diameter - diameter) > EPS_GEOM:
         findings.append(
             Finding(

@@ -61,6 +61,20 @@ def test_the_digest_describes_every_object(profile: Profile) -> None:
     assert "auf Bett" in text
 
 
+def test_the_digest_says_where_the_body_stands(profile: Profile) -> None:
+    """Die Maße allein sagen nicht, *wo* der Körper liegt.
+
+    Solidon legt einen Quader um den Ursprung; das Modell rechnete mit einer
+    Ecke dort und bohrte „mittig" an die Kante. Ableiten ließ sich die Lage
+    aus den Flächenmitten, aber genau das ist die Sorte Rechnung, die ein
+    Sprachmodell falsch macht — sie steht jetzt da.
+    """
+    text = digest(plate_scene(profile))
+
+    assert "-40.0 … 40.0" in text, "die Grenzen in x"
+    assert "0.0 … 8.0" in text, "und in z, wo der Körper auf dem Bett steht"
+
+
 def test_the_digest_lists_features_by_name(profile: Profile) -> None:
     """Leitprinzip 5: der Agent bezieht sich auf diese Namen, nie auf
     Koordinaten.

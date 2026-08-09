@@ -23,7 +23,22 @@ VOLUME_FACTOR = 10.0
 
 #: Codes, die die Prüfung aus der Auswertung durchreicht, weil sie genau das
 #: sagen, wonach §26.5 fragt.
-PASSED_THROUGH = ("perceive.orphaned", "feature.orphaned", "fit.violated", "fit.missing_feature")
+#:
+#: Die beiden letzten kamen aus einem Chatlauf: „5 mm mittig durch" ergab ein
+#: Loch an der Ecke, weil das Modell den Quader ab dem Ursprung wähnte statt um
+#: ihn herum. Der Befund dazu entstand — und blieb im Prüfbericht liegen, denn
+#: was hier nicht steht, sieht das Modell nie. Es schrieb danach „Das Loch ist
+#: durchgehend und mittig positioniert", und niemand widersprach. Ein Werkzeug,
+#: das den Körper nur streift oder ganz verfehlt, ist genau die Sorte Fehler,
+#: die ein zweiter Aufruf beheben kann — wenn er davon erfährt.
+PASSED_THROUGH = (
+    "perceive.orphaned",
+    "feature.orphaned",
+    "fit.violated",
+    "fit.missing_feature",
+    "bore.over_the_edge",
+    "boolean.without_effect",
+)
 
 
 def check(result: EvaluationResult, before: Scene | None = None) -> list[Finding]:

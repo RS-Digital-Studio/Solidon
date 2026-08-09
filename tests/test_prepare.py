@@ -73,6 +73,41 @@ def test_drilling_removes_material(profile: Profile) -> None:
     assert result.mesh.volume == pytest.approx(expected, rel=0.01)
 
 
+def test_a_bore_hanging_over_the_edge_says_so(profile: Profile) -> None:
+    """Der Fall, den das Modell im Chat gebaut hat, und niemand widersprach.
+
+    Auf „ein 5-mm-Loch mittig durch" kam ``x = 15, y = 10`` — die Ecke eines
+    Quaders, der von −15 bis 15 reicht, weil das Modell mit einer Ecke im
+    Ursprung rechnete. Abgetragen wurde ein Viertel: 53 statt 212 mm³. Es gab
+    keinen Befund dazu, denn abgetragen *wurde* ja etwas, und der Agent
+    schrieb danach „Das Loch ist durchgehend und mittig positioniert".
+    """
+    body = cube()
+    edge = body.bounds.maximum[0]
+
+    result = drill(body, position=(edge, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
+
+    assert "bore.over_the_edge" in {finding.code for finding in result.findings}
+
+
+def test_a_bore_well_inside_stays_quiet(profile: Profile) -> None:
+    """Die Gegenprobe — sonst warnt jede zweite Bohrung und keine zählt mehr."""
+    result = drill(cube(), position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
+
+    assert "bore.over_the_edge" not in {finding.code for finding in result.findings}
+
+
+def test_a_bore_touching_the_edge_from_inside_stays_quiet(profile: Profile) -> None:
+    """Eine Bohrung, die den Rand gerade noch trifft, ist eine Absicht und
+    kein Versehen; gewarnt wird erst, wenn sie darüber hinausragt."""
+    body = cube()
+    inside = body.bounds.maximum[0] - 3.2
+
+    result = drill(body, position=(inside, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
+
+    assert "bore.over_the_edge" not in {finding.code for finding in result.findings}
+
+
 def test_a_blind_bore_does_not_go_through(profile: Profile) -> None:
     body = cube()
     through = drill(body, position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)

@@ -599,6 +599,59 @@ def test_the_check_notices_an_open_body(project: Project, profile: Profile) -> N
     assert "agent.not_watertight" in {finding.code for finding in findings}
 
 
+def test_the_check_passes_on_a_tool_that_only_grazed_the_body(
+    project: Project, profile: Profile
+) -> None:
+    """Der Fall aus dem Chatlauf: „5 mm mittig durch" ergab ein Loch an der Ecke.
+
+    Abgetragen wurde ein Viertel, die Warnung dazu entstand — und blieb im
+    Prüfbericht liegen, weil die Prüfung nach der Operation nur eine feste
+    Liste von Codes durchreicht. Das Modell erfuhr nichts und schrieb „Das
+    Loch ist durchgehend und mittig positioniert". Was es nicht erfährt, kann
+    es nicht verbessern.
+    """
+    History(project.document).apply(
+        "Quader", [OperationDraft(op="create_box", params={"width": 30.0, "depth": 20.0})]
+    )
+    before = evaluate(project.document, profile, sources=ProjectSources(project)).scene
+    body = next(entry for entry in before.objects.values() if entry.name == "Quader")
+    History(project.document).apply(
+        "Bohren",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(body.id,),
+                params={"x": 15.0, "y": 10.0, "z": 5.0, "axis": "z", "diameter": 5.0},
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    findings = checks.check(result, before)
+
+    assert "bore.over_the_edge" in {finding.code for finding in findings}
+    assert "über den Körper hinaus" in checks.as_lines(findings)
+
+
+def test_the_check_passes_on_an_operation_without_effect(
+    project: Project, profile: Profile
+) -> None:
+    """Dieselbe Lücke, andere Tür: „hat nichts abgetragen" stand im Bericht
+    und ging nicht mit."""
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    before = evaluate(project.document, profile, sources=ProjectSources(project)).scene
+    body = next(entry for entry in before.objects.values() if entry.name == "Quader")
+    History(project.document).apply(
+        "Verschließen",
+        [OperationDraft(op="plug_hole", inputs=(body.id,), params={"diameter": 5.0, "z": 5.0})],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    findings = checks.check(result, before)
+
+    assert "boolean.without_effect" in {finding.code for finding in findings}
+
+
 def test_a_clean_result_has_nothing_to_report(project: Project, profile: Profile) -> None:
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     findings = checks.check(result)

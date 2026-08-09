@@ -156,9 +156,28 @@ def _object_lines(object_id: ObjectId, entry: SceneObject) -> list[str]:
         facts.append(entry.material)
 
     lines = [f'{object_id}  "{entry.name}"  ' + ", ".join(facts)]
+    lines.append("  " + _extent_line(entry))
     for feature_id, feature in entry.features.items():
         lines.append("  " + _feature_line(feature_id, feature))
     return lines
+
+
+def _extent_line(entry: SceneObject) -> str:
+    """Wo der Körper liegt, Achse für Achse.
+
+    Die Maße sagen, wie groß er ist, nicht wo er steht — und Solidon legt
+    einen Quader **um** den Ursprung. Das Modell nahm eine Ecke dort an und
+    bohrte auf „mittig durch" in die Kante: ein Viertel abgetragen, und die
+    Antwort lautete trotzdem „durchgehend und mittig". Herleiten ließ sich die
+    Lage schon vorher aus den Flächenmitten — aber genau solche Rechnungen
+    macht ein Sprachmodell falsch, und eine Zeile kostet nichts.
+    """
+    lower, upper = entry.mesh.bounds.minimum, entry.mesh.bounds.maximum
+    spans = " · ".join(
+        f"{name} {lower[index]:.1f} … {upper[index]:.1f}"
+        for index, name in enumerate(("x", "y", "z"))
+    )
+    return f"{tr('liegt')}: {spans} mm"
 
 
 def _solidity(entry: SceneObject) -> float | None:
