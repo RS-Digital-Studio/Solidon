@@ -29,6 +29,7 @@ und das war ihre Aufgabe).
 from __future__ import annotations
 
 import contextlib
+import faulthandler
 import os
 import sys
 import time
@@ -524,6 +525,11 @@ def main() -> int:
     settle(app, 40)
     silence_questions(session, window)
 
+    # Bleibt der Lauf irgendwo stehen, soll er sagen wo — das Aufräumen am
+    # Ende eingeschlossen. Ein Hänger ohne Standort kostet mehr Zeit als jede
+    # Zeitgrenze; dieser hier sah dreimal nach etwas anderem aus, als er war.
+    faulthandler.dump_traceback_later(240, exit=True)
+
     groups: dict[str, list[Outcome]] = {}
     if "projekte" in wanted_groups:
         print("\n--- Projekte ---", flush=True)
@@ -536,6 +542,19 @@ def main() -> int:
         groups["Aufbau"] = [build_from_nothing(app, window, session, out)]
 
     code = report(groups, list(ASKED))
+    # **Erst ein leeres Projekt, dann schließen.**
+    #
+    # Das Fenster fragt beim Schließen nach ungespeicherten Änderungen, und
+    # dieser Lauf hat welche erzeugt — der Dialog stand dann offen und
+    # niemand antwortete. Der Stapelabzug zeigte genau das: ``closeEvent`` →
+    # ``_may_discard`` → ``confirm_unsaved``, vier Minuten lang.
+    #
+    # Die Rückfrage ist richtig so: Regel 19 verlangt Bestätigung genau dort,
+    # wo eine Handlung **nicht** rücknehmbar ist, und verworfene Arbeit ist
+    # weg. Nicht der Dialog gehört abgeschaltet, sondern der Grund für ihn —
+    # ``start_new`` setzt den Änderungsstand zurück.
+    session.start_new()
+    until_quiet(app, session)
     window.close()
     plotter = getattr(getattr(window, "viewport", None), "plotter", None)
     if plotter is not None:
