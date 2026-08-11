@@ -18,7 +18,13 @@ vor rücknehmbaren Handlungen**, kein „Möchten Sie wirklich", keine Sackgasse
 ## Texte
 
 Keine feste Zeichenkette in der Oberfläche — alles über `tr()`, deutsch und
-englisch. Ein Fehler endet nie mit „fehlgeschlagen": erst was nicht ging, dann
+englisch. **Das gilt auch für Auswahlwerte**: `raised`, `flat`, `linear` sind
+Schlüssel und keine Beschriftungen. Der Name steht in `_CHOICE_NAMES`
+(`app/ui/labels.py`), und `tests/test_translations.py` lässt nur durch, was
+sein eigener Name ist — M4, 6x3, mm, x, DejaVu Sans, gyroid. Bilder statt
+Wörter, wo ein Wort nichts zeigt: die Texturmuster tragen ihre Kachel aus
+`figures.texture_tile`, erkannt an den Werten des Feldes und nicht an seinem
+Namen. Ein Fehler endet nie mit „fehlgeschlagen": erst was nicht ging, dann
 warum, dann was jetzt möglich ist, als anklickbare Handlungen (§2.7). Kein
 Stapelabzug im Nutzerdialog.
 

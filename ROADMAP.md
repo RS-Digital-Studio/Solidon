@@ -4047,3 +4047,74 @@ Der letzte Hänger kostete vier Minuten je Lauf und drei falsche Vermutungen:
 Schließen nach ungespeicherten Änderungen, und niemand antwortete. Ein
 Stapelabzug hat das in einem Versuch beantwortet, wo Raten es dreimal nicht
 tat — `faulthandler` bleibt deshalb über den ganzen Lauf scharf.
+
+---
+
+## Gegen das Wettbewerbsfeld gehalten (11.08.2026)
+
+`konzept-wettbewerb-2026-08.md` zieht auf, was `konzept-sindricad.md` an einem
+einzelnen Konkurrenten gemessen hat: sechs Gruppen — parametrisches CAD,
+Direktmodellierer, Einsteigerwerkzeuge am Modellkatalog, Mesh-Reparatur,
+Slicer, KI —, jeder Bereich der Anwendung dagegen gehalten.
+
+**Der Befund ist nicht, dass etwas fehlt, sondern dass das Falsche vorn
+stand.** Führend sind wir beim Anpassen fremder Modelle (Meshmixer
+eingestellt, 3D Builder abgekündigt), bei der Druckbarkeit vor dem Slicen und
+bei `auto:<material>`. Die Website führte mit Säule A — dem einen Bereich, in
+dem Autodesk gerade Foundation-Modelle für editierbares B-Rep auffährt.
+
+### Umgesetzt
+
+- [x] **GLB hinausschreiben** (B4 aus dem SindriCAD-Konzept). Mit Namen und
+      Farben: glTF kennt Farben nur an Ecken, deshalb je Materialslot ein
+      eigenes Teilnetz — sonst kommt die Grenze zwischen roter Platte und
+      blauer Schrift als Verlauf über das halbe Teil an. Die Kommandozeile
+      nimmt ihre Formatliste jetzt aus dem Schreiber.
+- [x] **Mehrsprachigkeit als Gerüst.** `available_languages()` liest das
+      Katalogverzeichnis; Erstlauf, Einstellungen, Einsammler, Handbuch und
+      Abbildungen lesen es. Eine neue Sprache ist eine Datei. Der
+      Übersetzungstest prüft jede gefundene, nicht mehr nur die englische —
+      halb übersetzt einchecken geht damit nicht. Das Dezimaltrennzeichen
+      kennt jetzt auch Spanisch, Französisch, Italienisch und Portugiesisch.
+- [x] **Modell aus dem Netz** (§16.3). Verweis aus dem Browser ablegen oder
+      *Datei → Modell aus dem Netz*, Feld mit der Zwischenablage vorbelegt.
+      Beides geht durch `Session.import_payload`, also durch dieselbe
+      Operation wie eine Datei von der Platte. Nur http/https, Größengrenze
+      beim Lesen statt am `Content-Length`, Herkunft in `Source.origin`. Eine
+      Adresse mit HTML dahinter ist eine Modellseite und bekommt genau diesen
+      Satz — ausgewertet wird nichts.
+- [x] **Texturmuster sichtbar** (B2). Bild und Name je Zeile in der Auswahl,
+      gezeichnet aus `pattern_shapes`. Dazu eine Handbuchabbildung mit allen
+      achten und ein Abschnitt auf der Startseite.
+- [x] **Website.** Weg 1 als Aufmacher, Windows und Linux ausdrücklich mit
+      macOS als benannter Lücke (eigene FAQ-Frage), GLB bei den Formaten.
+
+### Was der Durchgang durch das laufende Fenster gefunden hat
+
+Zwei Zeilen unter der Musterauswahl, die gerade Bilder bekommen hatte, standen
+die Werte weiter englisch: „Art: raised", „Auflegen: flat". Über das ganze
+Register waren es **sechsundzwanzig** Auswahlwerte. Behoben, und
+`tests/test_translations.py` lässt nur noch durch, was sein eigener Name ist
+(M4, 6x3, mm, x, DejaVu Sans, gyroid).
+
+Der zweite Fund war ein eigener Fehlbefund: die beworbenen **77 Operationen**
+sind richtig. Ein Zähllauf über `walk_packages` kam auf 61, weil die sechzehn
+`insert_*`-Operationen der Bausteine erst mit `load_operations()` entstehen.
+`tests/test_website.py` prüft die Zahl gegen das Register und hat es gefangen,
+bevor die falsche Zahl auf der Seite stand.
+
+### Offen, mit Entscheidung dahinter
+
+- [ ] **Sichtbarkeit.** Solidon ist fertiger als das, worüber geschrieben
+      wird, und unbekannt. Keine Entwicklungsaufgabe.
+- [ ] **macOS ausliefern.** Die Suite läuft dort bei Tags grün; es fehlen
+      Paketierschritt, Apple-Signatur und die Bereitschaft, eine dritte
+      Plattform zu stützen. Die Website sagt es jetzt ausdrücklich, statt es
+      auszulassen.
+- [ ] **G-Code an die Maschine senden** (B3). §28 meint mit „Drucker" das
+      Zurücklesen; Senden wäre eine Bauplanänderung. Wenn, dann über ein
+      offenes Protokoll für viele Maschinen.
+- [ ] **Weitere Sprachen befüllen.** Das Gerüst steht, die Kataloge fehlen —
+      ES, FR, IT, PT sind der billigste Reichweitengewinn, den es gibt.
+- [ ] **Skizze bedienerisch fertig** (B1). Die Ändern-Gruppe steht; der Rest
+      der neun Punkte aus `konzept-bedienung.md` Teil 4 nicht.
