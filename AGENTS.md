@@ -81,6 +81,12 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 | Oberflächentexte | Deutsch + Englisch über `tr()` |
 | Doku und Bauplan | Deutsch |
 
+Eine **weitere Sprache** ist eine Datei in `app/i18n/locales/` und sonst
+nichts: Sprachauswahl, Einsammler, Handbuch, Abbildungen und Prüfung lesen das
+Verzeichnis (`available_languages()`). Unvollständig eingecheckt wird keine —
+`tests/test_translations.py` prüft jede gefundene Datei, nicht nur die
+englische.
+
 Kommentare und Docstrings waren bis dahin englisch. Sie sind es nicht mehr:
 `app/`, `tests/` und `tools/` sind vollständig übersetzt. Was neu dazukommt,
 wird deutsch geschrieben — nachträglich zu übersetzen gibt es nichts mehr.

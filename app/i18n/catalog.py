@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 
 from app.core.log import get_logger
-from app.i18n import SOURCE_LANGUAGE, SUPPORTED_LANGUAGES, install_catalog
+from app.i18n import SOURCE_LANGUAGE, install_catalog
 
 _log = get_logger(__name__)
 
@@ -24,6 +24,24 @@ LOCALES_DIR = Path(__file__).parent / "locales"
 
 def catalog_path(language: str) -> Path:
     return LOCALES_DIR / f"{language}.json"
+
+
+def available_languages() -> tuple[str, ...]:
+    """Die Quellsprache und jede Sprache, für die ein Katalog daliegt.
+
+    Eine feste Liste stand hier lange als ``SUPPORTED_LANGUAGES`` — und mit
+    ihr die Aussicht, dass eine neue Sprache an fünf Stellen nachgetragen
+    werden muss, von denen man vier vergisst: Auswahl im Erstlauf,
+    Einstellungen, Einsammler, Handbuch, Bilder. Jetzt ist der Katalog selbst
+    die Anmeldung. Wer eine Sprache hinzufügt, legt eine Datei ab; alles
+    andere findet sie.
+
+    Vollständig muss sie sein, bevor sie eingecheckt wird — dafür sorgt
+    ``tests/test_translations.py``, das jede gefundene Datei prüft und nicht
+    nur die englische.
+    """
+    found = sorted(path.stem for path in LOCALES_DIR.glob("*.json"))
+    return tuple(dict.fromkeys((SOURCE_LANGUAGE, *found)))
 
 
 def read_catalog(language: str) -> dict[str, str]:
@@ -49,7 +67,7 @@ def install_language(language: str) -> None:
     """Stellt eine Sprache für die Übersetzung bereit."""
     if language == SOURCE_LANGUAGE:
         return
-    if language not in SUPPORTED_LANGUAGES:
+    if language not in available_languages():
         _log.warning("unknown language %s, staying on %s", language, SOURCE_LANGUAGE)
         return
     entries = {key: value for key, value in read_catalog(language).items() if value}

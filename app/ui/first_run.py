@@ -37,7 +37,8 @@ from app.core.backends import llm
 from app.core.export import slicer_keys, slicer_profiles
 from app.core.knowledge import profiles
 from app.core.log import get_logger
-from app.i18n import SUPPORTED_LANGUAGES, language_name, tr
+from app.i18n import language_name, tr
+from app.i18n.catalog import available_languages
 from app.ui.icons import icon
 from app.ui.labels import by_title
 from app.ui.settings import UiSettings
@@ -123,7 +124,7 @@ class FirstRunDialog(QDialog):
         self.language = QComboBox(self)
         # Der Name, nicht das Kürzel: „de" stand hier als allererste Angabe, die
         # ein neuer Benutzer zu sehen bekam.
-        for entry in SUPPORTED_LANGUAGES:
+        for entry in available_languages():
             self.language.addItem(language_name(entry), entry)
         self.language.setCurrentIndex(self.language.findData(settings.language))
 

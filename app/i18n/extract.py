@@ -13,8 +13,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from app.i18n import SOURCE_LANGUAGE, SUPPORTED_LANGUAGES
-from app.i18n.catalog import read_catalog, write_catalog
+from app.i18n import SOURCE_LANGUAGE
+from app.i18n.catalog import available_languages, read_catalog, write_catalog
 
 MARKERS = ("_", "tr")
 PACKAGE_DIR = Path(__file__).parent.parent
@@ -46,7 +46,7 @@ def update_catalogs() -> dict[str, tuple[int, int]]:
     """Bringt jeden Katalog auf den Stand der Quellen. Liefert (gesamt, offen)."""
     ids = message_ids()
     report: dict[str, tuple[int, int]] = {}
-    for language in SUPPORTED_LANGUAGES:
+    for language in available_languages():
         if language == SOURCE_LANGUAGE:
             continue
         existing = read_catalog(language)

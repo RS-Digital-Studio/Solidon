@@ -47,8 +47,8 @@ from app.core import figures
 from app.core.bootstrap import load_operations
 from app.core.registry.registry import REGISTRY
 from app.core.types import Finding
-from app.i18n import SUPPORTED_LANGUAGES, install_catalog, set_language
-from app.i18n.catalog import read_catalog
+from app.i18n import install_catalog, set_language
+from app.i18n.catalog import available_languages, read_catalog
 
 #: Welches Beispielprojekt im Hauptfenster steht.
 #:
@@ -320,7 +320,7 @@ def main() -> int:
     # man ihm am ehesten glaubt.
     apply_theme(app, "dark")
     qt_translator = None
-    for language in SUPPORTED_LANGUAGES:
+    for language in available_languages():
         install_catalog(language, read_catalog(language))
         set_language(language)
         # Auch Qt selbst spricht die Sprache der Aufnahme — sonst zeigen die

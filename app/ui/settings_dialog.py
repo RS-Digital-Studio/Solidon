@@ -31,7 +31,8 @@ from PySide6.QtWidgets import (
 
 from app.core.knowledge import profiles
 from app.core.units import DISPLAY_UNITS
-from app.i18n import SUPPORTED_LANGUAGES, language_name, tr
+from app.i18n import language_name, tr
+from app.i18n.catalog import available_languages
 from app.ui.labels import by_title
 from app.ui.palette import DIFF_PALETTES
 from app.ui.settings import UiSettings
@@ -65,7 +66,7 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(tr("Einstellungen"))
         self.setMinimumWidth(460)
 
-        self.language = _choices(self, {key: language_name(key) for key in SUPPORTED_LANGUAGES})
+        self.language = _choices(self, {key: language_name(key) for key in available_languages()})
         _select(self.language, settings.language)
         self.language_note = QLabel(tr("Eine andere Sprache erscheint beim nächsten Start."), self)
         self.language_note.setWordWrap(True)

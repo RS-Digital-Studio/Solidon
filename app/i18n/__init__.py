@@ -13,18 +13,26 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-#: Sprachen, mit denen die Anwendung ausgeliefert wird. Deutsch ist die
-#: Quellsprache.
+#: Deutsch ist die Quellsprache: ihre Texte sind die Message-IDs, sie braucht
+#: keinen Katalog. Welche Sprachen es sonst gibt, sagt nicht diese Datei,
+#: sondern das Katalogverzeichnis — :func:`app.i18n.catalog.available_languages`.
 SOURCE_LANGUAGE: Final = "de"
-SUPPORTED_LANGUAGES: Final = ("de", "en")
 
 #: Wie eine Sprache heißt — **in sich selbst**, nicht übersetzt. Wer die
 #: Anwendung in einer Sprache vorfindet, die er nicht liest, sucht in der
 #: Auswahl nach dem Wort, das er kennt: „Deutsch" steht auch in der englischen
 #: Oberfläche als „Deutsch" da. Aus demselben Grund steht hier kein ``_()``.
+#:
+#: Die Liste ist keine Anmeldung, sondern ein Wörterbuch: ein Eintrag hier
+#: liefert keine Sprache aus, und eine Sprache ohne Eintrag erscheint mit
+#: ihrem Kürzel statt ihrem Namen.
 LANGUAGE_NAMES: Final[dict[str, str]] = {
     "de": "Deutsch",
     "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "it": "Italiano",
+    "pt": "Português",
 }
 
 
@@ -112,8 +120,11 @@ def sort_key(text: object) -> str:
     return str(text).casefold().translate(_FOLDED)
 
 
-#: Sprachen, die das Komma als Dezimaltrennzeichen schreiben.
-_DECIMAL_COMMA: Final = frozenset({"de"})
+#: Sprachen, die das Komma als Dezimaltrennzeichen schreiben. Englisch ist
+#: unter den europäischen Sprachen die Ausnahme, nicht die Regel — wer eine
+#: Sprache hinzufügt und sie hier vergisst, bekommt „0.2 mm" neben einer
+#: Oberfläche, die „2,40 mm" anzeigt.
+_DECIMAL_COMMA: Final = frozenset({"de", "es", "fr", "it", "pt"})
 
 
 def format_decimal(value: float | int, digits: int | None = None) -> str:

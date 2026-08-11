@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 import app
-from app.i18n import SOURCE_LANGUAGE, SUPPORTED_LANGUAGES, TranslatableText, set_language
-from app.i18n.catalog import install_language, read_catalog
+from app.i18n import SOURCE_LANGUAGE, TranslatableText, set_language
+from app.i18n.catalog import available_languages, install_language, read_catalog
 from app.i18n.extract import message_ids
 
 PACKAGE_DIR = Path(app.__file__).parent
@@ -45,9 +45,16 @@ LABELLED_WIDGETS = frozenset(
 
 
 @pytest.mark.parametrize(
-    "language", [entry for entry in SUPPORTED_LANGUAGES if entry != SOURCE_LANGUAGE]
+    "language", [entry for entry in available_languages() if entry != SOURCE_LANGUAGE]
 )
 def test_every_text_is_translated(language: str) -> None:
+    """Jede Sprache, die dasteht, ist fertig.
+
+    Nicht nur englisch: die Liste kommt aus dem Katalogverzeichnis, also prüft
+    dieser Test jede Sprache, die jemand hinzufügt, vom ersten Lauf an. Eine
+    halb übersetzte Datei einzuchecken ist damit keine Option — sie wäre eine
+    Sprache in der Auswahl, die mitten im Satz nach Deutsch zurückfällt.
+    """
     catalog = read_catalog(language)
     ids = message_ids()
 
@@ -195,3 +202,45 @@ def test_no_hard_wired_text_in_the_surface(path: Path) -> None:
                 offenders.append(f"{path.name}:{argument.lineno} {argument.value!r}")
 
     assert not offenders, "text that never reaches tr():\n" + "\n".join(offenders)
+
+
+def test_a_new_catalogue_is_all_it_takes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """§4.1: Eine Sprache meldet sich über ihre Datei an, nicht über eine Liste.
+
+    Der Nachweis, dass das Gerüst offen ist: ein Katalog im Verzeichnis, und
+    die Sprache steht in der Auswahl. Vorher hing sie an ``SUPPORTED_LANGUAGES``
+    im Quelltext, und daneben an vier weiteren Stellen, die man einzeln
+    nachtragen musste.
+    """
+    from app.i18n import catalog as catalogue_module
+
+    for language in ("en", "es"):
+        (tmp_path / f"{language}.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(catalogue_module, "LOCALES_DIR", tmp_path)
+
+    assert catalogue_module.available_languages() == (SOURCE_LANGUAGE, "en", "es")
+
+
+def test_an_unnamed_language_still_shows_up() -> None:
+    """Ein Kürzel ohne Eintrag in ``LANGUAGE_NAMES`` verschwindet nicht — es
+    steht als Kürzel da. Die Namensliste ist ein Wörterbuch, keine Anmeldung."""
+    from app.i18n import language_name
+
+    assert language_name("es") == "Español"
+    assert language_name("xx") == "xx"
+
+
+def test_the_manual_finds_a_place_for_a_new_language() -> None:
+    """Die Sprachauswahl darf der Anwendung nicht davonlaufen: der
+    Handbuchbauer kannte zwei Sprachen und brach bei der dritten ab."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "make_manual", Path(app.__file__).parent.parent / "tools" / "make_manual.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.page_for("de") == ("handbuch.html", "handbuch/de")
+    assert module.page_for("es") == ("es/manual.html", "../handbuch/es")

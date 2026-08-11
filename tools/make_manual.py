@@ -37,19 +37,34 @@ if hasattr(sys.stdout, "reconfigure"):
 from app.branding import APP_NAME, APP_VENDOR, APP_VERSION, COPYRIGHT, WEBSITE_URL
 from app.core import figures, manual
 from app.core.bootstrap import load_operations
-from app.i18n import SUPPORTED_LANGUAGES, install_catalog, set_language, tr
-from app.i18n.catalog import read_catalog
+from app.i18n import install_catalog, set_language, tr
+from app.i18n.catalog import available_languages, read_catalog
 
 ROOT = Path(__file__).resolve().parent.parent
 WEBSITE = ROOT / "website"
 RELEASES = ROOT / "Releases"
 
-#: Wie die Handbuchseite je Sprache heißt und wo sie liegt. Der englische Teil
-#: der Website wohnt in einem Unterordner, also auch sein Handbuch.
+#: Wie die Handbuchseite je Sprache heißt und wo sie liegt. Deutsch ist die
+#: Wurzel der Website, jede andere Sprache wohnt in ihrem eigenen Unterordner
+#: — also auch ihr Handbuch.
 PAGES = {
     "de": ("handbuch.html", "handbuch/de"),
     "en": ("en/manual.html", "../handbuch/en"),
 }
+
+
+def page_for(language: str) -> tuple[str, str]:
+    """Zielseite und Bildpfad einer Sprache.
+
+    Eine Sprache, die noch keinen Eintrag hat, bekommt den Ort, den sie nach
+    demselben Muster hätte — sonst stünde die Sprachauswahl in der Anwendung
+    schon offen, während der Handbuchbauer beim ersten neuen Kürzel mit einem
+    ``KeyError`` abbricht.
+    """
+    if language in PAGES:
+        return PAGES[language]
+    return f"{language}/manual.html", f"../handbuch/{language}"
+
 
 STYLE = """
     /* Der Text bleibt schmal, weil sich lange Zeilen schlecht lesen. Die
@@ -750,13 +765,13 @@ def _overlay(target: Path, chapters: list[str], total: int, language: str) -> Pa
 
 def main() -> int:
     load_operations()
-    for language in SUPPORTED_LANGUAGES:
+    for language in available_languages():
         install_catalog(language, read_catalog(language))
         set_language(language)
         figures.forget()
         print(f"{language}:")
 
-        name, prefix = PAGES[language]
+        name, prefix = page_for(language)
         # Je Sprache ein eigener Ordner: die Beschriftungen stecken in den
         # Zeichnungen, also ist ein deutsches Bild kein englisches.
         folder = WEBSITE / "handbuch" / language
