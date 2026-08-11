@@ -14,6 +14,7 @@ from typing import Any
 from PySide6.QtCore import QLocale
 from PySide6.QtGui import QColor
 
+from app.core import figures
 from app.core.errors import AppError
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import group_title as group_title
@@ -138,6 +139,11 @@ def colour_name(value: str) -> str:
 _CHOICE_NAMES: dict[str, TranslatableText] = {
     "mouth": _("Mündung"),
     "centre": _("Mitte"),
+    # Die acht Texturmuster standen als „knurl_diamond" und „voronoi" im
+    # Dialog: englische Schlüssel, unübersetzt, und damit gegen Regel 20 dem
+    # Geist nach. Die Namen kommen aus dem Abbildungskatalog, der dieselben
+    # Kacheln beschriftet — zwei Listen wären eine Frage der Zeit.
+    **figures.TEXTURE_NAMES,
 }
 
 

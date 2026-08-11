@@ -459,6 +459,107 @@ def _texture(theme: Theme) -> str:
     return canvas.svg()
 
 
+#: Wie groß eine Musterkachel gezeichnet wird, und mit welcher Teilung. Die
+#: Werte sind Zeichenmaße, keine Millimeter: gezeigt wird die *Form* des
+#: Musters, und die hängt an der Teilung, nicht an der Größe des Feldes.
+TILE_SIZE: Final = 120.0
+TILE_PITCH: Final = 16.0
+
+
+def texture_tile(pattern: str, theme: Theme, size: float = TILE_SIZE) -> str:
+    """Eine Musterkachel, gezeichnet aus **denselben** Polygonen, aus denen der
+    Körper entsteht (§25).
+
+    Ein von Hand gemaltes Vorschaubild wäre eine zweite Wahrheit: es zeigte,
+    was jemand für das Muster hielt, als er es malte. Hier kommt die Zeichnung
+    aus :func:`app.core.geom.texture_ops.pattern_shapes` — was im Bild steht,
+    ist das, was gerechnet wird.
+
+    Ohne die Geometriepakete gibt es kein Bild, sondern einen leeren Rahmen;
+    der Alt-Text trägt die Aussage dann allein (siehe Modulkopf).
+    """
+    canvas = Canvas(size, size, theme)
+    colours = canvas.colours
+    canvas.background()
+    try:
+        from app.core.geom.texture_ops import pattern_shapes
+
+        shapes = pattern_shapes(pattern, size, size, TILE_PITCH, seed=1)
+    except Exception:  # pragma: no cover — ohne shapely/trimesh bleibt der Rahmen
+        shapes = []
+
+    for shape in shapes:
+        for ring in _rings_of(shape):
+            # Die Polygone liegen um den Ursprung; die Zeichenfläche zählt von
+            # links oben. Y wird gespiegelt, sonst stünde ein Muster im Bild
+            # auf dem Kopf — bei Rippen fällt das nicht auf, bei Waben schon.
+            points = [(x + size / 2.0, size / 2.0 - y) for x, y in ring]
+            canvas.polygon(points, fill=colours.accent, stroke=colours.ink, weight=0.8)
+    canvas.box(0.0, 0.0, size, size, stroke=colours.muted)
+    return canvas.svg()
+
+
+def _rings_of(shape: object) -> list[list[tuple[float, float]]]:
+    """Die äußeren Ringe eines Shapely-Gebildes, ohne Shapely zu importieren."""
+    geoms = getattr(shape, "geoms", None)
+    if geoms is not None:
+        return [ring for part in geoms for ring in _rings_of(part)]
+    exterior = getattr(shape, "exterior", None)
+    if exterior is None:
+        return []
+    return [[(float(x), float(y)) for x, y in exterior.coords]]
+
+
+def _textures(theme: Theme) -> str:
+    """Alle acht Muster nebeneinander — die Antwort auf „welches denn?"."""
+    from app.core.geom.texture_ops import PATTERNS
+
+    columns = 4
+    tile = 96.0
+    gap = 14.0
+    label_height = 20.0
+    rows = (len(PATTERNS) + columns - 1) // columns
+    canvas = Canvas(
+        columns * tile + (columns + 1) * gap,
+        rows * (tile + label_height) + (rows + 1) * gap,
+        theme,
+    )
+    colours = canvas.colours
+    canvas.background()
+
+    for index, pattern in enumerate(PATTERNS):
+        left = gap + (index % columns) * (tile + gap)
+        top = gap + (index // columns) * (tile + label_height + gap)
+        try:
+            from app.core.geom.texture_ops import pattern_shapes
+
+            shapes = pattern_shapes(pattern, tile, tile, TILE_PITCH * tile / TILE_SIZE, seed=1)
+        except Exception:  # pragma: no cover — siehe :func:`texture_tile`
+            shapes = []
+        for shape in shapes:
+            for ring in _rings_of(shape):
+                points = [(left + x + tile / 2.0, top + tile / 2.0 - y) for x, y in ring]
+                canvas.polygon(points, fill=colours.accent, stroke=colours.ink, weight=0.7)
+        canvas.box(left, top, tile, tile, stroke=colours.muted)
+        canvas.caption(left, top + tile + 14.0, str(TEXTURE_NAMES[pattern]))
+    return canvas.svg()
+
+
+#: Wie die acht Muster heißen. Hier, nicht in der Oberfläche: das Handbuch
+#: beschriftet damit seine Abbildung, der Dialog seine Auswahl, und zwei
+#: Listen liefen erfahrungsgemäß auseinander.
+TEXTURE_NAMES: Final[dict[str, TranslatableText]] = {
+    "rib": _("Rippe"),
+    "wave": _("Welle"),
+    "knurl_straight": _("Rändel gerade"),
+    "knurl_diamond": _("Rändel gekreuzt"),
+    "hexagon": _("Wabe"),
+    "dimple": _("Noppen"),
+    "voronoi": _("Voronoi"),
+    "noise": _("Rauschen"),
+}
+
+
 def _ways(theme: Theme) -> str:
     """Die drei Hauptwege aus §2.2, als Ablauf."""
     canvas = Canvas(620, 260, theme)
@@ -883,6 +984,17 @@ FIGURES: Final[tuple[Figure, ...]] = (
         ),
         caption=_("Ein Rändel gehört um den Griff, nicht als Fleck darauf."),
         build=_texture,
+    ),
+    Figure(
+        key="textures",
+        alt=_(
+            "Acht Musterkacheln in zwei Reihen: Rippe als parallele Streifen, Welle "
+            "als wellige Streifen, Rändel gerade und gekreuzt als schräge Streifen "
+            "beziehungsweise Rauten, Wabe als Sechsecke, Noppen als Punktraster, "
+            "Voronoi als unregelmäßige Zellen und Rauschen als verstreute Flecken."
+        ),
+        caption=_("Alle acht Muster, gezeichnet aus denselben Umrissen, die gedruckt werden."),
+        build=_textures,
     ),
     Figure(
         key="ways",

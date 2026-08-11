@@ -394,6 +394,7 @@ class OperationDialog(QDialog):
             combo = QComboBox(self)
             for choice in entry.choices:
                 combo.addItem(choice_label(str(choice)), choice)
+            _show_patterns(combo, entry.choices)
             if start is not None and start in entry.choices:
                 combo.setCurrentIndex(combo.findData(start))
             return combo
@@ -568,6 +569,47 @@ class OperationDialog(QDialog):
             elif isinstance(editor, QLineEdit):
                 collected[entry.name] = editor.text()
         return collected
+
+
+#: Wie groß eine Musterkachel in der Auswahl steht. Klein genug für eine
+#: Zeile, groß genug, dass sich Voronoi und Rauschen unterscheiden lassen —
+#: bei 16 Pixeln sehen beide aus wie Grau.
+PATTERN_ICON = 44
+
+
+def _show_patterns(combo: QComboBox, choices: Sequence[Any]) -> None:
+    """Zeigt jedes Texturmuster als Bild neben seinem Namen (§2.6).
+
+    Acht Muster als Wort in einem Aufklappmenü sind acht Wörter; wer sie nicht
+    kennt, probiert sie durch. Erkannt wird das Feld an seinen Werten und
+    nicht an seinem Namen: eine zweite Operation mit denselben Mustern bekommt
+    die Bilder damit von selbst.
+    """
+    from PySide6.QtCore import QByteArray, QSize
+    from PySide6.QtGui import QIcon, QPainter, QPixmap
+    from PySide6.QtSvg import QSvgRenderer
+
+    from app.core import figures
+    from app.core.drawing import Theme
+    from app.core.geom.texture_ops import PATTERNS
+    from app.ui.start_screen import current_theme
+
+    wanted = [str(entry) for entry in choices]
+    if not wanted or not set(wanted) <= set(PATTERNS):
+        return
+
+    theme: Theme = "light" if current_theme() == "light" else "dark"
+    ratio = combo.devicePixelRatioF()
+    for index, pattern in enumerate(wanted):
+        pixmap = QPixmap(QSize(PATTERN_ICON, PATTERN_ICON) * ratio)
+        pixmap.setDevicePixelRatio(ratio)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        renderer = QSvgRenderer(QByteArray(figures.texture_tile(pattern, theme).encode("utf-8")))
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        combo.setItemIcon(index, QIcon(pixmap))
+    combo.setIconSize(QSize(PATTERN_ICON, PATTERN_ICON))
 
 
 #: Was vorausgewählt ist, wenn die Skizze fertig ist.

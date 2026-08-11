@@ -425,3 +425,43 @@ def test_the_register_says_which_operations_need_an_exact_body() -> None:
         assert REGISTRY.get(name).requires_kind == "brep", name
     for name in ("drill_hole", "hollow_object", "repair"):
         assert not REGISTRY.get(name).requires_kind, name
+
+
+# --- Texturmuster (§2.6, B2) ----------------------------------------------------
+
+
+def test_the_patterns_are_shown_and_named(qt_app: object) -> None:
+    """Acht Muster standen als „knurl_diamond" in einer Liste ohne Bild.
+
+    Beides zusammen war der Befund: unlesbar **und** unsichtbar. Geprüft wird
+    an der fertigen Auswahl, nicht an der Namensliste — die Verdrahtung ist
+    hier der Punkt.
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    from app.core.geom.texture_ops import PATTERNS
+    from app.core.registry import REGISTRY
+    from app.ui.op_dialog import OperationDialog
+
+    dialog = OperationDialog(REGISTRY.get("apply_texture"), [])
+    combo = dialog._editors["pattern"]
+    assert isinstance(combo, QComboBox)
+    assert combo.count() == len(PATTERNS)
+
+    for index in range(combo.count()):
+        label = combo.itemText(index)
+        assert label not in PATTERNS, f"{label} ist ein Schlüssel, kein Name"
+        assert not combo.itemIcon(index).isNull(), f"{label} hat kein Bild"
+    dialog.deleteLater()
+
+
+def test_a_pattern_tile_comes_from_the_geometry() -> None:
+    """§25: Was im Bild steht, ist das, was gerechnet wird — kein gemaltes
+    Vorschaubild, das irgendwann von der Geometrie abweicht."""
+    from app.core import figures
+    from app.core.geom.texture_ops import PATTERNS
+
+    for pattern in PATTERNS:
+        tile = figures.texture_tile(pattern, "light")
+        assert tile.startswith("<svg")
+        assert "<polygon" in tile, f"{pattern} zeichnet keine Umrisse"
