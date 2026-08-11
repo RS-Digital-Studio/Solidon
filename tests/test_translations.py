@@ -244,3 +244,35 @@ def test_the_manual_finds_a_place_for_a_new_language() -> None:
 
     assert module.page_for("de") == ("handbuch.html", "handbuch/de")
     assert module.page_for("es") == ("es/manual.html", "../handbuch/es")
+
+
+#: Auswahlwerte, die ihr eigener Name sind: Normteilgrößen (M4), Maße (6x3),
+#: Einheiten, Achsen, Schriftnamen und der eine Eigenname unter den
+#: Gitterstrukturen. Sie heißen in jeder Sprache gleich.
+SELF_NAMING = re.compile(r"^(M\d+(\.\d+)?|\d+x\d+|mm|cm|in|m|x|y|z|DejaVu .*|gyroid)$")
+
+
+def test_every_choice_has_a_name_someone_can_read() -> None:
+    """Regel 20 gilt auch für Auswahlwerte.
+
+    Gefunden im laufenden Fenster, nicht in der Suite: im Texturdialog stand
+    „Art: raised" und „Auflegen: flat", und dieselbe Sorte Wert steckte über
+    das ganze Register verteilt sechsundzwanzigmal. Ein Schlüssel ist kein
+    Text, den jemand liest — auch dann nicht, wenn er zufällig ein englisches
+    Wort ist.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.ui.labels import choice_label
+
+    load_operations()
+    offenders = []
+    for spec in REGISTRY.all():
+        for entry in spec.params.spec():
+            for choice in entry.choices or ():
+                value = str(choice)
+                if SELF_NAMING.match(value) or choice_label(value) != value:
+                    continue
+                offenders.append(f"{spec.name}.{entry.name}: {value!r}")
+
+    assert not offenders, "choice values shown as keys:\n" + "\n".join(sorted(offenders))

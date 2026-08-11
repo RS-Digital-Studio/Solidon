@@ -136,6 +136,12 @@ def colour_name(value: str) -> str:
 #: Auswahlwerte, die selbst kein Name sind. Der Schlüssel bleibt englisch, weil
 #: er in der Projektdatei steht (§4.2); gezeigt wird der übersetzte Text. Was
 #: schon ein Name ist — „M4", „PLA", „z" — steht hier nicht.
+#: Wie ein Auswahlwert heißt, wenn er nicht schon sein eigener Name ist.
+#:
+#: Die Liste ist flach, und das ist eine Entscheidung: derselbe Schlüssel
+#: bedeutet in dieser Anwendung überall dasselbe. Wo das einmal nicht mehr
+#: stimmt, bekommt der Wert einen eigenen Schlüssel — nicht diese Liste eine
+#: zweite Ebene.
 _CHOICE_NAMES: dict[str, TranslatableText] = {
     "mouth": _("Mündung"),
     "centre": _("Mitte"),
@@ -144,6 +150,34 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # Geist nach. Die Namen kommen aus dem Abbildungskatalog, der dieselben
     # Kacheln beschriftet — zwei Listen wären eine Frage der Zeit.
     **figures.TEXTURE_NAMES,
+    # Und dieselbe Sorte Fund im selben Dialog eine Zeile tiefer: „Art:
+    # raised", „Auflegen: flat". Über das ganze Register waren es
+    # sechsundzwanzig Werte; ``tests/test_translations.py`` hält sie jetzt
+    # zusammen.
+    "raised": _("Erhaben"),
+    "engraved": _("Vertieft"),
+    "flat": _("Flach"),
+    "cylinder": _("Umlaufend"),
+    "all": _("Alle"),
+    "top": _("Oben"),
+    "bottom": _("Unten"),
+    "side": _("Seitlich"),
+    "horizontal": _("Waagerecht"),
+    "vertical": _("Senkrecht"),
+    "linear": _("Geradlinig"),
+    "circular": _("Kreisförmig"),
+    "origin": _("Ursprung"),
+    "bed": _("Druckbett"),
+    "corner": _("Ecke"),
+    "pin": _("Stift"),
+    "bore": _("Bohrung"),
+    "rectangle": _("Rechteck"),
+    "circle": _("Kreis"),
+    "polygon": _("Vieleck"),
+    "slot": _("Langloch"),
+    "honeycomb": _("Wabe"),
+    "cubic": _("Würfelgitter"),
+    "auto": _("Automatisch"),
 }
 
 

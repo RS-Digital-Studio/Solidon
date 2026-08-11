@@ -57,7 +57,7 @@ Empfehlung. Das Urteil ist eine von drei Marken — **führend**, **gleichauf**,
 
 ### 2.1 Konstruieren, parametrisch (Säule A)
 
-**Stand:** 61 Operationen im Register, 16 Bausteine, Projektparameter mit
+**Stand:** 77 Operationen im Register (16 davon aus der Bausteinbibliothek), Projektparameter mit
 eigener Grammatik ohne `eval`, Passungen in vier Arten, Op-Stack
 non-destruktiv, Undo auf Transaktionsebene.
 
@@ -285,12 +285,16 @@ FreeCAD kostenlos.
 genug, um selbst ein Argument zu sein — der Sprung von kostenlos auf 299 $/Jahr
 lässt bei Shapr3D erklärtermaßen eine Lücke, und 49 € sitzen genau darin.
 
-**Ein Befund am Rande, der ins Werbliche fällt:** Die Website nennt *„77
-Operationen im Register"* neben *„16 geprüfte Bausteine"*. Gemessen sind es 61
-Operationen und 16 Bausteine — 77 ist die Summe, und die Bausteine stehen damit
-zweimal in derselben Zahlenreihe. 61 ist eine gute Zahl; sie muss nicht
-aufgerundet werden, und eine Werbeaussage, die sich nachrechnen lässt, sollte
-stimmen.
+**Ein Befund am Rande, der sich als Fehlbefund erwiesen hat:** Die Website
+nennt *„77 Operationen im Register"* neben *„16 geprüfte Bausteine"*, und ein
+erster Zähllauf kam auf 61 — die Zahl sah nach einer Summe mit doppelt
+gezählten Bausteinen aus. Sie ist keine: jeder Baustein ist zugleich eine
+registrierte Operation (`insert_*`), und mit vollständig geladenem Register
+sind es tatsächlich 77, davon 16 aus der Bibliothek. Der erste Lauf hatte das
+Register über `walk_packages` gefüllt statt über `load_operations()` und die
+sechzehn deshalb nicht gesehen. `tests/test_website.py` prüft die Zahl gegen
+das Register — die Suite hat den Fehlbefund gefangen, bevor er auf der Seite
+stand.
 
 ---
 
@@ -331,7 +335,6 @@ die Arbeit ist.
 | **W7** | **GLB geht nicht hinaus** | klein | B4, offen |
 | **W8** | **Skizze bedienerisch halb** — Ändern-Gruppe steht, Rest offen | mittel | B1, teilerledigt |
 | **W9** | **Kein Weg vom Modellkatalog zu uns** — der Anpassungsfall wandert zu MakerWorld | Entscheidung | neu |
-| **W10** | **Werbezahl 77 stimmt nicht** | winzig | neu |
 
 ---
 
@@ -352,7 +355,7 @@ die Arbeit ist.
 
 Nach Wirkung je Aufwand, nicht nach Bereich:
 
-1. **W10, W4, W6** — eine Runde an Website und Vermarktung: Zahl richtigstellen,
+1. **W4, W6** — eine Runde an Website und Vermarktung: Zahl richtigstellen,
    Weg 1 nach vorn, Texturen mit Bild. Kein Code, größter sichtbarer Gewinn.
 2. **W3** — Spanisch, Französisch, Italienisch, Portugiesisch. Additiv, prüfbar
    über den bestehenden Übersetzungstest.
