@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Solidon3D — druckbare 3D-Modelle konstruieren, generieren und bearbeiten</title>
-<meta name="description" content="Solidon3D ist eine Desktop-Anwendung für den 3D-Druck: Modelle konstruieren, generieren und bearbeiten — lokal, ohne Konto, ohne Abo. Die Geometrie rechnet Code, nie das Sprachmodell.">
+<title>Solidon3D — fremde 3D-Modelle anpassen, eigene konstruieren, druckbar machen</title>
+<meta name="description" content="Solidon3D ist eine Desktop-Anwendung für den 3D-Druck: heruntergeladene Modelle anpassen, eigene konstruieren, Druckbarkeit vor dem Slicen prüfen — lokal, ohne Konto, ohne Abo.">
 <link rel="canonical" href="https://solidon3d.de/">
 <link rel="alternate" hreflang="de" href="https://solidon3d.de/">
 <link rel="alternate" hreflang="en" href="https://solidon3d.de/en/">
@@ -14,8 +14,8 @@
 <meta property="og:locale" content="de_DE">
 <meta property="og:locale:alternate" content="en_GB">
 <meta property="og:url" content="https://solidon3d.de/">
-<meta property="og:title" content="Solidon3D — druckbare 3D-Modelle konstruieren, generieren und bearbeiten">
-<meta property="og:description" content="Desktop-Anwendung für den 3D-Druck: konstruieren, generieren, bearbeiten — lokal, ohne Konto, ohne Abo. Die Geometrie rechnet Code, nie das Sprachmodell.">
+<meta property="og:title" content="Solidon3D — fremde 3D-Modelle anpassen, eigene konstruieren, druckbar machen">
+<meta property="og:description" content="Desktop-Anwendung für den 3D-Druck: fremde Modelle anpassen, eigene konstruieren, Druckbarkeit prüfen — lokal, ohne Konto, ohne Abo.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/de/main-window.png">
 <meta property="og:image:alt" content="Das Hauptfenster von Solidon3D: Objektbaum, 3D-Ansicht und Prüfbericht nebeneinander">
 <meta name="twitter:card" content="summary_large_image">
@@ -71,19 +71,21 @@
   <div class="wrap">
     <div class="hero">
       <div class="hero-text">
-        <h1>Beschreibe das Teil. Bekomme ein maßhaltiges, druckbares Modell.</h1>
-        <p class="lead">Solidon3D ist eine Desktop-Anwendung zum Konstruieren,
-        Generieren und Bearbeiten druckbarer 3D-Modelle — lokal, ohne Konto,
-        ohne Abo. Ein KI-Agent bedient dieselben Werkzeuge wie die Menüs;
-        die Geometrie rechnet Code, nie das Sprachmodell.</p>
+        <h1>Das heruntergeladene Teil passt nicht. Mach es passend.</h1>
+        <p class="lead">STL hereinziehen, Bohrung setzen, Deckel dazu, Passung
+        aus dem Materialprofil — und vor dem Slicen steht im Prüfbericht, was
+        beim Drucken schiefgeht. Solidon3D bearbeitet fremde Modelle,
+        konstruiert eigene und bereitet erzeugte auf. Lokal, ohne Konto, ohne
+        Abo; ein KI-Agent bedient dieselben Werkzeuge wie die Menüs, und die
+        Geometrie rechnet Code, nie das Sprachmodell.</p>
 
         <div class="download">
           <strong>Version 1.0 erscheint 2026</strong>
           <p><b>14 Tage kostenlos testen</b>, danach Einmalkauf:
           <b>49 € zur Einführung</b>, später 79 € — kein Abo, kein Konto,
           alle 1.x-Updates inklusive.</p>
-          <p>Für Windows und Linux. Diese Seite ist dann auch die
-          Download-Adresse.</p>
+          <p>Für <b>Windows und Linux</b> — macOS gibt es vorerst nicht.
+          Diese Seite ist dann auch die Download-Adresse.</p>
           <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20fr%C3%BCher%20hineinschauen">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
@@ -124,7 +126,7 @@
   <section class="tint">
     <div class="wrap">
       <div class="stats">
-        <div><b>77</b><span>Operationen im Register</span></div>
+        <div><b>61</b><span>Operationen im Register</span></div>
         <div><b>16</b><span>geprüfte Bausteine</span></div>
         <div><b>40</b><span>Normteilmaße hinterlegt</span></div>
         <div><b>16</b><span>Druckerprofile ab Werk</span></div>
@@ -419,6 +421,29 @@
         </figure>
       </div>
 
+      <div class="showcase">
+        <div>
+          <span class="kicker">Oberflächen</span>
+          <h3>Acht Muster, und alle davon druckbar geprüft</h3>
+          <p>Rippe, Welle, Rändel gerade und gekreuzt, Wabe, Noppen, Voronoi
+          und Rauschen — als <b>echte Geometrie</b> und als exaktes Gitter,
+          nicht als abgetastetes Höhenfeld. Sonst druckt ein Rändel gerundeten
+          Brei statt scharfer Rauten.</p>
+          <p class="note">Vor dem Rechnen die Frage, ob das Muster auf dieser
+          Maschine überhaupt entsteht: <b>Stege schmaler als die Düse und
+          Prägungen flacher als eine Schicht werden abgewiesen</b>, nicht
+          gerechnet.</p>
+        </div>
+        <figure class="shot">
+          <picture>
+            <source srcset="handbuch/de/textures-dark.svg" media="(prefers-color-scheme: dark)">
+            <img class="figure" src="handbuch/de/textures.svg" loading="lazy" decoding="async"
+                 alt="Acht Musterkacheln in zwei Reihen: Rippe als parallele Streifen, Welle als wellige Streifen, Rändel gerade und gekreuzt als schräge Streifen beziehungsweise Rauten, Wabe als Sechsecke, Noppen als Punktraster, Voronoi als unregelmäßige Zellen und Rauschen als verstreute Flecken.">
+          </picture>
+          <figcaption>Dieselben Umrisse, die danach gedruckt werden — die Vorschau ist gerechnet, nicht gemalt.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase flip">
         <div>
           <span class="kicker">Schichtanalyse</span>
@@ -531,7 +556,7 @@
           Wert aus dem Materialprofil, statt als Konstante im Modell zu
           verschwinden. Vorne stehen die drei Zahlen, die man braucht — der
           Rest liegt unter „Weitere Einstellungen“.</p>
-          <p class="note">77 Operationen, alle nach demselben Muster:
+          <p class="note">61 Operationen, alle nach demselben Muster:
           <b>Menü, Kontextmenü, Kommandozeile und Chat sehen dieselbe
           Deklaration.</b></p>
         </div>
@@ -715,7 +740,7 @@
           <summary>Muss ich eine KI benutzen?</summary>
           <p>Nein. Der Chat ist ein Weg von dreien. Ohne Schlüssel und ohne
           Ollama bleibt alles außer dem Chat vollständig benutzbar — Menüs,
-          Kontextmenüs, Kommandozeile und alle 77 Operationen.</p>
+          Kontextmenüs, Kommandozeile und alle 61 Operationen.</p>
         </details>
         <details>
           <summary>Rechnet die KI meine Geometrie?</summary>
@@ -737,10 +762,19 @@
           <summary>Welche Formate liest und schreibt Solidon3D?</summary>
           <p>Gelesen werden STL, 3MF (auch als Baugruppe), OBJ und GLB, dazu
           STEP über den B-Rep-Kern. Geschrieben werden STL, 3MF — mit
-          Farbwechsel und Plattenbelegung —, OBJ, PLY und STEP; STEP steht im
-          Exportdialog, sobald ein Körper es tragen kann. Ein Projekt ist eine
+          Farbwechsel und Plattenbelegung —, OBJ, PLY, GLB und STEP; STEP steht
+          im Exportdialog, sobald ein Körper es tragen kann. GLB ist das Format
+          zum Herzeigen: Farben und Name reisen mit, und der Empfänger dreht
+          das Teil im Browser. Ein Projekt ist eine
           ZIP-Datei mit <code>project.json</code> darin: auch ohne Solidon3D
           zu öffnen.</p>
+        </details>
+        <details>
+          <summary>Läuft das auf einem Mac?</summary>
+          <p>Nein, vorerst nicht. Es gibt Solidon3D für Windows und Linux;
+          eine macOS-Fassung ist keine Frage der Technik, sondern eine
+          Entscheidung über Signatur und Pflege einer dritten Plattform. Wenn
+          du eine brauchst, schreib uns — das zählt.</p>
         </details>
         <details>
           <summary>Funktioniert das mit meinem Drucker?</summary>

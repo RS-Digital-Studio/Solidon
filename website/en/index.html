@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Solidon3D — design, generate and edit printable 3D models</title>
-<meta name="description" content="Solidon3D is a desktop application for 3D printing: design, generate and edit printable models — local, no account, no subscription. Geometry is computed by code, never by the language model.">
+<title>Solidon3D — adapt other people's 3D models, design your own, make them printable</title>
+<meta name="description" content="Solidon3D is a desktop application for 3D printing: adapt downloaded models, design your own, check printability before slicing — local, no account, no subscription.">
 <link rel="canonical" href="https://solidon3d.de/en/">
 <link rel="alternate" hreflang="de" href="https://solidon3d.de/">
 <link rel="alternate" hreflang="en" href="https://solidon3d.de/en/">
@@ -14,8 +14,8 @@
 <meta property="og:locale" content="en_GB">
 <meta property="og:locale:alternate" content="de_DE">
 <meta property="og:url" content="https://solidon3d.de/en/">
-<meta property="og:title" content="Solidon3D — design, generate and edit printable 3D models">
-<meta property="og:description" content="Desktop application for 3D printing: design, generate, edit — local, no account, no subscription. Geometry is computed by code, never by the language model.">
+<meta property="og:title" content="Solidon3D — adapt other people's 3D models, design your own, make them printable">
+<meta property="og:description" content="Desktop application for 3D printing: adapt other people's models, design your own, check printability — local, no account, no subscription.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/en/main-window.png">
 <meta property="og:image:alt" content="The Solidon3D main window: object tree, 3D view and inspection report side by side">
 <meta name="twitter:card" content="summary_large_image">
@@ -71,19 +71,22 @@
   <div class="wrap">
     <div class="hero">
       <div class="hero-text">
-        <h1>Describe the part. Get an accurate, printable model.</h1>
-        <p class="lead">Solidon3D is a desktop application for designing,
-        generating and editing printable 3D models — local, no account, no
-        subscription. An AI agent drives the same tools as the menus;
-        geometry is computed by code, never by the language model.</p>
+        <h1>The model you downloaded does not fit. Make it fit.</h1>
+        <p class="lead">Drag the STL in, place a hole, add a lid, take the
+        clearance from the material profile — and before you slice, the report
+        says what will go wrong on the printer. Solidon3D edits other people's
+        models, designs your own and cleans up generated ones. Local, no
+        account, no subscription; an AI agent drives the same tools as the
+        menus, and geometry is computed by code, never by the language
+        model.</p>
 
         <div class="download">
           <strong>Version 1.0 ships in 2026</strong>
           <p><b>14-day free trial</b>, then a one-time purchase:
           <b>€49 at launch</b>, €79 later — no subscription, no account,
           every 1.x update included.</p>
-          <p>For Windows and Linux. This page will be the download
-          address.</p>
+          <p>For <b>Windows and Linux</b> — there is no macOS build for
+          now. This page will be the download address.</p>
           <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20an%20early%20look">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
@@ -124,7 +127,7 @@
   <section class="tint">
     <div class="wrap">
       <div class="stats">
-        <div><b>77</b><span>operations in the registry</span></div>
+        <div><b>61</b><span>operations in the registry</span></div>
         <div><b>16</b><span>tested building blocks</span></div>
         <div><b>40</b><span>standard part sizes</span></div>
         <div><b>16</b><span>printer profiles included</span></div>
@@ -415,6 +418,29 @@
         </figure>
       </div>
 
+      <div class="showcase">
+        <div>
+          <span class="kicker">Surfaces</span>
+          <h3>Eight patterns, every one checked for printability</h3>
+          <p>Rib, wave, straight and diamond knurl, honeycomb, dimples,
+          Voronoi and noise — as <b>real geometry</b> and as an exact lattice,
+          not a sampled height field. Otherwise a knurl prints rounded mush
+          instead of sharp diamonds.</p>
+          <p class="note">Before anything is computed comes the question
+          whether the pattern can exist on this machine at all: <b>ridges
+          narrower than the nozzle and embossings shallower than one layer are
+          refused</b>, not computed.</p>
+        </div>
+        <figure class="shot">
+          <picture>
+            <source srcset="../handbuch/en/textures-dark.svg" media="(prefers-color-scheme: dark)">
+            <img class="figure" src="../handbuch/en/textures.svg" loading="lazy" decoding="async"
+                 alt="Eight pattern tiles in two rows: rib as parallel stripes, wave as wavy stripes, straight and diamond knurl as slanted stripes and diamonds respectively, honeycomb as hexagons, dimples as a grid of dots, Voronoi as irregular cells and noise as scattered patches.">
+          </picture>
+          <figcaption>The very outlines that get printed — the preview is computed, not drawn by hand.</figcaption>
+        </figure>
+      </div>
+
       <div class="showcase flip">
         <div>
           <span class="kicker">Layer analysis</span>
@@ -525,7 +551,7 @@
           value from the material profile rather than disappearing into the
           model as a constant. The three numbers you need are up front — the
           rest lives under “More settings”.</p>
-          <p class="note">77 operations, all built the same way:
+          <p class="note">61 operations, all built the same way:
           <b>menu, context menu, command line and chat read the same
           declaration.</b></p>
         </div>
@@ -706,7 +732,7 @@
           <summary>Do I have to use AI?</summary>
           <p>No. The chat is one way out of three. Without a key and without
           Ollama, everything except the chat stays fully usable — menus,
-          context menus, command line and all 77 operations.</p>
+          context menus, command line and all 61 operations.</p>
         </details>
         <details>
           <summary>Does the AI compute my geometry?</summary>
@@ -729,9 +755,18 @@
           <summary>Which formats does Solidon3D read and write?</summary>
           <p>It reads STL, 3MF (including assemblies), OBJ and GLB, plus STEP
           through the B-rep kernel. It writes STL, 3MF — with colour changes
-          and plate layout —, OBJ, PLY and STEP; STEP appears in the export
-          dialog as soon as a solid can carry it. A project is a ZIP file with
+          and plate layout —, OBJ, PLY, GLB and STEP; STEP appears in the
+          export dialog as soon as a solid can carry it. GLB is the format for
+          showing: colours and name travel along, and the recipient turns the
+          part in a browser. A project is a ZIP file with
           <code>project.json</code> inside: openable without Solidon3D.</p>
+        </details>
+        <details>
+          <summary>Does it run on a Mac?</summary>
+          <p>Not for now. Solidon3D comes for Windows and Linux; a macOS build
+          is not a technical question but a decision about signing and
+          maintaining a third platform. If you need one, write to us — that
+          counts.</p>
         </details>
         <details>
           <summary>Will it work with my printer?</summary>
