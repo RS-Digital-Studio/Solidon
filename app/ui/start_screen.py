@@ -51,6 +51,7 @@ from app.core import examples
 from app.core.brep.step import SUFFIXES as STEP_SUFFIXES
 from app.core.examples import Example
 from app.core.geom.mesh import READABLE_SUFFIXES
+from app.core.ingest.fetch import ALLOWED_SUFFIXES, suffix_of
 from app.core.ingest.outline import OUTLINE_SUFFIXES
 from app.i18n import tr
 from app.ui.icons import icon
@@ -78,6 +79,8 @@ class DropArea(QFrame):
     """
 
     fileDropped = Signal(Path)
+    urlDropped = Signal(str)
+    """Ein Verweis aus dem Browser, gezogen statt heruntergeladen (§16.3)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -140,7 +143,7 @@ class DropArea(QFrame):
         self._paint(current_theme())
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
-        if accepted_path(event) is not None:
+        if accepted_path(event) is not None or accepted_url(event) is not None:
             self._set_hover(True)
             event.acceptProposedAction()
 
@@ -153,6 +156,11 @@ class DropArea(QFrame):
         path = accepted_path(event)
         if path is not None:
             self.fileDropped.emit(path)
+            event.acceptProposedAction()
+            return
+        url = accepted_url(event)
+        if url is not None:
+            self.urlDropped.emit(url)
             event.acceptProposedAction()
 
 
@@ -290,6 +298,26 @@ class ExampleTile(QFrame):
         super().keyPressEvent(event)
 
 
+def accepted_url(event: QDragEnterEvent | QDropEvent) -> str | None:
+    """Die erste fallengelassene **Web**-Adresse, die auf ein Modell zeigt.
+
+    Wer aus dem Browser einen Herunterladen-Verweis auf das Fenster zieht,
+    meint dieselbe Handlung wie mit einer Datei — und bekam bisher nichts, weil
+    :func:`accepted_path` alles verwirft, was keine lokale Datei ist. Geprüft
+    wird nur die Endung; ob dahinter wirklich ein Modell liegt, weiß erst der
+    Server (:mod:`app.core.ingest.fetch`).
+    """
+    data = event.mimeData()
+    if not data.hasUrls():
+        return None
+    for url in data.urls():
+        if url.isLocalFile() or url.scheme().lower() not in ("http", "https"):
+            continue
+        if suffix_of(url.path()) in ALLOWED_SUFFIXES:
+            return str(url.toString())
+    return None
+
+
 def accepted_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
     """Die erste fallengelassene Datei, mit der diese Anwendung etwas
     anfangen kann.
@@ -320,6 +348,9 @@ class StartScreen(QWidget):
     newRequested = Signal()
     browseRequested = Signal()
     fileDropped = Signal(Path)
+    urlDropped = Signal(str)
+    """Eine Adresse aus dem Browser ist hier gelandet — dieselbe Handlung wie
+    eine Datei, nur liegt sie noch nicht auf der Platte (§16.3)."""
     forgetRequested = Signal(Path)
     """Ein Eintrag soll aus der Liste verschwinden — die Datei bleibt."""
     manualRequested = Signal()
@@ -363,6 +394,7 @@ class StartScreen(QWidget):
 
         drop = DropArea(self)
         drop.fileDropped.connect(self.fileDropped)
+        drop.urlDropped.connect(self.urlDropped)
 
         # Die ersten fünfzehn Minuten stehen im Handbuch — aber der Weg
         # dorthin führte über das Hilfemenü des Hauptfensters, das beim ersten
@@ -473,13 +505,18 @@ class StartScreen(QWidget):
         menu.exec(self.recent_list.viewport().mapToGlobal(position))
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
-        if accepted_path(event) is not None:
+        if accepted_path(event) is not None or accepted_url(event) is not None:
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt name
         path = accepted_path(event)
         if path is not None:
             self.fileDropped.emit(path)
+            event.acceptProposedAction()
+            return
+        url = accepted_url(event)
+        if url is not None:
+            self.urlDropped.emit(url)
             event.acceptProposedAction()
 
 

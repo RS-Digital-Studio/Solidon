@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMenu,
@@ -82,6 +83,7 @@ from app.core.export.writer import (
     write_plan,
 )
 from app.core.geom.mesh import as_mesh_data
+from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.knowledge import calibration, print_settings, profiles
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
@@ -112,6 +114,7 @@ from app.core.types import (
     Origin,
     Parameter,
     SliceResult,
+    SourceOrigin,
 )
 from app.i18n import _, tr
 from app.ui import first_run
@@ -164,7 +167,7 @@ from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.shortcut_schemes import shortcut_for
 from app.ui.sketch_editor import SketchPanel, Surroundings
-from app.ui.start_screen import StartScreen, accepted_path
+from app.ui.start_screen import StartScreen, accepted_path, accepted_url
 from app.ui.style import NORMAL, TIGHT
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
@@ -308,6 +311,34 @@ class _OllamaSizeWorker(QThread):
 
     def run(self) -> None:
         self.done.emit(llm.ollama_size_warning(self._model))
+
+
+class _DownloadWorker(QThread):
+    """Eine Modelldatei aus dem Netz holen, abseits des Oberflächen-Threads
+    (§2.8).
+
+    Eine Leitung kann langsam sein, und ein Fenster, das währenddessen nicht
+    reagiert, sieht aus wie ein abgestürztes. Der Fortschritt kommt aus dem
+    Lesen selbst, also aus dem Kern — die Statusleiste zeigt ihn wie bei jeder
+    anderen langen Rechnung.
+    """
+
+    done = Signal(object)
+    failed = Signal(object)
+    step = Signal(float, str)
+
+    def __init__(self, url: str) -> None:
+        super().__init__()
+        self._url = url
+
+    def run(self) -> None:
+        try:
+            self.done.emit(fetch_model(self._url, progress=self._report))
+        except AppError as error:
+            self.failed.emit(error)
+
+    def _report(self, share: float, text: str) -> None:
+        self.step.emit(share, text)
 
 
 class _SliceWorker(QThread):
@@ -466,6 +497,9 @@ class MainWindow(QMainWindow):
         andere Arbeiter, damit sie das Fenster nicht überlebt."""
         self._ollama_size_worker: Any = None
         """Die Modellgrößen-Frage an Ollama (§27), aus demselben Grund."""
+        self._download_worker: Any = None
+        """Ein Modell, das gerade aus dem Netz kommt (§16.3) — dieselbe
+        Halteleine, derselbe Grund."""
         self._retired: list[Any] = []
         """Ersetzte Arbeiter, bis sie ausgelaufen sind. „Eine neuere Anfrage
         ersetzt die wartende" hieß hier: die Referenz überschreiben — und ein
@@ -793,6 +827,7 @@ class MainWindow(QMainWindow):
         self.start_screen.browseRequested.connect(self.action_open)
         self.start_screen.openRequested.connect(self.open_path)
         self.start_screen.fileDropped.connect(self.open_path)
+        self.start_screen.urlDropped.connect(self.download_model)
         self.start_screen.forgetRequested.connect(self._forget_recent)
         self.start_screen.manualRequested.connect(self.action_manual)
 
@@ -878,6 +913,16 @@ class MainWindow(QMainWindow):
             "Ctrl+I",
             self.action_import,
             tr("Eine Modelldatei laden (STL, 3MF, OBJ, STEP). Eine Baugruppe kommt einzeln an."),
+        )
+        self.import_url_action = self._add_action(
+            file_menu,
+            tr("Modell aus dem Netz …"),
+            None,
+            self.action_import_url,
+            tr(
+                "Eine Modelldatei über ihre Adresse laden — für den Fall, dass sie "
+                "noch nicht auf der Platte liegt."
+            ),
         )
         self.generate_action = self._add_action(
             file_menu,
@@ -1702,6 +1747,93 @@ class MainWindow(QMainWindow):
         name, _filter = QFileDialog.getOpenFileName(self, tr("Modell einfügen"), "", model_filter())
         if name:
             self.session.import_model(Path(name))
+
+    def action_import_url(self) -> None:
+        """Weg 1 (§2.2), wenn die Datei noch nicht auf der Platte liegt.
+
+        Die Zwischenablage ist vorbelegt, und das ist der ganze Griff: wer von
+        einer Modellseite kommt, hat die Adresse gerade kopiert. Steht dort
+        etwas anderes, bleibt das Feld leer statt Unsinn anzubieten.
+        """
+        clipboard = QApplication.clipboard()
+        pasted = clipboard.text().strip() if clipboard is not None else ""
+        try:
+            suggestion = check_url(pasted)
+        except AppError:
+            suggestion = ""
+
+        url, accepted = QInputDialog.getText(
+            self,
+            tr("Modell aus dem Netz"),
+            tr("Adresse der Modelldatei (STL, 3MF, OBJ, STEP …):"),
+            text=suggestion,
+        )
+        if accepted and url.strip():
+            self.download_model(url.strip())
+
+    def download_model(self, url: str) -> None:
+        """Holt eine Adresse und legt das Ergebnis auf den Stapel.
+
+        Die Adresse wird geprüft, **bevor** ein Arbeiter startet: eine
+        ``file:``-Adresse aus der Zwischenablage soll gar nicht erst in einen
+        Thread wandern (§32), und ein Tippfehler soll sofort etwas sagen.
+        """
+        try:
+            address = check_url(url)
+        except AppError as error:
+            show_error(error, self)
+            return
+
+        worker = _DownloadWorker(address)
+        self._retire(self._download_worker)
+        self._download_worker = worker
+        worker.step.connect(self._on_download_progress)
+        worker.done.connect(self._downloaded)
+        worker.failed.connect(self._download_failed)
+        worker.finished.connect(lambda done=worker: self._download_worker_done(done))
+        self.status_message.setText(tr("Modell herunterladen …"))
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setVisible(True)
+        worker.start()
+
+    def _on_download_progress(self, share: float, label: str) -> None:
+        """Wie weit die Datei ist. Ein Server ohne Längenangabe liefert
+        ``0.0`` — dann läuft der Balken endlos, statt auf null zu stehen."""
+        if share > 0.0:
+            self.progress.setRange(0, 100)
+            self.progress.setValue(int(share * 100))
+        else:
+            self.progress.setRange(0, 0)
+        self.status_message.setText(label)
+
+    def _download_worker_done(self, worker: Any) -> None:
+        if self._download_worker is worker:
+            self._download_worker = None
+        self._hold_until_done(worker)
+
+    def _download_failed(self, error: AppError) -> None:
+        self._end_download()
+        show_error(error, self)
+
+    def _downloaded(self, fetched: FetchedModel) -> None:
+        """Was ankam, geht denselben Weg wie eine Datei von der Platte — mit
+        einer Herkunft mehr (§16.3)."""
+        self._end_download()
+        self.session.import_payload(
+            fetched.name,
+            fetched.payload,
+            origin=SourceOrigin(url=fetched.url, retrieved=fetched.retrieved),
+        )
+        self.announce(f"{tr('Geladen')}: {fetched.name}")
+
+    def _end_download(self) -> None:
+        """Die Anzeige zurück in den Ruhezustand — aber nur, wenn nicht schon
+        etwas anderes rechnet."""
+        self.progress.setRange(0, 100)
+        if not self.session.busy:
+            self.progress.setVisible(False)
+        self.status_message.setText(self._announcement)
 
     def action_generate(self) -> None:
         """Weg 3 (§2.2): ein Satz oder ein Bild wird ein Körper in der Szene."""
@@ -4241,13 +4373,20 @@ class MainWindow(QMainWindow):
             self.session.open_project(candidate)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
-        if accepted_path(event) is not None:
+        if accepted_path(event) is not None or accepted_url(event) is not None:
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt name
         path = accepted_path(event)
         if path is not None:
             self.open_path(path)
+            event.acceptProposedAction()
+            return
+        # Ein Verweis aus dem Browser ist dieselbe Handlung wie eine Datei,
+        # nur liegt die Datei noch nicht auf der Platte (§16.3).
+        url = accepted_url(event)
+        if url is not None:
+            self.download_model(url)
             event.acceptProposedAction()
 
     def wait_for_workers(self, timeout_ms: int = 2000) -> None:

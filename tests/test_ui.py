@@ -10,6 +10,7 @@ Arbeiter.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -3590,3 +3591,76 @@ def test_the_first_run_dialog_mentions_the_trial_in_one_sentence(
     dialog = FirstRunDialog(UiSettings())
     assert "14" in dialog.greeting.text()
     assert "frei" in dialog.greeting.text()
+
+
+# --- Modell aus dem Netz (§16.3) ------------------------------------------------
+
+
+class _Drag:
+    """Ein Ablegen-Ereignis mit Adressen, wie es ein Browser schickt.
+
+    Als eigene Klasse und nicht als echtes ``QDropEvent``: Qt übernimmt die
+    ``QMimeData`` nicht, und ohne eine Referenz auf der Python-Seite gibt der
+    Speicherbereiniger sie frei, während das Ereignis noch darauf zeigt —
+    ``mimeData()`` liefert dann ein blankes ``QObject``. Derselbe Fake steht
+    aus demselben Grund in ``test_chat_ui.py``.
+    """
+
+    def __init__(self, urls: list[str]) -> None:
+        from PySide6.QtCore import QMimeData, QUrl
+
+        self._data = QMimeData()
+        self._data.setUrls([QUrl(entry) for entry in urls])
+
+    def mimeData(self) -> object:  # noqa: N802 — Qt gibt den Namen
+        return self._data
+
+
+def _drag(urls: list[str]) -> Any:
+    return _Drag(urls)
+
+
+def test_a_dropped_link_is_taken_like_a_dropped_file() -> None:
+    """§2.3: Ziehen und Ablegen gilt auch für einen Verweis aus dem Browser."""
+    from app.ui.start_screen import accepted_url
+
+    assert accepted_url(_drag(["https://example.invalid/halter.stl"])) is not None
+    assert accepted_url(_drag(["https://example.invalid/modelle/17"])) is None
+    assert accepted_url(_drag(["file:///C:/teil.stl"])) is None, "das ist der Weg für Dateien"
+
+
+def test_a_bad_address_says_so_before_a_worker_starts(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§32: Eine ``file:``-Adresse wandert gar nicht erst in einen Thread."""
+    seen: list[object] = []
+    monkeypatch.setattr("app.ui.main_window.show_error", lambda error, _parent: seen.append(error))
+
+    window.download_model("file:///C:/Windows/win.ini")
+
+    assert seen, "ohne Meldung bliebe der Klick wirkungslos"
+    assert window._download_worker is None
+
+
+def test_a_downloaded_model_keeps_where_it_came_from(window: MainWindow) -> None:
+    """§16.3: Die Herkunft steht in der Quelle, nicht in einem Gedächtnis."""
+    from app.core.ingest.fetch import FetchedModel
+
+    payload = (MESHES / "cube_clean.stl").read_bytes()
+    window._downloaded(
+        FetchedModel(
+            name="halter.stl",
+            payload=payload,
+            url="https://example.invalid/halter.stl",
+            retrieved="2026-08-11T10:00:00+00:00",
+        )
+    )
+    window.session.wait_for_idle()
+
+    sources = list(window.session.project.document.sources.values())
+    assert len(sources) == 1
+    assert sources[0].origin is not None
+    assert sources[0].origin.url == "https://example.invalid/halter.stl"
+    assert sources[0].origin.retrieved.startswith("2026-08-11")
+    assert window.session.last_result is not None
+    assert window.session.last_result.scene.objects, "das Modell steht danach in der Szene"

@@ -47,6 +47,16 @@ ermitteln und Aufsetzen anbieten — nicht erzwingen.
 Die Eingangsstufe ist die Op `load`, damit ihre Parameter im Stack sichtbar
 und änderbar bleiben.
 
+Eine Datei aus dem Netz (`core/ingest/fetch.py`) geht **denselben** Weg:
+`Session.import_payload` ist die gemeinsame Stelle, `import_model` liest nur
+die Platte und ruft sie auf. Zwei Importwege wären zwei Stellen, an denen die
+Einheitenfrage vergessen werden kann. Was aus dem Netz kommt, trägt seine
+Herkunft in `Source.origin` (§16.3), wird nur über `http`/`https` geholt, und
+die Größengrenze wird **während** des Lesens geprüft — `Content-Length` ist
+eine Behauptung des Servers. Eine Adresse, unter der HTML liegt, ist eine
+Modellseite und keine Modelldatei; sie wird als solche gemeldet, nicht
+ausgewertet.
+
 ## Formate
 
 3MF ist eine **Baugruppe**, keine einzelne Datei: mehrere Objekte, Stückzahlen,

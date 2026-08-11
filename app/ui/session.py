@@ -69,6 +69,7 @@ from app.core.types import (
     Quality,
     Report,
     Source,
+    SourceOrigin,
     Transaction,
 )
 from app.core.units import is_close
@@ -625,18 +626,39 @@ class Session(QObject):
         self.projectChanged.emit()
 
     def import_model(self, path: Path, unit: str = "auto") -> None:
-        """Bettet eine Datei ein und legt die passende load-Operation auf den
-        Stapel (§17.1).
+        """Bettet eine Datei von der Platte ein und legt die passende
+        load-Operation auf den Stapel (§17.1)."""
+        self.import_payload(path.name, path.read_bytes(), unit=unit)
+
+    def import_payload(
+        self,
+        name: str,
+        payload: bytes,
+        *,
+        unit: str = "auto",
+        origin: SourceOrigin | None = None,
+    ) -> None:
+        """Derselbe Weg für eine Datei, die nicht von der Platte kommt (§16.3).
+
+        Getrennt von :meth:`import_model`, weil ein heruntergeladenes Modell
+        keinen Pfad hat und dafür eine Herkunft — und weil beide danach genau
+        dieselbe Operation auf denselben Stapel legen sollen. Zwei Importwege
+        wären zwei Stellen, an denen die Einheitenfrage vergessen werden kann.
 
         STEP nimmt den anderen Kern und trägt seine eigene Einheit — es braucht
         also weder die Einheitenfrage noch die Mesh-Eingangsstufe (§30, §11.1).
         """
+        path = Path(name)
         document = self.project.document
         source_id = f"src_{len(document.sources) + 1}"
         document.sources[source_id] = Source(
-            id=source_id, kind="import", path=embedded_source_path(path.name), sha256=""
+            id=source_id,
+            kind="import",
+            path=embedded_source_path(path.name),
+            sha256="",
+            origin=origin,
         )
-        self.project.sources[source_id] = path.read_bytes()
+        self.project.sources[source_id] = payload
 
         is_3mf = path.suffix.lower() == ".3mf"
         if brep_step.is_step(path.suffix):
