@@ -192,14 +192,56 @@ def test_writing_produces_readable_files(tmp_path: Path, profile: Profile) -> No
         assert reread.triangle_count == 12
 
 
-@pytest.mark.parametrize("export_format", ["stl", "3mf", "obj", "ply"])
+@pytest.mark.parametrize("export_format", ["stl", "3mf", "obj", "ply", "glb"])
 def test_every_format_writes_something_readable(export_format: str, profile: Profile) -> None:
     data = export_bytes(body(), export_format)  # type: ignore[arg-type]
 
     assert data, f"{export_format} produced no bytes"
-    if export_format in ("stl", "obj", "ply", "3mf"):
+    if export_format in ("stl", "obj", "ply", "3mf", "glb"):
         suffix = f".{export_format}"
         assert read_mesh(data, suffix).triangle_count == 12
+
+
+def test_glb_keeps_the_measurements_it_was_given() -> None:
+    """§29: Ein GLB ist zum Zeigen da — und was es zeigt, muss stimmen.
+
+    glTF ist ein Y-oben-Format und Solidon rechnet Z-oben. Wer das beim
+    Schreiben oder Lesen einmal zu oft dreht, verschickt ein liegendes Teil.
+    """
+    original = body()
+    back = read_mesh(export_bytes(original, "glb"), ".glb")
+
+    assert back.triangle_count == original.triangle_count
+    assert back.volume == pytest.approx(original.volume, rel=1e-6)
+    assert back.bounds.size == pytest.approx(original.bounds.size, abs=1e-6)
+
+
+def test_glb_carries_the_slot_colours() -> None:
+    """§20: Ein zweifarbiges Teil, das grau ankommt, zeigt nicht, wofür man
+    es verschickt hat."""
+    plain = body()
+    two_tone = MeshData(raw=plain.raw, slots=tuple(0 if index < 6 else 1 for index in range(12)))
+    slots = [
+        MaterialSlot(index=0, name="Grundkörper", colour=(1.0, 0.0, 0.0)),
+        MaterialSlot(index=1, name="Schrift", colour=(0.0, 0.0, 1.0)),
+    ]
+
+    written = trimesh.load(
+        BytesIO(export_bytes(two_tone, "glb", slots=slots, name="Schild")),
+        file_type="glb",
+        force="mesh",
+    )
+    seen = {tuple(colour[:3]) for colour in written.visual.face_colors}
+
+    assert (255, 0, 0, 255)[:3] in seen
+    assert (0, 0, 255, 255)[:3] in seen
+
+
+def test_a_single_colour_stays_undecided() -> None:
+    """Ein Teil ohne Materialslots bekommt keine erfundene Farbe."""
+    data = export_bytes(body(), "glb", slots=[MaterialSlot(index=0, name="PLA")])
+
+    assert read_mesh(data, ".glb").triangle_count == 12
 
 
 def test_a_name_keeps_its_alphabet() -> None:

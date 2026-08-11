@@ -2007,7 +2007,10 @@ class MainWindow(QMainWindow):
         ]
 
         stem = safe_name(Path(self.session.title.rstrip("*")).stem, "projekt")
-        offered = ["STL (*.stl)", "3MF (*.3mf)", "OBJ (*.obj)", "PLY (*.ply)"]
+        # GLB steht am Ende und nicht bei den Druckformaten: es ist das
+        # Format zum Zeigen, nicht zum Drucken — Farben und Name reisen mit,
+        # jeder Betrachter öffnet es, kein Slicer will es.
+        offered = ["STL (*.stl)", "3MF (*.3mf)", "OBJ (*.obj)", "PLY (*.ply)", "GLB (*.glb)"]
         # STEP hält Flächen und Kanten fest, und ein Netz hat keine. Der
         # Schreiber sagt das mit einem guten Satz — nur sagte er ihn erst,
         # nachdem der Nutzer Format, Ordner und Namen gewählt hatte. Bei

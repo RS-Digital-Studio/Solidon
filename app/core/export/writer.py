@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
 import trimesh
 
 from app.core import activation
@@ -44,7 +45,7 @@ from app.i18n import _, tr
 
 _log = get_logger(__name__)
 
-ExportFormat = Literal["stl", "3mf", "obj", "ply", "step"]
+ExportFormat = Literal["stl", "3mf", "obj", "ply", "glb", "step"]
 
 #: Als was jedes Format geschrieben wird. STL bleibt binär — ASCII wäre für
 #: dieselben Dreiecke fünfmal so groß.
@@ -53,6 +54,12 @@ FORMAT_SUFFIX: dict[ExportFormat, str] = {
     "3mf": ".3mf",
     "obj": ".obj",
     "ply": ".ply",
+    # GLB ist das einzige Format hier, das nicht zum Drucken gedacht ist,
+    # sondern zum Zeigen: eine Datei, die jeder Betrachter und jedes
+    # Nachrichtenprogramm öffnet, ohne dass der Empfänger ein CAD-Programm
+    # hat. Gelesen wurde es längst (``READABLE_SUFFIXES``) — hinaus ging es
+    # nicht.
+    "glb": ".glb",
     # §30: nur ein B-Rep-Objekt hat etwas, das in eine STEP-Datei gehört. Ein
     # als STEP exportiertes Netz wäre eine STEP-Datei voller Dreiecke — legal,
     # und eine Lüge über ihren Inhalt.
@@ -595,8 +602,75 @@ def export_bytes(
         return mesh.to_stl()
     if export_format == "3mf":
         return threemf.write(mesh, slots, name)
+    if export_format == "glb":
+        return _glb_bytes(mesh, slots, name)
     data = trimesh.exchange.export.export_mesh(mesh.raw, None, file_type=export_format)
     return data if isinstance(data, bytes) else str(data).encode("utf-8")
+
+
+def _glb_bytes(mesh: MeshData, slots: list[MaterialSlot] | None, name: str = "") -> bytes:
+    """GLB mit Namen und Farben — die Datei zum Herzeigen.
+
+    Zwei Dinge macht sie besser als ein OBJ derselben Dreiecke, und beide sind
+    der Grund, warum es dieses Format hier gibt. Der Name reist mit, sonst
+    heißt das Teil im Betrachter des Empfängers ``geometry_0``. Und die
+    Materialslots werden zu Dreiecksfarben: ein zweifarbiges Schild, das grau
+    ankommt, zeigt genau das nicht, wofür man es verschickt hat.
+
+    Der Rest bleibt bewusst schlicht — keine Texturen, kein PBR-Feinwerk. Was
+    hier hinausgeht, ist eine Vorschau, kein Renderauftrag.
+
+    Zweifarbig wird **je Slot ein eigenes Teilnetz**, und das ist kein Umweg:
+    glTF kennt Farben nur an Ecken, nicht an Dreiecken. Zwei benachbarte
+    Dreiecke teilen sich ihre Ecken, und eine scharfe Grenze zwischen roter
+    Grundplatte und blauer Schrift kam damit als Farbverlauf über das halbe
+    Teil an. Getrennte Netze haben getrennte Ecken — und nebenbei heißen sie
+    im Betrachter so, wie die Slots im Dokument heißen.
+    """
+    stem = safe_name(name, "teil")
+    parts = _parts_by_slot(mesh, slots)
+    if parts is None:
+        bodies = {stem: mesh.raw.copy()}
+    else:
+        bodies = {
+            f"{stem}_{safe_name(label, f'slot{index}')}": part for index, (label, part) in parts
+        }
+    scene = trimesh.Scene(bodies)  # type: ignore[arg-type]
+    data = scene.export(file_type="glb")
+    return data if isinstance(data, bytes) else str(data).encode("utf-8")
+
+
+def _parts_by_slot(
+    mesh: MeshData, slots: list[MaterialSlot] | None
+) -> list[tuple[int, tuple[str, trimesh.Trimesh]]] | None:
+    """Ein eingefärbtes Teilnetz je benutztem Materialslot, oder ``None``.
+
+    ``None`` heißt: hier ist nichts zu trennen — ein einfarbiges Teil bleibt
+    ein Netz und bekommt keine erfundene Farbe, sondern die Vorgabe des
+    Betrachters.
+    """
+    known = {entry.index: entry for entry in (slots or []) if entry.colour is not None}
+    if not known or not mesh.slots:
+        return None
+    picked = np.asarray(mesh.slots)
+    used = [index for index in dict.fromkeys(picked.tolist()) if index in known]
+    if len(used) < 2:
+        return None
+
+    parts = []
+    for index in used:
+        faces = np.flatnonzero(picked == index)
+        # ``append=True`` gibt genau ein Netz zurück, keine Liste.
+        part: trimesh.Trimesh = mesh.raw.submesh([faces], append=True)  # type: ignore[assignment]
+        colour = known[index].colour or (0.0, 0.0, 0.0)
+        part.visual = trimesh.visual.ColorVisuals(
+            mesh=part,
+            face_colors=np.tile(
+                [*(round(channel * 255.0) for channel in colour), 255], (len(faces), 1)
+            ).astype(np.uint8),
+        )
+        parts.append((index, (known[index].name, part)))
+    return parts
 
 
 def _step_bytes(body: Mesh | None, name: str = "") -> bytes:

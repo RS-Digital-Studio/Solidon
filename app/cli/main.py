@@ -24,7 +24,7 @@ from app.core import manual
 from app.core.bootstrap import load_operations
 from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
 from app.core.export import threemf
-from app.core.export.writer import plan_export, write_plan
+from app.core.export.writer import FORMAT_SUFFIX, plan_export, write_plan
 from app.core.geom.mesh import read_mesh
 from app.core.ingest.loader import detect_unit
 from app.core.knowledge import profiles
@@ -436,7 +436,15 @@ def build_parser() -> argparse.ArgumentParser:
     export = commands.add_parser("export", help=tr("Objekte als Druckdatei schreiben"))
     export.add_argument("path")
     export.add_argument("directory", nargs="?", default=".")
-    export.add_argument("--format", dest="export_format", default="stl", choices=("stl", "3mf"))
+    export.add_argument(
+        "--format",
+        dest="export_format",
+        default="stl",
+        # Aus dem Schreiber, nicht aus einer zweiten Liste: ein Format, das
+        # er kann und die Kommandozeile nicht anbietet, gibt es sonst so
+        # lange, bis jemand es vermisst.
+        choices=tuple(FORMAT_SUFFIX),
+    )
     export.add_argument("--on", nargs="*", default=None, help=tr("Objekte, z. B. obj_1"))
     export.add_argument("--scheme", default=None, help=tr("Namensschema für die Dateinamen"))
     export.set_defaults(handler=command_export)
