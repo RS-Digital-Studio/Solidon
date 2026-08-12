@@ -1060,6 +1060,96 @@ def profiles_text() -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def remote_text(registry: Registry | None = None) -> str:
+    """Was ein fremdes Programm über die Leitung aufrufen kann.
+
+    Die geschriebene Seite *Fernsteuerung* sagt, wie man sie einschaltet und
+    warum sie standardmäßig aus ist. Was fehlte, war die Liste — und die ist
+    genau das, was jemand braucht, der eine Gegenstelle einrichtet.
+
+    Aus ``remote_tools`` und nicht aus dem Register: Zwei Operationen gehen
+    nicht durch die Leitung, und eine Seite, die sie mitzählte, verspräche
+    etwas, das beim ersten Aufruf abgelehnt wird.
+    """
+    from app.core.agent.remote import DENIED, remote_tools
+
+    source = registry or REGISTRY
+    reachable = {entry["name"] for entry in remote_tools(source)}
+    lines = [
+        str(
+            _(
+                "Jeder Eintrag hier ist dieselbe Operation, die auch im Menü steht, mit "
+                "denselben Parametern. Was hereinkommt, wird eine Transaktion wie jede "
+                "andere: Der Verlauf zeigt sie, ein Strg+Z nimmt sie zurück."
+            )
+        ),
+        "",
+    ]
+    for name, entries in source.by_category().items():
+        offen = [spec for spec in entries if spec.name in reachable]
+        if not offen:
+            continue
+        lines.append(f"### {CATEGORIES[name]}")
+        lines.append("")
+        for spec in offen:
+            doc = " ".join(str(spec.doc).split())
+            lines.append(f"- `{spec.name}` — {doc}" if doc else f"- `{spec.name}`")
+        lines.append("")
+
+    # Was nicht aus dem Register kommt: Werkzeuge der Agentenschicht. Sie
+    # lesen den Zustand oder ändern das Dokument neben dem Stapel — Parameter,
+    # Passungen, Druckziel, Rücknahme. Eine Liste, die nur Operationen zeigte,
+    # ließe genau die Hälfte weg, die eine Gegenstelle zuerst braucht.
+    operations = {spec.name for spec in source.all()}
+    others = [entry for entry in remote_tools(source) if entry["name"] not in operations]
+    if others:
+        lines.append(f"### {_('Lesen, Parameter, Rücknahme')}")
+        lines.append("")
+        lines.append(
+            str(
+                _(
+                    "Diese Werkzeuge stehen in keinem Menü — sie sind die Auskunft, die "
+                    "eine Gegenstelle braucht, bevor sie etwas ändert."
+                )
+            )
+        )
+        lines.append("")
+        for entry in others:
+            doc = " ".join(str(entry["description"]).split())
+            lines.append(f"- `{entry['name']}` — {doc}" if doc else f"- `{entry['name']}`")
+        lines.append("")
+
+    lines.append(f"### {_('Was nicht durch die Leitung geht')}")
+    lines.append("")
+    lines.append(
+        str(
+            _(
+                "Zwei Operationen sind gesperrt, und beide aus demselben Grund: Ein "
+                "fremdes Programm soll nicht bestimmen, was auf diesem Rechner "
+                "ausgeführt oder gelesen wird."
+            )
+        )
+    )
+    lines.append("")
+    # ``ask_user`` steht in keinem Register — es ist ein Werkzeug der
+    # Agentenschicht und keine Operation. Deshalb über die vorhandenen Namen
+    # und nicht über einen Zugriff, der bei ihm mit einem Programmfehler endet.
+    titles = {spec.name: str(spec.title) for spec in source.all()}
+    for name in sorted(DENIED):
+        lines.append(f"- `{name}` — {titles.get(name, _('Rückfrage an den Nutzer'))}")
+    lines.append("")
+    lines.append(
+        str(
+            _(
+                "Dazu wird jedes Argument abgewiesen, das wie ein Dateipfad aussieht. "
+                "Beides bleibt im Fenster benutzbar; gesperrt ist nur der Weg von "
+                "außen."
+            )
+        )
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def knowledge_pages() -> tuple[Page, ...]:
     """Die zwei Seiten, die zeigen, *wonach* gerechnet wird.
 
@@ -1078,6 +1168,12 @@ def knowledge_pages() -> tuple[Page, ...]:
             key="profiles",
             title=_("Material, Drucker, Normteile"),
             body=profiles_text(),
+            generated=True,
+        ),
+        Page(
+            key="remote-tools",
+            title=_("Die Werkzeuge der Fernsteuerung"),
+            body=remote_text(),
             generated=True,
         ),
     )

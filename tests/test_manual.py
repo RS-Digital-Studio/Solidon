@@ -513,3 +513,26 @@ def test_the_knowledge_pages_stand_before_the_reference() -> None:
     keys = [page.key for page in manual.pages()]
     assert keys.index("rules") < keys.index("scene")
     assert keys.index("profiles") < keys.index("scene")
+
+
+def test_the_remote_page_lists_exactly_what_gets_through() -> None:
+    """Eine Seite, die ein gesperrtes Werkzeug mitzählt, verspricht etwas, das
+    beim ersten Aufruf abgelehnt wird — und eine, die eines auslässt, versteckt
+    Arbeit, die möglich wäre."""
+    from app.core.agent.remote import DENIED, remote_tools
+
+    body = manual.remote_text()
+    reachable = {entry["name"] for entry in remote_tools()}
+    for name in reachable:
+        assert f"`{name}`" in body, name
+    for name in DENIED:
+        assert f"`{name}`" in body, f"{name} muss als gesperrt dastehen"
+        assert name not in reachable
+
+
+def test_the_remote_page_names_the_reason_not_just_the_ban() -> None:
+    """Regel 17 gilt auch fürs Handbuch: Eine Sperre ohne Grund ist eine
+    Behauptung."""
+    body = manual.remote_text()
+    assert "Dateipfad" in body
+    assert "ausgeführt" in body
