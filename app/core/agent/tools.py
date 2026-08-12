@@ -67,12 +67,25 @@ EXTRA_TOOLS: Final[tuple[str, ...]] = (
 )
 
 
-def tool_schemas(registry: Registry | None = None) -> tuple[dict[str, Any], ...]:
-    """Alles, was das Modell aufrufen darf — die Operationen zuerst."""
-    return (*operation_tools(registry), *extra_tools())
+def tool_schemas(
+    registry: Registry | None = None, *, compact: bool = False
+) -> tuple[dict[str, Any], ...]:
+    """Alles, was das Modell aufrufen darf — die Operationen zuerst.
+
+    ``compact`` kürzt die Beschreibungen, **ohne ein Werkzeug wegzulassen**.
+    Das ist der Unterschied, auf den es ankommt: eine Auswahl, die Operationen
+    aussortiert, wäre eine Betriebsart mit anderem Namen (§2.6) — der Agent
+    käme an sie nicht mehr heran, ohne dass ihm jemand sagt, dass es sie gibt.
+    Gekürzt wird die Prosa: der doc-Satz und der Menüort machen den größten
+    Teil der 104 KB aus, und ein lokales Modell mit kleinem Kontextfenster
+    verliert daran mehr, als es gewinnt.
+    """
+    return (*operation_tools(registry, compact=compact), *extra_tools())
 
 
-def operation_tools(registry: Registry | None = None) -> tuple[dict[str, Any], ...]:
+def operation_tools(
+    registry: Registry | None = None, *, compact: bool = False
+) -> tuple[dict[str, Any], ...]:
     """Das Register als Werkzeuge, jedes mit den Objekten, auf denen es
     arbeitet.
     """
@@ -98,10 +111,26 @@ def operation_tools(registry: Registry | None = None) -> tuple[dict[str, Any], .
         # die Funktion im Fenster liegt — es hat sonst keine Quelle dafür.
         # ``menu_path`` staffelt wie die Leiste; nur Gruppe und Titel zu
         # nennen traf für 72 von 77 Ops den falschen Ort.
+        beschreibung = str(schema["description"])
+        if compact:
+            # Auch die Parametertexte: sie sind mit 36 KB der größte einzelne
+            # Posten im Schema. Gekürzt auf den ersten Satz bleibt stehen, was
+            # der Wert bedeutet; weg fällt, warum er so heißt und was bei
+            # Randfällen passiert.
+            for name, feld in properties.items():
+                text = str(feld.get("description", ""))
+                if ". " in text:
+                    properties[name] = {**feld, "description": text.split(". ")[0] + "."}
+            parameters["properties"] = properties
+            # Der erste Satz sagt, was die Operation tut; der Rest erklärt
+            # Randfälle, die ein Modell mit kleinem Fenster nicht liest.
+            beschreibung = beschreibung.split(". ")[0].rstrip(".") + "."
+        else:
+            beschreibung = f"{beschreibung} {tr('Menü')}: {menu_path(spec, source)}."
         schemas.append(
             {
                 "name": schema["name"],
-                "description": f"{schema['description']} {tr('Menü')}: {menu_path(spec, source)}.",
+                "description": beschreibung,
                 "input_schema": parameters,
             }
         )

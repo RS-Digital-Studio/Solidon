@@ -1256,6 +1256,7 @@
   "Lochkorrektur": "Hole compensation",
   "Lochkreis Ø 50, 6 × Ø 4": "Bolt circle Ø 50, 6 × Ø 4",
   "Lochraster 4 × 3, Abstand 10": "Hole grid 4 × 3, spacing 10",
+  "Lokale Modelle sind langsamer und ungenauer als ein gehostetes: qwen3:14b hat in der Messung drei von fünf Werkzeugaufrufen richtig getroffen und für einen davon zwei Minuten gebraucht. Für kurze Anweisungen reicht das; für lange Züge lohnt ein Schlüssel.": "Local models are slower and less accurate than a hosted one: in our measurement qwen3:14b got three out of five tool calls right and took two minutes for one of them. That is enough for short instructions; for long runs a key pays off.",
   "Los geht's": "Let's go",
   "Luft zwischen den Teilen. Genug, dass ein Elefantenfuß zwei Teile nicht am Rand zusammenwachsen lässt.": "Air between the parts. Enough that an elephant foot does not fuse two of them at the edge.",
   "Länge": "Length",

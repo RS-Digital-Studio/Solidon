@@ -588,6 +588,25 @@ def ollama_size_warning(
     )
 
 
+def local_model_expectation() -> TranslatableText:
+    """Was ein lokales Modell hier wirklich leistet — gemessen, nicht geschätzt.
+
+    Der Satz gehört an die Stelle, an der jemand Ollama einträgt. Ohne ihn
+    erlebt er das Ergebnis als Fehler der Anwendung: ein Zug, der zwei Minuten
+    braucht und dann das falsche Werkzeug ruft, sieht nach einem Fehler aus und
+    ist eine Eigenschaft des Modells.
+
+    Die Zahlen stammen aus ``tools/check_local_model.py`` gegen die 88
+    Werkzeuge dieser Anwendung, nicht aus einer Bestenliste.
+    """
+    return _(
+        "Lokale Modelle sind langsamer und ungenauer als ein gehostetes: "
+        "qwen3:14b hat in der Messung drei von fünf Werkzeugaufrufen richtig "
+        "getroffen und für einen davon zwei Minuten gebraucht. Für kurze "
+        "Anweisungen reicht das; für lange Züge lohnt ein Schlüssel."
+    )
+
+
 #: Ein Werkzeug, das es nur für die Probe gibt: klein, eindeutig, und mit einem
 #: Pflichtfeld, damit die Antwort nicht bloß ein leeres Objekt sein kann.
 PROBE_TOOL: Final = {

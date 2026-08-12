@@ -163,7 +163,11 @@ class AgentSession:
             rule_set=active,
             views=self.views if self.backend.supports_images else (),
         )
-        tools = list(tool_schemas(self.registry))
+        # Ein lokales Modell bekommt dieselben Werkzeuge, nur knapper
+        # beschrieben. Gemessen: qwen3:14b traf drei von fünf und brauchte für
+        # einen einzigen Aufruf bis zu zwei Minuten — bei 88 Werkzeugen mit
+        # 104 KB Schema. Was fehlt, ist nicht Können, sondern Platz.
+        tools = list(tool_schemas(self.registry, compact=self.backend.id == "ollama"))
 
         while True:
             if self.cancelled is not None:

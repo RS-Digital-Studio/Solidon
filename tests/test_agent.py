@@ -815,3 +815,31 @@ def test_a_carried_conversation_is_framed_as_content(project: Project, profile: 
 
     assert len(rahmen) == 1, "der Verlauf bekommt genau einen Rahmen"
     assert messages[-1].content == "Mach das Loch größer", "der Auftrag steht zuletzt"
+
+
+def test_the_compact_schema_keeps_every_tool() -> None:
+    """§2.6: Kürzen darf die Prosa treffen, nie den Katalog.
+
+    Ein lokales Modell mit kleinem Kontextfenster verliert an 99 KB Schema
+    mehr, als es gewinnt — qwen3:14b traf drei von fünf und brauchte für einen
+    Aufruf bis zu zwei Minuten. Was hilft, ist weniger Text; was nicht ginge,
+    wäre weniger Werkzeug: eine Auswahl, die Operationen aussortiert, wäre eine
+    Betriebsart mit anderem Namen, und der Agent käme an sie nicht mehr heran.
+    """
+    import json
+
+    from app.core.agent.tools import tool_schemas
+
+    voll = tool_schemas()
+    kurz = tool_schemas(compact=True)
+
+    assert {entry["name"] for entry in kurz} == {entry["name"] for entry in voll}
+    for lang, knapp in zip(voll, kurz, strict=True):
+        assert (
+            lang["input_schema"]["properties"].keys() == knapp["input_schema"]["properties"].keys()
+        )
+        assert lang["input_schema"].get("required") == knapp["input_schema"].get("required")
+
+    grosse = len(json.dumps(voll, ensure_ascii=False, default=str))
+    kleine = len(json.dumps(kurz, ensure_ascii=False, default=str))
+    assert kleine < grosse * 0.85, "unter fünfzehn Prozent Ersparnis lohnt der Sonderweg nicht"

@@ -2335,8 +2335,15 @@ class MainWindow(QMainWindow):
         self._hold_until_done(worker)
 
     def _ollama_size_answered(self, warning: Any) -> None:
-        if warning is not None:
-            self.chat.set_notice(str(warning))
+        """Was zum lokalen Modell zu sagen ist, steht an der Chatleiste.
+
+        Zwei Sorten Satz: die Warnung, wenn etwas nicht laufen wird — und
+        sonst die gemessene Erwartung. Ohne die zweite erlebt jemand das
+        Ergebnis als Fehler der Anwendung: ein Zug, der zwei Minuten braucht
+        und dann das falsche Werkzeug ruft, sieht danach aus und ist eine
+        Eigenschaft des Modells.
+        """
+        self.chat.set_notice(str(warning if warning is not None else llm.local_model_expectation()))
 
     def action_settings(self) -> None:
         """§19.3, §38: alles, was die Anwendung sich merkt, an einer Stelle.
