@@ -114,14 +114,11 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     zurück, und der nächste ``wait_for_idle`` mit seinem ``processEvents``
     stellt genau dann zu.
 
-    Deshalb wird jedes Fenster hier **planmäßig** zerstört statt eingesammelt:
-    ``deleteLater`` trennt beim Ausführen alle Verbindungen, an denen es als
-    Empfänger hängt. Das ``processEvents`` danach ist der Punkt, an dem das
-    wirklich geschieht — ohne es bliebe die Löschung angemeldet und das Fenster
-    hinge weiter an den Signalen seiner Sitzung.
+    Deshalb kappt ``MainWindow.release`` hier die Verbindung — und **nur** sie.
+    Das Fenster zu zerstören wäre der naheliegende Schluss und war der falsche:
+    siehe die Begründung unten am Ende dieser Fixture.
     """
     yield
-    from PySide6.QtCore import QEvent
     from PySide6.QtWidgets import QApplication
     from shiboken6 import isValid
 
@@ -137,26 +134,25 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
             continue
         release = getattr(widget, "release", None)
         if callable(release):
-            # Arbeiter **und** VTK-Interactor: der zweite lebt in einem Zustand,
-            # der dem Prozess gehört. Bleibt er offen, stirbt der nächste
-            # Fensteraufbau, und der Absturz steht in einem fremden Test.
+            # Arbeiter auslaufen lassen **und** die Sitzung abbestellen. Das
+            # zweite ist das Neue: ohne es ruft ein späteres Ergebnis in
+            # Widgets, die es nicht mehr gibt.
             release()
         else:
             waiter = getattr(widget, "wait_for_workers", None)
             if callable(waiter):
                 waiter()
-        # Löschen, nicht schließen: ``closeEvent`` fragt bei ungesicherter
-        # Arbeit nach, und eine modale Frage in einer Suite ohne Bildschirm
-        # wartet, bis jemand kommt. ``deleteLater`` geht daran vorbei — es
-        # zerstört das Objekt, ohne es zu schließen.
-        widget.deleteLater()
+    # Zerstört wird hier **nichts**. Zwei Anläufe haben das versucht —
+    # ``deleteLater`` allein änderte nichts (``processEvents`` führt
+    # ``DeferredDelete`` nicht aus), und mit ``sendPostedEvents`` dazu
+    # verschob sich der Absturz nur: ein zerstörtes Fenster nimmt den
+    # VTK-Zustand mit, und der **nächste** Aufbau stirbt in
+    # ``render_window_interactor.initialize``. Beides gemessen, in Fenstern
+    # nacheinander, nicht erlitten in einem zwanzigminütigen Lauf.
+    #
+    # Was bleibt, ist die eigentliche Ursache: nicht die Lebenszeit, sondern
+    # die Verbindung. ``release`` kappt sie oben.
     application.processEvents()
-    # Und jetzt wirklich löschen. ``processEvents`` verarbeitet
-    # ``DeferredDelete`` **nicht** — die Ereignisse bleiben liegen, und die
-    # Fenster, die oben abbestellt wurden, stünden bis zum Prozessende in der
-    # Warteschlange. Der erste Anlauf dieser Fixture hat genau das getan und
-    # nichts geändert; erst diese Zeile führt aus, was oben angemeldet ist.
-    application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 @dataclass(frozen=True, slots=True)

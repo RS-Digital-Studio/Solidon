@@ -4515,17 +4515,20 @@ class MainWindow(QMainWindow):
                 worker.wait(timeout_ms)
 
     def release(self, timeout_ms: int = 2000) -> None:
-        """Alles loslassen, was dieses Fenster außerhalb von Qt hält.
+        """Alles loslassen, was dieses Fenster außerhalb von Qt hält: seine
+        Arbeiter und seine Verbindungen zur Sitzung.
 
-        Zwei Dinge überleben ein weggeräumtes Fenster, wenn niemand sie
-        abbestellt: seine Arbeiter (siehe oben) und der VTK-Interactor des
-        Viewports. Der zweite lebt in einem Zustand, der dem Prozess gehört
-        und nicht dem Widget — bleibt er offen, stirbt der **nächste** Aufbau
-        in ``render_window_interactor.initialize``, und der Absturz steht dann
-        in einem Test, der nichts damit zu tun hat.
+        **Was hier ausdrücklich nicht steht, ist der Viewport.** Ihn zu
+        schließen war der zweite Anlauf gegen den Absturz auf dem Ubuntu-Runner,
+        und er hat ihn nur verschoben: mit geschlossenem Plotter stirbt der
+        **nächste** Fensteraufbau in ``render_window_interactor.initialize``,
+        weil VTKs Zustand dem Prozess gehört und nicht dem Widget. Beides
+        gemessen, in Fenstern nacheinander.
 
-        Ein Aufruf für beide Wege aus §38: Schließen im Betrieb und Wegräumen
-        in der Suite.
+        Die Ursache war nie die Lebenszeit des Fensters, sondern die
+        Verbindung: die Sitzung überlebt es und rief ihr Ergebnis in Widgets,
+        die der Speicherbereiniger schon abgeräumt hatte. Wer die Verbindung
+        kappt, braucht das Fenster nicht zu zerstören.
         """
         self.wait_for_workers(timeout_ms)
         # Die Sitzung überlebt dieses Fenster — in der Suite gehört sie einem
@@ -4543,10 +4546,6 @@ class MainWindow(QMainWindow):
         # Zeile, also ist beides kein Fehler.
         with suppress(RuntimeError, TypeError):
             self.session.disconnect(self)
-        plotter = getattr(self.viewport, "plotter", None)
-        closer = getattr(plotter, "close", None)
-        if callable(closer):
-            closer()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name
         # Der Menühinweis versprach das seit jeher („Ungesichertes wird vorher
