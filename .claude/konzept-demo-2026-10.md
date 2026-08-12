@@ -59,6 +59,52 @@ Nicht mehr offen, Stand 12.08.2026: `support@solidon3d.de` ist eingerichtet.
 Zu prüfen bleiben SPF/DMARC gegen eine Testmail von außen und der
 Auftragsverarbeitungsvertrag bei netcup.
 
+### 1.2 Was der zweite, gründliche Durchgang gefunden hat (12.08.2026)
+
+Der erste Durchgang hat den Stand aus den Unterlagen gelesen. Dieser hier hat
+ihn gegen GitHub, den Webserver und die Paketierung geprüft — und dabei fünf
+Dinge gefunden, von denen drei den Start am 20.08. betreffen.
+
+**a) Das Repository ist öffentlich.** `RS-Digital-Studio/Formwerk` steht auf
+`PUBLIC`. Das Veröffentlichungskonzept sagt an drei Stellen das Gegenteil
+(§2 H „privat und soll es bleiben", §3 „keine öffentliche Quelloffenlegung"),
+und die Härtungsstufe H5 — das Prüfmodul kompiliert ausliefern, damit niemand
+den Bytecode um ein `return True` ergänzt — ist gegenstandslos, solange
+derselbe Quelltext daneben zum Lesen liegt. H1 hält weiter (ohne den privaten
+Schlüssel entsteht kein gültiger Schlüssel), der Rest nicht. **Das ist eine
+Entscheidung, keine Aufgabe** — aber sie gehört getroffen, bevor die Demo
+Aufmerksamkeit bringt.
+
+**b) Der Name der Ablage ist noch der alte.** Das Remote zeigt auf
+`Formwerk`, nicht auf `Solidon`. Kosmetik, solange das Repository privat wäre;
+öffentlich ist es die erste Google-Antwort auf den Produktnamen.
+
+**c) 205 Commits sind nicht gepusht, und der Stand dort ist rot.** `origin/main`
+steht auf dem 06.08. Der letzte grüne Lauf war am **02.08.**; seither scheitert
+die Suite auf dem Ubuntu-Runner mit einem **Segmentierungsfehler** (Rückgabe
+139) in `app/ui/panels.py::show_document`, ausgelöst aus
+`tests/test_operation_ui.py`. Lokal läuft dieselbe Datei durch; es ist ein
+Qt-Absturz unter der Offscreen-Plattform, kein fehlgeschlagener Test.
+
+Das ist der wichtigste Fund für den Termin: **`package` hängt an `needs:
+suite`.** Solange die Suite auf dem Runner stirbt, entsteht kein Artefakt —
+also auch kein Download. Der Stand dort ist allerdings 205 Commits alt, und
+seither ist an genau diesen Dateien viel gearbeitet worden (unter anderem
+„VTK/Qt-Referenzen halten zu lange"). Ob der Absturz noch existiert, weiß
+niemand, bevor gepusht wurde. **Deshalb steht der Push jetzt ganz vorn.**
+
+**d) Die Setup-Datei ließ sich nicht bauen.** Behoben am 12.08.: Die Spec baute
+nach `dist/Solidon`, `tools/make_installer.py` suchte unter `dist/Solidon3D`
+und meldete „Kein Bau unter …". Die Umbenennung hatte die Paketierung nie
+erreicht — und wäre die Datei entstanden, zeigten Startmenüeintrag und
+Deinstallationssymbol auf eine `.exe`, die es unter dem Namen nicht gab. Die
+CI trug den alten Namen an vier weiteren Stellen.
+
+**e) Das Handbuch im Paket hatte keine Bilder.** Ebenfalls behoben: Die
+Bildschirmfotos unter `app/images/manual/` standen nicht in den `datas`.
+`tests/test_packaging.py` hält beide Funde fest — kein zweiter Ort für den
+Namen, und jedes Verzeichnis mit Nicht-Python-Dateien muss ins Paket.
+
 ### 1.2 Was heute falsch auf der Seite steht
 
 Die Website verkauft „14 Tage kostenlos testen, danach Einmalkauf 49 €". Für
@@ -375,14 +421,29 @@ Tage bis Wochen. Also:
 **Abnahme jetzt:** die Download-Seite erklärt die Warnung und nennt die
 Prüfsumme · `build.yml` läuft ohne den toten Schritt durch.
 
-### D7 — CI-Bau und Auslieferung (S–M)
+### D7 — CI-Bau und Auslieferung (M, war S–M) — **zuerst, nicht zuletzt**
 
-1. `workflow_dispatch` von Hand starten, Matrix und Paketierung grün sehen
-2. Beide Artefakte holen: Setup-Datei und tar.gz
-3. Auf den Webspace legen, Platz prüfen (rund 255 MB je Fassung)
-4. Prüfsummen notieren und auf die Seite schreiben
+Nach Fund c) ist das kein Abschlusspaket mehr, sondern das mit dem größten
+Unbekannten. Es zieht deshalb vor D4.
 
-**Abnahme:** beide Dateien laden von `solidon3d.de` herunter und öffnen sich.
+1. **Pushen** — 205 Commits. Vorher Fund a) entscheiden: bleibt das
+   Repository öffentlich?
+2. Den Lauf ansehen. Ist der Segmentierungsfehler mit den 205 Commits weg, ist
+   dieses Paket klein. Ist er es nicht, gilt Punkt 3
+3. **Rückfallweg, falls der Runner weiter stirbt:** die Suite in der CI in
+   Portionen fahren (`pytest --forked` oder mehrere Aufrufe), damit ein
+   Absturz in einer Datei nicht den ganzen Lauf nimmt. Die Ursache selbst ist
+   eine eigene Arbeit und kein Startkriterium — **wohl aber, dass sie benannt
+   und eingegrenzt ist**
+4. **Zweiter Rückfallweg:** das Paket lokal bauen (`pyinstaller` +
+   `tools/make_installer.py`) und von Hand hochladen. Für eine Demo genügt
+   das; die CI ist der Weg, nicht das Ziel
+5. Beide Artefakte holen, auf den Webspace legen, Platz prüfen (rund 255 MB je
+   Fassung, 75 GB vorhanden)
+6. Prüfsummen notieren und auf die Seite schreiben
+
+**Abnahme:** beide Dateien laden von `solidon3d.de` herunter und öffnen sich ·
+der Weg, auf dem sie entstanden sind, ist wiederholbar aufgeschrieben.
 
 ### D8 — Der fremde Rechner (M) — **der Härtetest**
 
@@ -425,12 +486,17 @@ Wartezeit: Azure, Paddle, Rechtsprüfung ─┘  (blockieren den Start nicht)
 
 | Tag | Arbeit | Nebenher |
 |---|---|---|
-| 12.–13.08. | D0 Stichtag, D1 Fassung, D2 Texte | Azure-Nachweise, Paddle-Konto und Rechtsprüfung anstoßen; Testmail an das Postfach |
-| 14.–15.08. | D3 Rechtstexte, D5 Rückmeldeweg | AV-Vertrag netcup |
-| 16.–17.08. | D4 Website, D6 Punkt 1 (unsigniert erklären) | — |
-| 18.08. | D7 CI-Bau, Artefakte auf den Webspace | — |
+| 12.08. | D0 Stichtag ✓, Paketierung repariert ✓, **D7 Punkt 1–2: pushen und den Lauf ansehen** | Azure-Nachweise, Paddle-Konto und Rechtsprüfung anstoßen; Testmail an das Postfach |
+| 13.–14.08. | D1 Fassung, D2 Texte; was der CI-Lauf gezeigt hat | AV-Vertrag netcup |
+| 15.–16.08. | D3 Rechtstexte, D5 Rückmeldeweg | — |
+| 17.–18.08. | D4 Website, D6 Punkt 1 (unsigniert erklären), D7 Rest | — |
 | 19.08. | **D8 fremder Rechner**, D9 Doku | — |
 | 20.08. | Start | — |
+
+Die Reihenfolge hat sich gegenüber dem ersten Entwurf gedreht: **der CI-Lauf
+steht vorn, nicht hinten.** Vor ihm ist jede Aussage über die Auslieferung eine
+Vermutung — dasselbe Argument, mit dem V1 im Veröffentlichungskonzept vor allem
+anderen stand, und diesmal mit einem bekannten roten Lauf dahinter.
 
 Arbeit rund **fünf bis sechs Tage**, und damit ist der Plan eng, aber ohne
 Wartezeit im kritischen Pfad — genau deshalb fällt die Signierung aus dem
@@ -541,8 +607,19 @@ Damit es niemand nachträglich hineinliest:
 ## §9 Offene Entscheidungen
 
 Entschieden am 12.08.2026: Startdatum (20.08.), Schlüsselfreiheit (§2 B),
-Download über die Website, Update-Suche von Hand mit Option (§2 G), Signierung
-(unsigniert starten, D6). Offen bleiben zwei:
+harter Stopp am 31.10. (§2 B2), Download über die Website, Update-Suche von
+Hand mit Option (§2 G), Signierung (unsigniert starten, D6). Offen bleiben
+vier — die ersten beiden neu aus dem zweiten Durchgang:
+
+0. **Bleibt das Repository öffentlich?** (§1.2 a) Öffentlich heißt: der
+   Quelltext der Lizenzprüfung liegt neben dem Paket, das ihn kompiliert
+   ausliefert, und die Unterlagen — Roadmap, Konzepte, Preisüberlegungen —
+   liegen mit. Privat heißt: ein Klick im Repository-Menü, und die Härtung
+   H3–H5 bedeutet wieder, was sie bedeuten soll. *Blockiert den Push und damit
+   D7.*
+0b. **Zieht das Repository auf den Produktnamen um?** (§1.2 b) `Formwerk` →
+   `Solidon`. GitHub legt eine Weiterleitung an; das lokale Remote wird
+   nachgezogen.
 
 1. **Fassungsnummer**: `0.9.0` nach §2 D — oder doch `1.0.0-demo`? Gegen die
    zweite Variante spricht, dass `current_major()` dann eine Eins liest und ein
