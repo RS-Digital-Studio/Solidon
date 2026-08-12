@@ -107,6 +107,12 @@ AXIS_X = "#d4574e"
 AXIS_Y = "#7fb069"
 AXIS_Z = "#5b8fd4"
 
+#: Die Beschriftung der Achsen. Sie steht auf dem Hintergrund des Viewports und
+#: nicht auf einem eigenen Feld — schwarz, wie VTK sie vorgibt, ist im dunklen
+#: Thema unlesbar, und weiß wäre es im hellen.
+AXIS_LABEL_DARK = "#e9e6e1"
+AXIS_LABEL_LIGHT = "#2b2a28"
+
 SSAO_RADIUS = 2.0
 
 #: Wie lange die Maus stehen muss, bevor unter ihr nach einem Merkmal gesucht
@@ -1054,7 +1060,7 @@ class Viewport(QWidget):
 
     # --- Darstellungsqualität (§18.1) -------------------------------------------
 
-    def _add_orientation_widget(self) -> None:
+    def _add_orientation_widget(self, theme: str = "dark") -> None:
         """Der Würfel oben rechts: anfassbare Achsen statt eines Menüwegs.
 
         `add_axes` zeigt nur an, wo Norden ist; dieser Würfel lässt sich
@@ -1076,6 +1082,16 @@ class Viewport(QWidget):
         """
         if self.plotter is None:
             return
+        # Die Schriftfarbe kommt aus dem Thema des Plotters — ``add_axes``
+        # nimmt sie von dort und lässt sich daneben kein zweites Mal sagen.
+        # VTKs Vorgabe ist Schwarz, und das ist auf dem dunklen Hintergrund,
+        # mit dem die Anwendung startet, unlesbar.
+        try:
+            self.plotter.theme.font.color = (
+                AXIS_LABEL_DARK if theme != "light" else AXIS_LABEL_LIGHT
+            )
+        except Exception as problem:  # pragma: no cover - hängt an pyvista
+            _log.info("axis labels keep their colour: %s", problem)
         try:
             self.plotter.add_axes(
                 viewport=ORIENTATION_CORNER,
@@ -1084,8 +1100,6 @@ class Viewport(QWidget):
                 # kennt. Die Werte sind aufeinander abgestimmt — ein dünner
                 # Schaft mit dicker Spitze sieht aus wie ein Stecknadelkopf,
                 # ein dicker mit kurzer Spitze wie ein abgesägter Balken.
-                shaft_type="cylinder",
-                tip_type="cone",
                 cone_radius=0.5,
                 shaft_length=0.78,
                 tip_length=0.28,
@@ -1098,6 +1112,7 @@ class Viewport(QWidget):
             )
         except Exception as problem:  # pragma: no cover - hängt am Treiber
             _log.info("orientation widget unavailable: %s", problem)
+            return
 
     def _apply_render_quality(self) -> None:
         """Kantenglättung und Umgebungsverdeckung.
@@ -1827,6 +1842,10 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
         self.plotter.set_background(colours["bottom"], top=colours["top"])
+        # Die Achsenanzeige trägt eine Schriftfarbe und muss deshalb mit dem
+        # Thema wechseln — eine schwarze Beschriftung auf dunklem Grund ist
+        # keine Auskunft.
+        self._add_orientation_widget(theme)
         self.show_scene(self._result)
 
     # --- display (§18.1) --------------------------------------------------------
