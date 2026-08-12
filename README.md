@@ -10,6 +10,21 @@ bleibt alles außer dem Chat benutzbar.
 
 Projektdateien tragen die Endung `.p3d`.
 
+## Fassung 0.7 — die öffentliche Demo
+
+Die aktuelle Fassung ist eine **Demo**: vollständig, unentgeltlich, ohne
+Schlüssel und ohne Konto, **befristet bis zum 30. Oktober 2026**. Danach
+startet sie nicht mehr — kein Betrachtermodus, keine halbe Fassung, die
+niemand pflegt. Projektdateien sind davon unberührt: eine `.p3d` ist ein
+ZIP-Archiv mit JSON darin und bleibt lesbar.
+
+Der Stichtag steht in `app/core/activation/store.py` (`DEMO_UNTIL`) und
+nirgends sonst; die Verkaufsfassung 1.0 trägt dort `None` und zählt
+stattdessen die vierzehn Testtage. Zwei Tests halten das zusammen: einer
+schlägt an, wenn der Stichtag verstrichen ist, der andere verbietet einer
+1.x-Fassung überhaupt einen. Das Konzept dahinter steht in
+`.claude/konzept-demo-2026-10.md`.
+
 ## Was Solidon nicht ist
 
 Damit niemand das Falsche erwartet:
