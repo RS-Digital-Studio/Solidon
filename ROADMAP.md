@@ -4118,3 +4118,80 @@ bevor die falsche Zahl auf der Seite stand.
       ES, FR, IT, PT sind der billigste Reichweitengewinn, den es gibt.
 - [ ] **Skizze bedienerisch fertig** (B1). Die Ändern-Gruppe steht; der Rest
       der neun Punkte aus `konzept-bedienung.md` Teil 4 nicht.
+
+## Die Demo bis 30.10.2026 (12.08.2026)
+
+Entschieden: eine öffentliche Demo statt eines Testlaufs. Start **20.08.2026**,
+Ende **30.10.2026**, kostenlos, vollständig, ohne Schlüssel. Danach fällt am
+10.10. die Entscheidung zwischen 1.0 und einer zweiten Runde. Das Konzept mit
+allen Abwägungen steht in `.claude/konzept-demo-2026-10.md`; hier steht, was
+davon gebaut ist.
+
+### Was der gründliche Durchgang gefunden hat
+
+Der erste Durchgang las die Unterlagen, der zweite sah nach — gegen GitHub,
+den Webserver und die Paketierung. Fünf Funde:
+
+- [x] **Die Setup-Datei ließ sich nicht bauen.** PyInstaller baute nach
+      `dist/Solidon`, `make_installer.py` suchte `dist/Solidon3D`. Die
+      Umbenennung hatte die Paketierung nie erreicht; die CI trug den alten
+      Namen an vier weiteren Stellen. Der Name kommt jetzt überall aus
+      `app/branding.py`.
+- [x] **Das Handbuch im Paket hatte keine Bilder.** `app/images/manual/` stand
+      nicht in den `datas` — F1 hätte an jeder Abbildung eine Lücke gezeigt,
+      stillschweigend. `tests/test_packaging.py` hält beides fest: kein
+      zweiter Ort für den Namen, und jedes Verzeichnis mit Nicht-Python-
+      Dateien muss ins Paket.
+- [x] **Der Segmentierungsfehler auf dem Ubuntu-Runner.** Seit dem 06.08. starb
+      jeder Lauf an derselben Zeile — `HistoryPanel.show_document`,
+      `self.list.clear()`. Eine Messung mit zerlegter Suite zeigte, dass der
+      Absturz *wandert*: er hing an keinem Test, sondern an den Fenstern, die
+      sich über den Lauf ansammelten. Ein `window`-Fixture gibt sein Fenster
+      zurück und überlässt es dem Speicherbereiniger; sammelt Python es ein,
+      während eine Zustellung läuft, schreibt `clear()` in freigegebenen
+      Speicher. Unter Windows behält der Allokator die Seite, unter Linux gibt
+      er sie zurück. Die Fixture zerstört Fenster jetzt planmäßig
+      (`deleteLater` plus `processEvents`), und `MainWindow.release()` schließt
+      dabei den VTK-Interactor — ohne das stirbt der **nächste** Fensteraufbau.
+- [ ] **Das Repository ist öffentlich** und hieß bis heute `Formwerk`.
+      Umbenannt auf `Solidon`; die Sichtbarkeit ist Roberts Entscheidung und
+      steht auf öffentlich. Damit ist H5 (kompiliertes Prüfmodul) eine Bremse
+      und keine Hürde — H1 hält weiter.
+- [ ] **DMARC fehlt** für `solidon3d.de`. SPF und MX stehen (netcup), der
+      Eintrag `_dmarc` ist nicht gesetzt. Gehört ins CCP.
+
+### Gebaut
+
+- [x] **Stichtag im Kern.** `store.DEMO_UNTIL` ersetzt die Frist ab dem ersten
+      Start; `Activation.deadline` und `.over` sagen der Oberfläche, woran sie
+      ist. Der Testlaufmarker verliert damit seine Bedeutung. Zwei Tests halten
+      dagegen: einer weckt, wenn der ausgelieferte Stichtag verstrichen ist,
+      der andere verbietet einer 1.x-Fassung überhaupt einen Stichtag.
+- [x] **Fassung 0.7.0.** Die Null vorn ist Mechanik: `key.current_major()`
+      liest sie, also greift ein 1.x-Kaufschlüssel in der Demo nicht — und der
+      Update-Hinweis zeigt später auf die 1.0.
+- [x] **Die Texte.** Statuszeile dauerhaft (nicht erst am vorletzten Tag),
+      Über-Dialog, Freischaltdialog, Ersteinrichtung.
+- [x] **Der Schluss.** Nach dem Stichtag startet weder Fenster noch
+      Kommandozeile; die Meldung nennt das Datum, die Website und den Verbleib
+      der eigenen Dateien.
+- [x] **Zwei Menüeinträge**: nach einer neuen Fassung sehen (mit Antwort in
+      allen drei Fällen) und Rückmeldung schreiben.
+- [x] **Rechtstexte.** EULA §4a für die Demo; AGB und Widerruf sagen, dass sie
+      ab dem Verkaufsstart gelten.
+- [x] **Website.** Beide Startseiten führen die Demo, zwei neue Fragen
+      beantworten das Ende.
+
+### Offen bis zum 20.08.
+
+- [ ] **CI grün sehen und die Artefakte holen** — Setup-Datei, tar.gz,
+      Prüfsummen. Der Weg über `workflow_dispatch`; Inno Setup liegt auf dem
+      Runner, nicht auf dieser Maschine.
+- [ ] **Auf einem fremden Rechner installieren** (ohne Python, ohne venv, ohne
+      OpenSCAD/Ollama/ComfyUI). Der Punkt, der erfahrungsgemäß mehr findet als
+      alle Tests.
+- [ ] **Download-Kasten mit echter Datei und Prüfsumme**, dazu der Satz zur
+      SmartScreen-Warnung: die Demo geht unsigniert hinaus, weil Azure Trusted
+      Signing Nachweise braucht, die keine acht Tage dauern. 0.9.1 trägt sie
+      nach.
+- [ ] **Hochladen** — Website ohne `README.md`, `version.json` zuletzt.

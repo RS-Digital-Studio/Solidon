@@ -136,6 +136,20 @@ jobs:
       - name: Bauen
         run: pyinstaller packaging/solidon3d.spec --noconfirm
 
+      - name: Ohne Signatur bauen (Windows)
+        # Kein stummer Übersprung: die Demo geht unsigniert hinaus, und das
+        # gehört ins Protokoll, damit niemand ein signiertes Paket vermutet.
+        #
+        # Der Weg darunter ist ohnehin einer von gestern: seit Juni 2023 geben
+        # die Zertifizierungsstellen keine exportierbaren Code-Signing-Schlüssel
+        # mehr heraus — ein PFX in einem Secret ist für ein neu gekauftes
+        # Zertifikat kein möglicher Weg. Wenn signiert wird, dann über Azure
+        # Trusted Signing, und dann wird dieser Schritt ersetzt, nicht gefüllt.
+        if: runner.os == 'Windows' && env.SIGN_CERTIFICATE == ''
+        shell: pwsh
+        run: |
+          Write-Host "::warning::Unsigniert gebaut - SmartScreen warnt beim ersten Start."
+
       - name: Signieren (Windows)
         # Erst die Anwendung, dann unten der Installer — was in die Setup-Datei
         # wandert, muss vorher signiert sein.
@@ -188,12 +202,35 @@ jobs:
           version=$(python -c "from app.branding import APP_VERSION; print(APP_VERSION)")
           tar -czf "dist/${name}-${version}-linux-x86_64.tar.gz" -C dist "${name}"
 
+      - name: Prüfsummen (Windows)
+        # Sie stehen auf der Download-Seite neben der Datei — bei einem
+        # unsignierten Paket ist das die einzige Möglichkeit, die Herkunft zu
+        # prüfen. Als Datei neben dem Artefakt und im Protokoll: das eine holt
+        # man mit, das andere liest man ohne Download.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -Filter "*-Setup-*.exe" | ForEach-Object {
+            $sum = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$sum  $($_.Name)" | Tee-Object -FilePath "dist/$($_.Name).sha256"
+          }
+
+      - name: Prüfsummen (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd dist
+          for archive in *-linux-x86_64.tar.gz; do
+            sha256sum "$archive" | tee "$archive.sha256"
+          done
+
       - name: Installer hochladen (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: solidon3d-setup-windows
-          path: dist/*-Setup-*.exe
+          path: |
+            dist/*-Setup-*.exe
+            dist/*-Setup-*.exe.sha256
           # Der private Speicher fasst 500 MB, ein Paket rund 250 — was
           # veröffentlicht wird, liegt danach auf der Website, nicht hier.
           retention-days: 7
@@ -203,7 +240,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: solidon3d-linux
-          path: dist/*-linux-x86_64.tar.gz
+          path: |
+            dist/*-linux-x86_64.tar.gz
+            dist/*-linux-x86_64.tar.gz.sha256
           retention-days: 7
 
   latest:
