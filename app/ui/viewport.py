@@ -961,6 +961,16 @@ class Viewport(QWidget):
         # Als Any typisiert: pyvista umhüllt seine Plotter-Methoden, Annotationen
         # überleben das nicht.
         self.plotter = cast(Any, QtInteractor(self))
+        # Qt malt hier nichts, VTK malt alles.
+        #
+        # Das Fenster des Interactors ist ein natives OpenGL-Fenster
+        # (``WA_PaintOnScreen``), und trotzdem stand ``WA_NoSystemBackground``
+        # auf ``False``: Qt füllte den Bereich also mit dem Hintergrund seines
+        # Stils, bevor VTK darin zeichnen konnte. Zusammen mit dem Stylesheet
+        # am ``OverlayHost`` darüber ist das der Verdächtige für das Bild, in
+        # dem nur die Achsenmarker stehen und der Körper beim Bewegen der
+        # Kamera aufblitzt.
+        self.plotter.interactor.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         self._layout.addWidget(self.plotter.interactor)
         # Während eines Zugs gehören Ziffern dem Wertfeld, nicht VTK — der
         # Filter sitzt deshalb auf dem Fenster, das die Tasten bekommt.
@@ -1272,7 +1282,7 @@ class Viewport(QWidget):
             # der Leiste bleibt an, und das nächste Projekt bekommt den Griff
             # wieder, sobald etwas ausgewählt ist.
             self._detach_gizmo()
-            self.plotter.render()
+            self._draw()
             return
 
         import numpy as np
@@ -1387,6 +1397,25 @@ class Viewport(QWidget):
         # nächsten Ereignisdurchlauf kostet nichts und schließt die Lücke.
         QTimer.singleShot(0, self._render_again)
         QTimer.singleShot(150, self._render_again)
+
+    def _draw(self) -> None:
+        """Zeichnen, so dass es auch ankommt.
+
+        **Zwei Durchgänge, immer.** Ein einzelner tauscht auf den Puffer, der
+        gerade nicht gefüllt wurde — gemessen am echten Bildschirm: ein
+        Nachschlag mit *einem* Durchgang machte vier von vier Läufen wieder
+        leer, mit zweien blieben sie stehen. Deshalb geht jede Stelle, die
+        etwas an der Ansicht geändert hat, hier durch und nicht direkt an
+        ``plotter.render()``.
+        """
+        if self.plotter is None:
+            return
+        window = getattr(self.plotter, "ren_win", None)
+        if window is None:
+            self.plotter.render()
+            return
+        window.Render()
+        window.Render()
 
     def _render_again(self) -> None:
         """Der Nachschlag aus :meth:`_render_now` — nur, wenn es noch etwas
@@ -1555,7 +1584,7 @@ class Viewport(QWidget):
             self.plotter.remove_actor(actor, render=False)
         self._shadow_actors.clear()
         self._place_shadows(direction)
-        self.plotter.render()
+        self._draw()
 
     def set_hidden(self, hidden: frozenset[ObjectId]) -> None:
         """Welche Körper nicht gezeichnet werden (§18.8).
@@ -1697,7 +1726,7 @@ class Viewport(QWidget):
         # durchkommt, hängt der Griff nach jeder Auswertung am neuen Actor
         # statt am entfernten der letzten.
         self.set_gizmo(self._gizmo_wanted)
-        self.plotter.render()
+        self._draw()
 
     def show_build_volume(self, profile: Profile) -> None:
         """Das Bett als Raster in echter Größe, der Bauraum als Eckwinkel
@@ -1794,7 +1823,7 @@ class Viewport(QWidget):
                 reset_camera=False,
             )
         )
-        self.plotter.render()
+        self._draw()
 
     # --- theme (§19.3) ----------------------------------------------------------
 
@@ -1834,7 +1863,7 @@ class Viewport(QWidget):
             self.plotter.enable_parallel_projection()
         else:
             self.plotter.disable_parallel_projection()
-        self.plotter.render()
+        self._draw()
 
     @property
     def display_mode(self) -> DisplayMode:
@@ -2043,7 +2072,7 @@ class Viewport(QWidget):
                         render=False,
                     )
                 )
-        self.plotter.render()
+        self._draw()
 
     # --- analysis maps (§18.4) --------------------------------------------------
 
@@ -2086,7 +2115,7 @@ class Viewport(QWidget):
         target = np.asarray(point, dtype=float)
         camera.focal_point = tuple(target)
         camera.position = tuple(target + direction / length * reach)
-        self.plotter.render()
+        self._draw()
 
     def _scene_size(self) -> float:
         if self._result is None or not self._result.scene.objects:
@@ -2109,7 +2138,7 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
         self._redraw_features()
-        self.plotter.render()
+        self._draw()
 
     def select_feature(self, feature_id: FeatureId | None) -> None:
         self._selected_feature = feature_id
@@ -2119,7 +2148,7 @@ class Viewport(QWidget):
             # auf die Fläche, eine abgewählte gibt ihn ans Objekt zurück
             # (§18.11) — nicht erst beim nächsten Umschalten.
             self.set_gizmo(self._gizmo_wanted)
-            self.plotter.render()
+            self._draw()
 
     @property
     def selected_feature(self) -> FeatureId | None:
@@ -2226,7 +2255,7 @@ class Viewport(QWidget):
         self._ghost = ghost
         self._redraw_difference()
         if self.plotter is not None:
-            self.plotter.render()
+            self._draw()
 
     @property
     def difference(self) -> Any | None:
@@ -2267,7 +2296,7 @@ class Viewport(QWidget):
         self._difference_held = held
         self._redraw_difference()
         if self.plotter is not None:
-            self.plotter.render()
+            self._draw()
 
     @property
     def difference_held(self) -> bool:
@@ -2312,7 +2341,7 @@ class Viewport(QWidget):
             # Die Legende erklärt Farben; die haben sich gerade geändert.
             self.banner.show_preview(self.banner.note.text(), palette, self.banner.hint.text())
         if self.plotter is not None:
-            self.plotter.render()
+            self._draw()
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         super().resizeEvent(event)
@@ -2340,7 +2369,7 @@ class Viewport(QWidget):
             self._layer_rebuild.start()
         self._redraw_layer()
         if self.plotter is not None:
-            self.plotter.render()
+            self._draw()
 
     def _redraw_layer(self) -> None:
         if self.plotter is None:
@@ -2824,7 +2853,7 @@ class Viewport(QWidget):
         if self.plotter is None or factor <= 0.0:
             return
         self.plotter.camera.zoom(factor)
-        self.plotter.render()
+        self._draw()
 
     def view_from(self, direction: str) -> None:
         """Eine der sieben Kameravorgaben (§18.1)."""
