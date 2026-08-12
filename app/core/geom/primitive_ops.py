@@ -213,6 +213,11 @@ class ScadParams(BaseParams):
         "Baut einen Körper aus OpenSCAD-Quelltext. Rückfallebene für Formen, für die "
         "es keinen Baustein gibt — braucht eine Installation und wird vorher geprüft."
     ),
+    caveat=_(
+        "Die letzte Wahl, nicht die erste. Was ein Baustein oder der exakte Kern kann, "
+        "wird nicht als Quelltext geschrieben — das Ergebnis ist genauer, bleibt im "
+        "Verlauf änderbar und braucht kein installiertes OpenSCAD."
+    ),
 )
 def create_from_scad(ctx: OpContext) -> OpResult:
     """§24.1: die Rückfallebene. Die Prüfung aus §32 läuft, bevor irgendetwas

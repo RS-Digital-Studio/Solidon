@@ -46,10 +46,28 @@ class Page:
     body: TranslatableText | str
     generated: bool = False
     """Erzeugte Seiten kommen aus dem Register und stehen hinter den anderen."""
+    summary: TranslatableText | str = ""
+    """Ein Satz vorweg: was auf dieser Seite steht, für den, der sie überfliegt.
+
+    Ein eigenes Feld und kein erster Absatz im Fließtext, damit ein Test ihn
+    einfordern kann — eine Kurzfassung, die man vergessen darf, schreibt beim
+    zwanzigsten Kapitel niemand mehr. Die erzeugten Seiten haben keine: Was
+    dort steht, sagt ihre Überschrift.
+    """
 
     def figures(self) -> tuple[str, ...]:
         """Die Schlüssel der Abbildungen, in der Reihenfolge ihres Auftretens."""
         return tuple(FIGURE_PATTERN.findall(str(self.body)))
+
+    def text(self) -> str:
+        """Kurzfassung und Text, so wie die Seite gelesen wird.
+
+        Eine Stelle für beide Ausgaben. Setzten Fenster und Markdown sie je
+        selbst zusammen, stünde die Kurzfassung irgendwann nur noch in einer
+        von beiden — und niemandem fiele auf, in welcher.
+        """
+        opening = f"*{self.summary}*\n\n" if self.summary else ""
+        return f"{opening}{self.body}"
 
 
 #: Ein Bildverweis im Fließtext einer Seite.
@@ -60,6 +78,7 @@ FIGURE_PATTERN: Final = re.compile(r"!\[\]\(figure:([a-z0-9-]+)\)")
 INTRODUCTION: Final[tuple[Page, ...]] = (
     Page(
         key="what",
+        summary=_("Wofür das Programm gedacht ist, und wofür nicht — in vier Absätzen."),
         title=_("Was Solidon ist"),
         body=_(
             "Solidon baut, ändert und druckreif macht — Modelle für den "
@@ -86,6 +105,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="start",
+        summary=_("Der erste Durchlauf von der heruntergeladenen Datei bis zur Druckdatei."),
         title=_("Die ersten fünfzehn Minuten"),
         body=_(
             "Wer noch nie mit einem Konstruktionsprogramm gearbeitet hat, fängt "
@@ -139,6 +159,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="window",
+        summary=_("Welcher Bereich des Fensters welche Frage beantwortet."),
         title=_("Das Fenster"),
         body=_(
             "Drei Zonen, und keine davon versteckt sich.\n\n"
@@ -177,6 +198,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="looking",
+        summary=_(
+            "Was der Prüfbericht meldet, was die Analysekarten zeigen, und wann "
+            "man hinsehen sollte."
+        ),
         title=_("Hinsehen, bevor gedruckt wird"),
         body=_(
             "Ein Modell sieht auf dem Bildschirm fast immer gut aus. Ob es sich "
@@ -227,6 +252,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="moving",
+        summary=_("Objekte verschieben, drehen, anordnen — und Flächen einem Filament zuweisen."),
         title=_("Bewegen und Bemalen"),
         body=_(
             "Zwei Werkzeuge derselben Leiste ändern das Modell wirklich: "
@@ -272,6 +298,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="sketch",
+        summary=_("Zeichnen mit Zwängen: Linien, Bögen, Bedingungen, und was danach daraus wird."),
         title=_("Zeichnen"),
         body=_(
             "Für den Umriss, den kein Grundkörper hergibt. Ein Klotz mit einer "
@@ -387,6 +414,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="ways",
+        summary=_("Anpassen, konstruieren, erzeugen — drei Wege in dieselbe Szene."),
         title=_("Die drei Wege"),
         body=_(
             "Fast jede Aufgabe geht einen von drei Wegen. Zu jedem liegt ein "
@@ -411,6 +439,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="history",
+        summary=_("Warum jeder Schritt änderbar bleibt und was eine Transaktion zusammenhält."),
         title=_("Der Verlauf"),
         body=_(
             "Jede Operation steht im Verlauf, und dort bleibt sie änderbar. Das "
@@ -439,6 +468,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="parameters",
+        summary=_("Benannte Maße statt Zahlen im Modell, mit Ausdrücken zwischen ihnen."),
         title=_("Parameter und Ausdrücke"),
         body=_(
             "Ein Projekt hat benannte Parameter — `breite`, `tiefe`, "
@@ -476,6 +506,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="tolerances",
+        summary=_(
+            "Woher das Spiel kommt, das ein Deckel braucht — und warum es nicht geschätzt wird."
+        ),
         title=_("Material, Toleranzen, Passungen"),
         body=_(
             "Das Stück, das Solidon von einem Slicer unterscheidet.\n\n"
@@ -518,6 +551,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="parts",
+        summary=_("Geprüfte Verbindungen aus der Bibliothek statt selbst konstruierter Geometrie."),
         title=_("Die Bausteine"),
         body=_(
             "Ein Sechskant so tief in eine Wand zu legen, dass eine M4-Mutter "
@@ -555,6 +589,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="printing",
+        summary=_("Vom fertigen Modell zur Übergabe an den Slicer."),
         title=_("Auf die Platte und hinaus"),
         body=_(
             "**Auf dem Bett anordnen** legt die Objekte nebeneinander und "
@@ -590,6 +625,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="splitting",
+        summary=_("Teilen, verstiften und anordnen, wenn der Bauraum nicht reicht."),
         title=_("Wenn das Teil nicht auf die Platte passt"),
         body=_(
             "Ein Bauraum ist endlich, und das Teil, das man braucht, ist es "
@@ -626,6 +662,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="variants",
+        summary=_("Mehrere Maße nebeneinander drucken und den gemessenen Wert übernehmen."),
         title=_("Ausprobieren statt raten: Varianten und Kalibrieren"),
         body=_(
             "Die Zahl, die über eine Passung entscheidet, ist das Spiel — und "
@@ -659,6 +696,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="chat",
+        summary=_("Wie man mit dem Agenten spricht, was er sieht und was ein Vorschlag kostet."),
         title=_("Der Chat"),
         body=_(
             "Der Chat ruft dieselben Operationen auf, die auch in den Menüs "
@@ -699,6 +737,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="generating",
+        summary=_(
+            "Aus Text oder Bild ein Netz — und was danach nötig ist, damit es druckbar wird."
+        ),
         title=_("Ein Modell erzeugen lassen"),
         body=_(
             "Der dritte Weg (§2.2): Sie beschreiben ein Teil oder legen ein "
@@ -743,6 +784,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="surfaces",
+        summary=_("Muster als echte Geometrie, Gitterfüllungen und ausgehöhlte Körper."),
         title=_("Oberflächen und Füllungen"),
         body=_(
             "Ein Rändel für den Griff, eine Wabe fürs Aussehen, ein Gitter "
@@ -776,6 +818,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="remote",
+        summary=_(
+            "Ein anderes Programm bedient diese Installation — lokal, abschaltbar, rücknehmbar."
+        ),
         title=_("Fernsteuerung"),
         body=_(
             "Ein anderes Programm auf demselben Rechner darf Solidon "
@@ -806,6 +851,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="trouble",
+        summary=_("Die häufigsten Fälle am Anfang, mit dem, was dahintersteckt."),
         title=_("Wenn etwas nicht geht"),
         body=_(
             "Die Fälle, die am Anfang am häufigsten sind — was dahintersteckt "
@@ -863,6 +909,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="glossary",
+        summary=_("Die Begriffe, die in Menüs und Meldungen vorkommen, kurz erklärt."),
         title=_("Wörterbuch"),
         body=_(
             "Die Wörter, die in Solidon, in Slicern und in Druckforen "
@@ -1156,6 +1203,60 @@ def remote_text(registry: Registry | None = None) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def messages_text() -> str:
+    """Jede Meldung im Wortlaut, mit dem, was sie bedeutet, und dem Ausweg.
+
+    Die geschriebene Seite *Wenn etwas nicht geht* erklärt die häufigsten
+    Fälle in ganzen Sätzen. Was fehlte, war die andere Richtung: Man liest
+    einen Satz im Fenster und sucht ihn im Handbuch. Genau dafür steht die
+    Meldung hier links und wörtlich — abgetippt findet man sie sonst nicht.
+
+    Erzeugt aus der Ausnahmehierarchie: Regel 17 verlangt, dass jede Ausnahme
+    einen Handlungsvorschlag trägt, also gibt es zu jeder auch die Spalte
+    „was hilft" — und eine neue Ausnahme kann gar nicht in die Anwendung
+    kommen, ohne hier aufzutauchen.
+    """
+    import inspect
+
+    from app.core import errors
+
+    lines = [
+        str(
+            _(
+                "Was die Anwendung sagt, wenn etwas nicht geht — im Wortlaut, damit es "
+                "sich nachschlagen lässt. Ein Fehler endet hier nie mit „fehlgeschlagen“: "
+                "Zu jeder Meldung gehört mindestens ein Weg weiter."
+            )
+        ),
+        "",
+        f"| {_('Meldung')} | {_('Was hilft')} |",
+        "|---|---|",
+    ]
+    seen: set[str] = set()
+    for _name, kind in sorted(vars(errors).items()):
+        if not inspect.isclass(kind) or not issubclass(kind, errors.AppError):
+            continue
+        if kind is errors.AppError:
+            continue
+        title = str(kind.default_title)
+        if title in seen:
+            continue
+        seen.add(title)
+        ways = ", ".join(str(action.label) for action in kind.default_suggestions)
+        lines.append(f"| {title} | {ways} |")
+    lines.append("")
+    lines.append(
+        str(
+            _(
+                "Die Zeile darunter im Fenster nennt den Grund für genau diesen Fall — "
+                "welche Wand zu dünn ist, welcher Wert außerhalb liegt, welche Datei "
+                "gemeint war."
+            )
+        )
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def knowledge_pages() -> tuple[Page, ...]:
     """Die zwei Seiten, die zeigen, *wonach* gerechnet wird.
 
@@ -1180,6 +1281,12 @@ def knowledge_pages() -> tuple[Page, ...]:
             key="remote-tools",
             title=_("Die Werkzeuge der Fernsteuerung"),
             body=remote_text(),
+            generated=True,
+        ),
+        Page(
+            key="messages",
+            title=_("Meldungen im Wortlaut"),
+            body=messages_text(),
             generated=True,
         ),
     )
@@ -1219,8 +1326,10 @@ def as_markdown(registry: Registry | None = None, *, with_figures: bool = False)
     """
     parts = []
     for page in pages(registry):
-        body = str(page.body) if with_figures else without_figures(str(page.body))
-        parts.append(body if page.generated else f"## {page.title}\n\n{body}")
+        # Über ``Page.text`` und nicht über ``page.body``: Die Kurzfassung
+        # gehört zur Seite, und das Handbuchfenster liest dieselbe Methode.
+        text = page.text() if with_figures else without_figures(page.text())
+        parts.append(text if page.generated else f"## {page.title}\n\n{text}")
     return "\n\n".join(parts).rstrip() + "\n"
 
 

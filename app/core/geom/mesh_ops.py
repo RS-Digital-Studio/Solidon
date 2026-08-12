@@ -254,6 +254,11 @@ class DecimateParams(BaseParams):
         "Verringert die Dreieckszahl. Die größte Abweichung zur Ausgangsfläche "
         "wird gemessen und gemeldet."
     ),
+    caveat=_(
+        "Nicht auf einem Teil, das noch bemaßt wird: Dezimieren verschiebt Flächen, "
+        "und eine Bohrung, die danach gesetzt wird, sitzt auf einer anderen Oberfläche "
+        "als geplant. Zuerst konstruieren, zuletzt dezimieren."
+    ),
 )
 def decimate_mesh(ctx: OpContext) -> OpResult:
     params = cast(DecimateParams, ctx.params)

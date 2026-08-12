@@ -171,6 +171,16 @@ class OperationSpec:
     die mit P15 leer wird — bis dahin ist ein Menüeintrag ohne Symbol reiner
     Text, und reiner Text ist bei einundsiebzig Einträgen schwer zu finden."""
     doc: TranslatableText | str = ""
+    caveat: TranslatableText | str = ""
+    """Wann man diese Operation *nicht* nehmen sollte — und was stattdessen.
+
+    Getrennt von ``doc``, weil beides Verschiedenes tut: ``doc`` sagt, was
+    passiert, ``caveat`` sagt, wann es die falsche Wahl ist. In einen Satz
+    gepackt liest sich die Einschränkung wie ein Nachtrag und wird überlesen.
+
+    Nur dort, wo es eine echte Grenze gibt. Ein Vorbehalt an jeder Operation
+    wäre keiner mehr — dann steht neben jedem Menüeintrag eine Warnung, und
+    die erste, die zählt, geht darin unter."""
 
     @property
     def requires_seed(self) -> bool:
@@ -315,6 +325,7 @@ def register_op(
     shortcut: str | None = None,
     icon: str = "",
     doc: TranslatableText | str = "",
+    caveat: TranslatableText | str = "",
     registry: Registry | None = None,
 ) -> Callable[[OpFn], OpFn]:
     """Deklariert eine Operation. Die dekorierte Funktion bleibt aufrufbar
@@ -341,6 +352,7 @@ def register_op(
                 shortcut=shortcut,
                 icon=icon,
                 doc=doc,
+                caveat=caveat,
             )
         )
         return fn

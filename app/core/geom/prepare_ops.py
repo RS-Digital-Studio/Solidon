@@ -360,6 +360,12 @@ class HollowParams(BaseParams):
         "Höhlt ein Objekt aus und setzt Entlüftungen. Spart Material und Zeit; "
         "die Wandstärke stimmt im Rahmen des Rasters."
     ),
+    caveat=_(
+        "Nicht ohne Entlüftung, wenn im Slicer Stützen entstehen: Der Hohlraum füllt "
+        "sich sonst mit Material, das niemand mehr herausbekommt. Und nicht bei "
+        "Teilen, die Kräfte aufnehmen — eine dünne Hülle bricht anders als ein "
+        "gefüllter Körper."
+    ),
 )
 def hollow_object(ctx: OpContext) -> OpResult:
     params = cast(HollowParams, ctx.params)
@@ -636,6 +642,11 @@ class SplitPinnedParams(BaseParams):
     doc=_(
         "Teilt ein Objekt an einer Ebene und setzt Passstifte in die Schnittfläche. "
         "Das Spiel kommt aus dem Materialprofil."
+    ),
+    caveat=_(
+        "Nicht bei Teilen, deren Schnittfläche sichtbar bleibt: Die Naht liegt an "
+        "einer Ebene und ist es danach auch. Wo sie stören würde, lieber die Lage "
+        "ändern oder eine Stelle wählen, an der ohnehin eine Kante läuft."
     ),
 )
 def split_pinned(ctx: OpContext) -> OpResult:

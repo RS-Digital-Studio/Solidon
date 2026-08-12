@@ -241,6 +241,11 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
             if spec.doc:
                 lines.append(str(spec.doc))
                 lines.append("")
+            if spec.caveat:
+                # Eigener Absatz mit eigenem Wort davor: In den doc-Satz
+                # gehängt liest sich eine Grenze wie ein Nachtrag.
+                lines.append(f"**{_('Wann nicht')}:** {spec.caveat}")
+                lines.append("")
             facts = [
                 f"{_('Objekte')}: {spec.consumes} → {spec.produces}",
                 str(_("umkehrbar") if spec.reversible else _("nicht umkehrbar")),

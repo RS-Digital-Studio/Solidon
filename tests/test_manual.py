@@ -536,3 +536,47 @@ def test_the_remote_page_names_the_reason_not_just_the_ban() -> None:
     body = manual.remote_text()
     assert "Dateipfad" in body
     assert "ausgeführt" in body
+
+
+def test_every_written_page_says_in_one_sentence_what_it_is_about() -> None:
+    """Eine Kurzfassung, die man vergessen darf, schreibt beim zwanzigsten
+    Kapitel niemand mehr — deshalb steht sie im Feld und nicht im Fließtext."""
+    ohne = [page.key for page in manual.pages() if not page.generated and not page.summary]
+    assert not ohne, f"ohne Kurzfassung: {ohne}"
+
+
+def test_the_summary_reaches_the_reader() -> None:
+    """Sie nützt nur, wenn sie ausgegeben wird — im Fenster wie im Handbuch."""
+    seite = manual.pages()[0]
+    assert str(seite.summary) in seite.text()
+    assert str(seite.summary) in manual.as_markdown()
+
+
+def test_the_message_table_carries_every_exception() -> None:
+    """Regel 17: Jede Ausnahme trägt einen Handlungsvorschlag. Eine neue kann
+    nicht in die Anwendung kommen, ohne hier im Wortlaut aufzutauchen."""
+    import inspect
+
+    from app.core import errors
+
+    body = manual.messages_text()
+    for _name, kind in vars(errors).items():
+        if not inspect.isclass(kind) or not issubclass(kind, errors.AppError):
+            continue
+        if kind is errors.AppError:
+            continue
+        assert str(kind.default_title) in body, kind.__name__
+        for action in kind.default_suggestions:
+            assert str(action.label) in body, action.id
+
+
+def test_an_operation_with_a_limit_says_when_not_to_use_it() -> None:
+    """Ein Vorbehalt an jeder Operation wäre keiner mehr. An den fünf mit einer
+    echten Grenze steht er — und er steht getrennt vom doc-Satz, sonst liest er
+    sich wie ein Nachtrag."""
+    with_caveat = [spec for spec in REGISTRY.all() if spec.caveat]
+    assert len(with_caveat) >= 5
+    text = manual.as_markdown()
+    for spec in with_caveat:
+        assert str(spec.caveat) in text, spec.name
+    assert tr("Wann nicht") in text

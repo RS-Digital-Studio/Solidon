@@ -287,6 +287,11 @@ class LatticeParams(BaseParams):
         "als echte Geometrie. Sie reist im 3MF mit und ist dieselbe, egal wer "
         "das Teil schneidet."
     ),
+    caveat=_(
+        "Nicht für Teile, die dicht sein müssen: Ein Gitter hat Hohlräume, und Wasser "
+        "findet sie. Für tragende Teile erst die Wandstärke erhöhen — eine Füllung "
+        "ersetzt keine Wand."
+    ),
 )
 def lattice_fill(ctx: OpContext) -> OpResult:
     """Die Füllung in den Hohlraum legen.

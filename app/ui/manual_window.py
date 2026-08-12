@@ -187,7 +187,9 @@ class ManualWindow(QMainWindow):
             caption = f"\n\n*{figure.caption}*" if figure.caption else ""
             return f"![{figure.alt}](figure:{key}){caption}"
 
-        return manual.FIGURE_PATTERN.sub(replace, str(page.body))
+        # ``page.text()`` und nicht ``page.body``: Die Kurzfassung steht der
+        # Seite voran, im Fenster wie im erzeugten Handbuch.
+        return manual.FIGURE_PATTERN.sub(replace, page.text())
 
     def _filter(self, needle: str) -> None:
         """Über Titel *und* Text suchen — wer sucht, weiß das Kapitel nicht."""
@@ -199,7 +201,7 @@ class ManualWindow(QMainWindow):
             [
                 page
                 for page in self._pages
-                if wanted in str(page.title).casefold() or wanted in str(page.body).casefold()
+                if wanted in str(page.title).casefold() or wanted in page.text().casefold()
             ]
         )
 
