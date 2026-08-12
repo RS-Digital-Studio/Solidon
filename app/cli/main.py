@@ -19,8 +19,14 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from app.branding import APP_NAME, APP_VERSION, DISTRIBUTION_NAME, PROJECT_SUFFIX
-from app.core import manual
+from app.branding import (
+    APP_NAME,
+    APP_VERSION,
+    DISTRIBUTION_NAME,
+    PROJECT_SUFFIX,
+    WEBSITE_URL,
+)
+from app.core import activation, manual
 from app.core.bootstrap import load_operations
 from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
 from app.core.export import threemf
@@ -500,8 +506,44 @@ def _speak_utf8() -> None:
             reconfigure(encoding="utf-8", errors="backslashreplace")
 
 
+def _demo_is_over() -> bool:
+    """Sagt und protokolliert, dass diese Demo abgelaufen ist.
+
+    Die Kommandozeile bekommt dieselbe Grenze wie das Fenster (Demo-Konzept
+    §2 B2) — ohne sie wäre sie der offene Weg an einem Ende vorbei, das für
+    die Oberfläche gilt.
+
+    Die Sätze stehen hier noch einmal und nicht in einer gemeinsamen Funktion:
+    die des Fensters wohnen in ``app.ui.dialogs``, und die Kommandozeile darf
+    nichts aus ``app.ui`` importieren — sie läuft auf Rechnern ohne Qt. Gleich
+    sind die drei Aussagen: was abgelaufen ist, wo es weitergeht, und dass die
+    eigenen Dateien davon unberührt bleiben.
+    """
+    state = activation.state()
+    if not state.over:
+        return False
+    last_day = state.deadline.strftime("%d.%m.%Y") if state.deadline else ""
+    print(
+        tr("Diese Demo von {app} lief bis zum {date} und lässt sich nicht mehr starten.").format(
+            app=APP_NAME, date=last_day
+        ),
+        file=sys.stderr,
+    )
+    print(tr("Die aktuelle Fassung gibt es auf {url}.").format(url=WEBSITE_URL), file=sys.stderr)
+    print(
+        tr(
+            "Ihre Projektdateien bleiben lesbar — eine Projektdatei ist ein "
+            "ZIP-Archiv mit JSON darin."
+        ),
+        file=sys.stderr,
+    )
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
     _speak_utf8()
+    if _demo_is_over():
+        return 1
     load_operations()
     parser = build_parser()
     args = parser.parse_args(argv)

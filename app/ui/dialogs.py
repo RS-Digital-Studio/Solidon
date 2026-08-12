@@ -37,6 +37,7 @@ from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.core.scene import expressions
 from app.i18n import tr
+from app.ui.labels import deadline_date
 from app.ui.style import set_level
 
 _log = get_logger(__name__)
@@ -552,6 +553,23 @@ class ActivationDialog(QDialog):
                 )
             )
             set_level(self.state_label, "info")
+        elif state.in_demo:
+            # Für die Demo gibt es keinen Schlüssel — das ist keine Lücke,
+            # sondern die Bauart: sie läuft ohne Eingabe und endet an einem
+            # Datum. Ohne diesen Satz stünde hier ein Eingabefeld, das
+            # niemand füllen kann, und der Nutzer suchte den Fehler bei sich.
+            self.state_label.setText(
+                tr("Demo — noch {days} Tage, bis zum {date}.").format(
+                    days=state.days_left, date=deadline_date(state)
+                )
+                + " "
+                + tr(
+                    "Für die Demo gibt es keinen Schlüssel: sie läuft vollständig und "
+                    "ohne Eingabe. Danach lässt sie sich nicht mehr starten — die "
+                    "Vollversion und ihr Schlüssel kommen über die Website."
+                )
+            )
+            set_level(self.state_label, "info")
         elif state.in_trial:
             self.state_label.setText(
                 tr("Testzeitraum: noch {days} Tage.").format(days=state.days_left)
@@ -612,6 +630,52 @@ class ActivationDialog(QDialog):
 def open_website() -> None:
     """Öffnet die Produktseite — dieselbe Adresse, die auch der Installer nennt."""
     QDesktopServices.openUrl(QUrl(WEBSITE_URL))
+
+
+def expired_demo_text(state: activation.Activation) -> str:
+    """Was eine abgelaufene Demo zu sagen hat — der Text ohne Fenster darum.
+
+    Getrennt vom Dialog, weil dieselben Sätze auch die Kommandozeile braucht;
+    zwei Formulierungen desselben Endes wären zwei verschiedene Auskünfte.
+
+    Drei Dinge stehen darin, und jedes aus einem Grund (Demo-Konzept §2 B2):
+    was abgelaufen ist — sonst wirkt ein Programm, das nicht mehr startet, wie
+    ein defektes. Wo es weitergeht — ein Ende ohne Fortsetzung ist eine
+    Sackgasse, und Regel 17 verbietet sie auch hier. Und was aus der eigenen
+    Arbeit wird: das ist die Frage, die jemand als erste stellt, und die
+    Antwort nimmt ihr die Schärfe.
+    """
+    return (
+        tr("Diese Demo von {app} lief bis zum {date} und lässt sich nicht mehr starten.").format(
+            app=APP_NAME, date=deadline_date(state)
+        )
+        + "\n\n"
+        + tr("Die aktuelle Fassung gibt es auf {url}.").format(url=WEBSITE_URL)
+        + "\n\n"
+        + tr(
+            "Ihre Projekte sind davon nicht betroffen. Sie liegen, wo Sie sie "
+            "gespeichert haben, und eine Projektdatei ist ein ZIP-Archiv mit JSON "
+            "darin — lesbar auch ohne dieses Programm, und die nächste Fassung "
+            "öffnet sie unverändert."
+        )
+    )
+
+
+def show_expired_demo(state: activation.Activation) -> None:
+    """Die Verabschiedung der Demo, mit einem Weg nach vorn.
+
+    Ein Fenster und kein stiller Nichtstart: Wer doppelt klickt und nichts
+    geschieht, sucht den Fehler bei sich oder hält das Programm für kaputt.
+    """
+    box = QMessageBox()
+    box.setWindowTitle(tr("Die Demo ist abgelaufen"))
+    box.setIcon(QMessageBox.Icon.Information)
+    box.setText(expired_demo_text(state))
+    website = box.addButton(tr("Website öffnen"), QMessageBox.ButtonRole.AcceptRole)
+    box.addButton(QMessageBox.StandardButton.Close)
+    box.exec()
+    if box.clickedButton() is website:
+        open_website()
 
 
 def handlers_of(widget: QWidget | None) -> Mapping[str, Callable[[AppError], None]]:
@@ -767,6 +831,10 @@ def _licence_line() -> str:
         return tr("Lizenziert für {holder} (Bestellung {order}).").format(
             holder=state.licence.holder or tr("diesen Rechner"),
             order=state.licence.order,
+        )
+    if state.in_demo:
+        return tr("Demo — noch {days} Tage, bis zum {date}.").format(
+            days=state.days_left, date=deadline_date(state)
         )
     if state.in_trial:
         return tr("Testzeitraum: noch {days} Tage.").format(days=state.days_left)

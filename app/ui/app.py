@@ -14,10 +14,12 @@ from PySide6.QtCore import QCoreApplication, QLibraryInfo, QLocale, QTranslator
 from PySide6.QtWidgets import QApplication
 
 from app.branding import APP_ID, APP_NAME, APP_VERSION
+from app.core import activation
 from app.core.bootstrap import load_operations
 from app.core.log import configure, get_logger
 from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
+from app.ui.dialogs import show_expired_demo
 from app.ui.icons import application_icon
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
@@ -106,6 +108,23 @@ def main(argv: list[str] | None = None) -> int:
     existing = QApplication.instance()
     application = existing if isinstance(existing, QApplication) else QApplication(argv or sys.argv)
     application.setWindowIcon(application_icon())
+
+    # Vor allem anderen: eine abgelaufene Demo startet nicht mehr
+    # (Demo-Konzept §2 B2). Die Sprache muss dafür schon stehen — diese
+    # Meldung ist womöglich das Einzige, was dieser Start noch zeigt, und
+    # sie auf Deutsch zu zeigen, weil der Katalog erst später kommt, wäre
+    # ausgerechnet beim Abschied der falsche Ton.
+    settings = load_settings()
+    install_language(settings.language)
+    set_language(settings.language)
+    install_qt_translations(application, settings.language)
+    state = activation.state()
+    if state.over:
+        _log.info("demo ended on %s, not starting", state.deadline)
+        show_expired_demo(state)
+        # Kein Erfolg und kein Fehler: die Anwendung hat nicht gearbeitet, und
+        # ein Skript, das sie aufruft, soll das an der Rückgabe sehen.
+        return 1
 
     splash = SplashScreen()
     splash.show()

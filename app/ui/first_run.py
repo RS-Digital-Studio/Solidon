@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME
-from app.core import install, tools
+from app.core import activation, install, tools
 from app.core.activation import TRIAL_DAYS
 from app.core.backends import llm
 from app.core.export import slicer_keys, slicer_profiles
@@ -40,7 +40,7 @@ from app.core.log import get_logger
 from app.i18n import language_name, tr
 from app.i18n.catalog import available_languages
 from app.ui.icons import icon
-from app.ui.labels import by_title
+from app.ui.labels import by_title, deadline_date
 from app.ui.settings import UiSettings
 from app.ui.style import NORMAL, TIGHT, set_level
 
@@ -105,7 +105,20 @@ class FirstRunDialog(QDialog):
 
         # Der Testlauf steht hier in einem Satz und mehr nicht: die
         # Ersteinrichtung fragt nach keinem Schlüssel — das wäre eine Hürde
-        # vor dem ersten Blick (Konzept V4b).
+        # vor dem ersten Blick (Konzept V4b). In der Demo steht dort der
+        # Stichtag, aus demselben Grund in einem Satz.
+        state = activation.state()
+        if state.in_demo:
+            terms = tr(
+                "Diese Demo läuft vollständig und ohne Schlüssel bis zum {date}; "
+                "danach lässt sie sich nicht mehr starten. Ihre Projekte bleiben "
+                "erhalten."
+            ).format(date=deadline_date(state))
+        else:
+            terms = tr(
+                "Die ersten {days} Tage ist alles frei; danach bleiben Öffnen, "
+                "Ansehen und Messen es."
+            ).format(days=TRIAL_DAYS)
         self.greeting = QLabel(
             f"{APP_NAME} — "
             + tr(
@@ -113,10 +126,7 @@ class FirstRunDialog(QDialog):
                 "stehen später unter Bearbeiten, Einstellungen; überspringen geht auch."
             )
             + " "
-            + tr(
-                "Die ersten {days} Tage ist alles frei; danach bleiben Öffnen, "
-                "Ansehen und Messen es."
-            ).format(days=TRIAL_DAYS),
+            + terms,
             self,
         )
         self.greeting.setWordWrap(True)

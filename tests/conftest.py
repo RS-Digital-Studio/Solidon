@@ -134,9 +134,16 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
         # der Segmentierungsfehler.
         if not isValid(widget):
             continue
-        waiter = getattr(widget, "wait_for_workers", None)
-        if callable(waiter):
-            waiter()
+        release = getattr(widget, "release", None)
+        if callable(release):
+            # Arbeiter **und** VTK-Interactor: der zweite lebt in einem Zustand,
+            # der dem Prozess gehört. Bleibt er offen, stirbt der nächste
+            # Fensteraufbau, und der Absturz steht in einem fremden Test.
+            release()
+        else:
+            waiter = getattr(widget, "wait_for_workers", None)
+            if callable(waiter):
+                waiter()
         # Löschen, nicht schließen: ``closeEvent`` fragt bei ungesicherter
         # Arbeit nach, und eine modale Frage in einer Suite ohne Bildschirm
         # wartet, bis jemand kommt. ``deleteLater`` geht daran vorbei — es

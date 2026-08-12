@@ -15,6 +15,7 @@ from PySide6.QtCore import QLocale
 from PySide6.QtGui import QColor
 
 from app.core import figures
+from app.core.activation import Activation
 from app.core.errors import AppError
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import group_title as group_title
@@ -287,3 +288,27 @@ def feature_label(feature_id: FeatureId, feature: Feature) -> str:
     measure = feature_measure(feature)
     name = feature_name(feature_id, feature)
     return f"{name} · {measure}" if measure else name
+
+
+def deadline_date(state: Activation) -> str:
+    """Der Stichtag der Demo, wie ihn der Nutzer liest.
+
+    Ein Ort dafür, weil er an fünf Stellen steht: Statusleiste, Über-Dialog,
+    Freischaltdialog, Ersteinrichtung und die Meldung, mit der sich eine
+    abgelaufene Demo verabschiedet. Fünf Formulierungen desselben Datums
+    lesen sich wie fünf verschiedene Fristen.
+    """
+    return state.deadline.strftime("%d.%m.%Y") if state.deadline is not None else ""
+
+
+def demo_line(state: Activation) -> str:
+    """„Demo — noch 47 Tage, bis zum 30.10.2026".
+
+    Steht dauerhaft in der Statusleiste und nicht erst am vorletzten Tag. Für
+    ein Kaufprodukt wäre das Druck (Veröffentlichungskonzept §2 C); für eine
+    Demo mit hartem Ende ist es die Zusage, dass niemand überrascht wird —
+    wer am 28.10. ein Projekt anfängt, soll es vorher gewusst haben.
+    """
+    return tr("Demo — noch {days} Tage, bis zum {date}").format(
+        days=state.days_left, date=deadline_date(state)
+    )

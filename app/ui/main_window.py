@@ -11,15 +11,17 @@ Kommandozeile, sobald sie deklariert ist (§10).
 
 from __future__ import annotations
 
+import platform
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QPoint, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QPoint, Qt, QThread, QTimer, QUrl, QUrlQuery, Signal, qVersion
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
     QCloseEvent,
+    QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
     QKeySequence,
@@ -45,7 +47,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_NAME, PROJECT_SUFFIX
+from app.branding import APP_NAME, APP_VERSION, PROJECT_SUFFIX, SUPPORT_ADDRESS
 from app.core import activation, examples, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
@@ -141,7 +143,7 @@ from app.ui.generate_dialog import GenerateDialog
 from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
-from app.ui.labels import MENU_GROUPS, feature_label
+from app.ui.labels import MENU_GROUPS, demo_line, feature_label
 from app.ui.loading import LoadingVeil
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
@@ -540,6 +542,10 @@ class MainWindow(QMainWindow):
         self._trial_message = ""
         """Die Testlauf-Zeile der Statusleiste — gemerkt, damit das
         Freischalten genau sie wegräumt und keine fremde Meldung."""
+        self._asked_for_update = False
+        """Ob jemand von Hand nach einer neuen Fassung gefragt hat. Die
+        Abfrage beim Start schweigt, wenn es nichts Neues gibt; auf einen Klick
+        hin wäre dasselbe Schweigen ein toter Knopf."""
 
         self._build_central()
         self._build_status_bar()
@@ -1307,6 +1313,21 @@ class MainWindow(QMainWindow):
             self.action_report,
             tr("Einen Ordner mit Protokoll und Umgebung anlegen. Verschickt wird nichts."),
         )
+        self._add_action(
+            help_menu,
+            tr("Rückmeldung schreiben …"),
+            None,
+            self.action_feedback,
+            tr("Eine Mail an den Support vorbereiten — Fassung und System stehen schon drin."),
+        )
+        help_menu.addSeparator()
+        self._add_action(
+            help_menu,
+            tr("Nach einer neuen Fassung sehen"),
+            None,
+            self.action_check_updates,
+            tr("Fragt einmal bei solidon3d.de nach. Es wird nichts geladen und nichts ersetzt."),
+        )
         help_menu.addSeparator()
         self._add_action(
             help_menu,
@@ -1614,10 +1635,17 @@ class MainWindow(QMainWindow):
         ablöst, und das ist genug. Nach dem Eintragen eines Schlüssels räumt
         derselbe Aufruf sie weg, aber nur sie: eine fremde Meldung, die
         inzwischen dort steht, bleibt stehen.
+
+        **In der Demo steht sie dauerhaft** (Demo-Konzept §2 F). Dort endet
+        die Frist nicht in einem Betrachtermodus, sondern im Schluss; eine
+        Zeile, die erst am vorletzten Tag erscheint, käme für den zu spät, der
+        drei Tage vorher angefangen hat.
         """
         state = activation.state()
         message = ""
-        if state.in_trial and state.days_left < 3:
+        if state.in_demo and state.days_left > 0:
+            message = demo_line(state)
+        elif state.in_trial and state.days_left < 3:
             message = tr("Testzeitraum: noch {days} Tage — Hilfe → Solidon freischalten …").format(
                 days=state.days_left
             )
@@ -4218,9 +4246,59 @@ class MainWindow(QMainWindow):
         self._update_worker = None
 
     def _update_answered(self, release: Any) -> None:
-        if release is None or not release.newer_than():
+        if release is not None and release.newer_than():
+            self.announce(f"{tr('Neue Fassung verfügbar')}: {release.version} — {release.url}")
+            self._asked_for_update = False
             return
-        self.announce(f"{tr('Neue Fassung verfügbar')}: {release.version} — {release.url}")
+        # Beim Start schweigt die Abfrage, wenn es nichts Neues gibt — niemand
+        # will beim Öffnen lesen, dass alles beim Alten ist. Auf einen Klick
+        # hin ist dasselbe Schweigen ein toter Knopf, und der Nutzer klickt
+        # ein zweites Mal.
+        if self._asked_for_update:
+            self._asked_for_update = False
+            if release is None:
+                self.announce(tr("Die Seite war nicht erreichbar — später noch einmal versuchen."))
+            else:
+                self.announce(
+                    tr("Sie haben die aktuelle Fassung ({version}).").format(version=APP_VERSION)
+                )
+
+    def action_check_updates(self) -> None:
+        """Von Hand nach einer neuen Fassung sehen (Demo-Konzept §2 G).
+
+        Die Abfrage beim Start bleibt eine Einstellung und ist aus; ohne diesen
+        Weg gäbe es für alle anderen gar keinen. Für eine Demo mit Enddatum ist
+        das der Unterschied zwischen „endet am 30.10." und „ist einfach weg".
+        """
+        self._asked_for_update = True
+        self.announce(tr("Es wird nach einer neuen Fassung gesehen …"))
+        self._check_for_updates()
+
+    def action_feedback(self) -> None:
+        """Eine vorbereitete Mail an den Support — geschickt wird sie vom
+        Nutzer, nicht von hier.
+
+        Dieselbe Haltung wie beim Fehlerbericht: die Anwendung legt etwas
+        bereit und verschickt nichts. Was drinsteht, sieht der Absender vorher
+        — Fassung, System und Qt-Fassung, damit die Antwort nicht mit drei
+        Rückfragen beginnt.
+        """
+        body = "\n".join(
+            (
+                "",
+                "",
+                "--",
+                f"{APP_NAME} {APP_VERSION}",
+                f"{platform.system()} {platform.release()}",
+                f"Qt {qVersion()}",
+            )
+        )
+        address = QUrl(f"mailto:{SUPPORT_ADDRESS}")
+        query = QUrlQuery()
+        query.addQueryItem("subject", f"{APP_NAME} {APP_VERSION} — {tr('Rückmeldung')}")
+        query.addQueryItem("body", body)
+        address.setQuery(query)
+        QDesktopServices.openUrl(address)
 
     def report_error(self, error: BaseException, summary: str = "") -> None:
         """§33.1: ein Programmfehler bekommt ein Berichtsangebot, keinen
@@ -4424,6 +4502,25 @@ class MainWindow(QMainWindow):
         ):
             if worker is not None and worker.isRunning():
                 worker.wait(timeout_ms)
+
+    def release(self, timeout_ms: int = 2000) -> None:
+        """Alles loslassen, was dieses Fenster außerhalb von Qt hält.
+
+        Zwei Dinge überleben ein weggeräumtes Fenster, wenn niemand sie
+        abbestellt: seine Arbeiter (siehe oben) und der VTK-Interactor des
+        Viewports. Der zweite lebt in einem Zustand, der dem Prozess gehört
+        und nicht dem Widget — bleibt er offen, stirbt der **nächste** Aufbau
+        in ``render_window_interactor.initialize``, und der Absturz steht dann
+        in einem Test, der nichts damit zu tun hat.
+
+        Ein Aufruf für beide Wege aus §38: Schließen im Betrieb und Wegräumen
+        in der Suite.
+        """
+        self.wait_for_workers(timeout_ms)
+        plotter = getattr(self.viewport, "plotter", None)
+        closer = getattr(plotter, "close", None)
+        if callable(closer):
+            closer()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name
         # Der Menühinweis versprach das seit jeher („Ungesichertes wird vorher
