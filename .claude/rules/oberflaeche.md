@@ -169,6 +169,33 @@ def _worker_done(self, worker: Any) -> None:
 `_retire`. `wait_for_workers` wartet am Ende auf alle — auch auf die in
 `_retired`, sonst überlebt einer sein Fenster und nimmt den Prozess mit.
 
+## Der Mauszeiger
+
+Zeiger kommen aus `app/ui/cursors.py`, nie als `Qt.CursorShape` an der
+Aufrufstelle. `cursor(rolle, widget)` gibt entweder eine eigene Zeichnung im
+Akzent oder eine Systemform zurück — welche, entscheidet das Modul und nicht
+der Anrufer.
+
+Drei Dinge, die man beim Zeichnen einer neuen Rolle wissen muss:
+
+* **Silhouette schlägt Bildidee.** Bei 32 Punkten wird ein Zeiger nicht
+  gelesen. Der Schnittzeiger trug zuerst denselben Körper wie das Symbol der
+  Werkzeugzeile und war ein Fleck mit Strich; erst die grobe Form — Linie,
+  darüber und darunter eine Hälfte — erzählt etwas. **Angesehen wird auf vier
+  Untergründen**: Viewport dunkel, Akzent (ein gewählter Körper!), Körpergrau,
+  helles Thema.
+* **Jede eigene Zeichnung trägt den dunklen Saum.** Der Akzent liegt über
+  einem gewählten Körper auf sich selbst und wäre ohne ihn weg. Er entsteht
+  aus zwei Durchgängen über dieselben Pfade, dick dunkel und dünn im Akzent.
+* **Wo das System eine bekannte Form hat, gewinnt sie** (`SYSTEM`): geschlossene
+  Hand beim Schieben, Verschiebekreuz am Griff. Sie folgt der eingestellten
+  Zeigergröße und dem Hochkontrastmodus, unsere täte das nicht.
+
+**Ein Maß in Millimetern gehört nicht an den Zeiger.** Der Pinselradius ist der
+Fall, an dem das auffällt: Ein Zeiger hat feste Punktgröße und weiß nichts von
+der Kamera — beim ersten Zoom behauptet er eine Größe, die er nicht mehr hat.
+Was ein Weltmaß zeigt, gehört als Ring in die Szene.
+
 ## Barrierefreiheit
 
 - **Keine Bedeutung allein über Farbe** (Regel 18). Immer eine zweite
