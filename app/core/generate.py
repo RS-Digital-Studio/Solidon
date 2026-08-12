@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Final
 
 from app.core.backends.mesh import GeneratedMesh, MeshBackend
 from app.core.log import get_logger
@@ -58,6 +59,18 @@ WORKING_SIZE_MM = 100.0
 
 def _silent(fraction: float, text: str) -> None:
     del fraction, text
+
+
+#: Ab wie vielen Dreiecken ein erzeugtes Netz dezimiert wird. Die Zahl ist
+#: nicht frei gewählt: oberhalb davon steigt die Merkmalserkennung aus
+#: (``agent.analysis.TRIANGLE_LIMIT``), und ein Körper ohne Merkmale ist einer,
+#: an dem weder ein Klick noch der Agent etwas ansetzen kann.
+GENERATED_TRIANGLE_LIMIT: Final = 500_000
+
+#: Worauf dezimiert wird. Deutlich unter der Grenze, damit eine spätere
+#: Boolesche Operation nicht sofort wieder darüber landet — und immer noch fein
+#: genug, dass eine erzeugte Figur ihre Falten behält.
+GENERATED_TRIANGLE_TARGET: Final = 200_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,12 +218,40 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
         [OperationDraft(op="repair", inputs=(object_id,), params=dict(GENERATED_REPAIR))],
         origin,
     )
+    # Und ein vierter Schritt, wenn das Netz zu fein ist, um damit zu arbeiten.
+    #
+    # Ein Generator liefert typisch anderthalb Millionen Dreiecke. Damit hat
+    # niemand ein Problem, außer der Merkmalserkennung — sie steigt oberhalb
+    # von :data:`GENERATED_TRIANGLE_LIMIT` aus, und ohne Merkmale gibt es
+    # nichts, worauf ein Klick oder der Agent zeigen könnte: keine Bohrung,
+    # keinen Baustein, keine Passung. Der Ausweg stand bisher als Nebensatz im
+    # Prüfbericht („Netz → Dezimieren"), und niemand ging ihn.
+    #
+    # Als eigene Transaktion und nicht als stiller Teil der Reparatur: ein
+    # Undo nimmt sie zurück, der Stapel zeigt sie, und wer die volle Auflösung
+    # braucht, hat sie einen Klick entfernt.
+    schritte = [loading.id, repairing.id]
+    if result.mesh.triangle_count > GENERATED_TRIANGLE_LIMIT:
+        dezimieren = history.apply(
+            _("Auf Arbeitsauflösung bringen"),
+            [
+                OperationDraft(
+                    op="decimate_mesh",
+                    inputs=(object_id,),
+                    outputs=(object_id,),
+                    params={"triangles": GENERATED_TRIANGLE_TARGET},
+                )
+            ],
+            origin,
+        )
+        schritte.append(dezimieren.id)
+
     _log.info("generated %s into %s via %s", object_id, source_id, result.backend)
     return Generation(
         source_id=source_id,
         object_id=object_id,
         result=result,
-        transactions=(loading.id, repairing.id),
+        transactions=tuple(schritte),
     )
 
 

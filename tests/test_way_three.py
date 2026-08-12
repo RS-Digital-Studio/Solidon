@@ -262,3 +262,30 @@ def test_a_tiny_generated_body_survives_the_chain(project: Project, profile: Pro
     body = scene.scene.objects[result.object_id].mesh
     assert body.is_watertight, "was geschlossen ankam, geht auf dem Weg nicht auf"
     assert max(body.bounds.size) == pytest.approx(100.0, abs=1e-3), "und steht auf Arbeitsgröße"
+
+
+def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -> None:
+    """§2.2 Weg 3 endet nicht bei „liegt in der Szene", sondern bei
+    „damit lässt sich arbeiten".
+
+    Ein Generator liefert typisch anderthalb Millionen Dreiecke. Damit hat
+    niemand ein Problem außer der Merkmalserkennung — und ohne Merkmale gibt es
+    nichts, worauf ein Klick oder der Agent zeigen könnte. Der Ausweg stand
+    bisher als Nebensatz im Prüfbericht; jetzt geht ihn die Kette selbst.
+    """
+    import trimesh
+
+    from app.core.generate import GENERATED_TRIANGLE_LIMIT, GENERATED_TRIANGLE_TARGET
+
+    # Ein feines Netz, wie es aus einem Generator kommt.
+    fein = trimesh.creation.icosphere(subdivisions=8, radius=30.0)
+    assert len(fein.faces) > GENERATED_TRIANGLE_LIMIT, "sonst prüft der Test nichts"
+    payload = bytes(trimesh.exchange.export.export_mesh(fein, None, file_type="ply"))
+
+    generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
+    generation = from_text(project, generator, "eine Figur", seed=7)
+
+    assert len(generation.transactions) == 3, "Laden, Reparieren, Dezimieren"
+    result = evaluated(project, profile)
+    entry = result.scene.objects[generation.object_id]
+    assert entry.mesh.triangle_count <= GENERATED_TRIANGLE_TARGET * 1.1
