@@ -4195,3 +4195,58 @@ den Webserver und die Paketierung. Fünf Funde:
       Signing Nachweise braucht, die keine acht Tage dauern. 0.9.1 trägt sie
       nach.
 - [ ] **Hochladen** — Website ohne `README.md`, `version.json` zuletzt.
+
+---
+
+## Das Erzeugen-und-Agent-Konzept abgearbeitet (12.08.2026)
+
+`konzept-erzeugen-agent-oberflaeche-2026-08.md` ist umgesetzt. Zwei Punkte sind
+dabei anders ausgefallen als geplant, beide begründet.
+
+- [x] **Gedreht wird um das, was man ansieht.** Der Kamerafokus stand auf dem
+      Weltursprung; ein heruntergeladenes Teil liegt fast nie dort und wanderte
+      beim Drehen im Bogen durchs Bild. Blickrichtung und Abstand bleiben.
+- [x] **Das Freistellmodell durfte nicht verkauft werden.** `RMBG-2.0` steht
+      unter CC BY-NC und stand als Vorgabe in beiden Graphen; `INSPYRENET`
+      (MIT) tut dasselbe. Ein Test verhindert den nächsten Fall.
+- [x] **Hunyuan3D bleibt, mit einem Satz dazu.** Es ist für die EU ausdrücklich
+      nicht lizenziert, ein Wechsel braucht aber eine andere Knotensammlung in
+      ComfyUI. Solidon liefert keine Gewichte, der Graph nennt Rollen statt
+      Dateien — Modulkopf und Handbuch sagen jetzt, was das bedeutet.
+- [x] **Dezimieren in der Erzeugen-Kette.** Gemessen: 42 s, 1.588.016 Dreiecke,
+      **null Merkmale** — der Agent hatte nichts, worauf er zeigen konnte.
+      Oberhalb von 500.000 kommt jetzt eine vierte Transaktion auf 200.000.
+- [x] **Das Werkzeugschema für lokale Modelle.** 99 → 79 KB, **ohne ein
+      Werkzeug wegzulassen**: nach `applies_to` zu filtern wäre eine
+      Betriebsart mit anderem Namen gewesen. Der größte Posten waren nicht die
+      Beschreibungen (13 KB), sondern die Parametertexte (36 KB).
+- [x] **Was ein lokales Modell leistet, steht an der Chatleiste** — drei von
+      fünf Treffern, bis zu zwei Minuten je Aufruf, gemessen mit
+      `tools/check_local_model.py`.
+- [x] **Anschluss statt Wettlauf.** Wer mit Meshy, Tripo oder Rodin erzeugt,
+      bringt das GLB her; druckbar wird es hier. Dazu im Handbuch der Satz,
+      dass die MCP-Werkzeuge die Operationen der folgenden Kapitel sind.
+- [x] **Karten wachsen mit breiten Fenstern**, anteilig und mit Deckel. Bei
+      3413 px war die linke ein Zwölftel des Fensters, und die Maßspalte brach
+      mitten in der Zahl ab.
+
+### Was die Sitzung über das Prüfen gelernt hat
+
+**Ein Messgerät, das seinen Gegenstand verändert, misst nichts.** Der
+VTK-Screenshot rendert neu und reparierte damit genau den Zustand, den er
+zeigen sollte; `QWidget.grab()` lässt den OpenGL-Bereich schwarz. Beide haben
+mich stundenlang einen Viewport-Fehler jagen lassen, den es in der laufenden
+Anwendung nicht gab: meine Prüfskripte fuhren `processEvents()` statt
+`app.exec()`, und ein natives OpenGL-Fenster zeichnet so nur, solange etwas
+passiert. Der Beweis war der Stand vom 08.08. — bei mir derselbe Fehler, in
+der Anwendung intakt.
+
+**Der eine Schritt, der die Frage beantwortet hätte, war die Anwendung
+normal zu starten.** Eine Minute statt eines halben Tages.
+
+**Und das Protokoll sagt, was die Ausnahme verschluckt.** Die Achsenanzeige
+fehlte dreimal nacheinander, und jedes Mal stand der Grund als eine Zeile in
+`app.log`: die Repräsentation kennt kein `SetViewport`, `add_axes` kennt kein
+`shaft_type`, `label_color` setzt es selbst. Ein `except`, das nur
+protokolliert, macht solche Fehler unsichtbar — die Anzeige war weg, und im
+Fenster stand kein Wort darüber (Regel 17 dem Geist nach).
