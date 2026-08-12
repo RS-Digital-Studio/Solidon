@@ -716,6 +716,14 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Wasserdichtheit — es hat eine Form. Bohrungen und Passungen "
             "entstehen **danach** als eigene Operationen, nicht dadurch, dass "
             "man das Netz vermisst.\n\n"
+            "**Die Modelle gehören nicht uns, und ihre Lizenzen auch "
+            "nicht.** Welches Modell ComfyUI benutzt, entscheiden Sie — "
+            "Solidon liefert keines mit. Das verbreitetste für diesen "
+            "Zweck, Hunyuan3D, ist für die Europäische Union ausdrücklich "
+            "**nicht** lizenziert; frei lizenziert sind etwa Step1X-3D und "
+            "TripoSG. Der mitgelieferte Ablauf nennt Rollen und keine "
+            "Dateinamen: ein anderes Modell einzusetzen heißt, es zu "
+            "installieren, sonst nichts.\n\n"
             "**Das Erzeugte wird eine Quelle, keine Operation.** Ein "
             "Generator ist keine Funktion: dieselbe Anfrage liefert nach "
             "einem Modellwechsel etwas anderes. Die Bytes liegen deshalb im "
@@ -920,8 +928,163 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
 )
 
 
+def rules_text() -> str:
+    """Die Regelsammlung, wie der Agent sie liest — nur lesbar gesetzt.
+
+    §39 nennt sie das eigentliche Produkt. Ein Produkt, das man nicht lesen
+    kann, ist schwer zu verkaufen: Bis hierher wusste niemand außer dem Agenten,
+    wonach er sich richtet.
+    """
+    from app.core.knowledge.rules import load as load_rules
+    from app.i18n import get_language
+
+    collection = load_rules()
+    language = get_language()
+    lines = [
+        str(
+            _(
+                "Diese Regeln liegen dem Agenten bei jeder Anfrage vor. Sie sind der "
+                "Grund, warum er ein Schraubenloch aus der Tabelle nimmt statt es zu "
+                "schätzen — und warum er nachfragt, statt zu raten."
+            )
+        ),
+        "",
+        f"{_('Fassung')}: {collection.version}",
+        "",
+    ]
+    for rule in collection.rules:
+        title, text = rule.reading(language)
+        lines.append(f"### {title}")
+        lines.append("")
+        lines.append(text)
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def profiles_text() -> str:
+    """Material, Drucker und Normteile als Tabellen.
+
+    Die Zahlen stehen ohnehin im Programm und bestimmen jede Passung, jede
+    Bohrung, jede Warnung über eine zu dünne Wand. Sie hier zu zeigen kostet
+    nichts und beantwortet die Frage, die ein Prüfbericht offenlässt: *woher
+    kommt dieser Wert?*
+    """
+    from app.core.knowledge import standards
+    from app.core.knowledge.profiles import material_profiles, printer_profiles
+    from app.i18n import format_decimal as zahl
+
+    lines: list[str] = []
+
+    lines.append(f"### {_('Materialien')}")
+    lines.append("")
+    lines.append(
+        str(
+            _(
+                "Alle Maße in Millimetern. „Spiel“ ist der Abstand, den eine bewegliche "
+                "Passung bekommt, „Presssitz“ das Übermaß einer festen. Ein Profil, das "
+                "kalibriert wurde, trägt gemessene Werte statt der Vorgaben."
+            )
+        )
+    )
+    lines.append("")
+    lines.append(
+        f"| {_('Material')} | {_('Spiel')} | {_('Presssitz')} | {_('Bohrungszugabe')} "
+        f"| {_('Elefantenfuß')} | {_('Schwund')} | {_('kalibriert')} |"
+    )
+    lines.append("|---|---|---|---|---|---|---|")
+    for profile in material_profiles().values():
+        kalibriert = _("ja") if profile.calibrated else _("nein")
+        lines.append(
+            f"| {profile.title} | {zahl(profile.clearance, 2)} | {zahl(profile.press, 2)} "
+            f"| {zahl(profile.hole_compensation, 2)} | {zahl(profile.elephant_foot, 2)} "
+            f"| {zahl(profile.shrinkage * 100, 1)} % | {kalibriert} |"
+        )
+    lines.append("")
+
+    lines.append(f"### {_('Drucker')}")
+    lines.append("")
+    lines.append(
+        str(
+            _(
+                "Der eingestellte Drucker entscheidet, was auf die Platte passt und ab "
+                "wann eine Wand zu dünn ist — zwei Extrusionsbahnen sind die Grenze."
+            )
+        )
+    )
+    lines.append("")
+    lines.append(
+        f"| {_('Drucker')} | {_('Bauraum')} | {_('Düse')} | {_('Schichthöhe')} "
+        f"| {_('Extrusionsbreite')} | {_('geschlossen')} |"
+    )
+    lines.append("|---|---|---|---|---|---|")
+    for printer in printer_profiles().values():
+        x, y, z = printer.build_volume
+        geschlossen = _("ja") if printer.enclosed else _("nein")
+        lines.append(
+            f"| {printer.title} | {x:.0f} × {y:.0f} × {z:.0f} | {zahl(printer.nozzle_diameter, 2)} "
+            f"| {zahl(printer.layer_height, 2)} | {zahl(printer.extrusion_width, 2)} | {geschlossen} |"
+        )
+    lines.append("")
+
+    lines.append(f"### {_('Normteile')}")
+    lines.append("")
+    lines.append(
+        str(
+            _(
+                "Woher die Maße kommen, wenn ein Baustein ein Schraubenloch oder eine "
+                "Mutternfalle setzt. Nichts davon wird geschätzt."
+            )
+        )
+    )
+    lines.append("")
+    lines.append(
+        f"| {_('Größe')} | {_('Nennmaß')} | {_('Durchgangsloch')} | {_('Kernloch')} "
+        f"| {_('Kopf')} | {_('Steigung')} |"
+    )
+    lines.append("|---|---|---|---|---|---|")
+    for screw in standards.load().screws.values():
+        lines.append(
+            f"| {screw.size} | {zahl(screw.nominal, 1)} | {zahl(screw.clearance, 1)} "
+            f"| {zahl(screw.tap, 2)} | {zahl(screw.head, 1)} | {zahl(screw.pitch, 2)} |"
+        )
+    lines.append("")
+    lines.append(
+        str(
+            _(
+                "Muttern, Scheiben, Einpressbuchsen, Magnete, Lager, Profile und Rohre "
+                "stehen in derselben Tabelle; die Bausteine schlagen dort nach."
+            )
+        )
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def knowledge_pages() -> tuple[Page, ...]:
+    """Die zwei Seiten, die zeigen, *wonach* gerechnet wird.
+
+    Bis hierher stand im Handbuch, was die Anwendung tut, und in den Tabellen
+    unter ``knowledge/data/``, mit welchen Werten sie es tut — sichtbar war nur
+    das Ergebnis. Wer wissen wollte, ab wann eine Wand als zu dünn gilt oder
+    welches Spiel PETG bekommt, fand es nirgends.
+
+    Erzeugt und nicht geschrieben, aus demselben Grund wie die Referenz: Eine
+    zweite Liste veraltet. Ändert jemand eine Toleranz, ändert sich diese Seite
+    mit — sonst stünde hier eine Zahl, nach der niemand mehr rechnet.
+    """
+    return (
+        Page(key="rules", title=_("Wonach Solidon urteilt"), body=rules_text(), generated=True),
+        Page(
+            key="profiles",
+            title=_("Material, Drucker, Normteile"),
+            body=profiles_text(),
+            generated=True,
+        ),
+    )
+
+
 def pages(registry: Registry | None = None) -> tuple[Page, ...]:
-    """Alle Seiten: erst die geschriebenen, dann eine je Kategorie."""
+    """Alle Seiten: erst die geschriebenen, dann das Wissen, dann eine je
+    Kategorie."""
     source = registry or REGISTRY
     generated = tuple(
         Page(
@@ -932,7 +1095,7 @@ def pages(registry: Registry | None = None) -> tuple[Page, ...]:
         )
         for category in source.by_category()
     )
-    return INTRODUCTION + generated
+    return INTRODUCTION + knowledge_pages() + generated
 
 
 def find(key: str, registry: Registry | None = None) -> Page | None:

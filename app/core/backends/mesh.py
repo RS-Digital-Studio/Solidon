@@ -14,6 +14,17 @@ Woran die mitgelieferten Graphen hängen, steht deshalb hier und nicht im Code:
 an der Knotensammlung ``ComfyUI-Hunyuan3d-2-1`` samt ihren beiden Gewichten
 (``hunyuan3d-dit-v2-1-fp16`` und die zugehörige VAE), an ``ComfyUI-RMBG`` fürs
 Freistellen, und ``text_to_mesh`` zusätzlich an einem SDXL-Modell. Letzteres
+**Zur Lizenz der Gewichte, weil sie nicht unsere ist.** Hunyuan3D steht unter
+der Tencent Community License, und deren Geltungsbereich schließt die
+Europäische Union, das Vereinigte Königreich und Südkorea ausdrücklich aus.
+Solidon liefert keine Gewichte mit und lädt keine — der Nutzer installiert
+ComfyUI und seine Modelle selbst, und was er einsetzt, entscheidet er. Der
+mitgelieferte Graph nennt deshalb Rollen (``{model:shape}``) und keine Datei:
+wer ein anderes Modell mit derselben Rolle installiert, benutzt es ohne eine
+Zeile Code zu ändern. Frei lizenzierte Alternativen für dieselbe Aufgabe sind
+Step1X-3D (Apache-2.0) und TripoSG (MIT); fürs Freistellen ist INSPYRENET (MIT)
+voreingestellt, nachdem dort RMBG-2.0 (CC BY-NC) stand.
+
 ist kein Umweg, sondern die Sache selbst: Hunyuan3D kennt keinen Texteingang,
 Text wird erst zu einem Bild und das Bild zum Körper. Fehlt eines davon, sagt
 ComfyUI beim Abschicken, welcher Knoten fehlt — die Meldung reicht bis zum

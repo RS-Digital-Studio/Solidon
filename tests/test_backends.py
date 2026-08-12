@@ -494,3 +494,35 @@ def test_an_unknown_size_claims_nothing() -> None:
     warning = ollama_size_warning("mystery", fetch=lambda url: _tags(("mystery", "keine Angabe")))
 
     assert warning is None
+
+
+#: Freistellmodelle, die ein verkauftes Programm nicht vorgeben darf.
+#:
+#: ``RMBG-2.0`` steht unter CC BY-NC 4.0 — nicht-kommerziell. Es stand als
+#: Vorgabe in beiden mitgelieferten Graphen: der zahlende Nutzer landete ohne
+#: Zutun im nicht-kommerziellen Modell, ohne dass irgendwo ein Wort dazu stand.
+#: ``INSPYRENET`` (MIT) tut dasselbe und darf es.
+NON_COMMERCIAL_MODELS = ("RMBG-2.0", "rmbg-2.0", "BEN2")
+
+
+def test_the_shipped_graphs_name_no_non_commercial_model() -> None:
+    """§36: Was mitgeliefert wird, muss auch verkauft werden dürfen.
+
+    Geprüft wird der Text der Graphen und nicht ein geladener Knoten: die
+    Datei ist das, was ausgeliefert wird, und ein Modellname darin ist eine
+    Vorgabe an jeden, der sie benutzt.
+    """
+    from pathlib import Path
+
+    import app.core.backends as backends
+
+    ordner = Path(backends.__file__).parent / "data"
+    graphen = sorted(ordner.glob("*.json"))
+    assert graphen, "ohne Graphen prüft dieser Test nichts"
+    for graph in graphen:
+        text = graph.read_text(encoding="utf-8")
+        for modell in NON_COMMERCIAL_MODELS:
+            assert modell not in text, (
+                f"{graph.name} nennt {modell} — dessen Lizenz erlaubt keine "
+                "kommerzielle Nutzung (§36)"
+            )
