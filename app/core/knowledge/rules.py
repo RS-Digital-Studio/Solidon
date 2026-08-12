@@ -35,10 +35,26 @@ class Rule:
     title: str
     text: str
     applies_to: tuple[str, ...] = ()
+    title_en: str = ""
+    text_en: str = ""
+    """Die Fassung fürs Handbuch, wenn dort englisch gelesen wird.
+
+    **Nicht für den Agenten.** Der liest weiter die deutschen Felder, in jeder
+    Sprache — zwei Fassungen einer Regel wären zwei Wahrheiten, und die
+    Suite-Quote hinge davon ab, welche gerade galt. Fehlt eine Übersetzung,
+    steht das deutsche Original da; ein Handbuch mit einer Lücke wäre
+    schlechter als eines mit einem fremdsprachigen Absatz.
+    """
 
     def as_line(self) -> str:
         """Eine Regel als ein Absatz — die Form, die der Systemprompt benutzt."""
         return f"- {self.title}: {' '.join(self.text.split())}"
+
+    def reading(self, language: str) -> tuple[str, str]:
+        """Titel und Text in der Sprache, in der gelesen wird."""
+        if language == "en" and self.title_en and self.text_en:
+            return self.title_en, " ".join(self.text_en.split())
+        return self.title, " ".join(self.text.split())
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +101,8 @@ def load(path: Path | None = None) -> RuleSet:
             title=str(entry["title"]),
             text=str(entry["text"]).strip(),
             applies_to=tuple(entry.get("applies_to", ())),
+            title_en=str(entry.get("title_en", "")),
+            text_en=str(entry.get("text_en", "")).strip(),
         )
         for entry in table.get("rules", ())
     )

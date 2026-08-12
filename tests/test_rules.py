@@ -77,3 +77,32 @@ def test_a_own_file_can_be_loaded_without_touching_the_cache(tmp_path: Path) -> 
 
     assert rules.load(path).version == "9"
     assert rules.load().version != "9", "the shipped set stays the shipped set"
+
+
+def test_the_manual_can_read_the_rules_in_english() -> None:
+    """§39 nennt die Regelsammlung das eigentliche Produkt — ein Produkt, das
+    nur eine Sprache spricht, ist im Handbuch der zweiten eine Lücke.
+    """
+    collection = rules.load()
+    missing = [rule.id for rule in collection.rules if not rule.title_en or not rule.text_en]
+    assert not missing, f"ohne englische Fassung: {missing}"
+    for rule in collection.rules:
+        assert rule.reading("en") == (rule.title_en, " ".join(rule.text_en.split()))
+
+
+def test_the_agent_keeps_reading_german_whatever_the_language() -> None:
+    """Zwei Fassungen einer Regel wären zwei Wahrheiten, und die Suite-Quote
+    hinge davon ab, welche gerade gilt. Die Übersetzung ist fürs Handbuch da.
+    """
+    collection = rules.load()
+    for rule in collection.rules:
+        assert rule.title in rule.as_line()
+        assert rule.title_en not in rule.as_line()
+    assert "Mindestwandstärke" in collection.as_text()
+
+
+def test_a_rule_without_a_translation_falls_back_to_the_original() -> None:
+    """Ein Handbuch mit einem fremdsprachigen Absatz ist besser als eines mit
+    einer Lücke."""
+    plain = rules.Rule(id="x", title="Titel", text="Ein Satz.")
+    assert plain.reading("en") == ("Titel", "Ein Satz.")

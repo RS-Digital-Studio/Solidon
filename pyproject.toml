@@ -145,6 +145,9 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 # Den Steckbrief lesen Menschen und das Modell; „20 × 20 mm" ist das richtige
 # Zeichen.
 "app/core/perceive/digest.py" = ["RUF001"]
+# Das Handbuch ist Fließtext für Leser: Bauräume stehen dort als „256 × 256 ×
+# 256", mit dem Zeichen, das ein Setzer nähme, nicht mit einem kleinen x.
+"app/core/manual.py" = ["RUF001"]
 "tests/*" = ["RUF001", "RUF002"]
 
 [tool.mypy]
