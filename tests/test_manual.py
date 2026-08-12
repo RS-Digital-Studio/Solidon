@@ -108,10 +108,18 @@ def test_every_figure_of_the_website_page_is_there(language: str) -> None:
 
 
 def test_every_category_has_a_chapter() -> None:
-    """Eine neue Kategorie kann nicht ohne Kapitel bleiben — sie wird erzeugt."""
-    chapters = {page.key for page in manual.pages() if page.generated}
+    """Eine neue Kategorie kann nicht ohne Kapitel bleiben — sie wird erzeugt.
 
-    assert chapters == set(REGISTRY.by_category())
+    Seit den Wissensseiten gibt es zwei Sorten erzeugter Seiten: die Referenz
+    aus dem Register und die Tabellen aus ``knowledge/data``. Beide sind
+    ``generated``, weil beide keine Handarbeit sind; „erzeugt" heißt deshalb
+    nicht mehr „eine Kategorie". Geprüft wird, dass keine Kategorie fehlt —
+    das war der Punkt.
+    """
+    chapters = {page.key for page in manual.pages() if page.generated}
+    knowledge = {page.key for page in manual.knowledge_pages()}
+
+    assert chapters - knowledge == set(REGISTRY.by_category())
 
 
 def test_every_operation_appears_by_name() -> None:
@@ -452,3 +460,56 @@ def test_every_category_page_that_has_a_figure_opens_with_it() -> None:
         assert category in pages, f"{category} hat keine Seite"
         assert f"![](figure:{key})" in documentation(category=category), category
         assert figures.find(key) is not None, f"{category} zeigt auf {key}"
+
+
+def test_the_knowledge_pages_show_the_numbers_the_program_rechnet_mit() -> None:
+    """Die Werte bestimmten jede Passung und jede Warnung — und standen nirgends.
+
+    Geprüft wird gegen die Tabellen selbst, nicht gegen abgeschriebene Zahlen:
+    Ein Test, der eine 0,25 erwartet, wäre beim nächsten Kalibrieren rot, ohne
+    dass etwas kaputt ist.
+    """
+    from app.core.knowledge import standards
+    from app.core.knowledge.profiles import material_profiles, printer_profiles
+
+    body = manual.profiles_text()
+    for profile in material_profiles().values():
+        assert profile.title in body, profile.title
+    for printer in printer_profiles().values():
+        assert printer.title in body, printer.title
+    for size in standards.load().screws:
+        assert size in body, size
+
+
+def test_the_rules_page_carries_every_rule() -> None:
+    """§39 nennt die Regelsammlung das eigentliche Produkt. Eine Regel, die der
+    Agent befolgt und niemand nachlesen kann, ist keines."""
+    from app.core.knowledge.rules import load as load_rules
+
+    collection = load_rules()
+    body = manual.rules_text()
+    for rule in collection.rules:
+        assert rule.title in body, rule.id
+    assert collection.version in body
+
+
+def test_the_numbers_are_written_the_way_the_language_writes_them() -> None:
+    """Der Kern liefert diese Seite fertig aus — ein Punkt statt eines Kommas
+    stünde im deutschen Handbuch neben einer Anwendung, die 2,40 mm anzeigt."""
+    from app.i18n import set_language
+
+    try:
+        set_language("de")
+        assert "0,25" in manual.profiles_text()
+        set_language("en")
+        assert "0.25" in manual.profiles_text()
+    finally:
+        set_language("de")
+
+
+def test_the_knowledge_pages_stand_before_the_reference() -> None:
+    """Wonach gerechnet wird, gehört vor die Liste dessen, was gerechnet werden
+    kann."""
+    keys = [page.key for page in manual.pages()]
+    assert keys.index("rules") < keys.index("scene")
+    assert keys.index("profiles") < keys.index("scene")

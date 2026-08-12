@@ -1022,7 +1022,8 @@ def profiles_text() -> str:
         geschlossen = _("ja") if printer.enclosed else _("nein")
         lines.append(
             f"| {printer.title} | {x:.0f} × {y:.0f} × {z:.0f} | {zahl(printer.nozzle_diameter, 2)} "
-            f"| {zahl(printer.layer_height, 2)} | {zahl(printer.extrusion_width, 2)} | {geschlossen} |"
+            f"| {zahl(printer.layer_height, 2)} | {zahl(printer.extrusion_width, 2)} "
+            f"| {geschlossen} |"
         )
     lines.append("")
 
