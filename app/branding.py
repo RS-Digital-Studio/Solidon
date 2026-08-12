@@ -50,7 +50,14 @@ WEBSITE_URL: Final = "https://solidon3d.de/"
 PROJECT_SUFFIX: Final = ".p3d"
 
 #: Anwendungsversion, gespiegelt in jede Projektdatei als ``app_version``.
-APP_VERSION: Final = "0.0.1"
+#:
+#: **0.7 ist die erste öffentliche Demo** (Demo-Konzept §2 D), nicht die
+#: Verkaufsfassung. Die Null vorn ist keine Bescheidenheit, sondern Mechanik:
+#: `key.current_major()` liest die Hauptversion, und ein Kaufschlüssel für 1.x
+#: greift damit in einer Demo nicht — wer kauft, lädt die Verkaufsfassung, die
+#: keinen Stichtag trägt. Zugleich zeigt der Update-Hinweis jeder laufenden
+#: Demo auf die 1.0, sobald `version.json` sie nennt.
+APP_VERSION: Final = "0.7.0"
 
 #: Copyright-Zeile für LICENSE, Über-Dialog und Installer.
 COPYRIGHT: Final = f"Copyright © 2026 {APP_VENDOR}"
