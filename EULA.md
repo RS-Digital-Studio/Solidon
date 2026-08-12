@@ -10,6 +10,11 @@ RS Digital, Robert Schneider (Anschrift im Impressum unter
 Wenn Sie mit diesen Bedingungen nicht einverstanden sind, benutzen Sie die
 Software nicht und löschen Sie sie.
 
+**Zur Demo-Fassung 0.7:** Sie ist unentgeltlich, vollständig und **zeitlich
+befristet**. Für sie gelten dieselben Bedingungen wie unten beschrieben, mit
+den Abweichungen in Abschnitt 4a. Ein Kauf findet dabei nicht statt, und ein
+Lizenzschlüssel wird nicht gebraucht.
+
 ---
 
 ## 1. Was Sie bekommen
@@ -52,7 +57,43 @@ Bibliothek steht ausdrücklich unter der MIT-Lizenz, damit an Ihrem Ergebnis
 keine Frage offenbleibt. Wir erheben daran keinen Anspruch und verlangen
 keine Nennung.
 
+## 4a. Demo-Fassung
+
+Eine als **Demo** bezeichnete Fassung (Versionsnummer 0.x) überlassen wir
+Ihnen unentgeltlich und befristet. Sie läuft **vollständig** — keine
+Wasserzeichen, keine Exportsperre, keine gesperrten Funktionen — bis zu dem
+Tag, den die Anwendung selbst nennt: in der Statuszeile, im Über-Dialog und
+auf der Website. Dieser Tag ist der 30. Oktober 2026.
+
+**Danach lässt sich die Demo nicht mehr starten.** Das ist kein Mangel,
+sondern ihr Zweck: Sie zeigt das Programm für eine begrenzte Zeit, sie ist
+keine dauerhaft nutzbare Fassung.
+
+Was dabei bleibt, sind **Ihre Dateien**. Sie liegen dort, wo Sie sie
+gespeichert haben; wir löschen nichts und machen nichts unlesbar. Eine
+Projektdatei ist ein ZIP-Archiv mit JSON darin und lässt sich auch ohne dieses
+Programm öffnen. Jede spätere Fassung liest sie unverändert.
+
+Für die Demo gilt außerdem:
+
+* **Kein Anspruch auf Fortsetzung.** Ob und wann eine Vollversion erscheint,
+  entscheiden wir. Aus der Demo entsteht kein Anspruch darauf und kein
+  Anspruch auf Rabatt.
+* **Keine Weitergabe der Datei.** Geben Sie stattdessen die Adresse
+  <https://solidon3d.de/> weiter. Eine weitergereichte Setup-Datei ist nach
+  dem Stichtag wertlos, und niemand soll ein Programm bekommen, das bei ihm
+  nicht mehr startet.
+* **Haftung wie bei einer unentgeltlichen Überlassung.** Wir haften für
+  Vorsatz und grobe Fahrlässigkeit; im Übrigen gelten die Abschnitte 10 und
+  11 entsprechend.
+* **Keine Zusicherung von Support.** Rückmeldungen sind willkommen —
+  <support@solidon3d.de> —, ein Anspruch auf Antwort oder Fehlerbehebung
+  besteht nicht.
+
 ## 4. Testlauf
+
+Dieser Abschnitt betrifft die **Vollversion** (Versionsnummer 1.x); für die
+Demo gilt 4a.
 
 Vor dem Kauf läuft Solidon3D **vierzehn Tage vollständig und ohne
 Einschränkung** — keine Wasserzeichen, keine Exportsperre, keine gesperrten
