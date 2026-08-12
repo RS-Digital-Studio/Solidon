@@ -1,0 +1,473 @@
+# Konzept: Öffentliche Demo bis 30.10.2026
+
+Stand 12.08.2026. Baut auf `.claude/konzept-veroeffentlichung-1.0.md` auf und
+ändert dessen §7-Entscheidung „keine Beta-Fassung" — mit Begründung, siehe §2 A.
+Dieses Dokument ist die fachliche SSOT der Demo-Phase; alles, was den späteren
+Verkauf betrifft, bleibt im Veröffentlichungskonzept.
+
+Der Auftrag in einem Satz: **eine kostenlose, vollständige Fassung
+veröffentlichen, die am 30.10.2026 endet — danach fällt die Entscheidung
+zwischen einer zweiten Demo und dem Verkauf von 1.0.**
+
+---
+
+## §1 Ist-Zustand — was schon steht
+
+Der Abstand zur Auslieferung ist kleiner, als er sich anfühlt. Belegt:
+
+| Bereich | Stand | Beleg |
+|---|---|---|
+| Anwendung | P0–P15 durch, 77 Operationen, drei Hauptwege als Ende-zu-Ende-Tests | `ROADMAP.md` |
+| Prüfkern | Ed25519 in reinem Python, RFC-8032-Vektoren, Schlüssel erzeugen/prüfen | `app/core/activation/`, V3 |
+| Lizenzgrenze | vier Stellen im Datenpfad rufen `require()`, Fall für Fall geprüft | `tests/test_licence_boundary.py`, V4 |
+| Grenze an der Oberfläche | ausgegraute Einträge mit Grund, Freischaltdialog, Über-Dialog | V4b |
+| Härtung | Prüfmodul mit Cython kompiliert, signiertes Manifest über vier Grenzdateien, **am Paket belegt** | V4c |
+| Paketierung | PyInstaller-Spec, Inno-Setup-Skript, Symbol, tar.gz für Linux | `packaging/` |
+| CI | drei Plattformen, Matrix bei Tag und Handstart, erster echter Lauf hat vier Funde geliefert und sie sind behoben | `.github/workflows/build.yml` |
+| Website | live auf `solidon3d.de`, HTTPS (Let's Encrypt bis 06.11.2026), deutsch und englisch, Handbuch erzeugt | netcup, 08.08.2026 |
+| Rechtstexte | Impressum und Datenschutz mit echten Angaben, EULA/AGB/Widerruf als Entwurf mit Warnhinweis | `website/*.html` |
+| Handbuch | 33 Seiten, 28 Abbildungen, beide Sprachen, als PDF im Releases-Ordner | `tools/make_manual.py` |
+
+**Was heißt: es fehlt kein Baustein der Anwendung.** Was fehlt, ist der Weg
+vom fertigen Programm zum fremden Rechner — und ein Zeitmodell, das es heute
+nicht gibt.
+
+### 1.1 Die drei echten Lücken
+
+1. **Der Stichtag existiert nicht.** `store.TRIAL_DAYS = 14` zählt ab dem
+   ersten Start. Eine Demo, die am 30.10. für alle endet, ist ein anderes
+   Modell und heute nirgends abgebildet — auch der Lizenzschlüssel kennt kein
+   Ablaufdatum (`Licence` trägt Hauptversion, Kaufdatum, Bestellkennung,
+   Käufer — kein `expires_on`).
+2. **Es ist nie ein Paket auf einem fremden Rechner gelaufen.** V6 Punkt 3 aus
+   dem Veröffentlichungskonzept ist offen. Der Satz dort gilt unverändert:
+   dieser Punkt findet erfahrungsgemäß mehr als alle Tests zusammen.
+3. **Das Postfach `support@solidon3d.de` ist nicht in Betrieb** (samt
+   SPF/DMARC), und der Auftragsverarbeitungsvertrag bei netcup fehlt. Eine
+   Demo ohne Rückkanal ist eine Demo, deren Funde nirgends ankommen — und das
+   Impressum nennt eine Adresse, die erreichbar sein muss.
+
+### 1.2 Was heute falsch auf der Seite steht
+
+Die Website verkauft „14 Tage kostenlos testen, danach Einmalkauf 49 €". Für
+eine Demo bis 30.10. ohne Verkauf ist jede dieser Stellen zu ändern:
+
+```
+website/index.html:84, 670        Download-Kasten und Preisliste (deutsch)
+website/en/index.html:85, 664     dasselbe englisch
+website/agb.html:34, 50           vierzehntägiger Testlauf vor dem Kauf
+website/eula.html:39–40           Abschnitt 4 „Testlauf"
+website/widerruf.html:28          vierzehn Tage Widerruf — betrifft nur den Kauf
+app/ui/first_run.py:119           der Satz in der Ersteinrichtung
+app/core/activation/store.py:35   TRIAL_DAYS mit dem Kommentar „steht so auf der Website"
+```
+
+---
+
+## §2 Entscheidungen
+
+### A — Die Demo ist die Beta, die am 06.08. verworfen wurde. Sie ist jetzt billiger
+
+Das Veröffentlichungskonzept §7 hat eine 0.9-Beta erwogen und aus zwei Gründen
+verworfen: der Testlauf sei die Beta schon, und eine öffentliche Beta mache
+Impressum, Datenschutz und Signierfrage ohnehin fällig.
+
+**Der zweite Grund ist seit dem 08.08.2026 entfallen** — Domain, Webspace,
+HTTPS, Impressum und Datenschutz stehen. Der erste trägt nicht mehr, sobald
+kein Verkauf läuft: ohne Kaufabwicklung ist der Testlauf keine Beta, sondern
+eine Sackgasse nach vierzehn Tagen.
+
+Was die Demo dagegen einbringt, ist genau das, was §7 Punkt 2 als dringlich
+bezeichnet hat: **SmartScreen-Reputation baut sich über Zeit und Downloadzahl
+auf.** Wer erst zum Verkaufsstart signiert und ausliefert, fängt bei null an,
+genau wenn Geld fließt. Elf Wochen Demo sind elf Wochen Vorlauf für Reputation,
+Feldfunde und die Frage, ob jemand anderes die Anwendung bedienen kann.
+
+### B — Zeitmodell: harter Stichtag, kein Schlüssel, kein Konto
+
+Die Demo endet am **30.10.2026** für alle gleichzeitig. Nicht vierzehn Tage ab
+Erststart, nicht verlängerbar, keine Eingabe.
+
+**Begründung:** Ein Stichtag ist die einzige Variante ohne neue Mechanik. Er
+ersetzt die Resttageberechnung, nicht die Zustände — `Activation.days_left`
+rechnet dann `(30.10. − heute).days`, und alles darüber (`unlocked`,
+`in_trial`, `expired`, die vier `require`-Stellen, die ausgegraute Oberfläche)
+bleibt unverändert. Ein Ablaufdatum im Schlüsselformat wäre die Alternative;
+sie kostet eine Formatfassung, ein Erzeugungswerkzeug, eine Verteilung per
+Mail und dem Nutzer eine Hürde vor dem ersten Blick — für nichts, was die Demo
+braucht.
+
+**Nebenwirkung, die zum Modell passt:** Der Testlaufmarker verliert seine
+Bedeutung. Wer `trial.json` löscht, gewinnt in der Demo keinen Tag.
+
+**Wer spät kommt, bekommt weniger.** Das ist ehrlich, solange die Seite den
+Stichtag ab Tag eins nennt. Ab dem 24.10. wird der Download durch einen Satz
+ersetzt: „Die Demo endet am 30.10. — auf 1.0 warten lohnt sich mehr."
+
+### C — Der Stichtag steht in `activation/store.py`, nicht in `branding.py`
+
+`branding.py` liegt im Paket als Klartext; `app/core/activation/` geht seit
+V4c mit Cython nach C. Ein Stichtag in `store.py` reist damit in der `.pyd`
+und nicht in einer lesbaren Datei daneben.
+
+Das ist kein Sicherheitsargument im engeren Sinn — die Demo ist kostenlos, es
+gibt nichts zu umgehen. Es ist eins der Sauberkeit: der Ablauf gehört
+fachlich dorthin, wo die Frist heute schon gezählt wird.
+
+**Keine Hintertür** (Veröffentlichungskonzept §2 I, V3.7): Der Stichtag kann
+nur sperren, nie öffnen. Keine Umgebungsvariable, kein Schalter, keine
+Freigabedatei; die Suite setzt den Zustand weiter über die Fixture.
+
+### D — Version 0.9.0, damit 1.0.0 die Verkaufsfassung bleibt
+
+`APP_VERSION` geht auf `0.9.0`, nicht auf `1.0.0`. Drei Folgen, alle
+erwünscht:
+
+* **Der Update-Hinweis funktioniert als Nachricht.** Sobald `version.json` auf
+  `1.0.0` steht, zeigt jede laufende Demo darauf. Das ist der einzige Weg, die
+  Demo-Nutzer ohne Konto und ohne Newsletter zu erreichen — und genau der Fall,
+  den V7 als Verifikation vorgesehen hat („Update-Hinweis in einer Anwendung
+  mit `APP_VERSION` 0.9 zeigt 1.0.0 an").
+* **Ein Kaufschlüssel läuft in der Demo nicht.** `key.parse` prüft
+  `licence.major` gegen `current_major()`, und das ist bei 0.9.0 eine Null. Wer
+  später kauft, lädt 1.0 — was er ohnehin tun soll, weil die Demo einen
+  Stichtag trägt. Der Freischaltdialog muss diesen Satz sagen, statt „gilt für
+  eine andere Hauptversion" stehen zu lassen.
+* **Demo-Projektdateien tragen `app_version: 0.9.0`.** Sie öffnen in 1.0
+  unverändert; die Zahl ist Herkunft, kein Format.
+
+### E — Vollständig heißt vollständig
+
+Keine Wasserzeichen, keine Exportsperre, keine gesperrte Operation, kein
+gedrosseltes Netz. Die Demo ist die Verkaufsfassung mit einem Enddatum. Alles
+andere wäre eine zweite Auslieferungsvariante mit eigener Fehlersuche — und es
+widerspräche dem Satz, der seit dem ersten Tag auf der Seite steht.
+
+**Eine Reibung bleibt und ist keine Beschneidung:** Der Chat braucht ein
+Sprachmodell — entweder Ollama lokal oder einen eigenen API-Schlüssel. Für
+jemanden, der die Demo aus Neugier lädt, ist das die höchste Schwelle im ganzen
+Programm. Die Startseite der Anwendung soll deshalb sagen, was ohne Modell geht
+(alles außer dem Chat) und welcher Weg der kürzeste ist (Ollama, ein Befehl).
+
+### F — Sichtbare Restlaufzeit, bewusst abweichend von §2 C des Veröffentlichungskonzepts
+
+Dort steht: keine Zählung im Fenstertitel, eine Zeile in der Statusleiste erst
+unter drei Tagen. Das ist für ein Kaufprodukt richtig — eine Frist, die einen
+täglich anspricht, ist Druck.
+
+Für eine Demo dreht sich das um: Wer nicht weiß, dass am 30.10. Schluss ist,
+fängt am 28.10. ein Projekt an. Deshalb **dauerhaft eine ruhige Zeile in der
+Statusleiste** („Demo — noch 47 Tage") und der Stichtag im Über-Dialog. Kein
+Startdialog, kein Zähler im Titel, keine Erinnerung, die sich in den Vordergrund
+schiebt.
+
+### G — Der Update-Hinweis wird in der Ersteinrichtung gefragt, nicht heimlich eingeschaltet
+
+`settings.check_for_updates` steht auf `False`, und das ist richtig so
+(§37.2, und die Datenschutzseite sagt „sendet von sich aus keine Daten").
+
+Für die Demo bekommt die Ersteinrichtung **eine Frage mit einem Satz
+Begründung**: „Diese Demo endet am 30.10.2026. Soll Solidon beim Start nachsehen,
+ob es weitergeht? Dabei wird `solidon3d.de` abgerufen — mehr nicht." Vorbelegt
+mit Ja, mit einem Klick abwählbar, jederzeit in den Einstellungen umkehrbar.
+
+Der Datenschutztext bekommt dafür einen Absatz: welche Abfrage, welche Daten
+(IP und Zeitpunkt im Server-Log), welche Rechtsgrundlage, wie lange.
+
+### H — Kein Verkauf während der Demo. Paddle läuft trotzdem parallel an
+
+Die Demo verkauft nichts. Das entlastet die Rechtsseite erheblich: ohne
+entgeltlichen Vertrag greift die Widerrufsbelehrung nicht, und die AGB
+beschreiben einen Vorgang, den es noch nicht gibt.
+
+**Trotzdem wird das Paddle-Konto in Woche eins beantragt** (V5). Nachweise,
+Bankverbindung und Steuerangaben dauern Tage bis Wochen; wer damit erst am
+30.10. anfängt, verschiebt den Verkauf in den Dezember.
+
+---
+
+## §3 Was fehlt — die Arbeitspakete
+
+Umfang wie im Veröffentlichungskonzept: **S** unter einem halben Tag, **M** ein
+Tag, **L** zwei bis drei Tage. Jedes Paket endet mit grüner Suite und einem
+Commit.
+
+### D0 — Der Stichtag im Kern (S)
+
+1. `store.py`: `DEMO_UNTIL: Final = date(2026, 10, 30)` und
+   `demo_days_left()`; `trial_days_left()` bleibt unangetastet, damit die
+   Verkaufsfassung ohne Rückbau daraus entsteht (`DEMO_UNTIL = None` schaltet
+   auf die Frist zurück)
+2. `activation.__init__._determine()` nimmt die Demo-Restzeit, wo heute
+   `trial_days_left()` steht
+3. Kein neuer Zustand, keine neue Ausnahme: `expired` bleibt `expired`
+
+**Abnahme:** `tests/test_activation.py` — vor dem Stichtag offen, am Stichtag
+offen, danach gesperrt; eine zurückgestellte Uhr ändert nichts am Stichtag; ein
+gelöschter Testlaufmarker verlängert nichts · `tests/test_licence_boundary.py`
+bleibt Fall für Fall grün, in beide Richtungen.
+
+### D1 — Version und Kennzeichnung (S)
+
+`app/branding.py` und `pyproject.toml` auf `0.9.0`. `website/version.json`
+bleibt zunächst auf dem Demo-Stand — es wird erst zum Schluss angefasst (§4).
+
+**Abnahme:** `tests/test_website.py` und der Versionstest grün · eine erzeugte
+Projektdatei trägt `app_version: 0.9.0`.
+
+### D2 — Die Texte in der Anwendung (S–M)
+
+1. Ersteinrichtung: der Testlaufsatz wird der Demosatz mit Stichtag
+2. Statusleiste: dauerhafte Zeile nach §2 F
+3. Über-Dialog: „Demo, endet am 30.10.2026" statt Resttagen
+4. Freischaltdialog: erklärt, dass Demo-Schlüssel nicht existieren und wo 1.0
+   herkommt — statt „gilt für eine andere Hauptversion" (Regel 17)
+5. `LicenceRequired` nach dem 30.10.: zwei Handlungen — „Was 1.0 kostet" und
+   „Projekt weiter ansehen"
+6. Ersteinrichtung: die Update-Frage aus §2 G
+7. Alles über `tr()`, deutsch und englisch
+
+**Abnahme:** `tests/test_translations.py` grün (Regel 20) ·
+`tests/test_ui.py` offscreen · von Hand mit gestelltem Datum: am 31.10. öffnet
+ein Projekt, dreht sich, misst sich, speichert — und verliert nichts.
+
+### D3 — Rechtstexte auf „kostenlose, befristete Demo" (M, dazu Wartezeit)
+
+1. **EULA** bekommt einen Demo-Abschnitt: befristete, unentgeltliche Nutzung,
+   keine Weitergabe der Datei, kein Anspruch auf Fortbestand, Haftung wie bei
+   unentgeltlicher Überlassung. Er wird die Lizenzseite des Installers
+2. **AGB und Widerrufsbelehrung** bleiben, werden aber sichtbar als „gilt ab
+   dem Verkaufsstart" gekennzeichnet — ein Widerrufstext neben einem kostenlosen
+   Download verwirrt und ist im Zweifel angreifbar
+3. **Datenschutz**: Absatz zur Update-Abfrage (§2 G), Absatz zu den
+   Download-Logs
+4. Die fachliche Prüfung anstoßen — sie läuft während der Demo und muss vor
+   dem Verkauf fertig sein, nicht vor dem Demo-Start
+
+**Abnahme:** kein Entwurfshinweis mehr auf Texten, die für die Demo gelten ·
+der Installer zeigt den EULA-Text · beide Sprachen.
+
+### D4 — Website auf die Demo umschreiben (M)
+
+1. Download-Kasten in beiden `index.html`: echte Dateien, SHA-256 daneben,
+   Stichtag ausdrücklich genannt, Windows und Linux
+2. Der „Früher hineinschauen"-Mailto verschwindet — er war der Platzhalter für
+   genau diesen Moment
+3. Preisabschnitt: „49 € zur Einführung" bleibt als Ausblick stehen, aber ohne
+   Kaufknopf und mit dem Satz, dass die Demo davon unberührt kostenlos ist
+4. Neuer Abschnitt oder FAQ-Frage: **Was passiert am 30.10.?** — Projekte
+   bleiben lesbar, nichts wird gelöscht, 1.0 kommt, was der Betrachtermodus
+   noch kann
+5. Falls unsigniert (§2 E des Veröffentlichungskonzepts): der Satz zur
+   SmartScreen-Warnung samt Prüfsumme
+6. Handbuch neu erzeugen (`tools/make_manual.py`), beide Sprachen
+
+**Abnahme:** `tests/test_website.py` grün · beide Startseiten von Hand
+durchgeklickt · Download startet, Prüfsumme stimmt.
+
+### D5 — Postfach und Rückmeldeweg (S, dazu Wartezeit) — **Blocker**
+
+1. `support@solidon3d.de` einrichten, SPF und DMARC setzen, Testmail von außen
+2. Auftragsverarbeitungsvertrag bei netcup abschließen
+3. In der Anwendung ein Menüeintrag **„Rückmeldung senden"**: öffnet eine Mail
+   mit Fassung, Betriebssystem und dem Hinweis, dass das Protokoll angehängt
+   werden kann — verschickt selbst nichts, wie der Fehlerbericht auch
+
+**Abnahme:** Testmail kommt an und wird nicht als Spam einsortiert · der
+Menüeintrag öffnet eine vorbereitete Mail.
+
+### D6 — Signierung entscheiden und einbauen (M, dazu Wartezeit)
+
+Der Schritt in `build.yml:137` schreibt eine PFX-Datei aus einem Secret. Seit
+Juni 2023 gibt es für neu gekaufte Zertifikate keine exportierbare Datei mehr —
+der Schritt ist tot, egal wie die Entscheidung ausfällt.
+
+Empfehlung unverändert: **Azure Trusted Signing** (~10 $/Monat, ohne Hardware
+CI-tauglich). Wenn die Nachweise nicht durchgehen: unsigniert ausliefern und es
+auf der Download-Seite erklären.
+
+**Warum jetzt und nicht zum Verkauf:** siehe §2 A. Reputation wächst mit
+Downloads, und die Demo ist die einzige Phase, in der Downloads nichts kosten,
+wenn etwas schiefgeht.
+
+**Abnahme:** die Setup-Datei zeigt beim Start einen Herausgeber, oder die
+Download-Seite erklärt, warum nicht.
+
+### D7 — CI-Bau und Auslieferung (S–M)
+
+1. `workflow_dispatch` von Hand starten, Matrix und Paketierung grün sehen
+2. Beide Artefakte holen: Setup-Datei und tar.gz
+3. Auf den Webspace legen, Platz prüfen (rund 255 MB je Fassung)
+4. Prüfsummen notieren und auf die Seite schreiben
+
+**Abnahme:** beide Dateien laden von `solidon3d.de` herunter und öffnen sich.
+
+### D8 — Der fremde Rechner (M) — **der Härtetest**
+
+V6 Punkt 3 aus dem Veröffentlichungskonzept, unverändert gültig:
+
+1. Auf einem Windows ohne Python, ohne venv, ohne Entwicklerwerkzeuge
+   installieren
+2. Die drei Hauptwege durchgehen: Beispielprojekt öffnen, bearbeiten,
+   exportieren, an den Slicer übergeben
+3. **Ohne** OpenSCAD, Ollama und ComfyUI prüfen, dass die Anwendung das sagt,
+   statt zu scheitern
+4. Deinstallieren und nachsehen, was liegen bleibt
+5. Dasselbe auf Linux mit dem tar.gz
+
+**Abnahme:** Startmenüeintrag, Symbol, Deinstallation stimmen · die acht
+Beispielprojekte sind da und rechnen · F1 öffnet das Handbuch · die
+Paketierung hat OCP und V-HACD dabei (sie hat sie zuletzt nicht gesehen,
+`ROADMAP.md:515`).
+
+### D9 — Doku nachziehen (S)
+
+`README.md` (Fassung, Demo-Abschnitt, Stichtag), `ROADMAP.md` (P8
+fortschreiben), `.claude/rules/kern.md` um den Stichtag ergänzen, dieses
+Konzept mit Fortschrittstabelle.
+
+**Abnahme:** `/pruefen` grün · `/regelcheck` ohne Verstoß.
+
+---
+
+## §4 Reihenfolge und Termine
+
+Heute ist der 12.08.2026. Zielstart der Demo: **Montag, 01.09.2026** — acht
+Wochen Laufzeit bis zum 30.10.
+
+```
+Arbeit:    D0 ─▶ D1 ─▶ D2 ─▶ D4 ─▶ D7 ─▶ D8 ─▶ D9 ─▶ Start
+Papier:    D3 ────────────────────────────┘
+Wartezeit: D5, D6, Paddle (§2 H) ─────────┘
+```
+
+| Woche | Arbeit | Wartezeit anstoßen |
+|---|---|---|
+| 12.–16.08. | D0, D1, D2 | D5 Postfach, D6 Azure-Nachweise, Paddle-Konto, Rechtsprüfung beauftragen |
+| 17.–23.08. | D3, D4 | — |
+| 24.–30.08. | D7, D8, D9 | — |
+| 31.08. | Puffer, Start am 01.09. | — |
+
+Arbeit rund **fünf bis sieben Tage**. Der früheste Termin hängt an D5 und D6,
+nicht am Code — deshalb stehen beide in Woche eins.
+
+**D5 ist der einzige harte Blocker.** Ohne erreichbares Postfach kommt kein
+Fund zurück, und das Impressum nennt eine tote Adresse.
+
+Wenn der 01.09. nicht zu halten ist, wird **nicht** der Stichtag verschoben,
+sondern die Laufzeit kürzer. Der 30.10. steht in den Texten und ist der Anker,
+an dem die Entscheidung hängt.
+
+---
+
+## §5 Was während der Demo läuft
+
+Die acht Wochen sind keine Wartezeit:
+
+* **Funde beheben und nachschieben.** 0.9.1, 0.9.2 — jede Punktversion mit
+  Änderungsliste auf der Seite. Der Update-Hinweis holt die Leute ab.
+* **Paddle einrichten und einen Testkauf durchspielen** (V5). Der Schlüssel
+  für Hauptversion 1 wird gegen ein gebautes 1.0-Paket geprüft, nicht gegen
+  die Demo.
+* **Rechtstexte fachlich prüfen lassen.** Das ist der Punkt mit der längsten
+  und am wenigsten steuerbaren Laufzeit.
+* **Die verbleibenden vier ROADMAP-Punkte** nach Nutzen sortieren: weitere
+  Sprachkataloge (ES/FR/IT/PT — der billigste Reichweitengewinn, das Gerüst
+  steht, es fehlen die Dateien), die Skizzen-Restpunkte aus
+  `konzept-bedienung.md` Teil 4, Plattenvorschlag in der Oberfläche.
+* **Zählen, was zählbar ist, ohne Telemetrie:** Download-Zahlen aus dem
+  Server-Log, Abrufe von `version.json`, eingegangene Rückmeldungen. Mehr wird
+  nicht erhoben, und mehr braucht die Entscheidung in §6 auch nicht.
+
+---
+
+## §6 Der Entscheidungspunkt: 10.10.2026
+
+Zwanzig Tage vor Schluss wird entschieden, ob am 30.10. **1.0 erscheint** oder
+**eine zweite Demo** folgt. Zwanzig Tage, weil ein Verkaufsstart Paketbau,
+Website und einen Testkauf braucht.
+
+**1.0 erscheint, wenn alle fünf zutreffen:**
+
+1. Kein offener Absturz und kein offener Datenverlust aus der Demo
+2. Die Anwendung ist auf mindestens **zehn fremden Rechnern** gelaufen, und
+   von mindestens **fünf verschiedenen Personen** liegt eine Rückmeldung vor,
+   die nicht von Robert stammt
+3. Paddle ist eingerichtet, ein Testkauf ist durchgelaufen und wurde storniert
+4. Die Rechtstexte sind fachlich geprüft, oder die Prüfung hat nichts
+   Blockierendes ergeben
+5. Die Signierfrage ist beantwortet — signiert oder erklärt
+
+**Sonst eine zweite Demo**, als 0.9.5 mit Stichtag **31.12.2026**. Sie kostet
+nur D0 (Datum), D1 (Fassung), D4 (zwei Sätze auf der Seite) und D7 — ein
+halber Tag, weil die Mechanik dann steht. Das ist der eigentliche Grund, warum
+der Stichtag eine Konstante an einer Stelle ist.
+
+**Was eine zweite Demo nicht sein darf:** eine Verlängerung, weil es sich noch
+nicht fertig anfühlt. Die Kriterien oben sind absichtlich zählbar. Trifft
+keines zu und die Demo lief still, ist die Antwort trotzdem 1.0 — dann fehlt
+nicht Reife, sondern Sichtbarkeit, und die entsteht nicht durch Warten.
+
+---
+
+## §7 Risiken
+
+| Risiko | Wirkung | Rückfalloption |
+|---|---|---|
+| Postfach oder AV-Vertrag ziehen sich | Start verschiebt sich, Laufzeit schrumpft | Start ohne Rückmeldungs-Menüeintrag, Adresse steht im Impressum |
+| Azure Trusted Signing lehnt ab oder dauert | SmartScreen warnt jeden Erstnutzer | unsigniert starten, in 0.9.1 nachsignieren — die Reputation wächst dann eben ab dann |
+| Der fremde Rechner findet etwas Großes (D8) | Start verschiebt sich um Tage | Laufzeit kürzen, Stichtag halten |
+| Die Demo bleibt unbemerkt | keine Funde, keine Reputation, Entscheidung ohne Daten | §6 Schlusssatz: dann erscheint 1.0; Sichtbarkeit ist eine eigene Aufgabe, keine Entwicklungsaufgabe |
+| Jemand patcht den Stichtag | eine kostenlose Fassung läuft weiter | keine Wirkung — es gibt nichts zu bezahlen; die Schwelle für 1.0 ist die Signatur, und die hält |
+| Demo-Nutzer erwarten am 30.10. einen Freischaltweg | Enttäuschung genau bei den Interessiertesten | §2 D: der Freischaltdialog nennt den Weg zu 1.0, statt eine Fehlermeldung zu zeigen |
+| 255 MB je Fassung mal mehrere Punktversionen | Webspace läuft voll | nur die aktuelle Fassung halten |
+
+---
+
+## §8 Was ausdrücklich nicht zur Demo gehört
+
+Damit es niemand nachträglich hineinliest:
+
+* **Kein Verkauf, kein Kaufknopf, keine Zahlungsseite** (§2 H)
+* **Keine Beschneidung der Funktionen** (§2 E) — kein Wasserzeichen, keine
+  Exportsperre
+* **Kein Konto, keine Anmeldung, keine Telemetrie.** Auch nicht „nur zum
+  Zählen der Installationen"
+* **Kein macOS, kein AppImage, kein Flatpak**
+* **Kein Demo-Schlüssel und keine Verlängerung per Eingabe** — eine zweite
+  Runde ist ein neuer Bau (§6)
+* **Keine weiteren Sprachen als Startbedingung.** ES/FR/IT/PT sind Arbeit
+  während der Laufzeit, kein Blocker (§5)
+
+---
+
+## §9 Offene Entscheidungen
+
+1. **Startdatum.** 01.09. ist das Ziel; alles Frühere geht auf Kosten von D8,
+   und D8 ist der Punkt, der am meisten findet.
+2. **Signierung** (D6): Azure Trusted Signing beantragen — oder unsigniert
+   starten und in 0.9.1 nachziehen?
+3. **Fassungsnummer**: `0.9.0` nach §2 D — oder doch `1.0.0-demo`? Gegen die
+   zweite Variante spricht, dass `current_major()` dann eine Eins liest und ein
+   Kaufschlüssel in einer abgelaufenen Demo greifen würde, deren Stichtag ihn
+   nichts angeht.
+4. **Rechtsprüfung**: jetzt beauftragen (kostet, läuft parallel) oder erst zum
+   Verkauf? Für eine kostenlose Demo ist der Bedarf geringer — für 1.0 nicht,
+   und die Laufzeit ist nicht steuerbar.
+
+---
+
+## §10 Fortschritt
+
+| Paket | Status | Commit |
+|---|---|---|
+| D0 Stichtag im Kern | offen | |
+| D1 Version 0.9.0 | offen | |
+| D2 Texte in der Anwendung | offen | |
+| D3 Rechtstexte | offen | |
+| D4 Website | offen | |
+| D5 Postfach und Rückmeldeweg | offen | |
+| D6 Signierung | offen | |
+| D7 CI-Bau und Auslieferung | offen | |
+| D8 Fremder Rechner | offen | |
+| D9 Doku | offen | |
