@@ -196,6 +196,37 @@ Fall, an dem das auffällt: Ein Zeiger hat feste Punktgröße und weiß nichts v
 der Kamera — beim ersten Zoom behauptet er eine Größe, die er nicht mehr hat.
 Was ein Weltmaß zeigt, gehört als Ring in die Szene.
 
+**Gesetzt wird an einer Stelle**, `Viewport._update_cursor`. Alle Auslöser
+melden nur ihren Zustand: `set_painting`, `set_measure_mode`,
+`set_drag_cursor` (vom Interaktionsstil) und die Mausbewegung im
+`eventFilter`. Verteilt auf die Aufrufer wäre jeder Pfad für sich richtig und
+das Ergebnis trotzdem falsch — wer beim Loslassen den Auswahlzeiger setzt,
+überschreibt damit den Pinsel. Die Rangfolge in `_resting_role` ist dieselbe
+wie in `_on_picked`; laufen sie auseinander, verspricht der Zeiger etwas
+anderes, als der Klick tut.
+
+Drei Fallen an dieser Kette, alle drei schon zugeschnappt:
+
+* **`setMouseTracking(True)`** auf dem Interactor, sonst kommt eine Bewegung
+  erst mit gedrückter Taste — der Zeiger wüsste nie, worüber er schwebt.
+* **VTK zählt Y von unten, Qt von oben.** Ohne die Umrechnung in
+  `_note_pointer` sucht das Hover-Picking am gespiegelten Ort, was in der
+  Bildmitte oft genug stimmt, um lange nicht aufzufallen.
+* **Der Rückruf aus dem Interaktionsstil geht über `weakref`**, wie
+  `on_context` und `on_pick` daneben. Eine starke Referenz baut die Schleife
+  Stil → Viewport → Plotter → Interactor → Stil, und die ist der Absturz ohne
+  Zeile am Ende eines Laufs.
+
+**Gesucht wird erst, wenn die Maus steht** (`HOVER_DELAY_MS`, einmaliger
+Timer). Bei jeder Bewegung zu picken hieße, den Tiefenpuffer hunderte Male in
+der Sekunde im Qt-Hauptthread zu lesen. Ein Zug an der Kamera stoppt die Suche
+ganz — wer dreht, will nicht wissen, was unter dem Zeiger liegt.
+
+**Offscreen gibt es keinen Plotter**, und jeder Setzpfad steigt vorher aus: Ein
+Test, der nur `_cursor_role` prüft, wäre auch dann grün, wenn im Fenster nie
+ein Zeiger ankommt. `tests/test_cursors.py` hält deshalb eine Attrappe mit
+genau der einen Methode, die benutzt wird.
+
 ## Barrierefreiheit
 
 - **Keine Bedeutung allein über Farbe** (Regel 18). Immer eine zweite

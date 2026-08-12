@@ -41,6 +41,7 @@ from app.core.units import (
     EPS_MATCH_RELATIVE,
 )
 from app.i18n import tr
+from app.ui import cursors
 from app.ui.labels import feature_label
 from app.ui.palette import DIFF_PALETTES, ROLES, VIRIDIS, DiffPalette
 from app.ui.scale_widget import ScaleHandle
@@ -95,7 +96,23 @@ VIEW_DIRECTIONS: dict[str, tuple[tuple[float, float, float], tuple[float, float,
 #: :data:`SSAO_BIAS` warnt; die höhere Zahl ist dort größtenteils Rauschen. Zwei
 #: Millimeter ist die Größenordnung einer Fase, einer Nutbreite, eines
 #: Bohrungsrands, und das Bild bleibt sauber.
+#: Wo die Achsenanzeige sitzt, in Anteilen des Fensters: unten links, wo
+#: keine Karte liegt — rechts steht der Prüfbericht, oben die Werkzeugzeile.
+ORIENTATION_CORNER = (0.0, 0.0, 0.16, 0.24)
+
+#: Die drei Achsenfarben. Gedämpft und nicht signalbunt: die Anzeige sagt,
+#: wo oben ist, sie ist keine Warnung — und sie steht neben einem Modell,
+#: dem sie nicht die Aufmerksamkeit nehmen darf.
+AXIS_X = "#d4574e"
+AXIS_Y = "#7fb069"
+AXIS_Z = "#5b8fd4"
+
 SSAO_RADIUS = 2.0
+
+#: Wie lange die Maus stehen muss, bevor unter ihr nach einem Merkmal gesucht
+#: wird. Kurz genug, dass es sich sofort anfühlt, lang genug, dass ein Zug quer
+#: übers Bild keine hundert Suchen auslöst.
+HOVER_DELAY_MS = 90
 
 #: Wie weit zwei Tiefen auseinanderliegen müssen, damit eine die andere
 #: verdeckt. Zu klein, und eine ebene Fläche verdeckt sich selbst — das ist
@@ -933,6 +950,25 @@ class Viewport(QWidget):
         """Welche Druckplatte gezeigt wird; -1 heißt alle (§25)."""
         self._painting = False
         """§20: solange das an ist, sind Klicks Pinselstriche."""
+        self._cursor_role = "select"
+        """Welcher Zeiger gerade über dem Bild steht. Gemerkt, damit nicht bei
+        jeder Mausbewegung derselbe neu gesetzt wird — Qt zeichnet ihn sonst
+        jedes Mal neu, und das flackert auf langsamen Treibern."""
+        self._dragging_role: str | None = None
+        """Was die Kamera gerade tut, solange eine Taste unten ist. Schlägt
+        jede andere Rolle: wer dreht, will nicht wissen, was unter dem Zeiger
+        liegt."""
+        self._hover_timer = QTimer(self)
+        self._hover_timer.setSingleShot(True)
+        self._hover_timer.setInterval(HOVER_DELAY_MS)
+        self._hover_timer.timeout.connect(self._look_under_pointer)
+        """Sucht das Merkmal unter dem Zeiger — erst, wenn die Maus steht.
+        Bei jeder Bewegung zu suchen hieße, den Tiefenpuffer hunderte Male in
+        der Sekunde zu lesen, und zwar im Qt-Hauptthread."""
+        self._hover_at: tuple[int, int] | None = None
+        """Wo die Maus zuletzt stand, in VTK-Koordinaten."""
+        self._hover_feature = False
+        """Ob unter dem Zeiger ein benanntes Merkmal liegt (§18.5)."""
         self._hidden: frozenset[ObjectId] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansicht, nicht Szene — die
         Körper werden weiter gerechnet, geprüft und exportiert."""
@@ -975,6 +1011,11 @@ class Viewport(QWidget):
         # Während eines Zugs gehören Ziffern dem Wertfeld, nicht VTK — der
         # Filter sitzt deshalb auf dem Fenster, das die Tasten bekommt.
         self.plotter.interactor.installEventFilter(self)
+        # Ohne das kommt eine Mausbewegung erst, wenn eine Taste unten ist —
+        # und der Zeiger wüsste nie, worüber er schwebt, sondern nur, worauf
+        # jemand schon geklickt hat.
+        self.plotter.interactor.setMouseTracking(True)
+        self.plotter.interactor.setCursor(cursors.cursor(self._cursor_role, self))
         self._add_orientation_widget()
         self._apply_render_quality()
         self.set_theme("dark")
@@ -1036,7 +1077,25 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
         try:
-            self.plotter.add_camera_orientation_widget()
+            self.plotter.add_axes(
+                viewport=ORIENTATION_CORNER,
+                # Pfeile, keine Kugeln: ein kräftiger Schaft mit einer Spitze
+                # darauf ist das, was jeder aus einem Konstruktionsprogramm
+                # kennt. Die Werte sind aufeinander abgestimmt — ein dünner
+                # Schaft mit dicker Spitze sieht aus wie ein Stecknadelkopf,
+                # ein dicker mit kurzer Spitze wie ein abgesägter Balken.
+                shaft_type="cylinder",
+                tip_type="cone",
+                cone_radius=0.5,
+                shaft_length=0.78,
+                tip_length=0.28,
+                line_width=3,
+                x_color=AXIS_X,
+                y_color=AXIS_Y,
+                z_color=AXIS_Z,
+                label_size=(0.3, 0.16),
+                ambient=0.4,
+            )
         except Exception as problem:  # pragma: no cover - hängt am Treiber
             _log.info("orientation widget unavailable: %s", problem)
 
@@ -1853,6 +1912,7 @@ class Viewport(QWidget):
         """
         self._measure_mode = mode
         self._pending_point = None
+        self._update_cursor()
 
     @property
     def measure_mode(self) -> MeasureMode:
@@ -1875,6 +1935,89 @@ class Viewport(QWidget):
         ein Undo behebt und Vertrauen nicht übersteht.
         """
         self._painting = active
+        self._update_cursor()
+
+    # --- der Zeiger (§19.3) -----------------------------------------------------
+
+    def _update_cursor(self) -> None:
+        """Setzt den Zeiger, der zum jetzigen Zustand gehört.
+
+        Eine Stelle für alle Auslöser — Werkzeugwechsel, Kamerazug, Merkmal
+        unter der Maus. Verteilt auf die Aufrufer wäre jeder Pfad für sich
+        richtig und das Ergebnis trotzdem falsch: Wer beim Loslassen den
+        Auswahlzeiger setzt, überschreibt damit den Pinsel.
+        """
+        role = self._dragging_role or self._resting_role()
+        if role == self._cursor_role:
+            return
+        self._cursor_role = role
+        if self.plotter is None:
+            return
+        self.plotter.interactor.setCursor(cursors.cursor(role, self))
+
+    def _resting_role(self) -> str:
+        """Was ein Klick jetzt täte, wenn die Kamera stillsteht.
+
+        Die Reihenfolge ist die der Vorrangigkeit im Klick selbst
+        (:meth:`_on_picked`): erst Pinsel, dann Messen, dann das Merkmal
+        darunter. Ein Zeiger, der eine andere Reihenfolge behauptet als die
+        Behandlung, lügt genau dann, wenn zwei Werkzeuge zugleich anstehen.
+        """
+        if self._painting:
+            return "paint"
+        if self._measure_mode != "off":
+            return "measure"
+        return "feature" if self._hover_feature else "select"
+
+    def set_drag_cursor(self, role: str | None) -> None:
+        """Meldet, was die Kamera gerade tut — vom Interaktionsstil gerufen.
+
+        ``None`` heißt: Taste losgelassen, zurück zum Ruhezustand.
+        """
+        self._dragging_role = role
+        if role is not None:
+            # Während eines Zugs ist gleichgültig, was unter dem Zeiger liegt,
+            # und die Suche danach wäre die teuerste Stelle im Zug.
+            self._hover_timer.stop()
+            self._hover_feature = False
+        self._update_cursor()
+
+    def _look_under_pointer(self) -> None:
+        """Sucht nach der Ruhepause, ob unter dem Zeiger ein Merkmal liegt.
+
+        Über den Tiefenpuffer (:func:`_world_under`) und nicht über einen
+        Aktor-Pick: Der Tiefenwert steht ohnehin im Bild, ein Pick würde die
+        Szene erneut durchlaufen.
+        """
+        if self.plotter is None or self._hover_at is None or self._dragging_role:
+            return
+        x, y = self._hover_at
+        point = _world_under(self.plotter.renderer, x, y)
+        found = point is not None and self._feature_at(point) is not None
+        if found != self._hover_feature:
+            self._hover_feature = found
+            self._update_cursor()
+
+    def _note_pointer(self, position: Any) -> None:
+        """Merkt sich, wo die Maus steht, und stößt die Suche neu an.
+
+        VTK zählt seine Y-Achse von unten, Qt von oben — ohne die Umrechnung
+        findet die Suche das Merkmal am gespiegelten Ort, was in der Mitte des
+        Bildes zufällig oft genug stimmt, um lange nicht aufzufallen.
+        """
+        if self.plotter is None:
+            return
+        height = self.plotter.interactor.height()
+        self._hover_at = (int(position.x()), int(height - position.y()))
+        self._hover_timer.start()
+
+    def _forget_pointer(self) -> None:
+        """Die Maus hat das Bild verlassen."""
+        self._hover_timer.stop()
+        self._hover_at = None
+        if self._hover_feature:
+            self._hover_feature = False
+            self._update_cursor()
 
     def _on_picked(self, point: Any) -> None:
         picked = (float(point[0]), float(point[1]), float(point[2]))
@@ -2703,7 +2846,18 @@ class Viewport(QWidget):
         von beiden Seiten. VTKs eigene Tastenkürzel bleiben unangetastet —
         geschluckt wird nur, was zum Zug gehört, und nur solange einer läuft.
         """
-        if self._drag_kind is None or event.type() != QEvent.Type.KeyPress:
+        kind = event.type()
+        # Der Zeiger zuerst, und immer: Er hängt an der Mausbewegung und nicht
+        # daran, ob gerade ein Zug läuft. Nichts davon wird geschluckt — VTK
+        # bekommt jede dieser Bewegungen weiterhin.
+        if kind == QEvent.Type.MouseMove:
+            self._note_pointer(event.position())
+        elif kind == QEvent.Type.Leave:
+            self._forget_pointer()
+        elif kind == QEvent.Type.Enter:
+            self._update_cursor()
+
+        if self._drag_kind is None or kind != QEvent.Type.KeyPress:
             return False
         key = event.key()
         if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -2823,7 +2977,12 @@ class Viewport(QWidget):
             if view is not None:
                 view._on_left_click(x, y)
 
-        style = _InteractorStyle(self.plotter, scheme, on_context, on_pick)
+        def on_cursor(role: str | None) -> None:
+            view = weak()
+            if view is not None:
+                view.set_drag_cursor(role)
+
+        style = _InteractorStyle(self.plotter, scheme, on_context, on_pick, on_cursor)
         self.plotter.interactor.SetInteractorStyle(style)
         # Ein neuer Stil bringt seine eigenen Beobachter mit; was beim Wechsel
         # sonst noch einzuschalten wäre, steht dort.
@@ -2941,7 +3100,11 @@ def _world_under(renderer: Any, x: int, y: int) -> tuple[float, float, float] | 
 
 
 def _InteractorStyle(  # noqa: N802
-    plotter: Any, scheme: NavigationScheme, on_context: Any = None, on_pick: Any = None
+    plotter: Any,
+    scheme: NavigationScheme,
+    on_context: Any = None,
+    on_pick: Any = None,
+    on_cursor: Any = None,
 ) -> Any:
     """Baut einen VTK-Interaktionsstil mit den Tasten des gewählten Schemas.
 
@@ -2982,21 +3145,30 @@ def _InteractorStyle(  # noqa: N802
             x, y = self.GetInteractor().GetEventPosition()
             return int(x), int(y)
 
+        def _tell(self, role: str | None) -> None:
+            """Was die Kamera jetzt tut — der Zeiger hängt daran."""
+            if on_cursor is not None:
+                on_cursor(role)
+
         def _left_down(self, *_: Any) -> None:
             self._left_at = self._position()
             if scheme == "slicer":
                 # Left selects; panning is shift plus drag.
                 if self._shift():
                     self.StartPan()
+                    self._tell("panning")
                 return
             if scheme == "blender" and self._shift():
                 self.StartPan()
+                self._tell("panning")
                 return
             self.StartRotate()
+            self._tell("rotate")
 
         def _left_up(self, *_: Any) -> None:
             self.EndPan()
             self.EndRotate()
+            self._tell(None)
             started, self._left_at = self._left_at, None
             if on_pick is None:
                 return
@@ -3044,18 +3216,22 @@ def _InteractorStyle(  # noqa: N802
             self._right_at = self._position()
             if scheme == "cad":
                 self.StartDolly()
+                self._tell("zoom")
                 return
             if scheme == "orbit":
                 # Links dreht, rechts schiebt — die Aufteilung von Bambu
                 # Studio, OrcaSlicer und PrusaSlicer.
                 self.StartPan()
+                self._tell("panning")
                 return
             self.StartRotate()
+            self._tell("rotate")
 
         def _right_up(self, *_: Any) -> None:
             self.EndRotate()
             self.EndDolly()
             self.EndPan()
+            self._tell(None)
             started, self._right_at = self._right_at, None
             if on_context is None:
                 return
