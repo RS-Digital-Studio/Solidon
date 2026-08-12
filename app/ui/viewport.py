@@ -167,6 +167,13 @@ BED_SCALE_STEP = 50.0
 #: nicht auf einem Teil liegen, das bis an den Rand geht.
 BED_SCALE_GAP = 8.0
 
+#: Wie weit die Fläche des gewählten Merkmals über dem Körper liegt, als
+#: Anteil der Szenengröße. Zwei Gründe, beide zwingend: ohne Abstand streiten
+#: Merkmal und Körper um dieselbe Tiefe und das Bild flimmert, und für die
+#: Anzeige wird dezimiert (§18.9) — das gröbere Netz darunter läge sonst
+#: stellenweise davor.
+FEATURE_PATCH_LIFT = 0.0015
+
 #: Wie hoch der Kontaktschatten über der Platte liegt. Ohne diesen Abstand
 #: streiten sich Schatten und Platte um dieselbe Tiefe, und das Bild flimmert
 #: beim Drehen.
@@ -931,6 +938,10 @@ class Viewport(QWidget):
         self._feature_overlay = False
         self._feature_actors: list[Any] = []
         self._selected_feature: FeatureId | None = None
+        self._feature_patch: Any | None = None
+        """Die Dreiecke des gewählten Merkmals, in der Auswahlfarbe über dem
+        Körper. Ohne sie hieß „Bohrung gewählt", dass der ganze Körper
+        aufleuchtet — die Auswahl zeigte das Objekt und nicht die Stelle."""
         self._layer_actors: list[Any] = []
         self._layer: LayerInfo | None = None
         self._layer_rebuild = QTimer(self)
@@ -1750,18 +1761,33 @@ class Viewport(QWidget):
         self._selected = object_id
         if self.plotter is None:
             return
-        for identifier, actor in self._actors.items():
-            if self._map is not None and identifier == self._map_object:
-                # Eine Karte besitzt die Farbe ihres Körpers; die Auswahl zeigt sich
-                # stattdessen im Objektbaum und in der Statusleiste (§19.1).
-                continue
-            actor.prop.color = SELECTED_COLOUR if identifier == object_id else self._object_colour
+        self._apply_selection_colour()
         # Der Griff folgt der Auswahl (§18.11): wer ein anderes Objekt wählt,
         # will es auch bewegen — nicht das vorige. Und weil `show_scene` hier
         # durchkommt, hängt der Griff nach jeder Auswertung am neuen Actor
         # statt am entfernten der letzten.
         self.set_gizmo(self._gizmo_wanted)
         self._draw()
+
+    def _apply_selection_colour(self) -> None:
+        """Welcher Körper die Auswahlfarbe trägt — und wann keiner.
+
+        Ist ein **Merkmal** gewählt, bleibt der Körper grau: die Auswahlfarbe
+        liegt dann auf der Bohrung, und derselbe Ton am ganzen Teil hieße,
+        dass die Stelle keine Auskunft mehr trägt. Dass der Körper trotzdem
+        ausgewählt ist, steht im Objektbaum und in der Statusleiste — dieselbe
+        Ausnahme, die für einen Körper unter einer Analysekarte längst gilt
+        (§19.1).
+        """
+        if self.plotter is None:
+            return
+        highlighted = self.highlighted_object()
+        for identifier, actor in self._actors.items():
+            if self._map is not None and identifier == self._map_object:
+                # Eine Karte besitzt die Farbe ihres Körpers; die Auswahl zeigt sich
+                # stattdessen im Objektbaum und in der Statusleiste (§19.1).
+                continue
+            actor.prop.color = SELECTED_COLOUR if identifier == highlighted else self._object_colour
 
     def show_build_volume(self, profile: Profile) -> None:
         """Das Bett als Raster in echter Größe, der Bauraum als Eckwinkel
@@ -2266,6 +2292,9 @@ class Viewport(QWidget):
     def select_feature(self, feature_id: FeatureId | None) -> None:
         self._selected_feature = feature_id
         self._redraw_features()
+        # Der Körper gibt die Auswahlfarbe an das Merkmal ab und holt sie
+        # zurück, sobald keines mehr gewählt ist.
+        self._apply_selection_colour()
         if self.plotter is not None:
             # Auch der Griff wechselt mit: eine gewählte Fläche bekommt ihn
             # auf die Fläche, eine abgewählte gibt ihn ans Objekt zurück
@@ -2277,6 +2306,37 @@ class Viewport(QWidget):
     def selected_feature(self) -> FeatureId | None:
         return self._selected_feature
 
+    def highlighted_object(self) -> ObjectId | None:
+        """Welcher Körper die Auswahlfarbe trägt — keiner, solange ein Merkmal
+        gewählt ist (§19.1).
+
+        Als eigene Auskunft und nicht als Zustand des Plotters, aus demselben
+        Grund wie bei :meth:`gizmo_target`: offscreen gibt es keinen, und ein
+        Test, der sich dort überspringt, prüft nie etwas.
+        """
+        if self._selected_feature is not None:
+            return None
+        return self._selected
+
+    def highlighted_faces(self) -> tuple[int, ...]:
+        """Die Dreiecke, die als gewähltes Merkmal aufleuchten (§18.5).
+
+        Leer heißt: nichts hervorzuheben — kein Merkmal gewählt, der Körper
+        ausgeblendet, oder ein Merkmal ohne zugeordnete Dreiecke wie eine
+        Kante aus dem exakten Kern. Gezählt wird im Netz der Szene, nicht im
+        dezimierten Anzeigenetz (§18.9).
+        """
+        if self._selected_feature is None or self._result is None or self._selected is None:
+            return ()
+        entry = self._result.scene.objects.get(self._selected)
+        if entry is None or not entry.visible or self._selected in self._hidden:
+            return ()
+        feature = entry.features.get(self._selected_feature)
+        raw = getattr(entry.mesh, "raw", None)
+        if feature is None or raw is None:
+            return ()
+        return tuple(index for index in feature.face_indices if 0 <= index < len(raw.faces))
+
     def _features_of_selection(self) -> dict[FeatureId, Feature]:
         if self._result is None or self._selected is None:
             return {}
@@ -2286,17 +2346,30 @@ class Viewport(QWidget):
     def _redraw_features(self) -> None:
         if self.plotter is None:
             return
+        self._redraw_feature_patch()
         for actor in self._feature_actors:
             self.plotter.remove_actor(actor, render=False)
         self._feature_actors.clear()
-        if not self._feature_overlay:
+        # Ohne Überlagerung bleibt das **gewählte** Merkmal beschriftet: seine
+        # Fläche leuchtet in der Auswahlfarbe, und eine Aussage allein über
+        # Farbe wäre genau die, die Regel 18 verbietet.
+        shown = (
+            self._features_of_selection()
+            if self._feature_overlay
+            else {
+                feature_id: feature
+                for feature_id, feature in self._features_of_selection().items()
+                if feature_id == self._selected_feature
+            }
+        )
+        if not shown:
             return
 
         import numpy as np
 
         points: list[list[float]] = []
         labels: list[str] = []
-        for feature_id, feature in self._features_of_selection().items():
+        for feature_id, feature in shown.items():
             centre = feature.params.get("centre")
             if centre is None:
                 continue
@@ -2325,6 +2398,66 @@ class Viewport(QWidget):
                 render=False,
                 reset_camera=False,
             )
+        )
+
+    def _redraw_feature_patch(self) -> None:
+        """Die Dreiecke des gewählten Merkmals in der Auswahlfarbe (§18.5).
+
+        Ein Klick auf eine Bohrung wählt zweierlei aus: den Körper und die
+        Stelle. Zu sehen war nur das Erste — der ganze Körper nahm die
+        Auswahlfarbe an, und die Bohrung, die gemeint war, unterschied sich
+        von der Wand daneben durch nichts. Gefärbt wird deshalb, was das
+        Merkmal ausmacht: die Dreiecke, die die Erkennung ihm zugeordnet hat
+        (``face_indices``).
+
+        Gegen das **Originalnetz**, nicht gegen das gezeigte: dezimiert und
+        geschnitten wird für die Anzeige (§18.9), die Indizes des Merkmals
+        zählen aber im Netz der Szene. Ein paar hundert Dreiecke kosten
+        nichts, und die Abweichung zum dezimierten Körper darunter fängt der
+        Versatz entlang der Flächennormalen ab.
+        """
+        if self.plotter is None:
+            return
+        if self._feature_patch is not None:
+            self.plotter.remove_actor(self._feature_patch, render=False)
+            self._feature_patch = None
+        highlighted = self.highlighted_faces()
+        if not highlighted or self._result is None or self._selected is None:
+            return
+        entry = self._result.scene.objects.get(self._selected)
+        raw = getattr(entry.mesh, "raw", None) if entry is not None else None
+        if entry is None or raw is None:
+            return
+
+        import numpy as np
+        import pyvista as pv
+
+        chosen = np.asarray(highlighted, dtype=np.int64)
+        triangles = np.asarray(raw.faces, dtype=np.int64)[chosen]
+        normals = np.asarray(raw.face_normals, dtype=float)[chosen]
+        # Je Dreieck eigene Punkte: die Fläche wird entlang **ihrer** Normalen
+        # angehoben, und geteilte Eckpunkte würden das über die Kante hinaus
+        # in den Nachbarn ziehen.
+        corners = np.asarray(raw.vertices, dtype=float)[triangles.ravel()]
+        lift = max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
+        corners += np.repeat(normals, 3, axis=0) * lift
+        corners += self._exploded(entry, self._result)
+        count = len(triangles)
+        faces = np.hstack(
+            [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
+        ).ravel()
+        self._feature_patch = self.plotter.add_mesh(
+            pv.PolyData(corners, faces),
+            color=SELECTED_COLOUR,
+            # Beidseitig: die Wand einer Bohrung sieht man von innen, und ihre
+            # Normale zeigt zur Achse — ohne das wäre die gewählte Bohrung
+            # genau aus der Richtung unsichtbar, aus der man sie ansieht.
+            backface_params={"color": SELECTED_COLOUR},
+            lighting=False,
+            name="feature-patch",
+            render=False,
+            reset_camera=False,
+            pickable=False,
         )
 
     def _feature_at(self, point: Vec3) -> FeatureId | None:

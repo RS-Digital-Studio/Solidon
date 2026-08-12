@@ -465,6 +465,55 @@ def test_the_diameter_of_a_bore_reaches_the_status_bar(window: MainWindow) -> No
     assert "Ø" in window.measurements.text()
 
 
+def test_a_chosen_feature_lights_up_instead_of_its_body(window: MainWindow) -> None:
+    """Wer eine Bohrung anklickt, meint die Bohrung (§18.5).
+
+    Gefärbt wurde der ganze Körper: die Auswahl zeigte das Objekt, und die
+    Stelle, die gemeint war, unterschied sich von der Wand daneben durch
+    nichts. Jetzt trägt das Merkmal die Auswahlfarbe auf seinen eigenen
+    Dreiecken, und der Körper bleibt grau — dass er ausgewählt ist, steht im
+    Objektbaum und in der Statusleiste, wie bei einer Analysekarte auch
+    (§19.1).
+
+    Geprüft wird die Entscheidung, nicht das Bild: offscreen gibt es keinen
+    Plotter, und ein Test, der sich dort überspringt, prüft nie etwas.
+    """
+    select_plate(window)
+    window.viewport.show_scene(window.session.last_result)
+    window.viewport.select("obj_1")
+
+    assert window.viewport.highlighted_object() == "obj_1", "ohne Merkmal färbt der Körper"
+    assert window.viewport.highlighted_faces() == (), "und es leuchtet keine Fläche"
+
+    window.object_tree.select_feature("obj_1", "hole_2")
+
+    assert window.viewport.selected_feature == "hole_2"
+    assert window.viewport.highlighted_object() is None, "jetzt nicht mehr der ganze Körper"
+    faces = window.viewport.highlighted_faces()
+    assert faces, "sondern die Dreiecke der Bohrung"
+    entry = window.session.last_result.scene.objects["obj_1"]
+    assert set(faces) == set(entry.features["hole_2"].face_indices)
+
+    # Und zurück: ohne Merkmal gehört die Farbe wieder dem Körper.
+    window.viewport.select_feature(None)
+    assert window.viewport.highlighted_object() == "obj_1"
+    assert window.viewport.highlighted_faces() == ()
+
+
+def test_a_hidden_body_lights_up_nothing(window: MainWindow) -> None:
+    """Ein ausgeblendeter Körper ist nicht im Bild, sein Merkmal also auch
+    nicht — eine Fläche, die über einem unsichtbaren Teil schwebt, behauptet
+    Geometrie, wo keine steht (§18.8)."""
+    select_plate(window)
+    window.viewport.show_scene(window.session.last_result)
+    window.viewport.select("obj_1")
+    window.viewport.select_feature("hole_2")
+    assert window.viewport.highlighted_faces(), "sichtbar leuchtet sie"
+
+    window.viewport.set_hidden(frozenset({"obj_1"}))
+    assert window.viewport.highlighted_faces() == ()
+
+
 def test_a_click_in_the_view_finds_the_feature_under_it(window: MainWindow) -> None:
     """§40 für P3: ein Klick muss die richtige Merkmal-ID liefern, keinen
     Beinahe-Treffer.
