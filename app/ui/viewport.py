@@ -1323,7 +1323,29 @@ class Viewport(QWidget):
         self.select(self._selected)
         self._redraw_features()
         self._redraw_layer()
-        self.plotter.render()
+        self._render_now()
+
+    def _render_now(self) -> None:
+        """Ein Renderdurchgang, der wirklich stattfindet.
+
+        ``plotter.render()`` ist unter pyvistaqt kein Zeichnen, sondern ein
+        Repaint-Wunsch an Qt. Für jede Änderung an einer stehenden Szene
+        genügt das. Für die **erste** Darstellung nach dem Aufbau nicht: fällt
+        der Wunsch mit dem Aufbau zusammen, bleibt das Bild leer, bis jemand
+        die Maus bewegt — und dann steht dort ein Viewport, in dem nur die
+        Orientierungsmarker liegen und der Körper beim Zoomen kurz aufblitzt.
+
+        Das Renderfenster direkt zu bitten ist der Unterschied zwischen „ich
+        möchte gleich neu zeichnen" und „zeichne jetzt". Es kostet einen
+        Durchgang je Szenenaufbau, nicht je Bild.
+        """
+        if self.plotter is None:
+            return
+        window = getattr(self.plotter, "ren_win", None)
+        if window is None:
+            self.plotter.render()
+            return
+        window.Render()
 
     def _slot_colours(self, surface: Any, mesh: Any, entry: Any, face_count: int) -> dict[str, Any]:
         """Ein bemalter Körper wird in seinen Filamentfarben gezeichnet (§20).
