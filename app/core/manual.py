@@ -795,7 +795,13 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Beides würde bedeuten, dass ein fremdes Programm bestimmt, was "
             "auf diesem Rechner ausgeführt oder gelesen wird.\n\n"
             "In der Gegenstelle wird sie als Server mit der Adresse "
-            "`http://127.0.0.1:8787/mcp` eingetragen."
+            "`http://127.0.0.1:8787/mcp` eingetragen.\n\n"
+            "**Welche Werkzeuge es gibt, steht in diesem Handbuch.** Jede "
+            "Operation der folgenden Kapitel ist eines — mit denselben "
+            "Parametern, denselben Grenzen und denselben Vorgaben, die auch "
+            "der Dialog zeigt. Eine eigene Schnittstellenliste gibt es "
+            "deshalb nicht: sie wäre eine zweite Fassung derselben Auskunft "
+            "und sagte nach dem zweiten Monat etwas anderes."
         ),
     ),
     Page(

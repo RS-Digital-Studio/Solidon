@@ -364,6 +364,7 @@
 <p>Whatever arrives is a transaction like any other. Ctrl+Z in the window undoes it, the history shows it, and the entry says that it came from outside.</p>
 <p>Two things never travel over the wire, and that is deliberate: OpenSCAD source and anything that looks like a file path. Either would mean a foreign program deciding what gets executed or read on this machine.</p>
 <p>In the other program it is entered as a server at <code>http://127.0.0.1:8787/mcp</code>.</p>
+<p><strong>Which tools exist is written in this manual.</strong> Every operation in the chapters that follow is one — with the same parameters, the same limits and the same defaults the dialog shows. There is no separate interface listing for that reason: it would be a second version of the same information, and after two months it would say something else.</p>
 <h3 id="trouble">When something goes wrong</h3>
 <p>The cases that are most common at the start — what is behind them and what helps.</p>
 <p><strong>“The model is not closed.”</strong> Faces are missing from the file, or triangles face the wrong way. With downloaded models that is normal. <em>Repair</em> in the report closes small holes and turns faces around. If a whole wall is missing, no repair can guess it — then the file is broken and another source is the shorter way.</p>
