@@ -4,10 +4,12 @@ Anlass ist eine Frage in vier Teilen: *Wie stehen Oberfläche, Funktionen,
 Handbuch und Schnittstelle gegen die beiden führenden KI-3D-Generatoren?
 Können wir mithalten?*
 
-**Zweite, gründlichere Fassung.** Der erste Durchgang blieb an vier Stellen
-bei Vermutungen stehen; sie sind jetzt gemessen, und zwei davon fielen anders
-aus als angenommen. Was korrigiert wurde, steht in Teil 8 — nicht versteckt,
-weil eine Korrektur mehr wert ist als eine Behauptung, die zufällig stimmte.
+**Dritte Fassung.** Der erste Durchgang blieb an vier Stellen bei Vermutungen;
+der zweite maß sie nach. Der dritte entstand aus der Frage, ob die Webseiten
+und Funktionen wirklich vollständig angesehen worden seien — sie waren es
+nicht, und eine der Aussagen war schlicht falsch. Alle sieben Korrekturen
+stehen in Teil 8, nicht versteckt: Eine Korrektur ist mehr wert als eine
+Behauptung, die zufällig stimmte.
 
 Die kurze Antwort: **In zwei von sechs Bereichen sind wir deutlich überlegen,
 in zweien gleichauf, in zweien chancenlos.** Der wichtigste Befund ist keiner
@@ -26,15 +28,21 @@ mehr. `konzept-bedienung.md` ist die Durchsicht der eigenen Oberfläche; die
 Befunde dort werden hier **nicht** wiederholt (Doku-Doktrin, Regel 3), Teil 4
 prüft nur, was der Vergleich *zusätzlich* zeigt.
 
-**Methode.** Der eigene Stand ist aus dem laufenden Code gemessen: Register
-über `load_operations()` (ohne den Aufruf fehlen sechzehn Operationen),
-Handbuch über `manual.pages()`, Wissensbestand aus den TOML-Tabellen, die
-Farbkette über einen eigens gefahrenen Durchlauf (Teil 3.4). Alle sechs
-Bildschirmfotos des Handbuchs wurden angesehen, nicht nur eines. Der
-Marktstand kommt von den Seiten der Anbieter, abgerufen am 12.08.2026:
-Produktseiten, Preisseiten, `llms.txt` und `llms-full.txt` der
-Dokumentation. Preise und Nutzerzahlen sind ihre Angaben, keine geprüften
-Werte. Wo etwas nicht messbar war, steht „nicht geprüft".
+**Methode.** Der eigene Stand ist aus dem laufenden Code gemessen: **alle 77
+Operationen** mit Titel und Beschreibung ausgelesen (über `load_operations()` —
+ohne den Aufruf fehlen sechzehn), alle 16 Bausteine mit ihren Features, die
+Wissenstabellen einzeln, das Handbuch über `manual.pages()`, die Farbkette über
+einen eigens gefahrenen Durchlauf (3.4). Alle sechs Bildschirmfotos wurden
+angesehen, nicht nur eines.
+
+Der Marktstand kommt von den Seiten der Anbieter, abgerufen am 12.08.2026 —
+**im dritten Durchgang über den Browser und ihre eigene Navigation** statt über
+geratene Pfade: Produkt- und Preisseiten, die Dokumentationsseiten zu Auto
+Split und zur Slicer-Anbindung, die Werkzeugstrecke, die Akademie, dazu
+`llms.txt` und die API-Referenz. Preise, Nutzerzahlen und Aufbewahrungsfristen
+sind ihre Angaben, keine geprüften Werte. Wo etwas nicht einsehbar war — die
+Lektionstexte der Akademie und die Webanwendung selbst liegen hinter einem
+Konto —, steht „nicht geprüft" statt einer Schätzung.
 
 **Eine Einordnung vorweg, damit der Vergleich fair bleibt:** Solidon 1.0 ist
 noch nicht erschienen (Website: „Version 1.0 erscheint 2026"). Verglichen wird
@@ -204,22 +212,49 @@ zugleich ginge: ein schmaler Kennzahlenkopf über der Befundliste — wasserdich
 Volumen, Komponenten, schmalste Wand, schlimmster Überhang. Die Werte liegen
 alle vor (Befund B9).
 
-### 3.2 „Auto Split" — trennen gegen trennen und verbinden
+### 3.2 „Auto Split" — der Schnitt gegen die Verbindung
 
-Meshy beschreibt es auf der Startseite so: Ist ein Modell zu komplex, zerlegt
-Auto Split es in wasserdichte Teile, die bereits auf dem Druckbett angeordnet
-sind. In ihrer **Dokumentation kommt Auto Split nicht vor** — weder in der
-Endpunktliste noch im Volltext (`llms-full.txt` geprüft). Es ist eine beworbene
-Funktion ohne Handbuchseite.
+Ihre Handbuchseite (`/en/webapp/guides/3d-model/auto-split`) gelesen, nicht
+zusammengefasst. Sie ist gut: Kurzfassung, Wann-benutzen, **Wann-nicht-benutzen**,
+neun nummerierte Schritte, Bebilderung, Tipps, vier Fragen mit Antwort.
 
-Bei uns sind es zwei Operationen: `split_plane` trennt an einer Ebene,
-`split_pinned` trennt **und verstiftet**. Die Website formuliert es so: „Auto-Split
-legt Passstifte, Bohrungen und die zugehörigen Passungen gleich mit an."
+**Was ihres besser kann:**
 
-Der Unterschied ist der ganze Punkt des Teilens: Zwei Hälften, die man
-zusammenkleben soll, brauchen eine Führung. Ihre Version liefert zwei Hälften,
-unsere liefert zwei Hälften, die ineinanderfinden — mit einem Spiel, das aus
-dem Materialprofil kommt und nicht geschätzt ist.
+- **Der Schnitt folgt der Form, nicht einer Ebene.** Ihre eigene Antwort auf
+  die Frage nach dem Unterschied zum Slicer: Ein planarer Schnitt kann nur
+  entlang einer flachen Ebene trennen und hinterlässt gerade Nähte quer über
+  die Oberfläche; ihr Verfahren schneidet entlang der natürlichen Teilform, die
+  Naht versteckt sich in der Struktur. **Das können wir nicht** — `split_plane`
+  und `split_pinned` schneiden an einer Ebene.
+- **Vorschau in ~40 Sekunden**, danach neu würfeln möglich (kostet Guthaben).
+- **Ein Schieberegler zieht die Teile auseinander**, zwei Ansichten: zusammengesetzt
+  und auf der Platte. Ein Explosionswerkzeug haben wir auch (Viewportleiste,
+  „Explosion"), aber nicht als Regler im Teilungsablauf.
+- Schnittflächen werden automatisch wasserdicht verschlossen, Teile auf dem
+  Bett angeordnet, ein Klick in Bambu Studio, OrcaSlicer, Elegoo Slicer.
+
+**Was in ihrer eigenen FAQ steht und die Sache dreht:**
+
+| Ihre Aussage | Folge |
+|---|---|
+| „Auto Split unterstützt derzeit nur unstrukturierte Entwurfsmodelle, die mit Meshy 6 erzeugt wurden." | **Ein eigenes oder heruntergeladenes Modell geht nicht hindurch.** Der häufigste Fall überhaupt — die zu große STL aus dem Netz — ist ausgeschlossen. |
+| „Geteilte Teile werden derzeit ohne Farbinformation exportiert, sie können also nicht direkt in den Mehrfarbdruck." | Teilen und Mehrfarbe schließen sich bei ihnen aus. Genau die Kombination, für die die Funktion beworben wird. |
+| „Sie brauchen präzise Schnittführung oder eigene Verbindungen — die sind in Blender oder Meshmixer besser aufgehoben." | **Verbindungen sind ausdrücklich kein Teil des Werkzeugs.** Sie verweisen dafür auf fremde Programme. |
+
+Genau dort steht unsere Fassung: `split_pinned` „teilt ein Objekt an einer
+Ebene und setzt Passstifte in die Schnittfläche. Das Spiel kommt aus dem
+Materialprofil." Und es funktioniert an jedem Objekt in der Szene, gleich
+woher es kam.
+
+**Der ehrliche Vergleich lautet also nicht „wir verstiften, sie nicht", sondern:**
+Ihr Schnitt ist klüger, unsere Verbindung existiert. Wer eine erzeugte Figur
+zerlegen will, ist bei ihnen besser bedient — solange sie aus ihrem eigenen
+Haus stammt und keine Farben hat. Wer ein beliebiges Teil so trennen will, dass
+es hinterher wieder zusammenfindet, hat dort kein Werkzeug.
+
+Ein nicht-planarer Schnitt entlang der Form wäre für uns eine große, echte
+Erweiterung — und der erste Punkt in diesem Dokument, an dem eine ihrer
+Funktionen etwas kann, das wir nicht können und gebrauchen könnten (Befund B13).
 
 ### 3.3 „Mehrfarbdruck" — und was dabei herauskommt
 
@@ -305,6 +340,29 @@ an einem Modell weiterarbeiten, das gerade auf dem Bildschirm liegt.
 
 Die Dokumentationslücke ist die auffälligste des ganzen Handbuchs: Sie haben
 jedes Werkzeug benannt, wir haben keines (Befund B6).
+
+### 3.7 Was auf der Gegenseite überhaupt nicht vorkommt
+
+Für diesen Durchgang wurde das Register vollständig ausgelesen — alle 77
+Operationen mit Titel und Beschreibung, nicht nur gezählt. Der Vergleich ist
+danach schnell erzählt: **Fünf der fünfzehn Kategorien haben drüben kein
+Gegenstück, nicht einmal ansatzweise.**
+
+| Gruppe | bei uns | bei Meshy / Rodin |
+|---|---|---|
+| **Exakter Kern (B-Rep)** | `chamfer_edges`, `fillet_edges`, `draft_faces`, `shell_exact`, `thread_exact`, `push_face`, `create_brep_box`, `create_brep_cylinder`, `load_step` | nichts — Netze haben keine Kanten, an die eine Verrundung greifen könnte |
+| **Skizze mit Zwängen** | `sketch_extrude`, `sketch_pocket`, `sketch_revolve`, `sketch_sweep`, `sketch_loft` | nichts |
+| **Kalibrieren am eigenen Drucker** | `insert_fit_ladder`, `insert_wall_ladder`, `insert_overhang_fan`, `test_piece` | nichts — sie kennen den Drucker des Nutzers nicht |
+| **Verbindungen und Normteile** | 18 Bausteine-Ops: Mutternfalle, Heat-Set-Buchse, Schraubenloch mit Senkung, Gewinde, Passstift, Rastnase, Filmscharnier, Schnappverbindung, Magnettasche, Kabeldurchführung mit Zugentlastung, Schlüsselloch, Wandhalter, Versteifungsrippe, Deckel, Drehdeckel | angekündigt als „KI-Steinteile-Generator", noch nicht ausgeliefert |
+| **Druckvorbereitung mit Maß** | `hollow_object`, `compensate_first_layer`, `set_material`, `split_pinned`, `orient_for_print` | Auto Split und Reparatur, sonst nichts |
+
+Die vier Kalibrierkörper verdienen einen eigenen Satz, weil sie das Prinzip in
+Reinform zeigen: Die Toleranzleiter, die Wandstärkenleiter und der
+Überhangfächer werden **einmal gedruckt**, ausgemessen, und der gemessene Wert
+wandert ins Materialprofil. Danach rechnet jede Passung mit dem Spiel, das
+*diese* Maschine mit *diesem* Filament tatsächlich hält. Ein Dienst in der
+Cloud kann das grundsätzlich nicht — er weiß nicht, welcher Drucker im Keller
+steht.
 
 ---
 
@@ -419,10 +477,19 @@ Die erzeugte Referenz ist ein Vorteil, den sie nicht einholen können, ohne ihre
 Dokumentation neu zu bauen. Bei uns kann keine Operation undokumentiert
 existieren — Regel 4 verbietet den Registereintrag ohne übersetzte Texte, und
 die Handbuchseite entsteht aus demselben Eintrag. Ihre Funktionsseiten sind
-Handarbeit und veralten einzeln; ihr eigenes Auto Split ist der Beweis: beworben,
-nicht dokumentiert.
+Handarbeit: gut geschrieben, aber jede einzeln zu pflegen, und der Umfang endet
+bei den beworbenen Funktionen.
 
 Dazu Bilder, wo ihr Quick Start keine hat, und zwei vollständige Sprachen.
+
+**Wo ihre besser ist, und zwar deutlich: die Form.** Die Auto-Split-Seite hat
+eine Kurzfassung, ein „Wann benutzen", ein **„Wann *nicht* benutzen"**, neun
+nummerierte Schritte, Tipps zu geeigneten und ungeeigneten Modellen und vier
+Fragen mit ehrlichen Antworten — einschließlich zweier Einschränkungen, die
+das eigene Produkt schlecht aussehen lassen. Keine unserer zwanzig
+geschriebenen Seiten hat diese Form. Der Abschnitt „Wann nicht" ist der,
+den wir am dringendsten übernehmen sollten: Er erspart dem Leser den
+Fehlversuch und wirkt vertrauenswürdiger als jede Werbezeile.
 
 ### 5.2 Wo wir schlechter sind — und der Befund, den ich nicht erwartet hatte
 
@@ -443,19 +510,36 @@ Handbuchseiten nach Zahlenwerten durchsucht — Millimeter, Grad, Prozent:
 | Wenn etwas nicht geht | **keine** |
 | Material, Toleranzen, Passungen | „5 mm", „45 Grad" |
 
-Zwei Zahlen im ganzen erzählenden Teil. Meshys Dokumentation nennt ebenfalls
-**keinen einzigen** Wert für Wandstärke, Überhangwinkel, Stützen, Orientierung
-oder Toleranzen — das wurde im Volltext geprüft. Beide Handbücher sind an
-dieser Stelle gleich wertfrei.
+Zwei Zahlen im ganzen erzählenden Teil. Ihre *Dokumentation* nennt an dieser
+Stelle ebenfalls keine Werte — aber sie ist nicht der Ort, an dem sie es
+versuchen.
 
-Der Unterschied ist, dass **wir die Werte haben und sie nicht.** Im Programm
-liegen:
+**Sie betreiben eine 3D-Druck-Akademie.** Fünf Module, 27 Lektionen, mit
+Fortschrittszählern wie ein Kurs: Erste Schritte (5) — Druckerwahl, Sicherheit
+bei Dämpfen und Feuer, Begriffe, Tag-1-Checkliste, Werkzeuge. Mit Meshy
+erstellen (9). Materialien und Filamente (5) — warum mit PLA anfangen, wann auf
+PETG wechseln, nasses Filament trocknen. Slicing und Software (6) — wie Slicing
+funktioniert, Profil abstimmen, Stützstrukturen, Mehrfarbe. Fehlersuche (2) —
+ungleichmäßige erste Schicht, zu dünn gedruckte Details. Die Lektionstexte
+selbst waren ohne Konto **nicht einsehbar**; ob dort Zahlenwerte stehen, ist
+nicht geprüft.
+
+Das ist inhaltlich genau der Stoff, der unserem Handbuch fehlt. Der Befund aus
+der ersten Fassung — „wir haben die Werte und sie nicht" — war zu bequem. Er
+lautet richtig:
+
+> **Ihr Fertigungswissen ist Lesestoff neben dem Werkzeug. Unseres ist im
+> Werkzeug — es rechnet, prüft und warnt. Nur lesen kann man es nicht.**
+
+Im Programm liegen:
 
 - **6 Materialprofile** (PLA, PETG, PETG-CF, ASA, ABS, TPU-95A) mit `clearance`,
   `press`, `shrinkage`, `elephant_foot`, `hole_compensation`, `calibrated`
 - **16 Druckerprofile** ab Werk (Bambu A1/A1 mini/P1S/X1C, Creality Ender-3 V3
   und K1, Anycubic Kobra 2, Elegoo …)
-- **40 Normteilmaße** (Angabe der Website, aus `standards.toml`)
+- **40 Normteilmaße** in acht Tabellen (`standards.toml`): 7 Schrauben,
+  7 Muttern, 4 Scheiben, 6 Einpressbuchsen, 5 Magnete, 4 Lager, 3 Profile,
+  4 Rohre
 - **11 Konstruktionsregeln**, Version 2, mit Titel und Begründung:
   Mindestwandstärke, Fasen statt Überhängen, Toleranzen aus dem Materialprofil,
   Hauptmaße als Parameter, Überlappung bei Booleschen Ops, Löcher größer als
@@ -468,11 +552,52 @@ daraus, und der Nutzer bekommt es nie zu lesen.
 
 Zwei erzeugte Handbuchseiten — „Die Regeln, nach denen Solidon urteilt" und
 „Was in den Material- und Druckerprofilen steht" — kosten wenig (dieselbe
-Technik wie die Op-Referenz), veralten nie, und sind das einzige Kapitel, das
-die Gegenseite strukturell nicht schreiben kann: Ihre Werte stehen in keinem
-Programm (Befund B4). Der Bauplan nennt die Regelsammlung in §39 ohnehin „das
-eigentliche Produkt". Ein Produkt, das man nicht lesen kann, ist schwer zu
-verkaufen.
+Technik wie die Op-Referenz) und veralten nie (Befund B4). Der Unterschied zu
+einer Akademie ist dabei der Punkt, nicht der Mangel: Eine Lektion sagt, was
+man tun sollte; eine erzeugte Seite sagt, **wonach das Programm gerade
+gerechnet hat**, mit dem Wert, der im Prüfbericht steht. Der Bauplan nennt die
+Regelsammlung in §39 „das eigentliche Produkt". Ein Produkt, das man nicht
+lesen kann, ist schwer zu verkaufen.
+
+---
+
+### 5.3 Was neben dem Handbuch steht — und uns direkt betrifft
+
+Meshy betreibt eine Strecke kostenloser Browser-Werkzeuge **ohne Konto**. Fünf
+sind ausgeliefert: STL-Reparatur, Dateikonverter, Online-Betrachter,
+Dateikompressor, 3D-Textgenerator. Acht weitere stehen als graue Kacheln
+daneben, ausdrücklich als Fahrplan gekennzeichnet — darunter ein
+„KI-Steinteile-Generator" für Scharniere, Träger und Zahnräder mit
+druckfertigem STL. Das wäre eine Überschneidung mit unserer
+Bausteinbibliothek; heute ist es eine Ankündigung.
+
+**Die STL-Reparatur ist der Punkt, der uns betrifft.** Sie behebt
+nicht-mannigfaltige Kanten, Löcher und umgedrehte Normalen, baut eine
+wasserdichte Topologie, nimmt STL, OBJ und GLB bis 100 MB, braucht etwa eine
+Minute — und kostet nichts. Das ist Funktion für Funktion unsere Op `repair`.
+
+Daraus folgt eine Anpassung der eigenen Erzählung: **Die Reparatur allein ist
+kein Verkaufsargument mehr.** Sie ist im Netz gratis und ohne Anmeldung zu
+haben. Was bleibt, ist alles, was danach kommt — Maß, Passung, Schichtanalyse,
+Stapel. Wo unsere Website heute „einlesen, reparieren, aufs Bett setzen"
+sagt, muss die Betonung auf dem stehen, was ein Reparaturknopf nicht kann.
+
+**Und ein Muster lohnt die Nachahmung.** Auf ihrer Reparaturseite steht eine
+Tabelle, die vier Wege gegeneinanderstellt — manuelle Reparatur in Blender,
+gekaufte Reparatursoftware wie Netfabb oder Magics, ein Druckservice, und ihr
+Werkzeug — mit sechs Zeilen und einer ehrlichen Fußnote, dass die Spalten
+typische Vertreter beschreiben. Genau diese Form empfiehlt Befund B1 für uns.
+Es ist die wirksamste Seite ihres ganzen Auftritts, und sie besteht aus einer
+Tabelle.
+
+Dazu kommt eine Maschine, die wir nicht haben und nicht bauen werden:
+Vergleichsseiten gegen jeden namhaften Wettbewerber („Meshy vs. Tripo",
+„vs. Trellis 2", „vs. Hunyuan3D"), ein Glossar, die Akademie, ein Blog mit
+datierten Fachartikeln, Discord, YouTube, TikTok, LinkedIn. Das ist Marktarbeit
+im industriellen Maßstab. Der einzige sinnvolle Schluss daraus ist **nicht**,
+es nachzubauen, sondern die zwei Seiten zu haben, die ein Suchender bei uns
+finden muss: den Vergleich (B1) und die Kette vom erzeugten Modell zum Druck
+(B3).
 
 ---
 
@@ -507,9 +632,11 @@ Wer heute vergleicht, kann dort ohne Frist anfangen.
 | Bereich | Urteil |
 |---|---|
 | **Druckbarkeit und Fertigungsurteil** | **deutlich überlegen** — fünf Topologiewerte gegen vierzehn Sachverhalte samt Fertigung |
-| **Konstruieren mit Maß** | **konkurrenzlos** — Stapel, Parameter, Zwänge, Passungen, Normteile; auf der Gegenseite existiert nichts davon |
-| **Mehrfarbe und Aufbereitung generierter Netze** | **gleichauf bis überlegen** — Kette gemessen, lokal, wiederholbar, ohne Guthaben |
-| **Handbuch** | **überlegen** in der Referenz, **gleichauf** in der Prosa (beide wertfrei), **unterlegen** in Form und Auffindbarkeit |
+| **Konstruieren mit Maß** | **konkurrenzlos** — exakter Kern, Skizze mit Zwängen, Kalibrierkörper, 18 Verbindungsbausteine; fünf ganze Kategorien ohne Gegenstück (3.7) |
+| **Mehrfarbe und Aufbereitung generierter Netze** | **überlegen** — Kette gemessen, lokal, wiederholbar, ohne Guthaben; ihre geteilten Teile verlieren die Farbe sogar |
+| **Teilen** | **geteiltes Urteil** — ihr Schnitt folgt der Form (können wir nicht), unsere Verstiftung existiert (haben sie nicht, und verweisen dafür auf Blender) |
+| **Reparieren** | **gleichauf** — ihre kostenlose STL-Reparatur deckt unsere `repair`-Op ab |
+| **Handbuch** | **überlegen** in der Referenz, **unterlegen** in Form und Lernstoff (27 Akademielektionen gegen null) |
 | **Erzeugen aus Text und Bild** | **chancenlos** — und nach §42 nicht unser Rennen |
 | **Reichweite, Ökosystem, Integrationen** | **chancenlos** — 12 Mio. Nutzer gegen einen Einzelentwickler vor Version 1.0 |
 | **Preis und Eigentum** | **überlegen**, wird nicht ausgespielt |
@@ -521,7 +648,7 @@ auch die, die Meshy erzeugt hat.*
 
 ---
 
-## Teil 8 — Was der zweite Durchgang korrigiert hat
+## Teil 8 — Was die späteren Durchgänge korrigiert haben
 
 Vier Aussagen der ersten Fassung waren falsch oder zu grob. Sie stehen hier,
 weil eine Konzeptvorlage, die ihre eigenen Irrtümer verschweigt, beim nächsten
@@ -543,6 +670,33 @@ Lesen nicht mehr zu prüfen ist.
 
 Dazu zwei Zahlen: Die Regelsammlung hat **11** Regeln, nicht 13 — die erste
 Zählung hatte andere Tabellen mitgezählt.
+
+### Der dritte Durchgang, nach der Frage „hast du wirklich alles angesehen?"
+
+Die Antwort war nein. Die zweite Fassung hatte von der Meshy-Webapp-Doku nur
+die Navigationsliste gesehen, keine einzige Seite; zwei geratene Pfade gaben
+404, danach blieb es bei `llms-full.txt`. Was daraus folgte, war falsch:
+
+5. **„Auto Split kommt in ihrer Dokumentation nicht vor — beworben, nicht
+   dokumentiert."** Falsch, und es war sogar als Argument benutzt worden. Die
+   Seite existiert unter `/en/webapp/guides/3d-model/auto-split`, ist
+   ausführlich und ehrlicher als unsere eigenen: mit „Wann *nicht* benutzen"
+   und zwei Einschränkungen, die das eigene Produkt schlecht aussehen lassen.
+   Das „nicht gefunden" war ein Abschneide-Artefakt der Volltextdatei — ein
+   Werkzeugfehler, den ich als Befund ausgegeben hatte. Der richtige Vergleich
+   steht jetzt in 3.2 und fällt an einer Stelle **gegen** uns aus: Ihr Schnitt
+   folgt der Form, unserer einer Ebene.
+6. **„Wir haben die Werte, sie nicht."** Zu bequem. Sie betreiben eine
+   3D-Druck-Akademie mit 27 Lektionen. Der Unterschied ist nicht Besitz,
+   sondern Wirksamkeit (5.2).
+7. **Die kostenlose Werkzeugstrecke war übersehen worden** — darunter eine
+   STL-Reparatur, die unsere `repair`-Op eins zu eins abdeckt, gratis und ohne
+   Konto (5.3).
+
+Methodisch bleibt daraus eine Regel für den nächsten Durchgang: **Eine
+Zusammenfassung, die etwas *nicht* findet, ist kein Beleg dafür, dass es
+fehlt.** Negative Befunde brauchen die Seite selbst, im Browser, mit der
+Navigation der Gegenseite statt geratener Pfade.
 
 ---
 
@@ -637,6 +791,35 @@ Rund 90 Pixel über dem Beschreibungssatz. Entweder gehört dort eine Vorschau
 hin, oder der Dialog ist zu hoch. Eine Messung am laufenden Fenster
 entscheidet das in fünf Minuten.
 
+### B13 — Nicht-planarer Schnitt · **offen** · groß
+
+Der einzige Punkt im ganzen Vergleich, an dem eine ihrer Funktionen etwas kann,
+das wir nicht können und gebrauchen könnten. `split_plane` und `split_pinned`
+schneiden an einer Ebene; ihr Verfahren folgt der Form, und die Naht versteckt
+sich in der Struktur. Für Figuren und organische Teile ist das sichtbar besser.
+
+Vor jeder Umsetzung gehört die Frage geklärt, ob es zum Kundenkreis passt: Wer
+Halterungen und Gehäuse druckt, teilt an einer Ebene und verstiftet. Wer
+Figuren druckt, will die versteckte Naht. Der zweite ist heute nicht unser
+Kundenkreis — und der Ausbau würde nur mit Verstiftung entlang einer krummen
+Fläche Sinn ergeben, was die Sache erheblich vergrößert.
+
+### B14 — „Wann nicht benutzen" in die Handbuchseiten · **mittel** · klein
+
+Ihre Auto-Split-Seite nennt fünf Fälle, in denen man das Werkzeug **nicht**
+nehmen soll, und zwei Einschränkungen, die das eigene Produkt schlecht
+aussehen lassen. Das wirkt vertrauenswürdiger als jede Werbezeile und erspart
+den Fehlversuch. Bei Operationen mit Grenzen — `split_pinned`, `hollow_object`,
+`decimate_mesh`, `create_from_scad`, `lattice_fill` — gehört derselbe Abschnitt
+ins Handbuch. Er lässt sich nicht erzeugen; er muss geschrieben werden.
+
+### B15 — Die Erzählung um die Reparatur korrigieren · **mittel** · klein
+
+Meshys STL-Reparatur ist gratis, ohne Konto, nimmt STL/OBJ/GLB bis 100 MB und
+deckt unsere `repair`-Op eins zu eins ab. Reparieren allein trägt kein
+Verkaufsargument mehr. Auf Website und in Weg 1 muss die Betonung dorthin
+wandern, wo ein Reparaturknopf endet: Maß, Passung, Schichtanalyse, Stapel.
+
 ---
 
 ## Was ausdrücklich nicht folgt
@@ -674,8 +857,11 @@ Ein Durchgang gilt als erledigt, wenn:
 
 ---
 
-*Stand 12.08.2026, zweite Fassung. Der eigene Stand ist aus dem laufenden Code
-gemessen, die Farbkette eigens durchgefahren, alle sechs Bildschirmfotos
-angesehen. Der Marktstand stammt von den Seiten der Anbieter; Preise,
-Nutzerzahlen und Aufbewahrungsfristen sind ihre Angaben, keine geprüften
-Werte.*
+*Stand 12.08.2026, dritte Fassung. Der eigene Stand ist aus dem laufenden Code
+gemessen — alle 77 Operationen, alle 16 Bausteine, alle Wissenstabellen, die
+Farbkette eigens durchgefahren, alle sechs Bildschirmfotos angesehen. Der
+Marktstand stammt von den Seiten der Anbieter, im dritten Durchgang über ihre
+eigene Navigation im Browser abgerufen. Preise, Nutzerzahlen und
+Aufbewahrungsfristen sind ihre Angaben, keine geprüften Werte. Nicht einsehbar
+und deshalb nicht bewertet: die Lektionstexte ihrer Akademie und die
+Webanwendung selbst — beides liegt hinter einem Konto.*
