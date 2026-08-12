@@ -10,11 +10,21 @@
 #
 #     pyinstaller packaging/solidon3d.spec
 
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 ROOT = Path(SPECPATH).resolve().parent
+
+# Der Name kommt aus app/branding.py und nirgends sonst (§37.1). Er stand hier
+# als „Solidon" fest und überlebte damit die Umbenennung auf „Solidon3D“:
+# PyInstaller baute nach dist/Solidon, tools/make_installer.py suchte unter
+# dist/Solidon3D — und fand nichts. Die Setup-Datei ließ sich nicht bauen, und
+# im Installer zeigten Startmenüeintrag und Deinstallationssymbol auf eine
+# Solidon3D.exe, die es nicht gab.
+sys.path.insert(0, str(ROOT))
+from app.branding import APP_NAME  # noqa: E402
 
 # V4c (Konzept §2 I H4/H5): das Prüfmodul reist kompiliert, das Manifest
 # signiert. Beides baut tools/build_licence_module.py — ohne den Schritt gibt
@@ -38,6 +48,11 @@ datas = [
     (str(ROOT / "app" / "examples"), "app/examples"),
     # Das Fenster rastert sein Symbol zur Laufzeit aus der SVG-Quelle.
     (str(ROOT / "app" / "images" / "icon"), "app/images/icon"),
+    # Die Bildschirmfotos des Handbuchs, je Sprache ein Ordner. Ohne sie öffnet
+    # F1 ein Handbuch, in dem an jeder Abbildung eine Lücke steht:
+    # `figures.IMAGE_ROOT` zeigt hierher, und `ManualView._image` gibt für eine
+    # fehlende Datei stillschweigend nichts zurück.
+    (str(ROOT / "app" / "images" / "manual"), "app/images/manual"),
     (str(ROOT / "LICENSE"), "."),
     (str(ROOT / "THIRD-PARTY-NOTICES.md"), "."),
 ]
@@ -117,7 +132,7 @@ executable = EXE(
     analysis.scripts,
     [],
     exclude_binaries=True,
-    name="Solidon",
+    name=APP_NAME,
     console=False,
     # Erzeugt von tools/make_icon.py aus app/images/icon/solidon3d.svg.
     icon=str(ROOT / "packaging" / "solidon3d.ico"),
@@ -129,5 +144,5 @@ collected = COLLECT(
     executable,
     analysis.binaries,
     analysis.datas,
-    name="Solidon",
+    name=APP_NAME,
 )

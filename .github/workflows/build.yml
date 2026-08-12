@@ -137,9 +137,12 @@ jobs:
           $bytes = [Convert]::FromBase64String($env:SIGN_CERTIFICATE)
           $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
           [IO.File]::WriteAllBytes($pfx, $bytes)
+          # Der Name kommt aus app/branding.py, nicht aus dieser Datei — hier
+          # stand er zweimal und war nach der Umbenennung zweimal falsch.
+          $name = python -c "from app.branding import APP_NAME; print(APP_NAME)"
           & signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 `
             /tr http://timestamp.digicert.com /td SHA256 `
-            "dist/Solidon/Solidon.exe"
+            "dist/$name/$name.exe"
 
       - name: Inno Setup sicherstellen (Windows)
         # Auf den GitHub-Runnern vorinstalliert; die Prüfung hält den Lauf
@@ -163,7 +166,7 @@ jobs:
           $bytes = [Convert]::FromBase64String($env:SIGN_CERTIFICATE)
           $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
           [IO.File]::WriteAllBytes($pfx, $bytes)
-          $setup = Get-ChildItem dist -Filter "Solidon-Setup-*.exe" | Select-Object -First 1
+          $setup = Get-ChildItem dist -Filter "*-Setup-*.exe" | Select-Object -First 1
           & signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 `
             /tr http://timestamp.digicert.com /td SHA256 `
             $setup.FullName
@@ -173,15 +176,16 @@ jobs:
         # Ausführungsrechte, das Archiv behält sie.
         if: runner.os == 'Linux'
         run: |
+          name=$(python -c "from app.branding import APP_NAME; print(APP_NAME)")
           version=$(python -c "from app.branding import APP_VERSION; print(APP_VERSION)")
-          tar -czf "dist/Solidon-${version}-linux-x86_64.tar.gz" -C dist Solidon
+          tar -czf "dist/${name}-${version}-linux-x86_64.tar.gz" -C dist "${name}"
 
       - name: Installer hochladen (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: solidon3d-setup-windows
-          path: dist/Solidon-Setup-*.exe
+          path: dist/*-Setup-*.exe
           # Der private Speicher fasst 500 MB, ein Paket rund 250 — was
           # veröffentlicht wird, liegt danach auf der Website, nicht hier.
           retention-days: 7
@@ -191,7 +195,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: solidon3d-linux
-          path: dist/Solidon-*-linux-x86_64.tar.gz
+          path: dist/*-linux-x86_64.tar.gz
           retention-days: 7
 
   latest:
