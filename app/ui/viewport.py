@@ -1025,8 +1025,18 @@ class Viewport(QWidget):
         """
         if self.plotter is None:
             return
+        # **Nicht** ``add_camera_orientation_widget``. Es ist das schönere
+        # Ding — anfassbar, mit beschrifteten Kugeln —, und es ist der Grund,
+        # warum im Viewport nur noch Achsenmarker standen: seine
+        # Repräsentation erschien formatfüllend über der Szene, während der
+        # Körper nur beim Bewegen der Kamera kurz aufblitzte. Gemessen am
+        # echten Bildschirm, nicht am Screenshot.
+        #
+        # ``add_axes`` sagt dasselbe, sitzt fest in der Ecke und hat keinen
+        # eigenen Renderer, der sich über das Bild legen kann. Wenn die
+        # Ursache im Widget gefunden ist, kann es zurückkommen.
         try:
-            self.plotter.add_camera_orientation_widget()
+            self.plotter.add_axes()
         except Exception as problem:  # pragma: no cover - hängt am Treiber
             _log.info("orientation widget unavailable: %s", problem)
 
@@ -1345,7 +1355,53 @@ class Viewport(QWidget):
         if window is None:
             self.plotter.render()
             return
+        # Die Kamera als geändert melden, bevor gezeichnet wird.
+        #
+        # Das ist der Unterschied zwischen einem Durchgang, den VTK auslässt,
+        # und einem, den es fährt: steht nichts auf „geändert", bleibt der
+        # Puffer, wie er war — leer. Genau deshalb erschien der Körper erst,
+        # wenn jemand die Kamera bewegte, und verschwand danach wieder.
+        # Angefasst wird nur der Zustandsstempel, keine Stellung: die Ansicht
+        # bleibt Pixel für Pixel dieselbe.
+        # Zwei Durchgänge, und der Grund steht in der Messung: **ein einzelner
+        # Render zeigt den vorigen Puffer.** Der erste Durchgang füllt den
+        # hinteren Puffer, getauscht wird er erst mit dem zweiten — bis dahin
+        # steht im Fenster, was vorher darin stand, und das war beim ersten
+        # Aufbau nichts. Genau daher das Bild, in dem nur die
+        # Orientierungsmarker liegen und der Körper beim Bewegen der Kamera
+        # kurz aufblitzt.
+        #
+        # Der Clipping-Bereich davor ist keine Zugabe: die Szene hat gerade
+        # ihre Ausdehnung geändert, und die alten Ebenen können den neuen
+        # Körper wegschneiden.
+        renderer = getattr(self.plotter, "renderer", None)
+        if renderer is not None:
+            renderer.ResetCameraClippingRange()
         window.Render()
+        window.Render()
+        # Und einer hinterher, wenn Qt mit dem Fenster durch ist.
+        #
+        # Zwei Durchgänge decken den Doppelpuffer ab, nicht aber den Fall, dass
+        # der Grafikkontext beim Aufbau noch nicht so weit war: in einem von
+        # drei Läufen blieb das Bild trotzdem leer. Ein Nachschlag nach dem
+        # nächsten Ereignisdurchlauf kostet nichts und schließt die Lücke.
+        QTimer.singleShot(0, self._render_again)
+        QTimer.singleShot(150, self._render_again)
+
+    def _render_again(self) -> None:
+        """Der Nachschlag aus :meth:`_render_now` — nur, wenn es noch etwas
+        zu zeichnen gibt."""
+        if self.plotter is None:
+            return
+        window = getattr(self.plotter, "ren_win", None)
+        if window is not None:
+            # Auch hier zweimal, und aus demselben Grund: **ein einzelner
+            # Durchgang tauscht auf den leeren Puffer.** Ein Nachschlag, der
+            # nur einmal zeichnet, macht damit genau das kaputt, was der
+            # doppelte Durchgang davor in Ordnung gebracht hat — vier von vier
+            # Läufen blieben so leer.
+            window.Render()
+            window.Render()
 
     def _slot_colours(self, surface: Any, mesh: Any, entry: Any, face_count: int) -> dict[str, Any]:
         """Ein bemalter Körper wird in seinen Filamentfarben gezeichnet (§20).
