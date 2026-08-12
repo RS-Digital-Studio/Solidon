@@ -1407,7 +1407,39 @@ class Viewport(QWidget):
         self.select(self._selected)
         self._redraw_features()
         self._redraw_layer()
+        self._centre_rotation()
         self._render_now()
+
+    def _centre_rotation(self) -> None:
+        """Gedreht wird um das, was man ansieht (§2.9).
+
+        VTK dreht um den Fokuspunkt der Kamera, und der stand auf dem
+        Weltursprung: ein Teil, das neben dem Ursprung liegt — und das tut
+        jedes heruntergeladene Modell —, wanderte beim Drehen im Bogen durch
+        das Bild, statt sich zu drehen. Der Fokus wandert deshalb in die Mitte
+        dessen, was sichtbar ist.
+
+        Die Blickrichtung und der Abstand bleiben dabei erhalten: die Kamera
+        rückt mit, statt sich zu verdrehen. Wer gerade von vorn schaut, schaut
+        danach immer noch von vorn.
+        """
+        if self.plotter is None:
+            return
+        renderer = getattr(self.plotter, "renderer", None)
+        if renderer is None:
+            return
+        grenzen = renderer.ComputeVisiblePropBounds()
+        if grenzen[0] > grenzen[1]:
+            return
+        mitte = tuple((grenzen[i * 2] + grenzen[i * 2 + 1]) / 2.0 for i in range(3))
+        camera = renderer.GetActiveCamera()
+        fokus = camera.GetFocalPoint()
+        if all(abs(mitte[i] - fokus[i]) < EPS_DISPLAY for i in range(3)):
+            return
+        position = camera.GetPosition()
+        camera.SetFocalPoint(*mitte)
+        camera.SetPosition(*(position[i] + mitte[i] - fokus[i] for i in range(3)))
+        renderer.ResetCameraClippingRange()
 
     def _render_now(self) -> None:
         """Zeichnen nach dem Aufbau einer Szene.
