@@ -61,7 +61,7 @@
       <a class="hide-small" href="#preis">Preis</a>
       <a href="/handbuch.html">Handbuch</a>
       <a href="/en/">English</a>
-      <a class="cta" href="#preis">Testen</a>
+      <a class="cta" href="#preis">Demo</a>
     </nav>
   </div>
 </header>
@@ -240,11 +240,16 @@
           <span class="tag">Weg 3 — Generieren</span>
           <h3>Aus Text oder Bild</h3>
           <p>Ein generiertes Mesh durchläuft automatisch die Reparaturkette,
+          wird auf eine Auflösung gebracht, mit der sich arbeiten lässt,
           bekommt einen Prüfbericht und wird bei Bedarf geteilt und
           verstiftet — bis es druckbar auf der Platte liegt. Braucht ein
           lokal laufendes ComfyUI mit Erzeuger-Modell und eine kräftige
           Grafikkarte; ohne beides bleiben Weg 1 und 2 vollständig
           nutzbar.</p>
+          <p><b>Mit Meshy, Tripo oder Rodin erzeugt?</b> Lade das GLB herunter
+          und zieh es hierher. Was dort entsteht, ist eine Oberfläche —
+          druckbar wird sie hier: Reparatur, Wandstärken, Bohrungen mit
+          Passung, Prüfbericht vor dem Slicen.</p>
         </div>
       </div>
     </div>
@@ -618,7 +623,56 @@
     </div>
   </section>
 
-  <section id="ehrlich" class="tint">
+  <section id="generiert" class="tint">
+    <div class="wrap">
+      <h2>Wenn das Modell aus einer KI kommt</h2>
+      <p class="sub">Meshy, Rodin, Tripo, Hunyuan — sie machen aus einem Satz
+      eine Form. Was sie nicht machen, ist ein Teil, das passt. Genau dort
+      fängt Solidon3D an.</p>
+
+      <ol class="chain">
+        <li><b>GLB oder STL hereinziehen.</b> Auch texturiert — die Farben
+        überleben den Import.</li>
+        <li><b>Reparaturkette und Prüfbericht.</b> Löcher, umgedrehte
+        Normalen, entartete Dreiecke; danach steht da, was beim Drucken
+        schiefgeht.</li>
+        <li><b>Farben auf deine Filamente umrechnen.</b> Auf die Zahl, die
+        wirklich in der Maschine steckt — nicht auf eine Höchstzahl.</li>
+        <li><b>Teilen, verstiften, anordnen.</b> Passstifte mit Spiel aus dem
+        Materialprofil, damit die Hälften wieder zusammenfinden.</li>
+        <li><b>3MF mit Materialgruppen an den Slicer.</b></li>
+      </ol>
+
+      <h3>Was eine Druckbarkeitsprüfung prüft</h3>
+      <p class="sub">Links, was die Prüfung eines Generators beantwortet.
+      Rechts, was vor dem Druck sonst noch schiefgehen kann. Stand
+      12.08.2026, nach der öffentlichen Dokumentation von Meshy.</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Geprüft wird</th><th>Generator</th><th>Solidon3D</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Wasserdicht, Löcher, offene Kanten</td><td><span class="yes">✓ ja</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Nicht-mannigfaltige Kanten, entartete Flächen</td><td><span class="yes">✓ ja</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Volumen</td><td><span class="yes">✓ ja</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Wandstärke gegen die Düse dieses Druckers</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Überhangwinkel je Schicht</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Inseln: Material ohne Verbindung nach unten</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Brückenweiten, schmalste Stelle</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Stützbedarf und beste Lage</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Passt es auf dein Druckbett</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Passungen gegen das Materialprofil</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">Reparieren allein gibt es inzwischen gratis im
+      Browser, und das ist auch in Ordnung — ein geschlossenes Netz ist noch
+      kein Teil, das passt. Der Unterschied liegt hinter der Reparatur: Maß,
+      Passung, Schichtanalyse, und ein Verlauf, in dem sich jede Zahl später
+      noch ändern lässt.</p>
+    </div>
+  </section>
+
+  <section id="ehrlich">
     <div class="wrap">
       <h2>Was Solidon3D nicht ist</h2>
       <div class="honest">
@@ -672,6 +726,16 @@
               <span><b>Die Demo ist nicht beschnitten.</b> Keine
               Wasserzeichen, keine Exportsperre, keine gesperrten Funktionen —
               sie hat ein Enddatum, sonst nichts.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Einmal, nicht jeden Monat.</b> Die KI-Dienste, mit
+              denen 3D heute beworben wird, rechnen im Abo ab — 20 bis 30 $ im
+              Monat sind üblich, also 240 bis 360 $ im Jahr, und nach der
+              Kündigung endet der Zugang. Hier sind es 49 € einmal. Dazu
+              kommt, was das Sprachmodell kostet, wenn du den Chat benutzt;
+              lokal über Ollama kostet auch das nichts.
+              <em>(Fremdpreise Stand 12.08.2026, ohne Gewähr.)</em></span>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>

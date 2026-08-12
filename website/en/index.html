@@ -61,7 +61,7 @@
       <a class="hide-small" href="#pricing">Price</a>
       <a href="/en/manual.html">Manual</a>
       <a href="/">Deutsch</a>
-      <a class="cta" href="#pricing">Try it</a>
+      <a class="cta" href="#pricing">Demo</a>
     </nav>
   </div>
 </header>
@@ -244,6 +244,10 @@
           until it sits printable on the plate. Needs a locally running
           ComfyUI with a generator model and a capable graphics card;
           without both, ways 1 and 2 remain fully usable.</p>
+          <p><b>Generated with Meshy, Tripo or Rodin?</b> Download the GLB and
+          drag it in here. What comes out of those is a surface — printable is
+          what it becomes here: repair, wall thicknesses, holes with a fit, a
+          report before you slice.</p>
         </div>
       </div>
     </div>
@@ -611,7 +615,54 @@
     </div>
   </section>
 
-  <section id="honest" class="tint">
+  <section id="generated" class="tint">
+    <div class="wrap">
+      <h2>When the model comes from an AI</h2>
+      <p class="sub">Meshy, Rodin, Tripo, Hunyuan — they turn a sentence into a
+      shape. What they do not turn it into is a part that fits. That is exactly
+      where Solidon3D starts.</p>
+
+      <ol class="chain">
+        <li><b>Drop in a GLB or STL.</b> Textured as well — the colours survive
+        the import.</li>
+        <li><b>Repair chain and report.</b> Holes, flipped normals, degenerate
+        triangles; afterwards it says what will go wrong on the plate.</li>
+        <li><b>Map the colours onto your filaments.</b> Onto the number
+        actually loaded in the machine, not onto a maximum.</li>
+        <li><b>Split, pin, arrange.</b> Dowels with clearance from the material
+        profile, so the halves find each other again.</li>
+        <li><b>3MF with material groups, straight to the slicer.</b></li>
+      </ol>
+
+      <h3>What a printability check checks</h3>
+      <p class="sub">On the left, what a generator's check answers. On the
+      right, what else can go wrong before the print. As of 12 August 2026,
+      from Meshy's public documentation.</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Checked</th><th>Generator</th><th>Solidon3D</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Watertight, holes, open edges</td><td><span class="yes">✓ yes</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Non-manifold edges, degenerate faces</td><td><span class="yes">✓ yes</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Volume</td><td><span class="yes">✓ yes</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Wall thickness against this printer's nozzle</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Overhang angle per layer</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Islands: material with nothing below it</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Bridge spans, narrowest section</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Support needed, and the best orientation</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Does it fit your build plate</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Fits against the material profile</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">Repairing alone is available free in a browser these
+      days, and that is fine — a closed mesh is still not a part that fits. The
+      difference sits behind the repair: dimension, fit, layer analysis, and a
+      history in which every number can still be changed later.</p>
+    </div>
+  </section>
+
+  <section id="honest">
     <div class="wrap">
       <h2>What Solidon3D is not</h2>
       <div class="honest">
@@ -665,6 +716,17 @@
               <span><b>The demo is not cut down.</b> No watermarks, no export
               lock, no features held back — it has an end date, nothing
               else.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Once, not every month.</b> The AI services 3D is
+              advertised with today bill by subscription — $20 to $30 a month
+              is usual, so $240 to $360 a year, and access ends when you
+              cancel. Here it is €49, once. On top comes whatever the language
+              model costs if you use the chat; locally, through Ollama, that
+              costs nothing either.
+              <em>(Third-party prices as of 12 August 2026, without
+              warranty.)</em></span>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>

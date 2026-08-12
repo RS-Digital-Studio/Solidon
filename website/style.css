@@ -1501,3 +1501,90 @@ main.legal p.lang-note {
 }
 
 main.legal p.lang-note b { color: var(--fg); }
+
+/* --- Der Weg vom erzeugten Netz zum Druck ---------------------------------
+   Nummeriert, weil es eine Reihenfolge ist und keine Aufzählung: Wer bei der
+   Farbumrechnung anfängt, hat ein Netz mit Löchern bunt gemacht. */
+ol.chain {
+  counter-reset: chain;
+  list-style: none;
+  margin: 2rem 0 3rem;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+  max-width: 46rem;
+}
+
+ol.chain li {
+  counter-increment: chain;
+  position: relative;
+  padding-left: 2.9rem;
+  color: var(--muted);
+}
+
+ol.chain li::before {
+  content: counter(chain);
+  position: absolute;
+  left: 0;
+  top: -0.1rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 650;
+  font-size: 0.9rem;
+}
+
+ol.chain li b { color: var(--fg); }
+
+/* --- Die Vergleichstabelle ------------------------------------------------
+   Häkchen und Strich tragen ihr Wort mit sich: Wer die Farbe nicht sieht,
+   liest „ja" und „nein" — dieselbe Regel, nach der die Anwendung selbst
+   gebaut ist. */
+table.compare {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 46rem;
+  margin: 1.4rem 0 1.2rem;
+  font-size: 0.97rem;
+}
+
+table.compare th {
+  text-align: left;
+  padding: 0 1rem 0.6rem 0;
+  border-bottom: 2px solid var(--line);
+  font-size: 0.86rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+table.compare th:not(:first-child),
+table.compare td:not(:first-child) { width: 8.5rem; }
+
+table.compare td {
+  padding: 0.6rem 1rem 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+table.compare tr:hover td { background: var(--card); }
+
+table.compare .yes { color: var(--accent); font-weight: 600; white-space: nowrap; }
+table.compare .no { color: var(--muted); white-space: nowrap; }
+
+p.footnote {
+  max-width: 44rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  border-left: 2px solid var(--line);
+  padding-left: 1.1rem;
+}
+
+#generiert h3 {
+  margin-top: 2.6rem;
+  font-size: 1.25rem;
+}
