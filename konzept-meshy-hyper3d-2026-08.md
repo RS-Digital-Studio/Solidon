@@ -4,12 +4,15 @@ Anlass ist eine Frage in vier Teilen: *Wie stehen Oberfläche, Funktionen,
 Handbuch und Schnittstelle gegen die beiden führenden KI-3D-Generatoren?
 Können wir mithalten?*
 
-**Dritte Fassung.** Der erste Durchgang blieb an vier Stellen bei Vermutungen;
+**Vierte Fassung.** Der erste Durchgang blieb an vier Stellen bei Vermutungen;
 der zweite maß sie nach. Der dritte entstand aus der Frage, ob die Webseiten
 und Funktionen wirklich vollständig angesehen worden seien — sie waren es
-nicht, und eine der Aussagen war schlicht falsch. Alle sieben Korrekturen
-stehen in Teil 8, nicht versteckt: Eine Korrektur ist mehr wert als eine
-Behauptung, die zufällig stimmte.
+nicht, und eine Aussage war schlicht falsch. Der vierte kam aus einer
+Beobachtung am laufenden Fenster: *Wo ist der orange Akzent? Alles eintönig.*
+Sie stimmt, sie ist messbar, und sie hat den schwächsten Teil dieses Dokuments
+— den Oberflächenvergleich — auf eigene Füße gestellt (4.3, 4.4, B16). Alle
+sieben Korrekturen stehen in Teil 8, nicht versteckt: Eine Korrektur ist mehr
+wert als eine Behauptung, die zufällig stimmte.
 
 Die kurze Antwort: **In zwei von sechs Bereichen sind wir deutlich überlegen,
 in zweien gleichauf, in zweien chancenlos.** Der wichtigste Befund ist keiner
@@ -438,7 +441,114 @@ es ist ein Feld, das sie nicht betreten.
 Angebot. Rodins fünfstufiger Aufwandsregler mit Sekundenangaben ist dieselbe
 Sache, als Versprechen formuliert (Befund B11).
 
-### 4.3 Was wir nicht übernehmen
+### 4.3 Der Akzent — warum das Fenster eintönig wirkt
+
+Der Anlass für diesen Abschnitt war eine Beobachtung am laufenden Programm:
+*Im Viewport und um die Panels ist nirgends ein oranger Akzent zu sehen.* Sie
+stimmt, und der Grund ist im Code eindeutig belegbar.
+
+**Die Farbe existiert und ist gut gewählt.** `theme.py:30` setzt
+`_SELECTION = "#f0a54a"` — Bernstein, 69,2 % Sättigung, Kontrast **7,27**
+gegen die Fensterfarbe. Sie ist in beiden Themen dieselbe und mit Bedacht
+gewählt: derselbe Ton, in dem der Viewport einen gewählten Körper färbt, damit
+Liste und Bild dieselbe Handlung gleich färben.
+
+**Sie hängt an genau einer Sorte Zustand: dem flüchtigen.** Ausgelesen aus
+`style.py`:
+
+| Der Akzent erscheint bei | Regel |
+|---|---|
+| markierter Zeile in Baum, Liste, Tabelle | `::item:selected` |
+| Primärknopf eines Dialogs | `QPushButton:default` |
+| eingeschaltetem Werkzeug | `QToolButton:checked` |
+| Tastaturfokus | `:focus` — 2 px Rahmen |
+| Menüeintrag unter der Maus | `QMenu::item:selected` |
+| laufendem Fortschritt | `QProgressBar::chunk` |
+
+Alle sechs sind **Momentzustände**. Sie setzen voraus, dass gerade etwas
+gewählt, gedrückt, überfahren oder berechnet wird. Im Handbuchbild des
+Hauptfensters steht unten links „Keine Auswahl" — und deshalb ist auf dem
+ganzen Bildschirm kein einziger Akzentpunkt. Genau das ist der Normalzustand
+beim Hinsehen.
+
+**Was der Akzent nicht tut: dauerhafte Struktur zeigen.** Ebenfalls aus
+`style.py`:
+
+- `QTabBar::tab:selected` bekommt `base` als Hintergrund und `line` als
+  Rahmen — **kein Akzent**. Der aktive Reiter „Prüfbericht" unterscheidet sich
+  vom inaktiven „Chat" also nur durch einen Flächenwechsel mit **1,10**
+  Kontrast.
+- `QHeaderView::section` — Fensterfarbe, gedämpfter Text.
+- `QGroupBox::title` — gedämpft.
+- `QSplitter::handle` — ein Pixel `line`.
+- Die Panels selbst haben keine Kante zum Viewport.
+
+**Und darunter liegt das eigentliche Problem: die Flächen sind zu eng
+beieinander.** Nachgerechnet für das dunkle Thema:
+
+| Flächenpaar | Kontrast |
+|---|---|
+| Panel gegen Fenster | **1,10** |
+| Zebrazeile gegen Panel | **1,16** |
+| Viewport-Verlauf unten gegen oben | **1,21** |
+| Trennlinie gegen Fenster | **1,43** |
+
+Sieben Rollen — Fenster, Panel, Zebrazeile, Trennlinie, Tooltip, beide
+Viewport-Enden, Bettfläche — liegen sämtlich zwischen **1,3 % und 5,0 %
+Helligkeit**. Ein Band von 3,7 Prozentpunkten für alles, was Fläche ist. Zum
+Vergleich: Für Bedienelemente gilt 3,0 als Untergrenze der Erkennbarkeit; die
+Trennlinie erreicht die Hälfte davon, und sie ist der **stärkste** Trenner im
+Fenster.
+
+Der Kommentar in `theme.py` hat die Richtung schon erkannt — die Trennlinie
+stand vorher bei 1,05 und wurde ausdrücklich angehoben, weil „ein Knopf ohne
+sichtbaren Rahmen kein Knopf ist, sondern Text". Der Schritt war richtig und
+zu klein.
+
+**Damit ist der Eindruck erklärt.** Es fehlt nicht an Farbe — es fehlt an
+Hierarchie. Ein einziger, sehr kräftiger Ton (7,27) markiert Flüchtiges; alles
+Bleibende teilt sich ein Helligkeitsband, in dem nichts vor oder zurücktritt.
+Ein Fenster ohne Auswahl ist deshalb wörtlich einfarbig, und die Struktur —
+was ist Panel, was ist Viewport, welcher Reiter gilt — muss der Betrachter aus
+Linien erschließen, die selbst kaum zu sehen sind.
+
+Der Vergleich mit den Generatoren ist an dieser Stelle ausnahmsweise unfair,
+weil deren Bildschirme aus Inhalt bestehen: Eine Kachelwand aus texturierten
+Figuren *ist* die Farbe. Der ehrliche Maßstab sind die Programme, aus denen
+unsere Nutzer kommen — Fusion, OrcaSlicer, Bambu Studio. Alle drei arbeiten
+mit deutlich abgestuften Flächen und einem Akzent, der den aktiven Bereich
+markiert, nicht nur die Auswahl darin. Das ist keine Geschmacksfrage, sondern
+Orientierung: Wer nicht sieht, wo er ist, sucht länger.
+
+### 4.4 Was daraus folgt — ohne Regel 18 zu verletzen
+
+Regel 18 verbietet Bedeutung **allein** über Farbe. Sie verbietet nicht, Farbe
+als *zusätzliche* Kodierung für etwas zu benutzen, das ohnehin schon anders
+erkennbar ist. Alle folgenden Punkte sind mehrfach kodiert und damit zulässig:
+
+1. **Der aktive Reiter bekommt eine Akzentkante** (2 px oben oder unten). Er
+   ist bereits durch Position und Flächenwechsel kodiert — die Kante macht ihn
+   auf einen Blick auffindbar, statt auf den zweiten.
+2. **Die Flächen weiter auseinanderziehen.** Panel gegen Fenster von 1,10 auf
+   mindestens 1,5, die Trennlinie auf 3,0. Das ist reine Zahlenarbeit an
+   `THEMES` und kostet keine Zeile Logik.
+3. **Der Viewport bekommt Tiefe.** 1,21 zwischen unten und oben ist kein
+   Verlauf, sondern eine Fläche mit Messfehler. Ein spürbarer Verlauf lässt
+   den Körper vor dem Raum stehen, statt in ihm zu kleben.
+4. **Der aktive Abschnitt links** (Objekte / Parameter / Verlauf) bekommt eine
+   Akzentmarke am Kopf — zusätzlich zum Auf-/Zuklapp-Dreieck, das die
+   Zweitkodierung schon liefert.
+5. **Der geltende Schritt im Verlauf** wird markiert. Im Bild ist die Liste
+   „Körper, Aushöhlen, Kabel und Befestigung, …" gleichförmig; wo der Stapel
+   gerade steht, sagt sie nicht.
+
+Was **nicht** passieren darf: Orange als Dekoration. Der Wert des Tons liegt
+darin, dass er heute genau eine Bedeutung hat. Jede neue Verwendung muss eine
+Frage beantworten, die der Nutzer wirklich stellt — *wo bin ich, was gilt
+gerade, wo stehe ich im Ablauf* —, sonst verliert er seine Schärfe und das
+Fenster wird bunt statt gegliedert.
+
+### 4.5 Was wir nicht übernehmen
 
 Galerie, Likes, Community-Kachelwand, Kontozwang, endloses Scrollen. Das
 verlangt einen Dienst, ein Konto und Serverbetrieb — alle drei stehen auf der
@@ -641,6 +751,7 @@ Wer heute vergleicht, kann dort ohne Frist anfangen.
 | **Reichweite, Ökosystem, Integrationen** | **chancenlos** — 12 Mio. Nutzer gegen einen Einzelentwickler vor Version 1.0 |
 | **Preis und Eigentum** | **überlegen**, wird nicht ausgespielt |
 | **Erster optischer Eindruck** | **unterlegen** im Hauptfenster, **gleichauf** bei Startbildschirm und Katalog |
+| **Gliederung der Oberfläche** | **eigenständige Schwäche** — sieben Flächenrollen in einem Helligkeitsband von 3,7 Punkten, der Akzent nur auf Flüchtigem (4.3, B16) |
 
 Der Satz, der aus den ersten drei Zeilen folgt:
 *Meshy erzeugt Dinge, die aussehen wie etwas. Solidon macht Teile, die passen —
@@ -760,6 +871,33 @@ am offenen Dokument und lässt sich mit einem Strg+Z zurücknehmen.
 Quelle. Daneben die Drei-Tage-Löschung als Sachverhalt. Beides beantwortet
 dieselbe Frage: *Was habe ich hinterher in der Hand?*
 
+### B16 — Flächen abstufen und den Akzent an Bleibendes binden · **hoch** · klein bis mittel
+
+Der Befund aus 4.3, in Zahlen: Panel gegen Fenster 1,10 · Zebrazeile gegen
+Panel 1,16 · Viewport-Verlauf 1,21 · Trennlinie gegen Fenster 1,43. Sieben
+Flächenrollen zwischen 1,3 % und 5,0 % Helligkeit. Der Akzent hat 7,27
+Kontrast und erscheint ausschließlich bei Auswahl, Fokus, Hover, gedrücktem
+Knopf und laufendem Fortschritt — also nie im Ruhezustand.
+
+Zwei Teile, verschieden teuer:
+
+**Teil A, reine Zahlenarbeit an `THEMES` (klein).** Panel gegen Fenster auf
+mindestens 1,5, Trennlinie auf 3,0, Viewport-Verlauf spürbar. Kein
+Logikeingriff, keine neue Regel — aber sämtliche Bildschirmfotos des Handbuchs
+müssen danach neu aufgenommen werden (`tools/make_figures.py`, **nicht**
+offscreen, sonst fehlen die Schriften), und `tests/test_accessibility.py` prüft
+die Kontraste mit.
+
+**Teil B, der Akzent an fünf bleibende Zustände (mittel).** Aktiver Reiter,
+aktiver Abschnitt links, geltender Schritt im Verlauf — jeweils *zusätzlich*
+zu einer bestehenden Kodierung, damit Regel 18 unberührt bleibt. Die Liste
+steht in 4.4.
+
+Priorität hoch, weil es den ersten Eindruck betrifft und weil Teil A billiger
+ist als jede andere Maßnahme in diesem Dokument. Vor der Umsetzung gehört ein
+Blick auf Fusion und OrcaSlicer im Vollbild daneben — nicht auf die
+Generatoren, deren Bildschirme aus Inhalt bestehen.
+
 ### B8 — Vorschaubilder im Objektbaum · **niedrig** · mittel
 
 Die Renderstrecke existiert und wird im Bausteinkatalog benutzt. Sie auf
@@ -857,9 +995,10 @@ Ein Durchgang gilt als erledigt, wenn:
 
 ---
 
-*Stand 12.08.2026, dritte Fassung. Der eigene Stand ist aus dem laufenden Code
+*Stand 12.08.2026, vierte Fassung. Der eigene Stand ist aus dem laufenden Code
 gemessen — alle 77 Operationen, alle 16 Bausteine, alle Wissenstabellen, die
-Farbkette eigens durchgefahren, alle sechs Bildschirmfotos angesehen. Der
+Farbkette eigens durchgefahren, Themenfarben auf Kontrast und Sättigung
+nachgerechnet, alle sechs Bildschirmfotos angesehen. Der
 Marktstand stammt von den Seiten der Anbieter, im dritten Durchgang über ihre
 eigene Navigation im Browser abgerufen. Preise, Nutzerzahlen und
 Aufbewahrungsfristen sind ihre Angaben, keine geprüften Werte. Nicht einsehbar
