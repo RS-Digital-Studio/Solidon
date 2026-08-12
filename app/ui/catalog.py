@@ -138,7 +138,7 @@ class PartCatalog(QDialog):
         self._previews: dict[str, QPixmap] = {}
         self.show_parts()
         self._show_detail()
-        QTimer.singleShot(0, self._render_pending)
+        QTimer.singleShot(0, self, self._render_pending)
 
     # --- content ----------------------------------------------------------------
 
@@ -188,7 +188,7 @@ class PartCatalog(QDialog):
         if watched is self.list and event.type() == QEvent.Type.Resize:
             # Ein Filter sieht das Ereignis vor dem Ziel — der Viewport hat
             # hier noch die alte Breite. Erst nach der Verarbeitung messen.
-            QTimer.singleShot(0, self._stretch_headings)
+            QTimer.singleShot(0, self, self._stretch_headings)
         handled: bool = super().eventFilter(watched, event)
         return handled
 
@@ -237,7 +237,7 @@ class PartCatalog(QDialog):
         self._previews[missing.name] = pixmap
 
         self._refresh_icon(missing.name)
-        QTimer.singleShot(0, self._render_pending)
+        QTimer.singleShot(0, self, self._render_pending)
 
     def _refresh_icon(self, name: str) -> None:
         """Hängt ein fertiges Bild an seine Zeile, ohne die Liste neu zu bauen —

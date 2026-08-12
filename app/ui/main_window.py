@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import platform
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from pathlib import Path
 from typing import Any, Final
 
@@ -2809,7 +2810,10 @@ class MainWindow(QMainWindow):
         """
         if worker not in self._retired:
             self._retired.append(worker)
-        QTimer.singleShot(0, lambda: self._release(worker))
+        # Mit diesem Fenster als Kontext: ein Lambda ohne Empfänger läuft
+        # weiter, wenn das Fenster längst weg ist, und greift dann in ein
+        # zerstörtes C++-Objekt.
+        QTimer.singleShot(0, self, lambda: self._release(worker))
 
     def _release(self, worker: Any) -> None:
         """Einen ausgelaufenen Arbeiter loslassen — und keinen, der noch läuft."""
@@ -4393,7 +4397,7 @@ class MainWindow(QMainWindow):
             self.right.setCurrentWidget(self.report)
 
         area.setStyleSheet(f"border: 2px solid {ROLES['select']};")
-        QTimer.singleShot(FLASH_MS, lambda: area.setStyleSheet(""))
+        QTimer.singleShot(FLASH_MS, self, lambda: area.setStyleSheet(""))
 
     def _remove_tour(self) -> None:
         """Blendet den Tour-Reiter aus — beim Beenden und beim Projektwechsel."""
@@ -4517,6 +4521,21 @@ class MainWindow(QMainWindow):
         in der Suite.
         """
         self.wait_for_workers(timeout_ms)
+        # Die Sitzung überlebt dieses Fenster — in der Suite gehört sie einem
+        # eigenen Fixture, im Betrieb kann ein zweites Fenster folgen. Solange
+        # ihre Signale hierher zeigen, ruft das nächste Ergebnis in ein
+        # Fenster, dessen Widgets auf der C++-Seite schon weg sind, und
+        # `show_document` schreibt in freigegebenen Speicher. Das war der
+        # Absturz, der den Ubuntu-Runner eine Woche lang jedes Mal an
+        # derselben Zeile umbrachte.
+        #
+        # Ausdrücklich getrennt und nicht dem Zerstören überlassen: `deleteLater`
+        # trennt zwar auch, aber erst wenn es wirklich ausgeführt wird — und
+        # ein `processEvents` allein tut das nicht.
+        # Nichts verbunden oder Sitzung schon weg: beides ist das Ziel dieser
+        # Zeile, also ist beides kein Fehler.
+        with suppress(RuntimeError, TypeError):
+            self.session.disconnect(self)
         plotter = getattr(self.viewport, "plotter", None)
         closer = getattr(plotter, "close", None)
         if callable(closer):

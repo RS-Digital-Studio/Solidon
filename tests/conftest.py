@@ -121,6 +121,7 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     hinge weiter an den Signalen seiner Sitzung.
     """
     yield
+    from PySide6.QtCore import QEvent
     from PySide6.QtWidgets import QApplication
     from shiboken6 import isValid
 
@@ -150,6 +151,12 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
         # zerstört das Objekt, ohne es zu schließen.
         widget.deleteLater()
     application.processEvents()
+    # Und jetzt wirklich löschen. ``processEvents`` verarbeitet
+    # ``DeferredDelete`` **nicht** — die Ereignisse bleiben liegen, und die
+    # Fenster, die oben abbestellt wurden, stünden bis zum Prozessende in der
+    # Warteschlange. Der erste Anlauf dieser Fixture hat genau das getan und
+    # nichts geändert; erst diese Zeile führt aus, was oben angemeldet ist.
+    application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 @dataclass(frozen=True, slots=True)
