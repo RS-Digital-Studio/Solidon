@@ -96,17 +96,53 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
 
     Zentral und nicht in jedem ``window``-Fixture: es gibt neun davon, und das
     zehnte vergisst es.
+
+    **Warten allein genügte nicht.** Der Ubuntu-Runner starb ab dem 06.08.2026
+    in jedem Lauf mit einem Segmentierungsfehler, immer an derselben Zeile —
+    ``HistoryPanel.show_document``, erste Anweisung, ``self.list.clear()`` —,
+    aber jedes Mal in einem anderen Test. Eine Messung mit zerlegter Suite hat
+    gezeigt, dass der Absturz *wandert*: es liegt an keinem Test, sondern an
+    dem, was sich über den Lauf ansammelt.
+
+    Angesammelt haben sich die Fenster. Ein ``window``-Fixture gibt sein
+    ``MainWindow`` zurück und überlässt es danach dem Speicherbereiniger; die
+    ``Session`` daneben lebt in ihrem eigenen Fixture weiter. Sammelt Python
+    das Fenster ein, während eine Zustellung läuft, ruft ``sceneChanged`` in
+    ein ``_on_scene``, dessen Widgets auf der C++-Seite schon weg sind — und
+    ``clear()`` schreibt in freigegebenen Speicher. Unter Windows fällt das
+    selten auf, weil der Allokator die Seite behält; unter Linux gibt er sie
+    zurück, und der nächste ``wait_for_idle`` mit seinem ``processEvents``
+    stellt genau dann zu.
+
+    Deshalb wird jedes Fenster hier **planmäßig** zerstört statt eingesammelt:
+    ``deleteLater`` trennt beim Ausführen alle Verbindungen, an denen es als
+    Empfänger hängt. Das ``processEvents`` danach ist der Punkt, an dem das
+    wirklich geschieht — ohne es bliebe die Löschung angemeldet und das Fenster
+    hinge weiter an den Signalen seiner Sitzung.
     """
     yield
     from PySide6.QtWidgets import QApplication
+    from shiboken6 import isValid
 
     application = QApplication.instance()
     if application is None:
         return
     for widget in list(application.topLevelWidgets()):
+        # In dieser Liste stehen auch Wrapper, deren C++-Seite längst weg ist —
+        # `isValid` ist keine Vorsicht, sondern die Bestätigung des Befunds:
+        # genau solche Leichen hält Qt hier, und genau in eine davon schrieb
+        # der Segmentierungsfehler.
+        if not isValid(widget):
+            continue
         waiter = getattr(widget, "wait_for_workers", None)
         if callable(waiter):
             waiter()
+        # Löschen, nicht schließen: ``closeEvent`` fragt bei ungesicherter
+        # Arbeit nach, und eine modale Frage in einer Suite ohne Bildschirm
+        # wartet, bis jemand kommt. ``deleteLater`` geht daran vorbei — es
+        # zerstört das Objekt, ohne es zu schließen.
+        widget.deleteLater()
+    application.processEvents()
 
 
 @dataclass(frozen=True, slots=True)
