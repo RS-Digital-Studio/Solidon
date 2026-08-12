@@ -82,8 +82,30 @@ LEFT_WIDTH = 260
 #: als links, weil hier nichts eingerückt ist.
 RIGHT_WIDTH = 300
 
+#: Ab welcher Fensterbreite die Karten mitwachsen, und wie weit.
+#:
+#: Feste Breiten sind für 1920 gebaut und bleiben dort richtig. Auf einem
+#: breiten Bildschirm werden sie zum Zwölftel des Fensters: die Maßspalte im
+#: Objektbaum brach mitten in der Zahl ab — aus drei Maßen wurden zwei und ein
+#: Auslassungszeichen —, während
+#: daneben ein 20-mm-Würfel in zwei Metern Leere stand. Gewachsen wird
+#: anteilig und mit Deckel — eine Karte, die mit dem Fenster mitwächst, wäre
+#: bei 5000 Pixeln eine Wand.
+GROWTH_SHARE = 0.13
+LEFT_MAX = 420
+RIGHT_MAX = 460
+
 #: Abstand der Karten zum Fensterrand und zueinander.
 MARGIN = ROOMY
+
+
+def card_width(base: int, cap: int, window: int) -> int:
+    """Wie breit eine Karte in einem Fenster dieser Breite sein soll.
+
+    Unter etwa 2000 Pixeln kommt der Grundwert heraus — dort ändert sich
+    nichts. Darüber wächst die Karte anteilig, bis sie den Deckel erreicht.
+    """
+    return int(min(max(base, window * GROWTH_SHARE), cap))
 
 
 def card_stylesheet(theme: Theme) -> str:
@@ -460,14 +482,16 @@ class OverlayHost(QWidget):
         if self.left.isVisibleTo(self):
             self._share_room(self.left, room)
             wanted = min(natural_height(self.left), room)
-            self._move(self.left, QRect(MARGIN, MARGIN, LEFT_WIDTH, wanted), moving)
+            breite = card_width(LEFT_WIDTH, LEFT_MAX, width)
+            self._move(self.left, QRect(MARGIN, MARGIN, breite, wanted), moving)
 
         if self.right.isVisibleTo(self):
             self._share_room(self.right, room)
             wanted = min(natural_height(self.right), room)
+            breite = card_width(RIGHT_WIDTH, RIGHT_MAX, width)
             self._move(
                 self.right,
-                QRect(width - RIGHT_WIDTH - MARGIN, MARGIN, RIGHT_WIDTH, wanted),
+                QRect(width - breite - MARGIN, MARGIN, breite, wanted),
                 moving,
             )
 

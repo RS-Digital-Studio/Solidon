@@ -3668,3 +3668,19 @@ def test_a_downloaded_model_keeps_where_it_came_from(window: MainWindow) -> None
     assert window.stack.currentWidget() is not window.start_screen, (
         "geladen laut Statusleiste, unsichtbar im Bild: der Startbildschirm blieb stehen"
     )
+
+
+def test_the_cards_grow_with_a_wide_window() -> None:
+    """§19.3: Feste Breiten sind für 1920 gebaut.
+
+    Auf 3413 Pixeln wurde die linke Karte zum Zwölftel des Fensters — die
+    Maßspalte brach mitten in der Zahl ab, während daneben zwei Meter Leere
+    standen. Gewachsen wird anteilig und mit Deckel; unter etwa 2000 Pixeln
+    bleibt alles, wie es war.
+    """
+    from app.ui.overlay import LEFT_MAX, LEFT_WIDTH, card_width
+
+    assert card_width(LEFT_WIDTH, LEFT_MAX, 1280) == LEFT_WIDTH
+    assert card_width(LEFT_WIDTH, LEFT_MAX, 1920) == LEFT_WIDTH
+    assert card_width(LEFT_WIDTH, LEFT_MAX, 2560) > LEFT_WIDTH
+    assert card_width(LEFT_WIDTH, LEFT_MAX, 5120) == LEFT_MAX
