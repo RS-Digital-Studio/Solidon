@@ -95,6 +95,7 @@ def stylesheet(theme: Theme, base_point_size: int) -> str:
     line = colours["line"]
     highlight = colours["highlight"]
     on_highlight = colours["highlight_text"]
+    accent_line = colours["accent_line"]
     hover = colours["alternate"]
 
     return f"""
@@ -227,11 +228,19 @@ QTabBar::tab {{
     padding: {TIGHT}px {ROOMY}px;
 }}
 QTabBar::tab:hover {{ color: {text}; background: {hover}; }}
+/* Der aktive Reiter trägt eine Akzentkante — und zwar zusätzlich zu Fläche,
+   Farbe und Fettschrift, die er schon hatte (Regel 18 bleibt unberührt).
+   Vorher unterschied ihn vom stillen allein der Flächenwechsel, und der lag
+   bei 1,10 Kontrast: Ob Prüfbericht oder Chat gilt, war eine Frage des
+   zweiten Blicks. Das obere Padding gibt die drei Pixel wieder her, sonst
+   rutscht die Beschriftung nach unten. */
 QTabBar::tab:selected {{
     color: {text};
     background: {base};
     border-color: {line};
+    border-top: 3px solid {accent_line};
     border-bottom-color: {base};
+    padding-top: {max(TIGHT - 2, 0)}px;
     font-weight: 600;
 }}
 

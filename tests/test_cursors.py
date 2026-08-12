@@ -242,3 +242,31 @@ def test_the_same_role_twice_does_not_set_it_twice(qt_app: QApplication) -> None
     viewport.set_drag_cursor("rotate")
     viewport.set_drag_cursor("rotate")
     assert viewport.plotter.interactor.count == 1
+
+
+def test_the_panels_get_the_same_pointer_as_the_view(qt_app: QApplication) -> None:
+    """Sonst stehen zwei Handschriften in einem Fenster: der eigene Zeiger über
+    dem Bild, der des Systems daneben."""
+    from app.ui.cursors import apply_default_cursor
+
+    window = QWidget()
+    child = QWidget(window)
+    apply_default_cursor(window)
+
+    assert not window.cursor().pixmap().isNull()
+    # Das Kind hat keinen eigenen gesetzt und erbt deshalb — genau darauf
+    # beruht der Aufruf auf Fensterebene.
+    assert child.cursor().pixmap().cacheKey() == window.cursor().pixmap().cacheKey()
+
+
+def test_a_text_field_keeps_its_own_pointer(qt_app: QApplication) -> None:
+    """Der Textbalken ist eine Auskunft, keine Zierde. Widgets, die ihren
+    Zeiger selbst setzen, dürfen von der Vererbung nicht überfahren werden."""
+    from PySide6.QtWidgets import QLineEdit
+
+    from app.ui.cursors import apply_default_cursor
+
+    window = QWidget()
+    field = QLineEdit(window)
+    apply_default_cursor(window)
+    assert field.cursor().shape() == Qt.CursorShape.IBeamCursor

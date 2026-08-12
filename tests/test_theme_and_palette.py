@@ -33,8 +33,41 @@ def test_a_border_is_actually_visible(theme: str) -> None:
     fiel genau das auf, und es fällt nur im Bild auf.
     """
     colours = THEMES[theme]  # type: ignore[index]
-    assert contrast_ratio(colours["line"], colours["window"]) >= 1.3
-    assert contrast_ratio(colours["line"], colours["base"]) >= 1.3
+    assert contrast_ratio(colours["line"], colours["window"]) >= 1.9
+    assert contrast_ratio(colours["line"], colours["base"]) >= 1.9
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_the_surfaces_stand_apart(theme: str) -> None:
+    """Sieben Flächenrollen lagen in einem Helligkeitsband von 3,7 Punkten.
+
+    Panel gegen Fenster 1,10, Zebrazeile gegen Panel 1,16, der Viewport-Verlauf
+    1,21 — nichts trat vor oder zurück, und wer keine Auswahl getroffen hatte,
+    sah ein einfarbiges Fenster. Die Schwellen unten halten den Abstand fest,
+    damit er nicht Farbe für Farbe zurückrutscht.
+
+    Sie sind je Thema verschieden, und das ist keine Nachlässigkeit: Was dunkel
+    für Tiefe sorgt, macht hell aus dem Weiß ein schmutziges Grau.
+    """
+    colours = THEMES[theme]  # type: ignore[index]
+    panel = 1.4 if theme == "dark" else 1.18
+    zebra = 1.25 if theme == "dark" else 1.15
+    assert contrast_ratio(colours["base"], colours["window"]) >= panel, (
+        "das Panel muss sich vom Fenster lösen"
+    )
+    assert contrast_ratio(colours["alternate"], colours["base"]) >= zebra, (
+        "die Zebrazeile muss eine sein"
+    )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_the_accent_line_carries_on_its_own_window(theme: str) -> None:
+    """Die Kante des aktiven Reiters ist der einzige Ort, an dem der Akzent
+    einen *bleibenden* Zustand zeigt. Sie muss auf beiden Untergründen tragen —
+    der Bernstein selbst bringt gegen das helle Fenster nur 1,37.
+    """
+    colours = THEMES[theme]  # type: ignore[index]
+    assert contrast_ratio(colours["accent_line"], colours["window"]) >= 3.0
 
 
 @pytest.mark.parametrize("theme", list(THEMES))

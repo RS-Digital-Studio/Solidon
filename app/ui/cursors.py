@@ -161,6 +161,21 @@ def cursor(role: str, widget: QWidget) -> QCursor:
     return cached
 
 
+def apply_default_cursor(window: QWidget) -> None:
+    """Gibt einem Fenster den Auswahlzeiger — und damit allen Panels darin.
+
+    Qt vererbt den Zeiger an jedes Kind, das keinen eigenen gesetzt hat. Genau
+    das ist hier erwünscht: Listen, Bäume, Beschriftungen und Flächen erben
+    ihn, während ein Eingabefeld seinen Textbalken behält und ein Splitter
+    seinen Doppelpfeil — beide setzen ihren selbst und werden deshalb nicht
+    überschrieben.
+
+    Ohne diesen Aufruf hing der Zeiger allein am Viewport, und links daneben
+    stand der Pfeil des Systems: dieselbe Anwendung mit zwei Handschriften.
+    """
+    window.setCursor(cursor("select", window))
+
+
 def known() -> tuple[str, ...]:
     """Alle Rollen — gezeichnete und geerbte. Der Test liest das."""
     return tuple(sorted({*SHAPES, *SYSTEM}))

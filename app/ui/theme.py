@@ -8,7 +8,7 @@ ein bekanntes Hintergrundbild voraus. Farben, die Bedeutung tragen, leben in
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Final, Literal
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
@@ -30,46 +30,72 @@ Theme = Literal["dark", "light"]
 _SELECTION = "#f0a54a"
 _ON_SELECTION = "#1c2026"
 
+#: Die Kante, mit der ein *bleibender* Zustand markiert wird — der aktive
+#: Reiter, der offene Abschnitt.
+#:
+#: Warum nicht einfach :data:`_SELECTION`: Der Bernstein ist hell. Gegen das
+#: dunkle Fenster bringt er 5,4, gegen das helle nur **1,37** — dort wäre die
+#: Kante ein Hauch. Im hellen Thema steht deshalb ein abgedunkelter Ton
+#: derselben Farbe, gerechnet auf 3,0 gegen sein Fenster. Es ist dieselbe
+#: Farbe im Sinne der Bedeutung, nur so hell, wie ihr Untergrund es zulässt.
+_ACCENT_LINE: Final = {"dark": _SELECTION, "light": "#c37210"}
+
 #: Window, panel and text colours per theme, contrast checked against WCAG AA.
 #:
 #: ``line`` ist die Farbe jeder Trennung — Rahmen, Trenner, Kopfzeilenkante.
 #: Sie trägt keine Schrift und muss deshalb nicht AA erfüllen; sie muss
-#: *sichtbar* sein. Vorher stand dafür ``alternate``, die Farbe der Zebrazeile:
-#: im dunklen Thema 1,05 Kontrast zum Fenster, also nichts. Ein Knopf ohne
-#: sichtbaren Rahmen ist kein Knopf, sondern Text.
+#: *sichtbar* sein.
+#:
+#: **Die Flächen liegen bewusst weiter auseinander als früher.** Der Stand
+#: davor: Panel gegen Fenster 1,10, Zebrazeile gegen Panel 1,16, der
+#: Viewport-Verlauf 1,21, die Trennlinie 1,43 — sieben Flächenrollen in einem
+#: Helligkeitsband von 3,7 Prozentpunkten. Nichts trat vor oder zurück, und
+#: ohne Auswahl war das Fenster wörtlich einfarbig. Die Zahlen unten sind aus
+#: Zielkontrasten gerechnet und danach am Bild geprüft, nicht geschätzt.
+#:
+#: **Und sie sind je Thema verschieden.** Ein dunkles Thema verträgt die
+#: Spreizung, die ein helles schmutzig aussehen lässt: 1,45 zwischen Panel und
+#: Fenster steht dunkel gut und macht hell aus dem Weiß ein Grau. Hell arbeitet
+#: deshalb mit 1,22. Wer beide über einen Kamm schert, verdirbt eines von
+#: beiden.
 THEMES: dict[Theme, dict[str, str]] = {
     "dark": {
-        "window": "#23272e",
+        "window": "#343a45",
         "base": "#1b1f25",
-        "alternate": "#262b33",
-        "line": "#39404a",
+        "alternate": "#2c323b",
+        "line": "#647182",
         "text": "#e6e9ee",
         "disabled": "#7c848f",
         "highlight": _SELECTION,
         "highlight_text": _ON_SELECTION,
+        "accent_line": _ACCENT_LINE["dark"],
         "tooltip": "#2c323c",
         "viewport_bottom": "#20242b",
-        "viewport_top": "#2c323c",
+        "viewport_top": "#3b4350",
         "object": "#b9c4d0",
         "bed": "#5a6472",
         "bed_surface": "#2a303a",
         "edge": "#4c5258",
     },
     "light": {
-        "window": "#f2f3f5",
+        "window": "#e7e9ed",
         "base": "#ffffff",
-        "alternate": "#e9ebee",
-        "line": "#c9ced6",
+        "alternate": "#e8eaed",
+        "line": "#9ea7b5",
         "text": "#1c2026",
         "disabled": "#8b929b",
         "highlight": _SELECTION,
         "highlight_text": _ON_SELECTION,
+        "accent_line": _ACCENT_LINE["light"],
         "tooltip": "#ffffe1",
-        "viewport_bottom": "#dfe3e8",
+        "viewport_bottom": "#d5dae1",
         "viewport_top": "#f4f6f8",
         "object": "#7d8894",
         "bed": "#9aa3ae",
-        "bed_surface": "#cdd3da",
+        # Zieht mit dem Hintergrund mit: Der abgedunkelte Verlauf war der
+        # bisherigen Plattenfarbe auf 1,07 nahegekommen, und eine Druckplatte,
+        # die man vom Nichts dahinter nicht unterscheidet, ist keine.
+        "bed_surface": "#bcc4ce",
         "edge": "#1c2228",
     },
 }
@@ -105,11 +131,18 @@ def apply_theme(application: QApplication, theme: Theme) -> None:
     Stylesheet die Form. Getrennt gesetzt wären sie zwei Wege, auf denen ein
     Themenwechsel halb ankommen kann.
     """
+    from app.ui.cursors import apply_default_cursor
     from app.ui.style import apply_style
 
     application.setStyle("Fusion")
     application.setPalette(build_palette(theme))
     apply_style(application, theme)
+    # Der Zeiger gehört zum Aussehen wie die Farben. Er hing lange nur am
+    # Viewport, und in den Panels stand der gewöhnliche Pfeil daneben — zwei
+    # Programme in einem Fenster. Hier gesetzt, weil ein Themenwechsel die
+    # einzige Gelegenheit ist, die *jedes* Fenster erreicht.
+    for window in application.topLevelWidgets():
+        apply_default_cursor(window)
 
 
 def viewport_colours(theme: Theme) -> dict[str, str]:
