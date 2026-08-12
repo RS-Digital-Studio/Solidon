@@ -35,6 +35,20 @@ _log = get_logger(__name__)
 #: Wie lange der Testlauf dauert. Steht so auf der Website.
 TRIAL_DAYS: Final = 14
 
+#: Letzter Tag der öffentlichen Demo — oder ``None`` in der Verkaufsfassung,
+#: die stattdessen den Testlauf zählt.
+#:
+#: Ein Stichtag statt einer Frist ab dem ersten Start: die Demo endet für alle
+#: am selben Tag, der Tag selbst gehört noch dazu. Der Testlaufmarker verliert
+#: damit seine Bedeutung — wer ihn löscht, gewinnt keinen Tag, und wer die Uhr
+#: zurückstellt, verschiebt nur sein eigenes Kalenderblatt.
+#:
+#: Er steht hier und nicht in ``branding.py``, weil dieses Paket seit V4c mit
+#: Cython übersetzt ausgeliefert wird: der Stichtag reist in der Erweiterung
+#: statt als lesbare Zeile daneben. Öffnen kann er ohnehin nichts, was ein
+#: Schlüssel nicht öffnete — er kann nur sperren.
+DEMO_UNTIL: Final[date | None] = date(2026, 10, 30)
+
 #: Dateiname des Schlüssels im Einstellungsordner.
 KEY_FILE: Final = "licence.key"
 
@@ -125,6 +139,22 @@ def _write_trial(first_run: date, last_seen: date) -> None:
         # Start neu. Das ist die freundliche Richtung des Fehlers, und ein
         # Abbruch wäre die falsche.
         _log.warning("trial marker could not be written: %s", problem)
+
+
+def days_left(today: date | None = None) -> int:
+    """Wie viele Tage die schreibende Seite noch offensteht. Null heißt zu.
+
+    Die eine Stelle, an der sich Demo und Verkaufsfassung unterscheiden: mit
+    einem Stichtag zählt der Kalender, ohne ihn die Frist ab dem ersten Start.
+    Alles darüber — die vier Grenzstellen, die ausgegraute Oberfläche, der
+    Freischaltdialog — sieht in beiden Fällen dieselbe Zahl.
+    """
+    if DEMO_UNTIL is None:
+        return trial_days_left(today)
+    # Der Stichtag selbst gehört noch dazu: am 30.10. bleibt ein Tag übrig,
+    # am 31.10. keiner. Die freundliche Richtung, und die, die auf der Website
+    # steht („bis zum 30.10.").
+    return max(0, (DEMO_UNTIL - (today or date.today())).days + 1)
 
 
 def trial_days_left(today: date | None = None) -> int:

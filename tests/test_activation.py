@@ -341,6 +341,115 @@ def test_a_missing_marker_starts_over(own_config: Path) -> None:
     assert store.trial_days_left(start + timedelta(days=13)) == store.TRIAL_DAYS
 
 
+# --- Die Demo -------------------------------------------------------------------
+
+
+@pytest.fixture
+def demo(monkeypatch: pytest.MonkeyPatch) -> Iterator[date]:
+    """Ein bekannter Stichtag statt des ausgelieferten.
+
+    Die Suite läuft sonst ohne (siehe `conftest._the_calendar_stays_out_of_it`);
+    hier wird die Frist selbst geprüft, also muss sie hier stehen.
+    """
+    deadline = date(2026, 10, 30)
+    monkeypatch.setattr(store, "DEMO_UNTIL", deadline)
+    activation.forget_cache()
+    yield deadline
+    activation.forget_cache()
+
+
+def test_the_demo_runs_up_to_and_including_its_deadline(demo: date) -> None:
+    assert store.days_left(demo - timedelta(days=70)) == 71
+    assert store.days_left(demo) == 1, "der Stichtag selbst gehört noch dazu"
+    assert store.days_left(demo + timedelta(days=1)) == 0
+
+
+def test_the_demo_does_not_count_from_the_first_run(own_config: Path, demo: date) -> None:
+    """Der Testlaufmarker entscheidet in der Demo nichts mehr.
+
+    Das ist der Unterschied der beiden Modelle in einem Test: eine Frist ab
+    dem ersten Start ließe sich durch Löschen der Datei erneuern, ein
+    Kalendertag nicht. Deshalb steht in der Demo auch keine Zusicherung über
+    ihn — er wird schlicht nicht gelesen.
+    """
+    store.trial_path().write_text(
+        '{"first_run": "2026-01-01", "last_seen": "2026-08-06"}', encoding="utf-8"
+    )
+    assert store.days_left(demo - timedelta(days=1)) == 2
+    store.trial_path().unlink()
+    assert store.days_left(demo - timedelta(days=1)) == 2
+
+
+def test_after_its_deadline_the_demo_is_over(
+    own_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nicht Betrachter, sondern Schluss (Demo-Konzept §2 B2)."""
+    monkeypatch.setattr(store, "DEMO_UNTIL", date.today() - timedelta(days=1))
+    activation.forget_cache()
+    state = activation.state()
+    assert state.over
+    assert state.in_demo
+    assert not state.unlocked
+    with pytest.raises(LicenceRequired):
+        activation.require(activation.CHANGE)
+
+
+def test_a_running_demo_knows_its_last_day(own_config: Path, demo: date) -> None:
+    """Die Oberfläche nennt den Stichtag dauerhaft — sie holt ihn hier."""
+    state = activation.state()
+    assert state.in_demo
+    assert state.deadline == demo
+    assert state.unlocked
+    assert not state.over
+
+
+def test_a_sale_build_is_never_over(own_config: Path) -> None:
+    """Ohne Stichtag bleibt es beim Testlauf: abgelaufen ja, zu nein.
+
+    Der abgelaufene Testlauf lässt alles Lesende offen (Veröffentlichungs-
+    konzept §2 C) — genau das, was die Demo nicht tut.
+    """
+    store.trial_path().write_text(
+        '{"first_run": "2026-01-01", "last_seen": "2026-08-06"}', encoding="utf-8"
+    )
+    state = activation.state()
+    assert state.expired
+    assert not state.over
+    assert not state.in_demo
+
+
+def test_a_sale_version_carries_no_deadline(shipped_demo_until: object) -> None:
+    """Eine 1.x-Fassung darf keinen Stichtag tragen.
+
+    Der teuerste Fehler, den dieses Paket zulässt: die Verkaufsfassung mit
+    einem Ablaufdatum ausliefern. Sie ließe sich nach dem Tag nicht mehr
+    starten — bei jedem, der bezahlt hat.
+    """
+    from app.branding import APP_VERSION
+
+    if int(APP_VERSION.split(".")[0]) >= 1:
+        assert shipped_demo_until is None, (
+            f"{APP_VERSION} ist eine Verkaufsfassung und trägt trotzdem einen "
+            f"Stichtag ({shipped_demo_until}) — er gehört in store.DEMO_UNTIL auf None"
+        )
+
+
+def test_the_shipped_deadline_has_not_passed(shipped_demo_until: object) -> None:
+    """Der Wecker: läuft die ausgelieferte Demo noch?
+
+    Wird dieser Test rot, ist nichts kaputt — es ist der 31.10.2026 oder
+    später. Dann trägt die nächste Fassung entweder einen neuen Stichtag
+    (zweite Demo) oder keinen mehr (Verkaufsfassung, §6 des Demo-Konzepts).
+    Ein Bau in diesem Zustand ließe sich beim Nutzer nicht starten.
+    """
+    if shipped_demo_until is None:
+        return
+    assert isinstance(shipped_demo_until, date)
+    assert shipped_demo_until >= date.today(), (
+        f"Die Demo ist am {shipped_demo_until} abgelaufen — neuer Stichtag oder None"
+    )
+
+
 # --- Der Zustand ----------------------------------------------------------------
 
 

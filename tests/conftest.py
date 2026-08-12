@@ -27,8 +27,34 @@ for _variable in ("APPDATA", "LOCALAPPDATA", "XDG_DATA_HOME", "XDG_CONFIG_HOME",
     os.environ[_variable] = _ISOLATED
 
 from app.core import discover
+from app.core.activation import store as activation_store
 from app.core.knowledge import profiles
 from app.core.types import BoundingBox, Document, Profile, SceneObject
+
+#: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
+_SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
+
+
+@pytest.fixture(autouse=True)
+def _the_calendar_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Suite misst die Mechanik der Demo, nicht das Kalenderblatt.
+
+    Der ausgelieferte Stichtag ist ein Datum. Ohne diese Zeile wäre die Suite
+    ab dem Tag danach rot — an Dutzenden Stellen, die mit der Frist nichts zu
+    tun haben, weil jede Dokumentänderung durch die Freischaltung geht.
+
+    Wer die Frist selbst prüft, setzt sie ausdrücklich; `test_activation.py`
+    tut das über die Fixture `demo`. Den **echten** Wert bekommt nur, wer ihn
+    über `shipped_demo_until` verlangt — dort steht auch der Wecker, der
+    anschlägt, wenn der Stichtag verstrichen ist.
+    """
+    monkeypatch.setattr(activation_store, "DEMO_UNTIL", None)
+
+
+@pytest.fixture
+def shipped_demo_until() -> object:
+    """Der Stichtag, mit dem tatsächlich ausgeliefert wird — oder ``None``."""
+    return _SHIPPED_DEMO_UNTIL
 
 
 @pytest.fixture(autouse=True)

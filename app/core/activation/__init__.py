@@ -33,11 +33,12 @@ patcht — ein eingebauter Umschalter wäre genau das, was ein Angreifer sucht.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Final
 
 from app.core.activation import integrity, store
 from app.core.activation.key import Licence, LicenceKeyError, parse
-from app.core.activation.store import TRIAL_DAYS, read_key, trial_days_left
+from app.core.activation.store import TRIAL_DAYS, read_key
 from app.core.errors import LicenceRequired
 from app.core.log import get_logger
 
@@ -77,7 +78,15 @@ class Activation:
 
     licence: Licence | None = None
     days_left: int = 0
-    """Resttage des Testlaufs. Ohne Belang, sobald eine Lizenz vorliegt."""
+    """Resttage des Testlaufs oder der Demo. Ohne Belang, sobald eine Lizenz
+    vorliegt."""
+    deadline: date | None = None
+    """Letzter Tag einer befristeten Demo, sonst ``None``.
+
+    Die Oberfläche nennt ihn dauerhaft, nicht erst am vorletzten Tag: eine
+    Demo, die am 30.10. endet, darf niemanden überraschen, der am 28.10. ein
+    Projekt anfängt.
+    """
 
     @property
     def unlocked(self) -> bool:
@@ -91,6 +100,29 @@ class Activation:
     @property
     def expired(self) -> bool:
         return self.licence is None and self.days_left <= 0
+
+    @property
+    def in_demo(self) -> bool:
+        """Ob diese Fassung eine befristete Demo ist — ob sie noch läuft, sagt
+        :attr:`days_left`."""
+        return self.deadline is not None
+
+    @property
+    def over(self) -> bool:
+        """Ob hier endgültig Schluss ist: der Stichtag einer Demo ist herum.
+
+        Der Unterschied zu :attr:`expired` ist der Unterschied zwischen zwei
+        Produkten. Ein abgelaufener Testlauf lässt alles Lesende offen — wer
+        nichts mehr ändern kann, soll wenigstens an seine Arbeit kommen. Eine
+        abgelaufene Demo dagegen startet nicht mehr: sie ist ein Angebot auf
+        Zeit, kein beschnittenes Programm, und ein unbegrenzt weiterlaufender
+        Betrachter wäre eine zweite kostenlose Fassung, die niemand pflegt.
+
+        Wer das auswertet, schuldet dem Nutzer die Erklärung dazu: was
+        abgelaufen ist, wo es weitergeht, und wo seine Projekte liegen (sie
+        bleiben, wo sie sind, und öffnen sich mit der nächsten Fassung).
+        """
+        return self.deadline is not None and self.licence is None and self.days_left <= 0
 
 
 _cached: Activation | None = None
@@ -131,7 +163,7 @@ def _determine() -> Activation:
             # dann weiter, und der Dialog holt sich den Grund über
             # stored_problem().
             _log.info("stored licence key not accepted: %s", problem.detail)
-    return Activation(days_left=trial_days_left())
+    return Activation(days_left=store.days_left(), deadline=store.DEMO_UNTIL)
 
 
 def stored_problem() -> LicenceKeyError | None:

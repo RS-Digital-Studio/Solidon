@@ -122,6 +122,37 @@ Bedeutung. Wer `trial.json` löscht, gewinnt in der Demo keinen Tag.
 Stichtag ab Tag eins nennt. Ab dem 24.10. wird der Download durch einen Satz
 ersetzt: „Die Demo endet am 30.10. — auf 1.0 warten lohnt sich mehr."
 
+### B2 — Am 31.10. startet die Demo nicht mehr. Kein Betrachtermodus
+
+**Vorgabe vom 12.08.2026.** Das Veröffentlichungskonzept §2 C lässt nach
+Ablauf alles Lesende offen — öffnen, drehen, messen, speichern. Für die Demo
+gilt das **nicht**: Nach dem 30.10.2026 lässt sie sich nicht mehr starten.
+
+**Begründung:** Eine befristete Demo ist ein Angebot auf Zeit, kein
+beschnittenes Produkt. Ein Betrachtermodus, der unbegrenzt weiterläuft, ist
+eine zweite kostenlose Fassung, die niemand gepflegt hat — mit einem Stand,
+der beim Erscheinen der 1.0 veraltet ist, und mit einem Fehlerbild, für das
+später niemand mehr einen Bau nachschiebt.
+
+**Was das kostet, und was dagegen zu tun ist:** Wer in der Demo gearbeitet
+hat, kommt am 31.10. nicht mehr an seine Projekte. Drei Auflagen federn das
+ab, und sie sind nicht optional:
+
+1. **Der Nachfolger steht am 30.10. bereit** — 1.0 oder die zweite Demo. Der
+   Entscheidungspunkt in §6 ist damit verbindlich, nicht beratend: fällt die
+   Entscheidung am 10.10. auf „noch nicht", muss 0.9.5 rechtzeitig gebaut sein.
+2. **Der Stopp erklärt sich.** Kein stummer Nichtstart, sondern ein Fenster:
+   was abgelaufen ist, wo es weitergeht, **wo die eigenen Projekte liegen** und
+   dass sie unverändert bleiben. Eine `.p3d` ist eine ZIP-Datei mit JSON darin;
+   das gehört in diese Meldung, weil es die Angst herausnimmt.
+3. **Die Website sagt es vorher**, im Download-Kasten und in der FAQ — nicht
+   erst die Meldung am 31.10.
+
+**Wo die Sperre greift:** Der Kern kennt den Zustand (`Activation.over`), die
+Oberfläche und die Kommandozeile beenden sich beim Start mit der Meldung. Die
+vier `require`-Stellen sperren ohnehin — sie bleiben, weil die Verkaufsfassung
+sie braucht.
+
 ### C — Der Stichtag steht in `activation/store.py`, nicht in `branding.py`
 
 `branding.py` liegt im Paket als Klartext; `app/core/activation/` geht seit
@@ -179,6 +210,10 @@ Statusleiste** („Demo — noch 47 Tage") und der Stichtag im Über-Dialog. Kei
 Startdialog, kein Zähler im Titel, keine Erinnerung, die sich in den Vordergrund
 schiebt.
 
+Mit dem harten Stopp aus §2 B2 ist diese Zeile keine Höflichkeit mehr, sondern
+die Zusage, dass niemand überrascht wird. Sie ist der Grund, warum es beim
+Ablauf keinen Vorwurf gibt: es stand jeden Tag da.
+
 ### G — Nach neuen Fassungen wird von Hand gesucht; automatisch ist eine Option
 
 `settings.check_for_updates` steht auf `False` und bleibt es. Die Ersteinrichtung
@@ -223,18 +258,25 @@ Commit.
 
 ### D0 — Der Stichtag im Kern (S)
 
-1. `store.py`: `DEMO_UNTIL: Final = date(2026, 10, 30)` und
-   `demo_days_left()`; `trial_days_left()` bleibt unangetastet, damit die
-   Verkaufsfassung ohne Rückbau daraus entsteht (`DEMO_UNTIL = None` schaltet
-   auf die Frist zurück)
-2. `activation.__init__._determine()` nimmt die Demo-Restzeit, wo heute
+1. `store.py`: `DEMO_UNTIL: Final = date(2026, 10, 30)` und `days_left()`, das
+   je nach Stichtag die Demo- oder die Testlaufrestzeit liefert.
+   `trial_days_left()` bleibt unangetastet, damit die Verkaufsfassung ohne
+   Rückbau daraus entsteht (`DEMO_UNTIL = None` schaltet auf die Frist zurück)
+2. `activation.__init__._determine()` nimmt `days_left()`, wo heute
    `trial_days_left()` steht
-3. Kein neuer Zustand, keine neue Ausnahme: `expired` bleibt `expired`
+3. **`Activation.over`** — wahr, wenn ein Stichtag gesetzt und verstrichen ist
+   (§2 B2). Der einzige neue Zustand; `expired` bleibt, was es war, weil die
+   Verkaufsfassung es unverändert braucht
+4. Ein Test koppelt beides an die Fassung: **eine 1.x-Fassung darf keinen
+   Stichtag tragen.** Sonst liefert ein unachtsamer Bau die Verkaufsfassung mit
+   Ablaufdatum aus — der teuerste Fehler, den dieses Paket zulässt
 
-**Abnahme:** `tests/test_activation.py` — vor dem Stichtag offen, am Stichtag
-offen, danach gesperrt; eine zurückgestellte Uhr ändert nichts am Stichtag; ein
-gelöschter Testlaufmarker verlängert nichts · `tests/test_licence_boundary.py`
-bleibt Fall für Fall grün, in beide Richtungen.
+**Abnahme:** `tests/test_activation.py` — vor dem Stichtag offen, **am**
+Stichtag offen, am Tag darauf `over`; eine zurückgestellte Uhr ändert nichts am
+Stichtag; ein gelöschter Testlaufmarker verlängert nichts · mit
+`DEMO_UNTIL = None` verhält sich alles wie heute (die Testlauftests laufen
+unverändert weiter) · `tests/test_licence_boundary.py` bleibt Fall für Fall
+grün, in beide Richtungen.
 
 ### D1 — Version und Kennzeichnung (S)
 
@@ -251,8 +293,10 @@ Projektdatei trägt `app_version: 0.9.0`.
 3. Über-Dialog: „Demo, endet am 30.10.2026" statt Resttagen
 4. Freischaltdialog: erklärt, dass es für die Demo keinen Schlüssel gibt und wo
    1.0 herkommt — statt „gilt für eine andere Hauptversion" (Regel 17)
-5. `LicenceRequired` nach dem 30.10.: zwei Handlungen — „Was 1.0 kostet" und
-   „Projekt weiter ansehen"
+5. **Die Schlussmeldung** (§2 B2): Oberfläche und Kommandozeile beenden sich
+   beim Start, sobald `state().over` gilt. Das Fenster nennt das Ablaufdatum,
+   die Adresse der Website, den Ordner mit den eigenen Projekten und den Satz,
+   dass eine `.p3d` eine ZIP-Datei mit JSON darin ist und lesbar bleibt
 6. Menüeintrag „Nach einer neuen Fassung sehen" (§2 G) mit Antwort in allen
    drei Fällen; die Prüfung selbst bleibt, wie sie ist
 7. Alles über `tr()`, deutsch und englisch
@@ -285,9 +329,10 @@ der Installer zeigt den EULA-Text · beide Sprachen.
    genau diesen Moment
 3. Preisabschnitt: „49 € zur Einführung" bleibt als Ausblick stehen, aber ohne
    Kaufknopf und mit dem Satz, dass die Demo davon unberührt kostenlos ist
-4. Neuer Abschnitt oder FAQ-Frage: **Was passiert am 30.10.?** — Projekte
-   bleiben lesbar, nichts wird gelöscht, 1.0 kommt, was der Betrachtermodus
-   noch kann
+4. Neuer Abschnitt oder FAQ-Frage: **Was passiert am 30.10.?** — die Demo
+   lässt sich danach nicht mehr starten (§2 B2), nichts wird gelöscht, die
+   Projektdateien bleiben und öffnen sich mit 1.0. Dieser Satz steht **vor**
+   dem Download, nicht nur in der FAQ
 5. Falls unsigniert (§2 E des Veröffentlichungskonzepts): der Satz zur
    SmartScreen-Warnung samt Prüfsumme
 6. Handbuch neu erzeugen (`tools/make_manual.py`), beide Sprachen
@@ -430,6 +475,11 @@ Zwanzig Tage vor Schluss wird entschieden, ob am 30.10. **1.0 erscheint** oder
 **eine zweite Demo** folgt. Zwanzig Tage, weil ein Verkaufsstart Paketbau,
 Website und einen Testkauf braucht.
 
+**Seit §2 B2 ist dieser Termin verbindlich, nicht beratend.** Am 31.10. startet
+keine Demo mehr; wer bis dahin ohne Nachfolger dasteht, sperrt seine
+interessiertesten Nutzer aus. Eine dritte Antwort — „wir sehen dann weiter" —
+gibt es an diesem Tag nicht.
+
 **1.0 erscheint, wenn alle fünf zutreffen:**
 
 1. Kein offener Absturz und kein offener Datenverlust aus der Demo
@@ -463,6 +513,7 @@ nicht Reife, sondern Sichtbarkeit, und die entsteht nicht durch Warten.
 | Die Demo bleibt unbemerkt | keine Funde, keine Reputation, Entscheidung ohne Daten | §6 Schlusssatz: dann erscheint 1.0; Sichtbarkeit ist eine eigene Aufgabe, keine Entwicklungsaufgabe |
 | Jemand patcht den Stichtag | eine kostenlose Fassung läuft weiter | keine Wirkung — es gibt nichts zu bezahlen; die Schwelle für 1.0 ist die Signatur, und die hält |
 | Demo-Nutzer erwarten am 30.10. einen Freischaltweg | Enttäuschung genau bei den Interessiertesten | §2 D: der Freischaltdialog nennt den Weg zu 1.0, statt eine Fehlermeldung zu zeigen |
+| **Am 31.10. steht kein Nachfolger bereit** (§2 B2) | Nutzer kommen an ihre eigenen Projekte nicht mehr heran — der teuerste Fehler dieses Plans | Entscheidung am 10.10. (§6), notfalls 0.9.5 mit neuem Stichtag; sie kostet einen halben Tag |
 | 255 MB je Fassung mal mehrere Punktversionen | Webspace läuft voll | nur die aktuelle Fassung halten |
 
 ---
@@ -479,6 +530,9 @@ Damit es niemand nachträglich hineinliest:
 * **Kein macOS, kein AppImage, kein Flatpak**
 * **Kein Demo-Schlüssel und keine Verlängerung per Eingabe** — eine zweite
   Runde ist ein neuer Bau (§6)
+* **Kein Betrachtermodus nach dem 30.10.** (§2 B2). Der bleibt der
+  Verkaufsfassung, wo er hingehört: dort ist er die Freundlichkeit gegenüber
+  jemandem, der vierzehn Tage getestet und noch nicht gekauft hat
 * **Keine weiteren Sprachen als Startbedingung.** ES/FR/IT/PT sind Arbeit
   während der Laufzeit, kein Blocker (§5)
 
