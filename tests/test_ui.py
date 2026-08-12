@@ -3647,6 +3647,7 @@ def test_a_downloaded_model_keeps_where_it_came_from(window: MainWindow) -> None
     from app.core.ingest.fetch import FetchedModel
 
     payload = (MESHES / "cube_clean.stl").read_bytes()
+    assert window.stack.currentWidget() is window.start_screen, "sonst prüft der Test unten nichts"
     window._downloaded(
         FetchedModel(
             name="halter.stl",
@@ -3664,3 +3665,6 @@ def test_a_downloaded_model_keeps_where_it_came_from(window: MainWindow) -> None
     assert sources[0].origin.retrieved.startswith("2026-08-11")
     assert window.session.last_result is not None
     assert window.session.last_result.scene.objects, "das Modell steht danach in der Szene"
+    assert window.stack.currentWidget() is not window.start_screen, (
+        "geladen laut Statusleiste, unsichtbar im Bild: der Startbildschirm blieb stehen"
+    )

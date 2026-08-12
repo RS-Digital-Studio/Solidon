@@ -1818,13 +1818,23 @@ class MainWindow(QMainWindow):
 
     def _downloaded(self, fetched: FetchedModel) -> None:
         """Was ankam, geht denselben Weg wie eine Datei von der Platte — mit
-        einer Herkunft mehr (§16.3)."""
+        einer Herkunft mehr (§16.3).
+
+        „Denselben Weg" heißt auch: dieselben zwei Schritte drumherum wie in
+        :meth:`open_path`. Ohne sie landete das Modell in einem Projekt, das
+        noch gar nicht angefangen hat, und das Fenster blieb auf dem
+        Startbildschirm stehen — geladen laut Statusleiste, unsichtbar im
+        Bild.
+        """
         self._end_download()
+        if self.stack.currentWidget() is self.start_screen:
+            self.session.start_new(self.settings.printer, self.settings.material)
         self.session.import_payload(
             fetched.name,
             fetched.payload,
             origin=SourceOrigin(url=fetched.url, retrieved=fetched.retrieved),
         )
+        self._show_start_screen(False)
         self.announce(f"{tr('Geladen')}: {fetched.name}")
 
     def _end_download(self) -> None:
