@@ -9,6 +9,12 @@ Der Auftrag in einem Satz: **eine kostenlose, vollständige Fassung
 veröffentlichen, die am 30.10.2026 endet — danach fällt die Entscheidung
 zwischen einer zweiten Demo und dem Verkauf von 1.0.**
 
+**Vorgaben vom 12.08.2026 (Robert), im Text eingearbeitet:** Start am
+**20.08.2026**. Kein Schlüssel, keine Eingabe — herunterladen, installieren,
+es läuft. Download über die Website. Nach neuen Fassungen wird **von Hand**
+gesucht; automatisch beim Start bleibt eine Option. `support@solidon3d.de`
+gibt es bereits.
+
 ---
 
 ## §1 Ist-Zustand — was schon steht
@@ -42,10 +48,16 @@ nicht gibt.
 2. **Es ist nie ein Paket auf einem fremden Rechner gelaufen.** V6 Punkt 3 aus
    dem Veröffentlichungskonzept ist offen. Der Satz dort gilt unverändert:
    dieser Punkt findet erfahrungsgemäß mehr als alle Tests zusammen.
-3. **Das Postfach `support@solidon3d.de` ist nicht in Betrieb** (samt
-   SPF/DMARC), und der Auftragsverarbeitungsvertrag bei netcup fehlt. Eine
-   Demo ohne Rückkanal ist eine Demo, deren Funde nirgends ankommen — und das
-   Impressum nennt eine Adresse, die erreichbar sein muss.
+3. **Es gibt keinen Weg, von Hand nach einer neuen Fassung zu sehen.**
+   `updates.check()` läuft heute nur beim Start und nur, wenn
+   `settings.check_for_updates` an ist (Vorgabe: aus) — und meldet sich nur,
+   wenn etwas Neueres da ist (`main_window.py:4202` und `:4222`). Ein
+   Menüeintrag fehlt, und ohne Rückmeldung in allen drei Fällen (neuer, aktuell,
+   nicht erreichbar) wirkt ein solcher Klick tot.
+
+Nicht mehr offen, Stand 12.08.2026: `support@solidon3d.de` ist eingerichtet.
+Zu prüfen bleiben SPF/DMARC gegen eine Testmail von außen und der
+Auftragsverarbeitungsvertrag bei netcup.
 
 ### 1.2 Was heute falsch auf der Seite steht
 
@@ -87,6 +99,12 @@ Feldfunde und die Frage, ob jemand anderes die Anwendung bedienen kann.
 
 Die Demo endet am **30.10.2026** für alle gleichzeitig. Nicht vierzehn Tage ab
 Erststart, nicht verlängerbar, keine Eingabe.
+
+**Herunterladen, installieren, es läuft** — das ist die Vorgabe und zugleich
+die Probe für jede Entscheidung in diesem Dokument. Kein Schlüssel, kein
+Freischaltfeld beim ersten Start, keine Mail mit einer Zeichenkette darin, kein
+Konto. Der Freischaltdialog bleibt im Programm, weil er zu 1.0 gehört; in der
+Demo ist er ein Weg, den niemand gehen muss (§2 D nennt, was er dann sagt).
 
 **Begründung:** Ein Stichtag ist die einzige Variante ohne neue Mechanik. Er
 ersetzt die Resttageberechnung, nicht die Zustände — `Activation.days_left`
@@ -161,18 +179,29 @@ Statusleiste** („Demo — noch 47 Tage") und der Stichtag im Über-Dialog. Kei
 Startdialog, kein Zähler im Titel, keine Erinnerung, die sich in den Vordergrund
 schiebt.
 
-### G — Der Update-Hinweis wird in der Ersteinrichtung gefragt, nicht heimlich eingeschaltet
+### G — Nach neuen Fassungen wird von Hand gesucht; automatisch ist eine Option
 
-`settings.check_for_updates` steht auf `False`, und das ist richtig so
-(§37.2, und die Datenschutzseite sagt „sendet von sich aus keine Daten").
+`settings.check_for_updates` steht auf `False` und bleibt es. Die Ersteinrichtung
+bekommt **keine** zusätzliche Frage — sie wäre genau die Hürde, die „installieren
+und es läuft" nicht haben soll.
 
-Für die Demo bekommt die Ersteinrichtung **eine Frage mit einem Satz
-Begründung**: „Diese Demo endet am 30.10.2026. Soll Solidon beim Start nachsehen,
-ob es weitergeht? Dabei wird `solidon3d.de` abgerufen — mehr nicht." Vorbelegt
-mit Ja, mit einem Klick abwählbar, jederzeit in den Einstellungen umkehrbar.
+Stattdessen: ein Menüeintrag **„Nach einer neuen Fassung sehen"** unter Hilfe,
+der jederzeit fragt und in **allen drei** Fällen antwortet — es gibt eine neuere
+Fassung (mit Nummer und Adresse), es gibt keine, oder die Seite war nicht
+erreichbar. Heute schweigt die Prüfung in den letzten beiden Fällen
+(`main_window.py:4222`); beim automatischen Lauf beim Start ist das richtig, bei
+einem Klick wäre es ein toter Knopf.
 
-Der Datenschutztext bekommt dafür einen Absatz: welche Abfrage, welche Daten
-(IP und Zeitpunkt im Server-Log), welche Rechtsgrundlage, wie lange.
+**Die Folge ist zu benennen:** Wer die Option nicht einschaltet und nicht von
+sich aus nachsieht, erfährt vom Erscheinen der 1.0 nichts aus dem Programm.
+Deshalb trägt die Demo den Stichtag selbst — dauerhaft in der Statusleiste (§2 F),
+im Über-Dialog, und nach dem 30.10. in der Meldung, die jede gesperrte Handlung
+auslöst, samt Adresse der Website. Das Programm sagt, woran man ist, ohne zu
+fragen und ohne zu funken.
+
+Der Datenschutztext bekommt trotzdem seinen Absatz zur Abfrage: welche Daten
+(IP und Zeitpunkt im Server-Log von netcup), wann sie anfallen — nur auf Klick
+oder bei eingeschalteter Option —, wie lange sie bleiben.
 
 ### H — Kein Verkauf während der Demo. Paddle läuft trotzdem parallel an
 
@@ -220,11 +249,12 @@ Projektdatei trägt `app_version: 0.9.0`.
 1. Ersteinrichtung: der Testlaufsatz wird der Demosatz mit Stichtag
 2. Statusleiste: dauerhafte Zeile nach §2 F
 3. Über-Dialog: „Demo, endet am 30.10.2026" statt Resttagen
-4. Freischaltdialog: erklärt, dass Demo-Schlüssel nicht existieren und wo 1.0
-   herkommt — statt „gilt für eine andere Hauptversion" (Regel 17)
+4. Freischaltdialog: erklärt, dass es für die Demo keinen Schlüssel gibt und wo
+   1.0 herkommt — statt „gilt für eine andere Hauptversion" (Regel 17)
 5. `LicenceRequired` nach dem 30.10.: zwei Handlungen — „Was 1.0 kostet" und
    „Projekt weiter ansehen"
-6. Ersteinrichtung: die Update-Frage aus §2 G
+6. Menüeintrag „Nach einer neuen Fassung sehen" (§2 G) mit Antwort in allen
+   drei Fällen; die Prüfung selbst bleibt, wie sie ist
 7. Alles über `tr()`, deutsch und englisch
 
 **Abnahme:** `tests/test_translations.py` grün (Regel 20) ·
@@ -265,9 +295,11 @@ der Installer zeigt den EULA-Text · beide Sprachen.
 **Abnahme:** `tests/test_website.py` grün · beide Startseiten von Hand
 durchgeklickt · Download startet, Prüfsumme stimmt.
 
-### D5 — Postfach und Rückmeldeweg (S, dazu Wartezeit) — **Blocker**
+### D5 — Rückmeldeweg (S)
 
-1. `support@solidon3d.de` einrichten, SPF und DMARC setzen, Testmail von außen
+Das Postfach steht. Was fehlt, ist der Weg aus der Anwendung dorthin.
+
+1. Testmail von außen an `support@solidon3d.de`, SPF und DMARC gegenprüfen
 2. Auftragsverarbeitungsvertrag bei netcup abschließen
 3. In der Anwendung ein Menüeintrag **„Rückmeldung senden"**: öffnet eine Mail
    mit Fassung, Betriebssystem und dem Hinweis, dass das Protokoll angehängt
@@ -276,22 +308,27 @@ durchgeklickt · Download startet, Prüfsumme stimmt.
 **Abnahme:** Testmail kommt an und wird nicht als Spam einsortiert · der
 Menüeintrag öffnet eine vorbereitete Mail.
 
-### D6 — Signierung entscheiden und einbauen (M, dazu Wartezeit)
+### D6 — Signierung: unsigniert starten, in 0.9.1 nachziehen (S jetzt, M später)
 
 Der Schritt in `build.yml:137` schreibt eine PFX-Datei aus einem Secret. Seit
 Juni 2023 gibt es für neu gekaufte Zertifikate keine exportierbare Datei mehr —
 der Schritt ist tot, egal wie die Entscheidung ausfällt.
 
-Empfehlung unverändert: **Azure Trusted Signing** (~10 $/Monat, ohne Hardware
-CI-tauglich). Wenn die Nachweise nicht durchgehen: unsigniert ausliefern und es
-auf der Download-Seite erklären.
+**Mit dem Start am 20.08. ist die Frage entschieden, ob man will oder nicht:**
+Azure Trusted Signing verlangt Nachweise zum Unternehmen, und die brauchen
+Tage bis Wochen. Also:
 
-**Warum jetzt und nicht zum Verkauf:** siehe §2 A. Reputation wächst mit
-Downloads, und die Demo ist die einzige Phase, in der Downloads nichts kosten,
-wenn etwas schiefgeht.
+1. **Jetzt (S):** unsigniert ausliefern. Auf der Download-Seite ein Satz zur
+   SmartScreen-Warnung samt SHA-256 — ehrlicher als eine Warnung ohne
+   Erklärung. Den toten Signierschritt in `build.yml` stilllegen, statt ihn
+   sich stumm überspringen zu lassen
+2. **Parallel:** Azure Trusted Signing beantragen
+3. **In 0.9.1 (M):** signieren, sobald es durch ist. Reputation wächst dann ab
+   diesem Zeitpunkt — später als gewünscht, aber immer noch vor dem Verkauf,
+   und das ist der Punkt aus §2 A
 
-**Abnahme:** die Setup-Datei zeigt beim Start einen Herausgeber, oder die
-Download-Seite erklärt, warum nicht.
+**Abnahme jetzt:** die Download-Seite erklärt die Warnung und nennt die
+Prüfsumme · `build.yml` läuft ohne den toten Schritt durch.
 
 ### D7 — CI-Bau und Auslieferung (S–M)
 
@@ -332,31 +369,36 @@ Konzept mit Fortschrittstabelle.
 
 ## §4 Reihenfolge und Termine
 
-Heute ist der 12.08.2026. Zielstart der Demo: **Montag, 01.09.2026** — acht
+Heute ist der 12.08.2026. Start der Demo: **Donnerstag, 20.08.2026** — zehn
 Wochen Laufzeit bis zum 30.10.
 
 ```
-Arbeit:    D0 ─▶ D1 ─▶ D2 ─▶ D4 ─▶ D7 ─▶ D8 ─▶ D9 ─▶ Start
-Papier:    D3 ────────────────────────────┘
-Wartezeit: D5, D6, Paddle (§2 H) ─────────┘
+Arbeit:    D0 ─▶ D1 ─▶ D2 ─▶ D5 ─▶ D4 ─▶ D7 ─▶ D8 ─▶ D9 ─▶ Start
+Papier:    D3 ──────────────────────────┘
+Wartezeit: Azure, Paddle, Rechtsprüfung ─┘  (blockieren den Start nicht)
 ```
 
-| Woche | Arbeit | Wartezeit anstoßen |
+| Tag | Arbeit | Nebenher |
 |---|---|---|
-| 12.–16.08. | D0, D1, D2 | D5 Postfach, D6 Azure-Nachweise, Paddle-Konto, Rechtsprüfung beauftragen |
-| 17.–23.08. | D3, D4 | — |
-| 24.–30.08. | D7, D8, D9 | — |
-| 31.08. | Puffer, Start am 01.09. | — |
+| 12.–13.08. | D0 Stichtag, D1 Fassung, D2 Texte | Azure-Nachweise, Paddle-Konto und Rechtsprüfung anstoßen; Testmail an das Postfach |
+| 14.–15.08. | D3 Rechtstexte, D5 Rückmeldeweg | AV-Vertrag netcup |
+| 16.–17.08. | D4 Website, D6 Punkt 1 (unsigniert erklären) | — |
+| 18.08. | D7 CI-Bau, Artefakte auf den Webspace | — |
+| 19.08. | **D8 fremder Rechner**, D9 Doku | — |
+| 20.08. | Start | — |
 
-Arbeit rund **fünf bis sieben Tage**. Der früheste Termin hängt an D5 und D6,
-nicht am Code — deshalb stehen beide in Woche eins.
+Arbeit rund **fünf bis sechs Tage**, und damit ist der Plan eng, aber ohne
+Wartezeit im kritischen Pfad — genau deshalb fällt die Signierung aus dem
+Startumfang heraus (D6) und der Verkauf ohnehin (§2 H).
 
-**D5 ist der einzige harte Blocker.** Ohne erreichbares Postfach kommt kein
-Fund zurück, und das Impressum nennt eine tote Adresse.
+**Der einzige Puffer liegt am 19.08.** Findet D8 auf dem fremden Rechner etwas
+Großes, wird **nicht** der Stichtag verschoben, sondern der Start um Tage. Der
+30.10. steht in den Texten und ist der Anker, an dem die Entscheidung in §6
+hängt.
 
-Wenn der 01.09. nicht zu halten ist, wird **nicht** der Stichtag verschoben,
-sondern die Laufzeit kürzer. Der 30.10. steht in den Texten und ist der Anker,
-an dem die Entscheidung hängt.
+**Was am 19.08. fertig sein muss, sonst startet nichts:** ein Paket, das auf
+einem fremden Windows installiert, die drei Wege durchläuft und ohne OpenSCAD,
+Ollama und ComfyUI sagt, was fehlt, statt zu scheitern.
 
 ---
 
@@ -365,7 +407,8 @@ an dem die Entscheidung hängt.
 Die acht Wochen sind keine Wartezeit:
 
 * **Funde beheben und nachschieben.** 0.9.1, 0.9.2 — jede Punktversion mit
-  Änderungsliste auf der Seite. Der Update-Hinweis holt die Leute ab.
+  Änderungsliste auf der Seite. **0.9.1 trägt die Signatur**, sobald Azure
+  durch ist (D6).
 * **Paddle einrichten und einen Testkauf durchspielen** (V5). Der Schlüssel
   für Hauptversion 1 wird gegen ein gebautes 1.0-Paket geprüft, nicht gegen
   die Demo.
@@ -414,9 +457,9 @@ nicht Reife, sondern Sichtbarkeit, und die entsteht nicht durch Warten.
 
 | Risiko | Wirkung | Rückfalloption |
 |---|---|---|
-| Postfach oder AV-Vertrag ziehen sich | Start verschiebt sich, Laufzeit schrumpft | Start ohne Rückmeldungs-Menüeintrag, Adresse steht im Impressum |
-| Azure Trusted Signing lehnt ab oder dauert | SmartScreen warnt jeden Erstnutzer | unsigniert starten, in 0.9.1 nachsignieren — die Reputation wächst dann eben ab dann |
-| Der fremde Rechner findet etwas Großes (D8) | Start verschiebt sich um Tage | Laufzeit kürzen, Stichtag halten |
+| **Unsigniert am 20.08.** (eingetreten, siehe D6) | SmartScreen warnt jeden Erstnutzer; die Vorsichtigen brechen ab | Erklärung und Prüfsumme auf der Download-Seite, Nachsignieren in 0.9.1 |
+| Der fremde Rechner findet etwas Großes (D8) | Start verschiebt sich um Tage | Start schieben, Stichtag halten, Laufzeit kürzen |
+| Acht Tage sind zu wenig für D0–D9 | halbfertige Texte oder ungeprüftes Paket | in dieser Reihenfolge streichen: D6 Punkt 1 (dann nur Prüfsumme), D9, D5 Punkt 3 — **nie D8** |
 | Die Demo bleibt unbemerkt | keine Funde, keine Reputation, Entscheidung ohne Daten | §6 Schlusssatz: dann erscheint 1.0; Sichtbarkeit ist eine eigene Aufgabe, keine Entwicklungsaufgabe |
 | Jemand patcht den Stichtag | eine kostenlose Fassung läuft weiter | keine Wirkung — es gibt nichts zu bezahlen; die Schwelle für 1.0 ist die Signatur, und die hält |
 | Demo-Nutzer erwarten am 30.10. einen Freischaltweg | Enttäuschung genau bei den Interessiertesten | §2 D: der Freischaltdialog nennt den Weg zu 1.0, statt eine Fehlermeldung zu zeigen |
@@ -443,15 +486,15 @@ Damit es niemand nachträglich hineinliest:
 
 ## §9 Offene Entscheidungen
 
-1. **Startdatum.** 01.09. ist das Ziel; alles Frühere geht auf Kosten von D8,
-   und D8 ist der Punkt, der am meisten findet.
-2. **Signierung** (D6): Azure Trusted Signing beantragen — oder unsigniert
-   starten und in 0.9.1 nachziehen?
-3. **Fassungsnummer**: `0.9.0` nach §2 D — oder doch `1.0.0-demo`? Gegen die
+Entschieden am 12.08.2026: Startdatum (20.08.), Schlüsselfreiheit (§2 B),
+Download über die Website, Update-Suche von Hand mit Option (§2 G), Signierung
+(unsigniert starten, D6). Offen bleiben zwei:
+
+1. **Fassungsnummer**: `0.9.0` nach §2 D — oder doch `1.0.0-demo`? Gegen die
    zweite Variante spricht, dass `current_major()` dann eine Eins liest und ein
-   Kaufschlüssel in einer abgelaufenen Demo greifen würde, deren Stichtag ihn
-   nichts angeht.
-4. **Rechtsprüfung**: jetzt beauftragen (kostet, läuft parallel) oder erst zum
+   Kaufschlüssel in einer abgelaufenen Demo griffe, deren Stichtag ihn nichts
+   angeht. Bis zum Widerspruch wird `0.9.0` gebaut; es sind zwei Zeilen.
+2. **Rechtsprüfung**: jetzt beauftragen (kostet, läuft parallel) oder erst zum
    Verkauf? Für eine kostenlose Demo ist der Bedarf geringer — für 1.0 nicht,
    und die Laufzeit ist nicht steuerbar.
 
