@@ -300,6 +300,19 @@ Gründe gegen Dyntopo: Es macht die Auswertung nichtdeterministisch bezüglich
 der Strichreihenfolge, es bricht Entscheidung C, und es macht aus jedem Strich
 eine Topologieänderung, die kein Cache mehr überspringen kann.
 
+**In P16.2 kam eine zweite Vorbedingung dazu, die vorher niemand genannt
+hatte.** Der Versuch, `generated_figure.stl` aus dem Korpus direkt zu sculpten,
+lieferte ein *leeres* Manifold: Die Datei trägt absichtlich die Fehler eines
+Generators (fehlende Dreiecke, verdrehte Normalen, ein loser Splitter), und
+`manifold3d` nimmt kein Netz an, das kein Volumen ist. Nach der Kette aus
+`GENERATED_REPAIR` sind es 3 368 Dreiecke und wasserdicht, nach `refine(8)`
+215 552 — Sculpting-Auflösung.
+
+Die Kette für Weg 3 heißt damit vollständig: **generieren → reparieren →
+verfeinern → sculpten.** Der Editor prüft beim Öffnen beides, Volumen *und*
+Auflösung, und bietet die fehlenden Schritte als Handlung an, statt an einem
+leeren Ergebnis zu scheitern.
+
 ### F — Symmetrie ist eine Eigenschaft der Operation, kein Modus
 
 Kein „Symmetriemodus" im Fenster. Die Op `sculpt_strokes` trägt
@@ -628,15 +641,35 @@ Rechner ohne sein Relief.
 
 ## §10 Leistung — neue Zeilen für §31
 
-| Vorgang | Zielwert | gemessen (§2.5) |
+| Vorgang | Zielwert | gemessen (P16.2) |
 |---|---|---|
-| Pinselstrich → Vorschau, 200 000 Dreiecke | unter 50 ms | offen, Prüfung in P16.2 |
-| Strichliste (1 000) neu auswerten, 200 000 Dreiecke | unter 2 s | 252 ms bei 131 072 Dreiecken |
-| Subdivision auf 200 000 Dreiecke | unter 3 s | 204 ms für `refine(2)` |
+| Pinselstrich → Vorschau | unter 50 ms | **0,7 ms** bei 1,31 Mio. Dreiecken |
+| Strichliste (1 000) neu auswerten | unter 2 s | **67 ms** auf dem §31-Prüfnetz |
+| Subdivision | unter 3 s | **574 ms** (`smooth_out` + `refine(2)`) |
 
-Regressionsschwelle wie überall 25 %. Die erste Zeile ist die riskante: Sie
-verlangt eine Vorschau, die nur die betroffenen Vertices anfasst, statt die
-ganze Op auszuwerten. P16.2 misst das, bevor der Rest gebaut wird.
+Regressionsschwelle wie überall 25 %. Vier Tests in `tests/test_performance.py`
+halten die Zahlen fest, dazu einer, der Entscheidung C selbst prüft statt sie
+zu behaupten.
+
+**R1 ist beantwortet, und deutlich.** Die riskante Zeile war die erste — sie
+verlangt eine Vorschau, die nur die betroffenen Vertices anfasst. Gemessen an
+`dense_1m.stl` (1 310 720 Dreiecke, 3 932 160 Vertices), also dem
+Sechseinhalbfachen der Größe, für die das Budget gilt:
+
+| Weg | Zeit |
+|---|---|
+| KD-Baum bauen — **einmal je Sitzung** | 786 ms |
+| Ein Strich, mit Vollkopie des Vertex-Arrays | 28,4 ms |
+| **Ein Strich, nur die getroffenen Vertices** | **0,7 ms** |
+
+Der Strich trifft 10 595 von 3 932 160 Vertices. Die Vollkopie kostet das
+Vierzigfache und ist der Fehler, den man an dieser Stelle leicht macht —
+`test_a_brush_stroke_stays_inside_a_frame` verhindert ihn.
+
+Daraus folgt der Vorschauweg: **Der Pinsel geht nicht über den Geometriekern.**
+Er schreibt in das Vertex-Array des Anzeigenetzes; die Op wird erst beim
+Verlassen der Sitzung ausgewertet. Die 786 ms für den KD-Baum sind die
+Wartezeit beim Öffnen und bekommen eine Fortschrittsanzeige (§2.8).
 
 ---
 
@@ -731,7 +764,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | # | Paket | Umfang | Verifikation | Stand |
 |---|---|---|---|---|
 | **P16.1** | Regel 2 neu fassen; `tests/test_gesture_ops.py` gegen die **bestehenden** Skizzen-Ops; `AGENTS.md`, `.claude/rules/operationen.md`; Befund B13 im Meshy-Konzept zurücknehmen | S | neuer Test grün auf dem Bestand, ohne eine Zeile neuer Geometrie | **fertig** — 26 Tests, Tor grün |
-| **P16.2** | **Reine Messung**, plus Figuren in den Referenzkorpus (§18). Vorschau-Prototyp, Strichwiedergabe, Zahlen für §31 | S | Messwerte festgehalten; R1 beantwortet **bevor** P16.5 beginnt | offen |
+| **P16.2** | **Reine Messung.** Vorschauweg, Strichwiedergabe, Subdivision, Entscheidung C als Test | S | Messwerte festgehalten; R1 beantwortet **bevor** P16.5 beginnt | **fertig** — 4 Tests, R1 entwarnt |
 | **P16.3** | `subdivide_surface` und `remesh_uniform` — erst prüfen, ob letzteres in `remesh_mesh` gehört | S | Geometrietest gegen Korpus, beide Qualitätsstufen | offen |
 | **P16.4** | `blend_union` über `level_set` (N) — **zugleich das Basisnetz-Werkzeug für H2** | S | Volumen und Wasserdichtheit gegen analytische Körper | offen |
 | **P16.5** | Kern des Sculptings: `kind="strokes"`, `Stroke`-Verträge (§9), Auswertung mit Etappen, sechs Werkzeuge, Symmetrie — **ohne Oberfläche**, über CLI bedienbar | **XL** | Determinismus, Symmetrie, Etappen; zweimal auswerten identisch | offen |
@@ -840,7 +873,7 @@ muss, damit die Entscheidung nicht nur im Code steht:
 
 | Was | Warum | Wo im Plan |
 |---|---|---|
-| **Referenzkorpus** um Figuren ergänzen | Ohne Figur im Korpus gibt es keinen Geometrietest für Sculpting und keine Abnahme (§16.3) | P16.2, vorgezogen |
+| **Referenzkorpus** um eine saubere Figur ergänzen | Ohne sie kein Geometrietest für Sculpting und keine Abnahme (§16.3). `generated_figure.stl` trägt absichtlich Generatorfehler und taugt erst nach der Reparaturkette — als Prüfstein für Weg 3 richtig, als Sculpting-Grundlage zu indirekt | P16.5, mit den ersten Geometrietests |
 | **Beispielprojekt** „Figur drucken" als vierter Weg | Die drei Wege aus §2.2 bilden den Kundenkreis ab; ein vierter Kundenkreis ohne vierten Weg ist unsichtbar | P16.10 |
 | **Website** — Weg 4, Vergleichstabelle aus §17 | Befund B3 des Meshy-Konzepts verlangt schon, die Kette für generierte Netze sichtbar zu machen; das hier ist dieselbe Sache für geformte | P16.10 |
 | **Handbuch** — Sculpting-Seiten, „wann nicht benutzen" (R3) | Befund B14 | P16.10 |

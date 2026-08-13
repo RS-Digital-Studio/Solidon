@@ -285,3 +285,131 @@ def test_reevaluating_from_the_cache_is_quick(profile: Profile) -> None:
     )
     assert taken < 1.0
     assert cache.statistics.hits >= 1
+
+
+# --- Organische Modellierung (P16.2) ----------------------------------------
+#
+# Die Messungen, die über den Entwurf aus
+# `konzept-organische-modellierung-2026-08.md` entscheiden. Sie prüfen die
+# **Verfahren**, nicht die Operationen — die gibt es noch nicht, und genau
+# darum stehen sie hier: P16.2 darf das Vorhaben stoppen, bevor P16.5 beginnt.
+# Sobald `sculpt_strokes` existiert, wird hier auf die Op umgestellt; die
+# Zielwerte bleiben.
+
+
+def brush_field(points: Any, centres: Any, radius: float) -> Any:
+    """Die Summe aller Pinselgewichte je Vertex — Entscheidung C.
+
+    Ein KD-Baum, dann je Strich eine Kugelabfrage. Der Aufbau ist der ganze
+    Trick: Ein eigener Durchgang über alle Vertices je Strich kostet das
+    Produkt aus Strichzahl und Vertexzahl, dieser hier die Summe der
+    tatsächlich getroffenen Punkte.
+    """
+    import numpy as np
+    from scipy.spatial import cKDTree
+
+    tree = cKDTree(points)
+    weights = np.zeros(len(points))
+    for centre in centres:
+        near = tree.query_ball_point(centre, radius)
+        if not near:
+            continue
+        near = np.asarray(near, dtype=np.int64)
+        away = np.linalg.norm(points[near] - centre, axis=1)
+        weights[near] += np.exp(-((away / radius) ** 2))
+    return weights
+
+
+def sculpting_ground() -> tuple[Any, Any, Any, float]:
+    """Ein Netz in Sculpting-Auflösung, seine Normalen und tausend Strichmitten."""
+    import numpy as np
+
+    points = np.asarray(medium_mesh().raw.vertices, dtype=float)
+    normals = np.asarray(medium_mesh().raw.vertex_normals, dtype=float)
+    radius = float(np.ptp(points, axis=0).max()) * 0.05
+    generator = np.random.default_rng(7)
+    centres = points[generator.integers(0, len(points), 1000)]
+    return points, normals, centres, radius
+
+
+def test_a_brush_stroke_stays_inside_a_frame() -> None:
+    """§31 (neu): ein Strich unter 50 ms, damit der Pinsel der Hand folgt.
+
+    Gemessen wird der Vorschauweg: der KD-Baum steht seit dem Öffnen der
+    Sitzung, und ein Strich schreibt nur die getroffenen Vertices. Die
+    naheliegende Vollkopie des Vertex-Arrays kostet das Vierzigfache und ist
+    der Fehler, den dieser Test verhindert.
+    """
+    import numpy as np
+    from scipy.spatial import cKDTree
+
+    points, normals, centres, radius = sculpting_ground()
+    tree = cKDTree(points)
+    buffer = points.copy()
+
+    def one_stroke() -> None:
+        near = np.asarray(tree.query_ball_point(centres[0], radius), dtype=np.int64)
+        away = np.linalg.norm(buffer[near] - centres[0], axis=1)
+        buffer[near] += normals[near] * np.exp(-((away / radius) ** 2))[:, None]
+
+    taken = measure("sculpt_stroke_preview", one_stroke)
+    assert taken < 0.05
+
+
+def test_replaying_a_thousand_strokes_stays_under_two_seconds() -> None:
+    """§31 (neu): eine Strichliste neu auszuwerten bleibt im Budget einer
+    Parameteränderung.
+    """
+    points, _normals, centres, radius = sculpting_ground()
+    taken = measure("sculpt_replay_1000", lambda: brush_field(points, centres, radius))
+    assert taken < 2.0
+
+
+def test_gathering_strokes_beats_replaying_them_one_by_one() -> None:
+    """Entscheidung C, als Test statt als Behauptung.
+
+    Der ganze Entwurf hängt daran, dass alle Striche in **einem** Durchgang
+    billiger sind als jeder für sich.
+
+    Zwei Abstände, nicht einer — das war beim ersten Schreiben dieses Tests
+    verwechselt. Über den vollen Weg mit ``warp_batch`` und neu gebautem
+    Manifold liegt rund das Sechzigfache dazwischen (§2.5 des Konzepts); hier
+    wird nur das Gewichtsfeld gemessen, ohne Manifold, und da sind es rund
+    neun. Die Schwelle steht deshalb beim Fünffachen: eng genug, dass eine
+    kaputte Annahme auffällt, weit genug, dass eine langsame Maschine nicht
+    als Fehler gilt.
+    """
+    import numpy as np
+
+    points, _normals, centres, radius = sculpting_ground()
+    few = centres[:50]
+
+    started = time.perf_counter()
+    brush_field(points, few, radius)
+    gathered = time.perf_counter() - started
+
+    started = time.perf_counter()
+    for centre in few:
+        away = np.linalg.norm(points - centre, axis=1)
+        np.exp(-((away / radius) ** 2))
+    apart = time.perf_counter() - started
+
+    print(f"\ngathered {gathered * 1000:.0f} ms vs. one by one {apart * 1000:.0f} ms")
+    assert gathered * 5 < apart
+
+
+def test_subdivision_stays_under_three_seconds() -> None:
+    """§31 (neu): Subdivision auf einem Netz in Arbeitsgröße."""
+    import numpy as np
+
+    manifold = pytest.importorskip("manifold3d")
+    mesh = medium_mesh().raw
+    body = manifold.Manifold(
+        manifold.Mesh(
+            np.asarray(mesh.vertices, dtype=np.float32),
+            np.asarray(mesh.faces, dtype=np.uint32),
+        )
+    )
+    assert not body.is_empty(), "das Prüfnetz muss ein Volumen sein"
+    taken = measure("subdivide_surface", lambda: body.smooth_out(52.5).refine(2))
+    assert taken < 3.0

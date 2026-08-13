@@ -4438,8 +4438,25 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       auf der Rückseite des Dialogs. 26 Tests, grün auf dem Bestand — die neue
       Regel ist bewiesen, bevor eine Zeile neuer Geometrie sie braucht.
       `AGENTS.md` und `.claude/rules/operationen.md` nachgezogen.
-- [ ] **P16.2 — Messung und Korpus.** Vorschau-Prototyp, Strichwiedergabe,
-      Zahlen für §31, Figuren in den Referenzkorpus. Darf das Vorhaben stoppen.
+- [x] **P16.2 — Gemessen, und R1 ist entwarnt.** Die riskante Zahl war die
+      Vorschau: ein Strich unter 50 ms. Gemessen an `dense_1m.stl` — 1,31 Mio.
+      Dreiecke, das Sechseinhalbfache der Budgetgröße — sind es **0,7 ms**,
+      weil ein Strich nur 10 595 von 3 932 160 Vertices trifft. Die
+      naheliegende Vollkopie des Vertex-Arrays kostet 28,4 ms, das
+      Vierzigfache; `test_a_brush_stroke_stays_inside_a_frame` verhindert sie.
+      Daraus folgt der Vorschauweg: Der Pinsel geht **nicht** über den
+      Geometriekern, sondern schreibt ins Anzeigenetz; ausgewertet wird beim
+      Verlassen der Sitzung. Strichliste (1 000) neu auswerten: 67 ms von 2 s.
+      Subdivision: 574 ms von 3 s. Vier Leistungstests, dazu einer, der
+      Entscheidung C prüft statt sie zu behaupten.
+
+      **Ein Befund, den niemand bestellt hatte:** `generated_figure.stl` direkt
+      zu sculpten ergibt ein *leeres* Manifold. Die Datei trägt absichtlich
+      Generatorfehler, und `manifold3d` nimmt kein Netz an, das kein Volumen
+      ist. Nach `GENERATED_REPAIR` sind es 3 368 Dreiecke und wasserdicht, nach
+      `refine(8)` 215 552. Die Kette für Weg 3 heißt damit vollständig:
+      generieren → reparieren → verfeinern → sculpten, und der Editor prüft
+      beim Öffnen beides statt an einem leeren Ergebnis zu scheitern.
 - [ ] **P16.3 — `subdivide_surface`, `remesh_uniform`.** Erst prüfen, ob
       letzteres in `remesh_mesh` gehört, statt daneben zu bauen.
 - [ ] **P16.4 — `blend_union`** über `level_set`. Steht nicht im Auftrag und
