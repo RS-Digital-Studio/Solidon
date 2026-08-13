@@ -624,7 +624,7 @@ def _sketch_editor(theme: Theme) -> str:
     # Die Ebene gehört vor das Zeichnen: sie entscheidet, wohin extrudiert
     # wird — und wie die Schichten zur Zeichnung liegen.
     canvas.box(10, 50, 168, 22, fill=colours.fill, radius=2.0)
-    canvas.label(20, 65, str(_("Ebene XY — liegend")), size=10, bold=True)
+    canvas.label(20, 65, str(_("Draufsicht (XY) — liegend")), size=10, bold=True)
     canvas.caption(
         188, 65, str(_("Schichten liegen parallel zur Zeichnung — sie wächst nach oben heraus."))
     )

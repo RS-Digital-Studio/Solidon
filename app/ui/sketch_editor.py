@@ -23,6 +23,7 @@ from typing import Any
 from PySide6.QtCore import QPoint, QPointF, Qt, Signal
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QPen, QShortcut
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -62,6 +63,10 @@ SNAP_PX = 8.0
 #: Trefferabstand für Linien und Ränder, in Pixeln.
 PICK_PX = 5.0
 
+#: Halbe Armlänge des Fangkreuzes am Zeiger, in Pixeln. Kleiner als der
+#: Fangradius: es zeigt einen Ort, es greift nicht.
+SNAP_MARK_PX = 5.0
+
 #: Der Maßstab in Pixeln je Millimeter, solange nichts einzupassen ist.
 START_SCALE = 4.0
 
@@ -88,6 +93,37 @@ MIN_FIT_MM = 20.0
 #: Eine leere Skizze beginnt auf der XY-Ebene — die Ops setzen sie über
 #: ihren Flächenparameter dorthin, wo sie hingehört (§30.1).
 EMPTY = Sketch(plane="plane:xy", elements=())
+
+#: Auf welche Schrittweite ein Klick fällt, solange der Fang an ist, in
+#: Millimetern.
+#:
+#: Ein Millimeter, und nicht das gezeichnete Zehnerraster: gedruckt wird in
+#: Millimetern, Wandstärken und Bohrungsabstände sind ganze oder halbe, und
+#: ein Klick landete vorher auf -29,75 mm. Wer feiner braucht, stellt die
+#: Weite um; wer gar nicht fangen will, nimmt den Haken weg.
+DEFAULT_SNAP_MM = 1.0
+
+#: Wie eng die Rasterlinien im Bild höchstens stehen, in Bildpunkten. Darunter
+#: wird die nächstgröbere Stufe genommen — ein Raster, dessen Linien sich
+#: berühren, ist eine Fläche.
+MIN_GRID_PX = 7.0
+
+#: Die Stufen, aus denen die Rasterweite gewählt wird. Millimeterschritte in
+#: der Folge 1, 2, 5, wie an jedem Maßband: dazwischen gibt es keine Weite, die
+#: sich ablesen ließe.
+GRID_STEPS: tuple[float, ...] = (0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0)
+
+#: Wie die beiden Achsen der Zeichenfläche in jeder Ebene heißen (§30.1).
+#:
+#: Die Zeichenfläche bleibt eine Fläche; was ihre Waagerechte im Raum bedeutet,
+#: hängt an der Ebene. Beschriftet stand dort immer „X" und „Y" — auf der
+#: stehenden Ebene ist die Senkrechte aber Z, und wer danach maß, maß in der
+#: falschen Richtung.
+PLANE_AXES: dict[str, tuple[str, str]] = {
+    "plane:xy": ("X", "Y"),
+    "plane:xz": ("X", "Z"),
+    "plane:yz": ("Y", "Z"),
+}
 
 #: Ab wann eine Fläche als waagerecht gilt und ab wann als senkrecht, gemessen
 #: am Betrag der Z-Komponente ihrer Normalen. Die Werte entsprechen 15° und
@@ -162,6 +198,31 @@ def measure_label(constraint: SketchConstraint, points: list[tuple[float, float]
     ax, ay = points[first]
     bx, by = points[second]
     return f"({length(math.hypot(bx - ax, by - ay), with_unit=False)})"
+
+
+def _on_multiple(value: float, spacing: float, tolerance: float) -> bool:
+    """Ob ein Rasterwert auf einem Vielfachen der Beschriftungsweite liegt.
+
+    Nicht über ``value % spacing == 0``: die Werte entstehen durch
+    schrittweises Addieren, und der Rest liegt dann mal knapp über null und
+    mal knapp unter der Weite. Gemessen wird der Abstand zum nächsten
+    Vielfachen in beide Richtungen — Regel 6, kein Fließkommavergleich.
+    """
+    if spacing <= 0.0:
+        return False
+    rest = value % spacing
+    return min(rest, spacing - rest) < tolerance / 2.0
+
+
+def _decimals_for(step: float) -> int:
+    """Wie viele Nachkommastellen eine Rasterzahl braucht.
+
+    Bei einer Weite von zehn Millimetern stand ``f"{x:.0f}"`` richtig; bei
+    einer halben stünde dort dreimal dieselbe Null.
+    """
+    if step >= 1.0:
+        return 0
+    return 1 if step >= 0.1 else 2
 
 
 def flat_offsets(sketch: Sketch) -> list[int]:
@@ -267,11 +328,52 @@ class SketchCanvas(QWidget):
         Die Zeichenfläche ist der früheste Ort, an dem eine zu große Skizze
         auffallen kann — später kostet es einen Export, einen Slicerlauf und
         die Frage, warum das Teil nicht auf die Platte passt (E1)."""
+        self.snapping = True
+        """Ob ein Klick auf die Rasterweite fällt.
+
+        An als Vorgabe: ein Klick landete sonst auf -29,75 mm, und aus so
+        einem Wert wird kein Maß, sondern eine Bedingung, die man nachträgt.
+        Der Haken in der Leiste nimmt ihn weg, wenn jemand frei zeichnen
+        will."""
+        self.snap_step = DEFAULT_SNAP_MM
+        """Auf welche Weite gefangen wird, in Millimetern."""
+        self._snap_mark: tuple[float, float] | None = None
+        """Der Rasterpunkt unter dem Zeiger, solange ein Werkzeug gewählt
+        ist — gemerkt, damit nicht jede Mausbewegung neu zeichnet."""
 
     def set_bed(self, size: tuple[float, float] | None) -> None:
         """Die Grundfläche des Bauraums, gegen die gezeichnet wird."""
         self._bed = size
         self.update()
+
+    def set_snapping(self, active: bool, step: float | None = None) -> None:
+        """Den Rasterfang ein- oder ausschalten, wahlweise mit neuer Weite."""
+        self.snapping = active
+        if step is not None and step > 0.0:
+            self.snap_step = step
+        self.update()
+
+    def snapped(self, world: tuple[float, float]) -> tuple[float, float]:
+        """Ein Punkt auf der Rasterweite — oder unverändert, wenn der Fang
+        aus ist.
+
+        Gerundet, nicht abgeschnitten: abgeschnitten läge jeder Punkt links
+        unter dem Zeiger, und bei einer Weite von zehn Millimetern wäre das
+        ein sichtbarer Versatz in eine Richtung.
+        """
+        if not self.snapping or self.snap_step <= 0.0:
+            return world
+        step = self.snap_step
+        return (round(world[0] / step) * step, round(world[1] / step) * step)
+
+    def axis_names(self) -> tuple[str, str]:
+        """Wie die waagerechte und die senkrechte Achse hier heißen (§30.1).
+
+        Auf einer angeklickten Fläche des Körpers stehen sie ohne Namen: die
+        Fläche kann beliebig geneigt sein, und „X" auf einer schrägen Wand
+        wäre eine Angabe, die nicht stimmt.
+        """
+        return PLANE_AXES.get(self.sketch.plane, ("", ""))
 
     def layer_note(self) -> str:
         """Wie die Schichten zu dieser Ebene liegen (E1).
@@ -781,8 +883,15 @@ class SketchCanvas(QWidget):
         Element und Deckungen kommen als **ein** Schritt an, damit ein
         Rückgängig den ganzen Klickzug nimmt, nicht seine Hälften.
         """
+        # Ein vorhandener Punkt schlägt das Raster: er wird zur Deckung, und
+        # eine Deckung hält auch dann, wenn der Punkt später wandert. Erst wo
+        # keiner liegt, fällt der Klick auf die Rasterweite.
         snapped = self._hit_point(position)
-        world = self.points()[snapped] if snapped is not None else self._to_world(position)
+        world = (
+            self.points()[snapped]
+            if snapped is not None
+            else self.snapped(self._to_world(position))
+        )
 
         # Ein Spline endet nicht bei einer Punktzahl, sondern wenn jemand sagt,
         # dass er fertig ist: Doppelklick, Eingabetaste oder ein zweiter Klick
@@ -928,11 +1037,35 @@ class SketchCanvas(QWidget):
         # Wo der Zeiger steht, entscheidet die **Richtung** eines eingetippten
         # Maßes: die Länge kommt aus dem Feld, wohin es geht aus der Hand.
         self._pointer = self._to_world(QPointF(event.position()))
+        # Die Fangmarke wandert immer mit, auch schon vor dem ersten Klick:
+        # das Raster wird gröber gezeichnet, als gefangen wird, und ohne die
+        # Marke wäre nicht zu sehen, wohin ein Klick fiele.
+        moved = self._note_snap_mark()
         if self._dragging is not None and event.buttons() & Qt.MouseButton.LeftButton:
-            self.move_point(self._dragging, self._pointer[0], self._pointer[1])
+            # Ein gezogener Punkt fällt auf dieselbe Weite wie ein gesetzter —
+            # sonst wäre das Raster eine Zusage, die beim ersten Nachbessern
+            # nicht mehr gilt.
+            target = self.snapped(self._pointer)
+            self.move_point(self._dragging, target[0], target[1])
         elif self._pending_world:
             self.measuringChanged.emit(self.pending_measure())
             self.update()
+        elif moved:
+            self.update()
+
+    def _note_snap_mark(self) -> bool:
+        """Merkt den Rasterpunkt unter dem Zeiger und sagt, ob er gewechselt
+        hat.
+
+        Neu gezeichnet wird nur beim Wechsel: bei jeder Mausbewegung wäre es
+        ein voller Neuaufbau der Zeichenfläche für ein Kreuz, das an
+        derselben Stelle stehen bleibt.
+        """
+        mark = self.snapped(self._pointer) if self.snapping and self.tool != "select" else None
+        if mark == self._snap_mark:
+            return False
+        self._snap_mark = mark
+        return True
 
     def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         if event.button() == Qt.MouseButton.MiddleButton:
@@ -941,11 +1074,25 @@ class SketchCanvas(QWidget):
             self._dragging = None
 
     def wheelEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        """Das Rad zoomt **auf den Zeiger**, nicht auf die Bildmitte.
+
+        Vorher blieb die Mitte stehen: wer an einer Ecke der Zeichnung
+        arbeitete und heranzoomte, verlor sie aus dem Bild und musste
+        hinterherschieben. Der Punkt unter dem Zeiger bleibt jetzt, wo er ist
+        — dieselbe Zusage, die der Viewport für die Ansicht gibt (§2.9).
+        """
         # Wer selbst zoomt, hat die Ansicht: von hier an folgt sie keiner
         # Einpassung mehr, bis er sie über den Knopf zurückholt.
         self._fitting = False
+        position = QPointF(event.position())
+        before = self._to_world(position)
         factor = 1.25 if event.angleDelta().y() > 0 else 0.8
         self._scale = min(max(self._scale * factor, MIN_SCALE), MAX_SCALE)
+        after = self._to_world(position)
+        self._centre = QPointF(
+            self._centre.x() + (before[0] - after[0]),
+            self._centre.y() + (before[1] - after[1]),
+        )
         self.update()
 
     def keyPressEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
@@ -1073,6 +1220,20 @@ class SketchCanvas(QWidget):
             label = f"{label} — {tr('die Skizze ragt darüber hinaus')}"
         painter.drawText(top_left + QPointF(4.0, -4.0), label)
 
+    def grid_step(self) -> float:
+        """Wie weit die Rasterlinien auseinanderstehen, in Millimetern.
+
+        Sie standen fest auf zehn. Beim Herauszoomen wurde daraus eine Fläche
+        aus Linien, beim Heranzoomen ein Blatt mit vier Linien darauf — und
+        die beschrifteten Fünfziger blieben in beiden Fällen dieselben. Die
+        Weite folgt jetzt dem Maßstab: genommen wird die feinste Stufe, deren
+        Linien noch :data:`MIN_GRID_PX` auseinanderliegen.
+        """
+        for step in GRID_STEPS:
+            if step * self._scale >= MIN_GRID_PX:
+                return step
+        return GRID_STEPS[-1]
+
     def _paint_grid(self, painter: QPainter) -> None:
         palette = self.palette()
         minor = QColor(palette.mid().color())
@@ -1081,17 +1242,21 @@ class SketchCanvas(QWidget):
         major.setAlpha(140)
         left, top = self._to_world(QPointF(0, 0))
         right, bottom = self._to_world(QPointF(self.width(), self.height()))
-        step = 10.0
+        step = self.grid_step()
+        # Jede fünfte Linie kräftiger, und dieselbe trägt die Zahl: so bleibt
+        # ablesbar, was ein Kästchen bedeutet, wenn der Maßstab die Weite
+        # wechselt.
+        marked = step * 5.0
         x = math.floor(left / step) * step
         while x <= right:
             screen = self._to_screen(x, 0.0)
-            painter.setPen(QPen(major if abs(x % 50.0) < 1e-9 else minor, 1.0))
+            painter.setPen(QPen(major if _on_multiple(x, marked, step) else minor, 1.0))
             painter.drawLine(QPointF(screen.x(), 0.0), QPointF(screen.x(), float(self.height())))
             x += step
         y = math.floor(bottom / step) * step
         while y <= top:
             screen = self._to_screen(0.0, y)
-            painter.setPen(QPen(major if abs(y % 50.0) < 1e-9 else minor, 1.0))
+            painter.setPen(QPen(major if _on_multiple(y, marked, step) else minor, 1.0))
             painter.drawLine(QPointF(0.0, screen.y()), QPointF(float(self.width()), screen.y()))
             y += step
         self._paint_scale(painter, step, left, right, bottom, top)
@@ -1100,14 +1265,17 @@ class SketchCanvas(QWidget):
     def _paint_scale(
         self, painter: QPainter, step: float, left: float, right: float, bottom: float, top: float
     ) -> None:
-        """Zahlen an das Raster, alle fünfzig Millimeter.
+        """Zahlen an das Raster, an jede fünfte Linie.
 
         Ein Raster ohne Zahlen sagt nur, dass es ein Raster gibt. Fusion
         beschriftet seine Achsen, und ohne das weiß man beim Zeichnen nicht, ob
         ein Kästchen einen Millimeter bedeutet oder zehn — der Maßstab ändert
-        sich mit jedem Rad am Zoom.
+        sich mit jedem Rad am Zoom. Beschriftet wird deshalb die Linie, die
+        auch kräftiger gezeichnet ist, und nicht ein fester Fünfzigerabstand:
+        beim Hineinzoomen stünde sonst irgendwann keine Zahl mehr im Bild.
         """
         labelled = step * 5.0
+        digits = _decimals_for(step)
         painter.setPen(QPen(self.palette().text().color(), 1.0))
         font = painter.font()
         font.setPointSizeF(max(font.pointSizeF() - 1.0, 6.0))
@@ -1118,10 +1286,12 @@ class SketchCanvas(QWidget):
         while x <= right:
             if abs(x) > EPS_DISPLAY:
                 screen = self._to_screen(x, 0.0)
-                text = f"{x:.0f}"
+                text = f"{x:.{digits}f}"
                 # Nur, wenn die Zahl ganz hinpasst: eine abgeschnittene „1"
-                # am rechten Rand ist keine Angabe, sondern ein Fehler.
-                if screen.x() + 2.0 + metrics.horizontalAdvance(text) <= self.width():
+                # am rechten Rand ist keine Angabe, sondern ein Fehler. Am
+                # linken Rand ebenso — dort stand „00" von einer -200.
+                width = metrics.horizontalAdvance(text)
+                if screen.x() + 2.0 >= 0.0 and screen.x() + 2.0 + width <= self.width():
                     painter.drawText(QPointF(screen.x() + 2.0, self.height() - 4.0), text)
             x += labelled
         y = math.floor(bottom / labelled) * labelled
@@ -1129,29 +1299,37 @@ class SketchCanvas(QWidget):
             if abs(y) > EPS_DISPLAY:
                 screen = self._to_screen(0.0, y)
                 if metrics.height() <= screen.y() - 2.0 <= self.height():
-                    painter.drawText(QPointF(4.0, screen.y() - 2.0), f"{y:.0f}")
+                    painter.drawText(QPointF(4.0, screen.y() - 2.0), f"{y:.{digits}f}")
             y += labelled
 
     def _paint_axes(self, painter: QPainter) -> None:
-        """Ursprung und Achsen, rot für X und grün für Y (E15).
+        """Ursprung und Achsen, jede in ihrer Farbe und mit ihrem Buchstaben
+        (E15).
 
         Vorher lagen beide in der Rasterfarbe: zwei Linien unter vielen, und
         wo der Nullpunkt liegt, musste man aus der Zeichnung erschließen. Die
         Farben sind dieselben wie am Achsenkreuz des Viewports und in jedem
         CAD, das jemand vorher benutzt hat — und weil Farbe nie allein trägt
         (Regel 18), steht der Buchstabe am Ende der Achse.
+
+        **Der Buchstabe folgt der Ebene.** Er stand fest auf X und Y, auch auf
+        der stehenden XZ-Ebene, wo die Senkrechte Z ist — die Zeichenfläche
+        behauptete dann eine Richtung, die es dort nicht gibt. Auf einer
+        angeklickten Fläche des Körpers bleibt er weg: sie kann beliebig
+        geneigt sein, und ein Buchstabe wäre geraten.
         """
         origin = self._to_screen(0.0, 0.0)
-        for colour, name, line, label in (
-            (ROLES["axis_x"], "X", (0.0, origin.y(), float(self.width()), origin.y()), True),
-            (ROLES["axis_y"], "Y", (origin.x(), 0.0, origin.x(), float(self.height())), True),
+        across, up = self.axis_names()
+        for colour, name, line, horizontal in (
+            (ROLES["axis_x"], across, (0.0, origin.y(), float(self.width()), origin.y()), True),
+            (ROLES["axis_y"], up, (origin.x(), 0.0, origin.x(), float(self.height())), False),
         ):
             painter.setPen(QPen(QColor(colour), 1.6))
             painter.drawLine(QPointF(line[0], line[1]), QPointF(line[2], line[3]))
-            if label:
+            if name:
                 spot = (
                     QPointF(self.width() - 14.0, origin.y() - 6.0)
-                    if name == "X"
+                    if horizontal
                     else QPointF(origin.x() + 6.0, 14.0)
                 )
                 painter.drawText(spot, name)
@@ -1232,12 +1410,58 @@ class SketchCanvas(QWidget):
             painter.drawText(middle, measure_label(entry, points))
 
     def _paint_pending(self, painter: QPainter) -> None:
-        if not self._pending_world:
-            return
+        """Was gerade entsteht — die gesetzten Punkte und die Linie zum Zeiger.
+
+        Der Zug zum Zeiger fehlte, und das war die eigentliche Auskunft: ein
+        Klick setzte einen gestrichelten Kreis, dann geschah nichts sichtbares,
+        und beim zweiten Klick stand plötzlich eine Linie. Jedes CAD zeigt
+        dazwischen, was es zeichnen würde.
+        """
         pen = QPen(self.palette().highlight().color(), 1.2, Qt.PenStyle.DashLine)
         painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
+        if not self._pending_world:
+            self._paint_snap_mark(painter)
+            return
         for world in self._pending_world:
             painter.drawEllipse(self._to_screen(*world), 4.0, 4.0)
+
+        target = self.snapped(self._pointer)
+        first = self._pending_world[0]
+        last = self._pending_world[-1]
+        if self.tool in ("line", "spline"):
+            painter.drawLine(self._to_screen(*last), self._to_screen(*target))
+        elif self.tool == "circle":
+            radius = math.hypot(target[0] - first[0], target[1] - first[1]) * self._scale
+            painter.drawEllipse(self._to_screen(*first), radius, radius)
+        elif self.tool == "arc":
+            # Ein Bogen entsteht aus Mitte, Anfang und Ende. Bis der Anfang
+            # steht, zeigt die Vorschau den Radius als Strich; danach den
+            # Kreis, auf dem der Bogen liegen wird.
+            painter.drawLine(self._to_screen(*first), self._to_screen(*target))
+            if len(self._pending_world) >= 2:
+                radius = math.hypot(last[0] - first[0], last[1] - first[1]) * self._scale
+                painter.drawEllipse(self._to_screen(*first), radius, radius)
+        self._paint_snap_mark(painter)
+
+    def _paint_snap_mark(self, painter: QPainter) -> None:
+        """Ein Kreuz auf dem Rasterpunkt, auf den der nächste Klick fiele.
+
+        Das Raster wird gröber gezeichnet, als gefangen wird — ohne die Marke
+        wäre der Fang eine Zusage, die man erst am gesetzten Punkt nachprüfen
+        kann. Nur beim Zeichnen: wer auswählt, setzt keinen Punkt.
+        """
+        if not self.snapping or self.tool == "select" or self._snap_mark is None:
+            return
+        spot = self._to_screen(*self._snap_mark)
+        painter.setPen(QPen(QColor(ROLES["measure"]), 1.2))
+        painter.drawLine(
+            QPointF(spot.x() - SNAP_MARK_PX, spot.y()), QPointF(spot.x() + SNAP_MARK_PX, spot.y())
+        )
+        painter.drawLine(
+            QPointF(spot.x(), spot.y() - SNAP_MARK_PX), QPointF(spot.x(), spot.y() + SNAP_MARK_PX)
+        )
 
 
 def _segment_distance(
@@ -1484,10 +1708,16 @@ class SketchPanel(QWidget):
         # entscheidet, wohin extrudiert wird (§30.1). Ein Auswahlfeld und
         # keine drei Knöpfe — eine Handlung, eine Stelle (Konzept P15, E11).
         self.plane_choice = QComboBox(self)
+        # Benannt wie die Ansicht, die man sieht, und nicht wie die Ebene, auf
+        # der man rechnet. „Ebene XZ — stehend, nach hinten" beschreibt
+        # richtig, was passiert, und beantwortet die Frage nicht, die jemand
+        # vor der Zeichenfläche hat: sehe ich das Teil von oben oder von der
+        # Seite? Die Ebene steht in Klammern daneben — sie ist die Angabe, die
+        # in der Projektdatei landet.
         for value, label in (
-            ("plane:xy", tr("Ebene XY — liegend")),
-            ("plane:xz", tr("Ebene XZ — stehend, nach hinten")),
-            ("plane:yz", tr("Ebene YZ — stehend, zur Seite")),
+            ("plane:xy", tr("Draufsicht (XY) — liegend")),
+            ("plane:xz", tr("Vorderansicht (XZ) — stehend, von vorn")),
+            ("plane:yz", tr("Seitenansicht (YZ) — stehend, von der Seite")),
         ):
             self.plane_choice.addItem(label, userData=value)
         self.plane_choice.setCurrentIndex(
@@ -1512,6 +1742,28 @@ class SketchPanel(QWidget):
         self.layer_note.setFont(note_font)
         self.canvas.sketchChanged.connect(lambda: self.layer_note.setText(self.canvas.layer_note()))
         plane_row.addWidget(self.layer_note, stretch=1)
+
+        # Der Rasterfang, an derselben Zeile wie die Ebene: beides entscheidet
+        # man vor dem ersten Strich, nicht mittendrin. Ein Haken und eine
+        # Weite — an ist die Vorgabe, weil ein Klick sonst auf -29,75 mm
+        # landet und daraus kein Maß wird, sondern Nacharbeit.
+        self.snap_toggle = QCheckBox(tr("Am Raster fangen"), self)
+        self.snap_toggle.setChecked(self.canvas.snapping)
+        self.snap_toggle.setToolTip(
+            tr("Klicks fallen auf die eingestellte Weite. Vorhandene Punkte fangen weiterhin vor.")
+        )
+        self.snap_step = QDoubleSpinBox(self)
+        self.snap_step.setDecimals(2)
+        self.snap_step.setRange(0.05, 100.0)
+        self.snap_step.setSingleStep(0.5)
+        self.snap_step.setValue(self.canvas.snap_step)
+        self.snap_step.setSuffix(f" {DISPLAY_UNITS[0]}")
+        self.snap_step.setToolTip(tr("Auf welche Weite ein Klick fällt."))
+        self.snap_toggle.toggled.connect(self._snapping_changed)
+        self.snap_step.valueChanged.connect(lambda _value: self._snapping_changed())
+        self._snapping_changed()
+        plane_row.addWidget(self.snap_toggle)
+        plane_row.addWidget(self.snap_step)
         tools.addStretch(1)
 
         # Die drei Grundebenen stehen immer; die Flächen des Körpers kommen
@@ -1757,6 +2009,16 @@ class SketchPanel(QWidget):
             if other != name and button.isChecked():
                 button.setChecked(False)
         self.canvas.set_tool(name)
+
+    def _snapping_changed(self) -> None:
+        """Haken und Weite an die Zeichenfläche geben.
+
+        Das Feld wird mit dem Haken bedienbar: eine Weite einzustellen, die
+        nichts tut, sieht aus wie eine Einstellung, die nicht wirkt.
+        """
+        active = self.snap_toggle.isChecked()
+        self.snap_step.setEnabled(active)
+        self.canvas.set_snapping(active, self.snap_step.value())
 
     def constraint_offers(self) -> dict[SketchConstraintKind, bool]:
         """Welche Bedingung zur Auswahl passt — Kontextmenü und Knöpfe lesen

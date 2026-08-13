@@ -98,6 +98,145 @@ def test_placing_snaps_to_an_existing_point(qt_app: QApplication) -> None:
     assert not canvas.sketch.constraints
 
 
+def test_a_click_falls_on_the_grid(qt_app: QApplication) -> None:
+    """Ohne Fang landete ein Klick auf -29,75 mm.
+
+    Aus so einem Wert wird kein Maß, sondern Nacharbeit: jede Bemaßung, die
+    danach kommt, korrigiert erst einmal die krumme Zahl. Der Fang ist die
+    Vorgabe, weil gedruckt wird, was in Millimetern beschrieben ist.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+    canvas.set_tool("line")
+
+    canvas.place(canvas._to_screen(12.4, -7.7))
+    canvas.place(canvas._to_screen(30.2, 5.1))
+
+    assert canvas.sketch.elements[0].points == ((12.0, -8.0), (30.0, 5.0))
+
+
+def test_the_grid_lets_go_when_the_hook_comes_off(qt_app: QApplication) -> None:
+    """Wer frei zeichnen will, nimmt den Haken weg — und dann fängt nichts.
+
+    Und mit anderer Weite fängt es anders: eine Einstellung, die nur an und
+    aus kennt, wäre bei einem Teil mit halben Millimetern keine.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+
+    canvas.set_snapping(False)
+    assert canvas.snapped((12.4, -7.7)) == (12.4, -7.7)
+
+    canvas.set_snapping(True, 0.5)
+    assert canvas.snapped((12.4, -7.7)) == pytest.approx((12.5, -7.5))
+
+    canvas.set_snapping(True, 10.0)
+    assert canvas.snapped((12.4, -7.7)) == pytest.approx((10.0, -10.0))
+
+
+def test_an_existing_point_beats_the_grid(qt_app: QApplication) -> None:
+    """Ein vorhandener Punkt fängt vor dem Raster.
+
+    Sonst risse der Fang gerade die Verbindung auf, für die er da ist: der
+    Endpunkt einer Linie auf -0,25 mm rutschte auf null, und die Deckung, die
+    das Element zusammenhält, käme nie zustande.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+    canvas.add_element("line", ((0.0, 0.0), (30.25, 0.0)))
+
+    canvas.set_tool("line")
+    canvas.place(canvas._to_screen(30.3, 0.05))
+    canvas.place(canvas._to_screen(30.0, 20.0))
+
+    assert canvas.sketch.elements[1].points[0] == (30.25, 0.0), "der vorhandene Punkt, nicht 30,0"
+    assert [entry.kind for entry in canvas.sketch.constraints] == ["coincident"]
+
+
+def test_the_axes_say_what_they_are_on_this_plane(qt_app: QApplication) -> None:
+    """Auf der stehenden Ebene ist die Senkrechte Z, nicht Y.
+
+    Beschriftet stand dort immer „X" und „Y" — die Zeichenfläche behauptete
+    eine Richtung, die es auf dieser Ebene nicht gibt. Auf einer angeklickten
+    Fläche des Körpers bleibt der Buchstabe weg: sie kann beliebig geneigt
+    sein, und dann wäre er geraten.
+    """
+    canvas = SketchCanvas()
+
+    assert canvas.axis_names() == ("X", "Y")
+    canvas.set_plane("plane:xz")
+    assert canvas.axis_names() == ("X", "Z")
+    canvas.set_plane("plane:yz")
+    assert canvas.axis_names() == ("Y", "Z")
+    canvas.set_plane("feature:face_1")
+    assert canvas.axis_names() == ("", "")
+
+
+def test_the_grid_follows_the_scale(qt_app: QApplication) -> None:
+    """Die Rasterweite stand fest auf zehn Millimetern.
+
+    Herausgezoomt wurde daraus eine Fläche aus Linien, hineingezoomt ein
+    Blatt mit vier Linien darauf. Sie folgt jetzt dem Maßstab — und bleibt in
+    der Folge 1, 2, 5, damit ein Kästchen ablesbar bleibt.
+    """
+    from app.ui.sketch_editor import GRID_STEPS, MIN_GRID_PX
+
+    canvas = SketchCanvas()
+    for scale in (0.5, 2.0, 4.0, 20.0, 100.0):
+        canvas._scale = scale
+        step = canvas.grid_step()
+        assert step in GRID_STEPS
+        assert step * scale >= MIN_GRID_PX or step == GRID_STEPS[-1], "Linien kleben nicht"
+
+
+def test_zooming_keeps_the_point_under_the_pointer(qt_app: QApplication) -> None:
+    """Das Rad zoomt auf den Zeiger, nicht auf die Bildmitte.
+
+    Vorher blieb die Mitte stehen: wer an einer Ecke der Zeichnung arbeitete
+    und heranzoomte, verlor sie aus dem Bild und musste hinterherschieben.
+    """
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+    spot = QPointF(340.0, 90.0)
+    before = canvas._to_world(spot)
+
+    canvas.wheelEvent(
+        QWheelEvent(
+            spot,
+            spot,
+            QPoint(0, 0),
+            QPoint(0, 120),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        )
+    )
+
+    assert canvas._to_world(spot) == pytest.approx(before), "derselbe Punkt liegt noch dort"
+
+
+def test_the_hook_in_the_bar_reaches_the_canvas(qt_app: QApplication) -> None:
+    """Haken und Weite stehen an der Ebenenzeile — beides entscheidet man vor
+    dem ersten Strich."""
+    panel = SketchPanel()
+    try:
+        assert panel.snap_toggle.isChecked(), "an ist die Vorgabe"
+        assert panel.snap_step.isEnabled()
+
+        panel.snap_step.setValue(5.0)
+        assert panel.canvas.snap_step == pytest.approx(5.0)
+
+        panel.snap_toggle.setChecked(False)
+        assert not panel.canvas.snapping
+        assert not panel.snap_step.isEnabled(), "eine Weite, die nichts tut, wird nicht angeboten"
+    finally:
+        panel.deleteLater()
+
+
 def test_inserting_a_shape_shifts_its_targets(qt_app: QApplication) -> None:
     """Eine Grundform hinter bestehenden Elementen behält ihre Bedingungen —
     die Ziele zählen über die ganze flache Punktliste."""
