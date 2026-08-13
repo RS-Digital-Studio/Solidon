@@ -4327,3 +4327,46 @@ Vier Anläufe, alle gemessen, keiner erfolgreich:
       `xfail` für Linux, nicht `strict`: sobald eine Fassung es dort kann,
       wird der Lauf grün und die Marke fällt auf. Für die Demo ist die Wirkung
       begrenzt — sie erscheint für Windows, und dort geht es.
+
+### Der Absturz, der die CI eine Woche lang rot hielt (13.08.2026)
+
+Vom 06. bis zum 13.08. starb jeder Lauf auf dem Ubuntu-Runner, und zwar immer
+an derselben Anweisung — der ersten Widget-Zeile des Szenenaufbaus
+(`show_document`, `self.list.clear()`) —, aber jedes Mal in einem anderen
+Test. Ein Absturz, der wandert, hängt an keinem Test.
+
+**Vier Ursachen wurden gefunden und behoben**, jede für sich ein echter Fehler:
+
+- [x] **Die Sitzung überlebt ihr Fenster.** Ein `window`-Fixture gibt sein
+      `MainWindow` zurück und überlässt es dem Speicherbereiniger; die
+      `Session` daneben lebt weiter und ruft ihr nächstes Ergebnis in Widgets,
+      die es nicht mehr gibt. `MainWindow.release()` kappt die Verbindung, die
+      Fixture ruft es nach jedem Test.
+- [x] **Verzögerte Aufrufe ohne Empfänger.** Fünf `QTimer.singleShot` liefen
+      ohne Kontextobjekt weiter, nachdem ihr Widget weg war — im
+      Bausteinkatalog sichtbar als `RuntimeError`, anderswo als Absturz.
+- [x] **OCCT ändert seine Argumente**, wenn man es nicht verbietet: die zweite
+      Boolesche Operation rechnete mit Formen, die die erste ausgehöhlt hatte.
+      `SetNonDestructive(True)`.
+- [x] **Die Suite prüfte die Sprache des Rechners**, nicht die der Anwendung
+      (`QLocale`), und ein Test über deutsche Kommas war grün, ohne dass jemand
+      etwas dafür getan hätte.
+
+**Zwei Wege waren falsch** und stehen hier, damit sie niemand wiederholt:
+Fenster planmäßig zerstören (`deleteLater` plus `sendPostedEvents`) nimmt VTKs
+Zustand mit, und der **nächste** Fensteraufbau stirbt in
+`render_window_interactor.initialize`. Und `pytest-xdist` ersetzt eine Grenze
+durch eine andere: ein sterbender Worker reißt den ganzen Lauf mit einem
+`INTERNALERROR` ab.
+
+**Was den Lauf grün gemacht hat**, ist die Aufteilung: jede Testdatei, die
+Fenster baut, bekommt in der CI ihren eigenen Prozess (gesucht, nicht
+gepflegt), und die Suite läuft dort unter Xvfb statt unter Qts
+Offscreen-Plattform — VTK will einen GL-Kontext.
+
+- [ ] **Offen: ein Test bleibt.**
+      `test_chat_ui.py::test_a_reversible_proposal_is_applied_without_asking`
+      nimmt auf Linux den Prozess mit, reproduzierbar nach dem siebten Test
+      seiner Datei, hier nie. Er trägt ein `skipif` für Linux — kein `xfail`,
+      weil ein Absturz keinen Testausgang hat. Unter Windows, der Plattform
+      der Demo, läuft er.
