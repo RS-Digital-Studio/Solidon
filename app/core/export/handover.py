@@ -80,7 +80,7 @@ class SlicerSetup:
         return self.executable.stem
 
 
-def profile_file(chosen: str, setup: SlicerSetup, kind: str) -> Path | None:
+def profile_file(chosen: str, setup: SlicerSetup, kind: slicer_profiles.ProfileKind) -> Path | None:
     """Die Datei zu einem Profil, gleich ob ein Name oder ein Pfad ankam.
 
     Beides muss gehen, und das ist kein Entgegenkommen, sondern die Folge aus
@@ -104,7 +104,14 @@ def profile_file(chosen: str, setup: SlicerSetup, kind: str) -> Path | None:
     # ``kind`` und nicht ``type_of``: das eine ist der Ordner, aus dem das
     # Profil stammt, das andere sein ``type``-Feld — und das steht in den
     # mitgelieferten Profilen der Orca-Familie durchweg leer.
-    for entry in slicer_profiles.find_profiles(setup.executable, setup.flavour):
+    #
+    # Gesucht wird ausdrücklich nach dieser Art. Ohne die Angabe gilt
+    # ``DEFAULT_KINDS``, und darin fehlen die Filamentprofile mit Absicht —
+    # sie vervielfachen den Bestand. Wer hier nach einem Filament fragte, bekam
+    # deshalb nie eines: die Schleife lief über Maschinen und Prozesse und
+    # endete in „no filament profile named ...". Nach einer Art zu fragen ist
+    # obendrein schneller als nach zweien.
+    for entry in slicer_profiles.find_profiles(setup.executable, setup.flavour, kinds=(kind,)):
         if entry.name == chosen and entry.kind == kind:
             found = Path(entry.path)
             if found.is_file():
@@ -375,6 +382,73 @@ def write_config(
     return SlicerConfig(process=target)
 
 
+def project_settings(
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup,
+    extruders: int = 1,
+) -> dict[str, object]:
+    """Die Einstellungen einer Platte, wie eine Orca-Projektdatei sie führt.
+
+    Dieselben Werte wie in :func:`write_config`, nur in *einer* Abbildung statt
+    in zwei Dateien: eine 3MF trennt Prozess und Filament nicht, sie hat einen
+    Satz Schlüssel. Damit trägt die exportierte Datei ihre Temperaturen,
+    Geschwindigkeiten und Kühlung selbst — sonst öffnet der Slicer sie mit dem
+    Profil, das gerade eingestellt ist, und was Solidon über dieses Teil weiß,
+    ist beim Öffnen weg.
+
+    Aufgesetzt wird auf den Bestand des Slicers, nicht auf Erfundenes: das
+    benannte System-Prozessprofil und -Filamentprofil werden gelesen, Solidons
+    Werte kommen darüber. Was Solidon nicht anfasst, bleibt so, wie der
+    Hersteller es abgestimmt hat (§29).
+
+    Die Filamentschlüssel werden zu **Listen**, einer je Extruder — so führt
+    das Format sie, und ein blanker String kommt in der Oberfläche als leeres
+    Feld an.
+    """
+    if setup.flavour != "orca":
+        # Nur diese Familie liest Einstellungen aus der 3MF. Cura bekommt sie
+        # über die Kommandozeile, PrusaSlicer über seine INI.
+        return {}
+
+    split = by_section(settings, setup.flavour)
+    filament_values = split.get("filament", {})
+    document = _orca_process(split.get("process", {}), settings, setup)
+    filament = _orca_filament(filament_values, settings, profile, setup)
+    document.update(filament)
+    document.update(_machine_keys(profile, setup.flavour))
+
+    for key in ("type", "instantiation", "inherits"):
+        document.pop(key, None)
+
+    # Welche Schlüssel je Extruder geführt werden, sagt die Übersetzungstabelle
+    # selbst — sie trägt die Sektion je Eintrag. Eine zweite Liste hier wäre
+    # beim nächsten neuen Schlüssel schon falsch.
+    per_extruder = set(filament.keys())
+    resolved: dict[str, object] = {
+        key: ([value] * extruders if key in per_extruder and not isinstance(value, list) else value)
+        for key, value in document.items()
+    }
+
+    # Erst nach der Umwandlung: das hier sind Angaben *über* die Datei, keine
+    # Werte je Extruder. Als Liste geschrieben liest der Slicer sie nicht.
+    resolved["from"] = "project"
+    resolved["name"] = "project_settings"
+
+    # Woran der Slicer erkennt, wofür diese Werte gelten. Ohne sie lädt er
+    # seine eigene Auswahl darunter, und was hier nicht ausdrücklich steht,
+    # kommt aus einem Profil, das niemand gewählt hat.
+    if setup.machine_profile:
+        resolved["printer_settings_id"] = setup.machine_profile
+    if setup.base_process:
+        resolved["print_settings_id"] = setup.base_process
+    if setup.base_filament:
+        resolved["filament_settings_id"] = [setup.base_filament] * extruders
+    resolved.setdefault("printer_model", profile.printer.title)
+    resolved.setdefault("nozzle_diameter", [str(profile.printer.nozzle_diameter)])
+    return resolved
+
+
 def _orca_process(
     values: dict[str, str],
     settings: PrintSettings,
@@ -449,12 +523,49 @@ def _orca_filament(
         "instantiation": "true",
         "filament_type": [slicer_keys.filament_type(profile.material.id)],
     }
-    if setup.base_filament:
-        base = Path(setup.base_filament)
-        if base.is_file():
-            inherited = slicer_profiles.resolve_values(base)
-            document.update({key: _as_slots(value) for key, value in inherited.items()})
+    # Über ``profile_file``, nicht über ``Path(...).is_file()``: hierher kommt
+    # bevorzugt ein **Name** aus dem Bestand des Slicers, denn ein Pfad
+    # verstieße in der Projektdatei gegen Regel 12. Direkt als Pfad gelesen
+    # sagte ``is_file()`` schlicht nein, und das Herstellerprofil wurde still
+    # übersprungen — dieselbe Falle, die beim Prozessprofil schon einmal
+    # zweiundvierzig Schlüssel statt zweiundsechzig ergab.
+    #
+    # Hier kostete es mehr als Schlüssel: ohne das Profil des Herstellers
+    # fehlten die Temperaturen aller Druckplatten außer der einen, die Solidon
+    # selbst setzt. Der Slicer wählte „Cool Plate", fand dort die 35 Grad
+    # seiner eigenen Vorgabe, und ein PETG-Druck ging mit kaltem Bett hinaus.
+    base = profile_file(setup.base_filament, setup, "filament")
+    if base is not None:
+        inherited = slicer_profiles.resolve_values(base)
+        document.update({key: _as_slots(value) for key, value in inherited.items()})
     document.update({key: [value] for key, value in values.items()})
+    return _with_every_plate(document, values)
+
+
+#: Die Druckplatten, die die Orca-Familie auseinanderhält. Welche aufliegt,
+#: weiß Solidon nicht — deshalb bekommt jede denselben Wert.
+PLATE_KINDS: Final = ("cool", "eng", "hot", "textured", "supertack")
+
+
+def _with_every_plate(document: dict[str, object], values: Mapping[str, str]) -> dict[str, object]:
+    """Die Betttemperatur auf jede Druckplatte, nicht nur auf eine.
+
+    ``curr_bed_type`` gehört der Maschine, die Temperatur dem Material — und
+    Solidon kennt nur das zweite. Schreibt es allein ``hot_plate_temp`` und
+    der Nutzer hat eine andere Platte eingestellt, liest der Slicer die
+    Temperatur einer Platte, über die nie jemand entschieden hat.
+
+    Erfunden wird dabei nichts: geschrieben wird derselbe Wert, den Solidon
+    ohnehin für das Bett gesetzt hat. Danach ist das Ergebnis unabhängig
+    davon, welche Platte gewählt ist — dieselbe Vorsicht wie bei den
+    Haftungsarten, wo ein ungenutztes Maß sonst als eigener Schalter wirkt.
+    """
+    for suffix in ("", "_initial_layer"):
+        value = values.get(f"hot_plate_temp{suffix}")
+        if value is None:
+            continue
+        for plate in PLATE_KINDS:
+            document[f"{plate}_plate_temp{suffix}"] = [value]
     return document
 
 
@@ -677,7 +788,13 @@ def slice_model(
     """
     # §2 C: die Druckdatei ist ein herausgegebenes Ergebnis — wie der Export.
     activation.require(activation.SLICER)
-    models = [model] if isinstance(model, Path) else list(model)
+    # Absolut, bevor irgendetwas damit geschieht: der Lauf unten setzt sein
+    # eigenes Arbeitsverzeichnis, ein relativer Pfad zeigt dort ins Leere. Die
+    # Prüfung gleich darunter sähe die Datei trotzdem — sie sucht im
+    # Verzeichnis des aufrufenden Prozesses —, und der Fehler käme erst vom
+    # Slicer selbst, als „No such file" mit einem Pfad, den es aus seiner
+    # Sicht wirklich nicht gibt.
+    models = [entry.resolve() for entry in ([model] if isinstance(model, Path) else model)]
     if not models:
         raise ExternalToolError(
             tool=setup.name,
@@ -701,7 +818,10 @@ def slice_model(
     with tempfile.TemporaryDirectory(prefix="solidon-slice-") as directory:
         workspace = Path(directory)
         config = write_config(settings, profile, setup, workspace)
-        target = output_dir if output_dir is not None else workspace
+        # Aus demselben Grund wie die Modellpfade: der Slicer schreibt sonst
+        # neben sein Arbeitsverzeichnis statt dorthin, wo die Datei erwartet
+        # wird — und ``_find_gcode`` sucht an der leeren Stelle.
+        target = (output_dir if output_dir is not None else workspace).resolve()
         target.mkdir(parents=True, exist_ok=True)
 
         completed = subprocess.run(

@@ -17,7 +17,7 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import trimesh
@@ -42,6 +42,12 @@ from app.core.types import (
 )
 from app.core.units import EPS_GEOM, format_length
 from app.i18n import _, tr
+
+if TYPE_CHECKING:
+    # Nur für die Signatur: zur Laufzeit zieht ``handover`` die
+    # G-Code-Auswertung mit, und ein Export soll nicht davon abhängen, dass
+    # ein Slicer im Spiel ist.
+    from app.core.export.handover import SlicerSetup
 
 _log = get_logger(__name__)
 
@@ -485,6 +491,7 @@ def write_assembly(
     settings: PrintSettings | None = None,
     flavour: SlicerFlavour = "orca",
     place_on_bed: bool = False,
+    setup: SlicerSetup | None = None,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in *eine* 3MF-Datei (§20, §29).
 
@@ -549,9 +556,41 @@ def write_assembly(
         for entry in chosen
     ]
     target = directory / (safe_name(project_name, "projekt") + ".3mf")
-    target.write_bytes(threemf.write_assembly(parts, project_name, bed=bed))
+    target.write_bytes(
+        threemf.write_assembly(
+            parts,
+            project_name,
+            bed=bed,
+            project_settings=_plate_settings(settings, profile, flavour, setup),
+        )
+    )
     _log.info("exported %d object(s) as one assembly to %s", len(parts), target.name)
     return target, findings
+
+
+def _plate_settings(
+    settings: PrintSettings | None,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    setup: SlicerSetup | None,
+) -> dict[str, object]:
+    """Die Druckeinstellungen, die mit der Datei reisen (§29).
+
+    Ohne sie ist eine exportierte 3MF nur Geometrie, und der Slicer öffnet sie
+    mit dem Profil, das gerade eingestellt ist. Mit ihnen trägt die Datei
+    Temperatur, Tempo und Kühlung selbst — der Unterschied zwischen einer
+    Datei, die man druckt, und einer, die man erst einrichtet.
+
+    Ist kein Slicer bekannt, werden trotzdem Solidons Werte geschrieben, nur
+    ohne das Systemprofil darunter: die Maschine kennt Solidon aus dem eigenen
+    Profil, und ein Wert, der dasteht, ist mehr als einer, der fehlt.
+    """
+    if settings is None:
+        return {}
+    from app.core.export import handover
+
+    known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
+    return handover.project_settings(settings, profile, known)
 
 
 def _cura_assembly(objects: Sequence[SceneObject], bed: tuple[float, float] | None) -> bytes:

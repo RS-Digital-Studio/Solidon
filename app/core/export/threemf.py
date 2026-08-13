@@ -35,6 +35,7 @@ Abhängigkeit für fünfzehn Zeilen.
 from __future__ import annotations
 
 import dataclasses
+import json
 import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -65,6 +66,15 @@ MODEL_PATH = "3D/3dmodel.model"
 #: und eine Szene aus Körpern namens „object 7" ist eine Szene, in der niemand
 #: arbeiten kann. Gelesen, wenn da; achselzuckend übergangen, wenn nicht.
 SETTINGS_PATH = "Metadata/model_settings.config"
+
+#: Wo die Orca-Familie die Einstellungen einer *Projektdatei* führt — was in
+#: der Oberfläche Prozess, Filament und Drucker sind, in einer JSON-Abbildung.
+#:
+#: Ohne sie ist eine 3MF nur Geometrie: der Slicer öffnet sie mit dem Profil,
+#: das gerade eingestellt ist, und alles, was Solidon über Temperatur, Tempo
+#: und Kühlung dieses Teils weiß, ist beim Öffnen weg. Genau das trennt eine
+#: Datei, die man druckt, von einer, die man erst noch einrichtet.
+PROJECT_SETTINGS_PATH = "Metadata/project_settings.config"
 
 #: Endungen, die ein Slicer in einem Teilnamen stehen lässt, weil das Teil aus
 #: einer Datei kam.
@@ -151,6 +161,7 @@ def write_assembly(
     parts: Sequence[AssemblyPart],
     name: str = "",
     bed: tuple[float, float] | None = None,
+    project_settings: Mapping[str, object] | None = None,
 ) -> bytes:
     """Mehrere Körper als eine 3MF-Baugruppe (§20, §29).
 
@@ -173,6 +184,13 @@ def write_assembly(
     Verschoben wird über die Platzierungsmatrix des Standards, nicht über die
     Punkte. Die Geometrie bleibt damit die, die im Dokument steht — dieselbe
     Datei taugt weiter als Modell und nicht nur als Druckauftrag.
+
+    ``project_settings`` sind die Druckeinstellungen der Platte, wie die
+    Orca-Familie sie in einer Projektdatei führt (:data:`PROJECT_SETTINGS_PATH`).
+    Ohne sie öffnet der Slicer die Datei mit dem Profil, das gerade eingestellt
+    ist — die Geometrie stimmt dann, und alles andere ist Zufall. Gebaut wird
+    die Abbildung nicht hier, sondern in ``handover``: sie zu kennen heißt, den
+    Slicer zu kennen, und dieses Modul kennt nur das Format.
     """
     if not parts:
         raise ValueError("an assembly needs at least one part")
@@ -186,7 +204,17 @@ def write_assembly(
         container.writestr("_rels/.rels", _relationships())
         container.writestr(MODEL_PATH, model)
         container.writestr(SETTINGS_PATH, _settings_xml(parts))
-    _log.info("wrote 3MF assembly: %d part(s), %d material(s)", len(parts), len(materials))
+        if project_settings:
+            container.writestr(
+                PROJECT_SETTINGS_PATH,
+                json.dumps(dict(project_settings), indent=4, ensure_ascii=False),
+            )
+    _log.info(
+        "wrote 3MF assembly: %d part(s), %d material(s), settings: %s",
+        len(parts),
+        len(materials),
+        "yes" if project_settings else "no",
+    )
     return buffer.getvalue()
 
 

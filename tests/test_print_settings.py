@@ -1264,13 +1264,20 @@ def test_a_profile_name_finds_its_file(tmp_path, monkeypatch) -> None:
         kind = "process"
         path = echte
 
-    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_: [Eintrag()])
+    gefragt: list[object] = []
+
+    def suche(_executable, _flavour, kinds=None):
+        gefragt.append(kinds)
+        return [Eintrag()]
+
+    monkeypatch.setattr(slicer_profiles, "find_profiles", suche)
     setup = handover.SlicerSetup(
         executable=Path("elegoo-slicer.exe"), flavour="orca", base_process="0.20mm Standard"
     )
 
     gefunden = handover.profile_file("0.20mm Standard", setup, "process")
     assert gefunden == echte, "der Name führt zur Datei"
+    assert gefragt == [("process",)], "gefragt wird nach der gesuchten Art, nicht nach allen"
 
     # Ein Pfad geht weiterhin unverändert durch
     assert handover.profile_file(str(echte), setup, "process") == echte
@@ -1286,6 +1293,64 @@ def test_a_profile_name_finds_its_file(tmp_path, monkeypatch) -> None:
     assert daten["inherits"] == "fdm_process_common", "die Erbschaft bleibt erhalten"
     assert daten["compatible_printers"] == ["Elegoo Centauri Carbon 2 0.4 nozzle"]
     assert daten["name"].startswith("Solidon"), "aber der Name ist Solidons eigener"
+
+
+def test_a_filament_profile_is_found_by_name_too(tmp_path, monkeypatch) -> None:
+    """Derselbe Weg für das Filament — und der war es nicht.
+
+    ``find_profiles`` lässt Filamentprofile weg, wenn niemand nach ihnen
+    fragt: sie vervielfachen den Bestand, und die Vorgabe kennt nur Maschinen
+    und Prozesse. ``profile_file`` fragte aber nicht nach der Art, die es
+    suchte — also lief die Schleife über Maschinen und Prozesse und fand nie
+    ein Filament, egal wie es hieß.
+
+    Das kostete mehr als einen Namen: ohne das Herstellerprofil fehlten die
+    Temperaturen aller Druckplatten außer der einen, die Solidon selbst setzt.
+    Der Slicer wählte „Cool Plate", fand dort seine eigenen 35 Grad, und ein
+    PETG-Druck ging mit kaltem Bett hinaus.
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    datei = tmp_path / "Elegoo PETG PRO.json"
+    datei.write_text(json.dumps({"name": "Elegoo PETG PRO"}), encoding="utf-8")
+
+    class Eintrag:
+        name = "Elegoo PETG PRO"
+        kind = "filament"
+        path = datei
+
+    def suche(_executable, _flavour, kinds=None):
+        # Genau wie im Bestand: ohne Nachfrage gibt es keine Filamentprofile.
+        return [Eintrag()] if kinds and "filament" in kinds else []
+
+    monkeypatch.setattr(slicer_profiles, "find_profiles", suche)
+    setup = handover.SlicerSetup(
+        executable=Path("elegoo-slicer.exe"), flavour="orca", base_filament="Elegoo PETG PRO"
+    )
+
+    assert handover.profile_file("Elegoo PETG PRO", setup, "filament") == datei
+
+
+def test_the_bed_temperature_reaches_every_plate(tmp_path) -> None:
+    """Die Temperatur gehört dem Material, der Plattentyp der Maschine.
+
+    Solidon weiß nicht, welche Platte aufliegt — also bekommt jede denselben
+    Wert. Sonst steht die Betttemperatur auf genau einer Platte, der Slicer
+    liest eine andere, und niemand hat über diesen Wert entschieden.
+    """
+    from pathlib import Path
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    werte = handover.project_settings(settings, profile, setup)
+
+    erwartet = [str(settings.temperature.bed)]
+    for platte in handover.PLATE_KINDS:
+        assert werte[f"{platte}_plate_temp"] == erwartet, f"{platte} bekommt dieselbe Temperatur"
 
 
 def test_cura_gets_its_values_on_the_extruder_too(tmp_path) -> None:

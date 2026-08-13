@@ -123,6 +123,37 @@ nicht in die Anwendungskonfiguration: sie beschreiben das Teil, nicht den
 Rechner. Slicer-Pfad und Profilwahl bleiben dagegen bei der Anwendung — ein
 Projekt wird auch auf einem Rechner geöffnet, wo ein anderer Slicer liegt.
 
+## Die Einstellungen reisen in der Datei mit
+
+`threemf.write_assembly` schreibt neben der Geometrie auch
+`Metadata/project_settings.config` — was die Orca-Familie in einer
+Projektdatei führt, gebaut von `handover.project_settings`. Ohne sie ist eine
+exportierte 3MF nur Geometrie: der Slicer öffnet sie mit dem Profil, das
+gerade eingestellt ist, und alles, was Solidon über Temperatur, Tempo und
+Kühlung dieses Teils weiß, ist beim Öffnen weg.
+
+Zwei Eigenheiten, die dabei nicht angenommen werden dürfen:
+
+- **Filamentschlüssel sind Listen**, einer je Extruder; `from` und `name`
+  dagegen nicht — sie beschreiben die Datei, nicht einen Platz. Welche
+  Schlüssel je Extruder gehen, sagt die Übersetzungstabelle selbst über ihre
+  Sektion; eine zweite Liste daneben ist beim nächsten Zuwachs falsch.
+- **Die Betttemperatur geht auf jede Druckplatte.** `curr_bed_type` gehört der
+  Maschine, die Temperatur dem Material, und Solidon kennt nur das zweite.
+  Stand sie allein auf `hot_plate_temp` und der Slicer las „Cool Plate", ging
+  ein PETG-Druck mit 35 Grad Bett hinaus — dieselbe Falle wie bei den
+  Haftungsarten, wo ein ungenutztes Maß als eigener Schalter wirkt.
+
+`profile_file` fragt `find_profiles` **nach der Art, die es sucht**. Die
+Vorgabe kennt nur Maschinen und Prozesse; wer ohne Angabe nach einem Filament
+sucht, findet nie eines — und dann fehlt das ganze Herstellerprofil, nicht nur
+sein Name.
+
+Und die Pfade zum Slicer sind **absolut**, bevor er läuft: `slice_model` setzt
+sein eigenes Arbeitsverzeichnis. Ein relativer Pfad besteht die Vorprüfung —
+sie sucht im Verzeichnis des Aufrufers — und scheitert erst im Slicer, als
+„No such file".
+
 ## Eine Platte ist eine Datei
 
 Was zusammen gedruckt wird, geht als **eine 3MF-Baugruppe** hinaus
