@@ -4568,8 +4568,37 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       Grundformen vereinigt, derselbe Aufbau wie in P16.11. Sie entsteht auf
       dem Weg, den die Anwendung ihren Nutzern anbietet. 26 Tests, davon drei
       über die ganze Kette aus Entscheidung E.
-- [ ] **P16.6 — Sculpting-Sitzung im Viewport**, mit mitlaufender
-      Wandstärkenkarte. XL.
+- [x] **P16.6 — Sculpting-Sitzung im Viewport**, mit Pinselring und
+      mitlaufender Wandprüfung. Ein Werkzeugmodus und kein Betriebsmodus
+      (Entscheidung J): Er gilt für die eine Operation, die gerade entsteht,
+      die Szene bleibt die Szene, Escape kommt heraus. Anders als beim
+      Skizzenmodus bleibt die Ansicht — geformt wird am Körper.
+
+      **Die Vorschau geht den Weg aus P16.2**: Sie schreibt in das
+      Vertex-Array des Anzeigenetzes, statt einen Actor neu zu bauen. Der
+      Dokumentzustand ändert sich dabei nicht — er ändert sich bei „Fertig",
+      in einer Transaktion. Vier Züge, ein Schritt im Verlauf, ein Undo nimmt
+      ihn vollständig zurück (Regel 16). Strg+Z nimmt währenddessen einen
+      **Zug** zurück, nicht die Operation davor; Escape beendet wie „Fertig"
+      und verwirft nicht.
+
+      **Der Ring liegt in der Szene, nicht am Zeiger** — die Gebietsregel sagt
+      warum, und sie hat recht: Ein Zeiger hat feste Punktgröße und behauptete
+      beim ersten Zoom eine Größe, die er nicht mehr hat. Flach auf der Fläche
+      statt in der Bildebene, mit einem Hilfsvektor aus der schwächsten Achse
+      der Normale — ein fester wäre an jeder achsparallelen Fläche entartet.
+
+      **Die Wandprüfung hat eine Zahl gekostet, die niemand geraten hätte.**
+      Das Raster der Karte muss feiner sein als die Mindestwandstärke: bei
+      2 mm Raster und 1,2 mm Mindestwand meldete sie **null** zu dünne Stellen
+      an einer Schale mit 0,8 mm Wand. Eine Prüfung, die immer schweigt, ist
+      schlimmer als keine. Sie läuft verzögert nach der Geste und steht als
+      Zahl da, nicht nur als Farbe (Regel 18). 19 Tests, offscreen.
+
+      Offen aus §7.1: der Abfall (glatt, linear, scharf) — die Auswertung hat
+      eine feste Gewichtsfunktion. Die Leiste hält ihre acht Elemente ein, und
+      „Neu ansetzen" aus Entscheidung C hat den Platz bekommen, den im Konzept
+      der Abfall hatte.
 - [ ] **P16.7 — `displace_image`.**
 - [ ] **P16.8 — `pose_armature`.** Eine Pose, keine Animation. XL.
 - [ ] **P16.9 — Dateiformat 7 → 8**, Migration, Einbacken. **Dabei mitnehmen:

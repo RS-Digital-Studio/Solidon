@@ -709,8 +709,20 @@ eines Dialogs, genau ein Menüeintrag je Operation. Der neue Bereich wird
 **hineingeplant**, nicht drangehängt (Entscheidung M).
 
 **Die Sculpting-Leiste** — nach dem Vorbild der Skizzenleiste, höchstens acht
-Bedienelemente: Werkzeug, Radius, Stärke, Abfall, Symmetrie, Auflösungs-
-hinweis, Wandstärkenwarnung, *[Fertig]*.
+Bedienelemente. Umgesetzt in P16.6 mit: Werkzeug, Radius, Stärke, Symmetrie,
+*Neu ansetzen*, Auflösungshinweis, Wandstärkenwarnung, *[Fertig]*. Der
+**Abfall** aus der ursprünglichen Liste ist entfallen und hat seinen Platz an
+die erzwungene Etappe aus Entscheidung C verloren; die Auswertung hat eine
+feste Gewichtsfunktion. Kein *[Verwerfen]* daneben, anders als bei der Skizze:
+Eine Sitzung ohne Züge hinterlässt nichts, und eine mit Zügen ist eine
+Transaktion, die ein Undo zurücknimmt (Regel 19) — ein Knopf für das, was
+Strg+Z kann, wäre der neunte.
+
+**Der Pinselring gehört in die Szene, nicht an den Zeiger.** Ein Zeiger hat
+feste Punktgröße und weiß nichts von der Kamera; er behauptete beim ersten
+Zoom eine Größe, die er nicht mehr hat. Und er liegt flach auf der Fläche
+statt in der Bildebene — einer, der immer zum Betrachter zeigt, sagt nichts
+darüber, wie schräg die Stelle unter ihm steht.
 
 **Offscreen testbar.** Der Skizzeneditor hat vorgemacht, wie das geht
 (`tests/test_sketch_editor.py`): Die Interaktion läuft über Methoden, die ein
@@ -881,7 +893,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | **P16.3** | `subdivide_surface` und `remesh_uniform` — erst prüfen, ob letzteres in `remesh_mesh` gehört | S | Geometrietest gegen Korpus, beide Qualitätsstufen | **fertig** — 15 Tests, Prüffrage mit Zahlen beantwortet (§7.2) |
 | **P16.4** | `blend_union` über `level_set` (N) — **zugleich das Basisnetz-Werkzeug für H2** | S | Volumen und Wasserdichtheit gegen analytische Körper | **fertig** — 10 Tests, Rechenweg geändert (N) |
 | **P16.5** | Kern des Sculptings: `kind="strokes"`, `Stroke`-Verträge (§9), Auswertung mit Etappen, sechs Werkzeuge, Symmetrie — **ohne Oberfläche**, über CLI bedienbar; **bringt die saubere Figur in den Korpus mit** (§18, verschoben aus P16.2) | **XL** | Determinismus, Symmetrie, Etappen; zweimal auswerten identisch | **fertig** — 26 Tests, 96 ms für 1 000 Striche |
-| **P16.6** | Sculpting-Sitzung im Viewport: Pinselring, Leiste, Vorschau, Wandstärke live, Editor-Undo | **XL** | offscreen wie `test_sketch_editor.py`; Grenzen aus `test_interface_limits.py` | offen |
+| **P16.6** | Sculpting-Sitzung im Viewport: Pinselring, Leiste, Vorschau, Wandstärke live, Editor-Undo | **XL** | offscreen wie `test_sketch_editor.py`; Grenzen aus `test_interface_limits.py` | **fertig** — 19 Tests, Grenzen gehalten |
 | **P16.7** | `displace_image` samt Bild in `sources/` und Profilprüfung | L | Relief unter Düsenbreite wird gemeldet | offen |
 | **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | offen |
 | **P16.9** | Dateiformat 7→8, Migration, Beispieldatei, Einbacken (D) | L | alte Datei öffnet und rechnet | offen |
@@ -1058,6 +1070,9 @@ anderer Stelle).
   `kind="strokes"` im Schema, `clean_figure.stl` im Korpus.
   `tests/test_sculpt.py` mit 26 Tests. Der Gesten-Test aus P16.1 greift ohne
   Anpassung — er war für diesen Tag geschrieben.
+- **P16.6** — Sitzung im Viewport: `app/ui/sculpt_bar.py`, die Sitzungslogik
+  in `main_window.py`, Vorschau und Pinselring im Viewport, ein eigener
+  Zeiger. `tests/test_sculpt_session.py` mit 19 Tests, offscreen.
 - P16.6 bis P16.10: unverändert wie in §15 beschrieben, keiner begonnen.
   **P16.9 trägt jetzt eine bestätigte Entscheidung**: Einbacken mit Nachfrage
   (D), von Robert am 13.08.2026 so entschieden.
@@ -1077,17 +1092,17 @@ dem Beginn von P16.5 zurückgefragt):
   Volumen und Wasserdichtheit unbeschadet ließ und die Ausdehnung um acht
   Millimeter verfehlte.
 
-**Nächster Schritt, wenn es weitergeht:** P16.6 — die Sculpting-Sitzung im
-Viewport, der zweite XL-Brocken. Pinselring, Leiste, Vorschau auf dem
-Anzeigenetz, mitlaufende Wandstärkenkarte, Editor-Undo auf der Strichliste.
-Der Kern darunter ist fertig und über die Kommandozeile schon bedienbar; was
-P16.6 hinzufügt, ist die Hand.
+**Nächster Schritt, wenn es weitergeht:** P16.7 — `displace_image`, ein
+Höhenfeld als Geometrie. Umfang L, unabhängig von allem Bisherigen, und die
+Rechnung dafür steht schon: Es ist dasselbe Verschieben entlang der Normale
+wie beim Pinsel, nur dass die Stärke aus einem Bild kommt statt aus einer
+Geste. Danach P16.8 (Posing, XL), P16.9 (Dateiformat 7 → 8 samt Einbacken)
+und P16.10 (Weg 4, Handbuch, Website, Regelsammlung).
 
-Zwei Dinge aus P16.2 gelten dafür als entschieden und gemessen: Der Pinsel
-geht **nicht** über den Geometriekern, sondern schreibt ins Vertex-Array des
-Anzeigenetzes (0,7 ms je Strich bei 1,31 Mio. Dreiecken), und der KD-Baum wird
-einmal beim Öffnen gebaut (786 ms, mit Fortschrittsanzeige). Die Auswertung
-der Op läuft erst beim Verlassen der Sitzung.
+**Was P16.9 vorfindet:** Entscheidung D ist bestätigt, und der Ort dafür steht
+— die Strichliste liegt bis 2 000 Zügen im `project.json` und darüber als
+Block in `sources/` (§9). Das Einbacken schreibt den Stand als neues Quellnetz
+und beginnt die Liste neu.
 
 **Vorher zu klären, weil es ab P16.5 wirksam wird:** die beiden unten
 genannten Entscheidungen C und D.
