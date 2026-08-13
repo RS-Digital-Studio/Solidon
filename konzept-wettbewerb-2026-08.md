@@ -324,17 +324,46 @@ Autodesks Foundation-Modelle antreten.
 Sortiert danach, wie viele Käufe der Punkt verhindert — nicht danach, wie groß
 die Arbeit ist.
 
-| | Lücke | Größe | Herkunft |
+| | Lücke | Größe | Stand am 13.08.2026 |
 |---|---|---|---|
-| **W1** | **Niemand weiß, dass es uns gibt.** | Entscheidung | B5, offen |
-| **W2** | **Kein macOS-Paket** — ein spürbarer Teil der Zielgruppe kann nicht starten | mittel + Entscheidung | neu |
-| ~~**W3**~~ | ~~**Nur zwei Sprachen** — ES, FR, IT, PT fehlen, Gerüst steht~~ **erledigt 13.08.2026: sechs Sprachen, je 2279 Einträge** | klein je Sprache | neu |
-| **W4** | **Weg 1 ist unsere Stärke und nicht unser Versprechen** — Website führt mit Säule A | klein | neu |
-| **W5** | **Letzte Meile zum Drucker** — Datei bleibt im Ordner | mittel + Bauplanänderung | B3, offen |
-| **W6** | **Acht Texturmuster, die niemand sieht** | klein | B2, offen |
-| **W7** | **GLB geht nicht hinaus** | klein | B4, offen |
-| **W8** | **Skizze bedienerisch halb** — Ändern-Gruppe steht, Rest offen | mittel | B1, teilerledigt |
-| **W9** | **Kein Weg vom Modellkatalog zu uns** — der Anpassungsfall wandert zu MakerWorld | Entscheidung | neu |
+| **W1** | **Niemand weiß, dass es uns gibt.** | Entscheidung | **offen** — B5, siehe Teil 7 |
+| **W2** | **Kein macOS-Paket** — ein spürbarer Teil der Zielgruppe kann nicht starten | mittel + Entscheidung | **offen** — Entscheidung, siehe Teil 7 |
+| ~~W3~~ | ~~Nur zwei Sprachen — ES, FR, IT, PT fehlen, Gerüst steht~~ | klein je Sprache | **erledigt** — sechs Sprachen, je 2279 Einträge |
+| ~~W4~~ | ~~Weg 1 ist unsere Stärke und nicht unser Versprechen — Website führt mit Säule A~~ | klein | **erledigt** — Überschrift ist Weg 1 |
+| **W5** | **Letzte Meile zum Drucker** — Datei bleibt im Ordner | mittel + Bauplanänderung | **offen** — B3, Entscheidung, siehe Teil 7 |
+| ~~W6~~ | ~~Acht Texturmuster, die niemand sieht~~ | klein | **erledigt** — Musterbild auf der Seite |
+| ~~W7~~ | ~~GLB geht nicht hinaus~~ | klein | **erledigt** — GLB-Export gebaut |
+| ~~W8~~ | ~~Skizze bedienerisch halb — Ändern-Gruppe steht, Rest offen~~ | mittel | **erledigt** — alle neun Punkte |
+| **W9** | **Kein Weg vom Modellkatalog zu uns** — der Anpassungsfall wandert zu MakerWorld | Entscheidung | **offen** — Entscheidung, siehe Teil 7 |
+
+**Fünf von neun sind zu, und vier davon nicht durch dieses Dokument.** W4, W6,
+W7 und W8 wurden erledigt, während dieses Konzept sie als offen führte — von
+P15 und der Website-Runde, die eigene Wege gingen. Nachgemessen am 13.08.2026,
+Punkt für Punkt gegen den Code statt gegen die Erinnerung:
+
+* **W4** — die Überschrift lautet „Das heruntergeladene Teil passt nicht. Mach
+  es passend." Damit führt Weg 1 statt Säule A, genau wie es die Empfehlung in
+  2.3 verlangt. Auch der Rest steht: der Prüfbericht mit Insel-Beispiel, die
+  Abgrenzung („Was Solidon3D nicht ist"), der Anschluss an fremde Generatoren
+  („Wenn das Modell aus einer KI kommt"), Claude Code und der MCP-Server. Die
+  Agenten-Suite steht als **Zahl** da — 28 von 39, 98 % der Werkzeugaufrufe —
+  und `auto:<material>` in Klartext: *Toleranzen holen sich ihren Wert aus dem
+  Materialprofil, statt als Konstante im Modell zu verschwinden.*
+* **W6** — die acht Muster stehen als Bild auf der Seite, hell und dunkel, mit
+  einem Alternativtext, der jedes einzelne benennt.
+* **W7** — `glb` steht in `ExportFormat`, `_glb_bytes()` schreibt es mit Namen
+  und Farben. Import **und** Export.
+* **W8** — alle neun Punkte aus `konzept-bedienung.md` Teil 4: Ursprung und
+  Maßstab, die Zeichenkürzel L R C A D T O X mit Esc, ausdrücklich **nur im
+  Skizzenmodus** belegt (damit ist der R/C-Widerspruch zur Fusion-Belegung
+  aufgelöst), Trimmen/Verlängern/Versetzen/Spiegeln, Projizieren und
+  Hilfsgeometrie, Maß beim Zeichnen eintippen, Aufleuchten der Geometrie zur
+  Bedingungsliste, ein sichtbarer *Fertig* in einer eigenen Zeile — die die
+  alte Werkzeugzeile ersetzt, statt sich unter sie zu stellen.
+
+Was das über das Dokument sagt, nicht über die Arbeit: **eine Lückenliste
+altert schneller als der Code.** Wer sie liest, muss messen, bevor er baut —
+sonst baut er ein zweites Mal, was schon steht.
 
 ---
 
@@ -353,10 +382,13 @@ die Arbeit ist.
 
 ## Teil 6 — Empfohlene Reihenfolge
 
-Nach Wirkung je Aufwand, nicht nach Bereich:
+Nach Wirkung je Aufwand, nicht nach Bereich. **Die Punkte 1 bis 4 sind
+abgearbeitet; was bleibt, ist Punkt 5 — und das ist keine Arbeit, sondern eine
+Entscheidung.**
 
-1. **W4, W6** — eine Runde an Website und Vermarktung: Zahl richtigstellen,
-   Weg 1 nach vorn, Texturen mit Bild. Kein Code, größter sichtbarer Gewinn.
+1. ~~**W4, W6**~~ — **erledigt.** Eine Runde an Website und Vermarktung: Zahl
+   richtiggestellt, Weg 1 nach vorn, Texturen mit Bild. Kein Code, größter
+   sichtbarer Gewinn.
 2. ~~**W3**~~ — **erledigt am 13.08.2026.** Spanisch, Französisch, Italienisch,
    Portugiesisch liegen vollständig in `app/i18n/locales/`, je 2279 Einträge,
    abgenommen von `tests/test_translations.py` (104 Fälle) und mitgetragen von
@@ -369,9 +401,12 @@ Nach Wirkung je Aufwand, nicht nach Bereich:
    Basis, Nachträge über den Quelltext statt über den Index. **Offen bleibt**
    die Nachaufnahme der Handbuchbilder je Sprache — eigener Schritt, läuft
    nicht offscreen.
-3. **W7** — GLB hinausschreiben. Kleine, abgeschlossene Arbeit.
-4. **W8** — Baustein A zu Ende, nach `konzept-bedienung.md` Teil 4.
-5. **W1, W2, W5, W9** — Entscheidungen, siehe Teil 7. Erst danach Code.
+3. ~~**W7**~~ — **erledigt.** GLB wird hinausgeschrieben, mit Namen und Farben.
+4. ~~**W8**~~ — **erledigt.** Baustein A steht, alle neun Punkte aus
+   `konzept-bedienung.md` Teil 4.
+5. **W1, W2, W5, W9** — Entscheidungen, siehe Teil 7. **Hier steht die Arbeit
+   jetzt.** Kein Code wartet mehr davor, und drei der vier kosten Geld oder
+   Bauplan, nicht Tage.
 
 ---
 
