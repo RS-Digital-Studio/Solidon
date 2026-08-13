@@ -113,7 +113,12 @@ jobs:
           run -m "not performance" $ignores
           for file in $windowed; do
             echo "::group::$file"
-            run -m "not performance" "$file"
+            # Je Test ein eigener Prozess (`--forked`, nur auf POSIX möglich).
+            # Ein Fenster darf hier weder sterben noch bleiben: zerstören nimmt
+            # VTKs Zustand mit, ansammeln füllt den Speicher — beides gemessen.
+            # Ein Fork löst beides, weil er mit dem Test endet; und stirbt einer
+            # doch, meldet pytest ihn als Fehler, statt den Lauf abzureißen.
+            run -m "not performance" --forked "$file"
             echo "::endgroup::"
           done
 

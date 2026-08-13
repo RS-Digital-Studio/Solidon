@@ -60,6 +60,12 @@ agent = ["keyring>=25.0"]
 brep = ["cadquery-ocp-novtk>=7.8"]
 dev = [
   "pytest>=8.0",
+  # Jeder Test in einem eigenen Fork (`--forked`, nur POSIX). Gebraucht in
+  # der CI für die Dateien, die Fenster bauen: ein VTK-Fenster darf weder
+  # sterben noch bleiben — zerstören nimmt VTKs Zustand mit, ansammeln
+  # füllt den Speicher des Runners. Ein Fork löst beides, weil er mit dem
+  # Test endet. MIT, reine Testabhängigkeit.
+  "pytest-forked>=1.6",
   "ruff>=0.6",
   "mypy>=1.11",
   # Wertet Umgebungsmarker für die Lizenzprüfung aus.
