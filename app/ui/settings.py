@@ -48,6 +48,15 @@ class UiSettings:
     """Filamentprofil, auf das die Solidon-Werte gelegt werden. Ohne es kennt
     der Slicer nur „PETG" und nicht, welches — und die Werte des Herstellers
     für dieses Filament kämen gar nicht zum Tragen."""
+    slicer_filament_per_material: dict[str, str] = field(default_factory=dict)
+    """Welche Spule zuletzt für welches Material gewählt wurde (§29).
+
+    Solidon kennt „petg"; im Bestand des Slicers liegen sieben davon, und die
+    fahren verschieden — PETG PRO 5 mm³/s, PETG HF 18. Geraten wird das nicht
+    (eine falsche Vorauswahl sieht aus wie eine Entscheidung), aber wer es
+    einmal gesagt hat, soll es nicht bei jedem Projekt wiederholen. Der eine
+    zuletzt benutzte Wert daneben reichte dafür nicht: er galt über alle
+    Materialien hinweg, und nach einem TPU-Teil stand er beim nächsten PETG."""
     first_run_done: bool = False
     shortcut_scheme: str = "default"
     """Welche Kürzelbelegung gilt (Konzept P15, E7). Die Vorgabe ist die des

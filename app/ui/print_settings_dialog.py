@@ -1072,8 +1072,15 @@ class PrintSettingsDialog(QDialog):
         for entry in fitting:
             self.filament_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
 
-        wanted = self.ui_settings.slicer_base_filament
+        # Erst was für *dieses* Material zuletzt galt, dann der allgemeine
+        # Merker, dann die Zuordnung nach Materialart.
+        material = self.session.profile.material.id
+        wanted = self.ui_settings.slicer_filament_per_material.get(
+            material, self.ui_settings.slicer_base_filament
+        )
         index = self.filament_choice.findData(wanted) if wanted else -1
+        if index < 0 and wanted:
+            index = self.filament_choice.findText(wanted)
         if index < 0:
             material = slicer_keys.filament_type(self.session.profile.material.id)
             preferred = slicer_profiles.match_filament(self._profiles, machine, material)
@@ -1520,6 +1527,12 @@ class PrintSettingsDialog(QDialog):
         self.ui_settings.slicer_machine_profile = setup.machine_profile
         self.ui_settings.slicer_base_process = setup.base_process
         self.ui_settings.slicer_base_filament = setup.base_filament
+        # Und je Material: „petg" allein sagt nicht, welche der sieben Spulen
+        # gemeint war, und nach einem TPU-Teil stünde die falsche da.
+        if setup.base_filament:
+            self.ui_settings.slicer_filament_per_material[self.session.profile.material.id] = (
+                setup.base_filament
+            )
 
         self._temporary = TemporaryDirectory(prefix="solidon-handover-")
         folder = Path(self._temporary.name)
