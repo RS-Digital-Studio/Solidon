@@ -49,11 +49,12 @@ jobs:
 
       - name: Qt-Systembibliotheken (Linux)
         # PySide6 lädt libEGL auch offscreen; ohne sie scheitert schon der
-        # Import in jedem UI-Test.
+        # Import in jedem UI-Test. Dazu Xvfb — die Begründung steht unten beim
+        # Testschritt.
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libdbus-1-3
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libdbus-1-3 xvfb
 
       - name: Abhängigkeiten
         # Mit `brep`, sonst liefe der zweite Kern nie: seine Tests überspringen
@@ -73,16 +74,25 @@ jobs:
         # misst eine Referenzmaschine, geteilte Runner streuen zu stark —
         # das Budget prüft der lokale Lauf.
         #
-        # Wieder ein Aufruf, und das ist der Beweis: vom 06. bis zum 12.08.2026
-        # starb der Runner in jedem Lauf mit einem Segmentierungsfehler in
-        # `HistoryPanel.show_document`. Eine Messung mit zerlegter Suite zeigte,
-        # dass der Absturz wandert — er hing an keinem Test, sondern an den
-        # Fenstern, die sich über den Lauf ansammelten. Die Fixture in
-        # `tests/conftest.py` zerstört sie jetzt planmäßig. Bleibt dieser
-        # Aufruf grün, war das die Ursache.
+        # **Unter Xvfb, nicht offscreen** — und das ist die Antwort auf eine
+        # Woche Abstürze. Vom 06. bis zum 12.08.2026 starb jeder Lauf hier mit
+        # einem Segmentierungsfehler: erst in `HistoryPanel.show_document`,
+        # nach der Reparatur dieser Stelle beim Aufbau des nächsten Fensters,
+        # in `render_window_interactor.initialize`. Der Absturz wanderte, hing
+        # also an keinem Test.
+        #
+        # Was reparierbar war, ist repariert (`tests/conftest.py`: die Sitzung
+        # ruft nicht mehr in weggeräumte Widgets). Der Rest ist VTK: es will
+        # einen GL-Kontext, und Qts Offscreen-Plattform gibt ihm keinen — auf
+        # einem Runner ohne Anzeige rechnet es sich einen aus Software zurecht,
+        # bis eine Grenze reißt. Xvfb ist die Anzeige, die es sucht; es ist
+        # zugleich der Weg, den pyvista selbst für CI empfiehlt.
+        #
+        # `QT_QPA_PLATFORM` bleibt ungesetzt: unter Xvfb läuft Qt normal, und
+        # `tests/conftest.py` setzt offscreen nur, wenn nichts anderes dasteht.
         env:
-          QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -q -m "not performance"
+          QT_QPA_PLATFORM: xcb
+        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q -m "not performance"
 
   package:
     name: Paket (${{ matrix.os }})
