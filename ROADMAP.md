@@ -4297,3 +4297,33 @@ zur Hand hat, prüft sie zuerst — und dann trotzdem die andere.
       grün, `test_slice` plus nur dieser eine Test auch; rot wird es erst mit
       der ganzen Leistungsdatei davor. Derselbe Cluster wie die
       Zugriffsverletzungen im langen Lauf — die Zeile ist es nicht.
+
+### Ein Gewinde, das nur auf einem Betriebssystem schließt (13.08.2026)
+
+`thread_exact` mit **M6 und einem Millimeter Steigung** — das gewöhnlichste
+Gewinde überhaupt — kommt unter Windows als geschlossener Bolzen heraus und
+auf den Linux-Runnern als offener. Dieselbe Rechnung, andere OCCT-Fassung.
+
+Vier Anläufe, alle gemessen, keiner erfolgreich:
+
+- **ShapeFix** nach der Vereinigung. Näht, was rechnerisch zusammengehört —
+  hier nicht genug.
+- **Gröbere Fuzzy-Toleranz.** Ein Tausendstel der Steigung: die Boolesche
+  Operation gab ganz auf. Deshalb stehen jetzt drei Werte von fein nach grob
+  (`ROD_FUZZ_RATIOS`), jeder in seinem eigenen Versuch.
+- **Beides zusammen**, in Stufen wie die Boolesche Rückfallkette (§17.2).
+- Dabei fiel ein **echter Fehler** auf, der nichts mit der Plattform zu tun
+  hat: OCCT ändert seine Argumente, wenn man es nicht verbietet. Die zweite
+  Vereinigung rechnete mit Formen, die die erste ausgehöhlt hatte — auf dem
+  Runner ein Segmentierungsfehler ohne Zeile, hier ein stilles falsches
+  Ergebnis. `SetNonDestructive(True)` steht jetzt in `_fuzzy_boolean`, und
+  das gilt für **jede** Boolesche Operation dort, nicht nur fürs Gewinde.
+
+- [ ] **Offen: den helikalen Gang so bauen, dass er überall schließt.** Der
+      Verdacht liegt nicht mehr bei der Vereinigung, sondern beim Gang selbst
+      (`MakePipeShell`) — dort wäre der nächste Griff `SetTransitionMode`,
+      oder das Gewinde als Rotationskörper statt als Sweep. Bis dahin trägt
+      `tests/test_sketch_ops.py::test_a_sound_thread_still_goes_through` ein
+      `xfail` für Linux, nicht `strict`: sobald eine Fassung es dort kann,
+      wird der Lauf grün und die Marke fällt auf. Für die Demo ist die Wirkung
+      begrenzt — sie erscheint für Windows, und dort geht es.
