@@ -80,6 +80,21 @@ def test_both_languages_state_the_same_numbers() -> None:
     assert _stats("index.html") == _stats("en/index.html")
 
 
+def test_the_number_of_agent_cases_on_the_page_matches_the_suite() -> None:
+    """Die Seite nennt die Größe der Agenten-Suite — auch diese Zahl wird
+    falsch, sobald ein Referenzfall dazukommt oder wegfällt."""
+    from tests.agent_cases import ALL_CASES
+
+    for page, pattern in (
+        ("index.html", r"(\d+) Referenzanfragen"),
+        ("en/index.html", r"(\d+) reference requests"),
+    ):
+        text = (WEBSITE / page).read_text(encoding="utf-8")
+        found = re.search(pattern, text)
+        assert found is not None, f"{page} nennt die Suite nicht"
+        assert int(found.group(1)) == len(ALL_CASES), page
+
+
 @pytest.mark.parametrize("page", PAGES)
 def test_every_file_the_page_refers_to_exists(page: str) -> None:
     source = WEBSITE / page

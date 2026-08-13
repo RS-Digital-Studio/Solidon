@@ -273,6 +273,12 @@
           <p class="note">Die Geometrie rechnet Code, nie das Sprachmodell.
           <b>Jedes Maß im Vorschlag ist exakt — nichts ist „ungefähr
           generiert“.</b></p>
+          <p class="note">Und das ist gemessen, nicht versprochen: eine Suite
+          aus <b>39 Referenzanfragen</b> läuft gegen jede Änderung am Agenten.
+          Stand 08.08.2026, mit einem lokalen 14-Milliarden-Modell ganz ohne
+          Cloud: 28 von 39 gut beantwortet, 98 % der Werkzeugaufrufe im
+          ersten Versuch gültig — und jede mehrdeutige Anfrage endete in
+          einer Rückfrage statt in einer Vermutung.</p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 290" role="img"
@@ -619,6 +625,10 @@
         <li><b>KI lokal oder mit eigenem Schlüssel.</b> Ollama auf dem
         eigenen Rechner oder ein API-Schlüssel — und ohne beides läuft
         alles außer dem Chat.</li>
+        <li><b>Fernsteuerbar über MCP — auch aus Claude Code.</b> Ein
+        zweites Programm ruft dieselben Operationen auf wie die Menüs:
+        standardmäßig aus, nur auf dem eigenen Rechner, und jeder
+        Fernaufruf ist eine Transaktion, die ein Undo zurücknimmt.</li>
       </ul>
     </div>
   </section>
@@ -832,6 +842,15 @@
           Sprachmodell wählt Operationen und Parameter aus — gerechnet wird
           jede Geometrie von Code. Jeder Vorschlag des Agenten ist genau eine
           Transaktion, die ein einziges Undo vollständig zurücknimmt.</p>
+        </details>
+        <details>
+          <summary>Kann ich Solidon3D aus Claude Code oder einem anderen KI-Werkzeug steuern?</summary>
+          <p>Ja. Solidon3D hat einen eingebauten MCP-Server: ein Programm wie
+          Claude Code ruft damit dieselben Operationen auf, die auch in den
+          Menüs stehen. Er ist standardmäßig aus, nimmt Verbindungen nur vom
+          eigenen Rechner an (127.0.0.1), akzeptiert weder Dateipfade noch
+          Quelltext von außen — und jeder Fernaufruf ist eine Transaktion im
+          Verlauf, die ein einziges Undo vollständig zurücknimmt.</p>
         </details>
         <details>
           <summary>Gehen meine Modelle irgendwohin?</summary>

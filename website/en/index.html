@@ -270,6 +270,12 @@
           <p class="note">Geometry is computed by code, never by the language
           model. <b>Every dimension in a proposal is exact — nothing is
           “roughly generated”.</b></p>
+          <p class="note">And that is measured, not promised: a suite of
+          <b>39 reference requests</b> runs against every change to the
+          agent. As of 2026-08-08, with a local 14-billion-parameter model
+          and no cloud at all: 28 of 39 answered well, 98 % of tool calls
+          valid on the first attempt — and every ambiguous request ended in
+          a question back, not in a guess.</p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 290" role="img"
@@ -611,6 +617,10 @@
         <li><b>AI local or with your own key.</b> Ollama on your own
         machine or an API key — and without either, everything except the
         chat keeps working.</li>
+        <li><b>Remote-controllable via MCP — including from Claude Code.</b>
+        A second program calls the same operations as the menus: off by
+        default, your own machine only, and every remote call is one
+        transaction that a single undo takes back.</li>
       </ul>
     </div>
   </section>
@@ -823,6 +833,15 @@
           geometry is computed by code. Each proposal from the agent is
           exactly one transaction, and a single undo takes it back
           completely.</p>
+        </details>
+        <details>
+          <summary>Can I drive Solidon3D from Claude Code or another AI tool?</summary>
+          <p>Yes. Solidon3D has a built-in MCP server: a program like Claude
+          Code uses it to call the same operations that sit in the menus. It
+          is off by default, accepts connections only from your own machine
+          (127.0.0.1), takes neither file paths nor source code from outside
+          — and every remote call is a transaction in the history that a
+          single undo takes back completely.</p>
         </details>
         <details>
           <summary>Do my models go anywhere?</summary>
