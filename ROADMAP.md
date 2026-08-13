@@ -4618,7 +4618,28 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       Offen aus §7.4: die vierte Projektion „per Fläche" und die Kachelung.
       Drei Projektionen decken den Fall ab, für den es die Operation gibt; die
       vierte braucht eine erkannte Fläche als Bezug und gehört zu §21.
-- [ ] **P16.8 — `pose_armature`.** Eine Pose, keine Animation. XL.
+- [x] **P16.8 — `pose_armature`, Kern.** Eine Pose, keine Animation. Drei
+      Streichungen gegenüber einem Animationsprogramm, alle drei Absicht:
+      eine Pose statt einer Bewegung, Vorwärtskinematik statt inverser,
+      **gerechnete Gewichte statt gespeicherter**. Die dritte ist die
+      interessanteste — gespeicherte Gewichte wären ein zweiter
+      Dokumentbegriff neben dem Stapel und beim nächsten Vernetzen darunter
+      falsch, ohne dass jemand es merkt.
+
+      Zwei Fallen im Skinning, beide mit Test: Gedreht wird um den Kopf des
+      Knochens und nicht um den Weltursprung (sonst fliegt der Arm weg), und
+      Eltern kommen vor Kindern, unabhängig von der Reihenfolge in der Datei
+      (sonst bleibt der Unterarm stehen, während der Oberarm sich hebt). Ein
+      Zyklus im Baum hält an. Der Abstand geht zum **Segment**, nicht zur
+      Achse — eine unendliche Achse bände die Fußspitze an den Oberarm.
+
+      `armature` ist der dritte Sammelparameter neben `sketch` und `strokes`;
+      `test_gesture_ops.py` prüft ihn seit P16.1 mit, ohne eine Zeile
+      Anpassung. 16 Tests.
+
+      **Offen: der Skeletteditor** in der Oberfläche (§7.5) — Knochen setzen,
+      Kette bilden, Namen vergeben. Der Kern ist über die Kommandozeile
+      bedienbar, wie es bei P16.5 vor P16.6 auch war.
 - [ ] **P16.9 — Dateiformat 7 → 8**, Migration, Einbacken. **Dabei mitnehmen:
       ein `title_translatable` für Parameter.** Für Transaktionstitel gibt es
       das Feld seit Fassung 6, für Parameter nicht — ihr Titel kommt aus dem

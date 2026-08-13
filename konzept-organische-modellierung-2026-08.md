@@ -704,8 +704,16 @@ verbindet.
 
 ### 7.5 Posing
 
-`pose_armature` nach Entscheidung I. Dazu ein kleiner Skeletteditor: Knochen
-setzen, Kette bilden, Namen vergeben. Gewichte gerechnet, nicht gespeichert.
+`pose_armature` nach Entscheidung I. **Kern umgesetzt in P16.8**, der
+Skeletteditor steht noch aus — Knochen setzen, Kette bilden, Namen vergeben.
+Dasselbe Verhältnis wie zwischen P16.5 und P16.6: Der Kern ist über die
+Kommandozeile bedienbar, was fehlt, ist die Hand.
+
+Gewichte gerechnet, nicht gespeichert. Zwei Dinge, die beim Bauen Zeit
+gekostet haben und in keinem Lehrbuch nebeneinander stehen: Der Abstand geht
+zum Knochen*segment* und nicht zu seiner Achse — sonst bindet der Oberarm die
+Fußspitze, sobald beide auf einer Geraden liegen. Und Eltern müssen vor
+Kindern gerechnet werden, unabhängig davon, wie die Datei sie sortiert.
 
 Nach dem Posieren steht in der Leiste, was der Druck davon hält: Ein
 ausgestreckter Arm ist ein Überhang, und die bestehende Überhangkarte weiß
@@ -907,7 +915,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | **P16.5** | Kern des Sculptings: `kind="strokes"`, `Stroke`-Verträge (§9), Auswertung mit Etappen, sechs Werkzeuge, Symmetrie — **ohne Oberfläche**, über CLI bedienbar; **bringt die saubere Figur in den Korpus mit** (§18, verschoben aus P16.2) | **XL** | Determinismus, Symmetrie, Etappen; zweimal auswerten identisch | **fertig** — 26 Tests, 96 ms für 1 000 Striche |
 | **P16.6** | Sculpting-Sitzung im Viewport: Pinselring, Leiste, Vorschau, Wandstärke live, Editor-Undo | **XL** | offscreen wie `test_sketch_editor.py`; Grenzen aus `test_interface_limits.py` | **fertig** — 19 Tests, Grenzen gehalten |
 | **P16.7** | `displace_image` samt Bild in `sources/` und Profilprüfung | L | Relief unter Düsenbreite wird gemeldet | **fertig** — 17 Tests, drei Projektionen |
-| **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | offen |
+| **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | **Kern fertig** — 16 Tests; Skeletteditor offen |
 | **P16.9** | Dateiformat 7→8, Migration, Beispieldatei, Einbacken (D) | L | alte Datei öffnet und rechnet | offen |
 | **P16.10** | Handbuch, Weg 4, Website, Beispielprojekt, Übersetzungen, Regelsammlung + Agenten-Suite vorher/nachher (§18) | L | Sprachdateien vollständig; Suitenquote nicht schlechter | offen |
 | **P16.11** | **Prüfpunkt Käfigmodellierung** (H2): Reicht Primitive + `blend_union` + Pinsel als Basisnetz für die Korpusfiguren? | S | Kriterium **vor** P16.5 festgeschrieben; Ergebnis dokumentiert, nicht passend gemacht | **fertig** — 4 von 5 Bedingungen erfüllt (H2) |
@@ -1087,6 +1095,9 @@ anderer Stelle).
   Zeiger. `tests/test_sculpt_session.py` mit 19 Tests, offscreen.
 - **P16.7** — `app/core/geom/displace.py`, `tests/test_displace.py` mit 17
   Tests. Ohne neue Abhängigkeit: `imageio` kommt mit scikit-image.
+- **P16.8** — Kern in `app/core/geom/pose.py`, `Bone` und `Pose` in
+  `types.py`, `kind="armature"` im Schema, `tests/test_pose.py` mit 16 Tests.
+  **Der Skeletteditor fehlt** — der Kern läuft über die Kommandozeile.
 - P16.6 bis P16.10: unverändert wie in §15 beschrieben, keiner begonnen.
   **P16.9 trägt jetzt eine bestätigte Entscheidung**: Einbacken mit Nachfrage
   (D), von Robert am 13.08.2026 so entschieden.
@@ -1106,10 +1117,12 @@ dem Beginn von P16.5 zurückgefragt):
   Volumen und Wasserdichtheit unbeschadet ließ und die Ausdehnung um acht
   Millimeter verfehlte.
 
-**Nächster Schritt, wenn es weitergeht:** P16.8 — Posing, der letzte
-XL-Brocken und laut §4 I „der erste Kandidat zum Streichen, wenn die Phase zu
-lang wird". Danach P16.9 (Dateiformat 7 → 8 samt Einbacken) und P16.10 (Weg 4,
-Handbuch, Website, Regelsammlung).
+**Nächster Schritt, wenn es weitergeht:** P16.9 — Dateiformat 7 → 8 mit
+Migration und dem Einbacken aus Entscheidung D. Der Ort dafür steht: Die
+Strichliste liegt bis 2 000 Zügen im `project.json` und darüber als Block in
+`sources/` (§9), und das Einbacken schreibt den Stand als neues Quellnetz.
+Danach P16.10 (Weg 4, Handbuch, Website, Regelsammlung) und der
+Skeletteditor aus §7.5.
 
 **Was P16.9 vorfindet:** Entscheidung D ist bestätigt, und der Ort dafür steht
 — die Strichliste liegt bis 2 000 Zügen im `project.json` und darüber als
