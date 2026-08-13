@@ -578,20 +578,20 @@ def filament_values(path: Path) -> dict[str, float | int]:
     hat, ist keine Angabe des Herstellers, und ihn zu erfinden wäre schlimmer
     als ihn wegzulassen.
     """
-    gelesen = resolve_values(path)
-    werte: dict[str, float | int] = {}
+    resolved = resolve_values(path)
+    values: dict[str, float | int] = {}
     for solidon, orca, kind in FILAMENT_READBACK:
-        roh = gelesen.get(orca)
-        if isinstance(roh, list):
-            roh = roh[0] if roh else None
-        if roh is None or roh == "" or roh == "nil":
+        raw = resolved.get(orca)
+        if isinstance(raw, list):
+            raw = raw[0] if raw else None
+        if raw is None or raw == "" or raw == "nil":
             continue
-        text = str(roh).strip().rstrip("%")
+        text = str(raw).strip().rstrip("%")
         try:
-            zahl = float(text)
+            number = float(text)
         except ValueError:
             continue
         if solidon in _AS_FRACTION:
-            zahl /= 100.0
-        werte[solidon] = kind(zahl)
-    return werte
+            number /= 100.0
+        values[solidon] = kind(number)
+    return values
