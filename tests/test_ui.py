@@ -3479,8 +3479,10 @@ def test_the_last_trial_days_show_up_once_in_the_status_bar(
     monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=2))
     window = MainWindow(Session(), UiSettings())
 
-    assert "2" in window.statusBar().currentMessage()
-    assert "freischalten" in window.statusBar().currentMessage()
+    # In einem eigenen Feld, nicht als Statusmeldung: eine Meldung verdeckt,
+    # was links in der Leiste steht, und die Zeile steht dauerhaft.
+    assert "2" in window.trial_line.text()
+    assert "freischalten" in window.trial_line.text()
 
 
 def test_a_comfortable_trial_rest_stays_quiet(
@@ -3491,7 +3493,39 @@ def test_a_comfortable_trial_rest_stays_quiet(
     monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=14))
     window = MainWindow(Session(), UiSettings())
 
+    assert window.trial_line.text() == ""
     assert window.statusBar().currentMessage() == ""
+
+
+def test_the_trial_line_does_not_cover_the_measurements(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Maße bleiben lesbar, während die Demo-Zeile steht.
+
+    Als ``showMessage`` geführt, legte die Zeile sich über das Maßfeld —
+    Qt blendet bei einer Meldung aus, was per ``addWidget`` in der Leiste
+    liegt. Sichtbar wurde es erst auf den Handbuchbildern, wo „Keine
+    Auswahl" und „Demo — noch 79 Tage" ineinanderliefen. Beide Felder
+    müssen gleichzeitig etwas anzeigen können.
+    """
+    from datetime import date
+
+    from app.core import activation
+
+    # ``in_demo`` ist abgeleitet und hängt an der Frist, nicht an einem Feld.
+    # Das Datum steht hier ausdrücklich: ``conftest`` nimmt den ausgelieferten
+    # Stichtag weg, damit die Suite nicht am Kalender hängt.
+    monkeypatch.setattr(
+        activation, "_cached", activation.Activation(days_left=79, deadline=date(2026, 10, 30))
+    )
+    window = MainWindow(Session(), UiSettings())
+    window.resize(1180, 760)
+    window.show()
+    qt_app.processEvents()
+
+    assert window.trial_line.text(), "die Demo-Zeile fehlt"
+    assert window.measurements.isVisible(), "die Maße sind verdeckt"
+    assert window.measurements.text(), "die Maße sind leer"
 
 
 def test_the_about_dialog_names_the_activation_state(

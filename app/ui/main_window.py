@@ -880,8 +880,20 @@ class MainWindow(QMainWindow):
         # beim Drucken zählt, und standen bisher allein hinter Strg+P.
         self.facts = PrintFacts(self)
 
+        # Die Demo- und Testzeitraumzeile steht **dauerhaft** (Demo-Konzept
+        # §2 F) und ist damit keine Meldung im Sinne von ``showMessage`` —
+        # das blendet aus, was links per ``addWidget`` liegt. Genau das war
+        # sie vorher, und weil das Maß-Label trotzdem sichtbar blieb, lagen
+        # „Keine Auswahl" und „Demo — noch 79 Tage" übereinander: auf jedem
+        # Handbuchbild, in jeder Sprache. Als eigenes dauerhaftes Feld steht
+        # sie neben den Maßen statt auf ihnen, und ``showMessage`` bleibt
+        # frei für das, wofür es gedacht ist — den Zeichenmodus etwa.
+        self.trial_line = QLabel("", self)
+        self.trial_line.setVisible(False)
+
         bar = self.statusBar()
         bar.addWidget(self.measurements, 1)
+        bar.addPermanentWidget(self.trial_line)
         bar.addPermanentWidget(self.facts)
         bar.addPermanentWidget(self.status_message)
         bar.addPermanentWidget(self.progress)
@@ -1642,10 +1654,15 @@ class MainWindow(QMainWindow):
         drei Tage übrig sind.
 
         Kein Startdialog, keine Zählung im Fenstertitel, keine Erinnerung am
-        dritten Tag — die Zeile steht da, bis die nächste Statusmeldung sie
-        ablöst, und das ist genug. Nach dem Eintragen eines Schlüssels räumt
-        derselbe Aufruf sie weg, aber nur sie: eine fremde Meldung, die
-        inzwischen dort steht, bleibt stehen.
+        dritten Tag — die Zeile steht in ihrem eigenen Feld am rechten Rand
+        der Statusleiste, und das ist genug. Nach dem Eintragen eines
+        Schlüssels räumt derselbe Aufruf sie weg.
+
+        Sie war einmal eine ``showMessage``-Meldung, und das war der Fehler:
+        Eine solche Meldung legt sich über alles, was links per ``addWidget``
+        liegt — hier über die Maße der Auswahl. Auf jedem Handbuchbild lagen
+        deshalb „Keine Auswahl" und „Demo — noch 79 Tage" ineinander. Was
+        dauerhaft steht, ist keine Meldung.
 
         **In der Demo steht sie dauerhaft** (Demo-Konzept §2 F). Dort endet
         die Frist nicht in einem Betrachtermodus, sondern im Schluss; eine
@@ -1660,10 +1677,8 @@ class MainWindow(QMainWindow):
             message = tr("Testzeitraum: noch {days} Tage — Hilfe → Solidon freischalten …").format(
                 days=state.days_left
             )
-        if message:
-            self.statusBar().showMessage(message)
-        elif self._trial_message and self.statusBar().currentMessage() == self._trial_message:
-            self.statusBar().clearMessage()
+        self.trial_line.setText(message)
+        self.trial_line.setVisible(bool(message))
         self._trial_message = message
 
     def _connect_session(self) -> None:
