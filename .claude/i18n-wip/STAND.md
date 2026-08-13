@@ -20,10 +20,14 @@ gesichert, damit ein zweiter Abbruch nichts mehr kostet.
 
 | Sprache | fertige Einträge | fehlend | fehlende Bereiche (Index, 0-basiert) |
 |---|---|---|---|
-| Italienisch (`it`) | 1480 (65 %) | 784 | 440–1131, 2172–2263 |
+| Italienisch (`it`) | 1720 (76 %) | 544 | 680–1131, 2172–2263 |
 | Spanisch (`es`) | 960 (42 %) | 1304 | 480–1131, 1612–2263 |
 | Französisch (`fr`) | 760 (34 %) | 1504 | 440–1131, 1452–2263 |
-| Portugiesisch (`pt`) | 680 (30 %) | 1584 | 360–1131, 1584–2263 |
+| Portugiesisch (`pt`) | 680 (30 %) | 1584 | 360–1131, 1452–2263 |
+
+Die Zahlen sind gemessen, nicht fortgeschrieben: `make_locale.py` meldet die
+fehlenden Bereiche, wenn es nicht schreiben kann. Wer die Tabelle ändert, hat
+sie vorher laufen lassen.
 
 Jede Sprache hatte zwei Agenten (Hälfte A: Index 0–1131, Hälfte B: Index
 1132–2263) — beide Hälften brechen mitten im jeweiligen jeweiligen
@@ -41,6 +45,9 @@ doppelten/leeren Werte) — siehe „Wie weiter" unten.
    ```
    .venv\Scripts\python.exe .claude\i18n-wip\dump_chunk.py <START> <ENDE>
    ```
+   (Beide Skripte fanden ihre Wurzel anfangs über einen absoluten Pfad des
+   Rechners, auf dem sie entstanden sind — auf einem zweiten Rechner liefen
+   sie damit gar nicht. Sie leiten sie jetzt aus der eigenen Lage ab.)
    gibt die fehlenden Einträge als JSONL aus (`{"i", "de", "en"}` je
    Zeile; `de` ist die Quelle, `en` die englische Referenz für Ton und
    Begriffswahl). Übersetzung als `part-NNNN.json` in den passenden
@@ -55,6 +62,15 @@ doppelten/leeren Werte) — siehe „Wie weiter" unten.
 3. **Suite:** `pytest tests/test_translations.py -k <lang>` (bzw. ohne
    `-k` für alle) — prüft Vollständigkeit, verwaiste Schlüssel und dass
    keine Sprache mitten im Satz auf Deutsch zurückfällt.
+
+   Vorher, und ohne dass ein vollständiger Katalog nötig wäre:
+   ```
+   .venv\Scripts\python.exe .claude\i18n-wip\check_parts.py [lang …]
+   ```
+   prüft die Teile gegen die Invarianten weiter unten — Platzhalter,
+   Abbildungsmarken, Absatzzahl, unübersetzt Übernommenes. Das fängt
+   genau die Fehler, die sonst erst beim Einsammeln auffallen, und es
+   läuft auf halbfertigem Bestand.
 4. **Erst wenn alle vier Sprachen grün sind**, diesen Ordner
    (`.claude/i18n-wip/`) löschen und in einem eigenen Commit die vier
    `app/i18n/locales/*.json` einchecken. Nicht sprachweise einzeln
@@ -130,6 +146,15 @@ Passstift→spina · Trennebene→piano di taglio · Startwert→seme ·
 Baugruppe→assieme · Merkmal→caratteristica · Werkzeug→strumento ·
 Ansicht→vista · Drucker→stampante · Materialprofil→profilo del
 materiale. Ton: Imperativ 2. Person bei Bedienaktionen, volle Akzente.
+Anführungszeichen «…» (so steht es im ganzen Bestand), Op-Stapel→pila.
+
+**Menünamen, Italienisch — eine Kollision, die vorentschieden ist.**
+„Bearbeiten" (Edit) steht im Bestand als **Modifica** (Index 167). Damit ist
+das naheliegende Wort für „Ändern" (Modify) verbraucht: zwei Menüs dürfen
+nicht gleich heißen. Festgelegt: **Ändern → Cambia** (Index 2230). Wer den
+Menütext oder die Handbuchstellen mit *Ändern → …* übersetzt, nimmt Cambia.
+In den anderen drei Sprachen tritt die Kollision nicht auf (editar/modificar,
+édition/modifier, editar/modificar).
 
 **Portugiesisch:** Operation→operação · Transaktion→transação ·
 Baustein→bloco · Teil→peça · Passung→ajuste · Spiel→folga ·
