@@ -342,8 +342,18 @@ class SketchCanvas(QWidget):
         ist — gemerkt, damit nicht jede Mausbewegung neu zeichnet."""
 
     def set_bed(self, size: tuple[float, float] | None) -> None:
-        """Die Grundfläche des Bauraums, gegen die gezeichnet wird."""
+        """Die Grundfläche des Bauraums, gegen die gezeichnet wird.
+
+        Ein leeres Blatt passt auf den Bauraum ein — kommt der erst nach dem
+        Aufbau herein, muss die Einpassung nachziehen. Sonst stand der
+        Maßstab auf der Vorgabe, und der Rand, der die früheste Warnung
+        tragen soll (E1), lag zur Hälfte außerhalb. Nur solange die Ansicht
+        der Einpassung überhaupt folgt: wer selbst gezoomt hat, behält seinen
+        Ausschnitt.
+        """
         self._bed = size
+        if self._fitting:
+            self.fit_view(keep_following=True)
         self.update()
 
     def set_snapping(self, active: bool, step: float | None = None) -> None:
@@ -539,6 +549,9 @@ class SketchCanvas(QWidget):
         self.tool = tool
         self._pending.clear()
         self._pending_world.clear()
+        # Was das gewählte Werkzeug erwartet, steht sofort da und nicht erst
+        # nach dem ersten Klick.
+        self.statusChanged.emit(self.status_text())
         self.update()
 
     def points(self) -> list[tuple[float, float]]:
@@ -592,6 +605,9 @@ class SketchCanvas(QWidget):
     def status_text(self) -> str:
         if self.conflict:
             return self.conflict
+        drawing = self.drawing_hint()
+        if drawing:
+            return drawing
         if self.solved is None:
             return tr("Leere Skizze — zeichnen oder eine Grundform einfügen.")
         if self.solved.free_dof == 0:
@@ -599,6 +615,44 @@ class SketchCanvas(QWidget):
         if self.solved.free_dof == 1:
             return tr("Ein Freiheitsgrad ist noch frei.")
         return tr("{count} Freiheitsgrade sind noch frei.").format(count=self.solved.free_dof)
+
+    def drawing_hint(self) -> str:
+        """Was der nächste Klick tut, und wie man wieder herauskommt.
+
+        Der Linienzug ist der Fall, an dem es fehlte: nach dem zweiten Klick
+        hängt der nächste Strich am Zeiger und läuft weiter, und dass Esc ihn
+        beendet, stand nirgends. Ein Werkzeug, das man nur durch Ausprobieren
+        verlässt, ist eine Sackgasse mit Ausgang (§2.1).
+
+        Leer heißt: nichts zu sagen — mit dem Auswahlwerkzeug zeichnet
+        niemand, und dann gehört die Zeile den Freiheitsgraden.
+        """
+        if self.tool == "select":
+            return ""
+        started = len(self._pending_world)
+        if self.tool == "spline":
+            if started:
+                return tr("Spline: weiter klicken. Doppelklick oder Eingabetaste schließt ihn.")
+            return tr("Spline: klicken, so oft es die Kurve braucht.")
+        if self.tool in ("trim", "extend"):
+            return tr("Auf die Hälfte klicken, die es betrifft.")
+        if self.tool == "point":
+            return tr("Punkt: ein Klick setzt ihn.")
+        if self.tool == "line":
+            if started:
+                return tr("Linie: Klick setzt den nächsten Punkt, Esc beendet den Zug.")
+            return tr("Linie: erster Klick setzt den Anfang.")
+        if self.tool == "circle":
+            if started:
+                return tr("Kreis: der nächste Klick setzt den Radius. Oder das Maß eintippen.")
+            return tr("Kreis: erster Klick setzt die Mitte.")
+        if self.tool == "arc":
+            if started >= 2:
+                return tr("Bogen: der nächste Klick setzt das Ende.")
+            if started:
+                return tr("Bogen: der nächste Klick setzt den Anfang.")
+            return tr("Bogen: erster Klick setzt die Mitte.")
+        return ""
 
     # --- Bearbeitung (auch für Tests) ---------------------------------------------
 
@@ -909,11 +963,16 @@ class SketchCanvas(QWidget):
         self._pending_world.append(world)
 
         if self.tool == "spline":
+            self.statusChanged.emit(self.status_text())
             self.update()
             return
 
         needed = {"point": 1, "line": 2, "circle": 2, "arc": 3}[self.tool]
         if len(self._pending_world) < needed:
+            # Der Hinweis wandert mit dem angefangenen Element: was der
+            # nächste Klick tut, ist nach dem ersten eine andere Auskunft als
+            # davor.
+            self.statusChanged.emit(self.status_text())
             self.update()
             return
 
@@ -1099,6 +1158,7 @@ class SketchCanvas(QWidget):
         if event.key() == Qt.Key.Key_Escape and self._pending_world:
             self._pending.clear()
             self._pending_world.clear()
+            self.statusChanged.emit(self.status_text())
             self.update()
             return
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and self.tool == "spline":
@@ -1583,6 +1643,14 @@ ACTION_KEYS: dict[str, str] = {
 #: zum Anfang" heißt.
 VIEW_KEYS: dict[str, str] = {"fit": "Home"}
 
+#: Die Ziffern für die drei Grundebenen — dieselbe Belegung, die Fusion,
+#: SolidWorks und FreeCAD für ihre Standardansichten haben.
+#:
+#: Die Ebene zu wechseln ist kein seltener Griff: ein Gehäuse zeichnet man von
+#: oben, seine Aufhängung von der Seite, und dazwischen liegt jedes Mal ein
+#: Klappmenü. Die Ziffern sind frei — die Werkzeuge liegen auf Buchstaben.
+PLANE_KEYS: dict[str, str] = {"plane:xy": "1", "plane:xz": "2", "plane:yz": "3"}
+
 
 @dataclass(frozen=True, slots=True)
 class Surroundings:
@@ -1719,7 +1787,11 @@ class SketchPanel(QWidget):
             ("plane:xz", tr("Vorderansicht (XZ) — stehend, von vorn")),
             ("plane:yz", tr("Seitenansicht (YZ) — stehend, von der Seite")),
         ):
-            self.plane_choice.addItem(label, userData=value)
+            key = PLANE_KEYS.get(value, "")
+            self.plane_choice.addItem(f"{label}  ({key})" if key else str(label), userData=value)
+        self.plane_choice.setToolTip(
+            tr("Worauf gezeichnet wird. Die Ziffern 1, 2 und 3 wechseln direkt.")
+        )
         self.plane_choice.setCurrentIndex(
             max(0, self.plane_choice.findData(self.canvas.sketch.plane))
         )
@@ -1991,6 +2063,21 @@ class SketchPanel(QWidget):
         helper = QShortcut(QKeySequence(ACTION_KEYS["construction"]), self)
         helper.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         helper.activated.connect(self.canvas.toggle_construction)
+
+        for plane, key in PLANE_KEYS.items():
+            view = QShortcut(QKeySequence(key), self)
+            view.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            view.activated.connect(lambda chosen=plane: self.choose_plane(chosen))
+
+    def choose_plane(self, plane: str) -> None:
+        """Die Zeichenebene wechseln — über die Wahl, nicht an ihr vorbei.
+
+        Die Zeichenfläche direkt zu setzen ließe das Auswahlfeld auf der
+        vorigen Ebene stehen, und dann behaupten zwei Stellen zweierlei.
+        """
+        index = self.plane_choice.findData(plane)
+        if index >= 0:
+            self.plane_choice.setCurrentIndex(index)
 
     def choose_tool(self, name: str) -> None:
         """Wählt ein Werkzeug — was ein Klick auf seinen Knopf tut.

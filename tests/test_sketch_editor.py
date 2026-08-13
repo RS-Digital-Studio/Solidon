@@ -219,6 +219,79 @@ def test_zooming_keeps_the_point_under_the_pointer(qt_app: QApplication) -> None
     assert canvas._to_world(spot) == pytest.approx(before), "derselbe Punkt liegt noch dort"
 
 
+def test_a_digit_switches_the_view(qt_app: QApplication) -> None:
+    """Die Ebene zu wechseln ist kein seltener Griff.
+
+    Ein Gehäuse zeichnet man von oben, seine Aufhängung von der Seite, und
+    dazwischen lag jedes Mal ein Klappmenü. Die Ziffern sind dieselben wie in
+    Fusion und FreeCAD — und sie gehen über die Wahl, damit nicht zwei
+    Stellen zweierlei behaupten.
+    """
+    from app.ui.sketch_editor import PLANE_KEYS
+
+    panel = SketchPanel()
+    try:
+        panel.choose_plane("plane:xz")
+        assert panel.canvas.sketch.plane == "plane:xz"
+        assert panel.plane_choice.currentData() == "plane:xz", "die Wahl steht mit"
+
+        panel.choose_plane("plane:yz")
+        assert panel.canvas.axis_names() == ("Y", "Z")
+
+        # Und die Belegung steht am Eintrag: eine Taste ohne sichtbares Ziel
+        # findet niemand (§19.2, Regel 18).
+        for plane, key in PLANE_KEYS.items():
+            index = panel.plane_choice.findData(plane)
+            assert key in panel.plane_choice.itemText(index)
+    finally:
+        panel.deleteLater()
+
+
+def test_the_status_says_what_the_next_click_does(qt_app: QApplication) -> None:
+    """Dass Esc den Linienzug beendet, stand nirgends.
+
+    Nach dem zweiten Klick hängt der nächste Strich am Zeiger und läuft
+    weiter — ein Werkzeug, das man nur durch Ausprobieren verlässt, ist eine
+    Sackgasse mit Ausgang (§2.1).
+    """
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+
+    canvas.set_tool("line")
+    assert "Anfang" in canvas.status_text()
+
+    canvas.place(canvas._to_screen(0.0, 0.0))
+    assert "Esc" in canvas.status_text(), "der Ausgang steht da, solange er gebraucht wird"
+
+    canvas.set_tool("select")
+    assert "Esc" not in canvas.status_text(), "wer auswählt, zeichnet nicht"
+
+    canvas.set_tool("arc")
+    assert "Mitte" in canvas.status_text()
+
+
+def test_a_bed_that_arrives_late_still_gets_fitted(qt_app: QApplication) -> None:
+    """Ein leeres Blatt passt auf den Bauraum ein — auch wenn der erst nach
+    dem Aufbau hereinkommt.
+
+    Sonst stand der Maßstab auf der Vorgabe, und der Rand, der die früheste
+    Warnung tragen soll (E1), lag zur Hälfte außerhalb.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.fit_view()
+    before = canvas._scale
+
+    canvas.set_bed((220.0, 220.0))
+    assert canvas._scale != pytest.approx(before), "die Einpassung zieht nach"
+
+    # Wer selbst gezoomt hat, behält seinen Ausschnitt.
+    _zoom(canvas)
+    own = canvas._scale
+    canvas.set_bed((120.0, 120.0))
+    assert canvas._scale == pytest.approx(own)
+
+
 def test_the_hook_in_the_bar_reaches_the_canvas(qt_app: QApplication) -> None:
     """Haken und Weite stehen an der Ebenenzeile — beides entscheidet man vor
     dem ersten Strich."""
