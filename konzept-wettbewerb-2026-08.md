@@ -328,7 +328,7 @@ die Arbeit ist.
 |---|---|---|---|
 | **W1** | **Niemand weiß, dass es uns gibt.** | Entscheidung | B5, offen |
 | **W2** | **Kein macOS-Paket** — ein spürbarer Teil der Zielgruppe kann nicht starten | mittel + Entscheidung | neu |
-| **W3** | **Nur zwei Sprachen** — ES, FR, IT, PT fehlen, Gerüst steht | klein je Sprache | neu |
+| ~~**W3**~~ | ~~**Nur zwei Sprachen** — ES, FR, IT, PT fehlen, Gerüst steht~~ **erledigt 13.08.2026: sechs Sprachen, je 2279 Einträge** | klein je Sprache | neu |
 | **W4** | **Weg 1 ist unsere Stärke und nicht unser Versprechen** — Website führt mit Säule A | klein | neu |
 | **W5** | **Letzte Meile zum Drucker** — Datei bleibt im Ordner | mittel + Bauplanänderung | B3, offen |
 | **W6** | **Acht Texturmuster, die niemand sieht** | klein | B2, offen |
@@ -357,8 +357,18 @@ Nach Wirkung je Aufwand, nicht nach Bereich:
 
 1. **W4, W6** — eine Runde an Website und Vermarktung: Zahl richtigstellen,
    Weg 1 nach vorn, Texturen mit Bild. Kein Code, größter sichtbarer Gewinn.
-2. **W3** — Spanisch, Französisch, Italienisch, Portugiesisch. Additiv, prüfbar
-   über den bestehenden Übersetzungstest.
+2. ~~**W3**~~ — **erledigt am 13.08.2026.** Spanisch, Französisch, Italienisch,
+   Portugiesisch liegen vollständig in `app/i18n/locales/`, je 2279 Einträge,
+   abgenommen von `tests/test_translations.py` (104 Fälle) und mitgetragen von
+   Handbuch- und Website-Tests (460 Fälle). Die Vorhersage „additiv, prüfbar"
+   hat gestimmt: keine Zeile Code, die eine Sprache kennt. Was sie nicht
+   vorhergesagt hat, war der Preis der Parallelität — acht gleichzeitig
+   arbeitende Agenten gegen einen Katalog, der während des Laufs um fünfzehn
+   Schlüssel wuchs und damit jeden Index über der ersten Einfügestelle
+   verschob. Der Ausweg steht in `.claude/i18n-wip/STAND.md`: eine eingefrorene
+   Basis, Nachträge über den Quelltext statt über den Index. **Offen bleibt**
+   die Nachaufnahme der Handbuchbilder je Sprache — eigener Schritt, läuft
+   nicht offscreen.
 3. **W7** — GLB hinausschreiben. Kleine, abgeschlossene Arbeit.
 4. **W8** — Baustein A zu Ende, nach `konzept-bedienung.md` Teil 4.
 5. **W1, W2, W5, W9** — Entscheidungen, siehe Teil 7. Erst danach Code.
