@@ -1,10 +1,13 @@
 # Stand der Mehrsprachigkeit (W3) — 13.08.2026
 
-**Das hier ist keine Ablage für immer.** Dieser Ordner ist eine
-Zwischenstation für vier Katalogdateien, die noch nicht vollständig sind.
-Sobald `app/i18n/locales/es.json`, `fr.json`, `it.json` und `pt.json`
-jeweils vollständig und von `tests/test_translations.py` grün abgenommen
-sind, wird dieser ganze Ordner gelöscht — er gehört nicht zur Anwendung.
+**Die vier Kataloge stehen.** `es.json`, `fr.json`, `it.json` und `pt.json`
+liegen vollständig in `app/i18n/locales/`, je 2279 Einträge, und
+`tests/test_translations.py` nimmt sie grün ab. Damit hat die Anwendung
+sechs Sprachen. Dieser Ordner hat seinen Zweck erfüllt und kann gelöscht
+werden — mit **einer** Einschränkung, siehe „Was hierbleiben sollte".
+
+**Das hier ist keine Ablage für immer.** Dieser Ordner war eine
+Zwischenstation für vier Katalogdateien, die noch nicht vollständig waren.
 
 ## Warum er trotzdem im Repository liegt
 
@@ -16,18 +19,59 @@ session-eigenen Scratchpad-Verzeichnis, das laut Systemvorgabe
 session-spezifisch ist und nicht garantiert überlebt. Er ist deshalb hier
 gesichert, damit ein zweiter Abbruch nichts mehr kostet.
 
-## Ist-Stand, exakt nachgezählt (13.08.2026, 2264 Einträge gesamt)
+## Ist-Stand (13.08.2026)
 
-| Sprache | fertige Einträge | fehlend | fehlende Bereiche (Index, 0-basiert) |
-|---|---|---|---|
-| Italienisch (`it`) | 1720 (76 %) | 544 | 680–1131, 2172–2263 |
-| Spanisch (`es`) | 960 (42 %) | 1304 | 480–1131, 1612–2263 |
-| Französisch (`fr`) | 760 (34 %) | 1504 | 440–1131, 1452–2263 |
-| Portugiesisch (`pt`) | 680 (30 %) | 1584 | 360–1131, 1452–2263 |
+Alle vier Sprachen vollständig: je 2264 Einträge der Basis plus die 15
+Schlüssel, die während des Laufs dazukamen — 2279, wie der lebende Katalog.
 
 Die Zahlen sind gemessen, nicht fortgeschrieben: `make_locale.py` meldet die
 fehlenden Bereiche, wenn es nicht schreiben kann. Wer die Tabelle ändert, hat
 sie vorher laufen lassen.
+
+## Der Fehler, der die zweite Runde beinahe gekostet hätte
+
+**Der Katalog ist mitten im Lauf gewachsen.** Während acht Agenten
+übersetzten, hat eine parallele Sitzung (P16.3) `app/i18n/locales/en.json`
+um 15 Schlüssel erweitert: 2264 → 2279. Weil einsortiert wird, lag die erste
+Einfügung bei Index 7 — **jeder Index darüber verschiebt sich**, und die
+Verschiebung ist über den Bestand hinweg nicht einmal konstant, sondern
+wächst von +6 auf +15. Die Teile sind indexbasiert; `dump_chunk.py` las
+genau diese wandernde Datei.
+
+Was daraus folgt, und was jetzt eingebaut ist:
+
+1. **Eine eingefrorene Basis.** `base-en.json` ist der Stand, gegen den alle
+   Teile gelten. `dump_chunk.py` und `check_parts.py` lesen sie, nicht den
+   lebenden Katalog. Ohne sie ist jede Indexangabe in diesem Ordner eine
+   Aussage über einen Zeitpunkt statt über einen Text.
+2. **Nachträge sind schlüsselbasiert.** Was nach dem Einfrieren dazukommt,
+   hat in der Basis keinen Index und gehört nach `new-keys-<lang>.json`
+   ({deutscher Quelltext: Übersetzung}). `make_locale.py` liest beide
+   Quellen und schreibt gegen den **lebenden** Katalog; wächst der weiter,
+   nennt der Lauf die neuen Schlüssel namentlich, statt still eine Lücke zu
+   lassen.
+3. **Rückrechnen statt Nachrechnen.** Wer trotzdem gegen den gewachsenen
+   Katalog übersetzt hat, führt seine Dateien mit `rebase_parts.py <lang>`
+   zurück — Zuordnung über den deutschen Quelltext, nicht über einen Offset.
+   Ein fester Betrag verschiebt Teile des Bestands falsch. Das Werkzeug
+   erkennt je Datei, auf welcher Nummerierung sie steht, und läuft ohne
+   `--schreiben` als Trockenlauf.
+
+Zwei der acht Agenten haben ihre eigenen Dateien selbst richtig
+zurückgerechnet, zwei weitere gegen HEAD gepinnt gearbeitet. Einer hat den
+gesamten `es`-Ordner auf die neue Nummerierung umgeschrieben — nachvollziehbar
+gedacht, aber es machte Spanisch zur einzigen Sprache auf abweichender Basis;
+`rebase_parts.py` hat das verlustfrei zurückgeführt.
+
+## Was hierbleiben sollte, wenn der Rest gelöscht wird
+
+Die `part-*.json` haben ihren Zweck erfüllt — die Kataloge sind geschrieben,
+und die sind schlüsselbasiert und damit gegen jedes Katalogwachstum immun.
+Nützlich bleiben `base-en.json` und die drei Werkzeuge nur, solange jemand
+noch einmal aus Teilen einsammeln will. Für den Normalfall — der Katalog
+bekommt neue Schlüssel, vier Sprachen müssen nachziehen — genügt es, die
+neuen Texte in die sechs Katalogdateien einzutragen; `test_translations.py`
+sagt, welche fehlen.
 
 Jede Sprache hatte zwei Agenten (Hälfte A: Index 0–1131, Hälfte B: Index
 1132–2263) — beide Hälften brechen mitten im jeweiligen jeweiligen
