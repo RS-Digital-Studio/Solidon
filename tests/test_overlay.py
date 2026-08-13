@@ -25,6 +25,7 @@ from app.ui.main_window import MainWindow
 from app.ui.overlay import LEFT_WIDTH, MARGIN, RIGHT_WIDTH, OverlayHost, card_stylesheet
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from app.ui.theme import THEMES
 
 
 @pytest.fixture(autouse=True)
@@ -436,3 +437,20 @@ def test_a_list_pinned_below_qts_default_hint_does_not_shrink_its_zone(
     assert overlay.natural_height(zone) >= zone.sizeHint().height(), (
         "die Zone muss mindestens bekommen, was ihr Layout braucht"
     )
+
+
+def test_the_card_edge_carries_the_accent() -> None:
+    """Ein grauer Rand über einem grauen Modell in einem grauen Raum ist die
+    Kante, die man sucht statt sieht.
+
+    Der Akzent steht damit an mehr als einer Stelle zugleich — das war eine
+    bewusste Entscheidung und keine Nachlässigkeit. Der Test hält sie fest,
+    damit sie nicht beim nächsten Aufräumen still zurückgedreht wird.
+    """
+    for theme in ("dark", "light"):
+        sheet = card_stylesheet(theme)  # type: ignore[arg-type]
+        accent = THEMES[theme]["accent_line"]  # type: ignore[index]
+        assert f"border: 1px solid {accent}" in sheet, theme
+        # Und nicht mehr die Trennfarbe: Die steht weiter zwischen Zeilen und
+        # Feldern, nur nicht mehr an der Kante der Karte.
+        assert f"border: 1px solid {THEMES[theme]['line']}" not in sheet  # type: ignore[index]

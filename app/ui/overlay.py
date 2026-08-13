@@ -115,6 +115,12 @@ def card_stylesheet(theme: Theme) -> str:
     steht ihr Text auf dem Modell, und beides ist grau. Der Rand ist keine
     Zierde, sondern die Kante, an der die Karte aufhört.
 
+    **Er trägt den Akzent, nicht die Trennfarbe.** Ein grauer Rand über einem
+    grauen Modell in einem grauen Raum ist die Kante, die man sucht statt
+    sieht — und das Fenster hatte, solange nichts ausgewählt war, keinen
+    einzigen farbigen Punkt. Dass der Akzent damit an mehr als einer Stelle
+    zugleich steht, ist der Preis dafür und war eine bewusste Entscheidung.
+
     **Wo das hingehört:** nach ``style.py``, zu den übrigen Formregeln. Es
     steht hier, weil die Karten neu sind und jene Datei gerade an anderer
     Stelle umgebaut wird; zusammengelegt wird, sobald das durch ist.
@@ -123,7 +129,7 @@ def card_stylesheet(theme: Theme) -> str:
     return f"""
 QWidget#overlayCard {{
     background: {colours["window"]};
-    border: 1px solid {colours["line"]};
+    border: 1px solid {colours["accent_line"]};
     border-radius: {ROOMY}px;
 }}
 """

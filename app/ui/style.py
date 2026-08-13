@@ -289,6 +289,7 @@ QProgressBar {{
     text-align: center;
 }}
 QProgressBar::chunk {{ background: {highlight}; border-radius: {SPACE}px; }}
+
 """
 
 
