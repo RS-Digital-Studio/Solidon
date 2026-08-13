@@ -410,7 +410,38 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     slab = Solid(BRepPrimAPI_MakeCylinder(major / 2.0 + 1.0, length).Shape())
     trimmed = _fuzzy_boolean("intersection", ridge_solid, slab)
     core = Solid(BRepPrimAPI_MakeCylinder(core_radius, length).Shape())
-    return _checked_rod(_fuzzy_boolean("union", core, trimmed), major, pitch)
+    return _joined_rod(core, trimmed, major, pitch)
+
+
+#: Wie grob die zweite Vereinigung eines Gewindes sein darf, als Anteil der
+#: Steigung. Ein Tausendstel davon ist bei M6 ein Mikrometer — feiner als
+#: jeder Drucker und jede Passung, und genug, damit OCCT die Naht zwischen
+#: Gang und Kern findet.
+ROD_FUZZ_RATIO: Final = 1e-3
+
+
+def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
+    """Kern und Gang zusammenfügen — in Stufen, wie die Boolesche Kette (§17.2).
+
+    Der Reihe nach: die feine Vereinigung, dann das Vernähen des Ergebnisses,
+    dann eine gröbere Vereinigung. Jede Stufe wird nur betreten, wenn die
+    vorige keinen geschlossenen Bolzen ergeben hat — und geprüft wird nach
+    jeder, nicht am Ende.
+
+    Dass es die Stufen braucht, hat der Linux-Runner gezeigt: **M6 mit einem
+    Millimeter Steigung**, das gewöhnlichste Gewinde überhaupt, kam dort offen
+    heraus und hier geschlossen. Dieselbe Rechnung, andere OCCT-Fassung.
+    """
+    solid = _fuzzy_boolean("union", core, ridge)
+    if _is_sound_rod(solid):
+        return solid
+    sewn = _sewn(solid)
+    if _is_sound_rod(sewn):
+        return sewn
+    coarse = _fuzzy_boolean("union", core, ridge, tolerance=pitch * ROD_FUZZ_RATIO)
+    if _is_sound_rod(coarse):
+        return coarse
+    return _checked_rod(_sewn(coarse), major, pitch)
 
 
 def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
@@ -471,13 +502,17 @@ def _sewn(solid: Solid) -> Solid:
     return Solid(fix.Shape(), deflection=solid.deflection)
 
 
-def _fuzzy_boolean(kind: str, first: Solid, second: Solid) -> Solid:
-    """Boolesch mit kleiner Fuzzy-Toleranz — der helikale Gang braucht sie."""
+def _fuzzy_boolean(kind: str, first: Solid, second: Solid, tolerance: float = EPS_GEOM) -> Solid:
+    """Boolesch mit kleiner Fuzzy-Toleranz — der helikale Gang braucht sie.
+
+    ``tolerance`` ist die zweite Stufe aus :func:`_joined_rod`: gröber, wenn
+    die feine Rechnung eine Naht offen gelassen hat.
+    """
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Fuse
 
     maker = BRepAlgoAPI_Fuse if kind == "union" else BRepAlgoAPI_Common
     operation = maker(first.shape, second.shape)
-    operation.SetFuzzyValue(EPS_GEOM)
+    operation.SetFuzzyValue(tolerance)
     return _finished(operation, _("Die Boolesche Operation ist fehlgeschlagen."))
 
 
