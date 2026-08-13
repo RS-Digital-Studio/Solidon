@@ -4,6 +4,9 @@ Anlass ist eine Frage in vier Teilen: *Wie stehen Oberfläche, Funktionen,
 Handbuch und Schnittstelle gegen die beiden führenden KI-3D-Generatoren?
 Können wir mithalten?*
 
+**Fünfte Fassung.** Die Befunde sind abgearbeitet; was daraus wurde, steht in
+Teil 10.
+
 **Vierte Fassung.** Der erste Durchgang blieb an vier Stellen bei Vermutungen;
 der zweite maß sie nach. Der dritte entstand aus der Frage, ob die Webseiten
 und Funktionen wirklich vollständig angesehen worden seien — sie waren es
@@ -910,12 +913,50 @@ schmale Zeile über der Befundliste. Die Werte liegen alle vor. Ihre Darstellung
 ist an dieser einen Stelle besser als unsere, und der Grund ist kein
 technischer.
 
-### B10 — Rodins ControlNet als offene Frage · **offen** · groß
+### B10 — Rodins ControlNet · **beantwortet: nein** · 12.08.2026
 
 Erzeugung, die in einen vorgegebenen Hüllquader hineinrechnet, ist die einzige
 Idee der Gegenseite, die unser Kernproblem berührt: generierte Netze haben
-keine Maße. Ob unser ComfyUI-Weg so etwas kann, ist **nicht geprüft**. Eine
-Frage an den nächsten Konzeptdurchgang, keine Aufgabe.
+keine Maße.
+
+**Unser Weg kann es nicht.** Nachgesehen in den mitgelieferten Workflows
+(`app/core/backends/data/`): `Hy3DMeshGenerator` nimmt `model`, `image`,
+`steps`, `guidance_scale`, `seed`, `attention_mode` — und sonst nichts. Kein
+Hüllquader, keine Voxel, keine Punktwolke. Das liegt nicht am Workflow, sondern
+am Modell: Formvorgabe ist ein Merkmal von Rodins Gen-2.5, nicht der
+Knotensammlung Hunyuan3D 2.1. Ein anderes Modell könnte es mitbringen, und der
+Workflow ist eine Datendatei — das ist der Grund, warum §27 ihn als Datei führt
+und nicht als Code.
+
+**Was wir stattdessen haben, ist die Gegenrichtung.** Rodin gibt die Form
+vorher vor; wir bringen sie hinterher auf Maß — `fit_to_size` skaliert auf eine
+Kantenlänge, `check_build_volume` sagt, ob es auf die Platte passt. Das ersetzt
+keine Proportionsvorgabe, beantwortet aber die Frage, die ein Drucker stellt.
+
+### B13 — Nicht-planarer Schnitt · **beantwortet, mit Gegenvorschlag** · 12.08.2026
+
+Der einzige Punkt im ganzen Vergleich, an dem eine ihrer Funktionen etwas kann,
+das wir nicht können und gebrauchen könnten.
+
+**Der naheliegende Weg ist geprüft und verworfen — vor diesem Konzept.** Der
+Modulkopf von `geom/autosplit.py` sagt, dass bei erfolgloser Ebenensuche die
+konvexe Zerlegung gefragt wird, wo ein Körper von selbst auseinanderfällt, und
+der Schnitt dorthin gelegt wird: *„als Ebene, nicht als die Hüllen selbst.
+Hüllenstücke sind eine Näherung, und eine Näherung wieder zusammenzukleben
+ergibt ein genähertes Teil (§11.1)."* Ein Schnitt entlang V-HACD-Hüllen ist
+also kein offener Weg, sondern ein bewusst geschlossener.
+
+**Was offen bleibt und regelkonform wäre: die geneigte Ebene.** `SectionPlane`
+trägt bereits eine freie Normale (`normal: Vec3`) — nur die *Suche* kennt drei
+Achsen (`AXIS_NORMALS`, `_axis_to_cut`). Eine Ebene, die einer schrägen Kante
+folgt, versteckt ihre Naht dort, wo ohnehin eine Kante läuft, bleibt exakt
+statt genähert und behält die Verstiftung, die heute funktioniert. Das ist
+nicht Meshys formfolgender Schnitt, aber es ist der Teil davon, der ohne ein
+trainiertes Segmentierungsmodell zu haben ist.
+
+Der Kundenkreis entscheidet, ob es sich lohnt: Wer Halterungen und Gehäuse
+druckt, teilt an einer Ebene und verstiftet. Wer Figuren druckt, will die
+versteckte Naht — und ist heute nicht unser Kunde.
 
 ### B11 — Qualitätsstufe als Angebot statt als Einstellung · **niedrig** · klein
 
@@ -1004,3 +1045,40 @@ eigene Navigation im Browser abgerufen. Preise, Nutzerzahlen und
 Aufbewahrungsfristen sind ihre Angaben, keine geprüften Werte. Nicht einsehbar
 und deshalb nicht bewertet: die Lektionstexte ihrer Akademie und die
 Webanwendung selbst — beides liegt hinter einem Konto.*
+
+---
+
+## Teil 10 — Was daraus wurde (12.08.2026)
+
+Abgearbeitet, jeder Punkt mit Test und eigenem Commit. Die Zeilen sind der
+Stand, nicht die Absicht.
+
+| Befund | Stand |
+|---|---|
+| **B1** Vergleichstabelle Druckbarkeit | Website, beide Sprachen, mit Datum und Quelle |
+| **B2** Analysekarten nach vorn | **teilweise** — der Text argumentiert damit, das Bild fehlt |
+| **B3** Kette für generierte Netze | Website-Abschnitt „Wenn das Modell aus einer KI kommt", fünf Schritte |
+| **B4** Fertigungswissen ins Handbuch | zwei erzeugte Seiten; Regelsammlung dafür zweisprachig |
+| **B5** Handbuchform | 20 Kurzfassungen, erzeugte Meldungstabelle im Wortlaut |
+| **B6** Referenz der Fernsteuerung | erzeugt; zehn Werkzeuge waren gar keine Operationen und fehlten |
+| **B7** Preisrechnung | 240–360 $/Jahr gegen 49 € einmal, beide Sprachen |
+| **B8** Vorschaubilder im Objektbaum | gerendert, nach Objekt-Hash gecacht, eines je Ereignisschleife |
+| **B9** Kennzahlenkopf im Prüfbericht | wasserdicht · Volumen · Teile |
+| **B10** Rodins ControlNet | **beantwortet: nein** — Hunyuan3D 2.1 hat keine Formvorgabe |
+| **B11** Qualitätsstufe als Angebot | als Restzeitschätzung umgesetzt; der Umschalter wäre eine Betriebsart gewesen |
+| **B12** Leerraum im Operationsdialog | 189 → 26 px; es war eine fehlende Größenrichtlinie |
+| **B13** Nicht-planarer Schnitt | **beantwortet, mit Gegenvorschlag** — geneigte Ebene statt Hüllen |
+| **B14** „Wann nicht benutzen" | fünf Operationen mit echter Grenze |
+| **B15** Erzählung um die Reparatur | Website: reparieren allein trägt kein Argument mehr |
+| **B16** Flächen abstufen, Akzent binden | Kontraste 1,10 → 1,45, Trennlinie 1,43 → 2,30, Reiterkante |
+
+**Was dabei über den Auftrag hinausging**, weil es sich beim Bauen zeigte: Die
+Karten tragen ihre Kante im Akzent — gegen die Warnung dieses Konzepts, auf
+ausdrückliche Entscheidung, und der Grund steht im Bild. Der Zeiger im Viewport
+sagt, was ein Klick täte, und gilt auch in den Panels.
+
+**Was offen bleibt.** B2 braucht ein Bildschirmfoto einer Analysekarte, das der
+Abbildungskatalog nicht hat. Die Website läuft mit 1456 px in einem Fenster von
+1265 px über — der Überlauf steht schon vor diesen Änderungen im HEAD, kein
+Element ragt über den Rand. Und in der Statuszeile überlappen sich „Keine
+Auswahl" und der Demo-Hinweis; beides gehört nicht zu diesen Befunden.
