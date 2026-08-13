@@ -1155,15 +1155,15 @@ class PrintSettingsDialog(QDialog):
         if position >= len(self.slot_rows):
             return
         box = self.slot_rows[position][1]
-        gewaehlt = box.currentText()
-        namen = list(self.settings.slot_profiles)
-        namen += [""] * (len(self.slot_rows) - len(namen))
-        namen[position] = gewaehlt
-        self.settings = replace(self.settings, slot_profiles=tuple(namen))
+        chosen = box.currentText()
+        names = list(self.settings.slot_profiles)
+        names += [""] * (len(self.slot_rows) - len(names))
+        names[position] = chosen
+        self.settings = replace(self.settings, slot_profiles=tuple(names))
         self.state.setText(
             tr("{slot} druckt mit {profil}.")
             .replace("{slot}", self.slot_rows[position][0].text().strip())
-            .replace("{profil}", gewaehlt)
+            .replace("{profil}", chosen)
         )
 
     def _filament_chosen(self, _index: int) -> None:
