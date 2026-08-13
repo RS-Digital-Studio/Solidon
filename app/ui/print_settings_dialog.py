@@ -921,6 +921,11 @@ class PrintSettingsDialog(QDialog):
         self.process_choice.setEnabled(False)
         self.filament_choice = QComboBox(self.slicer_box)
         self.filament_choice.setEnabled(False)
+        self.filament_choice.activated.connect(self._filament_chosen)
+        """``activated`` und nicht ``currentIndexChanged``: das eine meint die
+        Wahl eines Menschen, das andere jedes Befüllen der Liste. Der
+        Unterschied entscheidet, ob die Werte eines geladenen Projekts
+        überschrieben werden — sie dürfen es nicht."""
 
         form.addRow(tr("Drucker"), self.machine_choice)
         form.addRow(tr("Grundprofil"), self.process_choice)
@@ -1064,6 +1069,39 @@ class PrintSettingsDialog(QDialog):
             if preferred is not None:
                 index = self.filament_choice.findData(str(preferred.path))
         self.filament_choice.setCurrentIndex(max(index, 0))
+
+    def _filament_chosen(self, _index: int) -> None:
+        """Die Werte der gewählten Spule übernehmen (§29).
+
+        Solidon kennt „PETG" und bringt dafür einen Startbestand mit — 10 mm³/s
+        bei 80 Grad Bett. Der Bestand des Slicers kennt sieben PETG, und das
+        PRO fährt 5 mm³/s bei 70 Grad. Ohne diese Übernahme rechnet die
+        Beratung gegen eine Grenze, die das eingelegte Material gar nicht hat:
+        sie sah 10 mm³/s, wo 5 galten, fand nichts einzuwenden und ließ ein
+        Tempo stehen, das die Düse nicht flüssig bekommt.
+
+        Nur auf ausdrückliche Wahl, nie beim Befüllen der Liste: was ein
+        Projekt mitbringt, gilt (eine Dichtung aus TPU bleibt eine Dichtung aus
+        TPU). Wer eine besondere Spule einlegt, sagt es hier einmal.
+        """
+        chosen = self.filament_choice.currentData()
+        if not chosen:
+            return
+        werte = slicer_profiles.filament_values(Path(str(chosen)))
+        if not werte:
+            return
+        settings = self.settings
+        for path, value in werte.items():
+            settings = print_settings.with_path(settings, path, value)
+        self.settings = settings
+        self._load_into_editors()
+        self._refresh_advice()
+        self.state.setText(
+            tr("Werte aus {profil} übernommen.").replace(
+                "{profil}", self.filament_choice.currentText()
+            )
+        )
+        _log.info("adopted %d values from %s", len(werte), chosen)
 
     def _profile_search_finished(self) -> None:
         self._profile_worker = None

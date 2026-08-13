@@ -7,6 +7,7 @@ Vorschläge kommen mit Begründung, und ohne Slicer bleibt er benutzbar.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -114,6 +115,51 @@ def test_a_speed_survives_being_shown(dialog: PrintSettingsDialog) -> None:
         "der angezeigte Wert darf den Volumenstrom des Materials nicht überschreiten"
     )
     assert zurueck == pytest.approx(genau, abs=0.05), "und er bleibt bei dem, was er war"
+
+
+def test_choosing_a_filament_adopts_its_values(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
+    """Wer eine Spule wählt, bekommt ihre Werte — auch den Volumenstrom.
+
+    Solidon kennt „PETG" und bringt 10 mm³/s mit; Elegoo PETG PRO fährt 5.
+    Ohne diese Übernahme rechnet die Beratung gegen eine Grenze, die das
+    eingelegte Material nicht hat.
+    """
+    datei = tmp_path / "Spule.json"
+    datei.write_text(
+        json.dumps(
+            {
+                "name": "Spule",
+                "nozzle_temperature": ["255"],
+                "hot_plate_temp": ["75"],
+                "filament_max_volumetric_speed": ["5"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    dialog.filament_choice.addItem("Spule", str(datei))
+    dialog.filament_choice.setCurrentIndex(dialog.filament_choice.count() - 1)
+
+    dialog._filament_chosen(dialog.filament_choice.currentIndex())
+
+    assert dialog.settings.filament.max_flow == 5.0
+    assert dialog.settings.temperature.nozzle == 255
+    assert dialog.settings.temperature.bed == 75
+
+
+def test_filling_the_filament_list_changes_nothing(dialog: PrintSettingsDialog) -> None:
+    """Was ein Projekt mitbringt, gilt.
+
+    Die Liste wird beim Öffnen befüllt und dabei eine Vorauswahl gesetzt. Käme
+    daraus eine Übernahme, überschriebe allein das Aufgehen des Fensters die
+    Einstellungen des Projekts — eine Dichtung aus TPU wäre danach keine mehr.
+    Deshalb hängt die Übernahme an ``activated`` (der Wahl eines Menschen) und
+    nicht an ``currentIndexChanged``.
+    """
+    vorher = dialog.settings
+
+    dialog._fill_filaments(None)
+
+    assert dialog.settings is vorher, "das Befüllen der Liste ändert keine Einstellung"
 
 
 def test_changing_a_field_reaches_the_settings(dialog: PrintSettingsDialog) -> None:

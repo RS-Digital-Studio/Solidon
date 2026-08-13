@@ -532,3 +532,66 @@ def match(
     fitting = processes(profiles, chosen)
     named = [entry for entry in fitting if entry.name == chosen.default_process]
     return chosen, (named[0] if named else (fitting[0] if fitting else None))
+
+
+#: Was ein Filamentprofil des Slicers über das Material sagt, in Solidons
+#: Worten. Die Gegenrichtung zu :mod:`slicer_keys`, und mit Absicht kurz: hier
+#: stehen nur die Werte, die *dem Filament* gehören und nicht der Maschine oder
+#: dem Vorgehen.
+#:
+#: Warum es das braucht: Solidon kennt „PETG" und bringt dafür einen
+#: Startbestand mit — 10 mm³/s, Bett 80. Elegoo kennt sieben PETG, und das
+#: PRO fährt 5 mm³/s bei Bett 70. Der Unterschied ist kein Feinschliff: mit dem
+#: falschen Volumenstrom rechnet die Beratung an der Grenze vorbei, die das
+#: Material wirklich hat.
+FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
+    ("temperature.nozzle", "nozzle_temperature", int),
+    ("temperature.nozzle_first_layer", "nozzle_temperature_initial_layer", int),
+    ("temperature.bed", "hot_plate_temp", int),
+    ("temperature.bed_first_layer", "hot_plate_temp_initial_layer", int),
+    ("temperature.chamber", "chamber_temperature", int),
+    ("cooling.fan_speed", "fan_max_speed", float),
+    ("cooling.bridge_fan_speed", "overhang_fan_speed", float),
+    ("cooling.disable_first_layers", "close_fan_the_first_x_layers", int),
+    ("cooling.minimum_layer_time", "slow_down_layer_time", float),
+    ("filament.density", "filament_density", float),
+    ("filament.flow_ratio", "filament_flow_ratio", float),
+    ("filament.max_flow", "filament_max_volumetric_speed", float),
+    ("filament.diameter", "filament_diameter", float),
+    ("retraction.length", "filament_retraction_length", float),
+    ("retraction.speed", "filament_retraction_speed", float),
+    ("retraction.z_hop", "filament_z_hop", float),
+)
+
+#: Anteile stehen im Profil als ganze Prozent, in Solidon als Bruch.
+_AS_FRACTION: Final = frozenset({"cooling.fan_speed", "cooling.bridge_fan_speed"})
+
+
+def filament_values(path: Path) -> dict[str, float | int]:
+    """Was dieses Filamentprofil über sein Material sagt (§29).
+
+    Die Erbkette wird aufgelöst — ein Profil bei Elegoo setzt selbst drei Werte
+    und erbt fünfzig. Zurück kommen Solidon-Pfade, wie sie
+    :func:`app.core.knowledge.print_settings.with_path` versteht.
+
+    Was das Profil nicht nennt, fehlt auch hier: ein Wert, den niemand gesetzt
+    hat, ist keine Angabe des Herstellers, und ihn zu erfinden wäre schlimmer
+    als ihn wegzulassen.
+    """
+    gelesen = resolve_values(path)
+    werte: dict[str, float | int] = {}
+    for solidon, orca, kind in FILAMENT_READBACK:
+        roh = gelesen.get(orca)
+        if isinstance(roh, list):
+            roh = roh[0] if roh else None
+        if roh is None or roh == "" or roh == "nil":
+            continue
+        text = str(roh).strip().rstrip("%")
+        try:
+            zahl = float(text)
+        except ValueError:
+            continue
+        if solidon in _AS_FRACTION:
+            zahl /= 100.0
+        werte[solidon] = kind(zahl)
+    return werte

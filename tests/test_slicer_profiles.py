@@ -390,3 +390,67 @@ def test_a_missing_configuration_is_no_suggestion(tmp_path: Path) -> None:
     """Kein Slicer, keine Vorgabe — und kein Fehler."""
     assert sp.chosen_machine("orca", tmp_path / "nirgends.exe") == ""
     assert sp.chosen_machine("prusa", tmp_path / "nirgends.exe") == ""
+
+
+# --- was ein Filament über sich sagt (§29) --------------------------------------
+
+
+def test_a_filament_profile_tells_its_own_values(tmp_path: Path) -> None:
+    """Solidon kennt „PETG", der Slicer kennt sieben davon.
+
+    Der Startbestand nennt 10 mm³/s bei 80 Grad Bett; Elegoo PETG PRO fährt
+    5 mm³/s bei 70. Der Unterschied ist kein Feinschliff — mit dem falschen
+    Volumenstrom rechnet die Beratung gegen eine Grenze, die das eingelegte
+    Material gar nicht hat, findet nichts einzuwenden und lässt ein Tempo
+    stehen, das die Düse nicht flüssig bekommt.
+
+    Gelesen wird über die Erbkette: ein Profil bei Elegoo setzt selbst drei
+    Werte und erbt fünfzig.
+    """
+    (tmp_path / "Basis.json").write_text(
+        json.dumps(
+            {
+                "name": "Basis",
+                "nozzle_temperature": ["240"],
+                "hot_plate_temp": ["70"],
+                "fan_max_speed": ["40"],
+                "filament_density": ["1.25"],
+                "filament_max_volumetric_speed": ["8"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    oben = tmp_path / "Spule.json"
+    oben.write_text(
+        json.dumps({"name": "Spule", "inherits": "Basis", "filament_max_volumetric_speed": ["5"]}),
+        encoding="utf-8",
+    )
+
+    werte = sp.filament_values(oben)
+
+    assert werte["filament.max_flow"] == 5.0, "der eigene Wert schlägt den geerbten"
+    assert werte["temperature.nozzle"] == 240, "und was nur geerbt ist, steht trotzdem da"
+    assert werte["temperature.bed"] == 70
+    assert werte["filament.density"] == 1.25
+    assert werte["cooling.fan_speed"] == 0.4, "Prozent im Profil, Bruch in Solidon"
+
+
+def test_what_a_filament_does_not_say_is_not_invented(tmp_path: Path) -> None:
+    """Ein Wert, den niemand gesetzt hat, ist keine Angabe des Herstellers.
+
+    ``nil`` steht in den mitgelieferten Profilen für „hier gilt, was das
+    Vorgehen sagt". Als Zahl gelesen wäre daraus eine Rückzugslänge von null.
+    """
+    datei = tmp_path / "Karg.json"
+    datei.write_text(
+        json.dumps(
+            {"name": "Karg", "nozzle_temperature": ["230"], "filament_retraction_length": ["nil"]}
+        ),
+        encoding="utf-8",
+    )
+
+    werte = sp.filament_values(datei)
+
+    assert werte["temperature.nozzle"] == 230
+    assert "retraction.length" not in werte, "nil ist keine Zahl"
+    assert "filament.max_flow" not in werte, "was fehlt, fehlt"
