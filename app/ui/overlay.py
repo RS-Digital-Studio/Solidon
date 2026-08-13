@@ -488,16 +488,16 @@ class OverlayHost(QWidget):
         if self.left.isVisibleTo(self):
             self._share_room(self.left, room)
             wanted = min(natural_height(self.left), room)
-            breite = card_width(LEFT_WIDTH, LEFT_MAX, width)
-            self._move(self.left, QRect(MARGIN, MARGIN, breite, wanted), moving)
+            card = card_width(LEFT_WIDTH, LEFT_MAX, width)
+            self._move(self.left, QRect(MARGIN, MARGIN, card, wanted), moving)
 
         if self.right.isVisibleTo(self):
             self._share_room(self.right, room)
             wanted = min(natural_height(self.right), room)
-            breite = card_width(RIGHT_WIDTH, RIGHT_MAX, width)
+            card = card_width(RIGHT_WIDTH, RIGHT_MAX, width)
             self._move(
                 self.right,
-                QRect(width - breite - MARGIN, MARGIN, breite, wanted),
+                QRect(width - card - MARGIN, MARGIN, card, wanted),
                 moving,
             )
 

@@ -1024,7 +1024,7 @@ def profiles_text() -> str:
     """
     from app.core.knowledge import standards
     from app.core.knowledge.profiles import material_profiles, printer_profiles
-    from app.i18n import format_decimal as zahl
+    from app.i18n import format_decimal as decimal
 
     lines: list[str] = []
 
@@ -1048,9 +1048,9 @@ def profiles_text() -> str:
     for profile in material_profiles().values():
         kalibriert = _("ja") if profile.calibrated else _("nein")
         lines.append(
-            f"| {profile.title} | {zahl(profile.clearance, 2)} | {zahl(profile.press, 2)} "
-            f"| {zahl(profile.hole_compensation, 2)} | {zahl(profile.elephant_foot, 2)} "
-            f"| {zahl(profile.shrinkage * 100, 1)} % | {kalibriert} |"
+            f"| {profile.title} | {decimal(profile.clearance, 2)} | {decimal(profile.press, 2)} "
+            f"| {decimal(profile.hole_compensation, 2)} | {decimal(profile.elephant_foot, 2)} "
+            f"| {decimal(profile.shrinkage * 100, 1)} % | {kalibriert} |"
         )
     lines.append("")
 
@@ -1074,8 +1074,9 @@ def profiles_text() -> str:
         x, y, z = printer.build_volume
         geschlossen = _("ja") if printer.enclosed else _("nein")
         lines.append(
-            f"| {printer.title} | {x:.0f} × {y:.0f} × {z:.0f} | {zahl(printer.nozzle_diameter, 2)} "
-            f"| {zahl(printer.layer_height, 2)} | {zahl(printer.extrusion_width, 2)} "
+            f"| {printer.title} | {x:.0f} × {y:.0f} × {z:.0f} "
+            f"| {decimal(printer.nozzle_diameter, 2)} "
+            f"| {decimal(printer.layer_height, 2)} | {decimal(printer.extrusion_width, 2)} "
             f"| {geschlossen} |"
         )
     lines.append("")
@@ -1098,8 +1099,8 @@ def profiles_text() -> str:
     lines.append("|---|---|---|---|---|---|")
     for screw in standards.load().screws.values():
         lines.append(
-            f"| {screw.size} | {zahl(screw.nominal, 1)} | {zahl(screw.clearance, 1)} "
-            f"| {zahl(screw.tap, 2)} | {zahl(screw.head, 1)} | {zahl(screw.pitch, 2)} |"
+            f"| {screw.size} | {decimal(screw.nominal, 1)} | {decimal(screw.clearance, 1)} "
+            f"| {decimal(screw.tap, 2)} | {decimal(screw.head, 1)} | {decimal(screw.pitch, 2)} |"
         )
     lines.append("")
     lines.append(

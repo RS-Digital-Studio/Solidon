@@ -1447,16 +1447,16 @@ class Viewport(QWidget):
         renderer = getattr(self.plotter, "renderer", None)
         if renderer is None:
             return
-        mitte = self.rotation_centre()
-        if mitte is None:
+        centre = self.rotation_centre()
+        if centre is None:
             return
         camera = renderer.GetActiveCamera()
-        fokus = camera.GetFocalPoint()
-        if all(abs(mitte[i] - fokus[i]) < EPS_DISPLAY for i in range(3)):
+        focus = camera.GetFocalPoint()
+        if all(abs(centre[i] - focus[i]) < EPS_DISPLAY for i in range(3)):
             return
         position = camera.GetPosition()
-        camera.SetFocalPoint(*mitte)
-        camera.SetPosition(*(position[i] + mitte[i] - fokus[i] for i in range(3)))
+        camera.SetFocalPoint(*centre)
+        camera.SetPosition(*(position[i] + centre[i] - focus[i] for i in range(3)))
         renderer.ResetCameraClippingRange()
 
     def rotation_centre(self) -> Vec3 | None:
