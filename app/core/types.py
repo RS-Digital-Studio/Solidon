@@ -557,6 +557,18 @@ class PrintSettings:
     adhesion: AdhesionSettings = field(default_factory=AdhesionSettings)
     retraction: RetractionSettings = field(default_factory=RetractionSettings)
     filament: FilamentSettings = field(default_factory=FilamentSettings)
+    slot_profiles: tuple[str, ...] = ()
+    """Welches Filamentprofil des Slicers auf welchem Materialslot liegt (§20).
+
+    Ein Eintrag je Slot, in der Reihenfolge der Slots — die *ist* die
+    Extruderbelegung. Gespeichert wird der **Name** des Profils, nicht sein
+    Pfad: er reist mit dem Projekt und zeigt auf einem zweiten Rechner nicht
+    ins Leere (Regel 12).
+
+    Kürzer als die Slotliste zu sein ist erlaubt und der Normalfall: wo nichts
+    steht, gilt das Filament der Platte. Ein Gehäuse in Schwarz mit weißer
+    Schrift braucht genau einen Eintrag mehr als ein einfarbiges Teil.
+    """
 
     @property
     def wall_thickness(self) -> float:
@@ -695,11 +707,26 @@ class BaseParams:
 
 
 ParamKind = Literal[
-    "float", "int", "bool", "str", "enum", "object", "feature", "part", "source", "sketch"
+    "float",
+    "int",
+    "bool",
+    "str",
+    "enum",
+    "object",
+    "feature",
+    "part",
+    "source",
+    "sketch",
+    "strokes",
 ]
 """``sketch`` trägt eine gezeichnete Skizze als JSON-Text (§30.1) — gedacht für
 den Skizzeneditor; bis er da ist, zeigt der Dialog ein Textfeld. Der Agent
-bekommt diesen Parameter nicht: Grundformen statt roher Punktlisten (§26)."""
+bekommt diesen Parameter nicht: Grundformen statt roher Punktlisten (§26).
+
+``strokes`` trägt eine Liste von Pinselstrichen, ebenfalls als JSON-Text und
+aus demselben Grund ohne den Agenten: Ein Strich *ist* eine Koordinate, und
+die KI erzeugt keine (Leitprinzip 5). Beide unterliegen den fünf Prüfungen aus
+:mod:`tests.test_gesture_ops`."""
 ParamPlacement = Literal["front", "advanced"]
 """Vorderseite oder „Weitere Einstellungen" — die gestufte Tiefe aus §2.4."""
 
@@ -1100,6 +1127,60 @@ class SolvedSketch:
     elements: tuple[SketchElement, ...]
     free_dof: int
     max_residual: float
+
+
+SculptTool = Literal["draw", "carve", "smooth", "inflate", "flatten", "pinch"]
+"""Die sechs Pinselwerkzeuge (§25, Konzept P16 §7.1). Sechs, nicht sechzig —
+Konsistenz vor Vollständigkeit.
+
+Drei davon lassen sich nicht akkumulieren: ``smooth`` mittelt über die
+Nachbarschaft, ``inflate`` folgt der Krümmung, ``flatten`` zieht auf eine
+Ebene, die es erst aus dem Getroffenen bildet. Alle drei lesen den Zustand,
+den die Striche davor hinterlassen haben, und beginnen deshalb eine neue
+Etappe."""
+
+#: Werkzeuge, die den Zustand vor sich lesen und deshalb eine Etappe beginnen.
+ORDERED_TOOLS: Final[frozenset[str]] = frozenset({"smooth", "inflate", "flatten"})
+
+
+@dataclass(frozen=True, slots=True)
+class Stroke:
+    """Ein Pinselstrich (Konzept P16, Entscheidung B).
+
+    **In Weltkoordinaten, nicht auf einem Eckpunkt.** Der Strich merkt sich,
+    *wo im Raum* er lag und wie die Fläche dort stand — kein Vertex-Index,
+    keine Dreiecksnummer. Damit übersteht er jede Änderung der Vernetzung
+    darunter: Dezimieren, Reparieren, eine andere Qualitätsstufe. Präzedenzfall
+    ist ``paint_slot``, dessen Klickpunkt aus demselben Grund in
+    Weltkoordinaten liegt.
+
+    Was er *nicht* übersteht, ist eine Änderung der **Form** darunter: Dann
+    steht er an einer Stelle im Raum, an der keine Fläche mehr ist. Er
+    verschwindet dort nicht still, sondern wird gemeldet.
+    """
+
+    point: Vec3
+    normal: Vec3
+    """Die Flächennormale zum Zeitpunkt des Strichs — die Richtung, in die er
+    trägt. Aus der Ursprungsform genommen und nicht aus der laufenden, damit
+    die Summe vieler Striche eine Näherung bleibt und keine Drift wird."""
+    radius: float
+    strength: float
+    tool: SculptTool = "draw"
+    symmetry: int = 0
+    """Bitmaske der Ebenen, an denen dieser Strich gespiegelt gemeint war:
+    1 = X, 2 = Y, 4 = Z. Am Strich und nicht nur an der Operation, damit sich
+    die Symmetrie einer Sitzung nachträglich ändern lässt, ohne dass ältere
+    Striche mitwandern."""
+    cut: bool = False
+    """Erzwingt eine Etappengrenze vor diesem Strich (Entscheidung C).
+
+    Die akkumulierte Auswertung macht Striche kommutativ — zweimal über
+    dieselbe Stelle addiert zwei Gewichte auf die Ausgangsfläche, statt den
+    zweiten Zug auf das Ergebnis des ersten zu setzen. Wer die exakte
+    Reihenfolge braucht, kauft sie sich hier stückweise: Ein gesetzter Schnitt
+    kostet einen zusätzlichen Durchgang und gilt nur für diese Stelle, statt
+    die ganze Sitzung zu verlangsamen."""
 
 
 # --- Weitere feste Verträge ------------------------------------------------------

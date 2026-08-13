@@ -155,6 +155,15 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # raised", „Auflegen: flat". Über das ganze Register waren es
     # sechsundzwanzig Werte; ``tests/test_translations.py`` hält sie jetzt
     # zusammen.
+    # Die Symmetrieebenen des Formens. „xz" ist für den Kern der richtige
+    # Schlüssel und für den Dialog kein Wort — „ohne" und „X- und Z-Ebene"
+    # sagen dasselbe in lesbar. Die einzelnen Achsen bleiben, wie sie sind:
+    # ein „x" ist selbst schon der Name (siehe ``SELF_NAMING`` in der Suite).
+    "none": _("Ohne"),
+    "xy": _("X- und Y-Ebene"),
+    "xz": _("X- und Z-Ebene"),
+    "yz": _("Y- und Z-Ebene"),
+    "xyz": _("Alle drei Ebenen"),
     "raised": _("Erhaben"),
     "engraved": _("Vertieft"),
     "flat": _("Flach"),

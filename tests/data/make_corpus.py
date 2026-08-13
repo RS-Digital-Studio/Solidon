@@ -334,6 +334,44 @@ def generated_figure() -> None:
     write(trimesh.util.concatenate([broken, splinter]), "generated_figure.stl")
 
 
+def clean_figure() -> None:
+    """Eine Figur ohne Fehler — die Grundlage fürs Formen (§34, Konzept P16.5).
+
+    ``generated_figure.stl`` trägt absichtlich die Fehler eines Generators und
+    ist als Prüfstein für Weg 3 richtig. Als *Sculpting*-Grundlage taugt sie
+    nicht: Sie ist erst nach der Reparaturkette ein Volumen, und ein
+    Geometrietest, der nebenbei eine Reparatur mitprüft, misst zwei Dinge und
+    sagt über keines etwas Genaues.
+
+    Diese hier ist der Gegenpol: derselbe Aufbau, den P16.11 dem Käfigeditor
+    entgegenhält — Rumpf, Kopf, zwei Arme, zwei Beine aus Grundformen, weich
+    verschmolzen. Sie entsteht also auf dem Weg, den die Anwendung ihren
+    Nutzern anbietet, und nicht auf einem, den nur dieses Skript kennt.
+
+    Bewusst grob gehalten: Wer darauf formen will, vernetzt vorher gleichmäßig.
+    Genau diese Vorbedingung soll an ihr prüfbar sein.
+    """
+    parts = [trimesh.creation.box(extents=(24.0, 14.0, 40.0))]
+
+    head = trimesh.creation.icosphere(subdivisions=2, radius=9.0)
+    head.apply_translation((0.0, 0.0, 26.0))
+    parts.append(head)
+
+    for side in (-1.0, 1.0):
+        arm = trimesh.creation.cylinder(radius=3.5, height=22.0, sections=24)
+        arm.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2.0, [0, 1, 0]))
+        arm.apply_translation((side * 18.0, 0.0, 12.0))
+        parts.append(arm)
+
+        leg = trimesh.creation.cylinder(radius=4.5, height=30.0, sections=24)
+        leg.apply_translation((side * 7.0, 0.0, -32.0))
+        parts.append(leg)
+
+    figure = trimesh.boolean.union(parts)
+    figure.apply_translation(-figure.bounds[0] * np.array([0.0, 0.0, 1.0]))
+    write(figure, "clean_figure.stl")
+
+
 if __name__ == "__main__":
     cube_clean()
     bracket_inch()
@@ -344,6 +382,7 @@ if __name__ == "__main__":
     broken_open()
     two_components()
     generated_figure()
+    clean_figure()
     broken_selfint()
     colored_3mf()
     island_tower()

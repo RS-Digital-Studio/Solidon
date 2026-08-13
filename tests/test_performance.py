@@ -365,6 +365,41 @@ def test_replaying_a_thousand_strokes_stays_under_two_seconds() -> None:
     assert taken < 2.0
 
 
+def test_the_real_stroke_evaluation_meets_the_same_budget() -> None:
+    """Dasselbe Budget, aber an der Operation statt am Gewichtsfeld.
+
+    Der Test darüber misst den Kern des Verfahrens und hat in P16.2 den
+    Entwurf entschieden. Seit P16.5 gibt es die Auswertung wirklich, und ab
+    jetzt gilt die Zahl für sie: mit Normalen, Nachbarschaft, Etappen und dem
+    neu gebauten Netz am Ende. Ein Budget, das nur den Kern kennt, deckt nicht
+    ab, was der Nutzer wartet.
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.sculpt import apply_strokes
+    from app.core.types import Stroke
+
+    mesh = medium_mesh()
+    points = np.asarray(mesh.raw.vertices, dtype=float)
+    normals = np.asarray(mesh.raw.vertex_normals, dtype=float)
+    radius = float(np.ptp(points, axis=0).max()) * 0.05
+    generator = np.random.default_rng(7)
+    picked = generator.integers(0, len(points), 1000)
+    strokes = [
+        Stroke(
+            point=tuple(points[index]),
+            normal=tuple(normals[index]),
+            radius=radius,
+            strength=0.2,
+        )
+        for index in picked
+    ]
+
+    taken = measure("sculpt_apply_1000", lambda: apply_strokes(MeshData.of(mesh.raw), strokes))
+    assert taken < 2.0
+
+
 def test_gathering_strokes_beats_replaying_them_one_by_one() -> None:
     """Entscheidung C, als Test statt als Behauptung.
 
