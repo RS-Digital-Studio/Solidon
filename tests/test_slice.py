@@ -270,6 +270,67 @@ def test_a_hole_touching_its_own_wall_does_not_stop_the_slicer() -> None:
     assert section.area == pytest.approx(1600.0 - 20.0 * 20.0, rel=TOLERANCE)
 
 
+def test_a_shared_edge_is_cut_at_the_same_point_from_both_sides() -> None:
+    """Der Fall, der einem Besteckkorb Stützen verschrieben hätte.
+
+    Eine Kante gehört zwei Dreiecken, und jedes benennt sie in seiner eigenen
+    Richtung. ``A + (B-A)*f`` und ``B + (A-B)*f'`` sind dieselbe Stelle, aber
+    nicht dasselbe Fließkommamuster — und wenn der Wert auf einer
+    Rundungsgrenze liegt, kippen die beiden Ergebnisse auf verschiedene
+    Seiten. Die Enden finden nicht mehr zusammen, der Ring bleibt offen,
+    ``polygonize`` lässt ihn fallen, und das Fach, das er umschloss, fehlt der
+    Schicht als Loch.
+
+    Die Zahlen hier sind nicht erfunden: es ist die Trennwand eines
+    eingelesenen Besteckkorbs, deren Diagonale bei z = 70,9 genau bei
+    34,9796875 geschnitten wird. Vorwärts gerechnet endet das auf
+    ...875, rückwärts auf ...8749999 — nach dem Runden auf sechs Stellen ein
+    Unterschied von eins in der letzten. In dem Modell traf das 31 von 800
+    Schichten, die daraufhin die fünffache Querschnittsfläche und 9 463 mm²
+    Überhang meldeten, den es nicht gibt.
+    """
+    # Eine Wand in y = 52,7 — als Rechteck aus zwei Dreiecken, deren gemeinsame
+    # Diagonale genau die kritische Kante ist.
+    y_front, y_back = 52.70000076293945, 55.70000076293945
+    x_left, x_right, z_low, z_high = 3.0, 108.5, 4.0, 100.0
+    corners = np.array(
+        [
+            [x_right, y_front, z_low],  # 0 — Anfang der Diagonale
+            [x_left, y_front, z_high],  # 1 — ihr Ende
+            [x_left, y_front, z_low],
+            [x_right, y_front, z_high],
+            [x_right, y_back, z_low],
+            [x_left, y_back, z_high],
+            [x_left, y_back, z_low],
+            [x_right, y_back, z_high],
+        ]
+    )
+    faces = np.array(
+        [
+            [0, 1, 2],
+            [1, 0, 3],  # Vorderseite, geteilt entlang der Diagonale 0-1
+            [4, 6, 5],
+            [5, 7, 4],  # Rückseite
+            [2, 6, 4],
+            [4, 0, 2],  # unten
+            [1, 5, 6],
+            [6, 2, 1],  # links
+            [3, 7, 5],
+            [5, 1, 3],  # oben
+            [0, 4, 7],
+            [7, 3, 0],  # rechts
+        ]
+    )
+    wall = trimesh.Trimesh(vertices=corners, faces=faces, process=False)
+    assert wall.is_watertight, "der Prüfkörper selbst muss geschlossen sein"
+
+    section = cross_section(MeshData.of(wall), 70.9)
+
+    assert section is not None, "eine Wand, die es gibt, kommt nicht als nichts zurück"
+    breite = (y_back - y_front) * (x_right - x_left)
+    assert section.area == pytest.approx(breite, rel=TOLERANCE)
+
+
 # --- freie Spannweiten (§22.2) --------------------------------------------------
 
 

@@ -309,12 +309,49 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any]:
     start_height = height_above[rows, edges]
     end_height = height_above[rows, (edges + 1) % 3]
 
+    # Jede Kante gehört zwei Dreiecken, und jedes benennt sie in seiner eigenen
+    # Richtung. ``A + (B-A)*f`` und ``B + (A-B)*f'`` sind dieselbe Stelle —
+    # aber nicht dasselbe Fließkommamuster, und der Unterschied wächst, je
+    # näher die Ebene an einer Ecke liegt. Zwei Enden, die sich um mehr als die
+    # sechste Nachkommastelle unterscheiden, führt das Runden in
+    # :func:`_polygon_from` nicht mehr zusammen: der Ring bleibt offen,
+    # ``polygonize`` lässt ihn fallen, und ein Fach verschwindet als Loch aus
+    # der Schicht. Gemessen an einem Behälter mit drei Fächern: 31 von 800
+    # Schichten meldeten die fünffache Querschnittsfläche und daraus 9 463 mm²
+    # Überhang, den es nicht gibt — genug, dass die Beratung Stützen für einen
+    # Kasten mit senkrechten Wänden vorschlug.
+    #
+    # Also wird jede Kante kanonisch orientiert, bevor interpoliert wird: von
+    # der lexikografisch kleineren Ecke zur größeren. Beide Dreiecke rechnen
+    # damit denselben Ausdruck und bekommen bitgleich denselben Punkt.
+    swap = _lexicographically_after(start, end)
+    start, end = np.where(swap[..., None], end, start), np.where(swap[..., None], start, end)
+    start_height, end_height = (
+        np.where(swap, end_height, start_height),
+        np.where(swap, start_height, end_height),
+    )
+
     span = start_height - end_height
     fraction = np.where(
         np.abs(span) > EPS_GEOM, start_height / np.where(span == 0.0, 1.0, span), 0.0
     )
     points = start[:, :, :2] + (end[:, :, :2] - start[:, :, :2]) * fraction[:, :, None]
     return points, layers[keep]
+
+
+def _lexicographically_after(first: Any, second: Any) -> Any:
+    """Wo ``first`` in der Reihenfolge (x, y, z) hinter ``second`` liegt.
+
+    Verglichen wird exakt, nicht auf Toleranz: beide Ecken stammen aus
+    derselben Punktliste des Netzes, sind für dieselbe Ecke also bitgleich.
+    Eine Toleranz würde hier nur zwei benachbarte Ecken verwechseln.
+    """
+    delta_x = first[..., 0] - second[..., 0]
+    delta_y = first[..., 1] - second[..., 1]
+    delta_z = first[..., 2] - second[..., 2]
+    return (delta_x > 0.0) | (
+        (delta_x == 0.0) & ((delta_y > 0.0) | ((delta_y == 0.0) & (delta_z > 0.0)))
+    )
 
 
 def _polygon_from(points: Any) -> ShapelyPolygon | None:
