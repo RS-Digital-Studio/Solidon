@@ -78,10 +78,27 @@ REPORT = (460, 300)
 SKETCH = (980, 620)
 
 
+#: Wie lange ein „Durchgang" beim Setzenlassen dauert, in Millisekunden.
+#: ``settle(app, 30)`` sind damit anderthalb Sekunden — genug für einen
+#: Bildaufbau, wenig genug, dass sechs Aufnahmen je Sprache erträglich bleiben.
+SETTLE_MS = 50
+
+
 def settle(app: QApplication, rounds: int = 12) -> None:
-    """Der Oberfläche Zeit geben, fertig zu werden, bevor abgedrückt wird."""
-    for _round in range(rounds):
-        app.processEvents()
+    """Der Oberfläche Zeit geben, fertig zu werden, bevor abgedrückt wird.
+
+    **Mit einem laufenden Event-Loop, nicht mit ``processEvents``.** Der
+    Unterschied ist genau der Fehler, der das Hauptfenster zweimal mit leerem
+    Viewport ins Handbuch gebracht hat: ein natives OpenGL-Fenster zeichnet
+    unter ``processEvents`` nur, solange etwas passiert — die Kulisse stand im
+    Bild, das Modell nicht. Ein echter Loop lässt Qt und den Treiber ihre
+    Arbeit zu Ende bringen.
+    """
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    loop = QEventLoop()
+    QTimer.singleShot(rounds * SETTLE_MS, loop.quit)
+    loop.exec()
 
 
 def await_result(app: QApplication, session: object, seconds: float = 30.0) -> bool:
@@ -91,14 +108,17 @@ def await_result(app: QApplication, session: object, seconds: float = 30.0) -> b
     ``processEvents``: ohne das Warten wird das Hauptfenster fotografiert,
     während es noch den Startbildschirm zeigt — genau das ist beim ersten
     Versuch passiert.
+
+    Gewartet wird in kurzen Loop-Läufen und nicht mit ``sleep``: ein
+    schlafender Hauptthread zeichnet nicht, und die Auswertung meldet sich
+    über Signale, die einen Loop brauchen.
     """
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        app.processEvents()
+        settle(app, 1)
         if getattr(session, "last_result", None) is not None:
             settle(app)
             return True
-        time.sleep(0.05)
     return False
 
 
