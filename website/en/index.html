@@ -29,7 +29,7 @@
   "@type": "SoftwareApplication",
   "name": "Solidon3D",
   "applicationCategory": "DesignApplication",
-  "operatingSystem": "Windows 10/11, Linux",
+  "operatingSystem": "Windows 10/11, macOS, Linux",
   "url": "https://solidon3d.de/en/",
   "inLanguage": ["de", "en"],
   "description": "Desktop application for designing, generating and editing printable 3D models. Non-destructive operation stack, layer analysis, fits from calibratable material profiles. Runs locally, without an account and without telemetry.",
@@ -85,8 +85,11 @@
           <p>Complete and without a key: no watermarks, no export lock, no
           feature held back. <b>It runs until 30 October 2026</b> and will not
           start after that — your project files are not affected.</p>
-          <p>For <b>Windows and Linux</b> — there is no macOS build for
-          now. Download from this page, install, get going.</p>
+          <p>For <b>Windows, macOS and Linux</b> — on the Mac as separate
+          builds for Apple Silicon and Intel. Download from this page,
+          install, get going. The Mac build is not yet signed with Apple: on
+          first launch, right-click the application once and choose “Open”,
+          after that it starts like any other.</p>
           <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20tell%20me%20when%20the%20demo%20is%20out">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
@@ -198,7 +201,9 @@
           </svg>
           <span class="tag">Way 1 — Edit</span>
           <h3>Change a downloaded model</h3>
-          <p>Drop the file, read the inspection report, click a face or a
+          <p>Drop the file — or drag the link from MakerWorld, Printables or
+          Thingiverse straight out of the browser into the window, skipping
+          the download folder. Read the inspection report, click a face or a
           hole — then say in the chat what it should become, or pick from
           the context menu. Compare before/after, apply, export.</p>
         </div>
@@ -779,7 +784,7 @@
     <div class="wrap">
       <h2>System requirements</h2>
       <table class="req">
-        <tr><td>Operating system</td><td>Windows 10/11 (64 bit) or Linux</td></tr>
+        <tr><td>Operating system</td><td>Windows 10/11 (64 bit), macOS 12 or later, or Linux</td></tr>
         <tr><td>Disk space</td><td>about 750 MB installed, download about 255 MB</td></tr>
         <tr><td>Chat (optional)</td><td>your own API key (ongoing cost at
         the provider) or Ollama with a model of around 14 billion

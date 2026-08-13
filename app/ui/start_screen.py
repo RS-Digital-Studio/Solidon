@@ -102,6 +102,14 @@ class DropArea(QFrame):
         kinds.setAlignment(Qt.AlignmentFlag.AlignCenter)
         set_level(kinds, "caption")
 
+        # Das Feld nimmt auch einen Verweis (:attr:`urlDropped`), und das ist
+        # der kürzeste Weg von einer Modellseite hierher: kein Herunterladen,
+        # kein Suchen im Download-Ordner. Es stand nirgends — ein Weg, den
+        # niemand kennt, ist keiner.
+        link = QLabel(tr("Auch ein Verweis aus dem Browser"), self)
+        link.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        set_level(link, "caption")
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
         layout.setSpacing(TIGHT)
@@ -109,6 +117,7 @@ class DropArea(QFrame):
         layout.addWidget(self.symbol)
         layout.addWidget(hint)
         layout.addWidget(kinds)
+        layout.addWidget(link)
         layout.addStretch(1)
         self._painted: tuple[str, bool] | None = None
         self._paint("dark")
