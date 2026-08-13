@@ -108,6 +108,11 @@ def test_the_header_is_updated_where_the_state_changes() -> None:
 
     source = (Path(__file__).parent.parent / "app" / "ui" / "main_window.py").read_text("utf-8")
     body = source.split("def _on_scene(", 1)[1].split("def ", 1)[0]
+    assert "_show_scene(" in body, (
+        "jede Auswertung — auch eine aufgestaute — geht durch _show_scene"
+    )
+
+    body = source.split("def _show_scene(", 1)[1].split("def ", 1)[0]
     assert "_update_header()" in body, "nach jeder Auswertung"
 
     body = source.split("def _on_project(", 1)[1].split("def ", 1)[0]
