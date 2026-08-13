@@ -4292,3 +4292,11 @@ zur Hand hat, prüft sie zuerst — und dann trotzdem die andere.
 - [ ] **`app/core/drawing.py` und `app/ui/panels.py` sind rot** (Formatierung
       und ein `Literal`-Argument bei `thumbnail`) — beides aus einer parallelen
       Sitzung, nicht angefasst.
+- [ ] **`test_the_layer_analysis_survives_a_knurled_surface` fällt unter
+      Last.** `pytest tests/test_slice.py tests/test_performance.py
+      -p no:randomly` liefert `TypeError: cannot unpack non-iterable int
+      object` in `analysis.py:377` — an einer Stelle, an der `enumerate` über
+      `list[list[int]]` läuft und das gar nicht kann. Jede Datei einzeln ist
+      grün, `test_slice` plus nur dieser eine Test auch; rot wird es erst mit
+      der ganzen Leistungsdatei davor. Derselbe Cluster wie die
+      Zugriffsverletzungen im langen Lauf — die Zeile ist es nicht.
