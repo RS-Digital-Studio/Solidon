@@ -247,6 +247,20 @@ oder einer der spezielleren Dateien ist unfertig.
 
 ## Die Ansicht
 
+**Die Auswahlfarbe gehört dem Genauesten, was gewählt ist.** Ein Klick auf eine
+Bohrung wählt zweierlei aus, den Körper und die Stelle; gefärbt wird die Stelle.
+`highlighted_object()` gibt `None` zurück, solange ein Merkmal gewählt ist, und
+`highlighted_faces()` nennt dessen Dreiecke — beide als eigene Auskunft, weil es
+offscreen keinen Plotter gibt. Dass der Körper trotzdem ausgewählt ist, steht im
+Objektbaum und in der Statusleiste; dieselbe Ausnahme gilt für einen Körper unter
+einer Analysekarte (§19.1). Das gewählte Merkmal trägt seine Beschriftung auch
+bei ausgeschalteter Überlagerung — ohne sie wäre die Aussage allein die Farbe
+(Regel 18).
+
+Gerechnet wird gegen das Netz der Szene, nicht gegen das dezimierte
+Anzeigenetz: `face_indices` zählt dort. Den Unterschied fängt der Versatz
+entlang der Flächennormalen ab (`FEATURE_PATCH_LIFT`).
+
 Umgebungsverdeckung und Kontaktschatten weichen, solange eine Analysekarte
 läuft: beide dunkeln nach, und die Karte färbt nach Zahlen — der abgelesene
 Wert wäre ein anderer als der gemeldete. Beide hängen deshalb an einer
@@ -323,3 +337,36 @@ sonst sind Auswahl-Klick, Kontextmenü und Schema nach dem ersten Zug weg.
 Und der Skaliergriff (`app/ui/scale_widget.py`) ist diesem Widget
 absichtlich Zeile für Zeile nachgebaut — wer dort etwas am
 Interaktionsmuster ändert, ändert es an beiden Stellen.
+
+## Die Zeichenfläche
+
+Der Skizzeneditor (`app/ui/sketch_editor.py`) ist die zweite Ansicht, in der
+gezeigt werden muss, was gleich passiert. Vier Zusagen, alle vier hatten
+gefehlt:
+
+**Was entsteht, hängt am Zeiger.** Linie, Kreis und Bogen zeigen ihre Vorschau,
+bis der Klick sie festmacht. Ohne sie setzt ein Klick einen gestrichelten
+Kreis, dann geschieht nichts, und beim zweiten steht plötzlich eine Linie da.
+
+**Gefangen wird auf das Raster, ein vorhandener Punkt schlägt es.** Sonst risse
+der Fang die Deckung auf, für die er da ist. Der Haken steht an der
+Ebenenzeile, an ist die Vorgabe, ein Millimeter die Weite; ein Kreuz am Zeiger
+zeigt, wohin ein Klick fiele — gefangen wird feiner, als das Raster gezeichnet
+ist. Derselbe Fang gilt beim Ziehen eines Punktes, sonst wäre er eine Zusage
+bis zum ersten Nachbessern.
+
+**Raster und Beschriftung folgen dem Maßstab** (`grid_step`, Folge 1, 2, 5),
+und das Rad zoomt auf den Zeiger. Eine feste Weite ist herausgezoomt eine
+Fläche aus Linien und hineingezoomt ein Blatt mit vier Linien darauf.
+
+**Die Ebene ist eine Ansicht, und sie steht im Bild.** Benannt wird sie danach,
+was man sieht (Draufsicht, Vorderansicht, Seitenansicht), die Ebene steht in
+Klammern daneben — sie ist die Angabe, die in der Projektdatei landet. Die
+Achsenbuchstaben kommen aus `PLANE_AXES` und folgen ihr; auf einer angeklickten
+Fläche des Körpers bleiben sie weg, denn die kann beliebig geneigt sein. Die
+Ziffern 1, 2 und 3 wechseln direkt und gehen dabei über `choose_plane`, also
+über das Auswahlfeld — an ihm vorbei behaupteten zwei Stellen zweierlei.
+
+Und jedes Zeichenwerkzeug sagt in der Statuszeile, was der nächste Klick tut
+(`drawing_hint`). Der Linienzug ist der Fall, an dem es fehlte: er läuft
+weiter, bis Esc ihn beendet, und das stand nirgends.

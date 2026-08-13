@@ -4250,3 +4250,36 @@ fehlte dreimal nacheinander, und jedes Mal stand der Grund als eine Zeile in
 `shaft_type`, `label_color` setzt es selbst. Ein `except`, das nur
 protokolliert, macht solche Fehler unsichtbar — die Anzeige war weg, und im
 Fenster stand kein Wort darüber (Regel 17 dem Geist nach).
+
+---
+
+## Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen
+
+Drei Beobachtungen aus der laufenden Anwendung, alle drei behoben.
+
+- [x] **Gewählt war die Bohrung, hervorgehoben der ganze Körper.** Ein Klick
+      auf ein Merkmal wählt zweierlei aus, den Körper und die Stelle; gefärbt
+      wurde nur das Erste. Jetzt trägt das Merkmal die Auswahlfarbe auf seinen
+      eigenen Dreiecken (`highlighted_faces`), der Körper bleibt grau, und die
+      Beschriftung steht auch bei ausgeschalteter Überlagerung da.
+- [x] **Zeichnen zeigte nicht, was gleich passiert.** Keine Vorschau am
+      Zeiger, kein Rasterfang (Punkte auf -29,75 mm), ein Raster mit fester
+      Weite, ein Rad, das auf die Bildmitte zoomte, und eine Statuszeile, die
+      nicht sagte, wie man einen Linienzug beendet. Alle fünf behoben; der
+      Fang ist an, ein Millimeter, mit Haken an der Ebenenzeile.
+- [x] **Zwischen Draufsicht und Seitenansicht lag ein Klappmenü.** Die Ebenen
+      heißen jetzt nach der Ansicht, die Achsenbuchstaben folgen ihnen, und
+      die Ziffern 1, 2, 3 wechseln direkt.
+
+### Offen aus derselben Durchsicht
+
+- [ ] **`tools/make_figures.py` nimmt das Hauptfenster mit leerem Viewport
+      auf.** Dasselbe Messproblem wie im Abschnitt darüber: ein natives
+      OpenGL-Fenster zeichnet unter `processEvents` nur, solange etwas
+      passiert. Die Anwendung ist in Ordnung — das Werkzeug braucht einen
+      echten `app.exec()`-Lauf mit Timer, sonst wandern leere Bilder ins
+      Handbuch. Nur `sketch-mode` ist neu aufgenommen, die übrigen zehn
+      stehen unverändert.
+- [ ] **`app/core/drawing.py` und `app/ui/panels.py` sind rot** (Formatierung
+      und ein `Literal`-Argument bei `thumbnail`) — beides aus einer parallelen
+      Sitzung, nicht angefasst.
