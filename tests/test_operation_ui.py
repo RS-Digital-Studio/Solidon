@@ -465,3 +465,28 @@ def test_a_pattern_tile_comes_from_the_geometry() -> None:
         tile = figures.texture_tile(pattern, "light")
         assert tile.startswith("<svg")
         assert "<polygon" in tile, f"{pattern} zeichnet keine Umrisse"
+
+
+def test_the_description_is_as_tall_as_its_text(qt_app: QApplication) -> None:
+    """Der Satz über den Feldern stand vertikal zentriert in 189 Pixeln.
+
+    Im Bild sah das aus wie ein Gestaltungsfehler — ein Beschreibungstext, der
+    ohne Grund in der Mitte schwebt. Es war eine fehlende Größenrichtlinie: Das
+    senkrechte Layout verteilte die freie Höhe auf alle Einträge, und der erste
+    war dieser Satz. Der Platz gehört zwischen Felder und Knöpfe, nicht darüber.
+    """
+    from app.ui.op_dialog import OperationDialog
+
+    dialog = OperationDialog(REGISTRY.get("drill_hole"), [])
+    try:
+        dialog.resize(520, 460)
+        dialog.show()
+        description = dialog.layout().itemAt(0)
+
+        assert description.widget() is dialog._description
+        # Zwei Zeilen Text in einem Dialog dieser Höhe — großzügig gedeckelt,
+        # damit der Test eine andere Schrift überlebt und trotzdem anschlägt,
+        # wenn das Label wieder wächst.
+        assert description.geometry().height() < 120
+    finally:
+        dialog.deleteLater()

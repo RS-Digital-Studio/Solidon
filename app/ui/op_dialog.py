@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QSizePolicy,
     QSpinBox,
     QToolButton,
     QVBoxLayout,
@@ -299,9 +300,22 @@ class OperationDialog(QDialog):
         if spec.doc:
             description = QLabel(str(spec.doc), self)
             description.setWordWrap(True)
+            # So hoch wie sein Text, nicht so hoch wie der übrige Platz.
+            #
+            # Ohne das teilt das senkrechte Layout die freie Höhe unter seinen
+            # Einträgen auf, und der erste ist dieser Satz: Im Bohrungsdialog
+            # bekam er 189 Pixel für zwei Zeilen und stand vertikal zentriert
+            # darin. Was im Bild wie ein Gestaltungsfehler aussah — ein
+            # Beschreibungstext, der ohne Grund in der Mitte schwebt —, war
+            # eine fehlende Größenrichtlinie.
+            description.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+            description.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             layout.addWidget(description)
             self._description = description
         layout.addLayout(front)
+        # Der freie Platz sammelt sich hier, zwischen Feldern und Knöpfen, und
+        # nicht mehr verteilt über alles.
+        layout.addStretch(1)
 
         if extra is not None:
             advanced.addRow("", extra)

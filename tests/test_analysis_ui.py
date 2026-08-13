@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.core.perceive import maps
 from app.core.types import Finding
-from app.i18n import tr
+from app.i18n import format_decimal, tr
 from app.ui.analysis_bar import MAP_ORDER, AnalysisBar, LayerBar, MapLegend
 from app.ui.labels import feature_label
 from app.ui.main_window import MainWindow
@@ -2138,3 +2138,39 @@ def test_a_click_on_a_feature_selects_its_body_too(window: MainWindow) -> None:
 
     assert picked == ["obj_1"], "der Körper zuerst — er trägt die Zeile im Baum"
     assert features == [hole], "und danach das Merkmal, das darunter erscheint"
+
+
+def test_the_report_says_where_you_stand_not_only_what_to_do(qt_app: QApplication) -> None:
+    """Ein Bericht aus Sätzen sagt, *was* zu tun ist — nicht, woran man ist.
+
+    Die Kennzahlen darüber tun das, und sie kosten nichts: wasserdicht,
+    Volumen, Zahl der Teile stehen im ausgewerteten Netz. Was einen Schnitt
+    durch jede Schicht kostet — schmalste Wand, schlimmster Überhang —, steht
+    bewusst nicht dort.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.panels import ReportPanel
+
+    box = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Klotz", mesh=box)})
+    panel = ReportPanel()
+    try:
+        panel.show_result(EvaluationResult(scene=scene))
+
+        assert panel.facts.isVisible() or panel.facts.text()
+        text = panel.facts.text()
+        assert tr("wasserdicht") in text
+        # Ein Wuerfel mit 20 mm Kante ist 8 Kubikzentimeter — die Zahl kommt aus
+        # dem Netz, nicht aus
+        # dem Test: eine abgeschriebene Konstante prüfte nur sich selbst.
+        assert format_decimal(box.volume / 1000.0, 1) in text
+        assert tr("Teil") in text
+
+        panel.show_result(None)
+        assert not panel.facts.text()
+    finally:
+        panel.deleteLater()

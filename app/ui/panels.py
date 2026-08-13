@@ -39,7 +39,7 @@ from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
 from app.core.units import LengthUnit
-from app.i18n import tr
+from app.i18n import format_decimal, tr
 from app.ui.icons import icon
 from app.ui.labels import (
     compact_length,
@@ -864,6 +864,12 @@ class ReportPanel(QWidget):
         self.list.itemActivated.connect(self._on_activated)
         self.summary = QLabel(tr("Keine Befunde."), self)
         self.summary.setWordWrap(True)
+        # Die Kennzahlen darunter: was der Bericht in Sätzen sagt, hier als
+        # Zahlen zum Vergleichen und Weitergeben.
+        self.facts = QLabel("", self)
+        self.facts.setWordWrap(True)
+        self.facts.setProperty("level", "caption")
+        self.facts.setVisible(False)
 
         # Ein Bericht mit hundert Hinweisen und zwei Fehlern versteckt die zwei.
         # Gefiltert wird über den Text und über den Schweregrad; beides
@@ -886,6 +892,7 @@ class ReportPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         layout.addWidget(self.summary)
+        layout.addWidget(self.facts)
         layout.addLayout(filter_row)
         layout.addWidget(self.list)
 
@@ -917,6 +924,7 @@ class ReportPanel(QWidget):
         for finding in _by_severity(result.scene.report.findings if result else ()):
             self._append(finding)
         self._count_up()
+        self._measure_up(result)
         self._refilter()
         self._grew()
 
@@ -1032,6 +1040,39 @@ class ReportPanel(QWidget):
             f"{counts['warning']} × {tr('Warnung')} · "
             f"{counts['info']} × {tr('Hinweis')}"
         )
+
+    def _measure_up(self, result: EvaluationResult | None) -> None:
+        """Die Kennzahlen über den Befunden — wasserdicht, Volumen, Teile.
+
+        Ein Bericht aus Sätzen sagt, *was* zu tun ist; er sagt nicht, woran man
+        gerade ist. Diese drei Zahlen tun das, und sie kosten nichts: Sie
+        stehen im ausgewerteten Netz und werden nicht gerechnet.
+
+        Bewusst nur, was ohne Schichtanalyse dasteht. Schmalste Wand und
+        schlimmster Überhang gehören der Sache nach hierher, aber sie kosten
+        einen Schnitt durch jede Schicht — eine Zeile, die beim Öffnen jeder
+        Datei sekundenlang rechnet, ist keine Auskunft, sondern eine Bremse.
+        """
+        meshes = [entry.mesh for entry in result.scene.objects.values()] if result else []
+        if not meshes:
+            self.facts.setText("")
+            self.facts.setVisible(False)
+            return
+
+        volume = sum(float(mesh.volume) for mesh in meshes)
+        parts = sum(int(mesh.component_count) for mesh in meshes)
+        tight = sum(1 for mesh in meshes if mesh.is_watertight)
+        # Das Wort steht neben dem Zeichen, nicht statt seiner (Regel 18).
+        closed = (
+            tr("wasserdicht")
+            if tight == len(meshes)
+            else f"{tight}/{len(meshes)} {tr('geschlossen')}"
+        )
+        self.facts.setText(
+            f"{closed} · {format_decimal(volume / 1000.0, 1)} cm³ · "
+            f"{parts} × {tr('Teil') if parts == 1 else tr('Teile')}"
+        )
+        self.facts.setVisible(True)
 
     def worst_severity(self, result: EvaluationResult | None) -> str | None:
         if result is None:
