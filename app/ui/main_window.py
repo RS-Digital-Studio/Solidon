@@ -547,6 +547,13 @@ class MainWindow(QMainWindow):
         """Ob jemand von Hand nach einer neuen Fassung gefragt hat. Die
         Abfrage beim Start schweigt, wenn es nichts Neues gibt; auf einen Klick
         hin wäre dasselbe Schweigen ein toter Knopf."""
+        self._showing_scene = False
+        """Ob gerade eine Auswertung ins Fenster geschrieben wird (siehe
+        ``_on_scene``). Ein zweiter Durchlauf mitten im ersten räumt Listen,
+        die gerade befüllt werden."""
+        self._pending_scene: EvaluationResult | None = None
+        """Das Ergebnis, das während des Aufbaus hereinkam — nachgeholt, sobald
+        er fertig ist."""
 
         self._build_central()
         self._build_status_bar()
@@ -3782,6 +3789,36 @@ class MainWindow(QMainWindow):
     # --- session replies --------------------------------------------------------
 
     def _on_scene(self, result: EvaluationResult) -> None:
+        """Eine fertige Auswertung ins Fenster bringen — **nicht verschachtelt**.
+
+        Der Aufbau unten schreibt in Objektbaum, Verlauf und Bericht. Läuft er
+        ein zweites Mal, während der erste noch mittendrin ist, räumt
+        ``show_document`` eine Liste, die gerade befüllt wird; unter Linux
+        endete das im Segmentierungsfehler, unter Windows in einer Ansicht,
+        die zwei Stände mischt.
+
+        Verschachteln lässt es sich leicht: Jede Warteschleife mit
+        ``processEvents`` — ``Session.wait_for_idle``, die Vorschau des
+        Agenten, jeder Test, der auf eine Transaktion wartet — stellt
+        Ereignisse zu, während dieser Slot arbeitet. Der zweite Anlauf wird
+        deshalb gemerkt und **nach** dem ersten nachgeholt: das neueste
+        Ergebnis gewinnt, keines geht verloren, und keine Liste wird zweimal
+        gleichzeitig angefasst.
+        """
+        if self._showing_scene:
+            self._pending_scene = result
+            return
+        self._showing_scene = True
+        try:
+            self._show_scene(result)
+            while self._pending_scene is not None:
+                pending, self._pending_scene = self._pending_scene, None
+                self._show_scene(pending)
+        finally:
+            self._showing_scene = False
+            self._pending_scene = None
+
+    def _show_scene(self, result: EvaluationResult) -> None:
         # Neue Geometrie heißt: jede Karte und jeder Schnitt sind veraltet.
         self._map_cache.clear()
         self._slice_key = None
