@@ -587,6 +587,9 @@ class MainWindow(QMainWindow):
 
     def _build_central(self) -> None:
         self.object_tree = ObjectTree(self)
+        # Die Vorschaubilder im Baum werden für ein Thema gezeichnet — beim
+        # Aufbau ist das die Einstellung, nicht die Vorgabe der Klasse.
+        self.object_tree.set_theme(self.settings.theme)
         self.parameters = ParameterPanel(self)
         self.history_panel = HistoryPanel(self)
         self.history_panel.operationActivated.connect(self.edit_operation)
@@ -3240,6 +3243,7 @@ class MainWindow(QMainWindow):
         if application is not None:
             apply_theme(application, theme)  # type: ignore[arg-type]
         self.viewport.set_theme(theme)
+        self.object_tree.set_theme(theme)
         self._apply_card_style(theme)
         self.settings.theme = theme
         save_settings(self.settings)

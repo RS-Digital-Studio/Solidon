@@ -657,3 +657,35 @@ def _size_of(svg: str) -> int:
 
 def _inner(svg: str) -> str:
     return svg[svg.index(">") + 1 : svg.rindex("</svg>")]
+
+
+#: Wie viele Dreiecke ein Vorschaubild höchstens zeichnet.
+#:
+#: Gemessen an einer feinen Kugel: 82 000 Dreiecke kosten 400 ms und ergeben
+#: ein SVG von acht Megabyte — für ein Bild von zwanzig Pixeln neben einem
+#: Namen. Auf 600 heruntergerechnet sind es 85 ms und 59 kB, und man sieht
+#: keinen Unterschied, weil bei dieser Größe keiner zu sehen ist.
+PREVIEW_FACES: Final = 600
+
+
+def thumbnail(
+    mesh: trimesh.Trimesh,
+    size: int = 48,
+    *,
+    theme: Theme = "light",
+    subtractive: bool = False,
+) -> str:
+    """Ein Netz als kleines Vorschaubild — dieselbe Projektion wie überall.
+
+    Dezimiert vorher, und das ist der ganze Unterschied zu :func:`project`:
+    Ein Vorschaubild wird nach Silhouette erkannt, nicht nach Dreiecken. Wer
+    ein Bild von zwanzig Pixeln aus achtzigtausend Flächen zeichnet, bezahlt
+    für Genauigkeit, die kein Bildschirm zeigt.
+    """
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.mesh_ops import decimate
+
+    small = decimate(MeshData.of(mesh), PREVIEW_FACES)
+    colours = palette(theme)
+    tone = colours.subtractive if subtractive else colours.solid
+    return project(small.raw, size, tone, theme=theme)

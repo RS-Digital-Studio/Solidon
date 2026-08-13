@@ -465,6 +465,36 @@ def test_the_diameter_of_a_bore_reaches_the_status_bar(window: MainWindow) -> No
     assert "Ø" in window.measurements.text()
 
 
+def test_the_rotation_centre_is_the_body_and_not_the_scenery(window: MainWindow) -> None:
+    """Gedreht wird um das Teil, nicht um den Bauraum (§2.9).
+
+    Der Drehpunkt kam aus ``ComputeVisiblePropBounds`` — den Grenzen alles
+    Sichtbaren, und dazu gehören Druckplatte und Bauraumrahmen. Der Rahmen ist
+    250 mm hoch, das Teil 8: die Mitte lag über hundert Millimeter über dem
+    Modell, die Kamera rückte dorthin mit, und im Bild stand die Kulisse,
+    während das Teil unten aus der Ecke ragte. Genau so kam das Hauptfenster
+    aus dem Abbildungswerkzeug heraus.
+
+    Geprüft wird die Auskunft, nicht die Kamera: offscreen gibt es keinen
+    Plotter, und ein Test, der sich dort überspringt, prüft nie etwas.
+    """
+    select_plate(window)
+    window.viewport.show_scene(window.session.last_result)
+    window.viewport.show_build_volume(window.session.profile)
+
+    centre = window.viewport.rotation_centre()
+    entry = window.session.last_result.scene.objects["obj_1"]
+    box = entry.mesh.bounds
+
+    assert centre is not None
+    for axis in range(3):
+        expected = (box.minimum[axis] + box.maximum[axis]) / 2.0
+        assert centre[axis] == pytest.approx(expected), "die Mitte des Körpers"
+
+    height = window.session.profile.printer.build_volume[2]
+    assert centre[2] < height / 4.0, "und nicht die halbe Bauraumhöhe"
+
+
 def test_a_chosen_feature_lights_up_instead_of_its_body(window: MainWindow) -> None:
     """Wer eine Bohrung anklickt, meint die Bohrung (§18.5).
 
@@ -2174,3 +2204,87 @@ def test_the_report_says_where_you_stand_not_only_what_to_do(qt_app: QApplicatio
         assert not panel.facts.text()
     finally:
         panel.deleteLater()
+
+
+def test_the_object_tree_draws_its_bodies_once_per_shape(qt_app: QApplication) -> None:
+    """Ein Bild je Form, nicht je Auswertung.
+
+    Gerendert wird über den Hash des Körpers: „obj_1" bleibt dasselbe Objekt,
+    wenn sich seine Wandstärke ändert — sein Bild nicht. Ohne den Vorrat
+    zeichnete jede Auswertung alles neu, und das kostet bei einem gescannten
+    Teil achtzig Millisekunden je Zeile im Hauptthread.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.panels import ObjectTree
+
+    box = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Klotz", mesh=box)})
+    result = EvaluationResult(scene=scene, object_hashes={"obj_1": "abc"})
+
+    tree = ObjectTree()
+    try:
+        tree.show_scene(result)
+        # Der Baum steht sofort; die Bilder kommen nach.
+        assert tree.tree.topLevelItemCount() == 1
+        while tree._pending:
+            tree._render_pending()
+        assert len(tree._previews) == 1
+
+        tree.show_scene(result)
+        while tree._pending:
+            tree._render_pending()
+        assert len(tree._previews) == 1, "derselbe Körper wurde zweimal gezeichnet"
+    finally:
+        tree.deleteLater()
+
+
+def test_a_hidden_body_keeps_its_own_mark(qt_app: QApplication) -> None:
+    """Ein ausgeblendetes Objekt hat gerade nichts zu zeigen — es behält das
+    Zeichen, das sagt, warum (Regel 18: Zeichen und Wort, nie Farbe allein)."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.panels import ObjectTree
+
+    box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Klotz", mesh=box)})
+    tree = ObjectTree()
+    try:
+        tree.set_hidden(frozenset({"obj_1"}))
+        tree.show_scene(EvaluationResult(scene=scene))
+
+        assert not tree._pending, "für ein ausgeblendetes Objekt wird nichts gerendert"
+        assert tr("ausgeblendet") in tree.tree.topLevelItem(0).text(0)
+    finally:
+        tree.deleteLater()
+
+
+def test_a_theme_change_redraws_the_previews(qt_app: QApplication) -> None:
+    """Die Bilder sind SVG mit eingebackenen Farben — ein helles Teil auf
+    hellem Grund ist kein Bild mehr."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.panels import ObjectTree
+
+    box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Klotz", mesh=box)})
+    tree = ObjectTree()
+    try:
+        tree.show_scene(EvaluationResult(scene=scene, object_hashes={"obj_1": "abc"}))
+        while tree._pending:
+            tree._render_pending()
+        assert tree._previews
+
+        tree.set_theme("light")
+        assert not tree._previews, "der Vorrat gehört dem alten Thema"
+    finally:
+        tree.deleteLater()

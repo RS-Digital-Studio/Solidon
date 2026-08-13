@@ -11,8 +11,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -34,7 +34,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import drawing
+from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import AppError
+from app.core.log import get_logger
 from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
@@ -54,6 +57,8 @@ from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING
 from app.ui.style import NORMAL, ROOMY, TIGHT, set_level
 
+_log = get_logger(__name__)
+
 #: Zeichen je Schweregrad, aus der gemeinsamen Kodierung — Farbe steht nie
 #: allein (§19.1).
 SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items()}
@@ -63,6 +68,7 @@ SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items
 #: ``tests/test_interface_limits.py`` der Menüleiste zieht, und aus demselben
 #: Grund: darüber liest niemand mehr, er sucht.
 MAX_MENU_ROWS = 12
+
 
 #: In welcher Reihenfolge die Schweregrade stehen. Die Zeile über der Liste
 #: zählt Fehler, Warnungen und Hinweise getrennt — sie verspricht damit eine
@@ -238,6 +244,9 @@ class ObjectTree(QWidget):
         # Operation bekam einen Eingang, wo sie zwei erwartet, und lehnte ab.
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.setRootIsDecorated(True)
+        # Ohne das zeichnet Qt jedes Symbol auf Textgröße herunter, und das
+        # gerenderte Vorschaubild wäre umsonst gerechnet.
+        self.tree.setIconSize(QSize(_preview_pixels(self.tree), _preview_pixels(self.tree)))
         self._order: list[ObjectId] = []
         """Die Reihenfolge, in der angeklickt wurde. „A minus B" ist nicht „B
         minus A", und die Reihenfolge im Baum weiß davon nichts."""
@@ -248,6 +257,19 @@ class ObjectTree(QWidget):
         zugeteilt (§2.5). ``None`` heißt: noch niemand hat es gesagt."""
         self._result: EvaluationResult | None = None
         self._document: Document | None = None
+        self._theme: DrawingTheme = "dark"
+        """Für welches Thema die Vorschaubilder gezeichnet werden."""
+        self._previews: dict[str, QIcon] = {}
+        """Gerenderte Vorschaubilder, nach dem Hash des Objekts.
+
+        Nach dem Hash und nicht nach der Kennung: „obj_1" bleibt dasselbe
+        Objekt, wenn sich seine Wandstärke ändert — sein Bild nicht. Der Hash
+        steht ohnehin im Ergebnis, weil der Stapel ihn zum Zwischenspeichern
+        braucht."""
+        self._pending: list[tuple[QTreeWidgetItem, str, Any]] = []
+        """Was noch gezeichnet werden muss. Erst nach dem Aufbau, sonst steht
+        der Baum still, während das erste Bild entsteht — und bei einem
+        gescannten Teil sind das achtzig Millisekunden je Zeile."""
         """Das Zuletzt-Gezeigte, damit sich der Baum ohne neue Auswertung
         neu zeichnen kann — beim Ausblenden ändert sich nur die Anzeige."""
         self.tree.itemSelectionChanged.connect(self._on_selection)
@@ -277,12 +299,85 @@ class ObjectTree(QWidget):
         self._unit = unit
         self.show_scene(self._result, self._document)
 
+    def set_theme(self, theme: str) -> None:
+        """Ein anderes Thema heißt andere Vorschaubilder.
+
+        Der Vorrat wird geleert und nicht umgefärbt: Die Bilder sind SVG mit
+        eingebackenen Farben, und ein helles Teil auf hellem Grund ist kein
+        Bild mehr.
+        """
+        if theme == self._theme:
+            return
+        self._theme = "light" if theme == "light" else "dark"
+        self._previews.clear()
+        self.show_scene(self._result, self._document)
+
+    def _want_preview(self, item: QTreeWidgetItem, object_id: ObjectId, entry: Any) -> None:
+        """Merkt vor, dass diese Zeile ein Bild bekommen soll.
+
+        Steht es schon im Vorrat, kommt es sofort — dann hat sich am Körper
+        nichts geändert, und Rendern hieße dasselbe Bild zweimal zeichnen.
+        """
+        stamp = self._stamp(object_id, entry)
+        ready = self._previews.get(stamp)
+        if ready is not None:
+            item.setIcon(0, ready)
+            return
+        self._pending.append((item, stamp, entry))
+
+    def _stamp(self, object_id: ObjectId, entry: Any) -> str:
+        """Woran ein Bild hängt: am Hash des Körpers, nicht an seiner Kennung.
+
+        Fehlt der Hash — bei einer Szene, die nie durch den Stapel lief —,
+        tut es die Dreieckszahl mit der Kennung. Sie ist gröber und würde eine
+        Formänderung bei gleicher Zahl übersehen; das ist hier verkraftbar,
+        weil es um ein Bild von zwanzig Pixeln geht.
+        """
+        hashes = self._result.object_hashes if self._result else {}
+        known = hashes.get(object_id)
+        return str(known) if known else f"{object_id}:{entry.mesh.triangle_count}"
+
+    def _render_pending(self) -> None:
+        """Zeichnet die vorgemerkten Bilder — eines je Aufruf.
+
+        Eines und nicht alle: Bei einem gescannten Teil kostet ein Bild achtzig
+        Millisekunden, und fünf davon am Stück sind eine halbe Sekunde, in der
+        das Fenster steht. So kommt jedes Bild einzeln nach, und dazwischen
+        bleibt die Anwendung bedienbar — dasselbe Verfahren wie im Katalog.
+        """
+        if not self._pending:
+            return
+        item, stamp, entry = self._pending.pop(0)
+        try:
+            image = drawing.thumbnail(
+                entry.mesh.raw,
+                _preview_pixels(self.tree),
+                theme=self._theme,
+            )
+        except Exception as problem:  # pragma: no cover - hängt am Netz
+            # Ein Vorschaubild ist Beiwerk. Scheitert es, bleibt die Zeile, wie
+            # sie war — eine Ansicht, die wegen eines Bildes nicht aufgeht,
+            # wäre der teuerste mögliche Umgang mit einer Nebensache.
+            _log.info("no preview for %s: %s", stamp, problem)
+        else:
+            found = _svg_icon(image, _preview_pixels(self.tree))
+            self._previews[stamp] = found
+            # Die Zeile kann inzwischen weg sein — eine neue Auswertung räumt
+            # den Baum, während hier noch gezeichnet wird.
+            if self.tree.indexFromItem(item).isValid():
+                item.setIcon(0, found)
+        if self._pending:
+            QTimer.singleShot(0, self, self._render_pending)
+
     def show_scene(self, result: EvaluationResult | None, document: Document | None = None) -> None:
         selected = self.selected_objects()
         selected_feature = self.selected_feature()
         self._result = result
         self._document = document
         self.tree.clear()
+        # Was noch nicht gezeichnet war, gehört zu Zeilen, die es nicht mehr
+        # gibt. Der Vorrat bleibt: dieselben Körper kommen meist wieder.
+        self._pending.clear()
         if result is None:
             return
         for object_id, entry in result.scene.objects.items():
@@ -321,6 +416,12 @@ class ObjectTree(QWidget):
                 # einzige Kodierung (Regel 18).
                 item.setIcon(0, icon("hidden", self.tree))
                 item.setText(0, f"{item.text(0)}  ·  {tr('ausgeblendet')}")
+            else:
+                # Ein Vorschaubild statt eines Aufzählungszeichens: „Dose" und
+                # „Dose Deckel" sind zwei Zeilen Text, die man liest — zwei
+                # Bilder erkennt man. Das ausgeblendete Objekt behält sein
+                # eigenes Zeichen; es hat gerade nichts zu zeigen.
+                self._want_preview(item, object_id, entry)
             if entry.material:
                 # §12: ein Körper, der nicht im Material des Projekts ist, muss das
                 # dort sagen, wo die Teile aufgezählt werden — sonst zeigt sich
@@ -343,6 +444,10 @@ class ObjectTree(QWidget):
         self.tree.resizeColumnToContents(0)
         self._restore(selected, selected_feature)
         self._fit()
+        # Erst steht der Baum, dann kommen die Bilder nach. Andersherum wartet
+        # der Nutzer auf eine Liste, die längst fertig gerechnet ist.
+        if self._pending:
+            QTimer.singleShot(0, self, self._render_pending)
 
     def _rows(self) -> int:
         """Die sichtbaren Zeilen — ein zugeklappter Ast zählt als eine."""
@@ -1259,3 +1364,43 @@ def describe_selection(result: EvaluationResult | None, object_id: ObjectId | No
     if entry is None:
         return None
     return entry.name, entry.mesh.bounds.size, entry.mesh.volume
+
+
+def _preview_pixels(widget: QWidget) -> int:
+    """Wie groß ein Vorschaubild wird — an der Zeilenhöhe, nicht in Pixeln.
+
+    Wer seine Schrift größer stellt, bekommt größere Zeilen; ein Bild in
+    fester Größe säße dann in einer Zeile, die doppelt so hoch ist.
+
+    Der Faktor kommt aus dem Bild und nicht aus einer Überlegung: Bei
+    Zeilenhöhe mal 1,15 war ein Quader ein Punkt, an dem nichts zu erkennen
+    war — und ein Bild, das man nicht erkennt, ist teurer als kein Bild.
+
+    Größer geht trotzdem nicht: Die Karte ist 260 Pixel breit, ein volles
+    Kantenmaß nimmt davon gut die Hälfte, und ab Zeilenhöhe mal 1,7 stand
+    „Dose Deckel" als „Dose Dec…" da. Ein Name, den man lesen kann, ist mehr
+    wert als eine Silhouette, die man erkennt — das Bild bleibt deshalb die
+    Wiedererkennung nebenher und wird nie die Auskunft selbst. Eine
+    Maßspalte mit Deckel half nicht: Sie war schon am Anschlag.
+    """
+    return max(int(widget.fontMetrics().height() * 1.2), 18)
+
+
+def _svg_icon(svg: str, size: int) -> QIcon:
+    """Ein SVG als Symbol, scharf auf HiDPI.
+
+    Doppelt gerastert und dann auf die Anzeigegröße gesetzt: Ein Bild in
+    genau der Punktgröße franst auf einem skalierten Bildschirm aus.
+    """
+    from PySide6.QtSvg import QSvgRenderer
+
+    renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+    if not renderer.isValid():
+        return QIcon()
+    image = QImage(QSize(size, size) * 2, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    renderer.render(painter)
+    painter.end()
+    image.setDevicePixelRatio(2.0)
+    return QIcon(QPixmap.fromImage(image))
