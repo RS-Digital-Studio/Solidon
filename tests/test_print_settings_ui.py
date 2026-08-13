@@ -7,6 +7,7 @@ Vorschläge kommen mit Begründung, und ohne Slicer bleibt er benutzbar.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -88,6 +89,31 @@ def test_the_editors_start_on_the_resolved_values(dialog: PrintSettingsDialog) -
     editor = dialog._editors["layers.layer_height"]
     assert isinstance(editor, QDoubleSpinBox)
     assert editor.value() == pytest.approx(dialog.settings.layers.layer_height)
+
+
+def test_a_speed_survives_being_shown(dialog: PrintSettingsDialog) -> None:
+    """Ein Feld, das einen Wert nur anzeigt, darf ihn nicht verändern.
+
+    Die Bahngeschwindigkeiten standen auf null Nachkommastellen. Das ist keine
+    Frage der Anzeige: der Wert, den ``advise`` aus dem Volumenstrom errechnet,
+    ist selten glatt — bei 5 mm³/s, 0,2 mm Schicht und 0,42 mm Bahn sind es
+    59,52 mm/s. Gerundet auf 60 fördert die Düse 5,04 mm³/s, und damit stand
+    allein durch das Öffnen des Fensters mehr in der Datei, als das Material
+    verträgt.
+    """
+    genau = 59.52380952380952
+    dialog.settings = replace(
+        dialog.settings, speed=replace(dialog.settings.speed, outer_wall=genau)
+    )
+    dialog._load_into_editors()
+
+    zurueck = dialog._collect().speed.outer_wall
+
+    fluss = dialog.settings.layers.layer_height * dialog.settings.layers.line_width
+    assert zurueck * fluss <= dialog.settings.filament.max_flow + 1e-9, (
+        "der angezeigte Wert darf den Volumenstrom des Materials nicht überschreiten"
+    )
+    assert zurueck == pytest.approx(genau, abs=0.05), "und er bleibt bei dem, was er war"
 
 
 def test_changing_a_field_reaches_the_settings(dialog: PrintSettingsDialog) -> None:

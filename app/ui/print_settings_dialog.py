@@ -357,7 +357,7 @@ FIELDS: tuple[Field, ...] = (
         minimum=1.0,
         maximum=1000.0,
         step=5.0,
-        decimals=0,
+        decimals=1,
     ),
     Field(
         "speed.inner_wall",
@@ -367,7 +367,7 @@ FIELDS: tuple[Field, ...] = (
         minimum=1.0,
         maximum=1000.0,
         step=5.0,
-        decimals=0,
+        decimals=1,
     ),
     Field(
         "speed.infill",
@@ -377,7 +377,7 @@ FIELDS: tuple[Field, ...] = (
         minimum=1.0,
         maximum=1000.0,
         step=5.0,
-        decimals=0,
+        decimals=1,
     ),
     Field(
         "speed.top_surface",
@@ -387,7 +387,7 @@ FIELDS: tuple[Field, ...] = (
         minimum=1.0,
         maximum=1000.0,
         step=5.0,
-        decimals=0,
+        decimals=1,
     ),
     Field(
         "speed.first_layer",
@@ -397,7 +397,7 @@ FIELDS: tuple[Field, ...] = (
         minimum=1.0,
         maximum=1000.0,
         step=5.0,
-        decimals=0,
+        decimals=1,
     ),
     Field(
         "speed.travel",
@@ -417,7 +417,7 @@ FIELDS: tuple[Field, ...] = (
         minimum=1.0,
         maximum=200.0,
         step=5.0,
-        decimals=0,
+        decimals=1,
     ),
     Field(
         "speed.acceleration",
@@ -463,7 +463,7 @@ FIELDS: tuple[Field, ...] = (
         minimum=0.0,
         maximum=90.0,
         step=5.0,
-        decimals=0,
+        decimals=1,
     ),
     Field(
         "support.z_gap",
