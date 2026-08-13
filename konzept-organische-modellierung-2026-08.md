@@ -684,11 +684,23 @@ Hand bewegt, ist die Sorte Überraschung, die Vertrauen kostet.
 ### 7.4 Displacement über Höhenfeld
 
 `displace_image` nach Entscheidung G. Bild in `sources/` mit Prüfsumme,
-Projektion planar/zylindrisch/sphärisch/per Fläche, Stärke, Mittelwert,
-Glättung, Kachelung.
+Stärke, Nulllage, Weichzeichnen. **Umgesetzt in P16.7 mit drei Projektionen**
+— von oben, um die Achse, über die Kugel. „Per Fläche" braucht eine erkannte
+Fläche als Bezug und gehört damit zu §21; die Kachelung ist entfallen, weil
+ein gekacheltes Höhenfeld an jeder Kachelgrenze eine Kante hat, die kein
+Drucker trifft — wer eine Struktur wiederholen will, nimmt `texture_ops`.
 
-Prüfung gegen das Druckerprofil vor der Rechnung: Ein Relief unter einer
-Schichthöhe oder unter einer Düsenbreite wird als Befund gemeldet.
+Abgetastet wird **bilinear**. Mit dem nächsten Nachbarn bekäme jedes Pixel
+eine Stufe, und aus einem weichen Relief würde eine Treppe mit der Auflösung
+des Bildes — genau der Vorwurf, den `texture_ops` an Höhenfelder richtet, und
+hier war er zu vermeiden statt zu erben.
+
+Prüfung gegen das Druckerprofil: Ein Relief unter einer Schichthöhe wird als
+Befund gemeldet. Dazu eine zweite, die beim Bauen dazukam: ob das Netz
+überhaupt genug Eckpunkte für das Bild hat. Unter einem Eckpunkt je zwei
+Bildpunkten bleibt vom Relief nichts übrig, und das Ergebnis ist dann nicht
+falsch, sondern leer — die Sorte Fehler, die niemand mit seiner Ursache
+verbindet.
 
 ### 7.5 Posing
 
@@ -894,7 +906,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | **P16.4** | `blend_union` über `level_set` (N) — **zugleich das Basisnetz-Werkzeug für H2** | S | Volumen und Wasserdichtheit gegen analytische Körper | **fertig** — 10 Tests, Rechenweg geändert (N) |
 | **P16.5** | Kern des Sculptings: `kind="strokes"`, `Stroke`-Verträge (§9), Auswertung mit Etappen, sechs Werkzeuge, Symmetrie — **ohne Oberfläche**, über CLI bedienbar; **bringt die saubere Figur in den Korpus mit** (§18, verschoben aus P16.2) | **XL** | Determinismus, Symmetrie, Etappen; zweimal auswerten identisch | **fertig** — 26 Tests, 96 ms für 1 000 Striche |
 | **P16.6** | Sculpting-Sitzung im Viewport: Pinselring, Leiste, Vorschau, Wandstärke live, Editor-Undo | **XL** | offscreen wie `test_sketch_editor.py`; Grenzen aus `test_interface_limits.py` | **fertig** — 19 Tests, Grenzen gehalten |
-| **P16.7** | `displace_image` samt Bild in `sources/` und Profilprüfung | L | Relief unter Düsenbreite wird gemeldet | offen |
+| **P16.7** | `displace_image` samt Bild in `sources/` und Profilprüfung | L | Relief unter Düsenbreite wird gemeldet | **fertig** — 17 Tests, drei Projektionen |
 | **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | offen |
 | **P16.9** | Dateiformat 7→8, Migration, Beispieldatei, Einbacken (D) | L | alte Datei öffnet und rechnet | offen |
 | **P16.10** | Handbuch, Weg 4, Website, Beispielprojekt, Übersetzungen, Regelsammlung + Agenten-Suite vorher/nachher (§18) | L | Sprachdateien vollständig; Suitenquote nicht schlechter | offen |
@@ -1073,6 +1085,8 @@ anderer Stelle).
 - **P16.6** — Sitzung im Viewport: `app/ui/sculpt_bar.py`, die Sitzungslogik
   in `main_window.py`, Vorschau und Pinselring im Viewport, ein eigener
   Zeiger. `tests/test_sculpt_session.py` mit 19 Tests, offscreen.
+- **P16.7** — `app/core/geom/displace.py`, `tests/test_displace.py` mit 17
+  Tests. Ohne neue Abhängigkeit: `imageio` kommt mit scikit-image.
 - P16.6 bis P16.10: unverändert wie in §15 beschrieben, keiner begonnen.
   **P16.9 trägt jetzt eine bestätigte Entscheidung**: Einbacken mit Nachfrage
   (D), von Robert am 13.08.2026 so entschieden.
@@ -1092,12 +1106,10 @@ dem Beginn von P16.5 zurückgefragt):
   Volumen und Wasserdichtheit unbeschadet ließ und die Ausdehnung um acht
   Millimeter verfehlte.
 
-**Nächster Schritt, wenn es weitergeht:** P16.7 — `displace_image`, ein
-Höhenfeld als Geometrie. Umfang L, unabhängig von allem Bisherigen, und die
-Rechnung dafür steht schon: Es ist dasselbe Verschieben entlang der Normale
-wie beim Pinsel, nur dass die Stärke aus einem Bild kommt statt aus einer
-Geste. Danach P16.8 (Posing, XL), P16.9 (Dateiformat 7 → 8 samt Einbacken)
-und P16.10 (Weg 4, Handbuch, Website, Regelsammlung).
+**Nächster Schritt, wenn es weitergeht:** P16.8 — Posing, der letzte
+XL-Brocken und laut §4 I „der erste Kandidat zum Streichen, wenn die Phase zu
+lang wird". Danach P16.9 (Dateiformat 7 → 8 samt Einbacken) und P16.10 (Weg 4,
+Handbuch, Website, Regelsammlung).
 
 **Was P16.9 vorfindet:** Entscheidung D ist bestätigt, und der Ort dafür steht
 — die Strichliste liegt bis 2 000 Zügen im `project.json` und darüber als

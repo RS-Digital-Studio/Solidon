@@ -4599,7 +4599,25 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       eine feste Gewichtsfunktion. Die Leiste hält ihre acht Elemente ein, und
       „Neu ansetzen" aus Entscheidung C hat den Platz bekommen, den im Konzept
       der Abfall hatte.
-- [ ] **P16.7 — `displace_image`.**
+- [x] **P16.7 — `displace_image`.** Die Helligkeit eines Graustufenbildes
+      wird zur Höhe auf der Oberfläche. Getrennt vom Pinsel, weil es ein
+      **Wert** ist und kein Handgriff — und deshalb darf der Agent es setzen:
+      Leitprinzip 5 verbietet ihm Koordinaten, nicht Zahlen.
+
+      Kein neues Paket dafür: `imageio` kommt seit je mit scikit-image und
+      steht in der Freigabeliste. Abgetastet wird **bilinear** — mit dem
+      nächsten Nachbarn bekäme jedes Pixel eine Stufe, und aus einem weichen
+      Relief würde eine Treppe mit der Auflösung des Bildes, also genau der
+      Vorwurf, den `texture_ops` an Höhenfelder richtet.
+
+      Zwei Prüfungen, die der Bildschirm nicht beantwortet: ob das Netz genug
+      Eckpunkte hat (unter einem je zwei Bildpunkten bleibt vom Relief nichts,
+      und das Ergebnis wäre nicht falsch, sondern leer) und ob das Relief
+      tiefer ist als eine Druckschicht. 17 Tests.
+
+      Offen aus §7.4: die vierte Projektion „per Fläche" und die Kachelung.
+      Drei Projektionen decken den Fall ab, für den es die Operation gibt; die
+      vierte braucht eine erkannte Fläche als Bezug und gehört zu §21.
 - [ ] **P16.8 — `pose_armature`.** Eine Pose, keine Animation. XL.
 - [ ] **P16.9 — Dateiformat 7 → 8**, Migration, Einbacken. **Dabei mitnehmen:
       ein `title_translatable` für Parameter.** Für Transaktionstitel gibt es
