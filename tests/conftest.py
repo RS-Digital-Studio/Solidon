@@ -202,9 +202,23 @@ class FakeMesh:
 
 @pytest.fixture(scope="session")
 def qt_app() -> object:
-    """Eine QApplication für den ganzen Lauf — Widgets stürzen ohne sie ab."""
+    """Eine QApplication für den ganzen Lauf — Widgets stürzen ohne sie ab.
+
+    Und mit derselben Zahlenschreibweise wie die Anwendung. ``app/ui/app.py``
+    setzt ``QLocale`` auf die Anzeigesprache; die Suite baut ihre Fenster
+    direkt und übersprang das, womit sie die Sprache des **Rechners** prüfte:
+    hier stand „Raster 0,30 mm", auf dem Runner „Raster 0.30 mm", und ein Test
+    über deutsche Kommas war grün, ohne dass jemand etwas dafür getan hätte.
+    Dieselbe Begründung wie bei den Nutzerverzeichnissen und dem
+    Maschinen-Fixture oben: wer die Umgebung nicht festlegt, prüft nicht, was
+    er zu prüfen vorgibt.
+    """
+    from PySide6.QtCore import QLocale
     from PySide6.QtWidgets import QApplication
 
+    from app.i18n import SOURCE_LANGUAGE
+
+    QLocale.setDefault(QLocale(SOURCE_LANGUAGE))
     return QApplication.instance() or QApplication([])
 
 
