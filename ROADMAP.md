@@ -4289,9 +4289,6 @@ zur Hand hat, prüft sie zuerst — und dann trotzdem die andere.
 
 ### Offen aus derselben Durchsicht
 
-- [ ] **`app/core/drawing.py` und `app/ui/panels.py` sind rot** (Formatierung
-      und ein `Literal`-Argument bei `thumbnail`) — beides aus einer parallelen
-      Sitzung, nicht angefasst.
 - [ ] **`test_the_layer_analysis_survives_a_knurled_surface` fällt unter
       Last.** `pytest tests/test_slice.py tests/test_performance.py
       -p no:randomly` liefert `TypeError: cannot unpack non-iterable int
