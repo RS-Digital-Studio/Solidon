@@ -1,0 +1,14 @@
+[
+{"i": 1120, "t": "I tuoi file di progetto restano leggibili — un file di progetto è un archivio ZIP con dentro del JSON."},
+{"i": 1121, "t": "I tuoi progetti non ne sono toccati. Restano dove li hai salvati, e un file di progetto è un archivio ZIP con dentro del JSON — leggibile anche senza questo programma, e la versione successiva lo apre invariato."},
+{"i": 1122, "t": "Nel programma si è verificato un errore imprevisto."},
+{"i": 1123, "t": "Nella cronologia sta «Svuota» con l'interruttore *Apri in alto*. È il motivo per cui un coperchio può esistere: una cavità chiusa è una cavità, non uno scomparto."},
+{"i": 1124, "t": "Importa"},
+{"i": 1125, "t": "Nei file di progetto non ci sono percorsi assoluti."},
+{"i": 1126, "t": "Nell'indirizzo manca il nome del computer."},
+{"i": 1127, "t": "In questa direzione non punta nessuna faccia piana di questo corpo."},
+{"i": 1128, "t": "In questa direzione non c'è alcuno spigolo — sull'altra metà ce n'è uno."},
+{"i": 1129, "t": "In questa direzione non c'è alcuno spigolo fino al quale prolungare."},
+{"i": 1130, "t": "In questo disegno non c'è alcuna superficie chiusa."},
+{"i": 1131, "t": "Converti in una mesh"}
+]

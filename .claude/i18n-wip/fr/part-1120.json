@@ -1,0 +1,14 @@
+[
+{"i": 1120, "t": "Vos fichiers de projet restent lisibles — un fichier de projet est une archive ZIP contenant du JSON."},
+{"i": 1121, "t": "Vos projets n'en sont pas affectés. Ils restent là où vous les avez enregistrés, et un fichier de projet est une archive ZIP contenant du JSON — lisible même sans ce programme, et la prochaine version l'ouvre sans changement."},
+{"i": 1122, "t": "Une erreur inattendue s'est produite dans le programme."},
+{"i": 1123, "t": "L'historique affiche « Évidement » avec l'option *Ouvrir en haut*. Elle est la raison pour laquelle un couvercle peut exister : une cavité fermée est une cavité, pas un compartiment."},
+{"i": 1124, "t": "Import"},
+{"i": 1125, "t": "Les fichiers de projet ne contiennent aucun chemin absolu."},
+{"i": 1126, "t": "Il manque le nom de machine dans l'adresse."},
+{"i": 1127, "t": "Aucune face plane de ce corps ne pointe dans cette direction."},
+{"i": 1128, "t": "Il n'y a pas d'arête dans cette direction — l'autre moitié en a une."},
+{"i": 1129, "t": "Il n'y a pas d'arête dans cette direction jusqu'à laquelle prolonger."},
+{"i": 1130, "t": "Ce dessin ne contient aucune surface fermée."},
+{"i": 1131, "t": "Convertir en maillage"}
+]

@@ -1,0 +1,17 @@
+{
+  "Ab welchem Winkel eine Kante scharf bleibt. Niedriger rundet mehr ab; über neunzig verliert auch ein Quader seine Ecken.": "Da quale angolo uno spigolo resta vivo. Più basso arrotonda di più; oltre novanta anche un parallelepipedo perde i suoi spigoli.",
+  "Bringt alle Dreiecke auf ungefähr dieselbe Größe — die groben werden geteilt, die überflüssig feinen zusammengefasst. Die Vorstufe zum Formen von Hand.": "Porta tutti i triangoli più o meno alla stessa dimensione — quelli grossolani vengono divisi, quelli inutilmente fini raggruppati. Il passo che precede la modellazione a mano.",
+  "Die Dreiecke liegen jetzt gleichmäßig über der Oberfläche.": "Ora i triangoli sono distribuiti in modo uniforme sulla superficie.",
+  "Die Fläche wurde zwischen ihren Facetten interpoliert.": "La superficie è stata interpolata tra le sue faccette.",
+  "Die Form ist dabei unverändert geblieben.": "La forma è rimasta invariata.",
+  "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig vernetzen noch unterteilen. Erst reparieren, dann noch einmal.": "Questo corpo non racchiude alcun volume — non si può né uniformare né suddividere. Prima ripara, poi riprova.",
+  "Fläche unterteilen": "Suddividi la superficie",
+  "Gleichmäßig vernetzen": "Uniforma la mesh",
+  "Macht aus einer kantigen Fläche eine gekrümmte: Die neuen Punkte werden nicht in die Facette gesetzt, sondern auf die Rundung, die sie meint. Scharfe Kanten bleiben scharf.": "Trasforma una superficie sfaccettata in una curva: i nuovi punti non vengono messi nella faccetta, ma sulla curvatura che essa rappresenta. Gli spigoli vivi restano vivi.",
+  "Nicht als Ersatz für eine gröbere Vorlage: Was hier entsteht, ist eine Interpolation der vorhandenen Facetten, keine wiedergewonnene Konstruktion. Wo es auf ein Maß ankommt, gehört die Rundung in die Skizze.": "Non è un sostituto di un originale più grossolano: ciò che nasce qui è un'interpolazione delle faccette presenti, non una costruzione recuperata. Dove conta una quota, la curvatura va nello schizzo.",
+  "Nicht zum Verfeinern allein: Wer nur mehr Dreiecke will, ohne dass irgendwo welche verschwinden, nimmt „Neu vernetzen“ — das teilt und fasst nie zusammen.": "Non serve solo a infittire: chi vuole soltanto più triangoli, senza che da qualche parte ne spariscano, usa «Rigenera la mesh» — quello divide e non raggruppa mai.",
+  "Wie fein die neue Fläche wird. Kürzer heißt runder und teurer.": "Quanto fine diventa la nuova superficie. Più corto significa più tondo e più costoso.",
+  "Wie lang die Kanten danach ungefähr überall sind. Kürzer heißt feiner und größer — und feiner ist nur nötig, wo später geformt wird.": "Quanto sono lunghi all'incirca gli spigoli dappertutto, dopo. Più corto significa più fine e più grande — e più fine serve solo dove poi si modella.",
+  "Wie weit die Fläche dafür wandern darf. Null lässt die Form unangetastet; erst darüber verschwinden auch die überflüssig feinen Stellen.": "Di quanto la superficie può spostarsi per farlo. Zero lascia la forma intatta; solo oltre spariscono anche i punti inutilmente fini.",
+  "Zulässige Abweichung": "Scostamento ammesso"
+}
