@@ -78,6 +78,31 @@ def test_without_a_radius_it_is_the_ordinary_union(profile: Profile) -> None:
     assert merged.component_count == 1
 
 
+def test_the_result_stays_inside_the_hull_it_was_given(profile: Profile) -> None:
+    """Die Lücke, durch die ein Fehler bis in einen Commit kam.
+
+    Volumen und Wasserdichtheit waren geprüft, die *Ausdehnung* nicht — und
+    genau dort saß der Fehler: Das Vorzeichen des Abstandsfeldes kam aus
+    gemittelten Eckpunktnormalen, und die stehen an der Deckkante eines
+    Zylinders 45 Grad schräg. Über der Deckfläche kippten sie, und der Körper
+    wuchs um acht Millimeter ins Leere, ohne dass das Volumen auffällig genug
+    gewesen wäre. Ein Rohr, das nach dem Verschmelzen länger ist als vorher,
+    ist kein Detail.
+
+    Geprüft wird gegen die Hülle beider Eingangskörper, großzügig um den
+    Übergang erweitert: Der Wulst darf nach außen wachsen, aber nicht weit.
+    """
+    first, second = rod("z"), rod("y")
+    radius = 4.0
+    low = np.minimum(first.raw.bounds[0], second.raw.bounds[0]) - radius
+    high = np.maximum(first.raw.bounds[1], second.raw.bounds[1]) + radius
+
+    merged = run(first, second, profile, radius=radius, grid=1.0).outputs[0].mesh
+
+    assert np.all(np.asarray(merged.raw.bounds[0]) > low), "der Körper wächst nach unten ins Leere"
+    assert np.all(np.asarray(merged.raw.bounds[1]) < high), "und nach oben"
+
+
 def test_the_radius_puts_material_into_the_throat(profile: Profile) -> None:
     """Wofür es die Operation gibt: die Kehle, die niemand drucken will.
 

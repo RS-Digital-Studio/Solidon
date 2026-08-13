@@ -74,6 +74,16 @@ def _surface_points(mesh: MeshData, spacing: float) -> tuple[np.ndarray, np.ndar
     Die Wolke muss feiner sein als das Raster, sonst misst der Abstand zum
     nächsten Punkt etwas anderes als den Abstand zur Fläche — an einem groben
     Dreieck liegt die Mitte weit von jeder Ecke.
+
+    **Dreiecksmitten mit Flächennormalen, nicht Eckpunkte mit gemittelten
+    Normalen.** Eine Eckpunktnormale ist der Mittelwert der angrenzenden
+    Flächen; an der Deckkante eines Zylinders steht sie deshalb 45 Grad
+    schräg, und für einen Punkt senkrecht über der Deckfläche kippt damit das
+    Vorzeichen. Gemessen an einem Zylinder von 30 mm Länge: Die Hülle reichte
+    von -54,9 bis -8,6 statt von -47 bis -17 — acht Millimeter Geometrie an
+    beiden Enden, die es nicht gibt, und ein Volumen vier Prozent zu hoch. Eine
+    Flächennormale gilt für ihre Fläche und für keine andere; über
+    Dreiecksmitten gerechnet trifft dieselbe Hülle auf ein Zehntel genau.
     """
     vertices, faces = trimesh.remesh.subdivide_to_size(
         np.asarray(mesh.raw.vertices, dtype=float),
@@ -83,13 +93,16 @@ def _surface_points(mesh: MeshData, spacing: float) -> tuple[np.ndarray, np.ndar
     dense = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     dense.merge_vertices()
     return (
-        np.asarray(dense.vertices, dtype=float),
-        np.asarray(dense.vertex_normals, dtype=float),
+        np.asarray(dense.triangles_center, dtype=float),
+        np.asarray(dense.face_normals, dtype=float),
     )
 
 
 def distance_field(mesh: MeshData, grid: np.ndarray, spacing: float) -> np.ndarray:
     """Abstand zur Oberfläche für jeden Rasterpunkt: positiv innen, negativ außen.
+
+    Welche Normale das sein muss, steht in :func:`_surface_points` — die
+    Antwort hat ein Paket gekostet.
 
     **Das Vorzeichen kommt aus der Normale, nicht aus einem Strahl.** Der
     naheliegende Weg wäre ``Trimesh.contains``; er läuft über ``rtree``, und
