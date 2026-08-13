@@ -14,11 +14,11 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+BASE = Path(__file__).resolve().parent / "base-en.json"
 PLACEHOLDER = re.compile(r"\{[a-z_][a-z0-9_]*\}")
 FIGURE = re.compile(r"!\[\]\(figure:[^)]+\)")
 
-en = json.loads((ROOT / "app/i18n/locales/en.json").read_text(encoding="utf-8"))
+en = json.loads(BASE.read_text(encoding="utf-8"))
 keys = list(en.keys())
 
 languages = sys.argv[1:] or ["es", "fr", "it", "pt"]

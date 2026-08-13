@@ -1,10 +1,19 @@
 """Fügt Teil-Übersetzungen zu einer Katalogdatei zusammen.
 
 Aufruf: python make_locale.py <lang> <teileverzeichnis>
-Liest alle part-*.json im Verzeichnis (jeweils ein JSON-Array aus
-Objekten {"i": <index>, "t": "<übersetzung>"}), prüft Vollständigkeit
-gegen en.json und schreibt app/i18n/locales/<lang>.json im Format des
-Einsammlers (indent=2, ensure_ascii=False, sort_keys=True).
+
+Zwei Quellen, zwei Arten der Zuordnung:
+
+* die `part-*.json` sind **indexbasiert** und gelten gegen `base-en.json`,
+  den eingefrorenen Stand. Über den Index wird der deutsche Quelltext
+  bestimmt, und der ist der eigentliche Schlüssel.
+* `new-keys-<lang>.json` ist **schlüsselbasiert**: {deutscher Quelltext:
+  Übersetzung}. Dort steht alles, was nach dem Einfrieren dazugekommen ist.
+
+Geschrieben wird gegen den **lebenden** Katalog `app/i18n/locales/en.json`,
+denn der entscheidet, was die Anwendung braucht. Wächst er, meldet dieser
+Lauf die neuen Schlüssel namentlich, statt still eine Lücke zu lassen —
+sie gehören dann in new-keys-<lang>.json.
 """
 
 import json
@@ -12,12 +21,19 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+BASE = Path(__file__).resolve().parent / "base-en.json"
 
 lang = sys.argv[1]
 parts_dir = Path(sys.argv[2])
 
-en = json.loads((ROOT / "app/i18n/locales/en.json").read_text(encoding="utf-8"))
+en = json.loads(BASE.read_text(encoding="utf-8"))
 keys = list(en.keys())
+live = list(json.loads((ROOT / "app/i18n/locales/en.json").read_text(encoding="utf-8")))
+
+nachtrag_datei = Path(__file__).resolve().parent / f"new-keys-{lang}.json"
+nachtrag: dict[str, str] = (
+    json.loads(nachtrag_datei.read_text(encoding="utf-8")) if nachtrag_datei.exists() else {}
+)
 
 values: dict[int, str] = {}
 problems: list[str] = []
@@ -56,10 +72,28 @@ if problems:
     print("\n".join(problems))
     raise SystemExit(1)
 
-catalog = {key: values[i] for i, key in enumerate(keys)}
+nach_schluessel = {key: values[i] for i, key in enumerate(keys)}
+nach_schluessel.update(nachtrag)
+
+catalog: dict[str, str] = {}
+ohne_uebersetzung: list[str] = []
+for key in live:
+    if key in nach_schluessel:
+        catalog[key] = nach_schluessel[key]
+    else:
+        ohne_uebersetzung.append(key)
+
+if ohne_uebersetzung:
+    print(f"NICHT geschrieben: {len(ohne_uebersetzung)} Schlüssel ohne Übersetzung.")
+    print(f"Sie sind seit dem Einfrieren dazugekommen und gehören in {nachtrag_datei.name}:")
+    for key in ohne_uebersetzung:
+        print(f"   {key}")
+    raise SystemExit(1)
+
 target = ROOT / "app/i18n/locales" / f"{lang}.json"
 target.write_text(
     json.dumps(catalog, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
     encoding="utf-8",
 )
-print(f"{target} geschrieben: {len(catalog)} Einträge")
+verwaist = len(nach_schluessel) - len(catalog)
+print(f"{target} geschrieben: {len(catalog)} Einträge, {verwaist} nicht mehr gebraucht")
