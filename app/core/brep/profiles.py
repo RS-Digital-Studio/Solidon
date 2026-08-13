@@ -431,6 +431,13 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
     Dass es die Stufen braucht, hat der Linux-Runner gezeigt: **M6 mit einem
     Millimeter Steigung**, das gewöhnlichste Gewinde überhaupt, kam dort offen
     heraus und hier geschlossen. Dieselbe Rechnung, andere OCCT-Fassung.
+
+    Dass eine zweite Stufe die **Eingaben** der ersten wiederverwendet, ist
+    dabei der Punkt, an dem der erste Versuch abstürzte: OCCT ändert seine
+    Argumente, solange man es nicht ausdrücklich verbietet. ``_fuzzy_boolean``
+    tut das seither (``SetNonDestructive``) — ohne diese Zeile fügt die grobe
+    Vereinigung Formen zusammen, die die feine bereits ausgehöhlt hat, und der
+    Prozess stirbt ohne Zeile.
     """
     solid = _fuzzy_boolean("union", core, ridge)
     if _is_sound_rod(solid):
@@ -439,9 +446,7 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
     if _is_sound_rod(sewn):
         return sewn
     coarse = _fuzzy_boolean("union", core, ridge, tolerance=pitch * ROD_FUZZ_RATIO)
-    if _is_sound_rod(coarse):
-        return coarse
-    return _checked_rod(_sewn(coarse), major, pitch)
+    return _checked_rod(coarse, major, pitch)
 
 
 def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
@@ -513,6 +518,12 @@ def _fuzzy_boolean(kind: str, first: Solid, second: Solid, tolerance: float = EP
     maker = BRepAlgoAPI_Fuse if kind == "union" else BRepAlgoAPI_Common
     operation = maker(first.shape, second.shape)
     operation.SetFuzzyValue(tolerance)
+    # OCCT darf seine Argumente ändern, solange man es nicht verbietet — und
+    # es tut es. Wer dieselben Formen ein zweites Mal verrechnet (die grobe
+    # Stufe in `_joined_rod`), verrechnet dann Reste der ersten: auf dem
+    # Linux-Runner ein Segmentierungsfehler ohne Zeile, hier ein stilles
+    # falsches Ergebnis. Kostet Speicher, spart die Suche danach.
+    operation.SetNonDestructive(True)
     return _finished(operation, _("Die Boolesche Operation ist fehlgeschlagen."))
 
 
