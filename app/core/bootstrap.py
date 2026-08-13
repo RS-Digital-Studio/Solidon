@@ -20,6 +20,7 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.geom.colour_ops",
     "app.core.geom.paint",
     "app.core.geom.mesh_ops",
+    "app.core.geom.blend",
     "app.core.geom.label_ops",
     "app.core.geom.lattice",
     "app.core.geom.texture_ops",

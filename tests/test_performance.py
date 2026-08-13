@@ -447,3 +447,33 @@ def test_evening_out_a_mesh_stays_under_three_seconds() -> None:
 
     taken = measure("remesh_uniform", lambda: uniform(mesh, edge, 0.0))
     assert taken < 3.0
+
+
+def test_blending_two_bodies_stays_under_three_seconds() -> None:
+    """§31 (neu): das weiche Verschmelzen auf einem Raster in Arbeitsgröße.
+
+    Nicht am §31-Prüfnetz gemessen, sondern an zwei gekreuzten Rohren: Die
+    Kosten dieser Operation hängen an der Zahl der **Rasterpunkte**, nicht an
+    der Zahl der Dreiecke. Eine Kugel mit 200 000 Dreiecken auf einem groben
+    Raster wäre die bequeme Messung; zwei Körper, die einander wirklich
+    durchdringen, sind der Fall, für den es die Operation gibt.
+
+    Die Zahl hängt an ``workers=-1`` in der Abstandsabfrage: mit einem Kern
+    sind es 9,6 Sekunden statt 1,5, bei identischem Ergebnis. Fällt der Wert
+    einmal weg, schlägt dieser Test an und nicht erst der Nutzer.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.blend import blend_bodies
+    from app.core.geom.mesh import MeshData
+
+    first = trimesh.creation.cylinder(radius=10.0, height=60.0, sections=48)
+    second = trimesh.creation.cylinder(radius=10.0, height=60.0, sections=48)
+    second.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2.0, [1, 0, 0]))
+
+    taken = measure(
+        "blend_union",
+        lambda: blend_bodies(MeshData.of(first), MeshData.of(second), 6.0, 1.0),
+    )
+    assert taken < 3.0
