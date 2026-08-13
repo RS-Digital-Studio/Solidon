@@ -423,8 +423,18 @@ def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
     Komponenten — und niemand sagte etwas. Ein offener B-Rep-Körper trägt
     weder den STEP-Export noch eine weitere Operation; er ist kein Ergebnis,
     das man jemandem in die Hand gibt.
+
+    **Vor der Absage steht eine Rettungsstufe** (§17.2 dem Geist nach): OCCT
+    näht die helikale Fläche je nach Fassung unterschiedlich sauber an den
+    Kern. M6 mit einem Millimeter Steigung — das gewöhnlichste Gewinde, das es
+    gibt — kam hier geschlossen heraus und auf dem Linux-Runner offen. Was
+    rechnerisch zusammengehört, schließt ``ShapeFix``; es verschiebt keine
+    Fläche, es näht. Erst wenn auch das nichts hilft, ist die Kombination
+    wirklich keine.
     """
-    if solid.volume <= EPS_GEOM or not solid.is_watertight or solid.component_count != 1:
+    if not _is_sound_rod(solid):
+        solid = _sewn(solid)
+    if not _is_sound_rod(solid):
         raise GeometryError(
             detail=_(
                 "Aus diesem Durchmesser und dieser Steigung entsteht kein "
@@ -438,6 +448,27 @@ def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
             ),
         )
     return solid
+
+
+def _is_sound_rod(solid: Solid) -> bool:
+    """Ob dieser Bolzen etwas ist, das man weiterreichen kann: Volumen,
+    geschlossen, ein Stück."""
+    return solid.volume > EPS_GEOM and solid.is_watertight and solid.component_count == 1
+
+
+def _sewn(solid: Solid) -> Solid:
+    """Offene Nähte schließen, ohne die Geometrie zu verrücken.
+
+    ``ShapeFix_Shape`` ist OCCTs eigener Weg dafür. Er wird hier **nur** als
+    zweiter Anlauf gerufen: Was beim ersten Mal geschlossen herauskam, geht
+    unverändert weiter — eine Reparatur, die immer läuft, kostet Zeit und
+    verdeckt, dass sie gebraucht wurde.
+    """
+    from OCP.ShapeFix import ShapeFix_Shape
+
+    fix = ShapeFix_Shape(solid.shape)
+    fix.Perform()
+    return Solid(fix.Shape(), deflection=solid.deflection)
 
 
 def _fuzzy_boolean(kind: str, first: Solid, second: Solid) -> Solid:
