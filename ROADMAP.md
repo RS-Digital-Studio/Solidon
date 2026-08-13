@@ -4546,9 +4546,29 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
 - [ ] **P16.8 — `pose_armature`.** Eine Pose, keine Animation. XL.
 - [ ] **P16.9 — Dateiformat 7 → 8**, Migration, Einbacken.
 - [ ] **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.**
-- [ ] **P16.11 — Prüfpunkt Käfigmodellierung.** Kriterium wird vor P16.5
-      festgeschrieben, damit die Antwort nicht davon abhängt, wie müde man
-      hinterher ist.
+- [x] **P16.11 — Prüfpunkt Käfigmodellierung: Kriterium steht, und vier von
+      fünf Bedingungen sind erfüllt.** `tests/test_base_mesh.py` schreibt fest,
+      was „brauchbares Basisnetz" heißt, bevor P16.5 beginnt: ein Körper ohne
+      Löcher (Euler-Charakteristik zwei), höchstens fünfzehn Schritte,
+      Kantenstreuung nach dem gleichmäßigen Vernetzen unter 0,5, und Maße, die
+      Zahlen bleiben. Die fünfte — ob der Pinsel von der groben Form zur Figur
+      kommt — braucht P16.5 und steht als Einzige noch offen.
+
+      Gemessen an einer humanoiden Grundfigur aus sechs Primitiven und fünf
+      Verschmelzungen: **elf Schritte, eine Komponente, Euler zwei,
+      Kantenstreuung im Rahmen.** Das ist der Aufbau, den H2 dem Käfig
+      entgegenhält, und er trägt. Der Käfigeditor bleibt damit nachgeordnet —
+      die Entscheidung fällt endgültig nach P16.6, aber sie fällt jetzt gegen
+      ein festgeschriebenes Kriterium und nicht gegen ein Gefühl.
+
+      **Der Prüfpunkt hat sich sofort bezahlt gemacht.** Sein erster Lauf
+      meldete fünf Komponenten statt einer, und die Ursache lag in P16.4: Das
+      Vorzeichen des Abstandsfeldes kam aus gemittelten Eckpunktnormalen, die
+      an der Deckkante eines Zylinders 45 Grad schräg stehen. Ein Rohr war nach
+      dem Verschmelzen acht Millimeter länger als vorher — Volumen und
+      Wasserdichtheit stimmten, deshalb sahen die Tests von P16.4 es nicht.
+      Flächennormalen statt Punktnormalen, plus ein Test, der die Ausdehnung
+      misst.
 
 ### Die Grenze, die bleibt
 

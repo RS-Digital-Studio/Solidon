@@ -375,8 +375,31 @@ nicht, aber die Messung entscheidet.* Drei Gründe:
 **Prüfpunkt nach P16.6** (P16.11 im Plan): Wenn sich mit Primitiven,
 `blend_union` und dem Pinsel kein brauchbares Basisnetz für die Figuren aus dem
 Korpus bauen lässt, kommt der Käfig — und dann als eigene Phase mit eigenem
-Konzept, nicht als Anhängsel. Das Kriterium wird vorher festgeschrieben, damit
-es nicht hinterher passend gemacht wird.
+Konzept, nicht als Anhängsel.
+
+**Das Kriterium steht seit P16.11 als Test** (`tests/test_base_mesh.py`),
+geschrieben bevor P16.5 begann, damit es hinterher nicht passend gemacht wird.
+Fünf Bedingungen an ein „brauchbares Basisnetz":
+
+1. ein Körper ohne Löcher — wasserdicht, eine Komponente, Euler-Charakteristik
+   zwei;
+2. höchstens fünfzehn Schritte;
+3. nach dem gleichmäßigen Vernetzen eine Kantenstreuung unter 0,5, sonst wirkt
+   der Pinsel an verschiedenen Stellen verschieden;
+4. Maße bleiben Zahlen — ein längerer Arm ist eine Parameteränderung;
+5. der Pinsel bringt die grobe Form zur Figur, ohne dass Topologie fehlt.
+
+**Vier davon sind erfüllt**, gemessen an einer humanoiden Grundfigur aus sechs
+Primitiven und fünf Verschmelzungen: elf Schritte, eine Komponente, Euler
+zwei. Nur die fünfte braucht P16.5 und steht offen. Der Käfig bleibt damit
+nachgeordnet.
+
+Der Prüfpunkt hat sich beim ersten Lauf bezahlt gemacht: Er meldete fünf
+Komponenten statt einer, und die Ursache lag in P16.4 — das Vorzeichen des
+Abstandsfeldes kam aus gemittelten Eckpunktnormalen, die an einer Zylinderkante
+schräg stehen. Ein Rohr war nach dem Verschmelzen acht Millimeter länger als
+vorher, bei richtigem Volumen und geschlossener Hülle; kein Test von P16.4
+konnte das sehen.
 
 ### I — Posing: Skelett als Parameter, Vorwärtskinematik, automatische Gewichte
 
@@ -719,7 +742,7 @@ Rechner ohne sein Relief.
 | Strichliste (1 000) neu auswerten | unter 2 s | **67 ms** auf dem §31-Prüfnetz (P16.2) |
 | Subdivision | unter 3 s | **1 778 ms** (P16.3, ganze Operation) |
 | Gleichmäßig vernetzen | unter 3 s | **1 480 ms** (P16.3, ganze Operation) |
-| Weich verschmelzen | unter 3 s | **1 242 ms** (P16.4, zwei gekreuzte Rohre) |
+| Weich verschmelzen | unter 3 s | **1 607 ms** (P16.4, zwei gekreuzte Rohre) |
 
 Regressionsschwelle wie überall 25 %. Fünf Tests in `tests/test_performance.py`
 halten die Zahlen fest, dazu einer, der Entscheidung C selbst prüft statt sie
@@ -856,7 +879,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | offen |
 | **P16.9** | Dateiformat 7→8, Migration, Beispieldatei, Einbacken (D) | L | alte Datei öffnet und rechnet | offen |
 | **P16.10** | Handbuch, Weg 4, Website, Beispielprojekt, Übersetzungen, Regelsammlung + Agenten-Suite vorher/nachher (§18) | L | Sprachdateien vollständig; Suitenquote nicht schlechter | offen |
-| **P16.11** | **Prüfpunkt Käfigmodellierung** (H2): Reicht Primitive + `blend_union` + Pinsel als Basisnetz für die Korpusfiguren? | S | Kriterium **vor** P16.5 festgeschrieben; Ergebnis dokumentiert, nicht passend gemacht | offen |
+| **P16.11** | **Prüfpunkt Käfigmodellierung** (H2): Reicht Primitive + `blend_union` + Pinsel als Basisnetz für die Korpusfiguren? | S | Kriterium **vor** P16.5 festgeschrieben; Ergebnis dokumentiert, nicht passend gemacht | **fertig** — 4 von 5 Bedingungen erfüllt (H2) |
 
 **Reihenfolge mit Absicht.** P16.1 ändert die Regel und beweist sie am
 Bestand — die neue Regel ist grün, bevor irgendetwas Neues sie braucht. P16.2
@@ -1042,11 +1065,21 @@ wirksam werden):
   das Einbacken an, mit Nachfrage, weil nicht folgenlos rücknehmbar (einzige
   Ausnahme von Regel 19 in diesem Konzept).
 
-**Nächster Schritt, wenn es weitergeht:** P16.11, der Prüfpunkt zur
-Käfigmodellierung. Er gehört terminlich **vor** P16.5, und seine Voraussetzung
-steht seit P16.4: Ob Primitive, `blend_union` und der Pinsel als Basisnetz
-reichen, lässt sich jetzt zum ersten Mal ausprobieren statt vermuten — zwei
-der drei gibt es. Danach P16.5, der XL-Brocken.
+- **P16.11** — Kriterium in `tests/test_base_mesh.py` festgeschrieben, vier
+  von fünf Bedingungen erfüllt (H2). Die fünfte braucht den Pinsel. Der
+  Prüfpunkt fand beim ersten Lauf einen Vorzeichenfehler in P16.4, der
+  Volumen und Wasserdichtheit unbeschadet ließ und die Ausdehnung um acht
+  Millimeter verfehlte.
+
+**Nächster Schritt, wenn es weitergeht:** P16.5 — der XL-Brocken.
+`kind="strokes"`, die `Stroke`-Verträge aus §9, Auswertung mit Etappen, sechs
+Pinselwerkzeuge, Symmetrie, ohne Oberfläche und über die Kommandozeile
+bedienbar. Er bringt die saubere Figur in den Korpus mit (§18). Beide
+Voraussetzungen stehen: der Prüfpunkt ist gefällt, und die Vorstufen aus
+P16.3 und P16.4 sind da.
+
+**Vorher zu klären, weil es ab P16.5 wirksam wird:** die beiden unten
+genannten Entscheidungen C und D.
 
 **Zwei Dinge, die P16.3 offen an den Bauplan zurückgibt** — beide brauchen
 eine Ansage, deshalb stehen sie hier und nicht im Code:
