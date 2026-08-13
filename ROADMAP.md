@@ -4502,9 +4502,42 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       dritte hieß „Iterationen" und ist bei diesem Verfahren wirkungslos, weil
       eine zweite Runde auf einem Netz, das die Zielkantenlänge bereits hat,
       keine neuen Punkte erzeugt und damit nichts interpoliert.
-- [ ] **P16.4 — `blend_union`** über `level_set`. Steht nicht im Auftrag und
-      gehört trotzdem hierher: die einzige Operation der Phase, die
-      *parametrisch* organisch ist, und zugleich unser Basisnetz-Werkzeug.
+- [x] **P16.4 — `blend_union`.** Zwei Körper mit fließendem Übergang statt
+      scharfer Kehle, gerechnet über ein gemeinsames Abstandsfeld. Die einzige
+      Operation der Phase, die *parametrisch* organisch ist — und die einzige,
+      die an eine Innenkante kommt, wo kein Pinsel hinreicht.
+
+      **Drei verworfene Wege, jeder mit einer Zahl.** `level_set` von
+      manifold3d, wie das Konzept es vorsieht, ruft eine Python-Funktion je
+      Rasterpunkt auf: mit analytischer Formel brauchbare 0,7 µs, mit zwei
+      interpolierten Feldern darin **25 Sekunden**. Marching Cubes auf dem
+      vektorisierten Feld liefert dieselbe Isofläche in **200 ms**, ohne den
+      Callback dazwischen. Beim Abstandsfeld war der billige Weg
+      (`voxelized().fill()` plus Distanztransformation) um eine halbe Zelle zu
+      groß — er markiert jede berührte Zelle und misst ab Zellmitte, an einer
+      Kugel mit 25 mm Radius **acht Prozent zu viel Volumen**. Der genaue Weg
+      über `Trimesh.contains` gab das richtige Vorzeichen und endete nach
+      75 000 Rasterpunkten in einer **Zugriffsverletzung in rtree** — genau
+      dort, wo die Hausregel lautet, diesen Index weniger zu fragen statt
+      öfter.
+
+      Geblieben ist: Abstand über einen KD-Baum auf einer deterministisch
+      verdichteten Oberflächenwolke, Vorzeichen über die Normale am nächsten
+      Punkt. An derselben Kugel 0,9956 — so gut wie die exakte Abfrage und 24
+      mal schneller. `workers=-1` bringt weitere 6,3: **1,5 statt 9,6
+      Sekunden** bei identischem Ergebnis, und ein Leistungstest hält den Wert
+      fest, damit er nicht unbemerkt wegfällt.
+
+      **Das Fehlerbild dieses Pakets:** Ein achsparalleler Quader mit runden
+      Maßen legt seine Flächen genau auf die Rasterpunkte. Dort ist das Feld
+      exakt null, Marching Cubes findet keinen Vorzeichenwechsel und spannt
+      entartete Dreiecke auf — 793 Bruchstücke statt eines Körpers. Das Raster
+      liegt deshalb um 0,37 Zellen versetzt, mit Absicht kein einfacher Bruch.
+
+      Was der Dialog über das Überbrücken sagt, ist gemessen: ab etwa dem
+      Dreifachen der Übergangsbreite. Wer schmaler wählt, bekommt einen Befund
+      statt zweier Körper, die er für einen hält. Kategorie `boolean` wie bei
+      P16.3, aus demselben Grund. 10 Tests, 1 242 ms von 3 000.
 - [ ] **P16.5 — Sculpting-Kern** ohne Oberfläche, über die Kommandozeile
       bedienbar. XL.
 - [ ] **P16.6 — Sculpting-Sitzung im Viewport**, mit mitlaufender

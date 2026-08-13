@@ -464,8 +464,44 @@ Wachstum.
 ### N — Weiches Verschmelzen als Zugabe, weil es fast geschenkt ist
 
 `blend_union`: zwei Körper mit einem Radiusparameter ineinander übergehen
-lassen, gerechnet als `level_set` über die geglättete Minimumsfunktion der
-beiden Abstandsfelder. Gemessen: 240 ms für einen 80-mm-Würfel bei 1,0-mm-Gitter.
+lassen, gerechnet über die geglättete Maximumsfunktion der beiden
+Abstandsfelder. **Umgesetzt in P16.4 — „fast geschenkt" war es nicht, und der
+Rechenweg ist ein anderer geworden.**
+
+`level_set` ruft eine Python-Funktion je Rasterpunkt auf. Die gemessenen
+240 ms galten einer analytischen Formel darin; mit zwei interpolierten
+Abstandsfeldern sind es 25 Sekunden. Marching Cubes über
+`skimage` auf dem **vektorisierten** Feld liefert dieselbe Isofläche in
+200 ms — es ist derselbe Gedanke, nur ohne den Aufruf je Punkt.
+
+Das Abstandsfeld eines Netzes war der eigentliche Brocken, und beide
+naheliegenden Wege scheitern:
+
+| Weg | Ergebnis |
+|---|---|
+| `voxelized().fill()` + Distanztransformation | acht Prozent zu viel Volumen — markiert jede berührte Zelle, misst ab Zellmitte |
+| `Trimesh.contains` fürs Vorzeichen | richtig, aber Zugriffsverletzung in `rtree` nach 75 000 Punkten |
+| **KD-Baum auf verdichteter Oberfläche, Vorzeichen aus der Normale** | **0,9956 an der Prüfkugel, 24 mal schneller als die exakte Abfrage** |
+
+Die dritte Zeile ist die Umsetzung. `workers=-1` bringt weitere 6,3 — 1,5
+statt 9,6 Sekunden bei identischem Ergebnis.
+
+**Ein Rasterverfahren hat eine Falle, die kein Lehrbuch nennt:** Ein
+achsparalleler Quader mit runden Maßen legt seine Flächen genau auf die
+Rasterpunkte. Dort ist das Feld exakt null, es gibt keinen
+Vorzeichenwechsel, und Marching Cubes spannt entartete Dreiecke auf — 793
+Bruchstücke statt eines Körpers. Das Raster liegt deshalb um 0,37 Zellen
+versetzt.
+
+**Und eine Bedienauskunft, die sonst niemand findet:** Ein Spalt zwischen zwei
+Körpern wird überbrückt, wenn der Übergang etwa dreimal so breit ist wie der
+Spalt — der Wulst hebt das Feld in der Mitte um ein Viertel der Übergangsbreite
+an und muss dort den halben Spalt überwinden. Der Dialogtext sagt es, und wer
+zu schmal wählt, bekommt einen Befund statt zweier Körper, die er für einen
+hält.
+
+Kategorie `boolean`, nicht `organic` — dieselbe Abwägung wie in §7.2: Wer
+„Vereinigen" sucht, findet „Weich verschmelzen" daneben.
 
 Steht nicht im Auftrag, gehört aber hierher: Es ist die einzige Operation im
 ganzen Konzept, die *parametrisch* organisch ist — drei Zahlen, kein Handgriff,
@@ -683,6 +719,7 @@ Rechner ohne sein Relief.
 | Strichliste (1 000) neu auswerten | unter 2 s | **67 ms** auf dem §31-Prüfnetz (P16.2) |
 | Subdivision | unter 3 s | **1 778 ms** (P16.3, ganze Operation) |
 | Gleichmäßig vernetzen | unter 3 s | **1 480 ms** (P16.3, ganze Operation) |
+| Weich verschmelzen | unter 3 s | **1 242 ms** (P16.4, zwei gekreuzte Rohre) |
 
 Regressionsschwelle wie überall 25 %. Fünf Tests in `tests/test_performance.py`
 halten die Zahlen fest, dazu einer, der Entscheidung C selbst prüft statt sie
@@ -812,7 +849,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | **P16.1** | Regel 2 neu fassen; `tests/test_gesture_ops.py` gegen die **bestehenden** Skizzen-Ops; `AGENTS.md`, `.claude/rules/operationen.md`; Befund B13 im Meshy-Konzept zurücknehmen | S | neuer Test grün auf dem Bestand, ohne eine Zeile neuer Geometrie | **fertig** — 26 Tests, Tor grün |
 | **P16.2** | **Reine Messung.** Vorschauweg, Strichwiedergabe, Subdivision, Entscheidung C als Test | S | Messwerte festgehalten; R1 beantwortet **bevor** P16.5 beginnt | **fertig** — 4 Tests, R1 entwarnt |
 | **P16.3** | `subdivide_surface` und `remesh_uniform` — erst prüfen, ob letzteres in `remesh_mesh` gehört | S | Geometrietest gegen Korpus, beide Qualitätsstufen | **fertig** — 15 Tests, Prüffrage mit Zahlen beantwortet (§7.2) |
-| **P16.4** | `blend_union` über `level_set` (N) — **zugleich das Basisnetz-Werkzeug für H2** | S | Volumen und Wasserdichtheit gegen analytische Körper | offen |
+| **P16.4** | `blend_union` über `level_set` (N) — **zugleich das Basisnetz-Werkzeug für H2** | S | Volumen und Wasserdichtheit gegen analytische Körper | **fertig** — 10 Tests, Rechenweg geändert (N) |
 | **P16.5** | Kern des Sculptings: `kind="strokes"`, `Stroke`-Verträge (§9), Auswertung mit Etappen, sechs Werkzeuge, Symmetrie — **ohne Oberfläche**, über CLI bedienbar; **bringt die saubere Figur in den Korpus mit** (§18, verschoben aus P16.2) | **XL** | Determinismus, Symmetrie, Etappen; zweimal auswerten identisch | offen |
 | **P16.6** | Sculpting-Sitzung im Viewport: Pinselring, Leiste, Vorschau, Wandstärke live, Editor-Undo | **XL** | offscreen wie `test_sketch_editor.py`; Grenzen aus `test_interface_limits.py` | offen |
 | **P16.7** | `displace_image` samt Bild in `sources/` und Profilprüfung | L | Relief unter Düsenbreite wird gemeldet | offen |
@@ -966,15 +1003,27 @@ Ein Lauf in einem Rutsch stürzt ab; das ist nicht neu und nicht von P16
 verursacht (nachgewiesen: tritt auch ohne `test_gesture_ops.py` auf, an
 anderer Stelle).
 
+- **P16.4** — `blend_union` in `app/core/geom/blend.py`,
+  `tests/test_blend.py` mit 10 Tests, eine Leistungszeile in §10. Der
+  Rechenweg ist ein anderer als in N vorgesehen; die drei verworfenen
+  Varianten stehen dort mit ihren Zahlen, damit sie nicht ein zweites Mal
+  probiert werden. Nebenbei behoben: vier deutsche Bezeichner in
+  `slicer_profiles.py` und ein Oberflächentext ohne Übersetzung, beides aus
+  `566e0af` und beides Ursache eines roten Laufs, der nicht aus P16 stammte.
+
 **Noch nichts angefasst — keine Oberfläche, keine Verträge:**
 
-- **P16.4** — `blend_union` über `level_set`. Klein, unabhängig von P16.3.
-  Nächster sinnvoller Einstieg. Der Adapter in den exakten Netzkern steht
-  seit P16.3 in `mesh_ops.py` (`_as_solid`, `_as_mesh`) — wer ihn als Zweiter
-  braucht, zieht ihn heraus, statt ihn ein zweites Mal zu schreiben. Die zwei
-  Fallen darin sind bezahlt und stehen dort auskommentiert: `Mesh64` statt
-  `Mesh`, und Verschweißen nach der Rückkonvertierung, weil der Kern an jeder
-  scharfen Kante mehrere Eckpunkte an derselben Stelle herausgibt.
+- Der Adapter in den exakten Netzkern steht seit P16.3 in `mesh_ops.py`
+  (`_as_solid`, `_as_mesh`); P16.4 brauchte ihn nicht, weil sein Weg über das
+  Raster läuft. Die zwei Fallen darin sind bezahlt und stehen dort
+  auskommentiert: `Mesh64` statt `Mesh`, und Verschweißen nach der
+  Rückkonvertierung, weil der Kern an jeder scharfen Kante mehrere Eckpunkte
+  an derselben Stelle herausgibt.
+- **Das Abstandsfeld aus `blend.py` ist der Baustein, den P16.5 wieder
+  braucht.** Ein Sculpting-Strich verschiebt Vertices entlang einer Normale;
+  wo geprüft werden muss, ob eine Wand zu dünn wird, ist dasselbe Feld die
+  Antwort. `distance_field()` steht dafür bereit — mit der Warnung im
+  Docstring, welche zwei Wege dorthin nicht funktionieren.
 - **P16.5** — der XL-Brocken: `kind="strokes"`, `Stroke`-Verträge, Auswertung
   mit Etappen, sechs Pinselwerkzeuge, Symmetrie. Braucht vorher P16.11
   (Käfig-Prüfpunkt, Kriterium festschreiben) und die saubere Figur im
@@ -993,9 +1042,11 @@ wirksam werden):
   das Einbacken an, mit Nachfrage, weil nicht folgenlos rücknehmbar (einzige
   Ausnahme von Regel 19 in diesem Konzept).
 
-**Nächster Schritt, wenn es weitergeht:** P16.4 — klein, für sich nützlich,
-unabhängig von der noch offenen Käfig-Frage. P16.11 (Prüfpunkt) gehört
-terminlich vor P16.5, nicht dazwischen.
+**Nächster Schritt, wenn es weitergeht:** P16.11, der Prüfpunkt zur
+Käfigmodellierung. Er gehört terminlich **vor** P16.5, und seine Voraussetzung
+steht seit P16.4: Ob Primitive, `blend_union` und der Pinsel als Basisnetz
+reichen, lässt sich jetzt zum ersten Mal ausprobieren statt vermuten — zwei
+der drei gibt es. Danach P16.5, der XL-Brocken.
 
 **Zwei Dinge, die P16.3 offen an den Bauplan zurückgibt** — beide brauchen
 eine Ansage, deshalb stehen sie hier und nicht im Code:
