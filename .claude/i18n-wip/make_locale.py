@@ -11,7 +11,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(r"C:\Users\roschneider\Documents\Formwerk")
+ROOT = Path(__file__).resolve().parents[2]
 
 lang = sys.argv[1]
 parts_dir = Path(sys.argv[2])
