@@ -95,9 +95,27 @@ jobs:
         #
         # `QT_QPA_PLATFORM` bleibt ungesetzt: unter Xvfb läuft Qt normal, und
         # `tests/conftest.py` setzt offscreen nur, wenn nichts anderes dasteht.
+        #
+        # **Und je Fensterdatei ein eigener Prozess.** Xvfb allein hat den
+        # Absturz nur nach vorn geholt: er hängt an der Zahl der VTK-Fenster,
+        # die ein Prozess nacheinander aufbaut, und die Suite baut siebenhundert.
+        # Die Liste wird nicht gepflegt, sondern gesucht — wer eine neue
+        # Oberflächendatei anlegt, bekommt ihren eigenen Prozess, ohne hier
+        # etwas zu ändern.
         env:
           QT_QPA_PLATFORM: xcb
-        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q -m "not performance"
+        run: |
+          set -e
+          windowed=$(grep -l "MainWindow" tests/test_*.py | tr '\n' ' ')
+          ignores=""
+          for file in $windowed; do ignores="$ignores --ignore=$file"; done
+          run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
+          run -m "not performance" $ignores
+          for file in $windowed; do
+            echo "::group::$file"
+            run -m "not performance" "$file"
+            echo "::endgroup::"
+          done
 
   package:
     name: Paket (${{ matrix.os }})
