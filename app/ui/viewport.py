@@ -1428,7 +1428,15 @@ class Viewport(QWidget):
         Weltursprung: ein Teil, das neben dem Ursprung liegt — und das tut
         jedes heruntergeladene Modell —, wanderte beim Drehen im Bogen durch
         das Bild, statt sich zu drehen. Der Fokus wandert deshalb in die Mitte
-        dessen, was sichtbar ist.
+        der **Körper**.
+
+        Nicht in die Mitte dessen, was der Renderer sieht: dazu gehören der
+        Bauraumrahmen und die Druckplatte. Der Rahmen ist 250 mm hoch, das
+        Teil 40 — die Mitte lag hundert Millimeter über dem Modell, die Kamera
+        rückte dorthin mit, und im Bild stand die Kulisse, während das Teil
+        unten aus der Ecke ragte. Genau das zeigte das Handbuchbild des
+        Hauptfensters. Dieselbe Quelle wie beim Einpassen (`_object_bounds`),
+        aus demselben Grund.
 
         Die Blickrichtung und der Abstand bleiben dabei erhalten: die Kamera
         rückt mit, statt sich zu verdrehen. Wer gerade von vorn schaut, schaut
@@ -1439,10 +1447,9 @@ class Viewport(QWidget):
         renderer = getattr(self.plotter, "renderer", None)
         if renderer is None:
             return
-        grenzen = renderer.ComputeVisiblePropBounds()
-        if grenzen[0] > grenzen[1]:
+        mitte = self.rotation_centre()
+        if mitte is None:
             return
-        mitte = tuple((grenzen[i * 2] + grenzen[i * 2 + 1]) / 2.0 for i in range(3))
         camera = renderer.GetActiveCamera()
         fokus = camera.GetFocalPoint()
         if all(abs(mitte[i] - fokus[i]) < EPS_DISPLAY for i in range(3)):
@@ -1451,6 +1458,22 @@ class Viewport(QWidget):
         camera.SetFocalPoint(*mitte)
         camera.SetPosition(*(position[i] + mitte[i] - fokus[i] for i in range(3)))
         renderer.ResetCameraClippingRange()
+
+    def rotation_centre(self) -> Vec3 | None:
+        """Der Punkt, um den gedreht wird — die Mitte der Körper, oder nichts.
+
+        Als eigene Auskunft, damit die Regel ohne Plotter prüfbar bleibt:
+        offscreen gibt es keinen, und ein Test, der sich dort überspringt,
+        prüft nie etwas.
+        """
+        bounds = self._object_bounds()
+        if bounds is None:
+            return None
+        return (
+            (bounds[0] + bounds[1]) / 2.0,
+            (bounds[2] + bounds[3]) / 2.0,
+            (bounds[4] + bounds[5]) / 2.0,
+        )
 
     def _render_now(self) -> None:
         """Zeichnen nach dem Aufbau einer Szene.
