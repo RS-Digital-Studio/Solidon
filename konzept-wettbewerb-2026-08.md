@@ -417,7 +417,8 @@ Entscheidung.**
 
 ## Teil 7 — Was du entscheiden musst
 
-Vier Fragen, die dieses Dokument nicht beantworten kann:
+Vier Fragen, die dieses Dokument nicht beantworten kann. **Alle vier sind am
+13.08.2026 beantwortet worden; die Antwort steht jeweils unter der Frage.**
 
 1. **macOS ausliefern — ja oder nein?** Die Suite läuft dort bereits grün. Es
    fehlen der Paketierschritt, eine Signierung bei Apple (jährliche Gebühr) und
@@ -425,10 +426,24 @@ Vier Fragen, die dieses Dokument nicht beantworten kann:
    vertretbare Antwort — dann sollte die Website es aber aussprechen, statt es
    auszulassen.
 
+   > **Entschieden: ja.** Umgesetzt ist der Weg vom Bau zum Doppelklick — ein
+   > `.app`-Bundle statt eines Ordners, ein ICNS neben der ICO, und **zwei**
+   > Macs in der Paketmatrix, weil ein auf Apple Silicon gebautes Paket auf
+   > keinem Intel-Gerät startet. Offen bleibt die Signierung: Sie braucht ein
+   > Apple-Konto. Bis es das gibt, geht das Paket unsigniert hinaus, und
+   > Gatekeeper verweigert den ersten Start, bis der Nutzer die Anwendung
+   > über das Kontextmenü öffnet — das gehört auf die Download-Seite, nicht
+   > in eine Fußnote.
+
 2. **G-Code an die Maschine senden — Bauplanänderung?** §28 meint mit „Drucker"
    das Zurücklesen, nicht das Senden. Senden ist kein Erzeugen, der eigene
    Slicer bleibt ausgeschlossen. Wenn ja, dann über ein offenes Protokoll für
    viele Maschinen, nicht für eine.
+
+   > **Entschieden: nein.** Die Übergabe an den Slicer bleibt die Grenze, die
+   > Datei bleibt im Ordner. §28 wird nicht angefasst. Damit bleibt der letzte
+   > Meter beim Wettbewerb — bewusst, und im Tausch gegen eine Klasse von
+   > Netzwerkfehlern, die wir nicht stützen müssen.
 
 3. **Weg vom Modellkatalog — bauen oder auslassen?** Der Anpassungsfall ist
    unsere Stärke, und er wandert gerade auf die Modellseiten von MakerWorld.
@@ -436,8 +451,21 @@ Vier Fragen, die dieses Dokument nicht beantworten kann:
    ist eine Netzabhängigkeit im Einstieg. Auslassen ist vertretbar; dann muss
    der Weg „heruntergeladene Datei ziehen und ablegen" umso sichtbarer sein.
 
+   > **Entschieden: auslassen** — und die Bedingung gilt: Ziehen und Ablegen
+   > muss sichtbarer werden, auf der Website wie im Startbildschirm. Das ist
+   > der einzige offene Arbeitspunkt aus diesem Teil.
+
 4. **Wer schreibt über uns?** W1 ist kein Entwicklungspunkt. Solange er offen
    ist, arbeiten alle anderen Punkte für ein leeres Haus.
+
+   > **Entschieden: alle drei Wege** — Fachpresse, Gemeinschaften, Kurzvideos.
+   > Das Material liegt bereit: die Pressemitteilung und vier fertige Filme in
+   > beiden Sprachen und beiden Formaten. Eine Auflage kam dazu, und sie war
+   > berechtigt: **verständlich muss es sein.** Der Text erklärte einem
+   > Journalisten `auto:PETG`, sprach von Transaktionen und Werkzeugaufrufen
+   > und verwies als Pressematerial auf einen Ordner im Repository. Das ist
+   > bereinigt, und `tests/test_press_release.py` hält es — Fachbegriffe und
+   > Projektpfade unterhalb der Trennlinie sind jetzt ein roter Lauf.
 
 ---
 
