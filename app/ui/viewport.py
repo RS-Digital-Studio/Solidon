@@ -856,6 +856,13 @@ class Viewport(QWidget):
     paintRequested = Signal(object)
     """A point on the surface to paint at (§20). The window turns it into an
     operation — the view never changes geometry itself."""
+    sculptRequested = Signal(object)
+    """Eine Stelle, an der ein Pinselzug gesetzt wird (§25).
+
+    Derselbe Vertrag wie beim Bemalen und aus demselben Grund: Die Ansicht
+    meldet einen Ort, das Fenster macht daraus einen Zug, und Geometrie ändert
+    einzig die Operation (Regel 2). Was der Viewport währenddessen zeigt, ist
+    eine Vorschau."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -966,6 +973,7 @@ class Viewport(QWidget):
         self._plate = -1
         """Welche Druckplatte gezeigt wird; -1 heißt alle (§25)."""
         self._painting = False
+        self._sculpting = False
         """§20: solange das an ist, sind Klicks Pinselstriche."""
         self._cursor_role = "select"
         """Welcher Zeiger gerade über dem Bild steht. Gemerkt, damit nicht bei
@@ -1307,6 +1315,40 @@ class Viewport(QWidget):
         return pv.PolyData(corners, faces=np.hstack(([len(corners)], np.arange(len(corners)))))
 
     # --- scene ------------------------------------------------------------------
+
+    def show_preview_mesh(self, object_id: str, mesh: Any) -> None:
+        """Einen Körper zeigen, wie er nach dem laufenden Werkzeug aussähe.
+
+        **Nur die Punkte, kein Neuaufbau** — das ist der Weg, den P16.2
+        gemessen hat: Ein Pinselzug trifft zehntausend von vier Millionen
+        Eckpunkten, und die Vollkopie kostet das Vierzigfache. Ein neuer Actor
+        je Zug wäre noch teurer und würde nebenbei Auswahl, Kanten und Schatten
+        neu aufbauen.
+
+        Die Dreiecke bleiben dieselben; passt die Punktzahl nicht, ist das
+        keine Vorschau derselben Sache, und es passiert nichts.
+        """
+        import numpy as np
+
+        actor = self._actors.get(object_id)
+        if actor is None or self.plotter is None:
+            return
+        data = actor.mapper.dataset
+        points = np.asarray(mesh.raw.vertices, dtype=float)
+        if len(points) != data.n_points:
+            return
+        data.points = points
+        data.Modified()
+        self.plotter.render()
+
+    def clear_preview_mesh(self) -> None:
+        """Zurück zu dem, was wirklich in der Szene steht.
+
+        Über den vollen Neuaufbau und nicht über gemerkte Punkte: Was gezeigt
+        wurde, war eine Vorschau, und der Dokumentzustand ist die einzige
+        Wahrheit darüber, was danach zu sehen ist.
+        """
+        self.show_scene(self._result)
 
     def show_scene(self, result: EvaluationResult | None) -> None:
         """Baut die Ansicht aus der letzten vollständigen Auswertung neu (§15.3)."""
@@ -2026,6 +2068,16 @@ class Viewport(QWidget):
         self._pending_point = None
         self._redraw_measurements()
 
+    def set_sculpting(self, active: bool) -> None:
+        """Macht aus Klicks Pinselzüge (§25).
+
+        Dasselbe Picking wie beim Bemalen und beim Messen; was sich ändert,
+        ist, wer den Punkt bekommt. Solange die Sitzung läuft, wird gemalt und
+        nicht gewählt — sonst hätte jeder Zug nebenbei die Auswahl geändert.
+        """
+        self._sculpting = active
+        self._update_cursor()
+
     def set_painting(self, active: bool) -> None:
         """Macht aus Klicks Pinselstriche (§20).
 
@@ -2059,10 +2111,12 @@ class Viewport(QWidget):
         """Was ein Klick jetzt täte, wenn die Kamera stillsteht.
 
         Die Reihenfolge ist die der Vorrangigkeit im Klick selbst
-        (:meth:`_on_picked`): erst Pinsel, dann Messen, dann das Merkmal
-        darunter. Ein Zeiger, der eine andere Reihenfolge behauptet als die
-        Behandlung, lügt genau dann, wenn zwei Werkzeuge zugleich anstehen.
+        (:meth:`_on_picked`): erst Formen, dann Pinsel, dann Messen, dann das
+        Merkmal darunter. Ein Zeiger, der eine andere Reihenfolge behauptet als
+        die Behandlung, lügt genau dann, wenn zwei Werkzeuge zugleich anstehen.
         """
+        if self._sculpting:
+            return "sculpt"
         if self._painting:
             return "paint"
         if self._measure_mode != "off":
@@ -2121,6 +2175,9 @@ class Viewport(QWidget):
 
     def _on_picked(self, point: Any) -> None:
         picked = (float(point[0]), float(point[1]), float(point[2]))
+        if self._sculpting:
+            self.sculptRequested.emit(picked)
+            return
         if self._painting:
             self.paintRequested.emit(picked)
             return

@@ -14,6 +14,7 @@ from __future__ import annotations
 import platform
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
 
@@ -85,7 +86,16 @@ from app.core.export.writer import (
     write_assembly,
     write_plan,
 )
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.sculpt import (
+    BRUSH_TO_EDGE,
+    SYMMETRY_BITS,
+    apply_strokes,
+    median_edge,
+    stages,
+    stroke_at,
+    strokes_to_text,
+)
 from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.knowledge import calibration, print_settings, profiles
 from app.core.knowledge.parts.ops import op_name as part_op_name
@@ -118,6 +128,7 @@ from app.core.types import (
     Parameter,
     SliceResult,
     SourceOrigin,
+    Stroke,
 )
 from app.i18n import _, tr
 from app.ui import first_run
@@ -164,6 +175,7 @@ from app.ui.panels import (
 from app.ui.print_settings_dialog import PrintSettingsDialog
 from app.ui.remote_server import RemoteServer, WindowBridge
 from app.ui.report_dialog import ErrorReportDialog
+from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
@@ -404,6 +416,16 @@ def _format_of(target: Path, chosen_filter: str) -> ExportFormat:
 def _has_sketch_param(spec: OperationSpec) -> bool:
     """Ob diese Operation eine gezeichnete Skizze verbraucht (§30.1)."""
     return any(entry.kind == "sketch" for entry in spec.params.spec())
+
+
+def _has_stroke_param(spec: OperationSpec) -> bool:
+    """Ob diese Operation gemalte Züge verbraucht (§25, Konzept P16).
+
+    Derselbe Gedanke wie beim Skizzenfeld: Der Menüeintrag führt dorthin, wo
+    der Wert entsteht, und nicht in einen Dialog mit einem Textfeld voller
+    Zahlen, die niemand tippt.
+    """
+    return any(entry.kind == "strokes" for entry in spec.params.spec())
 
 
 def _sketch_param(op_name: str) -> str:
@@ -758,6 +780,22 @@ class MainWindow(QMainWindow):
         # Haken oben rechts; hier stand ein Textknopf unter den anderen und
         # war von „Verwerfen" nicht zu unterscheiden. Als Hauptknopf trägt er
         # die Auswahlfarbe des Themas und liegt auf der Eingabetaste.
+        # Die Formsitzung bekommt ihre eigene Leiste, aus demselben Grund wie
+        # die Skizze: Formen ist kein Ansichtswerkzeug, das sich mit Schnitt
+        # und Messen ablöst, sondern ein Modus, in den man hineingeht und aus
+        # dem man herauskommt (Konzept P16, Entscheidung J).
+        self.sculpt_bar = SculptBar(self)
+        self.sculpt_bar.finished.connect(self.finish_sculpt)
+        self.sculpt_bar.setVisible(False)
+        self.viewport.sculptRequested.connect(self._on_sculpt)
+        self._sculpt_target: str | None = None
+        """Das Objekt, an dem gerade geformt wird — leer, wenn keine Sitzung
+        läuft."""
+        self._sculpt_strokes: list[Stroke] = []
+        """Die Züge dieser Sitzung. Das Rückgängig des Editors läuft auf
+        dieser Liste und nicht über den Verlauf: Der Verlauf bekommt die
+        Sitzung als *eine* Transaktion, wenn sie fertig ist (Regel 16)."""
+
         done = QPushButton(tr("Fertig"), self.sketch_bar)
         done.setDefault(True)
         done.clicked.connect(lambda: self.finish_sketch(keep=True))
@@ -777,6 +815,7 @@ class MainWindow(QMainWindow):
         bottom_layout.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
         bottom_layout.setSpacing(0)
         bottom_layout.addWidget(self.sketch_bar)
+        bottom_layout.addWidget(self.sculpt_bar)
         bottom_layout.addWidget(self.tools)
 
         self.report = ReportPanel(self)
@@ -1466,6 +1505,11 @@ class MainWindow(QMainWindow):
         # erste Schritt ist das Zeichnen und nicht das Ausfüllen.
         if _has_sketch_param(spec):
             action.triggered.connect(lambda _checked=False, name=spec.name: self.start_sketch(name))
+        elif _has_stroke_param(spec):
+            # Dasselbe für die Formsitzung: Wer „Formen" wählt, will den
+            # Pinsel und nicht ein Feld, in das eine Strichliste zu tippen
+            # wäre.
+            action.triggered.connect(lambda _checked=False: self.start_sculpt())
         else:
             action.triggered.connect(lambda _checked=False, entry=spec: self.run_operation(entry))
         menu.addAction(action)
@@ -1951,6 +1995,12 @@ class MainWindow(QMainWindow):
         )
 
     def action_undo(self) -> None:
+        # Läuft eine Formsitzung, nimmt Strg+Z den letzten Zug zurück und
+        # nicht die Operation davor. Dieselbe Trennung wie beim
+        # Skizzeneditor: Der Editor hat sein eigenes Rückgängig, der Verlauf
+        # bekommt die Sitzung als eine Transaktion (Regel 16).
+        if self.undo_sculpt_stroke():
+            return
         self.session.undo()
 
     def action_redo(self) -> None:
@@ -2519,6 +2569,13 @@ class MainWindow(QMainWindow):
         if self._sketch_panel is not None:
             self.finish_sketch(keep=False)
             return
+        if self._sculpt_target is not None:
+            # Nicht verwerfen: Escape beendet die Sitzung wie „Fertig", und
+            # was dabei entsteht, nimmt ein Undo zurück (Regel 19). Ein
+            # Escape, das stundenlange Arbeit wegwirft, wäre die teuerste
+            # Taste des Programms.
+            self.finish_sculpt()
+            return
         self.tools.close_tool()
 
     def sketching(self) -> bool:
@@ -2628,6 +2685,162 @@ class MainWindow(QMainWindow):
                 # was aus der Skizze wird — mit der fertigen Zeichnung vor
                 # Augen statt vorab aus fünf Menüeinträgen.
                 self._offer_sketch_use(text)
+
+    # --- Formsitzung (§25, Konzept P16.6) ---------------------------------------
+
+    def start_sculpt(self, object_id: str = "") -> None:
+        """Die Formsitzung öffnen: Klicks werden von jetzt an Pinselzüge.
+
+        Ein **Werkzeugmodus**, kein Betriebsmodus (Entscheidung J): Er gilt für
+        die eine Operation, die gerade entsteht, die Szene bleibt die Szene,
+        und Escape kommt heraus. Der Unterschied zum Skizzenmodus ist, dass die
+        Ansicht bleibt, was sie ist — geformt wird am Körper, nicht auf einer
+        Zeichenfläche.
+        """
+        if self._sculpt_target is not None:
+            return
+        target = object_id or self.object_tree.selected()
+        if not target:
+            self.announce(tr("Bitte zuerst ein Objekt auswählen."))
+            return
+        mesh = self._sculpt_mesh(target)
+        if mesh is None:
+            self.announce(tr("Dieses Objekt hat kein Netz zum Formen."))
+            return
+
+        self._sculpt_target = target
+        self._sculpt_strokes = []
+        self.viewport.set_sculpting(True)
+        self.tools.close_tool()
+        self.tools.setVisible(False)
+        self.sculpt_bar.setVisible(True)
+        self.sculpt_bar.show_count(0, 0)
+        self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh))
+        self._update_actions()
+        self.statusBar().showMessage(tr("Formen — Escape oder Fertig beendet die Sitzung."))
+
+    def sculpting(self) -> bool:
+        """Ob gerade geformt wird statt betrachtet."""
+        return self._sculpt_target is not None
+
+    def _sculpt_mesh(self, object_id: str) -> MeshData | None:
+        """Das Netz, auf dem geformt wird — aus der letzten Auswertung."""
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result else None
+        if entry is None:
+            return None
+        try:
+            return as_mesh_data(entry.mesh)
+        except AppError:
+            return None
+
+    def _sculpt_resolution_hint(self, mesh: MeshData) -> str:
+        """Entscheidung E: sagen, dass das Netz zu grob ist, **bevor** jemand
+        vergeblich malt.
+
+        ``warp`` ändert die Topologie nicht. Wer eine feine Falte in ein grobes
+        Netz zieht, bekommt keine Falte, sondern eine verzogene Facette — und
+        das erkennt man am Ergebnis nicht, sondern nur an dieser Zeile.
+        """
+        edge = median_edge(mesh)
+        radius = float(self.sculpt_bar.radius.value())
+        if radius >= edge * BRUSH_TO_EDGE:
+            return ""
+        return tr("Das Netz ist für diesen Pinsel zu grob — erst gleichmäßig vernetzen.")
+
+    def _on_sculpt(self, point: Any) -> None:
+        """Ein Klick im Viewport wird ein Zug.
+
+        Geometrie entsteht dabei **nicht** (Regel 2): Der Zug geht in die
+        Liste, und was das Fenster zeigt, ist eine Vorschau. Die Operation
+        entsteht beim Verlassen der Sitzung, aus derselben Liste.
+        """
+        if self._sculpt_target is None:
+            return
+        mesh = self._sculpt_mesh(self._sculpt_target)
+        if mesh is None:
+            return
+        bar = self.sculpt_bar
+        self._sculpt_strokes.append(
+            stroke_at(
+                mesh,
+                (float(point[0]), float(point[1]), float(point[2])),
+                radius=float(bar.radius.value()),
+                strength=float(bar.strength.value()),
+                tool=str(bar.tool.currentData()),
+                cut=bool(bar.cut.isChecked()),
+            )
+        )
+        # Der Schalter gilt für **einen** Zug. Stehen zu bleiben hieße, dass
+        # jeder weitere Zug eine eigene Etappe bekommt — und damit einen
+        # eigenen Durchgang, ohne dass jemand das verlangt hätte.
+        self.sculpt_bar.cut.setChecked(False)
+        self._show_sculpt_preview(mesh)
+
+    def _show_sculpt_preview(self, mesh: MeshData) -> None:
+        """Was der Zug bewirkt, sofort — und was er kostet, daneben.
+
+        Die Vorschau rechnet dieselbe Auswertung wie die Operation, nur auf dem
+        Anzeigenetz und ohne den Stapel darum: Tausend Züge auf dem
+        §31-Prüfnetz kosten 96 ms, ein einzelner also nichts, was jemand
+        bemerkt. Der Dokumentzustand ändert sich dabei nicht — er ändert sich
+        bei „Fertig", in einer Transaktion.
+        """
+        strokes = self._sculpt_strokes
+        self.sculpt_bar.show_count(len(strokes), len(stages(strokes)))
+        self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh))
+        if self._sculpt_target is None:
+            return
+        plane = SYMMETRY_BITS.get(self.sculpt_bar.plane(), 0)
+        shown = [replace(s, symmetry=s.symmetry | plane) for s in strokes] if plane else strokes
+        self.viewport.show_preview_mesh(self._sculpt_target, apply_strokes(mesh, shown))
+
+    def undo_sculpt_stroke(self) -> bool:
+        """Das Rückgängig des Editors: ein Zug, nicht die Sitzung.
+
+        Dieselbe Trennung wie beim Skizzeneditor. Der Verlauf bekommt die
+        Sitzung als **eine** Transaktion (Regel 16); solange sie offen ist,
+        wäre ein Schritt darin im Verlauf ein Eintrag, den niemand haben will.
+        """
+        if self._sculpt_target is None or not self._sculpt_strokes:
+            return False
+        self._sculpt_strokes.pop()
+        mesh = self._sculpt_mesh(self._sculpt_target)
+        if mesh is not None:
+            self._show_sculpt_preview(mesh)
+        return True
+
+    def finish_sculpt(self) -> None:
+        """Die Sitzung schließen — und aus ihr genau eine Operation machen."""
+        target = self._sculpt_target
+        strokes = self._sculpt_strokes
+        if target is None:
+            return
+        self._sculpt_target = None
+        self._sculpt_strokes = []
+        self.viewport.set_sculpting(False)
+        self.viewport.clear_preview_mesh()
+        self.sculpt_bar.setVisible(False)
+        self.tools.setVisible(True)
+        self.statusBar().clearMessage()
+        self._update_actions()
+        if not strokes:
+            # Eine Sitzung ohne Zug hinterlässt nichts. Ein leerer Schritt im
+            # Verlauf wäre Rauschen an genau der Stelle, an der man sucht.
+            return
+        self.session.apply(
+            _("Formen"),
+            [
+                OperationDraft(
+                    op="sculpt_strokes",
+                    inputs=(target,),
+                    params={
+                        "strokes": strokes_to_text(strokes),
+                        "symmetry": self.sculpt_bar.plane(),
+                    },
+                )
+            ],
+        )
 
     def action_sketch_free(self) -> None:
         """Der Zeichnen-Knopf der Werkzeugzeile: Skizzenmodus ohne

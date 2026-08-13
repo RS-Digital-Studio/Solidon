@@ -115,6 +115,14 @@ SHAPES: Final[dict[str, tuple[str, tuple[float, float]]]] = {
         '<path d="M20 15.5 26.5 22 22 26.5 15.5 20z" />',
         (3.5, 3.5),
     ),
+    # Formen: ein Ring auf der Spitze eines Stiels — der Pinsel greift eine
+    # Fläche, kein einzelner Punkt. Bewusst nicht derselbe wie beim Bemalen:
+    # Der eine färbt ein Dreieck, der andere verschiebt es, und wer beide für
+    # dasselbe hält, malt in eine Form hinein.
+    "sculpt": (
+        '<path d="M4 28 12 20" /><circle cx="19" cy="13" r="8" />',
+        (4.0, 28.0),
+    ),
     # Über einem erkannten Merkmal: derselbe Pfeil, aber mit einem Ring an der
     # Spitze — „hier ist etwas, das einen Namen hat".
     "feature": (

@@ -183,6 +183,52 @@ def _offsets(mesh: MeshData, strokes: Iterable[Stroke]) -> np.ndarray:
     return shift
 
 
+def median_edge(mesh: MeshData) -> float:
+    """Die mittlere Kantenlänge — das Maß, an dem ein Pinsel sich messen lässt.
+
+    Der Median und nicht der Mittelwert: Ein einziges entartetes Dreieck zieht
+    den Mittelwert nach unten und ließe ein grobes Netz fein aussehen.
+    """
+    lengths = np.asarray(mesh.raw.edges_unique_length, dtype=float)
+    return float(np.median(lengths)) if len(lengths) else 0.0
+
+
+def stroke_at(
+    mesh: MeshData,
+    point: Vec3,
+    *,
+    radius: float,
+    strength: float,
+    tool: str = "draw",
+    symmetry: int = 0,
+    cut: bool = False,
+) -> Stroke:
+    """Aus einem angeklickten Punkt einen Strich machen.
+
+    Die Oberfläche liefert einen Ort, keine Richtung — und die Richtung ist
+    das, woran der Strich trägt. Sie kommt hier aus der Normale des nächsten
+    Eckpunkts: Bei einem Pinsel von einigen Millimetern ist das genau genug,
+    und es geht ohne den Abstandsindex, der auf dieser Maschine danebengreift.
+
+    Im Kern und nicht in der Oberfläche, weil es Geometrie ist. Was das Fenster
+    beisteuert, sind zwei Zahlen und ein Klick.
+    """
+    points = np.asarray(mesh.raw.vertices, dtype=float)
+    if not len(points):
+        return Stroke(point=point, normal=(0.0, 0.0, 1.0), radius=radius, strength=strength)
+    _away, index = cKDTree(points).query(np.asarray(point, dtype=float))
+    normal = np.asarray(mesh.raw.vertex_normals, dtype=float)[int(index)]
+    return Stroke(
+        point=point,
+        normal=(float(normal[0]), float(normal[1]), float(normal[2])),
+        radius=radius,
+        strength=strength,
+        tool=tool,  # type: ignore[arg-type]
+        symmetry=symmetry,
+        cut=cut,
+    )
+
+
 def apply_strokes(mesh: MeshData, strokes: Sequence[Stroke]) -> MeshData:
     """Die ganze Strichliste auswerten — Etappe für Etappe, jede in einem Zug.
 
