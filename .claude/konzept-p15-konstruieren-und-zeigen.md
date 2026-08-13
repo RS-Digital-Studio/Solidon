@@ -860,10 +860,12 @@ kommt aus `ctx.seed`, so wie Regel 9 es sagt.
       der Zug wird zu `push_face`. Was quer zur Normalen gezogen wurde, wird
       verworfen — sonst wäre Press/Pull ein Verschieben mit anderem Namen
 
-*Abnahme teils erfüllt:* Ein Lochkreis aus einer Operation, sechs Kopien auf
+*Abnahme erfüllt:* Ein Lochkreis aus einer Operation, sechs Kopien auf
 dem Teilkreis. Dreißig Kopien über den Bauraum hinaus werden abgelehnt, bevor
 gerechnet wird. Eine offene Schale wird durch `thicken` ein geschlossener
-Körper. Offen: die Wandstärkenprüfung nach dem Zug und der Gizmo-Griff.
+Körper. Die beiden zuletzt offenen Punkte sind nachgekommen: die
+Wandstärkenprüfung sitzt zentral in `slice/advise.py` und ist getestet, der
+Gizmo-Zug auf der Fläche landet als eine Transaktion in `push_face`.
 
 ### Etappe 7 — Gitterfüllung (D17, E6, E11)
 

@@ -4116,8 +4116,10 @@ bevor die falsche Zahl auf der Seite stand.
       offenes Protokoll für viele Maschinen.
 - [ ] **Weitere Sprachen befüllen.** Das Gerüst steht, die Kataloge fehlen —
       ES, FR, IT, PT sind der billigste Reichweitengewinn, den es gibt.
-- [ ] **Skizze bedienerisch fertig** (B1). Die Ändern-Gruppe steht; der Rest
-      der neun Punkte aus `konzept-bedienung.md` Teil 4 nicht.
+- [x] **Skizze bedienerisch fertig** (B1). Die Ändern-Gruppe stand schon;
+      die übrigen Punkte aus `konzept-bedienung.md` Teil 4 sind seither
+      nachgekommen — die Stand-Notiz dort führt alle neun als durch, im Code
+      nachgeprüft am 13.08.
 
 ## Die Demo bis 30.10.2026 (12.08.2026)
 
