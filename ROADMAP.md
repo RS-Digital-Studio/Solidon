@@ -4457,8 +4457,51 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       `refine(8)` 215 552. Die Kette für Weg 3 heißt damit vollständig:
       generieren → reparieren → verfeinern → sculpten, und der Editor prüft
       beim Öffnen beides statt an einem leeren Ergebnis zu scheitern.
-- [ ] **P16.3 — `subdivide_surface`, `remesh_uniform`.** Erst prüfen, ob
-      letzteres in `remesh_mesh` gehört, statt daneben zu bauen.
+- [x] **P16.3 — `subdivide_surface`, `remesh_uniform`.** Die Prüffrage des
+      Pakets lautete, ob das gleichmäßige Vernetzen in `remesh_mesh` gehört.
+      Gemessen an `plate_holes`: **nein, und nicht knapp.** Die Streuung der
+      Kantenlängen liegt vor `remesh_mesh` bei 2,224 und danach bei 2,224 — auf
+      die vierte Stelle unverändert. Die Operation macht das Netz feiner, nicht
+      gleichmäßiger, weil sie jede Kante gleich oft teilt und das Verhältnis
+      zwischen der längsten und der kürzesten damit mitnimmt. Bezahlt wird das
+      mit 3 260 416 Dreiecken für 1,5 mm Zielkantenlänge; `remesh_uniform`
+      kommt auf 30 648 bei einer Streuung von 0,41. **Faktor hundert**, und
+      zwei verschiedene Zusagen: die eine teilt nur und verschiebt nie einen
+      Punkt, die andere teilt *und* fasst zusammen und sagt, was das gekostet
+      hat.
+
+      **Das Fehlerbild, das das Paket gekostet hat.** Der naheliegende Weg für
+      `subdivide_surface` — `smooth_out` + `refine_to_length`, so wie ihn das
+      Konzept in H1 nennt — bricht bei CAD-Netzen zusammen. `smooth_out` fasst
+      je zwei koplanare Dreiecke zu einem Viereck zusammen und überspringt
+      beim Verfeinern dessen Diagonale; wo *jede* ebene Fläche aus genau zwei
+      Dreiecken besteht, ist das jede Fläche. `plate_holes` verlor damit ein
+      Sechstel seines Volumens (31 322 → 25 832 mm³) und bekam 2 772 Kanten
+      der Länge null — und meldete sich weiter als wasserdicht, also hätte es
+      keine Prüfung danach gefangen. `calculate_normals` + `smooth_by_normals`
+      leitet die Tangenten aus den Eckpunktnormalen ab, kennt keine Vierecke
+      und hält die Form exakt. Die Kugel wird darüber genauso rund: 33 436 von
+      33 510 mm³ möglichen. `tests/test_subdivision.py`, 15 Tests.
+
+      **Zwei Funde nebenbei, beide in bestehendem Code.** Der Vorschlag bei zu
+      kleiner Kantenlänge rundete die erreichbare Länge auf zwei Stellen und
+      nannte damit bei 0,05 mm exakt die Zahl, die er gerade abgelehnt hatte —
+      ein Vorschlag, der die Ablehnung wiederholt, ist keiner (Regel 17). Und
+      der Übergang in den exakten Netzkern lief über `Mesh`, das `float32`
+      nimmt; `Mesh64` gibt es, und der Kern rechnet in doppelter Genauigkeit
+      (Regel 6). Beides behoben.
+
+      **Zwei Abweichungen vom Konzept, mit Ansage.** Die Ops stehen in
+      Kategorie `mesh` neben ihren Geschwistern, nicht in einer neuen Kategorie
+      `organic` (Entscheidung M): Wer „Neu vernetzen" sucht, findet
+      „Gleichmäßig vernetzen" daneben, und zwei Operationen desselben Zwecks in
+      zwei Menüs wären eine Zumutung. Über `organic` entscheidet P16.5, wenn
+      die vier wirklich neuen Ops dazukommen — `test_interface_limits.py`
+      bleibt bis dahin grün, ohne dass eine Grenze angehoben wurde.
+      `subdivide_surface` bekommt zwei Parameter statt der drei aus §7.2: Der
+      dritte hieß „Iterationen" und ist bei diesem Verfahren wirkungslos, weil
+      eine zweite Runde auf einem Netz, das die Zielkantenlänge bereits hat,
+      keine neuen Punkte erzeugt und damit nichts interpoliert.
 - [ ] **P16.4 — `blend_union`** über `level_set`. Steht nicht im Auftrag und
       gehört trotzdem hierher: die einzige Operation der Phase, die
       *parametrisch* organisch ist, und zugleich unser Basisnetz-Werkzeug.

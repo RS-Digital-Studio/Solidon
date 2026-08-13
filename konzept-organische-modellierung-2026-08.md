@@ -559,13 +559,49 @@ existiert bereits und ist über Prozesse hinweg stabil (`hashing.py:9–11`).
 
 ### 7.2 Subdivision
 
-`subdivide_surface` nach Entscheidung H1: `smooth_out(min_sharp_angle)` +
-`refine_to_length(l)`. Parameter: Zielkantenlänge, Kantenwinkel, Iterationen.
+`subdivide_surface` nach Entscheidung H1. **Umgesetzt in P16.3, und dabei hat
+sich der Weg dorthin geändert.**
 
-Zusätzlich `remesh_uniform` — gleichmäßige Kantenlängen ohne Formänderung, als
-Vorbereitung für §7.1 (Entscheidung E). Das ist nah an `remesh_mesh` und wird
-**geprüft, ob es dort hineingehört**, statt daneben gebaut („Bestehende
-Struktur nutzen", `AGENTS.md`).
+Der naheliegende Weg — `smooth_out(min_sharp_angle)` + `refine_to_length(l)` —
+bricht bei CAD-Netzen zusammen. `smooth_out` leitet die Tangenten aus der
+Dreiecksgeometrie ab und fasst dabei je zwei koplanare Dreiecke zu einem
+Viereck zusammen, dessen Diagonale beim Verfeinern übersprungen wird. Wo
+*jede* ebene Fläche aus genau zwei Dreiecken besteht — also bei so ziemlich
+jedem Netz, das aus einem CAD-Programm kommt —, ist das jede Fläche:
+`plate_holes` verlor damit ein Sechstel seines Volumens (31 322 → 25 832 mm³)
+und bekam 2 772 Kanten der Länge null. Es meldete sich weiter als wasserdicht;
+keine Prüfung danach hätte das gefangen.
+
+`calculate_normals(0, angle)` + `smooth_by_normals(0)` + `refine_to_length(l)`
+leitet die Tangenten aus den Eckpunktnormalen ab, kennt keine Vierecke und
+hält die Form exakt. Geglättet wird darüber genauso gut: das Ikosaeder mit
+einer Unterteilung geht von 29 270 auf 33 436 mm³, bei 33 510 möglichen.
+
+Parameter: **Zielkantenlänge und Kantenwinkel — zwei, nicht drei.** Die oben
+genannten „Iterationen" sind bei diesem Verfahren wirkungslos: Eine zweite
+Runde auf einem Netz, das die Zielkantenlänge bereits erreicht hat, erzeugt
+keine neuen Punkte und interpoliert deshalb nichts.
+
+`remesh_uniform` — gleichmäßige Kantenlängen ohne Formänderung, als
+Vorbereitung für §7.1 (Entscheidung E). Ob es in `remesh_mesh` hineingehört,
+war die Prüffrage von P16.3, und die Antwort ist **nein, gemessen**: Die
+Streuung der Kantenlängen von `plate_holes` liegt vor `remesh_mesh` bei 2,224
+und danach bei 2,224. Die Operation teilt jede Kante gleich oft und nimmt das
+Verhältnis zwischen der längsten und der kürzesten damit mit — sie macht das
+Netz feiner, nicht gleichmäßiger. Bezahlt wird das mit 3 260 416 Dreiecken für
+1,5 mm; `remesh_uniform` (`simplify` + `refine_to_length`) kommt auf 30 648 bei
+einer Streuung von 0,41.
+
+Zwei verschiedene Zusagen, deshalb zwei Operationen: Die eine teilt nur und
+verschiebt nie einen Punkt. Die andere teilt *und* fasst zusammen, in einer
+zugesagten Schranke, und sagt, was das gekostet hat.
+
+**Kategorie `mesh`, nicht `organic`** — Abweichung von Entscheidung M, mit
+Absicht. Beide stehen neben ihren Geschwistern `remesh_mesh`, `smooth_mesh`
+und `decimate_mesh`; wer „Neu vernetzen" sucht, findet „Gleichmäßig vernetzen"
+daneben. Über `organic` entscheidet P16.5, wenn die vier wirklich neuen Ops
+dazukommen und die Frage sich stellt, die M eigentlich beantwortet: wohin mit
+sechs Einträgen, die nirgends hineinpassen.
 
 Käfigmodellierung: vertagt, Begründung in H2.
 
@@ -641,15 +677,25 @@ Rechner ohne sein Relief.
 
 ## §10 Leistung — neue Zeilen für §31
 
-| Vorgang | Zielwert | gemessen (P16.2) |
+| Vorgang | Zielwert | gemessen |
 |---|---|---|
-| Pinselstrich → Vorschau | unter 50 ms | **0,7 ms** bei 1,31 Mio. Dreiecken |
-| Strichliste (1 000) neu auswerten | unter 2 s | **67 ms** auf dem §31-Prüfnetz |
-| Subdivision | unter 3 s | **574 ms** (`smooth_out` + `refine(2)`) |
+| Pinselstrich → Vorschau | unter 50 ms | **0,7 ms** bei 1,31 Mio. Dreiecken (P16.2) |
+| Strichliste (1 000) neu auswerten | unter 2 s | **67 ms** auf dem §31-Prüfnetz (P16.2) |
+| Subdivision | unter 3 s | **1 778 ms** (P16.3, ganze Operation) |
+| Gleichmäßig vernetzen | unter 3 s | **1 480 ms** (P16.3, ganze Operation) |
 
-Regressionsschwelle wie überall 25 %. Vier Tests in `tests/test_performance.py`
+Regressionsschwelle wie überall 25 %. Fünf Tests in `tests/test_performance.py`
 halten die Zahlen fest, dazu einer, der Entscheidung C selbst prüft statt sie
 zu behaupten.
+
+**Die Subdivisionszeile ist in P16.3 gewachsen, ohne dass etwas langsamer
+wurde.** Sie stand bei 574 ms, und das war eine bequeme Messung: ein selbst
+gebautes Manifold, `smooth_out(52.5).refine(2)`, ohne den Weg hin und zurück
+ins Netz. Gemessen wird jetzt die Operation, die ausgeliefert wird — samt
+Konvertierung, Normalenrechnung und Verschweißen, und mit halbierter
+Kantenlänge als Ziel, was dieselbe Vervierfachung der Dreiecke bedeutet wie
+`refine(2)`. Ein Budget, das den Aufruf nicht abdeckt, den es zu schützen
+vorgibt, ist keines.
 
 **R1 ist beantwortet, und deutlich.** Die riskante Zeile war die erste — sie
 verlangt eine Vorschau, die nur die betroffenen Vertices anfasst. Gemessen an
@@ -765,7 +811,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 |---|---|---|---|---|
 | **P16.1** | Regel 2 neu fassen; `tests/test_gesture_ops.py` gegen die **bestehenden** Skizzen-Ops; `AGENTS.md`, `.claude/rules/operationen.md`; Befund B13 im Meshy-Konzept zurücknehmen | S | neuer Test grün auf dem Bestand, ohne eine Zeile neuer Geometrie | **fertig** — 26 Tests, Tor grün |
 | **P16.2** | **Reine Messung.** Vorschauweg, Strichwiedergabe, Subdivision, Entscheidung C als Test | S | Messwerte festgehalten; R1 beantwortet **bevor** P16.5 beginnt | **fertig** — 4 Tests, R1 entwarnt |
-| **P16.3** | `subdivide_surface` und `remesh_uniform` — erst prüfen, ob letzteres in `remesh_mesh` gehört | S | Geometrietest gegen Korpus, beide Qualitätsstufen | offen |
+| **P16.3** | `subdivide_surface` und `remesh_uniform` — erst prüfen, ob letzteres in `remesh_mesh` gehört | S | Geometrietest gegen Korpus, beide Qualitätsstufen | **fertig** — 15 Tests, Prüffrage mit Zahlen beantwortet (§7.2) |
 | **P16.4** | `blend_union` über `level_set` (N) — **zugleich das Basisnetz-Werkzeug für H2** | S | Volumen und Wasserdichtheit gegen analytische Körper | offen |
 | **P16.5** | Kern des Sculptings: `kind="strokes"`, `Stroke`-Verträge (§9), Auswertung mit Etappen, sechs Werkzeuge, Symmetrie — **ohne Oberfläche**, über CLI bedienbar; **bringt die saubere Figur in den Korpus mit** (§18, verschoben aus P16.2) | **XL** | Determinismus, Symmetrie, Etappen; zweimal auswerten identisch | offen |
 | **P16.6** | Sculpting-Sitzung im Viewport: Pinselring, Leiste, Vorschau, Wandstärke live, Editor-Undo | **XL** | offscreen wie `test_sketch_editor.py`; Grenzen aus `test_interface_limits.py` | offen |
@@ -896,6 +942,15 @@ die versteckte Naht.
   nachgezogen. `tests/test_gesture_ops.py`: 26 Tests, prüfen fünf
   Eigenschaften von Sammelparametern über das ganze Register. Befund B13 im
   Meshy-Konzept mit Datum zurückgenommen (technische Hälfte bleibt gültig).
+- **P16.3** — `remesh_uniform` und `subdivide_surface` in `mesh_ops.py`,
+  `tests/test_subdivision.py` mit 15 Tests, zwei Leistungszeilen in §10.
+  Die Prüffrage („gehört das gleichmäßige Vernetzen in `remesh_mesh`?") ist
+  mit Zahlen beantwortet — nein, Faktor hundert an Dreiecken und eine andere
+  Zusage (§7.2). Zwei Funde in bestehendem Code mitbehoben: ein
+  Handlungsvorschlag, der die Zahl nannte, die er gerade abgelehnt hatte
+  (Regel 17), und ein Übergang in den exakten Netzkern über `float32`, wo
+  `Mesh64` dieselbe Arbeit in doppelter Genauigkeit tut (Regel 6). Die
+  Operationszahl auf beiden Websprachen von 77 auf 79 nachgezogen.
 - **P16.2** (`4b1fa53`) — vier Leistungstests in `tests/test_performance.py`
   unter `pytest.mark.performance`. R1 entwarnt: Vorschau 0,7 ms statt der
   befürchteten Sekunden, weil der Pinsel nur die getroffenen Vertices
@@ -911,13 +966,15 @@ Ein Lauf in einem Rutsch stürzt ab; das ist nicht neu und nicht von P16
 verursacht (nachgewiesen: tritt auch ohne `test_gesture_ops.py` auf, an
 anderer Stelle).
 
-**Noch nichts angefasst — keine Ops, keine Oberfläche, keine Verträge:**
+**Noch nichts angefasst — keine Oberfläche, keine Verträge:**
 
-- **P16.3** — `subdivide_surface`, `remesh_uniform`. Klein, acht Schritte der
-  Op-Checkliste, kein Vorwissen aus P16.4/.5 nötig. Nächster sinnvoller
-  Einstieg.
-- **P16.4** — `blend_union` über `level_set`. Ebenso klein, unabhängig von
-  P16.3.
+- **P16.4** — `blend_union` über `level_set`. Klein, unabhängig von P16.3.
+  Nächster sinnvoller Einstieg. Der Adapter in den exakten Netzkern steht
+  seit P16.3 in `mesh_ops.py` (`_as_solid`, `_as_mesh`) — wer ihn als Zweiter
+  braucht, zieht ihn heraus, statt ihn ein zweites Mal zu schreiben. Die zwei
+  Fallen darin sind bezahlt und stehen dort auskommentiert: `Mesh64` statt
+  `Mesh`, und Verschweißen nach der Rückkonvertierung, weil der Kern an jeder
+  scharfen Kante mehrere Eckpunkte an derselben Stelle herausgibt.
 - **P16.5** — der XL-Brocken: `kind="strokes"`, `Stroke`-Verträge, Auswertung
   mit Etappen, sechs Pinselwerkzeuge, Symmetrie. Braucht vorher P16.11
   (Käfig-Prüfpunkt, Kriterium festschreiben) und die saubere Figur im
@@ -936,6 +993,20 @@ wirksam werden):
   das Einbacken an, mit Nachfrage, weil nicht folgenlos rücknehmbar (einzige
   Ausnahme von Regel 19 in diesem Konzept).
 
-**Nächster Schritt, wenn es weitergeht:** P16.3, dann P16.4 — beide klein,
-beide für sich nützlich, beide unabhängig von der noch offenen Käfig-Frage.
-P16.11 (Prüfpunkt) gehört terminlich vor P16.5, nicht dazwischen.
+**Nächster Schritt, wenn es weitergeht:** P16.4 — klein, für sich nützlich,
+unabhängig von der noch offenen Käfig-Frage. P16.11 (Prüfpunkt) gehört
+terminlich vor P16.5, nicht dazwischen.
+
+**Zwei Dinge, die P16.3 offen an den Bauplan zurückgibt** — beide brauchen
+eine Ansage, deshalb stehen sie hier und nicht im Code:
+
+- **Bauplan §25** kennt die zwei neuen Operationen noch nicht. §6 dieses
+  Dokuments sieht die Änderung vor („sechs Ops, Kategorie `organic"'), aber
+  der Bauplan wird nicht ungefragt geändert. Sinnvoll zusammen mit P16.4 oder
+  P16.5, wenn feststeht, welche der sechs wirklich `organic` werden.
+- **Die Kategoriefrage selbst.** P16.3 hat sie mit `mesh` beantwortet, weil
+  zwei Netz-Operationen neben ihren Geschwistern gehören (§7.2). Für
+  `sculpt_strokes`, `displace_image`, `pose_armature` und `blend_union` gilt
+  das nicht — spätestens dort ist zu entscheiden, ob `organic` als Kategorie
+  entsteht und unter welche Menügruppe sie fällt. Ein eigenes Menü ist es
+  nicht: `test_interface_limits.py` deckelt bei neun, und neun sind es.
