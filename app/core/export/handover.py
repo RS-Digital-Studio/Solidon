@@ -24,7 +24,7 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Final
 
@@ -35,7 +35,7 @@ from app.core.export.slicer_keys import SlicerFlavour
 from app.core.knowledge.print_settings import read_path, with_path
 from app.core.log import get_logger
 from app.core.slice import gcode
-from app.core.types import Finding, PrintSettings, Profile, SettingAdvice
+from app.core.types import Finding, MaterialSlot, PrintSettings, Profile, SettingAdvice
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -327,12 +327,23 @@ class SlicerConfig:
     """Die Profildateien für einen Lauf.
 
     ``process`` trägt bei ``prusa`` und ``cura`` alles; bei der Orca-Familie
-    steht daneben ``filament``, weil sie Werte nur aus dem Profil annimmt, in
-    das sie gehören.
+    stehen daneben die ``filaments``, weil sie Werte nur aus dem Profil annimmt,
+    in das sie gehören.
+
+    **Mehrzahl, nicht Einzahl.** Ein Modell hat so viele Filamente wie
+    Materialslots (§20), und die sind nicht dasselbe: ein Schriftzug in Weiß
+    auf einem Gehäuse in Schwarz sind zwei Spulen mit zwei Temperaturen. Solange
+    hier eine Datei stand, bekam der Slicer für jeden Slot dasselbe Filament —
+    und die zweite Farbe fuhr mit den Werten der ersten.
     """
 
     process: Path
-    filament: Path | None = None
+    filaments: tuple[Path, ...] = ()
+
+    @property
+    def filament(self) -> Path | None:
+        """Das erste Filament. Für alles, was nur eines kennt."""
+        return self.filaments[0] if self.filaments else None
 
 
 def write_config(
@@ -340,8 +351,16 @@ def write_config(
     profile: Profile,
     setup: SlicerSetup,
     directory: Path,
+    slots: Sequence[MaterialSlot] = (),
 ) -> SlicerConfig:
-    """Schreibt die Profile, die der Slicer gleich lädt."""
+    """Schreibt die Profile, die der Slicer gleich lädt.
+
+    ``slots`` sind die Materialslots der Platte (§20). Je Slot entsteht ein
+    Filamentprofil, denn ein Slot *ist* ein Filament — zwei Farben sind zwei
+    Spulen, und die fahren verschieden. Trägt ein Slot einen eigenen
+    Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
+    sonst gilt für alle das eine aus dem ``setup``.
+    """
     split = by_section(settings, setup.flavour)
     values = {key: value for section in split.values() for key, value in section.items()}
     values |= _machine_keys(profile, setup.flavour)
@@ -363,16 +382,22 @@ def write_config(
             ),
             encoding="utf-8",
         )
-        filament = directory / "solidon_filament.json"
-        filament.write_text(
-            json.dumps(
-                _orca_filament(split.get("filament", {}), settings, profile, setup),
-                indent=2,
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-        return SlicerConfig(process=target, filament=filament)
+        # Je Slot eine Datei. Ohne Slots bleibt es bei einer — der einfarbige
+        # Druck ist der Sonderfall mit einem Eintrag, nicht ein anderer Weg.
+        written: list[Path] = []
+        for index, slot in enumerate(slots or (MaterialSlot(index=0, name=""),)):
+            eigen = replace(setup, base_filament=slot.material) if slot.material else setup
+            datei = directory / f"solidon_filament_{index}.json"
+            datei.write_text(
+                json.dumps(
+                    _orca_filament(split.get("filament", {}), settings, profile, eigen, slot),
+                    indent=2,
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            written.append(datei)
+        return SlicerConfig(process=target, filaments=tuple(written))
 
     target = directory / "solidon_cura.txt"
     target.write_text(
@@ -523,6 +548,7 @@ def _orca_filament(
     settings: PrintSettings,
     profile: Profile,
     setup: SlicerSetup,
+    slot: MaterialSlot | None = None,
 ) -> dict[str, object]:
     """Das Filamentprofil für die Orca-Familie.
 
@@ -563,11 +589,51 @@ def _orca_filament(
     # selbst setzt. Der Slicer wählte „Cool Plate", fand dort die 35 Grad
     # seiner eigenen Vorgabe, und ein PETG-Druck ging mit kaltem Bett hinaus.
     base = profile_file(setup.base_filament, setup, "filament")
+    inherited: dict[str, object] = {}
     if base is not None:
         inherited = slicer_profiles.resolve_values(base)
         document.update({key: _as_slots(value) for key, value in inherited.items()})
-    document.update({key: [value] for key, value in values.items()})
-    return _with_every_plate(document, values)
+
+    # Solidons Werte kommen darüber — außer sie gehören einem anderen Material.
+    #
+    # Die Einstellungen kennen ein Material, das Projekt-Material. Ein Slot
+    # kann ein anderes tragen: eine Schrift in PLA auf einem Gehäuse aus PETG.
+    # Für die Schrift sind 240 Grad und 10 mm³/s keine Solidon-Entscheidung
+    # mehr, sondern ein Wert aus der falschen Zeile — PLA fährt 210 bei 21.
+    # Wo der Slot sein eigenes Profil nennt, gilt deshalb der Hersteller für
+    # alles, was am Material hängt.
+    fremd = bool(slot is not None and slot.material and inherited)
+    eigene = {key: [value] for key, value in values.items()}
+    if fremd:
+        vom_material = {orca for _solidon, orca, _kind in slicer_profiles.FILAMENT_READBACK}
+        eigene = {key: value for key, value in eigene.items() if key not in vom_material}
+    document.update(eigene)
+    # Die Farbe gehört dem Slot, nicht der Einstellung: sie ist der Grund,
+    # warum es diesen Slot überhaupt gibt (§20). Ein Schriftzug in Weiß auf
+    # schwarzem Gehäuse sind zwei Spulen, und beide bekämen sonst die eine
+    # Farbe aus den Druckeinstellungen.
+    if slot is not None and slot.colour is not None:
+        red, green, blue = (round(channel * 255) for channel in slot.colour)
+        document["filament_colour"] = [f"#{red:02X}{green:02X}{blue:02X}"]
+    if slot is not None and slot.name:
+        document["name"] = f"Solidon {slot.name}"
+    # Aus dem Dokument, nicht aus ``values``: bei einem Slot mit eigenem
+    # Material stehen dort die Werte des Herstellers, und die Platte soll die
+    # Temperatur bekommen, die auch sonst gilt — PLA bei 60, nicht bei den 80
+    # des Projektmaterials.
+    return _with_every_plate(document, _plate_source(document, values))
+
+
+def _plate_source(document: Mapping[str, object], values: Mapping[str, str]) -> dict[str, str]:
+    """Welche Betttemperatur auf alle Platten geschrieben wird."""
+    quelle: dict[str, str] = {}
+    for schluessel in ("hot_plate_temp", "hot_plate_temp_initial_layer"):
+        wert = document.get(schluessel, values.get(schluessel))
+        if isinstance(wert, list):
+            wert = wert[0] if wert else None
+        if wert is not None:
+            quelle[schluessel] = str(wert)
+    return quelle
 
 
 #: Die Druckplatten, die die Orca-Familie auseinanderhält. Welche aufliegt,
@@ -702,8 +768,12 @@ def _command(
         # ``--load-settings`` zu geben hilft nicht: der Slicer sortiert die
         # Dateien nach ihrem ``type``, und ein Filamentprofil, das dort
         # ankommt, wird verworfen statt geladen.
-        if config.filament is not None:
-            arguments += ["--load-filaments", str(config.filament)]
+        # Alle Filamente auf einmal, durch Semikolon getrennt — je Slot eines,
+        # in der Reihenfolge der Slots. Die *ist* die Extruderbelegung (§20);
+        # gäbe man nur das erste, druckte die zweite Farbe mit den Werten der
+        # ersten.
+        if config.filaments:
+            arguments += ["--load-filaments", ";".join(str(one) for one in config.filaments)]
         if keep_arrangement:
             # Ohne diesen Schalter ordnet die Orca-Familie **immer** neu an,
             # egal in welchen Koordinaten die Teile ankommen — gemessen an zwei
@@ -802,6 +872,7 @@ def slice_model(
     output_dir: Path | None = None,
     timeout: float = TIMEOUT_SECONDS,
     keep_arrangement: bool = False,
+    slots: Sequence[MaterialSlot] = (),
 ) -> SliceOutcome:
     """Slicen lassen und die Datei zurücklesen (§29, §28.1).
 
@@ -845,7 +916,7 @@ def slice_model(
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix="solidon-slice-") as directory:
         workspace = Path(directory)
-        config = write_config(settings, profile, setup, workspace)
+        config = write_config(settings, profile, setup, workspace, slots)
         # Aus demselben Grund wie die Modellpfade: der Slicer schreibt sonst
         # neben sein Arbeitsverzeichnis statt dorthin, wo die Datei erwartet
         # wird — und ``_find_gcode`` sucht an der leeren Stelle.

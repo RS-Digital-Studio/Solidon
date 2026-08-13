@@ -1507,3 +1507,69 @@ def test_the_worst_layer_is_reported_separately() -> None:
     assert total_overhang(result) == pytest.approx(150.0)
     assert worst_overhang(result) == pytest.approx(50.0)
     assert worst_overhang(_layers()) == 0.0, "ohne Schichten kein Überhang"
+
+
+# --- mehrere Filamente auf einer Platte (§20, §29) ------------------------------
+
+
+def _filament_profile(directory: Path, name: str, **werte: object) -> Path:
+    datei = directory / f"{name}.json"
+    datei.write_text(json.dumps({"name": name, **werte}), encoding="utf-8")
+    return datei
+
+
+def test_every_slot_gets_its_own_filament(tmp_path: Path) -> None:
+    """Ein Slot ist ein Filament, kein Objektmerkmal (§20).
+
+    Ein Schriftzug in Weiß auf einem Gehäuse in Schwarz sind zwei Spulen mit
+    zwei Temperaturen. Solange die Übergabe eine Datei kannte, bekam jeder
+    Slot dasselbe Filament — die zweite Farbe fuhr mit den Werten der ersten,
+    und im G-Code stand nirgends, dass das so gemeint war.
+    """
+    from app.core.types import MaterialSlot
+
+    petg = _filament_profile(
+        tmp_path, "Haus PETG", nozzle_temperature=["240"], filament_max_volumetric_speed=["5"]
+    )
+    pla = _filament_profile(
+        tmp_path, "Haus PLA", nozzle_temperature=["210"], filament_max_volumetric_speed=["21"]
+    )
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+    slots = [
+        MaterialSlot(index=0, name="Gehäuse", colour=(0.0, 0.0, 0.0), material=str(petg)),
+        MaterialSlot(index=1, name="Schrift", colour=(1.0, 1.0, 1.0), material=str(pla)),
+    ]
+
+    config = handover.write_config(settings, profile, setup, tmp_path, slots)
+
+    assert len(config.filaments) == 2, "je Slot ein Profil"
+    erste, zweite = (json.loads(f.read_text(encoding="utf-8")) for f in config.filaments)
+    assert erste["nozzle_temperature"] == ["240"], "der Hersteller des Slots gilt"
+    assert zweite["nozzle_temperature"] == ["210"], "und für den zweiten ein anderer"
+    assert zweite["filament_max_volumetric_speed"] == ["21"]
+    assert erste["filament_colour"] == ["#000000"], "die Farbe kommt vom Slot"
+    assert zweite["filament_colour"] == ["#FFFFFF"]
+    assert zweite["name"] == "Solidon Schrift"
+
+    befehl = handover._command(setup, [tmp_path / "platte.3mf"], config, tmp_path)
+    stelle = befehl.index("--load-filaments")
+    assert befehl[stelle + 1].count(";") == 1, "beide gehen an den Slicer, nicht nur eines"
+
+
+def test_without_slots_it_stays_one_filament(tmp_path: Path) -> None:
+    """Der einfarbige Druck ist der Sonderfall mit einem Eintrag, nicht ein
+    anderer Weg — und dort gelten Solidons Werte, nicht die des Herstellers."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    config = handover.write_config(settings, profile, setup, tmp_path)
+
+    assert len(config.filaments) == 1
+    assert config.filament == config.filaments[0], (
+        "das eine bleibt über die alte Auskunft erreichbar"
+    )
+    document = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+    assert document["nozzle_temperature"] == [str(settings.temperature.nozzle)]

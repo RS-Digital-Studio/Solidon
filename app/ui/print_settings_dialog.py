@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
 
 from app.core import discover, tools
 from app.core.errors import AppError
-from app.core.export import handover, slicer_keys, slicer_profiles
+from app.core.export import handover, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import arrangement_holds, write_assembly
 from app.core.geom.mesh import as_mesh_data
@@ -61,6 +61,7 @@ from app.core.slice import advise
 from app.core.types import (
     BoundingBox,
     Finding,
+    MaterialSlot,
     PrintSettings,
     Profile,
     SettingAdvice,
@@ -683,6 +684,7 @@ class _SliceWorker(QThread):
         profile: Profile,
         setup: handover.SlicerSetup,
         keep_arrangement: bool = False,
+        slots: Sequence[MaterialSlot] = (),
     ) -> None:
         super().__init__()
         self._model = model
@@ -690,6 +692,7 @@ class _SliceWorker(QThread):
         self._profile = profile
         self._setup = setup
         self._keep_arrangement = keep_arrangement
+        self._slots = slots
 
     def run(self) -> None:
         try:
@@ -699,6 +702,7 @@ class _SliceWorker(QThread):
                 self._profile,
                 self._setup,
                 keep_arrangement=self._keep_arrangement,
+                slots=self._slots,
             )
         except AppError as problem:
             self.failed.emit(problem)
@@ -1473,7 +1477,17 @@ class PrintSettingsDialog(QDialog):
         self.progress.setVisible(True)
         self.state.setText(tr("Der Slicer rechnet …"))
 
-        worker = _SliceWorker([written], self.settings, self.session.profile, setup, keep)
+        # Die Materialslots der Platte: je Slot ein Filament (§20). Ohne sie
+        # bekäme jede Farbe die Werte der ersten.
+        slots = threemf.merge_slots(
+            [
+                threemf.AssemblyPart(
+                    mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots)
+                )
+                for entry in on_first_plate
+            ]
+        )
+        worker = _SliceWorker([written], self.settings, self.session.profile, setup, keep, slots)
         worker.done.connect(self._sliced)
         worker.failed.connect(self._slice_failed)
         worker.finished.connect(self._slice_finished)
