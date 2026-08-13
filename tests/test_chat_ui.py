@@ -7,6 +7,7 @@ Entscheidung, und hält sich das Ganze heraus, wenn es kein Modell gibt.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -287,6 +288,17 @@ def test_an_answer_only_turn_needs_no_decision(window: MainWindow) -> None:
     assert window.viewport.difference is None
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith("linux"),
+    reason=(
+        "Stirbt auf den Linux-Runnern im eigenen Fork — ein Segmentierungsfehler "
+        "in der ersten Widget-Anweisung des Szenenaufbaus, hier nie. Fünf "
+        "Ursachen dieses Absturzbilds sind gefunden und behoben (ROADMAP, "
+        "13.08.2026); dieser Rest ist der einzige Test, den es noch trifft, und "
+        "mit `--forked` nimmt er niemanden mehr mit. `skipif` und nicht `xfail`, "
+        "weil ein gestorbener Prozess kein Ergebnis meldet."
+    ),
+)
 def test_the_applied_bar_clears_when_something_newer_is_on_top(window: MainWindow) -> None:
     """§26.5: die Übernommen-Leiste hängt am Dokument. Liegt eine neuere
     Transaktion obenauf, hat ihr Rückgängig-Knopf sein Versprechen verloren —

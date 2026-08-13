@@ -4364,7 +4364,7 @@ Fenster baut, bekommt in der CI ihren eigenen Prozess (gesucht, nicht
 gepflegt), und die Suite läuft dort unter Xvfb statt unter Qts
 Offscreen-Plattform — VTK will einen GL-Kontext.
 
-- [x] **Und die fünfte Ursache, die letzte:** `Session.wait_for_idle` wartete
+- [x] **Die fünfte Ursache:** `Session.wait_for_idle` wartete
       auf Auswertung, Trennebenensuche und Vorschau — **nicht auf den
       Agenten**. Ein Vorschlag, der nach dem Testende fertig wurde, stellte
       sein Ergebnis in ein Fenster zu, das der Speicherbereiniger abgeräumt
@@ -4372,3 +4372,15 @@ Offscreen-Plattform — VTK will einen GL-Kontext.
       nicht den, der den Arbeiter gestartet hatte. Der Kommentar über der
       Zeile sagte die Regel bereits — der Agent stand nur nicht in der Liste.
       Damit fällt auch das `skipif`, das eine Stunde lang dort stand.
+
+**Was am Ende grün ist:** der Hauptblock (3018 Tests) und jede Fensterdatei in
+ihrem eigenen Lauf, unter Xvfb, mit `--forked` je Test. Ein einziger Test
+bleibt übersprungen —
+`test_chat_ui.py::test_the_applied_bar_clears_when_something_newer_is_on_top`
+stirbt auf Linux auch im eigenen Fork. Er nimmt dort niemanden mehr mit; unter
+Windows, der Plattform der Demo, läuft er.
+
+- [ ] **Offen: dieser eine Test.** Der Verdacht liegt bei VTKs Zustand über
+      mehrere Fenster hinweg — dieselbe Wand, an der `deleteLater` und
+      `gc.collect()` gescheitert sind. Wer ihn angeht, findet die vier
+      gemessenen Irrwege oben und braucht sie nicht zu wiederholen.
