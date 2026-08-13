@@ -30,6 +30,8 @@ Schicht um Schicht, mit dem Druckkopf an der Aufbaukante
 
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import QByteArray, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter
 from PySide6.QtSvg import QSvgRenderer
@@ -46,6 +48,18 @@ from app.ui.theme import THEMES, Theme
 #: §2.8 sagt „unter 0,2 s nichts". Ein leeres Projekt ist in Millisekunden
 #: gerechnet, und eine Anzeige, die dabei aufblitzt, ist Unruhe ohne Auskunft.
 DELAY_MS = 200
+
+#: Ab wann eine Wartezeit eine Schätzung bekommt (Bauplan §2.8).
+#:
+#: Vorher wäre sie geraten: Die ersten Sekunden eines Laufs sagen wenig über
+#: seinen Rest, weil der Anfang oft billiger ist als die Mitte. Eine Zahl, die
+#: erst „noch 40 Sekunden" und dann „noch zwei Minuten" sagt, ist schlechter
+#: als keine.
+ESTIMATE_AFTER_S = 10.0
+
+#: Wie weit ein Lauf sein muss, bevor aus ihm hochgerechnet wird. Bei drei
+#: Prozent ist der Hochrechnungsfehler größer als die Aussage.
+ESTIMATE_FROM = 0.08
 
 #: Bildabstand der Animation in Millisekunden.
 FRAME_MS = 16
@@ -112,6 +126,8 @@ class LoadingVeil(QWidget):
         self._theme: Theme = "dark"
         self._headline = ""
         self._detail = ""
+        self._started: float | None = None
+        """Wann dieser Lauf begonnen hat — Grundlage der Restschätzung."""
         self._target = 0.0
         """Der gemessene Anteil — was die Zahl sagt."""
         self._shown = 0.0
@@ -165,12 +181,34 @@ class LoadingVeil(QWidget):
         self._detail = ""
         self._target = 0.0
         self._shown = 0.0
+        self._started = time.monotonic()
         if not animations_enabled():
             # Offscreen sieht niemand ein Aufblitzen, und ein Test, der auf
             # einen Zeitgeber wartet, prüft die Uhr statt das Verhalten.
             self._appear()
             return
         self._delay.start(DELAY_MS)
+
+    def remaining(self) -> str:
+        """Was von der Wartezeit noch aussteht — leer, solange es geraten wäre.
+
+        §2.8 verlangt die Schätzung erst über zehn Sekunden, und das ist keine
+        Willkür: Die ersten Sekunden eines Laufs sagen wenig über seinen Rest.
+        Aus verstrichener Zeit und Anteil hochgerechnet, linear — genauer geht
+        es nicht, denn wie viel Arbeit hinter den nächsten Prozent steckt,
+        weiß nur die Operation selbst.
+        """
+        if self._started is None or self._target < ESTIMATE_FROM:
+            return ""
+        passed = time.monotonic() - self._started
+        if passed < ESTIMATE_AFTER_S:
+            return ""
+        left = passed * (1.0 - self._target) / self._target
+        if left < 5.0:
+            return tr("gleich fertig")
+        if left < 90.0:
+            return tr("noch etwa {sekunden} s").format(sekunden=round(left / 5.0) * 5)
+        return tr("noch etwa {minuten} min").format(minuten=round(left / 60.0))
 
     def step(self, fraction: float, detail: str) -> None:
         """Wie weit der Lauf ist und woran er gerade rechnet."""
@@ -301,7 +339,12 @@ class LoadingVeil(QWidget):
         faded.setAlpha(170)
         painter.setPen(faded)
 
+        # Prozent sagt, wie weit; die Schätzung sagt, wie lange noch. Beide
+        # rechts, damit der laufende Schritt links seine Breite behält.
+        left_over = self.remaining()
         percent = f"{round(self._target * 100)} %"
+        if left_over:
+            percent = f"{percent}  ·  {left_over}"
         metrics = QFontMetrics(font)
         room = area.width() - metrics.horizontalAdvance(percent) - ROOMY
         painter.drawText(
