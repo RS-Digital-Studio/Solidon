@@ -130,13 +130,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        # Zwei Macs, keine Doppelung: `macos-13` läuft auf Intel, `macos-latest`
+        # auf Apple Silicon. PyInstaller packt, was unter ihm liegt — ein auf
+        # arm64 gebautes Paket startet auf einem Intel-Mac nicht, und das
+        # betrifft jedes Gerät vor 2020.
+        os: [windows-latest, ubuntu-latest, macos-13, macos-latest]
     env:
       # Absichtlich auf Job-Ebene: ein Schritt kann den `secrets`-Kontext nicht
       # im eigenen `if` lesen, und sein eigenes `env` dort auch nicht. Dies ist
       # die eine Stelle, die die Bedingung unten sieht.
       SIGN_CERTIFICATE: ${{ secrets.SIGN_CERTIFICATE }}
       SIGN_PASSWORD: ${{ secrets.SIGN_PASSWORD }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -240,6 +247,58 @@ jobs:
           version=$(python -c "from app.branding import APP_VERSION; print(APP_VERSION)")
           tar -czf "dist/${name}-${version}-linux-x86_64.tar.gz" -C dist "${name}"
 
+      - name: Bundle prüfen (macOS)
+        # Der Bau bricht nicht ab, wenn BUNDLE ausbleibt — er liefert dann
+        # stillschweigend einen Ordner. Auf einem Mac ist das kein Programm,
+        # sondern eine Enttäuschung beim Doppelklick, und sie fiele erst dem
+        # ersten Nutzer auf.
+        if: runner.os == 'macOS'
+        run: |
+          name=$(python -c "from app.branding import APP_NAME; print(APP_NAME)")
+          test -d "dist/${name}.app" || { echo "::error::dist/${name}.app fehlt — BUNDLE hat nicht gegriffen."; exit 1; }
+          test -x "dist/${name}.app/Contents/MacOS/${name}" || { echo "::error::Im Bundle fehlt die ausführbare Datei."; exit 1; }
+          plutil -lint "dist/${name}.app/Contents/Info.plist"
+
+      - name: Ohne Signatur bauen (macOS)
+        # Wie bei Windows kein stummer Übersprung. Auf dem Mac wiegt es
+        # schwerer: Gatekeeper lässt eine unsignierte Anwendung aus dem Netz
+        # gar nicht erst starten, der Nutzer muss sie über das Kontextmenü
+        # öffnen. Das gehört auf die Download-Seite, nicht in eine Fußnote.
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE == ''
+        run: |
+          echo "::warning::Unsigniert gebaut - Gatekeeper blockiert den ersten Start (Rechtsklick, Oeffnen)."
+
+      - name: Signieren (macOS)
+        # Ad-hoc genügt nicht: signiert wird mit einer Developer-ID, sonst
+        # nützt die Signatur außerhalb des eigenen Rechners nichts. Die
+        # Notarisierung ist ein eigener Schritt und braucht ein Apple-Konto —
+        # sie kommt dazu, sobald es eines gibt.
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != ''
+        run: |
+          name=$(python -c "from app.branding import APP_NAME; print(APP_NAME)")
+          keychain="$RUNNER_TEMP/build.keychain"
+          security create-keychain -p "" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "" "$keychain"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          codesign --force --deep --options runtime --timestamp \
+            --sign "$APPLE_SIGN_IDENTITY" "dist/${name}.app"
+          codesign --verify --deep --strict --verbose=2 "dist/${name}.app"
+
+      - name: Archiv packen (macOS)
+        # `ditto`, nicht `zip`: ein Bundle trägt Symlinks und erweiterte
+        # Attribute, und ein gewöhnliches zip macht daraus Kopien und verliert
+        # die Signatur. `ditto` ist der Weg, den Apple selbst dafür vorsieht.
+        if: runner.os == 'macOS'
+        run: |
+          name=$(python -c "from app.branding import APP_NAME; print(APP_NAME)")
+          version=$(python -c "from app.branding import APP_VERSION; print(APP_VERSION)")
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/${name}.app" "dist/${name}-${version}-macos-$(uname -m).zip"
+
       - name: Prüfsummen (Windows)
         # Sie stehen auf der Download-Seite neben der Datei — bei einem
         # unsignierten Paket ist das die einzige Möglichkeit, die Herkunft zu
@@ -259,6 +318,15 @@ jobs:
           cd dist
           for archive in *-linux-x86_64.tar.gz; do
             sha256sum "$archive" | tee "$archive.sha256"
+          done
+
+      - name: Prüfsummen (macOS)
+        # `shasum -a 256`, weil macOS kein `sha256sum` mitbringt.
+        if: runner.os == 'macOS'
+        run: |
+          cd dist
+          for archive in *-macos-*.zip; do
+            shasum -a 256 "$archive" | tee "$archive.sha256"
           done
 
       - name: Installer hochladen (Windows)
@@ -281,6 +349,19 @@ jobs:
           path: |
             dist/*-linux-x86_64.tar.gz
             dist/*-linux-x86_64.tar.gz.sha256
+          retention-days: 7
+
+      - name: Archiv hochladen (macOS)
+        # Der Name trägt die Architektur, sonst überschreibt der zweite Mac
+        # das Artefakt des ersten und übrig bliebe eines von beiden — ohne
+        # dass jemand sähe, welches.
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidon3d-macos-${{ runner.arch }}
+          path: |
+            dist/*-macos-*.zip
+            dist/*-macos-*.zip.sha256
           retention-days: 7
 
   latest:

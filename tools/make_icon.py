@@ -7,6 +7,10 @@ werden die zwei Ablagen, die nicht selbst rendern können:
 * ``packaging/solidon3d.ico`` — für die exe (PyInstaller) und den Installer
   (Inno Setup). Kleine Größen als DIB, die 256er als PNG, wie Windows es
   vorsieht; geschrieben ohne neue Abhängigkeit.
+* ``packaging/solidon3d.icns`` — dasselbe für das macOS-Bundle. Ein ICNS ist
+  ein Container aus benannten Blöcken; die modernen Typen nehmen PNG, also
+  entsteht es aus denselben Rasterungen wie die ICO und braucht ebenfalls
+  keine neue Abhängigkeit.
 * ``website/icon.svg`` — das Favicon der Website, eine Kopie der Quelle.
 
 Das Fenster selbst rastert die SVG-Quelle zur Laufzeit
@@ -30,11 +34,30 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "app" / "images" / "icon" / "solidon3d.svg"
 SOURCE_SMALL = ROOT / "app" / "images" / "icon" / "solidon3d-small.svg"
 ICO_TARGET = ROOT / "packaging" / "solidon3d.ico"
+ICNS_TARGET = ROOT / "packaging" / "solidon3d.icns"
 WEBSITE_TARGET = ROOT / "website" / "icon.svg"
 
 #: Die Größenreihe der ICO — was Windows in Taskleiste, Explorer und
 #: Alt-Tab tatsächlich abruft.
 SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)
+
+#: Die Blöcke der ICNS: Typkennung und Kantenlänge. Die Doppelungen sind
+#: keine — ``ic13`` ist 128 Punkte in doppelter Auflösung und damit dieselben
+#: 256 Pixel wie ``ic08``, das für 256 Punkte einfach steht. macOS greift je
+#: nach Bildschirm den einen oder den anderen Block ab, und fehlt er, skaliert
+#: es sichtbar unscharf.
+ICNS_BLOCKS = (
+    ("icp4", 16),
+    ("icp5", 32),
+    ("ic11", 32),
+    ("ic12", 64),
+    ("ic07", 128),
+    ("ic13", 256),
+    ("ic08", 256),
+    ("ic14", 512),
+    ("ic09", 512),
+    ("ic10", 1024),
+)
 
 #: Bis hierher kommt die vereinfachte Fassung zum Zug. Dieselbe Grenze wie in
 #: ``app.ui.icons`` — was die exe zeigt und was das Fenster zeigt, ist dasselbe
@@ -122,6 +145,23 @@ def write_ico(large: bytes, small: bytes, target: Path) -> None:
     target.write_bytes(struct.pack("<HHH", 0, 1, len(SIZES)) + b"".join(entries) + b"".join(blobs))
 
 
+def write_icns(large: bytes, small: bytes, target: Path) -> None:
+    """Schreibt die ICNS: Kennung, Gesamtlänge, dann die Blöcke.
+
+    Jeder Block trägt seine Typkennung, seine Länge **einschließlich** dieser
+    acht Kopfbytes und danach die Daten — hier immer ein PNG. Das ist die
+    Stelle, an der ein selbstgebautes ICNS üblicherweise scheitert: Wird die
+    Länge ohne den Kopf gezählt, liest macOS den nächsten Block acht Bytes zu
+    früh und die Datei gilt als beschädigt.
+    """
+    blocks: list[bytes] = []
+    for kind, size in ICNS_BLOCKS:
+        png = _as_png(render(source_for(size, large, small), size))
+        blocks.append(kind.encode("ascii") + struct.pack(">I", len(png) + 8) + png)
+    body = b"".join(blocks)
+    target.write_bytes(b"icns" + struct.pack(">I", len(body) + 8) + body)
+
+
 def main() -> int:
     QGuiApplication.instance() or QGuiApplication(sys.argv)
     source = SOURCE.read_bytes()
@@ -135,8 +175,10 @@ def main() -> int:
         return 1
 
     write_ico(source, source_small, ICO_TARGET)
+    write_icns(source, source_small, ICNS_TARGET)
     shutil.copyfile(SOURCE, WEBSITE_TARGET)
     print(f"Geschrieben: {ICO_TARGET} ({ICO_TARGET.stat().st_size} Bytes)")
+    print(f"Geschrieben: {ICNS_TARGET} ({ICNS_TARGET.stat().st_size} Bytes)")
     print(f"Geschrieben: {WEBSITE_TARGET}")
     return 0
 

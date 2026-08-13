@@ -24,7 +24,11 @@ ROOT = Path(SPECPATH).resolve().parent
 # im Installer zeigten Startmenüeintrag und Deinstallationssymbol auf eine
 # Solidon3D.exe, die es nicht gab.
 sys.path.insert(0, str(ROOT))
-from app.branding import APP_NAME  # noqa: E402
+from app.branding import APP_ID, APP_NAME, APP_VERSION, COPYRIGHT  # noqa: E402
+
+# Windows will ein ICO, macOS ein ICNS. Beide entstehen aus derselben SVG-
+# Quelle in tools/make_icon.py und liegen daneben — hier wird nur gewählt.
+ICON = ROOT / "packaging" / ("solidon3d.icns" if sys.platform == "darwin" else "solidon3d.ico")
 
 # V4c (Konzept §2 I H4/H5): das Prüfmodul reist kompiliert, das Manifest
 # signiert. Beides baut tools/build_licence_module.py — ohne den Schritt gibt
@@ -135,7 +139,7 @@ executable = EXE(
     name=APP_NAME,
     console=False,
     # Erzeugt von tools/make_icon.py aus app/images/icon/solidon3d.svg.
-    icon=str(ROOT / "packaging" / "solidon3d.ico"),
+    icon=str(ICON),
     # Signiert wird nach dem Bauen, in der CI (§37.2). Hier stünde sonst das
     # Zertifikat auf jeder Entwicklermaschine.
 )
@@ -146,3 +150,27 @@ collected = COLLECT(
     analysis.datas,
     name=APP_NAME,
 )
+
+# Auf macOS ist ein Ordner keine Anwendung. Was der Finder startet, was im Dock
+# steht und was Gatekeeper überhaupt prüfen kann, ist ein .app-Bundle; COLLECT
+# allein füllt nur den Ordner, den BUNDLE dann umschließt. Ohne diesen Schritt
+# entstünde auf dem Mac zwar ein lauffähiges Programm, aber keines, das sich
+# per Doppelklick starten oder in den Programme-Ordner ziehen ließe.
+if sys.platform == "darwin":
+    bundle = BUNDLE(  # noqa: F821  (von PyInstaller bereitgestellt)
+        collected,
+        name=f"{APP_NAME}.app",
+        icon=str(ICON),
+        bundle_identifier=APP_ID,
+        version=APP_VERSION,
+        info_plist={
+            "CFBundleShortVersionString": APP_VERSION,
+            "NSHumanReadableCopyright": COPYRIGHT,
+            # Fehlt das, rendert Qt auf einem Retina-Bildschirm in halber
+            # Auflösung und das Fenster sieht unscharf aus — eine Ursache,
+            # die niemand in einer Plist sucht.
+            "NSHighResolutionCapable": True,
+            # Die älteste Fassung, auf der die mitgelieferten Qt-Räder laufen.
+            "LSMinimumSystemVersion": "12.0",
+        },
+    )

@@ -14,10 +14,20 @@ jemand das Paket bauen wollte — keine Suite hatte je hingesehen:
 Beide Male genügte es, dass eine Zeichenkette an zwei Stellen gepflegt wurde.
 Hier steht die Prüfung dagegen: der Name kommt aus ``app/branding.py``, und
 jedes Verzeichnis mit Dateien, die kein Python sind, muss im Paket landen.
+
+Seit macOS dazugehört, prüft der zweite Teil dieselbe Sache eine Ebene
+früher: dass die eingecheckten Symbole heil sind, dass die Spezifikation dort
+etwas Startbares beschreibt — ein Ordner ist auf einem Mac keine Anwendung —
+und dass der Arbeitsablauf beide Architekturen paketiert. Der Bau selbst
+läuft nur in der CI und nur bei Tags; was hier durchrutscht, fällt sonst
+frühestens dort auf und im schlimmsten Fall erst dem ersten Nutzer beim
+Doppelklick.
 """
 
 from __future__ import annotations
 
+import re
+import struct
 from pathlib import Path
 from typing import Final
 
@@ -27,9 +37,16 @@ ROOT: Final = Path(__file__).resolve().parent.parent
 SPEC: Final = ROOT / "packaging" / "solidon3d.spec"
 INSTALLER_SCRIPT: Final = ROOT / "packaging" / "solidon3d.iss"
 WORKFLOW: Final = ROOT / ".github" / "workflows" / "build.yml"
+ICNS: Final = ROOT / "packaging" / "solidon3d.icns"
+ICO: Final = ROOT / "packaging" / "solidon3d.ico"
 
 #: Was beim Suchen nach Datenverzeichnissen nicht zählt.
 IGNORED: Final = ("__pycache__", ".pyc", ".pyo")
+
+#: Der Beginn einer PNG-Datei. Die modernen ICNS-Blöcke tragen PNG, und einen
+#: Block, der etwas anderes trägt, übergeht macOS — das Symbol fehlt dann in
+#: genau dieser Größe, ohne Fehlermeldung.
+PNG_MAGIC: Final = b"\x89PNG\r\n\x1a\n"
 
 
 def _data_directories() -> set[Path]:
@@ -62,9 +79,15 @@ def test_every_data_directory_travels_with_the_package() -> None:
 
 def test_the_spec_names_the_application_from_branding() -> None:
     """Kein zweiter Ort für den Namen. Der erste hat schon eine Umbenennung
-    verschlafen."""
+    verschlafen.
+
+    Gesucht wird der Import, nicht seine Schreibweise: Seit das Bundle auch
+    Kennung, Fassung und Urheberrecht braucht, holt dieselbe Zeile mehrere
+    Namen. Eine wörtliche Prüfung wäre hier rot geworden, ohne dass am Namen
+    etwas falsch gewesen wäre.
+    """
     spec = SPEC.read_text(encoding="utf-8")
-    assert "from app.branding import APP_NAME" in spec
+    assert re.search(r"^from app\.branding import .*\bAPP_NAME\b", spec, re.MULTILINE)
     assert "name=APP_NAME" in spec
     assert f'name="{APP_NAME}"' not in spec, "der Name steht fest verdrahtet in der Spec"
 
@@ -93,3 +116,87 @@ def test_the_workflow_carries_no_second_copy_of_the_name() -> None:
             f"{wrong!r} steht fest in build.yml statt aus branding zu kommen"
         )
     assert "from app.branding import APP_NAME" in workflow
+
+
+def test_both_application_icons_exist() -> None:
+    """Windows braucht das ICO, macOS das ICNS — beide liegen im Paketordner."""
+    assert ICO.is_file(), "packaging/solidon3d.ico fehlt — tools/make_icon.py läuft nicht?"
+    assert ICNS.is_file(), "packaging/solidon3d.icns fehlt — tools/make_icon.py läuft nicht?"
+
+
+def test_the_icns_is_a_sound_container() -> None:
+    """Das ICNS ist von der Kennung bis zum letzten Block in sich stimmig.
+
+    Ein ICNS besteht aus Blöcken, die ihre Länge **einschließlich** der acht
+    Kopfbytes angeben. Zählt eine Länge falsch, läuft das Lesen aus dem Tritt
+    und die Datei gilt als beschädigt — dann zeigt macOS ein leeres Blatt
+    statt des Symbols. Von außen sieht man einer solchen Datei nichts an,
+    deshalb wird sie hier durchlaufen wie von einem Leser.
+    """
+    raw = ICNS.read_bytes()
+    assert raw[:4] == b"icns", "Die Kennung am Anfang fehlt"
+    assert struct.unpack(">I", raw[4:8])[0] == len(raw), "Die Länge im Kopf passt nicht zur Datei"
+
+    position, kinds = 8, []
+    while position < len(raw):
+        kind = raw[position : position + 4].decode("ascii")
+        length = struct.unpack(">I", raw[position + 4 : position + 8])[0]
+        assert length > 8, f"Block {kind} hat keine Daten"
+        assert raw[position + 8 : position + 16] == PNG_MAGIC, f"Block {kind} trägt kein PNG"
+        kinds.append(kind)
+        position += length
+    assert position == len(raw), "Der letzte Block endet nicht am Dateiende"
+
+    # Ohne den 1024er sieht das Symbol in der Übersicht des Finders unscharf
+    # aus, ohne den 32er in der Menüleiste.
+    assert {"icp5", "ic10"} <= set(kinds), f"Größen fehlen: {sorted(kinds)}"
+
+
+def test_the_specification_builds_a_bundle_on_macos() -> None:
+    """Die Spezifikation umschließt den Ordner auf macOS mit einem Bundle.
+
+    COLLECT allein liefert dort einen Ordner, und ein Ordner ist auf einem Mac
+    keine Anwendung: kein Start per Doppelklick, kein Symbol im Dock, nichts,
+    was Gatekeeper prüfen könnte.
+    """
+    spec = SPEC.read_text(encoding="utf-8")
+    assert "BUNDLE(" in spec
+    assert 'sys.platform == "darwin"' in spec
+    assert "bundle_identifier=APP_ID" in spec
+    # Ohne diesen Eintrag rendert Qt auf einem Retina-Bildschirm halb aufgelöst.
+    assert "NSHighResolutionCapable" in spec
+
+
+def test_the_specification_picks_the_icon_for_its_platform() -> None:
+    """Das ICO steht nicht mehr fest in der Spezifikation.
+
+    PyInstaller nimmt auf macOS kein ICO an; stünde es dort weiter hart
+    eingetragen, bräche der Bau erst auf dem Mac ab.
+    """
+    spec = SPEC.read_text(encoding="utf-8")
+    assert "solidon3d.icns" in spec
+    assert 'icon=str(ROOT / "packaging" / "solidon3d.ico")' not in spec
+
+
+def test_the_workflow_packages_every_delivered_platform() -> None:
+    """Der Arbeitsablauf baut Pakete für Windows, Linux und beide Macs.
+
+    ``macos-13`` ist Intel, ``macos-latest`` Apple Silicon. Fehlt einer von
+    beiden, fehlt die Hälfte der Mac-Nutzer — ein auf arm64 gebautes Paket
+    startet auf einem Intel-Gerät nicht.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    matrix = next(line for line in workflow.splitlines() if "os: [windows-latest" in line)
+    for runner in ("windows-latest", "ubuntu-latest", "macos-13", "macos-latest"):
+        assert runner in matrix, f"{runner} fehlt in der Paket-Matrix"
+
+
+def test_the_workflow_keeps_the_two_mac_packages_apart() -> None:
+    """Beide Mac-Pakete kommen unter eigenem Namen an.
+
+    Hießen die Artefakte gleich, überschriebe der zweite Lauf den ersten und
+    übrig bliebe eines von beiden — ohne dass jemand sähe, welches.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert "solidon3d-macos-${{ runner.arch }}" in workflow
+    assert "macos-$(uname -m)" in workflow
