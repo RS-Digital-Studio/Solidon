@@ -413,7 +413,28 @@ def project_settings(
 
     split = by_section(settings, setup.flavour)
     filament_values = split.get("filament", {})
-    document = _orca_process(split.get("process", {}), settings, setup)
+
+    # Eine Projektdatei trägt kein ``inherits`` — sie muss die Werte
+    # ausgeschrieben enthalten. Die Erbkette wird deshalb **aufgelöst**, für
+    # Maschine wie Prozess, nicht nur die oberste Datei gelesen.
+    #
+    # Das ist der Unterschied zu ``write_config``: dort bekommt der Slicer eine
+    # Profildatei und löst selbst auf. Hier bekommt er ein Projekt, und was
+    # darin fehlt, füllt er aus dem Profil, das gerade eingestellt ist. Genau
+    # das ist passiert: von 546 Schlüsseln standen 122 in der Datei, der Rest
+    # kam aus der Auswahl des Nutzers — die 3MF sagte drei Wände, gedruckt
+    # wurden zwei, und der Unterschied waren 127 Gramm.
+    document: dict[str, object] = {}
+    grundlagen: tuple[tuple[slicer_profiles.ProfileKind, str], ...] = (
+        ("machine", setup.machine_profile),
+        ("process", setup.base_process),
+    )
+    for kind, chosen in grundlagen:
+        found = profile_file(chosen, setup, kind)
+        if found is not None:
+            document.update(slicer_profiles.resolve_values(found))
+
+    document.update(_orca_process(split.get("process", {}), settings, setup))
     filament = _orca_filament(filament_values, settings, profile, setup)
     document.update(filament)
     document.update(_machine_keys(profile, setup.flavour))

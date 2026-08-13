@@ -1333,6 +1333,52 @@ def test_a_filament_profile_is_found_by_name_too(tmp_path, monkeypatch) -> None:
     assert handover.profile_file("Elegoo PETG PRO", setup, "filament") == datei
 
 
+def test_a_project_file_carries_its_values_written_out(tmp_path, monkeypatch) -> None:
+    """Eine Projektdatei kennt kein ``inherits`` — sie muss alles enthalten.
+
+    Ein Profil darf sich auf seine Erbkette verlassen: der Slicer lädt es und
+    löst selbst auf. Ein Projekt nicht. Was darin fehlt, füllt der Slicer aus
+    dem Profil, das gerade eingestellt ist — und das ist nicht Solidons.
+
+    Genau daran ging ein Druck vorbei: die 3MF trug 122 der 546 Schlüssel, in
+    ihr standen drei Wände, gedruckt wurden zwei, und der Unterschied waren
+    127 Gramm. Geprüft wird deshalb, dass die Erbkette **aufgelöst** wird und
+    Solidons eigene Werte trotzdem obenauf liegen.
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    geerbt = tmp_path / "basis.json"
+    geerbt.write_text(
+        json.dumps({"name": "basis", "wall_loops": "2", "bridge_angle": "45"}),
+        encoding="utf-8",
+    )
+
+    class Eintrag:
+        name = "basis"
+        kind = "process"
+        path = geerbt
+
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_, **__: [Eintrag()])
+    monkeypatch.setattr(
+        slicer_profiles, "resolve_values", lambda _: {"wall_loops": "2", "bridge_angle": "45"}
+    )
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    setup = handover.SlicerSetup(
+        executable=Path("elegoo-slicer.exe"), flavour="orca", base_process="basis"
+    )
+
+    werte = handover.project_settings(settings, profile, setup)
+
+    assert werte["bridge_angle"] == "45", "was nur geerbt ist, steht trotzdem in der Datei"
+    assert werte["wall_loops"] == str(settings.shell.wall_count), (
+        "Solidons eigener Wert liegt über dem geerbten"
+    )
+
+
 def test_the_bed_temperature_reaches_every_plate(tmp_path) -> None:
     """Die Temperatur gehört dem Material, der Plattentyp der Maschine.
 
