@@ -204,10 +204,41 @@ SAMPLE_FINDINGS: dict[str, tuple[str, str, str, str]] = {
         "A wall is thinner than two extrusion paths.",
         "The file did not state a unit; millimetres were assumed.",
     ),
+    "es": (
+        "El modelo está abierto en tres puntos.",
+        "14 triángulos apuntan hacia dentro.",
+        "Una pared es más delgada que dos cordones de extrusión.",
+        "El archivo no indicaba la unidad; se han supuesto milímetros.",
+    ),
+    "fr": (
+        "Le modèle est ouvert à trois endroits.",
+        "14 triangles sont orientés vers l'intérieur.",
+        "Une paroi est plus mince que deux cordons d'extrusion.",
+        "Le fichier n'indiquait pas d'unité ; les millimètres ont été supposés.",
+    ),
+    "it": (
+        "Il modello è aperto in tre punti.",
+        "14 triangoli sono rivolti verso l'interno.",
+        "Una parete è più sottile di due passate di estrusione.",
+        "Nel file non c'era l'unità; sono stati assunti millimetri.",
+    ),
+    "pt": (
+        "O modelo está aberto em três sítios.",
+        "14 triângulos apontam para dentro.",
+        "Uma parede é mais fina do que dois cordões de extrusão.",
+        "O ficheiro não indicava a unidade; foram assumidos milímetros.",
+    ),
 }
 
 #: Der Name des Körpers im Operationsdialog, aus demselben Grund ausgeschrieben.
-SAMPLE_OBJECT = {"de": "Halterung", "en": "Bracket"}
+SAMPLE_OBJECT = {
+    "de": "Halterung",
+    "en": "Bracket",
+    "es": "Soporte",
+    "fr": "Support",
+    "it": "Supporto",
+    "pt": "Suporte",
+}
 
 
 def sample_findings(language: str) -> list[Finding]:

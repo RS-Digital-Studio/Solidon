@@ -234,6 +234,11 @@ freien Programme haben.
 `marketing/`-Ordner hat bereits Tonproben und eine Drehanleitung — das ist der
 richtige Weg, er ist nur nicht zu Ende gegangen.
 
+**Nachgetragen 13.08.2026: doch zu Ende gegangen.** `marketing/video/` enthält
+vier fertige Filme — deutsch und englisch, jeweils quer (1080p) und hoch
+(1080×1920) für die Kurzformate —, dazu die eingesprochene Tonspur. Offen ist
+daran nichts mehr außer der Frage, *wo* sie laufen; die steht in Teil 7 als W1.
+
 ### 2.10 Plattform, Sprache, Reichweite
 
 **Stand — und hier liegt der härteste Befund des Durchgangs:**

@@ -32,7 +32,9 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication
 
+from app.i18n.catalog import available_languages
 from app.ui.manual_window import ManualWindow
+from tools.make_figures import SAMPLE_FINDINGS, SAMPLE_OBJECT
 
 #: Die erzeugten Handbuchseiten der Website. Sie sind eingecheckt, weil sie
 #: hochgeladen werden — und veralten, sobald jemand am Handbuchtext dreht,
@@ -580,3 +582,31 @@ def test_an_operation_with_a_limit_says_when_not_to_use_it() -> None:
     for spec in with_caveat:
         assert str(spec.caveat) in text, spec.name
     assert tr("Wann nicht") in text
+
+
+def test_the_staged_texts_of_the_figures_cover_every_language() -> None:
+    """Die gestellten Texte der Aufnahmen gibt es in jeder Sprache.
+
+    Zwei Texte in ``tools/make_figures.py`` laufen bewusst nicht über den
+    Katalog, weil der Sammler nur ``app/`` liest: die Befunde im Prüfbericht
+    und der Körpername im Operationsdialog. Fehlt eine Sprache, fällt beides
+    still auf Deutsch zurück — und das sieht man dem erzeugten Bild nicht an,
+    man sieht es erst im fertigen Handbuch, wo ein deutscher Befund mitten im
+    fremdsprachigen Text steht. Genau das ist im englischen Handbuch schon
+    einmal passiert; der Kommentar an der Stelle erzählt davon.
+
+    Seit eine weitere Sprache nur noch eine Datei in ``app/i18n/locales/``
+    ist, kann es jederzeit wieder passieren, ohne dass jemand diese Datei
+    öffnet. Deshalb steht der Riegel hier und nicht in der Erinnerung.
+    """
+    languages = set(available_languages())
+    assert not sorted(languages - set(SAMPLE_FINDINGS)), (
+        f"ohne gestellte Befunde: {sorted(languages - set(SAMPLE_FINDINGS))}"
+    )
+    assert not sorted(languages - set(SAMPLE_OBJECT)), (
+        f"ohne Körpernamen: {sorted(languages - set(SAMPLE_OBJECT))}"
+    )
+    for language, findings in SAMPLE_FINDINGS.items():
+        assert len(findings) == 4, language
+        assert all(text.strip() for text in findings), language
+        assert SAMPLE_OBJECT[language].strip(), language
