@@ -164,6 +164,12 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "xz": _("X- und Z-Ebene"),
     "yz": _("Y- und Z-Ebene"),
     "xyz": _("Alle drei Ebenen"),
+    # Die drei Projektionen des Reliefs. „planar" ist kein Wort, das jemand
+    # in einem Auswahlfeld erwartet, und „spherical" schon gar nicht — benannt
+    # wird, was passiert, nicht wie die Rechnung heißt.
+    "planar": _("Von oben"),
+    "cylindrical": _("Um die Achse"),
+    "spherical": _("Über die Kugel"),
     "raised": _("Erhaben"),
     "engraved": _("Vertieft"),
     "flat": _("Flach"),
