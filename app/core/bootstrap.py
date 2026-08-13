@@ -23,6 +23,7 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.geom.blend",
     "app.core.geom.sculpt",
     "app.core.geom.displace",
+    "app.core.geom.pose",
     "app.core.geom.label_ops",
     "app.core.geom.lattice",
     "app.core.geom.texture_ops",

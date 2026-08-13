@@ -718,6 +718,7 @@ ParamKind = Literal[
     "source",
     "sketch",
     "strokes",
+    "armature",
 ]
 """``sketch`` trägt eine gezeichnete Skizze als JSON-Text (§30.1) — gedacht für
 den Skizzeneditor; bis er da ist, zeigt der Dialog ein Textfeld. Der Agent
@@ -725,8 +726,9 @@ bekommt diesen Parameter nicht: Grundformen statt roher Punktlisten (§26).
 
 ``strokes`` trägt eine Liste von Pinselstrichen, ebenfalls als JSON-Text und
 aus demselben Grund ohne den Agenten: Ein Strich *ist* eine Koordinate, und
-die KI erzeugt keine (Leitprinzip 5). Beide unterliegen den fünf Prüfungen aus
-:mod:`tests.test_gesture_ops`."""
+die KI erzeugt keine (Leitprinzip 5). ``armature`` trägt ein Skelett, dessen
+Knochen ebenfalls Koordinaten sind. Alle drei unterliegen den fünf Prüfungen
+aus :mod:`tests.test_gesture_ops`."""
 ParamPlacement = Literal["front", "advanced"]
 """Vorderseite oder „Weitere Einstellungen" — die gestufte Tiefe aus §2.4."""
 
@@ -1181,6 +1183,45 @@ class Stroke:
     Reihenfolge braucht, kauft sie sich hier stückweise: Ein gesetzter Schnitt
     kostet einen zusätzlichen Durchgang und gilt nur für diese Stelle, statt
     die ganze Sitzung zu verlangsamen."""
+
+
+@dataclass(frozen=True, slots=True)
+class Bone:
+    """Ein Knochen des Skeletts (Konzept P16, Entscheidung I).
+
+    Zwei Punkte und ein Elternteil, mehr nicht. ``head`` sitzt am Gelenk,
+    ``tail`` zeigt, wohin der Knochen weist; ein Kind hängt mit seinem Kopf am
+    Fuß seines Elternteils, und die Kette daraus ist das Skelett.
+
+    **Keine Gewichte.** Welcher Eckpunkt zu welchem Knochen gehört, wird
+    gerechnet und nicht gespeichert: aus dem Abstand zum Knochensegment mit
+    einem Abfall darüber. Gespeicherte Gewichte wären ein zweiter
+    Dokumentbegriff neben dem Stapel — und beim nächsten Vernetzen darunter
+    falsch, ohne dass jemand es merkt.
+    """
+
+    name: str
+    head: Vec3
+    tail: Vec3
+    parent: str = ""
+    """Name des Elternteils, leer für die Wurzel."""
+
+
+@dataclass(frozen=True, slots=True)
+class Pose:
+    """Die Stellung **eines** Knochens: drei Winkel in Grad.
+
+    Eine Pose, keine Animation (§13): Gedruckt wird ein Zustand. Keine
+    Zeitachse, keine Interpolation, keine Kurven — das ist der größte
+    Streichposten gegenüber einem Animationsprogramm.
+
+    Die Winkel dürfen aus Projektparametern kommen; das ist der Punkt, an dem
+    Posing zu Solidon gehört statt zu Blender. ``=@arm_angle`` in einer Pose,
+    und die Passung am Sockel rechnet mit.
+    """
+
+    bone: str
+    angles: Vec3 = (0.0, 0.0, 0.0)
 
 
 # --- Weitere feste Verträge ------------------------------------------------------

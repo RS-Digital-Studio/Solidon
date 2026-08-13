@@ -228,13 +228,14 @@ _JSON_TYPE: dict[ParamKind, str] = {
     "source": "string",
     "sketch": "string",
     "strokes": "string",
+    "armature": "string",
 }
 
 #: Parameterarten, die eine unbegrenzte Zahl von Nutzergesten sammeln (Regel 2).
 #: Der Agent sieht sie nicht — er verweist auf Merkmale und benutzt Maße, er
 #: erzeugt keine Koordinaten (Leitprinzip 5). ``tests/test_gesture_ops.py``
 #: prüft diese Menge gegen dieselbe Liste auf der anderen Seite.
-_GATHERED: Final[frozenset[str]] = frozenset({"sketch", "strokes"})
+_GATHERED: Final[frozenset[str]] = frozenset({"sketch", "strokes", "armature"})
 
 
 def json_schema(params_class: type[BaseParams]) -> dict[str, Any]:
