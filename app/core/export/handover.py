@@ -386,17 +386,17 @@ def write_config(
         # Druck ist der Sonderfall mit einem Eintrag, nicht ein anderer Weg.
         written: list[Path] = []
         for index, slot in enumerate(slots or (MaterialSlot(index=0, name=""),)):
-            eigen = replace(setup, base_filament=slot.material) if slot.material else setup
-            datei = directory / f"solidon_filament_{index}.json"
-            datei.write_text(
+            own = replace(setup, base_filament=slot.material) if slot.material else setup
+            path = directory / f"solidon_filament_{index}.json"
+            path.write_text(
                 json.dumps(
-                    _orca_filament(split.get("filament", {}), settings, profile, eigen, slot),
+                    _orca_filament(split.get("filament", {}), settings, profile, own, slot),
                     indent=2,
                     ensure_ascii=False,
                 ),
                 encoding="utf-8",
             )
-            written.append(datei)
+            written.append(path)
         return SlicerConfig(process=target, filaments=tuple(written))
 
     target = directory / "solidon_cura.txt"
@@ -626,14 +626,14 @@ def _orca_filament(
 
 def _plate_source(document: Mapping[str, object], values: Mapping[str, str]) -> dict[str, str]:
     """Welche Betttemperatur auf alle Platten geschrieben wird."""
-    quelle: dict[str, str] = {}
-    for schluessel in ("hot_plate_temp", "hot_plate_temp_initial_layer"):
-        wert = document.get(schluessel, values.get(schluessel))
-        if isinstance(wert, list):
-            wert = wert[0] if wert else None
-        if wert is not None:
-            quelle[schluessel] = str(wert)
-    return quelle
+    source: dict[str, str] = {}
+    for key in ("hot_plate_temp", "hot_plate_temp_initial_layer"):
+        value = document.get(key, values.get(key))
+        if isinstance(value, list):
+            value = value[0] if value else None
+        if value is not None:
+            source[key] = str(value)
+    return source
 
 
 #: Die Druckplatten, die die Orca-Familie auseinanderhält. Welche aufliegt,
