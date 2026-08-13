@@ -236,12 +236,13 @@ bleibt gewahrt — der ganze Vorgang ist eine Transaktion.
 Ein Strich ist:
 
 ```
-{ p: [x,y,z], n: [nx,ny,nz], r: float, s: float, tool: str, sym: int }
+{ p: [x,y,z], n: [nx,ny,nz], r: float, s: float, tool: str, sym: int, cut: bool }
 ```
 
 Punkt, Flächennormale zum Zeitpunkt des Strichs, Radius, Stärke, Werkzeug,
-Symmetrieflaggen. **Kein Vertex-Index, keine Dreiecksnummer.** Präzedenzfall
-`paint_slot`, dessen Klickpunkt aus demselben Grund in Weltkoordinaten liegt.
+Symmetrieflaggen, erzwungene Etappengrenze (C). **Kein Vertex-Index, keine
+Dreiecksnummer.** Präzedenzfall `paint_slot`, dessen Klickpunkt aus demselben
+Grund in Weltkoordinaten liegt.
 
 Folge: Eine Änderung der Vernetzung darunter (Dezimierung, Reparatur, andere
 Qualitätsstufe) lässt die Striche gültig. Eine Änderung der *Form* darunter
@@ -270,6 +271,12 @@ Das wird abgefedert, nicht versteckt:
   Abschnitte werden sequenziell ausgewertet. Ein Glättungsstrich kostet also
   einen zusätzlichen Durchgang — das ist der ehrliche Preis, und die
   Statusleiste zeigt die Zahl der Etappen.
+- **Eine Etappe lässt sich erzwingen** (Robert, 13.08.2026). Jeder Strich kann
+  eine Etappengrenze setzen, unabhängig von seinem Werkzeug: Wer zweimal
+  übereinander fahren und dabei das Ergebnis des ersten Zuges treffen will,
+  kauft sich die exakte Reihenfolge stückweise, statt sie für die ganze Sitzung
+  zu bezahlen. Der Strich trägt dafür ein eigenes Feld; ein erzwungener
+  Abschnitt kostet denselben zusätzlichen Durchgang wie ein Glättungsstrich.
 - Ist die Etappenzahl über zwanzig, schlägt der Editor das **Einbacken** vor
   (Entscheidung D).
 
@@ -739,7 +746,7 @@ Rechner ohne sein Relief.
 | Vorgang | Zielwert | gemessen |
 |---|---|---|
 | Pinselstrich → Vorschau | unter 50 ms | **0,7 ms** bei 1,31 Mio. Dreiecken (P16.2) |
-| Strichliste (1 000) neu auswerten | unter 2 s | **67 ms** auf dem §31-Prüfnetz (P16.2) |
+| Strichliste (1 000) neu auswerten | unter 2 s | **96 ms** auf dem §31-Prüfnetz (P16.5, ganze Auswertung) |
 | Subdivision | unter 3 s | **1 778 ms** (P16.3, ganze Operation) |
 | Gleichmäßig vernetzen | unter 3 s | **1 480 ms** (P16.3, ganze Operation) |
 | Weich verschmelzen | unter 3 s | **1 607 ms** (P16.4, zwei gekreuzte Rohre) |
@@ -873,7 +880,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | **P16.2** | **Reine Messung.** Vorschauweg, Strichwiedergabe, Subdivision, Entscheidung C als Test | S | Messwerte festgehalten; R1 beantwortet **bevor** P16.5 beginnt | **fertig** — 4 Tests, R1 entwarnt |
 | **P16.3** | `subdivide_surface` und `remesh_uniform` — erst prüfen, ob letzteres in `remesh_mesh` gehört | S | Geometrietest gegen Korpus, beide Qualitätsstufen | **fertig** — 15 Tests, Prüffrage mit Zahlen beantwortet (§7.2) |
 | **P16.4** | `blend_union` über `level_set` (N) — **zugleich das Basisnetz-Werkzeug für H2** | S | Volumen und Wasserdichtheit gegen analytische Körper | **fertig** — 10 Tests, Rechenweg geändert (N) |
-| **P16.5** | Kern des Sculptings: `kind="strokes"`, `Stroke`-Verträge (§9), Auswertung mit Etappen, sechs Werkzeuge, Symmetrie — **ohne Oberfläche**, über CLI bedienbar; **bringt die saubere Figur in den Korpus mit** (§18, verschoben aus P16.2) | **XL** | Determinismus, Symmetrie, Etappen; zweimal auswerten identisch | offen |
+| **P16.5** | Kern des Sculptings: `kind="strokes"`, `Stroke`-Verträge (§9), Auswertung mit Etappen, sechs Werkzeuge, Symmetrie — **ohne Oberfläche**, über CLI bedienbar; **bringt die saubere Figur in den Korpus mit** (§18, verschoben aus P16.2) | **XL** | Determinismus, Symmetrie, Etappen; zweimal auswerten identisch | **fertig** — 26 Tests, 96 ms für 1 000 Striche |
 | **P16.6** | Sculpting-Sitzung im Viewport: Pinselring, Leiste, Vorschau, Wandstärke live, Editor-Undo | **XL** | offscreen wie `test_sketch_editor.py`; Grenzen aus `test_interface_limits.py` | offen |
 | **P16.7** | `displace_image` samt Bild in `sources/` und Profilprüfung | L | Relief unter Düsenbreite wird gemeldet | offen |
 | **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | offen |
@@ -1047,23 +1054,22 @@ anderer Stelle).
   wo geprüft werden muss, ob eine Wand zu dünn wird, ist dasselbe Feld die
   Antwort. `distance_field()` steht dafür bereit — mit der Warnung im
   Docstring, welche zwei Wege dorthin nicht funktionieren.
-- **P16.5** — der XL-Brocken: `kind="strokes"`, `Stroke`-Verträge, Auswertung
-  mit Etappen, sechs Pinselwerkzeuge, Symmetrie. Braucht vorher P16.11
-  (Käfig-Prüfpunkt, Kriterium festschreiben) und die saubere Figur im
-  Korpus (jetzt hier statt in P16.2 vorgesehen — Verschiebung gegenüber der
-  ursprünglichen Paket-Tabelle, siehe §15).
+- **P16.5** — Kern in `app/core/geom/sculpt.py`, `Stroke` in `types.py`,
+  `kind="strokes"` im Schema, `clean_figure.stl` im Korpus.
+  `tests/test_sculpt.py` mit 26 Tests. Der Gesten-Test aus P16.1 greift ohne
+  Anpassung — er war für diesen Tag geschrieben.
 - P16.6 bis P16.10: unverändert wie in §15 beschrieben, keiner begonnen.
+  **P16.9 trägt jetzt eine bestätigte Entscheidung**: Einbacken mit Nachfrage
+  (D), von Robert am 13.08.2026 so entschieden.
 
-**Zwei Entscheidungen aus dem Konzept, die Robert noch nicht ausdrücklich
-bestätigt hat** (mitgedacht, nicht zurückgefragt, weil sie erst ab P16.5
-wirksam werden):
+**Beide offenen Entscheidungen sind entschieden** (Robert, 13.08.2026, vor
+dem Beginn von P16.5 zurückgefragt):
 
-- **Entscheidung C** — Striche werden durch die akkumulierte Auswertung
-  kommutativ; das ist der Preis für Faktor 60. Etappen mildern es bei
-  `smooth`/`inflate`/`flatten`.
-- **Entscheidung D** — ab 20 000 Strichen oder 20 Etappen bietet der Editor
-  das Einbacken an, mit Nachfrage, weil nicht folgenlos rücknehmbar (einzige
-  Ausnahme von Regel 19 in diesem Konzept).
+- **Entscheidung C** — kommutativ, **aber mit erzwingbarer Etappe**. Der
+  Strich trägt dafür `cut`; wer die exakte Reihenfolge braucht, kauft sie
+  stückweise statt für die ganze Sitzung. Umgesetzt in P16.5.
+- **Entscheidung D** — Einbacken ab 20 000 Strichen oder 20 Etappen, mit
+  Nachfrage, weil nicht folgenlos rücknehmbar. Gehört in P16.9.
 
 - **P16.11** — Kriterium in `tests/test_base_mesh.py` festgeschrieben, vier
   von fünf Bedingungen erfüllt (H2). Die fünfte braucht den Pinsel. Der
@@ -1071,12 +1077,17 @@ wirksam werden):
   Volumen und Wasserdichtheit unbeschadet ließ und die Ausdehnung um acht
   Millimeter verfehlte.
 
-**Nächster Schritt, wenn es weitergeht:** P16.5 — der XL-Brocken.
-`kind="strokes"`, die `Stroke`-Verträge aus §9, Auswertung mit Etappen, sechs
-Pinselwerkzeuge, Symmetrie, ohne Oberfläche und über die Kommandozeile
-bedienbar. Er bringt die saubere Figur in den Korpus mit (§18). Beide
-Voraussetzungen stehen: der Prüfpunkt ist gefällt, und die Vorstufen aus
-P16.3 und P16.4 sind da.
+**Nächster Schritt, wenn es weitergeht:** P16.6 — die Sculpting-Sitzung im
+Viewport, der zweite XL-Brocken. Pinselring, Leiste, Vorschau auf dem
+Anzeigenetz, mitlaufende Wandstärkenkarte, Editor-Undo auf der Strichliste.
+Der Kern darunter ist fertig und über die Kommandozeile schon bedienbar; was
+P16.6 hinzufügt, ist die Hand.
+
+Zwei Dinge aus P16.2 gelten dafür als entschieden und gemessen: Der Pinsel
+geht **nicht** über den Geometriekern, sondern schreibt ins Vertex-Array des
+Anzeigenetzes (0,7 ms je Strich bei 1,31 Mio. Dreiecken), und der KD-Baum wird
+einmal beim Öffnen gebaut (786 ms, mit Fortschrittsanzeige). Die Auswertung
+der Op läuft erst beim Verlassen der Sitzung.
 
 **Vorher zu klären, weil es ab P16.5 wirksam wird:** die beiden unten
 genannten Entscheidungen C und D.

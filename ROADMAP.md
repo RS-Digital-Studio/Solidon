@@ -4538,8 +4538,36 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       Dreifachen der Übergangsbreite. Wer schmaler wählt, bekommt einen Befund
       statt zweier Körper, die er für einen hält. Kategorie `boolean` wie bei
       P16.3, aus demselben Grund. 10 Tests, 1 242 ms von 3 000.
-- [ ] **P16.5 — Sculpting-Kern** ohne Oberfläche, über die Kommandozeile
-      bedienbar. XL.
+- [x] **P16.5 — Sculpting-Kern**, ohne Oberfläche und über das Register schon
+      jetzt von der Kommandozeile aus bedienbar. `sculpt_strokes` trägt die
+      ganze Sitzung in einem Sammelparameter `kind="strokes"`; die fünf
+      Prüfungen aus `tests/test_gesture_ops.py` warten seit P16.1 darauf und
+      greifen ohne eine Zeile Anpassung.
+
+      **Die Auswertung ist akkumuliert** — KD-Baum, je Strich eine
+      Kugelabfrage, Gewichte summieren, einmal verschieben. Tausend Striche auf
+      dem §31-Prüfnetz kosten **96 ms von 2 000**. Der Preis steht als Test da
+      und nicht als Fußnote: Striche derselben Etappe sind kommutativ.
+
+      **Robert hat sich für die erzwingbare Etappe entschieden** (13.08.2026).
+      `Stroke.cut` setzt eine Grenze an beliebiger Stelle — wer zweimal
+      übereinander fahren und dabei das Ergebnis des ersten Zuges treffen will,
+      kauft die exakte Reihenfolge stückweise statt für die ganze Sitzung.
+      Glätten, Aufblasen und Flachziehen lesen den Zustand vor sich und
+      beginnen von selbst eine Etappe. Entscheidung D (Einbacken mit Nachfrage)
+      ist bestätigt und gehört in P16.9.
+
+      Sechs Werkzeuge, nicht sechzig. Flachziehen bildet seine Ebene aus dem,
+      was der Pinsel greift, nicht aus dem Klickpunkt — eine feste Ebene
+      schnitte in den Körper, sobald der Pinsel größer ist als die Wölbung
+      darunter. Symmetrie ist eine Eigenschaft der Operation, wird mit der des
+      Strichs verodert und spiegelt am **Objektursprung**: Der Schwerpunkt
+      wandert beim Formen.
+
+      **`clean_figure.stl` ist im Korpus** (§18) — Rumpf, Kopf, Arme, Beine aus
+      Grundformen vereinigt, derselbe Aufbau wie in P16.11. Sie entsteht auf
+      dem Weg, den die Anwendung ihren Nutzern anbietet. 26 Tests, davon drei
+      über die ganze Kette aus Entscheidung E.
 - [ ] **P16.6 — Sculpting-Sitzung im Viewport**, mit mitlaufender
       Wandstärkenkarte. XL.
 - [ ] **P16.7 — `displace_image`.**
