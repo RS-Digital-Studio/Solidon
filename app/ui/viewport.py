@@ -974,6 +974,12 @@ class Viewport(QWidget):
         """Welche Druckplatte gezeigt wird; -1 heißt alle (§25)."""
         self._painting = False
         self._sculpting = False
+        self._brush_radius = 0.0
+        """Der Pinselradius in Millimetern, solange geformt wird."""
+        self._brush_actor: Any = None
+        """Der Ring, der ihn zeigt — als Weltmaß in der Szene und nicht am
+        Zeiger: Ein Zeiger hat feste Punktgröße und weiß nichts von der Kamera,
+        er behauptete beim ersten Zoom eine Größe, die er nicht mehr hat."""
         """§20: solange das an ist, sind Klicks Pinselstriche."""
         self._cursor_role = "select"
         """Welcher Zeiger gerade über dem Bild steht. Gemerkt, damit nicht bei
@@ -2068,7 +2074,7 @@ class Viewport(QWidget):
         self._pending_point = None
         self._redraw_measurements()
 
-    def set_sculpting(self, active: bool) -> None:
+    def set_sculpting(self, active: bool, radius: float = 0.0) -> None:
         """Macht aus Klicks Pinselzüge (§25).
 
         Dasselbe Picking wie beim Bemalen und beim Messen; was sich ändert,
@@ -2076,7 +2082,54 @@ class Viewport(QWidget):
         nicht gewählt — sonst hätte jeder Zug nebenbei die Auswahl geändert.
         """
         self._sculpting = active
+        self._brush_radius = radius if active else 0.0
+        if not active:
+            self._hide_brush()
         self._update_cursor()
+
+    def set_brush_radius(self, radius: float) -> None:
+        """Der Ring folgt dem Regler, nicht erst dem nächsten Zug."""
+        self._brush_radius = radius
+        if self._sculpting:
+            self._draw_brush()
+
+    def _hide_brush(self) -> None:
+        if self._brush_actor is not None and self.plotter is not None:
+            self.plotter.remove_actor(self._brush_actor, render=True)
+        self._brush_actor = None
+
+    def _draw_brush(self) -> None:
+        """Den Ring dorthin legen, wo der Pinsel greifen würde.
+
+        Flach auf die Fläche, nicht in die Bildebene: Ein Kreis, der immer zum
+        Betrachter zeigt, sagt nichts darüber, wie schräg die Stelle unter ihm
+        steht — und schräg ist beim Formen der Normalfall.
+        """
+        import numpy as np
+        import pyvista as pv
+
+        if self.plotter is None or self._hover_at is None or self._brush_radius <= 0.0:
+            return
+        x, y = self._hover_at
+        point = _world_under(self.plotter.renderer, x, y)
+        if point is None:
+            self._hide_brush()
+            return
+        mesh = self._nearest_mesh(point)
+        if mesh is None:
+            self._hide_brush()
+            return
+        vertices = np.asarray(mesh.raw.vertices, dtype=float)
+        nearest = int(np.argmin(np.linalg.norm(vertices - np.asarray(point), axis=1)))
+        normal = np.asarray(mesh.raw.vertex_normals, dtype=float)[nearest]
+        ring = _ring_points(np.asarray(point, dtype=float), normal, self._brush_radius)
+        line = pv.PolyData(ring)
+        line.lines = np.hstack([[len(ring) + 1], np.arange(len(ring)), [0]])
+        self._hide_brush()
+        self._brush_actor = self.plotter.add_mesh(
+            line, color=SELECTED_COLOUR, line_width=2, render=False, reset_camera=False
+        )
+        self.plotter.render()
 
     def set_painting(self, active: bool) -> None:
         """Macht aus Klicks Pinselstriche (§20).
@@ -2147,6 +2200,12 @@ class Viewport(QWidget):
             return
         x, y = self._hover_at
         point = _world_under(self.plotter.renderer, x, y)
+        if self._sculpting:
+            # Beim Formen ist unter dem Zeiger nie ein Merkmal gemeint,
+            # sondern immer eine Stelle. Der Ring zeigt sie; die Suche nach
+            # Merkmalen bliebe hier nur teuer.
+            self._draw_brush()
+            return
         found = point is not None and self._feature_at(point) is not None
         if found != self._hover_feature:
             self._hover_feature = found
@@ -3342,6 +3401,38 @@ class Viewport(QWidget):
     @property
     def navigation(self) -> NavigationScheme:
         return self._scheme
+
+
+def _ring_points(centre: Any, normal: Any, radius: float, count: int = 48) -> Any:
+    """Ein Kreis um ``centre``, flach auf der Fläche mit dieser Normale.
+
+    Flach und nicht in der Bildebene: Ein Ring, der immer zum Betrachter zeigt,
+    sagt nichts darüber, wie schräg die Stelle unter ihm steht — und schräg ist
+    beim Formen der Normalfall.
+
+    Als eigene Funktion, damit die Rechnung ohne Plotter prüfbar bleibt.
+    """
+    import numpy as np
+
+    axis = np.asarray(normal, dtype=float)
+    length = float(np.linalg.norm(axis))
+    axis = axis / length if length > EPS_GEOM else np.array([0.0, 0.0, 1.0])
+    # Irgendein Vektor, der nicht parallel zur Normale liegt: die Achse, in der
+    # sie am schwächsten ist. Ein fester Startvektor wäre genau dort entartet,
+    # wo er parallel zu ihr steht.
+    other = np.zeros(3)
+    other[int(np.argmin(np.abs(axis)))] = 1.0
+    first = np.cross(axis, other)
+    first /= np.linalg.norm(first)
+    second = np.cross(axis, first)
+    angles = np.linspace(0.0, 2.0 * np.pi, count, endpoint=False)
+    return (
+        np.asarray(centre, dtype=float)
+        + radius * (np.outer(np.cos(angles), first) + np.outer(np.sin(angles), second))
+        # Ein Stück über der Fläche, sonst kämpft der Ring mit ihr um den
+        # Tiefenpuffer und zerfällt beim Drehen in Striche.
+        + axis * radius * 0.02
+    )
 
 
 def _world_under(renderer: Any, x: int, y: int) -> tuple[float, float, float] | None:

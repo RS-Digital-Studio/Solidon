@@ -102,6 +102,7 @@ from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
 from app.core.perceive.digest import digest
+from app.core.perceive.maps import wall_thickness_map
 from app.core.registry import (
     MENU_TWINS,
     REGISTRY,
@@ -155,7 +156,7 @@ from app.ui.generate_dialog import GenerateDialog
 from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
-from app.ui.labels import MENU_GROUPS, demo_line, feature_label
+from app.ui.labels import MENU_GROUPS, demo_line, feature_label, length
 from app.ui.loading import LoadingVeil
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
@@ -243,6 +244,18 @@ MODEL_SUFFIXES: Final = (
     ".dxf",
 )
 GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g", ".nc")
+
+#: Wie lange nach dem letzten Pinselzug gewartet wird, bevor die Wandstärke
+#: nachgerechnet wird (Entscheidung L). Bei jedem Zug zu rechnen hieße, den
+#: Pinsel zu verzögern, damit eine Zahl aktuell ist, die sich beim nächsten Zug
+#: wieder ändert.
+SCULPT_CHECK_MS: Final = 400
+
+#: Wie fein die mitlaufende Wandprüfung rastert, als Anteil der
+#: Mindestwandstärke. Ein Raster, das gröber ist als die gesuchte Wand, findet
+#: sie nicht: bei 2 mm Raster und 1,2 mm Mindestwand meldete die Karte null zu
+#: dünne Stellen an einer Schale mit 0,8 mm Wand.
+WALL_GRID_SHARE: Final = 0.8
 
 #: Operationen, die einen Deckel bauen und deshalb über ihren Ablauf laufen —
 #: er trägt die Passung ein, die die Operation allein nicht eintragen darf
@@ -786,11 +799,22 @@ class MainWindow(QMainWindow):
         # dem man herauskommt (Konzept P16, Entscheidung J).
         self.sculpt_bar = SculptBar(self)
         self.sculpt_bar.finished.connect(self.finish_sculpt)
+        # Der Ring folgt dem Regler und nicht erst dem nächsten Zug: Wer den
+        # Pinsel größer stellt, will vor dem Klicken sehen, was er greift.
+        self.sculpt_bar.radius.valueChanged.connect(self.viewport.set_brush_radius)
         self.sculpt_bar.setVisible(False)
         self.viewport.sculptRequested.connect(self._on_sculpt)
         self._sculpt_target: str | None = None
         """Das Objekt, an dem gerade geformt wird — leer, wenn keine Sitzung
         läuft."""
+        self._sculpt_check = QTimer(self)
+        self._sculpt_check.setSingleShot(True)
+        self._sculpt_check.setInterval(SCULPT_CHECK_MS)
+        self._sculpt_check.timeout.connect(self._check_sculpted_walls)
+        """Die Wandstärkenprüfung läuft **nach** der Geste, nicht in ihr
+        (Entscheidung L). Bei jedem Zug zu rechnen hieße, den Pinsel um eine
+        Viertelsekunde zu verzögern, damit eine Zahl aktuell ist, die sich beim
+        nächsten Zug wieder ändert."""
         self._sculpt_strokes: list[Stroke] = []
         """Die Züge dieser Sitzung. Das Rückgängig des Editors läuft auf
         dieser Liste und nicht über den Verlauf: Der Verlauf bekommt die
@@ -2710,7 +2734,7 @@ class MainWindow(QMainWindow):
 
         self._sculpt_target = target
         self._sculpt_strokes = []
-        self.viewport.set_sculpting(True)
+        self.viewport.set_sculpting(True, float(self.sculpt_bar.radius.value()))
         self.tools.close_tool()
         self.tools.setVisible(False)
         self.sculpt_bar.setVisible(True)
@@ -2776,6 +2800,7 @@ class MainWindow(QMainWindow):
         # eigenen Durchgang, ohne dass jemand das verlangt hätte.
         self.sculpt_bar.cut.setChecked(False)
         self._show_sculpt_preview(mesh)
+        self._sculpt_check.start()
 
     def _show_sculpt_preview(self, mesh: MeshData) -> None:
         """Was der Zug bewirkt, sofort — und was er kostet, daneben.
@@ -2794,6 +2819,45 @@ class MainWindow(QMainWindow):
         plane = SYMMETRY_BITS.get(self.sculpt_bar.plane(), 0)
         shown = [replace(s, symmetry=s.symmetry | plane) for s in strokes] if plane else strokes
         self.viewport.show_preview_mesh(self._sculpt_target, apply_strokes(mesh, shown))
+
+    def _check_sculpted_walls(self) -> None:
+        """Entscheidung L: Was der Pinsel zu dünn gemacht hat, sagt es selbst.
+
+        **Das ist der Grund, warum dieses Vorhaben zu Solidon gehört und nicht
+        zu Blender.** Ein Sculpting-Programm weiß nichts über Drucker; ein
+        Slicer merkt es, aber erst, wenn die Form fertig ist. Hier steht es in
+        der Leiste, während man formt.
+
+        In Entwurfsqualität und verzögert: Das Raster muss feiner sein als die
+        Mindestwandstärke, sonst findet die Karte gar nichts — bei 2 mm Raster
+        und 1,2 mm Mindestwand meldete sie null zu dünne Stellen an einer
+        Schale mit 0,8 mm Wand. Und als Zahl, nicht nur als Farbe (Regel 18).
+        """
+        if self._sculpt_target is None or not self._sculpt_strokes:
+            return
+        mesh = self._sculpt_mesh(self._sculpt_target)
+        if mesh is None:
+            return
+        plane = SYMMETRY_BITS.get(self.sculpt_bar.plane(), 0)
+        strokes = self._sculpt_strokes
+        shown = [replace(s, symmetry=s.symmetry | plane) for s in strokes] if plane else strokes
+        sculpted = apply_strokes(mesh, shown)
+        minimum = self.session.profile.minimum_wall_thickness
+        try:
+            card = wall_thickness_map(sculpted, minimum=minimum, pitch=minimum * WALL_GRID_SHARE)
+        except AppError:
+            # Ein zu großes Netz ist kein Grund, die Sitzung zu stören. Der
+            # Prüfbericht sagt dasselbe später und gründlicher.
+            return
+        thin = len(card.highlighted)
+        if not thin:
+            self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh))
+            return
+        self.sculpt_bar.show_warning(
+            tr("{zahl} Stellen dünner als {maß}")
+            .replace("{zahl}", str(thin))
+            .replace("{maß}", length(minimum))
+        )
 
     def undo_sculpt_stroke(self) -> bool:
         """Das Rückgängig des Editors: ein Zug, nicht die Sitzung.
@@ -2818,6 +2882,7 @@ class MainWindow(QMainWindow):
             return
         self._sculpt_target = None
         self._sculpt_strokes = []
+        self._sculpt_check.stop()
         self.viewport.set_sculpting(False)
         self.viewport.clear_preview_mesh()
         self.sculpt_bar.setVisible(False)

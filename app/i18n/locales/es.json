@@ -2296,6 +2296,7 @@
   "{sign}{grams} seit dem letzten Schritt": "{sign}{grams} desde el último paso",
   "{slot} druckt mit {profil}.": "{slot} imprime con {profil}.",
   "{striche} Züge, {etappen} Etappen": "{striche} trazos, {etappen} etapas",
+  "{zahl} Stellen dünner als {maß}": "{zahl} puntos más finos que {maß}",
   "Ändere den Wert eines bestehenden Projektparameters.": "Cambia el valor de un parámetro de proyecto existente.",
   "Ändern": "Modificar",
   "Ändern Sie den Wert von Breite — etwa auf 90. Das ganze Teil folgt sofort, und die Schraubenlöcher bleiben, wo sie hingehören.": "Cambie el valor de Anchura — por ejemplo a 90. Toda la pieza sigue al instante, y los agujeros para tornillo se quedan donde corresponde.",

@@ -2296,6 +2296,7 @@
   "{sign}{grams} seit dem letzten Schritt": "{sign}{grams} since the last step",
   "{slot} druckt mit {profil}.": "{slot} prints with {profil}.",
   "{striche} Züge, {etappen} Etappen": "{striche} strokes, {etappen} stages",
+  "{zahl} Stellen dünner als {maß}": "{zahl} spots thinner than {maß}",
   "Ändere den Wert eines bestehenden Projektparameters.": "Change the value of an existing project parameter.",
   "Ändern": "Modify",
   "Ändern Sie den Wert von Breite — etwa auf 90. Das ganze Teil folgt sofort, und die Schraubenlöcher bleiben, wo sie hingehören.": "Change the value of breite — to 90, say. The whole part follows at once, and the screw holes stay where they belong.",

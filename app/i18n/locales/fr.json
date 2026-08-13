@@ -2296,6 +2296,7 @@
   "{sign}{grams} seit dem letzten Schritt": "{sign}{grams} depuis la dernière étape",
   "{slot} druckt mit {profil}.": "{slot} imprime avec {profil}.",
   "{striche} Züge, {etappen} Etappen": "{striche} traits, {etappen} étapes",
+  "{zahl} Stellen dünner als {maß}": "{zahl} endroits plus fins que {maß}",
   "Ändere den Wert eines bestehenden Projektparameters.": "Change la valeur d'un paramètre de projet existant.",
   "Ändern": "Modifier",
   "Ändern Sie den Wert von Breite — etwa auf 90. Das ganze Teil folgt sofort, und die Schraubenlöcher bleiben, wo sie hingehören.": "Modifiez la valeur de breite — par exemple à 90. Toute la pièce suit aussitôt, et les trous de vis restent où ils doivent être.",

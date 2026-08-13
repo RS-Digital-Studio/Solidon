@@ -265,3 +265,135 @@ def test_a_brush_finer_than_the_mesh_says_so_before_anyone_paints(
     window.sculpt_bar.radius.setValue(6.0)
     window._on_sculpt((20.0, 0.0, 0.0))
     assert not window.sculpt_bar.warning.text()
+
+
+# --- der Pinselring -------------------------------------------------------------
+
+
+def test_the_brush_ring_lies_flat_on_the_surface() -> None:
+    """Ein Weltmaß gehört als Ring in die Szene, nicht an den Zeiger.
+
+    Ein Zeiger hat feste Punktgröße und weiß nichts von der Kamera — beim
+    ersten Zoom behauptet er eine Größe, die er nicht mehr hat. Der Ring liegt
+    stattdessen flach auf der Fläche: Einer, der immer zum Betrachter zeigt,
+    sagt nichts darüber, wie schräg die Stelle unter ihm steht, und schräg ist
+    beim Formen der Normalfall.
+    """
+    import numpy as np
+
+    from app.ui.viewport import _ring_points
+
+    centre = np.array([10.0, 0.0, 0.0])
+    normal = np.array([1.0, 0.0, 0.0])
+
+    ring = _ring_points(centre, normal, 4.0)
+
+    away = np.linalg.norm(ring - centre - normal * 4.0 * 0.02, axis=1)
+    assert np.allclose(away, 4.0), "jeder Punkt hat den Pinselradius"
+    assert np.allclose(ring[:, 0], ring[0, 0]), "und alle liegen in einer Ebene quer zur Normale"
+
+
+def test_the_brush_ring_survives_a_normal_along_any_axis() -> None:
+    """Der Hilfsvektor darf nirgends parallel zur Normale liegen.
+
+    Ein fester Startvektor wäre genau dort entartet, wo er parallel zu ihr
+    steht — und das ist keine seltene Lage, sondern jede achsparallele Fläche.
+    """
+    import numpy as np
+
+    from app.ui.viewport import _ring_points
+
+    for axis in ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0), (0.0, 0.0, -1.0)):
+        ring = _ring_points(np.zeros(3), np.asarray(axis), 3.0)
+        assert np.isfinite(ring).all(), f"Normale {axis} ergibt keine Zahlen"
+        assert len(np.unique(np.round(ring, 6), axis=0)) == len(ring), "keine doppelten Punkte"
+
+
+# --- die mitlaufende Wandprüfung ------------------------------------------------
+
+
+def with_a_thin_shell(window: MainWindow, tmp_path: Path) -> str:
+    """Eine Schale mit 0,6 mm Wand — dünner, als jedes Material verträgt.
+
+    Aus zwei Quadern und nicht über ``hollow``: Das Aushöhlen läuft über ein
+    Raster und liefert 160 000 Dreiecke, deren Laden den Test von der
+    Reihenfolge abhängig machte. Vierundzwanzig Dreiecke sagen dasselbe über
+    eine dünne Wand.
+    """
+    import numpy as np
+    import trimesh
+
+    outer = trimesh.creation.box(extents=(30.0, 30.0, 20.0))
+    inner = trimesh.creation.box(extents=(28.8, 28.8, 18.8))
+    shell = trimesh.Trimesh(
+        vertices=np.vstack([outer.vertices, inner.vertices]),
+        faces=np.vstack([outer.faces, inner.faces[:, ::-1] + len(outer.vertices)]),
+        process=False,
+    )
+    shell.apply_translation((0.0, 0.0, 10.0))
+    path = tmp_path / "shell.stl"
+    path.write_bytes(trimesh.exchange.stl.export_stl(shell))
+    window.open_path(path)
+    window.session.wait_for_idle()
+    item = window.object_tree.tree.topLevelItem(0)
+    assert item is not None
+    item.setSelected(True)
+    object_id = window.object_tree.selected()
+    assert object_id
+    return str(object_id)
+
+
+def test_sculpting_reports_walls_that_are_too_thin(window: MainWindow, tmp_path: Path) -> None:
+    """Entscheidung L, und der Grund, warum das Vorhaben hierher gehört.
+
+    Ein Sculpting-Programm weiß nichts über Drucker; ein Slicer merkt es, aber
+    erst wenn die Form fertig ist. Hier steht es in der Leiste, während man
+    formt — als Zahl und nicht nur als Farbe (Regel 18).
+    """
+    object_id = with_a_thin_shell(window, tmp_path)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 20.0))
+
+    window._check_sculpted_walls()
+
+    text = window.sculpt_bar.warning.text()
+    assert any(char.isdigit() for char in text), f"eine Zahl muss dastehen: {text!r}"
+
+
+def test_a_solid_body_leaves_the_warning_empty(window: MainWindow) -> None:
+    """Die Gegenprobe — sonst warnt jede Sitzung und keine Warnung zählt."""
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 82.0))
+
+    window._check_sculpted_walls()
+
+    assert not window.sculpt_bar.warning.text()
+
+
+def test_the_wall_check_waits_for_the_hand_to_rest(window: MainWindow) -> None:
+    """Nicht bei jedem Zug, sondern nach dem letzten.
+
+    Bei jedem Zug zu rechnen hieße, den Pinsel um eine Viertelsekunde zu
+    verzögern, damit eine Zahl aktuell ist, die sich beim nächsten Zug wieder
+    ändert.
+    """
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+
+    window._on_sculpt((0.0, 0.0, 82.0))
+
+    assert window._sculpt_check.isActive(), "der Zug stößt die Prüfung an"
+    assert window._sculpt_check.interval() > 0, "und zwar verzögert"
+
+
+def test_leaving_the_session_stops_the_check(window: MainWindow) -> None:
+    """Eine Prüfung, die nach dem Verlassen zuschlägt, schriebe in eine Leiste,
+    die niemand mehr ansieht."""
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 82.0))
+
+    window.finish_sculpt()
+
+    assert not window._sculpt_check.isActive()
