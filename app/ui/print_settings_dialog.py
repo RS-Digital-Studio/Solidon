@@ -934,6 +934,13 @@ class PrintSettingsDialog(QDialog):
         form.addRow(tr("Drucker"), self.machine_choice)
         form.addRow(tr("Grundprofil"), self.process_choice)
         form.addRow(tr("Filament"), self.filament_choice)
+
+        # Je Materialslot eine Zeile — aber nur, wenn es mehr als einen gibt.
+        # Ein einfarbiges Teil hat eine Farbe und braucht keine Liste darüber;
+        # die Zeile „Filament" oben ist dann die ganze Aussage (§2.4).
+        self.slot_rows: list[tuple[QLabel, QComboBox]] = []
+        self.slot_form = form
+        self._build_slot_rows(form)
         self.profile_note = QLabel(tr("Der Profilbestand wird durchgesehen …"), self.slicer_box)
         self.profile_note.setWordWrap(True)
         form.addRow(self.profile_note)
@@ -1073,6 +1080,84 @@ class PrintSettingsDialog(QDialog):
             if preferred is not None:
                 index = self.filament_choice.findData(str(preferred.path))
         self.filament_choice.setCurrentIndex(max(index, 0))
+
+        # Dieselbe Liste in jede Slot-Zeile. Vorbelegt mit dem, was das Projekt
+        # dazu sagt; ohne Angabe mit dem Filament der Platte.
+        for position, (_label, box) in enumerate(self.slot_rows):
+            box.clear()
+            for entry in fitting:
+                box.addItem(entry.title(tr("eigenes")), str(entry.path))
+            box.setEnabled(True)
+            gemerkt = self.settings.slot_profiles
+            name = gemerkt[position] if position < len(gemerkt) else ""
+            stelle = box.findText(name) if name else -1
+            box.setCurrentIndex(stelle if stelle >= 0 else self.filament_choice.currentIndex())
+
+    def _build_slot_rows(self, form: QFormLayout) -> None:
+        """Eine Auswahl je Slot, sobald ein Teil mehrere Farben trägt (§20).
+
+        Der Slot *ist* das Filament: ein Schriftzug in Weiß auf schwarzem
+        Gehäuse sind zwei Spulen mit zwei Temperaturen. Ohne diese Zeilen ließe
+        sich das zwar drucken, aber nicht sagen — und die zweite Farbe liefe
+        mit den Werten der ersten.
+        """
+        for label, _box in self.slot_rows:
+            form.removeRow(label)
+        self.slot_rows.clear()
+
+        slots = self._plate_slots()
+        if len(slots) < 2:
+            return
+        gespeichert = self.settings.slot_profiles
+        for index, slot in enumerate(slots):
+            box = QComboBox(self.slicer_box)
+            box.setEnabled(bool(self._profiles))
+            box.activated.connect(lambda _i, position=index: self._slot_filament_chosen(position))
+            beschriftung = slot.name or tr("Slot {nummer}").replace("{nummer}", str(index + 1))
+            label = QLabel(f"   {beschriftung}", self.slicer_box)
+            form.addRow(label, box)
+            self.slot_rows.append((label, box))
+            if index < len(gespeichert) and gespeichert[index]:
+                box.setProperty("wanted", gespeichert[index])
+
+    def _plate_slots(self) -> list[MaterialSlot]:
+        """Die Materialslots der ersten Platte, zusammengelegt wie beim Export."""
+        result = self.session.last_result
+        if result is None:
+            return []
+        objects = [result.scene.objects[oid] for oid in result.scene.objects]
+        if not objects:
+            return []
+        erste = min(entry.plate for entry in objects)
+        return threemf.merge_slots(
+            [
+                threemf.AssemblyPart(
+                    mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots)
+                )
+                for entry in objects
+                if entry.plate == erste
+            ]
+        )
+
+    def _slot_filament_chosen(self, position: int) -> None:
+        """Die Wahl für einen Slot festhalten (§20).
+
+        Gespeichert wird der **Name**, nicht der Pfad: er reist mit dem Projekt
+        und zeigt auf einem zweiten Rechner nicht ins Leere (Regel 12).
+        """
+        if position >= len(self.slot_rows):
+            return
+        box = self.slot_rows[position][1]
+        gewaehlt = box.currentText()
+        namen = list(self.settings.slot_profiles)
+        namen += [""] * (len(self.slot_rows) - len(namen))
+        namen[position] = gewaehlt
+        self.settings = replace(self.settings, slot_profiles=tuple(namen))
+        self.state.setText(
+            tr("{slot} druckt mit {profil}.")
+            .replace("{slot}", self.slot_rows[position][0].text().strip())
+            .replace("{profil}", gewaehlt)
+        )
 
     def _filament_chosen(self, _index: int) -> None:
         """Die Werte der gewählten Spule übernehmen (§29).

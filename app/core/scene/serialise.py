@@ -427,6 +427,9 @@ def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:
         "id": settings.id,
         "title": settings.title,
         "quality": settings.quality,
+        # Die Zuordnung Slot zu Filament (§20). Als Liste, weil JSON kein
+        # Tupel kennt — beim Lesen wird wieder eines daraus.
+        "slot_profiles": list(settings.slot_profiles),
     }
     for group in _SETTING_GROUPS:
         section = getattr(settings, group)
@@ -450,6 +453,7 @@ def print_settings_from_data(data: dict[str, Any]) -> PrintSettings:
         id=str(data.get("id", "standard")),
         title=str(data.get("title", "")),
         quality=data.get("quality", "standard"),
+        slot_profiles=tuple(str(one) for one in data.get("slot_profiles", ())),
         **groups,
     )
 

@@ -598,3 +598,76 @@ def test_a_built_fit_counts_like_an_entered_one(session: Session, qt_app) -> Non
         assert dialog._fits_in_play(), "ein Deckel legt zwei Flächen mit Spiel aufeinander"
     finally:
         dialog.deleteLater()
+
+
+# --- ein Filament je Materialslot (§20) -----------------------------------------
+
+
+def _two_slots() -> list[object]:
+    """Zwei Materialslots, wie ein Schild mit Schriftzug sie hat.
+
+    Der Dialog liest sie über ``_plate_slots`` aus der Szene; hier wird genau
+    diese eine Auskunft ersetzt. Ein wirklich erzeugter Schriftzug kostete in
+    einem Oberflächentest mehr Zeit als der ganze Rest der Datei — und geprüft
+    wird der Dialog, nicht die Beschriftungs-Op.
+    """
+    from app.core.types import MaterialSlot
+
+    return [
+        MaterialSlot(index=0, name="Gehäuse", colour=(0.0, 0.0, 0.0)),
+        MaterialSlot(index=1, name="Schrift", colour=(1.0, 1.0, 1.0)),
+    ]
+
+
+def test_one_slot_shows_no_list(dialog: PrintSettingsDialog) -> None:
+    """Ein einfarbiges Teil hat eine Farbe und braucht keine Liste darüber.
+
+    Vielseitigkeit gehört in die Tiefe, nicht an die Oberfläche (§2): die Zeile
+    „Filament" ist dann die ganze Aussage.
+    """
+    assert dialog.slot_rows == []
+
+
+def test_a_second_slot_gets_its_own_choice(
+    qt_app: QApplication, session: Session, tmp_path: Path, monkeypatch
+) -> None:
+    """Zwei Slots, zwei Auswahlen — und die Wahl bleibt im Projekt.
+
+    Ein Schriftzug in Weiß auf schwarzem Gehäuse sind zwei Spulen mit zwei
+    Temperaturen. Ohne diese Zeilen ließe sich das drucken, aber nicht sagen,
+    und die zweite Farbe liefe mit den Werten der ersten.
+    """
+    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self: _two_slots())
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    assert len(dialog.slot_rows) == 2, "je Slot eine Zeile"
+    assert "Gehäuse" in dialog.slot_rows[0][0].text()
+    assert "Schrift" in dialog.slot_rows[1][0].text()
+
+    box = dialog.slot_rows[1][1]
+    box.addItem("Haus PLA weiß", str(tmp_path / "pla.json"))
+    box.setCurrentIndex(box.count() - 1)
+    dialog._slot_filament_chosen(1)
+
+    gemerkt = dialog.settings.slot_profiles
+    assert len(gemerkt) == 2, "ein Eintrag je Slot"
+    assert gemerkt[1] == "Haus PLA weiß", "der Name reist mit, nicht der Pfad"
+
+
+def test_the_slot_choice_survives_the_project_file(tmp_path: Path) -> None:
+    """Die Zuordnung gehört ins Projekt und nicht an den Rechner.
+
+    Sie beschreibt das Teil — welcher Slot aus welcher Spule kommt —, und ein
+    Projekt, das man weitergibt, soll das mitbringen. Der **Name** reist,
+    nicht der Pfad (Regel 12).
+    """
+    from app.core.scene.serialise import print_settings_from_data, print_settings_to_data
+
+    settings = replace(
+        print_settings.resolve(profiles.make_profile()),
+        slot_profiles=("Haus PETG", "Haus PLA weiß"),
+    )
+
+    zurueck = print_settings_from_data(print_settings_to_data(settings))
+
+    assert zurueck.slot_profiles == ("Haus PETG", "Haus PLA weiß")
