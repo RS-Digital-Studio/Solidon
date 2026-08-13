@@ -370,3 +370,10 @@ Ziffern 1, 2 und 3 wechseln direkt und gehen dabei über `choose_plane`, also
 Und jedes Zeichenwerkzeug sagt in der Statuszeile, was der nächste Klick tut
 (`drawing_hint`). Der Linienzug ist der Fall, an dem es fehlte: er läuft
 weiter, bis Esc ihn beendet, und das stand nirgends.
+
+**Der Drehpunkt ist die Mitte der Körper, nicht die des Sichtbaren.**
+`ComputeVisiblePropBounds` nimmt Druckplatte und Bauraumrahmen mit; bei 250 mm
+Rahmen und 40 mm Teil liegt die Mitte hundert Millimeter über dem Modell, und
+die Kamera rückt bei jedem Szenenaufbau dorthin. `rotation_centre()` rechnet
+deshalb aus `_object_bounds()` — derselben Quelle wie `reset_camera`. Ohne
+Körper wird gar nichts verschoben.

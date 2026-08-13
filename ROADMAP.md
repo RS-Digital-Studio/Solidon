@@ -4271,15 +4271,24 @@ Drei Beobachtungen aus der laufenden Anwendung, alle drei behoben.
       heißen jetzt nach der Ansicht, die Achsenbuchstaben folgen ihnen, und
       die Ziffern 1, 2, 3 wechseln direkt.
 
+- [x] **Gedreht wurde um die Kulisse.** Der Drehpunkt kam aus
+      `ComputeVisiblePropBounds` — alles Sichtbare, also auch Druckplatte und
+      Bauraumrahmen. Bei 250 mm Rahmen und 40 mm Teil lag die Mitte hundert
+      Millimeter über dem Modell, und die Kamera rückte bei jedem
+      Szenenaufbau mit. Jetzt `_object_bounds()`, dieselbe Quelle wie beim
+      Einpassen.
+- [x] **`tools/make_figures.py` zeichnete nur, solange etwas passierte.**
+      `settle()` fuhr `processEvents`; ein natives OpenGL-Fenster braucht
+      einen laufenden Loop. Beides zusammen — Drehpunkt und Werkzeug — hat
+      das Hauptfenster zweimal mit leerem Viewport ins Handbuch gebracht.
+
+**Ein Fund, den ich zuerst falsch zugeordnet habe.** Das leere Handbuchbild
+sah nach dem bekannten Messproblem aus, und der Abschnitt darüber beschreibt
+es. Es war die Anwendung: die Kulisse im Drehpunkt. Wer eine bekannte Ursache
+zur Hand hat, prüft sie zuerst — und dann trotzdem die andere.
+
 ### Offen aus derselben Durchsicht
 
-- [ ] **`tools/make_figures.py` nimmt das Hauptfenster mit leerem Viewport
-      auf.** Dasselbe Messproblem wie im Abschnitt darüber: ein natives
-      OpenGL-Fenster zeichnet unter `processEvents` nur, solange etwas
-      passiert. Die Anwendung ist in Ordnung — das Werkzeug braucht einen
-      echten `app.exec()`-Lauf mit Timer, sonst wandern leere Bilder ins
-      Handbuch. Nur `sketch-mode` ist neu aufgenommen, die übrigen zehn
-      stehen unverändert.
 - [ ] **`app/core/drawing.py` und `app/ui/panels.py` sind rot** (Formatierung
       und ein `Literal`-Argument bei `thumbnail`) — beides aus einer parallelen
       Sitzung, nicht angefasst.
