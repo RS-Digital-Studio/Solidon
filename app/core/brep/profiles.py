@@ -413,11 +413,14 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     return _joined_rod(core, trimmed, major, pitch)
 
 
-#: Wie grob die zweite Vereinigung eines Gewindes sein darf, als Anteil der
-#: Steigung. Ein Tausendstel davon ist bei M6 ein Mikrometer — feiner als
-#: jeder Drucker und jede Passung, und genug, damit OCCT die Naht zwischen
-#: Gang und Kern findet.
-ROD_FUZZ_RATIO: Final = 1e-3
+#: Wie grob die späteren Vereinigungen eines Gewindes sein dürfen, als Anteil
+#: der Steigung, von fein nach grob. Bei M6 sind das 0,1 bis 10 Mikrometer —
+#: alles feiner als jeder Drucker und jede Passung, und in dieser Spanne liegt
+#: die Naht, die OCCT je nach Fassung findet oder nicht.
+#:
+#: Mehrere Werte, weil beides schiefgeht: zu fein lässt die Naht offen, zu grob
+#: bringt die Boolesche Operation ganz zum Aufgeben.
+ROD_FUZZ_RATIOS: Final = (1e-4, 1e-3, 1e-2)
 
 
 def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
@@ -445,8 +448,18 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
     sewn = _sewn(solid)
     if _is_sound_rod(sewn):
         return sewn
-    coarse = _fuzzy_boolean("union", core, ridge, tolerance=pitch * ROD_FUZZ_RATIO)
-    return _checked_rod(coarse, major, pitch)
+    for ratio in ROD_FUZZ_RATIOS:
+        try:
+            coarse = _fuzzy_boolean("union", core, ridge, tolerance=pitch * ratio)
+        except GeometryError:
+            # Zu grob ist auch falsch: dann rechnet OCCT gar nicht mehr. Die
+            # nächste Stufe darf es trotzdem versuchen — und wenn keine mehr
+            # kommt, sagt `_checked_rod` es mit Vorschlägen statt mit dem
+            # nackten Fehlschlag einer Booleschen Operation.
+            continue
+        if _is_sound_rod(coarse):
+            return coarse
+    return _checked_rod(sewn, major, pitch)
 
 
 def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
