@@ -399,17 +399,51 @@ def test_gathering_strokes_beats_replaying_them_one_by_one() -> None:
 
 
 def test_subdivision_stays_under_three_seconds() -> None:
-    """§31 (neu): Subdivision auf einem Netz in Arbeitsgröße."""
+    """§31 (neu): Subdivision auf einem Netz in Arbeitsgröße.
+
+    Gemessen wird die Operation, die ausgeliefert wird, nicht das Verfahren,
+    das beim Messen naheliegend schien. In P16.2 stand hier
+    ``smooth_out(52.5).refine(2)`` auf einem selbst gebauten Manifold; P16.3
+    hat beide Hälften davon ersetzt — ``smooth_by_normals`` statt
+    ``smooth_out``, weil Ersteres CAD-Netze zerlegt, und die Zielkantenlänge
+    statt eines Teilungsfaktors. Der Weg hin und zurück ins Netz samt
+    Verschweißen gehört mit in die Zeit; ihn wegzulassen hieße, ein Budget für
+    etwas einzuhalten, das so niemand aufruft.
+    """
     import numpy as np
 
-    manifold = pytest.importorskip("manifold3d")
-    mesh = medium_mesh().raw
-    body = manifold.Manifold(
-        manifold.Mesh(
-            np.asarray(mesh.vertices, dtype=np.float32),
-            np.asarray(mesh.faces, dtype=np.uint32),
-        )
-    )
-    assert not body.is_empty(), "das Prüfnetz muss ein Volumen sein"
-    taken = measure("subdivide_surface", lambda: body.smooth_out(52.5).refine(2))
+    from app.core.geom.mesh_ops import subdivided
+
+    pytest.importorskip("manifold3d")
+    mesh = medium_mesh()
+    # Halbe vorhandene Kantenlänge: Das vervierfacht die Dreiecke und ist damit
+    # dieselbe Arbeit, die das alte ``refine(2)`` gemessen hat. Die vorhandene
+    # Länge als Ziel zu nehmen wäre die bequeme Messung — sie würde kaum etwas
+    # teilen und ein Budget bestätigen, das niemand strapaziert hat.
+    edge = float(np.median(np.asarray(mesh.raw.edges_unique_length, dtype=float))) / 2.0
+
+    taken = measure("subdivide_surface", lambda: subdivided(mesh, edge, 52.5))
+    assert taken < 3.0
+
+
+def test_evening_out_a_mesh_stays_under_three_seconds() -> None:
+    """§31 (neu): dasselbe Budget fürs gleichmäßige Vernetzen.
+
+    Es steht vor dem Sculpting und wird deshalb genauso oft aufgerufen wie das
+    Unterteilen — ein Budget, das nur eine der beiden Vorstufen kennt, deckt
+    den Weg nicht ab.
+    """
+    import numpy as np
+
+    from app.core.geom.mesh_ops import uniform
+
+    pytest.importorskip("manifold3d")
+    mesh = medium_mesh()
+    # Halbe vorhandene Kantenlänge: Das vervierfacht die Dreiecke und ist damit
+    # dieselbe Arbeit, die das alte ``refine(2)`` gemessen hat. Die vorhandene
+    # Länge als Ziel zu nehmen wäre die bequeme Messung — sie würde kaum etwas
+    # teilen und ein Budget bestätigen, das niemand strapaziert hat.
+    edge = float(np.median(np.asarray(mesh.raw.edges_unique_length, dtype=float))) / 2.0
+
+    taken = measure("remesh_uniform", lambda: uniform(mesh, edge, 0.0))
     assert taken < 3.0

@@ -15,12 +15,13 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from typing import cast
+from typing import Any, cast
 
+import manifold3d
 import numpy as np
 import trimesh
 
-from app.core.errors import CANCEL, Action, ValidationError
+from app.core.errors import CANCEL, Action, NotManifoldError, ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data, on_surface
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -167,7 +168,12 @@ def _too_fine(mesh: MeshData, edge: float, would_be: int) -> ValidationError:
     die Dreiecke, also lässt sich die erreichbare Länge ausrechnen.
     """
     growth = would_be / max(MAX_REMESH_TRIANGLES, 1)
-    reachable = edge * math.sqrt(growth)
+    # Aufgerundet, nicht gerundet: bei 0,05 mm und knapp gerissener Decke ergab
+    # das Runden auf zwei Stellen wieder 0,05 — der Vorschlag nannte exakt die
+    # Zahl, die gerade abgelehnt worden war, und war damit keiner (Regel 17).
+    # Aufwärts ist zudem die sichere Richtung: eine längere Kante ergibt
+    # weniger Dreiecke, eine kürzere könnte erneut auflaufen.
+    reachable = math.ceil(edge * math.sqrt(growth) * 100.0) / 100.0
     return ValidationError(
         field="edge",
         detail=_("Diese Kantenlänge ergäbe mehr Dreiecke, als sich noch rechnen lassen."),
@@ -175,7 +181,7 @@ def _too_fine(mesh: MeshData, edge: float, would_be: int) -> ValidationError:
         values={
             "triangles": would_be,
             "limit": MAX_REMESH_TRIANGLES,
-            "reachable": round(reachable, 2),
+            "reachable": reachable,
         },
         suggestions=(
             Action(id="use_reachable", label=_("Die kleinste Kantenlänge nehmen, die noch geht.")),
@@ -227,6 +233,124 @@ def remesh(mesh: MeshData, edge: float) -> MeshData:
         even.triangle_count,
     )
     return even
+
+
+# --- gleichmäßig vernetzen und unterteilen ----------------------------------------
+#
+# Beides rechnet der exakte Netzkern, nicht ``trimesh``. Der Grund steht in
+# ``uniform``: Ein Verfahren, das nur teilt, erreicht die *obere* Schranke der
+# Kantenlänge und nie die untere — und Gleichmäßigkeit ist genau der Abstand
+# zwischen beiden.
+
+
+def _as_solid(mesh: MeshData) -> Any:
+    """Das Netz als Körper des exakten Kerns, oder ein guter Satz dazu, warum
+    nicht.
+
+    Der Kern nimmt kein Netz an, das kein Volumen umschließt — er gibt
+    wortlos einen leeren Körper zurück. Genau das ist in P16.2 an
+    ``generated_figure.stl`` passiert: Die Datei trägt absichtlich die Fehler
+    eines Generators, und heraus kam nichts. Ein Objekt, das beim Unterteilen
+    verschwindet, ist die Sorte Fehler, die niemand mit seiner Ursache
+    verbindet; also wird hier angehalten, mit dem Weg dorthin (Regel 17).
+    """
+    # ``Mesh64``, nicht ``Mesh``: der einfache Eingang nimmt ``float32``, und
+    # der Kern rechnet in doppelter Genauigkeit (Regel 6). Bei einem Eckpunkt
+    # auf 100 mm liegt zwischen zwei ``float32`` rund ein hundertstel
+    # Mikrometer — unter jeder Fertigungstoleranz, aber es ist ein Verlust, den
+    # niemand zu bezahlen hat, wenn der Kern die doppelte Breite selbst anbietet.
+    solid = manifold3d.Manifold(
+        manifold3d.Mesh64(
+            np.asarray(mesh.raw.vertices, dtype=np.float64),
+            np.asarray(mesh.raw.faces, dtype=np.uint64),
+        )
+    )
+    if solid.is_empty():
+        raise NotManifoldError(
+            detail=_(
+                "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig "
+                "vernetzen noch unterteilen. Erst reparieren, dann noch einmal."
+            ),
+            # Jede innere Kante trägt zwei Halbkanten, jede offene eine: aus
+            # 3F = 2·E_innen + E_offen und E = E_innen + E_offen folgt
+            # E_offen = 2E - 3F. Andersherum gerechnet kommt dieselbe Zahl mit
+            # negativem Vorzeichen heraus, und ein Befund über minus achtzehn
+            # offene Kanten ist schlimmer als keiner.
+            open_edges=int(len(mesh.raw.edges_unique) * 2 - len(mesh.raw.faces) * 3),
+        )
+    return solid
+
+
+def _as_mesh(mesh: MeshData, solid: Any) -> MeshData:
+    """Zurück ins Netz — und die doppelten Eckpunkte wieder zusammen.
+
+    Der Kern gibt an jeder scharfen Kante mehrere Eckpunkte an derselben
+    Stelle heraus, einen je Normalenrichtung. Für einen Renderer ist das
+    richtig; hier heißt es, dass ein tadelloser Würfel als sechs Komponenten
+    mit offenen Kanten ankommt. Ohne das Verschweißen fällt jede Prüfung
+    danach auf ein Netz herein, das nur so aussieht.
+    """
+    built = solid.to_mesh64()
+    body = trimesh.Trimesh(
+        vertices=np.asarray(built.vert_properties[:, :3], dtype=float),
+        faces=np.asarray(built.tri_verts, dtype=np.int64),
+        process=False,
+    )
+    body.merge_vertices()
+    return mesh.replacing(body)
+
+
+def uniform(mesh: MeshData, edge: float, deviation: float) -> MeshData:
+    """Gleichmäßige Kantenlängen — nach oben wie nach unten.
+
+    Der Unterschied zu :func:`remesh`, gemessen an ``plate_holes``: Teilen
+    allein lässt das Verhältnis zwischen längster und kürzester Kante, wie es
+    war (Streuung 2,22 vorher wie nachher). Es macht das Netz feiner, nicht
+    gleichmäßiger — und zahlt dafür 3 260 416 Dreiecke, weil es die winzigen
+    Bohrungsfacetten mitzerteilt. Hier sind es rund 30 000 für dieselbe
+    Zielkantenlänge.
+
+    Zwei Schritte, und der erste ist der, den ``remesh`` nicht hat:
+    ``simplify`` räumt die überflüssig feinen Stellen ab, und zwar in einer
+    zugesagten Schranke — kein Punkt der Oberfläche wandert weiter als
+    ``deviation``. Erst danach wird geteilt. Mit ``deviation = 0`` fällt der
+    erste Schritt aus und die Form bleibt exakt.
+    """
+    wanted = estimated_triangles(mesh, edge)
+    if wanted > MAX_REMESH_TRIANGLES:
+        raise _too_fine(mesh, edge, wanted)
+    solid = _as_solid(mesh)
+    evened = _as_mesh(mesh, solid.simplify(deviation).refine_to_length(edge))
+    _log.info("evened %d to %d triangles", mesh.triangle_count, evened.triangle_count)
+    return evened
+
+
+def subdivided(mesh: MeshData, edge: float, angle: float) -> MeshData:
+    """Zwischen den Dreiecken interpolieren, scharfe Kanten stehen lassen.
+
+    Reines Teilen setzt neue Punkte in die Ebene der Facette, aus der sie
+    stammen — ein Vieleck bleibt ein Vieleck, nur mit mehr Dreiecken. Erst
+    Tangenten an den Halbkanten heben die neuen Punkte auf die gekrümmte
+    Fläche, die das Vieleck meint. Kanten steiler als ``angle`` bekommen keine
+    und bleiben scharf.
+
+    **Über die Normalen, nicht über die Flächen.** Der naheliegende Weg
+    (``smooth_out``) leitet die Tangenten aus der Dreiecksgeometrie ab und
+    fasst dabei je zwei koplanare Dreiecke zu einem Viereck zusammen, dessen
+    Diagonale beim Verfeinern übersprungen wird. Bei einem CAD-Netz, in dem
+    jede ebene Fläche aus genau zwei Dreiecken besteht, bricht das zusammen:
+    ``plate_holes`` verlor damit ein Sechstel seines Volumens und bekam 2 772
+    Kanten der Länge null — und meldete sich weiter als wasserdicht.
+    ``smooth_by_normals`` liest stattdessen die zuvor gerechneten
+    Eckpunktnormalen und kennt keine Vierecke. Die Kugel wird darüber genauso
+    rund (33 436 mm³ von 33 510 möglichen).
+    """
+    wanted = estimated_triangles(mesh, edge)
+    if wanted > MAX_REMESH_TRIANGLES:
+        raise _too_fine(mesh, edge, wanted)
+    solid = _as_solid(mesh)
+    smoothed = solid.calculate_normals(0, angle).smooth_by_normals(0)
+    return _as_mesh(mesh, smoothed.refine_to_length(edge))
 
 
 # --- operations -------------------------------------------------------------------
@@ -437,6 +561,155 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
                 values={"components": after.component_count},
             )
         )
+    return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
+
+
+@op_params
+class UniformParams(BaseParams):
+    edge: float = param(
+        title=_("Kantenlänge"),
+        default=1.0,
+        unit="mm",
+        minimum=0.05,
+        maximum=50.0,
+        doc=_(
+            "Wie lang die Kanten danach ungefähr überall sind. Kürzer heißt feiner "
+            "und größer — und feiner ist nur nötig, wo später geformt wird."
+        ),
+    )
+    deviation: float = param(
+        title=_("Zulässige Abweichung"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1.0,
+        doc=_(
+            "Wie weit die Fläche dafür wandern darf. Null lässt die Form unangetastet; "
+            "erst darüber verschwinden auch die überflüssig feinen Stellen."
+        ),
+    )
+
+
+@register_op(
+    name="remesh_uniform",
+    title=_("Gleichmäßig vernetzen"),
+    category="mesh",
+    params=UniformParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Bringt alle Dreiecke auf ungefähr dieselbe Größe — die groben werden geteilt, "
+        "die überflüssig feinen zusammengefasst. Die Vorstufe zum Formen von Hand."
+    ),
+    caveat=_(
+        "Nicht zum Verfeinern allein: Wer nur mehr Dreiecke will, ohne dass irgendwo "
+        "welche verschwinden, nimmt „Neu vernetzen“ — das teilt und fasst nie zusammen."
+    ),
+)
+def remesh_uniform(ctx: OpContext) -> OpResult:
+    """Gleichmäßige Dreiecke, damit ein Pinsel überall gleich wirkt.
+
+    ``ctx.quality`` ändert hier bewusst nichts. Die Kantenlänge *ist* die
+    Zusage dieser Operation; sie im Entwurf stillschweigend zu verdoppeln
+    hieße, ein anderes Netz zu liefern als bestelltes — und was danach kommt,
+    rechnet mit genau dieser Auflösung.
+    """
+    params = cast(UniformParams, ctx.params)
+    source = ctx.inputs[0]
+    before = as_mesh_data(source.mesh)
+    after = uniform(before, params.edge, params.deviation)
+    findings = [
+        Finding(
+            code="mesh.evened",
+            severity="info",
+            message=_("Die Dreiecke liegen jetzt gleichmäßig über der Oberfläche."),
+            object_id=source.id,
+            values={"before": before.triangle_count, "after": after.triangle_count},
+        )
+    ]
+    # Gemessen wird nur, wenn es etwas zu messen gibt. Ohne zugelassene
+    # Abweichung wird kein Eckpunkt verschoben, und die Messung kostet eine
+    # Abstandsabfrage über zehntausende Punkte — für eine Zahl, die null ist.
+    if params.deviation > 0.0:
+        findings.extend(_deviation_findings(before, after, source.id))
+    else:
+        findings.append(
+            Finding(
+                code="mesh.deviation",
+                severity="info",
+                message=_("Die Form ist dabei unverändert geblieben."),
+                object_id=source.id,
+                values={
+                    "deviation_mm": 0.0,
+                    "before": before.triangle_count,
+                    "after": after.triangle_count,
+                },
+            )
+        )
+    return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
+
+
+@op_params
+class SubdivideParams(BaseParams):
+    edge: float = param(
+        title=_("Kantenlänge"),
+        default=1.0,
+        unit="mm",
+        minimum=0.05,
+        maximum=50.0,
+        doc=_("Wie fein die neue Fläche wird. Kürzer heißt runder und teurer."),
+    )
+    angle: float = param(
+        title=_("Kantenwinkel"),
+        default=52.5,
+        unit="°",
+        minimum=0.0,
+        maximum=180.0,
+        doc=_(
+            "Ab welchem Winkel eine Kante scharf bleibt. Niedriger rundet mehr ab; "
+            "über neunzig verliert auch ein Quader seine Ecken."
+        ),
+    )
+
+
+@register_op(
+    name="subdivide_surface",
+    title=_("Fläche unterteilen"),
+    category="mesh",
+    params=SubdivideParams,
+    consumes=1,
+    produces=1,
+    doc=_(
+        "Macht aus einer kantigen Fläche eine gekrümmte: Die neuen Punkte werden nicht "
+        "in die Facette gesetzt, sondern auf die Rundung, die sie meint. Scharfe Kanten "
+        "bleiben scharf."
+    ),
+    caveat=_(
+        "Nicht als Ersatz für eine gröbere Vorlage: Was hier entsteht, ist eine "
+        "Interpolation der vorhandenen Facetten, keine wiedergewonnene Konstruktion. "
+        "Wo es auf ein Maß ankommt, gehört die Rundung in die Skizze."
+    ),
+)
+def subdivide_surface(ctx: OpContext) -> OpResult:
+    """Unterteilen als Glättungsverfahren, nicht als Vernetzungswerkzeug.
+
+    ``ctx.quality`` bleibt auch hier ohne Wirkung, aus demselben Grund wie bei
+    :func:`remesh_uniform`: Die Kantenlänge ist die Zusage.
+    """
+    params = cast(SubdivideParams, ctx.params)
+    source = ctx.inputs[0]
+    before = as_mesh_data(source.mesh)
+    after = subdivided(before, params.edge, params.angle)
+    findings = _deviation_findings(before, after, source.id)
+    findings.append(
+        Finding(
+            code="mesh.subdivided",
+            severity="info",
+            message=_("Die Fläche wurde zwischen ihren Facetten interpoliert."),
+            object_id=source.id,
+            values={"before": before.triangle_count, "after": after.triangle_count},
+        )
+    )
     return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
 
 
