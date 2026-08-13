@@ -767,7 +767,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | **P16.2** | **Reine Messung.** Vorschauweg, Strichwiedergabe, Subdivision, Entscheidung C als Test | S | Messwerte festgehalten; R1 beantwortet **bevor** P16.5 beginnt | **fertig** — 4 Tests, R1 entwarnt |
 | **P16.3** | `subdivide_surface` und `remesh_uniform` — erst prüfen, ob letzteres in `remesh_mesh` gehört | S | Geometrietest gegen Korpus, beide Qualitätsstufen | offen |
 | **P16.4** | `blend_union` über `level_set` (N) — **zugleich das Basisnetz-Werkzeug für H2** | S | Volumen und Wasserdichtheit gegen analytische Körper | offen |
-| **P16.5** | Kern des Sculptings: `kind="strokes"`, `Stroke`-Verträge (§9), Auswertung mit Etappen, sechs Werkzeuge, Symmetrie — **ohne Oberfläche**, über CLI bedienbar | **XL** | Determinismus, Symmetrie, Etappen; zweimal auswerten identisch | offen |
+| **P16.5** | Kern des Sculptings: `kind="strokes"`, `Stroke`-Verträge (§9), Auswertung mit Etappen, sechs Werkzeuge, Symmetrie — **ohne Oberfläche**, über CLI bedienbar; **bringt die saubere Figur in den Korpus mit** (§18, verschoben aus P16.2) | **XL** | Determinismus, Symmetrie, Etappen; zweimal auswerten identisch | offen |
 | **P16.6** | Sculpting-Sitzung im Viewport: Pinselring, Leiste, Vorschau, Wandstärke live, Editor-Undo | **XL** | offscreen wie `test_sketch_editor.py`; Grenzen aus `test_interface_limits.py` | offen |
 | **P16.7** | `displace_image` samt Bild in `sources/` und Profilprüfung | L | Relief unter Düsenbreite wird gemeldet | offen |
 | **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | offen |
@@ -884,3 +884,58 @@ muss, damit die Entscheidung nicht nur im Code steht:
 Die letzte Zeile ist die interessanteste: Die Kundenkreis-Entscheidung macht
 einen abgelehnten Befund wieder zu einer offenen Frage. Wer Figuren teilt, will
 die versteckte Naht.
+
+---
+
+## Übergabenotiz — Stand 13.08.2026
+
+**Fertig, committet, Tor grün:**
+
+- **P16.1** (`a046a05`) — Regel 2 in `AGENTS.md` neu gefasst, dieselbe
+  Formulierung in Bauplan-Absicht in `.claude/rules/operationen.md`
+  nachgezogen. `tests/test_gesture_ops.py`: 26 Tests, prüfen fünf
+  Eigenschaften von Sammelparametern über das ganze Register. Befund B13 im
+  Meshy-Konzept mit Datum zurückgenommen (technische Hälfte bleibt gültig).
+- **P16.2** (`4b1fa53`) — vier Leistungstests in `tests/test_performance.py`
+  unter `pytest.mark.performance`. R1 entwarnt: Vorschau 0,7 ms statt der
+  befürchteten Sekunden, weil der Pinsel nur die getroffenen Vertices
+  anfasst und nicht über den Geometriekern geht. Nebenbefund: generierte
+  Netze brauchen vor dem Sculpten `GENERATED_REPAIR` + `refine` — Kette für
+  Weg 3 jetzt vollständig benannt in §2.4 dieses Dokuments.
+
+**Voller Tor-Lauf zuletzt bestätigt:** 3553 pytest-Tests (aufgeteilt wie die
+CI es tut — elf Fensterdateien einzeln, wegen des bekannten,
+vorbestehenden VTK-Absturzes bei vielen Fenstern in einem Prozess), 16
+Leistungstests, `ruff check`, `ruff format --check`, `mypy` — alle grün.
+Ein Lauf in einem Rutsch stürzt ab; das ist nicht neu und nicht von P16
+verursacht (nachgewiesen: tritt auch ohne `test_gesture_ops.py` auf, an
+anderer Stelle).
+
+**Noch nichts angefasst — keine Ops, keine Oberfläche, keine Verträge:**
+
+- **P16.3** — `subdivide_surface`, `remesh_uniform`. Klein, acht Schritte der
+  Op-Checkliste, kein Vorwissen aus P16.4/.5 nötig. Nächster sinnvoller
+  Einstieg.
+- **P16.4** — `blend_union` über `level_set`. Ebenso klein, unabhängig von
+  P16.3.
+- **P16.5** — der XL-Brocken: `kind="strokes"`, `Stroke`-Verträge, Auswertung
+  mit Etappen, sechs Pinselwerkzeuge, Symmetrie. Braucht vorher P16.11
+  (Käfig-Prüfpunkt, Kriterium festschreiben) und die saubere Figur im
+  Korpus (jetzt hier statt in P16.2 vorgesehen — Verschiebung gegenüber der
+  ursprünglichen Paket-Tabelle, siehe §15).
+- P16.6 bis P16.10: unverändert wie in §15 beschrieben, keiner begonnen.
+
+**Zwei Entscheidungen aus dem Konzept, die Robert noch nicht ausdrücklich
+bestätigt hat** (mitgedacht, nicht zurückgefragt, weil sie erst ab P16.5
+wirksam werden):
+
+- **Entscheidung C** — Striche werden durch die akkumulierte Auswertung
+  kommutativ; das ist der Preis für Faktor 60. Etappen mildern es bei
+  `smooth`/`inflate`/`flatten`.
+- **Entscheidung D** — ab 20 000 Strichen oder 20 Etappen bietet der Editor
+  das Einbacken an, mit Nachfrage, weil nicht folgenlos rücknehmbar (einzige
+  Ausnahme von Regel 19 in diesem Konzept).
+
+**Nächster Schritt, wenn es weitergeht:** P16.3, dann P16.4 — beide klein,
+beide für sich nützlich, beide unabhängig von der noch offenen Käfig-Frage.
+P16.11 (Prüfpunkt) gehört terminlich vor P16.5, nicht dazwischen.
