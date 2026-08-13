@@ -846,6 +846,10 @@ def test_the_filament_profile_keeps_what_the_maker_knows(tmp_path: Path) -> None
     # Wo beide etwas sagen, gewinnt Solidon: die Einstellung ist die
     # Entscheidung des Nutzers, das Profil nur die Unterlage.
     assert document["nozzle_temperature"] == [str(settings.temperature.nozzle)]
+    # Und der Name sagt, welche Spule gemeint ist. „Solidon Standard — PETG"
+    # stand einmal über Werten von Elegoo PETG PRO — richtig gerechnet, falsch
+    # beschriftet: wer die Druckdatei später liest, legt die falsche Rolle ein.
+    assert document["name"] == "Solidon besonders", "der Name nennt das gewählte Profil"
 
 
 def test_the_orca_call_loads_the_filament_profile(tmp_path: Path) -> None:

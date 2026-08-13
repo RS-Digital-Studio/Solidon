@@ -537,9 +537,16 @@ def _orca_filament(
     setzt selbst drei Werte und erbt fünfzig; kopierte man nur die oberste
     Datei, stünde in der Übergabe ein Bruchstück.
     """
+    # Der Name nennt die Spule, nicht die Qualitätsstufe. „Solidon Standard —
+    # PETG" stand über Werten von Elegoo PETG PRO: 5 mm³/s statt 11, 240 Grad
+    # statt 250 — richtig gerechnet, falsch beschriftet. Wer die Druckdatei
+    # später liest oder sie jemandem gibt, sieht nur „PETG" und legt die
+    # falsche Rolle ein. Das „Solidon" davor bleibt, denn die Werte sind
+    # Solidons und nicht die des Herstellers.
+    marke = Path(setup.base_filament).stem if setup.base_filament else ""
     document: dict[str, object] = {
         "type": "filament",
-        "name": f"Solidon {settings.title}",
+        "name": f"Solidon {marke or settings.title}",
         "from": "User",
         "instantiation": "true",
         "filament_type": [slicer_keys.filament_type(profile.material.id)],
