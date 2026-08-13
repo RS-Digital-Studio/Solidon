@@ -4572,7 +4572,18 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       Wandstärkenkarte. XL.
 - [ ] **P16.7 — `displace_image`.**
 - [ ] **P16.8 — `pose_armature`.** Eine Pose, keine Animation. XL.
-- [ ] **P16.9 — Dateiformat 7 → 8**, Migration, Einbacken.
+- [ ] **P16.9 — Dateiformat 7 → 8**, Migration, Einbacken. **Dabei mitnehmen:
+      ein `title_translatable` für Parameter.** Für Transaktionstitel gibt es
+      das Feld seit Fassung 6, für Parameter nicht — ihr Titel kommt aus dem
+      Code, verliert beim Speichern aber die Herkunft und steht danach als
+      nackter deutscher Text in der Datei. Wer ein Beispielprojekt auf
+      Spanisch öffnet, liest deshalb „Breite" statt „Ancho".
+      `tools/make_figures.py` löst das für die Handbuchbilder selbst auf
+      (`translate_parameter_titles`, mit Begründung im Docstring); in der
+      Anwendung geht es nicht, solange die Datei nicht sagt, ob ein Titel aus
+      dem Code oder aus der Tastatur des Nutzers stammt. Genau diese
+      Unterscheidung ist das Feld — die Migration von 6 hält fest, warum ein
+      nachträglicher Abgleich mit dem Katalog der falsche Weg wäre.
 - [ ] **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.**
 - [x] **P16.11 — Prüfpunkt Käfigmodellierung: Kriterium steht, und vier von
       fünf Bedingungen sind erfüllt.** `tests/test_base_mesh.py` schreibt fest,
