@@ -4364,9 +4364,11 @@ Fenster baut, bekommt in der CI ihren eigenen Prozess (gesucht, nicht
 gepflegt), und die Suite läuft dort unter Xvfb statt unter Qts
 Offscreen-Plattform — VTK will einen GL-Kontext.
 
-- [ ] **Offen: ein Test bleibt.**
-      `test_chat_ui.py::test_a_reversible_proposal_is_applied_without_asking`
-      nimmt auf Linux den Prozess mit, reproduzierbar nach dem siebten Test
-      seiner Datei, hier nie. Er trägt ein `skipif` für Linux — kein `xfail`,
-      weil ein Absturz keinen Testausgang hat. Unter Windows, der Plattform
-      der Demo, läuft er.
+- [x] **Und die fünfte Ursache, die letzte:** `Session.wait_for_idle` wartete
+      auf Auswertung, Trennebenensuche und Vorschau — **nicht auf den
+      Agenten**. Ein Vorschlag, der nach dem Testende fertig wurde, stellte
+      sein Ergebnis in ein Fenster zu, das der Speicherbereiniger abgeräumt
+      hatte. In `test_chat_ui.py` traf es reproduzierbar den zehnten Test,
+      nicht den, der den Arbeiter gestartet hatte. Der Kommentar über der
+      Zeile sagte die Regel bereits — der Agent stand nur nicht in der Liste.
+      Damit fällt auch das `skipif`, das eine Stunde lang dort stand.

@@ -1108,9 +1108,17 @@ class Session(QObject):
         """
         deadline = time.monotonic() + timeout_ms / 1000.0
         while time.monotonic() < deadline:
-            # Auch Trennebenensuche und Vorschau zählen: ein Arbeiter, der
-            # das Fenster überlebt, nimmt beim Beenden den Prozess mit.
-            worker = self._worker or self._split or next(iter(self._previews), None)
+            # Auch Trennebenensuche, Vorschau **und der Agent** zählen: ein
+            # Arbeiter, der das Fenster überlebt, nimmt beim Beenden den
+            # Prozess mit.
+            #
+            # Der Agent fehlte hier, und das war der letzte offene Rest des
+            # Absturzes, der die CI eine Woche rot hielt: Ein Vorschlag, der
+            # nach dem Testende fertig wurde, stellte sein Ergebnis in ein
+            # Fenster zu, das der Speicherbereiniger abgeräumt hatte. In
+            # `test_chat_ui.py` traf es reproduzierbar den zehnten Test —
+            # nicht den, der den Arbeiter gestartet hatte.
+            worker = self._worker or self._agent or self._split or next(iter(self._previews), None)
             if worker is None:
                 break
             worker.wait(50)
