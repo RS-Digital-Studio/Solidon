@@ -25,7 +25,7 @@ from app.core.types import (
     Scene,
 )
 from app.core.units import EPS_DISPLAY, format_length
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -101,7 +101,7 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
         Finding(
             code="fit.violated",
             severity="warning",
-            message=_(_message_for(fit.kind, actual, wanted)),
+            message=_message_for(fit.kind, actual, wanted),
             values={
                 "fit": fit.name,
                 "actual": format_length(actual),
@@ -235,10 +235,19 @@ def _sort_by_kind(first: Feature, second: Feature) -> tuple[Feature, Feature]:
     )
 
 
-def _message_for(kind: FitKind, actual: float, wanted: float) -> str:
+def _message_for(kind: FitKind, actual: float, wanted: float) -> TranslatableText:
+    """Die Meldung zu einer Passung, die nicht sitzt wie gewollt.
+
+    Der Marker steht hier an den Zeichenketten und **nicht** um den Aufruf
+    herum. Das ist kein Geschmack: Der Sammler nimmt nur Konstanten, die
+    unmittelbar in ``_()`` stehen (``app/i18n/extract.py``). Als
+    ``_(_message_for(...))`` geschrieben, sah der Aufruf übersetzt aus, war
+    es aber nie — beide Sätze standen in keinem Katalog, und im spanischen
+    Handbuchbild stand ein deutscher Befund zwischen sieben spanischen.
+    """
     if actual < wanted:
-        return "Die Passung sitzt enger als vorgesehen."
-    return "Die Passung sitzt loser als vorgesehen."
+        return _("Die Passung sitzt enger als vorgesehen.")
+    return _("Die Passung sitzt loser als vorgesehen.")
 
 
 def add(scene_fits: list[Fit], fit: Fit) -> list[Fit]:

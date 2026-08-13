@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -47,7 +48,7 @@ from app.core import figures
 from app.core.bootstrap import load_operations
 from app.core.registry.registry import REGISTRY
 from app.core.types import Finding
-from app.i18n import install_catalog, set_language
+from app.i18n import install_catalog, set_language, tr
 from app.i18n.catalog import available_languages, read_catalog
 
 #: Welches Beispielprojekt im Hauptfenster steht.
@@ -267,6 +268,33 @@ def sample_findings(language: str) -> list[Finding]:
     ]
 
 
+def translate_parameter_titles(session: Any) -> None:
+    """Setzt die Titel der Beispielparameter in die Sprache der Aufnahme.
+
+    Die Titel stammen aus dem Code — ``tools/make_examples.py`` markiert sie
+    mit ``_()``, und weil diese Datei in ``EXTRA_SOURCES`` steht, stehen sie
+    im Katalog. Beim Speichern geht die Herkunft aber verloren: Für einen
+    **Transaktionstitel** vermerkt die Projektdatei ``title_translatable``,
+    für einen Parameter gibt es das Feld nicht. Geladen kommt deshalb ein
+    nackter deutscher Text zurück, und ohne diesen Schritt stünde in der
+    Parameterleiste jedes fremdsprachigen Bildes „Breite" statt „Ancho" —
+    dieselbe Sorte Fehler, die schon einmal als deutscher Prüfbericht im
+    englischen Handbuch zu sehen war.
+
+    Aufgelöst wird nur hier, für die Aufnahme. Die Anwendung selbst darf das
+    nicht tun: Sie kann einen Titel aus dem Code nicht von einem selbst
+    getippten unterscheiden, und ein Abgleich mit dem Katalog übersetzte
+    plötzlich auch den, der zufällig einem Eintrag gleicht — genau die
+    Begründung, die in ``migrations.py`` für Transaktionstitel steht. Die
+    saubere Stelle ist das Dateiformat; dort gehört es in den nächsten
+    Schritt (7 → 8), der für P16.9 ohnehin ansteht.
+    """
+    parameters = session.project.document.parameters
+    for name, parameter in list(parameters.items()):
+        if parameter.title:
+            parameters[name] = replace(parameter, title=tr(str(parameter.title)))
+
+
 def take_all(app: QApplication, language: str) -> None:
     """Alle fünf Aufnahmen einer Sprache."""
     from app.core import examples
@@ -294,6 +322,11 @@ def take_all(app: QApplication, language: str) -> None:
     if not project.is_file():
         raise SystemExit(f"Beispielprojekt fehlt: {project}")
     session.open_project(project)
+    translate_parameter_titles(session)
+    # Die Leiste ist beim Öffnen schon gefüllt — ohne diesen zweiten Aufbau
+    # stünden die alten, deutschen Titel im Bild, obwohl das Dokument längst
+    # die übersetzten trägt.
+    window.parameters.show_document(session.project.document)
     # Nicht über ``open_path``: das schriebe das Beispiel in die Zuletzt-Liste
     # des echten Benutzerprofils. Die Ansichtsumschaltung, die dort mit
     # drinsteckt, wird deshalb hier von Hand nachgeholt — ohne sie fotografiert
@@ -357,6 +390,29 @@ def take_all(app: QApplication, language: str) -> None:
     window.close()
 
 
+def chosen_languages() -> tuple[str, ...]:
+    """Welche Sprachen aufgenommen werden — alle, oder die genannten.
+
+    Ohne Angabe alle. Mit Angabe nur diese: Eine Sprache, die dazukommt,
+    braucht ihre Bilder, und die fünf fertigen deshalb neu aufzunehmen kostet
+    das Vielfache der Zeit und ändert an ihnen nichts — außer dem Zeitstempel
+    und, wenn zwischenzeitlich jemand an der Oberfläche war, unbeabsichtigt
+    auch dem Inhalt.
+
+        python tools/make_figures.py es fr it pt
+    """
+    available = available_languages()
+    wanted = tuple(sys.argv[1:])
+    if not wanted:
+        return available
+    unknown = [language for language in wanted if language not in available]
+    if unknown:
+        raise SystemExit(
+            f"Unbekannte Sprache: {', '.join(unknown)} — bekannt: {', '.join(available)}"
+        )
+    return wanted
+
+
 def main() -> int:
     from app.ui.app import install_qt_translations
     from app.ui.theme import apply_theme
@@ -371,7 +427,7 @@ def main() -> int:
     # man ihm am ehesten glaubt.
     apply_theme(app, "dark")
     qt_translator = None
-    for language in available_languages():
+    for language in chosen_languages():
         install_catalog(language, read_catalog(language))
         set_language(language)
         # Auch Qt selbst spricht die Sprache der Aufnahme — sonst zeigen die

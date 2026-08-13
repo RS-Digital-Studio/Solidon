@@ -63,9 +63,13 @@ def way_two() -> Project:
     """Neu bauen: Parameter, ein Körper, Bausteine aus der Bibliothek (§2.2)."""
     project = new_project("centauri-carbon-2", "petg")
     document = project.document
-    document.parameters["breite"] = Parameter(name="breite", value=60.0, unit="mm", title="Breite")
-    document.parameters["tiefe"] = Parameter(name="tiefe", value=40.0, unit="mm", title="Tiefe")
-    document.parameters["staerke"] = Parameter(name="staerke", value=6.0, unit="mm", title="Stärke")
+    document.parameters["breite"] = Parameter(
+        name="breite", value=60.0, unit="mm", title=_("Breite")
+    )
+    document.parameters["tiefe"] = Parameter(name="tiefe", value=40.0, unit="mm", title=_("Tiefe"))
+    document.parameters["staerke"] = Parameter(
+        name="staerke", value=6.0, unit="mm", title=_("Stärke")
+    )
 
     history = History(document)
     history.apply(
@@ -144,9 +148,13 @@ def housing() -> Project:
     """
     project = new_project("centauri-carbon-2", "petg")
     document = project.document
-    document.parameters["breite"] = Parameter(name="breite", value=70.0, unit="mm", title="Breite")
-    document.parameters["tiefe"] = Parameter(name="tiefe", value=50.0, unit="mm", title="Tiefe")
-    document.parameters["wand"] = Parameter(name="wand", value=8.0, unit="mm", title="Wandstärke")
+    document.parameters["breite"] = Parameter(
+        name="breite", value=70.0, unit="mm", title=_("Breite")
+    )
+    document.parameters["tiefe"] = Parameter(name="tiefe", value=50.0, unit="mm", title=_("Tiefe"))
+    document.parameters["wand"] = Parameter(
+        name="wand", value=8.0, unit="mm", title=_("Wandstärke")
+    )
 
     history = History(document)
     history.apply(
@@ -398,10 +406,14 @@ def box_with_lid() -> Project:
     """
     project = new_project("centauri-carbon-2", "petg")
     document = project.document
-    document.parameters["breite"] = Parameter(name="breite", value=80.0, unit="mm", title="Breite")
-    document.parameters["tiefe"] = Parameter(name="tiefe", value=55.0, unit="mm", title="Tiefe")
-    document.parameters["hoehe"] = Parameter(name="hoehe", value=40.0, unit="mm", title="Höhe")
-    document.parameters["wand"] = Parameter(name="wand", value=2.4, unit="mm", title="Wandstärke")
+    document.parameters["breite"] = Parameter(
+        name="breite", value=80.0, unit="mm", title=_("Breite")
+    )
+    document.parameters["tiefe"] = Parameter(name="tiefe", value=55.0, unit="mm", title=_("Tiefe"))
+    document.parameters["hoehe"] = Parameter(name="hoehe", value=40.0, unit="mm", title=_("Höhe"))
+    document.parameters["wand"] = Parameter(
+        name="wand", value=2.4, unit="mm", title=_("Wandstärke")
+    )
 
     history = History(document)
     history.apply(
