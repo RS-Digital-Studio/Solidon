@@ -983,6 +983,21 @@ Figuren druckt, will die versteckte Naht. Der zweite ist heute nicht unser
 Kundenkreis — und der Ausbau würde nur mit Verstiftung entlang einer krummen
 Fläche Sinn ergeben, was die Sache erheblich vergrößert.
 
+> **Nachtrag 13.08.2026 — die halbe Begründung ist entfallen.** Mit der
+> Entscheidung zu P16 (`konzept-organische-modellierung-2026-08.md` §17) gehören
+> Figuren zum Kundenkreis. Der Satz „der zweite ist heute nicht unser
+> Kundenkreis" gilt nicht mehr und trägt hier nichts mehr.
+>
+> Was **weiter** gilt, ist die technische Hälfte: Ein Schnitt entlang
+> V-HACD-Hüllen bleibt abgelehnt (`geom/autosplit.py`, §11.1 — eine Näherung
+> wieder zusammenzukleben ergibt ein genähertes Teil), und die Verstiftung
+> entlang einer krummen Fläche bleibt der teure Teil. Der offene Weg ist
+> weiterhin die **geneigte Ebene**: `SectionPlane` trägt schon eine freie
+> Normale, nur die Suche kennt drei Achsen.
+>
+> Damit wird B13 von „abgelehnt, weil Kundenkreis" zu „offen, weil noch nicht
+> gebaut" — neu zu bewerten nach P16, nicht darin.
+
 ### B14 — „Wann nicht benutzen" in die Handbuchseiten · **mittel** · klein
 
 Ihre Auto-Split-Seite nennt fünf Fälle, in denen man das Werkzeug **nicht**

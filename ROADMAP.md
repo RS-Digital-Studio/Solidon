@@ -4386,3 +4386,84 @@ Windows, der Plattform der Demo, läuft er.
       mehrere Fenster hinweg — dieselbe Wand, an der `deleteLater` und
       `gc.collect()` gescheitert sind. Wer ihn angeht, findet die vier
       gemessenen Irrwege oben und braucht sie nicht zu wiederholen.
+
+---
+
+## P16 — Organische Modellierung
+
+Die Frage war, ob Solidon organische Formen und Figuren nicht nur generieren,
+sondern **machen** kann. Die Antwort steht in
+`konzept-organische-modellierung-2026-08.md`: ja, und der teure Teil ist nicht
+die Technik.
+
+**Der Kundenkreis ist erweitert** (Entscheidung vom 13.08.2026). Figuren
+gehören dazu, Posing wird mitgenommen, Käfigmodellierung bekommt einen
+Prüfpunkt statt eines Versprechens. Damit fällt die halbe Begründung von
+Befund B13 im Meshy-Konzept — sie ist dort mit Datum zurückgenommen, statt
+still stehen zu bleiben.
+
+**Was die Recherche zutage gefördert hat**, und was den Zuschnitt der Phase
+bestimmt:
+
+*Regel 2 war nie das Hindernis.* Sie verbietet Geometrieänderungen außerhalb
+einer Op — sie verlangt nirgends, dass jede Nutzergeste ein eigener Schritt
+wird. Diese Gleichsetzung stand nur in der Auslegung, und der Skizzeneditor aus
+P13 hat sie längst gebrochen: hunderte Klicks, ein Op-Eintrag, der Skizzentext
+als Parameterwert. Der Modulkopf von `sketch/edit.py` nannte das „Regel 2 dem
+Geist nach" — der Buchstabe passte damals nicht, und niemand hat ihn
+nachgezogen.
+
+*Die Messung hat den Entwurf entschieden, nicht umgekehrt.* Ein Pinselstrich
+je `warp_batch` kostet bei 100 Strichen auf 16 000 Vertices bereits 747 ms und
+wächst mit dem Produkt aus Strichzahl und Vertexzahl — bei einer echten Figur
+wären das Minuten. Alle Striche in **einem** Durchgang über einen KD-Baum:
+5 000 Striche auf 65 538 Vertices in 586 ms. Faktor sechzig, und er entscheidet
+zwischen „geht nicht" und „geht". Der Preis steht als Entscheidung C im
+Konzept: Striche werden dadurch kommutativ, und die Werkzeuge, bei denen das
+nicht trägt, laufen in Etappen.
+
+*`manifold3d` bringt alles mit* — `warp_batch`, `level_set`, `refine`,
+`smooth_out`, `calculate_curvature`, `mirror`. Nachgesehen, nicht vermutet.
+Zwei Eigenschaften bestimmen den Entwurf: `warp` ändert die Topologie nicht
+(also keine dynamische Tessellierung, Auflösung ist eine eigene Op davor), und
+es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
+
+### Was daraus folgt
+
+- [x] **P16.1 — Regel 2 neu gefasst.** Eine Op darf beliebig viele Gesten
+      sammeln, wenn ihr Ergebnis vollständig aus ihren Parametern folgt.
+      `tests/test_gesture_ops.py` prüft fünf Eigenschaften über das ganze
+      Register: der Sammelwert geht in den Op-Hash ein, übersteht die runde
+      Reise, ist reiner Text, fehlt im Agentenschema (Leitprinzip 5) und steht
+      auf der Rückseite des Dialogs. 26 Tests, grün auf dem Bestand — die neue
+      Regel ist bewiesen, bevor eine Zeile neuer Geometrie sie braucht.
+      `AGENTS.md` und `.claude/rules/operationen.md` nachgezogen.
+- [ ] **P16.2 — Messung und Korpus.** Vorschau-Prototyp, Strichwiedergabe,
+      Zahlen für §31, Figuren in den Referenzkorpus. Darf das Vorhaben stoppen.
+- [ ] **P16.3 — `subdivide_surface`, `remesh_uniform`.** Erst prüfen, ob
+      letzteres in `remesh_mesh` gehört, statt daneben zu bauen.
+- [ ] **P16.4 — `blend_union`** über `level_set`. Steht nicht im Auftrag und
+      gehört trotzdem hierher: die einzige Operation der Phase, die
+      *parametrisch* organisch ist, und zugleich unser Basisnetz-Werkzeug.
+- [ ] **P16.5 — Sculpting-Kern** ohne Oberfläche, über die Kommandozeile
+      bedienbar. XL.
+- [ ] **P16.6 — Sculpting-Sitzung im Viewport**, mit mitlaufender
+      Wandstärkenkarte. XL.
+- [ ] **P16.7 — `displace_image`.**
+- [ ] **P16.8 — `pose_armature`.** Eine Pose, keine Animation. XL.
+- [ ] **P16.9 — Dateiformat 7 → 8**, Migration, Einbacken.
+- [ ] **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.**
+- [ ] **P16.11 — Prüfpunkt Käfigmodellierung.** Kriterium wird vor P16.5
+      festgeschrieben, damit die Antwort nicht davon abhängt, wie müde man
+      hinterher ist.
+
+### Die Grenze, die bleibt
+
+Wir gewinnen kein Sculpting-Rennen, und das ist kein Versäumnis. Sechs Pinsel
+gegen ZBrushs Hunderte — wer eine Porträtbüste modelliert, nimmt weiter
+Blender. Das Rennen, das Solidon läuft, ist ein anderes: Kein
+Sculpting-Programm meldet eine Wand unter der Düsenbreite, während man sie
+formt, und kein CAD-Programm formt eine Figur. Nach P16 steht beides in einem
+Fenster, und die vier Fähigkeiten, die den Unterschied machen —
+Wandstärkenkarte, Überhangkarte, Bauraumprüfung, Teilung mit Verstiftung —
+existieren alle und bekommen nur ein neues Anwendungsgebiet.

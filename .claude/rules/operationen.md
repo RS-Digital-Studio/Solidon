@@ -10,6 +10,14 @@ paths:
 Eine Operation ist die einzige Stelle, an der Geometrie entsteht oder sich
 ändert — auch nicht „kurz" im Viewport, auch nicht im Agenten (Regel 2).
 
+**Eine Geste ist nicht dasselbe wie ein Schritt.** Eine Op darf beliebig viele
+Nutzergesten sammeln, solange ihr Ergebnis vollständig aus ihren Parametern
+folgt: Der Editor schreibt in einen Parameterwert, die Geometrie entsteht erst
+bei der Auswertung, und was das Fenster währenddessen zeigt, ist eine Vorschau.
+Die Skizze macht es so (§30.1), das Sculpting wird es so machen. Was dabei
+einzuhalten ist, steht unten unter „Sammelparameter" und wird von
+`tests/test_gesture_ops.py` über das ganze Register geprüft.
+
 ## Vollständig oder gar nicht
 
 Keine Op ohne Registereintrag, Parameterschema, Geometrietest und übersetzte
@@ -38,10 +46,17 @@ Einstellungen" (§2.4).
 Toleranzen verweisen ins Materialprofil (`auto:<material>`), nie als Zahl.
 Wo ein Projektparameter passt, steht keine Streuzahl.
 
-### Skizzenparameter (`kind="sketch"`)
+### Sammelparameter (`kind` in `sketch`, `strokes`, `armature`)
 
-Eine Skizze reist als JSON-Text in einem Parameter (§30.1). Zwei Dinge folgen
-daraus, und beide sind leicht zu übersehen:
+Ein Editor sammelt darin, was er nicht in Zahlen fassen kann: eine Skizze als
+JSON-Text (§30.1), eine Strichliste, ein Skelett. Fünf Eigenschaften machen
+aus so einem Wert einen zulässigen Schritt statt eines Lochs in Regel 2 —
+`tests/test_gesture_ops.py` prüft alle fünf über das Register: er geht in den
+Op-Hash ein, er übersteht die runde Reise durch die Projektdatei, er ist
+reiner Text, der Agent sieht ihn nicht, und er steht auf der Rückseite des
+Dialogs.
+
+Zwei davon sind leicht zu übersehen:
 
 **Der Cache-Schlüssel muss die Parameter enthalten, die *in* der Skizze
 gelesen werden.** Ein Maß in der Skizze darf ein Ausdruck sein; ändert sich der

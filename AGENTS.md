@@ -24,7 +24,12 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 **Aufbau**
 1. **Kein Qt unterhalb von `ui/`.** `core` ohne installiertes Qt importierbar.
 2. **Keine Geometrieänderung außerhalb einer Op** — auch nicht „kurz" im
-   Viewport, auch nicht im Agenten.
+   Viewport, auch nicht im Agenten. Eine Op darf beliebig viele Nutzergesten
+   zu einem Schritt zusammenfassen, wenn sie **vollständig aus ihren
+   Parametern reproduzierbar** ist: Ein Editor sammelt Gesten in einen
+   Parameterwert, das Ergebnis entsteht erst bei der Auswertung. Was der
+   Editor zeigt, während er offen ist, ist eine Vorschau und kein
+   Dokumentzustand.
 3. **`OpContext.scene` ist nur lesend.** Ops erzeugen Objekte, sie ändern
    keine.
 4. **Keine Op ohne Registereintrag**, Parameterschema, Geometrietest und
