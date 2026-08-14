@@ -402,10 +402,11 @@ Entscheidung.**
    vorhergesagt hat, war der Preis der Parallelität — acht gleichzeitig
    arbeitende Agenten gegen einen Katalog, der während des Laufs um fünfzehn
    Schlüssel wuchs und damit jeden Index über der ersten Einfügestelle
-   verschob. Der Ausweg steht in `.claude/i18n-wip/STAND.md`: eine eingefrorene
-   Basis, Nachträge über den Quelltext statt über den Index. **Offen bleibt**
-   die Nachaufnahme der Handbuchbilder je Sprache — eigener Schritt, läuft
-   nicht offscreen.
+   verschob. Der Ausweg war eine eingefrorene Basis und Nachträge über den
+   Quelltext statt über den Index; was davon dauerhaft gilt — Glossare,
+   Format-Invarianten —, steht in `.claude/rules/uebersetzung.md`.
+   **Offen bleibt** die Nachaufnahme der Handbuchbilder je Sprache — eigener
+   Schritt, läuft nicht offscreen.
 3. ~~**W7**~~ — **erledigt.** GLB wird hinausgeschrieben, mit Namen und Farben.
 4. ~~**W8**~~ — **erledigt.** Baustein A steht, alle neun Punkte aus
    `konzept-bedienung.md` Teil 4.
