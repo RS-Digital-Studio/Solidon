@@ -1,4 +1,4 @@
-"""Dependencies against the clearance list (Bauplan §36, AGENTS.md rule 22)."""
+"""Abhängigkeiten gegen die Freigabeliste (Bauplan §36, AGENTS.md Regel 22)."""
 
 from __future__ import annotations
 

@@ -77,7 +77,7 @@ def test_mirroring_turns_the_part_over_without_turning_it_inside_out(profile: Pr
     assert mirrored.bounds.centre[0] == pytest.approx(-15.0)
 
 
-# --- the net --------------------------------------------------------------------
+# --- das Netz -------------------------------------------------------------------
 
 
 def test_decimation_keeps_the_shape_within_a_measured_bound(profile: Profile) -> None:
@@ -345,7 +345,7 @@ def test_hollow_runs_as_an_operation(profile: Profile) -> None:
     assert "hollow.done" in {finding.code for finding in result.findings}
 
 
-# --- the first layer ------------------------------------------------------------
+# --- die erste Schicht ----------------------------------------------------------
 
 
 def test_the_first_layers_are_pulled_in_by_the_profile_value(profile: Profile) -> None:
@@ -566,7 +566,7 @@ def test_an_empty_label_body_is_a_user_error(profile: Profile) -> None:
     assert problem.value.field == "text"
 
 
-# --- the test piece -------------------------------------------------------------
+# --- das Prüfstück --------------------------------------------------------------
 
 
 def drilled_plate() -> MeshData:
@@ -684,7 +684,7 @@ def test_only_flat_formats_go_this_way() -> None:
         extrude(SVG, ".stl", 2.0)
 
 
-# --- the register ---------------------------------------------------------------
+# --- das Register ---------------------------------------------------------------
 
 
 def test_every_category_of_the_plan_has_something_in_it() -> None:

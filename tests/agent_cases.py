@@ -157,7 +157,7 @@ CASES: tuple[Case, ...] = (
         expects_mention=("Menü",),
         note="Eine reine Wo-Frage: keine Operation, nur der Ort im Fenster.",
     ),
-    # --- the three ambiguous ones ---------------------------------------------
+    # --- die drei mehrdeutigen ------------------------------------------------
     Case(
         id="which_hole",
         request="Mach das Loch größer.",

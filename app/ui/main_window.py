@@ -3275,7 +3275,7 @@ class MainWindow(QMainWindow):
             measurement.kind, measurement.value, len(self.viewport.measurements)
         )
 
-    # --- analysis maps and layers (§18.4, §18.10) -------------------------------
+    # --- Analysekarten und Schichten (§18.4, §18.10) ----------------------------
 
     def _on_map_changed(self, kind: Any) -> None:
         """Baut die gewählte Karte für das gewählte Objekt und gibt sie der
@@ -3516,7 +3516,7 @@ class MainWindow(QMainWindow):
         if target is not None:
             self.viewport.fly_to(target)
 
-    # --- the agent (§26) --------------------------------------------------------
+    # --- der Agent (§26) --------------------------------------------------------
 
     def _on_request_sent(self, request: str) -> None:
         """Ein Zug. Die Auswahl reist mit, sonst heißt „dieses Loch"

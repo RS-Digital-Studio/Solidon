@@ -106,7 +106,7 @@ class Solid:
     deflection: float = DEFLECTION
     _cache: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
 
-    # --- the exact answers ------------------------------------------------------
+    # --- die exakten Antworten --------------------------------------------------
 
     @property
     def volume(self) -> float:
@@ -132,7 +132,7 @@ class Solid:
     def edges(self) -> list[Any]:
         return self._explore("edge")
 
-    # --- the tessellated answers ------------------------------------------------
+    # --- die tessellierten Antworten --------------------------------------------
 
     @property
     def mesh(self) -> MeshData:

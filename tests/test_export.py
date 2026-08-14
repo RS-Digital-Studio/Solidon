@@ -91,7 +91,7 @@ def test_exporting_nothing_is_a_user_error(profile: Profile) -> None:
     assert caught.value.suggestions
 
 
-# --- the check ------------------------------------------------------------------
+# --- die Prüfung ----------------------------------------------------------------
 
 
 def test_a_clean_part_has_nothing_to_report(profile: Profile) -> None:

@@ -59,7 +59,7 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
     return combinations
 
 
-# --- the library ------------------------------------------------------------------
+# --- die Bibliothek ---------------------------------------------------------------
 
 
 def test_the_library_has_the_first_set_from_the_plan() -> None:
@@ -171,7 +171,7 @@ def test_a_subtractive_part_reaches_into_the_material(spec: PartSpec) -> None:
     )
 
 
-# --- the standard table ------------------------------------------------------------
+# --- die Normteiltabelle -----------------------------------------------------------
 
 
 def test_the_table_answers_the_question_from_the_plan() -> None:

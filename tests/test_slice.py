@@ -161,7 +161,7 @@ def test_a_thin_wall_is_found_across_the_body() -> None:
     assert narrowest(result) == pytest.approx(0.8, rel=0.1)
 
 
-# --- the contract ---------------------------------------------------------------
+# --- der Vertrag ----------------------------------------------------------------
 
 
 def test_every_figure_is_marked_as_internal() -> None:

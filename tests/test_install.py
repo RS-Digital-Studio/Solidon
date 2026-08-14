@@ -48,7 +48,7 @@ def test_every_requirement_says_what_it_is_for_and_where_it_comes_from() -> None
         assert entry.kind in ("package", "program"), entry.id
 
 
-# --- the command line -----------------------------------------------------------
+# --- die Kommandozeile ----------------------------------------------------------
 
 
 def test_a_package_is_installed_into_this_interpreter() -> None:
@@ -134,7 +134,7 @@ def test_what_is_already_there_is_not_installed_again(monkeypatch: pytest.Monkey
     assert ran == []
 
 
-# --- the dialog -----------------------------------------------------------------
+# --- der Dialog -----------------------------------------------------------------
 
 
 def test_the_dialog_lists_everything_with_its_state(qt_app: QApplication) -> None:

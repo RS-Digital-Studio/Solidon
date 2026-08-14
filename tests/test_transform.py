@@ -31,7 +31,7 @@ def cube():
     return normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
 
 
-# --- the arithmetic -------------------------------------------------------------
+# --- die Rechnung ---------------------------------------------------------------
 
 
 def test_moving_shifts_the_bounds_and_keeps_the_volume() -> None:

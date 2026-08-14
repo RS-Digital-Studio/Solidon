@@ -163,7 +163,7 @@ def test_a_slicer_warning_travels_along() -> None:
     assert metrics.warnings == ("Detected print stability issues",)
 
 
-# --- the cross-check (§28.2) ---------------------------------------------------------
+# --- der Abgleich (§28.2) ------------------------------------------------------------
 
 
 def test_a_close_estimate_says_nothing() -> None:

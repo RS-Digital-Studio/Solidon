@@ -195,7 +195,7 @@ def test_the_curvature_map_shows_the_edges() -> None:
     assert analysis.high == pytest.approx(90.0, abs=1.0), "a cube edge is a right angle"
 
 
-# --- features and fits ----------------------------------------------------------
+# --- Features und Passungen -----------------------------------------------------
 
 
 def test_every_feature_gets_its_own_level() -> None:

@@ -123,7 +123,7 @@ def _tokenise(source: str) -> list[_Token]:
     return tokens
 
 
-# --- Parsing and evaluation ----------------------------------------------------
+# --- Zerlegen und Auswerten ----------------------------------------------------
 
 
 class _Parser:

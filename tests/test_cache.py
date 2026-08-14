@@ -1,4 +1,4 @@
-"""Result cache over the operation hash (Bauplan §15, §38)."""
+"""Ergebniscache über den Op-Hash (Bauplan §15, §38)."""
 
 from __future__ import annotations
 

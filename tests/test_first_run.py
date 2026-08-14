@@ -102,7 +102,7 @@ def test_a_tool_can_be_pointed_at_by_hand(tmp_path: Path) -> None:
     assert slicer.path() is None
 
 
-# --- the first run (§38) --------------------------------------------------------------
+# --- der Erstlauf (§38) ---------------------------------------------------------------
 
 
 def test_the_first_run_happens_once(qt_app: QApplication) -> None:
@@ -207,7 +207,7 @@ def test_a_window_does_not_open_a_dialog_by_itself(qt_app: QApplication) -> None
     assert not settings.first_run_done, "nothing happened until start() is called"
 
 
-# --- the error report (§37.2) ---------------------------------------------------------
+# --- der Fehlerbericht (§37.2) --------------------------------------------------------
 
 
 def test_a_report_carries_the_versions() -> None:
@@ -285,7 +285,7 @@ def test_the_dialog_offers_the_attachment_and_writes_a_folder(
     assert "Geometrie" in text
 
 
-# --- the update notice (§37.2) --------------------------------------------------------
+# --- der Aktualisierungshinweis (§37.2) -----------------------------------------------
 
 
 def test_a_newer_version_is_recognised() -> None:

@@ -1,4 +1,4 @@
-"""Catalogue, previews, SCAD output, own parts and versioning (Bauplan §24.3–24.5)."""
+"""Katalog, Vorschau, SCAD-Ausgabe, eigene Bausteine, Versionierung (Bauplan §24.3–24.5)."""
 
 from __future__ import annotations
 

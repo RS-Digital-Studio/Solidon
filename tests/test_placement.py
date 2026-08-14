@@ -53,7 +53,7 @@ def hole(
     )
 
 
-# --- position and direction -----------------------------------------------------
+# --- Lage und Richtung ----------------------------------------------------------
 
 
 def test_a_face_says_where_a_bore_goes() -> None:
@@ -128,7 +128,7 @@ def test_an_operation_without_a_place_takes_nothing() -> None:
     assert values_for(REGISTRY.get("repair"), face()) == {}
 
 
-# --- the two helpers ------------------------------------------------------------
+# --- die zwei Helfer ------------------------------------------------------------
 
 
 def test_the_dominant_axis_needs_to_be_dominant() -> None:

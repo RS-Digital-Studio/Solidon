@@ -218,7 +218,7 @@ def test_a_small_compartment_still_gets_a_collar(profile: Profile) -> None:
     assert shared_volume(result.outputs[1].mesh.raw, body) < 1e-6
 
 
-# --- the turning lid ------------------------------------------------------------
+# --- der Drehdeckel -------------------------------------------------------------
 
 
 def jar(radius: float = 20.0, wall: float = 3.0, height: float = 60.0) -> SceneObject:

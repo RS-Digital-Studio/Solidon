@@ -30,7 +30,7 @@ def own_profiles(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     profiles.reload()
 
 
-# --- the test bodies (§28.3) ----------------------------------------------------------
+# --- die Prüfkörper (§28.3) -----------------------------------------------------------
 
 
 @pytest.mark.parametrize("name", ["fit_ladder", "wall_ladder", "overhang_fan"])
@@ -183,7 +183,7 @@ def test_calibration_reaches_existing_projects(own_profiles: Path, profile: Prof
     assert second == pytest.approx(4.40, abs=0.01), "the calibrated play, not the shipped one"
 
 
-# --- the variant generator (§28.3) ----------------------------------------------------
+# --- der Variantenerzeuger (§28.3) ----------------------------------------------------
 
 
 def project_with_parameter() -> Project:
@@ -299,7 +299,7 @@ def test_the_values_can_be_read_before_the_run() -> None:
     assert variants.values(0.10, 0.05, 4) == (0.10, 0.15, 0.20, 0.25)
 
 
-# --- the dialog (§28.3, step two) -----------------------------------------------------
+# --- der Dialog (§28.3, zweiter Schritt) ----------------------------------------------
 
 
 def test_the_dialog_offers_exactly_the_fields_of_the_profile(own_profiles: Path) -> None:

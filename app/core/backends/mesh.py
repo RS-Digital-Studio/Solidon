@@ -294,7 +294,7 @@ class ComfyBackend:
         graph = self._graph("image_to_mesh", {"image": name, "seed": seed})
         return self._run(graph, prompt="", seed=seed, progress=progress)
 
-    # --- the three steps ---
+    # --- die drei Schritte ---
 
     def _graph(self, name: str, values: dict[str, Any]) -> dict[str, Any]:
         """Lädt den mitgelieferten Workflow und setzt die Werte hinein."""

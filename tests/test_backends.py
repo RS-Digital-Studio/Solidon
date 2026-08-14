@@ -102,7 +102,7 @@ def test_the_keychain_is_used_when_there_is_one(monkeypatch: pytest.MonkeyPatch)
     assert keys.read("anthropic") is None
 
 
-# --- the hosted backend ----------------------------------------------------------
+# --- das gehostete Backend -------------------------------------------------------
 
 
 def anthropic_answer() -> dict[str, Any]:
@@ -269,7 +269,7 @@ def test_an_unreachable_model_is_an_error_with_a_suggestion(
     assert raised.value.suggestions
 
 
-# --- the local backend ------------------------------------------------------------
+# --- das lokale Backend -----------------------------------------------------------
 
 
 def ollama_answer() -> dict[str, Any]:
@@ -346,7 +346,7 @@ def test_without_any_backend_there_is_no_chat(monkeypatch: pytest.MonkeyPatch) -
     assert first_available() is None
 
 
-# --- the scripted backend ---------------------------------------------------------
+# --- das Skript-Backend -----------------------------------------------------------
 
 
 def test_the_scripted_backend_answers_in_order() -> None:
@@ -376,7 +376,7 @@ def test_the_scripted_backend_keeps_what_it_was_told() -> None:
     assert backend.tools_seen[0] == ("ask_user",)
 
 
-# --- the model size check (§27) ----------------------------------------------------
+# --- die Prüfung der Modellgröße (§27) ---------------------------------------------
 
 
 def _tags(*models: tuple[str, str]) -> dict[str, Any]:

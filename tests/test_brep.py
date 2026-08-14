@@ -214,7 +214,7 @@ def test_step_knows_its_own_suffixes() -> None:
     assert not step.is_step(".stl")
 
 
-# --- features off the topology --------------------------------------------------
+# --- Features aus der Topologie -------------------------------------------------
 
 
 def test_a_bore_is_read_off_the_topology_rather_than_fitted() -> None:
@@ -337,7 +337,7 @@ def test_brep_to_mesh_is_a_step_in_the_stack(profile: Profile) -> None:
     assert [finding.code for finding in result.findings] == ["brep.converted"]
 
 
-# --- the whole way --------------------------------------------------------------
+# --- der ganze Weg --------------------------------------------------------------
 
 
 def test_a_step_file_becomes_a_scene_object(profile: Profile, tmp_path: Path) -> None:

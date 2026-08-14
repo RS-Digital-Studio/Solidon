@@ -116,7 +116,7 @@ def cube(size: float, at: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> trime
     return body
 
 
-# --- the multiplication ---------------------------------------------------------
+# --- die Vervielfältigung -------------------------------------------------------
 
 
 def test_three_objects_in_one_file_come_back_three_times_not_nine() -> None:
@@ -159,7 +159,7 @@ def test_the_count_matches_what_is_read() -> None:
     assert threemf.count_objects(payload) == len(threemf.read_objects(payload)) == 3
 
 
-# --- the transforms -------------------------------------------------------------
+# --- die Transformationen -------------------------------------------------------
 
 
 def test_a_body_arrives_where_the_build_put_it() -> None:
@@ -193,7 +193,7 @@ def test_a_rotation_in_the_transform_is_applied() -> None:
     assert size[1] == pytest.approx(30.0)
 
 
-# --- the names ------------------------------------------------------------------
+# --- die Namen ------------------------------------------------------------------
 
 
 def test_the_parts_are_called_what_the_slicer_called_them() -> None:

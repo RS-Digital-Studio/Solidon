@@ -94,7 +94,7 @@ def wait_for_map(window: MainWindow) -> None:
     QApplication.processEvents()
 
 
-# --- the map selector -----------------------------------------------------------
+# --- die Kartenauswahl ----------------------------------------------------------
 
 
 def test_every_map_of_the_table_is_offered(qt_app: QApplication) -> None:
@@ -240,7 +240,7 @@ def test_feature_edges_leave_a_round_body_alone() -> None:
     assert edges_of(pv.Cube().triangulate()) == 12, "ein Würfel hat zwölf Kanten"
 
 
-# --- the legend -----------------------------------------------------------------
+# --- die Legende ----------------------------------------------------------------
 
 
 def test_a_measured_map_shows_its_range_and_its_origin(qt_app: QApplication) -> None:

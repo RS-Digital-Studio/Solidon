@@ -35,7 +35,7 @@ def hole(mesh, name: str = "hole_1") -> Feature:
     return detect(mesh)[name]
 
 
-# --- the rotation ---------------------------------------------------------------
+# --- die Drehung ----------------------------------------------------------------
 
 
 def test_a_direction_is_turned_onto_another() -> None:
@@ -56,7 +56,7 @@ def test_the_opposite_direction_is_turned_all_the_way() -> None:
     assert turned[:3] == pytest.approx([0.0, 0.0, -1.0], abs=1e-9)
 
 
-# --- the frames -----------------------------------------------------------------
+# --- die Bezugssysteme ----------------------------------------------------------
 
 
 def test_a_bore_carries_axis_and_centre() -> None:

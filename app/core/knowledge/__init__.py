@@ -1,1 +1,1 @@
-"""Parts, standard fasteners, printer and material profiles, rules (§24, §38, §39)."""
+"""Bausteine, Normteile, Drucker- und Materialprofile, Regelsammlung (§24, §38, §39)."""

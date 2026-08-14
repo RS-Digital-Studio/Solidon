@@ -81,7 +81,7 @@ def test_a_damaged_file_is_reported_not_raised_raw() -> None:
     assert caught.value.constraint in ("unreadable", "no_geometry")
 
 
-# --- the six steps --------------------------------------------------------------
+# --- die sechs Schritte ---------------------------------------------------------
 
 
 def test_welding_turns_a_raw_stl_into_a_solid() -> None:
@@ -166,7 +166,7 @@ def test_import_limits_are_stated_clearly() -> None:
     assert many_triangles.value.constraint == "too_many_triangles"
 
 
-# --- the load operation ---------------------------------------------------------
+# --- die Lade-Operation ---------------------------------------------------------
 
 
 def project_with(name: str) -> Project:

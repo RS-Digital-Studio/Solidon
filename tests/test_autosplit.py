@@ -39,7 +39,7 @@ def bar(length: float = 400.0) -> MeshData:
     return MeshData.of(trimesh.creation.box(extents=(length, 60.0, 40.0)))
 
 
-# --- the search -----------------------------------------------------------------
+# --- die Suche ------------------------------------------------------------------
 
 
 def test_a_part_that_fits_is_left_alone(profile: Profile) -> None:
@@ -165,7 +165,7 @@ def test_convex_parts_are_reproducible(profile: Profile) -> None:
     assert [round(part.volume, 3) for part in first] == [round(part.volume, 3) for part in second]
 
 
-# --- the pins -------------------------------------------------------------------
+# --- die Passstifte -------------------------------------------------------------
 
 
 def test_pins_sit_inside_the_cut_face(profile: Profile) -> None:
@@ -276,7 +276,7 @@ def test_a_plane_that_misses_the_body_is_a_user_error(profile: Profile) -> None:
     assert problem.value.field == "position"
 
 
-# --- the whole way --------------------------------------------------------------
+# --- der ganze Weg --------------------------------------------------------------
 
 
 @pytest.fixture

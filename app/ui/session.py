@@ -938,7 +938,7 @@ class Session(QObject):
         self.cancel_signal.cancel()
         self.agent_cancel.cancel()
 
-    # --- the agent (§26) --------------------------------------------------------
+    # --- der Agent (§26) --------------------------------------------------------
 
     @property
     def agent_backend(self) -> LLMBackend | None:

@@ -1,4 +1,4 @@
-"""Stack, transactions and undo (Bauplan §12, §15.4, §15.5)."""
+"""Stapel, Transaktionen und Undo (Bauplan §12, §15.4, §15.5)."""
 
 from __future__ import annotations
 

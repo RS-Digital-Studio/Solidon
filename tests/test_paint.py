@@ -48,7 +48,7 @@ def run(op: str, entry: SceneObject, profile: Profile, **params: object):
     )
 
 
-# --- the edge -------------------------------------------------------------------
+# --- die Kante ------------------------------------------------------------------
 
 
 def test_the_brush_stops_at_an_edge_however_wide_it_is() -> None:
@@ -127,7 +127,7 @@ def test_the_slot_keeps_the_name_it_was_given(profile: Profile) -> None:
     assert [slot.name for slot in second.material_slots] == ["Rot"]
 
 
-# --- the bar --------------------------------------------------------------------
+# --- die Leiste -----------------------------------------------------------------
 
 
 def test_the_bar_is_off_until_somebody_switches_it_on(qt_app: QApplication) -> None:

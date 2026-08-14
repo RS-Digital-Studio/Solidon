@@ -51,7 +51,7 @@ def textured(image: Image.Image) -> trimesh.Trimesh:
     return body
 
 
-# --- reading the colour ---------------------------------------------------------
+# --- die Farbe lesen ------------------------------------------------------------
 
 
 def test_a_plain_body_carries_no_colour() -> None:
@@ -157,7 +157,7 @@ def test_a_real_boundary_survives_the_smoothing() -> None:
     assert np.array_equal(result, labels), "half a plate is not speckle"
 
 
-# --- the whole way --------------------------------------------------------------
+# --- der ganze Weg --------------------------------------------------------------
 
 
 def test_four_colours_onto_two_filaments() -> None:

@@ -157,7 +157,7 @@ def test_the_export_check_knows_which_plate_complains(profile: Profile) -> None:
     assert [entry.values["plate"] for entry in outside] == [2]
 
 
-# --- the selector ---------------------------------------------------------------
+# --- der Wähler -----------------------------------------------------------------
 
 
 def test_the_selector_appears_from_two_plates_on(qt_app: QApplication) -> None:

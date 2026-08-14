@@ -29,7 +29,7 @@ def body(name: str) -> MeshData:
     return normalise(read_mesh((MESHES / name).read_bytes(), ".stl"), "mm").mesh
 
 
-# --- the self-intersection ------------------------------------------------------
+# --- die Selbstdurchdringung ----------------------------------------------------
 
 
 def test_a_self_intersecting_body_still_goes_through_a_boolean() -> None:
@@ -59,7 +59,7 @@ def test_the_two_blocks_really_do_pass_through_each_other() -> None:
     assert mesh.bounds.size[0] == pytest.approx(28.0)
 
 
-# --- the colours ----------------------------------------------------------------
+# --- die Farben -----------------------------------------------------------------
 
 
 def test_the_coloured_file_comes_back_with_its_groups() -> None:
@@ -87,7 +87,7 @@ def test_both_colours_carry_real_area() -> None:
     assert min(counted.values()) >= 8, counted
 
 
-# --- the fit --------------------------------------------------------------------
+# --- die Passung ----------------------------------------------------------------
 
 
 def project():

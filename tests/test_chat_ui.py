@@ -43,7 +43,7 @@ def scripted(window: MainWindow, *answers: Reply) -> ScriptedBackend:
     return backend
 
 
-# --- the panel --------------------------------------------------------------------
+# --- die Leiste -------------------------------------------------------------------
 
 
 def test_without_a_model_the_chat_says_so_once(qt_app: QApplication) -> None:
@@ -111,7 +111,7 @@ def test_a_turn_names_its_transaction(window: MainWindow) -> None:
     assert "scripted:test" in tip
 
 
-# --- a proposal -------------------------------------------------------------------
+# --- ein Vorschlag ----------------------------------------------------------------
 
 
 def test_a_proposal_waits_for_a_decision(window: MainWindow) -> None:

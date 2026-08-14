@@ -614,7 +614,7 @@ def _ring(ring: Any) -> tuple[tuple[float, float], ...]:
     return tuple(map(tuple, shapely.get_coordinates(ring).tolist()))
 
 
-# --- judgements over the whole body ---------------------------------------------
+# --- Urteile über den ganzen Körper ---------------------------------------------
 
 
 def total_overhang(result: SliceResult) -> float:

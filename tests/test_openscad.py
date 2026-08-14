@@ -23,7 +23,7 @@ difference() {
 """
 
 
-# --- reading the source (§32) -------------------------------------------------------
+# --- den Quelltext lesen (§32) ------------------------------------------------------
 
 
 def test_a_plain_source_is_allowed() -> None:

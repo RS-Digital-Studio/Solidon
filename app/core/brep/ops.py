@@ -1,9 +1,9 @@
-"""B-Rep operations (Bauplan §30, §25, §10).
+"""B-Rep-Operationen (Bauplan §30, §25, §10).
 
-Declared like every other operation, so they reach the menu, the palette, the
-command line and the agent from one place (§10). What is different is that they
-refuse to run without the kernel — with one sentence, not with an import trace
-(§36).
+Angemeldet wie jede andere Operation, damit sie von einer Stelle aus Menü,
+Palette, Kommandozeile und Agent erreichen (§10). Anders ist nur eines: ohne
+den Kern laufen sie nicht — und sie sagen das mit einem Satz, nicht mit einer
+Importspur (§36).
 
 Die Kategorie heißt „Formgebung", nicht nach dem Kern: wer eine Verrundung
 sucht, sucht sie neben Fase, Schale und Formschräge — nicht unter einem

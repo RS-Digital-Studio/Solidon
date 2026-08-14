@@ -191,7 +191,7 @@ def test_a_sketch_parameter_is_not_offered_to_the_model() -> None:
     assert "shape" in properties, "die Grundformen bleiben der Weg"
 
 
-# --- the run (§26.5) ---------------------------------------------------------------
+# --- der Lauf (§26.5) --------------------------------------------------------------
 
 
 def test_a_proposal_collects_operations_without_touching_the_document(
@@ -536,7 +536,7 @@ def test_a_fit_takes_its_tolerance_from_the_material(project: Project, profile: 
     assert proposal.fits[0].tolerance == "auto:petg"
 
 
-# --- accepting and taking back (§26.3, §26.5) ------------------------------------
+# --- annehmen und zurücknehmen (§26.3, §26.5) ------------------------------------
 
 
 def test_a_proposal_becomes_exactly_one_transaction(project: Project, profile: Profile) -> None:
@@ -664,7 +664,7 @@ def test_the_origin_records_the_conditions(project: Project, profile: Profile) -
     assert origin.temperature == 0.0
 
 
-# --- the checks -------------------------------------------------------------------
+# --- die Prüfungen ----------------------------------------------------------------
 
 
 def test_the_check_notices_an_open_body(project: Project, profile: Profile) -> None:
