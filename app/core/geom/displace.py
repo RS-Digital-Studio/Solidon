@@ -31,7 +31,7 @@ from app.core.errors import Action, ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, Finding, OpContext, OpResult
+from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -48,7 +48,7 @@ POINTS_PER_PIXEL: Final = 0.5
 MIN_LAYERS: Final = 1.0
 
 #: Die vier Arten, ein rechteckiges Bild auf einen Körper zu legen.
-PROJECTIONS: Final[tuple[str, ...]] = ("planar", "cylindrical", "spherical")
+PROJECTIONS: Final[tuple[str, ...]] = ("planar", "cylindrical", "spherical", "face")
 
 
 def sample_image(payload: bytes) -> np.ndarray:
@@ -104,10 +104,32 @@ def _bilinear(field: np.ndarray, rows: np.ndarray, columns: np.ndarray) -> np.nd
     return np.asarray(top * (1.0 - dy) + bottom * dy, dtype=float)
 
 
-def _coordinates(mesh: MeshData, projection: str) -> tuple[np.ndarray, np.ndarray]:
+def _face_frame(feature: Feature) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Zwei Richtungen in der Ebene einer erkannten Fläche, dazu ihr Mittelpunkt.
+
+    Der Hilfsvektor kommt aus der schwächsten Achse der Normale — ein fester
+    wäre genau dort entartet, wo er parallel zu ihr steht, also an jeder
+    achsparallelen Fläche. Derselbe Griff wie beim Pinselring im Viewport, und
+    aus demselben Grund.
+    """
+    normal = np.asarray(feature.params.get("normal", (0.0, 0.0, 1.0)), dtype=float)
+    length = float(np.linalg.norm(normal))
+    normal = normal / length if length > 1e-12 else np.array([0.0, 0.0, 1.0])
+    other = np.zeros(3)
+    other[int(np.argmin(np.abs(normal)))] = 1.0
+    first = np.cross(normal, other)
+    first /= np.linalg.norm(first)
+    second = np.cross(normal, first)
+    centre = np.asarray(feature.params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
+    return first, second, centre
+
+
+def _coordinates(
+    mesh: MeshData, projection: str, face: Feature | None = None
+) -> tuple[np.ndarray, np.ndarray]:
     """Wo jeder Eckpunkt im Bild liegt — Zeile und Spalte, je zwischen 0 und 1.
 
-    Drei Arten, und jede beantwortet dieselbe Frage anders: Welche zwei Maße
+    Vier Arten, und jede beantwortet dieselbe Frage anders: Welche zwei Maße
     des Körpers sollen die zwei Maße des Bildes sein?
     """
     points = np.asarray(mesh.raw.vertices, dtype=float)
@@ -129,6 +151,17 @@ def _coordinates(mesh: MeshData, projection: str) -> tuple[np.ndarray, np.ndarra
         return np.arccos(np.clip(towards[:, 2] / radius, -1.0, 1.0)) / math.pi, (
             angle + math.pi
         ) / (2.0 * math.pi)
+    if projection == "face" and face is not None:
+        # Auf die Ebene einer erkannten Fläche: Das Bild liegt so darauf, wie
+        # es aussähe, wenn man senkrecht daraufsieht. Die einzige Projektion,
+        # die ein Merkmal braucht — und die einzige, die auf einer schrägen
+        # Fläche nicht verzerrt.
+        first, second, centre = _face_frame(face)
+        towards = points - centre
+        along = towards @ first
+        across = towards @ second
+        span = max(float(np.ptp(along)), float(np.ptp(across)), 1e-9)
+        return (across - across.min()) / span, (along - along.min()) / span
     # Planar: von oben auf die XY-Ebene, die häufigste und einzige, bei der
     # ein rechteckiges Bild rechteckig bleibt.
     return (points[:, 1] - low[1]) / size[1], (points[:, 0] - low[0]) / size[0]
@@ -142,6 +175,7 @@ def displaced(
     projection: str = "planar",
     middle: float = 0.0,
     smooth: int = 0,
+    face: Feature | None = None,
 ) -> MeshData:
     """Jeden Eckpunkt entlang seiner Normale um den Bildwert verschieben.
 
@@ -156,7 +190,7 @@ def displaced(
     body = mesh.raw
     if abs(strength) < 1e-12:
         return mesh
-    rows, columns = _coordinates(mesh, projection)
+    rows, columns = _coordinates(mesh, projection, face)
     heights = _bilinear(field, rows, columns) - middle
     if smooth > 0:
         heights = _relaxed(body, heights, smooth)
@@ -239,6 +273,16 @@ class DisplaceParams(BaseParams):
             "gewickelt oder über die Kugel."
         ),
     )
+    at_feature: str = param(
+        title=_("Fläche"),
+        kind="feature",
+        default="",
+        placement="advanced",
+        doc=_(
+            "Auf welche erkannte Fläche das Bild gelegt wird. Nur für „Auf eine Fläche“ — "
+            "die anderen Arten brauchen keine."
+        ),
+    )
     middle: float = param(
         title=_("Nulllage"),
         default=0.0,
@@ -294,11 +338,40 @@ def displace_image(ctx: OpContext) -> OpResult:
         projection=params.projection,
         middle=params.middle,
         smooth=params.smooth,
+        face=_chosen_face(source, params),
     )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=after)],
         findings=_displacement_findings(before, field, params, ctx, source.id),
     )
+
+
+def _chosen_face(source: object, params: DisplaceParams) -> Feature | None:
+    """Die Fläche, auf die projiziert wird — oder ein Satz, warum es keine gibt.
+
+    Nur die eine Projektion braucht sie. Fehlt sie dort, ist das kein Grund für
+    ein stilles Ausweichen auf „von oben": Das Ergebnis sähe fast richtig aus
+    und läge auf der falschen Ebene.
+    """
+    if params.projection != "face":
+        return None
+    features = getattr(source, "features", {}) or {}
+    found = features.get(params.at_feature) if params.at_feature else None
+    if found is None:
+        raise ValidationError(
+            field="face",
+            detail=_(
+                "Für „Auf eine Fläche“ fehlt die Fläche. Klicken Sie eine an, bevor Sie "
+                "das Relief auflegen."
+            ),
+            constraint="required",
+            values={"known": sorted(features)},
+            suggestions=(
+                Action(id="pick_face", label=_("Eine Fläche anklicken.")),
+                Action(id="use_planar", label=_("Stattdessen von oben auflegen.")),
+            ),
+        )
+    return cast(Feature, found)
 
 
 def _displacement_findings(

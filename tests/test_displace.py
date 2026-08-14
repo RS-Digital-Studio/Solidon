@@ -24,7 +24,7 @@ from app.core.geom.displace import displaced, sample_image
 from app.core.geom.mesh import MeshData
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
-from app.core.types import OpContext, OpResult, Profile, Scene, SceneObject, Source
+from app.core.types import Feature, OpContext, OpResult, Profile, Scene, SceneObject, Source
 
 
 def image_bytes(values: np.ndarray) -> bytes:
@@ -340,3 +340,94 @@ def test_the_helper_takes_a_mesh_and_a_field() -> None:
 
     assert lifted.volume > body.volume
     assert io is not None  # der Import oben gehört zum Bilderzeugen
+
+
+# --- auf eine erkannte Fläche ---------------------------------------------------
+
+
+def slanted() -> tuple[MeshData, Feature]:
+    """Eine schräge Platte mit ihrer Fläche als erkanntes Merkmal.
+
+    Schräg mit Absicht: Auf einer waagerechten Fläche gäbe „von oben"
+    dasselbe Ergebnis, und der Test bewiese nichts.
+    """
+    body = plate(40.0, 40.0, 6.0)
+    tilted = body.raw.copy()
+    tilted.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 6.0, [0, 1, 0]))
+    normal = np.asarray([np.sin(np.pi / 6.0), 0.0, np.cos(np.pi / 6.0)])
+    face = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={
+            "area": 1600.0,
+            "normal": tuple(float(value) for value in normal),
+            "centre": tuple(float(value) for value in tilted.bounds.mean(axis=0)),
+        },
+    )
+    return MeshData.of(tilted), face
+
+
+def test_a_relief_can_sit_on_a_detected_face(profile: Profile) -> None:
+    """Die vierte Projektion: das Bild liegt so auf, wie es aussähe, wenn man
+    senkrecht auf die Fläche sieht.
+
+    Auf einer schrägen Fläche ist das die einzige Art, die nicht verzerrt —
+    „von oben" staucht sie um den Kosinus ihrer Neigung.
+    """
+    body, face = slanted()
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features={"face_1": face})
+
+    result = run(entry, profile, ramp(), strength=1.5, projection="face", at_feature="face_1")
+
+    after = result.outputs[0].mesh
+    assert after.volume > body.volume
+    assert after.is_watertight
+    assert after.triangle_count == body.triangle_count
+
+
+def test_the_face_projection_differs_from_looking_down(profile: Profile) -> None:
+    """Sonst wäre die vierte Art eine Zeile Code für nichts."""
+    body, face = slanted()
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features={"face_1": face})
+
+    flat = run(entry, profile, ramp(), strength=1.5, projection="planar")
+    on_face = run(entry, profile, ramp(), strength=1.5, projection="face", at_feature="face_1")
+
+    assert not np.allclose(
+        np.asarray(flat.outputs[0].mesh.raw.vertices),
+        np.asarray(on_face.outputs[0].mesh.raw.vertices),
+    )
+
+
+def test_the_face_projection_without_a_face_says_so(profile: Profile) -> None:
+    """Kein stilles Ausweichen auf „von oben".
+
+    Das Ergebnis sähe fast richtig aus und läge auf der falschen Ebene — die
+    Sorte Fehler, die man erst am gedruckten Teil bemerkt.
+    """
+    body, face = slanted()
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features={"face_1": face})
+
+    with pytest.raises(ValidationError) as raised:
+        run(entry, profile, ramp(), strength=1.5, projection="face")
+
+    assert raised.value.suggestions
+    assert raised.value.constraint == "required"
+
+
+def test_a_face_frame_survives_any_normal() -> None:
+    """Der Hilfsvektor darf nirgends parallel zur Flächennormale liegen.
+
+    Derselbe Griff wie beim Pinselring: die schwächste Achse der Normale. Ein
+    fester Startvektor wäre an jeder achsparallelen Fläche entartet — und das
+    sind die häufigsten.
+    """
+    from app.core.geom.displace import _face_frame
+
+    for axis in ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0), (0.0, 0.0, -1.0)):
+        feature = Feature(id="face_1", kind="face", provenance="detected", params={"normal": axis})
+        first, second, _centre = _face_frame(feature)
+        assert np.isfinite(first).all() and np.isfinite(second).all()
+        assert abs(float(np.dot(first, second))) < 1e-9, "die beiden stehen senkrecht"
+        assert abs(float(np.dot(first, np.asarray(axis)))) < 1e-9, "und beide in der Ebene"

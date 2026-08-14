@@ -170,6 +170,7 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "planar": _("Von oben"),
     "cylindrical": _("Um die Achse"),
     "spherical": _("Über die Kugel"),
+    "face": _("Auf eine Fläche"),
     "raised": _("Erhaben"),
     "engraved": _("Vertieft"),
     "flat": _("Flach"),
