@@ -206,11 +206,15 @@ class LayerBar(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._on = False
+        """Ob die Schichtanalyse läuft.
 
-        self.active = BarComboBox(self)
-        self.active.addItem(tr("Keine Schichtanalyse"), userData=False)
-        self.active.addItem(tr("Schichtanalyse"), userData=True)
-        self.active.currentIndexChanged.connect(lambda _index: self._emit())
+        Früher stand hier ein Auswahlfeld mit „Keine Schichtanalyse" und
+        „Schichtanalyse" — ein Umschalter hinter dem Umschalter, der diese
+        Leiste überhaupt erst öffnet. Wer *Schichten* anklickte, bekam einen
+        toten Regler und musste erraten, dass er im Feld daneben noch einmal
+        einschalten muss. Jetzt schaltet der Werkzeugknopf, und zwar beides.
+        """
 
         self.slider = QSlider(Qt.Orientation.Horizontal, self)
         self.slider.setMinimum(0)
@@ -222,11 +226,21 @@ class LayerBar(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
-        layout.addWidget(self.active)
         layout.addWidget(self.slider, stretch=1)
         layout.addWidget(self.readout)
         self._result: SliceResult | None = None
         self._update_enabled()
+
+    def set_active(self, active: bool) -> None:
+        """Die Schichtanalyse ein- oder ausschalten.
+
+        Gerufen vom Fenster, wenn das Werkzeug auf- oder zugeht — nicht vom
+        Nutzer: für ihn ist der Werkzeugknopf der Schalter.
+        """
+        if active == self._on:
+            return
+        self._on = active
+        self._emit()
 
     def show_result(self, result: SliceResult | None) -> None:
         self._result = result
@@ -236,7 +250,7 @@ class LayerBar(QWidget):
         self._show_readout()
 
     def enabled(self) -> bool:
-        return bool(self.active.currentData())
+        return self._on
 
     def index(self) -> int:
         return self.slider.value() if self.enabled() else -1

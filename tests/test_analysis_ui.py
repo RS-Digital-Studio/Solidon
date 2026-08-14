@@ -1554,13 +1554,37 @@ def _wait_for_slice(window: MainWindow, timeout_ms: int = 20_000) -> None:
         application.processEvents()
 
 
-def test_the_layer_bar_is_called_what_it_is(qt_app: QApplication) -> None:
-    """Keine Vorschau: sie zeigt Geometrie, keine Werkzeugwege (§18.10)."""
-    bar = LayerBar()
-    labels = [bar.active.itemText(index) for index in range(bar.active.count())]
+def test_the_layer_tool_is_called_what_it_is(window: MainWindow) -> None:
+    """Keine Vorschau: sie zeigt Geometrie, keine Werkzeugwege (§18.10).
 
-    assert any("Schichtanalyse" in text for text in labels)
-    assert not any("Vorschau" in text for text in labels)
+    Die Benennung trug früher das Auswahlfeld in der Leiste selbst; seit es
+    weg ist, tragen sie der Werkzeugknopf und sein Hinweis.
+    """
+    title = window.tools.tool_titles()["layers"]
+    hint = str(window.tools.tools()["layers"].hint)
+
+    assert "Schichten" in title
+    assert "Vorschau" not in title
+    assert "Vorschau" not in hint
+
+
+def test_opening_the_layer_tool_is_the_only_switch(window: MainWindow) -> None:
+    """Ein Umschalter, nicht zwei.
+
+    In der Leiste stand ein Auswahlfeld mit „Keine Schichtanalyse" und
+    „Schichtanalyse" — hinter dem Werkzeugknopf, der die Leiste überhaupt
+    erst öffnet. Wer *Schichten* anklickte, bekam einen toten Regler und
+    musste erraten, dass er daneben noch einmal einschalten muss.
+    """
+    select_plate(window)
+    assert not window.layer_bar.enabled(), "geschlossen ist aus"
+
+    window.tools.activate("layers")
+    assert window.layer_bar.enabled(), "der Knopf schaltet die Analyse ein"
+
+    window.tools.activate(None)
+    assert not window.layer_bar.enabled(), "und wieder aus"
+    assert window.layer_bar.index() == -1
 
 
 def test_scrubbing_shows_one_layer(window: MainWindow) -> None:
@@ -1568,7 +1592,7 @@ def test_scrubbing_shows_one_layer(window: MainWindow) -> None:
     sobald sie da ist, statt das Fenster so lange anzuhalten.
     """
     select_plate(window)
-    window.layer_bar.active.setCurrentIndex(1)
+    window.layer_bar.set_active(True)
     _wait_for_slice(window)
 
     assert window.layer_bar.slider.maximum() > 0, "the plate has layers"
@@ -1755,8 +1779,8 @@ def test_a_chosen_layer_cuts_away_what_lies_above(window: MainWindow) -> None:
 
 def test_switching_it_off_clears_the_view(window: MainWindow) -> None:
     select_plate(window)
-    window.layer_bar.active.setCurrentIndex(1)
-    window.layer_bar.active.setCurrentIndex(0)
+    window.layer_bar.set_active(True)
+    window.layer_bar.set_active(False)
 
     assert window.layer_bar.index() == -1
     assert window.layer_bar.readout.text() == ""

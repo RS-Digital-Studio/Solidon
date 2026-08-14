@@ -745,7 +745,7 @@ class MainWindow(QMainWindow):
             "layers",
             tr("Schichten"),
             self.layer_bar,
-            lambda: self.layer_bar.active.setCurrentIndex(0),
+            lambda: self.layer_bar.set_active(False),
             symbol="layers",
             hint=tr(
                 "Durch die Höhe fahren und den Querschnitt ansehen. Inseln sind "
@@ -919,6 +919,11 @@ class MainWindow(QMainWindow):
         # und die Leiste des Werkzeugs lag über den Umschaltern: bei allen
         # sieben, von Schnitt bis Bemalen.
         self.tools.toolChanged.connect(lambda _key: self.overlay.reflow())
+        # Wer *Schichten* öffnet, will Schichten sehen. Der Schalter dafür war
+        # ein zweites Auswahlfeld in der Leiste selbst — ein Umschalter hinter
+        # dem Umschalter, der die Leiste öffnet. Geschlossen wird über den
+        # ``reset`` des Werkzeugs.
+        self.tools.toolChanged.connect(lambda key: self.layer_bar.set_active(key == "layers"))
         # Dasselbe für Befunde, die nach der Auswertung nachkommen: die Liste
         # meldet ihr Wachstum, weil ein QListWidget es nicht von selbst tut.
         self.report.contentGrew.connect(self.overlay.reflow)
