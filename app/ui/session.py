@@ -768,7 +768,9 @@ class Session(QObject):
             self.evaluate_async()
         return applied
 
-    def split_along(self, object_id: str, plane: SectionPlane, *, pins: int) -> SplitApplied:
+    def split_along(
+        self, object_id: str, plane: SectionPlane, *, pins: int, shape: str = "round"
+    ) -> SplitApplied:
         """§25: an einer gezeichneten Ebene trennen — als Ablauf, damit die
         Passung mitkommt (§14).
 
@@ -776,8 +778,23 @@ class Session(QObject):
         Die Operation allein macht die zwei Hälften. Erst der Ablauf trägt das
         Paar aus Stift und Bohrung ins Dokument ein, und daran hängen im
         Slicer die Werte, die über eine Passung entscheiden.
+
+        Der ausgewertete Körper geht mit: An ihm entscheidet sich, wie viele
+        Stifte auf die Schnittfläche passen — und damit, wie viele Passungen
+        entstehen. Ohne ihn entstünden Paare, die auf Merkmale zeigen, die es
+        nicht gibt.
         """
-        applied = apply_line_split(self.project.document, object_id, plane, self.profile, pins=pins)
+        result = self.last_result
+        entry = result.scene.objects.get(object_id) if result is not None else None
+        applied = apply_line_split(
+            self.project.document,
+            object_id,
+            plane,
+            self.profile,
+            mesh=as_mesh_data(entry.mesh) if entry is not None else None,
+            pins=pins,
+            shape=shape,
+        )
         self._dirty = True
         self.projectChanged.emit()
         self.evaluate_async()

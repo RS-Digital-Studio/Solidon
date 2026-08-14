@@ -108,6 +108,7 @@ from app.core.perceive.maps import wall_thickness_map
 from app.core.registry import (
     MENU_TWINS,
     REGISTRY,
+    TWIN_TOGGLES,
     OperationSpec,
     PaletteEntry,
     menu_tree,
@@ -631,6 +632,22 @@ class MainWindow(QMainWindow):
         QShortcut(
             QKeySequence("Ctrl+Shift+Tab"), self, lambda: self.object_tree.step_selection(False)
         )
+
+        # §19.2: die acht Werkzeuge der unteren Leiste bekommen ihr Kürzel, und
+        # zwar in der Reihenfolge, in der sie dastehen. Sie hatten als Einzige
+        # keines — ausgerechnet die Handgriffe, die einem Anfänger am nächsten
+        # liegen.
+        #
+        # ``Alt`` und eine Ziffer, nicht ein Buchstabe: Ein Kürzel ohne
+        # Modifikator feuert auch, während jemand in den Chat tippt, und
+        # schluckt dort den Buchstaben. Die Ziffern 1 bis 6 sind an Darstellung
+        # und Projektion vergeben, also braucht es ohnehin einen Modifikator;
+        # ``Alt`` bleibt übrig, weil ``Ctrl+1`` bis ``Ctrl+6`` die Kameras
+        # sind. Welche Zahl zu welchem Werkzeug gehört, steht im Tooltip des
+        # Knopfes und in der Kürzelübersicht — geraten werden muss es nicht.
+        for index, key in enumerate(self.tools.tools(), start=1):
+            self.tools.set_shortcut(key, f"Alt+{index}")
+            QShortcut(QKeySequence(f"Alt+{index}"), self, lambda name=key: self.tools.toggle(name))
 
         self._autosave = QTimer(self)
         self._autosave.setInterval(AUTOSAVE_INTERVAL_MS)
@@ -2651,10 +2668,10 @@ class MainWindow(QMainWindow):
             "view.toggle_right": (tr("Rechten Bereich zeigen"), "F9", self.action_toggle_right),
             "help.manual": (tr("Handbuch …"), "F1", self.action_manual),
         }
-        for key, title in self.tools.tool_titles().items():
+        for key, tool in self.tools.tools().items():
             commands[f"tool.{key}"] = (
-                f"{strip_title()}: {title}",
-                "",
+                f"{strip_title()}: {tool.title}",
+                tool.shortcut,
                 lambda name=key: self.tools.toggle(name),
             )
         return commands
@@ -3797,8 +3814,11 @@ class MainWindow(QMainWindow):
             )
             return
 
-        pins = int(self.split_bar.values()["pins"])
-        applied = self.session.split_along(self._split_target, plane, pins=pins)
+        chosen = self.split_bar.values()
+        pins = int(chosen["pins"])
+        applied = self.session.split_along(
+            self._split_target, plane, pins=pins, shape=str(chosen["shape"])
+        )
         self.report.add_findings(applied.findings)
         self._clear_split_line()
         self.announce(
@@ -3978,19 +3998,27 @@ class MainWindow(QMainWindow):
             # werden auf das Schema der gewählten Op gefiltert (der exakte
             # Quader kennt kein ``anchor``, der exakte Zylinder keine
             # ``segments``).
+            #
+            # Den Umschalter bekommt nur, wer einen deklariert hat
+            # (``TWIN_TOGGLES``). Die Beschriftung stand hier als feste
+            # Zeichenkette, und damit taugte die ganze Zusammenlegung für
+            # nichts als die zwei Rechenkerne: *An Ebene teilen* unter
+            # *Teilen* hätte einen Haken bekommen, der von einem exakten
+            # Körper spricht, den es dort nicht gibt. Sein Umschalter ist ein
+            # Wert im selben Dialog — die Null im Feld *Passstifte*.
             hidden_twin = next(
-                (hidden for hidden, shown in MENU_TWINS.items() if shown == spec.name), None
+                (
+                    hidden
+                    for hidden, shown in MENU_TWINS.items()
+                    if shown == spec.name and hidden in TWIN_TOGGLES
+                ),
+                None,
             )
             exact: QCheckBox | None = None
             if hidden_twin is not None:
-                exact = QCheckBox(tr("Exakter Körper (B-Rep) — echte Flächen und Kanten"), self)
-                exact.setToolTip(
-                    tr(
-                        "Rechnet im exakten Kern statt als Netz: STEP-Export und "
-                        "spätere Verrundungen bleiben möglich. Netz-Feinheiten "
-                        "wie Verankerung oder Segmentzahl entfallen."
-                    )
-                )
+                label, hint = TWIN_TOGGLES[hidden_twin]
+                exact = QCheckBox(str(label), self)
+                exact.setToolTip(str(hint))
 
             def chosen_spec() -> OperationSpec:
                 if exact is not None and exact.isChecked() and hidden_twin is not None:

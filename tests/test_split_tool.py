@@ -72,17 +72,36 @@ def test_the_button_waits_for_a_finished_line(qt_app: QApplication) -> None:
 
 
 def test_the_pin_count_goes_with_its_checkbox(qt_app: QApplication) -> None:
-    """Eine Zahl ohne die Sache, zu der sie gehört, ist eine Frage ohne Anlass."""
+    """Eine Zahl ohne die Sache, zu der sie gehört, ist eine Frage ohne Anlass.
+
+    Dasselbe gilt für die Form: ein Auswahlfeld „Schwalbenschwanz“ neben einem
+    Haken, der die Verbindung ganz abschaltet, ist eine Wahl ohne Wirkung.
+    """
     bar = SplitBar()
     bar.show()
 
     bar.connect_halves.setChecked(False)
     assert not bar.count.isVisible()
-    assert bar.values() == {"pins": 0}
+    assert not bar.shape.isVisible()
+    assert bar.values() == {"pins": 0, "shape": "round"}
 
     bar.connect_halves.setChecked(True)
     assert bar.count.isVisible()
+    assert bar.shape.isVisible()
     assert bar.values()["pins"] == bar.count.value()
+
+
+def test_the_bar_offers_every_connector_shape(qt_app: QApplication) -> None:
+    """Die Form gehört neben die Zahl und nicht hinten in einen Dialog: Wer
+    einen Schwalbenschwanz will, will ihn, *bevor* er trennt."""
+    from app.core.geom.prepare_ops import CONNECTOR_SHAPES
+
+    bar = SplitBar()
+
+    offered = [bar.shape.itemData(row) for row in range(bar.shape.count())]
+    assert offered == list(CONNECTOR_SHAPES)
+    assert all(bar.shape.itemText(row) for row in range(bar.shape.count())), "keine leeren Zeilen"
+    assert bar.values()["shape"] == "round", "die einfachste Form ist vorgewählt"
 
 
 def test_the_connection_is_preselected(qt_app: QApplication) -> None:
@@ -391,3 +410,51 @@ def test_the_stored_plane_does_not_depend_on_the_camera(window: MainWindow) -> N
     assert params["normal_y"] == pytest.approx(expected.normal[1])
     assert params["normal_z"] == pytest.approx(expected.normal[2])
     assert set(params) & {"view_x", "camera", "view"} == set(), "keine Kamera im Stapel"
+
+
+# --- die Kürzel der Werkzeugzeile ------------------------------------------------
+
+
+def test_every_tool_has_a_shortcut(window: MainWindow) -> None:
+    """Die acht Handgriffe, die einem Anfänger am nächsten liegen, hatten als
+    Einzige keine Taste.
+
+    ``Alt`` und eine Ziffer: Ein Kürzel ohne Modifikator feuerte auch, während
+    jemand in den Chat tippt, und schluckte dort den Buchstaben. Die Ziffern
+    allein sind an die Darstellung vergeben, ``Ctrl`` und Ziffer an die
+    Kameras.
+    """
+    tools = window.tools.tools()
+
+    sequences = [tool.shortcut for tool in tools.values()]
+    assert all(sequences), "kein Werkzeug ohne Kürzel"
+    assert sequences == [f"Alt+{index}" for index in range(1, len(tools) + 1)]
+    assert len(set(sequences)) == len(sequences), "und keines doppelt"
+
+
+def test_the_shortcut_stands_in_the_tooltip(window: MainWindow) -> None:
+    """Ein Kürzel, das nirgends steht, lernt niemand."""
+    button = window.tools._buttons["split"]
+
+    assert "Alt+" in button.toolTip()
+    assert str(window.tools.tools()["split"].title) in button.toolTip()
+
+
+def test_greying_out_and_back_keeps_the_shortcut_visible(window: MainWindow) -> None:
+    """Beim Ausgrauen sagt der Tooltip den Grund — danach wieder das Kürzel.
+
+    Ohne das stand nach der ersten leeren Szene nur noch der nackte Titel dort,
+    und das Kürzel war für den Rest der Sitzung unsichtbar.
+    """
+    window.tools.set_usable(False, "Dafür braucht es einen Körper in der Szene.")
+    assert "Alt+" not in window.tools._buttons["split"].toolTip()
+
+    window.tools.set_usable(True)
+    assert "Alt+" in window.tools._buttons["split"].toolTip()
+
+
+def test_the_palette_carries_the_tool_shortcuts(window: MainWindow) -> None:
+    """Die Palette ist der Universalzugang, und daneben lernt man das Kürzel."""
+    commands = window.window_commands()
+
+    assert all(commands[f"tool.{key}"][1] for key in window.tools.tools())

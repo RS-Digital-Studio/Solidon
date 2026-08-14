@@ -22,7 +22,7 @@ from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.project import Project, ProjectSources, new_project
-from app.core.split import apply_split, plan_split
+from app.core.split import apply_planned, apply_split, plan_split
 from app.core.types import OpContext, Profile, Scene, SceneObject, Source
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -252,7 +252,10 @@ def test_split_pinned_runs_as_an_operation(profile: Profile) -> None:
 
     result = run("split_pinned", entry, profile, axis="x", position=0.0, pins=2)
 
-    assert [output.name for output in result.outputs] == ["Balken A", "Balken B"]
+    assert [output.name for output in result.outputs] == [
+        "Balken A · Stifte",
+        "Balken B · Löcher",
+    ], "beim Export ist der Name die einzige Auskunft darüber, welches Teil welches ist"
     assert all(output.mesh.is_watertight for output in result.outputs)
     assert "pin_1" in result.outputs[0].features
     assert "bore_1" in result.outputs[1].features
@@ -331,6 +334,36 @@ def test_the_seams_become_fit_pairs(loaded, profile: Profile) -> None:
     assert project.document.fits == applied.fits
     assert applied.fits[0].a.feature_id == "pin_1"
     assert applied.fits[0].b.feature_id == "bore_1"
+
+
+def test_a_seam_without_pins_gets_no_fit_pair(profile: Profile) -> None:
+    """Ein Paar, dessen beide Seiten es nicht gibt, ist schlimmer als keines.
+
+    Ist die Schnittfläche für Stifte zu schmal, setzt ``plan_pins`` keinen und
+    sagt das als Befund. Die Passung entstand hier trotzdem — und die
+    Passungsprüfung meldete danach eine Verletzung an einem Teil, das in
+    Ordnung ist.
+
+    Der Balken ist genau dafür gebaut: vierhundert Millimeter lang, drei mal
+    drei im Querschnitt. Er muss geteilt werden, und auf neun Quadratmillimeter
+    passt kein Stift samt Wand.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Anlegen",
+        [OperationDraft(op="create_box", params={"width": 400.0, "depth": 3.0, "height": 3.0})],
+    )
+    thin = MeshData.of(trimesh.creation.box(extents=(400.0, 3.0, 3.0)))
+
+    plan = plan_split(thin, "obj_1", profile)
+
+    assert plan.cuts, "der Balken passt nicht auf das Bett und wird geteilt"
+    assert all(count == 0 for count in plan.seated), "auf 3 × 3 mm sitzt kein Stift"
+
+    applied = apply_planned(project.document, plan, "obj_1", profile)
+
+    assert applied.fits == [], "keine Passung ohne Stift, auf den sie zeigt"
+    assert project.document.fits == []
 
 
 def test_the_pairs_hold_when_the_scene_is_checked(loaded, profile: Profile) -> None:

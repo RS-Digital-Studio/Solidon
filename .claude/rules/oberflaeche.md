@@ -82,9 +82,9 @@ gerissen werden:
 |---|---|
 | Menüs in der Leiste | ≤ 9 |
 | Zeilen in einem Menü (ein Untermenü zählt als eine) | ≤ 12 |
-| Umschalter in der Werkzeugzeile | ≤ 8 — **erreicht**: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Trennen, Bemalen |
+| Umschalter in der Werkzeugzeile | ≤ 8 — **erreicht**: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Trennen, Bemalen — auf `Alt+1` bis `Alt+8` |
 | Felder auf der Vorderseite eines Operationsdialogs | ≤ 8 |
-| Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben als Umschalter im Dialog ihres Partners, erreichbar über Palette und Verlauf |
+| Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben im Dialog ihres Partners, erreichbar über Palette und Verlauf |
 
 Wer eine Zahl erhöhen will, tut das mit Absicht und begründet es im Commit.
 Die Werkzeugzeile ist voll: Ein neuntes Werkzeug heißt, dass eines der acht
@@ -97,6 +97,13 @@ Mesh/B-Rep-Zwillinge (Quader, Zylinder) sind dieselbe Handlung in zwei
 Rechenkernen: ein Eintrag, „Exakt (B-Rep)" ist ein Umschalter hinten im
 Dialog, und `MENU_TWINS` im Register hält die Zuordnung — auch für den
 Menüort, den der Agent nennt (§2.6).
+
+**Nicht jeder Zwilling braucht einen Umschalter.** Die Beschriftung liegt in
+`TWIN_TOGGLES`, nicht als Zeichenkette in der Oberfläche; wer dort fehlt, hat
+seinen Umschalter als **Wert** im Dialog des Partners. *An Ebene teilen* ist
+*Teilen* mit `pins = 0` — ein Haken „Exakter Körper (B-Rep)" wäre dort eine
+Wegbeschreibung zu etwas, das es nicht gibt. Solange das fest verdrahtet war,
+taugte die ganze Zusammenlegung für nichts als die zwei Rechenkerne.
 
 **Ein Umschalter zwischen Varianten schaltet den ganzen Dialog um**, nicht nur
 die Rechnung: `OperationDialog.switch_variant` blendet aus, was die gewählte

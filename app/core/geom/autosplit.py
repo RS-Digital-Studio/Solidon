@@ -102,6 +102,17 @@ class Step:
 
     part_index: int
     plane: Candidate
+    source: MeshData | None = None
+    """Das Stück, das dieser Schnitt geteilt hat.
+
+    Mitgegeben, weil erst daran zu sehen ist, ob auf die Schnittfläche
+    überhaupt Stifte passen — und danach entscheidet sich, ob ein
+    Passungspaar entsteht oder ins Leere zeigt (§14). Eine Referenz, keine
+    Kopie; wer sie ändert, ändert das Stück, und das tut hier niemand.
+
+    Gerechnet wird es nicht hier: Die Stiftplanung lebt in ``pins.py``, und
+    das Modul importiert dieses hier. Der Aufrufer in ``app/core/split.py``
+    hat beide."""
 
 
 @dataclass(slots=True)
@@ -182,7 +193,7 @@ def split_to_fit(
             return outcome
 
         outcome.parts[index : index + 1] = [first, second]
-        outcome.cuts.append(Step(part_index=index, plane=candidate))
+        outcome.cuts.append(Step(part_index=index, plane=candidate, source=part))
         _log.info("split along %s at %.2f mm", candidate.axis, candidate.position)
 
     if _worst(outcome.parts, profile) is not None:

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 from app.core.geom.autosplit import SplitOutcome, split_to_fit
 from app.core.geom.mesh import MeshData
-from app.core.geom.pins import PIN_COUNT
+from app.core.geom.pins import PIN_COUNT, plan_pins
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft
@@ -44,10 +44,20 @@ class SplitPlan:
 
     drafts: tuple[OperationDraft, ...]
     outcome: SplitOutcome
+    seated: tuple[int, ...] = ()
+    """Wie viele Stifte je Schnitt wirklich sitzen — siehe :func:`fitting_pins`.
+
+    Leer heißt: nicht gerechnet, dann gilt die gewünschte Zahl. Das betrifft
+    nur von Hand gebaute Pläne in Tests; ``plan_split`` füllt sie immer."""
 
     @property
     def cuts(self) -> int:
         return len(self.drafts)
+
+    def pins_at(self, index: int, wanted: int) -> int:
+        """Die Stiftzahl des ``index``-ten Schnitts, mit der gewünschten als
+        Rückfall."""
+        return self.seated[index] if index < len(self.seated) else wanted
 
 
 @dataclass(slots=True)
@@ -83,7 +93,33 @@ def plan_split(
         )
         for step in outcome.cuts
     ]
-    return SplitPlan(drafts=tuple(drafts), outcome=outcome)
+    return SplitPlan(
+        drafts=tuple(drafts),
+        outcome=outcome,
+        seated=tuple(fitting_pins(step.source, step.plane.plane, pins) for step in outcome.cuts),
+    )
+
+
+def fitting_pins(
+    mesh: MeshData | None, plane: SectionPlane, wanted: int, *, shape: str = "round"
+) -> int:
+    """Wie viele Stifte an dieser Naht wirklich sitzen werden.
+
+    Nicht dasselbe wie die gewünschte Zahl: Ist die Schnittfläche zu schmal,
+    setzt ``plan_pins`` keinen einzigen und sagt das als Befund. Ein
+    Passungspaar entstand hier trotzdem — ein `Fit`, dessen beide Seiten auf
+    Merkmale zeigen, die es nie gab. Die Passungsprüfung meldet das später als
+    Verletzung, und der Nutzer sucht einen Fehler an einem Teil, das in
+    Ordnung ist.
+
+    Gerechnet wird dieselbe Planung, die die Operation gleich noch einmal
+    macht. Sie ist deterministisch, also stimmen beide Antworten überein; und
+    sie kostet einen Querschnitt, während der Schnitt daneben ein ganzes Netz
+    zerlegt.
+    """
+    if not wanted or mesh is None:
+        return 0
+    return plan_pins(mesh, plane, count=wanted, shape=shape).count
 
 
 def apply_split(
@@ -122,7 +158,7 @@ def apply_planned(
     fits: list[Fit] = []
     transaction = None
 
-    for step, draft in zip(plan.outcome.cuts, plan.drafts, strict=True):
+    for index, (step, draft) in enumerate(zip(plan.outcome.cuts, plan.drafts, strict=True)):
         target = pieces[step.part_index]
         applied = history.apply(
             _("Teilen und verstiften"),
@@ -132,7 +168,10 @@ def apply_planned(
         transaction = applied.id
         made = document.ops[-1].outputs
         pieces[step.part_index : step.part_index + 1] = list(made)
-        fits.extend(_pairs(made[0], made[1], pins, profile, len(fits)))
+        # So viele Paare, wie Stifte sitzen — nicht so viele, wie gewünscht
+        # waren. Eine zu schmale Schnittfläche bekommt keinen Stift und
+        # deshalb auch keine Passung, die auf ihn zeigt.
+        fits.extend(_pairs(made[0], made[1], plan.pins_at(index, pins), profile, len(fits)))
 
     document.fits.extend(fits)
     _log.info("split into %d part(s) with %d fit pair(s)", len(pieces), len(fits))
@@ -150,7 +189,9 @@ def apply_line_split(
     plane: SectionPlane,
     profile: Profile,
     *,
+    mesh: MeshData | None = None,
     pins: int = PIN_COUNT,
+    shape: str = "round",
 ) -> SplitApplied:
     """Ein einzelner Schnitt an einer gezeichneten Linie — mit Passungspaaren.
 
@@ -158,7 +199,13 @@ def apply_line_split(
     leben im Dokument, die Auswertung schreibt nicht hinein. Der Unterschied zu
     Auto Split ist nur die Zahl der Schnitte — einer, den jemand gezeigt hat,
     statt so vieler, wie der Bauraum verlangt.
+
+    ``mesh`` ist der Körper, wie die Auswertung ihn zuletzt gerechnet hat. Er
+    entscheidet, wie viele Stifte wirklich sitzen (:func:`fitting_pins`) —
+    ohne ihn gilt die gewünschte Zahl, und das ist die alte, ungenauere
+    Antwort.
     """
+    seated = fitting_pins(mesh, plane, pins, shape=shape)
     history = History(document)
     applied = history.apply(
         _("An gezeichneter Linie trennen"),
@@ -172,13 +219,14 @@ def apply_line_split(
                     "normal_z": plane.normal[2],
                     "position": plane.position,
                     "pins": pins,
+                    "shape": shape,
                 },
             )
         ],
         Origin(by="user"),
     )
     made = document.ops[-1].outputs
-    fits = _pairs(made[0], made[1], pins, profile, 0) if pins else []
+    fits = _pairs(made[0], made[1], seated, profile, 0)
     document.fits.extend(fits)
     _log.info("split along a drawn line into %d part(s)", len(made))
     return SplitApplied(object_ids=list(made), fits=fits, transaction=applied.id)

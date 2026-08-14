@@ -59,6 +59,29 @@ def hexagon(width: float, height: float) -> MeshData:
     return MeshData.of(body)
 
 
+def dovetail(width: float, height: float, *, taper: float = 0.55) -> MeshData:
+    """Ein Schwalbenschwanz-Prisma, ``width`` über die breite Seite.
+
+    Der Querschnitt ist ein gleichschenkliges Trapez: hinten schmal, vorn
+    breit. In einer Trennfuge sichert das gegen Verdrehen *und* gegen
+    Auseinanderziehen quer zur Naht — ein runder Stift kann nur das Erste, und
+    dafür braucht er zwei Stück.
+
+    ``taper`` ist die schmale Seite als Anteil der breiten. Über etwa 0,7
+    verschwindet der Formschluss, unter etwa 0,4 wird die schmale Seite zur
+    Sollbruchstelle; die Vorgabe liegt dazwischen und entspricht dem, was die
+    Slicer für ihre Schwalbenschwänze nehmen.
+    """
+    broad = width / 2.0
+    narrow = broad * taper
+    depth = width / 2.0
+    points = np.array(
+        [[-narrow, -depth], [narrow, -depth], [broad, depth], [-broad, depth]], dtype=float
+    )
+    body = trimesh.creation.extrude_polygon(_polygon(points), height=height)
+    return MeshData.of(body)
+
+
 def cone(bottom: float, top: float, height: float, *, segments: int = SEGMENTS) -> MeshData:
     """Ein Kegelstumpf auf Z = 0 — eine Senkung, oder eine Fase."""
     profile = np.array(

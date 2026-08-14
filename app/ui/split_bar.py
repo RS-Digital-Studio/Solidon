@@ -27,8 +27,11 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.geom.pins import PIN_COUNT
+from app.core.geom.prepare_ops import CONNECTOR_SHAPES
 from app.i18n import tr
+from app.ui.labels import choice_label
 from app.ui.style import NORMAL, TIGHT, make_primary
+from app.ui.tool_strip import BarComboBox
 
 #: Wie viele Punkte eine Trennlinie hat. Zwei — mehr wäre ein Polygonzug, und
 #: der beschriebe eine Fläche, die kein Schnitt ist.
@@ -96,6 +99,23 @@ class SplitBar(QWidget):
         )
         self.count_label = QLabel(tr("Stifte"), self)
 
+        # Die Form gehört neben die Zahl und nicht hinten in einen Dialog: Wer
+        # einen Schwalbenschwanz will, will ihn *bevor* er trennt, und ein Wert,
+        # den man erst nachträglich im Verlauf findet, ist ein zweiter
+        # Arbeitsgang. Die Namen kommen aus derselben Quelle wie im Dialog
+        # (``labels.choice_label``), sonst heißt dieselbe Form an zwei
+        # Stellen anders.
+        self.shape = BarComboBox(self)
+        for value in CONNECTOR_SHAPES:
+            self.shape.addItem(choice_label(value), userData=value)
+        self.shape.setToolTip(
+            tr(
+                "Runde Stifte drucken am saubersten. Sechskant und Schwalbenschwanz "
+                "sichern gegen Verdrehen, der Schwalbenschwanz zusätzlich gegen "
+                "Auseinanderziehen."
+            )
+        )
+
         # Nicht „Trennen": so heißt der Umschalter, der diese Leiste öffnet.
         # Der Umschalter nennt das Werkzeug, der Knopf seine Handlung — sonst
         # stehen zwei gleich beschriftete Bedienelemente übereinander, und der
@@ -115,6 +135,7 @@ class SplitBar(QWidget):
         layout.addWidget(self.connect_halves)
         layout.addWidget(self.count_label)
         layout.addWidget(self.count)
+        layout.addWidget(self.shape)
         layout.addWidget(self.apply)
         layout.addWidget(self.clear)
 
@@ -127,6 +148,7 @@ class SplitBar(QWidget):
         """
         self.count.setVisible(wanted)
         self.count_label.setVisible(wanted)
+        self.shape.setVisible(wanted)
 
     def show_points(self, points: int) -> None:
         """Wie viele Punkte gesetzt sind — der einzige Zustand dieser Leiste."""
@@ -134,9 +156,11 @@ class SplitBar(QWidget):
         self.apply.setEnabled(points >= POINTS_NEEDED)
         self.clear.setEnabled(points > 0)
 
-    def values(self) -> dict[str, int]:
+    def values(self) -> dict[str, int | str]:
         """Die Parameter, die nicht aus der Linie kommen."""
-        return {"pins": int(self.count.value()) if self.connect_halves.isChecked() else 0}
+        if not self.connect_halves.isChecked():
+            return {"pins": 0, "shape": "round"}
+        return {"pins": int(self.count.value()), "shape": str(self.shape.currentData())}
 
     def reset(self) -> None:
         """Was das Schließen des Werkzeugs zurücknimmt."""

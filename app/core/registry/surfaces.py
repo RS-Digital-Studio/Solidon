@@ -26,6 +26,7 @@ from app.core.registry.registry import (
     MENU_GROUPS,
     MENU_TWINS,
     REGISTRY,
+    TWIN_TOGGLES,
     MenuSection,
     OperationSpec,
     Registry,
@@ -58,11 +59,19 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
     """
     source = registry or REGISTRY
     if spec.name in MENU_TWINS:
-        # Der B-Rep-Zwilling hat keinen eigenen Eintrag mehr (MENU_TWINS):
-        # sein Ort ist der Eintrag des Mesh-Zwillings samt Umschalter — alles
-        # andere schickte Nutzer und Agent an eine Stelle, die es nicht gibt.
+        # Ein zusammengelegter Zwilling hat keinen eigenen Eintrag
+        # (MENU_TWINS): sein Ort ist der Eintrag des Partners — alles andere
+        # schickte Nutzer und Agent an eine Stelle, die es nicht gibt.
+        #
+        # Wie er dort erreicht wird, hängt am Paar: mit einem Umschalter
+        # (TWIN_TOGGLES), oder über einen Wert im Dialog. Der Zusatz nannte
+        # früher immer den Umschalter „Exakt" — für ein Paar ohne ihn wäre
+        # das eine Wegbeschreibung zu einem Haken, den es nicht gibt.
         twin = source.get(MENU_TWINS[spec.name])
-        return f"{menu_path(twin, source)} ({_('Umschalter „Exakt“')})"
+        where = menu_path(twin, source)
+        if spec.name in TWIN_TOGGLES:
+            return f"{where} ({_('Umschalter „Exakt“')})"
+        return f"{where} ({_('im selben Dialog')})"
     steps = [group_title(spec.category)]
 
     populated = {entry.category for entry in source.all()}

@@ -27,7 +27,7 @@ werden, statt verstreut in sieben Widgets.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from PySide6.QtCore import QEvent, QPoint, QRect, Qt, Signal
 from PySide6.QtWidgets import (
@@ -106,6 +106,12 @@ class Tool:
     """Was passiert, wenn das Werkzeug geschlossen wird. Ohne das bleibt die
     Ansichtsänderung stehen — richtig für alles, was nicht nur die Ansicht
     ändert."""
+    shortcut: str = ""
+    """Die Tastenfolge, die dieses Werkzeug holt.
+
+    Gesetzt wird sie vom Fenster (``set_shortcut``) und nicht hier
+    hineingeschrieben: Wer eine Taste vergibt, muss wissen, welche schon
+    vergeben sind, und das weiß das Fenster."""
 
 
 class ToolStrip(QWidget):
@@ -180,6 +186,20 @@ class ToolStrip(QWidget):
 
         bar.setVisible(False)
         self._layout.addWidget(bar)
+
+    def set_shortcut(self, key: str, sequence: str) -> None:
+        """Merkt sich die Tastenfolge und schreibt sie in den Tooltip.
+
+        Die Taste selbst installiert das Fenster; hier steht nur, wie sie
+        heißt. Sichtbar muss sie sein — ein Kürzel, das nirgends steht, lernt
+        niemand, und die Werkzeugzeile hat keinen Platz für eine zweite Zeile
+        neben jedem Knopf.
+        """
+        tool = self._tools.get(key)
+        if tool is None:
+            return
+        self._tools[key] = replace(tool, shortcut=sequence)
+        self._buttons[key].setToolTip(f"{tool.title}  ({sequence})")
 
     def toggle(self, key: str) -> None:
         """Ein Werkzeug öffnen — oder schließen, wenn es schon offen war."""
@@ -281,8 +301,13 @@ class ToolStrip(QWidget):
         bleibt nicht offen stehen.
         """
         for key, button in self._buttons.items():
+            tool = self._tools[key]
             button.setEnabled(usable)
-            button.setToolTip(str(self._tools[key].title) if usable else reason)
+            # Der Tooltip trägt im Normalfall das Kürzel; ihn beim Ausgrauen
+            # gegen den Grund zu tauschen ist richtig, ihn danach ohne Kürzel
+            # zurückzugeben wäre es nicht.
+            label = f"{tool.title}  ({tool.shortcut})" if tool.shortcut else str(tool.title)
+            button.setToolTip(label if usable else reason)
         if not usable and self._active is not None:
             self.activate(None)
 

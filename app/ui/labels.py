@@ -192,6 +192,12 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "circle": _("Kreis"),
     "polygon": _("Vieleck"),
     "slot": _("Langloch"),
+    # Die drei Verbinderquerschnitte. „round" und „hex" wären als Schlüssel
+    # noch zu erraten, „dovetail" nicht — und genau der ist der, für den man
+    # sich entscheidet.
+    "round": _("Rund"),
+    "hex": _("Sechskant"),
+    "dovetail": _("Schwalbenschwanz"),
     "honeycomb": _("Wabe"),
     "cubic": _("Würfelgitter"),
     "auto": _("Automatisch"),

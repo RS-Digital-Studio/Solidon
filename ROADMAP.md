@@ -41,11 +41,7 @@ bekommt einen roten Lauf.
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Die Wegekarten am Browser nachmessen | Die Konzepte gegen den Code gehalten (14.08.2026) | einen Browser, der JavaScript ausführt |
 | Spur A und B getrennt weiterverfolgen | Die Konzepte gegen den Code gehalten (14.08.2026) | für A einen Reproduzierer, der kürzer ist als ein Volllauf |
-| Drei Menüeinträge für einen Schnitt | Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026) | `MENU_TWINS` von seiner B-Rep-Beschriftung zu trennen |
-| Schwalbenschwanz und Schnapper | Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026) | nichts — eine Erweiterung des Verbinder-Parameters |
-| Passungspaar ohne Stifte | Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026) | eine Stelle, an der schon bekannt ist, was die Auswertung gemacht hat |
-| Die Hälften heißen „A" und „B" | Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026) | eine Umbenennung mit Folgen für Beispielprojekte und Tour |
-| Sechs Kürzel auf 84 Operationen | Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026) | eine Vergabe in einem Zug, nicht acht Einzelfälle |
+| Der Schnapper als Verbinderform | Die offenen Punkte abgearbeitet (14.08.2026) | einen eigenen Baustein mit Federweg und Hinterschnitt — kein Wert in einer Formliste |
 
 ---
 
@@ -5333,25 +5329,78 @@ Solidon hatte drei Wege zu teilen und keinen, der über das Bild ging.
 
 ### Offen, mit Grund
 
-- [ ] **Drei Menüeinträge für einen Schnitt.** *An Ebene teilen* ist *Teilen
-      und verstiften* mit `pins = 0`. Das Werkzeug zum Zusammenlegen gibt es
-      (`MENU_TWINS`), nur ist es fest auf B-Rep verdrahtet: Es hängt an jeden
-      Zwilling einen Haken „Exakter Körper (B-Rep)", und `menu_path` schreibt
-      „(Umschalter „Exakt")" hinter den Weg. Für dieses Paar wäre beides
-      gelogen. Der saubere Weg ist, `MENU_TWINS` von seiner Beschriftung zu
-      trennen — eigene Änderung, eigener Test.
-- [ ] **Schwalbenschwanz und Schnapper.** Die Slicer bieten drei
-      Verbinderformen, hier ist eine umgesetzt — die, die als einzige beiden
-      Hälften eine ebene Auflage lässt. Die anderen sind eine Erweiterung des
-      Parameters, keine zweite Operation.
-- [ ] **Ein Passungspaar entsteht auch dann, wenn die Schnittfläche für Stifte
-      zu klein war.** `plan_pins` meldet das sauber und setzt keine Stifte; das
-      Dokument bekommt trotzdem seine `Fit`-Einträge, weil an dieser Stelle
-      noch niemand weiß, was die Auswertung daraus macht. Bestand seit Auto
-      Split und ist jetzt an zwei Stellen — zusammen zu beheben.
-- [ ] **Die Hälften heißen „A" und „B".** Nach dem Verstiften trägt die eine
-      die Stifte und die andere die Löcher; das zu benennen hülfe beim
-      Zusammenbau. Betrifft `split_pinned`, Auto Split, eingecheckte
-      Beispielprojekte und die Tour.
-- [ ] **Sechs Kürzel auf 84 Operationen.** Unverändert offen, und weiter aus
-      demselben Grund: Kürzel vergibt man einmal und vollständig.
+Alle fünf sind inzwischen abgearbeitet — siehe den Abschnitt darunter.
+
+## Die offenen Punkte abgearbeitet (14.08.2026)
+
+Die fünf Punkte, die die Durchsicht offen ließ, plus das, was an Handbuch und
+Website nur halb nachgezogen war.
+
+- [x] **Ein Passungspaar entstand auch ohne Stifte.** War die Schnittfläche zu
+      schmal, setzte `plan_pins` keinen einzigen und sagte das als Befund — das
+      Dokument bekam seine `Fit`-Einträge trotzdem, und beide Seiten zeigten
+      auf Merkmale, die es nie gab. Die Passungsprüfung meldete danach eine
+      Verletzung an einem Teil, das in Ordnung ist.
+
+      Die Zahl der Paare kommt jetzt aus `fitting_pins()` — derselben Planung,
+      die die Operation gleich noch einmal macht, und weil sie deterministisch
+      ist, stimmen beide Antworten überein. Damit sie das auch für Auto Split
+      kann, führt jeder `Step` das Stück mit, das er geteilt hat: Gerechnet
+      wird es nicht in `autosplit.py`, denn `pins.py` importiert das Modul —
+      der Aufrufer in `split.py` hat beide.
+- [x] **Die Hälften heißen jetzt „… A · Stifte" und „… B · Löcher".** Beim
+      Export ist der Dateiname die einzige Auskunft darüber, welches der
+      beiden Teile man in der Hand hat. Ein vorhandener Zusatz wird ersetzt
+      statt ergänzt, sonst steht dort beim zweiten Teilen
+      „Halter A · Stifte A · Stifte"; der Buchstabenpfad bleibt, er zeigt den
+      Teilungsbaum. Getrennt wird an „ · " — das Zeichen kommt in Nutzernamen
+      praktisch nicht vor, also nimmt das Abschneiden keine fremde Klammer mit.
+- [x] **`MENU_TWINS` hängt nicht mehr an B-Rep.** Der Haken „Exakter Körper
+      (B-Rep)" stand als feste Zeichenkette in der Oberfläche und
+      „(Umschalter „Exakt")" im Menüweg; damit taugte die Zusammenlegung für
+      nichts als die zwei Rechenkerne. Die Beschriftungen liegen jetzt in
+      `TWIN_TOGGLES`, und wer dort fehlt, bekommt keinen Haken — sein
+      Umschalter ist ein Wert im Dialog des Partners.
+
+      Damit ist *An Ebene teilen* dorthin gezogen, wo es hingehört: unter
+      *Teilen* (vormals *Teilen und verstiften*), mit der Null im Feld
+      *Passstifte* als Umschalter. Aus drei „teilen"-Zeilen nebeneinander sind
+      zwei geworden.
+- [x] **Verbinder haben eine Form.** Rund, Sechskant, Schwalbenschwanz — als
+      Querschnitt des `dowel`-Bausteins, also über den Parameterbereichstest
+      mitgeprüft. Rund braucht zwei Stück gegen Verdrehen, die kantigen halten
+      einzeln; gemessen wird das im Test als das, was von der Bohrung frei
+      bliebe, wenn der Stift verdreht steckte. Die Fase bleibt für alle drei
+      dieselbe Rechnung, weil sie über den Umkreis arbeitet. Die Wahl steht in
+      der Trennleiste neben der Stiftzahl, nicht hinten in einem Dialog: Wer
+      einen Schwalbenschwanz will, will ihn, *bevor* er trennt.
+- [x] **Die acht Werkzeuge haben Kürzel**, `Alt+1` bis `Alt+8` in der
+      Reihenfolge der Leiste. `Alt` und eine Ziffer mit Grund: Ein Kürzel ohne
+      Modifikator feuert auch, während jemand in den Chat tippt, und schluckt
+      dort den Buchstaben; die Ziffern allein gehören der Darstellung, `Ctrl`
+      und Ziffer den Kameras. Das Kürzel steht im Tooltip und in der Palette —
+      und es überlebt jetzt auch das Ausgrauen, das den Tooltip gegen den
+      Grund tauscht.
+- [x] **Handbuch und Website waren nur halb nachgezogen.** Die aus dem
+      Register erzeugte Referenz stimmte von selbst; der *geschriebene* Teil
+      nicht. Das Handbuch zählte die Werkzeugzeile weiter mit sieben
+      Werkzeugen auf und schickte den Leser nach „Bearbeiten → Automatisch
+      teilen" und „Ändern → Teilen und verstiften" — beide Wege gibt es so
+      nicht mehr. Nachgezogen in allen fünf Sprachen, nicht nur auf Deutsch
+      und Englisch: Kapitel 3 (Werkzeugzeile samt Kürzeln), Kapitel 13 und 14
+      (das Trennwerkzeug, die Verbinderformen, die Namen der Hälften). Auf der
+      Website hieß der Abschnitt *Auto-Split* und kannte nur die Suche; er
+      heißt jetzt *Trennen und Auto-Split* und fängt mit den zwei Klicks an.
+
+### Offen, und zwar als Entscheidung
+
+- [ ] **Der Schnapper als Verbinderform.** Er steht nicht in derselben Reihe
+      wie Sechskant und Schwalbenschwanz, auch wenn die Slicer ihn dort
+      führen: Die beiden sind ein Querschnitt, der Schnapper ist ein
+      federnder Arm. Er braucht einen Schlitz, damit er federt, eine Kammer
+      mit Hinterschnitt in der Gegenseite — und die ist in dieser Lage eine
+      Überhangfläche, über die der Baustein etwas sagen müsste — und eine
+      Federkraft, die ohne Kalibrierung geraten wäre. Das ist ein eigener
+      Baustein mit eigenem Bereichstest (`insert_snap_fit` gibt es bereits),
+      kein Wert in einer Formliste. Als Formwert wäre er eine Zusage, die die
+      Geometrie nicht hält.

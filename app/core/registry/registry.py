@@ -111,6 +111,42 @@ def group_title(category: str) -> str:
 MENU_TWINS: Final[dict[str, str]] = {
     "create_brep_box": "create_box",
     "create_brep_cylinder": "create_cylinder",
+    # *An Ebene teilen* ist *Teilen* mit ``pins = 0``. Zwei Menüzeilen, die
+    # sich in einer Zahl unterscheiden und beide „teilen" heißen — der
+    # Umschalter dafür stand schon im Dialog, es war das Feld *Passstifte*.
+    "split_plane": "split_pinned",
+}
+
+#: Der Umschalter, mit dem der Dialog des sichtbaren Zwillings auf den
+#: versteckten wechselt — und die Erklärung dazu.
+#:
+#: **Nicht jedes Paar braucht einen.** Die Tabelle stand lange nicht hier,
+#: sondern als fest eingebaute Zeichenkette „Exakter Körper (B-Rep)" in der
+#: Oberfläche und als „(Umschalter „Exakt")" im Menüweg. Damit ließ sich
+#: `MENU_TWINS` für nichts anderes benutzen als für die zwei Rechenkerne: Ein
+#: drittes Paar hätte einen Haken bekommen, der von einem exakten Körper
+#: spricht, den es nicht gibt.
+#:
+#: Wer hier fehlt, hat keinen eigenen Umschalter. Sein Weg ist ein Wert im
+#: Dialog des Partners — bei ``split_plane`` die Null im Feld *Passstifte* —,
+#: und erreichbar bleibt er über Befehlspalette und Verlauf.
+TWIN_TOGGLES: Final[dict[str, tuple[TranslatableText, TranslatableText]]] = {
+    "create_brep_box": (
+        _("Exakter Körper (B-Rep) — echte Flächen und Kanten"),
+        _(
+            "Rechnet im exakten Kern statt als Netz: STEP-Export und spätere "
+            "Verrundungen bleiben möglich. Netz-Feinheiten wie Verankerung oder "
+            "Segmentzahl entfallen."
+        ),
+    ),
+    "create_brep_cylinder": (
+        _("Exakter Körper (B-Rep) — echte Flächen und Kanten"),
+        _(
+            "Rechnet im exakten Kern statt als Netz: STEP-Export und spätere "
+            "Verrundungen bleiben möglich. Netz-Feinheiten wie Verankerung oder "
+            "Segmentzahl entfallen."
+        ),
+    ),
 }
 
 

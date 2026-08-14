@@ -74,6 +74,13 @@ class PinPlan:
     nächstgelegenen Achse aufgestellt wird, steht nicht senkrecht auf der
     Fläche, in der er sitzt — er schert beim Fügen.
     """
+    shape: str = "round"
+    """Querschnitt der Stifte — ``round``, ``hex`` oder ``dovetail``.
+
+    Rund braucht zwei Stück gegen Verdrehen, die kantigen halten schon
+    einzeln. Welcher es ist, entscheidet der Nutzer; die Planung sucht in
+    jedem Fall Platz für einen Kreis dieses Durchmessers, und was
+    hineingelegt wird, passt dann hinein."""
     findings: tuple[Finding, ...] = ()
 
     @property
@@ -94,7 +101,12 @@ class PinnedPair:
 
 
 def plan_pins(
-    mesh: MeshData, plane: SectionPlane, *, count: int = PIN_COUNT, wall: float = PIN_WALL
+    mesh: MeshData,
+    plane: SectionPlane,
+    *,
+    count: int = PIN_COUNT,
+    wall: float = PIN_WALL,
+    shape: str = "round",
 ) -> PinPlan:
     """Sucht Platz für Stifte auf der Schnittfläche von ``plane``.
 
@@ -105,13 +117,13 @@ def plan_pins(
     normal = _unit(plane.normal)
     section = sections_across(mesh, normal, np.array([plane.position]))[0]
     if section is None or section.is_empty:
-        return PinPlan((), 0.0, 0.0, normal, (_no_face(),))
+        return PinPlan((), 0.0, 0.0, normal, shape, (_no_face(),))
 
     largest = max(getattr(section, "geoms", (section,)), key=lambda entry: entry.area)
     diameter = _diameter(largest)
     inset = largest.buffer(-(diameter / 2.0 + wall))
     if inset.is_empty:
-        return PinPlan((), 0.0, 0.0, normal, (_too_small(diameter, wall),))
+        return PinPlan((), 0.0, 0.0, normal, shape, (_too_small(diameter, wall),))
 
     room = max(getattr(inset, "geoms", (inset,)), key=lambda entry: entry.area)
     points = _spread(room, count)
@@ -121,6 +133,7 @@ def plan_pins(
         diameter=diameter,
         length=length,
         normal=normal,
+        shape=shape,
     )
 
 
@@ -198,12 +211,20 @@ def add_pins(
         return pair
 
     clearance = profile.material.clearance if play is None else play
-    pin_body = _part("dowel", diameter=plan.diameter, length=plan.length, kind="pin", play=0.0)
+    pin_body = _part(
+        "dowel",
+        diameter=plan.diameter,
+        length=plan.length,
+        kind="pin",
+        shape=plan.shape,
+        play=0.0,
+    )
     bore_body = _part(
         "dowel",
         diameter=plan.diameter,
         length=plan.length / 2.0 + BORE_RELIEF,
         kind="bore",
+        shape=plan.shape,
         play=clearance,
     )
 

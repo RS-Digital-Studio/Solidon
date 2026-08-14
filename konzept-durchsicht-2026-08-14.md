@@ -102,10 +102,10 @@ wasserdicht zu schließen und beide Hälften daran zu schneiden — das ist ein
 eigenes Stück Arbeit und kein Nebenprodukt. Der Vorbehalt steht am
 Registereintrag und damit im Dialog, im Handbuch und beim Agenten.
 
-**Nur Stifte, keine Schwalbenschwänze und keine Schnapper.** Die Slicer bieten
-drei Formen; hier ist eine umgesetzt, und zwar die, die als einzige beiden
-Hälften eine ebene Auflage lässt. Schwalbenschwanz und Schnapper sind eine
-Erweiterung des Parameters, keine zweite Operation — sie stehen in der Roadmap.
+**Drei Formen, kein Schnapper.** Rund, Sechskant und Schwalbenschwanz stehen
+als Querschnitt zur Wahl, in der Leiste direkt neben der Stiftzahl. Der
+Schnapper fehlt mit Absicht: Er ist kein Querschnitt, sondern ein federnder Arm
+— siehe Teil 4.
 
 ---
 
@@ -175,45 +175,37 @@ beieinander.
 
 ---
 
-## Teil 4 — Offen, mit Grund
+## Teil 4 — Die offenen Punkte, und was aus ihnen wurde
 
-**4.1 Drei Menüeinträge für einen Schnitt.** *An Ebene teilen*, *Teilen und
-verstiften* und *An gezeichneter Linie trennen* stehen nebeneinander, und der
-erste ist der zweite mit `pins = 0`. Das Hausprinzip sagt „eine Operation je
-Handlung, nicht je Variante", und das Werkzeug dafür gibt es: `MENU_TWINS`
-nimmt einem Zwilling den Menüeintrag und lässt ihn über Palette und Verlauf
-erreichbar. Nur ist dieses Werkzeug **fest auf B-Rep verdrahtet** — es hängt an
-jeden Zwilling einen Haken „Exakter Körper (B-Rep)", und `menu_path` schreibt
-„(Umschalter „Exakt")" hinter den Weg. Für das Paar hier wäre beides gelogen.
+Alle fünf sind abgearbeitet; die ausführliche Fassung steht in der Roadmap.
 
-Der saubere Weg ist, `MENU_TWINS` von der Beschriftung zu trennen, statt einen
-dritten Fall hineinzudrücken. Das ist eine eigene Änderung mit eigenem Test,
-und sie gehört nicht in denselben Commit wie ein neues Werkzeug. **In der
-Roadmap.**
+**4.1 Drei Menüeinträge für einen Schnitt** — behoben. `MENU_TWINS` hing an
+einer festen Beschriftung („Exakter Körper (B-Rep)") und taugte damit für
+nichts als die zwei Rechenkerne. Die Beschriftungen liegen jetzt in
+`TWIN_TOGGLES`; wer dort fehlt, bekommt keinen Haken, sondern hat einen Wert im
+Dialog des Partners. *An Ebene teilen* lebt seither unter *Teilen*, mit der
+Null im Feld *Passstifte*.
 
-**4.2 Sechs Kürzel auf 84 Operationen**, und die Werkzeuge der unteren Leiste
-haben keines. Steht seit zwei Durchsichten offen und ist es weiter: Kürzel
-vergibt man einmal und vollständig, nicht acht auf einmal. `Ctrl+B`, `Ctrl+D`,
-`Ctrl+R`, `Ctrl+T`, `Del`, `F2` — mehr ist es nicht.
+**4.2 Sechs Kürzel auf 84 Operationen** — die acht Werkzeuge haben jetzt
+`Alt+1` bis `Alt+8`. Für die Operationen selbst bleibt es bei sechs; das ist
+eine Vergabe in einem Zug und keine Nebenarbeit.
 
-**4.3 Der Objektbaum nennt die Hälften „A" und „B".** Nach dem Verstiften trägt
-die eine die Stifte und die andere die Löcher, und genau das würde beim
-Zusammenbau helfen. Betrifft aber `split_pinned` und Auto Split mit, also auch
-eingecheckte Beispielprojekte und die Tour — eine Umbenennung mit Folgen, keine
-Zeile.
+**4.3 Die Hälften hießen „A" und „B"** — behoben, sie heißen jetzt
+„… A · Stifte" und „… B · Löcher".
 
-**4.4 Ein Passungspaar entsteht auch dann, wenn die Schnittfläche für Stifte
-zu klein war.** `plan_pins` meldet das sauber als Befund und setzt keine
-Stifte; das Dokument bekommt trotzdem seine `Fit`-Einträge, weil an dieser
-Stelle noch niemand weiß, was die Auswertung daraus macht. Bestand seit Auto
-Split, nicht neu — und mit dem gezeichneten Trennen jetzt an einer zweiten
-Stelle. Gehört zusammen behoben.
+**4.4 Ein Passungspaar ohne Stifte** — behoben, an beiden Stellen. Die Zahl der
+Paare kommt aus derselben Planung, die die Operation gleich noch einmal macht.
 
-**4.5 Drei Namen für benachbarte Dinge**: „Chat einrichten" (Erststart),
-„Zugang zum Sprachmodell" (Menü), „Fernsteuerung über MCP" (Einstellungen).
-Steht aus der Erstnutzer-Durchsicht offen und ist es geblieben.
+**4.5 Drei Namen für benachbarte Dinge** („Chat einrichten", „Zugang zum
+Sprachmodell", „Fernsteuerung über MCP") — **weiter offen**, aus der
+Erstnutzer-Durchsicht. Betrifft dieses Werkzeug nicht.
 
----
+**Und einer bleibt bewusst offen:** der Schnapper als Verbinderform. Er steht
+nicht in derselben Reihe wie Sechskant und Schwalbenschwanz, auch wenn die
+Slicer ihn dort führen — die beiden sind ein Querschnitt, der Schnapper ist ein
+federnder Arm mit Schlitz, Hinterschnitt und einer Federkraft, die ohne
+Kalibrierung geraten wäre. Als Formwert wäre er eine Zusage, die die Geometrie
+nicht hält.
 
 ## Teil 5 — Was die Durchsicht entlastet hat
 

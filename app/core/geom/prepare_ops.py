@@ -60,6 +60,17 @@ _ALONG = _(
 #: es, weil Dateien bis Formatversion 6 es so gemeint haben.
 _ANCHORS = ("mouth", "centre")
 
+#: Querschnitte, die ein Verbinder haben kann. Rund ist die Vorgabe und der
+#: einfachste Druck; die kantigen sichern gegen Verdrehen, der Schwalbenschwanz
+#: zusätzlich gegen Auseinanderziehen quer zur Naht.
+CONNECTOR_SHAPES = ("round", "hex", "dovetail")
+
+_CONNECTOR_DOC = _(
+    "Querschnitt der Stifte. Rund druckt am saubersten und braucht zwei Stück "
+    "gegen Verdrehen; Sechskant und Schwalbenschwanz halten schon einzeln, der "
+    "Schwalbenschwanz auch gegen Auseinanderziehen."
+)
+
 
 @op_params
 class DrillParams(BaseParams):
@@ -611,6 +622,13 @@ class SplitPinnedParams(BaseParams):
         maximum=6,
         doc=_("Null heißt: nur schneiden. Zwei halten die Hälften gegen Verdrehen."),
     )
+    shape: str = param(
+        title=_("Stiftform"),
+        default="round",
+        choices=CONNECTOR_SHAPES,
+        placement="advanced",
+        doc=_CONNECTOR_DOC,
+    )
     diameter: float = param(
         title=_("Stiftdurchmesser"),
         default=0.0,
@@ -633,14 +651,19 @@ class SplitPinnedParams(BaseParams):
 
 @register_op(
     name="split_pinned",
-    title=_("Teilen und verstiften"),
+    # Nicht mehr „Teilen und verstiften": Seit *An Ebene teilen* als Zwilling
+    # unter diesem Eintrag lebt (MENU_TWINS), ist es die eine Zeile für beides
+    # — mit Stiften und ohne. Ein Titel, der die Stifte verspricht, wäre für
+    # die Hälfte der Fälle falsch; das Feld *Passstifte* sagt, welcher gilt.
+    title=_("Teilen"),
     category="prepare",
     params=SplitPinnedParams,
     consumes=1,
     produces=2,
     doc=_(
-        "Teilt ein Objekt an einer Ebene und setzt Passstifte in die Schnittfläche. "
-        "Das Spiel kommt aus dem Materialprofil."
+        "Teilt ein Objekt an einer Ebene, auf Wunsch mit Passstiften in der "
+        "Schnittfläche. Das Spiel kommt aus dem Materialprofil; null Stifte heißt: "
+        "nur schneiden."
     ),
     caveat=_(
         "Nicht bei Teilen, deren Schnittfläche sichtbar bleibt: Die Naht liegt an "
@@ -662,8 +685,37 @@ def split_pinned(ctx: OpContext) -> OpResult:
         ctx,
         plane,
         pins=params.pins,
+        shape=params.shape,
         diameter=params.diameter,
         play=params.play,
+    )
+
+
+#: Was eine Hälfte von der anderen unterscheidet, sobald verstiftet wurde.
+#: Getrennt durch „ · " und nicht in Klammern: Das Zeichen kommt in
+#: Nutzernamen praktisch nicht vor, also lässt sich der Zusatz beim erneuten
+#: Teilen wieder abschneiden, ohne eine fremde Klammer mitzunehmen.
+_HALF_MARK = " · "
+
+
+def half_names(base: str, *, pinned: bool) -> tuple[str, str]:
+    """Wie die beiden Stücke heißen.
+
+    „A" und „B" allein beantworten die Frage nicht, die man beim Zusammenbauen
+    hat — und beim Export ist der Dateiname die einzige Auskunft darüber,
+    welches der beiden Teile die Stifte trägt. Deshalb steht sie im Namen.
+
+    Ein vorhandener Zusatz wird ersetzt, nicht ergänzt: Wer eine Hälfte noch
+    einmal teilt, bekommt sonst „Halter A · Stifte A · Stifte". Der
+    Buchstabenpfad bleibt dabei stehen — er zeigt, aus welchem Stück welches
+    geworden ist.
+    """
+    stem = base.rsplit(_HALF_MARK, 1)[0]
+    if not pinned:
+        return f"{stem} A", f"{stem} B"
+    return (
+        f"{stem} A{_HALF_MARK}{_('Stifte')}",
+        f"{stem} B{_HALF_MARK}{_('Löcher')}",
     )
 
 
@@ -672,6 +724,7 @@ def _cut_and_pin(
     plane: SectionPlane,
     *,
     pins: int,
+    shape: str,
     diameter: float,
     play: float,
 ) -> OpResult:
@@ -688,7 +741,7 @@ def _cut_and_pin(
     first, second, findings = split_at_plane(mesh, plane)
     _both_halves_or_stop(first, second, plane.position)
 
-    plan = plan_pins(mesh, plane, count=pins) if pins else None
+    plan = plan_pins(mesh, plane, count=pins, shape=shape) if pins else None
     if plan is not None and diameter:
         plan = dataclasses.replace(plan, diameter=diameter)
 
@@ -700,18 +753,19 @@ def _cut_and_pin(
         else PinnedPair(first=first, second=second)
     )
 
+    first_name, second_name = half_names(source.name, pinned=bool(pair.pin_features))
     return OpResult(
         outputs=[
             dataclasses.replace(
                 source,
                 mesh=pair.first,
-                name=f"{source.name} A",
+                name=first_name,
                 features={**source.features, **pair.pin_features},
             ),
             dataclasses.replace(
                 source,
                 mesh=pair.second,
-                name=f"{source.name} B",
+                name=second_name,
                 features=dict(pair.bore_features),
             ),
         ],
@@ -770,6 +824,13 @@ class SplitLineParams(BaseParams):
         default=1.0,
         placement="advanced",
         doc=_("Dritte Achse der Trennrichtung — siehe Trennrichtung X."),
+    )
+    shape: str = param(
+        title=_("Stiftform"),
+        default="round",
+        choices=CONNECTOR_SHAPES,
+        placement="advanced",
+        doc=_CONNECTOR_DOC,
     )
     diameter: float = param(
         title=_("Stiftdurchmesser"),
@@ -831,6 +892,7 @@ def split_line(ctx: OpContext) -> OpResult:
         ctx,
         SectionPlane(normal=normal, position=params.position),
         pins=params.pins,
+        shape=params.shape,
         diameter=params.diameter,
         play=params.play,
     )

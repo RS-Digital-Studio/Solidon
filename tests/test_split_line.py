@@ -222,3 +222,111 @@ def test_a_direction_of_zero_length_is_a_user_error(profile: Profile) -> None:
 
     assert problem.value.field == "normal_z"
     assert problem.value.suggestions
+
+
+# --- wie die Hälften heißen ---------------------------------------------------------
+
+
+def test_the_halves_say_which_one_carries_the_pins() -> None:
+    """Beim Export ist der Dateiname die einzige Auskunft darüber, welches
+    Teil welches ist."""
+    from app.core.geom.prepare_ops import half_names
+
+    assert half_names("Halter", pinned=True) == ("Halter A · Stifte", "Halter B · Löcher")
+    assert half_names("Halter", pinned=False) == ("Halter A", "Halter B")
+
+
+def test_splitting_a_half_again_replaces_the_note_instead_of_stacking_it() -> None:
+    """Sonst steht dort „Halter A · Stifte A · Stifte".
+
+    Der Buchstabenpfad bleibt: Er zeigt, aus welchem Stück welches geworden
+    ist, und genau das will man beim Zusammenbau wissen.
+    """
+    from app.core.geom.prepare_ops import half_names
+
+    first, _second = half_names("Halter", pinned=True)
+
+    assert half_names(first, pinned=True) == (
+        "Halter A A · Stifte",
+        "Halter A B · Löcher",
+    )
+    assert half_names(first, pinned=False) == ("Halter A A", "Halter A B")
+
+
+# --- zusammengelegte Zwillinge ------------------------------------------------------
+
+
+def test_a_twin_without_a_toggle_gets_none() -> None:
+    """`MENU_TWINS` hing an einer festen Beschriftung, und damit an B-Rep.
+
+    Der Haken „Exakter Körper (B-Rep)" stand als Zeichenkette in der
+    Oberfläche und „(Umschalter „Exakt")" im Menüweg. Ein drittes Paar hätte
+    beides geerbt — *An Ebene teilen* unter *Teilen* mit einem Haken, der von
+    einem exakten Körper spricht, den es dort nicht gibt. Sein Umschalter ist
+    ein Wert im selben Dialog: die Null im Feld *Passstifte*.
+    """
+    from app.core.registry import MENU_TWINS, TWIN_TOGGLES
+    from app.core.registry.surfaces import menu_path
+
+    assert MENU_TWINS["split_plane"] == "split_pinned"
+    assert "split_plane" not in TWIN_TOGGLES, "kein eigener Haken"
+    assert "split_plane" not in menu_path(REGISTRY.get("split_plane"))
+    assert "Exakt" not in menu_path(REGISTRY.get("split_plane"))
+    assert "Exakt" in menu_path(REGISTRY.get("create_brep_box")), "die B-Rep-Paare behalten ihn"
+
+
+def test_every_toggle_belongs_to_a_twin() -> None:
+    """Ein Umschalter ohne Paar wäre ein Haken, den kein Dialog zeigt."""
+    from app.core.registry import MENU_TWINS, TWIN_TOGGLES
+
+    assert set(TWIN_TOGGLES) <= set(MENU_TWINS)
+
+
+# --- die Verbinderformen ------------------------------------------------------------
+
+
+@pytest.mark.parametrize("shape", ["round", "hex", "dovetail"])
+def test_every_connector_shape_gives_two_closed_halves(profile: Profile, shape: str) -> None:
+    """Die Slicer bieten drei Formen, und die Foren diskutieren nur noch,
+    welche.
+
+    Rund braucht zwei Stück gegen Verdrehen; Sechskant und Schwalbenschwanz
+    halten schon einzeln, der Schwalbenschwanz auch gegen Auseinanderziehen.
+    Geprüft wird für alle drei dasselbe: zwei geschlossene Hälften, Material
+    auf der einen, Material weniger auf der anderen.
+    """
+    entry = SceneObject(id="obj_1", name="Klotz", mesh=block())
+    plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=0.0)
+    first, second, _findings = split_at_plane(block(), plane)
+
+    result = run("split_line", entry, profile, normal_z=1.0, position=0.0, pins=2, shape=shape)
+
+    assert all(output.mesh.is_watertight for output in result.outputs)
+    assert float(result.outputs[0].mesh.volume) > float(first.volume)
+    assert float(result.outputs[1].mesh.volume) < float(second.volume)
+    assert "pin_1" in result.outputs[0].features
+    assert "bore_1" in result.outputs[1].features
+
+
+def test_a_dovetail_holds_where_a_round_pin_only_guides(profile: Profile) -> None:
+    """Der Unterschied ist messbar, nicht bloß behauptet.
+
+    Ein Schwalbenschwanz ist hinten schmaler als vorn. Dreht man ihn um seine
+    eigene Achse, deckt er sich nicht mit sich selbst — ein runder Stift tut
+    das in jeder Stellung, und genau deshalb braucht er einen zweiten neben
+    sich.
+    """
+    from app.core.geom.boolean import boolean
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts.shapes import turned
+
+    spec = PARTS.get("dowel")
+    for shape, secured in (("round", False), ("hex", True), ("dovetail", True)):
+        body = spec.fn(spec.params(diameter=6.0, length=12.0, kind="pin", shape=shape)).mesh
+        # Was von der Bohrung frei bliebe, wenn der Stift verdreht steckte.
+        # Bei einem Kreis ist das nur die Facettierung, bei den kantigen ein
+        # echter Anschlag.
+        left_over = boolean("difference", [body, turned(body, 37.0)]).mesh
+        share = float(left_over.volume) / float(body.volume)
+
+        assert (share > 0.02) is secured, f"{shape}: {share:.3f} des Querschnitts hält"

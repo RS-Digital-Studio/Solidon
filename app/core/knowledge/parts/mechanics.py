@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 from typing import cast
 
+from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
 from app.core.knowledge.parts.registry import PartChange, register_part
@@ -290,6 +291,17 @@ class DowelParams(BaseParams):
         choices=("pin", "bore"),
         doc=_("Der Stift selbst oder die Bohrung dazu."),
     )
+    shape: str = param(
+        title=_("Form"),
+        default="round",
+        choices=("round", "hex", "dovetail"),
+        placement="advanced",
+        doc=_(
+            "Der Querschnitt. Rund ist die einfachste und braucht zwei Stück gegen "
+            "Verdrehen; Sechskant und Schwalbenschwanz halten schon einzeln, der "
+            "Schwalbenschwanz zusätzlich gegen Auseinanderziehen."
+        ),
+    )
     chamfer: float = param(
         title=_("Fase"),
         default=0.6,
@@ -331,7 +343,7 @@ def dowel(raw: BaseParams) -> PartResult:
     # Grenze selbst ein.
     chamfer = min(params.chamfer, diameter / 2.0 - 0.2)
 
-    body = shapes.cylinder(diameter, params.length)
+    body = _profile(params.shape, diameter, params.length)
     if chamfer > 0.0:
         lead = shapes.cone(diameter, diameter - 2.0 * chamfer, chamfer)
         if is_pin:
@@ -351,6 +363,27 @@ def dowel(raw: BaseParams) -> PartResult:
         body,
         bore("bore_1", diameter, (0.0, 0.0, params.length / 2.0), depth=params.length),
     )
+
+
+def _profile(shape: str, diameter: float, length: float) -> MeshData:
+    """Der Querschnitt eines Verbinders, auf ``length`` hochgezogen.
+
+    ``diameter`` ist bei allen dreien das Maß über die breiteste Stelle —
+    beim Sechskant die Schlüsselweite, beim Schwalbenschwanz die breite Seite.
+    So bleibt die Planung dieselbe: Sie sucht Platz für einen Kreis von diesem
+    Durchmesser, und was hineingelegt wird, passt in jeden Fall hinein.
+
+    Die Fase bleibt für alle drei dieselbe Rechnung, weil sie über den
+    Umkreis arbeitet (:func:`_ring`): Am Stift schneidet sie die Ecken oben
+    schräg an, an der Bohrung setzt sie eine runde Einführung vor ein
+    kantiges Loch. Beides ist genau das, was eine Fase tun soll.
+    """
+    width = diameter
+    if shape == "hex":
+        return shapes.hexagon(width, length)
+    if shape == "dovetail":
+        return shapes.dovetail(width, length)
+    return shapes.cylinder(width, length)
 
 
 def _ring(diameter: float, chamfer: float):  # type: ignore[no-untyped-def]
