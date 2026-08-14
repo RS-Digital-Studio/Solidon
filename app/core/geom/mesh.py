@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # das 3MF-Modul braucht MeshData, der Import geht also nur in eine Richtung
     from app.core.export.threemf import Part
@@ -227,8 +227,14 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
             return _joined(parts)
 
     try:
-        loaded: Any = trimesh.load(
-            io.BytesIO(payload), file_type=normalised.lstrip("."), process=False, force="mesh"
+        # ``load_mesh`` statt ``load(force="mesh")``: trimesh 5 führt ``load``
+        # nur noch als Rückwärtskompatibilität und nennt es im Docstring
+        # veraltet. Der Nachfolger sagt schon im Rückgabetyp, dass ein
+        # ``Trimesh`` herauskommt — mehrere Körper in einer Datei verschweißt
+        # er wie zuvor ``force="mesh"``, gemessen an einer GLB mit zwei
+        # Quadern: beide Wege 24 Dreiecke.
+        loaded = trimesh.load_mesh(
+            io.BytesIO(payload), file_type=normalised.lstrip("."), process=False
         )
     except PROGRAMMING_ERRORS:
         raise
@@ -240,9 +246,9 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
             values={"suffix": suffix},
         ) from problem
 
-    if isinstance(loaded, trimesh.Scene):
-        loaded = loaded.to_mesh() if loaded.geometry else trimesh.Trimesh()
-    if not isinstance(loaded, trimesh.Trimesh) or not len(loaded.faces):
+    # Eine Datei, an der der Parser scheitert, ohne zu werfen, kommt als leerer
+    # Körper heraus — das ist der Fall, den die Zeile abfängt.
+    if not len(loaded.faces):
         raise ValidationError(
             field="file",
             detail=_("Die Datei enthält keine Dreiecksgeometrie."),

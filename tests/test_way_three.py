@@ -41,7 +41,7 @@ def generated_body() -> bytes:
     PLY, weil es die Farben je Fläche behält, mit denen ein erzeugtes Modell
     ankommt — und genau diese Farben muss §20 in Filamente verwandeln.
     """
-    shell = trimesh.load(MESHES / "broken_open.stl", process=False)
+    shell = trimesh.load_mesh(MESHES / "broken_open.stl", process=False)
     crumb = trimesh.creation.box(extents=(0.4, 0.4, 0.4))
     crumb.apply_translation([40.0, 40.0, 0.0])
     body = trimesh.util.concatenate([shell, crumb])

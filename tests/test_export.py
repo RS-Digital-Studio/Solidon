@@ -226,10 +226,9 @@ def test_glb_carries_the_slot_colours() -> None:
         MaterialSlot(index=1, name="Schrift", colour=(0.0, 0.0, 1.0)),
     ]
 
-    written = trimesh.load(
+    written = trimesh.load_mesh(
         BytesIO(export_bytes(two_tone, "glb", slots=slots, name="Schild")),
         file_type="glb",
-        force="mesh",
     )
     seen = {tuple(colour[:3]) for colour in written.visual.face_colors}
 
