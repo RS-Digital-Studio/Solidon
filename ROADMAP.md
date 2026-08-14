@@ -2895,15 +2895,19 @@ die konstruktive Frage, nicht die Diagnose.
 
 ### Zusammenspiel mit dem ElegooSlicer
 
-- [ ] **`machine_profile` und `base_process` müssen Pfade sein, nicht Namen.**
-      Der Docstring von `SlicerSetup` sagt das Gegenteil: „Namen aus dem
-      Bestand des Slicers, keine Pfade — sie reisen so auch in eine
-      Projektdatei, ohne gegen Regel 12 zu verstoßen." Mit Namen bricht der
-      Lauf ab (`can not find setting file`), und das geschriebene Prozessprofil
-      hat 42 Schlüssel ohne `inherits` und ohne `compatible_printers`. Mit
-      Pfaden sind es 62 mit beidem, und der Lauf endet mit Rückgabe 0.
-      Beides zugleich geht nicht: die Datei braucht den Namen, der Aufruf den
-      Pfad. Die Auflösung gehört zwischen beide — heute fehlt sie.
+- [x] **`machine_profile` und `base_process` müssen Pfade sein, nicht Namen —
+      die Auflösung dazwischen steht.** Die Anforderungen ziehen auseinander:
+      In die Projektdatei gehört der **Name** (ein Pfad dort verstößt gegen
+      Regel 12), der Slicer nimmt nur die **Datei**. `handover.profile_file`
+      löst beides auf und wird an allen vier Stellen benutzt — Maschine,
+      Prozess, Filament und im Profilschreiber.
+
+      **Am 14.08.2026 am echten Bestand nachgemessen:** ElegooSlicer, 3887
+      gefundene Profile, `profile_file("0.12mm Fine @Afinia H+1(HS)", …)`
+      liefert die existierende Datei unter `resources/profiles/…`. Fünf Tests
+      in `tests/test_print_settings.py` halten Name, Pfad, falsche Art und den
+      leeren Fall fest. Der Punkt stand offen, weil ihn niemand abgehakt hat —
+      nicht, weil etwas fehlte.
 - [x] Gefunden werden die Profile einwandfrei: 3887 Stück, die im Slicer
       eingestellte Maschine erkannt, sieben passende Prozesse dazu.
 - [x] Der Rücklauf stimmt: Solidon liest seinen eigenen G-Code mit 10,38 g,
@@ -4299,6 +4303,14 @@ zur Hand hat, prüft sie zuerst — und dann trotzdem die andere.
       grün, `test_slice` plus nur dieser eine Test auch; rot wird es erst mit
       der ganzen Leistungsdatei davor. Derselbe Cluster wie die
       Zugriffsverletzungen im langen Lauf — die Zeile ist es nicht.
+
+      **Am 14.08.2026 zweimal hintereinander gefahren, gleicher Aufruf:** der
+      erste Lauf rot, der zweite grün. Damit ist er nicht einmal unter Last
+      deterministisch, und das ist der Datenpunkt, der ihn endgültig zum
+      Maschinen-Cluster stellt (siehe „Diese Maschine rechnet sporadisch
+      falsch"). Wer ihn angeht, sucht nicht in `analysis.py`: Das Unpacking
+      dort ist über `list[list[int]]` deklariert und kann gar nicht anders
+      als Paare liefern.
 
 ### Ein Gewinde, das nur auf einem Betriebssystem schließt (13.08.2026)
 
