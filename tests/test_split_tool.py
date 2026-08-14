@@ -419,10 +419,9 @@ def test_every_tool_has_a_shortcut(window: MainWindow) -> None:
     """Die acht Handgriffe, die einem Anfänger am nächsten liegen, hatten als
     Einzige keine Taste.
 
-    ``Alt`` und eine Ziffer: Ein Kürzel ohne Modifikator feuerte auch, während
-    jemand in den Chat tippt, und schluckte dort den Buchstaben. Die Ziffern
-    allein sind an die Darstellung vergeben, ``Ctrl`` und Ziffer an die
-    Kameras.
+    ``Alt`` und eine Ziffer, weil die Ziffern allein der Darstellung gehören
+    und ``Ctrl`` und Ziffer den Kameras — für eine durchgehende Reihe von acht
+    bleibt ``Alt``.
     """
     tools = window.tools.tools()
 
@@ -458,3 +457,26 @@ def test_the_palette_carries_the_tool_shortcuts(window: MainWindow) -> None:
     commands = window.window_commands()
 
     assert all(commands[f"tool.{key}"][1] for key in window.tools.tools())
+
+
+def test_no_shortcut_of_the_window_is_handed_out_twice(window: MainWindow) -> None:
+    """Acht neue Tastenfolgen auf einmal — und keine davon war belegt.
+
+    Für die Kürzel der Operationen prüft das ``test_registry_consistency``.
+    Die Fensterbefehle und die Menüeinträge hatten diese Zusage nicht, und
+    genau dort sind die acht dazugekommen.
+    """
+    from PySide6.QtGui import QAction, QKeySequence
+
+    taken: dict[str, set[str]] = {}
+    for title, sequence, _fn in window.window_commands().values():
+        if sequence:
+            taken.setdefault(QKeySequence(sequence).toString(), set()).add(title)
+    for action in window.findChildren(QAction):
+        sequence = action.shortcut().toString()
+        if sequence:
+            taken.setdefault(sequence, set()).add(action.text())
+
+    doubled = {key: sorted(names) for key, names in taken.items() if len(names) > 1}
+    assert not doubled, f"doppelt vergeben: {doubled}"
+    assert {f"Alt+{index}" for index in range(1, 9)} <= set(taken)

@@ -8,6 +8,7 @@ Operation, wenn die Alternative eine Überraschung am Drucker ist.
 from __future__ import annotations
 
 import dataclasses
+from functools import lru_cache
 from typing import cast
 
 import trimesh
@@ -70,6 +71,68 @@ _CONNECTOR_DOC = _(
     "gegen Verdrehen; Sechskant und Schwalbenschwanz halten schon einzeln, der "
     "Schwalbenschwanz auch gegen Auseinanderziehen."
 )
+
+
+#: Was eine Hälfte von der anderen unterscheidet, sobald verstiftet wurde,
+#: und das Zeichen davor.
+_HALF_MARK = " · "
+_PIN_NOTE = _("Stifte")
+_BORE_NOTE = _("Löcher")
+
+
+@lru_cache(maxsize=1)
+def _own_notes() -> frozenset[str]:
+    """Die beiden Zusätze in jeder ausgelieferten Sprache.
+
+    Gebraucht, um den *eigenen* Zusatz von einem fremden Namensteil zu
+    unterscheiden. Ein bloßes Abschneiden am letzten „ · " war zu grob:
+    „Halter · Sonderanfertigung" verlor beim Teilen sein zweites Wort —
+    stiller Verlust an einem Namen, den jemand selbst vergeben hat.
+
+    Über alle Sprachen und nicht nur über die aktive, weil ein Teil auf
+    Deutsch geteilt und danach auf Englisch weitergeteilt werden kann. Ohne
+    das stapelten sich zwei Zusätze in zwei Sprachen.
+
+    Gemerkt, und das ist keine vorbeugende Optimierung: Der Aufruf liest fünf
+    Katalogdateien und kostet gemessen 9,6 ms — für den Vergleich von zwei
+    Wörtern, einmal je Schnitt. Die Antwort hängt an den ausgelieferten
+    Dateien und nicht an der eingestellten Sprache, kann also nicht veralten.
+    """
+    from app.i18n.catalog import available_languages, read_catalog
+
+    notes = {str(_PIN_NOTE), str(_BORE_NOTE), _PIN_NOTE.msgid, _BORE_NOTE.msgid}
+    for language in available_languages():
+        catalog = read_catalog(language)
+        for note in (_PIN_NOTE, _BORE_NOTE):
+            translated = catalog.get(note.msgid)
+            if translated:
+                notes.add(translated)
+    return frozenset(notes)
+
+
+def half_names(base: str, *, pinned: bool) -> tuple[str, str]:
+    """Wie die beiden Stücke heißen.
+
+    „A" und „B" allein beantworten die Frage nicht, die man beim Zusammenbauen
+    hat — und beim Export ist der Dateiname die einzige Auskunft darüber,
+    welches der beiden Teile die Stifte trägt. Deshalb steht sie im Namen.
+
+    Ein **eigener** Zusatz wird ersetzt, nicht ergänzt: Wer eine Hälfte noch
+    einmal teilt, bekommt sonst „Halter A · Stifte A · Stifte". Der
+    Buchstabenpfad bleibt dabei stehen — er zeigt, aus welchem Stück welches
+    geworden ist. Ein fremder Namensteil hinter demselben Zeichen bleibt, wo
+    er ist (:func:`_own_notes`).
+    """
+    stem = base
+    head, mark, tail = base.rpartition(_HALF_MARK)
+    if mark and tail in _own_notes():
+        stem = head
+    if not pinned:
+        return f"{stem} A", f"{stem} B"
+    return (
+        f"{stem} A{_HALF_MARK}{_PIN_NOTE}",
+        f"{stem} B{_HALF_MARK}{_BORE_NOTE}",
+    )
 
 
 @op_params
@@ -203,10 +266,15 @@ def split_plane(ctx: OpContext) -> OpResult:
     plane = SectionPlane(normal=AXIS_NORMALS[cast(Axis, params.axis)], position=params.position)
     first, second, findings = split_at_plane(as_mesh_data(source.mesh), plane)
     _both_halves_or_stop(first, second, params.position)
+    # Über dieselbe Namensbildung wie das verstiftete Teilen, obwohl hier nie
+    # Stifte entstehen: Wer eine Hälfte „Halter A · Stifte" hier weiterteilt,
+    # bekäme sonst „Halter A · Stifte A" — einen Zusatz, der von der Naht des
+    # *vorigen* Schnitts spricht und an dieser nichts zu suchen hat.
+    first_name, second_name = half_names(source.name, pinned=False)
     return OpResult(
         outputs=[
-            dataclasses.replace(source, mesh=first, name=f"{source.name} A"),
-            dataclasses.replace(source, mesh=second, name=f"{source.name} B", features={}),
+            dataclasses.replace(source, mesh=first, name=first_name),
+            dataclasses.replace(source, mesh=second, name=second_name, features={}),
         ],
         findings=findings,
     )
@@ -688,34 +756,6 @@ def split_pinned(ctx: OpContext) -> OpResult:
         shape=params.shape,
         diameter=params.diameter,
         play=params.play,
-    )
-
-
-#: Was eine Hälfte von der anderen unterscheidet, sobald verstiftet wurde.
-#: Getrennt durch „ · " und nicht in Klammern: Das Zeichen kommt in
-#: Nutzernamen praktisch nicht vor, also lässt sich der Zusatz beim erneuten
-#: Teilen wieder abschneiden, ohne eine fremde Klammer mitzunehmen.
-_HALF_MARK = " · "
-
-
-def half_names(base: str, *, pinned: bool) -> tuple[str, str]:
-    """Wie die beiden Stücke heißen.
-
-    „A" und „B" allein beantworten die Frage nicht, die man beim Zusammenbauen
-    hat — und beim Export ist der Dateiname die einzige Auskunft darüber,
-    welches der beiden Teile die Stifte trägt. Deshalb steht sie im Namen.
-
-    Ein vorhandener Zusatz wird ersetzt, nicht ergänzt: Wer eine Hälfte noch
-    einmal teilt, bekommt sonst „Halter A · Stifte A · Stifte". Der
-    Buchstabenpfad bleibt dabei stehen — er zeigt, aus welchem Stück welches
-    geworden ist.
-    """
-    stem = base.rsplit(_HALF_MARK, 1)[0]
-    if not pinned:
-        return f"{stem} A", f"{stem} B"
-    return (
-        f"{stem} A{_HALF_MARK}{_('Stifte')}",
-        f"{stem} B{_HALF_MARK}{_('Löcher')}",
     )
 
 

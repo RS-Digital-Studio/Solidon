@@ -228,6 +228,53 @@ alle fünf Sprachen, geprüft in beide Richtungen.
 
 ---
 
+## Teil 6 — Der eigene Änderungssatz im Review
+
+Nach dem Bauen dasselbe noch einmal, diesmal am fertigen Diff: 46 Dateien
+gelesen wie fremder Code. Neun Funde, alle behoben, jeder mit einem Test.
+
+**Ein Fehler steckte in der Methode.** Ich hielt den Diff gegen `main` — und
+`main` liegt hinter dem Stand, auf dem diese Arbeit aufgesetzt hat. Ich las
+also Änderungen einer Nebensitzung als meine und hätte sie beinahe „behoben".
+Verglichen wird gegen den eigenen Ausgangspunkt, nicht gegen den Zweig, in den
+es später geht.
+
+**Die kantigen Verbinder waren größer, als sie sagten.** `hexagon()` nimmt die
+Schlüsselweite, `dovetail()` die breite Seite; beide bekamen den Durchmesser
+roh durchgereicht. Bei 6 mm maß der Sechskant 6,93 Umkreis, der
+Schwalbenschwanz 8,49 — dessen Ecke allein nahm 1,24 mm von den 1,6 mm
+Wandreserve, die die Stiftplanung stehen lassen wollte. Wer einen dickeren
+Verbinder will, soll den Durchmesser erhöhen und ihn nicht durch die Formwahl
+geschenkt bekommen.
+
+**Eine Zusage im Docstring, die der Code nicht hielt.** `fitting_pins()` gab
+ohne Netz null zurück, versprochen war die gewünschte Zahl. Null heißt hier
+„keine Passung eintragen" — eine stillschweigend falsche Antwort statt einer
+offenen Frage.
+
+**Eine Begründung, die eine Messung nicht überlebt hat.** Im Kommentar stand,
+ein Kürzel ohne Modifikator feuere auch beim Tippen im Chat. `QTest.keyClick`
+gegen ein fokussiertes Eingabefeld sagt: tut es nicht. Der Grund für
+`Alt+Ziffer` bleibt, aber er ist ein anderer — die nackten Ziffern gehören der
+Darstellung, `Ctrl` und Ziffer den Kameras.
+
+**Zwei Fehler an den Namen der Hälften.** `half_names()` schnitt am letzten
+„ · " ab und warf alles dahinter weg: aus „Halter · Version 2" wurde
+„Halter A · Stifte". Und `split_plane` ging an der Funktion vorbei, stapelte
+also beim zweiten Teilen „… A · Stifte A". Abgeschnitten wird jetzt nur, was
+einer der eigenen Zusätze ist — in der Quelle wie in jedem der fünf Kataloge,
+sonst verlöre ein auf Spanisch geteiltes und auf Deutsch weitergeteiltes
+Projekt die Regel.
+
+**Und vier Kleinigkeiten**, die einzeln nichts wiegen und zusammen die
+nächste Durchsicht in die Irre schicken: ein Docstring, der ein Kreuz
+beschrieb, wo eine Kugel gezeichnet wird; Enden ohne `name`, also nicht
+einzeln abräumbar; derselbe Umschaltertext zweimal wörtlich im Register; und
+eine Menüsuche über den *übersetzten* Gruppentitel, die auf Deutsch
+funktioniert und sonst nirgends.
+
+---
+
 ## Was gemessen wurde
 
 `build_application([])` mit umgebogenen Nutzerverzeichnissen, dazu
@@ -243,3 +290,9 @@ Nicht gemessen: das laufende Fenster als Bild. Der Container hier bringt VTK
 und die Offscreen-Plattform nicht zusammen — `window.grab()` über dem
 OpenGL-Fenster bricht ab, und zwar auch auf dem unveränderten Stand. Was
 davon abhängt, steht in dieser Durchsicht nicht.
+
+**Für Teil 6** kam dazu: der Umkreis der drei Verbinderformen an gebauten
+Netzen gemessen, das Kürzelverhalten mit `QTest.keyClick` gegen ein
+fokussiertes Eingabefeld nachgestellt, und die zwei Testdateien, die in diesem
+Container abbrechen, gegen einen Worktree auf dem unveränderten Ausgangsstand
+gehalten — sechs Läufe hier, sechs dort. Sie brechen dort genauso ab.

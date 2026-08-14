@@ -116,9 +116,16 @@ def fitting_pins(
     macht. Sie ist deterministisch, also stimmen beide Antworten überein; und
     sie kostet einen Querschnitt, während der Schnitt daneben ein ganzes Netz
     zerlegt.
+
+    **Ohne Körper gilt die gewünschte Zahl.** Ist nichts bekannt, ist auch
+    nichts widerlegt — und stumm auf null zu gehen wäre kein Vorsichtsmaß,
+    sondern der Verlust der Passungen, die es vor dieser Änderung gab. Der
+    Fall tritt auf, wenn noch keine Auswertung vorliegt.
     """
-    if not wanted or mesh is None:
+    if not wanted:
         return 0
+    if mesh is None:
+        return wanted
     return plan_pins(mesh, plane, count=wanted, shape=shape).count
 
 

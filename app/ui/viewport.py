@@ -2114,10 +2114,14 @@ class Viewport(QWidget):
     def show_split_line(self, points: Sequence[Vec3]) -> None:
         """Zeichnet, was bisher geklickt wurde.
 
-        Ein Punkt ist ein Kreuz, zwei sind eine Linie mit Kreuzen an den Enden.
-        Ohne das erste Kreuz sieht ein Klick auf ein großes Teil aus, als sei
-        nichts passiert — und der zweite Klick landet dann irgendwo, weil
-        niemand weiß, wo der erste war.
+        Ein Punkt ist eine Kugel in der Auswahlfarbe, zwei sind eine Linie mit
+        einer Kugel an jedem Ende. Ohne die erste Kugel sieht ein Klick auf ein
+        großes Teil aus, als sei nichts passiert — und der zweite Klick landet
+        dann irgendwo, weil niemand weiß, wo der erste war.
+
+        Beide Actors tragen einen Namen: Wo ``clear_split_line`` einmal nicht
+        gelaufen ist, ersetzt pyvista den gleichnamigen, statt einen zweiten
+        danebenzulegen.
         """
         import numpy as np
 
@@ -2132,6 +2136,7 @@ class Viewport(QWidget):
                 color=SELECTED_COLOUR,
                 point_size=14,
                 render_points_as_spheres=True,
+                name="split:ends",
                 render=False,
                 reset_camera=False,
             )

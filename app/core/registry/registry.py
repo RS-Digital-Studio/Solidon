@@ -117,6 +117,18 @@ MENU_TWINS: Final[dict[str, str]] = {
     "split_plane": "split_pinned",
 }
 
+#: Der Umschalter der beiden Rechenkerne. Einmal geschrieben und zweimal
+#: eingetragen: Zwei wörtliche Kopien wären zwei Stellen, an denen derselbe
+#: Satz beim nächsten Nachbessern auseinanderläuft.
+_EXACT_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
+    _("Exakter Körper (B-Rep) — echte Flächen und Kanten"),
+    _(
+        "Rechnet im exakten Kern statt als Netz: STEP-Export und spätere "
+        "Verrundungen bleiben möglich. Netz-Feinheiten wie Verankerung oder "
+        "Segmentzahl entfallen."
+    ),
+)
+
 #: Der Umschalter, mit dem der Dialog des sichtbaren Zwillings auf den
 #: versteckten wechselt — und die Erklärung dazu.
 #:
@@ -131,22 +143,8 @@ MENU_TWINS: Final[dict[str, str]] = {
 #: Dialog des Partners — bei ``split_plane`` die Null im Feld *Passstifte* —,
 #: und erreichbar bleibt er über Befehlspalette und Verlauf.
 TWIN_TOGGLES: Final[dict[str, tuple[TranslatableText, TranslatableText]]] = {
-    "create_brep_box": (
-        _("Exakter Körper (B-Rep) — echte Flächen und Kanten"),
-        _(
-            "Rechnet im exakten Kern statt als Netz: STEP-Export und spätere "
-            "Verrundungen bleiben möglich. Netz-Feinheiten wie Verankerung oder "
-            "Segmentzahl entfallen."
-        ),
-    ),
-    "create_brep_cylinder": (
-        _("Exakter Körper (B-Rep) — echte Flächen und Kanten"),
-        _(
-            "Rechnet im exakten Kern statt als Netz: STEP-Export und spätere "
-            "Verrundungen bleiben möglich. Netz-Feinheiten wie Verankerung oder "
-            "Segmentzahl entfallen."
-        ),
-    ),
+    "create_brep_box": _EXACT_TOGGLE,
+    "create_brep_cylinder": _EXACT_TOGGLE,
 }
 
 

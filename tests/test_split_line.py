@@ -253,6 +253,35 @@ def test_splitting_a_half_again_replaces_the_note_instead_of_stacking_it() -> No
     assert half_names(first, pinned=False) == ("Halter A A", "Halter A B")
 
 
+def test_a_name_of_someone_elses_keeps_its_own_addition() -> None:
+    """Ersetzt wird der *eigene* Zusatz, nicht alles hinter dem Zeichen.
+
+    Ein bloßes Abschneiden am letzten „ · " war zu grob: „Halter ·
+    Sonderanfertigung" verlor beim Teilen sein zweites Wort — stiller Verlust
+    an einem Namen, den jemand selbst vergeben hat.
+    """
+    from app.core.geom.prepare_ops import half_names
+
+    assert half_names("Halter · Sonderanfertigung", pinned=True) == (
+        "Halter · Sonderanfertigung A · Stifte",
+        "Halter · Sonderanfertigung B · Löcher",
+    )
+
+
+def test_a_note_from_another_language_is_replaced_too() -> None:
+    """Ein Teil kann auf Deutsch geteilt und auf Englisch weitergeteilt werden.
+
+    Erkennt die Ersetzung nur die aktive Sprache, stapeln sich zwei Zusätze in
+    zwei Sprachen — „Halter A · Pins A · Stifte".
+    """
+    from app.core.geom.prepare_ops import half_names
+
+    assert half_names("Halter A · Pins", pinned=True) == (
+        "Halter A A · Stifte",
+        "Halter A B · Löcher",
+    )
+
+
 # --- zusammengelegte Zwillinge ------------------------------------------------------
 
 
@@ -330,3 +359,43 @@ def test_a_dovetail_holds_where_a_round_pin_only_guides(profile: Profile) -> Non
         share = float(left_over.volume) / float(body.volume)
 
         assert (share > 0.02) is secured, f"{shape}: {share:.3f} des Querschnitts hält"
+
+
+def test_a_connector_never_grows_past_the_circle_that_was_planned_for_it() -> None:
+    """Die Planung sucht Platz für einen Kreis; die Form muss hineinpassen.
+
+    ``plan_pins`` zieht die Schnittfläche um Stiftradius plus Wandstärke ein.
+    Eine Form, die über diesen Kreis hinausragt, frisst still von der Wand,
+    die dort stehen bleiben soll. Gemessen war genau das der Fall: Bei
+    ``diameter = 6`` kam der Sechskant auf 6,93 Umkreis und der
+    Schwalbenschwanz auf 8,49 — dessen Ecke allein nahm 1,24 mm der 1,6 mm
+    Reserve.
+    """
+    from app.core.knowledge.parts import PARTS
+
+    spec = PARTS.get("dowel")
+    for shape in ("round", "hex", "dovetail"):
+        body = spec.fn(
+            spec.params(diameter=6.0, length=12.0, kind="pin", shape=shape, chamfer=0.0)
+        ).mesh
+        flat = np.asarray(body.raw.vertices)[:, :2]
+        circle = 2.0 * float(np.linalg.norm(flat, axis=1).max())
+
+        assert circle == pytest.approx(6.0, abs=1e-6), f"{shape} ragt über den Kreis hinaus"
+
+
+def test_without_the_evaluated_body_the_wanted_count_holds(profile: Profile) -> None:
+    """Ist nichts bekannt, ist auch nichts widerlegt.
+
+    ``fitting_pins`` soll die Zahl der Passungen an die Stifte binden, die
+    wirklich sitzen — aber ohne den ausgewerteten Körper weiß es nichts, und
+    stumm auf null zu gehen wäre der Verlust der Passungen, die es vor dieser
+    Änderung gab.
+    """
+    from app.core.split import fitting_pins
+
+    plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=0.0)
+
+    assert fitting_pins(None, plane, 2) == 2, "ohne Körper gilt die gewünschte Zahl"
+    assert fitting_pins(None, plane, 0) == 0, "null bleibt null"
+    assert fitting_pins(block(), plane, 2) == 2, "mit Körper wird nachgerechnet"

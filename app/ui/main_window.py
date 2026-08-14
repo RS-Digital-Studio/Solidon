@@ -638,13 +638,20 @@ class MainWindow(QMainWindow):
         # keines — ausgerechnet die Handgriffe, die einem Anfänger am nächsten
         # liegen.
         #
-        # ``Alt`` und eine Ziffer, nicht ein Buchstabe: Ein Kürzel ohne
-        # Modifikator feuert auch, während jemand in den Chat tippt, und
-        # schluckt dort den Buchstaben. Die Ziffern 1 bis 6 sind an Darstellung
-        # und Projektion vergeben, also braucht es ohnehin einen Modifikator;
-        # ``Alt`` bleibt übrig, weil ``Ctrl+1`` bis ``Ctrl+6`` die Kameras
-        # sind. Welche Zahl zu welchem Werkzeug gehört, steht im Tooltip des
-        # Knopfes und in der Kürzelübersicht — geraten werden muss es nicht.
+        # ``Alt`` und eine Ziffer, und zwar aus einem gemessenen Grund: Die
+        # Ziffern 1 bis 6 allein gehören der Darstellung und der Projektion,
+        # ``Ctrl+1`` bis ``Ctrl+6`` den Kameras. Für eine durchgehende Reihe
+        # von acht bleibt ``Alt`` — nachgezählt über alle Fensterbefehle und
+        # Menüeinträge, dort ist keine Alt-Folge vergeben.
+        #
+        # Hier stand als zweite Begründung, ein Kürzel ohne Modifikator
+        # schlucke den Buchstaben, während jemand in den Chat tippt. Das ist
+        # **falsch**, nachgemessen mit ``QTest``: Ein fokussiertes Eingabefeld
+        # bekommt den Buchstaben, der Shortcut feuert nicht. Der Satz ist
+        # weg, die Wahl bleibt — sie trägt auch ohne ihn.
+        #
+        # Welche Zahl zu welchem Werkzeug gehört, steht im Tooltip des Knopfes
+        # und in der Kürzelübersicht; geraten werden muss es nicht.
         for index, key in enumerate(self.tools.tools(), start=1):
             self.tools.set_shortcut(key, f"Alt+{index}")
             QShortcut(QKeySequence(f"Alt+{index}"), self, lambda name=key: self.tools.toggle(name))
@@ -1278,13 +1285,20 @@ class MainWindow(QMainWindow):
 
         # *Automatisch teilen* ist kein Registereintrag, sondern ein Ablauf über
         # mehreren Operationen — und stand deshalb unter *Bearbeiten*, zwei
-        # Menüs entfernt von den drei anderen Wegen, ein Teil zu trennen. Wer
-        # ein zu großes Teil vor sich hat, sucht nicht nach der Bauart einer
-        # Funktion, sondern nach dem Wort „teilen"; die vier stehen jetzt
-        # beieinander. Fällt die Gruppe weg, weil keine Vorbereiten-Operation
-        # registriert ist, bleibt *Bearbeiten* der Platz — ein Eintrag darf
-        # umziehen, nicht verschwinden.
-        prepare_menu = groups.get(str(_("Vorbereiten")), edit_menu)
+        # Menüs entfernt von den anderen Wegen, ein Teil zu trennen. Wer ein zu
+        # großes Teil vor sich hat, sucht nicht nach der Bauart einer Funktion,
+        # sondern nach dem Wort „teilen"; sie stehen jetzt beieinander.
+        #
+        # Gesucht wird über die **Kategorie** und nicht über den Menütitel:
+        # Der Titel ist übersetzt und umbenennbar, und ein Vergleich darauf
+        # ließe den Eintrag nach der nächsten Umbenennung still unter
+        # *Bearbeiten* zurück. Gibt es die Gruppe nicht, weil keine
+        # Vorbereiten-Operation registriert ist, bleibt *Bearbeiten* der Platz
+        # — ein Eintrag darf umziehen, nicht verschwinden.
+        prepare_group = next(
+            (str(title) for title, categories in MENU_GROUPS if "prepare" in categories), ""
+        )
+        prepare_menu = groups.get(prepare_group, edit_menu)
         if prepare_menu is not edit_menu:
             prepare_menu.addSeparator()
         self.auto_split_action = self._add_action(

@@ -368,22 +368,33 @@ def dowel(raw: BaseParams) -> PartResult:
 def _profile(shape: str, diameter: float, length: float) -> MeshData:
     """Der Querschnitt eines Verbinders, auf ``length`` hochgezogen.
 
-    ``diameter`` ist bei allen dreien das Maß über die breiteste Stelle —
-    beim Sechskant die Schlüsselweite, beim Schwalbenschwanz die breite Seite.
-    So bleibt die Planung dieselbe: Sie sucht Platz für einen Kreis von diesem
-    Durchmesser, und was hineingelegt wird, passt in jeden Fall hinein.
+    **``diameter`` ist immer der Umkreis**, also der Kreis, in den die Form
+    hineinpasst — nicht die Schlüsselweite und nicht die breite Seite. Daran
+    hängt mehr als eine Bezeichnung: Die Stiftplanung sucht Platz für einen
+    Kreis dieses Durchmessers und zieht die Schnittfläche um ihn plus die
+    Wandstärke ein. Eine Form, die über diesen Kreis hinausragt, frisst still
+    von der Wand, die dort stehen bleiben soll.
 
-    Die Fase bleibt für alle drei dieselbe Rechnung, weil sie über den
+    Gemessen war genau das der Fall, bevor diese Umrechnung hier stand: Bei
+    ``diameter = 6`` kam der Sechskant auf 6,93 Umkreis und der
+    Schwalbenschwanz auf 8,49 — dessen Ecke allein nahm 1,24 mm der 1,6 mm
+    Wandreserve. Wer einen dickeren Verbinder will, erhöht den Durchmesser;
+    er soll ihn nicht durch die Formwahl geschenkt bekommen.
+
+    Die Fase bleibt für alle drei dieselbe Rechnung, weil sie über denselben
     Umkreis arbeitet (:func:`_ring`): Am Stift schneidet sie die Ecken oben
     schräg an, an der Bohrung setzt sie eine runde Einführung vor ein
     kantiges Loch. Beides ist genau das, was eine Fase tun soll.
     """
-    width = diameter
     if shape == "hex":
-        return shapes.hexagon(width, length)
+        # Schlüsselweite aus dem Umkreis: beim Sechskant ist sie das
+        # √3/2-fache.
+        return shapes.hexagon(diameter * math.sqrt(3.0) / 2.0, length)
     if shape == "dovetail":
-        return shapes.dovetail(width, length)
-    return shapes.cylinder(width, length)
+        # Die weiteste Ecke des Trapezes liegt auf (b/2, t/2) — der Umkreis
+        # ist also das √2-fache der breiten Seite.
+        return shapes.dovetail(diameter / math.sqrt(2.0), length)
+    return shapes.cylinder(diameter, length)
 
 
 def _ring(diameter: float, chamfer: float):  # type: ignore[no-untyped-def]

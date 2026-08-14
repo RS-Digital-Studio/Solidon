@@ -5404,3 +5404,76 @@ Website nur halb nachgezogen war.
       Baustein mit eigenem Bereichstest (`insert_snap_fit` gibt es bereits),
       kein Wert in einer Formliste. Als Formwert wäre er eine Zusage, die die
       Geometrie nicht hält.
+
+## Der eigene Änderungssatz im Review (14.08.2026)
+
+Drei Commits, 46 Dateien — durchgesehen wie fremder Code, jeder Fund einzeln
+behoben und mit einem Test festgenagelt.
+
+**Zuerst ein Fehler an der Methode selbst.** Ich hielt den Diff gegen `main`
+und las dabei fremden Code als meinen: `main` (62ba22a) liegt *hinter* meinem
+Ausgangspunkt `051fdb6`, der Vergleich zeigte also auch Änderungen der
+Nebensitzung. Wer seinen eigenen Satz prüfen will, vergleicht gegen den Stand,
+auf dem er aufgesetzt hat — nicht gegen den Zweig, in den er später geht.
+
+- [x] **Die kantigen Verbinder waren größer, als sie sagten.** `hexagon(width)`
+      nimmt die Schlüsselweite, `dovetail(width)` die breite Seite — beide
+      bekamen den Durchmesser roh durchgereicht. Bei `diameter = 6` maß der
+      Sechskant 6,93 Umkreis und der Schwalbenschwanz 8,49; dessen Ecke allein
+      nahm 1,24 mm der 1,6 mm Wandreserve, die die Stiftplanung stehen lassen
+      wollte. `_profile()` rechnet jetzt um (√3/2 beim Sechskant, 1/√2 beim
+      Schwalbenschwanz), und der Docstring sagt in einem Satz, was `diameter`
+      ist: immer der Umkreis. Ein Test misst alle drei Formen gegen ihn.
+- [x] **`fitting_pins()` sagte etwas anderes, als es tat.** Ohne Netz gab es
+      null zurück, während der Docstring die gewünschte Zahl versprach. Null
+      heißt hier „keine Passung eintragen" — bei einem Aufruf ohne
+      ausgewerteten Körper wäre das stillschweigend die falsche Antwort statt
+      einer offenen Frage. Es gibt jetzt `wanted` zurück: Wer kein Netz
+      mitgibt, bekommt, was er wollte, und die Operation korrigiert es beim
+      Rechnen.
+- [x] **Die Begründung der Kürzel stimmte nicht.** Im Kommentar stand, ein
+      Kürzel ohne Modifikator würde auch beim Tippen im Chat feuern. Mit
+      `QTest.keyClick` gegen ein fokussiertes `QLineEdit` gemessen: tut es
+      nicht, Qt gibt die Taste dem Eingabefeld. Der Grund für `Alt+Ziffer`
+      bleibt trotzdem — die nackten Ziffern gehören der Darstellung, `Ctrl`
+      und Ziffer den Kameras. Der Kommentar sagt das jetzt, und ein neuer Test
+      prüft das ganze Fenster auf doppelt vergebene Kürzel statt nur die
+      Werkzeugzeile.
+- [x] **`half_names()` schnitt fremde Namensteile ab.** Es trennte am letzten
+      „ · " und warf den Rest weg — ein Körper namens „Halter · Version 2"
+      hieß nach dem Teilen „Halter A · Stifte". Abgeschnitten wird jetzt nur,
+      was hinter dem Trenner steht *und* einer der eigenen Zusätze ist:
+      „Stifte" und „Löcher", in der Quelle wie in jedem der fünf Kataloge —
+      sonst verlöre ein auf Spanisch geteiltes und auf Deutsch weitergeteiltes
+      Projekt die Regel. `_own_notes()` liest die Kataloge einmal
+      (`lru_cache`), nicht bei jedem Namen.
+- [x] **`split_plane` stapelte den Zusatz.** Die Op ohne Stifte baute ihre
+      Namen selbst und kam an `half_names()` vorbei; zweimal geteilt stand
+      „… A · Stifte A" da. Beide Ops gehen jetzt durch dieselbe Funktion.
+- [x] **Kleinkram, der trotzdem in die Irre führt.** Der Docstring von
+      `show_split_line` sprach von einem Kreuz an den Enden, gezeichnet wird
+      eine Kugel; die Enden hatten keinen `name`, waren also nicht einzeln
+      abräumbar; der B-Rep-Umschaltertext stand zweimal wörtlich in
+      `TWIN_TOGGLES`; die Menüsuche für *Automatisch teilen* ging über den
+      übersetzten Gruppentitel statt über die Kategorie und hätte in jeder
+      anderen Sprache danebengegriffen; und ein Kommentar sprach noch von
+      „drei anderen Wegen", wo es inzwischen vier sind.
+
+### Was der Volllauf sagt
+
+3357 bestanden, 10 übersprungen, 1 erwartet fehlgeschlagen; die Fensterdateien
+Datei für Datei grün. `ruff`, `ruff format` und `mypy` sauber.
+
+**Zwei Dateien brechen in diesem Container ab, beide ohne Zutun dieses
+Zweigs** — nachgemessen, nicht angenommen:
+
+* `test_manual.py` stirbt reproduzierbar beim Aufbau der `QApplication` unter
+  `offscreen`, und zwar an derselben Stelle auf dem unveränderten `051fdb6`.
+  Unter einem echten Bildschirm (`xvfb-run`) laufen alle 46 Prüfungen durch.
+* `test_operation_ui.py` bricht unregelmäßig ab, mal beim Leeren der
+  Verlaufsliste, mal beim Öffnen eines Dialogs — unter `offscreen` wie unter
+  `xvfb`, und auf dem unveränderten Stand mit derselben Häufigkeit: ein
+  Abbruch in sechs Läufen hier wie dort. Wo er nicht zuschlägt, sind alle 24
+  Prüfungen grün.
+
+Ein Umgebungsartefakt in beiden Fällen, kein Befund an diesem Änderungssatz.
