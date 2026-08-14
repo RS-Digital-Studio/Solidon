@@ -58,8 +58,24 @@ def dense_mesh() -> MeshData:
 
 
 def measure(name: str, work: Callable[[], Any]) -> float:
-    """Einmal laufen lassen, die Sekunden festhalten, mit dem vorigen Lauf
-    vergleichen.
+    """Einmal laufen lassen, die Sekunden festhalten, mit dem **besten** Lauf
+    auf dieser Maschine vergleichen.
+
+    Gemerkt wird der schnellste bekannte Wert, nicht der letzte. Das ist kein
+    Schönrechnen, sondern die einzige Zahl, die etwas über den *Code* sagt:
+    Eine Messung ist nach oben beliebig verrauschbar — eine Datei mit
+    Leistungstests unmittelbar davor genügt schon — und nach unten nicht. Wer
+    den letzten Wert merkt, hat beides falsch: Ein Lauf unter Fremdlast lässt
+    den Test scheitern, obwohl nichts langsamer wurde, *und* er hebt danach
+    die Marke an, sodass eine echte Verlangsamung um zwanzig Prozent
+    unbemerkt durchginge. An dieser Datei gemessen: `sketch_solve_200`
+    braucht allein 114 ms und hinter `test_slice.py` 162 — dieselbe Rechnung,
+    dasselbe Ergebnis, achtunddreißig Prozent Unterschied.
+
+    Die Kehrseite ist gewollt: Wer ein Verfahren bewusst durch ein teureres
+    ersetzt, bekommt einen dauerhaft roten Test, bis er die Marke verwirft.
+    Genau dann soll jemand hinsehen — und die Marke fällt mit einer Begründung
+    im Commit, nicht stillschweigend beim nächsten Lauf.
     """
     started = time.perf_counter()
     work()
@@ -69,16 +85,16 @@ def measure(name: str, work: Callable[[], Any]) -> float:
     if BASELINE.is_file():
         history = json.loads(BASELINE.read_text(encoding="utf-8"))
     previous = history.get(name)
-    history[name] = taken
+    history[name] = taken if previous is None else min(previous, taken)
     BASELINE.write_text(json.dumps(history, indent=2, sort_keys=True), encoding="utf-8")
 
     print(
         f"\n{name}: {taken * 1000:.0f} ms"
-        + (f" (vorher {previous * 1000:.0f} ms)" if previous else "")
+        + (f" (bester Lauf bisher {previous * 1000:.0f} ms)" if previous else "")
     )
     if previous is not None and previous > 0.02:
         assert taken <= previous * REGRESSION_LIMIT, (
-            f"{name} is {taken / previous:.2f} times slower than the last run on this machine"
+            f"{name} is {taken / previous:.2f} times slower than the best run on this machine"
         )
     return taken
 
