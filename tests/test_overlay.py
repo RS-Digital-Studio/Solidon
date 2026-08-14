@@ -490,9 +490,5 @@ def test_the_dodge_margin_covers_the_card_it_dodges(window: MainWindow) -> None:
     assert left is not None and right is not None
     assert left.geometry().width() > LEFT_WIDTH, "die Karte ist mitgewachsen"
 
-    assert left_margin > left.geometry().right(), (
-        "der linke Rand deckt die linke Karte vollständig"
-    )
-    assert right_margin > host.width() - right.geometry().left(), (
-        "und der rechte die rechte"
-    )
+    assert left_margin > left.geometry().right(), "der linke Rand deckt die linke Karte vollständig"
+    assert right_margin > host.width() - right.geometry().left(), "und der rechte die rechte"
