@@ -22,6 +22,7 @@ import numpy as np
 import trimesh
 
 from app.core.errors import CANCEL, Action, NotManifoldError, ValidationError
+from app.core.geom.attributes import transfer
 from app.core.geom.mesh import MeshData, as_mesh_data, on_surface
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -75,12 +76,32 @@ def deviation(before: MeshData, after: MeshData) -> float:
 
 
 def decimate(mesh: MeshData, target: int) -> MeshData:
-    """Weniger Dreiecke für dieselbe Form, soweit das möglich ist."""
+    """Weniger Dreiecke für dieselbe Form, soweit das möglich ist.
+
+    Die Materialslots reisen mit (§20). Sie taten es nicht: Die Dreiecke, die
+    herauskommen, sind nicht die, die hineingingen, und ``replacing`` lässt eine
+    Zuweisung fallen, deren Länge nicht mehr passt — aus 20 480 Slots wurden
+    keine. Ein zweifarbiges Schild kam einfarbig aus der Operation, und im
+    Viewport verlor jedes große Modell beim Dezimieren für die Anzeige seine
+    Farben.
+
+    **Ohne Grenze übertragen**, anders als nach einer Booleschen Operation: Dort
+    trennt die Toleranz die alten Oberflächen von den frisch geschnittenen, die
+    zu keiner gehören. Beim Dezimieren gibt es keine frisch geschnittenen — jedes
+    Dreieck stammt von der alten Haut, nur gröber. Eine Grenze könnte hier
+    nichts richtig machen, aber einiges falsch: Wie weit die Oberfläche wandert,
+    ist genau das, was die Dezimierung aushandelt.
+
+    Kostenlos ist das nicht, aber es kostet nur, wo es etwas zu tragen gibt:
+    Ohne Slots in der Quelle kehrt die Übertragung sofort zurück, ohne eine
+    einzige Anfrage an den ``rtree``-Index — und die allermeisten Körper haben
+    ein Material.
+    """
     if mesh.triangle_count <= max(target, DECIMATE_FLOOR):
         return mesh
     reduced = mesh.raw.simplify_quadric_decimation(face_count=target)
     _log.info("decimated %d to %d triangles", mesh.triangle_count, len(reduced.faces))
-    return mesh.replacing(reduced)
+    return transfer(mesh.replacing(reduced), [mesh], tolerance=math.inf)
 
 
 def smooth(mesh: MeshData, iterations: int) -> MeshData:
@@ -516,8 +537,15 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
     ]
     # Was der zweite Weg kostet, gehört gesagt. Er wird nur gegangen, wenn der
     # erste das Netz zerrissen hätte, und er zerteilt dabei auch die Dreiecke,
-    # die längst fein genug waren: aus 796 wurden bei einer Lochplatte 815 104.
-    # Danach ist jede weitere Operation langsamer, und niemand wüsste warum.
+    # die längst fein genug waren. Danach ist jede weitere Operation langsamer,
+    # und niemand wüsste warum.
+    #
+    # Wie teuer, hat der Sprung auf trimesh 5 verschoben: dieselbe Lochplatte
+    # ging unter 4.12.2 von 796 Dreiecken auf 815 104 (Faktor 1024), unter
+    # 5.0.0 auf 22 636 (Faktor 28). Die Schwelle bleibt, wo sie ist — sie
+    # meint den Sprung, der eine Anzeige lahmlegt, und den gibt es weiter.
+    # Nur löst der Regelfall sie nicht mehr von selbst aus, weshalb
+    # `test_a_net_that_explodes_says_so` sie eigens herunterdreht.
     if after.triangle_count > before.triangle_count * DENSE_FACTOR:
         findings.append(
             Finding(

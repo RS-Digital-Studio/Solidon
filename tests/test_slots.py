@@ -22,6 +22,7 @@ from app.core.export.writer import export_bytes, plan_export
 from app.core.geom.attributes import counts, transfer, used_slots, with_slot
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData
+from app.core.geom.mesh_ops import decimate
 from app.core.types import MaterialSlot, Profile, SceneObject
 
 NAMESPACE = {"c": threemf.CORE_NAMESPACE}
@@ -81,6 +82,43 @@ def test_slots_survive_the_voxel_stage() -> None:
     assert area_share(result.mesh, 1) == pytest.approx(0.82, abs=0.08), (
         "the outside of the cube keeps its colour, the bore does not get it"
     )
+
+
+def test_slots_survive_the_decimation() -> None:
+    """Die Dezimierung wirft Dreiecke weg — nicht die Farbe darauf.
+
+    §20 nennt die Booleschen Operationen, weil dort die Arbeit sitzt. Der Satz
+    dahinter gilt weiter: Eine Zuweisung, die eine Operation still verliert, ist
+    eine, die der Nutzer neu machen darf. Gemessen an einer Kugel, deren obere
+    Hälfte Slot 1 trägt: 20 480 Dreiecke gingen hinein, 5 000 kamen heraus, und
+    alle 20 480 Slots waren fort.
+
+    Die Grenze zwischen den Farben verläuft nach dem Zusammenlegen nicht mehr
+    exakt am Äquator — ein Dreieck, das beide Hälften überspannt, hat keine
+    richtige Antwort. Deshalb der Flächenanteil und nicht die Dreieckszahl.
+    """
+    body = trimesh.creation.icosphere(subdivisions=5)
+    upper = tuple(int(centre[2] > 0.0) for centre in body.triangles_center)
+    two_tone = MeshData(raw=body, slots=upper)
+
+    reduced = decimate(two_tone, 5_000)
+
+    assert len(reduced.slots) == reduced.triangle_count, "jedes Dreieck trägt einen Slot"
+    assert used_slots(reduced) == (0, 1), "beide Farben sind noch da"
+    assert area_share(reduced, 1) == pytest.approx(0.5, abs=0.02), "der Äquator liegt, wo er lag"
+
+
+def test_the_decimation_invents_no_slots() -> None:
+    """Ein Körper mit einem Material bleibt einer — auch nach der Dezimierung.
+
+    Das ist nicht nur Kosmetik: Ohne Slots läuft die Übertragung gar nicht erst
+    an, und damit auch keine Anfrage an den ``rtree``-Index. Der Viewport
+    dezimiert jedes große Modell für die Anzeige, und die allermeisten sind
+    einfarbig.
+    """
+    reduced = decimate(MeshData.of(trimesh.creation.icosphere(subdivisions=5)), 5_000)
+
+    assert not reduced.slots
 
 
 def test_the_cutter_does_not_paint_the_body_it_cuts() -> None:
