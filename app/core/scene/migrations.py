@@ -18,12 +18,13 @@ from typing import Any, Final
 
 from app.core.errors import ValidationError
 from app.core.log import get_logger
+from app.core.scene.gathered import carry_over
 from app.i18n import _
 
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 7
+FORMAT_VERSION: Final = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +142,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=4, to_version=5, apply=_add_transaction_changes),
     Step(from_version=5, to_version=6, apply=_keep_transaction_titles_literal),
     Step(from_version=6, to_version=7, apply=_keep_bores_centred),
+    Step(from_version=7, to_version=8, apply=carry_over),
 )
 
 

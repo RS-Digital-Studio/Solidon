@@ -36,6 +36,7 @@ from app.core.errors import ValidationError
 from app.core.knowledge.parts.registry import LIBRARY_VERSION
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_data_dir
+from app.core.scene.gathered import externalise, gathered_path, inline, references
 from app.core.scene.migrations import FORMAT_VERSION, migrate
 from app.core.scene.serialise import (
     document_from_data,
@@ -166,6 +167,20 @@ def _check_relative(path: str, where: str) -> None:
 # --- Schreiben -------------------------------------------------------------------
 
 
+def _next_gathered(document: Document) -> int:
+    """Die nächste freie Nummer für einen ausgelagerten Wert.
+
+    Aus den vorhandenen Quellen abgeleitet und nicht mitgezählt: Ein Zähler im
+    Dokument wäre ein Zustand, der beim Rückgängigmachen falsch wird.
+    """
+    used = [
+        int(source_id.rsplit("_", 1)[-1])
+        for source_id in document.sources
+        if source_id.startswith("gathered_") and source_id.rsplit("_", 1)[-1].isdigit()
+    ]
+    return max(used, default=0) + 1
+
+
 def save(project: Project, path: Path) -> Path:
     """Schreibt den Container, atomar. Gibt den geschriebenen Pfad zurück."""
     document = project.document
@@ -191,13 +206,20 @@ def save(project: Project, path: Path) -> Path:
         # ein (§16.1).
         document.sources[source_id] = dataclasses.replace(source, sha256=checksum(payload))
 
+    # §9: Was ein Editor gesammelt hat, kann groß werden — eine
+    # Sculpting-Sitzung mit viertausend Zügen ist ein halbes Megabyte Zahlen in
+    # einer Zeile. Ab der Grenze wandert der Wert in eine eigene Datei im
+    # Container, und im Dokument steht ein Verweis. Gearbeitet wird auf der
+    # frisch serialisierten Kopie: Das Dokument im Speicher bleibt, was es ist.
+    data = document_to_data(document)
+    gathered_payloads = externalise(data, _next_gathered(document))
+
     ensure_dir(path.parent)
     temporary = path.with_name(path.name + ".part")
     with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as container:
-        container.writestr(
-            PROJECT_ENTRY,
-            json.dumps(document_to_data(document), indent=2, ensure_ascii=False),
-        )
+        container.writestr(PROJECT_ENTRY, json.dumps(data, indent=2, ensure_ascii=False))
+        for source_id, payload in gathered_payloads.items():
+            container.writestr(gathered_path(source_id), payload)
         for source_id, source in document.sources.items():
             if source.embedded:
                 container.writestr(source.path, project.sources[source_id])
@@ -237,6 +259,18 @@ def load(path: Path) -> Project:
                 _check_relative(name, "container")
 
             data = migrate(json.loads(container.read(PROJECT_ENTRY)))
+            # Die ausgelagerten Sammelwerte zurück ins Dokument, bevor daraus
+            # eines wird: Ein Verweis, den niemand auflöst, wäre für jede
+            # Operation dahinter ein Text ohne Inhalt und ein leeres Ergebnis
+            # ohne Fehlermeldung.
+            inline(
+                data,
+                {
+                    source_id: container.read(gathered_path(source_id))
+                    for source_id in references(data)
+                    if gathered_path(source_id) in names
+                },
+            )
             document = document_from_data(data)
 
             payloads: dict[SourceId, bytes] = {}
