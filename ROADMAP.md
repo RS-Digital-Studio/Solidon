@@ -4615,9 +4615,12 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       und das Ergebnis wäre nicht falsch, sondern leer) und ob das Relief
       tiefer ist als eine Druckschicht. 17 Tests.
 
-      Offen aus §7.4: die vierte Projektion „per Fläche" und die Kachelung.
-      Drei Projektionen decken den Fall ab, für den es die Operation gibt; die
-      vierte braucht eine erkannte Fläche als Bezug und gehört zu §21.
+      **Die vierte Projektion steht** (§7.4): auf eine erkannte Fläche, die
+      einzige Art, die auf einer schrägen Fläche nicht verzerrt. Fehlt die
+      Fläche, hält die Operation an, statt still auf „von oben" auszuweichen —
+      das Ergebnis sähe fast richtig aus und läge auf der falschen Ebene. Die
+      Kachelung bleibt entfallen, mit Grund: Ein gekacheltes Höhenfeld hat an
+      jeder Kachelgrenze eine Kante, die kein Drucker trifft.
 - [x] **P16.8 — `pose_armature`, Kern.** Eine Pose, keine Animation. Drei
       Streichungen gegenüber einem Animationsprogramm, alle drei Absicht:
       eine Pose statt einer Bewegung, Vorwärtskinematik statt inverser,
@@ -4637,9 +4640,11 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       `test_gesture_ops.py` prüft ihn seit P16.1 mit, ohne eine Zeile
       Anpassung. 16 Tests.
 
-      **Offen: der Skeletteditor** in der Oberfläche (§7.5) — Knochen setzen,
-      Kette bilden, Namen vergeben. Der Kern ist über die Kommandozeile
-      bedienbar, wie es bei P16.5 vor P16.6 auch war.
+      **Der Skeletteditor steht** (§7.5): zwei Klicks je Knochen, der nächste
+      hängt am vorigen, *Neue Kette* für den zweiten Arm. Er setzt das Skelett
+      und lässt die Stellung leer — die Winkel sind Zahlen und gehören in den
+      Dialog, wo auch ein Projektparameter stehen darf. Das ist keine Lücke,
+      sondern die Arbeitsteilung, die Posing hierher gehören lässt. 14 Tests.
 - [x] **P16.9 — Dateiformat 7 → 8**, Migration, Einbacken. Der Bruch ist die
       **Auslagerung großer Sammelwerte**: Eine Sculpting-Sitzung mit
       viertausend Zügen steht sonst als eine Zeile im `project.json`, und die
@@ -4669,8 +4674,10 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       reist im Container mit wie jede andere, und eine Quelle *ist* ein
       Parameter, sonst wäre auch `load` keine Operation. 18 Tests.
 
-      Offen: die Nachfrage in der Oberfläche, die den Stand tatsächlich
-      schreibt. Der Kern meldet die Schwelle, der Weg dorthin fehlt. **Dabei mitnehmen:
+      **Die Nachfrage steht** — im Kontextmenü des Verlaufs, neben „Parameter
+      ändern" und nur an einer Sitzung, die noch gerechnet wird. Sie fragt
+      nicht nach Sicherheit, sondern sagt, was danach nicht mehr geht und was
+      man dafür bekommt. Die einzige Nachfrage im ganzen Programm. **Dabei mitnehmen:
       ein `title_translatable` für Parameter.** Für Transaktionstitel gibt es
       das Feld seit Fassung 6, für Parameter nicht — ihr Titel kommt aus dem
       Code, verliert beim Speichern aber die Herkunft und steht danach als

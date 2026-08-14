@@ -704,10 +704,14 @@ verbindet.
 
 ### 7.5 Posing
 
-`pose_armature` nach Entscheidung I. **Kern umgesetzt in P16.8**, der
-Skeletteditor steht noch aus — Knochen setzen, Kette bilden, Namen vergeben.
-Dasselbe Verhältnis wie zwischen P16.5 und P16.6: Der Kern ist über die
-Kommandozeile bedienbar, was fehlt, ist die Hand.
+`pose_armature` nach Entscheidung I. **Vollständig umgesetzt in P16.8**, Kern
+und Editor.
+
+Der Editor setzt die Knochen — zwei Klicks je Knochen, der nächste hängt am
+vorigen — und lässt die Stellung leer. **Das ist Absicht und keine Lücke:**
+Die Winkel sind drei Zahlen je Knochen und gehören in den Dialog, wo auch ein
+Projektparameter stehen darf. Wer sie mit der Maus zöge, hätte ein
+Animationsprogramm mit einem Bild statt eines Stapels mit einer Zahl.
 
 Gewichte gerechnet, nicht gespeichert. Zwei Dinge, die beim Bauen Zeit
 gekostet haben und in keinem Lehrbuch nebeneinander stehen: Der Abstand geht
@@ -926,7 +930,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | **P16.5** | Kern des Sculptings: `kind="strokes"`, `Stroke`-Verträge (§9), Auswertung mit Etappen, sechs Werkzeuge, Symmetrie — **ohne Oberfläche**, über CLI bedienbar; **bringt die saubere Figur in den Korpus mit** (§18, verschoben aus P16.2) | **XL** | Determinismus, Symmetrie, Etappen; zweimal auswerten identisch | **fertig** — 26 Tests, 96 ms für 1 000 Striche |
 | **P16.6** | Sculpting-Sitzung im Viewport: Pinselring, Leiste, Vorschau, Wandstärke live, Editor-Undo | **XL** | offscreen wie `test_sketch_editor.py`; Grenzen aus `test_interface_limits.py` | **fertig** — 19 Tests, Grenzen gehalten |
 | **P16.7** | `displace_image` samt Bild in `sources/` und Profilprüfung | L | Relief unter Düsenbreite wird gemeldet | **fertig** — 17 Tests, drei Projektionen |
-| **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | **Kern fertig** — 16 Tests; Skeletteditor offen |
+| **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | **fertig** — 16 + 14 Tests |
 | **P16.9** | Dateiformat 7→8, Migration, Beispieldatei, Einbacken (D) | L | alte Datei öffnet und rechnet | **fertig** — 18 Tests; Nachfrage in der Oberfläche offen |
 | **P16.10** | Handbuch, Weg 4, Website, Beispielprojekt, Übersetzungen, Regelsammlung + Agenten-Suite vorher/nachher (§18) | L | Sprachdateien vollständig; Suitenquote nicht schlechter | **bis auf die Regelsammlung fertig** — die braucht den Suite-Lauf |
 | **P16.11** | **Prüfpunkt Käfigmodellierung** (H2): Reicht Primitive + `blend_union` + Pinsel als Basisnetz für die Korpusfiguren? | S | Kriterium **vor** P16.5 festgeschrieben; Ergebnis dokumentiert, nicht passend gemacht | **fertig** — 4 von 5 Bedingungen erfüllt (H2) |
@@ -1143,10 +1147,10 @@ vergessen durchgeht:
 | Rest | Wo | Warum noch nicht |
 |---|---|---|
 | **Regelsammlung** | §11, P16.10 | Verlangt die Agenten-Suite vorher und nachher — je rund anderthalb Stunden, und sie kostet Geld. Ein Lauf, den man ansagt. |
-| **Skeletteditor** | §7.5, P16.8 | Der Posing-Kern läuft über die Kommandozeile; es fehlt die Hand, wie zwischen P16.5 und P16.6. |
-| **Nachfrage zum Einbacken** | §4 D, P16.9 | Der Kern meldet die Schwelle und kann den Stand lesen; der Weg zum Festschreiben in der Oberfläche fehlt. |
-| **Vierte Projektion** | §7.4, P16.7 | „Per Fläche" braucht eine erkannte Fläche als Bezug und gehört damit zu §21. |
-| **Bauplan §25 und die Kategorie `organic`** | §6, Entscheidung M | Sechs neue Operationen stehen bei ihren Geschwistern (`mesh`, `boolean`, `surface`). Ob `organic` entsteht und unter welche Menügruppe sie fällt, ist eine Entscheidung, die angesagt gehört. |
+| **Bauplan §25 und die Kategorie `organic`** | §6, Entscheidung M | Acht neue Operationen stehen bei ihren Geschwistern (`mesh`, `boolean`, `surface`). Ob `organic` entsteht und unter welche Menügruppe sie fällt, ist eine Entscheidung, die angesagt gehört. |
+
+Skeletteditor, Einback-Nachfrage und die vierte Displacement-Projektion sind
+seit dem 14.08.2026 erledigt und stehen bei ihren Paketen.
 
 **Die Abnahme aus §16** ist bis auf einen Punkt erfüllt. Sieben von acht:
 Tore grün, `test_gesture_ops.py` für alle drei Sammelarten, Leistungszeilen
