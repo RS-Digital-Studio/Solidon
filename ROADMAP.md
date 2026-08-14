@@ -4701,8 +4701,8 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       dem Code oder aus der Tastatur des Nutzers stammt. Genau diese
       Unterscheidung ist das Feld — die Migration von 6 hält fest, warum ein
       nachträglicher Abgleich mit dem Katalog der falsche Weg wäre.
-- [~] **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.** Alles
-      bis auf die Regelsammlung.
+- [~] **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.** Die
+      Sperre steht; offen ist nur noch, ob eine Regel dazukommt.
 
       **Handbuch:** ein Kapitel *Formen* mit dem Abschnitt, den `AGENTS.md`
       für jedes Werkzeug mit einer echten Grenze verlangt — wann es *nicht*
@@ -4724,11 +4724,27 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       fünf statt zwei, während die Seitentabelle zwei kennt. Es überspringt
       jetzt, wofür es keine Seite gibt, und sagt welche.
 
-      **Offen: die Regelsammlung.** Der Agent muss wissen, dass er nicht
-      sculptet (K) und was er stattdessen anbietet. Eine Regeländerung
-      verlangt die Agenten-Suite vorher und nachher (`AGENTS.md`, Checkliste
-      „Regelsammlung ändern") — je rund anderthalb Stunden, und sie kostet
-      Geld. Der Lauf gehört angesagt und nicht nebenbei gestartet.
+      **Der Agent sculptet nicht — und zwar, weil er es nicht kann.** (K)
+      Entscheidung K verlangte eine Regel in der Sammlung; der Kopf von
+      `rules.toml` sagt selbst, was dann besser ist: „eine eingehaltene Regel
+      ist besser als eine beschriebene". Für Skizzen stand das Muster längst,
+      seit §30.1 — zweifach gesperrt, im Schema und im Aufruf.
+
+      Am 14.08.2026 nachgesehen: `GATHERED_KINDS` führte alle drei Arten
+      (`sketch`, `strokes`, `armature`), aber nur die **erste** Sperre las die
+      Menge. Die zweite in `agent/session.py` prüfte `kind == "sketch"`, und
+      ein geratener Pinselstrich lief hindurch und wurde gerechnet. Der
+      Kommentar darüber behauptete das Gegenteil. Beide Stellen lesen die
+      Menge jetzt; die Ablehnung nennt je Art die Stelle, an die der Nutzer
+      gehört. Drei Tests, zehn Katalogeinträge.
+
+      **Bleibt als Entscheidung:** ob *zusätzlich* eine Regel in die Sammlung
+      soll. Die Sperre verhindert den Schaden, eine Regel verhindert den
+      Fehlversuch — ein Modell, das vorher weiß, dass es nicht modelliert,
+      erklärt dem Nutzer gleich den Weg, statt es zu probieren und abgewiesen
+      zu werden. Sie kostet zwei Suite-Läufe (`AGENTS.md`, Checkliste
+      „Regelsammlung ändern"), je rund anderthalb Stunden, und Geld. Der Lauf
+      gehört angesagt und nicht nebenbei gestartet.
 - [x] **P16.11 — Prüfpunkt Käfigmodellierung: Kriterium steht, und vier von
       fünf Bedingungen sind erfüllt.** `tests/test_base_mesh.py` schreibt fest,
       was „brauchbares Basisnetz" heißt, bevor P16.5 beginnt: ein Körper ohne
