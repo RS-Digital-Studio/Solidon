@@ -477,3 +477,72 @@ def test_baking_something_that_is_not_a_session_does_nothing(window: MainWindow)
 
     assert not window.session.bake_strokes(other.id)
     assert object_id
+
+
+# --- der Weg aus der Warnung heraus ---------------------------------------------
+
+
+def test_the_resolution_warning_carries_a_button(window: MainWindow) -> None:
+    """Ein Hinweis, der eine andere Operation verlangt, braucht den Weg dorthin.
+
+    Die Zeile „erst gleichmäßig vernetzen" stand allein da. Wer ihr folgen
+    wollte, musste die Sitzung verlassen, im Menü *Ändern → Netz* suchen, eine
+    Kantenlänge raten und von vorn anfangen — vier Schritte für einen Satz,
+    der die Antwort schon kennt.
+    """
+    with_a_body(window)
+    window.sculpt_bar.radius.setValue(1.0)
+    window.start_sculpt()
+
+    assert window.sculpt_bar.warning.text(), "die Figur ist für diesen Pinsel zu grob"
+    assert window.sculpt_bar.refine.isVisibleTo(window.sculpt_bar)
+
+
+def test_the_button_makes_the_mesh_fine_enough_for_the_brush(window: MainWindow) -> None:
+    """Und zwar fein genug, ohne zu fragen, wie fein.
+
+    Die Kantenlänge folgt aus dem eingestellten Radius über dieselbe Schwelle,
+    die die Warnung auslöst. Sie zu erfragen hieße, dem Nutzer eine Zahl
+    abzuverlangen, die das Fenster ausrechnen kann.
+    """
+    with_a_body(window)
+    window.sculpt_bar.radius.setValue(1.0)
+    window.start_sculpt()
+
+    window.sculpt_bar.refine.click()
+    window.session.wait_for_idle()
+
+    assert [entry.op for entry in window.session.project.document.ops][-1] == "remesh_uniform"
+    mesh = window._sculpt_mesh(str(window.object_tree.selected()))
+    assert mesh is not None
+    assert window._sculpt_resolution_hint(mesh) == "", "die Warnung ist behoben, nicht verschoben"
+    assert window.sculpting(), "die Sitzung läuft weiter — kein Umweg über das Beenden"
+
+
+def test_the_button_goes_when_the_warning_goes(window: MainWindow) -> None:
+    """Ein Knopf ohne Anlass ist ein Angebot, das ins Leere führt."""
+    with_a_body(window)
+    window.sculpt_bar.radius.setValue(1.0)
+    window.start_sculpt()
+    window.sculpt_bar.refine.click()
+    window.session.wait_for_idle()
+
+    mesh = window._sculpt_mesh(str(window.object_tree.selected()))
+    assert mesh is not None
+    window.sculpt_bar.show_warning(window._sculpt_resolution_hint(mesh), refinable=True)
+
+    assert not window.sculpt_bar.refine.isVisibleTo(window.sculpt_bar)
+
+
+def test_the_thin_wall_warning_gets_no_button(window: MainWindow) -> None:
+    """Denn Vernetzen macht eine dünne Wand nicht dicker.
+
+    Beide Warnungen teilen sich dasselbe Feld; nur eine hat eine Handlung, die
+    von hier aus richtig ist. Deshalb sagt der Aufrufer es und nicht der Text.
+    """
+    with_a_body(window)
+    window.start_sculpt()
+    window.sculpt_bar.show_warning("Die Wand wird zu dünn.", refinable=False)
+
+    assert window.sculpt_bar.warning.text()
+    assert not window.sculpt_bar.refine.isVisibleTo(window.sculpt_bar)

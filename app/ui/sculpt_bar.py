@@ -55,6 +55,9 @@ class SculptBar(QWidget):
 
     finished = Signal()
 
+    refineRequested = Signal()
+    """Der Knopf an der Warnung: das Netz jetzt fein genug machen."""
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
@@ -106,6 +109,16 @@ class SculptBar(QWidget):
         #: nichts im Weg steht: eine Warnung, die immer dasteht, ist keine.
         self.warning = QLabel("", self)
 
+        #: Die Handlung zur Warnung. Sie stand als Satz da — „erst gleichmäßig
+        #: vernetzen" — und ließ den Nutzer allein damit: Sitzung verlassen,
+        #: im Menü suchen, eine Kantenlänge raten, neu anfangen. Die Zahl, die
+        #: er dabei raten müsste, folgt aus dem Pinselradius und steht dem
+        #: Fenster zur Verfügung (§2.7: ein Hinweis endet nicht mit sich
+        #: selbst). Sichtbar nur mit der Warnung, zu der er gehört.
+        self.refine = QPushButton(tr("Jetzt vernetzen"), self)
+        self.refine.setVisible(False)
+        self.refine.clicked.connect(self.refineRequested)
+
         # Kein „Verwerfen" daneben, anders als bei der Skizze: Eine Sitzung
         # ohne Züge hinterlässt nichts, und eine mit Zügen ist eine
         # Transaktion, die ein Undo vollständig zurücknimmt (Regel 19). Ein
@@ -127,6 +140,7 @@ class SculptBar(QWidget):
         layout.addWidget(self.cut)
         layout.addWidget(self.state)
         layout.addWidget(self.warning, stretch=1)
+        layout.addWidget(self.refine)
         layout.addWidget(self.done)
 
     # --- Ablesen ---------------------------------------------------------------
@@ -156,5 +170,12 @@ class SculptBar(QWidget):
             .replace("{etappen}", str(stages))
         )
 
-    def show_warning(self, text: str) -> None:
+    def show_warning(self, text: str, refinable: bool = False) -> None:
+        """Was im Weg steht — und, wo es sich beheben lässt, der Knopf dazu.
+
+        ``refinable`` ist nicht aus dem Text abzuleiten: Die Warnung über zu
+        dünne Wände sieht genauso aus und hat keine Handlung, die von hier aus
+        richtig wäre.
+        """
         self.warning.setText(text)
+        self.refine.setVisible(bool(text) and refinable)
