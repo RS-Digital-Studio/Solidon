@@ -25,7 +25,7 @@ from typing import Literal
 import numpy as np
 import trimesh
 
-from app.core.errors import PROGRAMMING_ERRORS, BooleanFailedError
+from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, BooleanFailedError
 from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
@@ -90,6 +90,16 @@ def boolean(
 
     chain = stages if stages is not None else (FULL_CHAIN if quality == "fine" else DRAFT_CHAIN)
     attempted: list[SolverStage] = []
+    emptied = False
+    """Ob eine Stufe sauber gerechnet hat und dabei nichts übrig blieb.
+
+    Das ist kein Scheitern des Verfahrens, sondern eine Aussage über die
+    Eingabe: eine Bohrung mit 200 mm Durchmesser in einer 80er Platte frisst
+    sie ganz. Ohne diese Unterscheidung liefen alle vier Stufen durch und der
+    Nutzer las am Ende „Auch die letzte Rückfallstufe hat kein brauchbares
+    Ergebnis geliefert" — die Sprache des Rechenkerns für etwas, das aus den
+    Maßen folgt.
+    """
 
     for stage in chain:
         attempted.append(stage)
@@ -99,6 +109,8 @@ def boolean(
             _log.info("boolean stage %s failed: %s", stage, problem)
             continue
         if result is None or not _plausible(result, allow_empty):
+            if result is not None and result.triangle_count == 0:
+                emptied = True
             _log.info("boolean stage %s produced nothing usable", stage)
             continue
         return BooleanOutcome(
@@ -115,6 +127,19 @@ def boolean(
             findings=list(_findings_for(stage)),
         )
 
+    if emptied:
+        # Kein Rückfall hilft gegen Maße. Der Satz sagt, was zu sehen wäre,
+        # und die Handlung dazu ist eine andere als beim Kernversagen: nicht
+        # reparieren, sondern nachrechnen.
+        raise BooleanFailedError(
+            detail=_(
+                "Von dem Körper bleibt nichts übrig — das Werkzeug deckt ihn "
+                "vollständig ab. Prüfen Sie Maß und Lage."
+            ),
+            suggestions=(CORRECT_INPUT, CANCEL),
+            attempted=tuple(attempted),
+            seed=seed,
+        )
     raise BooleanFailedError(
         detail=_("Auch die letzte Rückfallstufe hat kein brauchbares Ergebnis geliefert."),
         attempted=tuple(attempted),

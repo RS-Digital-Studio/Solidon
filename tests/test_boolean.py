@@ -261,3 +261,26 @@ def test_a_kernel_that_gives_up_is_still_an_answer(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(trimesh.boolean, "intersection", gave_up)
 
     assert shared_volume(solid().raw, solid().raw) == 0.0
+
+
+def test_an_emptied_body_says_so_instead_of_blaming_the_solver() -> None:
+    """Kein Rückfall hilft gegen Maße.
+
+    Eine Bohrung mit 200 mm Durchmesser in einer 80er Platte frisst sie ganz.
+    Vier Stufen liefen durch, und der Nutzer las am Ende „Auch die letzte
+    Rückfallstufe hat kein brauchbares Ergebnis geliefert" — die Sprache des
+    Rechenkerns für etwas, das aus den Maßen folgt, und ohne den
+    Handlungsvorschlag, den Regel 17 verlangt.
+    """
+    plate = MeshData.of(trimesh.creation.box(extents=(80.0, 50.0, 8.0)))
+    tool = MeshData.of(trimesh.creation.box(extents=(300.0, 300.0, 300.0)))
+
+    with pytest.raises(BooleanFailedError) as caught:
+        boolean("difference", [plate, tool])
+
+    detail = str(caught.value.detail)
+    assert "bleibt nichts übrig" in detail, "der Satz sagt, was zu sehen wäre"
+    assert "Rückfallstufe" not in detail, "und nicht, woran der Kern gescheitert ist"
+    assert any(action.id == "correct_input" for action in caught.value.suggestions), (
+        "die Handlung ist nachrechnen, nicht reparieren"
+    )
