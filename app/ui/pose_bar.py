@@ -18,7 +18,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QWidget
 
 from app.i18n import tr
-from app.ui.style import NORMAL, TIGHT
+from app.ui.style import NORMAL, TIGHT, make_primary
 
 
 class PoseBar(QWidget):
@@ -52,7 +52,7 @@ class PoseBar(QWidget):
         self.remove.clicked.connect(self.lastRemoved)
 
         self.done = QPushButton(tr("Fertig"), self)
-        self.done.setDefault(True)
+        make_primary(self.done)
         self.done.clicked.connect(self.finished)
 
         self.hint = QLabel(tr("Erst das Gelenk anklicken, dann das Ende des Knochens."), self)

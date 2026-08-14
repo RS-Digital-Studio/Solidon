@@ -35,12 +35,22 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
     "repair": _("Reparatur"),
     "transform": _("Transformation"),
     "primitive": _("Grundformen"),
-    "boolean": _("Boolesch"),
+    # Nicht „Boolesch". Der Begriff ist richtig und in jedem CAD-Programm
+    # üblich — und er ist genau die Sorte Wort, an der jemand hängen bleibt,
+    # der zum ersten Mal zwei Körper zusammenfügen will. Was darunter steht,
+    # sind Vereinigen, Abziehen, Schnittmenge und Weich verschmelzen; zwei
+    # davon nennt der Titel, und die anderen beiden erklären sich, wenn man
+    # erst einmal am richtigen Menü ist.
+    "boolean": _("Verbinden und Abziehen"),
     "sketch": _("Skizze"),
     "shaping": _("Formgebung"),
     "holes": _("Bohrungen"),
     "parts": _("Bausteine"),
-    "prepare": _("Druckvorbereitung"),
+    # Nicht „Druckvorbereitung": Diese Kategorie steht als Untermenü unter der
+    # Gruppe *Vorbereiten*, und zwei Ebenen, die fast dasselbe Wort tragen,
+    # sagen zusammen weniger als eine. Der Name nennt jetzt, wofür man
+    # hierherkommt — teilen, aushöhlen, ein Maß anpassen.
+    "prepare": _("Teilen und Anpassen"),
     "import": _("Import"),
     "export": _("Export"),
     "colour": _("Farbe"),

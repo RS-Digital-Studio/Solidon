@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 import os
 import weakref
+from collections.abc import Sequence
 from typing import Any, Literal, cast
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
@@ -862,6 +863,12 @@ class Viewport(QWidget):
     Derselbe Vertrag wie beim Formen und beim Bemalen: Die Ansicht meldet
     einen Ort, das Fenster macht daraus einen Knochen, und Geometrie ändert
     einzig die Operation."""
+    splitPointRequested = Signal(object)
+    """Ein Ende der Trennlinie (§25).
+
+    Derselbe Vertrag wie beim Bemalen, beim Formen und beim Skelett: Die
+    Ansicht meldet einen Ort, das Fenster sammelt zwei davon zu einer Linie,
+    und getrennt wird einzig in der Operation (Regel 2)."""
     sculptRequested = Signal(object)
     """Eine Stelle, an der ein Pinselzug gesetzt wird (§25).
 
@@ -981,6 +988,12 @@ class Viewport(QWidget):
         self._painting = False
         self._sculpting = False
         self._boning = False
+        self._splitting = False
+        """§25: solange das an ist, setzen Klicks die Enden einer Trennlinie."""
+        self._split_actors: list[Any] = []
+        """Was von der gezeichneten Linie im Bild steht. Eine eigene Liste, weil
+        sie ein anderes Leben hat als die Körper: Ein Szenenaufbau räumt sie
+        nicht weg, ein Werkzeugwechsel schon."""
         self._brush_radius = 0.0
         """Der Pinselradius in Millimetern, solange geformt wird."""
         self._brush_actor: Any = None
@@ -2085,6 +2098,87 @@ class Viewport(QWidget):
         self._pending_point = None
         self._redraw_measurements()
 
+    def set_splitting(self, active: bool) -> None:
+        """Macht aus Klicks die Enden einer Trennlinie (§25).
+
+        Dasselbe Picking wie beim Messen; was sich ändert, ist, wer den Punkt
+        bekommt. Beim Ausschalten geht die gezeichnete Linie weg — sie ist eine
+        Vorschau und kein Dokumentzustand (Regel 2), und eine Linie, die ein
+        geschlossenes Werkzeug überlebte, wäre ein Strich ohne Knopf dazu.
+        """
+        self._splitting = active
+        if not active:
+            self.clear_split_line()
+        self._update_cursor()
+
+    def show_split_line(self, points: Sequence[Vec3]) -> None:
+        """Zeichnet, was bisher geklickt wurde.
+
+        Ein Punkt ist ein Kreuz, zwei sind eine Linie mit Kreuzen an den Enden.
+        Ohne das erste Kreuz sieht ein Klick auf ein großes Teil aus, als sei
+        nichts passiert — und der zweite Klick landet dann irgendwo, weil
+        niemand weiß, wo der erste war.
+        """
+        import numpy as np
+
+        self.clear_split_line()
+        if self.plotter is None or not points:
+            return
+
+        marks = np.asarray(points, dtype=float)
+        self._split_actors.append(
+            self.plotter.add_points(
+                marks,
+                color=SELECTED_COLOUR,
+                point_size=14,
+                render_points_as_spheres=True,
+                render=False,
+                reset_camera=False,
+            )
+        )
+        if len(points) >= 2:
+            self._split_actors.append(
+                self.plotter.add_lines(marks[:2], color=SELECTED_COLOUR, width=3, name="split:line")
+            )
+        self.plotter.render()
+
+    def clear_split_line(self) -> None:
+        """Nimmt die Vorschau wieder heraus."""
+        if self.plotter is None:
+            self._split_actors.clear()
+            return
+        for actor in self._split_actors:
+            self.plotter.remove_actor(actor, render=False)
+        self._split_actors.clear()
+        self.plotter.render()
+
+    def view_direction(self) -> Vec3:
+        """Wohin die Kamera schaut — von ihr weg auf den Brennpunkt zu.
+
+        Die Richtung, die aus einer gezeichneten Linie eine Ebene macht
+        (:func:`app.core.geom.section.plane_through`). Sie wird **einmal**
+        abgefragt, wenn die Linie fertig ist, und wandert dann als Zahl in die
+        Operation: Eine Op, die die Kamera läse, gäbe beim zweiten Auswerten
+        ein anderes Ergebnis (§11.2).
+
+        Ohne Plotter — offscreen — der Blick aus der Vorgabestellung. Eine
+        Ausnahme, die eine Rechnung überspringt, wäre ein Test, der nie etwas
+        prüft.
+        """
+        import numpy as np
+
+        if self.plotter is None:
+            return (0.0, 1.0, 0.0)
+        camera = self.plotter.camera
+        forward = np.asarray(camera.focal_point, dtype=float) - np.asarray(
+            camera.position, dtype=float
+        )
+        length = float(np.linalg.norm(forward))
+        if length <= 0.0:
+            return (0.0, 1.0, 0.0)
+        forward = forward / length
+        return (float(forward[0]), float(forward[1]), float(forward[2]))
+
     def set_boning(self, active: bool) -> None:
         """Macht aus Klicks Knochenpunkte (§25).
 
@@ -2189,6 +2283,11 @@ class Viewport(QWidget):
         Merkmal darunter. Ein Zeiger, der eine andere Reihenfolge behauptet als
         die Behandlung, lügt genau dann, wenn zwei Werkzeuge zugleich anstehen.
         """
+        if self._splitting:
+            # Das Fadenkreuz des Messens: Beide setzen einen Punkt, der eine
+            # Strecke aufspannt, und derselbe Handgriff soll denselben Zeiger
+            # haben.
+            return "measure"
         if self._boning:
             # Derselbe Zeiger wie beim Formen: Beide setzen einen Punkt auf der
             # Fläche, und ein dritter Ring wäre eine Unterscheidung ohne
@@ -2260,6 +2359,9 @@ class Viewport(QWidget):
 
     def _on_picked(self, point: Any) -> None:
         picked = (float(point[0]), float(point[1]), float(point[2]))
+        if self._splitting:
+            self.splitPointRequested.emit(picked)
+            return
         if self._boning:
             self.boneRequested.emit(picked)
             return
@@ -2323,6 +2425,15 @@ class Viewport(QWidget):
                 best_offset = offset
                 best = entry.mesh
         return best
+
+    def object_at(self, point: Vec3) -> ObjectId | None:
+        """Welcher Körper an dieser Stelle liegt.
+
+        Für Werkzeuge, die ihr Ziel aus einem Klick ableiten statt aus der
+        Auswahl — das Trennen tut das (§25). Die Ansicht weiß es ohnehin; sie
+        behielt es bisher nur für sich.
+        """
+        return self._object_at(point)
 
     def _object_at(self, point: Vec3) -> ObjectId | None:
         """Der Körper unter einem Klick, oder nichts.

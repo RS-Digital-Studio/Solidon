@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 from app.core.units import DISPLAY_UNITS
 from app.i18n import TranslatableText, _, tr
 from app.ui.labels import choice_label
-from app.ui.style import NORMAL, TIGHT
+from app.ui.style import NORMAL, TIGHT, make_primary
 
 #: Die sechs Werkzeuge in der Reihenfolge, in der man sie braucht: erst
 #: auftragen und abtragen, dann die drei, die eine Form beruhigen, zuletzt das
@@ -124,7 +124,7 @@ class SculptBar(QWidget):
         # Transaktion, die ein Undo vollständig zurücknimmt (Regel 19). Ein
         # Knopf, der dasselbe tut wie Strg+Z, wäre ein neunter.
         self.done = QPushButton(tr("Fertig"), self)
-        self.done.setDefault(True)
+        make_primary(self.done)
         self.done.clicked.connect(self.finished)
 
         layout = QHBoxLayout(self)

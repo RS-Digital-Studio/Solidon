@@ -390,7 +390,11 @@ class DecimateParams(BaseParams):
 
 @register_op(
     name="decimate_mesh",
-    title=_("Dezimieren"),
+    # Nicht „Dezimieren". Das Wort ist der Fachbegriff und steht so in jedem
+    # Netzwerkzeug — es sagt nur niemandem, der zum ersten Mal ein zu großes
+    # Netz vor sich hat, worum es geht. Der Bezeichner bleibt, was er war;
+    # geändert ist die Zeile im Menü.
+    title=_("Dreiecke verringern"),
     category="mesh",
     params=DecimateParams,
     consumes=1,

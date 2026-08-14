@@ -91,6 +91,15 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M13.5 10.5 10.5 13.5" />'
         '<path d="M13.5 10.5h-3v3" />'
     ),
+    # Trennen: ein Körper, durch den eine gezeichnete Linie schräg hindurchgeht,
+    # und die beiden Hälften stehen schon auseinander. Schräg mit Absicht — das
+    # ist der Unterschied zum Schnittwerkzeug daneben, dessen Linie waagerecht
+    # liegt; zwei Zeichen mit derselben Geste wären eines zu viel.
+    "split": (
+        '<path d="M4.5 10.5 10.5 4.5h5.5l-6 6z" />'
+        '<path d="M8 19.5l6-6h5.5l-6 6z" />'
+        '<path d="M3 18 21 6" stroke-dasharray="3 2.5" />'
+    ),
     # Die Schweregrade des Prüfberichts. Hier ist Ikonografie ausnahmsweise
     # etabliert: Dreieck warnt, Kreis erklärt, Achteck hält an — die Form trägt
     # allein, auch wo die Farbe wegfällt (Regel 18).

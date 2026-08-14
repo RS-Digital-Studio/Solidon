@@ -56,7 +56,7 @@ from app.core.ingest.fetch import ALLOWED_SUFFIXES, suffix_of
 from app.core.ingest.outline import OUTLINE_SUFFIXES
 from app.i18n import tr
 from app.ui.icons import icon
-from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, set_level
+from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
 from app.ui.theme import THEMES
 
 #: Wie breit die Spalte höchstens wird. Darüber hinaus wächst nur der Rand:
@@ -397,7 +397,7 @@ class StartScreen(QWidget):
         # gewöhnlicher Größe nebeneinander und sagten nicht, welcher gemeint
         # ist, wenn man nichts Bestimmtes vorhat.
         self.new_button = QPushButton(tr("Neues Projekt"), self)
-        self.new_button.setDefault(True)
+        make_primary(self.new_button)
         self.new_button.clicked.connect(self.newRequested)
         self.open_button = QPushButton(tr("Projekt öffnen …"), self)
         self.open_button.clicked.connect(self.browseRequested)

@@ -31,6 +31,7 @@ from app.core.export import threemf
 from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
+from app.core.geom.section import SectionPlane
 from app.core.ingest.outline import is_outline
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
@@ -58,7 +59,7 @@ from app.core.scene.project import (
     save,
     write_autosave,
 )
-from app.core.split import SplitApplied, apply_planned, apply_split, plan_split
+from app.core.split import SplitApplied, apply_line_split, apply_planned, apply_split, plan_split
 from app.core.types import (
     Finding,
     Fit,
@@ -765,6 +766,21 @@ class Session(QObject):
             self._dirty = True
             self.projectChanged.emit()
             self.evaluate_async()
+        return applied
+
+    def split_along(self, object_id: str, plane: SectionPlane, *, pins: int) -> SplitApplied:
+        """§25: an einer gezeichneten Ebene trennen — als Ablauf, damit die
+        Passung mitkommt (§14).
+
+        Dieselbe Bauart wie *Deckel erzeugen* daneben und aus demselben Grund:
+        Die Operation allein macht die zwei Hälften. Erst der Ablauf trägt das
+        Paar aus Stift und Bohrung ins Dokument ein, und daran hängen im
+        Slicer die Werte, die über eine Passung entscheiden.
+        """
+        applied = apply_line_split(self.project.document, object_id, plane, self.profile, pins=pins)
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
         return applied
 
     def create_lid(self, object_id: str, params: dict[str, Any]) -> LidApplied:

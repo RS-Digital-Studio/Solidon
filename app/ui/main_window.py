@@ -97,6 +97,7 @@ from app.core.geom.sculpt import (
     stroke_at,
     strokes_to_text,
 )
+from app.core.geom.section import plane_through
 from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.knowledge import calibration, print_settings, profiles
 from app.core.knowledge.parts.ops import op_name as part_op_name
@@ -132,6 +133,7 @@ from app.core.types import (
     SliceResult,
     SourceOrigin,
     Stroke,
+    Vec3,
 )
 from app.i18n import _, tr
 from app.ui import first_run
@@ -186,8 +188,9 @@ from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.shortcut_schemes import shortcut_for
 from app.ui.sketch_editor import SketchPanel, Surroundings
+from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
-from app.ui.style import NORMAL, TIGHT
+from app.ui.style import NORMAL, TIGHT, make_primary
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
 from app.ui.tour import TourPanel
@@ -694,6 +697,19 @@ class MainWindow(QMainWindow):
         self.paint_bar = PaintBar(self)
         self.paint_bar.paintingToggled.connect(self.viewport.set_painting)
         self.viewport.paintRequested.connect(self._on_paint)
+        self.split_bar = SplitBar(self)
+        self.split_bar.applyRequested.connect(self._apply_split_line)
+        self.split_bar.clearRequested.connect(self._clear_split_line)
+        self.viewport.splitPointRequested.connect(self._on_split_point)
+        self._split_points: list[Vec3] = []
+        """Die Enden der gezeichneten Trennlinie, in Weltkoordinaten. Eine
+        Vorschau, kein Dokumentzustand (Regel 2) — die Operation bekommt die
+        Ebene, die daraus folgt."""
+        self._split_target: ObjectId | None = None
+        """Der Körper, auf den der erste Klick fiel. Aus dem Klick und nicht
+        aus der Auswahl: Wer auf ein Teil zeigt, meint dieses Teil, und ein
+        Werkzeug, das stattdessen das zuletzt Ausgewählte nimmt, trennt das
+        falsche."""
 
         # §2.4: eine Zeile Umschalter statt sieben Dauerleisten. Wie ein
         # Werkzeug beim Schließen zurückgenommen wird, steht hier und nicht in
@@ -764,6 +780,24 @@ class MainWindow(QMainWindow):
             hint=tr(
                 "Regler schiebt die Teile auseinander. Nur die Ansicht — was "
                 "exportiert wird, bleibt, wo es ist."
+            ),
+        )
+        # Trennen ist das zweite Werkzeug, das das Modell ändert und nicht nur
+        # die Ansicht — aus demselben Grund wie das Bemalen daneben: Es ist der
+        # Handgriff, den ein Anfänger als Erstes braucht, sobald ein Teil nicht
+        # auf die Platte passt, und ein Menüweg dahin wäre einer zu viel. Was
+        # das Schließen zurücknimmt, ist die gezeichnete Linie; ein getrenntes
+        # Teil bleibt getrennt und geht über Strg+Z zurück.
+        self.tools.add(
+            "split",
+            tr("Trennen"),
+            self.split_bar,
+            self._end_split,
+            symbol="split",
+            hint=tr(
+                "Zwei Punkte auf dem Teil anklicken — dazwischen wird getrennt, "
+                "gerade in den Bildschirm hinein. Die Hälften bekommen Stifte zum "
+                "Zusammenstecken, wenn der Haken steht."
             ),
         )
         # Bemalen ändert Materialslots und nicht bloß die Ansicht: das Schließen
@@ -853,7 +887,7 @@ class MainWindow(QMainWindow):
         Sitzung als *eine* Transaktion, wenn sie fertig ist (Regel 16)."""
 
         done = QPushButton(tr("Fertig"), self.sketch_bar)
-        done.setDefault(True)
+        make_primary(done)
         done.clicked.connect(lambda: self.finish_sketch(keep=True))
         discard = QPushButton(tr("Verwerfen"), self.sketch_bar)
         discard.clicked.connect(lambda: self.finish_sketch(keep=False))
@@ -928,6 +962,10 @@ class MainWindow(QMainWindow):
         # dem Umschalter, der die Leiste öffnet. Geschlossen wird über den
         # ``reset`` des Werkzeugs.
         self.tools.toolChanged.connect(lambda key: self.layer_bar.set_active(key == "layers"))
+        # Dasselbe für das Trennen: Der Umschalter macht aus Klicks Punkte der
+        # Trennlinie. An der Leiste vorbei gäbe es zwei Stellen, die denselben
+        # Zustand steuern — und die gewinnen abwechselnd.
+        self.tools.toolChanged.connect(lambda key: self.viewport.set_splitting(key == "split"))
         # Dasselbe für Befunde, die nach der Auswertung nachkommen: die Liste
         # meldet ihr Wachstum, weil ein QListWidget es nicht von selbst tut.
         self.report.contentGrew.connect(self.overlay.reflow)
@@ -1147,16 +1185,6 @@ class MainWindow(QMainWindow):
             self.action_add_parameter,
             tr("Ein Maß benennen, auf das Operationen und Skizzen mit @name verweisen können."),
         )
-        self.auto_split_action = self._add_action(
-            edit_menu,
-            tr("Automatisch teilen …"),
-            None,
-            self.action_auto_split,
-            tr(
-                "Ein zu großes Teil zerschneiden, bis jedes Stück auf die Platte passt — "
-                "mit Passstiften in jeder Schnittfläche."
-            ),
-        )
         self._add_action(
             edit_menu,
             tr("Material kalibrieren …"),
@@ -1199,11 +1227,13 @@ class MainWindow(QMainWindow):
         # Beschreibung der Operation und steht deshalb an beiden Stellen: in der
         # Statusleiste beim Durchgehen und als Tooltip beim Zögern.
         sections = {section.category: section for section in menu_tree()}
+        groups: dict[str, QMenu] = {}
         for title, categories in MENU_GROUPS:
             present = [sections[name] for name in categories if name in sections]
             if not present:
                 continue
             group = self._menu(str(title))
+            groups[str(title)] = group
             self._workspace_menus.append(group)
             for section in present:
                 # Eine Gruppe aus einer Kategorie braucht kein Untermenü — es
@@ -1228,6 +1258,28 @@ class MainWindow(QMainWindow):
                         continue
                     place = self._subgroup_for(spec, target, subgroups)
                     self._op_actions[spec.name] = self._operation_action(place, spec)
+
+        # *Automatisch teilen* ist kein Registereintrag, sondern ein Ablauf über
+        # mehreren Operationen — und stand deshalb unter *Bearbeiten*, zwei
+        # Menüs entfernt von den drei anderen Wegen, ein Teil zu trennen. Wer
+        # ein zu großes Teil vor sich hat, sucht nicht nach der Bauart einer
+        # Funktion, sondern nach dem Wort „teilen"; die vier stehen jetzt
+        # beieinander. Fällt die Gruppe weg, weil keine Vorbereiten-Operation
+        # registriert ist, bleibt *Bearbeiten* der Platz — ein Eintrag darf
+        # umziehen, nicht verschwinden.
+        prepare_menu = groups.get(str(_("Vorbereiten")), edit_menu)
+        if prepare_menu is not edit_menu:
+            prepare_menu.addSeparator()
+        self.auto_split_action = self._add_action(
+            prepare_menu,
+            tr("Automatisch teilen …"),
+            None,
+            self.action_auto_split,
+            tr(
+                "Ein zu großes Teil zerschneiden, bis jedes Stück auf die Platte passt — "
+                "mit Passstiften in jeder Schnittfläche."
+            ),
+        )
 
         # Was das Register kennt und diese Tabelle nicht, bekommt sein eigenes
         # Menü: eine neue Kategorie soll auftauchen, nicht verschwinden.
@@ -3682,6 +3734,79 @@ class MainWindow(QMainWindow):
             [OperationDraft(op="paint_slot", inputs=(object_id,), params=params)],
         )
 
+    # --- Trennen entlang einer gezeichneten Linie (§25) --------------------------
+
+    def _on_split_point(self, point: Any) -> None:
+        """Ein Klick setzt ein Ende der Trennlinie; zwei machen sie fertig.
+
+        Der dritte Klick fängt von vorn an, statt nichts zu tun oder eine
+        dritte Ecke anzulegen: Wer nach zwei Punkten noch einmal klickt, hat
+        sich vertan — und einen Knopf dafür zu suchen wäre der Umweg, den
+        dieses Werkzeug gerade abschaffen soll.
+        """
+        picked = (float(point[0]), float(point[1]), float(point[2]))
+        if len(self._split_points) >= POINTS_NEEDED:
+            self._split_points = []
+        if not self._split_points:
+            target = self.viewport.object_at(picked)
+            if target is None:
+                # Daneben geklickt. Die alte Linie muss dabei weg — sie stand
+                # sonst weiter im Bild, der Knopf blieb bedienbar, und was er
+                # dann täte, wäre nichts: der Körper unter ihr ist keiner mehr,
+                # den dieser Klick meint.
+                self._clear_split_line()
+                self.announce(tr("Bitte auf das Teil klicken, das getrennt werden soll."))
+                return
+            self._split_target = target
+        self._split_points.append(picked)
+        self.viewport.show_split_line(self._split_points)
+        self.split_bar.show_points(len(self._split_points))
+
+    def _clear_split_line(self) -> None:
+        """Die gezeichnete Linie verwerfen — kein Undo nötig, es war nie eine
+        Änderung."""
+        self._split_points = []
+        self._split_target = None
+        self.viewport.clear_split_line()
+        self.split_bar.show_points(0)
+
+    def _end_split(self) -> None:
+        """Was das Schließen des Werkzeugs zurücknimmt."""
+        self.viewport.set_splitting(False)
+        self._clear_split_line()
+        self.split_bar.reset()
+
+    def _apply_split_line(self) -> None:
+        """§25: aus zwei Punkten und der Blickrichtung wird eine Ebene, aus der
+        Ebene eine Transaktion.
+
+        Die Blickrichtung wird **hier** abgefragt und nicht in der Operation:
+        Eine Op, die die Kamera läse, gäbe beim zweiten Auswerten ein anderes
+        Ergebnis (§11.2). Was in den Stapel geht, sind Zahlen.
+        """
+        if len(self._split_points) < POINTS_NEEDED or self._split_target is None:
+            return
+
+        first, second = self._split_points[0], self._split_points[1]
+        plane = plane_through(first, second, self.viewport.view_direction())
+        if plane is None:
+            # Zwei Punkte genau hintereinander sehen im Bild aus wie einer.
+            # Raten wäre hier eine Ebene, die niemand gezeigt hat (Regel 21).
+            self.announce(
+                tr("Die zwei Punkte liegen hintereinander — bitte quer über das Teil zeichnen.")
+            )
+            return
+
+        pins = int(self.split_bar.values()["pins"])
+        applied = self.session.split_along(self._split_target, plane, pins=pins)
+        self.report.add_findings(applied.findings)
+        self._clear_split_line()
+        self.announce(
+            tr("Getrennt — die Hälften stehen im Objektbaum.")
+            if not pins
+            else tr("Getrennt und zum Zusammenstecken vorbereitet.")
+        )
+
     # --- Sichtbarkeit (§18.8) ---------------------------------------------------
 
     def _on_visibility(self, objects: Any, visible: bool) -> None:
@@ -4401,6 +4526,14 @@ class MainWindow(QMainWindow):
             self._focus_report()
 
     def _on_project(self) -> None:
+        # Eine gezeichnete Trennlinie liegt auf einem Körper, den es nach einer
+        # Änderung am Dokument so nicht mehr geben muss — ein neues Projekt,
+        # ein Undo, eine Operation von woanders. Sie stehen zu lassen hieße,
+        # auf zwei Punkte im Leeren zu zeigen; und das Ziel der Linie wäre nach
+        # dem Öffnen einer anderen Datei eine Kennung, die dort etwas anderes
+        # bezeichnet.
+        if self._split_points:
+            self._clear_split_line()
         document = self.session.project.document
         self.parameters.show_document(document)
         self.history_panel.show_document(document, undone=self.session.history.undone)

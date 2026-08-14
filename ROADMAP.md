@@ -41,6 +41,11 @@ bekommt einen roten Lauf.
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Die Wegekarten am Browser nachmessen | Die Konzepte gegen den Code gehalten (14.08.2026) | einen Browser, der JavaScript ausführt |
 | Spur A und B getrennt weiterverfolgen | Die Konzepte gegen den Code gehalten (14.08.2026) | für A einen Reproduzierer, der kürzer ist als ein Volllauf |
+| Drei Menüeinträge für einen Schnitt | Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026) | `MENU_TWINS` von seiner B-Rep-Beschriftung zu trennen |
+| Schwalbenschwanz und Schnapper | Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026) | nichts — eine Erweiterung des Verbinder-Parameters |
+| Passungspaar ohne Stifte | Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026) | eine Stelle, an der schon bekannt ist, was die Auswertung gemacht hat |
+| Die Hälften heißen „A" und „B" | Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026) | eine Umbenennung mit Folgen für Beispielprojekte und Tour |
+| Sechs Kürzel auf 84 Operationen | Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026) | eine Vergabe in einem Zug, nicht acht Einzelfälle |
 
 ---
 
@@ -5273,3 +5278,80 @@ sagte damit nichts.
       *vor* `test_sketch_editor.py`, und welche davon zählen, ist ungemessen.
       Was für beide nicht mehr gilt: die Erklärung „diese Maschine rechnet
       sporadisch falsch". Dreimal derselbe Test ist kein Rauschen.
+
+## Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026)
+
+Eine vollständige Durchsicht mit einer Frage: Wer das Programm zum ersten Mal
+öffnet und ein Teil trennen will, kommt der an? Der lange Bericht steht in
+`konzept-durchsicht-2026-08-14.md`; hier die Arbeitsliste.
+
+Vorweg das, was die Recherche über solche Programme sagt, weil es die
+Reihenfolge bestimmt hat: **Gelobt wird Einfachheit und sonst nichts**
+(Tinkercad wird für seine Oberfläche gelobt und für seinen Umfang kritisiert,
+Fusion 360 andersherum). **Gefordert wird das Trennen mit Verbindern** — Cut
+Tool mit Plug, Dowel und Snap ist in Bambu Studio, OrcaSlicer, Creality Print
+und PrusaSlicer Standard, und diskutiert wird dort nur noch die Dübelform.
+Solidon hatte drei Wege zu teilen und keinen, der über das Bild ging.
+
+### Gebaut
+
+- [x] **`split_line` — an einer gezeichneten Linie trennen.** Zwei Klicks auf
+      das Teil, die Blickrichtung dazu, fertig ist die Ebene. Achter
+      Umschalter in der Werkzeugzeile (`SplitBar`), Verbindung vorgewählt,
+      eine Transaktion, ein Undo, und je Stift ein Passungspaar (§14). Die
+      Kamera steht nicht im Stapel: Die Blickrichtung wird einmal gelesen,
+      und was in die Operation geht, sind Zahlen — sonst gäbe dieselbe Datei
+      nach einem Schwenk ein anderes Teil (§11.2).
+- [x] **Die Verstiftung kann jetzt schiefe Ebenen.** Das war der eigentliche
+      Aufwand. `plan_pins` und `add_pins` rechneten mit einem Achsenbuchstaben,
+      weil Auto Split nur achsparallele Ebenen legt; auf einer 45-Grad-Fläche
+      steht ein so aufgestellter Stift schief in seiner eigenen Bohrung.
+      Beide nehmen jetzt eine `SectionPlane`, gedreht wird mit derselben
+      Matrix wie der Schnitt, nur invertiert. Drei Sonderfälle für drei Achsen
+      sind dabei weggefallen, statt einen vierten zu bekommen — `upright_normal`
+      hat die Eigenschaft, die alles trägt: die dritte Koordinate des gedrehten
+      Punktes *ist* der Ebenenabstand, ohne Umrechnung.
+- [x] **Auf dem Hauptknopf stand „etzt trenne".** Ein Fehler, der das ganze
+      Programm betrifft und den man nur im Bild sieht: Das Stylesheet zeichnet
+      `QPushButton:default` halbfett, Qt rechnet die bevorzugte Breite aus der
+      normalen Schrift. „Jetzt trennen" sind 77 gegen 89 Bildpunkte, der Knopf
+      bekam 104 — in einem Dialog fällt das nie auf, in einer engen Leiste
+      immer. `style.make_primary()` setzt jetzt beides; alle sieben Hauptknöpfe
+      gehen darüber, ein Test misst gegen die Schrift, mit der gezeichnet wird,
+      ein zweiter verbietet `setDefault(True)` außerhalb von `style.py`.
+- [x] **Vier Wörter, an denen ein Anfänger hängen bleibt.** *Boolesch* →
+      **Verbinden und Abziehen**; *Druckvorbereitung* → **Teilen und Anpassen**
+      (es stand als Untermenü unter *Vorbereiten*, zwei Ebenen mit fast
+      demselben Wort); *Dezimieren* → **Dreiecke verringern**; *Muster* →
+      **Kopien in Reihe oder Kreis** (*Textur aufbringen* hat einen Parameter
+      „Muster", und der meint Rändel und Wabe). Bezeichner unverändert, fünf
+      Kataloge nachgezogen, Handbuch neu erzeugt.
+- [x] **„Automatisch teilen …" ist umgezogen**, von *Bearbeiten* nach
+      *Vorbereiten*. Es stand dort, weil es technisch kein Registereintrag ist
+      — eine Einteilung nach der Bauart der Funktion, nicht danach, wonach
+      jemand sucht. Die vier Wege zu trennen stehen jetzt beieinander.
+
+### Offen, mit Grund
+
+- [ ] **Drei Menüeinträge für einen Schnitt.** *An Ebene teilen* ist *Teilen
+      und verstiften* mit `pins = 0`. Das Werkzeug zum Zusammenlegen gibt es
+      (`MENU_TWINS`), nur ist es fest auf B-Rep verdrahtet: Es hängt an jeden
+      Zwilling einen Haken „Exakter Körper (B-Rep)", und `menu_path` schreibt
+      „(Umschalter „Exakt")" hinter den Weg. Für dieses Paar wäre beides
+      gelogen. Der saubere Weg ist, `MENU_TWINS` von seiner Beschriftung zu
+      trennen — eigene Änderung, eigener Test.
+- [ ] **Schwalbenschwanz und Schnapper.** Die Slicer bieten drei
+      Verbinderformen, hier ist eine umgesetzt — die, die als einzige beiden
+      Hälften eine ebene Auflage lässt. Die anderen sind eine Erweiterung des
+      Parameters, keine zweite Operation.
+- [ ] **Ein Passungspaar entsteht auch dann, wenn die Schnittfläche für Stifte
+      zu klein war.** `plan_pins` meldet das sauber und setzt keine Stifte; das
+      Dokument bekommt trotzdem seine `Fit`-Einträge, weil an dieser Stelle
+      noch niemand weiß, was die Auswertung daraus macht. Bestand seit Auto
+      Split und ist jetzt an zwei Stellen — zusammen zu beheben.
+- [ ] **Die Hälften heißen „A" und „B".** Nach dem Verstiften trägt die eine
+      die Stifte und die andere die Löcher; das zu benennen hülfe beim
+      Zusammenbau. Betrifft `split_pinned`, Auto Split, eingecheckte
+      Beispielprojekte und die Tour.
+- [ ] **Sechs Kürzel auf 84 Operationen.** Unverändert offen, und weiter aus
+      demselben Grund: Kürzel vergibt man einmal und vollständig.

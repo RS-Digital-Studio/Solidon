@@ -27,7 +27,8 @@ einen einzelnen Fehler benennen kann.
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
 from app.ui.theme import THEMES, Theme
 
@@ -74,6 +75,30 @@ def set_level(widget: QWidget, level: str) -> None:
     """
     widget.setProperty("level", level)
     _repolish(widget)
+
+
+def make_primary(button: QPushButton) -> QPushButton:
+    """Macht einen Knopf zum Hauptknopf — und breit genug für seine eigene
+    Beschriftung.
+
+    ``setDefault(True)`` allein genügt nicht, und das ist der Fehler, den man
+    erst im Bild sieht: Das Stylesheet setzt für ``QPushButton:default`` ein
+    ``font-weight: 600``, gezeichnet wird also halbfett. Qt rechnet die
+    bevorzugte Breite aber aus der **normalen** Schrift des Widgets — bei
+    „Jetzt trennen" sind das 77 gegen 89 Bildpunkte. Wo ein Layout dem Knopf
+    genau seine bevorzugte Breite gibt, und in einer engen Leiste tut es das,
+    stand auf dem Hauptknopf „etzt trenne".
+
+    Die Schrift hier am Widget zu setzen behebt beides an einer Stelle: Die
+    Zeichnung bleibt, wie sie war, und die Breitenrechnung kennt sie jetzt.
+    Fett bleibt dabei die zweite Kodierung neben der Akzentfarbe (Regel 18) —
+    sie zu streichen wäre die andere Möglichkeit gewesen und die schlechtere.
+    """
+    button.setDefault(True)
+    font = button.font()
+    font.setWeight(QFont.Weight.DemiBold)
+    button.setFont(font)
+    return button
 
 
 def _repolish(widget: QWidget) -> None:

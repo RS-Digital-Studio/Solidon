@@ -228,3 +228,56 @@ def test_a_step_that_does_not_fit_ends_in_an_ellipsis(qt_app: object) -> None:
 
     label.set_wrapped(True)
     assert label.text() == long, "umgebrochen steht er wieder ganz da"
+
+
+# --- der Hauptknopf --------------------------------------------------------------
+
+
+def test_a_primary_button_is_wide_enough_for_its_own_bold_label(qt_app: object) -> None:
+    """Der Fehler, den man erst im Bild sieht.
+
+    Das Stylesheet zeichnet ``QPushButton:default`` halbfett, Qt rechnet die
+    bevorzugte Breite aber aus der normalen Schrift des Widgets. Wo ein Layout
+    dem Knopf genau diese Breite gibt — in einer engen Leiste tut es das —,
+    stand auf dem Hauptknopf des Trennwerkzeugs „etzt trenne": vorn und hinten
+    ein Buchstabe abgeschnitten.
+
+    Gemessen wird gegen die Schrift, mit der wirklich gezeichnet wird, plus
+    den Innenabstand aus dem Stylesheet. Ein Knopf, der ``setDefault(True)``
+    ohne :func:`make_primary` bekommt, fällt hier durch.
+    """
+    from PySide6.QtGui import QFontMetrics
+    from PySide6.QtWidgets import QPushButton
+
+    from app.ui.style import make_primary
+
+    for text in ("Jetzt trennen", "Neues Projekt", "Slicen", "Fertig", "Weiter"):
+        button = make_primary(QPushButton(text))
+        drawn = QFontMetrics(button.font()).horizontalAdvance(text)
+
+        assert button.sizeHint().width() >= drawn + 2 * ROOMY, (
+            f"{text!r} bekommt {button.sizeHint().width()} Bildpunkte und braucht "
+            f"{drawn + 2 * ROOMY} — die Beschriftung wird abgeschnitten."
+        )
+
+
+def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: object) -> None:
+    """``setDefault(True)`` allein genügt nicht mehr, und das darf niemand
+    wieder vergessen.
+
+    Geprüft wird am Quelltext und nicht am gebauten Fenster: Die sieben
+    Hauptknöpfe leben in sieben Dateien, und sechs davon brauchen einen
+    Dialog, um überhaupt zu entstehen.
+    """
+    offenders = [
+        path.name
+        for path in sorted(UI.glob("*.py"))
+        # ``style.py`` selbst ist die eine Stelle, an der der Aufruf stehen
+        # darf — dort steht er in ``make_primary``.
+        if path.name != "style.py" and "setDefault(True)" in path.read_text(encoding="utf-8")
+    ]
+
+    assert not offenders, (
+        f"Diese Dateien setzen den Hauptknopf noch von Hand: {offenders}. "
+        "make_primary() setzt zugleich die Schrift, aus der die Breite folgt."
+    )

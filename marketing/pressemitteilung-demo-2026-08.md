@@ -95,7 +95,7 @@ erscheint Solidon3D als Einmalkauf zu 49 Euro (Einführungspreis, alle
 | Demo | 20.08.–30.10.2026, kostenlos, vollständig, ohne Konto |
 | Plattformen | Windows 10/11, macOS, Linux |
 | Sprachen | Deutsch, Englisch, Spanisch, Französisch, Italienisch, Portugiesisch |
-| Umfang | 83 Arbeitsschritte, 16 geprüfte Bausteine, 40 Normteilmaße, 16 Druckerprofile, 9 Beispielprojekte |
+| Umfang | 84 Arbeitsschritte, 16 geprüfte Bausteine, 40 Normteilmaße, 16 Druckerprofile, 9 Beispielprojekte |
 | Formate | liest STL, 3MF, OBJ, GLB/GLTF, PLY, OFF, STEP, SVG, DXF — schreibt STL, 3MF, OBJ, PLY, GLB, STEP |
 | Slicer-Übergabe | PrusaSlicer, OrcaSlicer, Cura — mit fertigem Profil, und die entstandene Druckdatei wird zur Gegenprobe zurückgelesen |
 | KI | auf dem eigenen Rechner oder über einen selbst hinterlegten Zugang; von außen ansteuerbar, standardmäßig abgeschaltet |

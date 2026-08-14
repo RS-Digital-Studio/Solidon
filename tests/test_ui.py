@@ -834,7 +834,7 @@ def test_every_tool_button_carries_a_label(qt_app: QApplication) -> None:
 
     titles = window.tools.tool_titles()
 
-    assert len(titles) == 7
+    assert len(titles) == 8
     for key, title in titles.items():
         assert title.strip(), key
 

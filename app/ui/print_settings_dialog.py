@@ -72,6 +72,7 @@ from app.ui.dialogs import show_error
 from app.ui.labels import by_title, colour_name
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from app.ui.style import make_primary
 
 _log = get_logger(__name__)
 
@@ -1247,7 +1248,7 @@ class PrintSettingsDialog(QDialog):
         if close is not None:
             close.setText(tr("Schließen"))
         self.slice_button = QPushButton(tr("Slicen"), self)
-        self.slice_button.setDefault(True)
+        make_primary(self.slice_button)
         self.slice_button.clicked.connect(self._slice)
         buttons.addButton(self.slice_button, QDialogButtonBox.ButtonRole.ActionRole)
         self.save_button = QPushButton(tr("Druckdatei speichern …"), self)

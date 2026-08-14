@@ -220,7 +220,11 @@ class PatternParams(BaseParams):
 
 @register_op(
     name="pattern",
-    title=_("Muster"),
+    # Nicht „Muster": Das Wort heißt in dieser Anwendung schon etwas anderes —
+    # *Textur aufbringen* hat einen Parameter „Muster", und der meint Rändel
+    # und Wabe. Ein Menüeintrag und ein Feld mit demselben Wort für zwei
+    # verschiedene Sachen sind eine Verwechslung, auf die man wartet.
+    title=_("Kopien in Reihe oder Kreis"),
     category="transform",
     params=PatternParams,
     consumes=1,

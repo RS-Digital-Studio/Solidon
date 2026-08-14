@@ -46,6 +46,24 @@ passen — driftet beides, wird `tests/test_tour.py` rot.
 **Keine Betriebsarten.** Kein Umschalten zwischen „Bearbeiten" und
 „Konstruieren" — es gibt einen Zustand, und der ist die Szene.
 
+## Der Hauptknopf
+
+**Ein Hauptknopf entsteht über `style.make_primary()`, nie über
+`setDefault(True)`.** Das Stylesheet zeichnet `QPushButton:default` halbfett;
+Qt rechnet die bevorzugte Breite aus der **normalen** Schrift des Widgets. Wo
+ein Layout dem Knopf genau diese Breite gibt — in einer engen Leiste tut es
+das —, wird die Beschriftung abgeschnitten: Auf dem Hauptknopf des
+Trennwerkzeugs stand „etzt trenne", 89 Bildpunkte Text in 104 minus
+Innenabstand. `make_primary` setzt die Schrift am Widget, damit die Rechnung
+sie kennt; das Fett bleibt, denn es ist neben der Akzentfarbe die zweite
+Kodierung (Regel 18). `tests/test_style.py` misst gegen die Schrift, mit der
+wirklich gezeichnet wird, und verbietet `setDefault(True)` außerhalb von
+`style.py`.
+
+**Und er heißt nicht wie sein Werkzeug.** Der Umschalter der Werkzeugzeile
+nennt das Werkzeug, der Knopf darin seine Handlung — „Trennen" oben, „Jetzt
+trennen" unten. `tests/test_interface_limits.py` hält das fest.
+
 ## Gestufte Tiefe
 
 Jeder Dialog hat eine kurze Vorderseite und einen aufklappbaren Bereich
@@ -64,11 +82,13 @@ gerissen werden:
 |---|---|
 | Menüs in der Leiste | ≤ 9 |
 | Zeilen in einem Menü (ein Untermenü zählt als eine) | ≤ 12 |
-| Umschalter in der Werkzeugzeile | ≤ 8 |
+| Umschalter in der Werkzeugzeile | ≤ 8 — **erreicht**: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Trennen, Bemalen |
 | Felder auf der Vorderseite eines Operationsdialogs | ≤ 8 |
 | Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben als Umschalter im Dialog ihres Partners, erreichbar über Palette und Verlauf |
 
 Wer eine Zahl erhöhen will, tut das mit Absicht und begründet es im Commit.
+Die Werkzeugzeile ist voll: Ein neuntes Werkzeug heißt, dass eines der acht
+kein Werkzeug mehr ist.
 
 **Eine Operation je Handlung, nicht je Variante.** Neun Texturmuster sind ein
 Menüeintrag mit einem Auswahlparameter, nicht neun Einträge. Rechteck aus zwei
@@ -91,7 +111,7 @@ bekommt:
 
 | Weg | Ort an der Oberfläche |
 |---|---|
-| Weg 1 — fremdes Modell anpassen | Kontextmenü am Merkmal, Vorschlag im Prüfbericht |
+| Weg 1 — fremdes Modell anpassen | Kontextmenü am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Trennen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
 | Weg 2 — neu konstruieren | Werkzeugzeile („Zeichnen": erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig"), Menü *Erzeugen* / *Ändern* |
 | Weg 3 — generieren | Chat und Generierungsdialog |
 | Weg 4 — organisch formen | Werkzeugzeile (*Formen*, *Skelett*), Menü *Ändern* |

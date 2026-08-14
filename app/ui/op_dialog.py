@@ -44,7 +44,7 @@ from app.core.scene import expressions
 from app.core.types import ParamSpec
 from app.i18n import tr
 from app.ui.labels import choice_label
-from app.ui.style import TIGHT, set_level
+from app.ui.style import TIGHT, make_primary, set_level
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
 #: von 0,075 mm wurde bei zwei Nachkommastellen beim Öffnen des Dialogs zu 0,08
@@ -668,7 +668,7 @@ class SketchUseDialog(QDialog):
 
         buttons = QDialogButtonBox(self)
         use = buttons.addButton(tr("Weiter"), QDialogButtonBox.ButtonRole.AcceptRole)
-        use.setDefault(True)
+        make_primary(use)
         # Kein „Abbrechen", das Arbeit vernichtet: der Weg zurück führt in
         # den Skizzenmodus, die Zeichnung bleibt (§2.1, keine Sackgassen).
         buttons.addButton(tr("Zurück zum Zeichnen"), QDialogButtonBox.ButtonRole.RejectRole)
