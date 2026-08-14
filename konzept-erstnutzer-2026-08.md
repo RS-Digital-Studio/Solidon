@@ -1,6 +1,6 @@
 # Konzept — Solidon3D mit den Augen eines Anfängers
 
-Aus acht Bedienläufen am echten Programm, 13. August 2026, im Vollbild
+Aus dreizehn Bedienläufen am echten Programm, 13. und 14. August 2026, im Vollbild
 (2560 × 1369 px), plus vier Läufen über die Website im installierten
 QtWebEngine. Gestartet über `build_application`, bedient über den
 Qt-Ereignisweg — dieselben Wege, die eine Maus nimmt. Alles unten ist gemessen
@@ -282,26 +282,229 @@ Interessent hat.
 
 **4.7 `FirstRunDialog` trägt einen englischen Docstring** („One page, four
 questions, everything skippable.", `first_run.py:96`) in einer Datei, deren
-übrige Kommentare deutsch sind.
+übrige Kommentare deutsch sind. Es ist nicht der einzige — die vollständige
+Zählung steht in [Teil 6](#teil-6--was-die-zweite-runde-fand).
+
+---
+
+## Teil 5 — Was die zweite Runde fand
+
+Fünf weitere Läufe, 14. August 2026, an denselben Wegen entlang, aber tiefer:
+die Werkzeuge der unteren Leiste einzeln eingeschaltet, alle sieben
+Analysekarten, der Weg zum Drucker, die Fehlerpfade, die Tastatur allein und
+die Anwendung auf Englisch.
+
+### 5.1 „Die Kette hält an — siehe Prüfbericht", und der Bericht bleibt zu
+
+Eine Bohrung von 200 mm Durchmesser in eine 80 × 50-Platte. Das ist Unsinn,
+und das Programm behandelt ihn richtig: die Kette hält an, der letzte gültige
+Stand bleibt im Bild, der Verlauf markiert den Schritt mit „**!** Bohrung zu
+gross", die Statusleiste sagt „Die Kette hält an — siehe Prüfbericht."
+
+Der Prüfbericht ist in diesem Moment nicht offen. Rechts steht die Tour, und
+sie bleibt stehen: `_focus_report` (`main_window.py:4675`) kehrt bei aktiver
+Tour ohne Wechsel zurück.
+
+```python
+if self.right.currentWidget() is self.tour and self.tour.active:
+    # Die Tour zeigt selbst auf den Prüfbericht, wenn er dran ist —
+    # ein Reiterwechsel unter der Anleitung weg wäre ihr Ende.
+    return
+```
+
+Für eine Warnung im normalen Ablauf ist das die richtige Entscheidung. Für
+einen Kettenabbruch nicht: Hier verweist die Anwendung im selben Atemzug
+ausdrücklich auf ein Fenster, das sie selbst geschlossen hält — und der Reiter
+trägt weiterhin keinen Zähler (Befund 2.4).
+
+Beleg: `B-bohrung-zu-gross.png`.
+
+### 5.2 Der Fehlertext am Ende der Rückfallkette sagt dem Anfänger nichts
+
+Derselbe Fall, der Befund im Bericht: **„Auch die letzte Rückfallstufe hat kein
+brauchbares Ergebnis geliefert."** Das ist die Sprache des Rechenkerns, nicht
+die des Nutzers, und es fehlt der Handlungsvorschlag, den Regel 17 verlangt.
+Was hier wahr wäre: der Bohrer ist größer als das Teil — prüfbar, bevor die
+Kette anläuft, und in einem Satz erklärbar.
+
+Vier Rückfallstufen laufen für ein Ergebnis, das aus den Maßen vorher
+feststeht.
+
+### 5.3 „Schichten" hat zwei Schalter für eine Handlung
+
+Der Werkzeugknopf *Schichten* schaltet die Leiste ein. Was dann dasteht, ist
+ein Auswahlfeld mit „Keine Schichtanalyse" und ein toter Regler. Erst wer im
+Feld auf „Schichtanalyse" umstellt, sieht etwas — dann allerdings sofort und
+gut: „Schicht 1/200 · z 0,10 mm · 4387 mm²", beide Teile im Querschnitt.
+
+Im Code sind es zwei Einträge mit den Werten `False` und `True`
+(`analysis_bar.py:209`) — ein An-aus-Schalter hinter einem An-aus-Schalter. Der
+Hinweistext darüber sagt derweil „Durch die Höhe fahren und den Querschnitt
+ansehen", was in diesem Zustand nicht geht und nicht sagt, warum.
+
+Belege: `81-werkzeug-layers.png`, `90-schichten-gewaehlt.png`.
+
+### 5.4 Die Legende der Merkmalskarte ist eine Debug-Ausgabe
+
+Analyse → *Feature-Zuordnung* färbt den Körper und legt darunter 24 farbige
+Kacheln über die ganze Fensterbreite:
+
+```
+ohne Merkmal · face_1 · face_10 · face_11 · face_2 · face_3 · face_4 · face_5 ·
+face_6 · face_7 · face_8 · face_9 · hole_1 … hole_5 · lid_cavity · pin_1 … pin_4
+```
+
+Interne Kennungen, alphabetisch sortiert — `face_10` und `face_11` stehen
+zwischen `face_1` und `face_2`. Die sechs anderen Karten machen es vor:
+Wandstärke zeigt „0,35 mm · 1,31 mm · 2,28 mm …", Überhang „0 … 90 grad",
+Netzfehler „in Ordnung · offene Kante · Non-Manifold".
+
+Zwei Kleinigkeiten in derselben Zeile: Die Karte heißt als einzige halb
+englisch **„Feature-Zuordnung"**, obwohl die Begriffszuordnung Merkmal →
+`feature` festlegt und die Legende daneben „ohne Merkmal" schreibt. Und die
+Winkel stehen als **„45 grad"** statt „45°".
+
+Beleg: `82-karte-5-features.png`.
+
+### 5.5 Neun Tabulatorschritte bis zum Hauptknopf
+
+Der Startbildschirm mit der Tastatur, Station für Station:
+
+```
+ 1.–8.  exampleTile  (die acht Beispielkacheln)
+ 9.     QPushButton: Neues Projekt
+10.     QPushButton: Projekt öffnen …
+11.     QPushButton: Handbuch — die ersten fünfzehn Minuten
+```
+
+Der vorbelegte Hauptknopf ist die neunte Station, weil `show_examples()` im
+Konstruktor vor den Knöpfen steht und Qt der Aufbaureihenfolge folgt. Für die
+Maus ist die Anordnung richtig; für die Tastatur ist sie umgekehrt.
+
+Dazu: Der Objektbaum hat nach dem Öffnen eines Projekts **kein aktuelles
+Element** (`currentItem()` ist `None` bei einer vorhandenen Zeile) — wer per
+Tabulator hinkommt und eine Pfeiltaste drückt, bewegt nichts.
+
+### 5.6 Die sichtbarsten sechs Handlungen haben keine Tastenkürzel
+
+`window_commands()` führt 22 Fensterbefehle. Fünf davon haben ein leeres Kürzel
+— und es sind ausgerechnet die Werkzeuge der unteren Leiste:
+
+```
+Ctrl+N  Neu            …            Ansicht: Schnitt
+Ctrl+O  Öffnen …       …            Ansicht: Messen
+Ctrl+S  Speichern      …            Ansicht: Bewegen
+Home    Alles einpassen …           Ansicht: Analyse
+F1      Handbuch …     …            Ansicht: Schichten
+```
+
+Von 83 registrierten Operationen tragen sechs ein Kürzel. Das ist derselbe
+offene Punkt wie 2.7 aus der Kundensicht-Durchsicht — nur ist die Zahl der
+Operationen seither von 77 auf 83 gewachsen und die der Kürzel nicht.
+
+### 5.7 Im Druckdialog steht ein zugeklappter Bereich offen
+
+*Weitere Einstellungen* ist zugeklappt und zeigt nichts — richtig. *Profile des
+Slicers* daneben ist ebenfalls zugeklappt und zeigt trotzdem seine sechs
+Auswahlfelder (Drucker, Grundprofil, Filament, Körper, Schrift, Slot 3), alle
+leer, dazu „Der Profilbestand wird durchgesehen …". Zwei Klappen, zwei
+Verhalten.
+
+Und der einzige Vorschlag, den der Dialog macht, ist rechts abgeschnitten:
+„Das Projekt hat Passungen. Die Außenwand auf das Sollmaß zu rechnen statt auf
+die Bahnmitte ist genau …" — kein Umbruch, keine zweite Zeile.
+
+Beleg: `91-druckeinstellungen.png`.
+
+### 5.8 Elf englische Docstrings, wo die Regel Deutsch verlangt
+
+Die Sprachregelung gilt als abgeschlossen („der Bestand ist vollständig
+nachgezogen"). Gezählt über den Syntaxbaum von `app/`:
+
+| Datei | Zeile | Stelle |
+|---|---|---|
+| `app/ui/command_palette.py` | 37 | `CommandPalette` — „Type, pick, run." |
+| `app/ui/first_run.py` | 95 | `FirstRunDialog` |
+| `app/ui/session.py` | 100 | `_EvaluationWorker` |
+| `app/ui/settings.py` | 25 | `UiSettings` |
+| `app/ui/main_window.py` | 4901 | `registered_operations` |
+| `app/core/registry/surfaces.py` | 38 | `menu_tree` |
+| `app/core/perceive/features.py` | 464 | `component_count` |
+| `app/core/knowledge/parts/registry.py` | 84 | `PartSpec` |
+| `app/core/geom/measure.py` | 84 | `distance` |
+| `app/core/slice/orientation.py` | 87 | `improvement` |
+| `app/core/backends/openscad.py` | 171 | `available` |
+
+Dazu fünf in `tests/`. Alle elf sind Einzeiler — genau die Sorte, die eine
+Übersetzungsrunde übersieht.
+
+### 5.9 Zwei modale Fehlerfenster hintereinander
+
+Zwei fehlgeschlagene Operationen nacheinander erzeugen zwei modale
+*Fehlerbericht*-Fenster, die sich stapeln. Der Text darin ist vorbildlich —
+„Das war ein Programmfehler, nicht Ihre Schuld. Hier wird ein Bericht
+zusammengestellt — verschickt wird nichts." —, aber zweimal hintereinander
+wegzuklicken ist einmal zu viel.
+
+---
+
+## Teil 6 — Was die zweite Runde entlastet hat
+
+Vier Sachen wurden gezielt gesucht und nicht gefunden. Sie stehen hier, weil
+ein nicht gefundener Fehler dieselbe Arbeit gekostet hat wie ein gefundener.
+
+**Die englische Oberfläche ist vollständig.** Am laufenden Fenster geprüft, nicht
+am Katalog: 0 deutsche Einträge in 127 Menüzeilen, 0 im Operationsdialog, 0 im
+Bausteinkatalog, 0 in den Touren, alle sieben Werkzeughinweise übersetzt. Der
+eine Treffer meiner Suche war „…Nothing is lost here: und…" — Qts eigene
+Kürzung von „undo".
+
+**Jede Operation sagt, was sie tut.** 83 Operationen: keine ohne
+Beschreibungssatz, kein Parameter ohne Erklärung. Der vollste Dialog hat acht
+Felder auf der Vorderseite (`label_text`), die Grenze liegt bei acht.
+
+**Die Website ist handwerklich sauber.** Sieben Bilder, alle mit Alt-Text; kein
+toter Sprungmarken-Verweis auf sieben Seiten; Impressum, AGB, EULA, Widerruf
+und Datenschutz vollständig gegliedert; kleinste Fließtextgröße 12,8 px.
+
+**Die Preise stehen in beiden Sprachfassungen.** Der erste Verdacht — auf
+Englisch fehle der Preis — kam von der Schreibweise: die deutsche Seite
+schreibt „49 €", die englische „€49". Inhaltlich identisch, 0/49/79 hier wie
+dort.
 
 ---
 
 ## Was gemessen wurde
 
-Acht Läufe über `build_application([])` im Vollbild, Nutzerverzeichnisse in
+Dreizehn Läufe über `build_application([])` im Vollbild, Nutzerverzeichnisse in
 einen Temp-Ordner umgebogen (also mit echtem Erststart), dazu die
 Zustandsabfrage aller 127 Menüeinträge in drei Szenenzuständen — leer, Projekt
 offen, Objekt gewählt. Fotografiert: Startbildschirm, Erststart, leeres
 Projekt, alle neun Menüs mit allen Untermenüs, Beispielprojekt mit Tour, Chat,
 Prüfbericht, Operationsdialog vorn und hinten, Kontextmenü, Skizzeneditor,
 Bausteinkatalog, Einstellungen, Handbuch, helles Thema in drei Abfolgen,
-Fremdmodell mit Befunden. Website: Startseite und Handbuch bei 1440 und
-390 px, dazu die Überstandsmessung und die Gegenprobe im laufenden Browser.
+Fremdmodell mit Befunden, alle sieben Werkzeuge der unteren Leiste einzeln,
+alle sieben Analysekarten, Druckeinstellungen mit allen acht Reitern, drei
+absichtlich unsinnige Operationen, die Tabulatorkette auf zwei Bildschirmen
+und die gesamte Oberfläche auf Englisch. Website: Startseite und Handbuch bei
+1440 und 390 px, dazu Überstandsmessung, Gegenprobe im laufenden Browser und
+eine Strukturabfrage über alle sieben Seiten.
+
+Ein Wachhund räumte modale Fenster weg und schrieb auf, was er wegräumte —
+sonst bleibt jeder Lauf am ersten Fehlerdialog stehen, und niemand erfährt, an
+welchem.
 
 Die Bilder liegen im Arbeitsordner dieser Sitzung, nicht im Repository.
 
-Zwei Lesarten am Bild waren falsch und wurden von der Messung widerlegt: das
-Menü *Objekt* sah aktiv aus, ist aber vollständig ausgegraut (grau und weiß
-sind im dunklen Thema am verkleinerten Bild kaum zu trennen), und der
-waagerechte Überstand der Website stammt nicht von einem sichtbaren Element,
-sondern von zwei Pseudo-Elementen, die `querySelectorAll` nicht findet.
+**Vier eigene Lesarten waren falsch** und wurden von der Messung widerlegt.
+Sie stehen hier, weil sie sonst als Befund im Bericht stünden:
+
+* Das Menü *Objekt* sah am Bild aktiv aus und ist vollständig ausgegraut —
+  grau und weiß sind im dunklen Thema am verkleinerten Bild kaum zu trennen.
+* Der waagerechte Überstand der Website stammt von zwei Pseudo-Elementen, die
+  `querySelectorAll` nicht findet, nicht von einem sichtbaren Element.
+* Zwanzig Operationen schienen die Grenze von acht Feldern auf der Vorderseite
+  zu reißen. Das Kriterium war falsch: die Suite zählt `placement == "front"`,
+  nicht ein Attribut `advanced`. Richtig gezählt liegt keine über acht.
+* Auf der englischen Seite schien der Preis zu fehlen. Sie schreibt „€49", die
+  deutsche „49 €".
