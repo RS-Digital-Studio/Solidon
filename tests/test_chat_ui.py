@@ -15,10 +15,11 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton
 
 from app.core.backends.llm import Reply, ToolCall
 from app.core.backends.scripted import ScriptedBackend
+from app.core.scene.project import new_project
 from app.core.types import ChatEntry, Origin
 from app.ui.chat import ChatPanel, describe
 from app.ui.main_window import MainWindow
@@ -547,3 +548,52 @@ def test_an_image_dropped_on_the_chat_becomes_a_request(qt_app: QApplication) ->
     assert _dropped_image(_Event(model)) is None, "ein Modell gehört auf den Viewport"
 
     assert _dropped_image(_Event(QMimeData())) is None, "und Text ist kein Bild"
+
+
+def test_the_empty_chat_shows_what_one_can_ask(qt_app: QApplication) -> None:
+    """Der Chat ist das Versprechen der Anwendung — und stand leer da.
+
+    Was ein neuer Nutzer sah: eine Zeile mit dem Modellnamen, darunter eine
+    schwarze Fläche, darunter „Was soll geändert werden?" und „Senden". Kein
+    Beispiel, kein Vorschlag, keine Andeutung dessen, was hier geht. Der
+    Erststart-Dialog wirbt für den Chat, das Handbuch hat ein Kapitel, die
+    Website zeigt ihn — nur die Stelle selbst sagte nichts.
+    """
+    from app.ui.chat import STARTERS
+
+    panel = ChatPanel()
+    document = new_project().document
+    panel.show_document(document)
+
+    assert panel.starters.isVisibleTo(panel), "im leeren Gespräch stehen Beispiele"
+    labels = [button.text() for button in panel.starters.findChildren(QPushButton)]
+    assert len(labels) == len(STARTERS)
+    assert any("M4" in label for label in labels), "mit echten Maßen, nicht in Befehlsform"
+
+
+def test_a_starter_lands_in_the_field_and_is_not_sent(qt_app: QApplication) -> None:
+    """Ein Beispiel ist ein Anfang zum Weiterschreiben, kein Knopf.
+
+    Abschicken kostet Zeit und womöglich Geld; wer ein Beispiel anklickt,
+    will es meistens noch anpassen.
+    """
+    sent: list[str] = []
+    panel = ChatPanel()
+    panel.requestSent.connect(sent.append)
+    panel.show_document(new_project().document)
+
+    button = panel.starters.findChildren(QPushButton)[0]
+    button.click()
+
+    assert panel.input.toPlainText() == button.text(), "der Satz steht im Feld"
+    assert not sent, "und ist noch nicht unterwegs"
+
+
+def test_the_starters_step_aside_once_the_talk_begins(qt_app: QApplication) -> None:
+    """Sobald etwas im Gespräch steht, weiß der Nutzer, wofür es da ist."""
+    panel = ChatPanel()
+    document = new_project().document
+    document.chat.append(ChatEntry(id="c1", role="user", text="Mach die Wand dicker"))
+    panel.show_document(document)
+
+    assert not panel.starters.isVisibleTo(panel)

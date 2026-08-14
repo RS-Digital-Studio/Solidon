@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 
 from app.core.agent.context import is_discarded
 from app.core.types import ChatEntry, Document
-from app.i18n import tr
+from app.i18n import TranslatableText, _, tr
 from app.ui.style import NORMAL, set_level
 
 #: Wie ein Beitrag markiert wird, damit die Rollen ohne Farbe
@@ -50,6 +50,28 @@ DISCARDED_COLOUR = "#7a828c"
 #: Antwort mit Begründung hineinpasst, ohne dass der leere Zustand die halbe
 #: Ansicht verdeckt.
 EMPTY_TURNS_HEIGHT = 190
+
+#: Was im leeren Gespräch als Beispiel dasteht — anklickbar, nicht abschickbar.
+#:
+#: Der Chat ist das Versprechen, mit dem die Anwendung antritt, und im leeren
+#: Zustand stand dort eine schwarze Fläche mit „Was soll geändert werden?"
+#: darunter. Der Erststart-Dialog wirbt für ihn, das Handbuch hat ein Kapitel,
+#: die Website zeigt ihn — und die Stelle selbst sagte nichts darüber, was man
+#: hier eigentlich schreiben kann.
+#:
+#: Vier Sätze, je einer aus einer anderen Ecke: etwas Neues, ein Baustein, eine
+#: Änderung am Vorhandenen, die Druckvorbereitung. Sie sind absichtlich so
+#: geschrieben, wie jemand wirklich tippt — mit Maßen, nicht in Befehlsform.
+#:
+#: Ein Klick setzt den Satz ins Eingabefeld und schickt ihn **nicht** ab: Was
+#: der Agent tut, kostet Zeit und womöglich Geld, und ein Beispiel ist ein
+#: Anfang zum Weiterschreiben, kein Knopf.
+STARTERS: tuple[TranslatableText, ...] = (
+    _("Halter, 60 × 40 mm, zwei M4-Löcher"),
+    _("Setz eine M3-Mutternfalle in die Unterseite"),
+    _("Mach die Wandstärke 3 mm"),
+    _("Teile das Teil, damit es auf die Platte passt"),
+)
 
 
 class ChatPanel(QWidget):
@@ -125,6 +147,26 @@ class ChatPanel(QWidget):
         entry_row.addWidget(self.input, stretch=1)
         entry_row.addWidget(self.send)
 
+        # Die Beispielanfragen für das leere Gespräch — siehe :data:`STARTERS`.
+        self.starters = QWidget(self)
+        starters_layout = QVBoxLayout(self.starters)
+        starters_layout.setContentsMargins(0, 0, 0, 0)
+        starters_layout.setSpacing(0)
+        starters_lead = QLabel(tr("Zum Beispiel:"), self.starters)
+        set_level(starters_lead, "caption")
+        starters_layout.addWidget(starters_lead)
+        for starter in STARTERS:
+            button = QPushButton(str(starter), self.starters)
+            button.setFlat(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            # Linksbündig wie ein Vorschlag, nicht mittig wie ein Knopf: was
+            # hier steht, ist ein Satz zum Weiterschreiben.
+            button.setStyleSheet("text-align: left;")
+            button.clicked.connect(
+                lambda _checked=False, text=str(starter): self._take_starter(text)
+            )
+            starters_layout.addWidget(button)
+
         self.summary = QLabel("", self)
         self.summary.setWordWrap(True)
 
@@ -184,6 +226,7 @@ class ChatPanel(QWidget):
         layout.addWidget(self.setup)
         layout.addWidget(self.unlock)
         layout.addWidget(self.turns, stretch=1)
+        layout.addWidget(self.starters)
         layout.addWidget(self.decision)
         layout.addLayout(entry_row)
 
@@ -257,6 +300,9 @@ class ChatPanel(QWidget):
         for entry in document.chat:
             self.turns.addItem(_item(entry, is_discarded(entry, document)))
         self.turns.scrollToBottom()
+        # Die Beispiele gelten dem leeren Gespräch. Sobald etwas darin steht,
+        # weiß der Nutzer, wofür der Chat da ist.
+        self.starters.setVisible(not document.chat)
 
     def show_applied(self, preview: Any, transaction_id: str) -> None:
         """Die Übernommen-Leiste (§26.5): der Vorschlag ist schon angewandt,
@@ -321,6 +367,19 @@ class ChatPanel(QWidget):
                 return True
         handled: bool = super().eventFilter(watched, event)
         return handled
+
+    def _take_starter(self, text: str) -> None:
+        """Ein Beispiel ins Eingabefeld übernehmen — und dort stehen lassen.
+
+        Nicht abschicken: Was der Agent tut, kostet Zeit und womöglich Geld,
+        und ein Beispiel ist ein Anfang zum Weiterschreiben. Der Zeiger steht
+        danach am Ende des Satzes, wo weitergetippt wird.
+        """
+        self.input.setPlainText(text)
+        self.input.setFocus()
+        cursor = self.input.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        self.input.setTextCursor(cursor)
 
     def _send(self) -> None:
         text = self.input.toPlainText().strip()
