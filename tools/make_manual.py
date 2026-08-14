@@ -291,8 +291,10 @@ CONTENTS = {"de": "Inhalt", "en": "Contents"}
 #: der „Meldungen im Wortlaut" und „Szene, Reparatur, Transformation" ohne
 #: Fuge aufeinander folgten — erzählte Seiten und Nachschlagewerk sahen gleich
 #: aus. Nicht über ``tr()``, aus demselben Grund wie :data:`CONTENTS`.
-REFERENCE_HEADING = {"de": "Referenz — jede Operation mit ihren Werten",
-                     "en": "Reference — every operation with its values"}
+REFERENCE_HEADING = {
+    "de": "Referenz — jede Operation mit ihren Werten",
+    "en": "Reference — every operation with its values",
+}
 
 #: Die Adresse, unter der die Seiten liegen — für canonical, hreflang und die
 #: Vorschau beim Teilen. Aus ``branding.WEBSITE_URL``, damit sie an einer
@@ -404,6 +406,7 @@ def contents(language: str) -> str:
 
     Die Anker dazu setzt `anchored`; hier steht nur die Liste.
     """
+
     def entry(number: int, page: manual.Page) -> str:
         return (
             f'<li><a href="#{_anchor(page)}">'
