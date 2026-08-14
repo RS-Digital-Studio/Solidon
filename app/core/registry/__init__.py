@@ -1,7 +1,13 @@
 """Das Register der Operationen (Bauplan §10): die eine Deklaration, die jede
 Oberfläche liest."""
 
-from app.core.registry.params import json_schema, op_params, param, validate
+from app.core.registry.params import (
+    GATHERED_KINDS,
+    json_schema,
+    op_params,
+    param,
+    validate,
+)
 from app.core.registry.registry import (
     CATEGORIES,
     FEATURE_KINDS,
@@ -31,6 +37,7 @@ from app.core.registry.surfaces import (
 __all__ = [
     "CATEGORIES",
     "FEATURE_KINDS",
+    "GATHERED_KINDS",
     "MENU_GROUPS",
     "MENU_TWINS",
     "REGISTRY",

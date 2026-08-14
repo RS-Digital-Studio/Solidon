@@ -235,7 +235,11 @@ _JSON_TYPE: dict[ParamKind, str] = {
 #: Der Agent sieht sie nicht — er verweist auf Merkmale und benutzt Maße, er
 #: erzeugt keine Koordinaten (Leitprinzip 5). ``tests/test_gesture_ops.py``
 #: prüft diese Menge gegen dieselbe Liste auf der anderen Seite.
-_GATHERED: Final[frozenset[str]] = frozenset({"sketch", "strokes", "armature"})
+#: Parameterarten, die Gesten sammeln (§30.1). Der Agent bekommt sie nicht
+#: angeboten — und `agent/session.py` weist sie auch ab, wenn ein Modell sie
+#: rät. Beide Stellen lesen diese Menge; eine zweite Liste wäre am Tag nach
+#: der nächsten Geste falsch.
+GATHERED_KINDS: Final[frozenset[str]] = frozenset({"sketch", "strokes", "armature"})
 
 
 def json_schema(params_class: type[BaseParams]) -> dict[str, Any]:
@@ -243,7 +247,7 @@ def json_schema(params_class: type[BaseParams]) -> dict[str, Any]:
     properties: dict[str, Any] = {}
     required: list[str] = []
     for spec in params_class.spec():
-        if spec.kind in _GATHERED:
+        if spec.kind in GATHERED_KINDS:
             # §26, Leitprinzip 5: der Agent erzeugt Skizzen ausschließlich über
             # benannte Grundformen und Maße, nie über rohe Punktlisten — den
             # Skizzentext bekommt er gar nicht erst angeboten. Für Pinselstriche

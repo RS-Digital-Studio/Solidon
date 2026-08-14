@@ -286,6 +286,92 @@ def test_a_drawn_sketch_from_the_model_is_rejected(project: Project, profile: Pr
     assert "Grundformen" in answer.content
 
 
+def test_no_gathered_parameter_is_offered_to_the_model() -> None:
+    """Was aus Gesten entsteht, steht in keinem Tool-Schema — alle drei Arten.
+
+    Der Test daneben prüft die Skizze; sie war zwei Phasen lang die einzige.
+    Pinselstriche und Skelett kamen mit P16 dazu und tragen dieselbe Sperre,
+    denn ein Strich *ist* eine Koordinate und ein Knochen auch.
+    """
+    schemas = {entry["name"]: entry for entry in tools.operation_tools()}
+
+    assert "strokes" not in schemas["sculpt_strokes"]["input_schema"]["properties"]
+    for field in ("armature", "pose"):
+        assert field not in schemas["pose_armature"]["input_schema"]["properties"], field
+
+
+def test_guessed_brush_strokes_are_rejected(project: Project, profile: Profile) -> None:
+    """Rät das Modell die Striche trotzdem, lehnt die Sitzung sie ab.
+
+    Das Schema wegzulassen ist eine Bitte; erst die zweite Sperre ist eine.
+    Sie prüfte lange nur ``sketch`` — ein geratener Strich lief hindurch und
+    wurde gerechnet.
+    """
+    backend = ScriptedBackend(
+        answers=[
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="sculpt_strokes",
+                        arguments={"strokes": "grab 10 0 0 5 1.0", "symmetry": "none"},
+                    ),
+                )
+            ),
+            Reply(text="Dann beschreibe ich die Stelle."),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Zieh die Nase etwas raus")
+
+    assert proposal.drafts == [], "ein geratener Strich wird nie eine Operation"
+    assert proposal.invalid_calls == 1
+    answer = [entry for entry in backend.seen[-1] if entry.role == "tool"][-1]
+    assert "Pinselstriche" in answer.content
+
+
+def test_a_guessed_pose_is_rejected_like_the_skeleton(project: Project, profile: Profile) -> None:
+    """Auch die **Stellung**, nicht nur das Skelett.
+
+    Beide Felder tragen ``kind="armature"``. Die Ablehnung sagte hier einmal
+    „die Gelenkwinkel kannst du danach angeben" — das stimmte nie, und ein
+    Modell, das dem folgt, versucht genau das als Nächstes.
+    """
+    backend = ScriptedBackend(
+        answers=[
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1",
+                        name="pose_armature",
+                        arguments={"pose": "arm 0 45 0"},
+                    ),
+                )
+            ),
+            Reply(text="Dann macht das der Nutzer."),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Heb den Arm um 45 Grad")
+
+    assert proposal.drafts == []
+    answer = [entry for entry in backend.seen[-1] if entry.role == "tool"][-1]
+    assert "Skeletteditor" in answer.content
+    assert "danach" not in answer.content, "die Ablehnung verspricht keinen zweiten Versuch"
+
+
 def test_an_operation_that_stops_the_chain_is_dropped(project: Project, profile: Profile) -> None:
     agent = session(
         project,

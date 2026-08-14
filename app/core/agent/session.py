@@ -53,7 +53,7 @@ from app.core.errors import AppError, UserError
 from app.core.knowledge import rules
 from app.core.log import get_logger
 from app.core.perceive.digest import digest, new_feature_lines
-from app.core.registry import REGISTRY, Registry, validate
+from app.core.registry import GATHERED_KINDS, REGISTRY, Registry, validate
 from app.core.scene.evaluate import EvaluationResult, evaluate
 from app.core.scene.history import History, OperationDraft
 from app.core.types import (
@@ -99,6 +99,28 @@ def _refuse(question: str, options: list[str]) -> str:
     beantworten.
     """
     raise AppError(tr("Für diese Rückfrage ist niemand da."), detail=question)
+
+
+def _gathered_refusal(kind: str) -> str:
+    """Warum ein gesammelter Parameter abgelehnt wird — je Art ein eigener Satz.
+
+    Ein gemeinsamer Satz taugt hier nicht: Wohin der Nutzer geschickt wird, ist
+    bei jeder der drei Arten eine andere Stelle — Grundformen, Pinsel,
+    Skeletteditor. Eine Ablehnung ohne diesen Zusatz erzeugt einen zweiten
+    Versuch, keinen besseren.
+
+    **Beim Skelett sind es beide Felder**, `armature` *und* `pose`. Der
+    naheliegende Satz „die Winkel kannst du danach angeben" stand hier schon
+    und war falsch: Die Stellung trägt dieselbe Art und ist damit genauso
+    gesperrt. Sie ist auch kein Zahlenfeld, sondern drei Winkel je Knochen in
+    einem Text — geraten von einem Modell, das das Skelett nicht sieht, ergäbe
+    er eine Haltung zu Knochen, die es nicht gibt.
+    """
+    if kind == "strokes":
+        return tr("Pinselstriche setzt der Nutzer selbst — beschreibe ihm, wo er ansetzen soll.")
+    if kind == "armature":
+        return tr("Skelett und Stellung setzt der Nutzer selbst — im Skeletteditor und im Dialog.")
+    return tr("Skizzen zeichnet der Nutzer selbst — benutze die Grundformen und Maße.")
 
 
 def _unknown_objects(wanted: tuple[str, ...], scene: Scene) -> str:
@@ -447,17 +469,23 @@ class AgentSession:
             # zu lassen wäre eine Gelegenheit, eines zu vergessen — und die
             # Szene kennt sie.
             inputs = tuple(scene.objects)
-        if any(
-            entry.kind == "sketch" and arguments.get(entry.name) for entry in spec.params.spec()
-        ):
-            # §26, Leitprinzip 5: Skizzen entstehen beim Nutzer, nie als rohe
-            # Punktliste aus dem Modell. Das Schema bietet den Parameter nicht
-            # an — und hier wird er auch abgelehnt, wenn das Modell ihn rät.
+        gathered = next(
+            (
+                entry
+                for entry in spec.params.spec()
+                if entry.kind in GATHERED_KINDS and arguments.get(entry.name)
+            ),
+            None,
+        )
+        if gathered is not None:
+            # §26, Leitprinzip 5: Was aus Gesten entsteht, entsteht beim
+            # Nutzer — nie als rohe Koordinatenliste aus dem Modell. Das
+            # Schema bietet diese Parameter nicht an, und hier werden sie auch
+            # abgelehnt, wenn ein Modell sie rät. Die Ablehnung nennt den Weg,
+            # der offen bleibt: sonst versucht es dieselbe Operation noch
+            # dreimal mit anderen Zahlen.
             proposal.invalid_calls += 1
-            return (
-                tr("Skizzen zeichnet der Nutzer selbst — benutze die Grundformen und Maße."),
-                scene,
-            )
+            return _gathered_refusal(gathered.kind), scene
         try:
             # P4 acceptance: schema-valid before anything is computed.
             validate(spec.params, arguments)
