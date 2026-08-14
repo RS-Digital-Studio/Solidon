@@ -4682,7 +4682,34 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       dem Code oder aus der Tastatur des Nutzers stammt. Genau diese
       Unterscheidung ist das Feld — die Migration von 6 hält fest, warum ein
       nachträglicher Abgleich mit dem Katalog der falsche Weg wäre.
-- [ ] **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.**
+- [~] **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.** Alles
+      bis auf die Regelsammlung.
+
+      **Handbuch:** ein Kapitel *Formen* mit dem Abschnitt, den `AGENTS.md`
+      für jedes Werkzeug mit einer echten Grenze verlangt — wann es *nicht*
+      das richtige ist. Aus den drei Wegen werden vier, in fünf Sprachen; der
+      Wege-Text wurde fortgeschrieben statt ersetzt, damit jede Sprache die
+      Übersetzung bleibt, die jemand geprüft hat.
+
+      **Website:** Weg 4 auf beiden Sprachen, mit derselben Einblendung wie
+      Weg 3 und im selben Takt — vier Einblendungen zu vier Zeiten wären
+      Unruhe statt Auskunft. Bei reduzierter Bewegung steht der Endzustand.
+
+      **Beispielprojekt** `weg4-figur-formen.p3d` mit Tour. Es legt **keine**
+      Pinselzüge: Ein Beispiel, das mit viertausend gespeicherten Zügen
+      ankommt, zeigt ein Ergebnis und keinen Weg. Es hört dort auf, wo der
+      Nutzer den Pinsel nimmt.
+
+      **Nebenbei behoben:** `tools/make_manual.py` lief seit den vier neuen
+      Sprachkatalogen nicht mehr — es fragt `available_languages()` und bekommt
+      fünf statt zwei, während die Seitentabelle zwei kennt. Es überspringt
+      jetzt, wofür es keine Seite gibt, und sagt welche.
+
+      **Offen: die Regelsammlung.** Der Agent muss wissen, dass er nicht
+      sculptet (K) und was er stattdessen anbietet. Eine Regeländerung
+      verlangt die Agenten-Suite vorher und nachher (`AGENTS.md`, Checkliste
+      „Regelsammlung ändern") — je rund anderthalb Stunden, und sie kostet
+      Geld. Der Lauf gehört angesagt und nicht nebenbei gestartet.
 - [x] **P16.11 — Prüfpunkt Käfigmodellierung: Kriterium steht, und vier von
       fünf Bedingungen sind erfüllt.** `tests/test_base_mesh.py` schreibt fest,
       was „brauchbares Basisnetz" heißt, bevor P16.5 beginnt: ein Körper ohne

@@ -928,7 +928,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | **P16.7** | `displace_image` samt Bild in `sources/` und Profilprüfung | L | Relief unter Düsenbreite wird gemeldet | **fertig** — 17 Tests, drei Projektionen |
 | **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | **Kern fertig** — 16 Tests; Skeletteditor offen |
 | **P16.9** | Dateiformat 7→8, Migration, Beispieldatei, Einbacken (D) | L | alte Datei öffnet und rechnet | **fertig** — 18 Tests; Nachfrage in der Oberfläche offen |
-| **P16.10** | Handbuch, Weg 4, Website, Beispielprojekt, Übersetzungen, Regelsammlung + Agenten-Suite vorher/nachher (§18) | L | Sprachdateien vollständig; Suitenquote nicht schlechter | offen |
+| **P16.10** | Handbuch, Weg 4, Website, Beispielprojekt, Übersetzungen, Regelsammlung + Agenten-Suite vorher/nachher (§18) | L | Sprachdateien vollständig; Suitenquote nicht schlechter | **bis auf die Regelsammlung fertig** — die braucht den Suite-Lauf |
 | **P16.11** | **Prüfpunkt Käfigmodellierung** (H2): Reicht Primitive + `blend_union` + Pinsel als Basisnetz für die Korpusfiguren? | S | Kriterium **vor** P16.5 festgeschrieben; Ergebnis dokumentiert, nicht passend gemacht | **fertig** — 4 von 5 Bedingungen erfüllt (H2) |
 
 **Reihenfolge mit Absicht.** P16.1 ändert die Regel und beweist sie am
@@ -1109,6 +1109,10 @@ anderer Stelle).
 - **P16.8** — Kern in `app/core/geom/pose.py`, `Bone` und `Pose` in
   `types.py`, `kind="armature"` im Schema, `tests/test_pose.py` mit 16 Tests.
   **Der Skeletteditor fehlt** — der Kern läuft über die Kommandozeile.
+- **P16.10** — Kapitel *Formen* im Handbuch, Weg 4 auf beiden Websprachen,
+  `weg4-figur-formen.p3d` mit Tour, alles in fünf Sprachen. **Die
+  Regelsammlung fehlt** — sie verlangt die Agenten-Suite vorher und nachher,
+  und der Lauf kostet Zeit und Geld.
 - **P16.9** — `app/core/scene/gathered.py`, Formatversion 8,
   `example_v8.p3d`, Einbacken als Parameter an `sculpt_strokes`.
   `tests/test_gathered.py` mit 13 Tests, dazu fünf in `test_sculpt.py`.
@@ -1133,16 +1137,24 @@ dem Beginn von P16.5 zurückgefragt):
   Volumen und Wasserdichtheit unbeschadet ließ und die Ausdehnung um acht
   Millimeter verfehlte.
 
-**Nächster Schritt, wenn es weitergeht:** P16.10 — Weg 4, Handbuch, Website,
-Beispielprojekt, Übersetzungen und die Regelsammlung. Das letzte Paket der
-Phase und das einzige, das **Geld kostet**: Die Agenten-Suite läuft vorher und
-nachher, je rund anderthalb Stunden, und eine Regeländerung ohne beide
-Messungen wird zurückgenommen (`AGENTS.md`, Checkliste „Regelsammlung
-ändern"). Der Lauf gehört deshalb angesagt und nicht nebenbei gestartet.
+**Was noch offen ist**, vollständig und als Liste, damit nichts davon als
+vergessen durchgeht:
 
-Dazu die drei Reste, die als solche dastehen und nicht als vergessen: der
-Skeletteditor (§7.5), die Nachfrage zum Einbacken in der Oberfläche (§4 D) und
-die vierte Displacement-Projektion (§7.4).
+| Rest | Wo | Warum noch nicht |
+|---|---|---|
+| **Regelsammlung** | §11, P16.10 | Verlangt die Agenten-Suite vorher und nachher — je rund anderthalb Stunden, und sie kostet Geld. Ein Lauf, den man ansagt. |
+| **Skeletteditor** | §7.5, P16.8 | Der Posing-Kern läuft über die Kommandozeile; es fehlt die Hand, wie zwischen P16.5 und P16.6. |
+| **Nachfrage zum Einbacken** | §4 D, P16.9 | Der Kern meldet die Schwelle und kann den Stand lesen; der Weg zum Festschreiben in der Oberfläche fehlt. |
+| **Vierte Projektion** | §7.4, P16.7 | „Per Fläche" braucht eine erkannte Fläche als Bezug und gehört damit zu §21. |
+| **Bauplan §25 und die Kategorie `organic`** | §6, Entscheidung M | Sechs neue Operationen stehen bei ihren Geschwistern (`mesh`, `boolean`, `surface`). Ob `organic` entsteht und unter welche Menügruppe sie fällt, ist eine Entscheidung, die angesagt gehört. |
+
+**Die Abnahme aus §16** ist damit zu sieben Achteln erfüllt: Tore grün,
+`test_gesture_ops.py` für alle drei Sammelarten, Leistungszeilen eingehalten,
+Grenzen aus `test_interface_limits.py` gehalten ohne eine angehobene Zahl,
+Handbuchseiten in beiden Sprachen mit „wann nicht benutzen". Offen sind die
+Punkte 3 und 4 — eine Figur vom Grundkörper bis zum druckfertigen 3MF, mit
+Zeitmessung und Hash-Vergleich nach dem Wiederöffnen — und Punkt 7, die
+Agenten-Suite.
 
 **Was P16.9 vorfindet:** Entscheidung D ist bestätigt, und der Ort dafür steht
 — die Strichliste liegt bis 2 000 Zügen im `project.json` und darüber als
