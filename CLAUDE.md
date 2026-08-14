@@ -8,8 +8,9 @@ meine globalen Vorgaben auf dieses Projekt nicht passen.
 
 ## Was dieses Projekt ist
 
-Solidon — eine Desktop-Anwendung in **Python 3.13 mit PySide6**, kein
-Avalonia/.NET. Die globale `~/.claude/CLAUDE.md` beschreibt meine Haltung und
+Solidon — eine Desktop-Anwendung in **Python (3.13 oder neuer) mit PySide6**,
+kein Avalonia/.NET. Die Untergrenze steht in `pyproject.toml`; die
+Arbeitsumgebung fährt derzeit 3.14, die CI 3.13. Die globale `~/.claude/CLAUDE.md` beschreibt meine Haltung und
 Arbeitsweise; ihre Stack-Angaben (Avalonia, `dotnet build`, MVVM, RESX,
 Android) gelten hier **nicht**. Wo sie sich widersprechen, gewinnt für den
 Stack diese Datei, für die Haltung die globale.
@@ -67,6 +68,8 @@ zusammen. Weiteres:
 .venv\Scripts\python.exe tools/make_manual.py                   # Handbuch als Website und PDF
 .venv\Scripts\python.exe tools/make_icon.py                     # Anwendungssymbol rastern: ICO und Website-Favicon
 .venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Solidon, braucht Inno Setup 6
+python tools/check_env.py                                       # stimmen die Fassungen? läuft auch ohne .venv
+python tools/check_env.py --install                             # sie stimmen machen (braucht Netz)
 ```
 
 Die letzten beiden laufen **nicht** offscreen und dürfen es nicht: unter
@@ -78,6 +81,12 @@ Erstaufbau: `python -m venv .venv` und
 `.venv\Scripts\python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"`.
 Das `-c` ist kein Beiwerk: ohne es zieht ein frischer Klon andere Fassungen als
 die CI, und die Suite wird rot, ohne dass eine Zeile Code sich geändert hat.
+Beides zusammen macht auch `python tools/check_env.py --install`.
+
+Arbeiten mehrere am selben Repository, genügt der gute Vorsatz nicht: Der
+Sitzungsstart-Hook gleicht die installierten Fassungen gegen `constraints.txt`
+ab und sagt, wenn etwas abweicht — samt Befehl. Er läuft dafür auch ohne
+`.venv`, sonst könnte er im frischen Klon nicht melden, dass sie fehlt.
 
 Qt-Tests brauchen kein Bild: `QT_QPA_PLATFORM=offscreen` setzt
 `tests/conftest.py` selbst. Dieselbe Datei biegt die Nutzerverzeichnisse in

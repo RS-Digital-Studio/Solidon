@@ -25,8 +25,8 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" sitzungsstart",
-            "timeout": 20
+            "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || P=\"$(command -v python3 || command -v python || command -v py)\"; [ -n \"$P\" ] && \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" sitzungsstart",
+            "timeout": 25
           }
         ]
       }

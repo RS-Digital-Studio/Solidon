@@ -27,6 +27,8 @@ import tomllib
 from pathlib import Path
 from typing import Any, Final
 
+from tools.check_env import abweichungen, aufbaubefehl, festgeschrieben, normal
+
 #: Die Wurzel des Arbeitsbaums — von hier aus liegt ``pyproject.toml`` daneben.
 _ROOT: Final = Path(__file__).resolve().parent.parent
 
@@ -93,3 +95,57 @@ def test_ruff_targets_the_version_that_is_demanded() -> None:
     assert configured == f"py{required[0]}{required[1]}", (
         f"ruff zielt auf {configured}, das Projekt verlangt py{required[0]}{required[1]}."
     )
+
+
+# --- der festgeschriebene Versionssatz -------------------------------------------
+#
+# `constraints.txt` hält fest, *in welcher* Fassung ein Paket installiert wird.
+# Sie half nur nichts, solange niemand nachsah: Wer das `-c` beim Installieren
+# vergisst, bekommt andere Fassungen als die, gegen die die Suite grün ist.
+# `tools/check_env.py` sieht nach, der Sitzungsstart-Hook ruft es auf. Was hier
+# geprüft wird, ist das Werkzeug — nicht die Umgebung dieses Laufs: Der
+# wöchentliche Frühwarnlauf der CI installiert **absichtlich** ohne
+# `constraints.txt`, und ein Test, der ihn rot färbt, entwertet ihn.
+
+
+def test_the_pinned_set_is_read_completely() -> None:
+    """Jede Zeile `name==fassung` landet im Satz, normalisiert nach PEP 503."""
+    satz = festgeschrieben()
+
+    assert len(satz) > 50, f"nur {len(satz)} Einträge — liest `constraints.txt` noch?"
+    assert "pyside6" in satz, "PySide6 fehlt im Satz, obwohl die Oberfläche darauf steht"
+    # `svg.path` steht mit Punkt in der Datei und muss trotzdem gefunden werden
+    assert satz["svg-path"][0] == "svg.path"
+    for name, fassung in satz.values():
+        assert not fassung.startswith(("<", ">", "=")), f"{name} ist keine feste Fassung: {fassung}"
+
+
+def test_names_compare_the_way_the_index_compares_them() -> None:
+    """`svg.path`, `svg_path` und `SVG-Path` sind dasselbe Paket (PEP 503)."""
+    assert normal("svg.path") == normal("svg_path") == normal("SVG-Path") == "svg-path"
+
+
+def test_a_deviating_version_is_found() -> None:
+    """Der Fall vom 06.08.2026: der Klon zog eine andere Fassung, die Suite fiel um."""
+    satz = {"numpy": ("numpy", "2.4.0"), "trimesh": ("trimesh", "4.12.2")}
+
+    assert abweichungen(satz, {"numpy": "2.5.0", "trimesh": "4.12.2"}) == [
+        "numpy 2.5.0 statt 2.4.0"
+    ]
+    assert abweichungen(satz, {"numpy": "2.4.0", "trimesh": "4.12.2"}) == []
+
+
+def test_a_package_that_is_absent_is_not_a_deviation() -> None:
+    """Constraints, nicht Requirements: der Windows-Eintrag fehlt auf Linux zu Recht."""
+    satz = {"pywin32-ctypes": ("pywin32-ctypes", "0.2.3")}
+
+    assert abweichungen(satz, {}) == []
+
+
+def test_the_rebuild_command_pins_the_versions() -> None:
+    """Ohne das `-c` ist der Vorschlag genau der Fehler, den er beheben soll."""
+    for mit_venv in (True, False):
+        befehl = aufbaubefehl(mit_venv=mit_venv)
+        assert "-c constraints.txt" in befehl, befehl
+        assert "-e" in befehl, befehl
+    assert "venv" in aufbaubefehl(mit_venv=False), "ohne Umgebung muss sie zuerst angelegt werden"

@@ -96,6 +96,11 @@ englische. Derzeit sind es sechs: Deutsch als Quelle, dazu `en`, `es`, `fr`,
 Kommentare und Docstrings waren bis dahin englisch. Sie sind es nicht mehr:
 `app/`, `tests/` und `tools/` sind vollständig übersetzt. Was neu dazukommt,
 wird deutsch geschrieben — nachträglich zu übersetzen gibt es nichts mehr.
+
+**Assert-Meldungen in Tests fallen nicht darunter.** Sie stehen neben dem
+Bezeichner, den sie erklären, und der ist englisch; zweisprachige Sätze mitten
+im Testcode lesen sich schlechter, nicht besser. Wer eine neue schreibt, hält
+sich an den Bestand der Datei.
 Bezeichner bleiben englisch, daran ändert das nichts
 (`tests/test_language_rules.py` prüft nur die).
 
@@ -186,6 +191,9 @@ Dialoge.
 2. Bei GPL: nicht verwenden — Alternative oder externer Aufruf
 3. Hinweis im Über-Dialog, wenn die Lizenz das verlangt
 4. Lizenzprüfung muss grün bleiben
+5. Untergrenze in `pyproject.toml`, **feste Fassung in `constraints.txt`** —
+   sonst installiert der nächste Klon etwas anderes als die CI. Prüfen mit
+   `python tools/check_env.py`
 
 ## Checkliste: Regelsammlung ändern
 

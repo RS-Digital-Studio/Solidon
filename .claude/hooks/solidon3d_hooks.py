@@ -4,7 +4,9 @@ Ein Skript, fünf Aufgaben — welche, sagt das erste Argument:
 
     sitzungsstart    SessionStart: sagt, in welchem Projekt wir sind. Die
                      globale Konfiguration beschreibt ein Avalonia-Projekt;
-                     dieses hier ist Python.
+                     dieses hier ist Python. Prüft dabei, ob die Umgebung dem
+                     festgeschriebenen Stand entspricht — mehrere Leute am
+                     selben Repository heißt sonst mehrere Fassungssätze.
     nach-aenderung   PostToolUse (Write|Edit): formatiert die geänderte
                      Python-Datei und meldet Lint-Befunde sowie Verstöße gegen
                      die harten Regeln, die sich rein syntaktisch erkennen
@@ -82,17 +84,50 @@ def ruff(*argumente: str) -> tuple[int, str]:
     return lauf.returncode, (lauf.stdout or "") + (lauf.stderr or "")
 
 
+def umgebungshinweis() -> str:
+    """Meldet, wenn die Umgebung nicht dem festgeschriebenen Stand entspricht.
+
+    Der Grund steht in `constraints.txt`: Wer das `-c` beim Installieren
+    vergisst, bekommt andere Fassungen als die, gegen die die Suite grün ist.
+    Am 06.08.2026 zog ein frischer Klon numpy 2.5, und sechzehn Tests fielen
+    um, ohne dass eine Zeile Code sich geändert hatte. Arbeiten mehrere am
+    selben Repository, ist das kein Einzelfall.
+
+    Der Hinweis kostet zwei kurze Unterprozesse und kein Netz. Schlägt er
+    fehl, bleibt er still — ein Hook hält die Arbeit nie auf.
+    """
+    try:
+        if str(WURZEL) not in sys.path:
+            sys.path.insert(0, str(WURZEL))
+        from tools.check_env import pruefen
+
+        befunde, vorschlaege = pruefen()
+    except Exception:  # ein Hinweis darf nie die Sitzung kosten
+        return ""
+    if not befunde:
+        return ""
+    schritte = " ".join(vorschlaege)
+    return (
+        " ACHTUNG, die Umgebung weicht ab: "
+        + " ".join(befunde)
+        + f" Herstellen mit: {schritte} — oder in einem Schritt: "
+        "python tools/check_env.py --install. Bis dahin sagt ein roter Lauf "
+        "nichts über den Code."
+    )
+
+
 def sitzungsstart() -> None:
     eingabe()
     melden(
         "SessionStart",
-        "Projekt Solidon: Python 3.13 mit PySide6, kein Avalonia und kein MVVM — "
+        "Projekt Solidon: Python mit PySide6, kein Avalonia und kein MVVM — "
         "die Stack-Angaben der globalen Konfiguration gelten hier nicht. "
         "Bezeichner, Dateinamen und Modulnamen auf Englisch; Docstrings, Kommentare, "
         "Doku, Commits und Gespräch auf Deutsch mit echten Umlauten. "
         "Der Kern (app/core) bleibt ohne Qt. "
         "Nach jedem Schritt läuft die Suite — /pruefen. Vor dem Commit /regelcheck. "
-        "Die 22 harten Regeln stehen in AGENTS.md, das Sollverhalten im Bauplan.",
+        "Die 22 harten Regeln stehen in AGENTS.md, das Sollverhalten im Bauplan."
+        + umgebungshinweis(),
     )
 
 
