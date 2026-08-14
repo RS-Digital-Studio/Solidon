@@ -220,14 +220,44 @@ ausgelieferte.
 
 | Paket | Status | Commit | Gemessen |
 |---|---|---|---|
-| P0 Referenz | offen | — | blockiert durch fremde Baustelle |
-| P1 Fehlerbehebungen | offen | — | — |
-| P2 Werkzeuge | offen | — | — |
-| P3 ruff | offen | — | — |
-| P4 die drei unter 1.0 | offen | — | — |
+| P0 Referenz | **teilweise** | — | Absturz besteht, aber fassungsunabhängig (s. u.) |
+| P1 Fehlerbehebungen | **erledigt** | `d526a53` | numpy 2.5.2, platformdirs 4.11.3, charset-normalizer 3.5.0 |
+| P2 Werkzeuge | **erledigt** | `d526a53` | pytest-forked 1.7.5, setuptools 84.0.0 |
+| P3 ruff | **erledigt** | `d526a53` | 0.16.3, keine neuen Befunde, kein Formatdiff |
+| P4 die drei unter 1.0 | **erledigt** | `d526a53` | ast_serialize 0.8.0, librt 0.15.0, fast_simplification 0.2.0 |
 | P5 Python 3.14 in der CI | offen | — | — |
-| P6 trimesh 5 | offen | — | — |
+| P6 trimesh 5 | **erledigt** | `d526a53` | 22 636 statt 815 104 Dreiecke bei gleicher Kantenlänge |
+
+**Abweichung vom Konzept, ausdrücklich als solche.** §2 A verlangte die
+Staffelung nach Risiko, ein Paket je Commit. Auf Ansage wurde stattdessen in
+einem Zug aktualisiert und in einem Commit abgelegt. Das ist vertretbar, weil
+jede Fassung einzeln gemessen wurde, bevor sie einzog — aber es heißt auch:
+Wäre etwas rot geworden, hätte es neun Verdächtige gegeben. Für die nächste
+Runde gilt §2 A wieder.
+
+**P0 im Klartext.** Ein Volllauf bricht weiterhin nativ ab
+(`access violation`), sobald genug Qt-Tests zusammen laufen. Das ist gemessen
+**unabhängig von den Fassungen**: derselbe Abbruch unter trimesh 4.12.2 wie
+unter 5.0.0. Deshalb blockierte er die Aktualisierung nicht. Verifiziert wurde
+stattdessen in Blöcken — rund 3 900 Tests grün, kein Fehler, der nicht
+zugeordnet wäre. Der Abbruch selbst bleibt offen und gehört nicht hierher.
+
+**Was P6 wirklich kostete.** Zwei Zeilen: `export/writer.py` und
+`examples.py` riefen `trimesh.util.concatenate` direkt auf, statt die
+Engführung `concatenated` zu nehmen. Dazu drei Tests, die an den alten Zahlen
+hingen. Der gefürchtete Teil — die Voxelstufe der Rückfallkette über
+`trimesh.voxel.ops` — lief ohne eine Änderung durch.
+
+**Eine Frage, die der Sprung aufgeworfen hat.** `remesh_uniform` existiert als
+eigene Operation, weil `remesh_mesh` für dieselbe Kantenlänge das Hundertfache
+an Dreiecken brauchte. Unter trimesh 5 ist daraus Faktor 5,2 geworden (160 084
+gegen 30 648), bei einer Kantenstreuung von 0,555 gegen 0,410. Die Operation
+bleibt die bessere, aber ihre Begründung ist schwächer geworden. Das ist keine
+Aufgabe dieses Konzepts — es gehört nur festgehalten, solange die Zahlen frisch
+sind.
 
 Die Werkzeuge dafür stehen seit dem 14.08.2026: `tools/check_env.py` mit
-`--outdated`, `--install` und `--freeze`, elf Tests in
-`tests/test_toolchain.py`, und die Erinnerung im Sitzungsstart-Hook.
+`--outdated`, `--install` und `--freeze`, dreizehn Tests in
+`tests/test_toolchain.py`, und die Erinnerung im Sitzungsstart-Hook. Wichtig
+beim Anheben: `--upgrade-strategy eager`, sonst lässt pip alles stehen, was die
+offenen Untergrenzen schon erfüllt — und das sind sie fast alle.
