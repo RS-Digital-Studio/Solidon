@@ -414,10 +414,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="ways",
-        summary=_("Anpassen, konstruieren, erzeugen — drei Wege in dieselbe Szene."),
-        title=_("Die drei Wege"),
+        summary=_("Anpassen, konstruieren, erzeugen, formen — vier Wege in dieselbe Szene."),
+        title=_("Die vier Wege"),
         body=_(
-            "Fast jede Aufgabe geht einen von drei Wegen. Zu jedem liegt ein "
+            "Fast jede Aufgabe geht einen von vier Wegen. Zu jedem liegt ein "
             "Beispielprojekt bereit — auf dem Startbildschirm, und jedes "
             "öffnet sich mit einer Tour: rechts steht Schritt für Schritt, "
             "was Sie ausprobieren sollten, und die Tour merkt selbst, wenn "

@@ -307,6 +307,52 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
     ),
     Tour(
+        example_id="weg4-figur-formen",
+        intro=_(
+            "Manche Formen lassen sich nicht bemaßen. Weg 4 baut die grobe Gestalt "
+            "aus Grundkörpern und formt sie dann von Hand — dieses Beispiel hört "
+            "genau dort auf, wo Sie den Pinsel nehmen."
+        ),
+        steps=(
+            TourStep(
+                shows="history",
+                text=_(
+                    "Im Verlauf stehen vier Schritte: zwei Grundkörper, weich "
+                    "verschmolzen, dann gleichmäßig vernetzt. Der dritte ist der, den "
+                    "man auslässt und danach vermisst — ohne ihn hat der Pinsel zu "
+                    "wenige Eckpunkte."
+                ),
+            ),
+            TourStep(
+                text=_(
+                    "Doppelklick auf *Weich verschmelzen* und den Übergang auf 8 "
+                    "stellen: Der Hals wird dicker, ohne dass irgendetwas neu gebaut "
+                    "wird. Das ist der Unterschied zu einem Sculpting-Programm."
+                ),
+            ),
+            TourStep(
+                text=_(
+                    "Jetzt der Pinsel: Ändern → Formen. Malen Sie ein paar Züge, "
+                    "sehen Sie in der Leiste auf die Wandstärke — und beenden Sie mit "
+                    "Fertig."
+                ),
+                done=_op_present("sculpt_strokes"),
+            ),
+            TourStep(
+                shows="history",
+                text=_(
+                    "Strg+Z nimmt die ganze Sitzung zurück, nicht den letzten Zug: Im "
+                    "Verlauf steht ein Schritt, so viele Züge er auch enthält."
+                ),
+                done=_undo_happened,
+            ),
+        ),
+        closing=_(
+            "Das war Weg 4. Was ihn von den anderen dreien unterscheidet: Hier zählt "
+            "eine Geste und keine Zahl — und trotzdem bleibt jeder Schritt änderbar."
+        ),
+    ),
+    Tour(
         example_id="gehaeuse-mit-bausteinen",
         intro=_(
             "Ein Gehäuseboden mit vier Bausteinen, die einzeln je eine halbe Stunde "

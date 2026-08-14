@@ -138,6 +138,66 @@ def way_three() -> Project:
     return project
 
 
+def way_four() -> Project:
+    """Eine Figur formen: verschmelzen, vernetzen, ausformen (§2.2, Weg 4).
+
+    Der Aufbau ist der, den P16.11 dem Käfigeditor entgegenhält — Grundkörper
+    weich verschmolzen. Die Züge legt dieses Skript nicht: Ein Beispiel, das
+    mit viertausend gespeicherten Pinselzügen ankommt, zeigt ein Ergebnis und
+    keinen Weg. Es endet dort, wo der Nutzer den Pinsel nimmt, und die Tour
+    sagt ihm das.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+
+    history.apply(
+        _("Rumpf"),
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 24.0, "depth": 14.0, "height": 40.0, "name": "Figur"},
+            )
+        ],
+    )
+    history.apply(
+        _("Kopf"),
+        [OperationDraft(op="create_sphere", params={"diameter": 18.0, "name": "Kopf"})],
+    )
+    history.apply(
+        _("Kopf setzen"),
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=("obj_2",),
+                params={"dx": 0.0, "dy": 0.0, "dz": 26.0},
+            )
+        ],
+    )
+    history.apply(
+        _("Weich verschmelzen"),
+        [
+            OperationDraft(
+                op="blend_union",
+                inputs=("obj_1", "obj_2"),
+                params={"radius": 4.0, "grid": 1.2},
+            )
+        ],
+    )
+    history.apply(
+        _("Gleichmäßig vernetzen"),
+        [
+            OperationDraft(
+                op="remesh_uniform",
+                # Zwei Körper hinein, einer heraus: Das Verschmelzen verbraucht
+                # beide und legt einen neuen an.
+                inputs=("obj_3",),
+                params={"edge": 1.5, "deviation": 0.0},
+            )
+        ],
+    )
+    return project
+
+
 def housing() -> Project:
     """Ein Gehäuseboden, wie er wirklich gebraucht wird — Bausteine statt Handarbeit.
 
@@ -519,6 +579,7 @@ def main() -> int:
         "weg1-halterung-anpassen": way_one,
         "weg2-halter-konstruieren": way_two,
         "weg3-generiert-aufbereiten": way_three,
+        "weg4-figur-formen": way_four,
         "gehaeuse-mit-bausteinen": housing,
         "schild-zweifarbig": two_colour_sign,
         "drucker-kalibrieren": calibration_plate,

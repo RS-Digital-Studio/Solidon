@@ -19,15 +19,16 @@ from app.core.types import Profile
 
 
 def test_there_is_one_example_per_way() -> None:
-    """§2.2 hat drei Wege, und §37.2 will genau die drei als Beispiele.
+    """§2.2 hat vier Wege, und §37.2 will genau die vier als Beispiele.
 
-    Die weiteren Projekte sind keine vierten Wege — sie zeigen, was auf den
-    dreien an Werkzeug bereitliegt. Die drei müssen aber da sein und vorn
-    stehen: sie beantworten „wie fange ich an", und das ist die erste Frage.
+    Der vierte kam mit P16 dazu: eine Figur formen. Die weiteren Projekte sind
+    keine fünften Wege — sie zeigen, was auf den vieren an Werkzeug
+    bereitliegt. Die vier müssen aber da sein und vorn stehen: sie beantworten
+    „wie fange ich an", und das ist die erste Frage.
     """
     ways = [entry.way for entry in examples.EXAMPLES if entry.way]
 
-    assert ways == ["1", "2", "3"]
+    assert ways == ["1", "2", "3", "4"]
     assert len({entry.id for entry in examples.EXAMPLES}) == len(examples.EXAMPLES)
     for entry in examples.EXAMPLES:
         assert str(entry.title).strip()

@@ -95,6 +95,15 @@ EXAMPLES: Final[tuple[Example, ...]] = (
             "selbst kommt später; hier liegt das fertige Mesh bei."
         ),
     ),
+    Example(
+        id="weg4-figur-formen",
+        title=_("Weg 4 — eine Figur formen"),
+        way="4",
+        doc=_(
+            "Grundkörper weich verschmelzen, gleichmäßig vernetzen, von Hand ausformen. "
+            "Der Weg für Formen, die sich nicht bemaßen lassen."
+        ),
+    ),
     # Die vier darunter sind keine vierten, fünften und sechsten Wege — sie
     # zeigen, was auf den drei Wegen an Werkzeug bereitliegt. Die drei oben
     # beantworten „wie fange ich an", diese „was kann das eigentlich".
