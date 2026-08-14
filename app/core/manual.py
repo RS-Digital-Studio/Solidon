@@ -434,7 +434,57 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Weg 3 — ein erzeugtes Modell aufbereiten.** Was ein Bildmodell "
             "liefert, ist eine Oberfläche und keine Konstruktion. Sie kommt "
             "durch die Reparaturkette, und Bohrungen entstehen danach als "
-            "eigene Schritte — nicht dadurch, dass man das Netz vermisst."
+            "eigene Schritte — nicht dadurch, dass man das Netz vermisst.\n\n"
+            "**Weg 4 — eine Figur formen.** Eine Form, die sich nicht bemaßen "
+            "lässt: aus Grundkörpern grob zusammengesetzt, weich verschmolzen "
+            "und dann von Hand geformt. Das eigene Kapitel dazu steht weiter "
+            "unten; was ihn von den anderen dreien unterscheidet, ist, dass "
+            "hier eine Geste zählt und keine Zahl."
+        ),
+    ),
+    Page(
+        key="sculpting",
+        summary=_("Formen von Hand — und warum ein ganzer Vorgang ein Schritt bleibt."),
+        title=_("Formen"),
+        body=_(
+            "Manche Formen lassen sich nicht bemaßen. Ein Griff, der in der Hand "
+            "liegen soll, eine Figur, ein gewachsener Übergang — dafür gibt es "
+            "den Pinsel.\n\n"
+            "**Der Weg dorthin hat drei Stufen, und die erste wird gern "
+            "übersprungen.** Erst eine grobe Form aus Grundkörpern, weich "
+            "verschmolzen (*Weich verschmelzen* im Menü *Ändern*); dann "
+            "*Gleichmäßig vernetzen*, damit überall gleich viele Eckpunkte "
+            "sitzen; dann *Formen*. Wer die zweite Stufe auslässt, malt auf "
+            "einem Netz, das seinem Pinsel nicht folgen kann — die Leiste sagt "
+            "es, sobald die Sitzung offen ist.\n\n"
+            "**Die ganze Sitzung ist ein Schritt im Verlauf.** Nicht ein "
+            "Schritt je Zug: Eine Figur sind mehrere tausend Züge, und ein "
+            "Verlauf mit viertausend Einträgen ist keiner mehr. Strg+Z nimmt "
+            "während der Sitzung einen Zug zurück, danach die ganze Sitzung.\n\n"
+            "**Sechs Werkzeuge.** *Auftragen* und *Abtragen* sind dasselbe mit "
+            "umgekehrtem Vorzeichen. *Glätten*, *Aufblasen* und *Flachziehen* "
+            "lesen, was vor ihnen liegt, und kosten deshalb je einen "
+            "zusätzlichen Durchgang — die Leiste zeigt, wie viele es sind. "
+            "*Kneifen* zieht zur Strichmitte und macht Kanten.\n\n"
+            "**Die Reihenfolge ist innerhalb einer Etappe egal.** Zwei Züge "
+            "über dieselbe Stelle addieren sich auf die Ausgangsfläche, statt "
+            "dass der zweite auf dem Ergebnis des ersten sitzt. Wer das nicht "
+            "will, setzt *Neu ansetzen* — dann beginnt der nächste Zug auf dem, "
+            "was da ist. Der Schalter gilt für einen Zug.\n\n"
+            "**Symmetrie ist nachträglich änderbar.** Sie steht an der "
+            "Operation und nicht am einzelnen Zug: Eine fertige Sitzung lässt "
+            "sich damit spiegeln. Gespiegelt wird am Ursprung des Objekts — "
+            "nicht an seinem Schwerpunkt, denn der wandert beim Formen.\n\n"
+            "**Wann dieses Werkzeug nicht das richtige ist.** An einem Teil, "
+            "das noch bemaßt wird: Ein Zug sitzt an einer Stelle im Raum, und "
+            "wer die Form darunter ändert, zieht ihm die Fläche weg. Für einen "
+            "Übergang zwischen zwei Körpern ist *Weich verschmelzen* besser — "
+            "drei Zahlen statt hundert Zügen, und jederzeit änderbar. Und wer "
+            "eine Porträtbüste modelliert, ist mit einem Programm besser "
+            "bedient, das dafür gebaut ist; sechs Pinsel sind sechs Pinsel.\n\n"
+            "**Was dieses Programm dafür kann und die anderen nicht:** Während "
+            "Sie formen, läuft die Wandstärke mit. Zu dünne Stellen stehen als "
+            "Zahl in der Leiste, bevor der Slicer sie findet."
         ),
     ),
     Page(

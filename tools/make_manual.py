@@ -765,7 +765,17 @@ def _overlay(target: Path, chapters: list[str], total: int, language: str) -> Pa
 
 def main() -> int:
     load_operations()
-    for language in available_languages():
+    # Nur die Sprachen, für die es eine Seite auf der Website gibt. Seit die
+    # Kataloge für ES, FR, IT und PT dazugekommen sind, liefert
+    # ``available_languages()`` mehr, als hier gebaut werden kann: Jede Sprache
+    # braucht ihren Ordner, ihre Navigation und einen Sprachwechsler, der fünf
+    # Ziele kennt. Das ist ein eigenes Stück Arbeit, und bis es getan ist, ist
+    # eine Meldung ehrlicher als ein Abbruch mit KeyError.
+    known = [language for language in available_languages() if language in PAGES]
+    missing = [language for language in available_languages() if language not in PAGES]
+    if missing:
+        print(f"ohne Handbuchseite, übersprungen: {', '.join(sorted(missing))}")
+    for language in known:
         install_catalog(language, read_catalog(language))
         set_language(language)
         figures.forget()
