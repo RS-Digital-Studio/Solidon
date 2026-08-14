@@ -139,6 +139,28 @@ def test_an_unreadable_image_says_what_it_needs(profile: Profile) -> None:
     assert raised.value.suggestions
 
 
+def test_a_wrong_call_into_imageio_is_not_a_broken_image(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``imread`` wird mit ``mode="L"`` gerufen — einem Argument, das eine
+    künftige Fassung anders nennen kann.
+
+    Fiele der TypeError daraus in den Handler für „je Format etwas anderes",
+    bekäme der Nutzer „das ist keine Bilddatei" für ein Bild, das tadellos ist,
+    und niemand suchte den Fehler im eigenen Aufruf
+    (``errors.PROGRAMMING_ERRORS``).
+    """
+    import imageio.v3 as iio
+
+    def wrong(*_args: object, **_kwargs: object) -> None:
+        raise TypeError("imread() got an unexpected keyword argument 'mode'")
+
+    monkeypatch.setattr(iio, "imread", wrong)
+
+    with pytest.raises(TypeError):
+        sample_image(b"was auch immer")
+
+
 # --- was es mit dem Körper macht ------------------------------------------------
 
 

@@ -250,6 +250,30 @@ def test_a_wrong_call_into_the_kernel_is_not_swallowed(monkeypatch: pytest.Monke
         shared_volume(solid().raw, solid().raw)
 
 
+def test_the_fallback_chain_does_not_swallow_a_wrong_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dieselbe Regel eine Ebene höher — dort, wo sie am meisten verdeckt.
+
+    ``shared_volume`` ließ Programmfehler durch, die Rückfallkette nicht: Sie
+    fing jede Ausnahme, notierte „Stufe gescheitert" ins Protokoll und probierte
+    die nächste. Ein falscher Aufruf sah damit aus wie vier Kerne, die nacheinander
+    aufgeben — und der Nutzer las am Ende, seine Geometrie sei schuld.
+
+    Die Stufen rufen mit eigenen Argumenten (``voxelized(pitch=...)``,
+    ``matrix_to_marching_cubes(matrix=..., pitch=...)``), also gilt hier genau
+    die Vorsichtsmaßnahme, die ``errors.PROGRAMMING_ERRORS`` beschreibt.
+    """
+
+    def wrong(*_args: object, **_kwargs: object) -> None:
+        raise TypeError("union(): incompatible function arguments")
+
+    monkeypatch.setattr(trimesh.boolean, "union", wrong)
+
+    with pytest.raises(TypeError):
+        boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))])
+
+
 def test_a_kernel_that_gives_up_is_still_an_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     """Die andere Hälfte der Regel: wofür der Handler wirklich da ist, bleibt
     gefangen.

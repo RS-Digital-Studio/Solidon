@@ -105,6 +105,13 @@ def boolean(
         attempted.append(stage)
         try:
             result = _run_stage(kind, meshes, stage, seed)
+        except PROGRAMMING_ERRORS:
+            # Die Stufen rufen mit eigenen Argumenten — ``voxelized(pitch=...)``,
+            # ``matrix_to_marching_cubes(matrix=..., pitch=...)``. Fiele ein
+            # falscher Aufruf in den Handler darunter, sähe er aus wie vier
+            # Kerne, die nacheinander aufgeben, und der Nutzer läse am Ende, es
+            # liege an seiner Geometrie.
+            raise
         except Exception as problem:  # Kerne scheitern auf kerneigene Arten
             _log.info("boolean stage %s failed: %s", stage, problem)
             continue
