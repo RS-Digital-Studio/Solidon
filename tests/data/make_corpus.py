@@ -27,7 +27,7 @@ def write(mesh: trimesh.Trimesh, name: str) -> None:
 
 
 def cube_clean() -> None:
-    """The base case: watertight, 12 triangles, written in millimetres."""
+    """Der Grundfall: wasserdicht, 12 Dreiecke, in Millimetern geschrieben."""
     write(trimesh.creation.box(extents=(20.0, 20.0, 20.0)), "cube_clean.stl")
 
 
@@ -39,7 +39,7 @@ def bracket_inch() -> None:
 
 
 def plate_cm() -> None:
-    """A plate stored in centimetres — 8 x 5 x 0.5 cm."""
+    """Eine Platte in Zentimetern abgelegt — 8 × 5 × 0,5 cm."""
     write(trimesh.creation.box(extents=(8.0, 5.0, 0.5)), "plate_cm.stl")
 
 

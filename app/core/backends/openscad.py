@@ -169,7 +169,7 @@ def _is_local(path: str) -> bool:
 
 
 def available() -> bool:
-    """Whether OpenSCAD can be called at all."""
+    """Ob sich OpenSCAD überhaupt aufrufen lässt."""
     return executable() is not None
 
 

@@ -462,5 +462,5 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
 
 
 def component_count(mesh: MeshData) -> int:
-    """How many separate bodies the mesh holds (§21.1)."""
+    """Wie viele getrennte Körper das Netz enthält (§21.1)."""
     return len(face_components(mesh.raw))

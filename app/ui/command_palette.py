@@ -35,7 +35,7 @@ def matches(entry: PaletteEntry, query: str) -> bool:
 
 
 class CommandPalette(QDialog):
-    """Type, pick, run."""
+    """Tippen, wählen, ausführen."""
 
     def __init__(self, entries: list[PaletteEntry] | None = None, parent: QWidget | None = None):
         super().__init__(parent)

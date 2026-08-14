@@ -136,6 +136,13 @@ class SettingsDialog(QDialog):
                 "jeder Aufruf ist eine Transaktion, die ein Strg+Z zurücknimmt."
             )
         )
+        # Die Portnummer gehört zur Fernsteuerung und nicht neben sie: Sie
+        # stand bedienbar da, während der Haken aus war — eine Einstellung für
+        # etwas, das nicht läuft. Derselbe Tooltip, damit die Erklärung auch
+        # den erreicht, der zuerst auf das Feld zeigt.
+        self.remote_port.setEnabled(self.remote.isChecked())
+        self.remote_port.setToolTip(self.remote.toolTip())
+        self.remote.toggled.connect(self.remote_port.setEnabled)
 
         self.printer = _choices(
             self,

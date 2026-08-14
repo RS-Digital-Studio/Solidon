@@ -85,7 +85,7 @@ class SearchResult:
 
     @property
     def improvement(self) -> float:
-        """Support volume saved against the starting position, in mm³."""
+        """Wie viel Stützvolumen gegenüber der Ausgangslage gespart wird, in mm³."""
         return max(0.0, self.baseline.support_volume - self.best.support_volume)
 
 

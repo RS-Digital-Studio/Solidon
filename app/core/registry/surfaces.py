@@ -36,7 +36,7 @@ from app.i18n import TranslatableText, _, format_decimal
 
 
 def menu_tree(registry: Registry | None = None) -> tuple[MenuSection, ...]:
-    """The menu, in catalogue order (§25)."""
+    """Das Menü, in der Reihenfolge des Katalogs (§25)."""
     source = registry or REGISTRY
     return tuple(
         MenuSection(category=category, title=CATEGORIES[category], entries=entries)

@@ -23,7 +23,7 @@ MAX_RECENT = 10
 
 @dataclass(slots=True)
 class UiSettings:
-    """Everything the window remembers between sessions."""
+    """Alles, was sich das Fenster über Sitzungen hinweg merkt."""
 
     recent: list[str] = field(default_factory=list)
     navigation: str = "slicer"

@@ -17,6 +17,7 @@ sieht, dass man sie anklicken kann.
 
 from __future__ import annotations
 
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -455,7 +456,24 @@ class StartScreen(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(scroll)
 
+        self._order_the_tab_chain()
         self.show_recent([])
+
+    def _order_the_tab_chain(self) -> None:
+        """Die Knöpfe vor die Kacheln, für den, der ohne Maus kommt (§19.2).
+
+        Qt folgt der Reihenfolge, in der die Widgets entstanden sind, und die
+        Kacheln entstehen im Konstruktor vor den Knöpfen — gemessen brauchte
+        es **neun** Tabulatorschritte bis „Neues Projekt", dem vorbelegten
+        Hauptknopf: acht Beispiele und dann er. Für die Maus ist die Anordnung
+        richtig, für die Tastatur war sie umgekehrt.
+
+        Gesetzt wird die Kette und nicht die Anordnung: Wo etwas steht,
+        entscheidet weiterhin das Layout.
+        """
+        chain = [self.new_button, self.open_button, self.manual_button, *self.tiles]
+        for first, second in pairwise(chain):
+            QWidget.setTabOrder(first, second)
 
     def show_recent(self, paths: list[Path]) -> None:
         """Die zuletzt geöffneten Projekte — oder eine Zeile, wenn es keine gibt.
@@ -494,6 +512,12 @@ class StartScreen(QWidget):
             tile.chosen.connect(self.openRequested)
             self.examples_grid.addWidget(tile, index // TILE_COLUMNS, index % TILE_COLUMNS)
             self.tiles.append(tile)
+
+        # Neue Kacheln stehen am Ende der Tabulatorkette, wo Qt sie anlegt —
+        # also wieder vor die Knöpfe. Beim Aufbau gibt es die Knöpfe noch
+        # nicht; dann setzt sie der Konstruktor selbst.
+        if hasattr(self, "new_button"):
+            self._order_the_tab_chain()
 
     def _on_recent(self, item: QListWidgetItem) -> None:
         stored = item.data(Qt.ItemDataRole.UserRole)

@@ -93,7 +93,7 @@ class ToolRow(QWidget):
 
 
 class FirstRunDialog(QDialog):
-    """One page, four questions, everything skippable."""
+    """Eine Seite, vier Fragen, alles überspringbar."""
 
     importRequested = Signal()
 

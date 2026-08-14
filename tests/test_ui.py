@@ -500,7 +500,7 @@ def test_a_narrow_view_leaves_the_dialog_where_it_was(qt_app: QApplication) -> N
 
 
 def test_the_about_dialog_carries_the_licence_information(qt_app: QApplication) -> None:
-    """§36: licence notices belong in the about dialog."""
+    """§36: Lizenzhinweise gehören in den Über-Dialog."""
     from PySide6.QtWidgets import QLabel, QTextBrowser
 
     from app.ui.dialogs import AboutDialog

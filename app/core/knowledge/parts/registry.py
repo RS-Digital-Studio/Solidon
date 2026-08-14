@@ -82,7 +82,7 @@ class PartChange:
 
 @dataclass(frozen=True, slots=True)
 class PartSpec:
-    """Everything known about one part."""
+    """Alles, was über einen Baustein bekannt ist."""
 
     name: str
     title: TranslatableText | str

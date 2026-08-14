@@ -82,7 +82,7 @@ class MeasurementList:
 
 
 def distance(a: Vec3, b: Vec3) -> float:
-    """Point to point, in millimetres."""
+    """Von Punkt zu Punkt, in Millimetern."""
     return float(np.linalg.norm(np.asarray(b, dtype=float) - np.asarray(a, dtype=float)))
 
 

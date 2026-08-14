@@ -176,7 +176,7 @@ def surface_files() -> list[Path]:
 
 @pytest.mark.parametrize("path", surface_files(), ids=lambda path: path.name)
 def test_no_hard_wired_text_in_the_surface(path: Path) -> None:
-    """AGENTS.md rule 20: everything the user reads goes through tr()."""
+    """AGENTS.md Regel 20: alles, was der Nutzer liest, geht durch tr()."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     offenders: list[str] = []
 

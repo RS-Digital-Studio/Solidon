@@ -98,7 +98,7 @@ class AskRequest:
 
 
 class _EvaluationWorker(QThread):
-    """One evaluation pass. Owns nothing, reports everything."""
+    """Ein Auswertungslauf. Besitzt nichts, meldet alles."""
 
     finishedWith = Signal(object)
     failedWith = Signal(object)

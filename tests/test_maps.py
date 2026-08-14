@@ -34,7 +34,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def plate() -> MeshData:
-    """80 × 50 × 8 mm with four bores."""
+    """80 × 50 × 8 mm mit vier Bohrungen."""
     return place_on_bed(
         normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
     )
