@@ -223,14 +223,19 @@ def test_a_torn_remesh_says_so_instead_of_claiming_the_shape_is_fine(profile: Pr
 def test_remeshing_an_imported_part_keeps_it_closed_and_says_the_price(
     profile: Profile,
 ) -> None:
-    """Beide Wege haben einen Haken, und der Kunde erfährt, welcher ihn traf.
+    """Geschlossen bleibt die Bedingung — was es kostet, hat trimesh 5 geändert.
 
     ``plate_holes`` hat winzige Bohrungsfacetten neben großen Grundflächen. Der
-    bedarfsgerechte Weg schafft 5 mm mit 63 040 Dreiecken, zerreißt das Netz
-    dabei aber; der gleichmäßige hält es geschlossen und braucht 815 104, weil
-    er die winzigen Facetten mitzerteilt. Geschlossen wiegt schwerer — und der
-    Sprung von 796 auf über achthunderttausend gehört gesagt, denn danach ist
-    jede Operation langsamer.
+    bedarfsgerechte Weg schafft 5 mm, zerreißt das Netz dabei aber; der
+    gleichmäßige hält es geschlossen, weil er die winzigen Facetten mitzerteilt.
+
+    Was er dafür verlangt, ist eingebrochen (gemessen am 14.08.2026 an
+    derselben Datei): Aus 796 Dreiecken wurden unter **trimesh 4.12.2**
+    815 104 — Faktor 1024, und die längste Kante lag bei 2,51 mm, also weit
+    unter den verlangten 5. Unter **trimesh 5.0.0** sind es 22 636, Faktor 28,
+    und die längste Kante trifft die 5,0 genau. Der Warnbefund
+    ``mesh.remesh_dense`` bleibt hier deshalb aus; er greift erst ab dem
+    Hundertfachen und hat seinen eigenen Test darunter.
     """
     mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
     entry = SceneObject(id="obj_1", name="Platte", mesh=mesh)
@@ -241,7 +246,30 @@ def test_remeshing_an_imported_part_keeps_it_closed_and_says_the_price(
     assert after.is_watertight, "geschlossen bleibt die Bedingung, nicht der Wunsch"
     assert after.component_count == 1
     assert max(mesh_ops.edge_lengths(as_mesh_data(after))) <= 5.0 + 1e-9
-    assert "mesh.remesh_dense" in {finding.code for finding in result.findings}
+    assert "mesh.remeshed" in {finding.code for finding in result.findings}
+    assert after.triangle_count < mesh.triangle_count * mesh_ops.DENSE_FACTOR, (
+        "das Netz ist wieder explodiert — dann gehört der Warnbefund geprüft, "
+        "nicht diese Schranke gelockert"
+    )
+
+
+def test_a_net_that_explodes_says_so(profile: Profile, monkeypatch) -> None:
+    """Der Warnbefund hing an einer Zahl, die trimesh 5 unterschritten hat.
+
+    Vor dem Sprung löste ``plate_holes`` ihn von selbst aus — mit dem
+    Tausendfachen war die Schwelle vom Hundertfachen leicht erreicht. Jetzt
+    liegt derselbe Fall bei Faktor 28, und ohne diesen Test wäre der Pfad
+    ungeprüft: Er ist nicht überflüssig geworden, er wird nur seltener
+    gebraucht.
+    """
+    monkeypatch.setattr(mesh_ops, "DENSE_FACTOR", 2)
+    mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh)
+
+    result = run("remesh_mesh", entry, profile, edge=5.0)
+
+    codes = {finding.code for finding in result.findings}
+    assert "mesh.remesh_dense" in codes, "der Sprung gehört gesagt, sonst sucht niemand die Ursache"
 
 
 def test_an_edge_length_beyond_reach_names_one_that_works(profile: Profile) -> None:

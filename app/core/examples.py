@@ -104,9 +104,9 @@ EXAMPLES: Final[tuple[Example, ...]] = (
             "Der Weg für Formen, die sich nicht bemaßen lassen."
         ),
     ),
-    # Die vier darunter sind keine vierten, fünften und sechsten Wege — sie
-    # zeigen, was auf den drei Wegen an Werkzeug bereitliegt. Die drei oben
-    # beantworten „wie fange ich an", diese „was kann das eigentlich".
+    # Die fünf darunter sind keine weiteren Wege — sie zeigen, was auf den vier
+    # Wegen an Werkzeug bereitliegt. Die vier oben beantworten „wie fange ich
+    # an", diese „was kann das eigentlich".
     Example(
         id="gehaeuse-mit-bausteinen",
         title=_("Bausteine — Muttern, Buchsen, Kabel"),
@@ -197,16 +197,14 @@ def render_preview(meshes: Iterable[object], theme: str = "light") -> str:
     Heruntergerechnet, bevor gezeichnet wird — siehe ``PREVIEW_TRIANGLES``.
     Das Ergebnis fließt nirgends zurück; es ist ein Bild, keine Geometrie.
     """
-    import trimesh
-
     from app.core import drawing
-    from app.core.geom.mesh import MeshData
+    from app.core.geom.mesh import MeshData, concatenated
     from app.core.geom.mesh_ops import decimate
 
     raw = [mesh.raw for mesh in meshes]  # type: ignore[attr-defined]
     if not raw:
         return ""
-    body = trimesh.util.concatenate(raw) if len(raw) > 1 else raw[0]
+    body = concatenated(raw) if len(raw) > 1 else raw[0]
     reduced = decimate(MeshData.of(body), PREVIEW_TRIANGLES)
     tone = drawing.palette(theme).solid  # type: ignore[arg-type]
     return drawing.project(

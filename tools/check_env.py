@@ -419,7 +419,10 @@ def zeige_neueres(python: Path) -> int:
     if moeglich:
         print(
             "\nSo wird daraus ein neuer Stand:\n"
-            f'  1. {venv_name()} -m pip install -U -e ".[{EXTRAS}]"\n'
+            f"  1. {venv_name()} -m pip install -U --upgrade-strategy eager "
+            f'-e ".[{EXTRAS}]"\n'
+            "     (ohne `eager` lässt pip alles stehen, was die Untergrenzen\n"
+            "     schon erfüllt — und das sind sie fast alle)\n"
             "  2. Die Suite fahren — rot heißt: die Fassung bleibt, wo sie war\n"
             "  3. python tools/check_env.py --freeze\n"
             "  4. `constraints.txt` committen, mit dem Grund im Text"

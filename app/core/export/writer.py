@@ -26,7 +26,7 @@ from app.core import activation
 from app.core.errors import NeedsSolidError, ValidationError
 from app.core.export import threemf
 from app.core.export.slicer_keys import SlicerFlavour, wants_bed_coordinates
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.prepare import check_build_volume
 from app.core.log import get_logger
 from app.core.types import (
@@ -617,7 +617,7 @@ def _cura_assembly(objects: Sequence[SceneObject], bed: tuple[float, float] | No
         if bed is not None:
             body.apply_translation((bed[0] / 2.0, bed[1] / 2.0, 0.0))
         bodies.append(body)
-    joined = trimesh.util.concatenate(bodies) if len(bodies) > 1 else bodies[0]
+    joined = concatenated(bodies) if len(bodies) > 1 else bodies[0]
     return MeshData.of(joined).to_stl()
 
 

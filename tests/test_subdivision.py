@@ -83,16 +83,19 @@ def object_of(mesh: MeshData, name: str = "Teil") -> SceneObject:
 # --- gleichmäßig vernetzen ------------------------------------------------------
 
 
-def test_uniform_remeshing_evens_out_what_remeshing_only_scaled_down(
+def test_uniform_remeshing_evens_out_more_than_splitting_does(
     profile: Profile,
 ) -> None:
     """Der Unterschied zu ``remesh_mesh``, in einer Zahl.
 
-    ``remesh_mesh`` teilt jede zu lange Kante — und teilt damit auch jede
-    kurze mit, sobald es gleichmäßig teilen muss. Das Verhältnis zwischen der
-    längsten und der kürzesten Kante bleibt dabei, was es war: gemessen an
-    ``plate_holes`` vorher 2,224 und nachher 2,224, auf die vierte Stelle
-    identisch. Die Operation macht das Netz feiner, nicht gleichmäßiger.
+    Bis trimesh 4 war er schroff: Teilen ließ die Kantenstreuung, wie sie war
+    — an ``plate_holes`` vorher 2,224 und nachher 2,224, auf die vierte Stelle
+    identisch. Die Operation machte das Netz feiner, nicht gleichmäßiger.
+
+    trimesh 5 teilt selbst gleichmäßig und kommt auf **0,555** (gemessen am
+    14.08.2026). Der Vorsprung ist damit kleiner geworden, aber er steht:
+    ``remesh_uniform`` liegt bei **0,410** — und braucht dafür ein Fünftel der
+    Dreiecke, siehe den Test darunter.
     """
     plate = corpus("plate_holes.stl")
     before = spread(plate)
@@ -102,8 +105,9 @@ def test_uniform_remeshing_evens_out_what_remeshing_only_scaled_down(
     evened = result.outputs[0].mesh
 
     assert before > 2.0, "die Vorlage ist ungleichmäßig, sonst prüft dieser Test nichts"
-    assert spread(only_split) == pytest.approx(before, rel=0.01), "Teilen ändert daran nichts"
-    assert spread(evened) < 0.5, "gleichmäßig vernetzen schon"
+    assert spread(only_split) < before, "seit trimesh 5 teilt auch remesh_mesh gleichmäßiger"
+    assert spread(evened) < spread(only_split), "gleichmäßig vernetzen liegt weiter vorn"
+    assert spread(evened) < 0.5
 
 
 def test_uniform_remeshing_keeps_the_shape_exactly(profile: Profile) -> None:
@@ -126,18 +130,21 @@ def test_uniform_remeshing_costs_a_fraction_of_the_triangles(profile: Profile) -
     """Warum es eine eigene Operation ist und keine Zeile in ``remesh_mesh``.
 
     Für dieselbe Zielkantenlänge von 1,5 mm braucht ``remesh_mesh`` auf
-    ``plate_holes`` 3 260 416 Dreiecke — es muss gleichmäßig teilen, um das
-    Netz nicht zu zerreißen, und zerteilt dabei die winzigen Bohrungsfacetten
-    mit. ``remesh_uniform`` kommt auf rund 30 000. Das ist Faktor hundert, und
-    damit der Unterschied zwischen einem Netz, mit dem sich sculpten lässt,
-    und einem, das jede weitere Operation lahmlegt.
+    ``plate_holes`` **160 084** Dreiecke, ``remesh_uniform`` **30 648** —
+    Faktor 5,2 (gemessen am 14.08.2026 unter trimesh 5.0.0).
+
+    Hier stand Faktor **hundert**: 3 260 416 gegen rund 30 000. Der Abstand
+    ist eingebrochen, weil trimesh 5 sparsamer teilt, statt jede winzige
+    Bohrungsfacette mitzuzerteilen. Die Operation bleibt die schonendere und
+    die gleichmäßigere — aber ihr Vorsprung trägt sich nicht mehr von selbst.
+    Wer sie infrage stellt, misst neu, statt diese Zahlen fortzuschreiben.
     """
     plate = corpus("plate_holes.stl")
 
     result = run("remesh_uniform", object_of(plate), profile, edge=1.5)
 
     evened = result.outputs[0].mesh
-    assert evened.triangle_count < mesh_ops.remesh(plate, 1.5).triangle_count / 50
+    assert evened.triangle_count < mesh_ops.remesh(plate, 1.5).triangle_count / 5
     assert evened.triangle_count > plate.triangle_count, "feiner wird es trotzdem"
 
 

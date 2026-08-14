@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "solidon3d"
-version = "0.7.0"
+version = "0.1.0"
 description = "Desktop application for building, generating and editing printable models"
 requires-python = ">=3.13"
 license = { file = "LICENSE" }
@@ -18,9 +18,12 @@ geom = [
   # trimesh braucht einen Graphen für Wasserdichtheit und Komponenten; scipy
   # bringt zudem den Zuordnungslöser für das Feature-Matching aus §21.2 mit.
   "scipy>=1.13",
-  # Unter 5 gepinnt: der Major-Sprung wird als eigene Migration gemacht —
-  # der erste frische CI-Lauf mit trimesh 5.0.0 war rot (siehe ROADMAP).
-  "trimesh>=4.4,<5",
+  # Der Sprung auf 5 ist am 14.08.2026 gemacht. Er kostete zwei Zeilen: Zwei
+  # Stellen riefen ``trimesh.util.concatenate`` direkt auf, statt die
+  # Engführung ``mesh.concatenated`` zu nehmen, die es dafür gibt. Bezahlt
+  # hat er sich beim gleichmäßigen Vernetzen — dieselbe Lochplatte, dieselbe
+  # Kantenlänge, 22 636 Dreiecke statt 815 104.
+  "trimesh>=5.0",
   "manifold3d>=2.5",
   # Polygonarbeit hinter dem gedeckelten Schnitt (§18.2). BSD-3, bündelt GEOS (LGPL).
   "shapely>=2.0",

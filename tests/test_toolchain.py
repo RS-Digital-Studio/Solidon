@@ -105,6 +105,31 @@ def test_ruff_targets_the_version_that_is_demanded() -> None:
     )
 
 
+def test_the_version_is_the_same_in_both_places_that_carry_it() -> None:
+    """Die Fassung steht in ``branding.py`` und in ``pyproject.toml``.
+
+    Sie ist dieselbe Zahl mit zwei Lesern: der Über-Dialog, jede Projektdatei
+    (``app_version``), das 3MF, der Fehlerbericht und der Update-Vergleich lesen
+    ``APP_VERSION``; die Paketmetadaten und alles, was ``pip`` daraus macht,
+    lesen ``pyproject.toml``. Laufen sie auseinander, nennt ein Paket eine
+    andere Fassung als das Fenster darin — und niemand merkt es, denn keines von
+    beiden ist kaputt.
+
+    Der Anlass steht in der ROADMAP unter der Demo: die Zahl wurde am 14.08.2026
+    von 0.7.0 auf 0.1.0 gesetzt, und bis dahin hielt die beiden Orte nichts
+    zusammen außer Aufmerksamkeit. Die Zählregel — letzte Stelle plus eins je
+    ausgeliefertem Bau — dreht also immer an zwei Stellen.
+    """
+    from app.branding import APP_VERSION
+
+    packaged = str(_pyproject()["project"]["version"])
+
+    assert packaged == APP_VERSION, (
+        f"pyproject.toml nennt {packaged}, app/branding.py nennt {APP_VERSION}. "
+        "Beide tragen dieselbe Fassung — eine von ihnen wurde vergessen."
+    )
+
+
 # --- der festgeschriebene Versionssatz -------------------------------------------
 #
 # `constraints.txt` hält fest, *in welcher* Fassung ein Paket installiert wird.
@@ -167,13 +192,36 @@ def test_the_rebuild_command_pins_the_versions() -> None:
 # die absichtlich gesetzt sind.
 
 
-def test_a_deliberate_upper_bound_is_read_from_the_project() -> None:
-    """`trimesh>=4.4,<5` ist eine Entscheidung: der Major-Sprung wird migriert."""
+def test_a_deliberate_upper_bound_is_read_from_the_project(tmp_path, monkeypatch) -> None:
+    """Eine Obergrenze ist eine Entscheidung, und `--outdated` muss sie kennen.
+
+    Sonst schlägt es jede Woche einen Sprung vor, der absichtlich nicht kommt
+    — und wird nach zwei Wochen ignoriert. Geprüft wird an einer erfundenen
+    Datei: Das Projekt selbst hat seit dem trimesh-5-Sprung am 14.08.2026
+    **keine** Obergrenze mehr, und ein Test, der eine braucht, hinge davon ab,
+    dass wieder eine entsteht.
+    """
+    datei = tmp_path / "pyproject.toml"
+    datei.write_text(
+        '[project]\ndependencies = [\n  "numpy>=1.26",\n  "trimesh>=4.4,<5",\n]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_env, "PYPROJECT", datei)
+
     grenzen = obergrenzen()
 
-    assert grenzen.get("trimesh") == "5", (
-        "die Obergrenze für trimesh wird nicht gefunden — dann schlägt "
-        "`--outdated` einen Sprung vor, der absichtlich nicht kommt"
+    assert grenzen.get("trimesh") == "5"
+    assert "numpy" not in grenzen, "eine offene Untergrenze ist keine Grenze"
+
+
+def test_the_project_currently_pins_nothing_from_above() -> None:
+    """Der Ist-Stand, damit sein Ende auffällt.
+
+    Fällt dieser Test, hat jemand eine Obergrenze gesetzt — dann gehört der
+    Grund in `pyproject.toml` daneben, so wie es bei `trimesh<5` stand.
+    """
+    assert obergrenzen() == {}, (
+        f"neue Obergrenze(n): {sorted(obergrenzen())} — steht der Grund daneben?"
     )
 
 
