@@ -454,3 +454,45 @@ def test_the_card_edge_carries_the_accent() -> None:
         # Und nicht mehr die Trennfarbe: Die steht weiter zwischen Zeilen und
         # Feldern, nur nicht mehr an der Kante der Karte.
         assert f"border: 1px solid {THEMES[theme]['line']}" not in sheet  # type: ignore[index]
+
+
+def test_the_dodge_margin_covers_the_card_it_dodges(window: MainWindow) -> None:
+    """Ausweichen, das die eigene Breite nicht kennt, weicht nicht aus.
+
+    Der Skizzeneditor bekommt über ``set_zone_margins`` gesagt, wie weit er
+    links und rechts wegbleiben soll. Gemeldet wurden die Grundbreiten
+    (260 und 300) — und die gelten nur bis etwa 2000 Pixel Fensterbreite.
+    Darüber wachsen die Karten mit: im Vollbild war die linke 332 Pixel breit,
+    der Rand also 72 Pixel zu schmal. Genau dort, bei x = 284, lag die
+    Ebenenwahl des Editors unter der Karte — zusammen mit der ersten
+    Zwangsbedingung, dem Rückgängig-Knopf und der Überschrift der
+    Bedingungsspalte.
+    """
+    seen: list[tuple[int, int]] = []
+
+    class Dodger(QWidget):
+        """Eine Ansicht, die ausweichen möchte, und mitschreibt, worum sie
+        gebeten wird."""
+
+        def set_zone_margins(self, left: int, right: int) -> None:
+            seen.append((left, right))
+
+    host = window.overlay
+    host.view = Dodger(host)
+    host.resize(2560, 1369)
+    host._place()
+
+    assert seen, "die Ansicht wurde überhaupt gefragt"
+    left_margin, right_margin = seen[-1]
+
+    left = host.left
+    right = host.right
+    assert left is not None and right is not None
+    assert left.geometry().width() > LEFT_WIDTH, "die Karte ist mitgewachsen"
+
+    assert left_margin > left.geometry().right(), (
+        "der linke Rand deckt die linke Karte vollständig"
+    )
+    assert right_margin > host.width() - right.geometry().left(), (
+        "und der rechte die rechte"
+    )

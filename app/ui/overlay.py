@@ -529,6 +529,14 @@ class OverlayHost(QWidget):
 
         Wer ausweichen will, bringt ``set_zone_margins`` mit; wer nichts
         mitbringt, bekommt weiterhin die ganze Fläche.
+
+        **Gemeldet wird die Breite, die die Karte wirklich bekommt**, also
+        dieselbe Rechnung wie in ``_lay_out``. Vorher standen hier die
+        Grundwerte, und die gelten nur bis etwa 2000 Pixel Fensterbreite:
+        Im Vollbild war die linke Karte 332 statt 260 Pixel breit, der Rand
+        also 72 Pixel zu schmal — und genau dort, bei x = 284, lag die
+        Ebenenwahl des Skizzeneditors unter der Karte. Ausweichen, das die
+        eigene Breite nicht kennt, weicht am Ende nicht aus.
         """
         inner = getattr(self.view, "currentWidget", None)
         target = inner() if callable(inner) else self.view
@@ -537,9 +545,10 @@ class OverlayHost(QWidget):
             return
         showing_left = self.left is not None and self.left.isVisibleTo(self)
         showing_right = self.right is not None and self.right.isVisibleTo(self)
+        width = self.width()
         setter(
-            LEFT_WIDTH + 2 * MARGIN if showing_left else 0,
-            RIGHT_WIDTH + 2 * MARGIN if showing_right else 0,
+            card_width(LEFT_WIDTH, LEFT_MAX, width) + 2 * MARGIN if showing_left else 0,
+            card_width(RIGHT_WIDTH, RIGHT_MAX, width) + 2 * MARGIN if showing_right else 0,
         )
 
     def _share_room(self, zone: QWidget, room: int) -> None:
