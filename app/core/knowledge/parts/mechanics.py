@@ -13,7 +13,7 @@ sagt.
 from __future__ import annotations
 
 import math
-from typing import cast
+from typing import Final, cast
 
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
@@ -395,6 +395,174 @@ def _profile(shape: str, diameter: float, length: float) -> MeshData:
         # ist also das √2-fache der breiten Seite.
         return shapes.dovetail(diameter / math.sqrt(2.0), length)
     return shapes.cylinder(diameter, length)
+
+
+#: Der Anlaufwinkel des Schnapphakens, in Grad. Derselbe Wert wie die Vorgabe
+#: von :class:`SnapFitParams` — flacher rastet leichter ein, steiler hält
+#: fester, und beides schon einmal abgewogen zu haben genügt.
+SNAP_LEAD_ANGLE: Final = 35.0
+
+#: Was eine 0,4er Düse als tragende Wand ablegen kann: zwei Außenwände. Ein
+#: Federarm darunter ist keiner — er ist eine Fahne, die beim ersten Einrasten
+#: abreißt.
+SNAP_MIN_ARM: Final = 0.8
+
+
+@op_params
+class SnapConnectorParams(BaseParams):
+    # Vier Millimeter als Untergrenze, und das ist gerechnet: Unter 3,85 mm
+    # bleibt bei vollem Spiel im Umkreis kein Platz mehr für einen Arm, der
+    # zwei Außenwände dick ist. Die Nahtplanung fragt ohnehin nie darunter —
+    # ihre Länge von 1,5 · Ø trifft die Acht-Millimeter-Grenze erst ab 5,33 mm.
+    diameter: float = param(
+        title=_("Durchmesser"),
+        default=6.0,
+        unit="mm",
+        minimum=4.0,
+        maximum=30.0,
+        doc=_(
+            "Der Kreis, in den der Verbinder hineinpasst — dasselbe Maß wie beim "
+            "Passstift, damit die Nahtplanung für beide gleich rechnet."
+        ),
+    )
+    length: float = param(
+        title=_("Länge"),
+        default=9.0,
+        unit="mm",
+        minimum=8.0,
+        maximum=100.0,
+        doc=_(
+            "Wie weit der Arm heraussteht, beziehungsweise wie tief die Tasche geht. "
+            "Sie bestimmt zugleich die Armstärke: ein Zehntel davon."
+        ),
+    )
+    kind: str = param(
+        title=_("Art"),
+        default="pin",
+        choices=("pin", "bore"),
+        doc=_("Der Federarm selbst oder die Tasche mit der Rastkante dazu."),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1.0,
+        placement="advanced",
+        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+    )
+
+
+@register_part(
+    name="snap_connector",
+    title=_("Schnappverbinder für eine Naht"),
+    group="mechanics",
+    params=SnapConnectorParams,
+    features=["arm", "catch"],
+    doc=_(
+        "Federarm und Tasche als Paar — die Hälften rasten ein, statt geklebt zu "
+        "werden. Die Armstärke ist ein Zehntel der Länge; kürzer als 8 mm gibt es "
+        "ihn nicht, darunter wäre der Arm dünner, als eine Düse ihn tragfähig legt."
+    ),
+    changes=[
+        PartChange(
+            version="2",
+            date="2026-08-14",
+            reason="Der Schnapper als Verbinder in der Trennfuge (§25, Trennen).",
+        )
+    ],
+)
+def snap_connector(raw: BaseParams) -> PartResult:
+    """Ein Schnappverbinder, wie ihn eine Trennfuge braucht.
+
+    **Warum das ein eigener Baustein ist und kein Wert in der Formliste des
+    Passstifts:** Rund, Sechskant und Schwalbenschwanz sind Querschnitte —
+    dieselbe Rechnung, ein anderes Vieleck. Ein Schnapper ist ein Mechanismus.
+    Er hat einen Arm, der federn muss, einen Haken, der einrastet, und in der
+    Gegenseite eine Tasche mit Rastkante *und* Biegeraum. Das durch
+    ``_profile`` zu schicken hieße, drei Körper als einen zu behaupten.
+
+    **Die Maße folgen aus der Länge, nicht aus einem Regler.** Die Armstärke
+    ist ``length / SNAP_RATIO`` — zehn zu eins ist das Verhältnis, das PLA
+    federnd übersteht. Daraus fällt die Untergrenze der Länge von selbst:
+    unter 8 mm käme ein Arm unter 0,8 mm heraus, und das ist weniger als zwei
+    Außenwände einer 0,4er Düse. Der Haken steht so weit vor, wie der Arm dick
+    ist; die Tasche ist entsprechend ``3 t`` tief, denn sie trägt den Arm in
+    Ruhe (``t``), den Haken (``t``) und den Weg, den der Arm beim Einrasten
+    zurückweicht (noch einmal ``t``).
+
+    **Beides druckt ohne Stütze**, und das war der Einwand, an dem dieser
+    Baustein eine Runde lang hing. Der Haken ist ein Keil, der nach oben
+    ausläuft — jede Lage kleiner als die darunter. Die Rastkante der Tasche
+    ist, wenn die Naht nach oben zeigt, eine Brücke von der Breite des
+    Hakenüberstands: bei einem 6-mm-Verbinder 0,9 mm. Das ist keine
+    Überhangfläche, über die ein Baustein etwas sagen müsste, sondern eine
+    Brücke, die jeder Drucker legt.
+    """
+    params = cast(SnapConnectorParams, raw)
+    is_pin = params.kind == "pin"
+
+    # Die Tasche trägt drei Dinge nebeneinander: den Arm in Ruhe, den Haken
+    # daneben und den Weg, den der Arm beim Einrasten zurückweicht — bei einem
+    # Haken so tief wie der Arm dick also ``3 t``. Zusammen mit der Breite muss
+    # das in den Umkreis passen, für den die Nahtplanung Wand reserviert hat.
+    #
+    # Daraus folgt eine Obergrenze für die Armstärke, und die *muss* geprüft
+    # werden: Länge und Durchmesser sind unabhängig deklariert, und bei
+    # Ø 30 mm bei 100 mm Länge käme ein 10 mm dicker Arm heraus — die Tasche stand dann
+    # 30,22 mm breit in einem 30er Kreis. Nach unten zu kappen ist dabei die
+    # gutmütige Richtung: ein dünnerer Arm federt weicher, ein zu dicker bricht.
+    room = math.sqrt(max(params.diameter**2 - (SNAP_MIN_ARM + params.play) ** 2, 0.0))
+    thickness = min(params.length / SNAP_RATIO, (room - params.play) / 3.0)
+    hook = thickness
+
+    across = 3.0 * thickness + params.play
+    width = max(SNAP_MIN_ARM, math.sqrt(max(params.diameter**2 - across**2, 0.0)) - params.play)
+
+    # Wie weit der Haken in Längsrichtung ausläuft. Der Rest der Länge ist die
+    # Rastkante: dort trifft die Hakenunterseite auf die Kante der Tasche.
+    run = hook / math.tan(math.radians(SNAP_LEAD_ANGLE))
+    catch = params.length - run
+
+    # Der ganze Verbinder liegt mittig im Umkreis: der Arm sitzt deshalb nicht
+    # auf y = 0, sondern so weit daneben, dass Arm, Haken und Rückweg zusammen
+    # symmetrisch stehen.
+    rest = across / 2.0 - params.play / 2.0
+    arm_centre = rest - hook - thickness / 2.0
+
+    if is_pin:
+        arm = shapes.moved(shapes.box(width, thickness, params.length), (0.0, arm_centre, 0.0))
+        tip = shapes.wedge(width, hook + shapes.OVERLAP, run)
+        tip = shapes.moved(tip, (0.0, arm_centre + thickness / 2.0 - shapes.OVERLAP, catch))
+        body = union(arm, tip)
+        return result(
+            body,
+            face(
+                "arm_1",
+                width * params.length,
+                (0.0, arm_centre, params.length / 2.0),
+                (0.0, -1.0, 0.0),
+            ),
+            face(
+                "hook_1",
+                width * hook,
+                (0.0, arm_centre + thickness / 2.0 + hook / 2.0, catch),
+                (0.0, 0.0, -1.0),
+            ),
+        )
+
+    # Die Tasche: erst der ganze Schlitz, dann die Rastkante wieder hinein.
+    # Herausgerechnet wird sie und nicht dazugebaut, weil dieser Körper
+    # abgezogen wird — was hier fehlt, bleibt im Bauteil stehen.
+    depth = params.length + shapes.SEAT_RELIEF
+    slot = shapes.box(width + params.play, across, depth)
+    lip = shapes.box(width + params.play + 2.0 * shapes.OVERLAP, hook, catch)
+    lip = shapes.moved(lip, (0.0, across / 2.0 - hook / 2.0, 0.0))
+    body = subtract(slot, lip)
+    return result(
+        body,
+        face("catch_1", width * hook, (0.0, across / 2.0 - hook / 2.0, catch), (0.0, 0.0, 1.0)),
+    )
 
 
 def _ring(diameter: float, chamfer: float):  # type: ignore[no-untyped-def]

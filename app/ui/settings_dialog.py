@@ -124,7 +124,21 @@ class SettingsDialog(QDialog):
         # Hinweis daneben nennt Adresse und Port, denn ohne die kann niemand
         # sie eintragen — und wer sie liest, sieht zugleich, dass sie diesen
         # Rechner nicht verlässt.
-        self.remote = QCheckBox(tr("Fernsteuerung über MCP zulassen"), self)
+        #
+        # „Fernsteuerung über MCP zulassen" stand hier und war der dritte von
+        # drei Namen für scheinbar Benachbartes — *Chat einrichten* im Menü
+        # daneben, und „Fern-" klingt danach, als ginge etwas hinaus. Es kommt
+        # aber etwas herein. „über MCP" nannte das Protokoll; wer hier steuert,
+        # stand nur im Tooltip. „durch andere Programme" nennt es.
+        #
+        # Das Wort *Fernsteuerung* bleibt vorn stehen, und das ist Absicht: Die
+        # Zeile darunter heißt „Port der Fernsteuerung", das Handbuch hat ein
+        # Kapitel *Fernsteuerung*. Wer hier ein anderes Wort setzt, behebt
+        # einen Namensbruch und legt einen zweiten an. Die ausführliche
+        # Fassung („Solidon von anderen Programmen auf diesem Rechner
+        # fernsteuern lassen") sagte nicht mehr und zog den Dialog auf
+        # Französisch von 566 auf 768 Bildpunkte — gemessen, dann verworfen.
+        self.remote = QCheckBox(tr("Fernsteuerung durch andere Programme zulassen (MCP)"), self)
         self.remote.setChecked(settings.remote_enabled)
         self.remote_port = QSpinBox(self)
         self.remote_port.setRange(1024, 65535)

@@ -317,7 +317,7 @@ class _ToolProbeWorker(QThread):
 
 
 class KeyDialog(QDialog):
-    """Wo der Nutzer seinen Zugang zum Sprachmodell einrichtet (Bauplan §27).
+    """Wo der Nutzer den Chat einrichtet (Bauplan §27).
 
     Zwei Wege, ein Dialog: der eigene Schlüssel gegen ein gehostetes Modell,
     und das lokale Modell über Ollama. Der Schlüssel geht in den
@@ -329,12 +329,21 @@ class KeyDialog(QDialog):
     steht die Probe, und sie steht dort aus einem Grund: ob ein Modell
     Werkzeuge wirklich aufruft, sieht man ihm nicht an. Weder seine Größe noch
     die Fähigkeit, die Ollama meldet, sagen es — nur ein Zug.
+
+    **Der Dialog heißt überall gleich, und das war er nicht.** Der
+    Erstlaufbildschirm bot ihn als *Chat einrichten* an, das Menü als *Zugang
+    zum Sprachmodell*: derselbe Dialog unter zwei Namen, und wer den einen
+    gesehen hatte, suchte den anderen nicht. Geblieben ist der, der die Sache
+    aus Sicht des Nutzers nennt — er sieht den Chat, nicht das Sprachmodell
+    dahinter —, und der beide Wege aus §27 trägt: Ein Schlüssel *und* ein
+    lokales Modell sind zwei Arten, den Chat zum Laufen zu bringen. Was
+    darunter passiert, sagt der Erklärtext im Dialog.
     """
 
     def __init__(self, account: str = "anthropic", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.account = account
-        self.setWindowTitle(tr("Zugang zum Sprachmodell"))
+        self.setWindowTitle(tr("Chat einrichten"))
         self.setMinimumWidth(460)
         self._probe: _ToolProbeWorker | None = None
 
@@ -472,7 +481,7 @@ class KeyDialog(QDialog):
         if not keys.store(self.account, key):
             QMessageBox.information(
                 self,
-                tr("Zugang zum Sprachmodell"),
+                tr("Chat einrichten"),
                 tr(
                     "Auf diesem Rechner gibt es keinen Schlüsselbund. "
                     "Der Schlüssel kann über die Umgebungsvariable übergeben werden."

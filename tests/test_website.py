@@ -298,3 +298,45 @@ def test_the_page_loads_nothing_from_outside(page: str) -> None:
     # sehen davon nichts, und ein Zählpixel schreibt sich genau so.
     assert 'src="//' not in text, f"{page} lädt protokollrelativ von außen"
     assert 'href="//' not in text, f"{page} verweist protokollrelativ nach außen"
+
+
+def test_no_self_arranging_grid_stops_shrinking_above_phone_width() -> None:
+    """Ein `auto-fit`-Raster, das auf dem Telefon nicht mehr nachgibt.
+
+    ``repeat(auto-fit, minmax(X, 1fr))`` nimmt Spalten weg, wenn das Fenster
+    schmaler wird — aber die *letzte* verbleibende Spalte macht es **nicht**
+    schmaler als ``X``. Bei den Wegekarten stand dort 34rem: Unter 544 px
+    Fensterbreite stand eine Spalte da, und die war weiter 544 px breit. Weil
+    `html` und `body` `overflow-x: clip` tragen, scrollte da auch nichts — auf
+    einem 390er Telefon fehlten die rechten 150 px jeder Karte, und man kam
+    nicht hin. Gemessen im laufenden Chromium; hier steht die Regel dagegen.
+
+    **Geprüft wird nur `auto-fit` und `auto-fill`**, denn nur die geben das
+    Versprechen, sich dem Fenster anzupassen. Ein von Hand gesetztes
+    Spaltenpaar wie das der Kopfzeile ist etwas anderes: Es steht in einem
+    ``@media (min-width: 68rem)``, gilt also erst, wo der Platz erwiesen da
+    ist. Ein Test, der beide über einen Kamm schert, meldet dort einen Fehler,
+    wo eine Entscheidung steht.
+
+    Zwei Auswege gelten: ein Mindestmaß, das auf das schmalste verbreitete
+    Telefon passt (320 px, also 20rem), oder ``min(X, 100%)`` — dann gibt die
+    Spalte auf schmalen Fenstern nach und behält auf breiten ihr Maß.
+    """
+    css = (WEBSITE / "style.css").read_text(encoding="utf-8")
+    # 320 px ist das schmalste noch verbreitete Telefon; die Seitenränder des
+    # Rumpfes gehen davon ab, deshalb wird nicht ganz bis dorthin gemessen.
+    narrowest_rem = 20.0
+    too_wide = []
+    for match in re.finditer(r"repeat\(\s*auto-(?:fit|fill)\s*,\s*minmax\(\s*([^,]+?)\s*,", css):
+        floor = match.group(1).strip()
+        if floor.startswith("min(") or floor in {"0", "auto", "min-content"}:
+            continue
+        size = re.fullmatch(r"([\d.]+)rem", floor)
+        if size is None:
+            continue
+        if float(size.group(1)) > narrowest_rem:
+            too_wide.append(match.group(0))
+    assert not too_wide, (
+        "Ein auto-fit-Raster hört über Telefonbreite auf zu schrumpfen und "
+        f"wird dort abgeschnitten — min(…, 100%) um das Mindestmaß: {too_wide}"
+    )

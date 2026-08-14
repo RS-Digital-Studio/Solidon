@@ -39,9 +39,7 @@ bekommt einen roten Lauf.
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | `SetTransitionMode` oder das Gewinde als Rotationskörper |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
-| Die Wegekarten am Browser nachmessen | Die Konzepte gegen den Code gehalten (14.08.2026) | einen Browser, der JavaScript ausführt |
-| Spur A und B getrennt weiterverfolgen | Die Konzepte gegen den Code gehalten (14.08.2026) | für A einen Reproduzierer, der kürzer ist als ein Volllauf |
-| Der Schnapper als Verbinderform | Die offenen Punkte abgearbeitet (14.08.2026) | einen eigenen Baustein mit Federweg und Hinterschnitt — kein Wert in einer Formliste |
+| Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 
 ---
 
@@ -5180,11 +5178,33 @@ lesen:
       aus `.wrap` 76rem, `gap` 1.25rem und dem Seitenverhältnis 320:140 der
       Vignetten. `align-items: start` nimmt den Streckzwang.
 
-- [ ] **Offen: die Wegekarten am laufenden Browser nachmessen.** Die Zahlen
-      oben sind aus dem CSS gerechnet, nicht gemessen — die Vorschau führt bei
-      `file://` kein JavaScript aus, und ein lokaler Server auf Port 8765 ist
-      hier durch die Richtlinie gesperrt. Nach der Regel dieses Hauses (*wer
-      Gestaltung ändert, muss sie ansehen*) fehlt der Blick.
+- [x] **Nachgemessen — und die Rechnung hatte recht, die Regel nicht**
+      (14.08.2026). Chromium und Playwright liegen in dieser Umgebung bereit;
+      gemessen wurde über `file://` bei neun Breiten von 1920 bis 360. Die
+      Zahlen oben stimmen auf den Punkt: 578 px je Karte, 533 px Bildbreite,
+      234 statt der gerechneten 233 px Höhe — der eine Pixel ist Chromiums
+      Rundung. `align-items: start` sieht man im Bild: die vier Karten sind
+      438 bis 538 px hoch und keine gestreckt.
+
+      **Der Blick hat trotzdem etwas gefunden, das keine Rechnung zeigt.**
+      `repeat(auto-fit, minmax(34rem, 1fr))` nimmt Spalten weg, aber es macht
+      die *letzte* nicht schmaler als 34rem. Unter 544 px Fensterbreite stand
+      also eine Spalte da, die weiter 544 px maß — und weil `html` und `body`
+      `overflow-x: clip` tragen, war da auch nichts zu scrollen: Auf einem
+      390er Telefon fehlten die rechten 150 px jeder Wegekarte, auf beiden
+      Startseiten. `min(34rem, 100%)` um das Mindestmaß behebt es; breite
+      Fenster bleiben unverändert bei zwei Spalten, bei 390 px ist die Karte
+      350 px breit und vollständig. Nachgemessen und angesehen.
+
+      `test_no_self_arranging_grid_stops_shrinking_above_phone_width` hält die
+      Regel fest — nur für `auto-fit` und `auto-fill`, denn nur die versprechen
+      mitzugehen; das Spaltenpaar der Kopfzeile steht in einem
+      `@media (min-width: 68rem)` und ist eine Entscheidung, kein Versehen.
+
+      Die Handbuchtabellen sahen in derselben Messung zuerst wie ein zweiter
+      Fund aus — sie stehen bei 390 px bis zu 725 px breit da. Sie rollen aber
+      in sich (`table { display: block; overflow-x: auto }`), und die Probe
+      hatte nur die Kinder eines Rollbereichs nicht ausgenommen. Kein Befund.
 
 ### Review des Skizzeneditors — drei Funde, alle behoben (14.08.2026)
 
@@ -5266,14 +5286,10 @@ sagte damit nichts.
       `test_translations.py` überhaupt kein Fenster: kein `MainWindow`, kein
       `build_application`, kein `deleteLater`. Es vergiftet, ohne eines
       anzufassen.
-- [ ] **Offen: A und B getrennt weiterverfolgen.** Für **B** ist der nächste
-      Schritt die Halbierung von `test_translations.py` gegen den Aufruf oben —
-      es importiert jede Datei unter `app/ui/` und installiert Sprachkataloge,
-      beides Kandidaten, keiner belegt. Für **A** fehlt zuerst ein
-      Reproduzierer, der kürzer ist als ein Volllauf: er braucht die Dateien
-      *vor* `test_sketch_editor.py`, und welche davon zählen, ist ungemessen.
-      Was für beide nicht mehr gilt: die Erklärung „diese Maschine rechnet
-      sporadisch falsch". Dreimal derselbe Test ist kein Rauschen.
+- [x] **A und B sind derselbe Fehler, und er ist behoben** (14.08.2026) — die
+      Halbierung war die richtige nächste Frage, nur war die Antwort weder
+      „die Kataloge" noch „die Importe von `app/ui/`". Siehe den Abschnitt
+      *Ein Umgebungsartefakt, das keines war* weiter unten.
 
 ## Trennen, wo man hinzeigt — und vier Wörter weniger (14.08.2026)
 
@@ -5392,18 +5408,44 @@ Website nur halb nachgezogen war.
       Website hieß der Abschnitt *Auto-Split* und kannte nur die Suche; er
       heißt jetzt *Trennen und Auto-Split* und fängt mit den zwei Klicks an.
 
-### Offen, und zwar als Entscheidung
+### Die Entscheidung, die eine Rechnung nicht überlebt hat
 
-- [ ] **Der Schnapper als Verbinderform.** Er steht nicht in derselben Reihe
-      wie Sechskant und Schwalbenschwanz, auch wenn die Slicer ihn dort
-      führen: Die beiden sind ein Querschnitt, der Schnapper ist ein
-      federnder Arm. Er braucht einen Schlitz, damit er federt, eine Kammer
-      mit Hinterschnitt in der Gegenseite — und die ist in dieser Lage eine
-      Überhangfläche, über die der Baustein etwas sagen müsste — und eine
-      Federkraft, die ohne Kalibrierung geraten wäre. Das ist ein eigener
-      Baustein mit eigenem Bereichstest (`insert_snap_fit` gibt es bereits),
-      kein Wert in einer Formliste. Als Formwert wäre er eine Zusage, die die
-      Geometrie nicht hält.
+- [x] **Der Schnapper ist gebaut** (14.08.2026). Er stand hier als *bewusst
+      offen*, mit drei Gründen — und zwei davon halten einer Messung nicht
+      stand. Der eine, der hält, ist genau der, der ihn zum eigenen Baustein
+      macht und nicht zu einem Wert in `_profile`.
+
+      **Was stimmte:** Ein Schnapper ist kein Querschnitt. Rund, Sechskant und
+      Schwalbenschwanz sind dieselbe Rechnung mit einem anderen Vieleck; der
+      Schnapper ist ein Paar aus Federarm und Tasche mit Rastkante. Deshalb
+      `snap_connector` als eigener Baustein — der vierzehnte, einer mehr als
+      die Erstbestückung in §24.1, und das ist eine Ansage.
+
+      **Was nicht stimmte, erstens: „der Hinterschnitt ist eine
+      Überhangfläche, über die der Baustein etwas sagen müsste."** Er ist eine
+      Brücke von der Breite des Hakenüberstands — bei einem 6-mm-Verbinder
+      0,9 mm. Das legt jeder Drucker, und in der anderen Lage (Naht nach
+      unten) gibt es überhaupt keinen Überhang. Ich hatte die Lage nicht
+      durchgerechnet, sondern das Wort *Hinterschnitt* gelesen.
+
+      **Und zweitens: „eine Federkraft, die ohne Kalibrierung geraten wäre."**
+      Sie wird nicht geraten, sie wird gebaut: zehn zu eins ist das Verhältnis
+      aus Länge zu Armstärke, das ein Arm zum Federn braucht, und es stand
+      längst als `SNAP_RATIO` im Repository — `snap_fit` benutzt es seit der
+      Erstbestückung. Der Baustein setzt die Stärke daraus, statt einen Regler
+      dafür anzubieten.
+
+      **Was die Rechnung wirklich begrenzt**, war keiner der drei Gründe: Aus
+      zehn zu eins und zwei Außenwänden einer 0,4er Düse (0,8 mm) folgt eine
+      Mindestlänge von 8 mm, und die Nahtplanung vergibt `1,5 · Ø` — ein
+      Schnapper braucht also eine Naht, die mindestens **5,4 mm** hergibt. Ist
+      sie schmaler, wird rund daraus **und der Prüfbericht sagt warum**
+      (`split.snap_too_small`, Regel 21). Das ist die ehrliche Grenze, und sie
+      ist eine Zahl statt einer Meinung.
+
+      Gemessen: 144 Ecken des Parameterbereichs, alle wasserdicht, einteilig
+      und innerhalb ihres Umkreises; der Anschlag beim Auseinanderziehen und
+      die Durchfahrt des ausgewichenen Arms als Volumen, über vier Größen.
 
 ## Der eigene Änderungssatz im Review (14.08.2026)
 
@@ -5476,4 +5518,141 @@ Zweigs** — nachgemessen, nicht angenommen:
   Abbruch in sechs Läufen hier wie dort. Wo er nicht zuschlägt, sind alle 24
   Prüfungen grün.
 
-Ein Umgebungsartefakt in beiden Fällen, kein Befund an diesem Änderungssatz.
+> **Nachtrag (14.08.2026, eine Runde später): der erste Punkt war kein
+> Umgebungsartefakt, sondern ein Fehler.** `tests/test_manual.py` importiert
+> `tools.make_figures`, und dieses Modul setzte beim *Import*
+> `QT_QPA_PLATFORM` zurück — danach baute die `QApplication` gegen eine echte
+> Plattform, die es hier nicht gibt. Behoben, siehe den Abschnitt *Ein
+> Umgebungsartefakt, das keines war* unten; die Datei läuft jetzt auch
+> offscreen. „Auf dem unveränderten Stand genauso" war richtig gemessen und
+> hat trotzdem zur falschen Schlussfolgerung geführt: Ein Fehler, der älter
+> ist als der eigene Zweig, ist deswegen kein Fehler der Umgebung.
+>
+> Der zweite Punkt bleibt bestehen und ist ein eigener, dritter Absturz.
+
+## Ein Umgebungsartefakt, das keines war (14.08.2026)
+
+Die beiden Abstürze, die dieses Repository als **A** und **B** führte, sind
+ein einziger Fehler, und er stand in einer Zeile.
+
+```python
+# tools/make_manual.py, ganz oben, seit jeher
+os.environ.pop("QT_QPA_PLATFORM", None)
+```
+
+Die Zeile ist richtig: Das Werkzeug braucht eine echte Plattform, unter
+`offscreen` hat Qt auf dieser Maschine null Schriftfamilien. Falsch war nur,
+**wann** sie läuft — beim Import, und damit auch bei jedem, der das Modul nur
+lesen will. `tests/test_translations.py` führt es aus, um `page_for()` zu
+prüfen. Ab diesem Test galt für den *ganzen Prozess* keine
+Offscreen-Plattform mehr:
+
+```
+vorher: QT_QPA_PLATFORM = offscreen → viewport._available() False
+danach: QT_QPA_PLATFORM = None      → viewport._available() True
+```
+
+Und `_available()` entscheidet, ob ein `Viewport` einen echten
+`QtInteractor` baut. Der Docstring dieser Funktion sagt seit Langem, was
+dann passiert: „auf der Offscreen-Qt-Plattform scheiterte es nicht höflich,
+sondern nähme den Prozess mit."
+
+**Damit erklären sich beide Bilder und ihre scheinbare Wanderung.** Was
+starb, war jeweils die *nächste* Datei, die ein Fenster baut — und welche das
+ist, entscheidet `pytest-randomly` mit seiner Dateireihenfolge. Lief
+`test_translations.py` vor `test_ui.py`, riss es dort; lief sie vor
+`test_sketch_editor.py`, riss es da. Gemessen, jeweils vorher und nachher:
+
+| Aufruf | vorher | nachher |
+|---|---|---|
+| `test_translations.py` + `test_ui.py` | Zugriffsverletzung bei 22 % | **300 passed** |
+| `test_translations.py` + `test_sketch_editor.py` | Abbruch beim ersten Fenster | **195 passed** |
+| `test_manual.py` allein, offscreen | reproduzierbar tot im `QApplication`-Aufbau | **46 passed**, dreimal |
+
+Der dritte Fall ist der, den ich eine Runde vorher als Umgebungsartefakt
+abgelegt hatte. `tests/test_manual.py` importiert `tools.make_figures` — ganz
+gewöhnlich, in Zeile 37 —, und dasselbe Pop stand auch dort. Die Messung
+„auf dem unveränderten Stand genauso" war richtig; der Schluss daraus war
+falsch. **Ein Fehler, der älter ist als der eigene Zweig, ist deswegen kein
+Fehler der Umgebung.**
+
+### Behoben an beiden Enden
+
+- [x] **Die vier Werkzeuge setzen die Plattform in `main()` zurück, nicht beim
+      Import** — `make_manual.py`, `make_figures.py`, `make_video.py`,
+      `run_ui_audit.py`. Wer sie startet, hat die Variable ohnehin nicht
+      gesetzt; wer sie importiert, bekommt keinen Prozess mehr umgebaut.
+- [x] **Und der Test gibt die Umgebung von sich aus zurück.**
+      `test_the_manual_finds_a_place_for_a_new_language` führt fremden
+      Modulcode aus; ein `monkeypatch.setenv` davor stellt sicher, dass pytest
+      hinterher aufräumt — auch wenn das nächste Werkzeug wieder so eine Zeile
+      mitbringt. Zwei Ebenen, weil eine davon eine Verabredung ist und die
+      andere ein Mechanismus.
+
+### Offen: ein dritter Absturz, und er ist ein anderer
+
+- [ ] **`test_operation_ui.py` bricht weiter ab, etwa einmal in acht Läufen.**
+      Mit A und B hat er nichts zu tun: Er tritt auch dann auf, wenn die
+      Plattform steht, unter `offscreen` wie unter `xvfb`, und er trat auf dem
+      unveränderten Ausgangsstand in derselben Häufigkeit auf (ein Abbruch in
+      sechs Läufen dort, einer in acht hier).
+
+      **Was gemessen ist.** Die Stelle ist in beiden eingefangenen Fällen
+      dieselbe: `panels.py:890`, das `self.list.clear()` in `show_document`,
+      erreicht aus `session.wait_for_idle` → `processEvents` → `_on_finished`
+      → `_show_scene`. Und die Meldung darunter ist nicht Qt, sondern glibc:
+      **`free(): invalid pointer`**. Das ist ein doppeltes Freigeben, keine
+      verletzte Qt-Zusicherung.
+
+      **Was ausgeschlossen ist.** Nicht der Speicherbereiniger — die
+      naheliegende PySide6-Falle, dass er ein C++-Objekt abräumt, während Qt
+      noch darauf steht. Mit `gc.disable()` fielen 5 von 24 Läufen, ohne ihn
+      1 von 8: dieselbe Größenordnung. Das spart dem Nächsten den Versuch.
+
+      **Nächster Schritt**, wenn er drankommt: ein Lauf unter Valgrind oder
+      gegen ein Python mit Adress-Sanitizer, gezielt auf
+      `test_every_operation_of_the_history_can_be_opened`. Vorher zu raten
+      lohnt nicht — das Bild sagt „jemand gibt zweimal frei", und wer, sagt
+      nur ein Werkzeug, das die erste Freigabe mitschreibt.
+
+## Alles Offene abgearbeitet (14.08.2026)
+
+Vier Punkte standen offen, drei davon länger als diese Sitzung. Alle vier sind
+zu, und drei haben unterwegs etwas gefunden, das nicht auf der Liste stand.
+
+- [x] **Die Wegekarten am Browser nachgemessen** — und dabei einen Fehler
+      gefunden, den keine Rechnung zeigt: Unter 544 px Fensterbreite standen
+      die Karten weiter 544 px breit da und wurden abgeschnitten. Der
+      ausführliche Eintrag steht oben bei der Durchsicht, in der die Zahlen
+      entstanden sind.
+- [x] **Drei Namen für benachbarte Dinge** — zwei davon waren *derselbe
+      Dialog*. Er heißt jetzt überall *Chat einrichten*: auf dem
+      Erstlaufbildschirm, im Menü, im Fenstertitel, im Handbuch und in der
+      README. Der dritte bleibt *Fernsteuerung*, weil die Zeile darunter und
+      das Handbuchkapitel so heißen; geändert ist, was fehlte — „über MCP"
+      nannte das Protokoll, jetzt steht dort *durch andere Programme*.
+- [x] **Absturz A und B** — ein Fehler, eine Zeile, siehe oben.
+- [x] **Der Schnapper** — gebaut, nachdem zwei meiner drei Ablehnungsgründe
+      einer Messung nicht standhielten.
+
+### Was die Suite dabei gefunden hat
+
+Der neue Baustein hat sechs Prüfungen rot gemacht, und jede einzelne war
+berechtigt — das ist der Teil, der ohne Suite still danebengegangen wäre:
+
+* Der Baustein erzeugt eine Operation (`insert_snap_connector`), und die
+  braucht einen Testaufruf.
+* Die Startseiten führen die Zahl der Operationen und der Bausteine; beide
+  standen auf dem alten Stand, in beiden Sprachen. Die Pressemitteilung auch.
+* Der Registerkopf der ROADMAP führt jeden offenen Punkt — drei fielen weg,
+  einer kam dazu.
+* Und einer war ein echter Fund an einer ganz anderen Stelle: Der Katalogtest
+  suchte nach „zzz-gibt-es-nicht" und erwartete null Treffer. `PARTS.search`
+  zerlegt aber an jedem Nicht-Wortzeichen, aus dem Bindestrich wurden vier
+  Wörter — und weil der neue Baustein einen Satz mit „gibt es" bekam, fand die
+  angeblich leere Suche ihn. Die Anfrage heißt jetzt „qwertzuiopasdfgh": ein
+  Buchstabensalat ohne Trennzeichen kann das nicht passieren.
+
+**Volllauf danach:** 3374 bestanden, 10 übersprungen, 1 erwartet
+fehlgeschlagen; jede Fensterdatei einzeln grün, `test_manual.py` zum ersten Mal
+seit Langem auch offscreen. `ruff`, `ruff format` und `mypy` sauber.

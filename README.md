@@ -145,7 +145,7 @@ lässt sich das mit `SOLIDON3D_NO_VIEWPORT=1`.
 ## Sprachmodell für den Chat
 
 Der Chat braucht ein Modell; alles andere in Solidon kommt ohne aus. Der
-Schlüssel wird über **Bearbeiten → Zugang zum Sprachmodell** im Schlüsselbund
+Schlüssel wird über **Bearbeiten → Chat einrichten** im Schlüsselbund
 des Systems abgelegt und reist nie mit der Projektdatei mit. Auf einem
 Bauserver geht auch die Umgebungsvariable `SOLIDON3D_LLM_KEY`.
 

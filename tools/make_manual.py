@@ -28,7 +28,6 @@ import re
 import sys
 from pathlib import Path
 
-os.environ.pop("QT_QPA_PLATFORM", None)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -810,6 +809,15 @@ def _overlay(target: Path, chapters: list[str], total: int, language: str) -> Pa
 
 
 def main() -> int:
+    # Zurückgesetzt hier und nicht beim Import: Das Modul stand als Falle für
+    # jeden, der es importiert, statt es zu starten. `tests/test_translations.py`
+    # führt es aus, um `page_for()` zu prüfen — danach galt für den ganzen
+    # Testlauf keine Offscreen-Plattform mehr, `viewport._available()` sagte ja,
+    # und jedes später gebaute Fenster bekam einen echten VTK-Interactor ohne
+    # OpenGL-Kontext. Das nahm den Prozess mit. Wer dieses Werkzeug startet, hat
+    # die Variable ohnehin nicht gesetzt; der Pop bleibt für den Fall, dass doch.
+    os.environ.pop("QT_QPA_PLATFORM", None)
+
     load_operations()
     # Nur die Sprachen, für die es eine Seite auf der Website gibt. Seit die
     # Kataloge für ES, FR, IT und PT dazugekommen sind, liefert

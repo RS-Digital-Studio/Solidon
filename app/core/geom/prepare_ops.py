@@ -61,15 +61,24 @@ _ALONG = _(
 #: es, weil Dateien bis Formatversion 6 es so gemeint haben.
 _ANCHORS = ("mouth", "centre")
 
-#: Querschnitte, die ein Verbinder haben kann. Rund ist die Vorgabe und der
-#: einfachste Druck; die kantigen sichern gegen Verdrehen, der Schwalbenschwanz
-#: zusätzlich gegen Auseinanderziehen quer zur Naht.
-CONNECTOR_SHAPES = ("round", "hex", "dovetail")
+#: Was ein Verbinder sein kann. Die ersten drei sind Querschnitte: dieselbe
+#: Rechnung, ein anderes Vieleck. Rund ist die Vorgabe und der einfachste
+#: Druck; die kantigen sichern gegen Verdrehen, der Schwalbenschwanz zusätzlich
+#: gegen Auseinanderziehen quer zur Naht.
+#:
+#: Der Schnapper ist kein Querschnitt, sondern ein Mechanismus mit eigenem
+#: Baustein (``snap_connector``) — er steht hier trotzdem in derselben Liste,
+#: weil er für den Nutzer dieselbe Entscheidung ist: *womit* halten die Hälften
+#: zusammen. Wo eine Naht ihm zu schmal ist, wird rund daraus, und der
+#: Prüfbericht sagt es (``split.snap_too_small``).
+CONNECTOR_SHAPES = ("round", "hex", "dovetail", "snap")
 
 _CONNECTOR_DOC = _(
-    "Querschnitt der Stifte. Rund druckt am saubersten und braucht zwei Stück "
-    "gegen Verdrehen; Sechskant und Schwalbenschwanz halten schon einzeln, der "
-    "Schwalbenschwanz auch gegen Auseinanderziehen."
+    "Womit die Hälften zusammenhalten. Rund druckt am saubersten und braucht "
+    "zwei Stück gegen Verdrehen; Sechskant und Schwalbenschwanz halten schon "
+    "einzeln, der Schwalbenschwanz auch gegen Auseinanderziehen. Der Schnapper "
+    "rastet ein und hält ohne Kleber — er braucht eine Naht, die mindestens "
+    "5,4 mm hergibt."
 )
 
 

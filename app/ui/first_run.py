@@ -234,8 +234,10 @@ class FirstRunDialog(QDialog):
     def _setup_chat(self) -> None:
         """§27: der Zugang für den Chat, vom ersten Start aus erreichbar.
 
-        Derselbe Dialog wie unter *Bearbeiten → Zugang zum Sprachmodell* — nur
-        eben hier, wo ein neuer Nutzer steht.
+        Derselbe Dialog wie unter *Bearbeiten → Chat einrichten* — und seit
+        dieser Sitzung auch derselbe Name. Er stand hier als *Chat
+        einrichten* und dort als *Zugang zum Sprachmodell*; wer den einen
+        gesehen hatte, suchte den anderen nicht.
         """
         from app.ui.dialogs import KeyDialog
 

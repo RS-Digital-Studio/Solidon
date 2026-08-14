@@ -32,7 +32,6 @@ from pathlib import Path
 from typing import Any
 
 # Vor allem, was Qt anfasst: die echte Plattform, siehe Modulkopf.
-os.environ.pop("QT_QPA_PLATFORM", None)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Die Eingabeaufforderung unter Windows kommt sonst schon am ersten Umlaut ins
@@ -414,6 +413,11 @@ def chosen_languages() -> tuple[str, ...]:
 
 
 def main() -> int:
+    # Beim Start zurückgesetzt, nicht beim Import — die Begründung steht in
+    # `tools/make_manual.py`: ein Modul, das die Plattform schon beim Importieren
+    # umstellt, reißt jeden Testlauf mit, der es nur lesen will.
+    os.environ.pop("QT_QPA_PLATFORM", None)
+
     from app.ui.app import install_qt_translations
     from app.ui.theme import apply_theme
 

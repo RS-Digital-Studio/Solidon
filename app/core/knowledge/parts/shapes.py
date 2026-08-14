@@ -31,6 +31,15 @@ RIDGE_SHARE = 0.55
 #: Flächen sind der klassische Weg, eine Boolesche Operation zu brechen.
 OVERLAP = 0.01
 
+#: Zusatztiefe einer Aufnahme über das hinaus, was in ihr steckt — damit zwei
+#: Hälften auf ihrer Naht schließen und nicht auf dem Ende des Verbinders.
+#:
+#: Steht hier und nicht bei den Verbindern, weil zwei Stellen sie brauchen:
+#: `geom/pins.py` beim Bohren und `parts/mechanics.py` beim Schnappverbinder.
+#: `pins.py` importiert Bausteine, umgekehrt ginge es nicht — also wohnt die
+#: Zahl unter beiden statt zweimal nebeneinander.
+SEAT_RELIEF = 0.4
+
 
 def cylinder(diameter: float, height: float, *, segments: int = SEGMENTS) -> MeshData:
     """Auf Z = 0 stehend, nach oben wachsend — der Rahmen, den jeder Baustein

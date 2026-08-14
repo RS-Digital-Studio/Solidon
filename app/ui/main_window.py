@@ -1177,7 +1177,7 @@ class MainWindow(QMainWindow):
         self._workspace_menus.append(edit_menu)
         # Rückgängig und Wiederholen zuerst: sie sind die häufigsten Einträge
         # des Menüs und stehen in jeder Anwendung oben. Vorher lagen sie unter
-        # den Spezialfunktionen, hinter „Zugang zum Sprachmodell".
+        # den Spezialfunktionen, hinter „Chat einrichten".
         self.undo_action = self._add_action(
             edit_menu,
             tr("Rückgängig"),
@@ -1238,12 +1238,12 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             edit_menu,
-            tr("Zugang zum Sprachmodell …"),
+            tr("Chat einrichten …"),
             None,
             self.action_llm_key,
             tr(
-                "Schlüssel für den Chat hinterlegen. Er landet im Schlüsselbund, "
-                "nie in der Projektdatei."
+                "Schlüssel oder lokales Modell für den Chat hinterlegen. Ein "
+                "Schlüssel landet im Schlüsselbund, nie in der Projektdatei."
             ),
         )
 

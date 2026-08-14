@@ -27,6 +27,7 @@ from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData
 from app.core.geom.section import SectionPlane
 from app.core.geom.transform import apply, translation
+from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.registry import PARTS
 from app.core.log import get_logger
 from app.core.types import Feature, FeatureId, Finding, Profile, Vec3
@@ -49,13 +50,27 @@ PIN_MAX = 8.0
 #: Wie tief ein Stift in jeder Hälfte sitzt, relativ zu seinem Durchmesser.
 PIN_DEPTH_FACTOR = 1.5
 
+#: Der Schnappverbinder unter den Querschnitten — er ist keiner, sondern ein
+#: eigener Baustein, und beide Stellen, die ihn erkennen müssen, lesen hier.
+SNAP = "snap"
+
+#: Wie weit ein Federarm mindestens herausstehen muss. Zehn zu eins ist das
+#: Verhältnis, das ein Arm zum Federn braucht (``SNAP_RATIO``), und zwei
+#: Außenwände einer 0,4er Düse sind das Dünnste, was tragend gedruckt wird —
+#: acht Millimeter ist das Produkt. Die Planung vergibt ``1,5 · Ø`` an Länge,
+#: ein Schnapper braucht also eine Naht, die mindestens 5,4 mm Durchmesser
+#: hergibt.
+SNAP_MIN_REACH = 8.0
+
 #: Material, das um einen Stift stehen bleiben muss. Darunter bricht die
 #: Bohrung aus.
 PIN_WALL = 1.6
 
 #: Zusatztiefe der Bohrung über den Stift hinaus, damit die Hälften auf der
-#: Fläche schließen und nicht auf dem Stiftende.
-BORE_RELIEF = 0.4
+#: Fläche schließen und nicht auf dem Stiftende. Der Schnappverbinder braucht
+#: dieselbe Zahl und kann sie hier nicht holen — sie wohnt deshalb bei den
+#: Grundformen, unter beiden.
+BORE_RELIEF = shapes.SEAT_RELIEF
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,12 +143,27 @@ def plan_pins(
     room = max(getattr(inset, "geoms", (inset,)), key=lambda entry: entry.area)
     points = _spread(room, count)
     length = diameter * PIN_DEPTH_FACTOR * 2.0
+
+    if shape == SNAP and length / 2.0 < SNAP_MIN_REACH:
+        # Ein Federarm braucht eine Mindestlänge, sonst federt er nicht,
+        # sondern bricht — und die Länge, die hier zu vergeben ist, hängt am
+        # Durchmesser. Statt einen zu kurzen Arm zu bauen, der beim ersten
+        # Zusammenstecken abreißt, kommt der Verbinder rund heraus, und der
+        # Befund sagt warum. Das ist die Stelle, an der Regel 21 gilt: lieber
+        # etwas anderes tun und es sagen, als stillschweigend etwas Untaugliches
+        # liefern.
+        shape = "round"
+        findings = [_too_thin_for_snap(diameter)]
+    else:
+        findings = []
+
     return PinPlan(
         positions=tuple(_in_world(point, plane.position, normal) for point in points),
         diameter=diameter,
         length=length,
         normal=normal,
         shape=shape,
+        findings=tuple(findings),
     )
 
 
@@ -211,25 +241,46 @@ def add_pins(
         return pair
 
     clearance = profile.material.clearance if play is None else play
-    pin_body = _part(
-        "dowel",
-        diameter=plan.diameter,
-        length=plan.length,
-        kind="pin",
-        shape=plan.shape,
-        play=0.0,
-    )
-    bore_body = _part(
-        "dowel",
-        diameter=plan.diameter,
-        length=plan.length / 2.0 + BORE_RELIEF,
-        kind="bore",
-        shape=plan.shape,
-        play=clearance,
-    )
+    if plan.shape == SNAP:
+        # Der Schnapper ist ein eigener Baustein und kein Querschnitt: Arm mit
+        # Haken auf der einen, Tasche mit Rastkante auf der anderen Seite.
+        #
+        # Er sitzt auch anders. Ein Passstift steckt zur Hälfte in seiner
+        # eigenen Hälfte, deshalb bekommt er die volle Länge und einen Versatz
+        # nach hinten. Ein Federarm wächst aus der Wand — sein Fuß *ist* die
+        # Nahtfläche, an der er angeschweißt wird. Beide Körper stehen deshalb
+        # auf der Naht und reichen gleich weit hinein.
+        reach = plan.length / 2.0
+        pin_body = _part("snap_connector", diameter=plan.diameter, length=reach, kind="pin")
+        bore_body = _part(
+            "snap_connector",
+            diameter=plan.diameter,
+            length=reach,
+            kind="bore",
+            play=clearance,
+        )
+        pin_offset = 0.0
+    else:
+        pin_body = _part(
+            "dowel",
+            diameter=plan.diameter,
+            length=plan.length,
+            kind="pin",
+            shape=plan.shape,
+            play=0.0,
+        )
+        bore_body = _part(
+            "dowel",
+            diameter=plan.diameter,
+            length=plan.length / 2.0 + BORE_RELIEF,
+            kind="bore",
+            shape=plan.shape,
+            play=clearance,
+        )
+        pin_offset = -plan.length / 2.0
 
     for index, position in enumerate(plan.positions, start=1):
-        placed_pin = _along_normal(pin_body, plan.normal, position, -plan.length / 2.0)
+        placed_pin = _along_normal(pin_body, plan.normal, position, pin_offset)
         placed_bore = _along_normal(bore_body, plan.normal, position, 0.0)
 
         pair.first = boolean("union", [pair.first, placed_pin]).mesh
@@ -292,6 +343,19 @@ def _no_face() -> Finding:
         code="split.no_cut_face",
         severity="warning",
         message=_("An der Trennebene war keine Schnittfläche zu finden."),
+    )
+
+
+def _too_thin_for_snap(diameter: float) -> Finding:
+    """Die Naht gibt keinen Federarm her — es wurde rund verstiftet."""
+    return Finding(
+        code="split.snap_too_small",
+        severity="info",
+        message=_(
+            "Für einen Schnappverbinder ist die Naht zu schmal — er wäre zu kurz zum "
+            "Federn. Es sind runde Stifte geworden; zum Zusammenstecken hilft Kleber."
+        ),
+        values={"diameter_mm": round(diameter, 2), "needed_mm": round(SNAP_MIN_REACH, 2)},
     )
 
 

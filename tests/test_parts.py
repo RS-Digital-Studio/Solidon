@@ -63,15 +63,23 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
 
 
 def test_the_library_has_the_first_set_from_the_plan() -> None:
-    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung.
+    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung, dazu einen.
 
     Die Kalibrierkörper aus §28.3 sind auch Bausteine, gehören aber nicht zu
     diesem Satz — sie sind Werkzeuge für den Drucker, nicht für das Modell, und
     sie haben ihre eigene Gruppe im Katalog.
+
+    **Der vierzehnte steht nicht in der Erstbestückung**, und das ist eine
+    Ansage und kein Versehen: ``snap_connector`` ist am 14.08.2026 dazugekommen,
+    weil das Trennwerkzeug einen Verbinder brauchte, der einrastet. Die
+    ``snap_fit`` des Plans ist etwas anderes — ein Arm, den man an eine Wand
+    setzt; dieser hier ist ein Paar aus Arm und Tasche, bemaßt aus dem
+    Durchmesser, den eine Naht hergibt. Wer die Zahl hier ändert, ändert die
+    Bibliothek, und das soll auffallen.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 13
+    assert len(building) == 14
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -326,6 +334,7 @@ def test_the_play_comes_from_the_material_profile(profile: Profile) -> None:
         "insert_keyhole",
         "insert_wall_mount",
         "insert_cable_gland",
+        "insert_snap_connector",
     ],
 )
 def test_every_part_operation_runs_on_a_body(name: str, profile: Profile) -> None:

@@ -197,15 +197,38 @@ eine Vergabe in einem Zug und keine Nebenarbeit.
 Paare kommt aus derselben Planung, die die Operation gleich noch einmal macht.
 
 **4.5 Drei Namen für benachbarte Dinge** („Chat einrichten", „Zugang zum
-Sprachmodell", „Fernsteuerung über MCP") — **weiter offen**, aus der
-Erstnutzer-Durchsicht. Betrifft dieses Werkzeug nicht.
+Sprachmodell", „Fernsteuerung über MCP") — behoben. Die ersten beiden waren
+**derselbe Dialog**: `KeyDialog`, auf dem Erstlaufbildschirm als *Chat
+einrichten* angeboten und im Menü als *Zugang zum Sprachmodell*. Wer den einen
+gesehen hatte, suchte den anderen nicht. Geblieben ist der Name, der die Sache
+aus Sicht des Nutzers nennt — er sieht den Chat, nicht das Modell dahinter —
+und der beide Wege aus §27 trägt: Ein Schlüssel *und* ein lokales Ollama sind
+zwei Arten, den Chat zum Laufen zu bringen.
 
-**Und einer bleibt bewusst offen:** der Schnapper als Verbinderform. Er steht
-nicht in derselben Reihe wie Sechskant und Schwalbenschwanz, auch wenn die
-Slicer ihn dort führen — die beiden sind ein Querschnitt, der Schnapper ist ein
-federnder Arm mit Schlitz, Hinterschnitt und einer Federkraft, die ohne
-Kalibrierung geraten wäre. Als Formwert wäre er eine Zusage, die die Geometrie
-nicht hält.
+Der dritte ist etwas anderes und heißt deshalb weiter *Fernsteuerung*; die
+Zeile darunter („Port der Fernsteuerung") und das Handbuchkapitel tragen
+denselben Namen, und ein neues Wort hier hätte einen Namensbruch behoben und
+den nächsten angelegt. Geändert ist, was fehlte: „über MCP" nannte das
+Protokoll, nicht den Handelnden. Jetzt steht dort *Fernsteuerung durch andere
+Programme zulassen (MCP)*. Die ausführliche Fassung — „Solidon von anderen
+Programmen auf diesem Rechner fernsteuern lassen" — sagte nicht mehr und zog
+den Dialog auf Französisch von 566 auf 768 Bildpunkte; gemessen, dann
+verworfen.
+
+**Und einer blieb bewusst offen — bis ich ihn nachgerechnet habe:** der
+Schnapper. Er stand hier mit drei Gründen, und zwei davon haben eine Messung
+nicht überlebt. Der Hinterschnitt in der Gegenseite ist keine Überhangfläche,
+über die ein Baustein etwas sagen müsste, sondern eine Brücke von 0,9 mm — die
+legt jeder Drucker, und mit der Naht nach unten gibt es gar keinen Überhang.
+Und die Federkraft wird nicht geraten: zehn zu eins ist das Verhältnis aus
+Länge zu Armstärke, und es stand als `SNAP_RATIO` längst im Repository.
+
+Was blieb, ist der Grund, der ihn zum eigenen Baustein macht und nicht zu einem
+Wert in der Formliste: Rund, Sechskant und Schwalbenschwanz sind Querschnitte,
+der Schnapper ist ein Paar aus Federarm und Tasche. Er ist jetzt genau das —
+`snap_connector`, der vierzehnte Baustein. Die echte Grenze ist eine Zahl: Aus
+zehn zu eins und zwei Außenwänden folgen 8 mm Mindestlänge, und die Naht muss
+5,4 mm hergeben. Darunter wird rund daraus, und der Prüfbericht sagt warum.
 
 ## Teil 5 — Was die Durchsicht entlastet hat
 

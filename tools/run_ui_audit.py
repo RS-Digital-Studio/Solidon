@@ -40,7 +40,6 @@ from typing import Any
 
 # Vor allem, was Qt anfasst: die echte Plattform. Offscreen hat auf dieser
 # Maschine keine Schriften, und der Viewport rendert dort nichts.
-os.environ.pop("QT_QPA_PLATFORM", None)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -481,6 +480,11 @@ def report(groups: dict[str, list[Outcome]], questions: list[str]) -> int:
 
 
 def main() -> int:
+    # Beim Start zurückgesetzt, nicht beim Import — die Begründung steht in
+    # `tools/make_manual.py`: ein Modul, das die Plattform schon beim Importieren
+    # umstellt, reißt jeden Testlauf mit, der es nur lesen will.
+    os.environ.pop("QT_QPA_PLATFORM", None)
+
     from app.core.bootstrap import load_operations
     from app.i18n import install_catalog, set_language
     from app.i18n.catalog import read_catalog

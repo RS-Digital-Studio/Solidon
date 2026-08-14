@@ -75,11 +75,18 @@ def test_a_heading_spans_the_row(qt_app: QApplication) -> None:
 def test_the_search_narrows_and_empties_the_grid(qt_app: QApplication) -> None:
     """Die Suche filtert die Kacheln; ohne Treffer bleibt auch keine
     Überschrift stehen, die eine leere Gruppe verspräche.
+
+    **Die Anfrage muss wirklich unsinnig sein, nicht nur unsinnig aussehen.**
+    Hier stand „zzz-gibt-es-nicht", und `PARTS.search` zerlegt an allem, was
+    kein Wortzeichen ist — aus dem Bindestrich wurden vier Wörter, darunter
+    „gibt". Als ein Baustein einen Beschreibungssatz mit „gibt es" bekam, fand
+    die angeblich leere Suche ihn. Ein Buchstabensalat ohne Trennzeichen kann
+    das nicht passieren.
     """
     catalog = PartCatalog()
     everything = catalog.list.count()
 
-    catalog.search.setText("zzz-gibt-es-nicht")
+    catalog.search.setText("qwertzuiopasdfgh")
     assert catalog.list.count() == 0
 
     catalog.search.setText("")

@@ -5,6 +5,7 @@ vollständig (§4.1, §37.2).
 from __future__ import annotations
 
 import ast
+import os
 import re
 from pathlib import Path
 
@@ -230,10 +231,29 @@ def test_an_unnamed_language_still_shows_up() -> None:
     assert language_name("xx") == "xx"
 
 
-def test_the_manual_finds_a_place_for_a_new_language() -> None:
+def test_the_manual_finds_a_place_for_a_new_language(monkeypatch: pytest.MonkeyPatch) -> None:
     """Die Sprachauswahl darf der Anwendung nicht davonlaufen: der
-    Handbuchbauer kannte zwei Sprachen und brach bei der dritten ab."""
+    Handbuchbauer kannte zwei Sprachen und brach bei der dritten ab.
+
+    **Das `monkeypatch` ist kein Beiwerk.** Die Werkzeuge unter ``tools/``
+    setzen `QT_QPA_PLATFORM` zurück, weil sie eine echte Plattform brauchen —
+    und bis zu dieser Sitzung taten sie es beim *Import*. Dieser Test führt
+    genau diesen Import aus, also galt die Änderung danach für den ganzen
+    Prozess: `viewport._available()` sah keine Offscreen-Plattform mehr und
+    baute in jedem späteren Fenster einen echten VTK-Interactor — ohne
+    OpenGL-Kontext, und das nimmt den Prozess mit.
+
+    Das war beide Abstürze, die dieses Repository als „A" und „B" führte, und
+    dass sie zu wandern schienen, lag an der zufälligen Dateireihenfolge:
+    lief diese Datei vor `test_ui.py`, starb der Fensteraufbau dort; lief sie
+    vor `test_sketch_editor.py`, starb er da. Der Import selbst ist harmlos
+    geworden (`main()` setzt jetzt zurück, nicht das Modul), aber ein Test,
+    der fremden Modulcode ausführt, gibt die Umgebung von sich aus zurück —
+    das nächste Werkzeug hat vielleicht wieder eine Zeile davon.
+    """
     import importlib.util
+
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
 
     spec = importlib.util.spec_from_file_location(
         "make_manual", Path(app.__file__).parent.parent / "tools" / "make_manual.py"

@@ -578,9 +578,17 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
    Bei 34rem passen zwei Spalten in die 76rem des Rumpfes und drei nicht:
    578 px je Karte, davon 533 px Bild — Rahmen und Polster gehen ab, und mit
    `box-sizing: border-box` zählt der Rahmen zur Kartenbreite —, also
-   **233 px hoch**. Auf schmalen Fenstern fällt es von selbst auf eine Spalte.
-   Gerechnet und noch nicht am Fenster nachgemessen; der offene Punkt steht in
-   `ROADMAP.md`.
+   **233 px hoch**. Am Browser nachgemessen: 578 und 533 auf den Punkt, das
+   Bild 234 statt 233 (Chromium rundet anders auf).
+
+   **`min()` um das Mindestmaß, und daran hängt die ganze Regel.** `auto-fit`
+   nimmt Spalten weg, aber es macht die letzte nicht schmaler als ihr
+   Mindestmaß: Unter 544 px Fensterbreite stand *eine* Spalte da, und die war
+   weiter 544 px breit. `html` und `body` tragen `overflow-x: clip`, also
+   scrollte da nichts — auf einem 390er Telefon fehlten schlicht die rechten
+   150 px jeder Karte. Gerechnet war die Regel richtig und trotzdem falsch;
+   gesehen hat man es erst im laufenden Browser, und genau deshalb steht die
+   Messung hier und nicht nur die Rechnung.
 
    `align-items: start` dazu: ohne das streckt das Raster jede Karte auf die
    Höhe der längsten ihrer Zeile, und unter der kürzeren stand Leerraum, den
@@ -588,7 +596,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
    Karten im Fenster keine Streckfaktoren haben. */
 .ways {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(34rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(34rem, 100%), 1fr));
   align-items: start;
   gap: 1.25rem;
 }
