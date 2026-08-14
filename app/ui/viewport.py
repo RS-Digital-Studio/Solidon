@@ -872,10 +872,10 @@ class Viewport(QWidget):
         self._actors: dict[ObjectId, Any] = {}
         self._frame_actors: list[Any] = []
         self._selected: ObjectId | None = None
-        self._fitted = False
-        """Ob die Kamera schon einmal auf die Körper eingepasst wurde. Fällt
-        zurück, sobald die Szene leer ist — das nächste Projekt wird wieder
-        eingepasst."""
+        self._fitted_to: Literal["", "bed", "objects"] = ""
+        """Worauf die Kamera zuletzt eingepasst wurde — auf nichts, auf den
+        Bauraum oder auf die Körper. Wechselt der Zustand, wird einmal neu
+        eingepasst; innerhalb desselben Zustands bleibt jeder Zoom stehen."""
         self._scheme: NavigationScheme = "slicer"
         self._mode: DisplayMode = "solid"
         self._shading: Shading = "flat"
@@ -1869,6 +1869,13 @@ class Viewport(QWidget):
         ein — das machte jedes Einpassen auf die Körper wieder zunichte, weil
         die Kulisse danach gezeichnet wurde.
         """
+        width, depth, height = profile.printer.build_volume
+        # Gemerkt, weil der Kontaktschatten an dieser Kante geschnitten wird —
+        # und weil ``_fit_once_for`` daran erkennt, ob es auf einer leeren Szene
+        # überhaupt etwas einzupassen gibt. Vor dem Plotter-Zweig, aus demselben
+        # Grund wie dort: dass ein Bauraum gilt, ist eine Aussage über die
+        # Szene und nicht über VTK.
+        self._bed_extent = (width, depth)
         if self.plotter is None:
             return
         import pyvista as pv
@@ -1877,9 +1884,6 @@ class Viewport(QWidget):
             self.plotter.remove_actor(actor, render=False)
         self._frame_actors.clear()
 
-        width, depth, height = profile.printer.build_volume
-        # Gemerkt, weil der Kontaktschatten an dieser Kante geschnitten wird.
-        self._bed_extent = (width, depth)
         # Ein gefüllter Grund unter dem Raster. Bis hierhin war die Platte ein
         # Drahtgitter über dem Hintergrund — hübsch, aber ohne Fläche: ein
         # Schatten darauf fiel auf nichts und war im Bild schlicht nicht da.
@@ -3234,11 +3238,28 @@ class Viewport(QWidget):
         drückt. Jeder weitere Aufbau lässt die Kamera in Ruhe: wer heranzoomt,
         eine Bohrung setzt und die Ansicht dabei verliert, hat den Zoom
         zweimal gemacht.
+
+        **Die leere Szene hat auch etwas zu zeigen: den Bauraum.** Ohne diesen
+        Zweig stand die Kamera nach *Neues Projekt* auf (1, -1, 0,8) — also
+        anderthalb Millimeter vom Ursprung entfernt in einem 220er Bauraum. Die
+        Druckplatte lag außerhalb des Bildes, und der erste Blick eines neuen
+        Nutzers ging auf eine leere Fläche. Der Aufruf ist derselbe, den *Alles
+        einpassen* macht; ohne Körper nimmt er den Bauraum.
+
+        **Nur wenn es den Bauraum schon gibt.** Das Fenster baut die Ansicht
+        einmal auf, bevor ein Profil gilt — dort wäre nichts einzupassen, und
+        der Zustand stünde danach trotzdem auf „erledigt". Genau so gemessen:
+        ``_fitted_to`` sagte „bed", und die Kamera stand weiter auf (1, -1, 0,8).
         """
-        has_objects = result is not None and bool(result.scene.objects)
-        if has_objects and not self._fitted:
+        if result is not None and result.scene.objects:
+            wanted = "objects"
+        elif self._bed_extent is not None:
+            wanted = "bed"
+        else:
+            return
+        if wanted != self._fitted_to:
             self.reset_camera()
-        self._fitted = has_objects
+            self._fitted_to = wanted  # type: ignore[assignment]
 
     def _object_bounds(self) -> tuple[float, float, float, float, float, float] | None:
         """Der Hüllquader über alle Körper, im Format von VTK, oder nichts."""

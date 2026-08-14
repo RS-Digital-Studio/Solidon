@@ -796,13 +796,13 @@ def test_the_camera_is_fitted_once_and_then_left_alone(window: MainWindow) -> No
     """
     result = window.session.last_result
     window.viewport.show_scene(result)
-    assert window.viewport._fitted, "das geöffnete Projekt steht im Bild"
+    assert window.viewport._fitted_to == "objects", "das geöffnete Projekt steht im Bild"
 
     window.viewport.show_scene(result)
-    assert window.viewport._fitted, "und der nächste Aufbau passt nicht erneut ein"
+    assert window.viewport._fitted_to == "objects", "und der nächste Aufbau passt nicht erneut ein"
 
     window.viewport.show_scene(None)
-    assert not window.viewport._fitted, (
+    assert window.viewport._fitted_to == "bed", (
         "eine leere Szene macht den Weg für das nächste Projekt frei"
     )
 
@@ -853,6 +853,39 @@ def test_an_empty_scene_still_fits_on_something(window: MainWindow) -> None:
 
     assert plotter.fitted_to == [None]
     assert plotter.camera_set
+
+
+def test_a_new_project_puts_the_build_volume_in_the_picture(window: MainWindow) -> None:
+    """Nach *Neues Projekt* muss die Druckplatte zu sehen sein.
+
+    Sie war es nicht: eingepasst wurde nur, wenn Körper da waren, und die
+    Startkamera stand aus dem Aufbau heraus auf (1, -1, 0,8) — anderthalb
+    Millimeter vom Ursprung entfernt, während der Bauraum 220 mm misst. Wer
+    ein neues Projekt anlegte, sah eine leere Fläche und musste Pos1 drücken,
+    um zu erfahren, dass alles in Ordnung ist.
+
+    Geprüft wird ``_fit_once_for`` und nicht ``show_scene``: die Entscheidung
+    fällt dort, und der Buchhalter-Plotter kennt nur ``reset_camera``.
+    """
+    viewport = window.viewport
+    viewport.show_scene(window.session.last_result)
+    assert viewport._fitted_to == "objects"
+
+    plotter = _CameraPlotter()
+    viewport.plotter = plotter
+    # In derselben Reihenfolge wie ``show_scene``: erst steht die neue Szene,
+    # dann wird eingepasst. Andersherum misst ``reset_camera`` die Körper der
+    # vorigen und passt auf etwas ein, das nicht mehr da ist.
+    viewport._result = None
+    viewport._fit_once_for(None)
+
+    assert plotter.fitted_to == [None], "die leere Szene passt auf den Bauraum ein"
+    assert viewport._bed_extent is not None, "der Bauraum gilt auch ohne Plotter"
+    assert viewport._fitted_to == "bed"
+
+    plotter.fitted_to.clear()
+    viewport._fit_once_for(None)
+    assert plotter.fitted_to == [], "der nächste leere Aufbau lässt die Kamera in Ruhe"
 
 
 def test_the_build_volume_is_a_hint_not_a_cage() -> None:
@@ -2288,3 +2321,26 @@ def test_a_theme_change_redraws_the_previews(qt_app: QApplication) -> None:
         assert not tree._previews, "der Vorrat gehört dem alten Thema"
     finally:
         tree.deleteLater()
+
+
+def test_nothing_is_fitted_before_a_build_volume_exists(qt_app: QApplication) -> None:
+    """Ein Einpassen ohne Bauraum zählt nicht als erledigt.
+
+    Das Fenster baut die Ansicht auf, bevor ein Druckerprofil gilt. Passte man
+    dort ein, gäbe es nichts zu messen — und der Zustand stünde danach auf
+    „schon eingepasst", sodass das erste echte Projekt nie eingepasst würde.
+    Genau so gemessen: ``_fitted_to`` sagte „bed", und die Kamera stand
+    unverändert anderthalb Millimeter vom Ursprung entfernt.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        plotter = _CameraPlotter()
+        viewport.plotter = plotter
+        viewport._fit_once_for(None)
+
+        assert plotter.fitted_to == [], "ohne Bauraum wird nicht eingepasst"
+        assert viewport._fitted_to == "", "und nichts gilt als erledigt"
+    finally:
+        viewport.deleteLater()
