@@ -1148,13 +1148,15 @@ vergessen durchgeht:
 | **Vierte Projektion** | §7.4, P16.7 | „Per Fläche" braucht eine erkannte Fläche als Bezug und gehört damit zu §21. |
 | **Bauplan §25 und die Kategorie `organic`** | §6, Entscheidung M | Sechs neue Operationen stehen bei ihren Geschwistern (`mesh`, `boolean`, `surface`). Ob `organic` entsteht und unter welche Menügruppe sie fällt, ist eine Entscheidung, die angesagt gehört. |
 
-**Die Abnahme aus §16** ist damit zu sieben Achteln erfüllt: Tore grün,
-`test_gesture_ops.py` für alle drei Sammelarten, Leistungszeilen eingehalten,
-Grenzen aus `test_interface_limits.py` gehalten ohne eine angehobene Zahl,
-Handbuchseiten in beiden Sprachen mit „wann nicht benutzen". Offen sind die
-Punkte 3 und 4 — eine Figur vom Grundkörper bis zum druckfertigen 3MF, mit
-Zeitmessung und Hash-Vergleich nach dem Wiederöffnen — und Punkt 7, die
-Agenten-Suite.
+**Die Abnahme aus §16** ist bis auf einen Punkt erfüllt. Sieben von acht:
+Tore grün, `test_gesture_ops.py` für alle drei Sammelarten, Leistungszeilen
+eingehalten, Grenzen aus `test_interface_limits.py` gehalten ohne eine
+angehobene Zahl, Handbuchseiten in beiden Sprachen mit „wann nicht benutzen" —
+und seit `tests/test_way_four.py` auch die Punkte 3 und 4: Eine Figur läuft vom
+Grundkörper bis zum druckfertigen 3MF in **0,24 Sekunden**, und nach dem
+Wiederöffnen der Projektdatei sind es dieselben Eckpunkte.
+
+Offen ist Punkt 7, die Agenten-Suite.
 
 **Was P16.9 vorfindet:** Entscheidung D ist bestätigt, und der Ort dafür steht
 — die Strichliste liegt bis 2 000 Zügen im `project.json` und darüber als
