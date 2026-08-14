@@ -61,6 +61,33 @@ class SectionPlane:
         )
 
 
+def plane_through(first: Vec3, second: Vec3, view: Vec3) -> SectionPlane | None:
+    """Die Ebene, die eine im Bild gezeichnete Linie meint.
+
+    Zwei angeklickte Punkte auf dem Körper geben eine Linie — und eine Linie
+    allein legt keine Ebene fest, sie lässt sich um sich selbst drehen. Was
+    die Drehung festhält, ist die Richtung, in die geschaut wurde: Gemeint ist
+    immer der Schnitt *in den Bildschirm hinein*, denn das ist die Ebene, die
+    der Nutzer als Strich sieht. Beides zusammen ist eindeutig, und deshalb
+    steht die Blickrichtung hier im Argument statt in der Operation — die Op
+    bekommt die fertige Ebene und hängt damit an keiner Kamerastellung (§11.2).
+
+    ``None``, wenn die Linie zu kurz ist oder genau in die Blickrichtung
+    zeigt: dann spannt sich keine Ebene auf, und eine geratene wäre schlimmer
+    als keine (Regel 21).
+    """
+    along = np.asarray(second, dtype=float) - np.asarray(first, dtype=float)
+    normal = np.cross(along, np.asarray(view, dtype=float))
+    length = float(np.linalg.norm(normal))
+    if length <= EPS_GEOM:
+        return None
+    normal = normal / length
+    return SectionPlane(
+        normal=(float(normal[0]), float(normal[1]), float(normal[2])),
+        position=float(np.dot(normal, np.asarray(first, dtype=float))),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class SectionResult:
     """Was vom Körper bleibt, und ob die Schnittfläche geschlossen werden

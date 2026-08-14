@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from app.core.geom.autosplit import SplitOutcome, split_to_fit
 from app.core.geom.mesh import MeshData
 from app.core.geom.pins import PIN_COUNT
+from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft
 from app.core.types import (
@@ -141,6 +142,46 @@ def apply_planned(
         transaction=transaction,
         findings=list(plan.outcome.findings),
     )
+
+
+def apply_line_split(
+    document: Document,
+    object_id: ObjectId,
+    plane: SectionPlane,
+    profile: Profile,
+    *,
+    pins: int = PIN_COUNT,
+) -> SplitApplied:
+    """Ein einzelner Schnitt an einer gezeichneten Linie — mit Passungspaaren.
+
+    Warum das nicht die Operation selbst tut, steht im Modulkopf: Passungen
+    leben im Dokument, die Auswertung schreibt nicht hinein. Der Unterschied zu
+    Auto Split ist nur die Zahl der Schnitte — einer, den jemand gezeigt hat,
+    statt so vieler, wie der Bauraum verlangt.
+    """
+    history = History(document)
+    applied = history.apply(
+        _("An gezeichneter Linie trennen"),
+        [
+            OperationDraft(
+                op="split_line",
+                inputs=(object_id,),
+                params={
+                    "normal_x": plane.normal[0],
+                    "normal_y": plane.normal[1],
+                    "normal_z": plane.normal[2],
+                    "position": plane.position,
+                    "pins": pins,
+                },
+            )
+        ],
+        Origin(by="user"),
+    )
+    made = document.ops[-1].outputs
+    fits = _pairs(made[0], made[1], pins, profile, 0) if pins else []
+    document.fits.extend(fits)
+    _log.info("split along a drawn line into %d part(s)", len(made))
+    return SplitApplied(object_ids=list(made), fits=fits, transaction=applied.id)
 
 
 def _pairs(

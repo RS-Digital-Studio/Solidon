@@ -34,7 +34,7 @@ from app.core.geom.mesh import MeshData
 from app.core.geom.section import AXIS_NORMALS, Axis, SectionPlane
 from app.core.log import get_logger
 from app.core.slice.analysis import cross_sections
-from app.core.types import Finding, Profile
+from app.core.types import Finding, Profile, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -308,27 +308,54 @@ def _judge(mesh: MeshData, axis: Axis, positions: np.ndarray) -> list[Candidate]
 
 def upright(axis: Axis) -> np.ndarray:
     """Die Drehung, die ``axis`` auf +Z legt. Für Z selbst die Identität."""
-    if axis == "z":
+    return upright_normal(AXIS_NORMALS[axis])
+
+
+def upright_normal(normal: Vec3) -> np.ndarray:
+    """Die Drehung, die ``normal`` auf +Z legt — für jede Richtung, nicht nur
+    für die drei Achsen.
+
+    Sie hat eine Eigenschaft, auf der alles Weitere ruht: Für einen Punkt ``p``
+    ist die dritte Koordinate des gedrehten Punktes genau ``normal · p``. Denn
+    die Drehung ``R`` erfüllt ``R n = ẑ``, also ``ẑ · R p = (Rᵀ ẑ) · p = n · p``.
+    Der Abstand einer Ebene vom Ursprung entlang ihrer Normalen ist damit
+    dieselbe Zahl wie die Höhe, in der im gedrehten Bezugssystem geschnitten
+    wird — **ohne Umrechnung**, und das gilt für eine gezeichnete Trennlinie
+    genauso wie für eine Achse.
+    """
+    direction = np.asarray(normal, dtype=float)
+    length = float(np.linalg.norm(direction))
+    if length <= EPS_GEOM:
+        return np.eye(4)
+    direction = direction / length
+    if abs(direction[2] - 1.0) <= EPS_GEOM:
         return np.eye(4)
     return np.asarray(
-        trimesh.geometry.align_vectors(np.asarray(AXIS_NORMALS[axis]), [0.0, 0.0, 1.0]),
+        trimesh.geometry.align_vectors(direction, [0.0, 0.0, 1.0]),
         dtype=float,
     )
 
 
 def sections_along(mesh: MeshData, axis: Axis, heights: np.ndarray) -> list[Any]:
-    """Querschnitte entlang beliebiger Achsen — die Achse wird erst aufgerichtet.
+    """Querschnitte entlang einer der drei Achsen."""
+    return sections_across(mesh, AXIS_NORMALS[axis], heights)
+
+
+def sections_across(mesh: MeshData, normal: Vec3, heights: np.ndarray) -> list[Any]:
+    """Querschnitte quer zu einer beliebigen Richtung — sie wird erst
+    aufgerichtet.
 
     Die Schichtanalyse schneidet entlang Z und kann das gut; den Körper zu
     drehen ist billiger als eine zweite Umsetzung, und es hält die zwei
     Antworten vergleichbar. Die Polygone liegen im gedrehten Bezugssystem —
-    :func:`upright` gibt die Matrix her, ein Punkt darauf lässt sich also
-    dorthin legen, wo er in der Welt hingehört.
+    :func:`upright_normal` gibt die Matrix her, ein Punkt darauf lässt sich
+    also dorthin legen, wo er in der Welt hingehört.
     """
+    turn = upright_normal(normal)
     body = mesh
-    if axis != "z":
+    if not np.allclose(turn, np.eye(4)):
         turned = mesh.raw.copy()
-        turned.apply_transform(upright(axis))
+        turned.apply_transform(turn)
         body = MeshData.of(turned)
 
     # Die Schichtanalyse sortiert jedes Dreieck in die Schichten, die es

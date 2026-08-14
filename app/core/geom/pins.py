@@ -18,17 +18,19 @@ wurden — und das Passungspaar hält den Verweis fest, nicht den Wert (§14).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 
-from app.core.geom.autosplit import Candidate, sections_along, upright
+from app.core.geom.autosplit import sections_across, upright_normal
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData
-from app.core.geom.transform import apply, rotation, translation
+from app.core.geom.section import SectionPlane
+from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts.registry import PARTS
 from app.core.log import get_logger
 from app.core.types import Feature, FeatureId, Finding, Profile, Vec3
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -63,7 +65,15 @@ class PinPlan:
     positions: tuple[Vec3, ...]
     diameter: float
     length: float
-    axis: str
+    normal: Vec3
+    """Richtung, in der die Stifte stehen — die Normale der Trennebene.
+
+    Sie war lange ein Achsenbuchstabe, und das reichte, solange nur Auto Split
+    verstiftete: dessen Ebenen stehen immer quer zu x, y oder z. Eine
+    gezeichnete Trennlinie steht schief, und ein Stift, der dann entlang der
+    nächstgelegenen Achse aufgestellt wird, steht nicht senkrecht auf der
+    Fläche, in der er sitzt — er schert beim Fügen.
+    """
     findings: tuple[Finding, ...] = ()
 
     @property
@@ -84,33 +94,45 @@ class PinnedPair:
 
 
 def plan_pins(
-    mesh: MeshData, candidate: Candidate, *, count: int = PIN_COUNT, wall: float = PIN_WALL
+    mesh: MeshData, plane: SectionPlane, *, count: int = PIN_COUNT, wall: float = PIN_WALL
 ) -> PinPlan:
-    """Sucht Platz für Stifte auf der Schnittfläche von ``candidate``.
+    """Sucht Platz für Stifte auf der Schnittfläche von ``plane``.
 
     Liefert einen Plan ohne Positionen, wenn die Fläche zu klein ist — eine
     Naht ohne Stifte klebt immer noch, ein Stift, der aus der Wand ausbricht,
     nicht.
     """
-    section = sections_along(mesh, cast(Any, candidate.axis), np.array([candidate.position]))[0]
+    normal = _unit(plane.normal)
+    section = sections_across(mesh, normal, np.array([plane.position]))[0]
     if section is None or section.is_empty:
-        return PinPlan((), 0.0, 0.0, candidate.axis, (_no_face(),))
+        return PinPlan((), 0.0, 0.0, normal, (_no_face(),))
 
     largest = max(getattr(section, "geoms", (section,)), key=lambda entry: entry.area)
     diameter = _diameter(largest)
     inset = largest.buffer(-(diameter / 2.0 + wall))
     if inset.is_empty:
-        return PinPlan((), 0.0, 0.0, candidate.axis, (_too_small(diameter, wall),))
+        return PinPlan((), 0.0, 0.0, normal, (_too_small(diameter, wall),))
 
     room = max(getattr(inset, "geoms", (inset,)), key=lambda entry: entry.area)
     points = _spread(room, count)
     length = diameter * PIN_DEPTH_FACTOR * 2.0
     return PinPlan(
-        positions=tuple(_in_world(point, candidate) for point in points),
+        positions=tuple(_in_world(point, plane.position, normal) for point in points),
         diameter=diameter,
         length=length,
-        axis=candidate.axis,
+        normal=normal,
     )
+
+
+def _unit(normal: Vec3) -> Vec3:
+    """Die Richtung auf Länge eins. Alles hier rechnet mit Einheitsnormalen —
+    die Ebenenlage ist sonst ein Vielfaches ihrer selbst."""
+    vector = np.asarray(normal, dtype=float)
+    length = float(np.linalg.norm(vector))
+    if length <= EPS_GEOM:
+        return (0.0, 0.0, 1.0)
+    vector = vector / length
+    return (float(vector[0]), float(vector[1]), float(vector[2]))
 
 
 def _diameter(section: Any) -> float:
@@ -144,15 +166,16 @@ def _spread(room: Any, count: int) -> list[tuple[float, float]]:
     return points
 
 
-def _in_world(point: tuple[float, float], candidate: Candidate) -> Vec3:
+def _in_world(point: tuple[float, float], position: float, normal: Vec3) -> Vec3:
     """Ein Punkt des Schnitts zurück in Weltkoordinaten.
 
-    Der Schnitt wurde mit aufgerichteter Schnittachse genommen, der Rückweg
+    Der Schnitt wurde mit aufgerichteter Trennrichtung genommen, der Rückweg
     ist also dieselbe Drehung, invertiert — keine Tabelle von
-    Vorzeichenwechseln, die für drei Achsen gleichzeitig stimmen muss.
+    Vorzeichenwechseln, die für drei Achsen gleichzeitig stimmen muss, und
+    für eine schiefe Richtung gäbe es sie ohnehin nicht.
     """
-    turned = np.array([point[0], point[1], candidate.position, 1.0])
-    back = np.linalg.inv(upright(cast(Any, candidate.axis))) @ turned
+    turned = np.array([point[0], point[1], position, 1.0])
+    back = np.linalg.inv(upright_normal(normal)) @ turned
     return (float(back[0]), float(back[1]), float(back[2]))
 
 
@@ -185,13 +208,13 @@ def add_pins(
     )
 
     for index, position in enumerate(plan.positions, start=1):
-        placed_pin = _upright(pin_body, plan.axis, position, -plan.length / 2.0)
-        placed_bore = _upright(bore_body, plan.axis, position, 0.0)
+        placed_pin = _along_normal(pin_body, plan.normal, position, -plan.length / 2.0)
+        placed_bore = _along_normal(bore_body, plan.normal, position, 0.0)
 
         pair.first = boolean("union", [pair.first, placed_pin]).mesh
         pair.second = boolean("difference", [pair.second, placed_bore]).mesh
 
-        axis_vector = _axis_vector(plan.axis)
+        axis_vector = plan.normal
         pair.pin_features[f"pin_{index}"] = Feature(
             id=f"pin_{index}",
             kind="pin",
@@ -227,25 +250,20 @@ def _part(name: str, **values: Any) -> MeshData:
     return as_mesh_data(spec.fn(spec.params(**values)).mesh)
 
 
-def _upright(body: MeshData, axis: str, position: Vec3, offset: float) -> MeshData:
-    """Legt einen Baustein, der auf +Z steht, entlang der Schnittachse und
-    schiebt ihn an seinen Platz."""
-    placed = body
-    if axis == "x":
-        placed = apply(placed, rotation("y", 90.0))
-    elif axis == "y":
-        placed = apply(placed, rotation("x", -90.0))
+def _along_normal(body: MeshData, normal: Vec3, position: Vec3, offset: float) -> MeshData:
+    """Legt einen Baustein, der auf +Z steht, in die Trennrichtung und schiebt
+    ihn an seinen Platz.
 
-    shift = [0.0, 0.0, 0.0]
-    shift["xyz".index(axis)] = offset
-    target = (position[0] + shift[0], position[1] + shift[1], position[2] + shift[2])
-    return apply(placed, translation(target))
-
-
-def _axis_vector(axis: str) -> Vec3:
-    vector = [0.0, 0.0, 0.0]
-    vector["xyz".index(axis)] = 1.0
-    return (vector[0], vector[1], vector[2])
+    Gedreht wird mit derselben Matrix wie der Schnitt, nur andersherum: was
+    :func:`upright_normal` auf +Z legt, kommt hier von +Z zurück. Drei
+    Sonderfälle für drei Achsen standen hier vorher und waren für eine schiefe
+    Ebene nicht zu ergänzen.
+    """
+    turn = np.linalg.inv(upright_normal(normal))
+    placed = MeshData.of(body.raw.copy().apply_transform(turn))
+    direction = np.asarray(normal, dtype=float)
+    target = np.asarray(position, dtype=float) + direction * offset
+    return apply(placed, translation((float(target[0]), float(target[1]), float(target[2]))))
 
 
 def _no_face() -> Finding:

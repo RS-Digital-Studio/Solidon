@@ -13,7 +13,6 @@ from typing import cast
 import trimesh
 
 from app.core.errors import InternalError, ValidationError
-from app.core.geom.autosplit import Candidate
 from app.core.geom.boolean import boolean
 from app.core.geom.hollow import VENT_DIAMETER, hollow
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -658,27 +657,45 @@ def split_pinned(ctx: OpContext) -> OpResult:
     Operation heißt außerdem: ein Undo nimmt das Ganze zurück.
     """
     params = cast(SplitPinnedParams, ctx.params)
-    source = ctx.inputs[0]
-    mesh = as_mesh_data(source.mesh)
-    candidate = Candidate(
-        axis=cast(Axis, params.axis),
-        position=params.position,
-        area=0.0,
-        contours=1,
-        score=0.0,
+    plane = SectionPlane(normal=AXIS_NORMALS[cast(Axis, params.axis)], position=params.position)
+    return _cut_and_pin(
+        ctx,
+        plane,
+        pins=params.pins,
+        diameter=params.diameter,
+        play=params.play,
     )
 
-    first, second, findings = split_at_plane(mesh, candidate.plane)
-    _both_halves_or_stop(first, second, params.position)
 
-    plan = plan_pins(mesh, candidate, count=params.pins) if params.pins else None
-    if plan is not None and params.diameter:
-        plan = dataclasses.replace(plan, diameter=params.diameter)
+def _cut_and_pin(
+    ctx: OpContext,
+    plane: SectionPlane,
+    *,
+    pins: int,
+    diameter: float,
+    play: float,
+) -> OpResult:
+    """Der gemeinsame Teil von *Teilen und verstiften* und *An Linie trennen*.
+
+    Die beiden unterscheiden sich einzig darin, **woher die Ebene kommt** —
+    aus einer Achse und einer Zahl oder aus zwei angeklickten Punkten. Alles
+    danach ist dasselbe, und zweimal geschrieben wäre es beim ersten Nachbessern
+    an einer Stelle anders.
+    """
+    source = ctx.inputs[0]
+    mesh = as_mesh_data(source.mesh)
+
+    first, second, findings = split_at_plane(mesh, plane)
+    _both_halves_or_stop(first, second, plane.position)
+
+    plan = plan_pins(mesh, plane, count=pins) if pins else None
+    if plan is not None and diameter:
+        plan = dataclasses.replace(plan, diameter=diameter)
 
     pair = (
         # Beide Hälften kommen aus diesem einen Körper, das Spiel ist also das
         # seines Materials.
-        add_pins(first, second, plan, for_object(ctx.profile, source), play=params.play or None)
+        add_pins(first, second, plan, for_object(ctx.profile, source), play=play or None)
         if plan is not None and ctx.profile is not None
         else PinnedPair(first=first, second=second)
     )
@@ -700,6 +717,127 @@ def split_pinned(ctx: OpContext) -> OpResult:
         ],
         findings=[*findings, *pair.findings],
     )
+
+
+@op_params
+class SplitLineParams(BaseParams):
+    """Die Trennebene aus einer gezeichneten Linie.
+
+    Was der Nutzer tut, ist zwei Punkte anklicken; was gespeichert wird, ist
+    die Ebene, die daraus folgt. Beides ist dieselbe Angabe — nur ist die
+    Ebene die, die sich hinterher noch verschieben lässt, und ein Punktpaar
+    wäre eine Zahlenkolonne, an der niemand etwas nachbessert.
+    """
+
+    position: float = param(
+        title=_("Lage"),
+        default=0.0,
+        unit="mm",
+        doc=_(
+            "Wie weit die Trennebene vom Nullpunkt entfernt liegt, in Trennrichtung "
+            "gemessen. Die gezeichnete Linie trägt die Zahl ein; nachträglich "
+            "verschiebt sie den Schnitt, ohne ihn zu drehen."
+        ),
+    )
+    pins: int = param(
+        title=_("Passstifte"),
+        default=PIN_COUNT,
+        minimum=0,
+        maximum=6,
+        doc=_(
+            "Stifte auf der einen Hälfte, Bohrungen auf der anderen — sie halten die "
+            "Teile beim Kleben in Deckung. Null heißt: nur trennen."
+        ),
+    )
+    normal_x: float = param(
+        title=_("Trennrichtung X"),
+        default=0.0,
+        placement="advanced",
+        doc=_(
+            "Richtung, in der die Ebene steht. Die gezeichnete Linie trägt sie ein — "
+            "von Hand gesetzt ergeben die drei Zahlen zusammen einen Pfeil senkrecht "
+            "zur Schnittfläche."
+        ),
+    )
+    normal_y: float = param(
+        title=_("Trennrichtung Y"),
+        default=0.0,
+        placement="advanced",
+        doc=_("Zweite Achse der Trennrichtung — siehe Trennrichtung X."),
+    )
+    normal_z: float = param(
+        title=_("Trennrichtung Z"),
+        default=1.0,
+        placement="advanced",
+        doc=_("Dritte Achse der Trennrichtung — siehe Trennrichtung X."),
+    )
+    diameter: float = param(
+        title=_("Stiftdurchmesser"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=PIN_MAX,
+        placement="advanced",
+        doc=_("Null heißt: aus der Schnittfläche ableiten."),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1.0,
+        placement="advanced",
+        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+    )
+
+
+@register_op(
+    name="split_line",
+    title=_("An gezeichneter Linie trennen"),
+    category="prepare",
+    params=SplitLineParams,
+    consumes=1,
+    produces=2,
+    icon="split",
+    doc=_(
+        "Trennt ein Objekt entlang einer im Bild gezeichneten Linie und setzt auf "
+        "Wunsch Passstifte in die Schnittfläche."
+    ),
+    caveat=_(
+        "Der Schnitt ist eine Ebene, keine Kurve: Die Linie legt fest, wo und wie "
+        "schräg getrennt wird, und die Ebene läuft von dort gerade durch das Teil. "
+        "Wer um eine Rundung herum trennen will, teilt zweimal."
+    ),
+)
+def split_line(ctx: OpContext) -> OpResult:
+    """§25: derselbe Schnitt wie *Teilen und verstiften*, nur mit einer Ebene,
+    die nicht an einer Achse hängt.
+
+    Zwei Punkte auf dem Körper und die Blickrichtung spannen sie auf — das ist
+    die Rechnung, die das Fenster macht, bevor es hier ankommt. Hier steht nur
+    noch die fertige Ebene, und das ist Absicht: Eine Operation, die von der
+    Kamerastellung abhinge, wäre beim zweiten Auswerten eine andere (§11.2).
+    """
+    params = cast(SplitLineParams, ctx.params)
+    normal = (params.normal_x, params.normal_y, params.normal_z)
+    if _length(normal) <= EPS_GEOM:
+        raise ValidationError(
+            field="normal_z",
+            detail=_("Ohne Trennrichtung gibt es keine Ebene."),
+            value=0.0,
+            constraint="no_normal",
+        )
+    return _cut_and_pin(
+        ctx,
+        SectionPlane(normal=normal, position=params.position),
+        pins=params.pins,
+        diameter=params.diameter,
+        play=params.play,
+    )
+
+
+def _length(vector: tuple[float, float, float]) -> float:
+    return float(sum(entry * entry for entry in vector) ** 0.5)
 
 
 @op_params

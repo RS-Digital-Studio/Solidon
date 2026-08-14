@@ -173,7 +173,7 @@ def test_pins_sit_inside_the_cut_face(profile: Profile) -> None:
     candidate = autosplit.find_plane(whole, profile)
     assert candidate is not None
 
-    plan = pins.plan_pins(whole, candidate)
+    plan = pins.plan_pins(whole, candidate.plane)
 
     assert plan.count == 2, "one pin is a hinge"
     assert pins.PIN_MIN <= plan.diameter <= pins.PIN_MAX
@@ -188,7 +188,7 @@ def test_a_face_too_small_gets_no_pins_and_says_so(profile: Profile) -> None:
     candidate = autosplit.find_plane(thin, profile)
     assert candidate is not None
 
-    plan = pins.plan_pins(thin, candidate)
+    plan = pins.plan_pins(thin, candidate.plane)
 
     assert plan.count == 0
     assert [finding.code for finding in plan.findings] == ["split.face_too_small"]
@@ -199,7 +199,7 @@ def test_the_pin_goes_into_one_half_and_the_bore_into_the_other(profile: Profile
     candidate = autosplit.find_plane(whole, profile)
     assert candidate is not None
     first, second, _findings = split_at_plane(whole, candidate.plane)
-    plan = pins.plan_pins(whole, candidate)
+    plan = pins.plan_pins(whole, candidate.plane)
 
     pair = pins.add_pins(first, second, plan, profile)
 
@@ -218,7 +218,7 @@ def test_the_play_comes_from_the_material_profile(profile: Profile) -> None:
     candidate = autosplit.find_plane(whole, profile)
     assert candidate is not None
     first, second, _findings = split_at_plane(whole, candidate.plane)
-    plan = pins.plan_pins(whole, candidate)
+    plan = pins.plan_pins(whole, candidate.plane)
 
     pair = pins.add_pins(first, second, plan, profile)
 
