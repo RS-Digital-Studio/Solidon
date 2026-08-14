@@ -763,9 +763,20 @@ bleiben bestehen (Checkliste `AGENTS.md`).
 
 **Wo die Striche liegen.** Bis 2 000 Striche im `project.json` als kompakte
 Zahlenliste — das sind etwa 200 kB, vergleichbar mit einer großen Skizze.
-Darüber als binärer Block in `sources/strokes/<op>.npz`, mit Prüfsumme wie
-jede andere Quelle (§16.1). Die Grenze ist eine Konstante, keine Streuzahl,
-und sie steht im Modulkopf mit ihrer Begründung.
+Darüber in einer eigenen Datei im Container. Die Grenze ist eine Konstante,
+keine Streuzahl, und sie steht im Modulkopf mit ihrer Begründung.
+
+**Umgesetzt in P16.9, mit zwei Abweichungen von diesem Absatz.** Ausgelagert
+wird derselbe JSON-Text und kein `npz`: Ein zweites Format für dieselben Zahlen
+wäre ein zweiter Leseweg, ein zweiter Fehlerfall und ein Gewinn von wenigen
+Prozent, weil der Container ohnehin komprimiert. Und ausgelagert wird **jeder**
+Sammelwert über der Grenze, nicht nur die Strichliste — eine Skizze mit
+zehntausend Elementen hat dasselbe Problem, und eine Regel, die nur einen Fall
+kennt, ist beim zweiten falsch.
+
+**Nur beim Speichern und Laden.** Im Arbeitsspeicher ist ein Sammelparameter
+immer sein Text; sonst müsste jede Auswertung, jeder Hash und jeder Vergleich
+wissen, ob der Wert gerade ausgelagert ist.
 
 Keine absoluten Pfade (Regel 12). Das Bild eines Displacements reist im
 Container mit, nicht als Verweis — sonst öffnet das Projekt auf einem anderen
@@ -916,7 +927,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | **P16.6** | Sculpting-Sitzung im Viewport: Pinselring, Leiste, Vorschau, Wandstärke live, Editor-Undo | **XL** | offscreen wie `test_sketch_editor.py`; Grenzen aus `test_interface_limits.py` | **fertig** — 19 Tests, Grenzen gehalten |
 | **P16.7** | `displace_image` samt Bild in `sources/` und Profilprüfung | L | Relief unter Düsenbreite wird gemeldet | **fertig** — 17 Tests, drei Projektionen |
 | **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | **Kern fertig** — 16 Tests; Skeletteditor offen |
-| **P16.9** | Dateiformat 7→8, Migration, Beispieldatei, Einbacken (D) | L | alte Datei öffnet und rechnet | offen |
+| **P16.9** | Dateiformat 7→8, Migration, Beispieldatei, Einbacken (D) | L | alte Datei öffnet und rechnet | **fertig** — 18 Tests; Nachfrage in der Oberfläche offen |
 | **P16.10** | Handbuch, Weg 4, Website, Beispielprojekt, Übersetzungen, Regelsammlung + Agenten-Suite vorher/nachher (§18) | L | Sprachdateien vollständig; Suitenquote nicht schlechter | offen |
 | **P16.11** | **Prüfpunkt Käfigmodellierung** (H2): Reicht Primitive + `blend_union` + Pinsel als Basisnetz für die Korpusfiguren? | S | Kriterium **vor** P16.5 festgeschrieben; Ergebnis dokumentiert, nicht passend gemacht | **fertig** — 4 von 5 Bedingungen erfüllt (H2) |
 
@@ -1098,6 +1109,11 @@ anderer Stelle).
 - **P16.8** — Kern in `app/core/geom/pose.py`, `Bone` und `Pose` in
   `types.py`, `kind="armature"` im Schema, `tests/test_pose.py` mit 16 Tests.
   **Der Skeletteditor fehlt** — der Kern läuft über die Kommandozeile.
+- **P16.9** — `app/core/scene/gathered.py`, Formatversion 8,
+  `example_v8.p3d`, Einbacken als Parameter an `sculpt_strokes`.
+  `tests/test_gathered.py` mit 13 Tests, dazu fünf in `test_sculpt.py`.
+  **Die Nachfrage in der Oberfläche fehlt** — der Kern meldet die Schwelle,
+  der Weg zum Festschreiben ist noch keiner.
 - P16.6 bis P16.10: unverändert wie in §15 beschrieben, keiner begonnen.
   **P16.9 trägt jetzt eine bestätigte Entscheidung**: Einbacken mit Nachfrage
   (D), von Robert am 13.08.2026 so entschieden.
@@ -1117,12 +1133,16 @@ dem Beginn von P16.5 zurückgefragt):
   Volumen und Wasserdichtheit unbeschadet ließ und die Ausdehnung um acht
   Millimeter verfehlte.
 
-**Nächster Schritt, wenn es weitergeht:** P16.9 — Dateiformat 7 → 8 mit
-Migration und dem Einbacken aus Entscheidung D. Der Ort dafür steht: Die
-Strichliste liegt bis 2 000 Zügen im `project.json` und darüber als Block in
-`sources/` (§9), und das Einbacken schreibt den Stand als neues Quellnetz.
-Danach P16.10 (Weg 4, Handbuch, Website, Regelsammlung) und der
-Skeletteditor aus §7.5.
+**Nächster Schritt, wenn es weitergeht:** P16.10 — Weg 4, Handbuch, Website,
+Beispielprojekt, Übersetzungen und die Regelsammlung. Das letzte Paket der
+Phase und das einzige, das **Geld kostet**: Die Agenten-Suite läuft vorher und
+nachher, je rund anderthalb Stunden, und eine Regeländerung ohne beide
+Messungen wird zurückgenommen (`AGENTS.md`, Checkliste „Regelsammlung
+ändern"). Der Lauf gehört deshalb angesagt und nicht nebenbei gestartet.
+
+Dazu die drei Reste, die als solche dastehen und nicht als vergessen: der
+Skeletteditor (§7.5), die Nachfrage zum Einbacken in der Oberfläche (§4 D) und
+die vierte Displacement-Projektion (§7.4).
 
 **Was P16.9 vorfindet:** Entscheidung D ist bestätigt, und der Ort dafür steht
 — die Strichliste liegt bis 2 000 Zügen im `project.json` und darüber als

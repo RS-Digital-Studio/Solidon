@@ -4640,7 +4640,37 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       **Offen: der Skeletteditor** in der Oberfläche (§7.5) — Knochen setzen,
       Kette bilden, Namen vergeben. Der Kern ist über die Kommandozeile
       bedienbar, wie es bei P16.5 vor P16.6 auch war.
-- [ ] **P16.9 — Dateiformat 7 → 8**, Migration, Einbacken. **Dabei mitnehmen:
+- [x] **P16.9 — Dateiformat 7 → 8**, Migration, Einbacken. Der Bruch ist die
+      **Auslagerung großer Sammelwerte**: Eine Sculpting-Sitzung mit
+      viertausend Zügen steht sonst als eine Zeile im `project.json`, und die
+      Datei lässt sich weder ansehen noch ändern, ohne sie ganz neu zu
+      schreiben. Ab 200 000 Zeichen wandert der Wert in eine eigene Datei im
+      Container — rund zweitausend Züge, die Größenordnung einer großen
+      Skizze.
+
+      **Nur beim Speichern und Laden.** Im Arbeitsspeicher ist ein
+      Sammelparameter immer sein Text; sonst müsste jede Auswertung, jeder
+      Hash und jeder Vergleich wissen, ob der Wert gerade ausgelagert ist. Die
+      Nummer kommt aus den vorhandenen Quellen und nicht aus einem Zähler im
+      Dokument — ein Zähler wäre ein Zustand, der beim Rückgängigmachen falsch
+      wird.
+
+      Die Migration 7 → 8 ist eine Feststellung und keine Umrechnung. Sie
+      prüft den einen Fall, in dem eine alte Datei doch etwas dieser Art
+      enthalten könnte: einen Parameterwert, der zufällig wie ein Verweis
+      aussieht. Er wäre in Version 8 einer, und das wäre eine Umdeutung — also
+      hält sie an. `example_v8.p3d` eingecheckt, `example_v7.p3d` öffnet
+      weiter.
+
+      **Das Einbacken** (Entscheidung D, von Robert bestätigt) ist ein
+      Parameter an `sculpt_strokes` und keine eigene Operation: Ist `baked`
+      gesetzt, kommt das Ergebnis aus der Quelle statt aus der Rechnung, und
+      die Züge bleiben als Beleg stehen. Reproduzierbar bleibt es — die Quelle
+      reist im Container mit wie jede andere, und eine Quelle *ist* ein
+      Parameter, sonst wäre auch `load` keine Operation. 18 Tests.
+
+      Offen: die Nachfrage in der Oberfläche, die den Stand tatsächlich
+      schreibt. Der Kern meldet die Schwelle, der Weg dorthin fehlt. **Dabei mitnehmen:
       ein `title_translatable` für Parameter.** Für Transaktionstitel gibt es
       das Feld seit Fassung 6, für Parameter nicht — ihr Titel kommt aus dem
       Code, verliert beim Speichern aber die Herkunft und steht danach als
