@@ -559,3 +559,25 @@ def test_the_tool_strip_comes_back_with_a_body(window: MainWindow) -> None:
         if child.text() in window.tools.tool_titles().values()
     ]
     assert all(button.isEnabled() for button in buttons)
+
+
+def test_what_creates_a_body_lives_under_creating() -> None:
+    """Ein Erzeugen gehört nicht ins Ändern-Menü.
+
+    Der exakte Gewindebolzen stand unter *Ändern → Formgebung* — und war dort
+    auf einer leeren Szene der einzige anklickbare Eintrag, während alle sechs
+    Nachbarn ausgegraut waren. Kein Wunder: Er verbraucht nichts. Dieselbe
+    Sorte Fehler wie die Grundformen unter *Boolesch*, die
+    ``test_a_basic_shape_is_created_not_changed`` festhält.
+    """
+    creating = {
+        category
+        for title, categories in MENU_GROUPS
+        if str(title) == "Erzeugen"
+        for category in categories
+    }
+    for spec in REGISTRY.all():
+        if spec.consumes == 0 and spec.produces >= 1 and spec.category != "parts":
+            assert spec.category in creating, (
+                f"{spec.name} erzeugt aus dem Nichts, steht aber unter {spec.category!r}"
+            )

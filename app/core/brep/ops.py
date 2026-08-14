@@ -369,7 +369,12 @@ class ThreadParams(BaseParams):
 @register_op(
     name="thread_exact",
     title=_("Exakten Gewindebolzen erzeugen"),
-    category="shaping",
+    # „primitive" und nicht „shaping": Der Bolzen verbraucht nichts und
+    # erzeugt einen Körper — dasselbe wie der exakte Quader und der exakte
+    # Zylinder daneben. Unter *Ändern → Formgebung* war er der einzige
+    # Eintrag, der auf einer leeren Szene anklickbar blieb, während alle
+    # sechs Nachbarn ausgegraut waren: ein Erzeugen im Ändern-Menü.
+    category="primitive",
     params=ThreadParams,
     consumes=0,
     produces=1,
