@@ -397,3 +397,83 @@ def test_leaving_the_session_stops_the_check(window: MainWindow) -> None:
     window.finish_sculpt()
 
     assert not window._sculpt_check.isActive()
+
+
+# --- Einbacken (Entscheidung D) -------------------------------------------------
+
+
+def test_the_history_offers_baking_only_for_a_live_session(window: MainWindow) -> None:
+    """Der Eintrag steht an einer Formsitzung und an keinem anderen Schritt.
+
+    Ein Menüeintrag, der überall steht und fast nirgends etwas tut, ist einer,
+    den man nicht mehr liest.
+    """
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 82.0))
+    window.finish_sculpt()
+    window.session.wait_for_idle()
+
+    document = window.session.project.document
+    sculpt = next(entry for entry in document.ops if entry.op == "sculpt_strokes")
+    other = next(entry for entry in document.ops if entry.op != "sculpt_strokes")
+    window.history_panel.show_document(document)
+
+    assert sculpt.id in window.history_panel._bakeable
+    assert other.id not in window.history_panel._bakeable
+
+
+def test_baking_writes_the_state_into_the_project(window: MainWindow) -> None:
+    """Entscheidung D: Der Stand wandert als Quelle ins Projekt.
+
+    Danach wird nicht mehr gerechnet — bei zwanzig Etappen kostet jede
+    Auswertung zwanzig Durchgänge, und genau das ist der Grund für die
+    Handlung.
+    """
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 82.0))
+    window.finish_sculpt()
+    window.session.wait_for_idle()
+    sculpt = next(
+        entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
+    )
+    before = len(window.session.project.document.sources)
+
+    assert window.session.bake_strokes(sculpt.id)
+    window.session.wait_for_idle()
+
+    assert len(window.session.project.document.sources) == before + 1
+    frozen = next(
+        entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
+    )
+    assert frozen.params["baked"], "die Operation kennt ihren festgeschriebenen Stand"
+    assert frozen.params["strokes"], "und die Züge stehen weiter als Beleg da"
+
+
+def test_a_baked_session_is_not_offered_again(window: MainWindow) -> None:
+    """Zweimal festschreiben ergibt keinen Sinn — und der Eintrag verschwindet."""
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 82.0))
+    window.finish_sculpt()
+    window.session.wait_for_idle()
+    sculpt = next(
+        entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
+    )
+    window.session.bake_strokes(sculpt.id)
+    window.session.wait_for_idle()
+
+    window.history_panel.show_document(window.session.project.document)
+
+    assert sculpt.id not in window.history_panel._bakeable
+
+
+def test_baking_something_that_is_not_a_session_does_nothing(window: MainWindow) -> None:
+    """Der Kern lehnt ab, statt irgendetwas festzuschreiben."""
+    object_id = with_a_body(window)
+    other = window.session.project.document.ops[0]
+    assert other.op != "sculpt_strokes"
+
+    assert not window.session.bake_strokes(other.id)
+    assert object_id

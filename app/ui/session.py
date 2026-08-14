@@ -611,6 +611,43 @@ class Session(QObject):
         self.projectChanged.emit()
         self.evaluate_async()
 
+    def bake_strokes(self, op_id: int) -> bool:
+        """Den Stand einer Formsitzung festschreiben (Entscheidung D).
+
+        Das aktuelle Ergebnis wandert als Quelle ins Projekt, und die Operation
+        bekommt sie als ``baked``. Danach wird sie nicht mehr gerechnet — bei
+        zwanzig Etappen kostet jede Auswertung zwanzig Durchgänge, und genau
+        das ist der Grund für diese Handlung.
+
+        **Der einzige Fall, in dem eine Nachfrage richtig ist.** Regel 19
+        verbietet Bestätigungsdialoge vor rücknehmbaren Handlungen; diese ist
+        nicht folgenlos rücknehmbar, denn danach lässt sich an den Zügen nichts
+        mehr ändern. Die Nachfrage stellt der Aufrufer, nicht diese Methode —
+        der Kern fragt nie selbst (Regel 21).
+        """
+        result = self.last_result
+        operation = next((entry for entry in self.project.document.ops if entry.id == op_id), None)
+        if result is None or operation is None or operation.op != "sculpt_strokes":
+            return False
+        # Ein Körper hinein, einer heraus: Die Operation behält die
+        # Objektkennung ihrer Eingabe, und das gesuchte Ergebnis steht unter
+        # derselben in der Szene.
+        entry = result.scene.objects.get(operation.inputs[0]) if operation.inputs else None
+        if entry is None:
+            return False
+
+        document = self.project.document
+        source_id = f"src_{len(document.sources) + 1}"
+        document.sources[source_id] = Source(
+            id=source_id,
+            kind="generated",
+            path=embedded_source_path(f"{source_id}.stl"),
+            sha256="",
+        )
+        self.project.sources[source_id] = as_mesh_data(entry.mesh).to_stl()
+        self.change_params(op_id, {"baked": source_id})
+        return True
+
     def set_print_settings(self, settings: PrintSettings) -> None:
         """Womit dieses Projekt gedruckt wird (§29).
 

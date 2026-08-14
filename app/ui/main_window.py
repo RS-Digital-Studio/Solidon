@@ -635,6 +635,7 @@ class MainWindow(QMainWindow):
         self.parameters = ParameterPanel(self)
         self.history_panel = HistoryPanel(self)
         self.history_panel.operationActivated.connect(self.edit_operation)
+        self.history_panel.bakeRequested.connect(self.bake_sculpt)
 
         # Ohne Streckfaktoren: die Karte ist so hoch wie ihr Inhalt, nicht so
         # hoch wie die Spalte. Ein Objektbaum mit einer Zeile soll eine Zeile
@@ -2017,6 +2018,32 @@ class MainWindow(QMainWindow):
         self.announce(
             f"{tr('Geteilt')}: {len(applied.object_ids)} · {len(applied.fits)} {tr('Passungen')}"
         )
+
+    def bake_sculpt(self, op_id: int) -> None:
+        """Den Stand einer Formsitzung festschreiben — mit Nachfrage.
+
+        **Die einzige Nachfrage im ganzen Programm.** Regel 19 verbietet
+        Bestätigungsdialoge vor rücknehmbaren Handlungen, und fast alles hier
+        ist rücknehmbar; diese Handlung ist es nicht folgenlos, denn danach
+        lässt sich an den Zügen nichts mehr ändern. Deshalb steht im Dialog
+        auch nicht „Sind Sie sicher", sondern was danach nicht mehr geht
+        (Entscheidung D, §2.7).
+        """
+        answer = QMessageBox.question(
+            self,
+            tr("Stand festschreiben"),
+            tr(
+                "Der jetzige Stand wird als Körper im Projekt abgelegt. Die Züge bleiben "
+                "als Beleg stehen, wirken aber nicht mehr — an dieser Sitzung lässt sich "
+                "danach nichts mehr ändern. Dafür wird sie nicht mehr gerechnet."
+            ),
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Ok:
+            return
+        if not self.session.bake_strokes(op_id):
+            self.announce(tr("Dieser Schritt lässt sich nicht festschreiben."))
 
     def action_undo(self) -> None:
         # Läuft eine Formsitzung, nimmt Strg+Z den letzten Zug zurück und

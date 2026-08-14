@@ -821,6 +821,12 @@ class HistoryPanel(QWidget):
 
     operationActivated = Signal(int)
     """Eine Operation wurde doppelt angeklickt — trägt ihre ID, zum Ändern (§15.4)."""
+    bakeRequested = Signal(int)
+    """Der Stand einer Formsitzung soll festgeschrieben werden (Entscheidung D).
+
+    Als Signal und nicht als Aufruf: Die Nachfrage stellt das Fenster, denn sie
+    ist die einzige im ganzen Programm — die Handlung ist nicht folgenlos
+    rücknehmbar, und Regel 19 gilt nur für die, die es sind."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -831,6 +837,9 @@ class HistoryPanel(QWidget):
         self.list.customContextMenuRequested.connect(self._on_context_menu)
         self._room: int | None = None
         """Wie beim Objektbaum: die zugeteilte Höhe, ``None`` bis sie kommt."""
+        self._bakeable: frozenset[int] = frozenset()
+        """Formsitzungen, deren Stand sich festschreiben lässt — also die, die
+        noch aus ihren Zügen gerechnet werden."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.list)
@@ -871,6 +880,11 @@ class HistoryPanel(QWidget):
         """
         self.list.clear()
         titles = {entry.id: _op_title(entry.op) for entry in document.ops}
+        self._bakeable = frozenset(
+            entry.id
+            for entry in document.ops
+            if entry.op == "sculpt_strokes" and not entry.params.get("baked")
+        )
         for transaction in document.transactions:
             # Nur was abweicht, wird ausgeschrieben (§26.4). „(Nutzer)" stand
             # vorher an jeder Zeile — in einem Projekt ohne Agenten also
@@ -930,6 +944,12 @@ class HistoryPanel(QWidget):
         menu = QMenu(self)
         action = menu.addAction(tr("Parameter ändern …"))
         action.triggered.connect(lambda _checked=False: self.operationActivated.emit(int(op_id)))
+        if int(op_id) in self._bakeable:
+            # Nur an einer Formsitzung, und nur an einer, die noch gerechnet
+            # wird: Ein Eintrag, der an jedem Schritt steht und an fast keinem
+            # etwas tut, ist einer, den man nicht mehr liest.
+            frozen = menu.addAction(tr("Stand festschreiben …"))
+            frozen.triggered.connect(lambda _checked=False: self.bakeRequested.emit(int(op_id)))
         menu.exec(self.list.viewport().mapToGlobal(position))
 
 
