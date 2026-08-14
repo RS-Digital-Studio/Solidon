@@ -2041,9 +2041,9 @@ class SketchPanel(QWidget):
         measure.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         measure.activated.connect(lambda: self.request_constraint("distance"))
 
-        versetzen = QShortcut(QKeySequence(ACTION_KEYS["offset"]), self)
-        versetzen.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        versetzen.activated.connect(
+        offsetting = QShortcut(QKeySequence(ACTION_KEYS["offset"]), self)
+        offsetting.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        offsetting.activated.connect(
             lambda: self.canvas.offset_selected(self.offset_distance.value())
         )
 

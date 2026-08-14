@@ -17,27 +17,37 @@ import app
 PACKAGE_DIR = Path(app.__file__).parent
 
 #: Deutsche Wörter, die nie ein Abschnitt eines Bezeichners sein dürfen.
+#:
+#: Die Liste ist kuratiert und nicht vollständig — sie kann es nicht sein, denn
+#: ein deutsches Wörterbuch träfe zu viel: `object`, `radius`, `position` und
+#: `parameter` stehen wörtlich in den deutschen Oberflächentexten und sind
+#: trotzdem englische Bezeichner. Was hier steht, ist eindeutig.
 GERMAN_WORDS = frozenset(
     {
         "abstand",
         "anzahl",
         "bauteil",
         "baustein",
+        "beschreibung",
+        "beschriftung",
         "breite",
         "datei",
         "dicke",
+        "direkt",
         "durchmesser",
         "ebene",
         "einheit",
         "ende",
         "farbe",
         "fehler",
+        "feld",
         "hinweis",
         "kante",
         "koerper",
         "loch",
         "menge",
         "meldung",
+        "minuten",
         "mutter",
         "objekt",
         "ordner",
@@ -45,9 +55,12 @@ GERMAN_WORDS = frozenset(
         "punkt",
         "schicht",
         "schraube",
+        "schritt",
         "seite",
         "spalte",
+        "stelle",
         "stift",
+        "stunde",
         "szene",
         "teil",
         "tiefe",
@@ -64,9 +77,14 @@ GERMAN_STEMS = (
     "aenderung",
     "auswahl",
     "bohrung",
+    "dezimier",
     "druck",
     "einstellung",
     "flaeche",
+    "gemerkt",
+    "geschlossen",
+    "geschrieben",
+    "gespeichert",
     "groesse",
     "hoehe",
     "laenge",
@@ -74,7 +92,21 @@ GERMAN_STEMS = (
     "pruef",
     "staerke",
     "stueck",
+    "versetz",
     "waehl",
+)
+
+#: Deutsche Beugungen der Wörter oben. ``wert`` stand in der Liste und
+#: ``werte`` kam trotzdem durch: geprüft wurde auf Gleichheit, und ein
+#: deutscher Plural ist kein anderes Wort. Nur ``-e``, ``-en`` und ``-n`` —
+#: ``-er`` und ``-s`` erzeugen aus ``wand`` und ``loch`` die englischen
+#: ``wander`` und ``lochs``.
+GERMAN_ENDINGS = ("e", "en", "n")
+INFLECTED = frozenset(
+    word + ending
+    for word in GERMAN_WORDS
+    for ending in GERMAN_ENDINGS
+    if word + ending not in GERMAN_WORDS
 )
 
 UMLAUTS = "äöüÄÖÜß"
@@ -102,7 +134,7 @@ def identifiers_of(tree: ast.AST) -> list[tuple[str, int]]:
 
 def offences_in(name: str) -> list[str]:
     lowered = name.lower()
-    hits = [word for word in lowered.split("_") if word in GERMAN_WORDS]
+    hits = [word for word in lowered.split("_") if word in GERMAN_WORDS | INFLECTED]
     hits += [stem for stem in GERMAN_STEMS if stem in lowered]
     return hits
 
@@ -145,3 +177,28 @@ def test_the_check_would_catch_a_violation() -> None:
     assert offences_in("hoehe")
     assert not offences_in("detail_view")
     assert not offences_in("part_registry")
+
+
+def test_the_check_sees_through_a_german_plural() -> None:
+    """``wert`` stand in der Liste, ``werte`` kam durch — ein Jahr lang.
+
+    Gesucht wurde auf Gleichheit, und der Plural ist damit ein anderes Wort.
+    Die vier hier standen so im Bestand oder hätten es jederzeit gekonnt.
+    """
+    assert offences_in("werte")
+    assert offences_in("schritte")
+    assert offences_in("kanten")
+    assert offences_in("objekte")
+
+
+def test_the_check_leaves_english_words_alone() -> None:
+    """Die Gegenprobe zur Beugung, und der Grund für die Wahl der Endungen.
+
+    ``wand`` und ``loch`` stehen in der Liste; mit ``-er`` und ``-s`` daran
+    entstünden ``wander`` und ``lochs``, und beide sind englisch. Deshalb
+    kennt `GERMAN_ENDINGS` nur ``-e``, ``-en`` und ``-n``.
+    """
+    assert not offences_in("wander")
+    assert not offences_in("wanders")
+    assert not offences_in("lochs")
+    assert not offences_in("ends")

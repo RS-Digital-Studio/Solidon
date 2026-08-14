@@ -111,26 +111,26 @@ def operation_tools(
         # die Funktion im Fenster liegt — es hat sonst keine Quelle dafür.
         # ``menu_path`` staffelt wie die Leiste; nur Gruppe und Titel zu
         # nennen traf für 72 von 77 Ops den falschen Ort.
-        beschreibung = str(schema["description"])
+        description = str(schema["description"])
         if compact:
             # Auch die Parametertexte: sie sind mit 36 KB der größte einzelne
             # Posten im Schema. Gekürzt auf den ersten Satz bleibt stehen, was
             # der Wert bedeutet; weg fällt, warum er so heißt und was bei
             # Randfällen passiert.
-            for name, feld in properties.items():
-                text = str(feld.get("description", ""))
+            for name, field in properties.items():
+                text = str(field.get("description", ""))
                 if ". " in text:
-                    properties[name] = {**feld, "description": text.split(". ")[0] + "."}
+                    properties[name] = {**field, "description": text.split(". ")[0] + "."}
             parameters["properties"] = properties
             # Der erste Satz sagt, was die Operation tut; der Rest erklärt
             # Randfälle, die ein Modell mit kleinem Fenster nicht liest.
-            beschreibung = beschreibung.split(". ")[0].rstrip(".") + "."
+            description = description.split(". ")[0].rstrip(".") + "."
         else:
-            beschreibung = f"{beschreibung} {tr('Menü')}: {menu_path(spec, source)}."
+            description = f"{description} {tr('Menü')}: {menu_path(spec, source)}."
         schemas.append(
             {
                 "name": schema["name"],
-                "description": beschreibung,
+                "description": description,
                 "input_schema": parameters,
             }
         )

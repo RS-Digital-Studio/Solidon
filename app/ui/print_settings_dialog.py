@@ -1095,10 +1095,10 @@ class PrintSettingsDialog(QDialog):
             for entry in fitting:
                 box.addItem(entry.title(tr("eigenes")), str(entry.path))
             box.setEnabled(True)
-            gemerkt = self.settings.slot_profiles
-            name = gemerkt[position] if position < len(gemerkt) else ""
-            stelle = box.findText(name) if name else -1
-            box.setCurrentIndex(stelle if stelle >= 0 else self.filament_choice.currentIndex())
+            remembered = self.settings.slot_profiles
+            name = remembered[position] if position < len(remembered) else ""
+            found = box.findText(name) if name else -1
+            box.setCurrentIndex(found if found >= 0 else self.filament_choice.currentIndex())
 
     def _build_slot_rows(self, form: QFormLayout) -> None:
         """Eine Auswahl je Slot, sobald ein Teil mehrere Farben trägt (§20).
@@ -1115,17 +1115,17 @@ class PrintSettingsDialog(QDialog):
         slots = self._plate_slots()
         if len(slots) < 2:
             return
-        gespeichert = self.settings.slot_profiles
+        stored = self.settings.slot_profiles
         for index, slot in enumerate(slots):
             box = QComboBox(self.slicer_box)
             box.setEnabled(bool(self._profiles))
             box.activated.connect(lambda _i, position=index: self._slot_filament_chosen(position))
-            beschriftung = slot.name or tr("Slot {nummer}").replace("{nummer}", str(index + 1))
-            label = QLabel(f"   {beschriftung}", self.slicer_box)
+            caption = slot.name or tr("Slot {nummer}").replace("{nummer}", str(index + 1))
+            label = QLabel(f"   {caption}", self.slicer_box)
             form.addRow(label, box)
             self.slot_rows.append((label, box))
-            if index < len(gespeichert) and gespeichert[index]:
-                box.setProperty("wanted", gespeichert[index])
+            if index < len(stored) and stored[index]:
+                box.setProperty("wanted", stored[index])
 
     def _plate_slots(self) -> list[MaterialSlot]:
         """Die Materialslots der ersten Platte, zusammengelegt wie beim Export."""
@@ -1183,11 +1183,11 @@ class PrintSettingsDialog(QDialog):
         chosen = self.filament_choice.currentData()
         if not chosen:
             return
-        werte = slicer_profiles.filament_values(Path(str(chosen)))
-        if not werte:
+        values = slicer_profiles.filament_values(Path(str(chosen)))
+        if not values:
             return
         settings = self.settings
-        for path, value in werte.items():
+        for path, value in values.items():
             settings = print_settings.with_path(settings, path, value)
         self.settings = settings
         self._load_into_editors()
@@ -1197,7 +1197,7 @@ class PrintSettingsDialog(QDialog):
                 "{profil}", self.filament_choice.currentText()
             )
         )
-        _log.info("adopted %d values from %s", len(werte), chosen)
+        _log.info("adopted %d values from %s", len(values), chosen)
 
     def _profile_search_finished(self) -> None:
         self._profile_worker = None

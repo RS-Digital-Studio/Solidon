@@ -4971,26 +4971,24 @@ class MainWindow(QMainWindow):
         from datetime import datetime
 
         try:
-            geschrieben = datetime.fromtimestamp(path.stat().st_mtime)
+            written = datetime.fromtimestamp(path.stat().st_mtime)
         except OSError:
             return tr("unbekannt")
-        minuten = int((datetime.now() - geschrieben).total_seconds() // 60)
-        if minuten < 1:
+        minutes = int((datetime.now() - written).total_seconds() // 60)
+        if minutes < 1:
             return tr("gerade eben")
         # Die Einzahl steht daneben, sie wird nicht gebildet: „vor 1 Stunden"
         # liest sich wie ein Fehler in der Anwendung, und im Englischen fiele
         # das gebildete „1 hours" genauso auf. Zwei Formen je Einheit sind
         # billiger als eine Regel, die für jede Sprache anders lautet.
-        if minuten < 60:
+        if minutes < 60:
             return (
-                tr("vor einer Minute") if minuten == 1 else tr("vor {n} Minuten").format(n=minuten)
+                tr("vor einer Minute") if minutes == 1 else tr("vor {n} Minuten").format(n=minutes)
             )
-        stunden = minuten // 60
-        if stunden < 24:
-            return (
-                tr("vor einer Stunde") if stunden == 1 else tr("vor {n} Stunden").format(n=stunden)
-            )
-        return geschrieben.strftime("%d.%m.%Y %H:%M")
+        hours = minutes // 60
+        if hours < 24:
+            return tr("vor einer Stunde") if hours == 1 else tr("vor {n} Stunden").format(n=hours)
+        return written.strftime("%d.%m.%Y %H:%M")
 
     def _offer_recovery(self, path: Path) -> None:
         """Eine Sicherung anbieten, die neuer ist als die Datei (§38).

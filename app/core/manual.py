@@ -1122,12 +1122,12 @@ def profiles_text() -> str:
     lines.append("|---|---|---|---|---|---|")
     for printer in printer_profiles().values():
         x, y, z = printer.build_volume
-        geschlossen = _("ja") if printer.enclosed else _("nein")
+        enclosed = _("ja") if printer.enclosed else _("nein")
         lines.append(
             f"| {printer.title} | {x:.0f} × {y:.0f} × {z:.0f} "
             f"| {decimal(printer.nozzle_diameter, 2)} "
             f"| {decimal(printer.layer_height, 2)} | {decimal(printer.extrusion_width, 2)} "
-            f"| {geschlossen} |"
+            f"| {enclosed} |"
         )
     lines.append("")
 

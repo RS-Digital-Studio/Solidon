@@ -230,9 +230,9 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # Als eigene Transaktion und nicht als stiller Teil der Reparatur: ein
     # Undo nimmt sie zurück, der Stapel zeigt sie, und wer die volle Auflösung
     # braucht, hat sie einen Klick entfernt.
-    schritte = [loading.id, repairing.id]
+    steps = [loading.id, repairing.id]
     if result.mesh.triangle_count > GENERATED_TRIANGLE_LIMIT:
-        dezimieren = history.apply(
+        decimating = history.apply(
             _("Auf Arbeitsauflösung bringen"),
             [
                 OperationDraft(
@@ -244,14 +244,14 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
             ],
             origin,
         )
-        schritte.append(dezimieren.id)
+        steps.append(decimating.id)
 
     _log.info("generated %s into %s via %s", object_id, source_id, result.backend)
     return Generation(
         source_id=source_id,
         object_id=object_id,
         result=result,
-        transactions=tuple(schritte),
+        transactions=tuple(steps),
     )
 
 

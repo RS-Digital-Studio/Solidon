@@ -98,9 +98,9 @@ def profile_file(chosen: str, setup: SlicerSetup, kind: slicer_profiles.ProfileK
     """
     if not chosen:
         return None
-    direkt = Path(chosen)
-    if direkt.is_file():
-        return direkt
+    direct = Path(chosen)
+    if direct.is_file():
+        return direct
     # ``kind`` und nicht ``type_of``: das eine ist der Ordner, aus dem das
     # Profil stammt, das andere sein ``type``-Feld — und das steht in den
     # mitgelieferten Profilen der Orca-Familie durchweg leer.
