@@ -119,6 +119,16 @@ STYLE = """
     }
     .figure-text { color: var(--muted); font-style: italic; }
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92rem; }
+    /* Eine Tabelle mit sieben Spalten passt auf kein Telefon, und sie soll es
+       auch nicht: die Materialtabelle ist eine Tabelle, kein Fließtext. Sie
+       bekommt deshalb ihren eigenen Rollbereich, statt die Seite zu sprengen
+       — gemessen ließ sich das Handbuch bei 375 px Bildbreite um 270 Pixel
+       nach rechts schieben, weil die breiteste Tabelle 645 px maß.
+       ``display: block`` ist der Preis dafür, dass hier kein Wrapper um jede
+       Tabelle steht; die Spalten bleiben lesbar, weil ``white-space: nowrap``
+       nur die Kopfzeile trifft. */
+    table { display: block; overflow-x: auto; max-width: 100%; }
+    thead th { white-space: nowrap; }
     th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; }
     th { background: var(--card); }
     code { background: var(--card); padding: .1rem .3rem; border-radius: 3px; }

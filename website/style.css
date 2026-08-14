@@ -57,6 +57,13 @@
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 5.5rem;
+
+  /* Und hier, nicht nur am body: der Rollbereich der Seite gehört dem
+     Wurzelelement. Ein `clip` allein am body sieht richtig aus und wirkt
+     nicht — gemessen ließ sich die Startseite bei 1440 px trotzdem um
+     111 Pixel nach rechts schieben, das Handbuch auf dem Telefon um 270
+     von 375. `clip` und nicht `hidden`, aus demselben Grund wie unten. */
+  overflow-x: clip;
 }
 
 /* Der Browser-Standardring verschwindet auf den Knöpfen, die selbst einen
@@ -80,7 +87,8 @@ body {
   /* Der Schein hinter dem Aufmacher greift absichtlich über beide Ränder
      hinaus und erzeugte damit einen waagerechten Rollbalken über die ganze
      Seite. ``clip`` schneidet ihn ab — ``hidden`` täte das auch, würde aber
-     die stehende Kopfzeile lösen, weil es einen Rollbereich erzeugt. */
+     die stehende Kopfzeile lösen, weil es einen Rollbereich erzeugt.
+     Die Zeile allein genügt nicht; sie steht auch am ``html`` darüber. */
   overflow-x: clip;
 }
 
@@ -199,8 +207,17 @@ nav.lang a.cta:hover {
   box-shadow: var(--shadow-lift);
 }
 
+/* Was auf einem schmalen Gerät zuerst weicht, ist eine Reihenfolge und keine
+   Menge: „Funktionen“ steht ausführlich weiter unten auf derselben Seite, der
+   Preis ist die erste Frage eines Interessenten. Er bleibt deshalb, bis es
+   wirklich eng wird — darunter führt der Demo-Knopf ohnehin auf denselben
+   Abschnitt. */
 @media (max-width: 44rem) {
   nav.lang .hide-small { display: none; }
+}
+
+@media (max-width: 30rem) {
+  nav.lang .hide-tiny { display: none; }
 }
 
 /* ── Aufmacher ─────────────────────────────────────────────────────────── */

@@ -71,6 +71,16 @@
     }
     .figure-text { color: var(--muted); font-style: italic; }
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92rem; }
+    /* Eine Tabelle mit sieben Spalten passt auf kein Telefon, und sie soll es
+       auch nicht: die Materialtabelle ist eine Tabelle, kein Fließtext. Sie
+       bekommt deshalb ihren eigenen Rollbereich, statt die Seite zu sprengen
+       — gemessen ließ sich das Handbuch bei 375 px Bildbreite um 270 Pixel
+       nach rechts schieben, weil die breiteste Tabelle 645 px maß.
+       ``display: block`` ist der Preis dafür, dass hier kein Wrapper um jede
+       Tabelle steht; die Spalten bleiben lesbar, weil ``white-space: nowrap``
+       nur die Kopfzeile trifft. */
+    table { display: block; overflow-x: auto; max-width: 100%; }
+    thead th { white-space: nowrap; }
     th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; }
     th { background: var(--card); }
     code { background: var(--card); padding: .1rem .3rem; border-radius: 3px; }
@@ -822,7 +832,7 @@
 <p>Macht aus der Helligkeit eines Bildes eine Höhe auf der Oberfläche. Für Maserung, Prägung und Wappen — alles, wofür keine Skizze taugt.</p>
 <p><strong>Wann nicht:</strong> Nicht auf ein grobes Netz: Ein Relief zeigt sich nur, wo Eckpunkte sind, und unter einem Eckpunkt je zwei Bildpunkten bleibt vom Bild nichts übrig. Erst gleichmäßig vernetzen.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>
-<table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Bild <code>source</code></td><td></td><td>erforderlich</td><td></td><td>Das Graustufenbild, dessen Helligkeit zur Höhe wird. Hell steht hoch.</td></tr><tr><td>Höhe <code>strength</code></td><td>mm</td><td>1</td><td>0 … 50</td><td>Wie hoch das Relief wird — der Abstand zwischen schwarz und weiß.</td></tr><tr><td>Auflegen <code>projection</code></td><td></td><td>planar</td><td>planar, cylindrical, spherical</td><td>Wie das rechteckige Bild auf den Körper kommt: von oben, um die Achse gewickelt oder über die Kugel.</td></tr><tr><td>Nulllage <code>middle</code></td><td></td><td>0</td><td>0 … 1</td><td>Welcher Grauwert die Fläche in Ruhe lässt. Null trägt nur auf; ein halb hebt und senkt — der Unterschied zwischen Stempel und Prägung.</td></tr><tr><td>Weichzeichnen <code>smooth</code></td><td></td><td>0</td><td>0 … 20</td><td>Wie oft die Höhen über die Nachbarn gemittelt werden. Nimmt harte Ränder aus einem Bild, das für den Druck zu scharf gezeichnet ist.</td></tr></tbody></table>
+<table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Bild <code>source</code></td><td></td><td>erforderlich</td><td></td><td>Das Graustufenbild, dessen Helligkeit zur Höhe wird. Hell steht hoch.</td></tr><tr><td>Höhe <code>strength</code></td><td>mm</td><td>1</td><td>0 … 50</td><td>Wie hoch das Relief wird — der Abstand zwischen schwarz und weiß.</td></tr><tr><td>Auflegen <code>projection</code></td><td></td><td>planar</td><td>planar, cylindrical, spherical, face</td><td>Wie das rechteckige Bild auf den Körper kommt: von oben, um die Achse gewickelt oder über die Kugel.</td></tr><tr><td>Fläche <code>face</code></td><td></td><td></td><td></td><td>Auf welche erkannte Fläche das Bild gelegt wird. Nur für „Auf eine Fläche“ — die anderen Arten brauchen keine.</td></tr><tr><td>Nulllage <code>middle</code></td><td></td><td>0</td><td>0 … 1</td><td>Welcher Grauwert die Fläche in Ruhe lässt. Null trägt nur auf; ein halb hebt und senkt — der Unterschied zwischen Stempel und Prägung.</td></tr><tr><td>Weichzeichnen <code>smooth</code></td><td></td><td>0</td><td>0 … 20</td><td>Wie oft die Höhen über die Nachbarn gemittelt werden. Nimmt harte Ränder aus einem Bild, das für den Druck zu scharf gezeichnet ist.</td></tr></tbody></table>
 <h4>Textur aufbringen (<code>apply_texture</code>)</h4>
 <p>Prägt ein Muster als echte Geometrie auf eine Fläche — Rändel für den Griff, Wabe oder Rippe fürs Aussehen. Was der Slicer bekommt, ist das, was man sieht.</p>
 <p>Objekte: 1 → 1 · umkehrbar · mit Startwert · Gilt für: Fläche</p>

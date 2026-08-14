@@ -71,6 +71,16 @@
     }
     .figure-text { color: var(--muted); font-style: italic; }
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92rem; }
+    /* Eine Tabelle mit sieben Spalten passt auf kein Telefon, und sie soll es
+       auch nicht: die Materialtabelle ist eine Tabelle, kein Fließtext. Sie
+       bekommt deshalb ihren eigenen Rollbereich, statt die Seite zu sprengen
+       — gemessen ließ sich das Handbuch bei 375 px Bildbreite um 270 Pixel
+       nach rechts schieben, weil die breiteste Tabelle 645 px maß.
+       ``display: block`` ist der Preis dafür, dass hier kein Wrapper um jede
+       Tabelle steht; die Spalten bleiben lesbar, weil ``white-space: nowrap``
+       nur die Kopfzeile trifft. */
+    table { display: block; overflow-x: auto; max-width: 100%; }
+    thead th { white-space: nowrap; }
     th, td { border: 1px solid var(--line); padding: .4rem .6rem; text-align: left; }
     th { background: var(--card); }
     code { background: var(--card); padding: .1rem .3rem; border-radius: 3px; }
@@ -817,7 +827,7 @@
 <p>Turns the brightness of an image into height on the surface. For grain, embossing and crests — everything a sketch is no good for.</p>
 <p><strong>When not to:</strong> Not on a coarse mesh: a relief only shows where there are vertices, and below one vertex per two pixels nothing of the image survives. Even out the mesh first.</p>
 <p>Objects: 1 → 1 · reversible · deterministic</p>
-<table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Image <code>source</code></td><td></td><td>required</td><td></td><td>The greyscale image whose brightness becomes height. Light stands high.</td></tr><tr><td>Height <code>strength</code></td><td>mm</td><td>1</td><td>0 … 50</td><td>How tall the relief becomes — the distance between black and white.</td></tr><tr><td>Apply as <code>projection</code></td><td></td><td>planar</td><td>planar, cylindrical, spherical</td><td>How the rectangular image gets onto the body: from above, wrapped around the axis or over the sphere.</td></tr><tr><td>Neutral level <code>middle</code></td><td></td><td>0</td><td>0 … 1</td><td>Which grey value leaves the surface alone. Zero only adds; a half raises and lowers — the difference between a stamp and an embossing.</td></tr><tr><td>Soften <code>smooth</code></td><td></td><td>0</td><td>0 … 20</td><td>How often the heights are averaged over their neighbours. Takes hard edges out of an image drawn too sharply for printing.</td></tr></tbody></table>
+<table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Image <code>source</code></td><td></td><td>required</td><td></td><td>The greyscale image whose brightness becomes height. Light stands high.</td></tr><tr><td>Height <code>strength</code></td><td>mm</td><td>1</td><td>0 … 50</td><td>How tall the relief becomes — the distance between black and white.</td></tr><tr><td>Apply as <code>projection</code></td><td></td><td>planar</td><td>planar, cylindrical, spherical, face</td><td>How the rectangular image gets onto the body: from above, wrapped around the axis or over the sphere.</td></tr><tr><td>Face <code>face</code></td><td></td><td></td><td></td><td>Which detected face the image is laid onto. Only for “Onto a face” — the other kinds need none.</td></tr><tr><td>Neutral level <code>middle</code></td><td></td><td>0</td><td>0 … 1</td><td>Which grey value leaves the surface alone. Zero only adds; a half raises and lowers — the difference between a stamp and an embossing.</td></tr><tr><td>Soften <code>smooth</code></td><td></td><td>0</td><td>0 … 20</td><td>How often the heights are averaged over their neighbours. Takes hard edges out of an image drawn too sharply for printing.</td></tr></tbody></table>
 <h4>Apply texture (<code>apply_texture</code>)</h4>
 <p>Presses a pattern into a face as real geometry — knurling for grip, hexagon or rib for looks. What the slicer gets is what you see.</p>
 <p>Objects: 1 → 1 · reversible · with a seed · Applies to: Face</p>
