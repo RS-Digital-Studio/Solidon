@@ -5114,5 +5114,5 @@ class MainWindow(QMainWindow):
 
 
 def registered_operations() -> list[OperationSpec]:
-    """Small helper the palette will use in P1."""
+    """Kleine Hilfe, die die Befehlspalette benutzt."""
     return list(REGISTRY.all())

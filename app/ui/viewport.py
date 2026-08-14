@@ -856,6 +856,12 @@ class Viewport(QWidget):
     paintRequested = Signal(object)
     """A point on the surface to paint at (§20). The window turns it into an
     operation — the view never changes geometry itself."""
+    boneRequested = Signal(object)
+    """Eine Stelle, an der ein Knochenpunkt gesetzt wird (§25).
+
+    Derselbe Vertrag wie beim Formen und beim Bemalen: Die Ansicht meldet
+    einen Ort, das Fenster macht daraus einen Knochen, und Geometrie ändert
+    einzig die Operation."""
     sculptRequested = Signal(object)
     """Eine Stelle, an der ein Pinselzug gesetzt wird (§25).
 
@@ -974,6 +980,7 @@ class Viewport(QWidget):
         """Welche Druckplatte gezeigt wird; -1 heißt alle (§25)."""
         self._painting = False
         self._sculpting = False
+        self._boning = False
         self._brush_radius = 0.0
         """Der Pinselradius in Millimetern, solange geformt wird."""
         self._brush_actor: Any = None
@@ -2078,6 +2085,16 @@ class Viewport(QWidget):
         self._pending_point = None
         self._redraw_measurements()
 
+    def set_boning(self, active: bool) -> None:
+        """Macht aus Klicks Knochenpunkte (§25).
+
+        Ein eigener Zustand neben dem Formen, obwohl beide dasselbe Picking
+        benutzen: Wer ein Skelett setzt, will keinen Zug malen, und ein Modus,
+        der beides gleichzeitig kann, kann keines von beidem verlässlich.
+        """
+        self._boning = active
+        self._update_cursor()
+
     def set_sculpting(self, active: bool, radius: float = 0.0) -> None:
         """Macht aus Klicks Pinselzüge (§25).
 
@@ -2172,6 +2189,11 @@ class Viewport(QWidget):
         Merkmal darunter. Ein Zeiger, der eine andere Reihenfolge behauptet als
         die Behandlung, lügt genau dann, wenn zwei Werkzeuge zugleich anstehen.
         """
+        if self._boning:
+            # Derselbe Zeiger wie beim Formen: Beide setzen einen Punkt auf der
+            # Fläche, und ein dritter Ring wäre eine Unterscheidung ohne
+            # Unterschied.
+            return "sculpt"
         if self._sculpting:
             return "sculpt"
         if self._painting:
@@ -2238,6 +2260,9 @@ class Viewport(QWidget):
 
     def _on_picked(self, point: Any) -> None:
         picked = (float(point[0]), float(point[1]), float(point[2]))
+        if self._boning:
+            self.boneRequested.emit(picked)
+            return
         if self._sculpting:
             self.sculptRequested.emit(picked)
             return
