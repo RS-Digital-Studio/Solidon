@@ -492,6 +492,15 @@ class ObjectTree(QWidget):
         gibt es keines, auf das es sich beziehen könnte.
         """
         if not objects:
+            # Ohne Auswahl bekommt die erste Zeile wenigstens die Marke des
+            # aktuellen Eintrags — gewählt ist damit nichts, aber die Tastatur
+            # hat einen Anfang. Ohne sie stand ``currentItem()`` auf nichts,
+            # und wer per Tabulator in den Baum kam, bewegte mit den
+            # Pfeiltasten gar nichts.
+            first = self.tree.topLevelItem(0)
+            if first is not None and self.tree.currentItem() is None:
+                self.tree.setCurrentItem(first)
+                first.setSelected(False)
             return
         wanted = set(objects)
         self._order = list(objects)

@@ -147,6 +147,11 @@ STYLE = """
                 padding: .28rem 0; border-bottom: 1px solid var(--line);
                 text-decoration: none; color: var(--fg); font-size: .95rem; }
     nav.toc li:last-child a { border-bottom: none; }
+    /* Die Fuge zwischen den geschriebenen Kapiteln und der Referenz —
+       gedämpft, weil sie ordnet und nicht ruft. */
+    nav.toc .toc-divider { margin: 1.6rem 0 .8rem; border: none; padding: 0;
+                           font-size: .92rem; color: var(--muted);
+                           font-weight: 600; letter-spacing: .02em; }
     nav.toc a:hover { color: var(--accent); }
     nav.toc .num { color: var(--accent); font-size: .82rem; font-weight: 600;
                    min-width: 1.6rem; font-variant-numeric: tabular-nums; }
@@ -279,6 +284,16 @@ def write_figures(target: Path, language: str) -> tuple[dict[str, str], dict[str
 #: immer als unübersetzbar herum.
 CONTENTS = {"de": "Inhalt", "en": "Contents"}
 
+#: Die Zwischenüberschrift im Verzeichnis, dort wo die geschriebenen Kapitel
+#: enden und die aus dem Register erzeugten beginnen.
+#:
+#: Ohne sie war das Verzeichnis eine flache Liste von vierzig Einträgen, in
+#: der „Meldungen im Wortlaut" und „Szene, Reparatur, Transformation" ohne
+#: Fuge aufeinander folgten — erzählte Seiten und Nachschlagewerk sahen gleich
+#: aus. Nicht über ``tr()``, aus demselben Grund wie :data:`CONTENTS`.
+REFERENCE_HEADING = {"de": "Referenz — jede Operation mit ihren Werten",
+                     "en": "Reference — every operation with its values"}
+
 #: Die Adresse, unter der die Seiten liegen — für canonical, hreflang und die
 #: Vorschau beim Teilen. Aus ``branding.WEBSITE_URL``, damit sie an einer
 #: Stelle steht.
@@ -389,12 +404,30 @@ def contents(language: str) -> str:
 
     Die Anker dazu setzt `anchored`; hier steht nur die Liste.
     """
-    items = "".join(
-        f'<li><a href="#{_anchor(page)}"><span class="num">{number:02d}</span>{page.title}</a></li>'
-        for number, page in enumerate(manual.pages(), start=1)
-    )
+    def entry(number: int, page: manual.Page) -> str:
+        return (
+            f'<li><a href="#{_anchor(page)}">'
+            f'<span class="num">{number:02d}</span>{page.title}</a></li>'
+        )
+
+    pages = list(manual.pages())
+    written = [(number, page) for number, page in enumerate(pages, start=1) if not page.generated]
+    generated = [(number, page) for number, page in enumerate(pages, start=1) if page.generated]
+
     heading = CONTENTS.get(language, CONTENTS["de"])
-    return f'<nav class="toc" id="toc"><h2 class="toc-title">{heading}</h2><ol>{items}</ol></nav>'
+    blocks = [f'<h2 class="toc-title">{heading}</h2>']
+    blocks.append("<ol>" + "".join(entry(number, page) for number, page in written) + "</ol>")
+    if generated:
+        # Die Fuge, an der aus Lesen Nachschlagen wird. Die Nummern laufen
+        # durch: sie stehen so auch über den Kapiteln selbst.
+        divider = REFERENCE_HEADING.get(language, REFERENCE_HEADING["de"])
+        blocks.append(f'<h3 class="toc-divider">{divider}</h3>')
+        blocks.append(
+            f'<ol start="{generated[0][0]}">'
+            + "".join(entry(number, page) for number, page in generated)
+            + "</ol>"
+        )
+    return f'<nav class="toc" id="toc">{"".join(blocks)}</nav>'
 
 
 def anchored(html: str) -> str:

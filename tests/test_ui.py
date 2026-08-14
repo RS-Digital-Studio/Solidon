@@ -3776,3 +3776,22 @@ def test_a_stopped_chain_opens_the_report_even_during_a_tour(window: MainWindow)
 
     window._focus_report(force=True)
     assert window.right.currentWidget() is window.report, "ein Abbruch holt den Bericht nach vorn"
+
+
+def test_the_object_tree_offers_the_keyboard_a_starting_point(window: MainWindow) -> None:
+    """Wer per Tabulator in den Baum kommt, muss sich bewegen können.
+
+    Nach dem Öffnen stand ``currentItem()`` auf nichts, obwohl eine Zeile da
+    war — eine Pfeiltaste bewegte daraufhin gar nichts, und die
+    Tastaturnavigation begann im Leeren.
+
+    Gewählt ist damit weiterhin nichts: die Marke sagt „hier steht der
+    Zeiger", nicht „das ist ausgewählt". Der Unterschied zählt, denn an der
+    Auswahl hängen die Menüs.
+    """
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    assert window.object_tree.tree.topLevelItemCount() >= 1
+    assert window.object_tree.tree.currentItem() is not None, "die Tastatur hat einen Anfang"
+    assert not window.object_tree.selected_objects(), "gewählt ist trotzdem nichts"
