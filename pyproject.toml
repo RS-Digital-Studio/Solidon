@@ -172,8 +172,10 @@ strict = true
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
+# trimesh stand hier bis zum 14.08.2026 mit dabei. Seit 5.0 liefert es ein
+# `py.typed` und damit echte Typen — die Zeile hätte von da an nur noch
+# verdeckt, wenn ein Import daneben greift.
 module = [
-  "trimesh.*",
   "manifold3d.*",
   "pyvista.*",
   "scipy.*",
@@ -192,16 +194,38 @@ module = ["app.core.paths", "app.core.discover", "app.core.backends.openscad"]
 warn_unreachable = false
 
 [[tool.mypy.overrides]]
-# trimesh liefert nur teilweise Annotationen; Aufrufe hinein lassen sich von
-# hier aus nicht typisieren.
+# trimesh 5 ist typisiert, seine älteren Untermodule sind es nicht:
+# `transformations`, `grouping`, `remesh`, `repair`, `smoothing`, `proximity`
+# und `exchange` tragen weiter keine Signaturen, `skimage.measure` ebenso
+# wenig. Ein Aufruf dorthin lässt sich von hier aus nicht typisieren.
+#
+# Bis zum 14.08.2026 standen hier **sieben Paketbäume**. Gemessen betrifft es
+# 31 Aufrufe in diesen 18 Dateien — und `app.core.brep.*` gar nicht mehr, weil
+# `OCP.*` oben ohnehin als `Any` ankommt. Namentlich statt mit `*`, damit eine
+# **neue** Datei, die untypisiert in eine fremde Bibliothek ruft, auffällt statt
+# stillschweigend mitgedeckt zu werden. Genau diese Sorte Fehler hat die
+# konvexe Zerlegung zwei Phasen lang getragen (siehe `errors.PROGRAMMING_ERRORS`).
+#
+# Wer hier eine Zeile hinzufügt, prüft erst, ob eine typisierte Engführung
+# besser passt — `geom.mesh.concatenated` ist das Muster dafür.
 module = [
-  "app.core.geom.*",
-  "app.core.ingest.*",
-  "app.core.export.*",
-  "app.core.perceive.*",
-  "app.core.slice.*",
-  "app.core.knowledge.parts.*",
-  # Dasselbe für OpenCASCADE: ein Erweiterungsmodul ohne Stubs (§30).
-  "app.core.brep.*",
+  "app.core.export.writer",
+  "app.core.geom.autosplit",
+  "app.core.geom.blend",
+  "app.core.geom.label_ops",
+  "app.core.geom.lattice",
+  "app.core.geom.mesh",
+  "app.core.geom.mesh_ops",
+  "app.core.geom.orient",
+  "app.core.geom.prepare",
+  "app.core.geom.repair",
+  "app.core.geom.transform",
+  "app.core.ingest.loader",
+  "app.core.ingest.outline",
+  "app.core.knowledge.parts.shapes",
+  "app.core.knowledge.parts.testbodies",
+  "app.core.perceive.features",
+  "app.core.perceive.maps",
+  "app.core.slice.orientation",
 ]
 disallow_untyped_calls = false
