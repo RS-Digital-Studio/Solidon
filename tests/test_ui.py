@@ -3718,3 +3718,61 @@ def test_the_cards_grow_with_a_wide_window() -> None:
     assert card_width(LEFT_WIDTH, LEFT_MAX, 1920) == LEFT_WIDTH
     assert card_width(LEFT_WIDTH, LEFT_MAX, 2560) > LEFT_WIDTH
     assert card_width(LEFT_WIDTH, LEFT_MAX, 5120) == LEFT_MAX
+
+
+def test_the_report_tab_counts_what_needs_attention(window: MainWindow) -> None:
+    """Eine Warnung muss zu sehen sein, auch wenn etwas anderes vorn steht.
+
+    Ein eingelesenes Netz mit offenen Stellen meldete sich im Prüfbericht —
+    und im Fenster sah man einen Reiter, der aussah wie vorher. Wer die Tour
+    oder den Chat offen hatte, erfuhr von der Warnung nichts.
+
+    Gezählt werden Fehler und Warnungen, keine Hinweise: „Doppelte Punkte
+    wurden verschweißt" ist eine Auskunft und keine Aufforderung.
+    """
+    from app.core.types import Finding
+
+    index = window.right.indexOf(window.report)
+    plain = window.right.tabText(index)
+    assert "·" not in plain, "ohne Befunde steht dort nur der Name"
+
+    window.report.add_findings(
+        [
+            Finding(code="ingest.not_watertight", severity="warning", message="offen"),
+            Finding(code="slice.thin_wall", severity="info", message="dünn"),
+        ]
+    )
+
+    assert window.report.alerts() == 1, "eine Warnung, der Hinweis zählt nicht"
+    assert window.right.tabText(index) == f"{plain} · 1"
+
+
+def test_a_stopped_chain_opens_the_report_even_during_a_tour(window: MainWindow) -> None:
+    """Die Meldung sagt „siehe Prüfbericht" — dann muss er auch aufgehen.
+
+    Der Vorrang der Tour ist richtig, solange es um eine Warnung im Ablauf
+    geht. Hält die Kette an, verweist die Statusleiste ausdrücklich auf den
+    Bericht; ein Verweis auf ein Fenster, das die Anwendung selbst zuhält,
+    ist keiner.
+    """
+    from app.core import examples
+    from app.core.tour import tour_for
+
+    example = next(entry for entry in examples.EXAMPLES if tour_for(entry.id))
+    window.tour.start(example, tour_for(example.id))
+    # Gezeigt und mit sichtbarem Arbeitsbereich, weil ``_focus_report`` auf
+    # einer unsichtbaren Spalte nichts tut — richtig so: ein Reiterwechsel
+    # hinter dem Startbildschirm wäre keiner. Hält die Kette an, ist ohnehin
+    # ein Projekt offen.
+    window.show()
+    window._show_start_screen(False)
+    switch_to = window.right.indexOf(window.tour)
+    window.right.setTabVisible(switch_to, True)
+    window.right.setCurrentIndex(switch_to)
+    assert window.tour.active, "die Anleitung läuft"
+
+    window._focus_report()
+    assert window.right.currentWidget() is window.tour, "eine Warnung lässt die Anleitung stehen"
+
+    window._focus_report(force=True)
+    assert window.right.currentWidget() is window.report, "ein Abbruch holt den Bericht nach vorn"

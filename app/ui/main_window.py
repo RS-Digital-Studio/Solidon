@@ -87,6 +87,7 @@ from app.core.export.writer import (
     write_plan,
 )
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.pose import armature_to_text
 from app.core.geom.sculpt import (
     BRUSH_TO_EDGE,
     SYMMETRY_BITS,
@@ -127,6 +128,7 @@ from app.core.types import (
     ObjectId,
     Origin,
     Parameter,
+    Bone,
     SliceResult,
     SourceOrigin,
     Stroke,
@@ -176,6 +178,7 @@ from app.ui.panels import (
 from app.ui.print_settings_dialog import PrintSettingsDialog
 from app.ui.remote_server import RemoteServer, WindowBridge
 from app.ui.report_dialog import ErrorReportDialog
+from app.ui.pose_bar import PoseBar
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
@@ -429,6 +432,15 @@ def _format_of(target: Path, chosen_filter: str) -> ExportFormat:
 def _has_sketch_param(spec: OperationSpec) -> bool:
     """Ob diese Operation eine gezeichnete Skizze verbraucht (§30.1)."""
     return any(entry.kind == "sketch" for entry in spec.params.spec())
+
+
+def _has_armature_param(spec: OperationSpec) -> bool:
+    """Ob diese Operation ein gesetztes Skelett verbraucht (§25).
+
+    Vor dem Strichfeld geprüft: ``pose_armature`` hat beides nicht, aber die
+    Reihenfolge der Fälle ist die Reihenfolge, in der jemand sie liest.
+    """
+    return any(entry.kind == "armature" for entry in spec.params.spec())
 
 
 def _has_stroke_param(spec: OperationSpec) -> bool:
@@ -803,6 +815,21 @@ class MainWindow(QMainWindow):
         # Der Ring folgt dem Regler und nicht erst dem nächsten Zug: Wer den
         # Pinsel größer stellt, will vor dem Klicken sehen, was er greift.
         self.sculpt_bar.radius.valueChanged.connect(self.viewport.set_brush_radius)
+
+        # Der Skeletteditor, dieselbe Bauart: eine Leiste neben der
+        # Werkzeugzeile, ein Zustand im Fenster, eine Operation am Ende.
+        self.pose_bar = PoseBar(self)
+        self.pose_bar.finished.connect(self.finish_armature)
+        self.pose_bar.chainBroken.connect(self.break_armature_chain)
+        self.pose_bar.lastRemoved.connect(self.undo_bone)
+        self.pose_bar.setVisible(False)
+        self.viewport.boneRequested.connect(self._on_bone_point)
+        self._armature_target: str | None = None
+        self._armature_bones: list[Bone] = []
+        self._armature_head: tuple[float, float, float] | None = None
+        """Das Gelenk eines angefangenen Knochens — zwei Klicks machen einen."""
+        self._armature_parent = ""
+        """Woran der nächste Knochen hängt. Leer nach *Neue Kette*."""
         self.sculpt_bar.setVisible(False)
         self.viewport.sculptRequested.connect(self._on_sculpt)
         self._sculpt_target: str | None = None
@@ -841,6 +868,7 @@ class MainWindow(QMainWindow):
         bottom_layout.setSpacing(0)
         bottom_layout.addWidget(self.sketch_bar)
         bottom_layout.addWidget(self.sculpt_bar)
+        bottom_layout.addWidget(self.pose_bar)
         bottom_layout.addWidget(self.tools)
 
         self.report = ReportPanel(self)
@@ -864,6 +892,11 @@ class MainWindow(QMainWindow):
         self.right = QTabWidget(self)
         self.right.addTab(self.report, tr("Prüfbericht"))
         self.right.addTab(self.chat, tr("Chat"))
+        # Der Reiter trägt, wie viele Fehler und Warnungen hinter ihm stehen.
+        # Ohne die Zahl bleibt eine Warnung unsichtbar, solange Chat oder Tour
+        # vorn sind: ein eingelesenes Netz mit offenen Stellen meldete sich im
+        # Bericht, und der Reiter sah aus wie vorher.
+        self.report.alertsChanged.connect(self._mark_report_tab)
         # Der Reiter wird einmal angelegt und danach nur noch ein- und
         # ausgeblendet, nie entfernt: ``removeTab`` machte das Panel elternlos,
         # und ein elternloses Widget gehört dem Speicherbereiniger — der es
@@ -1530,6 +1563,10 @@ class MainWindow(QMainWindow):
         # erste Schritt ist das Zeichnen und nicht das Ausfüllen.
         if _has_sketch_param(spec):
             action.triggered.connect(lambda _checked=False, name=spec.name: self.start_sketch(name))
+        elif _has_armature_param(spec):
+            # Dasselbe für das Skelett: Wer „Stellung geben" wählt, will die
+            # Knochen setzen und kein Feld voller Koordinaten.
+            action.triggered.connect(lambda _checked=False: self.start_armature())
         elif _has_stroke_param(spec):
             # Dasselbe für die Formsitzung: Wer „Formen" wählt, will den
             # Pinsel und nicht ein Feld, in das eine Strichliste zu tippen
@@ -2050,7 +2087,7 @@ class MainWindow(QMainWindow):
         # nicht die Operation davor. Dieselbe Trennung wie beim
         # Skizzeneditor: Der Editor hat sein eigenes Rückgängig, der Verlauf
         # bekommt die Sitzung als eine Transaktion (Regel 16).
-        if self.undo_sculpt_stroke():
+        if self.undo_sculpt_stroke() or self.undo_bone():
             return
         self.session.undo()
 
@@ -2620,6 +2657,10 @@ class MainWindow(QMainWindow):
         if self._sketch_panel is not None:
             self.finish_sketch(keep=False)
             return
+        if self._armature_target is not None:
+            # Wie beim Formen: Escape beendet und verwirft nicht.
+            self.finish_armature()
+            return
         if self._sculpt_target is not None:
             # Nicht verwerfen: Escape beendet die Sitzung wie „Fertig", und
             # was dabei entsteht, nimmt ein Undo zurück (Regel 19). Ein
@@ -2930,6 +2971,116 @@ class MainWindow(QMainWindow):
                         "strokes": strokes_to_text(strokes),
                         "symmetry": self.sculpt_bar.plane(),
                     },
+                )
+            ],
+        )
+
+    # --- Skelettsitzung (§25, Konzept P16 §7.5) ---------------------------------
+
+    def start_armature(self, object_id: str = "") -> None:
+        """Den Skeletteditor öffnen: Klicks setzen von jetzt an Knochenpunkte.
+
+        Zwei Klicks je Knochen — erst das Gelenk, dann das Ende. Der nächste
+        Knochen hängt am vorigen, bis jemand *Neue Kette* drückt: Ein Skelett
+        ist meistens eine Kette, und wer für jeden Knochen sein Elternteil
+        wählen muss, klickt dreimal so oft wie nötig.
+        """
+        if self._armature_target is not None or self._sculpt_target is not None:
+            return
+        target = object_id or self.object_tree.selected()
+        if not target:
+            self.announce(tr("Bitte zuerst ein Objekt auswählen."))
+            return
+
+        self._armature_target = target
+        self._armature_bones = []
+        self._armature_head = None
+        self._armature_parent = ""
+        self.viewport.set_boning(True)
+        self.tools.close_tool()
+        self.tools.setVisible(False)
+        self.pose_bar.setVisible(True)
+        self.pose_bar.show_state(0, pending=False, chain=True)
+        self._update_actions()
+        self.statusBar().showMessage(tr("Skelett setzen — Escape oder Fertig beendet."))
+
+    def setting_armature(self) -> bool:
+        """Ob gerade ein Skelett gesetzt wird."""
+        return self._armature_target is not None
+
+    def _on_bone_point(self, point: Any) -> None:
+        """Ein Klick im Viewport: erst der Kopf, dann der Fuß eines Knochens."""
+        if self._armature_target is None:
+            return
+        place = (float(point[0]), float(point[1]), float(point[2]))
+        if self._armature_head is None:
+            self._armature_head = place
+            self.pose_bar.show_state(len(self._armature_bones), pending=True, chain=True)
+            return
+
+        name = self.pose_bar.next_name() or f"bone_{len(self._armature_bones) + 1}"
+        # Ein Name, den es schon gibt, wäre ein Skelett, dessen Stellung
+        # niemand mehr zuordnet — die Winkel stehen je Knochenname.
+        taken = {bone.name for bone in self._armature_bones}
+        while name in taken:
+            name = f"{name}_1"
+        self._armature_bones.append(
+            Bone(name=name, head=self._armature_head, tail=place, parent=self._armature_parent)
+        )
+        self._armature_head = None
+        self._armature_parent = name
+        self.pose_bar.clear_name()
+        self.pose_bar.show_state(len(self._armature_bones), pending=False, chain=True)
+
+    def break_armature_chain(self) -> None:
+        """Der nächste Knochen hängt an nichts — für den zweiten Arm."""
+        self._armature_parent = ""
+        self._armature_head = None
+        self.pose_bar.show_state(len(self._armature_bones), pending=False, chain=False)
+
+    def undo_bone(self) -> bool:
+        """Das Rückgängig des Editors: ein Knochen, nicht die Sitzung."""
+        if self._armature_target is None:
+            return False
+        if self._armature_head is not None:
+            # Ein halb gesetzter Knochen ist der erste, der zurückgeht: Sonst
+            # nähme das erste Strg+Z einen fertigen Knochen und ließe den
+            # angefangenen stehen.
+            self._armature_head = None
+        elif self._armature_bones:
+            gone = self._armature_bones.pop()
+            self._armature_parent = gone.parent
+        else:
+            return False
+        self.pose_bar.show_state(len(self._armature_bones), pending=False, chain=True)
+        return True
+
+    def finish_armature(self) -> None:
+        """Die Sitzung schließen — und aus ihr genau eine Operation machen."""
+        target = self._armature_target
+        bones = self._armature_bones
+        if target is None:
+            return
+        self._armature_target = None
+        self._armature_bones = []
+        self._armature_head = None
+        self.viewport.set_boning(False)
+        self.pose_bar.setVisible(False)
+        self.tools.setVisible(True)
+        self.statusBar().clearMessage()
+        self._update_actions()
+        if not bones:
+            return
+        # Die Stellung bleibt leer: Der Editor setzt das Skelett, die Winkel
+        # sind Zahlen und gehören in den Dialog — dort darf auch ein
+        # Projektparameter stehen.
+        self.session.apply(
+            _("Stellung geben"),
+            [
+                OperationDraft(
+                    op="pose_armature",
+                    inputs=(target,),
+                    params={"armature": armature_to_text(bones), "pose": ""},
                 )
             ],
         )
@@ -4185,9 +4336,11 @@ class MainWindow(QMainWindow):
         self._update_actions()
         if result.stopped_at is not None:
             # §15.3: der letzte vollständige Zustand bleibt sichtbar, die
-            # Statusleiste sagt warum.
+            # Statusleiste sagt warum. Und der Bericht kommt nach vorn, auch
+            # wenn eine Tour läuft: die Meldung verweist auf ihn, und ein
+            # Verweis auf etwas Zugehaltenes ist keiner.
             self.announce(tr("Die Kette hält an — siehe Prüfbericht."))
-            self._focus_report()
+            self._focus_report(force=True)
         elif self.report.worst_severity(result) in ("warning", "error"):
             self._focus_report()
 
@@ -4699,10 +4852,31 @@ class MainWindow(QMainWindow):
         for menu in self._workspace_menus:
             menu.menuAction().setVisible(not show)
 
-    def _focus_report(self) -> None:
+    def _mark_report_tab(self, alerts: int) -> None:
+        """Schreibt die Zahl der Fehler und Warnungen an den Reiter.
+
+        Eine Zahl und kein Punkt: Regel 18 verlangt eine zweite Kodierung
+        neben der Farbe, und „3" sagt mehr als ein Fleck. Bei null bleibt es
+        beim bloßen Namen — ein Zähler, der immer dasteht, wird Tapete.
+        """
+        index = self.right.indexOf(self.report)
+        if index < 0:
+            return
+        name = tr("Prüfbericht")
+        self.right.setTabText(index, f"{name} · {alerts}" if alerts else name)
+
+    def _focus_report(self, force: bool = False) -> None:
+        """Den Prüfbericht nach vorn holen.
+
+        ``force`` überstimmt die laufende Tour. Gebraucht wird das genau
+        einmal: wenn die Kette anhält. Die Statusleiste sagt dann wörtlich
+        „siehe Prüfbericht", und ein Verweis auf ein Fenster, das die
+        Anwendung selbst zuhält, ist keiner. Für eine Warnung im normalen
+        Ablauf bleibt es beim Vorrang der Anleitung.
+        """
         if not self.right.isVisible():
             return
-        if self.right.currentWidget() is self.tour and self.tour.active:
+        if not force and self.right.currentWidget() is self.tour and self.tour.active:
             # Die Tour zeigt selbst auf den Prüfbericht, wenn er dran ist —
             # ein Reiterwechsel unter der Anleitung weg wäre ihr Ende.
             return

@@ -969,10 +969,19 @@ class ReportPanel(QWidget):
     ausdrücklich vorsieht.
     """
 
+    alertsChanged = Signal(int)
+    """Wie viele Fehler und Warnungen jetzt im Bericht stehen.
+
+    Der Reiter darüber trägt die Zahl; ohne sie ist eine Warnung unsichtbar,
+    solange Chat oder Tour vorn stehen.
+    """
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._names: Mapping[str, str] = {}
         """Kennung zu Namen, aus der zuletzt gezeigten Szene."""
+        self._alerts = 0
+        """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
         self.list = QListWidget(self)
         # §2.7 schreibt die Sätze, die hier stehen — im schmalen rechten
         # Bereich endeten sie mitten im Wort hinter einer horizontalen
@@ -1157,6 +1166,10 @@ class ReportPanel(QWidget):
         for row in range(self.list.count()):
             finding: Finding = self.list.item(row).data(Qt.ItemDataRole.UserRole)
             counts[finding.severity] += 1
+        alerts = counts["error"] + counts["warning"]
+        if alerts != self._alerts:
+            self._alerts = alerts
+            self.alertsChanged.emit(alerts)
         if not any(counts.values()):
             self.summary.setText(tr("Keine Befunde."))
             return
@@ -1165,6 +1178,21 @@ class ReportPanel(QWidget):
             f"{counts['warning']} × {tr('Warnung')} · "
             f"{counts['info']} × {tr('Hinweis')}"
         )
+
+    def alerts(self) -> int:
+        """Wie viele Befunde nach Aufmerksamkeit verlangen — Fehler und
+        Warnungen, keine Hinweise.
+
+        Der Reiter über diesem Panel trägt die Zahl. Ohne sie ist eine Warnung
+        unsichtbar, solange etwas anderes vorn steht: ein eingelesenes Netz mit
+        offenen Stellen meldete sich im Bericht, und im Fenster sah man einen
+        Reiter, der aussah wie vorher.
+
+        Hinweise zählen nicht mit. „Doppelte Punkte wurden verschweißt" ist
+        eine Auskunft und keine Aufforderung; eine Zahl, die bei jedem Projekt
+        dasteht, wird zur Tapete.
+        """
+        return self._alerts
 
     def _measure_up(self, result: EvaluationResult | None) -> None:
         """Die Kennzahlen über den Befunden — wasserdicht, Volumen, Teile.
