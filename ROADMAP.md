@@ -4745,6 +4745,31 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       zu werden. Sie kostet zwei Suite-Läufe (`AGENTS.md`, Checkliste
       „Regelsammlung ändern"), je rund anderthalb Stunden, und Geld. Der Lauf
       gehört angesagt und nicht nebenbei gestartet.
+- [x] **Die Kategorie `organic` entsteht nicht — gemessen statt entschieden.**
+      (14.08.2026) Die Frage war, ob die acht neuen Operationen eine eigene
+      Kategorie brauchen, damit man sie findet und benutzt. Statt sie nach
+      Gefühl umzusortieren, wurde Weg 4 einmal ganz durchgefahren: Kugel
+      anlegen, auswählen, *Formen*, zwei Züge, *Fertig*, Undo.
+
+      **Der Weg trägt.** Die Operation entsteht, der Stapel zeigt sie, ein
+      Undo nimmt sie zurück. Was nicht trug, war eine ganz andere Stelle: Der
+      erste Schritt endet bei „Das Netz ist für diesen Pinsel zu grob", und
+      der Satz ließ den Nutzer mit vier Schritten allein. Behoben mit einem
+      Knopf, der die Kantenlänge aus dem Pinselradius rechnet — die Zahl, die
+      er sonst hätte raten müssen.
+
+      Damit bleibt die Einordnung, wie sie ist: `mesh`, `boolean`, `surface`.
+      Sie war nie das Hindernis, und eine neunte Menügruppe hätte den Bauplan
+      geändert, um ein Problem zu lösen, das an anderer Stelle lag. Was den
+      Einstieg trägt, steht schon: Handbuchkapitel *Formen*, Weg 4 auf der
+      Website, das Beispielprojekt mit Tour, die Befehlspalette.
+
+      **Was auffiel und stehen bleibt:** `mesh` führt neun Operationen, davon
+      sieben technische (Dezimieren, Neu vernetzen, Aufdicken) und zwei
+      kreative (*Formen*, *Stellung geben*). Wer die zwei sucht, sucht sie
+      nicht unter „Netz". Das ist eine Umsortierung wert, sobald jemand sie
+      **vermisst** — bis dahin ist es eine Vermutung, und die letzte dieser
+      Art hat sich beim Nachmessen als falsch erwiesen.
 - [x] **P16.11 — Prüfpunkt Käfigmodellierung: Kriterium steht, und vier von
       fünf Bedingungen sind erfüllt.** `tests/test_base_mesh.py` schreibt fest,
       was „brauchbares Basisnetz" heißt, bevor P16.5 beginnt: ein Körper ohne
