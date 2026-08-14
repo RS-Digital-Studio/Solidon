@@ -83,14 +83,15 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 | Bezeichner, Dateinamen, Modulnamen | Englisch |
 | Docstrings, Kommentare, Commits | **Deutsch** |
 | Schlüssel in Projektdatei und Schemata | Englisch |
-| Oberflächentexte | Deutsch + Englisch über `tr()` |
+| Oberflächentexte | Deutsche Quelle, je Sprache ein Katalog über `tr()` |
 | Doku und Bauplan | Deutsch |
 
 Eine **weitere Sprache** ist eine Datei in `app/i18n/locales/` und sonst
 nichts: Sprachauswahl, Einsammler, Handbuch, Abbildungen und Prüfung lesen das
 Verzeichnis (`available_languages()`). Unvollständig eingecheckt wird keine —
 `tests/test_translations.py` prüft jede gefundene Datei, nicht nur die
-englische.
+englische. Derzeit sind es sechs: Deutsch als Quelle, dazu `en`, `es`, `fr`,
+`it` und `pt`.
 
 Kommentare und Docstrings waren bis dahin englisch. Sie sind es nicht mehr:
 `app/`, `tests/` und `tools/` sind vollständig übersetzt. Was neu dazukommt,
@@ -112,12 +113,12 @@ Code.
 app/
   core/        # kein Qt, keine Fenster, keine Benutzerinteraktion
     types.py errors.py units.py
-    registry/ scene/ geom/ slice/ ingest/ perceive/ knowledge/
-    agent/ backends/ export/
+    registry/ scene/ geom/ sketch/ brep/ slice/ ingest/ perceive/
+    knowledge/ agent/ backends/ export/ activation/
   ui/          # PySide6 — darf core benutzen, nie umgekehrt
   cli/         # Kommandozeilen-Einstieg auf core
   i18n/
-  tests/data/  # Referenzkorpus
+tests/data/    # Referenzkorpus
 ```
 
 Kommunikation aus dem Kern nach außen nur über den `OpContext`:
@@ -155,7 +156,8 @@ Dialoge.
 5. Beide Qualitätsstufen bedienen (`ctx.quality`)
 6. Befunde als `findings` zurückgeben, nicht selbst protokollieren
 7. Geometrietest gegen den Korpus
-8. Texte übersetzbar, deutsch und englisch
+8. Texte übersetzbar — deutsche Quelle, und jeder Katalog aus
+   `app/i18n/locales/` zieht nach
 
 ## Checkliste: neuer Baustein
 

@@ -238,8 +238,8 @@ eine Ebene höher.
 ## 8. Konzept F — Fremde Hand
 
 Zwei Sitzungen auf einem Arbeitsbaum sind hier der Normalfall, nicht die
-Ausnahme. Das steht schon als Erfahrung im Gedächtnis dieses Projekts
-(`parallele-sitzungen-solidon3d.md`): *nur eigene Pfade stagen*.
+Ausnahme. Die Erfahrung dieses Projekts dazu passt in einen Satz: *nur eigene
+Pfade stagen*.
 
 ### Ablauf
 

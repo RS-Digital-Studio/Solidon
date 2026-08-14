@@ -33,8 +33,9 @@ Die Sprachregelung steht verbindlich in `AGENTS.md`; hier die Kurzform:
   `tests/test_language_rules.py` lehnt deutsche Stämme in Bezeichnern ab.
 - **Docstrings und Kommentare: Deutsch** — seit „Doku nachziehen" (b2e6e28),
   der Bestand ist vollständig nachgezogen. Neues wird deutsch geschrieben.
-- **Oberflächentexte: über `tr()`**, deutsch und englisch in
-  `app/i18n/locales/`. Keine feste Zeichenkette in der Oberfläche.
+- **Oberflächentexte: über `tr()`**, deutsche Quelle und je ein Katalog in
+  `app/i18n/locales/` — derzeit `en`, `es`, `fr`, `it`, `pt`. Keine feste
+  Zeichenkette in der Oberfläche.
 - **Doku, Bauplan, Roadmap, Commit-Meldungen: Deutsch**, mit echten Umlauten.
 - **Gespräch mit Robert: Deutsch.**
 
@@ -89,6 +90,7 @@ app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
   registry/   Register der Ops, Parameterschema, Flächenzuordnung
   scene/      Szene, Stapel, Auswertung, Projektdatei, Parameter, Passungen
   geom/       Ops gegen manifold3d/trimesh, Boolesche Rückfallkette, Reparatur
+  sketch/     Skizzen mit Zwangsbedingungen (§30.1): Löser, Profile, Ebenen
   brep/       zweiter Kern (OpenCASCADE) — optional, meldet sich ab wenn er fehlt
   slice/      Schichtanalyse und G-Code lesen, nie G-Code schreiben;
               advise.py schließt aus der Geometrie auf Druckeinstellungen
@@ -100,6 +102,7 @@ app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
   backends/   LLM, OpenSCAD, Mesh-Erzeuger — alles extern, alles abschaltbar
   export/     STL/3MF/STEP, Plattenbelegung, Übergabe an den Slicer
               (handover.py ruft ihn, slicer_keys.py übersetzt die Namen)
+  activation/ Freischaltung: Testlauf, Schlüssel, Demo-Frist (store.py)
   manual.py   Handbuch: geschriebene Seiten, Referenz aus dem Register erzeugt
   figures.py  Abbildungskatalog — gezeichnet, gerendert, aufgenommen
   drawing.py  SVG ohne Qt: Maßlinien, Schemata, Netzprojektion

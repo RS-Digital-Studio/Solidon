@@ -1,4 +1,4 @@
-# 3D-Agent — Bauplan v10
+# Solidon — Bauplan v10
 
 Desktop-Anwendung zum **Konstruieren, Generieren und Bearbeiten** druckbarer
 3D-Modelle. Non-destruktiver Operationsstack über einer Szene mit mehreren

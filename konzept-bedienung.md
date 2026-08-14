@@ -157,8 +157,8 @@ Farbknopf). Damit erbt jeder Knopf, jedes Eingabefeld, jeder Reiter und jede
 Liste das Standardaussehen von Qt Fusion. Es gibt keine eigenen Eckradien,
 keine Abstufung zwischen Haupt- und Nebenknopf, keine Hover-, Fokus- oder
 Aktiv-Zustände über den Qt-Vorgaben, keine Trennlinien mit Absicht. Das
-Ergebnis ist nicht hässlich — es ist **unverwechselbar unverwechselbar**: Es
-sieht aus wie jede andere Qt-Anwendung.
+Ergebnis ist nicht hässlich — es ist **verwechselbar**: Es sieht aus wie jede
+andere Qt-Anwendung.
 
 **Zweitens: Es gibt keine Typografie-Skala.** Zwei Stellen setzen eine
 Schriftgröße (`20px` und `24px` für Überschriften), alles andere läuft in der
