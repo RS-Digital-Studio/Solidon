@@ -2368,3 +2368,76 @@ def test_nothing_is_fitted_before_a_build_volume_exists(qt_app: QApplication) ->
         assert viewport._fitted_to == "", "und nichts gilt als erledigt"
     finally:
         viewport.deleteLater()
+
+
+def test_the_feature_legend_reads_like_the_object_tree(window: MainWindow) -> None:
+    """Eine Legende aus ``face_10`` und ``pin_3`` ist eine Debug-Ausgabe.
+
+    Die Merkmalskarte führt ihre Stufen als Provenienz-IDs — richtig für die
+    Karte, falsch für die Legende darunter. Bei einem Gehäuse standen dort
+    vierundzwanzig bunte Kacheln über die volle Fensterbreite: „ohne Merkmal",
+    elf Flächen, fünf Bohrungen, ein Deckelinneres, vier Stifte, alphabetisch
+    sortiert, also ``face_10`` und ``face_11`` zwischen ``face_1`` und
+    ``face_2``.
+
+    Jetzt übersetzt das Fenster die Kennungen in dieselben Namen, die im
+    Objektbaum stehen, und die Liste bekommt einen Deckel.
+    """
+    from app.core.perceive.maps import AnalysisMap
+
+    analysis = AnalysisMap(
+        kind="features",
+        title="Merkmale",
+        values=(0.0, 1.0, 2.0),
+        unit="",
+        low=0.0,
+        high=2.0,
+        categories=("ohne Merkmal", "hole_1", "face_2"),
+    )
+    window.analysis_bar.show_legend(analysis, {"hole_1": "Bohrung 1 · ⌀4,2 mm"})
+
+    labels = [label for label, _colour in window.analysis_bar.legend.entries]
+    assert "Bohrung 1 · ⌀4,2 mm" in labels, "was einen Namen hat, trägt ihn"
+    assert "face_2" in labels, "und was keinen hat, bleibt lesbar"
+
+
+def test_a_long_legend_says_how_much_it_leaves_out(window: MainWindow) -> None:
+    """Eine gekürzte Liste, die ihre Kürzung verschweigt, behauptet
+    Vollständigkeit."""
+    from app.core.perceive.maps import AnalysisMap
+    from app.ui.analysis_bar import LEGEND_MAX_ENTRIES
+
+    many = tuple(f"feature_{index}" for index in range(LEGEND_MAX_ENTRIES + 5))
+    analysis = AnalysisMap(
+        kind="features",
+        title="Merkmale",
+        values=tuple(float(index) for index in range(len(many))),
+        unit="",
+        low=0.0,
+        high=float(len(many) - 1),
+        categories=many,
+    )
+    window.analysis_bar.show_legend(analysis)
+
+    labels = [label for label, _colour in window.analysis_bar.legend.entries]
+    assert len(labels) == LEGEND_MAX_ENTRIES + 1, "acht Felder und ein Rest"
+    assert "5" in labels[-1], "der Rest wird gezählt, nicht verschwiegen"
+
+
+def test_the_angle_maps_write_the_degree_sign(window: MainWindow) -> None:
+    """„45°", nicht „45 grad" — wie überall sonst im Programm."""
+    from app.core.perceive.maps import AnalysisMap
+
+    analysis = AnalysisMap(
+        kind="overhang",
+        title="Überhang",
+        values=(0.0, 45.0, 90.0),
+        unit="°",
+        low=0.0,
+        high=90.0,
+    )
+    window.analysis_bar.show_legend(analysis)
+
+    labels = [label for label, _colour in window.analysis_bar.legend.entries]
+    assert all("grad" not in label for label in labels)
+    assert any(label.endswith("°") for label in labels)

@@ -14,6 +14,8 @@ der externe Slicer liefert (§18.10, §22.5).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -43,8 +45,17 @@ MAP_ORDER: tuple[MapKind, ...] = (
     "support",
 )
 
-#: How many swatches the continuous legend shows.
+#: Wie viele Farbfelder eine stufenlose Legende zeigt.
 LEGEND_STEPS = 5
+
+#: Wie viele benannte Stufen höchstens einzeln dastehen.
+#:
+#: Die Merkmalskarte eines Gehäuses hat vierundzwanzig: „ohne Merkmal", elf
+#: Flächen, fünf Bohrungen, ein Deckelinneres, vier Stifte. Alle nebeneinander
+#: sind eine Zeile über die volle Fensterbreite, und keine davon sagt etwas —
+#: die Karte beantwortet „welches Dreieck gehört wozu", und dafür genügt die
+#: Farbe im Bild plus die Auskunft, wie viele es sind.
+LEGEND_MAX_ENTRIES = 8
 
 
 class MapLegend(QWidget):
@@ -62,7 +73,16 @@ class MapLegend(QWidget):
         self.entries: list[tuple[str, str]] = []
         """Beschriftung und Farbe jedes Feldes — für den Test und den Kurzhinweis."""
 
-    def show_map(self, analysis: AnalysisMap | None) -> None:
+    def show_map(
+        self, analysis: AnalysisMap | None, names: Mapping[str, str] | None = None
+    ) -> None:
+        """Die Legende zur Karte. ``names`` übersetzt interne Kennungen.
+
+        Die Merkmalskarte führt ihre Stufen als Provenienz-IDs — so gehören
+        sie in die Karte, und so stünden sie ohne diese Zuordnung auch in der
+        Legende: ``face_1``, ``face_10``, ``face_11``, ``hole_3``,
+        ``lid_cavity``. Die Namen kennt das Fenster, nicht der Kern.
+        """
         while self._layout.count():
             item = self._layout.takeAt(0)
             widget = item.widget() if item is not None else None
@@ -73,13 +93,22 @@ class MapLegend(QWidget):
             self.note.setText("")
             return
 
-        for label, colour in _legend_entries(analysis):
+        shown = _legend_entries(analysis, names)
+        extra = len(shown) - LEGEND_MAX_ENTRIES
+        for label, colour in shown[:LEGEND_MAX_ENTRIES]:
             self.entries.append((label, colour))
             swatch = QLabel(label, self)
             swatch.setStyleSheet(
                 f"background: {colour}; color: {_readable_on(colour)}; padding: 1px 5px;"
             )
             self._layout.addWidget(swatch)
+        if extra > 0:
+            # Nicht weglassen, sondern zählen: eine gekürzte Liste, die ihre
+            # Kürzung verschweigt, behauptet Vollständigkeit.
+            more = QLabel(tr("+ {count} weitere").format(count=extra), self)
+            more.setProperty("level", "caption")
+            self.entries.append((more.text(), ""))
+            self._layout.addWidget(more)
 
         # §22.5: woher eine Zahl kommt, gehört neben die Zahl.
         parts = [f"{tr('Herkunft')}: {origin_label(analysis.source)}"]
@@ -99,14 +128,20 @@ class MapLegend(QWidget):
         self._layout.addWidget(self.note, stretch=1)
 
 
-def _legend_entries(analysis: AnalysisMap) -> list[tuple[str, str]]:
+def _legend_entries(
+    analysis: AnalysisMap, names: Mapping[str, str] | None = None
+) -> list[tuple[str, str]]:
     """Beschriftungen und Farben: benannte Stufen, wo es welche gibt, sonst
     eine Rampe.
+
+    ``names`` übersetzt Provenienz-IDs in das, was auch im Objektbaum steht —
+    aus ``hole_3`` wird „Bohrung 3 · ⌀4,2". Fehlt eine Zuordnung, bleibt die
+    Kennung stehen: sie ist immer noch besser als nichts.
     """
     if analysis.categories:
         count = len(analysis.categories)
         return [
-            (name, map_colour(index / max(count - 1, 1)))
+            (str((names or {}).get(name, name)), map_colour(index / max(count - 1, 1)))
             for index, name in enumerate(analysis.categories)
         ]
 
@@ -117,7 +152,14 @@ def _legend_entries(analysis: AnalysisMap) -> list[tuple[str, str]]:
     for step in range(LEGEND_STEPS):
         fraction = step / (LEGEND_STEPS - 1)
         value = low + (high - low) * fraction
-        text = length(value) if analysis.unit == "mm" else f"{value:.0f} {analysis.unit}"
+        if analysis.unit == "mm":
+            text = length(value)
+        elif analysis.unit == "°":
+            # Ohne Leerzeichen, wie überall sonst im Programm: die
+            # Winkelparameter schreiben „45°", die Karten schrieben „45 grad".
+            text = f"{value:.0f}°"
+        else:
+            text = f"{value:.0f} {analysis.unit}"
         entries.append((text, map_colour(fraction, VIRIDIS)))
     return entries
 
@@ -149,7 +191,7 @@ class AnalysisBar(QWidget):
             ("overhang", tr("Überhang")),
             ("defects", tr("Netzfehler")),
             ("curvature", tr("Krümmung")),
-            ("features", tr("Feature-Zuordnung")),
+            ("features", tr("Merkmale")),
             ("fits", tr("Passungen")),
             ("support", tr("Stützbedarf")),
         ):
@@ -183,8 +225,11 @@ class AnalysisBar(QWidget):
             self.selector.setCurrentIndex(index)
             self.selector.blockSignals(blocked)
 
-    def show_legend(self, analysis: AnalysisMap | None) -> None:
-        self.legend.show_map(analysis)
+    def show_legend(
+        self, analysis: AnalysisMap | None, names: Mapping[str, str] | None = None
+    ) -> None:
+        """Die Legende zur Karte; ``names`` übersetzt interne Kennungen."""
+        self.legend.show_map(analysis, names)
 
     def show_problem(self, message: str) -> None:
         """Eine Karte, die sich nicht bauen ließ, sagt das, statt nichts zu

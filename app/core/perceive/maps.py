@@ -123,7 +123,11 @@ TITLES: dict[MapKind, TranslatableText] = {
     "overhang": _("Überhang"),
     "defects": _("Netzfehler"),
     "curvature": _("Krümmung"),
-    "features": _("Feature-Zuordnung"),
+    # „Merkmale" und nicht „Feature-Zuordnung": Die Begriffszuordnung aus
+    # Bauplan §4.2 sagt Merkmal → feature, und die sechs Nachbarn heißen
+    # Wandstärke, Überhang, Netzfehler, Krümmung, Passungen, Stützbedarf. Ein
+    # halb englischer Name in dieser Reihe war der einzige.
+    "features": _("Merkmale"),
     "fits": _("Passungen"),
     "support": _("Stützbedarf"),
 }
@@ -351,7 +355,7 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
             kind="overhang",
             title=TITLES["overhang"],
             values=(),
-            unit="grad",
+            unit="°",
             low=0.0,
             high=0.0,
             threshold=limit,
@@ -364,7 +368,7 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
         kind="overhang",
         title=TITLES["overhang"],
         values=tuple(float(value) for value in angles),
-        unit="grad",
+        unit="°",
         low=0.0,
         high=90.0,
         highlighted=tuple(int(index) for index in np.nonzero(angles > limit)[0]),
@@ -425,7 +429,7 @@ def curvature_map(mesh: MeshData) -> AnalysisMap:
         kind="curvature",
         title=TITLES["curvature"],
         values=tuple(float(value) for value in values),
-        unit="grad",
+        unit="°",
         low=0.0,
         high=float(values.max()) if len(values) else 0.0,
         note=_("Zum Gegenprüfen, was die Merkmalserkennung als Kante sieht."),

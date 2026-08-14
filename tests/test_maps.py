@@ -144,7 +144,7 @@ def test_a_thick_block_is_thick_everywhere() -> None:
 def test_a_cube_has_no_overhang_worth_the_name() -> None:
     analysis = maps.overhang_map(cube())
 
-    assert analysis.unit == "grad"
+    assert analysis.unit == "°"
     # The underside faces straight down, everything else stands vertical.
     assert set(round(value) for value in analysis.values) <= {0, 90}
     assert analysis.threshold == 45.0

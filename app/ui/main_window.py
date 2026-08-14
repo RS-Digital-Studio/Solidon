@@ -3346,7 +3346,7 @@ class MainWindow(QMainWindow):
 
     def _show_map(self, analysis: Any, object_id: ObjectId) -> None:
         self.viewport.set_analysis_map(analysis, object_id if analysis else None)
-        self.analysis_bar.show_legend(analysis)
+        self.analysis_bar.show_legend(analysis, self._feature_names())
 
     def _on_layer_changed(self, index: int) -> None:
         """Durch die Schichtanalyse fahren (§18.10) — Geometrie, keine
