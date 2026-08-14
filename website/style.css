@@ -1152,7 +1152,8 @@ a { color: var(--accent); }
 .fig-w1-ring,
 .fig-w1-d52,
 .fig-w2-v110,
-.fig-w3-fixed { opacity: 0; }
+.fig-w3-fixed,
+.fig-w4-shaped { opacity: 0; }
 
 /* Zeichnung 1 — an der Zahl drehen, das Modell folgt. */
 @keyframes fig-value-thin {
@@ -1409,6 +1410,17 @@ a { color: var(--accent); }
 
 .fig-w3-fixed { animation-name: fig-w3-fixed; }
 
+/* Vignette Weg 4 — aus den Grundkörpern wird eine geformte Figur. Derselbe
+   Takt wie bei Weg 3: Die vier Karten stehen nebeneinander, und vier
+   Einblendungen zu vier verschiedenen Zeiten wären Unruhe statt Auskunft. */
+@keyframes fig-w4-shaped {
+  0%, 46% { opacity: 0; }
+  54%, 88% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.fig-w4-shaped { animation-name: fig-w4-shaped; }
+
 /* ── Papier ────────────────────────────────────────────────────────────── */
 
 /* Die Widerrufsbelehrung und die AGB sind Dokumente, die jemand ausdruckt.
@@ -1476,7 +1488,8 @@ a { color: var(--accent); }
   .fig-w1-ring,
   .fig-w1-d52,
   .fig-w2-v110,
-  .fig-w3-fixed { opacity: 1; }
+  .fig-w3-fixed,
+  .fig-w4-shaped { opacity: 1; }
 
   .fig-cavity { transform: scale(0.9192, 0.9355); }
   .fig-wall-bar { transform: scaleX(1.5); }
