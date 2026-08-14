@@ -98,6 +98,16 @@ RIGHT_MAX = 460
 #: Abstand der Karten zum Fensterrand und zueinander.
 MARGIN = ROOMY
 
+#: Das Polster zwischen der Randlinie einer Karte und ihrem Inhalt.
+#:
+#: Genau ein Pixel, denn genau einen ist die Linie breit. Ohne ihn malen die
+#: Kinder sie zu — Objektbaum, Verlaufsliste und die Seite des Reiters tragen
+#: eigene Flächen und reichten bis an die Widgetkante. Sichtbar blieb der
+#: Rahmen nur, wo zufällig ein Layout Abstand hielt: um „Objekte" lief er ganz
+#: herum, ab der Kopfzeile der Liste fehlte rechts alles, ab „Verlauf" auch
+#: links. Von der Kante, an der die Karte aufhört, blieb ein Haken oben links.
+CARD_PADDING = 1
+
 
 def card_width(base: int, cap: int, window: int) -> int:
     """Wie breit eine Karte in einem Fenster dieser Breite sein soll.
@@ -124,6 +134,20 @@ def card_stylesheet(theme: Theme) -> str:
     **Wo das hingehört:** nach ``style.py``, zu den übrigen Formregeln. Es
     steht hier, weil die Karten neu sind und jene Datei gerade an anderer
     Stelle umgebaut wird; zusammengelegt wird, sobald das durch ist.
+
+    **Der Rand braucht seinen eigenen Pixel.** Ohne das Polster darunter malen
+    die Kinder ihn zu: Objektbaum, Verlaufsliste und die Seite des Reiters
+    tragen eigene Flächen, und die reichten bis an die Widgetkante. Sichtbar
+    blieb der Rahmen nur dort, wo zufällig ein Layout Abstand hielt — um
+    „Objekte" lief er ganz herum, ab der Kopfzeile der Liste fehlte rechts
+    alles, ab „Verlauf" auch links. Von einer Kante, an der die Karte aufhört,
+    blieb ein Haken oben links.
+
+    Das Reiterfeld bekommt es hier, weil ``::pane`` ein eigenes Subcontrol ist;
+    die anderen Zonen bekommen es als Rand ihres Layouts (:data:`CARD_PADDING`).
+    Ein ``padding`` im Stilblatt wäre der kürzere Weg und wirkt nicht: Qt
+    verkleinert damit die Fläche eines schlichten ``QWidget`` nicht, und das
+    Layout darin legt seine Kinder weiter auf die Randlinie.
     """
     colours = THEMES[theme]
     return f"""
@@ -131,6 +155,12 @@ QWidget#overlayCard {{
     background: {colours["window"]};
     border: 1px solid {colours["accent_line"]};
     border-radius: {ROOMY}px;
+}}
+
+QTabWidget#overlayCard::pane {{
+    border: none;
+    background: transparent;
+    margin: 0px {CARD_PADDING}px {CARD_PADDING}px {CARD_PADDING}px;
 }}
 """
 

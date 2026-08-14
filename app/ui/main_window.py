@@ -163,7 +163,7 @@ from app.ui.loading import LoadingVeil
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
 from app.ui.op_dialog import OperationDialog, SketchUseDialog
-from app.ui.overlay import OverlayHost, card_stylesheet
+from app.ui.overlay import CARD_PADDING, OverlayHost, card_stylesheet
 from app.ui.paint_bar import PaintBar
 from app.ui.palette import ROLES
 from app.ui.panels import (
@@ -655,7 +655,10 @@ class MainWindow(QMainWindow):
         # über einem Modell, das daneben keinen Platz hatte.
         left = QWidget(self)
         left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        # Ein Pixel Polster, damit die Randlinie der Karte stehen bleibt: die
+        # Listen darin tragen eigene Flächen und malten sie sonst zu (siehe
+        # ``CARD_PADDING``).
+        left_layout.setContentsMargins(CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING)
         left_layout.setSpacing(TIGHT)
         left_layout.addWidget(collapsible(tr("Objekte"), self.object_tree))
         left_layout.addWidget(collapsible(tr("Parameter"), self.parameters))
@@ -812,6 +815,7 @@ class MainWindow(QMainWindow):
         # dem man herauskommt (Konzept P16, Entscheidung J).
         self.sculpt_bar = SculptBar(self)
         self.sculpt_bar.finished.connect(self.finish_sculpt)
+        self.sculpt_bar.refineRequested.connect(self.refine_for_sculpt)
         # Der Ring folgt dem Regler und nicht erst dem nächsten Zug: Wer den
         # Pinsel größer stellt, will vor dem Klicken sehen, was er greift.
         self.sculpt_bar.radius.valueChanged.connect(self.viewport.set_brush_radius)
@@ -2821,7 +2825,7 @@ class MainWindow(QMainWindow):
         self.tools.setVisible(False)
         self.sculpt_bar.setVisible(True)
         self.sculpt_bar.show_count(0, 0)
-        self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh))
+        self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
         self._update_actions()
         self.statusBar().showMessage(tr("Formen — Escape oder Fertig beendet die Sitzung."))
 
@@ -2853,6 +2857,44 @@ class MainWindow(QMainWindow):
         if radius >= edge * BRUSH_TO_EDGE:
             return ""
         return tr("Das Netz ist für diesen Pinsel zu grob — erst gleichmäßig vernetzen.")
+
+    def refine_for_sculpt(self) -> None:
+        """Das Netz so fein machen, dass der eingestellte Pinsel greift.
+
+        Die Kantenlänge ist keine Frage an den Nutzer: Sie folgt aus dem
+        Radius, den er schon eingestellt hat, über dieselbe Schwelle, die die
+        Warnung auslöst (:data:`BRUSH_TO_EDGE`). Ein Viertel darunter statt
+        genau darauf — die Vernetzung trifft ihren Zielwert nur ungefähr, und
+        eine Warnung, die nach ihrer eigenen Behebung stehen bleibt, ist
+        schlimmer als gar keine.
+
+        Die Sitzung läuft weiter. Vorhandene Züge überleben das: sie stehen in
+        Weltkoordinaten und nicht als Eckenverweise (§30.1), und die Operation
+        entsteht ohnehin erst beim Verlassen.
+        """
+        if self._sculpt_target is None:
+            return
+        edge = float(self.sculpt_bar.radius.value()) / (BRUSH_TO_EDGE * 1.25)
+        # Der feinste Wert, den die Operation annimmt, steht in ihrem Schema
+        # und nicht hier: der kleinste Pinsel (0,1 mm) rechnet sich sonst auf
+        # eine Kante, die sie ablehnt — eine Sackgasse hinter einem Knopf, der
+        # aus einer Sackgasse herausführen soll.
+        finest = next(
+            entry.minimum or 0.0
+            for entry in REGISTRY.get("remesh_uniform").params.spec()
+            if entry.name == "edge"
+        )
+        self.session.apply(
+            tr("Gleichmäßig vernetzen"),
+            [
+                OperationDraft(
+                    op="remesh_uniform",
+                    inputs=(self._sculpt_target,),
+                    outputs=(self._sculpt_target,),
+                    params={"edge": max(finest, edge)},
+                )
+            ],
+        )
 
     def _on_sculpt(self, point: Any) -> None:
         """Ein Klick im Viewport wird ein Zug.
@@ -2895,7 +2937,7 @@ class MainWindow(QMainWindow):
         """
         strokes = self._sculpt_strokes
         self.sculpt_bar.show_count(len(strokes), len(stages(strokes)))
-        self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh))
+        self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
         if self._sculpt_target is None:
             return
         plane = SYMMETRY_BITS.get(self.sculpt_bar.plane(), 0)
@@ -2933,7 +2975,7 @@ class MainWindow(QMainWindow):
             return
         thin = len(card.highlighted)
         if not thin:
-            self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh))
+            self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
             return
         self.sculpt_bar.show_warning(
             tr("{zahl} Stellen dünner als {maß}")

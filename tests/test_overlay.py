@@ -18,13 +18,22 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QRect
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from app.ui import overlay
 from app.ui.main_window import MainWindow
-from app.ui.overlay import LEFT_WIDTH, MARGIN, RIGHT_WIDTH, OverlayHost, card_stylesheet
+from app.ui.overlay import (
+    CARD_PADDING,
+    LEFT_WIDTH,
+    MARGIN,
+    RIGHT_WIDTH,
+    OverlayHost,
+    card_stylesheet,
+)
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from app.ui.style import ROOMY
 from app.ui.theme import THEMES
 
 
@@ -492,3 +501,66 @@ def test_the_dodge_margin_covers_the_card_it_dodges(window: MainWindow) -> None:
 
     assert left_margin > left.geometry().right(), "der linke Rand deckt die linke Karte vollständig"
     assert right_margin > host.width() - right.geometry().left(), "und der rechte die rechte"
+
+
+def test_every_card_keeps_a_pixel_for_its_border(window: MainWindow) -> None:
+    """Die Randlinie ist die Kante, an der die Karte aufhört — sie muss stehen.
+
+    Sie stand nicht: Objektbaum, Verlaufsliste und die Seite des Reiters
+    tragen eigene Flächen und reichten bis an die Widgetkante. Am Bild
+    nachgezählt fehlten links 300 von 588 Randzeilen und rechts 412 von 427 —
+    die rechte Karte hatte den Rahmen nur noch um ihre Reiterzeile.
+
+    Geprüft wird die Ursache: ein Layout ohne Rand legt seine Kinder auf die
+    Linie. Ein ``padding`` im Stilblatt tut es nicht, Qt verkleinert damit die
+    Fläche eines schlichten ``QWidget`` nicht.
+    """
+    for name in ("left", "bottom"):
+        zone = getattr(window.overlay, name)
+        assert zone is not None
+        layout = zone.layout()
+        assert layout is not None, f"{name} hat ein Layout"
+        margins = layout.contentsMargins()
+        assert min(margins.left(), margins.right()) >= CARD_PADDING, (
+            f"{name}: die Kinder liegen auf der Randlinie"
+        )
+
+
+def test_the_drawn_card_really_shows_its_border(window: MainWindow) -> None:
+    """Und die Wirkung, an der gerenderten Karte abgelesen.
+
+    Die Ursache allein genügt nicht: eine zweite Stelle könnte die Linie
+    trotzdem zumalen. Gemessen wird an der linken Spalte, weil sie die drei
+    Listen trägt, an denen es aufgefallen ist.
+    """
+    from app.ui.theme import THEMES
+
+    zone = window.overlay.left
+    assert zone is not None
+    picture = zone.grab().toImage()
+    accent = QColor(THEMES["dark"]["accent_line"])
+
+    # Ohne die Rundungen oben und unten: dort schneidet die Maske, und eine
+    # Ecke ist keine Kante.
+    rows = range(ROOMY, picture.height() - ROOMY)
+    for label, x in (("links", 0), ("rechts", picture.width() - 1)):
+        wrong = [
+            y
+            for y in rows
+            if abs(QColor(picture.pixel(x, y)).red() - accent.red()) > 30
+            or abs(QColor(picture.pixel(x, y)).green() - accent.green()) > 30
+        ]
+        assert not wrong, f"{label}: {len(wrong)} von {len(rows)} Zeilen ohne Randlinie"
+
+
+def test_the_tab_card_keeps_its_border_too(window: MainWindow) -> None:
+    """Das Reiterfeld braucht seine eigene Zeile im Stilblatt.
+
+    ``QTabWidget::pane`` ist ein Subcontrol und weiß vom Polster des
+    Elternteils nichts — ohne die Regel malt es den Rahmen der rechten Karte
+    über die ganze Höhe zu, und übrig bleibt der Bogen um die Reiterzeile.
+    """
+    sheet = card_stylesheet("dark")
+
+    assert "QTabWidget#overlayCard::pane" in sheet
+    assert f"margin: 0px {CARD_PADDING}px {CARD_PADDING}px {CARD_PADDING}px" in sheet
