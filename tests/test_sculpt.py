@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.mesh_ops import uniform
 from app.core.geom.sculpt import apply_strokes, stages, strokes_from_text, strokes_to_text
@@ -491,3 +492,111 @@ def test_sculpting_the_coarse_figure_warns_instead_of_failing_quietly(
     result = run(entry, profile, strokes=strokes_to_text([stroke]))
 
     assert "sculpt.too_coarse" in {finding.code for finding in result.findings}
+
+
+# --- Einbacken (Entscheidung D) -------------------------------------------------
+
+
+class BakedSources:
+    """Der Quellenspeicher des Projekts, wie ihn die Auswertung reicht."""
+
+    def __init__(self, payload: bytes) -> None:
+        self._payload = payload
+
+    def read(self, source_id: str) -> bytes:
+        return self._payload
+
+    def describe(self, source_id: str) -> object:  # pragma: no cover - hier ungefragt
+        raise NotImplementedError
+
+
+def run_with_sources(entry: SceneObject, profile: Profile, payload: bytes, **params: object):
+    spec = REGISTRY.get("sculpt_strokes")
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+            sources=BakedSources(payload),  # type: ignore[arg-type]
+        )
+    )
+
+
+def test_a_big_session_offers_to_be_baked(profile: Profile) -> None:
+    """Entscheidung D: angeboten, nie automatisch.
+
+    Zwanzig Etappen heißen zwanzig Durchgänge über alle Eckpunkte, je
+    Auswertung. Das ist der Punkt, an dem das Festschreiben mehr wert ist als
+    die Änderbarkeit — aber die Entscheidung trifft der Nutzer.
+    """
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+    many = [on_ball(1.0, 0.0, 0.0, tool="smooth") for _ in range(20)]
+
+    result = run(entry, profile, strokes=strokes_to_text(many))
+
+    assert "sculpt.consider_baking" in {finding.code for finding in result.findings}
+
+
+def test_a_small_session_is_not_pestered(profile: Profile) -> None:
+    """Die Gegenprobe — ein Angebot, das immer dasteht, ist eine Belästigung."""
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+
+    result = run(entry, profile, strokes=strokes_to_text([on_ball(1.0, 0.0, 0.0)]))
+
+    assert "sculpt.consider_baking" not in {finding.code for finding in result.findings}
+
+
+def test_a_baked_session_comes_from_its_source(profile: Profile) -> None:
+    """Ist der Stand festgeschrieben, wird nichts mehr gerechnet.
+
+    Das ist der Sinn der Sache. Reproduzierbar bleibt es trotzdem: Die Quelle
+    reist im Container mit wie jede andere, und was aus ihr kommt, hängt an
+    keinem Rechner und an keiner Sitzung.
+    """
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+    frozen = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+
+    result = run_with_sources(
+        entry,
+        profile,
+        frozen.to_stl(),
+        strokes=strokes_to_text([on_ball(1.0, 0.0, 0.0)]),
+        baked="src_9",
+    )
+
+    after = result.outputs[0].mesh
+    assert after.volume == pytest.approx(1000.0, rel=0.01), "das Ergebnis kommt aus der Quelle"
+    assert "sculpt.baked" in {finding.code for finding in result.findings}
+
+
+def test_the_strokes_stay_as_evidence_after_baking(profile: Profile) -> None:
+    """Die alte Liste bleibt in der eingebackenen Operation erhalten.
+
+    Wer ein halbes Jahr später nachsieht, was dort gemacht wurde, findet es —
+    und der Befund sagt dazu, dass sich daran nichts mehr ändern lässt.
+    """
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+    text = strokes_to_text([on_ball(1.0, 0.0, 0.0), on_ball(0.0, 1.0, 0.0)])
+    frozen = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+
+    result = run_with_sources(entry, profile, frozen.to_stl(), strokes=text, baked="src_9")
+
+    baked = next(f for f in result.findings if f.code == "sculpt.baked")
+    assert baked.values["strokes"] == 2, "die Züge sind gezählt, nicht verworfen"
+
+
+def test_baking_without_sources_says_so(profile: Profile) -> None:
+    """Ein eingebackener Stand ohne Quellen ist kein leeres Ergebnis, sondern
+    eine Meldung."""
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+
+    with pytest.raises(ValidationError) as raised:
+        run(entry, profile, strokes="", baked="src_9")
+
+    assert raised.value.suggestions

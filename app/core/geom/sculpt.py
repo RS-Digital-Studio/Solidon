@@ -32,7 +32,8 @@ import numpy as np
 import trimesh
 from scipy.spatial import cKDTree
 
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.errors import CANCEL, ValidationError
+from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
     ORDERED_TOOLS,
@@ -309,6 +310,16 @@ SYMMETRY_BITS: Final[dict[str, int]] = {
     "xyz": 7,
 }
 
+#: Ab wie vielen Etappen das Einbacken angeboten wird (Entscheidung D).
+#: Jede Etappe ist ein eigener Durchgang über alle Eckpunkte; bei zwanzig
+#: kostet jede Auswertung das Zwanzigfache eines einzelnen.
+BAKE_STAGES: Final = 20
+
+#: Und ab wie vielen Zügen, unabhängig von den Etappen. Zwanzigtausend sind
+#: rund zwei Megabyte Zahlen — spätestens dort ist die Sitzung ein Datenblock
+#: und keine Liste von Entscheidungen mehr.
+BAKE_STROKES: Final = 20_000
+
 #: Ab wie vielen mittleren Kantenlängen ein Pinsel noch etwas ausrichtet.
 #: Darunter liegen im Pinselgebiet zu wenige Eckpunkte, um eine Form zu
 #: tragen — es entsteht keine Falte, sondern eine verzogene Facette.
@@ -325,6 +336,17 @@ class SculptParams(BaseParams):
         doc=_(
             "Die gesammelten Pinselzüge dieser Sitzung. Sie werden gemalt, nicht "
             "getippt — dieses Feld zeigt nur, was dabei entstanden ist."
+        ),
+    )
+    baked: str = param(
+        title=_("Eingebacken"),
+        kind="source",
+        default="",
+        placement="advanced",
+        doc=_(
+            "Ein festgeschriebener Stand dieser Sitzung. Ist er gesetzt, kommt das "
+            "Ergebnis von dort und nicht mehr aus den Zügen — die bleiben als Beleg "
+            "stehen, wirken aber nicht mehr."
         ),
     )
     symmetry: str = param(
@@ -362,6 +384,14 @@ def sculpt_strokes(ctx: OpContext) -> OpResult:
     before = as_mesh_data(source.mesh)
     strokes = strokes_from_text(params.strokes)
 
+    if params.baked:
+        # Entscheidung D: Der Stand ist festgeschrieben. Gerechnet wird nichts
+        # mehr — das ist der Sinn der Sache, denn bei zwanzig Etappen kostet
+        # jede Auswertung zwanzig Durchgänge. Reproduzierbar bleibt es
+        # trotzdem: Die Quelle reist im Container mit wie jede andere, und was
+        # aus ihr kommt, hängt an keinem Rechner und an keiner Sitzung.
+        return _from_baked(ctx, source, before, strokes)
+
     extra = SYMMETRY_BITS.get(params.symmetry, 0)
     if extra:
         strokes = [replace(stroke, symmetry=stroke.symmetry | extra) for stroke in strokes]
@@ -369,6 +399,43 @@ def sculpt_strokes(ctx: OpContext) -> OpResult:
     after = apply_strokes(before, strokes)
     findings = _sculpting_findings(before, after, strokes, source.id)
     return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
+
+
+def _from_baked(
+    ctx: OpContext, source: Any, before: MeshData, strokes: Sequence[Stroke]
+) -> OpResult:
+    """Das eingebackene Netz statt der Rechnung.
+
+    Der Verlust an Änderbarkeit steht als Befund da und nicht nur im Dialog,
+    der ihn seinerzeit angekündigt hat: Wer eine Datei ein halbes Jahr später
+    öffnet, war bei der Nachfrage nicht dabei.
+    """
+    params = cast(SculptParams, ctx.params)
+    if ctx.sources is None:
+        raise ValidationError(
+            field="baked",
+            detail=_(
+                "Der eingebackene Stand lässt sich ohne die Quellen des Projekts nicht lesen."
+            ),
+            constraint="no_sources",
+            suggestions=(CANCEL,),
+        )
+    mesh = read_mesh(ctx.sources.read(params.baked), ".stl")
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=mesh)],
+        findings=[
+            Finding(
+                code="sculpt.baked",
+                severity="info",
+                message=_(
+                    "Dieser Stand ist festgeschrieben — die Züge stehen als Beleg da, "
+                    "geändert werden kann an ihnen nichts mehr."
+                ),
+                object_id=source.id,
+                values={"strokes": len(strokes), "before": before.triangle_count},
+            )
+        ],
+    )
 
 
 def _sculpting_findings(
@@ -416,6 +483,24 @@ def _sculpting_findings(
                 ),
                 object_id=object_id,
                 values={"brush_mm": round(finest, 3), "edge_mm": round(edge, 3)},
+            )
+        )
+    if len(parts) >= BAKE_STAGES or len(strokes) >= BAKE_STROKES:
+        # Entscheidung D: angeboten, nie automatisch. Das Einbacken ist ein
+        # bewusster Verlust an Änderbarkeit und damit die einzige Stelle in
+        # diesem Konzept, an der eine Nachfrage richtig ist (Regel 19 greift
+        # nicht, weil die Handlung nicht folgenlos rücknehmbar ist).
+        findings.append(
+            Finding(
+                code="sculpt.consider_baking",
+                severity="info",
+                message=_(
+                    "Diese Sitzung ist groß genug, dass jede Auswertung spürbar dauert. "
+                    "Der Stand lässt sich festschreiben — danach sind die Züge nicht mehr "
+                    "änderbar."
+                ),
+                object_id=object_id,
+                values={"strokes": len(strokes), "stages": len(parts)},
             )
         )
     if not after.is_watertight and before.is_watertight:
