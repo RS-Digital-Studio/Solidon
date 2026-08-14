@@ -27,7 +27,15 @@ import tomllib
 from pathlib import Path
 from typing import Any, Final
 
-from tools.check_env import abweichungen, aufbaubefehl, festgeschrieben, normal
+import tools.check_env as check_env
+from tools.check_env import (
+    abweichungen,
+    aufbaubefehl,
+    festgeschrieben,
+    normal,
+    obergrenzen,
+    zahlenfolge,
+)
 
 #: Die Wurzel des Arbeitsbaums — von hier aus liegt ``pyproject.toml`` daneben.
 _ROOT: Final = Path(__file__).resolve().parent.parent
@@ -149,3 +157,60 @@ def test_the_rebuild_command_pins_the_versions() -> None:
         assert "-c constraints.txt" in befehl, befehl
         assert "-e" in befehl, befehl
     assert "venv" in aufbaubefehl(mit_venv=False), "ohne Umgebung muss sie zuerst angelegt werden"
+
+
+# --- aktuell bleiben, ohne die Grenzen zu reißen ---------------------------------
+#
+# Festgenagelt ist nicht dasselbe wie gepflegt. Der wöchentliche CI-Lauf meldet
+# eine Fassung, die *bricht*; dass es überhaupt eine neuere *gäbe*, sagt er
+# niemandem. `--outdated` beantwortet das — und muss dabei die Grenzen kennen,
+# die absichtlich gesetzt sind.
+
+
+def test_a_deliberate_upper_bound_is_read_from_the_project() -> None:
+    """`trimesh>=4.4,<5` ist eine Entscheidung: der Major-Sprung wird migriert."""
+    grenzen = obergrenzen()
+
+    assert grenzen.get("trimesh") == "5", (
+        "die Obergrenze für trimesh wird nicht gefunden — dann schlägt "
+        "`--outdated` einen Sprung vor, der absichtlich nicht kommt"
+    )
+
+
+def test_versions_compare_as_numbers_not_as_text() -> None:
+    """Sonst gilt „10.0" als kleiner als „9.0", und die Grenze greift verkehrt."""
+    assert zahlenfolge("5.0.0") > zahlenfolge("4.12.2")
+    assert zahlenfolge("10.0") > zahlenfolge("9.0")
+    assert zahlenfolge("2.9.0.post0") == (2, 9, 0)
+    assert zahlenfolge("") == ()
+
+
+def test_freezing_keeps_the_head_that_explains_the_file(tmp_path, monkeypatch) -> None:
+    """`pip freeze > constraints.txt` wäre der naheliegende Weg — und löscht die
+    neunzehn Zeilen Erklärung, die die Datei überhaupt verständlich machen."""
+    ziel = tmp_path / "constraints.txt"
+    ziel.write_text(
+        "# Der Versionssatz, gegen den die Suite grün ist.\n"
+        "#\n"
+        "# Warum es die Datei gibt: hier steht der Grund.\n"
+        "\n"
+        "numpy==2.4.0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_env, "CONSTRAINTS", ziel)
+
+    class Antwort:
+        returncode = 0
+        stdout = "Zebra==1.0\nnumpy==2.5.0\n"
+        stderr = ""
+
+    monkeypatch.setattr(check_env.subprocess, "run", lambda *a, **k: Antwort())
+
+    assert check_env.einfrieren(Path("python")) == 0
+
+    geschrieben = ziel.read_text(encoding="utf-8")
+    assert "# Warum es die Datei gibt: hier steht der Grund." in geschrieben
+    assert "numpy==2.5.0" in geschrieben
+    assert "numpy==2.4.0" not in geschrieben
+    # sortiert wie im Bestand, damit ein Diff die Änderung zeigt und nicht die Ordnung
+    assert geschrieben.strip().splitlines()[-2:] == ["numpy==2.5.0", "Zebra==1.0"]

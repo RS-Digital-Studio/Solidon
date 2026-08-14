@@ -70,6 +70,8 @@ zusammen. Weiteres:
 .venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Solidon, braucht Inno Setup 6
 python tools/check_env.py                                       # stimmen die Fassungen? läuft auch ohne .venv
 python tools/check_env.py --install                             # sie stimmen machen (braucht Netz)
+python tools/check_env.py --outdated                            # was wäre neuer, und was verbietet eine Grenze
+python tools/check_env.py --freeze                              # constraints.txt neu schreiben — erst nach grüner Suite
 ```
 
 Die letzten beiden laufen **nicht** offscreen und dürfen es nicht: unter
@@ -87,6 +89,15 @@ Arbeiten mehrere am selben Repository, genügt der gute Vorsatz nicht: Der
 Sitzungsstart-Hook gleicht die installierten Fassungen gegen `constraints.txt`
 ab und sagt, wenn etwas abweicht — samt Befehl. Er läuft dafür auch ohne
 `.venv`, sonst könnte er im frischen Klon nicht melden, dass sie fehlt.
+
+**Festgenagelt ist nicht gepflegt.** Der wöchentliche CI-Lauf „Neueste
+Fassungen" (montags, ohne `constraints.txt`) meldet, wenn eine neue Fassung
+etwas *bricht* — dass es überhaupt eine neuere *gäbe*, sagt er niemandem.
+Dafür ist `--outdated` da; es trennt, was gehen würde, von dem, was eine
+Grenze in `pyproject.toml` ausschließt (`trimesh<5` ist eine aufgeschobene
+Migration, kein Versehen). Steht der Satz länger als drei Monate, erinnert der
+Sitzungsstart-Hook daran. Der Weg zum neuen Stand ist immer derselbe:
+aktualisieren, **Suite fahren**, dann `--freeze` — nie umgekehrt.
 
 Qt-Tests brauchen kein Bild: `QT_QPA_PLATFORM=offscreen` setzt
 `tests/conftest.py` selbst. Dieselbe Datei biegt die Nutzerverzeichnisse in
