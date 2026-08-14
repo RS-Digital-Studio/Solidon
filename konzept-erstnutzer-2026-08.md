@@ -10,6 +10,37 @@ die sie widerlegt hat.
 Die Frage war nicht „ist es fertig", sondern: **Wer das hier zum ersten Mal
 öffnet — sieht der, was er sehen muss?**
 
+> **Stand 14.08.2026.** Abgearbeitet, jeder Fund mit Test und am laufenden
+> Fenster nachgemessen. Offen bleiben vier, und zwar als Entscheidung.
+>
+> | Befund | Stand |
+> |---|---|
+> | 1.1 Kamera im Nullpunkt nach *Neues Projekt* | behoben — `2f56d93` |
+> | 1.2 Vier Bedienelemente unter den Karten | behoben — `443058f` |
+> | 1.3 Website scrollt seitlich | behoben — `61fbc01` |
+> | 2.2 Chat ohne ein einziges Beispiel | behoben — `7fe7c30` |
+> | 2.3 Werkzeugzeile graut nicht aus | behoben — `b07bcfb` |
+> | 2.4 Warnung unsichtbar hinter dem Reiter | behoben — `46e2b7c` |
+> | 3.3 Erzeugen-Op im Ändern-Menü | behoben — `8232923` |
+> | 4.2 Port immer bedienbar · 4.5 Handbuchverzeichnis · 4.6 Preis auf Mobil · 4.7 englische Docstrings | behoben — `799fce5`, `9aa7df9`, `61fbc01` |
+> | 5.1 Kettenabbruch verweist auf zugehaltenes Fenster | behoben — `46e2b7c` |
+> | 5.2 Fehlertext der Rückfallkette | behoben — `c2bd852` |
+> | 5.3 Zwei Schalter für die Schichtansicht | behoben — `b0cb0d1` |
+> | 5.4 Legende aus `face_10`, Kartenname, Gradzeichen | behoben — `5902211` |
+> | 5.5 Tabulator · Objektbaum ohne Anfang | behoben — `799fce5`, `9aa7df9` |
+> | 5.8 Elf englische Docstrings | behoben — `799fce5`, jetzt null |
+> | **2.1 Karten nutzen die Fensterhöhe nicht** | **offen** |
+> | **2.5 Import landet im vorhandenen Körper** | **offen, als Entscheidung** |
+> | **3.1 Verteilermenüs · 3.4 Kontextmenü** | **offen, als Entscheidung** |
+> | **5.6 Kürzel für die Werkzeuge** | **offen, als Entscheidung** |
+>
+> Nicht behoben und bewusst so: **3.2** (alphabetische Sortierung der
+> Grundformen) — sie ist eine begründete Entscheidung, die
+> `test_a_menu_is_sorted_the_way_it_is_read` festhält. **4.1** (halb
+> umgeschaltetes Thema nach dem Zeichenmodus) und **4.3** (Fokus sieht aus wie
+> Mausüberfahrt) sind geblieben; beide brauchen mehr als eine Zeile und keinen
+> Befund über sich hinaus.
+
 Vorweg, damit die Liste unten nicht das falsche Bild gibt: Startbildschirm,
 Erststart-Dialog, Operationsdialoge, Prüfbericht, Bausteinkatalog und Handbuch
 sind sehr gut. Die Operationsdialoge machen es vor — Beschreibungssatz oben,
