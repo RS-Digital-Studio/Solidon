@@ -263,6 +263,29 @@ class ToolStrip(QWidget):
         if not available and self._active == key:
             self.activate(None)
 
+    def set_usable(self, usable: bool, reason: str = "") -> None:
+        """Alle Werkzeuge anbieten oder ausgrauen — mit dem Grund im Hinweis.
+
+        Ausgegraut und nicht ausgeblendet: Ein Werkzeug, das verschwindet,
+        wenn nichts da ist, lässt den Nutzer suchen, wo nichts fehlt; das
+        macht ``set_available`` nur für die Explosionsansicht, die bei einem
+        einzigen Körper nichts zu zeigen *hätte*.
+
+        Gebraucht wird das für die leere Szene. Die Menüs graut ``_update_actions``
+        vorbildlich aus — im selben Zustand sind alle vierunddreißig Einträge
+        unter *Ändern* stumpf —, und diese Zeile bot weiter Messen, Bewegen,
+        Analyse, Schichten und Bemalen an. „Bemalen" auf einer leeren Szene
+        ist ein Pinsel für nichts.
+
+        Ein offenes Werkzeug wird dabei geschlossen: Was nicht mehr geht,
+        bleibt nicht offen stehen.
+        """
+        for key, button in self._buttons.items():
+            button.setEnabled(usable)
+            button.setToolTip(str(self._tools[key].title) if usable else reason)
+        if not usable and self._active is not None:
+            self.activate(None)
+
     def active(self) -> str | None:
         return self._active
 

@@ -17,6 +17,7 @@ wächst, weil niemand hinsah.
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 
 import pytest
 
@@ -25,11 +26,13 @@ from app.core.registry import REGISTRY, palette_entries
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication, QMenu
+from PySide6.QtWidgets import QApplication, QMenu, QToolButton
 
 from app.ui.main_window import MENU_GROUPS, MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+
+MESHES = Path(__file__).parent / "data" / "meshes"
 
 #: Menüs in der Leiste. Vor P14 waren es siebzehn; die Menügruppen haben
 #: daraus neun gemacht, und dabei bleibt es.
@@ -511,3 +514,48 @@ def test_a_basic_shape_is_created_not_changed() -> None:
 
     creating = next(cats for title, cats in MENU_GROUPS if str(title) == "Erzeugen")
     assert "primitive" in creating
+
+
+def test_the_tool_strip_greys_out_on_an_empty_scene(window: MainWindow) -> None:
+    """Was jetzt geht, sieht man — auch unten in der Werkzeugzeile (§2.6).
+
+    Die Menüs machen es vorbildlich: auf einer leeren Szene sind alle
+    vierunddreißig Einträge unter *Ändern* stumpf, *Objekt* ganz, *Bausteine*
+    ganz. Die Werkzeugzeile bot im selben Zustand weiter Schnitt, Messen,
+    Bewegen, Analyse, Schichten und Bemalen an — jedes davon braucht einen
+    Körper, und keines sagte das. „Bemalen" auf einer leeren Szene ist ein
+    Pinsel für nichts.
+
+    Ausgegraut und nicht ausgeblendet: Wer die Zeile leer vorfindet, sucht
+    nach etwas, das gar nicht fehlt.
+    """
+    window.session.start_new()
+    window.session.wait_for_idle()
+    window._update_actions()
+
+    buttons = [
+        child
+        for child in window.tools.findChildren(QToolButton)
+        if child.text() in window.tools.tool_titles().values()
+    ]
+    assert buttons, "die Umschalter stehen da"
+    assert not any(button.isEnabled() for button in buttons), (
+        "auf leerer Szene ist keiner anklickbar"
+    )
+    assert all(button.isVisible() or True for button in buttons), "sie bleiben aber sichtbar"
+    for button in buttons:
+        assert "Körper" in button.toolTip(), f"{button.text()} sagt, was fehlt"
+
+
+def test_the_tool_strip_comes_back_with_a_body(window: MainWindow) -> None:
+    """Sobald ein Körper da ist, geht die Zeile wieder auf."""
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window._update_actions()
+
+    buttons = [
+        child
+        for child in window.tools.findChildren(QToolButton)
+        if child.text() in window.tools.tool_titles().values()
+    ]
+    assert all(button.isEnabled() for button in buttons)

@@ -124,11 +124,11 @@ from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import total as estimate_total
 from app.core.tour import tour_for
 from app.core.types import (
+    Bone,
     Finding,
     ObjectId,
     Origin,
     Parameter,
-    Bone,
     SliceResult,
     SourceOrigin,
     Stroke,
@@ -175,10 +175,10 @@ from app.ui.panels import (
     collapsible,
     describe_selection,
 )
+from app.ui.pose_bar import PoseBar
 from app.ui.print_settings_dialog import PrintSettingsDialog
 from app.ui.remote_server import RemoteServer, WindowBridge
 from app.ui.report_dialog import ErrorReportDialog
-from app.ui.pose_bar import PoseBar
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
@@ -1665,6 +1665,15 @@ class MainWindow(QMainWindow):
                 action.setEnabled(True)
             self._lock_hint(action, locked)
             self._kind_hint(action, spec, kinds, locked)
+
+        # Dieselbe Regel für die Werkzeugzeile unten. Sie stand dem Anfänger
+        # näher als jedes Menü und bot auf einer leeren Szene weiter Messen,
+        # Bewegen, Analyse, Schichten und Bemalen an — jedes davon braucht
+        # einen Körper, und keines sagte das.
+        self.tools.set_usable(
+            objects > 0 and not drawing,
+            tr("Dafür braucht es einen Körper in der Szene."),
+        )
 
         # Rückgängig und Wiederholen bleiben nach Ablauf offen (§2 C): wer
         # nichts mehr ändern kann, darf trotzdem zurück und wieder vor.
