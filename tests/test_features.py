@@ -265,7 +265,7 @@ def test_a_small_flat_face_is_not_swallowed_by_the_curve_next_to_it() -> None:
         (facet for facet in body.facets if len(facet) >= 8),
         key=lambda facet: len(facet),
     )
-    assert set(int(index) for index in top) <= planar
+    assert {int(index) for index in top} <= planar
 
 
 def test_a_cylinder_has_three_faces_and_not_fifty() -> None:

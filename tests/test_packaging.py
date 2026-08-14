@@ -71,7 +71,7 @@ def test_every_data_directory_travels_with_the_package() -> None:
     spec = SPEC.read_text(encoding="utf-8")
     for directory in sorted(_data_directories()):
         covered = [directory, *directory.parents]
-        assert any(f'"{parent.as_posix()}"' in spec for parent in covered if parent != Path(".")), (
+        assert any(f'"{parent.as_posix()}"' in spec for parent in covered if parent != Path()), (
             f"{directory.as_posix()} liegt im Paket nicht bei — Eintrag in packaging/"
             f"solidon3d.spec unter datas fehlt"
         )

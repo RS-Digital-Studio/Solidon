@@ -1317,7 +1317,7 @@ class PrintSettingsDialog(QDialog):
                     editor.setValue(int(value))
                 elif isinstance(editor, QComboBox):
                     index = editor.findData(str(value))
-                    editor.setCurrentIndex(index if index >= 0 else 0)
+                    editor.setCurrentIndex(max(index, 0))
                 elif isinstance(editor, _ColourButton):
                     editor.set_value(str(value))
                 elif isinstance(editor, QDoubleSpinBox):

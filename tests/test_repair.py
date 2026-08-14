@@ -120,7 +120,7 @@ def test_repair_reports_every_step_it_took() -> None:
 def test_repair_says_when_it_could_not_close_the_body() -> None:
     """Ein ehrliches „immer noch offen" schlägt eine stille halbe Reparatur."""
     body, _welded = merge_vertices(raw("cube_clean.stl"))
-    half = body.replacing(body.raw.submesh([range(0, 6)], append=True))
+    half = body.replacing(body.raw.submesh([range(6)], append=True))
 
     result = repair(half, holes=False)
     assert "repair.still_open" in {finding.code for finding in result.findings}

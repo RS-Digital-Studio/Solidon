@@ -146,7 +146,7 @@ def test_a_cube_has_no_overhang_worth_the_name() -> None:
 
     assert analysis.unit == "°"
     # The underside faces straight down, everything else stands vertical.
-    assert set(round(value) for value in analysis.values) <= {0, 90}
+    assert {round(value) for value in analysis.values} <= {0, 90}
     assert analysis.threshold == 45.0
 
 

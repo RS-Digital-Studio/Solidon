@@ -159,7 +159,7 @@ def _is_local(path: str) -> bool:
     text = path.strip().replace("\\", "/")
     if not text:
         return False
-    if text.startswith("/") or text.startswith("~"):
+    if text.startswith(("/", "~")):
         return False
     if re.match(r"^[a-zA-Z]:", text):
         return False

@@ -42,7 +42,7 @@ HEAVY = "Cat_Toys_V2.3mf"
 
 
 def find(name: str) -> Path:
-    found = [entry for entry in MODELS.rglob(name)]
+    found = list(MODELS.rglob(name))
     if not found:
         pytest.skip(f"{name} is not in the folder")
     return found[0]

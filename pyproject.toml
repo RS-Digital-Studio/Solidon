@@ -133,7 +133,18 @@ line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+# Die sechs hinteren kamen am 14.08.2026 dazu, nachgemessen mit 13 Befunden im
+# ganzen Baum: A (ein Name, der einen eingebauten überdeckt), C4 (Umwege über
+# Generatoren), FURB und PIE (Modernisierung), ICN (Importname) und PTH
+# (`pathlib` statt `os.path` — der Rest des Projekts rechnet ohnehin in
+# `Path`).
+#
+# Zwei stehen bewusst **nicht** hier. `PERF` fände neunzehnmal dieselbe
+# Schleife, die eine Comprehension werden könnte — ohne sicheren Autofix, und
+# der Bestand ist an diesen Stellen mit Kommentaren darin lesbarer.
+# `DTZ` fände sieben naive Zeitstempel, fünf davon in der Freischaltung: Das
+# ist eine Verhaltensänderung an der Lizenzgrenze und kein Aufräumen.
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF", "A", "C4", "FURB", "ICN", "PIE", "PTH"]
 
 [tool.ruff.lint.per-file-ignores]
 # Bauplan §33.1 legt die Ausnahmenamen fest. OutOfBuildVolume und
@@ -157,6 +168,10 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 # Qt-Signale sind per Konvention camelCase, und „20 × 20 mm" ist die deutsche
 # Schreibweise eines Maßes — beides ist in der Oberfläche Absicht.
 "app/ui/*" = ["N815", "RUF001"]
+# ``log_message(self, format, *args)`` überschreibt eine Methode von
+# ``BaseHTTPRequestHandler``. Der Name kommt aus der Standardbibliothek; ihn zu
+# ändern hieße, die Methode nicht mehr zu überschreiben.
+"app/ui/remote_server.py" = ["A002", "N815", "RUF001"]
 # Den Steckbrief lesen Menschen und das Modell; „20 × 20 mm" ist das richtige
 # Zeichen.
 "app/core/perceive/digest.py" = ["RUF001"]

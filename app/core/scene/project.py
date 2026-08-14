@@ -24,7 +24,6 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
-import os
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
@@ -228,7 +227,9 @@ def save(project: Project, path: Path) -> Path:
         )
         if project.thumbnail is not None:
             container.writestr(THUMBNAIL_ENTRY, project.thumbnail)
-    os.replace(temporary, path)
+    # Derselbe atomare Wechsel wie ``os.replace`` — ``Path.replace`` ruft ihn
+    # auf. Eine halb geschriebene Projektdatei darf es nie geben.
+    temporary.replace(path)
     _log.info("saved project %s", path.name)
     return path
 

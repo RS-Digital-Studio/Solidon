@@ -944,7 +944,8 @@ def _first_mesh(result: EvaluationResult) -> trimesh.Trimesh:
 def _geometry_available() -> bool:
     """Ob die Geometriepakete da sind. Ohne sie bleibt es beim Alt-Text."""
     try:
-        import numpy  # noqa: F401
+        # Nur nachsehen, ob sie da sind — deshalb ohne die üblichen Kurznamen.
+        import numpy  # noqa: F401, ICN001
         import trimesh  # noqa: F401
     except ImportError:
         return False

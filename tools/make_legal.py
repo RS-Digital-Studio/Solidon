@@ -178,7 +178,7 @@ def to_text(markdown: str) -> str:
     Zeilenumbrüche hinweg, und ein zeilenweiser Ausdruck findet dann nur die
     Hälfte — im Text stand danach ``**vierzehn Tage`` mit offenem Sternchen.
     """
-    markdown = re.sub(r"\*\*(.+?)\*\*", r"\1", markdown, flags=re.S)
+    markdown = re.sub(r"\*\*(.+?)\*\*", r"\1", markdown, flags=re.DOTALL)
     lines: list[str] = []
     for raw in markdown.splitlines():
         line = raw.rstrip()

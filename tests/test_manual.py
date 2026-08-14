@@ -328,7 +328,7 @@ def test_no_page_prints_its_own_markup(language: str) -> None:
         offenders: list[str] = []
         for page in manual.pages():
             html = markup.to_html(str(page.body))
-            without_code = re.sub(r"<code>.*?</code>", "", html, flags=re.S)
+            without_code = re.sub(r"<code>.*?</code>", "", html, flags=re.DOTALL)
             for line in without_code.splitlines():
                 if "**" in line:
                     offenders.append(f"{page.key}: {line.strip()[:110]}")
