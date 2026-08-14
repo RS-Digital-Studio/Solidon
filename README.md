@@ -10,7 +10,7 @@ bleibt alles außer dem Chat benutzbar.
 
 Projektdateien tragen die Endung `.p3d`.
 
-## Fassung 0.7 — die öffentliche Demo
+## Fassung 0.1 — die öffentliche Demo
 
 Die aktuelle Fassung ist eine **Demo**: vollständig, unentgeltlich, ohne
 Schlüssel und ohne Konto, **befristet bis zum 30. Oktober 2026**. Danach

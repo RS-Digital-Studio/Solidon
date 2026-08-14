@@ -227,7 +227,7 @@ Dialoge.
 | Barrierefreiheit | keine Bedeutung allein über Farbe |
 | Leistung | Zielwerte Bauplan §31, Regressionsschwelle 25 % |
 | Lizenzen | Abhängigkeiten gegen Freigabeliste |
-| Hauptwege | die drei Wege aus Bauplan §2.2 Ende zu Ende |
+| Hauptwege | die vier Wege aus Bauplan §2.2 Ende zu Ende |
 | Agenten-Suite | 39 Referenzanfragen |
 
 ---

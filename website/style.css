@@ -1,4 +1,5 @@
-/* Solidon3D — statische Website. Keine externen Ressourcen, kein JavaScript.
+/* Solidon3D — statische Website. Keine externen Ressourcen. Das einzige
+   Skript ist `site.js` von dieser Seite, und es markiert nur die Sprungliste.
    Bewegung entsteht ausschließlich aus CSS: Übergänge beim Zeigen und
    scroll-gesteuerte Zeitachsen beim Lesen. Wo der Browser die Zeitachse nicht
    kennt, steht alles sichtbar da — eine Seite, die ohne Animation leer ist,
@@ -501,7 +502,17 @@ section h2 {
   margin: 0 0 0.5rem;
 }
 
-section > .wrap > h2 + p.sub {
+/* Eine Unterseite führt ihre Überschrift als h1 dort, wo die Startseite eine
+   h2 hätte — eine Stufe größer, sonst gleich. Ohne diese Regel bliebe sie auf
+   der Browservorgabe stehen: die gilt nur für `.hero h1` und `main.legal h1`. */
+section h1 {
+  font-size: clamp(1.9rem, 3.2vw, 2.5rem);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 0.5rem;
+}
+
+section > .wrap > :is(h1, h2) + p.sub {
   margin: 0 0 2rem;
   color: var(--muted);
   max-width: 56ch;
@@ -556,11 +567,29 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 
 .pains p b { color: var(--accent); }
 
-/* ── Die drei Wege ─────────────────────────────────────────────────────── */
+/* ── Die vier Wege ─────────────────────────────────────────────────────── */
 
+/* Zwei Karten je Zeile, nicht vier. Mit `minmax(16rem, …)` standen alle vier
+   nebeneinander: 279 px je Karte, davon 236 px für die Zeichnung, die bei
+   ihrem Seitenverhältnis von 320:140 dann 103 px hoch war — ein Achtel einer
+   Karte von rund 730 px. Die Vignette soll den Weg vorführen, bevor der Text
+   ihn erklärt, und dafür war sie zu klein.
+
+   Bei 34rem passen zwei Spalten in die 76rem des Rumpfes und drei nicht:
+   578 px je Karte, davon 533 px Bild — Rahmen und Polster gehen ab, und mit
+   `box-sizing: border-box` zählt der Rahmen zur Kartenbreite —, also
+   **233 px hoch**. Auf schmalen Fenstern fällt es von selbst auf eine Spalte.
+   Gerechnet und noch nicht am Fenster nachgemessen; der offene Punkt steht in
+   `ROADMAP.md`.
+
+   `align-items: start` dazu: ohne das streckt das Raster jede Karte auf die
+   Höhe der längsten ihrer Zeile, und unter der kürzeren stand Leerraum, den
+   der Text der Nachbarin aufgemacht hat. Es ist derselbe Grund, aus dem die
+   Karten im Fenster keine Streckfaktoren haben. */
 .ways {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(34rem, 1fr));
+  align-items: start;
   gap: 1.25rem;
 }
 
@@ -769,6 +798,52 @@ ul.features li::before {
 ul.features li:hover::before { transform: rotate(45deg) scale(1.15); }
 
 ul.features b { display: inline; }
+
+/* ── Sprungliste der Funktionsseite ────────────────────────────────────── */
+
+/* Zwölf Blöcke sind fünf Bildschirme. Die Liste steht zwischen Aufmacher und
+   erstem Block und sagt, was kommt — als nummerierte Liste, weil die Zahl
+   allein schon den Umfang zeigt. `site.js` markiert darin den Block, der
+   gerade gelesen wird; ohne das Skript bleibt es eine Sprungliste. */
+.toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: toc;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.15rem 1.75rem;
+}
+
+.toc li { counter-increment: toc; }
+
+.toc a {
+  display: flex;
+  gap: 0.55rem;
+  align-items: baseline;
+  padding: 0.4rem 0;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+  transition: color var(--step);
+}
+
+.toc a::before {
+  content: counter(toc, decimal-leading-zero);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82em;
+  color: var(--accent);
+}
+
+.toc a:hover { color: var(--fg); }
+
+/* Der Block, der gerade gelesen wird. Nicht allein über Farbe: er trägt den
+   fetteren Schnitt und einen kräftigen Strich darunter (Regel 18). */
+.toc a[aria-current] {
+  color: var(--fg);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
 
 /* ── Ehrlichkeitsblock ─────────────────────────────────────────────────── */
 

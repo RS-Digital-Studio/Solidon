@@ -28,6 +28,7 @@ from app.ui.sketch_editor import (
     SketchEditorDialog,
     SketchField,
     SketchPanel,
+    _constraint_label,
 )
 
 
@@ -1236,3 +1237,401 @@ def test_finishing_a_sketch_looks_like_the_main_action(qt_app: QApplication) -> 
         assert not buttons[tr("Verwerfen")].isDefault()
     finally:
         window.deleteLater()
+
+
+# --- Was ein Neuling braucht: sagen, was fehlt, und Zahlen zulassen -------------
+
+
+def test_a_constraint_that_does_not_fit_says_what_to_select(qt_app: QApplication) -> None:
+    """„D" ohne passende Auswahl tat gar nichts — kein Ton, keine Zeile.
+
+    Ein Weg, der gerade nicht geht, nennt seine Bedingung (Regel 17). Stumm
+    zurückzukehren ist die schlechtere Hälfte von „fehlgeschlagen": es sagt
+    nicht einmal, dass etwas nicht ging.
+    """
+    panel = SketchPanel()
+    said: list[str] = []
+    panel.canvas.statusChanged.connect(said.append)
+
+    panel.request_constraint("distance")
+
+    assert said, "der Versuch bleibt nicht stumm"
+    assert "zwei Punkte" in said[-1], "und er nennt die Auswahl, die fehlt"
+    assert not panel.canvas.sketch.constraints
+
+
+def test_every_constraint_knows_what_it_needs(qt_app: QApplication) -> None:
+    """Zu jeder Bedingung gehört ein Halbsatz — sonst bliebe ein Knopf grau
+    ohne Grund."""
+    from app.ui.sketch_editor import _NEEDS, _needs_phrase
+
+    for kind in _NEEDS:
+        assert _needs_phrase(kind), kind
+
+
+def test_the_constraint_buttons_start_locked(qt_app: QApplication) -> None:
+    """Beim Öffnen ist nichts ausgewählt, also passt keine Bedingung.
+
+    Sie standen alle zehn bedienbar da: ``_refresh_buttons`` hing allein am
+    Auswahlsignal, und das kam vor dem ersten Klick nie.
+    """
+    panel = SketchPanel()
+
+    assert not any(button.isEnabled() for button in panel._constraint_buttons.values())
+    for kind, button in panel._constraint_buttons.items():
+        assert _constraint_label(kind) in button.toolTip()
+        assert "auswählen" in button.toolTip(), "der Hinweis nennt die nötige Auswahl"
+
+
+def test_an_opened_sketch_shows_its_constraints(qt_app: QApplication) -> None:
+    """Eine geöffnete Skizze zeigte rechts eine leere Liste.
+
+    Die Skizze wird im Konstruktor gesetzt, also **vor** den Verbindungen —
+    das Signal lief ins Leere, und die Liste füllte sich erst bei der nächsten
+    Änderung. Wer seine Bedingungen nicht sieht, setzt sie ein zweites Mal.
+    """
+    panel = SketchPanel(sketch_to_text(shapes.rectangle(40.0, 20.0)))
+
+    assert panel.canvas.sketch.constraints, "die Vorlage bringt welche mit"
+    assert panel.constraint_list.count() == len(panel.canvas.sketch.constraints)
+
+
+def test_the_measure_starts_at_what_is_already_there(qt_app: QApplication) -> None:
+    """Das Maßfeld stand leer — wer 30 mm setzen wollte, musste die Zahl
+    kennen, die er gerade selbst gezeichnet hatte."""
+    from app.ui.sketch_editor import measured_expression
+
+    assert measured_expression([(0.0, 0.0), (30.0, 0.0)], (0, 1)) == "30"
+    assert measured_expression([(0.0, 0.0), (0.0, 12.5)], (0, 1)) == "12.5"
+    assert "," not in measured_expression([(0.0, 0.0), (7.25, 0.0)], (0, 1)), (
+        "ein Ausdruck der Grammatik, keine Beschriftung"
+    )
+    assert measured_expression([(0.0, 0.0)], (0, 1)) == "", "ohne zweiten Punkt kein Maß"
+
+
+def test_the_pointer_position_reaches_the_bar(qt_app: QApplication) -> None:
+    """Wo der Zeiger steht, stand nirgends — und ohne das ist ein gezogener
+    Punkt eine ungefähre Lage."""
+    panel = SketchPanel()
+    panel.canvas.set_tool("line")
+    panel.canvas._pointer = (12.0, 8.0)
+
+    panel.canvas.pointerChanged.emit(*panel.canvas.pointer_target())
+
+    shown = panel.coordinates.text()
+    assert "12" in shown and "8" in shown
+    assert "X" in shown and "Y" in shown, "mit den Achsen dieser Ebene"
+
+
+def test_the_shown_position_is_where_the_click_lands(qt_app: QApplication) -> None:
+    """Gefangen wird auf die Rasterweite — eine Anzeige, die 29,75 zeigt, wo
+    30 entsteht, wäre schlechter als keine."""
+    canvas = SketchCanvas()
+    canvas.set_tool("line")
+    canvas.set_snapping(True, 1.0)
+    canvas._pointer = (29.75, 0.4)
+
+    assert canvas.pointer_target() == pytest.approx((30.0, 0.0))
+
+    canvas.set_tool("select")
+    assert canvas.pointer_target() == pytest.approx((29.75, 0.4)), "beim Auswählen ungefangen"
+
+
+def test_a_point_can_be_set_by_number(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ziehen ist der schnelle Weg; wo es auf den Zehntel ankommt, ist Zielen
+    mit der Maus der falsche Griff. Den Weg gab es gar nicht."""
+    from app.ui import sketch_editor
+
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (10.0, 0.0)))
+
+    class Stub:
+        DialogCode = sketch_editor.PointDialog.DialogCode
+
+        def __init__(
+            self, point: tuple[float, float], axes: tuple[str, str], parent: object
+        ) -> None:
+            self.start = point
+
+        def exec(self) -> object:
+            return sketch_editor.PointDialog.DialogCode.Accepted
+
+        def point(self) -> tuple[float, float]:
+            return (25.0, 4.5)
+
+    monkeypatch.setattr(sketch_editor, "PointDialog", Stub)
+    canvas.edit_point(1)
+
+    assert canvas.points()[1] == pytest.approx((25.0, 4.5))
+
+    canvas.undo()
+    assert canvas.points()[1] == pytest.approx((10.0, 0.0)), "und ein Rückgängig nimmt es zurück"
+
+
+def test_the_point_dialog_starts_where_the_point_is(qt_app: QApplication) -> None:
+    """Der Dialog fragt nicht, wohin es gehen soll — er zeigt, wo es ist."""
+    from app.ui.sketch_editor import PointDialog
+
+    dialog = PointDialog((12.0, -3.5), ("X", "Y"))
+
+    assert dialog.point() == pytest.approx((12.0, -3.5))
+
+
+def test_an_untouched_field_gives_the_exact_number_back(qt_app: QApplication) -> None:
+    """Ansehen ist keine Änderung (Regel 6).
+
+    Das Feld zeigt zwei Dezimalstellen, weil die Anzeige das überall tut — der
+    Kern rechnet weiter genau. Ohne diese Trennung verschob der Dialog den
+    Punkt allein dadurch, dass man ihn öffnete und mit OK schloss: Ein
+    projizierter Punkt bei 30,125 mm kam als 30,13 zurück, einer bei 0,001 mm
+    als 0. Gemessen an der Klasse selbst, nicht an einer Attrappe.
+
+    Der Merker hängt am Signal und nicht an einem Zahlenvergleich: Qt rundet
+    beim Vorbelegen 30,125 auf 30,13 und Python auf 30,12, und ein Vergleich
+    gegen die eigene Rundung hielte genau diesen Fall für eine Eingabe.
+    """
+    from app.ui.sketch_editor import PointDialog
+
+    for exact in (30.125, 12.3456, 0.001, -7.0049):
+        dialog = PointDialog((exact, exact), ("X", "Y"))
+
+        assert dialog.point() == (exact, exact), f"{exact} kam gerundet zurück"
+
+
+def test_a_typed_number_wins_and_the_other_field_stays(qt_app: QApplication) -> None:
+    """Wer eine Zahl eintippt, meint sie — und nur sie.
+
+    Der Docstring der Klasse verspricht genau das: „Wer nur die Waagerechte
+    genau braucht, tippt eine Zahl und lässt die andere stehen."
+    """
+    from app.ui.sketch_editor import PointDialog
+
+    dialog = PointDialog((30.125, 0.001), ("X", "Y"))
+    dialog._across.setValue(42.5)
+
+    assert dialog.point() == (42.5, 0.001), "das unangetastete Feld hat sich mitverändert"
+
+
+def test_one_selected_says_how_the_second_comes_along(qt_app: QApplication) -> None:
+    """Dass Strg mehrere wählt, stand nirgends.
+
+    Ein Maß zwischen zwei Punkten braucht beide ausgewählt; wer den zweiten
+    anklickt, verliert den ersten, und der Knopf bleibt grau. Die Zeile nennt
+    die Taste genau dann, wenn sie gebraucht wird.
+    """
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+    said: list[str] = []
+    canvas.statusChanged.connect(said.append)
+
+    canvas._select(("point", (0,)), False)
+    assert "Strg" in said[-1], "beim ersten Klick steht die Taste da"
+
+    canvas._select(("point", (1,)), True)
+    assert "Strg" not in said[-1], "beim zweiten nicht mehr"
+    assert "2" in said[-1]
+
+
+def test_without_a_selection_the_line_belongs_to_the_degrees_of_freedom(
+    qt_app: QApplication,
+) -> None:
+    """Der Hinweis verdrängt die Freiheitsgrade nur, solange er etwas sagt."""
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+
+    assert not canvas.selection_hint()
+    assert "Freiheitsgrade" in canvas.status_text()
+
+
+# --- Punkte setzen und danach greifen (der Weg, an dem es scheiterte) ----------
+
+
+def test_a_click_on_a_point_grabs_it(qt_app: QApplication) -> None:
+    """Wer drei Punkte gesetzt hat und den mittleren anklickt, um ihn zu
+    ziehen, bekam einen vierten genau darauf.
+
+    Deckungsgleich, unsichtbar, mit Bedingung — und ausgewählt war nichts. Man
+    klickt, sieht nichts, klickt wieder und stapelt. Ein Klick auf einen Punkt
+    greift ihn jetzt, gleich welches der beiden Werkzeuge läuft.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("point")
+    for x, y in ((0.0, 0.0), (20.0, 0.0), (20.0, 15.0)):
+        canvas.place(canvas._to_screen(x, y))
+
+    canvas.place(canvas._to_screen(20.0, 0.0))
+
+    assert len(canvas.sketch.elements) == 3, "kein vierter Punkt"
+    assert not canvas.sketch.constraints, "und keine Deckung auf sich selbst"
+    assert canvas.selection == [("point", (1,))], "der getroffene Punkt ist ausgewählt"
+    assert canvas._dragging == 1, "und er hängt schon am Zeiger"
+
+
+def test_ctrl_takes_the_second_point_along_with_the_point_tool(qt_app: QApplication) -> None:
+    """Strg gilt auf demselben Weg, den die Maus nimmt.
+
+    Der Griff stand einmal im Mausereignis und einmal in ``place``; das erste
+    reichte Strg weiter, das zweite nicht — und weil das Ereignis zuerst kam,
+    prüften alle Greif-Tests den Weg, den die Maus nie nahm. Jetzt greift
+    ``place`` allein, und dieser Test hält fest, dass die Taste dort ankommt:
+    ein Maß zwischen zwei Punkten braucht beide ausgewählt.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("point")
+    canvas.place(canvas._to_screen(0.0, 0.0))
+    canvas.place(canvas._to_screen(20.0, 0.0))
+
+    canvas.place(canvas._to_screen(0.0, 0.0))
+    canvas.place(canvas._to_screen(20.0, 0.0), extend=True)
+
+    assert canvas.selection == [("point", (0,)), ("point", (1,))], "Strg nimmt dazu"
+    assert len(canvas.sketch.elements) == 2, "und setzt dabei keinen neuen Punkt"
+
+
+def test_the_snap_mark_gives_way_where_a_point_lights_up(qt_app: QApplication) -> None:
+    """Zwei Zeichen an zwei Stellen behaupten zwei Ziele.
+
+    Beim Punktwerkzeug greift ein Klick den vorhandenen Punkt. Stand die
+    Fangmarke daneben auf dem Rasterpunkt, zeigte sie eine Stelle, die der
+    Klick nicht nimmt — also weicht sie, wo ein Punkt aufleuchtet.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("point")
+    canvas.place(canvas._to_screen(20.0, 0.0))
+
+    # Neben dem Punkt: Marke ja, kein Aufleuchten.
+    canvas._pointer = (40.0, 30.0)
+    neben = canvas._hit_point(canvas._to_screen(40.0, 30.0))
+    canvas._note_hover(neben)
+    canvas._note_snap_mark(over_point=neben is not None)
+    assert neben is None, "vierzig Millimeter daneben trifft keinen Punkt"
+    assert not canvas.highlighted
+    assert canvas._snap_mark is not None, "ohne Treffer gehört die Marke ins Bild"
+
+    # Auf dem Punkt: Aufleuchten ja, keine Marke.
+    canvas._pointer = (20.0, 0.0)
+    darauf = canvas._hit_point(canvas._to_screen(20.0, 0.0))
+    canvas._note_hover(darauf)
+    canvas._note_snap_mark(over_point=darauf is not None)
+    assert darauf == 0, "der Klick trifft den gesetzten Punkt"
+    assert canvas.highlighted, "der getroffene Punkt leuchtet auch beim Punktwerkzeug"
+    assert canvas._snap_mark is None, "und die Fangmarke weicht ihm"
+
+
+def test_the_grabbed_point_moves_and_comes_back(qt_app: QApplication) -> None:
+    """Greifen und ziehen ist ein Schritt — und einer, den ein Undo nimmt."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("point")
+    canvas.place(canvas._to_screen(20.0, 0.0))
+
+    canvas.place(canvas._to_screen(20.0, 0.0))
+    canvas.move_point(0, 26.0, 4.0)
+    assert canvas.points()[0] == pytest.approx((26.0, 4.0))
+
+    canvas.undo()
+    assert canvas.points()[0] == pytest.approx((20.0, 0.0))
+
+
+def test_drawing_goes_on_next_to_the_grabbed_point(qt_app: QApplication) -> None:
+    """Das Werkzeug bleibt, was es ist: daneben entsteht weiter ein Punkt."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("point")
+    canvas.place(canvas._to_screen(20.0, 0.0))
+    canvas.place(canvas._to_screen(20.0, 0.0))
+
+    canvas.place(canvas._to_screen(40.0, 30.0))
+
+    assert len(canvas.sketch.elements) == 2
+    assert canvas.points()[1] == pytest.approx((40.0, 30.0))
+
+
+def test_the_line_says_what_is_selected_with_the_point_tool(qt_app: QApplication) -> None:
+    """Sonst stünde dort weiter „jeder Klick setzt einen", während der eben
+    gegriffene Punkt dick im Bild liegt."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("point")
+    canvas.place(canvas._to_screen(20.0, 0.0))
+    assert "jeder Klick" in canvas.status_text()
+
+    canvas.place(canvas._to_screen(20.0, 0.0))
+
+    assert "ausgewählt" in canvas.status_text()
+
+
+def test_the_snap_still_joins_a_line_to_a_point(qt_app: QApplication) -> None:
+    """Nur das Punktwerkzeug lässt es bleiben — bei Linie, Kreis und Bogen ist
+    derselbe Fang die Verbindung, für die er da ist."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("point")
+    canvas.place(canvas._to_screen(0.0, 0.0))
+
+    canvas.set_tool("line")
+    canvas.place(canvas._to_screen(0.05, 0.0))
+    canvas.place(canvas._to_screen(30.0, 0.0))
+
+    assert [entry.kind for entry in canvas.sketch.constraints] == ["coincident"]
+
+
+def test_the_pointer_says_whether_it_draws_or_selects(qt_app: QApplication) -> None:
+    """Auf der Zeichenfläche stand der Pfeil, gleich ob ein Werkzeug lief.
+
+    Ein Zustand, den man nur am gedrückten Knopf sieht, ist bei Symbolgröße
+    keiner, den jemand bemerkt.
+    """
+    from PySide6.QtCore import Qt as QtCore
+
+    canvas = SketchCanvas()
+
+    canvas.set_tool("point")
+    assert canvas.cursor().shape() == QtCore.CursorShape.CrossCursor
+    canvas.set_tool("line")
+    assert canvas.cursor().shape() == QtCore.CursorShape.CrossCursor
+
+    canvas.set_tool("select")
+    assert canvas.cursor().shape() != QtCore.CursorShape.CrossCursor
+
+
+def test_the_point_under_the_pointer_lights_up(qt_app: QApplication) -> None:
+    """Ohne das ist nicht zu sehen, ob ein Klick den Punkt trifft oder
+    danebengeht.
+
+    Gesucht wird im Mausereignis, einmal je Bewegung — die Fangmarke braucht
+    dasselbe Ergebnis. Hier steht deshalb dieselbe Kette wie dort: erst
+    ``_hit_point``, dann der Merker.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.add_element("point", ((20.0, 0.0),))
+    canvas.set_tool("select")
+
+    assert canvas._note_hover(canvas._hit_point(canvas._to_screen(20.0, 0.0)))
+    assert canvas.highlighted == frozenset({0})
+
+    assert canvas._note_hover(canvas._hit_point(canvas._to_screen(60.0, 60.0)))
+    assert not canvas.highlighted, "daneben leuchtet nichts"
+
+
+def test_nothing_lights_up_while_drawing(qt_app: QApplication) -> None:
+    """Beim Zeichnen leuchtet die Fangmarke — zwei Zeichen an derselben Stelle
+    sind eines zu viel.
+
+    Das Werkzeug entscheidet, ob überhaupt gesucht wird: bei ``line`` sucht das
+    Mausereignis keinen Treffer, also kommt hier ``None`` an.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.add_element("point", ((20.0, 0.0),))
+    canvas.set_tool("line")
+
+    canvas._note_hover(None)
+
+    assert not canvas.highlighted

@@ -57,7 +57,7 @@
       Solidon<span>3D</span>
     </a>
     <nav class="lang">
-      <a class="hide-small" href="#funktionen">Funktionen</a>
+      <a class="hide-small" href="/funktionen.html">Funktionen</a>
       <a class="hide-tiny" href="#preis">Preis</a>
       <a href="/handbuch.html">Handbuch</a>
       <a href="/en/">English</a>
@@ -84,12 +84,7 @@
           <p>Vollständig und ohne Schlüssel: keine Wasserzeichen, keine
           Exportsperre, keine gesperrte Funktion. <b>Sie läuft bis zum
           30. Oktober 2026</b> und lässt sich danach nicht mehr starten —
-          Ihre Projektdateien bleiben davon unberührt.</p>
-          <p>Für <b>Windows, macOS und Linux</b> — auf dem Mac für Apple
-          Silicon und Intel getrennt. Herunterladen von dieser Seite,
-          installieren, loslegen. Die Mac-Fassung ist noch nicht bei Apple
-          signiert: Beim ersten Start einmal mit der rechten Maustaste auf das
-          Programm und „Öffnen" wählen, danach startet es wie jedes andere.</p>
+          deine Projektdateien bleiben davon unberührt.</p>
           <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20Bescheid%20geben%2C%20wenn%20die%20Demo%20da%20ist">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
@@ -112,6 +107,10 @@
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Deine Dateien bleiben deine
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Windows, macOS, Linux
             </li>
           </ul>
         </div>
@@ -176,8 +175,8 @@
 
   <section id="wege">
     <div class="wrap">
-      <h2>Drei Wege zum Teil</h2>
-      <p class="sub">Alle drei führen in dieselbe Szene, denselben Verlauf und
+      <h2>Vier Wege zum Teil</h2>
+      <p class="sub">Alle vier führen in dieselbe Szene, denselben Verlauf und
       denselben Prüfbericht. Du entscheidest je Teil, nicht je Programm.</p>
       <div class="ways">
         <div class="way">
@@ -252,10 +251,6 @@
           lokal laufendes ComfyUI mit Erzeuger-Modell und eine kräftige
           Grafikkarte; ohne beides bleiben Weg 1 und 2 vollständig
           nutzbar.</p>
-          <p><b>Mit Meshy, Tripo oder Rodin erzeugt?</b> Lade das GLB herunter
-          und zieh es hierher. Was dort entsteht, ist eine Oberfläche —
-          druckbar wird sie hier: Reparatur, Wandstärken, Bohrungen mit
-          Passung, Prüfbericht vor dem Slicen.</p>
         </div>
         <div class="way">
           <svg class="figure art" viewBox="0 0 320 140" role="img"
@@ -278,7 +273,7 @@
           zusammensetzen, weich verschmelzen, gleichmäßig vernetzen — dann mit
           sechs Pinseln ausformen. Der ganze Vorgang bleibt <b>ein</b> Schritt
           im Verlauf und damit änderbar.</p>
-          <p><b>Was kein Sculpting-Programm kann:</b> Während Sie formen, läuft
+          <p><b>Was kein Sculpting-Programm kann:</b> Während du formst, läuft
           die Wandstärke mit. Zu dünne Stellen stehen als Zahl in der Leiste —
           nicht erst im Slicer, wenn die Form fertig ist.</p>
         </div>
@@ -289,427 +284,42 @@
   <section id="funktionen" class="tint">
     <div class="wrap">
       <h2>Was den Unterschied macht</h2>
-      <p class="sub">Alles hier ist ein Bildschirmfoto aus der laufenden
-      Anwendung oder zeigt genau, was sie tut.</p>
-
-      <div class="showcase">
-        <div>
-          <span class="kicker">KI-Agent</span>
-          <h3>Ein Satz im Chat, ein Vorschlag, ein Undo</h3>
-          <p>Der Agent bedient dieselben Operationen wie die Menüs — es gibt
-          keine Abkürzung an der Geometrie vorbei. Jeder Vorschlag zeigt,
-          was er tun wird, bevor er es tut, und wird als Ganzes übernommen:
-          genau eine Transaktion, die ein einziges Undo vollständig
-          zurücknimmt.</p>
-          <p class="note">Die Geometrie rechnet Code, nie das Sprachmodell.
-          <b>Jedes Maß im Vorschlag ist exakt — nichts ist „ungefähr
-          generiert“.</b></p>
-          <p class="note">Und das ist gemessen, nicht versprochen: eine Suite
-          aus <b>39 Referenzanfragen</b> läuft gegen jede Änderung am Agenten.
-          Stand 08.08.2026, mit einem lokalen 14-Milliarden-Modell ganz ohne
-          Cloud: 28 von 39 gut beantwortet, 98 % der Werkzeugaufrufe im
-          ersten Versuch gültig — und jede mehrdeutige Anfrage endete in
-          einer Rückfrage statt in einer Vermutung.</p>
-        </div>
-        <figure class="shot">
-          <svg class="figure" viewBox="0 0 560 290" role="img"
-               aria-label="Eine Zeichnung: in ein Chatfeld schreibt sich „Senke die vier Schrauben — M4, bündig.“; der Agent antwortet mit einem Vorschlag aus drei Operationen, im Querschnitt daneben weitet sich die Bohrung auf 4,5 Millimeter und bekommt einen 90-Grad-Senkkegel, darunter steht: übernommen — eine Transaktion, ein Undo nimmt alles zurück.">
-            <text class="ink" x="24" y="30" font-weight="600">Ein Satz — drei Operationen</text>
-
-            <text class="dim" x="24" y="64">Du</text>
-            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
-            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Senke die vier Schrauben — M4, bündig.</text>
-
-            <g class="anim fig-chat-card">
-              <text class="dim" x="24" y="110">Agent</text>
-              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
-              <text class="value" x="90" y="112">Vorschlag — 3 Operationen</text>
-            </g>
-            <g class="anim fig-chat-op-1">
-              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="136" font-size="12">Bohrung anpassen: ø 4,2 → 4,5 mm</text>
-            </g>
-            <g class="anim fig-chat-op-2">
-              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="160" font-size="12">Senkung 90°, ø 8,6 mm — bündig</text>
-            </g>
-            <g class="anim fig-chat-op-3">
-              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
-              <text class="ink" x="112" y="184" font-size="12">Auf alle vier Bohrungen übertragen</text>
-            </g>
-
-            <text class="dim" x="380" y="64">Querschnitt</text>
-            <rect class="body" x="380" y="96" width="150" height="53"/>
-            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
-            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
-            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
-            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4,2 mm</text>
-            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4,5 mm</text>
-
-            <g class="anim fig-chat-done">
-              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
-              <text class="ink" x="48" y="258" font-size="12">Übernommen — eine Transaktion. Ein Undo nimmt alles zurück.</text>
-            </g>
-          </svg>
-          <figcaption>Der Vorschlag ändert nichts, bis er übernommen ist — und dann als Ganzes.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase flip">
-        <div>
-          <span class="kicker">Skizzen mit Zwängen</span>
-          <h3>Zeichnen, bemaßen — und jedes Maß darf ein Parameter sein</h3>
-          <p>Linie, Kreis, Bogen, Spline und fertige Umrisse wie Langloch,
-          Lochkreis oder Lochraster. Zehn Bedingungen halten die Zeichnung
-          zusammen — waagerecht, rechtwinklig, tangential, symmetrisch,
-          Abstand —, und unten steht jederzeit, was noch frei ist. Was aus dem
-          Umriss wird, entscheidest du erst danach: extrudieren, als Tasche
-          einschneiden, drehen, entlang eines Bogens führen oder zwischen zwei
-          Umrissen aufspannen.</p>
-          <p class="note">Der Umriss geht als exakte Kurve in den B-Rep-Kern.
-          <b>Ein gezeichneter Kreis wird ein runder Zylinder, kein Vieleck mit
-          vielen Ecken.</b></p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <img src="handbuch/de/sketch-mode.png" width="980" height="620" loading="lazy" decoding="async"
-                 alt="Der Skizzenmodus: die Zeichenwerkzeuge als Symbolzeile, die Ebenenwahl, die Reihe der Bedingungsknöpfe und ein bemaßtes Rechteck mit einem Kreis darin; rechts die dreizehn Bedingungen der Zeichnung einzeln aufgelistet">
-          </div>
-          <figcaption>Der Skizzenmodus — dieselbe Fläche, die sonst das Modell zeigt.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase">
-        <div>
-          <span class="kicker">Prüfbericht</span>
-          <h3>Du erfährst vor dem Druck, was schiefgehen wird</h3>
-          <p>Jede geöffnete Datei bekommt einen Bericht: offene Stellen,
-          falsch orientierte Dreiecke, Wände unter zwei Extrusionsbahnen,
-          fehlende Einheiten. Sortiert nach Fehler, Warnung und Hinweis —
-          und jeder Eintrag springt im Modell an die Stelle, die er
-          meint.</p>
-          <p class="note">Jeder Befund trägt einen Handlungsvorschlag.
-          <b>Ein Fehler endet hier nie mit „fehlgeschlagen“.</b></p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <img src="handbuch/de/report.png" width="460" height="300" loading="lazy" decoding="async"
-                 alt="Der Prüfbericht: null Fehler, zwei Warnungen und zwei Hinweise, darunter „Das Modell ist an drei Stellen offen“ und „Eine Wand ist dünner als zwei Extrusionsbahnen“">
-          </div>
-          <figcaption>Der Prüfbericht einer eingelesenen Fremddatei.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase flip">
-        <div>
-          <span class="kicker">Parametrisch</span>
-          <h3>Eine Zahl ändern — nicht das Modell neu bauen</h3>
-          <p>Der Verlauf ist non-destruktiv: jeder Schritt bleibt änderbar,
-          jede Zahl nachträglich drehbar. Wandstärke von 2,40 auf 3,60?
-          Aushöhlen, Deckel, Bohrungen und Passungen rechnen sich neu — in
-          derselben Reihenfolge, mit demselben Ergebnis.</p>
-          <p class="note">Benannte Projektparameter statt Streuzahlen:
-          <b>eine Änderung an einer Stelle, nicht an sieben.</b></p>
-        </div>
-        <figure class="shot">
-          <svg class="figure" viewBox="0 0 560 250" role="img"
-               aria-label="Eine Zeichnung: das Feld „Wandstärke“ wechselt von 2,40 auf 3,60 Millimeter, der Querschnitt der Dose bekommt dickere Wände und einen dickeren Boden, der Verlauf darunter bleibt unverändert.">
-            <text class="ink" x="24" y="30" font-weight="600">An der Zahl drehen</text>
-
-            <rect class="field" x="24" y="52" width="216" height="38" rx="4"/>
-            <text class="dim" x="38" y="76">Wandstärke</text>
-            <text class="value anim fig-value-thin" x="222" y="76" text-anchor="end">2,40 mm</text>
-            <text class="value anim fig-value-thick" x="222" y="76" text-anchor="end">3,60 mm</text>
-
-            <text class="dim" x="24" y="122">Verlauf — unverändert</text>
-            <g class="rule" stroke-linecap="round">
-              <line x1="26" y1="140" x2="26" y2="212"/>
-            </g>
-            <circle class="hot" cx="26" cy="146" r="4"/>
-            <circle class="hot" cx="26" cy="176" r="4"/>
-            <circle class="hot" cx="26" cy="206" r="4"/>
-            <text class="ink" x="42" y="151" font-size="12">Körper</text>
-            <text class="ink" x="42" y="181" font-size="12">Aushöhlen</text>
-            <text class="ink" x="42" y="211" font-size="12">Deckel erzeugen</text>
-
-            <text class="dim" x="300" y="42">Querschnitt</text>
-            <rect class="body" x="300" y="60" width="230" height="140"/>
-            <rect class="anim fig-cavity" x="316" y="60" width="198" height="124" fill="#16181c"/>
-            <rect class="hot anim fig-wall-bar" x="300" y="212" width="16" height="5" rx="2"/>
-            <text class="dim" x="300" y="238">Wandstärke</text>
-          </svg>
-          <figcaption>Wandstärke gedreht — der Verlauf bleibt derselbe.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase">
-        <div>
-          <span class="kicker">Bausteine</span>
-          <h3>Mutternfalle in vier Klicks statt vier halben Stunden</h3>
-          <p>Sechzehn geprüfte Bausteine — Schraubenloch mit Senkung,
-          Mutternfalle, Heat-Set-Einpressbuchse, Gewinde, Passstift,
-          Filmscharnier, Schnappverbindung, Magnettasche. Die Maße kommen
-          aus einer Normteiltabelle mit 40 Einträgen, nicht aus dem
-          Bauchgefühl.</p>
-          <p class="note">Jeder Baustein ist über seinen ganzen
-          Parameterbereich getestet: <b>wasserdicht, Mindestwandstärke,
-          keine Selbstdurchdringung.</b></p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <img src="handbuch/de/catalog.png" width="1180" height="760" loading="lazy" decoding="async"
-                 alt="Der Bausteinkatalog mit den Gruppen Verbindungen, Einlegeteile und Mechanik: Mutternfalle, Gewinde, Schraubenloch mit Senkung, Heat-Set-Einpressbuchse, Passstift, Rastnase, Filmscharnier und Schnappverbindung">
-          </div>
-          <figcaption>Der Katalog — jedes Vorschaubild ist gerendert, nicht gezeichnet.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase">
-        <div>
-          <span class="kicker">Oberflächen</span>
-          <h3>Acht Muster, und alle davon druckbar geprüft</h3>
-          <p>Rippe, Welle, Rändel gerade und gekreuzt, Wabe, Noppen, Voronoi
-          und Rauschen — als <b>echte Geometrie</b> und als exaktes Gitter,
-          nicht als abgetastetes Höhenfeld. Sonst druckt ein Rändel gerundeten
-          Brei statt scharfer Rauten.</p>
-          <p class="note">Vor dem Rechnen die Frage, ob das Muster auf dieser
-          Maschine überhaupt entsteht: <b>Stege schmaler als die Düse und
-          Prägungen flacher als eine Schicht werden abgewiesen</b>, nicht
-          gerechnet.</p>
-        </div>
-        <figure class="shot">
-          <picture>
-            <source srcset="handbuch/de/textures-dark.svg" media="(prefers-color-scheme: dark)">
-            <img class="figure" src="handbuch/de/textures.svg" loading="lazy" decoding="async"
-                 alt="Acht Musterkacheln in zwei Reihen: Rippe als parallele Streifen, Welle als wellige Streifen, Rändel gerade und gekreuzt als schräge Streifen beziehungsweise Rauten, Wabe als Sechsecke, Noppen als Punktraster, Voronoi als unregelmäßige Zellen und Rauschen als verstreute Flecken.">
-          </picture>
-          <figcaption>Dieselben Umrisse, die danach gedruckt werden — die Vorschau ist gerechnet, nicht gemalt.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase flip">
-        <div>
-          <span class="kicker">Schichtanalyse</span>
-          <h3>Sehen, was der Drucker sehen wird</h3>
-          <p>Solidon3D schneidet das Modell in Schichten und misst, was
-          daraus folgt: Überhangwinkel, freischwebende Inseln, Wände unter
-          zwei Bahnen, Brückenweiten und das Stützvolumen. Die
-          Orientierungssuche schlägt die Lage vor, die am wenigsten davon
-          erzeugt.</p>
-          <p class="note">Kein eigener Slicer — und keine gemischten Zahlen:
-          <b>was aus der Analyse stammt und was aus dem G-Code, steht
-          dabei.</b></p>
-        </div>
-        <figure class="shot">
-          <svg class="figure" viewBox="0 0 560 250" role="img"
-               aria-label="Eine Zeichnung: eine Analyselinie fährt von der Bauplatte durch ein Teil nach oben; nacheinander erscheinen drei Befunde — Überhang 78 Grad, freischwebende Insel und eine Wand unter zwei Bahnen.">
-            <text class="ink" x="24" y="30" font-weight="600">Schichtanalyse</text>
-
-            <rect class="body" x="60" y="80" width="48" height="120"/>
-            <rect class="body" x="108" y="80" width="120" height="28"/>
-            <rect class="body" x="252" y="140" width="48" height="20"/>
-            <rect class="body" x="225" y="180" width="6" height="20"/>
-            <line class="rule" x1="40" y1="200" x2="320" y2="200" stroke-width="2.5" stroke-linecap="round"/>
-            <text class="dim" x="40" y="220">Bauplatte</text>
-
-            <g class="anim fig-scan">
-              <line class="hot-stroke" x1="44" y1="196" x2="316" y2="196" stroke-dasharray="5 4"/>
-              <path class="hot" d="M44 196 l-8 -5 v10 z"/>
-            </g>
-
-            <g class="anim fig-find-1">
-              <path class="warn" d="M368 88 l9 16 h-18 z"/>
-              <text class="ink" x="386" y="103" font-size="12">Überhang 90°</text>
-            </g>
-            <g class="anim fig-find-2">
-              <path class="warn" d="M368 128 l9 16 h-18 z"/>
-              <text class="ink" x="386" y="143" font-size="12">Insel, ohne Anbindung</text>
-            </g>
-            <g class="anim fig-find-3">
-              <path class="warn" d="M368 168 l9 16 h-18 z"/>
-              <text class="ink" x="386" y="183" font-size="12">Wand &lt; 2 Bahnen</text>
-            </g>
-          </svg>
-          <figcaption>Drei Befunde, die der Slicer erst nach dem Slicen kennt.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase">
-        <div>
-          <span class="kicker">Auto-Split</span>
-          <h3>Zu groß fürs Bett ist kein Grund mehr, es zu lassen</h3>
-          <p>Solidon3D sucht die Schnittebene, teilt das Teil und setzt
-          Passstifte samt Bohrungen. Das Spiel dazwischen kommt aus dem
-          Materialprofil — kein Nachfeilen, kein zweiter Versuch. Die
-          Passung bleibt als Beziehung im Projekt und wird bei jeder
-          späteren Änderung mitgeprüft.</p>
-          <p class="note">Der Bauraum kommt aus dem Druckerprofil.
-          <b>Sechzehn sind ab Werk hinterlegt</b>, eigene lassen sich
-          anlegen.</p>
-        </div>
-        <figure class="shot">
-          <svg class="figure" viewBox="0 0 560 250" role="img"
-               aria-label="Eine Zeichnung: ein 320 Millimeter breites Teil ragt über einen Bauraum von 220 Millimetern hinaus; es teilt sich in zwei Hälften von je 160 Millimetern, zwischen denen drei Passstifte und ihre Bohrungen sichtbar werden.">
-            <text class="ink" x="24" y="30" font-weight="600">Zu breit fürs Bett</text>
-
-            <g class="anim fig-verdict-no">
-              <rect x="170" y="66" width="220" height="118" rx="4" fill="none"
-                    stroke="#575e69" stroke-width="1.4" stroke-dasharray="6 5"/>
-              <text class="dim" x="280" y="58" text-anchor="middle">Bauraum 220 mm</text>
-            </g>
-
-            <g class="anim fig-half-left">
-              <rect class="body" x="120" y="100" width="158" height="52" rx="2"/>
-              <g class="anim fig-pins">
-                <rect class="hot" x="276" y="108" width="30" height="8" rx="2"/>
-                <rect class="hot" x="276" y="122" width="30" height="8" rx="2"/>
-                <rect class="hot" x="276" y="136" width="30" height="8" rx="2"/>
-                <text class="dim" x="199" y="172" text-anchor="middle">160 mm</text>
-              </g>
-            </g>
-            <g class="anim fig-half-right">
-              <rect class="body" x="282" y="100" width="158" height="52" rx="2"/>
-              <g class="anim fig-pins">
-                <rect x="284" y="108" width="30" height="8" rx="2" fill="#16181c"/>
-                <rect x="284" y="122" width="30" height="8" rx="2" fill="#16181c"/>
-                <rect x="284" y="136" width="30" height="8" rx="2" fill="#16181c"/>
-                <text class="dim" x="361" y="172" text-anchor="middle">160 mm</text>
-              </g>
-            </g>
-
-            <g class="anim fig-verdict-no">
-              <path class="warn" d="M186 200 l9 16 h-18 z"/>
-              <text class="ink" x="204" y="215" font-size="12">320 mm &gt; 220 mm — passt nicht</text>
-            </g>
-            <g class="anim fig-verdict-yes">
-              <path class="hot" d="m178 209 5 6 10 -13 3 3 -13 16 -8 -9z"/>
-              <text class="ink" x="204" y="215" font-size="12">2 × 160 mm — passt, verstiftet</text>
-            </g>
-          </svg>
-          <figcaption>Geteilt und verstiftet — das Spiel kommt aus dem Materialprofil.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase flip">
-        <div>
-          <span class="kicker">Jede Zahl eine Formel</span>
-          <h3>Dialoge, die mitrechnen</h3>
-          <p>Hinter jedem Zahlenfeld steht ein <b>fx</b>: statt 4,20 darf dort
-          <code>schraube_m4 + spiel</code> stehen. Toleranzen holen sich ihren
-          Wert aus dem Materialprofil, statt als Konstante im Modell zu
-          verschwinden. Vorne stehen die drei Zahlen, die man braucht — der
-          Rest liegt unter „Weitere Einstellungen“.</p>
-          <p class="note">83 Operationen, alle nach demselben Muster:
-          <b>Menü, Kontextmenü, Kommandozeile und Chat sehen dieselbe
-          Deklaration.</b></p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <img class="crop-top" src="handbuch/de/op-dialog.png" width="520" height="460" loading="lazy" decoding="async"
-                 alt="Der Dialog „Bohrung setzen“ mit Durchmesser, Position X, Y und Z, Achse, einem fx-Knopf hinter jedem Zahlenfeld und dem zugeklappten Bereich „Weitere Einstellungen“">
-          </div>
-          <figcaption>Der Dialog einer Operation — vorne drei Zahlen, hinten alles andere.</figcaption>
-        </figure>
-      </div>
-
-      <div class="showcase">
-        <div>
-          <span class="kicker">Erster Start</span>
-          <h3>Du fängst nicht bei null an</h3>
-          <p>Acht fertige Beispielprojekte liegen bei — eines je Weg, dazu
-          Bausteine, zweifarbige Beschriftung, Kalibrierung,
-          Druckvorbereitung und eine Dose mit Deckel, an der alles
-          zusammenkommt. Jedes ist ein echtes Projekt mit Verlauf, nicht ein
-          Bild in einem Handbuch.</p>
-          <p class="note">Und ein Handbuch, das die ersten fünfzehn Minuten
-          erklärt — <b>in derselben Sprache wie die Oberfläche.</b></p>
-        </div>
-        <figure class="shot">
-          <div class="stage">
-            <img src="handbuch/de/start-screen.png" width="1180" height="760" loading="lazy" decoding="async"
-                 alt="Der Startbildschirm: ein Ablagefeld für Modelle und Projekte, die Knöpfe „Neues Projekt“ und „Projekt öffnen“, darunter acht Beispielprojekte mit Vorschaubild und Beschreibung">
-          </div>
-          <figcaption>Der Startbildschirm mit den acht Beispielen.</figcaption>
-        </figure>
-      </div>
-    </div>
-  </section>
-
-  <section id="drin">
-    <div class="wrap">
-      <h2>Was sonst noch drinsteckt</h2>
+      <p class="sub">Sechs von zwölf Funktionen in je einem Satz —
+      <a href="/funktionen.html">alle mit Bildern auf der Funktionsseite</a>.</p>
       <ul class="features">
-        <li><b>Exakte Kanten.</b> B-Rep-Kern für Fasen, Verrundungen und
-        rundreisefähiges STEP.</li>
-        <li><b>Zwei Farben ohne zweites Programm.</b> Beschriftung erhaben,
-        vertieft oder als Farbwechsel in einer 3MF-Datei.</li>
-        <li><b>Übergabe an deinen Slicer.</b> Direkt, mit den passenden
-        Einstellungen — und sein G-Code kommt zur Gegenprobe zurück.</li>
-        <li><b>Kalibrieren statt raten.</b> Toleranzleiter, Wandstärkenleiter
-        und Überhangfächer auf einer Platte; die gemessenen Werte gehen ins
-        Materialprofil.</li>
-        <li><b>Reparaturkette für fremde Dateien.</b> Löcher schließen,
-        Normalen richten, entartete Dreiecke und Splitter entfernen — bevor
-        irgendetwas gerechnet wird.</li>
-        <li><b>Messen, Schneiden, Explosion.</b> Werkzeuge in der Ansicht,
-        ohne die Geometrie anzufassen.</li>
-        <li><b>KI lokal oder mit eigenem Schlüssel.</b> Ollama auf dem
-        eigenen Rechner oder ein API-Schlüssel — und ohne beides läuft
-        alles außer dem Chat.</li>
-        <li><b>Fernsteuerbar über MCP — auch aus Claude Code.</b> Ein
-        zweites Programm ruft dieselben Operationen auf wie die Menüs:
-        standardmäßig aus, nur auf dem eigenen Rechner, und jeder
-        Fernaufruf ist eine Transaktion, die ein Undo zurücknimmt.</li>
+        <li><b>Ein KI-Agent, der nichts rät.</b> Ein Satz im Chat wird ein
+        Vorschlag, den ein einziges Undo vollständig zurücknimmt. Die Geometrie
+        rechnet Code, nie das Sprachmodell — und das ist gemessen: eine Suite
+        aus <b>39 Referenzanfragen</b> läuft gegen jede Änderung am Agenten.</li>
+        <li><b>Prüfbericht vor dem Druck.</b> Offene Stellen, falsche Normalen,
+        Wände unter zwei Bahnen — jeder Befund springt an die Stelle im Modell
+        und trägt einen Handlungsvorschlag.</li>
+        <li><b>Eine Zahl ändern statt neu bauen.</b> Der Verlauf ist
+        non-destruktiv: Wandstärke von 2,40 auf 3,60, und Aushöhlen, Deckel,
+        Bohrungen und Passungen rechnen sich neu.</li>
+        <li><b>Sechzehn geprüfte Bausteine.</b> Mutternfalle, Gewinde,
+        Heat-Set-Buchse, Filmscharnier — die Maße kommen aus einer
+        Normteiltabelle, nicht aus dem Bauchgefühl.</li>
+        <li><b>Schichtanalyse ohne Slicer.</b> Überhänge, Inseln, Brückenweiten
+        und Stützvolumen; die Orientierungssuche schlägt die Lage vor, die am
+        wenigsten davon erzeugt.</li>
+        <li><b>Skizzen mit Zwängen.</b> Zehn Bedingungen halten die Zeichnung
+        zusammen, und der Umriss geht als exakte Kurve in den B-Rep-Kern — ein
+        Kreis wird ein Zylinder, kein Vieleck.</li>
       </ul>
+      <a class="btn ghost" href="/funktionen.html">Alle zwölf Funktionen ansehen</a>
     </div>
   </section>
 
-  <section id="generiert" class="tint">
+  <section id="generiert">
     <div class="wrap">
       <h2>Wenn das Modell aus einer KI kommt</h2>
-      <p class="sub">Meshy, Rodin, Tripo, Hunyuan — sie machen aus einem Satz
-      eine Form. Was sie nicht machen, ist ein Teil, das passt. Genau dort
-      fängt Solidon3D an.</p>
-
-      <ol class="chain">
-        <li><b>GLB oder STL hereinziehen.</b> Auch texturiert — die Farben
-        überleben den Import.</li>
-        <li><b>Reparaturkette und Prüfbericht.</b> Löcher, umgedrehte
-        Normalen, entartete Dreiecke; danach steht da, was beim Drucken
-        schiefgeht.</li>
-        <li><b>Farben auf deine Filamente umrechnen.</b> Auf die Zahl, die
-        wirklich in der Maschine steckt — nicht auf eine Höchstzahl.</li>
-        <li><b>Teilen, verstiften, anordnen.</b> Passstifte mit Spiel aus dem
-        Materialprofil, damit die Hälften wieder zusammenfinden.</li>
-        <li><b>3MF mit Materialgruppen an den Slicer.</b></li>
-      </ol>
-
-      <h3>Was eine Druckbarkeitsprüfung prüft</h3>
-      <p class="sub">Links, was die Prüfung eines Generators beantwortet.
-      Rechts, was vor dem Druck sonst noch schiefgehen kann. Stand
-      12.08.2026, nach der öffentlichen Dokumentation von Meshy.</p>
-      <table class="compare">
-        <thead>
-          <tr><th>Geprüft wird</th><th>Generator</th><th>Solidon3D</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Wasserdicht, Löcher, offene Kanten</td><td><span class="yes">✓ ja</span></td><td><span class="yes">✓ ja</span></td></tr>
-          <tr><td>Nicht-mannigfaltige Kanten, entartete Flächen</td><td><span class="yes">✓ ja</span></td><td><span class="yes">✓ ja</span></td></tr>
-          <tr><td>Volumen</td><td><span class="yes">✓ ja</span></td><td><span class="yes">✓ ja</span></td></tr>
-          <tr><td>Wandstärke gegen die Düse dieses Druckers</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
-          <tr><td>Überhangwinkel je Schicht</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
-          <tr><td>Inseln: Material ohne Verbindung nach unten</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
-          <tr><td>Brückenweiten, schmalste Stelle</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
-          <tr><td>Stützbedarf und beste Lage</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
-          <tr><td>Passt es auf dein Druckbett</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
-          <tr><td>Passungen gegen das Materialprofil</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
-        </tbody>
-      </table>
-      <p class="footnote">Reparieren allein gibt es inzwischen gratis im
-      Browser, und das ist auch in Ordnung — ein geschlossenes Netz ist noch
-      kein Teil, das passt. Der Unterschied liegt hinter der Reparatur: Maß,
-      Passung, Schichtanalyse, und ein Verlauf, in dem sich jede Zahl später
-      noch ändern lässt.</p>
+      <p class="sub">Ein Generator prüft, ob das Netz geschlossen ist. Nicht
+      geprüft wird, ob die Wand dicker ist als deine Düse, ob ein Überhang
+      trägt, ob eine Insel in der Luft anfängt und ob das Ganze auf dein
+      Druckbett passt. Genau da fängt Solidon3D an — und danach lässt sich jede
+      Zahl noch ändern.</p>
+      <a class="btn ghost" href="/ki-modelle.html">Der Weg vom Generator zum Druck</a>
     </div>
   </section>
 
@@ -819,7 +429,11 @@
     <div class="wrap">
       <h2>Systemvoraussetzungen</h2>
       <table class="req">
-        <tr><td>Betriebssystem</td><td>Windows 10/11 (64 Bit), macOS 12 oder neuer, oder Linux</td></tr>
+        <tr><td>Betriebssystem</td><td>Windows 10/11 (64 Bit), macOS 12 oder
+        neuer, oder Linux — auf dem Mac für Apple Silicon und Intel getrennt.
+        Die Mac-Fassung ist noch nicht bei Apple signiert: beim ersten Start
+        einmal mit der rechten Maustaste auf das Programm und „Öffnen“ wählen,
+        danach startet es wie jedes andere.</td></tr>
         <tr><td>Speicherplatz</td><td>rund 750 MB installiert, Download rund 255 MB</td></tr>
         <tr><td>Chat (optional)</td><td>eigener API-Schlüssel (laufende
         Kosten beim Anbieter) oder Ollama mit einem Modell ab etwa
@@ -863,7 +477,7 @@
         </details>
         <details>
           <summary>Muss ich eine KI benutzen?</summary>
-          <p>Nein. Der Chat ist ein Weg von dreien. Ohne Schlüssel und ohne
+          <p>Nein. Der Chat ist ein Weg von vieren. Ohne Schlüssel und ohne
           Ollama bleibt alles außer dem Chat vollständig benutzbar — Menüs,
           Kontextmenüs, Kommandozeile und alle 83 Operationen.</p>
         </details>
@@ -905,10 +519,13 @@
         </details>
         <details>
           <summary>Läuft das auf einem Mac?</summary>
-          <p>Nein, vorerst nicht. Es gibt Solidon3D für Windows und Linux;
-          eine macOS-Fassung ist keine Frage der Technik, sondern eine
-          Entscheidung über Signatur und Pflege einer dritten Plattform. Wenn
-          du eine brauchst, schreib uns — das zählt.</p>
+          <p>Ja, für Apple Silicon und für Intel als getrennte Fassungen — ein
+          Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht,
+          und das betrifft jedes Gerät vor 2020. Bei Apple signiert ist es
+          noch nicht, und Gatekeeper lässt eine unsignierte Anwendung aus dem
+          Netz per Doppelklick nicht starten: einmal mit der rechten Maustaste
+          auf das Programm und „Öffnen“ wählen, danach startet es wie jedes
+          andere. Notarisierung kommt, sobald das Apple-Konto steht.</p>
         </details>
         <details>
           <summary>Funktioniert das mit meinem Drucker?</summary>

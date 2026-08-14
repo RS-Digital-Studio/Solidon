@@ -8,6 +8,42 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 
 ---
 
+## Was offen ist
+
+Die offenen Punkte stehen weit auseinander: ein paar in den Phasen, die meisten
+in den Durchsichten der letzten Tage. Dazwischen liegen tausende Zeilen ohne
+einen einzigen — die sind Geschichte, kein Rückstand. (Keine Zahl in diesem
+Absatz: Sie stünde neben einer Tabelle, die sie schon nennt, und wäre die
+Erste, die driftet.)
+
+Diese Übersicht ist die Abkürzung, nicht die Quelle. Der Punkt selbst steht mit
+seiner Begründung an seinem Ort, und dort wird er auch geändert; hier steht nur,
+dass es ihn gibt und worauf er wartet. **Ein Register, dem man nicht glaubt, ist
+schlechter als keines** — deshalb hält `tests/test_roadmap.py` beides zusammen:
+Wer einen Punkt abhakt oder einen neuen aufmacht, ohne hier nachzuziehen,
+bekommt einen roten Lauf.
+
+| Punkt | steht unter | wartet auf |
+|---|---|---|
+| Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | einen kompilierten Kern; der Polygonaufbau in GEOS ist das, was übrig ist |
+| CI-Bauläufe, Signierung, AppImage/Flatpak | P8 — Erste Veröffentlichung | die beiden Linux-Formate; die Signierung braucht ein Zertifikat |
+| Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
+| Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
+| macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
+| G-Code an die Maschine senden (B3) | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | eine Bauplanentscheidung, nicht auf Code |
+| DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
+| CI grün sehen und die Artefakte holen | Die Demo bis 30.10.2026 (12.08.2026) | den Segfault in `test_chat_ui.py` auf den Linux-Runnern |
+| Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | eine gebaute Datei — hängt an der CI |
+| Download-Kasten mit Datei und Prüfsumme | Die Demo bis 30.10.2026 (12.08.2026) | dieselbe Datei |
+| Hochladen | Die Demo bis 30.10.2026 (12.08.2026) | den Stand nach dem Bau; live steht noch eine ältere `version.json` |
+| Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | `SetTransitionMode` oder das Gewinde als Rotationskörper |
+| Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
+| P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
+| Die Wegekarten am Browser nachmessen | Die Konzepte gegen den Code gehalten (14.08.2026) | einen Browser, der JavaScript ausführt |
+| Spur A und B getrennt weiterverfolgen | Die Konzepte gegen den Code gehalten (14.08.2026) | für A einen Reproduzierer, der kürzer ist als ein Volllauf |
+
+---
+
 ## P0 — Skelett
 
 ### Grundgerüst
@@ -129,9 +165,20 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
 - [x] Analysekarten (§18.4), Klick auf Warnung fährt die Kamera hin — sieben Karten
       in `core/perceive/maps.py`, Legende mit Zahlenbereich und Herkunft
 - [x] Feature-Overlay mit Kontextmenü (`applies_to`) — Beschriftungen im Viewport,
-      Merkmale als Kinder im Objektbaum, Kontextmenü aus dem Register. Das
-      Hervorheben beim Überfahren braucht echte Mauszeiger-Ereignisse und fehlt
-      noch; Anklicken und Auswählen stehen
+      Merkmale als Kinder im Objektbaum, Kontextmenü aus dem Register.
+      Anklicken und Auswählen stehen.
+
+      **Die Begründung hier war überholt** (nachgesehen am 14.08.2026): Die
+      Mauszeiger-Ereignisse fehlen nicht mehr. `viewport._note_pointer`,
+      `_look_under_pointer` und `_forget_pointer` stehen, mit einem
+      entprellenden Zeitgeber und Suche über den Tiefenpuffer statt über einen
+      Aktor-Pick. Was das Überfahren **zeigt**, ist allerdings der Mauszeiger
+      („feature" statt „select") und keine Hervorhebung am Merkmal selbst.
+      Das ist keine halbe Umsetzung, sondern eine andere: Ein Umfärben je
+      Zeigerbewegung ginge über den Aktor, und genau den meidet die Stelle aus
+      Kostengründen. Wer die Hervorhebung will, bekommt sie über
+      `highlighted_faces` — dieselbe Bahn, die die Auswahl seit dem 13.08.
+      benutzt — und bezahlt sie mit einem Aktor-Update je Ruhepause.
 - [x] Passungen anlegen und prüfen (§14)
 
 ### Schichtanalyse (§22)
@@ -157,6 +204,26 @@ Legende: `[ ]` offen · `[~]` in Arbeit · `[x]` fertig und Suite grün
       dorthin führten, stehen unter „Leistung (§31) — Stand nach der
       Durchsicht". Was übrig ist, ist der Polygonaufbau in GEOS und braucht
       einen kompilierten Kern, keine weitere Python-Idee
+
+      **Nachgemessen am 14.08.2026**, und eine der Zahlen oben ist überholt:
+      die Wandstärkenkarte steht nicht mehr bei 3,08 s, sondern bei **4,30 s**
+      — auch allein gefahren, ohne Leistungsdatei davor. Die Orientierungssuche
+      liegt mit 14,8 s im Ziel, die Schichtanalyse bei 1,07 s.
+
+      **Dabei fiel eine verwaiste Messmarke auf, und sie ist verworfen.**
+      `subdivide_surface` meldete das 3,54-fache seines Bestwerts (1 956 ms
+      gegen 537 ms) und riss damit die Regressionsschwelle — isoliert genauso
+      wie im vollen Lauf. Es war keine Verlangsamung: Commit `43afb51` hat am
+      13.08. den *Messgegenstand* getauscht („der Leistungstest aus P16.2 maß
+      ein Verfahren, das es nicht mehr gibt") und dort schon notiert, was
+      seither herauskommt — 1 778 ms und 1 480 ms von 3 000. Die alte Marke
+      stand unter demselben Namen weiter in `tests/.performance.json`, und der
+      Wächter verglich zwei verschiedene Rechnungen miteinander. Der Docstring
+      von `measure()` sagt den Fix wörtlich vorher: „die Marke fällt mit einer
+      Begründung im Commit, nicht stillschweigend beim nächsten Lauf" — genau
+      das war unterblieben. Marke gestrichen, der nächste Lauf setzt sie neu.
+      Die Datei ist gitignored, also gilt das für diese Maschine; wer den Test
+      anderswo laufen lässt, fängt ohnehin bei null an
 
 ## P4 — Agent auf Säule C
 - [x] `LLMBackend`, Schlüssel im Schlüsselbund, lokal über Ollama — kein
@@ -601,6 +668,34 @@ und Umriss-Extrusion sind die zwei häufigsten Gründe, ein zweites Programm zu
   und bewertet, die Druckdatei kommt weiter aus dem Slicer.
 
 ## Leistung (§31) — Stand nach der Durchsicht
+
+### Die Regressionsschwelle schlägt an, ohne dass etwas langsamer wurde
+
+Gemessen am 14.08.2026, fünf Läufe von `pytest tests/test_slice.py
+tests/test_performance.py -p no:randomly` allein auf der Maschine: **zwei von
+fünf rot**, und zwar nicht am selben Test — einmal `sketch_solve_200` (125 ms
+gegen den Bestwert 94 ms, Faktor 1,33), einmal `blending`. Beide Male war es die
+25-%-Schwelle, kein absoluter Zielwert und keine echte Verlangsamung.
+
+**Der Docstring von `measure` beschreibt die Ursache selbst**, und er hat sie
+nur halb behoben: Er nennt achtunddreißig Prozent Unterschied allein aus der
+Aufrufreihenfolge — `sketch_solve_200` braucht allein 114 ms und hinter
+`test_slice.py` 162 — bei einer Schwelle von fünfundzwanzig. Das Merken des
+**besten** Werts statt des letzten behebt das Anheben der Marke; dass ein Lauf
+unter Fremdlast rot wird, „obwohl nichts langsamer wurde", steht dort als
+Problem und bleibt ungelöst. Ein gespeicherter Bestwert kennt den Kontext
+nicht, in dem er entstand.
+
+**Der Code ist absichtlich unverändert.** Die naheliegende Reparatur — bei
+Überschreitung einmal nachmessen und den besseren Wert nehmen — führt `work()`
+zweimal aus, und mindestens ein Aufruf hängt an einem Zwischenspeicher
+(`evaluate_cached`). Ein zweiter Durchgang wäre dort schneller, weil er den
+Cache trifft, und aus einem roten Test würde ein **falsch grüner**. Das ist
+schlimmer als der Zustand jetzt. Zwei Wege ohne dieses Risiko: den
+Regressionsvergleich aussetzen, sobald andere Testdateien im Lauf sind (die
+absoluten Schranken bleiben und prüfen weiter), oder den Bestwert je
+Aufrufkontext getrennt halten. Beides ändert das Verhalten des Tors und gehört
+angesagt, nicht nebenbei gemacht.
 
 Gemessen auf einer Kugel mit 328 000 Dreiecken (§31 nennt seine Ziele für
 200 000), Werte in `tests/.performance.json`:
@@ -2521,12 +2616,32 @@ Platz, an dem die echten stehen.
       Register). Die eine Zahl, die §40 nicht als Quote führt, sondern als
       Regel, ist erreicht: **3/3 bei Mehrdeutigkeit gefragt**. Schwach bleibt
       „Baustein statt eigener Geometrie" mit 0/13.
+
+      **Diese Zahlen sind überholt** — beide entstanden unter einem Prompt, den
+      Ollama bei 4096 Token abgeschnitten hat. Der Stand nach dem Fund und
+      Systemprompt v2 ist **22/33 und 8/13**; er steht im Punkt „Der Agent
+      greift nicht zu den Bausteinen" unten in diesem Abschnitt. Wer hier
+      aufhört zu lesen, nimmt den falschen Wert mit.
 - [x] **Eine Operation ohne Eingangsobjekt** stürzte mit einem `IndexError`
       ab, statt anzuhalten — `example_v1.p3d` ließ sich damit gar nicht öffnen.
 
-### Offen
+### Zwei Spuren, die hier enden
 
-- [ ] **Diese Maschine rechnet sporadisch falsch — es ist keine Bibliothek.**
+- [x] **Die Hardware-Spur wird nicht weiter verfolgt** (entschieden am
+      14.08.2026). Die Messreihen bleiben stehen, weil sie eine Reihe von
+      Verdächtigen ausschließen und niemand sie zweimal aufstellen soll. Was
+      nicht bleibt, ist der offene Punkt: Es wird keine Speicherdiagnose und
+      kein Prozessortest gefahren. Ein Testlauf, der rot wird, heißt damit
+      wieder „Fehler im Code" — und der flackernde Rändel-Test verliert seine
+      Erklärung und wird zur Fehlersuche wie jede andere.
+
+      **Was das kostet, steht dazu:** Die beiden Pflaster in
+      `mesh.on_surface` und `threemf._numbers_from` — einmal wiederholen, beim
+      zweiten Fehlschlag durchlassen — bleiben im Code, ohne dass eine Ursache
+      dahinter nachgewiesen ist. Sie fangen einen Fehlschlag, den niemand mehr
+      erklärt. Wer sie anfasst, weiß damit, dass er eine Stütze wegnimmt und
+      nicht eine Redundanz.
+
       Der Verdacht lag zuerst auf `rtree`; **das war falsch**, und die
       Korrektur ist der eigentliche Ertrag. Weiter eingegrenzt, jede Variante
       im eigenen Prozess:
@@ -2573,14 +2688,12 @@ Platz, an dem die echten stehen.
         Zufall. Das heißt nicht „behoben" — es heißt, dass die Bedingung
         fehlt, unter der er auftrat.
 
-      **Nächster Schritt ist keiner am Code.** Wegen des TLB-Befunds zuerst
-      die CPU: Intel Processor Diagnostic Tool, und bei Auffälligkeiten die
-      verlängerte Garantie für 13./14. Generation. Der Speichertest bleibt
-      daneben richtig, ist aber nicht mehr der erste Verdacht. Die zwei
-      Pflaster (`mesh.on_surface`, `threemf._numbers_from`) bleiben: einmal
-      wiederholen, beim zweiten Fehlschlag durchlassen. Sie sind gegen ein
-      Symptom gebaut, nicht gegen eine Ursache — und wenn die Maschine der
-      Grund ist, sind sie genau richtig, denn dagegen hilft kein Code.
+      **Und der letzte Datenpunkt spricht gegen die Spur, nicht für sie.**
+      Dass 300 Runden derselben Bauart nichts fanden, wo zehn Fehlschläge zu
+      erwarten waren, heißt: Die Bedingung, unter der der Rechenfehler auftrat,
+      ist keine Eigenschaft der Maschine, sonst wäre sie reproduzierbar
+      gewesen. Damit endet die Spur — nicht weil sie widerlegt ist, sondern
+      weil sie nichts mehr vorhersagt.
 - [x] **Der Agent greift nicht zu den Bausteinen (0/13) — es war das
       Kontextfenster.** Am 08.08.2026 gefunden, und es macht die ganze
       Untersuchung darunter zur Vorgeschichte: **Ollama schneidet den Prompt
@@ -4093,6 +4206,18 @@ dem Autodesk gerade Foundation-Modelle für editierbares B-Rep auffährt.
 - [x] **Website.** Weg 1 als Aufmacher, Windows und Linux ausdrücklich mit
       macOS als benannter Lücke (eigene FAQ-Frage), GLB bei den Formaten.
 
+      **Die FAQ-Frage war falsch, und zwar zu unseren Lasten** (am 14.08.2026
+      gegen die CI geprüft). Sie sagte „Nein, vorerst nicht … für Windows und
+      Linux", während `build.yml` seit je vier Pakete baut: `windows-latest`,
+      `ubuntu-latest`, `macos-13` (Intel) und `macos-latest` (Apple Silicon),
+      jeweils mit Bundle-Prüfung, `codesign`-Schritt und `ditto`-Archiv. Drei
+      andere Stellen derselben Seite — Auszeichnung für Suchmaschinen,
+      Zusicherungsliste und Systemvoraussetzungen — nannten den Mac korrekt.
+      Eine Seite, die Kunden von einer Plattform abrät, die sie ausliefert,
+      kostet mehr als eine Lücke. Beide Sprachen nachgezogen; was tatsächlich
+      fehlt, ist allein die Apple-Signatur, und die Systemvoraussetzungen
+      sagten das schon vorher richtig.
+
 ### Was der Durchgang durch das laufende Fenster gefunden hat
 
 Zwei Zeilen unter der Musterauswahl, die gerade Bilder bekommen hatte, standen
@@ -4112,14 +4237,28 @@ bevor die falsche Zahl auf der Seite stand.
 - [ ] **Sichtbarkeit.** Solidon ist fertiger als das, worüber geschrieben
       wird, und unbekannt. Keine Entwicklungsaufgabe.
 - [ ] **macOS ausliefern.** Die Suite läuft dort bei Tags grün; es fehlen
-      Paketierschritt, Apple-Signatur und die Bereitschaft, eine dritte
-      Plattform zu stützen. Die Website sagt es jetzt ausdrücklich, statt es
-      auszulassen.
+      Apple-Signatur und die Bereitschaft, eine dritte Plattform zu stützen.
+      Die Website sagt es jetzt ausdrücklich, statt es auszulassen.
+
+      **Der Paketierschritt fehlt nicht mehr** (nachgesehen am 14.08.2026):
+      `build.yml` baut das Bundle, prüft es auf seine ausführbare Datei,
+      signiert mit einer Developer-ID sofern das Secret liegt, packt als zip,
+      rechnet die Prüfsumme über `shasum -a 256` und lädt je Architektur ein
+      eigenes Artefakt hoch — Intel und Apple Silicon getrennt. Was wirklich
+      fehlt, ist enger und benennbar: das **Apple-Zertifikat** und die
+      **Notarisierung**. `xcrun notarytool` und `stapler` kommen im Auftrag
+      nirgends vor, und ohne sie hält Gatekeeper eine geladene Anwendung auch
+      dann an, wenn sie signiert ist.
 - [ ] **G-Code an die Maschine senden** (B3). §28 meint mit „Drucker" das
       Zurücklesen; Senden wäre eine Bauplanänderung. Wenn, dann über ein
       offenes Protokoll für viele Maschinen.
-- [ ] **Weitere Sprachen befüllen.** Das Gerüst steht, die Kataloge fehlen —
-      ES, FR, IT, PT sind der billigste Reichweitengewinn, den es gibt.
+- [x] **Weitere Sprachen befüllen.** Erledigt und am 14.08.2026 nachgezählt:
+      `app/i18n/locales/` führt fünf Kataloge — `en`, `es`, `fr`, `it`, `pt` —
+      mit je **2 426 Einträgen**, keiner leer. Was in einem Katalog wie die
+      deutsche Quelle aussieht, sind Eigennamen und Maßangaben (24 bis 48 je
+      Sprache: `mm`, `M4`, `6x3`, `DejaVu Sans`, `gyroid`), und die sollen so
+      stehen. Die Zahl der Sprachen steht dabei nirgends im Code —
+      `available_languages()` zählt das Verzeichnis.
 - [x] **Skizze bedienerisch fertig** (B1). Die Ändern-Gruppe stand schon;
       die übrigen Punkte aus `konzept-bedienung.md` Teil 4 sind seither
       nachgekommen — die Stand-Notiz dort führt alle neun als durch, im Code
@@ -4159,10 +4298,23 @@ den Webserver und die Paketierung. Fünf Funde:
       er sie zurück. Die Fixture zerstört Fenster jetzt planmäßig
       (`deleteLater` plus `processEvents`), und `MainWindow.release()` schließt
       dabei den VTK-Interactor — ohne das stirbt der **nächste** Fensteraufbau.
-- [ ] **Das Repository ist öffentlich** und hieß bis heute `Formwerk`.
+- [x] **Das Repository ist öffentlich** und hieß bis heute `Formwerk`.
       Umbenannt auf `Solidon`; die Sichtbarkeit ist Roberts Entscheidung und
       steht auf öffentlich. Damit ist H5 (kompiliertes Prüfmodul) eine Bremse
       und keine Hürde — H1 hält weiter.
+
+      **Am 14.08.2026 nachgeprüft und zwei Reste nachgezogen**, die die
+      Umbenennung nicht erreicht hatte. Die API bestätigt beides —
+      `full_name: RS-Digital-Studio/Solidon`, `private: false`, der alte Name
+      antwortet mit 301. Aber der lokale `origin` zeigte weiter auf
+      `.../Formwerk.git` (GitHub leitet weiter, deshalb fiel es nie auf), und
+      der Kopf von `build.yml` begründete die Ein-Plattform-Matrix damit, das
+      Repository sei privat und die Minuten gezählt. Öffentliche Repositories
+      zahlen für die Standard-Runner nichts; die Begründung war weg, die
+      Beschränkung stand noch. Beides steht jetzt richtig da — die Matrix
+      selbst bleibt, aber mit dem Grund, den sie wirklich hat (Rückmeldezeit),
+      und mit dem Hinweis, was sie kostet: Ein Fehler, der nur unter Windows
+      auftritt, fällt sonst erst am Tag der Veröffentlichung auf.
 - [ ] **DMARC fehlt** für `solidon3d.de`. SPF und MX stehen (netcup), der
       Eintrag `_dmarc` ist nicht gesetzt. Gehört ins CCP.
 
@@ -4173,9 +4325,18 @@ den Webserver und die Paketierung. Fünf Funde:
       ist. Der Testlaufmarker verliert damit seine Bedeutung. Zwei Tests halten
       dagegen: einer weckt, wenn der ausgelieferte Stichtag verstrichen ist,
       der andere verbietet einer 1.x-Fassung überhaupt einen Stichtag.
-- [x] **Fassung 0.7.0.** Die Null vorn ist Mechanik: `key.current_major()`
-      liest sie, also greift ein 1.x-Kaufschlüssel in der Demo nicht — und der
-      Update-Hinweis zeigt später auf die 1.0.
+- [x] **Fassung 0.1.0** (am 14.08.2026 von 0.7.0 heruntergesetzt, entschieden
+      von Robert). Die Null vorn ist Mechanik: `key.current_major()` liest sie,
+      also greift ein 1.x-Kaufschlüssel in der Demo nicht — und der
+      Update-Hinweis zeigt später auf die 1.0. Die 7 dahinter war nie
+      begründet; die 1 ist der Anfang einer Zählung, die weitergeht.
+
+      **Die Zählregel steht jetzt dabei:** letzte Stelle plus eins je
+      ausgeliefertem Bau, vordere Stellen nur bei einer größeren Änderung.
+      Sieben Stellen tragen die Zahl, zwei davon von Hand (`app/branding.py`,
+      `pyproject.toml`) — und bis heute hielt die beiden nichts zusammen außer
+      Aufmerksamkeit. `test_the_version_is_the_same_in_both_places_that_carry_it`
+      tut es jetzt.
 - [x] **Die Texte.** Statuszeile dauerhaft (nicht erst am vorletzten Tag),
       Über-Dialog, Freischaltdialog, Ersteinrichtung.
 - [x] **Der Schluss.** Nach dem Stichtag startet weder Fenster noch
@@ -4187,12 +4348,109 @@ den Webserver und die Paketierung. Fünf Funde:
       ab dem Verkaufsstart gelten.
 - [x] **Website.** Beide Startseiten führen die Demo, zwei neue Fragen
       beantworten das Ende.
+- [x] **Startseite geteilt** (14.08.2026). Sie war auf **14 Bildschirme**
+      gewachsen, und der Preis begann erst bei Bildschirm 11 — der
+      Funktionsblock allein war mit 4809 px 36 % der Seite. Funktionen und
+      KI-Modelle haben jetzt eigene Seiten (`funktionen.html`,
+      `ki-modelle.html` und die englischen), auf der Startseite steht je ein
+      Anriss. Gemessen bei 1920×937: **8,0 Bildschirme, Preis ab 4,8**, und der
+      Knopf im Aufmacher steht im ersten Bild statt 100 px darunter.
+      Nebenbei vier Selbstwidersprüche behoben, die beim Kaufentscheid standen:
+      „Drei Wege" über vier Karten, acht gegen neun Beispielprojekte, zwei
+      Sie-Formen auf einer Du-Seite, und der Plattform-Absatz wanderte aus dem
+      Aufmacher in die Voraussetzungen.
+- [x] **Ein Skript auf der Website** (14.08.2026). `site.js` markiert in der
+      Sprungliste der Funktionsseite den Block, der gerade gelesen wird — das
+      Einzige, was CSS dort nicht kann. Damit fällt die Zusage „kein
+      JavaScript"; die tragende bleibt und ist jetzt die geprüfte: **nichts von
+      außen**, kein CDN, keine Bibliothek, kein Zählpixel
+      (`test_the_page_loads_nothing_from_outside`). Die Bewegung der
+      Zeichnungen bleibt CSS.
 
 ### Offen bis zum 20.08.
 
 - [ ] **CI grün sehen und die Artefakte holen** — Setup-Datei, tar.gz,
       Prüfsummen. Der Weg über `workflow_dispatch`; Inno Setup liegt auf dem
       Runner, nicht auf dieser Maschine.
+
+      **Am 14.08.2026 nachgesehen, und der Stand ist schlechter als er hier
+      klang.** Von **34 Läufen ist genau einer grün** — der vom 02.08., per
+      Handstart. Jeder Push seither ist rot, auch der letzte auf `93f0989`.
+      Damit gibt es keine Artefakte: `package` hängt an `suite` und wird
+      übersprungen, und alle drei Punkte unter diesem hier warten auf einen
+      Lauf, den es nicht gibt.
+
+      **Woran er scheitert, steht im Protokoll und ist nicht das, was der
+      Abschnitt weiter unten sagt.** Der Hauptblock ist grün — 3 275 Tests,
+      10 übersprungen, 1 xfail, in 456 s. Danach laufen die Fensterdateien
+      einzeln, und `tests/test_chat_ui.py` stirbt beim achten Test an einem
+      Segmentierungsfehler:
+
+      ```
+      panels.py:890 show_document ← main_window.py:4389 _show_scene
+        ← main_window.py:4340 _on_scene ← session.py:1101 _on_finished
+        ← session.py:1164 wait_for_idle
+        ← test_chat_ui.py:217 test_a_reversible_proposal_is_applied_without_asking
+      ```
+
+      Das ist **nicht** der Test, den „Der Absturz, der die CI eine Woche lang
+      rot hielt" als einzigen Rest führt. Dort steht
+      `test_the_applied_bar_clears_when_something_newer_is_on_top`, und der ist
+      per `skipif` übersprungen — der hier trifft es zusätzlich. Die Stelle ist
+      dieselbe wie immer (`self.list.clear()`, die erste Widget-Anweisung des
+      Szenenaufbaus), die Kette ist neu: Sie kommt aus `wait_for_idle`, also
+      aus dem Ereignispumpen *im laufenden Test* und nicht aus einem Fenster,
+      das der Speicherbereiniger schon abgeräumt hat.
+
+      Eine Ursache steht hier bewusst **nicht**: Sie wäre geraten. Der Absturz
+      tritt auf Linux auf, diese Maschine ist Windows, und der lokale Lauf
+      läuft zudem unter einer anderen Interpreter-Fassung (siehe den
+      Rändel-Test weiter unten). Wer ihn angeht, hat die Kette oben und die
+      vier gemessenen Irrwege in jenem Abschnitt.
+
+      **Und die Gegenprobe hier stirbt auch** — an einer anderen Stelle und
+      mit einem anderen Fehlerbild. `pytest -q -m "not performance"` kam am
+      14.08.2026 sechzig Tests weit und ging dann mit einem `Windows fatal
+      exception: stack overflow` unter, beim Aufbau des Viewports:
+
+      ```
+      pyvistaqt/rwi.py:254 __init__ ← pyvistaqt/plotting.py:231 __init__
+        ← viewport.py:1037 __init__
+        ← test_analysis_ui.py:1983 test_a_body_too_thin_for_a_hull_still_gets_one
+      ```
+
+      **Und die Interpreter-Spur erklärt ihn nicht — gemessen, nicht
+      vermutet.** Die Messung, die der Abschnitt unten fordert, ist am
+      14.08.2026 gefahren: `.venv-py313` mit **Python 3.13.15** frisch
+      aufgebaut, dieselbe Suite. Sie stirbt genauso, nur woanders — der
+      Stapelüberlauf steht dann in `main_window.py:790 _build_central`, aus
+      `test_sketch_editor.py:826`, bei achtzig Prozent. Anderer Test, andere
+      Zeile, gleiches Bild. Ein Absturz, der wandert, hängt an keinem Test und
+      an keiner Interpreter-Fassung.
+
+      **Was er stattdessen ist, steht seit dem 13.08. im Kopf von
+      `build.yml`:** die Zahl der VTK-Fenster, die ein Prozess nacheinander
+      aufbaut. Die CI teilt deshalb auf; der lokale Lauf tat es nicht. Beide
+      betroffenen Dateien laufen **allein grün** — `test_sketch_editor.py`
+      85 Tests in 3,9 s, `test_analysis_ui.py` 99 in 30 s.
+
+      **Aufgeteilt wie die CI ist diese Maschine grün**, und das ist die Zahl,
+      die seit Tagen fehlte: Hauptblock ohne die dreizehn Fensterdateien
+      **3 313 Tests in 186 s**, dazu zwölf der dreizehn Dateien einzeln, jede
+      grün.
+
+      **Die dreizehnte ist der eigentliche Fund.** `tests/test_ui.py` (190
+      Tests) stirbt schon nach fünf, mit einem *anderen* Fehlerbild —
+      `access violation` statt Stapelüberlauf —, und zwar an
+      `test_saving_and_reopening_keeps_the_stack`. Dreimal reproduziert.
+      Derselbe Test **ganz allein** aufgerufen läuft in 0,3 s durch, unter
+      3.13 wie unter 3.14. Es sind also wieder die Fenster davor, nur reicht
+      hier eine Handvoll, wo andere Dateien neunundneunzig vertragen — dort
+      baut jeder Test ein volles Fenster. Die CI kommt darüber hinweg, weil
+      `--forked` jedem Test seinen eigenen Prozess gibt; unter Windows gibt es
+      das nicht, und deshalb ist `pytest -q` hier nicht der richtige Aufruf.
+      Wer das lokale Tor grün sehen will, teilt auf — und für `test_ui.py`
+      bleibt die Frage offen, warum fünf Fenster genügen.
 - [ ] **Auf einem fremden Rechner installieren** (ohne Python, ohne venv, ohne
       OpenSCAD/Ollama/ComfyUI). Der Punkt, der erfahrungsgemäß mehr findet als
       alle Tests.
@@ -4295,22 +4553,70 @@ zur Hand hat, prüft sie zuerst — und dann trotzdem die andere.
 
 ### Offen aus derselben Durchsicht
 
-- [ ] **`test_the_layer_analysis_survives_a_knurled_surface` fällt unter
-      Last.** `pytest tests/test_slice.py tests/test_performance.py
-      -p no:randomly` liefert `TypeError: cannot unpack non-iterable int
-      object` in `analysis.py:377` — an einer Stelle, an der `enumerate` über
-      `list[list[int]]` läuft und das gar nicht kann. Jede Datei einzeln ist
-      grün, `test_slice` plus nur dieser eine Test auch; rot wird es erst mit
-      der ganzen Leistungsdatei davor. Derselbe Cluster wie die
-      Zugriffsverletzungen im langen Lauf — die Zeile ist es nicht.
+- [x] **`test_the_layer_analysis_survives_a_knurled_surface` fiel unter Last —
+      und „Last" hieß: vier `pytest`-Läufe gleichzeitig.** Aufgelöst am
+      14.08.2026. Der Aufruf `pytest tests/test_slice.py
+      tests/test_performance.py -p no:randomly` lieferte `TypeError: cannot
+      unpack non-iterable int object` in `analysis.py:377` — an einer Stelle,
+      an der `enumerate` über `list[list[int]]` läuft und das gar nicht kann.
 
-      **Am 14.08.2026 zweimal hintereinander gefahren, gleicher Aufruf:** der
-      erste Lauf rot, der zweite grün. Damit ist er nicht einmal unter Last
-      deterministisch, und das ist der Datenpunkt, der ihn endgültig zum
-      Maschinen-Cluster stellt (siehe „Diese Maschine rechnet sporadisch
-      falsch"). Wer ihn angeht, sucht nicht in `analysis.py`: Das Unpacking
-      dort ist über `list[list[int]]` deklariert und kann gar nicht anders
-      als Paare liefern.
+      **Derselbe Aufruf, allein auf der Maschine: fünf von fünf grün**, kein
+      TypeError, 38 bis 41 Sekunden je Lauf. Was vorher fehlte, war nicht die
+      Ursache, sondern die Kontrolle über die Umgebung: Auf diesem Rechner
+      liefen vier `pytest`-Aufrufe gegen **dieselbe** `.venv`, dazu ein
+      `http.server`. Qt und VTK bauen dabei echte Fenster und GL-Kontexte, und
+      mehrere Läufe darüber sind genau die Bedingung, unter der es rot wurde.
+      Wer eine Messung an dieser Suite macht, sorgt zuerst dafür, dass sie
+      allein läuft — sonst misst er die Nachbarschaft und nennt es einen Bug
+      im Kern.
+
+      Damit ist auch die Zuordnung zum „Maschinen-Cluster" hinfällig, und die
+      beiden anderen Kandidaten (Interpreter-Fassung, Hardware) sind für dieses
+      Fehlerbild nicht mehr nötig. Der Kern bleibt unverändert — an
+      `_polygon_from` war nichts zu reparieren, was das Nachmessen an Shapely
+      2.1.2 unten schon zeigte.
+
+      **Die Chronologie, weil sie den Umweg erklärt:** Zuerst zweimal
+      hintereinander gefahren, erster Lauf rot, zweiter grün — daraus wurde „ist
+      nicht einmal unter Last deterministisch" und die Zuordnung zur Hardware.
+      Richtig war der erste Teil, falsch der Schluss: Nicht die Maschine
+      schwankte, sondern die Zahl der Läufe auf ihr.
+
+      **Und die Zeilenangabe stimmt nicht mehr** (nachgesehen am 14.08.2026):
+      `analysis.py:377` ist heute `if not parts: return None`, ohne jedes
+      Unpacking. Die Stelle, auf die der Befund zeigt, ist inzwischen Zeile 372
+      — `zip(held.tolist(), holder.tolist(), strict=True)` über die Rückgabe
+      von `STRtree.query`. **Der Verdacht dort ist ausgeschlossen**, nachgemessen
+      gegen Shapely 2.1.2: `query` liefert bei jedem listenartigen Eingang ein
+      Feld der Form (2, n), auch bei genau einem Element; eindimensional wird es
+      nur bei einer *einzelnen* Geometrie, und `points` ist an dieser Stelle
+      immer eine Liste. Beide Unpackings der Funktion können den Fehler nicht
+      werfen.
+
+      Der Kern brauchte also keine Änderung, und bekam keine.
+
+- [x] **Entwickelt wurde unter einer Fassung, die nie ausgeliefert wird**
+      (gefunden und behoben am 14.08.2026). Nebenbefund der Suche oben, und mit
+      ihr nicht verwandt: Diese Maschine hatte ihre `.venv` unter **Python
+      3.14.2**, während `pyproject.toml` mypy auf 3.13 stellt und alle drei
+      CI-Aufträge `python-version: "3.13"` fahren. Die Paketfassungen waren
+      identisch mit `constraints.txt` — aber es waren andere Binaries:
+      `shapely/lib` lag als `cp314-win_amd64.pyd`, in der CI als `cp313`. Damit
+      lief der ganze Unterbau aus C-Erweiterungen (shapely/GEOS, numpy, scipy,
+      trimesh, rtree, manifold3d, VTK, OCCT) lokal in einer Fassung, die weder
+      geprüft noch paketiert wird — und jeder grüne Lauf hier sagte etwas über
+      eine Umgebung, die kein Kunde bekommt.
+
+      Behoben: Python 3.13.15 installiert, `.venv313` gegen `constraints.txt`
+      aufgebaut, cp313 nachgewiesen. Die beiden Umgebungen unterscheiden sich
+      danach in genau zwei Paketen, und keines davon ist gepinnt (`pip`,
+      `pypdf`).
+
+      **`constraints.txt` allein reicht dafür nicht**, und das ist die Lehre:
+      Es pinnt die Fassungen, nicht den Interpreter. Wer eine Umgebung nach der
+      Anleitung in `CLAUDE.md` aufbaut, bekommt die gepinnten Fassungen für
+      *sein* Python — und wenn das ein anderes ist als in der CI, andere
+      Binaries bei identischen Nummern.
 
 ### Ein Gewinde, das nur auf einem Betriebssystem schließt (13.08.2026)
 
@@ -4607,10 +4913,15 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       schlimmer als keine. Sie läuft verzögert nach der Geste und steht als
       Zahl da, nicht nur als Farbe (Regel 18). 19 Tests, offscreen.
 
-      Offen aus §7.1: der Abfall (glatt, linear, scharf) — die Auswertung hat
-      eine feste Gewichtsfunktion. Die Leiste hält ihre acht Elemente ein, und
-      „Neu ansetzen" aus Entscheidung C hat den Platz bekommen, den im Konzept
-      der Abfall hatte.
+      **Nicht offen, sondern gestrichen** — richtiggestellt am 14.08.2026, weil
+      es hier zwei Sätze lang wie eine Lücke aussah: Der wählbare Abfall
+      (glatt, linear, scharf) aus §7.1 ist im Konzept selbst entfallen und hat
+      seinen Platz in der Leiste an „Neu ansetzen" aus Entscheidung C verloren.
+      Die Auswertung hat deshalb eine feste Gewichtsfunktion —
+      `exp(-4·d²)` in `sculpt._weights` —, und das ist die Entscheidung, nicht
+      ihr Rest. Wer den Abfall nachträglich einbaut, reißt die harte Grenze von
+      acht Bedienelementen aus `tests/test_interface_limits.py`; er wäre das
+      neunte.
 - [x] **P16.7 — `displace_image`.** Die Helligkeit eines Graustufenbildes
       wird zur Höhe auf der Oberfläche. Getrennt vom Pinsel, weil es ein
       **Wert** ist und kein Handgriff — und deshalb darf der Agent es setzen:
@@ -4804,3 +5115,161 @@ formt, und kein CAD-Programm formt eine Figur. Nach P16 steht beides in einem
 Fenster, und die vier Fähigkeiten, die den Unterschied machen —
 Wandstärkenkarte, Überhangkarte, Bauraumprüfung, Teilung mit Verstiftung —
 existieren alle und bekommen nur ein neues Anwendungsgebiet.
+
+---
+
+## Die Konzepte gegen den Code gehalten (14.08.2026)
+
+Anlass war eine einzige Frage: *Sind alle Konzepte vollständig abgearbeitet und
+aktuell?* Siebzehn Dokumente, jede Statusaussage im Code nachgeschlagen. Die
+Antwort war zweigeteilt — inhaltlich fast alles durch, aber **fünf Dokumente
+beschrieben einen Stand, den der Code überholt hatte.** Alle fünf sind
+nachgezogen.
+
+- [x] **Die Demo-Fortschrittstabelle stand auf zehnmal „offen"**, während sechs
+      Pakete gebaut waren (`konzept-demo-2026-10.md` §10). Wer den Stand dort
+      statt in dieser Datei las, hielt die Demo für unangefangen. Jetzt mit
+      Commit je Paket, und D6 und D9 stehen als „halb" da, weil sie es sind:
+      dem einen fehlt der Download-Kasten mit Prüfsumme, dem anderen der
+      Stichtag in `.claude/rules/kern.md`.
+- [x] **Drei Sätze im organischen Konzept sagten „fehlt"**, während ein
+      Nachtrag zwanzig Zeilen weiter „erledigt" sagte — Skeletteditor
+      (`app/ui/pose_bar.py`, 14 Tests), Einback-Nachfrage (`bake_sculpt`, vier
+      Fälle) und die Zeile „P16.6 bis P16.10: keiner begonnen", die aus dem
+      Plan stehengeblieben war. Dazu führte die Restliste die Kategorie
+      `organic` als offene Entscheidung, die am selben Tag entschieden wurde.
+- [x] **Die Live-Durchsicht trug an vier von fünfzehn Befunden einen
+      Erledigt-Vermerk**, obwohl alle fünfzehn erledigt sind. Die neun
+      fehlenden sind nachgetragen, jeder mit der Stelle im Code — und zwei
+      davon sind **anders** gebaut worden als vorgeschlagen: die Passung
+      entsteht in `lid_flow.py` statt in den Ops (Regel 3 verbietet der Op die
+      Dokumentänderung), und die neue Merkmalsart heißt `pin`, nicht `boss`.
+      Genau solche Abweichungen verschwinden, wenn niemand den Vermerk setzt.
+- [x] **Zwei B13-Abschnitte im Meshy-Konzept** mit verschiedenem Status, und
+      die Schlusstabelle führte den Befund als abgeschlossen, während der
+      eigene Nachtrag ihn auf „offen" gestellt hatte. Am Code entschieden:
+      `autosplit.py` holt seine Normale weiter aus `AXIS_NORMALS`, die Suche
+      kennt drei Achsen — also offen.
+- [x] **Die Agent-Vertiefung verlangte in ihrer Reihenfolge-Tabelle ein
+      Werkzeug `set_print_setting`**, das §5.1 desselben Dokuments schon am
+      08.08. mit Begründung zurückgenommen hatte. Mit dem Werkzeug fiel auch
+      seine Abnahme — sie prüfte, was nicht gebaut werden sollte.
+
+**Was die Durchsicht nebenbei fand**, weil sie Zahlen nachzählte statt sie zu
+lesen:
+
+- [x] **„Beispiele — die drei Wege und was darauf bereitliegt"** stand als
+      Beschriftung über neun Beispielen auf dem Startbildschirm, und es sind
+      seit P16 **vier** Wege. Ein sichtbarer Text, den P16.10 übersehen hat;
+      fünf Kataloge ziehen nach, die Wortwahl je Sprache aus dem
+      Handbuchtitel *Die vier Wege* übernommen, damit die Oberfläche nicht
+      zwei Wörter für dieselbe Sache führt. Der Kommentar in `examples.py`
+      war dreifach falsch (vier statt fünf darunter, drei statt vier Wege).
+- [x] **Die Fassung stand an zwei Orten und kein Test hielt sie zusammen.**
+      `test_the_version_is_the_same_in_both_places_that_carry_it` tut es jetzt.
+      Aufgefallen beim Heruntersetzen auf 0.1.0 — bis dahin hing die
+      Übereinstimmung an Aufmerksamkeit.
+- [x] **Die vier Wegekarten auf der Startseite waren textlastig und ihre
+      Zeichnungen klein**, und die Ursache war nicht das Layout: Weg 3 trug
+      89 Wörter gegen 25 bei Weg 2, und das Raster streckt jede Karte auf die
+      Höhe der längsten. Der zweite Absatz von Weg 3 (Meshy, Tripo, Rodin)
+      stand ohnehin doppelt — `ki-modelle.html` führt ihn — und ist dort
+      gestrichen. Dazu zwei Spalten statt vier: 578 statt 279 px je Karte,
+      533 statt 236 px Bildbreite, **233 statt 103 px Bildhöhe**, gerechnet
+      aus `.wrap` 76rem, `gap` 1.25rem und dem Seitenverhältnis 320:140 der
+      Vignetten. `align-items: start` nimmt den Streckzwang.
+
+- [ ] **Offen: die Wegekarten am laufenden Browser nachmessen.** Die Zahlen
+      oben sind aus dem CSS gerechnet, nicht gemessen — die Vorschau führt bei
+      `file://` kein JavaScript aus, und ein lokaler Server auf Port 8765 ist
+      hier durch die Richtlinie gesperrt. Nach der Regel dieses Hauses (*wer
+      Gestaltung ändert, muss sie ansehen*) fehlt der Blick.
+
+### Review des Skizzeneditors — drei Funde, alle behoben (14.08.2026)
+
+Ein Durchgang durch den gesamten uncommitteten Stand (40 Dateien, 959 Zeilen
+Code). Zwei der Funde hat die parallele Sitzung noch während des Reviews
+aufgegriffen; was hier steht, ist der Stand danach.
+
+- [x] **Der Punktdialog rundete, was er nur anzeigen sollte.** `PointDialog`
+      bindet seine Felder auf zwei Dezimalstellen — richtig, denn die Anzeige
+      tut das überall (§11.2). Falsch war, dass `edit_point` das Ergebnis
+      unbesehen zurückschrieb: Ein projizierter Punkt bei 30,125 mm kam als
+      30,13 zurück, einer bei 0,001 mm als 0. **Ansehen war eine Änderung**, und
+      Regel 6 sagt, dass nur die Anzeige rundet.
+
+      Behoben mit einem Merker am `valueChanged`-Signal, nicht mit einem
+      Zahlenvergleich — und das ist der lehrreiche Teil: Der erste Versuch
+      verglich gegen die eigene Rundung und scheiterte an genau dem Wert, um den
+      es ging. **Qt rundet 30,125 auf 30,13, Python auf 30,12** (round-half-even
+      auf einer Zahl, die binär nicht exakt ist). Ein unangetastetes Feld gibt
+      jetzt die genaue Lage zurück, ein angetastetes die Ansage des Nutzers.
+      Zwei Tests, vier Werte gemessen.
+- [x] **Zwei Wege zu einer Geste, und geprüft war der ungenutzte.** Der Griff
+      auf einen vorhandenen Punkt stand im Mausereignis *und* in `place`. Das
+      Ereignis kam zuerst und reichte Strg weiter, `place` nicht — also nahm die
+      Maus einen anderen Weg als die drei Greif-Tests, die alle `place` rufen.
+      Jetzt greift `place` allein und bekommt `extend` herein; ein Test hält
+      fest, dass Strg dort ankommt.
+- [x] **Beim Punktwerkzeug leuchtete nichts auf, obwohl ein Klick greift** —
+      und nach der ersten Behebung leuchteten *zwei* Zeichen: der Punkt und die
+      Fangmarke daneben, die eine Stelle zeigte, die der Klick nicht nimmt. Die
+      Marke weicht jetzt.
+
+      **Dabei fiel eine Doppelbedeutung auf:** `highlighted` trägt zweierlei —
+      den Punkt unter dem Zeiger *und* die Punkte der überfahrenen Bedingung in
+      der Liste (`highlight_points`). Die Fangmarke daran zu hängen hätte sie
+      von der Maus über einer Liste abhängig gemacht. Der Treffer wird deshalb
+      einmal je Mausbewegung gesucht und beiden Verbrauchern **als Argument**
+      gegeben; `_note_hover` nimmt jetzt den Punkt statt der Position. Das
+      spart zugleich den zweiten Durchlauf über alle Punkte.
+
+### Der Absturz im langen Lauf: die Reihenfolge entscheidet (14.08.2026)
+
+Nebenbefund derselben Sitzung, und er räumt eine Erklärung ab. Drei
+Vollläufe, alle drei abgebrochen — und **zwei davon an derselben Stelle**:
+`test_leaving_the_sketch_mode_empty_starts_no_operation`, im `MainWindow`-Aufbau,
+bei 80 und 81 Prozent. Der erste Lauf brach bei 62 Prozent ohne Traceback ab und
+sagte damit nichts.
+
+- [x] **„Der Absturz wandert" gilt nicht mehr.** Er hing bisher am Cluster
+      „diese Maschine rechnet sporadisch falsch", dessen Spur am selben Tag
+      aufgegeben wurde. Zweimal derselbe Test ist keine Wanderung.
+- [x] **Es sind zwei Abstürze, nicht einer.** Das ist der Fund, und er
+      entstand aus einem eigenen Fehler: Der erste Reproduzierer wurde für den
+      Volllauf-Absturz gehalten und ist ein anderer. Beide gemessen:
+
+      | Aufruf | Fehlerbild | Wo |
+      |---|---|---|
+      | `pytest -q` (dreimal gefahren) | **Stack overflow** bei 80/81/82 % | jedes Mal `test_leaving_the_sketch_mode_empty_starts_no_operation`, im `MainWindow`-Aufbau |
+      | `pytest -q --ignore=tests/test_translations.py` | **Stack overflow** bei 82 % | derselbe Test |
+      | `pytest tests/test_translations.py tests/test_ui.py` | **Zugriffsverletzung** bei 22 % | `window`-Fixture von `test_ui.py`, in `render_window_interactor.initialize` |
+      | `pytest tests/test_ui.py tests/test_translations.py` | 298 passed | — |
+      | `pytest tests/test_ui.py` · `tests/test_sketch_editor.py` | 190 · 73 passed | — |
+
+      **Absturz A — der Stapelüberlauf**, der die Vollläufe nimmt: viermal
+      gefahren, **dreimal derselbe Test** (der vierte Lauf brach bei 62 % ohne
+      Traceback ab und sagt nichts). Die gerissene Zeile wandert innerhalb des
+      Fensteraufbaus — `overlay.py:327`, `overlay.py:333`,
+      `main_window.py:790` —, und genau das ist das Bild eines Stapels, der
+      schon fast voll ankommt: Es reißt, wo die nächste tiefe C-Rekursion
+      liegt, nicht dort, wo die Ursache sitzt. `test_sketch_editor.py` allein
+      ist grün, also braucht A einen Vorlauf.
+
+      **Absturz B — die Zugriffsverletzung**, in 90 Sekunden reproduzierbar
+      und **von A unabhängig**: Wer `test_translations.py` vor die
+      fensterbauenden Dateien stellt, tötet einen späteren Aufbau in
+      `render_window_interactor.initialize`; umgekehrte Reihenfolge läuft
+      durch. Die Absturzstelle ist wörtlich die, die `conftest.py` als Folge
+      eines **zerstörten** Fensters beschreibt — nur baut
+      `test_translations.py` überhaupt kein Fenster: kein `MainWindow`, kein
+      `build_application`, kein `deleteLater`. Es vergiftet, ohne eines
+      anzufassen.
+- [ ] **Offen: A und B getrennt weiterverfolgen.** Für **B** ist der nächste
+      Schritt die Halbierung von `test_translations.py` gegen den Aufruf oben —
+      es importiert jede Datei unter `app/ui/` und installiert Sprachkataloge,
+      beides Kandidaten, keiner belegt. Für **A** fehlt zuerst ein
+      Reproduzierer, der kürzer ist als ein Volllauf: er braucht die Dateien
+      *vor* `test_sketch_editor.py`, und welche davon zählen, ist ungemessen.
+      Was für beide nicht mehr gilt: die Erklärung „diese Maschine rechnet
+      sporadisch falsch". Dreimal derselbe Test ist kein Rauschen.

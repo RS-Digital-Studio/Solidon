@@ -141,6 +141,13 @@ SYSTEM: Final[dict[str, Qt.CursorShape]] = {
     "panning": Qt.CursorShape.ClosedHandCursor,
     "move": Qt.CursorShape.SizeAllCursor,
     "busy": Qt.CursorShape.BusyCursor,
+    # Das Fadenkreuz beim Zeichnen. Auf der Zeichenfläche stand der Pfeil,
+    # gleich ob ein Werkzeug lief oder nicht — wer nach dem Setzen von drei
+    # Punkten den mittleren anklickte, um ihn zu ziehen, setzte einen vierten
+    # darauf, und zu sehen war das nicht. Systemform und keine eigene
+    # Zeichnung: das Fadenkreuz ist die bekannteste Form überhaupt für „hier
+    # entsteht etwas", und es folgt der Zeigergröße des Systems.
+    "draw": Qt.CursorShape.CrossCursor,
 }
 
 #: Gebaute Zeiger, nach Rolle und Größe. Ein Zeiger wird bei jeder

@@ -1,7 +1,15 @@
 # Website — solidon3d.de
 
-Statische Seite, kein JavaScript, keine externen Ressourcen. Alles in diesem
-Ordner wird unverändert hochgeladen; einen Build-Schritt gibt es nicht.
+Statische Seiten, **keine externen Ressourcen**. Alles in diesem Ordner wird
+unverändert hochgeladen; einen Build-Schritt gibt es nicht.
+
+Ein einziges Skript liegt dabei, `site.js`, und es kommt von hier — kein CDN,
+keine Bibliothek, keine Schriftart von außen, kein Zählpixel. Es tut genau
+eines: die Sprungliste der Funktionsseite markiert den Block, der gerade
+gelesen wird. Ohne das Skript bleibt sie eine gewöhnliche Sprungliste, und
+sonst ändert sich nichts. `tests/test_website.py` prüft nicht mehr auf „kein
+JavaScript", sondern auf den Teil, der die Zusage der Seite trägt: **nichts von
+außen**.
 
 Bewegung entsteht ausschließlich aus CSS: Übergänge beim Zeigen und
 scroll-gesteuerte Zeitachsen (`animation-timeline: view()`) beim Lesen. Der
@@ -19,6 +27,9 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 |---|---|
 | `index.html` | Startseite deutsch |
 | `en/index.html` | Startseite englisch |
+| `funktionen.html`, `en/features.html` | Funktionsseite — die zwölf Blöcke mit Bildern, dazu die Sprungliste |
+| `ki-modelle.html`, `en/ai-models.html` | Was ein Modell aus Meshy, Tripo oder Rodin noch braucht |
+| `site.js` | Markiert in der Sprungliste den Block, der gerade gelesen wird — das einzige Skript |
 | `handbuch.html`, `en/manual.html` | Handbuch — erzeugt von `tools/make_manual.py`, nie von Hand ändern |
 | `handbuch/` | Abbildungen des Handbuchs, je Sprache ein Ordner |
 | `icon.svg` | Anwendungssymbol als Favicon — erzeugt von `tools/make_icon.py` |
@@ -34,7 +45,16 @@ beim nächsten Lauf von selbst, sobald die Angabe da ist. `tests/test_legal.py`
 lässt keine Seite durch, die einen Platzhalter trägt und sich nicht als
 Entwurf ausweist.
 
-## Zwei Kopplungen, die man sehen muss
+## Drei Kopplungen, die man sehen muss
+
+**Die Startseite reißt an, die Unterseiten führen aus.** Funktionen und
+KI-Modelle standen bis zum 14.08.2026 auf der Startseite und machten sie
+vierzehn Bildschirme lang — der Preis begann erst bei Bildschirm elf. Beide
+haben jetzt eigene Seiten, auf der Startseite steht je ein Anriss mit Verweis;
+sie ist damit acht Bildschirme lang und der Preis beginnt bei 4,8. Wer einen
+Anriss ändert, ändert die Unterseite mit: dieselbe Aussage darf nicht zweimal
+verschieden dastehen. Die Angabe **39 Referenzanfragen** bleibt bewusst im
+Anriss der Startseite — `tests/test_website.py` sucht sie dort.
 
 **Die Startseite lebt von `handbuch/`.** Sie bindet fünf Abbildungen daraus
 ein — `main-window.png`, `report.png`, `catalog.png`, `op-dialog.png` und

@@ -1112,19 +1112,30 @@ anderer Stelle).
   Tests. Ohne neue Abhängigkeit: `imageio` kommt mit scikit-image.
 - **P16.8** — Kern in `app/core/geom/pose.py`, `Bone` und `Pose` in
   `types.py`, `kind="armature"` im Schema, `tests/test_pose.py` mit 16 Tests.
-  **Der Skeletteditor fehlt** — der Kern läuft über die Kommandozeile.
+  **Der Skeletteditor steht** (14.08.2026): `app/ui/pose_bar.py`, dazu
+  `tests/test_pose_session.py` mit 14 Tests. Der Kern bleibt über die
+  Kommandozeile bedienbar.
 - **P16.10** — Kapitel *Formen* im Handbuch, Weg 4 auf beiden Websprachen,
   `weg4-figur-formen.p3d` mit Tour, alles in fünf Sprachen. **Die
   Regelsammlung fehlt** — sie verlangt die Agenten-Suite vorher und nachher,
-  und der Lauf kostet Zeit und Geld.
+  und der Lauf kostet Zeit und Geld. Der Schaden ist trotzdem verhindert: die
+  Sperre gegen geratene Pinselzüge greift zweifach, im Schema und im Aufruf
+  (`GATHERED_KINDS`). Was die Regel zusätzlich brächte, ist der vermiedene
+  Fehlversuch — kein verhinderter Fehler.
 - **P16.9** — `app/core/scene/gathered.py`, Formatversion 8,
   `example_v8.p3d`, Einbacken als Parameter an `sculpt_strokes`.
   `tests/test_gathered.py` mit 13 Tests, dazu fünf in `test_sculpt.py`.
-  **Die Nachfrage in der Oberfläche fehlt** — der Kern meldet die Schwelle,
-  der Weg zum Festschreiben ist noch keiner.
-- P16.6 bis P16.10: unverändert wie in §15 beschrieben, keiner begonnen.
-  **P16.9 trägt jetzt eine bestätigte Entscheidung**: Einbacken mit Nachfrage
-  (D), von Robert am 13.08.2026 so entschieden.
+  **Die Nachfrage in der Oberfläche steht** (14.08.2026):
+  `HistoryPanel.bakeRequested` → `MainWindow.bake_sculpt` →
+  `Session.bake_strokes`, vier Fälle in `tests/test_sculpt_session.py` unter
+  „Einbacken (Entscheidung D)". Sie ist die einzige Nachfrage im ganzen
+  Programm, und der Docstring sagt, warum Regel 19 sie hier zulässt: die
+  Handlung ist nicht folgenlos rücknehmbar.
+- **P16.6 bis P16.10 sind durch.** Diese Zeile stand bis zum 14.08.2026 auf
+  „keiner begonnen" und widersprach damit den fünf Zeilen über ihr — sie war
+  aus §15 stehengeblieben, wo sie beim Schreiben des Plans richtig war.
+  **P16.9 trägt eine bestätigte Entscheidung**: Einbacken mit Nachfrage (D),
+  von Robert am 13.08.2026 so entschieden.
 
 **Beide offenen Entscheidungen sind entschieden** (Robert, 13.08.2026, vor
 dem Beginn von P16.5 zurückgefragt):
@@ -1147,10 +1158,21 @@ vergessen durchgeht:
 | Rest | Wo | Warum noch nicht |
 |---|---|---|
 | **Regelsammlung** | §11, P16.10 | Verlangt die Agenten-Suite vorher und nachher — je rund anderthalb Stunden, und sie kostet Geld. Ein Lauf, den man ansagt. |
-| **Bauplan §25 und die Kategorie `organic`** | §6, Entscheidung M | Acht neue Operationen stehen bei ihren Geschwistern (`mesh`, `boolean`, `surface`). Ob `organic` entsteht und unter welche Menügruppe sie fällt, ist eine Entscheidung, die angesagt gehört. |
 
-Skeletteditor, Einback-Nachfrage und die vierte Displacement-Projektion sind
-seit dem 14.08.2026 erledigt und stehen bei ihren Paketen.
+**Die Kategorie `organic` ist entschieden — sie entsteht nicht** (14.08.2026).
+Sie stand hier als offene Entscheidung und ist keine mehr: statt nach Gefühl
+umzusortieren, wurde Weg 4 einmal ganz durchgefahren, und der Weg trug. Was
+nicht trug, lag an einer anderen Stelle — der erste Schritt endete bei „Das
+Netz ist für diesen Pinsel zu grob" und ließ den Nutzer mit vier Schritten
+allein; behoben mit einem Knopf, der die Kantenlänge aus dem Pinselradius
+rechnet. Die acht Operationen bleiben bei ihren Geschwistern (`mesh`,
+`boolean`, `surface`); eine neunte Menügruppe hätte den Bauplan geändert, um
+ein Problem zu lösen, das dort nicht lag. Einzelheiten in `ROADMAP.md` unter
+P16.
+
+Skeletteditor, Einback-Nachfrage und die vierte Displacement-Projektion
+(`PROJECTIONS` führt `planar`, `cylindrical`, `spherical`, `face`) sind seit
+dem 14.08.2026 erledigt und stehen bei ihren Paketen.
 
 **Die Abnahme aus §16** ist bis auf einen Punkt erfüllt. Sieben von acht:
 Tore grün, `test_gesture_ops.py` für alle drei Sammelarten, Leistungszeilen

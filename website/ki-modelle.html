@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KI-Modelle druckbar machen — Solidon3D</title>
+<meta name="description" content="Ein Modell aus Meshy, Tripo oder Rodin ist eine Oberfläche, kein Teil. Solidon3D repariert, prüft Wandstärken und Überhänge, teilt und verstiftet — vor dem Slicen.">
+<link rel="canonical" href="https://solidon3d.de/ki-modelle.html">
+<link rel="alternate" hreflang="de" href="https://solidon3d.de/ki-modelle.html">
+<link rel="alternate" hreflang="en" href="https://solidon3d.de/en/ai-models.html">
+<link rel="alternate" hreflang="x-default" href="https://solidon3d.de/ki-modelle.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Solidon3D">
+<meta property="og:locale" content="de_DE">
+<meta property="og:url" content="https://solidon3d.de/ki-modelle.html">
+<meta property="og:title" content="KI-Modelle druckbar machen — Solidon3D">
+<meta property="og:description" content="Ein Modell aus Meshy, Tripo oder Rodin ist eine Oberfläche, kein Teil. Solidon3D repariert, prüft Wandstärken und Überhänge, teilt und verstiftet — vor dem Slicen.">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>
+        <path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>
+      </svg>
+      Solidon<span>3D</span>
+    </a>
+    <nav class="lang">
+      <a class="hide-small" href="/funktionen.html">Funktionen</a>
+      <a class="hide-tiny" href="/#wege">Vier Wege</a>
+      <a href="/handbuch.html">Handbuch</a>
+      <a href="/en/ai-models.html">English</a>
+      <a class="cta" href="/#preis">Demo</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section id="anfang">
+    <div class="wrap">
+      <h1>Wenn das Modell aus einer KI kommt</h1>
+      <p class="sub">Meshy, Rodin, Tripo, Hunyuan — sie machen aus einem Satz eine Form. Was sie nicht machen, ist ein Teil, das passt. Genau dort fängt Solidon3D an.</p>
+    </div>
+  </section>
+
+  <section id="generiert">
+    <div class="wrap">
+      <ol class="chain">
+        <li><b>GLB oder STL hereinziehen.</b> Auch texturiert — die Farben
+        überleben den Import.</li>
+        <li><b>Reparaturkette und Prüfbericht.</b> Löcher, umgedrehte
+        Normalen, entartete Dreiecke; danach steht da, was beim Drucken
+        schiefgeht.</li>
+        <li><b>Farben auf deine Filamente umrechnen.</b> Auf die Zahl, die
+        wirklich in der Maschine steckt — nicht auf eine Höchstzahl.</li>
+        <li><b>Teilen, verstiften, anordnen.</b> Passstifte mit Spiel aus dem
+        Materialprofil, damit die Hälften wieder zusammenfinden.</li>
+        <li><b>3MF mit Materialgruppen an den Slicer.</b></li>
+      </ol>
+
+      <h3>Was eine Druckbarkeitsprüfung prüft</h3>
+      <p class="sub">Links, was die Prüfung eines Generators beantwortet.
+      Rechts, was vor dem Druck sonst noch schiefgehen kann. Stand
+      12.08.2026, nach der öffentlichen Dokumentation von Meshy.</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Geprüft wird</th><th>Generator</th><th>Solidon3D</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Wasserdicht, Löcher, offene Kanten</td><td><span class="yes">✓ ja</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Nicht-mannigfaltige Kanten, entartete Flächen</td><td><span class="yes">✓ ja</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Volumen</td><td><span class="yes">✓ ja</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Wandstärke gegen die Düse dieses Druckers</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Überhangwinkel je Schicht</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Inseln: Material ohne Verbindung nach unten</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Brückenweiten, schmalste Stelle</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Stützbedarf und beste Lage</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Passt es auf dein Druckbett</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+          <tr><td>Passungen gegen das Materialprofil</td><td><span class="no">— nein</span></td><td><span class="yes">✓ ja</span></td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">Reparieren allein gibt es inzwischen gratis im
+      Browser, und das ist auch in Ordnung — ein geschlossenes Netz ist noch
+      kein Teil, das passt. Der Unterschied liegt hinter der Reparatur: Maß,
+      Passung, Schichtanalyse, und ein Verlauf, in dem sich jede Zahl später
+      noch ändern lässt.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="closing">
+        <h2>Aus der Form ein Teil machen</h2>
+        <p>Die Demo erscheint am 20. August 2026 und läuft bis zum 30. Oktober
+        — kostenlos und vollständig.</p>
+        <a class="btn" href="/#preis">Zur Demo</a>
+        <a class="btn ghost" href="/funktionen.html">Alle Funktionen</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    © 2026 RS Digital ·
+    <a href="/">Startseite</a> ·
+    <a href="/handbuch.html">Handbuch</a> ·
+    <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
+    <a href="/impressum.html">Impressum</a> ·
+    <a href="/datenschutz.html">Datenschutz</a> ·
+    <a href="/en/">English</a>
+  </div>
+</footer>
+
+</body>
+</html>

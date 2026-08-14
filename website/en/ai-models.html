@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Make AI models printable — Solidon3D</title>
+<meta name="description" content="A model from Meshy, Tripo or Rodin is a surface, not a part. Solidon3D repairs it, checks wall thickness and overhangs, splits and pins it — before you slice.">
+<link rel="canonical" href="https://solidon3d.de/en/ai-models.html">
+<link rel="alternate" hreflang="de" href="https://solidon3d.de/ki-modelle.html">
+<link rel="alternate" hreflang="en" href="https://solidon3d.de/en/ai-models.html">
+<link rel="alternate" hreflang="x-default" href="https://solidon3d.de/ki-modelle.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Solidon3D">
+<meta property="og:locale" content="en_GB">
+<meta property="og:url" content="https://solidon3d.de/en/ai-models.html">
+<meta property="og:title" content="Make AI models printable — Solidon3D">
+<meta property="og:description" content="A model from Meshy, Tripo or Rodin is a surface, not a part. Solidon3D repairs it, checks wall thickness and overhangs, splits and pins it — before you slice.">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/en/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>
+        <path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>
+      </svg>
+      Solidon<span>3D</span>
+    </a>
+    <nav class="lang">
+      <a class="hide-small" href="/en/features.html">Features</a>
+      <a class="hide-tiny" href="/en/#ways">Four ways</a>
+      <a href="/en/manual.html">Manual</a>
+      <a href="/ki-modelle.html">Deutsch</a>
+      <a class="cta" href="/en/#pricing">Demo</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section id="anfang">
+    <div class="wrap">
+      <h1>When the model comes from an AI</h1>
+      <p class="sub">Meshy, Rodin, Tripo, Hunyuan — they turn a sentence into a shape. What they do not turn it into is a part that fits. That is where Solidon3D starts.</p>
+    </div>
+  </section>
+
+  <section id="generated">
+    <div class="wrap">
+      <ol class="chain">
+        <li><b>Drop in a GLB or STL.</b> Textured as well — the colours survive
+        the import.</li>
+        <li><b>Repair chain and report.</b> Holes, flipped normals, degenerate
+        triangles; afterwards it says what will go wrong on the plate.</li>
+        <li><b>Map the colours onto your filaments.</b> Onto the number
+        actually loaded in the machine, not onto a maximum.</li>
+        <li><b>Split, pin, arrange.</b> Dowels with clearance from the material
+        profile, so the halves find each other again.</li>
+        <li><b>3MF with material groups, straight to the slicer.</b></li>
+      </ol>
+
+      <h3>What a printability check checks</h3>
+      <p class="sub">On the left, what a generator's check answers. On the
+      right, what else can go wrong before the print. As of 12 August 2026,
+      from Meshy's public documentation.</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Checked</th><th>Generator</th><th>Solidon3D</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Watertight, holes, open edges</td><td><span class="yes">✓ yes</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Non-manifold edges, degenerate faces</td><td><span class="yes">✓ yes</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Volume</td><td><span class="yes">✓ yes</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Wall thickness against this printer's nozzle</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Overhang angle per layer</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Islands: material with nothing below it</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Bridge spans, narrowest section</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Support needed, and the best orientation</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Does it fit your build plate</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+          <tr><td>Fits against the material profile</td><td><span class="no">— no</span></td><td><span class="yes">✓ yes</span></td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">Repairing alone is available free in a browser these
+      days, and that is fine — a closed mesh is still not a part that fits. The
+      difference sits behind the repair: dimension, fit, layer analysis, and a
+      history in which every number can still be changed later.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="closing">
+        <h2>Turn the shape into a part</h2>
+        <p>The demo arrives on 20 August 2026 and runs until 30 October — free
+        and complete.</p>
+        <a class="btn" href="/en/#pricing">To the demo</a>
+        <a class="btn ghost" href="/en/features.html">All features</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    © 2026 RS Digital ·
+    <a href="/en/">Home</a> ·
+    <a href="/en/manual.html">Manual</a> ·
+    <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
+    <a href="/impressum.html">Legal notice</a> ·
+    <a href="/datenschutz.html">Privacy</a> ·
+    <a href="/">Deutsch</a>
+  </div>
+</footer>
+
+</body>
+</html>

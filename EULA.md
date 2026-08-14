@@ -10,7 +10,7 @@ RS Digital, Robert Schneider (Anschrift im Impressum unter
 Wenn Sie mit diesen Bedingungen nicht einverstanden sind, benutzen Sie die
 Software nicht und löschen Sie sie.
 
-**Zur Demo-Fassung 0.7:** Sie ist unentgeltlich, vollständig und **zeitlich
+**Zur Demo-Fassung 0.1:** Sie ist unentgeltlich, vollständig und **zeitlich
 befristet**. Für sie gelten dieselben Bedingungen wie unten beschrieben, mit
 den Abweichungen in Abschnitt 4a. Ein Kauf findet dabei nicht statt, und ein
 Lizenzschlüssel wird nicht gebraucht.

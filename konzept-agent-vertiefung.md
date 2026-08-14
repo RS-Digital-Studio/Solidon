@@ -374,12 +374,20 @@ Commit.
 | **0 — Messgrundlage** | 2.1 Basislinie, 2.2 `invalid`-Kennzahl, 2.3 Zwischenspeicherung + `max_tokens` | Voller Suite-Lauf dokumentiert (ROADMAP + `rules.toml`-Verlauf); `invalid` wird je Fall ausgewiesen; Tokenkosten je Zug messbar gefallen |
 | **1 — Wahrnehmung Text** | 3.1 frischer Steckbrief, 3.2 Steckbrief-Blöcke, 3.4 `read_standard`, 4.5 Verlaufshinweis | Op-Ergebnisse nennen neue Feature-IDs (Test gegen `ScriptedBackend`); Steckbrief-Tests für Passungen/Einstellungen/Quellen/Verlauf; Suite ≥ Basislinie |
 | **2 — Sichtbarkeit** | 4.1 Fortschritt, 4.2 Kosten und Fragen am Vorschlag, 4.3 Suchfeld-Absatz | Offscreen-Test: Statuszeile trägt Schritt und Werkzeugtitel; Entscheidungszeile zeigt Schritte/Tokens; zwei neue Suite-Fälle für den Menüort bestehen |
-| **3 — Handlungsraum** | 3.3 `read_analysis`, 5.1 `set_print_setting`, 5.2 `set_print_target` | Bauplan-Ansage 1 eingetragen; jede Analyse mit Herkunftspräfix und Zeitdeckel (Test); Einstellungsänderung reist im Undo mit (Test); neue Suite-Fälle bestehen |
+| **3 — Handlungsraum** | 3.3 `read_analysis`, 5.1 Druckeinstellungen **lesen** (nicht setzen — siehe dort), 5.2 `set_print_target` | Bauplan-Ansage 1 eingetragen; jede Analyse mit Herkunftspräfix und Zeitdeckel (Test); neue Suite-Fälle bestehen |
 | **4 — Augen und Autopilot** | 3.5 Ansichten, 4.4 automatische Übernahme | Bild erreicht Anthropic-Payload (Test gegen Transport-Attrappe); Backend ohne `supports_images` bekommt reinen Text; Auto-Übernahme greift nur unter allen vier Bedingungen (Test je Bedingung); mehrdeutige Fälle fragen weiterhin 3/3 |
 | **5 — Grundform-Skizzen** | 5.3 `shape`-Schema | Bauplan-Ansage 2 eingetragen; Geometrietests je Grundform gegen den Korpus; die vier Skizzen-Suite-Fälle sind gewinnbar und gewonnen |
 
 Begleitend, ohne eigenen Schritt: 2.4 (eine Werkzeuglogik) beginnt vor
 Schritt 3 — die neuen Werkzeuge entstehen nur einmal.
+
+> **Die Zeile zu Schritt 3 nannte bis zum 14.08.2026 ein Werkzeug
+> `set_print_setting`**, das §5.1 desselben Dokuments schon am 08.08. mit
+> Begründung zurückgenommen hatte — und das es folgerichtig nicht gibt: die
+> Werkzeugliste in `agent/tools.py` führt `read_analysis`, `read_standard` und
+> `set_print_target`, keinen Setzer für Einstellungen. Mit dem Werkzeug fiel
+> auch seine Abnahme („Einstellungsänderung reist im Undo mit") — sie prüfte,
+> was gar nicht gebaut werden sollte.
 
 **Risiken, benannt:**
 

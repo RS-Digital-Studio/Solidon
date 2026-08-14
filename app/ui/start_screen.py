@@ -431,7 +431,7 @@ class StartScreen(QWidget):
         inner.addWidget(title)
         inner.addWidget(drop)
         inner.addLayout(buttons)
-        inner.addWidget(_caption(tr("Beispiele — die drei Wege und was darauf bereitliegt"), self))
+        inner.addWidget(_caption(tr("Beispiele — die vier Wege und was darauf bereitliegt"), self))
         inner.addWidget(self.examples_area)
         inner.addWidget(_caption(tr("Zuletzt geöffnet"), self))
         inner.addWidget(self.recent_empty)

@@ -14,10 +14,18 @@
 # Der Schritt steht hier und überspringt sich, wenn das Secret fehlt — ein
 # Fork baut dann unsigniert, statt zu scheitern.
 #
-# Das Repository ist privat, und private Minuten sind gezählt — macOS zehnfach,
-# Windows doppelt. Deshalb läuft der tägliche Push nur auf Ubuntu; die volle
-# Drei-Plattform-Matrix und die Paketierung laufen bei Tags und beim Handstart
-# (workflow_dispatch), also genau dann, wenn veröffentlicht wird.
+# Der tägliche Push läuft nur auf Ubuntu; die volle Drei-Plattform-Matrix und
+# die Paketierung laufen bei Tags und beim Handstart (workflow_dispatch), also
+# genau dann, wenn veröffentlicht wird.
+#
+# Die Begründung dafür hat sich am 14.08.2026 geändert. Hier stand, das
+# Repository sei privat und private Minuten seien gezählt — macOS zehnfach,
+# Windows doppelt. Es ist seit der Umbenennung auf `Solidon` öffentlich, und
+# damit kosten die Standard-Runner nichts mehr. Was bleibt, ist die
+# Rückmeldezeit: der Ubuntu-Lauf allein braucht schon über zwölf Minuten.
+# Wer die Matrix trotzdem auf jeden Push erweitert, tut das mit einem echten
+# Grund — plattformabhängige Fehler fallen sonst erst am Tag der
+# Veröffentlichung auf, und genau das ist hier schon passiert.
 
 name: Bauen
 

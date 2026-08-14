@@ -933,7 +933,13 @@ vorher vor; wir bringen sie hinterher auf Maß — `fit_to_size` skaliert auf ei
 Kantenlänge, `check_build_volume` sagt, ob es auf die Platte passt. Das ersetzt
 keine Proportionsvorgabe, beantwortet aber die Frage, die ein Drucker stellt.
 
-### B13 — Nicht-planarer Schnitt · **beantwortet, mit Gegenvorschlag** · 12.08.2026
+### B13 — Nicht-planarer Schnitt · **offen, weil noch nicht gebaut** · groß
+
+*Dieser Befund steht in diesem Dokument zweimal: hier die geprüfte Fassung, und
+unten die ursprüngliche samt Nachtrag vom 13.08.2026, der die halbe Begründung
+zurücknimmt. Der Status hier ist der geltende.* **Beantwortet ist die Frage
+nach dem Weg, gebaut ist nichts** — nachgesehen am 14.08.2026: `autosplit.py`
+holt seine Normale weiter aus `AXIS_NORMALS`, die Suche kennt also drei Achsen.
 
 Der einzige Punkt im ganzen Vergleich, an dem eine ihrer Funktionen etwas kann,
 das wir nicht können und gebrauchen könnten.
@@ -970,7 +976,10 @@ Rund 90 Pixel über dem Beschreibungssatz. Entweder gehört dort eine Vorschau
 hin, oder der Dialog ist zu hoch. Eine Messung am laufenden Fenster
 entscheidet das in fünf Minuten.
 
-### B13 — Nicht-planarer Schnitt · **offen** · groß
+### B13 — Nicht-planarer Schnitt · **offen** · groß · *ursprüngliche Fassung*
+
+*Die geprüfte Fassung dieses Befundes steht weiter oben; hier bleibt der
+Wortlaut von damals stehen, weil der Nachtrag am Ende sich darauf bezieht.*
 
 Der einzige Punkt im ganzen Vergleich, an dem eine ihrer Funktionen etwas kann,
 das wir nicht können und gebrauchen könnten. `split_plane` und `split_pinned`
@@ -1082,7 +1091,7 @@ Stand, nicht die Absicht.
 | **B10** Rodins ControlNet | **beantwortet: nein** — Hunyuan3D 2.1 hat keine Formvorgabe |
 | **B11** Qualitätsstufe als Angebot | als Restzeitschätzung umgesetzt; der Umschalter wäre eine Betriebsart gewesen |
 | **B12** Leerraum im Operationsdialog | 189 → 26 px; es war eine fehlende Größenrichtlinie |
-| **B13** Nicht-planarer Schnitt | **beantwortet, mit Gegenvorschlag** — geneigte Ebene statt Hüllen |
+| **B13** Nicht-planarer Schnitt | **offen** — der Weg ist beantwortet (geneigte Ebene statt Hüllen), gebaut ist nichts: die Suche kennt weiter drei Achsen. Diese Zeile stand bis zum 14.08.2026 auf „beantwortet" und widersprach damit dem Nachtrag über ihr |
 | **B14** „Wann nicht benutzen" | fünf Operationen mit echter Grenze |
 | **B15** Erzählung um die Reparatur | Website: reparieren allein trägt kein Argument mehr |
 | **B16** Flächen abstufen, Akzent binden | Kontraste 1,10 → 1,45, Trennlinie 1,43 → 2,30, Reiterkante |

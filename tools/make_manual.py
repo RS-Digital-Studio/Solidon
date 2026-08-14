@@ -182,7 +182,7 @@ STYLE = """
                                  box-shadow: none; border-radius: 0; }
       /* Die Kapitelnummer bleibt ebenfalls am Bildschirm: der Kolumnentitel
          des PDF erkennt ein Kapitel an seiner Titelzeile, und eine Nummer
-         davor macht aus „Die drei Wege" eine Zeile, die niemand erwartet
+         davor macht aus „Die vier Wege" eine Zeile, die niemand erwartet
          (siehe ``_chapter_of_each_page``). */
       main > h2[id]::before, main > h3[id]::before { content: none; }
 

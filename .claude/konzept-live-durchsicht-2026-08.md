@@ -94,6 +94,15 @@ falsch.
 Dreiecken. Der Weg ist kurz, der Test ist ein Zylinder mit Ø 50, dessen
 Hüllquader auf `EPS_GEOM` genau stimmen muss.
 
+> **Erledigt** — mit einem anderen Aufruf als hier vorgeschlagen.
+> `AddOptimal_s` statt `Add_s`: das eine misst die Flächen, das andere nimmt
+> die Triangulation, wo es eine gibt — und die gibt es hier, denn die Anzeige
+> hat sie gerade gebaut. Mit `Add_s` wäre der Fehler geblieben und der Test
+> trotzdem grün gewesen, solange niemand nachrechnet.
+> `test_the_bounding_box_comes_from_the_shape_not_from_the_triangles` prüft
+> beide Richtungen: der Hüllquader trifft 50 mm auf `EPS_GEOM`, und die
+> Tessellation daneben trifft ihn weiterhin nicht.
+
 #### A2 — Die angeklickte Fläche ist die Mitte des Werkzeugs, nicht sein Anfang
 
 `drill` legt den Schnittzylinder mittig auf `position`
@@ -165,6 +174,13 @@ die Regel überhaupt erfasst.
 („Werkzeug liegt außerhalb des Körpers", „an einer Fläche ausrichten",
 „Position prüfen"). Ein Test je Sorte, mit einer Position weit daneben.
 
+> **Erledigt.** Der Satz steht in `geom/boolean.py`: „Der Schnitt hat nichts
+> abgetragen — das Werkzeug liegt neben dem Körper." Er greift für jeden
+> abziehenden Weg, also auch für die Bausteine, die darüber laufen — genau die
+> Magnettasche aus dem Befund ist der Testfall in `tests/test_parts.py`. Beim
+> Bohren gab es den Satz schon vorher; neu ist, dass er nicht mehr an der einen
+> Operation hängt, sondern an der Stelle, durch die alle gehen.
+
 ### B. Der Weg zur Platte
 
 #### B1 — Solidons Anordnung erreicht den Slicer nicht
@@ -232,6 +248,14 @@ gedruckt, die es für Deckel gibt. Im Live-Lauf: Vorschläge = 0.
 Das Dokument erfährt damit, was die Geometrie längst weiß. `History.apply`
 nimmt `changes` bereits entgegen; die Ops müssen sie nur füllen dürfen (§15.5).
 
+> **Erledigt, aber nicht in den Ops.** Die Passung entsteht in
+> `app/core/lid_flow.py` — ein Ablauf *um* die Operation herum, nicht in ihr.
+> Der Grund ist Regel 3: eine Op erzeugt Objekte und ändert das Dokument nicht,
+> und eine Passung ist eine Dokumentänderung. Der Ablauf sammelt die
+> Namen der bestehenden Passungen ein, damit keine zweite denselben Namen
+> bekommt, und reicht `changes` an `History.apply`. `tests/test_lid_flow.py`
+> hält es fest.
+
 #### B4 — Die Gegenprobe vergleicht nur das Stützvolumen
 
 Der Live-Lauf: Solidons Schätzung **12 g / 46 min**, der G-Code **10,0 g /
@@ -247,6 +271,12 @@ die Schätzung gehalten zu werden. §28.2 meint beides.
 bleiben stehen, beide behalten ihre Herkunft (Regel 14) — was fehlt, ist der
 Satz, dass sie sich widersprechen. Und genau dieser Satz ist der Hinweis, dass
 `slice/estimate.py` Arbeit braucht.
+
+> **Erledigt.** `gcode.compare` läuft jetzt dreimal statt einmal: Stützvolumen
+> wie zuvor, dazu `"material"` gegen `metrics.grams` und `"time"` gegen
+> `metrics.print_minutes`. Beide nur, wenn die Schätzung überhaupt einen Wert
+> hat — eine Gegenprobe gegen Null wäre eine Warnung über eine fehlende
+> Messung, nicht über eine Abweichung. Die 15-%-Schwelle bleibt, wo sie stand.
 
 #### B5 — `arrange_bed` ohne Eingaben hält das Dokument an
 
@@ -291,6 +321,13 @@ beiden Stellen. Prüfbar ohne Fenster wird es nicht — der Test ist ein Klick a
 die Mitte einer Fläche in einem sichtbaren Fenster, und er gehört in die Liste
 der Dinge, die von Hand geprüft werden, weil offscreen kein Plotter existiert.
 
+> **Erledigt.** `vtkCellPicker` an beiden Stellen; der Viewport gibt das
+> Getroffene über `objectPicked` heraus, und daran hängen Auswahl,
+> Kontextmenü, Messen und die Flächenübernahme in den Dialog — die vier Dinge,
+> die dieser Befund als Folge nennt. Die Vorhersage über den Test hat sich
+> bestätigt: prüfbar ist der Rückgabewert des Pickers, nicht der Klick, und
+> genau das prüft die Suite.
+
 #### C2 — Ein Zylinder hat einundfünfzig Flächen
 
 Der Netz-Prüfkörper (Ø 50, 48 Segmente, eine Bohrung) trägt nach der
@@ -331,6 +368,14 @@ Richtung der Normalen zur Achse) und zwischen `hole` und `boss` unterscheiden.
 Ein Vokabular für den zweiten Fall gibt es in §21 noch nicht — er gehört
 zuerst in Bauplan §4.2, dann in den Code.
 
+> **Erledigt — die Vokabel heißt `pin`, nicht `boss`.** Sie steht in
+> `FeatureKind` neben `hole`, `face`, `edge_loop` und `thread`, und der Bauplan
+> führt sie in derselben Zeile. Beide Kerne unterscheiden jetzt: der Mesh-Weg
+> über `detect_pins` (Zylinderflächen, deren Normalen nach außen zeigen), der
+> B-Rep-Weg über `hollow` in `_describe`. Für `boss` sprach nichts außer dem
+> Vorschlag hier; `pin` sagt dasselbe und passt zum Verstiften, das die Vokabel
+> anderswo schon benutzt.
+
 #### C4 — Die Skizzenleiste liegt unter den Fenstern
 
 Im Skizzenmodus laufen Werkzeugleiste und Zwangsbedingungszeile über die volle
@@ -346,6 +391,12 @@ Fusion kommt, findet also die Tasten, aber nicht die Knöpfe.
 **Fix:** Die Leiste gehört in den Viewport-Bereich zwischen die Panels, nicht
 über das ganze Fenster. Prüfbar über die Geometrie der Widgets, ohne Bild.
 
+> **Erledigt, und dann von P15 überholt.** Die Leiste sitzt nicht mehr über dem
+> Fenster, sondern im mittleren Bereich: der Skizzenmodus ist ein Stapel aus
+> Ansicht und Zeichenfläche (`SketchPanel`, P15 Etappe 3), die `sketch_bar`
+> gehört zur unteren Zone. Dialog und Modus benutzen dasselbe Panel — es gibt
+> keine zweite Skizzenoberfläche, die auseinanderlaufen könnte.
+
 #### C5 — Der Ersteinrichtungsdialog fragt den gefundenen Slicer nicht
 
 Der Dialog meldet „gefunden: Slicer" und schlägt im selben Fenster „Allgemeiner
@@ -359,6 +410,13 @@ vorschlagen. Trifft nichts, bleibt der allgemeine Drucker stehen; eine falsche
 Vorauswahl wäre schlimmer (dieselbe Regel, die `slicer_profiles.match` schon
 befolgt).
 
+> **Erledigt.** `first_run._printer_from_slicer()` fragt den gefundenen Slicer
+> nach seiner eingestellten Maschine (`chosen_machine`) und bildet sie auf ein
+> Druckerprofil ab (`printer_for`). Die Kette ist so gebaut, dass jedes Glied
+> aussteigen darf: kein Slicer, kein Treffer, kein Profil — dann bleibt der
+> allgemeine Drucker stehen. Die Reihenfolge im Aufruf sagt es selbst:
+> `settings.printer or _printer_from_slicer() or DEFAULT_PRINTER`.
+
 #### C6 — Der Name des Teils reist nicht ins STEP
 
 In Fusion heißt das importierte Teil „Körper1"; der STEP-Header nennt „Open
@@ -369,6 +427,12 @@ hat dieselbe Lücke.
 **Fix:** `PRODUCT`-Name beim Schreiben setzen (`STEPControl_Writer` über
 `Interface_Static` bzw. den Namen an der Form). Prüfbar ohne Fusion: die
 geschriebene Datei enthält den Objektnamen.
+
+> **Erledigt.** `writer._step_bytes` reicht den Objektnamen an `brep_step.write`
+> durch; zwei Tests halten es fest — einer am Übersetzer
+> (`test_the_object_name_travels_into_the_step_file`), einer am Export aus der
+> Szene. Der Name lag die ganze Zeit im Dokument, er kam nur nicht bis zur
+> Datei.
 
 #### C7 — Von der Aushöhlung zum Deckel fehlt ein Schritt
 
@@ -395,7 +459,15 @@ aber er entscheidet darüber, ob „Dose mit Deckel" ein Zweiklick-Weg ist.
 
 Vier Pakete. Jedes ist so geschnitten, dass die Suite danach grün sein kann.
 
-**Paket 1 — Maße, die stimmen.** A1, A3, C6.
+> **Alle vier Pakete und A2 sind durch** (nachgeprüft am Code, 14.08.2026).
+> Bis dahin trug nur Paket 2 einen Vermerk, obwohl die anderen dreizehn
+> Befunde ebenso erledigt waren — die Vermerke sind jetzt bei den Befunden
+> selbst nachgetragen, mit der Stelle im Code. Zwei Abweichungen von den
+> Vorschlägen unten stehen dort ausdrücklich: die Passung entsteht in
+> `lid_flow.py` statt in den Ops (Regel 3), und die neue Vokabel heißt `pin`
+> statt `boss`.
+
+**Paket 1 — Maße, die stimmen.** A1, A3, C6. **Erledigt.**
 Der exakte Hüllquader, der laute Fehlschlag, der Name im STEP. Zusammen, weil
 alle drei klein sind und alle drei an derselben Stelle wehtun: eine Zahl, der
 man ansieht, dass sie stimmt.
@@ -415,7 +487,7 @@ Auswertung vollständig.
 unbekannt ist. Die Auswertung läuft durch. Einzelheiten am Ende der
 `ROADMAP.md`.
 
-**Paket 3 — Zeigen und Auswählen.** C1, C4, dann C2.
+**Paket 3 — Zeigen und Auswählen.** C1, C4, dann C2. **Erledigt.**
 Der Flächenpicker zuerst — er schaltet Auswahl, Kontextmenü, Messen und
 Flächenübernahme auf einmal frei. Die Skizzenleiste danach, weil sie eine
 Stunde ist. C2 (Facetten zusammenfassen) zuletzt, weil es die ID-Stabilität
@@ -425,14 +497,15 @@ Rechtsklick öffnet das Menü; im Skizzenmodus ist der erste Knopf der Leiste
 sichtbar und anklickbar; ein Zylinder trägt drei Flächenmerkmale statt
 einundfünfzig.
 
-**Paket 4 — Was das Teil verlangt.** B3, B4, C3, C5, C7.
-Die Passung ins Dokument, die vollständige Gegenprobe, `boss` neben `hole`, die
+**Paket 4 — Was das Teil verlangt.** B3, B4, C3, C5, C7. **Erledigt.**
+Die Passung ins Dokument, die vollständige Gegenprobe, `pin` neben `hole`, die
 Vorbelegung aus dem Slicer, der Weg zur Dose.
 *Abnahme:* ein Deckel aus `create_lid` erzeugt eine Passung, und `advise`
 schlägt daraufhin die genaue Außenwand vor; eine Abweichung über 15 % zwischen
 Schätzung und G-Code erscheint als Warnung im Prüfbericht.
 
-**A2 steht bewusst außerhalb der Pakete.** Die Bohrposition zu drehen ist die
+**A2 steht bewusst außerhalb der Pakete** und ist erledigt — der Vermerk mit
+den Zahlen steht beim Befund. Die Bohrposition zu drehen ist die
 einzige Änderung hier, die bestehende Projektdateien anders rechnen lässt. Sie
 braucht ihre eigene Runde: Formatversion, Migration, Beispieldatei, und einen
 Durchgang durch alle sieben Bausteine, die darauf aufsetzen. Sie ist aber auch

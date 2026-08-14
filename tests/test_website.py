@@ -25,7 +25,22 @@ from app.core.knowledge.parts.registry import PARTS
 from app.core.registry import REGISTRY
 
 WEBSITE = Path(__file__).resolve().parent.parent / "website"
+
+#: Die Startseiten. Sie führen die Kennzahlen, das Angebot für Suchmaschinen
+#: und die häufigen Fragen — nur sie werden auf diese Inhalte geprüft.
 PAGES = ("index.html", "en/index.html")
+
+#: Jede von Hand gepflegte Verkaufsseite. Handbuch und Rechtstexte stehen nicht
+#: dabei: die erzeugt ein Werkzeug, und `test_manual.py` beziehungsweise
+#: `test_legal.py` prüfen sie. Was hier steht, wird auf Aufbau geprüft —
+#: Verweise, Bildmaße, Sprungmarken.
+ALL_PAGES = (
+    *PAGES,
+    "funktionen.html",
+    "ki-modelle.html",
+    "en/features.html",
+    "en/ai-models.html",
+)
 DATA = Path(__file__).resolve().parent.parent / "app" / "core" / "knowledge" / "data"
 EXAMPLES = Path(__file__).resolve().parent.parent / "app" / "examples"
 
@@ -95,13 +110,19 @@ def test_the_number_of_agent_cases_on_the_page_matches_the_suite() -> None:
         assert int(found.group(1)) == len(ALL_CASES), page
 
 
-@pytest.mark.parametrize("page", PAGES)
+@pytest.mark.parametrize("page", ALL_PAGES)
 def test_every_file_the_page_refers_to_exists(page: str) -> None:
     source = WEBSITE / page
     missing = []
     for match in LINK.finditer(source.read_text(encoding="utf-8")):
         target = match.group(1)
         if target.startswith(("http", "mailto:", "#", "data:")):
+            continue
+        # Seit die Unterseiten dazugekommen sind, trägt ein Verweis auch eine
+        # Sprungmarke: `/#preis` meint die Startseite und darin die Stelle.
+        # Hier zählt die Datei davor — die Marke prüft der Test darunter.
+        target = target.split("#", 1)[0]
+        if not target:
             continue
         # Ein führender Schrägstrich meint die Wurzel der Website, kein
         # Wurzelverzeichnis der Festplatte.
@@ -111,7 +132,7 @@ def test_every_file_the_page_refers_to_exists(page: str) -> None:
     assert not missing, f"{page} verweist auf {missing}"
 
 
-@pytest.mark.parametrize("page", PAGES)
+@pytest.mark.parametrize("page", ALL_PAGES)
 def test_every_picture_states_the_size_it_actually_has(page: str) -> None:
     """Falsche Maße lassen die Seite beim Laden springen.
 
@@ -134,7 +155,7 @@ def test_every_picture_states_the_size_it_actually_has(page: str) -> None:
     assert not wrong, wrong
 
 
-@pytest.mark.parametrize("page", PAGES)
+@pytest.mark.parametrize("page", ALL_PAGES)
 def test_every_jump_mark_the_navigation_offers_has_a_target(page: str) -> None:
     """Ein Sprung ins Leere merkt niemand beim Schreiben.
 
@@ -146,20 +167,134 @@ def test_every_jump_mark_the_navigation_offers_has_a_target(page: str) -> None:
     text = (WEBSITE / page).read_text(encoding="utf-8")
     ids = set(re.findall(r'id="([^"]+)"', text))
     marks = {m.lstrip("#") for m in re.findall(r'href="(#[^"]+)"', text)}
-    marks |= {m for m in re.findall(r'"https://solidon3d\.de[^"]*#([^"]+)"', text)}
+    marks |= set(re.findall(r'"https://solidon3d\.de[^"]*#([^"]+)"', text))
     assert marks <= ids, f"{page} springt auf {sorted(marks - ids)}"
 
 
-@pytest.mark.parametrize("page", PAGES)
-def test_the_page_stays_free_of_scripts_and_outside_hosts(page: str) -> None:
-    """Die Seite lädt nichts nach und führt nichts aus.
+@pytest.mark.parametrize("page", ALL_PAGES)
+def test_every_jump_onto_another_page_lands_somewhere(page: str) -> None:
+    """Die Unterseiten springen zurück in die Startseite — auf eine Stelle.
 
-    Das einzige ``<script>`` ist die Auszeichnung für Suchmaschinen —
-    ``application/ld+json`` ist Daten, kein Code. Alles andere wäre ein
-    Bruch mit `website/README.md`.
+    ``/#preis`` und ``/en/#pricing`` stehen auf jeder Unterseite, im Kopf und
+    am Fuß. Wird ein Abschnitt der Startseite umbenannt, zeigen sie ins Leere,
+    und niemand merkt es: der Browser lädt die Seite und bleibt oben stehen.
+    Diese Art Verweis gab es erst, seit Funktionen und KI-Modelle eigene
+    Seiten haben.
     """
     text = (WEBSITE / page).read_text(encoding="utf-8")
-    scripts = re.findall(r"<script([^>]*)>", text)
-    assert all('type="application/ld+json"' in tag for tag in scripts), scripts
+    lost = []
+    for target in re.findall(r'href="(/[^"#]*#[^"]+)"', text):
+        path, mark = target.split("#", 1)
+        name = path.lstrip("/") or "index.html"
+        if name.endswith("/"):
+            name += "index.html"
+        other = WEBSITE / name
+        # Ob die Datei überhaupt da ist, sagt der Test über diesem.
+        if not other.exists():
+            continue
+        if mark not in set(re.findall(r'id="([^"]+)"', other.read_text(encoding="utf-8"))):
+            lost.append(target)
+    assert not lost, f"{page} springt auf eine Stelle, die es nicht gibt: {lost}"
+
+
+#: Der Runner-Name eines Auftrags sagt, für welche Familie gepackt wird. Die
+#: Paketmatrix steht als Liste da; die Suite-Matrix daneben baut ihre über
+#: ``fromJSON`` und packt nichts — die eckige Klammer trennt beide.
+PACKAGE_MATRIX = re.compile(r"^\s*os:\s*\[([^\]]+)\]", re.MULTILINE)
+
+#: Wie ein Runner heißt und wie die Seite die Plattform nennt.
+FAMILIES = {"windows": "Windows", "ubuntu": "Linux", "macos": "macOS"}
+
+#: Womit eine Frage nach einer Plattform anfangen kann, wenn die Antwort Nein
+#: lautet. Mehr braucht es nicht — geprüft wird der Satzanfang.
+DENIALS = ("nein", "no,", "no.", "not for now", "nicht für jetzt")
+
+
+def _packaged_platforms() -> set[str]:
+    """Die Plattformen, für die die CI ein Paket baut.
+
+    Gelesen wird der Auftrag selbst und keine gepflegte Liste daneben: Eine
+    zweite Aufzählung würde genau dann falsch, wenn jemand die erste ändert.
+    """
+    workflow = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "build.yml"
+    found = set()
+    for match in PACKAGE_MATRIX.finditer(workflow.read_text(encoding="utf-8")):
+        for runner in match.group(1).split(","):
+            for prefix, name in FAMILIES.items():
+                if runner.strip().startswith(prefix):
+                    found.add(name)
+    return found
+
+
+@pytest.mark.parametrize("page", PAGES)
+def test_the_markup_promises_exactly_the_platforms_the_build_produces(page: str) -> None:
+    """Die Auszeichnung für Suchmaschinen ist die formalste Zusage der Seite.
+
+    Sie ist auch die, die niemand liest — deshalb steht sie hier gegen den
+    Bauauftrag. Nennt sie eine Plattform zu viel, sucht jemand ein Paket, das
+    es nicht gibt; nennt sie eine zu wenig, findet ein Kunde uns gar nicht.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    found = re.search(r'"operatingSystem":\s*"([^"]+)"', text)
+    assert found is not None, f"{page} zeichnet kein Betriebssystem aus"
+    stated = found.group(1)
+    for name in _packaged_platforms():
+        assert name in stated, f"{page} lässt {name} aus, obwohl dafür gepackt wird"
+    for name in set(FAMILIES.values()) - _packaged_platforms():
+        assert name not in stated, f"{page} nennt {name}, dafür wird nichts gepackt"
+
+
+@pytest.mark.parametrize("page", PAGES)
+def test_no_answer_denies_a_platform_the_build_ships(page: str) -> None:
+    """Eine Seite darf von einer Plattform nicht abraten, die sie ausliefert.
+
+    Genau das stand hier: Vier Stellen nannten den Mac, und die FAQ-Antwort
+    begann mit „Nein, vorerst nicht" — während `build.yml` seit je zwei
+    Mac-Pakete baut, für Intel und Apple Silicon getrennt. Von den vier
+    Stellen ist die Antwort die, die ein Kunde wirklich liest, und sie hat ihn
+    weggeschickt. Der Widerspruch fiel keinem der übrigen Tests auf, weil
+    keiner die Seite gegen den Bauauftrag hielt.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    shipped = _packaged_platforms()
+    # Der Mac heißt in einer Frage „Mac", nicht „macOS".
+    asked = {"macOS": ("mac",), "Windows": ("windows",), "Linux": ("linux",)}
+    denied = []
+    for block in re.finditer(
+        r"<summary>(.*?)</summary>\s*<p>(.*?)[<.]", text, re.DOTALL | re.IGNORECASE
+    ):
+        question, answer = block.group(1).lower(), block.group(2).strip().lower()
+        for name in shipped:
+            if any(word in question for word in asked[name]) and answer.startswith(DENIALS):
+                denied.append(f'{name}: „{block.group(2).strip()[:40]}…"')
+    assert not denied, f"{page} rät von einer ausgelieferten Plattform ab: {denied}"
+
+
+@pytest.mark.parametrize("page", ALL_PAGES)
+def test_the_page_loads_nothing_from_outside(page: str) -> None:
+    """Die Seite holt sich nichts von einem fremden Rechner.
+
+    Das ist die Zusage, die auf der Seite selbst steht — kein Konto, keine
+    Telemetrie —, und sie hängt nicht an gutem Willen: was nicht eingebunden
+    ist, kann nicht mitlesen. Kein CDN, keine Schriftart von außen, keine
+    Bibliothek, kein Zählpixel.
+
+    Skripte **von der eigenen Seite** sind erlaubt, seit die Funktionsseite
+    ihre Sprungliste markiert (`site.js`). Diese Prüfung sagt nicht mehr „kein
+    JavaScript", sondern „nichts von außen" — der engere Teil der alten Regel,
+    und der, der die Zusage trägt.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    for tag in re.findall(r"<script([^>]*)>", text):
+        # Ein einzelner Schrägstrich meint die eigene Wurzel, zwei meinen einen
+        # fremden Rechner mit dem Protokoll der Seite. ``//cdn.example.com/x.js``
+        # sah wie ein eigener Pfad aus und bestand die Prüfung; das ``(?!/)``
+        # ist der ganze Unterschied.
+        allowed = 'type="application/ld+json"' in tag or re.search(r'src="/(?!/)[^"]*\.js"', tag)
+        assert allowed, f"{page} bindet ein Skript ein, das nicht von hier kommt: {tag}"
     assert 'src="http' not in text
     assert 'href="http' not in text.replace('href="https://solidon3d.de', "")
+    # Protokollrelativ, also ohne ``http`` im Text — die beiden Zeilen darüber
+    # sehen davon nichts, und ein Zählpixel schreibt sich genau so.
+    assert 'src="//' not in text, f"{page} lädt protokollrelativ von außen"
+    assert 'href="//' not in text, f"{page} verweist protokollrelativ nach außen"

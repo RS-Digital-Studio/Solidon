@@ -213,23 +213,39 @@ fachlich dorthin, wo die Frist heute schon gezählt wird.
 nur sperren, nie öffnen. Keine Umgebungsvariable, kein Schalter, keine
 Freigabedatei; die Suite setzt den Zustand weiter über die Fixture.
 
-### D — Version 0.9.0, damit 1.0.0 die Verkaufsfassung bleibt
+### D — Version 0.1.0, damit 1.0.0 die Verkaufsfassung bleibt
 
-`APP_VERSION` geht auf `0.9.0`, nicht auf `1.0.0`. Drei Folgen, alle
+`APP_VERSION` geht auf `0.1.0`, nicht auf `1.0.0`. Drei Folgen, alle
 erwünscht:
 
 * **Der Update-Hinweis funktioniert als Nachricht.** Sobald `version.json` auf
   `1.0.0` steht, zeigt jede laufende Demo darauf. Das ist der einzige Weg, die
   Demo-Nutzer ohne Konto und ohne Newsletter zu erreichen — und genau der Fall,
   den V7 als Verifikation vorgesehen hat („Update-Hinweis in einer Anwendung
-  mit `APP_VERSION` 0.9 zeigt 1.0.0 an").
+  mit `APP_VERSION` 0.1 zeigt 1.0.0 an").
 * **Ein Kaufschlüssel läuft in der Demo nicht.** `key.parse` prüft
-  `licence.major` gegen `current_major()`, und das ist bei 0.9.0 eine Null. Wer
+  `licence.major` gegen `current_major()`, und das ist bei 0.1.0 eine Null. Wer
   später kauft, lädt 1.0 — was er ohnehin tun soll, weil die Demo einen
   Stichtag trägt. Der Freischaltdialog muss diesen Satz sagen, statt „gilt für
   eine andere Hauptversion" stehen zu lassen.
-* **Demo-Projektdateien tragen `app_version: 0.9.0`.** Sie öffnen in 1.0
+* **Demo-Projektdateien tragen `app_version: 0.1.0`.** Sie öffnen in 1.0
   unverändert; die Zahl ist Herkunft, kein Format.
+
+**Wie weitergezählt wird** (entschieden am 14.08.2026): Die letzte Stelle
+steigt mit **jedem ausgelieferten Bau** um eins — 0.1.0, 0.1.1, 0.1.2. Die
+vorderen Stellen bewegen sich nur bei einer größeren Änderung, und das ist
+eine Entscheidung und kein Nebenprodukt des Bauens. Für die Mechanik oben
+ändert das nichts: alles hängt an der Null vorn, nicht an den Stellen dahinter.
+
+Die Zahl steht an zwei Orten — `app/branding.py` und `pyproject.toml` — und
+bis zum 14.08.2026 hielt die beiden nichts zusammen außer Aufmerksamkeit. Wer
+eine drehte und die andere vergaß, lieferte ein Paket, dessen Metadaten eine
+andere Fassung nennen als der Über-Dialog.
+`test_the_version_is_the_same_in_both_places_that_carry_it` hält sie jetzt
+zusammen. Die erzeugten Seiten ziehen ohnehin von selbst nach:
+`tools/make_manual.py` liest `APP_VERSION` fürs Deckblatt, `tools/make_legal.py`
+holt die Fassung aus `EULA.md`, und `website/version.json` wird von Hand
+gesetzt, weil es die *angebotene* Fassung nennt und nicht die gebaute.
 
 ### E — Vollständig heißt vollständig
 
@@ -635,13 +651,38 @@ vier — die ersten beiden neu aus dem zweiten Durchgang:
 
 | Paket | Status | Commit |
 |---|---|---|
-| D0 Stichtag im Kern | offen | |
-| D1 Version 0.9.0 | offen | |
-| D2 Texte in der Anwendung | offen | |
-| D3 Rechtstexte | offen | |
-| D4 Website | offen | |
-| D5 Postfach und Rückmeldeweg | offen | |
-| D6 Signierung | offen | |
+| D0 Stichtag im Kern | **fertig** — `store.DEMO_UNTIL = date(2026, 10, 30)`, `Activation.deadline` und `.over` | f8ac8c1 |
+| D1 Version | **fertig** — `0.1.0` in `branding.py` und `pyproject.toml`, dazu `website/version.json`, README, EULA und die beiden erzeugten Handbuch-Deckblätter | 7c2e6d6, danach auf 0.1.0 |
+| D2 Texte in der Anwendung | **fertig** — Statuszeile dauerhaft, Über-Dialog, Freischaltdialog, Ersteinrichtung, dazu die Abschiedsmeldung nach dem Stichtag (§2 B2) | 1c50fab |
+| D3 Rechtstexte | **fertig** — EULA §4a; AGB und Widerruf sagen, dass sie erst ab dem Verkaufsstart gelten | 57d1d7b |
+| D4 Website | **fertig** — beide Startseiten führen die Demo, zwei neue Fragen beantworten das Ende | 9a88bfa |
+| D5 Postfach und Rückmeldeweg | **fertig** — zwei Menüeinträge: nach einer neuen Fassung sehen (mit Antwort in allen drei Fällen) und Rückmeldung schreiben | 1c50fab |
+| D6 Signierung | **halb** — der tote PFX-Schritt ist stillgelegt und protokolliert statt stumm übersprungen (`build.yml`, „Ohne Signatur bauen"). Die Abnahme fehlt: die Download-Seite erklärt die SmartScreen-Warnung noch nicht und nennt keine Prüfsumme | |
 | D7 CI-Bau und Auslieferung | offen | |
 | D8 Fremder Rechner | offen | |
-| D9 Doku | offen | |
+| D9 Doku | **halb** — `README.md` trägt Fassung, Demo-Abschnitt und Stichtag, die `ROADMAP.md` den Demo-Abschnitt, und diese Tabelle ist der letzte Punkt. Offen: `.claude/rules/kern.md` nennt den Stichtag nicht | |
+
+**Die Tabelle stand bis zum 14.08.2026 auf zehnmal „offen"**, während sechs
+Pakete gebaut waren — nachgezählt am Code, nicht an der Erinnerung. Wer den
+Stand aus dem Konzept statt aus der ROADMAP las, hielt die Demo für
+unangefangen. Das ist der Grund, warum D9 diese Tabelle ausdrücklich als
+eigenen Punkt führt.
+
+**Zur Fassung: die Zahl war zweimal eine andere.** Dieses Konzept schrieb
+`0.9.0` vor, gebaut wurde am 12.08. `0.7.0`, und am 14.08.2026 steht sie auf
+**`0.1.0`** — die Fassung, mit der die Demo hinausgeht. Für die drei Folgen
+oben ändert das nichts, weil alle drei an der Null vorn hängen und nicht an den
+Stellen dahinter. Was sich ändert, ist die Zählung dahinter: sie beginnt jetzt
+am Anfang statt in der Nähe der 1.0, und der nächste ausgelieferte Bau ist
+`0.1.1`.
+
+Sieben Stellen tragen die Zahl, und sie sind nachgezogen: `app/branding.py`,
+`pyproject.toml`, `website/version.json`, `README.md`, `EULA.md` (von dort
+`website/eula.html` und `packaging/eula.txt` über `tools/make_legal.py`) und
+die Deckblätter von `website/handbuch.html` und `website/en/manual.html` über
+`tools/make_manual.py`. Demo-Projektdateien tragen entsprechend
+`app_version: 0.1.0`.
+
+**Was bis zum Start bleibt:** D7 (die CI grün sehen und die Artefakte holen),
+D8 (der fremde Rechner), der Download-Kasten mit echter Datei und Prüfsumme —
+der zugleich die Abnahme von D6 ist —, und der Stichtag in `kern.md`.

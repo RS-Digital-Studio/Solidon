@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -53,7 +54,7 @@ from app.core.types import (
 )
 from app.core.units import DISPLAY_UNITS, EPS_DISPLAY
 from app.i18n import tr
-from app.ui import icons
+from app.ui import cursors, icons
 from app.ui.labels import length
 from app.ui.palette import ROLES
 
@@ -200,6 +201,27 @@ def measure_label(constraint: SketchConstraint, points: list[tuple[float, float]
     return f"({length(math.hypot(bx - ax, by - ay), with_unit=False)})"
 
 
+def measured_expression(points: Sequence[tuple[float, float]], targets: tuple[int, ...]) -> str:
+    """Der Abstand zweier Punkte, wie er im Maßfeld vorstehen soll.
+
+    Das Feld stand leer. Wer zwei Punkte gewählt hatte und ein Maß setzen
+    wollte, musste die Zahl kennen, die er gerade selbst gezeichnet hatte —
+    und wenn er sie falsch riet, sprang die Zeichnung. Vorbelegt ist das Feld
+    eine Ansage: hier stehen 30,25, trag 30 ein, und der Solver zieht es
+    dorthin.
+
+    Mit Punkt und ohne Einheit, denn es ist ein Ausdruck der
+    Parametergrammatik (§13) und keine Beschriftung. Die abschließenden
+    Nullen fallen weg — „30" ist die Aussage, „30,00" nur ihre Formatierung.
+    """
+    if len(targets) < 2 or max(targets[0], targets[1]) >= len(points):
+        return ""
+    ax, ay = points[targets[0]]
+    bx, by = points[targets[1]]
+    text = f"{math.hypot(bx - ax, by - ay):.2f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
 def _on_multiple(value: float, spacing: float, tolerance: float) -> bool:
     """Ob ein Rasterwert auf einem Vielfachen der Beschriftungsweite liegt.
 
@@ -266,6 +288,13 @@ class SketchCanvas(QWidget):
     measuringChanged = Signal(float)
     """Das Maß des angefangenen Elements, oder 0 — das Feld in der Leiste
     folgt ihm, solange gezeichnet wird (E19)."""
+
+    pointerChanged = Signal(float, float)
+    """Wohin ein Klick gerade fiele, in Millimetern.
+
+    Jede Zeichenfläche eines CAD sagt, wo der Zeiger steht; diese sagte es
+    nicht. Wer einen Punkt auf 30 mm ziehen wollte, zog ihn ins Ungefähre und
+    maß hinterher nach."""
 
     def __init__(
         self,
@@ -375,6 +404,28 @@ class SketchCanvas(QWidget):
             return world
         step = self.snap_step
         return (round(world[0] / step) * step, round(world[1] / step) * step)
+
+    def pointer_target(self) -> tuple[float, float]:
+        """Wo ein Klick landen würde — der Wert, den die Anzeige nennt.
+
+        Nicht die rohe Zeigerlage: solange der Fang gilt, fällt der Klick auf
+        die Rasterweite, und eine Anzeige, die 29,75 zeigt, wo 30 entsteht,
+        wäre schlechter als keine. Beim Ziehen gilt derselbe Fang, also
+        dieselbe Zahl.
+
+        Liegt ein Punkt unter dem Zeiger, gilt **seine** Lage: dort greift der
+        Klick, und der Punkt sitzt nicht zwangsläufig auf dem Raster. Bei
+        20,25 mm und einem Millimeter Weite stand sonst 20,00 in der Zeile,
+        während der Klick den Punkt bei 20,25 nahm — derselbe Fehler, nur
+        andersherum.
+        """
+        if self._dragging is None and self.tool in ("select", "point"):
+            hit = self._hit_point(self._to_screen(*self._pointer))
+            if hit is not None:
+                return self.points()[hit]
+        if self.tool == "select" and self._dragging is None:
+            return self._pointer
+        return self.snapped(self._pointer)
 
     def axis_names(self) -> tuple[str, str]:
         """Wie die waagerechte und die senkrechte Achse hier heißen (§30.1).
@@ -549,6 +600,11 @@ class SketchCanvas(QWidget):
         self.tool = tool
         self._pending.clear()
         self._pending_world.clear()
+        # Der Zeiger sagt, was ein Klick tut. Er stand auf dem Pfeil, gleich
+        # ob ein Zeichenwerkzeug lief oder nicht — und ein Werkzeug, dessen
+        # Zustand man nur am gedrückten Knopf sieht, ist bei achtunddreißig
+        # Bildpunkten Symbolgröße kein Zustand, den jemand bemerkt.
+        self.setCursor(cursors.cursor("select" if tool == "select" else "draw", self))
         # Was das gewählte Werkzeug erwartet, steht sofort da und nicht erst
         # nach dem ersten Klick.
         self.statusChanged.emit(self.status_text())
@@ -605,7 +661,16 @@ class SketchCanvas(QWidget):
     def status_text(self) -> str:
         if self.conflict:
             return self.conflict
+        # Ein angefangenes Element geht vor: was der nächste Klick tut, ist
+        # dringender als was vorhin ausgewählt wurde. Ohne Angefangenes gewinnt
+        # die Auswahl — sonst stünde beim Punktwerkzeug weiter „jeder Klick
+        # setzt einen", während der eben gegriffene Punkt dick im Bild liegt.
         drawing = self.drawing_hint()
+        if drawing and self._pending_world:
+            return drawing
+        chosen = self.selection_hint()
+        if chosen:
+            return chosen
         if drawing:
             return drawing
         if self.solved is None:
@@ -615,6 +680,27 @@ class SketchCanvas(QWidget):
         if self.solved.free_dof == 1:
             return tr("Ein Freiheitsgrad ist noch frei.")
         return tr("{count} Freiheitsgrade sind noch frei.").format(count=self.solved.free_dof)
+
+    def selection_hint(self) -> str:
+        """Was ausgewählt ist — und wie das Zweite dazukommt.
+
+        Dass Strg mehrere wählt, stand nirgends. Ein Maß zwischen zwei Punkten
+        braucht beide ausgewählt; wer den zweiten anklickt, verliert den
+        ersten, der Knopf bleibt grau, und der Grund ist eine Taste, die
+        niemand genannt hat. Die Zeile sagt sie genau dann, wenn sie gebraucht
+        wird: wenn eines dasteht und ein zweites fehlt.
+
+        Leer heißt: nichts ausgewählt — dann gehört die Zeile den
+        Freiheitsgraden.
+        """
+        # Die beiden Werkzeuge, mit denen sich ein Punkt greifen lässt. Beim
+        # Zeichnen einer Linie gehört die Zeile dem nächsten Klick, auch wenn
+        # von vorhin noch etwas ausgewählt ist.
+        if self.tool not in ("select", "point") or not self.selection:
+            return ""
+        if len(self.selection) == 1:
+            return tr("Eines ausgewählt — mit Strg das Nächste dazunehmen.")
+        return tr("{count} ausgewählt.").format(count=len(self.selection))
 
     def drawing_hint(self) -> str:
         """Was der nächste Klick tut, und wie man wieder herauskommt.
@@ -637,7 +723,10 @@ class SketchCanvas(QWidget):
         if self.tool in ("trim", "extend"):
             return tr("Auf die Hälfte klicken, die es betrifft.")
         if self.tool == "point":
-            return tr("Punkt: ein Klick setzt ihn.")
+            # Beide Hälften in einem Satz: das Werkzeug bleibt nach dem Klick
+            # stehen, und wer einen vorhandenen Punkt greifen will, muss nicht
+            # erst herausfinden, wie er herauskommt — er klickt ihn an.
+            return tr("Punkt: jeder Klick setzt einen, ein Klick auf einen vorhandenen greift ihn.")
         if self.tool == "line":
             if started:
                 return tr("Linie: Klick setzt den nächsten Punkt, Esc beendet den Zug.")
@@ -801,6 +890,7 @@ class SketchCanvas(QWidget):
         else:
             self.selection.append(entry)
         self.selectionChanged.emit()
+        self.statusChanged.emit(self.status_text())
         self.update()
 
     # --- Koordinaten --------------------------------------------------------------
@@ -876,13 +966,15 @@ class SketchCanvas(QWidget):
             return
 
         if self.tool == "select":
+            # Ein Klick auf einen vorhandenen Punkt greift ihn. Für das
+            # Punktwerkzeug steht dieselbe Regel in ``place`` und nur dort —
+            # zweimal geschrieben würde sie beim nächsten Nachziehen einmal
+            # vergessen, und der Mausweg wiche vom geprüften ab.
             hit = self._hit_point(position)
             if hit is not None:
-                self._select(
-                    ("point", (hit,)), bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+                self.grab_point(
+                    hit, extend=bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
                 )
-                self._remember()
-                self._dragging = hit
                 return
             element = self._hit_element(position)
             if element is not None:
@@ -891,6 +983,7 @@ class SketchCanvas(QWidget):
             if not event.modifiers():
                 self.selection.clear()
                 self.selectionChanged.emit()
+                self.statusChanged.emit(self.status_text())
                 self.update()
             return
 
@@ -898,7 +991,29 @@ class SketchCanvas(QWidget):
             self.cut_or_grow(position)
             return
 
-        self.place(position)
+        self.place(position, extend=bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier))
+
+    def grab_point(self, flat: int, *, extend: bool = False) -> None:
+        """Einen vorhandenen Punkt auswählen und zum Ziehen bereitmachen.
+
+        Derselbe Griff, gleich welches der beiden Werkzeuge gerade läuft: wer
+        auf einen Punkt klickt, meint diesen Punkt. Mit dem Punktwerkzeug
+        entstand dort vorher ein zweiter genau darauf — deckungsgleich und
+        unsichtbar —, und um den ersten zu bewegen, musste man erst das
+        Werkzeug wechseln.
+
+        Der Undo-Stand wird hier gemerkt, weil das Ziehen gleich beginnen
+        kann: ``mouseMoveEvent`` schiebt den Punkt, sobald die Taste unten
+        bleibt, und ohne den Merker nähme ein Rückgängig den Schritt davor.
+
+        Am Zeiger hängt er nur, wenn er danach auch ausgewählt ist: ein
+        Strg-Klick auf einen bereits gewählten Punkt wählt ihn ab, und einen
+        abgewählten Punkt zu verschieben wäre das Gegenteil dessen, was die
+        Geste sagt.
+        """
+        self._select(("point", (flat,)), extend)
+        self._remember()
+        self._dragging = flat if ("point", (flat,)) in self.selection else None
 
     def cut_or_grow(self, position: QPointF) -> None:
         """Trimmen und Verlängern: ein Klick auf die Hälfte, die es betrifft.
@@ -929,13 +1044,20 @@ class SketchCanvas(QWidget):
         self._apply(changed)
         self.selectionChanged.emit()
 
-    def place(self, position: QPointF) -> None:
+    def place(self, position: QPointF, *, extend: bool = False) -> None:
         """Ein Klick eines Zeichenwerkzeugs: Punkt setzen, Element schließen.
 
         Ein Klick nahe eines vorhandenen Punkts fängt — das neue Element
         bekommt dann eine Deckungs-Bedingung statt einer Kopie der Zahl.
         Element und Deckungen kommen als **ein** Schritt an, damit ein
         Rückgängig den ganzen Klickzug nimmt, nicht seine Hälften.
+
+        ``extend`` ist die Strg-Taste des Klicks, und sie zählt nur für den
+        Griff unten: Ein Maß zwischen zwei Punkten braucht beide ausgewählt,
+        und wer den zweiten ohne Strg anklickt, verliert den ersten. Das
+        Mausereignis reicht sie herein, statt selbst zu greifen — sonst gäbe es
+        zwei Wege zu derselben Geste, und geprüft wäre der, den die Maus nicht
+        nimmt.
         """
         # Ein vorhandener Punkt schlägt das Raster: er wird zur Deckung, und
         # eine Deckung hält auch dann, wenn der Punkt später wandert. Erst wo
@@ -946,6 +1068,20 @@ class SketchCanvas(QWidget):
             if snapped is not None
             else self.snapped(self._to_world(position))
         )
+
+        # Ein Klick auf einen Punkt greift ihn, statt einen zweiten daraufzu-
+        # setzen. Der bekam vorher einen vierten genau auf den mittleren —
+        # deckungsgleich, unsichtbar —, und um den ersten zu bewegen, musste
+        # man erst das Werkzeug wechseln. Dieselbe Regel wie beim Auswählen,
+        # und deshalb steht sie auch hier und nicht nur im Mausereignis: was
+        # ein Klick tut, entscheidet die Methode, die auch ein Test ruft.
+        #
+        # Bei Linie, Kreis und Bogen bleibt der Fang, wie er ist: dort wird der
+        # vorhandene Punkt zum Anfang des neuen Elements, und die Deckung ist
+        # die Verbindung, für die der Fang da ist.
+        if self.tool == "point" and snapped is not None:
+            self.grab_point(snapped, extend=extend)
+            return
 
         # Ein Spline endet nicht bei einer Punktzahl, sondern wenn jemand sagt,
         # dass er fertig ist: Doppelklick, Eingabetaste oder ein zweiter Klick
@@ -1093,13 +1229,24 @@ class SketchCanvas(QWidget):
             )
             self.update()
             return
+        position = QPointF(event.position())
         # Wo der Zeiger steht, entscheidet die **Richtung** eines eingetippten
         # Maßes: die Länge kommt aus dem Feld, wohin es geht aus der Hand.
-        self._pointer = self._to_world(QPointF(event.position()))
+        self._pointer = self._to_world(position)
+        self.pointerChanged.emit(*self.pointer_target())
+        # Was ein Klick greifen würde — einmal gesucht und an beide gegeben:
+        # das Aufleuchten braucht den Punkt, die Fangmarke braucht nur zu
+        # wissen, dass es einen gibt. Zweimal zu suchen hieße, bei jeder
+        # Mausbewegung zweimal über alle Punkte zu laufen.
+        under = self._hit_point(position) if self.tool in ("select", "point") else None
+        # Getrennt ausgewertet und nicht mit ``or`` verkettet: eine
+        # Kurzschluss-Oder ließe das Zweite ungeprüft, sobald das Erste
+        # zutrifft.
+        hovered = self._note_hover(under)
         # Die Fangmarke wandert immer mit, auch schon vor dem ersten Klick:
         # das Raster wird gröber gezeichnet, als gefangen wird, und ohne die
         # Marke wäre nicht zu sehen, wohin ein Klick fiele.
-        moved = self._note_snap_mark()
+        moved = self._note_snap_mark(over_point=under is not None)
         if self._dragging is not None and event.buttons() & Qt.MouseButton.LeftButton:
             # Ein gezogener Punkt fällt auf dieselbe Weite wie ein gesetzter —
             # sonst wäre das Raster eine Zusage, die beim ersten Nachbessern
@@ -1109,18 +1256,51 @@ class SketchCanvas(QWidget):
         elif self._pending_world:
             self.measuringChanged.emit(self.pending_measure())
             self.update()
-        elif moved:
+        elif moved or hovered:
             self.update()
 
-    def _note_snap_mark(self) -> bool:
+    def _note_hover(self, under: int | None) -> bool:
+        """Merkt den Punkt unter dem Zeiger und sagt, ob er gewechselt hat.
+
+        Ohne das ist nicht zu sehen, ob ein Klick den Punkt trifft oder
+        danebengeht — man klickt, sieht keinen Unterschied und klickt wieder.
+        Der Fangradius ist acht Bildpunkte; wo er greift, gehört ein Zeichen
+        hin.
+
+        Wer der Treffer ist, entscheidet der Anrufer: gesucht wird einmal je
+        Mausbewegung, und die Fangmarke braucht dasselbe Ergebnis. Bei einem
+        Werkzeug, das nicht greift, kommt ``None`` — beim Zeichnen einer Linie
+        leuchtet stattdessen die Fangmarke, und zwei Zeichen an derselben Stelle
+        sind eines zu viel.
+        """
+        wanted = frozenset() if under is None else frozenset({under})
+        if wanted == self.highlighted:
+            return False
+        self.highlighted = wanted
+        return True
+
+    def _note_snap_mark(self, *, over_point: bool = False) -> bool:
         """Merkt den Rasterpunkt unter dem Zeiger und sagt, ob er gewechselt
         hat.
 
         Neu gezeichnet wird nur beim Wechsel: bei jeder Mausbewegung wäre es
         ein voller Neuaufbau der Zeichenfläche für ein Kreuz, das an
         derselben Stelle stehen bleibt.
+
+        **Sie weicht, wo ein Punkt gegriffen würde** (``over_point``). Beim
+        Punktwerkzeug greift ein Klick den vorhandenen Punkt, statt auf das
+        Raster zu fallen — dann stünde die Marke auf einer Stelle, die der Klick
+        nicht nimmt, und zwei Zeichen behaupteten zwei verschiedene Ziele.
+
+        Der Treffer kommt als Argument und nicht aus ``self.highlighted``: die
+        Menge trägt zwei Bedeutungen, denn ``highlight_points`` setzt sie auch
+        für die überfahrene Bedingung in der Liste. Sie hier zu lesen hieße, die
+        Fangmarke von der Maus über einer Liste abhängig zu machen.
         """
-        mark = self.snapped(self._pointer) if self.snapping and self.tool != "select" else None
+        if over_point:
+            mark = None
+        else:
+            mark = self.snapped(self._pointer) if self.snapping and self.tool != "select" else None
         if mark == self._snap_mark:
             return False
         self._snap_mark = mark
@@ -1178,18 +1358,52 @@ class SketchCanvas(QWidget):
 
     def _context_menu(self, event: Any) -> None:
         """Bedingungen am Ort der Auswahl — §30.1 nennt das Kontextmenü
-        ausdrücklich."""
+        ausdrücklich. Und, wo einer liegt, der Punkt selbst."""
+        menu = QMenu(self)
+
+        # Was am angeklickten Punkt hängt, steht oben: ein Kontextmenü
+        # beantwortet „was kann ich mit *dem hier* tun", und der Punkt unter
+        # dem Zeiger ist das Genaueste, was dort liegt.
+        hit = self._hit_point(QPointF(event.position()))
+        if hit is not None:
+            entry = menu.addAction(tr("Koordinaten …"))
+            entry.triggered.connect(lambda _checked=False, flat=hit: self.edit_point(flat))
+            menu.addSeparator()
+
         dialog = self.parent()
         offers = getattr(dialog, "constraint_offers", None)
         request = getattr(dialog, "request_constraint", None)
-        if offers is None or request is None:
+        if offers is not None and request is not None:
+            for kind, enabled in offers().items():
+                action = menu.addAction(_constraint_label(kind))
+                action.setEnabled(enabled)
+                action.triggered.connect(lambda _checked=False, chosen=kind: request(chosen))
+
+        if menu.isEmpty():
             return
-        menu = QMenu(self)
-        for kind, enabled in offers().items():
-            action = menu.addAction(_constraint_label(kind))
-            action.setEnabled(enabled)
-            action.triggered.connect(lambda _checked=False, chosen=kind: request(chosen))
         menu.exec(event.globalPosition().toPoint())
+
+    def edit_point(self, flat: int) -> None:
+        """Einen Punkt auf genaue Koordinaten setzen.
+
+        Ziehen ist der schnelle Weg, und das Raster hält ihn brauchbar. Wo es
+        auf den Zehntelmillimeter ankommt, ist Zielen mit der Maus der falsche
+        Griff — dann tippt man die Zahl ein, wie überall sonst in dieser
+        Anwendung auch.
+
+        Der Undo-Punkt wird hier gesetzt, weil es beim Ziehen der Mausdruck
+        tut: der Weg über den Dialog kommt an ihm vorbei, und ohne ihn nähme
+        das Rückgängig den Schritt davor.
+        """
+        points = self.points()
+        if not 0 <= flat < len(points):
+            return
+        dialog = PointDialog(points[flat], self.axis_names(), parent=self)
+        if dialog.exec() != PointDialog.DialogCode.Accepted:
+            return
+        across, up = dialog.point()
+        self._remember()
+        self.move_point(flat, across, up)
 
     # --- Zeichnen -------------------------------------------------------------------
 
@@ -1232,9 +1446,16 @@ class SketchCanvas(QWidget):
             screen = self._to_screen(x, y)
             selected = flat in chosen_points
             lit = flat in self.highlighted
-            painter.setPen(QPen(chosen_colour if selected else line_colour, 1.0))
+            # Ein ausgewählter Punkt war 5,0 statt 3,5 groß — drei Bildpunkte
+            # im Durchmesser, und die Aussage hing praktisch allein an der
+            # Farbe. Er ist jetzt fast doppelt so groß und trägt einen dicken
+            # Rand: die Größe ist die zweite Kodierung, und sie muss man auch
+            # sehen können (Regel 18).
+            painter.setPen(
+                QPen(chosen_colour if selected else line_colour, 2.4 if selected else 1.0)
+            )
             painter.setBrush(chosen_colour if selected else palette.base().color())
-            radius = 5.0 if selected else 3.5
+            radius = 6.5 if selected else 3.5
             painter.drawEllipse(screen, radius, radius)
             if lit:
                 # Ein Ring darum, nicht eine andere Füllung: die Auswahl hat
@@ -1596,6 +1817,90 @@ class ExpressionDialog(QDialog):
         return self.field.text().strip()
 
 
+class PointDialog(QDialog):
+    """Ein Punkt auf genaue Koordinaten — der Weg neben dem Ziehen.
+
+    Zwei Zahlen, vorbelegt mit der Lage, die der Punkt gerade hat: der Dialog
+    fragt nicht, wohin es gehen soll, sondern zeigt, wo es ist, und lässt
+    ändern, was zu ändern ist. Wer nur die Waagerechte genau braucht, tippt
+    eine Zahl und lässt die andere stehen.
+
+    **Ein unangetastetes Feld gibt seinen Wert unverändert zurück.** Das Feld
+    zeigt zwei Dezimalstellen, weil die Anzeige das überall tut (§11.2) — der
+    Kern rechnet in doppelter Genauigkeit weiter (Regel 6). Ohne diese
+    Unterscheidung verschob der Dialog den Punkt allein dadurch, dass man ihn
+    ansah: ein projizierter Punkt bei 30,125 mm kam als 30,13 zurück, und bei
+    0,001 mm als 0. Gerundet wird also nur, was der Nutzer selbst angefasst
+    hat, und dann ist die Zahl seine Ansage und nicht unsere Verkürzung.
+    """
+
+    def __init__(
+        self,
+        point: tuple[float, float],
+        axes: tuple[str, str],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(tr("Punkt setzen"))
+        self.setMinimumWidth(280)
+
+        #: Die Lage, mit der der Dialog aufgemacht hat — sie kommt unverändert
+        #: zurück, wo niemand etwas eingetippt hat.
+        self._start = point
+        #: Welche Felder der Nutzer angefasst hat. Ein Merker statt eines
+        #: Zahlenvergleichs: Qt rundet beim Vorbelegen anders als Python
+        #: (30,125 wird zu 30,13 hier und zu 30,12 dort), und ein Vergleich
+        #: gegen die eigene Rundung hielte genau den Fall für eine Eingabe, den
+        #: er erkennen soll.
+        self._touched: set[QDoubleSpinBox] = set()
+
+        self._across = QDoubleSpinBox(self)
+        self._up = QDoubleSpinBox(self)
+        for box, value in ((self._across, point[0]), (self._up, point[1])):
+            box.setDecimals(2)
+            box.setRange(-10_000.0, 10_000.0)
+            # Ein Einheitenzeichen ist keine Übersetzung (§11.1).
+            box.setSuffix(f" {DISPLAY_UNITS[0]}")
+            box.setValue(value)
+            # **Nach** dem Vorbelegen verbunden, sonst zählte das Vorbelegen
+            # selbst als Eingabe.
+            box.valueChanged.connect(lambda _value, field=box: self._touched.add(field))
+
+        # Die Achsenbuchstaben der Ebene, wo es welche gibt. Auf einer
+        # angeklickten Fläche gibt es keine — sie kann beliebig geneigt sein —,
+        # und dann heißen die Felder nach der Richtung im Bild.
+        first, second = axes
+        form = QFormLayout()
+        form.addRow(first or tr("Waagerecht"), self._across)
+        form.addRow(second or tr("Senkrecht"), self._up)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if ok is not None:
+            ok.setText(tr("Punkt setzen"))
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+    def point(self) -> tuple[float, float]:
+        """Die eingetragene Lage — und für jedes unangetastete Feld die alte.
+
+        Wer etwas eintippt, meint es: dann gilt seine Zahl, auf zwei Stellen,
+        wie das Feld sie annimmt. Wer nichts eintippt, hat nichts gesagt, und
+        dann bleibt die genaue Lage aus dem Dokument stehen.
+        """
+        return (
+            self._across.value() if self._across in self._touched else self._start[0],
+            self._up.value() if self._up in self._touched else self._start[1],
+        )
+
+
 #: Welche Auswahlmuster eine Bedingung braucht — die Knöpfe folgen dem, statt
 #: eine falsche Auswahl mit einem Fehler zu quittieren.
 _NEEDS: dict[SketchConstraintKind, tuple[tuple[str, ...], ...]] = {
@@ -1610,6 +1915,32 @@ _NEEDS: dict[SketchConstraintKind, tuple[tuple[str, ...], ...]] = {
     "fixed": (("point",),),
     "reference": (("point", "point"),),
 }
+
+
+def _needs_phrase(kind: SketchConstraintKind) -> str:
+    """Was ausgewählt sein muss, damit die Bedingung gilt — als Halbsatz.
+
+    Ein Knopf, der nur seinen Namen kennt, lässt raten, warum er grau ist:
+    zehn gleich aussehende Knöpfe, und keiner sagt, was ihm fehlt. Der
+    Halbsatz steht im Hinweis am Knopf und in der Meldung, die ein Kürzel
+    ohne passende Auswahl auslöst — dieselbe Auskunft an beiden Stellen.
+
+    Ganze Halbsätze statt einer aus ``_NEEDS`` zusammengesetzten Wortkette:
+    ein Satz lässt sich übersetzen, eine Kette aus Zahlwort und Mehrzahl
+    nicht. Dass zu jeder Bedingung einer existiert, prüft der Test.
+    """
+    return {
+        "distance": tr("zwei Punkte"),
+        "coincident": tr("zwei Punkte"),
+        "horizontal": tr("eine Linie"),
+        "vertical": tr("eine Linie"),
+        "parallel": tr("zwei Linien"),
+        "perpendicular": tr("zwei Linien"),
+        "tangent": tr("eine Linie und einen Kreis oder Bogen"),
+        "symmetric": tr("zwei Punkte und eine Linie"),
+        "fixed": tr("einen Punkt"),
+        "reference": tr("zwei Punkte"),
+    }[kind]
 
 
 #: Die Zeichenkürzel, wie Fusion sie belegt (E16). Wer aus einem CAD kommt,
@@ -1941,7 +2272,12 @@ class SketchPanel(QWidget):
             key = ACTION_KEYS.get(kind, "")
             label = _constraint_label(kind)
             constraint_button = QPushButton(f"{label}  {key}" if key else label, self)
-            constraint_button.setToolTip(label)
+            # Der Hinweis nennt die Auswahl, nicht noch einmal den Namen: der
+            # steht auf dem Knopf. Ein grauer Knopf, dessen Hinweis nur seine
+            # Beschriftung wiederholt, sagt nichts über den Grund.
+            constraint_button.setToolTip(
+                tr("{name} — dazu {what} auswählen.").format(name=label, what=_needs_phrase(kind))
+            )
             constraint_button.clicked.connect(
                 lambda _checked=False, chosen=kind: self.request_constraint(chosen)
             )
@@ -1961,6 +2297,16 @@ class SketchPanel(QWidget):
         self.status = QLabel(opening or self.canvas.status_text(), self)
         self.status.setWordWrap(True)
 
+        # Wo der Zeiger steht, rechts in der Statuszeile — an der Stelle, an
+        # der jedes CAD sie hat. Sie beantwortet die Frage, die man beim
+        # Zeichnen dauernd hat und für die es hier keine Antwort gab: wo bin
+        # ich gerade? Erst mit ihr wird der Rasterfang sichtbar, und erst mit
+        # ihr ist ein gezogener Punkt mehr als eine ungefähre Lage.
+        self.coordinates = QLabel("", self)
+        self.coordinates.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.coordinates.setToolTip(tr("Wohin der nächste Klick fällt."))
+        self.canvas.pointerChanged.connect(self._show_pointer)
+
         side = QVBoxLayout()
         side.addWidget(QLabel(tr("Bedingungen"), self))
         side.addWidget(self.constraint_list, stretch=1)
@@ -1975,7 +2321,10 @@ class SketchPanel(QWidget):
         layout.addLayout(plane_row)
         layout.addLayout(constraints_row)
         layout.addLayout(middle, stretch=1)
-        layout.addWidget(self.status)
+        status_row = QHBoxLayout()
+        status_row.addWidget(self.status, stretch=1)
+        status_row.addWidget(self.coordinates)
+        layout.addLayout(status_row)
 
         self.canvas.sketchChanged.connect(self.sketchChanged)
         self.canvas.sketchChanged.connect(self._refresh_constraints)
@@ -1983,6 +2332,15 @@ class SketchPanel(QWidget):
         self.canvas.statusChanged.connect(self.status.setText)
         self.constraint_list.installEventFilter(self)
         self._install_shortcuts()
+
+        # Einmal von Hand nachziehen, was sonst nur ein Signal auslöst: die
+        # Skizze ist oben gesetzt worden, also **vor** diesen Verbindungen.
+        # Eine geöffnete Skizze mit elf Bedingungen zeigte rechts eine leere
+        # Liste, bis irgendetwas geändert wurde — und wer seine Bedingungen
+        # nicht sieht, setzt sie ein zweites Mal. Die Knöpfe standen aus
+        # demselben Grund alle bedienbar da, ohne dass etwas ausgewählt war.
+        self._refresh_constraints()
+        self._refresh_buttons()
 
         # Zuletzt, weil die Flächen in die eben gebaute Ebenenwahl kommen.
         if surroundings is not None:
@@ -2115,11 +2473,23 @@ class SketchPanel(QWidget):
 
     def request_constraint(self, kind: SketchConstraintKind) -> None:
         if not self.constraint_offers().get(kind):
+            # Nicht stumm zurück: „D" ohne passende Auswahl tat gar nichts —
+            # kein Ton, keine Zeile, und woran es lag, stand nirgends. Ein
+            # Weg, der gerade nicht geht, nennt seine Bedingung (Regel 17).
+            self.canvas.statusChanged.emit(
+                tr("{name}: dazu erst {what} auswählen.").format(
+                    name=_constraint_label(kind), what=_needs_phrase(kind)
+                )
+            )
             return
         targets = self.canvas.selection_targets()
         value = ""
         if kind == "distance":
-            dialog = ExpressionDialog(self._params, parent=self)
+            dialog = ExpressionDialog(
+                self._params,
+                start=measured_expression(self.canvas.points(), targets),
+                parent=self,
+            )
             if dialog.exec() != ExpressionDialog.DialogCode.Accepted:
                 return
             value = dialog.expression()
@@ -2142,6 +2512,21 @@ class SketchPanel(QWidget):
             item = QListWidgetItem(f"{label}  ({targets})")
             item.setData(Qt.ItemDataRole.UserRole, entry.targets)
             self.constraint_list.addItem(item)
+
+    def _show_pointer(self, x: float, y: float) -> None:
+        """Die Zeigerlage rechts in der Statuszeile.
+
+        Die Einheit steht einmal, hinter dem Paar — so schreibt man ein
+        Koordinatenpaar. Auf einer angeklickten Fläche fehlen die
+        Achsenbuchstaben, und dann stehen dort nur die Zahlen: die Fläche kann
+        beliebig geneigt sein, und ein „X" wäre dort eine Angabe, die nicht
+        stimmt (siehe ``axis_names``).
+        """
+        first, second = self.canvas.axis_names()
+        across, up = length(x, with_unit=False), length(y)
+        self.coordinates.setText(
+            f"{first} {across}  ·  {second} {up}" if first and second else f"{across}  ·  {up}"
+        )
 
     def _show_pending_measure(self, value: float) -> None:
         """Das Feld folgt dem, was gerade gezeichnet wird."""
