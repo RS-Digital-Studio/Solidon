@@ -50,16 +50,52 @@ def test_a_relative_include_below_the_folder_is_allowed() -> None:
         'import("../../modell.stl");',
         'surface(file = "/etc/hosts");',
         "include <https://example.invalid/x.scad>",
+        # Die veralteten Einbindungen laufen in OpenSCAD weiter — nur als
+        # DEPRECATED gemeldet, nicht verweigert. Eine Prüfung, die sie nicht
+        # kennt, prüft die Hälfte.
+        'import_stl("/etc/passwd");',
+        'import_dxf("C:/geheim.dxf");',
+        'import_off("~/netz.off");',
+        'dxf_linear_extrude(file="/etc/passwd", height=2);',
+        'dxf_rotate_extrude(file="../aussen.dxf");',
+        'linear_extrude(height=2, file="/etc/passwd");',
+        'rotate_extrude(file="C:/kontur.dxf");',
     ],
 )
 def test_a_reference_out_of_the_folder_is_refused(source: str) -> None:
-    """§32: include, use, import und surface nur relativ und unterhalb."""
+    """§32: include, use, import und surface nur relativ und unterhalb —
+    einschließlich der veralteten Formen und jedes ``file=``."""
     check = openscad.check_source(source)
 
     assert not check.allowed
     assert check.refused
     assert check.findings[0].code == "scad.refused_reference"
     assert check.findings[0].severity == "error"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'import_stl("teile/deckel.stl");',
+        'linear_extrude(height=2, file="kontur.dxf");',
+    ],
+)
+def test_a_relative_legacy_include_is_allowed(source: str) -> None:
+    """Die Altformen folgen derselben Regel wie ``import``: relativ und
+    unterhalb des Arbeitsordners ist in Ordnung."""
+    check = openscad.check_source(source)
+
+    assert check.allowed
+    assert check.references
+
+
+def test_a_file_argument_without_a_literal_is_refused() -> None:
+    """``file=`` mit einem Ausdruck statt einer Zeichenkette ist nicht
+    prüfbar — wohin es führt, stünde erst zur Laufzeit fest."""
+    check = openscad.check_source('name = "x.dxf";\nlinear_extrude(height=2, file=name);')
+
+    assert not check.allowed
+    assert check.refused
 
 
 def test_the_finding_names_what_was_refused() -> None:

@@ -14,8 +14,9 @@ das irgendwohin auf dem Rechner zeigt.
 Also werden die Regeln aus §32 hier durchgesetzt, in dieser Reihenfolge:
 
 1. der Quelltext wird **gelesen**, bevor er läuft — ``include``, ``use``,
-   ``import`` und ``surface`` nur mit relativen Pfaden unterhalb des
-   Arbeitsordners;
+   ``import`` und ``surface`` samt den veralteten Einbindungen
+   (``import_stl`` und Verwandte) und jedem ``file=`` nur mit relativen
+   Pfaden unterhalb des Arbeitsordners;
 2. jeder Lauf bekommt seinen **eigenen Arbeitsordner** und nichts außerhalb;
 3. **Zeit und Speicher sind gedeckelt**, und der Prozess bekommt kein Netz.
 
@@ -41,11 +42,29 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Anweisungen, die etwas anderes hereinholen. Jede einzelne ist ein Weg aus
-#: dem Arbeitsordner hinaus, wenn der Pfad nicht geprüft wird.
-INCLUDING = ("include", "use", "import", "surface")
+#: dem Arbeitsordner hinaus, wenn der Pfad nicht geprüft wird. Die hinteren
+#: fünf sind seit Jahren als veraltet gemeldet — OpenSCAD führt sie trotzdem
+#: aus, also prüfen wir sie trotzdem.
+INCLUDING = (
+    "include",
+    "use",
+    "import",
+    "surface",
+    "import_stl",
+    "import_dxf",
+    "import_off",
+    "dxf_linear_extrude",
+    "dxf_rotate_extrude",
+)
+
+#: Dazu jedes ``file=``: ``linear_extrude`` und ``rotate_extrude`` (und die
+#: dxf-Altformen) lesen darüber eine Datei, ohne dass der Modulname es verrät.
 
 _INCLUDE_PATTERN = re.compile(
-    r"\b(include|use)\s*<([^>]*)>|(\bimport|\bsurface)\s*\(\s*(?:file\s*=\s*)?\"([^\"]*)\"",
+    r"\b(include|use)\s*<([^>]*)>"
+    r"|\b(import_stl|import_dxf|import_off|dxf_linear_extrude|dxf_rotate_extrude"
+    r"|import|surface)\s*\(\s*(?:file\s*=\s*)?\"([^\"]*)\""
+    r"|\b(file)\s*=\s*\"([^\"]*)\"",
     re.IGNORECASE,
 )
 
@@ -57,7 +76,12 @@ _INCLUDE_PATTERN = re.compile(
 #: Verweis und gab den Lauf frei. Eine Prüfung, die man mit einer
 #: Zeichenkettenverkettung umgeht, ist keine. Also wird jede Anweisung gezählt,
 #: und was die Literal-Suche nicht erklären kann, gilt als nicht prüfbar.
-_ANY_INCLUDE_PATTERN = re.compile(r"\b(include|use|import|surface)\s*[<(]", re.IGNORECASE)
+_ANY_INCLUDE_PATTERN = re.compile(
+    r"\b(include|use|import_stl|import_dxf|import_off|dxf_linear_extrude"
+    r"|dxf_rotate_extrude|import|surface)\s*[<(]"
+    r"|\bfile\s*=",
+    re.IGNORECASE,
+)
 
 #: Wie lange ein Lauf dauern darf. Ein Modell, das länger braucht, ist kein
 #: Rückfall, sondern ein Fehler (§31).
@@ -121,19 +145,29 @@ def check_source(source: str) -> SourceCheck:
     references: list[str] = []
     refused: list[str] = []
 
-    readable = set()
+    # Spannen statt Startpositionen: ``import(file="…")`` ist ein lesbarer
+    # Fund, aber sein ``file=`` steht mitten darin — als bloße Position würde
+    # der zweite Durchlauf es für eine eigene, ungelesene Anweisung halten.
+    readable: list[tuple[int, int]] = []
     for match in _INCLUDE_PATTERN.finditer(source):
-        path = match.group(2) if match.group(2) is not None else match.group(4)
+        path = next(
+            (
+                group
+                for group in (match.group(2), match.group(4), match.group(6))
+                if group is not None
+            ),
+            None,
+        )
         if path is None:
             continue
-        readable.add(match.start())
+        readable.append(match.span())
         (references if _is_local(path) else refused).append(path.strip())
 
     # Jede Anweisung, die keine lesbare Zeichenkette dabeihat, führt irgendwohin
     # — nur wohin, steht erst zur Laufzeit fest. Sie wird abgelehnt statt
     # übersehen: der Nutzer sieht die Stelle und kann sie ausschreiben.
     for match in _ANY_INCLUDE_PATTERN.finditer(source):
-        if match.start() not in readable:
+        if not any(start <= match.start() < end for start, end in readable):
             refused.append(match.group(0).strip())
 
     findings = tuple(

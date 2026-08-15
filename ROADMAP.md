@@ -5891,10 +5891,18 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       und die Auswertung mit echten Werten wirft unverändert. Vier neue
       Tests, darunter der Skizzenfall `=@d/@n`, dessen Referenzen jetzt in
       den Cache-Schlüssel kommen.
-- [ ] **K2 — OpenSCAD-Quelltextprüfung umgehbar** (Regel 11, §32).
+- [x] **K2 — OpenSCAD-Quelltextprüfung umgehbar** (Regel 11, §32).
       `import_stl`/`import_dxf`/`file=` gehen am Muster vorbei; gegen das
       installierte OpenSCAD belegt, die Datei wird gelesen. Vor jeder
       Auslieferung.
+
+      **Behoben:** Beide Muster kennen jetzt die fünf veralteten
+      Einbindungen und jedes `file=`; die Literal-Suche merkt sich Spannen
+      statt Startpositionen, damit das `file=` innerhalb eines gelesenen
+      `import(file="…")` nicht als zweite, ungelesene Anweisung gilt.
+      Relative Altformen bleiben erlaubt (gleiche Regel wie `import`),
+      `file=` mit Ausdruck statt Literal ist nicht prüfbar und wird
+      abgelehnt. Zehn neue Testfälle.
 - [ ] **K3 — Slot-Filamente erreichen die Übergabe nie**: der Dialog sammelt
       `slot_profiles` ein und meldet Vollzug, `MaterialSlot.material` setzt
       niemand — alle Slots slicen mit dem Basisfilament.
