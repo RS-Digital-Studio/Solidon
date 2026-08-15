@@ -12,6 +12,7 @@ ohne ``type``.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -368,6 +369,23 @@ def test_the_filament_default_is_the_plain_one(slicer: Path) -> None:
     assert chosen.name == "Elegoo PETG @ECC2"
     assert sp.match_filament(found, machine, "PLA") is not None
     assert sp.match_filament(found, machine, "ABS") is None, "was fehlt, wird nicht geraten"
+
+
+def test_without_a_printer_there_is_no_filament_default(slicer: Path) -> None:
+    """Ohne Drucker keine Vorgabe — und vor allem: keine Suche über alles.
+
+    ``type_of`` löst je Profil eine Erbkette aus Dateien auf. Mit Drucker sind
+    das die 42 verträglichen Profile, ohne ihn der ganze Bestand: 5962 beim
+    installierten ElegooSlicer, gemessen 0,97 Sekunden gegen über zehn
+    Minuten. Der Aufruf steht im Qt-Hauptthread, also stand mit ihm die
+    Anwendung — und ausgelöst hat es kein Sonderfall, sondern die Vorgabe:
+    zum „Allgemeinen FDM-Drucker 220 mm" findet kein Slicer ein Profil.
+    """
+    found = sp.find_profiles(slicer, "orca", kinds=("machine", "process", "filament"))
+
+    begonnen = time.perf_counter()
+    assert sp.match_filament(found, None, "PETG") is None
+    assert time.perf_counter() - begonnen < 0.1, "ohne Drucker wird nichts aufgeschlagen"
 
 
 # --- welchen Drucker der Slicer hat (§2.3, §29) ---------------------------------

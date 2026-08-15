@@ -482,7 +482,20 @@ def match_filament(
     Gewählt wird deshalb der schlichteste Name, also die Grundausführung; wer
     eine besondere Spule hat, stellt sie ein. Eine Vorgabe zu raten, die
     genauer aussieht als sie ist, wäre schlechter als die einfache.
+
+    **Ohne Drucker gibt es keine Vorgabe**, und das ist keine Bequemlichkeit.
+    Ein Filamentprofil gilt für eine Maschine; ohne sie gäbe es nichts, wozu
+    die Antwort passen könnte. Vor allem aber fällt damit die Einschränkung
+    weg, auf der die Rechnung unten beruht: ``type_of`` löst je Profil eine
+    Erbkette aus Dateien auf, und der Aufruf lief über **5962** Filamente
+    statt über die 42, die zu einem Drucker gehören. Gemessen am Bestand des
+    ElegooSlicer: 0,97 Sekunden mit Drucker, über zehn Minuten ohne — und
+    weil der Aufruf im Qt-Hauptthread steht, stand mit ihm die ganze
+    Anwendung. Ausgelöst hat das kein Sonderfall, sondern die Vorgabe: zum
+    „Allgemeinen FDM-Drucker 220 mm" findet kein Slicer ein Profil.
     """
+    if machine is None:
+        return None
     wanted = material_type.casefold()
     # Der Typ steht wie die Verträglichkeit meist nicht in der obersten Datei,
     # sondern eine Ebene höher: von 42 verträglichen Filamentprofilen nennen

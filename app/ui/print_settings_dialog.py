@@ -1073,6 +1073,19 @@ class PrintSettingsDialog(QDialog):
         for entry in fitting:
             self.filament_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
 
+        if not fitting:
+            # Nichts zu wählen heißt nichts vorzuwählen. Die Suche darunter lief
+            # trotzdem und war zweimal falsch: wirkungslos, weil ``findData``
+            # danach eine leere Liste absucht, und teuer, weil sie ohne Drucker
+            # den ganzen Bestand aufschlägt statt der Handvoll passender. Beim
+            # vorgegebenen „Allgemeinen FDM-Drucker" — also beim ersten Öffnen,
+            # bevor jemand einen Drucker eingestellt hat — stand die Anwendung
+            # damit minutenlang.
+            self.filament_choice.setCurrentIndex(-1)
+            for _label, box in self.slot_rows:
+                box.clear()
+            return
+
         # Erst was für *dieses* Material zuletzt galt, dann der allgemeine
         # Merker, dann die Zuordnung nach Materialart.
         material = self.session.profile.material.id
