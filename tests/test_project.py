@@ -343,6 +343,30 @@ def test_an_autosave_older_than_the_project_is_not_offered(filled: Project, tmp_
     assert find_recovery(path) is None, "a saved project is newer than its autosave"
 
 
+def test_an_autosave_at_the_same_second_is_still_offered(filled: Project, tmp_path: Path) -> None:
+    """Gleichstand ist keine Auskunft — und wird zur sicheren Seite entschieden.
+
+    So gefunden: ``test_autosave_sits_next_to_the_project`` schlug in einem
+    vollen Lauf fehl und ließ sich außerhalb von pytest nachstellen. Beide
+    Dateien trugen dieselbe Zeit, auf die letzte Stelle genau — die Dateizeit
+    löst hier rund 16 Millisekunden auf, und Speichern plus Sichern dauert
+    weniger. Der Test hing damit an der Rechnerlast; die Anwendung hätte im
+    selben Fall die Wiederherstellung verschwiegen.
+
+    Hier stehen die Zeiten deshalb fest, statt gemessen zu werden: Ein Test,
+    der eine Zeitauflösung prüft, prüft die Maschine und nicht die Anwendung.
+    """
+    import os
+
+    path = tmp_path / "projekt.p3d"
+    save(filled, path)
+    autosave = write_autosave(filled, path)
+    stamp = path.stat().st_mtime
+    os.utime(autosave, (stamp, stamp))
+
+    assert find_recovery(path) == autosave, "gleiche Zeit heißt nicht älter"
+
+
 def test_the_checked_in_example_still_opens() -> None:
     """Das Regressionsnetz des Formats: diese Datei muss sich weiter öffnen
     lassen (§16.2).
