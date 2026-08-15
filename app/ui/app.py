@@ -134,7 +134,14 @@ def main(argv: list[str] | None = None) -> int:
     application, window = build_application(argv, progress=splash.step)
     splash.step(tr("Bereit."), 1.0)
 
-    window.show()
+    # Bildschirmfüllend, aber ein Fenster: Titelleiste, Menüs und die Knöpfe
+    # zum Verkleinern bleiben da. Echtes Vollbild nimmt sie weg, und wer dann
+    # eine zweite Anwendung danebenlegen will, findet keinen Griff.
+    #
+    # Und nicht bloß 1280 auf 820 wie die Vorgabe des Fensters: Objektbaum,
+    # Viewport und Prüfbericht nebeneinander brauchen Breite — auf einem
+    # 2560er Schirm stünde die Anwendung sonst als Briefmarke in der Ecke.
+    window.showMaximized()
     splash.finish(window)
     # Der erste Start und der Update-Hinweis gehören hinter das sichtbare
     # Fenster (§38) — und nur hierher, wo wirklich ein Mensch hinsieht.
