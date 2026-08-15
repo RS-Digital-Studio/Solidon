@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import zipfile
 from dataclasses import replace
 from io import BytesIO
@@ -302,6 +303,41 @@ def test_only_the_named_plate_goes_into_the_file(tmp_path: Path, profile: Profil
     )
 
     assert threemf.count_objects(written.read_bytes()) == 1
+
+
+def test_without_a_named_plate_every_plate_goes_in(tmp_path: Path, profile: Profile) -> None:
+    """Und ohne Einschränkung kommen alle hinein — mit ihrer Platte dazu.
+
+    Die Orca-Familie legt ihre Platten in einem Koordinatenraum nebeneinander.
+    Ohne den Versatz stünde die zweite auf der ersten: Beide fangen am selben
+    Bettursprung an, und am modularen Besteckkorb überlagerten sich zwei
+    Platten um neunundzwanzig Millimeter.
+
+    Der Abstand ist gemessen und nicht gewählt — siehe ``PLATE_STRIDE``. Hier
+    steht die Gegenprobe: Zwei gleiche Teile auf zwei Platten liegen um genau
+    eine Bettbreite plus ein Achtel auseinander.
+    """
+    erste = scene_object("obj_1", "Vorne")
+    zweite = scene_object("obj_2", "Naechste")
+    zweite.plate = 1
+
+    written, _findings = write_assembly(
+        [erste, zweite], tmp_path, project_name="x", profile=profile
+    )
+
+    payload = written.read_bytes()
+    assert threemf.count_objects(payload) == 2, "beide Teile in einer Datei"
+
+    beilage = zipfile.ZipFile(BytesIO(payload)).read(threemf.SETTINGS_PATH).decode("utf-8")
+    assert beilage.count("<plate>") == 2, "und beide Platten benannt"
+
+    # Die erste Platte steht, wo sie steht, und bekommt gar keine Matrix — eine
+    # Verschiebung um null wäre eine Angabe ohne Aussage. Verschoben ist nur,
+    # was auf die zweite gehört.
+    model = zipfile.ZipFile(BytesIO(payload)).read(threemf.MODEL_PATH).decode("utf-8")
+    offsets = [float(entry.split()[9]) for entry in re.findall(r'transform="([^"]+)"', model)]
+    width = profile.printer.build_volume[0]
+    assert offsets == [pytest.approx(width * threemf.PLATE_STRIDE)]
 
 
 def test_an_empty_plate_says_so(tmp_path: Path, profile: Profile) -> None:

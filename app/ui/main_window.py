@@ -2468,11 +2468,37 @@ class MainWindow(QMainWindow):
             if export_format == "3mf" and len(objects) > 1:
                 # Eine Baugruppe bleibt eine Datei: der Slicer bekommt einen
                 # Druckauftrag, keine Handvoll Teile (§20).
+                #
+                # **Mit allen Platten darin.** Die Datei trägt je Platte einen
+                # Eintrag, und der Slicer zeigt sie als das, was sie sind —
+                # mehrere Platten eines Auftrags, die er auch am Stück slicen
+                # kann. Ohne diese Angabe stünde alles auf derselben Platte
+                # übereinander: Jede fängt am selben Bettursprung an, und am
+                # modularen Besteckkorb überlagerten sich zwei davon um
+                # neunundzwanzig Millimeter, ohne dass man es der Datei ansah.
+                #
+                # **Und mit den Druckeinstellungen des Projekts.** Eine 3MF
+                # ohne sie ist Geometrie: Der Slicer öffnet sie mit dem Profil,
+                # das gerade eingestellt ist, und was Solidon über Temperatur,
+                # Tempo und Wandzahl weiß, ist beim Öffnen weg. In diesem
+                # Repository steht der Preis dafür aufgeschrieben — eine Datei
+                # sagte drei Wände, gedruckt wurden zwei, 127 Gramm
+                # Unterschied, und der Datei sah man nichts an.
+                #
+                # Trägt das Projekt keine, werden sie aus Drucker und Material
+                # aufgelöst — dieselbe Vorgabe, mit der die Anwendung selbst
+                # rechnet (§29). Das ist mehr wert als gar nichts: Die Datei
+                # sagt dann, womit Solidon drucken würde, statt es dem Profil
+                # zu überlassen, das im Slicer zufällig eingestellt ist.
                 written_path, findings = write_assembly(
                     objects,
                     target.parent,
                     project_name=target.stem,
                     profile=self.session.profile,
+                    settings=(
+                        self.session.project.document.print_settings
+                        or print_settings.resolve(self.session.profile)
+                    ),
                     sources=sources,
                 )
                 written = [written_path]
