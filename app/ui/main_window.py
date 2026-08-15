@@ -2312,13 +2312,24 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()
         return self._slice_cache if self._slice_key is not None else None
 
-    def _gcode_returned(self, outcome: SliceOutcome) -> None:
+    def _gcode_returned(self, outcomes: list[SliceOutcome]) -> None:
         """Was der Slicer gemessen hat, geht in den Prüfbericht — als gemessen
-        markiert, neben der Schätzung, nie an ihrer Stelle (Regel 14)."""
-        self.report.add_findings(outcome.findings)
-        self._compare_totals(outcome.metrics)
+        markiert, neben der Schätzung, nie an ihrer Stelle (Regel 14).
+
+        Eine Liste, weil ein Auftrag mehrere Platten haben kann (§25). Die
+        Gegenprobe läuft gegen die **Summe**: die Schätzung gilt dem Projekt,
+        und sie je Platte dagegenzuhalten hieße, dreimal denselben Vergleich mit
+        einem Drittel der Messung zu führen.
+        """
+        for outcome in outcomes:
+            self.report.add_findings(outcome.findings)
+        self._compare_totals(gcode.combine([entry.metrics for entry in outcomes]))
         self._focus_report()
-        self.announce(f"{tr('Geslicet')}: {outcome.gcode_path.name}")
+        self.announce(
+            f"{tr('Geslicet')}: {outcomes[0].gcode_path.name}"
+            if len(outcomes) == 1
+            else f"{tr('Geslicet')}: {len(outcomes)} {tr('Platten')}"
+        )
 
     def action_check_gcode(self) -> None:
         """§28.1: eine geslicete Datei zurücklesen und gegen die Schätzung

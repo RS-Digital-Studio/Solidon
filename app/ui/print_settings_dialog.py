@@ -57,13 +57,14 @@ from app.core.export.writer import arrangement_holds, write_assembly
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import print_settings, profiles
 from app.core.log import get_logger
-from app.core.slice import advise
+from app.core.slice import advise, gcode
 from app.core.types import (
     BoundingBox,
     Finding,
     MaterialSlot,
     PrintSettings,
     Profile,
+    SceneObject,
     SettingAdvice,
     SliceResult,
 )
@@ -667,48 +668,81 @@ class _ColourButton(QPushButton):
             self.changed.emit(self._value)
 
 
+@dataclass(frozen=True, slots=True)
+class PlateRun:
+    """Eine Druckplatte, wie sie in den Slicer geht.
+
+    Der Auftrag ist die **Liste** dieser Läufe, nicht einer davon: eine Szene
+    mit mehr Teilen, als auf ein Bett passen, ist der Normalfall (§25), und ein
+    Auftrag, von dem nur die erste Platte geslicet wird, ist kein Auftrag,
+    sondern eine Teilmenge, über die niemand entschieden hat.
+    """
+
+    plate: int
+    model: Path
+    slots: tuple[MaterialSlot, ...] = ()
+    keep_arrangement: bool = False
+    findings: tuple[Finding, ...] = ()
+    """Was beim Schreiben der Baugruppe auffiel — Haftungsränder,
+    Filamentwechsel. Sie reisen mit ihrer Platte, damit im Prüfbericht steht,
+    welche gemeint ist."""
+
+
 class _SliceWorker(QThread):
-    """Ein Slicer-Lauf abseits der Ereignisschleife (§2.8).
+    """Die Slicer-Läufe abseits der Ereignisschleife (§2.8).
 
     Ein Teil mit vielen Schichten beschäftigt den Slicer Minuten. Im
     Qt-Hauptthread hieße das ein eingefrorenes Fenster samt der Fortschritts-
     zeile, die davon berichten soll.
+
+    **Eine Platte ist ein Lauf.** Der Slicer schreibt je Aufruf eine Druckdatei,
+    und mehr wäre auch nicht richtig: Wer zwei Platten druckt, legt zweimal
+    Filament ein und drückt zweimal Start. Dass alle drei Slicer-Familien
+    denselben Weg gehen, ist der zweite Grund — die Orca-Familie könnte mehrere
+    Platten in einer Projektdatei führen, Cura und PrusaSlicer nicht.
     """
 
     done = Signal(object)
     failed = Signal(object)
+    step = Signal(int, int)
+    """Welche Platte gerade läuft und wie viele es sind — beide ab eins gezählt,
+    denn diese Zahl steht in der Statuszeile."""
 
     def __init__(
         self,
-        model: Sequence[Path],
+        runs: Sequence[PlateRun],
         settings: PrintSettings,
         profile: Profile,
         setup: handover.SlicerSetup,
-        keep_arrangement: bool = False,
-        slots: Sequence[MaterialSlot] = (),
     ) -> None:
         super().__init__()
-        self._model = model
+        self._runs = list(runs)
         self._settings = settings
         self._profile = profile
         self._setup = setup
-        self._keep_arrangement = keep_arrangement
-        self._slots = slots
 
     def run(self) -> None:
-        try:
-            outcome = handover.slice_model(
-                self._model,
-                self._settings,
-                self._profile,
-                self._setup,
-                keep_arrangement=self._keep_arrangement,
-                slots=self._slots,
-            )
-        except AppError as problem:
-            self.failed.emit(problem)
-            return
-        self.done.emit(outcome)
+        results: list[handover.SliceOutcome] = []
+        for index, entry in enumerate(self._runs, start=1):
+            self.step.emit(index, len(self._runs))
+            try:
+                outcome = handover.slice_model(
+                    [entry.model],
+                    self._settings,
+                    self._profile,
+                    self._setup,
+                    keep_arrangement=entry.keep_arrangement,
+                    slots=entry.slots,
+                )
+            except AppError as problem:
+                # Eine Platte, die scheitert, nimmt den Auftrag mit: Was danach
+                # käme, wäre eine Sammlung von Druckdateien, in der eine fehlt —
+                # und wer sie hinterher an den Drucker gibt, merkt das nicht.
+                self.failed.emit(problem)
+                return
+            outcome.findings = [*entry.findings, *outcome.findings]
+            results.append(outcome)
+        self.done.emit(results)
 
 
 class _ProfileWorker(QThread):
@@ -775,7 +809,8 @@ class PrintSettingsDialog(QDialog):
         self._profile_worker: _ProfileWorker | None = None
         self._profiles: list[slicer_profiles.SlicerProfile] = []
         self._temporary: TemporaryDirectory[str] | None = None
-        self._gcode: Path | None = None
+        self._gcode: list[Path] = []
+        """Die Druckdateien des letzten Laufs — eine je Platte."""
         self._pending_findings: list[Finding] = []
         """Was die Prüfung vor dem Schreiben fand (§29). Sie berichtet, sie
         blockiert nicht — also reist sie mit dem Ergebnis in den Prüfbericht."""
@@ -1551,63 +1586,107 @@ class PrintSettingsDialog(QDialog):
         self._temporary = TemporaryDirectory(prefix="solidon-handover-")
         folder = Path(self._temporary.name)
         name = self.session.path.stem if self.session.path else "solidon"
-        # Eine Baugruppe und nicht eine Datei je Objekt: der Slicer bekommt
-        # damit einen Druckauftrag statt einer Handvoll Teile, über deren
-        # Zusammengehörigkeit er selbst entscheiden müsste (§20, §29).
         plates = sorted({entry.plate for entry in objects})
-        # Hält die Anordnung, geht sie mit — und wird beim Aufruf auch
-        # durchgesetzt. Sonst ordnet der Slicer an, wie er es ohne uns täte:
-        # zwei Teile übereinander wären schlimmer als eine verworfene
-        # Anordnung (§29).
-        on_first_plate = [entry for entry in objects if entry.plate == plates[0]]
-        keep = arrangement_holds(
-            [as_mesh_data(entry.mesh) for entry in on_first_plate], self.session.profile
-        )
         try:
-            written, findings = write_assembly(
-                objects,
-                folder,
-                project_name=name,
-                profile=self.session.profile,
-                plate=plates[0],
-                # Damit ein Teil bekommen kann, was nur es braucht — der Brim
-                # unter der Streuscheibe, nicht unter den zwölf Behältern.
-                settings=self.settings,
-                flavour=setup.flavour,
-                place_on_bed=keep,
-            )
+            runs = [self._plate_run(objects, plate, folder, name, setup) for plate in plates]
         except AppError as problem:
             show_error(problem, self)
             return
-        if len(plates) > 1:
-            # Mehr Teile als auf eine Platte passen ist normal (§25) — aber
-            # nichts, was still zur Hälfte geslicet werden darf.
-            self.state.setText(tr("Diese Szene braucht mehrere Platten; geslicet wird die erste."))
-        self._pending_findings = findings
 
         self.slice_button.setEnabled(False)
         self.progress.setVisible(True)
         self.state.setText(tr("Der Slicer rechnet …"))
 
+        worker = _SliceWorker(runs, self.settings, self.session.profile, setup)
+        worker.done.connect(self._sliced)
+        worker.failed.connect(self._slice_failed)
+        worker.finished.connect(self._slice_finished)
+        worker.step.connect(self._slicing_plate)
+        self._worker = worker
+        worker.start()
+
+    def _plate_run(
+        self,
+        objects: list[SceneObject],
+        plate: int,
+        folder: Path,
+        name: str,
+        setup: handover.SlicerSetup,
+    ) -> PlateRun:
+        """Eine Platte für den Slicer fertig machen (§20, §25, §29).
+
+        Eine Baugruppe je Platte und nicht eine Datei je Objekt: der Slicer
+        bekommt damit einen Druckauftrag statt einer Handvoll Teile, über deren
+        Zusammengehörigkeit er selbst entscheiden müsste.
+
+        Der Dateiname trägt die Plattennummer, sobald es mehr als eine gibt —
+        ohne sie schriebe die zweite Platte die erste über, und beide Läufe
+        legten ihren G-Code an dieselbe Stelle daneben.
+        """
+        on_plate = [entry for entry in objects if entry.plate == plate]
+        # Hält die Anordnung, geht sie mit — und wird beim Aufruf auch
+        # durchgesetzt. Sonst ordnet der Slicer an, wie er es ohne uns täte:
+        # zwei Teile übereinander wären schlimmer als eine verworfene
+        # Anordnung (§29). Je Platte gefragt, denn jede ist eine eigene.
+        keep = arrangement_holds(
+            [as_mesh_data(entry.mesh) for entry in on_plate], self.session.profile
+        )
+        written, findings = write_assembly(
+            objects,
+            folder,
+            project_name=name if len(objects) == len(on_plate) else f"{name}-{plate + 1}",
+            profile=self.session.profile,
+            plate=plate,
+            # Damit ein Teil bekommen kann, was nur es braucht — der Brim
+            # unter der Streuscheibe, nicht unter den zwölf Behältern.
+            settings=self.settings,
+            flavour=setup.flavour,
+            place_on_bed=keep,
+            # Und das Systemprofil darunter: ohne es trägt die Datei zwar
+            # Solidons Werte, aber keinen Drucker, zu dem sie passen.
+            setup=setup,
+        )
         # Die Materialslots der Platte: je Slot ein Filament (§20). Ohne sie
-        # bekäme jede Farbe die Werte der ersten.
+        # bekäme jede Farbe die Werte der ersten. Je Platte eigene, denn die
+        # Plattenaufteilung folgt gerade dem Material (`plates_by_material`).
         slots = threemf.merge_slots(
             [
                 threemf.AssemblyPart(
                     mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots)
                 )
-                for entry in on_first_plate
+                for entry in on_plate
             ]
         )
-        worker = _SliceWorker([written], self.settings, self.session.profile, setup, keep, slots)
-        worker.done.connect(self._sliced)
-        worker.failed.connect(self._slice_failed)
-        worker.finished.connect(self._slice_finished)
-        self._worker = worker
-        worker.start()
+        return PlateRun(
+            plate=plate,
+            model=written,
+            slots=tuple(slots),
+            keep_arrangement=keep,
+            findings=tuple(findings),
+        )
 
-    def _sliced(self, outcome: handover.SliceOutcome) -> None:
-        metrics = outcome.metrics
+    def _slicing_plate(self, index: int, count: int) -> None:
+        """Bei welcher Platte der Lauf steht (§2.8).
+
+        Nur bei mehreren: „Platte 1 von 1" wäre eine Zahl ohne Aussage.
+        """
+        if count > 1:
+            self.state.setText(
+                tr("Der Slicer rechnet — Platte {nummer} von {anzahl} …")
+                .replace("{nummer}", str(index))
+                .replace("{anzahl}", str(count))
+            )
+
+    def _sliced(self, outcomes: list[handover.SliceOutcome]) -> None:
+        """Was der Lauf gebracht hat — über alle Platten zusammen.
+
+        Zeit und Material sind Summen, weil zwei Platten zweimal gedruckt
+        werden; die Schichtzahl steht nur bei einer, denn über zwei addiert
+        wäre sie eine Zahl, die es nirgends gibt (:func:`gcode.combine`).
+        """
+        if not outcomes:
+            return
+        metrics = gcode.combine([entry.metrics for entry in outcomes])
         parts = []
         if metrics.print_minutes is not None:
             parts.append(f"{tr('Druckzeit')}: {metrics.print_minutes:.0f} min")
@@ -1616,40 +1695,70 @@ class PrintSettingsDialog(QDialog):
             parts.append(f"{tr('Material')}: {grams:.1f} g")
         if metrics.layer_count is not None:
             parts.append(f"{tr('Schichten')}: {metrics.layer_count}")
+        if len(outcomes) > 1:
+            parts.append(f"{tr('Platten')}: {len(outcomes)}")
         self.state.setText(" · ".join(parts) if parts else tr("Fertig geslicet."))
-        # Die Datei liegt im Arbeitsordner, der beim Schließen verschwindet.
+        # Die Dateien liegen im Arbeitsordner, der beim Schließen verschwindet.
         # Ohne diesen Knopf wäre der ganze Lauf eine Zahl auf dem Bildschirm
         # und nichts, was auf einen Drucker geht.
-        self._gcode = outcome.gcode_path
+        self._gcode = [entry.gcode_path for entry in outcomes]
         self.save_button.setEnabled(True)
-        outcome.findings = [*self._pending_findings, *outcome.findings]
+        outcomes[0].findings = [*self._pending_findings, *outcomes[0].findings]
         self._pending_findings = []
-        self.sliced.emit(outcome)
-        _log.info("sliced with %s in %.1f s", metrics.slicer, outcome.seconds)
+        self.sliced.emit(outcomes)
+        _log.info(
+            "sliced %d plate(s) with %s in %.1f s",
+            len(outcomes),
+            metrics.slicer,
+            sum(entry.seconds for entry in outcomes),
+        )
 
     def _save_gcode(self) -> None:
-        """Die Druckdatei dorthin, wo der Nutzer sie haben will (§29).
+        """Die Druckdateien dorthin, wo der Nutzer sie haben will (§29).
 
         Vorgeschlagen wird der Ordner des Projekts und der Name des Projekts —
         eine Datei namens ``plate_1.gcode`` in den Downloads findet später
         niemand wieder.
+
+        **Bei mehreren Platten wird der Ordner gewählt, nicht die Datei.** Ein
+        Speichern-Dialog je Platte wäre dieselbe Frage dreimal; die Namen
+        stehen ohnehin fest, sobald der Auftrag einen hat — sie unterscheiden
+        sich nur in der Plattennummer.
         """
-        if self._gcode is None or not self._gcode.is_file():
+        written = [path for path in self._gcode if path.is_file()]
+        if not written:
             return
         start = self.session.path.parent if self.session.path else Path.home()
         stem = self.session.path.stem if self.session.path else "solidon"
-        chosen, _filter = QFileDialog.getSaveFileName(
-            self,
-            tr("Druckdatei speichern"),
-            str(start / f"{stem}.gcode"),
-            f"{tr('G-Code')} (*.gcode)",
+
+        if len(written) == 1:
+            chosen, _filter = QFileDialog.getSaveFileName(
+                self,
+                tr("Druckdatei speichern"),
+                str(start / f"{stem}.gcode"),
+                f"{tr('G-Code')} (*.gcode)",
+            )
+            if not chosen:
+                return
+            targets = [Path(chosen)]
+        else:
+            folder = QFileDialog.getExistingDirectory(
+                self, tr("Ordner für die Druckdateien"), str(start)
+            )
+            if not folder:
+                return
+            targets = [
+                Path(folder) / f"{stem}-{index}.gcode" for index in range(1, len(written) + 1)
+            ]
+
+        for target, source in zip(targets, written, strict=True):
+            target.write_bytes(source.read_bytes())
+            _log.info("wrote g-code to %s", target)
+        self.state.setText(
+            f"{tr('Gespeichert')}: {targets[0].name}"
+            if len(targets) == 1
+            else f"{tr('Gespeichert')}: {len(targets)} {tr('Druckdateien')} → {targets[0].parent}"
         )
-        if not chosen:
-            return
-        target = Path(chosen)
-        target.write_bytes(self._gcode.read_bytes())
-        self.state.setText(f"{tr('Gespeichert')}: {target.name}")
-        _log.info("wrote g-code to %s", target)
 
     def _slice_failed(self, problem: AppError) -> None:
         self.state.setText("")

@@ -234,3 +234,52 @@ G0 X30 Y10
 """
     assert not gcode.extrudes(leerlauf)
     assert gcode.extrudes(PRUSA)
+
+
+# --- mehrere Platten (§25, §29) -----------------------------------------------
+
+
+def test_two_plates_add_up_to_one_job() -> None:
+    """Zeit und Material addieren sich, weil zweimal gedruckt wird."""
+    first = gcode.GcodeMetrics(print_seconds=600.0, filament_mm=1000.0, filament_grams=10.0)
+    second = gcode.GcodeMetrics(print_seconds=1200.0, filament_mm=2000.0, filament_grams=20.0)
+
+    total = gcode.combine([first, second])
+
+    assert total.print_seconds == 1800.0
+    assert total.filament_mm == 3000.0
+    assert total.filament_grams == 30.0
+    assert total.source == "gcode"
+
+
+def test_a_missing_value_on_one_plate_leaves_the_sum_missing() -> None:
+    """Sonst stünde eine Gesamtzeit da, die zu kurz ist — und niemand sähe es.
+
+    Dieselbe Unterscheidung, aus der ``GcodeMetrics`` seine Felder optional
+    führt: ein fehlender Wert fehlt, er ist nicht null.
+    """
+    first = gcode.GcodeMetrics(print_seconds=600.0, filament_grams=10.0)
+    second = gcode.GcodeMetrics(filament_grams=20.0)
+
+    total = gcode.combine([first, second])
+
+    assert total.print_seconds is None
+    assert total.filament_grams == 30.0
+
+
+def test_the_layer_count_belongs_to_a_plate_and_not_to_a_job() -> None:
+    """Über zwei Platten addiert wäre sie eine Zahl, die es nirgends gibt."""
+    plates = [gcode.GcodeMetrics(layer_count=110), gcode.GcodeMetrics(layer_count=40)]
+
+    assert gcode.combine(plates).layer_count is None
+    # Bei einer Platte bleibt sie, denn dort sagt sie etwas.
+    assert gcode.combine(plates[:1]).layer_count == 110
+
+
+def test_one_plate_comes_back_unchanged() -> None:
+    """Der einfarbige Einzelauftrag ist der Sonderfall mit einem Eintrag,
+    nicht ein anderer Weg."""
+    only = gcode.parse(PRUSA)
+
+    assert gcode.combine([only]) is only
+    assert gcode.combine([]) == gcode.GcodeMetrics()

@@ -8,6 +8,7 @@ Vorschläge kommen mit Begründung, und ohne Slicer bleibt er benutzbar.
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -453,10 +454,90 @@ def test_slicing_makes_the_file_available(dialog: PrintSettingsDialog, tmp_path:
     produced.write_text("; nur ein Test\n", encoding="utf-8")
     outcome = handover.SliceOutcome(gcode_path=produced, metrics=gcode.GcodeMetrics())
 
-    dialog._sliced(outcome)
+    dialog._sliced([outcome])
 
     assert dialog.save_button.isEnabled()
-    assert dialog._gcode == produced
+    assert dialog._gcode == [produced]
+
+
+def test_every_plate_keeps_its_own_print_file(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
+    """Zwei Platten sind zwei Druckdateien — und zwei Zahlen, die sich addieren.
+
+    Das ist der Punkt, an dem die Übergabe lange stehen blieb: Sie schrieb die
+    erste Platte und sagte das auch, aber wer den Satz übersah, hielt eine halbe
+    Druckdatei für die ganze.
+    """
+    outcomes = []
+    for index in (1, 2):
+        produced = tmp_path / f"platte-{index}.gcode"
+        produced.write_text("; nur ein Test\n", encoding="utf-8")
+        outcomes.append(
+            handover.SliceOutcome(
+                gcode_path=produced,
+                metrics=gcode.GcodeMetrics(print_seconds=600.0, filament_grams=10.0),
+            )
+        )
+
+    dialog._sliced(outcomes)
+
+    assert dialog._gcode == [entry.gcode_path for entry in outcomes]
+    # Zwanzig Minuten und zwanzig Gramm, nicht zehn: gedruckt wird zweimal.
+    assert "20 min" in dialog.state.text()
+    assert "20.0 g" in dialog.state.text()
+    assert "2" in dialog.state.text()
+
+
+def test_every_plate_becomes_its_own_run(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
+    """Die Übergabe nimmt alle Platten, nicht die erste.
+
+    Der Fund, aus dem das entstand: `_slice` schrieb die Baugruppe von
+    `plates[0]`, meldete „geslicet wird die erste" und hörte auf. Der Export
+    konnte längst alle. Geprüft wird an der Stelle, die je Platte ihre Datei
+    baut — jede trägt nur ihre eigenen Teile und einen eigenen Namen.
+    """
+    import trimesh
+
+    from app.core.export import handover
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    def body(size: float, name: str, plate: int) -> SceneObject:
+        mesh = trimesh.creation.box(extents=(size, size, size))
+        mesh.apply_translation((0.0, 0.0, size / 2.0))
+        return SceneObject(id=name, name=name, mesh=MeshData.of(mesh), plate=plate)
+
+    objects = [body(20.0, "A", 0), body(30.0, "B", 1), body(15.0, "C", 1)]
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    runs = [
+        dialog._plate_run(objects, plate, tmp_path, "satz", setup)
+        for plate in sorted({entry.plate for entry in objects})
+    ]
+
+    assert [entry.plate for entry in runs] == [0, 1]
+    # Zwei Dateien, nicht eine: sonst schriebe die zweite Platte die erste über.
+    assert len({entry.model for entry in runs}) == 2
+    assert all(entry.model.is_file() for entry in runs)
+
+
+def test_an_unknown_printer_leaves_the_dialog_responsive(dialog: PrintSettingsDialog) -> None:
+    """Ohne passenden Drucker bleibt die Filamentliste leer — und still.
+
+    Der Fund dahinter ist der Normalfall und kein Sonderfall: Solidons Vorgabe
+    ist der „Allgemeine FDM-Drucker 220 mm", und dazu hat kein Slicer ein
+    Profil. Die Vorbelegungssuche lief trotzdem, schlug ohne Drucker den
+    ganzen Filamentbestand auf (5962 Profile statt 42, je eines mit Erbkette
+    aus Dateien) und blockierte dabei den Qt-Hauptthread. Wirkungslos war sie
+    obendrein: gesucht wurde ein Eintrag in einer Liste, die leer ist.
+    """
+    dialog._profiles = []
+
+    begonnen = time.perf_counter()
+    dialog._fill_filaments(None)
+
+    assert time.perf_counter() - begonnen < 0.5, "ohne Drucker wird nichts aufgeschlagen"
+    assert dialog.filament_choice.count() == 0
+    assert dialog.filament_choice.currentIndex() == -1, "und nichts steht da, was nicht da ist"
 
 
 # --- Profilauswahl (§29) ------------------------------------------------------------

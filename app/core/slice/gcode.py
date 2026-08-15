@@ -19,6 +19,7 @@ Schichtanalyse Arbeit braucht, kein Grund, eine von beiden still vorzuziehen.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from app.core.log import get_logger
@@ -313,6 +314,54 @@ def compare(estimated: float, measured: float, what: str = "support") -> CrossCh
             )
         )
     return check
+
+
+def combine(parts: Sequence[GcodeMetrics]) -> GcodeMetrics:
+    """Die Kennzahlen mehrerer Druckplatten als eine Auskunft.
+
+    Ein Auftrag, der auf zwei Platten passt, wird zweimal gedruckt — Zeit und
+    Material addieren sich also, und wer wissen will, was der Satz kostet, will
+    diese Summe sehen. Alle Werte kommen aus derselben Quelle (G-Code), Regel 14
+    ist damit gewahrt: hier wird nichts mit einer Schätzung vermischt.
+
+    **Fehlt ein Wert bei einer Platte, fehlt die Summe.** Die Alternative wäre,
+    ihn als null zu behandeln — und dann stünde eine Gesamtzeit da, die zu kurz
+    ist, ohne dass jemand es sehen kann. Das ist derselbe Grundsatz, mit dem
+    :class:`GcodeMetrics` seine Felder optional führt.
+
+    Die Schichtzahl wird **nicht** summiert. Sie beschreibt eine Platte; über
+    zwei addiert ergäbe sie eine Zahl, die es nirgends gibt. Sie steht deshalb
+    nur da, wo es eine Platte ist.
+    """
+    if not parts:
+        return GcodeMetrics()
+    if len(parts) == 1:
+        return parts[0]
+
+    def total(pick: Callable[[GcodeMetrics], float | None]) -> float | None:
+        values = [pick(entry) for entry in parts]
+        return (
+            None
+            if any(value is None for value in values)
+            else sum(value or 0.0 for value in values)
+        )
+
+    heights = {entry.layer_height for entry in parts if entry.layer_height is not None}
+    warnings: list[str] = []
+    for entry in parts:
+        warnings += [text for text in entry.warnings if text not in warnings]
+
+    return GcodeMetrics(
+        slicer=parts[0].slicer,
+        print_seconds=total(lambda entry: entry.print_seconds),
+        filament_mm=total(lambda entry: entry.filament_mm),
+        filament_grams=total(lambda entry: entry.filament_grams),
+        support_mm3=total(lambda entry: entry.support_mm3),
+        layer_count=None,
+        layer_height=heights.pop() if len(heights) == 1 else None,
+        warnings=tuple(warnings),
+        source="gcode",
+    )
 
 
 def findings_for(metrics: GcodeMetrics) -> list[Finding]:
