@@ -5858,3 +5858,88 @@ nachgefahren — echte Qt-Plattform, echtes Hauptfenster, echter ElegooSlicer.
 
 **Nebenbei:** Die Anwendung startet bildschirmfüllend statt auf 1280 auf 820 —
 `showMaximized()` und nicht Vollbild, damit Titelleiste und Menüs bleiben.
+
+## Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb
+
+Sechs Durchgänge über den ganzen Stand: drei Code-Reviews über den Kern,
+Oberfläche, Bedienlogik der vier Hauptwege, Wettbewerbsrecherche. Alle Funde
+mit Stelle, Beleg und Fix-Skizze stehen in
+`.claude/durchsicht-2026-08-16.md` — hier nur, was daraus zu tun ist.
+
+Vorab die Baseline: Umgebung auf `constraints.txt` gebracht (trimesh
+4.12 → 5.0.0; der Major-Sprung ist nachweislich folgenlos, in beiden
+Kern-Gebieten gegen die installierte Fassung aufgelöst), Suite portionsweise
+**4009 Tests grün**, ruff/format/mypy grün. Der Lauf am Stück stirbt weiter
+am nativen rtree-Abriss — Umgebung, nicht Code.
+
+**Das Muster der Durchsicht:** Fünf der sieben Stopper sind grün getestet und
+trotzdem falsch — die Suite kennt jeweils die Form nicht, in der der Fehler
+auftritt (kein Test dividiert *durch* einen Parameter, keiner prüft die
+`*_settings_id`-Inhalte, keiner den Slicer-Timeout, keiner die Slot-Filamente
+am echten Eingang, keiner Weg 4 am laufenden Programm). **P16 hat nie eine
+Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
+
+- [ ] **K1 — Division durch einen Parameterverweis ist unmöglich** (§13).
+      `expressions.check/references` parsen mit Platzhalter-Nullen, der
+      Divisionsschutz lehnt `=@width/@count` überall ab; `sketch/serialize`
+      frisst den Fehler still und rechnet mit altem Cache. Fix + Test zuerst.
+- [ ] **K2 — OpenSCAD-Quelltextprüfung umgehbar** (Regel 11, §32).
+      `import_stl`/`import_dxf`/`file=` gehen am Muster vorbei; gegen das
+      installierte OpenSCAD belegt, die Datei wird gelesen. Vor jeder
+      Auslieferung.
+- [ ] **K3 — Slot-Filamente erreichen die Übergabe nie**: der Dialog sammelt
+      `slot_profiles` ein und meldet Vollzug, `MaterialSlot.material` setzt
+      niemand — alle Slots slicen mit dem Basisfilament.
+- [ ] **K4 — die exportierte 3MF trägt absolute Pfade als Profil-IDs**
+      (Regel 12; Orca erwartet Namen und trifft kein Preset).
+- [ ] **K5 — Slicer-Lauf: Timeout tötet den Dialog, Schließen friert ein,
+      Abbrechen fehlt** (§2.8, Regel 17; `reject()` umgeht `closeEvent`).
+- [ ] **K6 — Cura scheitert am eigenen Türsteher**: der Dialog verlangt ein
+      Maschinenprofil, das es bei Cura strukturell nicht gibt, obwohl der
+      Kern die Maschine selbst beschreibt.
+- [ ] **K7 — Weg 4 ist gebaut, aber nicht benutzbar**: `finish_armature`
+      schickt eine leere Pose (nichts passiert, ohne Ansage); eine getippte
+      Pose tötet über ungeschütztes `json.loads` den Auswertungs-Thread und
+      die Sitzung meldet Erfolg; „Relief auflegen" bietet kein Bild an (kein
+      Bildformat führt in die Quellen); der Startbildschirm-Import lädt ins
+      Unsichtbare — und genau darauf zeigt der Schlussknopf der
+      Erstinbetriebnahme.
+- [ ] **Nebensitzung 3MF-Export**: Urteil *nachbessern* — ohne geöffneten
+      Dialog ist `print_settings` weiter `None` (A1), der Einzelkörper-Export
+      läuft am neuen Code vorbei (A2); Details und A3–A7 in der
+      Durchsichts-Datei.
+- [ ] **Mittel-Block Kern**: Platten-Cache verliert
+      `findings`/`solver`/`transform`; T-Vernähen quadratisch und doppelt;
+      Rückfallkette unabbrechbar; `FIT_TOLERANCE` widerspricht §14;
+      `nut_trap`/`printed_thread` mit Konstanten-Toleranz (Kalibrierung
+      erreicht sie nie); **eigene Bausteine werden nie geladen** (§24.5 ohne
+      Aufrufer); Lizenzprüfung deckt `agent,brep` nicht; beschädigte
+      Nutzer-TOML stürzt beim Start ab; Schlüsselwerkzeug erzeugt bei zwei
+      Vorratsläufen identische Schlüssel; Zipbomben-Lücke beim 3MF;
+      Einheitenantwort landet nicht in den Op-Parametern (§15.1);
+      Nullmessung gilt als Übereinstimmung; Baumstützen erreichen Cura nie.
+- [ ] **Mittel-Block Oberfläche**: Arbeiter-Halteleine in fünf Dialogen
+      fehlt (Hauptfenster macht es vor — in ein Modul heben); Export rechnet
+      im Hauptthread; Sculpting kennt kein Ziehen (20 Züge = 20 Klicks);
+      während Gestensitzungen bleiben alle Ops anklickbar und *Fertig*
+      verliert dann die Züge; die Befehlspalette umgeht die Gestenmodi und
+      kennt keine Verfügbarkeit; Differenzlegende einfarbig; Fenstergeometrie
+      wird nie gespeichert.
+- [ ] **Gering-Block als eigene Runde**: ~30 englische Docstrings (AGENTS.md
+      behauptet Vollständigkeit), acht englische nutzersichtbare Fehlertexte
+      in `backends/mesh.py`, „aufgeloest" in `advise.py`, deutsche
+      Bezeichner in `tools/check_env.py` (Sprachprüfung sieht `tools/`
+      nicht), Zylinder-Sortierung ohne Z, Redirect kann `check_url` umgehen,
+      Analysekarten ohne Abbruch, Details in der Datei.
+
+**Wettbewerb (Recherche 16.08., Quellen in der Durchsichts-Datei):** Die
+Chat-Alleinstellung ist seit Zoo „Zookeeper" (01/2026) nicht mehr
+konkurrenzlos — verteidigungsfähig als Paket *lokal + kalibrierte Passungen +
+Schichtanalyse speist die Konstruktion + Einmalkauf*; kalibrierte Passungen
+hat sonst niemand. Gefährlichstes Ökosystem ist Bambu/MakerWorld (Meshy-6,
+Hunyuan 3.1, OpenSCAD-Customizer und Slicer-Werkzeuge in einem Gratis-Konto);
+Backflip macht seit 03.08. Scan→Feature-Baum für ~10 USD. Die fünf größten
+Lücken aus Kundensicht: Weg-3-Einstieg (ComfyUI-Hürde gegen Browser-Klick),
+Verrundung auf importierten STLs, Gridfinity-Baustein, Messen am
+Referenz-Mesh, Anschluss an fremde `.scad`-Customizer. Preis-Korridor:
+69–99 € einmalig, Plasticity (150 USD) als Anker darüber.
