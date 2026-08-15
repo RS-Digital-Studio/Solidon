@@ -36,6 +36,14 @@ def test_an_unreadable_text_has_no_references() -> None:
     assert sketch_parameter_references("{kaputt") == frozenset()
 
 
+def test_a_measure_dividing_by_a_parameter_keeps_its_references() -> None:
+    """`=@d/@n` galt der Prüfung als Division durch null; der stille Fang
+    machte daraus eine leere Referenzmenge, und die Skizze rechnete nach
+    einer Parameteränderung mit dem alten Cache weiter (§15)."""
+    text = sketch_to_text(rectangle("=@d/@n", "@inner"))
+    assert sketch_parameter_references(text) == {"d", "n", "inner"}
+
+
 def test_a_feature_plane_travels() -> None:
     """§30.1: neben den drei Hauptebenen ist eine erkannte Fläche eine Ebene."""
     sketch = Sketch(plane="feature:top_1", elements=(), constraints=())

@@ -5879,10 +5879,18 @@ auftritt (kein Test dividiert *durch* einen Parameter, keiner prüft die
 am echten Eingang, keiner Weg 4 am laufenden Programm). **P16 hat nie eine
 Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
 
-- [ ] **K1 — Division durch einen Parameterverweis ist unmöglich** (§13).
+- [x] **K1 — Division durch einen Parameterverweis ist unmöglich** (§13).
       `expressions.check/references` parsen mit Platzhalter-Nullen, der
       Divisionsschutz lehnt `=@width/@count` überall ab; `sketch/serialize`
       frisst den Fehler still und rechnet mit altem Cache. Fix + Test zuerst.
+
+      **Behoben:** Der Prüfmodus toleriert eine Null im Nenner genau dann,
+      wenn der Nenner eine Referenz enthält — ein Zähler je Vorkommen, weil
+      das deduplizierende Set als Vorher-nachher-Marke nicht taugt. Die
+      Literal-Null (`/0`, `/(2-2)`) bleibt auch in der Prüfung ein Fehler,
+      und die Auswertung mit echten Werten wirft unverändert. Vier neue
+      Tests, darunter der Skizzenfall `=@d/@n`, dessen Referenzen jetzt in
+      den Cache-Schlüssel kommen.
 - [ ] **K2 — OpenSCAD-Quelltextprüfung umgehbar** (Regel 11, §32).
       `import_stl`/`import_dxf`/`file=` gehen am Muster vorbei; gegen das
       installierte OpenSCAD belegt, die Datei wird gelesen. Vor jeder

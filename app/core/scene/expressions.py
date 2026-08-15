@@ -136,6 +136,9 @@ class _Parser:
         self.tokens = _tokenise(source)
         self.index = 0
         self.references: set[str] = set()
+        # Zählt jedes Referenz-Vorkommen, auch das wiederholte — das Set
+        # dedupliziert und taugt deshalb nicht als Vorher-nachher-Marke.
+        self.reference_hits = 0
 
     @property
     def current(self) -> _Token:
@@ -179,11 +182,19 @@ class _Parser:
         value = self.factor(depth + 1)
         while self.current.kind in ("*", "/"):
             token = self.advance()
+            marker = self.reference_hits
             right = self.factor(depth + 1)
             if token.kind == "*":
                 value *= right
                 continue
             if right == 0.0:
+                # Der Vergleich mit exakt null ist hier richtig: nur exakt
+                # null teilt nicht. Im Prüfmodus stehen Referenzen aber als
+                # Platzhalter-Null da — hängt der Nenner an einer, entscheidet
+                # erst die Auswertung mit echten Werten, ob durch null geteilt
+                # wird. Eine Literal-Null bleibt auch im Prüfmodus ein Fehler.
+                if self.values is None and self.reference_hits > marker:
+                    continue
                 raise _fail(
                     str(_("Division durch null.")),
                     self.source,
@@ -211,6 +222,7 @@ class _Parser:
         if token.kind == "reference":
             self.advance()
             self.references.add(token.text)
+            self.reference_hits += 1
             return self._lookup(token)
         if token.kind == "function":
             self.advance()
