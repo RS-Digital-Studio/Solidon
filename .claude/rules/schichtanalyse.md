@@ -20,6 +20,32 @@ Prüfbericht sagt welches.
 Beschriftung in der Oberfläche: „Schichtanalyse", nicht „Vorschau". Sie zeigt
 die Geometrie, nicht die Werkzeugwege.
 
+## Zwei Wege durch den Schnitt, und beide müssen dasselbe rechnen
+
+`app/core/slice/_chain.pyx` verkettet die Konturen einer Schicht übersetzt
+(`tools/build_slice_core.py`). Es ist **optional**: fehlt es, geht derselbe
+Schnitt über `shapely.polygonize`. Drei Sachen gelten dabei:
+
+- **Der GEOS-Weg bleibt der Bezug.** Er wird nicht entfernt, nicht
+  vernachlässigt und nicht als Notlösung behandelt. Er ist der Weg, den jeder
+  Klon ohne Compiler nimmt.
+- **Jede Änderung an einem der beiden gilt beiden.** `tests/test_slice_core.py`
+  hält sie aneinander — Fläche, Löcher, Geometrieart, Überhang. Wer nur einen
+  ändert, bekommt dort einen roten Lauf.
+- **Der übersetzte Weg ist der schnellere, nicht der genauere.** Er *könnte*
+  genauer sein — er kennt die Kante, auf der ein Punkt liegt, und bräuchte
+  das Runden auf sechs Nachkommastellen nicht. Er rundet trotzdem, und zwar
+  genau wie GEOS. Der erste Anlauf tat es nicht, und eine Abweichung in der
+  neunten Stelle kam hinter `buffer` → Extrusion → Boolesche Differenz als
+  andere Topologie heraus: 17 erkannte Merkmale statt 14, darunter ein Stift,
+  den es nicht gibt. **Zwei Wege durch dieselbe Rechnung dürfen sich nicht in
+  der letzten Stelle unterscheiden**, auch nicht zum Besseren hin.
+
+Der Grund für das Ganze steht als Messung in `ROADMAP.md` („Der kompilierte
+Kern, nachgerechnet"): Derselbe Durchlauf kostet 608 ms in Python und 11 ms
+übersetzt. **Eine Python-Idee mehr bringt dort nichts** — drei sind gemessen
+und alle drei landen in derselben Größenordnung.
+
 ## Die Einstellungen bleiben trotzdem hier
 
 Kein eigener Slicer heißt **nicht** kein eigenes Profil. `PrintSettings`

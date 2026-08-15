@@ -25,7 +25,7 @@ bekommt einen roten Lauf.
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | einen kompilierten Kern; der Polygonaufbau in GEOS ist das, was übrig ist |
+| Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | die Entscheidung, ob `_chain` mit ausgeliefert wird; der kompilierte Kern steht und bringt 1,34× — was jetzt oben liegt, ist `_plane_segments` |
 | CI-Bauläufe, Signierung, AppImage/Flatpak | P8 — Erste Veröffentlichung | die beiden Linux-Formate; die Signierung braucht ein Zertifikat |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
@@ -734,6 +734,101 @@ Kommentar an der Stelle — damit sie niemand nochmal versucht.
 Offen bleibt die Schichtanalyse selbst: 1,05 s statt 300 ms, also rund 650 ms
 für die Größe, die §31 nennt. Was übrig ist, ist der Polygonaufbau in GEOS; das
 zu schließen braucht einen kompilierten Kern, keine weitere Python-Idee.
+
+### Der kompilierte Kern, nachgerechnet (14.08.2026)
+
+Der Satz darüber stand zwei Phasen lang als Vermutung. Er stimmt — aber erst
+die Gegenprobe zeigt, *warum*, und sie hat unterwegs zwei andere Annahmen
+umgeworfen. Alle Zahlen auf einer Maschine, die rund dreimal langsamer ist als
+die, auf der die Tabelle oben entstand; verglichen wird deshalb nur
+untereinander.
+
+**Was die Zeit wirklich kostet.** Warm gemessen liegt der Polygonaufbau bei
+1078 ms gegen 455 ms für das Sammeln der Segmente — GEOS ist also tatsächlich
+die größere Hälfte. Threads helfen dort nicht, sie schaden: Faktor 0,75 auf
+vier Kernen, weil `polygonize` den Interpreter-Lock hält.
+
+**Die billigere Erklärung, geprüft und verworfen.** `polygonize` löst ein
+schwereres Problem als wir haben: Es nodet beliebig kreuzende Linien, während
+unsere Segmente aus Dreiecken mit exakt geteilten Ecken kommen und paarweise
+zusammenpassen. Die Ringe selbst zu verketten ist damit ein Durchlauf in O(n)
+ohne eine einzige Fließkommaentscheidung. In Python gemessen: **1215 ms** —
+also nicht schneller als GEOS, das mehr tut. Vektorisiert über alle Schichten
+(Halbkanten, Zyklenzerlegung, Zeigerverdopplung) waren es **540 ms**, wieder
+dieselbe Größenordnung. Drei Wege, ein Ergebnis: Python ist hier an der Decke,
+und zwar nicht am Verfahren, sondern am Interpreter.
+
+**Übersetzt sind es 11 ms** — Faktor 54 auf dieselben Zeilen. Daraus ist
+`app/core/slice/_chain.pyx` geworden, gebaut mit `tools/build_slice_core.py`.
+Gemessen am selben Körper, beide Wege im selben Prozess:
+
+| Vorgang | über GEOS | übersetzt | Faktor |
+|---|---|---|---|
+| `slice_body`, 328 000 Dreiecke, 0,2 mm | 2732 ms | 2041 ms | **1,34** |
+| Orientierungssuche, 200 Lagen | 48,2 s | 35,8 s | **1,35** |
+| Wandstärkenkarte | 5074 ms | 4602 ms | 1,10 |
+
+**Das Modul ist optional, und das ist keine Bequemlichkeit.** Fehlt es, nimmt
+`_rings_from` den Weg über GEOS — gemessen 2732 ms gegen 2789 ms vor der
+ganzen Änderung, also unverändert. Ein Klon ohne Compiler wird dadurch nicht
+langsamer als vorher, er wird nur nicht schneller.
+
+**Robuster, aber ausdrücklich nicht genauer — und das war ein Fehlschlag
+unterwegs.** Der GEOS-Weg rundet die Enden auf sechs Nachkommastellen, damit
+sie zusammenfinden; genau dort meldete ein Behälter mit drei Fächern einmal
+9 463 mm² Überhang, den es nicht gab. Die Verkettung *braucht* das nicht: Sie
+kennt die Kante, auf der ein Punkt liegt, und die ist für beide
+Nachbardreiecke dieselbe ganze Zahl.
+
+Der erste Anlauf hat daraus den Schluss gezogen, dann eben nicht zu runden.
+Das kostete `test_evaluation.py`: `compensate_elephant_foot` zieht den
+Querschnitt mit `buffer` ein, extrudiert die Differenz und schneidet sie ab —
+und eine Boolesche Operation macht aus einer Abweichung in der **neunten**
+Stelle eine andere Topologie. Am ausgehöhlten Quader kamen 17 erkannte
+Merkmale heraus statt 14, darunter ein Stift, den es nicht gibt, und die
+Mehrdeutigkeit, an der die Auswertung anhalten sollte, verschwand.
+
+Also rundet die Verkettung genauso. **Der übersetzte Weg ist der schnellere,
+nicht der genauere**, und was die Kante bringt, ist die Ringschließung, die
+nicht mehr davon abhängt, dass die Rundung zwei Enden zusammenführt.
+
+Bemerkenswert ist, wie knapp das durchgerutscht wäre: `tests/test_slice_core.py`
+gab es schon und es war grün — es verglich Flächen und Löcher auf `rel=1e-6`.
+Es vergleicht jetzt die **Punkte** und die Flächen auf `1e-12`; übrig bleibt
+eine Abweichung von einer letzten Stelle, weil GEOS sich den Anfangspunkt
+eines geschlossenen Rings selbst sucht und die Flächenformel dadurch in
+anderer Reihenfolge summiert.
+
+**Was jetzt die größte Position ist**, ist nicht mehr der Polygonaufbau,
+sondern `_plane_segments` mit 893 ms — das Sammeln der Schnittsegmente in
+numpy. Wer §31 weiter schließen will, misst dort weiter, nicht bei GEOS.
+
+### Drei fremde Bibliotheken, geprüft (14.08.2026)
+
+Anlass war die Frage, ob C- oder C++-Bibliotheken auf Dauer mehr Spielraum
+geben. Die Lizenzen waren nie das Problem — die Freigabeliste lässt MIT, Boost
+und MPL zu —, die Auslieferung schon:
+
+* **CoACD** (MIT, `abi3`-Wheels für alle drei Plattformen) sollte V-HACD in
+  `convex_parts` ablösen. **Verworfen, gemessen.** Auto Split nimmt von der
+  Zerlegung eine einzige Zahl, die Stelle der Einschnürung, und dort trifft
+  V-HACD näher (Abweichung 7,2 gegen 9,2 an der Hantel). Dazu ist CoACD in der
+  genauen Einstellung zwei- bis fünfzigmal langsamer — 32,3 s gegen 0,66 s an
+  `plate_holes.stl` —, und grob eingestellt liefert es nur noch ein Stück,
+  also gar keinen Hinweis. Es gibt keine Einstellung, in der es gleichzeitig
+  schnell und aussagekräftig ist. Damit ist das „prüfen" in Bauplan §36
+  beantwortet.
+* **pyclipr** (Clipper2, Boost) hat **kein Linux-Wheel**. Es einzubauen hieße,
+  eine C++-Bauumgebung in die CI zu holen — genau das, was eine fremde
+  Bibliothek ersparen sollte.
+* **libigl** (MPL-2.0) liefert nur bis cp312 und **nicht für Windows**. Das
+  Projekt verlangt Python ≥ 3.13 und zielt auf Windows; es ist damit heute
+  nicht installierbar, unabhängig davon, ob es fachlich passte.
+
+Das Muster taugt als Regel: Bei einer nativen Abhängigkeit entscheidet nicht
+die Lizenz und nicht der Funktionsumfang, sondern ob es Räder für Windows,
+macOS und Linux in der Python-Fassung dieses Projekts gibt. Alles andere ist
+eine Bauumgebung, die jemand pflegen muss.
 
 ## P11 — Gehosteter Backend
 - [–] **Bewusst nicht gebaut.** §27 knüpft diese Phase an nachweisbare

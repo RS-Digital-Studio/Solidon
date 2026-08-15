@@ -31,6 +31,24 @@ from app.core.units import EPS_GEOM
 
 _log = get_logger(__name__)
 
+#: Die übersetzte Konturverkettung (§22.1), oder ``None``.
+#:
+#: Optional wie der B-Rep-Kern: fehlt sie, geht derselbe Schnitt über GEOS und
+#: liefert dasselbe Ergebnis — nur langsamer. Gebaut wird sie mit
+#: ``tools/build_slice_core.py``.
+#:
+#: ``Any`` und nicht der Modultyp aus ``_chain.pyi``: Die Erweiterung ist auf
+#: der Maschine da oder nicht, und ``warn_unreachable`` hielte die Abfrage
+#: darauf sonst für toten Code — auf genau der Maschine, auf der gerade gebaut
+#: wurde. Geprüft wird die Signatur trotzdem, nämlich am Import darunter.
+_chain: Any
+try:
+    from app.core.slice import _chain as _compiled_chain
+except ImportError:  # pragma: no cover — hängt daran, ob gebaut wurde
+    _chain = None
+else:
+    _chain = _compiled_chain
+
 #: Der kleinste Überhang, der nicht bloß Vernetzungsrauschen ist.
 OVERHANG_MARGIN = 0.05
 
@@ -237,12 +255,12 @@ def cross_sections(mesh: MeshData, heights: Any) -> list[ShapelyPolygon | None]:
     if not len(heights) or not len(mesh.raw.faces):
         return empty
 
-    points, layers = _plane_segments(mesh, heights)
+    points, layers, nodes = _plane_segments(mesh, heights)
     if not len(points):
         return empty
 
     order = np.argsort(layers, kind="stable")
-    points, layers = points[order], layers[order]
+    points, layers, nodes = points[order], layers[order], nodes[order]
     starts = np.searchsorted(layers, np.arange(len(heights)), side="left")
     ends = np.searchsorted(layers, np.arange(len(heights)), side="right")
 
@@ -253,18 +271,31 @@ def cross_sections(mesh: MeshData, heights: Any) -> list[ShapelyPolygon | None]:
     # Prädikate, die das Messen benutzt — übrig bleibt also nur der Aufwand,
     # vierhundert kleine Aufträge herumzureichen. Die Messung steht hier, damit
     # niemand den Nachmittag noch einmal verbringt.
+    #
+    # Mit ``_chain`` gilt der Grund nicht mehr: die Verkettung gibt den Lock
+    # frei. Aufgefächert wird trotzdem nicht — sie kostet dann 11 ms für alle
+    # vierhundert Schichten, und das Herumreichen der Aufträge wäre wieder
+    # teurer als die Arbeit (gemessen: 23 ms auf vier Threads).
     result: list[ShapelyPolygon | None] = []
     for start, end in zip(starts, ends, strict=True):
-        result.append(_polygon_from(points[start:end]) if end > start else None)
+        result.append(_polygon_from(points[start:end], nodes[start:end]) if end > start else None)
     return result
 
 
-def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any]:
+def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any, Any]:
     """Wo jedes Dreieck jede Ebene kreuzt, die es erreicht.
 
-    Liefert die Segmente als ``(n, 2, 2)`` Punkte in XY und die Schicht, zu der
-    jedes gehört. ``heights`` muss aufsteigend sein; der Abstand darf beliebig
-    sein.
+    Liefert die Segmente als ``(n, 2, 2)`` Punkte in XY, die Schicht, zu der
+    jedes gehört, und je Segmentende die **Kante**, auf der es liegt.
+    ``heights`` muss aufsteigend sein; der Abstand darf beliebig sein.
+
+    Die Kantennummer ist die eigentliche Identität eines Schnittpunkts, und
+    zwar eine exakte: Eine Kante gehört in einem geschlossenen Netz genau zwei
+    Dreiecken, beide schneiden sie an derselben Stelle, und beide bekommen
+    damit dieselbe Nummer. Wer die Enden stattdessen über ihre gerundeten
+    Koordinaten zusammenführt, rechnet dieselbe Auskunft aus Fließkommazahlen
+    nach — teurer und angreifbarer (siehe den Absatz zur kanonischen
+    Kantenrichtung weiter unten).
     """
     triangles = np.asarray(mesh.raw.triangles, dtype=float)
 
@@ -281,7 +312,7 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any]:
     counts[vertical.min(axis=1) > heights[-1]] = 0
     counts[vertical.max(axis=1) < heights[0]] = 0
     if not counts.sum():
-        return np.empty((0, 2, 2)), np.empty(0, dtype=np.int64)
+        return _no_segments()
 
     faces = np.repeat(np.arange(len(triangles)), counts)
     within = np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)
@@ -296,7 +327,7 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any]:
 
     keep = crossing.sum(axis=1) == 2
     if not keep.any():
-        return np.empty((0, 2, 2)), np.empty(0, dtype=np.int64)
+        return _no_segments()
 
     corners, height_above, crossing = corners[keep], height_above[keep], crossing[keep]
     rows = np.arange(len(corners))[:, None]
@@ -336,7 +367,33 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any]:
         np.abs(span) > EPS_GEOM, start_height / np.where(span == 0.0, 1.0, span), 0.0
     )
     points = start[:, :, :2] + (end[:, :, :2] - start[:, :, :2]) * fraction[:, :, None]
-    return points, layers[keep]
+
+    # Dieselbe Auswahl noch einmal, aber auf den Kanten. Die Nummer wird
+    # gerechnet, nicht nachgeschlagen: ``kleinere Ecke * Eckenzahl + größere``
+    # ist für dieselbe Kante in beiden Dreiecken dieselbe Zahl, weil beide
+    # dieselben zwei Eckennummern nennen. Spalte i ist dabei die Kante „von
+    # Ecke i nach Ecke i+1" — die Zählweise, nach der ``edges`` gebildet wurde.
+    #
+    # ``mesh.raw.faces_unique_edges`` gäbe dieselbe Auskunft, baut dafür aber
+    # eine Kantentabelle über das ganze Netz: 467 ms auf einem Körper mit
+    # 327 680 Dreiecken, gegen 16 ms hier. Beim einmaligen Schneiden ist das
+    # der Unterschied zwischen schneller und langsamer als vorher.
+    #
+    # Gerechnet wird nur für die zwei kreuzenden Kanten, nicht für alle drei:
+    # ein Drittel weniger Arbeit, und das Zwischenfeld über alle Ecken
+    # entsteht gar nicht erst.
+    corner_ids = np.asarray(mesh.raw.faces, dtype=np.int64)[faces[keep]]
+    corner_from = corner_ids[rows, edges]
+    corner_to = corner_ids[rows, (edges + 1) % 3]
+    nodes = np.minimum(corner_from, corner_to) * len(mesh.raw.vertices) + np.maximum(
+        corner_from, corner_to
+    )
+    return points, layers[keep], nodes
+
+
+def _no_segments() -> tuple[Any, Any, Any]:
+    """Die leere Antwort von :func:`_plane_segments`, an einer Stelle."""
+    return np.empty((0, 2, 2)), np.empty(0, dtype=np.int64), np.empty((0, 2), dtype=np.int64)
 
 
 def _lexicographically_after(first: Any, second: Any) -> Any:
@@ -354,24 +411,94 @@ def _lexicographically_after(first: Any, second: Any) -> Any:
     )
 
 
-def _polygon_from(points: Any) -> ShapelyPolygon | None:
-    """Baut die gefüllte Fläche einer Schicht aus ihren losen Segmenten.
+def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any] | None:
+    """Die geschlossenen Ringe einer Schicht, aus den Kantennummern verkettet.
 
-    Die Segmente kommen aus Dreiecken, die ihre Ecken exakt teilen — nach dem
-    Wegrunden der letzten Fließkommastellen passen die Enden also zusammen, und
-    GEOS kann die Ringe selbst schließen. Zurück kommen Ringe, keine Flächen:
-    ein Außenring und der Ring einer Bohrung sehen gleich aus. Was was ist,
-    folgt daraus, wie tief ein Ring in den anderen sitzt — gerade ist Material,
-    ungerade ein Loch.
+    Ein Schnittpunkt gehört genau einer Kante, und eine Kante genau zwei
+    Dreiecken. Damit trägt jeder Knoten genau zwei Segmente, und die Ringe
+    sind schlicht die Zyklen dieser Zuordnung — kein Noden, keine
+    Fließkommaentscheidung, keine Toleranz.
+
+    ``None`` heißt „nicht hier entschieden" und hat zwei Gründe. Der erste:
+    ``_chain`` ist nicht gebaut. Der Weg lohnt sich nur übersetzt — als
+    Python-Schleife kostet derselbe Durchlauf 608 ms, wo GEOS für die
+    schwerere Aufgabe 826 ms braucht, und die Verkettung wäre ein Umbau ohne
+    Gewinn. Der zweite: Die Voraussetzung trägt nicht, weil ein Knoten einen
+    Grad ungleich zwei hat — eine offene Kante im Netz, oder eine Ebene genau
+    durch eine Ecke. Dann ist GEOS die richtige Antwort, denn es kommt auch
+    mit dem zurecht, was hier nicht mehr eindeutig ist.
+
+    Zurück kommen die Koordinaten in Ringreihenfolge und je Koordinate die
+    Nummer ihres Rings — genau die Form, die ``shapely.linearrings`` erwartet.
     """
-    rounded = np.round(points.reshape(-1, 2), 6)
-    lengths = np.linalg.norm(rounded[1::2] - rounded[0::2], axis=1)
-    usable = np.repeat(lengths > 0.0, 2)
-    if not usable.any():
+    if _chain is None:
         return None
 
-    kept = rounded[usable]
-    edges = shapely.linestrings(kept, indices=np.repeat(np.arange(len(kept) // 2), 2))
+    ends = np.asarray(nodes, dtype=np.int64).reshape(-1)
+    if len(ends) < 6:
+        return None
+
+    # Knotennummern dicht machen: die Kantennummer ist aus Eckennummern
+    # gerechnet und damit beliebig groß; ``bincount`` darüber wäre je Schicht
+    # ein Feld über das Quadrat der Eckenzahl.
+    unique, dense = np.unique(ends, return_inverse=True)
+    dense = np.ascontiguousarray(np.asarray(dense, dtype=np.int64).reshape(-1, 2))
+
+    degree = np.bincount(dense.reshape(-1), minlength=len(unique))
+    if degree.min() != 2 or degree.max() != 2:
+        return None
+
+    # Je Knoten die beiden Segmente, die an ihm hängen. ``argsort`` über die
+    # Knotennummern legt die beiden Vorkommen nebeneinander.
+    order = np.argsort(dense.reshape(-1), kind="stable")
+    incident = np.ascontiguousarray((order // 2).reshape(-1, 2))
+
+    walk = np.empty(len(dense), dtype=np.int64)
+    ring_of = np.empty(len(dense), dtype=np.int64)
+    rings, written = _chain.chain_rings(dense, incident, walk, ring_of)
+    if rings < 1:
+        return None
+
+    # Gerundet wird trotzdem — auf dieselben sechs Stellen wie der GEOS-Weg.
+    #
+    # Zum Schließen der Ringe braucht es das hier nicht mehr; die Identität
+    # kommt aus der Kante. Aber ungerundet käme aus demselben Körper ein um
+    # 10⁻⁹ anderer Querschnitt heraus, und das bleibt nicht folgenlos:
+    # `compensate_elephant_foot` zieht ihn mit `buffer` ein, extrudiert die
+    # Differenz und schneidet sie ab — und eine Boolesche Operation macht aus
+    # einer Abweichung in der neunten Stelle eine andere Topologie. Gemessen an
+    # einem ausgehöhlten Quader: 17 erkannte Merkmale statt 14, darunter ein
+    # Stift, den es nicht gibt.
+    #
+    # Zwei Wege durch dieselbe Rechnung dürfen sich nicht in der letzten
+    # Stelle unterscheiden. Der übersetzte ist der schnellere, nicht der
+    # genauere — und das ist Absicht.
+    return np.round(points.reshape(-1, 2), 6)[walk[:written]], ring_of[:written]
+
+
+def _polygon_from(points: Any, nodes: Any) -> ShapelyPolygon | None:
+    """Baut die gefüllte Fläche einer Schicht aus ihren losen Segmenten.
+
+    Zuerst über die Kantennummern verkettet (:func:`_rings_from`); trägt deren
+    Voraussetzung nicht, schließt GEOS die Ringe selbst aus den gerundeten
+    Koordinaten. Beide Wege enden an derselben Stelle: Zurück kommen Ringe,
+    keine Flächen — ein Außenring und der Ring einer Bohrung sehen gleich aus.
+    Was was ist, folgt daraus, wie tief ein Ring in den anderen sitzt — gerade
+    ist Material, ungerade ein Loch.
+    """
+    chained = _rings_from(points, nodes)
+    if chained is not None:
+        coordinates, ring_of = chained
+        edges = shapely.linearrings(coordinates, indices=ring_of)
+    else:
+        rounded = np.round(points.reshape(-1, 2), 6)
+        lengths = np.linalg.norm(rounded[1::2] - rounded[0::2], axis=1)
+        usable = np.repeat(lengths > 0.0, 2)
+        if not usable.any():
+            return None
+        kept = rounded[usable]
+        edges = shapely.linestrings(kept, indices=np.repeat(np.arange(len(kept) // 2), 2))
+
     built = shapely.polygonize(edges)
     parts = [part for part in getattr(built, "geoms", []) if not part.is_empty]
     if not parts:
@@ -391,7 +518,7 @@ def _polygon_from(points: Any) -> ShapelyPolygon | None:
     # ungerade heraus, und ein Schnitt, den es offensichtlich gibt, kommt
     # als gar nichts zurück.
     shells = [ShapelyPolygon(part.exterior) for part in parts]
-    points = [part.representative_point() for part in parts]
+    samples = [part.representative_point() for part in parts]
     # Wer in wem liegt, beantwortet ein räumlicher Index in einem Aufruf.
     # Paarweise gefragt („liegt Punkt i in Hülle j?") sind es n² einzelne
     # Prädikate durch den Python-Umweg — eine Rändel-Schicht mit 2 898 Ringen
@@ -399,7 +526,7 @@ def _polygon_from(points: Any) -> ShapelyPolygon | None:
     # Sekunden, je Schicht. Der Baum liefert dieselben Paare in Millisekunden.
     inside: list[list[int]] = [[] for _ in shells]
     if shells:
-        held, holder = shapely.STRtree(shells).query(points, predicate="within")
+        held, holder = shapely.STRtree(shells).query(samples, predicate="within")
         for index, container in zip(held.tolist(), holder.tolist(), strict=True):
             # Der Musterpunkt eines Teils liegt immer auch in dessen eigener
             # Hülle — das Teil ist sein eigener Behälter aber nicht.

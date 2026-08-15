@@ -24,6 +24,15 @@ venv/
 # Repository ist kein Ablageort für Megabytes, die ein Aufruf wiederherstellt.
 /marketing/video/
 
+# --- Übersetzte Erweiterungen -------------------------------------------------
+# Die Konturverkettung der Schichtanalyse (app/core/slice/_chain.pyx) wird mit
+# tools/build_slice_core.py gebaut. Die Quelle gehört ins Repository, das
+# Ergebnis gehört der Maschine, auf der es entstand — eine .so aus einem Klon
+# passt weder zur Python-Fassung noch zur Plattform des nächsten.
+/app/core/slice/_chain.c
+/app/core/slice/_chain.*.so
+/app/core/slice/_chain.*.pyd
+
 # --- Werkzeuge ---------------------------------------------------------------
 .pytest_cache/
 .mypy_cache/

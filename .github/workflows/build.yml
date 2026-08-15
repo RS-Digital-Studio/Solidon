@@ -75,6 +75,13 @@ jobs:
         # dieser Lauf denselben Satz installiert wie der letzte grüne.
         run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"
 
+      - name: Konturverkettung übersetzen
+        # Zur Laufzeit optional, hier aber Pflicht: ohne sie überspringt sich
+        # `tests/test_slice_core.py`, und dann prüft niemand mehr, ob der
+        # übersetzte Weg noch dasselbe rechnet wie der über GEOS. Einen
+        # Compiler haben alle drei Runner.
+        run: python tools/build_slice_core.py
+
       - name: Stil und Typen
         run: |
           python -m ruff check .
