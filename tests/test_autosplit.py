@@ -23,7 +23,7 @@ from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.project import Project, ProjectSources, new_project
-from app.core.split import apply_planned, apply_split, plan_split
+from app.core.split import apply_line_split, apply_planned, apply_split, plan_split
 from app.core.types import OpContext, Profile, Scene, SceneObject, Source
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -210,6 +210,15 @@ def wall(thickness: float) -> MeshData:
 WALL_PLANE = SectionPlane(normal=(0.0, 1.0, 0.0), position=0.0)
 
 
+def usable_in(thickness: float) -> float:
+    """Die Einbindung, die eine Wand dieser Dicke hergibt.
+
+    Die halbe Wand, abzüglich des Freistichs, um den die Bohrung tiefer reicht
+    als der Stift, und einer Wandstärke, die hinter ihr stehen bleiben muss.
+    """
+    return thickness / 2.0 - pins.BORE_RELIEF - pins.PIN_WALL
+
+
 def test_a_seam_with_nothing_behind_it_gets_no_pins_and_says_so(profile: Profile) -> None:
     """Eine 3-mm-Wand trägt keinen Stift, so groß ihre Schnittfläche auch ist.
 
@@ -237,6 +246,7 @@ def test_a_thick_enough_seam_keeps_the_full_pin(profile: Profile) -> None:
     plan = pins.plan_pins(wall(40.0), WALL_PLANE)
 
     assert plan.count == 2
+    assert plan.diameter == pytest.approx(pins.PIN_MAX), "die Fläche gibt den dicksten her"
     assert plan.length == pytest.approx(plan.diameter * pins.PIN_DEPTH_FACTOR * 2.0)
     assert not plan.findings
 
@@ -244,17 +254,34 @@ def test_a_thick_enough_seam_keeps_the_full_pin(profile: Profile) -> None:
 def test_a_tight_seam_shortens_the_pin_instead_of_dropping_it(profile: Profile) -> None:
     """Dazwischen wird gekürzt, nicht verworfen.
 
-    16 mm Wand heißt 8 mm je Seite; abzüglich des Freistichs bleiben 7,6 mm,
-    und das ist mehr als die Mindesteinbindung. Ein kürzerer Stift führt immer
-    noch — einer, der durch die Wand geht, nicht.
+    24 mm Wand heißt 12 mm je Seite und damit 10 mm Einbindung — weniger als
+    die 12 mm, die ein Stift von 8 mm gern hätte, und mehr als die 6 mm, unter
+    denen er nichts mehr führt. Der Durchmesser bleibt, die Länge gibt nach.
     """
-    plan = pins.plan_pins(wall(16.0), WALL_PLANE)
+    plan = pins.plan_pins(wall(24.0), WALL_PLANE)
 
     assert plan.count == 2
+    assert plan.diameter == pytest.approx(pins.PIN_MAX), "quer ist Platz genug"
     reach = plan.length / 2.0
-    assert reach == pytest.approx(8.0 - pins.BORE_RELIEF)
+    assert reach == pytest.approx(usable_in(24.0))
     assert reach < plan.diameter * pins.PIN_DEPTH_FACTOR, "gekürzt gegenüber dem Wunsch"
-    assert reach >= plan.diameter * pins.PIN_MIN_ENGAGEMENT, "und immer noch führend"
+
+
+def test_a_tighter_seam_thins_the_pin_before_giving_up(profile: Profile) -> None:
+    """Und darunter wird er dünner, nicht keiner.
+
+    12 mm Wand geben 4 mm Einbindung. Für einen Stift von 8 mm ist das zu
+    wenig — er bräuchte 6 —, aber Einbindung und Durchmesser hängen aneinander:
+    ein dünnerer kommt mit weniger aus. Gewählt wird der dickste, der noch
+    sitzt, und das ist die Rechnung rückwärts.
+    """
+    plan = pins.plan_pins(wall(12.0), WALL_PLANE)
+
+    assert plan.count == 2
+    assert pins.PIN_MIN <= plan.diameter < pins.PIN_MAX, "dünner, aber nicht zu dünn"
+    reach = plan.length / 2.0
+    assert reach == pytest.approx(usable_in(12.0))
+    assert reach == pytest.approx(plan.diameter * pins.PIN_MIN_ENGAGEMENT), "gerade noch führend"
 
 
 def test_the_pin_goes_into_one_half_and_the_bore_into_the_other(profile: Profile) -> None:
@@ -385,6 +412,81 @@ def test_oversized_is_divided_without_anybody_touching_a_parameter(
         part = result.scene.objects[object_id]
         assert part.mesh.is_watertight, object_id
         assert autosplit.fits(part.mesh, profile), object_id
+
+
+def test_splitting_a_piece_again_lets_its_fits_go(profile: Profile) -> None:
+    """Zweimal trennen hinterlässt keine Passung, die ins Leere zeigt.
+
+    So gefunden: Sechs Fachmodule über fünf gezeichnete Schnitte, und danach
+    sechs ``fit.missing_feature`` — **Fehler** im Prüfbericht, obwohl niemand
+    etwas falsch gemacht hatte. Ein Teil in mehr als zwei Stücke zu schneiden
+    heißt, ein schon geschnittenes noch einmal zu schneiden, und dessen
+    Passungen benennen es.
+
+    Umgehängt werden sie nicht — der zweite Schnitt vergibt wieder ``pin_1``,
+    und ein Verweis darauf zeigte auf einen anderen Stift als gemeint. Sie
+    entfallen, die Auswertung bleibt sauber, und der Bericht sagt es als
+    Hinweis statt als Fehler.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Anlegen",
+        [OperationDraft(op="create_box", params={"width": 80.0, "depth": 60.0, "height": 40.0})],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(80.0, 60.0, 40.0)))
+
+    first = apply_line_split(
+        project.document, "obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), profile, mesh=block
+    )
+    assert len(first.fits) == 2, "die erste Naht bekommt ihre Paare"
+    assert project.document.fits == first.fits
+
+    halved = evaluate(project.document, profile, sources=ProjectSources(project))
+    target = first.object_ids[0]
+    second = apply_line_split(
+        project.document,
+        target,
+        SectionPlane((0.0, 1.0, 0.0), 0.0),
+        profile,
+        mesh=halved.scene.objects[target].mesh,
+    )
+
+    assert [finding.code for finding in second.findings] == [
+        "split.fit_dropped",
+        "split.fit_dropped",
+    ], "und der Bericht sagt, dass zwei entfallen sind"
+    assert all(fit not in project.document.fits for fit in first.fits), "die alten sind weg"
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert "fit.missing_feature" not in codes, codes
+
+
+def test_undo_brings_the_dropped_fits_back(profile: Profile) -> None:
+    """Und ein Undo holt sie zurück — sie reisen in der Transaktion.
+
+    Die Passungen wurden bisher **nach** dem Aufruf ins Dokument geschrieben,
+    also an der Transaktion vorbei: Ein Undo nahm die Teilung zurück und ließ
+    die Paare stehen. Jetzt bildet ``History.apply`` sie aus den geplanten
+    Operationen, und beides ist ein Schritt.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Anlegen",
+        [OperationDraft(op="create_box", params={"width": 80.0, "depth": 60.0, "height": 40.0})],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(80.0, 60.0, 40.0)))
+
+    applied = apply_line_split(
+        project.document, "obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), profile, mesh=block
+    )
+    assert project.document.fits == applied.fits
+
+    History(project.document).undo()
+
+    assert project.document.fits == [], "was die Teilung anlegte, nimmt das Undo mit"
 
 
 def test_the_seams_become_fit_pairs(loaded, profile: Profile) -> None:

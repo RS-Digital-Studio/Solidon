@@ -15,14 +15,16 @@ Paare hierher — §14 sagt genau das.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.core.geom.autosplit import SplitOutcome, split_to_fit
 from app.core.geom.mesh import MeshData
 from app.core.geom.pins import PIN_COUNT, plan_pins
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
-from app.core.scene.history import History, OperationDraft
+from app.core.scene.history import History, OperationDraft, change_for
 from app.core.types import (
     Document,
     FeatureRef,
@@ -163,30 +165,49 @@ def apply_planned(
     history = History(document)
     pieces: list[ObjectId] = [object_id]
     fits: list[Fit] = []
+    dropped: list[Fit] = []
     transaction = None
 
     for index, (step, draft) in enumerate(zip(plan.outcome.cuts, plan.drafts, strict=True)):
         target = pieces[step.part_index]
+        # Auch hier wird ein Stück geteilt, das aus einem früheren Schnitt
+        # dieser Teilung stammt — mit seinen Passungen. Sie gehen denselben
+        # Weg wie bei einer gezeichneten Linie: siehe :func:`_fits_without`.
+        kept, gone = _fits_without(document, target)
+        dropped.extend(gone)
+        made: list[ObjectId] = []
+
+        # Die Schleifenvariablen wandern als Vorgabewerte hinein: Ein
+        # Abschluss, der sie erst beim Aufruf liest, läse den Stand der
+        # letzten Runde.
+        def change(
+            planned: Sequence[Any],
+            made: list[ObjectId] = made,
+            kept: list[Fit] = kept,
+            seated: int = plan.pins_at(index, pins),
+        ) -> Any:
+            made.extend(planned[0].outputs)
+            # So viele Paare, wie Stifte sitzen — nicht so viele, wie
+            # gewünscht waren. Eine zu schmale Schnittfläche bekommt keinen
+            # Stift und deshalb auch keine Passung, die auf ihn zeigt.
+            fits.extend(_pairs(made[0], made[1], seated, profile, len(kept) + len(fits)))
+            return change_for(document, fits=[*kept, *fits])
+
         applied = history.apply(
             _("Teilen und verstiften"),
             [OperationDraft(op=draft.op, inputs=(target,), params=dict(draft.params))],
             Origin(by="user"),
+            changes=change,
         )
         transaction = applied.id
-        made = document.ops[-1].outputs
         pieces[step.part_index : step.part_index + 1] = list(made)
-        # So viele Paare, wie Stifte sitzen — nicht so viele, wie gewünscht
-        # waren. Eine zu schmale Schnittfläche bekommt keinen Stift und
-        # deshalb auch keine Passung, die auf ihn zeigt.
-        fits.extend(_pairs(made[0], made[1], plan.pins_at(index, pins), profile, len(fits)))
 
-    document.fits.extend(fits)
     _log.info("split into %d part(s) with %d fit pair(s)", len(pieces), len(fits))
     return SplitApplied(
         object_ids=pieces,
         fits=fits,
         transaction=transaction,
-        findings=list(plan.outcome.findings),
+        findings=[*plan.outcome.findings, *(_fit_dropped(fit) for fit in dropped)],
     )
 
 
@@ -213,6 +234,22 @@ def apply_line_split(
     Antwort.
     """
     seated = fitting_pins(mesh, plane, pins, shape=shape)
+    kept, dropped = _fits_without(document, object_id)
+    made: list[ObjectId] = []
+    fits: list[Fit] = []
+
+    def change(planned: Sequence[Any]) -> Any:
+        """Die Passungen dieser Naht — und die, die dabei entfallen.
+
+        In der Transaktion und nicht daneben: Ein Undo, das die Teilung
+        zurücknimmt, muss auch die Passungen zurücknehmen, und ein Redo muss
+        sie wiederbringen. Gebildet wird das erst hier, weil die Paare die
+        Körper benennen, die es beim Aufruf noch nicht gab.
+        """
+        made.extend(planned[0].outputs)
+        fits.extend(_pairs(made[0], made[1], seated, profile, len(kept)))
+        return change_for(document, fits=[*kept, *fits])
+
     history = History(document)
     applied = history.apply(
         _("An gezeichneter Linie trennen"),
@@ -231,12 +268,48 @@ def apply_line_split(
             )
         ],
         Origin(by="user"),
+        changes=change,
     )
-    made = document.ops[-1].outputs
-    fits = _pairs(made[0], made[1], seated, profile, 0)
-    document.fits.extend(fits)
     _log.info("split along a drawn line into %d part(s)", len(made))
-    return SplitApplied(object_ids=list(made), fits=fits, transaction=applied.id)
+    return SplitApplied(
+        object_ids=list(made),
+        fits=fits,
+        transaction=applied.id,
+        findings=[_fit_dropped(fit) for fit in dropped],
+    )
+
+
+def _fits_without(document: Document, consumed: ObjectId) -> tuple[list[Fit], list[Fit]]:
+    """Trennt die Passungen in die, die bleiben, und die, deren Teil verschwindet.
+
+    Ein Teil, das noch einmal geteilt wird, ist danach zwei — und die Passung,
+    die es benannte, zeigt ins Leere. Der Prüfbericht meldete das bisher als
+    **Fehler**, und zwar zu Recht: Ein Verweis auf ein Objekt, das es nicht
+    gibt, ist keiner. Nur hatte der Nutzer nichts falsch gemacht; er hatte
+    zweimal getrennt, und das ist der Normalfall bei einem Teil, das in mehr
+    als zwei Stücke soll.
+
+    **Umgehängt wird nicht.** Naheliegend wäre, die Passung auf das Kindstück
+    zu zeigen, das den Stift geerbt hat. Das ginge geometrisch — und die
+    Kennung wäre trotzdem falsch: Der zweite Schnitt vergibt wieder ``pin_1``,
+    und der Verweis zeigte auf einen anderen Stift als gemeint. Eine Passung,
+    die auf das Falsche zeigt, ist schlechter als keine.
+    """
+    kept = [fit for fit in document.fits if consumed not in (fit.a.object_id, fit.b.object_id)]
+    dropped = [fit for fit in document.fits if consumed in (fit.a.object_id, fit.b.object_id)]
+    return kept, dropped
+
+
+def _fit_dropped(fit: Fit) -> Finding:
+    return Finding(
+        code="split.fit_dropped",
+        severity="info",
+        message=_(
+            "Eine Passung ist entfallen — ihr Teil wurde noch einmal geteilt. Die "
+            "neuen Nahtstellen haben ihre eigenen."
+        ),
+        values={"fit": fit.name},
+    )
 
 
 def _pairs(

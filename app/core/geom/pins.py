@@ -143,7 +143,12 @@ def plan_pins(
 ) -> PinPlan:
     """Sucht Platz für Stifte auf der Schnittfläche von ``plane``.
 
-    Liefert einen Plan ohne Positionen, wenn die Fläche zu klein ist — eine
+    Zwei Fragen, zwei Richtungen: Ist die Fläche breit genug, und steht hinter
+    ihr genug Material? Die erste beantwortet der Puffer, die zweite ein
+    Strahlenpaar je Stelle. Reicht die Tiefe für den Durchmesser nicht, den die
+    Fläche hergäbe, wird der Stift dünner und kürzer, statt zu entfallen.
+
+    Liefert einen Plan ohne Positionen, wenn beides nicht zusammengeht — eine
     Naht ohne Stifte klebt immer noch, ein Stift, der aus der Wand ausbricht,
     nicht.
     """
@@ -154,35 +159,46 @@ def plan_pins(
 
     largest = max(getattr(section, "geoms", (section,)), key=lambda entry: entry.area)
     diameter = _diameter(largest)
-    inset = largest.buffer(-(diameter / 2.0 + wall))
-    if inset.is_empty:
+    seats = _seat(mesh, largest, plane, normal, diameter, count, wall)
+    if seats is None:
         return PinPlan((), 0.0, 0.0, normal, shape, (_too_small(diameter, wall),))
 
-    room = max(getattr(inset, "geoms", (inset,)), key=lambda entry: entry.area)
-    placed = [_in_world(point, plane.position, normal) for point in _spread(room, count)]
+    # Die Fläche nennt eine obere Schranke für den Durchmesser, die Tiefe eine
+    # zweite. Wo die zweite kleiner ist, wird der Stift dünner statt zu
+    # entfallen: Einbindung und Durchmesser hängen aneinander
+    # (:data:`PIN_MIN_ENGAGEMENT`), und ein dünnerer braucht weniger. Gemessen
+    # wird an der *tiefsten* Stelle — sie bestimmt, was überhaupt möglich ist;
+    # welche Stellen es dann mittragen, entscheidet sich danach.
+    thickest = max((raw for _point, _usable, raw in seats), default=0.0)
+    deepest = max((usable for _point, usable, _raw in seats), default=0.0)
+    if deepest < diameter * PIN_MIN_ENGAGEMENT:
+        thinner = deepest / PIN_MIN_ENGAGEMENT
+        if thinner < PIN_MIN:
+            needed = PIN_MIN * PIN_MIN_ENGAGEMENT + BORE_RELIEF + wall
+            return PinPlan(
+                (), 0.0, 0.0, normal, shape, (_seam_too_thin(diameter, thickest, needed),)
+            )
+        diameter = thinner
+        seats = _seat(mesh, largest, plane, normal, diameter, count, wall)
+        if seats is None:
+            return PinPlan((), 0.0, 0.0, normal, shape, (_too_small(diameter, wall),))
 
-    # Wie tief das Material an jeder Stelle wirklich ist. Die Fläche allein
-    # weiß das nicht — siehe Modulkopf. Abgezogen wird der Freistich: die
-    # Bohrung reicht um ihn tiefer als der Stift und darf trotzdem nicht
-    # durchbrechen.
-    reach = diameter * PIN_DEPTH_FACTOR
-    depths = [_material_depth(mesh, point, normal) for point in placed]
-    seated = [
-        (point, depth - BORE_RELIEF)
-        for point, depth in zip(placed, depths, strict=True)
-        if depth - BORE_RELIEF >= diameter * PIN_MIN_ENGAGEMENT
-    ]
+    # Fließkomma: Nach dem Verdünnen ist die Einbindung genau die gemessene
+    # Tiefe, und ein Vergleich auf Gleichheit entschiede dort ein letztes Bit.
+    enough = diameter * PIN_MIN_ENGAGEMENT - EPS_GEOM
+    seated = [(point, usable) for point, usable, _raw in seats if usable >= enough]
     if not seated:
-        deepest = max(depths, default=0.0)
-        return PinPlan(
-            (), 0.0, 0.0, normal, shape, (_seam_too_thin(diameter, deepest, reach + BORE_RELIEF),)
-        )
+        # Nach dem Verdünnen stehen die Stellen woanders — der Befund nennt die
+        # Tiefe, die dort gemessen wurde, und nicht die vom ersten Anlauf.
+        thickest = max((raw for _point, _usable, raw in seats), default=thickest)
+        needed = diameter * PIN_MIN_ENGAGEMENT + BORE_RELIEF + wall
+        return PinPlan((), 0.0, 0.0, normal, shape, (_seam_too_thin(diameter, thickest, needed),))
 
     # Der Stift ist so lang, wie die dünnste seiner Stellen trägt — alle
     # teilen sich einen Körper, und der längste gemeinsame Nenner ist der
     # kleinste. Länger als vorgesehen wird er nie: ein Stift, der die halbe
     # Wand durchmisst, schwächt sie mehr, als er hilft.
-    reach = min(reach, min(usable for _point, usable in seated))
+    reach = min(diameter * PIN_DEPTH_FACTOR, min(usable for _point, usable in seated))
     points = tuple(point for point, _usable in seated)
     length = reach * 2.0
 
@@ -249,6 +265,41 @@ def _spread(room: Any, count: int) -> list[tuple[float, float]]:
             candidate = nearest_points(room, candidate)[0]
         points.append((float(candidate.x), float(candidate.y)))
     return points
+
+
+def _seat(
+    mesh: MeshData,
+    section: Any,
+    plane: SectionPlane,
+    normal: Vec3,
+    diameter: float,
+    count: int,
+    wall: float,
+) -> list[tuple[Vec3, float, float]] | None:
+    """Wo Stifte dieses Durchmessers stünden, wie tief sie dort fassen, und wie
+    viel Material überhaupt da ist.
+
+    Zwei Schranken, zwei Richtungen: Quer zur Naht zieht der Puffer die Fläche
+    um Stiftradius plus Wand ein — bleibt nichts übrig, gibt es keinen Platz
+    (``None``). Längs misst :func:`_material_depth`, und davon geht ab, was
+    hinter der Bohrung stehen bleiben muss: der Freistich, um den sie tiefer
+    reicht als der Stift, und eine Wandstärke, damit sie nicht auf der anderen
+    Seite herauskommt.
+
+    Zurück kommen beide Zahlen. Die Einbindung ist die, mit der gerechnet wird;
+    die rohe Tiefe ist die, die in den Befund gehört — wer liest, dass 1,5 mm
+    nicht reichen, sucht seine Wand, und die ist 3 mm dick.
+    """
+    inset = section.buffer(-(diameter / 2.0 + wall))
+    if inset.is_empty:
+        return None
+    room = max(getattr(inset, "geoms", (inset,)), key=lambda entry: entry.area)
+    placed = [_in_world(point, plane.position, normal) for point in _spread(room, count)]
+    seats: list[tuple[Vec3, float, float]] = []
+    for point in placed:
+        raw = _material_depth(mesh, point, normal)
+        seats.append((point, raw - BORE_RELIEF - wall, raw))
+    return seats
 
 
 def _material_depth(mesh: MeshData, point: Vec3, normal: Vec3) -> float:

@@ -903,6 +903,7 @@
   "Eine Modelldatei über ihre Adresse laden — für den Fall, dass sie noch nicht auf der Platte liegt.": "Load a model file by its address — for when it is not on your disk yet.",
   "Eine Mutternfalle: die sechseckige Tasche, in die beim Drucken eine Sechskantmutter eingelegt wird.": "A nut trap: the hexagonal pocket into which a hex nut is dropped during printing.",
   "Eine Operation ausführen": "Run one operation",
+  "Eine Passung ist entfallen — ihr Teil wurde noch einmal geteilt. Die neuen Nahtstellen haben ihre eigenen.": "A fit has been dropped — its part was split once more. The new seams have fits of their own.",
   "Eine Passung verweist auf ein Merkmal, das es nicht mehr gibt.": "A fit refers to a feature that no longer exists.",
   "Eine Quelle stimmt nicht mit ihrer Prüfsumme überein.": "A source does not match its checksum.",
   "Eine Rastnase: der federnde Arm mit der schrägen Nase, die beim Fügen ausweicht und danach zurückschnappt.": "A snap fit: the springy arm with the angled lug that gives way when joined and snaps back afterwards.",
