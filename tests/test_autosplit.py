@@ -17,6 +17,7 @@ from app.core.errors import ValidationError
 from app.core.geom import autosplit, pins
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.prepare import split_at_plane
+from app.core.geom.section import SectionPlane
 from app.core.ingest.loader import normalise
 from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
@@ -192,6 +193,68 @@ def test_a_face_too_small_gets_no_pins_and_says_so(profile: Profile) -> None:
 
     assert plan.count == 0
     assert [finding.code for finding in plan.findings] == ["split.face_too_small"]
+
+
+def wall(thickness: float) -> MeshData:
+    """Eine Trennwand: große Fläche, wenig Material dahinter.
+
+    Der Fall, den die Schnittfläche allein nicht erkennt. Der Schnitt bei
+    y = 0 liefert 100 mal 100 Millimeter — reichlich Platz für zwei Stifte samt
+    Wand —, und in Richtung der Stiftachse steht die halbe Wandstärke. So sieht
+    jede Trennwand eines Kastens aus.
+    """
+    return MeshData.of(trimesh.creation.box(extents=(100.0, thickness, 100.0)))
+
+
+#: Die Ebene quer durch eine solche Wand. Ihre Normale ist die Stiftachse.
+WALL_PLANE = SectionPlane(normal=(0.0, 1.0, 0.0), position=0.0)
+
+
+def test_a_seam_with_nothing_behind_it_gets_no_pins_and_says_so(profile: Profile) -> None:
+    """Eine 3-mm-Wand trägt keinen Stift, so groß ihre Schnittfläche auch ist.
+
+    Gemessen am Besteckkorb gefunden: zehn geplante Stifte, je 12 mm tief, und
+    an jeder Stelle 1,5 mm Material. Die Stifte standen im Fach, die Bohrungen
+    gingen durch die Wand, und gemeldet wurde nichts — die Fläche war ja groß
+    genug. Sie ist die falsche Größe: quer ist nicht tief.
+    """
+    plan = pins.plan_pins(wall(3.0), WALL_PLANE)
+
+    assert plan.count == 0
+    assert [finding.code for finding in plan.findings] == ["split.seam_too_thin"]
+    values = plan.findings[0].values
+    assert values["depth_mm"] == pytest.approx(1.5), "die halbe Wandstärke steht zur Verfügung"
+    assert values["needed_mm"] > values["depth_mm"], "und sie reicht nicht"
+
+
+def test_a_thick_enough_seam_keeps_the_full_pin(profile: Profile) -> None:
+    """Wo Material steht, ändert die Messung nichts.
+
+    Die Gegenprobe zum Fall darüber: derselbe Körper, nur 40 mm dick. Der Stift
+    bekommt seine volle Länge — anderthalb Durchmesser je Hälfte —, und kein
+    Befund entsteht.
+    """
+    plan = pins.plan_pins(wall(40.0), WALL_PLANE)
+
+    assert plan.count == 2
+    assert plan.length == pytest.approx(plan.diameter * pins.PIN_DEPTH_FACTOR * 2.0)
+    assert not plan.findings
+
+
+def test_a_tight_seam_shortens_the_pin_instead_of_dropping_it(profile: Profile) -> None:
+    """Dazwischen wird gekürzt, nicht verworfen.
+
+    16 mm Wand heißt 8 mm je Seite; abzüglich des Freistichs bleiben 7,6 mm,
+    und das ist mehr als die Mindesteinbindung. Ein kürzerer Stift führt immer
+    noch — einer, der durch die Wand geht, nicht.
+    """
+    plan = pins.plan_pins(wall(16.0), WALL_PLANE)
+
+    assert plan.count == 2
+    reach = plan.length / 2.0
+    assert reach == pytest.approx(8.0 - pins.BORE_RELIEF)
+    assert reach < plan.diameter * pins.PIN_DEPTH_FACTOR, "gekürzt gegenüber dem Wunsch"
+    assert reach >= plan.diameter * pins.PIN_MIN_ENGAGEMENT, "und immer noch führend"
 
 
 def test_the_pin_goes_into_one_half_and_the_bore_into_the_other(profile: Profile) -> None:
