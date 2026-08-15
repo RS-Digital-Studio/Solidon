@@ -193,11 +193,79 @@ STORYBOARD: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
+#: Das Modul-Video: ein Teil, das zu groß gedruckt wäre, wird zu sechs, die
+#: zusammenhalten.
+#:
+#: Es erzählt Weg 1 aus Bauplan §2.2 — ein fertiges Modell anpassen — und
+#: braucht dafür kein einziges Maß: Man sieht, dass es auseinandergeht, und man
+#: sieht, dass es wieder zusammengeht. Das ist die Sorte Aussage, die ein Video
+#: besser kann als ein Text.
+#:
+#: **Der Schluss ist der Punkt.** Nicht „Solidon kann teilen" — teilen kann
+#: jeder Slicer. Sondern: Was einmal geteilt ist, lässt sich erweitern, und die
+#: Verbindung dafür hat niemand von Hand konstruiert.
+#: **Ohne Druckzeiten, und das mit Absicht.** Der naheliegende Satz wäre „am
+#: Stück einundzwanzig Stunden, je Modul drei" — die einundzwanzig stehen in der
+#: Spezifikation des Besteckkorbs und gelten dem Stand mit 3-mm-Wänden, nicht
+#: diesem. Die drei waren geschätzt. Eine Zahl, die niemand an *diesem* Teil
+#: gemessen hat, gehört in kein Video; wer sie messen will, sliced beide Stände
+#: und setzt sie hier ein.
+MODULAR: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        (
+            "intro",
+            "Ein Abtropfkorb für Besteck. Sechs Fächer, ein Teil — und ein Druck, "
+            "der über einen Tag läuft.",
+        ),
+        (
+            "explode",
+            "Zwei Klicks legen die Trennebene — Solidon setzt die Schwalbenschwänze "
+            "selbst, dorthin, wo die Wand sie trägt.",
+        ),
+        (
+            "join",
+            "Sechs Module, die zusammenstecken. Jedes für sich auf die Platte, "
+            "jedes für sich gedruckt.",
+        ),
+        (
+            "outro",
+            "Und wer mehr Besteck hat, druckt ein Fach dazu. Solidon.",
+        ),
+    ),
+    "en": (
+        (
+            "intro",
+            "A draining basket for cutlery. Six compartments, one part — and a print "
+            "that runs for more than a day.",
+        ),
+        (
+            "explode",
+            "Two clicks set the parting plane — Solidon places the dovetails itself, "
+            "where the wall can carry them.",
+        ),
+        (
+            "join",
+            "Six modules that plug together. Each on the plate on its own, each "
+            "printed on its own.",
+        ),
+        (
+            "outro",
+            "And if you own more cutlery, you print another compartment. Solidon.",
+        ),
+    ),
+}
+
 #: Die Drehbücher unter ihren Namen. Vorgabe ist das Einstiegsvideo.
 SCRIPTS = {
     "einstieg": OPENING,
     "parametrik": STORYBOARD,
+    "modular": MODULAR,
 }
+
+#: Wie weit die Teile im Modul-Video auseinandergehen, als Faktor auf den
+#: Abstand zur Mitte. Eins ist der doppelte Abstand — genug, dass man die
+#: Schwalbenschwänze sieht, wenig genug, dass die sechs im Bild bleiben.
+EXPLOSION = 1.0
 
 #: Von wo nach wo die Breite läuft, und über wie viele Bilder.
 #:
@@ -1004,6 +1072,64 @@ def morph_step(
     return step
 
 
+def explode_step(
+    window: QWidget,
+    app: QApplication,
+    span: tuple[float, float],
+    zoom: float = 1.0,
+    turns: float = 0.12,
+) -> StepFn:
+    """Die Teile auseinanderziehen — oder wieder zusammenschieben.
+
+    Die Bewegung, die eine Teilung überhaupt erst erklärt. Sechs Module, die
+    aneinanderstehen, sehen aus wie ein Korb mit Fugen; erst wenn sie
+    auseinandergehen, sieht man, dass es sechs Teile sind. Und erst wenn sie
+    wieder zusammengehen, sieht man, dass sie zusammengehören.
+
+    Der Versatz kommt aus der Ansicht (``Viewport.set_explosion``) und erreicht
+    das Netz nie — was hier auseinanderfährt, steht im Stapel und im Export
+    weiterhin dort, wo es hingehört. Ein Video, das dafür die Geometrie
+    verschöbe, zeigte etwas, das die Anwendung nicht tut.
+
+    Die Kamera dreht dabei ein Stück mit: Auseinander **und** um sich selbst
+    ist eine Bewegung, die man ansieht; auseinander allein sieht aus wie ein
+    stehendes Bild, in dem etwas ruckt.
+    """
+    viewport = window.viewport  # type: ignore[attr-defined]
+    plotter = viewport.plotter
+    viewport.reset_camera()
+    settle(app, 20)
+    camera = plotter.camera
+    focal = tuple(float(value) for value in camera.focal_point)
+    position = tuple(float(value) for value in camera.position)
+    offset_x, offset_y = position[0] - focal[0], position[1] - focal[1]
+    radius = math.hypot(offset_x, offset_y) * zoom
+    height = focal[2] + (position[2] - focal[2]) * zoom
+    start_angle = math.atan2(offset_y, offset_x)
+    low, high = span
+
+    def step(index: int, total: int) -> None:
+        # Sinus statt linear, wie beim Parameterlauf: die Bewegung beginnt und
+        # endet ruhig, statt anzuspringen und abrupt zu stehen.
+        share = 0.5 - 0.5 * math.cos(math.pi * index / max(1, total - 1))
+        # Erst der Versatz, dann die Kamera: ``set_explosion`` baut die Szene
+        # neu auf, und was vorher an der Kamera stand, wäre danach vielleicht
+        # nicht mehr das, was gilt.
+        viewport.set_explosion(low + (high - low) * share)
+        angle = start_angle + 2.0 * math.pi * turns * index / max(1, total)
+        camera.position = (
+            focal[0] + radius * math.cos(angle),
+            focal[1] + radius * math.sin(angle),
+            height,
+        )
+        redraw = getattr(viewport, "_redraw_shadows", None)
+        if callable(redraw):
+            redraw()
+        plotter.render()
+
+    return step
+
+
 def hold_step(window: QWidget, app: QApplication) -> StepFn:
     """Stehen bleiben — für Szenen, in denen der Text die Arbeit macht."""
     plotter = getattr(getattr(window, "viewport", None), "plotter", None)
@@ -1036,6 +1162,10 @@ def shoot_storyboard(
     wird.
     """
     reset_morph(session)
+    # Und den Versatz auch: ``shoot_storyboard`` läuft zweimal am selben
+    # Fenster, quer und hoch. Bliebe die Explosion stehen, begänne das
+    # Hochformat mit einem Korb, der schon auseinander ist.
+    window.viewport.set_explosion(0.0)  # type: ignore[attr-defined]
     total = 0
     card_from = -1
     readout: list[str] = []
@@ -1057,6 +1187,10 @@ def shoot_storyboard(
             # bleibt und nicht der Wert des Bildes minus einer Szene.
             readout.extend([""] * (total - len(readout)))
             step = morph_step(window, app, session, MORPH_PARAMETER, MORPH, readout, label)
+        elif key == "explode":
+            step = explode_step(window, app, (0.0, EXPLOSION), zoom)
+        elif key == "join":
+            step = explode_step(window, app, (EXPLOSION, 0.0), zoom)
         elif key == "parameters":
             step = hold_step(window, app)
         else:
@@ -1067,6 +1201,7 @@ def shoot_storyboard(
         total = record(window, app, frames, total, count, step)
         print(f"  {key:12s} {count:4d} Bilder")
     reset_morph(session)
+    window.viewport.set_explosion(0.0)  # type: ignore[attr-defined]
     settle(app, 20)
     readout.extend([""] * (total - len(readout)))
     return Shot(
@@ -1265,8 +1400,17 @@ def main() -> int:
     arguments = sys.argv[2:]
     name = arguments[0] if arguments and arguments[0] in SCRIPTS else "einstieg"
     script = SCRIPTS[name]
-    wanted = [entry for entry in arguments if entry not in SCRIPTS] or list(script)
+    # Ein Argument, das auf ``.p3d`` endet, ist das Projekt. Gebraucht für
+    # Drehbücher, die kein Beispielprojekt zeigen, sondern ein echtes — das
+    # Modul-Video tut das, und ein Druckprojekt wohnt nicht im Repository.
+    chosen = [entry for entry in arguments if entry.endswith(".p3d")]
+    project = Path(chosen[0]) if chosen else None
+    wanted = [
+        entry for entry in arguments if entry not in SCRIPTS and not entry.endswith(".p3d")
+    ] or list(script)
     print(f"Drehbuch: {name}")
+    if project is not None:
+        print(f"Projekt:  {project}")
 
     qt_translator = None
     for language in wanted:
@@ -1280,7 +1424,7 @@ def main() -> int:
         if qt_translator is not None:
             app.removeTranslator(qt_translator)
         qt_translator = install_qt_translations(app, language)
-        shoot_language(app, language, out, frames / f"{name}-{language}", script)
+        shoot_language(app, language, out, frames / f"{name}-{language}", script, project)
 
     print(f"\nFertig: {out}")
     return 0
@@ -1292,6 +1436,7 @@ def shoot_language(
     out: Path,
     frames: Path,
     script: dict[str, tuple[tuple[str, str], ...]],
+    chosen: Path | None = None,
 ) -> None:
     """Ein vollständiger Durchgang für eine Sprache: sprechen, filmen, kodieren.
 
@@ -1321,9 +1466,9 @@ def shoot_language(
     window.resize(*WINDOW)
     window.show()
 
-    project = examples.directory() / EXAMPLE
+    project = chosen if chosen is not None else examples.directory() / EXAMPLE
     if not project.is_file():
-        raise SystemExit(f"Beispielprojekt fehlt: {project}")
+        raise SystemExit(f"Projekt fehlt: {project}")
     session.open_project(project)
     window._show_start_screen(False)
     if not await_result(app, session):
