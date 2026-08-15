@@ -1573,3 +1573,68 @@ def test_without_slots_it_stays_one_filament(tmp_path: Path) -> None:
     )
     document = json.loads(config.filaments[0].read_text(encoding="utf-8"))
     assert document["nozzle_temperature"] == [str(settings.temperature.nozzle)]
+
+
+# --- Verbinder, am Querschnitt gemessen (§25, §29) ----------------------------
+
+
+def test_a_connector_made_mostly_of_infill_asks_for_more_walls() -> None:
+    """Die Stiftplanung rechnet in Geometrie, gedruckt wird ein Ring mit Muster.
+
+    Nachgemessen am Querschnitt: Ein Verbinder mit Ø 5,00 mm ist bei zwei
+    Wänden à 0,42 mm innen 3,32 mm Füllung und außen 1,68 mm Material. Genau
+    dort sitzt die Verbindung, die die beiden Hälften zusammenhalten soll —
+    ein Gyroid mit fünfzehn Prozent trifft diesen Kern womöglich gar nicht.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    settings = replace(
+        settings,
+        shell=replace(settings.shell, wall_count=2),
+        layers=replace(settings.layers, line_width=0.42),
+    )
+
+    assert advise.solid_core(5.0, settings) == pytest.approx(3.32)
+
+    entries = [
+        entry
+        for entry in advise.advise(settings, profile, connectors=(5.0,))
+        if entry.path == "shell.wall_count"
+    ]
+
+    assert entries, "der Verbinder besteht überwiegend aus Füllung"
+    # 5,00 / (4 · 0,42) aufgerundet: die Schwelle, ab der das Material um den
+    # Zapfen mindestens so breit ist wie sein Kern — nicht bis vollmassiv, das
+    # wären zehn Wände auf dem ganzen Teil.
+    assert entries[0].value == 3
+    danach = replace(settings, shell=replace(settings.shell, wall_count=3))
+    assert advise.solid_core(5.0, danach) <= 2.0 * 3 * 0.42
+
+
+def test_a_connector_that_prints_solid_needs_no_advice() -> None:
+    """Ein Zapfen mit ein paar Zehnteln Muster in der Mitte trägt — erst wenn
+    der Füllkern breiter ist als das Material um ihn herum, ist es eine Sache.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    settings = replace(
+        settings,
+        shell=replace(settings.shell, wall_count=3),
+        layers=replace(settings.layers, line_width=0.42),
+    )
+
+    # 3,00 minus 2 mal 3 mal 0,42 sind 0,48 mm Kern gegen 2,52 mm Material.
+    assert advise.solid_core(3.0, settings) == pytest.approx(0.48)
+    paths = {entry.path for entry in advise.advise(settings, profile, connectors=(3.0,))}
+
+    assert "shell.wall_count" not in paths
+
+
+def test_without_connectors_nothing_is_said() -> None:
+    """Wer nicht geteilt hat, bekommt keinen Vorschlag über Verbinder."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+
+    paths = {entry.path for entry in advise.advise(settings, profile)}
+
+    assert "shell.wall_count" not in paths

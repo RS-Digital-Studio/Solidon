@@ -110,6 +110,25 @@ als gerechnet, und an den Einstellungen sieht man nichts. Zwei Auswege, beide
 werden genannt und keiner erzwungen: heißer, solange die Maschine das kann,
 sonst langsamer.
 
+**Was in Geometrie gerechnet ist, wird nicht so gedruckt.** Die Stiftplanung
+sucht auf der Schnittfläche Platz für einen Kreis; der Drucker legt dort einen
+Ring aus Wänden mit Muster darin, und genau in diesem Muster sitzt die
+Verbindung. `solid_core` misst das am Querschnitt — `Durchmesser minus zweimal
+Wandzahl mal Bahnbreite`, so wie man es am geschnittenen Teil nachmisst.
+
+Gemeldet wird erst, wenn der Füllkern **breiter** ist als das Material um ihn
+herum, und der Vorschlag geht genau bis zu dieser Schwelle, nicht bis
+vollmassiv: Bis zum vollen Querschnitt wären es bei einem 8-mm-Zapfen zehn
+Wände auf dem ganzen Teil. Ein Vorschlag, den niemand annimmt, macht die
+daneben unglaubwürdig.
+
+Vorgeschlagen wird die **Wandzahl**, nicht die Füllung — Wände liegen
+deterministisch um den Zapfen, Füllung trifft ihn statistisch.
+
+Dieselbe Vorsicht gilt jeder künftigen Regel über ein gedrucktes Maß: Was die
+Geometrie als Material führt, ist erst dann Material, wenn eine Bahn darin
+liegt.
+
 ## Das Maschinenprofil des Slicers
 
 `export/slicer_profiles.py` liest den Bestand des installierten Slicers. Vier
@@ -193,6 +212,19 @@ Die Materialslots werden dabei über **alle** Teile zusammengelegt
 (`merge_slots`), über Name und Farbe. Ein Slot ist ein Filament, kein
 Objektmerkmal — zwei Teile in derselben Farbe kommen aus derselben Düse. Die
 Reihenfolge der zusammengelegten Liste *ist* die Extruderbelegung.
+
+**Und jede Platte ist ein Lauf.** Eine Szene mit mehr Teilen, als auf ein Bett
+passen, ist der Normalfall (§25); die Übergabe geht sie deshalb einzeln durch,
+mit eigener Baugruppe, eigenen Slots, eigener Anordnungsprüfung und eigener
+Druckdatei. Der Name trägt die Plattennummer, sonst schreibt die zweite die
+erste über. Das gilt für alle drei Familien — die Orca-Familie könnte mehrere
+Platten in einer Projektdatei führen, Cura und PrusaSlicer nicht.
+
+Zeit und Material addieren sich über die Platten (`gcode.combine`), denn
+zweimal gedruckt ist zweimal. Die **Schichtzahl nicht**: sie beschreibt eine
+Platte, über zwei summiert wäre sie eine Zahl, die es nirgends gibt. Und fehlt
+ein Wert bei einer Platte, fehlt die Summe — sonst stünde eine Gesamtzeit da,
+die zu kurz ist, ohne dass jemand es sehen kann.
 
 ## Die Gegenprobe ersetzt die Dokumentation
 

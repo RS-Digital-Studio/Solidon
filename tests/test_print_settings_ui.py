@@ -26,6 +26,7 @@ from app.core.export import handover
 from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import gcode
+from app.core.types import Feature
 from app.ui.print_settings_dialog import FIELDS, GROUPS, PrintSettingsDialog, _ColourButton
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -538,6 +539,53 @@ def test_an_unknown_printer_leaves_the_dialog_responsive(dialog: PrintSettingsDi
     assert time.perf_counter() - begonnen < 0.5, "ohne Drucker wird nichts aufgeschlagen"
     assert dialog.filament_choice.count() == 0
     assert dialog.filament_choice.currentIndex() == -1, "und nichts steht da, was nicht da ist"
+
+
+def test_a_connector_of_infill_reaches_the_advice_list(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Der Vorschlag zum Verbinder steht in der Liste, nicht nur in der Rechnung.
+
+    Gemessen am Querschnitt, so wie man es am geschnittenen Teil nachmisst: Ein
+    Zapfen mit Ø 5,04 mm ist bei zwei Wänden à 0,42 mm innen 3,36 mm Füllmuster
+    und außen 1,68 mm Material — mehr Muster als Material, und genau dort sitzt
+    die Verbindung. Bei drei Wänden (der Vorgabe) hält es sich die Waage, und
+    dann sagt Solidon nichts.
+    """
+    session.import_model(Path(__file__).parent / "data" / "meshes" / "cube_clean.stl")
+    session.wait_for_idle()
+    result = session.last_result
+    assert result is not None, "die Szene steht"
+
+    # Ein Zapfen, wie ihn `split_pinned` erzeugt — die Planung rechnet ihn aus
+    # der Schnittfläche, er ist also kein Parameter, den jemand einträgt.
+    entry = next(iter(result.scene.objects.values()))
+    entry.features["pin_1"] = Feature(
+        id="pin_1", kind="pin", provenance="generated", params={"diameter": 5.04}
+    )
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog._connector_diameters() == (5.04,)
+
+    dialog._editors["shell.wall_count"].setValue(3)
+    titel = {
+        dialog.advice_view.topLevelItem(row).text(0)
+        for row in range(dialog.advice_view.topLevelItemCount())
+    }
+    assert not any("Wände" in eintrag for eintrag in titel), "bei drei Wänden trägt der Zapfen"
+
+    dialog._editors["shell.wall_count"].setValue(2)
+    zeilen = [
+        (
+            dialog.advice_view.topLevelItem(row).text(0),
+            dialog.advice_view.topLevelItem(row).text(1),
+        )
+        for row in range(dialog.advice_view.topLevelItemCount())
+    ]
+
+    passend = [zeile for zeile in zeilen if "Wände" in zeile[0]]
+    assert passend, f"der Vorschlag fehlt in der Liste: {zeilen}"
+    assert "2 → 3" in passend[0][1], "und er nennt beide Zahlen"
 
 
 # --- Profilauswahl (§29) ------------------------------------------------------------

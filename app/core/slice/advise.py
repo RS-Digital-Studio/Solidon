@@ -19,6 +19,7 @@ Werten aus dem G-Code wird es nie vermischt (Regel 14, §22.5).
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import replace
 from typing import Final
@@ -120,12 +121,19 @@ def advise(
     *,
     bounds: BoundingBox | None = None,
     fit_kinds: Sequence[str] = (),
+    connectors: Sequence[float] = (),
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
     ``result`` darf fehlen — dann bleiben die Vorschläge übrig, die allein aus
     Material und Drucker folgen. Das ist der Fall vor dem ersten Schnitt, und
     er soll nicht zu einem leeren Bericht führen.
+
+    ``connectors`` sind die Durchmesser der Verbinder, die beim Teilen
+    entstanden sind. Sie stehen neben ``fit_kinds`` und nicht darin: eine
+    Passung sagt, dass zwei Flächen aufeinandergehen, ein Verbinderdurchmesser
+    sagt, wie dick der Zapfen dabei ist — und nur die zweite Angabe lässt sich
+    gegen die Bahnbreite rechnen.
     """
     advice: list[SettingAdvice] = []
     advice += _from_machine(settings, profile)
@@ -134,6 +142,7 @@ def advise(
         advice += _from_geometry(settings, profile, result, bounds)
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
+    advice += _from_connectors(settings, connectors)
 
     # Der Volumenstrom hängt an Schichthöhe, Bahnbreite und Tempo — und an
     # genau diesen Werten haben die Vorschläge oben womöglich gedreht. Er wird
@@ -583,6 +592,77 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
             )
         )
     return advice
+
+
+def solid_core(diameter: float, settings: PrintSettings) -> float:
+    """Wie viel eines runden Querschnitts beim Drucken **nicht** massiv wird.
+
+    Die Wände legen sich als Ring um den Querschnitt, der Rest ist
+    Füllmuster — gerechnet am Durchmesser, so wie man es am geschnittenen Teil
+    nachmisst: ``Durchmesser minus zweimal Wandzahl mal Bahnbreite``. Null oder
+    weniger heißt: die Wände treffen sich in der Mitte, es bleibt nichts zu
+    füllen.
+    """
+    return diameter - 2.0 * settings.shell.wall_count * settings.layers.line_width
+
+
+def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> list[SettingAdvice]:
+    """Ein Verbinder, der beim Drucken zum größten Teil aus Füllung besteht.
+
+    Die Stiftplanung rechnet in Geometrie: Sie sucht auf der Schnittfläche
+    Platz für einen Kreis und legt einen Zapfen hinein. Was der Drucker daraus
+    macht, ist ein Ring aus Wänden mit Muster darin — und genau in diesem
+    Muster sitzt die Verbindung, die die beiden Hälften zusammenhalten soll.
+
+    Nachgemessen am Querschnitt: Ein Verbinder mit Ø 5,00 mm ist bei zwei
+    Wänden à 0,42 mm innen **3,32 mm** Füllung und außen 1,68 mm Material. Ein
+    Gyroid mit fünfzehn Prozent trifft diesen Kern womöglich gar nicht, und
+    dann trägt der Stift auf ganzer Länge nur seine Außenhaut.
+
+    Vorgeschlagen wird die Wandzahl und nicht die Füllung, obwohl beide Wege
+    gangbar sind: Wände liegen deterministisch um den Zapfen, Füllung trifft
+    ihn statistisch. Wer lieber an der Füllung dreht, sieht am Grund daneben,
+    worum es geht — angewandt wird nichts von allein.
+
+    **Nicht bis vollmassiv.** Der Vorschlag bringt den Zapfen genau auf die
+    Schwelle, ab der das Material um ihn herum mindestens so breit ist wie sein
+    Kern — dieselbe Rechnung, mit der oben entschieden wird, dass es überhaupt
+    eine Sache ist. Bis zum vollen Querschnitt zu gehen hieße bei einem
+    8-mm-Zapfen zehn Wände auf dem ganzen Teil, und ein Vorschlag, den niemand
+    annimmt, macht die vier daneben unglaubwürdig.
+    """
+    if not diameters:
+        return []
+    width = settings.layers.line_width
+    if width <= 0.0:
+        return []
+
+    # Der dickste Verbinder gibt den Ausschlag: Was ihn trägt, trägt die
+    # dünneren erst recht.
+    thickest = max(diameters)
+    core = solid_core(thickest, settings)
+    solid = 2.0 * settings.shell.wall_count * width
+    # Erst wenn der Füllkern breiter ist als das Material um ihn herum. Ein
+    # Zapfen mit ein paar Zehnteln Muster in der Mitte trägt; einer, der zur
+    # Hälfte aus Muster besteht, ist eine andere Sache.
+    if core <= solid:
+        return []
+
+    # Aus "Material mindestens so breit wie der Kern" nach der Wandzahl
+    # aufgeloest: 2*w*lw >= d - 2*w*lw, also w >= d / (4*lw).
+    needed = math.ceil(thickest / (4.0 * width))
+    return [
+        SettingAdvice(
+            path="shell.wall_count",
+            value=needed,
+            was=settings.shell.wall_count,
+            reason=_(
+                "Der Verbinder besteht bei den eingestellten Wänden im Kern aus "
+                "Füllmuster und trägt nur mit seiner Außenhaut. So viele Wände "
+                "treffen sich in seiner Mitte."
+            ),
+        )
+    ]
 
 
 def for_part(settings: PrintSettings, bounds: BoundingBox, footprint: float) -> list[SettingAdvice]:

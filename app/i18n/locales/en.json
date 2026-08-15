@@ -434,6 +434,7 @@
   "Der Toleranz-Testkörper: mehrere Zapfen und Bohrungen mit gestaffeltem Spiel auf einer Platte.": "The tolerance test body: several pegs and holes with graded clearance on one plate.",
   "Der Umriss ist nicht geschlossen — ein Ende bleibt frei.": "The outline is not closed — one end stays loose.",
   "Der Umriss verzweigt sich — an einem Punkt treffen sich drei Kanten.": "The outline branches — three edges meet at one point.",
+  "Der Verbinder besteht bei den eingestellten Wänden im Kern aus Füllmuster und trägt nur mit seiner Außenhaut. So viele Wände treffen sich in seiner Mitte.": "At the wall count set here the connector is infill in its core and carries only with its outer skin. This many walls meet in its centre.",
   "Der Verlauf": "The history",
   "Der Verlauf zeigt sie als Transaktionen: Boden, Befestigung, Kabel. Jeder Baustein sitzt an Zahlen, die Sie später noch ändern können.": "The history shows them as transactions: Base, Mounting, Cable. Every part sits on numbers you can still change later.",
   "Der Vorgang ist nicht durchgelaufen.": "The operation did not complete.",

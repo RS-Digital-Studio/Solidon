@@ -5751,3 +5751,110 @@ berechtigt — das ist der Teil, der ohne Suite still danebengegangen wäre:
 **Volllauf danach:** 3374 bestanden, 10 übersprungen, 1 erwartet
 fehlgeschlagen; jede Fensterdatei einzeln grün, `test_manual.py` zum ersten Mal
 seit Langem auch offscreen. `ruff`, `ruff format` und `mypy` sauber.
+
+## Drei Funde aus der Slicer-Übergabe (15.08.2026)
+
+Drei Punkte aus der Praxis, alle drei über die laufende Oberfläche
+nachgefahren — echte Qt-Plattform, echtes Hauptfenster, echter ElegooSlicer.
+
+### Der Drucker, den es nicht gibt, hielt die Anwendung an
+
+- [x] **Wer die Druckeinstellungen öffnete, ohne einen Drucker eingestellt zu
+      haben, sah die Anwendung stehen.** Minutenlang, ohne Anzeige, ohne
+      Ausweg. Der Auslöser ist kein Sonderfall, sondern die Vorgabe: Solidon
+      startet mit dem „Allgemeinen FDM-Drucker 220 mm", und dazu hat kein
+      Slicer ein Profil.
+
+      Die Kette: `match()` findet nichts, `_fill_filaments` bekommt
+      `machine=None`, und `match_filament` schlägt dann statt der verträglichen
+      Profile **den ganzen Bestand** auf — jedes mit einer Erbkette aus
+      Dateien. Gemessen am installierten ElegooSlicer:
+
+      | | Filamente | Dauer |
+      |---|---|---|
+      | mit erkanntem Drucker | 42 | 0,97 s |
+      | ohne | **5962** | nach zehn Minuten noch nicht durch |
+
+      Der Kommentar an der Stelle warnt wörtlich davor („sonst kostete es
+      Sekunden statt Zehntel"). Die Vorsicht hängt nur an der
+      Verträglichkeitsprüfung, und die gibt es ohne Drucker nicht.
+
+      **Wirkungslos war die Suche obendrein**: Ihr Treffer wird danach mit
+      `findData` in einer Liste gesucht, die leer ist. Behoben auf beiden
+      Ebenen — im Kern gibt `match_filament` ohne Drucker nichts zurück, in der
+      Oberfläche wird nichts vorgewählt, wo nichts zu wählen ist.
+
+      Eingekreist wurde er, indem der Ablauf gegen den unveränderten Stand
+      gefahren wurde: Beide starben identisch, also lag es nicht am eigenen
+      Änderungssatz. **Vollbild war es nicht** — er tritt in jedem
+      Fenstermodus auf.
+
+### Die Übergabe nahm nur Platte 1
+
+- [x] **Der Export konnte alle Platten, die Übergabe eine.** Sie schrieb die
+      Baugruppe von `plates[0]`, sagte „geslicet wird die erste" und hörte auf;
+      der Satz stand eine Zeile über dem Fortschrittsbalken und wurde von ihm
+      gleich wieder ersetzt.
+
+      Eine Platte ist jetzt ein Lauf: eigene Baugruppe, eigene Materialslots,
+      eigene Anordnungsprüfung, eigene Druckdatei. Das gilt für alle drei
+      Slicer-Familien — die Orca-Familie könnte mehrere Platten in einer
+      Projektdatei führen, Cura und PrusaSlicer nicht, und ein Weg, der überall
+      gleich läuft, ist mehr wert als einer, der bei zweien anders aussieht.
+
+      Zeit und Material addieren sich (`gcode.combine`), die Schichtzahl nicht:
+      über zwei Platten summiert wäre sie eine Zahl, die es nirgends gibt.
+      Fehlt ein Wert bei einer Platte, fehlt die Summe.
+
+      **Über die Oberfläche nachgefahren**, sechs Teile auf zwei Platten:
+
+      ```
+      [ 0.3 s] Der Slicer rechnet — Platte 1 von 2 …
+      [ 1.3 s] Der Slicer rechnet — Platte 2 von 2 …
+      [ 2.0 s] Druckzeit: 512 min · Material: 235.9 g · Platten: 2
+        Platte 1: solidon-1.gcode — 340 min, 156,9 g
+        Platte 2: solidon-2.gcode — 172 min,  78,9 g
+      ```
+
+### Der Verbinder sitzt im Füllmuster
+
+- [x] **Die Stiftplanung rechnet in Geometrie, gedruckt wird ein Ring mit
+      Muster darin.** Am Querschnitt gemessen, so wie man es am geschnittenen
+      Teil nachmisst — ein Zapfen mit Ø 5,04 mm aus `split_pinned`:
+
+      | Wände | Material | Füllkern |
+      |---|---|---|
+      | 2 | 1,68 mm | **3,36 mm** |
+      | 3 (Vorgabe) | 2,52 mm | 2,52 mm |
+
+      Bei zwei Wänden ist mehr Muster als Material, und genau dort sitzt die
+      Verbindung; ein Gyroid mit fünfzehn Prozent trifft diesen Kern womöglich
+      gar nicht. Bei drei hält es sich die Waage, und dann sagt Solidon nichts —
+      die Vorgabe ist in Ordnung.
+
+      `advise._from_connectors` schlägt die Wandzahl vor, nicht die Füllung:
+      Wände liegen deterministisch um den Zapfen, Füllung trifft ihn
+      statistisch. **Nicht bis vollmassiv** — der Vorschlag bringt ihn genau
+      auf die Schwelle, ab der das Material mindestens so breit ist wie sein
+      Kern. Bis zum vollen Querschnitt wären es bei einem 8-mm-Zapfen zehn
+      Wände auf dem ganzen Teil, und ein Vorschlag, den niemand annimmt, macht
+      die vier daneben unglaubwürdig.
+
+### Druckzeit und Materialbedarf des Videoprojekts
+
+- [x] **Gemessen statt geschätzt.** Im Videotext stand keine Zahl, weil keine
+      gemessen war. `gehaeuse-mit-bausteinen.p3d` einmal ganz durch die
+      Übergabe, auf Elegoo Centauri Carbon 2 mit Elegoo PETG und dem Profil
+      „0.20mm Standard @Elegoo CC2 0.4 nozzle":
+
+      | `breite` | Druckzeit | Material | Schichten |
+      |---|---|---|---|
+      | 70 mm | **52 min** | **17,6 g** | 40 |
+      | 96 mm | 64 min | 22,6 g | 40 |
+
+      Der Zuschauer sieht den kleinen Stand, also steht der kleine Wert im
+      Intro — in beiden Sprachen. Wer am Projekt oder am Profil dreht, misst
+      neu, statt die Zahl anzupassen.
+
+**Nebenbei:** Die Anwendung startet bildschirmfüllend statt auf 1280 auf 820 —
+`showMaximized()` und nicht Vollbild, damit Titelleiste und Menüs bleiben.

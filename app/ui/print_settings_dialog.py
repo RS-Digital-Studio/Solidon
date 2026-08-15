@@ -1421,6 +1421,27 @@ class PrintSettingsDialog(QDialog):
             self.slice_result,
             bounds=self._bounds(),
             fit_kinds=self._fits_in_play(),
+            connectors=self._connector_diameters(),
+        )
+
+    def _connector_diameters(self) -> tuple[float, ...]:
+        """Die Durchmesser der Zapfen, die beim Teilen entstanden sind.
+
+        Aus den Merkmalen und nicht aus dem Stapel: Die Stiftplanung rechnet
+        den Durchmesser aus der Schnittfläche, er ist also kein Parameter, den
+        jemand eingetragen hätte. Wo er steht, ist das erzeugte Merkmal.
+
+        Nur die Zapfen, nicht die Bohrungen — es ist dasselbe Maß plus Spiel,
+        und zweimal gezählt sähe es nach doppelt so vielen Verbindern aus.
+        """
+        result = self.session.last_result
+        if result is None:
+            return ()
+        return tuple(
+            float(feature.params["diameter"])
+            for entry in result.scene.objects.values()
+            for feature in entry.features.values()
+            if feature.kind == "pin" and "diameter" in feature.params
         )
 
     def _fits_in_play(self) -> tuple[str, ...]:
