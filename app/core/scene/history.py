@@ -19,7 +19,7 @@ import dataclasses
 import itertools
 import re
 import secrets
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -76,6 +76,13 @@ def restore(document: Document, state: DocumentState) -> None:
         document.printer = state.printer
     if state.material is not None:
         document.material = state.material
+
+
+#: Eine Änderung, die erst feststeht, wenn die Operationen geplant sind.
+#:
+#: Sie bekommt die geplanten Operationen — mit ihren Ausgabekennungen — und
+#: liefert die Dokumentänderung dazu. Siehe :meth:`History.apply`.
+ChangeFn = Callable[[Sequence["Operation"]], DocumentChange | None]
 
 
 def change_for(
@@ -143,9 +150,7 @@ class History:
         self._registry = registry or REGISTRY
         self._undone: list[Transaction] = []
         self._undone_ops: dict[OpId, Operation] = {}
-        self._next_op = itertools.count(self._highest_op_id() + 1)
-        self._next_object = itertools.count(self._highest_object_index() + 1)
-        self._next_transaction = itertools.count(len(document.transactions) + 1)
+        self._reseed()
 
     # --- Lesen -----------------------------------------------------------------
 
@@ -203,7 +208,7 @@ class History:
         title: TranslatableText | str,
         drafts: Sequence[OperationDraft] = (),
         origin: Origin = USER_ORIGIN,
-        changes: DocumentChange | None = None,
+        changes: DocumentChange | ChangeFn | None = None,
     ) -> Transaction:
         """Fügt Operationen als eine Transaktion an und gibt sie zurück.
 
@@ -215,6 +220,14 @@ class History:
         bestehen — eine gedrehte Zahl ist eine Änderung am Projekt, auch wenn
         kein Schritt dazukommt, und ohne Transaktion wäre sie nicht
         rücknehmbar.
+
+        **Auch eine Funktion.** Manche Änderung hängt an dem, was die
+        Operationen erst hervorbringen: Ein Schnitt legt ein Passungspaar an,
+        und das benennt die Körper, die es beim Aufruf noch nicht gibt. Wer
+        die Passungen deshalb nach dem Aufruf ins Dokument schreibt, schreibt
+        an der Transaktion vorbei — ein Undo nimmt sie dann nicht zurück, ein
+        Redo bringt sie nicht wieder. Eine Funktion bekommt die geplanten
+        Operationen und liefert die Änderung, und beides bleibt ein Schritt.
         """
         # §2 C: jede Dokumentänderung braucht die Freischaltung — hier, weil
         # keine Dokumentänderung an dieser Funktion vorbeikommt (H3).
@@ -226,11 +239,18 @@ class History:
                 constraint="empty",
             )
 
+        # Die Kennungen kommen aus dem Dokument, nicht aus dem Gedächtnis
+        # dieses Objekts — die Begründung steht bei :meth:`_reseed`.
+        self._reseed()
         known = self._known_objects()
         planned: list[Operation] = []
         for draft in drafts:
             planned.append(self._plan(draft, known))
             known.update(planned[-1].outputs)
+
+        # Jetzt stehen die Ausgabekennungen fest, und erst jetzt lässt sich
+        # eine Änderung bilden, die sie benennt.
+        settled = changes(planned) if callable(changes) else changes
 
         self._forget_undone()
         transaction = Transaction(
@@ -238,12 +258,12 @@ class History:
             title=title,
             ops=tuple(entry.id for entry in planned),
             origin=origin,
-            changes=changes,
+            changes=settled,
         )
         self.document.ops.extend(planned)
         self.document.transactions.append(transaction)
-        if changes is not None:
-            restore(self.document, changes.after)
+        if settled is not None:
+            restore(self.document, settled.after)
         return transaction
 
     def _plan(self, draft: OperationDraft, known: set[ObjectId]) -> Operation:
@@ -513,13 +533,51 @@ class History:
             living.update(entry.outputs)
         return living
 
+    def _reseed(self) -> None:
+        """Die Zähler an dem ausrichten, was im Dokument steht.
+
+        **Vor jeder Vergabe, nicht einmal im Konstruktor.** Ein Zähler, der
+        sich beim Anlegen merkt, wo er anfängt, hält nur, solange dieses Objekt
+        das einzige ist, das schreibt — und das ist es nicht. Die Sitzung hält
+        ihre ``History`` über die ganze Projektlaufzeit; Trennen, Deckeln und
+        Auto Split bauen sich eine eigene über demselben Dokument, weil sie
+        Passungen nachtragen und die im Dokument leben und nicht im Stapel.
+
+        Was dabei herauskam: Fünf gezeichnete Schnitte vergaben über ihre
+        eigene ``History`` die Kennungen 163 bis 167. Die Sitzung stand
+        weiterhin auf 163, und die nächste Operation über das Menü bekam 163
+        ein zweites Mal. Die Auswertung sortiert nach Kennung (§15) — damit
+        rutschte *Auf dem Bett anordnen* zwischen den ersten und den zweiten
+        Schnitt, fand die Körper nicht, die es anordnen sollte, und hielt das
+        ganze Dokument an. Im Fenster sah es aus, als habe das Anordnen die
+        Teilung zerstört.
+
+        Das Dokument ist die Quelle, nicht der Zähler. Neu ausgerichtet wird
+        beim Anlegen und zu Beginn jeder Transaktion; innerhalb einer
+        Transaktion zählen die Zähler weiter, denn ihre Operationen stehen
+        noch nicht im Dokument.
+        """
+        self._next_op = itertools.count(self._highest_op_id() + 1)
+        self._next_object = itertools.count(self._highest_object_index() + 1)
+        self._next_transaction = itertools.count(len(self.document.transactions) + 1)
+
+    def _all_operations(self) -> list[Operation]:
+        """Was Kennungen belegt: der Stapel **und** das Zurückgenommene.
+
+        Eine zurückgenommene Operation steht nicht mehr im Dokument und ist
+        trotzdem nicht frei — solange ein Redo sie zurückholen kann, gehört
+        ihr ihre Nummer. „Numbers are never reused" hält
+        ``test_a_change_after_undo_discards_the_cut_off_branch`` fest.
+        """
+        return [*self.document.ops, *self._undone_ops.values()]
+
     def _highest_op_id(self) -> OpId:
-        return max((entry.id for entry in self.document.ops), default=0)
+        return max((entry.id for entry in self._all_operations()), default=0)
 
     def _highest_object_index(self) -> int:
         indices = [
             int(match.group(1))
-            for entry in self.document.ops
+            for entry in self._all_operations()
             for object_id in entry.outputs
             if (match := _OBJECT_PATTERN.match(object_id))
         ]
