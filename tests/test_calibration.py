@@ -335,3 +335,38 @@ def test_the_dialog_starts_from_the_current_values(own_profiles: Path) -> None:
     dialog = CalibrationDialog("petg")
 
     assert dialog.editors["clearance"].value() == pytest.approx(current.clearance)
+
+
+def test_a_broken_user_toml_is_a_sentence_not_a_crash(own_profiles: Path) -> None:
+    """Regel 17: Eine von Hand beschädigte Nutzerdatei — die fehlende Klammer
+    ist der Normalfall, nicht der Sonderfall — war ein Startabbruch mit rohem
+    Stapelabzug, denn `printer_profiles()` läuft beim Fensteraufbau."""
+    own_profiles.mkdir(parents=True, exist_ok=True)
+    (own_profiles / "printers.toml").write_text("[kaputt\n", encoding="utf-8")
+    profiles.reload()
+
+    with pytest.raises(ValidationError) as caught:
+        profiles.printer_profiles()
+
+    assert caught.value.suggestions
+    assert "printers.toml" in str(caught.value.values.get("file", ""))
+
+    (own_profiles / "printers.toml").unlink()
+    profiles.reload()
+
+
+def test_a_quoted_material_title_survives_the_calibration_file(
+    own_profiles: Path, profile: Profile
+) -> None:
+    """Ein Anführungszeichen im Titel machte die Kalibrierdatei unlesbar —
+    zusammen mit dem Leser darüber ein Startabbruch, aus dem nur das Löschen
+    der Datei führte."""
+    own_profiles.mkdir(parents=True, exist_ok=True)
+    table = {"pla": {"title": 'PLA "matt"', "clearance": 0.3}}
+    text = calibration._as_toml(table)
+    (own_profiles / "materials.toml").write_text(text, encoding="utf-8")
+
+    again = calibration._read(own_profiles / "materials.toml")
+
+    assert again["pla"]["title"] == 'PLA "matt"'
+    (own_profiles / "materials.toml").unlink()

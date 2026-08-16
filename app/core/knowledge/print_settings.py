@@ -65,8 +65,20 @@ _tables: dict[str, dict[str, dict[str, Any]]] | None = None
 
 
 def _read_table(path: Path) -> dict[str, Any]:
-    with path.open("rb") as stream:
-        return tomllib.load(stream)
+    try:
+        with path.open("rb") as stream:
+            return tomllib.load(stream)
+    except tomllib.TOMLDecodeError as problem:
+        # Auch hier liest derselbe Leser die Datei des Nutzers — eine
+        # handgeschriebene. Ein Tippfehler ist ein Satz mit Dateinamen, kein
+        # Startabbruch (Regel 17).
+        raise ValidationError(
+            title=_("Diese Einstellungsdatei lässt sich nicht lesen."),
+            field="file",
+            detail=str(problem),
+            constraint="toml",
+            values={"file": str(path)},
+        ) from problem
 
 
 def _load() -> dict[str, dict[str, dict[str, Any]]]:

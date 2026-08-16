@@ -19,6 +19,7 @@ offensichtlich, aus welcher der beiden eine Zahl kam.
 
 from __future__ import annotations
 
+import json
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -137,8 +138,20 @@ def apply(calibration: Calibration, directory: Path | None = None) -> MaterialPr
 def _read(path: Path) -> dict[str, dict[str, Any]]:
     if not path.is_file():
         return {}
-    with path.open("rb") as stream:
-        return dict(tomllib.load(stream))
+    try:
+        with path.open("rb") as stream:
+            return dict(tomllib.load(stream))
+    except tomllib.TOMLDecodeError as problem:
+        # Die Datei ist zum Lesen — und damit zum Anfassen — gedacht. Ein
+        # Tippfehler darin ist ein Satz mit Dateinamen, kein Startabbruch,
+        # aus dem nur das Löschen der Datei herausführt (Regel 17).
+        raise ValidationError(
+            title=_("Die Kalibrierdatei lässt sich nicht lesen."),
+            field="file",
+            detail=str(problem),
+            constraint="toml",
+            values={"file": str(path)},
+        ) from problem
 
 
 def _as_toml(table: dict[str, dict[str, Any]]) -> str:
@@ -163,7 +176,11 @@ def _literal(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, str):
-        return f'"{value}"'
+        # `json.dumps` erzeugt gültige TOML-Basic-Strings: ein
+        # Anführungszeichen im Materialtitel — „PLA "matt"" — machte die
+        # Datei sonst unlesbar, und zusammen mit dem Leser darüber war das
+        # ein Startabbruch.
+        return json.dumps(value, ensure_ascii=False)
     return f"{value}"
 
 
