@@ -277,6 +277,35 @@ def test_new_leads_back_to_the_examples(window: MainWindow) -> None:
     assert not window.session.project.document.ops, "und das Projekt ist leer"
 
 
+def test_the_help_menu_leads_back_to_the_examples(window: MainWindow) -> None:
+    """Die Beispiele standen an genau einer Stelle (§37.2, August-Durchsicht 2.2).
+
+    Sie sind Dokumentation, Abnahmetest und Startbildschirm-Inhalt in einem —
+    und wer den Startbildschirm einmal verlassen hatte, fand sie nur über
+    *Öffnen* mit Pfadkenntnis wieder. Im Hilfemenü sieht man nach
+    Lehrmaterial.
+
+    Und ohne Verwerfen-Falle: Der Eintrag zeigt den Startbildschirm, mehr
+    nicht — gefragt wird erst, wenn wirklich etwas verloren ginge (Regel 19).
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    assert window.stack.currentWidget() is not window.start_screen
+
+    labels = [
+        action.text().replace("&", "")
+        for menu in window.menuBar().actions()
+        if menu.menu() is not None and menu.text().replace("&", "") == "Hilfe"
+        for action in menu.menu().actions()
+    ]
+    assert "Beispiele" in labels
+
+    window.action_examples()
+
+    assert window.stack.currentWidget() is window.start_screen
+    assert window.session.project.document.ops, "das Projekt steht noch, es ist nur verdeckt"
+
+
 def test_an_empty_scene_leaves_nothing_of_the_last_one(window: MainWindow) -> None:
     """Nach *Neu* blieben die orangen Merkmalsmarkierungen des vorigen Objekts
     im Bild stehen, während Objektbaum und Prüfbericht längst leer waren."""

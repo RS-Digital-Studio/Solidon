@@ -29,6 +29,7 @@ from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.slice.analysis import cross_sections, slice_body
 from app.core.types import (
+    CancelToken,
     Feature,
     FeatureId,
     Finding,
@@ -51,6 +52,12 @@ MapKind = Literal["wall", "overhang", "defects", "curvature", "features", "fits"
 #: Karten schießen einen Strahl je Dreieck, und diese Kosten wachsen mit dem
 #: Quadrat des Netzes.
 MAP_LIMIT_TRIANGLES = 120_000
+
+#: Nach so vielen Dreiecken wird gefragt, ob abgebrochen werden soll. Bei
+#: 512 liegt der Abstand zwischen zwei Fragen unter einer Millisekunde — fein
+#: genug, dass ein Kartenwechsel sofort wirkt, grob genug, dass die Frage
+#: selbst nicht ins Gewicht fällt.
+CANCEL_EVERY = 512
 
 #: Alles Steilere braucht Stützen — die Linie, die die Regelsammlung
 #: zieht (§39).
@@ -155,10 +162,19 @@ def build(
     *,
     profile: Profile | None = None,
     scene: Scene | None = None,
+    cancelled: CancelToken | None = None,
 ) -> AnalysisMap:
     """Der eine Einstiegspunkt, den die Oberfläche benutzt; der Rest ist die
     Karte selbst.
+
+    ``cancelled`` bricht ab, wo es sich lohnt: am Eingang und in der teuersten
+    Schleife. Die Zusage steht in §18.4 — die Karten laufen im Hintergrund und
+    sind abbrechbar —, und eingelöst hat sie niemand: Wer bei 51 000 Dreiecken
+    (3,4 s gemessen) die Karte wechselte, wartete auf die erste, bevor die
+    zweite überhaupt anfing.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     mesh = _mesh_of(entry)
     if mesh.triangle_count > MAP_LIMIT_TRIANGLES:
         raise MapTooLarge(mesh.triangle_count)
@@ -175,7 +191,7 @@ def build(
         return feature_map(mesh, entry.features)
     if kind == "fits":
         return fit_map(mesh, entry, scene)
-    return support_map(mesh, profile.printer.layer_height if profile else 0.2)
+    return support_map(mesh, profile.printer.layer_height if profile else 0.2, cancelled)
 
 
 def _mesh_of(entry: SceneObject) -> MeshData:
@@ -540,7 +556,9 @@ def fits_of(scene: Scene, object_id: ObjectId) -> tuple[Fit, ...]:
 # --- Stützen (§22) --------------------------------------------------------------
 
 
-def support_map(mesh: MeshData, layer_height: float = 0.2) -> AnalysisMap:
+def support_map(
+    mesh: MeshData, layer_height: float = 0.2, cancelled: CancelToken | None = None
+) -> AnalysisMap:
     """Wie hoch die Stützsäule unter jedem Dreieck wüchse.
 
     Das *Urteil* — braucht diese Stelle überhaupt Stützen — kommt aus der
@@ -564,6 +582,12 @@ def support_map(mesh: MeshData, layer_height: float = 0.2) -> AnalysisMap:
     values = np.zeros(len(centres), dtype=float)
     marked: list[int] = []
     for index, centre in enumerate(centres):
+        if cancelled is not None and index % CANCEL_EVERY == 0:
+            # Die teuerste Schleife der sieben Karten: je Dreieck ein Punkt in
+            # shapely. Nicht bei jedem Durchgang gefragt — der Abbruch ist eine
+            # Sache von Millisekunden, das Prüfen einer von Nanosekunden, und
+            # eine Million Abfragen kosten mehr als sie einbringen.
+            cancelled.raise_if_cancelled()
         region = _region_at(regions, float(centre[2]), layer_height)
         if region is None or not _inside(region, float(centre[0]), float(centre[1])):
             continue

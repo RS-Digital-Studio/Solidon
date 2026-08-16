@@ -76,7 +76,7 @@ from app.core.agent.tools import (
     UNDO_TRANSACTION,
 )
 from app.core.backends import llm
-from app.core.errors import AppError, InternalError, UserError
+from app.core.errors import AppError, InternalError, OperationCancelled, UserError
 from app.core.export.handover import SliceOutcome
 from app.core.export.writer import (
     ExportFormat,
@@ -120,6 +120,7 @@ from app.core.scene import (
     values_for,
     values_for_object,
 )
+from app.core.scene.cancel import CancelSignal
 from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
@@ -314,15 +315,33 @@ class _MapWorker(QThread):
         self._entry = entry
         self._profile = profile
         self._scene = scene
+        self.cancelled = CancelSignal()
+        """Der Schalter zum Kartenwechsel (§18.4): Wer die zweite Karte wählt,
+        wartete bis hierher erst die erste ab — 3,4 s bei 51 000 Dreiecken, und
+        das Fenster meldete die ganze Zeit „wird berechnet …" für die falsche."""
+
+    def cancel(self) -> None:
+        self.cancelled.cancel()
 
     def run(self) -> None:
         try:
             self.done.emit(
-                maps.build(self._kind, self._entry, profile=self._profile, scene=self._scene)
+                maps.build(
+                    self._kind,
+                    self._entry,
+                    profile=self._profile,
+                    scene=self._scene,
+                    cancelled=self.cancelled,
+                )
             )
         except maps.MapTooLarge:
             # §31: eine Karte, die Minuten bräuchte, sagt Nein, statt einzufrieren.
             self.tooLarge.emit()
+        except OperationCancelled:
+            # Kein Fehler und nie als einer gezeigt (§15.6): Eine andere Karte
+            # ist schon unterwegs, und ihr Ergebnis ist das, auf das jemand
+            # wartet.
+            return
 
 
 class _UpdateWorker(QThread):
@@ -461,7 +480,7 @@ class _ExportWorker(QThread):
             profile=self._profile,
             sources=self._sources,
             settings=self._settings,
-            setup=remembered_setup(self._ui_settings, self._material),
+            setup=remembered_setup(self._ui_settings, self._material, self._profile.printer.id),
         )
         return [written_path], list(findings)
 
@@ -1610,6 +1629,13 @@ class MainWindow(QMainWindow):
             self.action_manual,
             tr("Jede Operation mit ihren Werten, nach Bereichen sortiert."),
         )
+        self._add_action(
+            help_menu,
+            tr("Beispiele"),
+            None,
+            self.action_examples,
+            tr("Die Beispielprojekte mit ihren Touren — sie stehen auf dem Startbildschirm."),
+        )
         help_menu.addSeparator()
         self._add_action(
             help_menu,
@@ -2100,6 +2126,20 @@ class MainWindow(QMainWindow):
         Ein Klick mehr ist es nicht: „Neues Projekt" ist dort der Hauptknopf
         und liegt auf der Eingabetaste. Verworfen wird hier noch nichts —
         gefragt wird erst, wenn wirklich etwas verloren ginge (Regel 19).
+        """
+        self._show_start_screen(True)
+
+    def action_examples(self) -> None:
+        """Zurück zu den Beispielprojekten (§37.2).
+
+        Sie sind Dokumentation, Abnahmetest und Startbildschirm-Inhalt in
+        einem — und standen genau an einer Stelle: auf dem Startbildschirm,
+        den nach *Datei → Neu* niemand mehr suchte. Im Hilfemenü ist es der
+        Ort, an dem man nach Lehrmaterial sieht.
+
+        Denselben Weg wie *Neu*: Verworfen wird hier nichts. Gefragt wird
+        erst, wenn wirklich etwas verloren ginge — beim Öffnen eines
+        Beispiels oder beim leeren Projekt (Regel 19).
         """
         self._show_start_screen(True)
 
@@ -3739,10 +3779,21 @@ class MainWindow(QMainWindow):
         # Lauf der ganzen Suite. Der Arbeiter wandert jetzt in dieselbe
         # Halteleine wie ein ersetzter und wird dort gelöst, wenn er
         # tatsächlich ausgelaufen ist.
+        #
+        # Vorher bekommt er das Abbruchzeichen: Sein Ergebnis will niemand
+        # mehr, und bis er von allein fertig ist, rechnet er gegen den, der
+        # gerade startet (§18.4).
+        self._cancel_map_worker()
         self._retire(self._map_worker)
         self._map_worker = worker
         worker.finished.connect(lambda done=worker: self._map_worker_done(done))
         worker.start()
+
+    def _cancel_map_worker(self) -> None:
+        """Der laufenden Karte sagen, dass niemand mehr auf sie wartet."""
+        worker = self._map_worker
+        if worker is not None and worker.isRunning():
+            worker.cancel()
 
     def _map_worker_done(self, worker: Any) -> None:
         if self._map_worker is worker:
@@ -5628,6 +5679,9 @@ class MainWindow(QMainWindow):
         """
         self.session.cancel()
         self.session.wait_for_idle(timeout_ms)
+        # Die Analysekarte hat einen eigenen Schalter — ohne ihn läuft sie
+        # ihre Sekunden zu Ende, während das Fenster schon zugeht.
+        self._cancel_map_worker()
         for worker in (
             self._map_worker,
             self._slice_worker,

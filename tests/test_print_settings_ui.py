@@ -405,6 +405,107 @@ def test_both_orca_profiles_are_asked_for_before_the_run(qt_app: QApplication) -
 # --- was bleibt, wenn der Dialog zugeht ---------------------------------------------
 
 
+def test_the_chosen_profiles_are_kept_without_a_slicer_run(qt_app: QApplication) -> None:
+    """Was im Dialog stand, gilt auch für den Export (§29, A5).
+
+    Gemerkt wurde die Profilwahl nur beim **Slicen**. Wer sie hier einstellte
+    und danach über *Datei → Exportieren* eine 3MF schrieb, bekam die Auswahl
+    vom vorletzten Mal — für den Nutzer ist es dieselbe Entscheidung, und der
+    Docstring von ``remembered_setup`` verspricht sie.
+    """
+    settings = UiSettings()
+    session = Session()
+    dialog = PrintSettingsDialog(session, settings)
+    dialog.machine_choice.addItem("Centauri", "C:/profile/machine/centauri.json")
+    dialog.machine_choice.setCurrentIndex(dialog.machine_choice.count() - 1)
+    dialog.process_choice.addItem("0.20 fein", "C:/profile/process/fein.json")
+    dialog.process_choice.setCurrentIndex(dialog.process_choice.count() - 1)
+    dialog.filament_choice.addItem("PETG PRO", "C:/profile/filament/petg-pro.json")
+    dialog.filament_choice.setCurrentIndex(dialog.filament_choice.count() - 1)
+
+    dialog.reject()
+
+    assert settings.slicer_machine_profile == "C:/profile/machine/centauri.json"
+    assert settings.slicer_base_process == "C:/profile/process/fein.json"
+    assert settings.slicer_base_filament == "C:/profile/filament/petg-pro.json"
+    assert settings.slicer_profile_printer == session.profile.printer.id
+    assert (
+        settings.slicer_filament_per_material[session.profile.material.id]
+        == "C:/profile/filament/petg-pro.json"
+    )
+
+
+def test_closing_early_does_not_wipe_what_was_remembered(qt_app: QApplication) -> None:
+    """Die Profilsuche läuft im Hintergrund.
+
+    Wer den Dialog vorher wieder zumacht, hat eine leere Auswahl vor sich —
+    sie zu übernehmen hieße, eine gemerkte Einstellung zu löschen, weil
+    niemand hingesehen hat.
+    """
+    settings = UiSettings()
+    settings.slicer_machine_profile = "C:/profile/machine/centauri.json"
+    settings.slicer_base_process = "C:/profile/process/fein.json"
+    dialog = PrintSettingsDialog(Session(), settings)
+
+    dialog.reject()
+
+    assert settings.slicer_machine_profile == "C:/profile/machine/centauri.json"
+    assert settings.slicer_base_process == "C:/profile/process/fein.json"
+
+
+def _pretend_a_slicer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein gefundener Slicer, ohne einen auf der Maschine zu verlangen."""
+    from app.ui import print_settings_dialog as module
+
+    monkeypatch.setattr(
+        module.discover, "find_program", lambda *args, **kwargs: Path("elegoo-slicer.exe")
+    )
+    monkeypatch.setattr(
+        module.handover,
+        "detect",
+        lambda found: handover.SlicerSetup(executable=found, flavour="orca"),
+    )
+
+
+def test_a_profile_of_another_printer_is_not_reused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A6: Ein Maschinenprofil gehört zu genau einem Drucker.
+
+    Ohne diesen Abgleich trägt die 3MF eines Prusa-Projekts das Profil des
+    Elegoo, mit dem zuletzt gearbeitet wurde — richtig gerechnet, falsch
+    adressiert. Schlimmer als gar keines: Die Datei sieht vollständig aus.
+    """
+    from app.ui.print_settings_dialog import remembered_setup
+
+    _pretend_a_slicer(monkeypatch)
+    settings = UiSettings()
+    settings.slicer_machine_profile = "Centauri Carbon 0.4"
+    settings.slicer_profile_printer = "centauri-carbon"
+
+    assert remembered_setup(settings, "petg", "prusa-mk4") is None, "anderer Drucker, nichts gilt"
+
+    same = remembered_setup(settings, "petg", "centauri-carbon")
+    assert same is not None
+    assert same.machine_profile == "Centauri Carbon 0.4", "derselbe Drucker, alles gilt"
+
+
+def test_an_old_settings_file_still_carries_its_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ohne Vermerk wird nicht verglichen.
+
+    Eine Einstellung aus einer älteren Fassung kennt den Drucker nicht, für
+    den sie gewählt wurde. Sie deshalb zu verwerfen wäre eine Verschlechterung
+    für jeden, der schon eingerichtet hat.
+    """
+    from app.ui.print_settings_dialog import remembered_setup
+
+    _pretend_a_slicer(monkeypatch)
+    settings = UiSettings()
+    settings.slicer_machine_profile = "Centauri Carbon 0.4"
+
+    setup = remembered_setup(settings, "petg", "prusa-mk4")
+    assert setup is not None
+    assert setup.machine_profile == "Centauri Carbon 0.4"
+
+
 def test_the_project_settings_win_over_the_preset(qt_app: QApplication) -> None:
     """§29: was eingestellt wurde, gilt beim nächsten Öffnen weiter — sonst
     wäre der Dialog eine Sitzung lang gültig und danach vergessen."""

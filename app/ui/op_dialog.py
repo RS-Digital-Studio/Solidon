@@ -289,6 +289,18 @@ class ImageSourceField(QWidget):
         return str(data) if data is not None else self.combo.currentText()
 
 
+#: Felder, die nur bei einer bestimmten Wahl im selben Dialog etwas bewirken.
+#:
+#: Schlüssel ist (Operation, Feld), Wert das steuernde Feld und die Werte, bei
+#: denen das Feld wirkt. Die Tabelle steht hier und nicht im Schema, weil sie
+#: eine Aussage über den *Dialog* ist: Der Kern übergeht den Wert ohnehin
+#: schweigend, und dass man ihn dann gar nicht erst eintragen soll, ist eine
+#: Wegbeschreibung — dieselbe Art Angabe wie ``TWIN_TOGGLES``. Wächst die
+#: Liste über eine Handvoll hinaus, gehört die Abhängigkeit an den Parameter.
+DEPENDENT_FIELDS: dict[tuple[str, str], tuple[str, tuple[str, ...]]] = {
+    ("displace_image", "at_feature"): ("projection", ("face",)),
+}
+
 #: Die drei Achsen einer Knochenstellung, in der Reihenfolge, in der
 #: :func:`app.core.geom.pose.pose_to_text` sie schreibt. Beschriftungen, keine
 #: Schlüssel — deshalb stehen sie hier und nicht im Kern.
@@ -597,6 +609,50 @@ class OperationDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+        self._couple_dependent_fields()
+
+    def _couple_dependent_fields(self) -> None:
+        """Ein Feld ohne Wirkung steht nicht bedienbar da (§2.6).
+
+        „Relief auflegen" ist der Fall: *Fläche* wirkt nur, solange *Auflegen*
+        auf „Auf eine Fläche" steht — bei „Von oben" bleibt ein ausgefülltes
+        Feld stehen und verspricht etwas, das die Operation wortlos übergeht.
+        Dasselbe Versprechen, das ``switch_variant`` bei den Zwillingen
+        einlöst, nur eine Nummer kleiner: dort verschwindet die Zeile, weil die
+        andere Variante sie gar nicht kennt; hier gehört sie zur Operation und
+        ist nur gerade wirkungslos. Sie wird deshalb grau und sagt, woran es
+        liegt, statt zu verschwinden — wer sie verschwinden sähe, suchte sie.
+        """
+        rules = [
+            (name, controller, wanted)
+            for (op, name), (controller, wanted) in DEPENDENT_FIELDS.items()
+            if op == self.spec.name and name in self._editors and controller in self._editors
+        ]
+        if not rules:
+            return
+        titles = {entry.name: str(entry.title) for entry in self.spec.params.spec()}
+        docs = {entry.name: str(entry.doc or "") for entry in self.spec.params.spec()}
+
+        def follow() -> None:
+            entered = self.values()
+            for name, controller, wanted in rules:
+                editor = self._editors[name]
+                active = str(entered.get(controller, "")) in wanted
+                editor.setEnabled(active)
+                label = self._rows[name].labelForField(editor)
+                if label is not None:
+                    label.setEnabled(active)
+                editor.setToolTip(
+                    docs[name]
+                    if active
+                    else str(tr("Wirkt nur, wenn „{field}“ auf „{value}“ steht.")).format(
+                        field=titles[controller], value=choice_label(wanted[0])
+                    )
+                )
+
+        self.valuesChanged.connect(follow)
+        follow()
 
     def _watch(self, editor: QWidget) -> None:
         """Verbindet das Änderungssignal des Editors mit ``valuesChanged``.

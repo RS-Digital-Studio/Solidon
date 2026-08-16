@@ -73,6 +73,29 @@ def test_the_numbering_is_reproducible() -> None:
     assert first == second
 
 
+def test_two_coaxial_bores_are_numbered_from_below() -> None:
+    """§21.2: Zwei Bohrungen übereinander haben dieselbe Mitte in X und Y.
+
+    Eine Durchführung durch zwei Wände ist die häufigste Doppelbohrung
+    überhaupt — und die Sortierung, aus der die Nummern entstehen, verglich
+    nur X und Y. Der Vergleich endete unentschieden, und welche von beiden
+    ``hole_1`` wurde, hing an der Reihenfolge der gefundenen Flecken. Eine
+    Provenienz-ID darf das nicht: Eine Op, die an ``hole_2`` hängt, säße nach
+    der nächsten Auswertung an der anderen Bohrung.
+    """
+    lower = trimesh.creation.box(extents=(30.0, 30.0, 4.0))
+    upper = trimesh.creation.box(extents=(30.0, 30.0, 4.0))
+    upper.apply_translation((0.0, 0.0, 20.0))
+    bore = trimesh.creation.cylinder(radius=2.6, height=60.0, sections=64)
+    body = MeshData.of(trimesh.util.concatenate([lower, upper]).difference(bore))
+
+    holes = sorted(detect_holes(body), key=lambda hole: hole.id)
+
+    assert [hole.id for hole in holes] == ["hole_1", "hole_2"]
+    heights = [hole.params["centre"][2] for hole in holes]
+    assert heights == sorted(heights), f"die untere ist hole_1: {heights}"
+
+
 def test_a_cube_has_no_bores() -> None:
     assert detect_holes(cube()) == []
 

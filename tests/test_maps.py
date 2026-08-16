@@ -278,6 +278,68 @@ def test_a_body_on_the_plate_needs_nothing(profile: Profile) -> None:
     assert analysis.highlighted == ()
 
 
+# --- Abbrechen ------------------------------------------------------------------
+
+
+def test_a_map_stops_when_nobody_waits_for_it_any_more(profile: Profile) -> None:
+    """§18.4 verspricht abbrechbare Karten, und keine war es.
+
+    Wer die zweite Karte wählte, wartete erst die erste ab — bei 51 000
+    Dreiecken 3,4 Sekunden, in denen das Fenster „wird berechnet …" für die
+    falsche meldete. Gefragt wird am Eingang und in der teuersten Schleife.
+    """
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    signal = CancelSignal()
+    signal.cancel()
+
+    with pytest.raises(OperationCancelled):
+        maps.build("support", object_with(_table()), profile=profile, cancelled=signal)
+
+
+def test_the_expensive_loop_asks_too(profile: Profile) -> None:
+    """Am Eingang zu fragen genügt nicht.
+
+    Die Sekunden liegen in der Schleife über die Dreiecke, nicht davor — ein
+    Abbruch, der nur beim Start greift, kommt genau dann nie an, wenn er
+    gebraucht wird.
+    """
+    from app.core.errors import OperationCancelled
+
+    class _AfterTheFirstLook:
+        """Sagt beim zweiten Fragen ab — und das zweite Mal ist die Schleife."""
+
+        def __init__(self) -> None:
+            self.asked = 0
+
+        @property
+        def is_cancelled(self) -> bool:
+            return self.asked > 1
+
+        def raise_if_cancelled(self) -> None:
+            self.asked += 1
+            if self.asked > 1:
+                raise OperationCancelled
+
+    token = _AfterTheFirstLook()
+    with pytest.raises(OperationCancelled):
+        maps.build("support", object_with(_table()), profile=profile, cancelled=token)
+
+    assert token.asked > 1, "die Schleife hat gefragt, nicht nur der Eingang"
+
+
+def test_a_map_runs_through_while_nobody_cancels(profile: Profile) -> None:
+    """Der Schalter ist da und wird nicht gezogen — dann ändert er nichts."""
+    from app.core.scene.cancel import CancelSignal
+
+    analysis = maps.build(
+        "support", object_with(_table()), profile=profile, cancelled=CancelSignal()
+    )
+
+    assert analysis.highlighted
+
+
 # --- Der Weg von der Warnung zur Stelle -----------------------------------------
 
 

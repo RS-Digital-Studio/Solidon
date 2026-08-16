@@ -547,6 +547,30 @@ def test_the_pick_button_imports_and_selects(window: MainWindow, tmp_path: Path)
     )
 
 
+def test_a_field_without_effect_says_why(window: MainWindow) -> None:
+    """*Fläche* wirkt nur, solange *Auflegen* auf „Auf eine Fläche" steht.
+
+    Bei jeder anderen Art übergeht die Operation den Wert wortlos — im Dialog
+    stand er weiter bedienbar da und versprach eine Wirkung. Grau und mit
+    Grund statt weg: eine Zeile, die verschwindet, sucht man (§2.6).
+    """
+    spec = REGISTRY.get("displace_image")
+    dialog = OperationDialog(spec, {}, window, features={"face_1": "Fläche 1"})
+
+    editor = dialog._editors["at_feature"]
+    assert not editor.isEnabled(), "von oben aufgelegt braucht keine Fläche"
+    assert "Auflegen" in editor.toolTip(), f"ohne Grund: {editor.toolTip()!r}"
+
+    from PySide6.QtWidgets import QComboBox
+
+    projection = dialog._editors["projection"]
+    assert isinstance(projection, QComboBox)
+    projection.setCurrentIndex(projection.findData("face"))
+
+    assert editor.isEnabled()
+    assert str(spec.params.spec()[3].doc) == editor.toolTip(), "und der eigene Satz kommt zurück"
+
+
 # --- Die Stellung eines Skeletts (§25, Konzept P16 §7.5) -------------------------
 
 

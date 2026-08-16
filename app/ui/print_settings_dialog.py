@@ -630,7 +630,9 @@ def _select_data(box: QComboBox, identifier: str) -> None:
         box.setCurrentIndex(index)
 
 
-def remembered_setup(settings: UiSettings, material: str = "") -> handover.SlicerSetup | None:
+def remembered_setup(
+    settings: UiSettings, material: str = "", printer_id: str = ""
+) -> handover.SlicerSetup | None:
     """Der Slicer, wie er hier zuletzt eingestellt war (§29).
 
     Für alle, die eine Datei schreiben, ohne diesen Dialog geöffnet zu haben —
@@ -646,12 +648,22 @@ def remembered_setup(settings: UiSettings, material: str = "") -> handover.Slice
     TPU-Projekt nach einem PETG-Lauf das PETG-Profil — richtig gerechnet,
     falsch beschriftet.
 
+    ``printer_id`` ist der Drucker, für den gerade exportiert wird. Weicht er
+    von dem ab, für den die Profile gewählt wurden, gilt nichts davon: Ein
+    Maschinenprofil gehört zu genau einem Drucker, und das des letzten Projekts
+    an das nächste weiterzureichen wäre schlimmer als gar keines — die Datei
+    sähe vollständig aus und zeigte auf die falsche Maschine. Ohne Vermerk
+    (Einstellungen aus einer älteren Fassung) wird nicht verglichen.
+
     ``None``, solange kein Druckerprofil gemerkt ist: Die Suche nach dem
     Programm geht über PATH, Registry und die üblichen Orte und kostet eine
     halbe Sekunde. Wer den Slicer nie eingerichtet hat, bekäme dafür ein Setup
     ohne Maschine — also nichts, was die Kette auflösen könnte.
     """
     if not settings.slicer_machine_profile:
+        return None
+    chosen_for = settings.slicer_profile_printer
+    if printer_id and chosen_for and chosen_for != printer_id:
         return None
     found = discover.find_program("slicer", tools.SLICERS)
     if found is None:
@@ -1658,6 +1670,36 @@ class PrintSettingsDialog(QDialog):
 
     # --- Slicen ---------------------------------------------------------------
 
+    def _remember_slicer_choice(self, *, require_machine: bool) -> None:
+        """Was im Dialog steht, gilt auch für den Export (§29).
+
+        Gemerkt wurde das nur beim **Slicen**. Wer die Profile hier einstellte
+        und danach über *Datei → Exportieren* eine 3MF schrieb, bekam die
+        Auswahl vom vorletzten Mal — der Docstring von :func:`remembered_setup`
+        verspricht mehr, und für den Nutzer ist es dieselbe Entscheidung.
+
+        ``require_machine`` beim Schließen: Die Profilsuche läuft im
+        Hintergrund, und wer den Dialog vorher wieder zumacht, hat eine leere
+        Auswahl vor sich. Sie zu übernehmen hieße, eine gemerkte Einstellung
+        zu löschen, weil niemand hingesehen hat.
+        """
+        machine = str(self.machine_choice.currentData() or "")
+        if require_machine and not machine:
+            return
+        self.ui_settings.slicer_machine_profile = machine
+        self.ui_settings.slicer_base_process = str(self.process_choice.currentData() or "")
+        filament = str(self.filament_choice.currentData() or "")
+        self.ui_settings.slicer_base_filament = filament
+        # Zu welchem Drucker die drei gehören. Ohne den Vermerk trägt das
+        # nächste Projekt auf einer anderen Maschine dieselben Profile.
+        self.ui_settings.slicer_profile_printer = self.session.profile.printer.id
+        # Und je Material: „petg" allein sagt nicht, welche der sieben Spulen
+        # gemeint war, und nach einem TPU-Teil stünde die falsche da.
+        if filament:
+            self.ui_settings.slicer_filament_per_material[self.session.profile.material.id] = (
+                filament
+            )
+
     def _slice(self) -> None:
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []
@@ -1704,15 +1746,7 @@ class PrintSettingsDialog(QDialog):
                 tr("Dieser Slicer braucht auch ein Prozessprofil — bitte eines auswählen.")
             )
             return
-        self.ui_settings.slicer_machine_profile = setup.machine_profile
-        self.ui_settings.slicer_base_process = setup.base_process
-        self.ui_settings.slicer_base_filament = setup.base_filament
-        # Und je Material: „petg" allein sagt nicht, welche der sieben Spulen
-        # gemeint war, und nach einem TPU-Teil stünde die falsche da.
-        if setup.base_filament:
-            self.ui_settings.slicer_filament_per_material[self.session.profile.material.id] = (
-                setup.base_filament
-            )
+        self._remember_slicer_choice(require_machine=False)
 
         self._temporary = TemporaryDirectory(prefix="solidon-handover-")
         folder = Path(self._temporary.name)
@@ -1960,6 +1994,9 @@ class PrintSettingsDialog(QDialog):
         Sekunden, und ohne das Warten stürbe der Thread über einem
         zerstörten Dialog.
         """
+        # Erst merken, dann abräumen: Die Auswahl steht in Widgets, die es
+        # gleich nicht mehr gibt.
+        self._remember_slicer_choice(require_machine=True)
         worker = self._worker
         if worker is not None and worker.isRunning():
             worker.cancel()
