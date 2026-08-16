@@ -1688,16 +1688,42 @@ class MainWindow(QMainWindow):
             # Ebenen tief im Menü. Erst zeichnen, die Erzeugungsart kommt bei
             # „Fertig".
             ("category.sketch", tr("Zeichnen"), self.action_sketch_free),
+            # Und Weg 4 daneben. Beide lagen unter *Ändern → Netz* zwischen
+            # Reparaturwerkzeugen, ohne Kürzel — die Hauptwege-Tabelle nennt
+            # für „organisch formen" die Werkzeugzeile, und die untere ist mit
+            # acht Umschaltern voll. Der Menüeintrag bleibt, wo er war: Palette
+            # und Verlauf führen über ihn.
+            ("sculpt", tr("Formen"), self.action_sculpt_free),
+            ("armature", tr("Skelett"), self.action_armature_free),
         ):
             action = QAction(icon(symbol, toolbar), label, self)
             action.triggered.connect(slot)
             toolbar.addAction(action)
             if symbol == "import":
-                # Zwei Knöpfe der Zeile lösen Transaktionen aus — nach Ablauf
+                # Vier Knöpfe der Zeile lösen Transaktionen aus — nach Ablauf
                 # des Testlaufs grauen sie mit den Menüs aus (§2 C).
                 self._toolbar_import = action
             if symbol == "category.sketch":
                 self._toolbar_sketch = action
+            if symbol == "sculpt":
+                self._toolbar_sculpt = action
+            if symbol == "armature":
+                self._toolbar_armature = action
+
+        for action, hint in (
+            (
+                self._toolbar_sculpt,
+                tr("Einen gewählten Körper mit dem Pinsel auf- und abtragen."),
+            ),
+            (
+                self._toolbar_armature,
+                tr("Knochen in einen gewählten Körper setzen und ihn danach beugen."),
+            ),
+        ):
+            # Der Satz sagt, was der erste Handgriff ist — dieselbe Zusage, die
+            # `test_interface_limits` für die untere Werkzeugzeile hält.
+            action.setStatusTip(hint)
+            action.setToolTip(hint)
 
         # Rechts neben den vier Knöpfen stand tausend Pixel nichts. Dort steht
         # jetzt, was das Projekt gerade ist und worauf es gedruckt wird —
@@ -1913,6 +1939,12 @@ class MainWindow(QMainWindow):
         self.generate_action.setEnabled(not locked)
         self._toolbar_import.setEnabled(not locked)
         self._toolbar_sketch.setEnabled(not locked)
+        # Formen und Skelett gehen beide von einem gewählten Körper aus. Das
+        # fing bisher erst die Sitzung selbst ab — eine Meldung nach dem Klick,
+        # wo der Knopf sie vorher sagen kann (§2.6).
+        ready = chosen >= 1 and not locked and not gesturing
+        self._toolbar_sculpt.setEnabled(ready)
+        self._toolbar_armature.setEnabled(ready)
         for action in (
             self.auto_split_action,
             self.variants_action,
@@ -1921,8 +1953,12 @@ class MainWindow(QMainWindow):
             self.generate_action,
             self._toolbar_import,
             self._toolbar_sketch,
+            self._toolbar_sculpt,
+            self._toolbar_armature,
         ):
             self._lock_hint(action, locked)
+        for action in (self._toolbar_sculpt, self._toolbar_armature):
+            self._pick_hint(action, ready, locked)
 
     def _kinds_of_selection(self, result: Any) -> list[str]:
         """Die Bauart jedes gewählten Körpers — Netz oder exakt."""
@@ -1953,6 +1989,30 @@ class MainWindow(QMainWindow):
                 "Diese Operation braucht einen exakten Körper (B-Rep). Exakte Körper "
                 "kommen aus einer STEP-Datei oder aus den Grundformen mit „Exakt“."
             )
+            action.setStatusTip(reason)
+            action.setToolTip(reason)
+        elif stored is not None:
+            action.setStatusTip(str(stored))
+            action.setToolTip(str(stored))
+
+    def _pick_hint(self, action: QAction, ready: bool, locked: bool) -> None:
+        """Sagt am ausgegrauten Knopf, dass ihm die Auswahl fehlt.
+
+        Dasselbe Muster wie :meth:`_kind_hint`, nur mit der einfacheren Frage:
+        Formen und Skelett brauchen einen gewählten Körper. Ausgegraut allein
+        wäre die halbe Antwort — der Satz steht dort, wo er **vor** dem Klick
+        gelesen wird.
+
+        Bei gesperrter Anwendung schweigt er: dort gilt der Grund aus
+        :meth:`_lock_hint`, und zwei Gründe an einem Knopf sind einer zu viel.
+        """
+        if locked:
+            return
+        stored = action.property("tip_before_pick")
+        if not ready:
+            if stored is None:
+                action.setProperty("tip_before_pick", action.statusTip())
+            reason = tr("Dafür braucht es einen ausgewählten Körper.")
             action.setStatusTip(reason)
             action.setToolTip(reason)
         elif stored is not None:
@@ -3455,6 +3515,20 @@ class MainWindow(QMainWindow):
         """Der Zeichnen-Knopf der Werkzeugzeile: Skizzenmodus ohne
         festgelegte Operation (§2.2, Weg 2)."""
         self.start_sketch("")
+
+    def action_sculpt_free(self) -> None:
+        """Der Formen-Knopf der Werkzeugleiste (§2.2, Weg 4).
+
+        Eine eigene Methode und nicht ``start_sculpt`` selbst: ``triggered``
+        reicht seinen Haken-Zustand als erstes Argument durch, und das wäre
+        hier die Objektkennung — ``False`` als Körper, den es nicht gibt.
+        """
+        self.start_sculpt()
+
+    def action_armature_free(self) -> None:
+        """Der Skelett-Knopf der Werkzeugleiste — aus demselben Grund eine
+        eigene Methode wie der Nachbar darüber."""
+        self.start_armature()
 
     def _offer_sketch_use(self, text: str) -> None:
         """Was soll aus der Skizze werden? — die fünf Arten, mit der

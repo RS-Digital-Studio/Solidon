@@ -2490,6 +2490,70 @@ def test_the_toolbar_has_a_drawing_entry_for_way_two(window: MainWindow) -> None
         window.finish_sketch(keep=False)
 
 
+def test_the_toolbar_has_the_two_entries_for_way_four(window: MainWindow) -> None:
+    """§2.2: Weg 4 (organisch formen) nennt die Werkzeugzeile als Ort.
+
+    *Formen* und *Skelett* lagen unter *Ändern → Netz* zwischen
+    Reparaturwerkzeugen — an derselben Stelle wie „Löcher schließen", ohne
+    Kürzel und ohne Zusammenhang mit dem Weg, für den sie gebaut sind. Die
+    untere Werkzeugzeile ist mit acht Umschaltern voll; die obere hat den
+    Platz, und dort steht Weg 2 bereits.
+
+    Der Menüeintrag bleibt: Befehlspalette und Verlauf führen über ihn.
+    """
+    from PySide6.QtWidgets import QToolBar
+
+    toolbar = window.findChild(QToolBar)
+    assert toolbar is not None
+    labels = [action.text() for action in toolbar.actions() if action.text()]
+    assert "Formen" in labels
+    assert "Skelett" in labels
+    assert labels.index("Zeichnen") < labels.index("Formen") < labels.index("Skelett")
+
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    item = window.object_tree.tree.topLevelItem(0)
+    assert item is not None
+    item.setSelected(True)
+
+    window.action_sculpt_free()
+    try:
+        assert window.sculpting()
+    finally:
+        window.finish_sculpt()
+
+    window.action_armature_free()
+    try:
+        assert window.setting_armature()
+    finally:
+        window.finish_armature()
+
+
+def test_way_four_says_what_it_needs_before_the_click(window: MainWindow) -> None:
+    """Ein Knopf, der einen gewählten Körper braucht, sagt das vorher (§2.6).
+
+    Bis hierher fing das erst die Sitzung ab: Klick, dann „Bitte zuerst ein
+    Objekt auswählen." in der Statusleiste — eine Sackgasse, die der Knopf
+    selbst beantworten kann (Regel 19).
+    """
+    window._update_actions()
+    assert not window._toolbar_sculpt.isEnabled()
+    assert not window._toolbar_armature.isEnabled()
+    assert "ausgewählten Körper" in window._toolbar_sculpt.toolTip()
+
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    item = window.object_tree.tree.topLevelItem(0)
+    assert item is not None
+    item.setSelected(True)
+    window._update_actions()
+
+    assert window._toolbar_sculpt.isEnabled()
+    assert window._toolbar_armature.isEnabled()
+    assert "ausgewählten Körper" not in window._toolbar_sculpt.toolTip()
+    assert window._toolbar_sculpt.toolTip(), "und der eigene Satz steht wieder da"
+
+
 def test_the_sketch_bar_says_what_finishing_does(window: MainWindow) -> None:
     """Der Hinweis über „Fertig" zeigte auf eine Operation, die es beim
     freien Zeichnen noch nicht gibt.
