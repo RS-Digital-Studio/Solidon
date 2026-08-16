@@ -252,8 +252,10 @@ def register_part(
 
 #: Version der Bibliothek als Ganzes. Geht in jede Projektdatei (§16.2) und
 #: wird erhöht, sobald ein Baustein sich auf eine Art ändert, die Maße
-#: verschiebt.
-LIBRARY_VERSION: Final = "2"
+#: verschiebt. Version 3: das Spiel von Mutternfalle und Gewinde kommt aus
+#: dem Materialprofil statt aus einer festen Vorgabe (``PLAY_FROM_PROFILE``
+#: in ``fasteners.py``).
+LIBRARY_VERSION: Final = "3"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt
