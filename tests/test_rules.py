@@ -79,15 +79,21 @@ def test_a_own_file_can_be_loaded_without_touching_the_cache(tmp_path: Path) -> 
     assert rules.load().version != "9", "the shipped set stays the shipped set"
 
 
-def test_the_manual_can_read_the_rules_in_english() -> None:
+def test_the_manual_can_read_the_rules_in_every_language() -> None:
     """§39 nennt die Regelsammlung das eigentliche Produkt — ein Produkt, das
-    nur eine Sprache spricht, ist im Handbuch der zweiten eine Lücke.
+    im Handbuch einer Sprache deutsch bleibt, ist dort eine Lücke.
     """
+    from app.i18n.catalog import available_languages
+
     collection = rules.load()
-    missing = [rule.id for rule in collection.rules if not rule.title_en or not rule.text_en]
-    assert not missing, f"ohne englische Fassung: {missing}"
-    for rule in collection.rules:
-        assert rule.reading("en") == (rule.title_en, " ".join(rule.text_en.split()))
+    for language in available_languages():
+        if language == "de":
+            continue
+        missing = [rule.id for rule in collection.rules if language not in rule.translations]
+        assert not missing, f"ohne Fassung für {language}: {missing}"
+        for rule in collection.rules:
+            title, text = rule.translations[language]
+            assert rule.reading(language) == (title, " ".join(text.split()))
 
 
 def test_the_agent_keeps_reading_german_whatever_the_language() -> None:
@@ -97,7 +103,8 @@ def test_the_agent_keeps_reading_german_whatever_the_language() -> None:
     collection = rules.load()
     for rule in collection.rules:
         assert rule.title in rule.as_line()
-        assert rule.title_en not in rule.as_line()
+        for title, _text in rule.translations.values():
+            assert title not in rule.as_line()
     assert "Mindestwandstärke" in collection.as_text()
 
 
