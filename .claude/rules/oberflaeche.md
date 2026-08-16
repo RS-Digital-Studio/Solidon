@@ -113,15 +113,33 @@ Bezugspunkt des Netz-Quaders stand in derselben aufgeklappten Gruppe wie der
 Umschalter selbst, also genau dort, wo jeder vorbeikommt; auf „Ecke" gestellt
 kam ein mittiger Quader und kein Ton dazu.
 
+**Ein Feld ohne Wirkung sagt es.** Eine Nummer kleiner als der Umschalter:
+*Fläche* in „Relief auflegen" gilt nur, solange *Auflegen* auf „Auf eine
+Fläche" steht, und die Operation übergeht den Wert sonst wortlos. Solche
+Abhängigkeiten stehen in `DEPENDENT_FIELDS` (`app/ui/op_dialog.py`), nicht als
+Sonderfall im Aufbau. Das Feld wird **grau und begründet**, nicht unsichtbar —
+verschwinden darf nur, was die gewählte Variante gar nicht kennt; wer eine
+Zeile vermisst, sucht sie.
+
+**Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat.** Der
+Skizzentext hat ihn seit je, die Stellung eines Skeletts bekam ihn spät:
+`kind="armature"` fiel auf ein Textfeld durch, und der kürzeste Weg zu einem
+gebeugten Arm ging über getipptes JSON. `ArmatureField` baut je Knochen eine
+Zeile mit drei Winkeln — sobald der Dialog ein Skelett hat (aus dem Editor
+oder aus dem Wert der Operation), sonst bleibt das Textfeld als Rückfall. Die
+Winkel sind `ValueField`, denn §13 gilt für einen Winkel wie für eine Länge.
+Im **Schema** bleibt der Sammelparameter hinten (`tests/test_gesture_ops.py`);
+im Dialog steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
+
 **Jede neue Funktion nennt ihren Hauptweg** (§2.2), bevor sie einen Platz
 bekommt:
 
 | Weg | Ort an der Oberfläche |
 |---|---|
 | Weg 1 — fremdes Modell anpassen | Kontextmenü am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Trennen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
-| Weg 2 — neu konstruieren | Werkzeugzeile („Zeichnen": erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig"), Menü *Erzeugen* / *Ändern* |
+| Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen": erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig"), Menü *Erzeugen* / *Ändern* |
 | Weg 3 — generieren | Chat und Generierungsdialog |
-| Weg 4 — organisch formen | Werkzeugzeile (*Formen*, *Skelett*), Menü *Ändern* |
+| Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — beide brauchen einen gewählten Körper und sagen das, bevor man klickt), Menü *Ändern* |
 | keiner der vier | Untermenü und Befehlspalette, sonst nichts |
 
 **Was zur Auswahl passt, steht vorn.** `applies_to` sortiert nicht nur das
