@@ -461,28 +461,28 @@
 <p><strong>Emplacement de matériau</strong> — l&#x27;affectation d&#x27;une face à un matériau ou à une couleur pour l&#x27;impression multimatière.</p>
 <p>Ces règles sont sous les yeux de l&#x27;agent à chaque demande. Elles sont la raison pour laquelle il prend un trou de vis dans la table au lieu de l&#x27;estimer — et pour laquelle il redemande au lieu de deviner.</p>
 <p>Version: 2</p>
-<h4>Mindestwandstärke</h4>
-<p>Keine Wand dünner als zwei Extrusionsbreiten. Der Wert steht im Druckerprofil und wird nie als Zahl in die Op geschrieben.</p>
-<h4>Fasen statt Überhängen</h4>
-<p>Über 45 Grad Überhang eine Fase setzen statt Stützen in Kauf zu nehmen. Die Schichtanalyse sagt, wo der Überhang liegt.</p>
-<h4>Toleranzen aus dem Materialprofil</h4>
-<p>Passungen als Passungspaar anlegen und die Toleranz als auto:&lt;material&gt; angeben. Eine feste Zahl überlebt keine Kalibrierung.</p>
-<h4>Hauptmaße als Parameter</h4>
-<p>Jede Abmessung, die der Nutzer später ändern könnte, wird ein Projektparameter mit sprechendem Namen. Streuzahlen in Ops sind eine Sackgasse.</p>
-<h4>Überlappung bei Booleschen Ops</h4>
-<p>Bei Vereinigung und Differenz immer 0,01 mm Überlappung vorsehen. Koinzidente Flächen sind die häufigste Ursache für kaputte Ergebnisse.</p>
-<h4>Löcher größer als Nennmaß</h4>
-<p>FDM druckt Löcher enger als geplant. Die Bohrung um den Kompensationswert aus dem Materialprofil vergrößern, nicht um eine geratene Zahl.</p>
-<h4>Erste Schicht</h4>
-<p>Den Elefantenfuß aus dem Materialprofil einkalkulieren, wenn die erste Schicht maßhaltig sein muss.</p>
-<h4>OpenSCAD-Auflösung</h4>
-<p>Bei OpenSCAD $fn zentral setzen. Pro Objekt gesetzt explodieren die Renderzeiten.</p>
-<h4>Bausteine vor Primitiven</h4>
-<p>Erst in der Bausteinbibliothek suchen, dann selbst konstruieren. Ein Baustein bringt seine Merkmale, seine Grenzen und seine Tests mit.</p>
-<h4>Eigener Kern vor OpenSCAD</h4>
-<p>Was der B-Rep-Kern kann, wird nicht als OpenSCAD-Quelltext geschrieben: exakte Quader und Zylinder, präzise Boolesche Operationen, Fasen und Verrundungen. Das Ergebnis ist genauer, bleibt im Verlauf änderbar und braucht kein installiertes Programm. OpenSCAD bleibt für Formen, für die es weder Baustein noch Kern gibt.</p>
-<h4>Fragen vor Raten</h4>
-<p>Bei mehrdeutigen Anfragen ask_user benutzen. Eine Rückfrage kostet einen Klick, eine falsche Annahme kostet einen Druck.</p>
+<h4>Épaisseur de paroi minimale</h4>
+<p>Aucune paroi plus fine que deux largeurs d&#x27;extrusion. La valeur vit dans le profil d&#x27;imprimante et ne s&#x27;écrit jamais en chiffres dans l&#x27;opération.</p>
+<h4>Des chanfreins plutôt que des surplombs</h4>
+<p>Au-delà de 45 degrés de surplomb, poser un chanfrein plutôt que d&#x27;accepter des supports. L&#x27;analyse des couches dit où se trouve le surplomb.</p>
+<h4>Les tolérances viennent du profil de matériau</h4>
+<p>Créer les ajustements par paires et indiquer la tolérance comme auto:&lt;material&gt;. Un nombre figé ne survit à aucun étalonnage.</p>
+<h4>Les cotes principales en paramètres</h4>
+<p>Chaque dimension que l&#x27;utilisateur pourrait changer plus tard devient un paramètre de projet au nom parlant. Les nombres épars dans les opérations sont une impasse.</p>
+<h4>Du recouvrement pour les opérations booléennes</h4>
+<p>Pour les unions et les différences, prévoir toujours 0,01 mm de recouvrement. Les faces coïncidentes sont la cause la plus fréquente de résultats cassés.</p>
+<h4>Des trous plus grands que la cote nominale</h4>
+<p>Le FDM imprime les trous plus étroits que prévu. Agrandir le perçage de la valeur de compensation du profil de matériau, pas d&#x27;un nombre deviné.</p>
+<h4>La première couche</h4>
+<p>Prendre en compte le pied d&#x27;éléphant du profil de matériau dès que la première couche doit tenir sa cote.</p>
+<h4>Résolution OpenSCAD</h4>
+<p>Dans OpenSCAD, régler $fn de façon centrale. Réglé par objet, les temps de rendu explosent.</p>
+<h4>Les blocs avant les primitives</h4>
+<p>Chercher d&#x27;abord dans la bibliothèque de blocs, construire ensuite. Un bloc apporte ses caractéristiques, ses limites et ses tests.</p>
+<h4>Le noyau maison avant OpenSCAD</h4>
+<p>Ce que sait faire le noyau B-Rep ne s&#x27;écrit pas en source OpenSCAD : pavés et cylindres exacts, opérations booléennes précises, chanfreins et congés. Le résultat est plus précis, reste modifiable dans l&#x27;historique et ne demande aucun programme installé. OpenSCAD reste pour les formes qui n&#x27;ont ni bloc ni opération du noyau.</p>
+<h4>Demander plutôt que deviner</h4>
+<p>Pour les demandes ambiguës, utiliser ask_user. Une question coûte un clic, une hypothèse fausse coûte une impression.</p>
 <h4>Matériaux</h4>
 <p>Toutes les cotes en millimètres. Le « jeu » est l&#x27;écart que reçoit un ajustement mobile, l&#x27;« ajustement serré » l&#x27;interférence d&#x27;un ajustement fixe. Un profil calibré porte des valeurs mesurées au lieu des valeurs par défaut.</p>
 <table><thead><tr><th>Matériau</th><th>Jeu</th><th>Ajustement serré</th><th>Surcote de perçage</th><th>Pied d&#x27;éléphant</th><th>Retrait</th><th>calibré</th></tr></thead><tbody><tr><td>ABS</td><td>0,25</td><td>-0,06</td><td>0,20</td><td>0,15</td><td>0,7 %</td><td>non</td></tr><tr><td>ASA</td><td>0,25</td><td>-0,06</td><td>0,20</td><td>0,15</td><td>0,6 %</td><td>non</td></tr><tr><td>PETG</td><td>0,25</td><td>-0,05</td><td>0,20</td><td>0,20</td><td>0,4 %</td><td>non</td></tr><tr><td>PETG-CF</td><td>0,25</td><td>-0,05</td><td>0,20</td><td>0,15</td><td>0,3 %</td><td>non</td></tr><tr><td>PLA</td><td>0,20</td><td>-0,05</td><td>0,15</td><td>0,15</td><td>0,2 %</td><td>non</td></tr><tr><td>TPU 95A</td><td>0,35</td><td>-0,10</td><td>0,30</td><td>0,25</td><td>0,2 %</td><td>non</td></tr></tbody></table>

@@ -461,28 +461,28 @@
 <p><strong>Slot di materiale</strong> — l&#x27;assegnazione di una faccia a un materiale o a un colore nella stampa multicolore.</p>
 <p>Queste regole stanno davanti all&#x27;agente a ogni richiesta. Sono il motivo per cui prende un foro per vite dalla tabella invece di stimarlo — e per cui chiede invece di indovinare.</p>
 <p>Versione: 2</p>
-<h4>Mindestwandstärke</h4>
-<p>Keine Wand dünner als zwei Extrusionsbreiten. Der Wert steht im Druckerprofil und wird nie als Zahl in die Op geschrieben.</p>
-<h4>Fasen statt Überhängen</h4>
-<p>Über 45 Grad Überhang eine Fase setzen statt Stützen in Kauf zu nehmen. Die Schichtanalyse sagt, wo der Überhang liegt.</p>
-<h4>Toleranzen aus dem Materialprofil</h4>
-<p>Passungen als Passungspaar anlegen und die Toleranz als auto:&lt;material&gt; angeben. Eine feste Zahl überlebt keine Kalibrierung.</p>
-<h4>Hauptmaße als Parameter</h4>
-<p>Jede Abmessung, die der Nutzer später ändern könnte, wird ein Projektparameter mit sprechendem Namen. Streuzahlen in Ops sind eine Sackgasse.</p>
-<h4>Überlappung bei Booleschen Ops</h4>
-<p>Bei Vereinigung und Differenz immer 0,01 mm Überlappung vorsehen. Koinzidente Flächen sind die häufigste Ursache für kaputte Ergebnisse.</p>
-<h4>Löcher größer als Nennmaß</h4>
-<p>FDM druckt Löcher enger als geplant. Die Bohrung um den Kompensationswert aus dem Materialprofil vergrößern, nicht um eine geratene Zahl.</p>
-<h4>Erste Schicht</h4>
-<p>Den Elefantenfuß aus dem Materialprofil einkalkulieren, wenn die erste Schicht maßhaltig sein muss.</p>
-<h4>OpenSCAD-Auflösung</h4>
-<p>Bei OpenSCAD $fn zentral setzen. Pro Objekt gesetzt explodieren die Renderzeiten.</p>
-<h4>Bausteine vor Primitiven</h4>
-<p>Erst in der Bausteinbibliothek suchen, dann selbst konstruieren. Ein Baustein bringt seine Merkmale, seine Grenzen und seine Tests mit.</p>
-<h4>Eigener Kern vor OpenSCAD</h4>
-<p>Was der B-Rep-Kern kann, wird nicht als OpenSCAD-Quelltext geschrieben: exakte Quader und Zylinder, präzise Boolesche Operationen, Fasen und Verrundungen. Das Ergebnis ist genauer, bleibt im Verlauf änderbar und braucht kein installiertes Programm. OpenSCAD bleibt für Formen, für die es weder Baustein noch Kern gibt.</p>
-<h4>Fragen vor Raten</h4>
-<p>Bei mehrdeutigen Anfragen ask_user benutzen. Eine Rückfrage kostet einen Klick, eine falsche Annahme kostet einen Druck.</p>
+<h4>Spessore di parete minimo</h4>
+<p>Nessuna parete più sottile di due larghezze di estrusione. Il valore sta nel profilo della stampante e non si scrive mai come numero nell&#x27;operazione.</p>
+<h4>Smussi invece di sbalzi</h4>
+<p>Oltre i 45 gradi di sbalzo, applicare uno smusso invece di accettare i supporti. L&#x27;analisi degli strati dice dove sta lo sbalzo.</p>
+<h4>Tolleranze dal profilo del materiale</h4>
+<p>Creare gli accoppiamenti come coppia e indicare la tolleranza come auto:&lt;material&gt;. Un numero fisso non sopravvive a nessuna calibrazione.</p>
+<h4>Le misure principali come parametri</h4>
+<p>Ogni dimensione che l&#x27;utente potrebbe cambiare in seguito diventa un parametro di progetto con un nome parlante. I numeri sparsi nelle operazioni sono un vicolo cieco.</p>
+<h4>Sovrapposizione nelle operazioni booleane</h4>
+<p>Per unioni e differenze prevedere sempre 0,01 mm di sovrapposizione. Le facce coincidenti sono la causa più frequente di risultati rotti.</p>
+<h4>Fori più grandi della misura nominale</h4>
+<p>L&#x27;FDM stampa i fori più stretti del previsto. Allargare il foro del valore di compensazione dal profilo del materiale, non di un numero indovinato.</p>
+<h4>Il primo strato</h4>
+<p>Mettere in conto il piede d&#x27;elefante dal profilo del materiale quando il primo strato deve tenere la misura.</p>
+<h4>Risoluzione OpenSCAD</h4>
+<p>In OpenSCAD impostare $fn centralmente. Impostato per oggetto, i tempi di rendering esplodono.</p>
+<h4>I blocchi prima delle primitive</h4>
+<p>Cercare prima nella libreria dei blocchi, poi costruire da sé. Un blocco porta con sé le sue caratteristiche, i suoi limiti e i suoi test.</p>
+<h4>Il kernel proprio prima di OpenSCAD</h4>
+<p>Quello che sa fare il kernel B-Rep non si scrive come sorgente OpenSCAD: parallelepipedi e cilindri esatti, operazioni booleane precise, smussi e raccordi. Il risultato è più preciso, resta modificabile nella cronologia e non richiede alcun programma installato. OpenSCAD resta per le forme che non hanno né blocco né operazione del kernel.</p>
+<h4>Chiedere prima di indovinare</h4>
+<p>Con richieste ambigue usare ask_user. Una domanda costa un clic, un&#x27;ipotesi sbagliata costa una stampa.</p>
 <h4>Materiali</h4>
 <p>Tutte le quote in millimetri. Il «gioco» è la distanza che riceve un accoppiamento mobile, l&#x27;«accoppiamento forzato» l&#x27;interferenza di uno fisso. Un profilo calibrato porta valori misurati al posto dei valori predefiniti.</p>
 <table><thead><tr><th>Materiale</th><th>Gioco</th><th>Accoppiamento forzato</th><th>Maggiorazione del foro</th><th>Piede d&#x27;elefante</th><th>Ritiro</th><th>calibrato</th></tr></thead><tbody><tr><td>ABS</td><td>0,25</td><td>-0,06</td><td>0,20</td><td>0,15</td><td>0,7 %</td><td>no</td></tr><tr><td>ASA</td><td>0,25</td><td>-0,06</td><td>0,20</td><td>0,15</td><td>0,6 %</td><td>no</td></tr><tr><td>PETG</td><td>0,25</td><td>-0,05</td><td>0,20</td><td>0,20</td><td>0,4 %</td><td>no</td></tr><tr><td>PETG-CF</td><td>0,25</td><td>-0,05</td><td>0,20</td><td>0,15</td><td>0,3 %</td><td>no</td></tr><tr><td>PLA</td><td>0,20</td><td>-0,05</td><td>0,15</td><td>0,15</td><td>0,2 %</td><td>no</td></tr><tr><td>TPU 95A</td><td>0,35</td><td>-0,10</td><td>0,30</td><td>0,25</td><td>0,2 %</td><td>no</td></tr></tbody></table>

@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solidon3D — adattare modelli 3D altrui, costruire i propri, renderli stampabili</title>
+<meta name="description" content="Solidon3D è un'applicazione desktop per la stampa 3D: adatta i modelli scaricati, costruisci i tuoi, verifica la stampabilità prima dello slicing — in locale, senza account, senza abbonamento.">
+<link rel="canonical" href="https://solidon3d.de/it/">
+<link rel="alternate" hreflang="de" href="https://solidon3d.de/">
+<link rel="alternate" hreflang="en" href="https://solidon3d.de/en/">
+<link rel="alternate" hreflang="es" href="https://solidon3d.de/es/">
+<link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/">
+<link rel="alternate" hreflang="it" href="https://solidon3d.de/it/">
+<link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/">
+<link rel="alternate" hreflang="x-default" href="https://solidon3d.de/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Solidon3D">
+<meta property="og:locale" content="it_IT">
+<meta property="og:locale:alternate" content="de_DE">
+<meta property="og:locale:alternate" content="en_GB">
+<meta property="og:url" content="https://solidon3d.de/it/">
+<meta property="og:title" content="Solidon3D — adattare modelli 3D altrui, costruire i propri, renderli stampabili">
+<meta property="og:description" content="Applicazione desktop per la stampa 3D: adatta i modelli altrui, costruisci i tuoi, verifica la stampabilità — in locale, senza account, senza abbonamento.">
+<meta property="og:image" content="https://solidon3d.de/handbuch/it/main-window.png">
+<meta property="og:image:alt" content="La finestra principale di Solidon3D: albero degli oggetti, vista 3D e rapporto di verifica affiancati">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Solidon3D",
+  "applicationCategory": "DesignApplication",
+  "operatingSystem": "Windows 10/11, macOS, Linux",
+  "url": "https://solidon3d.de/it/",
+  "inLanguage": ["de", "en", "es", "fr", "it", "pt"],
+  "description": "Applicazione desktop per costruire, generare e modificare modelli 3D stampabili. Stack di operazioni non distruttivo, analisi degli strati, accoppiamenti da profili di materiale calibrabili. Gira in locale, senza account e senza telemetria.",
+  "author": { "@type": "Organization", "name": "RS Digital" },
+  "publisher": { "@type": "Organization", "name": "RS Digital" },
+  "offers": {
+    "@type": "Offer",
+    "price": "49",
+    "priceCurrency": "EUR",
+    "url": "https://solidon3d.de/it/#pricing",
+    "availability": "https://schema.org/PreOrder"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/it/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>
+        <path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>
+      </svg>
+      Solidon<span>3D</span>
+    </a>
+    <nav class="lang">
+      <a class="hide-small" href="/it/features.html">Funzioni</a>
+      <a class="hide-tiny" href="#pricing">Prezzo</a>
+      <a href="/it/manual.html">Manuale</a>
+      <span class="langs"><a href="/" hreflang="de">DE</a><a href="/en/" hreflang="en">EN</a><a href="/es/" hreflang="es">ES</a><a href="/fr/" hreflang="fr">FR</a><a href="/it/" hreflang="it" aria-current="page">IT</a><a href="/pt/" hreflang="pt">PT</a></span>
+      <a class="cta" href="#pricing">Demo</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <div class="wrap">
+    <div class="hero">
+      <div class="hero-text">
+        <h1>Il pezzo che hai scaricato non combacia. Fallo combaciare.</h1>
+        <p class="lead">Trascina dentro l'STL, pratica un foro, aggiungi un
+        coperchio, prendi il gioco dal profilo del materiale — e prima dello
+        slicing il rapporto di verifica dice cosa andrà storto in stampa.
+        Solidon3D modifica i modelli altrui, costruisce i tuoi e ripulisce
+        quelli generati. In locale, senza account, senza abbonamento; un
+        agente IA usa gli stessi strumenti dei menu, e la geometria la calcola
+        il codice, mai il modello linguistico.</p>
+
+        <div class="download">
+          <strong>Demo dal 20 agosto 2026 — gratuita</strong>
+          <p>Completa e senza chiave: niente filigrane, niente blocco
+          dell'esportazione, nessuna funzione bloccata. <b>Gira fino al
+          30 ottobre 2026</b> e dopo non si avvia più — i tuoi file di
+          progetto non ne sono toccati.</p>
+          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20avvisami%20quando%20esce%20la%20demo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
+            </svg>
+            Avvisami quando esce
+          </a>
+          <ul class="assure">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Funziona offline
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Nessun account
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Nessuna telemetria
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              I tuoi file restano tuoi
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Windows, macOS, Linux
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="shot">
+        <div class="stage">
+          <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+          <img src="../handbuch/it/main-window.png" width="1180" height="760" fetchpriority="high"
+               alt="La finestra principale di Solidon3D: a sinistra l'albero degli oggetti con parametri e cronologia, al centro la vista 3D, a destra il rapporto di verifica">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="tint">
+    <div class="wrap">
+      <div class="stats">
+        <div><b>85</b><span>operazioni nel registro</span></div>
+        <div><b>17</b><span>blocchi verificati</span></div>
+        <div><b>40</b><span>misure normalizzate in tabella</span></div>
+        <div><b>16</b><span>profili di stampante di serie</span></div>
+        <div><b>9</b><span>progetti di esempio inclusi</span></div>
+        <div><b>0</b><span>account, cloud, telemetria</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="why">
+    <div class="wrap">
+      <h2>Ti suona familiare?</h2>
+      <p class="sub">Le quattro frasi che si sentono più spesso attorno a una
+      stampante — e cosa ne fa Solidon3D.</p>
+      <ul class="pains">
+        <li>
+          <q>Il foro è 0,2 mm troppo stretto, e non ho un CAD.</q>
+          <p><b>Clicca la faccia, cambia la quota.</b> Anche in una STL
+          scaricata — fori, tasche e spessori di parete sono caratteristiche
+          con un nome, non una nuvola di triangoli.</p>
+        </li>
+        <li>
+          <q>La stampa si è fermata all'80%, per colpa di un'isola.</q>
+          <p><b>L'analisi degli strati la mostra prima.</b> Sbalzi, isole,
+          pareti troppo sottili e il fabbisogno di supporti — prima che lo
+          slicer ci spenda il tempo.</p>
+        </li>
+        <li>
+          <q>Il coperchio si blocca. Al terzo tentativo è entrato.</q>
+          <p><b>Accoppiamenti dal profilo del materiale.</b> Gioco,
+          accoppiamento forzato o a filo si ricavano da una scala di
+          calibrazione stampata una volta sola, non si stimano a occhio.</p>
+        </li>
+        <li>
+          <q>Il pezzo è 40 mm troppo grande per il piatto.</q>
+          <p><b>Dividere e mettere le spine in un solo passo.</b> La
+          divisione automatica crea le spine, i fori e i relativi
+          accoppiamenti in un colpo solo.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="ways">
+    <div class="wrap">
+      <h2>Quattro vie per arrivare al pezzo</h2>
+      <p class="sub">Tutte e quattro portano nella stessa scena, nella stessa
+      cronologia e nello stesso rapporto di verifica. Decidi pezzo per pezzo,
+      non programma per programma.</p>
+      <div class="ways">
+        <div class="way">
+          <svg class="figure art" viewBox="0 0 320 140" role="img"
+               aria-label="Un disegno: un puntatore clicca il foro di un pezzo sfaccettato, il foro viene marcato come caratteristica e la sua quota passa da 5,0 a 5,2 millimetri.">
+            <path class="body" d="M20 24 H150 V70 H96 V118 H20 Z"/>
+            <g class="rule">
+              <line x1="150" y1="24" x2="96" y2="70"/>
+              <line x1="20" y1="118" x2="96" y2="70"/>
+            </g>
+            <g class="anim fig-w1-hole">
+              <circle cx="58" cy="88" r="14" fill="#16181c"/>
+            </g>
+            <circle class="hot-stroke anim fig-w1-ring" cx="58" cy="88" r="19" fill="none"/>
+            <path class="ink anim fig-w1-cursor" d="M58 88 l17 6.5 -7.5 3 -3 7.5 z"/>
+            <text class="dim" x="180" y="38">Faccia cliccata</text>
+            <rect class="field" x="180" y="46" width="122" height="32" rx="4"/>
+            <text class="dim" x="190" y="67">ø</text>
+            <text class="value anim fig-w1-d50" x="292" y="67" text-anchor="end">5,0 mm</text>
+            <text class="value anim fig-w1-d52" x="292" y="67" text-anchor="end">5,2 mm</text>
+          </svg>
+          <span class="tag">Via 1 — Adattare</span>
+          <h3>Modificare un modello altrui</h3>
+          <p>Lascia cadere il file — o trascina il link da MakerWorld,
+          Printables o Thingiverse direttamente dal browser nella finestra,
+          senza passare dalla cartella dei download. Leggi il rapporto di
+          verifica, clicca una faccia o un foro — poi di' in chat cosa deve
+          diventare, oppure scegli dal menu contestuale. Confronta
+          prima/dopo, applica, esporta.</p>
+        </div>
+        <div class="way">
+          <svg class="figure art" viewBox="0 0 320 140" role="img"
+               aria-label="Un disegno: il parametro «larghezza» passa da 80 a 110 millimetri, il corpo sotto cresce con lui, e la sede per dado al suo interno resta dov'è.">
+            <text class="dim" x="20" y="34">Parametro</text>
+            <rect class="field" x="20" y="42" width="132" height="32" rx="4"/>
+            <text class="dim" x="30" y="63">larghezza</text>
+            <text class="value anim fig-w2-v80" x="142" y="63" text-anchor="end">80 mm</text>
+            <text class="value anim fig-w2-v110" x="142" y="63" text-anchor="end">110 mm</text>
+            <g class="anim fig-w2-grow">
+              <rect class="body" x="20" y="90" width="160" height="34" rx="2"/>
+            </g>
+            <polygon fill="#16181c" points="60,98 67.8,102.5 67.8,111.5 60,116 52.2,111.5 52.2,102.5"/>
+            <text class="dim" x="20" y="136">Blocco: sede per dado M4</text>
+          </svg>
+          <span class="tag">Via 2 — Costruire</span>
+          <h3>Costruire da zero, con le quote</h3>
+          <p>Descrivi cosa ti serve. L'agente crea i parametri e piazza
+          blocchi verificati — filettature, inserti a caldo, cerniere.
+          Gira i numeri, il modello segue all'istante.</p>
+        </div>
+        <div class="way">
+          <svg class="figure art" viewBox="0 0 320 140" role="img"
+               aria-label="Un disegno: a sinistra una forma di mesh frastagliata e aperta uscita dalla generazione; una freccia porta a destra, dove la stessa forma sta chiusa e levigata sul piano di stampa, con una spunta e la parola stampabile.">
+            <text class="dim" x="20" y="34">generata</text>
+            <path fill="none" stroke="#98a0ab" stroke-width="1.4" stroke-dasharray="4 3"
+                  d="M28 112 l4 -30 8 -14 6 6 8 -14 12 2 6 10 8 -4 4 14 -6 12 8 8 -10 10 -24 4 -16 -4 z"/>
+            <g class="anim fig-w3-fixed">
+              <path class="hot" d="M150 88 h24 v-6 l14 10 -14 10 v-6 h-24 z"/>
+              <text class="dim" x="208" y="34">riparata e verificata</text>
+              <line class="rule" x1="204" y1="114" x2="306" y2="114" stroke-width="2" stroke-linecap="round"/>
+              <path class="body" d="M216 114 V74 q0 -24 24 -24 h14 q24 0 24 24 v40 z"/>
+              <path class="hot" d="m230 124 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="254" y="136" font-size="11">stampabile</text>
+            </g>
+          </svg>
+          <span class="tag">Via 3 — Generare</span>
+          <h3>Da testo o immagine</h3>
+          <p>Una mesh generata attraversa da sola la catena di riparazione,
+          viene portata a una risoluzione con cui si può lavorare, riceve un
+          rapporto di verifica e, se serve, viene divisa e messa in spine —
+          finché non sta stampabile sul piatto. Serve un ComfyUI in
+          esecuzione locale con un modello generatore e una scheda grafica
+          robusta; senza entrambi, le vie 1 e 2 restano pienamente
+          utilizzabili.</p>
+        </div>
+        <div class="way">
+          <svg class="figure art" viewBox="0 0 320 140" role="img"
+               aria-label="Un disegno: a sinistra tre corpi di base con transizioni morbide fra loro, una freccia verso destra, lì la stessa forma modellata a mano, accanto un anello di pennello e l'indicazione parete 1,4 millimetri.">
+            <text class="dim" x="20" y="34">Forma di base</text>
+            <circle class="body" cx="52" cy="86" r="16"/>
+            <rect class="body" x="40" y="96" width="24" height="34" rx="6"/>
+            <circle class="body" cx="86" cy="104" r="11"/>
+            <path class="hot" d="M118 92 h24 v-6 l14 10 -14 10 v-6 h-24 z"/>
+            <g class="anim fig-w4-shaped">
+              <text class="dim" x="176" y="34">modellata</text>
+              <path class="body" d="M212 62 q18 -18 34 0 q10 14 2 30 l6 34 h-50 l6 -34 q-8 -16 2 -30 z"/>
+              <circle fill="none" stroke="#e08a3c" stroke-width="1.6" cx="228" cy="82" r="13"/>
+              <text class="ink" x="264" y="90" font-size="11">parete 1,4 mm</text>
+            </g>
+          </svg>
+          <span class="tag">Via 4 — Modellare</span>
+          <h3>Figure a mano</h3>
+          <p>Certe forme non si possono quotare. Assembla in modo grezzo i
+          corpi di base, fondili dolcemente, uniforma la mesh — poi modella
+          con sei pennelli. L'intera sessione resta <b>un</b> passo nella
+          cronologia, e quindi modificabile.</p>
+          <p><b>Ciò che nessun programma di sculpting sa fare:</b> mentre
+          modelli, lo spessore di parete corre con te. I punti troppo sottili
+          compaiono come numero nella barra — non nello slicer, quando la
+          forma è ormai finita.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="tint">
+    <div class="wrap">
+      <h2>Cosa fa la differenza</h2>
+      <p class="sub">Sei funzioni su dodici, una frase ciascuna —
+      <a href="/it/features.html">tutte con immagini nella pagina delle funzioni</a>.</p>
+      <ul class="features">
+        <li><b>Un agente IA che non tira a indovinare.</b> Una frase in chat
+        diventa una proposta, che un solo Annulla ritira per intero. La
+        geometria la calcola il codice, mai il modello linguistico — ed è
+        misurato: una suite di <b>39 richieste di riferimento</b> gira contro
+        ogni modifica all'agente.</li>
+        <li><b>Rapporto di verifica prima della stampa.</b> Punti aperti,
+        normali invertite, pareti sotto i due cordoni — ogni rilievo salta al
+        punto del modello e porta con sé un'azione proposta.</li>
+        <li><b>Cambiare un numero invece di ricostruire.</b> La cronologia è
+        non distruttiva: spessore di parete da 2,40 a 3,60, e svuotatura,
+        coperchio, fori e accoppiamenti si ricalcolano.</li>
+        <li><b>Diciassette blocchi verificati.</b> Sede per dado, filettatura,
+        inserto a caldo, cerniera a film — le quote vengono dalla tabella dei
+        componenti normalizzati, non dall'istinto.</li>
+        <li><b>Analisi degli strati senza slicer.</b> Sbalzi, isole, campate
+        dei ponti e volume dei supporti; la ricerca dell'orientamento propone
+        la posizione che ne genera di meno.</li>
+        <li><b>Schizzi con vincoli.</b> Dieci vincoli tengono insieme il
+        disegno, e il contorno entra nel kernel B-rep come curva esatta — un
+        cerchio diventa un cilindro, non un poligono.</li>
+      </ul>
+      <a class="btn ghost" href="/it/features.html">Guarda tutte le dodici funzioni</a>
+    </div>
+  </section>
+
+  <section id="generated">
+    <div class="wrap">
+      <h2>Quando il modello arriva da un'IA</h2>
+      <p class="sub">Un generatore verifica se la mesh è chiusa. Non verifica
+      se la parete è più spessa del tuo ugello, se uno sbalzo regge, se
+      un'isola comincia a mezz'aria e se il tutto entra nel tuo piatto di
+      stampa. È esattamente lì che comincia Solidon3D — e dopo, ogni numero si
+      può ancora cambiare.</p>
+      <a class="btn ghost" href="/it/ai-models.html">Dal generatore alla stampa</a>
+    </div>
+  </section>
+
+  <section id="honest">
+    <div class="wrap">
+      <h2>Cosa Solidon3D non è</h2>
+      <div class="honest">
+        Meglio dirlo prima che pentirsene dopo:
+        <ul>
+          <li><b>Non è uno slicer.</b> Solidon3D analizza e prepara; il file
+          di stampa lo produce ancora il tuo slicer — Solidon3D glielo
+          consegna direttamente e ne rilegge il G-code come controllo.</li>
+          <li><b>Non è un CAD in cloud.</b> Nessun account, nessun archivio
+          in rete, nessuna telemetria. I progetti sono file sul tuo
+          computer.</li>
+          <li><b>Nessuna garanzia di quota dalle mesh generate.</b> Ciò che
+          nasce da testo o immagine viene reso stampabile — per costruire in
+          quota ci sono le vie 1 e 2.</li>
+          <li><b>L'IA porta con sé i propri costi.</b> La chat gira con la
+          tua chiave API — l'uso del modello lo fattura il fornitore,
+          tipicamente centesimi a proposta. Gratis si fa in locale con
+          Ollama; un modello all'altezza (da circa 14 miliardi di parametri)
+          richiede però una scheda grafica con 16 GB di memoria.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing">
+    <div class="wrap">
+      <h2>Prima la demo, poi si compra una volta sola</h2>
+      <p class="sub">Fino al 30 ottobre Solidon3D non costa nulla. Poi un
+      acquisto una tantum — niente abbonamento, niente account, nessuna
+      funzione che dopo dodici mesi smette di funzionare.</p>
+      <div class="price">
+        <div class="price-card">
+          <div class="amount">
+            <b>0 €</b>
+            <em>demo fino al 30/10/2026</em>
+          </div>
+          <p class="terms">Completa, senza chiave, senza account. La versione
+          completa arriva a <b>49 €</b> invece di 79 € — una tantum, con
+          tutti gli aggiornamenti 1.x inclusi.</p>
+          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20avvisami%20quando%20esce%20la%20demo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
+            </svg>
+            Avvisami quando esce
+          </a>
+        </div>
+        <div>
+          <ul class="price-list">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>La demo non è mutilata.</b> Niente filigrane, niente
+              blocco dell'esportazione, nessuna funzione bloccata — ha una
+              data di fine, e nient'altro.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Una volta, non ogni mese.</b> I servizi IA con cui
+              oggi si pubblicizza il 3D fatturano in abbonamento — da 20 a
+              30 $ al mese è la norma, quindi da 240 a 360 $ l'anno, e con la
+              disdetta l'accesso finisce. Qui sono 49 €, una volta. In più
+              c'è quel che costa il modello linguistico se usi la chat; in
+              locale con Ollama anche quello non costa nulla.
+              <em>(Prezzi di terzi al 12 agosto 2026, senza garanzia.)</em></span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Una licenza, tutti i tuoi computer.</b> È legata a te,
+              non a un dispositivo — postazione, portatile, computer
+              dell'officina.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Nessuna attivazione in rete, nessun account.</b> La
+              chiave viene verificata sul tuo computer. Noi non veniamo a
+              sapere quando e dove lavori.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Uso commerciale incluso.</b> Ciò che crei è tuo —
+              vendilo, pubblicalo, concedilo in licenza. Anche con i blocchi
+              della libreria.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>I tuoi progetti restano leggibili.</b> Un file ZIP con
+              dentro JSON, esportazione in STL, 3MF, OBJ, PLY e STEP.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Si decide prima di pagare.</b> Prima la demo, poi con
+              la versione completa quattordici giorni di prova e il pagamento
+              dopo. In più il <a href="/widerruf.html">diritto di recesso</a>
+              previsto dalla legge — chi vuole la chiave subito vi rinuncia,
+              come per ogni acquisto digitale.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="requirements" class="tint">
+    <div class="wrap">
+      <h2>Requisiti di sistema</h2>
+      <table class="req">
+        <tr><td>Sistema operativo</td><td>Windows 10/11 (64 bit), macOS 12 o
+        successivo, oppure Linux — sul Mac in versioni separate per Apple
+        Silicon e Intel. La versione Mac non è ancora firmata presso Apple:
+        al primo avvio clicca una volta col tasto destro sull'applicazione e
+        scegli «Apri», poi parte come qualsiasi altra.</td></tr>
+        <tr><td>Spazio su disco</td><td>circa 750 MB installata, download circa 255 MB</td></tr>
+        <tr><td>Chat (opzionale)</td><td>una propria chiave API (costi
+        correnti presso il fornitore) oppure Ollama con un modello da circa
+        14 miliardi di parametri in su — che richiede una scheda grafica con
+        16 GB di memoria</td></tr>
+        <tr><td>Generare (opzionale)</td><td>un ComfyUI in esecuzione locale
+        con modello generatore e una scheda grafica robusta</td></tr>
+        <tr><td>Altro (opzionale)</td><td>OpenSCAD, uno slicer — tutto viene
+        trovato o indicato a mano, niente di questo è obbligatorio</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="questions">
+    <div class="wrap">
+      <h2>Domande frequenti</h2>
+      <div class="faq">
+        <details>
+          <summary>Cosa succede il 30 ottobre?</summary>
+          <p>Dal 31 ottobre la demo non si avvia più. Lo dice per tempo:
+          nella barra di stato c'è ogni giorno quanto le resta.</p>
+          <p><b>I tuoi file non ne sono toccati.</b> Restano dove li hai
+          salvati; non si cancella nulla e nulla diventa illeggibile. Un file
+          di progetto è un archivio ZIP con dentro JSON e si apre anche senza
+          Solidon3D — la versione successiva lo legge senza modifiche.</p>
+        </details>
+        <details>
+          <summary>Perché una demo con data di fine invece di un periodo di prova?</summary>
+          <p>Perché così può essere completa. Una versione che dopo
+          quattordici giorni si riduce a un visualizzatore mostra al secondo
+          progetto meno che al primo. Questa mostra tutto fino all'ultimo
+          giorno — e poi finisce, invece di continuare come mezza versione
+          che nessuno cura più.</p>
+        </details>
+        <details>
+          <summary>Mi serve esperienza con un CAD?</summary>
+          <p>No. La via 1 se la cava con un clic e una frase in chat, la
+          via 2 con descrivere e girare numeri. Chi vuole disegnare schizzi
+          con vincoli può farlo — ma non deve.</p>
+        </details>
+        <details>
+          <summary>Devo usare un'IA?</summary>
+          <p>No. La chat è una via su quattro. Senza chiave e senza Ollama
+          resta pienamente utilizzabile tutto tranne la chat — menu, menu
+          contestuali, riga di comando e tutte le 85 operazioni.</p>
+        </details>
+        <details>
+          <summary>L'IA calcola la mia geometria?</summary>
+          <p>No, ed è la frase più importante di questa pagina. Il modello
+          linguistico sceglie operazioni e parametri — ogni geometria la
+          calcola il codice. Ogni proposta dell'agente è esattamente una
+          transazione, che un solo Annulla ritira per intero.</p>
+        </details>
+        <details>
+          <summary>Posso comandare Solidon3D da Claude Code o da un altro strumento IA?</summary>
+          <p>Sì. Solidon3D ha un server MCP integrato: un programma come
+          Claude Code vi richiama le stesse operazioni che stanno nei menu.
+          È spento di serie, accetta connessioni solo dal proprio computer
+          (127.0.0.1), non accetta né percorsi di file né codice sorgente
+          dall'esterno — e ogni chiamata remota è una transazione nella
+          cronologia, che un solo Annulla ritira per intero.</p>
+        </details>
+        <details>
+          <summary>I miei modelli vanno da qualche parte?</summary>
+          <p>Solo se usi la chat con una chiave API di terzi — allora a quel
+          fornitore va la scheda della scena: gli oggetti con le loro quote,
+          i nomi delle caratteristiche, i parametri e la cronologia in breve.
+          Niente geometria, niente file. Con Ollama anche quello resta in
+          locale. Senza chat non esce nulla dal computer: nessun account,
+          nessun archivio in rete, nessuna telemetria.</p>
+        </details>
+        <details>
+          <summary>Quali formati legge e scrive Solidon3D?</summary>
+          <p>Legge STL, 3MF (anche come assieme), OBJ e GLB, più STEP tramite
+          il kernel B-rep. Scrive STL, 3MF — con cambi colore e disposizione
+          sui piatti —, OBJ, PLY, GLB e STEP; STEP compare nel dialogo di
+          esportazione non appena un corpo può sostenerlo. GLB è il formato
+          per far vedere: colori e nome viaggiano insieme, e il destinatario
+          gira il pezzo nel browser. Un progetto è un file ZIP con dentro
+          <code>project.json</code>: si apre anche senza Solidon3D.</p>
+        </details>
+        <details>
+          <summary>Gira su un Mac?</summary>
+          <p>Sì, per Apple Silicon e per Intel come versioni separate — un
+          pacchetto compilato su arm64 non parte su un Mac Intel, e questo
+          riguarda ogni macchina precedente al 2020. Non è ancora firmato
+          presso Apple, e Gatekeeper non lascia avviare col doppio clic
+          un'applicazione non firmata arrivata dalla rete: clicca una volta
+          col tasto destro sull'applicazione e scegli «Apri», poi parte come
+          qualsiasi altra. La notarizzazione arriva non appena l'account
+          Apple è pronto.</p>
+        </details>
+        <details>
+          <summary>Funziona con la mia stampante?</summary>
+          <p>Sedici profili sono inclusi di serie, tra cui Elegoo, Bambu Lab,
+          Prusa, Creality, Anycubic e Sovol. Se ne possono creare di propri —
+          servono il volume di stampa, l'ugello e l'altezza dello strato. Per
+          gli accoppiamenti si aggiunge una calibrazione, una volta sola.</p>
+        </details>
+        <details>
+          <summary>Cosa succede dopo la versione 1.x?</summary>
+          <p>Tutti gli aggiornamenti 1.x sono compresi nell'acquisto. Una
+          versione principale successiva sarebbe un nuovo acquisto — la
+          versione che hai comprato continua a girare, non smette di
+          funzionare, e i tuoi progetti restano leggibili.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="closing">
+        <h2>Il prossimo pezzo che combacia</h2>
+        <p>La demo esce il 20 agosto 2026 e gira fino al 30 ottobre —
+        gratuita e completa. Chi scrive due righe riceve un avviso appena
+        c'è: risponde un essere umano.</p>
+        <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20avvisami%20quando%20esce%20la%20demo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
+          </svg>
+          support@solidon3d.de
+        </a>
+        <a class="btn ghost" href="/it/manual.html">Prima leggi il manuale</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    © 2026 RS Digital ·
+    <a href="/it/manual.html">Manuale</a> ·
+    <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
+    <a href="/impressum.html">Note legali</a> ·
+    <a href="/datenschutz.html">Privacy</a> ·
+    <a href="/agb.html">Condizioni generali</a> ·
+    <a href="/widerruf.html">Diritto di recesso</a> ·
+    <a href="/eula.html">Contratto di licenza</a>
+    <em>(testi legali in tedesco — fa fede la versione tedesca)</em> ·
+    <a href="/">Deutsch</a> ·
+    <a href="/en/">English</a> ·
+    <a href="/es/">Español</a> ·
+    <a href="/fr/">Français</a> ·
+    <a href="/pt/">Português</a>
+  </div>
+</footer>
+
+</body>
+</html>
