@@ -1002,6 +1002,9 @@ class Viewport(QWidget):
         nicht weg, ein Werkzeugwechsel schon."""
         self._brush_radius = 0.0
         """Der Pinselradius in Millimetern, solange geformt wird."""
+        self._last_drag_stroke: Vec3 | None = None
+        """Wo der letzte Zug eines gezogenen Strichs saß — der Mindestabstand
+        (halber Pinselradius) rechnet dagegen."""
         self._brush_actor: Any = None
         """Der Ring, der ihn zeigt — als Weltmaß in der Szene und nicht am
         Zeiger: Ein Zeiger hat feste Punktgröße und weiß nichts von der Kamera,
@@ -2368,6 +2371,27 @@ class Viewport(QWidget):
             self._hover_feature = False
             self._update_cursor()
 
+    def _on_paint_drag(self, x: int, y: int, fresh: bool) -> None:
+        """Ein Zug des gedrückten Pinsels — einer je halbem Radius (§18.11).
+
+        Der Mindestabstand hält die Zugzahl im Zaum: hundert Züge je
+        Zentimeter wären Rauschen, kein Strich. Er gilt je Strich, nicht
+        darüber hinaus — sonst schluckte ein neuer Ansatz neben dem alten
+        Endpunkt seinen ersten Zug. Die Kosten sprechen nicht dagegen:
+        ``apply_strokes`` liegt gemessen bei zwei Millisekunden für 25 Züge.
+        """
+        if fresh:
+            self._last_drag_stroke = None
+        point = self._world_at(x, y)
+        if point is None:
+            return
+        last = self._last_drag_stroke
+        spacing = self._brush_radius * 0.5
+        if last is not None and spacing > 0.0 and math.dist(last, point) < spacing:
+            return
+        self._last_drag_stroke = point
+        self._on_picked(point)
+
     def _on_picked(self, point: Any) -> None:
         picked = (float(point[0]), float(point[1]), float(point[2]))
         if self._splitting:
@@ -3473,7 +3497,24 @@ class Viewport(QWidget):
             if view is not None:
                 view.set_drag_cursor(role)
 
-        style = _InteractorStyle(self.plotter, scheme, on_context, on_pick, on_cursor)
+        def on_paint(x: int, y: int, fresh: bool) -> None:
+            view = weak()
+            if view is not None:
+                view._on_paint_drag(x, y, fresh)
+
+        def is_sculpting() -> bool:
+            view = weak()
+            return view is not None and view._sculpting
+
+        style = _InteractorStyle(
+            self.plotter,
+            scheme,
+            on_context,
+            on_pick,
+            on_cursor,
+            on_paint=on_paint,
+            is_sculpting=is_sculpting,
+        )
         self.plotter.interactor.SetInteractorStyle(style)
         # Ein neuer Stil bringt seine eigenen Beobachter mit; was beim Wechsel
         # sonst noch einzuschalten wäre, steht dort.
@@ -3628,6 +3669,8 @@ def _InteractorStyle(  # noqa: N802
     on_context: Any = None,
     on_pick: Any = None,
     on_cursor: Any = None,
+    on_paint: Any = None,
+    is_sculpting: Any = None,
 ) -> Any:
     """Baut einen VTK-Interaktionsstil mit den Tasten des gewählten Schemas.
 
@@ -3652,6 +3695,11 @@ def _InteractorStyle(  # noqa: N802
             self.AddObserver("RightButtonReleaseEvent", self._right_up)
             self.AddObserver("MouseWheelForwardEvent", self._wheel_in)
             self.AddObserver("MouseWheelBackwardEvent", self._wheel_out)
+            self.AddObserver("MouseMoveEvent", self._mouse_move)
+            self._painting = False
+            """Ob die linke Taste gerade malt statt die Kamera zu führen.
+            Nur im Formzustand, und nur ohne Umschalt — schieben muss auch
+            mitten in der Sitzung gehen."""
             self._right_at: tuple[int, int] | None = None
             """Wo die rechte Taste heruntergegangen ist. In jedem Schema tut
             Rechts auch etwas an der Kamera — das Menü darf nur aufgehen, wenn
@@ -3675,8 +3723,18 @@ def _InteractorStyle(  # noqa: N802
 
         def _left_down(self, *_: Any) -> None:
             self._left_at = self._position()
+            if is_sculpting is not None and is_sculpting() and not self._shift():
+                # Malen statt Kamera (§18.11): Die Züge folgen dem gedrückten
+                # Zeiger, der erste sitzt beim Drücken. Ein Klick je Zug hieß
+                # zwanzig Klicks für einen Grat — in jedem Formprogramm ist
+                # das ein Zug. Umschalt behält die Kamera, schieben muss auch
+                # mitten in der Sitzung gehen.
+                self._painting = True
+                if on_paint is not None:
+                    on_paint(*self._left_at, True)
+                return
             if scheme == "slicer":
-                # Left selects; panning is shift plus drag.
+                # Links wählt; geschoben wird mit Umschalt und Ziehen.
                 if self._shift():
                     self.StartPan()
                     self._tell("panning")
@@ -3688,11 +3746,25 @@ def _InteractorStyle(  # noqa: N802
             self.StartRotate()
             self._tell("rotate")
 
+        def _mouse_move(self, *_: Any) -> None:
+            if self._painting:
+                if on_paint is not None:
+                    on_paint(*self._position(), False)
+                return
+            # Der Beobachter verdrängt die eingebaute Verarbeitung — ohne
+            # diesen Aufruf stünde die Kamera bei jedem Ziehen still.
+            self.OnMouseMove()
+
         def _left_up(self, *_: Any) -> None:
+            painted, self._painting = self._painting, False
             self.EndPan()
             self.EndRotate()
             self._tell(None)
             started, self._left_at = self._left_at, None
+            if painted:
+                # Die Züge sind schon beim Drücken und Ziehen gesetzt — der
+                # Klickpfad malte denselben Punkt ein zweites Mal.
+                return
             if on_pick is None:
                 return
             x, y = self._position()
