@@ -292,6 +292,52 @@ def test_applying_the_advice_moves_the_editors(qt_app: QApplication) -> None:
     assert editor.value() == pytest.approx(dialog.settings.speed.outer_wall)
 
 
+def test_the_layer_analysis_may_arrive_after_the_dialog(qt_app: QApplication) -> None:
+    """§2.8: Der Dialog geht sofort auf, die Schichtanalyse wird nachgereicht.
+
+    Vorher wartete der Weg hierher bis zu zwei Sekunden auf sie — mit
+    stehendem Fenster und ohne dass irgendwo stand, worauf. Beides ist zu
+    haben: Was aus der Geometrie folgt, steht ein paar Zehntel später in der
+    Liste, statt den ganzen Dialog aufzuhalten.
+    """
+    import math
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import place_on_bed
+    from app.core.slice.analysis import slice_body
+
+    session = Session()
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.slice_result is None
+    before = {
+        str(dialog.advice_view.topLevelItem(row).data(0, Qt.ItemDataRole.UserRole))
+        for row in range(dialog.advice_view.topLevelItemCount())
+    }
+
+    # Ein Kegel auf der Spitze: 63 Grad Wand, also Stützen — ein Vorschlag,
+    # den allein die Geometrie hergibt.
+    cone = trimesh.creation.cone(radius=20.0, height=10.0, sections=64)
+    cone.apply_transform(trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]))
+    dialog.take_slice_result(slice_body(place_on_bed(MeshData.of(cone)), 0.5))
+
+    after = {
+        str(dialog.advice_view.topLevelItem(row).data(0, Qt.ItemDataRole.UserRole))
+        for row in range(dialog.advice_view.topLevelItemCount())
+    }
+    assert dialog.slice_result is not None
+    assert after - before, "die nachgereichte Analyse hat die Vorschlagsliste nicht erreicht"
+
+
+def test_a_missing_layer_analysis_changes_nothing(dialog: PrintSettingsDialog) -> None:
+    """Ein ``None`` ist keine Analyse, sondern ihr Ausbleiben — dann bleibt es
+    bei dem, was aus Material und Maschine folgt."""
+    dialog.take_slice_result(None)
+
+    assert dialog.slice_result is None
+
+
 def test_the_advice_list_is_never_empty_of_words(dialog: PrintSettingsDialog) -> None:
     """Auch wenn nichts einzuwenden ist, steht das da — eine leere Liste sähe
     aus wie ein Fehler."""

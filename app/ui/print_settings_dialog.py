@@ -906,6 +906,24 @@ class PrintSettingsDialog(QDialog):
         self._refresh_advice()
         self._start_profile_search()
 
+    def take_slice_result(self, result: SliceResult | None) -> None:
+        """Die nachgereichte Schichtanalyse übernehmen (§2.8, §29).
+
+        Der Dialog geht auf, sobald er kann, und nicht erst, wenn die Analyse
+        fertig ist: Auf sie zu warten hielt den Weg zu den Druckeinstellungen
+        bis zu zwei Sekunden auf, mit stehendem Fenster und ohne dass irgendwo
+        stand, worauf.
+
+        Was aus der Geometrie folgt — Stützen, Haftung, Mindestschichtzeit —,
+        kommt damit ein paar Zehntel später in die Vorschlagsliste, statt den
+        ganzen Dialog aufzuhalten. Ein ``None`` ändert nichts: dann bleibt es
+        bei dem, was aus Material und Maschine folgt.
+        """
+        if result is None:
+            return
+        self.slice_result = result
+        self._refresh_advice()
+
     # --- Aufbau ---------------------------------------------------------------
 
     def _remembered_quality(self) -> Any:

@@ -2007,6 +2007,70 @@ def test_a_failed_export_reports_in_the_main_thread(
     assert window.export_action.isEnabled(), "nach dem Fehlschlag darf man es wieder versuchen"
 
 
+def test_the_print_settings_open_before_the_layer_analysis(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2.8: Der Weg zu den Druckeinstellungen wartet auf nichts mehr.
+
+    ``_current_slice(wait=True)`` hielt ihn bis zu zwei Sekunden an
+    (``worker.wait``) — die schlechtere Hälfte beider Möglichkeiten: lange
+    genug, um sich wie ein Hänger zu lesen, und ohne Zusage, denn wer den
+    Zeitraum riss, bekam den Dialog eben doch ohne Analyse.
+
+    Geprüft wird die ganze Kette: Der Dialog steht ohne Analyse da, und sie
+    findet ihn, solange er offen ist.
+    """
+    import time
+
+    from app.ui import main_window as module
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    item = window.object_tree.tree.topLevelItem(0)
+    assert item is not None
+    item.setSelected(True)
+
+    at_open: list[Any] = []
+    at_close: list[Any] = []
+
+    class ImmediateDialog(module.PrintSettingsDialog):
+        """Statt zu warten: einmal nachsehen, dann die Ereignisse laufen
+        lassen, wie es ein offener Dialog auch täte."""
+
+        def exec(self) -> int:
+            at_open.append(self.slice_result)
+            deadline = time.perf_counter() + 20.0
+            while self.slice_result is None and time.perf_counter() < deadline:
+                QApplication.processEvents()
+            at_close.append(self.slice_result)
+            return 0
+
+    monkeypatch.setattr(module, "PrintSettingsDialog", ImmediateDialog)
+
+    window.action_print_settings()
+
+    assert at_open == [None], "der Dialog hat doch auf die Schichtanalyse gewartet"
+    assert at_close and at_close[0] is not None, (
+        "die Analyse hat den offenen Dialog nie erreicht — genau dafür war das Warten da"
+    )
+    assert window._settings_dialog is None, (
+        "der Rückruf zeigte nach dem Schließen weiter auf ein Widget, das weggeräumt wird"
+    )
+
+
+def test_a_late_layer_analysis_finds_no_dialog(window: MainWindow) -> None:
+    """Ist keiner mehr offen, ist das Ergebnis nichts wert — und darf keinen
+    Absturz kosten.
+
+    Der Dialog wird nach ``exec`` weggeräumt (``deleteLater``); eine gebundene
+    Methode von ihm in der Warteliste wäre ein Rückruf in ein zerstörtes
+    C++-Objekt, also der Absturz ohne Zeile.
+    """
+    window._slice_for_settings(None)
+
+    assert window._settings_dialog is None
+
+
 def test_export_is_disabled_on_an_empty_scene(window: MainWindow) -> None:
     """Ein Exporteintrag, der auf leerer Szene ein Fenster öffnet, wäre die
     modale Sackgasse aus der Bedienrunde — er ist stattdessen aus."""

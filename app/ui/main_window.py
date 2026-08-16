@@ -204,16 +204,6 @@ _log = get_logger(__name__)
 
 AUTOSAVE_INTERVAL_MS = 120_000
 
-#: Wie lange die Druckeinstellungen auf eine nachgerechnete Schichtanalyse
-#: warten, bevor sie ohne sie aufgehen.
-#:
-#: Zwei Sekunden sind das Zehnfache dessen, was §31 für zweihunderttausend
-#: Dreiecke zulässt, und das Zehnfache dessen, was die Teile eines Gewürzsets
-#: tatsächlich brauchten. Wer ein Netz mitbringt, das darüber liegt, bekommt
-#: den Dialog trotzdem — nur ohne die Vorschläge zur Geometrie, so wie vorher
-#: immer.
-SLICE_WAIT_MS = 2000
-
 #: Wie lange der Rahmen steht, mit dem ein Tourschritt auf seinen Bereich
 #: zeigt. Lang genug, um den Blick dorthin zu ziehen, kurz genug, um nicht als
 #: Zustand gelesen zu werden.
@@ -667,6 +657,11 @@ class MainWindow(QMainWindow):
         """Der Agentenzug, der auf eine Entscheidung wartet (§26.5)."""
         self._manual: ManualWindow | None = None
         """Das Handbuchfenster, einmal gebaut und danach wiederverwendet."""
+        self._settings_dialog: PrintSettingsDialog | None = None
+        """Der offene Druckeinstellungen-Dialog, solange er offen ist (§29).
+        Die nachgereichte Schichtanalyse findet über ihn ihren Weg — nach
+        ``exec`` steht hier wieder ``None``, und der Rückruf läuft ins
+        Leere statt in ein zerstörtes Widget."""
         self._op_dialog: OperationDialog | None = None
         """Der offene Operationsdialog. Er sperrt das Fenster nicht mehr, also
         braucht er eine Referenz: ein Dialog, den nur eine lokale Variable hält,
@@ -2390,24 +2385,37 @@ class MainWindow(QMainWindow):
         anderen Programm.
 
         Der Dialog bekommt die Schichtanalyse, und wo keine vorliegt, wird sie
-        vorher gerechnet: die Vorschläge über Stützen, Haftung und
+        **nachgereicht**: die Vorschläge über Stützen, Haftung und
         Mindestschichtzeit hängen an der Geometrie und nicht am Material
         allein. Ohne sie ging der Dialog mit null Vorschlägen auf — bei einem
         Teil, dem Solidon 845 mm² Überhang auf einer Schicht ansieht.
+
+        Gewartet wird darauf nicht mehr. Der Weg hierher stand bis zu zwei
+        Sekunden still (``worker.wait``), und das war die schlechtere Hälfte
+        beider Möglichkeiten: lange genug, um sich wie ein Hänger zu lesen,
+        und trotzdem ohne Zusage — wer den Zeitraum riss, bekam den Dialog
+        eben doch ohne Analyse. Er geht jetzt sofort auf, und
+        :meth:`PrintSettingsDialog.take_slice_result` trägt sie nach, sobald
+        sie da ist (§2.8).
         """
-        # Eine knappe halbe Sekunde, die zum größten Teil auf die Suche nach dem
-        # Slicer geht — unter der Grenze aus §2.8, aber nicht unter der, ab der
-        # ein Zeiger dazugehört. Die Schichtanalyse kommt jetzt dazu und kostet
-        # zwei Zehntel.
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
+        # Der Wartezeiger bleibt für den Aufbau: die Suche nach dem Slicer im
+        # Konstruktor kostet eine knappe halbe Sekunde — unter der Grenze aus
+        # §2.8, aber nicht unter der, ab der ein Zeiger dazugehört.
+        with waiting():
             dialog = PrintSettingsDialog(
-                self.session, self.settings, self, slice_result=self._current_slice(wait=True)
+                self.session, self.settings, self, slice_result=self._current_slice()
             )
-        finally:
-            QApplication.restoreOverrideCursor()
+        object_id = self.object_tree.selected()
+        if dialog.slice_result is None and object_id is not None:
+            # Läuft schon eine für diesen Körper, stellt sich der Dialog an;
+            # sonst startet hier ein Arbeiter. Beide Wege enden in
+            # ``_slice_for_settings`` — und der ruft nur, solange der Dialog
+            # offen ist.
+            self._settings_dialog = dialog
+            self._slice_of(object_id, self._slice_for_settings)
         dialog.sliced.connect(self._gcode_returned)
         dialog.exec()
+        self._settings_dialog = None
 
         # Die Einstellungen gehören zum Projekt, die Stufe und die Slicer-Wahl
         # zur Anwendung (§29). Getrennt gespeichert, weil ein Projekt auf einem
@@ -2419,42 +2427,37 @@ class MainWindow(QMainWindow):
         # bei der Orca-Familie einige tausend Einträge je Aufruf.
         dialog.deleteLater()
 
-    def _current_slice(self, wait: bool = False) -> SliceResult | None:
-        """Die Schichtanalyse des gewählten Körpers.
+    def _current_slice(self) -> SliceResult | None:
+        """Die Schichtanalyse des gewählten Körpers, wenn sie schon vorliegt.
 
-        ``wait`` rechnet sie nach, wenn sie fehlt. Das war lange umgekehrt: sie
-        zu erzwingen hieße, den Weg zu den Druckeinstellungen an einer Rechnung
-        aufzuhalten, die niemand bestellt hat.
+        Liegt sie nicht vor, startet :meth:`_slice_of` sie und gibt ``None``
+        zurück — **ohne** darauf zu warten. Der Weg zu den Druckeinstellungen
+        stand hier zwei Sekunden still, weil ohne Analyse kein einziger
+        Vorschlag zur Geometrie zustande kommt: keine Stützen, keine Haftung,
+        keine Mindestschichtzeit, und die Warnung „Die Überhänge sind zu groß,
+        um sich selbst zu tragen" erst danach, wenn überhaupt.
 
-        Die Annahme hinter dem Satz stimmt nicht. Gemessen an den Teilen eines
-        Gewürzsets kostet die Analyse zwei Zehntelsekunden, und §31 deckelt sie
-        bei dreihundert Millisekunden für zweihunderttausend Dreiecke — die
-        Profilsuche im selben Dialog braucht 1,3 Sekunden und läuft
-        selbstverständlich. Was der Verzicht dagegen kostete, ist der ganze
-        Zweck: **ohne Analyse gibt es keinen einzigen Vorschlag zur
-        Geometrie.** Der Dialog ging mit null Vorschlägen und ausgegrautem
-        „Übernehmen" auf, und die Warnung „Die Überhänge sind zu groß, um sich
-        selbst zu tragen" erschien erst danach — wenn überhaupt.
-
-        Genau daran ist ein Satz Gewürzdeckel gescheitert: 845 mm² Überhang auf
-        einer Schicht, gemessen hätte Solidon es sofort, gefragt hat es
-        niemand.
+        Beides ist zu haben. Der Dialog geht sofort auf und bekommt die
+        Analyse nachgereicht (``take_slice_result``) — an genau der Stelle,
+        an der sie etwas ändert, nämlich in der Vorschlagsliste.
         """
         object_id = self.object_tree.selected()
         if object_id is None:
             return None
-        found = self._slice_of(object_id)
-        if found is not None or not wait:
-            return found
-        # Nachrechnen und darauf warten: der Dialog geht gleich auf, und ohne
-        # das Ergebnis wäre seine Vorschlagsliste leer. Der Wartezeiger steht
-        # währenddessen schon.
-        self._slice_of(object_id, then=lambda _result: None)
-        worker = self._slice_worker
-        if worker is not None:
-            worker.wait(SLICE_WAIT_MS)
-            QApplication.processEvents()
-        return self._slice_cache if self._slice_key is not None else None
+        return self._slice_of(object_id)
+
+    def _slice_for_settings(self, result: SliceResult | None) -> None:
+        """Die fertige Analyse in den offenen Druckeinstellungen-Dialog.
+
+        Über das Feld und nicht als gebundene Methode des Dialogs in der
+        Warteliste: Der Dialog wird nach ``exec`` weggeräumt
+        (``deleteLater``), und ein Rückruf in ein zerstörtes C++-Objekt ist
+        der Absturz ohne Zeile. Ist keiner mehr offen, ist das Ergebnis
+        einfach nichts wert — im Cache liegt es trotzdem.
+        """
+        dialog = self._settings_dialog
+        if dialog is not None:
+            dialog.take_slice_result(result)
 
     def _gcode_returned(self, outcomes: list[SliceOutcome]) -> None:
         """Was der Slicer gemessen hat, geht in den Prüfbericht — als gemessen
