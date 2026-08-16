@@ -545,3 +545,142 @@ def test_the_pick_button_imports_and_selects(window: MainWindow, tmp_path: Path)
     assert len(window.session.project.document.ops) == before, (
         "ein Bild bekommt keine load-Operation"
     )
+
+
+# --- Die Stellung eines Skeletts (§25, Konzept P16 §7.5) -------------------------
+
+
+def _armature(*names: str) -> str:
+    """Ein Skelett mit den genannten Knochen, wie der Editor es abgibt."""
+    from app.core.geom.pose import armature_to_text
+    from app.core.types import Bone
+
+    return armature_to_text(
+        [
+            Bone(name=name, head=(0.0, 0.0, float(index)), tail=(0.0, 0.0, float(index) + 10.0))
+            for index, name in enumerate(names)
+        ]
+    )
+
+
+def test_a_pose_is_three_numbers_per_bone_not_json(qt_app: QApplication) -> None:
+    """Der Weg zu einem gebeugten Arm führte über rohes JSON.
+
+    ``kind="armature"`` fiel im Dialog auf ein ``QLineEdit`` durch: Wer die
+    Stellung setzen wollte, tippte ``{"bone_1":[0,30,0]}`` in ein Feld hinter
+    „Weitere Einstellungen" — eine Syntax, die nirgends steht, für die
+    häufigste Handlung dieser Operation. Die Knochennamen kennt der Dialog,
+    sobald ein Skelett vorliegt; daraus wird ein Raster.
+    """
+    from app.core.geom.pose import pose_from_text
+    from app.ui.op_dialog import ArmatureField, ArmatureSummary
+
+    spec = REGISTRY.get("pose_armature")
+    dialog = OperationDialog(spec, [], None, values={"armature": _armature("arm", "hand")})
+
+    editor = dialog._editors["pose"]
+    assert isinstance(editor, ArmatureField)
+    assert list(editor._fields) == ["arm", "hand"], "eine Zeile je Knochen"
+
+    editor._fields["arm"][1].set_value(30.0)
+    editor._fields["hand"][2].set_value(-12.5)
+
+    poses = {pose.bone: pose.angles for pose in pose_from_text(str(dialog.values()["pose"]))}
+    assert poses["arm"] == pytest.approx((0.0, 30.0, 0.0))
+    assert poses["hand"] == pytest.approx((0.0, 0.0, -12.5))
+
+    # Das Skelett selbst wird gesetzt, nicht getippt — es steht als Zahl da
+    # und reist unverändert weiter.
+    summary = dialog._editors["armature"]
+    assert isinstance(summary, ArmatureSummary)
+    assert "2" in summary.text()
+    assert dialog.values()["armature"] == _armature("arm", "hand")
+
+
+def test_the_pose_grid_opens_on_the_values_it_has(qt_app: QApplication) -> None:
+    """Eine wieder geöffnete Operation zeigt ihre Winkel, nicht Nullen (§15.4)."""
+    from app.ui.op_dialog import ArmatureField
+
+    spec = REGISTRY.get("pose_armature")
+    dialog = OperationDialog(
+        spec,
+        [],
+        None,
+        values={"armature": _armature("arm"), "pose": '{"arm":[0,45,0]}'},
+    )
+
+    editor = dialog._editors["pose"]
+    assert isinstance(editor, ArmatureField)
+    assert editor._fields["arm"][1].value() == pytest.approx(45.0)
+
+
+def test_the_pose_grid_stands_in_front(qt_app: QApplication) -> None:
+    """Das Schema legt den Sammelparameter nach hinten (Regel für Gesten-Ops),
+    und das bleibt so. Im Dialog ist er trotzdem der einzige Grund, aus dem er
+    aufgeht — wie eine angeklickte Fläche steht er vorn.
+    """
+    from app.ui.op_dialog import ArmatureField
+
+    spec = REGISTRY.get("pose_armature")
+    declared = next(entry for entry in spec.params.spec() if entry.name == "pose")
+    assert declared.placement == "advanced", "im Schema bleibt er hinten"
+
+    dialog = OperationDialog(spec, [], None, values={"armature": _armature("arm")})
+    editor = dialog._editors["pose"]
+    assert isinstance(editor, ArmatureField)
+    assert dialog._rows["pose"] is dialog._rows["armature"], "beide im selben Formular"
+    assert not hasattr(dialog, "advanced"), "und hinten bleibt nichts übrig"
+
+
+def test_without_an_armature_the_pose_stays_a_text_field(qt_app: QApplication) -> None:
+    """Ohne Knochen gibt es keine Zeilen.
+
+    Ein leeres Raster wäre eine Zusage ohne Inhalt; das Textfeld bleibt der
+    Rückfall — und es ist der einzige Weg zu einer Stellung, die aus einer
+    fremden Datei stammt.
+    """
+    from PySide6.QtWidgets import QLineEdit
+
+    spec = REGISTRY.get("pose_armature")
+    dialog = OperationDialog(spec, [], None)
+
+    assert isinstance(dialog._editors["pose"], QLineEdit)
+    assert isinstance(dialog._editors["armature"], QLineEdit)
+
+
+def test_an_unreadable_armature_does_not_stop_the_dialog(qt_app: QApplication) -> None:
+    """Ein beschädigter Wert öffnet den Dialog, statt ihn zu verschlucken.
+
+    Derselbe Fall wie beim Ausdruck im Zahlenfeld: Was im Aufbau eines Dialogs
+    wirft, sieht der Nutzer als Doppelklick, der nichts tut.
+    """
+    from PySide6.QtWidgets import QLineEdit
+
+    spec = REGISTRY.get("pose_armature")
+    dialog = OperationDialog(spec, [], None, values={"armature": "{kaputt", "pose": "auch kaputt"})
+
+    assert isinstance(dialog._editors["pose"], QLineEdit)
+    assert dialog.values()["armature"] == "{kaputt", "und der Wert bleibt, wie er war"
+
+
+def test_a_bound_angle_keeps_its_expression(qt_app: QApplication) -> None:
+    """§13 gilt auch für einen Winkel: Was gebunden eingetragen wird, bleibt
+    gebunden stehen, statt beim Übernehmen zu einer Zahl zu werden."""
+    from app.ui.op_dialog import ArmatureField
+
+    spec = REGISTRY.get("pose_armature")
+    dialog = OperationDialog(
+        spec,
+        [],
+        None,
+        values={"armature": _armature("arm")},
+        parameter_values={"beugung": 25.0},
+    )
+    editor = dialog._editors["pose"]
+    assert isinstance(editor, ArmatureField)
+
+    field = editor._fields["arm"][1]
+    field.toggle.setChecked(True)
+    field.text.setText("=@beugung")
+
+    assert "=@beugung" in str(dialog.values()["pose"])

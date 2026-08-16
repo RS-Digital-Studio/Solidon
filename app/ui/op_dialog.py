@@ -15,6 +15,7 @@ Fall wäre ein zweiter Ort, an dem sich ein Parameter vergessen lässt.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -26,6 +27,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -287,6 +289,160 @@ class ImageSourceField(QWidget):
         return str(data) if data is not None else self.combo.currentText()
 
 
+#: Die drei Achsen einer Knochenstellung, in der Reihenfolge, in der
+#: :func:`app.core.geom.pose.pose_to_text` sie schreibt. Beschriftungen, keine
+#: Schlüssel — deshalb stehen sie hier und nicht im Kern.
+POSE_AXES: Sequence[str] = ("X", "Y", "Z")
+
+#: Grenzen eines Stellungswinkels. Eine volle Umdrehung in beide Richtungen:
+#: darüber hinaus beschreibt eine Zahl dieselbe Stellung noch einmal.
+POSE_LIMIT = 360.0
+
+
+class ArmatureField(QWidget):
+    """Die Stellung eines Skeletts: je Knochen eine Zeile mit drei Winkeln.
+
+    Der ``pose``-Parameter ist ein JSON-Text — ein Speicherformat, wie der
+    Skizzentext daneben (§30.1, Sammelparameter). Getippt wurde er trotzdem:
+    ``kind="armature"`` fiel im Dialog auf ein ``QLineEdit`` durch, und wer
+    einen Arm beugen wollte, schrieb ``{"bone_1":[0,30,0]}`` von Hand. Die
+    Knochennamen dazu standen im Nachbarfeld, ebenfalls als JSON.
+
+    Die Namen kennt der Dialog aber: Sie kommen aus dem Skelett, das der
+    Editor gerade gesetzt hat (oder aus dem Wert der Operation, wenn sie aus
+    dem Verlauf wieder geöffnet wird). Daraus wird ein Raster mit einer Zeile
+    je Knochen — der Text entsteht erst beim Übernehmen.
+
+    Die Felder sind :class:`ValueField` und keine nackten Drehknöpfe: ein Maß
+    darf an einem Projektparameter hängen (§13), und das gilt für einen Winkel
+    wie für eine Länge. **Der Kern löst einen Ausdruck *innerhalb* dieses
+    Textes heute noch nicht auf** — er steht hier, damit er nicht verloren
+    geht, nicht weil er schon rechnet.
+    """
+
+    changed = Signal()
+
+    def __init__(
+        self,
+        bones: Sequence[str],
+        start: str = "",
+        parameter_values: Mapping[str, float] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._bones = [str(name) for name in bones]
+        self._fields: dict[str, list[ValueField]] = {}
+
+        grid = QGridLayout(self)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(TIGHT)
+        for column, axis in enumerate(POSE_AXES):
+            # Die Achse steht einmal über der Spalte statt dreimal je Zeile.
+            # Den Namen trägt jedes Feld trotzdem: eine Spaltenüberschrift
+            # liest kein Screenreader mit, der auf einem Eingabefeld steht.
+            head = QLabel(f"{axis} [°]", self)
+            set_level(head, "caption")
+            grid.addWidget(head, 0, column + 1)
+
+        entered = _angles_from(start)
+        for row, bone in enumerate(self._bones, start=1):
+            grid.addWidget(QLabel(bone, self), row, 0)
+            angles = entered.get(bone, (0.0, 0.0, 0.0))
+            fields: list[ValueField] = []
+            for column, axis in enumerate(POSE_AXES):
+                spec = ParamSpec(
+                    name=f"{bone}.{axis.lower()}",
+                    kind="float",
+                    title=axis,
+                    default=0.0,
+                    unit="°",
+                    minimum=-POSE_LIMIT,
+                    maximum=POSE_LIMIT,
+                )
+                field = ValueField(spec, angles[column], parameter_values, self)
+                field.setAccessibleName(f"{bone} {axis}")
+                field.changed.connect(self.changed)
+                grid.addWidget(field, row, column + 1)
+                fields.append(field)
+            self._fields[bone] = fields
+
+    def value(self) -> str:
+        """Die Stellung als Text, wie ihn der Kern liest.
+
+        Geschrieben wird über :func:`app.core.geom.pose.pose_to_text` — es gibt
+        genau einen Schreiber für dieses Format, und der steht im Kern.
+        Trägt ein Feld einen Ausdruck statt einer Zahl, bleibt er wörtlich
+        stehen; die Bindung hier aufzulösen hieße, sie beim ersten Öffnen des
+        Dialogs zu verlieren, ohne dass es jemand sähe.
+        """
+        from app.core.geom.pose import pose_to_text
+        from app.core.types import Pose
+
+        angles = {bone: [field.value() for field in row] for bone, row in self._fields.items()}
+        if all(isinstance(value, float) for row in angles.values() for value in row):
+            return pose_to_text(
+                [
+                    Pose(bone=bone, angles=(float(row[0]), float(row[1]), float(row[2])))
+                    for bone, row in angles.items()
+                ]
+            )
+        return json.dumps(angles, separators=(",", ":"))
+
+
+def _angles_from(text: str) -> dict[str, tuple[float, float, float]]:
+    """Die eingetragene Stellung je Knochen — leer, wenn der Text nichts hergibt.
+
+    Ein unlesbarer Text ist hier kein Fehler, sondern ein leeres Raster: Der
+    Dialog soll aufgehen, und was nicht zu lesen war, wird beim Übernehmen
+    ohnehin überschrieben.
+    """
+    from app.core.geom.pose import pose_from_text
+
+    try:
+        return {pose.bone: pose.angles for pose in pose_from_text(text)}
+    except AppError:
+        return {}
+
+
+class ArmatureSummary(QLabel):
+    """Was das Skelett ist, in einem Satz — und der Text reist unverändert mit.
+
+    Das Skelett wird gesetzt, nicht getippt (so steht es in seinem eigenen
+    ``doc``-Satz). Ein Feld, in dem die Punktliste als JSON steht, lädt
+    trotzdem zum Tippen ein und ist die kürzeste Strecke zu einem Skelett, das
+    niemand mehr lesen kann. Gezeigt wird deshalb die Zahl, weitergegeben der
+    ursprüngliche Text.
+    """
+
+    def __init__(self, text: str, bones: Sequence[str], parent: QWidget | None = None) -> None:
+        count = len(bones)
+        super().__init__(
+            str(tr("Ein Knochen"))
+            if count == 1
+            else str(tr("{count} Knochen")).format(count=count),
+            parent,
+        )
+        self._text = text
+        self.setAccessibleName(str(tr("Skelett")))
+
+    def value(self) -> str:
+        return self._text
+
+
+def armature_bones(text: str) -> list[str]:
+    """Die Knochennamen eines Skeletttextes, oder nichts.
+
+    Ohne Knochen gibt es keine Zeilen, und der Dialog bleibt beim
+    Textfeld — ein leeres Raster wäre eine Zusage ohne Inhalt.
+    """
+    from app.core.geom.pose import armature_from_text
+
+    try:
+        return [bone.name for bone in armature_from_text(text)]
+    except AppError:
+        return []
+
+
 class OperationDialog(QDialog):
     """Ein Dialog für eine Operation, gebaut aus ihrem Schema."""
 
@@ -346,6 +502,10 @@ class OperationDialog(QDialog):
         self._pick_image = pick_image
         """Holt ein Bild von der Platte ins Projekt und gibt (Kennung, Name)
         zurück — der Weg, den ein leeres Projekt braucht."""
+        self._bones = armature_bones(str(given.get("armature") or ""))
+        """Die Knochen, an denen die Stellung hängt — aus dem Skelett, das der
+        Editor gerade gesetzt hat, oder aus dem Wert einer wieder geöffneten
+        Operation. Ohne sie hat ein Stellungsraster keine Zeilen."""
 
         front = QFormLayout()
         advanced = QFormLayout()
@@ -360,8 +520,16 @@ class OperationDialog(QDialog):
             if entry.unit:
                 label = f"{label} [{entry.unit}]"
             # Ein eingetragener Wert gehört vor den Nutzer, auch wenn das Schema ihn
-            # nach hinten legt: er ist der, der gerade entschieden wurde.
-            target = front if entry.placement == "front" or entry.name in given else advanced
+            # nach hinten legt: er ist der, der gerade entschieden wurde. Dasselbe
+            # gilt für das Stellungsraster: Es entsteht nur, wenn ein Skelett
+            # vorliegt — und dann ist es das Einzige, weswegen der Dialog aufgeht.
+            target = (
+                front
+                if entry.placement == "front"
+                or entry.name in given
+                or isinstance(editor, ArmatureField)
+                else advanced
+            )
             target.addRow(label, editor)
             self._rows[entry.name] = target
             if entry.doc:
@@ -438,7 +606,7 @@ class OperationDialog(QDialog):
         """
         from app.ui.sketch_editor import SketchField
 
-        if isinstance(editor, ValueField | SketchField | ImageSourceField):
+        if isinstance(editor, ValueField | SketchField | ImageSourceField | ArmatureField):
             editor.changed.connect(self.valuesChanged)
         elif isinstance(editor, QCheckBox):
             editor.toggled.connect(self.valuesChanged)
@@ -508,6 +676,20 @@ class OperationDialog(QDialog):
                     index = combo.count() - 1
                 combo.setCurrentIndex(index)
             return combo
+        if entry.kind == "armature":
+            # Zwei Felder derselben Art und zwei verschiedene Aufgaben: Das
+            # Skelett kommt aus dem Editor und wird nur gezeigt, die Stellung
+            # ist das, was hier entschieden wird. Ohne Knochen bleibt beides
+            # das Textfeld von vorher — ein Raster ohne Zeilen wäre eine
+            # Zusage ohne Inhalt.
+            if not self._bones:
+                line = QLineEdit(self)
+                if start:
+                    line.setText(str(start))
+                return line
+            if entry.name == "pose":
+                return ArmatureField(self._bones, str(start or ""), self._parameter_values, self)
+            return ArmatureSummary(str(start or ""), self._bones, self)
         if entry.kind == "image":
             return ImageSourceField(self._images, self._pick_image, str(start or ""), self)
         if entry.kind in ("object", "source"):
@@ -641,7 +823,7 @@ class OperationDialog(QDialog):
                 # hier aufzulösen hieße, die Bindung beim ersten Öffnen des
                 # Dialogs zu verlieren, ohne dass es jemand sähe.
                 collected[entry.name] = editor.value()
-            elif isinstance(editor, ImageSourceField):
+            elif isinstance(editor, ImageSourceField | ArmatureField | ArmatureSummary):
                 collected[entry.name] = editor.value()
             elif isinstance(editor, SketchField):
                 collected[entry.name] = editor.text()
