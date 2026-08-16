@@ -40,6 +40,8 @@ bekommt einen roten Lauf.
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
+| Mittel-Block Oberfläche: *Formen*/*Skelett* in die Werkzeugleiste (M2) samt `ArmatureField` | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | das letzte Paket der Abarbeitung — läuft |
+| Gering-Block: Zylinder-Z, Redirect, Kartenabbruch, G3, A5/A6, *Hilfe → Beispiele* | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | dieselbe Runde |
 
 ---
 
@@ -6011,15 +6013,26 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       Verfügbarkeit mit Grund; der Pinsel malt beim Ziehen (halber Radius
       als Mindestabstand); Legende zweifarbig, Fenstergeometrie gemerkt,
       Druckeinstellungsdialog wird freigegeben, Wandprüfung mit Wartezeiger,
-      „Festschreiben" statt „OK". **Offen:** Export/Import-Wege asynchron
-      (B3/B4/B5) und die Werkzeugleisten-Entscheidung für *Formen*/*Skelett*
-      (M2) — die nächsten Pakete.
+      „Festschreiben" statt „OK". Der Export läuft im Arbeiter
+      (`_ExportWorker`, ohne Abbrechen — mit Begründung im Docstring und in
+      der Gebietsregel), die Druckeinstellungen öffnen sofort und
+      `take_slice_result` trägt die Analyse nach, die synchronen Lesungen
+      stehen unter `waiting()`. **Offen:** die Werkzeugleisten-Entscheidung
+      für *Formen*/*Skelett* (M2) samt `ArmatureField` — das letzte Paket.
 - [ ] **Gering-Block als eigene Runde**: ~30 englische Docstrings (AGENTS.md
       behauptet Vollständigkeit), acht englische nutzersichtbare Fehlertexte
       in `backends/mesh.py`, „aufgeloest" in `advise.py`, deutsche
       Bezeichner in `tools/check_env.py` (Sprachprüfung sieht `tools/`
       nicht), Zylinder-Sortierung ohne Z, Redirect kann `check_url` umgehen,
       Analysekarten ohne Abbruch, Details in der Datei.
+
+      **Sprache vollständig erledigt** (Übersetzungen, `mesh.py`-Texte samt
+      Katalogen, `check_env.py`-Bezeichner, Sprachprüfung sieht `tools/`,
+      dazu die Kommentar- und Docstring-Korrekturen). **Als Rest offen:**
+      Zylinder-Sortierung ohne Z, Redirect an `check_url` vorbei,
+      Analysekarten ohne Abbruch, `displace`-Dialog schaltet bei „Auflegen"
+      nicht um (G3), Profil erst beim Slicen gemerkt (A5), kein Abgleich
+      des gemerkten Profils mit dem Drucker (A6), *Hilfe → Beispiele*.
 
 **Wettbewerb (Recherche 16.08., Quellen in der Durchsichts-Datei):** Die
 Chat-Alleinstellung ist seit Zoo „Zookeeper" (01/2026) nicht mehr
