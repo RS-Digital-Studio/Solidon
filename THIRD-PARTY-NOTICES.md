@@ -13,6 +13,7 @@ Neu erzeugen:
 
     python -m app.core.knowledge.licences
 
+
 | Paket | Lizenz |
 |---|---|
 | ImageIO | BSD-2-Clause |
@@ -22,15 +23,21 @@ Neu erzeugen:
 | Pygments | BSD-2-Clause |
 | QtPy | MIT License |
 | attrs | MIT |
+| cadquery-ocp-novtk | Apache Software License |
+| cadquery-ocp-proxy | Apache Software License |
 | certifi | Mozilla Public License 2.0 (MPL 2.0) |
 | charset-normalizer | MIT |
 | contourpy | BSD License |
 | cycler | BSD License |
 | cyclopts | Apache-2.0 |
 | docstring_parser | MIT License |
-| fast_simplification | MIT License |
+| fast_simplification | MIT |
 | fonttools | MIT |
 | idna | BSD-3-Clause |
+| jaraco.classes | MIT License |
+| jaraco.context | MIT |
+| jaraco.functools | MIT |
+| keyring | MIT |
 | kiwisolver | BSD License |
 | lazy-loader | BSD-3-Clause |
 | lxml | BSD-3-Clause |
@@ -38,6 +45,7 @@ Neu erzeugen:
 | markdown-it-py | MIT License |
 | matplotlib | Python Software Foundation License |
 | mdurl | MIT License |
+| more-itertools | MIT |
 | networkx | BSD-3-Clause |
 | numpy | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
 | packaging | Apache-2.0 OR BSD-2-Clause |
@@ -48,6 +56,7 @@ Neu erzeugen:
 | python-dateutil | BSD License, Apache Software License |
 | pyvista | MIT |
 | pyvistaqt | MIT License |
+| pywin32-ctypes | BSD-3-Clause |
 | requests | Apache Software License |
 | rich | MIT License |
 | rich-rst | MIT |
@@ -65,3 +74,4 @@ Neu erzeugen:
 | urllib3 | MIT |
 | vhacdx | BSD-3-Clause |
 | vtk | BSD License |
+
