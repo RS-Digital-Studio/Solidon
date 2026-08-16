@@ -72,6 +72,7 @@ from app.core.types import (
 from app.i18n import tr
 from app.ui.dialogs import show_error
 from app.ui.labels import by_title, colour_name
+from app.ui.leash import WorkerLeash
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.style import make_primary
@@ -868,6 +869,9 @@ class PrintSettingsDialog(QDialog):
         self._loading = False
         self._worker: _SliceWorker | None = None
         self._profile_worker: _ProfileWorker | None = None
+        self._leash = WorkerLeash(self)
+        """Hält ausgelaufene Arbeiter, bis Qt mit ihnen durch ist — das
+        Warum steht in :mod:`app.ui.leash`."""
         self._profiles: list[slicer_profiles.SlicerProfile] = []
         self._temporary: TemporaryDirectory[str] | None = None
         self._gcode: list[Path] = []
@@ -1322,7 +1326,12 @@ class PrintSettingsDialog(QDialog):
         _log.info("adopted %d values from %s", len(values), chosen)
 
     def _profile_search_finished(self) -> None:
+        # `finished` heißt „`run` ist zurück", nicht „das Objekt darf weg" —
+        # das Loslassen übernimmt die Halteleine.
+        worker = self._profile_worker
         self._profile_worker = None
+        if worker is not None:
+            self._leash.hold_until_done(worker)
 
     def _build_advice(self) -> QWidget:
         box = QGroupBox(tr("Was dieses Teil verlangt"), self)
@@ -1901,9 +1910,13 @@ class PrintSettingsDialog(QDialog):
         self.cancel_slice.setVisible(False)
         self.slice_button.setEnabled(True)
         worker = self._worker
-        if worker is not None and worker.cancelled.is_cancelled:
-            self.state.setText(tr("Abgebrochen."))
         self._worker = None
+        if worker is not None:
+            if worker.cancelled.is_cancelled:
+                self.state.setText(tr("Abgebrochen."))
+            # `finished` heißt „`run` ist zurück", nicht „das Objekt darf
+            # weg" — das Loslassen übernimmt die Halteleine.
+            self._leash.hold_until_done(worker)
 
     def reject(self) -> None:
         """Escape und der Schließen-Knopf gehen denselben Weg wie das X.
@@ -1935,6 +1948,7 @@ class PrintSettingsDialog(QDialog):
         for pending in (self._worker, self._profile_worker):
             if pending is not None and pending.isRunning():
                 pending.wait()
+        self._leash.wait_all()
         if self._temporary is not None:
             self._temporary.cleanup()
             self._temporary = None

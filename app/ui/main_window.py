@@ -162,6 +162,7 @@ from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import MENU_GROUPS, demo_line, feature_label, length
+from app.ui.leash import WorkerLeash
 from app.ui.loading import LoadingVeil
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
@@ -554,11 +555,9 @@ class MainWindow(QMainWindow):
         self._download_worker: Any = None
         """Ein Modell, das gerade aus dem Netz kommt (§16.3) — dieselbe
         Halteleine, derselbe Grund."""
-        self._retired: list[Any] = []
-        """Ersetzte Arbeiter, bis sie ausgelaufen sind. „Eine neuere Anfrage
-        ersetzt die wartende" hieß hier: die Referenz überschreiben — und ein
-        laufender QThread ohne Referenz wird vom Speicherbereiniger mitsamt
-        C++-Objekt zerstört. Ein Absturz ohne Zeile, irgendwann später."""
+        self._leash = WorkerLeash(self)
+        """Hält fertige und ersetzte Arbeiter, bis Qt mit ihnen durch ist —
+        das Warum steht in :mod:`app.ui.leash`."""
         self._proposal: Any = None
         self._applied_transaction: str | None = None
         """Die Transaktion hinter der Übernommen-Leiste (§26.5) — nur solange
@@ -1649,25 +1648,30 @@ class MainWindow(QMainWindow):
             self._scope_shortcut(action, key)
         action.setStatusTip(str(spec.doc))
         action.setToolTip(str(spec.doc))
-        # Eine Operation mit Skizzenfeld führt in den Zeichenmodus statt in
-        # einen Dialog mit einem Feld, das man erst aufklappen muss (§30.1
-        # Stufe zwei). Derselbe Eintrag, derselbe Weg dahinter — nur der
-        # erste Schritt ist das Zeichnen und nicht das Ausfüllen.
-        if _has_sketch_param(spec):
-            action.triggered.connect(lambda _checked=False, name=spec.name: self.start_sketch(name))
-        elif _has_armature_param(spec):
-            # Dasselbe für das Skelett: Wer „Stellung geben" wählt, will die
-            # Knochen setzen und kein Feld voller Koordinaten.
-            action.triggered.connect(lambda _checked=False: self.start_armature())
-        elif _has_stroke_param(spec):
-            # Dasselbe für die Formsitzung: Wer „Formen" wählt, will den
-            # Pinsel und nicht ein Feld, in das eine Strichliste zu tippen
-            # wäre.
-            action.triggered.connect(lambda _checked=False: self.start_sculpt())
-        else:
-            action.triggered.connect(lambda _checked=False, entry=spec: self.run_operation(entry))
+        action.triggered.connect(lambda _checked=False, entry=spec: self.launch_operation(entry))
         menu.addAction(action)
         return action
+
+    def launch_operation(self, spec: OperationSpec) -> None:
+        """Der eine Einstieg für Menü, Palette und jeden künftigen Weg.
+
+        Eine Operation mit Gestenfeld führt in ihren Editor statt in einen
+        Dialog mit einem Feld, das man erst aufklappen muss (§30.1 Stufe
+        zwei): Wer „Formen" wählt, will den Pinsel und keine Strichliste,
+        wer „Stellung geben" wählt, die Knochen und keine Koordinaten. Die
+        Verzweigung stand nur im Menüaufbau — die Palette rief
+        ``run_operation`` direkt, und „Formen" über Strg+Umschalt+P endete
+        in einem Rohdialog: die Operation lief, veränderte nichts und
+        hinterließ einen leeren Schritt im Verlauf.
+        """
+        if _has_sketch_param(spec):
+            self.start_sketch(spec.name)
+        elif _has_armature_param(spec):
+            self.start_armature()
+        elif _has_stroke_param(spec):
+            self.start_sculpt()
+        else:
+            self.run_operation(spec)
 
     #: Kürzel, die eine Taste ohne Zusatztaste sind und deshalb nur dort
     #: gelten dürfen, wo eine Objektauswahl sichtbar ist.
@@ -1733,6 +1737,11 @@ class MainWindow(QMainWindow):
         # Kürzeln derselben Taste **keines** von beiden feuern. Fusion macht
         # es genauso: im Skizzenmodus gilt der Zeichensatz.
         drawing = self._sketch_panel is not None
+        # **Und in einer Form- oder Skelettsitzung genauso.** Beide sammeln
+        # Gesten für die eine Operation, die gerade entsteht — wer währenddessen
+        # „Objekt entfernen" traf, malte danach stumm ins Leere, und *Fertig*
+        # verlor die Züge mit einer Meldung über einen Wert, den es nicht gab.
+        gesturing = drawing or self.sculpting() or self.setting_armature()
         # §2 C: nach Ablauf des Testlaufs graut die schreibende Seite aus —
         # vor dem Klick, mit Grund im Hinweistext. Die Hürde selbst liegt im
         # Kern; das hier ist die Freundlichkeit davor.
@@ -1746,7 +1755,7 @@ class MainWindow(QMainWindow):
 
         for name, action in self._op_actions.items():
             spec = REGISTRY.get(name)
-            if locked or drawing:
+            if locked or gesturing:
                 action.setEnabled(False)
             elif spec.takes_whole_scene:
                 action.setEnabled(objects > 0)
@@ -1763,7 +1772,7 @@ class MainWindow(QMainWindow):
         # Bewegen, Analyse, Schichten und Bemalen an — jedes davon braucht
         # einen Körper, und keines sagte das.
         self.tools.set_usable(
-            objects > 0 and not drawing,
+            objects > 0 and not gesturing,
             tr("Dafür braucht es einen Körper in der Szene."),
         )
 
@@ -1775,13 +1784,15 @@ class MainWindow(QMainWindow):
         # gleichzeitig aktiv zu lassen wäre die schlechtere Hälfte der Wahl —
         # Qt lässt bei zwei aktiven Belegungen derselben Taste **keine**
         # feuern, dieselbe Falle wie bei R und C oben.
-        self.undo_action.setEnabled(self.session.history.can_undo and not drawing)
-        self.redo_action.setEnabled(self.session.history.can_redo and not drawing)
+        # `gesturing`, nicht nur `drawing`: auch die Formsitzung belegt
+        # Strg+Z mit ihrem eigenen Zug-Rückgängig (P16.6).
+        self.undo_action.setEnabled(self.session.history.can_undo and not gesturing)
+        self.redo_action.setEnabled(self.session.history.can_redo and not gesturing)
         # Dieselbe Regel für die zwei Einträge, die keine Operationen sind und
         # trotzdem einen Körper brauchen: ausgegraut statt einer modalen
         # Sackgasse nach dem Klick.
-        self.auto_split_action.setEnabled(chosen >= 1 and not locked)
-        self.variants_action.setEnabled(objects > 0 and not locked)
+        self.auto_split_action.setEnabled(chosen >= 1 and not locked and not gesturing)
+        self.variants_action.setEnabled(objects > 0 and not locked and not gesturing)
         self.export_action.setEnabled(objects > 0 and not locked)
         self.import_action.setEnabled(not locked)
         self.generate_action.setEnabled(not locked)
@@ -2170,25 +2181,34 @@ class MainWindow(QMainWindow):
     def bake_sculpt(self, op_id: int) -> None:
         """Den Stand einer Formsitzung festschreiben — mit Nachfrage.
 
-        **Die einzige Nachfrage im ganzen Programm.** Regel 19 verbietet
+        **Die einzige Bestätigung vor einer Handlung.** (Daneben gibt es zwei
+        Fragen anderer Art: das Wiederherstellungs-Angebot nach einem Absturz
+        und Speichern/Verwerfen beim Schließen — die eine ist ein Angebot,
+        die andere schützt Unwiederbringliches.) Regel 19 verbietet
         Bestätigungsdialoge vor rücknehmbaren Handlungen, und fast alles hier
         ist rücknehmbar; diese Handlung ist es nicht folgenlos, denn danach
         lässt sich an den Zügen nichts mehr ändern. Deshalb steht im Dialog
         auch nicht „Sind Sie sicher", sondern was danach nicht mehr geht
         (Entscheidung D, §2.7).
         """
-        answer = QMessageBox.question(
-            self,
+        box = QMessageBox(
+            QMessageBox.Icon.Question,
             tr("Stand festschreiben"),
             tr(
                 "Der jetzige Stand wird als Körper im Projekt abgelegt. Die Züge bleiben "
                 "als Beleg stehen, wirken aber nicht mehr — an dieser Sitzung lässt sich "
                 "danach nichts mehr ändern. Dafür wird sie nicht mehr gerechnet."
             ),
-            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.NoButton,
+            self,
         )
-        if answer != QMessageBox.StandardButton.Ok:
+        # Die Knöpfe heißen nach ihrer Handlung, nicht „OK": „Ja" verlangt,
+        # die Frage im Kopf zu behalten — „Festschreiben" nicht. Derselbe
+        # Grund wie bei `confirm_discard` nebenan.
+        bake = box.addButton(tr("Festschreiben"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is not bake:
             return
         if not self.session.bake_strokes(op_id):
             self.announce(tr("Dieser Schritt lässt sich nicht festschreiben."))
@@ -2284,6 +2304,9 @@ class MainWindow(QMainWindow):
         self.session.set_print_settings(dialog.settings)
         self.settings.print_quality = dialog.settings.quality
         save_settings(self.settings)
+        # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
+        # bei der Orca-Familie einige tausend Einträge je Aufruf.
+        dialog.deleteLater()
 
     def _current_slice(self, wait: bool = False) -> SliceResult | None:
         """Die Schichtanalyse des gewählten Körpers.
@@ -3093,12 +3116,19 @@ class MainWindow(QMainWindow):
         shown = [replace(s, symmetry=s.symmetry | plane) for s in strokes] if plane else strokes
         sculpted = apply_strokes(mesh, shown)
         minimum = self.session.profile.minimum_wall_thickness
+        # Mit Wartezeiger: gemessen 273 ms bei 82 000 Dreiecken — über der
+        # 200-ms-Grenze aus §2.8, und die Prüfung läuft nach jedem Zug. Auf
+        # feinen Netzen (und `refine_for_sculpt` erzeugt gezielt feine) wäre
+        # das ein Stocken ohne Erklärung.
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             card = wall_thickness_map(sculpted, minimum=minimum, pitch=minimum * WALL_GRID_SHARE)
         except AppError:
             # Ein zu großes Netz ist kein Grund, die Sitzung zu stören. Der
             # Prüfbericht sagt dasselbe später und gründlicher.
             return
+        finally:
+            QApplication.restoreOverrideCursor()
         thin = len(card.highlighted)
         if not thin:
             self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
@@ -3129,6 +3159,15 @@ class MainWindow(QMainWindow):
         target = self._sculpt_target
         strokes = self._sculpt_strokes
         if target is None:
+            return
+        result = self.session.last_result
+        if strokes and (result is None or target not in result.scene.objects):
+            # Das Ziel ist fort — nur noch über einen Fern- oder Agentenzug
+            # möglich, denn die Menüs sind während der Sitzung gesperrt.
+            # Die Züge nicht verwerfen: die Sitzung bleibt offen, und der
+            # Satz sagt es (§2.7). Vorher lief *Fertig* durch, verlor die
+            # Züge und meldete einen Wert außerhalb seines Bereichs.
+            self.announce(tr("Der geformte Körper ist nicht mehr da — die Sitzung bleibt offen."))
             return
         self._sculpt_target = None
         self._sculpt_strokes = []
@@ -3243,6 +3282,15 @@ class MainWindow(QMainWindow):
         bones = self._armature_bones
         if target is None:
             return
+        result = self.session.last_result
+        if bones and (result is None or target not in result.scene.objects):
+            # Wie beim Formen: das Ziel ist fort, die Knochen bleiben — die
+            # Sitzung schließt nicht über einem Körper, den es nicht mehr
+            # gibt (§2.7).
+            self.announce(
+                tr("Der Körper des Skeletts ist nicht mehr da — die Sitzung bleibt offen.")
+            )
+            return
         self._armature_target = None
         self._armature_bones = []
         self._armature_head = None
@@ -3296,7 +3344,15 @@ class MainWindow(QMainWindow):
             )
             for key, (title, shortcut, _slot) in commands.items()
         ]
-        entries = palette_entries(for_feature=self.selected_feature_kind())
+        # Die Verfügbarkeit kommt aus derselben Quelle wie im Menü — den
+        # QActions, die `_update_actions` pflegt. Vorher zeigte die Palette
+        # jeden Eintrag gleich, und wer einen ohne passende Auswahl wählte,
+        # bekam die modale Sackgasse, die das Menü längst beseitigt hat.
+        entries = [
+            replace(entry, available=usable, reason=reason)
+            for entry in palette_entries(for_feature=self.selected_feature_kind())
+            for usable, reason in (self._palette_availability(entry.name),)
+        ]
         palette = CommandPalette([*entries, *extra], parent=self)
         if palette.exec() != CommandPalette.DialogCode.Accepted:
             return
@@ -3306,7 +3362,23 @@ class MainWindow(QMainWindow):
         if name in commands:
             commands[name][2]()
             return
-        self.run_operation(REGISTRY.get(name))
+        self.launch_operation(REGISTRY.get(name))
+
+    def _palette_availability(self, name: str) -> tuple[bool, str]:
+        """Ob eine Operation jetzt ausführbar ist, und warum nicht.
+
+        Aus den Menü-Actions gelesen statt neu gerechnet: zwei Quellen für
+        dieselbe Frage drifteten beim nächsten Zuwachs auseinander.
+        """
+        action = self._op_actions.get(name)
+        if action is None or action.isEnabled():
+            return True, ""
+        hint = action.toolTip()
+        spec = REGISTRY.get(name)
+        if hint and hint != str(spec.doc):
+            # `_lock_hint`/`_kind_hint` haben einen Grund gesetzt.
+            return False, hint
+        return False, tr("Dafür braucht es eine passende Auswahl.")
 
     def _on_face_dragged(self, normal: Any, distance: float) -> None:
         """Ein Zug am Flächengriff wird eine Operation (§18.11, Regel 2).
@@ -3464,44 +3536,14 @@ class MainWindow(QMainWindow):
         self._hold_until_done(worker)
 
     def _hold_until_done(self, worker: Any) -> None:
-        """Den fertigen Arbeiter halten, bis Qt mit ihm durch ist.
-
-        ``finished`` heißt „``run`` ist zurück", nicht „das Objekt darf weg".
-        Erst wenn ``isRunning`` nein sagt, ist es sicher — und bis dahin hält
-        ihn dieselbe Liste, die auch ersetzte Arbeiter hält.
-
-        Wer sein Feld leeren will, tut das im eigenen Slot davor und **nur für
-        seinen eigenen Arbeiter**: ein Lambda, das blind ``None`` schreibt,
-        trifft den Nachfolger, wenn der Vorgänger später fertig wird.
-        """
-        if worker not in self._retired:
-            self._retired.append(worker)
-        # Mit diesem Fenster als Kontext: ein Lambda ohne Empfänger läuft
-        # weiter, wenn das Fenster längst weg ist, und greift dann in ein
-        # zerstörtes C++-Objekt.
-        QTimer.singleShot(0, self, lambda: self._release(worker))
-
-    def _release(self, worker: Any) -> None:
-        """Einen ausgelaufenen Arbeiter loslassen — und keinen, der noch läuft."""
-        if worker in self._retired and not worker.isRunning():
-            self._retired.remove(worker)
+        """Den fertigen Arbeiter halten, bis Qt mit ihm durch ist — die
+        Halteleine steht in :mod:`app.ui.leash`, damit die Dialoge dasselbe
+        Muster benutzen, statt es nachzubauen."""
+        self._leash.hold_until_done(worker)
 
     def _retire(self, worker: Any) -> None:
-        """Hält einen ersetzten Arbeiter fest, bis er ausgelaufen ist.
-
-        Sein Ergebnis will niemand mehr — aber sein Thread läuft noch, und
-        ohne Referenz zerstört der Speicherbereiniger das QThread-Objekt
-        unter ihm.
-        """
-        if worker is None or not worker.isRunning():
-            return
-        self._retired.append(worker)
-        # Nicht beim Signal selbst loslassen: ``finished`` heißt „``run`` ist
-        # zurück", nicht „das Objekt darf weg" — dieselbe Begründung wie in
-        # ``_hold_until_done``, und derselbe Weg hinaus, damit es nur einen
-        # gibt. Wer hier direkt aus ``_retired`` entfernte, gäbe die letzte
-        # Referenz frei, während Qt den Thread noch abräumt.
-        worker.finished.connect(lambda done=worker: self._hold_until_done(done))
+        """Hält einen ersetzten Arbeiter fest, bis er ausgelaufen ist."""
+        self._leash.retire(worker)
 
     def _map_ready(self, analysis: Any, key: tuple[Any, ...], object_id: ObjectId) -> None:
         self._map_cache = {key: analysis}
@@ -5372,7 +5414,7 @@ class MainWindow(QMainWindow):
             self._update_worker,
             self._finished_update_worker,
             self._ollama_size_worker,
-            *self._retired,
+            *self._leash.pending(),
         ):
             if worker is not None and worker.isRunning():
                 worker.wait(timeout_ms)
@@ -5423,6 +5465,9 @@ class MainWindow(QMainWindow):
             self._remote = None
         if self.session.modified:
             self.session.autosave()
+        # Wie das Fenster verlassen wird, so kommt es wieder — maximiert ist
+        # nur die Vorgabe für den ersten Start.
+        self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
         save_settings(self.settings)
         event.accept()
 

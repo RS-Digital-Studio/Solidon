@@ -117,6 +117,13 @@ class PaletteEntry:
     category: str
     doc: TranslatableText | str
     shortcut: str | None = None
+    available: bool = True
+    """Ob der Eintrag jetzt ausführbar ist — die Palette zeigt ihn trotzdem:
+    sie ist eine Reihenfolge, keine Auswahl."""
+    reason: TranslatableText | str = ""
+    """Warum nicht, wenn nicht — dieselbe Auskunft, die das Menü im
+    Hinweistext trägt (Regel 18: der Grund ist die zweite Kodierung neben
+    dem Ausgrauen)."""
 
 
 def palette_entries(
