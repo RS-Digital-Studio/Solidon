@@ -162,6 +162,22 @@ def registry() -> Registry:
         ctx.cancelled.raise_if_cancelled()
         return OpResult(outputs=list(ctx.inputs))
 
+    @register_op(
+        name="raising_object",
+        title=_("Wirft eine fremde Ausnahme"),
+        category="prepare",
+        params=EmptyParams,
+        consumes=1,
+        produces=1,
+        doc=_("Testfassung."),
+        registry=own,
+    )
+    def raising(ctx: OpContext) -> OpResult:
+        import json
+
+        json.loads("kein json")
+        return OpResult(outputs=list(ctx.inputs))
+
     return own
 
 
@@ -331,6 +347,29 @@ def test_a_failing_operation_stops_the_chain_with_its_error(
     assert result.stopped_at == 2
     assert any(
         finding.code.startswith("op.failing_object") for finding in result.scene.report.findings
+    )
+
+
+def test_a_foreign_exception_stops_the_chain_instead_of_escaping(
+    history: History, document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Eine fremde Ausnahme aus einer Op-Umsetzung — etwa ein rohes
+    ``json.loads`` in einem Sammelparameter-Leser — darf die Auswertung nicht
+    verlassen: im echten Betrieb stirbt sonst der Thread, und die Sitzung
+    meldet Erfolg mit dem alten Ergebnis."""
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Wirft"), [OperationDraft(op="raising_object", inputs=("obj_1",))])
+
+    result = evaluate(document, profile, registry=registry)
+
+    assert result.stopped_at == 2
+    failure = next(
+        finding
+        for finding in result.scene.report.findings
+        if finding.code.startswith("op.raising_object")
+    )
+    assert "JSONDecodeError" in str(failure.message) or "JSONDecodeError" in str(failure.values), (
+        "die Ausnahme steht im Befund, nicht im Nirgendwo"
     )
 
 

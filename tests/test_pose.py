@@ -292,3 +292,43 @@ def test_no_bones_no_movement() -> None:
 
     assert posed(body, [], []) is body
     assert posed(body, two_bones(), []) is body
+
+
+# --- fremde Eingabe -------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "b1: 0,30,0",
+        "{kaputt",
+        '["kein", "objekt"]',
+        '{"b1": [0, 30]}',
+        '{"b1": "keine liste"}',
+    ],
+)
+def test_an_unreadable_pose_is_a_validation_error(text: str) -> None:
+    """Die naheliegendste Handeingabe ist kein JSON — sie bekommt einen Satz
+    mit der erwarteten Form (Regel 17), keinen toten Auswertungs-Thread."""
+    with pytest.raises(ValidationError) as caught:
+        pose_from_text(text)
+
+    assert caught.value.suggestions
+    assert caught.value.field == "pose"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "{kaputt",
+        '{"n": "kein array"}',
+        '[{"n": "b1"}]',
+        '[{"n": "b1", "h": [0, 0], "t": [1, 0, 0]}]',
+    ],
+)
+def test_an_unreadable_armature_is_a_validation_error(text: str) -> None:
+    with pytest.raises(ValidationError) as caught:
+        armature_from_text(text)
+
+    assert caught.value.suggestions
+    assert caught.value.field == "armature"
