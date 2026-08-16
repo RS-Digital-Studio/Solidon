@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.branding import APP_ID, APP_NAME, APP_VERSION
 from app.core import activation
-from app.core.bootstrap import load_operations
+from app.core.bootstrap import load_operations, load_user_parts
 from app.core.log import configure, get_logger
 from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
@@ -130,8 +130,14 @@ def main(argv: list[str] | None = None) -> int:
     splash.show()
     splash.step(tr("Operationen werden geladen …"), 0.12)
     load_operations()
+    # Die eigenen Bausteine des Nutzers, nach der Bibliothek (§24.5). Ihre
+    # Befunde — eine Datei, die sich nicht laden ließ — gehören in den
+    # Prüfbericht, sobald es ihn gibt.
+    user_findings = load_user_parts()
 
     application, window = build_application(argv, progress=splash.step)
+    if user_findings:
+        window.report.add_findings(list(user_findings))
     splash.step(tr("Bereit."), 1.0)
 
     # Bildschirmfüllend, aber ein Fenster: Titelleiste, Menüs und die Knöpfe

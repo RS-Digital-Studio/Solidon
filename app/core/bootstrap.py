@@ -9,7 +9,10 @@ unvollständiges Menü, ohne dass irgendwo ein Fehler stünde.
 from __future__ import annotations
 
 import importlib
-from typing import Final
+from typing import TYPE_CHECKING, Final
+
+if TYPE_CHECKING:
+    from app.core.types import Finding
 
 _OPERATION_MODULES: Final[tuple[str, ...]] = (
     "app.core.scene.ops",
@@ -56,3 +59,38 @@ def load_operations() -> None:
     importlib.import_module(_PART_MODULE)
     importlib.import_module(f"{_PART_MODULE}.ops").register_all()
     _loaded = True
+
+
+_user_loaded = False
+_user_findings: tuple[Finding, ...] = ()
+
+
+def load_user_parts() -> tuple[Finding, ...]:
+    """Liest die eigenen Bausteine aus dem Nutzerordner und macht aus jedem
+    eine Operation (§24.5).
+
+    Getrennt von :func:`load_operations`, mit Absicht: Das Register füllen
+    auch die Suite und jedes Werkzeug — die eigenen Bausteine aber gehören
+    zum **Anwendungsstart**. Ein Testlauf, der sie mitläse, prüfte gegen die
+    Maschine des Entwicklers statt gegen die Anwendung (§38). Deshalb rufen
+    Oberfläche und Kommandozeile diese Funktion zusätzlich — und sonst
+    niemand. Bis es sie gab, rief sie überhaupt niemand, und §24.5 stand nur
+    auf dem Papier: ``parts/user.py`` hatte keinen einzigen Aufrufer im
+    Produkt.
+
+    Gibt die Befunde des Ladens zurück — eine Datei, die sich nicht
+    importieren lässt, wird gemeldet und übersprungen, nie zum Startabbruch.
+    """
+    global _user_loaded, _user_findings
+    if _user_loaded:
+        return _user_findings
+    load_operations()
+    user = importlib.import_module(f"{_PART_MODULE}.user")
+    result = user.load()
+    if result.loaded:
+        # Auch ein eigener Baustein ist eine Operation (§24.1) — der zweite
+        # Aufruf registriert nur, was neu dazukam.
+        importlib.import_module(f"{_PART_MODULE}.ops").register_all()
+    _user_loaded = True
+    _user_findings = tuple(result.findings)
+    return _user_findings
