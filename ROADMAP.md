@@ -6045,6 +6045,26 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       Weg ist das Gegenstück zu `sketch_parameter_references()` und
       `_with_sketch_context()` für `kind="armature"` — Kernarbeit mit
       eigenen Tests, samt Cache-Schlüssel-Beteiligung (§15).
+- [x] **Die Operationszahl im Fließtext war weggelaufen.** Das Register
+      führt 85; die Funktionsseite sagte 83, die englische 84, während
+      beide Startseiten richtig lagen. Der Grund steht weiter oben in
+      dieser Datei: „`tests/test_website.py` prüft die Zahl gegen das
+      Register und hat es gefangen, bevor die falsche Zahl auf der Seite
+      stand" — das galt für die Kennzahlenleiste der zwei Startseiten und
+      für sonst nichts. Die Zahl steht aber ein zweites Mal im Text, auf
+      der Funktionsseite und in den häufigen Fragen. Der Test liest jetzt
+      jede Seite unter `website/` statt einer festen Liste; der Stamm
+      „oper" trägt durch alle sechs Sprachen, die Inline-SVG fallen vorher
+      heraus (ihr „Vorschlag — 3 Operationen" ist ein Beispiel). Dieselbe
+      Zahl stand im README: 84 Schemata und 97 KB, nachgemessen sind es 85
+      mit 109 170 Zeichen, rund 107 KB.
+
+      Offen daran: `tools.py` nennt im Docstring 104 KB (gemessen 110 KB
+      voll, 87 KB kompakt), und `.claude/rules/agentenschicht.md` führt
+      „84 Werkzeugschemata, rund 99 000 Zeichen, gemessen 21 162 Token".
+      Die Zeichenzahlen ließen sich nachziehen, die Tokenzahl nicht ohne
+      einen Ollama-Lauf — und halb nachgezogen wäre die Messreihe
+      widersprüchlich statt aktuell.
 
 **Wettbewerb (Recherche 16.08., Quellen in der Durchsichts-Datei):** Die
 Chat-Alleinstellung ist seit Zoo „Zookeeper" (01/2026) nicht mehr
