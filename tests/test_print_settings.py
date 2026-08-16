@@ -1753,9 +1753,7 @@ def test_an_unknown_material_is_reported_not_silent() -> None:
     from dataclasses import replace as dc_replace
 
     profile = profiles.make_profile("centauri-carbon-2", "petg")
-    unknown = dc_replace(
-        profile, material=dc_replace(profile.material, id="eigenes-filament")
-    )
+    unknown = dc_replace(profile, material=dc_replace(profile.material, id="eigenes-filament"))
     settings = print_settings.resolve(unknown)
 
     codes = {entry.code for entry in advise.warnings_for(settings, unknown)}
