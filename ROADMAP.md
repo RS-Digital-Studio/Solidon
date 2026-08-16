@@ -503,7 +503,11 @@ bekommt einen roten Lauf.
       Let's Encrypt für `solidon3d.de` und `www.solidon3d.de` (ein Zertifikat,
       beide Namen im SAN, bis 06.11.2026), HTTP antwortet für beide mit 301 auf
       HTTPS. Die DNS-Propagation ist durch — beide A-Records auf 188.68.47.33,
-      Zone bei netcup.
+      Zone bei netcup. **Seit dem 16.08.2026 sechssprachig**: Startseite,
+      Funktionen, KI-Modelle und Handbuch (Seite und PDF) auch auf es, fr,
+      it und pt, Sprachwechsler als Kürzelreihe, Regelsammlung mit Fassungen
+      je Handbuchsprache, Bildschirmfotos neu mit der aktuellen
+      Werkzeugleiste. Der Upload der neuen Fassungen steht noch aus.
 
       Ein Umweg war dabei zu vermeiden: Plesk hatte ein **Platzhalter**-
       zertifikat angeboten, und nur dafür verlangt Let's Encrypt die
