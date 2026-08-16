@@ -257,7 +257,7 @@ def _unreadable(stumble: object | None) -> ValidationError:
 class DisplaceParams(BaseParams):
     source: str = param(
         title=_("Bild"),
-        kind="source",
+        kind="image",
         doc=_("Das Graustufenbild, dessen Helligkeit zur Höhe wird. Hell steht hoch."),
     )
     strength: float = param(

@@ -15,7 +15,7 @@ Fall wäre ein zweiter Ort, an dem sich ein Parameter vergessen lässt.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QPushButton,
     QSizePolicy,
     QSpinBox,
     QToolButton,
@@ -223,6 +224,69 @@ class ValueField(QWidget):
         self.hint.setText(f"= {value:g}{unit}")
 
 
+class ImageSourceField(QWidget):
+    """Bildquelle wählen — oder eine neue von der Platte holen (§25, P16.7).
+
+    Ein ``source``-Feld bot hier an, was das Projekt an Quellen hat, und
+    dorthin führte kein Bildformat: Wer „Relief auflegen" wählte, sah eine
+    STL in einem Feld namens „Bild", und der Befund danach schlug „Ein Bild
+    wählen." vor — eine Handlung, die die Oberfläche nicht anbot. Der Knopf
+    ist dieser fehlende Weg.
+    """
+
+    changed = Signal()
+
+    def __init__(
+        self,
+        images: Mapping[str, str],
+        pick: Callable[[], tuple[str, str] | None] | None,
+        start: str = "",
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.combo = QComboBox(self)
+        for identifier, name in images.items():
+            self.combo.addItem(name, identifier)
+        if start:
+            index = self.combo.findData(str(start))
+            if index < 0:
+                # Ein Wert, den die Liste nicht kennt, wird gezeigt statt
+                # ersetzt — wie beim Quellenwähler darunter.
+                self.combo.addItem(str(start), str(start))
+                index = self.combo.count() - 1
+            self.combo.setCurrentIndex(index)
+        self.button = QPushButton(tr("Bild wählen …"), self)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.combo, 1)
+        layout.addWidget(self.button)
+        self.combo.currentIndexChanged.connect(self.changed)
+        self._pick = pick
+        if pick is None:
+            # Ohne Rückruf — etwa im Wiederöffnen aus dem Verlauf eines
+            # fremden Aufrufers — bleibt die Liste, was sie ist.
+            self.button.setVisible(False)
+        else:
+            self.button.clicked.connect(self._choose)
+
+    def _choose(self) -> None:
+        if self._pick is None:
+            return
+        chosen = self._pick()
+        if chosen is None:
+            return
+        identifier, name = chosen
+        index = self.combo.findData(identifier)
+        if index < 0:
+            self.combo.addItem(name, identifier)
+            index = self.combo.count() - 1
+        self.combo.setCurrentIndex(index)
+
+    def value(self) -> str:
+        data = self.combo.currentData()
+        return str(data) if data is not None else self.combo.currentText()
+
+
 class OperationDialog(QDialog):
     """Ein Dialog für eine Operation, gebaut aus ihrem Schema."""
 
@@ -240,6 +304,8 @@ class OperationDialog(QDialog):
         features: Mapping[str, str] | None = None,
         extra: QWidget | None = None,
         surroundings: Any = None,
+        images: Mapping[str, str] | None = None,
+        pick_image: Callable[[], tuple[str, str] | None] | None = None,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -274,6 +340,12 @@ class OperationDialog(QDialog):
         self._features = dict(features or {})
         """Die erkannten Merkmale des gewählten Körpers, Kennung auf
         Beschriftung — dieselbe, die im Objektbaum und über dem Modell steht."""
+        self._images = dict(images or {})
+        """Nur die Bildquellen des Projekts — das Feld „Bild" listet keine
+        Netze (§25, ``displace_image``)."""
+        self._pick_image = pick_image
+        """Holt ein Bild von der Platte ins Projekt und gibt (Kennung, Name)
+        zurück — der Weg, den ein leeres Projekt braucht."""
 
         front = QFormLayout()
         advanced = QFormLayout()
@@ -366,7 +438,7 @@ class OperationDialog(QDialog):
         """
         from app.ui.sketch_editor import SketchField
 
-        if isinstance(editor, ValueField | SketchField):
+        if isinstance(editor, ValueField | SketchField | ImageSourceField):
             editor.changed.connect(self.valuesChanged)
         elif isinstance(editor, QCheckBox):
             editor.toggled.connect(self.valuesChanged)
@@ -436,6 +508,8 @@ class OperationDialog(QDialog):
                     index = combo.count() - 1
                 combo.setCurrentIndex(index)
             return combo
+        if entry.kind == "image":
+            return ImageSourceField(self._images, self._pick_image, str(start or ""), self)
         if entry.kind in ("object", "source"):
             # Der Name steht da, die Kennung reist mit. Ein frei beschreibbares
             # Feld war hier ein Weg, „obj_12" falsch zu tippen — und der Baum
@@ -566,6 +640,8 @@ class OperationDialog(QDialog):
                 # Zahl oder Ausdruck — und der Ausdruck bleibt wörtlich. Ihn
                 # hier aufzulösen hieße, die Bindung beim ersten Öffnen des
                 # Dialogs zu verlieren, ohne dass es jemand sähe.
+                collected[entry.name] = editor.value()
+            elif isinstance(editor, ImageSourceField):
                 collected[entry.name] = editor.value()
             elif isinstance(editor, SketchField):
                 collected[entry.name] = editor.text()

@@ -157,7 +157,7 @@ from app.ui.dialogs import (
 )
 from app.ui.explode_bar import ExplodeBar
 from app.ui.facts import PrintFacts
-from app.ui.generate_dialog import GenerateDialog
+from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
@@ -2006,8 +2006,18 @@ class MainWindow(QMainWindow):
 
     def action_import(self) -> None:
         name, _filter = QFileDialog.getOpenFileName(self, tr("Modell einfügen"), "", model_filter())
-        if name:
+        if not name:
+            return
+        try:
+            if self.stack.currentWidget() is self.start_screen:
+                # Vom Startbildschirm aus ist Einfügen ein Anfang, kein
+                # Nachtrag: ein frisches Projekt mit Drucker und Material aus
+                # den Einstellungen, wie es open_path beim Ablegen einer
+                # Datei auch anlegt.
+                self.session.start_new(self.settings.printer, self.settings.material)
             self.session.import_model(Path(name))
+        except AppError as error:
+            show_error(error, self)
 
     def action_import_url(self) -> None:
         """Weg 1 (§2.2), wenn die Datei noch nicht auf der Platte liegt.
@@ -3221,18 +3231,14 @@ class MainWindow(QMainWindow):
         self._update_actions()
         if not bones:
             return
-        # Die Stellung bleibt leer: Der Editor setzt das Skelett, die Winkel
-        # sind Zahlen und gehören in den Dialog — dort darf auch ein
-        # Projektparameter stehen.
-        self.session.apply(
-            _("Stellung geben"),
-            [
-                OperationDraft(
-                    op="pose_armature",
-                    inputs=(target,),
-                    params={"armature": armature_to_text(bones), "pose": ""},
-                )
-            ],
+        # Der Editor setzt das Skelett, die Winkel sind Zahlen und gehören in
+        # den Dialog — dort darf auch ein Projektparameter stehen. Also öffnet
+        # „Fertig" den Dialog mit gesetztem Skelett, wie es „Fertig" der
+        # Skizze vormacht: eine Operation mit leerer Stellung anzulegen hieße,
+        # dass nichts geschieht und niemand erfährt, wo es weitergeht.
+        self.object_tree.select_object(target)
+        self.run_operation(
+            REGISTRY.get("pose_armature"), given={"armature": armature_to_text(bones)}
         )
 
     def action_sketch_free(self) -> None:
@@ -4063,6 +4069,8 @@ class MainWindow(QMainWindow):
                 parameter_values=self._parameter_values(),
                 extra=exact,
                 surroundings=self._sketch_surroundings(),
+                images=self._image_names(),
+                pick_image=self._pick_image_source,
             )
             if exact is not None:
                 # Die Live-Vorschau (§18.7) muss den Kernwechsel mitmachen —
@@ -4307,6 +4315,8 @@ class MainWindow(QMainWindow):
             parameter_values=self._parameter_values(),
             features=self._feature_names(),
             surroundings=self._sketch_surroundings(),
+            images=self._image_names(),
+            pick_image=self._pick_image_source,
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
@@ -4419,6 +4429,28 @@ class MainWindow(QMainWindow):
             source_id: Path(source.path).name or source_id
             for source_id, source in self.session.project.document.sources.items()
         }
+
+    def _image_names(self) -> dict[str, str]:
+        """Nur die Bildquellen — für das Feld „Bild" (§25, ``displace_image``)."""
+        return {
+            source_id: Path(source.path).name or source_id
+            for source_id, source in self.session.project.document.sources.items()
+            if source.kind == "image"
+        }
+
+    def _pick_image_source(self) -> tuple[str, str] | None:
+        """Holt ein Bild von der Platte ins Projekt — der Rückruf des
+        Bildwählers im Operationsdialog."""
+        name, _filter = QFileDialog.getOpenFileName(self, tr("Bild wählen"), "", image_filter())
+        if not name:
+            return None
+        path = Path(name)
+        try:
+            source_id = self.session.import_image(path)
+        except AppError as error:
+            show_error(error, self)
+            return None
+        return source_id, path.name
 
     def _feature_names(self) -> dict[str, str]:
         """Die Merkmale des gewählten Körpers, Kennung auf Beschriftung (§18.5).
@@ -4588,6 +4620,14 @@ class MainWindow(QMainWindow):
         if self._split_points:
             self._clear_split_line()
         document = self.session.project.document
+        # Wer auf dem Startbildschirm etwas ins Dokument bringt — Einfügen,
+        # Generieren, ein Baustein aus dem Katalog —, will es auch sehen. Von
+        # acht Wegen wechselten sieben einzeln von Hand, und der achte war der
+        # Schlussknopf der Erstinbetriebnahme: Modell geladen, Startbildschirm
+        # stand. Der Wechsel am Dokument selbst macht die vergessene Stelle
+        # unmöglich.
+        if document.ops and self.stack.currentWidget() is self.start_screen:
+            self._show_start_screen(False)
         self.parameters.show_document(document)
         self.history_panel.show_document(document, undone=self.session.history.undone)
         self.chat.show_document(document)
@@ -5247,10 +5287,19 @@ class MainWindow(QMainWindow):
             self.session.open_project(candidate)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
-        if accepted_path(event) is not None or accepted_url(event) is not None:
+        if (
+            accepted_path(event) is not None
+            or accepted_url(event) is not None
+            or _image_path(event) is not None
+        ):
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt name
+        image = _image_path(event)
+        if image is not None:
+            self._drop_image(image)
+            event.acceptProposedAction()
+            return
         path = accepted_path(event)
         if path is not None:
             self.open_path(path)
@@ -5262,6 +5311,23 @@ class MainWindow(QMainWindow):
         if url is not None:
             self.download_model(url)
             event.acceptProposedAction()
+
+    def _drop_image(self, path: Path) -> None:
+        """Ein Bild auf dem Fenster ist ein Relief-Wunsch (§25).
+
+        Auf den gewählten Körper, als geöffneter Dialog — nicht als stiller
+        Import: Ein Bild wird kein Körper, es gehört einer Operation als Wert.
+        """
+        target = self.object_tree.selected()
+        if not target:
+            self.announce(tr("Bitte zuerst ein Objekt auswählen — das Bild wird ein Relief."))
+            return
+        try:
+            source_id = self.session.import_image(path)
+        except AppError as error:
+            show_error(error, self)
+            return
+        self.run_operation(REGISTRY.get("displace_image"), given={"source": source_id})
 
     def wait_for_workers(self, timeout_ms: int = 2000) -> None:
         """Jeden Arbeiter dieses Fensters auslaufen lassen.
@@ -5342,3 +5408,20 @@ class MainWindow(QMainWindow):
 def registered_operations() -> list[OperationSpec]:
     """Kleine Hilfe, die die Befehlspalette benutzt."""
     return list(REGISTRY.all())
+
+
+def _image_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
+    """Das abgelegte Bild, oder ``None``.
+
+    Erkannt an der Endung, nicht am angebotenen Typ — Dateimanager
+    beschriften verschieden, die Endung ist überall dieselbe. Die Liste ist
+    dieselbe wie im Generierungsdialog und im Chat.
+    """
+    data = event.mimeData()
+    if data is None or not data.hasUrls():
+        return None
+    for url in data.urls():
+        name = url.toLocalFile()
+        if name and name.lower().endswith(IMAGE_SUFFIXES):
+            return Path(name)
+    return None

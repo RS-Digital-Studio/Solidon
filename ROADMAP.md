@@ -5913,13 +5913,30 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
 - [ ] **K6 — Cura scheitert am eigenen Türsteher**: der Dialog verlangt ein
       Maschinenprofil, das es bei Cura strukturell nicht gibt, obwohl der
       Kern die Maschine selbst beschreibt.
-- [ ] **K7 — Weg 4 ist gebaut, aber nicht benutzbar**: `finish_armature`
+- [x] **K7 — Weg 4 ist gebaut, aber nicht benutzbar**: `finish_armature`
       schickt eine leere Pose (nichts passiert, ohne Ansage); eine getippte
       Pose tötet über ungeschütztes `json.loads` den Auswertungs-Thread und
       die Sitzung meldet Erfolg; „Relief auflegen" bietet kein Bild an (kein
       Bildformat führt in die Quellen); der Startbildschirm-Import lädt ins
       Unsichtbare — und genau darauf zeigt der Schlussknopf der
       Erstinbetriebnahme.
+
+      **Behoben, vierteilig:** (1) Die beiden Sammelparameter-Leser in
+      `pose.py` werfen bei fremder Eingabe eine `ValidationError` mit der
+      erwarteten Form, und `evaluate` wandelt jede fremde Ausnahme unterhalb
+      einer Op in einen `InternalError`-Befund, statt den Thread sterben zu
+      lassen — die nächste ungeschützte `json.loads` wäre sonst derselbe
+      Fund noch einmal. (2) „Fertig" im Skeletteditor gibt an
+      `run_operation` ab, wie es die Skizze vormacht: der Dialog öffnet mit
+      gesetztem Skelett. (3) Neuer Parameter- und Quellentyp `image`:
+      `displace_image` listet nur Bildquellen, der Dialog bekommt „Bild
+      wählen …" (`ImageSourceField`), `session.import_image` bettet ohne
+      load-Operation ein, und ein auf das Fenster gezogenes Bild öffnet den
+      Relief-Dialog auf dem gewählten Körper. (4) `action_import` legt vom
+      Startbildschirm aus ein frisches Projekt an und fängt Fehler; der
+      Wechsel in den Arbeitsbereich hängt jetzt am Dokument selbst
+      (`_on_project`), damit die vergessene achte Stelle unmöglich wird.
+      Offen bleibt das `ArmatureField` (Reihenfolge Punkt 12).
 - [ ] **Nebensitzung 3MF-Export**: Urteil *nachbessern* — ohne geöffneten
       Dialog ist `print_settings` weiter `None` (A1), der Einzelkörper-Export
       läuft am neuen Code vorbei (A2); Details und A3–A7 in der

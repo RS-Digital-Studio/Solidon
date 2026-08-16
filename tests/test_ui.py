@@ -311,6 +311,28 @@ def test_opening_a_model_leaves_the_start_screen(window: MainWindow) -> None:
     assert [entry.op for entry in window.session.project.document.ops] == ["load"]
 
 
+def test_importing_from_the_start_screen_shows_the_workspace(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Von acht Wegen ins Dokument wechselte genau dieser nicht in den
+    Arbeitsbereich — und auf ihn zeigt der Schlussknopf der
+    Erstinbetriebnahme: Modell geladen, Startbildschirm stand (§2.3)."""
+    from PySide6.QtWidgets import QFileDialog
+
+    assert window.stack.currentWidget() is window.start_screen
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(MESHES / "cube_clean.stl"), "")),
+    )
+
+    window.action_import()
+    window.session.wait_for_idle()
+
+    assert window.stack.currentWidget() is not window.start_screen
+    assert [entry.op for entry in window.session.project.document.ops] == ["load"]
+
+
 def test_the_panels_follow_the_evaluation(window: MainWindow) -> None:
     window.open_path(MESHES / "two_components.stl")
     window.session.wait_for_idle()

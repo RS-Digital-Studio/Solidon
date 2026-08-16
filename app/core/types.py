@@ -69,7 +69,10 @@ Authorship = Literal["user", "agent"]
 ChatRole = Literal["user", "agent"]
 """Wer gesprochen hat. Dieselben zwei wie ``Authorship``, benannt fürs
 Gespräch (§26.3)."""
-SourceKind = Literal["import", "generated", "part"]
+SourceKind = Literal["import", "generated", "part", "image"]
+"""``image`` ist eine Quelle, die nie ein Körper wird: das Graustufenbild
+eines Reliefs (§25, ``displace_image``). Es reist eingebettet wie ein Modell,
+bekommt aber keine load-Operation — es gehört einer Operation als Wert."""
 
 SolverStage = Literal["direct", "welded", "jittered", "voxel"]
 """Die Stufen der Booleschen Rückfallkette (§17.2), in ihrer Reihenfolge."""
@@ -716,11 +719,17 @@ ParamKind = Literal[
     "feature",
     "part",
     "source",
+    "image",
     "sketch",
     "strokes",
     "armature",
 ]
-"""``sketch`` trägt eine gezeichnete Skizze als JSON-Text (§30.1) — gedacht für
+"""``image`` ist eine Quelle, die ein Bild sein muss: Der Dialog listet nur
+Bildquellen und bietet daneben an, eine von der Platte zu holen — ein
+``source``-Feld bot dort jede Quelle an, also STLs in einem Feld namens
+„Bild", und einen Weg zu einem Bild gab es nicht.
+
+``sketch`` trägt eine gezeichnete Skizze als JSON-Text (§30.1) — gedacht für
 den Skizzeneditor; bis er da ist, zeigt der Dialog ein Textfeld. Der Agent
 bekommt diesen Parameter nicht: Grundformen statt roher Punktlisten (§26).
 

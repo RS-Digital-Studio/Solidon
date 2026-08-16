@@ -199,8 +199,14 @@ def test_undo_then_takes_back_a_whole_bone(window: MainWindow) -> None:
 # --- was dabei herauskommt ------------------------------------------------------
 
 
-def test_finishing_writes_one_operation_with_the_skeleton(window: MainWindow) -> None:
-    """Regel 16: Der ganze Vorgang ist eine Transaktion."""
+def test_finishing_opens_the_dialog_with_the_skeleton(window: MainWindow) -> None:
+    """„Fertig" gibt an den Operationsdialog ab, wie es die Skizze vormacht.
+
+    Vorher legte es eine Operation mit leerer Stellung an: nichts geschah,
+    ohne Ansage, und weiter ging es nur über Verlauf → Doppelklick → JSON.
+    Der Dialog öffnet mit gesetztem Skelett — die Winkel sind der nächste
+    Handgriff, dort darf auch ein Projektparameter stehen.
+    """
     object_id = with_a_body(window)
     window.start_armature(object_id)
     bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
@@ -209,27 +215,32 @@ def test_finishing_writes_one_operation_with_the_skeleton(window: MainWindow) ->
 
     window.finish_armature()
 
-    ops = window.session.project.document.ops
-    assert len(ops) == before + 1
-    assert ops[-1].op == "pose_armature"
-    bones = armature_from_text(str(ops[-1].params["armature"]))
+    assert len(window.session.project.document.ops) == before, (
+        "eine Operation mit leerer Stellung täte nichts — erst der Dialog"
+    )
+    dialog = window._op_dialog
+    assert dialog is not None
+    bones = armature_from_text(str(dialog.values()["armature"]))
     assert len(bones) == 2
     assert bones[1].parent == bones[0].name
 
 
-def test_the_pose_stays_empty_because_it_is_a_number(window: MainWindow) -> None:
-    """Der Editor setzt das Skelett, die Winkel sind Zahlen.
-
-    Sie gehören in den Dialog der Operation, wo auch ein Projektparameter
-    stehen darf — das ist der Punkt, an dem Posing hierher gehört.
-    """
+def test_accepting_the_dialog_writes_one_operation(window: MainWindow) -> None:
+    """Regel 16: Der ganze Vorgang ist eine Transaktion."""
     object_id = with_a_body(window)
     window.start_armature(object_id)
     bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
+    before = len(window.session.project.document.ops)
 
     window.finish_armature()
+    dialog = window._op_dialog
+    assert dialog is not None
+    dialog.accept()
 
-    assert window.session.project.document.ops[-1].params["pose"] == ""
+    ops = window.session.project.document.ops
+    assert len(ops) == before + 1
+    assert ops[-1].op == "pose_armature"
+    assert armature_from_text(str(ops[-1].params["armature"]))
 
 
 def test_an_empty_session_leaves_no_step_behind(window: MainWindow) -> None:
@@ -243,13 +254,15 @@ def test_an_empty_session_leaves_no_step_behind(window: MainWindow) -> None:
 
 
 def test_escape_ends_the_session_without_throwing_it_away(window: MainWindow) -> None:
-    """Wie beim Formen: Escape beendet und verwirft nicht."""
+    """Wie beim Formen: Escape beendet und verwirft nicht — die gesetzten
+    Knochen stehen im Dialog, der sich daraufhin öffnet."""
     object_id = with_a_body(window)
     window.start_armature(object_id)
     bone(window, (0.0, 0.0, 0.0), (0.0, 0.0, 20.0))
-    before = len(window.session.project.document.ops)
 
     window._escape()
 
     assert not window.setting_armature()
-    assert len(window.session.project.document.ops) == before + 1
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert armature_from_text(str(dialog.values()["armature"]))

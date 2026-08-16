@@ -490,3 +490,58 @@ def test_the_description_is_as_tall_as_its_text(qt_app: QApplication) -> None:
         assert description.geometry().height() < 120
     finally:
         dialog.deleteLater()
+
+
+# --- Bilder als Quelle (§25, P16.7) ----------------------------------------------
+
+
+def test_the_image_field_lists_only_images(window: MainWindow) -> None:
+    """Das Feld „Bild" bot jede Quelle des Projekts an — also STLs in einem
+    Feld dieses Namens, und einen Weg zu einem Bild gab es nicht. Der Befund
+    schlug „Ein Bild wählen." vor, eine Handlung, die es nicht gab."""
+    from app.ui.op_dialog import ImageSourceField
+
+    spec = REGISTRY.get("displace_image")
+    dialog = OperationDialog(
+        spec,
+        {},
+        window,
+        sources={"src_1": "halterung.stl"},
+        images={},
+        pick_image=None,
+    )
+
+    editor = dialog._editors["source"]
+    assert isinstance(editor, ImageSourceField)
+    assert editor.combo.count() == 0, "eine STL ist kein Bild"
+
+
+def test_the_pick_button_imports_and_selects(window: MainWindow, tmp_path: Path) -> None:
+    """Der Knopf ist der fehlende Weg: Bild von der Platte holen, als Quelle
+    einbetten, im Feld auswählen — ohne load-Operation, denn ein Bild wird
+    kein Körper."""
+    from app.ui.op_dialog import ImageSourceField
+
+    picture = tmp_path / "relief.png"
+    # Ein minimales, echtes PNG — imageio braucht es hier nicht, nur der Weg.
+    picture.write_bytes(b"\x89PNG\r\n\x1a\nbild")
+    before = len(window.session.project.document.ops)
+
+    def pick() -> tuple[str, str]:
+        source_id = window.session.import_image(picture)
+        return source_id, picture.name
+
+    spec = REGISTRY.get("displace_image")
+    dialog = OperationDialog(spec, {}, window, images={}, pick_image=pick)
+    editor = dialog._editors["source"]
+    assert isinstance(editor, ImageSourceField)
+
+    editor.button.click()
+
+    chosen = dialog.values()["source"]
+    assert chosen, "das geholte Bild ist ausgewählt"
+    source = window.session.project.document.sources[chosen]
+    assert source.kind == "image"
+    assert len(window.session.project.document.ops) == before, (
+        "ein Bild bekommt keine load-Operation"
+    )

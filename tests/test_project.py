@@ -186,6 +186,22 @@ def test_provenance_of_a_transaction_survives(filled: Project, tmp_path: Path) -
     assert origin.rules_version == "7"
 
 
+def test_an_image_source_survives_the_round_trip(filled: Project, tmp_path: Path) -> None:
+    """§25: Das Relief-Bild ist eine Quelle ohne load-Operation — Art und
+    Nutzlast überleben die runde Reise, sonst öffnet das Projekt mit einem
+    Feld „Bild", das auf nichts mehr zeigt."""
+    payload = b"\x89PNG\r\n\x1a\nbild"
+    filled.document.sources["src_9"] = Source(
+        id="src_9", kind="image", path="sources/relief.png", sha256=""
+    )
+    filled.sources["src_9"] = payload
+
+    reopened = load(save(filled, tmp_path / "projekt.p3d"))
+
+    assert reopened.document.sources["src_9"].kind == "image"
+    assert reopened.sources["src_9"] == payload
+
+
 def test_the_licence_of_a_source_survives(filled: Project, tmp_path: Path) -> None:
     reopened = load(save(filled, tmp_path / "projekt.p3d"))
     origin = reopened.document.sources["src_1"].origin
