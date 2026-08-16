@@ -94,6 +94,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--holder", default="", help="auf wen der Schlüssel lautet")
     parser.add_argument("--count", type=int, default=1, help="wie viele Schlüssel")
     parser.add_argument("--major", type=int, default=None, help="Hauptversion, Vorgabe: die eigene")
+    parser.add_argument(
+        "--start",
+        type=int,
+        default=None,
+        help="erste Nummer der Vorratskennung — ohne Angabe wird sie zufällig gewürfelt",
+    )
     arguments = parser.parse_args(argv)
 
     if arguments.new_keypair:
@@ -110,15 +116,32 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     major = current_major() if arguments.major is None else arguments.major
+    # Die Nutzlast war vollständig determiniert: Zähler ab eins plus heutiges
+    # Datum — zwei Vorratsläufe am selben Tag erzeugten Byte für Byte
+    # dieselben Schlüssel, und zwei Käufer bekamen denselben. Ohne --start
+    # würfelt jeder Lauf seinen eigenen Namensraum.
+    first = arguments.start if arguments.start is not None else None
+    prefix = f"POOL-{secrets.token_hex(3).upper()}" if first is None else "POOL"
+    made: set[str] = set()
     for number in range(arguments.count):
-        order = arguments.order or f"POOL-{number + 1:04d}"
+        if arguments.order:
+            order = arguments.order
+        elif first is not None:
+            order = f"POOL-{first + number:04d}"
+        else:
+            order = f"{prefix}-{number + 1:04d}"
         licence = Licence(
             major=major,
             purchased_on=date.today(),
             order=order,
             holder=arguments.holder,
         )
-        print(make_key(seed, licence))
+        key = make_key(seed, licence)
+        if key in made:
+            print(f"Doppelter Schlüssel für {order} — Abbruch, nichts davon ausgeben.")
+            return 1
+        made.add(key)
+        print(key)
     return 0
 
 
