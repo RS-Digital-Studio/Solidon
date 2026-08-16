@@ -377,9 +377,6 @@ CURA: Final[tuple[Row, ...]] = (
     ("filament.flow_ratio", "material_flow", _percent),
 )
 
-#: Welche Schlüssel zu welcher Haftungsart gehören. Die Slicer lesen sie als
-#: unabhängige Maße, gemeint ist aber genau eine Art: wer Skirt eingestellt hat
-#: und trotzdem ``raft_layers`` mitschickt, bekommt beides.
 #: Wie ein Material beim Slicer heißt. Fast immer die Solidon-Kennung in
 #: Großbuchstaben — nur wo die Schreibweisen auseinandergehen, steht ein
 #: Eintrag. Ein unbekannter Typ ist kein Abbruch: der Slicer nimmt ihn als
@@ -392,6 +389,9 @@ def filament_type(material_id: str) -> str:
     return FILAMENT_TYPES.get(material_id, material_id.upper())
 
 
+#: Welche Schlüssel zu welcher Haftungsart gehören. Die Slicer lesen sie als
+#: unabhängige Maße, gemeint ist aber genau eine Art: wer Skirt eingestellt hat
+#: und trotzdem ``raft_layers`` mitschickt, bekommt beides.
 ADHESION_KEYS: Final[dict[SlicerFlavour, dict[str, tuple[str, ...]]]] = {
     "prusa": {
         "skirt": ("skirts",),

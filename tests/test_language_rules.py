@@ -15,6 +15,7 @@ import pytest
 import app
 
 PACKAGE_DIR = Path(app.__file__).parent
+TOOLS_DIR = PACKAGE_DIR.parent / "tools"
 
 #: Deutsche Wörter, die nie ein Abschnitt eines Bezeichners sein dürfen.
 #:
@@ -113,7 +114,7 @@ UMLAUTS = "äöüÄÖÜß"
 
 
 def source_files() -> list[Path]:
-    return sorted(PACKAGE_DIR.rglob("*.py"))
+    return sorted({*PACKAGE_DIR.rglob("*.py"), *TOOLS_DIR.glob("*.py")})
 
 
 def identifiers_of(tree: ast.AST) -> list[tuple[str, int]]:

@@ -232,14 +232,12 @@ _JSON_TYPE: dict[ParamKind, str] = {
     "armature": "string",
 }
 
-#: Parameterarten, die eine unbegrenzte Zahl von Nutzergesten sammeln (Regel 2).
-#: Der Agent sieht sie nicht — er verweist auf Merkmale und benutzt Maße, er
-#: erzeugt keine Koordinaten (Leitprinzip 5). ``tests/test_gesture_ops.py``
-#: prüft diese Menge gegen dieselbe Liste auf der anderen Seite.
-#: Parameterarten, die Gesten sammeln (§30.1). Der Agent bekommt sie nicht
-#: angeboten — und `agent/session.py` weist sie auch ab, wenn ein Modell sie
-#: rät. Beide Stellen lesen diese Menge; eine zweite Liste wäre am Tag nach
-#: der nächsten Geste falsch.
+#: Parameterarten, die eine unbegrenzte Zahl von Nutzergesten sammeln (Regel 2,
+#: §30.1). Der Agent sieht sie nicht — er verweist auf Merkmale und benutzt
+#: Maße, er erzeugt keine Koordinaten (Leitprinzip 5); `agent/session.py`
+#: weist ein trotzdem mitgeschicktes Argument auch ab, wenn ein Modell es rät.
+#: Beide Stellen lesen diese Menge, ebenso ``tests/test_gesture_ops.py`` — eine
+#: zweite Liste wäre am Tag nach der nächsten Geste falsch.
 GATHERED_KINDS: Final[frozenset[str]] = frozenset({"sketch", "strokes", "armature"})
 
 

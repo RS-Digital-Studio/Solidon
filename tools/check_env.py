@@ -34,9 +34,9 @@ import tomllib
 from pathlib import Path
 from typing import Final
 
-WURZEL: Final = Path(__file__).resolve().parent.parent
-CONSTRAINTS: Final = WURZEL / "constraints.txt"
-PYPROJECT: Final = WURZEL / "pyproject.toml"
+ROOT: Final = Path(__file__).resolve().parent.parent
+CONSTRAINTS: Final = ROOT / "constraints.txt"
+PYPROJECT: Final = ROOT / "pyproject.toml"
 
 #: Die Gruppen, die ein Arbeitsplatz braucht — dieselben wie in CLAUDE.md.
 EXTRAS: Final = "dev,geom,ui,agent,brep"
@@ -45,11 +45,11 @@ EXTRAS: Final = "dev,geom,ui,agent,brep"
 #: Fassungen" meldet gebrochene Fassungen; er sagt aber niemandem, dass es
 #: etwas Neues *gäbe*. Nach einem Vierteljahr ohne Nachziehen ist der Satz
 #: alt genug, dass ein Sprung wehtut — deshalb die Erinnerung.
-TAGE_BIS_ZUR_PFLEGE: Final = 90
+DAYS_UNTIL_MAINTENANCE: Final = 90
 
-_ZEILE = re.compile(r"^([A-Za-z0-9._-]+)==([^\s;#]+)")
+_LINE = re.compile(r"^([A-Za-z0-9._-]+)==([^\s;#]+)")
 #: Eine Obergrenze in `pyproject.toml`, etwa `trimesh>=4.4,<5`.
-_GRENZE = re.compile(r"^\s*[\"']?([A-Za-z0-9._-]+)[^\"']*?<=?\s*([0-9][0-9.]*)")
+_LIMIT = re.compile(r"^\s*[\"']?([A-Za-z0-9._-]+)[^\"']*?<=?\s*([0-9][0-9.]*)")
 
 
 def normal(name: str) -> str:
@@ -59,64 +59,64 @@ def normal(name: str) -> str:
 
 def venv_python() -> Path | None:
     """Der Interpreter der Projektumgebung, falls es sie gibt."""
-    for kandidat in (
-        WURZEL / ".venv" / "Scripts" / "python.exe",
-        WURZEL / ".venv" / "bin" / "python",
+    for candidate in (
+        ROOT / ".venv" / "Scripts" / "python.exe",
+        ROOT / ".venv" / "bin" / "python",
     ):
-        if kandidat.exists():
-            return kandidat
+        if candidate.exists():
+            return candidate
     return None
 
 
-def festgeschrieben() -> dict[str, tuple[str, str]]:
+def pinned() -> dict[str, tuple[str, str]]:
     """`constraints.txt` als Zuordnung normalisierter Name → (Name, Fassung)."""
-    satz: dict[str, tuple[str, str]] = {}
-    for zeile in CONSTRAINTS.read_text(encoding="utf-8").splitlines():
-        treffer = _ZEILE.match(zeile.strip())
-        if treffer:
-            name, fassung = treffer.group(1), treffer.group(2)
-            satz[normal(name)] = (name, fassung)
-    return satz
+    result: dict[str, tuple[str, str]] = {}
+    for line in CONSTRAINTS.read_text(encoding="utf-8").splitlines():
+        match = _LINE.match(line.strip())
+        if match:
+            name, version = match.group(1), match.group(2)
+            result[normal(name)] = (name, version)
+    return result
 
 
-def installiert(python: Path) -> dict[str, str] | None:
+def installed(python: Path) -> dict[str, str] | None:
     """Was in dieser Umgebung liegt — oder ``None``, wenn sie nicht antwortet."""
-    quelle = (
+    source = (
         "import json,importlib.metadata as m;"
         "print(json.dumps({d.metadata['Name']: d.version for d in m.distributions()"
         " if d.metadata['Name']}))"
     )
     try:
-        lauf = subprocess.run(
-            [str(python), "-c", quelle],
+        result = subprocess.run(
+            [str(python), "-c", source],
             capture_output=True,
             text=True,
             timeout=60,
-            cwd=WURZEL,
+            cwd=ROOT,
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    if lauf.returncode != 0:
+    if result.returncode != 0:
         return None
     try:
-        roh: dict[str, str] = json.loads(lauf.stdout)
+        raw: dict[str, str] = json.loads(result.stdout)
     except json.JSONDecodeError:
         return None
-    return {normal(name): fassung for name, fassung in roh.items()}
+    return {normal(name): version for name, version in raw.items()}
 
 
-def verlangte_fassung() -> tuple[int, int]:
+def required_version() -> tuple[int, int]:
     """Die Untergrenze aus ``requires-python`` als Zahlenpaar."""
     with PYPROJECT.open("rb") as handle:
-        daten = tomllib.load(handle)
-    roh = str(daten["project"]["requires-python"]).strip()
-    haupt, neben = roh.removeprefix(">=").strip().split(".")[:2]
-    return int(haupt), int(neben)
+        data = tomllib.load(handle)
+    raw = str(data["project"]["requires-python"]).strip()
+    major, minor = raw.removeprefix(">=").strip().split(".")[:2]
+    return int(major), int(minor)
 
 
-def interpreter_fassung(python: Path) -> tuple[int, int] | None:
+def interpreter_version(python: Path) -> tuple[int, int] | None:
     try:
-        lauf = subprocess.run(
+        result = subprocess.run(
             [str(python), "-c", "import sys;print(f'{sys.version_info[0]} {sys.version_info[1]}')"],
             capture_output=True,
             text=True,
@@ -124,13 +124,13 @@ def interpreter_fassung(python: Path) -> tuple[int, int] | None:
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    if lauf.returncode != 0:
+    if result.returncode != 0:
         return None
     try:
-        haupt, neben = lauf.stdout.split()
+        major, minor = result.stdout.split()
     except ValueError:
         return None
-    return int(haupt), int(neben)
+    return int(major), int(minor)
 
 
 def venv_name() -> str:
@@ -138,43 +138,43 @@ def venv_name() -> str:
     return ".venv\\Scripts\\python.exe" if sys.platform == "win32" else ".venv/bin/python"
 
 
-def aufbaubefehl(mit_venv: bool) -> str:
+def setup_command(with_venv: bool) -> str:
     """Der Befehl, der die Umgebung herstellt — plattformgerecht geschrieben."""
     python = venv_name()
-    anlegen = (
+    create = (
         ""
-        if mit_venv
+        if with_venv
         else f"{'python' if sys.platform == 'win32' else 'python3'} -m venv .venv && "
     )
-    return f'{anlegen}{python} -m pip install -c constraints.txt -e ".[{EXTRAS}]"'
+    return f'{create}{python} -m pip install -c constraints.txt -e ".[{EXTRAS}]"'
 
 
-def zahlenfolge(fassung: str) -> tuple[int, ...]:
+def version_tuple(version: str) -> tuple[int, ...]:
     """Eine Fassung als Zahlenfolge, so weit sie sich lesen lässt.
 
     Absichtlich kein vollständiger PEP-440-Vergleich: Gebraucht wird nur die
     Frage, ob eine angebotene Fassung unter einer Obergrenze bleibt, und die
     Obergrenzen dieses Projekts sind schlichte Zahlen (`<5`).
     """
-    teile: list[int] = []
-    for stueck in fassung.split("."):
-        if stueck.isdigit():
-            teile.append(int(stueck))
+    parts: list[int] = []
+    for piece in version.split("."):
+        if piece.isdigit():
+            parts.append(int(piece))
             continue
         # „0rc1" zählt als 0, „post0" gar nicht — was hinter der ersten
         # Nicht-Ziffer steht, ist Vorab- oder Nachlaufkennung, keine Stelle.
-        fuehrend = ""
-        for zeichen in stueck:
-            if not zeichen.isdigit():
+        leading = ""
+        for char in piece:
+            if not char.isdigit():
                 break
-            fuehrend += zeichen
-        if fuehrend:
-            teile.append(int(fuehrend))
+            leading += char
+        if leading:
+            parts.append(int(leading))
         break
-    return tuple(teile)
+    return tuple(parts)
 
 
-def obergrenzen() -> dict[str, str]:
+def upper_bounds() -> dict[str, str]:
     """Pakete aus `pyproject.toml`, die eine Fassung ausdrücklich ausschließen.
 
     `trimesh>=4.4,<5` ist keine Nachlässigkeit, sondern eine Entscheidung: Der
@@ -183,33 +183,33 @@ def obergrenzen() -> dict[str, str]:
     Grenzen kennen — sonst schlägt er etwas vor, das absichtlich nicht kommt.
     """
     text = PYPROJECT.read_text(encoding="utf-8")
-    grenzen: dict[str, str] = {}
-    for zeile in text.splitlines():
-        if "<" not in zeile or zeile.lstrip().startswith("#"):
+    limits: dict[str, str] = {}
+    for line in text.splitlines():
+        if "<" not in line or line.lstrip().startswith("#"):
             continue
-        treffer = _GRENZE.match(zeile)
-        if treffer:
-            grenzen[normal(treffer.group(1))] = treffer.group(2)
-    return grenzen
+        match = _LIMIT.match(line)
+        if match:
+            limits[normal(match.group(1))] = match.group(2)
+    return limits
 
 
-def alter_in_tagen() -> int | None:
+def age_in_days() -> int | None:
     """Wie lange `constraints.txt` unverändert ist — nach Git, sonst nach Datei.
 
     Der Git-Zeitstempel ist der richtige: Die Änderungszeit im Dateisystem
     sagt nach einem frischen Klon nur, wann geklont wurde.
     """
     try:
-        lauf = subprocess.run(
+        result = subprocess.run(
             ["git", "log", "-1", "--format=%ct", "--", CONSTRAINTS.name],
             capture_output=True,
             text=True,
             timeout=15,
-            cwd=WURZEL,
+            cwd=ROOT,
         )
-        if lauf.returncode == 0 and lauf.stdout.strip():
-            gesetzt = int(lauf.stdout.strip())
-            return int((time.time() - gesetzt) / 86400)
+        if result.returncode == 0 and result.stdout.strip():
+            committed = int(result.stdout.strip())
+            return int((time.time() - committed) / 86400)
     except (OSError, subprocess.SubprocessError, ValueError):
         pass
     try:
@@ -218,48 +218,48 @@ def alter_in_tagen() -> int | None:
         return None
 
 
-def neuere_fassungen(python: Path) -> tuple[list[str], list[str]] | None:
+def newer_versions(python: Path) -> tuple[list[str], list[str]] | None:
     """Was der Index neuer anbietet — getrennt in erlaubt und ausgeschlossen.
 
     Braucht Netz. ``None`` heißt: pip hat nicht geantwortet.
     """
     try:
-        lauf = subprocess.run(
+        result = subprocess.run(
             [str(python), "-m", "pip", "list", "--outdated", "--format=json"],
             capture_output=True,
             text=True,
             timeout=300,
-            cwd=WURZEL,
+            cwd=ROOT,
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    if lauf.returncode != 0:
+    if result.returncode != 0:
         return None
     try:
-        eintraege = json.loads(lauf.stdout)
+        entries = json.loads(result.stdout)
     except json.JSONDecodeError:
         return None
 
-    satz = festgeschrieben()
-    grenzen = obergrenzen()
-    moeglich: list[str] = []
-    gesperrt: list[str] = []
-    for eintrag in eintraege:
-        schluessel = normal(str(eintrag.get("name", "")))
-        if schluessel not in satz:
+    pinned_set = pinned()
+    limits = upper_bounds()
+    possible: list[str] = []
+    locked: list[str] = []
+    for entry in entries:
+        key = normal(str(entry.get("name", "")))
+        if key not in pinned_set:
             continue  # nicht festgeschrieben, also auch nicht unsere Sorge
-        neu = str(eintrag.get("latest_version", ""))
-        alt = str(eintrag.get("version", ""))
-        name = satz[schluessel][0]
-        grenze = grenzen.get(schluessel)
-        if grenze and zahlenfolge(neu) >= zahlenfolge(grenze):
-            gesperrt.append(f"{name} {alt} → {neu} (ausgeschlossen durch <{grenze})")
+        new = str(entry.get("latest_version", ""))
+        old = str(entry.get("version", ""))
+        name = pinned_set[key][0]
+        limit = limits.get(key)
+        if limit and version_tuple(new) >= version_tuple(limit):
+            locked.append(f"{name} {old} → {new} (ausgeschlossen durch <{limit})")
         else:
-            moeglich.append(f"{name} {alt} → {neu}")
-    return sorted(moeglich), sorted(gesperrt)
+            possible.append(f"{name} {old} → {new}")
+    return sorted(possible), sorted(locked)
 
 
-def einfrieren(python: Path) -> int:
+def freeze(python: Path) -> int:
     """Schreibt `constraints.txt` aus dem Ist — und behält den Kopf.
 
     `pip freeze > constraints.txt` wäre der naheliegende Weg und würde die
@@ -267,35 +267,35 @@ def einfrieren(python: Path) -> int:
     verständlich macht.
     """
     try:
-        lauf = subprocess.run(
+        result = subprocess.run(
             [str(python), "-m", "pip", "freeze", "--exclude-editable"],
             capture_output=True,
             text=True,
             timeout=120,
-            cwd=WURZEL,
+            cwd=ROOT,
         )
     except (OSError, subprocess.SubprocessError):
         print("`pip freeze` ließ sich nicht ausführen.")
         return 1
-    if lauf.returncode != 0:
-        print("`pip freeze` ist fehlgeschlagen:", lauf.stderr.strip()[:200])
+    if result.returncode != 0:
+        print("`pip freeze` ist fehlgeschlagen:", result.stderr.strip()[:200])
         return 1
 
-    alt = CONSTRAINTS.read_text(encoding="utf-8").splitlines()
-    kopf = [zeile for zeile in alt if zeile.startswith("#") or not zeile.strip()]
-    while kopf and not kopf[-1].strip():
-        kopf.pop()
-    neu = sorted(
-        (zeile for zeile in lauf.stdout.splitlines() if _ZEILE.match(zeile.strip())),
-        key=lambda zeile: normal(str(_ZEILE.match(zeile.strip()).group(1))),  # type: ignore[union-attr]
+    old = CONSTRAINTS.read_text(encoding="utf-8").splitlines()
+    head = [line for line in old if line.startswith("#") or not line.strip()]
+    while head and not head[-1].strip():
+        head.pop()
+    new = sorted(
+        (line for line in result.stdout.splitlines() if _LINE.match(line.strip())),
+        key=lambda line: normal(str(_LINE.match(line.strip()).group(1))),  # type: ignore[union-attr]
     )
-    CONSTRAINTS.write_text("\n".join([*kopf, "", *neu]) + "\n", encoding="utf-8")
-    print(f"`constraints.txt` neu geschrieben: {len(neu)} Pakete, Kopf erhalten.")
+    CONSTRAINTS.write_text("\n".join([*head, "", *new]) + "\n", encoding="utf-8")
+    print(f"`constraints.txt` neu geschrieben: {len(new)} Pakete, Kopf erhalten.")
     print("Jetzt die Suite fahren — grün heißt, der Satz taugt.")
     return 0
 
 
-def abweichungen(satz: dict[str, tuple[str, str]], vorhanden: dict[str, str]) -> list[str]:
+def mismatches(pinned_set: dict[str, tuple[str, str]], present: dict[str, str]) -> list[str]:
     """Pakete, die in einer anderen Fassung liegen als festgeschrieben.
 
     Ein Paket, das **fehlt**, steht hier absichtlich nicht: `constraints.txt`
@@ -304,79 +304,82 @@ def abweichungen(satz: dict[str, tuple[str, str]], vorhanden: dict[str, str]) ->
     installiertes Extra ist eine Entscheidung, kein Fehler.
     """
     return [
-        f"{name} {vorhanden[schluessel]} statt {fassung}"
-        for schluessel, (name, fassung) in sorted(satz.items())
-        if schluessel in vorhanden and vorhanden[schluessel] != fassung
+        f"{name} {present[key]} statt {version}"
+        for key, (name, version) in sorted(pinned_set.items())
+        if key in present and present[key] != version
     ]
 
 
-def pruefen() -> tuple[list[str], list[str]]:
+def check() -> tuple[list[str], list[str]]:
     """Befunde und Handlungsvorschläge — leer heißt: die Umgebung stimmt."""
-    befunde: list[str] = []
-    vorschlaege: list[str] = []
+    findings: list[str] = []
+    suggestions: list[str] = []
 
     python = venv_python()
     if python is None:
         return (
             ["Die Projektumgebung `.venv` fehlt."],
-            [aufbaubefehl(mit_venv=False)],
+            [setup_command(with_venv=False)],
         )
 
-    verlangt = verlangte_fassung()
-    laeuft = interpreter_fassung(python)
-    if laeuft is None:
+    required = required_version()
+    running = interpreter_version(python)
+    if running is None:
         return (
             ["Die Projektumgebung `.venv` antwortet nicht."],
-            [f"Umgebung neu aufbauen: {aufbaubefehl(mit_venv=False)}"],
+            [f"Umgebung neu aufbauen: {setup_command(with_venv=False)}"],
         )
-    if laeuft < verlangt:
-        befunde.append(
-            f"Die Umgebung fährt Python {laeuft[0]}.{laeuft[1]}, "
-            f"das Projekt verlangt {verlangt[0]}.{verlangt[1]} oder neuer."
+    if running < required:
+        findings.append(
+            f"Die Umgebung fährt Python {running[0]}.{running[1]}, "
+            f"das Projekt verlangt {required[0]}.{required[1]} oder neuer."
         )
-        vorschlaege.append("Umgebung mit einem neueren Python neu aufbauen (siehe CLAUDE.md).")
+        suggestions.append("Umgebung mit einem neueren Python neu aufbauen (siehe CLAUDE.md).")
 
-    satz = festgeschrieben()
-    vorhanden = installiert(python)
-    if vorhanden is None:
-        befunde.append("Die installierten Fassungen ließen sich nicht auslesen.")
-        vorschlaege.append(aufbaubefehl(mit_venv=True))
-        return befunde, vorschlaege
+    pinned_set = pinned()
+    present = installed(python)
+    if present is None:
+        findings.append("Die installierten Fassungen ließen sich nicht auslesen.")
+        suggestions.append(setup_command(with_venv=True))
+        return findings, suggestions
 
-    abweichend = abweichungen(satz, vorhanden)
-    if abweichend:
-        befunde.append(
-            f"{len(abweichend)} Paket(e) weichen von `constraints.txt` ab: "
-            + ", ".join(abweichend[:6])
-            + (" …" if len(abweichend) > 6 else "")
+    mismatched = mismatches(pinned_set, present)
+    if mismatched:
+        findings.append(
+            f"{len(mismatched)} Paket(e) weichen von `constraints.txt` ab: "
+            + ", ".join(mismatched[:6])
+            + (" …" if len(mismatched) > 6 else "")
         )
-        vorschlaege.append(aufbaubefehl(mit_venv=True))
+        suggestions.append(setup_command(with_venv=True))
 
-    tage = alter_in_tagen()
-    if tage is not None and tage >= TAGE_BIS_ZUR_PFLEGE:
-        befunde.append(
-            f"Der festgeschriebene Satz ist seit {tage} Tagen unverändert. "
+    days = age_in_days()
+    if days is not None and days >= DAYS_UNTIL_MAINTENANCE:
+        findings.append(
+            f"Der festgeschriebene Satz ist seit {days} Tagen unverändert. "
             "Festgenagelt heißt nicht aktuell — je länger er steht, desto "
             "größer der Sprung, wenn er doch einmal muss."
         )
-        vorschlaege.append("Was es Neues gibt: python tools/check_env.py --outdated")
+        suggestions.append("Was es Neues gibt: python tools/check_env.py --outdated")
 
-    return befunde, vorschlaege
+    return findings, suggestions
 
 
-def herstellen() -> int:
+def install() -> int:
     """Installiert gegen `constraints.txt`. Braucht Netz und dauert."""
     python = venv_python()
     if python is None:
         print("Die Umgebung fehlt. Sie wird zuerst angelegt:", flush=True)
-        lauf = subprocess.run([sys.executable, "-m", "venv", str(WURZEL / ".venv")], cwd=WURZEL)
-        if lauf.returncode != 0:
-            print("Das Anlegen ist fehlgeschlagen — bitte von Hand:", aufbaubefehl(mit_venv=False))
-            return lauf.returncode
+        result = subprocess.run([sys.executable, "-m", "venv", str(ROOT / ".venv")], cwd=ROOT)
+        if result.returncode != 0:
+            print(
+                "Das Anlegen ist fehlgeschlagen — bitte von Hand:",
+                setup_command(with_venv=False),
+            )
+            return result.returncode
         python = venv_python()
     assert python is not None
 
-    befehl = [
+    command = [
         str(python),
         "-m",
         "pip",
@@ -386,37 +389,37 @@ def herstellen() -> int:
         "-e",
         f".[{EXTRAS}]",
     ]
-    print("Stelle die Umgebung her:", " ".join(befehl), flush=True)
-    return subprocess.run(befehl, cwd=WURZEL).returncode
+    print("Stelle die Umgebung her:", " ".join(command), flush=True)
+    return subprocess.run(command, cwd=ROOT).returncode
 
 
-def zeige_neueres(python: Path) -> int:
+def show_newer(python: Path) -> int:
     """Berichtet, was aktueller wäre — und was absichtlich nicht kommt."""
-    ergebnis = neuere_fassungen(python)
-    if ergebnis is None:
+    outcome = newer_versions(python)
+    if outcome is None:
         print("pip hat nicht geantwortet — kein Netz, oder die Umgebung ist unvollständig.")
         return 1
 
-    moeglich, gesperrt = ergebnis
-    tage = alter_in_tagen()
-    if tage is not None:
-        print(f"Der festgeschriebene Satz ist seit {tage} Tagen unverändert.\n")
+    possible, locked = outcome
+    days = age_in_days()
+    if days is not None:
+        print(f"Der festgeschriebene Satz ist seit {days} Tagen unverändert.\n")
 
-    if not moeglich and not gesperrt:
+    if not possible and not locked:
         print("Alles festgeschriebene ist auf dem neuesten Stand.")
         return 0
 
-    if moeglich:
-        print(f"Neuer verfügbar ({len(moeglich)}):")
-        for zeile in moeglich:
-            print("  " + zeile)
-    if gesperrt:
-        print(f"\nDurch eine Grenze in `pyproject.toml` ausgeschlossen ({len(gesperrt)}):")
-        for zeile in gesperrt:
-            print("  " + zeile)
+    if possible:
+        print(f"Neuer verfügbar ({len(possible)}):")
+        for line in possible:
+            print("  " + line)
+    if locked:
+        print(f"\nDurch eine Grenze in `pyproject.toml` ausgeschlossen ({len(locked)}):")
+        for line in locked:
+            print("  " + line)
         print("  Eine Grenze fällt nicht nebenbei — sie ist eine eigene Migration.")
 
-    if moeglich:
+    if possible:
         print(
             "\nSo wird daraus ein neuer Stand:\n"
             f"  1. {venv_name()} -m pip install -U --upgrade-strategy eager "
@@ -431,55 +434,55 @@ def zeige_neueres(python: Path) -> int:
 
 
 def main() -> int:
-    zerleger = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    zerleger.add_argument(
+    parser.add_argument(
         "--install",
         action="store_true",
         help="die Umgebung herstellen statt nur prüfen (braucht Netz)",
     )
-    zerleger.add_argument(
+    parser.add_argument(
         "--outdated",
         action="store_true",
         help="zeigen, was der Index neuer anbietet und was eine Grenze ausschließt (braucht Netz)",
     )
-    zerleger.add_argument(
+    parser.add_argument(
         "--freeze",
         action="store_true",
         help="`constraints.txt` aus dem Ist neu schreiben, Kopf behalten — erst nach grüner Suite",
     )
-    zerleger.add_argument(
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="nichts ausgeben, nur den Exit-Code setzen",
     )
-    argumente = zerleger.parse_args()
+    args = parser.parse_args()
 
-    if argumente.install:
-        return herstellen()
+    if args.install:
+        return install()
 
-    if argumente.outdated or argumente.freeze:
+    if args.outdated or args.freeze:
         python = venv_python()
         if python is None:
-            print("Ohne `.venv` geht das nicht:", aufbaubefehl(mit_venv=False))
+            print("Ohne `.venv` geht das nicht:", setup_command(with_venv=False))
             return 1
-        if argumente.freeze:
-            return einfrieren(python)
-        return zeige_neueres(python)
+        if args.freeze:
+            return freeze(python)
+        return show_newer(python)
 
-    befunde, vorschlaege = pruefen()
-    if not befunde:
-        if not argumente.quiet:
+    findings, suggestions = check()
+    if not findings:
+        if not args.quiet:
             print("Die Umgebung entspricht `constraints.txt`.")
         return 0
 
-    if not argumente.quiet:
-        for satz in befunde:
-            print(satz)
+    if not args.quiet:
+        for finding in findings:
+            print(finding)
         print()
-        for satz in vorschlaege:
-            print("  " + satz)
+        for suggestion in suggestions:
+            print("  " + suggestion)
         print("\nOder in einem Schritt:  python tools/check_env.py --install")
     return 1
 

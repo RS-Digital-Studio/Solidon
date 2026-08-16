@@ -649,7 +649,7 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
         return []
 
     # Aus "Material mindestens so breit wie der Kern" nach der Wandzahl
-    # aufgeloest: 2*w*lw >= d - 2*w*lw, also w >= d / (4*lw).
+    # aufgelöst: 2*w*lw >= d - 2*w*lw, also w >= d / (4*lw).
     needed = math.ceil(thickest / (4.0 * width))
     return [
         SettingAdvice(

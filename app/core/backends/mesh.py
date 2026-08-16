@@ -14,23 +14,23 @@ Woran die mitgelieferten Graphen hängen, steht deshalb hier und nicht im Code:
 an der Knotensammlung ``ComfyUI-Hunyuan3d-2-1`` samt ihren beiden Gewichten
 (``hunyuan3d-dit-v2-1-fp16`` und die zugehörige VAE), an ``ComfyUI-RMBG`` fürs
 Freistellen, und ``text_to_mesh`` zusätzlich an einem SDXL-Modell. Letzteres
-**Zur Lizenz der Gewichte, weil sie nicht unsere ist.** Hunyuan3D steht unter
-der Tencent Community License, und deren Geltungsbereich schließt die
-Europäische Union, das Vereinigte Königreich und Südkorea ausdrücklich aus.
-Solidon liefert keine Gewichte mit und lädt keine — der Nutzer installiert
-ComfyUI und seine Modelle selbst, und was er einsetzt, entscheidet er. Der
-mitgelieferte Graph nennt deshalb Rollen (``{model:shape}``) und keine Datei:
-wer ein anderes Modell mit derselben Rolle installiert, benutzt es ohne eine
-Zeile Code zu ändern. Frei lizenzierte Alternativen für dieselbe Aufgabe sind
-Step1X-3D (Apache-2.0) und TripoSG (MIT); fürs Freistellen ist INSPYRENET (MIT)
-voreingestellt, nachdem dort RMBG-2.0 (CC BY-NC) stand.
-
 ist kein Umweg, sondern die Sache selbst: Hunyuan3D kennt keinen Texteingang,
 Text wird erst zu einem Bild und das Bild zum Körper. Fehlt eines davon, sagt
 ComfyUI beim Abschicken, welcher Knoten fehlt — die Meldung reicht bis zum
 Nutzer durch. Über die HTTP-API muss dabei **jeder** Eingang gesetzt sein, auch
 ein als ``optional`` deklarierter: die Oberfläche schickt sie immer alle mit,
 und mancher Knoten liest sie ungeprüft.
+
+**Bei der Lizenz der Gewichte ist Vorsicht geboten, denn sie ist nicht
+unsere.** Hunyuan3D steht unter der Tencent Community License, und deren
+Geltungsbereich schließt die Europäische Union, das Vereinigte Königreich und
+Südkorea ausdrücklich aus. Solidon liefert keine Gewichte mit und lädt keine —
+der Nutzer installiert ComfyUI und seine Modelle selbst, und was er einsetzt,
+entscheidet er. Der mitgelieferte Graph nennt deshalb Rollen (``{model:shape}``)
+und keine Datei: wer ein anderes Modell mit derselben Rolle installiert, benutzt
+es ohne eine Zeile Code zu ändern. Frei lizenzierte Alternativen für dieselbe
+Aufgabe sind Step1X-3D (Apache-2.0) und TripoSG (MIT); fürs Freistellen ist
+INSPYRENET (MIT) voreingestellt, nachdem dort RMBG-2.0 (CC BY-NC) stand.
 
 Was herauskommt, wird nie geglaubt — Generatoren erzeugen Netze mit Löchern,
 losen Komponenten und umgedrehten Normalen als Normalfall. Die Reparaturkette,
@@ -280,7 +280,7 @@ class ComfyBackend:
         self, prompt: str, *, seed: int = 0, progress: ProgressFn = _silent
     ) -> GeneratedMesh:
         if not prompt.strip():
-            raise GenerationFailed(detail="empty prompt")
+            raise GenerationFailed(detail=_("Die Beschreibung ist leer."))
         graph = self._graph("text_to_mesh", {"prompt": prompt, "seed": seed})
         return self._run(graph, prompt=prompt, seed=seed, progress=progress)
 
@@ -288,7 +288,7 @@ class ComfyBackend:
         self, image: bytes, *, seed: int = 0, progress: ProgressFn = _silent
     ) -> GeneratedMesh:
         if not image:
-            raise GenerationFailed(detail="empty image")
+            raise GenerationFailed(detail=_("Das Bild ist leer."))
         progress(0.05, str(_("Bild übertragen")))
         name = self._upload(image)
         graph = self._graph("image_to_mesh", {"image": name, "seed": seed})
@@ -302,7 +302,10 @@ class ComfyBackend:
         try:
             text = path.read_text(encoding="utf-8")
         except OSError as problem:
-            raise GenerationFailed(detail=f"workflow {name} is missing") from problem
+            raise GenerationFailed(
+                detail=_("Die Workflow-Datei fehlt."),
+                values={"name": name},
+            ) from problem
         graph = self._with_models(json.loads(text))
         return dict(_filled(graph, values))
 
@@ -340,7 +343,10 @@ class ComfyBackend:
         """Die Datei, die diese Rolle auf diesem Rechner ausfüllt."""
         wanted = MODEL_ROLES.get(role)
         if wanted is None:
-            raise GenerationFailed(detail=f"the workflow asks for an unknown model role {role!r}")
+            raise GenerationFailed(
+                detail=_("Der Workflow verlangt eine unbekannte Modellrolle."),
+                values={"role": role},
+            )
 
         key = f"{class_type}.{field}"
         if key not in offered:
@@ -376,7 +382,10 @@ class ComfyBackend:
             described = json.loads(answer.decode("utf-8"))
         except ValueError as problem:
             raise GenerationFailed(
-                detail=f"ComfyUI described {class_type} in a way we cannot read"
+                detail=_(
+                    "ComfyUI hat den Knoten in einer Form beschrieben, die sich nicht lesen lässt."
+                ),
+                values={"node": class_type},
             ) from problem
 
         inputs = described.get(class_type, {}).get("input", {})
@@ -419,7 +428,7 @@ class ComfyBackend:
         answer = self.transport(f"{self.url}/prompt", payload, {"Content-Type": "application/json"})
         job = json.loads(answer.decode("utf-8")).get("prompt_id")
         if not job:
-            raise GenerationFailed(detail="the backend accepted no job")
+            raise GenerationFailed(detail=_("Das Backend hat keinen Auftrag angenommen."))
 
         outputs = self._wait(str(job), progress)
         progress(0.9, str(_("Modell holen")))
@@ -458,7 +467,7 @@ class ComfyBackend:
                 return dict(entry["outputs"])
             progress(0.5, self._waiting_text(job, time.monotonic() - started))
             time.sleep(self.poll_seconds)
-        raise GenerationFailed(detail="the generation ran into its time limit")
+        raise GenerationFailed(detail=_("Die Erzeugung hat ihr Zeitlimit erreicht."))
 
     def _waiting_text(self, job: str, seconds: float) -> str:
         ahead = self._ahead_in_queue(job)
@@ -494,7 +503,7 @@ class ComfyBackend:
                         continue
                     query, suffix = located
                     return self.transport(f"{self.url}/view?{query}", None, {}), suffix
-        raise GenerationFailed(detail="the job produced no mesh file")
+        raise GenerationFailed(detail=_("Der Auftrag hat keine Netzdatei erzeugt."))
 
 
 # --- Geskriptet, für die Suite ------------------------------------------------------
