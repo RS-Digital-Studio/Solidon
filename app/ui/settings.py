@@ -57,6 +57,10 @@ class UiSettings:
     einmal gesagt hat, soll es nicht bei jedem Projekt wiederholen. Der eine
     zuletzt benutzte Wert daneben reichte dafür nicht: er galt über alle
     Materialien hinweg, und nach einem TPU-Teil stand er beim nächsten PETG."""
+    window_geometry: str = ""
+    """Größe und Lage des Fensters beim letzten Schließen, als Hex aus
+    ``saveGeometry``. Leer heißt: erster Start, dann bildschirmfüllend —
+    danach findet jeder das Fenster wieder, wie er es verlassen hat."""
     first_run_done: bool = False
     shortcut_scheme: str = "default"
     """Welche Kürzelbelegung gilt (Konzept P15, E7). Die Vorgabe ist die des

@@ -681,13 +681,19 @@ class PreviewBanner(QFrame):
         """Zeigt das Band mit Text, Legende und dem Griff zum Vergleichen."""
         colours = DIFF_PALETTES[palette]
         self.note.setText(note)
+        # Jede Kodierung in ihrer eigenen Farbe: die ganze Legende in der
+        # Farbe von `added` erfüllte Regel 18 nur formal — „Entfernt"
+        # stand in Blau, während seine Kodierung Orange ist. Eine Farbe, die
+        # die Unwahrheit sagt, ist schlechter als keine.
+        self.legend.setTextFormat(Qt.TextFormat.RichText)
         self.legend.setText(
-            "   ".join(
-                f"{encoding.symbol} {tr(encoding.label_key)}"
+            "&nbsp;&nbsp;&nbsp;".join(
+                f'<span style="color: {encoding.colour};">'
+                f"{encoding.symbol} {tr(encoding.label_key)}</span>"
                 for encoding in (colours.added, colours.removed)
             )
         )
-        self.legend.setStyleSheet(f"color: {colours.added.colour};")
+        self.legend.setStyleSheet("")
         self.hint.setText(hint)
         self.show()
         self.adjustSize()

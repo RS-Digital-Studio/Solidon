@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 
-from PySide6.QtCore import QCoreApplication, QLibraryInfo, QLocale, QTranslator
+from PySide6.QtCore import QByteArray, QCoreApplication, QLibraryInfo, QLocale, QTranslator
 from PySide6.QtWidgets import QApplication
 
 from app.branding import APP_ID, APP_NAME, APP_VERSION
@@ -147,7 +147,16 @@ def main(argv: list[str] | None = None) -> int:
     # Und nicht bloß 1280 auf 820 wie die Vorgabe des Fensters: Objektbaum,
     # Viewport und Prüfbericht nebeneinander brauchen Breite — auf einem
     # 2560er Schirm stünde die Anwendung sonst als Briefmarke in der Ecke.
-    window.showMaximized()
+    #
+    # Maximiert ist die Vorgabe für den **ersten** Start. Danach zählt, wie
+    # das Fenster verlassen wurde: wer es verkleinert und schließt, fand es
+    # beim nächsten Start wieder bildschirmfüllend — als hätte er nichts
+    # gesagt.
+    if settings.window_geometry:
+        window.restoreGeometry(QByteArray.fromHex(settings.window_geometry.encode("ascii")))
+        window.show()
+    else:
+        window.showMaximized()
     splash.finish(window)
     # Der erste Start und der Update-Hinweis gehören hinter das sichtbare
     # Fenster (§38) — und nur hierher, wo wirklich ein Mensch hinsieht.
