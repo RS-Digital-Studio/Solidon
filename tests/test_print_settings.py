@@ -1685,3 +1685,56 @@ def test_without_connectors_nothing_is_said() -> None:
     paths = {entry.path for entry in advise.advise(settings, profile)}
 
     assert "shell.wall_count" not in paths
+
+
+# --- der Lauf selbst: Zeitgrenze, Abbruch, Start (§2.8, Regel 17) -----------------
+
+
+def test_a_slicer_over_the_time_limit_is_an_answer_not_a_crash(tmp_path: Path) -> None:
+    """Der Zwilling zu ``test_openscad``: ``subprocess.run`` warf einen rohen
+    ``TimeoutExpired`` aus dem Arbeits-Thread, der nur ``AppError`` fing —
+    der Dialog stand dauerhaft auf „Der Slicer rechnet …"."""
+    import sys
+
+    setup = handover.SlicerSetup(executable=Path(sys.executable), flavour="orca")
+    command = [sys.executable, "-c", "import time; time.sleep(30)"]
+
+    with pytest.raises(ExternalToolError) as caught:
+        handover._run_slicer(command, tmp_path, 0.5, setup, None)
+
+    assert caught.value.suggestions, "eine Zeitgrenze ist eine Antwort, kein Absturz"
+
+
+def test_a_cancelled_slicer_run_stops_the_child_quickly(tmp_path: Path) -> None:
+    """Abbrechen beendet den Kindprozess, statt ihn auslaufen zu lassen —
+    daran hängt, dass Schließen nicht mehr minutenlang einfriert."""
+    import sys
+    import time as clock
+
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    signal = CancelSignal()
+    signal.cancel()
+    setup = handover.SlicerSetup(executable=Path(sys.executable), flavour="orca")
+    command = [sys.executable, "-c", "import time; time.sleep(30)"]
+    started = clock.perf_counter()
+
+    with pytest.raises(OperationCancelled):
+        handover._run_slicer(command, tmp_path, 60.0, setup, signal)
+
+    assert clock.perf_counter() - started < 15.0, "der Kindprozess stirbt, nicht der Nutzer wartet"
+
+
+def test_a_slicer_that_cannot_start_is_an_answer(tmp_path: Path) -> None:
+    """Eine gewählte Datei kann ``flavour_of`` bestehen und trotzdem kein
+    Programm sein — eine DLL zum Beispiel. Der ``OSError`` beim Start flog
+    roh aus dem Thread."""
+    fake = tmp_path / "elegoo-slicer.exe"
+    fake.write_text("kein programm", encoding="utf-8")
+    setup = handover.SlicerSetup(executable=fake, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as caught:
+        handover._run_slicer([str(fake)], tmp_path, 5.0, setup, None)
+
+    assert caught.value.suggestions

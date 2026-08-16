@@ -5919,11 +5919,24 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       endet; `.stem` auf „0.12mm Fine @…" schnitte mitten ins Maß), Prozess
       und Filament tragen den Solidon-Namen, unter dem `write_config` sie
       wirklich schreibt. Zwei Tests halten die IDs fest.
-- [ ] **K5 — Slicer-Lauf: Timeout tötet den Dialog, Schließen friert ein,
+- [x] **K5 — Slicer-Lauf: Timeout tötet den Dialog, Schließen friert ein,
       Abbrechen fehlt** (§2.8, Regel 17; `reject()` umgeht `closeEvent`).
-- [ ] **K6 — Cura scheitert am eigenen Türsteher**: der Dialog verlangt ein
+
+      **Behoben:** `_run_slicer` ersetzt das blinde `subprocess.run` —
+      Zeitgrenze und Startfehler sind `ExternalToolError` mit Vorschlägen,
+      und ein `CancelSignal` beendet den Kindprozess (erst höflich, dann
+      endgültig). Der Dialog hat ein Abbrechen neben dem Balken, der bei
+      mehreren Platten bestimmt zählt; `reject()` und `closeEvent` gehen
+      beide durch `_settle`, das den Lauf abbricht statt ihn auszusitzen —
+      das Warten bleibt als Absturzschutz, ist nach dem Kill aber kurz.
+      Drei Tests, darunter der Zwilling zum OpenSCAD-Timeout.
+- [x] **K6 — Cura scheitert am eigenen Türsteher**: der Dialog verlangt ein
       Maschinenprofil, das es bei Cura strukturell nicht gibt, obwohl der
       Kern die Maschine selbst beschreibt.
+
+      **Behoben:** Der Türsteher gilt nur noch der Orca-Familie; Cura wird
+      wie Prusa gar nicht erst durchsucht und sagt ehrlich, dass Solidon
+      die Maschine selbst beschreibt (`_machine_keys`, `_cura_base`).
 - [x] **K7 — Weg 4 ist gebaut, aber nicht benutzbar**: `finish_armature`
       schickt eine leere Pose (nichts passiert, ohne Ansage); eine getippte
       Pose tötet über ungeschütztes `json.loads` den Auswertungs-Thread und

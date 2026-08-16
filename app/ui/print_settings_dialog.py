@@ -50,13 +50,14 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import discover, tools
-from app.core.errors import AppError
+from app.core.errors import AppError, OperationCancelled
 from app.core.export import handover, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import arrangement_holds, write_assembly
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import print_settings, profiles
 from app.core.log import get_logger
+from app.core.scene.cancel import CancelSignal
 from app.core.slice import advise, gcode
 from app.core.types import (
     BoundingBox,
@@ -720,10 +721,20 @@ class _SliceWorker(QThread):
         self._settings = settings
         self._profile = profile
         self._setup = setup
+        self.cancelled = CancelSignal()
+        """Der Schalter zum Abbrechen-Knopf (§2.8): Der Kern-Lauf fragt ihn ab
+        und beendet den Kindprozess — vorher lief der Slicer, bis er fertig
+        war, gleich was der Nutzer wollte."""
+
+    def cancel(self) -> None:
+        """Bricht den laufenden und alle weiteren Läufe ab."""
+        self.cancelled.cancel()
 
     def run(self) -> None:
         results: list[handover.SliceOutcome] = []
         for index, entry in enumerate(self._runs, start=1):
+            if self.cancelled.is_cancelled:
+                return
             self.step.emit(index, len(self._runs))
             try:
                 outcome = handover.slice_model(
@@ -733,7 +744,12 @@ class _SliceWorker(QThread):
                     self._setup,
                     keep_arrangement=entry.keep_arrangement,
                     slots=entry.slots,
+                    cancelled=self.cancelled,
                 )
+            except OperationCancelled:
+                # Kein Fehler und nie als einer gezeigt (§15.6): der Nutzer
+                # hat abgebrochen, und das Aufräumen macht `finished`.
+                return
             except AppError as problem:
                 # Eine Platte, die scheitert, nimmt den Auftrag mit: Was danach
                 # käme, wäre eine Sammlung von Druckdateien, in der eine fehlt —
@@ -1000,6 +1016,18 @@ class PrintSettingsDialog(QDialog):
                     "Dieser Slicer braucht kein Grundprofil — Solidon schreibt eine vollständige "
                     "Konfiguration."
                 )
+            )
+            return
+        if flavour == "cura":
+            # CuraEngine hat keinen wählbaren Profilbestand: seine Ordner
+            # heißen definitions, variants und quality — `find_profiles`
+            # fände strukturell nichts. Der Kern beschreibt die Maschine
+            # selbst (`_machine_keys`) und nimmt die mitgelieferte Definition
+            # (`_cura_base`). Vorher lief die Suche, fand null, und der
+            # Türsteher in `_slice` verlangte eine Wahl aus einer leeren
+            # Liste — ein Fehler ohne Ausweg (Regel 17, §2.7).
+            self.profile_note.setText(
+                tr("Dieser Slicer braucht kein Profil — Solidon beschreibt die Maschine selbst.")
             )
             return
 
@@ -1284,8 +1312,14 @@ class PrintSettingsDialog(QDialog):
         self.progress = QProgressBar(holder)
         self.progress.setRange(0, 0)
         self.progress.setVisible(False)
+        # §2.8: über zwei Sekunden gehört neben den Fortschritt ein Abbrechen.
+        # Es gab keines — der Lauf war erst zu Ende, wenn der Slicer es war.
+        self.cancel_slice = QPushButton(tr("Abbrechen"), holder)
+        self.cancel_slice.setVisible(False)
+        self.cancel_slice.clicked.connect(self._cancel_slice)
         row.addWidget(self.state)
         row.addWidget(self.progress)
+        row.addWidget(self.cancel_slice)
         return holder
 
     def _build_buttons(self) -> QWidget:
@@ -1575,7 +1609,11 @@ class PrintSettingsDialog(QDialog):
             base_process=str(self.process_choice.currentData() or ""),
             base_filament=str(self.filament_choice.currentData() or ""),
         )
-        if setup.flavour != "prusa" and not setup.machine_profile:
+        # Nur die Orca-Familie: PrusaSlicer läuft mit Solidons vollständiger
+        # ini, und CuraEngine bekommt die Maschine aus dem Kern selbst
+        # (`_machine_keys`) — für Cura gibt es strukturell keine Profile zu
+        # wählen, und die Forderung war eine Wahl aus einer leeren Liste.
+        if setup.flavour == "orca" and not setup.machine_profile:
             self.slicer_box.setChecked(True)
             self.state.setText(
                 tr("Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen.")
@@ -1615,7 +1653,17 @@ class PrintSettingsDialog(QDialog):
             return
 
         self.slice_button.setEnabled(False)
+        # Bei mehreren Platten ist die Plattenzahl die ehrlichste Schätzung
+        # (§2.8) — bei einer bliebe ein Balken „0 von 1" eine Zahl ohne
+        # Aussage, dann läuft er unbestimmt.
+        if len(runs) > 1:
+            self.progress.setRange(0, len(runs))
+            self.progress.setValue(0)
+        else:
+            self.progress.setRange(0, 0)
         self.progress.setVisible(True)
+        self.cancel_slice.setEnabled(True)
+        self.cancel_slice.setVisible(True)
         self.state.setText(tr("Der Slicer rechnet …"))
 
         worker = _SliceWorker(runs, self.settings, self.session.profile, setup)
@@ -1696,11 +1744,25 @@ class PrintSettingsDialog(QDialog):
         Nur bei mehreren: „Platte 1 von 1" wäre eine Zahl ohne Aussage.
         """
         if count > 1:
+            self.progress.setValue(index - 1)
             self.state.setText(
                 tr("Der Slicer rechnet — Platte {nummer} von {anzahl} …")
                 .replace("{nummer}", str(index))
                 .replace("{anzahl}", str(count))
             )
+
+    def _cancel_slice(self) -> None:
+        """Der Abbrechen-Knopf: den Kindprozess beenden, den Rest lassen.
+
+        Der Knopf graut sofort aus — zweimal abbrechen gibt es nicht, und der
+        Text daneben sagt, dass es angekommen ist.
+        """
+        worker = self._worker
+        if worker is None:
+            return
+        self.cancel_slice.setEnabled(False)
+        self.state.setText(tr("Wird abgebrochen …"))
+        worker.cancel()
 
     def _sliced(self, outcomes: list[handover.SliceOutcome]) -> None:
         """Was der Lauf gebracht hat — über alle Platten zusammen.
@@ -1791,15 +1853,43 @@ class PrintSettingsDialog(QDialog):
 
     def _slice_finished(self) -> None:
         self.progress.setVisible(False)
+        self.cancel_slice.setVisible(False)
         self.slice_button.setEnabled(True)
+        worker = self._worker
+        if worker is not None and worker.cancelled.is_cancelled:
+            self.state.setText(tr("Abgebrochen."))
         self._worker = None
 
+    def reject(self) -> None:
+        """Escape und der Schließen-Knopf gehen denselben Weg wie das X.
+
+        Qt ruft bei ``reject()`` kein ``closeEvent`` — der Arbeiter lief
+        unsichtbar weiter, und ``_temporary`` blieb als Ordner liegen.
+        """
+        self._settle()
+        super().reject()
+
     def closeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
-        """Den Ordner erst freigeben, wenn niemand mehr darin liest."""
-        for worker in (self._worker, self._profile_worker):
-            if worker is not None and worker.isRunning():
-                worker.wait()
+        self._settle()
+        super().closeEvent(event)
+
+    def _settle(self) -> None:
+        """Den Ordner erst freigeben, wenn niemand mehr darin liest.
+
+        Der Slicer-Lauf wird abgebrochen statt abgewartet: ``worker.wait()``
+        ohne Grenze stand hier im Qt-Hauptthread, und wer während eines
+        großen Auftrags schloss, hatte eine eingefrorene Anwendung, bis der
+        externe Slicer von sich aus fertig war — Minuten. Das Warten bleibt,
+        aber nach dem Abbruch ist es kurz: der Kindprozess stirbt binnen
+        Sekunden, und ohne das Warten stürbe der Thread über einem
+        zerstörten Dialog.
+        """
+        worker = self._worker
+        if worker is not None and worker.isRunning():
+            worker.cancel()
+        for pending in (self._worker, self._profile_worker):
+            if pending is not None and pending.isRunning():
+                pending.wait()
         if self._temporary is not None:
             self._temporary.cleanup()
             self._temporary = None
-        super().closeEvent(event)
