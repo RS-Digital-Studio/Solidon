@@ -49,6 +49,10 @@ RELEASES = ROOT / "Releases"
 PAGES = {
     "de": ("handbuch.html", "handbuch/de"),
     "en": ("en/manual.html", "../handbuch/en"),
+    "es": ("es/manual.html", "../handbuch/es"),
+    "fr": ("fr/manual.html", "../handbuch/fr"),
+    "it": ("it/manual.html", "../handbuch/it"),
+    "pt": ("pt/manual.html", "../handbuch/pt"),
 }
 
 
@@ -281,7 +285,14 @@ def write_figures(target: Path, language: str) -> tuple[dict[str, str], dict[str
 #: Textsammler liest nur ``app/``, und ein Wort, das nur auf der Website
 #: vorkommt, gehört nicht in den Katalog der Anwendung — es stünde dort für
 #: immer als unübersetzbar herum.
-CONTENTS = {"de": "Inhalt", "en": "Contents"}
+CONTENTS = {
+    "de": "Inhalt",
+    "en": "Contents",
+    "es": "Índice",
+    "fr": "Sommaire",
+    "it": "Indice",
+    "pt": "Índice",
+}
 
 #: Die Zwischenüberschrift im Verzeichnis, dort wo die geschriebenen Kapitel
 #: enden und die aus dem Register erzeugten beginnen.
@@ -293,6 +304,10 @@ CONTENTS = {"de": "Inhalt", "en": "Contents"}
 REFERENCE_HEADING = {
     "de": "Referenz — jede Operation mit ihren Werten",
     "en": "Reference — every operation with its values",
+    "es": "Referencia — cada operación con sus valores",
+    "fr": "Référence — chaque opération avec ses valeurs",
+    "it": "Riferimento — ogni operazione con i suoi valori",
+    "pt": "Referência — cada operação com os seus valores",
 }
 
 #: Die Adresse, unter der die Seiten liegen — für canonical, hreflang und die
@@ -309,12 +324,28 @@ DESCRIPTION = {
     "en": "The Solidon3D manual: {pages} chapters, from the first fifteen minutes to "
     "every operation with its values and ranges. The reference half comes from "
     "the same registry as the menus.",
+    "es": "El manual de Solidon3D: {pages} capítulos, desde los primeros quince "
+    "minutos hasta cada operación con sus valores y rangos. La mitad de "
+    "referencia sale del mismo registro que los menús.",
+    "fr": "Le manuel de Solidon3D : {pages} chapitres, des quinze premières minutes "
+    "à chaque opération avec ses valeurs et ses plages. La moitié de référence "
+    "vient du même registre que les menus.",
+    "it": "Il manuale di Solidon3D: {pages} capitoli, dai primi quindici minuti a "
+    "ogni operazione con i suoi valori e intervalli. La metà di riferimento "
+    "viene dallo stesso registro dei menu.",
+    "pt": "O manual do Solidon3D: {pages} capítulos, dos primeiros quinze minutos "
+    "a cada operação com os seus valores e intervalos. A metade de referência "
+    "vem do mesmo registo que os menus.",
 }
 
 #: Die Texte des Deckblatts, aus demselben Grund nicht über ``tr()``.
 COVER = {
     "de": ("Handbuch", "Konstruieren, Erzeugen und Bearbeiten für den 3D-Druck", "Version"),
     "en": ("Manual", "Design, generate and prepare for 3D printing", "Version"),
+    "es": ("Manual", "Construir, generar y preparar para la impresión 3D", "Versión"),
+    "fr": ("Manuel", "Concevoir, générer et préparer pour l'impression 3D", "Version"),
+    "it": ("Manuale", "Costruire, generare e preparare per la stampa 3D", "Versione"),
+    "pt": ("Manual", "Construir, gerar e preparar para a impressão 3D", "Versão"),
 }
 
 #: Die Kopfzeile der Seite — dieselbe wie auf der Startseite, damit das
@@ -323,8 +354,12 @@ COVER = {
 #: zur Startseite mit ihrer Preis-Sprungmarke. Nicht über ``tr()``, aus
 #: demselben Grund wie ``CONTENTS``.
 HEADER_NAV = {
-    "de": ("Inhalt", "English", "en/manual.html", "Testen", "index.html#preis"),
-    "en": ("Contents", "Deutsch", "../handbuch.html", "Try it", "index.html#pricing"),
+    "de": ("Inhalt", "Testen", "index.html#preis"),
+    "en": ("Contents", "Try it", "index.html#pricing"),
+    "es": ("Índice", "Probar", "index.html#pricing"),
+    "fr": ("Sommaire", "Essayer", "index.html#pricing"),
+    "it": ("Indice", "Prova", "index.html#pricing"),
+    "pt": ("Índice", "Experimentar", "index.html#pricing"),
 }
 
 #: Der Satz unter dem Titel. Er sagt in einer Zeile, was die Seite ist und
@@ -336,6 +371,16 @@ LEDE = {
     "en": "{pages} chapters — from the first fifteen minutes to the reference "
     "of every operation, generated from the same source as the manual inside "
     "the application.",
+    "es": "{pages} capítulos — desde los primeros quince minutos hasta la "
+    "referencia de cada operación, generados de la misma fuente que el manual "
+    "dentro de la aplicación.",
+    "fr": "{pages} chapitres — des quinze premières minutes à la référence de "
+    "chaque opération, générés depuis la même source que le manuel dans "
+    "l'application.",
+    "it": "{pages} capitoli — dai primi quindici minuti al riferimento di ogni "
+    "operazione, generati dalla stessa fonte del manuale nell'applicazione.",
+    "pt": "{pages} capítulos — dos primeiros quinze minutos à referência de "
+    "cada operação, gerados da mesma fonte que o manual dentro da aplicação.",
 }
 
 #: Das Markenzeichen der Kopfzeile, identisch mit der Startseite.
@@ -348,17 +393,42 @@ BRAND_MARK = (
 )
 
 
+def _switch_target(current: str, other: str) -> str:
+    """Wo das Handbuch der anderen Sprache liegt, von der aktuellen aus.
+
+    Deutsch wohnt in der Wurzel, jede andere Sprache in ihrem Ordner — die
+    Pfade sind also relativ verschieden, je nachdem, wo man steht.
+    """
+    if current == "de":
+        return "handbuch.html" if other == "de" else f"{other}/manual.html"
+    return "../handbuch.html" if other == "de" else f"../{other}/manual.html"
+
+
+def _switcher(language: str) -> str:
+    """Die Kürzelreihe des Sprachwechsels — sechs Ziele statt eines Links.
+
+    Als Kürzel, weil sechs ausgeschriebene Sprachnamen die Kopfzeile
+    sprengten; die eigene Sprache ist markiert und verweist auf sich selbst,
+    damit die Reihe an jeder Stelle gleich aussieht.
+    """
+    links = "".join(
+        f'<a href="{_switch_target(language, other)}" hreflang="{other}"'
+        + (' aria-current="page"' if other == language else "")
+        + f">{other.upper()}</a>"
+        for other in sorted(PAGES)
+    )
+    return f'<span class="langs">{links}</span>'
+
+
 def _header(language: str) -> str:
     """Die Kopfzeile — am Bildschirm klebt sie oben, im Druck fehlt sie."""
-    toc_label, other_label, other_target, cta_label, cta_target = HEADER_NAV.get(
-        language, HEADER_NAV["de"]
-    )
+    toc_label, cta_label, cta_target = HEADER_NAV.get(language, HEADER_NAV["de"])
     return (
         '<header class="site no-print"><div class="wrap">'
         f'<a class="brand" href="index.html">{BRAND_MARK}Solidon<span>3D</span></a>'
         '<nav class="lang">'
         f'<a href="#toc">{toc_label}</a>'
-        f'<a href="{other_target}">{other_label}</a>'
+        f"{_switcher(language)}"
         f'<a class="cta" href="{cta_target}">{cta_label}</a>'
         "</nav></div></header>"
     )
@@ -370,7 +440,14 @@ PDF_MARGIN_SIDE = 18.0
 PDF_MARGIN_TOP = 16.0
 
 #: Wie die Fußzeile die Seite zählt.
-PAGE_OF = {"de": "Seite {page} von {total}", "en": "Page {page} of {total}"}
+PAGE_OF = {
+    "de": "Seite {page} von {total}",
+    "en": "Page {page} of {total}",
+    "es": "Página {page} de {total}",
+    "fr": "Page {page} sur {total}",
+    "it": "Pagina {page} di {total}",
+    "pt": "Página {page} de {total}",
+}
 
 #: Die Farben des hellen Themas (``website/style.css``). Gedruckt wird auf
 #: Papier, also gilt hell — und es sind dieselben Werte, mit denen die
@@ -505,7 +582,13 @@ def page_html(language: str, prefix: str) -> str:
     pages = len(manual.pages())
     description = DESCRIPTION[language].format(pages=pages)
     lede = LEDE.get(language, LEDE["de"]).format(pages=pages)
-    canonical = f"{SITE}handbuch.html" if language == "de" else f"{SITE}en/manual.html"
+    canonical = f"{SITE}{page_for(language)[0]}"
+    # Jede Sprache nennt jede — sechs Zeilen aus derselben Tabelle, die auch
+    # die Seiten baut, statt zweier von Hand gepflegter.
+    alternates = "".join(
+        f'<link rel="alternate" hreflang="{code}" href="{SITE}{page_for(code)[0]}">\n'
+        for code in sorted(PAGES)
+    )
     return (
         f'<!doctype html>\n<html lang="{language}">\n<head>\n'
         f'<meta charset="utf-8">\n'
@@ -516,8 +599,7 @@ def page_html(language: str, prefix: str) -> str:
         # sie über nichts als ihren Titel.
         f'<meta name="description" content="{description}">\n'
         f'<link rel="canonical" href="{canonical}">\n'
-        f'<link rel="alternate" hreflang="de" href="{SITE}handbuch.html">\n'
-        f'<link rel="alternate" hreflang="en" href="{SITE}en/manual.html">\n'
+        f"{alternates}"
         f'<link rel="alternate" hreflang="x-default" href="{SITE}handbuch.html">\n'
         f'<meta property="og:type" content="article">\n'
         f'<meta property="og:site_name" content="{APP_NAME}">\n'
