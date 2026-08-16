@@ -5975,7 +5975,7 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       Slicen gemerkt, nicht beim Schließen) und A6 (kein Abgleich des
       gemerkten Profils mit dem Drucker des Projekts) — beide gering, beide
       im Gering-Block.
-- [ ] **Mittel-Block Kern**: Platten-Cache verliert
+- [x] **Mittel-Block Kern**: Platten-Cache verliert
       `findings`/`solver`/`transform`; T-Vernähen quadratisch und doppelt;
       Rückfallkette unabbrechbar; `FIT_TOLERANCE` widerspricht §14;
       `nut_trap`/`printed_thread` mit Konstanten-Toleranz (Kalibrierung
@@ -5985,6 +5985,17 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       Vorratsläufen identische Schlüssel; Zipbomben-Lücke beim 3MF;
       Einheitenantwort landet nicht in den Op-Parametern (§15.1);
       Nullmessung gilt als Übereinstimmung; Baumstützen erreichen Cura nie.
+
+      **Alles behoben und einzeln committet** — mit zwei Vermerken:
+      `FIT_TOLERANCE` ist jetzt im Code begründet (Tessellationsrauschen
+      ±0,025 mm; mit `EPS_GEOM` wäre jede Passung auf einem exakten Körper
+      „verletzt"), aber **§14 ist mit Ansage nachzuziehen** — Robert
+      entscheidet. Und die **Einheitenantwort** bleibt offen: die saubere
+      Lösung ist eine Entscheidung zwischen „vorab fragen wie die CLI"
+      (kostet `read_mesh` doppelt, im Hauptthread) und
+      „`history.change_params` nach der Antwort" (kostet eine eigene
+      Undo-Stufe: das erste Undo stellte die Frage erneut) — ebenfalls
+      Roberts Entscheidung.
 - [ ] **Mittel-Block Oberfläche**: Arbeiter-Halteleine in fünf Dialogen
       fehlt (Hauptfenster macht es vor — in ein Modul heben); Export rechnet
       im Hauptthread; Sculpting kennt kein Ziehen (20 Züge = 20 Klicks);
@@ -5992,6 +6003,17 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       verliert dann die Züge; die Befehlspalette umgeht die Gestenmodi und
       kennt keine Verfügbarkeit; Differenzlegende einfarbig; Fenstergeometrie
       wird nie gespeichert.
+
+      **Fast durch:** Halteleine lebt in `app/ui/leash.py` (mit
+      Wiederanstoß) und gilt in allen fünf Dialogen; Gestensitzungen sperren
+      die Operationen und *Fertig* prüft sein Ziel; `launch_operation` ist
+      der eine Einstieg für Menü und Palette, und die Palette zeigt
+      Verfügbarkeit mit Grund; der Pinsel malt beim Ziehen (halber Radius
+      als Mindestabstand); Legende zweifarbig, Fenstergeometrie gemerkt,
+      Druckeinstellungsdialog wird freigegeben, Wandprüfung mit Wartezeiger,
+      „Festschreiben" statt „OK". **Offen:** Export/Import-Wege asynchron
+      (B3/B4/B5) und die Werkzeugleisten-Entscheidung für *Formen*/*Skelett*
+      (M2) — die nächsten Pakete.
 - [ ] **Gering-Block als eigene Runde**: ~30 englische Docstrings (AGENTS.md
       behauptet Vollständigkeit), acht englische nutzersichtbare Fehlertexte
       in `backends/mesh.py`, „aufgeloest" in `advise.py`, deutsche
