@@ -521,6 +521,42 @@ def test_every_plate_becomes_its_own_run(dialog: PrintSettingsDialog, tmp_path: 
     assert all(entry.model.is_file() for entry in runs)
 
 
+def test_the_chosen_slot_profile_reaches_the_run(
+    dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """Was die Slot-Zeile einsammelt, steht am Slot des Laufs (§20).
+
+    Der Fund dazu: `slot_profiles` wurde eingesammelt, gemeldet („{slot}
+    druckt mit {profil}.") und nie an `write_config` gereicht —
+    `MaterialSlot.material` setzte niemand, alle Slots slicten mit dem
+    Basisfilament, nur die Farbe stimmte.
+    """
+    import trimesh
+
+    from app.core.export import handover
+    from app.core.geom.mesh import MeshData
+    from app.core.types import MaterialSlot, SceneObject
+
+    mesh = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    mesh.apply_translation((0.0, 0.0, 10.0))
+    slotted = SceneObject(
+        id="A",
+        name="A",
+        mesh=MeshData.of(mesh),
+        material_slots=[
+            MaterialSlot(index=0, name="Gehäuse"),
+            MaterialSlot(index=1, name="Schrift"),
+        ],
+    )
+    dialog.settings = replace(dialog.settings, slot_profiles=("", "Elegoo PLA"))
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    run = dialog._plate_run([slotted], 0, tmp_path, "satz", setup)
+
+    assert run.slots[0].material is None, "ohne Wahl gilt das Filament der Platte"
+    assert run.slots[1].material == "Elegoo PLA"
+
+
 def test_an_unknown_printer_leaves_the_dialog_responsive(dialog: PrintSettingsDialog) -> None:
     """Ohne passenden Drucker bleibt die Filamentliste leer — und still.
 

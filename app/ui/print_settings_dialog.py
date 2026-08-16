@@ -1681,7 +1681,11 @@ class PrintSettingsDialog(QDialog):
         return PlateRun(
             plate=plate,
             model=written,
-            slots=tuple(slots),
+            # Die Wahl aus den Slot-Zeilen reist am Slot selbst: eingesammelt
+            # wurde sie schon immer, angekommen ist sie hier nie — alle Slots
+            # slicten mit dem Basisfilament, und „druckt mit" war eine Zusage
+            # ohne Deckung (§20).
+            slots=handover.with_slot_profiles(slots, self.settings.slot_profiles),
             keep_arrangement=keep,
             findings=tuple(findings),
         )

@@ -5903,11 +5903,22 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       Relative Altformen bleiben erlaubt (gleiche Regel wie `import`),
       `file=` mit Ausdruck statt Literal ist nicht prüfbar und wird
       abgelehnt. Zehn neue Testfälle.
-- [ ] **K3 — Slot-Filamente erreichen die Übergabe nie**: der Dialog sammelt
+- [x] **K3 — Slot-Filamente erreichen die Übergabe nie**: der Dialog sammelt
       `slot_profiles` ein und meldet Vollzug, `MaterialSlot.material` setzt
       niemand — alle Slots slicen mit dem Basisfilament.
-- [ ] **K4 — die exportierte 3MF trägt absolute Pfade als Profil-IDs**
+
+      **Behoben:** `handover.with_slot_profiles` heftet die Wahl positionsweise
+      an die Slots (die Position ist die Extruderbelegung), `_plate_run` ruft
+      es — `write_config` war auf `MaterialSlot.material` längst vorbereitet.
+      Der Dialogtest prüft jetzt den Eingang, nicht nur die Fähigkeit.
+- [x] **K4 — die exportierte 3MF trägt absolute Pfade als Profil-IDs**
       (Regel 12; Orca erwartet Namen und trifft kein Preset).
+
+      **Behoben:** `project_settings` schreibt Namen — das Maschinenprofil
+      über `_profile_name` (beschnitten wird nur, was wie eine Profildatei
+      endet; `.stem` auf „0.12mm Fine @…" schnitte mitten ins Maß), Prozess
+      und Filament tragen den Solidon-Namen, unter dem `write_config` sie
+      wirklich schreibt. Zwei Tests halten die IDs fest.
 - [ ] **K5 — Slicer-Lauf: Timeout tötet den Dialog, Schließen friert ein,
       Abbrechen fehlt** (§2.8, Regel 17; `reject()` umgeht `closeEvent`).
 - [ ] **K6 — Cura scheitert am eigenen Türsteher**: der Dialog verlangt ein

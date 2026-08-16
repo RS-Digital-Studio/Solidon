@@ -346,6 +346,28 @@ class SlicerConfig:
         return self.filaments[0] if self.filaments else None
 
 
+def with_slot_profiles(
+    slots: Sequence[MaterialSlot], chosen: Sequence[str]
+) -> tuple[MaterialSlot, ...]:
+    """Heftet die im Dialog gewählten Filamentprofile an die Slots (§20).
+
+    ``chosen`` ist ``PrintSettings.slot_profiles``: je Position ein
+    Profilname, die Position ist die Extruderbelegung. Wo nichts steht,
+    bleibt der Slot, wie er ist — dann gilt das Filament der Platte.
+
+    Diese Zuordnung ist das Stück, das fehlte: Der Dialog sammelte die Wahl
+    ein und meldete „druckt mit", ``write_config`` war auf
+    ``MaterialSlot.material`` vorbereitet — nur gesetzt hat es niemand, und
+    alle Slots slicten mit dem Basisfilament.
+    """
+    return tuple(
+        replace(entry, material=chosen[position])
+        if position < len(chosen) and chosen[position]
+        else entry
+        for position, entry in enumerate(slots)
+    )
+
+
 def write_config(
     settings: PrintSettings,
     profile: Profile,
@@ -484,15 +506,36 @@ def project_settings(
     # Woran der Slicer erkennt, wofür diese Werte gelten. Ohne sie lädt er
     # seine eigene Auswahl darunter, und was hier nicht ausdrücklich steht,
     # kommt aus einem Profil, das niemand gewählt hat.
+    #
+    # Als **Namen**, nie als Pfade: Die Oberfläche merkt sich Profile als
+    # Pfade, und unverändert durchgereicht stand `C:\Program Files\…` in
+    # einer Datei, die weitergegeben wird (Regel 12) — und die Orca-Familie
+    # trifft mit einem Pfad ohnehin kein Preset. Prozess und Filament tragen
+    # den Solidon-Namen, unter dem `write_config` sie wirklich schreibt:
+    # unter dem Namen eines Systemprofils lüde der Slicer sein eigenes
+    # darunter — die Verwechslung, die einen Satz Gewürzbehälter gekostet
+    # hat.
     if setup.machine_profile:
-        resolved["printer_settings_id"] = setup.machine_profile
-    if setup.base_process:
-        resolved["print_settings_id"] = setup.base_process
-    if setup.base_filament:
-        resolved["filament_settings_id"] = [setup.base_filament] * extruders
+        resolved["printer_settings_id"] = _profile_name(setup.machine_profile)
+    resolved["print_settings_id"] = f"Solidon {settings.title}"
+    marke = _profile_name(setup.base_filament) if setup.base_filament else ""
+    resolved["filament_settings_id"] = [f"Solidon {marke or settings.title}"] * extruders
     resolved.setdefault("printer_model", profile.printer.title)
     resolved.setdefault("nozzle_diameter", [str(profile.printer.nozzle_diameter)])
     return resolved
+
+
+def _profile_name(reference: str) -> str:
+    """Der Name eines Profils — gleich, ob ein Name oder ein Pfad kam.
+
+    Beschnitten wird nur, was wie eine Profildatei endet: ``.stem`` auf
+    „0.12mm Fine @Elegoo CC2 0.4 nozzle" schnitte mitten ins Maß, denn dort
+    ist der letzte Punkt Teil des Namens.
+    """
+    candidate = Path(reference)
+    if candidate.suffix.lower() in (".json", ".ini"):
+        return candidate.stem
+    return reference
 
 
 def _orca_process(
@@ -569,7 +612,7 @@ def _orca_filament(
     # später liest oder sie jemandem gibt, sieht nur „PETG" und legt die
     # falsche Rolle ein. Das „Solidon" davor bleibt, denn die Werte sind
     # Solidons und nicht die des Herstellers.
-    marke = Path(setup.base_filament).stem if setup.base_filament else ""
+    marke = _profile_name(setup.base_filament) if setup.base_filament else ""
     document: dict[str, object] = {
         "type": "filament",
         "name": f"Solidon {marke or settings.title}",

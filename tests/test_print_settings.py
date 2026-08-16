@@ -1383,6 +1383,53 @@ def test_a_project_file_carries_its_values_written_out(tmp_path, monkeypatch) ->
     )
 
 
+def test_the_project_settings_ids_are_names_not_paths() -> None:
+    """Regel 12: Der Pfad des eigenen Rechners reist nicht in einer Datei
+    mit, die weitergegeben wird — und die Orca-Familie trifft mit einem Pfad
+    ohnehin kein Preset. Prozess und Filament tragen den Solidon-Namen, unter
+    dem `write_config` sie wirklich schreibt; unter dem Namen eines
+    Systemprofils lüde der Slicer sein eigenes darunter."""
+    from pathlib import Path
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    root = "C:/Program Files/ElegooSlicer/resources/profiles/Elegoo"
+    setup = handover.SlicerSetup(
+        executable=Path("elegoo-slicer.exe"),
+        flavour="orca",
+        machine_profile=f"{root}/machine/ECC2/Elegoo Centauri Carbon 2 0.4 nozzle.json",
+        base_process=f"{root}/process/ECC2/0.12mm Fine @Elegoo CC2 0.4 nozzle.json",
+        base_filament=f"{root}/filament/ECC2/Elegoo PLA @ECC2.json",
+    )
+
+    werte = handover.project_settings(settings, profile, setup, extruders=2)
+
+    assert werte["printer_settings_id"] == "Elegoo Centauri Carbon 2 0.4 nozzle"
+    assert werte["print_settings_id"] == f"Solidon {settings.title}"
+    assert werte["filament_settings_id"] == ["Solidon Elegoo PLA @ECC2"] * 2
+    for key in ("printer_settings_id", "print_settings_id"):
+        assert "/" not in str(werte[key]) and "\\" not in str(werte[key])
+
+
+def test_a_profile_name_with_dots_is_not_truncated() -> None:
+    """`.stem` auf „0.12mm Fine @…" schnitte mitten ins Maß — ein Name, der
+    schon ein Name ist, bleibt unangetastet."""
+    from pathlib import Path
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    setup = handover.SlicerSetup(
+        executable=Path("elegoo-slicer.exe"),
+        flavour="orca",
+        machine_profile="Elegoo Centauri Carbon 2 0.4 nozzle",
+        base_process="0.12mm Fine @Elegoo CC2 0.4 nozzle",
+    )
+
+    werte = handover.project_settings(settings, profile, setup)
+
+    assert werte["printer_settings_id"] == "Elegoo Centauri Carbon 2 0.4 nozzle"
+
+
 def test_the_bed_temperature_reaches_every_plate(tmp_path) -> None:
     """Die Temperatur gehört dem Material, der Plattentyp der Maschine.
 
