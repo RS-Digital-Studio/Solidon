@@ -40,8 +40,7 @@ bekommt einen roten Lauf.
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
-| Mittel-Block Oberfläche: *Formen*/*Skelett* in die Werkzeugleiste (M2) samt `ArmatureField` | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | das letzte Paket der Abarbeitung — läuft |
-| Gering-Block: Zylinder-Z, Redirect, Kartenabbruch, G3, A5/A6, *Hilfe → Beispiele* | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | dieselbe Runde |
+| Parameterausdrücke in Pose-Winkeln | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | das Gegenstück zu `sketch_parameter_references` für `kind="armature"` — Kernarbeit mit eigenen Tests |
 
 ---
 
@@ -5998,7 +5997,7 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       „`history.change_params` nach der Antwort" (kostet eine eigene
       Undo-Stufe: das erste Undo stellte die Frage erneut) — ebenfalls
       Roberts Entscheidung.
-- [ ] **Mittel-Block Oberfläche**: Arbeiter-Halteleine in fünf Dialogen
+- [x] **Mittel-Block Oberfläche**: Arbeiter-Halteleine in fünf Dialogen
       fehlt (Hauptfenster macht es vor — in ein Modul heben); Export rechnet
       im Hauptthread; Sculpting kennt kein Ziehen (20 Züge = 20 Klicks);
       während Gestensitzungen bleiben alle Ops anklickbar und *Fertig*
@@ -6017,22 +6016,35 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       (`_ExportWorker`, ohne Abbrechen — mit Begründung im Docstring und in
       der Gebietsregel), die Druckeinstellungen öffnen sofort und
       `take_slice_result` trägt die Analyse nach, die synchronen Lesungen
-      stehen unter `waiting()`. **Offen:** die Werkzeugleisten-Entscheidung
-      für *Formen*/*Skelett* (M2) samt `ArmatureField` — das letzte Paket.
-- [ ] **Gering-Block als eigene Runde**: ~30 englische Docstrings (AGENTS.md
+      stehen unter `waiting()`. Und das letzte Paket ist drin: *Formen* und
+      *Skelett* stehen als Knöpfe neben *Zeichnen* in der oberen
+      Werkzeugleiste (ausgegraut mit Grund über `_pick_hint`), die Tour
+      nennt den echten Weg und das Ziehen, und die Stellung eines Skeletts
+      ist ein `ArmatureField` mit drei Zahlenfeldern je Knochen statt rohem
+      JSON.
+- [x] **Gering-Block als eigene Runde**: ~30 englische Docstrings (AGENTS.md
       behauptet Vollständigkeit), acht englische nutzersichtbare Fehlertexte
       in `backends/mesh.py`, „aufgeloest" in `advise.py`, deutsche
       Bezeichner in `tools/check_env.py` (Sprachprüfung sieht `tools/`
       nicht), Zylinder-Sortierung ohne Z, Redirect kann `check_url` umgehen,
       Analysekarten ohne Abbruch, Details in der Datei.
 
-      **Sprache vollständig erledigt** (Übersetzungen, `mesh.py`-Texte samt
-      Katalogen, `check_env.py`-Bezeichner, Sprachprüfung sieht `tools/`,
-      dazu die Kommentar- und Docstring-Korrekturen). **Als Rest offen:**
-      Zylinder-Sortierung ohne Z, Redirect an `check_url` vorbei,
-      Analysekarten ohne Abbruch, `displace`-Dialog schaltet bei „Auflegen"
-      nicht um (G3), Profil erst beim Slicen gemerkt (A5), kein Abgleich
-      des gemerkten Profils mit dem Drucker (A6), *Hilfe → Beispiele*.
+      **Vollständig erledigt** — Sprache (Übersetzungen, `mesh.py`-Texte
+      samt Katalogen, `check_env.py`-Bezeichner, Sprachprüfung sieht
+      `tools/`) und der Rest: Zylinder-Sortierung mit Z, `check_url` prüft
+      den erreichten Ort nach der Weiterleitung, Analysekarten abbrechbar,
+      abhängige Felder grauen mit Grund (G3), die Slicer-Wahl wird beim
+      Schließen gemerkt (A5) und gegen den Drucker abgeglichen (A6), und
+      *Hilfe → Beispiele* führt auf den Startbildschirm.
+- [ ] **Neuer Fund aus dem ArmatureField-Bau:** Der `pose`-doc verspricht
+      „Ein Winkel darf ein Projektparameter sein" — der Kern löst einen
+      Ausdruck *innerhalb* des JSON-Textes aber nicht auf:
+      `resolve_params` sieht nur ganze Parameterwerte, und
+      `pose_from_text._vector` wirft bei einem String (das Feld bewahrt
+      einen getippten Ausdruck, die Operation lehnt ihn sauber ab). Der
+      Weg ist das Gegenstück zu `sketch_parameter_references()` und
+      `_with_sketch_context()` für `kind="armature"` — Kernarbeit mit
+      eigenen Tests, samt Cache-Schlüssel-Beteiligung (§15).
 
 **Wettbewerb (Recherche 16.08., Quellen in der Durchsichts-Datei):** Die
 Chat-Alleinstellung ist seit Zoo „Zookeeper" (01/2026) nicht mehr
