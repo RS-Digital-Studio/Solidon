@@ -93,7 +93,7 @@ class PartSpec:
     subtractive: bool = False
     """Wahr für eine Form, die abgezogen wird: Bohrung, Tasche, Mutternfalle."""
     features: tuple[str, ...] = ()
-    """Provenance features the part promises to name (§24.1)."""
+    """Provenienz-Merkmale, die der Baustein zu benennen verspricht (§24.1)."""
     doc: TranslatableText | str = ""
     changes: tuple[PartChange, ...] = ()
     source: str = "shipped"

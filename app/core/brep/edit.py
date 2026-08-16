@@ -149,7 +149,7 @@ def fillet(solid: Solid, radius: float, choice: EdgeChoice = "all") -> Solid:
 
 
 def chamfer(solid: Solid, distance: float, choice: EdgeChoice = "all") -> Solid:
-    """Break the chosen edges at 45 degrees."""
+    """Bricht die gewählten Kanten im 45-Grad-Winkel."""
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer
 

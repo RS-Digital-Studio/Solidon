@@ -178,10 +178,11 @@ class OperationSpec:
     fn: OpFn
     reversible: bool = True
     consumes: int = 1
-    """How many objects the operation takes. Zero means any number."""
+    """Wie viele Objekte die Operation nimmt. Null heißt beliebig viele."""
     produces: int = 1
-    """How many it returns. ``VARIABLE`` means as many as it took — for
-    operations like arranging, which change every object and create none."""
+    """Wie viele sie zurückgibt. ``VARIABLE`` heißt so viele wie hineingegeben —
+    für Operationen wie das Anordnen, die jedes Objekt ändern und keines
+    erzeugen."""
     applies_to: tuple[str, ...] = ()
     """Merkmalsarten, für die sich diese Operation anbietet — steuert das Kontextmenü."""
     requires_kind: str = ""
@@ -197,14 +198,15 @@ class OperationSpec:
     Oberfläche wäre beim nächsten Zuwachs des exakten Kerns unvollständig —
     und dieselbe Auskunft braucht auch der Agent (§10, Leitprinzip 3)."""
     whole_scene: bool = False
-    """Works on every object at once — see :attr:`takes_whole_scene`."""
+    """Arbeitet auf allen Objekten zugleich — siehe :attr:`takes_whole_scene`."""
     produces_from: str | None = None
-    """The parameter that says how many objects come out, for a variable count.
+    """Der Parameter, der bei veränderlicher Anzahl sagt, wie viele Objekte
+    herauskommen.
 
-    The stack hands out object ids before anything runs (§11), so an operation
-    that makes a number of bodies has to say where that number is written down.
-    Duplicating names its ``count``; everything else leaves this empty and the
-    count follows from :attr:`produces`."""
+    Der Stapel vergibt Objekt-IDs, bevor irgendetwas läuft (§11), also muss
+    eine Operation, die eine Anzahl von Körpern erzeugt, sagen, wo diese Zahl
+    steht. Duplizieren nennt seinen ``count``; alles andere lässt dieses Feld
+    leer, und die Anzahl folgt aus :attr:`produces`."""
     touches_features: bool = False
     deterministic: bool = True
     shortcut: str | None = None
@@ -228,7 +230,7 @@ class OperationSpec:
 
     @property
     def requires_seed(self) -> bool:
-        """Randomised procedures carry a stored seed (§11.3)."""
+        """Zufallsprozeduren führen einen gespeicherten Startwert (§11.3)."""
         return not self.deterministic
 
     @property

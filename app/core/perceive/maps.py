@@ -85,7 +85,7 @@ class AnalysisMap:
     low: float
     high: float
     highlighted: tuple[int, ...] = ()
-    """Triangles the map wants to point at: too thin, too steep, broken."""
+    """Dreiecke, auf die die Karte hinweisen will: zu dünn, zu steil, gebrochen."""
     threshold: float | None = None
     """Ab wo hervorgehoben wird, in der Einheit der Karte."""
     categories: tuple[str, ...] = ()
@@ -210,7 +210,7 @@ class SolidField:
 
     filled: Any
     origin: Any
-    """World position of voxel (0, 0, 0)."""
+    """Weltposition des Voxels (0, 0, 0)."""
     pitch: float
 
 
@@ -397,7 +397,7 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
 
 
 def defect_map(mesh: MeshData) -> AnalysisMap:
-    """Open edges and non-manifold edges, per triangle (§18.4)."""
+    """Offene Kanten und nicht-mannigfaltige Kanten, je Dreieck (§18.4)."""
     body = mesh.raw
     values = np.zeros(len(body.faces), dtype=float)
     if len(body.faces):

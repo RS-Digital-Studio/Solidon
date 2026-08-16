@@ -35,9 +35,9 @@ class Screw:
     size: str
     nominal: float
     clearance: float
-    """Through hole, medium fit."""
+    """Durchgangsloch, mittlere Passung."""
     tap: float
-    """Core hole for cutting a thread."""
+    """Kernloch zum Gewindeschneiden."""
     head: float
     head_height: float
     countersink: float
@@ -89,7 +89,7 @@ class Bearing:
 
 @dataclass(frozen=True, slots=True)
 class ProfileSlot:
-    """An aluminium extrusion slot."""
+    """Eine Nut eines Aluminiumprofils."""
 
     size: str
     slot: float

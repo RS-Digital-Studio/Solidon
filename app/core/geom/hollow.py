@@ -52,7 +52,7 @@ class HollowResult:
 
     mesh: MeshData
     removed: float = 0.0
-    """Volume that came out, in mm³."""
+    """Volumen, das entfernt wurde, in mm³."""
     vents: tuple[Vec3, ...] = ()
     findings: list[Finding] = field(default_factory=list)
 

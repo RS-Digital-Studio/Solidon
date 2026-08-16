@@ -487,7 +487,7 @@ class AgentSession:
             proposal.invalid_calls += 1
             return _gathered_refusal(gathered.kind), scene
         try:
-            # P4 acceptance: schema-valid before anything is computed.
+            # Abnahme P4: schemagültig, bevor überhaupt gerechnet wird.
             validate(spec.params, arguments)
         except AppError as error:
             proposal.invalid_calls += 1

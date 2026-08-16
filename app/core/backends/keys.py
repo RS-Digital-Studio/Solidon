@@ -88,7 +88,7 @@ def forget(account: str) -> bool:
         return False
     try:
         keychain.delete_password(SERVICE, account)
-    except Exception:  # pragma: no cover - nothing stored
+    except Exception:  # pragma: no cover - nichts gespeichert
         return False
     return True
 
@@ -104,7 +104,7 @@ def source(account: str) -> str:
         try:
             if keychain.get_password(SERVICE, account):
                 return "keychain"
-        except Exception:  # pragma: no cover - locked keychain
+        except Exception:  # pragma: no cover - gesperrter Schlüsselbund
             pass
     if os.environ.get(f"{ENVIRONMENT_VARIABLE}_{account.upper()}") or os.environ.get(
         ENVIRONMENT_VARIABLE

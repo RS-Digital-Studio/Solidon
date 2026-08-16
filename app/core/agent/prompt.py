@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from app.core.knowledge import rules
 
-#: Raised whenever the text below changes (§26.4).
+#: Wird erhöht, sobald sich der Text darunter ändert (§26.4).
 #:
 #: Version 2 macht aus „Fragen vor Raten" eine Vorbedingung mit drei Prüfungen.
 #: Als Gewohnheit unter vier anderen trug sie nicht: sobald der Systemprompt

@@ -37,7 +37,7 @@ _log = get_logger(__name__)
 #: bezahlbar (§31).
 SEARCH_LAYER_HEIGHT = 1.0
 
-#: Default number of directions tried.
+#: Vorgabeanzahl der versuchten Richtungen.
 DEFAULT_CANDIDATES = 200
 
 

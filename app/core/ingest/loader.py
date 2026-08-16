@@ -200,7 +200,7 @@ def normalise(
                 )
             )
 
-    # 3 — degenerate triangles: zero area, needles, duplicates.
+    # 3 — entartete Dreiecke: null Fläche, Nadeln, Duplikate.
     removed = 0
     if remove_degenerate and len(body.faces):
         progress(0.4, str(_("Entartete Dreiecke entfernen")))

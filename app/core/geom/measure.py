@@ -78,7 +78,7 @@ class MeasurementList:
         return len(self.entries)
 
 
-# --- basic quantities -----------------------------------------------------------
+# --- Grundgrößen -----------------------------------------------------------------
 
 
 def distance(a: Vec3, b: Vec3) -> float:
@@ -116,7 +116,7 @@ def volume_of(meshes: list[MeshData]) -> float:
     return float(sum(mesh.volume for mesh in meshes))
 
 
-# --- snapping -------------------------------------------------------------------
+# --- Einrasten ------------------------------------------------------------------
 
 
 def snap(mesh: MeshData, point: Vec3, radius: float | None = None) -> SnapResult:
@@ -165,7 +165,7 @@ def _closest_point_on_edges(mesh: MeshData, target: np.ndarray) -> tuple[Vec3 | 
     return (float(found[0]), float(found[1]), float(found[2])), float(offsets[closest])
 
 
-# --- wall thickness -------------------------------------------------------------
+# --- Wandstärke ------------------------------------------------------------------
 
 
 def wall_thickness(mesh: MeshData, point: Vec3, direction: Vec3 | None = None) -> float | None:

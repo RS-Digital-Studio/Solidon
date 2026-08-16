@@ -123,8 +123,8 @@ class ExportEntry:
     """Die Materialslots des Objekts — 3MF trägt sie als Farbgruppen (§20)."""
     name: str = ""
     body: Mesh | None = None
-    """The object as it is in the scene. STEP needs the exact body, not the
-    triangles it was tessellated into (§30)."""
+    """Das Objekt, wie es in der Szene steht. STEP braucht den exakten Körper,
+    nicht die Dreiecke, in die er vernetzt wurde (§30)."""
     plate: int = 0
     """Zu welcher Druckplatte diese Datei gehört (§25)."""
 

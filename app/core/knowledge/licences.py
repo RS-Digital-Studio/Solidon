@@ -125,7 +125,7 @@ def requirements_of(distribution: metadata.Distribution) -> set[str]:
 
 
 def _direct_requirements(extras: Iterable[str]) -> set[str]:
-    """Our own dependencies, including the runtime extras."""
+    """Die eigenen Abhängigkeiten, samt der Laufzeit-Extras."""
     own = metadata.distribution(DISTRIBUTION_NAME)
     wanted = {normalise(entry) for entry in extras}
     names: set[str] = set()

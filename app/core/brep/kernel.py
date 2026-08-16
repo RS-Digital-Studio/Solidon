@@ -58,7 +58,7 @@ def available() -> bool:
     """Ist der Kern da? Wird gefragt, bevor sich eine Handlung anbietet (§36)."""
     try:
         import OCP.BRepPrimAPI  # noqa: F401
-    except Exception:  # a compiled extension fails in more ways than ImportError
+    except Exception:  # eine kompilierte Erweiterung scheitert auf mehr Arten als mit ImportError
         return False
     return True
 
@@ -234,7 +234,7 @@ class Solid:
         return props
 
     def _explore(self, kind: str) -> list[Any]:
-        """Topology entities, deduplicated — an explorer visits edges per face."""
+        """Topologie-Entitäten, entdoppelt — ein Explorer besucht Kanten je Fläche."""
         cached = self._cache.get(f"list:{kind}")
         if cached is not None:
             return list(cached)

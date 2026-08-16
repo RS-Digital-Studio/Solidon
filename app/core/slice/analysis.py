@@ -92,8 +92,8 @@ PARALLEL_FROM = 40
 MAX_WORKERS = 8
 
 Detail = Literal["full", "support"]
-"""How much of a layer is measured. ``support`` leaves out everything the
-orientation search does not read (§28.2)."""
+"""Wie viel einer Schicht vermessen wird. ``support`` lässt alles aus, was die
+Orientierungssuche nicht liest (§28.2)."""
 
 
 @dataclass(frozen=True, slots=True)
