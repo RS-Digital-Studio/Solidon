@@ -163,9 +163,10 @@ def evaluate(
         cached = cache.get(key) if cache is not None else None
 
         if cached is not None:
-            result = CachedResult(
-                objects=cached.objects, findings=cached.findings, transform=cached.transform
-            )
+            # Unverändert weiterreichen: der Umbau hier warf ohne Not den
+            # Solver weg, und nach einem Cache-Treffer fehlte die Stufe in
+            # der Solver-Übersicht des Berichts.
+            result = cached
         else:
             context = OpContext(
                 scene=Scene(

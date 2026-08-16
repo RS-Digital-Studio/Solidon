@@ -30,7 +30,7 @@ from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
 from app.core.log import get_logger
-from app.core.types import Finding, Quality, SolverInfo, SolverStage
+from app.core.types import CancelToken, Finding, Quality, SolverInfo, SolverStage
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -68,6 +68,7 @@ def boolean(
     stages: tuple[SolverStage, ...] | None = None,
     cut_slot: int = DEFAULT_CUT_SLOT,
     allow_empty: bool = False,
+    cancelled: CancelToken | None = None,
 ) -> BooleanOutcome:
     """Führt eine Boolesche Operation aus und fällt Stufe um Stufe zurück, bis
     eine hält.
@@ -102,6 +103,12 @@ def boolean(
     """
 
     for stage in chain:
+        # Zwischen den Stufen, nicht mittendrin: eine Stufe ist ein nativer
+        # Aufruf und kooperativ nicht zu unterbrechen — aber vier Versuche
+        # plus Voxelisierung an einem großen Netz waren als Ganzes
+        # unabbrechbar, und §15.6 verlangt „jederzeit abbrechbar".
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         attempted.append(stage)
         try:
             result = _run_stage(kind, meshes, stage, seed)

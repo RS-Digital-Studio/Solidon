@@ -308,3 +308,17 @@ def test_an_emptied_body_says_so_instead_of_blaming_the_solver() -> None:
     assert any(action.id == "correct_input" for action in caught.value.suggestions), (
         "die Handlung ist nachrechnen, nicht reparieren"
     )
+
+
+def test_a_cancelled_chain_stops_before_the_first_stage() -> None:
+    """§15.6: Vier Kernversuche plus Voxelisierung an einem großen Netz waren
+    als Ganzes unabbrechbar — das Token wird jetzt zwischen den Stufen
+    gefragt, und der Abbruch ist eine ``OperationCancelled``, kein Befund."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    signal = CancelSignal()
+    signal.cancel()
+
+    with pytest.raises(OperationCancelled):
+        boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))], cancelled=signal)
