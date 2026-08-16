@@ -5961,10 +5961,20 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       Wechsel in den Arbeitsbereich hängt jetzt am Dokument selbst
       (`_on_project`), damit die vergessene achte Stelle unmöglich wird.
       Offen bleibt das `ArmatureField` (Reihenfolge Punkt 12).
-- [ ] **Nebensitzung 3MF-Export**: Urteil *nachbessern* — ohne geöffneten
+- [x] **Nebensitzung 3MF-Export**: Urteil *nachbessern* — ohne geöffneten
       Dialog ist `print_settings` weiter `None` (A1), der Einzelkörper-Export
       läuft am neuen Code vorbei (A2); Details und A3–A7 in der
       Durchsichts-Datei.
+
+      **Nachgebessert und übernommen:** Jedes 3MF geht über `write_assembly`
+      (auch ein Körper — der Plan-Weg kennt keine Einstellungen), `None`
+      fällt auf `print_settings.resolve` zurück, `remembered_setup` löst je
+      Material auf wie der Dialog selbst, und die Slicer-Suche läuft hinter
+      dem Wartezeiger. Der Zip-Test deckt jetzt auch den Normalfall: ein
+      Körper, Dialog nie geöffnet. Offen bleiben A5 (Profil erst beim
+      Slicen gemerkt, nicht beim Schließen) und A6 (kein Abgleich des
+      gemerkten Profils mit dem Drucker des Projekts) — beide gering, beide
+      im Gering-Block.
 - [ ] **Mittel-Block Kern**: Platten-Cache verliert
       `findings`/`solver`/`transform`; T-Vernähen quadratisch und doppelt;
       Rückfallkette unabbrechbar; `FIT_TOLERANCE` widerspricht §14;

@@ -629,6 +629,51 @@ def _select_data(box: QComboBox, identifier: str) -> None:
         box.setCurrentIndex(index)
 
 
+def remembered_setup(settings: UiSettings, material: str = "") -> handover.SlicerSetup | None:
+    """Der Slicer, wie er hier zuletzt eingestellt war (§29).
+
+    Für alle, die eine Datei schreiben, ohne diesen Dialog geöffnet zu haben —
+    allen voran der Export im Menü. Ohne ein Setup trägt eine 3MF zwar Solidons
+    eigene Werte, aber kein Druckerprofil; der Slicer behält dann das gerade
+    eingestellte, und dessen Düse muss zu unserer Schichthöhe nicht passen. Bei
+    einer 0,2er Düse und 0,25 mm erster Schicht endet das in „Schichthöhe darf
+    den Düsendurchmesser nicht überschreiten" — eine Meldung über das Modell,
+    die keine über das Modell ist.
+
+    ``material`` löst das Filament auf, wie der Dialog selbst es tut: je
+    Material zuerst, das globale nur als Rückfall. Ohne das trüge ein
+    TPU-Projekt nach einem PETG-Lauf das PETG-Profil — richtig gerechnet,
+    falsch beschriftet.
+
+    ``None``, solange kein Druckerprofil gemerkt ist: Die Suche nach dem
+    Programm geht über PATH, Registry und die üblichen Orte und kostet eine
+    halbe Sekunde. Wer den Slicer nie eingerichtet hat, bekäme dafür ein Setup
+    ohne Maschine — also nichts, was die Kette auflösen könnte.
+    """
+    if not settings.slicer_machine_profile:
+        return None
+    found = discover.find_program("slicer", tools.SLICERS)
+    if found is None:
+        return None
+    try:
+        setup = handover.detect(found)
+    except AppError:
+        # Ein unbekanntes Programm ist hier kein Fehler, sondern eine
+        # Auskunft weniger: geschrieben wird trotzdem, nur ohne Systemprofil.
+        return None
+    filament = (
+        settings.slicer_filament_per_material.get(material, settings.slicer_base_filament)
+        if material
+        else settings.slicer_base_filament
+    )
+    return replace(
+        setup,
+        machine_profile=settings.slicer_machine_profile,
+        base_process=settings.slicer_base_process,
+        base_filament=filament,
+    )
+
+
 class _ColourButton(QPushButton):
     """Farbwahl, die ihren Wert auch schreibt.
 

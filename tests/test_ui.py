@@ -1776,13 +1776,26 @@ def test_export_as_3mf_writes_one_assembly(
 ) -> None:
     """Mehrere Körper als 3MF sind eine Baugruppe in einer Datei (§20) —
     nicht eine Datei je Körper, über deren Zusammengehörigkeit der Slicer
-    selbst entscheiden müsste."""
+    selbst entscheiden müsste.
+
+    **Und die Datei trägt die Druckeinstellungen mit** (§29). Sie tat es nicht:
+    Der Aufruf im Menü ließ ``settings`` weg, und heraus kam eine 3MF ganz ohne
+    ``project_settings.config``. Der Slicer füllt dann alles aus dem Profil,
+    das gerade bei ihm steht — und meldet Widersprüche zu einem Drucker, den
+    niemand gemeint hat.
+    """
+    import json
+    import zipfile
+
     from PySide6.QtWidgets import QFileDialog
+
+    from app.core.knowledge import print_settings
 
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     window.session.import_model(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
+    window.session.set_print_settings(print_settings.resolve(window.session.profile))
 
     target = tmp_path / "baugruppe.3mf"
     monkeypatch.setattr(
@@ -1795,6 +1808,90 @@ def test_export_as_3mf_writes_one_assembly(
 
     written = list(tmp_path.glob("*.3mf"))
     assert len(written) == 1, "eine Baugruppe, eine Datei"
+    with zipfile.ZipFile(written[0]) as archive:
+        assert "Metadata/project_settings.config" in archive.namelist(), (
+            "die Datei ist reine Geometrie — der Slicer erfindet den Rest"
+        )
+        values = json.loads(archive.read("Metadata/project_settings.config"))
+    assert values.get("layer_height"), "ohne Schichthöhe sagt die Datei nichts über den Druck"
+    assert float(values["layer_height"]) <= window.session.profile.printer.nozzle_diameter, (
+        "eine Schichthöhe über dem Düsendurchmesser lehnt jeder Slicer ab"
+    )
+
+
+def test_the_remembered_slicer_becomes_a_setup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Was im Druckeinstellungen-Dialog stand, gilt auch für den Export (§29).
+
+    Ohne Systemprofil trägt eine 3MF zwar Solidons Werte, aber keinen Drucker,
+    zu dem sie passen — und der Slicer bleibt bei dem, der gerade bei ihm
+    eingestellt ist. Steht dort eine 0,2er Düse, kollidiert sie mit einer
+    ersten Schicht von 0,25 mm, und die Meldung spricht vom Modell.
+    """
+    from pathlib import Path as PathType
+
+    from app.core import discover
+    from app.ui.print_settings_dialog import remembered_setup
+    from app.ui.settings import UiSettings
+
+    settings = UiSettings()
+    assert remembered_setup(settings) is None, "ohne gemerkten Drucker gibt es nichts aufzulösen"
+
+    monkeypatch.setattr(
+        discover, "find_program", lambda *args, **kwargs: PathType("orca-slicer.exe")
+    )
+    settings.slicer_machine_profile = "Elegoo Centauri Carbon 2 0.4 nozzle"
+    settings.slicer_base_process = "0.20mm Standard @Elegoo CC2 0.4 nozzle"
+    settings.slicer_base_filament = "Elegoo PETG PRO @ECC2"
+
+    setup = remembered_setup(settings)
+    assert setup is not None, "der gemerkte Drucker ist da, das Programm auch"
+    assert setup.machine_profile == settings.slicer_machine_profile
+    assert setup.base_process == settings.slicer_base_process
+    assert setup.base_filament == settings.slicer_base_filament
+
+    # Je Material zuerst, das globale nur als Rückfall — sonst trägt ein
+    # TPU-Projekt nach einem PETG-Lauf das PETG-Profil.
+    settings.slicer_filament_per_material["tpu"] = "Elegoo TPU @ECC2"
+    per_material = remembered_setup(settings, "tpu")
+    assert per_material is not None
+    assert per_material.base_filament == "Elegoo TPU @ECC2"
+    fallback = remembered_setup(settings, "pla")
+    assert fallback is not None
+    assert fallback.base_filament == settings.slicer_base_filament
+
+
+def test_a_single_body_3mf_carries_the_settings_too(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der häufigste Fall ist ein Körper — und genau der lief über den
+    Plan-Weg, der keine Einstellungen kennt. Dazu war der Dialog nie offen:
+    ``document.print_settings`` ist dann ``None``, und das hieß reine
+    Geometrie statt der Auflösung aus Stufe, Material und Drucker (§29)."""
+    import json
+    import zipfile
+
+    from PySide6.QtWidgets import QFileDialog
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    target = tmp_path / "einzel.3mf"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
+    )
+    window.object_tree.tree.clearSelection()
+    window.action_export()
+
+    written = list(tmp_path.glob("*.3mf"))
+    assert len(written) == 1
+    with zipfile.ZipFile(written[0]) as archive:
+        assert "Metadata/project_settings.config" in archive.namelist(), (
+            "ein Körper ohne geöffneten Dialog ist der Normalfall — nicht die Ausnahme"
+        )
+        values = json.loads(archive.read("Metadata/project_settings.config"))
+    assert values.get("layer_height"), "die Auflösung aus Stufe, Material und Drucker gilt"
 
 
 def test_export_is_disabled_on_an_empty_scene(window: MainWindow) -> None:

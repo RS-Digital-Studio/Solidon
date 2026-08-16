@@ -179,7 +179,7 @@ from app.ui.panels import (
     describe_selection,
 )
 from app.ui.pose_bar import PoseBar
-from app.ui.print_settings_dialog import PrintSettingsDialog
+from app.ui.print_settings_dialog import PrintSettingsDialog, remembered_setup
 from app.ui.remote_server import RemoteServer, WindowBridge
 from app.ui.report_dialog import ErrorReportDialog
 from app.ui.sculpt_bar import SculptBar
@@ -2486,16 +2486,38 @@ class MainWindow(QMainWindow):
 
         sources = self.session.project.document.sources
         try:
-            if export_format == "3mf" and len(objects) > 1:
+            if export_format == "3mf":
                 # Eine Baugruppe bleibt eine Datei: der Slicer bekommt einen
-                # Druckauftrag, keine Handvoll Teile (§20).
-                written_path, findings = write_assembly(
-                    objects,
-                    target.parent,
-                    project_name=target.stem,
-                    profile=self.session.profile,
-                    sources=sources,
-                )
+                # Druckauftrag, keine Handvoll Teile (§20). Auch bei **einem**
+                # Körper — der lief über den Plan-Weg, und der kennt keine
+                # Einstellungen: genau der häufigste Fall exportierte weiter
+                # reine Geometrie.
+                #
+                # Die Slicer-Suche in `remembered_setup` kostet eine knappe
+                # halbe Sekunde — unter der Grenze aus §2.8, aber nicht unter
+                # der, ab der ein Zeiger dazugehört.
+                QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+                try:
+                    written_path, findings = write_assembly(
+                        objects,
+                        target.parent,
+                        project_name=target.stem,
+                        profile=self.session.profile,
+                        sources=sources,
+                        # Die Druckeinstellungen reisen mit, und mit ihnen das
+                        # Profil des eingestellten Slicers (§29). Ohne beides
+                        # ist die Datei reine Geometrie: Der Slicer füllt sie
+                        # aus dem, was gerade bei ihm steht, und meldet dann
+                        # Widersprüche zu einem Drucker, den niemand gemeint
+                        # hat. ``None`` heißt „Dialog nie geöffnet", nicht
+                        # „keine Einstellungen" — dann gilt die Auflösung aus
+                        # Stufe, Material und Drucker, wie überall sonst.
+                        settings=self.session.project.document.print_settings
+                        or print_settings.resolve(self.session.profile),
+                        setup=remembered_setup(self.settings, self.session.profile.material.id),
+                    )
+                finally:
+                    QApplication.restoreOverrideCursor()
                 written = [written_path]
                 # Die Baugruppe prüft und schreibt in einem Zug: hier ist
                 # „vorher" nicht zu haben, ohne die Datei zweimal zu bauen.
