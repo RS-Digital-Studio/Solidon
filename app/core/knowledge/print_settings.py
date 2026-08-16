@@ -124,6 +124,16 @@ def _quality_table(quality: QualityPreset) -> dict[str, Any]:
     return table[quality]
 
 
+def has_material(material_id: str) -> bool:
+    """Ob die Einstellungstabelle dieses Material kennt (§29).
+
+    Für den Befund, der dem stillen ``_log.info`` in ``_material_table``
+    fehlte: ein selbst angelegtes Material bekam PLA-nahe Modellvorgaben,
+    und niemand erfuhr es (Regel 21).
+    """
+    return material_id in _all()["material"]
+
+
 def _material_table(material_id: str) -> dict[str, Any]:
     """Ein unbekanntes Material ist kein Fehler — dann gelten die Vorgaben des
     Modells, und der Nutzer stellt nach.

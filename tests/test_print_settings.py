@@ -558,7 +558,12 @@ def test_support_on_actually_reaches_the_slicer() -> None:
     assert orca["enable_support"] == "1"
     assert orca["support_type"] == "tree(auto)"
     assert handover.as_mapping(settings, "prusa")["support_material"] == "1"
-    assert handover.as_mapping(settings, "cura")["support_enable"] == "true"
+    cura = handover.as_mapping(settings, "cura")
+    assert cura["support_enable"] == "true"
+    # Nicht nur das An/Aus: `support_structure` steht in der
+    # fdmprinter-Definition — ohne den Schlüssel druckte Cura Gitterstützen,
+    # wo Baumstützen eingestellt waren, und `verify()` sah nichts.
+    assert cura["support_structure"] == "tree"
 
 
 #: Was die Orca-Familie an diesen Stellen annimmt, abgelesen am ausgelieferten
@@ -1738,3 +1743,23 @@ def test_a_slicer_that_cannot_start_is_an_answer(tmp_path: Path) -> None:
         handover._run_slicer([str(fake)], tmp_path, 5.0, setup, None)
 
     assert caught.value.suggestions
+
+
+def test_an_unknown_material_is_reported_not_silent() -> None:
+    """Regel 21: `_material_table` fällt mit Absicht still auf die
+    Modellvorgaben zurück — der Satz an den Nutzer fehlte: ein selbst
+    angelegtes Material druckt sonst mit PLA-nahen Werten, ohne dass es
+    irgendwo steht."""
+    from dataclasses import replace as dc_replace
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    unknown = dc_replace(
+        profile, material=dc_replace(profile.material, id="eigenes-filament")
+    )
+    settings = print_settings.resolve(unknown)
+
+    codes = {entry.code for entry in advise.warnings_for(settings, unknown)}
+
+    assert "settings.material_without_profile" in codes
+    known_codes = {entry.code for entry in advise.warnings_for(settings, profile)}
+    assert "settings.material_without_profile" not in known_codes

@@ -350,6 +350,11 @@ CURA: Final[tuple[Row, ...]] = (
     ("speed.first_layer", "speed_layer_0", _number),
     ("speed.travel", "speed_travel", _number),
     ("support.style", "support_enable", _support_on_boolean),
+    # Und die Art dazu: `support_structure` steht in der fdmprinter-Definition
+    # (nachgeschlagen, nicht angenommen). Ohne den Eintrag bekam Cura nur das
+    # An/Aus — wer Baumstützen einstellte, druckte Gitterstützen, und
+    # `verify()` sah nichts, weil der Schlüssel nie geschrieben wurde.
+    ("support.style", "support_structure", _mapped({"tree": "tree"}, "normal")),
     ("support.placement", "support_type", _mapped({"build_plate": "buildplate"}, "everywhere")),
     ("support.threshold_angle", "support_angle", _integer),
     ("support.z_gap", "support_z_distance", _number),

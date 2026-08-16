@@ -734,8 +734,13 @@ def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Fin
     """
     if setup.flavour != "orca" or not setup.base_filament:
         return []
-    base = Path(setup.base_filament)
-    if not base.is_file():
+    # Über ``profile_file``, nicht über ``Path(...).is_file()`` — dasselbe
+    # Muster wie in ``_orca_filament``, und derselbe Grund: hierher kommt
+    # bevorzugt ein **Name** aus dem Bestand des Slicers (Regel 12). Direkt
+    # als Pfad gelesen sagte ``is_file()`` schlicht nein, und die ganze
+    # Gegenüberstellung entfiel wortlos.
+    base = profile_file(setup.base_filament, setup, "filament")
+    if base is None:
         return []
 
     inherited = slicer_profiles.resolve_values(base)

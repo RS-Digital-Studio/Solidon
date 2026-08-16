@@ -71,7 +71,11 @@ class GcodeMetrics:
         return self.filament_mm * FILAMENT_AREA / 1000.0
 
     def grams(self, density: float = DEFAULT_DENSITY) -> float | None:
-        if self.filament_grams is not None:
+        # Nur ein Gewicht über null ist eine Messung — dieselbe Absicherung,
+        # die `filament_mm` seit dem Cura-Vorfall hat: dessen Kopf schreibt
+        # die Werte, *bevor* gerechnet wird, und eine Null gälte sonst als
+        # perfekte Übereinstimmung.
+        if self.filament_grams is not None and self.filament_grams > 0.0:
             return self.filament_grams
         volume = self.material_cm3
         return None if volume is None else volume * density
@@ -298,6 +302,21 @@ def compare(estimated: float, measured: float, what: str = "support") -> CrossCh
     Arbeit braucht.
     """
     check = CrossCheck(what=what, estimated=estimated, measured=measured)
+    if measured <= 0.0:
+        # Eine Null ist keine Messung, und `deviation` gäbe für sie glatt
+        # null zurück — die größtmögliche Abweichung sähe aus wie die
+        # perfekte Übereinstimmung. „Nicht vergleichbar" ist die ehrliche
+        # Antwort, und sie trägt ihre Herkunft (Regel 14).
+        check.findings.append(
+            Finding(
+                code="gcode.no_measurement",
+                severity="info",
+                message=_("Die Druckdatei nennt für diese Größe keinen Messwert."),
+                values={"what": what, "estimated": round(estimated, 2)},
+                source="gcode",
+            )
+        )
+        return check
     if not check.within_limit:
         check.findings.append(
             Finding(

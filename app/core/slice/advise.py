@@ -764,6 +764,25 @@ def warnings_for(
             )
         )
 
+    if not settings_table.has_material(profile.material.id):
+        # `_material_table` fällt still auf die Modellvorgaben zurück — mit
+        # Absicht, ein neues Material soll ohne Tabellenpflege druckbar sein.
+        # Was fehlte, war der Satz an den Nutzer (Regel 21): Temperaturen und
+        # Tempo eines selbst angelegten Materials sind sonst PLA-nahe Werte,
+        # ohne dass es irgendwo steht.
+        findings.append(
+            Finding(
+                code="settings.material_without_profile",
+                severity="info",
+                message=_(
+                    "Für dieses Material gibt es keine eigenen Druckeinstellungen — "
+                    "es druckt mit den Modellvorgaben. Temperaturen und Tempo bitte "
+                    "nachstellen."
+                ),
+                values={"material": profile.material.title},
+            )
+        )
+
     if settings.support.style != "none" and settings.support.z_gap < settings.layers.layer_height:
         findings.append(
             Finding(

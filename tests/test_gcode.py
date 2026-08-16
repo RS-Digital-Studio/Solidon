@@ -283,3 +283,23 @@ def test_one_plate_comes_back_unchanged() -> None:
 
     assert gcode.combine([only]) is only
     assert gcode.combine([]) == gcode.GcodeMetrics()
+
+
+def test_a_zero_measurement_is_not_a_perfect_match() -> None:
+    """`deviation` gab für `measured=0` glatt null zurück — die größtmögliche
+    Abweichung sah aus wie die perfekte Übereinstimmung. Eine Null ist keine
+    Messung, sondern „nicht vergleichbar" (Regel 14)."""
+    check = gcode.compare(12.0, 0.0, "material")
+
+    assert [entry.code for entry in check.findings] == ["gcode.no_measurement"]
+    assert all(entry.code != "gcode.deviation" for entry in check.findings)
+
+
+def test_a_zero_gram_header_falls_back_to_the_length() -> None:
+    """`filament_grams` hat dieselbe Null-Absicherung wie `filament_mm` seit
+    dem Cura-Vorfall: dessen Kopf schreibt die Werte, bevor gerechnet wird."""
+    metrics = gcode.GcodeMetrics(filament_mm=1000.0, filament_grams=0.0)
+
+    grams = metrics.grams(density=1.24)
+
+    assert grams is not None and grams > 0.0, "die Länge trägt, nicht die leere Kopfzeile"
