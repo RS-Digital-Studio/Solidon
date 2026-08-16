@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 from app.core import install, tools
 from app.core.log import get_logger
 from app.i18n import tr
+from app.ui.leash import WorkerLeash
 from app.ui.style import TIGHT
 
 _log = get_logger(__name__)
@@ -184,6 +185,9 @@ class InstallDialog(QDialog):
         self.setWindowTitle(tr("Zusätzliche Programme"))
         self.setMinimumWidth(640)
         self._worker: _Worker | None = None
+        self._leash = WorkerLeash(self)
+        """Hält den ausgelaufenen Arbeiter, bis Qt mit ihm durch ist — das
+        Warum steht in :mod:`app.ui.leash`."""
 
         intro = QLabel(
             tr(
@@ -245,7 +249,12 @@ class InstallDialog(QDialog):
         _log.info("install of %s did not finish: %s", result.requirement.id, reason)
 
     def _thread_done(self) -> None:
+        # `finished` heißt „`run` ist zurück", nicht „das Objekt darf weg" —
+        # das Loslassen übernimmt die Halteleine.
+        worker = self._worker
         self._worker = None
+        if worker is not None:
+            self._leash.hold_until_done(worker)
 
     def _busy(self, running: bool) -> None:
         self.progress.setVisible(running)

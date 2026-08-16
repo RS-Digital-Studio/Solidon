@@ -38,6 +38,7 @@ from app.core.log import get_logger
 from app.core.scene import expressions
 from app.i18n import tr
 from app.ui.labels import deadline_date
+from app.ui.leash import WorkerLeash
 from app.ui.style import set_level
 
 _log = get_logger(__name__)
@@ -346,6 +347,9 @@ class KeyDialog(QDialog):
         self.setWindowTitle(tr("Chat einrichten"))
         self.setMinimumWidth(460)
         self._probe: _ToolProbeWorker | None = None
+        self._leash = WorkerLeash(self)
+        """Hält den ausgelaufenen Prüf-Arbeiter, bis Qt mit ihm durch ist —
+        das Warum steht in :mod:`app.ui.leash`."""
 
         state = {
             "keychain": tr("Ein Schlüssel liegt im Schlüsselbund."),
@@ -465,10 +469,12 @@ class KeyDialog(QDialog):
         set_level(self.probe_result, "warning")
 
     def _probe_finished(self, worker: object) -> None:
-        # Wer einen Arbeiter startet, hält ihn fest, bis er wirklich fertig ist:
-        # `finished` kommt, während Qt ihn noch abräumt.
+        # Wer einen Arbeiter startet, hält ihn fest, bis er wirklich fertig
+        # ist: `finished` kommt, während Qt ihn noch abräumt — das Loslassen
+        # übernimmt die Halteleine, nicht dieses Feld.
         if self._probe is worker:
             self._probe = None
+        self._leash.hold_until_done(worker)
 
     def _save(self) -> None:
         llm.remember_ollama_model(self.model_field.text())
@@ -501,6 +507,7 @@ class KeyDialog(QDialog):
         if self._probe is not None:
             self._probe.wait()
             self._probe = None
+        self._leash.wait_all()
         super().closeEvent(event)
 
 
