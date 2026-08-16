@@ -12,8 +12,8 @@ Kommandozeile, sobald sie deklariert ist (§10).
 from __future__ import annotations
 
 import platform
-from collections.abc import Mapping, Sequence
-from contextlib import suppress
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager, suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
@@ -269,6 +269,24 @@ def _filter_for(label: str, suffixes: tuple[str, ...]) -> str:
     galt — hier hieß es „Modelle" auch in der englischen Oberfläche.
     """
     return f"{label} ({' '.join('*' + suffix for suffix in suffixes)})"
+
+
+@contextmanager
+def waiting() -> Iterator[None]:
+    """Der Wartezeiger für die Rechnung, die bis zu zwei Sekunden dauert
+    (§2.8).
+
+    Die Stufe darunter zeigt nichts, die darüber gehört in einen Arbeiter.
+    Dazwischen liegt genau das hier: eine Datei von der Platte lesen, einen
+    Dialog aufbauen, den Slicer suchen. Als Kontextmanager, weil das
+    Zurücksetzen sonst am ersten Fehlerausgang hängen bleibt — und ein
+    Wartezeiger, der stehen bleibt, sieht aus wie ein hängendes Programm.
+    """
+    QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+    try:
+        yield
+    finally:
+        QApplication.restoreOverrideCursor()
 
 
 def model_filter() -> str:
@@ -2066,24 +2084,37 @@ class MainWindow(QMainWindow):
         return True
 
     def open_path(self, path: Path) -> None:
-        """Ein Einstiegspunkt für Menü, Zuletzt-Liste und Drag and Drop."""
+        """Ein Einstiegspunkt für Menü, Zuletzt-Liste und Drag and Drop.
+
+        Mit Wartezeiger: Gelesen wird hier synchron — die Projektdatei über
+        ``load``, das Modell über ``path.read_bytes()``. Die Ladeanzeige deckt
+        das **nicht** ab: sie hängt am Fortschritt der Auswertung, und der
+        beginnt erst, wenn die Datei gelesen ist; ihre 200 ms Verzögerung
+        kommen obendrauf. Bis dahin stünde ein Fenster ohne jede Auskunft da
+        (§2.8).
+        """
         if path.suffix.lower() == PROJECT_SUFFIX and not self._may_discard():
             return
         try:
+            with waiting():
+                if path.suffix.lower() == PROJECT_SUFFIX:
+                    # Was zum vorigen Projekt zu sagen war, gilt für dieses
+                    # nicht: „Exportiert: dose.3mf" über einer gerade
+                    # geöffneten Datei wäre eine Auskunft über etwas anderes.
+                    self.announce("")
+                    self.session.open_project(path)
+                    self.settings.remember(path)
+                    save_settings(self.settings)
+                else:
+                    if self.stack.currentWidget() is self.start_screen:
+                        self.session.start_new(self.settings.printer, self.settings.material)
+                    self.session.import_model(path)
             if path.suffix.lower() == PROJECT_SUFFIX:
-                # Was zum vorigen Projekt zu sagen war, gilt für dieses nicht:
-                # „Exportiert: dose.3mf" über einer gerade geöffneten Datei
-                # wäre eine Auskunft über etwas anderes.
-                self.announce("")
-                self.session.open_project(path)
-                self.settings.remember(path)
-                save_settings(self.settings)
+                # Beide fragen etwas, und beide erst außerhalb des
+                # Wartezeigers: ein Fenster, das um Antwort bittet und dabei
+                # „bitte warten" zeigt, sagt zweierlei.
                 self._offer_recovery(path)
                 self._offer_tour(path)
-            else:
-                if self.stack.currentWidget() is self.start_screen:
-                    self.session.start_new(self.settings.printer, self.settings.material)
-                self.session.import_model(path)
         except AppError as error:
             show_error(error, self)
             return
@@ -2113,17 +2144,27 @@ class MainWindow(QMainWindow):
         self.announce(tr("Gespeichert"))
 
     def action_import(self) -> None:
+        """Eine Modelldatei in die laufende Szene (§17.1).
+
+        Mit Wartezeiger und ohne Arbeiter: Gelesen wird die Datei am Stück
+        (``read_bytes``), gerechnet wird an ihr erst in der Auswertung — und
+        die läuft längst im Arbeiter, mit Balken und Abbrechen. Ein zweiter
+        Arbeiter allein für das Lesen brächte eine Halteleine, einen
+        Fehlerpfad und einen zweiten Weg in ``import_payload`` — für die paar
+        Zehntel, die eine Platte für dreißig Megabyte braucht (§2.8).
+        """
         name, _filter = QFileDialog.getOpenFileName(self, tr("Modell einfügen"), "", model_filter())
         if not name:
             return
         try:
-            if self.stack.currentWidget() is self.start_screen:
-                # Vom Startbildschirm aus ist Einfügen ein Anfang, kein
-                # Nachtrag: ein frisches Projekt mit Drucker und Material aus
-                # den Einstellungen, wie es open_path beim Ablegen einer
-                # Datei auch anlegt.
-                self.session.start_new(self.settings.printer, self.settings.material)
-            self.session.import_model(Path(name))
+            with waiting():
+                if self.stack.currentWidget() is self.start_screen:
+                    # Vom Startbildschirm aus ist Einfügen ein Anfang, kein
+                    # Nachtrag: ein frisches Projekt mit Drucker und Material
+                    # aus den Einstellungen, wie es open_path beim Ablegen
+                    # einer Datei auch anlegt.
+                    self.session.start_new(self.settings.printer, self.settings.material)
+                self.session.import_model(Path(name))
         except AppError as error:
             show_error(error, self)
 
@@ -5447,7 +5488,10 @@ class MainWindow(QMainWindow):
         box.setDefaultButton(restore)
         box.exec()
         if box.clickedButton() is restore:
-            self.session.open_project(candidate)
+            # Dieselbe synchrone Lesung wie in ``open_path``, also derselbe
+            # Zeiger (§2.8).
+            with waiting():
+                self.session.open_project(candidate)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
         if (
@@ -5486,7 +5530,10 @@ class MainWindow(QMainWindow):
             self.announce(tr("Bitte zuerst ein Objekt auswählen — das Bild wird ein Relief."))
             return
         try:
-            source_id = self.session.import_image(path)
+            # Auch das Bild kommt von der Platte, und auch hier liest die
+            # Sitzung es am Stück (§2.8).
+            with waiting():
+                source_id = self.session.import_image(path)
         except AppError as error:
             show_error(error, self)
             return

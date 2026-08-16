@@ -3517,6 +3517,56 @@ def test_the_veil_covers_the_view_only_while_it_shows_nothing(window: MainWindow
     assert not window.veil.showing, "über einem Körper bleibt die Ansicht die Ansicht"
 
 
+def test_reading_a_file_stands_under_the_wait_cursor(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2.8: bis zwei Sekunden Mauszeiger und Statusleiste.
+
+    Die Sitzung liest synchron — ``load`` für ein Projekt, ``read_bytes`` für
+    ein Modell —, und die Ladeanzeige deckt das nicht: sie hängt am
+    Fortschritt der Auswertung, und der beginnt erst, wenn die Datei gelesen
+    ist. Dazwischen lag ein Fenster ohne jede Auskunft.
+    """
+    seen: list[Any] = []
+    real = window.session.import_model
+
+    def watched(path: Path, *args: Any, **kwargs: Any) -> Any:
+        seen.append(QApplication.overrideCursor())
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(window.session, "import_model", watched)
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    assert seen, "gelesen wurde nichts — der Test misst am falschen Ort"
+    assert seen[0] is not None, "gelesen wurde ohne Wartezeiger"
+    assert seen[0].shape() == Qt.CursorShape.WaitCursor
+    assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
+
+
+def test_a_broken_file_takes_the_wait_cursor_with_it(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Wartezeiger, der nach einem Fehler stehen bleibt, sieht aus wie ein
+    hängendes Programm — und der Fehlerdialog darunter wie ein Fenster, das
+    zugleich fragt und bittet zu warten."""
+
+    def refuse(*args: Any, **kwargs: Any) -> Any:
+        raise errors.UserError(title="Diese Datei ließ sich nicht lesen.")
+
+    shown: list[Any] = []
+    monkeypatch.setattr(window.session, "import_model", refuse)
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+    )
+
+    window.open_path(MESHES / "cube_clean.stl")
+
+    assert shown, "der Fehler kam nirgends an"
+    assert QApplication.overrideCursor() is None, "der Wartezeiger überlebte den Fehler"
+
+
 def test_the_veil_shows_the_measured_progress(window: MainWindow) -> None:
     """Bauhöhe, Linie und Zahl sagen dasselbe — die Zahl das Gemessene.
 

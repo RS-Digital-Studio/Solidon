@@ -161,6 +161,34 @@ Deckend gezeichnet, mit dem Verlauf aus `viewport_colours` — ein
 halbdurchsichtiges Qt-Widget über dem OpenGL-Fenster zeigt die Fensterfarbe,
 nicht die Ansicht dahinter.
 
+**Die Ladeanzeige beginnt später, als das Warten beginnt.** Sie hängt am
+Fortschritt der Auswertung; was *davor* liegt — `load()` für eine Projektdatei,
+`read_bytes()` für ein Modell —, sieht sie nicht, und ihre 200 ms kommen
+obendrauf. Diese Zeile der Tabelle bedient `waiting()` in `main_window.py`, ein
+Kontextmanager um genau eine Rechnung: Datei lesen, Dialog aufbauen, Slicer
+suchen. Als Kontextmanager, weil ein Wartezeiger, der an einem Fehlerausgang
+stehen bleibt, aussieht wie ein hängendes Programm — und eine Frage, die
+darunter gestellt wird, sagt zweierlei. `_offer_recovery` liegt deshalb
+außerhalb.
+
+**Ein Export bekommt Fortschritt, aber kein Abbrechen** (`_ExportWorker`). Die
+Regel darüber ist nicht aufgeweicht, sie greift hier nur anders: Ein halb
+geschriebener Export ist eine halbe Datei, und der Schreiber im Kern hat keinen
+Punkt, an dem er sauber aufhören könnte. Was §2.8 an dieser Stelle trägt, ist
+die Bedienbarkeit — der Balken läuft, das Fenster reagiert, der Menüeintrag ist
+gesperrt, solange geschrieben wird. Wer einen Arbeiter ohne Abbrechen baut,
+schreibt diese Begründung in seinen Docstring; ohne sie ist es Bequemlichkeit.
+
+**Was nicht sofort da ist, wird nachgereicht statt erwartet.** Der
+Druckeinstellungen-Dialog wartete bis zu zwei Sekunden auf die Schichtanalyse —
+die schlechtere Hälfte beider Möglichkeiten: lang genug, um sich wie ein Hänger
+zu lesen, und ohne Zusage, denn wer den Zeitraum riss, bekam den Dialog eben
+doch ohne sie. Er geht jetzt sofort auf, `take_slice_result` trägt sie in die
+Vorschlagsliste nach. Der Rückruf zeigt dabei auf ein **Feld des Fensters**
+(`_settings_dialog`), nicht auf eine gebundene Methode des Dialogs: der wird
+nach `exec` weggeräumt, und ein Rückruf in ein zerstörtes C++-Objekt ist der
+Absturz ohne Zeile.
+
 ### Wer einen Arbeiter startet, hält ihn fest
 
 Ein `QThread` bekommt hier keinen Qt-Elternteil; ihn hält allein die
