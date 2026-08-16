@@ -24,6 +24,7 @@ import trimesh
 from shapely.geometry import Point
 from shapely.geometry import Polygon as ShapelyPolygon
 
+from app.core.errors import CANCEL, Action, UserError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.slice.analysis import cross_sections, slice_body
@@ -110,11 +111,26 @@ class AnalysisMap:
         return sum(1 for value in self.values if math.isnan(value))
 
 
-class MapTooLarge(Exception):
-    """Der Körper hat mehr Dreiecke, als eine Karte abzulaufen bereit ist (§31)."""
+class MapTooLarge(UserError):
+    """Der Körper hat mehr Dreiecke, als eine Karte abzulaufen bereit ist (§31).
 
-    def __init__(self, triangles: int) -> None:
-        super().__init__(f"{triangles} triangles exceed the map limit {MAP_LIMIT_TRIANGLES}")
+    Ein ``UserError``, keine nackte ``Exception``: als solche fiel die Klasse
+    durch die Regel-17-Prüfung in ``tests/test_errors.py`` — kein Vorschlag,
+    kein Warum, und die Oberfläche konnte nur „zu groß" sagen. Die Antwort
+    steht seit je in der Eingangsstufe: Dezimieren hilft.
+    """
+
+    default_title = _("Für eine Analysekarte ist dieses Modell zu groß.")
+    default_suggestions = (
+        Action(id="decimate_mesh", label=_("Dreiecke verringern."), primary=True),
+        CANCEL,
+    )
+
+    def __init__(self, triangles: int = 0) -> None:
+        super().__init__(
+            detail=_("Die Karte läuft jedes Dreieck ab, und ihr Budget ist begrenzt (§31)."),
+            values={"triangles": triangles, "limit": MAP_LIMIT_TRIANGLES},
+        )
         self.triangles = triangles
 
 

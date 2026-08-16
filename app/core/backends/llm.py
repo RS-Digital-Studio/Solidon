@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final, Literal, Protocol
 
 from app.core.backends import keys
-from app.core.errors import AppError
+from app.core.errors import AppError, ExternalToolError
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
 
@@ -148,8 +148,14 @@ def post_json(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dic
         raise BackendUnavailable(detail=str(error.reason)) from error
 
 
-class BackendUnavailable(AppError):
-    """Das Modell war nicht erreichbar oder hat abgelehnt."""
+class BackendUnavailable(ExternalToolError):
+    """Das Modell war nicht erreichbar oder hat abgelehnt.
+
+    Ein ``ExternalToolError``, kein nackter ``AppError`` (§33.1): Der
+    häufigste Auslöser ist ein nicht laufendes Ollama oder ein abgelaufener
+    Schlüssel — dort helfen „Einstellungen öffnen" und „Erneut versuchen",
+    nicht das geerbte „Abbrechen" allein.
+    """
 
     default_title = _("Das Sprachmodell hat nicht geantwortet.")
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import Final, Literal
 
 from app.core.errors import CORRECT_INPUT, Action, GeometryError
 from app.core.types import Point2, SolvedSketch
@@ -245,13 +245,23 @@ def _segment(kind: str, points: tuple[Point2, ...]) -> ProfileSegment:
     return ProfileSegment("arc", start, end, via=_arc_midpoint(centre, start, end))
 
 
+#: Unterhalb dieses Winkels gelten Anfang und Ende eines Bogens als derselbe
+#: Punkt — der Löser liefert Koordinaten mit Restfehler um 1e-12, bit-genaue
+#: Gleichheit gibt es dort nie (Regel 6).
+_FULL_CIRCLE_EPS: Final = 1e-9
+
+
 def _arc_midpoint(centre: Point2, start: Point2, end: Point2) -> Point2:
     """Der Punkt auf halbem Weg des Bogens, gegen den Uhrzeigersinn gerechnet."""
     radius = math.dist(centre, start)
     begin = math.atan2(start[1] - centre[1], start[0] - centre[0])
     finish = math.atan2(end[1] - centre[1], end[0] - centre[0])
     sweep = (finish - begin) % (2.0 * math.pi)
-    if sweep == 0.0:
+    if sweep <= _FULL_CIRCLE_EPS:
+        # Zusammenfallende Enden sind ein Vollkreis, kein Nullbogen. Mit
+        # `== 0.0` fing das den Löser-Fall nie: der Stützpunkt landete auf
+        # dem Startpunkt, und der B-Rep-Kern baute einen Bogen ohne
+        # Ausdehnung statt eines Kreises.
         sweep = 2.0 * math.pi
     middle = begin + sweep / 2.0
     return (centre[0] + radius * math.cos(middle), centre[1] + radius * math.sin(middle))

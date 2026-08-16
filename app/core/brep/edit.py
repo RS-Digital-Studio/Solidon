@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.core.brep.kernel import Solid, require
-from app.core.errors import PROGRAMMING_ERRORS, GeometryError
+from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, GeometryError
 from app.core.log import get_logger
 from app.core.types import Vec3
 from app.core.units import EPS_GEOM
@@ -215,7 +215,20 @@ def boolean(kind: Literal["union", "difference", "intersection"], parts: list[So
         operation = makers[kind](shape, other.shape)
         operation.Build()
         if not operation.IsDone():
-            raise GeometryError(detail=_("Die Boolesche Operation ist fehlgeschlagen."))
+            # Nicht „fehlgeschlagen" (Regel 17), und nicht die geerbten
+            # Vorschläge: Mesh-Reparatur und offene Kanten gibt es für einen
+            # B-Rep-Körper nicht. Der häufigste Grund ist eine Berührung
+            # ohne Überlappung — und die behebt eine Bewegung, keine
+            # Reparatur.
+            raise GeometryError(
+                detail=_(
+                    "Der exakte Kern findet für diese Körper kein Ergebnis — "
+                    "meist berühren sie sich nur an einer Fläche oder Kante, "
+                    "statt sich zu überlappen. Verschieben Sie einen der "
+                    "beiden um die gewünschte Überlappung."
+                ),
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
         shape = operation.Shape()
     return parts[0].replacing(shape)
 

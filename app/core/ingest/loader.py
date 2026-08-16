@@ -111,6 +111,33 @@ def check_limits(payload_size: int, triangle_count: int) -> None:
         )
 
 
+def check_unpacked(payload: bytes) -> None:
+    """Die entpackte Summe eines Containers gegen dieselbe Grenze (§32).
+
+    Geprüft war nur die gepackte Größe: 2,6 MB wurden beim Lesen zu 1,08 GB —
+    Verhältnis 412, und über ``ingest/fetch`` ist so eine Datei aus dem Netz
+    erreichbar. Die Zahlen stehen im zentralen Verzeichnis des Archivs; die
+    Prüfung liest kein einziges Byte des Inhalts.
+    """
+    import zipfile
+    from io import BytesIO
+
+    try:
+        with zipfile.ZipFile(BytesIO(payload)) as container:
+            unpacked = sum(info.file_size for info in container.infolist())
+    except zipfile.BadZipFile:
+        # Keine gültige Zip — das meldet der eigentliche Leser mit seinem
+        # eigenen, besseren Satz.
+        return
+    if unpacked > MAX_FILE_BYTES:
+        raise ValidationError(
+            field="file",
+            detail=_("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
+            constraint="file_too_large",
+            values={"unpacked": unpacked, "limit": MAX_FILE_BYTES},
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class IngestResult:
     """Das normalisierte Netz plus was mit ihm passiert ist."""

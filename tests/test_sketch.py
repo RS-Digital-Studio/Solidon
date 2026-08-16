@@ -566,3 +566,16 @@ def test_a_single_shape_still_comes_back_as_one_profile() -> None:
     profile = profile_of(solve_sketch(shapes.rectangle(40.0, 20.0)))
     assert len(profile.segments) == 4
     assert not profile.holes
+
+
+def test_a_degenerate_arc_is_a_full_circle() -> None:
+    """Regel 6: Der Löser liefert Bogenenden mit Restfehler um 1e-12 —
+    `== 0.0` fing den Vollkreisfall nie, der Stützpunkt landete auf dem
+    Startpunkt, und der B-Rep-Kern baute einen Bogen ohne Ausdehnung."""
+    from app.core.sketch.profile import _arc_midpoint
+
+    exact = _arc_midpoint((0.0, 0.0), (10.0, 0.0), (10.0, 0.0))
+    assert exact == pytest.approx((-10.0, 0.0), abs=1e-6)
+
+    jittered = _arc_midpoint((0.0, 0.0), (10.0, 0.0), (10.0, 1e-10))
+    assert jittered == pytest.approx((-10.0, 0.0), abs=1e-3)
