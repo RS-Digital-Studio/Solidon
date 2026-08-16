@@ -1748,6 +1748,19 @@ def test_an_unreadable_gcode_file_says_so(
     assert gezeigt[0].suggestions, "und der Fehler trägt keinen Handlungsvorschlag"
 
 
+def wait_for_export(window: MainWindow) -> None:
+    """§2.8: Exportiert wird im Arbeiter, der Test wartet also wie das Fenster.
+
+    Nach dem Warten einmal zustellen — ``done`` ist eine Warteschlangen-
+    Verbindung, und ohne ``processEvents`` kämen weder Meldung noch Befunde je
+    an.
+    """
+    worker = window._export_worker
+    if worker is not None:
+        worker.wait(20_000)
+    QApplication.processEvents()
+
+
 def test_export_writes_the_selected_format(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1766,6 +1779,7 @@ def test_export_writes_the_selected_format(
         staticmethod(lambda *args, **kwargs: (str(target), "STL (*.stl)")),
     )
     window.action_export()
+    wait_for_export(window)
 
     assert target.is_file(), "der gewählte Name ist die Datei, nicht ein Schema daraus"
     assert target.stat().st_size > 0
@@ -1805,6 +1819,7 @@ def test_export_as_3mf_writes_one_assembly(
     )
     window.object_tree.tree.clearSelection()
     window.action_export()
+    wait_for_export(window)
 
     written = list(tmp_path.glob("*.3mf"))
     assert len(written) == 1, "eine Baugruppe, eine Datei"
@@ -1883,6 +1898,7 @@ def test_a_single_body_3mf_carries_the_settings_too(
     )
     window.object_tree.tree.clearSelection()
     window.action_export()
+    wait_for_export(window)
 
     written = list(tmp_path.glob("*.3mf"))
     assert len(written) == 1
@@ -1892,6 +1908,103 @@ def test_a_single_body_3mf_carries_the_settings_too(
         )
         values = json.loads(archive.read("Metadata/project_settings.config"))
     assert values.get("layer_height"), "die Auflösung aus Stufe, Material und Drucker gilt"
+
+
+def test_the_export_leaves_the_window_usable(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2.8: Prüfen und Schreiben laufen im Arbeiter, nicht in der
+    Ereignisschleife.
+
+    Vorher rechnete und schrieb ``action_export`` komplett im Hauptthread —
+    Prüfung vor dem Export, Aufbau der Baugruppe, Anordnungsprüfung und die
+    Dateien selbst. Bei mehreren großen Körpern ist das mehr als zwei
+    Sekunden mit stehendem Fenster.
+
+    Geprüft wird beides: dass der Aufruf zurückkommt, bevor geschrieben ist,
+    und dass der Menüeintrag währenddessen gesperrt bleibt — zwei Läufe auf
+    denselben Ordner wären ein Wettlauf um dieselben Dateinamen.
+    """
+    import time
+
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.ui import main_window as module
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    real_write = module.write_plan
+
+    def slow_write(*args: Any, **kwargs: Any) -> Any:
+        time.sleep(0.4)
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(module, "write_plan", slow_write)
+    target = tmp_path / "langsam.stl"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "STL (*.stl)")),
+    )
+
+    started = time.perf_counter()
+    window.action_export()
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 0.3, "der Aufruf hat auf das Schreiben gewartet — genau das war der Befund"
+    assert window._export_worker is not None, "ohne Arbeiter ist nichts nebenher gelaufen"
+    assert not window.export_action.isEnabled(), (
+        "ein zweiter Lauf schriebe in dieselben Dateien wie der erste"
+    )
+
+    wait_for_export(window)
+
+    assert target.is_file()
+    assert target.name in window._announcement, "der fertige Export meldet sich nicht"
+    assert window._export_worker is None
+    assert window.export_action.isEnabled(), "nach dem Lauf ist der Eintrag wieder da"
+    assert not window.progress.isVisible(), "der Balken bleibt stehen, wenn niemand ihn abräumt"
+
+
+def test_a_failed_export_reports_in_the_main_thread(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 17: Was im Arbeiter schiefgeht, wird im Fenster gezeigt — mit
+    Handlungsvorschlag, nicht als stiller Ausfall.
+
+    Der ``try/except AppError`` stand um den Code, der jetzt im Arbeiter
+    läuft. Fiele er dort ungefangen aus ``run`` heraus, endete der Export
+    ohne eine Zeile — und der Menüeintrag bliebe für immer gesperrt.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.ui import main_window as module
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    def refuse(*args: Any, **kwargs: Any) -> Any:
+        raise errors.UserError(
+            title="Der Ordner ließ sich nicht beschreiben.",
+            detail="Kein Schreibrecht.",
+        )
+
+    shown: list[Any] = []
+    monkeypatch.setattr(module, "write_plan", refuse)
+    monkeypatch.setattr(module, "show_error", lambda error, *args, **kwargs: shown.append(error))
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(tmp_path / "geht_nicht.stl"), "STL (*.stl)")),
+    )
+
+    window.action_export()
+    wait_for_export(window)
+
+    assert shown, "der Fehler des Arbeiters kam nirgends an"
+    assert shown[0].suggestions, "und er trägt keinen Handlungsvorschlag"
+    assert window.export_action.isEnabled(), "nach dem Fehlschlag darf man es wieder versuchen"
 
 
 def test_export_is_disabled_on_an_empty_scene(window: MainWindow) -> None:

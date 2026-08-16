@@ -1041,6 +1041,7 @@
   "Exportieren": "Export",
   "Exportieren …": "Export …",
   "Exportiert": "Exported",
+  "Exportiert wird … {name}": "Exporting … {name}",
   "Externe Programme — keines davon ist Pflicht:": "External programs — none of them is required:",
   "Extrusionsbreite": "Extrusion width",
   "Faktor": "Factor",
