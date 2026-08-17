@@ -40,6 +40,18 @@ bekommt einen roten Lauf.
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
+| Die Ebenentasten 1, 2 und 3 sind tot | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — eine Liste `_display_actions`, in `_update_actions` gesperrt, und einen Test, der die Taste wirklich drückt |
+| Der Dialog aus dem Verlauf verliert seine Klappe | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — die gestufte Tiefe gilt dort schlicht nicht |
+| Zwei lange Läufe ohne Abbrechen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts; die Live-Vorschau braucht zusätzlich einen Weg, nicht den ganzen Stapel zu rechnen |
+| Die Befehlspalette ist kein Universalzugang | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 38 Zeilen nachtragen, Umlautfaltung und Synonyme dazu |
+| Ausgegraute Einträge nennen ihren Grund nicht | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — `_kind_hint` deckt den häufigsten Fall nicht ab |
+| Was ein Bildschirmleser nicht liest | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 62 Namen, ein Fokusring, eine Tastenfalle |
+| Zwei Anzeigen allein über Farbe | Die Oberfläche im Bild durchgesehen (17.08.2026) | eine zweite Kodierung für Insel/Überhang und eine Legende (Regel 18) |
+| Vier Arbeiter am `finished`-Signal | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — das Muster steht in `.claude/rules/oberflaeche.md` |
+| Leere Zustände fehlen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — drei Karten und drei Suchen ohne Antwort |
+| Der Installationsdialog zeigt rohe Ausgabe | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — plus zwei Sätze ohne Warum (Regel 17) |
+| Weg 4 steht in keiner Unterlage | Die Oberfläche im Bild durchgesehen (17.08.2026) | eine Bauplanänderung mit Ansage; README, Handbuch, Website und die Abbildung ziehen nach |
+| Der Rest der Textfunde | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — Plural in fünf Katalogen, rohe Schlüssel, ein Knopf in den falschen Dialog |
 
 ---
 
@@ -5751,3 +5763,176 @@ berechtigt — das ist der Teil, der ohne Suite still danebengegangen wäre:
 **Volllauf danach:** 3374 bestanden, 10 übersprungen, 1 erwartet
 fehlgeschlagen; jede Fensterdatei einzeln grün, `test_manual.py` zum ersten Mal
 seit Langem auch offscreen. `ruff`, `ruff format` und `mypy` sauber.
+
+## Die Oberfläche im Bild durchgesehen (17.08.2026)
+
+Die vorige Durchsicht endete mit einem Satz, der eine Lücke benannte: *„Nicht
+gemessen: das laufende Fenster als Bild. Der Container hier bringt VTK und die
+Offscreen-Plattform nicht zusammen."* Diese hier hat genau dort angefangen —
+auf einer Maschine, die rendert. Dazu sieben Prüfungen parallel gegen Menüs,
+Dialoge, Aussehen, Texte, Rückmeldung, Barrierefreiheit und die vier Wege, jede
+mit einer Gegenprüfung, die widerlegen sollte statt zu bestätigen.
+
+**69 Funde haben die Gegenprüfung überlebt**, fünf sind daran gestorben. Was
+unten unter „Behoben" steht, hat einen Test; was unter „Offen" steht, ist
+belegt und mit Absicht liegen geblieben.
+
+> **Drei der behobenen Funde waren am Quelltext unsichtbar.** Der Achsenmarker,
+> die leeren Kästchen am Zahlenfeld und der verschwundene Platzhaltertext sind
+> alle drei erst im Bild aufgefallen — und der erste stand seit jeher auf jedem
+> Handbuchbild in jeder Sprache.
+
+### Behoben
+
+- [x] **Die Achsenanzeige lag hinter der linken Spalte.** Sichtbar war allein
+      die Spitze des roten X-Pfeils, die unter der Karte hervorschaute; das
+      sieht aus wie ein Grafikfehler und stand so auf jedem Bildschirmfoto.
+      Der Wert `(0.0, 0.0, 0.16, 0.24)` trug die Begründung „unten links, wo
+      keine Karte liegt" — dort liegen Objekte, Parameter und Verlauf. Anteile
+      können das nicht lösen: Die Karte hält ihren Abstand in Bildpunkten.
+      `orientation_corner()` rechnet jetzt aus Punkten, `resizeEvent` zieht
+      nach. Unterwegs zwei weitere Funde: Der Docstring beschrieb einen
+      anklickbaren Würfel, den es im ganzen Quelltext nicht gibt, und schloss
+      mit „er ersetzt aber `add_axes`" — während die Zeilen darunter genau das
+      aufrufen. Und `plotter.axes_widget` gibt es in pyvista 0.48 nicht; das
+      Nachziehen lief still ins Leere und legte die Anzeige quer über das
+      Modell, bis `axes_widget_of()` sie am Renderer suchte.
+- [x] **Jedes Zahlenfeld zeigte zwei leere Kästchen statt der Pfeile.** Sobald
+      ein Stylesheet an einem `QSpinBox` eine Rahmeneigenschaft setzt — und die
+      Regel, die allen Eingabefeldern ihren Radius gibt, tut das —, hört Qt
+      auf, dessen Unterelemente zu zeichnen. 27 Felder in 13 Dateien. Ein
+      Dreieck aus Rahmenkanten half nicht (Qt füllt die Fläche und malt einen
+      hellen Block), also sind es Bilder: zwei SVG im Cache (§38), je Thema in
+      seiner Textfarbe geschrieben.
+- [x] **Der Platzhaltertext verschwand.** `build_palette` setzte jede Rolle
+      außer `PlaceholderText`, und was dort fehlt, kommt vom Betriebssystem.
+      Auf einem dunkel eingestellten Windows war er hell — im hellen Thema
+      damit weiß auf Weiß. Dreizehn Felder tragen ihre Auskunft dort, darunter
+      das Muster `SOLIDON3D-1-…`, das als Einziges sagt, wie ein
+      Lizenzschlüssel aussieht.
+- [x] **Der Fokusring war im hellen Thema praktisch nicht da**: 2,06 auf einem
+      weißen Feld, 1,70 auf dem Fenster, gefordert sind 3,0 (WCAG 1.4.11). Er
+      nahm `highlight`; der Bernstein ist für den dunklen Untergrund gewählt.
+      Er nimmt jetzt `accent_line` — dieselbe Farbe im dunklen Thema, im hellen
+      der abgestufte Ton, den `theme.py` für genau diese Rechnung schon führte.
+- [x] **Im Prüfbericht stand jede Zeile unter der Lesbarkeitsgrenze.** Die
+      Befunde tragen ihre Rollenfarbe als Schrift (`panels.py`), und die ist
+      für Dunkel gewählt: auf der weißen Liste des hellen Themas 2,22 für eine
+      Warnung, 2,67 für einen Hinweis, 3,97 für einen Fehler. Der Test dazu
+      fand gleich noch einen: Das Fehlerrot bringt auch **dunkel** nur 4,17 —
+      im Standardthema, beim Schweregrad, der am dringendsten gelesen wird.
+      `text_colour()` wählt den Ton jetzt nach der Helligkeit der Fläche, auf
+      die geschrieben wird, nicht nach dem Namen des Themas.
+- [x] **Gesperrtes sah aus wie bedienbar.** Die Palette setzte den
+      Sperrzustand für `Text` und `ButtonText`, nicht für `WindowText` — und
+      daran hängen QLabel, QCheckBox, QRadioButton und QGroupBox. Ein
+      gesperrtes Ankreuzfeld war pixelgleich mit einem bedienbaren.
+- [x] **Eine Farbe tat zwei Arbeiten und beide schlecht.** `disabled` war
+      zugleich die Farbe für Nebentext — Maße, Spaltenköpfe, Gruppentitel, der
+      stille Reiter. Damit war Nebentext bei 2,59 unlesbar und Gesperrtes nicht
+      als solches zu erkennen. `muted` ist jetzt eine eigene Rolle.
+- [x] **Der Splittergriff war einen Bildpunkt breit** — optisch eine Linie,
+      praktisch nicht zu treffen. Jetzt zwei Rasterschritte, und er färbt sich
+      beim Überfahren.
+- [x] **Der Hinweis unter dem Zeiger hatte als einziges Element keine Form**
+      und stand im hellen Thema auf dem Blassgelb, das Qt von Windows erbt: die
+      einzige Farbe im hellen Thema, die aus keiner Tabelle dieser Anwendung
+      stammte.
+- [x] **Der Hauptknopf gab beim Drücken nicht nach.** `:default` steht später
+      als `:pressed` und wiegt gleich schwer, gewinnt also — der lauteste Knopf
+      der Anwendung war der einzige ohne Rückmeldung auf einen Klick.
+- [x] **„Einfügen" im Bausteinkatalog versprach eine Wirkung, die er nicht
+      hatte.** Ohne Auswahl stand er in voller Akzentfarbe da, nahm den Klick
+      an, schloss den Dialog — und setzte nichts: `_accept` rief `accept()`
+      auch ohne Baustein. Das ist die stillste Art, jemanden ratlos zu machen.
+- [x] **Der Rat des Kernautors kam nie an.** Von 48 Kennungen, die der Kern in
+      `Action(...)` vergibt, sind zehn verdrahtet; die übrigen wurden im
+      Fehlerdialog verworfen, und an ihrer Stelle stand „Fehlerbericht
+      erstellen" als Hauptknopf — auf einen reinen Bedienfehler, obwohl der
+      Bericht laut `errors.py` dem `InternalError` gehört. Sätze wie
+      „Schreiben Sie das Ziel als obj_2:hole_1." landeten im Nichts. Sie
+      werden jetzt gelesen statt geklickt: Knöpfe bleiben denen vorbehalten,
+      die etwas tun, der Rest steht als Text im Dialog (§2.7).
+- [x] **Die Handbuchbilder zeigten die Oberfläche von vor dem Trennwerkzeug** —
+      sieben Knöpfe statt acht, in allen sechs Sprachen. Alle 36 sind neu.
+
+### Offen
+
+- [ ] **Die Ebenentasten 1, 2 und 3 im Skizzeneditor tun nichts.** Die Ziffern
+      des Ansicht-Menüs liegen darüber, und Qt lässt bei zwei aktiven Kürzeln
+      derselben Taste keines von beiden feuern — eine Regel, die
+      `main_window.py` selbst aufstellt und nur auf R und C anwendet. Die
+      Oberfläche verspricht die Taste sichtbar: „(1)", „(2)", „(3)" stehen am
+      Ebenenfeld und noch einmal im Tooltip. Gemessen per A/B im selben Lauf:
+      Mit gesperrten Ziffern-Aktionen schaltet dieselbe Taste sauber. Der Test
+      dazu drückt keine Taste, sondern ruft `choose_plane` an einem nackten
+      Panel — also in genau der Umgebung ohne den Konflikt.
+- [ ] **Eine aus dem Verlauf geöffnete Operation kippt ihr ganzes Schema auf
+      die Vorderseite** — die Klappe „Weitere Einstellungen" verschwindet, und
+      die gestufte Tiefe (§2) gilt genau dann nicht mehr, wenn jemand einen
+      Wert nachbessern will.
+- [ ] **Zwei lange Läufe haben kein Abbrechen.** Die Live-Vorschau des
+      Operationsdialogs rechnet bei jeder Änderung den ganzen Stapel neu, und
+      der Slicer-Lauf hält beim Schließen des Dialogs die Ereignisschleife an.
+      Dazu: Analysekarte und Trennebenensuche laufen im Arbeiter, fragen aber
+      nie `ctx.cancelled`; im Erzeugen-Dialog ist „Abbrechen" ausgerechnet
+      während des Laufs gesperrt; eine abgebrochene Auswertung sagt niemandem,
+      dass sie abgebrochen wurde; und Speichern blockiert über eine Sekunde
+      ohne Zeiger und ohne Statuszeile.
+- [ ] **Die Befehlspalette ist nicht der Universalzugang, den §19.2 verlangt.**
+      38 von 135 Menüzeilen fehlen, darunter der Einstieg in Weg 3 — und die
+      Kürzelübersicht behauptet das Gegenteil. Die Suche kennt weder
+      Umlautfaltung noch ein Synonym, und sie umgeht die Bauart-Prüfung:
+      „Verrunden" öffnet für ein Netz seinen vollen Dialog.
+- [ ] **Kein ausgegrauter Menüeintrag nennt seinen Grund.** Auf der leeren
+      Szene sind 69 von 82 Operationszeilen gesperrt, und bei allen 69 ist der
+      Hinweistext der Beschreibungssatz. Die Werkzeugzeile daneben sagt es
+      richtig: „Dafür braucht es einen Körper in der Szene." Beim häufigsten
+      Grund — zu wenig ausgewählt — schweigt auch `_kind_hint`. Dazu drei
+      anklickbare Sackgassen unter *Erzeugen → Import*, die auf leerer Szene
+      in eine Fehlermeldung führen.
+- [ ] **Was ein Bildschirmleser nicht liest.** 62 von 111 fokussierbaren
+      Elementen des Hauptfensters haben keinen Namen; die Reiterleiste der
+      rechten Spalte zeigt den Tastaturfokus mit null Bildpunkten Unterschied;
+      und der Freischaltdialog ist eine Tastenfalle — Tab schreibt einen
+      Tabulator ins Feld, statt weiterzugehen.
+- [ ] **Zwei Anzeigen sprechen allein über Farbe** (Regel 18). In der
+      Schichtanalyse unterscheidet nur sie Insel von Überhang — beide Ringe
+      sind gleich dick, eine Legende gibt es nicht. Und die Legende der
+      Differenzansicht ist ganz in der Farbe von „Hinzugefügt" gezeichnet, in
+      Graustufen auf hellem Thema bei 1,16.
+- [ ] **Vier Dialoge lassen ihren Arbeiter im `finished`-Slot los** — genau das
+      Muster, das `.claude/rules/oberflaeche.md` ausdrücklich verbietet, weil
+      es eine Zugriffsverletzung ohne Zeile hinterlässt. Der Arbeiter des
+      Downloads fehlt zusätzlich in `wait_for_workers`.
+- [ ] **Leere Zustände fehlen.** Objektbaum und Verlauf sind bei einem neuen
+      Projekt stumme Kästen, und eine Suche ohne Treffer sagt an keiner der
+      drei Stellen, dass nichts gefunden wurde.
+- [ ] **Der Installationsdialog antwortet mit „Das hat nicht geklappt."** und
+      zeigt davor die rohe Befehlszeile und die rohe pip- oder winget-Ausgabe.
+      Daneben zwei weitere Sätze ohne Warum: „Die Boolesche Operation ist
+      fehlgeschlagen." an zwei Stellen, und „Zwei Bedingungen widersprechen
+      sich." ohne das Paar zu nennen, das der Bauplan ausdrücklich verlangt.
+- [ ] **Weg 4 steht in keiner Unterlage.** Bauplan, README, Handbuchkapitel und
+      Website nennen weiter drei Wege — die gezeichnete Abbildung zeigt drei,
+      die Oberflächenregel schickt Weg 4 in die Werkzeugzeile, wo er nicht
+      liegt und laut derselben Datei nicht liegen kann. README und Website
+      führen außerdem zu wenige Operationen und Bausteine.
+- [ ] **Der Rest der Textfunde**: „Fehler", „Warnung" und „Hinweis" stehen in
+      allen fünf Katalogen im Plural und erscheinen deshalb als „1 × warnings";
+      Fehler-Einzelheiten und Befund-Tooltip zeigen rohe englische Schlüssel;
+      der einzige Knopf am gesperrten Chat führt in den falschen Dialog; eine
+      neue Warnung erreicht niemanden mehr, sobald die rechte Spalte
+      ausgeblendet ist; und die Restzeitschätzung über zehn Sekunden gibt es
+      nur, solange das Bild leer ist — also gerade nicht bei den langen
+      Rechnungen.
+
+### Was die Durchsicht entlastet hat
+
+Gezielt geprüft und in Ordnung: Der Prüfbericht trägt zu jeder Farbe ein
+Symbol, die Menüs grauen vollständig richtig aus, die gestufte Tiefe hält in
+jedem Operationsdialog außer dem einen oben, kein Parameter steht ohne `doc`,
+und die Zahlenfelder der Skizzenleiste erklären sich über Tooltips. Fünf
+gemeldete Funde sind an der Gegenprüfung gestorben — darunter die Behauptung,
+der Startbildschirm trage einen veralteten Produktnamen: Die Domain heißt
+`solidon3d.de`, und „Solidon3D" ist der Name, nicht der Rest eines alten.
