@@ -81,6 +81,89 @@ def test_the_view_gets_the_whole_window(window: MainWindow) -> None:
     assert host.view.geometry().height() == host.height()
 
 
+def test_the_axis_marker_does_not_hide_behind_a_card(window: MainWindow) -> None:
+    """Die einzige Orientierungsanzeige der Anwendung muss zu sehen sein.
+
+    Sie stand auf ``(0.0, 0.0, 0.16, 0.24)`` — Anteile des Fensters, mit der
+    Begründung, unten links liege keine Karte. Dort liegt die linke Spalte:
+    Objekte, Parameter und Verlauf. Bei 1180 auf 760 war die Anzeige 189 auf
+    158 Punkte groß und lag fast vollständig dahinter; zu sehen blieb allein
+    die Spitze des roten X-Pfeils, die unter der Karte hervorschaute. Auf jedem
+    Bildschirmfoto, in jeder Sprache — und sie sieht aus wie ein Grafikfehler.
+
+    Ein fester Anteil kann das nicht lösen: Die Karte hält ihren Abstand in
+    Bildpunkten, der Anteil daran ändert sich mit jeder Fenstergröße. Geprüft
+    wird deshalb bei mehreren Größen.
+    """
+    from app.ui.viewport import orientation_corner
+
+    host = window.overlay
+    for size in ((1180, 760), (1600, 1000), (900, 640)):
+        window.resize(*size)
+        QApplication.processEvents()
+
+        view = host.view
+        left, bottom, right, top = orientation_corner(view.width(), view.height())
+        # VTK zählt von unten, Qt von oben.
+        marker = QRect(
+            round(left * view.width()),
+            round((1.0 - top) * view.height()),
+            round((right - left) * view.width()),
+            round((top - bottom) * view.height()),
+        )
+
+        # Gemessen wird gegen den Platz, den eine Karte einnehmen **kann**,
+        # nicht gegen den, den sie gerade einnimmt: Auf der leeren Szene ist
+        # die linke Spalte kurz, und genau dort fällt der Fehler nicht auf. Im
+        # Fenster mit geladenem Projekt reicht sie bis an diese Kante.
+        room = max(view.height() - 2 * MARGIN - host._bottom_room(), 0)
+        lowest_card_edge = MARGIN + room
+
+        assert marker.top() >= lowest_card_edge, (
+            f"{size}: Die Achsenanzeige beginnt bei {marker.top()} und damit "
+            f"{lowest_card_edge - marker.top()} Punkte über der Unterkante, bis zu der "
+            "eine Karte wächst — eine gefüllte linke Spalte deckt sie zu."
+        )
+
+        # Die Gegenprobe. Ohne sie stünde hier eine Formel, die immer aufgeht.
+        old_top = round((1.0 - 0.24) * view.height())
+        assert old_top < lowest_card_edge, (
+            "Der alte Wert (0.0, 0.0, 0.16, 0.24) lag hinter der linken Spalte. "
+            "Tut er das nicht mehr, hat sich das Layout geändert und dieser Test "
+            "braucht neue Zahlen."
+        )
+
+
+def test_the_axis_marker_is_found_where_pyvista_keeps_it() -> None:
+    """Das Nachziehen greift nur, wenn es das Widget findet.
+
+    ``plotter.axes_widget`` gibt es in pyvista 0.48 nicht — es hängt am
+    Renderer. Ein ``getattr`` auf den Plotter liefert still ``None``, das
+    Nachziehen fällt aus, und die Anzeige bleibt dort stehen, wo sie beim
+    Aufbau landete: mitten im Bild, weil das Fenster da noch keine Größe hat.
+    Kein Fehler, keine Ausnahme, nur ein handtellergroßes Achsenkreuz quer über
+    dem Modell — zu sehen allein im Bild.
+
+    Geprüft wird gegen die **echte** API und nicht gegen eine Attrappe: Eine
+    Attrappe, die ``axes_widget`` am Plotter hat, hätte genau diesen Fehler
+    bestätigt statt ihn zu finden.
+    """
+    pyvista = pytest.importorskip("pyvista")
+
+    from app.ui.viewport import axes_widget_of
+
+    plotter = pyvista.Plotter(off_screen=True)
+    try:
+        plotter.add_axes()
+        widget = axes_widget_of(plotter)
+        assert widget is not None, "das Achsen-Widget ist woanders hingewandert"
+        assert hasattr(widget, "SetViewport"), "ohne SetViewport lässt es sich nicht setzen"
+    finally:
+        plotter.close()
+
+    assert axes_widget_of(None) is None, "ohne Plotter darf nichts krachen"
+
+
 def test_placing_the_zones_never_runs_into_itself(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
