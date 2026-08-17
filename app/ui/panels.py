@@ -9,7 +9,7 @@ Regel 2).
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any
+from typing import Any, cast
 
 from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPixmap
@@ -54,7 +54,7 @@ from app.ui.labels import (
     volume,
 )
 from app.ui.overlay import LEFT_WIDTH
-from app.ui.palette import SEVERITY_ENCODING
+from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
 from app.ui.style import NORMAL, ROOMY, TIGHT, set_level
 
 _log = get_logger(__name__)
@@ -1147,15 +1147,24 @@ class ReportPanel(QWidget):
 
     def _append(self, finding: Finding) -> None:
         """Einen Befund als Eintrag anhängen."""
-        encoding = SEVERITY_ENCODING[finding.severity]
         item = QListWidgetItem(_line_for(finding, self._names))
+        # Die Farbe folgt der Fläche, auf der sie landet. Die Rollenfarben sind
+        # für den dunklen Untergrund gewählt; auf der weißen Liste des hellen
+        # Themas brachte Bernstein 2,22 und das Hinweisblau 2,67 — jede Zeile
+        # des Prüfberichts stand damit unter der Lesbarkeitsgrenze. Gefragt
+        # wird die Liste selbst und nicht das eingestellte Thema: sie weiß, auf
+        # was hier geschrieben wird.
+        tone = QColor(
+            text_colour(
+                cast(Role, finding.severity),
+                self.list.palette().base().color().name(),
+            )
+        )
         # Die Form trägt den Schweregrad, die Farbe verstärkt ihn nur: ein
         # Dreieck bleibt ein Dreieck, auch wo die Farbe nicht ankommt.
-        item.setIcon(
-            icon(f"severity-{finding.severity}", self.list, colour=QColor(encoding.colour))
-        )
+        item.setIcon(icon(f"severity-{finding.severity}", self.list, colour=tone))
         item.setData(Qt.ItemDataRole.UserRole, finding)
-        item.setForeground(QColor(encoding.colour))
+        item.setForeground(tone)
         # §22.5: woher eine Zahl kommt, ist Teil des Befunds und wird nie dem
         # Leser zum Annehmen überlassen — eine Schätzung ist keine Messung.
         details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]

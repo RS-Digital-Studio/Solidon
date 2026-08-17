@@ -70,6 +70,56 @@ ROLES: dict[Role, str] = {
 }
 
 
+#: Dieselben Bedeutungen, so weit abgedunkelt, wie eine helle Fläche es
+#: verlangt.
+#:
+#: Die Werte in :data:`ROLES` sind für den dunklen Untergrund gewählt, auf dem
+#: die Anwendung startet, und dort stimmen sie. Als **Schrift auf Weiß**
+#: stimmen sie nicht: Bernstein bringt 2,22, das Hinweisblau 2,67, das
+#: Fehlerrot 3,97 — WCAG AA verlangt 4,5. Im Prüfbericht, wo jede Zeile ihre
+#: Rollenfarbe trägt, war damit im hellen Thema der gesamte Text unterhalb der
+#: Lesbarkeitsgrenze.
+#:
+#: Der Farbton bleibt, nur die Helligkeit geht so weit herunter, bis 4,5 gegen
+#: Weiß steht. Es ist dieselbe Farbe im Sinne der Bedeutung — genau die
+#: Rechnung, die ``theme._ACCENT_LINE`` für die Akzentkante schon macht.
+ROLES_ON_LIGHT: dict[Role, str] = {
+    "info": "#3479ba",
+    "warning": "#9d6c19",
+    "error": "#cb4a4a",
+}
+
+#: Und dieselbe Rechnung in die andere Richtung.
+#:
+#: Das Fehlerrot ist nicht nur auf Weiß zu schwach — auf der dunklen Liste, mit
+#: der die Anwendung startet, bringt es 4,17. Knapp unter der Grenze, und
+#: ausgerechnet beim Schweregrad, der am dringendsten gelesen werden will.
+#: Aufgehellt sind es 4,52. Die anderen beiden stehen dunkel gut (7,46 und
+#: 6,19) und bleiben, wie sie sind.
+ROLES_ON_DARK: dict[Role, str] = {
+    "error": "#d36363",
+}
+
+#: Ab welcher Luminanz eine Fläche als hell gilt. 0,5 ist die Mitte zwischen
+#: Schwarz und Weiß; die Flächen beider Themen liegen weit davon entfernt
+#: (0,013 gegen 1,0), die Grenze muss also nichts Feines entscheiden.
+_LIGHT_SURFACE: Final = 0.5
+
+
+def text_colour(role: Role, background: str) -> str:
+    """Die Farbe einer Rolle, wo sie als **Schrift** auf ``background`` steht.
+
+    Entschieden wird an der Helligkeit des Untergrunds und nicht am Namen des
+    Themas: Der Aufrufer kennt die Fläche, auf die er schreibt, immer — sein
+    eigenes Widget sagt sie ihm —, das eingestellte Thema kennt er nur über
+    Umwege. Und eine Fläche, die aus einem anderen Grund hell ist, bekommt so
+    von selbst die richtige Schrift.
+    """
+    if relative_luminance(background) >= _LIGHT_SURFACE:
+        return ROLES_ON_LIGHT.get(role, ROLES[role])
+    return ROLES_ON_DARK.get(role, ROLES[role])
+
+
 @dataclass(frozen=True, slots=True)
 class Encoding:
     """Eine Bedeutung: Farbe plus mindestens ein weiterer Kanal (§19.1)."""

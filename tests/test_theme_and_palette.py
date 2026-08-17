@@ -24,6 +24,122 @@ def test_text_has_enough_contrast_in_both_themes(theme: str) -> None:
 
 
 @pytest.mark.parametrize("theme", list(THEMES))
+def test_a_severity_reads_on_the_surface_it_is_written_on(theme: str) -> None:
+    """Der Prüfbericht schreibt jede Zeile in der Farbe ihres Schweregrads.
+
+    Die Rollenfarben sind für den dunklen Untergrund gewählt, auf dem die
+    Anwendung startet. Auf der weißen Liste des hellen Themas brachten sie
+    2,22 (Warnung), 2,67 (Hinweis) und 3,97 (Fehler) — die zentrale Ansicht der
+    Anwendung stand vollständig unter der Lesbarkeitsgrenze. Geprüft hat das
+    niemand: die Kontrasttests hier kannten nur die Themenfarben, und die
+    Rollenfarben lagen daneben in einer eigenen Datei.
+    """
+    from app.ui.palette import text_colour
+
+    surface = THEMES[theme]["base"]  # type: ignore[index]
+    for role in ("info", "warning", "error"):
+        ratio = contrast_ratio(text_colour(role, surface), surface)  # type: ignore[arg-type]
+        assert ratio >= MINIMUM_CONTRAST, (
+            f"{role} bringt auf {surface} nur {ratio:.2f} — ein Befund, den man nicht liest."
+        )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_the_focus_ring_is_visible_on_its_own_background(theme: str) -> None:
+    """Wer ohne Maus arbeitet, sieht nur den Fokusring.
+
+    Er nahm ``highlight``, und der Bernstein bringt gegen das helle Fenster
+    1,70 und gegen ein weißes Feld 2,06. WCAG 1.4.11 verlangt 3,0 für die
+    Umrandung eines Bedienelements — im hellen Thema war der Ring praktisch
+    nicht da. Er nimmt jetzt ``accent_line``, die für genau diese Rechnung
+    schon je Thema abgestuft war.
+    """
+    colours = THEMES[theme]  # type: ignore[index]
+    for surface in ("base", "window"):
+        ratio = contrast_ratio(colours["accent_line"], colours[surface])
+        assert ratio >= 3.0, f"Fokusring auf {surface}: {ratio:.2f}"
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_quiet_text_stays_readable_and_locked_text_looks_locked(theme: str) -> None:
+    """Zwei Aufgaben, zwei Farben.
+
+    ``disabled`` versorgte beide: den Sperrzustand *und* jeden Nebentext —
+    Maße, Einheiten, Spaltenköpfe, Gruppentitel, den stillen Reiter. Damit war
+    beides falsch. Ein Fünftel aller Beschriftungen kam im hellen Thema auf
+    2,59 Kontrast, und ein gesperrter Knopf unterschied sich farblich nicht von
+    einem Spaltenkopf, der nie bedienbar war.
+    """
+    colours = THEMES[theme]  # type: ignore[index]
+    for surface in ("window", "base"):
+        quiet = contrast_ratio(colours["muted"], colours[surface])
+        assert quiet >= MINIMUM_CONTRAST, (
+            f"Nebentext auf {surface}: {quiet:.2f} — leise heißt nicht unlesbar."
+        )
+
+    assert colours["muted"] != colours["disabled"], (
+        "Eine Farbe für zwei Aussagen ist für beide die falsche."
+    )
+    assert (
+        contrast_ratio(colours["text"], colours["window"])
+        > contrast_ratio(colours["muted"], colours["window"])
+        > contrast_ratio(colours["disabled"], colours["window"])
+    ), (
+        "Die Reihenfolge muss stimmen: Haupttext lauter als Nebentext, Nebentext lauter "
+        "als Gesperrtes."
+    )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_a_locked_control_looks_locked_in_every_role(theme: str) -> None:
+    """Gesperrt ist ein Zustand, den man sehen muss.
+
+    Die Palette setzte ihn für ``Text`` und ``ButtonText`` — nicht für
+    ``WindowText``. Daran hängen genau die Elemente, die das Stylesheet nicht
+    anfasst: QLabel, QCheckBox, QRadioButton, QGroupBox. Ein gesperrtes
+    Ankreuzfeld war pixelgleich mit einem bedienbaren; „Scheibe" in der
+    Schnittleiste und „Projektdatei anhängen" im Fehlerbericht sahen
+    anklickbar aus und waren es nicht.
+    """
+    from PySide6.QtGui import QPalette
+
+    from app.ui.theme import build_palette
+
+    palette = build_palette(theme)  # type: ignore[arg-type]
+    for role in (
+        QPalette.ColorRole.Text,
+        QPalette.ColorRole.ButtonText,
+        QPalette.ColorRole.WindowText,
+    ):
+        locked = palette.color(QPalette.ColorGroup.Disabled, role).name()
+        usable = palette.color(QPalette.ColorGroup.Active, role).name()
+        assert locked != usable, f"{role.name}: gesperrt sieht aus wie bedienbar"
+
+
+def test_the_palette_leaves_no_role_to_the_system() -> None:
+    """Was hier nicht gesetzt wird, kommt vom Betriebssystem.
+
+    ``PlaceholderText`` stand als einzige Rolle nicht in der Palette. Auf einem
+    Rechner mit dunkel eingestelltem Windows war er hell — und im hellen Thema
+    damit weiß auf Weiß. Dreizehn Felder tragen ihre Auskunft dort: das
+    Suchfeld des Prüfberichts stand leer da, der Chat fragte nichts mehr, und
+    im Schlüsseldialog fehlte das Muster, das als Einziges sagt, wie ein
+    Lizenzschlüssel aussieht.
+    """
+    from PySide6.QtGui import QPalette
+
+    from app.ui.theme import build_palette
+
+    for theme in THEMES:
+        palette = build_palette(theme)  # type: ignore[arg-type]
+        placeholder = palette.color(QPalette.ColorRole.PlaceholderText).name()
+        base = THEMES[theme]["base"]  # type: ignore[index]
+        assert contrast_ratio(placeholder, base) >= 3.0, (
+            f"{theme}: Platzhalter {placeholder} auf {base} — man sieht ihn nicht."
+        )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
 def test_a_border_is_actually_visible(theme: str) -> None:
     """Ein Knopf ohne sichtbaren Rahmen ist kein Knopf, sondern Text.
 
