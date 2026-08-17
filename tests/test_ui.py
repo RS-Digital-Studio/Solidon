@@ -1385,14 +1385,32 @@ def test_only_actions_with_a_handler_are_offered(window: MainWindow) -> None:
 
 
 def test_an_error_without_a_handler_still_offers_a_way_out(window: MainWindow) -> None:
-    """Ein Dialog mit nur „Abbrechen" ist „fehlgeschlagen" mit mehr Worten."""
-    from app.ui.dialogs import offered_actions
+    """Ein Dialog mit nur „Abbrechen" ist „fehlgeschlagen" mit mehr Worten.
 
+    **Der Ausweg muss nicht immer ein Knopf sein.** Diese Prüfung verlangte
+    früher ``report_error``, und das war die halbe Antwort: Von 48 Kennungen,
+    die der Kern in ``Action(...)`` vergibt, sind zehn verdrahtet — die
+    übrigen wurden verworfen, und an ihrer Stelle stand der Fehlerbericht als
+    Hauptknopf. Auf einen reinen Bedienfehler ist das die falsche lauteste
+    Antwort; er gehört laut ``errors.py`` dem ``InternalError``. Der hilfreiche
+    Satz des Kernautors steckte derweil im weggeworfenen Knopf.
+
+    Geprüft wird deshalb die Regel und nicht ihre eine Umsetzung: Es bleibt
+    **entweder** eine Handlung mit Wirkung **oder** ein Rat zum Lesen. Nur
+    beides zugleich leer wäre „fehlgeschlagen" mit mehr Worten.
+    """
+    from app.ui.dialogs import offered_actions, unhandled_advice
+
+    known = window.error_handlers()
     error = errors.AmbiguityError("Welche Fläche ist gemeint?", ("oben", "unten"))
-    offered = [action.id for action in offered_actions(error, window.error_handlers())]
+    offered = [action.id for action in offered_actions(error, known)]
+    spoken = unhandled_advice(error, known)
 
-    assert offered, "zu keinem Vorschlag ein Handler — dann tritt der Bericht ein"
-    assert "report_error" in offered
+    assert offered or spoken, "weder Knopf noch Rat — genau das darf nicht passieren"
+    assert spoken, "die Vorschläge des Kerns dürfen nicht stillschweigend verschwinden"
+    assert "report_error" not in offered, (
+        "Der Fehlerbericht ist dem InternalError vorbehalten, nicht einer offenen Frage."
+    )
 
 
 def test_the_handlers_are_found_through_the_parent_window(window: MainWindow) -> None:
