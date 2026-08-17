@@ -40,14 +40,13 @@ bekommt einen roten Lauf.
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
-| Die Ebenentasten 1, 2 und 3 sind tot | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — eine Liste `_display_actions`, in `_update_actions` gesperrt, und einen Test, der die Taste wirklich drückt |
 | Der Dialog aus dem Verlauf verliert seine Klappe | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — die gestufte Tiefe gilt dort schlicht nicht |
 | Zwei lange Läufe ohne Abbrechen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts; die Live-Vorschau braucht zusätzlich einen Weg, nicht den ganzen Stapel zu rechnen |
 | Die Befehlspalette ist kein Universalzugang | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 38 Zeilen nachtragen, Umlautfaltung und Synonyme dazu |
 | Ausgegraute Einträge nennen ihren Grund nicht | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — `_kind_hint` deckt den häufigsten Fall nicht ab |
 | Was ein Bildschirmleser nicht liest | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 62 Namen, ein Fokusring, eine Tastenfalle |
 | Zwei Anzeigen allein über Farbe | Die Oberfläche im Bild durchgesehen (17.08.2026) | eine zweite Kodierung für Insel/Überhang und eine Legende (Regel 18) |
-| Vier Arbeiter am `finished`-Signal | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — das Muster steht in `.claude/rules/oberflaeche.md` |
+| Vier Arbeiter am `finished`-Signal | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — aber es ist ein Umbau: die Halteleine gehört in ein eigenes Modul, aus dem Fenster und Dialoge erben |
 | Leere Zustände fehlen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — drei Karten und drei Suchen ohne Antwort |
 | Der Installationsdialog zeigt rohe Ausgabe | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — plus zwei Sätze ohne Warum (Regel 17) |
 | Weg 4 steht in keiner Unterlage | Die Oberfläche im Bild durchgesehen (17.08.2026) | eine Bauplanänderung mit Ansage; README, Handbuch, Website und die Abbildung ziehen nach |
@@ -5855,18 +5854,26 @@ belegt und mit Absicht liegen geblieben.
       die etwas tun, der Rest steht als Text im Dialog (§2.7).
 - [x] **Die Handbuchbilder zeigten die Oberfläche von vor dem Trennwerkzeug** —
       sieben Knöpfe statt acht, in allen sechs Sprachen. Alle 36 sind neu.
+- [x] **Die Ebenentasten 1, 2 und 3 im Skizzeneditor taten nichts.** Die Ziffern
+      des Ansicht-Menüs lagen darüber, und Qt lässt bei zwei aktiven Kürzeln
+      derselben Taste keines von beiden feuern — eine Regel, die
+      `main_window.py` selbst aufstellt und bis dahin nur auf `R` und `C`
+      anwandte. Die Zeichenfläche versprach die Taste sichtbar: „(1)", „(2)",
+      „(3)" stehen am Ebenenfeld und noch einmal im Tooltip. Die Einträge unter
+      *Darstellung* sind im Skizzenmodus jetzt gesperrt — sie wirken dort
+      ohnehin auf einen Viewport, den `start_sketch` aus dem Stapel nimmt. Der
+      alte Test rief `choose_plane` an einem nackten Panel, also in genau der
+      Umgebung ohne den Konflikt; der neue drückt die Taste im gebauten Fenster
+      und macht im selben Lauf die Gegenprobe mit wieder aktiven Kürzeln.
+- [x] **Der Download-Arbeiter fehlte beim Schließen.** Er folgt dem Muster mit
+      `_retire` und `_hold_until_done` sauber, aber in `_retired` landet er
+      erst, wenn er fertig ist — solange er lief, hielt ihn allein sein Feld,
+      und `wait_for_workers` kannte es nicht. Ein Thread, der sein Fenster
+      überlebt, nimmt den Prozess mit. Ein Test liest die Aufzählung jetzt
+      gegen die Felder, damit der nächste nicht wieder durchrutscht.
 
 ### Offen
 
-- [ ] **Die Ebenentasten 1, 2 und 3 im Skizzeneditor tun nichts.** Die Ziffern
-      des Ansicht-Menüs liegen darüber, und Qt lässt bei zwei aktiven Kürzeln
-      derselben Taste keines von beiden feuern — eine Regel, die
-      `main_window.py` selbst aufstellt und nur auf R und C anwendet. Die
-      Oberfläche verspricht die Taste sichtbar: „(1)", „(2)", „(3)" stehen am
-      Ebenenfeld und noch einmal im Tooltip. Gemessen per A/B im selben Lauf:
-      Mit gesperrten Ziffern-Aktionen schaltet dieselbe Taste sauber. Der Test
-      dazu drückt keine Taste, sondern ruft `choose_plane` an einem nackten
-      Panel — also in genau der Umgebung ohne den Konflikt.
 - [ ] **Eine aus dem Verlauf geöffnete Operation kippt ihr ganzes Schema auf
       die Vorderseite** — die Klappe „Weitere Einstellungen" verschwindet, und
       die gestufte Tiefe (§2) gilt genau dann nicht mehr, wenn jemand einen
@@ -5903,8 +5910,12 @@ belegt und mit Absicht liegen geblieben.
       Graustufen auf hellem Thema bei 1,16.
 - [ ] **Vier Dialoge lassen ihren Arbeiter im `finished`-Slot los** — genau das
       Muster, das `.claude/rules/oberflaeche.md` ausdrücklich verbietet, weil
-      es eine Zugriffsverletzung ohne Zeile hinterlässt. Der Arbeiter des
-      Downloads fehlt zusätzlich in `wait_for_workers`.
+      es eine Zugriffsverletzung ohne Zeile hinterlässt. Der Weg dahin ist ein
+      Umbau und keine Zeile: `_hold_until_done`, `_release` und `_retire`
+      gehören in ein eigenes Modul, aus dem das Fenster **und** die vier
+      Dialoge erben; danach müssen die `closeEvent`-Wächter auf die Halteliste
+      zeigen statt auf ein Feld, das dann `None` ist. Der Download, der
+      denselben Fund an anderer Stelle hatte, ist oben abgehakt.
 - [ ] **Leere Zustände fehlen.** Objektbaum und Verlauf sind bei einem neuen
       Projekt stumme Kästen, und eine Suche ohne Treffer sagt an keiner der
       drei Stellen, dass nichts gefunden wurde.
