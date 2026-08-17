@@ -121,6 +121,13 @@ class PartCatalog(QDialog):
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
             ok.setText(tr("Einfügen"))
+        # Er kann nichts einfügen, solange nichts gewählt ist. Vorher stand er
+        # in voller Akzentfarbe da, nahm den Klick an, schloss den Dialog — und
+        # setzte nichts: ``_accept`` rief ``accept()`` auch ohne Baustein. Ein
+        # Knopf, der eine Wirkung verspricht und keine hat, ist die stillste
+        # Art, jemanden ratlos zu machen. Warum er nicht kann, steht daneben:
+        # die Detailspalte sagt „Wählen Sie einen Baustein".
+        self._insert = ok
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 
@@ -255,10 +262,12 @@ class PartCatalog(QDialog):
                 return
 
     def _show_detail(self) -> None:
-        """Was rechts steht, folgt der Auswahl links."""
+        """Was rechts steht, folgt der Auswahl links — und der Knopf auch."""
         name = self.chosen()
         spec = next((entry for entry in PARTS.all() if entry.name == name), None)
         self.detail.setText(detail(spec))
+        if self._insert is not None:
+            self._insert.setEnabled(spec is not None)
 
     # --- choosing ---------------------------------------------------------------
 
