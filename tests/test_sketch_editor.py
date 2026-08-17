@@ -248,6 +248,66 @@ def test_a_digit_switches_the_view(qt_app: QApplication) -> None:
         panel.deleteLater()
 
 
+def test_the_digit_really_switches_the_plane_inside_the_window(qt_app: QApplication) -> None:
+    """Und zwar gedrückt, nicht gerufen.
+
+    Der Test darüber ruft ``choose_plane`` an einem nackten ``SketchPanel`` —
+    also in genau der Umgebung, in der der Fehler nicht auftritt. Im Fenster
+    lagen auf denselben Ziffern die Einträge unter *Ansicht → Darstellung*,
+    und Qt lässt bei zwei aktiven Kürzeln derselben Taste **keines** von beiden
+    feuern: Die Taste tat nichts, weder das eine noch das andere. Die
+    Zeichenfläche versprach sie sichtbar — „(1)", „(2)", „(3)" stehen am
+    Ebenenfeld und noch einmal im Tooltip.
+
+    Gemessen wird deshalb am gebauten Fenster mit offener Skizze.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.show()
+        window._show_start_screen(False)
+        window.start_sketch("sketch_extrude")
+        qt_app.processEvents()
+
+        panel = window._sketch_panel
+        assert panel is not None, "ohne offene Skizze prüft dieser Test nichts"
+        assert panel.canvas.sketch.plane == "plane:xy"
+
+        panel.canvas.setFocus()
+        QTest.keyClick(panel.canvas, Qt.Key.Key_2)
+        qt_app.processEvents()
+        assert panel.canvas.sketch.plane == "plane:xz", (
+            "Die Taste 2 kam nicht an — liegt wieder ein Kürzel des Fensters darauf?"
+        )
+
+        QTest.keyClick(panel.canvas, Qt.Key.Key_3)
+        qt_app.processEvents()
+        assert panel.canvas.sketch.plane == "plane:yz"
+
+        # Die Gegenprobe im selben Lauf: Mit wieder aktiven Menü-Kürzeln muss
+        # dieselbe Taste versagen. Ohne sie stünde hier ein Test, der auch dann
+        # grün bliebe, wenn es den Konflikt nie gegeben hätte.
+        for action in window._display_actions:
+            action.setEnabled(True)
+        panel.choose_plane("plane:xy")
+        QTest.keyClick(panel.canvas, Qt.Key.Key_2)
+        qt_app.processEvents()
+        assert panel.canvas.sketch.plane == "plane:xy", (
+            "Zwei aktive Kürzel auf einer Taste, und sie feuert trotzdem — dann misst "
+            "dieser Test den Konflikt nicht mehr und braucht eine andere Begründung."
+        )
+    finally:
+        window.close()
+        window.deleteLater()
+        qt_app.processEvents()
+
+
 def test_the_status_says_what_the_next_click_does(qt_app: QApplication) -> None:
     """Dass Esc den Linienzug beendet, stand nirgends.
 

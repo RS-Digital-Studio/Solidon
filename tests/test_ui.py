@@ -1413,6 +1413,40 @@ def test_an_error_without_a_handler_still_offers_a_way_out(window: MainWindow) -
     )
 
 
+def test_every_worker_field_is_waited_for_when_the_window_closes() -> None:
+    """Ein Thread, der sein Fenster überlebt, nimmt den Prozess mit.
+
+    ``wait_for_workers`` zählt die Arbeiter von Hand auf, und der Download
+    fehlte darin. Er folgt dem Muster mit ``_retire`` und ``_hold_until_done``
+    sauber — aber in ``_retired`` landet er erst, wenn er fertig ist. Solange er
+    lief, hielt ihn allein sein Feld, und wer währenddessen schloss, bekam
+    genau den Absturz, gegen den die Liste geschrieben wurde: einen ohne Zeile,
+    weil niemand mehr da war, sie zu schreiben.
+
+    Geprüft wird am Quelltext und nicht am laufenden Fenster: Ein Test, der
+    dafür jeden Arbeiter wirklich startet, bräuchte ein Netz, einen Slicer und
+    ein Sprachmodell. Was hier zählt, ist die Vollständigkeit der Aufzählung —
+    wer ein neues Feld anlegt und es dort vergisst, wird rot.
+    """
+    import re
+
+    source = (Path(__file__).parent.parent / "app" / "ui" / "main_window.py").read_text(
+        encoding="utf-8"
+    )
+    fields = set(re.findall(r"self\.(_\w*worker\w*)\s*:\s*Any\s*=\s*None", source))
+    assert fields, "keine Arbeiterfelder gefunden — dieser Test misst nichts mehr"
+
+    body = source[source.index("def wait_for_workers") :]
+    body = body[: body.index("\n    def ", 1)]
+
+    forgotten = sorted(name for name in fields if name not in body)
+    assert not forgotten, (
+        f"Diese Arbeiter werden beim Schließen nicht abgewartet: {forgotten}. "
+        "Solange einer läuft, hält ihn allein sein Feld — `_retired` bekommt ihn "
+        "erst, wenn er fertig ist."
+    )
+
+
 def test_the_handlers_are_found_through_the_parent_window(window: MainWindow) -> None:
     """Ein Dialog im Fenster zeigt dieselben Handlungen wie das Fenster."""
     from app.ui.dialogs import handlers_of

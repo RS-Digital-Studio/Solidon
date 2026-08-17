@@ -591,6 +591,17 @@ class MainWindow(QMainWindow):
         """Die Menüeinträge der Operationen, damit sie sich ausgrauen lassen.
         Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
         etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten."""
+        self._display_actions: list[QAction] = []
+        """Die Einträge unter *Ansicht → Darstellung*.
+
+        Sie brauchen dieselbe Behandlung wie die Operationen, und zwar aus zwei
+        Gründen. Sie wirken auf den Viewport, und den tauscht ``start_sketch``
+        aus dem Stapel heraus — im Skizzenmodus ändern sie also etwas, das
+        niemand sieht. Und ihre Kürzel sind die Ziffern 1 bis 6, auf denen dort
+        der Ebenenwechsel liegt: Qt lässt bei zwei aktiven Kürzeln derselben
+        Taste **keines** von beiden feuern. Die Zeichenfläche versprach die
+        Taste sichtbar — „(1)", „(2)", „(3)" stehen am Ebenenfeld und noch
+        einmal im Tooltip —, und gedrückt geschah nichts."""
         self._trial_message = ""
         """Die Testlauf-Zeile der Statusleiste — gemerkt, damit das
         Freischalten genau sie wegräumt und keine fremde Meldung."""
@@ -1366,12 +1377,14 @@ class MainWindow(QMainWindow):
                 tr("Durchscheinend — für Hohlräume und Teile, die ineinandergreifen."),
             ),
         ):
-            self._add_action(
-                display_menu,
-                label,
-                shortcut,
-                lambda checked=False, key=mode: self.viewport.set_display_mode(key),
-                hint,
+            self._display_actions.append(
+                self._add_action(
+                    display_menu,
+                    label,
+                    shortcut,
+                    lambda checked=False, key=mode: self.viewport.set_display_mode(key),
+                    hint,
+                )
             )
         display_menu.addSeparator()
         for shading, label, hint in (
@@ -1386,12 +1399,14 @@ class MainWindow(QMainWindow):
                 tr("Über die Kanten hinweg gemittelt. Schöner, aber beschönigend."),
             ),
         ):
-            self._add_action(
-                display_menu,
-                label,
-                None,
-                lambda checked=False, key=shading: self.viewport.set_shading(key),
-                hint,
+            self._display_actions.append(
+                self._add_action(
+                    display_menu,
+                    label,
+                    None,
+                    lambda checked=False, key=shading: self.viewport.set_shading(key),
+                    hint,
+                )
             )
         display_menu.addSeparator()
         for projection, label, shortcut, hint in (
@@ -1408,12 +1423,14 @@ class MainWindow(QMainWindow):
                 tr("Ohne Fluchtpunkt — gleich lange Kanten sehen gleich lang aus. Zum Messen."),
             ),
         ):
-            self._add_action(
-                display_menu,
-                label,
-                shortcut,
-                lambda checked=False, key=projection: self.viewport.set_projection(key),
-                hint,
+            self._display_actions.append(
+                self._add_action(
+                    display_menu,
+                    label,
+                    shortcut,
+                    lambda checked=False, key=projection: self.viewport.set_projection(key),
+                    hint,
+                )
             )
 
         camera_menu = self._submenu(view_menu, tr("Kamera"))
@@ -1777,6 +1794,11 @@ class MainWindow(QMainWindow):
         # feuern, dieselbe Falle wie bei R und C oben.
         self.undo_action.setEnabled(self.session.history.can_undo and not drawing)
         self.redo_action.setEnabled(self.session.history.can_redo and not drawing)
+        # Und die Darstellung, aus demselben Grund wie die Operationen: Im
+        # Skizzenmodus liegt der Viewport nicht im Stapel, und ihre Ziffern
+        # blockieren dort den Ebenenwechsel — siehe ``_display_actions``.
+        for action in self._display_actions:
+            action.setEnabled(not drawing)
         # Dieselbe Regel für die zwei Einträge, die keine Operationen sind und
         # trotzdem einen Körper brauchen: ausgegraut statt einer modalen
         # Sackgasse nach dem Klick.
@@ -5299,6 +5321,13 @@ class MainWindow(QMainWindow):
             self._update_worker,
             self._finished_update_worker,
             self._ollama_size_worker,
+            # Der Download fehlte hier. Er folgt dem Muster mit ``_retire`` und
+            # ``_hold_until_done`` sauber — aber in ``_retired`` landet er erst,
+            # wenn er fertig ist. Solange er läuft, hält ihn allein dieses Feld,
+            # und wer währenddessen schließt, ließ einen Thread sein Fenster
+            # überleben. Genau der Absturz, gegen den diese Liste geschrieben
+            # wurde.
+            self._download_worker,
             *self._retired,
         ):
             if worker is not None and worker.isRunning():
