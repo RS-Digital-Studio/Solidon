@@ -39,6 +39,7 @@ bekommt einen roten Lauf.
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | `SetTransitionMode` oder das Gewinde als Rotationskörper |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
+| Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Zwei lange Läufe ohne Abbrechen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts; die Live-Vorschau braucht zusätzlich einen Weg, nicht den ganzen Stapel zu rechnen |
 | Die Befehlspalette ist kein Universalzugang | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 38 Zeilen nachtragen, Umlautfaltung und Synonyme dazu |
@@ -5898,6 +5899,31 @@ Fehler der Umgebung.**
       > Was die Häufung verursacht, ist damit offen. Der Zeitraum fällt mit dem
       > Zusammenführen von 65 Commits zusammen — das ist der nächste Ort zum
       > Suchen, aber ausdrücklich eine Vermutung und keine Messung.
+
+**Was am 18.08.2026 dazu gemessen wurde, und was daraus folgt**
+
+- [x] **Der Ort des Absturzes ist zufällig — er kumuliert.** Vier Läufe fielen
+      nach 228, 480, 3698 und 3907 Tests. Vier verschiedene Stellen, drei
+      davon beim Leeren einer `QListWidget`, eine beim Erzeugen eines
+      `QThread`. Damit ist die Suche nach dem *einen schuldigen Test*
+      erledigt: Es gibt ihn nicht, und jede Bisektion über Tests läuft ins
+      Leere. Gesucht wird, wer ein Qt-Objekt doppelt freigibt; der Absturz
+      fällt später und woanders — bevorzugt dort, wo viel auf einmal
+      freigegeben oder neu angefordert wird.
+- [x] **Je Datei ein Prozess, und er ist weg.** 130 Testdateien einzeln
+      gefahren: 4164 Tests, **kein einziger Absturz**, in zwölf statt siebzehn
+      Minuten. Das ist der Beleg für „kumuliert" und zugleich eine benutzbare
+      Suite, solange der Punkt offen ist — `tools/run_suite_isolated.py`. Auf
+      POSIX täte `pytest --forked` dasselbe je Test; unter Windows gibt es das
+      nicht.
+- [ ] **Er tritt auch in einer einzelnen Datei auf, und die Rate schwankt
+      stark.** `test_split_tool.py` allein fiel einmal in fünf Läufen — und
+      danach nicht mehr in acht. Die naheliegende Zuordnung zu einem einzelnen
+      Test (`…_pressing_split_makes_two_parts`) ist damit **nicht** belegt:
+      Acht Läufe ohne ihn waren sauber, acht Läufe mit ihm aber auch. Wer hier
+      weitermacht, braucht viele Läufe je Messpunkt — bei einer Rate um zwanzig
+      Prozent sagt ein einzelner Lauf nichts, und genau daran ist in dieser
+      Sitzung schon ein A/B-Schluss gescheitert.
 
       **Nächster Schritt**, wenn er drankommt: ein Lauf unter Valgrind oder
       gegen ein Python mit Adress-Sanitizer, gezielt auf
