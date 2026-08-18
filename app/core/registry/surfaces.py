@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 from app.core.registry.params import json_schema
 from app.core.registry.registry import (
@@ -234,6 +234,14 @@ CATEGORY_FIGURES: dict[str, str] = {
 }
 
 
+#: Die Ortsangaben, die jede Baustein-Operation zusätzlich trägt — die Namen
+#: aus ``knowledge/parts/ops.py`` (``_PLACEMENT``), hier als Konstante, weil
+#: das Register die Bausteinbibliothek nicht importieren darf. Ein Test hält
+#: beide Listen deckungsgleich. Das Handbuch erklärt sie einmal am Kopf der
+#: Kategorie, statt sechs identische Zeilen in jede Bausteintabelle zu setzen.
+PART_PLACEMENT_PARAMS: Final = ("x", "y", "z", "axis", "angle", "at_feature")
+
+
 def documentation(registry: Registry | None = None, category: str = "") -> str:
     """Der Referenzteil der Dokumentation — erzeugt, nie von Hand geschrieben.
 
@@ -251,6 +259,21 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
         if opening:
             lines.append(f"![](figure:{opening})")
             lines.append("")
+        if name == "parts" and entries:
+            shared = tuple(
+                entry for entry in entries[0].params.spec() if entry.name in PART_PLACEMENT_PARAMS
+            )
+            if shared:
+                lines.append(
+                    str(
+                        _(
+                            "Alle Bausteine teilen dieselben Ortsangaben. Sie stehen "
+                            "hier einmal und fehlen deshalb in den Tabellen darunter:"
+                        )
+                    )
+                )
+                lines.append("")
+                lines.extend(parameter_table(shared))
         for spec in entries:
             lines.append(f"### {spec.title} (`{spec.name}`)")
             lines.append("")
@@ -278,6 +301,11 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
             lines.append(" · ".join(facts))
             lines.append("")
             parameters = spec.params.spec()
+            if name == "parts":
+                # Die geteilten Ortsangaben stehen einmal am Kategoriekopf.
+                parameters = tuple(
+                    entry for entry in parameters if entry.name not in PART_PLACEMENT_PARAMS
+                )
             if parameters:
                 lines.extend(parameter_table(parameters))
     return "\n".join(lines).rstrip() + "\n"

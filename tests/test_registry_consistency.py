@@ -137,3 +137,16 @@ def test_every_operation_reaches_every_surface() -> None:
     assert {schema["name"] for schema in tool_schemas()} == names
     text = documentation()
     assert all(f"`{name}`" in text for name in names)
+
+
+def test_the_shared_placement_names_match_the_parts_library() -> None:
+    """Das Register erklärt die geteilten Ortsangaben der Bausteine einmal am
+    Kategoriekopf und filtert sie aus den Einzeltabellen — über eine eigene
+    Namensliste, weil es die Bausteinbibliothek nicht importieren darf.
+    Driftet eine der beiden Seiten, verschwinden Parameter aus dem Handbuch
+    oder stehen wieder doppelt.
+    """
+    from app.core.knowledge.parts.ops import _PLACEMENT
+    from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
+
+    assert tuple(name for name, _kind, _spec in _PLACEMENT) == PART_PLACEMENT_PARAMS

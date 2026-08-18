@@ -1250,9 +1250,26 @@ def remote_text(registry: Registry | None = None) -> str:
             )
         )
         lines.append("")
+        # Menschentitel für Werkzeuge, die in keinem Menü stehen — nur fürs
+        # Handbuch, die Leitung kennt weiter die Namen. Ein Werkzeug ohne
+        # Eintrag hier erscheint mit seinem Namen, statt zu fehlen.
+        remote_titles = {
+            "undo_transaction": _("Transaktion zurücknehmen"),
+            "add_parameter": _("Parameter anlegen"),
+            "set_parameter": _("Parameter ändern"),
+            "add_fit": _("Passung anlegen"),
+            "read_report": _("Prüfbericht lesen"),
+            "find_part": _("Baustein suchen"),
+            "read_digest": _("Steckbrief lesen"),
+            "read_standard": _("Normteilmaße nachschlagen"),
+            "read_analysis": _("Analyse lesen"),
+            "set_print_target": _("Drucker und Material wechseln"),
+        }
         for entry in others:
             doc = " ".join(str(entry["description"]).split())
-            lines.append(f"- `{entry['name']}` — {doc}" if doc else f"- `{entry['name']}`")
+            title = remote_titles.get(entry["name"])
+            head = f"- **{title}** (`{entry['name']}`)" if title else f"- `{entry['name']}`"
+            lines.append(f"{head} — {doc}" if doc else head)
         lines.append("")
 
     lines.append(f"### {_('Was nicht durch die Leitung geht')}")
@@ -1272,7 +1289,7 @@ def remote_text(registry: Registry | None = None) -> str:
     # und nicht über einen Zugriff, der bei ihm mit einem Programmfehler endet.
     titles = {spec.name: str(spec.title) for spec in source.all()}
     for name in sorted(DENIED):
-        lines.append(f"- `{name}` — {titles.get(name, _('Rückfrage an den Nutzer'))}")
+        lines.append(f"- **{titles.get(name, _('Rückfrage an den Nutzer'))}** (`{name}`)")
     lines.append("")
     lines.append(
         str(
@@ -1370,24 +1387,40 @@ def knowledge_pages() -> tuple[Page, ...]:
     zweite Liste veraltet. Ändert jemand eine Toleranz, ändert sich diese Seite
     mit — sonst stünde hier eine Zahl, nach der niemand mehr rechnet.
     """
+
+    def titled(title: object, body: str) -> str:
+        # Die Überschrift gehört in den Text, wie bei den Kategorie-Seiten:
+        # daran erkennt der Ankersetzer das Kapitel, und das Verzeichnis
+        # springt hin, statt ins Leere zu zeigen.
+        return f"## {title}\n\n{body}"
+
+    rules_title = _("Wonach Solidon urteilt")
+    profiles_title = _("Material, Drucker, Normteile")
+    remote_title = _("Die Werkzeuge der Fernsteuerung")
+    messages_title = _("Meldungen im Wortlaut")
     return (
-        Page(key="rules", title=_("Wonach Solidon urteilt"), body=rules_text(), generated=True),
+        Page(
+            key="rules",
+            title=rules_title,
+            body=titled(rules_title, rules_text()),
+            generated=True,
+        ),
         Page(
             key="profiles",
-            title=_("Material, Drucker, Normteile"),
-            body=profiles_text(),
+            title=profiles_title,
+            body=titled(profiles_title, profiles_text()),
             generated=True,
         ),
         Page(
             key="remote-tools",
-            title=_("Die Werkzeuge der Fernsteuerung"),
-            body=remote_text(),
+            title=remote_title,
+            body=titled(remote_title, remote_text()),
             generated=True,
         ),
         Page(
             key="messages",
-            title=_("Meldungen im Wortlaut"),
-            body=messages_text(),
+            title=messages_title,
+            body=titled(messages_title, messages_text()),
             generated=True,
         ),
     )
