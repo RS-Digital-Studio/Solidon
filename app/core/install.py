@@ -237,9 +237,16 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
             check=False,
         )
     except (OSError, subprocess.SubprocessError) as problem:
-        return InstallResult(requirement=requirement, installed=False, output=str(problem))
+        return InstallResult(
+            requirement=requirement,
+            installed=False,
+            output=str(problem),
+            reason=_("Die Paketverwaltung ließ sich nicht starten."),
+        )
 
     output = (finished.stdout or "") + (finished.stderr or "")
+    if finished.returncode:
+        output = output + chr(10) + f"exit {finished.returncode}"
     for line in output.splitlines()[-20:]:
         progress(line)
 
@@ -259,7 +266,30 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
             reason=_("Installiert — nach einem Neustart von Solidon ist es zu sehen."),
         )
     _log.info("install of %s finished: %s", requirement.id, done)
-    return InstallResult(requirement=requirement, installed=done, output=output[-2000:])
+    if done:
+        return InstallResult(requirement=requirement, installed=True, output=output[-2000:])
+    # **Ein Grund, kein Rückgabewert.** Ohne ihn antwortete der Dialog mit
+    # „Das hat nicht geklappt." — Regel 17 verlangt, was jetzt möglich ist, und
+    # die Zahl dahinter ist die Auskunft, die der Nutzer weitergeben kann. Die
+    # rohe Ausgabe bleibt in ``output``, wo sie hingehört: hinter „Details".
+    return InstallResult(
+        requirement=requirement,
+        installed=False,
+        output=output[-2000:],
+        reason=(
+            _(
+                "Die Paketverwaltung hat abgebrochen. Was sie gemeldet hat, steht "
+                "unter „Details“; die Seite des Herstellers führt die Datei zum "
+                "Selbstinstallieren."
+            )
+            if finished.returncode
+            else _(
+                "Der Befehl lief durch, das Programm ist danach trotzdem nicht zu "
+                "finden. Ein Neustart von Solidon hilft oft; sonst steht die Datei "
+                "zum Selbstinstallieren auf der Seite des Herstellers."
+            )
+        ),
+    )
 
 
 def _command(requirement: Requirement) -> list[str]:
