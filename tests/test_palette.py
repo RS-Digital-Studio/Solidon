@@ -127,3 +127,58 @@ def test_the_selection_bar_carries_readable_text() -> None:
     for name, theme in THEMES.items():
         ratio = contrast_ratio(theme["highlight"], theme["highlight_text"])
         assert ratio >= 4.5, f"{name}: Auswahlbalken trägt nur {ratio:.2f} Kontrast"
+
+
+def test_a_legend_field_carries_readable_text_on_every_step() -> None:
+    """Die Schrift auf einem Farbfeld wird gerechnet, nicht geschätzt.
+
+    ``_readable_on`` entschied an einer festen Luminanzschwelle von 0,35, und
+    eine feste Zahl ist immer nur für eine Rampe richtig: Über den mittleren
+    Tönen von Viridis kippte sie auf die schlechtere der beiden Schriften —
+    3,47 bei ``#21918c`` und 2,56 bei ``#28ae80``. Verglichen wird jetzt, was
+    der Vergleich entscheiden soll: die zwei Kontraste gegeneinander.
+    """
+    pytest.importorskip("PySide6")
+
+    from app.ui.analysis_bar import _readable_on
+
+    for colour in VIRIDIS:
+        ratio = contrast_ratio(_readable_on(colour), colour)
+        assert ratio >= 4.5, f"Legendenfeld {colour} trägt nur {ratio:.2f} Kontrast"
+
+
+def test_the_layer_roles_differ_in_more_than_colour() -> None:
+    """Kontur, Insel und Überhang liegen im selben Bild übereinander.
+
+    Unterschieden wurden sie allein durch die Farbe — drei gleich dicke Ringe,
+    ohne Legende (Regel 18). Jetzt trägt jede Rolle ihre eigene Strichstärke,
+    und die Ablesezeile nennt sie beim Namen.
+    """
+    from app.ui.palette import LAYER_WIDTHS
+
+    assert set(LAYER_WIDTHS) == {"layer", "island", "overhang"}
+    widths = sorted(LAYER_WIDTHS.values())
+    assert len(set(widths)) == len(widths), (
+        "Zwei Rollen mit derselben Strichstärke unterscheiden sich wieder nur in der Farbe."
+    )
+
+
+@pytest.mark.parametrize("name", list(DIFF_PALETTES))
+def test_the_difference_legend_gives_each_entry_its_own_colour(name: str) -> None:
+    """Eine Legende, die beide Einträge gleich färbt, sagt das Falsche.
+
+    Die ganze Zeile stand in der Farbe von „Hinzugefügt" — auch das Wort
+    „Entfernt". In Graustufen kam sie damit auf 1,16 gegen ihr Band. Jedes Feld
+    trägt jetzt seine eigene Kodierungsfarbe, und die Schrift darauf wird
+    gerechnet statt geraten.
+    """
+    from app.ui.palette import readable_on
+
+    palette = DIFF_PALETTES[name]  # type: ignore[index]
+    for encoding in (palette.added, palette.removed):
+        ratio = contrast_ratio(readable_on(encoding.colour), encoding.colour)
+        assert ratio >= 4.5, f"{name}/{encoding.label_key}: nur {ratio:.2f} auf dem Feld"
+
+    assert palette.added.colour != palette.removed.colour or name == "greyscale", (
+        "Zwei Kodierungen, eine Farbe — dann trägt allein das Zeichen."
+    )

@@ -17,7 +17,7 @@ from itertools import pairwise
 from typing import Final, Literal
 
 from app.i18n import _
-from app.ui.theme import relative_luminance
+from app.ui.theme import contrast_ratio, relative_luminance
 
 DiffPalette = Literal["blue_orange", "red_green", "greyscale"]
 
@@ -118,6 +118,41 @@ def text_colour(role: Role, background: str) -> str:
     if relative_luminance(background) >= _LIGHT_SURFACE:
         return ROLES_ON_LIGHT.get(role, ROLES[role])
     return ROLES_ON_DARK.get(role, ROLES[role])
+
+
+#: Die zwei Schriftfarben, zwischen denen eine Beschriftung auf einem Farbfeld
+#: wählt.
+ON_LIGHT_FIELD: Final = "#101418"
+ON_DARK_FIELD: Final = "#f2f4f7"
+
+
+def readable_on(colour: str) -> str:
+    """Dunkle oder helle Schrift — was auf diesem Feld lesbar bleibt (§19.3).
+
+    **Gerechnet statt geschätzt.** Die Entscheidung hing an einer festen
+    Luminanzschwelle von 0,35, und eine feste Zahl ist immer nur für eine
+    Rampe richtig: Über den mittleren Tönen von Viridis kippte sie auf die
+    schlechtere der beiden Schriften — 3,47 bei ``#21918c``, 2,56 bei
+    ``#28ae80``. Verglichen wird jetzt, was der Vergleich entscheiden soll.
+    """
+    if contrast_ratio(ON_LIGHT_FIELD, colour) >= contrast_ratio(ON_DARK_FIELD, colour):
+        return ON_LIGHT_FIELD
+    return ON_DARK_FIELD
+
+
+#: Wie dick die drei Rollen der Schichtansicht gezeichnet werden.
+#:
+#: **Drei Werte, keine zwei gleichen** — das ist die zweite Kodierung, die
+#: Regel 18 verlangt. Insel und Überhang lagen beide auf 3: zwei gleich dicke
+#: Ringe übereinander, unterschieden allein durch die Farbe, und ausgerechnet
+#: bei den zwei Rollen, die eine Handlung nach sich ziehen. Wer Rot und Gelb
+#: nicht auseinanderhält, sah eine Schicht voller Ringe und nicht, welcher
+#: davon ihn etwas angeht.
+#:
+#: Sie stehen hier und nicht im Viewport, weil die Leiste dieselbe Zahl für
+#: ihre Legende braucht — und eine Legende, die andere Stärken zeigt als das
+#: Bild, ist schlimmer als keine.
+LAYER_WIDTHS: dict[Role, int] = {"layer": 2, "island": 3, "overhang": 5}
 
 
 @dataclass(frozen=True, slots=True)

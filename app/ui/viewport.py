@@ -44,7 +44,14 @@ from app.core.units import (
 from app.i18n import tr
 from app.ui import cursors
 from app.ui.labels import feature_label
-from app.ui.palette import DIFF_PALETTES, ROLES, VIRIDIS, DiffPalette
+from app.ui.palette import (
+    DIFF_PALETTES,
+    LAYER_WIDTHS,
+    ROLES,
+    VIRIDIS,
+    DiffPalette,
+    readable_on,
+)
 from app.ui.scale_widget import ScaleHandle
 from app.ui.style import ROOMY, TIGHT
 from app.ui.theme import THEMES, viewport_colours
@@ -361,6 +368,7 @@ FACE_HANDLE_MINIMUM = 2.0
 LAYER_COLOUR = ROLES["layer"]
 ISLAND_COLOUR = ROLES["island"]
 OVERHANG_COLOUR = ROLES["overhang"]
+
 
 FEATURE_LABEL_COLOUR = ROLES["feature"]
 
@@ -740,13 +748,24 @@ class PreviewBanner(QFrame):
         """Zeigt das Band mit Text, Legende und dem Griff zum Vergleichen."""
         colours = DIFF_PALETTES[palette]
         self.note.setText(note)
+        # **Jeder Eintrag in seiner eigenen Farbe.** Die ganze Zeile stand in
+        # der Farbe von „Hinzugefügt" — auch das Wort „Entfernt". Eine Legende,
+        # die Farben erklären soll und beide gleich färbt, sagt das Falsche;
+        # in Graustufen kam sie auf 1,16 gegen ihr Band.
+        #
+        # Das Feld trägt die Kodierungsfarbe, die Schrift darauf wird gerechnet
+        # (``readable_on``) — dasselbe Muster wie die Kartenlegende. Das Zeichen
+        # bleibt daneben stehen: Es ist die zweite Kodierung (Regel 18), und
+        # ohne es hinge die Aussage wieder allein an der Farbe.
         self.legend.setText(
-            "   ".join(
-                f"{encoding.symbol} {tr(encoding.label_key)}"
+            "&nbsp;&nbsp;".join(
+                f'<span style="background:{encoding.colour};color:{readable_on(encoding.colour)};">'
+                f"&nbsp;{encoding.symbol} {tr(encoding.label_key)}&nbsp;</span>"
                 for encoding in (colours.added, colours.removed)
             )
         )
-        self.legend.setStyleSheet(f"color: {colours.added.colour};")
+        self.legend.setTextFormat(Qt.TextFormat.RichText)
+        self.legend.setStyleSheet("")
         self.hint.setText(hint)
         self.show()
         self.adjustSize()
@@ -780,6 +799,7 @@ class DragValueBar(QFrame):
 
         self.label = QLabel("", self)
         self.value = QLineEdit(self)
+        self.value.setAccessibleName(tr("Wert"))
         self.value.setFixedWidth(88)
         self.value.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.value.setToolTip(
@@ -2999,20 +3019,20 @@ class Viewport(QWidget):
         contours = [
             ring for polygon in layer.contours for ring in (polygon.outline, *polygon.holes)
         ]
-        self._add_rings(contours, layer.z, LAYER_COLOUR, "layer")
+        self._add_rings(contours, layer.z, LAYER_COLOUR, "layer", LAYER_WIDTHS["layer"])
         self._add_rings(
             [polygon.outline for polygon in layer.islands],
             layer.z,
             ISLAND_COLOUR,
             "island",
-            width=3,
+            LAYER_WIDTHS["island"],
         )
         self._add_rings(
             [polygon.outline for polygon in layer.overhangs],
             layer.z,
             OVERHANG_COLOUR,
             "overhang",
-            width=3,
+            LAYER_WIDTHS["overhang"],
         )
 
     def _add_rings(
