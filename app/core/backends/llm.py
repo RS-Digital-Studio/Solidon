@@ -323,10 +323,11 @@ def _from_anthropic(answer: dict[str, Any]) -> Reply:
 #: zählt: Kommt ein strukturierter Werkzeugaufruf zurück oder Prosa?
 #:
 #: Gemessen wird das mit **allen** Werkzeugen, die der Agent anbietet — das
-#: sind die dreiundachtzig aus dem geladenen Register, rund 96 KB Schema, und
-#: nicht die sieben Zusatzwerkzeuge allein. Der Unterschied entscheidet die
-#: Wahl und hat sie einmal falsch entschieden: mit sieben Schemata trifft
-#: ``llama3.1:8b`` fünf von fünf, mit dem vollen Register zwei. Es kennt die
+#: sind die sechsundneunzig aus dem geladenen Register, rund 110 KB Schema,
+#: und nicht die elf Zusatzwerkzeuge allein. Der Unterschied entscheidet die
+#: Wahl und hat sie einmal falsch entschieden: mit den damals sieben
+#: Zusatzschemata traf ``llama3.1:8b`` fünf von fünf, mit dem vollen Register
+#: (dreiundachtzig zu der Zeit) zwei. Es kennt die
 #: richtige Antwort auch dann — es schreibt sie als Fließtext hin, statt sie
 #: aufzurufen, und Ollama kann sie nicht auslesen.
 #:

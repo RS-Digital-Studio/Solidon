@@ -6083,12 +6083,16 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       die Parametertexte allein 40 945 — was der Kommentar dreißig Zeilen
       tiefer längst richtig sagte (dort stand 36 KB, gemessen 40 KB).
 
-      Nicht angefasst, weil es Messberichte sind und keine Bestandsangaben:
-      `session.py` („88 Werkzeuge mit 104 KB Schema"), `llm.py` oben
+      Fünf weitere Stellen nannten denselben alten Bestand, ohne ihn zu
+      messen: `session.py` („88 Werkzeuge mit 104 KB Schema"), `llm.py` oben
       („dreiundachtzig, rund 96 KB"), `tools/check_local_model.py` („sieben
-      statt dreiundachtzig") und das Konzeptpapier vom August. Sie nennen die
-      Lage, in der damals gemessen wurde; zöge man nur die Zahl nach, stünde
-      dort eine Messung, die es nie gab.
+      statt dreiundachtzig"), `.claude/rules/agentenschicht.md` („gegen 84
+      Werkzeuge") und das Konzeptpapier vom August. Sie sind nachgezogen —
+      aber nicht durch bloßes Ersetzen der Zahl: Jede nennt die Lage, in der
+      **damals** gemessen wurde, und danach den heutigen Bestand. Wer nur die
+      Zahl austauscht, behauptet eine Messung, die es nie gab; wer sie stehen
+      lässt, beschreibt ein Register, das es nicht mehr gibt. Beides steht
+      jetzt nebeneinander, und die Messwerte behalten ihren Bezug.
 
 **Wettbewerb (Recherche 16.08., Quellen in der Durchsichts-Datei):** Die
 Chat-Alleinstellung ist seit Zoo „Zookeeper" (01/2026) nicht mehr

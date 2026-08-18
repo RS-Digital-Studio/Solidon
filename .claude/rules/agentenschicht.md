@@ -30,8 +30,8 @@ gemessen. Wer eine davon lockert, misst vorher und nachher.
 mehrdeutige Anfragen und zählt, ob gefragt statt geraten wurde.
 
 **„Fragen vor Raten" trägt nur als Vorbedingung, nicht als Gewohnheit.** Als
-vierter Punkt einer Liste war sie anleitend, und das hielt gegen 84 Werkzeuge
-nicht: sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
+vierter Punkt einer Liste war sie anleitend, und das hielt gegen die damals
+84 Werkzeuge nicht — heute sind es 85 Operationen und elf Zusatzwerkzeuge: sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
 1/3 — wer genug Angebote hat, findet immer eines, das plausibel aussieht.
 Prompt-Version 2 stellt deshalb drei Prüfungen *vor* den ersten
 Werkzeugaufruf, jede einzeln hinreichend für eine Rückfrage: Ziel eindeutig,
