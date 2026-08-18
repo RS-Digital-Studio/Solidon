@@ -3125,17 +3125,39 @@ def test_every_worker_survives_the_delivery_of_its_own_signal(session: Session) 
 
     Geprüft am Slot statt am Absturz: einen Absturz zuverlässig auszulösen
     braucht Last und Glück, die Regel dahinter ist eine Zeile.
+
+    **Und geprüft an der Regel statt an drei Feldnamen.** Die Sitzung hielt je
+    Arbeiterart genau einen ausgelaufenen — ``_finished_worker``,
+    ``_finished_agent``, ``_finished_split``. Ein Feld hält aber nur einen, und
+    ``_on_thread_done`` startet bei ``_rerun_pending`` sofort den nächsten
+    Lauf: Wird der schnell fertig, überschreibt er das Feld, während Qt den
+    Vorgänger noch abräumt. Genau diese Kette stand im Stapelabzug eines
+    Absturzes, den das Repository lange nur als „Segfault in test_chat_ui.py"
+    kannte. Gehalten wird jetzt in einer Liste (:mod:`app.ui.leash`), und
+    dieser Test liest, dass die drei Slots sie benutzen.
     """
+    import re
+
     session.import_model(MESHES / "cube_clean.stl")
     session.wait_for_idle()
 
-    for name in ("_finished_worker", "_finished_agent", "_finished_split"):
-        assert hasattr(session, name), f"{name} fehlt — ein Arbeiter ohne Halteleine"
+    assert session._worker is None, "nach dem Warten läuft keiner mehr"
+    assert hasattr(session, "_leash"), "die Sitzung hat keine Halteleine"
 
-    # Nach einem Lauf hält das Feld den ausgelaufenen Arbeiter, statt ihn
-    # freigegeben zu haben.
-    assert session._finished_worker is not None
-    assert session._worker is None
+    quelle = (Path(__file__).parent.parent / "app" / "ui" / "session.py").read_text(
+        encoding="utf-8"
+    )
+    for slot in ("_on_thread_done", "_on_agent_done", "_on_split_done"):
+        koerper = quelle[quelle.index(f"def {slot}(") :]
+        koerper = koerper[: koerper.index(chr(10) + "    def ", 1)]
+        assert "_leash.hold_until_done" in koerper, (
+            f"{slot} übergibt seinen Arbeiter nicht an die Halteleine — wer die "
+            "Referenz im eigenen finished-Slot loslässt, gibt den Wrapper frei, "
+            "während Qt die Zustellung noch auf dem Stapel hat."
+        )
+        assert not re.search(r"self\._(worker|agent|split)\s*=\s*None", koerper), (
+            f"{slot} schreibt None in sein Feld, statt den Arbeiter erst zu sichern."
+        )
 
 
 # --- die Vorschau sagt, dass sie eine ist (Konzept Teil 10, 9b) ------------------

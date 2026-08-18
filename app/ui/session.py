@@ -75,6 +75,7 @@ from app.core.types import (
 )
 from app.core.units import is_close
 from app.i18n import TranslatableText, _, tr
+from app.ui.leash import WorkerLeash
 
 _log = get_logger(__name__)
 
@@ -312,26 +313,24 @@ class Session(QObject):
         Auswertung wäre es eine Zeile, die immer dasteht und die deshalb
         niemand mehr liest."""
         self._worker: _EvaluationWorker | None = None
-        self._finished_worker: _EvaluationWorker | None = None
-        """Der zuletzt ausgelaufene Auswertungs-Arbeiter, festgehalten bis ihn
-        der nächste ablöst. ``_on_thread_done`` läuft als Slot seines eigenen
-        ``finished``-Signals — die Referenz dort einfach zu überschreiben ließ
-        den Wrapper mitsamt C++-Objekt sterben, während Qt die Zustellung noch
-        auf dem Stapel hatte. Bei schnellen Ketten (ändern, Undo, Redo auf
-        einem schweren Dokument) riss das die Suite Tests später ohne eine
-        Zeile Traceback ab."""
         self._agent: _AgentWorker | None = None
-        self._finished_agent: _AgentWorker | None = None
-        """Derselbe Grund wie bei ``_finished_worker``: ``_on_agent_done``
-        läuft als Slot des ``finished``-Signals seines eigenen Arbeiters, und
-        die Referenz dort loszulassen nimmt den Wrapper mitsamt C++-QThread mit,
-        während Qt die Zustellung noch auf dem Stapel hat. Beim Auswerter hat
-        genau das die Suite ohne eine Zeile Traceback abgerissen; hier hämmerte
-        bisher nur niemand darauf."""
         self._split: _SplitWorker | None = None
-        self._finished_split: _SplitWorker | None = None
-        """Und dasselbe für die Teilungssuche — sie ließ ihre Referenz sogar in
-        einem Lambda am ``finished``-Signal los."""
+        self._leash = WorkerLeash(self)
+        """Hält jeden ausgelaufenen Arbeiter, bis Qt mit ihm durch ist.
+
+        **Vorher hielt jede Art genau einen** — ``_finished_worker``,
+        ``_finished_agent``, ``_finished_split`` —, und der nächste löste ihn
+        ab. Bei einer Kette geht das schief: ``_on_thread_done`` startet bei
+        ``_rerun_pending`` sofort den nächsten Lauf, und wird der schnell
+        fertig, überschreibt er das Feld, während Qt den Vorgänger noch
+        abräumt. Genau diese Kette steht im Stapelabzug eines Absturzes, den
+        das Repository lange nur als „Segfault in test_chat_ui.py" kannte:
+        ``start_new`` → ``_reset_for`` → ``evaluate_async`` →
+        ``_EvaluationWorker.__init__``, Zugriffsverletzung.
+
+        Die Halteleine hält eine Liste statt eines Feldes und lässt erst los,
+        wenn ``isRunning`` nein sagt — dasselbe Muster, das Fenster und Dialoge
+        seit dem Umbau benutzen (siehe :mod:`app.ui.leash`)."""
         self._split_discarded = False
         """Ob das laufende Split-Ergebnis verworfen wurde — der Arbeiter
         läuft dann aus, ohne dass jemand sein Ergebnis anwendet."""
@@ -1166,24 +1165,26 @@ class Session(QObject):
 
     def _on_agent_done(self) -> None:
         self.agentBusyChanged.emit(False)
-        # Nicht einfach loslassen — siehe ``_finished_agent``.
-        self._finished_agent = self._agent
-        self._agent = None
+        # Nicht einfach loslassen — siehe ``_leash``.
+        worker, self._agent = self._agent, None
+        self._leash.hold_until_done(worker)
 
     def _on_split_done(self) -> None:
         """Die Teilungssuche ist ausgelaufen — ihr Arbeiter bleibt am Leben.
 
         Als benannter Slot und nicht als Lambda: das Lambda schrieb ``None`` in
         dasselbe Feld, dessen Objekt es gerade zustellte."""
-        self._finished_split = self._split
-        self._split = None
+        worker, self._split = self._split, None
+        self._leash.hold_until_done(worker)
 
     def _on_thread_done(self) -> None:
         self.busyChanged.emit(False)
         # Nicht einfach loslassen: der Aufruf hier kommt vom Signal des
         # Arbeiters selbst, und sein Wrapper muss die Zustellung überleben.
-        self._finished_worker = self._worker
-        self._worker = None
+        # **An die Leine, nicht in ein Feld** — der nächste Lauf startet gleich
+        # darunter, und ein Feld hält nur einen.
+        worker, self._worker = self._worker, None
+        self._leash.hold_until_done(worker)
         if self._rerun_pending:
             self._rerun_pending = False
             self.evaluate_async()

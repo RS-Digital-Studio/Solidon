@@ -42,7 +42,7 @@ bekommt einen roten Lauf.
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Zwei lange Läufe ohne Abbrechen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts; die Live-Vorschau braucht zusätzlich einen Weg, nicht den ganzen Stapel zu rechnen |
 | Die Befehlspalette ist kein Universalzugang | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 38 Zeilen nachtragen, Umlautfaltung und Synonyme dazu |
-| Der Installationsdialog zeigt rohe Ausgabe | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — plus zwei Sätze ohne Warum (Regel 17) |
+| Zwei Sätze ohne Warum | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — OCCT nennt seine Fehlerklasse, der Löser kennt beide Bedingungen |
 | Die Zahlen im deutschen Handbuchbild tragen einen Punkt | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — eingegrenzt auf `take_all`, das gebaute Fenster ist richtig |
 | Weg 4 steht in keiner Unterlage | Die Oberfläche im Bild durchgesehen (17.08.2026) | eine Bauplanänderung mit Ansage; README, Handbuch, Website und die Abbildung ziehen nach |
 | Der Rest der Textfunde | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — rohe Schlüssel statt Beschriftungen, drei nie angebotene Vorschläge, eine Schätzung am falschen Ort |
@@ -2623,6 +2623,18 @@ Erkenntnis wie bei den drei Bausteinen über ihrem Ursprung, eine Etage höher.
       Reiterleiste der rechten Spalte zeigte den Tastaturfokus mit null
       Bildpunkten Unterschied; sie bekommt eine gestrichelte Marke, denn der
       aktive Reiter trägt schon Akzentkante, Fläche und Fettschrift.
+
+- [x] **Der Installationsdialog antwortete mit „Das hat nicht geklappt."** —
+      und zeigte davor die rohe Befehlszeile und jede Zeile, die pip oder
+      winget von sich geben, im Statuslabel. Wer das liest, weiß danach
+      weniger als vorher. Der Kern gab bei einem Fehlschlag gar keinen Grund
+      zurück, nur `installed=False`; er nennt jetzt einen, und zwar für alle
+      drei Fälle — die Paketverwaltung ließ sich nicht starten, sie hat
+      abgebrochen, oder sie meldete Erfolg und das Programm ist trotzdem nicht
+      da. Der Rückgabewert steht bei den Einzelheiten statt im Satz: Dort
+      gehört er hin, und ein Satz ohne Platzhalter übersetzt sich in fünf
+      Sprachen leichter. Die rohe Ausgabe sammelt der Dialog und bietet sie
+      hinter „Details anzeigen" an (§33.2).
 
 ### Offen aus dem Audit
 
@@ -5785,6 +5797,36 @@ Fehler der Umgebung.**
       noch darauf steht. Mit `gc.disable()` fielen 5 von 24 Läufen, ohne ihn
       1 von 8: dieselbe Größenordnung. Das spart dem Nächsten den Versuch.
 
+      > **Nachtrag vom 18.08.2026: ein zweiter Stapelabzug, und er zeigt
+      > woandershin.** Beim Fahren der Suite in eine *Datei* statt durch `tail`
+      > blieb erstmals der Kopf des Abzugs erhalten — die früheren Läufe hatten
+      > ihn verschluckt. Was darin steht, ist nicht `panels.py:890` und nicht
+      > glibc, sondern:
+      >
+      > ```
+      > tests/test_chat_ui.py:340  test_the_applied_bar_does_not_survive_a_new_project
+      >   session.start_new -> _reset_for -> evaluate_async
+      >     -> _EvaluationWorker.__init__      Windows fatal exception: access violation
+      > ```
+      >
+      > Ob das derselbe Fehler in anderer Gestalt ist oder ein vierter, ist
+      > **nicht** entschieden — die Stelle ist eine andere, die Meldung auch.
+      > Festgehalten ist er, weil ein Absturz mit Ort mehr wert ist als drei
+      > ohne.
+      >
+      > Daraufhin geändert, und zwar unabhängig davon richtig: Die Sitzung
+      > hielt ihre ausgelaufenen Arbeiter in je einem Feld, während Fenster und
+      > Dialoge längst die gemeinsame Halteleine benutzen. Ein Feld hält genau
+      > einen — und `_on_thread_done` startet bei `_rerun_pending` sofort den
+      > nächsten Lauf. Genau diese Kette steht oben im Abzug. `Session` hängt
+      > jetzt ebenfalls an `WorkerLeash`.
+      >
+      > **Behoben ist der Absturz damit nicht, jedenfalls nicht nachweislich.**
+      > `test_chat_ui.py` läuft danach viermal hintereinander sauber; bei einer
+      > Kombination aus vier Fensterdateien kam er einmal wieder, beim
+      > Nachfahren derselben Kombination nicht mehr. Das ist zu wenig für eine
+      > Aussage — der Punkt bleibt offen.
+
       **Nächster Schritt**, wenn er drankommt: ein Lauf unter Valgrind oder
       gegen ein Python mit Adress-Sanitizer, gezielt auf
       `test_every_operation_of_the_history_can_be_opened`. Vorher zu raten
@@ -6303,11 +6345,12 @@ belegt und mit Absicht liegen geblieben.
       Kürzelübersicht behauptet das Gegenteil. Die Suche kennt weder
       Umlautfaltung noch ein Synonym, und sie umgeht die Bauart-Prüfung:
       „Verrunden" öffnet für ein Netz seinen vollen Dialog.
-- [ ] **Der Installationsdialog antwortet mit „Das hat nicht geklappt."** und
-      zeigt davor die rohe Befehlszeile und die rohe pip- oder winget-Ausgabe.
-      Daneben zwei weitere Sätze ohne Warum: „Die Boolesche Operation ist
-      fehlgeschlagen." an zwei Stellen, und „Zwei Bedingungen widersprechen
-      sich." ohne das Paar zu nennen, das der Bauplan ausdrücklich verlangt.
+- [ ] **Zwei Sätze ohne Warum.** „Die Boolesche Operation ist
+      fehlgeschlagen." steht an zwei Stellen im B-Rep-Kern, und OCCT liefert
+      über `HasErrors()`/`DumpErrors()` mindestens die Fehlerklasse. „Zwei
+      Bedingungen widersprechen sich." nennt das Paar nicht, obwohl der
+      Bauplan es verlangt und die Ausnahme es verspricht — Nummer und Art
+      beider Bedingungen liegen an der Wurfstelle bereits vor.
 - [ ] **Im deutschen Handbuchbild steht „80.00 mm".** Punkt statt Komma, also
       die englische Zahlendarstellung im deutschen Handbuch — auf jedem Bild
       mit Parameterleiste. Gefunden beim Zusammenführen am 18.08., und der
