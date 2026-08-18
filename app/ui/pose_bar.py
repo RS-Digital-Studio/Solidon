@@ -32,6 +32,7 @@ class PoseBar(QWidget):
         super().__init__(parent)
 
         self.name = QLineEdit(self)
+        self.name.setAccessibleName(tr("Name der Pose"))
         self.name.setPlaceholderText(tr("Name des nächsten Knochens"))
         self.name.setToolTip(
             tr("Leer heißt: durchnummeriert. Ein Name macht die Stellung später lesbar.")

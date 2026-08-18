@@ -528,6 +528,11 @@ class ActivationDialog(QDialog):
         self.field = QPlainTextEdit(self)
         self.field.setPlaceholderText(tr("SOLIDON3D-1-…"))
         self.field.setFixedHeight(90)
+        # Sonst ist der Dialog eine Tastenfalle: Ein mehrzeiliges Feld nimmt den
+        # Tabulator als Zeichen, und wer ohne Maus arbeitet, kommt aus dem Feld
+        # nicht mehr heraus — ausgerechnet dort, wo ein Schlüssel eingegeben
+        # wird, den viele aus einer Mail kopieren.
+        self.field.setTabChangesFocus(True)
         if stored := activation.read_key():
             self.field.setPlainText(stored)
 

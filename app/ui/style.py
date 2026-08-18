@@ -412,6 +412,16 @@ QTabBar::tab:selected {{
     padding-top: {max(TIGHT - 2, 0)}px;
     font-weight: 600;
 }}
+/* Die Reiterleiste zeigte den Tastaturfokus mit null Bildpunkten Unterschied —
+   in beiden Themen. Wer mit dem Tabulator hierher kommt, sah nicht, dass er
+   hier ist, und die Pfeiltasten wechselten scheinbar grundlos den Reiter.
+
+   ``:selected:focus`` und nicht ``:focus`` allein: Der Zustand gilt der Leiste,
+   also träfe ``QTabBar::tab:focus`` alle Reiter zugleich — in einer QTabBar ist
+   der aktuelle der fokussierte. Gestrichelt, weil der aktive Reiter schon
+   Akzentkante, Fläche und Fettschrift trägt; eine zweite durchgezogene Linie
+   wäre nicht zu unterscheiden. */
+QTabBar::tab:selected:focus {{ border: 2px dashed {focus}; }}
 
 /* --- Rahmen, Trenner, Gruppen ------------------------------------------ */
 QGroupBox {{

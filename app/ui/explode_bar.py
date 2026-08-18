@@ -42,6 +42,7 @@ class ExplodeBar(QWidget):
         self._pending.timeout.connect(self._settled)
 
         self.slider = QSlider(Qt.Orientation.Horizontal, self)
+        self.slider.setAccessibleName(tr("Abstand der Explosion"))
         self.slider.setRange(0, MAX_STEPS)
         self.slider.setValue(0)
         self.slider.setToolTip(tr("Zieht geteilte Objekte zum Ansehen auseinander."))
@@ -52,6 +53,7 @@ class ExplodeBar(QWidget):
 
         self.plate_label = QLabel(tr("Druckplatte"), self)
         self.plates = BarComboBox(self)
+        self.plates.setAccessibleName(tr("Druckplatte"))
         self.plates.setToolTip(tr("Zeigt nur die Objekte einer Platte."))
         self.plates.currentIndexChanged.connect(self._on_plate)
 

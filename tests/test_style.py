@@ -350,3 +350,46 @@ def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: o
         f"Diese Dateien setzen den Hauptknopf noch von Hand: {offenders}. "
         "make_primary() setzt zugleich die Schrift, aus der die Breite folgt."
     )
+
+
+def test_no_multiline_field_swallows_the_tab_key() -> None:
+    """Ein mehrzeiliges Feld nimmt den Tabulator als Zeichen — und wird damit
+    zur Tastenfalle.
+
+    Im Freischaltdialog stand genau das: Wer ohne Maus arbeitet, kam aus dem
+    Schlüsselfeld nicht mehr heraus, ausgerechnet dort, wo viele ihren
+    Schlüssel aus einer Mail einfügen. Der Chat macht es seit jeher richtig.
+
+    Geprüft am Quelltext: Die zwei Felder leben in zwei Dialogen, und beide zu
+    bauen hieße, ein Sprachmodell und einen Lizenzserver zu brauchen.
+    """
+    offenders = []
+    for path in sorted(UI.glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"(\w+)\s*=\s*QPlainTextEdit\(", source):
+            feld = match.group(1)
+            if f"{feld}.setReadOnly(True)" in source:
+                continue
+            if f"{feld}.setTabChangesFocus(True)" not in source:
+                offenders.append(f"{path.name}:{feld}")
+
+    assert not offenders, (
+        f"Diese Felder schlucken den Tabulator: {offenders}. "
+        "setTabChangesFocus(True) macht daraus einen Weg statt einer Falle."
+    )
+
+
+def test_the_tab_bar_shows_where_the_keyboard_is() -> None:
+    """Die Reiterleiste zeigte den Fokus mit null Bildpunkten Unterschied.
+
+    Wer mit dem Tabulator dorthin kommt, sah nicht, dass er dort ist — und die
+    Pfeiltasten wechselten scheinbar grundlos den Reiter. ``:selected:focus``
+    und nicht ``:focus``: Der Zustand gilt der Leiste, also träfe der zweite
+    alle Reiter zugleich.
+    """
+    sheet = stylesheet("dark", 10)
+
+    assert "QTabBar::tab:selected:focus" in sheet
+    assert "QTabBar::tab:focus {" not in sheet, (
+        "Ein Fokusrahmen an jedem Reiter markiert die ganze Leiste statt einer Stelle."
+    )
