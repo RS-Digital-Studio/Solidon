@@ -29,13 +29,20 @@ from pathlib import Path
 from typing import Final
 
 from app.core import activation
-from app.core.errors import OPEN_SETTINGS, Action, ExternalToolError
+from app.core.errors import OPEN_SETTINGS, Action, ExternalToolError, OperationCancelled
 from app.core.export import slicer_keys, slicer_profiles
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.knowledge.print_settings import read_path, with_path
 from app.core.log import get_logger
 from app.core.slice import gcode
-from app.core.types import Finding, MaterialSlot, PrintSettings, Profile, SettingAdvice
+from app.core.types import (
+    CancelToken,
+    Finding,
+    MaterialSlot,
+    PrintSettings,
+    Profile,
+    SettingAdvice,
+)
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -346,6 +353,28 @@ class SlicerConfig:
         return self.filaments[0] if self.filaments else None
 
 
+def with_slot_profiles(
+    slots: Sequence[MaterialSlot], chosen: Sequence[str]
+) -> tuple[MaterialSlot, ...]:
+    """Heftet die im Dialog gewählten Filamentprofile an die Slots (§20).
+
+    ``chosen`` ist ``PrintSettings.slot_profiles``: je Position ein
+    Profilname, die Position ist die Extruderbelegung. Wo nichts steht,
+    bleibt der Slot, wie er ist — dann gilt das Filament der Platte.
+
+    Diese Zuordnung ist das Stück, das fehlte: Der Dialog sammelte die Wahl
+    ein und meldete „druckt mit", ``write_config`` war auf
+    ``MaterialSlot.material`` vorbereitet — nur gesetzt hat es niemand, und
+    alle Slots slicten mit dem Basisfilament.
+    """
+    return tuple(
+        replace(entry, material=chosen[position])
+        if position < len(chosen) and chosen[position]
+        else entry
+        for position, entry in enumerate(slots)
+    )
+
+
 def write_config(
     settings: PrintSettings,
     profile: Profile,
@@ -484,15 +513,36 @@ def project_settings(
     # Woran der Slicer erkennt, wofür diese Werte gelten. Ohne sie lädt er
     # seine eigene Auswahl darunter, und was hier nicht ausdrücklich steht,
     # kommt aus einem Profil, das niemand gewählt hat.
+    #
+    # Als **Namen**, nie als Pfade: Die Oberfläche merkt sich Profile als
+    # Pfade, und unverändert durchgereicht stand `C:\Program Files\…` in
+    # einer Datei, die weitergegeben wird (Regel 12) — und die Orca-Familie
+    # trifft mit einem Pfad ohnehin kein Preset. Prozess und Filament tragen
+    # den Solidon-Namen, unter dem `write_config` sie wirklich schreibt:
+    # unter dem Namen eines Systemprofils lüde der Slicer sein eigenes
+    # darunter — die Verwechslung, die einen Satz Gewürzbehälter gekostet
+    # hat.
     if setup.machine_profile:
-        resolved["printer_settings_id"] = setup.machine_profile
-    if setup.base_process:
-        resolved["print_settings_id"] = setup.base_process
-    if setup.base_filament:
-        resolved["filament_settings_id"] = [setup.base_filament] * extruders
+        resolved["printer_settings_id"] = _profile_name(setup.machine_profile)
+    resolved["print_settings_id"] = f"Solidon {settings.title}"
+    marke = _profile_name(setup.base_filament) if setup.base_filament else ""
+    resolved["filament_settings_id"] = [f"Solidon {marke or settings.title}"] * extruders
     resolved.setdefault("printer_model", profile.printer.title)
     resolved.setdefault("nozzle_diameter", [str(profile.printer.nozzle_diameter)])
     return resolved
+
+
+def _profile_name(reference: str) -> str:
+    """Der Name eines Profils — gleich, ob ein Name oder ein Pfad kam.
+
+    Beschnitten wird nur, was wie eine Profildatei endet: ``.stem`` auf
+    „0.12mm Fine @Elegoo CC2 0.4 nozzle" schnitte mitten ins Maß, denn dort
+    ist der letzte Punkt Teil des Namens.
+    """
+    candidate = Path(reference)
+    if candidate.suffix.lower() in (".json", ".ini"):
+        return candidate.stem
+    return reference
 
 
 def _orca_process(
@@ -569,7 +619,7 @@ def _orca_filament(
     # später liest oder sie jemandem gibt, sieht nur „PETG" und legt die
     # falsche Rolle ein. Das „Solidon" davor bleibt, denn die Werte sind
     # Solidons und nicht die des Herstellers.
-    marke = Path(setup.base_filament).stem if setup.base_filament else ""
+    marke = _profile_name(setup.base_filament) if setup.base_filament else ""
     document: dict[str, object] = {
         "type": "filament",
         "name": f"Solidon {marke or settings.title}",
@@ -684,8 +734,13 @@ def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Fin
     """
     if setup.flavour != "orca" or not setup.base_filament:
         return []
-    base = Path(setup.base_filament)
-    if not base.is_file():
+    # Über ``profile_file``, nicht über ``Path(...).is_file()`` — dasselbe
+    # Muster wie in ``_orca_filament``, und derselbe Grund: hierher kommt
+    # bevorzugt ein **Name** aus dem Bestand des Slicers (Regel 12). Direkt
+    # als Pfad gelesen sagte ``is_file()`` schlicht nein, und die ganze
+    # Gegenüberstellung entfiel wortlos.
+    base = profile_file(setup.base_filament, setup, "filament")
+    if base is None:
         return []
 
     inherited = slicer_profiles.resolve_values(base)
@@ -863,6 +918,80 @@ class SliceOutcome:
     seconds: float = 0.0
 
 
+def _run_slicer(
+    command: Sequence[str],
+    workspace: Path,
+    timeout: float,
+    setup: SlicerSetup,
+    cancelled: CancelToken | None,
+) -> subprocess.CompletedProcess[bytes]:
+    """Führt den Slicer aus — abbrechbar, und mit der Zeitgrenze als Antwort.
+
+    ``subprocess.run`` wartete blind: Eine Zeitüberschreitung flog als roher
+    ``TimeoutExpired`` aus dem Arbeits-Thread, der fing nur ``AppError`` —
+    der Dialog stand dauerhaft auf „Der Slicer rechnet …" (Regel 17, §2.8).
+    Der Zwilling ``openscad.render`` behandelt denselben Fall längst. Und
+    abzubrechen gab es nichts: der Kindprozess lief, bis er fertig war,
+    gleich was der Nutzer wollte.
+    """
+    try:
+        process = subprocess.Popen(
+            command, cwd=workspace, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+    except OSError as problem:
+        # Eine gewählte Datei kann `flavour_of` bestehen und trotzdem kein
+        # Programm sein — eine DLL zum Beispiel.
+        raise ExternalToolError(
+            tool=setup.name,
+            detail=_("Der Slicer ließ sich nicht starten."),
+            values={"reason": str(problem)},
+            suggestions=(
+                OPEN_SETTINGS,
+                Action(id="export_only", label=_("Nur exportieren und selbst slicen.")),
+            ),
+        ) from problem
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            stdout, stderr = process.communicate(timeout=_POLL_SECONDS)
+        except subprocess.TimeoutExpired:
+            if cancelled is not None and cancelled.is_cancelled:
+                _stop(process)
+                raise OperationCancelled from None
+            if time.monotonic() >= deadline:
+                _stop(process)
+                raise ExternalToolError(
+                    tool=setup.name,
+                    detail=_("Der Slicer hat das Zeitlimit überschritten."),
+                    values={"seconds": int(timeout)},
+                    suggestions=(
+                        Action(
+                            id="export_only",
+                            label=_("Nur exportieren und selbst slicen."),
+                        ),
+                        Action(id="retry", label=_("Erneut versuchen.")),
+                    ),
+                ) from None
+            continue
+        return subprocess.CompletedProcess(list(command), process.returncode, stdout, stderr)
+
+
+#: Wie oft der Lauf nach Abbruch und Zeitgrenze sieht. Kurz genug, dass ein
+#: Klick auf Abbrechen sich sofort anfühlt; lang genug, dass das Warten den
+#: Prozessor nicht beschäftigt.
+_POLL_SECONDS: Final = 0.2
+
+
+def _stop(process: subprocess.Popen[bytes]) -> None:
+    """Beendet den Kindprozess — erst höflich, dann endgültig."""
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
 def slice_model(
     model: Path | Sequence[Path],
     settings: PrintSettings,
@@ -873,6 +1002,7 @@ def slice_model(
     timeout: float = TIMEOUT_SECONDS,
     keep_arrangement: bool = False,
     slots: Sequence[MaterialSlot] = (),
+    cancelled: CancelToken | None = None,
 ) -> SliceOutcome:
     """Slicen lassen und die Datei zurücklesen (§29, §28.1).
 
@@ -923,12 +1053,12 @@ def slice_model(
         target = (output_dir if output_dir is not None else workspace).resolve()
         target.mkdir(parents=True, exist_ok=True)
 
-        completed = subprocess.run(
+        completed = _run_slicer(
             _command(setup, models, config, target, keep_arrangement),
-            cwd=workspace,
-            capture_output=True,
-            timeout=timeout,
-            check=False,
+            workspace,
+            timeout,
+            setup,
+            cancelled,
         )
         produced = _find_gcode(target)
         if produced is None:

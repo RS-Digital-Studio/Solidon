@@ -135,7 +135,7 @@ def _cut(
         outcome = boolean("difference", [keep, subtract], quality=quality)
     except PROGRAMMING_ERRORS:
         raise
-    except Exception as problem:  # kernels fail in kernel-specific ways
+    except Exception as problem:  # Kerne scheitern auf kerneigene Arten
         _log.info("difference could not be computed: %s", problem)
         return None
     return outcome.mesh, outcome.solver

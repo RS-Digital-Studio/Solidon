@@ -729,6 +729,27 @@ class Session(QObject):
             ],
         )
 
+    def import_image(self, path: Path) -> str:
+        """Ein Bild als Quelle fürs Relief (§25, ``displace_image``).
+
+        Eingebettet wie ein Modell, aber ohne load-Operation: ein Bild wird
+        kein Körper, es gehört einer Operation als Wert. Ohne diesen Weg
+        führte kein Bildformat in die Quellen — das Feld „Bild" bot STLs an,
+        und der Befund schlug eine Handlung vor, die es nicht gab.
+        """
+        document = self.project.document
+        source_id = f"src_{len(document.sources) + 1}"
+        document.sources[source_id] = Source(
+            id=source_id,
+            kind="image",
+            path=embedded_source_path(path.name),
+            sha256="",
+        )
+        self.project.sources[source_id] = path.read_bytes()
+        self._dirty = True
+        self.projectChanged.emit()
+        return source_id
+
     def add_generated(self, result: GeneratedMesh) -> str:
         """Weg 3: einen erzeugten Körper einbetten, laden, reparieren (§2.2).
 

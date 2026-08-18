@@ -106,11 +106,11 @@ def main() -> int:
         print("Ollama antwortet nicht — „ollama serve“ starten, dann noch einmal.")
         return 2
 
-    # Ohne das stünden hier sieben Werkzeuge statt dreiundachtzig, und die
+    # Ohne das stünden hier elf Werkzeuge statt sechsundneunzig, und die
     # Messung sagte etwas über eine Lage aus, in der der Agent nie ist. Genau
     # daran hat diese Prüfung beim ersten Anlauf vorbeigemessen: dasselbe
-    # Modell trifft mit sieben Schemata fünf von fünf und fällt mit dem
-    # vollständigen Register in Fließtext.
+    # Modell traf mit den damals sieben Zusatzschemata fünf von fünf und fiel
+    # mit dem vollständigen Register in Fließtext.
     load_operations()
     schemas = tool_schemas()
     print(f"Werkzeuge: {len(schemas)} ({len(json.dumps(schemas)) // 1024} KB Schema)\n")

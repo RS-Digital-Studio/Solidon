@@ -12,8 +12,9 @@ daraus, was der Drucker verbrauchen wird:
     Schale   ≈ Oberfläche mal Wandstärke
     Zeit     ≈ Materialvolumen / Volumenstrom
 
-Das ist eine **Schätzung und heißt auch so**. Sie trägt ``source="internal"``
-und wird mit gemessenen Werten aus dem G-Code nie vermischt (Regel 14, §22.5).
+Das ist eine **Schätzung und heißt auch so**. Die Befunde daraus tragen
+``source="internal"`` und werden mit gemessenen Werten aus dem G-Code nie
+vermischt (Regel 14, §22.5).
 Wer es genau braucht, slicet und liest die Gegenprobe.
 
 **Warum sie trotzdem taugt.** Der Fehler steckt in der Schale, und die Schale

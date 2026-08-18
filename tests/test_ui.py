@@ -277,6 +277,35 @@ def test_new_leads_back_to_the_examples(window: MainWindow) -> None:
     assert not window.session.project.document.ops, "und das Projekt ist leer"
 
 
+def test_the_help_menu_leads_back_to_the_examples(window: MainWindow) -> None:
+    """Die Beispiele standen an genau einer Stelle (§37.2, August-Durchsicht 2.2).
+
+    Sie sind Dokumentation, Abnahmetest und Startbildschirm-Inhalt in einem —
+    und wer den Startbildschirm einmal verlassen hatte, fand sie nur über
+    *Öffnen* mit Pfadkenntnis wieder. Im Hilfemenü sieht man nach
+    Lehrmaterial.
+
+    Und ohne Verwerfen-Falle: Der Eintrag zeigt den Startbildschirm, mehr
+    nicht — gefragt wird erst, wenn wirklich etwas verloren ginge (Regel 19).
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    assert window.stack.currentWidget() is not window.start_screen
+
+    labels = [
+        action.text().replace("&", "")
+        for menu in window.menuBar().actions()
+        if menu.menu() is not None and menu.text().replace("&", "") == "Hilfe"
+        for action in menu.menu().actions()
+    ]
+    assert "Beispiele" in labels
+
+    window.action_examples()
+
+    assert window.stack.currentWidget() is window.start_screen
+    assert window.session.project.document.ops, "das Projekt steht noch, es ist nur verdeckt"
+
+
 def test_an_empty_scene_leaves_nothing_of_the_last_one(window: MainWindow) -> None:
     """Nach *Neu* blieben die orangen Merkmalsmarkierungen des vorigen Objekts
     im Bild stehen, während Objektbaum und Prüfbericht längst leer waren."""
@@ -308,6 +337,28 @@ def test_opening_a_model_leaves_the_start_screen(window: MainWindow) -> None:
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     assert window.stack.currentWidget() is window.overlay
+    assert [entry.op for entry in window.session.project.document.ops] == ["load"]
+
+
+def test_importing_from_the_start_screen_shows_the_workspace(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Von acht Wegen ins Dokument wechselte genau dieser nicht in den
+    Arbeitsbereich — und auf ihn zeigt der Schlussknopf der
+    Erstinbetriebnahme: Modell geladen, Startbildschirm stand (§2.3)."""
+    from PySide6.QtWidgets import QFileDialog
+
+    assert window.stack.currentWidget() is window.start_screen
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(MESHES / "cube_clean.stl"), "")),
+    )
+
+    window.action_import()
+    window.session.wait_for_idle()
+
+    assert window.stack.currentWidget() is not window.start_screen
     assert [entry.op for entry in window.session.project.document.ops] == ["load"]
 
 
@@ -1778,6 +1829,19 @@ def test_an_unreadable_gcode_file_says_so(
     assert gezeigt[0].suggestions, "und der Fehler trägt keinen Handlungsvorschlag"
 
 
+def wait_for_export(window: MainWindow) -> None:
+    """§2.8: Exportiert wird im Arbeiter, der Test wartet also wie das Fenster.
+
+    Nach dem Warten einmal zustellen — ``done`` ist eine Warteschlangen-
+    Verbindung, und ohne ``processEvents`` kämen weder Meldung noch Befunde je
+    an.
+    """
+    worker = window._export_worker
+    if worker is not None:
+        worker.wait(20_000)
+    QApplication.processEvents()
+
+
 def test_export_writes_the_selected_format(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1796,6 +1860,7 @@ def test_export_writes_the_selected_format(
         staticmethod(lambda *args, **kwargs: (str(target), "STL (*.stl)")),
     )
     window.action_export()
+    wait_for_export(window)
 
     assert target.is_file(), "der gewählte Name ist die Datei, nicht ein Schema daraus"
     assert target.stat().st_size > 0
@@ -1806,13 +1871,26 @@ def test_export_as_3mf_writes_one_assembly(
 ) -> None:
     """Mehrere Körper als 3MF sind eine Baugruppe in einer Datei (§20) —
     nicht eine Datei je Körper, über deren Zusammengehörigkeit der Slicer
-    selbst entscheiden müsste."""
+    selbst entscheiden müsste.
+
+    **Und die Datei trägt die Druckeinstellungen mit** (§29). Sie tat es nicht:
+    Der Aufruf im Menü ließ ``settings`` weg, und heraus kam eine 3MF ganz ohne
+    ``project_settings.config``. Der Slicer füllt dann alles aus dem Profil,
+    das gerade bei ihm steht — und meldet Widersprüche zu einem Drucker, den
+    niemand gemeint hat.
+    """
+    import json
+    import zipfile
+
     from PySide6.QtWidgets import QFileDialog
+
+    from app.core.knowledge import print_settings
 
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     window.session.import_model(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
+    window.session.set_print_settings(print_settings.resolve(window.session.profile))
 
     target = tmp_path / "baugruppe.3mf"
     monkeypatch.setattr(
@@ -1822,9 +1900,256 @@ def test_export_as_3mf_writes_one_assembly(
     )
     window.object_tree.tree.clearSelection()
     window.action_export()
+    wait_for_export(window)
 
     written = list(tmp_path.glob("*.3mf"))
     assert len(written) == 1, "eine Baugruppe, eine Datei"
+    with zipfile.ZipFile(written[0]) as archive:
+        assert "Metadata/project_settings.config" in archive.namelist(), (
+            "die Datei ist reine Geometrie — der Slicer erfindet den Rest"
+        )
+        values = json.loads(archive.read("Metadata/project_settings.config"))
+    assert values.get("layer_height"), "ohne Schichthöhe sagt die Datei nichts über den Druck"
+    assert float(values["layer_height"]) <= window.session.profile.printer.nozzle_diameter, (
+        "eine Schichthöhe über dem Düsendurchmesser lehnt jeder Slicer ab"
+    )
+
+
+def test_the_remembered_slicer_becomes_a_setup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Was im Druckeinstellungen-Dialog stand, gilt auch für den Export (§29).
+
+    Ohne Systemprofil trägt eine 3MF zwar Solidons Werte, aber keinen Drucker,
+    zu dem sie passen — und der Slicer bleibt bei dem, der gerade bei ihm
+    eingestellt ist. Steht dort eine 0,2er Düse, kollidiert sie mit einer
+    ersten Schicht von 0,25 mm, und die Meldung spricht vom Modell.
+    """
+    from pathlib import Path as PathType
+
+    from app.core import discover
+    from app.ui.print_settings_dialog import remembered_setup
+    from app.ui.settings import UiSettings
+
+    settings = UiSettings()
+    assert remembered_setup(settings) is None, "ohne gemerkten Drucker gibt es nichts aufzulösen"
+
+    monkeypatch.setattr(
+        discover, "find_program", lambda *args, **kwargs: PathType("orca-slicer.exe")
+    )
+    settings.slicer_machine_profile = "Elegoo Centauri Carbon 2 0.4 nozzle"
+    settings.slicer_base_process = "0.20mm Standard @Elegoo CC2 0.4 nozzle"
+    settings.slicer_base_filament = "Elegoo PETG PRO @ECC2"
+
+    setup = remembered_setup(settings)
+    assert setup is not None, "der gemerkte Drucker ist da, das Programm auch"
+    assert setup.machine_profile == settings.slicer_machine_profile
+    assert setup.base_process == settings.slicer_base_process
+    assert setup.base_filament == settings.slicer_base_filament
+
+    # Je Material zuerst, das globale nur als Rückfall — sonst trägt ein
+    # TPU-Projekt nach einem PETG-Lauf das PETG-Profil.
+    settings.slicer_filament_per_material["tpu"] = "Elegoo TPU @ECC2"
+    per_material = remembered_setup(settings, "tpu")
+    assert per_material is not None
+    assert per_material.base_filament == "Elegoo TPU @ECC2"
+    fallback = remembered_setup(settings, "pla")
+    assert fallback is not None
+    assert fallback.base_filament == settings.slicer_base_filament
+
+
+def test_a_single_body_3mf_carries_the_settings_too(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der häufigste Fall ist ein Körper — und genau der lief über den
+    Plan-Weg, der keine Einstellungen kennt. Dazu war der Dialog nie offen:
+    ``document.print_settings`` ist dann ``None``, und das hieß reine
+    Geometrie statt der Auflösung aus Stufe, Material und Drucker (§29)."""
+    import json
+    import zipfile
+
+    from PySide6.QtWidgets import QFileDialog
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    target = tmp_path / "einzel.3mf"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
+    )
+    window.object_tree.tree.clearSelection()
+    window.action_export()
+    wait_for_export(window)
+
+    written = list(tmp_path.glob("*.3mf"))
+    assert len(written) == 1
+    with zipfile.ZipFile(written[0]) as archive:
+        assert "Metadata/project_settings.config" in archive.namelist(), (
+            "ein Körper ohne geöffneten Dialog ist der Normalfall — nicht die Ausnahme"
+        )
+        values = json.loads(archive.read("Metadata/project_settings.config"))
+    assert values.get("layer_height"), "die Auflösung aus Stufe, Material und Drucker gilt"
+
+
+def test_the_export_leaves_the_window_usable(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2.8: Prüfen und Schreiben laufen im Arbeiter, nicht in der
+    Ereignisschleife.
+
+    Vorher rechnete und schrieb ``action_export`` komplett im Hauptthread —
+    Prüfung vor dem Export, Aufbau der Baugruppe, Anordnungsprüfung und die
+    Dateien selbst. Bei mehreren großen Körpern ist das mehr als zwei
+    Sekunden mit stehendem Fenster.
+
+    Geprüft wird beides: dass der Aufruf zurückkommt, bevor geschrieben ist,
+    und dass der Menüeintrag währenddessen gesperrt bleibt — zwei Läufe auf
+    denselben Ordner wären ein Wettlauf um dieselben Dateinamen.
+    """
+    import time
+
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.ui import main_window as module
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    real_write = module.write_plan
+
+    def slow_write(*args: Any, **kwargs: Any) -> Any:
+        time.sleep(0.4)
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(module, "write_plan", slow_write)
+    target = tmp_path / "langsam.stl"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "STL (*.stl)")),
+    )
+
+    started = time.perf_counter()
+    window.action_export()
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 0.3, "der Aufruf hat auf das Schreiben gewartet — genau das war der Befund"
+    assert window._export_worker is not None, "ohne Arbeiter ist nichts nebenher gelaufen"
+    assert not window.export_action.isEnabled(), (
+        "ein zweiter Lauf schriebe in dieselben Dateien wie der erste"
+    )
+
+    wait_for_export(window)
+
+    assert target.is_file()
+    assert target.name in window._announcement, "der fertige Export meldet sich nicht"
+    assert window._export_worker is None
+    assert window.export_action.isEnabled(), "nach dem Lauf ist der Eintrag wieder da"
+    assert not window.progress.isVisible(), "der Balken bleibt stehen, wenn niemand ihn abräumt"
+
+
+def test_a_failed_export_reports_in_the_main_thread(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 17: Was im Arbeiter schiefgeht, wird im Fenster gezeigt — mit
+    Handlungsvorschlag, nicht als stiller Ausfall.
+
+    Der ``try/except AppError`` stand um den Code, der jetzt im Arbeiter
+    läuft. Fiele er dort ungefangen aus ``run`` heraus, endete der Export
+    ohne eine Zeile — und der Menüeintrag bliebe für immer gesperrt.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.ui import main_window as module
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    def refuse(*args: Any, **kwargs: Any) -> Any:
+        raise errors.UserError(
+            title="Der Ordner ließ sich nicht beschreiben.",
+            detail="Kein Schreibrecht.",
+        )
+
+    shown: list[Any] = []
+    monkeypatch.setattr(module, "write_plan", refuse)
+    monkeypatch.setattr(module, "show_error", lambda error, *args, **kwargs: shown.append(error))
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(tmp_path / "geht_nicht.stl"), "STL (*.stl)")),
+    )
+
+    window.action_export()
+    wait_for_export(window)
+
+    assert shown, "der Fehler des Arbeiters kam nirgends an"
+    assert shown[0].suggestions, "und er trägt keinen Handlungsvorschlag"
+    assert window.export_action.isEnabled(), "nach dem Fehlschlag darf man es wieder versuchen"
+
+
+def test_the_print_settings_open_before_the_layer_analysis(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2.8: Der Weg zu den Druckeinstellungen wartet auf nichts mehr.
+
+    ``_current_slice(wait=True)`` hielt ihn bis zu zwei Sekunden an
+    (``worker.wait``) — die schlechtere Hälfte beider Möglichkeiten: lange
+    genug, um sich wie ein Hänger zu lesen, und ohne Zusage, denn wer den
+    Zeitraum riss, bekam den Dialog eben doch ohne Analyse.
+
+    Geprüft wird die ganze Kette: Der Dialog steht ohne Analyse da, und sie
+    findet ihn, solange er offen ist.
+    """
+    import time
+
+    from app.ui import main_window as module
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    item = window.object_tree.tree.topLevelItem(0)
+    assert item is not None
+    item.setSelected(True)
+
+    at_open: list[Any] = []
+    at_close: list[Any] = []
+
+    class ImmediateDialog(module.PrintSettingsDialog):
+        """Statt zu warten: einmal nachsehen, dann die Ereignisse laufen
+        lassen, wie es ein offener Dialog auch täte."""
+
+        def exec(self) -> int:
+            at_open.append(self.slice_result)
+            deadline = time.perf_counter() + 20.0
+            while self.slice_result is None and time.perf_counter() < deadline:
+                QApplication.processEvents()
+            at_close.append(self.slice_result)
+            return 0
+
+    monkeypatch.setattr(module, "PrintSettingsDialog", ImmediateDialog)
+
+    window.action_print_settings()
+
+    assert at_open == [None], "der Dialog hat doch auf die Schichtanalyse gewartet"
+    assert at_close and at_close[0] is not None, (
+        "die Analyse hat den offenen Dialog nie erreicht — genau dafür war das Warten da"
+    )
+    assert window._settings_dialog is None, (
+        "der Rückruf zeigte nach dem Schließen weiter auf ein Widget, das weggeräumt wird"
+    )
+
+
+def test_a_late_layer_analysis_finds_no_dialog(window: MainWindow) -> None:
+    """Ist keiner mehr offen, ist das Ergebnis nichts wert — und darf keinen
+    Absturz kosten.
+
+    Der Dialog wird nach ``exec`` weggeräumt (``deleteLater``); eine gebundene
+    Methode von ihm in der Warteliste wäre ein Rückruf in ein zerstörtes
+    C++-Objekt, also der Absturz ohne Zeile.
+    """
+    window._slice_for_settings(None)
+
+    assert window._settings_dialog is None
 
 
 def test_export_as_3mf_carries_every_plate(
@@ -1876,6 +2201,7 @@ def test_export_as_3mf_carries_every_plate(
     )
     window.object_tree.tree.clearSelection()
     window.action_export()
+    wait_for_export(window)
 
     written = sorted(path.name for path in tmp_path.glob("*.3mf"))
     assert written == ["baugruppe.3mf"], "eine Baugruppe, eine Datei"
@@ -1916,6 +2242,7 @@ def test_export_as_3mf_carries_the_print_settings(
     )
     window.object_tree.tree.clearSelection()
     window.action_export()
+    wait_for_export(window)
 
     with zipfile.ZipFile(target) as container:
         assert "Metadata/project_settings.config" in container.namelist()
@@ -2338,6 +2665,70 @@ def test_the_toolbar_has_a_drawing_entry_for_way_two(window: MainWindow) -> None
         assert window._sketch_target == ""
     finally:
         window.finish_sketch(keep=False)
+
+
+def test_the_toolbar_has_the_two_entries_for_way_four(window: MainWindow) -> None:
+    """§2.2: Weg 4 (organisch formen) nennt die Werkzeugzeile als Ort.
+
+    *Formen* und *Skelett* lagen unter *Ändern → Netz* zwischen
+    Reparaturwerkzeugen — an derselben Stelle wie „Löcher schließen", ohne
+    Kürzel und ohne Zusammenhang mit dem Weg, für den sie gebaut sind. Die
+    untere Werkzeugzeile ist mit acht Umschaltern voll; die obere hat den
+    Platz, und dort steht Weg 2 bereits.
+
+    Der Menüeintrag bleibt: Befehlspalette und Verlauf führen über ihn.
+    """
+    from PySide6.QtWidgets import QToolBar
+
+    toolbar = window.findChild(QToolBar)
+    assert toolbar is not None
+    labels = [action.text() for action in toolbar.actions() if action.text()]
+    assert "Formen" in labels
+    assert "Skelett" in labels
+    assert labels.index("Zeichnen") < labels.index("Formen") < labels.index("Skelett")
+
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    item = window.object_tree.tree.topLevelItem(0)
+    assert item is not None
+    item.setSelected(True)
+
+    window.action_sculpt_free()
+    try:
+        assert window.sculpting()
+    finally:
+        window.finish_sculpt()
+
+    window.action_armature_free()
+    try:
+        assert window.setting_armature()
+    finally:
+        window.finish_armature()
+
+
+def test_way_four_says_what_it_needs_before_the_click(window: MainWindow) -> None:
+    """Ein Knopf, der einen gewählten Körper braucht, sagt das vorher (§2.6).
+
+    Bis hierher fing das erst die Sitzung ab: Klick, dann „Bitte zuerst ein
+    Objekt auswählen." in der Statusleiste — eine Sackgasse, die der Knopf
+    selbst beantworten kann (Regel 19).
+    """
+    window._update_actions()
+    assert not window._toolbar_sculpt.isEnabled()
+    assert not window._toolbar_armature.isEnabled()
+    assert "ausgewählten Körper" in window._toolbar_sculpt.toolTip()
+
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    item = window.object_tree.tree.topLevelItem(0)
+    assert item is not None
+    item.setSelected(True)
+    window._update_actions()
+
+    assert window._toolbar_sculpt.isEnabled()
+    assert window._toolbar_armature.isEnabled()
+    assert "ausgewählten Körper" not in window._toolbar_sculpt.toolTip()
+    assert window._toolbar_sculpt.toolTip(), "und der eigene Satz steht wieder da"
 
 
 def test_the_sketch_bar_says_what_finishing_does(window: MainWindow) -> None:
@@ -3365,6 +3756,56 @@ def test_the_veil_covers_the_view_only_while_it_shows_nothing(window: MainWindow
 
     window._on_busy(True)
     assert not window.veil.showing, "über einem Körper bleibt die Ansicht die Ansicht"
+
+
+def test_reading_a_file_stands_under_the_wait_cursor(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2.8: bis zwei Sekunden Mauszeiger und Statusleiste.
+
+    Die Sitzung liest synchron — ``load`` für ein Projekt, ``read_bytes`` für
+    ein Modell —, und die Ladeanzeige deckt das nicht: sie hängt am
+    Fortschritt der Auswertung, und der beginnt erst, wenn die Datei gelesen
+    ist. Dazwischen lag ein Fenster ohne jede Auskunft.
+    """
+    seen: list[Any] = []
+    real = window.session.import_model
+
+    def watched(path: Path, *args: Any, **kwargs: Any) -> Any:
+        seen.append(QApplication.overrideCursor())
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(window.session, "import_model", watched)
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    assert seen, "gelesen wurde nichts — der Test misst am falschen Ort"
+    assert seen[0] is not None, "gelesen wurde ohne Wartezeiger"
+    assert seen[0].shape() == Qt.CursorShape.WaitCursor
+    assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
+
+
+def test_a_broken_file_takes_the_wait_cursor_with_it(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Wartezeiger, der nach einem Fehler stehen bleibt, sieht aus wie ein
+    hängendes Programm — und der Fehlerdialog darunter wie ein Fenster, das
+    zugleich fragt und bittet zu warten."""
+
+    def refuse(*args: Any, **kwargs: Any) -> Any:
+        raise errors.UserError(title="Diese Datei ließ sich nicht lesen.")
+
+    shown: list[Any] = []
+    monkeypatch.setattr(window.session, "import_model", refuse)
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+    )
+
+    window.open_path(MESHES / "cube_clean.stl")
+
+    assert shown, "der Fehler kam nirgends an"
+    assert QApplication.overrideCursor() is None, "der Wartezeiger überlebte den Fehler"
 
 
 def test_the_veil_shows_the_measured_progress(window: MainWindow) -> None:

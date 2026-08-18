@@ -150,12 +150,22 @@ OPENING: dict[str, tuple[tuple[str, str], ...]] = {
 #:
 #: Es setzt voraus, dass der Zuschauer weiß, was Solidon ist — deshalb ist
 #: :data:`OPENING` das erste Video und dieses das zweite.
+#:
+#: **Die Zahlen im Intro sind gemessen, nicht geschätzt.** Zweiundfünfzig
+#: Minuten und achtzehn Gramm stehen dort, weil dieses Projekt einmal ganz
+#: durch die Übergabe gelaufen ist: Elegoo Centauri Carbon 2, Elegoo PETG,
+#: Profil „0.20mm Standard", zurückgelesen aus dem G-Code des ElegooSlicer
+#: (siehe ``ROADMAP.md``). Bei ``breite`` auf 96 mm werden 64 Minuten und
+#: 22,6 Gramm daraus — der Zuschauer sieht den kleinen Stand, also steht der
+#: kleine Wert. Wer am Projekt oder am Profil dreht, misst neu, statt die
+#: Zahl anzupassen: eine gerundete Behauptung wäre schlechter als keine.
 STORYBOARD: dict[str, tuple[tuple[str, str], ...]] = {
     "de": (
         (
             "intro",
             "Das ist ein Gehäuse aus Solidon. Siebzig Millimeter breit, "
-            "mit Mutternfallen, Einpressbuchsen und einer Kabeldurchführung.",
+            "mit Mutternfallen, Einpressbuchsen und einer Kabeldurchführung — "
+            "zweiundfünfzig Minuten Druckzeit, achtzehn Gramm.",
         ),
         (
             "parameters",
@@ -175,7 +185,8 @@ STORYBOARD: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "intro",
             "This is an enclosure built in Solidon. Seventy millimetres wide, "
-            "with nut traps, heat-set inserts and a cable gland.",
+            "with nut traps, heat-set inserts and a cable gland — "
+            "fifty-two minutes of printing, eighteen grams.",
         ),
         (
             "parameters",

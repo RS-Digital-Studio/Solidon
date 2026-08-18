@@ -1224,8 +1224,12 @@ def remote_text(registry: Registry | None = None) -> str:
         lines.append(f"### {CATEGORIES[name]}")
         lines.append("")
         for spec in offen:
+            # Zuerst der Titel aus dem Menü, dann der Leitungsname: Der eine
+            # sagt dem Leser, was gemeint ist, der andere der Gegenstelle,
+            # was zu senden ist.
             doc = " ".join(str(spec.doc).split())
-            lines.append(f"- `{spec.name}` — {doc}" if doc else f"- `{spec.name}`")
+            head = f"- **{spec.title}** (`{spec.name}`)"
+            lines.append(f"{head} — {doc}" if doc else head)
         lines.append("")
 
     # Was nicht aus dem Register kommt: Werkzeuge der Agentenschicht. Sie
@@ -1295,9 +1299,31 @@ def messages_text() -> str:
     „was hilft" — und eine neue Ausnahme kann gar nicht in die Anwendung
     kommen, ohne hier aufzutauchen.
     """
-    import inspect
+    import importlib
 
     from app.core import errors
+
+    # Die Hierarchie ist die Wahrheit, ``vars(errors)`` nur ihr Stammmodul:
+    # OpenSCAD, Sprachmodell, Mesh-Erzeugung, Lizenzschlüssel und die
+    # Analysekarten deklarieren ihre Ausnahmen in eigenen Modulen —
+    # ausgerechnet die, die ein Nutzer am ehesten sieht und nachschlägt,
+    # fehlten in der Tabelle, obwohl der Satz darüber Vollständigkeit
+    # verspricht. Der Import füllt die Hierarchie, bevor sie abgelaufen wird.
+    for module in (
+        "app.core.backends.openscad",
+        "app.core.backends.llm",
+        "app.core.backends.mesh",
+        "app.core.activation.key",
+        "app.core.perceive.maps",
+    ):
+        importlib.import_module(module)
+
+    def walk(kind: type[errors.AppError]) -> list[type[errors.AppError]]:
+        found: list[type[errors.AppError]] = []
+        for child in kind.__subclasses__():
+            found.append(child)
+            found.extend(walk(child))
+        return found
 
     lines = [
         str(
@@ -1312,11 +1338,7 @@ def messages_text() -> str:
         "|---|---|",
     ]
     seen: set[str] = set()
-    for _name, kind in sorted(vars(errors).items()):
-        if not inspect.isclass(kind) or not issubclass(kind, errors.AppError):
-            continue
-        if kind is errors.AppError:
-            continue
+    for kind in sorted(walk(errors.AppError), key=lambda entry: str(entry.default_title)):
         title = str(kind.default_title)
         if title in seen:
             continue

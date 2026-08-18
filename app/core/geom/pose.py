@@ -250,17 +250,32 @@ def armature_to_text(bones: Sequence[Bone]) -> str:
 
 
 def armature_from_text(text: str) -> list[Bone]:
-    if not text.strip():
-        return []
-    return [
-        Bone(
-            name=str(entry["n"]),
-            head=_vector(entry["h"]),
-            tail=_vector(entry["t"]),
-            parent=str(entry.get("p", "")),
-        )
-        for entry in json.loads(text)
-    ]
+    try:
+        if not text.strip():
+            return []
+        return [
+            Bone(
+                name=str(entry["n"]),
+                head=_vector(entry["h"]),
+                tail=_vector(entry["t"]),
+                parent=str(entry.get("p", "")),
+            )
+            for entry in json.loads(text)
+        ]
+    except (ValueError, KeyError, TypeError, IndexError, AttributeError) as problem:
+        # Der Text kommt aus einer Projektdatei oder einem Dialogfeld — beides
+        # fremde Eingabe. Ohne diesen Fang stirbt der Auswertungs-Thread an
+        # einem rohen JSONDecodeError, und die Sitzung meldet Erfolg.
+        raise ValidationError(
+            title=_("Dieses Skelett lässt sich nicht lesen."),
+            field="armature",
+            detail=_(
+                "Erwartet wird eine Liste von Knochen mit Name, Kopf und Schwanz — "
+                "gesetzt im Skeletteditor, nicht getippt."
+            ),
+            value=text,
+            constraint="unreadable",
+        ) from problem
 
 
 def pose_to_text(poses: Sequence[Pose]) -> str:
@@ -272,11 +287,26 @@ def pose_to_text(poses: Sequence[Pose]) -> str:
 
 
 def pose_from_text(text: str) -> list[Pose]:
-    if not text.strip():
-        return []
-    return [
-        Pose(bone=str(name), angles=_vector(values)) for name, values in json.loads(text).items()
-    ]
+    try:
+        if not text.strip():
+            return []
+        return [
+            Pose(bone=str(name), angles=_vector(values))
+            for name, values in json.loads(text).items()
+        ]
+    except (ValueError, KeyError, TypeError, IndexError, AttributeError) as problem:
+        # Die naheliegendste Handeingabe — „b1: 0,30,0" — ist kein JSON. Sie
+        # bekommt einen Satz mit der erwarteten Form, keinen toten Thread.
+        raise ValidationError(
+            title=_("Diese Stellung lässt sich nicht lesen."),
+            field="pose",
+            detail=_(
+                "Je Knochen drei Winkel: der Knochenname auf eine Liste aus drei "
+                "Zahlen, etwa [0, 30, 0]."
+            ),
+            value=text,
+            constraint="unreadable",
+        ) from problem
 
 
 def _vector(values: Sequence[float]) -> Vec3:

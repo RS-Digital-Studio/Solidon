@@ -1,1 +1,1 @@
-"""Writing files, slicer handover, naming scheme, pre-export check (§29)."""
+"""Dateien schreiben, Übergabe an den Slicer, Namensschema, Vorab-Prüfung (§29)."""

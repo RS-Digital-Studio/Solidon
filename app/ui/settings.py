@@ -48,6 +48,15 @@ class UiSettings:
     """Filamentprofil, auf das die Solidon-Werte gelegt werden. Ohne es kennt
     der Slicer nur „PETG" und nicht, welches — und die Werte des Herstellers
     für dieses Filament kämen gar nicht zum Tragen."""
+    slicer_profile_printer: str = ""
+    """Für welchen Drucker die drei Profile darüber gewählt wurden (§29).
+
+    Ein Maschinenprofil gehört zu genau einem Drucker. Ohne diesen Vermerk
+    trüge die 3MF eines Prusa-Projekts das Profil des Elegoo, mit dem zuletzt
+    gearbeitet wurde — richtig gerechnet, falsch adressiert, und der Slicer
+    lehnt den Prozess als unverträglich ab. Leer heißt „von früher", dann wird
+    nicht verglichen: eine Einstellung aus einer älteren Fassung ist keine
+    falsche."""
     slicer_filament_per_material: dict[str, str] = field(default_factory=dict)
     """Welche Spule zuletzt für welches Material gewählt wurde (§29).
 
@@ -57,6 +66,10 @@ class UiSettings:
     einmal gesagt hat, soll es nicht bei jedem Projekt wiederholen. Der eine
     zuletzt benutzte Wert daneben reichte dafür nicht: er galt über alle
     Materialien hinweg, und nach einem TPU-Teil stand er beim nächsten PETG."""
+    window_geometry: str = ""
+    """Größe und Lage des Fensters beim letzten Schließen, als Hex aus
+    ``saveGeometry``. Leer heißt: erster Start, dann bildschirmfüllend —
+    danach findet jeder das Fenster wieder, wie er es verlassen hat."""
     first_run_done: bool = False
     shortcut_scheme: str = "default"
     """Welche Kürzelbelegung gilt (Konzept P15, E7). Die Vorgabe ist die des

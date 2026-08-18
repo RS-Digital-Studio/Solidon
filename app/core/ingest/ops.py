@@ -17,7 +17,13 @@ from app.core.errors import InternalError, ValidationError
 from app.core.export import threemf
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest import outline
-from app.core.ingest.loader import IngestResult, check_limits, detect_unit, normalise
+from app.core.ingest.loader import (
+    IngestResult,
+    check_limits,
+    check_unpacked,
+    detect_unit,
+    normalise,
+)
 from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.types import BaseParams, Finding, MaterialSlot, OpContext, OpResult, SceneObject
 from app.core.units import LengthUnit
@@ -97,6 +103,11 @@ def load(ctx: OpContext) -> OpResult:
     check_limits(len(payload), 0)
 
     suffix = Path(source.path).suffix
+    if suffix.lower() == ".3mf":
+        # Vor dem Parsen, nicht danach: die gepackte Größe sagt bei einem
+        # Container nichts — 2,6 MB wurden beim Lesen zu 1,08 GB, und die
+        # Dreiecksgrenze griff erst, als der Speicher schon voll war (§32).
+        check_unpacked(payload)
     stem = Path(source.path).stem
     parts = threemf.read_objects(payload) if suffix.lower() == ".3mf" else []
     if not parts:

@@ -31,6 +31,17 @@ _log = get_logger(__name__)
 
 #: Wie weit das tatsächliche Spiel vom Profilwert abweichen darf, bevor es ein
 #: Befund wird.
+#:
+#: §14 sagt „im Rahmen von ``EPS_GEOM``", und das stimmt für den Fall, den er
+#: meinte: zwei **konstruierte** Maße unterscheiden sich exakt bis aufs
+#: Fließkommarauschen. Gemessen wird hier aber an erkannten Merkmalen, und
+#: deren Maße kommen bei B-Rep-Körpern aus der Tessellation — die trägt
+#: konstant etwa 0,025 mm (die halbe ``DEFLECTION``; gemessen in der
+#: Live-Durchsicht vom 05.08.2026, bei Ø 6 wie bei Ø 120). Mit ``EPS_GEOM``
+#: wäre jede Passung auf einem exakten Körper „verletzt". Fünffaches
+#: ``EPS_DISPLAY`` liegt sicher über dem Rauschen und weit unter jedem
+#: Spiel, über das eine Passung etwas aussagt. §14 ist entsprechend
+#: nachzuziehen — Bauplanänderung mit Ansage, siehe ROADMAP.
 FIT_TOLERANCE = EPS_DISPLAY * 5
 
 #: Wie parallel zwei Flächen stehen müssen, damit sich eine bündige Passung

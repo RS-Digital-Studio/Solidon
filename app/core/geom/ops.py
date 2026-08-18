@@ -428,7 +428,9 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     dahinter (§17.2).
     """
     first, second = (as_mesh_data(entry.mesh) for entry in ctx.inputs[:2])
-    outcome = boolean(kind, [first, second], quality=ctx.quality, seed=seed)
+    outcome = boolean(
+        kind, [first, second], quality=ctx.quality, seed=seed, cancelled=ctx.cancelled
+    )
     return OpResult(
         outputs=[dataclasses.replace(ctx.inputs[0], mesh=outcome.mesh)],
         solver=outcome.solver,

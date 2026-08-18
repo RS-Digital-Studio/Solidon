@@ -350,6 +350,11 @@ CURA: Final[tuple[Row, ...]] = (
     ("speed.first_layer", "speed_layer_0", _number),
     ("speed.travel", "speed_travel", _number),
     ("support.style", "support_enable", _support_on_boolean),
+    # Und die Art dazu: `support_structure` steht in der fdmprinter-Definition
+    # (nachgeschlagen, nicht angenommen). Ohne den Eintrag bekam Cura nur das
+    # An/Aus — wer Baumstützen einstellte, druckte Gitterstützen, und
+    # `verify()` sah nichts, weil der Schlüssel nie geschrieben wurde.
+    ("support.style", "support_structure", _mapped({"tree": "tree"}, "normal")),
     ("support.placement", "support_type", _mapped({"build_plate": "buildplate"}, "everywhere")),
     ("support.threshold_angle", "support_angle", _integer),
     ("support.z_gap", "support_z_distance", _number),
@@ -372,9 +377,6 @@ CURA: Final[tuple[Row, ...]] = (
     ("filament.flow_ratio", "material_flow", _percent),
 )
 
-#: Welche Schlüssel zu welcher Haftungsart gehören. Die Slicer lesen sie als
-#: unabhängige Maße, gemeint ist aber genau eine Art: wer Skirt eingestellt hat
-#: und trotzdem ``raft_layers`` mitschickt, bekommt beides.
 #: Wie ein Material beim Slicer heißt. Fast immer die Solidon-Kennung in
 #: Großbuchstaben — nur wo die Schreibweisen auseinandergehen, steht ein
 #: Eintrag. Ein unbekannter Typ ist kein Abbruch: der Slicer nimmt ihn als
@@ -387,6 +389,9 @@ def filament_type(material_id: str) -> str:
     return FILAMENT_TYPES.get(material_id, material_id.upper())
 
 
+#: Welche Schlüssel zu welcher Haftungsart gehören. Die Slicer lesen sie als
+#: unabhängige Maße, gemeint ist aber genau eine Art: wer Skirt eingestellt hat
+#: und trotzdem ``raft_layers`` mitschickt, bekommt beides.
 ADHESION_KEYS: Final[dict[SlicerFlavour, dict[str, tuple[str, ...]]]] = {
     "prusa": {
         "skirt": ("skirts",),

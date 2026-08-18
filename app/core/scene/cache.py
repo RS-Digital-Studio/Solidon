@@ -25,6 +25,12 @@ from typing import Any, Final, Protocol
 
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_cache_dir
+from app.core.scene.serialise import (
+    finding_from_data,
+    finding_to_data,
+    solver_from_data,
+    solver_to_data,
+)
 from app.core.types import (
     Feature,
     Finding,
@@ -215,6 +221,20 @@ class DiskCache:
                 )
                 for entry in data["objects"]
             )
+            # Die drei Beifänge gehören zum Ergebnis wie die Körper selbst:
+            # ohne `transform` liest `_with_features` die alten Merkmale im
+            # falschen Bezugspunkt und benennt sie um (§21.2), ohne
+            # `findings` verschwindet die Voxel-Warnung, die §17.2 nie
+            # stillschweigend lassen will. Sie wurden geschrieben — nur
+            # gelesen hat sie niemand.
+            findings = tuple(finding_from_data(entry) for entry in data.get("findings", []))
+            solver = solver_from_data(data.get("solver"))
+            raw_transform = data.get("transform")
+            transform: Transform | None = (
+                tuple(tuple(float(value) for value in row) for row in raw_transform)  # type: ignore[assignment]
+                if raw_transform
+                else None
+            )
         except (OSError, KeyError, ValueError) as problem:
             # Ein beschädigter Cache-Eintrag ist nie fatal: verwerfen und
             # neu rechnen.
@@ -222,7 +242,7 @@ class DiskCache:
             shutil.rmtree(folder, ignore_errors=True)
             return None
         folder.touch(exist_ok=True)
-        return CachedResult(objects=objects)
+        return CachedResult(objects=objects, findings=findings, solver=solver, transform=transform)
 
     def put(self, key: str, result: CachedResult) -> None:
         folder = ensure_dir(self._folder(key))
@@ -247,7 +267,14 @@ class DiskCache:
                         "plate": entry.plate,
                     }
                 )
-            (folder / "objects.json").write_text(json.dumps({"objects": entries}), encoding="utf-8")
+            payload: dict[str, Any] = {"objects": entries}
+            if result.findings:
+                payload["findings"] = [finding_to_data(entry) for entry in result.findings]
+            if result.solver is not None:
+                payload["solver"] = solver_to_data(result.solver)
+            if result.transform is not None:
+                payload["transform"] = [list(row) for row in result.transform]
+            (folder / "objects.json").write_text(json.dumps(payload), encoding="utf-8")
         except (OSError, TypeError) as problem:
             # TypeError heißt: ein Körper, den der Codec nicht ablegen kann —
             # ein B-Rep-Ergebnis (§30). Die werden neu gerechnet statt

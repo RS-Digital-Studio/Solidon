@@ -35,7 +35,7 @@ class Proposal:
     answer: str = ""
     drafts: list[OperationDraft] = field(default_factory=list)
     parameters: dict[ParameterName, Parameter] = field(default_factory=dict)
-    """Parameters the proposal wants to add or change."""
+    """Parameter, die der Vorschlag hinzufügen oder ändern will."""
     fits: list[Fit] = field(default_factory=list)
     print_target: tuple[str, str] | None = None
     """(Drucker, Material) nach einem Wechsel über ``set_print_target`` —

@@ -51,7 +51,7 @@ def _without_none(data: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in data.items() if value is not None}
 
 
-# --- Parameters ----------------------------------------------------------------
+# --- Parameter -----------------------------------------------------------------
 
 
 def parameter_to_data(parameter: Parameter) -> dict[str, Any]:
@@ -79,7 +79,7 @@ def parameter_from_data(name: str, data: dict[str, Any]) -> Parameter:
     )
 
 
-# --- Fits ----------------------------------------------------------------------
+# --- Passungen ------------------------------------------------------------------
 
 
 def fit_to_data(fit: Fit) -> dict[str, Any]:
@@ -102,7 +102,7 @@ def fit_from_data(data: dict[str, Any]) -> Fit:
     )
 
 
-# --- Sources -------------------------------------------------------------------
+# --- Quellen --------------------------------------------------------------------
 
 
 def source_to_data(source: Source) -> dict[str, Any]:
@@ -166,7 +166,7 @@ def source_from_data(source_id: str, data: dict[str, Any]) -> Source:
     )
 
 
-# --- Stack ---------------------------------------------------------------------
+# --- Stapel ---------------------------------------------------------------------
 
 
 def origin_to_data(origin: Origin) -> dict[str, Any]:
@@ -359,7 +359,7 @@ def operation_from_data(data: dict[str, Any]) -> Operation:
     )
 
 
-# --- Report --------------------------------------------------------------------
+# --- Prüfbericht ----------------------------------------------------------------
 
 
 def finding_to_data(finding: Finding) -> dict[str, Any]:
@@ -401,7 +401,7 @@ def report_from_data(data: dict[str, Any]) -> Report:
     return Report(tuple(finding_from_data(entry) for entry in data.get("findings", ())))
 
 
-# --- Document ------------------------------------------------------------------
+# --- Dokument -------------------------------------------------------------------
 
 
 #: Die Gruppen von :class:`PrintSettings` und ihre Klassen. Gelesen wird über

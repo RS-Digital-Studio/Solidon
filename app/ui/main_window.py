@@ -12,8 +12,8 @@ Kommandozeile, sobald sie deklariert ist (§10).
 from __future__ import annotations
 
 import platform
-from collections.abc import Mapping, Sequence
-from contextlib import suppress
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager, suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
@@ -77,7 +77,7 @@ from app.core.agent.tools import (
     UNDO_TRANSACTION,
 )
 from app.core.backends import llm
-from app.core.errors import AppError, InternalError, UserError
+from app.core.errors import AppError, InternalError, OperationCancelled, UserError
 from app.core.export.handover import SliceOutcome
 from app.core.export.writer import (
     ExportFormat,
@@ -121,6 +121,7 @@ from app.core.scene import (
     values_for,
     values_for_object,
 )
+from app.core.scene.cancel import CancelSignal
 from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
@@ -158,11 +159,12 @@ from app.ui.dialogs import (
 )
 from app.ui.explode_bar import ExplodeBar
 from app.ui.facts import PrintFacts
-from app.ui.generate_dialog import GenerateDialog
+from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import MENU_GROUPS, demo_line, feature_label, length
+from app.ui.leash import WorkerLeash
 from app.ui.loading import LoadingVeil
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
@@ -181,7 +183,7 @@ from app.ui.panels import (
     describe_selection,
 )
 from app.ui.pose_bar import PoseBar
-from app.ui.print_settings_dialog import PrintSettingsDialog
+from app.ui.print_settings_dialog import PrintSettingsDialog, remembered_setup
 from app.ui.remote_server import RemoteServer, WindowBridge
 from app.ui.report_dialog import ErrorReportDialog
 from app.ui.sculpt_bar import SculptBar
@@ -204,16 +206,6 @@ from app.ui.viewport import Viewport
 _log = get_logger(__name__)
 
 AUTOSAVE_INTERVAL_MS = 120_000
-
-#: Wie lange die Druckeinstellungen auf eine nachgerechnete Schichtanalyse
-#: warten, bevor sie ohne sie aufgehen.
-#:
-#: Zwei Sekunden sind das Zehnfache dessen, was §31 für zweihunderttausend
-#: Dreiecke zulässt, und das Zehnfache dessen, was die Teile eines Gewürzsets
-#: tatsächlich brauchten. Wer ein Netz mitbringt, das darüber liegt, bekommt
-#: den Dialog trotzdem — nur ohne die Vorschläge zur Geometrie, so wie vorher
-#: immer.
-SLICE_WAIT_MS = 2000
 
 #: Wie lange der Rahmen steht, mit dem ein Tourschritt auf seinen Bereich
 #: zeigt. Lang genug, um den Blick dorthin zu ziehen, kurz genug, um nicht als
@@ -282,6 +274,24 @@ def _filter_for(label: str, suffixes: tuple[str, ...]) -> str:
     return f"{label} ({' '.join('*' + suffix for suffix in suffixes)})"
 
 
+@contextmanager
+def waiting() -> Iterator[None]:
+    """Der Wartezeiger für die Rechnung, die bis zu zwei Sekunden dauert
+    (§2.8).
+
+    Die Stufe darunter zeigt nichts, die darüber gehört in einen Arbeiter.
+    Dazwischen liegt genau das hier: eine Datei von der Platte lesen, einen
+    Dialog aufbauen, den Slicer suchen. Als Kontextmanager, weil das
+    Zurücksetzen sonst am ersten Fehlerausgang hängen bleibt — und ein
+    Wartezeiger, der stehen bleibt, sieht aus wie ein hängendes Programm.
+    """
+    QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+    try:
+        yield
+    finally:
+        QApplication.restoreOverrideCursor()
+
+
 def model_filter() -> str:
     return _filter_for(tr("Modelle"), MODEL_SUFFIXES)
 
@@ -307,15 +317,33 @@ class _MapWorker(QThread):
         self._entry = entry
         self._profile = profile
         self._scene = scene
+        self.cancelled = CancelSignal()
+        """Der Schalter zum Kartenwechsel (§18.4): Wer die zweite Karte wählt,
+        wartete bis hierher erst die erste ab — 3,4 s bei 51 000 Dreiecken, und
+        das Fenster meldete die ganze Zeit „wird berechnet …" für die falsche."""
+
+    def cancel(self) -> None:
+        self.cancelled.cancel()
 
     def run(self) -> None:
         try:
             self.done.emit(
-                maps.build(self._kind, self._entry, profile=self._profile, scene=self._scene)
+                maps.build(
+                    self._kind,
+                    self._entry,
+                    profile=self._profile,
+                    scene=self._scene,
+                    cancelled=self.cancelled,
+                )
             )
         except maps.MapTooLarge:
             # §31: eine Karte, die Minuten bräuchte, sagt Nein, statt einzufrieren.
             self.tooLarge.emit()
+        except OperationCancelled:
+            # Kein Fehler und nie als einer gezeigt (§15.6): Eine andere Karte
+            # ist schon unterwegs, und ihr Ergebnis ist das, auf das jemand
+            # wartet.
+            return
 
 
 class _UpdateWorker(QThread):
@@ -376,6 +404,104 @@ class _DownloadWorker(QThread):
 
     def _report(self, share: float, text: str) -> None:
         self.step.emit(share, text)
+
+
+class _ExportWorker(QThread):
+    """Der Export, abseits des Oberflächen-Threads (§2.8, §29).
+
+    Er rechnete und schrieb komplett in der Ereignisschleife: die Prüfung vor
+    dem Export, der Aufbau der Baugruppe samt Slicer-Suche, die
+    Anordnungsprüfung und das Schreiben selbst. Bei ein paar großen Körpern
+    sind das mehr als zwei Sekunden mit stehendem Fenster — und §2.8 verlangt
+    darüber ein Fenster, das bedienbar bleibt.
+
+    **Ohne Abbrechen, und das ist Absicht.** Ein halb geschriebener Export ist
+    eine halbe Datei; der Schreiber im Kern kennt keinen Abbruchpunkt, an dem
+    er sauber aufhören könnte, und einen einzubauen hieße, ihn mitten in einer
+    Datei anhalten zu dürfen. Was §2.8 hier trägt, ist die Bedienbarkeit: der
+    Balken läuft, das Fenster reagiert, und der Menüeintrag ist gesperrt,
+    damit kein zweiter Lauf auf denselben Ordner schreibt.
+
+    Die Befunde der Prüfung kommen mit dem Ergebnis zurück, nicht davor. §29
+    sagt „vor dem Schreiben", und genau das ist hier nicht mehr zu haben:
+    **die Prüfung ist der lange Teil**, sie im Hauptthread zu lassen wäre die
+    Blockade, gegen die dieser Arbeiter geschrieben ist. Die Baugruppe macht
+    es seit je so — sie prüft und schreibt in einem Zug —, und der Abstand
+    zwischen beidem ist jetzt derselbe Wimpernschlag.
+    """
+
+    done = Signal(object, object)
+    failed = Signal(object)
+
+    def __init__(
+        self,
+        objects: list[Any],
+        target: Path,
+        export_format: ExportFormat,
+        *,
+        profile: Any,
+        sources: Any,
+        settings: Any,
+        ui_settings: Any,
+        material: str,
+    ) -> None:
+        super().__init__()
+        self._objects = objects
+        self._target = target
+        self._format = export_format
+        self._profile = profile
+        self._sources = sources
+        self._settings = settings
+        self._ui_settings = ui_settings
+        self._material = material
+
+    def run(self) -> None:
+        try:
+            if self._format == "3mf":
+                written, findings = self._assembly()
+            else:
+                written, findings = self._files()
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        self.done.emit(written, findings)
+
+    def _assembly(self) -> tuple[list[Path], list[Finding]]:
+        """Eine Baugruppe bleibt eine Datei: der Slicer bekommt einen
+        Druckauftrag, keine Handvoll Teile (§20). Auch bei **einem** Körper —
+        der lief über den Plan-Weg, und der kennt keine Einstellungen.
+
+        Die Slicer-Suche in ``remembered_setup`` läuft hier mit: sie kostet
+        eine knappe halbe Sekunde und hatte im Hauptthread einen Wartezeiger
+        über sich. Hier braucht sie keinen.
+        """
+        written_path, findings = write_assembly(
+            self._objects,
+            self._target.parent,
+            project_name=self._target.stem,
+            profile=self._profile,
+            sources=self._sources,
+            settings=self._settings,
+            setup=remembered_setup(self._ui_settings, self._material, self._profile.printer.id),
+        )
+        return [written_path], list(findings)
+
+    def _files(self) -> tuple[list[Path], list[Finding]]:
+        """Ein fester Name für einen Körper; bei mehreren zählt das
+        Namensschema aus §29, damit auf der Platte lesbar bleibt, welches Teil
+        welches ist. Geschweifte Klammern im Namen sind Zeichen, keine
+        Platzhalter — ``format`` sähe das anders.
+        """
+        fixed = self._target.stem.replace("{", "{{").replace("}", "}}")
+        plan = plan_export(
+            self._objects,
+            project_name=self._target.stem,
+            profile=self._profile,
+            export_format=self._format,
+            scheme=fixed if len(self._objects) == 1 else None,
+            sources=self._sources,
+        )
+        return write_plan(plan, self._target.parent, self._format), list(plan.findings)
 
 
 class _SliceWorker(QThread):
@@ -556,11 +682,13 @@ class MainWindow(QMainWindow):
         self._download_worker: Any = None
         """Ein Modell, das gerade aus dem Netz kommt (§16.3) — dieselbe
         Halteleine, derselbe Grund."""
-        self._retired: list[Any] = []
-        """Ersetzte Arbeiter, bis sie ausgelaufen sind. „Eine neuere Anfrage
-        ersetzt die wartende" hieß hier: die Referenz überschreiben — und ein
-        laufender QThread ohne Referenz wird vom Speicherbereiniger mitsamt
-        C++-Objekt zerstört. Ein Absturz ohne Zeile, irgendwann später."""
+        self._export_worker: Any = None
+        """Der laufende Export (§2.8, §29). Solange er steht, ist der
+        Menüeintrag gesperrt — zwei Läufe auf denselben Ordner wären ein
+        Wettlauf um dieselben Dateinamen."""
+        self._leash = WorkerLeash(self)
+        """Hält fertige und ersetzte Arbeiter, bis Qt mit ihnen durch ist —
+        das Warum steht in :mod:`app.ui.leash`."""
         self._proposal: Any = None
         self._applied_transaction: str | None = None
         """Die Transaktion hinter der Übernommen-Leiste (§26.5) — nur solange
@@ -568,6 +696,11 @@ class MainWindow(QMainWindow):
         """Der Agentenzug, der auf eine Entscheidung wartet (§26.5)."""
         self._manual: ManualWindow | None = None
         """Das Handbuchfenster, einmal gebaut und danach wiederverwendet."""
+        self._settings_dialog: PrintSettingsDialog | None = None
+        """Der offene Druckeinstellungen-Dialog, solange er offen ist (§29).
+        Die nachgereichte Schichtanalyse findet über ihn ihren Weg — nach
+        ``exec`` steht hier wieder ``None``, und der Rückruf läuft ins
+        Leere statt in ein zerstörtes Widget."""
         self._op_dialog: OperationDialog | None = None
         """Der offene Operationsdialog. Er sperrt das Fenster nicht mehr, also
         braucht er eine Referenz: ein Dialog, den nur eine lokale Variable hält,
@@ -1532,6 +1665,13 @@ class MainWindow(QMainWindow):
             self.action_manual,
             tr("Jede Operation mit ihren Werten, nach Bereichen sortiert."),
         )
+        self._add_action(
+            help_menu,
+            tr("Beispiele"),
+            None,
+            self.action_examples,
+            tr("Die Beispielprojekte mit ihren Touren — sie stehen auf dem Startbildschirm."),
+        )
         help_menu.addSeparator()
         self._add_action(
             help_menu,
@@ -1610,16 +1750,42 @@ class MainWindow(QMainWindow):
             # Ebenen tief im Menü. Erst zeichnen, die Erzeugungsart kommt bei
             # „Fertig".
             ("category.sketch", tr("Zeichnen"), self.action_sketch_free),
+            # Und Weg 4 daneben. Beide lagen unter *Ändern → Netz* zwischen
+            # Reparaturwerkzeugen, ohne Kürzel — die Hauptwege-Tabelle nennt
+            # für „organisch formen" die Werkzeugzeile, und die untere ist mit
+            # acht Umschaltern voll. Der Menüeintrag bleibt, wo er war: Palette
+            # und Verlauf führen über ihn.
+            ("sculpt", tr("Formen"), self.action_sculpt_free),
+            ("armature", tr("Skelett"), self.action_armature_free),
         ):
             action = QAction(icon(symbol, toolbar), label, self)
             action.triggered.connect(slot)
             toolbar.addAction(action)
             if symbol == "import":
-                # Zwei Knöpfe der Zeile lösen Transaktionen aus — nach Ablauf
+                # Vier Knöpfe der Zeile lösen Transaktionen aus — nach Ablauf
                 # des Testlaufs grauen sie mit den Menüs aus (§2 C).
                 self._toolbar_import = action
             if symbol == "category.sketch":
                 self._toolbar_sketch = action
+            if symbol == "sculpt":
+                self._toolbar_sculpt = action
+            if symbol == "armature":
+                self._toolbar_armature = action
+
+        for action, hint in (
+            (
+                self._toolbar_sculpt,
+                tr("Einen gewählten Körper mit dem Pinsel auf- und abtragen."),
+            ),
+            (
+                self._toolbar_armature,
+                tr("Knochen in einen gewählten Körper setzen und ihn danach beugen."),
+            ),
+        ):
+            # Der Satz sagt, was der erste Handgriff ist — dieselbe Zusage, die
+            # `test_interface_limits` für die untere Werkzeugzeile hält.
+            action.setStatusTip(hint)
+            action.setToolTip(hint)
 
         # Rechts neben den vier Knöpfen stand tausend Pixel nichts. Dort steht
         # jetzt, was das Projekt gerade ist und worauf es gedruckt wird —
@@ -1685,25 +1851,30 @@ class MainWindow(QMainWindow):
             self._scope_shortcut(action, key)
         action.setStatusTip(str(spec.doc))
         action.setToolTip(str(spec.doc))
-        # Eine Operation mit Skizzenfeld führt in den Zeichenmodus statt in
-        # einen Dialog mit einem Feld, das man erst aufklappen muss (§30.1
-        # Stufe zwei). Derselbe Eintrag, derselbe Weg dahinter — nur der
-        # erste Schritt ist das Zeichnen und nicht das Ausfüllen.
-        if _has_sketch_param(spec):
-            action.triggered.connect(lambda _checked=False, name=spec.name: self.start_sketch(name))
-        elif _has_armature_param(spec):
-            # Dasselbe für das Skelett: Wer „Stellung geben" wählt, will die
-            # Knochen setzen und kein Feld voller Koordinaten.
-            action.triggered.connect(lambda _checked=False: self.start_armature())
-        elif _has_stroke_param(spec):
-            # Dasselbe für die Formsitzung: Wer „Formen" wählt, will den
-            # Pinsel und nicht ein Feld, in das eine Strichliste zu tippen
-            # wäre.
-            action.triggered.connect(lambda _checked=False: self.start_sculpt())
-        else:
-            action.triggered.connect(lambda _checked=False, entry=spec: self.run_operation(entry))
+        action.triggered.connect(lambda _checked=False, entry=spec: self.launch_operation(entry))
         menu.addAction(action)
         return action
+
+    def launch_operation(self, spec: OperationSpec) -> None:
+        """Der eine Einstieg für Menü, Palette und jeden künftigen Weg.
+
+        Eine Operation mit Gestenfeld führt in ihren Editor statt in einen
+        Dialog mit einem Feld, das man erst aufklappen muss (§30.1 Stufe
+        zwei): Wer „Formen" wählt, will den Pinsel und keine Strichliste,
+        wer „Stellung geben" wählt, die Knochen und keine Koordinaten. Die
+        Verzweigung stand nur im Menüaufbau — die Palette rief
+        ``run_operation`` direkt, und „Formen" über Strg+Umschalt+P endete
+        in einem Rohdialog: die Operation lief, veränderte nichts und
+        hinterließ einen leeren Schritt im Verlauf.
+        """
+        if _has_sketch_param(spec):
+            self.start_sketch(spec.name)
+        elif _has_armature_param(spec):
+            self.start_armature()
+        elif _has_stroke_param(spec):
+            self.start_sculpt()
+        else:
+            self.run_operation(spec)
 
     #: Kürzel, die eine Taste ohne Zusatztaste sind und deshalb nur dort
     #: gelten dürfen, wo eine Objektauswahl sichtbar ist.
@@ -1769,6 +1940,11 @@ class MainWindow(QMainWindow):
         # Kürzeln derselben Taste **keines** von beiden feuern. Fusion macht
         # es genauso: im Skizzenmodus gilt der Zeichensatz.
         drawing = self._sketch_panel is not None
+        # **Und in einer Form- oder Skelettsitzung genauso.** Beide sammeln
+        # Gesten für die eine Operation, die gerade entsteht — wer währenddessen
+        # „Objekt entfernen" traf, malte danach stumm ins Leere, und *Fertig*
+        # verlor die Züge mit einer Meldung über einen Wert, den es nicht gab.
+        gesturing = drawing or self.sculpting() or self.setting_armature()
         # §2 C: nach Ablauf des Testlaufs graut die schreibende Seite aus —
         # vor dem Klick, mit Grund im Hinweistext. Die Hürde selbst liegt im
         # Kern; das hier ist die Freundlichkeit davor.
@@ -1782,7 +1958,7 @@ class MainWindow(QMainWindow):
 
         for name, action in self._op_actions.items():
             spec = REGISTRY.get(name)
-            if locked or drawing:
+            if locked or gesturing:
                 action.setEnabled(False)
             elif spec.takes_whole_scene:
                 action.setEnabled(objects > 0)
@@ -1799,7 +1975,7 @@ class MainWindow(QMainWindow):
         # Bewegen, Analyse, Schichten und Bemalen an — jedes davon braucht
         # einen Körper, und keines sagte das.
         self.tools.set_usable(
-            objects > 0 and not drawing,
+            objects > 0 and not gesturing,
             tr("Dafür braucht es einen Körper in der Szene."),
         )
 
@@ -1811,8 +1987,10 @@ class MainWindow(QMainWindow):
         # gleichzeitig aktiv zu lassen wäre die schlechtere Hälfte der Wahl —
         # Qt lässt bei zwei aktiven Belegungen derselben Taste **keine**
         # feuern, dieselbe Falle wie bei R und C oben.
-        self.undo_action.setEnabled(self.session.history.can_undo and not drawing)
-        self.redo_action.setEnabled(self.session.history.can_redo and not drawing)
+        # `gesturing`, nicht nur `drawing`: auch die Formsitzung belegt
+        # Strg+Z mit ihrem eigenen Zug-Rückgängig (P16.6).
+        self.undo_action.setEnabled(self.session.history.can_undo and not gesturing)
+        self.redo_action.setEnabled(self.session.history.can_redo and not gesturing)
         # Und die Darstellung, aus demselben Grund wie die Operationen: Im
         # Skizzenmodus liegt der Viewport nicht im Stapel, und ihre Ziffern
         # blockieren dort den Ebenenwechsel — siehe ``_display_actions``.
@@ -1821,13 +1999,19 @@ class MainWindow(QMainWindow):
         # Dieselbe Regel für die zwei Einträge, die keine Operationen sind und
         # trotzdem einen Körper brauchen: ausgegraut statt einer modalen
         # Sackgasse nach dem Klick.
-        self.auto_split_action.setEnabled(chosen >= 1 and not locked)
-        self.variants_action.setEnabled(objects > 0 and not locked)
-        self.export_action.setEnabled(objects > 0 and not locked)
+        self.auto_split_action.setEnabled(chosen >= 1 and not locked and not gesturing)
+        self.variants_action.setEnabled(objects > 0 and not locked and not gesturing)
+        self.export_action.setEnabled(objects > 0 and not locked and self._export_worker is None)
         self.import_action.setEnabled(not locked)
         self.generate_action.setEnabled(not locked)
         self._toolbar_import.setEnabled(not locked)
         self._toolbar_sketch.setEnabled(not locked)
+        # Formen und Skelett gehen beide von einem gewählten Körper aus. Das
+        # fing bisher erst die Sitzung selbst ab — eine Meldung nach dem Klick,
+        # wo der Knopf sie vorher sagen kann (§2.6).
+        ready = chosen >= 1 and not locked and not gesturing
+        self._toolbar_sculpt.setEnabled(ready)
+        self._toolbar_armature.setEnabled(ready)
         for action in (
             self.auto_split_action,
             self.variants_action,
@@ -1836,8 +2020,12 @@ class MainWindow(QMainWindow):
             self.generate_action,
             self._toolbar_import,
             self._toolbar_sketch,
+            self._toolbar_sculpt,
+            self._toolbar_armature,
         ):
             self._lock_hint(action, locked)
+        for action in (self._toolbar_sculpt, self._toolbar_armature):
+            self._pick_hint(action, ready, locked)
 
     def _kinds_of_selection(self, result: Any) -> list[str]:
         """Die Bauart jedes gewählten Körpers — Netz oder exakt."""
@@ -1917,6 +2105,30 @@ class MainWindow(QMainWindow):
                 )
             )
         return None
+
+    def _pick_hint(self, action: QAction, ready: bool, locked: bool) -> None:
+        """Sagt am ausgegrauten Knopf, dass ihm die Auswahl fehlt.
+
+        Dasselbe Muster wie :meth:`_kind_hint`, nur mit der einfacheren Frage:
+        Formen und Skelett brauchen einen gewählten Körper. Ausgegraut allein
+        wäre die halbe Antwort — der Satz steht dort, wo er **vor** dem Klick
+        gelesen wird.
+
+        Bei gesperrter Anwendung schweigt er: dort gilt der Grund aus
+        :meth:`_lock_hint`, und zwei Gründe an einem Knopf sind einer zu viel.
+        """
+        if locked:
+            return
+        stored = action.property("tip_before_pick")
+        if not ready:
+            if stored is None:
+                action.setProperty("tip_before_pick", action.statusTip())
+            reason = tr("Dafür braucht es einen ausgewählten Körper.")
+            action.setStatusTip(reason)
+            action.setToolTip(reason)
+        elif stored is not None:
+            action.setStatusTip(str(stored))
+            action.setToolTip(str(stored))
 
     def _lock_hint(self, action: QAction, locked: bool) -> None:
         """Schreibt den Grund der Sperre in den Hinweistext — und stellt den
@@ -2002,6 +2214,20 @@ class MainWindow(QMainWindow):
         """
         self._show_start_screen(True)
 
+    def action_examples(self) -> None:
+        """Zurück zu den Beispielprojekten (§37.2).
+
+        Sie sind Dokumentation, Abnahmetest und Startbildschirm-Inhalt in
+        einem — und standen genau an einer Stelle: auf dem Startbildschirm,
+        den nach *Datei → Neu* niemand mehr suchte. Im Hilfemenü ist es der
+        Ort, an dem man nach Lehrmaterial sieht.
+
+        Denselben Weg wie *Neu*: Verworfen wird hier nichts. Gefragt wird
+        erst, wenn wirklich etwas verloren ginge — beim Öffnen eines
+        Beispiels oder beim leeren Projekt (Regel 19).
+        """
+        self._show_start_screen(True)
+
     def start_empty(self) -> None:
         """Ein leeres Projekt — was der Hauptknopf des Startbildschirms tut."""
         if not self._may_discard():
@@ -2043,24 +2269,37 @@ class MainWindow(QMainWindow):
         return True
 
     def open_path(self, path: Path) -> None:
-        """Ein Einstiegspunkt für Menü, Zuletzt-Liste und Drag and Drop."""
+        """Ein Einstiegspunkt für Menü, Zuletzt-Liste und Drag and Drop.
+
+        Mit Wartezeiger: Gelesen wird hier synchron — die Projektdatei über
+        ``load``, das Modell über ``path.read_bytes()``. Die Ladeanzeige deckt
+        das **nicht** ab: sie hängt am Fortschritt der Auswertung, und der
+        beginnt erst, wenn die Datei gelesen ist; ihre 200 ms Verzögerung
+        kommen obendrauf. Bis dahin stünde ein Fenster ohne jede Auskunft da
+        (§2.8).
+        """
         if path.suffix.lower() == PROJECT_SUFFIX and not self._may_discard():
             return
         try:
+            with waiting():
+                if path.suffix.lower() == PROJECT_SUFFIX:
+                    # Was zum vorigen Projekt zu sagen war, gilt für dieses
+                    # nicht: „Exportiert: dose.3mf" über einer gerade
+                    # geöffneten Datei wäre eine Auskunft über etwas anderes.
+                    self.announce("")
+                    self.session.open_project(path)
+                    self.settings.remember(path)
+                    save_settings(self.settings)
+                else:
+                    if self.stack.currentWidget() is self.start_screen:
+                        self.session.start_new(self.settings.printer, self.settings.material)
+                    self.session.import_model(path)
             if path.suffix.lower() == PROJECT_SUFFIX:
-                # Was zum vorigen Projekt zu sagen war, gilt für dieses nicht:
-                # „Exportiert: dose.3mf" über einer gerade geöffneten Datei
-                # wäre eine Auskunft über etwas anderes.
-                self.announce("")
-                self.session.open_project(path)
-                self.settings.remember(path)
-                save_settings(self.settings)
+                # Beide fragen etwas, und beide erst außerhalb des
+                # Wartezeigers: ein Fenster, das um Antwort bittet und dabei
+                # „bitte warten" zeigt, sagt zweierlei.
                 self._offer_recovery(path)
                 self._offer_tour(path)
-            else:
-                if self.stack.currentWidget() is self.start_screen:
-                    self.session.start_new(self.settings.printer, self.settings.material)
-                self.session.import_model(path)
         except AppError as error:
             show_error(error, self)
             return
@@ -2090,9 +2329,29 @@ class MainWindow(QMainWindow):
         self.announce(tr("Gespeichert"))
 
     def action_import(self) -> None:
+        """Eine Modelldatei in die laufende Szene (§17.1).
+
+        Mit Wartezeiger und ohne Arbeiter: Gelesen wird die Datei am Stück
+        (``read_bytes``), gerechnet wird an ihr erst in der Auswertung — und
+        die läuft längst im Arbeiter, mit Balken und Abbrechen. Ein zweiter
+        Arbeiter allein für das Lesen brächte eine Halteleine, einen
+        Fehlerpfad und einen zweiten Weg in ``import_payload`` — für die paar
+        Zehntel, die eine Platte für dreißig Megabyte braucht (§2.8).
+        """
         name, _filter = QFileDialog.getOpenFileName(self, tr("Modell einfügen"), "", model_filter())
-        if name:
-            self.session.import_model(Path(name))
+        if not name:
+            return
+        try:
+            with waiting():
+                if self.stack.currentWidget() is self.start_screen:
+                    # Vom Startbildschirm aus ist Einfügen ein Anfang, kein
+                    # Nachtrag: ein frisches Projekt mit Drucker und Material
+                    # aus den Einstellungen, wie es open_path beim Ablegen
+                    # einer Datei auch anlegt.
+                    self.session.start_new(self.settings.printer, self.settings.material)
+                self.session.import_model(Path(name))
+        except AppError as error:
+            show_error(error, self)
 
     def action_import_url(self) -> None:
         """Weg 1 (§2.2), wenn die Datei noch nicht auf der Platte liegt.
@@ -2184,8 +2443,17 @@ class MainWindow(QMainWindow):
         self.announce(f"{tr('Geladen')}: {fetched.name}")
 
     def _end_download(self) -> None:
+        self._progress_idle()
+
+    def _progress_idle(self) -> None:
         """Die Anzeige zurück in den Ruhezustand — aber nur, wenn nicht schon
-        etwas anderes rechnet."""
+        etwas anderes rechnet.
+
+        Gemeinsam für alle Arbeiter, die den Balken der Statusleiste selbst
+        anschalten (Download, Export): jeder von ihnen muss ihn wieder
+        loswerden, und keiner darf dabei den laufenden Auswertungsbalken
+        ausknipsen.
+        """
         self.progress.setRange(0, 100)
         if not self.session.busy:
             self.progress.setVisible(False)
@@ -2245,25 +2513,34 @@ class MainWindow(QMainWindow):
     def bake_sculpt(self, op_id: int) -> None:
         """Den Stand einer Formsitzung festschreiben — mit Nachfrage.
 
-        **Die einzige Nachfrage im ganzen Programm.** Regel 19 verbietet
+        **Die einzige Bestätigung vor einer Handlung.** (Daneben gibt es zwei
+        Fragen anderer Art: das Wiederherstellungs-Angebot nach einem Absturz
+        und Speichern/Verwerfen beim Schließen — die eine ist ein Angebot,
+        die andere schützt Unwiederbringliches.) Regel 19 verbietet
         Bestätigungsdialoge vor rücknehmbaren Handlungen, und fast alles hier
         ist rücknehmbar; diese Handlung ist es nicht folgenlos, denn danach
         lässt sich an den Zügen nichts mehr ändern. Deshalb steht im Dialog
         auch nicht „Sind Sie sicher", sondern was danach nicht mehr geht
         (Entscheidung D, §2.7).
         """
-        answer = QMessageBox.question(
-            self,
+        box = QMessageBox(
+            QMessageBox.Icon.Question,
             tr("Stand festschreiben"),
             tr(
                 "Der jetzige Stand wird als Körper im Projekt abgelegt. Die Züge bleiben "
                 "als Beleg stehen, wirken aber nicht mehr — an dieser Sitzung lässt sich "
                 "danach nichts mehr ändern. Dafür wird sie nicht mehr gerechnet."
             ),
-            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.NoButton,
+            self,
         )
-        if answer != QMessageBox.StandardButton.Ok:
+        # Die Knöpfe heißen nach ihrer Handlung, nicht „OK": „Ja" verlangt,
+        # die Frage im Kopf zu behalten — „Festschreiben" nicht. Derselbe
+        # Grund wie bei `confirm_discard` nebenan.
+        bake = box.addButton(tr("Festschreiben"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is not bake:
             return
         if not self.session.bake_strokes(op_id):
             self.announce(tr("Dieser Schritt lässt sich nicht festschreiben."))
@@ -2335,24 +2612,37 @@ class MainWindow(QMainWindow):
         anderen Programm.
 
         Der Dialog bekommt die Schichtanalyse, und wo keine vorliegt, wird sie
-        vorher gerechnet: die Vorschläge über Stützen, Haftung und
+        **nachgereicht**: die Vorschläge über Stützen, Haftung und
         Mindestschichtzeit hängen an der Geometrie und nicht am Material
         allein. Ohne sie ging der Dialog mit null Vorschlägen auf — bei einem
         Teil, dem Solidon 845 mm² Überhang auf einer Schicht ansieht.
+
+        Gewartet wird darauf nicht mehr. Der Weg hierher stand bis zu zwei
+        Sekunden still (``worker.wait``), und das war die schlechtere Hälfte
+        beider Möglichkeiten: lange genug, um sich wie ein Hänger zu lesen,
+        und trotzdem ohne Zusage — wer den Zeitraum riss, bekam den Dialog
+        eben doch ohne Analyse. Er geht jetzt sofort auf, und
+        :meth:`PrintSettingsDialog.take_slice_result` trägt sie nach, sobald
+        sie da ist (§2.8).
         """
-        # Eine knappe halbe Sekunde, die zum größten Teil auf die Suche nach dem
-        # Slicer geht — unter der Grenze aus §2.8, aber nicht unter der, ab der
-        # ein Zeiger dazugehört. Die Schichtanalyse kommt jetzt dazu und kostet
-        # zwei Zehntel.
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
+        # Der Wartezeiger bleibt für den Aufbau: die Suche nach dem Slicer im
+        # Konstruktor kostet eine knappe halbe Sekunde — unter der Grenze aus
+        # §2.8, aber nicht unter der, ab der ein Zeiger dazugehört.
+        with waiting():
             dialog = PrintSettingsDialog(
-                self.session, self.settings, self, slice_result=self._current_slice(wait=True)
+                self.session, self.settings, self, slice_result=self._current_slice()
             )
-        finally:
-            QApplication.restoreOverrideCursor()
+        object_id = self.object_tree.selected()
+        if dialog.slice_result is None and object_id is not None:
+            # Läuft schon eine für diesen Körper, stellt sich der Dialog an;
+            # sonst startet hier ein Arbeiter. Beide Wege enden in
+            # ``_slice_for_settings`` — und der ruft nur, solange der Dialog
+            # offen ist.
+            self._settings_dialog = dialog
+            self._slice_of(object_id, self._slice_for_settings)
         dialog.sliced.connect(self._gcode_returned)
         dialog.exec()
+        self._settings_dialog = None
 
         # Die Einstellungen gehören zum Projekt, die Stufe und die Slicer-Wahl
         # zur Anwendung (§29). Getrennt gespeichert, weil ein Projekt auf einem
@@ -2360,51 +2650,60 @@ class MainWindow(QMainWindow):
         self.session.set_print_settings(dialog.settings)
         self.settings.print_quality = dialog.settings.quality
         save_settings(self.settings)
+        # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
+        # bei der Orca-Familie einige tausend Einträge je Aufruf.
+        dialog.deleteLater()
 
-    def _current_slice(self, wait: bool = False) -> SliceResult | None:
-        """Die Schichtanalyse des gewählten Körpers.
+    def _current_slice(self) -> SliceResult | None:
+        """Die Schichtanalyse des gewählten Körpers, wenn sie schon vorliegt.
 
-        ``wait`` rechnet sie nach, wenn sie fehlt. Das war lange umgekehrt: sie
-        zu erzwingen hieße, den Weg zu den Druckeinstellungen an einer Rechnung
-        aufzuhalten, die niemand bestellt hat.
+        Liegt sie nicht vor, startet :meth:`_slice_of` sie und gibt ``None``
+        zurück — **ohne** darauf zu warten. Der Weg zu den Druckeinstellungen
+        stand hier zwei Sekunden still, weil ohne Analyse kein einziger
+        Vorschlag zur Geometrie zustande kommt: keine Stützen, keine Haftung,
+        keine Mindestschichtzeit, und die Warnung „Die Überhänge sind zu groß,
+        um sich selbst zu tragen" erst danach, wenn überhaupt.
 
-        Die Annahme hinter dem Satz stimmt nicht. Gemessen an den Teilen eines
-        Gewürzsets kostet die Analyse zwei Zehntelsekunden, und §31 deckelt sie
-        bei dreihundert Millisekunden für zweihunderttausend Dreiecke — die
-        Profilsuche im selben Dialog braucht 1,3 Sekunden und läuft
-        selbstverständlich. Was der Verzicht dagegen kostete, ist der ganze
-        Zweck: **ohne Analyse gibt es keinen einzigen Vorschlag zur
-        Geometrie.** Der Dialog ging mit null Vorschlägen und ausgegrautem
-        „Übernehmen" auf, und die Warnung „Die Überhänge sind zu groß, um sich
-        selbst zu tragen" erschien erst danach — wenn überhaupt.
-
-        Genau daran ist ein Satz Gewürzdeckel gescheitert: 845 mm² Überhang auf
-        einer Schicht, gemessen hätte Solidon es sofort, gefragt hat es
-        niemand.
+        Beides ist zu haben. Der Dialog geht sofort auf und bekommt die
+        Analyse nachgereicht (``take_slice_result``) — an genau der Stelle,
+        an der sie etwas ändert, nämlich in der Vorschlagsliste.
         """
         object_id = self.object_tree.selected()
         if object_id is None:
             return None
-        found = self._slice_of(object_id)
-        if found is not None or not wait:
-            return found
-        # Nachrechnen und darauf warten: der Dialog geht gleich auf, und ohne
-        # das Ergebnis wäre seine Vorschlagsliste leer. Der Wartezeiger steht
-        # währenddessen schon.
-        self._slice_of(object_id, then=lambda _result: None)
-        worker = self._slice_worker
-        if worker is not None:
-            worker.wait(SLICE_WAIT_MS)
-            QApplication.processEvents()
-        return self._slice_cache if self._slice_key is not None else None
+        return self._slice_of(object_id)
 
-    def _gcode_returned(self, outcome: SliceOutcome) -> None:
+    def _slice_for_settings(self, result: SliceResult | None) -> None:
+        """Die fertige Analyse in den offenen Druckeinstellungen-Dialog.
+
+        Über das Feld und nicht als gebundene Methode des Dialogs in der
+        Warteliste: Der Dialog wird nach ``exec`` weggeräumt
+        (``deleteLater``), und ein Rückruf in ein zerstörtes C++-Objekt ist
+        der Absturz ohne Zeile. Ist keiner mehr offen, ist das Ergebnis
+        einfach nichts wert — im Cache liegt es trotzdem.
+        """
+        dialog = self._settings_dialog
+        if dialog is not None:
+            dialog.take_slice_result(result)
+
+    def _gcode_returned(self, outcomes: list[SliceOutcome]) -> None:
         """Was der Slicer gemessen hat, geht in den Prüfbericht — als gemessen
-        markiert, neben der Schätzung, nie an ihrer Stelle (Regel 14)."""
-        self.report.add_findings(outcome.findings)
-        self._compare_totals(outcome.metrics)
+        markiert, neben der Schätzung, nie an ihrer Stelle (Regel 14).
+
+        Eine Liste, weil ein Auftrag mehrere Platten haben kann (§25). Die
+        Gegenprobe läuft gegen die **Summe**: die Schätzung gilt dem Projekt,
+        und sie je Platte dagegenzuhalten hieße, dreimal denselben Vergleich mit
+        einem Drittel der Messung zu führen.
+        """
+        for outcome in outcomes:
+            self.report.add_findings(outcome.findings)
+        self._compare_totals(gcode.combine([entry.metrics for entry in outcomes]))
         self._focus_report()
-        self.announce(f"{tr('Geslicet')}: {outcome.gcode_path.name}")
+        self.announce(
+            f"{tr('Geslicet')}: {outcomes[0].gcode_path.name}"
+            if len(outcomes) == 1
+            else f"{tr('Geslicet')}: {len(outcomes)} {tr('Platten')}"
+        )
 
     def action_check_gcode(self) -> None:
         """§28.1: eine geslicete Datei zurücklesen und gegen die Schätzung
@@ -2513,9 +2812,14 @@ class MainWindow(QMainWindow):
         Auswahl alles; ein 3MF wird **eine** Datei mit allen Körpern (§20),
         jedes andere Format eine Datei je Körper nach dem Namensschema.
         Die Prüfung davor ist ein Bericht, keine Sperre (§29) — ihre Befunde
-        landen im Prüfbericht, und zwar bevor geschrieben wird. „Wer trotzdem
-        exportieren will, kann das — er weiß dann nur, was er tut", sagt §29,
-        und das setzt voraus, dass er es vorher weiß.
+        landen im Prüfbericht. „Wer trotzdem exportieren will, kann das — er
+        weiß dann nur, was er tut", sagt §29.
+
+        Gerechnet und geschrieben wird im Arbeiter (§2.8): Prüfung, Aufbau der
+        Baugruppe und das Schreiben zusammen sind bei mehreren großen Körpern
+        mehr als zwei Sekunden. Hier bleiben der Dateidialog und das
+        Einsammeln der Körper — beides braucht die Auswahl, und beides ist
+        sofort vorbei.
         """
         result = self.session.last_result
         if result is None or not result.scene.objects:
@@ -2549,84 +2853,60 @@ class MainWindow(QMainWindow):
         target = Path(name)
         export_format: ExportFormat = _format_of(target, chosen_filter)
 
-        sources = self.session.project.document.sources
-        try:
-            if export_format == "3mf" and len(objects) > 1:
-                # Eine Baugruppe bleibt eine Datei: der Slicer bekommt einen
-                # Druckauftrag, keine Handvoll Teile (§20).
-                #
-                # **Mit allen Platten darin.** Die Datei trägt je Platte einen
-                # Eintrag, und der Slicer zeigt sie als das, was sie sind —
-                # mehrere Platten eines Auftrags, die er auch am Stück slicen
-                # kann. Ohne diese Angabe stünde alles auf derselben Platte
-                # übereinander: Jede fängt am selben Bettursprung an, und am
-                # modularen Besteckkorb überlagerten sich zwei davon um
-                # neunundzwanzig Millimeter, ohne dass man es der Datei ansah.
-                #
-                # **Und mit den Druckeinstellungen des Projekts.** Eine 3MF
-                # ohne sie ist Geometrie: Der Slicer öffnet sie mit dem Profil,
-                # das gerade eingestellt ist, und was Solidon über Temperatur,
-                # Tempo und Wandzahl weiß, ist beim Öffnen weg. In diesem
-                # Repository steht der Preis dafür aufgeschrieben — eine Datei
-                # sagte drei Wände, gedruckt wurden zwei, 127 Gramm
-                # Unterschied, und der Datei sah man nichts an.
-                #
-                # Trägt das Projekt keine, werden sie aus Drucker und Material
-                # aufgelöst — dieselbe Vorgabe, mit der die Anwendung selbst
-                # rechnet (§29). Das ist mehr wert als gar nichts: Die Datei
-                # sagt dann, womit Solidon drucken würde, statt es dem Profil
-                # zu überlassen, das im Slicer zufällig eingestellt ist.
-                written_path, findings = write_assembly(
-                    objects,
-                    target.parent,
-                    project_name=target.stem,
-                    profile=self.session.profile,
-                    settings=(
-                        self.session.project.document.print_settings
-                        or print_settings.resolve(self.session.profile)
-                    ),
-                    sources=sources,
-                )
-                written = [written_path]
-                # Die Baugruppe prüft und schreibt in einem Zug: hier ist
-                # „vorher" nicht zu haben, ohne die Datei zweimal zu bauen.
-                if findings:
-                    self.report.add_findings(list(findings))
-                    self._focus_report()
-            else:
-                # Ein fester Name für einen Körper; bei mehreren zählt das
-                # Namensschema aus §29, damit auf der Platte lesbar bleibt,
-                # welches Teil welches ist. Geschweifte Klammern im Namen
-                # sind Zeichen, keine Platzhalter — ``format`` sähe das anders.
-                fixed = target.stem.replace("{", "{{").replace("}", "}}")
-                scheme = fixed if len(objects) == 1 else None
-                plan = plan_export(
-                    objects,
-                    project_name=target.stem,
-                    profile=self.session.profile,
-                    export_format=export_format,
-                    scheme=scheme,
-                    sources=sources,
-                )
-                findings = list(plan.findings)
-                # §29 sagt „vor dem Schreiben", und das ist keine Feinheit: der
-                # Bericht ist die Grundlage dafür, dass jemand weiß, was er tut.
-                # Danach gezeigt wäre er die Nachricht, dass er es nicht wusste.
-                # Eine Sperre wird daraus nicht — geschrieben wird gleich
-                # danach, ohne Rückfrage (Regel 19).
-                if findings:
-                    self.report.add_findings(findings)
-                    self._focus_report()
-                written = write_plan(plan, target.parent, export_format)
-        except AppError as error:
-            show_error(error, self)
-            return
+        worker = _ExportWorker(
+            objects,
+            target,
+            export_format,
+            profile=self.session.profile,
+            sources=self.session.project.document.sources,
+            # Die Druckeinstellungen reisen mit, und mit ihnen das Profil des
+            # eingestellten Slicers (§29). Ohne beides ist die Datei reine
+            # Geometrie: Der Slicer füllt sie aus dem, was gerade bei ihm
+            # steht, und meldet dann Widersprüche zu einem Drucker, den
+            # niemand gemeint hat. ``None`` heißt „Dialog nie geöffnet", nicht
+            # „keine Einstellungen" — dann gilt die Auflösung aus Stufe,
+            # Material und Drucker, wie überall sonst.
+            settings=self.session.project.document.print_settings
+            or print_settings.resolve(self.session.profile),
+            ui_settings=self.settings,
+            material=self.session.profile.material.id,
+        )
+        self._export_worker = worker
+        worker.done.connect(self._export_done)
+        worker.failed.connect(self._export_failed)
+        worker.finished.connect(lambda done=worker: self._export_worker_done(done))
+        self.status_message.setText(tr("Exportiert wird … {name}").format(name=target.name))
+        self.progress.setRange(0, 0)
+        self.progress.setVisible(True)
+        # Solange geschrieben wird, führt der Menüeintrag nirgendwo hin: ein
+        # zweiter Lauf schriebe in dieselben Dateien, und welcher von beiden
+        # gewinnt, entschiede die Reihenfolge zweier Threads.
+        self._update_actions()
+        worker.start()
 
+    def _export_done(self, written: list[Path], findings: list[Finding]) -> None:
+        """Was geschrieben wurde, und was dabei aufgefallen ist (§29)."""
+        if findings:
+            self.report.add_findings(list(findings))
+            self._focus_report()
+        if not written:
+            return
         self.announce(
             f"{tr('Exportiert')}: {written[0].name}"
             if len(written) == 1
-            else f"{tr('Exportiert')}: {len(written)} {tr('Dateien')} → {target.parent}"
+            else f"{tr('Exportiert')}: {len(written)} {tr('Dateien')} → {written[0].parent}"
         )
+
+    def _export_failed(self, error: AppError) -> None:
+        """Der Fehlerdialog gehört in den Hauptthread, nicht in den Arbeiter."""
+        show_error(error, self)
+
+    def _export_worker_done(self, worker: Any) -> None:
+        if self._export_worker is worker:
+            self._export_worker = None
+            self._progress_idle()
+            self._update_actions()
+        self._hold_until_done(worker)
 
     def action_catalog(self) -> None:
         """§24.3: die Bibliothek, die man sehen kann. Einen Baustein zu wählen
@@ -3162,12 +3442,19 @@ class MainWindow(QMainWindow):
         shown = [replace(s, symmetry=s.symmetry | plane) for s in strokes] if plane else strokes
         sculpted = apply_strokes(mesh, shown)
         minimum = self.session.profile.minimum_wall_thickness
+        # Mit Wartezeiger: gemessen 273 ms bei 82 000 Dreiecken — über der
+        # 200-ms-Grenze aus §2.8, und die Prüfung läuft nach jedem Zug. Auf
+        # feinen Netzen (und `refine_for_sculpt` erzeugt gezielt feine) wäre
+        # das ein Stocken ohne Erklärung.
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             card = wall_thickness_map(sculpted, minimum=minimum, pitch=minimum * WALL_GRID_SHARE)
         except AppError:
             # Ein zu großes Netz ist kein Grund, die Sitzung zu stören. Der
             # Prüfbericht sagt dasselbe später und gründlicher.
             return
+        finally:
+            QApplication.restoreOverrideCursor()
         thin = len(card.highlighted)
         if not thin:
             self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
@@ -3198,6 +3485,15 @@ class MainWindow(QMainWindow):
         target = self._sculpt_target
         strokes = self._sculpt_strokes
         if target is None:
+            return
+        result = self.session.last_result
+        if strokes and (result is None or target not in result.scene.objects):
+            # Das Ziel ist fort — nur noch über einen Fern- oder Agentenzug
+            # möglich, denn die Menüs sind während der Sitzung gesperrt.
+            # Die Züge nicht verwerfen: die Sitzung bleibt offen, und der
+            # Satz sagt es (§2.7). Vorher lief *Fertig* durch, verlor die
+            # Züge und meldete einen Wert außerhalb seines Bereichs.
+            self.announce(tr("Der geformte Körper ist nicht mehr da — die Sitzung bleibt offen."))
             return
         self._sculpt_target = None
         self._sculpt_strokes = []
@@ -3312,6 +3608,15 @@ class MainWindow(QMainWindow):
         bones = self._armature_bones
         if target is None:
             return
+        result = self.session.last_result
+        if bones and (result is None or target not in result.scene.objects):
+            # Wie beim Formen: das Ziel ist fort, die Knochen bleiben — die
+            # Sitzung schließt nicht über einem Körper, den es nicht mehr
+            # gibt (§2.7).
+            self.announce(
+                tr("Der Körper des Skeletts ist nicht mehr da — die Sitzung bleibt offen.")
+            )
+            return
         self._armature_target = None
         self._armature_bones = []
         self._armature_head = None
@@ -3322,24 +3627,34 @@ class MainWindow(QMainWindow):
         self._update_actions()
         if not bones:
             return
-        # Die Stellung bleibt leer: Der Editor setzt das Skelett, die Winkel
-        # sind Zahlen und gehören in den Dialog — dort darf auch ein
-        # Projektparameter stehen.
-        self.session.apply(
-            _("Stellung geben"),
-            [
-                OperationDraft(
-                    op="pose_armature",
-                    inputs=(target,),
-                    params={"armature": armature_to_text(bones), "pose": ""},
-                )
-            ],
+        # Der Editor setzt das Skelett, die Winkel sind Zahlen und gehören in
+        # den Dialog — dort darf auch ein Projektparameter stehen. Also öffnet
+        # „Fertig" den Dialog mit gesetztem Skelett, wie es „Fertig" der
+        # Skizze vormacht: eine Operation mit leerer Stellung anzulegen hieße,
+        # dass nichts geschieht und niemand erfährt, wo es weitergeht.
+        self.object_tree.select_object(target)
+        self.run_operation(
+            REGISTRY.get("pose_armature"), given={"armature": armature_to_text(bones)}
         )
 
     def action_sketch_free(self) -> None:
         """Der Zeichnen-Knopf der Werkzeugzeile: Skizzenmodus ohne
         festgelegte Operation (§2.2, Weg 2)."""
         self.start_sketch("")
+
+    def action_sculpt_free(self) -> None:
+        """Der Formen-Knopf der Werkzeugleiste (§2.2, Weg 4).
+
+        Eine eigene Methode und nicht ``start_sculpt`` selbst: ``triggered``
+        reicht seinen Haken-Zustand als erstes Argument durch, und das wäre
+        hier die Objektkennung — ``False`` als Körper, den es nicht gibt.
+        """
+        self.start_sculpt()
+
+    def action_armature_free(self) -> None:
+        """Der Skelett-Knopf der Werkzeugleiste — aus demselben Grund eine
+        eigene Methode wie der Nachbar darüber."""
+        self.start_armature()
 
     def _offer_sketch_use(self, text: str) -> None:
         """Was soll aus der Skizze werden? — die fünf Arten, mit der
@@ -3369,7 +3684,15 @@ class MainWindow(QMainWindow):
             )
             for key, (title, shortcut, _slot) in commands.items()
         ]
-        entries = palette_entries(for_feature=self.selected_feature_kind())
+        # Die Verfügbarkeit kommt aus derselben Quelle wie im Menü — den
+        # QActions, die `_update_actions` pflegt. Vorher zeigte die Palette
+        # jeden Eintrag gleich, und wer einen ohne passende Auswahl wählte,
+        # bekam die modale Sackgasse, die das Menü längst beseitigt hat.
+        entries = [
+            replace(entry, available=usable, reason=reason)
+            for entry in palette_entries(for_feature=self.selected_feature_kind())
+            for usable, reason in (self._palette_availability(entry.name),)
+        ]
         palette = CommandPalette([*entries, *extra], parent=self)
         if palette.exec() != CommandPalette.DialogCode.Accepted:
             return
@@ -3379,7 +3702,23 @@ class MainWindow(QMainWindow):
         if name in commands:
             commands[name][2]()
             return
-        self.run_operation(REGISTRY.get(name))
+        self.launch_operation(REGISTRY.get(name))
+
+    def _palette_availability(self, name: str) -> tuple[bool, str]:
+        """Ob eine Operation jetzt ausführbar ist, und warum nicht.
+
+        Aus den Menü-Actions gelesen statt neu gerechnet: zwei Quellen für
+        dieselbe Frage drifteten beim nächsten Zuwachs auseinander.
+        """
+        action = self._op_actions.get(name)
+        if action is None or action.isEnabled():
+            return True, ""
+        hint = action.toolTip()
+        spec = REGISTRY.get(name)
+        if hint and hint != str(spec.doc):
+            # `_lock_hint`/`_kind_hint` haben einen Grund gesetzt.
+            return False, hint
+        return False, tr("Dafür braucht es eine passende Auswahl.")
 
     def _on_face_dragged(self, normal: Any, distance: float) -> None:
         """Ein Zug am Flächengriff wird eine Operation (§18.11, Regel 2).
@@ -3526,10 +3865,21 @@ class MainWindow(QMainWindow):
         # Lauf der ganzen Suite. Der Arbeiter wandert jetzt in dieselbe
         # Halteleine wie ein ersetzter und wird dort gelöst, wenn er
         # tatsächlich ausgelaufen ist.
+        #
+        # Vorher bekommt er das Abbruchzeichen: Sein Ergebnis will niemand
+        # mehr, und bis er von allein fertig ist, rechnet er gegen den, der
+        # gerade startet (§18.4).
+        self._cancel_map_worker()
         self._retire(self._map_worker)
         self._map_worker = worker
         worker.finished.connect(lambda done=worker: self._map_worker_done(done))
         worker.start()
+
+    def _cancel_map_worker(self) -> None:
+        """Der laufenden Karte sagen, dass niemand mehr auf sie wartet."""
+        worker = self._map_worker
+        if worker is not None and worker.isRunning():
+            worker.cancel()
 
     def _map_worker_done(self, worker: Any) -> None:
         if self._map_worker is worker:
@@ -3537,44 +3887,14 @@ class MainWindow(QMainWindow):
         self._hold_until_done(worker)
 
     def _hold_until_done(self, worker: Any) -> None:
-        """Den fertigen Arbeiter halten, bis Qt mit ihm durch ist.
-
-        ``finished`` heißt „``run`` ist zurück", nicht „das Objekt darf weg".
-        Erst wenn ``isRunning`` nein sagt, ist es sicher — und bis dahin hält
-        ihn dieselbe Liste, die auch ersetzte Arbeiter hält.
-
-        Wer sein Feld leeren will, tut das im eigenen Slot davor und **nur für
-        seinen eigenen Arbeiter**: ein Lambda, das blind ``None`` schreibt,
-        trifft den Nachfolger, wenn der Vorgänger später fertig wird.
-        """
-        if worker not in self._retired:
-            self._retired.append(worker)
-        # Mit diesem Fenster als Kontext: ein Lambda ohne Empfänger läuft
-        # weiter, wenn das Fenster längst weg ist, und greift dann in ein
-        # zerstörtes C++-Objekt.
-        QTimer.singleShot(0, self, lambda: self._release(worker))
-
-    def _release(self, worker: Any) -> None:
-        """Einen ausgelaufenen Arbeiter loslassen — und keinen, der noch läuft."""
-        if worker in self._retired and not worker.isRunning():
-            self._retired.remove(worker)
+        """Den fertigen Arbeiter halten, bis Qt mit ihm durch ist — die
+        Halteleine steht in :mod:`app.ui.leash`, damit die Dialoge dasselbe
+        Muster benutzen, statt es nachzubauen."""
+        self._leash.hold_until_done(worker)
 
     def _retire(self, worker: Any) -> None:
-        """Hält einen ersetzten Arbeiter fest, bis er ausgelaufen ist.
-
-        Sein Ergebnis will niemand mehr — aber sein Thread läuft noch, und
-        ohne Referenz zerstört der Speicherbereiniger das QThread-Objekt
-        unter ihm.
-        """
-        if worker is None or not worker.isRunning():
-            return
-        self._retired.append(worker)
-        # Nicht beim Signal selbst loslassen: ``finished`` heißt „``run`` ist
-        # zurück", nicht „das Objekt darf weg" — dieselbe Begründung wie in
-        # ``_hold_until_done``, und derselbe Weg hinaus, damit es nur einen
-        # gibt. Wer hier direkt aus ``_retired`` entfernte, gäbe die letzte
-        # Referenz frei, während Qt den Thread noch abräumt.
-        worker.finished.connect(lambda done=worker: self._hold_until_done(done))
+        """Hält einen ersetzten Arbeiter fest, bis er ausgelaufen ist."""
+        self._leash.retire(worker)
 
     def _map_ready(self, analysis: Any, key: tuple[Any, ...], object_id: ObjectId) -> None:
         self._map_cache = {key: analysis}
@@ -4164,6 +4484,8 @@ class MainWindow(QMainWindow):
                 parameter_values=self._parameter_values(),
                 extra=exact,
                 surroundings=self._sketch_surroundings(),
+                images=self._image_names(),
+                pick_image=self._pick_image_source,
             )
             if exact is not None:
                 # Die Live-Vorschau (§18.7) muss den Kernwechsel mitmachen —
@@ -4408,6 +4730,8 @@ class MainWindow(QMainWindow):
             parameter_values=self._parameter_values(),
             features=self._feature_names(),
             surroundings=self._sketch_surroundings(),
+            images=self._image_names(),
+            pick_image=self._pick_image_source,
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
@@ -4520,6 +4844,28 @@ class MainWindow(QMainWindow):
             source_id: Path(source.path).name or source_id
             for source_id, source in self.session.project.document.sources.items()
         }
+
+    def _image_names(self) -> dict[str, str]:
+        """Nur die Bildquellen — für das Feld „Bild" (§25, ``displace_image``)."""
+        return {
+            source_id: Path(source.path).name or source_id
+            for source_id, source in self.session.project.document.sources.items()
+            if source.kind == "image"
+        }
+
+    def _pick_image_source(self) -> tuple[str, str] | None:
+        """Holt ein Bild von der Platte ins Projekt — der Rückruf des
+        Bildwählers im Operationsdialog."""
+        name, _filter = QFileDialog.getOpenFileName(self, tr("Bild wählen"), "", image_filter())
+        if not name:
+            return None
+        path = Path(name)
+        try:
+            source_id = self.session.import_image(path)
+        except AppError as error:
+            show_error(error, self)
+            return None
+        return source_id, path.name
 
     def _feature_names(self) -> dict[str, str]:
         """Die Merkmale des gewählten Körpers, Kennung auf Beschriftung (§18.5).
@@ -4689,6 +5035,14 @@ class MainWindow(QMainWindow):
         if self._split_points:
             self._clear_split_line()
         document = self.session.project.document
+        # Wer auf dem Startbildschirm etwas ins Dokument bringt — Einfügen,
+        # Generieren, ein Baustein aus dem Katalog —, will es auch sehen. Von
+        # acht Wegen wechselten sieben einzeln von Hand, und der achte war der
+        # Schlussknopf der Erstinbetriebnahme: Modell geladen, Startbildschirm
+        # stand. Der Wechsel am Dokument selbst macht die vergessene Stelle
+        # unmöglich.
+        if document.ops and self.stack.currentWidget() is self.start_screen:
+            self._show_start_screen(False)
         self.parameters.show_document(document)
         self.history_panel.show_document(document, undone=self.session.history.undone)
         self.chat.show_document(document)
@@ -5380,13 +5734,25 @@ class MainWindow(QMainWindow):
         box.setDefaultButton(restore)
         box.exec()
         if box.clickedButton() is restore:
-            self.session.open_project(candidate)
+            # Dieselbe synchrone Lesung wie in ``open_path``, also derselbe
+            # Zeiger (§2.8).
+            with waiting():
+                self.session.open_project(candidate)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
-        if accepted_path(event) is not None or accepted_url(event) is not None:
+        if (
+            accepted_path(event) is not None
+            or accepted_url(event) is not None
+            or _image_path(event) is not None
+        ):
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 - Qt name
+        image = _image_path(event)
+        if image is not None:
+            self._drop_image(image)
+            event.acceptProposedAction()
+            return
         path = accepted_path(event)
         if path is not None:
             self.open_path(path)
@@ -5398,6 +5764,26 @@ class MainWindow(QMainWindow):
         if url is not None:
             self.download_model(url)
             event.acceptProposedAction()
+
+    def _drop_image(self, path: Path) -> None:
+        """Ein Bild auf dem Fenster ist ein Relief-Wunsch (§25).
+
+        Auf den gewählten Körper, als geöffneter Dialog — nicht als stiller
+        Import: Ein Bild wird kein Körper, es gehört einer Operation als Wert.
+        """
+        target = self.object_tree.selected()
+        if not target:
+            self.announce(tr("Bitte zuerst ein Objekt auswählen — das Bild wird ein Relief."))
+            return
+        try:
+            # Auch das Bild kommt von der Platte, und auch hier liest die
+            # Sitzung es am Stück (§2.8).
+            with waiting():
+                source_id = self.session.import_image(path)
+        except AppError as error:
+            show_error(error, self)
+            return
+        self.run_operation(REGISTRY.get("displace_image"), given={"source": source_id})
 
     def wait_for_workers(self, timeout_ms: int = 2000) -> None:
         """Jeden Arbeiter dieses Fensters auslaufen lassen.
@@ -5414,20 +5800,24 @@ class MainWindow(QMainWindow):
         """
         self.session.cancel()
         self.session.wait_for_idle(timeout_ms)
+        # Die Analysekarte hat einen eigenen Schalter — ohne ihn läuft sie
+        # ihre Sekunden zu Ende, während das Fenster schon zugeht.
+        self._cancel_map_worker()
         for worker in (
             self._map_worker,
             self._slice_worker,
             self._update_worker,
             self._finished_update_worker,
             self._ollama_size_worker,
-            # Der Download fehlte hier. Er folgt dem Muster mit ``_retire`` und
-            # ``_hold_until_done`` sauber — aber in ``_retired`` landet er erst,
+            # Der Download fehlte hier. Er folgt dem Muster mit ``retire`` und
+            # ``hold_until_done`` sauber — aber die Halteleine bekommt ihn erst,
             # wenn er fertig ist. Solange er läuft, hält ihn allein dieses Feld,
             # und wer währenddessen schließt, ließ einen Thread sein Fenster
             # überleben. Genau der Absturz, gegen den diese Liste geschrieben
             # wurde.
             self._download_worker,
-            *self._retired,
+            self._export_worker,
+            *self._leash.pending(),
         ):
             if worker is not None and worker.isRunning():
                 worker.wait(timeout_ms)
@@ -5478,6 +5868,9 @@ class MainWindow(QMainWindow):
             self._remote = None
         if self.session.modified:
             self.session.autosave()
+        # Wie das Fenster verlassen wird, so kommt es wieder — maximiert ist
+        # nur die Vorgabe für den ersten Start.
+        self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
         save_settings(self.settings)
         event.accept()
 
@@ -5485,3 +5878,20 @@ class MainWindow(QMainWindow):
 def registered_operations() -> list[OperationSpec]:
     """Kleine Hilfe, die die Befehlspalette benutzt."""
     return list(REGISTRY.all())
+
+
+def _image_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
+    """Das abgelegte Bild, oder ``None``.
+
+    Erkannt an der Endung, nicht am angebotenen Typ — Dateimanager
+    beschriften verschieden, die Endung ist überall dieselbe. Die Liste ist
+    dieselbe wie im Generierungsdialog und im Chat.
+    """
+    data = event.mimeData()
+    if data is None or not data.hasUrls():
+        return None
+    for url in data.urls():
+        name = url.toLocalFile()
+        if name and name.lower().endswith(IMAGE_SUFFIXES):
+            return Path(name)
+    return None

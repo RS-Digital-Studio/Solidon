@@ -126,6 +126,22 @@ PATHS: Final[dict[str, str]] = {
     # Eine Diskette — das Zeichen fürs Speichern, auf das sich die Welt
     # tatsächlich geeinigt hat.
     "save": ('<path d="M4 4h12l4 4v12H4z" /><path d="M8 4v6h7V4" /><path d="M7 20v-6h10v6" />'),
+    # Formen: die ursprüngliche Fläche gestrichelt, darüber die verzogene, und
+    # der Pinsel, der sie hochgezogen hat. Ohne die gestrichelte Linie wäre es
+    # ein Hügel mit einem Stift daneben — die Aussage ist die *Änderung*.
+    "sculpt": (
+        '<path d="M3 16.5h18" stroke-dasharray="3 2.5" opacity="0.55" />'
+        '<path d="M3 16.5c4 0 3.5-5 9-5s5 5 9 5" />'
+        '<path d="M12 3.5v3.4" /><path d="M10 6.9h4l-2 3.2z" />'
+    ),
+    # Skelett: ein Gelenk mit zwei Knochen und dem Bogen, um den es beugt. Eine
+    # bloße Kette aus Punkten und Strichen sähe aus wie das Skizzensymbol
+    # daneben; der gestrichelte Winkel ist der Unterschied.
+    "armature": (
+        '<path d="M7 4.5v6.2" /><circle cx="7" cy="12.6" r="1.9" />'
+        '<path d="M8.4 14.2 13.5 19.3" />'
+        '<path d="M11 7a8 8 0 0 1 2.2 5.6" stroke-dasharray="2.5 2" opacity="0.7" />'
+    ),
     # Ein Körper mit einem Pfeil hinein.
     "import": (
         '<path d="M13 4.5 20 8.5v7l-7 4-7-4v-7z" stroke-dasharray="3 2" />'

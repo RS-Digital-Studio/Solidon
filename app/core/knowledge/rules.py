@@ -14,7 +14,7 @@ sich entfernen lassen, ohne Code anzufassen.
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
 
@@ -35,9 +35,8 @@ class Rule:
     title: str
     text: str
     applies_to: tuple[str, ...] = ()
-    title_en: str = ""
-    text_en: str = ""
-    """Die Fassung fürs Handbuch, wenn dort englisch gelesen wird.
+    translations: dict[str, tuple[str, str]] = field(default_factory=dict)
+    """Titel und Text je Handbuchsprache, aus ``title_<sprache>``/``text_<sprache>``.
 
     **Nicht für den Agenten.** Der liest weiter die deutschen Felder, in jeder
     Sprache — zwei Fassungen einer Regel wären zwei Wahrheiten, und die
@@ -52,8 +51,10 @@ class Rule:
 
     def reading(self, language: str) -> tuple[str, str]:
         """Titel und Text in der Sprache, in der gelesen wird."""
-        if language == "en" and self.title_en and self.text_en:
-            return self.title_en, " ".join(self.text_en.split())
+        translated = self.translations.get(language)
+        if translated:
+            title, text = translated
+            return title, " ".join(text.split())
         return self.title, " ".join(self.text.split())
 
 
@@ -84,6 +85,23 @@ class RuleSet:
         return "\n".join(rule.as_line() for rule in self.rules)
 
 
+def _translations(entry: dict[str, Any]) -> dict[str, tuple[str, str]]:
+    """Sammelt ``title_<sprache>``/``text_<sprache>``-Paare ein — nur vollständige.
+
+    Eine halbe Übersetzung (Titel ohne Text oder umgekehrt) fällt aufs deutsche
+    Original zurück, statt einen zweisprachigen Absatz zu erzeugen.
+    """
+    found: dict[str, tuple[str, str]] = {}
+    for key, value in entry.items():
+        if not key.startswith("title_"):
+            continue
+        language = key.removeprefix("title_")
+        text = str(entry.get(f"text_{language}", "")).strip()
+        if str(value) and text:
+            found[language] = (str(value), text)
+    return found
+
+
 def load(path: Path | None = None) -> RuleSet:
     """Liest die Regelsammlung. Gecacht, denn sie wird bei jeder Anfrage
     gebraucht.
@@ -101,8 +119,7 @@ def load(path: Path | None = None) -> RuleSet:
             title=str(entry["title"]),
             text=str(entry["text"]).strip(),
             applies_to=tuple(entry.get("applies_to", ())),
-            title_en=str(entry.get("title_en", "")),
-            text_en=str(entry.get("text_en", "")).strip(),
+            translations=_translations(entry),
         )
         for entry in table.get("rules", ())
     )

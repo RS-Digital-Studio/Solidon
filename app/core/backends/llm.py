@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final, Literal, Protocol
 
 from app.core.backends import keys
-from app.core.errors import AppError
+from app.core.errors import AppError, ExternalToolError
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
 
@@ -148,8 +148,14 @@ def post_json(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dic
         raise BackendUnavailable(detail=str(error.reason)) from error
 
 
-class BackendUnavailable(AppError):
-    """Das Modell war nicht erreichbar oder hat abgelehnt."""
+class BackendUnavailable(ExternalToolError):
+    """Das Modell war nicht erreichbar oder hat abgelehnt.
+
+    Ein ``ExternalToolError``, kein nackter ``AppError`` (§33.1): Der
+    häufigste Auslöser ist ein nicht laufendes Ollama oder ein abgelaufener
+    Schlüssel — dort helfen „Einstellungen öffnen" und „Erneut versuchen",
+    nicht das geerbte „Abbrechen" allein.
+    """
 
     default_title = _("Das Sprachmodell hat nicht geantwortet.")
 
@@ -317,10 +323,11 @@ def _from_anthropic(answer: dict[str, Any]) -> Reply:
 #: zählt: Kommt ein strukturierter Werkzeugaufruf zurück oder Prosa?
 #:
 #: Gemessen wird das mit **allen** Werkzeugen, die der Agent anbietet — das
-#: sind die dreiundachtzig aus dem geladenen Register, rund 96 KB Schema, und
-#: nicht die sieben Zusatzwerkzeuge allein. Der Unterschied entscheidet die
-#: Wahl und hat sie einmal falsch entschieden: mit sieben Schemata trifft
-#: ``llama3.1:8b`` fünf von fünf, mit dem vollen Register zwei. Es kennt die
+#: sind die sechsundneunzig aus dem geladenen Register, rund 110 KB Schema,
+#: und nicht die elf Zusatzwerkzeuge allein. Der Unterschied entscheidet die
+#: Wahl und hat sie einmal falsch entschieden: mit den damals sieben
+#: Zusatzschemata traf ``llama3.1:8b`` fünf von fünf, mit dem vollen Register
+#: (dreiundachtzig zu der Zeit) zwei. Es kennt die
 #: richtige Antwort auch dann — es schreibt sie als Fließtext hin, statt sie
 #: aufzurufen, und Ollama kann sie nicht auslesen.
 #:
@@ -333,8 +340,8 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: Wie groß das Kontextfenster sein muss, das Ollama für einen Aufruf öffnet.
 #:
 #: **Ohne diese Angabe schneidet Ollama den Prompt ab**, und zwar stillschweigend:
-#: sein Vorgabefenster ist 4096 Token, das Register bringt allein 84
-#: Werkzeugschemata mit rund 99 000 Zeichen — gemessen 21 162 Token. Was nicht
+#: sein Vorgabefenster ist 4096 Token, das Register bringt allein 85
+#: Werkzeugschemata mit rund 109 000 Zeichen — gemessen 24 474 Token. Was nicht
 #: hineinpasst, fällt weg, und mit ihm der Systemprompt samt der vier
 #: Vorrangregeln. Genau das war der Befund „der Agent greift nicht zu den
 #: Bausteinen (0/13)": nicht die Regel, nicht das Modell, sondern ein Fenster,
@@ -356,6 +363,13 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: Modell, das den Auftrag kennt, rät nicht herum. Es kostet Speicher: mit
 #: 32768 belegt ``qwen3:14b`` 14 GB und bleibt damit vollständig auf einer
 #: 16-GB-Karte. Wer ein größeres Modell fährt, zahlt hier zuerst.
+#:
+#: Die Reihe fuhr 84 Schemata. Bei 85 nachgemessen sind es 26 601 Token für
+#: Systemprompt und alle Werkzeuge, 19 249 für den kompakten Satz, den dieser
+#: Weg fährt (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) —
+#: beide kamen ganz an. Das Fenster trägt also weiter; wachsen kann es kaum,
+#: ohne die Karte zu verlassen. Was wächst, ist die Werkzeugliste: wer sie
+#: ändert, misst ``prompt_eval_count`` nach.
 OLLAMA_CONTEXT_TOKENS = 32768
 
 

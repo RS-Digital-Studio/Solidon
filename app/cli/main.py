@@ -27,7 +27,7 @@ from app.branding import (
     WEBSITE_URL,
 )
 from app.core import activation, manual
-from app.core.bootstrap import load_operations
+from app.core.bootstrap import load_operations, load_user_parts
 from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
 from app.core.export import threemf
 from app.core.export.writer import FORMAT_SUFFIX, plan_export, write_plan
@@ -545,6 +545,12 @@ def main(argv: list[str] | None = None) -> int:
     if _demo_is_over():
         return 1
     load_operations()
+    # Die eigenen Bausteine gelten auch hier (§24.5): ein Skript, das einen
+    # eigenen Baustein setzt, ist derselbe Anwendungsfall wie das Menü. Ihre
+    # Befunde gehen ins Protokoll — die Kommandozeile hat keinen Prüfbericht
+    # vor dem ersten Lauf.
+    for finding in load_user_parts():
+        print(f"{finding.message}", file=sys.stderr)
     parser = build_parser()
     args = parser.parse_args(argv)
     configure(debug=args.debug, to_console=False)

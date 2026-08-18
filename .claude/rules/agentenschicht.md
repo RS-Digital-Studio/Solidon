@@ -30,8 +30,8 @@ gemessen. Wer eine davon lockert, misst vorher und nachher.
 mehrdeutige Anfragen und zählt, ob gefragt statt geraten wurde.
 
 **„Fragen vor Raten" trägt nur als Vorbedingung, nicht als Gewohnheit.** Als
-vierter Punkt einer Liste war sie anleitend, und das hielt gegen 84 Werkzeuge
-nicht: sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
+vierter Punkt einer Liste war sie anleitend, und das hielt gegen die damals
+84 Werkzeuge nicht — heute sind es 85 Operationen und elf Zusatzwerkzeuge: sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
 1/3 — wer genug Angebote hat, findet immer eines, das plausibel aussieht.
 Prompt-Version 2 stellt deshalb drei Prüfungen *vor* den ersten
 Werkzeugaufruf, jede einzeln hinreichend für eine Rückfrage: Ziel eindeutig,
@@ -92,8 +92,8 @@ Version des Systemprompts, Version der Regelsammlung, Temperatur.
 ## Das Kontextfenster ist die Bedingung, nicht die Feineinstellung
 
 **Ollama schneidet den Prompt stillschweigend ab.** Sein Vorgabefenster ist
-4096 Token; allein die 84 Werkzeugschemata aus dem Register sind rund 99 000
-Zeichen, gemessen 21 162 Token. Was nicht hineinpasst, fällt weg — und mit ihm
+4096 Token; allein die 85 Werkzeugschemata aus dem Register sind rund 109 000
+Zeichen, gemessen 24 474 Token. Was nicht hineinpasst, fällt weg — und mit ihm
 der Systemprompt samt der vier Vorrangregeln. Das Modell ist dann nicht
 ungehorsam, es hat den Auftrag nie gesehen.
 
@@ -107,6 +107,14 @@ Modell, das den Auftrag kennt, nicht herumrät. `OLLAMA_CONTEXT_TOKENS` in
 Wer die Werkzeugmenge ändert, prüft diese Zahl nach: `prompt_eval_count` in
 Ollamas Antwort sagt, wie viel wirklich ankam. Liegt es bei etwa der Hälfte des
 Fensters, wurde gekürzt.
+
+Bei 85 Operationen nachgemessen, `qwen3:14b` gegen `num_ctx` 32768: 26 601
+Token für Systemprompt und alle 96 Werkzeuge, 19 249 für den kompakten Satz,
+den der Ollama-Pfad fährt — beide ganz angekommen. Das Fenster trägt also
+weiter. Gezählt ist die Luft trotzdem: über dem kompakten Satz bleiben rund
+13 500 Token für Steckbrief, Verlauf und Antworten, und größer als 32768 wird
+das Fenster nicht ohne Weiteres — bei diesem Wert belegt das Modell 14 GB und
+bleibt damit gerade noch auf einer 16-GB-Karte.
 
 ## Eine Ablehnung muss sagen, was zu ändern ist
 

@@ -29,12 +29,12 @@ from typing import Any, Final
 
 import tools.check_env as check_env
 from tools.check_env import (
-    abweichungen,
-    aufbaubefehl,
-    festgeschrieben,
+    mismatches,
     normal,
-    obergrenzen,
-    zahlenfolge,
+    pinned,
+    setup_command,
+    upper_bounds,
+    version_tuple,
 )
 
 #: Die Wurzel des Arbeitsbaums — von hier aus liegt ``pyproject.toml`` daneben.
@@ -143,7 +143,7 @@ def test_the_version_is_the_same_in_both_places_that_carry_it() -> None:
 
 def test_the_pinned_set_is_read_completely() -> None:
     """Jede Zeile `name==fassung` landet im Satz, normalisiert nach PEP 503."""
-    satz = festgeschrieben()
+    satz = pinned()
 
     assert len(satz) > 50, f"nur {len(satz)} Einträge — liest `constraints.txt` noch?"
     assert "pyside6" in satz, "PySide6 fehlt im Satz, obwohl die Oberfläche darauf steht"
@@ -162,26 +162,24 @@ def test_a_deviating_version_is_found() -> None:
     """Der Fall vom 06.08.2026: der Klon zog eine andere Fassung, die Suite fiel um."""
     satz = {"numpy": ("numpy", "2.4.0"), "trimesh": ("trimesh", "4.12.2")}
 
-    assert abweichungen(satz, {"numpy": "2.5.0", "trimesh": "4.12.2"}) == [
-        "numpy 2.5.0 statt 2.4.0"
-    ]
-    assert abweichungen(satz, {"numpy": "2.4.0", "trimesh": "4.12.2"}) == []
+    assert mismatches(satz, {"numpy": "2.5.0", "trimesh": "4.12.2"}) == ["numpy 2.5.0 statt 2.4.0"]
+    assert mismatches(satz, {"numpy": "2.4.0", "trimesh": "4.12.2"}) == []
 
 
 def test_a_package_that_is_absent_is_not_a_deviation() -> None:
     """Constraints, nicht Requirements: der Windows-Eintrag fehlt auf Linux zu Recht."""
     satz = {"pywin32-ctypes": ("pywin32-ctypes", "0.2.3")}
 
-    assert abweichungen(satz, {}) == []
+    assert mismatches(satz, {}) == []
 
 
 def test_the_rebuild_command_pins_the_versions() -> None:
     """Ohne das `-c` ist der Vorschlag genau der Fehler, den er beheben soll."""
-    for mit_venv in (True, False):
-        befehl = aufbaubefehl(mit_venv=mit_venv)
+    for with_venv in (True, False):
+        befehl = setup_command(with_venv=with_venv)
         assert "-c constraints.txt" in befehl, befehl
         assert "-e" in befehl, befehl
-    assert "venv" in aufbaubefehl(mit_venv=False), "ohne Umgebung muss sie zuerst angelegt werden"
+    assert "venv" in setup_command(with_venv=False), "ohne Umgebung muss sie zuerst angelegt werden"
 
 
 # --- aktuell bleiben, ohne die Grenzen zu reißen ---------------------------------
@@ -208,7 +206,7 @@ def test_a_deliberate_upper_bound_is_read_from_the_project(tmp_path, monkeypatch
     )
     monkeypatch.setattr(check_env, "PYPROJECT", datei)
 
-    grenzen = obergrenzen()
+    grenzen = upper_bounds()
 
     assert grenzen.get("trimesh") == "5"
     assert "numpy" not in grenzen, "eine offene Untergrenze ist keine Grenze"
@@ -220,17 +218,17 @@ def test_the_project_currently_pins_nothing_from_above() -> None:
     Fällt dieser Test, hat jemand eine Obergrenze gesetzt — dann gehört der
     Grund in `pyproject.toml` daneben, so wie es bei `trimesh<5` stand.
     """
-    assert obergrenzen() == {}, (
-        f"neue Obergrenze(n): {sorted(obergrenzen())} — steht der Grund daneben?"
+    assert upper_bounds() == {}, (
+        f"neue Obergrenze(n): {sorted(upper_bounds())} — steht der Grund daneben?"
     )
 
 
 def test_versions_compare_as_numbers_not_as_text() -> None:
     """Sonst gilt „10.0" als kleiner als „9.0", und die Grenze greift verkehrt."""
-    assert zahlenfolge("5.0.0") > zahlenfolge("4.12.2")
-    assert zahlenfolge("10.0") > zahlenfolge("9.0")
-    assert zahlenfolge("2.9.0.post0") == (2, 9, 0)
-    assert zahlenfolge("") == ()
+    assert version_tuple("5.0.0") > version_tuple("4.12.2")
+    assert version_tuple("10.0") > version_tuple("9.0")
+    assert version_tuple("2.9.0.post0") == (2, 9, 0)
+    assert version_tuple("") == ()
 
 
 def test_freezing_keeps_the_head_that_explains_the_file(tmp_path, monkeypatch) -> None:
@@ -254,7 +252,7 @@ def test_freezing_keeps_the_head_that_explains_the_file(tmp_path, monkeypatch) -
 
     monkeypatch.setattr(check_env.subprocess, "run", lambda *a, **k: Antwort())
 
-    assert check_env.einfrieren(Path("python")) == 0
+    assert check_env.freeze(Path("python")) == 0
 
     geschrieben = ziel.read_text(encoding="utf-8")
     assert "# Warum es die Datei gibt: hier steht der Grund." in geschrieben

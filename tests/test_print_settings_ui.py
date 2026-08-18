@@ -8,6 +8,7 @@ Vorschläge kommen mit Begründung, und ohne Slicer bleibt er benutzbar.
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from app.core.export import handover
 from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import gcode
+from app.core.types import Feature
 from app.ui.print_settings_dialog import FIELDS, GROUPS, PrintSettingsDialog, _ColourButton
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -290,6 +292,52 @@ def test_applying_the_advice_moves_the_editors(qt_app: QApplication) -> None:
     assert editor.value() == pytest.approx(dialog.settings.speed.outer_wall)
 
 
+def test_the_layer_analysis_may_arrive_after_the_dialog(qt_app: QApplication) -> None:
+    """§2.8: Der Dialog geht sofort auf, die Schichtanalyse wird nachgereicht.
+
+    Vorher wartete der Weg hierher bis zu zwei Sekunden auf sie — mit
+    stehendem Fenster und ohne dass irgendwo stand, worauf. Beides ist zu
+    haben: Was aus der Geometrie folgt, steht ein paar Zehntel später in der
+    Liste, statt den ganzen Dialog aufzuhalten.
+    """
+    import math
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import place_on_bed
+    from app.core.slice.analysis import slice_body
+
+    session = Session()
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.slice_result is None
+    before = {
+        str(dialog.advice_view.topLevelItem(row).data(0, Qt.ItemDataRole.UserRole))
+        for row in range(dialog.advice_view.topLevelItemCount())
+    }
+
+    # Ein Kegel auf der Spitze: 63 Grad Wand, also Stützen — ein Vorschlag,
+    # den allein die Geometrie hergibt.
+    cone = trimesh.creation.cone(radius=20.0, height=10.0, sections=64)
+    cone.apply_transform(trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]))
+    dialog.take_slice_result(slice_body(place_on_bed(MeshData.of(cone)), 0.5))
+
+    after = {
+        str(dialog.advice_view.topLevelItem(row).data(0, Qt.ItemDataRole.UserRole))
+        for row in range(dialog.advice_view.topLevelItemCount())
+    }
+    assert dialog.slice_result is not None
+    assert after - before, "die nachgereichte Analyse hat die Vorschlagsliste nicht erreicht"
+
+
+def test_a_missing_layer_analysis_changes_nothing(dialog: PrintSettingsDialog) -> None:
+    """Ein ``None`` ist keine Analyse, sondern ihr Ausbleiben — dann bleibt es
+    bei dem, was aus Material und Maschine folgt."""
+    dialog.take_slice_result(None)
+
+    assert dialog.slice_result is None
+
+
 def test_the_advice_list_is_never_empty_of_words(dialog: PrintSettingsDialog) -> None:
     """Auch wenn nichts einzuwenden ist, steht das da — eine leere Liste sähe
     aus wie ein Fehler."""
@@ -355,6 +403,107 @@ def test_both_orca_profiles_are_asked_for_before_the_run(qt_app: QApplication) -
 
 
 # --- was bleibt, wenn der Dialog zugeht ---------------------------------------------
+
+
+def test_the_chosen_profiles_are_kept_without_a_slicer_run(qt_app: QApplication) -> None:
+    """Was im Dialog stand, gilt auch für den Export (§29, A5).
+
+    Gemerkt wurde die Profilwahl nur beim **Slicen**. Wer sie hier einstellte
+    und danach über *Datei → Exportieren* eine 3MF schrieb, bekam die Auswahl
+    vom vorletzten Mal — für den Nutzer ist es dieselbe Entscheidung, und der
+    Docstring von ``remembered_setup`` verspricht sie.
+    """
+    settings = UiSettings()
+    session = Session()
+    dialog = PrintSettingsDialog(session, settings)
+    dialog.machine_choice.addItem("Centauri", "C:/profile/machine/centauri.json")
+    dialog.machine_choice.setCurrentIndex(dialog.machine_choice.count() - 1)
+    dialog.process_choice.addItem("0.20 fein", "C:/profile/process/fein.json")
+    dialog.process_choice.setCurrentIndex(dialog.process_choice.count() - 1)
+    dialog.filament_choice.addItem("PETG PRO", "C:/profile/filament/petg-pro.json")
+    dialog.filament_choice.setCurrentIndex(dialog.filament_choice.count() - 1)
+
+    dialog.reject()
+
+    assert settings.slicer_machine_profile == "C:/profile/machine/centauri.json"
+    assert settings.slicer_base_process == "C:/profile/process/fein.json"
+    assert settings.slicer_base_filament == "C:/profile/filament/petg-pro.json"
+    assert settings.slicer_profile_printer == session.profile.printer.id
+    assert (
+        settings.slicer_filament_per_material[session.profile.material.id]
+        == "C:/profile/filament/petg-pro.json"
+    )
+
+
+def test_closing_early_does_not_wipe_what_was_remembered(qt_app: QApplication) -> None:
+    """Die Profilsuche läuft im Hintergrund.
+
+    Wer den Dialog vorher wieder zumacht, hat eine leere Auswahl vor sich —
+    sie zu übernehmen hieße, eine gemerkte Einstellung zu löschen, weil
+    niemand hingesehen hat.
+    """
+    settings = UiSettings()
+    settings.slicer_machine_profile = "C:/profile/machine/centauri.json"
+    settings.slicer_base_process = "C:/profile/process/fein.json"
+    dialog = PrintSettingsDialog(Session(), settings)
+
+    dialog.reject()
+
+    assert settings.slicer_machine_profile == "C:/profile/machine/centauri.json"
+    assert settings.slicer_base_process == "C:/profile/process/fein.json"
+
+
+def _pretend_a_slicer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein gefundener Slicer, ohne einen auf der Maschine zu verlangen."""
+    from app.ui import print_settings_dialog as module
+
+    monkeypatch.setattr(
+        module.discover, "find_program", lambda *args, **kwargs: Path("elegoo-slicer.exe")
+    )
+    monkeypatch.setattr(
+        module.handover,
+        "detect",
+        lambda found: handover.SlicerSetup(executable=found, flavour="orca"),
+    )
+
+
+def test_a_profile_of_another_printer_is_not_reused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A6: Ein Maschinenprofil gehört zu genau einem Drucker.
+
+    Ohne diesen Abgleich trägt die 3MF eines Prusa-Projekts das Profil des
+    Elegoo, mit dem zuletzt gearbeitet wurde — richtig gerechnet, falsch
+    adressiert. Schlimmer als gar keines: Die Datei sieht vollständig aus.
+    """
+    from app.ui.print_settings_dialog import remembered_setup
+
+    _pretend_a_slicer(monkeypatch)
+    settings = UiSettings()
+    settings.slicer_machine_profile = "Centauri Carbon 0.4"
+    settings.slicer_profile_printer = "centauri-carbon"
+
+    assert remembered_setup(settings, "petg", "prusa-mk4") is None, "anderer Drucker, nichts gilt"
+
+    same = remembered_setup(settings, "petg", "centauri-carbon")
+    assert same is not None
+    assert same.machine_profile == "Centauri Carbon 0.4", "derselbe Drucker, alles gilt"
+
+
+def test_an_old_settings_file_still_carries_its_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ohne Vermerk wird nicht verglichen.
+
+    Eine Einstellung aus einer älteren Fassung kennt den Drucker nicht, für
+    den sie gewählt wurde. Sie deshalb zu verwerfen wäre eine Verschlechterung
+    für jeden, der schon eingerichtet hat.
+    """
+    from app.ui.print_settings_dialog import remembered_setup
+
+    _pretend_a_slicer(monkeypatch)
+    settings = UiSettings()
+    settings.slicer_machine_profile = "Centauri Carbon 0.4"
+
+    setup = remembered_setup(settings, "petg", "prusa-mk4")
+    assert setup is not None
+    assert setup.machine_profile == "Centauri Carbon 0.4"
 
 
 def test_the_project_settings_win_over_the_preset(qt_app: QApplication) -> None:
@@ -453,10 +602,173 @@ def test_slicing_makes_the_file_available(dialog: PrintSettingsDialog, tmp_path:
     produced.write_text("; nur ein Test\n", encoding="utf-8")
     outcome = handover.SliceOutcome(gcode_path=produced, metrics=gcode.GcodeMetrics())
 
-    dialog._sliced(outcome)
+    dialog._sliced([outcome])
 
     assert dialog.save_button.isEnabled()
-    assert dialog._gcode == produced
+    assert dialog._gcode == [produced]
+
+
+def test_every_plate_keeps_its_own_print_file(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
+    """Zwei Platten sind zwei Druckdateien — und zwei Zahlen, die sich addieren.
+
+    Das ist der Punkt, an dem die Übergabe lange stehen blieb: Sie schrieb die
+    erste Platte und sagte das auch, aber wer den Satz übersah, hielt eine halbe
+    Druckdatei für die ganze.
+    """
+    outcomes = []
+    for index in (1, 2):
+        produced = tmp_path / f"platte-{index}.gcode"
+        produced.write_text("; nur ein Test\n", encoding="utf-8")
+        outcomes.append(
+            handover.SliceOutcome(
+                gcode_path=produced,
+                metrics=gcode.GcodeMetrics(print_seconds=600.0, filament_grams=10.0),
+            )
+        )
+
+    dialog._sliced(outcomes)
+
+    assert dialog._gcode == [entry.gcode_path for entry in outcomes]
+    # Zwanzig Minuten und zwanzig Gramm, nicht zehn: gedruckt wird zweimal.
+    assert "20 min" in dialog.state.text()
+    assert "20.0 g" in dialog.state.text()
+    assert "2" in dialog.state.text()
+
+
+def test_every_plate_becomes_its_own_run(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
+    """Die Übergabe nimmt alle Platten, nicht die erste.
+
+    Der Fund, aus dem das entstand: `_slice` schrieb die Baugruppe von
+    `plates[0]`, meldete „geslicet wird die erste" und hörte auf. Der Export
+    konnte längst alle. Geprüft wird an der Stelle, die je Platte ihre Datei
+    baut — jede trägt nur ihre eigenen Teile und einen eigenen Namen.
+    """
+    import trimesh
+
+    from app.core.export import handover
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    def body(size: float, name: str, plate: int) -> SceneObject:
+        mesh = trimesh.creation.box(extents=(size, size, size))
+        mesh.apply_translation((0.0, 0.0, size / 2.0))
+        return SceneObject(id=name, name=name, mesh=MeshData.of(mesh), plate=plate)
+
+    objects = [body(20.0, "A", 0), body(30.0, "B", 1), body(15.0, "C", 1)]
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    runs = [
+        dialog._plate_run(objects, plate, tmp_path, "satz", setup)
+        for plate in sorted({entry.plate for entry in objects})
+    ]
+
+    assert [entry.plate for entry in runs] == [0, 1]
+    # Zwei Dateien, nicht eine: sonst schriebe die zweite Platte die erste über.
+    assert len({entry.model for entry in runs}) == 2
+    assert all(entry.model.is_file() for entry in runs)
+
+
+def test_the_chosen_slot_profile_reaches_the_run(
+    dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """Was die Slot-Zeile einsammelt, steht am Slot des Laufs (§20).
+
+    Der Fund dazu: `slot_profiles` wurde eingesammelt, gemeldet („{slot}
+    druckt mit {profil}.") und nie an `write_config` gereicht —
+    `MaterialSlot.material` setzte niemand, alle Slots slicten mit dem
+    Basisfilament, nur die Farbe stimmte.
+    """
+    import trimesh
+
+    from app.core.export import handover
+    from app.core.geom.mesh import MeshData
+    from app.core.types import MaterialSlot, SceneObject
+
+    mesh = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    mesh.apply_translation((0.0, 0.0, 10.0))
+    slotted = SceneObject(
+        id="A",
+        name="A",
+        mesh=MeshData.of(mesh),
+        material_slots=[
+            MaterialSlot(index=0, name="Gehäuse"),
+            MaterialSlot(index=1, name="Schrift"),
+        ],
+    )
+    dialog.settings = replace(dialog.settings, slot_profiles=("", "Elegoo PLA"))
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    run = dialog._plate_run([slotted], 0, tmp_path, "satz", setup)
+
+    assert run.slots[0].material is None, "ohne Wahl gilt das Filament der Platte"
+    assert run.slots[1].material == "Elegoo PLA"
+
+
+def test_an_unknown_printer_leaves_the_dialog_responsive(dialog: PrintSettingsDialog) -> None:
+    """Ohne passenden Drucker bleibt die Filamentliste leer — und still.
+
+    Der Fund dahinter ist der Normalfall und kein Sonderfall: Solidons Vorgabe
+    ist der „Allgemeine FDM-Drucker 220 mm", und dazu hat kein Slicer ein
+    Profil. Die Vorbelegungssuche lief trotzdem, schlug ohne Drucker den
+    ganzen Filamentbestand auf (5962 Profile statt 42, je eines mit Erbkette
+    aus Dateien) und blockierte dabei den Qt-Hauptthread. Wirkungslos war sie
+    obendrein: gesucht wurde ein Eintrag in einer Liste, die leer ist.
+    """
+    dialog._profiles = []
+
+    begonnen = time.perf_counter()
+    dialog._fill_filaments(None)
+
+    assert time.perf_counter() - begonnen < 0.5, "ohne Drucker wird nichts aufgeschlagen"
+    assert dialog.filament_choice.count() == 0
+    assert dialog.filament_choice.currentIndex() == -1, "und nichts steht da, was nicht da ist"
+
+
+def test_a_connector_of_infill_reaches_the_advice_list(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Der Vorschlag zum Verbinder steht in der Liste, nicht nur in der Rechnung.
+
+    Gemessen am Querschnitt, so wie man es am geschnittenen Teil nachmisst: Ein
+    Zapfen mit Ø 5,04 mm ist bei zwei Wänden à 0,42 mm innen 3,36 mm Füllmuster
+    und außen 1,68 mm Material — mehr Muster als Material, und genau dort sitzt
+    die Verbindung. Bei drei Wänden (der Vorgabe) hält es sich die Waage, und
+    dann sagt Solidon nichts.
+    """
+    session.import_model(Path(__file__).parent / "data" / "meshes" / "cube_clean.stl")
+    session.wait_for_idle()
+    result = session.last_result
+    assert result is not None, "die Szene steht"
+
+    # Ein Zapfen, wie ihn `split_pinned` erzeugt — die Planung rechnet ihn aus
+    # der Schnittfläche, er ist also kein Parameter, den jemand einträgt.
+    entry = next(iter(result.scene.objects.values()))
+    entry.features["pin_1"] = Feature(
+        id="pin_1", kind="pin", provenance="generated", params={"diameter": 5.04}
+    )
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog._connector_diameters() == (5.04,)
+
+    dialog._editors["shell.wall_count"].setValue(3)
+    titel = {
+        dialog.advice_view.topLevelItem(row).text(0)
+        for row in range(dialog.advice_view.topLevelItemCount())
+    }
+    assert not any("Wände" in eintrag for eintrag in titel), "bei drei Wänden trägt der Zapfen"
+
+    dialog._editors["shell.wall_count"].setValue(2)
+    zeilen = [
+        (
+            dialog.advice_view.topLevelItem(row).text(0),
+            dialog.advice_view.topLevelItem(row).text(1),
+        )
+        for row in range(dialog.advice_view.topLevelItemCount())
+    ]
+
+    passend = [zeile for zeile in zeilen if "Wände" in zeile[0]]
+    assert passend, f"der Vorschlag fehlt in der Liste: {zeilen}"
+    assert "2 → 3" in passend[0][1], "und er nennt beide Zahlen"
 
 
 # --- Profilauswahl (§29) ------------------------------------------------------------

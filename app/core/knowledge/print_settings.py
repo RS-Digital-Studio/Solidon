@@ -65,8 +65,20 @@ _tables: dict[str, dict[str, dict[str, Any]]] | None = None
 
 
 def _read_table(path: Path) -> dict[str, Any]:
-    with path.open("rb") as stream:
-        return tomllib.load(stream)
+    try:
+        with path.open("rb") as stream:
+            return tomllib.load(stream)
+    except tomllib.TOMLDecodeError as problem:
+        # Auch hier liest derselbe Leser die Datei des Nutzers — eine
+        # handgeschriebene. Ein Tippfehler ist ein Satz mit Dateinamen, kein
+        # Startabbruch (Regel 17).
+        raise ValidationError(
+            title=_("Diese Einstellungsdatei lässt sich nicht lesen."),
+            field="file",
+            detail=str(problem),
+            constraint="toml",
+            values={"file": str(path)},
+        ) from problem
 
 
 def _load() -> dict[str, dict[str, dict[str, Any]]]:
@@ -122,6 +134,16 @@ def _quality_table(quality: QualityPreset) -> dict[str, Any]:
             values={"requested": quality, "known": sorted(table)},
         )
     return table[quality]
+
+
+def has_material(material_id: str) -> bool:
+    """Ob die Einstellungstabelle dieses Material kennt (§29).
+
+    Für den Befund, der dem stillen ``_log.info`` in ``_material_table``
+    fehlte: ein selbst angelegtes Material bekam PLA-nahe Modellvorgaben,
+    und niemand erfuhr es (Regel 21).
+    """
+    return material_id in _all()["material"]
 
 
 def _material_table(material_id: str) -> dict[str, Any]:

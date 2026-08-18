@@ -32,6 +32,20 @@ FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Erstbestückung der Bibliothek (§24.1)."
 )
 
+#: Version 3 betrifft zwei Bausteine mit derselben Ursache: ihr Spiel stand
+#: als feste Zahl in der Vorgabe (0,2 bzw. 0,15 mm), und der Zweig, der es
+#: aus dem kalibrierten Materialprofil füllt, greift nur bei null — die
+#: Kalibrierung nach §28.3 erreichte beide nie (Regel 7).
+PLAY_FROM_PROFILE = PartChange(
+    version="3",
+    date="2026-08-16",
+    reason="Das Spiel kommt aus dem kalibrierten Materialprofil, nie als Zahl "
+    "im Baustein (Regel 7, §28.3).",
+    effect="Die Vorgabe ist null und heißt: Profilwert. Mutternfalle und "
+    "Gewinde fallen damit je nach Material enger oder weiter aus als mit den "
+    "alten Festwerten 0,2 und 0,15 mm; wer genau die will, trägt sie ein.",
+)
+
 
 # --- screw hole -------------------------------------------------------------------
 
@@ -204,12 +218,12 @@ class NutTrapParams(BaseParams):
     )
     play: float = param(
         title=_("Spiel"),
-        default=0.2,
+        default=0.0,
         unit="mm",
         minimum=0.0,
         maximum=1.0,
         placement="advanced",
-        doc=_("Zuschlag auf die Schlüsselweite."),
+        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
     )
     screw_hole: bool = param(
         title=_("Schraubenloch mitschneiden"),
@@ -229,7 +243,7 @@ class NutTrapParams(BaseParams):
         "Tasche für eine Sechskantmutter, seitlich eingeschoben oder von unten "
         "eingelegt, auf Wunsch mit durchgehendem Schraubenloch."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE],
 )
 def nut_trap(raw: BaseParams) -> PartResult:
     params = cast(NutTrapParams, raw)
@@ -294,12 +308,12 @@ class ThreadParams(BaseParams):
     )
     play: float = param(
         title=_("Spiel"),
-        default=0.15,
+        default=0.0,
         unit="mm",
         minimum=0.0,
         maximum=1.0,
         placement="advanced",
-        doc=_("Der Druck fällt enger aus, als die Datei sagt."),
+        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
     )
 
 
@@ -314,7 +328,7 @@ class ThreadParams(BaseParams):
         "Druckbares Gewinde als Wendel mit abgeflachtem Kamm — kein ISO-Profil, "
         "weil ein Drucker es ohnehin nicht auflöst."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE],
 )
 def printed_thread(raw: BaseParams) -> PartResult:
     """Ein Gewinde, und sein Gegenstück so gemessen, dass die zwei wirklich

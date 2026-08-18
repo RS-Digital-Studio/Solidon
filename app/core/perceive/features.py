@@ -125,7 +125,7 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     return found
 
 
-# --- bores ----------------------------------------------------------------------
+# --- Bohrungen -------------------------------------------------------------------
 
 
 def _cylinders(mesh: MeshData) -> list[tuple[CylinderFit, list[int]]]:
@@ -158,13 +158,25 @@ def _cylinders(mesh: MeshData) -> list[tuple[CylinderFit, list[int]]]:
             found.append((fit, patch))
 
     # Nach Position sortiert, damit die Nummerierung für denselben Körper
-    # reproduzierbar ist.
-    found.sort(key=lambda entry: (round(entry[0].centre[0], 3), round(entry[0].centre[1], 3)))
+    # reproduzierbar ist. **Alle drei Achsen**, nicht nur X und Y: Zwei
+    # koaxiale Bohrungen — eine Durchführung durch zwei Wände, die häufigste
+    # Doppelbohrung überhaupt — haben dieselbe Mitte in X und Y. Der Vergleich
+    # endete dort unentschieden, und welche von beiden `hole_1` wurde, hing an
+    # der Reihenfolge der Flecken. Genau das darf eine Provenienz-ID nicht
+    # (§21.2): Eine Op, die an `hole_2` hängt, sitzt nach der nächsten
+    # Auswertung an der anderen.
+    found.sort(
+        key=lambda entry: (
+            round(entry[0].centre[0], 3),
+            round(entry[0].centre[1], 3),
+            round(entry[0].centre[2], 3),
+        )
+    )
     return found
 
 
 def detect_holes(mesh: MeshData) -> list[Feature]:
-    """Cylindrical patches whose normals point inwards (§21.1)."""
+    """Zylindrische Flecken, deren Normalen nach innen zeigen (§21.1)."""
     body = mesh.raw
     found = [
         entry
@@ -371,11 +383,11 @@ def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int
     return [[int(index) for index in group] for group in groups]
 
 
-# --- flat faces -----------------------------------------------------------------
+# --- Flächen ---------------------------------------------------------------------
 
 
 def detect_faces(mesh: MeshData) -> list[Feature]:
-    """Coplanar patches: normal, area, centre (§21.1)."""
+    """Koplanare Flecken: Normale, Fläche, Mittelpunkt (§21.1)."""
     body = mesh.raw
     facets = list(body.facets)
     if not facets:
@@ -430,7 +442,7 @@ def detect_faces(mesh: MeshData) -> list[Feature]:
     return features
 
 
-# --- open edges -----------------------------------------------------------------
+# --- Offene Kanten ---------------------------------------------------------------
 
 
 def detect_edge_loops(mesh: MeshData) -> list[Feature]:
@@ -458,7 +470,7 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
     ]
 
 
-# --- components -----------------------------------------------------------------
+# --- Komponenten -----------------------------------------------------------------
 
 
 def component_count(mesh: MeshData) -> int:

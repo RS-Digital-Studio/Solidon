@@ -42,10 +42,11 @@ bekommt einen roten Lauf.
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Zwei lange Läufe ohne Abbrechen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts; die Live-Vorschau braucht zusätzlich einen Weg, nicht den ganzen Stapel zu rechnen |
 | Die Befehlspalette ist kein Universalzugang | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 38 Zeilen nachtragen, Umlautfaltung und Synonyme dazu |
-| Vier Arbeiter am `finished`-Signal | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — aber es ist ein Umbau: die Halteleine gehört in ein eigenes Modul, aus dem Fenster und Dialoge erben |
 | Der Installationsdialog zeigt rohe Ausgabe | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — plus zwei Sätze ohne Warum (Regel 17) |
+| Die Zahlen im deutschen Handbuchbild tragen einen Punkt | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — eingegrenzt auf `take_all`, das gebaute Fenster ist richtig |
 | Weg 4 steht in keiner Unterlage | Die Oberfläche im Bild durchgesehen (17.08.2026) | eine Bauplanänderung mit Ansage; README, Handbuch, Website und die Abbildung ziehen nach |
 | Der Rest der Textfunde | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — rohe Schlüssel statt Beschriftungen, drei nie angebotene Vorschläge, eine Schätzung am falschen Ort |
+| Parameterausdrücke in Pose-Winkeln | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | das Gegenstück zu `sketch_parameter_references` für `kind="armature"` — Kernarbeit mit eigenen Tests |
 
 ---
 
@@ -508,7 +509,13 @@ bekommt einen roten Lauf.
       Let's Encrypt für `solidon3d.de` und `www.solidon3d.de` (ein Zertifikat,
       beide Namen im SAN, bis 06.11.2026), HTTP antwortet für beide mit 301 auf
       HTTPS. Die DNS-Propagation ist durch — beide A-Records auf 188.68.47.33,
-      Zone bei netcup.
+      Zone bei netcup. **Seit dem 16.08.2026 sechssprachig**: Startseite,
+      Funktionen, KI-Modelle und Handbuch (Seite und PDF) auch auf es, fr,
+      it und pt, Sprachwechsler als Aufklappmenü, Regelsammlung mit Fassungen
+      je Handbuchsprache, Bildschirmfotos neu mit der aktuellen
+      Werkzeugleiste. Hochgeladen am 18.08.2026 (297 Dateien), Stichproben
+      über alle sechs Sprachen samt Bildern per HTTPS geprüft — alle 200,
+      die README bleibt unten (404).
 
       Ein Umweg war dabei zu vermeiden: Plesk hatte ein **Platzhalter**-
       zertifikat angeboten, und nur dafür verlangt Let's Encrypt die
@@ -5826,6 +5833,352 @@ berechtigt — das ist der Teil, der ohne Suite still danebengegangen wäre:
 fehlgeschlagen; jede Fensterdatei einzeln grün, `test_manual.py` zum ersten Mal
 seit Langem auch offscreen. `ruff`, `ruff format` und `mypy` sauber.
 
+## Drei Funde aus der Slicer-Übergabe (15.08.2026)
+
+Drei Punkte aus der Praxis, alle drei über die laufende Oberfläche
+nachgefahren — echte Qt-Plattform, echtes Hauptfenster, echter ElegooSlicer.
+
+### Der Drucker, den es nicht gibt, hielt die Anwendung an
+
+- [x] **Wer die Druckeinstellungen öffnete, ohne einen Drucker eingestellt zu
+      haben, sah die Anwendung stehen.** Minutenlang, ohne Anzeige, ohne
+      Ausweg. Der Auslöser ist kein Sonderfall, sondern die Vorgabe: Solidon
+      startet mit dem „Allgemeinen FDM-Drucker 220 mm", und dazu hat kein
+      Slicer ein Profil.
+
+      Die Kette: `match()` findet nichts, `_fill_filaments` bekommt
+      `machine=None`, und `match_filament` schlägt dann statt der verträglichen
+      Profile **den ganzen Bestand** auf — jedes mit einer Erbkette aus
+      Dateien. Gemessen am installierten ElegooSlicer:
+
+      | | Filamente | Dauer |
+      |---|---|---|
+      | mit erkanntem Drucker | 42 | 0,97 s |
+      | ohne | **5962** | nach zehn Minuten noch nicht durch |
+
+      Der Kommentar an der Stelle warnt wörtlich davor („sonst kostete es
+      Sekunden statt Zehntel"). Die Vorsicht hängt nur an der
+      Verträglichkeitsprüfung, und die gibt es ohne Drucker nicht.
+
+      **Wirkungslos war die Suche obendrein**: Ihr Treffer wird danach mit
+      `findData` in einer Liste gesucht, die leer ist. Behoben auf beiden
+      Ebenen — im Kern gibt `match_filament` ohne Drucker nichts zurück, in der
+      Oberfläche wird nichts vorgewählt, wo nichts zu wählen ist.
+
+      Eingekreist wurde er, indem der Ablauf gegen den unveränderten Stand
+      gefahren wurde: Beide starben identisch, also lag es nicht am eigenen
+      Änderungssatz. **Vollbild war es nicht** — er tritt in jedem
+      Fenstermodus auf.
+
+### Die Übergabe nahm nur Platte 1
+
+- [x] **Der Export konnte alle Platten, die Übergabe eine.** Sie schrieb die
+      Baugruppe von `plates[0]`, sagte „geslicet wird die erste" und hörte auf;
+      der Satz stand eine Zeile über dem Fortschrittsbalken und wurde von ihm
+      gleich wieder ersetzt.
+
+      Eine Platte ist jetzt ein Lauf: eigene Baugruppe, eigene Materialslots,
+      eigene Anordnungsprüfung, eigene Druckdatei. Das gilt für alle drei
+      Slicer-Familien — die Orca-Familie könnte mehrere Platten in einer
+      Projektdatei führen, Cura und PrusaSlicer nicht, und ein Weg, der überall
+      gleich läuft, ist mehr wert als einer, der bei zweien anders aussieht.
+
+      Zeit und Material addieren sich (`gcode.combine`), die Schichtzahl nicht:
+      über zwei Platten summiert wäre sie eine Zahl, die es nirgends gibt.
+      Fehlt ein Wert bei einer Platte, fehlt die Summe.
+
+      **Über die Oberfläche nachgefahren**, sechs Teile auf zwei Platten:
+
+      ```
+      [ 0.3 s] Der Slicer rechnet — Platte 1 von 2 …
+      [ 1.3 s] Der Slicer rechnet — Platte 2 von 2 …
+      [ 2.0 s] Druckzeit: 512 min · Material: 235.9 g · Platten: 2
+        Platte 1: solidon-1.gcode — 340 min, 156,9 g
+        Platte 2: solidon-2.gcode — 172 min,  78,9 g
+      ```
+
+### Der Verbinder sitzt im Füllmuster
+
+- [x] **Die Stiftplanung rechnet in Geometrie, gedruckt wird ein Ring mit
+      Muster darin.** Am Querschnitt gemessen, so wie man es am geschnittenen
+      Teil nachmisst — ein Zapfen mit Ø 5,04 mm aus `split_pinned`:
+
+      | Wände | Material | Füllkern |
+      |---|---|---|
+      | 2 | 1,68 mm | **3,36 mm** |
+      | 3 (Vorgabe) | 2,52 mm | 2,52 mm |
+
+      Bei zwei Wänden ist mehr Muster als Material, und genau dort sitzt die
+      Verbindung; ein Gyroid mit fünfzehn Prozent trifft diesen Kern womöglich
+      gar nicht. Bei drei hält es sich die Waage, und dann sagt Solidon nichts —
+      die Vorgabe ist in Ordnung.
+
+      `advise._from_connectors` schlägt die Wandzahl vor, nicht die Füllung:
+      Wände liegen deterministisch um den Zapfen, Füllung trifft ihn
+      statistisch. **Nicht bis vollmassiv** — der Vorschlag bringt ihn genau
+      auf die Schwelle, ab der das Material mindestens so breit ist wie sein
+      Kern. Bis zum vollen Querschnitt wären es bei einem 8-mm-Zapfen zehn
+      Wände auf dem ganzen Teil, und ein Vorschlag, den niemand annimmt, macht
+      die vier daneben unglaubwürdig.
+
+### Druckzeit und Materialbedarf des Videoprojekts
+
+- [x] **Gemessen statt geschätzt.** Im Videotext stand keine Zahl, weil keine
+      gemessen war. `gehaeuse-mit-bausteinen.p3d` einmal ganz durch die
+      Übergabe, auf Elegoo Centauri Carbon 2 mit Elegoo PETG und dem Profil
+      „0.20mm Standard @Elegoo CC2 0.4 nozzle":
+
+      | `breite` | Druckzeit | Material | Schichten |
+      |---|---|---|---|
+      | 70 mm | **52 min** | **17,6 g** | 40 |
+      | 96 mm | 64 min | 22,6 g | 40 |
+
+      Der Zuschauer sieht den kleinen Stand, also steht der kleine Wert im
+      Intro — in beiden Sprachen. Wer am Projekt oder am Profil dreht, misst
+      neu, statt die Zahl anzupassen.
+
+**Nebenbei:** Die Anwendung startet bildschirmfüllend statt auf 1280 auf 820 —
+`showMaximized()` und nicht Vollbild, damit Titelleiste und Menüs bleiben.
+
+## Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb
+
+Sechs Durchgänge über den ganzen Stand: drei Code-Reviews über den Kern,
+Oberfläche, Bedienlogik der vier Hauptwege, Wettbewerbsrecherche. Alle Funde
+mit Stelle, Beleg und Fix-Skizze stehen in
+`.claude/durchsicht-2026-08-16.md` — hier nur, was daraus zu tun ist.
+
+Vorab die Baseline: Umgebung auf `constraints.txt` gebracht (trimesh
+4.12 → 5.0.0; der Major-Sprung ist nachweislich folgenlos, in beiden
+Kern-Gebieten gegen die installierte Fassung aufgelöst), Suite portionsweise
+**4009 Tests grün**, ruff/format/mypy grün. Der Lauf am Stück stirbt weiter
+am nativen rtree-Abriss — Umgebung, nicht Code.
+
+**Das Muster der Durchsicht:** Fünf der sieben Stopper sind grün getestet und
+trotzdem falsch — die Suite kennt jeweils die Form nicht, in der der Fehler
+auftritt (kein Test dividiert *durch* einen Parameter, keiner prüft die
+`*_settings_id`-Inhalte, keiner den Slicer-Timeout, keiner die Slot-Filamente
+am echten Eingang, keiner Weg 4 am laufenden Programm). **P16 hat nie eine
+Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
+
+- [x] **K1 — Division durch einen Parameterverweis ist unmöglich** (§13).
+      `expressions.check/references` parsen mit Platzhalter-Nullen, der
+      Divisionsschutz lehnt `=@width/@count` überall ab; `sketch/serialize`
+      frisst den Fehler still und rechnet mit altem Cache. Fix + Test zuerst.
+
+      **Behoben:** Der Prüfmodus toleriert eine Null im Nenner genau dann,
+      wenn der Nenner eine Referenz enthält — ein Zähler je Vorkommen, weil
+      das deduplizierende Set als Vorher-nachher-Marke nicht taugt. Die
+      Literal-Null (`/0`, `/(2-2)`) bleibt auch in der Prüfung ein Fehler,
+      und die Auswertung mit echten Werten wirft unverändert. Vier neue
+      Tests, darunter der Skizzenfall `=@d/@n`, dessen Referenzen jetzt in
+      den Cache-Schlüssel kommen.
+- [x] **K2 — OpenSCAD-Quelltextprüfung umgehbar** (Regel 11, §32).
+      `import_stl`/`import_dxf`/`file=` gehen am Muster vorbei; gegen das
+      installierte OpenSCAD belegt, die Datei wird gelesen. Vor jeder
+      Auslieferung.
+
+      **Behoben:** Beide Muster kennen jetzt die fünf veralteten
+      Einbindungen und jedes `file=`; die Literal-Suche merkt sich Spannen
+      statt Startpositionen, damit das `file=` innerhalb eines gelesenen
+      `import(file="…")` nicht als zweite, ungelesene Anweisung gilt.
+      Relative Altformen bleiben erlaubt (gleiche Regel wie `import`),
+      `file=` mit Ausdruck statt Literal ist nicht prüfbar und wird
+      abgelehnt. Zehn neue Testfälle.
+- [x] **K3 — Slot-Filamente erreichen die Übergabe nie**: der Dialog sammelt
+      `slot_profiles` ein und meldet Vollzug, `MaterialSlot.material` setzt
+      niemand — alle Slots slicen mit dem Basisfilament.
+
+      **Behoben:** `handover.with_slot_profiles` heftet die Wahl positionsweise
+      an die Slots (die Position ist die Extruderbelegung), `_plate_run` ruft
+      es — `write_config` war auf `MaterialSlot.material` längst vorbereitet.
+      Der Dialogtest prüft jetzt den Eingang, nicht nur die Fähigkeit.
+- [x] **K4 — die exportierte 3MF trägt absolute Pfade als Profil-IDs**
+      (Regel 12; Orca erwartet Namen und trifft kein Preset).
+
+      **Behoben:** `project_settings` schreibt Namen — das Maschinenprofil
+      über `_profile_name` (beschnitten wird nur, was wie eine Profildatei
+      endet; `.stem` auf „0.12mm Fine @…" schnitte mitten ins Maß), Prozess
+      und Filament tragen den Solidon-Namen, unter dem `write_config` sie
+      wirklich schreibt. Zwei Tests halten die IDs fest.
+- [x] **K5 — Slicer-Lauf: Timeout tötet den Dialog, Schließen friert ein,
+      Abbrechen fehlt** (§2.8, Regel 17; `reject()` umgeht `closeEvent`).
+
+      **Behoben:** `_run_slicer` ersetzt das blinde `subprocess.run` —
+      Zeitgrenze und Startfehler sind `ExternalToolError` mit Vorschlägen,
+      und ein `CancelSignal` beendet den Kindprozess (erst höflich, dann
+      endgültig). Der Dialog hat ein Abbrechen neben dem Balken, der bei
+      mehreren Platten bestimmt zählt; `reject()` und `closeEvent` gehen
+      beide durch `_settle`, das den Lauf abbricht statt ihn auszusitzen —
+      das Warten bleibt als Absturzschutz, ist nach dem Kill aber kurz.
+      Drei Tests, darunter der Zwilling zum OpenSCAD-Timeout.
+- [x] **K6 — Cura scheitert am eigenen Türsteher**: der Dialog verlangt ein
+      Maschinenprofil, das es bei Cura strukturell nicht gibt, obwohl der
+      Kern die Maschine selbst beschreibt.
+
+      **Behoben:** Der Türsteher gilt nur noch der Orca-Familie; Cura wird
+      wie Prusa gar nicht erst durchsucht und sagt ehrlich, dass Solidon
+      die Maschine selbst beschreibt (`_machine_keys`, `_cura_base`).
+- [x] **K7 — Weg 4 ist gebaut, aber nicht benutzbar**: `finish_armature`
+      schickt eine leere Pose (nichts passiert, ohne Ansage); eine getippte
+      Pose tötet über ungeschütztes `json.loads` den Auswertungs-Thread und
+      die Sitzung meldet Erfolg; „Relief auflegen" bietet kein Bild an (kein
+      Bildformat führt in die Quellen); der Startbildschirm-Import lädt ins
+      Unsichtbare — und genau darauf zeigt der Schlussknopf der
+      Erstinbetriebnahme.
+
+      **Behoben, vierteilig:** (1) Die beiden Sammelparameter-Leser in
+      `pose.py` werfen bei fremder Eingabe eine `ValidationError` mit der
+      erwarteten Form, und `evaluate` wandelt jede fremde Ausnahme unterhalb
+      einer Op in einen `InternalError`-Befund, statt den Thread sterben zu
+      lassen — die nächste ungeschützte `json.loads` wäre sonst derselbe
+      Fund noch einmal. (2) „Fertig" im Skeletteditor gibt an
+      `run_operation` ab, wie es die Skizze vormacht: der Dialog öffnet mit
+      gesetztem Skelett. (3) Neuer Parameter- und Quellentyp `image`:
+      `displace_image` listet nur Bildquellen, der Dialog bekommt „Bild
+      wählen …" (`ImageSourceField`), `session.import_image` bettet ohne
+      load-Operation ein, und ein auf das Fenster gezogenes Bild öffnet den
+      Relief-Dialog auf dem gewählten Körper. (4) `action_import` legt vom
+      Startbildschirm aus ein frisches Projekt an und fängt Fehler; der
+      Wechsel in den Arbeitsbereich hängt jetzt am Dokument selbst
+      (`_on_project`), damit die vergessene achte Stelle unmöglich wird.
+      Offen bleibt das `ArmatureField` (Reihenfolge Punkt 12).
+- [x] **Nebensitzung 3MF-Export**: Urteil *nachbessern* — ohne geöffneten
+      Dialog ist `print_settings` weiter `None` (A1), der Einzelkörper-Export
+      läuft am neuen Code vorbei (A2); Details und A3–A7 in der
+      Durchsichts-Datei.
+
+      **Nachgebessert und übernommen:** Jedes 3MF geht über `write_assembly`
+      (auch ein Körper — der Plan-Weg kennt keine Einstellungen), `None`
+      fällt auf `print_settings.resolve` zurück, `remembered_setup` löst je
+      Material auf wie der Dialog selbst, und die Slicer-Suche läuft hinter
+      dem Wartezeiger. Der Zip-Test deckt jetzt auch den Normalfall: ein
+      Körper, Dialog nie geöffnet. Offen bleiben A5 (Profil erst beim
+      Slicen gemerkt, nicht beim Schließen) und A6 (kein Abgleich des
+      gemerkten Profils mit dem Drucker des Projekts) — beide gering, beide
+      im Gering-Block.
+- [x] **Mittel-Block Kern**: Platten-Cache verliert
+      `findings`/`solver`/`transform`; T-Vernähen quadratisch und doppelt;
+      Rückfallkette unabbrechbar; `FIT_TOLERANCE` widerspricht §14;
+      `nut_trap`/`printed_thread` mit Konstanten-Toleranz (Kalibrierung
+      erreicht sie nie); **eigene Bausteine werden nie geladen** (§24.5 ohne
+      Aufrufer); Lizenzprüfung deckt `agent,brep` nicht; beschädigte
+      Nutzer-TOML stürzt beim Start ab; Schlüsselwerkzeug erzeugt bei zwei
+      Vorratsläufen identische Schlüssel; Zipbomben-Lücke beim 3MF;
+      Einheitenantwort landet nicht in den Op-Parametern (§15.1);
+      Nullmessung gilt als Übereinstimmung; Baumstützen erreichen Cura nie.
+
+      **Alles behoben und einzeln committet** — mit zwei Vermerken:
+      `FIT_TOLERANCE` ist jetzt im Code begründet (Tessellationsrauschen
+      ±0,025 mm; mit `EPS_GEOM` wäre jede Passung auf einem exakten Körper
+      „verletzt"), aber **§14 ist mit Ansage nachzuziehen** — Robert
+      entscheidet. Und die **Einheitenantwort** bleibt offen: die saubere
+      Lösung ist eine Entscheidung zwischen „vorab fragen wie die CLI"
+      (kostet `read_mesh` doppelt, im Hauptthread) und
+      „`history.change_params` nach der Antwort" (kostet eine eigene
+      Undo-Stufe: das erste Undo stellte die Frage erneut) — ebenfalls
+      Roberts Entscheidung.
+- [x] **Mittel-Block Oberfläche**: Arbeiter-Halteleine in fünf Dialogen
+      fehlt (Hauptfenster macht es vor — in ein Modul heben); Export rechnet
+      im Hauptthread; Sculpting kennt kein Ziehen (20 Züge = 20 Klicks);
+      während Gestensitzungen bleiben alle Ops anklickbar und *Fertig*
+      verliert dann die Züge; die Befehlspalette umgeht die Gestenmodi und
+      kennt keine Verfügbarkeit; Differenzlegende einfarbig; Fenstergeometrie
+      wird nie gespeichert.
+
+      **Fast durch:** Halteleine lebt in `app/ui/leash.py` (mit
+      Wiederanstoß) und gilt in allen fünf Dialogen; Gestensitzungen sperren
+      die Operationen und *Fertig* prüft sein Ziel; `launch_operation` ist
+      der eine Einstieg für Menü und Palette, und die Palette zeigt
+      Verfügbarkeit mit Grund; der Pinsel malt beim Ziehen (halber Radius
+      als Mindestabstand); Legende zweifarbig, Fenstergeometrie gemerkt,
+      Druckeinstellungsdialog wird freigegeben, Wandprüfung mit Wartezeiger,
+      „Festschreiben" statt „OK". Der Export läuft im Arbeiter
+      (`_ExportWorker`, ohne Abbrechen — mit Begründung im Docstring und in
+      der Gebietsregel), die Druckeinstellungen öffnen sofort und
+      `take_slice_result` trägt die Analyse nach, die synchronen Lesungen
+      stehen unter `waiting()`. Und das letzte Paket ist drin: *Formen* und
+      *Skelett* stehen als Knöpfe neben *Zeichnen* in der oberen
+      Werkzeugleiste (ausgegraut mit Grund über `_pick_hint`), die Tour
+      nennt den echten Weg und das Ziehen, und die Stellung eines Skeletts
+      ist ein `ArmatureField` mit drei Zahlenfeldern je Knochen statt rohem
+      JSON.
+- [x] **Gering-Block als eigene Runde**: ~30 englische Docstrings (AGENTS.md
+      behauptet Vollständigkeit), acht englische nutzersichtbare Fehlertexte
+      in `backends/mesh.py`, „aufgeloest" in `advise.py`, deutsche
+      Bezeichner in `tools/check_env.py` (Sprachprüfung sieht `tools/`
+      nicht), Zylinder-Sortierung ohne Z, Redirect kann `check_url` umgehen,
+      Analysekarten ohne Abbruch, Details in der Datei.
+
+      **Vollständig erledigt** — Sprache (Übersetzungen, `mesh.py`-Texte
+      samt Katalogen, `check_env.py`-Bezeichner, Sprachprüfung sieht
+      `tools/`) und der Rest: Zylinder-Sortierung mit Z, `check_url` prüft
+      den erreichten Ort nach der Weiterleitung, Analysekarten abbrechbar,
+      abhängige Felder grauen mit Grund (G3), die Slicer-Wahl wird beim
+      Schließen gemerkt (A5) und gegen den Drucker abgeglichen (A6), und
+      *Hilfe → Beispiele* führt auf den Startbildschirm.
+- [ ] **Neuer Fund aus dem ArmatureField-Bau:** Der `pose`-doc verspricht
+      „Ein Winkel darf ein Projektparameter sein" — der Kern löst einen
+      Ausdruck *innerhalb* des JSON-Textes aber nicht auf:
+      `resolve_params` sieht nur ganze Parameterwerte, und
+      `pose_from_text._vector` wirft bei einem String (das Feld bewahrt
+      einen getippten Ausdruck, die Operation lehnt ihn sauber ab). Der
+      Weg ist das Gegenstück zu `sketch_parameter_references()` und
+      `_with_sketch_context()` für `kind="armature"` — Kernarbeit mit
+      eigenen Tests, samt Cache-Schlüssel-Beteiligung (§15).
+- [x] **Die Operationszahl im Fließtext war weggelaufen.** Das Register
+      führt 85; die Funktionsseite sagte 83, die englische 84, während
+      beide Startseiten richtig lagen. Der Grund steht weiter oben in
+      dieser Datei: „`tests/test_website.py` prüft die Zahl gegen das
+      Register und hat es gefangen, bevor die falsche Zahl auf der Seite
+      stand" — das galt für die Kennzahlenleiste der zwei Startseiten und
+      für sonst nichts. Die Zahl steht aber ein zweites Mal im Text, auf
+      der Funktionsseite und in den häufigen Fragen. Der Test liest jetzt
+      jede Seite unter `website/` statt einer festen Liste; der Stamm
+      „oper" trägt durch alle sechs Sprachen, die Inline-SVG fallen vorher
+      heraus (ihr „Vorschlag — 3 Operationen" ist ein Beispiel). Dieselbe
+      Zahl stand im README: 84 Schemata und 97 KB, nachgemessen sind es 85
+      mit 109 170 Zeichen, rund 107 KB.
+
+      Nachgezogen am 18.08.: `tools.py` nannte 104 KB — gemessen sind es
+      110 KB voll und 87 KB kompakt. `.claude/rules/agentenschicht.md`,
+      `backends/llm.py` und `tests/test_backends.py` führten dieselben
+      „84 Schemata, 99 000 Zeichen, 21 162 Token"; es sind 85 mit 109 170
+      Zeichen. Die Tokenzahl kommt aus einem Lauf gegen `qwen3:14b`
+      (`prompt_eval_count` bei `num_ctx` 32768, Basislinie ohne Werkzeuge
+      abgezogen): **24 474 Token** für die Schemata allein, 26 601 für den
+      ganzen Prompt mit allen 96 Werkzeugen, 19 249 für den kompakten Satz,
+      den der Ollama-Weg fährt. Keiner davon wurde gekürzt — 81 % des
+      Fensters, keine Halbierung, und 4,46 Zeichen je Token passen zur alten
+      Messung (4,68). **32768 trägt also weiter**; die Schranke im Test steht
+      jetzt auf 25 361 statt 21 162.
+
+      Nebenbefund im selben Docstring: „der doc-Satz und der Menüort machen
+      den größten Teil aus" stimmt nicht. Sie sind zusammen 14 013 Zeichen,
+      die Parametertexte allein 40 945 — was der Kommentar dreißig Zeilen
+      tiefer längst richtig sagte (dort stand 36 KB, gemessen 40 KB).
+
+      Fünf weitere Stellen nannten denselben alten Bestand, ohne ihn zu
+      messen: `session.py` („88 Werkzeuge mit 104 KB Schema"), `llm.py` oben
+      („dreiundachtzig, rund 96 KB"), `tools/check_local_model.py` („sieben
+      statt dreiundachtzig"), `.claude/rules/agentenschicht.md` („gegen 84
+      Werkzeuge") und das Konzeptpapier vom August. Sie sind nachgezogen —
+      aber nicht durch bloßes Ersetzen der Zahl: Jede nennt die Lage, in der
+      **damals** gemessen wurde, und danach den heutigen Bestand. Wer nur die
+      Zahl austauscht, behauptet eine Messung, die es nie gab; wer sie stehen
+      lässt, beschreibt ein Register, das es nicht mehr gibt. Beides steht
+      jetzt nebeneinander, und die Messwerte behalten ihren Bezug.
+
+**Wettbewerb (Recherche 16.08., Quellen in der Durchsichts-Datei):** Die
+Chat-Alleinstellung ist seit Zoo „Zookeeper" (01/2026) nicht mehr
+konkurrenzlos — verteidigungsfähig als Paket *lokal + kalibrierte Passungen +
+Schichtanalyse speist die Konstruktion + Einmalkauf*; kalibrierte Passungen
+hat sonst niemand. Gefährlichstes Ökosystem ist Bambu/MakerWorld (Meshy-6,
+Hunyuan 3.1, OpenSCAD-Customizer und Slicer-Werkzeuge in einem Gratis-Konto);
+Backflip macht seit 03.08. Scan→Feature-Baum für ~10 USD. Die fünf größten
+Lücken aus Kundensicht: Weg-3-Einstieg (ComfyUI-Hürde gegen Browser-Klick),
+Verrundung auf importierten STLs, Gridfinity-Baustein, Messen am
+Referenz-Mesh, Anschluss an fremde `.scad`-Customizer. Preis-Korridor:
+69–99 € einmalig, Plasticity (150 USD) als Anker darüber.
 ## Die Oberfläche im Bild durchgesehen (17.08.2026)
 
 Die vorige Durchsicht endete mit einem Satz, der eine Lücke benannte: *„Nicht
@@ -5950,19 +6303,22 @@ belegt und mit Absicht liegen geblieben.
       Kürzelübersicht behauptet das Gegenteil. Die Suche kennt weder
       Umlautfaltung noch ein Synonym, und sie umgeht die Bauart-Prüfung:
       „Verrunden" öffnet für ein Netz seinen vollen Dialog.
-- [ ] **Vier Dialoge lassen ihren Arbeiter im `finished`-Slot los** — genau das
-      Muster, das `.claude/rules/oberflaeche.md` ausdrücklich verbietet, weil
-      es eine Zugriffsverletzung ohne Zeile hinterlässt. Der Weg dahin ist ein
-      Umbau und keine Zeile: `_hold_until_done`, `_release` und `_retire`
-      gehören in ein eigenes Modul, aus dem das Fenster **und** die vier
-      Dialoge erben; danach müssen die `closeEvent`-Wächter auf die Halteliste
-      zeigen statt auf ein Feld, das dann `None` ist. Der Download, der
-      denselben Fund an anderer Stelle hatte, ist oben abgehakt.
 - [ ] **Der Installationsdialog antwortet mit „Das hat nicht geklappt."** und
       zeigt davor die rohe Befehlszeile und die rohe pip- oder winget-Ausgabe.
       Daneben zwei weitere Sätze ohne Warum: „Die Boolesche Operation ist
       fehlgeschlagen." an zwei Stellen, und „Zwei Bedingungen widersprechen
       sich." ohne das Paar zu nennen, das der Bauplan ausdrücklich verlangt.
+- [ ] **Im deutschen Handbuchbild steht „80.00 mm".** Punkt statt Komma, also
+      die englische Zahlendarstellung im deutschen Handbuch — auf jedem Bild
+      mit Parameterleiste. Gefunden beim Zusammenführen am 18.08., und der
+      Fehler liegt nicht am Merge: `origin/main` zeigt ihn ebenso.
+      Eingegrenzt ist er schon: `QLocale.setDefault` steht richtig in
+      `install_qt_translations`, und im **gebauten** Fenster steht „80,00 mm"
+      — offscreen wie mit echter Plattform, gemessen an den vier Feldern der
+      Parameterleiste. Es liegt also an etwas in `take_all`, zwischen
+      Sprachwahl und Aufnahme. `translate_parameter_titles` fasst nur Titel an,
+      keine Werte; der nächste Verdacht ist die Reihenfolge, in der der
+      Startbildschirm vor dem Hauptfenster gebaut wird.
 - [ ] **Weg 4 steht in keiner Unterlage.** Bauplan, README, Handbuchkapitel und
       Website nennen weiter drei Wege — die gezeichnete Abbildung zeigt drei,
       die Oberflächenregel schickt Weg 4 in die Werkzeugzeile, wo er nicht
@@ -5974,6 +6330,17 @@ belegt und mit Absicht liegen geblieben.
       liest Werte, die es in der Ausnahme nicht gibt; und die Restzeitschätzung
       über zehn Sekunden gibt es nur, solange das Bild leer ist — also gerade
       nicht bei den langen Rechnungen.
+
+> **Nachtrag vom 18.08.2026, beim Zusammenführen.** Zwei dieser Punkte hat eine
+> parallele Sitzung in denselben Tagen erledigt, und das ist der Grund, warum
+> sie hier nicht mehr stehen. Die vier Dialoge halten ihren Arbeiter jetzt über
+> `app/ui/leash.py` — genau der Umbau, der oben als Weg beschrieben stand, mit
+> einem eigenen Modul, aus dem Fenster und Dialoge erben. Und die Legende der
+> Differenzansicht war dort unabhängig gefunden und behoben worden: zweimal
+> derselbe Befund aus zwei Richtungen, was für ihn spricht. Geblieben ist die
+> Fassung mit Farbfeld und gerechneter Schrift, weil sie neben der Zuordnung
+> auch den Kontrast löst — als bloße Schriftfarbe kam die Legende in Graustufen
+> auf 1,16 gegen ihr Band.
 
 ### Was die Durchsicht entlastet hat
 

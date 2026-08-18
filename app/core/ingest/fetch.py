@@ -147,6 +147,12 @@ def fetch_model(
         ) from error
 
     with answer:
+        # Noch einmal dieselbe Prüfung, jetzt am *erreichten* Ort. Die Prüfung
+        # oben gilt der eingetippten Adresse; dazwischen liegt der
+        # Weiterleitungs-Handler von urllib, und der folgt auch nach `ftp:` —
+        # ein http-Server, der mit `Location: ftp://…` antwortet, käme so an
+        # der Schemaprüfung vorbei (§32). Gelesen wird erst danach.
+        address = check_url(str(getattr(answer, "url", address) or address))
         name = _name_from(answer, address)
         _reject_web_page(answer, name, address)
         payload = _read_limited(answer, progress)

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rendre les modèles IA imprimables — Solidon3D</title>
+<meta name="description" content="Un modèle sorti d'un générateur d'IA est une surface, pas une pièce. Solidon3D le répare, vérifie épaisseurs de paroi et surplombs, le découpe et le goupille — avant le slicing.">
+<link rel="canonical" href="https://solidon3d.de/fr/ai-models.html">
+<link rel="alternate" hreflang="de" href="https://solidon3d.de/ki-modelle.html">
+<link rel="alternate" hreflang="en" href="https://solidon3d.de/en/ai-models.html">
+<link rel="alternate" hreflang="es" href="https://solidon3d.de/es/ai-models.html">
+<link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/ai-models.html">
+<link rel="alternate" hreflang="it" href="https://solidon3d.de/it/ai-models.html">
+<link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/ai-models.html">
+<link rel="alternate" hreflang="x-default" href="https://solidon3d.de/ki-modelle.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Solidon3D">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:url" content="https://solidon3d.de/fr/ai-models.html">
+<meta property="og:title" content="Rendre les modèles IA imprimables — Solidon3D">
+<meta property="og:description" content="Un modèle sorti d'un générateur d'IA est une surface, pas une pièce. Solidon3D le répare, vérifie épaisseurs de paroi et surplombs, le découpe et le goupille — avant le slicing.">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/fr/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>
+        <path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>
+      </svg>
+      Solidon<span>3D</span>
+    </a>
+    <nav class="lang">
+      <a class="hide-small" href="/fr/features.html">Fonctions</a>
+      <a class="hide-tiny" href="/fr/#ways">Quatre voies</a>
+      <a href="/fr/manual.html">Manuel</a>
+      <details class="langs">
+        <summary aria-label="Choisir la langue">FR</summary>
+        <ul>
+          <li><a href="/ki-modelle.html" hreflang="de" lang="de">Deutsch</a></li>
+          <li><a href="/en/ai-models.html" hreflang="en" lang="en">English</a></li>
+          <li><a href="/es/ai-models.html" hreflang="es" lang="es">Español</a></li>
+          <li><a href="/fr/ai-models.html" hreflang="fr" lang="fr" aria-current="page">Français</a></li>
+          <li><a href="/it/ai-models.html" hreflang="it" lang="it">Italiano</a></li>
+          <li><a href="/pt/ai-models.html" hreflang="pt" lang="pt">Português</a></li>
+        </ul>
+      </details>
+      <a class="cta" href="/fr/#pricing">Démo</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section id="anfang">
+    <div class="wrap">
+      <h1>Quand le modèle sort d'une IA</h1>
+      <p class="sub">Les générateurs font d'une phrase une forme. Ce qu'ils n'en font pas, c'est une pièce qui s'ajuste. C'est exactement là que Solidon3D commence.</p>
+    </div>
+  </section>
+
+  <section id="generated">
+    <div class="wrap">
+      <ol class="chain">
+        <li><b>Glisser un GLB ou un STL.</b> Même texturé — les couleurs
+        survivent à l'import.</li>
+        <li><b>Chaîne de réparation et rapport de contrôle.</b> Trous,
+        normales retournées, triangles dégénérés&nbsp;; ensuite, il est écrit
+        noir sur blanc ce qui tournera mal à l'impression.</li>
+        <li><b>Ramener les couleurs à vos filaments.</b> Au nombre réellement
+        chargé dans la machine — pas à un maximum.</li>
+        <li><b>Découper, goupiller, disposer.</b> Des goupilles avec le jeu
+        du profil de matériau, pour que les moitiés se retrouvent.</li>
+        <li><b>Un 3MF avec groupes de matériaux, droit au slicer.</b></li>
+      </ol>
+
+      <h3>Ce que vérifie un contrôle d'imprimabilité</h3>
+      <p class="sub">À gauche, ce à quoi répond le contrôle d'un générateur.
+      À droite, ce qui peut encore mal tourner avant l'impression. État au
+      12&nbsp;août 2026, d'après la documentation publique d'un générateur
+      très répandu.</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Vérifié</th><th>Générateur</th><th>Solidon3D</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Étanchéité, trous, arêtes ouvertes</td><td><span class="yes">✓ oui</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Arêtes non manifold, faces dégénérées</td><td><span class="yes">✓ oui</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Volume</td><td><span class="yes">✓ oui</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Épaisseur de paroi contre la buse de cette imprimante</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Angle de surplomb couche par couche</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Îlots&nbsp;: de la matière sans lien vers le bas</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Portées de pont, passage le plus étroit</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Besoin de supports et meilleure orientation</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Tient-il sur votre plateau d'impression</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Ajustements contre le profil de matériau</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">La réparation seule se trouve aujourd'hui
+      gratuitement dans un navigateur, et c'est très bien — un maillage fermé
+      n'est toujours pas une pièce qui s'ajuste. La différence se joue après
+      la réparation&nbsp;: la cote, l'ajustement, l'analyse des couches, et
+      un historique où chaque chiffre peut encore changer plus tard.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="closing">
+        <h2>Faire de la forme une pièce</h2>
+        <p>La démo paraît le 20&nbsp;août 2026 et court jusqu'au
+        30&nbsp;octobre — gratuite et complète.</p>
+        <a class="btn" href="/fr/#pricing">Vers la démo</a>
+        <a class="btn ghost" href="/fr/features.html">Toutes les fonctions</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    © 2026 RS Digital ·
+    <a href="/fr/">Accueil</a> ·
+    <a href="/fr/manual.html">Manuel</a> ·
+    <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
+    <a href="/impressum.html">Mentions légales</a> ·
+    <a href="/datenschutz.html">Confidentialité</a>
+    <em>(textes juridiques en allemand — seule version faisant foi)</em> ·
+    <a href="/">Deutsch</a> ·
+    <a href="/en/">English</a> ·
+    <a href="/es/">Español</a> ·
+    <a href="/it/">Italiano</a> ·
+    <a href="/pt/">Português</a>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -24,7 +24,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.core.errors import AmbiguityError, AppError
+from app.core.errors import AmbiguityError, AppError, InternalError, OperationCancelled
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.perceive.features import detect
@@ -163,9 +163,10 @@ def evaluate(
         cached = cache.get(key) if cache is not None else None
 
         if cached is not None:
-            result = CachedResult(
-                objects=cached.objects, findings=cached.findings, transform=cached.transform
-            )
+            # Unverändert weiterreichen: der Umbau hier warf ohne Not den
+            # Solver weg, und nach einem Cache-Treffer fehlte die Stufe in
+            # der Solver-Übersicht des Berichts.
+            result = cached
         else:
             context = OpContext(
                 scene=Scene(
@@ -189,6 +190,23 @@ def evaluate(
                 produced = spec.fn(context)
             except AppError as error:
                 findings.append(_finding_from(error, operation))
+                stopped_at = operation.id
+                break
+            except OperationCancelled:
+                raise
+            except Exception as problem:
+                # Eine fremde Ausnahme aus einer Op-Umsetzung ist ein
+                # Programmfehler, kein Bedienfehler — aber ohne diesen Fang
+                # stirbt der Thread der Auswertung, und die Sitzung meldet
+                # Erfolg mit dem alten Ergebnis. Die nächste ungeschützte
+                # json.loads in einem Sammelparameter-Leser wäre sonst
+                # derselbe Fund noch einmal.
+                wrapped = InternalError(
+                    detail=f"{type(problem).__name__}: {problem}",
+                    values={"operation": str(operation.op)},
+                    op_id=operation.id,
+                )
+                findings.append(_finding_from(wrapped, operation))
                 stopped_at = operation.id
                 break
             result = CachedResult(

@@ -234,3 +234,72 @@ G0 X30 Y10
 """
     assert not gcode.extrudes(leerlauf)
     assert gcode.extrudes(PRUSA)
+
+
+# --- mehrere Platten (§25, §29) -----------------------------------------------
+
+
+def test_two_plates_add_up_to_one_job() -> None:
+    """Zeit und Material addieren sich, weil zweimal gedruckt wird."""
+    first = gcode.GcodeMetrics(print_seconds=600.0, filament_mm=1000.0, filament_grams=10.0)
+    second = gcode.GcodeMetrics(print_seconds=1200.0, filament_mm=2000.0, filament_grams=20.0)
+
+    total = gcode.combine([first, second])
+
+    assert total.print_seconds == 1800.0
+    assert total.filament_mm == 3000.0
+    assert total.filament_grams == 30.0
+    assert total.source == "gcode"
+
+
+def test_a_missing_value_on_one_plate_leaves_the_sum_missing() -> None:
+    """Sonst stünde eine Gesamtzeit da, die zu kurz ist — und niemand sähe es.
+
+    Dieselbe Unterscheidung, aus der ``GcodeMetrics`` seine Felder optional
+    führt: ein fehlender Wert fehlt, er ist nicht null.
+    """
+    first = gcode.GcodeMetrics(print_seconds=600.0, filament_grams=10.0)
+    second = gcode.GcodeMetrics(filament_grams=20.0)
+
+    total = gcode.combine([first, second])
+
+    assert total.print_seconds is None
+    assert total.filament_grams == 30.0
+
+
+def test_the_layer_count_belongs_to_a_plate_and_not_to_a_job() -> None:
+    """Über zwei Platten addiert wäre sie eine Zahl, die es nirgends gibt."""
+    plates = [gcode.GcodeMetrics(layer_count=110), gcode.GcodeMetrics(layer_count=40)]
+
+    assert gcode.combine(plates).layer_count is None
+    # Bei einer Platte bleibt sie, denn dort sagt sie etwas.
+    assert gcode.combine(plates[:1]).layer_count == 110
+
+
+def test_one_plate_comes_back_unchanged() -> None:
+    """Der einfarbige Einzelauftrag ist der Sonderfall mit einem Eintrag,
+    nicht ein anderer Weg."""
+    only = gcode.parse(PRUSA)
+
+    assert gcode.combine([only]) is only
+    assert gcode.combine([]) == gcode.GcodeMetrics()
+
+
+def test_a_zero_measurement_is_not_a_perfect_match() -> None:
+    """`deviation` gab für `measured=0` glatt null zurück — die größtmögliche
+    Abweichung sah aus wie die perfekte Übereinstimmung. Eine Null ist keine
+    Messung, sondern „nicht vergleichbar" (Regel 14)."""
+    check = gcode.compare(12.0, 0.0, "material")
+
+    assert [entry.code for entry in check.findings] == ["gcode.no_measurement"]
+    assert all(entry.code != "gcode.deviation" for entry in check.findings)
+
+
+def test_a_zero_gram_header_falls_back_to_the_length() -> None:
+    """`filament_grams` hat dieselbe Null-Absicherung wie `filament_mm` seit
+    dem Cura-Vorfall: dessen Kopf schreibt die Werte, bevor gerechnet wird."""
+    metrics = gcode.GcodeMetrics(filament_mm=1000.0, filament_grams=0.0)
+
+    grams = metrics.grams(density=1.24)
+
+    assert grams is not None and grams > 0.0, "die Länge trägt, nicht die leere Kopfzeile"

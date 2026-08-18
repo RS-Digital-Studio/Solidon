@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 from app.core import activation
-from app.core.errors import ValidationError
+from app.core.errors import CANCEL, CHOOSE, ValidationError
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, VARIABLE, Registry
 from app.core.scene import expressions
@@ -272,11 +272,17 @@ class History:
 
         missing = [entry for entry in draft.inputs if entry not in known]
         if missing:
+            # Mit eigenem Titel und eigener Handlung: der Vorgabetitel der
+            # ValidationError spricht von einem Wert außerhalb seines
+            # Bereichs — hier ist kein Wert schuld, hier fehlt ein Körper,
+            # und „Eingabe korrigieren" gäbe es nicht (Regel 17).
             raise ValidationError(
+                title=_("Der gewählte Körper ist nicht mehr da."),
                 field="in",
                 detail=_("Die Operation verweist auf ein Objekt, das es nicht gibt."),
                 constraint="unknown_object",
                 values={"op": draft.op, "missing": missing},
+                suggestions=(CHOOSE, CANCEL),
             )
         if spec.consumes and len(draft.inputs) != spec.consumes:
             raise ValidationError(

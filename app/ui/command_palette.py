@@ -65,17 +65,34 @@ class CommandPalette(QDialog):
             label = str(entry.title)
             if entry.shortcut:
                 label = f"{label}\t{entry.shortcut}"
+            if not entry.available and entry.reason:
+                # Der Grund als zweite Zeile: das Ausgrauen allein wäre die
+                # halbe Antwort (Regel 18) — und über die Palette stand die
+                # modale Sackgasse offen, die das Menü längst beseitigt hat.
+                label = f"{label}\n{entry.reason}"
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, entry.name)
             item.setToolTip(str(entry.doc))
+            if not entry.available:
+                # Sichtbar, aber nicht wählbar — dieselbe Antwort wie im
+                # Menü. Die Palette bleibt eine Reihenfolge, keine Auswahl:
+                # der Eintrag steht da und sagt, was ihm fehlt.
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
             self.list.addItem(item)
         if self.list.count():
-            self.list.setCurrentRow(0)
+            # Vorgewählt ist der erste Eintrag, der auch ausführbar ist — Enter
+            # auf einem ausgegrauten wäre ein Klick, der nichts tut.
+            for row in range(self.list.count()):
+                item = self.list.item(row)
+                if item is not None and item.flags() & Qt.ItemFlag.ItemIsEnabled:
+                    self.list.setCurrentRow(row)
+                    break
         elif query.strip():
             # Eine leere Liste sagt nicht, ob nichts passt oder ob die Palette
             # kaputt ist. Der Eintrag ist nicht wählbar und trägt keine Daten —
             # ``chosen()`` gibt darüber weiter None zurück, und die Eingabe
-            # kann nicht versehentlich einen Befehl auslösen.
+            # kann nicht versehentlich einen Befehl auslösen. Er ist damit auch
+            # für die Vorauswahl darüber unsichtbar.
             nothing = QListWidgetItem(
                 tr(
                     "Kein Befehl passt zu „{begriff}“. Gesucht wird in Titel, Name "

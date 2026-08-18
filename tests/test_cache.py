@@ -162,3 +162,38 @@ def test_objects_keep_their_features_through_the_disk_level(tmp_path: Path) -> N
     assert feature.kind == "hole"
     assert feature.params["diameter"] == 5.2
     assert feature.face_indices == (1, 2, 3)
+
+
+def test_the_disk_cache_keeps_findings_solver_and_transform(tmp_path: Path) -> None:
+    """Die drei Beifänge gehören zum Ergebnis wie die Körper selbst.
+
+    `put` schrieb nur die Objekte, `get` baute ein kahles `CachedResult`:
+    nach einem Platten-Treffer las `_with_features` die alten Merkmale ohne
+    die gemeldete Bewegung im falschen Bezugspunkt (§21.2), und die
+    Voxel-Warnung, die §17.2 nie stillschweigend lassen will, war weg.
+    """
+    from app.core.types import Finding, SolverInfo
+
+    cache = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    moved = (
+        (1.0, 0.0, 0.0, 12.0),
+        (0.0, 1.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0, 0.0),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+    cache.put(
+        "key",
+        CachedResult(
+            objects=(make_object("obj_1"),),
+            findings=(Finding(code="boolean.voxel", severity="warning", message="Voxelstufe."),),
+            solver=SolverInfo(strategy="voxel"),
+            transform=moved,
+        ),
+    )
+
+    again = cache.get("key")
+
+    assert again is not None
+    assert [entry.code for entry in again.findings] == ["boolean.voxel"]
+    assert again.solver is not None and again.solver.strategy == "voxel"
+    assert again.transform == moved

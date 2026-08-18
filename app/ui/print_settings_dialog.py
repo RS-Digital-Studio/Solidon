@@ -50,26 +50,29 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import discover, tools
-from app.core.errors import AppError
+from app.core.errors import AppError, OperationCancelled
 from app.core.export import handover, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import arrangement_holds, write_assembly
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import print_settings, profiles
 from app.core.log import get_logger
-from app.core.slice import advise
+from app.core.scene.cancel import CancelSignal
+from app.core.slice import advise, gcode
 from app.core.types import (
     BoundingBox,
     Finding,
     MaterialSlot,
     PrintSettings,
     Profile,
+    SceneObject,
     SettingAdvice,
     SliceResult,
 )
 from app.i18n import tr
 from app.ui.dialogs import show_error
 from app.ui.labels import by_title, colour_name
+from app.ui.leash import WorkerLeash
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.style import make_primary
@@ -627,6 +630,63 @@ def _select_data(box: QComboBox, identifier: str) -> None:
         box.setCurrentIndex(index)
 
 
+def remembered_setup(
+    settings: UiSettings, material: str = "", printer_id: str = ""
+) -> handover.SlicerSetup | None:
+    """Der Slicer, wie er hier zuletzt eingestellt war (§29).
+
+    Für alle, die eine Datei schreiben, ohne diesen Dialog geöffnet zu haben —
+    allen voran der Export im Menü. Ohne ein Setup trägt eine 3MF zwar Solidons
+    eigene Werte, aber kein Druckerprofil; der Slicer behält dann das gerade
+    eingestellte, und dessen Düse muss zu unserer Schichthöhe nicht passen. Bei
+    einer 0,2er Düse und 0,25 mm erster Schicht endet das in „Schichthöhe darf
+    den Düsendurchmesser nicht überschreiten" — eine Meldung über das Modell,
+    die keine über das Modell ist.
+
+    ``material`` löst das Filament auf, wie der Dialog selbst es tut: je
+    Material zuerst, das globale nur als Rückfall. Ohne das trüge ein
+    TPU-Projekt nach einem PETG-Lauf das PETG-Profil — richtig gerechnet,
+    falsch beschriftet.
+
+    ``printer_id`` ist der Drucker, für den gerade exportiert wird. Weicht er
+    von dem ab, für den die Profile gewählt wurden, gilt nichts davon: Ein
+    Maschinenprofil gehört zu genau einem Drucker, und das des letzten Projekts
+    an das nächste weiterzureichen wäre schlimmer als gar keines — die Datei
+    sähe vollständig aus und zeigte auf die falsche Maschine. Ohne Vermerk
+    (Einstellungen aus einer älteren Fassung) wird nicht verglichen.
+
+    ``None``, solange kein Druckerprofil gemerkt ist: Die Suche nach dem
+    Programm geht über PATH, Registry und die üblichen Orte und kostet eine
+    halbe Sekunde. Wer den Slicer nie eingerichtet hat, bekäme dafür ein Setup
+    ohne Maschine — also nichts, was die Kette auflösen könnte.
+    """
+    if not settings.slicer_machine_profile:
+        return None
+    chosen_for = settings.slicer_profile_printer
+    if printer_id and chosen_for and chosen_for != printer_id:
+        return None
+    found = discover.find_program("slicer", tools.SLICERS)
+    if found is None:
+        return None
+    try:
+        setup = handover.detect(found)
+    except AppError:
+        # Ein unbekanntes Programm ist hier kein Fehler, sondern eine
+        # Auskunft weniger: geschrieben wird trotzdem, nur ohne Systemprofil.
+        return None
+    filament = (
+        settings.slicer_filament_per_material.get(material, settings.slicer_base_filament)
+        if material
+        else settings.slicer_base_filament
+    )
+    return replace(
+        setup,
+        machine_profile=settings.slicer_machine_profile,
+        base_process=settings.slicer_base_process,
+        base_filament=filament,
+    )
+
+
 class _ColourButton(QPushButton):
     """Farbwahl, die ihren Wert auch schreibt.
 
@@ -667,48 +727,96 @@ class _ColourButton(QPushButton):
             self.changed.emit(self._value)
 
 
+@dataclass(frozen=True, slots=True)
+class PlateRun:
+    """Eine Druckplatte, wie sie in den Slicer geht.
+
+    Der Auftrag ist die **Liste** dieser Läufe, nicht einer davon: eine Szene
+    mit mehr Teilen, als auf ein Bett passen, ist der Normalfall (§25), und ein
+    Auftrag, von dem nur die erste Platte geslicet wird, ist kein Auftrag,
+    sondern eine Teilmenge, über die niemand entschieden hat.
+    """
+
+    plate: int
+    model: Path
+    slots: tuple[MaterialSlot, ...] = ()
+    keep_arrangement: bool = False
+    findings: tuple[Finding, ...] = ()
+    """Was beim Schreiben der Baugruppe auffiel — Haftungsränder,
+    Filamentwechsel. Sie reisen mit ihrer Platte, damit im Prüfbericht steht,
+    welche gemeint ist."""
+
+
 class _SliceWorker(QThread):
-    """Ein Slicer-Lauf abseits der Ereignisschleife (§2.8).
+    """Die Slicer-Läufe abseits der Ereignisschleife (§2.8).
 
     Ein Teil mit vielen Schichten beschäftigt den Slicer Minuten. Im
     Qt-Hauptthread hieße das ein eingefrorenes Fenster samt der Fortschritts-
     zeile, die davon berichten soll.
+
+    **Eine Platte ist ein Lauf.** Der Slicer schreibt je Aufruf eine Druckdatei,
+    und mehr wäre auch nicht richtig: Wer zwei Platten druckt, legt zweimal
+    Filament ein und drückt zweimal Start. Dass alle drei Slicer-Familien
+    denselben Weg gehen, ist der zweite Grund — die Orca-Familie könnte mehrere
+    Platten in einer Projektdatei führen, Cura und PrusaSlicer nicht.
     """
 
     done = Signal(object)
     failed = Signal(object)
+    step = Signal(int, int)
+    """Welche Platte gerade läuft und wie viele es sind — beide ab eins gezählt,
+    denn diese Zahl steht in der Statuszeile."""
 
     def __init__(
         self,
-        model: Sequence[Path],
+        runs: Sequence[PlateRun],
         settings: PrintSettings,
         profile: Profile,
         setup: handover.SlicerSetup,
-        keep_arrangement: bool = False,
-        slots: Sequence[MaterialSlot] = (),
     ) -> None:
         super().__init__()
-        self._model = model
+        self._runs = list(runs)
         self._settings = settings
         self._profile = profile
         self._setup = setup
-        self._keep_arrangement = keep_arrangement
-        self._slots = slots
+        self.cancelled = CancelSignal()
+        """Der Schalter zum Abbrechen-Knopf (§2.8): Der Kern-Lauf fragt ihn ab
+        und beendet den Kindprozess — vorher lief der Slicer, bis er fertig
+        war, gleich was der Nutzer wollte."""
+
+    def cancel(self) -> None:
+        """Bricht den laufenden und alle weiteren Läufe ab."""
+        self.cancelled.cancel()
 
     def run(self) -> None:
-        try:
-            outcome = handover.slice_model(
-                self._model,
-                self._settings,
-                self._profile,
-                self._setup,
-                keep_arrangement=self._keep_arrangement,
-                slots=self._slots,
-            )
-        except AppError as problem:
-            self.failed.emit(problem)
-            return
-        self.done.emit(outcome)
+        results: list[handover.SliceOutcome] = []
+        for index, entry in enumerate(self._runs, start=1):
+            if self.cancelled.is_cancelled:
+                return
+            self.step.emit(index, len(self._runs))
+            try:
+                outcome = handover.slice_model(
+                    [entry.model],
+                    self._settings,
+                    self._profile,
+                    self._setup,
+                    keep_arrangement=entry.keep_arrangement,
+                    slots=entry.slots,
+                    cancelled=self.cancelled,
+                )
+            except OperationCancelled:
+                # Kein Fehler und nie als einer gezeigt (§15.6): der Nutzer
+                # hat abgebrochen, und das Aufräumen macht `finished`.
+                return
+            except AppError as problem:
+                # Eine Platte, die scheitert, nimmt den Auftrag mit: Was danach
+                # käme, wäre eine Sammlung von Druckdateien, in der eine fehlt —
+                # und wer sie hinterher an den Drucker gibt, merkt das nicht.
+                self.failed.emit(problem)
+                return
+            outcome.findings = [*entry.findings, *outcome.findings]
+            results.append(outcome)
+        self.done.emit(results)
 
 
 class _ProfileWorker(QThread):
@@ -773,9 +881,13 @@ class PrintSettingsDialog(QDialog):
         self._loading = False
         self._worker: _SliceWorker | None = None
         self._profile_worker: _ProfileWorker | None = None
+        self._leash = WorkerLeash(self)
+        """Hält ausgelaufene Arbeiter, bis Qt mit ihnen durch ist — das
+        Warum steht in :mod:`app.ui.leash`."""
         self._profiles: list[slicer_profiles.SlicerProfile] = []
         self._temporary: TemporaryDirectory[str] | None = None
-        self._gcode: Path | None = None
+        self._gcode: list[Path] = []
+        """Die Druckdateien des letzten Laufs — eine je Platte."""
         self._pending_findings: list[Finding] = []
         """Was die Prüfung vor dem Schreiben fand (§29). Sie berichtet, sie
         blockiert nicht — also reist sie mit dem Ergebnis in den Prüfbericht."""
@@ -805,6 +917,24 @@ class PrintSettingsDialog(QDialog):
         self._load_into_editors()
         self._refresh_advice()
         self._start_profile_search()
+
+    def take_slice_result(self, result: SliceResult | None) -> None:
+        """Die nachgereichte Schichtanalyse übernehmen (§2.8, §29).
+
+        Der Dialog geht auf, sobald er kann, und nicht erst, wenn die Analyse
+        fertig ist: Auf sie zu warten hielt den Weg zu den Druckeinstellungen
+        bis zu zwei Sekunden auf, mit stehendem Fenster und ohne dass irgendwo
+        stand, worauf.
+
+        Was aus der Geometrie folgt — Stützen, Haftung, Mindestschichtzeit —,
+        kommt damit ein paar Zehntel später in die Vorschlagsliste, statt den
+        ganzen Dialog aufzuhalten. Ein ``None`` ändert nichts: dann bleibt es
+        bei dem, was aus Material und Maschine folgt.
+        """
+        if result is None:
+            return
+        self.slice_result = result
+        self._refresh_advice()
 
     # --- Aufbau ---------------------------------------------------------------
 
@@ -967,6 +1097,18 @@ class PrintSettingsDialog(QDialog):
                 )
             )
             return
+        if flavour == "cura":
+            # CuraEngine hat keinen wählbaren Profilbestand: seine Ordner
+            # heißen definitions, variants und quality — `find_profiles`
+            # fände strukturell nichts. Der Kern beschreibt die Maschine
+            # selbst (`_machine_keys`) und nimmt die mitgelieferte Definition
+            # (`_cura_base`). Vorher lief die Suche, fand null, und der
+            # Türsteher in `_slice` verlangte eine Wahl aus einer leeren
+            # Liste — ein Fehler ohne Ausweg (Regel 17, §2.7).
+            self.profile_note.setText(
+                tr("Dieser Slicer braucht kein Profil — Solidon beschreibt die Maschine selbst.")
+            )
+            return
 
         worker = _ProfileWorker(found, flavour)
         worker.done.connect(self._profiles_found)
@@ -1072,6 +1214,19 @@ class PrintSettingsDialog(QDialog):
         self.filament_choice.clear()
         for entry in fitting:
             self.filament_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
+
+        if not fitting:
+            # Nichts zu wählen heißt nichts vorzuwählen. Die Suche darunter lief
+            # trotzdem und war zweimal falsch: wirkungslos, weil ``findData``
+            # danach eine leere Liste absucht, und teuer, weil sie ohne Drucker
+            # den ganzen Bestand aufschlägt statt der Handvoll passender. Beim
+            # vorgegebenen „Allgemeinen FDM-Drucker" — also beim ersten Öffnen,
+            # bevor jemand einen Drucker eingestellt hat — stand die Anwendung
+            # damit minutenlang.
+            self.filament_choice.setCurrentIndex(-1)
+            for _label, box in self.slot_rows:
+                box.clear()
+            return
 
         # Erst was für *dieses* Material zuletzt galt, dann der allgemeine
         # Merker, dann die Zuordnung nach Materialart.
@@ -1201,7 +1356,12 @@ class PrintSettingsDialog(QDialog):
         _log.info("adopted %d values from %s", len(values), chosen)
 
     def _profile_search_finished(self) -> None:
+        # `finished` heißt „`run` ist zurück", nicht „das Objekt darf weg" —
+        # das Loslassen übernimmt die Halteleine.
+        worker = self._profile_worker
         self._profile_worker = None
+        if worker is not None:
+            self._leash.hold_until_done(worker)
 
     def _build_advice(self) -> QWidget:
         box = QGroupBox(tr("Was dieses Teil verlangt"), self)
@@ -1236,8 +1396,14 @@ class PrintSettingsDialog(QDialog):
         self.progress = QProgressBar(holder)
         self.progress.setRange(0, 0)
         self.progress.setVisible(False)
+        # §2.8: über zwei Sekunden gehört neben den Fortschritt ein Abbrechen.
+        # Es gab keines — der Lauf war erst zu Ende, wenn der Slicer es war.
+        self.cancel_slice = QPushButton(tr("Abbrechen"), holder)
+        self.cancel_slice.setVisible(False)
+        self.cancel_slice.clicked.connect(self._cancel_slice)
         row.addWidget(self.state)
         row.addWidget(self.progress)
+        row.addWidget(self.cancel_slice)
         return holder
 
     def _build_buttons(self) -> QWidget:
@@ -1373,6 +1539,27 @@ class PrintSettingsDialog(QDialog):
             self.slice_result,
             bounds=self._bounds(),
             fit_kinds=self._fits_in_play(),
+            connectors=self._connector_diameters(),
+        )
+
+    def _connector_diameters(self) -> tuple[float, ...]:
+        """Die Durchmesser der Zapfen, die beim Teilen entstanden sind.
+
+        Aus den Merkmalen und nicht aus dem Stapel: Die Stiftplanung rechnet
+        den Durchmesser aus der Schnittfläche, er ist also kein Parameter, den
+        jemand eingetragen hätte. Wo er steht, ist das erzeugte Merkmal.
+
+        Nur die Zapfen, nicht die Bohrungen — es ist dasselbe Maß plus Spiel,
+        und zweimal gezählt sähe es nach doppelt so vielen Verbindern aus.
+        """
+        result = self.session.last_result
+        if result is None:
+            return ()
+        return tuple(
+            float(feature.params["diameter"])
+            for entry in result.scene.objects.values()
+            for feature in entry.features.values()
+            if feature.kind == "pin" and "diameter" in feature.params
         )
 
     def _fits_in_play(self) -> tuple[str, ...]:
@@ -1483,6 +1670,36 @@ class PrintSettingsDialog(QDialog):
 
     # --- Slicen ---------------------------------------------------------------
 
+    def _remember_slicer_choice(self, *, require_machine: bool) -> None:
+        """Was im Dialog steht, gilt auch für den Export (§29).
+
+        Gemerkt wurde das nur beim **Slicen**. Wer die Profile hier einstellte
+        und danach über *Datei → Exportieren* eine 3MF schrieb, bekam die
+        Auswahl vom vorletzten Mal — der Docstring von :func:`remembered_setup`
+        verspricht mehr, und für den Nutzer ist es dieselbe Entscheidung.
+
+        ``require_machine`` beim Schließen: Die Profilsuche läuft im
+        Hintergrund, und wer den Dialog vorher wieder zumacht, hat eine leere
+        Auswahl vor sich. Sie zu übernehmen hieße, eine gemerkte Einstellung
+        zu löschen, weil niemand hingesehen hat.
+        """
+        machine = str(self.machine_choice.currentData() or "")
+        if require_machine and not machine:
+            return
+        self.ui_settings.slicer_machine_profile = machine
+        self.ui_settings.slicer_base_process = str(self.process_choice.currentData() or "")
+        filament = str(self.filament_choice.currentData() or "")
+        self.ui_settings.slicer_base_filament = filament
+        # Zu welchem Drucker die drei gehören. Ohne den Vermerk trägt das
+        # nächste Projekt auf einer anderen Maschine dieselben Profile.
+        self.ui_settings.slicer_profile_printer = self.session.profile.printer.id
+        # Und je Material: „petg" allein sagt nicht, welche der sieben Spulen
+        # gemeint war, und nach einem TPU-Teil stünde die falsche da.
+        if filament:
+            self.ui_settings.slicer_filament_per_material[self.session.profile.material.id] = (
+                filament
+            )
+
     def _slice(self) -> None:
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []
@@ -1506,7 +1723,11 @@ class PrintSettingsDialog(QDialog):
             base_process=str(self.process_choice.currentData() or ""),
             base_filament=str(self.filament_choice.currentData() or ""),
         )
-        if setup.flavour != "prusa" and not setup.machine_profile:
+        # Nur die Orca-Familie: PrusaSlicer läuft mit Solidons vollständiger
+        # ini, und CuraEngine bekommt die Maschine aus dem Kern selbst
+        # (`_machine_keys`) — für Cura gibt es strukturell keine Profile zu
+        # wählen, und die Forderung war eine Wahl aus einer leeren Liste.
+        if setup.flavour == "orca" and not setup.machine_profile:
             self.slicer_box.setChecked(True)
             self.state.setText(
                 tr("Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen.")
@@ -1525,76 +1746,140 @@ class PrintSettingsDialog(QDialog):
                 tr("Dieser Slicer braucht auch ein Prozessprofil — bitte eines auswählen.")
             )
             return
-        self.ui_settings.slicer_machine_profile = setup.machine_profile
-        self.ui_settings.slicer_base_process = setup.base_process
-        self.ui_settings.slicer_base_filament = setup.base_filament
-        # Und je Material: „petg" allein sagt nicht, welche der sieben Spulen
-        # gemeint war, und nach einem TPU-Teil stünde die falsche da.
-        if setup.base_filament:
-            self.ui_settings.slicer_filament_per_material[self.session.profile.material.id] = (
-                setup.base_filament
-            )
+        self._remember_slicer_choice(require_machine=False)
 
         self._temporary = TemporaryDirectory(prefix="solidon-handover-")
         folder = Path(self._temporary.name)
         name = self.session.path.stem if self.session.path else "solidon"
-        # Eine Baugruppe und nicht eine Datei je Objekt: der Slicer bekommt
-        # damit einen Druckauftrag statt einer Handvoll Teile, über deren
-        # Zusammengehörigkeit er selbst entscheiden müsste (§20, §29).
         plates = sorted({entry.plate for entry in objects})
-        # Hält die Anordnung, geht sie mit — und wird beim Aufruf auch
-        # durchgesetzt. Sonst ordnet der Slicer an, wie er es ohne uns täte:
-        # zwei Teile übereinander wären schlimmer als eine verworfene
-        # Anordnung (§29).
-        on_first_plate = [entry for entry in objects if entry.plate == plates[0]]
-        keep = arrangement_holds(
-            [as_mesh_data(entry.mesh) for entry in on_first_plate], self.session.profile
-        )
         try:
-            written, findings = write_assembly(
-                objects,
-                folder,
-                project_name=name,
-                profile=self.session.profile,
-                plate=plates[0],
-                # Damit ein Teil bekommen kann, was nur es braucht — der Brim
-                # unter der Streuscheibe, nicht unter den zwölf Behältern.
-                settings=self.settings,
-                flavour=setup.flavour,
-                place_on_bed=keep,
-            )
+            runs = [self._plate_run(objects, plate, folder, name, setup) for plate in plates]
         except AppError as problem:
             show_error(problem, self)
             return
-        if len(plates) > 1:
-            # Mehr Teile als auf eine Platte passen ist normal (§25) — aber
-            # nichts, was still zur Hälfte geslicet werden darf.
-            self.state.setText(tr("Diese Szene braucht mehrere Platten; geslicet wird die erste."))
-        self._pending_findings = findings
 
         self.slice_button.setEnabled(False)
+        # Bei mehreren Platten ist die Plattenzahl die ehrlichste Schätzung
+        # (§2.8) — bei einer bliebe ein Balken „0 von 1" eine Zahl ohne
+        # Aussage, dann läuft er unbestimmt.
+        if len(runs) > 1:
+            self.progress.setRange(0, len(runs))
+            self.progress.setValue(0)
+        else:
+            self.progress.setRange(0, 0)
         self.progress.setVisible(True)
+        self.cancel_slice.setEnabled(True)
+        self.cancel_slice.setVisible(True)
         self.state.setText(tr("Der Slicer rechnet …"))
 
+        worker = _SliceWorker(runs, self.settings, self.session.profile, setup)
+        worker.done.connect(self._sliced)
+        worker.failed.connect(self._slice_failed)
+        worker.finished.connect(self._slice_finished)
+        worker.step.connect(self._slicing_plate)
+        self._worker = worker
+        worker.start()
+
+    def _plate_run(
+        self,
+        objects: list[SceneObject],
+        plate: int,
+        folder: Path,
+        name: str,
+        setup: handover.SlicerSetup,
+    ) -> PlateRun:
+        """Eine Platte für den Slicer fertig machen (§20, §25, §29).
+
+        Eine Baugruppe je Platte und nicht eine Datei je Objekt: der Slicer
+        bekommt damit einen Druckauftrag statt einer Handvoll Teile, über deren
+        Zusammengehörigkeit er selbst entscheiden müsste.
+
+        Der Dateiname trägt die Plattennummer, sobald es mehr als eine gibt —
+        ohne sie schriebe die zweite Platte die erste über, und beide Läufe
+        legten ihren G-Code an dieselbe Stelle daneben.
+        """
+        on_plate = [entry for entry in objects if entry.plate == plate]
+        # Hält die Anordnung, geht sie mit — und wird beim Aufruf auch
+        # durchgesetzt. Sonst ordnet der Slicer an, wie er es ohne uns täte:
+        # zwei Teile übereinander wären schlimmer als eine verworfene
+        # Anordnung (§29). Je Platte gefragt, denn jede ist eine eigene.
+        keep = arrangement_holds(
+            [as_mesh_data(entry.mesh) for entry in on_plate], self.session.profile
+        )
+        written, findings = write_assembly(
+            objects,
+            folder,
+            project_name=name if len(objects) == len(on_plate) else f"{name}-{plate + 1}",
+            profile=self.session.profile,
+            plate=plate,
+            # Damit ein Teil bekommen kann, was nur es braucht — der Brim
+            # unter der Streuscheibe, nicht unter den zwölf Behältern.
+            settings=self.settings,
+            flavour=setup.flavour,
+            place_on_bed=keep,
+            # Und das Systemprofil darunter: ohne es trägt die Datei zwar
+            # Solidons Werte, aber keinen Drucker, zu dem sie passen.
+            setup=setup,
+        )
         # Die Materialslots der Platte: je Slot ein Filament (§20). Ohne sie
-        # bekäme jede Farbe die Werte der ersten.
+        # bekäme jede Farbe die Werte der ersten. Je Platte eigene, denn die
+        # Plattenaufteilung folgt gerade dem Material (`plates_by_material`).
         slots = threemf.merge_slots(
             [
                 threemf.AssemblyPart(
                     mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots)
                 )
-                for entry in on_first_plate
+                for entry in on_plate
             ]
         )
-        worker = _SliceWorker([written], self.settings, self.session.profile, setup, keep, slots)
-        worker.done.connect(self._sliced)
-        worker.failed.connect(self._slice_failed)
-        worker.finished.connect(self._slice_finished)
-        self._worker = worker
-        worker.start()
+        return PlateRun(
+            plate=plate,
+            model=written,
+            # Die Wahl aus den Slot-Zeilen reist am Slot selbst: eingesammelt
+            # wurde sie schon immer, angekommen ist sie hier nie — alle Slots
+            # slicten mit dem Basisfilament, und „druckt mit" war eine Zusage
+            # ohne Deckung (§20).
+            slots=handover.with_slot_profiles(slots, self.settings.slot_profiles),
+            keep_arrangement=keep,
+            findings=tuple(findings),
+        )
 
-    def _sliced(self, outcome: handover.SliceOutcome) -> None:
-        metrics = outcome.metrics
+    def _slicing_plate(self, index: int, count: int) -> None:
+        """Bei welcher Platte der Lauf steht (§2.8).
+
+        Nur bei mehreren: „Platte 1 von 1" wäre eine Zahl ohne Aussage.
+        """
+        if count > 1:
+            self.progress.setValue(index - 1)
+            self.state.setText(
+                tr("Der Slicer rechnet — Platte {nummer} von {anzahl} …")
+                .replace("{nummer}", str(index))
+                .replace("{anzahl}", str(count))
+            )
+
+    def _cancel_slice(self) -> None:
+        """Der Abbrechen-Knopf: den Kindprozess beenden, den Rest lassen.
+
+        Der Knopf graut sofort aus — zweimal abbrechen gibt es nicht, und der
+        Text daneben sagt, dass es angekommen ist.
+        """
+        worker = self._worker
+        if worker is None:
+            return
+        self.cancel_slice.setEnabled(False)
+        self.state.setText(tr("Wird abgebrochen …"))
+        worker.cancel()
+
+    def _sliced(self, outcomes: list[handover.SliceOutcome]) -> None:
+        """Was der Lauf gebracht hat — über alle Platten zusammen.
+
+        Zeit und Material sind Summen, weil zwei Platten zweimal gedruckt
+        werden; die Schichtzahl steht nur bei einer, denn über zwei addiert
+        wäre sie eine Zahl, die es nirgends gibt (:func:`gcode.combine`).
+        """
+        if not outcomes:
+            return
+        metrics = gcode.combine([entry.metrics for entry in outcomes])
         parts = []
         if metrics.print_minutes is not None:
             parts.append(f"{tr('Druckzeit')}: {metrics.print_minutes:.0f} min")
@@ -1603,40 +1888,70 @@ class PrintSettingsDialog(QDialog):
             parts.append(f"{tr('Material')}: {grams:.1f} g")
         if metrics.layer_count is not None:
             parts.append(f"{tr('Schichten')}: {metrics.layer_count}")
+        if len(outcomes) > 1:
+            parts.append(f"{tr('Platten')}: {len(outcomes)}")
         self.state.setText(" · ".join(parts) if parts else tr("Fertig geslicet."))
-        # Die Datei liegt im Arbeitsordner, der beim Schließen verschwindet.
+        # Die Dateien liegen im Arbeitsordner, der beim Schließen verschwindet.
         # Ohne diesen Knopf wäre der ganze Lauf eine Zahl auf dem Bildschirm
         # und nichts, was auf einen Drucker geht.
-        self._gcode = outcome.gcode_path
+        self._gcode = [entry.gcode_path for entry in outcomes]
         self.save_button.setEnabled(True)
-        outcome.findings = [*self._pending_findings, *outcome.findings]
+        outcomes[0].findings = [*self._pending_findings, *outcomes[0].findings]
         self._pending_findings = []
-        self.sliced.emit(outcome)
-        _log.info("sliced with %s in %.1f s", metrics.slicer, outcome.seconds)
+        self.sliced.emit(outcomes)
+        _log.info(
+            "sliced %d plate(s) with %s in %.1f s",
+            len(outcomes),
+            metrics.slicer,
+            sum(entry.seconds for entry in outcomes),
+        )
 
     def _save_gcode(self) -> None:
-        """Die Druckdatei dorthin, wo der Nutzer sie haben will (§29).
+        """Die Druckdateien dorthin, wo der Nutzer sie haben will (§29).
 
         Vorgeschlagen wird der Ordner des Projekts und der Name des Projekts —
         eine Datei namens ``plate_1.gcode`` in den Downloads findet später
         niemand wieder.
+
+        **Bei mehreren Platten wird der Ordner gewählt, nicht die Datei.** Ein
+        Speichern-Dialog je Platte wäre dieselbe Frage dreimal; die Namen
+        stehen ohnehin fest, sobald der Auftrag einen hat — sie unterscheiden
+        sich nur in der Plattennummer.
         """
-        if self._gcode is None or not self._gcode.is_file():
+        written = [path for path in self._gcode if path.is_file()]
+        if not written:
             return
         start = self.session.path.parent if self.session.path else Path.home()
         stem = self.session.path.stem if self.session.path else "solidon"
-        chosen, _filter = QFileDialog.getSaveFileName(
-            self,
-            tr("Druckdatei speichern"),
-            str(start / f"{stem}.gcode"),
-            f"{tr('G-Code')} (*.gcode)",
+
+        if len(written) == 1:
+            chosen, _filter = QFileDialog.getSaveFileName(
+                self,
+                tr("Druckdatei speichern"),
+                str(start / f"{stem}.gcode"),
+                f"{tr('G-Code')} (*.gcode)",
+            )
+            if not chosen:
+                return
+            targets = [Path(chosen)]
+        else:
+            folder = QFileDialog.getExistingDirectory(
+                self, tr("Ordner für die Druckdateien"), str(start)
+            )
+            if not folder:
+                return
+            targets = [
+                Path(folder) / f"{stem}-{index}.gcode" for index in range(1, len(written) + 1)
+            ]
+
+        for target, source in zip(targets, written, strict=True):
+            target.write_bytes(source.read_bytes())
+            _log.info("wrote g-code to %s", target)
+        self.state.setText(
+            f"{tr('Gespeichert')}: {targets[0].name}"
+            if len(targets) == 1
+            else f"{tr('Gespeichert')}: {len(targets)} {tr('Druckdateien')} → {targets[0].parent}"
         )
-        if not chosen:
-            return
-        target = Path(chosen)
-        target.write_bytes(self._gcode.read_bytes())
-        self.state.setText(f"{tr('Gespeichert')}: {target.name}")
-        _log.info("wrote g-code to %s", target)
 
     def _slice_failed(self, problem: AppError) -> None:
         self.state.setText("")
@@ -1644,15 +1959,51 @@ class PrintSettingsDialog(QDialog):
 
     def _slice_finished(self) -> None:
         self.progress.setVisible(False)
+        self.cancel_slice.setVisible(False)
         self.slice_button.setEnabled(True)
+        worker = self._worker
         self._worker = None
+        if worker is not None:
+            if worker.cancelled.is_cancelled:
+                self.state.setText(tr("Abgebrochen."))
+            # `finished` heißt „`run` ist zurück", nicht „das Objekt darf
+            # weg" — das Loslassen übernimmt die Halteleine.
+            self._leash.hold_until_done(worker)
+
+    def reject(self) -> None:
+        """Escape und der Schließen-Knopf gehen denselben Weg wie das X.
+
+        Qt ruft bei ``reject()`` kein ``closeEvent`` — der Arbeiter lief
+        unsichtbar weiter, und ``_temporary`` blieb als Ordner liegen.
+        """
+        self._settle()
+        super().reject()
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
-        """Den Ordner erst freigeben, wenn niemand mehr darin liest."""
-        for worker in (self._worker, self._profile_worker):
-            if worker is not None and worker.isRunning():
-                worker.wait()
+        self._settle()
+        super().closeEvent(event)
+
+    def _settle(self) -> None:
+        """Den Ordner erst freigeben, wenn niemand mehr darin liest.
+
+        Der Slicer-Lauf wird abgebrochen statt abgewartet: ``worker.wait()``
+        ohne Grenze stand hier im Qt-Hauptthread, und wer während eines
+        großen Auftrags schloss, hatte eine eingefrorene Anwendung, bis der
+        externe Slicer von sich aus fertig war — Minuten. Das Warten bleibt,
+        aber nach dem Abbruch ist es kurz: der Kindprozess stirbt binnen
+        Sekunden, und ohne das Warten stürbe der Thread über einem
+        zerstörten Dialog.
+        """
+        # Erst merken, dann abräumen: Die Auswahl steht in Widgets, die es
+        # gleich nicht mehr gibt.
+        self._remember_slicer_choice(require_machine=True)
+        worker = self._worker
+        if worker is not None and worker.isRunning():
+            worker.cancel()
+        for pending in (self._worker, self._profile_worker):
+            if pending is not None and pending.isRunning():
+                pending.wait()
+        self._leash.wait_all()
         if self._temporary is not None:
             self._temporary.cleanup()
             self._temporary = None
-        super().closeEvent(event)

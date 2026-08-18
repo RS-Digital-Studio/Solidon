@@ -43,8 +43,21 @@ _materials: dict[str, MaterialProfile] | None = None
 
 
 def _read_table(path: Path) -> dict[str, dict[str, Any]]:
-    with path.open("rb") as stream:
-        return tomllib.load(stream)
+    try:
+        with path.open("rb") as stream:
+            return tomllib.load(stream)
+    except tomllib.TOMLDecodeError as problem:
+        # Derselbe Leser liest die mitgelieferten Tabellen und die des
+        # Nutzers — und die zweiten sind von Hand geschrieben. Eine fehlende
+        # Klammer war sonst ein Startabbruch mit rohem Stapelabzug, denn
+        # `printer_profiles()` läuft beim Fensteraufbau (Regel 17, §33.1).
+        raise ValidationError(
+            title=_("Diese Profildatei lässt sich nicht lesen."),
+            field="file",
+            detail=str(problem),
+            constraint="toml",
+            values={"file": str(path)},
+        ) from problem
 
 
 def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path) -> PrinterProfile:

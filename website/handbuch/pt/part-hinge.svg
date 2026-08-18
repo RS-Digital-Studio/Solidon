@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 190" width="190" height="190">
+<polygon points="108.3,148.7 143.4,119.9 43.1,79.6" fill="#afbcc8" stroke="#afbcc8" stroke-width="0.6" />
+<line x1="108.3" y1="148.7" x2="143.4" y2="119.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="8.0,108.4 108.3,148.7 43.1,79.6" fill="#afbcc8" stroke="#afbcc8" stroke-width="0.6" />
+<line x1="8.0" y1="108.4" x2="108.3" y2="148.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="143.4,114.6 43.1,79.6 143.4,119.9" fill="#727a82" stroke="#727a82" stroke-width="0.6" />
+<line x1="43.1" y1="79.6" x2="143.4" y2="119.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="143.4" y1="114.6" x2="143.4" y2="119.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="46.6,71.4 143.4,114.6 146.9,111.7" fill="#afbcc8" stroke="#afbcc8" stroke-width="0.6" />
+<line x1="143.4" y1="114.6" x2="146.9" y2="111.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="8.0,101.7 8.0,108.4 43.1,74.3" fill="#919ba5" stroke="#919ba5" stroke-width="0.6" />
+<line x1="8.0" y1="101.7" x2="8.0" y2="108.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="43.1,74.3 43.1,79.6 143.4,114.6" fill="#727a82" stroke="#727a82" stroke-width="0.6" />
+<polygon points="43.1,74.3 143.4,114.6 46.6,71.4" fill="#afbcc8" stroke="#afbcc8" stroke-width="0.6" />
+<line x1="43.1" y1="74.3" x2="143.4" y2="114.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="8.0,108.4 43.1,79.6 43.1,74.3" fill="#919ba5" stroke="#919ba5" stroke-width="0.6" />
+<line x1="43.1" y1="74.3" x2="43.1" y2="79.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="8.0" y1="108.4" x2="43.1" y2="79.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="81.7,48.0 146.9,117.0 182.0,88.3" fill="#afbcc8" stroke="#afbcc8" stroke-width="0.6" />
+<line x1="146.9" y1="117.0" x2="182.0" y2="88.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="8.0,101.7 43.1,74.3 81.7,41.3" fill="#919ba5" stroke="#919ba5" stroke-width="0.6" />
+<line x1="8.0" y1="101.7" x2="81.7" y2="41.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="81.7,48.0 46.6,76.8 146.9,117.0" fill="#afbcc8" stroke="#afbcc8" stroke-width="0.6" />
+<line x1="46.6" y1="76.8" x2="146.9" y2="117.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="81.7,41.3 182.0,88.3 182.0,81.6" fill="#727a82" stroke="#727a82" stroke-width="0.6" />
+<line x1="81.7" y1="41.3" x2="182.0" y2="81.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="182.0" y1="81.6" x2="182.0" y2="88.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="81.7,41.3 43.1,74.3 46.6,71.4" fill="#919ba5" stroke="#919ba5" stroke-width="0.6" />
+<line x1="43.1" y1="74.3" x2="46.6" y2="71.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="81.7,41.3 46.6,71.4 46.6,76.8" fill="#919ba5" stroke="#919ba5" stroke-width="0.6" />
+<line x1="46.6" y1="71.4" x2="46.6" y2="76.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="81.7,41.3 81.7,48.0 182.0,88.3" fill="#727a82" stroke="#727a82" stroke-width="0.6" />
+<line x1="81.7" y1="48.0" x2="182.0" y2="88.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="81.7,41.3 46.6,76.8 81.7,48.0" fill="#919ba5" stroke="#919ba5" stroke-width="0.6" />
+<line x1="81.7" y1="41.3" x2="81.7" y2="48.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="46.6" y1="76.8" x2="81.7" y2="48.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+</svg>

@@ -1,4 +1,4 @@
-"""Scene, parameters, fits, op DAG, evaluation, project file, migrations (§12-§16)."""
+"""Szene, Parameter, Passungen, Op-DAG, Auswertung, Projektdatei, Migrationen (§12-§16)."""
 
 from app.core.scene.cache import CachedResult, DiskCache, MeshCodec, ResultCache
 from app.core.scene.cancel import CancelSignal, NeverCancelled

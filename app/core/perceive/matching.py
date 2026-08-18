@@ -51,7 +51,8 @@ AMBIGUITY_FLOOR = 0.05
 POSITION_TOLERANCE = 0.08
 """Anteil der Modelldiagonale, um den ein Merkmal gewandert sein darf."""
 DIAMETER_TOLERANCE = 0.15
-"""Relative change in diameter — a bore can be widened and stay itself."""
+"""Relative Änderung des Durchmessers — eine Bohrung kann geweitet werden und
+sich selbst bleiben."""
 AXIS_TOLERANCE = 0.3
 """Länge der Differenz zwischen den Einheitsachsen, rund 17 Grad."""
 
@@ -68,13 +69,13 @@ class MatchResult:
     """Wer wer geworden ist, und was sich nicht entscheiden ließ."""
 
     mapping: dict[FeatureId, FeatureId] = field(default_factory=dict)
-    """Old identifier to new identifier."""
+    """Alte Kennung auf neue Kennung."""
     orphaned: tuple[FeatureId, ...] = ()
-    """Old features with no partner (§21.2)."""
+    """Alte Merkmale ohne Partner (§21.2)."""
     ambiguous: dict[FeatureId, tuple[FeatureId, ...]] = field(default_factory=dict)
     """Alte Merkmale mit mehreren gleich guten Kandidaten — nach denen wird gefragt."""
     fresh: tuple[FeatureId, ...] = ()
-    """New features nobody was expecting."""
+    """Neue Merkmale, die niemand erwartet hat."""
 
     @property
     def settled(self) -> bool:

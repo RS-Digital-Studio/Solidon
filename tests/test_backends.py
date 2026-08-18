@@ -306,8 +306,8 @@ def test_the_local_backend_speaks_the_same_language() -> None:
 def test_the_local_backend_opens_a_window_big_enough_for_the_tools() -> None:
     """Ohne ``num_ctx`` schneidet Ollama den Prompt ab, und zwar stillschweigend.
 
-    Sein Vorgabefenster ist 4096 Token; das Register bringt allein 84
-    Werkzeugschemata mit rund 99 000 Zeichen. Was nicht hineinpasst, fällt weg
+    Sein Vorgabefenster ist 4096 Token; das Register bringt allein 85
+    Werkzeugschemata mit rund 109 000 Zeichen. Was nicht hineinpasst, fällt weg
     — und mit ihm der Systemprompt samt der vier Vorrangregeln. Das war der
     Befund „der Agent greift nicht zu den Bausteinen (0/13)": nicht die Regel,
     nicht das Modell, sondern ein Fenster, in das die Regel nie gelangte.
@@ -320,7 +320,7 @@ def test_the_local_backend_opens_a_window_big_enough_for_the_tools() -> None:
 
     _url, _headers, payload = transport.calls[0]
     assert payload["options"]["num_ctx"] == OLLAMA_CONTEXT_TOKENS
-    assert OLLAMA_CONTEXT_TOKENS >= 21162, "so viel brauchen die Werkzeuge allein"
+    assert OLLAMA_CONTEXT_TOKENS >= 25361, "so viel brauchen die Werkzeuge allein"
 
 
 def test_a_local_server_that_is_not_running_is_not_available() -> None:

@@ -25,8 +25,13 @@ _log = get_logger(__name__)
 
 _DATA_FILE: Final = Path(__file__).parent / "data" / "licences.toml"
 
-#: Extras whose dependencies end up in the shipped application.
-RUNTIME_EXTRAS: Final[tuple[str, ...]] = ("geom", "ui")
+#: Die Extras, deren Abhängigkeiten in der ausgelieferten Anwendung landen.
+#: Dieselbe Liste wie im Bau-Workflow (``.[geom,ui,agent,brep]``) — hier
+#: standen nur zwei der vier, und acht Pakete reisten ungeprüft und ohne
+#: Hinweis im Über-Dialog mit. Heute sind alle zulässig; die Lücke hätte
+#: erst das nächste transitive GPL-Paket unter ``agent`` oder ``brep``
+#: gezeigt.
+RUNTIME_EXTRAS: Final[tuple[str, ...]] = ("geom", "ui", "agent", "brep")
 
 _REQUIREMENT_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 _EXTRA_MARKER = re.compile(r"extra\s*==\s*[\"']([^\"']+)[\"']")
@@ -120,7 +125,7 @@ def requirements_of(distribution: metadata.Distribution) -> set[str]:
 
 
 def _direct_requirements(extras: Iterable[str]) -> set[str]:
-    """Our own dependencies, including the runtime extras."""
+    """Die eigenen Abhängigkeiten, samt der Laufzeit-Extras."""
     own = metadata.distribution(DISTRIBUTION_NAME)
     wanted = {normalise(entry) for entry in extras}
     names: set[str] = set()

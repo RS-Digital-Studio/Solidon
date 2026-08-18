@@ -486,3 +486,23 @@ def test_the_part_keeps_the_size_it_promises(profile: Profile) -> None:
 
     top = result.scene.objects["obj_1"].mesh.bounds.maximum[2]
     assert top == pytest.approx(13.0, abs=0.02), "10 mm Quader plus 3 mm Nase"
+
+
+def test_every_play_field_defaults_to_the_profile() -> None:
+    """Regel 7: `_part_values` füllt das Spiel nur bei **null** aus dem
+    Materialprofil — jede andere Vorgabe ist eine feste Zahl, die die
+    Kalibrierung (§28.3) nie erreicht. `nut_trap` (0,2) und `printed_thread`
+    (0,15) waren genau das: ein TPU-Projekt baute die Mutternfalle mit
+    PLA-Spiel."""
+    from app.core.knowledge.parts import PARTS
+
+    checked = 0
+    for spec in PARTS.all():
+        play = next((entry for entry in spec.params.fields() if entry.name == "play"), None)
+        if play is None:
+            continue
+        checked += 1
+        assert play.default == 0.0, (
+            f"{spec.name}: Vorgabe {play.default} statt Verweis ins Materialprofil"
+        )
+    assert checked >= 7, "die Prüfung muss die Bausteine mit Spiel wirklich sehen"

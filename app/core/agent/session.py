@@ -187,8 +187,10 @@ class AgentSession:
         )
         # Ein lokales Modell bekommt dieselben Werkzeuge, nur knapper
         # beschrieben. Gemessen: qwen3:14b traf drei von fünf und brauchte für
-        # einen einzigen Aufruf bis zu zwei Minuten — bei 88 Werkzeugen mit
-        # 104 KB Schema. Was fehlt, ist nicht Können, sondern Platz.
+        # einen einzigen Aufruf bis zu zwei Minuten — damals bei 88 Werkzeugen
+        # mit 104 KB Schema. Inzwischen sind es 96 mit 110 KB, kompakt 87: die
+        # Enge ist gewachsen, nicht geschrumpft. Was fehlt, ist nicht Können,
+        # sondern Platz.
         tools = list(tool_schemas(self.registry, compact=self.backend.id == "ollama"))
 
         while True:
@@ -487,7 +489,7 @@ class AgentSession:
             proposal.invalid_calls += 1
             return _gathered_refusal(gathered.kind), scene
         try:
-            # P4 acceptance: schema-valid before anything is computed.
+            # Abnahme P4: schemagültig, bevor überhaupt gerechnet wird.
             validate(spec.params, arguments)
         except AppError as error:
             proposal.invalid_calls += 1

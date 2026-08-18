@@ -326,7 +326,10 @@ def test_the_image_travels_in_the_project(profile: Profile) -> None:
     spec = REGISTRY.get("displace_image")
     entry = next(item for item in spec.params.spec() if item.name == "source")
 
-    assert entry.kind == "source"
+    assert entry.kind == "image", (
+        "eine Quellenkennung, und zwar die eines Bildes — ein source-Feld bot "
+        "jede Quelle an, also STLs in einem Feld namens Bild"
+    )
 
 
 def test_the_agent_may_set_the_numbers(profile: Profile) -> None:

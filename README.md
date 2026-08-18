@@ -161,7 +161,7 @@ nicht**: manches große Modell gibt den Aufruf als Fließtext aus statt als
 Aufruf, und dann sieht der Chat aus, als arbeite er, während nichts geschieht.
 
 Entscheidend ist dabei, wie viele Werkzeuge im Spiel sind. Der Agent bietet
-alle Operationen an — vierundachtzig Schemata, rund 97 KB —, und daran fallen
+alle Operationen an — fünfundachtzig Schemata, rund 107 KB —, und daran fallen
 kleinere Modelle, die mit einer Handvoll noch alles treffen. Vorgabe ist
 darum `qwen3:14b`; `llama3.1:8b` ist schneller und kleiner, gibt unter der
 vollen Last aber die Mehrzahl der Aufrufe als Text aus.

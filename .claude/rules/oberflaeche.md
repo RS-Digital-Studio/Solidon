@@ -113,15 +113,33 @@ Bezugspunkt des Netz-Quaders stand in derselben aufgeklappten Gruppe wie der
 Umschalter selbst, also genau dort, wo jeder vorbeikommt; auf „Ecke" gestellt
 kam ein mittiger Quader und kein Ton dazu.
 
+**Ein Feld ohne Wirkung sagt es.** Eine Nummer kleiner als der Umschalter:
+*Fläche* in „Relief auflegen" gilt nur, solange *Auflegen* auf „Auf eine
+Fläche" steht, und die Operation übergeht den Wert sonst wortlos. Solche
+Abhängigkeiten stehen in `DEPENDENT_FIELDS` (`app/ui/op_dialog.py`), nicht als
+Sonderfall im Aufbau. Das Feld wird **grau und begründet**, nicht unsichtbar —
+verschwinden darf nur, was die gewählte Variante gar nicht kennt; wer eine
+Zeile vermisst, sucht sie.
+
+**Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat.** Der
+Skizzentext hat ihn seit je, die Stellung eines Skeletts bekam ihn spät:
+`kind="armature"` fiel auf ein Textfeld durch, und der kürzeste Weg zu einem
+gebeugten Arm ging über getipptes JSON. `ArmatureField` baut je Knochen eine
+Zeile mit drei Winkeln — sobald der Dialog ein Skelett hat (aus dem Editor
+oder aus dem Wert der Operation), sonst bleibt das Textfeld als Rückfall. Die
+Winkel sind `ValueField`, denn §13 gilt für einen Winkel wie für eine Länge.
+Im **Schema** bleibt der Sammelparameter hinten (`tests/test_gesture_ops.py`);
+im Dialog steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
+
 **Jede neue Funktion nennt ihren Hauptweg** (§2.2), bevor sie einen Platz
 bekommt:
 
 | Weg | Ort an der Oberfläche |
 |---|---|
 | Weg 1 — fremdes Modell anpassen | Kontextmenü am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Trennen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
-| Weg 2 — neu konstruieren | Werkzeugzeile („Zeichnen": erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig"), Menü *Erzeugen* / *Ändern* |
+| Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen": erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig"), Menü *Erzeugen* / *Ändern* |
 | Weg 3 — generieren | Chat und Generierungsdialog |
-| Weg 4 — organisch formen | Werkzeugzeile (*Formen*, *Skelett*), Menü *Ändern* |
+| Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — beide brauchen einen gewählten Körper und sagen das, bevor man klickt), Menü *Ändern* |
 | keiner der vier | Untermenü und Befehlspalette, sonst nichts |
 
 **Was zur Auswahl passt, steht vorn.** `applies_to` sortiert nicht nur das
@@ -160,6 +178,34 @@ Drei Bedingungen, alle drei tragend:
 Deckend gezeichnet, mit dem Verlauf aus `viewport_colours` — ein
 halbdurchsichtiges Qt-Widget über dem OpenGL-Fenster zeigt die Fensterfarbe,
 nicht die Ansicht dahinter.
+
+**Die Ladeanzeige beginnt später, als das Warten beginnt.** Sie hängt am
+Fortschritt der Auswertung; was *davor* liegt — `load()` für eine Projektdatei,
+`read_bytes()` für ein Modell —, sieht sie nicht, und ihre 200 ms kommen
+obendrauf. Diese Zeile der Tabelle bedient `waiting()` in `main_window.py`, ein
+Kontextmanager um genau eine Rechnung: Datei lesen, Dialog aufbauen, Slicer
+suchen. Als Kontextmanager, weil ein Wartezeiger, der an einem Fehlerausgang
+stehen bleibt, aussieht wie ein hängendes Programm — und eine Frage, die
+darunter gestellt wird, sagt zweierlei. `_offer_recovery` liegt deshalb
+außerhalb.
+
+**Ein Export bekommt Fortschritt, aber kein Abbrechen** (`_ExportWorker`). Die
+Regel darüber ist nicht aufgeweicht, sie greift hier nur anders: Ein halb
+geschriebener Export ist eine halbe Datei, und der Schreiber im Kern hat keinen
+Punkt, an dem er sauber aufhören könnte. Was §2.8 an dieser Stelle trägt, ist
+die Bedienbarkeit — der Balken läuft, das Fenster reagiert, der Menüeintrag ist
+gesperrt, solange geschrieben wird. Wer einen Arbeiter ohne Abbrechen baut,
+schreibt diese Begründung in seinen Docstring; ohne sie ist es Bequemlichkeit.
+
+**Was nicht sofort da ist, wird nachgereicht statt erwartet.** Der
+Druckeinstellungen-Dialog wartete bis zu zwei Sekunden auf die Schichtanalyse —
+die schlechtere Hälfte beider Möglichkeiten: lang genug, um sich wie ein Hänger
+zu lesen, und ohne Zusage, denn wer den Zeitraum riss, bekam den Dialog eben
+doch ohne sie. Er geht jetzt sofort auf, `take_slice_result` trägt sie in die
+Vorschlagsliste nach. Der Rückruf zeigt dabei auf ein **Feld des Fensters**
+(`_settings_dialog`), nicht auf eine gebundene Methode des Dialogs: der wird
+nach `exec` weggeräumt, und ein Rückruf in ein zerstörtes C++-Objekt ist der
+Absturz ohne Zeile.
 
 ### Wer einen Arbeiter startet, hält ihn fest
 

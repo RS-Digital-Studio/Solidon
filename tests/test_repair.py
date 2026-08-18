@@ -239,3 +239,48 @@ def test_repair_reports_the_seam_separately_from_a_hole() -> None:
     codes = [finding.code for finding in outcome.findings]
     assert "repair.t_junctions" in codes
     assert outcome.mesh.is_watertight
+
+
+def test_many_boundary_edges_stay_fast() -> None:
+    """Die vollständige Paarung war quadratisch: elf Sekunden bei 2 100
+    Randkanten, hochgerechnet vierzig am eigenen Deckel — und das im
+    Normalfall „Reparieren an einem Download". Der Baum-Vorfilter hält es
+    flach; die Schranke ist bewusst grob, damit Fremdlast sie nicht reißt."""
+    import time
+
+    import numpy as np
+
+    count = 400  # 1 200 Randkanten, unter MAX_STITCH_EDGES
+    vertices: list[list[float]] = []
+    faces: list[list[int]] = []
+    for index in range(count):
+        base = index * 3.0
+        vertices += [[base, 0.0, 0.0], [base + 1.0, 0.0, 0.0], [base, 1.0, 0.0]]
+        faces.append([3 * index, 3 * index + 1, 3 * index + 2])
+    body = trimesh.Trimesh(vertices=np.asarray(vertices), faces=np.asarray(faces), process=False)
+
+    started = time.perf_counter()
+    _mesh, seams = stitch_t_junctions(MeshData.of(body))
+
+    assert seams == 0, "lauter getrennte Dreiecke — nichts sitzt auf einer Kante"
+    assert time.perf_counter() - started < 5.0, "die Paarung darf nicht quadratisch sein"
+
+
+def test_repair_stitches_only_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`repair()` vernähte zweimal: einmal selbst, einmal in `fill_holes` —
+    gemessener Faktor 2,1 auf demselben Netz."""
+    from app.core.geom import repair as repair_module
+
+    calls: list[int] = []
+    original = repair_module.stitch_t_junctions
+
+    def counted(mesh: MeshData) -> tuple[MeshData, int]:
+        calls.append(1)
+        return original(mesh)
+
+    monkeypatch.setattr(repair_module, "stitch_t_junctions", counted)
+    body, _welded = merge_vertices(raw("broken_open.stl"))
+
+    repair_module.repair(body, holes=True)
+
+    assert len(calls) == 1, "einmal vernähen, nicht doppelt zahlen"

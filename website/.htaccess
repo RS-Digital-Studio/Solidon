@@ -1,0 +1,17 @@
+# Jede Auslieferung wird gegen den Stand auf dem Server geprüft: der Browser
+# darf cachen, fragt aber vor jeder Nutzung nach und bekommt 304, solange sich
+# nichts geändert hat. Ohne diesen Header rät er die Frische aus dem Alter der
+# Datei — und zeigt nach einem Upload eine Mischung aus altem und neuem Stand
+# (neue Seite mit alter style.css: das Sprachmenü zerfiel zur Rohliste).
+<IfModule mod_headers.c>
+  Header set Cache-Control "no-cache"
+
+  # Übergang: Vor dem 18.08.2026 kam kein Cache-Control mit, und Browser
+  # halten die damaligen Seiten nach Heuristik tagelang für frisch — sie
+  # fragen gar nicht erst nach. Dieser Header räumt beim nächsten
+  # Serverkontakt den gesamten Cache der Domain weg, auch die alten
+  # Einträge. Sobald die Demo-Besucher nur noch den neuen Stand kennen
+  # (nach dem 01.09.2026), kann die Zeile raus — sie macht Caching sonst
+  # dauerhaft wirkungslos.
+  Header set Clear-Site-Data "\"cache\""
+</IfModule>

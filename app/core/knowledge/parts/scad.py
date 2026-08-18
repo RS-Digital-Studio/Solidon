@@ -14,6 +14,8 @@ das Netz.
 
 from __future__ import annotations
 
+import json
+
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge.parts.registry import PartSpec
 from app.core.types import BaseParams
@@ -60,5 +62,9 @@ def _literal(value: object) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, str):
-        return f'"{value}"'
+        # Maskiert wie JSON — OpenSCAD-Strings kennen dieselben
+        # Fluchtzeichen. Heute führt kein Baustein ein Freitextfeld; der
+        # erste, der eines bekommt, bräche hier sonst am ersten
+        # Anführungszeichen im Wert.
+        return json.dumps(value, ensure_ascii=False)
     return f"{value}"

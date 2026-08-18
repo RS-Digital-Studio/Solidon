@@ -81,6 +81,35 @@ def test_division_by_zero_is_a_user_error() -> None:
         expressions.evaluate("=@width / 0", {"width": 84.0})
 
 
+def test_division_by_a_parameter_reference_passes_the_check() -> None:
+    """Die Prüfung parst mit Platzhalter-Nullen — ob durch null geteilt wird,
+    weiß erst die Auswertung. `=@width/@count` war deshalb überall abgelehnt,
+    obwohl §13 genau diese Form als Vorlagen-Mechanik vorsieht."""
+    expressions.check("=@width/@count")
+    assert expressions.references("=100/@width") == {"width"}
+    resolved = expressions.resolve(parameters(a=(4.0, None), b=(0.0, "=100/@a")))
+    assert resolved["b"] == pytest.approx(25.0)
+
+
+def test_division_by_a_parameter_that_is_zero_fails_at_evaluation() -> None:
+    """Der Divisionsschutz gehört zur Auswertung mit echten Werten — dort
+    bleibt er scharf, auch wenn die Prüfung den Ausdruck durchlässt."""
+    expressions.check("=1/@count")
+    with pytest.raises(ValidationError):
+        expressions.evaluate("=1/@count", {"count": 0.0})
+    with pytest.raises(ValidationError):
+        expressions.resolve(parameters(n=(0.0, None), q=(0.0, "=1/@n")))
+
+
+def test_division_by_a_literal_zero_is_rejected_at_check() -> None:
+    """Eine Literal-Null im Nenner ist immer ein Fehler, unabhängig von
+    Parameterwerten — die Prüfung lehnt sie weiter ab."""
+    with pytest.raises(ValidationError):
+        expressions.check("=@width/0")
+    with pytest.raises(ValidationError):
+        expressions.check("=@width/(2-2)")
+
+
 def test_deep_nesting_stops_before_the_recursion_limit() -> None:
     with pytest.raises(ValidationError):
         expressions.check("=" + "(" * 200 + "1" + ")" * 200)

@@ -259,7 +259,7 @@ def test_a_missing_workflow_is_a_clear_error(tmp_path: Path) -> None:
     with pytest.raises(GenerationFailed) as problem:
         generator.text_to_mesh("ein Halter")
 
-    assert "workflow" in str(problem.value.detail)
+    assert "workflow" in str(problem.value.detail).lower()
 
 
 @pytest.mark.parametrize("name", ["text_to_mesh", "image_to_mesh"])

@@ -25,7 +25,11 @@ _CODE: Final = re.compile(r"`([^`]+)`")
 _STRONG: Final = re.compile(r"\*\*([^*]+)\*\*")
 _EMPHASIS: Final = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
 _HEADING: Final = re.compile(r"^(#{1,6})\s+(.*)$")
-_BULLET: Final = re.compile(r"^\*\s+(.*)$")
+_BULLET: Final = re.compile(r"^[*-]\s+(.*)$")
+"""Beide Markdown-Schreibweisen: Die geschriebenen Kapitel nutzen ``* ``,
+die erzeugten Referenzlisten ``- `` — wer nur eine kennt, klebt die andere
+zu einem Fließtextabsatz zusammen, und aus zwanzig Operationen wird ein
+Klumpen."""
 _FIGURE: Final = re.compile(r"^!\[\]\(figure:([a-z0-9-]+)\)$")
 _ROW: Final = re.compile(r"^\|(.+)\|$")
 _SEPARATOR: Final = re.compile(r"^\|[\s:|-]+\|$")

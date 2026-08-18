@@ -234,3 +234,25 @@ def test_a_project_with_an_unknown_part_is_an_error() -> None:
     assert findings[0].code == "parts.missing"
     assert findings[0].severity == "error"
     assert "eigenbau" in str(findings[0].values["parts"])
+
+
+def test_load_user_parts_reports_a_broken_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """§24.5 stand nur auf dem Papier: `parts/user.py::load()` hatte keinen
+    Aufrufer im Produkt — eigene Bausteine wurden nie geladen, ihr
+    Katalogzweig war unerreichbar. `bootstrap.load_user_parts` ist der
+    Aufrufer; eine kaputte Datei wird Befund, nie Startabbruch."""
+    from app.core import bootstrap
+    from app.core.knowledge.parts import user
+
+    broken = tmp_path / "kaputt.py"
+    broken.write_text("raise RuntimeError('absichtlich')", encoding="utf-8")
+    monkeypatch.setattr(user, "user_parts_dir", lambda: tmp_path)
+    monkeypatch.setattr(bootstrap, "_user_loaded", False)
+    monkeypatch.setattr(bootstrap, "_user_findings", ())
+
+    findings = bootstrap.load_user_parts()
+
+    assert [entry.code for entry in findings] == ["parts.user_failed"]
+    assert bootstrap.load_user_parts() == findings, "der zweite Aufruf lädt nicht erneut"

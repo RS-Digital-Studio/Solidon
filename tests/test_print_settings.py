@@ -558,7 +558,12 @@ def test_support_on_actually_reaches_the_slicer() -> None:
     assert orca["enable_support"] == "1"
     assert orca["support_type"] == "tree(auto)"
     assert handover.as_mapping(settings, "prusa")["support_material"] == "1"
-    assert handover.as_mapping(settings, "cura")["support_enable"] == "true"
+    cura = handover.as_mapping(settings, "cura")
+    assert cura["support_enable"] == "true"
+    # Nicht nur das An/Aus: `support_structure` steht in der
+    # fdmprinter-Definition — ohne den Schlüssel druckte Cura Gitterstützen,
+    # wo Baumstützen eingestellt waren, und `verify()` sah nichts.
+    assert cura["support_structure"] == "tree"
 
 
 #: Was die Orca-Familie an diesen Stellen annimmt, abgelesen am ausgelieferten
@@ -1383,6 +1388,53 @@ def test_a_project_file_carries_its_values_written_out(tmp_path, monkeypatch) ->
     )
 
 
+def test_the_project_settings_ids_are_names_not_paths() -> None:
+    """Regel 12: Der Pfad des eigenen Rechners reist nicht in einer Datei
+    mit, die weitergegeben wird — und die Orca-Familie trifft mit einem Pfad
+    ohnehin kein Preset. Prozess und Filament tragen den Solidon-Namen, unter
+    dem `write_config` sie wirklich schreibt; unter dem Namen eines
+    Systemprofils lüde der Slicer sein eigenes darunter."""
+    from pathlib import Path
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    root = "C:/Program Files/ElegooSlicer/resources/profiles/Elegoo"
+    setup = handover.SlicerSetup(
+        executable=Path("elegoo-slicer.exe"),
+        flavour="orca",
+        machine_profile=f"{root}/machine/ECC2/Elegoo Centauri Carbon 2 0.4 nozzle.json",
+        base_process=f"{root}/process/ECC2/0.12mm Fine @Elegoo CC2 0.4 nozzle.json",
+        base_filament=f"{root}/filament/ECC2/Elegoo PLA @ECC2.json",
+    )
+
+    werte = handover.project_settings(settings, profile, setup, extruders=2)
+
+    assert werte["printer_settings_id"] == "Elegoo Centauri Carbon 2 0.4 nozzle"
+    assert werte["print_settings_id"] == f"Solidon {settings.title}"
+    assert werte["filament_settings_id"] == ["Solidon Elegoo PLA @ECC2"] * 2
+    for key in ("printer_settings_id", "print_settings_id"):
+        assert "/" not in str(werte[key]) and "\\" not in str(werte[key])
+
+
+def test_a_profile_name_with_dots_is_not_truncated() -> None:
+    """`.stem` auf „0.12mm Fine @…" schnitte mitten ins Maß — ein Name, der
+    schon ein Name ist, bleibt unangetastet."""
+    from pathlib import Path
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile, "standard")
+    setup = handover.SlicerSetup(
+        executable=Path("elegoo-slicer.exe"),
+        flavour="orca",
+        machine_profile="Elegoo Centauri Carbon 2 0.4 nozzle",
+        base_process="0.12mm Fine @Elegoo CC2 0.4 nozzle",
+    )
+
+    werte = handover.project_settings(settings, profile, setup)
+
+    assert werte["printer_settings_id"] == "Elegoo Centauri Carbon 2 0.4 nozzle"
+
+
 def test_the_bed_temperature_reaches_every_plate(tmp_path) -> None:
     """Die Temperatur gehört dem Material, der Plattentyp der Maschine.
 
@@ -1573,3 +1625,139 @@ def test_without_slots_it_stays_one_filament(tmp_path: Path) -> None:
     )
     document = json.loads(config.filaments[0].read_text(encoding="utf-8"))
     assert document["nozzle_temperature"] == [str(settings.temperature.nozzle)]
+
+
+# --- Verbinder, am Querschnitt gemessen (§25, §29) ----------------------------
+
+
+def test_a_connector_made_mostly_of_infill_asks_for_more_walls() -> None:
+    """Die Stiftplanung rechnet in Geometrie, gedruckt wird ein Ring mit Muster.
+
+    Nachgemessen am Querschnitt: Ein Verbinder mit Ø 5,00 mm ist bei zwei
+    Wänden à 0,42 mm innen 3,32 mm Füllung und außen 1,68 mm Material. Genau
+    dort sitzt die Verbindung, die die beiden Hälften zusammenhalten soll —
+    ein Gyroid mit fünfzehn Prozent trifft diesen Kern womöglich gar nicht.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    settings = replace(
+        settings,
+        shell=replace(settings.shell, wall_count=2),
+        layers=replace(settings.layers, line_width=0.42),
+    )
+
+    assert advise.solid_core(5.0, settings) == pytest.approx(3.32)
+
+    entries = [
+        entry
+        for entry in advise.advise(settings, profile, connectors=(5.0,))
+        if entry.path == "shell.wall_count"
+    ]
+
+    assert entries, "der Verbinder besteht überwiegend aus Füllung"
+    # 5,00 / (4 · 0,42) aufgerundet: die Schwelle, ab der das Material um den
+    # Zapfen mindestens so breit ist wie sein Kern — nicht bis vollmassiv, das
+    # wären zehn Wände auf dem ganzen Teil.
+    assert entries[0].value == 3
+    danach = replace(settings, shell=replace(settings.shell, wall_count=3))
+    assert advise.solid_core(5.0, danach) <= 2.0 * 3 * 0.42
+
+
+def test_a_connector_that_prints_solid_needs_no_advice() -> None:
+    """Ein Zapfen mit ein paar Zehnteln Muster in der Mitte trägt — erst wenn
+    der Füllkern breiter ist als das Material um ihn herum, ist es eine Sache.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    settings = replace(
+        settings,
+        shell=replace(settings.shell, wall_count=3),
+        layers=replace(settings.layers, line_width=0.42),
+    )
+
+    # 3,00 minus 2 mal 3 mal 0,42 sind 0,48 mm Kern gegen 2,52 mm Material.
+    assert advise.solid_core(3.0, settings) == pytest.approx(0.48)
+    paths = {entry.path for entry in advise.advise(settings, profile, connectors=(3.0,))}
+
+    assert "shell.wall_count" not in paths
+
+
+def test_without_connectors_nothing_is_said() -> None:
+    """Wer nicht geteilt hat, bekommt keinen Vorschlag über Verbinder."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+
+    paths = {entry.path for entry in advise.advise(settings, profile)}
+
+    assert "shell.wall_count" not in paths
+
+
+# --- der Lauf selbst: Zeitgrenze, Abbruch, Start (§2.8, Regel 17) -----------------
+
+
+def test_a_slicer_over_the_time_limit_is_an_answer_not_a_crash(tmp_path: Path) -> None:
+    """Der Zwilling zu ``test_openscad``: ``subprocess.run`` warf einen rohen
+    ``TimeoutExpired`` aus dem Arbeits-Thread, der nur ``AppError`` fing —
+    der Dialog stand dauerhaft auf „Der Slicer rechnet …"."""
+    import sys
+
+    setup = handover.SlicerSetup(executable=Path(sys.executable), flavour="orca")
+    command = [sys.executable, "-c", "import time; time.sleep(30)"]
+
+    with pytest.raises(ExternalToolError) as caught:
+        handover._run_slicer(command, tmp_path, 0.5, setup, None)
+
+    assert caught.value.suggestions, "eine Zeitgrenze ist eine Antwort, kein Absturz"
+
+
+def test_a_cancelled_slicer_run_stops_the_child_quickly(tmp_path: Path) -> None:
+    """Abbrechen beendet den Kindprozess, statt ihn auslaufen zu lassen —
+    daran hängt, dass Schließen nicht mehr minutenlang einfriert."""
+    import sys
+    import time as clock
+
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    signal = CancelSignal()
+    signal.cancel()
+    setup = handover.SlicerSetup(executable=Path(sys.executable), flavour="orca")
+    command = [sys.executable, "-c", "import time; time.sleep(30)"]
+    started = clock.perf_counter()
+
+    with pytest.raises(OperationCancelled):
+        handover._run_slicer(command, tmp_path, 60.0, setup, signal)
+
+    assert clock.perf_counter() - started < 15.0, "der Kindprozess stirbt, nicht der Nutzer wartet"
+
+
+def test_a_slicer_that_cannot_start_is_an_answer(tmp_path: Path) -> None:
+    """Eine gewählte Datei kann ``flavour_of`` bestehen und trotzdem kein
+    Programm sein — eine DLL zum Beispiel. Der ``OSError`` beim Start flog
+    roh aus dem Thread."""
+    fake = tmp_path / "elegoo-slicer.exe"
+    fake.write_text("kein programm", encoding="utf-8")
+    setup = handover.SlicerSetup(executable=fake, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as caught:
+        handover._run_slicer([str(fake)], tmp_path, 5.0, setup, None)
+
+    assert caught.value.suggestions
+
+
+def test_an_unknown_material_is_reported_not_silent() -> None:
+    """Regel 21: `_material_table` fällt mit Absicht still auf die
+    Modellvorgaben zurück — der Satz an den Nutzer fehlte: ein selbst
+    angelegtes Material druckt sonst mit PLA-nahen Werten, ohne dass es
+    irgendwo steht."""
+    from dataclasses import replace as dc_replace
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    unknown = dc_replace(profile, material=dc_replace(profile.material, id="eigenes-filament"))
+    settings = print_settings.resolve(unknown)
+
+    codes = {entry.code for entry in advise.warnings_for(settings, unknown)}
+
+    assert "settings.material_without_profile" in codes
+    known_codes = {entry.code for entry in advise.warnings_for(settings, profile)}
+    assert "settings.material_without_profile" not in known_codes

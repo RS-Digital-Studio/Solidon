@@ -38,6 +38,7 @@ from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import CANCEL, AppError
 from app.core.log import get_logger
 from app.i18n import tr
+from app.ui.leash import WorkerLeash
 from app.ui.panels import collapsible
 
 _log = get_logger(__name__)
@@ -115,6 +116,9 @@ class GenerateDialog(QDialog):
         self.result_mesh: GeneratedMesh | None = None
         self._image: bytes | None = None
         self._worker: _Worker | None = None
+        self._leash = WorkerLeash(self)
+        """Hält den ausgelaufenen Arbeiter, bis Qt mit ihm durch ist — das
+        Warum steht in :mod:`app.ui.leash`."""
         self.tries: list[GeneratedMesh] = []
         """Was bisher entstanden ist (Konzept P15, E8).
 
@@ -344,7 +348,12 @@ class GenerateDialog(QDialog):
         self.state.setText("\n".join(lines))
 
     def _on_thread_done(self) -> None:
+        # `finished` heißt „`run` ist zurück", nicht „das Objekt darf weg" —
+        # das Loslassen übernimmt die Halteleine.
+        worker = self._worker
         self._worker = None
+        if worker is not None:
+            self._leash.hold_until_done(worker)
 
     def reject(self) -> None:
         """Abbrechen wartet auf den Thread, statt ihn laufen zu lassen.

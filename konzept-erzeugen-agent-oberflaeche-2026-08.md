@@ -161,11 +161,12 @@ nur mit einem fremden Betreiber statt einem eigenen Server.
 ## Teil 5 — Der lokale Agent: gemessen, nicht vermutet
 
 Der Chat spricht mit Anthropic über einen eigenen Schlüssel **oder** mit Ollama
-lokal. Der Agent sieht **88 Werkzeuge** (77 Operationen + 11 eigene:
+lokal. Der Agent sieht **96 Werkzeuge** (85 Operationen + 11 eigene:
 `ask_user`, `undo_transaction`, `add_parameter`, `set_parameter`, `add_fit`,
 `read_report`, `find_part`, `read_digest`, `read_standard`, `read_analysis`,
-`set_print_target`), das Schema ist **104 KB** groß, ein Zug endet nach
-höchstens acht Schritten.
+`set_print_target`), das Schema ist **110 KB** groß, ein Zug endet nach
+höchstens acht Schritten. Gemessen wurde weiter unten bei 88 Werkzeugen und
+104 KB — seither ist das Register gewachsen, die Enge also auch.
 
 Auf dieser Maschine liegen fünf Modelle. Gemessen wurde die Stufe, ohne die
 keine Antwort etwas nützt — **kommt ein strukturierter Werkzeugaufruf zurück
@@ -179,10 +180,11 @@ Das Urteil des Läufers: **„Brauchbar: keines."**
 
 Das ist die ehrliche Antwort auf „was geht lokal": Die Schicht ist gebaut, die
 Werkzeuge stehen, die Absicherung greift — aber kein installiertes lokales
-Modell bedient 88 Werkzeuge mit 104 KB Schema zuverlässig. Zwei Minuten für
-einen einzigen Werkzeugaufruf sind keine Bedienung.
+Modell bedient die 88 Werkzeuge mit 104 KB Schema zuverlässig, die es zur
+Messung waren. Zwei Minuten für einen einzigen Werkzeugaufruf sind keine
+Bedienung.
 
-**Vorschlag A1 — dem lokalen Modell weniger zumuten.** Nicht alle 88 Werkzeuge
+**Vorschlag A1 — dem lokalen Modell weniger zumuten.** Nicht alle 96 Werkzeuge
 mitschicken, sondern die zur Auswahl passenden (`applies_to` sortiert das
 Kontextmenü bereits) plus die elf eigenen. Das ist kein neues Konzept, sondern
 dieselbe Sortierung, die die Oberfläche schon benutzt — angewandt auf das, was

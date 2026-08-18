@@ -66,7 +66,15 @@ def store(account: str, key: str) -> bool:
     keychain = _keyring()
     if keychain is None:
         return False
-    keychain.set_password(SERVICE, account, key)
+    try:
+        keychain.set_password(SERVICE, account, key)
+    except Exception as error:  # pragma: no cover - gesperrter Schlüsselbund
+        # Derselbe Rahmen wie in `read`: ein gesperrter Schlüsselbund — etwa
+        # ein Linux ohne laufenden Secret-Service — ist ein Nein, kein
+        # Absturz. Die Ausnahme flog sonst aus dem Qt-Slot des
+        # Einstellungsdialogs, der nur den Rückgabewert behandelt.
+        _log.warning("keychain refused the key: %s", error)
+        return False
     _log.info("key for %s stored in the keychain", account)
     return True
 
@@ -80,7 +88,7 @@ def forget(account: str) -> bool:
         return False
     try:
         keychain.delete_password(SERVICE, account)
-    except Exception:  # pragma: no cover - nothing stored
+    except Exception:  # pragma: no cover - nichts gespeichert
         return False
     return True
 
@@ -96,7 +104,7 @@ def source(account: str) -> str:
         try:
             if keychain.get_password(SERVICE, account):
                 return "keychain"
-        except Exception:  # pragma: no cover - locked keychain
+        except Exception:  # pragma: no cover - gesperrter Schlüsselbund
             pass
     if os.environ.get(f"{ENVIRONMENT_VARIABLE}_{account.upper()}") or os.environ.get(
         ENVIRONMENT_VARIABLE

@@ -338,9 +338,17 @@ class Canvas:
             f"{escape(text)}</text>"
         )
 
-    def caption(self, x: float, y: float, text: str, *, size: float = 10.0) -> None:
+    def caption(
+        self,
+        x: float,
+        y: float,
+        text: str,
+        *,
+        size: float = 10.0,
+        anchor: Literal["start", "middle", "end"] = "start",
+    ) -> None:
         """Eine Nebenbemerkung im Bild — kleiner und zurückgenommen."""
-        self.label(x, y, text, size=size, colour=self.colours.muted)
+        self.label(x, y, text, size=size, colour=self.colours.muted, anchor=anchor)
 
     def wrapped(
         self,

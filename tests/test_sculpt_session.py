@@ -546,3 +546,32 @@ def test_the_thin_wall_warning_gets_no_button(window: MainWindow) -> None:
 
     assert window.sculpt_bar.warning.text()
     assert not window.sculpt_bar.refine.isVisibleTo(window.sculpt_bar)
+
+
+def test_dragging_paints_strokes_with_spacing(window: MainWindow) -> None:
+    """§18.11: Ein Grat ist ein Zug, nicht zwanzig Klicks — der gedrückte
+    Zeiger malt, und der Mindestabstand (halber Pinselradius) hält die
+    Zugzahl im Zaum, ohne einen frischen Ansatz zu schlucken."""
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    view = window.viewport
+    window.sculpt_bar.radius.setValue(8.0)
+    view.set_brush_radius(8.0)
+
+    walked = iter(
+        [
+            (0.0, 0.0, 0.0),  # frischer Ansatz: erster Zug sitzt immer
+            (1.0, 0.0, 0.0),  # unter 4 mm zum letzten Zug: geschluckt
+            (6.0, 0.0, 0.0),  # über 4 mm: der zweite Zug
+            (6.5, 0.0, 0.0),  # neuer Ansatz daneben: sitzt trotz Nähe
+        ]
+    )
+    view._world_at = lambda x, y: next(walked)  # type: ignore[method-assign]
+
+    view._on_paint_drag(0, 0, True)
+    view._on_paint_drag(1, 0, False)
+    view._on_paint_drag(2, 0, False)
+    assert len(window._sculpt_strokes) == 2, "der Mindestabstand schluckt den Zwischenpunkt"
+
+    view._on_paint_drag(3, 0, True)
+    assert len(window._sculpt_strokes) == 3, "ein frischer Ansatz beginnt ohne Altlast"

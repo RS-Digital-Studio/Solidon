@@ -9,6 +9,12 @@ Verkaufsseite ist kein Schönheitsfehler.
 
 Geprüft wird außerdem, dass beide Sprachfassungen dieselben Zahlen führen und
 dass jede eingebundene Datei existiert.
+
+Dieselbe Zahl steht ein zweites Mal im Fließtext — auf der Funktionsseite und
+in den häufigen Fragen. Die Leiste allein zu prüfen reichte nicht: sie stand
+längst auf 85, während der Satz daneben 83 behauptete und die englische
+Fassung 84. Was im Text steht, wird darum über **alle** Seiten geprüft, auch
+über die, die diese Datei sonst nicht kennt.
 """
 
 from __future__ import annotations
@@ -50,6 +56,16 @@ STAT = re.compile(r"<div><b>(\d+)</b><span>([^<]+)</span></div>")
 #: Verweise auf Dateien — Netzadressen, Postadressen und Sprungmarken zählen
 #: nicht dazu.
 LINK = re.compile(r'(?:src|href)="([^"]+)"')
+
+#: Die Registergröße im Fließtext: eine Zahl, dahinter das Wort für Operation.
+#: Der Stamm „oper“ trägt durch alle sechs Sprachen — Operationen, operations,
+#: operaciones, opérations, operazioni, operações. Eine siebte Sprache ist
+#: damit mitgeprüft, ohne dass hier jemand etwas nachträgt.
+OPERATION_COUNT = re.compile(r"(\d+)(?:&nbsp;|\s)+[Oo]per\w*")
+
+#: Die Illustrationen sind Inline-SVG und führen erfundene Beispielzahlen
+#: („Vorschlag — 3 Operationen“). Das ist keine Aussage über das Register.
+INLINE_SVG = re.compile(r"<svg\b.*?</svg>", re.DOTALL)
 
 
 def _stats(page: str) -> list[int]:
@@ -108,6 +124,25 @@ def test_the_number_of_agent_cases_on_the_page_matches_the_suite() -> None:
         found = re.search(pattern, text)
         assert found is not None, f"{page} nennt die Suite nicht"
         assert int(found.group(1)) == len(ALL_CASES), page
+
+
+def test_no_page_names_a_different_number_of_operations_in_its_text() -> None:
+    """Jede Nennung der Registergröße im Fließtext, auf jeder Seite.
+
+    Nicht `ALL_PAGES`, sondern was tatsächlich unter `website/` liegt: die
+    Sprachfassungen kommen einzeln dazu, und eine Zahl, die auf der
+    portugiesischen Seite veraltet, ist genauso falsch wie auf der deutschen.
+    Fehlt eine Sprache noch, prüft der Lauf sie eben nicht — er wird nicht rot,
+    weil jemand sie noch nicht eingecheckt hat.
+    """
+    expected = len(REGISTRY.all())
+    wrong = []
+    for page in sorted([*WEBSITE.glob("*.html"), *WEBSITE.glob("*/*.html")]):
+        prose = INLINE_SVG.sub("", page.read_text(encoding="utf-8"))
+        for found in OPERATION_COUNT.finditer(prose):
+            if int(found.group(1)) != expected:
+                wrong.append(f"{page.relative_to(WEBSITE).as_posix()}: „{found.group(0)}“")
+    assert not wrong, f"das Register führt {expected} Operationen, die Seiten sagen {wrong}"
 
 
 @pytest.mark.parametrize("page", ALL_PAGES)

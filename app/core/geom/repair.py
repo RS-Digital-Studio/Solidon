@@ -115,16 +115,37 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
 
     # Welche Fläche welche Randkante trägt: edges_sorted läuft drei je Fläche,
     # in Flächenreihenfolge — der Zeilenindex durch drei ist also die Fläche.
-    owner = {tuple(edges[index]): int(boundary[index] // 3) for index in range(len(edges))}
+    owner = {
+        (int(edges[index][0]), int(edges[index][1])): int(boundary[index] // 3)
+        for index in range(len(edges))
+    }
+
+    # Vorfilter statt vollständiger Paarung: jede Randkante gegen jeden
+    # Randpunkt waren bei 2 100 offenen Kanten elf Sekunden, am eigenen
+    # Deckel hochgerechnet vierzig — und `repair()` zahlte sie doppelt. Der
+    # Baum liefert je Kante nur die Punkte, die ihrem Mittelpunkt näher
+    # liegen als die halbe Kantenlänge plus Toleranz; weiter draußen kann
+    # nichts auf der Strecke sitzen.
+    from scipy.spatial import cKDTree
+
+    tree = cKDTree(points[candidates])
+    starts, ends = points[edges[:, 0]], points[edges[:, 1]]
+    centres = (starts + ends) / 2.0
+    lengths = np.linalg.norm(ends - starts, axis=1)
+    radii = lengths / 2.0 + ON_EDGE_TOLERANCE * np.maximum(lengths, 1.0)
+    nearby = tree.query_ball_point(centres, radii)
 
     splits: dict[int, list[tuple[int, int, int]]] = {}
-    for edge, face_index in owner.items():
+    for index in range(len(edges)):
+        edge = (int(edges[index][0]), int(edges[index][1]))
+        face_index = owner[edge]
         start, end = points[edge[0]], points[edge[1]]
-        for vertex in candidates:
+        for position in nearby[index]:
+            vertex = int(candidates[position])
             if vertex in edge:
                 continue
             if _lies_on(points[vertex], start, end):
-                splits.setdefault(face_index, []).append((edge[0], edge[1], int(vertex)))
+                splits.setdefault(face_index, []).append((edge[0], edge[1], vertex))
                 break
 
     if not splits:
@@ -170,21 +191,24 @@ def _lies_on(point: np.ndarray, start: np.ndarray, end: np.ndarray) -> bool:
     return distance <= ON_EDGE_TOLERANCE * max(length, 1.0)
 
 
-def fill_holes(mesh: MeshData) -> tuple[MeshData, bool]:
+def fill_holes(mesh: MeshData, stitch: bool = True) -> tuple[MeshData, bool]:
     """Schließt offene Kanten. Nur kleine Löcher — eine fehlende Wand kann
     trimesh nicht überbrücken.
 
     Das Vernähen läuft zuerst: eine T-Kreuzung sieht aus wie ein Loch und ist
     keines, und der Füller lässt sie exakt, wie er sie fand (siehe
-    :func:`stitch_t_junctions`).
+    :func:`stitch_t_junctions`). ``stitch=False`` ist für Aufrufer, die das
+    Vernähen selbst schon gefahren haben — ``repair()`` zahlte es sonst
+    doppelt, gemessener Faktor 2,1.
     """
     body = mesh.raw.copy()
     if body.is_watertight:
         return mesh, False
-    stitched, _seams = stitch_t_junctions(mesh.replacing(body))
-    body = stitched.raw.copy()
-    if body.is_watertight:
-        return mesh.replacing(body), True
+    if stitch:
+        stitched, _seams = stitch_t_junctions(mesh.replacing(body))
+        body = stitched.raw.copy()
+        if body.is_watertight:
+            return mesh.replacing(body), True
     trimesh.repair.fill_holes(body)
     return mesh.replacing(body), bool(body.is_watertight)
 
@@ -313,7 +337,10 @@ def repair(
                 )
             )
 
-        result.mesh, closed = fill_holes(result.mesh)
+        # `stitch=False`: das Vernähen ist gerade gelaufen — es erneut zu
+        # zahlen war der gemessene Faktor 2,1 auf dem Normalfall „Reparieren
+        # an einem heruntergeladenen Modell".
+        result.mesh, closed = fill_holes(result.mesh, stitch=False)
         if closed:
             result.changed = True
             result.findings.append(

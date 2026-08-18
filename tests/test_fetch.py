@@ -135,6 +135,63 @@ def test_only_http_gets_through(url: str) -> None:
         check_url(url)
 
 
+class _Redirected:
+    """Eine Antwort, die von woanders herkommt, als angefragt wurde.
+
+    Genau das, was urllibs Weiterleitungs-Handler zurückgibt: die Antwort
+    trägt in ``url`` den zuletzt erreichten Ort — und der Handler folgt auch
+    einem ``Location: ftp://…``.
+    """
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+        self.headers = {"Content-Type": "model/stl"}
+
+    def __enter__(self) -> _Redirected:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self, size: int) -> bytes:
+        raise AssertionError("gelesen wird erst nach der zweiten Prüfung")
+
+
+def test_a_redirect_cannot_leave_http() -> None:
+    """§32: Geprüft wird die eingetippte Adresse — und der erreichte Ort.
+
+    Dazwischen liegt der Weiterleitungs-Handler von urllib, und der folgt
+    auch nach ``ftp:``. Ein http-Server, der mit ``Location: ftp://…``
+    antwortet, käme sonst an der Schemaprüfung vorbei, obwohl sie genau dafür
+    da ist.
+    """
+    with pytest.raises(ValidationError) as raised:
+        fetch_model(
+            "http://example.invalid/teil.stl",
+            opener=lambda request, timeout: _Redirected("ftp://example.invalid/teil.stl"),
+        )
+
+    assert raised.value.values["constraint"] == "scheme"
+
+
+def test_a_redirect_within_http_goes_through() -> None:
+    """Die übliche Weiterleitung bleibt eine übliche Weiterleitung — und der
+    erreichte Ort ist der, der in die Provenienz gehört (§16.3)."""
+
+    class _Body(_Redirected):
+        def read(self, size: int) -> bytes:
+            payload = getattr(self, "_rest", b"solid teil\n")
+            self._rest = b""
+            return payload
+
+    fetched = fetch_model(
+        "http://example.invalid/teil.stl",
+        opener=lambda request, timeout: _Body("https://cdn.example.invalid/teil.stl"),
+    )
+
+    assert fetched.url == "https://cdn.example.invalid/teil.stl"
+
+
 def test_the_readable_formats_are_the_same_ones_the_drop_area_takes() -> None:
     """Zwei Listen, die auseinanderlaufen, sind eine Frage der Zeit."""
     from app.core.geom.mesh import READABLE_SUFFIXES
