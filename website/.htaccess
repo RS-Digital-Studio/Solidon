@@ -1,0 +1,8 @@
+# Jede Auslieferung wird gegen den Stand auf dem Server geprüft: der Browser
+# darf cachen, fragt aber vor jeder Nutzung nach und bekommt 304, solange sich
+# nichts geändert hat. Ohne diesen Header rät er die Frische aus dem Alter der
+# Datei — und zeigt nach einem Upload eine Mischung aus altem und neuem Stand
+# (neue Seite mit alter style.css: das Sprachmenü zerfiel zur Rohliste).
+<IfModule mod_headers.c>
+  Header set Cache-Control "no-cache"
+</IfModule>
