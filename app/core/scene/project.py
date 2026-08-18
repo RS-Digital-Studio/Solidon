@@ -351,11 +351,24 @@ def write_autosave(project: Project, path: Path | None) -> Path:
 
 def find_recovery(path: Path | None) -> Path | None:
     """Ein Autosave, das sein Projekt überlebt hat, wird beim nächsten Start
-    angeboten."""
+    angeboten.
+
+    **Bei Gleichstand wird angeboten.** Die Dateizeit hat auf dieser Plattform
+    eine Auflösung von rund 16 Millisekunden, und ein Projekt zu speichern und
+    danach zu sichern dauert weniger — beide Dateien tragen dann dieselbe Zeit,
+    bis aufs letzte Bit. Wer daraus „das Autosave ist nicht neuer" schließt,
+    hat nicht gemessen, sondern die Auflösung der Uhr abgelesen.
+
+    Entschieden wird deshalb zur sicheren Seite: Ein Angebot, das der Nutzer
+    ablehnt, kostet einen Klick; ein Autosave, das nicht angeboten wird, kostet
+    seine Arbeit. Ausgeschlossen bleibt nur, was **nachweislich** älter ist —
+    dort hat jemand nach der Sicherung gespeichert, und dann gilt das
+    Gespeicherte.
+    """
     candidate = autosave_path(path)
     if not candidate.is_file():
         return None
-    if path is not None and path.is_file() and candidate.stat().st_mtime <= path.stat().st_mtime:
+    if path is not None and path.is_file() and candidate.stat().st_mtime < path.stat().st_mtime:
         return None
     return candidate
 

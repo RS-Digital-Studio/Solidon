@@ -112,6 +112,40 @@ def test_operations_and_objects_are_numbered_in_order(history: History) -> None:
     assert history.operations[-1].id == 2
 
 
+def test_a_second_history_over_the_same_document_keeps_numbering(
+    document: Document, registry: Registry
+) -> None:
+    """Zwei Stapel über einem Dokument vergeben keine Kennung zweimal.
+
+    Kein erfundener Fall: Die Sitzung hält ihre ``History`` über die ganze
+    Projektlaufzeit, und Trennen, Deckeln und Auto Split bauen sich eine
+    eigene über demselben Dokument — sie tragen Passungen nach, und die leben
+    im Dokument. Nach fünf gezeichneten Schnitten vergab die Sitzung eine
+    Kennung, die es schon gab.
+
+    Und das bleibt nicht folgenlos: Die Auswertung sortiert nach Kennung
+    (§15). Eine doppelte reiht die Operation an der falschen Stelle ein, wo
+    ihre Eingänge noch nicht existieren — im Fenster sah es aus, als habe das
+    Anordnen die Teilung zerstört.
+    """
+    first = History(document, registry)
+    second = History(document, registry)
+
+    first.apply(_("Über den einen"), [OperationDraft(op="make_object")])
+    second.apply(_("Über den anderen"), [OperationDraft(op="make_object")])
+    first.apply(_("Wieder über den einen"), [OperationDraft(op="make_object")])
+
+    ids = [entry.id for entry in document.ops]
+    assert ids == sorted(ids), "die Reihenfolge im Dokument ist die der Kennungen"
+    assert len(set(ids)) == len(ids), f"doppelte Op-Kennung: {ids}"
+
+    objects = [name for entry in document.ops for name in entry.outputs]
+    assert len(set(objects)) == len(objects), f"doppelte Objektkennung: {objects}"
+
+    names = [entry.id for entry in document.transactions]
+    assert len(set(names)) == len(names), f"doppelte Transaktionskennung: {names}"
+
+
 def test_same_count_in_and_out_keeps_the_object(history: History) -> None:
     object_id = create(history)
     history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=(object_id,))])

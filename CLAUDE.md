@@ -10,10 +10,7 @@ meine globalen Vorgaben auf dieses Projekt nicht passen.
 
 Solidon — eine Desktop-Anwendung in **Python (3.13 oder neuer) mit PySide6**,
 kein Avalonia/.NET. Die Untergrenze steht in `pyproject.toml`; die
-Arbeitsumgebung fährt derzeit 3.14, die CI 3.13. Die globale `~/.claude/CLAUDE.md` beschreibt meine Haltung und
-Arbeitsweise; ihre Stack-Angaben (Avalonia, `dotnet build`, MVVM, RESX,
-Android) gelten hier **nicht**. Wo sie sich widersprechen, gewinnt für den
-Stack diese Datei, für die Haltung die globale.
+Arbeitsumgebung fährt derzeit 3.14, die CI 3.13.
 
 Die Unterlagen in ihrer Rangfolge:
 

@@ -7,8 +7,18 @@ lohnt.
 
 Wo die Stifte hinkommen, entscheidet sich auf der Schnittfläche, nicht am
 Hüllquader: das Schnittpolygon wird um Stiftradius plus Wand eingezogen, und
-was übrig bleibt, ist, wo auf beiden Seiten Material ist. Zwei Stifte entlang
-der langen Richtung dieses Bereichs — einer ließe die Hälften verdrehen.
+was übrig bleibt, ist, wo *quer zur Naht* Platz ist. Zwei Stifte entlang der
+langen Richtung dieses Bereichs — einer ließe die Hälften verdrehen.
+
+**Quer ist nicht tief.** Die Schnittfläche sagt nichts darüber, wie weit das
+Material hinter ihr reicht, und bei einem hohlen Teil — also genau bei dem, das
+man teilt — ist beides grundverschieden. Die Trennwand eines Besteckkorbs
+liefert eine Fläche von 180 auf 120 mm und dahinter anderthalb Millimeter
+Material, dann kommt das Fach. Ein Stift, der sich nur nach der Fläche richtet,
+steht mit zehn Millimetern im Fach, und seine Bohrung geht durch die Wand. Die
+Tiefe wird deshalb an jeder Stelle gemessen (:func:`_material_depth`); der
+Stift wird auf das gekürzt, was trägt, und wo nicht einmal das bleibt, entsteht
+keiner und der Prüfbericht sagt warum.
 
 Das Spiel ist hier keine Zahl. Es kommt aus dem Materialprofil (AGENTS.md
 Regel 7), damit eine spätere Kalibrierung Teile erreicht, die vor ihr geteilt
@@ -49,6 +59,14 @@ PIN_MAX = 8.0
 
 #: Wie tief ein Stift in jeder Hälfte sitzt, relativ zu seinem Durchmesser.
 PIN_DEPTH_FACTOR = 1.5
+
+#: Wie tief er mindestens sitzen muss, ebenfalls relativ zum Durchmesser.
+#:
+#: Die Grenze, unterhalb derer ein Stift nichts mehr führt: Ein Zapfen, der
+#: kürzer ist als er dick, richtet die Hälften nicht aus, sondern schert beim
+#: Fügen ab — und eine Naht ohne Stift klebt besser als eine mit einem
+#: abgebrochenen darin. Wo weniger Material steht, entsteht deshalb keiner.
+PIN_MIN_ENGAGEMENT = 0.75
 
 #: Der Schnappverbinder unter den Querschnitten — er ist keiner, sondern ein
 #: eigener Baustein, und beide Stellen, die ihn erkennen müssen, lesen hier.
@@ -125,7 +143,12 @@ def plan_pins(
 ) -> PinPlan:
     """Sucht Platz für Stifte auf der Schnittfläche von ``plane``.
 
-    Liefert einen Plan ohne Positionen, wenn die Fläche zu klein ist — eine
+    Zwei Fragen, zwei Richtungen: Ist die Fläche breit genug, und steht hinter
+    ihr genug Material? Die erste beantwortet der Puffer, die zweite ein
+    Strahlenpaar je Stelle. Reicht die Tiefe für den Durchmesser nicht, den die
+    Fläche hergäbe, wird der Stift dünner und kürzer, statt zu entfallen.
+
+    Liefert einen Plan ohne Positionen, wenn beides nicht zusammengeht — eine
     Naht ohne Stifte klebt immer noch, ein Stift, der aus der Wand ausbricht,
     nicht.
     """
@@ -136,13 +159,48 @@ def plan_pins(
 
     largest = max(getattr(section, "geoms", (section,)), key=lambda entry: entry.area)
     diameter = _diameter(largest)
-    inset = largest.buffer(-(diameter / 2.0 + wall))
-    if inset.is_empty:
+    seats = _seat(mesh, largest, plane, normal, diameter, count, wall)
+    if seats is None:
         return PinPlan((), 0.0, 0.0, normal, shape, (_too_small(diameter, wall),))
 
-    room = max(getattr(inset, "geoms", (inset,)), key=lambda entry: entry.area)
-    points = _spread(room, count)
-    length = diameter * PIN_DEPTH_FACTOR * 2.0
+    # Die Fläche nennt eine obere Schranke für den Durchmesser, die Tiefe eine
+    # zweite. Wo die zweite kleiner ist, wird der Stift dünner statt zu
+    # entfallen: Einbindung und Durchmesser hängen aneinander
+    # (:data:`PIN_MIN_ENGAGEMENT`), und ein dünnerer braucht weniger. Gemessen
+    # wird an der *tiefsten* Stelle — sie bestimmt, was überhaupt möglich ist;
+    # welche Stellen es dann mittragen, entscheidet sich danach.
+    thickest = max((raw for _point, _usable, raw in seats), default=0.0)
+    deepest = max((usable for _point, usable, _raw in seats), default=0.0)
+    if deepest < diameter * PIN_MIN_ENGAGEMENT:
+        thinner = deepest / PIN_MIN_ENGAGEMENT
+        if thinner < PIN_MIN:
+            needed = PIN_MIN * PIN_MIN_ENGAGEMENT + BORE_RELIEF + wall
+            return PinPlan(
+                (), 0.0, 0.0, normal, shape, (_seam_too_thin(diameter, thickest, needed),)
+            )
+        diameter = thinner
+        seats = _seat(mesh, largest, plane, normal, diameter, count, wall)
+        if seats is None:
+            return PinPlan((), 0.0, 0.0, normal, shape, (_too_small(diameter, wall),))
+
+    # Fließkomma: Nach dem Verdünnen ist die Einbindung genau die gemessene
+    # Tiefe, und ein Vergleich auf Gleichheit entschiede dort ein letztes Bit.
+    enough = diameter * PIN_MIN_ENGAGEMENT - EPS_GEOM
+    seated = [(point, usable) for point, usable, _raw in seats if usable >= enough]
+    if not seated:
+        # Nach dem Verdünnen stehen die Stellen woanders — der Befund nennt die
+        # Tiefe, die dort gemessen wurde, und nicht die vom ersten Anlauf.
+        thickest = max((raw for _point, _usable, raw in seats), default=thickest)
+        needed = diameter * PIN_MIN_ENGAGEMENT + BORE_RELIEF + wall
+        return PinPlan((), 0.0, 0.0, normal, shape, (_seam_too_thin(diameter, thickest, needed),))
+
+    # Der Stift ist so lang, wie die dünnste seiner Stellen trägt — alle
+    # teilen sich einen Körper, und der längste gemeinsame Nenner ist der
+    # kleinste. Länger als vorgesehen wird er nie: ein Stift, der die halbe
+    # Wand durchmisst, schwächt sie mehr, als er hilft.
+    reach = min(diameter * PIN_DEPTH_FACTOR, min(usable for _point, usable in seated))
+    points = tuple(point for point, _usable in seated)
+    length = reach * 2.0
 
     if shape == SNAP and length / 2.0 < SNAP_MIN_REACH:
         # Ein Federarm braucht eine Mindestlänge, sonst federt er nicht,
@@ -158,7 +216,7 @@ def plan_pins(
         findings = []
 
     return PinPlan(
-        positions=tuple(_in_world(point, plane.position, normal) for point in points),
+        positions=points,
         diameter=diameter,
         length=length,
         normal=normal,
@@ -207,6 +265,73 @@ def _spread(room: Any, count: int) -> list[tuple[float, float]]:
             candidate = nearest_points(room, candidate)[0]
         points.append((float(candidate.x), float(candidate.y)))
     return points
+
+
+def _seat(
+    mesh: MeshData,
+    section: Any,
+    plane: SectionPlane,
+    normal: Vec3,
+    diameter: float,
+    count: int,
+    wall: float,
+) -> list[tuple[Vec3, float, float]] | None:
+    """Wo Stifte dieses Durchmessers stünden, wie tief sie dort fassen, und wie
+    viel Material überhaupt da ist.
+
+    Zwei Schranken, zwei Richtungen: Quer zur Naht zieht der Puffer die Fläche
+    um Stiftradius plus Wand ein — bleibt nichts übrig, gibt es keinen Platz
+    (``None``). Längs misst :func:`_material_depth`, und davon geht ab, was
+    hinter der Bohrung stehen bleiben muss: der Freistich, um den sie tiefer
+    reicht als der Stift, und eine Wandstärke, damit sie nicht auf der anderen
+    Seite herauskommt.
+
+    Zurück kommen beide Zahlen. Die Einbindung ist die, mit der gerechnet wird;
+    die rohe Tiefe ist die, die in den Befund gehört — wer liest, dass 1,5 mm
+    nicht reichen, sucht seine Wand, und die ist 3 mm dick.
+    """
+    inset = section.buffer(-(diameter / 2.0 + wall))
+    if inset.is_empty:
+        return None
+    room = max(getattr(inset, "geoms", (inset,)), key=lambda entry: entry.area)
+    placed = [_in_world(point, plane.position, normal) for point in _spread(room, count)]
+    seats: list[tuple[Vec3, float, float]] = []
+    for point in placed:
+        raw = _material_depth(mesh, point, normal)
+        seats.append((point, raw - BORE_RELIEF - wall, raw))
+    return seats
+
+
+def _material_depth(mesh: MeshData, point: Vec3, normal: Vec3) -> float:
+    """Wie weit von der Naht aus Material steht — die dünnere der zwei Seiten.
+
+    Zwei Strahlen vom Nahtpunkt aus, einer in jede Richtung; gezählt wird der
+    erste Austritt. Zurück kommt der kleinere der beiden Wege, denn der Stift
+    sitzt in **beiden** Hälften, und die dünnere entscheidet.
+
+    Null, wenn ein Strahl nichts trifft: Dann steht dort kein Material, und ein
+    Stift hätte nichts, worin er sitzt. Das ist kein Sonderfall, sondern der
+    Normalfall bei einer Naht, die neben dem Hohlraum durch die Wand läuft.
+    """
+    body = mesh.raw
+    origin = np.asarray(point, dtype=float)
+    direction = np.asarray(normal, dtype=float)
+    both: list[float] = []
+    for sign in (1.0, -1.0):
+        hits, _rays, _faces = body.ray.intersects_location(
+            ray_origins=origin.reshape(1, 3),
+            ray_directions=(direction * sign).reshape(1, 3),
+        )
+        if len(hits) == 0:
+            return 0.0
+        distances = np.linalg.norm(np.asarray(hits, dtype=float) - origin, axis=1)
+        # Der Punkt liegt auf der Trennebene und damit oft genau auf einer
+        # Kante des Schnitts; ein Treffer im Abstand null ist er selbst.
+        ahead = distances[distances > EPS_GEOM]
+        if not len(ahead):
+            return 0.0
+        both.append(float(ahead.min()))
+    return min(both)
 
 
 def _in_world(point: tuple[float, float], position: float, normal: Vec3) -> Vec3:
@@ -356,6 +481,30 @@ def _too_thin_for_snap(diameter: float) -> Finding:
             "Federn. Es sind runde Stifte geworden; zum Zusammenstecken hilft Kleber."
         ),
         values={"diameter_mm": round(diameter, 2), "needed_mm": round(SNAP_MIN_REACH, 2)},
+    )
+
+
+def _seam_too_thin(diameter: float, found: float, needed: float) -> Finding:
+    """Die Fläche wäre groß genug, das Material hinter ihr ist es nicht.
+
+    Der Unterschied zu :func:`_too_small` steckt in der Richtung und gehört
+    deshalb in einen eigenen Befund: Dort ist die Naht zu schmal, hier ist sie
+    zu dünn. Wer die eine Meldung für die andere liest, sucht an der falschen
+    Stelle — bei einem Kasten ist die Naht so breit wie die ganze Wand.
+    """
+    return Finding(
+        code="split.seam_too_thin",
+        severity="warning",
+        message=_(
+            "Hinter der Trennfläche steht zu wenig Material für einen Stift — er "
+            "stünde im Hohlraum, und seine Bohrung ginge durch die Wand. Getrennt "
+            "wurde trotzdem; geklebt hält die Naht."
+        ),
+        values={
+            "diameter_mm": round(diameter, 2),
+            "depth_mm": round(found, 2),
+            "needed_mm": round(needed, 2),
+        },
     )
 
 

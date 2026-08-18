@@ -552,6 +552,10 @@ def write_assembly(
             name=entry.name,
             slots=tuple(entry.material_slots),
             settings=_part_settings(as_mesh_data(entry.mesh), settings, flavour),
+            # Die Platte reist mit. Ohne Einschränkung auf eine gehen alle in
+            # dieselbe Datei — und dann muss dort stehen, welches Teil auf
+            # welche gehört, sonst legt der Slicer sie übereinander.
+            plate=entry.plate - min(other.plate for other in chosen),
         )
         for entry in chosen
     ]
@@ -562,6 +566,10 @@ def write_assembly(
             project_name,
             bed=bed,
             project_settings=_plate_settings(settings, profile, flavour, setup),
+            # Nur wo es mehrere Platten gibt. Ein Versatz auf einer einzelnen
+            # wäre eine Verschiebung ohne Grund, und die Datei trüge eine
+            # Matrix, die nichts sagt.
+            stride=width * threemf.PLATE_STRIDE if len({p.plate for p in parts}) > 1 else 0.0,
         )
     )
     _log.info("exported %d object(s) as one assembly to %s", len(parts), target.name)

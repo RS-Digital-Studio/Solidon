@@ -2100,6 +2100,102 @@ def test_a_late_layer_analysis_finds_no_dialog(window: MainWindow) -> None:
     assert window._settings_dialog is None
 
 
+def test_export_as_3mf_carries_every_plate(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Platten sind eine Datei mit zwei Platten darin.
+
+    Jede Platte fängt am selben Bettursprung an. Ohne Plattenangabe legt die
+    Datei die Teile der zweiten über die der ersten; am modularen Besteckkorb
+    waren es neunundzwanzig Millimeter Überlappung, gemessen zwischen einem
+    Fuß auf Platte eins und einem Modul auf Platte zwei. Der Datei sah man das
+    nicht an, und der Slicer hätte sie genommen.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core.scene import OperationDraft
+
+    for _ in range(2):
+        window.session.apply(
+            "Anlegen",
+            [
+                OperationDraft(
+                    op="create_box", params={"width": 200.0, "depth": 200.0, "height": 10.0}
+                )
+            ],
+        )
+        window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None
+    window.session.apply(
+        "Anordnen",
+        [
+            OperationDraft(
+                op="arrange_bed", inputs=tuple(result.scene.objects), params={"plates": 2}
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+
+    scene = window.session.last_result
+    assert scene is not None
+    assert {entry.plate for entry in scene.scene.objects.values()} == {0, 1}, "zwei Platten"
+
+    target = tmp_path / "baugruppe.3mf"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
+    )
+    window.object_tree.tree.clearSelection()
+    window.action_export()
+    wait_for_export(window)
+
+    written = sorted(path.name for path in tmp_path.glob("*.3mf"))
+    assert written == ["baugruppe.3mf"], "eine Baugruppe, eine Datei"
+
+    import zipfile
+
+    with zipfile.ZipFile(target) as container:
+        beilage = container.read("Metadata/model_settings.config").decode("utf-8")
+    assert beilage.count("<plate>") == 2, "und darin beide Platten"
+    assert 'key="plater_id" value="1"' in beilage
+    assert 'key="plater_id" value="2"' in beilage
+
+
+def test_export_as_3mf_carries_the_print_settings(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine 3MF ohne Einstellungen ist Geometrie, kein Druckauftrag.
+
+    Der Slicer öffnet sie dann mit dem Profil, das gerade eingestellt ist. Was
+    das kostet, steht im Projekt Besteckkorb aufgeschrieben: Die Datei sagte
+    drei Wände, gedruckt wurden zwei — 127 Gramm Unterschied, und der Datei
+    sah man nichts an.
+    """
+    import zipfile
+
+    from PySide6.QtWidgets import QFileDialog
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    target = tmp_path / "auftrag.3mf"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
+    )
+    window.object_tree.tree.clearSelection()
+    window.action_export()
+    wait_for_export(window)
+
+    with zipfile.ZipFile(target) as container:
+        assert "Metadata/project_settings.config" in container.namelist()
+
+
 def test_export_is_disabled_on_an_empty_scene(window: MainWindow) -> None:
     """Ein Exporteintrag, der auf leerer Szene ein Fenster öffnet, wäre die
     modale Sackgasse aus der Bedienrunde — er ist stattdessen aus."""

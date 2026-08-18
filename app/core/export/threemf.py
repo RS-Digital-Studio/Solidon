@@ -130,6 +130,8 @@ class AssemblyPart:
     will einen Brim, die zwölf Behälter daneben stehen auf Ø 40 und wollen
     keinen. Leer heißt: es gilt, was für die Platte gilt.
     """
+    plate: int = 0
+    """Auf welche Druckplatte dieses Teil gehört, von null an gezählt."""
 
 
 def merge_slots(parts: Sequence[AssemblyPart]) -> list[MaterialSlot]:
@@ -162,6 +164,7 @@ def write_assembly(
     name: str = "",
     bed: tuple[float, float] | None = None,
     project_settings: Mapping[str, object] | None = None,
+    stride: float = 0.0,
 ) -> bytes:
     """Mehrere Körper als eine 3MF-Baugruppe (§20, §29).
 
@@ -196,7 +199,7 @@ def write_assembly(
         raise ValueError("an assembly needs at least one part")
 
     materials = merge_slots(parts)
-    model = _assembly_xml(parts, materials, name, bed)
+    model = _assembly_xml(parts, materials, name, bed, stride)
 
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
@@ -241,6 +244,28 @@ def _settings_xml(parts: Sequence[AssemblyPart]) -> bytes:
             ET.SubElement(node, "metadata", {"key": "name", "value": part.name})
         for key, value in part.settings.items():
             ET.SubElement(node, "metadata", {"key": key, "value": value})
+
+    # Und die Platten. Ohne sie ist eine Datei mit mehreren Platten für den
+    # Slicer eine einzige, auf der alles nebeneinander steht — die Teile
+    # lägen weit außerhalb des Betts, und er ordnete notgedrungen neu an.
+    #
+    # Aufbau aus einer echten Slicer-Datei gelesen (siehe :data:`PLATE_STRIDE`):
+    # je Platte ein ``plate``-Block mit ``plater_id`` von eins an und je Teil
+    # ein ``model_instance``, das auf die Objektnummer zeigt. Die
+    # Vorschaubilder, die der Slicer daneben führt, entstehen bei ihm — was
+    # hier fehlt, rechnet er beim Öffnen nach.
+    for plate in sorted({part.plate for part in parts}):
+        block = ET.SubElement(config, "plate")
+        ET.SubElement(block, "metadata", {"key": "plater_id", "value": str(plate + 1)})
+        ET.SubElement(block, "metadata", {"key": "plater_name", "value": ""})
+        ET.SubElement(block, "metadata", {"key": "locked", "value": "false"})
+        for number, part in enumerate(parts, start=2):
+            if part.plate != plate:
+                continue
+            instance = ET.SubElement(block, "model_instance")
+            ET.SubElement(instance, "metadata", {"key": "object_id", "value": str(number)})
+            ET.SubElement(instance, "metadata", {"key": "instance_id", "value": "0"})
+
     return b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(
         ET.tostring(config, encoding="utf-8")
     )
@@ -766,6 +791,7 @@ def _assembly_xml(
     materials: list[MaterialSlot],
     name: str,
     bed: tuple[float, float] | None = None,
+    stride: float = 0.0,
 ) -> bytes:
     """Das Modell-XML einer Baugruppe: ein ``object`` je Teil, ein ``item`` je
     Teil im Build.
@@ -811,23 +837,50 @@ def _assembly_xml(
         )
         _write_geometry(body, part.mesh, group_id, order)
         item = {"objectid": str(number)}
-        if bed is not None:
-            item["transform"] = _placement(bed)
+        placement = _placement(bed, part.plate, stride)
+        if placement is not None:
+            item["transform"] = placement
         ET.SubElement(build, "item", item)
 
     return b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(ET.tostring(root, encoding="utf-8"))
 
 
-def _placement(bed: tuple[float, float]) -> str:
+def _placement(bed: tuple[float, float] | None, plate: int, stride: float) -> str | None:
     """Die Platzierungsmatrix des Standards: neun Werte Drehung, drei
-    Verschiebung.
+    Verschiebung. ``None``, wenn nichts zu verschieben ist.
 
-    Gedreht wird nichts — verschoben um den halben Bauraum, denn dort liegt
-    Solidons Nullpunkt. Dass ein Slicer der Orca-Familie diese Matrix wirklich
-    liest, ist gemessen und nicht angenommen: mit ihr und ``--arrange 0``
-    stehen die Teile im G-Code auf ein Zehntel dort, wo das Dokument sie hat.
+    Gedreht wird nichts. Verschoben wird aus zwei voneinander unabhängigen
+    Gründen, und beide landen in derselben Matrix:
+
+    ``bed`` verschiebt um den halben Bauraum, denn dort liegt Solidons
+    Nullpunkt und ein Slicer misst von der Ecke. Das gilt nur für die Übergabe
+    an den Slicer und nur für die Orca-Familie. Dass diese Matrix dort wirklich
+    gelesen wird, ist gemessen: mit ihr und ``--arrange 0`` stehen die Teile im
+    G-Code auf ein Zehntel dort, wo das Dokument sie hat.
+
+    ``stride`` verschiebt auf die eigene Druckplatte. Die Orca-Familie legt
+    ihre Platten in **einem** Koordinatenraum nebeneinander; welche Platte
+    gemeint ist, steht in der Beilage, aber wo das Teil liegt, steht hier. Das
+    gilt **immer**, wenn es mehr als eine Platte gibt — auch beim Export ohne
+    Bettkoordinaten. Sonst stünde die zweite Platte auf der ersten.
     """
-    return f"1 0 0 0 1 0 0 0 1 {bed[0] / 2.0:g} {bed[1] / 2.0:g} 0"
+    across = (bed[0] / 2.0 if bed else 0.0) + plate * stride
+    along = bed[1] / 2.0 if bed else 0.0
+    if not across and not along:
+        return None
+    return f"1 0 0 0 1 0 0 0 1 {across:g} {along:g} 0"
+
+
+#: Wie weit die nächste Druckplatte nach rechts rückt, als Vielfaches der
+#: Bettbreite.
+#:
+#: **Nachgemessen, nicht angenommen.** In ``BowlingGame.3mf`` — vom
+#: ElegooSlicer für denselben Drucker geschrieben, Bett 256 auf 256 — steht das
+#: Objekt der ersten Platte bei x = 127,82 und das der zweiten bei x = 416,14.
+#: Die Differenz von 288,3 mm ist 256 plus ein Achtel davon, und plattenlokal
+#: stehen beide an derselben Stelle. Ein geratener Abstand legte die Teile
+#: neben ihre Platte, und angesehen hätte man es der Datei nicht.
+PLATE_STRIDE = 1.125
 
 
 def _model_xml(mesh: MeshData, slots: list[MaterialSlot], name: str) -> bytes:
