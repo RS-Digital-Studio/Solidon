@@ -139,8 +139,11 @@ STYLE = """
        Nummer trägt die Akzentfarbe und steht auf fester Breite, damit die
        Titel eine gemeinsame Kante haben — daran liest man eine Liste
        entlang, nicht an achtundzwanzig einzelnen Zeilen. */
+    /* ``margin: auto`` wie bei den übrigen Kindern von ``main`` — die
+       Kartenregel der Funktionsseite in style.css setzt sonst 0 und schiebt
+       das Verzeichnis als einziges Element an den linken Rand. */
     nav.toc { background: var(--card); border: 1px solid var(--line);
-              border-radius: 10px; padding: 1.4rem 1.8rem 1.6rem; margin: 2.5rem 0; }
+              border-radius: 10px; padding: 1.4rem 1.8rem 1.6rem; margin: 2.5rem auto; }
     nav.toc .toc-title { margin: 0 0 1rem; border: none; padding: 0;
                          font-size: 1.1rem; letter-spacing: .02em; }
     /* ``style.css`` nummeriert das Verzeichnis der Funktionsseite über
