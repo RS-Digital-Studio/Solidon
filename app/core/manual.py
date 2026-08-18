@@ -1224,8 +1224,12 @@ def remote_text(registry: Registry | None = None) -> str:
         lines.append(f"### {CATEGORIES[name]}")
         lines.append("")
         for spec in offen:
+            # Zuerst der Titel aus dem Menü, dann der Leitungsname: Der eine
+            # sagt dem Leser, was gemeint ist, der andere der Gegenstelle,
+            # was zu senden ist.
             doc = " ".join(str(spec.doc).split())
-            lines.append(f"- `{spec.name}` — {doc}" if doc else f"- `{spec.name}`")
+            head = f"- **{spec.title}** (`{spec.name}`)"
+            lines.append(f"{head} — {doc}" if doc else head)
         lines.append("")
 
     # Was nicht aus dem Register kommt: Werkzeuge der Agentenschicht. Sie
