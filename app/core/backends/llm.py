@@ -339,8 +339,8 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: Wie groß das Kontextfenster sein muss, das Ollama für einen Aufruf öffnet.
 #:
 #: **Ohne diese Angabe schneidet Ollama den Prompt ab**, und zwar stillschweigend:
-#: sein Vorgabefenster ist 4096 Token, das Register bringt allein 84
-#: Werkzeugschemata mit rund 99 000 Zeichen — gemessen 21 162 Token. Was nicht
+#: sein Vorgabefenster ist 4096 Token, das Register bringt allein 85
+#: Werkzeugschemata mit rund 109 000 Zeichen — gemessen 24 474 Token. Was nicht
 #: hineinpasst, fällt weg, und mit ihm der Systemprompt samt der vier
 #: Vorrangregeln. Genau das war der Befund „der Agent greift nicht zu den
 #: Bausteinen (0/13)": nicht die Regel, nicht das Modell, sondern ein Fenster,
@@ -362,6 +362,13 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: Modell, das den Auftrag kennt, rät nicht herum. Es kostet Speicher: mit
 #: 32768 belegt ``qwen3:14b`` 14 GB und bleibt damit vollständig auf einer
 #: 16-GB-Karte. Wer ein größeres Modell fährt, zahlt hier zuerst.
+#:
+#: Die Reihe fuhr 84 Schemata. Bei 85 nachgemessen sind es 26 601 Token für
+#: Systemprompt und alle Werkzeuge, 19 249 für den kompakten Satz, den dieser
+#: Weg fährt (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) —
+#: beide kamen ganz an. Das Fenster trägt also weiter; wachsen kann es kaum,
+#: ohne die Karte zu verlassen. Was wächst, ist die Werkzeugliste: wer sie
+#: ändert, misst ``prompt_eval_count`` nach.
 OLLAMA_CONTEXT_TOKENS = 32768
 
 
