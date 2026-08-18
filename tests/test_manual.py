@@ -249,6 +249,20 @@ def test_the_html_carries_headings_lists_and_tables() -> None:
         assert tag in html, tag
 
 
+def test_dash_bullets_become_a_list_too() -> None:
+    """Die erzeugten Referenzlisten schreiben ``- ``, die Kapitel ``* `` —
+    beide Schreibweisen müssen eine Liste werden. Vorher verklumpte die
+    Fernsteuerungsseite zu einem Absatz, in dem zwanzig Operationen
+    aneinanderhingen.
+    """
+    from app.core import markup
+
+    html = markup.to_html("- `load` — Liest eine Datei.\n- `repair` — Schließt Löcher.")
+    assert html.count("<li>") == 2
+    assert "<p>" not in html
+    assert "<p>- <code>" not in manual.as_html()
+
+
 def test_a_drawn_figure_offers_its_dark_version() -> None:
     """Wo eine dunkle Fassung existiert, steht sie als zweite Quelle daneben.
 
