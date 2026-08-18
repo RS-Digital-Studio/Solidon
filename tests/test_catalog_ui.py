@@ -111,7 +111,14 @@ def test_the_search_narrows_and_empties_the_grid(qt_app: QApplication) -> None:
     everything = catalog.list.count()
 
     catalog.search.setText("qwertzuiopasdfgh")
-    assert catalog.list.count() == 0
+    # Eine Zeile bleibt, und sie ist der Satz, dass nichts passt — ein leeres
+    # Raster sagte das nicht, und die Detailspalte forderte weiter auf, einen
+    # Baustein zu wählen, den es dort nicht gibt.
+    assert catalog_names(catalog) == set(), "kein Baustein darf übrig bleiben"
+    assert catalog.list.count() == 1
+    assert "qwertzuiopasdfgh" in catalog.list.item(0).text()
+    assert not catalog.list.item(0).flags() & Qt.ItemFlag.ItemIsSelectable
+    assert catalog.chosen() is None
 
     catalog.search.setText("")
     assert catalog.list.count() == everything

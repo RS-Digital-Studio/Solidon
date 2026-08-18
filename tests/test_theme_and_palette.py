@@ -253,11 +253,23 @@ def test_typing_narrows_the_list_and_picks_the_first(qt_app: object) -> None:
     assert palette.chosen() == "duplicate_object"
 
 
-def test_a_search_without_hits_chooses_nothing(qt_app: object) -> None:
+def test_a_search_without_hits_says_so_and_chooses_nothing(qt_app: object) -> None:
+    """Eine leere Liste sagt nicht, ob nichts passt oder ob die Suche hängt.
+
+    Die Zeile, die es jetzt sagt, ist ausdrücklich nicht wählbar und trägt
+    keine Daten — sonst löste die Eingabetaste einen Befehl aus, den es nicht
+    gibt. Geprüft wird deshalb beides: dass etwas dasteht, und dass ``chosen``
+    weiter ``None`` liefert.
+    """
+    from PySide6.QtCore import Qt
+
     palette = CommandPalette()
     palette.search.setText("gibtsnicht")
 
-    assert palette.list.count() == 0
+    assert palette.list.count() == 1, "kein Wort darüber, dass nichts passt"
+    zeile = palette.list.item(0)
+    assert "gibtsnicht" in zeile.text(), "der Satz nennt den Suchbegriff nicht"
+    assert not zeile.flags() & Qt.ItemFlag.ItemIsSelectable
     assert palette.chosen() is None
 
 

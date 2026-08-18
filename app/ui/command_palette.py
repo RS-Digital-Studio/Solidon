@@ -45,6 +45,7 @@ class CommandPalette(QDialog):
 
         self.search = QLineEdit(self)
         self.search.setPlaceholderText(tr("Befehl suchen …"))
+        self.search.setAccessibleName(tr("Befehl suchen"))
         self.search.textChanged.connect(self._refilter)
         self.search.returnPressed.connect(self.accept)
 
@@ -70,6 +71,19 @@ class CommandPalette(QDialog):
             self.list.addItem(item)
         if self.list.count():
             self.list.setCurrentRow(0)
+        elif query.strip():
+            # Eine leere Liste sagt nicht, ob nichts passt oder ob die Palette
+            # kaputt ist. Der Eintrag ist nicht wählbar und trägt keine Daten —
+            # ``chosen()`` gibt darüber weiter None zurück, und die Eingabe
+            # kann nicht versehentlich einen Befehl auslösen.
+            nothing = QListWidgetItem(
+                tr(
+                    "Kein Befehl passt zu „{begriff}“. Gesucht wird in Titel, Name "
+                    "und Beschreibung."
+                ).format(begriff=query.strip())
+            )
+            nothing.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.list.addItem(nothing)
 
     def chosen(self) -> str | None:
         """Name der gewählten Operation, oder None."""

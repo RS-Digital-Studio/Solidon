@@ -581,3 +581,47 @@ def test_what_creates_a_body_lives_under_creating() -> None:
             assert spec.category in creating, (
                 f"{spec.name} erzeugt aus dem Nichts, steht aber unter {spec.category!r}"
             )
+
+
+def test_reopening_an_operation_keeps_its_advanced_section(qt_app: object) -> None:
+    """Die gestufte Tiefe gilt auch für den Korrekturdialog (§2.4).
+
+    Wer eine Operation aus dem Verlauf öffnet, bekommt ihr *ganzes* Schema als
+    Werte übergeben. Der Dialog legte alles vor den Nutzer, was einen Wert
+    trug — und die Klappe „Weitere Einstellungen" verschwand genau dann, wenn
+    jemand einen Wert nachbessern will. Ein Wert, der auf seiner Vorgabe steht,
+    ist keine Entscheidung und gehört dorthin, wo das Schema ihn hinlegt.
+
+    Geprüft am gebauten Dialog und an einer Operation, die wirklich eine
+    Rückseite hat — sonst prüfte der Test nichts.
+    """
+    pytest.importorskip("PySide6")
+
+    from app.ui.op_dialog import OperationDialog
+
+    spec = next(
+        entry
+        for entry in REGISTRY.all()
+        if any(p.placement == "advanced" for p in entry.params.spec())
+        and any(p.placement == "front" for p in entry.params.spec())
+    )
+    vorne = next(p.name for p in spec.params.spec() if p.placement == "front")
+    values = {p.name: p.default for p in spec.params.spec() if p.default is not None}
+
+    frisch = OperationDialog(spec, ["obj_1"])
+    assert getattr(frisch, "advanced", None) is not None, (
+        f"{spec.name} hat gar keine Rückseite — dann prüft dieser Test nichts."
+    )
+    hinten = {name for name, form in frisch._rows.items() if form is not frisch._rows[vorne]}
+
+    wieder = OperationDialog(spec, ["obj_1"], values=values)
+    assert getattr(wieder, "advanced", None) is not None, (
+        f"{spec.name}: Aus dem Verlauf geoeffnet verschwindet die Klappe fuer die "
+        "weiteren Einstellungen - die gestufte Tiefe gilt dann genau dort nicht, wo "
+        "jemand einen Wert nachbessern will."
+    )
+    for name in hinten:
+        assert wieder._rows[name] is not wieder._rows[vorne], (
+            f"{spec.name}: {name!r} ist nach vorn gerutscht, obwohl es auf seiner "
+            "Vorgabe steht und das Schema es nach hinten legt."
+        )

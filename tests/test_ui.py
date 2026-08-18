@@ -3941,3 +3941,205 @@ def test_the_object_tree_offers_the_keyboard_a_starting_point(window: MainWindow
     assert window.object_tree.tree.topLevelItemCount() >= 1
     assert window.object_tree.tree.currentItem() is not None, "die Tastatur hat einen Anfang"
     assert not window.object_tree.selected_objects(), "gewählt ist trotzdem nichts"
+
+
+def test_every_locked_menu_entry_says_why(window: MainWindow) -> None:
+    """Ausgrauen allein ist die halbe Antwort.
+
+    Auf der leeren Szene sind fast alle Operationszeilen gesperrt, und bei
+    allen stand als Hinweis ihr Beschreibungssatz — was sie täte, wenn sie
+    könnte. Die Werkzeugzeile daneben sagte es im selben Augenblick richtig:
+    „Dafür braucht es einen Körper in der Szene." Der Grund fehlte, weil
+    ``_kind_hint`` sofort ausstieg, sobald eine Operation kein
+    ``requires_kind`` trägt — und das haben sieben von 84.
+
+    Geprüft wird gegen den Beschreibungssatz: Ein Hinweis, der ihm gleicht,
+    ist keiner.
+    """
+    from app.core.registry import REGISTRY
+
+    window._update_actions()
+
+    stumm = []
+    for name, action in window._op_actions.items():
+        if action.isEnabled():
+            continue
+        spec = REGISTRY.get(name)
+        if action.toolTip().strip() == str(spec.doc).strip():
+            stumm.append(name)
+
+    assert not stumm, (
+        f"{len(stumm)} gesperrte Einträge nennen ihren Grund nicht, "
+        f"darunter {stumm[:5]}. Der Nutzer sucht ihn dann bei sich."
+    )
+
+
+def test_a_menu_entry_gets_its_description_back_when_it_works_again(window: MainWindow) -> None:
+    """Der Grund verschwindet, sobald es keinen mehr gibt.
+
+    Sonst bleibt „Wählen Sie dafür ein Objekt aus" an einem Eintrag stehen,
+    der längst geht — und der Beschreibungssatz, den er eigentlich trägt, wäre
+    für immer weg.
+    """
+    from app.core.registry import REGISTRY
+
+    window._update_actions()
+    name = next(
+        entry
+        for entry, action in window._op_actions.items()
+        if not action.isEnabled() and REGISTRY.get(entry).consumes == 1
+    )
+    spec = REGISTRY.get(name)
+    action = window._op_actions[name]
+    assert action.toolTip() != str(spec.doc), "der gesperrte Eintrag nennt keinen Grund"
+
+    # Derselbe Eintrag, aber jetzt liegt genug vor: ein Objekt in der Szene und
+    # eines ausgewählt. Geprüft wird die Rückstellung und nicht der Szenenaufbau
+    # — dafür genügt der Zustand, aus dem der Hinweis entsteht.
+    window._kind_hint(action, spec, [], False, objects=1, chosen=spec.consumes)
+
+    assert action.toolTip().strip() == str(spec.doc).strip(), (
+        "Der Grund blieb stehen, obwohl der Eintrag wieder geht — dann ist der "
+        "Beschreibungssatz für immer weg."
+    )
+
+
+def test_the_chat_setup_button_leads_where_its_name_says(window: MainWindow) -> None:
+    """Derselbe Name, derselbe Dialog.
+
+    Der Knopf am gesperrten Chat hieß „Zugang einrichten …" und führte in die
+    „Zusätzlichen Programme" — dorthin, wo man ein lokales Modell installiert,
+    aber seinen Schlüssel nicht einträgt. Der Dialog mit dem Schlüsselfeld
+    heißt „Chat einrichten", steht im Menü unter genau diesem Namen und war
+    vom Chat aus nicht erreichbar. Wer keinen Zugang hatte, bekam damit einen
+    der zwei Wege aus §27 angeboten und fand den anderen nicht.
+    """
+    from app.i18n import tr
+
+    assert window.chat.setup.text() == str(tr("Chat einrichten …")), (
+        "Knopf und Menüeintrag müssen denselben Text tragen — sonst sind es für "
+        "den Nutzer zwei verschiedene Dinge."
+    )
+
+    treffer = [
+        action
+        for action in window.findChildren(QAction)
+        if action.text() == str(tr("Chat einrichten …"))
+    ]
+    assert treffer, "der Menüeintrag heißt nicht mehr so"
+
+
+def test_a_warning_still_reaches_someone_with_the_right_column_hidden(
+    window: MainWindow,
+) -> None:
+    """§2.5 nennt „Warnungen" für die Statusleiste, und dort standen sie nie.
+
+    Solange die rechte Spalte offen ist, trägt ihr Reiter die Zahl. Ist sie zu,
+    erreichte eine neue Warnung niemanden mehr: ``_focus_report`` steigt bei
+    unsichtbarer Spalte zu Recht aus, und danach kam nichts. Der Zähler in der
+    Statusleiste erscheint genau dann — und holt beides zurück.
+    """
+    # Ohne das liegt der Startbildschirm oben, und die rechte Spalte ist auch
+    # dann unsichtbar, wenn niemand sie ausgeblendet hat.
+    window._show_start_screen(False)
+    window.right.setVisible(True)
+    window._mark_status_alerts(3)
+    # ``isHidden`` und nicht ``isVisible``: Das Fenster selbst wird hier nie
+    # gezeigt, und dann ist jedes Kind unsichtbar — die Frage ist, ob der Knopf
+    # ausgeblendet wurde.
+    assert window.alert_button.isHidden(), (
+        "Bei offener Spalte trägt der Reiter die Zahl — zwei Zähler sind einer zu viel."
+    )
+
+    window.right.setVisible(False)
+    window._mark_status_alerts(3)
+    assert not window.alert_button.isHidden(), "die Warnung erreicht niemanden mehr"
+    assert "3" in window.alert_button.text()
+
+    window._show_alerts()
+    assert window.right.isVisibleTo(window), "der Klick holt die Spalte nicht zurück"
+    assert window.right.currentWidget() is window.report
+    assert window.alert_button.isHidden(), "er bleibt stehen, obwohl die Spalte offen ist"
+
+
+def test_the_status_counter_stays_away_when_nothing_is_wrong(window: MainWindow) -> None:
+    """Ein Zähler, der immer dasteht, wird Tapete — dieselbe Begründung wie am
+    Reiter."""
+    window._show_start_screen(False)
+    window.right.setVisible(False)
+    window._mark_status_alerts(0)
+
+    assert window.alert_button.isHidden()
+
+
+def test_what_a_screen_reader_can_name(window: MainWindow) -> None:
+    """Ein Feld ohne Namen wird als seine Art angesagt — „Eingabe", „Auswahl".
+
+    Wer nicht sieht, welches Label danebensteht, bedient damit ein Formular aus
+    lauter „Eingabe". Gemessen waren es 44 von 102 fokussierbaren Elementen:
+    die neun Beispielkacheln des Startbildschirms, die Wähler aller Leisten,
+    die Suchfelder, der Schichtenregler, jede Liste.
+
+    Was hier durchgeht, sind Qts eigene Unterwidgets: die Aufklappliste eines
+    Auswahlfelds trägt den Namen ihres Feldes, ein Rollbereich den seines
+    Inhalts. Sie zu benennen hieße, dieselbe Auskunft zweimal vorzulesen.
+    """
+    from PySide6.QtWidgets import (
+        QAbstractScrollArea,
+        QComboBox,
+        QLabel,
+        QTabBar,
+        QTabWidget,
+        QWidget,
+    )
+
+    def name_of(widget: QWidget) -> str:
+        if widget.accessibleName().strip():
+            return widget.accessibleName().strip()
+        text = getattr(widget, "text", None)
+        if callable(text):
+            try:
+                if str(text()).strip():
+                    return str(text()).strip()
+            except Exception:  # pragma: no cover - Qt-Signaturen streuen
+                pass
+        parent = widget.parentWidget()
+        if parent is not None:
+            for label in parent.findChildren(QLabel):
+                if label.buddy() is widget and label.text().strip():
+                    return label.text().strip()
+        return ""
+
+    def qt_internal(widget: QWidget) -> bool:
+        if widget.objectName().startswith("qt_"):
+            return True
+        # Die Popup-Liste eines Auswahlfelds und der Rollbereich um einen
+        # Inhalt: beide gehören einem Element, das selbst einen Namen trägt.
+        parent = widget.parentWidget()
+        while parent is not None:
+            if isinstance(parent, QComboBox):
+                return True
+            parent = parent.parentWidget()
+        # Ein Reiterfeld wird über seine Reiter angesagt, und die tragen Text.
+        return (
+            isinstance(widget, QAbstractScrollArea | QTabBar | QTabWidget)
+            and not widget.accessibleName()
+        )
+
+    window._show_start_screen(False)
+    nameless = [
+        f"{type(child).__name__}({child.objectName() or '-'})"
+        for child in window.findChildren(QWidget)
+        if child.focusPolicy() != Qt.FocusPolicy.NoFocus
+        # Ausgeblendetes liest niemand vor. ``isHidden`` und nicht
+        # ``isVisible``: Das Fenster selbst wird hier nie gezeigt, und dann
+        # wäre jedes Kind unsichtbar.
+        and not child.isHidden()
+        and not qt_internal(child)
+        and not name_of(child)
+    ]
+
+    assert not nameless, (
+        f"{len(nameless)} bedienbare Elemente haben für einen Bildschirmleser keinen "
+        f"Namen: {nameless}. setAccessibleName() oder ein Label mit setBuddy()."
+    )

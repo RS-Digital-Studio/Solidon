@@ -76,6 +76,7 @@ class PartCatalog(QDialog):
 
         self.search = QLineEdit(self)
         self.search.setPlaceholderText(tr("Suchen — zum Beispiel Mutter, Magnet, Kabel"))
+        self.search.setAccessibleName(tr("Bausteine durchsuchen"))
         self.search.textChanged.connect(self.show_parts)
 
         # §2.6 will eine Bibliothek, die man sieht. Als Liste mit bildhohen
@@ -175,7 +176,17 @@ class PartCatalog(QDialog):
             self.list.addItem(heading)
             for spec in entries:
                 self.list.addItem(self._item(spec))
+        if not self.list.count() and text.strip():
+            # Ein leeres Raster sagt nicht, ob nichts passt oder ob die Suche
+            # hängt — und die Detailspalte daneben forderte weiter auf, einen
+            # Baustein zu wählen, den es hier nicht gibt.
+            nothing = QListWidgetItem(
+                tr("Kein Baustein passt zu „{begriff}“.").format(begriff=text.strip())
+            )
+            nothing.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.list.addItem(nothing)
         self._stretch_headings()
+        self._show_detail()
 
     def _stretch_headings(self) -> None:
         """Eine Überschrift nimmt die ganze Zeile.

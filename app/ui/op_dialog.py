@@ -287,9 +287,24 @@ class OperationDialog(QDialog):
             label = f"{entry.title}"
             if entry.unit:
                 label = f"{label} [{entry.unit}]"
-            # Ein eingetragener Wert gehört vor den Nutzer, auch wenn das Schema ihn
-            # nach hinten legt: er ist der, der gerade entschieden wurde.
-            target = front if entry.placement == "front" or entry.name in given else advanced
+            # Ein eingetragener Wert gehört vor den Nutzer, auch wenn das Schema
+            # ihn nach hinten legt: er ist der, der gerade entschieden wurde —
+            # die angeklickte Fläche, die vorgewählte Position (§18.5).
+            #
+            # **Aber nur, wenn er wirklich entschieden wurde.** Wer eine
+            # Operation aus dem Verlauf öffnet, bekommt ihr *ganzes* Schema
+            # übergeben; mit ``entry.name in given`` allein landete damit jedes
+            # Feld vorn, und die Klappe „Weitere Einstellungen" verschwand
+            # genau dann, wenn jemand einen Wert nachbessern will (§2.4). Ein
+            # Wert, der auf seiner Vorgabe steht, ist keine Entscheidung.
+            #
+            # Sammelwerte bleiben hinten, was auch immer drinsteht: Eine
+            # Skizze, eine Strichliste oder ein Skelett sind hunderte
+            # Koordinaten in einem Textfeld und gehören nicht auf die
+            # Vorderseite eines Dialogs mit zwei Feldern.
+            decided = entry.name in given and given[entry.name] != entry.default
+            bulk = entry.kind in {"sketch", "strokes", "armature"}
+            target = front if entry.placement == "front" or (decided and not bulk) else advanced
             target.addRow(label, editor)
             self._rows[entry.name] = target
             if entry.doc:

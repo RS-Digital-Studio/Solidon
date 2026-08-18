@@ -212,6 +212,27 @@ def _origin_text(created_by: int | None, document: Document | None) -> str:
     return text
 
 
+def _empty_objects_text() -> str:
+    """Was in der leeren Objektliste steht.
+
+    Sie war ein stummer Kasten. Ein neues Projekt beginnt genau hier, und wer
+    zum ersten Mal davorsitzt, sieht drei leere Flächen und keinen Anfang —
+    die Parameterleiste daneben sagt seit jeher, wozu sie da ist.
+    """
+    return tr(
+        "Noch keine Objekte. Über „Erzeugen“ entsteht ein Körper, "
+        "„Modell einfügen“ liest eine Datei ein."
+    )
+
+
+def _empty_history_text() -> str:
+    """Was im leeren Verlauf steht — und wozu er gut ist."""
+    return tr(
+        "Noch keine Schritte. Jede Änderung steht hier als eine Zeile "
+        "und lässt sich mit Strg+Z zurücknehmen."
+    )
+
+
 class ObjectTree(QWidget):
     """Objekte der Szene mit ihren Merkmalen, Herkunft und Größe (§18.8,
     §18.5).
@@ -230,6 +251,7 @@ class ObjectTree(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.tree = QTreeWidget(self)
+        self.tree.setAccessibleName(tr("Objekte"))
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels([tr("Objekt"), tr("Maße")])
         # Die Maßspalte nimmt, was sie braucht; der Rest gehört den Namen.
@@ -281,8 +303,18 @@ class ObjectTree(QWidget):
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._on_context_menu)
 
+        # Der leere Zustand liegt über dem Baum, nicht darin: eine Zeile im
+        # Baum wäre auswählbar, hätte eine Spalte „Maße" und sähe aus wie ein
+        # Objekt namens „Noch keine Objekte".
+        self._empty = QLabel(_empty_objects_text(), self)
+        self._empty.setWordWrap(True)
+        self._empty.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._empty.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        fit_wrapped(self._empty)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._empty)
         layout.addWidget(self.tree)
 
     def set_hidden(self, hidden: frozenset[ObjectId]) -> None:
@@ -480,6 +512,11 @@ class ObjectTree(QWidget):
         darunter seine hundert Pixel für sich behielt und nichts davon zu
         sehen war.
         """
+        # Der leere Zustand tritt an die Stelle des Baums, nicht daneben: Ein
+        # Satz über einem leeren Rahmen sähe aus, als fehlte darunter etwas.
+        empty = self.tree.topLevelItemCount() == 0
+        self._empty.setVisible(empty)
+        self.tree.setVisible(not empty)
         fit_to_rows(self.tree, self._rows(), room=self._room)
         self.setMinimumHeight(self.sizeHint().height())
         self.updateGeometry()
@@ -840,6 +877,7 @@ class HistoryPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.list = QListWidget(self)
+        self.list.setAccessibleName(tr("Verlauf"))
         self.list.itemDoubleClicked.connect(self._on_activated)
         self.list.setToolTip(tr("Doppelklick öffnet die Operation und ihre Parameter."))
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -849,8 +887,16 @@ class HistoryPanel(QWidget):
         self._bakeable: frozenset[int] = frozenset()
         """Formsitzungen, deren Stand sich festschreiben lässt — also die, die
         noch aus ihren Zügen gerechnet werden."""
+        # Wie beim Objektbaum: ein Satz statt eines stummen Kastens.
+        self._empty = QLabel(_empty_history_text(), self)
+        self._empty.setWordWrap(True)
+        self._empty.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._empty.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        fit_wrapped(self._empty)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._empty)
         layout.addWidget(self.list)
 
     def wanted_height(self) -> int:
@@ -866,6 +912,9 @@ class HistoryPanel(QWidget):
 
     def _fit(self) -> None:
         """So hoch wie der Inhalt, höchstens so hoch wie zugeteilt."""
+        empty = self.list.count() == 0
+        self._empty.setVisible(empty)
+        self.list.setVisible(not empty)
         fit_to_rows(self.list, self.list.count(), room=self._room)
         # Dieselbe Stelle wie im Objektbaum: die Liste ist bemessen, die Karte
         # um sie herum meldete weiter ihre Mindesthöhe und wurde auf zehn Pixel
@@ -992,6 +1041,7 @@ class ReportPanel(QWidget):
         self._alerts = 0
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
         self.list = QListWidget(self)
+        self.list.setAccessibleName(tr("Befunde"))
         # §2.7 schreibt die Sätze, die hier stehen — im schmalen rechten
         # Bereich endeten sie mitten im Wort hinter einer horizontalen
         # Bildlaufleiste. Umbruch statt Abschneiden: die Leiste bleibt aus,
@@ -1020,8 +1070,10 @@ class ReportPanel(QWidget):
         # sind (§17.3).
         self.search = QLineEdit(self)
         self.search.setPlaceholderText(tr("Befunde durchsuchen …"))
+        self.search.setAccessibleName(tr("Befunde durchsuchen"))
         self.search.textChanged.connect(self._refilter)
         self.severity = QComboBox(self)
+        self.severity.setAccessibleName(tr("Nach Schweregrad filtern"))
         self.severity.addItem(tr("Alle"), "")
         for name in ("error", "warning", "info"):
             self.severity.addItem(f"{SEVERITY_MARKER[name]} {_severity_label(name)}", name)
@@ -1035,8 +1087,19 @@ class ReportPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         layout.addWidget(self.summary)
+        # Wenn der Filter alles wegnimmt, steht sonst ein leerer Rahmen da und
+        # sagt nicht, ob nichts passt oder ob der Bericht leer ist. Ein Label
+        # und kein Listeneintrag: gefiltert wird über ``setHidden``, die Liste
+        # bleibt gefüllt, und ein Eintrag darin wäre beim nächsten Filtern im
+        # Weg.
+        self._nothing = QLabel("", self)
+        self._nothing.setWordWrap(True)
+        self._nothing.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        self._nothing.setVisible(False)
+
         layout.addWidget(self.facts)
         layout.addLayout(filter_row)
+        layout.addWidget(self._nothing)
         layout.addWidget(self.list)
 
     def _refilter(self) -> None:
@@ -1055,6 +1118,21 @@ class ReportPanel(QWidget):
                 not wanted or finding.severity == wanted
             )
             item.setHidden(not matches)
+
+        visible = sum(1 for row in range(self.list.count()) if not self.list.item(row).isHidden())
+        if visible or not self.list.count():
+            self._nothing.setVisible(False)
+            return
+        begriff = self.search.text().strip()
+        stufe = self.severity.currentText().strip()
+        if begriff and wanted:
+            satz = tr("Kein Befund passt zu „{begriff}“ und „{stufe}“.")
+        elif begriff:
+            satz = tr("Kein Befund passt zu „{begriff}“.")
+        else:
+            satz = tr("Kein Befund dieser Stufe: „{stufe}“.")
+        self._nothing.setText(str(satz).format(begriff=begriff, stufe=stufe))
+        self._nothing.setVisible(True)
 
     def show_result(self, result: EvaluationResult | None) -> None:
         # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.

@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QTabWidget,
     QToolBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -170,6 +171,7 @@ from app.ui.overlay import CARD_PADDING, OverlayHost, card_stylesheet
 from app.ui.paint_bar import PaintBar
 from app.ui.palette import ROLES
 from app.ui.panels import (
+    SEVERITY_MARKER,
     HistoryPanel,
     MeasurementLabel,
     ObjectTree,
@@ -951,7 +953,10 @@ class MainWindow(QMainWindow):
         self.chat.accepted.connect(self._on_proposal_accepted)
         self.chat.discarded.connect(self._on_proposal_discarded)
         self.chat.undoRequested.connect(self._on_applied_undone)
-        self.chat.setupRequested.connect(self.action_install_extras)
+        # Der Knopf am gesperrten Chat führt dorthin, wo beide Wege aus §27
+        # stehen — Schlüssel und lokales Modell. Er hing am Installationsdialog
+        # und bot damit nur einen davon an.
+        self.chat.setupRequested.connect(self.action_llm_key)
         self.chat.unlockRequested.connect(self.action_activate)
         self.chat.imageDropped.connect(self.action_generate_from_image)
 
@@ -970,6 +975,7 @@ class MainWindow(QMainWindow):
         # vorn sind: ein eingelesenes Netz mit offenen Stellen meldete sich im
         # Bericht, und der Reiter sah aus wie vorher.
         self.report.alertsChanged.connect(self._mark_report_tab)
+        self.report.alertsChanged.connect(self._mark_status_alerts)
         # Der Reiter wird einmal angelegt und danach nur noch ein- und
         # ausgeblendet, nie entfernt: ``removeTab`` machte das Panel elternlos,
         # und ein elternloses Widget gehört dem Speicherbereiniger — der es
@@ -1067,11 +1073,24 @@ class MainWindow(QMainWindow):
         # Handbuchbild, in jeder Sprache. Als eigenes dauerhaftes Feld steht
         # sie neben den Maßen statt auf ihnen, und ``showMessage`` bleibt
         # frei für das, wofür es gedacht ist — den Zeichenmodus etwa.
+        # §2.5 nennt für die Statusleiste auch „Warnungen", und die standen
+        # dort nie. Solange die rechte Spalte offen ist, trägt ihr Reiter die
+        # Zahl; ist sie zu, erreichte eine neue Warnung niemanden mehr —
+        # ``_focus_report`` steigt bei unsichtbarer Spalte zu Recht aus, und
+        # danach kam nichts. Der Knopf erscheint genau dann und holt beides
+        # zurück: die Spalte und den Bericht.
+        self.alert_button = QToolButton(self)
+        self.alert_button.setAutoRaise(True)
+        self.alert_button.setAccessibleName(tr("Offene Befunde"))
+        self.alert_button.setVisible(False)
+        self.alert_button.clicked.connect(self._show_alerts)
+
         self.trial_line = QLabel("", self)
         self.trial_line.setVisible(False)
 
         bar = self.statusBar()
         bar.addWidget(self.measurements, 1)
+        bar.addPermanentWidget(self.alert_button)
         bar.addPermanentWidget(self.trial_line)
         bar.addPermanentWidget(self.facts)
         bar.addPermanentWidget(self.status_message)
@@ -1773,7 +1792,7 @@ class MainWindow(QMainWindow):
             else:
                 action.setEnabled(True)
             self._lock_hint(action, locked)
-            self._kind_hint(action, spec, kinds, locked)
+            self._kind_hint(action, spec, kinds, locked, objects, chosen)
 
         # Dieselbe Regel für die Werkzeugzeile unten. Sie stand dem Anfänger
         # näher als jedes Menü und bot auf einer leeren Szene weiter Messen,
@@ -1830,30 +1849,74 @@ class MainWindow(QMainWindow):
         ]
 
     def _kind_hint(
-        self, action: QAction, spec: OperationSpec, kinds: list[str], locked: bool
+        self,
+        action: QAction,
+        spec: OperationSpec,
+        kinds: list[str],
+        locked: bool,
+        objects: int = 0,
+        chosen: int = 0,
     ) -> None:
         """Sagt am ausgegrauten Eintrag, *warum* er ausgegraut ist.
 
         Ausgrauen allein wäre die halbe Antwort: der Nutzer sieht, dass es
         nicht geht, und sucht den Grund bei sich. Der Satz ist derselbe, den
         der Kern wirft, nur kommt er hier vor dem Klick statt nach dem Dialog.
+
+        **Er galt lange nur für die Bauart.** Die Funktion stieg sofort aus,
+        wenn ``requires_kind`` leer war — und das haben sieben von 84
+        Operationen. Auf der leeren Szene sind 69 von 82 Einträgen gesperrt,
+        und bei allen 69 stand als Hinweis ihr Beschreibungssatz: was sie täte,
+        wenn sie könnte. Die Werkzeugzeile daneben sagte es im selben Augenblick
+        richtig („Dafür braucht es einen Körper in der Szene."), weil
+        ``set_usable`` den Grund mitbekommt.
         """
-        if locked or not spec.requires_kind:
+        if locked:
             return
         stored = action.property("tip_before_kind")
-        passt = bool(kinds) and all(kind == spec.requires_kind for kind in kinds)
-        if not passt and kinds:
+        reason = self._reason_locked(spec, kinds, objects, chosen)
+        if reason is not None:
             if stored is None:
                 action.setProperty("tip_before_kind", action.statusTip())
-            reason = tr(
-                "Diese Operation braucht einen exakten Körper (B-Rep). Exakte Körper "
-                "kommen aus einer STEP-Datei oder aus den Grundformen mit „Exakt“."
-            )
             action.setStatusTip(reason)
             action.setToolTip(reason)
         elif stored is not None:
             action.setStatusTip(str(stored))
             action.setToolTip(str(stored))
+            action.setProperty("tip_before_kind", None)
+
+    def _reason_locked(
+        self, spec: OperationSpec, kinds: list[str], objects: int, chosen: int
+    ) -> str | None:
+        """Warum diese Operation gerade nicht geht — oder ``None``, wenn sie geht.
+
+        Die Reihenfolge ist die, in der ein Nutzer sie beheben würde: erst
+        etwas in die Szene, dann etwas auswählen, dann die richtige Bauart.
+        """
+        if spec.takes_whole_scene:
+            if objects <= 0:
+                return str(tr("Dafür braucht es einen Körper in der Szene."))
+            return None
+        if not spec.consumes:
+            return None
+        if chosen < spec.consumes:
+            if objects <= 0:
+                return str(tr("Dafür braucht es einen Körper in der Szene."))
+            if spec.consumes == 1:
+                return str(tr("Wählen Sie dafür ein Objekt aus — im Bild oder im Objektbaum."))
+            return str(
+                tr("Wählen Sie dafür {count} Objekte aus — im Bild oder im Objektbaum.").format(
+                    count=spec.consumes
+                )
+            )
+        if spec.requires_kind and kinds and not all(kind == spec.requires_kind for kind in kinds):
+            return str(
+                tr(
+                    "Diese Operation braucht einen exakten Körper (B-Rep). Exakte Körper "
+                    "kommen aus einer STEP-Datei oder aus den Grundformen mit „Exakt“."
+                )
+            )
+        return None
 
     def _lock_hint(self, action: QAction, locked: bool) -> None:
         """Schreibt den Grund der Sperre in den Hinweistext — und stellt den
@@ -2222,6 +2285,7 @@ class MainWindow(QMainWindow):
         self.right.setVisible(visible)
         self.settings.right_panel_visible = visible
         save_settings(self.settings)
+        self._mark_status_alerts()
 
     def action_variants(self) -> None:
         """§28.3: derselbe Stapel mit einer gestuften Zahl, nebeneinander auf
@@ -5143,6 +5207,41 @@ class MainWindow(QMainWindow):
             return
         name = tr("Prüfbericht")
         self.right.setTabText(index, f"{name} · {alerts}" if alerts else name)
+
+    def _mark_status_alerts(self, alerts: int = -1) -> None:
+        """Der Warnungszähler in der Statusleiste — nur wenn er gebraucht wird.
+
+        Nicht immer: Steht die rechte Spalte offen, trägt ihr Reiter dieselbe
+        Zahl, und zwei Zähler nebeneinander sind einer zu viel. Bei
+        ausgeblendeter Spalte ist er die einzige Auskunft, dass etwas
+        aufgelaufen ist — und der Weg zurück.
+        """
+        if alerts >= 0:
+            self._alerts = alerts
+        count = getattr(self, "_alerts", 0)
+        # ``isVisibleTo`` und nicht ``isVisible``: Gefragt ist, ob die Spalte
+        # ausgeblendet **wurde**. ``isVisible`` ist auch dann falsch, wenn nur
+        # das Fenster selbst noch nicht gezeigt wird — beim Aufbau und in jedem
+        # Test, und der Zähler stünde dort fälschlich neben einem offenen
+        # Bericht.
+        show = count > 0 and not self.right.isVisibleTo(self)
+        self.alert_button.setVisible(show)
+        if not show:
+            return
+        # Das Zeichen steht neben der Zahl, nicht statt ihrer: dieselbe zweite
+        # Kodierung wie am Reiter (Regel 18).
+        self.alert_button.setText(f"{SEVERITY_MARKER['warning']} {count}")
+        hint = tr("{count} offene Befunde — anklicken öffnet den Prüfbericht.").format(count=count)
+        self.alert_button.setToolTip(hint)
+        self.alert_button.setStatusTip(hint)
+
+    def _show_alerts(self) -> None:
+        """Die rechte Spalte zurückholen und den Bericht nach vorn."""
+        self.right.setVisible(True)
+        self.settings.right_panel_visible = True
+        save_settings(self.settings)
+        self._focus_report(force=True)
+        self._mark_status_alerts()
 
     def _focus_report(self, force: bool = False) -> None:
         """Den Prüfbericht nach vorn holen.
