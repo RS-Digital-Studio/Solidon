@@ -40,17 +40,12 @@ bekommt einen roten Lauf.
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
-| Der Dialog aus dem Verlauf verliert seine Klappe | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — die gestufte Tiefe gilt dort schlicht nicht |
 | Zwei lange Läufe ohne Abbrechen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts; die Live-Vorschau braucht zusätzlich einen Weg, nicht den ganzen Stapel zu rechnen |
 | Die Befehlspalette ist kein Universalzugang | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 38 Zeilen nachtragen, Umlautfaltung und Synonyme dazu |
-| Ausgegraute Einträge nennen ihren Grund nicht | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — `_kind_hint` deckt den häufigsten Fall nicht ab |
-| Was ein Bildschirmleser nicht liest | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 62 Namen, ein Fokusring, eine Tastenfalle |
-| Zwei Anzeigen allein über Farbe | Die Oberfläche im Bild durchgesehen (17.08.2026) | eine zweite Kodierung für Insel/Überhang und eine Legende (Regel 18) |
 | Vier Arbeiter am `finished`-Signal | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — aber es ist ein Umbau: die Halteleine gehört in ein eigenes Modul, aus dem Fenster und Dialoge erben |
-| Leere Zustände fehlen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — drei Karten und drei Suchen ohne Antwort |
 | Der Installationsdialog zeigt rohe Ausgabe | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — plus zwei Sätze ohne Warum (Regel 17) |
 | Weg 4 steht in keiner Unterlage | Die Oberfläche im Bild durchgesehen (17.08.2026) | eine Bauplanänderung mit Ansage; README, Handbuch, Website und die Abbildung ziehen nach |
-| Der Rest der Textfunde | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — Plural in fünf Katalogen, rohe Schlüssel, ein Knopf in den falschen Dialog |
+| Der Rest der Textfunde | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — rohe Schlüssel statt Beschriftungen, drei nie angebotene Vorschläge, eine Schätzung am falschen Ort |
 
 ---
 
@@ -2553,6 +2548,74 @@ behoben, einmal bei der Update-Abfrage, einmal bei der Analysekarte — jedes Ma
 mit ausführlichem Kommentar. Zwei Stellen daneben machten weiter den alten
 Fehler, und niemand konnte es sehen, weil nichts danach suchte. Dieselbe
 Erkenntnis wie bei den drei Bausteinen über ihrem Ursprung, eine Etage höher.
+
+- [x] **Zwei Anzeigen sprachen allein über Farbe** (Regel 18). In der
+      Schichtanalyse lagen Insel und Überhang beide auf Strichstärke 3 — zwei
+      gleich dicke Ringe übereinander, unterschieden allein durch die Farbe,
+      und ausgerechnet bei den zwei Rollen, die eine Handlung nach sich ziehen.
+      `LAYER_WIDTHS` gibt jeder ihre eigene Stärke, und die Schichtleiste trägt
+      jetzt eine Legende, deren Strich so lang ist wie der Ring im Bild dick.
+      Die Legende der Differenzansicht war ganz in der Farbe von „Hinzugefügt"
+      gezeichnet — auch das Wort „Entfernt": eine Legende, die Farben erklären
+      soll und beide gleich färbt, sagt das Falsche. Und die Schriftfarbe auf
+      einem Farbfeld hing an einer festen Luminanzschwelle von 0,35, die über
+      den mittleren Tönen von Viridis auf die schlechtere der beiden kippte
+      (3,47 und 2,56); verglichen werden jetzt die zwei Kontraste.
+- [x] **Objektbaum und Verlauf waren stumme Kästen**, und eine Suche ohne
+      Treffer sagte an keiner der drei Stellen, dass nichts gefunden wurde. Ein
+      neues Projekt beginnt in genau diesen Karten; die Parameterleiste daneben
+      sagte seit jeher, wozu sie da ist. Befehlspalette und Bausteinkatalog
+      nennen den Suchbegriff jetzt in einer nicht wählbaren Zeile, der
+      Prüfbericht in einem Feld über der Liste — dort wird über `setHidden`
+      gefiltert, ein Eintrag darin wäre beim nächsten Filtern im Weg.
+- [x] **Kein ausgegrauter Menüeintrag nannte seinen Grund.** `_kind_hint` stieg
+      sofort aus, wenn eine Operation kein `requires_kind` trägt — und das
+      haben sieben von 84. Auf der leeren Szene stand damit bei jedem
+      gesperrten Eintrag sein Beschreibungssatz: was er täte, wenn er könnte.
+      Die Werkzeugzeile daneben sagte es im selben Augenblick richtig.
+      `_reason_locked` nennt den Grund jetzt in der Reihenfolge, in der ein
+      Nutzer ihn behebt: erst etwas in die Szene, dann etwas auswählen, dann
+      die richtige Bauart. Ein Test vergleicht gegen den Beschreibungssatz —
+      ein Hinweis, der ihm gleicht, ist keiner.
+- [x] **Der Korrekturdialog verlor seine Klappe.** Wer eine Operation aus dem
+      Verlauf öffnet, bekommt ihr ganzes Schema als Werte übergeben, und
+      `entry.name in given` schob damit jedes Feld auf die Vorderseite — die
+      gestufte Tiefe (§2.4) galt genau dann nicht, wenn jemand einen Wert
+      nachbessern will. Nach vorn kommt jetzt, was vom Schema-Standard
+      abweicht; Sammelwerte (Skizze, Striche, Skelett) bleiben hinten, was auch
+      immer drinsteht.
+- [x] **Der Knopf am gesperrten Chat führte in den falschen Dialog.** Er hieß
+      „Zugang einrichten …" und öffnete die „Zusätzlichen Programme" — dort
+      installiert man ein lokales Modell, trägt aber keinen Schlüssel ein. Der
+      Dialog mit dem Schlüsselfeld heißt „Chat einrichten", steht im Menü unter
+      genau diesem Namen und war vom Chat aus nicht erreichbar: einer der zwei
+      Wege aus §27 fehlte. Knopf und Menüeintrag tragen jetzt wörtlich
+      denselben Text und damit denselben Katalogeintrag.
+- [x] **Eine Warnung erreichte niemanden mehr, sobald die rechte Spalte
+      ausgeblendet war.** §2.5 nennt „Warnungen" für die Statusleiste, und dort
+      standen sie nie; `_focus_report` steigt bei unsichtbarer Spalte zu Recht
+      aus, und danach kam nichts. Der Zähler erscheint jetzt genau dann — bei
+      offener Spalte trägt ihr Reiter die Zahl, und zwei Zähler wären einer zu
+      viel — und ein Klick holt Spalte und Bericht zurück.
+- [x] **„1 × warnings".** „Fehler", „Warnung" und „Hinweis" standen in allen
+      fünf Katalogen im Plural, während die deutsche Quelle den Singular führt
+      — nach dem Malzeichen steht er. Alle fünf sind gezogen.
+
+- [x] **Was ein Bildschirmleser nicht las.** 44 von 102 fokussierbaren
+      Elementen des Hauptfensters hatten keinen Namen — ein Feld ohne Namen
+      wird als seine Art angesagt, „Eingabe", „Auswahl", „Schieber". Darunter
+      die neun Beispielkacheln des Startbildschirms (das Erste, was jemand
+      sieht: neun Mal „Rahmen"), die Wähler aller Leisten, jedes Suchfeld,
+      jede Liste, der Schichtenregler. Jetzt trägt jedes bedienbare Element
+      einen Namen; durch geht nur, was Qt selbst anlegt — die Aufklappliste
+      eines Auswahlfelds trägt den Namen ihres Feldes, ein Reiterfeld wird
+      über seine Reiter angesagt. Ein Test hält es bei null.
+      Dazu zwei Nachbarn: Der Freischaltdialog war eine Tastenfalle — ein
+      mehrzeiliges Feld nimmt den Tabulator als Zeichen, und wer ohne Maus
+      arbeitet, kam aus dem Schlüsselfeld nicht mehr heraus. Und die
+      Reiterleiste der rechten Spalte zeigte den Tastaturfokus mit null
+      Bildpunkten Unterschied; sie bekommt eine gestrichelte Marke, denn der
+      aktive Reiter trägt schon Akzentkante, Fläche und Fettschrift.
 
 ### Offen aus dem Audit
 
@@ -5874,10 +5937,6 @@ belegt und mit Absicht liegen geblieben.
 
 ### Offen
 
-- [ ] **Eine aus dem Verlauf geöffnete Operation kippt ihr ganzes Schema auf
-      die Vorderseite** — die Klappe „Weitere Einstellungen" verschwindet, und
-      die gestufte Tiefe (§2) gilt genau dann nicht mehr, wenn jemand einen
-      Wert nachbessern will.
 - [ ] **Zwei lange Läufe haben kein Abbrechen.** Die Live-Vorschau des
       Operationsdialogs rechnet bei jeder Änderung den ganzen Stapel neu, und
       der Slicer-Lauf hält beim Schließen des Dialogs die Ereignisschleife an.
@@ -5891,23 +5950,6 @@ belegt und mit Absicht liegen geblieben.
       Kürzelübersicht behauptet das Gegenteil. Die Suche kennt weder
       Umlautfaltung noch ein Synonym, und sie umgeht die Bauart-Prüfung:
       „Verrunden" öffnet für ein Netz seinen vollen Dialog.
-- [ ] **Kein ausgegrauter Menüeintrag nennt seinen Grund.** Auf der leeren
-      Szene sind 69 von 82 Operationszeilen gesperrt, und bei allen 69 ist der
-      Hinweistext der Beschreibungssatz. Die Werkzeugzeile daneben sagt es
-      richtig: „Dafür braucht es einen Körper in der Szene." Beim häufigsten
-      Grund — zu wenig ausgewählt — schweigt auch `_kind_hint`. Dazu drei
-      anklickbare Sackgassen unter *Erzeugen → Import*, die auf leerer Szene
-      in eine Fehlermeldung führen.
-- [ ] **Was ein Bildschirmleser nicht liest.** 62 von 111 fokussierbaren
-      Elementen des Hauptfensters haben keinen Namen; die Reiterleiste der
-      rechten Spalte zeigt den Tastaturfokus mit null Bildpunkten Unterschied;
-      und der Freischaltdialog ist eine Tastenfalle — Tab schreibt einen
-      Tabulator ins Feld, statt weiterzugehen.
-- [ ] **Zwei Anzeigen sprechen allein über Farbe** (Regel 18). In der
-      Schichtanalyse unterscheidet nur sie Insel von Überhang — beide Ringe
-      sind gleich dick, eine Legende gibt es nicht. Und die Legende der
-      Differenzansicht ist ganz in der Farbe von „Hinzugefügt" gezeichnet, in
-      Graustufen auf hellem Thema bei 1,16.
 - [ ] **Vier Dialoge lassen ihren Arbeiter im `finished`-Slot los** — genau das
       Muster, das `.claude/rules/oberflaeche.md` ausdrücklich verbietet, weil
       es eine Zugriffsverletzung ohne Zeile hinterlässt. Der Weg dahin ist ein
@@ -5916,9 +5958,6 @@ belegt und mit Absicht liegen geblieben.
       Dialoge erben; danach müssen die `closeEvent`-Wächter auf die Halteliste
       zeigen statt auf ein Feld, das dann `None` ist. Der Download, der
       denselben Fund an anderer Stelle hatte, ist oben abgehakt.
-- [ ] **Leere Zustände fehlen.** Objektbaum und Verlauf sind bei einem neuen
-      Projekt stumme Kästen, und eine Suche ohne Treffer sagt an keiner der
-      drei Stellen, dass nichts gefunden wurde.
 - [ ] **Der Installationsdialog antwortet mit „Das hat nicht geklappt."** und
       zeigt davor die rohe Befehlszeile und die rohe pip- oder winget-Ausgabe.
       Daneben zwei weitere Sätze ohne Warum: „Die Boolesche Operation ist
@@ -5929,14 +5968,12 @@ belegt und mit Absicht liegen geblieben.
       die Oberflächenregel schickt Weg 4 in die Werkzeugzeile, wo er nicht
       liegt und laut derselben Datei nicht liegen kann. README und Website
       führen außerdem zu wenige Operationen und Bausteine.
-- [ ] **Der Rest der Textfunde**: „Fehler", „Warnung" und „Hinweis" stehen in
-      allen fünf Katalogen im Plural und erscheinen deshalb als „1 × warnings";
-      Fehler-Einzelheiten und Befund-Tooltip zeigen rohe englische Schlüssel;
-      der einzige Knopf am gesperrten Chat führt in den falschen Dialog; eine
-      neue Warnung erreicht niemanden mehr, sobald die rechte Spalte
-      ausgeblendet ist; und die Restzeitschätzung über zehn Sekunden gibt es
-      nur, solange das Bild leer ist — also gerade nicht bei den langen
-      Rechnungen.
+- [ ] **Der Rest der Textfunde**: Fehler-Einzelheiten und Befund-Tooltip zeigen
+      rohe englische Schlüssel dort, wo eine Beschriftung stehen müsste; drei
+      Handlungsvorschläge zum Bauraum werden nie angeboten, und ihr Handler
+      liest Werte, die es in der Ausnahme nicht gibt; und die Restzeitschätzung
+      über zehn Sekunden gibt es nur, solange das Bild leer ist — also gerade
+      nicht bei den langen Rechnungen.
 
 ### Was die Durchsicht entlastet hat
 
