@@ -113,7 +113,8 @@ def _window(theme: Theme) -> str:
     canvas.label(
         300, 140, str(_("Viewport")), anchor="middle", size=13, bold=True, colour=colours.accent
     )
-    canvas.caption(300, 158, str(_("das Modell, immer sichtbar")), size=10)
+    # Mittig wie das ``Viewport``-Wort darüber — beide teilen die x-Mitte.
+    canvas.caption(300, 158, str(_("das Modell, immer sichtbar")), size=10, anchor="middle")
 
     canvas.box(440, 46, 150, 202, fill=colours.fill, dashed=True)
     canvas.label(515, 76, str(_("Chat")), anchor="middle", size=11, bold=True)
