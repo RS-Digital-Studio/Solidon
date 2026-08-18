@@ -6312,13 +6312,23 @@ belegt und mit Absicht liegen geblieben.
       die englische Zahlendarstellung im deutschen Handbuch — auf jedem Bild
       mit Parameterleiste. Gefunden beim Zusammenführen am 18.08., und der
       Fehler liegt nicht am Merge: `origin/main` zeigt ihn ebenso.
-      Eingegrenzt ist er schon: `QLocale.setDefault` steht richtig in
-      `install_qt_translations`, und im **gebauten** Fenster steht „80,00 mm"
-      — offscreen wie mit echter Plattform, gemessen an den vier Feldern der
-      Parameterleiste. Es liegt also an etwas in `take_all`, zwischen
-      Sprachwahl und Aufnahme. `translate_parameter_titles` fasst nur Titel an,
-      keine Werte; der nächste Verdacht ist die Reihenfolge, in der der
-      Startbildschirm vor dem Hauptfenster gebaut wird.
+      **Was schon gemessen ist**, damit der nächste Durchgang nicht dort
+      anfängt: `QLocale.setDefault` steht richtig in
+      `install_qt_translations`, und `QLocale()` ist zum Zeitpunkt der
+      Aufnahme `de_DE`. Im gebauten Fenster steht „80,00 mm" — offscreen wie
+      mit echter Plattform, sichtbar wie versteckt, und **auch im Augenblick
+      des Abdrückens**: Ein Spion an `shoot` liest an den vier sichtbaren
+      Feldern `text()` *und* `lineEdit().text()`, beide mit Komma. Trotzdem
+      steht im Bild ein Punkt, und zwar nicht nur im Bildschirmabgriff —
+      `widget.grab()` über den Qt-Painter zeigt ihn genauso. Der Objektbaum
+      daneben schreibt im selben Bild „40,05 mm" richtig, `localised()` wirkt
+      dort also.
+      Damit ist ausgeschlossen: falsches Locale, veralteter Bildschirminhalt,
+      `translate_parameter_titles` (fasst nur Titel an). Offen ist der
+      Widerspruch zwischen dem, was `lineEdit().text()` meldet, und dem, was
+      gezeichnet wird — der nächste Schritt ist ein Blick auf die
+      Zeichenkette, mit der `QDoubleSpinBox` ihr Feld füllt, statt auf die,
+      die sie zurückgibt.
 - [ ] **Weg 4 steht in keiner Unterlage.** Bauplan, README, Handbuchkapitel und
       Website nennen weiter drei Wege — die gezeichnete Abbildung zeigt drei,
       die Oberflächenregel schickt Weg 4 in die Werkzeugzeile, wo er nicht
