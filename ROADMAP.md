@@ -507,7 +507,9 @@ bekommt einen roten Lauf.
       Funktionen, KI-Modelle und Handbuch (Seite und PDF) auch auf es, fr,
       it und pt, Sprachwechsler als Kürzelreihe, Regelsammlung mit Fassungen
       je Handbuchsprache, Bildschirmfotos neu mit der aktuellen
-      Werkzeugleiste. Der Upload der neuen Fassungen steht noch aus.
+      Werkzeugleiste. Hochgeladen am 18.08.2026 (297 Dateien), Stichproben
+      über alle sechs Sprachen samt Bildern per HTTPS geprüft — alle 200,
+      die README bleibt unten (404).
 
       Ein Umweg war dabei zu vermeiden: Plesk hatte ein **Platzhalter**-
       zertifikat angeboten, und nur dafür verlangt Let's Encrypt die
