@@ -184,16 +184,27 @@ nav.lang details.langs {
   position: relative;
 }
 
+/* Zugeklappt muss man ihm ansehen, dass er sich öffnet: eine schmale Pille
+   mit Rahmen statt bloßem Text — „DE" allein las sich als Beschriftung,
+   nicht als Knopf. */
 nav.lang details.langs summary {
   list-style: none;
   cursor: pointer;
   color: var(--muted);
   font-size: 0.85rem;
   letter-spacing: 0.02em;
-  padding: 0.15rem 0;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  transition: border-color var(--step), color var(--step);
+}
+
+nav.lang details.langs summary:hover,
+nav.lang details.langs[open] summary {
+  border-color: var(--accent);
 }
 
 nav.lang details.langs summary::-webkit-details-marker { display: none; }
