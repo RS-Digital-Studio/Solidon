@@ -76,9 +76,9 @@ def tool_schemas(
     Das ist der Unterschied, auf den es ankommt: eine Auswahl, die Operationen
     aussortiert, wäre eine Betriebsart mit anderem Namen (§2.6) — der Agent
     käme an sie nicht mehr heran, ohne dass ihm jemand sagt, dass es sie gibt.
-    Gekürzt wird die Prosa: der doc-Satz und der Menüort machen den größten
-    Teil der 104 KB aus, und ein lokales Modell mit kleinem Kontextfenster
-    verliert daran mehr, als es gewinnt.
+    Gekürzt wird die Prosa: die Parametertexte, der doc-Satz und der Menüort
+    machen zusammen die Hälfte der 110 KB aus, und ein lokales Modell mit
+    kleinem Kontextfenster verliert daran mehr, als es gewinnt.
     """
     return (*operation_tools(registry, compact=compact), *extra_tools())
 
@@ -113,7 +113,7 @@ def operation_tools(
         # nennen traf für 72 von 77 Ops den falschen Ort.
         description = str(schema["description"])
         if compact:
-            # Auch die Parametertexte: sie sind mit 36 KB der größte einzelne
+            # Auch die Parametertexte: sie sind mit 40 KB der größte einzelne
             # Posten im Schema. Gekürzt auf den ersten Satz bleibt stehen, was
             # der Wert bedeutet; weg fällt, warum er so heißt und was bei
             # Randfällen passiert.
