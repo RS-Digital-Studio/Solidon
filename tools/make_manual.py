@@ -143,8 +143,14 @@ STYLE = """
               border-radius: 10px; padding: 1.4rem 1.8rem 1.6rem; margin: 2.5rem 0; }
     nav.toc .toc-title { margin: 0 0 1rem; border: none; padding: 0;
                          font-size: 1.1rem; letter-spacing: .02em; }
+    /* ``style.css`` nummeriert das Verzeichnis der Funktionsseite über
+       einen Zähler und legt es als Raster an. Hier trägt jeder Eintrag
+       seine Kapitelnummer schon im Markup, und die Spalten füllen sich
+       der Reihe nach — beides ausdrücklich abschalten, sonst stehen zwei
+       Nummern nebeneinander. */
     nav.toc ol { columns: 2; column-gap: 2.5rem; margin: 0; padding: 0;
-                 list-style: none; counter-reset: none; }
+                 list-style: none; counter-reset: none; display: block; }
+    nav.toc a::before { content: none; }
     nav.toc li { break-inside: avoid; margin: 0; }
     nav.toc a { display: flex; gap: .7rem; align-items: baseline;
                 padding: .28rem 0; border-bottom: 1px solid var(--line);
