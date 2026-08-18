@@ -5837,11 +5837,67 @@ Fehler der Umgebung.**
       > nächsten Lauf. Genau diese Kette steht oben im Abzug. `Session` hängt
       > jetzt ebenfalls an `WorkerLeash`.
       >
-      > **Behoben ist der Absturz damit nicht, jedenfalls nicht nachweislich.**
-      > `test_chat_ui.py` läuft danach viermal hintereinander sauber; bei einer
-      > Kombination aus vier Fensterdateien kam er einmal wieder, beim
-      > Nachfahren derselben Kombination nicht mehr. Das ist zu wenig für eine
-      > Aussage — der Punkt bleibt offen.
+      > **Behoben ist der Absturz damit nicht — inzwischen ist das gemessen und
+      > keine Vermutung mehr.** Ein späterer Volllauf brachte ihn wieder, und
+      > der zweite Abzug ist aufschlussreicher als der erste: **dieselbe
+      > Stelle, anderer Weg.**
+      >
+      > ```
+      > session.py:110  _EvaluationWorker.__init__     access violation
+      >   evaluate_async <- apply <- import_payload <- import_model
+      > ```
+      >
+      > Beim ersten Mal führte der Weg über `start_new` -> `_reset_for`, jetzt
+      > über das Einlesen eines Modells. Was beide teilen, ist der Ort: das
+      > Erzeugen des Arbeiters. Und ein Zugriffsfehler bei einer schlichten
+      > Attributzuweisung im Konstruktor deutet nicht auf diese Zeile, sondern
+      > auf einen Heap, der vorher schon beschädigt war — dieselbe Signatur wie
+      > das `free(): invalid pointer` oben. Das stützt die These, dass A und
+      > dieser hier **ein** Fehler sind, der an zwei Stellen auffällt, und es
+      > bestätigt den nächsten Schritt: ein Werkzeug, das sagt, wer doppelt
+      > freigibt. Die Halteleine war trotzdem richtig — sie ist das Muster, das
+      > die Gebietsregel verlangt —, sie ist nur nicht die Ursache.
+      >
+      > **Ein dritter Abzug, und er schließt den Kreis.** Der nächste Lauf fiel
+      > an einer dritten Stelle:
+      >
+      > ```
+      > app/ui/command_palette.py:61  _refilter        access violation
+      >   tests/test_theme_and_palette.py:250  test_typing_narrows_the_list…
+      > ```
+      >
+      > Zeile 61 ist `self.list.clear()`. **Das ist dieselbe Operation wie in
+      > Fall A** (`panels.py:890`, ebenfalls ein `self.list.clear()`), nur in
+      > einem anderen Widget. Damit stehen drei Abzüge nebeneinander, und zwei
+      > davon fallen auf denselben Aufruf: Eine `QListWidget` zu leeren gibt
+      > viele Kindobjekte auf einmal frei, und genau dort schlägt ein Heap zu,
+      > der vorher beschädigt wurde. Der dritte (Erzeugen eines `QThread`) ist
+      > die Kehrseite — dort wird angefordert, was anderswo doppelt freigegeben
+      > wurde.
+      >
+      > **Wonach also zu suchen ist**, wenn der Punkt drankommt: nicht nach dem
+      > Ort des Absturzes, sondern nach dem, der ein Qt-Objekt zweimal
+      > freigibt. Die Abzüge sind Symptome an mehreren Stellen, nicht mehrere
+      > Fehler.
+      >
+      > **Und er ist häufig geworden.** In dieser Sitzung lief die Suite
+      > achtmal grün (4037 bis 4193 Tests); danach fiel sie viermal in Folge,
+      > an vier Stellen — `command_palette.py:61` und `panels.py:1144` und
+      > `panels.py:890` (alle drei beim Leeren einer Liste) sowie
+      > `session.py:110` beim Erzeugen des Arbeiters.
+      >
+      > Der naheliegende Verdacht war die Befehlspalette, die seit dem 18.08.
+      > sechzig statt dreiundzwanzig Fensterbefehle führt und damit je
+      > Tastendruck fast dreimal so viele Listeneinträge erzeugt und wieder
+      > wegräumt. **Ein A/B-Lauf hat ihn widerlegt**: Mit beiseitegelegter
+      > Änderung fällt die Suite an derselben Stelle
+      > (`_EvaluationWorker.__init__`). Die Palette ist unschuldig; sie ist
+      > wieder drin, und der Verdacht steht hier, damit ihn niemand ein zweites
+      > Mal prüft.
+      >
+      > Was die Häufung verursacht, ist damit offen. Der Zeitraum fällt mit dem
+      > Zusammenführen von 65 Commits zusammen — das ist der nächste Ort zum
+      > Suchen, aber ausdrücklich eine Vermutung und keine Messung.
 
       **Nächster Schritt**, wenn er drankommt: ein Lauf unter Valgrind oder
       gegen ein Python mit Adress-Sanitizer, gezielt auf

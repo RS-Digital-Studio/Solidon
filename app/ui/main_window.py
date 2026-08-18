@@ -1328,7 +1328,7 @@ class MainWindow(QMainWindow):
         # Verlassen" — eine Taste, die kaum eine Tastatur hat, als Kürzel
         # angeboten. Alt+F4 macht Windows selbst, Cmd+Q macht macOS über sein
         # Anwendungsmenü. Ein falsches Kürzel ist schlechter als keines.
-        self._add_action(
+        self._quit_action = self._add_action(
             file_menu,
             tr("Beenden"),
             None,
@@ -3080,7 +3080,46 @@ class MainWindow(QMainWindow):
                 tool.shortcut,
                 lambda name=key: self.tools.toggle(name),
             )
+        commands.update(self._menu_commands(commands))
         return commands
+
+    def _menu_commands(self, known: dict[str, tuple[str, str, Any]]) -> dict[str, Any]:
+        """Alles Übrige aus der Menüleiste — sie ist die Quelle, nicht eine
+        zweite Liste daneben.
+
+        §19.2 verlangt die Palette als Universalzugang, und das Wörterbuch
+        darüber führte sie von Hand. Von Hand heißt: Es driftet, und es war
+        gedriftet — **39 von 136 Menüzeilen fehlten**, darunter jede
+        Darstellungsart, jede Kameravorgabe, beide Themen, alle vier
+        Navigationsschemata und acht Zeilen aus dem Hilfe-Menü. Nachzutragen
+        hätte den nächsten Eintrag wieder vergessen lassen; aus der Leiste
+        gelesen kann das nicht mehr passieren.
+
+        Die Operationen bleiben draußen: Sie kommen aus dem Register und
+        tragen dort ihre Beschreibung, ihre Kategorie und ihre Verfügbarkeit —
+        über das Menü gelesen wären sie ein zweites, ärmeres Exemplar.
+
+        **Zwei Zeilen bleiben ebenfalls draußen**, und beide mit Grund:
+        *Beenden* wäre in einer Liste, durch die man tippt, ein Klick zu nah am
+        Verlust der Arbeit, und *Befehlspalette* öffnete sich selbst.
+        """
+        vorhanden = {title for title, _shortcut, _slot in known.values()}
+        ops = set(self._op_actions.values())
+        gefunden: dict[str, Any] = {}
+        for path, action in _menu_lines(self.menuBar()):
+            if action in ops or action.text() in vorhanden:
+                continue
+            if action in (self._quit_action, self._palette_action):
+                continue
+            # Der Weg steht im Titel: „Vorne" allein sagt in einer Liste aus
+            # hundert Zeilen nichts, „Kamera: Vorne" schon.
+            title = f"{path}: {action.text()}" if path else action.text()
+            gefunden[f"menu.{len(gefunden)}"] = (
+                title,
+                action.shortcut().toString(),
+                action.trigger,
+            )
+        return gefunden
 
     def selected_feature_kind(self) -> str | None:
         """Die Art des gerade ausgewählten Merkmals — ``hole``, ``face`` und
@@ -5873,6 +5912,23 @@ class MainWindow(QMainWindow):
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
         save_settings(self.settings)
         event.accept()
+
+
+def _menu_lines(menu: Any, path: str = "") -> Iterator[tuple[str, Any]]:
+    """Jede Zeile der Menüleiste mit ihrem Weg — Untermenüs eingeschlossen.
+
+    Trennstriche fallen weg, ein Untermenü liefert seine Kinder statt sich
+    selbst. Der Weg ist das, was in einer Liste aus hundert Zeilen den
+    Unterschied macht: „Vorne" sagt nichts, „Kamera: Vorne" schon.
+    """
+    for action in menu.actions():
+        if action.isSeparator():
+            continue
+        sub = action.menu()
+        if sub is not None:
+            yield from _menu_lines(sub, f"{path} > {action.text()}" if path else action.text())
+            continue
+        yield path, action
 
 
 def registered_operations() -> list[OperationSpec]:
