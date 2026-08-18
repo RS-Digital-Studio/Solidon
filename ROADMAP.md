@@ -42,7 +42,6 @@ bekommt einen roten Lauf.
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Zwei lange Läufe ohne Abbrechen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts; die Live-Vorschau braucht zusätzlich einen Weg, nicht den ganzen Stapel zu rechnen |
 | Die Befehlspalette ist kein Universalzugang | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 38 Zeilen nachtragen, Umlautfaltung und Synonyme dazu |
-| Zwei Sätze ohne Warum | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — OCCT nennt seine Fehlerklasse, der Löser kennt beide Bedingungen |
 | Die Zahlen im deutschen Handbuchbild tragen einen Punkt | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — eingegrenzt auf `take_all`, das gebaute Fenster ist richtig |
 | Weg 4 steht in keiner Unterlage | Die Oberfläche im Bild durchgesehen (17.08.2026) | eine Bauplanänderung mit Ansage; README, Handbuch, Website und die Abbildung ziehen nach |
 | Der Rest der Textfunde | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — rohe Schlüssel statt Beschriftungen, drei nie angebotene Vorschläge, eine Schätzung am falschen Ort |
@@ -2635,6 +2634,23 @@ Erkenntnis wie bei den drei Bausteinen über ihrem Ursprung, eine Etage höher.
       gehört er hin, und ein Satz ohne Platzhalter übersetzt sich in fünf
       Sprachen leichter. Die rohe Ausgabe sammelt der Dialog und bietet sie
       hinter „Details anzeigen" an (§33.2).
+
+- [x] **Zwei Sätze ohne Warum.** „Die Boolesche Operation ist
+      fehlgeschlagen." stand noch in `profiles.py` — die zweite Stelle in
+      `edit.py` war längst vorbildlich. Der Fall ist eng genug für einen
+      richtigen Satz: Diese Verknüpfung fügt den Kern eines Gewindes mit
+      seinem Gang zusammen, und was dort scheitert, scheitert an Flächen, die
+      sich berühren statt zu überlappen. Der Ausweg ist ein anderes Maß, keine
+      Reparatur — die gröbere Stufe versucht `_joined_rod` schon selbst.
+      „Zwei Bedingungen widersprechen sich." nannte das Paar nicht, obwohl der
+      Kern es seit jeher kennt und sogar anbietet, die eine oder die andere zu
+      entfernen. Bei vierzehn Einträgen in der Liste durfte man suchen, welche
+      zwei gemeint sind. Die Zeichenfläche merkt sich das Paar jetzt, und die
+      Liste rechts schreibt beide an — mit einem Zeichen und nicht nur mit
+      Farbe, denn eine Bedingungsliste wird auch ausgedruckt (Regel 18).
+      Den Satz selbst baut die Oberfläche und nicht der Kern: Dort liegen die
+      Beschriftungen, und der Kern führt seine Werte grundsätzlich über
+      `values` statt über Platzhalter.
 
 ### Offen aus dem Audit
 
@@ -6345,12 +6361,6 @@ belegt und mit Absicht liegen geblieben.
       Kürzelübersicht behauptet das Gegenteil. Die Suche kennt weder
       Umlautfaltung noch ein Synonym, und sie umgeht die Bauart-Prüfung:
       „Verrunden" öffnet für ein Netz seinen vollen Dialog.
-- [ ] **Zwei Sätze ohne Warum.** „Die Boolesche Operation ist
-      fehlgeschlagen." steht an zwei Stellen im B-Rep-Kern, und OCCT liefert
-      über `HasErrors()`/`DumpErrors()` mindestens die Fehlerklasse. „Zwei
-      Bedingungen widersprechen sich." nennt das Paar nicht, obwohl der
-      Bauplan es verlangt und die Ausnahme es verspricht — Nummer und Art
-      beider Bedingungen liegen an der Wurfstelle bereits vor.
 - [ ] **Im deutschen Handbuchbild steht „80.00 mm".** Punkt statt Komma, also
       die englische Zahlendarstellung im deutschen Handbuch — auf jedem Bild
       mit Parameterleiste. Gefunden beim Zusammenführen am 18.08., und der

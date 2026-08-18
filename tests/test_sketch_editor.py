@@ -1695,3 +1695,46 @@ def test_nothing_lights_up_while_drawing(qt_app: QApplication) -> None:
     canvas._note_hover(None)
 
     assert not canvas.highlighted
+
+
+def test_a_conflict_says_which_two_constraints(qt_app: QApplication) -> None:
+    """„Zwei Bedingungen widersprechen sich" — bei vierzehn in der Liste.
+
+    Der Kern nennt das Paar seit jeher (``error.first``/``error.second``) und
+    bietet sogar an, die eine oder die andere zu entfernen. Im Fenster stand
+    davon nichts: Wer den Satz las, durfte suchen, welche zwei gemeint sind.
+    Die Zeichenfläche merkt sich das Paar jetzt, und die Liste rechts schreibt
+    beide an — mit einem Zeichen und nicht nur mit Farbe (Regel 18).
+    """
+    from app.ui.sketch_editor import CONFLICT_MARKER, SketchPanel
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+        canvas.add_constraint("fixed", (0,))
+        canvas.add_constraint("distance", (0, 1), "30")
+        canvas.add_constraint("distance", (0, 1), "40")
+
+        assert canvas.conflict, "ohne Konflikt prüft dieser Test nichts"
+        assert canvas.conflict_pair is not None, "das Paar wird nicht gemerkt"
+        erste, zweite = canvas.conflict_pair
+        assert erste != zweite
+
+        markiert = [
+            row
+            for row in range(panel.constraint_list.count())
+            if panel.constraint_list.item(row).text().startswith(CONFLICT_MARKER)
+        ]
+        assert set(markiert) == {erste, zweite}, (
+            f"markiert sind {markiert}, gemeint sind {sorted(canvas.conflict_pair)}"
+        )
+
+        canvas.remove_constraint(zweite)
+        assert canvas.conflict_pair is None, "geheilt, und die Markierung geht mit"
+        assert not any(
+            panel.constraint_list.item(row).text().startswith(CONFLICT_MARKER)
+            for row in range(panel.constraint_list.count())
+        )
+    finally:
+        panel.deleteLater()

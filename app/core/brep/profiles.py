@@ -537,7 +537,21 @@ def _fuzzy_boolean(kind: str, first: Solid, second: Solid, tolerance: float = EP
     # Linux-Runner ein Segmentierungsfehler ohne Zeile, hier ein stilles
     # falsches Ergebnis. Kostet Speicher, spart die Suche danach.
     operation.SetNonDestructive(True)
-    return _finished(operation, _("Die Boolesche Operation ist fehlgeschlagen."))
+    # **Nicht „fehlgeschlagen"** (Regel 17). Der Satz stand hier wörtlich so,
+    # und er sagt weder, was nicht ging, noch was jetzt möglich ist — dabei ist
+    # der Fall eng: Diese Verknüpfung fügt den Kern eines Gewindes mit seinem
+    # Gang zusammen, und was dort scheitert, scheitert an Flächen, die sich
+    # berühren statt zu überlappen. Der Ausweg ist ein anderes Maß, keine
+    # Reparatur; die gröbere Stufe versucht ``_joined_rod`` schon selbst.
+    return _finished(
+        operation,
+        _(
+            "Kern und Gang des Gewindes ließen sich nicht zu einem Körper verbinden. "
+            "Das passiert, wenn zwei Flächen sich nur berühren statt zu überlappen — "
+            "ein leicht anderer Durchmesser oder eine andere Steigung verschiebt die "
+            "Berührung."
+        ),
+    )
 
 
 def bounds(solid: Solid) -> tuple[float, float, float, float, float, float]:
