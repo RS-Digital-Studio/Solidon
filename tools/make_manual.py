@@ -404,20 +404,44 @@ def _switch_target(current: str, other: str) -> str:
     return "../handbuch.html" if other == "de" else f"../{other}/manual.html"
 
 
-def _switcher(language: str) -> str:
-    """Die Kürzelreihe des Sprachwechsels — sechs Ziele statt eines Links.
+#: Sprachnamen und Menü-Beschriftung des Sprachwechsels, je in der eigenen
+#: Sprache — wer Deutsch nicht liest, findet seinen Eintrag trotzdem.
+LANGUAGE_NAMES = {
+    "de": "Deutsch",
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "it": "Italiano",
+    "pt": "Português",
+}
+SWITCHER_LABELS = {
+    "de": "Sprache wählen",
+    "en": "Choose language",
+    "es": "Elegir idioma",
+    "fr": "Choisir la langue",
+    "it": "Scegli la lingua",
+    "pt": "Escolher idioma",
+}
 
-    Als Kürzel, weil sechs ausgeschriebene Sprachnamen die Kopfzeile
-    sprengten; die eigene Sprache ist markiert und verweist auf sich selbst,
-    damit die Reihe an jeder Stelle gleich aussieht.
+
+def _switcher(language: str) -> str:
+    """Der Sprachwechsel als Aufklappmenü — zu sehen ist das eigene Kürzel,
+    offen stehen alle sechs Sprachen ausgeschrieben.
+
+    ``details`` braucht kein Skript; dasselbe Markup tragen die statischen
+    Seiten, die Stile wohnen in ``style.css`` unter ``details.langs``.
     """
-    links = "".join(
-        f'<a href="{_switch_target(language, other)}" hreflang="{other}"'
+    rows = "".join(
+        f'<li><a href="{_switch_target(language, other)}" hreflang="{other}" lang="{other}"'
         + (' aria-current="page"' if other == language else "")
-        + f">{other.upper()}</a>"
+        + f">{LANGUAGE_NAMES[other]}</a></li>"
         for other in sorted(PAGES)
     )
-    return f'<span class="langs">{links}</span>'
+    return (
+        '<details class="langs">'
+        f'<summary aria-label="{SWITCHER_LABELS[language]}">{language.upper()}</summary>'
+        f"<ul>{rows}</ul></details>"
+    )
 
 
 def _header(language: str) -> str:

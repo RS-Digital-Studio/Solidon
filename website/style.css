@@ -174,18 +174,78 @@ nav.lang a {
   padding: 0.15rem 0;
 }
 
-/* Der Sprachwechsel: sechs Kürzel als eine Gruppe, enger gesetzt als die
-   Navigation — sechs volle Abstände machten die Kopfzeile zur zweiten Zeile.
-   Die eigene Sprache steht heller da und trägt den Strich dauerhaft: das
-   Kürzel allein sagt sonst nicht, wo man ist (Regel 18 gilt auch hier). */
-nav.lang .langs {
-  display: inline-flex;
-  gap: 0.55rem;
+/* Der Sprachwechsel: ein Aufklappmenü statt sechs Kürzeln — die Reihe machte
+   die Kopfzeile voll, ohne zu sagen, was ES oder PT bedeutet. Zu sehen ist
+   das eigene Kürzel mit Pfeil; offen stehen die Sprachen ausgeschrieben.
+   ``details`` braucht kein Skript und funktioniert mit Tastatur und Finger.
+   Die eigene Sprache steht fett und heller da, nicht nur andersfarbig
+   (Regel 18 gilt auch hier). */
+nav.lang details.langs {
+  position: relative;
 }
 
-nav.lang .langs a {
+nav.lang details.langs summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted);
   font-size: 0.85rem;
   letter-spacing: 0.02em;
+  padding: 0.15rem 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+nav.lang details.langs summary::-webkit-details-marker { display: none; }
+
+/* Der Pfeil ist gezeichnet, kein Schriftzeichen — er dreht beim Öffnen. */
+nav.lang details.langs summary::after {
+  content: "";
+  width: 0.4em;
+  height: 0.4em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-25%);
+  transition: transform var(--step);
+}
+
+nav.lang details.langs[open] summary::after {
+  transform: rotate(225deg) translateY(15%);
+}
+
+nav.lang details.langs summary:hover { color: var(--accent); }
+
+nav.lang details.langs ul {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.6rem);
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  box-shadow: var(--shadow-lift);
+  min-width: 9.5rem;
+  z-index: 20;
+}
+
+nav.lang details.langs li a {
+  display: block;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.4rem;
+  font-size: 0.9rem;
+}
+
+nav.lang details.langs li a::after { display: none; }
+
+nav.lang details.langs li a:hover {
+  background: var(--accent-soft);
+}
+
+nav.lang details.langs li a[aria-current="page"] {
+  color: var(--fg);
+  font-weight: 600;
 }
 
 nav.lang a[aria-current="page"] {
