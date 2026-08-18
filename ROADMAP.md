@@ -505,7 +505,7 @@ bekommt einen roten Lauf.
       HTTPS. Die DNS-Propagation ist durch — beide A-Records auf 188.68.47.33,
       Zone bei netcup. **Seit dem 16.08.2026 sechssprachig**: Startseite,
       Funktionen, KI-Modelle und Handbuch (Seite und PDF) auch auf es, fr,
-      it und pt, Sprachwechsler als Kürzelreihe, Regelsammlung mit Fassungen
+      it und pt, Sprachwechsler als Aufklappmenü, Regelsammlung mit Fassungen
       je Handbuchsprache, Bildschirmfotos neu mit der aktuellen
       Werkzeugleiste. Hochgeladen am 18.08.2026 (297 Dateien), Stichproben
       über alle sechs Sprachen samt Bildern per HTTPS geprüft — alle 200,
@@ -6065,12 +6065,30 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       Zahl stand im README: 84 Schemata und 97 KB, nachgemessen sind es 85
       mit 109 170 Zeichen, rund 107 KB.
 
-      Offen daran: `tools.py` nennt im Docstring 104 KB (gemessen 110 KB
-      voll, 87 KB kompakt), und `.claude/rules/agentenschicht.md` führt
-      „84 Werkzeugschemata, rund 99 000 Zeichen, gemessen 21 162 Token".
-      Die Zeichenzahlen ließen sich nachziehen, die Tokenzahl nicht ohne
-      einen Ollama-Lauf — und halb nachgezogen wäre die Messreihe
-      widersprüchlich statt aktuell.
+      Nachgezogen am 18.08.: `tools.py` nannte 104 KB — gemessen sind es
+      110 KB voll und 87 KB kompakt. `.claude/rules/agentenschicht.md`,
+      `backends/llm.py` und `tests/test_backends.py` führten dieselben
+      „84 Schemata, 99 000 Zeichen, 21 162 Token"; es sind 85 mit 109 170
+      Zeichen. Die Tokenzahl kommt aus einem Lauf gegen `qwen3:14b`
+      (`prompt_eval_count` bei `num_ctx` 32768, Basislinie ohne Werkzeuge
+      abgezogen): **24 474 Token** für die Schemata allein, 26 601 für den
+      ganzen Prompt mit allen 96 Werkzeugen, 19 249 für den kompakten Satz,
+      den der Ollama-Weg fährt. Keiner davon wurde gekürzt — 81 % des
+      Fensters, keine Halbierung, und 4,46 Zeichen je Token passen zur alten
+      Messung (4,68). **32768 trägt also weiter**; die Schranke im Test steht
+      jetzt auf 25 361 statt 21 162.
+
+      Nebenbefund im selben Docstring: „der doc-Satz und der Menüort machen
+      den größten Teil aus" stimmt nicht. Sie sind zusammen 14 013 Zeichen,
+      die Parametertexte allein 40 945 — was der Kommentar dreißig Zeilen
+      tiefer längst richtig sagte (dort stand 36 KB, gemessen 40 KB).
+
+      Nicht angefasst, weil es Messberichte sind und keine Bestandsangaben:
+      `session.py` („88 Werkzeuge mit 104 KB Schema"), `llm.py` oben
+      („dreiundachtzig, rund 96 KB"), `tools/check_local_model.py` („sieben
+      statt dreiundachtzig") und das Konzeptpapier vom August. Sie nennen die
+      Lage, in der damals gemessen wurde; zöge man nur die Zahl nach, stünde
+      dort eine Messung, die es nie gab.
 
 **Wettbewerb (Recherche 16.08., Quellen in der Durchsichts-Datei):** Die
 Chat-Alleinstellung ist seit Zoo „Zookeeper" (01/2026) nicht mehr
