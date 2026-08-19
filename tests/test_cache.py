@@ -197,3 +197,55 @@ def test_the_disk_cache_keeps_findings_solver_and_transform(tmp_path: Path) -> N
     assert [entry.code for entry in again.findings] == ["boolean.voxel"]
     assert again.solver is not None and again.solver.strategy == "voxel"
     assert again.transform == moved
+
+
+def test_the_cache_survives_several_threads_writing_at_once() -> None:
+    """Drei Fäden legen hier ab: Auswertung, Agent und Vorschau.
+
+    ``_store`` ist kein einzelner Schritt, sondern vier — alten Eintrag
+    herausnehmen, Kosten abziehen, neuen einhängen, verdrängen bis das Budget
+    passt. Wechselt der Interpreter mittendrin den Faden, stimmt ``_cost``
+    nicht mehr mit dem überein, was wirklich in der Liste liegt: Der Cache
+    verdrängt dann zu früh (jeder Schritt wird neu gerechnet) oder gar nicht
+    mehr (er wächst, bis der Speicher knapp wird).
+
+    **Das Umschaltintervall ist der Kern dieses Tests, nicht Beiwerk.** Der
+    erste Anlauf lief ohne es — und war damit wertlos: Mit dem üblichen
+    Intervall von fünf Millisekunden trifft der Fadenwechsel praktisch nie in
+    die vier Schritte hinein, und die Gegenprobe *ohne* Schloss lief null von
+    fünf Mal auseinander. Ein Test, der auch ohne die geprüfte Sache grün ist,
+    prüft nichts. Mit einer Mikrosekunde fällt dieselbe Gegenprobe zehnmal von
+    zehn.
+    """
+    import sys
+    import threading
+
+    cache = ResultCache(triangle_budget=3_000)
+    problems: list[BaseException] = []
+
+    def work(start: int) -> None:
+        try:
+            for index in range(start, start + 200):
+                cache.put(f"key-{index}", result(triangles=100))
+                cache.get(f"key-{index - 1}")
+        except BaseException as problem:  # pragma: no cover - nur im Fehlerfall
+            problems.append(problem)
+
+    before = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        threads = [threading.Thread(target=work, args=(n * 10_000,)) for n in range(6)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    finally:
+        sys.setswitchinterval(before)
+
+    assert not problems, f"Ausnahme in einem Faden: {problems}"
+    counted = sum(entry.cost for entry in cache._entries.values())
+    assert cache.cost == counted, (
+        f"Der Cache nennt {cache.cost}, in der Liste liegen {counted} — die Buchführung "
+        "ist unter Nebenläufigkeit auseinandergelaufen."
+    )
+    assert cache.cost <= cache._budget or len(cache) == 1

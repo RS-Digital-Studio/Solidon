@@ -41,8 +41,8 @@ bekommt einen roten Lauf.
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
-| Zwei lange Läufe ohne Abbrechen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts; die Live-Vorschau braucht zusätzlich einen Weg, nicht den ganzen Stapel zu rechnen |
-| Die Befehlspalette ist kein Universalzugang | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 38 Zeilen nachtragen, Umlautfaltung und Synonyme dazu |
+| Der Rest der Abbruchpunkte | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — die Vorschau braucht ein eigenes Token je Arbeiter, kein geteiltes |
+| Die Suche der Palette findet zu wenig | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — Umlautfaltung, Synonyme, und die Bauart-Prüfung fehlt |
 | Der Rest der Textfunde | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — rohe Schlüssel statt Beschriftungen, drei nie angebotene Vorschläge, eine Schätzung am falschen Ort |
 | Parameterausdrücke in Pose-Winkeln | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | das Gegenstück zu `sketch_parameter_references` für `kind="armature"` — Kernarbeit mit eigenen Tests |
 
@@ -6428,19 +6428,45 @@ belegt und mit Absicht liegen geblieben.
 
 ### Offen
 
-- [ ] **Zwei lange Läufe haben kein Abbrechen.** Die Live-Vorschau des
-      Operationsdialogs rechnet bei jeder Änderung den ganzen Stapel neu, und
-      der Slicer-Lauf hält beim Schließen des Dialogs die Ereignisschleife an.
-      Dazu: Analysekarte und Trennebenensuche laufen im Arbeiter, fragen aber
-      nie `ctx.cancelled`; im Erzeugen-Dialog ist „Abbrechen" ausgerechnet
-      während des Laufs gesperrt; eine abgebrochene Auswertung sagt niemandem,
-      dass sie abgebrochen wurde; und Speichern blockiert über eine Sekunde
-      ohne Zeiger und ohne Statuszeile.
-- [ ] **Die Befehlspalette ist nicht der Universalzugang, den §19.2 verlangt.**
-      38 von 135 Menüzeilen fehlen, darunter der Einstieg in Weg 3 — und die
-      Kürzelübersicht behauptet das Gegenteil. Die Suche kennt weder
-      Umlautfaltung noch ein Synonym, und sie umgeht die Bauart-Prüfung:
-      „Verrunden" öffnet für ein Netz seinen vollen Dialog.
+- [x] **Die Live-Vorschau rechnete den ganzen Stapel neu**, obwohl ihr
+      Docstring seit jeher das Gegenteil zusagt: „der Cache trägt alle
+      Schritte, die schon gerechnet sind". Der Aufruf reichte ihn nie durch —
+      bei einem Dokument mit zwanzig Schritten also neunzehn fertige, für jede
+      Änderung an einer einzigen Zahl. Voraussetzung dafür war ein Schloss im
+      `ResultCache`: `_store` sind vier Schritte, und Auswertung, Agent und
+      Vorschau schreiben aus eigenen Fäden hinein.
+
+      **Der Test dazu war im ersten Anlauf wertlos**, und das ist die Lehre.
+      Er war grün — aber auch ohne Schloss: Mit dem üblichen Umschaltintervall
+      von fünf Millisekunden trifft der Fadenwechsel praktisch nie in die vier
+      Schritte, die Gegenprobe lief null von fünf Mal auseinander. Mit einer
+      Mikrosekunde fällt sie zehn von zehn. Wer hier etwas prüft, stellt das
+      Intervall — sonst prüft er nichts.
+- [x] **Der Slicer-Lauf ist abbrechbar.** `Popen` statt `run`, ein
+      Abbruch-Token, das die Warteschleife abfragt, `terminate()` darauf, ein
+      Abbrechen-Knopf am Fortschritt und ein `closeEvent`, das abbricht statt
+      zu warten. Gebaut in einer parallelen Sitzung, genau auf dem Weg, den
+      die Durchsicht vorgeschlagen hatte.
+- [ ] **Der Rest der Abbruchpunkte.** Analysekarte und Trennebenensuche laufen
+      im Arbeiter, fragen aber nie `ctx.cancelled`; im Erzeugen-Dialog ist
+      „Abbrechen" ausgerechnet während des Laufs gesperrt; eine abgebrochene
+      Auswertung sagt niemandem, dass sie abgebrochen wurde; und Speichern
+      blockiert über eine Sekunde ohne Zeiger und ohne Statuszeile. Für die
+      Vorschau fehlt zum Abbrechen ein eigenes `CancelSignal` je Arbeiter —
+      ein geteiltes mit `reset()` davor wäre ein Wettlauf, der alte Lauf sähe
+      den gesetzten Zustand womöglich nie.
+- [x] **Die Befehlspalette ist der Universalzugang aus §19.2.** 38 von 136
+      Menüzeilen fehlten, weil neben der Leiste ein von Hand gepflegtes
+      Wörterbuch stand — und von Hand heißt driften. Gelesen wird jetzt die
+      Leiste selbst: 82 Operationen kommen weiter aus dem Register (dort
+      tragen sie Beschreibung, Kategorie und Verfügbarkeit), 60 Fensterbefehle
+      aus dem Menü. Draußen bleiben genau zwei, und der Test nennt sie
+      namentlich: *Beenden* ist in einer Liste, durch die man tippt, ein Klick
+      zu nah am Verlust der Arbeit, und *Befehlspalette* öffnete sich selbst.
+- [ ] **Die Suche der Palette kennt weder Umlautfaltung noch ein Synonym**, und
+      sie umgeht die Bauart-Prüfung: „Verrunden" öffnet für ein Netz seinen
+      vollen Dialog. Das ist der Rest des Palettenpunkts — der Zugang steht,
+      das Finden nicht.
 - [x] **Zurückgenommen: Im deutschen Handbuchbild steht ein Komma, kein
       Punkt.** Der Fund war meiner, und er war falsch. Was ihn erzeugt hat, ist
       lehrreicher als er selbst.

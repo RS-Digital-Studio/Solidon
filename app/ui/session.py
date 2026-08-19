@@ -1103,6 +1103,14 @@ class Session(QObject):
             quality="draft",
             sources=ProjectSources(self.project, base_dir=self.base_dir),
             ask=ask or _no_questions,
+            # **Der Docstring versprach den Cache, der Aufruf reichte ihn nie
+            # durch.** Eine Vorschau rechnete damit jedes Mal den ganzen Stapel
+            # neu — bei einem Dokument mit zwanzig Schritten also
+            # neunzehn Schritte, die längst gerechnet dastanden, für jede
+            # Änderung an einer einzigen Zahl. Der Cache ist seit dieser Runde
+            # thread-sicher; ohne das wäre es hier gefährlich, weil Auswertung,
+            # Agent und Vorschau in eigenen Fäden laufen.
+            cache=self.cache,
         )
         if result.stopped_at is not None:
             # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
