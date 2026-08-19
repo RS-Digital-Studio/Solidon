@@ -43,7 +43,6 @@ bekommt einen roten Lauf.
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Zwei lange Läufe ohne Abbrechen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts; die Live-Vorschau braucht zusätzlich einen Weg, nicht den ganzen Stapel zu rechnen |
 | Die Befehlspalette ist kein Universalzugang | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 38 Zeilen nachtragen, Umlautfaltung und Synonyme dazu |
-| Die Zahlen im deutschen Handbuchbild tragen einen Punkt | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — eingegrenzt auf `take_all`, das gebaute Fenster ist richtig |
 | Weg 4 steht in keiner Unterlage | Die Oberfläche im Bild durchgesehen (17.08.2026) | eine Bauplanänderung mit Ansage; README, Handbuch, Website und die Abbildung ziehen nach |
 | Der Rest der Textfunde | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — rohe Schlüssel statt Beschriftungen, drei nie angebotene Vorschläge, eine Schätzung am falschen Ort |
 | Parameterausdrücke in Pose-Winkeln | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | das Gegenstück zu `sketch_parameter_references` für `kind="armature"` — Kernarbeit mit eigenen Tests |
@@ -6443,27 +6442,35 @@ belegt und mit Absicht liegen geblieben.
       Kürzelübersicht behauptet das Gegenteil. Die Suche kennt weder
       Umlautfaltung noch ein Synonym, und sie umgeht die Bauart-Prüfung:
       „Verrunden" öffnet für ein Netz seinen vollen Dialog.
-- [ ] **Im deutschen Handbuchbild steht „80.00 mm".** Punkt statt Komma, also
-      die englische Zahlendarstellung im deutschen Handbuch — auf jedem Bild
-      mit Parameterleiste. Gefunden beim Zusammenführen am 18.08., und der
-      Fehler liegt nicht am Merge: `origin/main` zeigt ihn ebenso.
-      **Was schon gemessen ist**, damit der nächste Durchgang nicht dort
-      anfängt: `QLocale.setDefault` steht richtig in
-      `install_qt_translations`, und `QLocale()` ist zum Zeitpunkt der
-      Aufnahme `de_DE`. Im gebauten Fenster steht „80,00 mm" — offscreen wie
-      mit echter Plattform, sichtbar wie versteckt, und **auch im Augenblick
-      des Abdrückens**: Ein Spion an `shoot` liest an den vier sichtbaren
-      Feldern `text()` *und* `lineEdit().text()`, beide mit Komma. Trotzdem
-      steht im Bild ein Punkt, und zwar nicht nur im Bildschirmabgriff —
-      `widget.grab()` über den Qt-Painter zeigt ihn genauso. Der Objektbaum
-      daneben schreibt im selben Bild „40,05 mm" richtig, `localised()` wirkt
-      dort also.
-      Damit ist ausgeschlossen: falsches Locale, veralteter Bildschirminhalt,
-      `translate_parameter_titles` (fasst nur Titel an). Offen ist der
-      Widerspruch zwischen dem, was `lineEdit().text()` meldet, und dem, was
-      gezeichnet wird — der nächste Schritt ist ein Blick auf die
-      Zeichenkette, mit der `QDoubleSpinBox` ihr Feld füllt, statt auf die,
-      die sie zurückgibt.
+- [x] **Zurückgenommen: Im deutschen Handbuchbild steht ein Komma, kein
+      Punkt.** Der Fund war meiner, und er war falsch. Was ihn erzeugt hat, ist
+      lehrreicher als er selbst.
+
+      **Die Messung taugte nicht.** Ob ein Zeichen ein Komma ist, habe ich
+      daran geprüft, ob es unter die Grundlinie reicht. Bei 9 pt tut das in
+      Segoe UI **auch ein echtes Komma nicht** — es ist schlicht zu klein.
+      Zwei Referenzfelder, eines mit „80,00" und eines mit „80.00", im selben
+      Widget gerendert, unterscheiden sich in genau **sechs Bildpunkten**:
+
+      ```
+      Komma  y=15:  ####..####.##..####..####
+      Punkt  y=15:  ####..####.###.####..####
+      echtes Feld:  ####..####.##..####..####
+      ```
+
+      Zwei Punkte breit, nicht drei — das ist das Komma. Dazu kam die
+      achtfache Vergrößerung, in der zwei Pixel auf der Grundlinie aussehen
+      wie ein runder Punkt.
+
+      **Was daran hängen blieb**, weil es teuer war: Ein Widerspruch zwischen
+      dem, was ein Widget meldet (`lineEdit().text()` sagte durchweg Komma),
+      und dem, was man im Bild zu sehen glaubt, ist zuerst ein Verdacht gegen
+      die eigene Messung — nicht gegen Qt. Die Stunden, die hier in
+      `QLocale`, `translate_parameter_titles` und die Aufnahmereihenfolge
+      gingen, hätte ein Vergleich mit einer **Referenz** in fünf Minuten
+      gespart: dasselbe Widget zweimal rendern, einmal mit dem vermuteten
+      Falschen, einmal mit dem Richtigen.
+
 - [ ] **Weg 4 steht in keiner Unterlage.** Bauplan, README, Handbuchkapitel und
       Website nennen weiter drei Wege — die gezeichnete Abbildung zeigt drei,
       die Oberflächenregel schickt Weg 4 in die Werkzeugzeile, wo er nicht
