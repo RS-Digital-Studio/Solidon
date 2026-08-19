@@ -37,7 +37,7 @@ from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.core.scene import expressions
 from app.i18n import tr
-from app.ui.labels import deadline_date
+from app.ui.labels import deadline_date, value_line
 from app.ui.leash import WorkerLeash
 from app.ui.style import set_level
 
@@ -811,7 +811,10 @@ def show_error(
 def show_details(error: AppError, parent: QWidget | None = None) -> None:
     """Was der Fehler an Zahlen mitbringt — ohne Stapelabzug (§2.7, §33.1)."""
     lines = [str(error.detail)] if error.detail else []
-    lines.extend(f"{key}: {value}" for key, value in error.values.items())
+    # Nicht der rohe Schlüssel: „open_edges: 6" ist ein Bezeichner, kein Satz
+    # (Regel 20). ``value_line`` setzt Beschriftung, Einheit und das
+    # Dezimaltrennzeichen der Anzeigesprache.
+    lines.extend(value_line(key, value) for key, value in error.values.items())
     if error.object_id:
         lines.append(f"{tr('Objekt')}: {error.object_id}")
     if error.op_id is not None:

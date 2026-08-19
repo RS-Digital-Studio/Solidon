@@ -41,7 +41,6 @@ bekommt einen roten Lauf.
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
-| Der Rest der Textfunde | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — rohe Schlüssel statt Beschriftungen, drei nie angebotene Vorschläge, eine Schätzung am falschen Ort |
 | Parameterausdrücke in Pose-Winkeln | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | das Gegenstück zu `sketch_parameter_references` für `kind="armature"` — Kernarbeit mit eigenen Tests |
 
 ---
@@ -6602,12 +6601,55 @@ belegt und mit Absicht liegen geblieben.
       README, in der jedes Beispiel seine Zeile haben muss. Die Website war
       bereits richtig; ihre 43 Zahlenprüfungen sind grün.
 
-- [ ] **Der Rest der Textfunde**: Fehler-Einzelheiten und Befund-Tooltip zeigen
-      rohe englische Schlüssel dort, wo eine Beschriftung stehen müsste; drei
-      Handlungsvorschläge zum Bauraum werden nie angeboten, und ihr Handler
-      liest Werte, die es in der Ausnahme nicht gibt; und die Restzeitschätzung
-      über zehn Sekunden gibt es nur, solange das Bild leer ist — also gerade
-      nicht bei den langen Rechnungen.
+- [x] **Der Rest der Textfunde.** Drei Stück, und das zweite war das
+      lehrreichste.
+
+      **168 rohe Bezeichner gingen an den Nutzer.** „oversize_mm: 12.4" im
+      Befund-Tooltip, „open_edges: 6" in den Einzelheiten eines Fehlers — eine
+      feste englische Zeichenkette in der Oberfläche mit einem Umweg (Regel
+      20). `value_label` in `app/ui/labels.py` übersetzt jetzt 156 Stämme; die
+      **Einheit steht nicht im Wörterbuch**, sondern kommt aus dem Suffix, also
+      teilen sich `size` und `size_mm` einen Eintrag und ein neuer Schlüssel
+      mit bekanntem Stamm ist schon übersetzt. Vollständig gehalten wird die
+      Liste **nicht von Hand** — von Hand heißt driften, daran war das
+      Palettenwörterbuch gescheitert: `tests/test_value_labels.py` liest jeden
+      `values=`-Schlüssel per AST aus `app/core` und wird rot, wenn einer keine
+      Beschriftung hat. Und andersherum genauso, damit keine Beschriftung ohne
+      Schlüssel fünf Kataloge belastet. Nebenbefund dabei: zwei Schlüssel
+      hießen `erwartet` und `vorhanden` — **deutsch**, in einem Feld, das
+      englisch zu sein hat.
+
+      **Drei fertige Handlungen, an eine Ausnahme gehängt, die niemand wirft.**
+      `OutOfBuildVolume` steht in `errors.py` mit *Modell teilen*, *Auf den
+      Bauraum verkleinern* und *Anderes Druckerprofil wählen* — und keine Zeile
+      im Programm erzeugt sie je. Das ist auch richtig so: Bauraum ist ein
+      Bericht und keine Sperre (§29), gemeldet wird `arrange.out_of_build_volume`
+      als Befund. Damit war der einzige Weg zu drei vollständig gebauten
+      Vorschlägen zugemauert, und der Prüfbericht sagte, was nicht stimmt, und
+      hörte auf — die halbe Antwort von §2.7.
+
+      Der Befund bekommt jetzt ein **Kontextmenü** (`FINDING_ACTIONS`), das
+      dieselben Handler ruft wie der Fehlerdialog; `as_error` verpackt ihn
+      dafür, statt jede Handlung zweimal zu schreiben. Angeboten wird nur, wofür
+      es einen Handler gibt — ein Befund ohne Handlung bekommt **kein leeres
+      Menü**. Damit eine Handlung überhaupt greifen kann, trägt
+      `check_build_volume` die Objektkennung mit: vorher stand dort nur ein
+      laufender Index, und ein Bericht, der nicht sagt **welches** Teil zu groß
+      ist, kann auch nichts dagegen anbieten.
+
+      Und der Handler dahinter tat nichts: `_scale_after_error` las
+      `build_volume` und `size` aus den Werten — zwei Schlüssel, die **weder
+      Ausnahme noch Befund** je trägt. Die Bedingung darunter griff also immer,
+      und die Methode kehrte still zurück. Gerechnet wird jetzt aus Profil und
+      Szene; das ist keine zweite Wahrheit, sondern dieselbe, aus der auch
+      `check_build_volume` rechnet.
+
+      **Die Restzeitschätzung stand am falschen Ort.** §2.8 verlangt sie über
+      zehn Sekunden — sie hing am Ladeschleier, und den gibt es nur, solange
+      **kein** Körper dasteht. Bei jeder langen Rechnung an einem geladenen
+      Modell, also genau im gemeinten Fall, stand in der Statusleiste Prozent
+      ohne jede Zeitangabe. `remaining_time` ist jetzt eine freie Funktion,
+      die beide benutzen.
 
 > **Nachtrag vom 18.08.2026, beim Zusammenführen.** Zwei dieser Punkte hat eine
 > parallele Sitzung in denselben Tagen erledigt, und das ist der Grund, warum

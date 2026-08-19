@@ -579,8 +579,9 @@ def _missing_inputs(
             op_id=operation.id,
             values={
                 "op": operation.op,
-                "erwartet": spec.consumes,
-                "vorhanden": len(operation.inputs),
+                # Englisch, wie jeder Schlüssel — hier standen zwei deutsche.
+                "expected": spec.consumes,
+                "given": len(operation.inputs),
             },
         )
     return None

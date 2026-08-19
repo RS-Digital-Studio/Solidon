@@ -32,6 +32,7 @@ from app.core.types import (
     BoundingBox,
     Finding,
     Mesh,
+    ObjectId,
     Profile,
     Quality,
     Severity,
@@ -480,9 +481,18 @@ def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile) -> bo
 
 
 def check_build_volume(
-    meshes: Sequence[Mesh], profile: Profile, plates: list[int] | None = None
+    meshes: Sequence[Mesh],
+    profile: Profile,
+    plates: list[int] | None = None,
+    object_ids: Sequence[ObjectId] | None = None,
 ) -> list[Finding]:
     """Was über den Bauraum hinaussteht, wird gemeldet, nie still skaliert.
+
+    ``object_ids`` trägt den Befund an seinen Körper. Ohne sie stand dort nur
+    der laufende Index, und ein Bericht, der nicht sagt, **welches** Teil zu
+    groß ist, kann auch nichts dagegen anbieten: Die drei Handlungen zum
+    Bauraum (teilen, verkleinern, anderes Profil) hingen an einer Ausnahme,
+    die niemand warf.
 
     Geprüft je Platte: zwei Objekte an derselben Stelle auf verschiedenen
     Platten sind kein Problem, und eine volle Platte neben einer leeren auch
@@ -521,6 +531,11 @@ def check_build_volume(
                     code="arrange.out_of_build_volume",
                     severity=_severity_for(bounds, allowed),
                     message=_message_for(bounds, allowed, outside),
+                    object_id=(
+                        object_ids[index]
+                        if object_ids is not None and index < len(object_ids)
+                        else None
+                    ),
                     values=values,
                 )
             )

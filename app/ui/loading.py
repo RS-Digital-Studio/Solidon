@@ -109,6 +109,36 @@ BLOCK_HEIGHT = (
 )
 
 
+def remaining_time(started: float | None, fraction: float) -> str:
+    """Was von einer Wartezeit noch aussteht — leer, solange es geraten wäre.
+
+    §2.8 verlangt die Schätzung erst über zehn Sekunden, und das ist keine
+    Willkür: Die ersten Sekunden eines Laufs sagen wenig über seinen Rest.
+    Aus verstrichener Zeit und Anteil hochgerechnet, linear — genauer geht es
+    nicht, denn wie viel Arbeit hinter den nächsten Prozent steckt, weiß nur
+    die Operation selbst.
+
+    **Freie Funktion und keine Methode**, weil sie an zwei Orten gebraucht
+    wird und lange nur an einem stand: Sie gehörte dem Ladeschleier, und den
+    gibt es nur bei **leerem** Bild. Steht ein Körper da — bei jeder langen
+    Rechnung an einem geladenen Modell also —, bleibt allein die Statusleiste,
+    und die zeigte Prozent ohne jede Zeitangabe. Die Zeile aus §2.8, die es
+    über zehn Sekunden verlangt, galt damit für genau den Fall nicht, für den
+    sie geschrieben ist.
+    """
+    if started is None or fraction < ESTIMATE_FROM:
+        return ""
+    passed = time.monotonic() - started
+    if passed < ESTIMATE_AFTER_S:
+        return ""
+    left = passed * (1.0 - fraction) / fraction
+    if left < 5.0:
+        return tr("gleich fertig")
+    if left < 90.0:
+        return tr("noch etwa {sekunden} s").format(sekunden=round(left / 5.0) * 5)
+    return tr("noch etwa {minuten} min").format(minuten=round(left / 60.0))
+
+
 class LoadingVeil(QWidget):
     """Was über der Ansicht steht, solange sie nichts zeigen kann.
 
@@ -190,25 +220,8 @@ class LoadingVeil(QWidget):
         self._delay.start(DELAY_MS)
 
     def remaining(self) -> str:
-        """Was von der Wartezeit noch aussteht — leer, solange es geraten wäre.
-
-        §2.8 verlangt die Schätzung erst über zehn Sekunden, und das ist keine
-        Willkür: Die ersten Sekunden eines Laufs sagen wenig über seinen Rest.
-        Aus verstrichener Zeit und Anteil hochgerechnet, linear — genauer geht
-        es nicht, denn wie viel Arbeit hinter den nächsten Prozent steckt,
-        weiß nur die Operation selbst.
-        """
-        if self._started is None or self._target < ESTIMATE_FROM:
-            return ""
-        passed = time.monotonic() - self._started
-        if passed < ESTIMATE_AFTER_S:
-            return ""
-        left = passed * (1.0 - self._target) / self._target
-        if left < 5.0:
-            return tr("gleich fertig")
-        if left < 90.0:
-            return tr("noch etwa {sekunden} s").format(sekunden=round(left / 5.0) * 5)
-        return tr("noch etwa {minuten} min").format(minuten=round(left / 60.0))
+        """Was von der Wartezeit noch aussteht — leer, solange es geraten wäre."""
+        return remaining_time(self._started, self._target)
 
     def step(self, fraction: float, detail: str) -> None:
         """Wie weit der Lauf ist und woran er gerade rechnet."""

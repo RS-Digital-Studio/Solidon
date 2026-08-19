@@ -12,7 +12,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, cast
 
 from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPixmap
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -36,13 +36,21 @@ from PySide6.QtWidgets import (
 
 from app.core import drawing
 from app.core.drawing import Theme as DrawingTheme
-from app.core.errors import AppError
+from app.core.errors import (
+    REPAIR_AND_RETRY,
+    SCALE_TO_FIT,
+    SHOW_LOCATIONS,
+    SPLIT_MODEL,
+    Action,
+    AppError,
+)
 from app.core.log import get_logger
 from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
 from app.core.units import LengthUnit
 from app.i18n import format_decimal, tr
+from app.ui.dialogs import handlers_of
 from app.ui.icons import icon
 from app.ui.labels import (
     compact_length,
@@ -51,6 +59,7 @@ from app.ui.labels import (
     group_title,
     length,
     localised,
+    value_line,
     volume,
 )
 from app.ui.overlay import LEFT_WIDTH
@@ -85,6 +94,43 @@ def _by_severity(findings: Iterable[Finding]) -> list[Finding]:
     lesbar, und die erzählt, an welcher Stelle etwas schiefging.
     """
     return sorted(findings, key=lambda entry: SEVERITY_ORDER.get(entry.severity, 3))
+
+
+#: Was gegen einen Befund hilft, je Befundkennung.
+#:
+#: **Ein Befund, der nur sagt, was nicht stimmt, ist die halbe Antwort.** §2.7
+#: verlangt drei Teile — was nicht ging, warum, und was jetzt möglich ist —,
+#: und der letzte fehlte hier ganz: Der Prüfbericht sagte „Das Objekt steht
+#: über den Bauraum hinaus" und hörte auf. Dabei waren die Handlungen dazu
+#: vollständig gebaut. Sie hingen an ``OutOfBuildVolume``, einer Ausnahme, die
+#: **niemand wirft** — Bauraum ist ein Bericht und keine Sperre (§29), und
+#: damit war der einzige Weg zu drei fertigen Vorschlägen zugemauert.
+#:
+#: Die Kennungen sind stabil (``Finding.code``), also ist diese Tabelle keine
+#: Textsuche über Meldungen. Was hier fehlt, bekommt kein Menü — lieber keins
+#: als eines, das nichts tut.
+FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
+    "arrange.out_of_build_volume": (SPLIT_MODEL, SCALE_TO_FIT),
+    "export.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+    "ingest.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+}
+
+
+def as_error(finding: Finding) -> AppError:
+    """Einen Befund so verpacken, dass die Fehlerhandlungen ihn annehmen.
+
+    Die Handler des Fensters (``error_handlers``) arbeiten auf einem
+    ``AppError``, weil sie aus dem Fehlerdialog kommen. Ein Befund ist keiner
+    — er trägt aber genau die zwei Angaben, die sie lesen: den Körper und die
+    Zahlen. Sie zweimal zu schreiben, einmal für Fehler und einmal für
+    Befunde, hieße zwei Wahrheiten über dieselbe Handlung.
+    """
+    return AppError(
+        title=finding.message,
+        object_id=finding.object_id,
+        op_id=finding.op_id,
+        values=dict(finding.values),
+    )
 
 
 #: Farbe der zurückgenommenen Schritte im Verlauf — dieselbe wie für einen
@@ -1055,6 +1101,9 @@ class ReportPanel(QWidget):
         # dass ein Doppelklick dann zweimal fährt, ist dasselbe Ziel.
         self.list.itemClicked.connect(self._on_activated)
         self.list.itemActivated.connect(self._on_activated)
+        # Und was dagegen hilft, steht im Kontextmenü — siehe :meth:`_on_menu`.
+        self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(self._on_menu)
         self.summary = QLabel(tr("Keine Befunde."), self)
         self.summary.setWordWrap(True)
         # Die Kennzahlen darunter: was der Bericht in Sätzen sagt, hier als
@@ -1246,7 +1295,7 @@ class ReportPanel(QWidget):
         # §22.5: woher eine Zahl kommt, ist Teil des Befunds und wird nie dem
         # Leser zum Annehmen überlassen — eine Schätzung ist keine Messung.
         details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]
-        details.extend(f"{key}: {value}" for key, value in finding.values.items())
+        details.extend(value_line(key, value) for key, value in finding.values.items())
         item.setToolTip(" · ".join(details))
         self.list.addItem(item)
 
@@ -1331,6 +1380,44 @@ class ReportPanel(QWidget):
     def _on_activated(self, item: QListWidgetItem) -> None:
         finding: Finding = item.data(Qt.ItemDataRole.UserRole)
         self.findingActivated.emit(finding)
+
+    def _on_menu(self, position: QPoint) -> None:
+        """Was gegen diesen Befund hilft — als anklickbare Handlung (§2.7).
+
+        Der Bericht sagte, was nicht stimmt, und hörte da auf. „Das Objekt
+        steht über den Bauraum hinaus" ist ein Satz mit einer offensichtlichen
+        Antwort — teilen oder verkleinern —, und beide Handlungen gab es
+        längst: Sie hingen an ``OutOfBuildVolume``, einer Ausnahme, die
+        **niemand wirft**. Drei Vorschläge, vollständig gebaut, nie angeboten.
+
+        Angeboten wird nur, wofür das Fenster einen Handler hat, wie im
+        Fehlerdialog auch (:func:`app.ui.dialogs.offered_actions`). Ein Befund
+        ohne Handlung bekommt kein leeres Menü — das wäre ein Klick, der
+        Auskunft verspricht und keine gibt.
+        """
+        item = self.list.itemAt(position)
+        if item is None:
+            return
+        finding: Finding = item.data(Qt.ItemDataRole.UserRole)
+        offers = FINDING_ACTIONS.get(finding.code, ())
+        handlers = handlers_of(self)
+        offered = [action for action in offers if action.id in handlers]
+        if not offered:
+            return
+
+        menu = QMenu(self)
+        chosen: dict[Any, Any] = {}
+        for action in offered:
+            chosen[menu.addAction(str(action.label))] = action
+        # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
+        # None. Dieselbe Notlüge wie bei ``currentItem`` in der Palette.
+        picked = cast(QAction | None, menu.exec(self.list.mapToGlobal(position)))
+        if picked is None:
+            return
+        # Die Handler des Fensters arbeiten auf einem ``AppError`` — sie
+        # kommen aus dem Fehlerdialog. Ein Befund ist keiner, trägt aber
+        # dieselben zwei Angaben, die sie brauchen: den Körper und die Zahlen.
+        handlers[chosen[picked].id](as_error(finding))
 
 
 class ChatPlaceholder(QWidget):

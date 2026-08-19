@@ -12,6 +12,7 @@ Kommandozeile, sobald sie deklariert ist (§10).
 from __future__ import annotations
 
 import platform
+import time
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from dataclasses import replace
@@ -165,7 +166,7 @@ from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import MENU_GROUPS, demo_line, feature_label, length
 from app.ui.leash import WorkerLeash
-from app.ui.loading import LoadingVeil
+from app.ui.loading import LoadingVeil, remaining_time
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
 from app.ui.op_dialog import OperationDialog, SketchUseDialog
@@ -709,6 +710,11 @@ class MainWindow(QMainWindow):
         """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
         Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
         self._announcement = ""
+        self._run_started: float | None = None
+        """Wann der laufende Lauf begann — für die Restzeitschätzung (§2.8).
+
+        Am Fenster und nicht am Balken: Der Balken kennt nur seinen Wert,
+        und aus einem Wert allein lässt sich nicht hochrechnen."""
         """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
         Fortschritt legt sich darüber und gibt es danach wieder frei."""
         self._menus: list[QMenu] = []
@@ -5195,9 +5201,21 @@ class MainWindow(QMainWindow):
     def _on_progress(self, fraction: float, text: str) -> None:
         self.progress.setValue(int(fraction * 100))
         self.veil.step(fraction, text)
-        # Ein leerer Text heißt, der Lauf ist vorbei; dann kommt zurück, was
-        # zuletzt zu sagen war (§2.8).
-        self.status_message.setText(text or self._announcement)
+        if not text:
+            # Ein leerer Text heißt, der Lauf ist vorbei; dann kommt zurück,
+            # was zuletzt zu sagen war (§2.8).
+            self._run_started = None
+            self.status_message.setText(self._announcement)
+            return
+        if self._run_started is None:
+            self._run_started = time.monotonic()
+        # **Über zehn Sekunden zusätzlich eine Schätzung** — die Zeile aus der
+        # Wartezeit-Tabelle galt bisher für genau den Fall nicht, für den sie
+        # geschrieben ist. Sie hing am Ladeschleier, und den gibt es nur bei
+        # leerem Bild; bei jeder langen Rechnung an einem geladenen Modell
+        # stand hier Prozent ohne jede Zeitangabe.
+        left_over = remaining_time(self._run_started, fraction)
+        self.status_message.setText(f"{text}  ·  {left_over}" if left_over else text)
 
     def _on_busy(self, busy: bool) -> None:
         # Agent und Trennebenensuche können gleichzeitig laufen; dann bleiben
@@ -5351,14 +5369,29 @@ class MainWindow(QMainWindow):
     def _scale_after_error(self, error: AppError) -> None:
         """Auf den Bauraum verkleinern — mit dem Faktor, der wirklich passt.
 
-        Der Fehler kennt beide Größen; sie hier neu zu raten wäre eine zweite
-        Wahrheit. Ein Prozent Luft, damit das Teil nicht exakt an der Wand des
-        Bauraums klebt.
+        **Der Knopf tat nichts, und das war nicht zu sehen.** Gelesen wurden
+        ``build_volume`` und ``size`` aus den Werten des Fehlers — zwei
+        Schlüssel, die **keine** Ausnahme und **kein** Befund je trägt. Die
+        Bedingung darunter griff also immer, und die Methode kehrte still
+        zurück: ein Vorschlag nach Regel 17, der optisch erfüllt und
+        funktional hohl war, wie „Reparieren und erneut versuchen" vor ihm.
+
+        Gerechnet wird jetzt aus Profil und Szene. Das ist keine zweite
+        Wahrheit, sondern dieselbe, aus der auch ``check_build_volume``
+        rechnet — und sie ist immer da, gleich ob die Handlung aus einem
+        Fehlerdialog kommt oder aus dem Kontextmenü des Prüfberichts.
+
+        Ein Prozent Luft, damit das Teil nicht exakt an der Wand klebt.
         """
-        volume = error.values.get("build_volume")
-        size = error.values.get("size")
         object_id = self._object_of(error)
-        if object_id is None or not volume or not size:
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result and object_id else None
+        if object_id is None or entry is None:
+            return
+        volume = self.session.profile.printer.build_volume
+        size = as_mesh_data(entry.mesh).bounds.size
+        needed_any = [needed for needed in size if needed > 0.0]
+        if not needed_any:
             return
         factor = min(
             available / needed

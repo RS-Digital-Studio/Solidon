@@ -407,7 +407,14 @@ def check_before_export(
                 )
             )
 
-    findings.extend(check_build_volume(meshes, profile, [entry.plate for entry in objects]))
+    findings.extend(
+        check_build_volume(
+            meshes,
+            profile,
+            [entry.plate for entry in objects],
+            [entry.id for entry in objects],
+        )
+    )
     findings.extend(_licence_findings(sources))
     return findings
 
