@@ -410,6 +410,21 @@ nav.lang a.cta:hover {
 
 .download b { color: var(--fg); }
 
+/* Der Zähler bis zur Demo. Er steht unter dem Termin, nicht an seiner Stelle:
+   der Satz darüber nennt Tag und Uhrzeit auch dann, wenn kein Skript läuft,
+   und dann bleibt dieser Absatz schlicht verborgen.
+
+   ``tabular-nums`` ist hier kein Feinschliff, sondern der Unterschied
+   zwischen einer Zeile und einem Zappeln: ohne das ändert jede wechselnde
+   Sekunde die Breite der Ziffer, und der halbe Kasten rückt im Sekundentakt
+   hin und her. */
+.download .countdown {
+  margin: 0.4rem 0 0;
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

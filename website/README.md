@@ -4,12 +4,15 @@ Statische Seiten, **keine externen Ressourcen**. Alles in diesem Ordner wird
 unverändert hochgeladen; einen Build-Schritt gibt es nicht.
 
 Ein einziges Skript liegt dabei, `site.js`, und es kommt von hier — kein CDN,
-keine Bibliothek, keine Schriftart von außen, kein Zählpixel. Es tut genau
-eines: die Sprungliste der Funktionsseite markiert den Block, der gerade
-gelesen wird. Ohne das Skript bleibt sie eine gewöhnliche Sprungliste, und
-sonst ändert sich nichts. `tests/test_website.py` prüft nicht mehr auf „kein
-JavaScript", sondern auf den Teil, der die Zusage der Seite trägt: **nichts von
-außen**.
+keine Bibliothek, keine Schriftart von außen, kein Zählpixel. Es tut zwei
+Dinge, und beide sind Zugabe: die Sprungliste der Funktionsseite markiert den
+Block, der gerade gelesen wird, und der Download-Kasten der Startseite zählt
+die Zeit bis zur Demo herunter. Ohne das Skript bleibt die Liste eine
+gewöhnliche Sprungliste, und der Kasten nennt Tag und Uhrzeit im Klartext, wie
+er es ohnehin tut — der Zähler steht als `hidden` daneben und wird nur
+sichtbar, wenn ihn jemand füllt. `tests/test_website.py` prüft nicht mehr auf
+„kein JavaScript", sondern auf den Teil, der die Zusage der Seite trägt:
+**nichts von außen**.
 
 Bewegung entsteht ausschließlich aus CSS: Übergänge beim Zeigen und
 scroll-gesteuerte Zeitachsen (`animation-timeline: view()`) beim Lesen. Der
@@ -29,7 +32,7 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `en/index.html` | Startseite englisch |
 | `funktionen.html`, `en/features.html` | Funktionsseite — die zwölf Blöcke mit Bildern, dazu die Sprungliste |
 | `ki-modelle.html`, `en/ai-models.html` | Was ein Modell aus Meshy, Tripo oder Rodin noch braucht |
-| `site.js` | Markiert in der Sprungliste den Block, der gerade gelesen wird — das einzige Skript |
+| `site.js` | Markiert in der Sprungliste den gelesenen Block und zählt im Download-Kasten die Zeit bis zur Demo — das einzige Skript |
 | `handbuch.html`, `en/manual.html` | Handbuch — erzeugt von `tools/make_manual.py`, nie von Hand ändern |
 | `handbuch/` | Abbildungen des Handbuchs, je Sprache ein Ordner |
 | `icon.svg` | Anwendungssymbol als Favicon — erzeugt von `tools/make_icon.py` |

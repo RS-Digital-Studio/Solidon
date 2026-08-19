@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 import struct
 import tomllib
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -375,3 +376,70 @@ def test_no_self_arranging_grid_stops_shrinking_above_phone_width() -> None:
         "Ein auto-fit-Raster hört über Telefonbreite auf zu schrumpfen und "
         f"wird dort abgeschnitten — min(…, 100%) um das Mindestmaß: {too_wide}"
     )
+
+
+#: Der Zähler im Download-Kasten — Zielzeitpunkt und übersetzter Rahmensatz.
+COUNTDOWN = re.compile(r'data-countdown="([^"]+)"\s+data-template="([^"]+)"')
+
+
+def _start_pages() -> list[Path]:
+    """Alle Startseiten, auch die vier, die `PAGES` nicht kennt.
+
+    `PAGES` führt Deutsch und Englisch, weil nur dort die Kennzahlenleiste
+    geprüft wird. Der Zähler steht auf allen sechs, und genau darum wird hier
+    gesucht statt aufgezählt: eine siebte Sprache ist mitgeprüft, sobald ihr
+    Ordner ein `index.html` enthält.
+    """
+    return sorted(WEBSITE.glob("index.html")) + sorted(WEBSITE.glob("*/index.html"))
+
+
+def test_every_start_page_counts_down_to_the_same_moment() -> None:
+    """Sechs Sprachfassungen, ein Termin.
+
+    Der Zielzeitpunkt steht im Markup, nicht im Skript — sonst stünde er an
+    einer Stelle, die keine Sprachfassung liest. Der Preis dafür ist, dass er
+    sechsmal dasteht, und der Fehler, der dann passiert, ist immer derselbe:
+    fünf werden geändert und eine nicht.
+
+    Die **Zeitzone gehört dazu**. Ohne sie deutet jeder Browser die Angabe als
+    Ortszeit seines Besuchers, und der Zähler in Lissabon liefe eine Stunde
+    hinter dem in Berlin — beide auf denselben Satz zeigend, der eine Uhrzeit
+    nennt.
+    """
+    pages = _start_pages()
+    assert len(pages) >= 2, "keine Startseiten gefunden — stimmt der Pfad?"
+    moments = {}
+    for page in pages:
+        name = page.relative_to(WEBSITE).as_posix()
+        found = COUNTDOWN.findall(page.read_text(encoding="utf-8"))
+        assert len(found) == 1, f"{name} trägt {len(found)} Zähler, erwartet ist genau einer"
+        moment, template = found[0]
+        stamp = datetime.fromisoformat(moment)
+        assert stamp.tzinfo is not None, (
+            f"{name} nennt den Zeitpunkt ohne Zeitzone ({moment}) — "
+            "jeder Browser deutet ihn dann als seine eigene Ortszeit"
+        )
+        assert "{rest}" in template, (
+            f"{name} hat einen Rahmensatz ohne Platzhalter ({template!r}) — "
+            "der Zähler hätte nichts, wohin er seine Zeit schreiben könnte"
+        )
+        moments[name] = stamp
+    assert len(set(moments.values())) == 1, (
+        f"die Startseiten zählen auf verschiedene Termine: {moments}"
+    )
+
+
+def test_every_page_with_a_countdown_loads_the_script_that_runs_it() -> None:
+    """Ein Zähler ohne Skript ist ein leerer Absatz.
+
+    Er steht als `hidden` im Markup und wird erst sichtbar, wenn `site.js`
+    ihn füllt. Fehlt die Einbindung, fällt das niemandem auf: die Seite sieht
+    aus wie vorher, nur zählt nichts. Ein Fehler, der nichts kaputt macht,
+    wird sonst erst bemerkt, wenn der Termin vorbei ist.
+    """
+    for page in _start_pages():
+        text = page.read_text(encoding="utf-8")
+        if "data-countdown" not in text:
+            continue
+        name = page.relative_to(WEBSITE).as_posix()
+        assert 'src="/site.js"' in text, f"{name} trägt einen Zähler, bindet aber site.js nicht ein"

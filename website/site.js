@@ -1,14 +1,15 @@
 /* Solidon3D — das Einzige, was diese Website ohne Skript nicht kann.
  *
- * Die Sprungliste der Funktionsseite markiert den Block, der gerade gelesen
- * wird. Alles andere bleibt CSS: die Bewegung der Zeichnungen läuft über
- * scroll-gesteuerte Zeitachsen (`animation-timeline: view()`), und die
- * gehören dorthin — sie laufen im Compositor, ein Skript müsste bei jedem
- * Bildlauf rechnen.
+ * Zwei Dinge stehen hier, und beide sind Zugabe: die Sprungliste der
+ * Funktionsseite markiert den Block, der gerade gelesen wird, und der
+ * Download-Kasten der Startseite zählt die Zeit bis zur Demo herunter. Alles
+ * andere bleibt CSS: die Bewegung der Zeichnungen läuft über scroll-gesteuerte
+ * Zeitachsen (`animation-timeline: view()`), und die gehören dorthin — sie
+ * laufen im Compositor, ein Skript müsste bei jedem Bildlauf rechnen.
  *
- * Ohne diese Datei bleibt die Liste eine gewöhnliche Sprungliste: jeder Link
- * springt, nichts fehlt, nichts ist unsichtbar. Wer sie blockt, verliert eine
- * Markierung und sonst nichts.
+ * Ohne diese Datei bleibt die Liste eine gewöhnliche Sprungliste, und der
+ * Kasten nennt Tag und Uhrzeit im Klartext, wie er es ohnehin tut. Wer das
+ * Skript blockt, verliert eine Markierung und einen Zähler — keine Aussage.
  */
 (() => {
   "use strict";
@@ -50,4 +51,89 @@
   );
 
   for (const target of links.keys()) watcher.observe(target);
+})();
+
+/* Der Zähler bis zur Demo im Download-Kasten der Startseite.
+ *
+ * Der Zielzeitpunkt steht im Markup (`data-countdown`), nicht hier: sechs
+ * Sprachfassungen tragen ihn, und eine Zahl in einem gemeinsamen Skript
+ * wäre die siebte Stelle, an der er sich ändern müsste. Der Rahmensatz
+ * kommt aus demselben Grund von dort (`data-template`) — er ist übersetzt.
+ *
+ * Die Einheiten formatiert `Intl`. Damit heißt es „1 Stunde" und nicht
+ * „1 Stunden", und zwar in jeder Sprache, ohne dass hier eine Liste von
+ * Pluralformen läge. Kann ein Browser das nicht, bleibt der Kasten so, wie
+ * er ohne Skript aussieht.
+ */
+(() => {
+  "use strict";
+
+  const box = document.querySelector("[data-countdown]");
+  if (!box) return;
+
+  const target = Date.parse(box.dataset.countdown);
+  if (Number.isNaN(target) || !box.dataset.template) return;
+
+  const language = document.documentElement.lang || "de";
+  let unit;
+  let join;
+  try {
+    unit = (value, name) =>
+      new Intl.NumberFormat(language, {
+        style: "unit",
+        unit: name,
+        unitDisplay: "long",
+      }).format(value);
+    join = new Intl.ListFormat(language, { style: "short", type: "unit" });
+    unit(1, "hour");
+  } catch {
+    return;
+  }
+
+  /* Wer ruhige Seiten eingestellt hat, bekommt keine Sekunden: eine Ziffer,
+     die im Blickfeld einmal je Sekunde springt, ist genau die Bewegung, die
+     diese Einstellung meint. Die Minute genügt — bis zum Termin sind es
+     Stunden. */
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Der Wecker steht vor `tick`, nicht dahinter: Wird die Seite **nach** dem
+     Termin geladen, räumt der erste Schlag ihn sofort wieder ab — und griffe
+     dabei auf eine Bindung zu, die erst zwei Zeilen später entsteht. Das ist
+     kein theoretischer Fall, sondern der Normalfall ab dem Zieltag. */
+  let timer = null;
+
+  const tick = () => {
+    const raw = target - Date.now();
+    /* Ruhige Seiten zählen in Minuten, und zwar aufgerundet: abgerundet
+       stünde die letzte Minute lang „noch 0 Minuten" da, was zugleich falsch
+       aussieht und falsch ist — es ist ja noch etwas übrig. */
+    const rest = calm ? Math.ceil(raw / 60000) * 60 : Math.floor(raw / 1000);
+    if (raw <= 0) {
+      /* Vorbei heißt weg. Was dann gilt, sagt der Kasten selbst — ein
+         Zähler, der auf null stehen bleibt, behauptete etwas über einen
+         Download, den er nicht kennt. */
+      box.hidden = true;
+      clearInterval(timer);
+      return;
+    }
+    const days = Math.floor(rest / 86400);
+    const hours = Math.floor(rest / 3600) % 24;
+    const minutes = Math.floor(rest / 60) % 60;
+    const seconds = rest % 60;
+    const parts = [];
+    if (days > 0) {
+      parts.push(unit(days, "day"));
+      if (hours > 0) parts.push(unit(hours, "hour"));
+    } else {
+      if (hours > 0) parts.push(unit(hours, "hour"));
+      /* Unter einer Minute bleiben die Sekunden allein stehen. */
+      if (hours > 0 || minutes > 0) parts.push(unit(minutes, "minute"));
+      if (!calm) parts.push(unit(seconds, "second"));
+    }
+    box.textContent = box.dataset.template.replace("{rest}", join.format(parts));
+    box.hidden = false;
+  };
+
+  tick();
+  if (!box.hidden) timer = setInterval(tick, calm ? 30000 : 1000);
 })();
