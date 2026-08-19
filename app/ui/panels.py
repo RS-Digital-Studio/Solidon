@@ -9,10 +9,10 @@ Regel 2).
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any
+from typing import Any, cast
 
 from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPixmap
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -36,13 +36,21 @@ from PySide6.QtWidgets import (
 
 from app.core import drawing
 from app.core.drawing import Theme as DrawingTheme
-from app.core.errors import AppError
+from app.core.errors import (
+    REPAIR_AND_RETRY,
+    SCALE_TO_FIT,
+    SHOW_LOCATIONS,
+    SPLIT_MODEL,
+    Action,
+    AppError,
+)
 from app.core.log import get_logger
 from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
 from app.core.units import LengthUnit
 from app.i18n import format_decimal, tr
+from app.ui.dialogs import handlers_of
 from app.ui.icons import icon
 from app.ui.labels import (
     compact_length,
@@ -51,10 +59,11 @@ from app.ui.labels import (
     group_title,
     length,
     localised,
+    value_line,
     volume,
 )
 from app.ui.overlay import LEFT_WIDTH
-from app.ui.palette import SEVERITY_ENCODING
+from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
 from app.ui.style import NORMAL, ROOMY, TIGHT, set_level
 
 _log = get_logger(__name__)
@@ -85,6 +94,43 @@ def _by_severity(findings: Iterable[Finding]) -> list[Finding]:
     lesbar, und die erzählt, an welcher Stelle etwas schiefging.
     """
     return sorted(findings, key=lambda entry: SEVERITY_ORDER.get(entry.severity, 3))
+
+
+#: Was gegen einen Befund hilft, je Befundkennung.
+#:
+#: **Ein Befund, der nur sagt, was nicht stimmt, ist die halbe Antwort.** §2.7
+#: verlangt drei Teile — was nicht ging, warum, und was jetzt möglich ist —,
+#: und der letzte fehlte hier ganz: Der Prüfbericht sagte „Das Objekt steht
+#: über den Bauraum hinaus" und hörte auf. Dabei waren die Handlungen dazu
+#: vollständig gebaut. Sie hingen an ``OutOfBuildVolume``, einer Ausnahme, die
+#: **niemand wirft** — Bauraum ist ein Bericht und keine Sperre (§29), und
+#: damit war der einzige Weg zu drei fertigen Vorschlägen zugemauert.
+#:
+#: Die Kennungen sind stabil (``Finding.code``), also ist diese Tabelle keine
+#: Textsuche über Meldungen. Was hier fehlt, bekommt kein Menü — lieber keins
+#: als eines, das nichts tut.
+FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
+    "arrange.out_of_build_volume": (SPLIT_MODEL, SCALE_TO_FIT),
+    "export.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+    "ingest.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+}
+
+
+def as_error(finding: Finding) -> AppError:
+    """Einen Befund so verpacken, dass die Fehlerhandlungen ihn annehmen.
+
+    Die Handler des Fensters (``error_handlers``) arbeiten auf einem
+    ``AppError``, weil sie aus dem Fehlerdialog kommen. Ein Befund ist keiner
+    — er trägt aber genau die zwei Angaben, die sie lesen: den Körper und die
+    Zahlen. Sie zweimal zu schreiben, einmal für Fehler und einmal für
+    Befunde, hieße zwei Wahrheiten über dieselbe Handlung.
+    """
+    return AppError(
+        title=finding.message,
+        object_id=finding.object_id,
+        op_id=finding.op_id,
+        values=dict(finding.values),
+    )
 
 
 #: Farbe der zurückgenommenen Schritte im Verlauf — dieselbe wie für einen
@@ -212,6 +258,27 @@ def _origin_text(created_by: int | None, document: Document | None) -> str:
     return text
 
 
+def _empty_objects_text() -> str:
+    """Was in der leeren Objektliste steht.
+
+    Sie war ein stummer Kasten. Ein neues Projekt beginnt genau hier, und wer
+    zum ersten Mal davorsitzt, sieht drei leere Flächen und keinen Anfang —
+    die Parameterleiste daneben sagt seit jeher, wozu sie da ist.
+    """
+    return tr(
+        "Noch keine Objekte. Über „Erzeugen“ entsteht ein Körper, "
+        "„Modell einfügen“ liest eine Datei ein."
+    )
+
+
+def _empty_history_text() -> str:
+    """Was im leeren Verlauf steht — und wozu er gut ist."""
+    return tr(
+        "Noch keine Schritte. Jede Änderung steht hier als eine Zeile "
+        "und lässt sich mit Strg+Z zurücknehmen."
+    )
+
+
 class ObjectTree(QWidget):
     """Objekte der Szene mit ihren Merkmalen, Herkunft und Größe (§18.8,
     §18.5).
@@ -230,6 +297,7 @@ class ObjectTree(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.tree = QTreeWidget(self)
+        self.tree.setAccessibleName(tr("Objekte"))
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels([tr("Objekt"), tr("Maße")])
         # Die Maßspalte nimmt, was sie braucht; der Rest gehört den Namen.
@@ -281,8 +349,18 @@ class ObjectTree(QWidget):
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._on_context_menu)
 
+        # Der leere Zustand liegt über dem Baum, nicht darin: eine Zeile im
+        # Baum wäre auswählbar, hätte eine Spalte „Maße" und sähe aus wie ein
+        # Objekt namens „Noch keine Objekte".
+        self._empty = QLabel(_empty_objects_text(), self)
+        self._empty.setWordWrap(True)
+        self._empty.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._empty.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        fit_wrapped(self._empty)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._empty)
         layout.addWidget(self.tree)
 
     def set_hidden(self, hidden: frozenset[ObjectId]) -> None:
@@ -480,6 +558,11 @@ class ObjectTree(QWidget):
         darunter seine hundert Pixel für sich behielt und nichts davon zu
         sehen war.
         """
+        # Der leere Zustand tritt an die Stelle des Baums, nicht daneben: Ein
+        # Satz über einem leeren Rahmen sähe aus, als fehlte darunter etwas.
+        empty = self.tree.topLevelItemCount() == 0
+        self._empty.setVisible(empty)
+        self.tree.setVisible(not empty)
         fit_to_rows(self.tree, self._rows(), room=self._room)
         self.setMinimumHeight(self.sizeHint().height())
         self.updateGeometry()
@@ -840,6 +923,7 @@ class HistoryPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.list = QListWidget(self)
+        self.list.setAccessibleName(tr("Verlauf"))
         self.list.itemDoubleClicked.connect(self._on_activated)
         self.list.setToolTip(tr("Doppelklick öffnet die Operation und ihre Parameter."))
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -849,8 +933,16 @@ class HistoryPanel(QWidget):
         self._bakeable: frozenset[int] = frozenset()
         """Formsitzungen, deren Stand sich festschreiben lässt — also die, die
         noch aus ihren Zügen gerechnet werden."""
+        # Wie beim Objektbaum: ein Satz statt eines stummen Kastens.
+        self._empty = QLabel(_empty_history_text(), self)
+        self._empty.setWordWrap(True)
+        self._empty.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._empty.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        fit_wrapped(self._empty)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._empty)
         layout.addWidget(self.list)
 
     def wanted_height(self) -> int:
@@ -866,6 +958,9 @@ class HistoryPanel(QWidget):
 
     def _fit(self) -> None:
         """So hoch wie der Inhalt, höchstens so hoch wie zugeteilt."""
+        empty = self.list.count() == 0
+        self._empty.setVisible(empty)
+        self.list.setVisible(not empty)
         fit_to_rows(self.list, self.list.count(), room=self._room)
         # Dieselbe Stelle wie im Objektbaum: die Liste ist bemessen, die Karte
         # um sie herum meldete weiter ihre Mindesthöhe und wurde auf zehn Pixel
@@ -992,6 +1087,7 @@ class ReportPanel(QWidget):
         self._alerts = 0
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
         self.list = QListWidget(self)
+        self.list.setAccessibleName(tr("Befunde"))
         # §2.7 schreibt die Sätze, die hier stehen — im schmalen rechten
         # Bereich endeten sie mitten im Wort hinter einer horizontalen
         # Bildlaufleiste. Umbruch statt Abschneiden: die Leiste bleibt aus,
@@ -1005,6 +1101,9 @@ class ReportPanel(QWidget):
         # dass ein Doppelklick dann zweimal fährt, ist dasselbe Ziel.
         self.list.itemClicked.connect(self._on_activated)
         self.list.itemActivated.connect(self._on_activated)
+        # Und was dagegen hilft, steht im Kontextmenü — siehe :meth:`_on_menu`.
+        self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(self._on_menu)
         self.summary = QLabel(tr("Keine Befunde."), self)
         self.summary.setWordWrap(True)
         # Die Kennzahlen darunter: was der Bericht in Sätzen sagt, hier als
@@ -1020,8 +1119,10 @@ class ReportPanel(QWidget):
         # sind (§17.3).
         self.search = QLineEdit(self)
         self.search.setPlaceholderText(tr("Befunde durchsuchen …"))
+        self.search.setAccessibleName(tr("Befunde durchsuchen"))
         self.search.textChanged.connect(self._refilter)
         self.severity = QComboBox(self)
+        self.severity.setAccessibleName(tr("Nach Schweregrad filtern"))
         self.severity.addItem(tr("Alle"), "")
         for name in ("error", "warning", "info"):
             self.severity.addItem(f"{SEVERITY_MARKER[name]} {_severity_label(name)}", name)
@@ -1035,8 +1136,19 @@ class ReportPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         layout.addWidget(self.summary)
+        # Wenn der Filter alles wegnimmt, steht sonst ein leerer Rahmen da und
+        # sagt nicht, ob nichts passt oder ob der Bericht leer ist. Ein Label
+        # und kein Listeneintrag: gefiltert wird über ``setHidden``, die Liste
+        # bleibt gefüllt, und ein Eintrag darin wäre beim nächsten Filtern im
+        # Weg.
+        self._nothing = QLabel("", self)
+        self._nothing.setWordWrap(True)
+        self._nothing.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        self._nothing.setVisible(False)
+
         layout.addWidget(self.facts)
         layout.addLayout(filter_row)
+        layout.addWidget(self._nothing)
         layout.addWidget(self.list)
 
     def _refilter(self) -> None:
@@ -1055,6 +1167,21 @@ class ReportPanel(QWidget):
                 not wanted or finding.severity == wanted
             )
             item.setHidden(not matches)
+
+        visible = sum(1 for row in range(self.list.count()) if not self.list.item(row).isHidden())
+        if visible or not self.list.count():
+            self._nothing.setVisible(False)
+            return
+        begriff = self.search.text().strip()
+        stufe = self.severity.currentText().strip()
+        if begriff and wanted:
+            satz = tr("Kein Befund passt zu „{begriff}“ und „{stufe}“.")
+        elif begriff:
+            satz = tr("Kein Befund passt zu „{begriff}“.")
+        else:
+            satz = tr("Kein Befund dieser Stufe: „{stufe}“.")
+        self._nothing.setText(str(satz).format(begriff=begriff, stufe=stufe))
+        self._nothing.setVisible(True)
 
     def show_result(self, result: EvaluationResult | None) -> None:
         # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.
@@ -1147,19 +1274,28 @@ class ReportPanel(QWidget):
 
     def _append(self, finding: Finding) -> None:
         """Einen Befund als Eintrag anhängen."""
-        encoding = SEVERITY_ENCODING[finding.severity]
         item = QListWidgetItem(_line_for(finding, self._names))
+        # Die Farbe folgt der Fläche, auf der sie landet. Die Rollenfarben sind
+        # für den dunklen Untergrund gewählt; auf der weißen Liste des hellen
+        # Themas brachte Bernstein 2,22 und das Hinweisblau 2,67 — jede Zeile
+        # des Prüfberichts stand damit unter der Lesbarkeitsgrenze. Gefragt
+        # wird die Liste selbst und nicht das eingestellte Thema: sie weiß, auf
+        # was hier geschrieben wird.
+        tone = QColor(
+            text_colour(
+                cast(Role, finding.severity),
+                self.list.palette().base().color().name(),
+            )
+        )
         # Die Form trägt den Schweregrad, die Farbe verstärkt ihn nur: ein
         # Dreieck bleibt ein Dreieck, auch wo die Farbe nicht ankommt.
-        item.setIcon(
-            icon(f"severity-{finding.severity}", self.list, colour=QColor(encoding.colour))
-        )
+        item.setIcon(icon(f"severity-{finding.severity}", self.list, colour=tone))
         item.setData(Qt.ItemDataRole.UserRole, finding)
-        item.setForeground(QColor(encoding.colour))
+        item.setForeground(tone)
         # §22.5: woher eine Zahl kommt, ist Teil des Befunds und wird nie dem
         # Leser zum Annehmen überlassen — eine Schätzung ist keine Messung.
         details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]
-        details.extend(f"{key}: {value}" for key, value in finding.values.items())
+        details.extend(value_line(key, value) for key, value in finding.values.items())
         item.setToolTip(" · ".join(details))
         self.list.addItem(item)
 
@@ -1244,6 +1380,44 @@ class ReportPanel(QWidget):
     def _on_activated(self, item: QListWidgetItem) -> None:
         finding: Finding = item.data(Qt.ItemDataRole.UserRole)
         self.findingActivated.emit(finding)
+
+    def _on_menu(self, position: QPoint) -> None:
+        """Was gegen diesen Befund hilft — als anklickbare Handlung (§2.7).
+
+        Der Bericht sagte, was nicht stimmt, und hörte da auf. „Das Objekt
+        steht über den Bauraum hinaus" ist ein Satz mit einer offensichtlichen
+        Antwort — teilen oder verkleinern —, und beide Handlungen gab es
+        längst: Sie hingen an ``OutOfBuildVolume``, einer Ausnahme, die
+        **niemand wirft**. Drei Vorschläge, vollständig gebaut, nie angeboten.
+
+        Angeboten wird nur, wofür das Fenster einen Handler hat, wie im
+        Fehlerdialog auch (:func:`app.ui.dialogs.offered_actions`). Ein Befund
+        ohne Handlung bekommt kein leeres Menü — das wäre ein Klick, der
+        Auskunft verspricht und keine gibt.
+        """
+        item = self.list.itemAt(position)
+        if item is None:
+            return
+        finding: Finding = item.data(Qt.ItemDataRole.UserRole)
+        offers = FINDING_ACTIONS.get(finding.code, ())
+        handlers = handlers_of(self)
+        offered = [action for action in offers if action.id in handlers]
+        if not offered:
+            return
+
+        menu = QMenu(self)
+        chosen: dict[Any, Any] = {}
+        for action in offered:
+            chosen[menu.addAction(str(action.label))] = action
+        # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
+        # None. Dieselbe Notlüge wie bei ``currentItem`` in der Palette.
+        picked = cast(QAction | None, menu.exec(self.list.mapToGlobal(position)))
+        if picked is None:
+            return
+        # Die Handler des Fensters arbeiten auf einem ``AppError`` — sie
+        # kommen aus dem Fehlerdialog. Ein Befund ist keiner, trägt aber
+        # dieselben zwei Angaben, die sie brauchen: den Körper und die Zahlen.
+        handlers[chosen[picked].id](as_error(finding))
 
 
 class ChatPlaceholder(QWidget):

@@ -76,6 +76,7 @@ class PartCatalog(QDialog):
 
         self.search = QLineEdit(self)
         self.search.setPlaceholderText(tr("Suchen — zum Beispiel Mutter, Magnet, Kabel"))
+        self.search.setAccessibleName(tr("Bausteine durchsuchen"))
         self.search.textChanged.connect(self.show_parts)
 
         # §2.6 will eine Bibliothek, die man sieht. Als Liste mit bildhohen
@@ -121,6 +122,13 @@ class PartCatalog(QDialog):
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
             ok.setText(tr("Einfügen"))
+        # Er kann nichts einfügen, solange nichts gewählt ist. Vorher stand er
+        # in voller Akzentfarbe da, nahm den Klick an, schloss den Dialog — und
+        # setzte nichts: ``_accept`` rief ``accept()`` auch ohne Baustein. Ein
+        # Knopf, der eine Wirkung verspricht und keine hat, ist die stillste
+        # Art, jemanden ratlos zu machen. Warum er nicht kann, steht daneben:
+        # die Detailspalte sagt „Wählen Sie einen Baustein".
+        self._insert = ok
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 
@@ -168,7 +176,17 @@ class PartCatalog(QDialog):
             self.list.addItem(heading)
             for spec in entries:
                 self.list.addItem(self._item(spec))
+        if not self.list.count() and text.strip():
+            # Ein leeres Raster sagt nicht, ob nichts passt oder ob die Suche
+            # hängt — und die Detailspalte daneben forderte weiter auf, einen
+            # Baustein zu wählen, den es hier nicht gibt.
+            nothing = QListWidgetItem(
+                tr("Kein Baustein passt zu „{begriff}“.").format(begriff=text.strip())
+            )
+            nothing.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.list.addItem(nothing)
         self._stretch_headings()
+        self._show_detail()
 
     def _stretch_headings(self) -> None:
         """Eine Überschrift nimmt die ganze Zeile.
@@ -255,10 +273,12 @@ class PartCatalog(QDialog):
                 return
 
     def _show_detail(self) -> None:
-        """Was rechts steht, folgt der Auswahl links."""
+        """Was rechts steht, folgt der Auswahl links — und der Knopf auch."""
         name = self.chosen()
         spec = next((entry for entry in PARTS.all() if entry.name == name), None)
         self.detail.setText(detail(spec))
+        if self._insert is not None:
+            self._insert.setEnabled(spec is not None)
 
     # --- choosing ---------------------------------------------------------------
 

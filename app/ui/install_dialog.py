@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
@@ -205,6 +206,16 @@ class InstallDialog(QDialog):
         self.state = QLabel(self)
         self.state.setWordWrap(True)
         self.state.setTextFormat(Qt.TextFormat.PlainText)
+        # **Die rohe Ausgabe gehört hinter einen Knopf, nicht in die Zeile.**
+        # Das Statuslabel hing an ``worker.line`` und zeigte damit die
+        # Befehlszeile und jede Zeile, die pip oder winget von sich geben —
+        # gefolgt von „Das hat nicht geklappt.". Wer das liest, weiß danach
+        # weniger als vorher. Der Satz sagt jetzt, was möglich ist; das
+        # Protokoll steht daneben für den, der es weitergeben will.
+        self._details = ""
+        self.details_button = QPushButton(tr("Details anzeigen"), self)
+        self.details_button.setVisible(False)
+        self.details_button.clicked.connect(self._show_details)
         self.progress = QProgressBar(self)
         self.progress.setRange(0, 0)
         self.progress.setVisible(False)
@@ -219,6 +230,7 @@ class InstallDialog(QDialog):
             layout.addWidget(row)
         layout.addWidget(self.progress)
         layout.addWidget(self.state)
+        layout.addWidget(self.details_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(buttons)
 
     # --- running ----------------------------------------------------------------
@@ -228,13 +240,27 @@ class InstallDialog(QDialog):
             return
         self._busy(True)
         self.state.setText(f"{tr('Wird installiert')}: {requirement.title}")
+        self._details = ""
+        self.details_button.setVisible(False)
 
         worker = _Worker(requirement)
         worker.done.connect(self._finished)
-        worker.line.connect(self.state.setText)
+        worker.line.connect(self._note_line)
         worker.finished.connect(self._thread_done)
         self._worker = worker
         worker.start()
+
+    def _note_line(self, line: str) -> None:
+        """Eine Zeile der Paketverwaltung — gesammelt, nicht gezeigt."""
+        self._details = f"{self._details}\n{line}" if self._details else line
+
+    def _show_details(self) -> None:
+        """Das Protokoll, für den der es weitergeben will (§33.2)."""
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("Einzelheiten"))
+        box.setText(tr("Was die Paketverwaltung gemeldet hat:"))
+        box.setDetailedText(self._details)
+        box.exec()
 
     def _finished(self, result: object) -> None:
         assert isinstance(result, install.InstallResult)
@@ -246,6 +272,9 @@ class InstallDialog(QDialog):
             return
         reason = str(result.reason) if result.reason else tr("Das hat nicht geklappt.")
         self.state.setText(f"{result.requirement.title}: {reason}")
+        if result.output:
+            self._details = f"{self._details}\n{result.output}" if self._details else result.output
+        self.details_button.setVisible(bool(self._details))
         _log.info("install of %s did not finish: %s", result.requirement.id, reason)
 
     def _thread_done(self) -> None:

@@ -58,11 +58,24 @@ Dialogs.
 
 Zwei davon sind leicht zu übersehen:
 
-**Der Cache-Schlüssel muss die Parameter enthalten, die *in* der Skizze
-gelesen werden.** Ein Maß in der Skizze darf ein Ausdruck sein; ändert sich der
-Projektparameter dahinter, ändert sich der Skizzentext nicht — die Auswertung
-gäbe das alte Ergebnis zurück. `sketch_parameter_references()` sammelt die
-Namen, `_with_sketch_context()` mischt ihre Werte in den Schlüssel.
+**Der Cache-Schlüssel muss die Parameter enthalten, die *in* einem
+Sammelparameter gelesen werden.** Ein Maß in der Skizze darf ein Ausdruck sein,
+ein Gelenkwinkel einer Stellung auch; ändert sich der Projektparameter
+dahinter, ändert sich der **Text** nicht — die Auswertung gäbe das alte
+Ergebnis zurück. `resolve_params` hilft dabei nicht: Sie sieht die **oberste**
+Ebene eines Parametersatzes, und ein Sammelparameter steht dort als *ein* Wert.
+
+`NESTED_REFERENCES` in `scene/evaluate.py` ordnet jedem betroffenen `kind`
+seinen Sammler zu — `sketch` → `sketch_parameter_references()`, `armature` →
+`pose_parameter_references()` —, und `_with_nested_context()` mischt die Werte
+in den Schlüssel. **Eine Zuordnung und keine Bedingung**, weil genau das schon
+einmal schiefging: `"sketch"` stand dort hart verdrahtet, die Pose kam später
+dazu und wurde übersehen — obwohl vier Stellen zusagten, dass ein Gelenkwinkel
+ein Projektparameter sein darf. Wer einen neuen Sammelparameter mit Ausdrücken
+baut, trägt ihn hier ein; das ist eine Zeile und keine Suche.
+
+`strokes` steht bewusst nicht drin: Ein Pinselstrich *ist* eine Koordinate,
+kein Maß, das jemand an einen Parameter hängt.
 
 **Der Agent bekommt den Parameter nicht zu sehen.** Skizzen entstehen über
 benannte Grundformen und Maße, nie über rohe Punktlisten (§26, Leitprinzip 5).

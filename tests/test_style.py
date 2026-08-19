@@ -94,6 +94,75 @@ def test_the_stylesheet_covers_the_states_a_control_has() -> None:
     assert "QPushButton:default" in sheet, "Haupt- und Nebenknopf müssen sich unterscheiden"
 
 
+def test_a_styled_control_keeps_the_parts_qt_stops_drawing() -> None:
+    """Wer die Box anfasst, muss ihre Teile mitliefern.
+
+    Sobald ein Stylesheet an einem ``QSpinBox`` eine Rahmeneigenschaft setzt —
+    und die Regel, die allen Eingabefeldern ihren Radius gibt, tut das —, hört
+    Qt auf, dessen Unterelemente selbst zu zeichnen. Übrig blieben zwei leere
+    Kästchen mit einem Strich dazwischen, auf jedem Zahlenfeld jedes Dialogs,
+    in beiden Themen; 27 Felder in 13 Dateien. Wer das sieht, hält es für einen
+    Grafikfehler und klickt nicht hin.
+
+    Ein Dreieck aus Rahmenkanten, wie man es in HTML baut, hilft nicht: Qt
+    füllt die Fläche und zeichnet einen hellen Block. Es muss ein Bild sein.
+    """
+    sheet = stylesheet("dark", 10, {"up": "/tmp/up.svg", "down": "/tmp/down.svg"})
+
+    assert "QSpinBox::up-button" in sheet, "die Knöpfe brauchen ihre Fläche"
+    for part in ("up-arrow", "down-arrow"):
+        assert f"QSpinBox::{part}" in sheet, f"kein {part} — das Kästchen bliebe leer"
+    assert sheet.count("image: url(") == 2, "ein Pfeil ohne Bild ist kein Pfeil"
+
+
+def test_the_arrows_follow_the_theme_and_survive_a_missing_cache() -> None:
+    """Die Pfeile sind Dateien, und Dateien können fehlen.
+
+    Sie tragen die Textfarbe ihres Themas, werden also je Thema neu
+    geschrieben. Lässt sich nichts schreiben, bleiben die Knöpfe leer — das ist
+    der Zustand von vorher und kein Grund, eine Anwendung nicht zu starten.
+    """
+    from app.ui.style import arrow_files
+
+    written = arrow_files("dark")
+    assert written is not None
+    assert set(written) == {"up", "down"}
+    for path in written.values():
+        assert Path(path).is_file()
+        assert THEMES["dark"]["text"] in Path(path).read_text(encoding="utf-8")
+
+    assert THEMES["light"]["text"] in Path(arrow_files("light")["up"]).read_text(  # type: ignore[index]
+        encoding="utf-8"
+    )
+
+    # Ohne Pfeile bleibt das Stylesheet ein Stylesheet.
+    assert "image: url(" not in stylesheet("dark", 10, None)
+
+
+def test_a_splitter_handle_can_be_hit_with_a_mouse() -> None:
+    """Ein Bildpunkt Griff ist eine Trennlinie, kein Griff.
+
+    Die Fuge zwischen Bausteinliste und Detailspalte war einen Punkt breit —
+    wer die Spalte verbreitern wollte, musste diesen einen Punkt treffen.
+    """
+    sheet = stylesheet("dark", 10)
+    width = re.search(r"QSplitter::handle:horizontal \{ width: (\d+)px", sheet)
+    assert width is not None, "der Griff hat keine Breite mehr"
+    assert int(width.group(1)) >= NORMAL, "unter zwei Rasterschritten trifft ihn niemand"
+    assert "QSplitter::handle:hover" in sheet, "er sagt nicht, dass er sich ziehen lässt"
+
+
+def test_the_tooltip_wears_the_form_of_the_application() -> None:
+    """Der Hinweis unter dem Zeiger erklärt jeden gesperrten Knopf.
+
+    Er war das letzte Element ohne eigene Form — kantig, randlos, und im hellen
+    Thema auf dem Blassgelb, das Qt von Windows erbt: die einzige Farbe im
+    ganzen hellen Thema, die aus keiner Tabelle dieser Anwendung stammte.
+    """
+    assert "QToolTip" in stylesheet("dark", 10)
+    assert THEMES["light"]["tooltip"] == "#ffffff", "das Blassgelb ist wieder da"
+
+
 def test_both_themes_build_a_stylesheet_out_of_their_own_colours() -> None:
     """Ein Themenwechsel, der nur die Palette umstellt, lässt die Form stehen —
     und die Form trägt hier Farben."""
@@ -280,4 +349,47 @@ def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: o
     assert not offenders, (
         f"Diese Dateien setzen den Hauptknopf noch von Hand: {offenders}. "
         "make_primary() setzt zugleich die Schrift, aus der die Breite folgt."
+    )
+
+
+def test_no_multiline_field_swallows_the_tab_key() -> None:
+    """Ein mehrzeiliges Feld nimmt den Tabulator als Zeichen — und wird damit
+    zur Tastenfalle.
+
+    Im Freischaltdialog stand genau das: Wer ohne Maus arbeitet, kam aus dem
+    Schlüsselfeld nicht mehr heraus, ausgerechnet dort, wo viele ihren
+    Schlüssel aus einer Mail einfügen. Der Chat macht es seit jeher richtig.
+
+    Geprüft am Quelltext: Die zwei Felder leben in zwei Dialogen, und beide zu
+    bauen hieße, ein Sprachmodell und einen Lizenzserver zu brauchen.
+    """
+    offenders = []
+    for path in sorted(UI.glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"(\w+)\s*=\s*QPlainTextEdit\(", source):
+            feld = match.group(1)
+            if f"{feld}.setReadOnly(True)" in source:
+                continue
+            if f"{feld}.setTabChangesFocus(True)" not in source:
+                offenders.append(f"{path.name}:{feld}")
+
+    assert not offenders, (
+        f"Diese Felder schlucken den Tabulator: {offenders}. "
+        "setTabChangesFocus(True) macht daraus einen Weg statt einer Falle."
+    )
+
+
+def test_the_tab_bar_shows_where_the_keyboard_is() -> None:
+    """Die Reiterleiste zeigte den Fokus mit null Bildpunkten Unterschied.
+
+    Wer mit dem Tabulator dorthin kommt, sah nicht, dass er dort ist — und die
+    Pfeiltasten wechselten scheinbar grundlos den Reiter. ``:selected:focus``
+    und nicht ``:focus``: Der Zustand gilt der Leiste, also träfe der zweite
+    alle Reiter zugleich.
+    """
+    sheet = stylesheet("dark", 10)
+
+    assert "QTabBar::tab:selected:focus" in sheet
+    assert "QTabBar::tab:focus {" not in sheet, (
+        "Ein Fokusrahmen an jedem Reiter markiert die ganze Leiste statt einer Stelle."
     )

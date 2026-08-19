@@ -34,6 +34,7 @@ from app.core.errors import Action, ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
+from app.core.scene.expressions import evaluate, is_expression, references
 from app.core.types import BaseParams, Bone, Finding, OpContext, OpResult, Pose, Vec3
 from app.i18n import _
 
@@ -279,20 +280,112 @@ def armature_from_text(text: str) -> list[Bone]:
 
 
 def pose_to_text(poses: Sequence[Pose]) -> str:
-    """Die Stellung als JSON-Text — je Knochen drei Winkel."""
+    """Die gerechnete Stellung als JSON-Text — je Knochen drei Zahlen."""
+    return pose_text({pose.bone: [round(value, 6) for value in pose.angles] for pose in poses})
+
+
+def pose_text(angles: Mapping[str, Sequence[float | str]]) -> str:
+    """Dasselbe Format, aber für Winkel, die auch ein Ausdruck sein dürfen.
+
+    **Ein Schreiber je Format**, und der steht im Kern — das stand schon als
+    Vorsatz im Dialog, und der Dialog hielt ihn trotzdem nicht: Sobald ein
+    Feld einen Ausdruck trug, fiel ``ArmatureField.value`` auf ein eigenes
+    ``json.dumps`` zurück, weil :func:`pose_to_text` nur ``Pose`` nimmt und
+    ``Pose.angles`` drei Zahlen sind. Zwei Schreiber für ein Format driften;
+    hier ist der zweite wieder eingesammelt.
+
+    Ein Ausdruck bleibt **wörtlich** stehen. Ihn beim Schreiben auszurechnen
+    hieße, die Bindung beim ersten Speichern zu verlieren, ohne dass es
+    jemand sähe.
+    """
     return json.dumps(
-        {pose.bone: [round(value, 6) for value in pose.angles] for pose in poses},
-        separators=(",", ":"),
+        {bone: list(values) for bone, values in angles.items()}, separators=(",", ":")
     )
 
 
-def pose_from_text(text: str) -> list[Pose]:
+def pose_parameter_references(text: str) -> frozenset[str]:
+    """Projektparameter, die die Winkel dieser Stellung lesen (§13, §15).
+
+    Das Gegenstück zu :func:`app.core.sketch.serialize.sketch_parameter_references`
+    und aus demselben Grund: Die Auswertung mischt die Werte in den
+    Cache-Schlüssel der Operation. Ein Ausdruck steckt im JSON-Text und ist
+    für ``resolve_params`` unsichtbar — die sieht die **oberste** Ebene eines
+    Parametersatzes, und dort steht der ganze Text als ein Wert. Ohne diese
+    Funktion bliebe nach einer Parameteränderung das alte Ergebnis im Cache:
+    der Arm bliebe gebeugt, während die Zahl daneben schon die neue ist.
+
+    Ein unlesbarer Text hat keine Abhängigkeiten; er scheitert beim Lauf der
+    Operation mit seiner eigenen Meldung.
+
+    **Auch das Skelett kommt hier vorbei**, denn beide Felder von
+    ``PoseParams`` tragen ``kind="armature"``. Sein Text ist eine JSON-*Liste*
+    statt eines Objekts, ``.values()`` gibt es darauf nicht, und der Fang
+    darunter macht daraus ein leeres Ergebnis — richtig, denn ein Knochen ist
+    eine Koordinate und kein Maß, das jemand an einen Parameter hängt. Es
+    steht hier, weil ein stiller ``AttributeError`` als Entwurf aussieht und
+    nicht als Entscheidung.
+    """
+    found: set[str] = set()
+    try:
+        for values in json.loads(text or "{}").values():
+            for angle in values:
+                if is_expression(angle):
+                    found |= references(angle)
+    except (ValueError, TypeError, AttributeError):
+        return frozenset()
+    return frozenset(found)
+
+
+def pose_angles(text: str) -> dict[str, tuple[float | str, ...]]:
+    """Die Winkel, wie sie dastehen — Zahl oder Ausdruck, nichts aufgelöst.
+
+    Für den Dialog, und deshalb **ohne Fehler**: Ein unlesbarer Text ist dort
+    ein leeres Raster und kein Abbruch. Der Dialog soll aufgehen; was nicht zu
+    lesen war, wird beim Übernehmen ohnehin überschrieben.
+
+    Sie ist der fehlende Rückweg. Der Dialog schrieb einen Ausdruck wörtlich —
+    das sagte sein Docstring zu, und beim Schreiben stimmte es. Gelesen wurde
+    über :func:`pose_from_text`, und die gibt drei **Zahlen**: Ein Ausdruck
+    liess sie scheitern, der Fang machte daraus ein leeres Raster, und alle
+    drei Winkel des Knochens standen auf null. Ein Rundlauf durch den Dialog
+    verlor damit genau die Bindung, die er zu erhalten versprach.
+    """
+    found: dict[str, tuple[float | str, ...]] = {}
+    try:
+        for name, entry in json.loads(text or "{}").items():
+            found[str(name)] = tuple(
+                value if is_expression(value) else float(value) for value in entry
+            )
+    except (ValueError, TypeError, AttributeError):
+        return {}
+    return found
+
+
+def pose_from_text(text: str, values: Mapping[str, float] | None = None) -> list[Pose]:
+    """Die Stellung, gelesen und gegen die Projektparameter aufgelöst.
+
+    ``values`` ist eine **Vorgabe und keine Pflicht**: Wer keine Parameter
+    reicht, bekommt weiter, was er immer bekam — sonst müsste jeder Aufrufer
+    mitziehen, auch die, die nie einen Ausdruck sehen.
+
+    **Ohne Erhöhung der ``format_version``, und das ist eine Entscheidung.**
+    Das Schema ändert sich nicht: Ein Pose-Winkel stand schon immer als Wert
+    im JSON, und dass dort jetzt auch ein Ausdruck stehen darf, ist ein
+    größerer Wertebereich und kein neues Feld. Alte Dateien tragen nur Zahlen
+    und lesen unverändert. Rückwärts gilt es nicht — eine Datei mit ``=@x``
+    im Winkel scheitert in einer älteren Fassung an ``float()`` —, und das ist
+    derselbe Fall wie bei jeder Datei, die eine neuere Operation benutzt. Eine
+    Erhöhung würde stattdessen **jede** neue Datei für die alte Fassung
+    sperren, auch die ohne einen einzigen Ausdruck; das wäre der teurere
+    Irrtum. Die Kette in ``migrations.py`` erhöht für Schemaänderungen, nicht
+    für Fähigkeiten.
+    """
     try:
         if not text.strip():
             return []
         return [
-            Pose(bone=str(name), angles=_vector(values))
-            for name, values in json.loads(text).items()
+            Pose(bone=str(name), angles=_angles(entry, values or {}))
+            for name, entry in json.loads(text).items()
         ]
     except (ValueError, KeyError, TypeError, IndexError, AttributeError) as problem:
         # Die naheliegendste Handeingabe — „b1: 0,30,0" — ist kein JSON. Sie
@@ -311,6 +404,23 @@ def pose_from_text(text: str) -> list[Pose]:
 
 def _vector(values: Sequence[float]) -> Vec3:
     return (float(values[0]), float(values[1]), float(values[2]))
+
+
+def _angles(entry: Sequence[float | str], values: Mapping[str, float]) -> Vec3:
+    """Drei Winkel, jeder eine Zahl oder ein Ausdruck darauf.
+
+    Aufgelöst wird **hier** und nicht später: ``Pose.angles`` ist ein Tripel
+    aus Zahlen, und das soll es bleiben — der Text ist die Quelle, der
+    geparste Typ ist das Ergebnis. Dasselbe Verhältnis wie beim Skizzentext,
+    den der Löser auflöst und nicht die Serialisierung.
+
+    Ein Ausdruck auf einen Parameter, den es nicht gibt, wirft die Meldung des
+    Auswerters — **nicht** die des unlesbaren Textes. Die Stellung ist ja
+    gelesen; was fehlt, ist ein Name, und wer den falschen Satz liest, sucht
+    am JSON statt am Parameter.
+    """
+    resolved = [evaluate(angle, values) if is_expression(angle) else angle for angle in entry]
+    return _vector(cast(Sequence[float], resolved))
 
 
 # --- operation --------------------------------------------------------------------
@@ -360,7 +470,12 @@ def pose_armature(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
     bones = armature_from_text(params.armature)
-    poses = pose_from_text(params.pose)
+    # Derselbe Weg wie bei der gezeichneten Skizze (``sketch/ops.py``): Ein
+    # Winkel wie ``=@arm_winkel`` rechnet hier mit denselben Werten wie
+    # überall (§13). Über ``resolve_params`` kommt er nicht — die sieht die
+    # oberste Ebene des Parametersatzes, und dort steht der ganze Text.
+    values = {name: entry.value for name, entry in ctx.scene.parameters.items()}
+    poses = pose_from_text(params.pose, values)
 
     after = posed(before, bones, poses)
     return OpResult(

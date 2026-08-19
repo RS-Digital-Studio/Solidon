@@ -179,3 +179,32 @@ def test_the_session_puts_a_generated_body_on_the_stack(
     ]
     assert object_id == "obj_1"
     assert session.project.document.sources["src_1"].kind == "generated"
+
+
+def test_the_way_out_stays_open_while_it_runs(
+    qt_app: QApplication, generator: ScriptedMeshBackend
+) -> None:
+    """Ein Lauf dauert Minuten — und sperrte ausgerechnet den Abbrechen-Knopf.
+
+    ``self.buttons.setEnabled(False)`` traf die ganze Leiste, also auch den
+    einen Knopf, den man waehrend einer Rechnung braucht. Der Ausgang selbst
+    war fertig gebaut (``reject`` wartet auf den Thread), unerreichbar war nur
+    sein Knopf: Es blieb Esc, eine Taste, die niemand sucht, solange der Weg
+    daneben grau dasteht (§2.8).
+    """
+    dialog = GenerateDialog(backend=generator)
+    dialog.prompt.setText("eine kleine Figur")
+    dialog._running(True)
+
+    cancel = dialog.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+    assert cancel.isEnabled(), "waehrend des Laufs ist Abbrechen der einzige sinnvolle Knopf"
+    assert not ok(dialog).isEnabled(), "zweimal erzeugen waere zwei Arbeiter"
+
+    # Und Weitertippen darf ihn nicht wieder aufmachen: ``_update_state`` haengt
+    # am Textfeld, und das bleibt bedienbar. Vorher deckte die gesperrte Leiste
+    # das zu, statt es zu verhindern.
+    dialog.prompt.setText("eine kleine Figur mit Hut")
+    assert not ok(dialog).isEnabled(), "wer weitertippt, startet sonst einen zweiten Wurf"
+
+    dialog._running(False)
+    assert ok(dialog).isEnabled(), "danach geht es weiter"

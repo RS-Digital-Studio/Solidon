@@ -17,7 +17,7 @@ from itertools import pairwise
 from typing import Final, Literal
 
 from app.i18n import _
-from app.ui.theme import relative_luminance
+from app.ui.theme import contrast_ratio, relative_luminance
 
 DiffPalette = Literal["blue_orange", "red_green", "greyscale"]
 
@@ -68,6 +68,91 @@ ROLES: dict[Role, str] = {
     "axis_x": "#d05a5a",
     "axis_y": "#5aa564",
 }
+
+
+#: Dieselben Bedeutungen, so weit abgedunkelt, wie eine helle Fläche es
+#: verlangt.
+#:
+#: Die Werte in :data:`ROLES` sind für den dunklen Untergrund gewählt, auf dem
+#: die Anwendung startet, und dort stimmen sie. Als **Schrift auf Weiß**
+#: stimmen sie nicht: Bernstein bringt 2,22, das Hinweisblau 2,67, das
+#: Fehlerrot 3,97 — WCAG AA verlangt 4,5. Im Prüfbericht, wo jede Zeile ihre
+#: Rollenfarbe trägt, war damit im hellen Thema der gesamte Text unterhalb der
+#: Lesbarkeitsgrenze.
+#:
+#: Der Farbton bleibt, nur die Helligkeit geht so weit herunter, bis 4,5 gegen
+#: Weiß steht. Es ist dieselbe Farbe im Sinne der Bedeutung — genau die
+#: Rechnung, die ``theme._ACCENT_LINE`` für die Akzentkante schon macht.
+ROLES_ON_LIGHT: dict[Role, str] = {
+    "info": "#3479ba",
+    "warning": "#9d6c19",
+    "error": "#cb4a4a",
+}
+
+#: Und dieselbe Rechnung in die andere Richtung.
+#:
+#: Das Fehlerrot ist nicht nur auf Weiß zu schwach — auf der dunklen Liste, mit
+#: der die Anwendung startet, bringt es 4,17. Knapp unter der Grenze, und
+#: ausgerechnet beim Schweregrad, der am dringendsten gelesen werden will.
+#: Aufgehellt sind es 4,52. Die anderen beiden stehen dunkel gut (7,46 und
+#: 6,19) und bleiben, wie sie sind.
+ROLES_ON_DARK: dict[Role, str] = {
+    "error": "#d36363",
+}
+
+#: Ab welcher Luminanz eine Fläche als hell gilt. 0,5 ist die Mitte zwischen
+#: Schwarz und Weiß; die Flächen beider Themen liegen weit davon entfernt
+#: (0,013 gegen 1,0), die Grenze muss also nichts Feines entscheiden.
+_LIGHT_SURFACE: Final = 0.5
+
+
+def text_colour(role: Role, background: str) -> str:
+    """Die Farbe einer Rolle, wo sie als **Schrift** auf ``background`` steht.
+
+    Entschieden wird an der Helligkeit des Untergrunds und nicht am Namen des
+    Themas: Der Aufrufer kennt die Fläche, auf die er schreibt, immer — sein
+    eigenes Widget sagt sie ihm —, das eingestellte Thema kennt er nur über
+    Umwege. Und eine Fläche, die aus einem anderen Grund hell ist, bekommt so
+    von selbst die richtige Schrift.
+    """
+    if relative_luminance(background) >= _LIGHT_SURFACE:
+        return ROLES_ON_LIGHT.get(role, ROLES[role])
+    return ROLES_ON_DARK.get(role, ROLES[role])
+
+
+#: Die zwei Schriftfarben, zwischen denen eine Beschriftung auf einem Farbfeld
+#: wählt.
+ON_LIGHT_FIELD: Final = "#101418"
+ON_DARK_FIELD: Final = "#f2f4f7"
+
+
+def readable_on(colour: str) -> str:
+    """Dunkle oder helle Schrift — was auf diesem Feld lesbar bleibt (§19.3).
+
+    **Gerechnet statt geschätzt.** Die Entscheidung hing an einer festen
+    Luminanzschwelle von 0,35, und eine feste Zahl ist immer nur für eine
+    Rampe richtig: Über den mittleren Tönen von Viridis kippte sie auf die
+    schlechtere der beiden Schriften — 3,47 bei ``#21918c``, 2,56 bei
+    ``#28ae80``. Verglichen wird jetzt, was der Vergleich entscheiden soll.
+    """
+    if contrast_ratio(ON_LIGHT_FIELD, colour) >= contrast_ratio(ON_DARK_FIELD, colour):
+        return ON_LIGHT_FIELD
+    return ON_DARK_FIELD
+
+
+#: Wie dick die drei Rollen der Schichtansicht gezeichnet werden.
+#:
+#: **Drei Werte, keine zwei gleichen** — das ist die zweite Kodierung, die
+#: Regel 18 verlangt. Insel und Überhang lagen beide auf 3: zwei gleich dicke
+#: Ringe übereinander, unterschieden allein durch die Farbe, und ausgerechnet
+#: bei den zwei Rollen, die eine Handlung nach sich ziehen. Wer Rot und Gelb
+#: nicht auseinanderhält, sah eine Schicht voller Ringe und nicht, welcher
+#: davon ihn etwas angeht.
+#:
+#: Sie stehen hier und nicht im Viewport, weil die Leiste dieselbe Zahl für
+#: ihre Legende braucht — und eine Legende, die andere Stärken zeigt als das
+#: Bild, ist schlimmer als keine.
+LAYER_WIDTHS: dict[Role, int] = {"layer": 2, "island": 3, "overhang": 5}
 
 
 @dataclass(frozen=True, slots=True)

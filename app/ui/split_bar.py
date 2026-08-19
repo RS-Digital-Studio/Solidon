@@ -106,6 +106,7 @@ class SplitBar(QWidget):
         # (``labels.choice_label``), sonst heißt dieselbe Form an zwei
         # Stellen anders.
         self.shape = BarComboBox(self)
+        self.shape.setAccessibleName(tr("Form der Verbinder"))
         for value in CONNECTOR_SHAPES:
             self.shape.addItem(choice_label(value), userData=value)
         self.shape.setToolTip(

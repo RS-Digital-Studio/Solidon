@@ -8,6 +8,8 @@ vor einem neuen Nutzer.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.core import examples
@@ -133,3 +135,40 @@ def test_turning_a_parameter_changes_the_second_example(profile: Profile) -> Non
         after.scene.objects["obj_1"].mesh.bounds.size[0]
         > (before.scene.objects["obj_1"].mesh.bounds.size[0])
     )
+
+
+def test_the_written_documents_count_the_ways_and_examples_right() -> None:
+    """Bauplan und README behaupten Zahlen — hier stehen sie neben der Quelle.
+
+    Beide waren gedriftet: Der Bauplan führte §2.2 als „Drei Hauptwege",
+    während der vierte längst gebaut war (P16, `weg4-figur-formen`), und die
+    README sprach von drei Wegen und acht Beispielprojekten, als es vier und
+    neun waren. Der Test darüber wusste es besser als beide Unterlagen — er
+    prüft seit P16 auf vier Wege.
+
+    Gezählt wird gegen ``EXAMPLES``, denn das ist die Quelle: Was dort liegt,
+    liegt beim Start bereit.
+    """
+    wurzel = Path(__file__).resolve().parent.parent
+    wege = sum(1 for entry in examples.EXAMPLES if entry.way)
+    zahlwort = {3: "drei", 4: "vier", 5: "fünf"}[wege]
+
+    bauplan = (wurzel / "3d-agent-bauplan.md").read_text(encoding="utf-8")
+    assert f"### 2.2 {zahlwort.capitalize()} Hauptwege" in bauplan, (
+        f"§2.2 nennt nicht {zahlwort} Hauptwege, obwohl {wege} Beispiele einen Weg tragen."
+    )
+
+    readme = (wurzel / "README.md").read_text(encoding="utf-8")
+    assert f"## Die {zahlwort} Wege" in readme, f"Die README zählt nicht {zahlwort} Wege."
+
+    # Die Unterlagen schreiben Zahlen aus — „neun Beispielprojekte", nicht „9".
+    zahlen = {7: "sieben", 8: "acht", 9: "neun", 10: "zehn", 11: "elf", 12: "zwölf"}
+    wort = zahlen.get(len(examples.EXAMPLES), str(len(examples.EXAMPLES)))
+    assert f"{wort} Beispielprojekte" in readme, (
+        f"Die README nennt nicht {wort} ({len(examples.EXAMPLES)}) Beispielprojekte."
+    )
+
+    # Und jedes Beispiel steht mit seiner Datei in der Tabelle — eine Zeile,
+    # die fehlt, ist ein Projekt, von dem der Leser nichts erfährt.
+    fehlen = [entry.id for entry in examples.EXAMPLES if f"{entry.id}.p3d" not in readme]
+    assert not fehlen, f"Diese Beispiele fehlen in der README-Tabelle: {fehlen}"

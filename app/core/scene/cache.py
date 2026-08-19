@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -101,28 +102,50 @@ class ResultCache:
         self._budget = triangle_budget
         self._disk = disk
         self.statistics = CacheStatistics()
+        self._lock = threading.RLock()
+        """Ein Schloss, weil mehr als ein Faden hier hineinschreibt.
+
+        Die Auswertung läuft in einem Arbeiter (§15.6), der Agent in einem
+        zweiten, die Vorschau in einem dritten — und alle drei legen am Ende
+        eines vollständigen Laufs ihr Ergebnis ab. ``_store`` ist dabei kein
+        einzelner Schritt, sondern vier: den alten Eintrag herausnehmen, die
+        Kosten abziehen, den neuen einhängen, verdrängen bis das Budget passt.
+        Zwei Fäden mittendrin, und ``_cost`` stimmt nicht mehr mit dem überein,
+        was wirklich in der Liste liegt: Der Cache verdrängt dann entweder zu
+        früh (jeder Schritt wird neu gerechnet) oder gar nicht mehr (er wächst,
+        bis der Speicher knapp wird).
+
+        Ein ``RLock`` und kein ``Lock``: ``get`` ruft bei einem Treffer auf der
+        Platte ``_store`` auf, hält das Schloss also schon."""
 
     def get(self, key: str) -> CachedResult | None:
-        entry = self._entries.get(key)
-        if entry is not None:
-            self._entries.move_to_end(key)
-            self.statistics.hits += 1
-            return entry
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is not None:
+                self._entries.move_to_end(key)
+                self.statistics.hits += 1
+                return entry
+        # Die Platte außerhalb des Schlosses: Sie liest eine Datei, und das
+        # dauert — solange dürfen die anderen Fäden nicht warten.
         if self._disk is not None:
             from_disk = self._disk.get(key)
             if from_disk is not None:
-                self.statistics.disk_hits += 1
-                self._store(key, from_disk)
+                with self._lock:
+                    self.statistics.disk_hits += 1
+                    self._store(key, from_disk)
                 return from_disk
-        self.statistics.misses += 1
+        with self._lock:
+            self.statistics.misses += 1
         return None
 
     def put(self, key: str, result: CachedResult) -> None:
-        self._store(key, result)
+        with self._lock:
+            self._store(key, result)
         if self._disk is not None:
             self._disk.put(key, result)
 
     def _store(self, key: str, result: CachedResult) -> None:
+        """Nur mit gehaltenem Schloss aufrufen — siehe :attr:`_lock`."""
         if key in self._entries:
             self._cost -= self._entries.pop(key).cost
         self._entries[key] = result
@@ -133,15 +156,18 @@ class ResultCache:
             self.statistics.evictions += 1
 
     def clear(self) -> None:
-        self._entries.clear()
-        self._cost = 0
+        with self._lock:
+            self._entries.clear()
+            self._cost = 0
 
     @property
     def cost(self) -> int:
-        return self._cost
+        with self._lock:
+            return self._cost
 
     def __len__(self) -> int:
-        return len(self._entries)
+        with self._lock:
+            return len(self._entries)
 
 
 # --- Plattenebene ----------------------------------------------------------------

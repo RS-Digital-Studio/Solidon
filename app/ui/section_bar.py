@@ -54,6 +54,7 @@ class MeasureBar(QWidget):
         super().__init__(parent)
 
         self.mode = BarComboBox(self)
+        self.mode.setAccessibleName(tr("Messart"))
         self.mode.addItem(tr("Nicht messen"), userData="off")
         self.mode.addItem(tr("Abstand messen"), userData="distance")
         self.mode.addItem(tr("Wandstärke messen"), userData="thickness")
@@ -94,12 +95,14 @@ class SectionBar(QWidget):
         self._pending.timeout.connect(self._settled)
 
         self.axis = BarComboBox(self)
+        self.axis.setAccessibleName(tr("Schnittachse"))
         self.axis.addItem(tr("Kein Schnitt"), userData=None)
         for axis, label in (("x", tr("Schnitt X")), ("y", tr("Schnitt Y")), ("z", tr("Schnitt Z"))):
             self.axis.addItem(label, userData=axis)
         self.axis.currentIndexChanged.connect(self._axis_changed)
 
         self.position = QSlider(Qt.Orientation.Horizontal, self)
+        self.position.setAccessibleName(tr("Schnittposition"))
         self.position.setMinimum(-1000)
         self.position.setMaximum(1000)
         self.position.setValue(0)

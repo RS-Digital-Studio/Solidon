@@ -37,7 +37,7 @@ from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.core.scene import expressions
 from app.i18n import tr
-from app.ui.labels import deadline_date
+from app.ui.labels import deadline_date, value_line
 from app.ui.leash import WorkerLeash
 from app.ui.style import set_level
 
@@ -535,6 +535,11 @@ class ActivationDialog(QDialog):
         self.field = QPlainTextEdit(self)
         self.field.setPlaceholderText(tr("SOLIDON3D-1-…"))
         self.field.setFixedHeight(90)
+        # Sonst ist der Dialog eine Tastenfalle: Ein mehrzeiliges Feld nimmt den
+        # Tabulator als Zeichen, und wer ohne Maus arbeitet, kommt aus dem Feld
+        # nicht mehr heraus — ausgerechnet dort, wo ein Schlüssel eingegeben
+        # wird, den viele aus einer Mail kopieren.
+        self.field.setTabChangesFocus(True)
         if stored := activation.read_key():
             self.field.setPlainText(stored)
 
@@ -720,14 +725,40 @@ def offered_actions(
     den Dialog aufmacht, hängt am modalen Fenster — dieselbe Falle steht
     schon im Kopf von ``tests/test_ui.py``.
 
-    Angeboten wird, wofür es einen Handler gibt. Bleibt nichts übrig, tritt
-    der Fehlerbericht ein: sonst stünde am Ende ein Fenster mit „Abbrechen",
-    und das ist „fehlgeschlagen" mit mehr Worten (Regel 17).
+    Angeboten wird, wofür es einen Handler gibt. Bleibt nichts übrig — weder
+    ein Knopf noch ein Rat zum Lesen —, tritt der Fehlerbericht ein: sonst
+    stünde am Ende ein Fenster mit „Abbrechen", und das ist „fehlgeschlagen"
+    mit mehr Worten (Regel 17).
     """
     offered = [action for action in error.suggestions if action.id in handlers]
     if offered:
         return offered
+    if unhandled_advice(error, handlers):
+        # Der Rat steht im Text, und der Fehlerbericht wäre daneben die
+        # lauteste Antwort auf einen Bedienfehler. Er gehört dem
+        # ``InternalError`` (errors.py), nicht einer fehlenden Auswahl.
+        return [entry for entry in (SHOW_DETAILS,) if entry.id in handlers]
     return [entry for entry in (SHOW_DETAILS, REPORT_ERROR) if entry.id in handlers]
+
+
+def unhandled_advice(
+    error: AppError, handlers: Mapping[str, Callable[[AppError], None]]
+) -> list[str]:
+    """Die Vorschläge ohne Handler — als Sätze zum Lesen statt als Knopf.
+
+    **Der Rat war da und kam nie an.** Von 48 Kennungen, die der Kern in
+    ``Action(...)`` vergibt, sind zehn verdrahtet; die übrigen wurden
+    stillschweigend verworfen, und an ihrer Stelle stand „Fehlerbericht
+    erstellen" als Hauptknopf — auf einen reinen Bedienfehler. Dabei sind es
+    gerade die selbst formulierten, die konkret helfen: „Schreiben Sie das Ziel
+    als obj_2:hole_1.", „Wählen Sie das Merkmal im Objektbaum aus."
+
+    Sie werden nicht zu Knöpfen: Ein Knopf ohne Wirkung ist schlimmer als
+    keiner, und daran ändert sich nichts. Sie werden zu Text — damit hält §2.7
+    sein Versprechen („was jetzt möglich ist"), ohne eines zu geben, das die
+    Oberfläche nicht einlösen kann.
+    """
+    return [str(action.label) for action in error.suggestions if action.id not in handlers]
 
 
 def show_error(
@@ -753,8 +784,12 @@ def show_error(
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(tr("Das hat so nicht funktioniert"))
     box.setText(str(error.title))
-    if error.detail:
-        box.setInformativeText(str(error.detail))
+    # Erst was nicht ging, dann was jetzt möglich ist (§2.7). Der zweite Teil
+    # fehlte für jeden Vorschlag ohne Handler — siehe :func:`unhandled_advice`.
+    spoken = [str(error.detail)] if error.detail else []
+    spoken.extend(unhandled_advice(error, known))
+    if spoken:
+        box.setInformativeText("\n".join(spoken))
 
     buttons: dict[Any, Action] = {}
     for action in offered:
@@ -776,7 +811,10 @@ def show_error(
 def show_details(error: AppError, parent: QWidget | None = None) -> None:
     """Was der Fehler an Zahlen mitbringt — ohne Stapelabzug (§2.7, §33.1)."""
     lines = [str(error.detail)] if error.detail else []
-    lines.extend(f"{key}: {value}" for key, value in error.values.items())
+    # Nicht der rohe Schlüssel: „open_edges: 6" ist ein Bezeichner, kein Satz
+    # (Regel 20). ``value_line`` setzt Beschriftung, Einheit und das
+    # Dezimaltrennzeichen der Anzeigesprache.
+    lines.extend(value_line(key, value) for key, value in error.values.items())
     if error.object_id:
         lines.append(f"{tr('Objekt')}: {error.object_id}")
     if error.op_id is not None:

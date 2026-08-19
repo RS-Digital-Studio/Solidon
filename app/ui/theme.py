@@ -66,6 +66,7 @@ THEMES: dict[Theme, dict[str, str]] = {
         "line": "#647182",
         "text": "#e6e9ee",
         "disabled": "#7c848f",
+        "muted": "#a8b0ba",
         "highlight": _SELECTION,
         "highlight_text": _ON_SELECTION,
         "accent_line": _ACCENT_LINE["dark"],
@@ -84,10 +85,16 @@ THEMES: dict[Theme, dict[str, str]] = {
         "line": "#9ea7b5",
         "text": "#1c2026",
         "disabled": "#8b929b",
+        "muted": "#5d646d",
         "highlight": _SELECTION,
         "highlight_text": _ON_SELECTION,
         "accent_line": _ACCENT_LINE["light"],
-        "tooltip": "#ffffe1",
+        # Weiß und nicht das Blassgelb, das Qt hier mitbringt: Der Hinweis
+        # erscheint über Leisten und Knöpfen, also über ``window``, und hebt
+        # sich davon ab. Das Gelb kam aus Windows und passte zu keiner anderen
+        # Fläche des Fensters — es war die einzige Farbe im hellen Thema, die
+        # nicht aus dieser Tabelle stammte.
+        "tooltip": "#ffffff",
         "viewport_bottom": "#d5dae1",
         "viewport_top": "#f4f6f8",
         "object": "#7d8894",
@@ -115,12 +122,25 @@ def build_palette(theme: Theme) -> QPalette:
     palette.setColor(QPalette.ColorRole.ToolTipText, QColor(colours["text"]))
     palette.setColor(QPalette.ColorRole.Highlight, QColor(colours["highlight"]))
     palette.setColor(QPalette.ColorRole.HighlightedText, QColor(colours["highlight_text"]))
-    palette.setColor(
-        QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(colours["disabled"])
-    )
-    palette.setColor(
-        QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor(colours["disabled"])
-    )
+    # Der Platzhaltertext stand als einzige Rolle nicht hier — und was hier
+    # nicht steht, kommt aus der Systempalette. Auf einem Rechner mit dunkel
+    # eingestelltem Windows war er hell, und im hellen Thema damit weiß auf
+    # Weiß: Das Suchfeld des Prüfberichts war leer, der Chat fragte nichts
+    # mehr, und im Schlüsseldialog fehlte das Muster ``SOLIDON3D-1-…``, das
+    # als Einziges sagt, wie ein Schlüssel aussieht. Dreizehn Felder tragen
+    # ihre Auskunft dort.
+    palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(colours["disabled"]))
+    for role in (
+        QPalette.ColorRole.Text,
+        QPalette.ColorRole.ButtonText,
+        # ``WindowText`` fehlte, und daran hängen genau die Elemente, die das
+        # Stylesheet nicht anfasst: QLabel, QCheckBox, QRadioButton,
+        # QGroupBox. Ein gesperrtes Ankreuzfeld war pixelgleich mit einem
+        # bedienbaren — „Scheibe" in der Schnittleiste und „Projektdatei
+        # anhängen" im Fehlerbericht sahen anklickbar aus und waren es nicht.
+        QPalette.ColorRole.WindowText,
+    ):
+        palette.setColor(QPalette.ColorGroup.Disabled, role, QColor(colours["disabled"]))
     return palette
 
 

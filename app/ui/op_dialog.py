@@ -15,7 +15,6 @@ Fall wäre ein zweiter Ort, an dem sich ein Parameter vergessen lässt.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -359,7 +358,7 @@ class ArmatureField(QWidget):
         entered = _angles_from(start)
         for row, bone in enumerate(self._bones, start=1):
             grid.addWidget(QLabel(bone, self), row, 0)
-            angles = entered.get(bone, (0.0, 0.0, 0.0))
+            angles: tuple[float | str, ...] = entered.get(bone, (0.0, 0.0, 0.0))
             fields: list[ValueField] = []
             for column, axis in enumerate(POSE_AXES):
                 spec = ParamSpec(
@@ -381,39 +380,42 @@ class ArmatureField(QWidget):
     def value(self) -> str:
         """Die Stellung als Text, wie ihn der Kern liest.
 
-        Geschrieben wird über :func:`app.core.geom.pose.pose_to_text` — es gibt
+        Geschrieben wird über :func:`app.core.geom.pose.pose_text` — es gibt
         genau einen Schreiber für dieses Format, und der steht im Kern.
         Trägt ein Feld einen Ausdruck statt einer Zahl, bleibt er wörtlich
         stehen; die Bindung hier aufzulösen hieße, sie beim ersten Öffnen des
         Dialogs zu verlieren, ohne dass es jemand sähe.
+
+        Der Vorsatz stand hier schon, und gehalten hat ihn diese Methode
+        trotzdem nicht: Sobald ein Feld einen Ausdruck trug, fiel sie auf ein
+        eigenes ``json.dumps`` zurück — ein zweiter Schreiber für dasselbe
+        Format, weil der im Kern nur ``Pose`` nahm und ``Pose.angles`` drei
+        Zahlen sind. ``pose_text`` nimmt beides, und damit gibt es wieder
+        einen.
         """
-        from app.core.geom.pose import pose_to_text
-        from app.core.types import Pose
+        from app.core.geom.pose import pose_text
 
-        angles = {bone: [field.value() for field in row] for bone, row in self._fields.items()}
-        if all(isinstance(value, float) for row in angles.values() for value in row):
-            return pose_to_text(
-                [
-                    Pose(bone=bone, angles=(float(row[0]), float(row[1]), float(row[2])))
-                    for bone, row in angles.items()
-                ]
-            )
-        return json.dumps(angles, separators=(",", ":"))
+        return pose_text(
+            {bone: [field.value() for field in row] for bone, row in self._fields.items()}
+        )
 
 
-def _angles_from(text: str) -> dict[str, tuple[float, float, float]]:
+def _angles_from(text: str) -> dict[str, tuple[float | str, ...]]:
     """Die eingetragene Stellung je Knochen — leer, wenn der Text nichts hergibt.
 
-    Ein unlesbarer Text ist hier kein Fehler, sondern ein leeres Raster: Der
-    Dialog soll aufgehen, und was nicht zu lesen war, wird beim Übernehmen
-    ohnehin überschrieben.
-    """
-    from app.core.geom.pose import pose_from_text
+    **Roh gelesen**, also Zahl oder Ausdruck, wie es dasteht. Vorher lief das
+    über ``pose_from_text``, und die gibt drei *Zahlen*: Ein Ausdruck liess sie
+    scheitern, der Fang machte daraus ein leeres Raster, und alle drei Winkel
+    des Knochens standen auf null. Der Dialog verlor beim Öffnen genau die
+    Bindung, die sein eigener Docstring beim Schreiben zu erhalten versprach.
 
-    try:
-        return {pose.bone: pose.angles for pose in pose_from_text(text)}
-    except AppError:
-        return {}
+    Ein unlesbarer Text bleibt kein Fehler, sondern ein leeres Raster: Der
+    Dialog soll aufgehen, und was nicht zu lesen war, wird beim Übernehmen
+    ohnehin überschrieben — das erledigt jetzt ``pose_angles`` selbst.
+    """
+    from app.core.geom.pose import pose_angles
+
+    return pose_angles(text)
 
 
 class ArmatureSummary(QLabel):
@@ -531,15 +533,27 @@ class OperationDialog(QDialog):
             label = f"{entry.title}"
             if entry.unit:
                 label = f"{label} [{entry.unit}]"
-            # Ein eingetragener Wert gehört vor den Nutzer, auch wenn das Schema ihn
-            # nach hinten legt: er ist der, der gerade entschieden wurde. Dasselbe
-            # gilt für das Stellungsraster: Es entsteht nur, wenn ein Skelett
-            # vorliegt — und dann ist es das Einzige, weswegen der Dialog aufgeht.
+            # Ein eingetragener Wert gehört vor den Nutzer, auch wenn das Schema
+            # ihn nach hinten legt: er ist der, der gerade entschieden wurde —
+            # die angeklickte Fläche, die vorgewählte Position (§18.5).
+            #
+            # **Aber nur, wenn er wirklich entschieden wurde.** Wer eine
+            # Operation aus dem Verlauf öffnet, bekommt ihr *ganzes* Schema
+            # übergeben; mit ``entry.name in given`` allein landete damit jedes
+            # Feld vorn, und die Klappe „Weitere Einstellungen" verschwand
+            # genau dann, wenn jemand einen Wert nachbessern will (§2.4). Ein
+            # Wert, der auf seiner Vorgabe steht, ist keine Entscheidung.
+            #
+            # Ein Sammelwert bleibt dabei nicht draußen: Wer eine Skizze oder
+            # ein Skelett übergibt, tut das, weil der Dialog ihretwegen aufgeht
+            # — und das Stellungsraster gehört neben das Skelett, aus dem es
+            # entsteht (``test_the_pose_grid_stands_in_front``). Ein erster
+            # Versuch schob rohe Sammelwerte pauschal nach hinten und trennte
+            # damit genau diese zwei.
+            decided = entry.name in given and given[entry.name] != entry.default
             target = (
                 front
-                if entry.placement == "front"
-                or entry.name in given
-                or isinstance(editor, ArmatureField)
+                if entry.placement == "front" or isinstance(editor, ArmatureField) or decided
                 else advanced
             )
             target.addRow(label, editor)

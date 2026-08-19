@@ -15,6 +15,7 @@ der externe Slicer liefert (§18.10, §22.5).
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -29,7 +30,7 @@ from app.core.perceive.maps import AnalysisMap, MapKind
 from app.core.types import SliceResult
 from app.i18n import tr
 from app.ui.labels import length
-from app.ui.palette import VIRIDIS, map_colour
+from app.ui.palette import LAYER_WIDTHS, ROLES, VIRIDIS, Role, map_colour, readable_on
 from app.ui.panels import origin_label
 from app.ui.style import NORMAL, TIGHT
 from app.ui.tool_strip import BarComboBox
@@ -164,13 +165,9 @@ def _legend_entries(
     return entries
 
 
-def _readable_on(colour: str) -> str:
-    """Schwarze oder weiße Schrift, je nachdem, was auf dem Farbfeld lesbar
-    bleibt (§19.3).
-    """
-    from app.ui.theme import relative_luminance
-
-    return "#101418" if relative_luminance(colour) > 0.35 else "#f2f4f7"
+#: Die Legende der Differenzansicht braucht dieselbe Rechnung — sie steht
+#: deshalb bei den Rollen und nicht hier.
+_readable_on = readable_on
 
 
 class AnalysisBar(QWidget):
@@ -185,6 +182,7 @@ class AnalysisBar(QWidget):
         super().__init__(parent)
 
         self.selector = BarComboBox(self)
+        self.selector.setAccessibleName(tr("Analysekarte"))
         self.selector.addItem(tr("Keine Karte"), userData=None)
         for kind, label in (
             ("wall", tr("Wandstärke")),
@@ -262,6 +260,7 @@ class LayerBar(QWidget):
         """
 
         self.slider = QSlider(Qt.Orientation.Horizontal, self)
+        self.slider.setAccessibleName(tr("Schicht"))
         self.slider.setMinimum(0)
         self.slider.setMaximum(0)
         self.slider.valueChanged.connect(lambda _value: self._emit())
@@ -269,10 +268,16 @@ class LayerBar(QWidget):
         self.readout = QLabel("", self)
         self.readout.setMinimumWidth(220)
 
+        self._legend = QHBoxLayout()
+        self._legend.setContentsMargins(0, 0, 0, 0)
+        self._legend.setSpacing(NORMAL)
+        """Welcher Ring im Bild was bedeutet — siehe :meth:`_show_legend`."""
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(self.slider, stretch=1)
         layout.addWidget(self.readout)
+        layout.addLayout(self._legend)
         self._result: SliceResult | None = None
         self._update_enabled()
 
@@ -324,3 +329,35 @@ class LayerBar(QWidget):
         if layer.overhang_area > 0.0:
             parts.append(f"{tr('Überhang')} {layer.overhang_area:.0f} mm²")
         self.readout.setText(" · ".join(parts))
+        self._show_legend(layer)
+
+    def _show_legend(self, layer: Any) -> None:
+        """Sagt, welcher Ring im Bild was bedeutet.
+
+        Ohne sie liegen drei Ringe übereinander, und was sie unterscheidet, ist
+        die Farbe (Regel 18). Die Strichstärken tragen die Aussage inzwischen
+        auch ohne Farbe — aber erst hier steht, welche zu welchem Wort gehört.
+
+        Gezeigt wird nur, was in dieser Schicht vorkommt: Eine Legende, die
+        „Insel" führt, wo keine liegt, lässt suchen.
+        """
+        while self._legend.count():
+            item = self._legend.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.deleteLater()
+
+        shown: list[tuple[Role, str, bool]] = [
+            ("layer", str(tr("Kontur")), True),
+            ("island", str(tr("Insel")), bool(layer.islands)),
+            ("overhang", str(tr("Überhang")), layer.overhang_area > 0.0),
+        ]
+        for role, name, present in shown:
+            if not present:
+                continue
+            # Der Strich ist so lang, wie der Ring im Bild dick ist — dieselbe
+            # zweite Kodierung, und sie verbindet die Legende mit dem Bild.
+            swatch = QLabel(f"{'─' * LAYER_WIDTHS[role]} {name}", self)
+            swatch.setStyleSheet(f"color: {ROLES[role]};")
+            self._legend.addWidget(swatch)
+        self._legend.addStretch(1)

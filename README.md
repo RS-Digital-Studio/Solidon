@@ -51,10 +51,10 @@ schickt. Für die Entwicklung bleiben daneben die Issues dieses Repositories.
 
 ---
 
-## Die drei Wege
+## Die vier Wege
 
-Beim Start liegen acht Beispielprojekte bereit — sie sind gleichzeitig
-Dokumentation und Abnahmeprüfung (§37.2). Die ersten drei beantworten „wie
+Beim Start liegen neun Beispielprojekte bereit — sie sind gleichzeitig
+Dokumentation und Abnahmeprüfung (§37.2). Die ersten vier beantworten „wie
 fange ich an", die übrigen „was kann das eigentlich":
 
 | Projekt | Inhalt |
@@ -62,6 +62,7 @@ fange ich an", die übrigen „was kann das eigentlich":
 | `weg1-halterung-anpassen.p3d` | fremdes Modell einlesen, reparieren, bohren |
 | `weg2-halter-konstruieren.p3d` | aus Parametern und Bausteinen neu konstruieren |
 | `weg3-generiert-aufbereiten.p3d` | erzeugtes Mesh durch die Reparaturkette |
+| `weg4-figur-formen.p3d` | weich verschmelzen, vernetzen, von Hand ausformen |
 | `gehaeuse-mit-bausteinen.p3d` | Mutternfalle, Heat-Set-Buchse, Kabeldurchführung, Prüfstück |
 | `schild-zweifarbig.p3d` | Schrift im Materialslot und Lettern als eigener Körper |
 | `drucker-kalibrieren.p3d` | Toleranzleiter, Wandstärkenleiter, Überhangfächer |

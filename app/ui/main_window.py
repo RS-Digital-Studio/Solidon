@@ -12,6 +12,7 @@ Kommandozeile, sobald sie deklariert ist (§10).
 from __future__ import annotations
 
 import platform
+import time
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from dataclasses import replace
@@ -45,6 +46,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QTabWidget,
     QToolBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -164,7 +166,7 @@ from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import MENU_GROUPS, demo_line, feature_label, length
 from app.ui.leash import WorkerLeash
-from app.ui.loading import LoadingVeil
+from app.ui.loading import LoadingVeil, remaining_time
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
 from app.ui.op_dialog import OperationDialog, SketchUseDialog
@@ -172,6 +174,7 @@ from app.ui.overlay import CARD_PADDING, OverlayHost, card_stylesheet
 from app.ui.paint_bar import PaintBar
 from app.ui.palette import ROLES
 from app.ui.panels import (
+    SEVERITY_MARKER,
     HistoryPanel,
     MeasurementLabel,
     ObjectTree,
@@ -707,6 +710,11 @@ class MainWindow(QMainWindow):
         """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
         Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
         self._announcement = ""
+        self._run_started: float | None = None
+        """Wann der laufende Lauf begann — für die Restzeitschätzung (§2.8).
+
+        Am Fenster und nicht am Balken: Der Balken kennt nur seinen Wert,
+        und aus einem Wert allein lässt sich nicht hochrechnen."""
         """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
         Fortschritt legt sich darüber und gibt es danach wieder frei."""
         self._menus: list[QMenu] = []
@@ -724,6 +732,17 @@ class MainWindow(QMainWindow):
         """Die Menüeinträge der Operationen, damit sie sich ausgrauen lassen.
         Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
         etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten."""
+        self._display_actions: list[QAction] = []
+        """Die Einträge unter *Ansicht → Darstellung*.
+
+        Sie brauchen dieselbe Behandlung wie die Operationen, und zwar aus zwei
+        Gründen. Sie wirken auf den Viewport, und den tauscht ``start_sketch``
+        aus dem Stapel heraus — im Skizzenmodus ändern sie also etwas, das
+        niemand sieht. Und ihre Kürzel sind die Ziffern 1 bis 6, auf denen dort
+        der Ebenenwechsel liegt: Qt lässt bei zwei aktiven Kürzeln derselben
+        Taste **keines** von beiden feuern. Die Zeichenfläche versprach die
+        Taste sichtbar — „(1)", „(2)", „(3)" stehen am Ebenenfeld und noch
+        einmal im Tooltip —, und gedrückt geschah nichts."""
         self._trial_message = ""
         """Die Testlauf-Zeile der Statusleiste — gemerkt, damit das
         Freischalten genau sie wegräumt und keine fremde Meldung."""
@@ -1073,7 +1092,10 @@ class MainWindow(QMainWindow):
         self.chat.accepted.connect(self._on_proposal_accepted)
         self.chat.discarded.connect(self._on_proposal_discarded)
         self.chat.undoRequested.connect(self._on_applied_undone)
-        self.chat.setupRequested.connect(self.action_install_extras)
+        # Der Knopf am gesperrten Chat führt dorthin, wo beide Wege aus §27
+        # stehen — Schlüssel und lokales Modell. Er hing am Installationsdialog
+        # und bot damit nur einen davon an.
+        self.chat.setupRequested.connect(self.action_llm_key)
         self.chat.unlockRequested.connect(self.action_activate)
         self.chat.imageDropped.connect(self.action_generate_from_image)
 
@@ -1092,6 +1114,7 @@ class MainWindow(QMainWindow):
         # vorn sind: ein eingelesenes Netz mit offenen Stellen meldete sich im
         # Bericht, und der Reiter sah aus wie vorher.
         self.report.alertsChanged.connect(self._mark_report_tab)
+        self.report.alertsChanged.connect(self._mark_status_alerts)
         # Der Reiter wird einmal angelegt und danach nur noch ein- und
         # ausgeblendet, nie entfernt: ``removeTab`` machte das Panel elternlos,
         # und ein elternloses Widget gehört dem Speicherbereiniger — der es
@@ -1189,11 +1212,24 @@ class MainWindow(QMainWindow):
         # Handbuchbild, in jeder Sprache. Als eigenes dauerhaftes Feld steht
         # sie neben den Maßen statt auf ihnen, und ``showMessage`` bleibt
         # frei für das, wofür es gedacht ist — den Zeichenmodus etwa.
+        # §2.5 nennt für die Statusleiste auch „Warnungen", und die standen
+        # dort nie. Solange die rechte Spalte offen ist, trägt ihr Reiter die
+        # Zahl; ist sie zu, erreichte eine neue Warnung niemanden mehr —
+        # ``_focus_report`` steigt bei unsichtbarer Spalte zu Recht aus, und
+        # danach kam nichts. Der Knopf erscheint genau dann und holt beides
+        # zurück: die Spalte und den Bericht.
+        self.alert_button = QToolButton(self)
+        self.alert_button.setAutoRaise(True)
+        self.alert_button.setAccessibleName(tr("Offene Befunde"))
+        self.alert_button.setVisible(False)
+        self.alert_button.clicked.connect(self._show_alerts)
+
         self.trial_line = QLabel("", self)
         self.trial_line.setVisible(False)
 
         bar = self.statusBar()
         bar.addWidget(self.measurements, 1)
+        bar.addPermanentWidget(self.alert_button)
         bar.addPermanentWidget(self.trial_line)
         bar.addPermanentWidget(self.facts)
         bar.addPermanentWidget(self.status_message)
@@ -1298,7 +1334,7 @@ class MainWindow(QMainWindow):
         # Verlassen" — eine Taste, die kaum eine Tastatur hat, als Kürzel
         # angeboten. Alt+F4 macht Windows selbst, Cmd+Q macht macOS über sein
         # Anwendungsmenü. Ein falsches Kürzel ist schlechter als keines.
-        self._add_action(
+        self._quit_action = self._add_action(
             file_menu,
             tr("Beenden"),
             None,
@@ -1499,12 +1535,14 @@ class MainWindow(QMainWindow):
                 tr("Durchscheinend — für Hohlräume und Teile, die ineinandergreifen."),
             ),
         ):
-            self._add_action(
-                display_menu,
-                label,
-                shortcut,
-                lambda checked=False, key=mode: self.viewport.set_display_mode(key),
-                hint,
+            self._display_actions.append(
+                self._add_action(
+                    display_menu,
+                    label,
+                    shortcut,
+                    lambda checked=False, key=mode: self.viewport.set_display_mode(key),
+                    hint,
+                )
             )
         display_menu.addSeparator()
         for shading, label, hint in (
@@ -1519,12 +1557,14 @@ class MainWindow(QMainWindow):
                 tr("Über die Kanten hinweg gemittelt. Schöner, aber beschönigend."),
             ),
         ):
-            self._add_action(
-                display_menu,
-                label,
-                None,
-                lambda checked=False, key=shading: self.viewport.set_shading(key),
-                hint,
+            self._display_actions.append(
+                self._add_action(
+                    display_menu,
+                    label,
+                    None,
+                    lambda checked=False, key=shading: self.viewport.set_shading(key),
+                    hint,
+                )
             )
         display_menu.addSeparator()
         for projection, label, shortcut, hint in (
@@ -1541,12 +1581,14 @@ class MainWindow(QMainWindow):
                 tr("Ohne Fluchtpunkt — gleich lange Kanten sehen gleich lang aus. Zum Messen."),
             ),
         ):
-            self._add_action(
-                display_menu,
-                label,
-                shortcut,
-                lambda checked=False, key=projection: self.viewport.set_projection(key),
-                hint,
+            self._display_actions.append(
+                self._add_action(
+                    display_menu,
+                    label,
+                    shortcut,
+                    lambda checked=False, key=projection: self.viewport.set_projection(key),
+                    hint,
+                )
             )
 
         camera_menu = self._submenu(view_menu, tr("Kamera"))
@@ -1932,7 +1974,7 @@ class MainWindow(QMainWindow):
             else:
                 action.setEnabled(True)
             self._lock_hint(action, locked)
-            self._kind_hint(action, spec, kinds, locked)
+            self._kind_hint(action, spec, kinds, locked, objects, chosen)
 
         # Dieselbe Regel für die Werkzeugzeile unten. Sie stand dem Anfänger
         # näher als jedes Menü und bot auf einer leeren Szene weiter Messen,
@@ -1955,6 +1997,11 @@ class MainWindow(QMainWindow):
         # Strg+Z mit ihrem eigenen Zug-Rückgängig (P16.6).
         self.undo_action.setEnabled(self.session.history.can_undo and not gesturing)
         self.redo_action.setEnabled(self.session.history.can_redo and not gesturing)
+        # Und die Darstellung, aus demselben Grund wie die Operationen: Im
+        # Skizzenmodus liegt der Viewport nicht im Stapel, und ihre Ziffern
+        # blockieren dort den Ebenenwechsel — siehe ``_display_actions``.
+        for action in self._display_actions:
+            action.setEnabled(not drawing)
         # Dieselbe Regel für die zwei Einträge, die keine Operationen sind und
         # trotzdem einen Körper brauchen: ausgegraut statt einer modalen
         # Sackgasse nach dem Klick.
@@ -1996,30 +2043,74 @@ class MainWindow(QMainWindow):
         ]
 
     def _kind_hint(
-        self, action: QAction, spec: OperationSpec, kinds: list[str], locked: bool
+        self,
+        action: QAction,
+        spec: OperationSpec,
+        kinds: list[str],
+        locked: bool,
+        objects: int = 0,
+        chosen: int = 0,
     ) -> None:
         """Sagt am ausgegrauten Eintrag, *warum* er ausgegraut ist.
 
         Ausgrauen allein wäre die halbe Antwort: der Nutzer sieht, dass es
         nicht geht, und sucht den Grund bei sich. Der Satz ist derselbe, den
         der Kern wirft, nur kommt er hier vor dem Klick statt nach dem Dialog.
+
+        **Er galt lange nur für die Bauart.** Die Funktion stieg sofort aus,
+        wenn ``requires_kind`` leer war — und das haben sieben von 84
+        Operationen. Auf der leeren Szene sind 69 von 82 Einträgen gesperrt,
+        und bei allen 69 stand als Hinweis ihr Beschreibungssatz: was sie täte,
+        wenn sie könnte. Die Werkzeugzeile daneben sagte es im selben Augenblick
+        richtig („Dafür braucht es einen Körper in der Szene."), weil
+        ``set_usable`` den Grund mitbekommt.
         """
-        if locked or not spec.requires_kind:
+        if locked:
             return
         stored = action.property("tip_before_kind")
-        passt = bool(kinds) and all(kind == spec.requires_kind for kind in kinds)
-        if not passt and kinds:
+        reason = self._reason_locked(spec, kinds, objects, chosen)
+        if reason is not None:
             if stored is None:
                 action.setProperty("tip_before_kind", action.statusTip())
-            reason = tr(
-                "Diese Operation braucht einen exakten Körper (B-Rep). Exakte Körper "
-                "kommen aus einer STEP-Datei oder aus den Grundformen mit „Exakt“."
-            )
             action.setStatusTip(reason)
             action.setToolTip(reason)
         elif stored is not None:
             action.setStatusTip(str(stored))
             action.setToolTip(str(stored))
+            action.setProperty("tip_before_kind", None)
+
+    def _reason_locked(
+        self, spec: OperationSpec, kinds: list[str], objects: int, chosen: int
+    ) -> str | None:
+        """Warum diese Operation gerade nicht geht — oder ``None``, wenn sie geht.
+
+        Die Reihenfolge ist die, in der ein Nutzer sie beheben würde: erst
+        etwas in die Szene, dann etwas auswählen, dann die richtige Bauart.
+        """
+        if spec.takes_whole_scene:
+            if objects <= 0:
+                return str(tr("Dafür braucht es einen Körper in der Szene."))
+            return None
+        if not spec.consumes:
+            return None
+        if chosen < spec.consumes:
+            if objects <= 0:
+                return str(tr("Dafür braucht es einen Körper in der Szene."))
+            if spec.consumes == 1:
+                return str(tr("Wählen Sie dafür ein Objekt aus — im Bild oder im Objektbaum."))
+            return str(
+                tr("Wählen Sie dafür {count} Objekte aus — im Bild oder im Objektbaum.").format(
+                    count=spec.consumes
+                )
+            )
+        if spec.requires_kind and kinds and not all(kind == spec.requires_kind for kind in kinds):
+            return str(
+                tr(
+                    "Diese Operation braucht einen exakten Körper (B-Rep). Exakte Körper "
+                    "kommen aus einer STEP-Datei oder aus den Grundformen mit „Exakt“."
+                )
+            )
+        return None
 
     def _pick_hint(self, action: QAction, ready: bool, locked: bool) -> None:
         """Sagt am ausgegrauten Knopf, dass ihm die Auswahl fehlt.
@@ -2111,6 +2202,7 @@ class MainWindow(QMainWindow):
         self.session.agentBusyChanged.connect(self._on_agent_busy)
         self.session.agentProgress.connect(self._on_agent_progress)
         self.session.splitBusyChanged.connect(self._on_split_busy)
+        self.session.evaluationCancelled.connect(self._on_evaluation_cancelled)
         self._refresh_chat_availability()
 
     # --- actions ----------------------------------------------------------------
@@ -2234,9 +2326,32 @@ class MainWindow(QMainWindow):
             self._save_to(Path(name))
 
     def _save_to(self, path: Path) -> None:
+        """Speichern mit Wartezeiger — es ist keine Handlung ohne Dauer.
+
+        Gemessen: 903 ms für ein Projekt mit einem 62-MiB-Netz, und das ohne
+        jedes Zeichen. Nach §2.8 ist das die mittlere Stufe — Mauszeiger und
+        Statusleiste —, und beide fehlten. Wer *Speichern* drückte, sah für
+        eine Sekunde ein Fenster, das nicht reagiert; ob der Klick angekommen
+        war, wusste er erst danach.
+
+        Kein Arbeiter: Das Schreiben mutiert nichts an der Szene, es blockiert
+        einmal und ist fertig. Ein Thread brächte eine Halteleine, einen
+        Fehlerpfad und die Frage, was passiert, wenn dazwischen jemand
+        weiterarbeitet — für unter zwei Sekunden ist das der teurere Weg.
+
+        Die Zeile wird **selbst neu gezeichnet**, bevor blockiert wird. Ohne
+        das käme sie erst, wenn die Ereignisschleife wieder dran ist — also
+        nachdem das Warten vorbei ist. ``repaint`` und nicht
+        ``processEvents``: Es zeichnet das eine Widget, statt fremde Eingaben
+        mitten in den laufenden Aufruf zu lassen.
+        """
+        self.status_message.setText(tr("Wird gespeichert …"))
+        self.status_message.repaint()
         try:
-            saved = self.session.save_project(path)
+            with waiting():
+                saved = self.session.save_project(path)
         except AppError as error:
+            self.status_message.setText(self._announcement)
             show_error(error, self)
             return
         self.settings.remember(saved)
@@ -2477,6 +2592,7 @@ class MainWindow(QMainWindow):
         self.right.setVisible(visible)
         self.settings.right_panel_visible = visible
         save_settings(self.settings)
+        self._mark_status_alerts()
 
     def action_variants(self) -> None:
         """§28.3: derselbe Stapel mit einer gestuften Zahl, nebeneinander auf
@@ -2994,7 +3110,46 @@ class MainWindow(QMainWindow):
                 tool.shortcut,
                 lambda name=key: self.tools.toggle(name),
             )
+        commands.update(self._menu_commands(commands))
         return commands
+
+    def _menu_commands(self, known: dict[str, tuple[str, str, Any]]) -> dict[str, Any]:
+        """Alles Übrige aus der Menüleiste — sie ist die Quelle, nicht eine
+        zweite Liste daneben.
+
+        §19.2 verlangt die Palette als Universalzugang, und das Wörterbuch
+        darüber führte sie von Hand. Von Hand heißt: Es driftet, und es war
+        gedriftet — **39 von 136 Menüzeilen fehlten**, darunter jede
+        Darstellungsart, jede Kameravorgabe, beide Themen, alle vier
+        Navigationsschemata und acht Zeilen aus dem Hilfe-Menü. Nachzutragen
+        hätte den nächsten Eintrag wieder vergessen lassen; aus der Leiste
+        gelesen kann das nicht mehr passieren.
+
+        Die Operationen bleiben draußen: Sie kommen aus dem Register und
+        tragen dort ihre Beschreibung, ihre Kategorie und ihre Verfügbarkeit —
+        über das Menü gelesen wären sie ein zweites, ärmeres Exemplar.
+
+        **Zwei Zeilen bleiben ebenfalls draußen**, und beide mit Grund:
+        *Beenden* wäre in einer Liste, durch die man tippt, ein Klick zu nah am
+        Verlust der Arbeit, und *Befehlspalette* öffnete sich selbst.
+        """
+        vorhanden = {title for title, _shortcut, _slot in known.values()}
+        ops = set(self._op_actions.values())
+        gefunden: dict[str, Any] = {}
+        for path, action in _menu_lines(self.menuBar()):
+            if action in ops or action.text() in vorhanden:
+                continue
+            if action in (self._quit_action, self._palette_action):
+                continue
+            # Der Weg steht im Titel: „Vorne" allein sagt in einer Liste aus
+            # hundert Zeilen nichts, „Kamera: Vorne" schon.
+            title = f"{path}: {action.text()}" if path else action.text()
+            gefunden[f"menu.{len(gefunden)}"] = (
+                title,
+                action.shortcut().toString(),
+                action.trigger,
+            )
+        return gefunden
 
     def selected_feature_kind(self) -> str | None:
         """Die Art des gerade ausgewählten Merkmals — ``hole``, ``face`` und
@@ -5046,9 +5201,21 @@ class MainWindow(QMainWindow):
     def _on_progress(self, fraction: float, text: str) -> None:
         self.progress.setValue(int(fraction * 100))
         self.veil.step(fraction, text)
-        # Ein leerer Text heißt, der Lauf ist vorbei; dann kommt zurück, was
-        # zuletzt zu sagen war (§2.8).
-        self.status_message.setText(text or self._announcement)
+        if not text:
+            # Ein leerer Text heißt, der Lauf ist vorbei; dann kommt zurück,
+            # was zuletzt zu sagen war (§2.8).
+            self._run_started = None
+            self.status_message.setText(self._announcement)
+            return
+        if self._run_started is None:
+            self._run_started = time.monotonic()
+        # **Über zehn Sekunden zusätzlich eine Schätzung** — die Zeile aus der
+        # Wartezeit-Tabelle galt bisher für genau den Fall nicht, für den sie
+        # geschrieben ist. Sie hing am Ladeschleier, und den gibt es nur bei
+        # leerem Bild; bei jeder langen Rechnung an einem geladenen Modell
+        # stand hier Prozent ohne jede Zeitangabe.
+        left_over = remaining_time(self._run_started, fraction)
+        self.status_message.setText(f"{text}  ·  {left_over}" if left_over else text)
 
     def _on_busy(self, busy: bool) -> None:
         # Agent und Trennebenensuche können gleichzeitig laufen; dann bleiben
@@ -5061,6 +5228,25 @@ class MainWindow(QMainWindow):
         self._update_veil(busy)
         if not busy and not others:
             self.status_message.setText(self._announcement)
+
+    def _on_evaluation_cancelled(self) -> None:
+        """Sagen, dass angehalten wurde — und was jetzt gilt.
+
+        Ohne diesen Satz sah ein abgebrochener Lauf genauso aus wie ein
+        fertiger: Balken weg, Knopf weg, dieselbe Ansicht wie vorher. Der Satz
+        nennt deshalb beides, das Aufhören **und** den Stand, den man vor sich
+        hat — sonst bleibt die Frage offen, ob das Bild das Ergebnis ist.
+
+        Er geht in ``_announcement``, nicht nur in die Zeile: Das nächste
+        ``_on_busy`` schreibt die Ansage zurück, und ein Satz, der beim
+        nächsten Ereignis verschwindet, war für den, der gerade woanders
+        hinsah, nie da.
+        """
+        self._announcement = tr(
+            "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand — "
+            "eine Änderung am Stapel rechnet weiter."
+        )
+        self.status_message.setText(self._announcement)
 
     def _update_veil(self, busy: bool) -> None:
         """Die Ladeanzeige gilt dem leeren Bild, nicht jeder Rechnung.
@@ -5183,14 +5369,29 @@ class MainWindow(QMainWindow):
     def _scale_after_error(self, error: AppError) -> None:
         """Auf den Bauraum verkleinern — mit dem Faktor, der wirklich passt.
 
-        Der Fehler kennt beide Größen; sie hier neu zu raten wäre eine zweite
-        Wahrheit. Ein Prozent Luft, damit das Teil nicht exakt an der Wand des
-        Bauraums klebt.
+        **Der Knopf tat nichts, und das war nicht zu sehen.** Gelesen wurden
+        ``build_volume`` und ``size`` aus den Werten des Fehlers — zwei
+        Schlüssel, die **keine** Ausnahme und **kein** Befund je trägt. Die
+        Bedingung darunter griff also immer, und die Methode kehrte still
+        zurück: ein Vorschlag nach Regel 17, der optisch erfüllt und
+        funktional hohl war, wie „Reparieren und erneut versuchen" vor ihm.
+
+        Gerechnet wird jetzt aus Profil und Szene. Das ist keine zweite
+        Wahrheit, sondern dieselbe, aus der auch ``check_build_volume``
+        rechnet — und sie ist immer da, gleich ob die Handlung aus einem
+        Fehlerdialog kommt oder aus dem Kontextmenü des Prüfberichts.
+
+        Ein Prozent Luft, damit das Teil nicht exakt an der Wand klebt.
         """
-        volume = error.values.get("build_volume")
-        size = error.values.get("size")
         object_id = self._object_of(error)
-        if object_id is None or not volume or not size:
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result and object_id else None
+        if object_id is None or entry is None:
+            return
+        volume = self.session.profile.printer.build_volume
+        size = as_mesh_data(entry.mesh).bounds.size
+        needed_any = [needed for needed in size if needed > 0.0]
+        if not needed_any:
             return
         factor = min(
             available / needed
@@ -5476,6 +5677,41 @@ class MainWindow(QMainWindow):
         name = tr("Prüfbericht")
         self.right.setTabText(index, f"{name} · {alerts}" if alerts else name)
 
+    def _mark_status_alerts(self, alerts: int = -1) -> None:
+        """Der Warnungszähler in der Statusleiste — nur wenn er gebraucht wird.
+
+        Nicht immer: Steht die rechte Spalte offen, trägt ihr Reiter dieselbe
+        Zahl, und zwei Zähler nebeneinander sind einer zu viel. Bei
+        ausgeblendeter Spalte ist er die einzige Auskunft, dass etwas
+        aufgelaufen ist — und der Weg zurück.
+        """
+        if alerts >= 0:
+            self._alerts = alerts
+        count = getattr(self, "_alerts", 0)
+        # ``isVisibleTo`` und nicht ``isVisible``: Gefragt ist, ob die Spalte
+        # ausgeblendet **wurde**. ``isVisible`` ist auch dann falsch, wenn nur
+        # das Fenster selbst noch nicht gezeigt wird — beim Aufbau und in jedem
+        # Test, und der Zähler stünde dort fälschlich neben einem offenen
+        # Bericht.
+        show = count > 0 and not self.right.isVisibleTo(self)
+        self.alert_button.setVisible(show)
+        if not show:
+            return
+        # Das Zeichen steht neben der Zahl, nicht statt ihrer: dieselbe zweite
+        # Kodierung wie am Reiter (Regel 18).
+        self.alert_button.setText(f"{SEVERITY_MARKER['warning']} {count}")
+        hint = tr("{count} offene Befunde — anklicken öffnet den Prüfbericht.").format(count=count)
+        self.alert_button.setToolTip(hint)
+        self.alert_button.setStatusTip(hint)
+
+    def _show_alerts(self) -> None:
+        """Die rechte Spalte zurückholen und den Bericht nach vorn."""
+        self.right.setVisible(True)
+        self.settings.right_panel_visible = True
+        save_settings(self.settings)
+        self._focus_report(force=True)
+        self._mark_status_alerts()
+
     def _focus_report(self, force: bool = False) -> None:
         """Den Prüfbericht nach vorn holen.
 
@@ -5688,6 +5924,13 @@ class MainWindow(QMainWindow):
             self._update_worker,
             self._finished_update_worker,
             self._ollama_size_worker,
+            # Der Download fehlte hier. Er folgt dem Muster mit ``retire`` und
+            # ``hold_until_done`` sauber — aber die Halteleine bekommt ihn erst,
+            # wenn er fertig ist. Solange er läuft, hält ihn allein dieses Feld,
+            # und wer währenddessen schließt, ließ einen Thread sein Fenster
+            # überleben. Genau der Absturz, gegen den diese Liste geschrieben
+            # wurde.
+            self._download_worker,
             self._export_worker,
             *self._leash.pending(),
         ):
@@ -5745,6 +5988,23 @@ class MainWindow(QMainWindow):
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
         save_settings(self.settings)
         event.accept()
+
+
+def _menu_lines(menu: Any, path: str = "") -> Iterator[tuple[str, Any]]:
+    """Jede Zeile der Menüleiste mit ihrem Weg — Untermenüs eingeschlossen.
+
+    Trennstriche fallen weg, ein Untermenü liefert seine Kinder statt sich
+    selbst. Der Weg ist das, was in einer Liste aus hundert Zeilen den
+    Unterschied macht: „Vorne" sagt nichts, „Kamera: Vorne" schon.
+    """
+    for action in menu.actions():
+        if action.isSeparator():
+            continue
+        sub = action.menu()
+        if sub is not None:
+            yield from _menu_lines(sub, f"{path} > {action.text()}" if path else action.text())
+            continue
+        yield path, action
 
 
 def registered_operations() -> list[OperationSpec]:

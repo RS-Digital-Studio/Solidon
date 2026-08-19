@@ -581,3 +581,92 @@ def test_what_creates_a_body_lives_under_creating() -> None:
             assert spec.category in creating, (
                 f"{spec.name} erzeugt aus dem Nichts, steht aber unter {spec.category!r}"
             )
+
+
+def test_reopening_an_operation_keeps_its_advanced_section(qt_app: object) -> None:
+    """Die gestufte Tiefe gilt auch für den Korrekturdialog (§2.4).
+
+    Wer eine Operation aus dem Verlauf öffnet, bekommt ihr *ganzes* Schema als
+    Werte übergeben. Der Dialog legte alles vor den Nutzer, was einen Wert
+    trug — und die Klappe „Weitere Einstellungen" verschwand genau dann, wenn
+    jemand einen Wert nachbessern will. Ein Wert, der auf seiner Vorgabe steht,
+    ist keine Entscheidung und gehört dorthin, wo das Schema ihn hinlegt.
+
+    Geprüft am gebauten Dialog und an einer Operation, die wirklich eine
+    Rückseite hat — sonst prüfte der Test nichts.
+    """
+    pytest.importorskip("PySide6")
+
+    from app.ui.op_dialog import OperationDialog
+
+    spec = next(
+        entry
+        for entry in REGISTRY.all()
+        if any(p.placement == "advanced" for p in entry.params.spec())
+        and any(p.placement == "front" for p in entry.params.spec())
+    )
+    vorne = next(p.name for p in spec.params.spec() if p.placement == "front")
+    values = {p.name: p.default for p in spec.params.spec() if p.default is not None}
+
+    frisch = OperationDialog(spec, ["obj_1"])
+    assert getattr(frisch, "advanced", None) is not None, (
+        f"{spec.name} hat gar keine Rückseite — dann prüft dieser Test nichts."
+    )
+    hinten = {name for name, form in frisch._rows.items() if form is not frisch._rows[vorne]}
+
+    wieder = OperationDialog(spec, ["obj_1"], values=values)
+    assert getattr(wieder, "advanced", None) is not None, (
+        f"{spec.name}: Aus dem Verlauf geoeffnet verschwindet die Klappe fuer die "
+        "weiteren Einstellungen - die gestufte Tiefe gilt dann genau dort nicht, wo "
+        "jemand einen Wert nachbessern will."
+    )
+    for name in hinten:
+        assert wieder._rows[name] is not wieder._rows[vorne], (
+            f"{spec.name}: {name!r} ist nach vorn gerutscht, obwohl es auf seiner "
+            "Vorgabe steht und das Schema es nach hinten legt."
+        )
+
+
+def test_the_palette_knows_every_line_of_the_menu_bar(qt_app: object) -> None:
+    """§19.2 verlangt die Palette als Universalzugang — alles über sie
+    erreichbar, und die Kürzel lernen sich daneben.
+
+    Sie war es nicht: Das Wörterbuch der Fensterbefehle wurde von Hand
+    geführt, und von Hand heißt driften. Gemessen fehlten **39 von 136
+    Menüzeilen** — jede Darstellungsart, jede Kameravorgabe, beide Themen,
+    alle vier Navigationsschemata und acht Zeilen aus dem Hilfe-Menü. Sie
+    nachzutragen hätte den nächsten Eintrag wieder vergessen lassen; gelesen
+    wird deshalb die Leiste selbst.
+
+    Zwei Zeilen bleiben mit Absicht draußen, und dieser Test nennt sie: In
+    einer Liste, durch die man tippt, ist *Beenden* ein Klick zu nah am
+    Verlust der Arbeit, und *Befehlspalette* öffnete sich selbst.
+    """
+    pytest.importorskip("PySide6")
+
+    from app.ui.main_window import MainWindow, _menu_lines
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        commands = window.window_commands()
+        titles = {title for title, _shortcut, _slot in commands.values()}
+        operations = set(window._op_actions.values())
+        gewollt_draussen = {window._quit_action, window._palette_action}
+
+        missing = []
+        for path, action in _menu_lines(window.menuBar()):
+            if action in operations or action in gewollt_draussen:
+                continue
+            full = f"{path}: {action.text()}" if path else action.text()
+            if full not in titles and action.text() not in titles:
+                missing.append(full)
+
+        assert not missing, (
+            f"{len(missing)} Menüzeilen sind über die Befehlspalette nicht erreichbar: "
+            f"{missing}. Die Palette liest die Leiste — wer hier landet, hat sie umgangen."
+        )
+    finally:
+        window.close()
+        window.deleteLater()

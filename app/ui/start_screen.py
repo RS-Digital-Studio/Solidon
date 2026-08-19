@@ -237,6 +237,12 @@ class ExampleTile(QFrame):
         self.path = path
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # Eine Kachel ist ein Knopf aus zwei Labels, und ein Bildschirmleser
+        # las davon nichts vor: Der Titel gehört einem Kind, nicht ihr. Neun
+        # solcher Kacheln sind das Erste, was jemand hier sieht — und ohne
+        # Namen neun Mal „Rahmen".
+        self.setAccessibleName(str(entry.title))
+        self.setAccessibleDescription(str(entry.doc))
         # Waagerecht dehnbar, senkrecht mitwachsend: sonst steht neben einer
         # Kachel mit drei Zeilen eine mit zwei, und die Zeile sieht schief aus.
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)

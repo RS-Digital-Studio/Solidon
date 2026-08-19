@@ -24,6 +24,122 @@ def test_text_has_enough_contrast_in_both_themes(theme: str) -> None:
 
 
 @pytest.mark.parametrize("theme", list(THEMES))
+def test_a_severity_reads_on_the_surface_it_is_written_on(theme: str) -> None:
+    """Der Prüfbericht schreibt jede Zeile in der Farbe ihres Schweregrads.
+
+    Die Rollenfarben sind für den dunklen Untergrund gewählt, auf dem die
+    Anwendung startet. Auf der weißen Liste des hellen Themas brachten sie
+    2,22 (Warnung), 2,67 (Hinweis) und 3,97 (Fehler) — die zentrale Ansicht der
+    Anwendung stand vollständig unter der Lesbarkeitsgrenze. Geprüft hat das
+    niemand: die Kontrasttests hier kannten nur die Themenfarben, und die
+    Rollenfarben lagen daneben in einer eigenen Datei.
+    """
+    from app.ui.palette import text_colour
+
+    surface = THEMES[theme]["base"]  # type: ignore[index]
+    for role in ("info", "warning", "error"):
+        ratio = contrast_ratio(text_colour(role, surface), surface)  # type: ignore[arg-type]
+        assert ratio >= MINIMUM_CONTRAST, (
+            f"{role} bringt auf {surface} nur {ratio:.2f} — ein Befund, den man nicht liest."
+        )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_the_focus_ring_is_visible_on_its_own_background(theme: str) -> None:
+    """Wer ohne Maus arbeitet, sieht nur den Fokusring.
+
+    Er nahm ``highlight``, und der Bernstein bringt gegen das helle Fenster
+    1,70 und gegen ein weißes Feld 2,06. WCAG 1.4.11 verlangt 3,0 für die
+    Umrandung eines Bedienelements — im hellen Thema war der Ring praktisch
+    nicht da. Er nimmt jetzt ``accent_line``, die für genau diese Rechnung
+    schon je Thema abgestuft war.
+    """
+    colours = THEMES[theme]  # type: ignore[index]
+    for surface in ("base", "window"):
+        ratio = contrast_ratio(colours["accent_line"], colours[surface])
+        assert ratio >= 3.0, f"Fokusring auf {surface}: {ratio:.2f}"
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_quiet_text_stays_readable_and_locked_text_looks_locked(theme: str) -> None:
+    """Zwei Aufgaben, zwei Farben.
+
+    ``disabled`` versorgte beide: den Sperrzustand *und* jeden Nebentext —
+    Maße, Einheiten, Spaltenköpfe, Gruppentitel, den stillen Reiter. Damit war
+    beides falsch. Ein Fünftel aller Beschriftungen kam im hellen Thema auf
+    2,59 Kontrast, und ein gesperrter Knopf unterschied sich farblich nicht von
+    einem Spaltenkopf, der nie bedienbar war.
+    """
+    colours = THEMES[theme]  # type: ignore[index]
+    for surface in ("window", "base"):
+        quiet = contrast_ratio(colours["muted"], colours[surface])
+        assert quiet >= MINIMUM_CONTRAST, (
+            f"Nebentext auf {surface}: {quiet:.2f} — leise heißt nicht unlesbar."
+        )
+
+    assert colours["muted"] != colours["disabled"], (
+        "Eine Farbe für zwei Aussagen ist für beide die falsche."
+    )
+    assert (
+        contrast_ratio(colours["text"], colours["window"])
+        > contrast_ratio(colours["muted"], colours["window"])
+        > contrast_ratio(colours["disabled"], colours["window"])
+    ), (
+        "Die Reihenfolge muss stimmen: Haupttext lauter als Nebentext, Nebentext lauter "
+        "als Gesperrtes."
+    )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_a_locked_control_looks_locked_in_every_role(theme: str) -> None:
+    """Gesperrt ist ein Zustand, den man sehen muss.
+
+    Die Palette setzte ihn für ``Text`` und ``ButtonText`` — nicht für
+    ``WindowText``. Daran hängen genau die Elemente, die das Stylesheet nicht
+    anfasst: QLabel, QCheckBox, QRadioButton, QGroupBox. Ein gesperrtes
+    Ankreuzfeld war pixelgleich mit einem bedienbaren; „Scheibe" in der
+    Schnittleiste und „Projektdatei anhängen" im Fehlerbericht sahen
+    anklickbar aus und waren es nicht.
+    """
+    from PySide6.QtGui import QPalette
+
+    from app.ui.theme import build_palette
+
+    palette = build_palette(theme)  # type: ignore[arg-type]
+    for role in (
+        QPalette.ColorRole.Text,
+        QPalette.ColorRole.ButtonText,
+        QPalette.ColorRole.WindowText,
+    ):
+        locked = palette.color(QPalette.ColorGroup.Disabled, role).name()
+        usable = palette.color(QPalette.ColorGroup.Active, role).name()
+        assert locked != usable, f"{role.name}: gesperrt sieht aus wie bedienbar"
+
+
+def test_the_palette_leaves_no_role_to_the_system() -> None:
+    """Was hier nicht gesetzt wird, kommt vom Betriebssystem.
+
+    ``PlaceholderText`` stand als einzige Rolle nicht in der Palette. Auf einem
+    Rechner mit dunkel eingestelltem Windows war er hell — und im hellen Thema
+    damit weiß auf Weiß. Dreizehn Felder tragen ihre Auskunft dort: das
+    Suchfeld des Prüfberichts stand leer da, der Chat fragte nichts mehr, und
+    im Schlüsseldialog fehlte das Muster, das als Einziges sagt, wie ein
+    Lizenzschlüssel aussieht.
+    """
+    from PySide6.QtGui import QPalette
+
+    from app.ui.theme import build_palette
+
+    for theme in THEMES:
+        palette = build_palette(theme)  # type: ignore[arg-type]
+        placeholder = palette.color(QPalette.ColorRole.PlaceholderText).name()
+        base = THEMES[theme]["base"]  # type: ignore[index]
+        assert contrast_ratio(placeholder, base) >= 3.0, (
+            f"{theme}: Platzhalter {placeholder} auf {base} — man sieht ihn nicht."
+        )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
 def test_a_border_is_actually_visible(theme: str) -> None:
     """Ein Knopf ohne sichtbaren Rahmen ist kein Knopf, sondern Text.
 
@@ -137,11 +253,23 @@ def test_typing_narrows_the_list_and_picks_the_first(qt_app: object) -> None:
     assert palette.chosen() == "duplicate_object"
 
 
-def test_a_search_without_hits_chooses_nothing(qt_app: object) -> None:
+def test_a_search_without_hits_says_so_and_chooses_nothing(qt_app: object) -> None:
+    """Eine leere Liste sagt nicht, ob nichts passt oder ob die Suche hängt.
+
+    Die Zeile, die es jetzt sagt, ist ausdrücklich nicht wählbar und trägt
+    keine Daten — sonst löste die Eingabetaste einen Befehl aus, den es nicht
+    gibt. Geprüft wird deshalb beides: dass etwas dasteht, und dass ``chosen``
+    weiter ``None`` liefert.
+    """
+    from PySide6.QtCore import Qt
+
     palette = CommandPalette()
     palette.search.setText("gibtsnicht")
 
-    assert palette.list.count() == 0
+    assert palette.list.count() == 1, "kein Wort darüber, dass nichts passt"
+    zeile = palette.list.item(0)
+    assert "gibtsnicht" in zeile.text(), "der Satz nennt den Suchbegriff nicht"
+    assert not zeile.flags() & Qt.ItemFlag.ItemIsSelectable
     assert palette.chosen() is None
 
 
@@ -149,3 +277,70 @@ def _palette_entries():
     from app.core.registry import palette_entries
 
     return list(palette_entries())
+
+
+def test_the_search_finds_words_typed_without_umlauts(qt_app: object) -> None:
+    """Nicht jede Tastatur hat Umlaute, und nicht jeder tippt sie.
+
+    „aushoehlen" fand **null** Einträge, obwohl die Operation „Aushöhlen"
+    heißt; dasselbe galt für „groesse". Gefaltet wird auf beiden Seiten — wer
+    „Aushöhlen" mit Umlaut tippt, soll ihn genauso finden.
+    """
+    from app.ui.command_palette import CommandPalette
+
+    palette = CommandPalette()
+    for typed in ("aushoehlen", "aushöhlen", "AUSHOEHLEN"):
+        palette.search.setText(typed)
+        titles = [palette.list.item(row).text() for row in range(palette.list.count())]
+        assert titles, f"{typed!r} findet nichts"
+        assert "Aushöhlen" in titles[0], f"{typed!r} zeigt zuerst {titles[0]!r}"
+
+
+def test_the_search_falls_back_to_the_word_stem(qt_app: object) -> None:
+    """„bohren" fand nichts, weil die Operation „Bohrung setzen" heißt.
+
+    Ein Fall, den keine Synonymtabelle je vollständig abdeckt — und den die
+    ersten vier Buchstaben lösen. Gelockert wird **erst**, wenn die genaue
+    Suche leer ausgeht: Sonst stünde zwischen guten Treffern immer auch
+    Ungefähres.
+    """
+    from app.ui.command_palette import CommandPalette, matches
+
+    palette = CommandPalette()
+    palette.search.setText("bohren")
+    titles = [palette.list.item(row).text() for row in range(palette.list.count())]
+
+    assert titles, "die Suche nach bohren findet nichts"
+    assert "Bohrung" in titles[0], f"zuerst steht {titles[0]!r} statt der Bohrung"
+
+    # Und die Lockerung greift wirklich nur als zweite Runde.
+    treffer = [entry for entry in palette._entries if matches(entry, "bohren")]
+    assert not treffer, "bohren passt neuerdings genau — dann prueft dieser Test nichts"
+
+
+def test_a_hit_in_the_title_beats_a_hit_in_the_description(qt_app: object) -> None:
+    """Wer tippt, meint fast immer den Namen.
+
+    Ohne Ordnung stand bei „bohren" das „An Merkmal ausrichten" vorn, weil
+    dessen Beschreibung das Wort Bohrung enthält, und „Bohrung setzen" auf
+    Platz drei. Sortiert wird stabil, damit die Reihenfolge aus ``applies_to``
+    innerhalb derselben Güte stehen bleibt.
+    """
+    from app.ui.command_palette import CommandPalette, rank
+
+    palette = CommandPalette()
+    palette.search.setText("bohrung")
+    titles = [palette.list.item(row).text() for row in range(palette.list.count())]
+
+    assert len(titles) > 1, "zu wenige Treffer, um eine Reihenfolge zu pruefen"
+    assert "Bohrung" in titles[0], f"zuerst steht {titles[0]!r}"
+
+    # Und die Ordnung dahinter, damit ein Umbau der Anzeige sie nicht still
+    # verliert: Titel schlaegt Beschreibung.
+    im_titel = next(e for e in palette._entries if "Bohrung" in str(e.title))
+    nur_im_text = next(
+        e
+        for e in palette._entries
+        if "bohrung" in f"{e.doc}".casefold() and "Bohrung" not in str(e.title)
+    )
+    assert rank(im_titel, "bohrung") < rank(nur_im_text, "bohrung")

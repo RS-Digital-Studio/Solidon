@@ -42,7 +42,15 @@ class WorkerLeash:
 
         Wer sein Feld leeren will, tut das im eigenen Slot davor und **nur
         für seinen eigenen Arbeiter** — siehe Gebietsregel.
+
+        ``None`` geht durch, wie bei :meth:`retire`: Ein Slot, der sein Feld
+        leert und den alten Inhalt hierherreicht, bekommt None, wenn schon
+        jemand vor ihm aufgeräumt hat. Ohne diese Zeile landete None in der
+        Liste, und der Zeitgeber danach fragte es nach ``isRunning`` — ein
+        AttributeError im Teardown, weit weg von seiner Ursache.
         """
+        if worker is None:
+            return
         if worker not in self._held:
             self._held.append(worker)
         QTimer.singleShot(0, self._context, lambda: self._release(worker))

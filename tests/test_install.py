@@ -165,3 +165,51 @@ def test_nothing_starts_by_itself(qt_app: QApplication, monkeypatch: pytest.Monk
     InstallDialog()
 
     assert ran == []
+
+
+def test_a_failed_install_says_what_went_wrong(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regel 17 gilt auch hier: „Das hat nicht geklappt." ist keine Antwort.
+
+    Der Kern gab bei einem Fehlschlag nur ``installed=False`` und die rohe
+    Ausgabe zurück; der Dialog machte daraus „Das hat nicht geklappt." und
+    zeigte davor jede Zeile, die pip oder winget von sich geben. Wer das liest,
+    weiß danach weniger als vorher.
+
+    Der Rückgabewert der Paketverwaltung gehört zu den Einzelheiten, nicht in
+    den Satz — dort steht er weiterhin, für den, der ihn weitergeben will.
+    """
+    import subprocess
+
+    class Fertig:
+        returncode = 1
+        stdout = "ERROR: Could not find a version that satisfies the requirement"
+        stderr = ""
+
+    monkeypatch.setattr(install, "present", lambda _requirement: False)
+    monkeypatch.setattr(install, "installable", lambda _requirement: True)
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: Fertig())
+
+    result = install.install(by_id("vhacd"))
+
+    assert not result.installed
+    assert result.reason, "ein Fehlschlag ohne Grund sagt nur, dass etwas nicht ging"
+    assert "1" in result.output, "der Rückgabewert gehört in die Einzelheiten"
+    satz = str(result.reason)
+    assert "ERROR:" not in satz, "die rohe Ausgabe gehört nicht in den Satz"
+
+
+def test_a_package_manager_that_will_not_start_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Auch der Ausfall vor dem ersten Befehl trägt einen Satz."""
+    import subprocess
+
+    def kaputt(*args: object, **kwargs: object) -> None:
+        raise OSError("nicht gefunden")
+
+    monkeypatch.setattr(install, "present", lambda _requirement: False)
+    monkeypatch.setattr(install, "installable", lambda _requirement: True)
+    monkeypatch.setattr(subprocess, "run", kaputt)
+
+    result = install.install(by_id("vhacd"))
+
+    assert not result.installed
+    assert result.reason

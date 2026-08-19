@@ -331,8 +331,8 @@ def test_an_operation_without_any_input_stops_instead_of_crashing(
         entry for entry in result.scene.report.findings if entry.code == "evaluate.too_few_inputs"
     )
     assert finding.severity == "error"
-    assert finding.values["erwartet"] == 1
-    assert finding.values["vorhanden"] == 0
+    assert finding.values["expected"] == 1
+    assert finding.values["given"] == 0
     assert "obj_1" in result.scene.objects, "was gerechnet war, bleibt sichtbar"
 
 

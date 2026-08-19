@@ -1436,14 +1436,66 @@ def test_only_actions_with_a_handler_are_offered(window: MainWindow) -> None:
 
 
 def test_an_error_without_a_handler_still_offers_a_way_out(window: MainWindow) -> None:
-    """Ein Dialog mit nur „Abbrechen" ist „fehlgeschlagen" mit mehr Worten."""
-    from app.ui.dialogs import offered_actions
+    """Ein Dialog mit nur „Abbrechen" ist „fehlgeschlagen" mit mehr Worten.
 
+    **Der Ausweg muss nicht immer ein Knopf sein.** Diese Prüfung verlangte
+    früher ``report_error``, und das war die halbe Antwort: Von 48 Kennungen,
+    die der Kern in ``Action(...)`` vergibt, sind zehn verdrahtet — die
+    übrigen wurden verworfen, und an ihrer Stelle stand der Fehlerbericht als
+    Hauptknopf. Auf einen reinen Bedienfehler ist das die falsche lauteste
+    Antwort; er gehört laut ``errors.py`` dem ``InternalError``. Der hilfreiche
+    Satz des Kernautors steckte derweil im weggeworfenen Knopf.
+
+    Geprüft wird deshalb die Regel und nicht ihre eine Umsetzung: Es bleibt
+    **entweder** eine Handlung mit Wirkung **oder** ein Rat zum Lesen. Nur
+    beides zugleich leer wäre „fehlgeschlagen" mit mehr Worten.
+    """
+    from app.ui.dialogs import offered_actions, unhandled_advice
+
+    known = window.error_handlers()
     error = errors.AmbiguityError("Welche Fläche ist gemeint?", ("oben", "unten"))
-    offered = [action.id for action in offered_actions(error, window.error_handlers())]
+    offered = [action.id for action in offered_actions(error, known)]
+    spoken = unhandled_advice(error, known)
 
-    assert offered, "zu keinem Vorschlag ein Handler — dann tritt der Bericht ein"
-    assert "report_error" in offered
+    assert offered or spoken, "weder Knopf noch Rat — genau das darf nicht passieren"
+    assert spoken, "die Vorschläge des Kerns dürfen nicht stillschweigend verschwinden"
+    assert "report_error" not in offered, (
+        "Der Fehlerbericht ist dem InternalError vorbehalten, nicht einer offenen Frage."
+    )
+
+
+def test_every_worker_field_is_waited_for_when_the_window_closes() -> None:
+    """Ein Thread, der sein Fenster überlebt, nimmt den Prozess mit.
+
+    ``wait_for_workers`` zählt die Arbeiter von Hand auf, und der Download
+    fehlte darin. Er folgt dem Muster mit ``_retire`` und ``_hold_until_done``
+    sauber — aber in ``_retired`` landet er erst, wenn er fertig ist. Solange er
+    lief, hielt ihn allein sein Feld, und wer währenddessen schloss, bekam
+    genau den Absturz, gegen den die Liste geschrieben wurde: einen ohne Zeile,
+    weil niemand mehr da war, sie zu schreiben.
+
+    Geprüft wird am Quelltext und nicht am laufenden Fenster: Ein Test, der
+    dafür jeden Arbeiter wirklich startet, bräuchte ein Netz, einen Slicer und
+    ein Sprachmodell. Was hier zählt, ist die Vollständigkeit der Aufzählung —
+    wer ein neues Feld anlegt und es dort vergisst, wird rot.
+    """
+    import re
+
+    source = (Path(__file__).parent.parent / "app" / "ui" / "main_window.py").read_text(
+        encoding="utf-8"
+    )
+    fields = set(re.findall(r"self\.(_\w*worker\w*)\s*:\s*Any\s*=\s*None", source))
+    assert fields, "keine Arbeiterfelder gefunden — dieser Test misst nichts mehr"
+
+    body = source[source.index("def wait_for_workers") :]
+    body = body[: body.index("\n    def ", 1)]
+
+    forgotten = sorted(name for name in fields if name not in body)
+    assert not forgotten, (
+        f"Diese Arbeiter werden beim Schließen nicht abgewartet: {forgotten}. "
+        "Solange einer läuft, hält ihn allein sein Feld — `_retired` bekommt ihn "
+        "erst, wenn er fertig ist."
+    )
 
 
 def test_the_handlers_are_found_through_the_parent_window(window: MainWindow) -> None:
@@ -2414,6 +2466,49 @@ def test_a_cancelled_preview_stays_silent(session: Session) -> None:
     assert not collected, "eine verworfene Vorschau meldet sich nicht mehr"
 
 
+def test_a_cancelled_preview_actually_stops_computing(session: Session) -> None:
+    """Verwerfen ist nicht abbrechen.
+
+    ``cancel_preview`` erhoehte nur die Generation: Das Ergebnis wurde
+    weggeworfen, angehalten wurde nichts. Wer einen Dialog ueber einem grossen
+    Koerper schloss, liess eine Rechnung hinter sich, die niemand mehr sehen
+    wollte und die trotzdem bis zum Ende lief — und beim schnellen Tippen
+    stapelten sich diese Rechnungen.
+
+    Geprueft wird deshalb das Token, nicht die Stille: Jeder Arbeiter fuehrt
+    ein **eigenes**, denn ein geteiltes mit ``reset()`` vor dem Start waere ein
+    Wettlauf — der alte Lauf saehe den gesetzten Zustand womoeglich nie.
+    """
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+
+    def bohrung() -> list[OperationDraft]:
+        return [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 4.0, "x": 0.0, "y": 0.0, "z": 0.0, "axis": "z"},
+            )
+        ]
+
+    session.preview_async(lambda _difference: None, bohrung())
+    erster = session._previews[-1]
+    session.preview_async(lambda _difference: None, bohrung())
+    zweiter = session._previews[-1]
+
+    assert erster is not zweiter, "zwei Anfragen, zwei Arbeiter"
+    assert erster.cancel is not zweiter.cancel, (
+        "ein geteiltes Token waere ein Wettlauf zwischen altem und neuem Lauf"
+    )
+    assert erster.cancel.is_cancelled, "die neuere Anfrage laesst die aeltere weiterrechnen"
+    assert not zweiter.cancel.is_cancelled, "die neueste darf rechnen"
+
+    session.cancel_preview()
+    assert zweiter.cancel.is_cancelled, "der geschlossene Dialog haelt seine Rechnung an"
+
+    session.wait_for_idle()
+
+
 def test_a_broken_preview_shows_nothing_instead_of_failing(session: Session) -> None:
     """Beim Tippen entstehen ungültige Zwischenstände — die Vorschau zeigt
     dann nichts; der echte Fehler kommt beim Anwenden als Vorschlag (§2.7)."""
@@ -3073,17 +3168,39 @@ def test_every_worker_survives_the_delivery_of_its_own_signal(session: Session) 
 
     Geprüft am Slot statt am Absturz: einen Absturz zuverlässig auszulösen
     braucht Last und Glück, die Regel dahinter ist eine Zeile.
+
+    **Und geprüft an der Regel statt an drei Feldnamen.** Die Sitzung hielt je
+    Arbeiterart genau einen ausgelaufenen — ``_finished_worker``,
+    ``_finished_agent``, ``_finished_split``. Ein Feld hält aber nur einen, und
+    ``_on_thread_done`` startet bei ``_rerun_pending`` sofort den nächsten
+    Lauf: Wird der schnell fertig, überschreibt er das Feld, während Qt den
+    Vorgänger noch abräumt. Genau diese Kette stand im Stapelabzug eines
+    Absturzes, den das Repository lange nur als „Segfault in test_chat_ui.py"
+    kannte. Gehalten wird jetzt in einer Liste (:mod:`app.ui.leash`), und
+    dieser Test liest, dass die drei Slots sie benutzen.
     """
+    import re
+
     session.import_model(MESHES / "cube_clean.stl")
     session.wait_for_idle()
 
-    for name in ("_finished_worker", "_finished_agent", "_finished_split"):
-        assert hasattr(session, name), f"{name} fehlt — ein Arbeiter ohne Halteleine"
+    assert session._worker is None, "nach dem Warten läuft keiner mehr"
+    assert hasattr(session, "_leash"), "die Sitzung hat keine Halteleine"
 
-    # Nach einem Lauf hält das Feld den ausgelaufenen Arbeiter, statt ihn
-    # freigegeben zu haben.
-    assert session._finished_worker is not None
-    assert session._worker is None
+    quelle = (Path(__file__).parent.parent / "app" / "ui" / "session.py").read_text(
+        encoding="utf-8"
+    )
+    for slot in ("_on_thread_done", "_on_agent_done", "_on_split_done"):
+        koerper = quelle[quelle.index(f"def {slot}(") :]
+        koerper = koerper[: koerper.index(chr(10) + "    def ", 1)]
+        assert "_leash.hold_until_done" in koerper, (
+            f"{slot} übergibt seinen Arbeiter nicht an die Halteleine — wer die "
+            "Referenz im eigenen finished-Slot loslässt, gibt den Wrapper frei, "
+            "während Qt die Zustellung noch auf dem Stapel hat."
+        )
+        assert not re.search(r"self\._(worker|agent|split)\s*=\s*None", koerper), (
+            f"{slot} schreibt None in sein Feld, statt den Arbeiter erst zu sichern."
+        )
 
 
 # --- die Vorschau sagt, dass sie eine ist (Konzept Teil 10, 9b) ------------------
@@ -3816,6 +3933,76 @@ def test_the_veil_can_be_cancelled(window: MainWindow) -> None:
     window._on_busy(False)
 
 
+def test_a_cancelled_run_says_that_it_was_cancelled(window: MainWindow) -> None:
+    """Ein abgebrochener Lauf sah aus wie ein fertiger.
+
+    Balken weg, Knopf weg, dieselbe Ansicht wie vorher — das erfuhr bisher nur
+    die Logdatei. Wer nicht mitgezaehlt hat, konnte nicht wissen, ob sein Klick
+    etwas bewirkt hat und ob das Bild vor ihm das Ergebnis ist oder ein alter
+    Stand. Der Satz nennt deshalb beides (§2.8).
+    """
+    window.session.cancel()
+    window.session._on_cancelled()
+
+    assert "Abgebrochen" in window.status_message.text()
+    assert "letzte" in window.status_message.text(), "der Stand gehoert dazu, nicht nur das Ende"
+
+    # Und er ueberlebt das naechste Ereignis: ``_on_busy`` schreibt die Ansage
+    # zurueck, und eine Meldung, die dabei verschwindet, war fuer den, der
+    # gerade woanders hinsah, nie da.
+    window._on_busy(False)
+    assert "Abgebrochen" in window.status_message.text()
+
+
+def test_replacing_a_run_is_not_an_interruption(window: MainWindow) -> None:
+    """Eine neuere Anfrage bricht die laufende ab — das ist Ersetzen, kein
+    Aufhoeren.
+
+    Es zu melden hiesse, beim Ziehen an einem Schieber im Sekundentakt
+    „abgebrochen" in die Statuszeile zu schreiben. Unterschieden wird an der
+    Herkunft: ``cancel()`` kommt von einem Menschen, ``evaluate_async`` von
+    der naechsten Zahl.
+    """
+    vorher = window.status_message.text()
+    window.session.cancel_signal.cancel()  # wie es ``evaluate_async`` tut
+    window.session._on_cancelled()
+
+    assert window.status_message.text() == vorher, "ein Ersetzen sagt nichts"
+
+
+def test_saving_shows_that_it_is_working(window: MainWindow, tmp_path) -> None:
+    """Speichern ist keine Handlung ohne Dauer.
+
+    Gemessen: 903 ms fuer ein Projekt mit einem 62-MiB-Netz, und das ohne
+    jedes Zeichen — nach §2.8 die mittlere Stufe, Mauszeiger und Statusleiste,
+    und beide fehlten. Wer *Speichern* drueckte, sah ein Fenster, das nicht
+    reagiert.
+
+    Geprueft wird der Zeiger waehrend des Schreibens, nicht danach: Ein Test,
+    der erst hinterher hinsieht, findet immer einen aufgeraeumten Zustand und
+    haette auch ohne die Aenderung bestanden.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    gesehen: list[object] = []
+    echtes_speichern = window.session.save_project
+
+    def merken(path):
+        zeiger = QApplication.overrideCursor()
+        gesehen.append(zeiger.shape() if zeiger is not None else None)
+        gesehen.append(window.status_message.text())
+        return echtes_speichern(path)
+
+    window.session.save_project = merken  # type: ignore[method-assign]
+    window._save_to(tmp_path / "projekt.solidon")
+
+    assert gesehen[0] == Qt.CursorShape.WaitCursor, "waehrend des Schreibens fehlt der Wartezeiger"
+    assert "gespeichert" in str(gesehen[1]), f"die Zeile sagt nichts: {gesehen[1]!r}"
+    assert QApplication.overrideCursor() is None, "und danach ist er wieder weg"
+    assert "Gespeichert" in window.status_message.text()
+
+
 def test_motion_is_off_where_nobody_watches(qt_app: object) -> None:
     """Offscreen wird nicht animiert — sonst prüft ein Test die Uhr.
 
@@ -4330,3 +4517,205 @@ def test_the_object_tree_offers_the_keyboard_a_starting_point(window: MainWindow
     assert window.object_tree.tree.topLevelItemCount() >= 1
     assert window.object_tree.tree.currentItem() is not None, "die Tastatur hat einen Anfang"
     assert not window.object_tree.selected_objects(), "gewählt ist trotzdem nichts"
+
+
+def test_every_locked_menu_entry_says_why(window: MainWindow) -> None:
+    """Ausgrauen allein ist die halbe Antwort.
+
+    Auf der leeren Szene sind fast alle Operationszeilen gesperrt, und bei
+    allen stand als Hinweis ihr Beschreibungssatz — was sie täte, wenn sie
+    könnte. Die Werkzeugzeile daneben sagte es im selben Augenblick richtig:
+    „Dafür braucht es einen Körper in der Szene." Der Grund fehlte, weil
+    ``_kind_hint`` sofort ausstieg, sobald eine Operation kein
+    ``requires_kind`` trägt — und das haben sieben von 84.
+
+    Geprüft wird gegen den Beschreibungssatz: Ein Hinweis, der ihm gleicht,
+    ist keiner.
+    """
+    from app.core.registry import REGISTRY
+
+    window._update_actions()
+
+    stumm = []
+    for name, action in window._op_actions.items():
+        if action.isEnabled():
+            continue
+        spec = REGISTRY.get(name)
+        if action.toolTip().strip() == str(spec.doc).strip():
+            stumm.append(name)
+
+    assert not stumm, (
+        f"{len(stumm)} gesperrte Einträge nennen ihren Grund nicht, "
+        f"darunter {stumm[:5]}. Der Nutzer sucht ihn dann bei sich."
+    )
+
+
+def test_a_menu_entry_gets_its_description_back_when_it_works_again(window: MainWindow) -> None:
+    """Der Grund verschwindet, sobald es keinen mehr gibt.
+
+    Sonst bleibt „Wählen Sie dafür ein Objekt aus" an einem Eintrag stehen,
+    der längst geht — und der Beschreibungssatz, den er eigentlich trägt, wäre
+    für immer weg.
+    """
+    from app.core.registry import REGISTRY
+
+    window._update_actions()
+    name = next(
+        entry
+        for entry, action in window._op_actions.items()
+        if not action.isEnabled() and REGISTRY.get(entry).consumes == 1
+    )
+    spec = REGISTRY.get(name)
+    action = window._op_actions[name]
+    assert action.toolTip() != str(spec.doc), "der gesperrte Eintrag nennt keinen Grund"
+
+    # Derselbe Eintrag, aber jetzt liegt genug vor: ein Objekt in der Szene und
+    # eines ausgewählt. Geprüft wird die Rückstellung und nicht der Szenenaufbau
+    # — dafür genügt der Zustand, aus dem der Hinweis entsteht.
+    window._kind_hint(action, spec, [], False, objects=1, chosen=spec.consumes)
+
+    assert action.toolTip().strip() == str(spec.doc).strip(), (
+        "Der Grund blieb stehen, obwohl der Eintrag wieder geht — dann ist der "
+        "Beschreibungssatz für immer weg."
+    )
+
+
+def test_the_chat_setup_button_leads_where_its_name_says(window: MainWindow) -> None:
+    """Derselbe Name, derselbe Dialog.
+
+    Der Knopf am gesperrten Chat hieß „Zugang einrichten …" und führte in die
+    „Zusätzlichen Programme" — dorthin, wo man ein lokales Modell installiert,
+    aber seinen Schlüssel nicht einträgt. Der Dialog mit dem Schlüsselfeld
+    heißt „Chat einrichten", steht im Menü unter genau diesem Namen und war
+    vom Chat aus nicht erreichbar. Wer keinen Zugang hatte, bekam damit einen
+    der zwei Wege aus §27 angeboten und fand den anderen nicht.
+    """
+    from app.i18n import tr
+
+    assert window.chat.setup.text() == str(tr("Chat einrichten …")), (
+        "Knopf und Menüeintrag müssen denselben Text tragen — sonst sind es für "
+        "den Nutzer zwei verschiedene Dinge."
+    )
+
+    treffer = [
+        action
+        for action in window.findChildren(QAction)
+        if action.text() == str(tr("Chat einrichten …"))
+    ]
+    assert treffer, "der Menüeintrag heißt nicht mehr so"
+
+
+def test_a_warning_still_reaches_someone_with_the_right_column_hidden(
+    window: MainWindow,
+) -> None:
+    """§2.5 nennt „Warnungen" für die Statusleiste, und dort standen sie nie.
+
+    Solange die rechte Spalte offen ist, trägt ihr Reiter die Zahl. Ist sie zu,
+    erreichte eine neue Warnung niemanden mehr: ``_focus_report`` steigt bei
+    unsichtbarer Spalte zu Recht aus, und danach kam nichts. Der Zähler in der
+    Statusleiste erscheint genau dann — und holt beides zurück.
+    """
+    # Ohne das liegt der Startbildschirm oben, und die rechte Spalte ist auch
+    # dann unsichtbar, wenn niemand sie ausgeblendet hat.
+    window._show_start_screen(False)
+    window.right.setVisible(True)
+    window._mark_status_alerts(3)
+    # ``isHidden`` und nicht ``isVisible``: Das Fenster selbst wird hier nie
+    # gezeigt, und dann ist jedes Kind unsichtbar — die Frage ist, ob der Knopf
+    # ausgeblendet wurde.
+    assert window.alert_button.isHidden(), (
+        "Bei offener Spalte trägt der Reiter die Zahl — zwei Zähler sind einer zu viel."
+    )
+
+    window.right.setVisible(False)
+    window._mark_status_alerts(3)
+    assert not window.alert_button.isHidden(), "die Warnung erreicht niemanden mehr"
+    assert "3" in window.alert_button.text()
+
+    window._show_alerts()
+    assert window.right.isVisibleTo(window), "der Klick holt die Spalte nicht zurück"
+    assert window.right.currentWidget() is window.report
+    assert window.alert_button.isHidden(), "er bleibt stehen, obwohl die Spalte offen ist"
+
+
+def test_the_status_counter_stays_away_when_nothing_is_wrong(window: MainWindow) -> None:
+    """Ein Zähler, der immer dasteht, wird Tapete — dieselbe Begründung wie am
+    Reiter."""
+    window._show_start_screen(False)
+    window.right.setVisible(False)
+    window._mark_status_alerts(0)
+
+    assert window.alert_button.isHidden()
+
+
+def test_what_a_screen_reader_can_name(window: MainWindow) -> None:
+    """Ein Feld ohne Namen wird als seine Art angesagt — „Eingabe", „Auswahl".
+
+    Wer nicht sieht, welches Label danebensteht, bedient damit ein Formular aus
+    lauter „Eingabe". Gemessen waren es 44 von 102 fokussierbaren Elementen:
+    die neun Beispielkacheln des Startbildschirms, die Wähler aller Leisten,
+    die Suchfelder, der Schichtenregler, jede Liste.
+
+    Was hier durchgeht, sind Qts eigene Unterwidgets: die Aufklappliste eines
+    Auswahlfelds trägt den Namen ihres Feldes, ein Rollbereich den seines
+    Inhalts. Sie zu benennen hieße, dieselbe Auskunft zweimal vorzulesen.
+    """
+    from PySide6.QtWidgets import (
+        QAbstractScrollArea,
+        QComboBox,
+        QLabel,
+        QTabBar,
+        QTabWidget,
+        QWidget,
+    )
+
+    def name_of(widget: QWidget) -> str:
+        if widget.accessibleName().strip():
+            return widget.accessibleName().strip()
+        text = getattr(widget, "text", None)
+        if callable(text):
+            try:
+                if str(text()).strip():
+                    return str(text()).strip()
+            except Exception:  # pragma: no cover - Qt-Signaturen streuen
+                pass
+        parent = widget.parentWidget()
+        if parent is not None:
+            for label in parent.findChildren(QLabel):
+                if label.buddy() is widget and label.text().strip():
+                    return label.text().strip()
+        return ""
+
+    def qt_internal(widget: QWidget) -> bool:
+        if widget.objectName().startswith("qt_"):
+            return True
+        # Die Popup-Liste eines Auswahlfelds und der Rollbereich um einen
+        # Inhalt: beide gehören einem Element, das selbst einen Namen trägt.
+        parent = widget.parentWidget()
+        while parent is not None:
+            if isinstance(parent, QComboBox):
+                return True
+            parent = parent.parentWidget()
+        # Ein Reiterfeld wird über seine Reiter angesagt, und die tragen Text.
+        return (
+            isinstance(widget, QAbstractScrollArea | QTabBar | QTabWidget)
+            and not widget.accessibleName()
+        )
+
+    window._show_start_screen(False)
+    nameless = [
+        f"{type(child).__name__}({child.objectName() or '-'})"
+        for child in window.findChildren(QWidget)
+        if child.focusPolicy() != Qt.FocusPolicy.NoFocus
+        # Ausgeblendetes liest niemand vor. ``isHidden`` und nicht
+        # ``isVisible``: Das Fenster selbst wird hier nie gezeigt, und dann
+        # wäre jedes Kind unsichtbar.
+        and not child.isHidden()
+        and not qt_internal(child)
+        and not name_of(child)
+    ]
+
+    assert not nameless, (
+        f"{len(nameless)} bedienbare Elemente haben für einen Bildschirmleser keinen "
+        f"Namen: {nameless}. setAccessibleName() oder ein Label mit setBuddy()."
+    )

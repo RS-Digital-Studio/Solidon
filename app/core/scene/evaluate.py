@@ -20,8 +20,9 @@ Drei Verhaltensweisen sind Absicht:
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import cache
 from typing import Any
 
 from app.core.errors import AmbiguityError, AppError, InternalError, OperationCancelled
@@ -155,7 +156,7 @@ def evaluate(
         previous_bounds = {entry.id: entry.mesh.bounds for entry in inputs}
         key = operation_hash(
             operation,
-            _with_sketch_context(spec.params, resolved, values),
+            _with_nested_context(spec.params, resolved, values),
             [hashes[entry] for entry in operation.inputs],
             profile,
             quality,
@@ -512,27 +513,66 @@ def _with_features(
     return dataclasses.replace(entry, features={**apply_mapping(detected, matched), **generated})
 
 
-def _with_sketch_context(
+#: Welcher Sammelparameter seine Ausdrücke in einem eigenen Text versteckt.
+#:
+#: ``resolve_params`` sieht die **oberste** Ebene eines Parametersatzes. Ein
+#: Sammelparameter steht dort als **ein** Wert — ein JSON-Text —, und was
+#: darin an Ausdrücken steckt, sieht sie nie. Wer hier fehlt, überlebt die
+#: Änderung des Parameters, aus dem er gerechnet wurde: Das Ergebnis bleibt im
+#: Cache stehen, während die Zahl daneben schon die neue ist.
+#:
+#: ``sketch`` stand hier als einziger und **hart verdrahtet**; die Pose kam
+#: später dazu und wurde übersehen — obwohl vier Stellen zusagten, dass ein
+#: Gelenkwinkel ein Projektparameter sein darf. Eine Zuordnung statt einer
+#: Bedingung, damit der nächste Sammelparameter eine Zeile ist und keine
+#: Suche.
+@cache
+def nested_references() -> dict[str, Callable[[str], frozenset[str]]]:
+    """Die Zuordnung selbst — **träge**, weil sie sonst einen Import-Kreis schließt.
+
+    ``geom.pose`` braucht den Ausdrucksauswerter und importiert dafür
+    ``scene.expressions``; Python lädt dabei das ganze Paket ``scene``, und
+    dessen ``__init__`` zieht dieses Modul hier. Stünde
+    ``pose_parameter_references`` oben als gewöhnlicher Import, liefe das im
+    Kreis, sobald jemand ``app.core.geom.pose`` **als erstes** lädt.
+
+    Die Suite hat das nicht gefangen und konnte es nicht: Sie importiert die
+    Kernmodule der Reihe nach in einem Prozess, und da ist ``scene`` längst
+    geladen, bevor ``geom.pose`` dran ist. Der Kreis fällt nur auf, wenn ein
+    Modul als **erstes** kommt — was ``tests/test_core_isolation.py`` seit
+    diesem Fund für jedes einzeln durchspielt.
+    """
+    from app.core.geom.pose import pose_parameter_references
+
+    return {
+        "sketch": sketch_parameter_references,
+        "armature": pose_parameter_references,
+    }
+
+
+def _with_nested_context(
     params_class: type[BaseParams],
     resolved: Mapping[str, Any],
     values: Mapping[ParameterName, float],
 ) -> Mapping[str, Any]:
     """Der Parametersatz für den Cache-Schlüssel, ergänzt um das, was ein
-    Skizzentext von außen liest.
+    Sammelparameter von außen liest.
 
-    Maßausdrücke einer gezeichneten Skizze (§30.1) stehen im JSON-Text der Op
-    und sind für ``resolve_params`` unsichtbar. Der Schlüssel deckt aber alles,
-    wovon das Ergebnis abhängt (§15) — also gehören die Werte der gelesenen
-    Projektparameter hinein, sonst überlebt ein Ergebnis die Änderung des
-    Parameters, aus dem es gerechnet wurde."""
+    Maßausdrücke einer gezeichneten Skizze (§30.1) und Gelenkwinkel einer
+    Stellung (§13) stehen im JSON-Text der Op und sind für ``resolve_params``
+    unsichtbar. Der Schlüssel deckt aber alles, wovon das Ergebnis abhängt
+    (§15) — also gehören die Werte der gelesenen Projektparameter hinein,
+    sonst überlebt ein Ergebnis die Änderung des Parameters, aus dem es
+    gerechnet wurde."""
     context: dict[str, Any] = {}
     for spec in params_class.spec():
-        if spec.kind != "sketch":
+        collect = nested_references().get(spec.kind)
+        if collect is None:
             continue
         text = resolved.get(spec.name)
         if not isinstance(text, str) or not text:
             continue
-        for name in sorted(sketch_parameter_references(text)):
+        for name in sorted(collect(text)):
             if name in values:
                 context[f"@{name}"] = values[name]
     return {**resolved, **context} if context else resolved
@@ -579,8 +619,9 @@ def _missing_inputs(
             op_id=operation.id,
             values={
                 "op": operation.op,
-                "erwartet": spec.consumes,
-                "vorhanden": len(operation.inputs),
+                # Englisch, wie jeder Schlüssel — hier standen zwei deutsche.
+                "expected": spec.consumes,
+                "given": len(operation.inputs),
             },
         )
     return None

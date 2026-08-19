@@ -62,6 +62,7 @@ class SculptBar(QWidget):
         super().__init__(parent)
 
         self.tool = QComboBox(self)
+        self.tool.setAccessibleName(tr("Formwerkzeug"))
         for value, title in TOOLS:
             self.tool.addItem(str(title), value)
         self.tool.setToolTip(
@@ -85,6 +86,7 @@ class SculptBar(QWidget):
         self.strength.setToolTip(tr("Wie weit ein einzelner Zug die Fläche verschiebt."))
 
         self.symmetry = QComboBox(self)
+        self.symmetry.setAccessibleName(tr("Symmetrie"))
         for value in PLANES:
             self.symmetry.addItem(choice_label(value), value)
         self.symmetry.setToolTip(

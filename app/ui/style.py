@@ -27,6 +27,8 @@ einen einzelnen Fehler benennen kann.
 
 from __future__ import annotations
 
+from typing import Final
+
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
@@ -109,19 +111,110 @@ def _repolish(widget: QWidget) -> None:
         style.polish(widget)
 
 
-def stylesheet(theme: Theme, base_point_size: int) -> str:
-    """Das Stylesheet der Anwendung, gefüllt aus Thema und Schriftgröße."""
+#: Die zwei Pfeile am Zahlenfeld, als Zeichnung ohne Datei im Paket.
+#:
+#: Ein Dreieck, zweimal — nach oben und nach unten. ``{colour}`` füllt die
+#: Textfarbe des Themas ein.
+#: Die Zeichenfläche ist genau so groß wie der Platz im Stylesheet — ein
+#: Dreieck aus einer 8-zu-5-Fläche in ein 8-zu-4-Feld gequetscht sitzt unscharf.
+_ARROW_SVG: Final = {
+    "up": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 4">'
+    '<path d="M0 4 L4 0 L8 4 Z" fill="{colour}"/></svg>',
+    "down": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 4">'
+    '<path d="M0 0 L4 4 L8 0 Z" fill="{colour}"/></svg>',
+}
+
+
+def arrow_files(theme: Theme) -> dict[str, str] | None:
+    """Legt die Pfeile des Zahlenfelds als Dateien ab und nennt ihre Pfade.
+
+    **Warum überhaupt Dateien.** Qt hört auf, die Unterelemente eines
+    ``QSpinBox`` selbst zu zeichnen, sobald ein Stylesheet an ihm eine
+    Rahmeneigenschaft setzt — und das tut die Regel, die allen Eingabefeldern
+    ihren Radius gibt. Übrig blieben zwei leere Kästchen. Ein Dreieck aus
+    Rahmenkanten, wie man es in HTML baut, hilft nicht: Qt füllt die Fläche
+    und zeichnet einen hellen Block. Bleibt ein Bild, und ein Bild braucht in
+    einem Stylesheet einen Pfad.
+
+    **Warum nicht im Paket.** Eine mitgelieferte Datei hätte eine feste Farbe,
+    also bräuchte jedes Thema seine eigene — und eine Datei, die beim
+    Paketieren vergessen wird, nimmt den Pfeilen ihr Aussehen genauso still,
+    wie es hier verloren ging. Geschrieben wird deshalb in den Cache (§38), der
+    jederzeit gelöscht werden darf; beim nächsten Start steht er wieder da.
+
+    Gibt ``None`` zurück, wenn sich nichts schreiben lässt. Dann bleiben die
+    Knöpfe leer — das ist der Zustand von vorher und kein Grund, eine
+    Anwendung nicht zu starten.
+    """
+    from app.core.paths import ensure_dir, user_cache_dir
+
+    try:
+        folder = ensure_dir(user_cache_dir() / "style")
+        paths = {}
+        for direction, template in _ARROW_SVG.items():
+            target = folder / f"spin-{direction}-{theme}.svg"
+            target.write_text(template.format(colour=THEMES[theme]["text"]), encoding="utf-8")
+            paths[direction] = target.as_posix()
+        return paths
+    except OSError:
+        return None
+
+
+def _arrow_rules(arrows: dict[str, str] | None) -> str:
+    """Die Stylesheet-Zeilen, die die Pfeile ins Zahlenfeld setzen."""
+    if not arrows:
+        return ""
+    return f"""
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
+    image: url("{arrows["up"]}");
+    width: {NORMAL}px;
+    height: {SPACE}px;
+}}
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
+    image: url("{arrows["down"]}");
+    width: {NORMAL}px;
+    height: {SPACE}px;
+}}
+"""
+
+
+def stylesheet(theme: Theme, base_point_size: int, arrows: dict[str, str] | None = None) -> str:
+    """Das Stylesheet der Anwendung, gefüllt aus Thema und Schriftgröße.
+
+    ``arrows`` sind die Pfeile des Zahlenfelds, siehe :func:`arrow_files`. Ohne
+    sie bleiben die Auf- und Ab-Knöpfe leer — für einen Test, der nur die
+    Farben liest, ist das gleichgültig.
+    """
     colours = THEMES[theme]
     sizes = type_scale(base_point_size)
     window = colours["window"]
     base = colours["base"]
     text = colours["text"]
-    muted = colours["disabled"]
+    # Zwei Farben, nicht eine. ``muted`` ist Nebentext — Maße, Einheiten,
+    # Spaltenköpfe, Gruppentitel, der stille Reiter: leise, aber zu lesen.
+    # ``disabled`` heißt gesperrt und soll genau das zeigen. Beides lag auf
+    # demselben Wert, und damit war beides falsch: Ein Fünftel aller
+    # Beschriftungen trug die Sperrfarbe und kam auf 2,59 Kontrast im hellen
+    # Thema, während ein gesperrter Knopf sich von einem stillen Spaltenkopf
+    # nicht unterschied.
+    muted = colours["muted"]
+    disabled = colours["disabled"]
     line = colours["line"]
     highlight = colours["highlight"]
     on_highlight = colours["highlight_text"]
     accent_line = colours["accent_line"]
     hover = colours["alternate"]
+    tooltip = colours["tooltip"]
+
+    # Der Fokusring nimmt dieselbe Farbe wie die Akzentkante, und aus demselben
+    # Grund: Er muss auf seinem Untergrund zu sehen sein. ``highlight`` ist
+    # dafür nur im dunklen Thema geeignet — der Bernstein bringt gegen das
+    # helle Fenster 1,70 und gegen ein weißes Feld 2,06, und WCAG 1.4.11
+    # verlangt für die Umrandung eines Bedienelements 3,0. Ein Ring, den man
+    # nicht sieht, ist für den, der ohne Maus arbeitet, gar keiner.
+    # ``accent_line`` ist im dunklen Thema derselbe Bernstein und im hellen der
+    # abgedunkelte Ton daneben: 3,66 auf Weiß, 3,01 auf dem Fenster.
+    focus = accent_line
 
     return f"""
 /* --- Typografie: vier Stufen, Größe und Gewicht und Farbe --------------- */
@@ -151,8 +244,18 @@ QPushButton:default {{
     font-weight: 600;
 }}
 QPushButton:default:hover {{ background: {highlight}; border-color: {text}; }}
-QPushButton:disabled {{ color: {muted}; border-color: {line}; background: {window}; }}
-QPushButton:focus {{ border: 2px solid {highlight}; }}
+QPushButton:disabled {{ color: {disabled}; border-color: {line}; background: {window}; }}
+/* Der Hauptknopf gibt beim Drücken nach. Ohne eigene Regel gewann hier
+   ``:default`` — es steht später und wiegt gleich schwer —, und der lauteste
+   Knopf der Anwendung war der einzige, der auf einen Klick nichts tat. */
+QPushButton:default:pressed {{ background: {accent_line}; border-color: {accent_line}; }}
+/* Zwei Bildpunkte Rahmen statt einem, und der Innenabstand gibt den einen
+   wieder her: sonst wandert die Beschriftung beim Durchtabben um einen Punkt,
+   und ein Dialog zittert unter der Tabulatortaste. */
+QPushButton:focus {{
+    border: 2px solid {focus};
+    padding: {TIGHT - 1}px {ROOMY - 1}px;
+}}
 
 QToolButton {{
     border: 1px solid transparent;
@@ -161,7 +264,10 @@ QToolButton {{
 }}
 QToolButton:hover {{ background: {hover}; border-color: {line}; }}
 QToolButton:checked {{ background: {highlight}; color: {on_highlight}; border-color: {highlight}; }}
-QToolButton:focus {{ border: 2px solid {highlight}; }}
+QToolButton:focus {{
+    border: 2px solid {focus};
+    padding: {TIGHT - 1}px {NORMAL - 1}px;
+}}
 
 /* Panel-Kopfzeilen sind dauerhaft „gedrückt"; eingefärbt wären sie die
    lauteste Fläche im Fenster für die stillste Aussage. */
@@ -184,7 +290,7 @@ QFrame#exampleTile {{
     border-radius: {NORMAL}px;
 }}
 QFrame#exampleTile:hover {{ border-color: {highlight}; background: {hover}; }}
-QFrame#exampleTile:focus {{ border: 2px solid {highlight}; }}
+QFrame#exampleTile:focus {{ border: 2px solid {focus}; }}
 
 /* --- Eingaben: der Fokus muss man sehen -------------------------------- */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit, QTextEdit {{
@@ -195,14 +301,52 @@ QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit, QTextEdit {{
     selection-background-color: {highlight};
     selection-color: {on_highlight};
 }}
+QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover,
+QComboBox:hover, QPlainTextEdit:hover, QTextEdit:hover {{
+    border-color: {muted};
+}}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus,
 QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus {{
-    border: 2px solid {highlight};
+    border: 2px solid {focus};
+    padding: {TIGHT - 1}px {NORMAL - 1}px;
 }}
 QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {{
-    color: {muted};
+    color: {disabled};
     background: {window};
 }}
+
+/* --- Die Pfeile am Zahlenfeld ------------------------------------------
+   Sobald ein Stylesheet an einem ``QSpinBox`` eine Rahmeneigenschaft setzt,
+   hört Qt auf, dessen Unterelemente nativ zu zeichnen. Übrig blieben zwei
+   leere Kästchen mit einem Strich dazwischen — auf jedem Zahlenfeld jedes
+   Dialogs, in beiden Themen. Wer das sieht, hält es für einen Grafikfehler
+   und klickt nicht hin.
+
+   Gezeichnet werden sie hier aus Rahmen: eine Fläche der Größe null, deren
+   drei Kanten ein Dreieck stehen lassen. Ein Bild wäre die andere
+   Möglichkeit und die schlechtere — es müsste als Datei neben dem Paket
+   liegen, und eine Datei, die beim Paketieren vergessen wird, nimmt den
+   Pfeilen ihr Aussehen genauso still, wie es hier verloren ging. */
+QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox::down-button, QDoubleSpinBox::down-button {{
+    subcontrol-origin: border;
+    width: {ROOMY}px;
+    background: transparent;
+    border-left: 1px solid {line};
+}}
+QSpinBox::up-button, QDoubleSpinBox::up-button {{
+    subcontrol-position: top right;
+    border-top-right-radius: {SPACE}px;
+}}
+QSpinBox::down-button, QDoubleSpinBox::down-button {{
+    subcontrol-position: bottom right;
+    border-bottom-right-radius: {SPACE}px;
+}}
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
+    background: {hover};
+}}
+{_arrow_rules(arrows)}
 QComboBox QAbstractItemView {{
     background: {base};
     border: 1px solid {line};
@@ -268,6 +412,16 @@ QTabBar::tab:selected {{
     padding-top: {max(TIGHT - 2, 0)}px;
     font-weight: 600;
 }}
+/* Die Reiterleiste zeigte den Tastaturfokus mit null Bildpunkten Unterschied —
+   in beiden Themen. Wer mit dem Tabulator hierher kommt, sah nicht, dass er
+   hier ist, und die Pfeiltasten wechselten scheinbar grundlos den Reiter.
+
+   ``:selected:focus`` und nicht ``:focus`` allein: Der Zustand gilt der Leiste,
+   also träfe ``QTabBar::tab:focus`` alle Reiter zugleich — in einer QTabBar ist
+   der aktuelle der fokussierte. Gestrichelt, weil der aktive Reiter schon
+   Akzentkante, Fläche und Fettschrift trägt; eine zweite durchgezogene Linie
+   wäre nicht zu unterscheiden. */
+QTabBar::tab:selected:focus {{ border: 2px dashed {focus}; }}
 
 /* --- Rahmen, Trenner, Gruppen ------------------------------------------ */
 QGroupBox {{
@@ -283,9 +437,15 @@ QGroupBox::title {{
     color: {muted};
     font-weight: 600;
 }}
-QSplitter::handle {{ background: {line}; }}
-QSplitter::handle:horizontal {{ width: 1px; }}
-QSplitter::handle:vertical {{ height: 1px; }}
+/* Die Fuge zwischen zwei Bereichen ist auch ihr Griff. Sie war einen
+   Bildpunkt breit — optisch eine feine Linie und praktisch nicht zu treffen;
+   wer die Detailspalte des Katalogs verbreitern wollte, zielte auf einen
+   Pixel. Jetzt ist sie so breit, dass ein Zeiger sie findet, und färbt sich
+   beim Überfahren, damit sie sagt, dass sie sich ziehen lässt. */
+QSplitter::handle {{ background: {window}; }}
+QSplitter::handle:hover {{ background: {accent_line}; }}
+QSplitter::handle:horizontal {{ width: {NORMAL}px; }}
+QSplitter::handle:vertical {{ height: {NORMAL}px; }}
 
 /* --- Bildlaufleisten: schmal und still --------------------------------- */
 QScrollBar:vertical {{ background: transparent; width: {ROOMY}px; margin: 0; }}
@@ -306,6 +466,18 @@ QMenu::separator {{ height: 1px; background: {line}; margin: {TIGHT}px {NORMAL}p
 QStatusBar {{ border-top: 1px solid {line}; }}
 QStatusBar::item {{ border: none; }}
 
+/* Der Hinweis unter dem Zeiger war das letzte Element ohne eigene Form: Qt
+   zeichnete ihn kantig und randlos, während daneben jedes Feld seinen Radius
+   trug. Er erklärt die Werkzeugzeile und jeden gesperrten Knopf — also ist er
+   kein Nebenschauplatz. */
+QToolTip {{
+    background: {tooltip};
+    color: {text};
+    border: 1px solid {line};
+    border-radius: {SPACE}px;
+    padding: {TIGHT}px {NORMAL}px;
+}}
+
 /* --- Fortschritt -------------------------------------------------------- */
 QProgressBar {{
     border: 1px solid {line};
@@ -321,4 +493,4 @@ QProgressBar::chunk {{ background: {highlight}; border-radius: {SPACE}px; }}
 def apply_style(application: QApplication, theme: Theme) -> None:
     """Legt das Stylesheet über die Anwendung. Wirkt sofort und überall."""
     font = application.font()
-    application.setStyleSheet(stylesheet(theme, max(font.pointSize(), 1)))
+    application.setStyleSheet(stylesheet(theme, max(font.pointSize(), 1), arrow_files(theme)))

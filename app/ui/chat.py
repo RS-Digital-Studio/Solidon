@@ -100,6 +100,7 @@ class ChatPanel(QWidget):
         self.setAcceptDrops(True)
 
         self.turns = QListWidget(self)
+        self.turns.setAccessibleName(tr("Gesprächsverlauf"))
         self.turns.setWordWrap(True)
         self.turns.setAlternatingRowColors(False)
         # Ein Gespräch ist ein Arbeitsbereich und kein Text: seine Höhe folgt
@@ -114,7 +115,13 @@ class ChatPanel(QWidget):
         # §2.7: ein Hinweis, der nur feststellt, was fehlt, lässt den
         # Benutzer stehen. Der Knopf daneben führt dorthin, wo es behoben
         # wird — sichtbar nur, solange etwas zu beheben ist.
-        self.setup = QPushButton(tr("Zugang einrichten …"), self)
+        # **Wörtlich derselbe Text wie im Menü** (`Bearbeiten → Chat
+        # einrichten …`) und derselbe Dialog dahinter. Vorher hieß er anders
+        # und führte woandershin: in die „Zusätzlichen Programme", wo man ein
+        # lokales Modell installiert — aber nicht seinen Schlüssel einträgt.
+        # Wer keinen Zugang hatte, bekam damit den einen von zwei Wegen aus
+        # §27 angeboten, und den anderen fand er von dort aus nicht.
+        self.setup = QPushButton(tr("Chat einrichten …"), self)
         self.setup.clicked.connect(self.setupRequested)
         self.setup.setVisible(False)
 
@@ -136,6 +143,7 @@ class ChatPanel(QWidget):
         # weiter — Umschalt und Eingabe macht den Absatz (§26.3).
         self.input = QPlainTextEdit(self)
         self.input.setPlaceholderText(tr("Was soll geändert werden?"))
+        self.input.setAccessibleName(tr("Nachricht an den Chat"))
         self.input.setTabChangesFocus(True)
         self.input.setFixedHeight(self.input.fontMetrics().lineSpacing() * 3 + 12)
         self.input.installEventFilter(self)

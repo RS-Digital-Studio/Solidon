@@ -39,8 +39,8 @@ bekommt einen roten Lauf.
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | `SetTransitionMode` oder das Gewinde als Rotationskörper |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
+| Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
-| Parameterausdrücke in Pose-Winkeln | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | das Gegenstück zu `sketch_parameter_references` für `kind="armature"` — Kernarbeit mit eigenen Tests |
 
 ---
 
@@ -2549,6 +2549,103 @@ behoben, einmal bei der Update-Abfrage, einmal bei der Analysekarte — jedes Ma
 mit ausführlichem Kommentar. Zwei Stellen daneben machten weiter den alten
 Fehler, und niemand konnte es sehen, weil nichts danach suchte. Dieselbe
 Erkenntnis wie bei den drei Bausteinen über ihrem Ursprung, eine Etage höher.
+
+- [x] **Zwei Anzeigen sprachen allein über Farbe** (Regel 18). In der
+      Schichtanalyse lagen Insel und Überhang beide auf Strichstärke 3 — zwei
+      gleich dicke Ringe übereinander, unterschieden allein durch die Farbe,
+      und ausgerechnet bei den zwei Rollen, die eine Handlung nach sich ziehen.
+      `LAYER_WIDTHS` gibt jeder ihre eigene Stärke, und die Schichtleiste trägt
+      jetzt eine Legende, deren Strich so lang ist wie der Ring im Bild dick.
+      Die Legende der Differenzansicht war ganz in der Farbe von „Hinzugefügt"
+      gezeichnet — auch das Wort „Entfernt": eine Legende, die Farben erklären
+      soll und beide gleich färbt, sagt das Falsche. Und die Schriftfarbe auf
+      einem Farbfeld hing an einer festen Luminanzschwelle von 0,35, die über
+      den mittleren Tönen von Viridis auf die schlechtere der beiden kippte
+      (3,47 und 2,56); verglichen werden jetzt die zwei Kontraste.
+- [x] **Objektbaum und Verlauf waren stumme Kästen**, und eine Suche ohne
+      Treffer sagte an keiner der drei Stellen, dass nichts gefunden wurde. Ein
+      neues Projekt beginnt in genau diesen Karten; die Parameterleiste daneben
+      sagte seit jeher, wozu sie da ist. Befehlspalette und Bausteinkatalog
+      nennen den Suchbegriff jetzt in einer nicht wählbaren Zeile, der
+      Prüfbericht in einem Feld über der Liste — dort wird über `setHidden`
+      gefiltert, ein Eintrag darin wäre beim nächsten Filtern im Weg.
+- [x] **Kein ausgegrauter Menüeintrag nannte seinen Grund.** `_kind_hint` stieg
+      sofort aus, wenn eine Operation kein `requires_kind` trägt — und das
+      haben sieben von 84. Auf der leeren Szene stand damit bei jedem
+      gesperrten Eintrag sein Beschreibungssatz: was er täte, wenn er könnte.
+      Die Werkzeugzeile daneben sagte es im selben Augenblick richtig.
+      `_reason_locked` nennt den Grund jetzt in der Reihenfolge, in der ein
+      Nutzer ihn behebt: erst etwas in die Szene, dann etwas auswählen, dann
+      die richtige Bauart. Ein Test vergleicht gegen den Beschreibungssatz —
+      ein Hinweis, der ihm gleicht, ist keiner.
+- [x] **Der Korrekturdialog verlor seine Klappe.** Wer eine Operation aus dem
+      Verlauf öffnet, bekommt ihr ganzes Schema als Werte übergeben, und
+      `entry.name in given` schob damit jedes Feld auf die Vorderseite — die
+      gestufte Tiefe (§2.4) galt genau dann nicht, wenn jemand einen Wert
+      nachbessern will. Nach vorn kommt jetzt, was vom Schema-Standard
+      abweicht; Sammelwerte (Skizze, Striche, Skelett) bleiben hinten, was auch
+      immer drinsteht.
+- [x] **Der Knopf am gesperrten Chat führte in den falschen Dialog.** Er hieß
+      „Zugang einrichten …" und öffnete die „Zusätzlichen Programme" — dort
+      installiert man ein lokales Modell, trägt aber keinen Schlüssel ein. Der
+      Dialog mit dem Schlüsselfeld heißt „Chat einrichten", steht im Menü unter
+      genau diesem Namen und war vom Chat aus nicht erreichbar: einer der zwei
+      Wege aus §27 fehlte. Knopf und Menüeintrag tragen jetzt wörtlich
+      denselben Text und damit denselben Katalogeintrag.
+- [x] **Eine Warnung erreichte niemanden mehr, sobald die rechte Spalte
+      ausgeblendet war.** §2.5 nennt „Warnungen" für die Statusleiste, und dort
+      standen sie nie; `_focus_report` steigt bei unsichtbarer Spalte zu Recht
+      aus, und danach kam nichts. Der Zähler erscheint jetzt genau dann — bei
+      offener Spalte trägt ihr Reiter die Zahl, und zwei Zähler wären einer zu
+      viel — und ein Klick holt Spalte und Bericht zurück.
+- [x] **„1 × warnings".** „Fehler", „Warnung" und „Hinweis" standen in allen
+      fünf Katalogen im Plural, während die deutsche Quelle den Singular führt
+      — nach dem Malzeichen steht er. Alle fünf sind gezogen.
+
+- [x] **Was ein Bildschirmleser nicht las.** 44 von 102 fokussierbaren
+      Elementen des Hauptfensters hatten keinen Namen — ein Feld ohne Namen
+      wird als seine Art angesagt, „Eingabe", „Auswahl", „Schieber". Darunter
+      die neun Beispielkacheln des Startbildschirms (das Erste, was jemand
+      sieht: neun Mal „Rahmen"), die Wähler aller Leisten, jedes Suchfeld,
+      jede Liste, der Schichtenregler. Jetzt trägt jedes bedienbare Element
+      einen Namen; durch geht nur, was Qt selbst anlegt — die Aufklappliste
+      eines Auswahlfelds trägt den Namen ihres Feldes, ein Reiterfeld wird
+      über seine Reiter angesagt. Ein Test hält es bei null.
+      Dazu zwei Nachbarn: Der Freischaltdialog war eine Tastenfalle — ein
+      mehrzeiliges Feld nimmt den Tabulator als Zeichen, und wer ohne Maus
+      arbeitet, kam aus dem Schlüsselfeld nicht mehr heraus. Und die
+      Reiterleiste der rechten Spalte zeigte den Tastaturfokus mit null
+      Bildpunkten Unterschied; sie bekommt eine gestrichelte Marke, denn der
+      aktive Reiter trägt schon Akzentkante, Fläche und Fettschrift.
+
+- [x] **Der Installationsdialog antwortete mit „Das hat nicht geklappt."** —
+      und zeigte davor die rohe Befehlszeile und jede Zeile, die pip oder
+      winget von sich geben, im Statuslabel. Wer das liest, weiß danach
+      weniger als vorher. Der Kern gab bei einem Fehlschlag gar keinen Grund
+      zurück, nur `installed=False`; er nennt jetzt einen, und zwar für alle
+      drei Fälle — die Paketverwaltung ließ sich nicht starten, sie hat
+      abgebrochen, oder sie meldete Erfolg und das Programm ist trotzdem nicht
+      da. Der Rückgabewert steht bei den Einzelheiten statt im Satz: Dort
+      gehört er hin, und ein Satz ohne Platzhalter übersetzt sich in fünf
+      Sprachen leichter. Die rohe Ausgabe sammelt der Dialog und bietet sie
+      hinter „Details anzeigen" an (§33.2).
+
+- [x] **Zwei Sätze ohne Warum.** „Die Boolesche Operation ist
+      fehlgeschlagen." stand noch in `profiles.py` — die zweite Stelle in
+      `edit.py` war längst vorbildlich. Der Fall ist eng genug für einen
+      richtigen Satz: Diese Verknüpfung fügt den Kern eines Gewindes mit
+      seinem Gang zusammen, und was dort scheitert, scheitert an Flächen, die
+      sich berühren statt zu überlappen. Der Ausweg ist ein anderes Maß, keine
+      Reparatur — die gröbere Stufe versucht `_joined_rod` schon selbst.
+      „Zwei Bedingungen widersprechen sich." nannte das Paar nicht, obwohl der
+      Kern es seit jeher kennt und sogar anbietet, die eine oder die andere zu
+      entfernen. Bei vierzehn Einträgen in der Liste durfte man suchen, welche
+      zwei gemeint sind. Die Zeichenfläche merkt sich das Paar jetzt, und die
+      Liste rechts schreibt beide an — mit einem Zeichen und nicht nur mit
+      Farbe, denn eine Bedingungsliste wird auch ausgedruckt (Regel 18).
+      Den Satz selbst baut die Oberfläche und nicht der Kern: Dort liegen die
+      Beschriftungen, und der Kern führt seine Werte grundsätzlich über
+      `values` statt über Platzhalter.
 
 ### Offen aus dem Audit
 
@@ -5711,11 +5808,136 @@ Fehler der Umgebung.**
       noch darauf steht. Mit `gc.disable()` fielen 5 von 24 Läufen, ohne ihn
       1 von 8: dieselbe Größenordnung. Das spart dem Nächsten den Versuch.
 
+      > **Nachtrag vom 18.08.2026: ein zweiter Stapelabzug, und er zeigt
+      > woandershin.** Beim Fahren der Suite in eine *Datei* statt durch `tail`
+      > blieb erstmals der Kopf des Abzugs erhalten — die früheren Läufe hatten
+      > ihn verschluckt. Was darin steht, ist nicht `panels.py:890` und nicht
+      > glibc, sondern:
+      >
+      > ```
+      > tests/test_chat_ui.py:340  test_the_applied_bar_does_not_survive_a_new_project
+      >   session.start_new -> _reset_for -> evaluate_async
+      >     -> _EvaluationWorker.__init__      Windows fatal exception: access violation
+      > ```
+      >
+      > Ob das derselbe Fehler in anderer Gestalt ist oder ein vierter, ist
+      > **nicht** entschieden — die Stelle ist eine andere, die Meldung auch.
+      > Festgehalten ist er, weil ein Absturz mit Ort mehr wert ist als drei
+      > ohne.
+      >
+      > Daraufhin geändert, und zwar unabhängig davon richtig: Die Sitzung
+      > hielt ihre ausgelaufenen Arbeiter in je einem Feld, während Fenster und
+      > Dialoge längst die gemeinsame Halteleine benutzen. Ein Feld hält genau
+      > einen — und `_on_thread_done` startet bei `_rerun_pending` sofort den
+      > nächsten Lauf. Genau diese Kette steht oben im Abzug. `Session` hängt
+      > jetzt ebenfalls an `WorkerLeash`.
+      >
+      > **Behoben ist der Absturz damit nicht — inzwischen ist das gemessen und
+      > keine Vermutung mehr.** Ein späterer Volllauf brachte ihn wieder, und
+      > der zweite Abzug ist aufschlussreicher als der erste: **dieselbe
+      > Stelle, anderer Weg.**
+      >
+      > ```
+      > session.py:110  _EvaluationWorker.__init__     access violation
+      >   evaluate_async <- apply <- import_payload <- import_model
+      > ```
+      >
+      > Beim ersten Mal führte der Weg über `start_new` -> `_reset_for`, jetzt
+      > über das Einlesen eines Modells. Was beide teilen, ist der Ort: das
+      > Erzeugen des Arbeiters. Und ein Zugriffsfehler bei einer schlichten
+      > Attributzuweisung im Konstruktor deutet nicht auf diese Zeile, sondern
+      > auf einen Heap, der vorher schon beschädigt war — dieselbe Signatur wie
+      > das `free(): invalid pointer` oben. Das stützt die These, dass A und
+      > dieser hier **ein** Fehler sind, der an zwei Stellen auffällt, und es
+      > bestätigt den nächsten Schritt: ein Werkzeug, das sagt, wer doppelt
+      > freigibt. Die Halteleine war trotzdem richtig — sie ist das Muster, das
+      > die Gebietsregel verlangt —, sie ist nur nicht die Ursache.
+      >
+      > **Ein dritter Abzug, und er schließt den Kreis.** Der nächste Lauf fiel
+      > an einer dritten Stelle:
+      >
+      > ```
+      > app/ui/command_palette.py:61  _refilter        access violation
+      >   tests/test_theme_and_palette.py:250  test_typing_narrows_the_list…
+      > ```
+      >
+      > Zeile 61 ist `self.list.clear()`. **Das ist dieselbe Operation wie in
+      > Fall A** (`panels.py:890`, ebenfalls ein `self.list.clear()`), nur in
+      > einem anderen Widget. Damit stehen drei Abzüge nebeneinander, und zwei
+      > davon fallen auf denselben Aufruf: Eine `QListWidget` zu leeren gibt
+      > viele Kindobjekte auf einmal frei, und genau dort schlägt ein Heap zu,
+      > der vorher beschädigt wurde. Der dritte (Erzeugen eines `QThread`) ist
+      > die Kehrseite — dort wird angefordert, was anderswo doppelt freigegeben
+      > wurde.
+      >
+      > **Wonach also zu suchen ist**, wenn der Punkt drankommt: nicht nach dem
+      > Ort des Absturzes, sondern nach dem, der ein Qt-Objekt zweimal
+      > freigibt. Die Abzüge sind Symptome an mehreren Stellen, nicht mehrere
+      > Fehler.
+      >
+      > **Und er ist häufig geworden.** In dieser Sitzung lief die Suite
+      > achtmal grün (4037 bis 4193 Tests); danach fiel sie viermal in Folge,
+      > an vier Stellen — `command_palette.py:61` und `panels.py:1144` und
+      > `panels.py:890` (alle drei beim Leeren einer Liste) sowie
+      > `session.py:110` beim Erzeugen des Arbeiters.
+      >
+      > Der naheliegende Verdacht war die Befehlspalette, die seit dem 18.08.
+      > sechzig statt dreiundzwanzig Fensterbefehle führt und damit je
+      > Tastendruck fast dreimal so viele Listeneinträge erzeugt und wieder
+      > wegräumt. **Ein A/B-Lauf hat ihn widerlegt**: Mit beiseitegelegter
+      > Änderung fällt die Suite an derselben Stelle
+      > (`_EvaluationWorker.__init__`). Die Palette ist unschuldig; sie ist
+      > wieder drin, und der Verdacht steht hier, damit ihn niemand ein zweites
+      > Mal prüft.
+      >
+      > Was die Häufung verursacht, ist damit offen. Der Zeitraum fällt mit dem
+      > Zusammenführen von 65 Commits zusammen — das ist der nächste Ort zum
+      > Suchen, aber ausdrücklich eine Vermutung und keine Messung.
+
+**Was am 18.08.2026 dazu gemessen wurde, und was daraus folgt**
+
+- [x] **Der Ort des Absturzes ist zufällig — er kumuliert.** Vier Läufe fielen
+      nach 228, 480, 3698 und 3907 Tests. Vier verschiedene Stellen, drei
+      davon beim Leeren einer `QListWidget`, eine beim Erzeugen eines
+      `QThread`. Damit ist die Suche nach dem *einen schuldigen Test*
+      erledigt: Es gibt ihn nicht, und jede Bisektion über Tests läuft ins
+      Leere. Gesucht wird, wer ein Qt-Objekt doppelt freigibt; der Absturz
+      fällt später und woanders — bevorzugt dort, wo viel auf einmal
+      freigegeben oder neu angefordert wird.
+- [x] **Je Datei ein Prozess, und er ist weg.** 130 Testdateien einzeln
+      gefahren: 4164 Tests, **kein einziger Absturz**, in zwölf statt siebzehn
+      Minuten. Das ist der Beleg für „kumuliert" und zugleich eine benutzbare
+      Suite, solange der Punkt offen ist — `tools/run_suite_isolated.py`. Auf
+      POSIX täte `pytest --forked` dasselbe je Test; unter Windows gibt es das
+      nicht.
+- [ ] **Er tritt auch in einer einzelnen Datei auf, und die Rate schwankt
+      stark.** `test_split_tool.py` allein fiel einmal in fünf Läufen — und
+      danach nicht mehr in acht. Die naheliegende Zuordnung zu einem einzelnen
+      Test (`…_pressing_split_makes_two_parts`) ist damit **nicht** belegt:
+      Acht Läufe ohne ihn waren sauber, acht Läufe mit ihm aber auch. Wer hier
+      weitermacht, braucht viele Läufe je Messpunkt — bei einer Rate um zwanzig
+      Prozent sagt ein einzelner Lauf nichts, und genau daran ist in dieser
+      Sitzung schon ein A/B-Schluss gescheitert.
+
       **Nächster Schritt**, wenn er drankommt: ein Lauf unter Valgrind oder
       gegen ein Python mit Adress-Sanitizer, gezielt auf
       `test_every_operation_of_the_history_can_be_opened`. Vorher zu raten
       lohnt nicht — das Bild sagt „jemand gibt zweimal frei", und wer, sagt
       nur ein Werkzeug, das die erste Freigabe mitschreibt.
+
+      **Messpunkt vom 19.08.2026, `test_ui.py`.** Zwei isolierte Suite-Läufe
+      hintereinander meldeten dieselbe Datei, und der Lauf davor war grün
+      gewesen — das sah nach einer frischen Ursache aus, den Pose-Winkeln.
+      War es nicht: Zwölf Läufe **im Wechsel** (HEAD gegen den Arbeitsstand,
+      abwechselnd statt hintereinander, sonst misst man die Maschine mit)
+      geben **1/6 gegen 1/6**. Kein Unterschied, und die Rate liegt genau in
+      dem Band, das dieser Eintrag seit dem 14.08. nennt.
+
+      Das ist derselbe Fehlschluss wie damals, nur von der anderen Seite: Dort
+      führte ein einzelner roter Lauf auf einen unschuldigen Test, hier ein
+      einzelner grüner auf eine unschuldige Änderung. Ein grüner Lauf bei
+      zwanzig Prozent Rate ist erwartbar und beweist nichts — er fühlt sich nur
+      an wie ein Beleg.
 
 ## Alles Offene abgearbeitet (14.08.2026)
 
@@ -6042,15 +6264,88 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       abhängige Felder grauen mit Grund (G3), die Slicer-Wahl wird beim
       Schließen gemerkt (A5) und gegen den Drucker abgeglichen (A6), und
       *Hilfe → Beispiele* führt auf den Startbildschirm.
-- [ ] **Neuer Fund aus dem ArmatureField-Bau:** Der `pose`-doc verspricht
-      „Ein Winkel darf ein Projektparameter sein" — der Kern löst einen
-      Ausdruck *innerhalb* des JSON-Textes aber nicht auf:
-      `resolve_params` sieht nur ganze Parameterwerte, und
-      `pose_from_text._vector` wirft bei einem String (das Feld bewahrt
-      einen getippten Ausdruck, die Operation lehnt ihn sauber ab). Der
-      Weg ist das Gegenstück zu `sketch_parameter_references()` und
-      `_with_sketch_context()` für `kind="armature"` — Kernarbeit mit
-      eigenen Tests, samt Cache-Schlüssel-Beteiligung (§15).
+- [x] **Vier Stellen versprachen es, der Kern antwortete mit einer
+      Fehlermeldung.** Ein Gelenkwinkel darf ein Projektparameter sein — das
+      sagten der Registereintrag (*„Ein Winkel darf ein Projektparameter
+      sein"*), der Docstring von `Pose` (*„`=@arm_angle` in einer Pose, und die
+      Passung am Sockel rechnet mit"*), der `fx`-Umschalter am Winkelfeld des
+      Dialogs und der Kopf von `tests/test_pose.py`. Wer es tat, las: **„Diese
+      Stellung lässt sich nicht lesen."**
+
+      **Der Denkfehler stand im Testkopf.** Dort hieß es, das prüfe „die
+      Ausdrucksauflösung der Szene, nicht diese Datei". Sie prüft es nicht:
+      `resolve_params` sieht die **oberste** Ebene eines Parametersatzes, und
+      die Stellung steht dort als **ein** Wert — ein JSON-Text. Was darin an
+      Ausdrücken steckt, sah nie jemand; `pose_from_text._vector` rief
+      `float()` darauf. Ein Satz, der die Zuständigkeit woandershin verweist,
+      ist genau die Sorte Beleg, die niemand nachprüft.
+
+      Vier Stücke, und drei davon sind Rückwege, die vorher fehlten:
+
+      **Auflösen** — `pose_from_text(text, values)` rechnet einen Winkel wie
+      `=@neigung * 2` gegen dieselben Werte wie überall (§13). `values` ist ein
+      Vorgabeargument und keine Pflicht, sonst müsste jeder Aufrufer mitziehen,
+      auch die, die nie einen Ausdruck sehen. Ein unbekannter Parametername
+      bekommt die Meldung des **Auswerters**, nicht die des unlesbaren Textes:
+      Die Stellung ist ja gelesen, und wer den falschen Satz liest, sucht am
+      JSON statt am Namen.
+
+      **Sammeln** — `pose_parameter_references(text)`, das Gegenstück zu
+      `sketch_parameter_references`. `NESTED_REFERENCES` in `evaluate.py` ist
+      jetzt eine **Zuordnung statt einer Bedingung**: `sketch` stand dort hart
+      verdrahtet, die Pose kam später und wurde übersehen. Ohne den Eintrag
+      bliebe der Arm gebeugt, während die Zahl daneben schon die neue ist — die
+      Gegenprobe fällt genau daran.
+
+      **Zurücklesen** — `pose_angles(text)` gibt die Rohwerte, Zahl oder
+      Ausdruck. Der Dialog **schrieb** einen Ausdruck wörtlich (das sagte sein
+      Docstring zu und hielt es), **las** ihn aber über `pose_from_text`
+      zurück, und die gibt drei Zahlen: Der Ausdruck ließ sie scheitern, der
+      Fang machte daraus ein leeres Raster, und alle drei Winkel des Knochens
+      standen auf null. Ein Rundlauf durch den Dialog verlor genau die
+      Bindung, die er zu erhalten versprach.
+
+      **Schreiben** — `pose_text(angles)` nimmt beides. Der Dialog hatte sich
+      einen **zweiten Schreiber** für dasselbe Format gebaut (`json.dumps`),
+      weil der im Kern nur `Pose` nahm und `Pose.angles` drei Zahlen sind —
+      genau das, was sein eigener Docstring vermeiden wollte. Jetzt gibt es
+      wieder einen.
+
+      Drei Nachträge aus der Nachprüfung, und der erste ist der wertvollste:
+
+      **Der neue Import schloss einen Kreis, und die Suite konnte ihn nicht
+      sehen.** `geom.pose` braucht den Auswerter und importiert
+      `scene.expressions`; Python lädt dabei das ganze Paket `scene`, dessen
+      `__init__` `scene.evaluate` zieht — und das importierte `geom.pose`. In
+      der Suite lief das durch, weil `scene` immer vorher dran war. Wer
+      `app.core.geom.pose` **als erstes** lud — ein Skript, ein Werkzeug, eine
+      Kommandozeile —, bekam einen `ImportError`. `nested_references()` ist
+      deshalb träge.
+
+      Der Test dagegen ist der eigentliche Gewinn:
+      `test_every_core_module_imports_first` lädt jedes der 151 Kernmodule
+      **als erstes**, mit geleertem `sys.modules` dazwischen. Der bisherige
+      Test lud sie der Reihe nach in einem Prozess, und das ist schwächer, als
+      es aussieht — ein Kreis zwischen zwei Modulen fällt nicht auf, solange
+      das eine schon fertig ist, wenn das andere beginnt. Neun Sekunden für
+      eine Klasse Fehler, die sonst erst ein Nutzer findet.
+
+      **Der Skelett-Text kommt am Sammler vorbei**, weil beide Felder von
+      `PoseParams` `kind="armature"` tragen. Er ist eine JSON-*Liste*, der
+      Fang macht daraus ein leeres Ergebnis — richtig, denn ein Knochen ist
+      eine Koordinate. Es steht jetzt im Docstring und in einem Test, weil ein
+      stiller `AttributeError` wie ein Entwurf aussieht und nicht wie eine
+      Entscheidung.
+
+      **`format_version` bleibt bei 8**, und auch das ist eine Entscheidung.
+      Das Schema ändert sich nicht — ein größerer Wertebereich in einem Feld
+      ist kein neues Feld. Rückwärts gilt es nicht, aber eine Erhöhung würde
+      **jede** neue Datei für die alte Fassung sperren, auch die ohne einen
+      einzigen Ausdruck. Die Kette in `migrations.py` erhöht für
+      Schemaänderungen, nicht für Fähigkeiten.
+
+      Der kernnahe Cache-Test kam dazu: Der Ende-zu-Ende-Beleg ging über die
+      Oberfläche, und fiele Qt aus, fiele der Beleg für §15 mit.
 - [x] **Die Operationszahl im Fließtext war weggelaufen.** Das Register
       führt 85; die Funktionsseite sagte 83, die englische 84, während
       beide Startseiten richtig lagen. Der Grund steht weiter oben in
@@ -6105,3 +6400,360 @@ Lücken aus Kundensicht: Weg-3-Einstieg (ComfyUI-Hürde gegen Browser-Klick),
 Verrundung auf importierten STLs, Gridfinity-Baustein, Messen am
 Referenz-Mesh, Anschluss an fremde `.scad`-Customizer. Preis-Korridor:
 69–99 € einmalig, Plasticity (150 USD) als Anker darüber.
+## Die Oberfläche im Bild durchgesehen (17.08.2026)
+
+Die vorige Durchsicht endete mit einem Satz, der eine Lücke benannte: *„Nicht
+gemessen: das laufende Fenster als Bild. Der Container hier bringt VTK und die
+Offscreen-Plattform nicht zusammen."* Diese hier hat genau dort angefangen —
+auf einer Maschine, die rendert. Dazu sieben Prüfungen parallel gegen Menüs,
+Dialoge, Aussehen, Texte, Rückmeldung, Barrierefreiheit und die vier Wege, jede
+mit einer Gegenprüfung, die widerlegen sollte statt zu bestätigen.
+
+**69 Funde haben die Gegenprüfung überlebt**, fünf sind daran gestorben. Was
+unten unter „Behoben" steht, hat einen Test; was unter „Offen" steht, ist
+belegt und mit Absicht liegen geblieben.
+
+> **Drei der behobenen Funde waren am Quelltext unsichtbar.** Der Achsenmarker,
+> die leeren Kästchen am Zahlenfeld und der verschwundene Platzhaltertext sind
+> alle drei erst im Bild aufgefallen — und der erste stand seit jeher auf jedem
+> Handbuchbild in jeder Sprache.
+
+### Behoben
+
+- [x] **Die Achsenanzeige lag hinter der linken Spalte.** Sichtbar war allein
+      die Spitze des roten X-Pfeils, die unter der Karte hervorschaute; das
+      sieht aus wie ein Grafikfehler und stand so auf jedem Bildschirmfoto.
+      Der Wert `(0.0, 0.0, 0.16, 0.24)` trug die Begründung „unten links, wo
+      keine Karte liegt" — dort liegen Objekte, Parameter und Verlauf. Anteile
+      können das nicht lösen: Die Karte hält ihren Abstand in Bildpunkten.
+      `orientation_corner()` rechnet jetzt aus Punkten, `resizeEvent` zieht
+      nach. Unterwegs zwei weitere Funde: Der Docstring beschrieb einen
+      anklickbaren Würfel, den es im ganzen Quelltext nicht gibt, und schloss
+      mit „er ersetzt aber `add_axes`" — während die Zeilen darunter genau das
+      aufrufen. Und `plotter.axes_widget` gibt es in pyvista 0.48 nicht; das
+      Nachziehen lief still ins Leere und legte die Anzeige quer über das
+      Modell, bis `axes_widget_of()` sie am Renderer suchte.
+- [x] **Jedes Zahlenfeld zeigte zwei leere Kästchen statt der Pfeile.** Sobald
+      ein Stylesheet an einem `QSpinBox` eine Rahmeneigenschaft setzt — und die
+      Regel, die allen Eingabefeldern ihren Radius gibt, tut das —, hört Qt
+      auf, dessen Unterelemente zu zeichnen. 27 Felder in 13 Dateien. Ein
+      Dreieck aus Rahmenkanten half nicht (Qt füllt die Fläche und malt einen
+      hellen Block), also sind es Bilder: zwei SVG im Cache (§38), je Thema in
+      seiner Textfarbe geschrieben.
+- [x] **Der Platzhaltertext verschwand.** `build_palette` setzte jede Rolle
+      außer `PlaceholderText`, und was dort fehlt, kommt vom Betriebssystem.
+      Auf einem dunkel eingestellten Windows war er hell — im hellen Thema
+      damit weiß auf Weiß. Dreizehn Felder tragen ihre Auskunft dort, darunter
+      das Muster `SOLIDON3D-1-…`, das als Einziges sagt, wie ein
+      Lizenzschlüssel aussieht.
+- [x] **Der Fokusring war im hellen Thema praktisch nicht da**: 2,06 auf einem
+      weißen Feld, 1,70 auf dem Fenster, gefordert sind 3,0 (WCAG 1.4.11). Er
+      nahm `highlight`; der Bernstein ist für den dunklen Untergrund gewählt.
+      Er nimmt jetzt `accent_line` — dieselbe Farbe im dunklen Thema, im hellen
+      der abgestufte Ton, den `theme.py` für genau diese Rechnung schon führte.
+- [x] **Im Prüfbericht stand jede Zeile unter der Lesbarkeitsgrenze.** Die
+      Befunde tragen ihre Rollenfarbe als Schrift (`panels.py`), und die ist
+      für Dunkel gewählt: auf der weißen Liste des hellen Themas 2,22 für eine
+      Warnung, 2,67 für einen Hinweis, 3,97 für einen Fehler. Der Test dazu
+      fand gleich noch einen: Das Fehlerrot bringt auch **dunkel** nur 4,17 —
+      im Standardthema, beim Schweregrad, der am dringendsten gelesen wird.
+      `text_colour()` wählt den Ton jetzt nach der Helligkeit der Fläche, auf
+      die geschrieben wird, nicht nach dem Namen des Themas.
+- [x] **Gesperrtes sah aus wie bedienbar.** Die Palette setzte den
+      Sperrzustand für `Text` und `ButtonText`, nicht für `WindowText` — und
+      daran hängen QLabel, QCheckBox, QRadioButton und QGroupBox. Ein
+      gesperrtes Ankreuzfeld war pixelgleich mit einem bedienbaren.
+- [x] **Eine Farbe tat zwei Arbeiten und beide schlecht.** `disabled` war
+      zugleich die Farbe für Nebentext — Maße, Spaltenköpfe, Gruppentitel, der
+      stille Reiter. Damit war Nebentext bei 2,59 unlesbar und Gesperrtes nicht
+      als solches zu erkennen. `muted` ist jetzt eine eigene Rolle.
+- [x] **Der Splittergriff war einen Bildpunkt breit** — optisch eine Linie,
+      praktisch nicht zu treffen. Jetzt zwei Rasterschritte, und er färbt sich
+      beim Überfahren.
+- [x] **Der Hinweis unter dem Zeiger hatte als einziges Element keine Form**
+      und stand im hellen Thema auf dem Blassgelb, das Qt von Windows erbt: die
+      einzige Farbe im hellen Thema, die aus keiner Tabelle dieser Anwendung
+      stammte.
+- [x] **Der Hauptknopf gab beim Drücken nicht nach.** `:default` steht später
+      als `:pressed` und wiegt gleich schwer, gewinnt also — der lauteste Knopf
+      der Anwendung war der einzige ohne Rückmeldung auf einen Klick.
+- [x] **„Einfügen" im Bausteinkatalog versprach eine Wirkung, die er nicht
+      hatte.** Ohne Auswahl stand er in voller Akzentfarbe da, nahm den Klick
+      an, schloss den Dialog — und setzte nichts: `_accept` rief `accept()`
+      auch ohne Baustein. Das ist die stillste Art, jemanden ratlos zu machen.
+- [x] **Der Rat des Kernautors kam nie an.** Von 48 Kennungen, die der Kern in
+      `Action(...)` vergibt, sind zehn verdrahtet; die übrigen wurden im
+      Fehlerdialog verworfen, und an ihrer Stelle stand „Fehlerbericht
+      erstellen" als Hauptknopf — auf einen reinen Bedienfehler, obwohl der
+      Bericht laut `errors.py` dem `InternalError` gehört. Sätze wie
+      „Schreiben Sie das Ziel als obj_2:hole_1." landeten im Nichts. Sie
+      werden jetzt gelesen statt geklickt: Knöpfe bleiben denen vorbehalten,
+      die etwas tun, der Rest steht als Text im Dialog (§2.7).
+- [x] **Die Handbuchbilder zeigten die Oberfläche von vor dem Trennwerkzeug** —
+      sieben Knöpfe statt acht, in allen sechs Sprachen. Alle 36 sind neu.
+- [x] **Die Ebenentasten 1, 2 und 3 im Skizzeneditor taten nichts.** Die Ziffern
+      des Ansicht-Menüs lagen darüber, und Qt lässt bei zwei aktiven Kürzeln
+      derselben Taste keines von beiden feuern — eine Regel, die
+      `main_window.py` selbst aufstellt und bis dahin nur auf `R` und `C`
+      anwandte. Die Zeichenfläche versprach die Taste sichtbar: „(1)", „(2)",
+      „(3)" stehen am Ebenenfeld und noch einmal im Tooltip. Die Einträge unter
+      *Darstellung* sind im Skizzenmodus jetzt gesperrt — sie wirken dort
+      ohnehin auf einen Viewport, den `start_sketch` aus dem Stapel nimmt. Der
+      alte Test rief `choose_plane` an einem nackten Panel, also in genau der
+      Umgebung ohne den Konflikt; der neue drückt die Taste im gebauten Fenster
+      und macht im selben Lauf die Gegenprobe mit wieder aktiven Kürzeln.
+- [x] **Der Download-Arbeiter fehlte beim Schließen.** Er folgt dem Muster mit
+      `_retire` und `_hold_until_done` sauber, aber in `_retired` landet er
+      erst, wenn er fertig ist — solange er lief, hielt ihn allein sein Feld,
+      und `wait_for_workers` kannte es nicht. Ein Thread, der sein Fenster
+      überlebt, nimmt den Prozess mit. Ein Test liest die Aufzählung jetzt
+      gegen die Felder, damit der nächste nicht wieder durchrutscht.
+
+### Offen
+
+- [x] **Die Live-Vorschau rechnete den ganzen Stapel neu**, obwohl ihr
+      Docstring seit jeher das Gegenteil zusagt: „der Cache trägt alle
+      Schritte, die schon gerechnet sind". Der Aufruf reichte ihn nie durch —
+      bei einem Dokument mit zwanzig Schritten also neunzehn fertige, für jede
+      Änderung an einer einzigen Zahl. Voraussetzung dafür war ein Schloss im
+      `ResultCache`: `_store` sind vier Schritte, und Auswertung, Agent und
+      Vorschau schreiben aus eigenen Fäden hinein.
+
+      **Der Test dazu war im ersten Anlauf wertlos**, und das ist die Lehre.
+      Er war grün — aber auch ohne Schloss: Mit dem üblichen Umschaltintervall
+      von fünf Millisekunden trifft der Fadenwechsel praktisch nie in die vier
+      Schritte, die Gegenprobe lief null von fünf Mal auseinander. Mit einer
+      Mikrosekunde fällt sie zehn von zehn. Wer hier etwas prüft, stellt das
+      Intervall — sonst prüft er nichts.
+- [x] **Der Slicer-Lauf ist abbrechbar.** `Popen` statt `run`, ein
+      Abbruch-Token, das die Warteschleife abfragt, `terminate()` darauf, ein
+      Abbrechen-Knopf am Fortschritt und ein `closeEvent`, das abbricht statt
+      zu warten. Gebaut in einer parallelen Sitzung, genau auf dem Weg, den
+      die Durchsicht vorgeschlagen hatte.
+- [x] **Der Rest der Abbruchpunkte.** Fünf Stellen, und sie hatten alle
+      dieselbe Bauart: Der Knopf wirkte, die Maschine hörte nicht auf.
+
+      **Die Vorschau verwarf, statt anzuhalten.** `cancel_preview` erhöhte die
+      Generation — das Ergebnis flog weg, die Rechnung lief zu Ende. Wer einen
+      Dialog über einem großen Körper schloss, ließ zwei Boolesche Operationen
+      je Körper hinter sich, und beim schnellen Tippen stapelten sie sich. Jeder
+      Arbeiter führt jetzt ein **eigenes** `CancelSignal`; ein geteiltes mit
+      `reset()` davor wäre ein Wettlauf, in dem der alte Lauf den gesetzten
+      Zustand womöglich nie sieht. Eine neuere Anfrage bricht die älteren ab.
+
+      **Die Trennebenensuche kannte keinen Abbruch von innen** — der Docstring
+      sagte das sogar, als wäre es eine Eigenschaft. Sie schneidet jede
+      Kandidatenebene durch das ganze Netz, Minuten an einem großen Körper, und
+      „Abbrechen" hieß bisher: *das Ergebnis wird verworfen, wenn es kommt*.
+      Das Token geht jetzt durch `plan_split` → `split_to_fit` → `find_plane`
+      → `_judge`. Der Sonderfall dort ist die **Blockbildung**: Ein einziger
+      Aufruf über alle Ebenen ist von außen nicht zu unterbrechen, und genau er
+      ist die Minute — `_sections_in_blocks` schneidet zu acht und fragt
+      dazwischen. Zusammengelegt wird gruppenweise, nicht blockweise, sonst
+      stünde die Bewertung vor der falschen Nachbarschaft.
+
+      **Im Erzeugen-Dialog war „Abbrechen" während des Laufs gesperrt** —
+      `setEnabled(False)` traf die ganze Leiste und damit ausgerechnet den
+      einen Knopf, den man bei einer Rechnung von Minuten braucht. Der Ausgang
+      selbst war fertig gebaut (`reject` wartet auf den Thread), unerreichbar
+      war nur sein Knopf; es blieb Esc, eine Taste, die niemand sucht, solange
+      der Weg daneben grau dasteht. Dabei kam ein zweiter Fund mit heraus, den
+      die gesperrte Leiste **verdeckt** hatte: `_update_state` hängt am
+      Textfeld, und das bleibt bedienbar — wer weitertippte, machte *Erzeugen*
+      wieder klickbar und startete einen zweiten Arbeiter über den ersten.
+
+      **Eine abgebrochene Auswertung sagte es nur der Logdatei.** Balken weg,
+      Knopf weg, dieselbe Ansicht wie vorher: von außen nicht zu unterscheiden
+      von einer Rechnung, die *fertig* geworden ist. Der Satz nennt jetzt
+      beides — das Aufhören und den Stand, den man vor sich hat —, und er geht
+      in `_announcement`, damit ihn das nächste `_on_busy` nicht wegwischt.
+      Gemeldet wird **nur der Abbruch durch einen Menschen**: Eine neuere
+      Anfrage bricht die laufende ebenfalls ab, und das im Sekundentakt zu
+      melden hieße, beim Ziehen an einem Schieber „abgebrochen" zu schreiben.
+
+      **Speichern blockierte ohne jedes Zeichen.** Gemessen: 903 ms für ein
+      Projekt mit einem 62-MiB-Netz — nach §2.8 die mittlere Stufe, Mauszeiger
+      *und* Statusleiste, und beide fehlten. Kein Arbeiter dafür: Das Schreiben
+      mutiert nichts, es blockiert einmal und ist fertig; ein Thread brächte
+      Halteleine, Fehlerpfad und die Frage, was passiert, wenn dazwischen
+      jemand weiterarbeitet. Die Zeile zeichnet sich vor dem Blockieren selbst
+      neu (`repaint`, nicht `processEvents` — das eine Widget statt fremder
+      Eingaben mitten im Aufruf).
+
+      Die **Analysekarte** war der einzige Teil des Punkts, der schon stand:
+      sie fragt am Eingang und in ihrer teuersten Schleife (`CANCEL_EVERY`).
+
+      Und ein Nachbarfund: `_preview_finished` entfernte seinen Arbeiter
+      **im** `finished`-Slot aus der Liste — die erste Hälfte der Falle aus der
+      Gebietsregel, denn `finished` heißt „`run` ist zurück", nicht „das Objekt
+      darf weg". Er geht jetzt denselben Weg über die Halteleine wie alle
+      anderen.
+- [x] **Die Befehlspalette ist der Universalzugang aus §19.2.** 38 von 136
+      Menüzeilen fehlten, weil neben der Leiste ein von Hand gepflegtes
+      Wörterbuch stand — und von Hand heißt driften. Gelesen wird jetzt die
+      Leiste selbst: 82 Operationen kommen weiter aus dem Register (dort
+      tragen sie Beschreibung, Kategorie und Verfügbarkeit), 60 Fensterbefehle
+      aus dem Menü. Draußen bleiben genau zwei, und der Test nennt sie
+      namentlich: *Beenden* ist in einer Liste, durch die man tippt, ein Klick
+      zu nah am Verlust der Arbeit, und *Befehlspalette* öffnete sich selbst.
+- [x] **Die Suche der Palette kannte weder Umlautfaltung noch ein Synonym.**
+      Der Zugang stand, das Finden nicht: Wer „aushoehlen" tippte — und wer
+      keine Umlaute auf der Tastatur hat, tippt so —, bekam **null Treffer**
+      auf eine Operation, die es gibt. Dasselbe bei „groesse". Gemessen, nicht
+      vermutet: die Zahlen unten sind vorher/nachher aus demselben Register.
+
+      Drei Dinge, und jedes löst einen eigenen Fall:
+
+      **Gefaltet wird auf beiden Seiten** (`fold`). „aushoehlen" findet
+      „Aushöhlen", „Größe" findet, was intern `groesse` heißt. Angezeigt bleibt,
+      was dasteht — gefaltet wird nur der Vergleich.
+
+      **Der Wortstamm ist die zweite Runde, nicht die erste** (`matches(…,
+      stem=True)`). „bohren" fand nichts, weil die Operation „Bohrung setzen"
+      heißt — ein Fall, den keine Synonymtabelle je vollständig abdeckt und den
+      die ersten Buchstaben lösen. Gelockert wird **erst, wenn die genaue Suche
+      leer ausgeht**: immer zu lockern hieße, zwischen guten Treffern dauerhaft
+      Ungefähres zu zeigen.
+
+      **Ein Treffer im Titel wiegt schwerer als einer in der Beschreibung**
+      (`rank`). Bei „bohrung" stand „An Merkmal ausrichten" vorn, weil dessen
+      Beschreibung das Wort enthält, und „Bohrung setzen" auf Platz drei. Wer
+      tippt, meint fast immer den Namen. Sortiert wird **stabil**, damit die
+      Reihenfolge aus `applies_to` innerhalb derselben Güte stehen bleibt.
+
+      | Eingabe | vorher | nachher | zuerst |
+      |---|---|---|---|
+      | `aushoehlen` | 0 | 2 | Aushöhlen |
+      | `bohren` | 0 | 7 | Bohrung setzen |
+      | `groesse` | 0 | 5 | Bohrung setzen |
+      | `bohrung` | 7 | 7 | Bohrung setzen *(war: An Merkmal ausrichten)* |
+
+      **Der Deckel auf dem Stamm ist der eigentliche Fund** (`STEM_CUT`). Die
+      Untergrenze von vier Zeichen allein genügte nicht: „gibtsnicht" fand
+      **acht** Einträge, weil „gibt" in acht Beschreibungen steht — und die
+      Zeile „Kein Befehl passt zu …" kam nie zum Vorschein. Ein Stamm ist ein
+      *gekürztes* Wort, kein beliebiger Anfang; höchstens drei Zeichen dürfen
+      fallen. Aufgefallen ist das nicht beim Nachdenken, sondern weil ein
+      **bestehender** Test rot wurde — der, der die Auskunftszeile prüft.
+
+      Die **Bauart-Prüfung** war der dritte Teil des Punkts und ist bereits
+      erledigt: `_palette_availability` liest sie aus denselben Menü-Actions,
+      und ein nicht ausführbarer Eintrag steht ausgegraut da **samt Grund** —
+      ausgrauen allein wäre die halbe Antwort (Regel 18).
+- [x] **Zurückgenommen: Im deutschen Handbuchbild steht ein Komma, kein
+      Punkt.** Der Fund war meiner, und er war falsch. Was ihn erzeugt hat, ist
+      lehrreicher als er selbst.
+
+      **Die Messung taugte nicht.** Ob ein Zeichen ein Komma ist, habe ich
+      daran geprüft, ob es unter die Grundlinie reicht. Bei 9 pt tut das in
+      Segoe UI **auch ein echtes Komma nicht** — es ist schlicht zu klein.
+      Zwei Referenzfelder, eines mit „80,00" und eines mit „80.00", im selben
+      Widget gerendert, unterscheiden sich in genau **sechs Bildpunkten**:
+
+      ```
+      Komma  y=15:  ####..####.##..####..####
+      Punkt  y=15:  ####..####.###.####..####
+      echtes Feld:  ####..####.##..####..####
+      ```
+
+      Zwei Punkte breit, nicht drei — das ist das Komma. Dazu kam die
+      achtfache Vergrößerung, in der zwei Pixel auf der Grundlinie aussehen
+      wie ein runder Punkt.
+
+      **Was daran hängen blieb**, weil es teuer war: Ein Widerspruch zwischen
+      dem, was ein Widget meldet (`lineEdit().text()` sagte durchweg Komma),
+      und dem, was man im Bild zu sehen glaubt, ist zuerst ein Verdacht gegen
+      die eigene Messung — nicht gegen Qt. Die Stunden, die hier in
+      `QLocale`, `translate_parameter_titles` und die Aufnahmereihenfolge
+      gingen, hätte ein Vergleich mit einer **Referenz** in fünf Minuten
+      gespart: dasselbe Widget zweimal rendern, einmal mit dem vermuteten
+      Falschen, einmal mit dem Richtigen.
+
+- [x] **Weg 4 stand in keiner Unterlage** — und der Test wusste es besser als
+      sie alle. `test_there_is_one_example_per_way` prüft seit P16 auf vier
+      Wege, das Beispielprojekt liegt bei, das Handbuch hat sein Kapitel, die
+      Oberflächenregel führt *Formen* und *Skelett* in der Werkzeugleiste.
+      Nachgezogen sind jetzt die drei Stellen, die zurückhingen: §2.2 des
+      Bauplans hieß „Drei Hauptwege" und listet den vierten jetzt mit seinem
+      Ablauf (Grundkörper → verschmelzen → ausformen → exportieren) und mit dem
+      Satz, warum Regel 2 dort besonders scharf gilt — hier zählt eine Geste
+      und keine Zahl. Die README sprach von drei Wegen und acht
+      Beispielprojekten, es sind vier und neun. Und die gezeichnete Abbildung
+      im Handbuch zeigte drei Zeilen, während der Text daneben vier beschrieb;
+      ihre Höhe folgt jetzt der Zahl der Zeilen, sonst stünde die nächste
+      außerhalb des Bildes.
+      Damit das nicht wieder driftet, zählt ein Test die Wege und die Beispiele
+      **gegen `EXAMPLES`** und liest beide Unterlagen — samt der Tabelle in der
+      README, in der jedes Beispiel seine Zeile haben muss. Die Website war
+      bereits richtig; ihre 43 Zahlenprüfungen sind grün.
+
+- [x] **Der Rest der Textfunde.** Drei Stück, und das zweite war das
+      lehrreichste.
+
+      **168 rohe Bezeichner gingen an den Nutzer.** „oversize_mm: 12.4" im
+      Befund-Tooltip, „open_edges: 6" in den Einzelheiten eines Fehlers — eine
+      feste englische Zeichenkette in der Oberfläche mit einem Umweg (Regel
+      20). `value_label` in `app/ui/labels.py` übersetzt jetzt 156 Stämme; die
+      **Einheit steht nicht im Wörterbuch**, sondern kommt aus dem Suffix, also
+      teilen sich `size` und `size_mm` einen Eintrag und ein neuer Schlüssel
+      mit bekanntem Stamm ist schon übersetzt. Vollständig gehalten wird die
+      Liste **nicht von Hand** — von Hand heißt driften, daran war das
+      Palettenwörterbuch gescheitert: `tests/test_value_labels.py` liest jeden
+      `values=`-Schlüssel per AST aus `app/core` und wird rot, wenn einer keine
+      Beschriftung hat. Und andersherum genauso, damit keine Beschriftung ohne
+      Schlüssel fünf Kataloge belastet. Nebenbefund dabei: zwei Schlüssel
+      hießen `erwartet` und `vorhanden` — **deutsch**, in einem Feld, das
+      englisch zu sein hat.
+
+      **Drei fertige Handlungen, an eine Ausnahme gehängt, die niemand wirft.**
+      `OutOfBuildVolume` steht in `errors.py` mit *Modell teilen*, *Auf den
+      Bauraum verkleinern* und *Anderes Druckerprofil wählen* — und keine Zeile
+      im Programm erzeugt sie je. Das ist auch richtig so: Bauraum ist ein
+      Bericht und keine Sperre (§29), gemeldet wird `arrange.out_of_build_volume`
+      als Befund. Damit war der einzige Weg zu drei vollständig gebauten
+      Vorschlägen zugemauert, und der Prüfbericht sagte, was nicht stimmt, und
+      hörte auf — die halbe Antwort von §2.7.
+
+      Der Befund bekommt jetzt ein **Kontextmenü** (`FINDING_ACTIONS`), das
+      dieselben Handler ruft wie der Fehlerdialog; `as_error` verpackt ihn
+      dafür, statt jede Handlung zweimal zu schreiben. Angeboten wird nur, wofür
+      es einen Handler gibt — ein Befund ohne Handlung bekommt **kein leeres
+      Menü**. Damit eine Handlung überhaupt greifen kann, trägt
+      `check_build_volume` die Objektkennung mit: vorher stand dort nur ein
+      laufender Index, und ein Bericht, der nicht sagt **welches** Teil zu groß
+      ist, kann auch nichts dagegen anbieten.
+
+      Und der Handler dahinter tat nichts: `_scale_after_error` las
+      `build_volume` und `size` aus den Werten — zwei Schlüssel, die **weder
+      Ausnahme noch Befund** je trägt. Die Bedingung darunter griff also immer,
+      und die Methode kehrte still zurück. Gerechnet wird jetzt aus Profil und
+      Szene; das ist keine zweite Wahrheit, sondern dieselbe, aus der auch
+      `check_build_volume` rechnet.
+
+      **Die Restzeitschätzung stand am falschen Ort.** §2.8 verlangt sie über
+      zehn Sekunden — sie hing am Ladeschleier, und den gibt es nur, solange
+      **kein** Körper dasteht. Bei jeder langen Rechnung an einem geladenen
+      Modell, also genau im gemeinten Fall, stand in der Statusleiste Prozent
+      ohne jede Zeitangabe. `remaining_time` ist jetzt eine freie Funktion,
+      die beide benutzen.
+
+> **Nachtrag vom 18.08.2026, beim Zusammenführen.** Zwei dieser Punkte hat eine
+> parallele Sitzung in denselben Tagen erledigt, und das ist der Grund, warum
+> sie hier nicht mehr stehen. Die vier Dialoge halten ihren Arbeiter jetzt über
+> `app/ui/leash.py` — genau der Umbau, der oben als Weg beschrieben stand, mit
+> einem eigenen Modul, aus dem Fenster und Dialoge erben. Und die Legende der
+> Differenzansicht war dort unabhängig gefunden und behoben worden: zweimal
+> derselbe Befund aus zwei Richtungen, was für ihn spricht. Geblieben ist die
+> Fassung mit Farbfeld und gerechneter Schrift, weil sie neben der Zuordnung
+> auch den Kontrast löst — als bloße Schriftfarbe kam die Legende in Graustufen
+> auf 1,16 gegen ihr Band.
+
+### Was die Durchsicht entlastet hat
+
+Gezielt geprüft und in Ordnung: Der Prüfbericht trägt zu jeder Farbe ein
+Symbol, die Menüs grauen vollständig richtig aus, die gestufte Tiefe hält in
+jedem Operationsdialog außer dem einen oben, kein Parameter steht ohne `doc`,
+und die Zahlenfelder der Skizzenleiste erklären sich über Tooltips. Fünf
+gemeldete Funde sind an der Gegenprüfung gestorben — darunter die Behauptung,
+der Startbildschirm trage einen veralteten Produktnamen: Die Domain heißt
+`solidon3d.de`, und „Solidon3D" ist der Name, nicht der Rest eines alten.

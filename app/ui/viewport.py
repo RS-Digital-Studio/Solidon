@@ -44,7 +44,14 @@ from app.core.units import (
 from app.i18n import tr
 from app.ui import cursors
 from app.ui.labels import feature_label
-from app.ui.palette import DIFF_PALETTES, ROLES, VIRIDIS, DiffPalette
+from app.ui.palette import (
+    DIFF_PALETTES,
+    LAYER_WIDTHS,
+    ROLES,
+    VIRIDIS,
+    DiffPalette,
+    readable_on,
+)
 from app.ui.scale_widget import ScaleHandle
 from app.ui.style import ROOMY, TIGHT
 from app.ui.theme import THEMES, viewport_colours
@@ -97,9 +104,66 @@ VIEW_DIRECTIONS: dict[str, tuple[tuple[float, float, float], tuple[float, float,
 #: :data:`SSAO_BIAS` warnt; die höhere Zahl ist dort größtenteils Rauschen. Zwei
 #: Millimeter ist die Größenordnung einer Fase, einer Nutbreite, eines
 #: Bohrungsrands, und das Bild bleibt sauber.
-#: Wo die Achsenanzeige sitzt, in Anteilen des Fensters: unten links, wo
-#: keine Karte liegt — rechts steht der Prüfbericht, oben die Werkzeugzeile.
-ORIENTATION_CORNER = (0.0, 0.0, 0.16, 0.24)
+#: Wie groß die Achsenanzeige ist und wie weit sie von der Ecke absteht — in
+#: Bildpunkten, nicht in Anteilen des Fensters.
+#:
+#: **Anteile waren der Fehler.** Der Wert stand auf ``(0.0, 0.0, 0.16, 0.24)``
+#: mit der Begründung, unten links liege keine Karte. Dort liegt die linke
+#: Spalte: Objekte, Parameter und Verlauf reichen bis 69 Bildpunkte über den
+#: unteren Rand. Die Anzeige war 189 auf 158 Punkte groß und lag damit fast
+#: vollständig dahinter; zu sehen war allein die Spitze des roten X-Pfeils,
+#: die unter der Karte hervorschaute — auf jedem Bildschirmfoto, in jeder
+#: Sprache, und sie sieht aus wie ein Grafikfehler.
+#:
+#: Ein fester Anteil kann das nicht lösen: Die Karte hält einen Abstand in
+#: Bildpunkten, der Anteil daran ändert sich mit jeder Fenstergröße. Gerechnet
+#: wird deshalb aus Punkten (:func:`orientation_corner`), und
+#: :meth:`Viewport.resizeEvent` zieht nach.
+#: Die Größe ist an den Streifen gebunden, den die Karten über dem unteren
+#: Rand frei lassen — er misst rund 63 Punkte, und darin muss die Anzeige samt
+#: Abstand Platz haben. Wächst die Werkzeugzeile, etwa weil jemand seine
+#: Systemschrift größer stellt, schrumpft der Streifen; dann wird
+#: ``test_the_axis_marker_does_not_hide_behind_a_card`` rot und sagt, um wie
+#: viele Punkte. Das ist der Zweck dieses Tests.
+ORIENTATION_SIZE = 52
+ORIENTATION_MARGIN = 4
+
+
+def axes_widget_of(plotter: Any) -> Any:
+    """Das Achsen-Widget eines Plotters — oder ``None``.
+
+    **Es hängt am Renderer, nicht am Plotter.** ``plotter.axes_widget`` gibt es
+    in pyvista 0.48 nicht; ein ``getattr`` darauf liefert still ``None``, und
+    die Anzeige bliebe für immer dort stehen, wo sie beim Aufbau landete —
+    also mitten im Bild, weil das Fenster da noch keine Größe hat. Der Fehler
+    fällt an keiner Ausnahme auf, sondern nur im Bild, und genau so ist er
+    aufgefallen: als handtellergroßes Achsenkreuz quer über dem Modell.
+    """
+    renderer = getattr(plotter, "renderer", None) if plotter is not None else None
+    return getattr(renderer, "axes_widget", None)
+
+
+def orientation_corner(width: int, height: int) -> tuple[float, float, float, float]:
+    """Wo die Achsenanzeige sitzt, für ein Fenster dieser Größe.
+
+    Unten links, in dem Streifen, den die linke Spalte über dem unteren Rand
+    frei lässt. Die Werkzeugzeile beginnt weiter rechts, also bleibt die Ecke
+    selbst frei — bei eingeklappten Karten erst recht.
+
+    VTK erwartet Anteile von 0 bis 1, mit dem Ursprung unten links. Bei einem
+    Fenster, das kleiner ist als die Anzeige, bleibt sie am Rand kleben statt
+    hinauszulaufen.
+    """
+    span = max(float(ORIENTATION_SIZE), 1.0)
+    left = ORIENTATION_MARGIN / max(width, 1)
+    bottom = ORIENTATION_MARGIN / max(height, 1)
+    return (
+        left,
+        bottom,
+        min(left + span / max(width, 1), 1.0),
+        min(bottom + span / max(height, 1), 1.0),
+    )
+
 
 #: Die drei Achsenfarben. Gedämpft und nicht signalbunt: die Anzeige sagt,
 #: wo oben ist, sie ist keine Warnung — und sie steht neben einem Modell,
@@ -304,6 +368,7 @@ FACE_HANDLE_MINIMUM = 2.0
 LAYER_COLOUR = ROLES["layer"]
 ISLAND_COLOUR = ROLES["island"]
 OVERHANG_COLOUR = ROLES["overhang"]
+
 
 FEATURE_LABEL_COLOUR = ROLES["feature"]
 
@@ -674,22 +739,31 @@ class PreviewBanner(QFrame):
             f"#previewBanner {{ background: {colours['window']};"
             f" border: 1px dashed {colours['disabled']}; border-radius: 4px; }}"
             f"#previewBanner QLabel {{ color: {colours['text']}; background: transparent; }}"
-            f"#previewBanner #previewHint {{ color: {colours['disabled']}; }}"
+            # Ein Hinweis ist Nebentext und nicht gesperrt: ``disabled`` bringt
+            # im hellen Thema 2,59 gegen das Band, ``muted`` ist dafür da.
+            f"#previewBanner #previewHint {{ color: {colours['muted']}; }}"
         )
 
     def show_preview(self, note: str, palette: DiffPalette, hint: str) -> None:
         """Zeigt das Band mit Text, Legende und dem Griff zum Vergleichen."""
         colours = DIFF_PALETTES[palette]
         self.note.setText(note)
-        # Jede Kodierung in ihrer eigenen Farbe: die ganze Legende in der
-        # Farbe von `added` erfüllte Regel 18 nur formal — „Entfernt"
-        # stand in Blau, während seine Kodierung Orange ist. Eine Farbe, die
-        # die Unwahrheit sagt, ist schlechter als keine.
+        # **Jede Kodierung in ihrer eigenen Farbe.** Die ganze Zeile stand in
+        # der Farbe von „Hinzugefügt" — auch das Wort „Entfernt", dessen
+        # Kodierung Orange ist. Eine Farbe, die die Unwahrheit sagt, ist
+        # schlechter als keine; Regel 18 war damit formal erfüllt und
+        # inhaltlich verkehrt.
+        #
+        # Das Feld trägt die Kodierungsfarbe, die Schrift darauf wird gerechnet
+        # (``readable_on``) — dasselbe Muster wie die Kartenlegende, und es löst
+        # den zweiten Teil des Fundes gleich mit: Als bloße Schriftfarbe kam die
+        # Legende in Graustufen auf 1,16 gegen ihr Band. Das Zeichen bleibt
+        # daneben stehen, denn ohne es hinge die Aussage wieder an der Farbe.
         self.legend.setTextFormat(Qt.TextFormat.RichText)
         self.legend.setText(
-            "&nbsp;&nbsp;&nbsp;".join(
-                f'<span style="color: {encoding.colour};">'
-                f"{encoding.symbol} {tr(encoding.label_key)}</span>"
+            "&nbsp;&nbsp;".join(
+                f'<span style="background:{encoding.colour};color:{readable_on(encoding.colour)};">'
+                f"&nbsp;{encoding.symbol} {tr(encoding.label_key)}&nbsp;</span>"
                 for encoding in (colours.added, colours.removed)
             )
         )
@@ -727,6 +801,7 @@ class DragValueBar(QFrame):
 
         self.label = QLabel("", self)
         self.value = QLineEdit(self)
+        self.value.setAccessibleName(tr("Wert"))
         self.value.setFixedWidth(88)
         self.value.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.value.setToolTip(
@@ -1115,24 +1190,19 @@ class Viewport(QWidget):
     # --- Darstellungsqualität (§18.1) -------------------------------------------
 
     def _add_orientation_widget(self, theme: str = "dark") -> None:
-        """Der Würfel oben rechts: anfassbare Achsen statt eines Menüwegs.
+        """Das Achsenkreuz unten links: die Anzeige, wo oben ist.
 
-        `add_axes` zeigt nur an, wo Norden ist; dieser Würfel lässt sich
-        **anklicken** und dreht die Kamera auf die getroffene Seite. Damit ist
-        der häufigste aller Ansichtswechsel — „zeig mir das von oben" — eine
-        Mausbewegung statt zweier Menüebenen.
+        **Der Docstring stand hier lange auf dem Kopf.** Er beschrieb einen
+        anklickbaren Würfel und schloss mit „er ersetzt aber ``add_axes``" —
+        während die Zeilen darunter genau ``add_axes`` aufrufen und einen
+        Würfel im ganzen Quelltext niemand findet. Von den zwei Anzeigen, die
+        damals doppelt im Bild standen, ist der Würfel gegangen und dieses
+        Kreuz geblieben; nachgezogen wurde der Text nicht. Wer ihn las, hielt
+        die einzige Orientierungsanzeige der Anwendung für abgeschafft.
 
-        Er ersetzt die Kürzel nicht und die Kameraeinträge auch nicht: dasselbe
-        Ziel auf drei Wegen ist bei einer Ansicht kein Widerspruch, sondern die
-        Regel aus §19.2 (alles über die Palette, Kürzel lernen sich nebenbei).
-        Was genau eine Stelle haben muss, sind Operationen — und der Würfel ist
-        keine.
-
-        **Er ersetzt aber `add_axes`.** Das kleine Achsenkreuz unten links sagt
-        dasselbe und lässt sich nicht anfassen; zwei Anzeigen für dieselbe
-        Auskunft in einem Bild sind eine zu viel. Aufgefallen ist es erst auf
-        dem neu aufgenommenen Handbuchbild — im Code standen die beiden Zeilen
-        untereinander und sahen wie zwei verschiedene Dinge aus.
+        Sie ist die einzige, also muss man sie sehen — wo sie sitzt und warum
+        das ausgerechnet in Bildpunkten gerechnet wird, steht bei
+        :func:`orientation_corner`.
         """
         if self.plotter is None:
             return
@@ -1148,7 +1218,7 @@ class Viewport(QWidget):
             _log.info("axis labels keep their colour: %s", problem)
         try:
             self.plotter.add_axes(
-                viewport=ORIENTATION_CORNER,
+                viewport=orientation_corner(self.width(), self.height()),
                 # Pfeile, keine Kugeln: ein kräftiger Schaft mit einer Spitze
                 # darauf ist das, was jeder aus einem Konstruktionsprogramm
                 # kennt. Die Werte sind aufeinander abgestimmt — ein dünner
@@ -2917,6 +2987,23 @@ class Viewport(QWidget):
         super().resizeEvent(event)
         self.banner.place()
         self.drag_bar.place()
+        self._place_orientation_widget()
+
+    def _place_orientation_widget(self) -> None:
+        """Zieht die Achsenanzeige an ihre Ecke nach.
+
+        Sie steht in Anteilen des Fensters, gemeint ist aber eine Größe in
+        Bildpunkten — ohne das Nachziehen wüchse sie mit dem Fenster und
+        verschwände wieder hinter der linken Spalte, sobald jemand das Fenster
+        aufzieht.
+        """
+        widget = axes_widget_of(self.plotter)
+        if widget is None:
+            return
+        try:
+            widget.SetViewport(*orientation_corner(self.width(), self.height()))
+        except Exception as problem:  # pragma: no cover - hängt am Treiber
+            _log.info("orientation widget keeps its place: %s", problem)
 
     # --- layer analysis (§18.10) ------------------------------------------------
 
@@ -2958,20 +3045,20 @@ class Viewport(QWidget):
         contours = [
             ring for polygon in layer.contours for ring in (polygon.outline, *polygon.holes)
         ]
-        self._add_rings(contours, layer.z, LAYER_COLOUR, "layer")
+        self._add_rings(contours, layer.z, LAYER_COLOUR, "layer", LAYER_WIDTHS["layer"])
         self._add_rings(
             [polygon.outline for polygon in layer.islands],
             layer.z,
             ISLAND_COLOUR,
             "island",
-            width=3,
+            LAYER_WIDTHS["island"],
         )
         self._add_rings(
             [polygon.outline for polygon in layer.overhangs],
             layer.z,
             OVERHANG_COLOUR,
             "overhang",
-            width=3,
+            LAYER_WIDTHS["overhang"],
         )
 
     def _add_rings(

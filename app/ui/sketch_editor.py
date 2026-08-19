@@ -56,7 +56,14 @@ from app.core.units import DISPLAY_UNITS, EPS_DISPLAY
 from app.i18n import tr
 from app.ui import cursors, icons
 from app.ui.labels import length
-from app.ui.palette import ROLES
+from app.ui.palette import ROLES, text_colour
+
+#: Was eine widersprüchliche Bedingung in der Liste anschreibt.
+#:
+#: Ein Zeichen und nicht nur die Farbe (Regel 18): Die Liste wird auch
+#: ausgedruckt, und wer Rot nicht von Grau unterscheidet, sähe sonst
+#: vierzehn gleiche Zeilen.
+CONFLICT_MARKER = "!"
 
 #: Fangradius in Pixeln: näher als das an einem Punkt heißt „dieser Punkt".
 SNAP_PX = 8.0
@@ -645,6 +652,13 @@ class SketchCanvas(QWidget):
         zur Meldung mit dem benannten Paar; jeder andere Fehler ebenso.
         """
         self.conflict = ""
+        self.conflict_pair: tuple[int, int] | None = None
+        """Welche zwei Bedingungen sich widersprechen — für die Liste rechts.
+
+        Der Kern nennt sie seit jeher (``error.first``/``error.second``) und
+        bietet sogar an, die eine oder die andere zu entfernen. Nur stand im
+        Text nichts davon: „Zwei Bedingungen widersprechen sich." bei
+        vierzehn Einträgen in der Liste lässt suchen, welche zwei."""
         if not self.sketch.elements:
             self.solved = None
         else:
@@ -652,6 +666,7 @@ class SketchCanvas(QWidget):
                 self.solved = solve_sketch(self.sketch, self._params)
             except SketchConflictError as error:
                 self.conflict = str(error.detail or error.title)
+                self.conflict_pair = (error.first, error.second)
             except AppError as error:
                 self.conflict = str(error.detail or error.title)
         self.sketchChanged.emit()
@@ -2503,15 +2518,34 @@ class SketchPanel(QWidget):
 
     def _refresh_constraints(self) -> None:
         self.constraint_list.clear()
-        for entry in self.canvas.sketch.constraints:
+        # Die zwei, die sich widersprechen, stehen markiert da. Der Kern nennt
+        # sie und bietet an, eine davon zu entfernen — welche das wären, war
+        # bis hierher nirgends zu sehen.
+        conflict = getattr(self.canvas, "conflict_pair", None) or ()
+        for index, entry in enumerate(self.canvas.sketch.constraints):
             label = _constraint_label(entry.kind)
             shown = measure_label(entry, self.canvas.points())
             if shown:
                 label = f"{label} {shown}"
             targets = ", ".join(str(target) for target in entry.targets)
-            item = QListWidgetItem(f"{label}  ({targets})")
+            text = f"{label}  ({targets})"
+            if index in conflict:
+                # Das Zeichen trägt die Aussage, die Farbe verstärkt sie nur
+                # (Regel 18) — und die Liste ist einfarbig, sobald jemand sie
+                # ausdruckt.
+                text = f"{CONFLICT_MARKER} {text}"
+            item = QListWidgetItem(text)
             item.setData(Qt.ItemDataRole.UserRole, entry.targets)
+            if index in conflict:
+                item.setForeground(QColor(text_colour("warning", self._surface())))
+                item.setToolTip(
+                    tr("Diese Bedingung widerspricht einer anderen. Entf entfernt sie.")
+                )
             self.constraint_list.addItem(item)
+
+    def _surface(self) -> str:
+        """Die Fläche, auf der die Liste schreibt — für die Farbwahl."""
+        return self.constraint_list.palette().base().color().name()
 
     def _show_pointer(self, x: float, y: float) -> None:
         """Die Zeigerlage rechts in der Statuszeile.

@@ -205,6 +205,219 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
 }
 
 
+#: Was hinter einem Wert-Schlüssel steht, in der Sprache des Nutzers.
+#:
+#: ``Finding.values`` und ``AppError.values`` tragen Zahlen, und ihre Schlüssel
+#: sind Bezeichner: englisch, mit Unterstrich, mit Einheitensuffix. Die
+#: Oberfläche schrieb sie **roh** hin — im Befund-Tooltip und in den
+#: Einzelheiten eines Fehlers stand „oversize_mm: 12.4" und „open_edges: 6".
+#: Das ist eine feste Zeichenkette in der Oberfläche mit einem Umweg (Regel 20),
+#: und für den Leser ist es die Sorte Text, die man überliest statt liest.
+#:
+#: Die Einheit wird **nicht** eingetragen, sondern aus dem Suffix gelesen
+#: (:data:`_VALUE_UNITS`): ``size_mm`` und ``size`` teilen sich einen Eintrag,
+#: und ein neuer Schlüssel mit bekanntem Stamm ist damit schon übersetzt.
+#:
+#: Vollständig gehalten wird die Liste nicht von Hand — von Hand heißt driften.
+#: ``tests/test_value_labels.py`` liest jeden ``values=``-Schlüssel aus
+#: ``app/core`` per AST und wird rot, sobald einer keine Beschriftung hat.
+_VALUE_NAMES: dict[str, TranslatableText] = {
+    "a": _("Erstes"),
+    "actual": _("Tatsächlich"),
+    "after": _("Nachher"),
+    "alignment": _("Ausrichtung"),
+    "amount": _("Betrag"),
+    "annotation": _("Anmerkung"),
+    "app_major": _("Programmfassung"),
+    "axes": _("Achsen"),
+    "axis": _("Achse"),
+    "b": _("Zweites"),
+    "before": _("Vorher"),
+    "bones": _("Knochen"),
+    "bore": _("Bohrung"),
+    "brush": _("Pinsel"),
+    "bytes": _("Bytes"),
+    "candidates": _("Kandidaten"),
+    "cavities": _("Hohlräume"),
+    "chain": _("Kette"),
+    "changes": _("Änderungen"),
+    "character": _("Zeichen"),
+    "choice": _("Wahl"),
+    "choices": _("Auswahl"),
+    "clearance": _("Spiel"),
+    "comfortable": _("Bequem"),
+    "components": _("Komponenten"),
+    "constraint": _("Bedingung"),
+    "contours": _("Konturen"),
+    "core": _("Kern"),
+    "count": _("Anzahl"),
+    "cut": _("Schnitt"),
+    "cycle": _("Zyklus"),
+    "depth": _("Tiefe"),
+    "deviation": _("Abweichung"),
+    "diameter": _("Durchmesser"),
+    "drawn_width": _("Gezeichnete Breite"),
+    "edge": _("Kante"),
+    "edges": _("Kanten"),
+    "entries": _("Einträge"),
+    "estimated": _("Geschätzt"),
+    "expected": _("Erwartet"),
+    "expected_prefix": _("Erwarteter Anfang"),
+    "faces": _("Flächen"),
+    "feature": _("Merkmal"),
+    "field": _("Feld"),
+    "file": _("Datei"),
+    "file_version": _("Dateifassung"),
+    "first_kind": _("Erste Art"),
+    "fit": _("Passung"),
+    "footprint": _("Standfläche"),
+    "formats": _("Formate"),
+    "from": _("Von"),
+    "gap": _("Spalt"),
+    "given": _("Vorhanden"),
+    "grams": _("Gramm"),
+    "grid": _("Raster"),
+    "groups": _("Gruppen"),
+    "height": _("Höhe"),
+    "key_major": _("Schlüsselfassung"),
+    "kind": _("Art"),
+    "known": _("Bekannt"),
+    "known_faces": _("Bekannte Flächen"),
+    "layer": _("Schicht"),
+    "layer_height": _("Schichthöhe"),
+    "layers": _("Schichten"),
+    "limit": _("Grenze"),
+    "lost": _("Verloren"),
+    "major": _("Hauptfassung"),
+    "material": _("Material"),
+    "maximum": _("Höchstwert"),
+    "measured": _("Gemessen"),
+    "minimum": _("Mindestwert"),
+    "minutes": _("Minuten"),
+    "missing": _("Fehlt"),
+    "name": _("Name"),
+    "neck": _("Hals"),
+    "needed": _("Nötig"),
+    "node": _("Knoten"),
+    "nominal": _("Nennmaß"),
+    "now": _("Jetzt"),
+    "nozzle": _("Düse"),
+    "object": _("Objekt"),
+    "op": _("Operation"),
+    "open_edges": _("Offene Kanten"),
+    "operation": _("Operation"),
+    "operations": _("Operationen"),
+    "output": _("Ausgabe"),
+    "overhang": _("Überhang"),
+    "oversize": _("Übermaß"),
+    "parameter": _("Parameter"),
+    "params": _("Parameter"),
+    "part": _("Baustein"),
+    "parts": _("Teile"),
+    "path": _("Pfad"),
+    "pitch": _("Steigung"),
+    "pixels": _("Bildpunkte"),
+    "plate": _("Platte"),
+    "plates": _("Platten"),
+    "posed": _("Gestellt"),
+    "position": _("Position"),
+    "printer": _("Drucker"),
+    "produced": _("Erzeugt"),
+    "profile": _("Profil"),
+    "radius": _("Radius"),
+    "reachable": _("Erreichbar"),
+    "reason": _("Grund"),
+    "reference": _("Bezug"),
+    "refused": _("Abgelehnt"),
+    "regions": _("Bereiche"),
+    "removed": _("Entfernt"),
+    "requested": _("Angefragt"),
+    "residual": _("Rest"),
+    "role": _("Rolle"),
+    "samples": _("Stichproben"),
+    "saved": _("Gespart"),
+    "scale": _("Maßstab"),
+    "scheme": _("Schema"),
+    "seams": _("Nähte"),
+    "second_kind": _("Zweite Art"),
+    "seconds": _("Sekunden"),
+    "seed": _("Startwert"),
+    "settings": _("Einstellungen"),
+    "share": _("Anteil"),
+    "shortcut": _("Kürzel"),
+    "size": _("Größe"),
+    "slicer": _("Slicer"),
+    "slot": _("Platz"),
+    "slots": _("Plätze"),
+    "source": _("Quelle"),
+    "sources": _("Quellen"),
+    "span": _("Spannweite"),
+    "stages": _("Stufen"),
+    "status": _("Zustand"),
+    "strokes": _("Striche"),
+    "suffix": _("Endung"),
+    "support": _("Stützen"),
+    "supported": _("Unterstützt"),
+    "target": _("Ziel"),
+    "text": _("Text"),
+    "to": _("Nach"),
+    "tolerance": _("Toleranz"),
+    "transaction": _("Transaktion"),
+    "triangles": _("Dreiecke"),
+    "type": _("Art"),
+    "unit": _("Einheit"),
+    "unpacked": _("Entpackt"),
+    "url": _("Adresse"),
+    "used_by": _("Benutzt von"),
+    "value": _("Wert"),
+    "vents": _("Entlüftungen"),
+    "vertices": _("Ecken"),
+    "volume": _("Volumen"),
+    "wall": _("Wandstärke"),
+    "wanted": _("Gewünscht"),
+    "what": _("Was"),
+    "where": _("Wo"),
+    "z": _("Z"),
+}
+
+#: Welches Suffix welche Einheit meint.
+#:
+#: Nach Länge sortiert geprüft, sonst schluckt _mm das _mm3.
+_VALUE_UNITS: tuple[tuple[str, str], ...] = (
+    ("_mm3", "mm³"),
+    ("_mm2", "mm²"),
+    ("_cm3", "cm³"),
+    ("_percent", "%"),
+    ("_deg", "°"),
+    ("_mm", "mm"),
+)
+
+
+def value_label(key: str) -> str:
+    """Die Beschriftung zu einem Wert-Schlüssel — mit Einheit, wenn er eine trägt.
+
+    Unbekanntes kommt durch, wie es ist: Ein Schlüssel aus einem Zweig, den der
+    Test nicht statisch sieht (``values=dict(...)``), soll den Tooltip nicht
+    leeren. Der Test hält die Liste vollständig, diese Zeile hält sie harmlos.
+    """
+    for suffix, unit in _VALUE_UNITS:
+        if key.endswith(suffix):
+            name = _VALUE_NAMES.get(key[: -len(suffix)])
+            return f"{name} ({unit})" if name is not None else key
+    name = _VALUE_NAMES.get(key)
+    return str(name) if name is not None else key
+
+
+def value_line(key: str, value: object) -> str:
+    """Eine Zeile „Beschriftung: Wert" für Tooltip und Einzelheiten.
+
+    Die Zahl geht durch :func:`localised`: Ein Komma steht in der Anzeige, wo
+    die Sprache eines will — die Einzelheiten eines Fehlers sind kein
+    Sonderfall (§13).
+    """
+    return f"{value_label(key)}: {localised(str(value))}"
+
+
 def by_title(entries: Mapping[str, Any]) -> list[tuple[str, Any]]:
     """Profile in der Reihenfolge, in der sie gelesen werden.
 
