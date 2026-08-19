@@ -5,9 +5,20 @@ alle drei werden hier geprüft: eine Pose statt einer Bewegung,
 Vorwärtskinematik statt inverser, gerechnete Gewichte statt gespeicherter.
 
 Der vierte Punkt ist der, an dem Posing hierher gehört und nicht zu Blender —
-ein Gelenkwinkel darf ein Projektparameter sein. Das prüft die
-Ausdrucksauflösung der Szene, nicht diese Datei; hier steht, dass die
-Operation eine gewöhnliche Zahl bekommt und nichts Besonderes daraus macht.
+ein Gelenkwinkel darf ein Projektparameter sein.
+
+**Dieser Satz stand hier, und er stimmte nicht.** Er endete auf „das prüft die
+Ausdrucksauflösung der Szene, nicht diese Datei", und genau daran lag es: Sie
+prüft es nicht. ``resolve_params`` sieht die **oberste** Ebene eines
+Parametersatzes, und die Stellung steht dort als **ein** Wert, ein JSON-Text.
+Was darin an Ausdrücken steckt, sah nie jemand — ``pose_from_text`` rief
+``float()`` darauf, und der Nutzer las „Diese Stellung lässt sich nicht
+lesen", nachdem vier Stellen ihm zugesagt hatten, dass es geht.
+
+Geprüft wird es jetzt hier, unten in dieser Datei: Auflösen, Sammeln,
+Schreiben und der Rückweg durch den Dialog. Ende zu Ende steht es in
+``test_pose_session.py`` — dort auch der Teil, der wirklich weh tut: dass eine
+Parameteränderung den Körper **mitbewegt** und nicht am Cache hängen bleibt.
 """
 
 from __future__ import annotations
@@ -332,3 +343,207 @@ def test_an_unreadable_armature_is_a_validation_error(text: str) -> None:
 
     assert caught.value.suggestions
     assert caught.value.field == "armature"
+
+
+# --- Winkel aus Projektparametern (§13) -------------------------------------------
+
+
+def test_an_angle_may_be_a_project_parameter() -> None:
+    """Vier Stellen versprachen das, und keine hielt es.
+
+    Der Registereintrag (``Ein Winkel darf ein Projektparameter sein``), der
+    Docstring von ``Pose`` (``=@arm_angle`` in einer Pose, und die Passung am
+    Sockel rechnet mit), der ``fx``-Umschalter am Winkelfeld des Dialogs und
+    der Kopf dieser Datei. Der Kern antwortete auf genau das mit ``Diese
+    Stellung laesst sich nicht lesen``: ``pose_from_text`` rief ``float()``
+    auf den Ausdruck.
+
+    Der Denkfehler steht im Kopf dieser Datei: *das prueft die
+    Ausdrucksaufloesung der Szene*. Sie tut es nicht — ``resolve_params``
+    sieht die **oberste** Ebene eines Parametersatzes, und die Stellung ist
+    dort ein JSON-Text. Was darin steht, sieht sie nie.
+    """
+    text = '{"arm":["=@winkel * 2",0,0]}'
+
+    poses = pose_from_text(text, {"winkel": 15.0})
+
+    assert poses == [Pose(bone="arm", angles=(30.0, 0.0, 0.0))]
+
+
+def test_a_bare_reference_works_like_an_expression() -> None:
+    """``@winkel`` ist dieselbe Bindung wie ``=@winkel``, nur kuerzer.
+
+    Beide Praefixe kennt ``is_expression``, und ein Winkelfeld schreibt das
+    eine so leicht wie das andere.
+    """
+    assert pose_from_text('{"arm":["@winkel",0,0]}', {"winkel": 12.0})[0].angles[0] == 12.0
+
+
+def test_a_pose_without_values_still_reads_plain_numbers() -> None:
+    """Wer keine Parameter reicht, bekommt weiter, was er immer bekam.
+
+    Die Signatur waechst um ein Vorgabeargument, nicht um eine Pflicht — sonst
+    muesste jeder Aufrufer im Programm mitziehen, auch die, die nie einen
+    Ausdruck sehen.
+    """
+    assert pose_from_text('{"arm":[30,0,0]}') == [Pose(bone="arm", angles=(30.0, 0.0, 0.0))]
+
+
+def test_an_unknown_parameter_says_which_one() -> None:
+    """Ein Tippfehler im Parameternamen ist kein unlesbarer Text.
+
+    ``Diese Stellung laesst sich nicht lesen`` waere hier die falsche Antwort:
+    Die Stellung ist gelesen, und was fehlt, ist ein Parameter. Wer den Satz
+    liest, sucht sonst am JSON statt am Namen.
+    """
+    with pytest.raises(ValidationError) as caught:
+        pose_from_text('{"arm":["=@gibtsnicht",0,0]}', {"winkel": 15.0})
+
+    assert "gibtsnicht" in f"{caught.value.title} {caught.value.detail} {caught.value.values}"
+
+
+def test_the_pose_says_which_parameters_it_reads() -> None:
+    """Das Gegenstueck zu ``sketch_parameter_references`` (§15).
+
+    Die Auswertung mischt die Werte der gelesenen Parameter in den
+    Cache-Schluessel. Ohne das bliebe nach einer Parameteraenderung das alte
+    Ergebnis stehen — der Arm bliebe gebeugt, waehrend die Zahl daneben schon
+    die neue ist.
+    """
+    from app.core.geom.pose import pose_parameter_references
+
+    text = '{"arm":["=@winkel * 2",0,"@neigung"],"bein":[0,"=@winkel",0]}'
+
+    assert pose_parameter_references(text) == {"winkel", "neigung"}
+
+
+def test_an_unreadable_pose_has_no_references() -> None:
+    """Ein kaputter Text haengt von nichts ab.
+
+    Er scheitert beim Lauf der Operation mit seiner eigenen Meldung; hier
+    waere eine zweite Fehlerquelle nur im Weg — genau wie bei
+    ``sketch_parameter_references``.
+    """
+    from app.core.geom.pose import pose_parameter_references
+
+    assert pose_parameter_references("{kaputt") == frozenset()
+
+
+def test_one_writer_for_the_format_even_with_expressions() -> None:
+    """Der Dialog baute sein eigenes JSON, weil der Kern-Schreiber nur Zahlen kann.
+
+    ``ArmatureField.value`` faellt auf ``json.dumps`` zurueck, sobald ein Feld
+    einen Ausdruck traegt — ein zweiter Schreiber fuer dasselbe Format, genau
+    das, was sein eigener Docstring vermeiden wollte. ``pose_text`` nimmt
+    beides, und damit gibt es wieder einen.
+    """
+    from app.core.geom.pose import pose_text
+
+    written = pose_text({"arm": ["=@winkel", 0.0, 0.0]})
+
+    assert pose_from_text(written, {"winkel": 15.0}) == [Pose(bone="arm", angles=(15.0, 0.0, 0.0))]
+
+
+def test_the_raw_angles_survive_being_read_back() -> None:
+    """Der Dialog schrieb Ausdruecke woertlich und las sie nicht zurueck.
+
+    ``ArmatureField.value`` sagt in seinem Docstring zu, dass ein Ausdruck
+    stehen bleibt — beim **Schreiben** stimmte das. Beim Oeffnen ging
+    ``_angles_from`` ueber ``pose_from_text``, das drei Zahlen zurueckgibt;
+    ein Ausdruck liess es scheitern, der Fang machte daraus ein leeres Raster,
+    und alle drei Winkel des Knochens standen auf null. Ein Rundlauf durch den
+    Dialog verlor damit genau die Bindung, die er zu erhalten versprach.
+
+    ``pose_angles`` gibt die Rohwerte: Zahl oder Ausdruck, wie sie dastehen.
+    """
+    from app.core.geom.pose import pose_angles
+
+    text = '{"arm":["=@winkel * 2",0,30],"bein":[0,0,0]}'
+
+    assert pose_angles(text) == {"arm": ("=@winkel * 2", 0.0, 30.0), "bein": (0.0, 0.0, 0.0)}
+
+
+def test_unreadable_raw_angles_are_an_empty_grid() -> None:
+    """Ein unlesbarer Text ist im Dialog kein Fehler, sondern ein leeres Raster.
+
+    Der Dialog soll aufgehen; was nicht zu lesen war, wird beim Uebernehmen
+    ohnehin ueberschrieben. Diese Zusage stand schon in ``_angles_from`` und
+    zieht mit um.
+    """
+    from app.core.geom.pose import pose_angles
+
+    assert pose_angles("{kaputt") == {}
+    assert pose_angles("") == {}
+
+
+def test_a_parameter_change_reaches_a_cached_pose(profile: Profile) -> None:
+    """§15: der Cache-Schluessel deckt alles, wovon das Ergebnis abhaengt.
+
+    Der Ende-zu-Ende-Beleg steht in ``test_pose_session.py`` und geht ueber
+    die Oberflaeche — faellt Qt aus, faellt der Beleg fuer §15 mit. Dieser
+    hier haengt an nichts als dem Kern.
+
+    Ohne den Eintrag in ``NESTED_REFERENCES`` ueberlebt der alte Koerper die
+    Parameteraenderung im Cache: Der Text der Operation aendert sich ja nicht,
+    der Ausdruck steckt darin, und ``resolve_params`` sieht nur die oberste
+    Ebene. Der Arm bliebe gebeugt, waehrend die Zahl daneben schon die neue
+    ist.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene.cache import ResultCache
+    from app.core.scene.evaluate import evaluate
+    from app.core.types import Document, Operation, Parameter
+
+    def dokument(neigung: float) -> Document:
+        return Document(
+            format_version=1,
+            app_version="0.0.1",
+            parameters={"neigung": Parameter(name="neigung", value=neigung)},
+            ops=[
+                Operation(
+                    id=1,
+                    op="create_box",
+                    outputs=("obj_1",),
+                    params={"width": 10.0, "depth": 10.0, "height": 40.0},
+                ),
+                Operation(
+                    id=2,
+                    op="pose_armature",
+                    inputs=("obj_1",),
+                    outputs=("obj_1",),
+                    params={
+                        "armature": '[{"n":"b1","h":[0,0,0],"t":[0,0,40]}]',
+                        "pose": '{"b1":["=@neigung",0,0]}',
+                    },
+                ),
+            ],
+        )
+
+    cache = ResultCache()
+    zehn = evaluate(dokument(10.0), profile, cache=cache)
+    assert zehn.complete
+    schmal = as_mesh_data(zehn.scene.objects["obj_1"].mesh).bounds.size
+
+    vierzig = evaluate(dokument(40.0), profile, cache=cache)
+    assert vierzig.complete
+    weit = as_mesh_data(vierzig.scene.objects["obj_1"].mesh).bounds.size
+
+    assert schmal != weit, (
+        "derselbe Stapel, ein anderer Parameter — der Cache darf das alte Ergebnis nicht halten"
+    )
+
+
+def test_the_armature_text_passes_through_the_collector_harmlessly() -> None:
+    """Beide Felder von ``PoseParams`` tragen ``kind="armature"``.
+
+    Der Sammler bekommt deshalb auch den **Skelett**-Text zu sehen, und der
+    ist eine JSON-*Liste* statt eines Objekts. Das Ergebnis ist leer, und das
+    ist richtig: Ein Knochen ist eine Koordinate und kein Mass, das jemand an
+    einen Parameter haengt. Geprueft wird es, weil ein stiller
+    ``AttributeError`` wie ein Entwurf aussieht und nicht wie eine
+    Entscheidung — wer das Skelett spaeter um Ausdruecke erweitert, faellt
+    hier auf und nicht im Cache.
+    """
+    from app.core.geom.pose import pose_parameter_references
+
+    assert pose_parameter_references('[{"n":"b1","h":[0,0,0],"t":[0,0,40]}]') == frozenset()

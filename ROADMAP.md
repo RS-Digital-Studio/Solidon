@@ -41,7 +41,6 @@ bekommt einen roten Lauf.
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
-| Parameterausdrücke in Pose-Winkeln | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | das Gegenstück zu `sketch_parameter_references` für `kind="armature"` — Kernarbeit mit eigenen Tests |
 
 ---
 
@@ -5926,6 +5925,20 @@ Fehler der Umgebung.**
       lohnt nicht — das Bild sagt „jemand gibt zweimal frei", und wer, sagt
       nur ein Werkzeug, das die erste Freigabe mitschreibt.
 
+      **Messpunkt vom 19.08.2026, `test_ui.py`.** Zwei isolierte Suite-Läufe
+      hintereinander meldeten dieselbe Datei, und der Lauf davor war grün
+      gewesen — das sah nach einer frischen Ursache aus, den Pose-Winkeln.
+      War es nicht: Zwölf Läufe **im Wechsel** (HEAD gegen den Arbeitsstand,
+      abwechselnd statt hintereinander, sonst misst man die Maschine mit)
+      geben **1/6 gegen 1/6**. Kein Unterschied, und die Rate liegt genau in
+      dem Band, das dieser Eintrag seit dem 14.08. nennt.
+
+      Das ist derselbe Fehlschluss wie damals, nur von der anderen Seite: Dort
+      führte ein einzelner roter Lauf auf einen unschuldigen Test, hier ein
+      einzelner grüner auf eine unschuldige Änderung. Ein grüner Lauf bei
+      zwanzig Prozent Rate ist erwartbar und beweist nichts — er fühlt sich nur
+      an wie ein Beleg.
+
 ## Alles Offene abgearbeitet (14.08.2026)
 
 Vier Punkte standen offen, drei davon länger als diese Sitzung. Alle vier sind
@@ -6251,15 +6264,88 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       abhängige Felder grauen mit Grund (G3), die Slicer-Wahl wird beim
       Schließen gemerkt (A5) und gegen den Drucker abgeglichen (A6), und
       *Hilfe → Beispiele* führt auf den Startbildschirm.
-- [ ] **Neuer Fund aus dem ArmatureField-Bau:** Der `pose`-doc verspricht
-      „Ein Winkel darf ein Projektparameter sein" — der Kern löst einen
-      Ausdruck *innerhalb* des JSON-Textes aber nicht auf:
-      `resolve_params` sieht nur ganze Parameterwerte, und
-      `pose_from_text._vector` wirft bei einem String (das Feld bewahrt
-      einen getippten Ausdruck, die Operation lehnt ihn sauber ab). Der
-      Weg ist das Gegenstück zu `sketch_parameter_references()` und
-      `_with_sketch_context()` für `kind="armature"` — Kernarbeit mit
-      eigenen Tests, samt Cache-Schlüssel-Beteiligung (§15).
+- [x] **Vier Stellen versprachen es, der Kern antwortete mit einer
+      Fehlermeldung.** Ein Gelenkwinkel darf ein Projektparameter sein — das
+      sagten der Registereintrag (*„Ein Winkel darf ein Projektparameter
+      sein"*), der Docstring von `Pose` (*„`=@arm_angle` in einer Pose, und die
+      Passung am Sockel rechnet mit"*), der `fx`-Umschalter am Winkelfeld des
+      Dialogs und der Kopf von `tests/test_pose.py`. Wer es tat, las: **„Diese
+      Stellung lässt sich nicht lesen."**
+
+      **Der Denkfehler stand im Testkopf.** Dort hieß es, das prüfe „die
+      Ausdrucksauflösung der Szene, nicht diese Datei". Sie prüft es nicht:
+      `resolve_params` sieht die **oberste** Ebene eines Parametersatzes, und
+      die Stellung steht dort als **ein** Wert — ein JSON-Text. Was darin an
+      Ausdrücken steckt, sah nie jemand; `pose_from_text._vector` rief
+      `float()` darauf. Ein Satz, der die Zuständigkeit woandershin verweist,
+      ist genau die Sorte Beleg, die niemand nachprüft.
+
+      Vier Stücke, und drei davon sind Rückwege, die vorher fehlten:
+
+      **Auflösen** — `pose_from_text(text, values)` rechnet einen Winkel wie
+      `=@neigung * 2` gegen dieselben Werte wie überall (§13). `values` ist ein
+      Vorgabeargument und keine Pflicht, sonst müsste jeder Aufrufer mitziehen,
+      auch die, die nie einen Ausdruck sehen. Ein unbekannter Parametername
+      bekommt die Meldung des **Auswerters**, nicht die des unlesbaren Textes:
+      Die Stellung ist ja gelesen, und wer den falschen Satz liest, sucht am
+      JSON statt am Namen.
+
+      **Sammeln** — `pose_parameter_references(text)`, das Gegenstück zu
+      `sketch_parameter_references`. `NESTED_REFERENCES` in `evaluate.py` ist
+      jetzt eine **Zuordnung statt einer Bedingung**: `sketch` stand dort hart
+      verdrahtet, die Pose kam später und wurde übersehen. Ohne den Eintrag
+      bliebe der Arm gebeugt, während die Zahl daneben schon die neue ist — die
+      Gegenprobe fällt genau daran.
+
+      **Zurücklesen** — `pose_angles(text)` gibt die Rohwerte, Zahl oder
+      Ausdruck. Der Dialog **schrieb** einen Ausdruck wörtlich (das sagte sein
+      Docstring zu und hielt es), **las** ihn aber über `pose_from_text`
+      zurück, und die gibt drei Zahlen: Der Ausdruck ließ sie scheitern, der
+      Fang machte daraus ein leeres Raster, und alle drei Winkel des Knochens
+      standen auf null. Ein Rundlauf durch den Dialog verlor genau die
+      Bindung, die er zu erhalten versprach.
+
+      **Schreiben** — `pose_text(angles)` nimmt beides. Der Dialog hatte sich
+      einen **zweiten Schreiber** für dasselbe Format gebaut (`json.dumps`),
+      weil der im Kern nur `Pose` nahm und `Pose.angles` drei Zahlen sind —
+      genau das, was sein eigener Docstring vermeiden wollte. Jetzt gibt es
+      wieder einen.
+
+      Drei Nachträge aus der Nachprüfung, und der erste ist der wertvollste:
+
+      **Der neue Import schloss einen Kreis, und die Suite konnte ihn nicht
+      sehen.** `geom.pose` braucht den Auswerter und importiert
+      `scene.expressions`; Python lädt dabei das ganze Paket `scene`, dessen
+      `__init__` `scene.evaluate` zieht — und das importierte `geom.pose`. In
+      der Suite lief das durch, weil `scene` immer vorher dran war. Wer
+      `app.core.geom.pose` **als erstes** lud — ein Skript, ein Werkzeug, eine
+      Kommandozeile —, bekam einen `ImportError`. `nested_references()` ist
+      deshalb träge.
+
+      Der Test dagegen ist der eigentliche Gewinn:
+      `test_every_core_module_imports_first` lädt jedes der 151 Kernmodule
+      **als erstes**, mit geleertem `sys.modules` dazwischen. Der bisherige
+      Test lud sie der Reihe nach in einem Prozess, und das ist schwächer, als
+      es aussieht — ein Kreis zwischen zwei Modulen fällt nicht auf, solange
+      das eine schon fertig ist, wenn das andere beginnt. Neun Sekunden für
+      eine Klasse Fehler, die sonst erst ein Nutzer findet.
+
+      **Der Skelett-Text kommt am Sammler vorbei**, weil beide Felder von
+      `PoseParams` `kind="armature"` tragen. Er ist eine JSON-*Liste*, der
+      Fang macht daraus ein leeres Ergebnis — richtig, denn ein Knochen ist
+      eine Koordinate. Es steht jetzt im Docstring und in einem Test, weil ein
+      stiller `AttributeError` wie ein Entwurf aussieht und nicht wie eine
+      Entscheidung.
+
+      **`format_version` bleibt bei 8**, und auch das ist eine Entscheidung.
+      Das Schema ändert sich nicht — ein größerer Wertebereich in einem Feld
+      ist kein neues Feld. Rückwärts gilt es nicht, aber eine Erhöhung würde
+      **jede** neue Datei für die alte Fassung sperren, auch die ohne einen
+      einzigen Ausdruck. Die Kette in `migrations.py` erhöht für
+      Schemaänderungen, nicht für Fähigkeiten.
+
+      Der kernnahe Cache-Test kam dazu: Der Ende-zu-Ende-Beleg ging über die
+      Oberfläche, und fiele Qt aus, fiele der Beleg für §15 mit.
 - [x] **Die Operationszahl im Fließtext war weggelaufen.** Das Register
       führt 85; die Funktionsseite sagte 83, die englische 84, während
       beide Startseiten richtig lagen. Der Grund steht weiter oben in

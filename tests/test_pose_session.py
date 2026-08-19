@@ -266,3 +266,59 @@ def test_escape_ends_the_session_without_throwing_it_away(window: MainWindow) ->
     dialog = window._op_dialog
     assert dialog is not None
     assert armature_from_text(str(dialog.values()["armature"]))
+
+
+def test_a_bound_angle_bends_the_body_and_follows_the_parameter(qt_app: QApplication) -> None:
+    """Der Punkt, an dem Posing hierher gehoert und nicht zu Blender.
+
+    Vier Stellen sagten zu, dass ein Gelenkwinkel ein Projektparameter sein
+    darf — Registereintrag, ``Pose``-Docstring, der ``fx``-Umschalter am
+    Winkelfeld und der Kopf von ``tests/test_pose.py``. Der Kern antwortete
+    darauf mit ``Diese Stellung laesst sich nicht lesen``.
+
+    Geprueft wird Ende zu Ende, und der zweite Teil ist der wichtigere: Wird
+    der Parameter geaendert, muss sich der Koerper **mitbewegen**. Der
+    Cache-Schluessel deckt alles, wovon das Ergebnis abhaengt (§15) — und ein
+    Ausdruck im JSON-Text der Operation ist fuer ``resolve_params``
+    unsichtbar. Ohne ``NESTED_REFERENCES`` bliebe der Arm gebeugt, waehrend
+    die Zahl daneben schon die neue ist.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene import OperationDraft
+    from app.core.types import Parameter
+
+    session = Session()
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+
+    session.add_parameter(Parameter(name="neigung", value=10.0, unit="°"))
+    session.apply(
+        "Stellung geben",
+        [
+            OperationDraft(
+                op="pose_armature",
+                inputs=("obj_1",),
+                params={
+                    "armature": '[{"n":"b1","h":[0,0,0],"t":[0,0,10]}]',
+                    "pose": '{"b1":["=@neigung",0,0]}',
+                },
+            )
+        ],
+    )
+    session.wait_for_idle()
+
+    result = session.last_result
+    assert result is not None
+    zehn_grad = as_mesh_data(result.scene.objects["obj_1"].mesh).bounds.size
+
+    # Derselbe Stapel, ein anderer Parameterwert: Der Koerper muss folgen.
+    session.change_parameter("neigung", 45.0)
+    session.wait_for_idle()
+
+    result = session.last_result
+    assert result is not None
+    fuenfundvierzig = as_mesh_data(result.scene.objects["obj_1"].mesh).bounds.size
+
+    assert zehn_grad != fuenfundvierzig, (
+        "der gebeugte Koerper haengt am Parameter — sonst steht ein altes Ergebnis im Cache"
+    )
