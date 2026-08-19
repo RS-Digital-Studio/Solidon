@@ -98,9 +98,9 @@ non-destruktiven Aufbaus — und er muss spürbar sein, nicht bloß vorhanden.
 Praktisch heißt das: keine Bestätigungsdialoge vor rücknehmbaren Handlungen,
 kein „Möchten Sie wirklich", keine Sackgassen.
 
-### 2.2 Drei Hauptwege
+### 2.2 Vier Hauptwege
 
-Alles Weitere ist Ausbau dieser drei. Sie müssen ohne Handbuch gehen.
+Alles Weitere ist Ausbau dieser vier. Sie müssen ohne Handbuch gehen.
 
 **Weg 1 — Fremdes Modell anpassen** (der häufigste Fall)
 Datei ziehen und ablegen → Einheitenrückfrage, falls nötig → Modell steht,
@@ -117,7 +117,23 @@ Modell folgt sofort → exportieren.
 Text oder Bild → Mesh → Reparaturkette läuft automatisch → Prüfbericht →
 gegebenenfalls teilen und verstiften → exportieren.
 
-Diese drei Wege sind je ein Beispielprojekt (§37) und je eine
+**Weg 4 — Organisch formen**
+Grundkörper grob zusammensetzen → weich verschmelzen → gleichmäßig vernetzen →
+von Hand ausformen, Skelett setzen und stellen → Prüfbericht → exportieren.
+
+Der Weg für Formen, die sich nicht bemaßen lassen. Was ihn von den anderen
+dreien unterscheidet: Hier zählt eine Geste und keine Zahl — und deshalb
+gilt Regel 2 hier besonders scharf. Ein Editor sammelt die Gesten in einen
+Parameterwert, und das Ergebnis entsteht erst bei der Auswertung; was während
+des Formens im Bild steht, ist Vorschau und kein Dokumentzustand.
+
+**Nachgetragen am 18.08.2026.** Dieser Abschnitt führte drei Wege, während der
+vierte längst gebaut war (P16): *Formen* und *Skelett* stehen in der oberen
+Werkzeugleiste, das Beispielprojekt `weg4-figur-formen` liegt bei, und das
+Handbuch hat sein Kapitel. Der Bauplan war die letzte Unterlage, die ihn nicht
+kannte — gefunden bei der Durchsicht vom 17.08.
+
+Diese vier Wege sind je ein Beispielprojekt (§37) und je eine
 Abnahmeprüfung (§40).
 
 ### 2.3 Die ersten fünf Minuten
@@ -1549,7 +1565,7 @@ Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 | Barrierefreiheit | keine Bedeutung allein über Farbe |
 | Leistung | Zielwerte §31, Regressionsschwelle 25 % |
 | Lizenzen | installierte Abhängigkeiten gegen Freigabeliste |
-| Hauptwege | die drei Wege aus §2.2 laufen als Ende-zu-Ende-Test |
+| Hauptwege | die vier Wege aus §2.2 laufen als Ende-zu-Ende-Test |
 | Agenten-Suite | 39 Referenzanfragen — 21 zu Säule C (sechs seit der Agent-Vertiefung: nachsehen statt raten, Druckziel, Menüort), 18 zu Säule A |
 
 Die Agenten-Suite misst zusätzlich: Wird ein vorhandener Baustein statt eigener
@@ -1628,7 +1644,7 @@ G-Code-Slicer" liest sich besser als die Langfassung.
 - **Fehlerberichte.** Keine Telemetrie. Ein Dialog legt Fehlertext,
   Versionsangaben und auf Wunsch den Projektcontainer bereit — mit Hinweis,
   dass Geometrie enthalten ist.
-- **Doku und Beispielprojekte**: genau die drei Hauptwege aus §2.2. Sie sind
+- **Doku und Beispielprojekte**: genau die vier Hauptwege aus §2.2. Sie sind
   gleichzeitig Doku, Abnahmeprüfung und Startbildschirm-Inhalt.
 - **Erwartungsmanagement.** Klar hinschreiben, was die Anwendung nicht ist —
   kein CAD-Ersatz, keine Passungen aus generierten Meshes.

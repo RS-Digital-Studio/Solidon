@@ -43,7 +43,6 @@ bekommt einen roten Lauf.
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Zwei lange Läufe ohne Abbrechen | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts; die Live-Vorschau braucht zusätzlich einen Weg, nicht den ganzen Stapel zu rechnen |
 | Die Befehlspalette ist kein Universalzugang | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — 38 Zeilen nachtragen, Umlautfaltung und Synonyme dazu |
-| Weg 4 steht in keiner Unterlage | Die Oberfläche im Bild durchgesehen (17.08.2026) | eine Bauplanänderung mit Ansage; README, Handbuch, Website und die Abbildung ziehen nach |
 | Der Rest der Textfunde | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — rohe Schlüssel statt Beschriftungen, drei nie angebotene Vorschläge, eine Schätzung am falschen Ort |
 | Parameterausdrücke in Pose-Winkeln | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | das Gegenstück zu `sketch_parameter_references` für `kind="armature"` — Kernarbeit mit eigenen Tests |
 
@@ -6471,11 +6470,24 @@ belegt und mit Absicht liegen geblieben.
       gespart: dasselbe Widget zweimal rendern, einmal mit dem vermuteten
       Falschen, einmal mit dem Richtigen.
 
-- [ ] **Weg 4 steht in keiner Unterlage.** Bauplan, README, Handbuchkapitel und
-      Website nennen weiter drei Wege — die gezeichnete Abbildung zeigt drei,
-      die Oberflächenregel schickt Weg 4 in die Werkzeugzeile, wo er nicht
-      liegt und laut derselben Datei nicht liegen kann. README und Website
-      führen außerdem zu wenige Operationen und Bausteine.
+- [x] **Weg 4 stand in keiner Unterlage** — und der Test wusste es besser als
+      sie alle. `test_there_is_one_example_per_way` prüft seit P16 auf vier
+      Wege, das Beispielprojekt liegt bei, das Handbuch hat sein Kapitel, die
+      Oberflächenregel führt *Formen* und *Skelett* in der Werkzeugleiste.
+      Nachgezogen sind jetzt die drei Stellen, die zurückhingen: §2.2 des
+      Bauplans hieß „Drei Hauptwege" und listet den vierten jetzt mit seinem
+      Ablauf (Grundkörper → verschmelzen → ausformen → exportieren) und mit dem
+      Satz, warum Regel 2 dort besonders scharf gilt — hier zählt eine Geste
+      und keine Zahl. Die README sprach von drei Wegen und acht
+      Beispielprojekten, es sind vier und neun. Und die gezeichnete Abbildung
+      im Handbuch zeigte drei Zeilen, während der Text daneben vier beschrieb;
+      ihre Höhe folgt jetzt der Zahl der Zeilen, sonst stünde die nächste
+      außerhalb des Bildes.
+      Damit das nicht wieder driftet, zählt ein Test die Wege und die Beispiele
+      **gegen `EXAMPLES`** und liest beide Unterlagen — samt der Tabelle in der
+      README, in der jedes Beispiel seine Zeile haben muss. Die Website war
+      bereits richtig; ihre 43 Zahlenprüfungen sind grün.
+
 - [ ] **Der Rest der Textfunde**: Fehler-Einzelheiten und Befund-Tooltip zeigen
       rohe englische Schlüssel dort, wo eine Beschriftung stehen müsste; drei
       Handlungsvorschläge zum Bauraum werden nie angeboten, und ihr Handler

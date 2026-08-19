@@ -562,8 +562,15 @@ TEXTURE_NAMES: Final[dict[str, TranslatableText]] = {
 
 
 def _ways(theme: Theme) -> str:
-    """Die drei Hauptwege aus §2.2, als Ablauf."""
-    canvas = Canvas(620, 260, theme)
+    """Die vier Hauptwege aus §2.2, als Ablauf.
+
+    Der vierte fehlte hier, während er im Handbuchkapitel daneben längst
+    beschrieben stand — die Abbildung zeigte drei, der Text vier. Die Höhe
+    folgt der Zahl der Zeilen und ist nicht mehr fest: Eine Zeile dazu und die
+    letzte stünde sonst außerhalb des Bildes.
+    """
+    rows = 4
+    canvas = Canvas(620, 30 + rows * 76 - 16, theme)
     colours = canvas.colours
     canvas.background()
 
@@ -580,7 +587,12 @@ def _ways(theme: Theme) -> str:
             _("Erzeugtes aufbereiten"),
             (_("erzeugen"), _("Reparaturkette"), _("prüfen"), _("exportieren")),
         ),
+        (
+            _("Organisch formen"),
+            (_("Grundkörper"), _("verschmelzen"), _("ausformen"), _("exportieren")),
+        ),
     )
+    assert len(ways) == rows, "die Höhe des Bildes folgt der Zahl der Zeilen"
     for row, (title, steps) in enumerate(ways):
         top = 30 + row * 76
         canvas.label(20, top, str(title), size=11, bold=True)
