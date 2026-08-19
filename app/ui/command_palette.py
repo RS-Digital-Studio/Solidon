@@ -7,7 +7,7 @@ eine Tabelle davon liest.
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Final, cast
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeyEvent
@@ -23,15 +23,112 @@ from PySide6.QtWidgets import (
 from app.core.registry import PaletteEntry, palette_entries
 from app.i18n import tr
 
+#: Wie ein Umlaut auf einer Tastatur ohne Umlaute geschrieben wird.
+#:
+#: Beide Richtungen zählen, und deshalb wird auf **beiden** Seiten gefaltet:
+#: Wer „aushoehlen" tippt, meint „Aushöhlen"; wer „Größe" tippt, soll auch das
+#: finden, was im Register „groesse" heißt. Gefaltet wird nur der Vergleich —
+#: angezeigt bleibt, was dasteht.
+_FOLDED: Final = {
+    "ä": "ae",
+    "ö": "oe",
+    "ü": "ue",
+    "ß": "ss",
+    "á": "a",
+    "à": "a",
+    "â": "a",
+    "é": "e",
+    "è": "e",
+    "ê": "e",
+    "í": "i",
+    "ì": "i",
+    "î": "i",
+    "ó": "o",
+    "ò": "o",
+    "ô": "o",
+    "ú": "u",
+    "ù": "u",
+    "û": "u",
+    "ç": "c",
+    "ñ": "n",
+}
 
-def matches(entry: PaletteEntry, query: str) -> bool:
-    """Teilstring-Suche über Titel, Name und Dokumentation, Akzente
-    inbegriffen.
+#: Ab wie vielen Zeichen ein Wortstamm als Suchbegriff durchgeht.
+#:
+#: Vier, weil darunter jedes zweite Wort passt: „ver" fände Verrunden,
+#: Vereinigen, Versetzen und Verstiften zugleich.
+STEM_LENGTH: Final = 4
+
+#: Wie viele Zeichen eine Beugung höchstens abschneiden darf.
+#:
+#: Die Untergrenze allein genügt nicht — sie war der Fehler. „gibtsnicht"
+#: fand acht Einträge, weil die ersten vier Zeichen „gibt" in acht
+#: Beschreibungen stehen; die Zeile „Kein Befehl passt zu …" kam nie zum
+#: Vorschein. Ein Stamm ist ein *gekürztes* Wort, kein beliebiger Anfang:
+#: „bohren" → „bohr" wirft zwei Zeichen weg, „skalieren" → „skalier" drei.
+#: Darüber ist es ein anderes Wort.
+STEM_CUT: Final = 3
+
+
+def stem_of(word: str) -> str:
+    """Der Suchstamm eines Wortes — kurz genug für die Beugung, lang genug
+    für die Bedeutung.
+    """
+    return word[: max(STEM_LENGTH, len(word) - STEM_CUT)]
+
+
+def fold(text: str) -> str:
+    """Kleinschreibung, Umlaute ausgeschrieben, Akzente weg."""
+    lowered = text.casefold()
+    return "".join(_FOLDED.get(letter, letter) for letter in lowered)
+
+
+def rank(entry: PaletteEntry, query: str) -> int:
+    """Wie gut ein Eintrag zur Anfrage passt — kleiner ist besser.
+
+    **Ein Treffer im Titel wiegt schwerer als einer in der Beschreibung.** Ohne
+    diese Ordnung stand bei „bohren" das „An Merkmal ausrichten" vorn, weil
+    dessen Beschreibung das Wort Bohrung enthält, und „Bohrung setzen" auf
+    Platz drei. Wer tippt, meint fast immer den Namen.
+
+    Sortiert wird **stabil**, damit die Reihenfolge aus ``applies_to`` innerhalb
+    derselben Güte erhalten bleibt: Was zur Auswahl passt, steht weiter vorn
+    (Gebietsregel, „Was zur Auswahl passt, steht vorn").
+    """
+    parts = fold(query).split()
+    if not parts:
+        return 0
+    title = fold(str(entry.title))
+    name = fold(str(entry.name))
+    if all(part in title for part in parts):
+        return 0
+    if all(part in name for part in parts):
+        return 1
+    if all(stem_of(part) in title for part in parts if len(part) >= STEM_LENGTH):
+        return 2
+    return 3
+
+
+def matches(entry: PaletteEntry, query: str, *, stem: bool = False) -> bool:
+    """Teilstring-Suche über Titel, Name und Dokumentation.
+
+    Gefaltet (siehe :func:`fold`), damit „aushoehlen" das Aushöhlen findet —
+    vorher gab es darauf **null Treffer**, und dasselbe galt für „groesse".
+
+    ``stem`` sucht nach dem Wortstamm statt nach dem ganzen Wort und ist die
+    zweite Runde: „bohren" fand nichts, weil die Operation „Bohrung setzen"
+    heißt — ein Fall, den keine Synonymtabelle je vollständig abdeckt und den
+    die ersten vier Buchstaben lösen. Gelockert wird erst, wenn die genaue
+    Suche leer ausgeht (siehe ``CommandPalette._refilter``): Sonst stünde
+    zwischen guten Treffern immer auch Ungefähres.
     """
     if not query:
         return True
-    haystack = f"{entry.title} {entry.name} {entry.doc}".casefold()
-    return all(part in haystack for part in query.casefold().split())
+    haystack = fold(f"{entry.title} {entry.name} {entry.doc}")
+    parts = fold(query).split()
+    if not stem:
+        return all(part in haystack for part in parts)
+    return all(stem_of(part) in haystack for part in parts if len(part) >= STEM_LENGTH)
 
 
 class CommandPalette(QDialog):
@@ -59,9 +156,18 @@ class CommandPalette(QDialog):
 
     def _refilter(self, query: str) -> None:
         self.list.clear()
-        for entry in self._entries:
-            if not matches(entry, query):
-                continue
+        # **Zwei Runden, und die zweite nur bei Bedarf.** Genau passende
+        # Treffer zuerst; findet sich keiner, wird auf den Wortstamm gelockert
+        # — „bohren" fand sonst nichts, weil die Operation „Bohrung setzen"
+        # heißt. Immer zu lockern hieße, zwischen guten Treffern dauerhaft
+        # Ungefähres zu zeigen.
+        found = [entry for entry in self._entries if matches(entry, query)]
+        if not found and query.strip():
+            found = [entry for entry in self._entries if matches(entry, query, stem=True)]
+        # Stabil nach Güte: Titel vor Name vor Beschreibung, und innerhalb
+        # derselben Güte bleibt die Reihenfolge aus ``applies_to`` stehen.
+        found.sort(key=lambda entry: rank(entry, query))
+        for entry in found:
             label = str(entry.title)
             if entry.shortcut:
                 label = f"{label}\t{entry.shortcut}"

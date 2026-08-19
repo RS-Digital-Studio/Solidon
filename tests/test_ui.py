@@ -2466,6 +2466,49 @@ def test_a_cancelled_preview_stays_silent(session: Session) -> None:
     assert not collected, "eine verworfene Vorschau meldet sich nicht mehr"
 
 
+def test_a_cancelled_preview_actually_stops_computing(session: Session) -> None:
+    """Verwerfen ist nicht abbrechen.
+
+    ``cancel_preview`` erhoehte nur die Generation: Das Ergebnis wurde
+    weggeworfen, angehalten wurde nichts. Wer einen Dialog ueber einem grossen
+    Koerper schloss, liess eine Rechnung hinter sich, die niemand mehr sehen
+    wollte und die trotzdem bis zum Ende lief — und beim schnellen Tippen
+    stapelten sich diese Rechnungen.
+
+    Geprueft wird deshalb das Token, nicht die Stille: Jeder Arbeiter fuehrt
+    ein **eigenes**, denn ein geteiltes mit ``reset()`` vor dem Start waere ein
+    Wettlauf — der alte Lauf saehe den gesetzten Zustand womoeglich nie.
+    """
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+
+    def bohrung() -> list[OperationDraft]:
+        return [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 4.0, "x": 0.0, "y": 0.0, "z": 0.0, "axis": "z"},
+            )
+        ]
+
+    session.preview_async(lambda _difference: None, bohrung())
+    erster = session._previews[-1]
+    session.preview_async(lambda _difference: None, bohrung())
+    zweiter = session._previews[-1]
+
+    assert erster is not zweiter, "zwei Anfragen, zwei Arbeiter"
+    assert erster.cancel is not zweiter.cancel, (
+        "ein geteiltes Token waere ein Wettlauf zwischen altem und neuem Lauf"
+    )
+    assert erster.cancel.is_cancelled, "die neuere Anfrage laesst die aeltere weiterrechnen"
+    assert not zweiter.cancel.is_cancelled, "die neueste darf rechnen"
+
+    session.cancel_preview()
+    assert zweiter.cancel.is_cancelled, "der geschlossene Dialog haelt seine Rechnung an"
+
+    session.wait_for_idle()
+
+
 def test_a_broken_preview_shows_nothing_instead_of_failing(session: Session) -> None:
     """Beim Tippen entstehen ungültige Zwischenstände — die Vorschau zeigt
     dann nichts; der echte Fehler kommt beim Anwenden als Vorschlag (§2.7)."""
@@ -3888,6 +3931,76 @@ def test_the_veil_can_be_cancelled(window: MainWindow) -> None:
 
     assert window.session.cancel_signal.is_cancelled
     window._on_busy(False)
+
+
+def test_a_cancelled_run_says_that_it_was_cancelled(window: MainWindow) -> None:
+    """Ein abgebrochener Lauf sah aus wie ein fertiger.
+
+    Balken weg, Knopf weg, dieselbe Ansicht wie vorher — das erfuhr bisher nur
+    die Logdatei. Wer nicht mitgezaehlt hat, konnte nicht wissen, ob sein Klick
+    etwas bewirkt hat und ob das Bild vor ihm das Ergebnis ist oder ein alter
+    Stand. Der Satz nennt deshalb beides (§2.8).
+    """
+    window.session.cancel()
+    window.session._on_cancelled()
+
+    assert "Abgebrochen" in window.status_message.text()
+    assert "letzte" in window.status_message.text(), "der Stand gehoert dazu, nicht nur das Ende"
+
+    # Und er ueberlebt das naechste Ereignis: ``_on_busy`` schreibt die Ansage
+    # zurueck, und eine Meldung, die dabei verschwindet, war fuer den, der
+    # gerade woanders hinsah, nie da.
+    window._on_busy(False)
+    assert "Abgebrochen" in window.status_message.text()
+
+
+def test_replacing_a_run_is_not_an_interruption(window: MainWindow) -> None:
+    """Eine neuere Anfrage bricht die laufende ab — das ist Ersetzen, kein
+    Aufhoeren.
+
+    Es zu melden hiesse, beim Ziehen an einem Schieber im Sekundentakt
+    „abgebrochen" in die Statuszeile zu schreiben. Unterschieden wird an der
+    Herkunft: ``cancel()`` kommt von einem Menschen, ``evaluate_async`` von
+    der naechsten Zahl.
+    """
+    vorher = window.status_message.text()
+    window.session.cancel_signal.cancel()  # wie es ``evaluate_async`` tut
+    window.session._on_cancelled()
+
+    assert window.status_message.text() == vorher, "ein Ersetzen sagt nichts"
+
+
+def test_saving_shows_that_it_is_working(window: MainWindow, tmp_path) -> None:
+    """Speichern ist keine Handlung ohne Dauer.
+
+    Gemessen: 903 ms fuer ein Projekt mit einem 62-MiB-Netz, und das ohne
+    jedes Zeichen — nach §2.8 die mittlere Stufe, Mauszeiger und Statusleiste,
+    und beide fehlten. Wer *Speichern* drueckte, sah ein Fenster, das nicht
+    reagiert.
+
+    Geprueft wird der Zeiger waehrend des Schreibens, nicht danach: Ein Test,
+    der erst hinterher hinsieht, findet immer einen aufgeraeumten Zustand und
+    haette auch ohne die Aenderung bestanden.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    gesehen: list[object] = []
+    echtes_speichern = window.session.save_project
+
+    def merken(path):
+        zeiger = QApplication.overrideCursor()
+        gesehen.append(zeiger.shape() if zeiger is not None else None)
+        gesehen.append(window.status_message.text())
+        return echtes_speichern(path)
+
+    window.session.save_project = merken  # type: ignore[method-assign]
+    window._save_to(tmp_path / "projekt.solidon")
+
+    assert gesehen[0] == Qt.CursorShape.WaitCursor, "waehrend des Schreibens fehlt der Wartezeiger"
+    assert "gespeichert" in str(gesehen[1]), f"die Zeile sagt nichts: {gesehen[1]!r}"
+    assert QApplication.overrideCursor() is None, "und danach ist er wieder weg"
+    assert "Gespeichert" in window.status_message.text()
 
 
 def test_motion_is_off_where_nobody_watches(qt_app: object) -> None:

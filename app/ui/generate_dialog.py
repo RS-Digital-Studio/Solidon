@@ -115,6 +115,8 @@ class GenerateDialog(QDialog):
         self.backend: MeshBackend = backend or ComfyBackend()
         self.result_mesh: GeneratedMesh | None = None
         self._image: bytes | None = None
+        self._busy = False
+        """Ob gerade ein Wurf läuft — siehe :meth:`_running`."""
         self._worker: _Worker | None = None
         self._leash = WorkerLeash(self)
         """Hält den ausgelaufenen Arbeiter, bis Qt mit ihm durch ist — das
@@ -218,7 +220,14 @@ class GenerateDialog(QDialog):
             )
         else:
             self.state.setText(tr("Bereit. Das kann einige Minuten dauern."))
-        ready = self.available and bool(self.prompt.text().strip() or self._image)
+        # ``_busy`` gehört hierher und nicht nur in ``_running``: Diese Methode
+        # hängt am Textfeld, und das bleibt während des Laufs bedienbar. Wer
+        # weitertippte, machte *Erzeugen* wieder klickbar und startete einen
+        # zweiten Arbeiter, der den ersten im Feld ersetzt. Die gesperrte
+        # Knopfleiste hatte das verdeckt, nicht verhindert.
+        ready = (
+            self.available and not self._busy and bool(self.prompt.text().strip() or self._image)
+        )
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(ready)
 
     def _choose_image(self) -> None:
@@ -253,10 +262,24 @@ class GenerateDialog(QDialog):
             return
         self._start()
 
+    def _running(self, running: bool) -> None:
+        """Während der Lauf läuft, ist *Erzeugen* gesperrt — **Abbrechen nicht**.
+
+        Vorher sperrte hier die ganze Leiste, und damit ausgerechnet der Knopf,
+        den man während einer Rechnung als Einzigen braucht: Ein
+        Diffusionsmodell braucht Minuten, und die einzige verbliebene Tür war
+        Esc — eine Taste, die niemand sucht, weil der Weg daneben grau
+        dasteht. Der Ausgang selbst war fertig (:meth:`reject` wartet auf den
+        Thread), unerreichbar war nur sein Knopf.
+        """
+        self._busy = running
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(not running)
+        self.buttons.button(QDialogButtonBox.StandardButton.Cancel).setEnabled(True)
+
     def _start(self) -> None:
         if not self.available:
             return
-        self.buttons.setEnabled(False)
+        self._running(True)
         self.progress.setVisible(True)
         self.progress.setValue(0)
 
@@ -279,7 +302,7 @@ class GenerateDialog(QDialog):
         self.result_mesh = result
         _log.info("generated %d triangles", result.mesh.triangle_count)
         self.progress.setVisible(False)
-        self.buttons.setEnabled(True)
+        self._running(False)
         self._show_tries()
 
     def _show_tries(self) -> None:
@@ -333,7 +356,7 @@ class GenerateDialog(QDialog):
         ist eine Sackgasse mit Vorgeschichte.
         """
         self.progress.setVisible(False)
-        self.buttons.setEnabled(True)
+        self._running(False)
         if not isinstance(problem, AppError):
             self.state.setText(str(problem))
             return

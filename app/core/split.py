@@ -26,6 +26,7 @@ from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft, change_for
 from app.core.types import (
+    CancelToken,
     Document,
     FeatureRef,
     Finding,
@@ -78,6 +79,7 @@ def plan_split(
     profile: Profile,
     *,
     pins: int = PIN_COUNT,
+    cancelled: CancelToken | None = None,
 ) -> SplitPlan:
     """Sucht die Schnitte und macht Operationen daraus.
 
@@ -86,7 +88,7 @@ def plan_split(
     Eingabe des nächsten Schnitts ist eines der zwei Stücke, die der vorige
     gemacht hat.
     """
-    outcome = split_to_fit(mesh, profile)
+    outcome = split_to_fit(mesh, profile, cancelled=cancelled)
     drafts = [
         OperationDraft(
             op="split_pinned",

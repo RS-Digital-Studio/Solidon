@@ -277,3 +277,70 @@ def _palette_entries():
     from app.core.registry import palette_entries
 
     return list(palette_entries())
+
+
+def test_the_search_finds_words_typed_without_umlauts(qt_app: object) -> None:
+    """Nicht jede Tastatur hat Umlaute, und nicht jeder tippt sie.
+
+    „aushoehlen" fand **null** Einträge, obwohl die Operation „Aushöhlen"
+    heißt; dasselbe galt für „groesse". Gefaltet wird auf beiden Seiten — wer
+    „Aushöhlen" mit Umlaut tippt, soll ihn genauso finden.
+    """
+    from app.ui.command_palette import CommandPalette
+
+    palette = CommandPalette()
+    for typed in ("aushoehlen", "aushöhlen", "AUSHOEHLEN"):
+        palette.search.setText(typed)
+        titles = [palette.list.item(row).text() for row in range(palette.list.count())]
+        assert titles, f"{typed!r} findet nichts"
+        assert "Aushöhlen" in titles[0], f"{typed!r} zeigt zuerst {titles[0]!r}"
+
+
+def test_the_search_falls_back_to_the_word_stem(qt_app: object) -> None:
+    """„bohren" fand nichts, weil die Operation „Bohrung setzen" heißt.
+
+    Ein Fall, den keine Synonymtabelle je vollständig abdeckt — und den die
+    ersten vier Buchstaben lösen. Gelockert wird **erst**, wenn die genaue
+    Suche leer ausgeht: Sonst stünde zwischen guten Treffern immer auch
+    Ungefähres.
+    """
+    from app.ui.command_palette import CommandPalette, matches
+
+    palette = CommandPalette()
+    palette.search.setText("bohren")
+    titles = [palette.list.item(row).text() for row in range(palette.list.count())]
+
+    assert titles, "die Suche nach bohren findet nichts"
+    assert "Bohrung" in titles[0], f"zuerst steht {titles[0]!r} statt der Bohrung"
+
+    # Und die Lockerung greift wirklich nur als zweite Runde.
+    treffer = [entry for entry in palette._entries if matches(entry, "bohren")]
+    assert not treffer, "bohren passt neuerdings genau — dann prueft dieser Test nichts"
+
+
+def test_a_hit_in_the_title_beats_a_hit_in_the_description(qt_app: object) -> None:
+    """Wer tippt, meint fast immer den Namen.
+
+    Ohne Ordnung stand bei „bohren" das „An Merkmal ausrichten" vorn, weil
+    dessen Beschreibung das Wort Bohrung enthält, und „Bohrung setzen" auf
+    Platz drei. Sortiert wird stabil, damit die Reihenfolge aus ``applies_to``
+    innerhalb derselben Güte stehen bleibt.
+    """
+    from app.ui.command_palette import CommandPalette, rank
+
+    palette = CommandPalette()
+    palette.search.setText("bohrung")
+    titles = [palette.list.item(row).text() for row in range(palette.list.count())]
+
+    assert len(titles) > 1, "zu wenige Treffer, um eine Reihenfolge zu pruefen"
+    assert "Bohrung" in titles[0], f"zuerst steht {titles[0]!r}"
+
+    # Und die Ordnung dahinter, damit ein Umbau der Anzeige sie nicht still
+    # verliert: Titel schlaegt Beschreibung.
+    im_titel = next(e for e in palette._entries if "Bohrung" in str(e.title))
+    nur_im_text = next(
+        e
+        for e in palette._entries
+        if "bohrung" in f"{e.doc}".casefold() and "Bohrung" not in str(e.title)
+    )
+    assert rank(im_titel, "bohrung") < rank(nur_im_text, "bohrung")

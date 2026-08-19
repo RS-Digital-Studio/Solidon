@@ -41,6 +41,7 @@ from app.core.scene import (
     CancelSignal,
     EvaluationResult,
     History,
+    NeverCancelled,
     OperationDraft,
     ResultCache,
     expressions,
@@ -202,11 +203,14 @@ class _PreviewWorker(QThread):
 
     done = Signal(int, object)
 
-    def __init__(self, session: Session, generation: int, compute: Any) -> None:
+    def __init__(
+        self, session: Session, generation: int, compute: Any, cancel: CancelSignal
+    ) -> None:
         super().__init__()
         self._session = session
         self._generation = generation
         self._compute = compute
+        self.cancel = cancel
 
     def run(self) -> None:
         try:
@@ -231,18 +235,26 @@ class _SplitWorker(QThread):
 
     done = Signal(object)
     failedWith = Signal(object)
+    cancelled = Signal()
 
     def __init__(self, mesh: Any, object_id: str, profile: Profile) -> None:
         super().__init__()
         self._mesh = mesh
         self._object_id = object_id
         self._profile = profile
+        #: Ein eigenes Token, wie bei der Vorschau: Die Suche kann Minuten
+        #: laufen, und wer sie abbricht, will nicht auf sie warten.
+        self.cancel = CancelSignal()
 
     def run(self) -> None:
         try:
-            self.done.emit(plan_split(self._mesh, self._object_id, self._profile))
+            plan = plan_split(self._mesh, self._object_id, self._profile, cancelled=self.cancel)
+        except OperationCancelled:
+            self.cancelled.emit()
         except AppError as error:
             self.failedWith.emit(error)
+        else:
+            self.done.emit(plan)
 
 
 def _no_questions(question: str, choices: list[str]) -> str:
@@ -281,6 +293,13 @@ class Session(QObject):
     agentBusyChanged = Signal(bool)
     splitBusyChanged = Signal(bool)
     """Die Trennebenensuche läuft oder ist fertig (§2.8)."""
+    evaluationCancelled = Signal()
+    """Ein Mensch hat die Auswertung angehalten (§2.8).
+
+    **Nicht** bei jedem Abbruch: Eine neuere Anfrage bricht die laufende
+    ebenfalls ab (``_rerun_pending``), und das ist ein Ersetzen, kein
+    Aufhören — es zu melden hieße, beim Ziehen an einem Schieber im
+    Sekundentakt „abgebrochen" in die Statuszeile zu schreiben."""
     projectChanged = Signal()
     """Stapel, Pfad oder Titel haben sich geändert; die Leisten laden neu."""
     failed = Signal(object)
@@ -292,6 +311,9 @@ class Session(QObject):
         self.history = History(self.project.document)
         self.cache = ResultCache()
         self.cancel_signal = CancelSignal()
+        self._cancel_by_user = False
+        """Ob der laufende Abbruch von einem Menschen kommt — siehe
+        ``evaluationCancelled``."""
         self.agent_cancel = CancelSignal()
         """Ein eigenes Signal für den Agentenzug: Auswertung und Agent laufen
         unabhängig, und ein abgebrochener Vorschlag darf keine laufende
@@ -850,13 +872,26 @@ class Session(QObject):
         """
         self._preview_generation += 1
         generation = self._preview_generation
+        # **Ein Token je Arbeiter, kein geteiltes.** Ein gemeinsames mit
+        # ``reset()`` vor dem Start wäre ein Wettlauf: der alte Lauf fragt es
+        # womöglich erst nach dem Zurücksetzen ab und sähe den gesetzten
+        # Zustand nie — dann rechnet er zu Ende, und beim schnellen Tippen
+        # stapeln sich Boolesche Operationen für Ergebnisse, die schon
+        # niemand mehr sehen will.
+        cancel = CancelSignal()
 
         def compute() -> tuple[Any, SceneDifference | None]:
             return self.preview_scene(
-                list(drafts or []), change_op=change_op, change_values=change_values
+                list(drafts or []),
+                change_op=change_op,
+                change_values=change_values,
+                cancelled=cancel,
             )
 
-        worker = _PreviewWorker(self, generation, compute)
+        # Was jetzt noch rechnet, rechnet für eine Frage von gestern: die
+        # Generation hätte sein Ergebnis ohnehin verworfen (``_preview_done``).
+        self.cancel_previews()
+        worker = _PreviewWorker(self, generation, compute, cancel)
         worker.done.connect(lambda stamp, difference: self._preview_done(stamp, difference, then))
         worker.finished.connect(lambda done=worker: self._preview_finished(done))
         self._previews.append(worker)
@@ -865,6 +900,14 @@ class Session(QObject):
     def _preview_finished(self, worker: _PreviewWorker) -> None:
         if worker in self._previews:
             self._previews.remove(worker)
+        # Nicht einfach loslassen: ``finished`` heißt „``run`` ist zurück",
+        # nicht „das Objekt darf weg" (siehe :mod:`app.ui.leash`).
+        self._leash.hold_until_done(worker)
+
+    def cancel_previews(self) -> None:
+        """Jedem laufenden Vorschau-Arbeiter sagen, dass er aufhören darf."""
+        for worker in list(self._previews):
+            worker.cancel.cancel()
 
     def _preview_done(self, stamp: int, difference: Any, then: Any) -> None:
         if stamp != self._preview_generation:
@@ -872,17 +915,23 @@ class Session(QObject):
         then(difference)
 
     def cancel_preview(self) -> None:
-        """Der Dialog ist zu — was noch rechnet, wird verworfen, nicht gezeigt."""
+        """Der Dialog ist zu — was noch rechnet, hört auf.
+
+        Die Generation allein genügte nicht: Sie **verwarf** das Ergebnis,
+        angehalten hat sie nichts. Wer einen Dialog über einem großen Körper
+        schloss, ließ eine Rechnung hinter sich, die niemand mehr sehen wollte
+        und die trotzdem bis zum Ende lief.
+        """
         self._preview_generation += 1
+        self.cancel_previews()
 
     def split_async(self, object_id: str, then: Any) -> None:
         """Auto Split, ohne das Fenster anzuhalten (§2.8).
 
         Die Suche läuft im Arbeiter, das Anwenden danach hier im Thread des
-        Dokuments; ``then`` bekommt das ``SplitApplied``. Ein Abbruch über
-        :meth:`cancel_split` verwirft den Plan — die Suche kennt keinen
-        Abbruch von innen, aber niemand muss auf ein Ergebnis warten, das er
-        nicht mehr will.
+        Dokuments; ``then`` bekommt das ``SplitApplied``. :meth:`cancel_split`
+        hält sie an **und** verwirft, was doch noch käme: Der Knopf wirkt
+        sofort, und die Maschine hört auf zu rechnen.
         """
         self.wait_for_idle()
         result = self.last_result
@@ -900,6 +949,7 @@ class Session(QObject):
         worker = _SplitWorker(as_mesh_data(entry.mesh), object_id, self.profile)
         worker.done.connect(lambda plan: self._split_planned(plan, object_id, then))
         worker.failedWith.connect(self._split_failed)
+        worker.cancelled.connect(self._split_cancelled)
         worker.finished.connect(self._on_split_done)
         self._split = worker
         self.splitBusyChanged.emit(True)
@@ -910,10 +960,16 @@ class Session(QObject):
         return self._split is not None and self._split.isRunning()
 
     def cancel_split(self) -> None:
-        """Das Ergebnis wird verworfen, wenn es kommt — der Knopf wirkt
-        sofort, auch wenn der Arbeiter noch ausläuft."""
+        """Anhalten und verwerfen — beides, und in dieser Reihenfolge.
+
+        Verwerfen allein war die halbe Antwort: Der Knopf wirkte sofort, die
+        Suche schnitt aber weiter jede Kandidatenebene durch das ganze Netz,
+        Minuten lang, für einen Plan, den schon niemand mehr wollte. Das Token
+        erreicht sie zwischen den Blöcken der Abtastung (§15.6).
+        """
         if self._split is None:
             return
+        self._split.cancel.cancel()
         self._split_discarded = True
         self.splitBusyChanged.emit(False)
 
@@ -921,6 +977,14 @@ class Session(QObject):
         self.splitBusyChanged.emit(False)
         if not self._split_discarded:
             self.failed.emit(error)
+
+    def _split_cancelled(self) -> None:
+        """Die Suche hat aufgehört, weil jemand es wollte — kein Fehler.
+
+        Ein abgebrochener Lauf als Fehlermeldung zu zeigen wäre eine Antwort
+        auf eine Frage, die der Nutzer selbst schon beantwortet hat.
+        """
+        self.splitBusyChanged.emit(False)
 
     def _split_planned(self, plan: Any, object_id: str, then: Any) -> None:
         self.splitBusyChanged.emit(False)
@@ -954,6 +1018,7 @@ class Session(QObject):
             self.cancel_signal.cancel()
             return
         self.cancel_signal.reset()
+        self._cancel_by_user = False
         self.busyChanged.emit(True)
         worker = _EvaluationWorker(self)
         worker.finishedWith.connect(self._on_finished)
@@ -988,6 +1053,7 @@ class Session(QObject):
 
     def cancel(self) -> None:
         """Der eine Knopf hält beides an, was gerade laufen kann (§2.8)."""
+        self._cancel_by_user = True
         self.cancel_signal.cancel()
         self.agent_cancel.cancel()
 
@@ -1079,6 +1145,7 @@ class Session(QObject):
         ask: Any = None,
         change_op: int | None = None,
         change_values: dict[str, Any] | None = None,
+        cancelled: Any = None,
     ) -> tuple[Any, SceneDifference | None]:
         """Wonach die Szene aussähe — die eine Vorschau für Agent und Dialog.
 
@@ -1111,6 +1178,7 @@ class Session(QObject):
             # thread-sicher; ohne das wäre es hier gefährlich, weil Auswertung,
             # Agent und Vorschau in eigenen Fäden laufen.
             cache=self.cache,
+            cancelled=cancelled or NeverCancelled(),
         )
         if result.stopped_at is not None:
             # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
@@ -1166,7 +1234,18 @@ class Session(QObject):
         self.failed.emit(error)
 
     def _on_cancelled(self) -> None:
+        """Der Lauf hat aufgehört — und das erfuhr bisher nur die Logdatei.
+
+        Der Balken verschwand, der Knopf verschwand, die Ansicht blieb auf dem
+        Stand von vorher stehen: dasselbe Bild wie bei einer Rechnung, die
+        *fertig* geworden ist. Wer nicht mitgezählt hat, konnte nicht wissen,
+        ob sein Klick etwas bewirkt hat — und ob das, was er sieht, das
+        Ergebnis ist oder ein alter Stand.
+        """
         _log.info("evaluation cancelled")
+        if self._cancel_by_user:
+            self._cancel_by_user = False
+            self.evaluationCancelled.emit()
 
     def _on_proposal(self, preview: Any) -> None:
         self.proposalReady.emit(preview)

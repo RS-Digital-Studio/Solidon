@@ -24,7 +24,7 @@ Näherung wieder zusammenzukleben ergibt ein genähertes Teil (§11.1).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 import trimesh
@@ -34,7 +34,7 @@ from app.core.geom.mesh import MeshData
 from app.core.geom.section import AXIS_NORMALS, Axis, SectionPlane
 from app.core.log import get_logger
 from app.core.slice.analysis import cross_sections
-from app.core.types import Finding, Profile, Vec3
+from app.core.types import CancelToken, Finding, Profile, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -138,6 +138,15 @@ def oversize(
     return tuple(max(0.0, float(size[index]) - limits[index]) for index in range(3))  # type: ignore[return-value]
 
 
+#: Wie viele Kandidatenebenen ein Block der Abtastung umfasst.
+#:
+#: Acht, weil die Abfrage dazwischen liegt: Ein einziger Aufruf über alle
+#: Ebenen ist von außen nicht zu unterbrechen, und genau er ist an einem
+#: großen Netz die Minute, die der Nutzer wartet. Kleiner wäre die Antwort
+#: nicht schneller, nur der Aufbau öfter bezahlt.
+JUDGE_BLOCK: Final = 8
+
+
 def fits(mesh: MeshData, profile: Profile, margin: float = MARGIN) -> bool:
     """Passt der Körper überhaupt auf die Platte, in der Lage, die er hat?"""
     return max(oversize(mesh, profile, margin)) <= EPS_GEOM
@@ -149,6 +158,7 @@ def split_to_fit(
     *,
     max_parts: int = MAX_PARTS,
     samples: int = SAMPLES,
+    cancelled: CancelToken | None = None,
 ) -> SplitOutcome:
     """Schneidet, bis jedes Stück passt — oder klar ist, dass Schneiden es
     nicht richten wird.
@@ -157,18 +167,25 @@ def split_to_fit(
     Nächstes geschnitten. Das hält die Stückzahl klein — den schlimmsten
     Übeltäter zuerst zu schneiden ist, was ein Mensch mit einer Säge tut, und
     aus demselben Grund.
+
+    ``cancelled`` wird **zwischen** den Schnitten und innerhalb der Abtastung
+    abgefragt (§15.6). Ein halb geschnittener Körper entsteht dabei nicht: Der
+    Abbruch wirft, und was schon gefunden war, ist ein Plan und noch keine
+    Änderung am Dokument.
     """
     outcome = SplitOutcome(parts=[mesh])
     if fits(mesh, profile):
         return outcome
 
     while len(outcome.parts) < max_parts:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         index = _worst(outcome.parts, profile)
         if index is None:
             return outcome
 
         part = outcome.parts[index]
-        candidate = find_plane(part, profile, samples=samples)
+        candidate = find_plane(part, profile, samples=samples, cancelled=cancelled)
         if candidate is None:
             outcome.findings.append(
                 Finding(
@@ -222,6 +239,7 @@ def find_plane(
     profile: Profile,
     *,
     samples: int = SAMPLES,
+    cancelled: CancelToken | None = None,
 ) -> Candidate | None:
     """Die beste Trennebene für diesen Körper, oder ``None``, wenn keine hilft.
 
@@ -234,14 +252,21 @@ def find_plane(
 
     window = _window(mesh, profile, axis)
     positions = np.linspace(window[0], window[1], samples)
-    candidates = [entry for entry in _judge(mesh, axis, positions) if entry.area > EPS_GEOM]
+    candidates = [
+        entry
+        for entry in _judge(mesh, axis, positions, cancelled=cancelled)
+        if entry.area > EPS_GEOM
+    ]
     best = min(candidates, key=lambda entry: entry.score) if candidates else None
     if best is not None and best.score <= HINT_THRESHOLD:
         return best
 
     # Nichts Überzeugendes unter den abgetasteten Ebenen: die Zerlegung
     # fragen, wo der Körper von selbst auseinanderfällt, und diese Position
-    # nach denselben Regeln beurteilen.
+    # nach denselben Regeln beurteilen. Sie ist der zweite teure Schritt, also
+    # steht davor die zweite Abfrage.
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     hinted = _from_decomposition(mesh, axis, window)
     if hinted is not None and (best is None or hinted.score < best.score):
         return hinted
@@ -280,11 +305,57 @@ def _window(mesh: MeshData, profile: Profile, axis: Axis) -> tuple[float, float]
     return (low + limit * FIRST_SLICE_SHARE, low + limit)
 
 
-def _judge(mesh: MeshData, axis: Axis, positions: np.ndarray) -> list[Candidate]:
+def _sections_in_blocks(
+    mesh: MeshData,
+    axis: Axis,
+    positions: np.ndarray,
+    cancelled: CancelToken | None,
+) -> list[Any]:
+    """Die Querschnitte zu allen Positionen — in Blöcken, damit dazwischen
+    jemand aufhören darf.
+
+    Zurück kommt dieselbe Liste wie aus einem einzigen Aufruf: erst alle
+    unteren, dann alle mittleren, dann alle oberen Schnitte. Ein Block liefert
+    diese drei Gruppen für seinen Ausschnitt, und sie werden gruppenweise
+    wieder zusammengelegt — nicht blockweise hintereinander, sonst stünde die
+    Bewertung gleich daneben vor der falschen Nachbarschaft.
+    """
+    if cancelled is None:
+        heights = np.concatenate([positions - PRISM_STEP, positions, positions + PRISM_STEP])
+        return sections_along(mesh, axis, heights)
+
+    below: list[Any] = []
+    middle: list[Any] = []
+    above: list[Any] = []
+    for start in range(0, len(positions), JUDGE_BLOCK):
+        cancelled.raise_if_cancelled()
+        chunk = positions[start : start + JUDGE_BLOCK]
+        cut = sections_along(
+            mesh, axis, np.concatenate([chunk - PRISM_STEP, chunk, chunk + PRISM_STEP])
+        )
+        size = len(chunk)
+        below.extend(cut[:size])
+        middle.extend(cut[size : 2 * size])
+        above.extend(cut[2 * size :])
+    return [*below, *middle, *above]
+
+
+def _judge(
+    mesh: MeshData,
+    axis: Axis,
+    positions: np.ndarray,
+    *,
+    cancelled: CancelToken | None = None,
+) -> list[Candidate]:
     """Schneidet den Körper an jeder Kandidatenposition und bewertet, was
-    herauskommt."""
-    heights = np.concatenate([positions - PRISM_STEP, positions, positions + PRISM_STEP])
-    sections = sections_along(mesh, axis, heights)
+    herauskommt.
+
+    Die Schnitte laufen in **Blöcken** statt in einem Zug: ein einziger Aufruf
+    über alle Höhen ist von außen nicht zu unterbrechen, und genau er ist bei
+    einem großen Netz die Minute, die der Nutzer wartet. Zwischen den Blöcken
+    liegt die Abfrage; die Bewertung danach ist billig.
+    """
+    sections = _sections_in_blocks(mesh, axis, positions, cancelled)
     count = len(positions)
     below, middle, above = sections[:count], sections[count : 2 * count], sections[2 * count :]
 

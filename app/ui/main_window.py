@@ -2196,6 +2196,7 @@ class MainWindow(QMainWindow):
         self.session.agentBusyChanged.connect(self._on_agent_busy)
         self.session.agentProgress.connect(self._on_agent_progress)
         self.session.splitBusyChanged.connect(self._on_split_busy)
+        self.session.evaluationCancelled.connect(self._on_evaluation_cancelled)
         self._refresh_chat_availability()
 
     # --- actions ----------------------------------------------------------------
@@ -2319,9 +2320,32 @@ class MainWindow(QMainWindow):
             self._save_to(Path(name))
 
     def _save_to(self, path: Path) -> None:
+        """Speichern mit Wartezeiger — es ist keine Handlung ohne Dauer.
+
+        Gemessen: 903 ms für ein Projekt mit einem 62-MiB-Netz, und das ohne
+        jedes Zeichen. Nach §2.8 ist das die mittlere Stufe — Mauszeiger und
+        Statusleiste —, und beide fehlten. Wer *Speichern* drückte, sah für
+        eine Sekunde ein Fenster, das nicht reagiert; ob der Klick angekommen
+        war, wusste er erst danach.
+
+        Kein Arbeiter: Das Schreiben mutiert nichts an der Szene, es blockiert
+        einmal und ist fertig. Ein Thread brächte eine Halteleine, einen
+        Fehlerpfad und die Frage, was passiert, wenn dazwischen jemand
+        weiterarbeitet — für unter zwei Sekunden ist das der teurere Weg.
+
+        Die Zeile wird **selbst neu gezeichnet**, bevor blockiert wird. Ohne
+        das käme sie erst, wenn die Ereignisschleife wieder dran ist — also
+        nachdem das Warten vorbei ist. ``repaint`` und nicht
+        ``processEvents``: Es zeichnet das eine Widget, statt fremde Eingaben
+        mitten in den laufenden Aufruf zu lassen.
+        """
+        self.status_message.setText(tr("Wird gespeichert …"))
+        self.status_message.repaint()
         try:
-            saved = self.session.save_project(path)
+            with waiting():
+                saved = self.session.save_project(path)
         except AppError as error:
+            self.status_message.setText(self._announcement)
             show_error(error, self)
             return
         self.settings.remember(saved)
@@ -5186,6 +5210,25 @@ class MainWindow(QMainWindow):
         self._update_veil(busy)
         if not busy and not others:
             self.status_message.setText(self._announcement)
+
+    def _on_evaluation_cancelled(self) -> None:
+        """Sagen, dass angehalten wurde — und was jetzt gilt.
+
+        Ohne diesen Satz sah ein abgebrochener Lauf genauso aus wie ein
+        fertiger: Balken weg, Knopf weg, dieselbe Ansicht wie vorher. Der Satz
+        nennt deshalb beides, das Aufhören **und** den Stand, den man vor sich
+        hat — sonst bleibt die Frage offen, ob das Bild das Ergebnis ist.
+
+        Er geht in ``_announcement``, nicht nur in die Zeile: Das nächste
+        ``_on_busy`` schreibt die Ansage zurück, und ein Satz, der beim
+        nächsten Ereignis verschwindet, war für den, der gerade woanders
+        hinsah, nie da.
+        """
+        self._announcement = tr(
+            "Abgebrochen. Zu sehen ist der letzte vollständig gerechnete Stand — "
+            "eine Änderung am Stapel rechnet weiter."
+        )
+        self.status_message.setText(self._announcement)
 
     def _update_veil(self, busy: bool) -> None:
         """Die Ladeanzeige gilt dem leeren Bild, nicht jeder Rechnung.

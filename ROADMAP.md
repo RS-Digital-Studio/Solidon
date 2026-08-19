@@ -41,8 +41,6 @@ bekommt einen roten Lauf.
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
-| Der Rest der Abbruchpunkte | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — die Vorschau braucht ein eigenes Token je Arbeiter, kein geteiltes |
-| Die Suche der Palette findet zu wenig | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — Umlautfaltung, Synonyme, und die Bauart-Prüfung fehlt |
 | Der Rest der Textfunde | Die Oberfläche im Bild durchgesehen (17.08.2026) | nichts — rohe Schlüssel statt Beschriftungen, drei nie angebotene Vorschläge, eine Schätzung am falschen Ort |
 | Parameterausdrücke in Pose-Winkeln | Die große Durchsicht vom 16.08.2026 — Code, Oberfläche, Wettbewerb | das Gegenstück zu `sketch_parameter_references` für `kind="armature"` — Kernarbeit mit eigenen Tests |
 
@@ -6447,14 +6445,64 @@ belegt und mit Absicht liegen geblieben.
       Abbrechen-Knopf am Fortschritt und ein `closeEvent`, das abbricht statt
       zu warten. Gebaut in einer parallelen Sitzung, genau auf dem Weg, den
       die Durchsicht vorgeschlagen hatte.
-- [ ] **Der Rest der Abbruchpunkte.** Analysekarte und Trennebenensuche laufen
-      im Arbeiter, fragen aber nie `ctx.cancelled`; im Erzeugen-Dialog ist
-      „Abbrechen" ausgerechnet während des Laufs gesperrt; eine abgebrochene
-      Auswertung sagt niemandem, dass sie abgebrochen wurde; und Speichern
-      blockiert über eine Sekunde ohne Zeiger und ohne Statuszeile. Für die
-      Vorschau fehlt zum Abbrechen ein eigenes `CancelSignal` je Arbeiter —
-      ein geteiltes mit `reset()` davor wäre ein Wettlauf, der alte Lauf sähe
-      den gesetzten Zustand womöglich nie.
+- [x] **Der Rest der Abbruchpunkte.** Fünf Stellen, und sie hatten alle
+      dieselbe Bauart: Der Knopf wirkte, die Maschine hörte nicht auf.
+
+      **Die Vorschau verwarf, statt anzuhalten.** `cancel_preview` erhöhte die
+      Generation — das Ergebnis flog weg, die Rechnung lief zu Ende. Wer einen
+      Dialog über einem großen Körper schloss, ließ zwei Boolesche Operationen
+      je Körper hinter sich, und beim schnellen Tippen stapelten sie sich. Jeder
+      Arbeiter führt jetzt ein **eigenes** `CancelSignal`; ein geteiltes mit
+      `reset()` davor wäre ein Wettlauf, in dem der alte Lauf den gesetzten
+      Zustand womöglich nie sieht. Eine neuere Anfrage bricht die älteren ab.
+
+      **Die Trennebenensuche kannte keinen Abbruch von innen** — der Docstring
+      sagte das sogar, als wäre es eine Eigenschaft. Sie schneidet jede
+      Kandidatenebene durch das ganze Netz, Minuten an einem großen Körper, und
+      „Abbrechen" hieß bisher: *das Ergebnis wird verworfen, wenn es kommt*.
+      Das Token geht jetzt durch `plan_split` → `split_to_fit` → `find_plane`
+      → `_judge`. Der Sonderfall dort ist die **Blockbildung**: Ein einziger
+      Aufruf über alle Ebenen ist von außen nicht zu unterbrechen, und genau er
+      ist die Minute — `_sections_in_blocks` schneidet zu acht und fragt
+      dazwischen. Zusammengelegt wird gruppenweise, nicht blockweise, sonst
+      stünde die Bewertung vor der falschen Nachbarschaft.
+
+      **Im Erzeugen-Dialog war „Abbrechen" während des Laufs gesperrt** —
+      `setEnabled(False)` traf die ganze Leiste und damit ausgerechnet den
+      einen Knopf, den man bei einer Rechnung von Minuten braucht. Der Ausgang
+      selbst war fertig gebaut (`reject` wartet auf den Thread), unerreichbar
+      war nur sein Knopf; es blieb Esc, eine Taste, die niemand sucht, solange
+      der Weg daneben grau dasteht. Dabei kam ein zweiter Fund mit heraus, den
+      die gesperrte Leiste **verdeckt** hatte: `_update_state` hängt am
+      Textfeld, und das bleibt bedienbar — wer weitertippte, machte *Erzeugen*
+      wieder klickbar und startete einen zweiten Arbeiter über den ersten.
+
+      **Eine abgebrochene Auswertung sagte es nur der Logdatei.** Balken weg,
+      Knopf weg, dieselbe Ansicht wie vorher: von außen nicht zu unterscheiden
+      von einer Rechnung, die *fertig* geworden ist. Der Satz nennt jetzt
+      beides — das Aufhören und den Stand, den man vor sich hat —, und er geht
+      in `_announcement`, damit ihn das nächste `_on_busy` nicht wegwischt.
+      Gemeldet wird **nur der Abbruch durch einen Menschen**: Eine neuere
+      Anfrage bricht die laufende ebenfalls ab, und das im Sekundentakt zu
+      melden hieße, beim Ziehen an einem Schieber „abgebrochen" zu schreiben.
+
+      **Speichern blockierte ohne jedes Zeichen.** Gemessen: 903 ms für ein
+      Projekt mit einem 62-MiB-Netz — nach §2.8 die mittlere Stufe, Mauszeiger
+      *und* Statusleiste, und beide fehlten. Kein Arbeiter dafür: Das Schreiben
+      mutiert nichts, es blockiert einmal und ist fertig; ein Thread brächte
+      Halteleine, Fehlerpfad und die Frage, was passiert, wenn dazwischen
+      jemand weiterarbeitet. Die Zeile zeichnet sich vor dem Blockieren selbst
+      neu (`repaint`, nicht `processEvents` — das eine Widget statt fremder
+      Eingaben mitten im Aufruf).
+
+      Die **Analysekarte** war der einzige Teil des Punkts, der schon stand:
+      sie fragt am Eingang und in ihrer teuersten Schleife (`CANCEL_EVERY`).
+
+      Und ein Nachbarfund: `_preview_finished` entfernte seinen Arbeiter
+      **im** `finished`-Slot aus der Liste — die erste Hälfte der Falle aus der
+      Gebietsregel, denn `finished` heißt „`run` ist zurück", nicht „das Objekt
+      darf weg". Er geht jetzt denselben Weg über die Halteleine wie alle
+      anderen.
 - [x] **Die Befehlspalette ist der Universalzugang aus §19.2.** 38 von 136
       Menüzeilen fehlten, weil neben der Leiste ein von Hand gepflegtes
       Wörterbuch stand — und von Hand heißt driften. Gelesen wird jetzt die
@@ -6463,10 +6511,50 @@ belegt und mit Absicht liegen geblieben.
       aus dem Menü. Draußen bleiben genau zwei, und der Test nennt sie
       namentlich: *Beenden* ist in einer Liste, durch die man tippt, ein Klick
       zu nah am Verlust der Arbeit, und *Befehlspalette* öffnete sich selbst.
-- [ ] **Die Suche der Palette kennt weder Umlautfaltung noch ein Synonym**, und
-      sie umgeht die Bauart-Prüfung: „Verrunden" öffnet für ein Netz seinen
-      vollen Dialog. Das ist der Rest des Palettenpunkts — der Zugang steht,
-      das Finden nicht.
+- [x] **Die Suche der Palette kannte weder Umlautfaltung noch ein Synonym.**
+      Der Zugang stand, das Finden nicht: Wer „aushoehlen" tippte — und wer
+      keine Umlaute auf der Tastatur hat, tippt so —, bekam **null Treffer**
+      auf eine Operation, die es gibt. Dasselbe bei „groesse". Gemessen, nicht
+      vermutet: die Zahlen unten sind vorher/nachher aus demselben Register.
+
+      Drei Dinge, und jedes löst einen eigenen Fall:
+
+      **Gefaltet wird auf beiden Seiten** (`fold`). „aushoehlen" findet
+      „Aushöhlen", „Größe" findet, was intern `groesse` heißt. Angezeigt bleibt,
+      was dasteht — gefaltet wird nur der Vergleich.
+
+      **Der Wortstamm ist die zweite Runde, nicht die erste** (`matches(…,
+      stem=True)`). „bohren" fand nichts, weil die Operation „Bohrung setzen"
+      heißt — ein Fall, den keine Synonymtabelle je vollständig abdeckt und den
+      die ersten Buchstaben lösen. Gelockert wird **erst, wenn die genaue Suche
+      leer ausgeht**: immer zu lockern hieße, zwischen guten Treffern dauerhaft
+      Ungefähres zu zeigen.
+
+      **Ein Treffer im Titel wiegt schwerer als einer in der Beschreibung**
+      (`rank`). Bei „bohrung" stand „An Merkmal ausrichten" vorn, weil dessen
+      Beschreibung das Wort enthält, und „Bohrung setzen" auf Platz drei. Wer
+      tippt, meint fast immer den Namen. Sortiert wird **stabil**, damit die
+      Reihenfolge aus `applies_to` innerhalb derselben Güte stehen bleibt.
+
+      | Eingabe | vorher | nachher | zuerst |
+      |---|---|---|---|
+      | `aushoehlen` | 0 | 2 | Aushöhlen |
+      | `bohren` | 0 | 7 | Bohrung setzen |
+      | `groesse` | 0 | 5 | Bohrung setzen |
+      | `bohrung` | 7 | 7 | Bohrung setzen *(war: An Merkmal ausrichten)* |
+
+      **Der Deckel auf dem Stamm ist der eigentliche Fund** (`STEM_CUT`). Die
+      Untergrenze von vier Zeichen allein genügte nicht: „gibtsnicht" fand
+      **acht** Einträge, weil „gibt" in acht Beschreibungen steht — und die
+      Zeile „Kein Befehl passt zu …" kam nie zum Vorschein. Ein Stamm ist ein
+      *gekürztes* Wort, kein beliebiger Anfang; höchstens drei Zeichen dürfen
+      fallen. Aufgefallen ist das nicht beim Nachdenken, sondern weil ein
+      **bestehender** Test rot wurde — der, der die Auskunftszeile prüft.
+
+      Die **Bauart-Prüfung** war der dritte Teil des Punkts und ist bereits
+      erledigt: `_palette_availability` liest sie aus denselben Menü-Actions,
+      und ein nicht ausführbarer Eintrag steht ausgegraut da **samt Grund** —
+      ausgrauen allein wäre die halbe Antwort (Regel 18).
 - [x] **Zurückgenommen: Im deutschen Handbuchbild steht ein Komma, kein
       Punkt.** Der Fund war meiner, und er war falsch. Was ihn erzeugt hat, ist
       lehrreicher als er selbst.
