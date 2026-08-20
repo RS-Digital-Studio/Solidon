@@ -528,3 +528,34 @@ def test_no_progress_bar_prints_its_number_over_the_moving_edge() -> None:
         f"Diese Balken schreiben ihre Zahl über die Füllung: {offenders}. "
         "setTextVisible(False), und der Prozentwert daneben."
     )
+
+
+def test_hover_and_focus_are_not_the_same_thing_on_a_tile() -> None:
+    """Beide sagten es über den Rahmen, in derselben Farbe.
+
+    Im dunklen Thema — dem voreingestellten — ist ``highlight`` derselbe
+    Bernstein wie der Fokusring: Überfahren setzte ``border-color: highlight``,
+    Fokus ``border: 2px solid focus``, und die zwei Zustände unterschieden sich
+    um einen Bildpunkt Rahmenbreite. Wer mit dem Tabulator durch die neun
+    Kacheln des Startbildschirms geht, sah nicht, welche die Eingabetaste
+    auslösen würde.
+
+    Überfahren wechselt jetzt die **Fläche**, Fokus den **Rahmen** — zwei
+    Kodierungen für zwei Zustände (Regel 18).
+    """
+    from app.ui.style import stylesheet
+    from app.ui.theme import THEMES
+
+    for theme in ("dark", "light"):
+        sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
+        hover = next(line for line in sheet.splitlines() if "#exampleTile:hover" in line)
+        focus = next(line for line in sheet.splitlines() if "#exampleTile:focus" in line)
+        assert "border" not in hover, f"{theme}: das Überfahren spricht über den Rahmen: {hover}"
+        assert "background" in hover, f"{theme}: das Überfahren sagt gar nichts: {hover}"
+        assert "border" in focus, f"{theme}: der Fokus sagt nichts über den Rahmen: {focus}"
+
+    # Und der Anlass, damit dieser Test seinen Grund behält: die zwei Farben
+    # sind im dunklen Thema wirklich dieselbe.
+    assert THEMES["dark"]["highlight"] == THEMES["dark"]["accent_line"], (
+        "wenn die Farben auseinandergehen, darf dieser Test neu begründet werden"
+    )

@@ -300,7 +300,13 @@ QFrame#exampleTile {{
     border: 1px solid {line};
     border-radius: {NORMAL}px;
 }}
-QFrame#exampleTile:hover {{ border-color: {highlight}; background: {hover}; }}
+/* Überfahren wechselt die **Fläche**, Fokus den **Rahmen**. Beides über den
+   Rahmen zu sagen war im dunklen Thema — dem voreingestellten — keine Aussage:
+   dort ist ``highlight`` derselbe Bernstein wie ``focus``, und die zwei
+   Zustände unterschieden sich um einen Bildpunkt Rahmenbreite. Wer mit dem
+   Tabulator durch die neun Kacheln geht, sah nicht, welche die Eingabetaste
+   auslösen würde. */
+QFrame#exampleTile:hover {{ background: {hover}; }}
 QFrame#exampleTile:focus {{ border: 2px solid {focus}; }}
 
 /* --- Eingaben: der Fokus muss man sehen -------------------------------- */
