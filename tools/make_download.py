@@ -245,31 +245,104 @@ def read_packages(paths: list[Path]) -> list[Package]:
     return sorted(found, key=lambda package: order.index(package.kind))
 
 
+#: Der Pfeil nach unten, der auf jedem Ladeknopf steht.
+ARROW = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+    ' aria-hidden="true">'
+    '<path d="M12 3v12" stroke-linecap="round"/>'
+    '<path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/>'
+    '<path d="M4 20h16" stroke-linecap="round"/></svg>'
+)
+
+#: Was auf dem Knopf einer Plattform steht, die mehrere Dateien hat.
+CHOICE_LABEL = {
+    "de": "{count} Pakete",
+    "en": "{count} packages",
+    "es": "{count} paquetes",
+    "fr": "{count} paquets",
+    "it": "{count} pacchetti",
+    "pt": "{count} pacotes",
+}
+
+#: Die Zeile über der Auswahl im Dialog.
+CHOICE_NOTE = {
+    "de": "Welches passt, hängt von deinem System ab — jedes enthält dieselbe Anwendung.",
+    "en": "Which one fits depends on your system — each contains the same application.",
+    "es": "Cuál encaja depende de tu sistema: todos contienen la misma aplicación.",
+    "fr": "Lequel convient dépend de votre système — tous contiennent la même application.",
+    "it": "Quale sia adatto dipende dal sistema — ognuno contiene la stessa applicazione.",
+    "pt": "Qual serve depende do teu sistema — todos contêm a mesma aplicação.",
+}
+
+#: Der Knopf, der den Dialog wieder zumacht.
+CLOSE_LABEL = {
+    "de": "Schließen",
+    "en": "Close",
+    "es": "Cerrar",
+    "fr": "Fermer",
+    "it": "Chiudi",
+    "pt": "Fechar",
+}
+
+
+def download_link(package: Package, language: str, label: str, css_class: str) -> str:
+    """Ein Ladeknopf für genau eine Datei."""
+    return (
+        f'\n            <a class="{css_class}" href="{COUNTER}{quote(package.name)}"'
+        f' download="{package.name}">'
+        f"{ARROW} {label} — {package.size(language)}</a>"
+    )
+
+
 def links(packages: list[Package], language: str) -> str:
-    """Die Verweise, wie sie im Kasten stehen."""
+    """Die Verweise, wie sie im Kasten stehen — ein Knopf je Plattform.
+
+    **Warum nicht eine Zeile je Datei.** Acht Pakete sind acht Knöpfe, und
+    sieben davon gehen den Leser nichts an: Wer auf einem Mac sitzt, braucht
+    keine Auswahl zwischen Flatpak und AppImage. Also trägt jede Plattform
+    einen Knopf; hat sie mehr als eine Datei, öffnet er einen Dialog mit
+    dieser einen Frage.
+
+    **Keine ``<div>`` im erzeugten Text.** ``write_pages`` schneidet den
+    Kasten mit einem Ausdruck heraus, der beim ersten ``</div>`` endet — ein
+    Behälter hier drin würde ihn mitten im Kasten abschneiden. ``dialog``,
+    ``form`` und ``p`` tun dasselbe und tun es nicht.
+    """
     if not packages:
         return (
             "\n            <!-- Von tools/make_download.py gefüllt. Steht hier nichts,\n"
             "                 bleibt der Kasten bei der Warteliste. -->\n          "
         )
 
-    rows = []
-    for position, package in enumerate(packages):
-        label = next(names[language] for kind, _, names in PLATFORMS if kind == package.kind)
-        label += variant_of(package.name, language)
+    rows: list[str] = []
+    for position, (kind, _, names) in enumerate(
+        entry for entry in PLATFORMS if any(p.kind == entry[0] for p in packages)
+    ):
+        mine = [package for package in packages if package.kind == kind]
+        system = names[language]
+        # Der erste Knopf ist der gefüllte; alles Weitere steht daneben.
         css_class = "btn" if position == 0 else "btn ghost"
+
+        if len(mine) == 1:
+            rows.append(download_link(mine[0], language, system, css_class))
+            continue
+
+        count = CHOICE_LABEL[language].format(count=len(mine))
+        auswahl = "".join(
+            download_link(package, language, variant_of(package.name, language).strip(" ()"), "btn")
+            for package in mine
+        )
         rows.append(
-            f'\n            <a class="{css_class}" href="{COUNTER}{quote(package.name)}"'
-            f' download="{package.name}">\n'
-            '              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"'
-            ' stroke-width="2" aria-hidden="true">\n'
-            '                <path d="M12 3v12" stroke-linecap="round"/>'
-            '<path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/>'
-            '<path d="M4 20h16" stroke-linecap="round"/>\n'
-            "              </svg>\n"
-            f"              {label} — {package.size(language)}\n"
-            "            </a>\n"
-            f'            <code class="pruefsumme">SHA-256 {package.hash_}</code>'
+            f'\n            <button class="{css_class}" type="button"'
+            f' data-choice="{kind}">{ARROW} {system} — {count}</button>'
+            f'\n            <dialog class="auswahl" id="wahl-{kind}"'
+            f' aria-label="{system}">'
+            f"\n              <h3>{system}</h3>"
+            f'\n              <p class="hinweis">{CHOICE_NOTE[language]}</p>'
+            f"{auswahl}"
+            '\n              <form method="dialog">'
+            f'<button class="btn ghost" value="zu">{CLOSE_LABEL[language]}</button></form>'
+            "\n            </dialog>"
         )
     return "".join(rows) + missing_note(packages, language) + "\n          "
 

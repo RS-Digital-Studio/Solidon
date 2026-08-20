@@ -259,3 +259,43 @@
     fetch("/api/count.php", { method: "POST", body, keepalive: true }).catch(() => {});
   }
 })();
+
+/* Ein Knopf je Plattform, und wo es mehrere Pakete gibt, führt er hierher.
+ *
+ * Acht Ladeknöpfe untereinander waren nicht mehr zu lesen, und sieben davon
+ * gehen den Leser nichts an: Wer auf einem Mac sitzt, entscheidet nicht
+ * zwischen Flatpak und AppImage. Also fragt der Dialog genau das, was offen
+ * ist — und nur, wenn etwas offen ist. Windows hat ein Paket und bleibt ein
+ * Knopf.
+ *
+ * Der Kasten kommt aus tools/make_download.py; hier steht nur das Aufmachen.
+ */
+(() => {
+  "use strict";
+
+  for (const button of document.querySelectorAll("[data-choice]")) {
+    button.addEventListener("click", () => {
+      const box = document.getElementById("wahl-" + button.dataset.choice);
+      if (!box) return;
+      /* `showModal` und nicht `show`: Der Dialog soll den Rest der Seite
+         sperren, damit Esc ihn schließt und der Fokus nicht dahinter
+         entwischt. */
+      if (typeof box.showModal === "function") box.showModal();
+      else box.setAttribute("open", "");
+    });
+  }
+
+  /* Ein Klick neben den Dialog schließt ihn. Das Ereignis trägt dann den
+     Dialog selbst als Ziel — sein Inhalt liegt in Kindknoten, und die
+     melden sich selbst. */
+  for (const box of document.querySelectorAll("dialog.auswahl")) {
+    box.addEventListener("click", (event) => {
+      if (event.target === box) box.close();
+    });
+    /* Nach dem Klick auf ein Paket bleibt sonst ein Dialog über einer Seite
+       stehen, auf der gerade ein Download läuft. */
+    for (const link of box.querySelectorAll("a[href]")) {
+      link.addEventListener("click", () => box.close());
+    }
+  }
+})();
