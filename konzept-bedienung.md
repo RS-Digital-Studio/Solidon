@@ -1091,3 +1091,30 @@ Vorschau am Zeiger, Bemaßung während des Zeichnens —, ändert das nichts.
 Protokoll wird nicht dadurch aktuell, dass man seine Zahlen austauscht; es
 wird durch einen neuen Lauf ersetzt. Die vier späteren Durchsichten sind
 genau das.
+
+
+---
+
+## Nachgeprüft am 20.08.2026
+
+**Die vier Punkte unter „Teilweise" tragen weiter, alle vier.** Gegen den Code
+geprüft und nicht übernommen: `place_on_bed` steht auf `default=False`
+(`ingest/ops.py:55`), `excepthook` und `faulthandler` kommen in `app/` nach wie
+vor nicht vor, die Merkmalsbeschriftungen stehen mit `always_visible=True`, und
+`announce()` schreibt in `_announcement` und die Statusleiste — ein zweiter Ort
+existiert nicht.
+
+**Ein Fund aus Teil 8 ist erledigt**, und er gehört hierher, weil das Protokoll
+selbst nicht gepflegt wird: Die Wiederherstellung fragte „Die automatische
+Sicherung öffnen?" mit „Ja"/„Nein" und ohne zu sagen, von wann die Sicherung
+ist. Sie tut es nicht mehr. Beide Wiederherstellungsfälle — der neben einer
+Datei und der namenlose — gehen seit dem 20.08. über einen Aufbau
+(`MainWindow._ask_recovery`), tragen benannte Knöpfe und das Alter der
+Sicherung. Der Satz aus Teil 8 hatte übrigens einen Zwilling: „Diese Änderung
+verwirft 2 zurückgenommene Schritte" nennt seine Schritte längst beim Namen,
+und dass ausgerechnet dieser Dialog es vorbildlich machte, stand schon damals
+daneben.
+
+Was das Protokoll insgesamt angeht, gilt der Satz von unten weiter: Ein
+Protokoll wird nicht dadurch aktuell, dass man seine Zahlen austauscht. Diese
+Zeilen sagen nur, was seither anders ist — den Lauf ersetzen sie nicht.

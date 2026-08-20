@@ -108,7 +108,9 @@ Ebenso fehlt der rechtliche Rahmen eines Verkaufs:
 Nicht veröffentlichungsrelevant, aber der Vollständigkeit wegen: Plattenvorschlag
 in der Oberfläche, Bügeln aus der Passung, Prusa/Cura am echten Programm
 (`ROADMAP.md:345–353`), Schichtanalyse 1,05 s statt 300 ms (§31, festgehalten,
-kein Rückschritt möglich), AppImage und Flatpak fehlen.
+kein Rückschritt möglich). AppImage und Flatpak haben seit dem 20.08.2026
+ihre Rezepte (`tools/make_linux_packages.py`), aber keinen Bau — siehe
+Entscheidung F.
 
 **`ROADMAP.md:2033` ist keine offene Stelle mehr**, nur eine nicht abgehakte:
 `aa48f10` legt den `Fit` über ein neues `fits`-Feld an `OpResult` an und vergibt
@@ -340,6 +342,17 @@ AppImage und Flatpak kommen nach 1.0. Grund: das tar.gz ist gebaut und
 funktioniert, die beiden anderen sind je ein eigenes Format mit eigener
 Fehlersuche — und die Zielgruppe der ersten Fassung ist Windows.
 
+**Stand 20.08.2026: die Entscheidung bleibt, ihre erste Hälfte ist erledigt.**
+`tools/make_linux_packages.py` schreibt Menüeintrag, Flatpak-Manifest und
+AppStream-Beschreibung — alle drei aus `app/branding.py`, geprüft von
+`tests/test_packaging.py` —, und `build.yml` ruft es auf. Was fehlt, ist genau
+das, was die Begründung nennt: **der Bau und seine Fehlersuche.** Kein Paket ist
+je entstanden, weil das Linux und zwei externe Programme braucht.
+
+Ein Format, dessen Rezept steht und dessen Bau nie gelaufen ist, gehört nicht in
+eine erste Fassung. Der Aufwand für 1.0 ist damit nicht kleiner geworden — nur
+die Vorarbeit ist getan, und sie liegt nicht mehr auf dem Weg dorthin.
+
 ### G — Version wird 1.0.0
 
 `APP_VERSION` steht auf `"0.0.1"` (`app/branding.py:35`), `pyproject.toml:7`
@@ -396,7 +409,8 @@ Ausdrücklich **nicht** Teil von 1.0, damit niemand sie nachträglich hineinlies
 * **Kein macOS.** Beglaubigung und ein Apple-Programm für 99 $/Jahr, für eine
   Plattform ohne bekannte Nachfrage.
 * **Kein automatisches Update.** Der Hinweis bleibt ein Hinweis (§37.2).
-* **Kein AppImage, kein Flatpak** (Entscheidung F).
+* **Kein AppImage, kein Flatpak** (Entscheidung F) — die Rezepte stehen seit
+  dem 20.08., gebaut wurde keines.
 * **Kein Erreichen des Schichtanalyse-Budgets.** 1,05 s statt 300 ms wird eine
   dokumentierte Grenze, kein Blocker.
 * **Keine öffentliche Quelloffenlegung.** Das Repository bleibt privat.
@@ -677,9 +691,9 @@ Rechner, der Solidon nie gesehen hat.
 
 ### V10 — Danach (nicht Teil von 1.0)
 
-AppImage und Flatpak (§2 F) · die vier offenen Funktionen aus §1.4 · macOS, wenn
-jemand fragt · die Leistungslücke der Schichtanalyse, wenn ein kompilierter Kern
-gebaut wird.
+AppImage und Flatpak (§2 F) — der **Bau**, nicht die Rezepte, die seit dem
+20.08. stehen · die vier offenen Funktionen aus §1.4 · macOS, wenn jemand fragt ·
+die Leistungslücke der Schichtanalyse, wenn ein kompilierter Kern gebaut wird.
 
 ---
 

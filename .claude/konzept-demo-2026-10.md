@@ -28,7 +28,7 @@ Der Abstand zur Auslieferung ist kleiner, als er sich anfühlt. Belegt:
 | Lizenzgrenze | vier Stellen im Datenpfad rufen `require()`, Fall für Fall geprüft | `tests/test_licence_boundary.py`, V4 |
 | Grenze an der Oberfläche | ausgegraute Einträge mit Grund, Freischaltdialog, Über-Dialog | V4b |
 | Härtung | Prüfmodul mit Cython kompiliert, signiertes Manifest über vier Grenzdateien, **am Paket belegt** | V4c |
-| Paketierung | PyInstaller-Spec, Inno-Setup-Skript, Symbol, tar.gz für Linux | `packaging/` |
+| Paketierung | PyInstaller-Spec, Inno-Setup-Skript, Symbol, tar.gz für Linux; AppImage- und Flatpak-Rezepte ungebaut (20.08.) | `packaging/` |
 | CI | drei Plattformen, Matrix bei Tag und Handstart, erster echter Lauf hat vier Funde geliefert und sie sind behoben | `.github/workflows/build.yml` |
 | Website | live auf `solidon3d.de`, HTTPS (Let's Encrypt bis 06.11.2026), deutsch und englisch, Handbuch erzeugt | netcup, 08.08.2026 |
 | Rechtstexte | Impressum und Datenschutz mit echten Angaben, EULA/AGB/Widerruf als Entwurf mit Warnhinweis | `website/*.html` |
@@ -502,7 +502,8 @@ V6 Punkt 3 aus dem Veröffentlichungskonzept, unverändert gültig:
 3. **Ohne** OpenSCAD, Ollama und ComfyUI prüfen, dass die Anwendung das sagt,
    statt zu scheitern
 4. Deinstallieren und nachsehen, was liegen bleibt
-5. Dasselbe auf Linux mit dem tar.gz
+5. Dasselbe auf Linux mit dem tar.gz — AppImage und Flatpak bleiben draußen,
+   solange kein Bau gelaufen ist (Veröffentlichungskonzept §2 F)
 
 **Abnahme:** Startmenüeintrag, Symbol, Deinstallation stimmen · die acht
 Beispielprojekte sind da und rechnen · F1 öffnet das Handbuch · die
@@ -639,7 +640,9 @@ Damit es niemand nachträglich hineinliest:
   Exportsperre
 * **Kein Konto, keine Anmeldung, keine Telemetrie.** Auch nicht „nur zum
   Zählen der Installationen"
-* **Kein macOS, kein AppImage, kein Flatpak**
+* **Kein macOS, kein AppImage, kein Flatpak** — die Rezepte für die beiden
+  Linux-Formate stehen seit dem 20.08., gebaut ist keines, und ein ungebautes
+  Format ist für eine Demo kein Format
 * **Kein Demo-Schlüssel und keine Verlängerung per Eingabe** — eine zweite
   Runde ist ein neuer Bau (§6)
 * **Kein Betrachtermodus nach dem 30.10.** (§2 B2). Der bleibt der
