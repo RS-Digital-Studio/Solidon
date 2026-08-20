@@ -377,6 +377,39 @@ def test_the_assembly_carries_the_part_names_where_the_slicer_reads_them() -> No
     assert 'key="name" value="Deckel"' in config
 
 
+def test_a_prusa_assembly_carries_its_settings(tmp_path: Path, profile: Profile) -> None:
+    """Eine exportierte 3MF soll man drucken können, nicht erst einrichten.
+
+    Für die Orca-Familie war das längst so; für PrusaSlicer trug dieselbe
+    Datei nur Geometrie, und beim Öffnen galt das Profil, das gerade
+    eingestellt war. Er liest seine Einstellungen aus einer eigenen Beilage —
+    gemessen: ohne ``--load`` geslict kamen Solidons Werte an.
+    """
+    settings = print_settings.resolve(profile)
+    target, _findings = write_assembly(
+        [scene_object()],
+        tmp_path,
+        project_name="Halter",
+        profile=profile,
+        settings=settings,
+        flavour="prusa",
+    )
+
+    with zipfile.ZipFile(target) as container:
+        config = container.read(threemf.PRUSA_CONFIG_PATH).decode("utf-8")
+    lines = config.splitlines()
+    assert lines[0] == threemf.PRUSA_CONFIG_HEADER, (
+        "die erste Zeile überspringt PrusaSlicer — ohne Kopf fehlt der erste Wert"
+    )
+    written = {
+        line.split("=", 1)[0].removeprefix(";").strip(): line.split("=", 1)[1].strip()
+        for line in lines[1:]
+        if "=" in line
+    }
+    assert written["perimeters"] == str(settings.shell.wall_count)
+    assert written["first_layer_temperature"] == str(settings.temperature.nozzle_first_layer)
+
+
 def test_only_the_part_that_needs_it_gets_the_setting() -> None:
     """Eine Platte hat einen Satz Werte, aber nicht jedes Teil darauf braucht
     dasselbe — ohne diesen Ort gäbe es nur „alle" oder „keiner"."""
