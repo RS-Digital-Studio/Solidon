@@ -913,6 +913,9 @@ class PrintSettingsDialog(QDialog):
         self._temporary: TemporaryDirectory[str] | None = None
         self._gcode: list[Path] = []
         """Die Druckdateien des letzten Laufs — eine je Platte."""
+        self._settled = False
+        """Ob schon aufgeräumt wurde — es gibt drei Wege hinaus (siehe
+        :meth:`_settle`)."""
         self._pending_findings: list[Finding] = []
         """Was die Prüfung vor dem Schreiben fand (§29). Sie berichtet, sie
         blockiert nicht — also reist sie mit dem Ergebnis in den Prüfbericht."""
@@ -2064,7 +2067,31 @@ class PrintSettingsDialog(QDialog):
         self._settle()
         super().closeEvent(event)
 
-    def _settle(self) -> None:
+    def done(self, result: int) -> None:
+        """Auch die Knöpfe räumen auf, nicht nur das Schließkreuz.
+
+        ``closeEvent`` kommt, wenn das Fenster geschlossen wird. *Slicen*,
+        *Übernehmen* und *Abbrechen* gehen aber über ``done``, und Qt schickt
+        dabei kein Schließereignis — gemessen: Nach ``accept()`` lief die
+        Profilsuche weiter, und der Dialog war weg, sobald der Aufrufer seine
+        Referenz fallen ließ. Ein Thread, der sein Fenster überlebt, nimmt den
+        Prozess mit; genau dagegen ist die Halteleine geschrieben.
+        """
+        self._settle()
+        super().done(result)
+
+    def wait_for_workers(self, timeout_ms: int = 2000) -> None:
+        """Derselbe Weg für die Suite, die Dialoge wegräumt statt sie zu
+        schließen.
+
+        Der Name ist der des Hauptfensters, und das ist der Punkt: Die
+        Aufräumhilfe der Suite (``tests/conftest.py``) sucht ihn an jedem
+        obersten Fenster. Ein Dialog, der ihn nicht führt, bleibt dort
+        unbeachtet — mit laufendem Arbeiter.
+        """
+        self._settle(timeout_ms)
+
+    def _settle(self, timeout_ms: int | None = None) -> None:
         """Den Ordner erst freigeben, wenn niemand mehr darin liest.
 
         Der Slicer-Lauf wird abgebrochen statt abgewartet: ``worker.wait()``
@@ -2075,6 +2102,12 @@ class PrintSettingsDialog(QDialog):
         Sekunden, und ohne das Warten stürbe der Thread über einem
         zerstörten Dialog.
         """
+        # Genau einmal: Es gibt drei Wege hinaus (Knopf, Schließkreuz,
+        # Wegräumen), und zwei davon können hintereinander kommen. Zweimal
+        # aufzuräumen schriebe die Slicer-Wahl zweimal und wartete zweimal.
+        if self._settled:
+            return
+        self._settled = True
         # Erst merken, dann abräumen: Die Auswahl steht in Widgets, die es
         # gleich nicht mehr gibt.
         self._remember_slicer_choice(require_machine=True)
@@ -2083,7 +2116,10 @@ class PrintSettingsDialog(QDialog):
             worker.cancel()
         for pending in (self._worker, self._profile_worker):
             if pending is not None and pending.isRunning():
-                pending.wait()
+                # Ohne Grenze, wenn der Weg über das Schließen geht (siehe
+                # oben); mit Grenze, wenn die Suite wegräumt — dort soll ein
+                # hängender Arbeiter den Lauf nicht anhalten, sondern auffallen.
+                pending.wait() if timeout_ms is None else pending.wait(timeout_ms)
         self._leash.wait_all()
         if self._temporary is not None:
             self._temporary.cleanup()

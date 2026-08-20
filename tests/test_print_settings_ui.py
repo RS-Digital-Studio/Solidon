@@ -449,6 +449,60 @@ def test_slicing_without_a_scene_says_what_is_missing(dialog: PrintSettingsDialo
     assert dialog.state.text()
 
 
+class WaitingWorker:
+    """Ein Arbeiter, der nur Buch führt: läuft, bis jemand auf ihn wartet.
+
+    Der echte startet nur, wenn ein Slicer installiert ist und zur
+    Orca-Familie gehört — ein Test, der das voraussetzt, prüft die Maschine des
+    Bauservers.
+    """
+
+    def __init__(self) -> None:
+        self.waited: list[int | None] = []
+        self.cancelled = False
+
+    def isRunning(self) -> bool:  # noqa: N802 — Qt gibt den Namen vor
+        return not self.waited
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+    def wait(self, timeout_ms: int | None = None) -> bool:
+        self.waited.append(timeout_ms)
+        return True
+
+
+def test_every_way_out_waits_for_the_profile_search(dialog: PrintSettingsDialog) -> None:
+    """Ein Thread, der sein Fenster überlebt, nimmt den Prozess mit.
+
+    Der Dialog wartete im ``closeEvent`` — und das kommt nur, wenn das Fenster
+    geschlossen wird. *Slicen* und *Abbrechen* gehen über ``done``, und Qt
+    schickt dabei kein Schließereignis: Gemessen lief die Profilsuche nach
+    ``accept()`` weiter, während der Aufrufer seine Referenz fallen ließ.
+
+    Der dritte Weg ist der der Suite: Dort wird ein Dialog **weggeräumt**, nicht
+    geschlossen. Die Aufräumhilfe in ``tests/conftest.py`` sucht dafür
+    ``wait_for_workers`` an jedem obersten Fenster — ein Dialog ohne diesen
+    Namen bleibt unbeachtet, mit laufendem Arbeiter.
+    """
+    worker = WaitingWorker()
+    dialog._profile_worker = worker  # type: ignore[assignment]
+
+    dialog.accept()
+
+    assert worker.waited, "der Knopf ging hinaus, ohne auf die Suche zu warten"
+
+    second = PrintSettingsDialog(dialog.session, UiSettings())
+    later = WaitingWorker()
+    second._profile_worker = later  # type: ignore[assignment]
+    try:
+        second.wait_for_workers()
+        assert later.waited, "und weggeräumt wird auch gewartet"
+        assert later.waited[0] is not None, "dort mit Grenze — ein hängender Arbeiter fällt auf"
+    finally:
+        second.deleteLater()
+
+
 def test_a_slicer_without_profiles_gets_a_way_out(dialog: PrintSettingsDialog) -> None:
     """Regel 17: „Keine Profile gefunden — ohne sie lehnt dieser Slicer den
     Auftrag ab." war die ganze Auskunft.
