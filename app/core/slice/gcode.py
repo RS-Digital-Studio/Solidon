@@ -102,6 +102,10 @@ _SUPPORT_TOOL = re.compile(r";\s*TYPE:\s*(?P<type>.+)", re.IGNORECASE)
 _EXTRUSION = re.compile(r"^G1\b(?=.*\bE(?P<e>-?[0-9.]+))(?=.*\b[XY])", re.IGNORECASE)
 _WARNING = re.compile(r";\s*(?:WARNING|Warnung)[:\s]\s*(?P<text>.+)", re.IGNORECASE)
 
+#: Die Marke, mit der PrusaSlicer jeden Schichtwechsel ankündigt. Gezählt ist
+#: sie die Schichtzahl, die er sonst nirgends nennt.
+_LAYER_CHANGE = re.compile(r"^;\s*LAYER_CHANGE\s*$", re.IGNORECASE | re.MULTILINE)
+
 
 def parse(text: str) -> GcodeMetrics:
     """Liest eine G-Code-Datei. Was nicht darin steht, bleibt unbekannt."""
@@ -130,6 +134,14 @@ def parse(text: str) -> GcodeMetrics:
     elapsed = re.findall(r";\s*TIME_ELAPSED:\s*([0-9.]+)", text, re.IGNORECASE)
     if elapsed:
         metrics.print_seconds = float(elapsed[-1])
+
+    if metrics.layer_count is None:
+        # PrusaSlicer nennt die Schichtzahl nirgends im Kopf — er markiert
+        # jeden Wechsel. Gezählt sind das dieselbe Auskunft: gemessen hundert
+        # Marken für hundert Schichten eines 20-mm-Würfels. Ohne sie stand im
+        # Prüfbericht bei jedem Prusa-Lauf nichts, wo bei Cura eine Zahl steht.
+        changes = sum(1 for _ in _LAYER_CHANGE.finditer(text))
+        metrics.layer_count = changes or None
 
     total, support = _extruded(text)
     metrics.support_mm3 = None if support is None else support * FILAMENT_AREA
