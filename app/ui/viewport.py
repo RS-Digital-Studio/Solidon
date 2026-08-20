@@ -14,10 +14,18 @@ import math
 import os
 import weakref
 from collections.abc import Sequence
-from typing import Any, Literal, cast
+from typing import Any, Final, Literal, cast
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.branding import ENVIRONMENT_PREFIX
 from app.core.geom.measure import Measurement, MeasurementList, distance, snap, wall_thickness
@@ -43,6 +51,7 @@ from app.core.units import (
 )
 from app.i18n import tr
 from app.ui import cursors
+from app.ui.icons import icon
 from app.ui.labels import feature_label
 from app.ui.palette import (
     DIFF_PALETTES,
@@ -741,6 +750,124 @@ WHEEL_STEP = 0.1
 BANNER_TOP = 12
 
 
+class ViewBar(QFrame):
+    """Die sieben Kameravorgaben, sichtbar statt im Menü (Konzept P15, D4).
+
+    **Warum sie zweimal entstanden ist.** D4 hieß ursprünglich „kein ViewCube,
+    keine Ansichtsleiste" und wurde mit dem Würfel geschlossen: Er deckte alle
+    sieben Vorgaben ab, und eine Leiste daneben wäre Doppelung gewesen, die
+    Bildfläche kostet. Am 12.08.2026 ist der Würfel dem Achsenkreuz gewichen
+    (`f04c35d`) — er deckt seither nichts mehr ab, und die Vorgaben lagen
+    wieder allein im Menü. Ein Befund, der über eine Zwischenlösung geschlossen
+    wurde, geht mit ihr wieder auf.
+
+    **Zeichen ohne Wort — und das ist eine begründete Abweichung.** Der Kopf
+    von :mod:`app.ui.icons` sagt „Symbole ergänzen Text, sie ersetzen ihn
+    nicht", und das gilt überall, wo Platz ist. Hier ist keiner: Mit
+    Beschriftung wird die Leiste **1039 Bildpunkte** breit und verdeckt bei
+    einem 1024er Fenster mehr als ein Drittel der Ansicht — genau die Fläche,
+    für die §2.5 die Karten schweben lässt. Mit Symbolen allein sind es 196.
+
+    Getragen wird der Text deshalb zweifach woanders: im Tooltip samt Kürzel
+    und im zugänglichen Namen, den ein Screenreader liest. Und gelernt wird er
+    im Kameramenü — dieselben sieben Wörter, dieselben Kürzel, an dem Ort, an
+    dem man ohnehin nachsieht. Die Leiste ist der schnelle Weg für den, der sie
+    kennt, nicht die Stelle, an der man sie kennenlernt.
+
+    Die Symbole sind eine Familie: sechsmal dieselbe Bildebene, unterschieden
+    nur darin, woher der Blick kommt, dazu der Würfel für die Isometrie.
+
+    **Unten rechts, und das ist keine Geschmacksfrage:** Unten links steht die
+    Achsenanzeige, die einzige Orientierungshilfe, die es noch gibt. Zwei
+    Anzeigen an derselben Stelle waren der Grund, aus dem der Würfel gehen
+    musste — derselbe Fehler zweimal wäre einer zu viel.
+    """
+
+    #: Die Vorgaben in der Reihenfolge, in der sie in der Leiste stehen. Die
+    #: Schlüssel sind die aus :data:`VIEW_DIRECTIONS`; eine zweite Liste
+    #: derselben Namen würde driften, deshalb prüft ein Test beide gegeneinander.
+    ORDER: Final = ("iso", "front", "back", "left", "right", "top", "bottom")
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("viewBar")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
+        layout.setSpacing(TIGHT)
+
+        self._buttons: dict[str, QToolButton] = {}
+        # **Dieselben Wörter wie im Kameramenü**, nicht kürzere daneben. „Vorn"
+        # neben „Vorne" wären zwei Wörter für dieselbe Sache — derselbe Fehler,
+        # den die Wegekarten schon einmal hatten, und er kostet in jeder Sprache
+        # einen Eintrag mehr, den niemand mit dem Menü abgleicht.
+        labels = {
+            "iso": (tr("Isometrisch"), "Ctrl+0"),
+            "front": (tr("Vorne"), "Ctrl+1"),
+            "back": (tr("Hinten"), "Ctrl+2"),
+            "left": (tr("Links"), "Ctrl+3"),
+            "right": (tr("Rechts"), "Ctrl+4"),
+            "top": (tr("Oben"), "Ctrl+5"),
+            "bottom": (tr("Unten"), "Ctrl+6"),
+        }
+        for key in self.ORDER:
+            long, shortcut = labels[key]
+            button = QToolButton(self)
+            button.setIcon(icon(f"view_{key}", self))
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+            # Der zugängliche Name trägt das Wort, das der Knopf nicht zeigt —
+            # ohne ihn hätte ein Screenreader hier sieben namenlose Schaltflächen.
+            button.setAccessibleName(long)
+            button.setToolTip(f"{long} ({shortcut})")
+            button.setAutoRaise(True)
+            button.clicked.connect(lambda _checked=False, name=key: self._request(name))
+            layout.addWidget(button)
+            self._buttons[key] = button
+
+        self.set_theme("dark")
+        self.adjustSize()
+
+    def keys(self) -> tuple[str, ...]:
+        """Welche Vorgaben die Leiste anbietet."""
+        return tuple(self._buttons)
+
+    def button(self, key: str) -> QToolButton | None:
+        """Der Knopf einer Vorgabe, für Tests und Touren."""
+        return self._buttons.get(key)
+
+    def _request(self, key: str) -> None:
+        parent = self.parentWidget()
+        view_from = getattr(parent, "view_from", None)
+        if callable(view_from):
+            view_from(key)
+
+    def set_theme(self, theme: str) -> None:
+        """Farben aus dem Thema — die Leiste liegt über dem Modell, nicht
+        neben ihm, und muss auf beiden Hintergründen lesbar sein."""
+        colours = THEMES["light" if theme == "light" else "dark"]
+        self.setStyleSheet(
+            f"#viewBar {{ background: {colours['window']};"
+            f" border: 1px solid {colours['disabled']}; border-radius: 4px; }}"
+            f"#viewBar QToolButton {{ color: {colours['text']}; background: transparent;"
+            # Enger Innenabstand: Die Leiste liegt über dem Modell, und jeder
+            # Bildpunkt, den sie nicht braucht, gehört dem Teil.
+            f" border: none; padding: {TIGHT}px; }}"
+            f"#viewBar QToolButton:hover {{ background: {colours['alternate']};"
+            f" border-radius: 3px; }}"
+        )
+
+    def place(self) -> None:
+        """Unten rechts, mit demselben Rand, den die Achsenanzeige links hält."""
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        self.adjustSize()
+        self.move(
+            max(parent.width() - self.width() - ORIENTATION_MARGIN, 0),
+            max(parent.height() - self.height() - ORIENTATION_MARGIN, 0),
+        )
+
+
 class PreviewBanner(QFrame):
     """Ein Band über dem Bild: was hier steht, ist noch nicht übernommen.
 
@@ -1165,6 +1292,10 @@ class Viewport(QWidget):
 
         self.banner = PreviewBanner(self)
         """Das Band über dem Bild, wenn eine Vorschau läuft."""
+        self.view_bar = ViewBar(self)
+        """Die sieben Kameravorgaben, unten rechts (D4). Vor ihr lagen sie
+        allein im Menü — der Würfel, der sie einmal abdeckte, ist am 12.08.2026
+        dem Achsenkreuz gewichen."""
         self.drag_bar = DragValueBar(self)
         """Die Zahl zum Zug (§18.11): lesen beim Ziehen, tippen statt zielen."""
         self.drag_bar.value.installEventFilter(self)
@@ -2123,6 +2254,7 @@ class Viewport(QWidget):
         self._bed_surface = colours["bed_surface"]
         self._edge_colour = colours["edge"]
         self.banner.set_theme(theme)
+        self.view_bar.set_theme(theme)
         self.drag_bar.set_theme(theme)
         if self.plotter is None:
             return
@@ -3039,6 +3171,7 @@ class Viewport(QWidget):
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         super().resizeEvent(event)
         self.banner.place()
+        self.view_bar.place()
         self.drag_bar.place()
         self._place_orientation_widget()
 

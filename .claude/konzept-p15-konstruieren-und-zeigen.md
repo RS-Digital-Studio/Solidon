@@ -694,11 +694,21 @@ zu hängen, wird rot — nachgewiesen an einem Wegwerf-Eintrag.
       > sagt es unumwunden: „Von den zwei Anzeigen, die damals doppelt im Bild
       > standen, ist **der Würfel gegangen** und dieses Kreuz geblieben."
       >
-      > Damit steht D4 heute wieder offen — **und zwar ganz**: Die
-      > Ansichtsleiste war mit dem Argument gestrichen worden, der Würfel decke
-      > sie ab. Der Würfel deckt nichts mehr ab. Sieben Kameravoreinstellungen
-      > liegen wieder allein im Menü, genau wie es §2 beschrieb.
-      > (Nachgeprüft am 19.08.2026.)
+      > Damit stand D4 wieder offen — **und zwar ganz**: Die Ansichtsleiste war
+      > mit dem Argument gestrichen worden, der Würfel decke sie ab. Der Würfel
+      > deckte nichts mehr ab. (Nachgeprüft am 19.08.2026.)
+      >
+      > **Geschlossen am 20.08.2026, diesmal mit der Leiste** — entschieden von
+      > Robert. `ViewBar` (`app/ui/viewport.py`) sitzt unten rechts im Viewport,
+      > sieben Symbole über denselben `view_from`, den das Menü nimmt. Das
+      > Achsenkreuz bleibt, wo es ist: Es sagt seit dem 12.08., was ein Klick
+      > täte, und das war der Grund für den Tausch. Die Leiste doppelt es nicht,
+      > sie ergänzt, was vorher nur im Menü stand.
+      >
+      > Der Vorbehalt dieses Abschnitts gilt damit weiter und ist eingelöst:
+      > Zwei Anzeigen an derselben Stelle waren der Grund, aus dem der Würfel
+      > gehen musste — deshalb steht die Leiste in der anderen Ecke, und ein
+      > Test prüft, dass sich die Rechtecke nicht schneiden.
 - [x] Leistungsschutz: die Kantensuche hört bei 200 000 Dreiecken je Körper
       auf (0,15 ms je tausend, gemessen) — dieselbe Zahl wie das
       Dezimierungsziel, weil es dieselbe Frage ist

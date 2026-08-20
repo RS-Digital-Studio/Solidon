@@ -23,7 +23,7 @@ import numpy as np
 import trimesh
 
 from app.core import activation
-from app.core.errors import NeedsSolidError, ValidationError
+from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
 from app.core.export import threemf
 from app.core.export.slicer_keys import SlicerFlavour, wants_bed_coordinates
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
@@ -450,14 +450,29 @@ def write_plan(
     """Schreibt die geplanten Dateien und gibt zurück, was geschrieben wurde."""
     # §2 C: Planen und Prüfen sind Lesen, das Herausgeben einer Datei nicht.
     activation.require(activation.EXPORT)
-    directory.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    for entry in plan.entries:
-        target = directory / entry.filename
-        target.write_bytes(
-            export_bytes(entry.mesh, export_format, list(entry.slots), entry.name, entry.body)
-        )
-        written.append(target)
+    # **Jeder Schreibfehler wird ein AppError.** Vorher lief hier jeder
+    # ``OSError`` weiter: In der Kommandozeile endete ein Export in ein Ziel,
+    # das schon eine Datei ist, mit einem Stapelabzug — im Nutzerdialog
+    # verboten (§2.7). Im Fenster war es stiller und schlimmer: Der
+    # Export-Arbeiter fängt ``AppError``, ein ``OSError`` riss den Thread ab,
+    # und danach geschah gar nichts mehr.
+    #
+    # Der Grund kommt vom Betriebssystem und bleibt unübersetzt: „Zugriff
+    # verweigert" gegen „Datei nicht gefunden" ist die eigentliche Auskunft.
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        for entry in plan.entries:
+            target = directory / entry.filename
+            target.write_bytes(
+                export_bytes(entry.mesh, export_format, list(entry.slots), entry.name, entry.body)
+            )
+            written.append(target)
+    except OSError as problem:
+        raise FileWriteError(
+            target=str(problem.filename or directory),
+            detail=str(problem.strerror or problem),
+        ) from problem
     _log.info("exported %d file(s) to %s", len(written), directory)
     return written
 

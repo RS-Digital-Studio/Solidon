@@ -229,6 +229,16 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
 #: ``app/core`` per AST und wird rot, sobald einer keine Beschriftung hat.
 _VALUE_NAMES: dict[str, TranslatableText] = {
     "a": _("Erstes"),
+    # Was eine Ausnahme selbst beisteuert (``_with_values`` in errors.py).
+    # Sieben Schlüssel standen als rohes Englisch im Tooltip, weil der
+    # Wächter nur Wörterbücher sah und keine Aufrufe.
+    "action": _("Handlung"),
+    "attempted": _("Versuchte Stufen"),
+    "exit_code": _("Rückgabewert"),
+    "first": _("Erste Bedingung"),
+    "overshoot": _("Überstand je Achse"),
+    "second": _("Zweite Bedingung"),
+    "tool": _("Programm"),
     "actual": _("Tatsächlich"),
     "after": _("Nachher"),
     "alignment": _("Ausrichtung"),

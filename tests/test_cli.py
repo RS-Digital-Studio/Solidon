@@ -214,3 +214,120 @@ def test_export_refuses_a_halted_chain(tmp_path: Path, capsys: pytest.CaptureFix
     assert "Nichts geschrieben" in printed.err
     assert "hält" in printed.out, "und der Bericht sagt, wo die Kette stehen bleibt"
     assert not list((tmp_path / "out").glob("*")), "geschrieben wurde wirklich nichts"
+
+
+def test_import_reads_every_format_the_window_reads(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """„Dieses Dateiformat kann nicht gelesen werden." war eine Unwahrheit.
+
+    Das Fenster entscheidet an der Endung: STEP nimmt den exakten Kern, eine
+    flache Zeichnung wird extrudiert, alles andere ist ein Netz. Die
+    Kommandozeile legte immer ``load`` auf den Stapel — und antwortete deshalb
+    auf STEP, SVG und DXF, das Format sei nicht lesbar. Dieselbe Anwendung liest
+    alle drei.
+
+    Die Entscheidung steht jetzt im Kern (``ingest.plan``), und beide Aufrufer
+    fragen dort: zwei Wege können nicht mehr auseinanderlaufen. Geprüft wird mit
+    einem SVG, weil es sich ohne Fremdbibliothek erzeugen lässt — für STEP
+    genügt die Zusicherung, dass der Plan dorthin führt.
+    """
+    from app.core.ingest.plan import import_plan
+
+    drawing = tmp_path / "platte.svg"
+    drawing.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20">'
+        '<rect x="0" y="0" width="40" height="20"/></svg>',
+        encoding="utf-8",
+    )
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path), "--printer", "centauri-carbon-2", "--material", "petg"])
+    capsys.readouterr()
+
+    assert main(["import", str(path), str(drawing)]) == 0, capsys.readouterr().err
+
+    project = load(path)
+    assert [entry.op for entry in project.document.ops] == ["load_outline"]
+    assert str(project.document.transactions[-1].title) == "Zeichnung extrudieren"
+
+    # Und der Weg für STEP und DXF, ohne dafür eine Datei zu brauchen: geprüft
+    # wird die Entscheidung, nicht der Leser dahinter.
+    assert import_plan("src_1", "teil.step", b"").draft.op == "load_step"
+    assert import_plan("src_1", "zeichnung.dxf", b"").draft.op == "load_outline"
+    assert import_plan("src_1", "modell.stl", b"").draft.op == "load"
+
+    # Die Einheitenfrage hat nur ein Netz: STEP trägt seine Einheit selbst, und
+    # eine Zeichnung hat keine dritte Dimension, bis jemand sie angibt.
+    assert not import_plan("src_1", "teil.step", b"").asks_unit
+    assert not import_plan("src_1", "platte.svg", b"").asks_unit
+    assert import_plan("src_1", "modell.stl", b"").asks_unit
+
+
+def test_a_write_that_cannot_work_says_so_instead_of_crashing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein Stapelabzug ist im Nutzerdialog verboten (§2.7, §33.1).
+
+    Der Schreiber im Kern ließ jeden ``OSError`` weiterlaufen. Ein Export in
+    ein Ziel, das schon eine Datei ist, endete deshalb mit
+    ``FileExistsError [WinError 183]`` und einem Stapelabzug — ohne einen
+    Hinweis, was jetzt hilft.
+
+    Im Fenster war derselbe Fehler stiller und schlimmer: Der Export-Arbeiter
+    fängt ``AppError``, ein ``OSError`` riss den Thread ab, und danach geschah
+    gar nichts mehr. Behoben ist er deshalb im Kern, nicht in einer der beiden
+    Oberflächen.
+    """
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path), "--printer", "centauri-carbon-2", "--material", "petg"])
+    main(["import", str(path), str(MESHES / "cube_clean.stl")])
+    blocker = tmp_path / "blocker"
+    blocker.write_text("x", encoding="utf-8")
+    capsys.readouterr()
+
+    code = main(["export", str(path), str(blocker)])
+
+    printed = capsys.readouterr()
+    assert code == 1
+    assert "Traceback" not in printed.err
+    assert "schreiben" in printed.err, printed.err
+    assert "  - " in printed.err, "und ein Ausweg steht dabei"
+
+
+def test_a_mistyped_operation_gets_a_suggestion_not_a_wall(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Vierundachtzig Namen, zweimal, englisch, ohne Vorschlag.
+
+    argparse antwortete auf ``run drill_hol`` mit der vollen Liste — einmal in
+    der Nutzungszeile, einmal in der Fehlermeldung. Zwei Bildschirme Text auf
+    einen fehlenden Buchstaben, und kein Wort dazu, was gemeint sein könnte.
+    """
+    code = main(["run", "drill_hol", "irgendwas.p3d"])
+
+    printed = capsys.readouterr()
+    assert code == 1
+    assert "drill_hole" in printed.err, "der naheliegende Name fehlt"
+    assert printed.err.count("insert_") == 0, "die ganze Liste steht wieder da"
+    assert "solidon3d ops" in printed.err, "und der Weg zur Liste, wer sie will"
+
+
+def test_an_error_carries_its_numbers_into_the_terminal(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """„Dieses Objekt gibt es nicht" ohne die Liste der Objekte ist halb.
+
+    Die Zahlen stehen im Fehler und kamen hier nie an; das Fenster zeigt sie
+    seit je. Mit den Schlüsseln, nicht mit Beschriftungen: die Tabelle dafür
+    zieht Qt mit, und die Kommandozeile läuft ohne.
+    """
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path), "--printer", "centauri-carbon-2", "--material", "petg"])
+    main(["import", str(path), str(MESHES / "cube_clean.stl")])
+    capsys.readouterr()
+
+    assert main(["export", str(path), str(tmp_path / "aus"), "--on", "obj_9"]) == 1
+
+    printed = capsys.readouterr().err
+    assert "obj_9" in printed, "das angefragte Objekt fehlt"
+    assert "obj_1" in printed, "und die, die es gibt, auch"

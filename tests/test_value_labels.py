@@ -42,6 +42,11 @@ def keys_in_source() -> dict[str, str]:
     ``checked``, ``materials``. Gesucht wird deshalb jede Zuweisung an einen
     Namen ``values`` mit einem Wörterbuch als Wert, mit und ohne Annotation.
 
+    **Und die Schlüssel, die eine Ausnahme selbst beisteuert.** ``errors.py``
+    setzt sie über ``_with_values(kwargs, tool=…, exit_code=…)`` — ein Aufruf,
+    kein Wörterbuch. Genau so standen ``tool`` und ``exit_code`` als rohes
+    Englisch im Tooltip jedes Fehlers eines externen Programms.
+
     Was weiter nicht gesehen wird, ist ein ``values=dict(...)`` oder ein
     Wörterbuch, das schrittweise gefüllt wird — dort greift die Sicherung in
     ``value_label``, die Unbekanntes durchlässt, statt den Tooltip zu leeren.
@@ -67,6 +72,11 @@ def keys_in_source() -> dict[str, str]:
                 for keyword in node.keywords:
                     if keyword.arg == "values" and isinstance(keyword.value, ast.Dict):
                         collect(keyword.value, path.name)
+                named = getattr(node.func, "id", "") or getattr(node.func, "attr", "")
+                if named == "_with_values":
+                    for keyword in node.keywords:
+                        if keyword.arg and keyword.arg != "values":
+                            found.setdefault(keyword.arg, path.name)
             elif isinstance(node, ast.AnnAssign):
                 if (
                     isinstance(node.target, ast.Name)

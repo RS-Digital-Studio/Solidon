@@ -25,14 +25,12 @@ from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import LLMBackend, first_available
 from app.core.backends.mesh import GeneratedMesh
-from app.core.brep import step as brep_step
 from app.core.errors import AppError, InternalError, OperationCancelled, ValidationError
-from app.core.export import threemf
 from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.section import SectionPlane
-from app.core.ingest.outline import is_outline
+from app.core.ingest.plan import import_plan
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
 from app.core.lid_flow import LidApplied, apply_lid
@@ -719,36 +717,13 @@ class Session(QObject):
         )
         self.project.sources[source_id] = payload
 
-        is_3mf = path.suffix.lower() == ".3mf"
-        if brep_step.is_step(path.suffix):
-            self.apply(
-                _("STEP laden"),
-                [OperationDraft(op="load_step", params={"source": source_id})],
-            )
-            return
-        if is_outline(path.suffix):
-            # Eine flache Zeichnung hat auch keine Einheitenfrage — sie hat keine
-            # dritte Dimension, bis jemand sagt, wie dick sie sein soll (§25).
-            self.apply(
-                _("Zeichnung extrudieren"),
-                [OperationDraft(op="load_outline", params={"source": source_id})],
-            )
-            return
-        # Wie viele Körper die Datei hält, entscheidet sich hier, nicht in der
-        # Operation: der Stapel vergibt Objekt-IDs, bevor irgendetwas läuft
-        # (§11), und bei einer 3MF-Baugruppe steht die Zahl in der Datei.
-        # Gezählt, ohne eine einzige Koordinate zu lesen.
-        parts = threemf.count_objects(self.project.sources[source_id]) if is_3mf else 1
-        self.apply(
-            _("Modell laden"),
-            [
-                OperationDraft(
-                    op="load",
-                    params={"source": source_id, "unit": unit},
-                    produces=max(parts, 1),
-                )
-            ],
-        )
+        # Welche Operation eine Datei einliest, entscheidet der Kern
+        # (``ingest.plan``) — dieselbe Stelle, die die Kommandozeile fragt. Sie
+        # stand hier vollständig und dort gar nicht: ``solidon3d import`` legte
+        # immer ``load`` auf den Stapel und antwortete auf eine STEP-Datei
+        # „Dieses Dateiformat kann nicht gelesen werden."
+        plan = import_plan(source_id, path.name, payload, unit)
+        self.apply(plan.title, [plan.draft])
 
     def import_image(self, path: Path) -> str:
         """Ein Bild als Quelle fürs Relief (§25, ``displace_image``).

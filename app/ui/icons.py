@@ -320,6 +320,40 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M12 3.5v17" opacity="0.55" />'
         '<path d="M3 9l18 6" opacity="0.55" /><path d="M21 9 3 15" opacity="0.55" />'
     ),
+    # --- Die sieben Kameravorgaben (Konzept P15, D4) -------------------------
+    #
+    # Eine Familie, kein Satz Einzelfälle: Sechs davon zeigen dasselbe Quadrat
+    # — die Bildebene — und unterscheiden sich nur darin, woher der Blick
+    # kommt. Die siebte ist der Würfel selbst.
+    #
+    # **Für „vorne" und „hinten" die Konvention der Physik.** Beide blicken
+    # senkrecht auf die Ebene, und ein Pfeil in der Bildebene könnte das nicht
+    # zeigen; ein Vektor senkrecht dazu wird seit je als **Punkt** (kommt
+    # heraus) und als **Kreuz** (geht hinein) gezeichnet. Wer das nicht kennt,
+    # liest den Text daneben — die Leiste trägt beides.
+    "view_iso": (
+        '<path d="M12 3.5 20.5 8.5v7L12 20.5 3.5 15.5v-7z" />'
+        '<path d="M12 12 20.5 8.5" opacity="0.55" />'
+        '<path d="M12 12 3.5 8.5" opacity="0.55" />'
+        '<path d="M12 12v8.5" opacity="0.55" />'
+    ),
+    "view_front": (
+        '<path d="M5 5h14v14H5z" />'
+        '<circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" />'
+    ),
+    "view_back": ('<path d="M5 5h14v14H5z" /><path d="M9 9l6 6" /><path d="M15 9l-6 6" />'),
+    "view_left": (
+        '<path d="M9 5h10v14H9z" /><path d="M2.5 12h4.5" /><path d="M5 9.5 7.5 12 5 14.5" />'
+    ),
+    "view_right": (
+        '<path d="M5 5h10v14H5z" /><path d="M21.5 12H17" /><path d="M19 9.5 16.5 12 19 14.5" />'
+    ),
+    "view_top": (
+        '<path d="M5 9h14v10H5z" /><path d="M12 2.5v4.5" /><path d="M9.5 5 12 7.5 14.5 5" />'
+    ),
+    "view_bottom": (
+        '<path d="M5 5h14v10H5z" /><path d="M12 21.5V17" /><path d="M9.5 19 12 16.5 14.5 19" />'
+    ),
 }
 
 

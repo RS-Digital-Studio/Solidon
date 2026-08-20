@@ -2839,22 +2839,29 @@ def test_the_sketch_bar_says_what_finishing_does(window: MainWindow) -> None:
 
 
 def test_the_sketch_use_dialog_preselects_extruding() -> None:
-    """Vorausgewählt ist der Normalfall, nicht die erste Zeile.
+    """Vorausgewählt **und** oben steht der Normalfall.
 
-    Die Liste kommt alphabetisch nach Titel aus dem Register, und damit stand
-    „Entlang eines Bogens führen" oben — ein Rohrbogen, der seltenste der
-    fünf Fälle. Wer nach dem Zeichnen auf „Weiter" drückt, ohne zu lesen,
-    bekam ihn; aus einer gezeichneten Fläche wird im Normalfall ein Körper,
-    indem man sie aufzieht.
+    Die Liste kam aus dem Register, und damit stand „Entlang eines Bogens
+    führen" oben — ein Rohrbogen, der seltenste der fünf Fälle. Vorgewählt war
+    schon das Aufziehen; das genügte nicht, denn gelesen wird von oben. Und es
+    genügte erst recht nicht, solange der Dialog nur zwei der fünf zeigte:
+    246 Bildpunkte hoch, der dritte Eintrag mitten im Satz abgeschnitten, ohne
+    sichtbare Bildlaufleiste. Wer hier scrollen muss, um überhaupt zu erfahren,
+    dass es fünf Arten gibt, entscheidet zwischen zwei.
+
+    Beides gehört zusammen, deshalb steht beides hier: die Höhe trägt alle fünf
+    (am Bild geprüft), und der Normalfall steht an erster Stelle. Die übrigen
+    folgen nach Titel — eine Reihenfolge, die niemanden überrascht.
     """
     from app.ui.op_dialog import SketchUseDialog
 
     dialog = SketchUseDialog()
     assert dialog.chosen() == "sketch_extrude"
-    # Die Reihenfolge der Liste bleibt, wie das Register sie liefert — geprüft
-    # wird die Markierung, nicht das Sortieren.
     assert dialog._list.count() == 5
-    assert dialog._list.item(0).data(Qt.ItemDataRole.UserRole) == "sketch_sweep"
+    assert dialog._list.item(0).data(Qt.ItemDataRole.UserRole) == "sketch_extrude"
+    assert dialog.minimumHeight() >= 400, (
+        f"der Dialog öffnet {dialog.minimumHeight()} Punkte hoch — dann sieht man zwei von fünf"
+    )
 
 
 def test_a_free_sketch_asks_what_it_becomes(
@@ -4804,3 +4811,21 @@ def test_the_open_tool_keeps_its_symbol_readable(qt_app: QApplication) -> None:
     # dem Thema folgen — sonst bleibt ein dunkles Symbol auf dunklem Knopf.
     window.tools.activate(None)
     assert dominant(button.icon()) == resting
+
+
+def test_the_view_bar_stays_out_of_the_way(window: MainWindow) -> None:
+    """Die Leiste liegt **über** dem Modell, also ist ihre Breite eine Zusage.
+
+    Mit Beschriftung an jedem Knopf wären es 1039 Bildpunkte gewesen — bei
+    einem 1024er Fenster mehr als ein Drittel der Ansicht, und damit genau die
+    Fläche, für die §2.5 die Karten überhaupt schweben lässt. Mit Symbolen sind
+    es gut zweihundert.
+
+    Die Grenze steht hier und nicht im Docstring, weil ein Zusatz sie sonst
+    lautlos zurücknimmt: Wer einen achten Knopf oder eine Beschriftung
+    hinzufügt, bekommt einen roten Lauf und entscheidet dann bewusst.
+    """
+    bar = window.viewport.view_bar
+    bar.adjustSize()
+    assert bar.width() <= 260, f"{bar.width()} px — die Leiste frisst den Viewport"
+    assert bar.height() <= 48, f"{bar.height()} px hoch"

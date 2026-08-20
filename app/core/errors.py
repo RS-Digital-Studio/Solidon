@@ -356,6 +356,35 @@ class ExternalToolError(AppError):
         self.exit_code = exit_code
 
 
+class FileWriteError(AppError):
+    """Eine Datei ließ sich nicht schreiben — Rechte, Pfad, volle Platte.
+
+    **Es gab sie nicht, und deshalb lief der Fehler bis oben durch.** Der
+    Schreiber im Kern ließ jeden ``OSError`` weiterlaufen: In der
+    Kommandozeile endete ein Export in ein Zielverzeichnis, das eine Datei ist,
+    mit einem Stapelabzug (`FileExistsError [WinError 183]`) — verboten im
+    Nutzerdialog, und ohne jeden Hinweis, was jetzt hilft. Im Fenster war es
+    stiller und schlimmer: Der Export-Arbeiter fängt ``AppError``, ein
+    ``OSError`` riss den Thread ab, und im Fenster geschah gar nichts mehr.
+
+    Der Grund vom Betriebssystem steht im Detail. Er ist nicht übersetzt und
+    darf es nicht sein: „Zugriff verweigert" gegen „Datei nicht gefunden" ist
+    die eigentliche Auskunft, und sie kommt von dort, wo sie entsteht.
+    """
+
+    default_title: ClassVar[TranslatableText] = _("Die Datei ließ sich nicht schreiben.")
+    default_suggestions: ClassVar[tuple[Action, ...]] = (CORRECT_INPUT, RETRY, CANCEL)
+
+    def __init__(
+        self,
+        target: str = "",
+        detail: TranslatableText | str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(detail=detail, **_with_values(kwargs, target=target))
+        self.target = target
+
+
 # --- Freischaltung ---------------------------------------------------------------
 
 

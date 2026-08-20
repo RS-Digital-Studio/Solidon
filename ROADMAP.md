@@ -42,7 +42,6 @@ bekommt einen roten Lauf.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| D4 — ViewCube und Ansichtsleiste, wieder offen | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung: Würfel zurück, Leiste bauen oder beides lassen |
 
 ---
 
@@ -6923,8 +6922,36 @@ Konzeptdateien und deshalb hier und nicht dort:
       nicht; und `profile_differences` nennt beim Volumenstrom die richtige
       Zeile: Beide Seiten sind sich mit 10 mm³/s einig, der Unterschied steht
       beim PRO.
-- [ ] **D4 steht wieder offen** — ViewCube und Ansichtsleiste, siehe oben. Die
-      sieben Kameravoreinstellungen liegen wieder allein im Menü.
+- [x] **D4 ist zu, diesmal mit der Ansichtsleiste** (entschieden von Robert am
+      20.08.2026: Leiste bauen, Achsenkreuz behalten). `ViewBar` sitzt unten
+      rechts im Viewport und schaltet die sieben Kameravorgaben über denselben
+      `view_from`, den auch das Menü nimmt — sieben Symbole, keine zweite
+      Wahrheit: Die Reihenfolge kommt aus `VIEW_DIRECTIONS`, und ein Test hält
+      beide Listen gegeneinander.
+
+      **Unten rechts, weil unten links die Achsenanzeige steht.** Zwei Anzeigen
+      an derselben Stelle waren der Grund, aus dem der Würfel gehen musste;
+      derselbe Fehler zweimal wäre einer zu viel. Ein Test prüft, dass sich die
+      Rechtecke nicht schneiden.
+
+      **Die Symbole sind gezeichnet, nicht geliehen** — sieben neue Pfade in
+      `app/ui/icons.py`, eine Familie: sechsmal dieselbe Bildebene,
+      unterschieden nur darin, woher der Blick kommt, dazu der Würfel für die
+      Isometrie. Für „vorne" und „hinten" trägt die Konvention der Physik, weil
+      ein Pfeil in der Bildebene eine Richtung senkrecht dazu nicht zeigen
+      kann: **Punkt** heißt „kommt heraus", **Kreuz** heißt „geht hinein".
+
+      **Und eine begründete Abweichung von der Symbolregel.** Der Kopf von
+      `icons.py` sagt „Symbole ergänzen Text, sie ersetzen ihn nicht" — hier
+      tragen sie ihn allein, denn mit Beschriftung an jedem Knopf wäre die
+      Leiste **1039 Bildpunkte** breit geworden und hätte bei einem 1024er
+      Fenster ein Drittel der Ansicht verdeckt. Mit Symbolen sind es 223. Das
+      Wort steht doppelt woanders: im Tooltip samt Kürzel und im zugänglichen
+      Namen. Gelernt wird es im Kameramenü — **dieselben sieben Wörter**, keine
+      kürzeren daneben, sonst führte die Oberfläche zwei für dieselbe Sache.
+      Deshalb kam auch kein einziger neuer Katalogeintrag dazu.
+      `test_the_view_bar_stays_out_of_the_way` hält die Breite fest, damit ein
+      Zusatz sie nicht lautlos zurücknimmt.
 - [x] **Die Rückfallebene für Rechner ohne Grafikkarte kommt nicht** —
       entschieden von Robert am 20.08.2026. B1 im Erzeugen-Konzept schlug ein
       zweites Mesh-Backend gegen einen gehosteten Dienst vor (dort fal.ai,

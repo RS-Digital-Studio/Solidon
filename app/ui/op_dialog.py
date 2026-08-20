@@ -995,12 +995,28 @@ class SketchUseDialog(QDialog):
 
         super().__init__(parent)
         self.setWindowTitle(tr("Was soll daraus werden?"))
-        self.setMinimumWidth(380)
+        # **Höhe, nicht nur Breite.** Ohne sie nahm das Layout seine kleinste:
+        # 246 Bildpunkte, und darin standen zwei der fünf Erzeugungsarten — die
+        # dritte mitten im Satz abgeschnitten, ohne sichtbare Bildlaufleiste.
+        # Das ist der Dialog, in dem Weg 2 entschieden wird; wer hier scrollen
+        # muss, um überhaupt zu erfahren, dass es fünf gibt, entscheidet
+        # zwischen zwei.
+        #
+        # Jeder Eintrag ist zwei Zeilen hoch (Titel und Beschreibung), und die
+        # Beschreibung bricht um — 440 tragen alle fünf, am Bild geprüft.
+        self.setMinimumSize(380, 440)
 
         self._list = QListWidget(self)
         self._list.setWordWrap(True)
         section = next((entry for entry in menu_tree(REGISTRY) if entry.category == "sketch"), None)
-        for spec in section.entries if section else ():
+        # **Der Normalfall steht oben.** Die Reihenfolge kam aus dem Menübaum,
+        # und dort stand „Entlang eines Bogens führen" zuerst: Wer den Dialog
+        # öffnet, liest als Erstes die exotischste der fünf Arten, während die
+        # übliche darunter vorgewählt ist. Das Vorwählen allein genügt nicht —
+        # gelesen wird von oben.
+        entries = list(section.entries) if section else []
+        entries.sort(key=lambda spec: (spec.name != DEFAULT_SKETCH_USE, str(spec.title)))
+        for spec in entries:
             item = QListWidgetItem(f"{spec.title}\n    {spec.doc}")
             item.setData(Qt.ItemDataRole.UserRole, spec.name)
             self._list.addItem(item)

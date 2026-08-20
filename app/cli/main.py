@@ -13,6 +13,7 @@ einem Dialog und einer Statusleiste umsetzt.
 from __future__ import annotations
 
 import argparse
+import difflib
 import sys
 import time
 from collections.abc import Mapping
@@ -29,10 +30,10 @@ from app.branding import (
 from app.core import activation, manual
 from app.core.bootstrap import load_operations, load_user_parts
 from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
-from app.core.export import threemf
 from app.core.export.writer import FORMAT_SUFFIX, plan_export, write_plan
 from app.core.geom.mesh import read_mesh
 from app.core.ingest.loader import detect_unit
+from app.core.ingest.plan import import_plan
 from app.core.knowledge import profiles
 from app.core.log import configure
 from app.core.registry import REGISTRY, cli_commands, documentation
@@ -263,7 +264,6 @@ def command_import(args: argparse.Namespace) -> int:
         return 1
 
     payload = incoming.read_bytes()
-    unit = _chosen_unit(payload, incoming, args.unit)
 
     source_id = f"src_{len(project.document.sources) + 1}"
     project.document.sources[source_id] = Source(
@@ -274,18 +274,21 @@ def command_import(args: argparse.Namespace) -> int:
     )
     project.sources[source_id] = payload
 
-    # Wie im Fenster: eine 3MF-Baugruppe braucht ihre Körperzahl, bevor der
-    # Stapel die IDs vergibt (§11).
-    parts = threemf.count_objects(payload) if incoming.suffix.lower() == ".3mf" else 1
+    # **Wie im Fenster, aus derselben Quelle.** Hier stand immer ``load``, und
+    # damit konnte die Kommandozeile STEP, SVG und DXF nicht — Formate, die
+    # dieselbe Anwendung im Fenster einliest. Geantwortet hat sie „Dieses
+    # Dateiformat kann nicht gelesen werden.", also eine Unwahrheit.
+    #
+    # Die Einheitenfrage kommt erst nach dem Plan: nur ein Netz hat sie. STEP
+    # trägt seine Einheit selbst, eine flache Zeichnung hat keine dritte
+    # Dimension — dort wäre die Frage eine Zumutung ohne Zweck.
+    plan = import_plan(source_id, incoming.name, payload, args.unit)
+    if plan.asks_unit:
+        plan = import_plan(
+            source_id, incoming.name, payload, _chosen_unit(payload, incoming, args.unit)
+        )
     history = History(project.document)
-    history.apply(
-        _("Modell laden"),
-        [
-            OperationDraft(
-                op="load", params={"source": source_id, "unit": unit}, produces=max(parts, 1)
-            )
-        ],
-    )
+    history.apply(plan.title, [plan.draft])
     result = run_evaluation(project, path)
     print_report(result)
     if not result.complete:
@@ -474,7 +477,11 @@ def build_parser() -> argparse.ArgumentParser:
     export.set_defaults(handler=command_export)
 
     run = commands.add_parser("run", help=tr("Eine Operation ausführen"))
-    run_commands = run.add_subparsers(dest="op", required=True)
+    # ``metavar`` gegen die Wand: ohne es schreibt argparse alle
+    # vierundachtzig Operationsnamen in die Nutzungszeile — und bei einem
+    # Tippfehler ein zweites Mal in die Fehlermeldung. Wer wissen will, welche
+    # es gibt, fragt ``solidon3d ops``; das steht im Hinweis unten.
+    run_commands = run.add_subparsers(dest="op", required=True, metavar="<operation>")
     for command in cli_commands():
         entry = run_commands.add_parser(command.name, help=command.help)
         entry.add_argument("path")
@@ -558,6 +565,34 @@ def _demo_is_over() -> bool:
     return True
 
 
+def _mistyped_operation(argv: list[str]) -> int | None:
+    """Bei einem Tippfehler in ``run`` ein Vorschlag statt vierundachtzig Namen.
+
+    argparse antwortet auf ``run drill_hol`` mit der vollen Liste — einmal in
+    der Nutzungszeile, einmal in der Fehlermeldung, beide Male englisch und
+    ohne einen Hinweis, was gemeint sein könnte. Zwei Bildschirme Text auf
+    einen fehlenden Buchstaben.
+
+    Geprüft wird vor argparse, weil danach der Name schon verloren ist: Die
+    Meldung entsteht tief in ``_check_value``, und der Ausstieg ist ein
+    ``SystemExit`` ohne den falschen Wert.
+
+    Gibt ``None`` zurück, wenn nichts zu sagen ist — dann läuft alles wie
+    vorher.
+    """
+    if len(argv) < 2 or argv[0] != "run":
+        return None
+    wanted = argv[1]
+    if wanted.startswith("-") or REGISTRY.has(wanted):
+        return None
+    near = difflib.get_close_matches(wanted, [spec.name for spec in REGISTRY.all()], n=3)
+    print(f"\n{tr('Diese Operation gibt es nicht')}: {wanted}", file=sys.stderr)
+    if near:
+        print(f"{tr('Gemeint war vielleicht')}: {', '.join(near)}", file=sys.stderr)
+    print(f"  - {tr('Alle Operationen auflisten')}: solidon3d ops", file=sys.stderr)
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     _speak_utf8()
     if _demo_is_over():
@@ -570,6 +605,9 @@ def main(argv: list[str] | None = None) -> int:
     for finding in load_user_parts():
         print(f"{finding.message}", file=sys.stderr)
     parser = build_parser()
+    mistyped = _mistyped_operation(argv if argv is not None else sys.argv[1:])
+    if mistyped is not None:
+        return mistyped
     args = parser.parse_args(argv)
     configure(debug=args.debug, to_console=False)
     try:
@@ -583,6 +621,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n{error.title}", file=sys.stderr)
         if error.detail:
             print(f"{error.detail}", file=sys.stderr)
+        # **Und die Zahlen dazu.** Sie standen im Fehler und kamen hier nie an:
+        # „Dieses Objekt gibt es in der Szene nicht." ohne die Liste der
+        # Objekte, die es gibt, ist die halbe Antwort. Das Fenster zeigt sie
+        # seit je — im Prüfbericht und im Fehlerdialog über ``value_line``.
+        #
+        # Mit den Schlüsseln und nicht mit Beschriftungen: Die
+        # Beschriftungstabelle lebt in ``app/ui/labels.py`` und zieht Qt mit,
+        # die Kommandozeile läuft ohne. Englische Schlüssel sind hier ohnehin
+        # das Richtige — sie sind der Vertrag, den ein Skript liest (§4.2).
+        for key, value in error.values.items():
+            if value in (None, ""):
+                continue
+            print(f"  {key}: {value}", file=sys.stderr)
         for action in error.suggestions:
             print(f"  - {action.label}", file=sys.stderr)
         return 1
