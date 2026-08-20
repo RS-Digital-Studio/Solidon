@@ -1985,3 +1985,148 @@ def test_home_has_exactly_one_owner_in_the_sketch_mode(qt_app: QApplication) -> 
     finally:
         window.close()
         window.deleteLater()
+
+
+# --- Was der Zeichnung fehlt, steht in der Zeile -------------------------------
+
+
+def test_the_line_says_whether_the_outline_is_closed(qt_app: QApplication) -> None:
+    """Ob die Fläche geschlossen ist, erfuhr man erst beim Bestätigen (§2.7).
+
+    Wer vier Linien zog und den letzten Klick knapp neben den ersten Punkt
+    setzte, sah dasselbe Bild wie einer, der getroffen hatte — die Auskunft
+    kam danach, als Absage der Operation. Gefragt wird derselbe Kern, der
+    später rechnet, und angezeigt wird **sein** Satz.
+    """
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+
+    assert canvas.status_text().startswith("Noch offen"), canvas.status_text()
+
+    canvas.add_element("line", ((30.0, 0.0), (30.0, 20.0)))
+    canvas.add_element("line", ((30.0, 20.0), (0.0, 20.0)))
+    canvas.add_element("line", ((0.0, 20.0), (0.0, 0.0)))
+
+    assert canvas.status_text().startswith("Geschlossen"), canvas.status_text()
+
+
+def test_a_closed_outline_still_counts_its_degrees_of_freedom(qt_app: QApplication) -> None:
+    """Die Freiheitsgrade bleiben in der Zeile — sie sind die zweite Frage,
+    nicht die abgeschaffte."""
+    canvas = SketchCanvas()
+    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+
+    line = canvas.status_text()
+    assert line.startswith("Geschlossen"), line
+    assert "Freiheitsgrade" in line or "Freiheitsgrad" in line, line
+
+
+def test_a_selection_can_be_moved_in_one_go(qt_app: QApplication) -> None:
+    """Verschieben gab es nicht — nur Punkt für Punkt (§30.1, Stufe zwei).
+
+    Bei einem Rechteck sind das vier Züge, von denen die ersten drei die Form
+    verziehen. Der Griff schiebt die ganze Auswahl und lässt die Bedingungen
+    zeigen, wohin sie zeigten: die Elemente behalten ihren Platz in der Liste.
+    """
+    canvas = SketchCanvas()
+    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    before = canvas.points()
+    canvas.selection.clear()
+    for index in range(len(canvas.sketch.elements)):
+        canvas._select((canvas.sketch.elements[index].kind, (index * 2,)), True)
+
+    canvas.move_selected(10.0, 5.0)
+
+    after = canvas.points()
+    assert len(after) == len(before)
+    for (bx, by), (ax, ay) in zip(before, after, strict=True):
+        assert ax == pytest.approx(bx + 10.0), "die Form ist nicht mitgekommen"
+        assert ay == pytest.approx(by + 5.0)
+
+
+def test_moving_nothing_says_what_is_missing(qt_app: QApplication) -> None:
+    """Ohne Auswahl passiert nichts — und zwar hörbar (Regel 17)."""
+    from app.core.errors import ValidationError
+    from app.core.sketch import edit
+
+    canvas = SketchCanvas()
+    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+
+    with pytest.raises(ValidationError) as raised:
+        edit.move(canvas.sketch, (), 5.0, 0.0)
+    assert "wählen" in str(raised.value)
+
+
+def test_the_context_menu_offers_deleting(qt_app: QApplication) -> None:
+    """Löschen lag allein auf der Entf-Taste.
+
+    In der Werkzeugleiste steht es nicht, und wer die Taste nicht rät, wird
+    ein Element nicht los. Das Kontextmenü ist der Ort, an dem man nachsieht,
+    was mit *dem hier* geht — das Kürzel steht daneben, so lernt man es
+    nebenbei.
+
+    Gefragt wird ``context_menu_at`` und nicht das Mausereignis: ein Menü,
+    das sich selbst öffnet, hält die Suite an.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    canvas._select(("line", (0,)), False)
+
+    menu = canvas.context_menu_at(None)
+    entries = [action.text() for action in menu.actions()]
+
+    assert any("Löschen" in entry for entry in entries), entries
+    assert any("Entf" in entry for entry in entries), "das Kürzel steht daneben"
+
+    before = len(canvas.sketch.elements)
+    for action in menu.actions():
+        if "Löschen" in action.text():
+            action.trigger()
+    assert len(canvas.sketch.elements) < before, "der Eintrag löscht nichts"
+
+
+def test_the_context_menu_keeps_quiet_without_a_selection(qt_app: QApplication) -> None:
+    """Ohne Auswahl gibt es nichts zu löschen — und keinen Eintrag dafür."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    canvas.selection.clear()
+
+    entries = [action.text() for action in canvas.context_menu_at(None).actions()]
+
+    assert not any("Löschen" in entry for entry in entries), entries
+
+
+def test_a_click_with_a_trembling_hand_moves_nothing(qt_app: QApplication) -> None:
+    """Ein Auswahlklick ist kein Verschieben (§30.1, Stufe zwei).
+
+    Die Hand wandert beim Klicken um ein, zwei Bildpunkte. Ohne Schwelle säße
+    die Form danach ein Zehntelmillimeter daneben — eine Änderung, die niemand
+    gewollt und niemand bemerkt hat, bis das Maß nicht mehr stimmt. Die Zahl
+    kommt von Qt, es ist dieselbe, die ein Ziehen überall sonst auslöst.
+    """
+    from PySide6.QtCore import QPointF
+    from PySide6.QtWidgets import QApplication as App
+
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    canvas._select(("line", (0,)), False)
+    before = canvas.points()
+
+    start = canvas._to_screen(*canvas.points()[0])
+    canvas._shift_from = canvas._to_world(start)
+    canvas._shifting = False
+    tremble = QPointF(start.x() + 2.0, start.y() + 1.0)
+    canvas._pointer = canvas._to_world(tremble)
+    canvas._shift_selection(tremble)
+
+    assert canvas.points() == before, "ein Klick hat die Zeichnung verschoben"
+
+    # Und ab der Schwelle bewegt sie sich.
+    far = QPointF(start.x() + App.startDragDistance() + 5.0, start.y())
+    canvas._pointer = canvas._to_world(far)
+    canvas._shift_selection(far)
+
+    assert canvas.points() != before, "ab der Schwelle muss der Zug greifen"

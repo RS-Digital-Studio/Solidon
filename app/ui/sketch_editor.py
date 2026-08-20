@@ -23,6 +23,7 @@ from typing import Any, Final
 from PySide6.QtCore import QPoint, QPointF, Qt, Signal
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QPen, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -44,6 +45,7 @@ from PySide6.QtWidgets import (
 
 from app.core.errors import AppError, SketchConflictError
 from app.core.sketch import edit, shapes
+from app.core.sketch.profile import regions_of
 from app.core.sketch.serialize import sketch_from_text, sketch_to_text
 from app.core.sketch.solver import solve_sketch
 from app.core.types import (
@@ -410,6 +412,8 @@ class SketchCanvas(QWidget):
         self.sketch: Sketch = EMPTY
         self.solved: SolvedSketch | None = None
         self.conflict: str = ""
+        self.outline: bool = False
+        """Ob die Zeichnung schon einen Umriss ergibt (:meth:`_outline_state`)."""
         self.tool = "select"
         self._pending: list[int] = []
         """Beim Zeichnen: die flachen Indizes der schon gesetzten Punkte —
@@ -421,6 +425,10 @@ class SketchCanvas(QWidget):
         parallel A"."""
         self._undo: list[Sketch] = []
         self._dragging: int | None = None
+        self._shift_from: tuple[float, float] | None = None
+        """Von wo aus die Auswahl geschoben wird — ``None`` heißt: gar nicht."""
+        self._shifting = False
+        """Ob die Schwelle schon überschritten ist (:meth:`_shift_selection`)."""
         self._scale = START_SCALE
         self._centre = QPointF(0.0, 0.0)
         self._fitting = False
@@ -763,9 +771,34 @@ class SketchCanvas(QWidget):
                 self.conflict_pair = (error.first, error.second)
             except AppError as error:
                 self.conflict = str(error.detail or error.title)
+        self.outline = self._outline_state()
         self.sketchChanged.emit()
         self.statusChanged.emit(self.status_text())
         self.update()
+
+    def _outline_state(self) -> bool:
+        """Ob aus der Zeichnung schon ein Umriss wird.
+
+        Ob eine Kontur geschlossen ist, war bis zum Bestätigen der Operation
+        nicht zu erfahren: Wer vier Linien zog und den letzten Klick knapp
+        neben den ersten Punkt setzte, sah dasselbe Bild wie einer, der
+        getroffen hatte. Die Auskunft kam erst danach, als Absage.
+
+        Gefragt wird derselbe Kern, der später rechnet
+        (:func:`app.core.sketch.profile.regions_of`) — die Antwort ist damit
+        dieselbe und nicht bloß eine ähnliche. Übernommen wird aber nur das
+        Ja oder Nein und **nicht** sein Satz: „Der Umriss ist nicht
+        geschlossen" ist die Absage einer Operation, die jemand ausgelöst hat.
+        In der Zeile stünde sie vom ersten Strich an und wäre bis zum letzten
+        Klick eine Warnung vor einem Zustand, den man gerade beabsichtigt.
+        """
+        if self.solved is None or self.conflict:
+            return False
+        try:
+            regions_of(self.solved)
+        except AppError:
+            return False
+        return True
 
     def status_text(self) -> str:
         if self.conflict:
@@ -784,11 +817,19 @@ class SketchCanvas(QWidget):
             return drawing
         if self.solved is None:
             return tr("Leere Skizze — zeichnen oder eine Grundform einfügen.")
+        # Zwei Fragen, eine Zeile, und die erste ist die dringendere: ohne
+        # geschlossenen Umriss scheitert die Operation, mit ihm ist ein freier
+        # Freiheitsgrad höchstens ungenau. Beide stehen nebeneinander, weil
+        # keine die andere beantwortet — ein bestimmtes Rechteck kann offen
+        # sein, ein geschlossenes darf wackeln.
+        state = tr("Geschlossen") if self.outline else tr("Noch offen")
         if self.solved.free_dof == 0:
-            return tr("Bestimmt — alle Freiheitsgrade sind vergeben.")
+            return tr("{state} · bestimmt — alle Freiheitsgrade sind vergeben.").format(state=state)
         if self.solved.free_dof == 1:
-            return tr("Ein Freiheitsgrad ist noch frei.")
-        return tr("{count} Freiheitsgrade sind noch frei.").format(count=self.solved.free_dof)
+            return tr("{state} · ein Freiheitsgrad ist noch frei.").format(state=state)
+        return tr("{state} · {count} Freiheitsgrade sind noch frei.").format(
+            state=state, count=self.solved.free_dof
+        )
 
     def selection_hint(self) -> str:
         """Was ausgewählt ist — und wie das Zweite dazukommt.
@@ -967,6 +1008,21 @@ class SketchCanvas(QWidget):
         except AppError as error:
             self.statusChanged.emit(str(error.detail or error.title))
 
+    def move_selected(self, dx: float, dy: float) -> None:
+        """Schiebt die ganze Auswahl — der Griff, den es nicht gab.
+
+        Ohne ihn war eine gezeichnete Form nur punktweise zu bewegen: vier
+        Züge für ein Rechteck, und die ersten drei verziehen es. Wie beim
+        Ziehen eines einzelnen Punktes wird hier **nicht** gemerkt — den
+        Undo-Punkt setzt der Mausdruck, sonst stünden im Rückgängig so viele
+        Schritte, wie die Maus Meldungen geschickt hat.
+        """
+        indices = tuple(sorted({_located(self.sketch, entry[1][0])[0] for entry in self.selection}))
+        if not indices:
+            return
+        self.sketch = edit.move(self.sketch, indices, dx, dy)
+        self._resolve()
+
     def move_point(self, flat: int, x: float, y: float) -> None:
         """Verschiebt einen Punkt und lässt den Solver den Rest ziehen."""
         element_index, local = _located(self.sketch, flat)
@@ -1088,6 +1144,14 @@ class SketchCanvas(QWidget):
             element = self._hit_element(position)
             if element is not None:
                 self._select(element, bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier))
+                # Und damit hängt die Auswahl am Zeiger: wer ein Element
+                # anklickt und die Maus bewegt, schiebt es. Gemerkt wird der
+                # Ort, nicht der Zustand — der Undo-Punkt entsteht erst, wenn
+                # wirklich geschoben wird (``_shift_selection``). Sonst legte
+                # jeder Auswahlklick einen Schritt ab, der nichts geändert
+                # hat, und das Rückgängig zählte Klicks statt Änderungen.
+                self._shift_from = self._to_world(position)
+                self._shifting = False
                 return
             if not event.modifiers():
                 self.selection.clear()
@@ -1362,11 +1426,40 @@ class SketchCanvas(QWidget):
             # nicht mehr gilt.
             target = self.snapped(self._pointer)
             self.move_point(self._dragging, target[0], target[1])
+        elif self._shift_from is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self._shift_selection(position)
         elif self._pending_world:
             self.measuringChanged.emit(self.pending_measure())
             self.update()
         elif moved or hovered:
             self.update()
+
+    def _shift_selection(self, position: QPointF) -> None:
+        """Schiebt die Auswahl mit der Hand — aber erst, wenn es eine Geste ist.
+
+        Ohne die Schwelle wäre jeder Auswahlklick ein Verschieben um die zwei
+        Bildpunkte, um die eine Hand beim Klicken wandert: die Form säße
+        danach ein Zehntelmillimeter daneben, und niemand hätte das gewollt.
+        Qt kennt das Maß, ab dem eine Bewegung eine Absicht ist
+        (``startDragDistance``) — dieselbe Zahl, die ein Ziehen überall sonst
+        im System auslöst.
+
+        Der Undo-Punkt entsteht hier, beim ersten wirklichen Zug, und nur
+        einmal: ``move_selected`` merkt nicht, sonst stünden im Rückgängig so
+        viele Schritte, wie die Maus Meldungen geschickt hat.
+        """
+        if self._shift_from is None:
+            return
+        across, up = self._pointer
+        if not self._shifting:
+            start = self._to_screen(*self._shift_from)
+            moved = math.hypot(position.x() - start.x(), position.y() - start.y())
+            if moved < QApplication.startDragDistance():
+                return
+            self._remember()
+            self._shifting = True
+        self.move_selected(across - self._shift_from[0], up - self._shift_from[1])
+        self._shift_from = (across, up)
 
     def _note_hover(self, under: int | None) -> bool:
         """Merkt den Punkt unter dem Zeiger und sagt, ob er gewechselt hat.
@@ -1420,6 +1513,8 @@ class SketchCanvas(QWidget):
             self._panning = None
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging = None
+            self._shift_from = None
+            self._shifting = False
 
     def wheelEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         """Das Rad zoomt **auf den Zeiger**, nicht auf die Bildmitte.
@@ -1468,15 +1563,36 @@ class SketchCanvas(QWidget):
     def _context_menu(self, event: Any) -> None:
         """Bedingungen am Ort der Auswahl — §30.1 nennt das Kontextmenü
         ausdrücklich. Und, wo einer liegt, der Punkt selbst."""
+        menu = self.context_menu_at(self._hit_point(QPointF(event.position())))
+        if menu.isEmpty():
+            return
+        menu.exec(event.globalPosition().toPoint())
+
+    def context_menu_at(self, hit: int | None) -> QMenu:
+        """Was das Kontextmenü anbietet — gebaut, nicht gezeigt.
+
+        Getrennt vom Zeigen, weil ein Menü, das sich selbst öffnet, in einem
+        Test die Suite anhält: ``QMenu.exec`` blockiert wie ein modaler
+        Dialog. Dieselbe Regel wie bei ``place`` — was ein Klick tut,
+        entscheidet die Methode, die auch ein Test ruft.
+        """
         menu = QMenu(self)
 
         # Was am angeklickten Punkt hängt, steht oben: ein Kontextmenü
         # beantwortet „was kann ich mit *dem hier* tun", und der Punkt unter
         # dem Zeiger ist das Genaueste, was dort liegt.
-        hit = self._hit_point(QPointF(event.position()))
         if hit is not None:
             entry = menu.addAction(tr("Koordinaten …"))
             entry.triggered.connect(lambda _checked=False, flat=hit: self.edit_point(flat))
+            menu.addSeparator()
+
+        # Löschen stand allein auf der Entf-Taste. Wer die nicht rät, wird ein
+        # Element nicht los: in der Werkzeugleiste steht es nicht, und ein
+        # Kontextmenü ist der Ort, an dem man nachsieht, was mit *dem hier*
+        # geht. Das Kürzel steht daneben — so lernt man es nebenbei.
+        if self.selection:
+            remove = menu.addAction(tr("Löschen  (Entf)"))
+            remove.triggered.connect(lambda _checked=False: self.remove_selected())
             menu.addSeparator()
 
         dialog = self.parent()
@@ -1488,9 +1604,7 @@ class SketchCanvas(QWidget):
                 action.setEnabled(enabled)
                 action.triggered.connect(lambda _checked=False, chosen=kind: request(chosen))
 
-        if menu.isEmpty():
-            return
-        menu.exec(event.globalPosition().toPoint())
+        return menu
 
     def edit_point(self, flat: int) -> None:
         """Einen Punkt auf genaue Koordinaten setzen.

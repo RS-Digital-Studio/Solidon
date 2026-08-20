@@ -264,6 +264,42 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
     return replace(sketch, elements=(*sketch.elements, *copies))
 
 
+def move(sketch: Sketch, indices: tuple[int, ...], dx: float, dy: float) -> Sketch:
+    """Schiebt die gewählten Elemente um einen Betrag — an Ort und Stelle.
+
+    Der Griff fehlte ganz: Wer eine gezeichnete Form woandershin wollte,
+    musste jeden ihrer Punkte einzeln fassen, und der Solver zog zwischen den
+    Griffen alles mit. Bei einem Rechteck sind das vier Züge, von denen die
+    ersten drei die Form verziehen.
+
+    Verschoben und **nicht** kopiert — darin unterscheidet es sich von
+    ``offset`` und ``mirror`` daneben. Die Elemente behalten damit ihren
+    Platz in der Liste, und jede Bedingung, die auf sie zeigt, zeigt weiter
+    auf dieselbe Stelle: Es gibt nichts umzunummerieren.
+
+    Was der Solver danach mit dem Ergebnis macht, ist seine Sache. Ein Maß,
+    das die Form festhält, zieht sie zurück — genauso wie beim Ziehen eines
+    einzelnen Punktes, und aus demselben guten Grund.
+    """
+    if not indices:
+        raise ValidationError(
+            "elements",
+            _("Nichts ausgewählt — erst die Elemente wählen, dann verschieben."),
+        )
+    chosen = set(indices)
+    elements = tuple(
+        SketchElement(
+            kind=element.kind,
+            points=tuple((x + dx, y + dy) for x, y in element.points),
+            construction=element.construction,
+        )
+        if at in chosen
+        else element
+        for at, element in enumerate(sketch.elements)
+    )
+    return replace(sketch, elements=elements)
+
+
 def mirror(sketch: Sketch, indices: tuple[int, ...], axis: str) -> Sketch:
     """Spiegelt die gewählten Elemente an einer der beiden Achsen.
 
