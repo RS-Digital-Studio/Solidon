@@ -136,23 +136,56 @@ jobs:
         # Exit 139). Dieselbe Datei allein: dreimal grün, 103 Tests. Je
         # Fensterdatei ein Prozess: 4021 Tests grün, kein Absturz. Es ist die
         # Zahl der Fenster und nichts an einem einzelnen Test.
+        #
+        # **`shell: bash` ist keine Formalie.** Ohne die Zeile führt Windows
+        # dieses Skript in PowerShell aus, und die zerbricht an der ersten
+        # Ersetzung: „$(subexpression) is missing the closing ')'". Der Schritt
+        # endete dort nach zwei Minuten mit einem ParserError — auf Windows lief
+        # seit der Umstellung auf Xvfb **kein einziger Test**, und weil
+        # `package` an dieser Suite hängt, wurde auch nie etwas paketiert. Auf
+        # macOS scheiterte derselbe Aufruf an `xvfb-run`, das es dort nicht
+        # gibt. Beides fiel nicht auf, weil die Matrix nur bei Tags und beim
+        # Handstart über eine Plattform hinausgeht.
+        shell: bash
         env:
-          QT_QPA_PLATFORM: xcb
+          # Unter Xvfb läuft Qt normal; wo es keinen X-Server gibt, muss
+          # offscreen stehen. Hier stand „xcb" für alle drei — eine Plattform,
+          # die es außerhalb von Linux nicht gibt.
+          QT_QPA_PLATFORM: ${{ runner.os == 'Linux' && 'xcb' || 'offscreen' }}
         run: |
           set -e
           windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
           ignores=""
           for file in $windowed; do ignores="$ignores --ignore=$file"; done
-          run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
+          # Xvfb nur, wo es eines gibt.
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
+          else
+            run() { python -m pytest -q "$@"; }
+          fi
+          # `--forked` gibt es nur auf POSIX. Unter Windows tut es der eigene
+          # Prozess je Datei — der Absturz hängt an der Zahl der VTK-Fenster in
+          # *einem* Prozess, und die bleibt so ebenfalls klein.
+          if [ "$RUNNER_OS" = "Windows" ]; then forked=""; else forked="--forked"; fi
           run -m "not performance" $ignores
           for file in $windowed; do
             echo "::group::$file"
-            # Je Test ein eigener Prozess (`--forked`, nur auf POSIX möglich).
-            # Ein Fenster darf hier weder sterben noch bleiben: zerstören nimmt
-            # VTKs Zustand mit, ansammeln füllt den Speicher — beides gemessen.
-            # Ein Fork löst beides, weil er mit dem Test endet; und stirbt einer
-            # doch, meldet pytest ihn als Fehler, statt den Lauf abzureißen.
-            run -m "not performance" --forked "$file"
+            # Je Test ein eigener Prozess. Ein Fenster darf hier weder sterben
+            # noch bleiben: zerstören nimmt VTKs Zustand mit, ansammeln füllt
+            # den Speicher — beides gemessen. Ein Fork löst beides, weil er mit
+            # dem Test endet; und stirbt einer doch, meldet pytest ihn als
+            # Fehler, statt den Lauf abzureißen.
+            #
+            # **Ohne ResourceWarning als Fehler, und nur hier:**
+            # `pytest-forked` legt für jeden Fork ein Temp-Verzeichnis mit
+            # `stdout` und `stderr` an und schließt beide nicht.
+            # `filterwarnings = ["error"]` machte daraus hunderte Fehler in
+            # Dateien, die mit offenen Dateien nichts zu tun haben — der ganze
+            # Tag-Lauf scheiterte daran. Die Ausnahme gilt dem geforkten Lauf,
+            # nicht der Suite: Ein eigenes Leck fiele im großen Lauf darüber
+            # weiter auf. Sie fällt weg, sobald `--forked` durch etwas ersetzt
+            # wird, das seine Rohre selbst schließt.
+            run -m "not performance" $forked -W "ignore::ResourceWarning" "$file"
             echo "::endgroup::"
           done
 
