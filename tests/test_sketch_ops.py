@@ -376,11 +376,31 @@ def test_a_rod_that_did_not_close_is_refused_instead_of_handed_over() -> None:
     assert raised.value.suggestions
 
 
-def test_a_thread_too_fine_for_its_diameter_is_refused() -> None:
-    """Dieselbe Prüfung von der anderen Seite: eine feine Steigung auf einem
-    großen Durchmesser ergibt neunzehn Bruchstücke."""
-    with pytest.raises(AppError):
-        run("thread_exact", diameter=10.0, pitch=0.25, length=12.0)
+def test_a_fine_pitch_yields_a_sound_rod_and_a_tight_mesh() -> None:
+    """Eine feine Steigung auf einem großen Durchmesser — der schwerste Fall.
+
+    Hier stand die Erwartung, dass er abgelehnt wird: „ergibt neunzehn
+    Bruchstücke". Beides ist überholt. Der Sockel im Kern hat die
+    Durchdringung so tief gemacht wie den Gang hoch, und die Vernetzung folgt
+    seit dem 20.08.2026 der Steigung statt einer festen Feinheit.
+
+    Geprüft wird deshalb beides, und zwar getrennt: der **Körper** (geschlossen,
+    ein Stück, Volumen zwischen Kern und Hülle) und sein **Netz**. Ein
+    Viertelmillimeter Steigung war genau der Fall, in dem die
+    Standardfeinheit von 0,05 mm die Flanke aufriss — der Körper trug den
+    STEP-Export, das STL daneben hatte Löcher. Zwei Fragen an zwei Dinge, und
+    bis dahin beantwortete eine Prüfung sie beide falsch.
+    """
+    body = solid_of(run("thread_exact", diameter=10.0, pitch=0.25, length=12.0))
+
+    ridge = 0.6134 * 0.25
+    core = math.pi * (10.0 / 2.0 - ridge) ** 2 * 12.0
+    hull = math.pi * 5.0**2 * 12.0
+
+    assert body.is_closed, "die Hülle ist offen"
+    assert body.solid_count == 1, f"{body.solid_count} Körper statt einem"
+    assert core <= body.volume <= hull, f"{body.volume:.1f} mm³ liegt nicht zwischen Kern und Hülle"
+    assert body.is_watertight, "der Körper trägt, sein Netz nicht — das STL bekäme Löcher"
 
 
 def test_a_thread_keeps_the_diameter_it_was_asked_for() -> None:

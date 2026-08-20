@@ -118,6 +118,48 @@ class Solid:
         return float(self._properties("surface").Mass())
 
     @property
+    def is_closed(self) -> bool:
+        """Ob die Hülle geschlossen ist — gefragt an der Form, nicht an den
+        Dreiecken.
+
+        **Der Unterschied ist kein feiner.** :attr:`is_watertight` unten
+        beantwortet dieselbe Frage über das vertesselte Netz, also über eine
+        Näherung, die je nach Plattform anders ausfällt. Ein Gewindebolzen kam
+        auf dem macOS-Runner mit richtigem Volumen und als ein Stück heraus
+        und galt trotzdem als undicht: Die Vernetzung der Gewindeflanke ritzte
+        dort, der Körper war tadellos. Die Operation sagte darauf „Aus diesem
+        Durchmesser und dieser Steigung entsteht kein geschlossener Bolzen" —
+        eine Absage über etwas, das gelungen war.
+
+        Wer wissen will, ob ein Körper trägt (Export nach STEP, weitere
+        Operationen), fragt hier. Wer wissen will, ob die **Dreiecke** dicht
+        sind (STL, Schichtanalyse), fragt :attr:`is_watertight` — beides sind
+        richtige Fragen, nur zu verschiedenen Dingen.
+        """
+        from OCP.ShapeAnalysis import ShapeAnalysis_Shell
+
+        checker = ShapeAnalysis_Shell()
+        checker.LoadShells(self.shape)
+        checker.CheckOrientedShells(self.shape)
+        return not checker.HasFreeEdges()
+
+    @property
+    def solid_count(self) -> int:
+        """Wie viele Körper die Form trägt — topologisch gezählt.
+
+        Das Gegenstück zu :attr:`component_count`, das die Dreiecke zählt.
+        Zwei Körper, die sich berühren, ohne sich zu durchdringen, sind hier
+        zwei — und im Netz je nach Vernetzung eines.
+        """
+        from OCP.TopAbs import TopAbs_SOLID
+        from OCP.TopExp import TopExp
+        from OCP.TopTools import TopTools_IndexedMapOfShape
+
+        found = TopTools_IndexedMapOfShape()
+        TopExp.MapShapes_s(self.shape, TopAbs_SOLID, found)
+        return int(found.Extent())
+
+    @property
     def face_count(self) -> int:
         return len(self.faces())
 

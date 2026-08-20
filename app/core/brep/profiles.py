@@ -15,7 +15,7 @@ import math
 from collections.abc import Callable
 from typing import Any, Final
 
-from app.core.brep.kernel import Solid, require
+from app.core.brep.kernel import DEFLECTION, Solid, require
 from app.core.errors import PROGRAMMING_ERRORS, Action, GeometryError, ValidationError
 from app.core.log import get_logger
 from app.core.sketch.profile import Profile
@@ -432,6 +432,18 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
         raise GeometryError(detail=_("Aus dieser Steigung entsteht kein Gewindegang.")) from problem
 
+    # **Die Vernetzung folgt der Steigung.** Die Standardfeinheit (0,05 mm)
+    # ist für einen Gewindegang von einem Viertelmillimeter zu grob: Der Körper
+    # kommt geschlossen heraus, sein Netz aber mit Ritzen an der Flanke — und
+    # damit wäre der STL-Export löchrig, während STEP stimmt. Gemessen an M10
+    # mit 0,25 mm Steigung, und auf dem macOS-Runner an M6 mit einem
+    # Millimeter, wo dieselbe Standardfeinheit anders rundet.
+    #
+    # Ein Zwanzigstel der Steigung ist die Grenze, unterhalb derer die Flanke
+    # in Dreiecken aufgeht; feiner als nötig wird nicht vernetzt, denn jede
+    # Halbierung vervierfacht die Dreiecke.
+    fineness = min(DEFLECTION, pitch / 20.0)
+
     slab = Solid(BRepPrimAPI_MakeCylinder(major / 2.0 + 1.0, length).Shape())
     trimmed = _fuzzy_boolean("intersection", ridge_solid, slab)
     core = Solid(BRepPrimAPI_MakeCylinder(core_radius, length).Shape())
@@ -441,7 +453,11 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     # Vereinigung.
     if not _is_sound_rod(trimmed):
         _log.info("thread rod: the trimmed ridge is already unsound (%s)", _rod_state(trimmed))
-    return _joined_rod(core, trimmed, major, pitch)
+    rod = _joined_rod(core, trimmed, major, pitch)
+    # Die Feinheit gilt dem Ergebnis, und sie wird einmal gesetzt: Jede
+    # Zwischenstufe damit zu vernetzen wäre Arbeit für Dreiecke, die niemand
+    # sieht.
+    return Solid(rod.shape, deflection=fineness)
 
 
 #: Wie grob die späteren Vereinigungen eines Gewindes sein dürfen, als Anteil
@@ -569,8 +585,18 @@ def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
 
 def _is_sound_rod(solid: Solid) -> bool:
     """Ob dieser Bolzen etwas ist, das man weiterreichen kann: Volumen,
-    geschlossen, ein Stück."""
-    return solid.volume > EPS_GEOM and solid.is_watertight and solid.component_count == 1
+    geschlossen, ein Stück.
+
+    **Gefragt wird der Körper, nicht sein Netz.** Hier standen
+    ``is_watertight`` und ``component_count``, und beide beantworten die Frage
+    über die Dreiecke — also über eine Näherung, die je nach Plattform anders
+    ausfällt. Auf dem macOS-Runner kam M6 mit richtigem Volumen und als ein
+    Stück heraus und galt trotzdem als undicht, weil die Vernetzung der
+    Gewindeflanke dort ritzte; die Absage traf einen Bolzen, der gelungen war.
+    Ob die Dreiecke dicht sind, ist eine eigene Frage — sie gehört zum
+    STL-Export und nicht zu der, ob die Vereinigung geklappt hat.
+    """
+    return solid.volume > EPS_GEOM and solid.is_closed and solid.solid_count == 1
 
 
 def _rod_state(solid: Solid) -> str:
