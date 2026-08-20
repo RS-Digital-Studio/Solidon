@@ -39,9 +39,16 @@ _ON_SELECTION = "#1c2026"
 #: steht. Der lauteste Knopf der Anwendung war also der einzige ohne Rückmeldung.
 #:
 #: Der Wert ist in beiden Themen derselbe, weil der Ruhezustand es auch ist:
-#: 1,78 Unterschied zum Bernstein — deutlich zu sehen —, und die dunkle Schrift
-#: darauf hält 4,47.
-_SELECTION_PRESSED = "#c37210"
+#: 1,76 Unterschied zum Bernstein — deutlich zu sehen —, und die dunkle Schrift
+#: darauf hält 4,50.
+#:
+#: Die letzte Stelle ist Absicht. Hier stand ``#c37210``, und damit hielt die
+#: Schrift 4,466 — unter den 4,5, die dieselbe Suite an jeder anderen Textfläche
+#: verlangt, und zwar auf dem lautesten Knopf der Anwendung. Ein Schritt heller
+#: im Grün bringt 4,502; gekostet hat es 0,013 des Unterschieds zum Bernstein,
+#: und mehr ist bei 4,5 Schriftkontrast nicht zu haben (gerechnet über den
+#: ganzen Farbraum: 1,763 ist das Maximum).
+_SELECTION_PRESSED = "#c37310"
 
 #: Die Kante, mit der ein *bleibender* Zustand markiert wird — der aktive
 #: Reiter, der offene Abschnitt.

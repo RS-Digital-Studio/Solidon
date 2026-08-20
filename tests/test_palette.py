@@ -129,6 +129,26 @@ def test_the_selection_bar_carries_readable_text() -> None:
         assert ratio >= 4.5, f"{name}: Auswahlbalken trägt nur {ratio:.2f} Kontrast"
 
 
+def test_a_pressed_button_keeps_its_label_readable() -> None:
+    """Gedrückt ist auch ein Zustand, und die Beschriftung ist auch dann Text.
+
+    Der gedrückte Bernstein kam mit 4,466 herein — knapp unter den 4,5, die
+    dieselbe Suite an jeder anderen Textfläche verlangt, und das auf dem
+    lautesten Knopf der Anwendung. „Knapp" ist keine Schwelle: Es gibt eine,
+    und die gilt für jede Fläche, die Text trägt. Ein Schritt heller im Grün
+    genügte.
+    """
+    from app.ui.theme import THEMES
+
+    for name, theme in THEMES.items():
+        ratio = contrast_ratio(theme["highlight_pressed"], theme["highlight_text"])
+        assert ratio >= 4.5, f"{name}: der gedrückte Knopf trägt nur {ratio:.3f} Kontrast"
+        # Und er bleibt vom Ruhezustand zu unterscheiden — sonst wäre die
+        # Rückmeldung wieder weg, für die die Farbe überhaupt entstanden ist.
+        apart = contrast_ratio(theme["highlight"], theme["highlight_pressed"])
+        assert apart >= 1.7, f"{name}: gedrückt sieht aus wie losgelassen ({apart:.3f})"
+
+
 def test_a_legend_field_carries_readable_text_on_every_step() -> None:
     """Die Schrift auf einem Farbfeld wird gerechnet, nicht geschätzt.
 
