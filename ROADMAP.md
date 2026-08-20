@@ -6973,3 +6973,39 @@ eigene Konfigurationsdatei in der 3MF läse.
 
 Der 3MF-Weg zu ElegooSlicer wurde mitgeprüft und ist in Ordnung: geschrieben,
 geöffnet, gerechnet, und die Gegenprobe meldet keine Abweichung.
+## Die Werkzeugleiste zeigt nur noch Zeichen (20.08.2026)
+
+Auf Wunsch: die Leiste über dem Fenster trägt keine Beschriftungen mehr. Sieben
+beschriftete Knöpfe brauchten 703 Pixel und drängten die Kopfzeile mit Projekt,
+Maßen, Drucker und Material an den rechten Rand; ohne Text sind es 310.
+
+Die Werkzeugzeile **unter** dem Viewport bleibt beschriftet. Der Unterschied
+steht jetzt in `.claude/rules/oberflaeche.md`: Ein Zeichen darf allein stehen,
+wenn es entweder ein geeinigtes Bild ist (Linie, Kreis, Diskette) oder die Zahl
+klein und die Stelle fest bleibt. Acht Umschalter, die mit dem Zustand
+wechseln, sind weder das eine noch das andere.
+
+Drei Dinge, die daran hingen und beim Nachlesen aufgefallen sind:
+
+- **Der Hinweis am Knopf war die stille Voraussetzung.** `_lock_hint` stellt
+  den eigenen Hinweis aus dem `statusTip` wieder her — *Modell einfügen* und
+  *Zeichnen* hatten gar keinen, und nach dem Freischalten wäre der Knopf ohne
+  jede Auskunft dagestanden. Zwei Tests halten das jetzt fest.
+- **Der Grund verdrängte den Namen.** `_lock_hint` und `_pick_hint` ersetzen
+  den Hinweis vollständig; am beschrifteten Knopf war das folgenlos, am
+  unbeschrifteten blieben ein Bild und ein zusammenhangloser Satz. `_with_name`
+  stellt den Namen voran, getrennt mit Doppelpunkt — der Sperrgrund führt
+  selbst einen Gedankenstrich.
+- **Der Tooltip war ärmer als das Menü.** Er trug nur das Wort, während der
+  Menüeintrag derselben Handlung längst „Ein gespeichertes Projekt öffnen
+  (.p3d)." und sein Kürzel führt. `_button_tip` holt beides von dort, statt
+  einen zweiten Satz danebenzustellen, der wegdriftet.
+
+Nachgezogen: Handbuch (Kapitel *Das Fenster*, *Zeichnen* und *Die vier Wege*),
+Tour Weg 4 — sie schickte den Anfänger „auf Formen" und hat `done=`-Bedingungen,
+hängt also, wenn er das Wort sucht —, die fünf Sprachkataloge und die
+Bildschirmfotos aller sechs Sprachen samt Handbuchseiten und Website.
+
+Offen: Ob die Leiste auf Dauer bei sieben Knöpfen bleibt. Der zweite Grund
+(„wenige, feste Stelle") trägt nicht beliebig weit; ein achter oder neunter
+Knopf nimmt ihn weg, und dann ist die Beschriftung wieder fällig.

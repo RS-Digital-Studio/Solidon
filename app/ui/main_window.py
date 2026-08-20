@@ -1244,21 +1244,24 @@ class MainWindow(QMainWindow):
         Datei und Hilfe bleiben — Öffnen, Beenden, Handbuch und Freischalten
         sind genau dort sinnvoll."""
         file_menu = self._menu(tr("Datei"))
-        self._add_action(
+        # Festgehalten, nicht weil das Menü sie bräuchte, sondern weil die
+        # Werkzeugleiste ihren Satz und ihr Kürzel übernimmt: derselbe Knopf
+        # soll nicht zwei Erklärungen haben, die auseinanderdriften.
+        self.new_action = self._add_action(
             file_menu,
             tr("Neu"),
             QKeySequence.StandardKey.New,
             self.action_new,
             tr("Zum Startbildschirm: leeres Projekt, ein Beispiel, oder zuletzt Geöffnetes."),
         )
-        self._add_action(
+        self.open_action = self._add_action(
             file_menu,
             tr("Öffnen …"),
             QKeySequence.StandardKey.Open,
             self.action_open,
             tr("Ein gespeichertes Projekt öffnen (.p3d)."),
         )
-        self._add_action(
+        self.save_action = self._add_action(
             file_menu,
             tr("Speichern"),
             QKeySequence.StandardKey.Save,
@@ -1751,34 +1754,56 @@ class MainWindow(QMainWindow):
         # Zeichenwerkzeuge). Der Name bleibt am ``QAction`` und damit im
         # Barrierefreiheitsbaum.
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        for symbol, label, slot in (
-            ("new", tr("Neu"), self.action_new),
-            ("open", tr("Öffnen"), self.action_open),
-            ("save", tr("Speichern"), self.action_save),
-            ("import", tr("Modell einfügen"), self.action_import),
+        # Vier der sieben haben ein Menüpendant; von ihm kommen Satz und
+        # Kürzel (``source``). Die drei anderen gibt es nur hier und tragen
+        # ihren Satz selbst.
+        for symbol, label, slot, source, own_hint in (
+            ("new", tr("Neu"), self.action_new, self.new_action, ""),
+            ("open", tr("Öffnen"), self.action_open, self.open_action, ""),
+            ("save", tr("Speichern"), self.action_save, self.save_action, ""),
+            ("import", tr("Modell einfügen"), self.action_import, self.import_action, ""),
             # Weg 2 aus §2.2 bekommt seinen vorgesehenen Platz: die
             # Hauptwege-Tabelle nennt für „neu konstruieren" ausdrücklich die
             # Werkzeugzeile — belegt war er nie, und das Zeichnen lag drei
             # Ebenen tief im Menü. Erst zeichnen, die Erzeugungsart kommt bei
             # „Fertig".
-            ("category.sketch", tr("Zeichnen"), self.action_sketch_free),
+            (
+                "category.sketch",
+                tr("Zeichnen"),
+                self.action_sketch_free,
+                None,
+                tr("Ein Profil zeichnen; was daraus wird, fragt der Dialog bei „Fertig“."),
+            ),
             # Und Weg 4 daneben. Beide lagen unter *Ändern → Netz* zwischen
             # Reparaturwerkzeugen, ohne Kürzel — die Hauptwege-Tabelle nennt
             # für „organisch formen" die Werkzeugzeile, und die untere ist mit
             # acht Umschaltern voll. Der Menüeintrag bleibt, wo er war: Palette
             # und Verlauf führen über ihn.
-            ("sculpt", tr("Formen"), self.action_sculpt_free),
-            ("armature", tr("Skelett"), self.action_armature_free),
+            (
+                "sculpt",
+                tr("Formen"),
+                self.action_sculpt_free,
+                None,
+                tr("Einen gewählten Körper mit dem Pinsel auf- und abtragen."),
+            ),
+            (
+                "armature",
+                tr("Skelett"),
+                self.action_armature_free,
+                None,
+                tr("Knochen in einen gewählten Körper setzen und ihn danach beugen."),
+            ),
         ):
             action = QAction(icon(symbol, toolbar), label, self)
             action.triggered.connect(slot)
             # Ohne Beschriftung am Knopf ist der Tooltip die Stelle, an der
-            # der Name steht; dieselbe Angabe gehört in die Statusleiste
-            # (§2 C). Der ``statusTip`` ist zugleich das, woraus
-            # ``_lock_hint`` den eigenen Hinweis wiederherstellt — ohne ihn
-            # bliebe der Knopf nach dem Freischalten stumm.
-            action.setToolTip(label)
-            action.setStatusTip(label)
+            # Name, Kürzel und Zweck gelesen werden; dieselbe Angabe gehört in
+            # die Statusleiste (§2 C). Der ``statusTip`` ist zugleich das,
+            # woraus ``_lock_hint`` den eigenen Hinweis wiederherstellt — ohne
+            # ihn bliebe der Knopf nach dem Freischalten stumm.
+            tip = self._button_tip(label, source, own_hint)
+            action.setToolTip(tip)
+            action.setStatusTip(tip)
             # Merkzettel für ``_with_name``: dieser Knopf zeigt seinen Namen
             # nicht selbst.
             action.setProperty("wordless", True)
@@ -1794,25 +1819,8 @@ class MainWindow(QMainWindow):
             if symbol == "armature":
                 self._toolbar_armature = action
 
-        for action, hint in (
-            (
-                self._toolbar_sculpt,
-                tr("Einen gewählten Körper mit dem Pinsel auf- und abtragen."),
-            ),
-            (
-                self._toolbar_armature,
-                tr("Knochen in einen gewählten Körper setzen und ihn danach beugen."),
-            ),
-        ):
-            # Der Satz sagt, was der erste Handgriff ist — dieselbe Zusage, die
-            # `test_interface_limits` für die untere Werkzeugzeile hält. Der
-            # Name steht davor, seit der Knopf ihn nicht mehr trägt.
-            tip = f"{action.text()} — {hint}"
-            action.setStatusTip(tip)
-            action.setToolTip(tip)
-
-        # Rechts neben den vier Knöpfen stand tausend Pixel nichts. Dort steht
-        # jetzt, was das Projekt gerade ist und worauf es gedruckt wird —
+        # Rechts neben den sieben Knöpfen stand die halbe Leiste leer. Dort
+        # steht jetzt, was das Projekt gerade ist und worauf es gedruckt wird —
         # Angaben, die jede Toleranz im Stapel bestimmen (§12) und für die man
         # bisher einen Dialog öffnen musste.
         self.header = HeaderBar(toolbar)
@@ -2131,6 +2139,28 @@ class MainWindow(QMainWindow):
         return None
 
     @staticmethod
+    def _button_tip(label: str, source: QAction | None, own_hint: str) -> str:
+        """Was am unbeschrifteten Knopf steht: Name, Kürzel, Zweck.
+
+        Der Zweck kommt aus dem Menüeintrag derselben Handlung, wenn es einen
+        gibt — er ist dort schon geschrieben und übersetzt, und zwei Sätze für
+        einen Knopf driften auseinander. Das Kürzel steht dabei: Es ist die
+        Stelle, an der man es nebenbei lernt, wie in der Werkzeugzeile unten
+        und im Skizzeneditor.
+        """
+        text = label
+        if source is not None:
+            key = source.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+            if key:
+                text = f"{label}  ({key})"
+        sentence = own_hint or (source.statusTip() if source is not None else "")
+        # Gedankenstrich hier, Doppelpunkt in ``_with_name``: jeder Trenner
+        # dort, wo der Satz dahinter ihn nicht schon selbst führt. „Zum
+        # Startbildschirm: leeres Projekt …" mit einem zweiten Doppelpunkt
+        # davor liest sich wie zwei Aufzählungen ineinander.
+        return f"{text} — {sentence}" if sentence else text
+
+    @staticmethod
     def _with_name(action: QAction, reason: str) -> str:
         """Der Grund, dem Namen des Knopfes vorangestellt — aber nur dort, wo
         der Knopf ihn nicht selbst zeigt.
@@ -2140,8 +2170,12 @@ class MainWindow(QMainWindow):
         überschreibt, lässt ein Bild und einen Satz zurück, die nichts
         miteinander zu tun scheinen. Im Menü steht der Name daneben — dort
         bleibt der Grund allein.
+
+        Getrennt wird mit Doppelpunkt und nicht mit Gedankenstrich: Der
+        Sperrgrund führt selbst einen, und zwei in einem Satz sagen nicht mehr,
+        welcher die Gliederung trägt.
         """
-        return f"{action.text()} — {reason}" if action.property("wordless") else reason
+        return f"{action.text()}: {reason}" if action.property("wordless") else reason
 
     def _pick_hint(self, action: QAction, ready: bool, locked: bool) -> None:
         """Sagt am ausgegrauten Knopf, dass ihm die Auswahl fehlt.

@@ -90,21 +90,35 @@ Wer eine Zahl erhöhen will, tut das mit Absicht und begründet es im Commit.
 Die Werkzeugzeile ist voll: Ein neuntes Werkzeug heißt, dass eines der acht
 kein Werkzeug mehr ist.
 
-**Ein Zeichen trägt allein, wo die Welt sich auf das Bild geeinigt hat — sonst
-steht das Wort daneben.** Die obere Werkzeugleiste zeigt nur Zeichen (Blatt,
-Ordner, Diskette; `ToolButtonIconOnly`), der Skizzeneditor auch (Linie, Kreis,
-Bogen). Die Werkzeugzeile unter dem Viewport bleibt beschriftet: für „Schnitt"
-und „Explosion" gibt es dieses Bild nicht, und ein geratenes Zeichen ist
-schlechter als ein gelesenes Wort. Regel 18 verlangt eine zweite Kodierung
-neben der **Farbe**, nicht eine Beschriftung neben jedem Zeichen.
+**Ein Zeichen darf allein stehen, wenn es entweder ein geeinigtes Bild ist
+oder die Zahl klein und die Stelle fest bleibt.** Der Skizzeneditor lebt vom
+ersten Fall: Linie, Kreis und Bogen sehen in jedem CAD gleich aus. Die obere
+Werkzeugleiste vom zweiten — Blatt, Ordner und Diskette sind geeinigt, „Modell
+einfügen", „Zeichnen", „Formen" und „Skelett" nicht; was sie trägt, sind
+sieben Knöpfe an unveränderlicher Position mit einem Tooltip, der Namen,
+Kürzel und Zweck in einem Satz nennt. Die Werkzeugzeile unter dem Viewport
+bleibt beschriftet: acht Umschalter, die mit dem Zustand wechseln, und für
+„Schnitt" und „Explosion" gibt es kein Bild. Regel 18 verlangt eine zweite
+Kodierung neben der **Farbe**, nicht eine Beschriftung neben jedem Zeichen.
 
 Wo das Wort vom Knopf verschwindet, muss es an drei Stellen weiterstehen: am
-`QAction` (Barrierefreiheitsbaum), im Tooltip und im `statusTip`. Der
-`statusTip` ist nicht nur Anzeige — `_lock_hint` und `_pick_hint` stellen den
-eigenen Hinweis daraus wieder her, und ein ungesetzter macht den Knopf nach dem
+`QAction` (Barrierefreiheitsbaum), im Tooltip und im `statusTip`. Den Satz
+dafür holt `_button_tip` aus dem Menüeintrag derselben Handlung, samt Kürzel —
+zwei eigene Erklärungen für einen Knopf driften auseinander. Der `statusTip`
+ist dabei nicht nur Anzeige: `_lock_hint` und `_pick_hint` stellen den eigenen
+Hinweis daraus wieder her, und ein ungesetzter macht den Knopf nach dem
 Freischalten stumm. Beide Helfer ersetzen den Hinweis vollständig; damit am
 unbeschrifteten Knopf nicht ein Bild und ein zusammenhangloser Satz übrig
 bleiben, stellt `_with_name` den Namen voran (Merkmal `wordless` am `QAction`).
+Getrennt wird mit dem Zeichen, das der Satz dahinter **nicht** schon führt:
+Gedankenstrich vor dem Zweck, Doppelpunkt vor einem Grund, der selbst einen
+Gedankenstrich hat.
+
+**Wer eine Beschriftung ausblendet, zieht die Anleitungstexte mit.** Handbuch
+(`app/core/manual.py`) und Tour (`app/core/tour.py`) verweisen auf Knöpfe beim
+Namen; steht der Name nicht mehr am Knopf, sucht der Leser. Die Tour wiegt
+schwerer als das Handbuch — ihre Schritte haben `done=`-Bedingungen und rücken
+nicht weiter.
 
 **Eine Operation je Handlung, nicht je Variante.** Neun Texturmuster sind ein
 Menüeintrag mit einem Auswahlparameter, nicht neun Einträge. Rechteck aus zwei

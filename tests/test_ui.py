@@ -1707,6 +1707,54 @@ def test_the_toolbar_buttons_carry_a_symbol_and_keep_their_words(
         assert action.text() in action.statusTip(), f"{action.text()} ohne Namen in der Zeile"
 
 
+def test_a_wordless_button_keeps_its_name_in_front_of_every_reason(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Grund verdrängt den Zweck — den Namen darf er nicht verdrängen.
+
+    Beide Helfer, die einen Hinweis überschreiben, sind vertreten: die Sperre
+    nach abgelaufenem Testzeitraum (``_lock_hint``) und die fehlende Auswahl
+    (``_pick_hint``). Ohne ``_with_name`` bliebe am Knopf ein Bild und ein Satz,
+    die nichts miteinander zu tun haben.
+    """
+    _expired(monkeypatch)
+    window = MainWindow(Session(), UiSettings())
+
+    assert window._toolbar_import.toolTip().startswith("Modell einfügen")
+    assert "Lizenzschlüssel" in window._toolbar_import.toolTip()
+    # Der Sperrgrund führt selbst einen Gedankenstrich; ein zweiter davor
+    # nähme dem ersten die Gliederung.
+    assert "—" not in window._toolbar_import.toolTip().split(":")[0]
+
+    from app.core import activation
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=99))
+    window._update_actions()
+
+    assert window._toolbar_sculpt.toolTip().startswith("Formen")
+    assert "ausgewählten Körper" in window._toolbar_sculpt.toolTip()
+    # Und im Menü, wo der Name danebensteht, bleibt der Grund allein.
+    assert not window.import_action.toolTip().startswith("Modell einfügen …")
+
+
+def test_a_wordless_button_says_what_it_does_and_which_key(qt_app: QApplication) -> None:
+    """Fund aus der Durchsicht: der Tooltip trug nur das Wort.
+
+    Er ist die einzige Erklärstelle, seit die Beschriftung fort ist — also
+    steht dort, was der Menüeintrag derselben Handlung sagt, samt Kürzel. Der
+    Satz wird nicht abgeschrieben, sondern von der Menü-Action geholt; zwei
+    Fassungen desselben Satzes driften auseinander.
+    """
+    window = MainWindow(Session(), UiSettings())
+
+    tip = window._toolbar_import.toolTip()
+    assert window.import_action.statusTip() in tip, "der Satz kommt aus dem Menüeintrag"
+    assert "Ctrl+I" in tip or "Strg+I" in tip, "und das Kürzel steht dabei"
+
+    # Die drei ohne Menüpendant tragen ihren eigenen Satz — leer wäre keiner.
+    assert len(window._toolbar_sketch.toolTip()) > len("Zeichnen")
+
+
 # --- Die Aufräumrunde -----------------------------------------------------------
 
 
@@ -4182,6 +4230,7 @@ def test_entering_a_key_puts_everything_back(
     _expired(monkeypatch)
     window = MainWindow(Session(), UiSettings())
     hint_before = str(window.import_action.property("tip_before_lock"))
+    toolbar_hint_before = str(window._toolbar_import.property("tip_before_lock"))
 
     licence = key.Licence(
         major=key.current_major(),
@@ -4196,6 +4245,11 @@ def test_entering_a_key_puts_everything_back(
     assert window.import_action.isEnabled()
     assert window.generate_action.isEnabled()
     assert window.import_action.statusTip() == hint_before
+    # Und am Knopf ohne Beschriftung: der trug vor der symbolfreien Leiste gar
+    # keinen ``statusTip``, und ``_lock_hint`` stellte nach dem Freischalten
+    # einen leeren wieder her — ein stummes Bild.
+    assert window._toolbar_import.statusTip() == toolbar_hint_before
+    assert window._toolbar_import.statusTip().startswith("Modell einfügen")
     assert not window.chat.unlock.isVisibleTo(window.chat)
 
 
