@@ -304,3 +304,20 @@ def test_only_files_below_the_website_go_up(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError):
         upload.remote_name(tmp_path / "fremd.html")
+
+
+def test_developer_notes_stay_off_the_public_server() -> None:
+    """``website/README.md`` erklärt, wie die Seiten gebaut sind — 232 Zeilen,
+    die niemand im Netz lesen soll.
+
+    Der Abgleich lud sie brav mit hoch, und sie lag öffentlich da. Was die
+    Regel hält, ist diese Zeile: Was unter ``website/`` liegt und ``.md``
+    heißt, geht nicht hinauf.
+    """
+    import tools.upload_website as upload
+
+    assert not upload.wanted(upload.LOCAL_ROOT / "README.md")
+    assert not upload.wanted(upload.LOCAL_ROOT / "dl" / "Solidon3D-Setup.exe")
+    assert upload.wanted(upload.LOCAL_ROOT / "index.html")
+    assert upload.wanted(upload.LOCAL_ROOT / "bilder" / "schau-skull.webp")
+    assert all(path.suffix != ".md" for path in upload.local_files())

@@ -118,6 +118,57 @@ def files_since(reference: str) -> list[Path]:
     return [ROOT / name for name in result.stdout.split("\n") if name and (ROOT / name).is_file()]
 
 
+def wanted(path: Path) -> bool:
+    """Ob eine lokale Datei überhaupt auf den Server gehört.
+
+    Zwei Ausnahmen, beide mit Grund:
+
+    ``dl/`` trägt die Installationspakete. Sie stehen nicht im Repository
+    (``.gitignore``) und wiegen je Fassung hundert Megabyte; hochgeladen
+    werden sie einmal und nicht bei jedem Abgleich.
+
+    ``.md`` ist Entwicklerdoku. ``website/README.md`` erklärt, wie die Seiten
+    gebaut sind — 232 Zeilen, die niemand im Netz lesen soll und die ein
+    Abgleich sonst brav mit hochlädt. Genau das ist einmal passiert.
+    """
+    relative = path.relative_to(LOCAL_ROOT)
+    return relative.parts[0] != "dl" and path.suffix != ".md"
+
+
+def local_files() -> list[Path]:
+    """Alles, was lokal zur Website gehört."""
+    return sorted(path for path in LOCAL_ROOT.rglob("*") if path.is_file() and wanted(path))
+
+
+def remote_index(session: ftplib.FTP_TLS, root: str) -> dict[str, int]:
+    """Was auf dem Server liegt, mit Größe — rekursiv.
+
+    Der Abgleich ist der Grund, aus dem es dieses Werkzeug gibt: Fünf Bilder
+    der Startseite fehlten dort monatelang, weil beim Hochladen von Hand die
+    Seite mitkam und ihre Bilder nicht. Ein Alternativtext, den niemand lesen
+    soll, stand an ihrer Stelle.
+    """
+    found: dict[str, int] = {}
+
+    def walk(path: str) -> None:
+        try:
+            entries = list(session.mlsd(path, facts=["type", "size"]))
+        except ftplib.error_perm:
+            return
+        for name, facts in entries:
+            if name in (".", ".."):
+                continue
+            kind = facts.get("type", "")
+            full = f"{path}/{name}"
+            if kind == "dir":
+                walk(full)
+            elif kind == "file":
+                found[full[len(root) + 1 :]] = int(facts.get("size", 0))
+
+    walk(root)
+    return found
+
+
 def remote_name(path: Path) -> str:
     """Der Pfad auf dem Server, abgeleitet aus dem lokalen."""
     return path.resolve().relative_to(LOCAL_ROOT).as_posix()
@@ -177,6 +228,11 @@ def main() -> int:
         help="alles nehmen, was sich seit diesem Commit unter website/ geändert hat",
     )
     parser.add_argument(
+        "--fehlend",
+        action="store_true",
+        help="den Serverstand listen und alles laden, was fehlt oder anders groß ist",
+    )
+    parser.add_argument(
         "--vorlage", action="store_true", help=f"{ACCESS_FILE.name} anlegen und aufhören"
     )
     arguments = parser.parse_args()
@@ -188,10 +244,12 @@ def main() -> int:
         files = files_since(arguments.seit)
     elif arguments.geaendert:
         files = changed_files()
+    elif arguments.fehlend:
+        files = []
     else:
         files = [path.resolve() for path in arguments.files]
-    if not files:
-        print("Nichts zu tun. Dateien nennen, --geaendert oder --seit benutzen.")
+    if not files and not arguments.fehlend:
+        print("Nichts zu tun. Dateien nennen, --geaendert, --seit oder --fehlend benutzen.")
         return 1
 
     for path in files:
@@ -201,10 +259,19 @@ def main() -> int:
             raise SystemExit(f"Liegt nicht unter website/: {path}")
 
     access = read_access()
-    print(f"{len(files)} Datei(en) → {access['host']}:{access['root']}")
-
+    root = str(access["root"]).strip("/")
     session = connect(access)
     try:
+        if arguments.fehlend:
+            oben = remote_index(session, "/" + root)
+            files = [
+                path for path in local_files() if oben.get(remote_name(path)) != path.stat().st_size
+            ]
+            print(f"{len(oben)} Dateien oben, {len(files)} davon fehlen oder weichen ab")
+            if not files:
+                print("Der Server hat alles.")
+                return 0
+        print(f"{len(files)} Datei(en) → {access['host']}:{root}")
         for path in files:
             upload(session, access, path)
     finally:
