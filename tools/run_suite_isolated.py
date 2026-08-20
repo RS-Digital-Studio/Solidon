@@ -37,8 +37,8 @@ import sys
 import time
 from pathlib import Path
 
-WURZEL = Path(__file__).resolve().parent.parent
-PYTHON = WURZEL / ".venv" / "Scripts" / "python.exe"
+ROOT = Path(__file__).resolve().parent.parent
+PYTHON = ROOT / ".venv" / "Scripts" / "python.exe"
 
 #: Wie lange eine einzelne Datei laufen darf. Großzügig: ``test_performance``
 #: misst gegen das Budget aus §31 und braucht seine Zeit.
@@ -50,7 +50,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 def chosen_files(patterns: tuple[str, ...]) -> list[Path]:
     """Welche Dateien laufen — alle, oder die, auf die ein Muster passt."""
-    files = sorted((WURZEL / "tests").glob("test_*.py"))
+    files = sorted((ROOT / "tests").glob("test_*.py"))
     if not patterns:
         return files
     return [path for path in files if any(part in path.name for part in patterns)]
@@ -82,7 +82,7 @@ def main() -> int:
                 [str(PYTHON), "-m", "pytest", "-q", str(path)],
                 capture_output=True,
                 text=True,
-                cwd=WURZEL,
+                cwd=ROOT,
                 timeout=BUDGET_SECONDS,
             )
         except subprocess.TimeoutExpired:

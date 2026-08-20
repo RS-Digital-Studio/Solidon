@@ -65,8 +65,10 @@ GERMAN_WORDS = frozenset(
         "szene",
         "teil",
         "tiefe",
+        "vorlage",
         "wand",
         "wert",
+        "wurzel",
         "zahl",
         "zeile",
     }
