@@ -248,11 +248,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Zwei Macs, keine Doppelung: `macos-13` läuft auf Intel, `macos-latest`
-        # auf Apple Silicon. PyInstaller packt, was unter ihm liegt — ein auf
-        # arm64 gebautes Paket startet auf einem Intel-Mac nicht, und das
-        # betrifft jedes Gerät vor 2020.
-        os: [windows-latest, ubuntu-latest, macos-13, macos-latest]
+        # Zwei Macs, keine Doppelung: `macos-15-intel` läuft auf Intel,
+        # `macos-latest` auf Apple Silicon. PyInstaller packt, was unter ihm
+        # liegt — ein auf arm64 gebautes Paket startet auf einem Intel-Mac
+        # nicht, und das betrifft jedes Gerät vor 2020.
+        #
+        # **Hier stand `macos-13`, und das war kein Runner mehr.** Das Image
+        # ist seit dem 04.12.2025 abgeschaltet; ein Job mit diesem Label wird
+        # nicht abgelehnt, sondern **angenommen und nie zugeteilt** — er stand
+        # am 20.08.2026 siebenundzwanzig Minuten in der Warteschlange und wäre
+        # nach dem Sechs-Stunden-Timeout gestorben. Von außen sieht das aus wie
+        # ein langsamer Lauf, nicht wie ein Fehler, und genau deshalb fiel es
+        # nie auf: Der Job kam vorher nie so weit, weil die Suite schon rot war.
+        #
+        # Intel ist auf Abruf: Apple hat x86_64 aufgegeben, GitHub trägt es bis
+        # zur Ausmusterung des 15er-Images (Herbst 2027). Fällt es weg, fällt
+        # die Intel-Fassung — dann sagt die Website das, statt sie anzubieten.
+        os: [windows-latest, ubuntu-latest, macos-15-intel, macos-latest]
     env:
       # Absichtlich auf Job-Ebene: ein Schritt kann den `secrets`-Kontext nicht
       # im eigenen `if` lesen, und sein eigenes `env` dort auch nicht. Dies ist
