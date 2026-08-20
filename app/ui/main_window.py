@@ -4024,8 +4024,14 @@ class MainWindow(QMainWindow):
             return
         self.start_sketch("", text)
 
-    def action_command_palette(self) -> None:
-        """Eine Taste, alles — und die Kürzel lernen sich nebenbei (§2.6)."""
+    def palette_rows(self) -> list[PaletteEntry]:
+        """Was in der Palette steht — Operationen und Fensterbefehle.
+
+        Getrennt von :meth:`action_command_palette`, weil dort ein modaler
+        Dialog aufgeht: Was danach kommt, sieht keine Prüfung mehr, und was
+        eine Prüfung nicht sieht, driftet. Die Kürzelfrage ist genau so
+        entstanden.
+        """
         commands = self.window_commands()
         extra = [
             PaletteEntry(
@@ -4044,12 +4050,29 @@ class MainWindow(QMainWindow):
         # QActions, die `_update_actions` pflegt. Vorher zeigte die Palette
         # jeden Eintrag gleich, und wer einen ohne passende Auswahl wählte,
         # bekam die modale Sackgasse, die das Menü längst beseitigt hat.
+        # **Das Kürzel geht durch die Belegung, wie im Menü.** Der Kern liefert
+        # das Kürzel aus dem Register — er kennt die Belegung nicht und darf es
+        # nicht, sie ist eine Einstellung der Oberfläche. Ungefiltert
+        # weitergereicht lehrte die Palette im Schema „Wie Fusion und Onshape"
+        # drei falsche Tasten (`translate_object` „Strg+T" statt „M") und
+        # verschwieg sieben, die es dort gibt — während der Menüeintrag daneben
+        # die richtige zeigte. Dieselbe Umrechnung wie in `_update_actions`.
         entries = [
-            replace(entry, available=usable, reason=reason)
+            replace(
+                entry,
+                available=usable,
+                reason=reason,
+                shortcut=shortcut_for(entry.name, entry.shortcut, self.settings.shortcut_scheme),
+            )
             for entry in palette_entries(for_feature=self.selected_feature_kind())
             for usable, reason in (self._palette_availability(entry.name),)
         ]
-        palette = CommandPalette([*entries, *extra], parent=self)
+        return [*entries, *extra]
+
+    def action_command_palette(self) -> None:
+        """Eine Taste, alles — und die Kürzel lernen sich nebenbei (§2.6)."""
+        commands = self.window_commands()
+        palette = CommandPalette(self.palette_rows(), parent=self)
         if palette.exec() != CommandPalette.DialogCode.Accepted:
             return
         name = palette.chosen()

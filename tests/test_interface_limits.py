@@ -814,3 +814,37 @@ def test_the_palette_greys_out_what_the_menu_greys_out(window: MainWindow) -> No
     open_keys = [key for key in commands if window._extra_availability(key)[0]]
     assert open_keys, "es kann nicht alles gesperrt sein"
     assert all(not window._extra_availability(key)[1] for key in open_keys)
+
+
+def test_the_palette_teaches_the_keys_of_the_active_scheme(qt_app: QApplication) -> None:
+    """Die Palette zeigte die Tasten des Registers, das Menü daneben die der
+    Belegung.
+
+    Der Kern liefert das Kürzel, das im Register steht — er kennt die Belegung
+    nicht und darf sie nicht kennen, sie ist eine Einstellung der Oberfläche.
+    Ungefiltert weitergereicht lehrte die Palette im Schema „Wie Fusion und
+    Onshape" drei falsche Tasten und verschwieg sieben, die es dort gibt:
+    ``translate_object`` stand auf „Strg+T" statt „M", ``sketch_extrude`` auf
+    gar nichts statt „E". Wer die Palette benutzt, um Tasten zu lernen — und
+    dafür ist sie da (§2.6) —, lernte die falschen.
+    """
+    from app.ui.shortcut_schemes import FUSION, shortcut_for
+
+    window = MainWindow(Session(), UiSettings(shortcut_scheme="fusion"))
+    try:
+        shown = {entry.name: entry.shortcut for entry in window.palette_rows()}
+
+        wrong = {name: (shown[name], key) for name, key in FUSION.items() if shown.get(name) != key}
+        assert not wrong, (
+            f"Die Palette nennt {len(wrong)} Tasten anders als die Belegung: {wrong}. "
+            "Gezeigt wird, was shortcut_for sagt — nicht das rohe Registerkürzel."
+        )
+
+        # Und die Gegenprobe: Was die Belegung nicht anfasst, behält sein
+        # Kürzel aus dem Register. Sonst wäre der Fix eine zweite Wahrheit.
+        for entry in window.palette_rows():
+            expected = shortcut_for(entry.name, entry.shortcut, "fusion")
+            assert entry.shortcut == expected, f"{entry.name}: {entry.shortcut} statt {expected}"
+    finally:
+        window.close()
+        window.deleteLater()

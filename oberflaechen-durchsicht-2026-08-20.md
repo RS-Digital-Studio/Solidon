@@ -107,21 +107,27 @@ andere Parameter), nicht über Code. Wer sie ändert, ändert `tools/make_exampl
 und muss `tests/test_tour.py` mitziehen — die Erkennungswerte der Touren hängen
 daran.
 
-## 4. Ein Kürzelschema nennt falsche Tasten
+## 4. Ein Kürzelschema nannte falsche Tasten — erledigt
 
-Im Schema „Wie Fusion und Onshape" zeigt die Palette Tasten, die dort nicht
-gelten. Heute nachgemessen: **drei** Operationen nennen eine falsche Taste —
-`translate_object` „Strg+T" statt „M", `rotate_object` „Strg+R" statt „R",
-`drill_hole` „Strg+B" statt „H" — und **sieben** nennen keine, obwohl das Schema
-ihnen eine gibt: `chamfer_edges` „C", `fillet_edges` „F", `mirror_object`
-„Strg+M", `pattern` „P", `push_face` „Q", `shell_exact` „S", `sketch_extrude`
-„E". Grund: `palette_entries()` setzt das rohe Registerkürzel, während der
-Menüeintrag es durch `shortcut_for(...)` schickt.
+Im Schema „Wie Fusion und Onshape" zeigte die Palette Tasten, die dort nicht
+gelten: **drei** Operationen nannten eine falsche — `translate_object` „Strg+T"
+statt „M", `rotate_object` „Strg+R" statt „R", `drill_hole` „Strg+B" statt „H" —
+und **sieben** nannten keine, obwohl das Schema ihnen eine gibt: `chamfer_edges`
+„C", `fillet_edges` „F", `mirror_object` „Strg+M", `pattern` „P", `push_face`
+„Q", `shell_exact` „S", `sketch_extrude` „E". Grund: `palette_entries()` setzt
+das rohe Registerkürzel, während der Menüeintrag es durch `shortcut_for(...)`
+schickt.
 
-**Behoben ist nur die Schreibweise** („Del" → „Entf", `91f504a`), nicht die
-Zuordnung. Der Fix ist klein, aber er berührt `palette_entries` und damit den
-Kern: das Schema ist eine Einstellung der Oberfläche, und der Kern kennt sie
-nicht. Wo die Umrechnung hingehört, ist eine Entwurfsfrage.
+**Die Entwurfsfrage hat sich an der Kerntrennung entschieden.** Sie lautete, wo
+die Umrechnung hingehört; die Antwort steht in Regel 1. Das Schema ist eine
+Einstellung der Oberfläche, der Kern kennt sie nicht und darf sie nicht kennen —
+also bleibt `palette_entries()` unberührt und liefert weiter das Register, und
+die Umrechnung steht dort, wo auch das Menü sie hat: im Fenster, das die
+Einstellung führt. Der Aufbau der Palettenzeilen ist dafür aus
+`action_command_palette` in `MainWindow.palette_rows()` herausgezogen — hinter
+dem modalen Dialog sieht keine Prüfung mehr etwas, und genau so ist der Fund
+entstanden. `test_the_palette_teaches_the_keys_of_the_active_scheme` misst jetzt
+alle zehn Tasten gegen die Belegung; ohne den Fix nennt er sie beim Namen.
 
 ## 5. Acht Gebiete sind nie gelaufen
 
