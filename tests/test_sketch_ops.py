@@ -341,18 +341,37 @@ def test_the_thread_pitch_needs_a_core() -> None:
         run("thread_exact", diameter=3.0, pitch=3.0, length=12.0)
 
 
-def test_a_thread_that_did_not_close_is_refused_instead_of_handed_over() -> None:
-    """Der Bolzen entsteht als Vereinigung von Kern und Gang, und die gelingt
-    nicht bei jeder Kombination.
+def test_a_rod_that_did_not_close_is_refused_instead_of_handed_over() -> None:
+    """Ein offener Bolzen wird abgelehnt, nicht herausgegeben.
 
-    Das Schema erlaubt 2 bis 100 mm und 0,25 bis 8 mm Steigung; verlässlich
-    geschlossen ist nur ein Teil davon. Ab 50 mm kam **nie** ein geschlossener
-    Körper heraus, bei 100 mm und 1 mm Steigung sogar einer mit null Volumen
-    und null Komponenten — und keiner sagte etwas. Ein offener B-Rep-Körper
-    trägt keinen STEP-Export und keine weitere Operation.
+    Er trägt weder den STEP-Export noch eine weitere Operation; bei 100 mm und
+    1 mm Steigung kam einmal einer mit null Volumen und null Komponenten
+    heraus, und keiner sagte etwas.
+
+    **Geprüft wird die Zusage, nicht ein Maß.** Hier stand ``diameter=100``,
+    weil ab 50 mm nie ein geschlossener Körper herauskam — seit der Gang einen
+    Sockel im Kern hat, kommt einer, und der Test prüfte damit eine Absage, die
+    es zu Recht nicht mehr gibt. Was bleiben muss, ist die Grenze selbst: Was
+    nicht geschlossen ist, geht nicht hinaus. Also bekommt ``_checked_rod``
+    zwei Zylinder, die einander nicht berühren — zwei Komponenten, wie sie
+    keine Vereinigung der Welt zusammenbringt.
     """
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.brep import profiles
+
+    near = Solid(BRepPrimAPI_MakeCylinder(3.0, 12.0).Shape())
+    far = Solid(
+        BRepPrimAPI_MakeCylinder(
+            gp_Ax2(gp_Pnt(50.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0)), 3.0, 12.0
+        ).Shape()
+    )
+    apart = profiles._fuzzy_boolean("union", near, far)
+    assert apart.component_count == 2, "ohne zwei Stücke prüft dieser Test nichts"
+
     with pytest.raises(AppError) as raised:
-        run("thread_exact", diameter=100.0, pitch=1.5, length=12.0)
+        profiles._checked_rod(apart, 6.0, 1.0)
 
     assert raised.value.suggestions
 
