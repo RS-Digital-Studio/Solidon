@@ -57,6 +57,7 @@ from app.ui.labels import (
     feature_measure,
     feature_name,
     group_title,
+    kind_requirement,
     length,
     localised,
     value_line,
@@ -698,8 +699,27 @@ class ObjectTree(QWidget):
     def operations_for_object(self) -> tuple[Any, ...]:
         """Operationen, die auf einem gewählten Objekt arbeiten — der kürzeste
         Weg vom Sehen zum Tun (§2.6).
+
+        Angeboten werden alle, auch die, die auf dieser Bauart nicht können:
+        Ausgegraut mit Grund steht sie da und sagt, was ihr fehlt — verschwunden
+        ließe sie den Nutzer suchen, wo nichts fehlt (dieselbe Entscheidung wie
+        in der Menüleiste). Welche das sind, entscheidet
+        :meth:`kinds_of_selection` beim Bauen des Menüs.
         """
         return tuple(spec for spec in REGISTRY.all() if spec.consumes == 1)
+
+    def kinds_of_selection(self) -> list[str]:
+        """Die Bauart jedes gewählten Körpers — Netz oder exakt.
+
+        Hier und nicht im Fenster: Der Baum hält die Auswahl **und** die
+        Auswertung, und beide Menüs — die Leiste oben und das Kontextmenü hier —
+        brauchen dieselbe Antwort. Vorher stand die Rechnung im Fenster, und das
+        Kontextmenü fragte niemanden.
+        """
+        if self._result is None:
+            return []
+        objects = self._result.scene.objects
+        return [objects[entry].kind for entry in self.selected_objects() if entry in objects]
 
     def operations_for_feature(self, kind: str) -> tuple[Any, ...]:
         """Was eine Bohrung oder eine Fläche anbietet, direkt aus ``applies_to``
@@ -744,10 +764,12 @@ class ObjectTree(QWidget):
         entries = self.operations_for_feature(kind) if kind else self.operations_for_object()
         if entries:
             menu.addSeparator()
-            self._add_operations(menu, entries)
+            self._add_operations(menu, entries, self.kinds_of_selection())
         return menu
 
-    def _add_operations(self, menu: QMenu, entries: Sequence[Any]) -> None:
+    def _add_operations(
+        self, menu: QMenu, entries: Sequence[Any], kinds: Sequence[str] = ()
+    ) -> None:
         """Die Operationen ins Menü — flach, solange man sie überblickt.
 
         An einem Merkmal sind es eine Handvoll, und die stehen direkt da: der
@@ -762,7 +784,7 @@ class ObjectTree(QWidget):
         """
         if len(entries) <= MAX_MENU_ROWS:
             for spec in entries:
-                self._add_operation(menu, spec)
+                self._add_operation(menu, spec, kinds)
             return
 
         groups: dict[str, list[Any]] = {}
@@ -775,13 +797,24 @@ class ObjectTree(QWidget):
         for title in sorted(groups):
             submenu = QMenu(title, menu)
             for spec in groups[title]:
-                self._add_operation(submenu, spec)
+                self._add_operation(submenu, spec, kinds)
             menu.addMenu(submenu)
 
-    def _add_operation(self, menu: QMenu, spec: Any) -> None:
+    def _add_operation(self, menu: QMenu, spec: Any, kinds: Sequence[str] = ()) -> None:
         action = menu.addAction(str(spec.title))
         action.setStatusTip(str(spec.doc))
         action.setToolTip(str(spec.doc))
+        # **Was auf dieser Bauart nicht geht, sagt es vorher.** Hier stand jede
+        # Operation mit einem Eingang anklickbar da, auch die sieben des exakten
+        # Kerns: Wer am Netz-Körper *Verrunden* wählte, füllte einen Dialog aus
+        # und bekam danach eine Absage — die Sackgasse, die Regel 19 ausschließt
+        # und die die Menüleiste seit je vermeidet. Der Satz kommt aus
+        # ``labels``, damit beide Menüs dasselbe sagen.
+        reason = kind_requirement(spec, kinds)
+        if reason:
+            action.setEnabled(False)
+            action.setStatusTip(reason)
+            action.setToolTip(reason)
         action.triggered.connect(
             lambda _checked=False, entry=spec: self.operationRequested.emit(entry)
         )
@@ -1083,6 +1116,9 @@ class ReportPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._names: Mapping[str, str] = {}
+        self._document: Document | None = None
+        """Nur für die Herkunftszeile im Tooltip — welcher Schritt das gemeldet
+        hat. Der Bericht braucht das Dokument für nichts anderes."""
         """Kennung zu Namen, aus der zuletzt gezeigten Szene."""
         self._alerts = 0
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
@@ -1183,7 +1219,17 @@ class ReportPanel(QWidget):
         self._nothing.setText(str(satz).format(begriff=begriff, stufe=stufe))
         self._nothing.setVisible(True)
 
-    def show_result(self, result: EvaluationResult | None) -> None:
+    def show_result(
+        self, result: EvaluationResult | None, document: Document | None = None
+    ) -> None:
+        # ``document`` nur für die Herkunft im Tooltip: welcher Schritt einen
+        # Befund gemeldet hat. Die Liste sortiert nach Schwere, und damit
+        # stehen Sätze aus verschiedenen Schritten untereinander — bei
+        # ``weg3-generiert-aufbereiten`` liest sich das als Widerspruch:
+        # „Das Modell ist nicht geschlossen." direkt neben „Eine offene Stelle
+        # ist geschlossen und damit fort." Beides stimmt, das eine kommt vom
+        # Einlesen, das andere von der Reparatur — und das stand nirgends.
+        self._document = document
         # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.
         # Sie stehen im Ergebnis, das ohnehin hereinkommt — die Kennung „obj_2"
         # wäre die zweitbeste Antwort auf „welcher denn".
@@ -1295,6 +1341,9 @@ class ReportPanel(QWidget):
         # §22.5: woher eine Zahl kommt, ist Teil des Befunds und wird nie dem
         # Leser zum Annehmen überlassen — eine Schätzung ist keine Messung.
         details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]
+        step = _origin_text(finding.op_id, self._document)
+        if step:
+            details.append(step)
         details.extend(value_line(key, value) for key, value in finding.values.items())
         item.setToolTip(" · ".join(details))
         self.list.addItem(item)

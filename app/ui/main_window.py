@@ -164,7 +164,7 @@ from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
-from app.ui.labels import MENU_GROUPS, demo_line, feature_label, length
+from app.ui.labels import MENU_GROUPS, demo_line, feature_label, kind_requirement, length
 from app.ui.leash import WorkerLeash
 from app.ui.loading import LoadingVeil, remaining_time
 from app.ui.manual_window import ManualWindow
@@ -2056,13 +2056,13 @@ class MainWindow(QMainWindow):
             self._pick_hint(action, ready, locked)
 
     def _kinds_of_selection(self, result: Any) -> list[str]:
-        """Die Bauart jedes gewählten Körpers — Netz oder exakt."""
-        if result is None:
-            return []
-        objects = result.scene.objects
-        return [
-            objects[entry].kind for entry in self.object_tree.selected_objects() if entry in objects
-        ]
+        """Die Bauart jedes gewählten Körpers — Netz oder exakt.
+
+        Gefragt wird der Baum: er hält Auswahl und Auswertung, und sein
+        Kontextmenü braucht dieselbe Antwort. ``result`` bleibt im Aufruf, weil
+        das Fenster hier schon eines in der Hand hat — der Baum hat dasselbe.
+        """
+        return self.object_tree.kinds_of_selection()
 
     def _kind_hint(
         self,
@@ -2125,14 +2125,9 @@ class MainWindow(QMainWindow):
                     count=spec.consumes
                 )
             )
-        if spec.requires_kind and kinds and not all(kind == spec.requires_kind for kind in kinds):
-            return str(
-                tr(
-                    "Diese Operation braucht einen exakten Körper (B-Rep). Exakte Körper "
-                    "kommen aus einer STEP-Datei oder aus den Grundformen mit „Exakt“."
-                )
-            )
-        return None
+        # Der Satz steht in ``labels``: das Kontextmenü am Körper braucht ihn
+        # auch, und zwei Stellen mit derselben Auskunft driften.
+        return kind_requirement(spec, kinds)
 
     def _pick_hint(self, action: QAction, ready: bool, locked: bool) -> None:
         """Sagt am ausgegrauten Knopf, dass ihm die Auswahl fehlt.
@@ -5102,7 +5097,7 @@ class MainWindow(QMainWindow):
             "explode",
             self.explode_bar.show_for(len(result.scene.objects), max(plates, default=0) + 1),
         )
-        self.report.show_result(result)
+        self.report.show_result(result, self.session.project.document)
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_scene(result)

@@ -172,3 +172,46 @@ def test_the_written_documents_count_the_ways_and_examples_right() -> None:
     # die fehlt, ist ein Projekt, von dem der Leser nichts erfährt.
     fehlen = [entry.id for entry in examples.EXAMPLES if f"{entry.id}.p3d" not in readme]
     assert not fehlen, f"Diese Beispiele fehlen in der README-Tabelle: {fehlen}"
+
+
+@pytest.mark.parametrize("example", examples.EXAMPLES, ids=lambda entry: entry.id)
+def test_no_example_ships_a_duplicate_operation_id(example: examples.Example) -> None:
+    """Zwei Operationen mit derselben Kennung zerstören das Projekt beim Undo.
+
+    Gemessen an ``dose-mit-deckel.p3d``, dem Vorzeigebeispiel, aus dem das
+    Handbuchbild stammt: Es trug ``create_lid`` und ``arrange_bed`` beide unter
+    der Kennung 6. Ein Strg+Z nahm **beide** zurück, ein Strg+Y brachte nur
+    ``arrange_bed`` wieder — der Deckel war weg, die Kette hielt an
+    (``complete=False``), und zurück kam er nie. Das ist keine Warnung im
+    Bericht, sondern ein zerstörtes Dokument in zwei Tastendrücken.
+
+    Die Ursache im Code ist behoben: ``History._reseed`` richtet die Zähler vor
+    jeder Transaktion am Dokument aus, weil mehrere ``History``-Objekte über
+    demselben Dokument schreiben (der Deckelablauf legt sich eines an, um die
+    Passung nachzutragen). Die **Datei** war älter als der Fix und trug ihn
+    nicht — und niemand sah hin. Deshalb steht die Prüfung hier: Der
+    Erzeugungsweg ist reparierbar, ein mitgeliefertes Projekt nicht.
+
+    Geprüft werden auch die Verweise der Transaktionen: Eine Transaktion, die
+    eine Kennung nennt, die es zweimal gibt, ist genauso wenig eindeutig
+    zurücknehmbar.
+    """
+    project = load(examples.directory() / example.filename)
+    ops = project.document.ops
+
+    seen: dict[int, str] = {}
+    doubled: list[str] = []
+    for operation in ops:
+        if operation.id in seen:
+            doubled.append(f"{operation.id}: {seen[operation.id]} und {operation.op}")
+        seen[operation.id] = operation.op
+
+    assert not doubled, f"{example.filename} trägt doppelte Kennungen — {doubled}"
+
+    known = {operation.id for operation in ops}
+    for transaction in project.document.transactions:
+        missing = [entry for entry in transaction.ops if entry not in known]
+        assert not missing, (
+            f"{example.filename}: Transaktion {transaction.id} nennt Operationen, "
+            f"die es nicht gibt — {missing}"
+        )

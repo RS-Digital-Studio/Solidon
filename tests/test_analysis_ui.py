@@ -2520,3 +2520,87 @@ def test_the_angle_maps_write_the_degree_sign(window: MainWindow) -> None:
     labels = [label for label, _colour in window.analysis_bar.legend.entries]
     assert all("grad" not in label for label in labels)
     assert any(label.endswith("°") for label in labels)
+
+
+def test_the_context_menu_greys_out_what_this_body_cannot_do(window: MainWindow) -> None:
+    """Am Netz-Körper bot es die Operationen des exakten Kerns anklickbar an.
+
+    Wer dort *Verrunden* wählte, füllte einen Dialog aus und bekam danach eine
+    Absage — genau die Sackgasse, die Regel 19 ausschließt. Die Menüleiste
+    vermeidet sie seit je: Sie graut aus und schreibt den Grund in den Tooltip,
+    „statt sie anzubieten und nach dem ausgefüllten Dialog abzulehnen". Das
+    Kontextmenü kannte die Bauart nicht — es fragte niemanden.
+
+    Ausgegraut und nicht ausgeblendet, aus demselben Grund wie dort: Wer eine
+    Zeile vermisst, sucht sie.
+    """
+    select_plate(window)
+    menu = window.object_tree.context_menu()
+    assert menu is not None
+
+    actions = {
+        action.text(): action
+        for entry in menu.actions()
+        for action in (entry.menu().actions() if entry.menu() else [entry])
+    }
+    exact = [spec for spec in window.object_tree.operations_for_object() if spec.requires_kind]
+    assert exact, "ohne Operationen des exakten Kerns prüft dieser Test nichts"
+
+    kinds = window.object_tree.kinds_of_selection()
+    assert kinds == ["mesh"], f"die Platte ist ein Netz, gemeldet wurde {kinds}"
+
+    for spec in exact:
+        action = actions.get(str(spec.title))
+        assert action is not None, f"{spec.name} fehlt im Menü — ausgegraut, nicht verschwunden"
+        assert not action.isEnabled(), f"{spec.name} steht am Netz-Körper anklickbar da"
+        assert "exakten Körper" in action.toolTip(), (
+            f"{spec.name} sagt nicht, was ihm fehlt: {action.toolTip()!r}"
+        )
+
+    # Und was auf einem Netz kann, bleibt bedienbar — sonst wäre die Prüfung
+    # eine Sperre und keine Auskunft.
+    plain = [spec for spec in window.object_tree.operations_for_object() if not spec.requires_kind]
+    enabled = [str(spec.title) for spec in plain if actions.get(str(spec.title)) is not None]
+    assert any(actions[title].isEnabled() for title in enabled), "alles gesperrt wäre kein Menü"
+    menu.deleteLater()
+
+
+def test_a_finding_says_which_step_reported_it(window: MainWindow) -> None:
+    """Die Liste sortiert nach Schwere — Sätze aus verschiedenen Schritten
+    stehen also untereinander.
+
+    Bei ``weg3-generiert-aufbereiten`` liest sich das als Widerspruch: „Das
+    Modell ist nicht geschlossen." direkt neben „Eine offene Stelle ist
+    geschlossen und damit fort." Beides stimmt, das eine kommt vom Einlesen, das
+    andere von der Reparatur — und das stand nirgends. ``Finding`` trägt seine
+    ``op_id`` seit je; gezeigt wurde sie nicht.
+
+    Im Tooltip und nicht in der Zeile: die trägt schon Kennzahlen, und der
+    Bericht ist die Ansicht, die ruhig bleiben muss.
+    """
+    from PySide6.QtCore import Qt
+
+    report = window.report
+    listed = [
+        report.list.item(row)
+        for row in range(report.list.count())
+        if report.list.item(row).data(Qt.ItemDataRole.UserRole) is not None
+    ]
+    with_step = [
+        item
+        for item in listed
+        if getattr(item.data(Qt.ItemDataRole.UserRole), "op_id", None) is not None
+    ]
+    assert with_step, "kein Befund im Bericht trägt eine Operationsnummer"
+
+    # Die genaue Wendung, nicht bloß die Zahl: eine „2" steckt auch in
+    # „2,40 mm", und ein Test, der darauf prüft, besteht auch ohne die Angabe.
+    # (Genau das ist bei der Gegenprobe passiert.)
+    from app.i18n import tr
+
+    for item in with_step:
+        finding = item.data(Qt.ItemDataRole.UserRole)
+        wanted = f"{tr('aus Operation')} {finding.op_id}"
+        assert wanted in item.toolTip(), (
+            f"{finding.message!r} nennt seinen Schritt nicht: {item.toolTip()!r}"
+        )

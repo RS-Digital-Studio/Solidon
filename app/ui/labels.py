@@ -8,7 +8,7 @@ Leitprinzip 5).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from PySide6.QtCore import QLocale
@@ -416,6 +416,33 @@ def value_line(key: str, value: object) -> str:
     Sonderfall (§13).
     """
     return f"{value_label(key)}: {localised(str(value))}"
+
+
+def kind_requirement(spec: Any, kinds: Sequence[str]) -> str | None:
+    """Warum diese Operation auf dieser Auswahl nicht geht — oder ``None``.
+
+    Eine Operation des exakten Kerns trägt ``requires_kind="brep"``; auf einem
+    Netz kann sie nicht arbeiten. Die Menüleiste graut sie dann aus und schreibt
+    diesen Satz in den Tooltip, statt sie anzubieten und nach dem ausgefüllten
+    Dialog abzulehnen (Regel 19).
+
+    **Der Satz steht hier, weil zwei Ansichten ihn brauchen.** Das Kontextmenü
+    am Körper bot alle Operationen mit einem Eingang an, ungeprüft — auch die
+    sieben des exakten Kerns. Wer am Netz-Körper *Verrunden* wählte, füllte
+    einen Dialog aus und bekam danach eine Absage: genau die Sackgasse, die die
+    Menüleiste zwei Dateien weiter vermeidet. Zwei Stellen, dieselbe Auskunft —
+    also gehört sie in diese Datei und nicht zweimal in die Oberfläche.
+    """
+    if not spec.requires_kind or not kinds:
+        return None
+    if all(kind == spec.requires_kind for kind in kinds):
+        return None
+    return str(
+        tr(
+            "Diese Operation braucht einen exakten Körper (B-Rep). Exakte Körper "
+            "kommen aus einer STEP-Datei oder aus den Grundformen mit „Exakt“."
+        )
+    )
 
 
 def by_title(entries: Mapping[str, Any]) -> list[tuple[str, Any]]:
