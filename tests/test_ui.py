@@ -5433,3 +5433,71 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
 
     assert str(REGISTRY.get("drill_hole").title) in hint, hint
     assert "zurücknehmen" in hint, "der Satz nennt eine Handlung, die es gibt"
+
+
+def test_a_finding_names_a_body_a_later_step_has_replaced(qt_app: QApplication) -> None:
+    """Der Fall aus dem Handbuchbild, in allen sechs Sprachen zu sehen.
+
+    Das Aushöhlen meldet etwas über die Dose. Danach macht ``create_lid`` aus
+    ihr zwei Körper — die Kennung `obj_1` gibt es nicht mehr, die zwei Befunde
+    zeigen aber weiter darauf. Im Bericht stand deshalb „obj_1" statt eines
+    Namens: aufgelöst wurde nur gegen die Endszene, und dort fehlt er.
+
+    Der Name, den der Körper trug, ist die Antwort auf „welcher denn". Er ist
+    nicht mehr aktuell — aber er war es, als der Befund entstand, und das ist
+    genau die Auskunft, die der Leser braucht.
+    """
+    from app.core.knowledge import profiles
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.ui.panels import ReportPanel
+
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    history = History(document)
+    history.apply(
+        "Dose",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 60.0, "depth": 40.0, "height": 30.0, "name": "Dose"},
+            )
+        ],
+    )
+    history.apply(
+        "Aushöhlen",
+        [
+            OperationDraft(
+                op="hollow_object",
+                inputs=(document.ops[-1].outputs[0],),
+                params={"wall": 3.0, "open_top": True},
+            )
+        ],
+    )
+    history.apply(
+        "Deckel",
+        [OperationDraft(op="create_lid", inputs=(document.ops[-1].outputs[0],), params={})],
+    )
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    stale = [f for f in result.scene.report.findings if f.object_id == "obj_1"]
+    assert stale, "kein Befund zeigt mehr auf den verbrauchten Körper — Fall verfehlt"
+    assert "obj_1" not in result.scene.objects, "obj_1 lebt noch — der Deckel hat ihn nicht ersetzt"
+
+    panel = ReportPanel()
+    try:
+        panel.show_result(result, document)
+        lines = [panel.list.item(row).text() for row in range(panel.list.count())]
+    finally:
+        panel.deleteLater()
+
+    about_stale = [line for line in lines if any(str(f.message) in line for f in stale)]
+    assert about_stale, f"die Befunde stehen nicht in der Liste: {lines}"
+    assert not any("obj_1" in line for line in about_stale), (
+        f"der Bericht nennt die Kennung statt des Namens: {about_stale}"
+    )
+    assert any("Dose" in line for line in about_stale), (
+        f"der Bericht nennt den Namen nicht, den der Körper trug: {about_stale}"
+    )

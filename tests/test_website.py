@@ -481,7 +481,13 @@ def test_no_self_arranging_grid_stops_shrinking_above_phone_width() -> None:
 
 
 #: Der Zähler im Download-Kasten — Zielzeitpunkt und übersetzter Rahmensatz.
-COUNTDOWN = re.compile(r'data-countdown="([^"]+)"\s+data-template="([^"]+)"')
+#: Der Zähler: seine Markierung ohne Wert, dahinter der übersetzte Rahmensatz.
+#: Der Zeitpunkt steht seit dem 20.08.2026 nur noch am ``<body>`` — siehe
+#: ``test_the_moment_of_release_stands_exactly_once``.
+COUNTDOWN = re.compile(r'data-countdown\s+data-template="([^"]+)"')
+
+#: Der Zeitpunkt, auf den alles zeigt: Zähler und Umschaltung.
+RELEASE = re.compile(r'<body[^>]*\sdata-release="([^"]+)"')
 
 
 def _start_pages() -> list[Path]:
@@ -513,9 +519,13 @@ def test_every_start_page_counts_down_to_the_same_moment() -> None:
     moments = {}
     for page in pages:
         name = page.relative_to(WEBSITE).as_posix()
-        found = COUNTDOWN.findall(page.read_text(encoding="utf-8"))
+        body = page.read_text(encoding="utf-8")
+        found = COUNTDOWN.findall(body)
         assert len(found) == 1, f"{name} trägt {len(found)} Zähler, erwartet ist genau einer"
-        moment, template = found[0]
+        template = found[0]
+        at_body = RELEASE.search(body)
+        assert at_body, f"{name} nennt am <body> keinen Zeitpunkt"
+        moment = at_body.group(1)
         stamp = datetime.fromisoformat(moment)
         assert stamp.tzinfo is not None, (
             f"{name} nennt den Zeitpunkt ohne Zeitzone ({moment}) — "
@@ -718,27 +728,28 @@ def test_the_download_box_can_switch_from_waiting_to_loading(page: str) -> None:
 
 
 @pytest.mark.parametrize("page", START_PAGES)
-def test_the_two_dates_for_the_same_moment_agree(page: str) -> None:
-    """Derselbe Termin steht zweimal auf der Seite — er muss zweimal gleich sein.
+def test_the_moment_of_release_stands_exactly_once(page: str) -> None:
+    """Der Termin steht einmal je Seite, und der Zähler liest ihn von dort.
 
-    Der Zähler trägt seinen Zieltermin selbst (``data-countdown`` am Absatz),
-    die Umschaltung von Warten auf Laden den ihren (``data-release`` am
-    ``<body>``). Beide meinen dieselbe Minute, und keiner von beiden weiß vom
-    anderen: Wer einen verschiebt und den anderen vergisst, bekommt eine Seite,
-    die den Download freigibt, während daneben noch etwas herunterzählt — oder
-    umgekehrt.
+    Bis zum 20.08.2026 stand er zweimal: am Zähler (``data-countdown`` mit
+    Wert) und an der Umschaltung von Warten auf Laden (``data-release`` am
+    ``<body>``). Ein Test hielt beide gleich — zwölf Stellen für einen
+    Zeitpunkt, und wer eine verschob und die andere vergaß, bekam eine Seite,
+    die den Download freigibt, während daneben noch etwas herunterzählt.
 
-    Zusammenlegen ließe sich das, aber nicht am Tag der Veröffentlichung. Bis
-    dahin hält dieser Test sie beisammen.
+    Der Zähler behält seine Markierung ohne Wert: Sie sagt, *welcher* Absatz
+    zählt, und das ist eine andere Auskunft als *wann*. Geprüft wird deshalb
+    beides — dass der Termin am Körper steht, und dass die Markierung keinen
+    zweiten mitbringt.
     """
     text = (WEBSITE / page).read_text(encoding="utf-8")
     am_body = re.search(r'<body[^>]*\sdata-release="([^"]+)"', text)
-    am_zaehler = re.search(r'data-countdown="([^"]+)"', text)
-    assert am_body and am_zaehler, f"{page}: einer der beiden Termine fehlt"
-    assert am_body.group(1) == am_zaehler.group(1), (
-        f"{page}: der Zähler zielt auf {am_zaehler.group(1)}, "
-        f"die Umschaltung auf {am_body.group(1)}"
+
+    assert am_body, f"{page}: am <body> steht kein Termin"
+    assert 'data-countdown="' not in text, (
+        f"{page}: der Zähler trägt wieder einen eigenen Termin — er soll den vom <body> lesen"
     )
+    assert "data-countdown" in text, f"{page}: die Markierung des Zählers fehlt"
 
 
 def test_all_six_languages_release_at_the_same_moment() -> None:

@@ -1202,10 +1202,11 @@ class ReportPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._names: Mapping[str, str] = {}
+        """Kennung zu Namen — aus der gezeigten Szene und aus allen Namen, die
+        die Auswertung je vergeben hat. Siehe :meth:`show_result`."""
         self._document: Document | None = None
         """Nur für die Herkunftszeile im Tooltip — welcher Schritt das gemeldet
         hat. Der Bericht braucht das Dokument für nichts anderes."""
-        """Kennung zu Namen, aus der zuletzt gezeigten Szene."""
         self._alerts = 0
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
         self.list = QListWidget(self)
@@ -1346,8 +1347,22 @@ class ReportPanel(QWidget):
         # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.
         # Sie stehen im Ergebnis, das ohnehin hereinkommt — die Kennung „obj_2"
         # wäre die zweitbeste Antwort auf „welcher denn".
+        #
+        # Zwei Quellen, und die Reihenfolge ist die Aussage: Zuerst alle Namen,
+        # die die Auswertung je vergeben hat, darüber die der Endszene. Ein
+        # Körper, der noch da ist, heißt also so, wie er *jetzt* heißt; einer,
+        # den ein späterer Schritt verbraucht hat, so wie er hieß, als der
+        # Befund entstand. Vorher gab es nur die zweite Quelle, und dann stand
+        # im Bericht „obj_1" — sichtbar im Handbuchbild, in allen sechs
+        # Sprachen: Das Aushöhlen meldet etwas über die Dose, und nach
+        # ``create_lid`` gibt es sie nicht mehr.
         self._names = (
-            {str(key): entry.name for key, entry in result.scene.objects.items()} if result else {}
+            {
+                **{str(key): name for key, name in result.object_names.items()},
+                **{str(key): entry.name for key, entry in result.scene.objects.items()},
+            }
+            if result
+            else {}
         )
         self.list.clear()
         for finding in _by_severity(result.scene.report.findings if result else ()):

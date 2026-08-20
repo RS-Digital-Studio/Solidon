@@ -80,6 +80,16 @@ class EvaluationResult:
     completed: tuple[OpId, ...] = ()
     stopped_at: OpId | None = None
     object_hashes: Mapping[ObjectId, str] = field(default_factory=dict)
+    object_names: Mapping[ObjectId, str] = field(default_factory=dict)
+    """Wie die Körper hießen — **auch die**, die eine spätere Operation
+    verbraucht hat.
+
+    ``scene.objects`` hält nur den Endstand. Ein Befund darf aber auf einen
+    Körper zeigen, den ein späterer Schritt ersetzt hat: Das Aushöhlen meldet
+    etwas über die Dose, danach macht ``create_lid`` aus ihr Deckel und Rumpf,
+    und im Prüfbericht stand „obj_1", weil die Auflösung ins Leere griff. Der
+    Name, den der Körper trug, ist die Antwort auf „welcher denn" — er ist
+    nicht mehr aktuell, aber er war es, als der Befund entstand."""
     solvers: Mapping[OpId, SolverInfo] = field(default_factory=dict)
     """Welche Rückfallstufe welche Operation getragen hat (§17.2). Der
     Aufrufer schreibt sie zurück in den Stapel, damit dieselbe Datei gleich
@@ -123,6 +133,7 @@ def evaluate(
 
     objects: dict[ObjectId, SceneObject] = {}
     hashes: dict[ObjectId, str] = {}
+    names: dict[ObjectId, str] = {}
     findings: list[Finding] = []
     completed: list[OpId] = []
     pending: list[tuple[str, CachedResult]] = []
@@ -289,6 +300,9 @@ def evaluate(
                 stopped_at = operation.id
                 break
             hashes[object_id] = object_hash(key, index)
+            # Wächst nur, wird nie geleert: Genau darin liegt der Wert (siehe
+            # ``EvaluationResult.object_names``).
+            names[object_id] = objects[object_id].name
 
         if stopped_at is not None:
             break
@@ -357,6 +371,7 @@ def evaluate(
         completed=tuple(completed),
         stopped_at=stopped_at,
         object_hashes=hashes,
+        object_names=names,
         solvers=solvers,
     )
 

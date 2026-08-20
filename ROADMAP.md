@@ -30,7 +30,6 @@ bekommt einen roten Lauf.
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
 | Die zwei Dreieckszahl-Grenzen zusammenbringen | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Entscheidung: Merkmale ab 200 000 oder wasserdicht bleiben — beides zugleich geht erst, wenn `decimate` sauber arbeitet |
 | `decimate` zerlegt glatte Körper | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Vereinfachung, die die Topologie hält; die Reparaturkette holt nur die Teilzahl zurück, nicht die Wasserdichtheit |
-| Erscheinungstermin steht zweimal je Startseite | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | einen ruhigen Tag — bis dahin hält ein Test Zähler und Umschaltung zusammen |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
@@ -44,8 +43,6 @@ bekommt einen roten Lauf.
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Objektnamen der Beispiele bleiben deutsch | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | ein Feld im Dateiformat, das einen Namen als übersetzbar ausweist — in der Aufnahme allein aufzulösen wäre schlimmer als der Zustand jetzt |
-| Der Prüfbericht nennt `obj_1` statt eines Namens | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | eine Antwort darauf, wie ein Befund auf ein Objekt zeigt, das eine spätere Op ersetzt hat |
-| Französisch nennt zwei Katalogruppen fast gleich | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | zwei Wörter, die sich um mehr als einen Buchstaben unterscheiden |
 | Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | eine Entscheidung, was aus der Zeile verschwindet — und einen Test, der sein Thema selbst setzt |
 | Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird — Kachelhöhe, Ablagefläche oder die Liste der zuletzt geöffneten Projekte; Umschichten ist ausgereizt |
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
@@ -8262,10 +8259,22 @@ Kleingedrucktes, sondern ein Ausschluss.
       Wasserdichtheit nicht. Älter als der TripoSG-Wechsel, aber erst durch ihn
       sichtbar geworden — und beide Punkte hängen zusammen: Wer die erste Grenze
       anfasst, ohne die zweite zu lösen, tauscht wasserdicht gegen Merkmale.
-- [ ] **Der Erscheinungstermin steht zweimal je Startseite** — am Zähler
-      (`data-countdown`) und an der Umschaltung (`data-release`).
-      `test_the_two_dates_for_the_same_moment_agree` hält beide zusammen;
-      zusammenlegen war keine Arbeit für den Tag der Veröffentlichung.
+- [x] **Der Erscheinungstermin steht jetzt einmal je Startseite.** Er stand am
+      Zähler (`data-countdown`) und an der Umschaltung (`data-release` am
+      `<body>`) — zwölf Stellen für einen Zeitpunkt, und ein Test hielt sie
+      gleich. Der Zähler liest ihn jetzt vom Körper; seine Markierung bleibt
+      ohne Wert, denn sie sagt, *welcher* Absatz zählt, und das ist eine andere
+      Auskunft als *wann*. Aus „beide müssen gleich sein" ist
+      `test_the_moment_of_release_stands_exactly_once` geworden, und der prüft
+      auch, dass niemand dem Zähler wieder einen eigenen Termin gibt —
+      Gegenprobe gefahren, einen zurückgeholt, rot.
+
+      Für JavaScript gibt es hier keinen Test, also am geladenen Browser
+      gemessen: dieselbe Kette gegen die echte Seite, mit einem Termin in der
+      Zukunft, ergibt „Noch 192 Tage, 20 Stunden" — aus `data-release` gelesen.
+      Dass der Zähler in der Vorschau beim Laden nicht anspringt, liegt an ihr
+      und nicht an der Änderung: `site.js` läuft dort überhaupt nicht, auch die
+      unberührte Umschaltung setzte `data-released` nie.
 
 ## Die zwei Historien zusammengeführt (20.08.2026)
 
@@ -8373,13 +8382,32 @@ Datei da, Alt-Text da, `width`/`height` gleich den Pixeln.
       anderes als die Anwendung. Die saubere Stelle ist dieselbe wie bei den
       Parametertiteln (`translate_parameter_titles`) — ein Feld im Dateiformat,
       das einen Namen als übersetzbar ausweist.
-- [ ] **Der Prüfbericht nennt `obj_1` statt eines Namens.** Der Befund des
-      Aushöhlens zeigt auf ein Objekt, das nach `create_lid` nicht mehr
-      existiert; die Namensauflösung greift ins Leere und lässt die Kennung
-      stehen. Im Handbuchbild ist das in allen sechs Sprachen zu sehen.
-- [ ] **Französisch nennt zwei Katalogruppen fast gleich:** „Fixations" für
-      Verbindungen und „Fixation" für Befestigung. Im Bild stehen sie
-      untereinander, und der Unterschied ist ein Buchstabe.
+- [x] **Der Prüfbericht nennt jetzt den Namen, den der Körper trug.** Der
+      Befund des Aushöhlens zeigte auf ein Objekt, das nach `create_lid` nicht
+      mehr existiert — aufgelöst wurde nur gegen die Endszene, und dort fehlt
+      es. Im Bericht stand deshalb „Ausgehöhlt. Die Wandstärke stimmt im Rahmen
+      des Rasters. — obj_1 — 3,0 mm — 48,1 cm³".
+
+      Die Antwort auf „wie zeigt ein Befund auf ein Objekt, das eine spätere Op
+      ersetzt hat": mit dem Namen, den es hatte, als der Befund entstand. Die
+      Auswertung führt ihn mit (`EvaluationResult.object_names`) — eine
+      Zuordnung, die nur wächst und nie geleert wird, genau darin liegt ihr
+      Wert. Der Bericht legt beide Quellen übereinander, Endszene über
+      Verlaufsnamen: Ein Körper, der noch da ist, heißt so wie *jetzt*; einer,
+      den ein Schritt verbraucht hat, so wie *damals*. Gegenprobe gefahren —
+      nur die Endszene, und beide Zeilen sagen wieder „obj_1".
+
+      Nebenbei: Der Docstring von `_names` saß hinter dem falschen Feld und
+      behauptete „aus der zuletzt gezeigten Szene", was seit dieser Änderung
+      auch inhaltlich nicht mehr stimmte.
+- [x] **Französisch nannte zwei Katalogruppen fast gleich, und Portugiesisch
+      auch.** „Fixations" für Verbindungen neben „Fixation" für Befestigung —
+      im Bild untereinander, ein Buchstabe Unterschied. Behoben am 20.08. im
+      Durchgang weiter unten, und dabei kam heraus, dass es zwei Sprachen
+      waren: Portugiesisch hatte dasselbe mit „Fixações" gegen „Fixação", und
+      das hatte niemand gesehen. Die Gruppe heißt jetzt „Visserie"
+      beziehungsweise „Parafusos e roscas"; ein Wächter über den Wortstamm
+      hält alle sechs Sprachen auseinander.
 - [ ] **Die Werkzeugzeile der Skizze verlangt mit Stylesheet 1007 Bildpunkte.**
       `test_the_constraint_buttons_stay_readable_on_a_laptop` fordert 900 und
       ist trotzdem grün — weil er allein läuft, und dann steht kein Thema. Läuft

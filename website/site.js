@@ -57,10 +57,17 @@
 
 /* Der Zähler bis zur Demo im Download-Kasten der Startseite.
  *
- * Der Zielzeitpunkt steht im Markup (`data-countdown`), nicht hier: sechs
- * Sprachfassungen tragen ihn, und eine Zahl in einem gemeinsamen Skript
- * wäre die siebte Stelle, an der er sich ändern müsste. Der Rahmensatz
- * kommt aus demselben Grund von dort (`data-template`) — er ist übersetzt.
+ * Der Zielzeitpunkt steht im Markup, nicht hier: sechs Sprachfassungen
+ * tragen ihn, und eine Zahl in einem gemeinsamen Skript wäre die siebte
+ * Stelle, an der er sich ändern müsste. Der Rahmensatz kommt aus demselben
+ * Grund von dort (`data-template`) — er ist übersetzt.
+ *
+ * Gelesen wird er aus `data-release` am `<body>`, derselben Angabe, aus der
+ * die Umschaltung von Warten auf Laden ihren Zeitpunkt nimmt. Bis zum
+ * 20.08.2026 stand er zweimal je Seite, am Zähler und am Körper, und ein
+ * Test hielt beide zusammen — zwölf Stellen für einen Termin. Wer eine
+ * verschob und die andere vergaß, bekam eine Seite, die den Download
+ * freigibt, während daneben noch etwas herunterzählt.
  *
  * Die Einheiten formatiert `Intl`. Damit heißt es „1 Stunde" und nicht
  * „1 Stunden", und zwar in jeder Sprache, ohne dass hier eine Liste von
@@ -73,7 +80,7 @@
   const box = document.querySelector("[data-countdown]");
   if (!box) return;
 
-  const target = Date.parse(box.dataset.countdown);
+  const target = Date.parse(document.body.dataset.release || "");
   if (Number.isNaN(target) || !box.dataset.template) return;
 
   const language = document.documentElement.lang || "de";
