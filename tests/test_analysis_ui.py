@@ -910,6 +910,58 @@ def test_a_new_project_puts_the_build_volume_in_the_picture(window: MainWindow) 
     assert plotter.fitted_to == [], "der nächste leere Aufbau lässt die Kamera in Ruhe"
 
 
+def test_a_scene_that_outgrows_the_view_gets_fitted_again() -> None:
+    """Der Sprung ist etwas anderes als die Feinarbeit.
+
+    „Jeder weitere Aufbau lässt die Kamera in Ruhe" schützt den Zoom, und das
+    bleibt so: Wer heranzoomt und eine Bohrung setzt, will seinen Zoom behalten.
+    Aufgenommen am laufenden Fenster war aber auch der andere Fall zu sehen: In
+    ein Teil von zwei Millimetern hineingezoomt und einen 400er Körper dazu
+    erzeugt — die Kamera stand in dessen Innerem, und zu sehen war eine
+    dunkelrote Fläche. Der Prüfbericht warnte richtig, das Bild sagte nichts.
+
+    Geprüft wird die Entscheidung als reine Funktion: offscreen gibt es keinen
+    Plotter, und was nur im Zeichnen steht, prüft niemand.
+    """
+    from app.ui.viewport import OUTGROWN_FACTOR, diagonal_of, outgrown
+
+    tiny = (-1.0, 1.0, -1.0, 1.0, 0.0, 1.0)
+    huge = (-200.0, 200.0, -150.0, 150.0, 0.0, 250.0)
+    aside = (500.0, 520.0, 500.0, 520.0, 0.0, 20.0)
+    nearby = (-2.0, 2.0, -2.0, 2.0, 0.0, 2.0)
+
+    assert outgrown(tiny, huge), "gewachsen: die Kamera steht im neuen Körper"
+    assert diagonal_of(huge) > OUTGROWN_FACTOR * diagonal_of(tiny), "und zwar deutlich"
+    assert outgrown(tiny, aside), "weggerückt: das Modell liegt außerhalb des Bildes"
+
+    assert not outgrown(tiny, nearby), "das Doppelte ist Feinarbeit — der Zoom bleibt"
+    assert not outgrown(huge, tiny), "was kleiner wird, zieht die Kamera nicht an sich"
+    assert not outgrown(None, huge), "ohne Vorher gibt es nichts zu vergleichen"
+    assert not outgrown(huge, None), "und ohne Körper nichts einzupassen"
+
+
+def test_the_camera_follows_a_body_that_dwarfs_the_scene(window: MainWindow) -> None:
+    """Dieselbe Sache am Fenster: erst eingepasst, dann entwachsen.
+
+    Die Blickrichtung bleibt dabei, wo sie war — ``reset_camera`` rahmt neu und
+    dreht nichts.
+    """
+    viewport = window.viewport
+    viewport.show_scene(window.session.last_result)
+    assert viewport._fitted_to == "objects"
+    assert viewport._fitted_bounds is not None, "worauf eingepasst wurde, wird gemerkt"
+
+    plotter = _CameraPlotter()
+    viewport.plotter = plotter
+    viewport._fit_once_for(window.session.last_result)
+    assert plotter.fitted_to == [], "derselbe Stand lässt die Kamera in Ruhe"
+
+    # Die Szene wächst: derselbe Zustand „objects", aber ein Vielfaches groß.
+    viewport._fitted_bounds = (-1.0, 1.0, -1.0, 1.0, 0.0, 1.0)
+    viewport._fit_once_for(window.session.last_result)
+    assert plotter.fitted_to, "der Sprung wird neu gerahmt"
+
+
 def test_the_build_volume_is_a_hint_not_a_cage() -> None:
     """Als geschlossener Drahtkasten war die Oberkante aus der Vorgabeansicht
     eine große Raute weit über dem Bett — und das Teil darunter ein Fleck.
@@ -2390,6 +2442,48 @@ def test_the_report_says_where_you_stand_not_only_what_to_do(qt_app: QApplicatio
 
         panel.show_result(None)
         assert not panel.facts.text()
+    finally:
+        panel.deleteLater()
+
+
+def test_the_report_writes_a_volume_that_says_something(qt_app: QApplication) -> None:
+    """„wasserdicht · 0,0 cm³ · 1 Teil" stand über einem Teil von 4 mm³.
+
+    Die Zeile rechnete selbst — ``format_decimal(volume / 1000.0, 1)`` mit
+    festem „cm³" dahinter. Zwei Fehler in einer Zeile: Unter einem
+    Kubikzentimeter sagt eine Nachkommastelle Kubikzentimeter nichts mehr, und
+    in Zoll stand die Zahl auch dann in Kubikzentimetern, wenn jede Länge
+    daneben in Zoll gemessen war (§19.3). Der Kern beantwortet beide Fragen;
+    diese Karte fragt ihn jetzt.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui import labels
+    from app.ui.panels import ReportPanel
+
+    def shown(extents: tuple[float, float, float]) -> str:
+        box = MeshData.of(trimesh.creation.box(extents=extents))
+        scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Teil", mesh=box)})
+        panel.show_result(EvaluationResult(scene=scene))
+        return panel.facts.text()
+
+    panel = ReportPanel()
+    try:
+        tiny = shown((2.0, 2.0, 1.0))
+        assert "mm³" in tiny, f"ein Teil von 4 mm³ steht als: {tiny!r}"
+        assert "0,0" not in tiny, "eine Null mit Komma ist keine Auskunft"
+
+        assert "8,0 cm³" in shown((20.0, 20.0, 20.0)), "im gewohnten Bereich bleibt es cm³"
+
+        labels.set_display_unit("in")
+        try:
+            inches = shown((20.0, 20.0, 20.0))
+        finally:
+            labels.set_display_unit("mm")
+        assert "in³" in inches, f"in Zoll steht Kubikzoll da, nicht: {inches!r}"
     finally:
         panel.deleteLater()
 

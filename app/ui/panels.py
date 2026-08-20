@@ -49,7 +49,7 @@ from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
 from app.core.units import LengthUnit
-from app.i18n import format_decimal, sort_key, tr
+from app.i18n import sort_key, tr
 from app.ui.dialogs import handlers_of
 from app.ui.icons import icon
 from app.ui.labels import (
@@ -1522,7 +1522,7 @@ class ReportPanel(QWidget):
             self.facts.setVisible(False)
             return
 
-        volume = sum(float(mesh.volume) for mesh in meshes)
+        content = sum(float(mesh.volume) for mesh in meshes)
         parts = sum(int(mesh.component_count) for mesh in meshes)
         tight = sum(1 for mesh in meshes if mesh.is_watertight)
         # Das Wort steht neben dem Zeichen, nicht statt seiner (Regel 18).
@@ -1535,9 +1535,17 @@ class ReportPanel(QWidget):
         # Deutsch: mit Singular hieße es zweimal dasselbe Teil, gemeint sind
         # zwei. Die Zeile darüber zählt Befunde und behält ihr Malzeichen —
         # dort steht der Singular dahinter.
+        # **Über ``volume`` und nicht mit eigener Rechnung.** Hier stand
+        # ``format_decimal(volume / 1000.0, 1)} cm³`` — zwei Fehler in einer
+        # Zeile: Ein Teil von zwei Millimetern Kantenlänge stand als „0,0 cm³"
+        # da, und in Zoll stand es auch dann in Kubikzentimetern, wenn jede
+        # Länge daneben in Zoll gemessen war (§19.3). Beides beantwortet
+        # ``labels.volume``: die Einheit aus der Anzeigeeinstellung, die Größe
+        # aus dem Kern (:func:`units.format_volume`). Ohne Argument, weil diese
+        # Karte keine eigene Einheit führt — die Anzeigeeinheit ist ein
+        # Zustand, kein Feld.
         self.facts.setText(
-            f"{closed} · {format_decimal(volume / 1000.0, 1)} cm³ · "
-            f"{parts} {tr('Teil') if parts == 1 else tr('Teile')}"
+            f"{closed} · {volume(content)} · {parts} {tr('Teil') if parts == 1 else tr('Teile')}"
         )
         self.facts.setVisible(True)
 

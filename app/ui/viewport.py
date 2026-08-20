@@ -638,6 +638,58 @@ def with_margin(
     return (widened[0], widened[1], widened[2], widened[3], widened[4], widened[5])
 
 
+#: Ab welchem Größenverhältnis eine Szene der eingepassten Ansicht entwachsen
+#: ist.
+#:
+#: Fünf, weil darunter der Grund gilt, aus dem die Kamera in Ruhe bleibt: Wer
+#: heranzoomt und eine Bohrung setzt, will seinen Zoom behalten. Ein Körper, der
+#: fünfmal so groß ist wie alles bisher, ist kein Nachbessern mehr — gemessen an
+#: einem Teil von 2 mm, zu dem ein 400er dazukam: das Verhältnis war 186, die
+#: Kamera stand im Inneren des neuen Körpers, und zu sehen war eine rote Fläche.
+OUTGROWN_FACTOR = 5.0
+
+
+def diagonal_of(bounds: tuple[float, float, float, float, float, float]) -> float:
+    """Die Raumdiagonale eines Hüllquaders im VTK-Format."""
+    spans = [high - low for low, high in zip(bounds[0::2], bounds[1::2], strict=True)]
+    return math.sqrt(sum(span * span for span in spans))
+
+
+def outgrown(
+    fitted: tuple[float, float, float, float, float, float] | None,
+    current: tuple[float, float, float, float, float, float] | None,
+    factor: float = OUTGROWN_FACTOR,
+) -> bool:
+    """Ob die Szene nicht mehr zu der Ansicht passt, auf die eingepasst wurde.
+
+    Zwei Fälle, und beide hat jemand vor sich, der nichts falsch gemacht hat:
+
+    **Sie ist gewachsen.** Wer in ein Teil von zwei Millimetern hineingezoomt
+    hat und dann einen 400er Körper erzeugt oder einlädt, sah eine dunkelrote
+    Fläche — die Kamera stand im Inneren des neuen Körpers. Der Prüfbericht
+    warnte richtig („Ein Objekt steht über den Bauraum hinaus"), das Bild sagte
+    nichts.
+
+    **Sie ist weggerückt.** Berühren sich der eingepasste und der jetzige
+    Hüllquader nicht mehr, steht das Modell außerhalb des Bildes. Auch das ist
+    keine Feinarbeit, bei der jemand seinen Zoom behalten will.
+
+    Alles darunter bleibt, wie es war (:meth:`Viewport._fit_once_for`): Eine
+    Kamera, die bei jeder Bohrung neu einpasst, macht den Zoom zweimal.
+
+    Als reine Funktion, aus demselben Grund wie :func:`with_margin`: offscreen
+    gibt es keinen Plotter, und was nur im Zeichnen steht, prüft niemand.
+    """
+    if fitted is None or current is None:
+        return False
+    if diagonal_of(current) > factor * diagonal_of(fitted):
+        return True
+    return any(
+        current[axis * 2] > fitted[axis * 2 + 1] or current[axis * 2 + 1] < fitted[axis * 2]
+        for axis in range(3)
+    )
+
+
 def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, float], str]]:
     """Die Maßzahlen an der vorderen und linken Plattenkante (§18.6).
 
@@ -1197,6 +1249,11 @@ class Viewport(QWidget):
         """Worauf die Kamera zuletzt eingepasst wurde — auf nichts, auf den
         Bauraum oder auf die Körper. Wechselt der Zustand, wird einmal neu
         eingepasst; innerhalb desselben Zustands bleibt jeder Zoom stehen."""
+        self._fitted_bounds: tuple[float, float, float, float, float, float] | None = None
+        """Die Maße, auf die eingepasst wurde — der Vergleich für
+        :func:`outgrown`. „Innerhalb desselben Zustands" hat eine Grenze: Ein
+        Körper, der fünfmal so groß ist wie alles bisher, ist kein Zoom mehr,
+        den man behalten will."""
         self._scheme: NavigationScheme = "slicer"
         self._mode: DisplayMode = "solid"
         self._shading: Shading = "flat"
@@ -3737,9 +3794,15 @@ class Viewport(QWidget):
         **Mit Luft** (:data:`CAMERA_MARGIN`). Genau eingepasst berührte ein
         40 mm großer Quader links und rechts den Bildrand.
         """
+        bounds = self._object_bounds() or self._volume_bounds()
+        # Worauf eingepasst wurde, wird gemerkt: ``_fit_once_for`` vergleicht
+        # damit, ob die Szene der Ansicht inzwischen entwachsen ist. **Vor** dem
+        # Plotter-Zweig, aus demselben Grund wie bei der Umgebungsverdeckung:
+        # offscreen gibt es keinen Plotter, und eine Regel, die nur im Zeichnen
+        # gilt, prüft niemand.
+        self._fitted_bounds = bounds
         if self.plotter is None:
             return
-        bounds = self._object_bounds() or self._volume_bounds()
         if bounds is None:
             self.plotter.reset_camera()
         else:
@@ -3778,7 +3841,14 @@ class Viewport(QWidget):
             wanted = "bed"
         else:
             return
-        if wanted != self._fitted_to:
+        # **Und noch einmal, wenn die Szene der Ansicht entwachsen ist.** Der
+        # Satz darüber schützt die Feinarbeit, und dabei bleibt es; was er nicht
+        # beantwortet, ist der Sprung: Wer in ein Teil von zwei Millimetern
+        # hineingezoomt hatte und einen 400er Körper dazu erzeugte, bekam eine
+        # dunkelrote Fläche zu sehen — die Kamera stand in dessen Innerem. Die
+        # Blickrichtung bleibt dabei, wo sie war: ``reset_camera`` rahmt neu, es
+        # dreht nichts. Wann es genug ist, entscheidet :func:`outgrown`.
+        if wanted != self._fitted_to or outgrown(self._fitted_bounds, self._object_bounds()):
             self.reset_camera()
             self._fitted_to = wanted  # type: ignore[assignment]
 

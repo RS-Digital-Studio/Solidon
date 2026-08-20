@@ -11,6 +11,7 @@ from app.core.units import (
     EPS_GEOM,
     clamp,
     format_length,
+    format_volume,
     from_mm,
     is_close,
     is_greater,
@@ -71,6 +72,33 @@ def test_rounding_happens_only_for_display() -> None:
     assert quantize(-0.005) == pytest.approx(-0.01)
     with pytest.raises(ValueError):
         quantize(1.0, 0.0)
+
+
+def test_a_volume_keeps_its_meaning_at_every_size() -> None:
+    """§19.3: Eine Nachkommastelle Kubikzentimeter ist unter einem
+    Kubikzentimeter keine Auskunft mehr.
+
+    Ein Teil von zwei Millimetern Kantenlaenge stand im Pruefbericht als
+    "0,0 cm3", und die Ueberschneidungswarnung meldete fuer einen Streifschuss
+    von einem Kubikmillimeter dasselbe wie fuer zwei Teile, die zur Haelfte
+    ineinander stecken — genau den Unterschied, den sie zeigen soll. Oben
+    dasselbe von der anderen Seite: 30 000 cm3 auf ein Zehntel genau behauptet
+    eine Messung, die es nicht gibt.
+    """
+    assert format_volume(4.0) == "4 mm³"
+    assert format_volume(999.0) == "999 mm³"
+    assert format_volume(1000.0) == "1.0 cm³"
+    assert format_volume(12500.0) == "12.5 cm³"
+    assert format_volume(30_000_000.0) == "30000 cm³"
+
+    # In Zoll bleibt es bei Kubikzoll — zwei Systeme in einer Zeile waeren
+    # schlimmer als eine kleine Zahl. Die Stellen wachsen, bis zwei geltende
+    # Ziffern dastehen.
+    assert format_volume(4.0, "in") == "0.00024 in³"
+    assert format_volume(12500.0, "in") == "0.76 in³"
+    assert float(format_volume(1.0, "in").split()[0]) > 0.0, (
+        "was nicht null ist, sieht nicht so aus"
+    )
 
 
 def test_formatting_matches_the_display_precision() -> None:

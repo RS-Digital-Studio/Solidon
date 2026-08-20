@@ -144,10 +144,35 @@ def format_volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
     In Millimetern rechnet niemand ein Volumen — Kubikzentimeter sind das
     Maß, in dem Filament verkauft und Verbrauch angegeben wird. Zu Zoll
     gehören Kubikzoll, und der Unterschied ist zu groß, um ihn zu übergehen.
+
+    **Die Einheit folgt der Größe, nicht der Gewohnheit.** Eine Nachkommastelle
+    Kubikzentimeter ist unter einem Kubikzentimeter keine Auskunft mehr: Ein
+    Teil von 2 mal 2 mal 1 Millimeter stand im Prüfbericht mit „0,0 cm³", und die
+    Überschneidungswarnung meldete für einen Streifschuss von einem
+    Kubikmillimeter dasselbe wie für zwei Teile, die zur Hälfte ineinander
+    stecken — genau den Unterschied, den sie zeigen soll. Unter einem
+    Kubikzentimeter stehen deshalb Kubikmillimeter, über tausend fällt die
+    Nachkommastelle weg (30 000 cm³ auf ein Zehntel genau behauptet eine
+    Messung, die es nicht gibt).
+
+    In Zoll dasselbe Problem und dieselbe Antwort, nur ohne Einheitenwechsel:
+    Kubikmillimeter neben Kubikzoll wären zwei Systeme in einer Zeile. Dort
+    wachsen stattdessen die Stellen, bis zwei geltende Ziffern dastehen — ein
+    Wert, der nicht null ist, sieht sonst wie null aus.
     """
     if unit == "in":
-        return f"{value_mm3 / UNIT_TO_MM['in'] ** 3:.2f} in³"
-    return f"{value_mm3 / 1000.0:.1f} cm³"
+        cubic_inches = value_mm3 / UNIT_TO_MM["in"] ** 3
+        size = abs(cubic_inches)
+        decimals = 2
+        while decimals < 5 and 0.0 < size < 10.0 ** (1 - decimals):
+            decimals += 1
+        return f"{cubic_inches:.{decimals}f} in³"
+    if abs(value_mm3) < 1000.0:
+        return f"{value_mm3:.0f} mm³"
+    cubic_centimetres = value_mm3 / 1000.0
+    if abs(cubic_centimetres) >= 1000.0:
+        return f"{cubic_centimetres:.0f} cm³"
+    return f"{cubic_centimetres:.1f} cm³"
 
 
 def format_length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = True) -> str:
