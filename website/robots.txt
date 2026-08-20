@@ -1,0 +1,7 @@
+# Solidon3D — solidon3d.de
+# Die Seite hat nichts zu verbergen: kein Konto, kein Zählpixel,
+# keine Ansicht, die nur für angemeldete Besucher gilt.
+User-agent: *
+Allow: /
+
+Sitemap: https://solidon3d.de/sitemap.xml

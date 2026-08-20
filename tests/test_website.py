@@ -175,17 +175,32 @@ def test_every_picture_states_the_size_it_actually_has(page: str) -> None:
     ``width`` und ``height`` reservieren den Platz, bevor das Bild da ist.
     Stimmen sie nicht, rutscht alles darunter im Moment des Ladens — und
     geschätzt hatte hier schon einmal jemand.
+
+    Beide Formate werden gelesen. Solange nur Bildschirmfotos ein Maß trugen,
+    reichte der IHDR-Block; seit auch die Musterkachel eines angibt, sind
+    dieselben acht Bytes in einer SVG-Datei irgendein Stück XML und ergeben
+    eine Größe wie 1 936 682 086 × 1 634 496 032.
     """
     source = WEBSITE / page
     wrong = []
     for match in re.finditer(
         r'<img[^>]*src="([^"]+)"[^>]*width="(\d+)"[^>]*height="(\d+)"',
         source.read_text(encoding="utf-8"),
+        re.DOTALL,
     ):
         path, stated = match.group(1), (int(match.group(2)), int(match.group(3)))
-        # Die Maße stehen im IHDR-Block, gleich hinter der PNG-Signatur.
-        header = (source.parent / path).read_bytes()[16:24]
-        actual = struct.unpack(">II", header)
+        picture = source.parent / path
+        if picture.suffix == ".svg":
+            # Gezeichnetes hat keine Pixel, nur einen Zeichenbereich.
+            box = re.search(
+                r'viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"',
+                picture.read_text(encoding="utf-8")[:2000],
+            )
+            assert box is not None, f"{path}: gibt ein Maß an, hat aber keine viewBox"
+            actual = (round(float(box.group(1))), round(float(box.group(2))))
+        else:
+            # Die Maße stehen im IHDR-Block, gleich hinter der PNG-Signatur.
+            actual = struct.unpack(">II", picture.read_bytes()[16:24])
         if actual != stated:
             wrong.append(f"{path}: angegeben {stated}, tatsächlich {actual}")
     assert not wrong, wrong
@@ -443,3 +458,116 @@ def test_every_page_with_a_countdown_loads_the_script_that_runs_it() -> None:
             continue
         name = page.relative_to(WEBSITE).as_posix()
         assert 'src="/site.js"' in text, f"{name} trägt einen Zähler, bindet aber site.js nicht ein"
+
+
+# --------------------------------------------------------------------------
+# Was Suchmaschinen zuerst holen — erzeugt von `tools/make_seo.py`.
+# --------------------------------------------------------------------------
+
+
+def _delivered_pages() -> list[Path]:
+    """Jede ausgelieferte Seite: oberste Ebene und Sprachordner."""
+    return sorted([*WEBSITE.glob("*.html"), *WEBSITE.glob("*/*.html")])
+
+
+def _address(page: Path) -> str:
+    """Die Adresse einer Seite — die Startseite heißt nach ihrem Ordner."""
+    rest = re.sub(r"(^|/)index\.html$", r"\1", page.relative_to(WEBSITE).as_posix())
+    return "https://solidon3d.de/" + rest
+
+
+def test_the_sitemap_lists_every_page_that_is_delivered() -> None:
+    """Eine Seite, die nicht in der Sitemap steht, wird über Links gefunden.
+
+    Bei einer Domain ohne eingehende Verweise heißt „über Links" Monate. Die
+    Sitemap wird erzeugt, deshalb ist der Fehlerfall nicht, dass jemand einen
+    Eintrag vergisst — sondern dass jemand eine Seite anlegt und das Werkzeug
+    nicht laufen lässt.
+    """
+    sitemap = (WEBSITE / "sitemap.xml").read_text(encoding="utf-8")
+    listed = set(re.findall(r"<loc>([^<]+)</loc>", sitemap))
+    expected = {
+        _address(p) for p in _delivered_pages() if "noindex" not in p.read_text(encoding="utf-8")
+    }
+    assert expected <= listed, f"nicht in der Sitemap: {sorted(expected - listed)}"
+
+
+def test_the_sitemap_offers_no_page_that_asks_not_to_be_indexed() -> None:
+    """Die fünf Rechtstexte tragen `noindex`, und das ist eine Entscheidung.
+
+    Eine Sitemap, die sie trotzdem anbietet, sagt das Gegenteil dessen, was
+    auf der Seite selbst steht. Die Search Console meldet den Widerspruch als
+    Fehler, und welches der beiden Signale gewinnt, entscheidet dann Google
+    statt uns.
+    """
+    sitemap = (WEBSITE / "sitemap.xml").read_text(encoding="utf-8")
+    listed = set(re.findall(r"<loc>([^<]+)</loc>", sitemap))
+    contradicting = listed & {
+        _address(p) for p in _delivered_pages() if "noindex" in p.read_text(encoding="utf-8")
+    }
+    assert not contradicting, f"noindex und trotzdem in der Sitemap: {sorted(contradicting)}"
+
+
+def test_the_sitemap_names_no_page_that_is_gone() -> None:
+    """Der umgekehrte Fall: eine gelöschte Seite bleibt in der Liste stehen."""
+    sitemap = (WEBSITE / "sitemap.xml").read_text(encoding="utf-8")
+    for address in re.findall(r"<loc>([^<]+)</loc>", sitemap):
+        rest = address.removeprefix("https://solidon3d.de/")
+        target = WEBSITE / (rest if rest.endswith(".html") else rest + "index.html")
+        assert target.exists(), f"die Sitemap führt {address}, die Datei fehlt"
+
+
+def test_robots_points_at_the_sitemap() -> None:
+    """Ohne diese Zeile muss ein Crawler die Sitemap erraten."""
+    robots = (WEBSITE / "robots.txt").read_text(encoding="utf-8")
+    assert "Sitemap: https://solidon3d.de/sitemap.xml" in robots
+
+
+@pytest.mark.parametrize("page", PAGES)
+def test_the_questions_are_marked_up_the_way_they_are_written(page: str) -> None:
+    """Die Auszeichnung der Fragen wird aus dem Markup abgeleitet.
+
+    Läuft `tools/make_seo.py` nach einer neuen Frage nicht, steht in der
+    Auszeichnung eine Frage weniger als auf der Seite — und was Google als
+    Rich Result zeigt, ist dann nicht, was dort steht.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    written = len(re.findall(r"<summary>", text))
+    marked = len(re.findall(r'"@type": "Question"', text))
+    assert written == marked, f"{page}: {written} Fragen geschrieben, {marked} ausgezeichnet"
+
+
+@pytest.mark.parametrize("page", PAGES)
+def test_the_questions_point_at_the_section_that_holds_them(page: str) -> None:
+    """Die Sprungmarke im `@id` heißt in jeder Sprache anders.
+
+    Sie wird abgelesen, nicht angenommen — und beim ersten Versuch las das
+    Werkzeug die erste Section des Dokuments statt der mit den Fragen. Beide
+    bestehen die Sprungmarkenprüfung darüber, denn beide Marken gibt es. Was
+    zählt, ist, dass die Marke den Fragenblock umschließt.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    match = re.search(r'"@type": "FAQPage",\s*\n\s*"@id": "[^"#]*#([^"]+)"', text)
+    assert match is not None, f"{page} zeichnet keine Fragen aus"
+    mark = match.group(1)
+    section = re.search(rf'<section id="{re.escape(mark)}"(.*?)</section>', text, re.DOTALL)
+    assert section is not None, f'{page}: kein Abschnitt mit id="{mark}"'
+    assert '<div class="faq">' in section.group(1), (
+        f'{page}: die Auszeichnung zeigt auf "{mark}", dort stehen aber keine Fragen'
+    )
+
+
+@pytest.mark.parametrize("page", ALL_PAGES)
+def test_the_preview_picture_exists(page: str) -> None:
+    """Was beim Teilen erscheint, wird sonst von niemandem geprüft.
+
+    Der Verweistest darüber sieht `og:image` nicht: das Bild steht dort in
+    einem `content`-Attribut und nicht in `src`. Fehlt die Datei, bleibt die
+    Seite fehlerfrei und die geteilte Karte leer — bemerkt wird das erst, wenn
+    jemand den Link in ein Forum stellt.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    match = re.search(r'<meta property="og:image" content="([^"]+)"', text)
+    assert match is not None, f"{page} zeigt beim Teilen kein Bild"
+    picture = WEBSITE / match.group(1).removeprefix("https://solidon3d.de/")
+    assert picture.exists(), f"{page} verweist auf {match.group(1)}, die Datei fehlt"

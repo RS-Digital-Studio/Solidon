@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Solidon3D — fremde 3D-Modelle anpassen, eigene konstruieren, druckbar machen</title>
+<title>Solidon3D — fremde 3D-Modelle anpassen und druckbar machen</title>
 <meta name="description" content="Solidon3D ist eine Desktop-Anwendung für den 3D-Druck: heruntergeladene Modelle anpassen, eigene konstruieren, Druckbarkeit vor dem Slicen prüfen — lokal, ohne Konto, ohne Abo.">
 <link rel="canonical" href="https://solidon3d.de/">
 <link rel="alternate" hreflang="de" href="https://solidon3d.de/">
@@ -22,7 +22,7 @@
 <meta property="og:locale:alternate" content="it_IT">
 <meta property="og:locale:alternate" content="pt_PT">
 <meta property="og:url" content="https://solidon3d.de/">
-<meta property="og:title" content="Solidon3D — fremde 3D-Modelle anpassen, eigene konstruieren, druckbar machen">
+<meta property="og:title" content="Solidon3D — fremde 3D-Modelle anpassen und druckbar machen">
 <meta property="og:description" content="Desktop-Anwendung für den 3D-Druck: fremde Modelle anpassen, eigene konstruieren, Druckbarkeit prüfen — lokal, ohne Konto, ohne Abo.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/de/main-window.png">
 <meta property="og:image:alt" content="Das Hauptfenster von Solidon3D: Objektbaum, 3D-Ansicht und Prüfbericht nebeneinander">
@@ -50,6 +50,103 @@
     "url": "https://solidon3d.de/#preis",
     "availability": "https://schema.org/PreOrder"
   }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "@id": "https://solidon3d.de/#fragen",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Was passiert am 30. Oktober?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Die Demo lässt sich ab dem 31. Oktober nicht mehr starten. Sie sagt das vorher: in der Statuszeile steht jeden Tag, wie lange sie noch läuft. Deine Dateien bleiben davon unberührt. Sie liegen, wo du sie gespeichert hast; nichts wird gelöscht und nichts unlesbar. Eine Projektdatei ist ein ZIP-Archiv mit JSON darin und lässt sich auch ohne Solidon3D öffnen — die nächste Fassung liest sie unverändert."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Warum eine Demo mit Enddatum statt einer Testphase?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Weil sie damit vollständig sein kann. Eine Fassung, die nach vierzehn Tagen zum Betrachter wird, zeigt beim zweiten Projekt weniger als beim ersten. Diese hier zeigt bis zum letzten Tag alles — und endet dann, statt in einer halben Fassung weiterzulaufen, die niemand mehr pflegt."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Brauche ich CAD-Erfahrung?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Nein. Weg 1 kommt mit Anklicken und einem Satz im Chat aus, Weg 2 mit Beschreiben und Zahlendrehen. Wer Skizzen mit Zwängen zeichnen will, kann das — muss es aber nicht."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Muss ich eine KI benutzen?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Nein. Der Chat ist ein Weg von vieren. Ohne Schlüssel und ohne Ollama bleibt alles außer dem Chat vollständig benutzbar — Menüs, Kontextmenüs, Kommandozeile und alle 85 Operationen."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Rechnet die KI meine Geometrie?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Nein, und das ist der wichtigste Satz auf dieser Seite. Das Sprachmodell wählt Operationen und Parameter aus — gerechnet wird jede Geometrie von Code. Jeder Vorschlag des Agenten ist genau eine Transaktion, die ein einziges Undo vollständig zurücknimmt."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Kann ich Solidon3D aus Claude Code oder einem anderen KI-Werkzeug steuern?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Ja. Solidon3D hat einen eingebauten MCP-Server: ein Programm wie Claude Code ruft damit dieselben Operationen auf, die auch in den Menüs stehen. Er ist standardmäßig aus, nimmt Verbindungen nur vom eigenen Rechner an (127.0.0.1), akzeptiert weder Dateipfade noch Quelltext von außen — und jeder Fernaufruf ist eine Transaktion im Verlauf, die ein einziges Undo vollständig zurücknimmt."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Gehen meine Modelle irgendwohin?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Nur wenn du den Chat mit einem fremden API-Schlüssel benutzt — dann geht der Steckbrief der Szene an diesen Anbieter: Objekte mit ihren Maßen, die Namen der Merkmale, die Parameter und der Verlauf in Kurzform. Keine Geometrie, keine Dateien. Mit Ollama bleibt auch das lokal. Ohne Chat verlässt nichts den Rechner: keine Konten, keine Ablage im Netz, keine Telemetrie."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Welche Formate liest und schreibt Solidon3D?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Gelesen werden STL, 3MF (auch als Baugruppe), OBJ und GLB, dazu STEP über den B-Rep-Kern. Geschrieben werden STL, 3MF — mit Farbwechsel und Plattenbelegung —, OBJ, PLY, GLB und STEP; STEP steht im Exportdialog, sobald ein Körper es tragen kann. GLB ist das Format zum Herzeigen: Farben und Name reisen mit, und der Empfänger dreht das Teil im Browser. Ein Projekt ist eine ZIP-Datei mit project.json darin: auch ohne Solidon3D zu öffnen."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Läuft das auf einem Mac?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Ja, für Apple Silicon und für Intel als getrennte Fassungen — ein Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht, und das betrifft jedes Gerät vor 2020. Bei Apple signiert ist es noch nicht, und Gatekeeper lässt eine unsignierte Anwendung aus dem Netz per Doppelklick nicht starten: einmal mit der rechten Maustaste auf das Programm und „Öffnen“ wählen, danach startet es wie jedes andere. Notarisierung kommt, sobald das Apple-Konto steht."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Funktioniert das mit meinem Drucker?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Sechzehn Profile sind ab Werk hinterlegt, darunter Elegoo, Bambu Lab, Prusa, Creality, Anycubic und Sovol. Eigene lassen sich anlegen — gebraucht werden Bauraum, Düse und Schichthöhe. Für die Passungen kommt einmal Kalibrieren dazu."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Was passiert nach Version 1.x?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Alle 1.x-Updates sind im Kauf enthalten. Eine spätere Hauptversion wäre ein neuer Kauf — deine gekaufte Fassung läuft weiter, sie hört nicht auf zu funktionieren, und deine Projekte bleiben lesbar."
+      }
+    }
+  ]
 }
 </script>
 </head>
