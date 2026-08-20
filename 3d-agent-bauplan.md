@@ -1240,7 +1240,7 @@ samt Begründung, und der Klick bleibt im Druckdialog.
 `ask_user` ist Pflicht, keine Höflichkeit: Die Agenten-Suite enthält absichtlich
 mehrdeutige Anfragen und misst, ob gefragt statt geraten wird.
 
-Diese Liste ist abschließend — was hier nicht steht, gibt es nicht. Die fünf
+Diese Liste ist abschließend — was hier nicht steht, gibt es nicht. Die vier
 Werkzeuge ab `read_digest` kamen mit der Agent-Vertiefung dazu
 (`konzept-agent-vertiefung.md`); sie öffnen keinen zweiten Weg ins Dokument:
 die lesenden rechnen auf der Arbeitskopie, die schreibenden reisen als Teil

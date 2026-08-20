@@ -470,9 +470,11 @@ class StartScreen(QWidget):
 
         Qt folgt der Reihenfolge, in der die Widgets entstanden sind, und die
         Kacheln entstehen im Konstruktor vor den Knöpfen — gemessen brauchte
-        es **neun** Tabulatorschritte bis „Neues Projekt", dem vorbelegten
-        Hauptknopf: acht Beispiele und dann er. Für die Maus ist die Anordnung
-        richtig, für die Tastatur war sie umgekehrt.
+        es einen Schritt je Beispiel und dann noch einen bis „Neues Projekt",
+        dem vorbelegten Hauptknopf. (Gemessen am 14.08.2026 mit acht
+        Beispielen, also neun Schritte; es sind inzwischen neun Beispiele. Die
+        Zahl wächst mit dem Katalog — der Befund nicht.) Für die Maus ist die
+        Anordnung richtig, für die Tastatur war sie umgekehrt.
 
         Gesetzt wird die Kette und nicht die Anordnung: Wo etwas steht,
         entscheidet weiterhin das Layout.

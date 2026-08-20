@@ -41,12 +41,7 @@ bekommt einen roten Lauf.
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
-| `CLAUDE.md` nennt `trimesh<5` als Grenze | Die Konzepte nachrecherchiert (19.08.2026) | einen Satz — die Grenze ist am 14.08. gefallen |
-| `CLAUDE.md` verweist auf die Bedienkonzept-Tabellen als „Stand" | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung: Satz nachziehen oder streichen |
-| Der Bauplan zählt fünf Werkzeuge und nennt vier | Die Konzepte nachrecherchiert (19.08.2026) | eine Bauplanänderung mit Ansage |
-| „Achter Umschalter" in dieser Datei | Die Konzepte nachrecherchiert (19.08.2026) | eine Ziffer — es ist der siebte, `Alt+7` |
-| `temperature` und die Modellvorgabe im Anthropic-Backend | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung über das Zielmodell; ab Opus 4.7 bricht der Aufruf |
-| Drei Docstrings mit überholtem Stand | Die Konzepte nachrecherchiert (19.08.2026) | drei Sätze — Schnapper, neun Beispiele, PETG-Volumenstrom |
+| Die Vorgabe für das Anthropic-Modell | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung samt zwei Suite-Läufen — der Alias trägt ein Rückzugsdatum |
 | D4 — ViewCube und Ansichtsleiste, wieder offen | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung: Würfel zurück, Leiste bauen oder beides lassen |
 | B1 — gehosteter Erzeugungsdienst als zweiter Weg | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung, nicht Code |
 
@@ -5515,8 +5510,9 @@ Solidon hatte drei Wege zu teilen und keinen, der über das Bild ging.
 ### Gebaut
 
 - [x] **`split_line` — an einer gezeichneten Linie trennen.** Zwei Klicks auf
-      das Teil, die Blickrichtung dazu, fertig ist die Ebene. Achter
-      Umschalter in der Werkzeugzeile (`SplitBar`), Verbindung vorgewählt,
+      das Teil, die Blickrichtung dazu, fertig ist die Ebene. Siebter
+      Umschalter in der Werkzeugzeile (`SplitBar`, `Alt+7` — hier stand bis
+      zum 19.08.2026 „achter", das ist `paint`), Verbindung vorgewählt,
       eine Transaktion, ein Undo, und je Stift ein Passungspaar (§14). Die
       Kamera steht nicht im Stapel: Die Blickrichtung wird einmal gelesen,
       und was in die Operation geht, sind Zahlen — sonst gäbe dieselbe Datei
@@ -6875,35 +6871,53 @@ bis siebzehn Tagen so bewegt, dass Entscheidungen daran hängen:
 **Was die Durchsicht nebenbei am Code gefunden hat**, jeweils außerhalb der
 Konzeptdateien und deshalb hier und nicht dort:
 
-- [ ] **`CLAUDE.md:95` nennt `trimesh<5` als „aufgeschobene Migration".** Der
-      Satz ist seit dem 14.08. falsch — `pyproject.toml:26` verlangt
-      `trimesh>=5.0`, installiert ist 5.0.0, und damit steht dort **keine
-      einzige Obergrenze mehr**. Er sitzt an einer Stelle, die jede Sitzung
-      liest.
-- [ ] **`CLAUDE.md` schickt den Leser für den Umsetzungsstand der
+- [x] **`CLAUDE.md` nannte `trimesh<5` als „aufgeschobene Migration".** Der
+      Satz war seit dem 14.08. falsch — `pyproject.toml:26` verlangt
+      `trimesh>=5.0`, und damit stand dort **keine einzige Obergrenze mehr**.
+      Berichtigt, und der Absatz sagt jetzt auch, was daraus folgt: Eine neue
+      Grenze ist eine Entscheidung und gehört begründet. Die nächste zeichnet
+      sich ab und liegt nicht in unserer Hand — `vtk 9.7.0` ist da, `pyvista`
+      verlangt `vtk<9.7.0`.
+- [x] **`CLAUDE.md` schickte den Leser für den Umsetzungsstand der
       Bedienkonzepte in ihre Schlusstabellen** — die nennen den Weg und den
-      Aufwand, nicht den Stand. Umgesetzt ist von sechzehn Regeln und sechs
-      Konzepten bis heute keines; drei sind auf anderem Weg eingelöst worden.
-      Beide Tabellen haben jetzt eine Stand-Spalte; der Satz in `CLAUDE.md`
-      gehört nachgezogen oder gestrichen.
-- [ ] **`3d-agent-bauplan.md:1244` zählt fünf neue Werkzeuge und nennt vier.**
-      Der Rest des zurückgenommenen `set_print_setting`. Eine Bauplanänderung
-      wird angesagt, nicht nebenbei gemacht.
-- [ ] **`ROADMAP.md:5511` sagt „Achter Umschalter in der Werkzeugzeile".** Es
-      ist der siebte, `Alt+7`.
-- [ ] **`app/core/backends/llm.py:223` sendet `temperature` unbedingt mit.**
-      Ab Claude Opus 4.7 ist der Parameter abgekündigt; ein Nicht-Standardwert
-      liefert einen 400er. Mit Sonnet 4.5 und 4.6 geht es weiter, mit jedem
-      neueren Modell scheitert der Aufruf. Dazu ist
-      `DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"` ein Alias auf den
-      Schnappschuss vom 29.09.2025 mit vorläufigem Rückzugsdatum „not sooner
-      than September 29, 2026"; der Nachfolger `claude-sonnet-5` kostet
-      weniger und hat das fünffache Kontextfenster.
-- [ ] **Drei Docstrings beschreiben einen überholten Stand.**
-      `app/core/geom/pins.py:111` kennt den Schnappverbinder nicht, obwohl
-      `plan_pins` ihn verarbeitet; `app/ui/start_screen.py:474` sagt „acht
-      Beispiele", es sind neun; `app/core/export/handover.py:722–731` trägt
-      den PETG-Volumenstrom 12 statt 10.
+      Aufwand, nicht den Stand. Beide Tabellen haben jetzt eine Stand-Spalte,
+      und der Satz in `CLAUDE.md` sagt das Ergebnis vorweg: **Entwurf, und
+      zwar vollständig** — umgesetzt ist von sechzehn Regeln und sechs
+      Konzepten keines, drei sind auf anderem Weg eingelöst worden.
+- [x] **`3d-agent-bauplan.md:1244` zählte fünf neue Werkzeuge und nannte
+      vier.** Der Rest des zurückgenommenen `set_print_setting`. Auf vier
+      berichtigt — und das ist keine Bauplanänderung mit Ansage, sondern die
+      Auflösung eines Widerspruchs im Bauplan selbst: Die Aufzählung darüber
+      ist die Wahrheit, die Zahl war ihr Rest.
+- [x] **Diese Datei sagte „Achter Umschalter in der Werkzeugzeile".** Es ist
+      der siebte, `Alt+7`; der achte ist `paint`. Berichtigt an der Stelle,
+      die es behauptete.
+- [x] **Das Anthropic-Backend sendete `temperature` unbedingt mit** — ab
+      Claude Opus 4.7 ist der Parameter entfernt, und ein Nicht-Standardwert
+      liefert einen 400er: Der Aufruf wäre also mit jedem neueren Modell
+      vollständig gescheitert, nicht bloß anders ausgefallen. Behoben über
+      eine **Positivliste** (`ANTHROPIC_MODELS_TAKING_TEMPERATURE`) statt einer
+      Sperrliste: Ein unbekanntes Modell fällt in „nicht senden", und das ist
+      immer zulässig — ohne Angabe nimmt die Gegenseite ihren Vorgabewert. Eine
+      vergessene Sperrzeile wäre dagegen ein harter Fehler. Verglichen wird
+      über den Namensanfang, weil dieselbe Fassung unter dem Alias und unter
+      ihrem Schnappschuss erreichbar ist. Zwei Tests in
+      `tests/test_backends.py`.
+- [ ] **Welches Anthropic-Modell die Vorgabe wird, ist offen.**
+      `DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"` ist ein Alias auf den
+      Schnappschuss vom 29.09.2025 und trägt ein vorläufiges Rückzugsdatum
+      („not sooner than September 29, 2026"); der Nachfolger `claude-sonnet-5`
+      kostet weniger und hat das fünffache Kontextfenster. Der Wechsel ist
+      damit eine Frage der Zeit — aber §35 verlangt die Suite vorher und
+      nachher, und die kostet Geld. Deshalb steht hier weiter der Stand, gegen
+      den zuletzt gemessen wurde.
+- [x] **Drei Docstrings beschrieben einen überholten Stand.** `PinPlan.shape`
+      kennt jetzt den Schnappverbinder samt seiner Mindestnaht von 5,4 mm;
+      `start_screen` zählt nicht mehr acht Beispiele, sondern sagt „einen
+      Schritt je Beispiel" — die Zahl wächst mit dem Katalog, der Befund
+      nicht; und `profile_differences` nennt beim Volumenstrom die richtige
+      Zeile: Beide Seiten sind sich mit 10 mm³/s einig, der Unterschied steht
+      beim PRO.
 - [ ] **D4 steht wieder offen** — ViewCube und Ansichtsleiste, siehe oben. Die
       sieben Kameravoreinstellungen liegen wieder allein im Menü.
 - [ ] **B1 aus dem Erzeugen-Konzept steht in keiner Arbeitsliste** — die

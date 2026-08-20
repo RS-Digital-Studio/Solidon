@@ -725,8 +725,9 @@ def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Fin
     Beide Seiten haben recht, und das ist der Punkt. Solidons Tabelle sagt,
     was PETG im Allgemeinen verträgt; das Profil des Herstellers sagt, was
     *diese Spule* auf *diesem Drucker* verträgt. Beim transluzenten Elegoo-PETG
-    sind das 255 °C bei 70 °C Bett gegen 240 bei 80 — und ein Volumenstrom von
-    10 mm³/s statt 12.
+    sind das 255 °C bei 70 °C Bett gegen 240 bei 80. Beim Volumenstrom sind
+    sich beide mit 10 mm³/s einig — der Unterschied steht beim PRO, und dort
+    um das Doppelte (5 gegen 10).
 
     Gemeldet, nicht stillschweigend übernommen: die Einstellung ist die
     Entscheidung des Nutzers. Wer den Hinweis liest, kann ihr widersprechen —

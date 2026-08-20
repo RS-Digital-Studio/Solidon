@@ -92,9 +92,12 @@ ab und sagt, wenn etwas abweicht — samt Befehl. Er läuft dafür auch ohne
 Fassungen" (montags, ohne `constraints.txt`) meldet, wenn eine neue Fassung
 etwas *bricht* — dass es überhaupt eine neuere *gäbe*, sagt er niemandem.
 Dafür ist `--outdated` da; es trennt, was gehen würde, von dem, was eine
-Grenze in `pyproject.toml` ausschließt (`trimesh<5` ist eine aufgeschobene
-Migration, kein Versehen). Steht der Satz länger als drei Monate, erinnert der
-Sitzungsstart-Hook daran. Der Weg zum neuen Stand ist immer derselbe:
+Grenze in `pyproject.toml` ausschließt — **dort steht seit dem 14.08.2026 keine
+mehr**, denn die letzte (`trimesh<5`) ist mit der Migration gefallen. Kommt eine
+neue dazu, ist sie eine Entscheidung und gehört begründet. Die nächste zeichnet
+sich schon ab, und sie liegt nicht in unserer Hand: `vtk 9.7.0` ist da, aber
+`pyvista` verlangt `vtk<9.7.0`. Steht der Satz länger als drei Monate, erinnert
+der Sitzungsstart-Hook daran. Der Weg zum neuen Stand ist immer derselbe:
 aktualisieren, **Suite fahren**, dann `--freeze` — nie umgekehrt.
 
 Qt-Tests brauchen kein Bild: `QT_QPA_PLATFORM=offscreen` setzt
@@ -147,8 +150,11 @@ Auflistung der Sitzung; hier stünden sie ein drittes Mal.
 
 Wie die Sitzung selbst bedienbar sein soll, steht in
 `.claude/bedienkonzept-ueberblick.md` (die Sitzung als Ganzes) und
-`.claude/bedienkonzept-funktionen.md` (sechzehn Funktionen einzeln). Entwurf,
-noch nicht Praxis — was daraus umgesetzt ist, steht dort in der Schlusstabelle.
+`.claude/bedienkonzept-funktionen.md` (sechzehn Funktionen einzeln). **Entwurf,
+und zwar vollständig:** Umgesetzt ist von den sechs Konzepten und sechzehn
+Regeln bis heute keines. Die Schlusstabellen beider Dateien nannten lange nur
+den *Ort* und den *Aufwand* — seit dem 19.08.2026 tragen sie eine Spalte mit dem
+Stand, und die ist der Blick, den es hier braucht.
 
 ## Arbeitsweise hier
 

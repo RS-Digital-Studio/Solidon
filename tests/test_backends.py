@@ -21,6 +21,7 @@ from app.core.backends.llm import (
     ollama_size_warning,
     ollama_tool_check,
     parse_parameter_count,
+    takes_temperature,
 )
 from app.core.backends.scripted import ScriptedBackend
 from app.core.errors import AppError
@@ -526,3 +527,46 @@ def test_the_shipped_graphs_name_no_non_commercial_model() -> None:
                 f"{graph.name} nennt {modell} — dessen Lizenz erlaubt keine "
                 "kommerzielle Nutzung (§36)"
             )
+
+
+def test_temperature_reaches_only_a_model_that_still_takes_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ab Claude Opus 4.7 ist ``temperature`` entfernt, und ein
+    Nicht-Standardwert liefert einen 400er — der Aufruf scheitert also
+    vollständig. Das Backend sendet den Parameter deshalb nur noch an Modelle,
+    die ihn annehmen; bei allen anderen fehlt er, und die Gegenseite nimmt
+    ihren eigenen Vorgabewert.
+
+    Geprüft wird über eine Positivliste, nicht über eine Sperrliste: Ein
+    unbekanntes Modell soll in „nicht senden" fallen, denn das ist immer
+    zulässig — eine vergessene Sperrzeile wäre ein harter Fehler.
+    """
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
+
+    transport = Recorder(anthropic_answer())
+    AnthropicBackend(transport=transport).complete([Message(role="user", content="x")])
+    assert transport.calls[0][2]["temperature"] == 0.0, "die heutige Vorgabe nimmt ihn"
+
+    for model in ("claude-opus-4-7", "claude-opus-5", "claude-sonnet-5", "claude-fable-5"):
+        transport = Recorder(anthropic_answer())
+        AnthropicBackend(model=model, transport=transport).complete(
+            [Message(role="user", content="x")]
+        )
+        assert "temperature" not in transport.calls[0][2], model
+
+    transport = Recorder(anthropic_answer())
+    AnthropicBackend(model="claude-etwas-noch-nicht-erschienenes", transport=transport).complete(
+        [Message(role="user", content="x")]
+    )
+    assert "temperature" not in transport.calls[0][2], "unbekannt heißt: nicht senden"
+
+
+def test_a_model_alias_and_its_snapshot_are_judged_alike() -> None:
+    """Dieselbe Fassung ist unter zwei Namen erreichbar — dem Alias und dem
+    Schnappschuss mit Datum. Wer nur den Alias prüft, schickt an den
+    Schnappschuss keinen Parameter und an den Alias einen.
+    """
+    assert takes_temperature("claude-sonnet-4-5")
+    assert takes_temperature("claude-sonnet-4-5-20250929")
+    assert not takes_temperature("claude-opus-5")

@@ -108,12 +108,18 @@ class PinPlan:
     Fläche, in der er sitzt — er schert beim Fügen.
     """
     shape: str = "round"
-    """Querschnitt der Stifte — ``round``, ``hex`` oder ``dovetail``.
+    """Verbinder — ``round``, ``hex``, ``dovetail`` oder ``snap``.
 
     Rund braucht zwei Stück gegen Verdrehen, die kantigen halten schon
     einzeln. Welcher es ist, entscheidet der Nutzer; die Planung sucht in
     jedem Fall Platz für einen Kreis dieses Durchmessers, und was
-    hineingelegt wird, passt dann hinein."""
+    hineingelegt wird, passt dann hinein.
+
+    ``snap`` ist der Ausreißer: kein Querschnitt, sondern ein federnder Arm
+    aus der Bausteinbibliothek. Er steht hier trotzdem in derselben Liste,
+    weil er für den Nutzer dieselbe Entscheidung ist — und er braucht eine
+    Naht von mindestens 5,4 mm, sonst wird rund daraus
+    (``split.snap_too_small``)."""
     findings: tuple[Finding, ...] = ()
 
     @property

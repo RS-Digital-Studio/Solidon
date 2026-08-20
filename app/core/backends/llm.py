@@ -170,8 +170,44 @@ class BackendUnavailable(ExternalToolError):
 
 
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"
+"""Das Modell, gegen das gefahren wird, wenn der Nutzer keines einträgt.
+
+Der Name ist ein Alias auf einen Schnappschuss (``claude-sonnet-4-5-20250929``)
+und trägt ein vorläufiges Rückzugsdatum — „not sooner than September 29, 2026".
+Ein Wechsel ist damit eine Frage der Zeit und keine des Geschmacks; er gehört
+aber gemessen, nicht geraten (§35: die Suite vorher und nachher), und deshalb
+steht hier weiter der Stand, gegen den zuletzt gemessen wurde.
+"""
+
+#: Modelle, die ``temperature`` noch annehmen.
+#:
+#: Eine **Positivliste**, und das ist der Punkt: Ab Claude Opus 4.7 ist der
+#: Parameter entfernt, und ein Nicht-Standardwert liefert einen 400er — der
+#: Aufruf scheitert also vollständig, nicht bloß anders. Wer hier eine
+#: Negativliste führte, müsste sie zu jedem neuen Modell nachziehen und bekäme
+#: bis dahin einen harten Fehler. So fällt ein unbekanntes Modell in „nicht
+#: senden", und das ist immer zulässig: Ohne Angabe nimmt die Gegenseite ihren
+#: eigenen Vorgabewert.
+ANTHROPIC_MODELS_TAKING_TEMPERATURE: Final = (
+    "claude-sonnet-4-5",
+    "claude-haiku-4-5",
+    "claude-opus-4-5",
+    "claude-opus-4-6",
+    "claude-sonnet-4-6",
+)
+
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
+
+
+def takes_temperature(model: str) -> bool:
+    """Nimmt dieses Modell den ``temperature``-Parameter noch an?
+
+    Verglichen wird über den Namensanfang, weil dieselbe Fassung sowohl unter
+    dem Alias (``claude-sonnet-4-5``) als auch unter ihrem Schnappschuss
+    (``claude-sonnet-4-5-20250929``) angesprochen werden kann.
+    """
+    return model.startswith(ANTHROPIC_MODELS_TAKING_TEMPERATURE)
 
 
 @dataclass(slots=True)
@@ -220,9 +256,10 @@ class AnthropicBackend:
         payload: dict[str, Any] = {
             "model": self.model,
             "max_tokens": limit,
-            "temperature": temperature,
             "messages": [_as_anthropic(entry) for entry in messages if entry.role != "system"],
         }
+        if takes_temperature(self.model):
+            payload["temperature"] = temperature
         if system:
             # Der Systemblock ist über alle Schritte eines Zuges identisch —
             # die Markierung lässt ihn im Zwischenspeicher der Gegenseite
