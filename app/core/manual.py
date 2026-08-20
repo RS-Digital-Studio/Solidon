@@ -111,7 +111,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "sein.\n\n"
             "**Was es nicht ist:** kein Slicer — die Druckdatei kommt weiter "
             "aus dem Slicer, Solidon sucht und bewertet nur. Keine Cloud — kein "
-            "Konto, keine Telemetrie, nichts, was den Rechner verlässt.\n\n"
+            "Konto, keine Telemetrie, nichts, was den Rechner von allein verlässt.\n\n"
             "Ohne Netz, ohne Konto und ohne Sprachmodell bleibt alles außer dem "
             "Chat benutzbar."
         ),
@@ -180,7 +180,8 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Oben die Werkzeugleiste:** Neu, Öffnen, Speichern, *Modell "
             "einfügen* — und *Zeichnen*, das die Mitte zur Zeichenfläche "
             "macht, solange gezeichnet wird. Escape kommt daraus zurück wie "
-            "aus jedem anderen Werkzeug.\n\n"
+            "aus jedem anderen Werkzeug. Die Knöpfe tragen nur ihr Zeichen; "
+            "der Name erscheint, sobald der Zeiger darauf stehen bleibt.\n\n"
             "**Unter dem Modell die Werkzeugzeile:** *Schnitt*, *Messen*, "
             "*Bewegen*, *Analyse*, *Schichten*, *Explosion*, *Trennen*, "
             "*Bemalen* — von links nach rechts auf Alt+1 bis Alt+8. Die "
@@ -319,10 +320,12 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Für den Umriss, den kein Grundkörper hergibt. Ein Klotz mit einer "
             "Bohrung braucht keine Zeichnung — eine Grundplatte mit einer "
             "Aussparung, in die ein Netzteil passt, schon.\n\n"
-            "**Angefangen wird oben in der Werkzeugleiste.** Der Knopf "
-            "*Zeichnen* macht die Mitte des Fensters zur Zeichenfläche, und was daraus "
-            "entsteht, entscheiden Sie am Ende — nicht vorher. Escape kommt "
-            "wieder heraus, wie aus jedem anderen Werkzeug.\n\n"
+            "**Angefangen wird oben in der Werkzeugleiste.** Das fünfte Zeichen "
+            "von links ist *Zeichnen* — die Knöpfe dort tragen keine Beschriftung, "
+            "ihr Name steht am Zeiger. Es macht die Mitte des Fensters zur "
+            "Zeichenfläche, und was daraus entsteht, entscheiden Sie am Ende — nicht "
+            "vorher. Escape kommt wieder heraus, wie aus jedem anderen "
+            "Werkzeug.\n\n"
             "![](figure:sketch-mode)\n\n"
             "**Zuerst die Ebene, dann die Linie.** *XY* liegt flach wie die "
             "Druckplatte, *XZ* und *YZ* stehen. Ist ein Körper in der Szene, "
@@ -444,7 +447,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Weg 2 — selbst konstruieren.** Aus Grundkörpern, Bausteinen und "
             "Zeichnungen etwas Neues, mit benannten Parametern: Breite, Tiefe, "
             "Stärke. Ändert sich eine Zahl, ändert sich das Teil. Was kein "
-            "Grundkörper hergibt, wird gezeichnet — der Knopf *Zeichnen* oben "
+            "Grundkörper hergibt, wird gezeichnet — das Zeichen *Zeichnen* oben "
             "in der Werkzeugleiste, beschrieben im Kapitel davor.\n\n"
             "**Weg 3 — ein erzeugtes Modell aufbereiten.** Was ein Bildmodell "
             "liefert, ist eine Oberfläche und keine Konstruktion. Sie kommt "
@@ -850,11 +853,11 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "man das Netz vermisst.\n\n"
             "**Die Modelle gehören nicht uns, und ihre Lizenzen auch "
             "nicht.** Welches Modell ComfyUI benutzt, entscheiden Sie — "
-            "Solidon liefert keines mit. Das verbreitetste für diesen "
-            "Zweck, Hunyuan3D, ist für die Europäische Union ausdrücklich "
-            "**nicht** lizenziert; frei lizenziert sind etwa Step1X-3D und "
-            "TripoSG. Der mitgelieferte Ablauf nennt Rollen und keine "
-            "Dateinamen: ein anderes Modell einzusetzen heißt, es zu "
+            "Solidon liefert keines mit. Der mitgelieferte Ablauf setzt auf "
+            "**TripoSG**, dessen MIT-Lizenz hier nichts offenlässt; das "
+            "verbreitetere Hunyuan3D ist für die Europäische Union "
+            "ausdrücklich **nicht** lizenziert. Der Ablauf nennt Rollen und "
+            "keine Dateinamen: ein anderes Modell einzusetzen heißt, es zu "
             "installieren, sonst nichts.\n\n"
             "**Das Erzeugte wird eine Quelle, keine Operation.** Ein "
             "Generator ist keine Funktion: dieselbe Anfrage liefert nach "
@@ -995,7 +998,12 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "vereinfachen — die Dreieckszahl steht im Objektbaum.\n\n"
             "**Grundsätzlich gilt:** Kein Fehler in Solidon endet bei der "
             "Feststellung. Steht keine Handlung dabei, mit der es weitergeht, "
-            "ist das ein Fehler in Solidon und einen Bericht wert."
+            "ist das ein Fehler in Solidon und einen Bericht wert. Der Weg "
+            "dahin ist *Hilfe → Rückmeldung senden*: Bildschirmfoto, "
+            "Protokoll und auf Wunsch die laufende Sitzung gehen mit, die "
+            "Vorschau zeigt vorher alles, und ein Knopf schickt es an den "
+            "Support. Wer nichts aus der Hand geben möchte, legt im selben "
+            "Dialog stattdessen einen Ordner auf dem eigenen Rechner ab."
         ),
     ),
     Page(
@@ -1263,9 +1271,26 @@ def remote_text(registry: Registry | None = None) -> str:
             )
         )
         lines.append("")
+        # Menschentitel für Werkzeuge, die in keinem Menü stehen — nur fürs
+        # Handbuch, die Leitung kennt weiter die Namen. Ein Werkzeug ohne
+        # Eintrag hier erscheint mit seinem Namen, statt zu fehlen.
+        remote_titles = {
+            "undo_transaction": _("Transaktion zurücknehmen"),
+            "add_parameter": _("Parameter anlegen"),
+            "set_parameter": _("Parameter ändern"),
+            "add_fit": _("Passung anlegen"),
+            "read_report": _("Prüfbericht lesen"),
+            "find_part": _("Baustein suchen"),
+            "read_digest": _("Steckbrief lesen"),
+            "read_standard": _("Normteilmaße nachschlagen"),
+            "read_analysis": _("Analyse lesen"),
+            "set_print_target": _("Drucker und Material wechseln"),
+        }
         for entry in others:
             doc = " ".join(str(entry["description"]).split())
-            lines.append(f"- `{entry['name']}` — {doc}" if doc else f"- `{entry['name']}`")
+            title = remote_titles.get(entry["name"])
+            head = f"- **{title}** (`{entry['name']}`)" if title else f"- `{entry['name']}`"
+            lines.append(f"{head} — {doc}" if doc else head)
         lines.append("")
 
     lines.append(f"### {_('Was nicht durch die Leitung geht')}")
@@ -1285,7 +1310,7 @@ def remote_text(registry: Registry | None = None) -> str:
     # und nicht über einen Zugriff, der bei ihm mit einem Programmfehler endet.
     titles = {spec.name: str(spec.title) for spec in source.all()}
     for name in sorted(DENIED):
-        lines.append(f"- `{name}` — {titles.get(name, _('Rückfrage an den Nutzer'))}")
+        lines.append(f"- **{titles.get(name, _('Rückfrage an den Nutzer'))}** (`{name}`)")
     lines.append("")
     lines.append(
         str(
@@ -1383,24 +1408,40 @@ def knowledge_pages() -> tuple[Page, ...]:
     zweite Liste veraltet. Ändert jemand eine Toleranz, ändert sich diese Seite
     mit — sonst stünde hier eine Zahl, nach der niemand mehr rechnet.
     """
+
+    def titled(title: object, body: str) -> str:
+        # Die Überschrift gehört in den Text, wie bei den Kategorie-Seiten:
+        # daran erkennt der Ankersetzer das Kapitel, und das Verzeichnis
+        # springt hin, statt ins Leere zu zeigen.
+        return f"## {title}\n\n{body}"
+
+    rules_title = _("Wonach Solidon urteilt")
+    profiles_title = _("Material, Drucker, Normteile")
+    remote_title = _("Die Werkzeuge der Fernsteuerung")
+    messages_title = _("Meldungen im Wortlaut")
     return (
-        Page(key="rules", title=_("Wonach Solidon urteilt"), body=rules_text(), generated=True),
+        Page(
+            key="rules",
+            title=rules_title,
+            body=titled(rules_title, rules_text()),
+            generated=True,
+        ),
         Page(
             key="profiles",
-            title=_("Material, Drucker, Normteile"),
-            body=profiles_text(),
+            title=profiles_title,
+            body=titled(profiles_title, profiles_text()),
             generated=True,
         ),
         Page(
             key="remote-tools",
-            title=_("Die Werkzeuge der Fernsteuerung"),
-            body=remote_text(),
+            title=remote_title,
+            body=titled(remote_title, remote_text()),
             generated=True,
         ),
         Page(
             key="messages",
-            title=_("Meldungen im Wortlaut"),
-            body=messages_text(),
+            title=messages_title,
+            body=titled(messages_title, messages_text()),
             generated=True,
         ),
     )

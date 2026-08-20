@@ -28,6 +28,9 @@ bekommt einen roten Lauf.
 | Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | die Entscheidung, ob `_chain` mit ausgeliefert wird; der kompilierte Kern steht und bringt 1,34× — oben liegt der Polygonaufbau in GEOS (446 von 1256 ms, profiliert am 20.08.), und der ist von Python aus nicht zu beschleunigen |
 | CI-Bauläufe und Signierung | P8 — Erste Veröffentlichung | einen CI-Dienst, der die Läufe fährt; die Signierung ein Zertifikat. AppImage und Flatpak stehen seit dem 20.08. |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
+| Die zwei Dreieckszahl-Grenzen zusammenbringen | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Entscheidung: Merkmale ab 200 000 oder wasserdicht bleiben — beides zugleich geht erst, wenn `decimate` sauber arbeitet |
+| `decimate` zerlegt glatte Körper | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Vereinfachung, die die Topologie hält; die Reparaturkette holt nur die Teilzahl zurück, nicht die Wasserdichtheit |
+| Erscheinungstermin steht zweimal je Startseite | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | einen ruhigen Tag — bis dahin hält ein Test Zähler und Umschaltung zusammen |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
@@ -596,6 +599,41 @@ bekommt einen roten Lauf.
       das läuft ohne jeden Eintrag. Eine Datei `_acme-challenge.txt` im
       Webspace hilft dabei nicht — eine DNS-Challenge wird im DNS abgefragt.
 
+      **Auffindbar erst seit dem 20.08.2026.** Die Seite stand zwölf Tage
+      online und war in keinem Index: `site:solidon3d.de` lieferte null
+      Treffer. Der Kopfbereich war seit je vorbildlich — `canonical`,
+      `hreflang` über alle sechs Sprachen samt `x-default`, Open Graph,
+      `SoftwareApplication` als JSON-LD, und kein einziges Bild ohne
+      alt-Text —, aber die zwei Dateien fehlten, die ein Crawler zuerst holt:
+      `robots.txt` und `sitemap.xml`, beide 404. Ohne Sitemap muss Google 24
+      Seiten über Verweise finden, und eine Domain ohne eingehende Links hat
+      keine. Beides erzeugt jetzt `tools/make_seo.py` aus dem Bestand, dazu
+      `llms.txt` und die `FAQPage`-Auszeichnung der elf Fragen in allen sechs
+      Sprachen; `tests/test_website.py` prüft die Sitemap in beide Richtungen
+      und die Auszeichnung gegen das Markup, aus dem sie stammt.
+
+      Drei Funde waren keine Schönheitsfehler. Die Rechtstexte tragen
+      `noindex` — sie in die Sitemap zu schreiben, hätte der Search Console
+      einen Widerspruch gemeldet, den dann Google auflöst statt wir. Die
+      Kopfzeile des Handbuchs verwies auf `index.html` statt auf den Ordner
+      und legte damit jede Startseite unter eine zweite Adresse. Und
+      `Clear-Site-Data: "cache"` ging bei jeder Antwort mit: ein Übergang vom
+      18.08., der den Cache jedes Besuchers vollständig räumte — ausgerechnet
+      am Tag mit den meisten Erstbesuchern. Er ist raus, Bilder cachen eine
+      Woche, Seiten bleiben auf `no-cache`.
+
+      Zwei Punkte der Durchsicht haben sich beim Nachmessen erledigt: „der
+      Text nennt 3D-Druck nicht" stimmte nur für die exakte Zeichenfolge — der
+      Wortstamm steht vierzehnmal auf der Startseite, in acht Formen —, und
+      ausgehende Verweise auf Autoritätsseiten verbietet die Zusage der Seite
+      selbst (`test_the_page_loads_nothing_from_outside`). Beides blieb
+      unangetastet.
+
+      Was bleibt, liegt außerhalb: **der Name kollidiert.** Eine Suche nach
+      „Solidon3D" liefert SolidWorks, Solid Edge, SolidPrint3D, Solidscape und
+      Solidoodle; Google behandelt „Solidon" als Verschreiber. Dagegen hilft
+      keine Auszeichnung, nur Zeit und Erwähnungen anderswo.
+
       Offen: Postfach `support@solidon3d.de` samt SPF/DMARC und der
       Auftragsverarbeitungsvertrag im CCP. Der Zahlungsdienstleister in den AGB
       ist seit dem 08.08.2026 eingetragen (Paddle); Entwurf bleiben die
@@ -627,8 +665,12 @@ Anmerkungen zu P9:
   einheitliches Grau zurück — Schreiben *und* Lesen der Materialgruppen liegen
   darum in `app/core/export/threemf.py`.
 * Die mitgelieferten ComfyUI-Arbeitsabläufe (`app/core/backends/data/*.json`)
-  sind ein Startpunkt für Hunyuan3D. Wer andere Knoten installiert hat, ersetzt
-  die Datei — Quelltext ist dafür nicht nötig.
+  laufen gegen **TripoSG** (MIT für Quelltext und Gewichte). Hunyuan3D lieferte
+  dieselbe Güte, aber seine Lizenz nimmt die Europäische Union ausdrücklich aus
+  — für eine Anwendung, die hier verkauft wird, ist das ein Ausschluss und
+  keine Fußnote. Die Knoten dazu stehen unter `tools/comfyui/` und werden mit
+  `python tools/setup_comfyui.py` eingerichtet. Wer andere Knoten installiert
+  hat, ersetzt die Datei — Quelltext ist dafür nicht nötig.
 
 ## P10 — Auto Split mit Verstiftung
 - [x] Trennebene über die Schichtanalyse suchen (§22.3), dann konvexe Zerlegung
@@ -7735,3 +7777,444 @@ und die drei Rundungspfade, die 40 mm über beide Richtungen bei 40 mm halten.
 durch `STEPS_PER_MM`) und ist keiner: ein `QSlider`, dessen `value()` Schritte
 zählt und keine Millimeter. Der Unterschied zwischen einem Fund und einem
 Verdacht ist eine Zeile nachsehen.
+## Die Slicer-Übergabe gegen die echten Slicer geprüft (20.08.2026)
+
+Alle drei Familien gegen die installierten Programme durchgemessen, nicht
+gegen die Erinnerung: PrusaSlicer 2.9.6, ElegooSlicer 1.5.3.4, CuraEngine
+5.13.0. Jede Behauptung unten hat einen Lauf hinter sich oder eine Zeile aus
+`fdmprinter.def.json` beziehungsweise der ausgeschriebenen Prusa-Vorgabe
+(`prusa-slicer-console --save`).
+
+Das Ergebnis fällt scharf auseinander. **PrusaSlicer nimmt 53 von 53
+geschriebenen Schlüsseln an, ElegooSlicer 56 von 56** — die Gegenprobe meldet
+bei beiden nichts, und das stimmt auch. **CuraEngine ist ein anderer Fall**,
+und der Grund steht am Ende dieses Abschnitts.
+
+### Der Stützwinkel misst in zwei Richtungen — und Solidon schreibt eine Zahl
+
+`SupportSettings.threshold_angle` ist dokumentiert als „Grad gegen die
+Senkrechte, ab dem gestützt wird". Das ist Curas Konvention. PrusaSlicer und
+die Orca-Familie messen **gegen die Horizontale**, und beide Tooltips sagen es
+wörtlich: „slope angle (90° = vertical) is above the given threshold" bei
+Prusa, „overhangs whose slope angle is below the threshold" bei Orca.
+
+Gemessen an einem eigens gebauten Keil, dessen Überhangfläche 30° zur
+Horizontalen steht — also 60° zur Senkrechten:
+
+| geschriebener Wert | PrusaSlicer | ElegooSlicer | CuraEngine |
+|---|---|---|---|
+| 20 | keine Stütze | 68 Abschnitte | 136 Abschnitte |
+| 40 | 260 Abschnitte | 236 Abschnitte | 136 Abschnitte |
+| 50 | 260 Abschnitte | 236 Abschnitte | 136 Abschnitte |
+| 70 | 260 Abschnitte | 236 Abschnitte | keine Stütze |
+
+Der Kipppunkt liegt bei Prusa und Orca zwischen 20 und 40 — dort, wo der
+Überhang 30 misst. Bei Cura zwischen 50 und 70 — dort, wo er 60 misst. Beide
+haben recht, sie messen nur verschieden. Solidon schickt allen dreien
+dieselbe Zahl. Für Prusa und Orca müsste sie `90 − Wert` lauten.
+
+Bei der Vorgabe 50 gegen 40 ist der Unterschied noch verzeihlich. An den
+Rändern kehrt er sich um: Wer 20 einstellt, meint „stütze fast alles" und
+bekommt von PrusaSlicer „stütze fast nichts".
+
+### CuraEngine löst keine Vererbung auf — und das kostet ein Drittel
+
+`_machine_keys` sagt es bereits: „Sie löst keine Vererbung auf — was das
+Fenster sonst aus Definition, Qualität, Material und Variante zusammenrechnet,
+muss ihr einzeln mitgegeben werden." Der Satz stimmt, aber die Folgerung wurde
+nur für drei Schlüssel gezogen (`roofing_layer_count`, `flooring_layer_count`,
+`acceleration_enabled`) und für einen vierten in `_cura_dependants`
+(`initial_layer_line_width_factor`). Sie gilt für zwölf weitere.
+
+In `fdmprinter.def.json` trägt jede abgeleitete Einstellung einen
+`value`-Ausdruck **und** einen `default_value`. Das Fenster wertet den
+Ausdruck aus, `CuraEngine` nimmt den Vorgabewert. Was Solidon schreibt, bleibt
+damit an seinem Schlüssel stehen und erreicht die Schlüssel nicht, aus denen
+gerechnet wird:
+
+| Solidon schreibt | erreicht **nicht** | die bleiben bei |
+|---|---|---|
+| `line_width=0.42` | `wall_line_width_0/x`, `skin_line_width`, `infill_line_width`, `skirt_brim_line_width`, `support_line_width`, `support_interface_line_width` | 0.4 |
+| `infill_sparse_density=15` | `infill_line_distance` | **2 mm** statt 5,6 |
+| `acceleration_print=8000` | 22 Feature-Beschleunigungen | 3000 |
+| `cool_fan_speed=60` | `cool_fan_speed_min/max` | 100 |
+| `material_flow=98` | sieben `*_material_flow` | 100 |
+| `retraction_speed=35` | `retraction_retract_speed`, `retraction_prime_speed` | 25 |
+| `speed_layer_0=20` | `speed_print_layer_0`, `skirt_brim_speed` | 30 |
+| `speed_topbottom=40` | `speed_roofing`, `speed_flooring`, `speed_ironing` | 25 |
+| `bottom_layers=4` | `initial_bottom_layers` | 6 |
+| `support_infill_rate=15` | `support_line_distance` | 2.66 |
+| `support_interface_height` | `support_roof_height`, `support_bottom_height` | 1 |
+
+Gemessen an einem 20-mm-Würfel, zweimal derselbe Lauf, einmal wie Solidon
+heute übergibt und einmal mit aufgelösten Werten:
+
+```
+                          Solidon heute    aufgeloest
+Filament                     1100,4 mm      817,6 mm     +34,6 %
+Druckzeit                       753 s         660 s      +14,1 %
+Luefter (M106)                    255      153 / 255
+Beschleunigung (M204)   3000/4000/5000   4000/5000/8000
+```
+
+Ein Drittel Material zu viel, und die Füllung ist der Hauptgrund: 2 mm
+Linienabstand statt 5,6 sind nicht 15 Prozent, sondern gut vierzig.
+
+### Drei Cura-Schlüssel treffen nichts
+
+**`outer_inset_first` gibt es in Cura 5.13 nicht.** Der Schalter heißt
+`inset_direction` mit `inside_out`/`outside_in`; der alte Name steht in keiner
+der 753 Einstellungen der Definition. Ein unbekannter `-s`-Wert wird
+stillschweigend verworfen. Gemessen: mit Solidons Übergabe beginnen **0 von 50
+Lagen** außen, mit `inset_direction=outside_in` **49 von 50**. „Außenwand
+zuerst" ist bei Cura folgenlos — und das ist die Einstellung, die `advise` bei
+Passungen setzt.
+
+**`retraction_hop` wirkt nicht ohne `retraction_hop_enabled`**, und dessen
+Vorgabe ist `false`. Gemessen: 0 Z-Sprünge gegen 5, sonst gleicher Lauf.
+
+**`support_interface_height` ist eine Höhe in Millimetern**, nicht eine
+Schichtzahl. Solidons `interface_layers=2` wird zu 2 mm — bei 0,2er Schichten
+das Zehnfache des Gemeinten. Orca (`support_interface_top_layers`) zählt
+Schichten, Cura misst.
+
+### Mit Stützen liefert CuraEngine gar nichts
+
+Zwei Einstellungen fehlen dem Extruder-Zug, und der Lauf endet, bevor eine
+Bahn entsteht:
+
+```
+style=grid   Rückgabewert 3221225477 (Access Violation), 444 Bytes ohne Bahn
+             [error] Trying to retrieve setting with no value given: support_z_seam_away_from_model
+style=tree   Rückgabewert 2, keine Datei
+             [error] ... : min_wall_line_width
+```
+
+Mit `support_z_seam_away_from_model=false` läuft `grid` durch (136
+Stützabschnitte), mit zusätzlich `min_wall_line_width` auch `tree`. Es ist
+derselbe Fall wie `roofing_layer_count` — nur trifft er jeden Druck mit
+Stützen, und Solidon fängt ihn nur als „Der Slicer hat das Modell nicht
+verarbeitet" ab.
+
+### Was Cura kennt und Solidon nicht schreibt
+
+`shell.seam_position` → `z_seam_type`, `temperature.chamber` →
+`build_volume_temperature`, `cooling.bridge_fan_speed` → `bridge_fan_speed`,
+`filament.max_flow` → `material_max_flowrate`. Die beiden Brückenwerte
+brauchen zusätzlich `bridge_settings_enabled=true` — ohne den gilt auch
+`speed.bridge` nicht, das Solidon bereits schreibt.
+
+Ohne Entsprechung und damit zu Recht ohne Eintrag: `wall_generator`,
+`precise_outer_wall`, `retraction.wipe`, `filament.density`, `filament.colour`,
+`filament.cost_per_kg`.
+
+### PrusaSlicer: zwei Lücken
+
+**`support.placement` erreicht PrusaSlicer nicht**, obwohl
+`support_material_buildplate_only` in seiner Vorgabedatei steht. Gemessen an
+demselben Keil: 260 Stützabschnitte wie Solidon übergibt, 234 mit dem Schalter.
+Wer „nur auf der Platte" einstellt, bekommt Stützen auf dem Modell.
+
+**`support.density` hat in keiner der beiden älteren Familien eine
+Entsprechung in Prozent.** PrusaSlicer führt `support_material_spacing`, Orca
+`support_base_pattern_spacing` — beides Abstände in Millimetern. Nur Cura
+kennt `support_infill_rate`. Der Wert ist damit für zwei von drei Slicern
+folgenlos, und der Dialog bietet ihn trotzdem an.
+
+### Warum das keiner gemerkt hat
+
+Die Gegenprobe in `verify()` liest die Konfiguration, die der Slicer als
+Kommentar in die Druckdatei schreibt. Das ist die richtige Idee, und sie trägt
+weit — aber nicht überall gleich weit:
+
+```
+Cura :  0 von 47 geschriebenen Schluesseln stehen im G-Code
+Prusa: 53 von 53
+Orca : 56 von 56
+```
+
+`CuraEngine` schreibt seine Einstellungen nicht in die Datei; das tut nur das
+Fenster. Der Mechanismus, der die Zuordnung selbst prüft, ist genau dort
+blind, wo die meisten Fehler sitzen. Was bei Cura hilft, ist kein
+Konfigurationskommentar, sondern die Definition daneben: `fdmprinter.def.json`
+liegt bei jeder Installation, nennt jeden gültigen Schlüssel, seine Einheit
+und seinen Vorgabewert — und hätte `outer_inset_first` beim ersten Lauf
+auffallen lassen.
+
+Auf der Testseite fehlt dieselbe Frage.
+`test_every_setting_in_a_table_actually_exists` prüft den Solidon-Pfad, nicht
+den Namen beim Slicer; `test_the_core_settings_reach_every_slicer` prüft neun
+von sechsundfünfzig Einstellungen, und keine der oben gefundenen ist unter den
+neun.
+
+### Nebenbei
+
+Der Rückweg misst je Slicer verschieden vollständig: bei Cura bleibt
+`filament_grams` leer, bei PrusaSlicer `layer_count`. Und eine exportierte 3MF
+trägt ihre Einstellungen nur für die Orca-Familie — für PrusaSlicer enthält
+sie `Metadata/model_settings.config` und sonst nichts, obwohl PrusaSlicer eine
+eigene Konfigurationsdatei in der 3MF läse.
+
+Der 3MF-Weg zu ElegooSlicer wurde mitgeprüft und ist in Ordnung: geschrieben,
+geöffnet, gerechnet, und die Gegenprobe meldet keine Abweichung.
+
+### Behoben (20.08.2026)
+
+Alles aus der Durchsicht darüber, gemessen gegen dieselben drei Programme.
+
+**Der Stützwinkel wird umgerechnet.** `_angle_from_horizontal` schreibt
+PrusaSlicer und der Orca-Familie `90 − Wert`; Cura bekommt die Zahl wie sie
+ist. Derselbe Keil, alle drei nachgemessen: der Kipppunkt liegt jetzt bei
+allen zwischen 50 und 70, dort wo der Überhang steht.
+
+**Die Cura-Ableitungen sind vollständig.** Reine Kopien in `CURA_MIRRORED`,
+Faktoren in `CURA_SCALED`, Gerechnetes in `_cura_rated` — jede Zeile die
+Formel aus `fdmprinter.def.json`, nicht eine Meinung darüber. Aus 47
+geschriebenen Schlüsseln sind 224 geworden, und der 20-mm-Würfel braucht
+**809,8 mm Filament statt 1100,4** und 647 Sekunden statt 753. Der Lüfter
+fährt 60 Prozent, die Beschleunigung 8000, und die Außenwand kommt in
+neunundvierzig von fünfzig Lagen zuerst.
+
+Damit die Reihenfolge stimmt, kommen die drei Stufen jetzt an **einer** Stelle
+zusammen: `values_for` legt Zuordnung, Maschine und Ableitung übereinander.
+Vorher hätte die Ableitung auf einen Düsendurchmesser gerechnet, den sie noch
+nicht kannte.
+
+**Drei Cura-Schlüssel treffen jetzt.** `inset_direction` statt
+`outer_inset_first`, `retraction_hop_enabled` neben dem Sprung,
+`support_interface_height` als Millimeter aus Schichtzahl mal Schichthöhe —
+samt der Schalter, ohne die Cura gar keine Schnittstelle baut.
+
+**Mit Stützen läuft Cura wieder.** `support_z_seam_away_from_model` und
+`min_wall_line_width` stehen bei `roofing_layer_count`, wo diese Sorte
+hingehört. Beide Stützarten kommen durch: Gitter 220 Abschnitte, Baum 217.
+
+**Vier neue Zuordnungen**, alle in der Definition nachgeschlagen:
+`z_seam_type`, `build_volume_temperature`, `bridge_fan_speed` und
+`material_max_flowrate` — dazu `bridge_settings_enabled`, ohne den weder die
+Brückengeschwindigkeit noch der Brückenlüfter gelten, und `speed_print`, aus
+dem Cura alles ableitet, was Solidon nicht einzeln setzt.
+
+**PrusaSlicer bekommt die Stützplatzierung** (`support_material_buildplate_only`),
+und beide älteren Familien die **Stützdichte** als Linienabstand, den sie
+statt eines Anteils führen.
+
+**Die exportierte 3MF trägt ihre Einstellungen auch für PrusaSlicer.** Er
+schreibt `Metadata/Slic3r_PE.config` beim Konsolenexport selbst nicht mit,
+liest sie aber: ohne `--load` geslict kamen sieben Wände und 33 Prozent
+Füllung an. Eine Falle steckte darin — er **überspringt die erste Zeile**, und
+ohne Kopfzeile fiel `avoid_crossing_perimeters` lautlos heraus. Gefunden, weil
+die Gegenprobe danach genau diesen einen Wert meldete.
+
+**Die Lücke in der Gegenprobe ist zu.** Für Cura gibt es keine Konfiguration
+im G-Code, aber eine Definition neben dem Programm: `unknown_keys()` liest
+`fdmprinter.def.json` der **installierten** Fassung und meldet, was sie nicht
+kennt. Dieselbe Absicht wie `verify()`, aus der einzigen Quelle, die dieser
+Slicer hergibt.
+
+**Und die Tests, die das halten.** `test_every_setting_reaches_every_slicer`
+prüft alle sechsundfünfzig Einstellungen gegen alle drei Familien statt neun
+handverlesener; wo eine nicht ankommen kann, steht der Grund in `UNREACHABLE`.
+`test_every_cura_key_exists_in_the_definition` und
+`test_nothing_cura_derives_is_left_to_its_default` prüfen gegen eine echte
+Cura-Installation und überspringen, wo keine liegt. Beide wurden gegen die
+alten Fehler gehalten: sie schlagen an.
+
+Nebenbei: **die Schichtzahl fehlte bei PrusaSlicer**, weil er sie im Kopf
+nicht nennt — gezählt sind seine Wechselmarken dieselbe Auskunft. Das Gewicht
+bei Cura rechnete `grams()` schon immer aus dem Volumen, wenn der Kopf
+schweigt.
+
+Offen bleibt einer: **die 3MF für Cura gibt es weiterhin nicht** — sie liest
+nur sein Fenster, nicht die Rechenmaschine. Cura bekommt ein STL und seine
+Einstellungen über die Kommandozeile, und das bleibt so.
+
+**Ein bestehendes Projekt slict jetzt anders**, und das ist kein Versehen:
+Die Druckeinstellungen reisen in der Projektdatei mit (`print_settings` in
+`serialise.py`), und ein gespeicherter Stützwinkel kommt bei PrusaSlicer und
+der Orca-Familie ab jetzt als `90 − Wert` an statt als Wert. Das Format ändert
+sich nicht — die gespeicherte Zahl war immer gegen die Senkrechte gemeint, nur
+die Übersetzung war falsch. Wer seinen Wert am alten Verhalten ausgerichtet
+hat, richtet ihn einmal neu aus; wer ihn nach der Beschreibung eingestellt
+hat, bekommt endlich das, was dort steht.
+
+## Die Werkzeugleiste zeigt nur noch Zeichen (20.08.2026)
+
+Auf Wunsch: die Leiste über dem Fenster trägt keine Beschriftungen mehr. Sieben
+beschriftete Knöpfe brauchten 703 Pixel und drängten die Kopfzeile mit Projekt,
+Maßen, Drucker und Material an den rechten Rand; ohne Text sind es 310.
+
+Die Werkzeugzeile **unter** dem Viewport bleibt beschriftet. Der Unterschied
+steht jetzt in `.claude/rules/oberflaeche.md`: Ein Zeichen darf allein stehen,
+wenn es entweder ein geeinigtes Bild ist (Linie, Kreis, Diskette) oder die Zahl
+klein und die Stelle fest bleibt. Acht Umschalter, die mit dem Zustand
+wechseln, sind weder das eine noch das andere.
+
+Drei Dinge, die daran hingen und beim Nachlesen aufgefallen sind:
+
+- **Der Hinweis am Knopf war die stille Voraussetzung.** `_lock_hint` stellt
+  den eigenen Hinweis aus dem `statusTip` wieder her — *Modell einfügen* und
+  *Zeichnen* hatten gar keinen, und nach dem Freischalten wäre der Knopf ohne
+  jede Auskunft dagestanden. Zwei Tests halten das jetzt fest.
+- **Der Grund verdrängte den Namen.** `_lock_hint` und `_pick_hint` ersetzen
+  den Hinweis vollständig; am beschrifteten Knopf war das folgenlos, am
+  unbeschrifteten blieben ein Bild und ein zusammenhangloser Satz. `_with_name`
+  stellt den Namen voran, getrennt mit Doppelpunkt — der Sperrgrund führt
+  selbst einen Gedankenstrich.
+- **Der Tooltip war ärmer als das Menü.** Er trug nur das Wort, während der
+  Menüeintrag derselben Handlung längst „Ein gespeichertes Projekt öffnen
+  (.p3d)." und sein Kürzel führt. `_button_tip` holt beides von dort, statt
+  einen zweiten Satz danebenzustellen, der wegdriftet.
+
+Nachgezogen: Handbuch (Kapitel *Das Fenster*, *Zeichnen* und *Die vier Wege*),
+Tour Weg 4 — sie schickte den Anfänger „auf Formen" und hat `done=`-Bedingungen,
+hängt also, wenn er das Wort sucht —, die fünf Sprachkataloge und die
+Bildschirmfotos aller sechs Sprachen samt Handbuchseiten und Website.
+
+Offen: Ob die Leiste auf Dauer bei sieben Knöpfen bleibt. Der zweite Grund
+(„wenige, feste Stelle") trägt nicht beliebig weit; ein achter oder neunter
+Knopf nimmt ihn weg, und dann ist die Beschriftung wieder fällig.
+
+## Die Rückmeldung geht jetzt raus (20.08.2026)
+
+Auf Wunsch: Was der Nutzer meldet — Vorschlag, Fehler, Frage oder Absturz —
+geht aus dem Programm heraus an `support@solidon3d.de`, mit Bildschirmfoto,
+Protokoll und auf Wunsch der laufenden Sitzung. Vorher war der Weg ein Ordner
+im Nutzerverzeichnis und ein `mailto:` ohne Anhänge: drei Schritte, von denen
+jeder einzelne der letzte sein kann, und der dritte hieß „Projektdatei suchen".
+
+**Die Grenze zur verbotenen Telemetrie liegt beim Auslöser, nicht beim
+Versand.** Es geht nichts von allein, nichts ungesehen und nichts ohne Inhalt —
+ein geschriebener Satz, oder nach einem Absturz der Stapelabzug, der sich
+selbst trägt. `support.send()` hat genau einen Aufrufer,
+und der hängt an einem Knopf — `test_nothing_leaves_without_being_sent` liest
+die Quelle und zählt ihn. Bauplan §37.2 und §33.2 sind entsprechend
+nachgezogen, ebenso die Datenschutzerklärung: Was übertragen wird, steht dort
+Feld für Feld, samt Zweck, Rechtsgrundlage und Aufbewahrungsdauer.
+
+Was dabei zusammengelegt wurde: `ErrorReportDialog` und der Rückmeldungs-
+`mailto` sind ein Dialog geworden (`app/ui/support_dialog.py`). Zwei Fenster,
+die zu 80 % dasselbe taten, standen als zwei Einträge im Hilfe-Menü; jetzt ist
+es einer. Der abgelegte Ordner ist dabei kein Notausgang, sondern ein Knopf
+neben *Senden* — wer ohne Netz sitzt oder nichts aus der Hand geben will,
+nimmt ihn, und §37.2 bleibt vollständig eingelöst.
+
+Drei Dinge, die daran hingen:
+
+- **Ein Programmfehler darf nicht wie ein Bedienfehler aussehen** (§33.1). Der
+  zusammengelegte Dialog hätte den Satz „Das war ein Programmfehler, nicht Ihre
+  Schuld" mit dem alten Modul verloren; er steht jetzt als eigene Ansage über
+  `kind=crash`, samt eigenem Fenstertitel.
+- **Der Kern formatiert keine Platzhalter.** Der Grund eines gescheiterten
+  Versands steht in `values["reason"]`, nicht als `{reason}` im Satz — ein
+  Kernfehlertext wird nicht formatiert, sondern angezeigt.
+- **Der Trenner der Sendung wird nicht gewürfelt**, sondern aus ihrem Inhalt
+  gebildet (sha256) und gegen Kollision geprüft. Ein Zufallstrenner müsste
+  einen Startwert führen (Regel 9); die Frage stellt sich so gar nicht.
+
+Der Gegenpart liegt im Repository: `website/api/support.php` nimmt die Sendung
+an und reicht sie als Mail weiter. Er muss nach `httpdocs/api/` hochgeladen
+werden — bis dahin scheitert *Senden* und bietet die beiden Wege an, die ohne
+ihn gehen. Ein SMTP-Zugang im ausgelieferten Programm war die Alternative und
+wäre ein Postfachpasswort in einer .exe gewesen.
+
+Offen: Der Absender `noreply@solidon3d.de` muss auf dem Server existieren oder
+SPF-seitig zugelassen sein, sonst wirft der eigene Mailserver die Nachricht weg.
+
+## Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026)
+
+Die mitgelieferten ComfyUI-Abläufe liefen gegen Hunyuan3D 2.1. Dessen Formen
+waren gut, aber die Tencent Community License nimmt die Europäische Union
+ausdrücklich aus — für eine Anwendung, die hier verkauft wird, ist das kein
+Kleingedrucktes, sondern ein Ausschluss.
+
+- [x] **TripoSG statt Hunyuan3D**, MIT für Quelltext *und* Gewichte. Vier
+      Testkörper vom Drehkörper bis zur Figur mit dünnen Fortsätzen kamen
+      geschlossen und aus einem Stück heraus, in rund dreizehn Sekunden auf
+      einer RTX 4080.
+- [x] **Die Knoten liegen im Repository** (`tools/comfyui/`), weil die
+      vorhandenen seit über einem Jahr unangetastet sind.
+      `python tools/setup_comfyui.py` richtet sie ein: kopieren, TripoSG
+      klonen, zwei Stellen richten, drei Pakete nachziehen, 7,5 GB Gewichte
+      holen. Erkannt wird am Ergebnis, ob das schon geschehen ist — nicht am
+      eigenen Kommentar, sonst patcht der zweite Lauf eine von Hand geänderte
+      Datei zu Bruch.
+- [x] **Zwei Stellen im fremden Quelltext** mussten gerichtet werden: `diso`
+      ist eine CUDA-Erweiterung ohne Windows-Wheel und wird nur im
+      Flash-Decoder-Pfad gebraucht; der Fourier-Embedder gibt float32 zurück,
+      woran die nächste Linearschicht mit halben Gewichten abbrach.
+- [x] **`requirements.txt` von TripoSG darf nie ungefiltert laufen.** Sie
+      nagelt `numpy==1.22.3` fest und zieht `pymeshlab` (GPL, Regel 15). Das
+      Werkzeug installiert drei Pakete mit `--no-deps`.
+- [x] **Die Zahlen im Graphen sind gemessen, nicht geraten.** `octree_depth`
+      steht auf 8, weil 9 bei vierfacher Dreieckszahl keinen sichtbaren
+      Unterschied brachte; `steps` auf 50, weil bei 25 dünne Flächen ausfransen.
+- [x] **Fehlt die Knotensammlung, sagt Solidon das jetzt.** ComfyUI antwortet
+      auf einen unbekannten Knoten mit einem leeren Objekt statt mit einem
+      Fehler; die Meldung lautete darauf „es fehlt die Modelldatei" und schickte
+      Leute 7,5 GB suchen, denen die Knoten fehlten.
+- [x] **Zwei Dreiecke schlugen einen Körper von 1,57.** Beim Aufräumen wählte
+      `abs(part.volume) or len(part.faces)` die größte Komponente — und ein
+      offenes Fragment hat das Volumen 0,0, was für Python falsch ist. Der
+      Ausdruck fiel auf die Dreieckszahl zurück und verglich sie mit dem
+      *Volumen* der anderen. Das sah aus wie ein sporadischer Ausfall des
+      Generators und führte auf eine falsche Spur zur halben Rechengenauigkeit;
+      aufgeklärt hat es ein Lauf ohne den Aufräum-Knoten.
+
+### Was dabei aufgefallen ist und offen bleibt
+
+- [ ] **Zwei Grenzen widersprechen sich.** Die Merkmalserkennung steigt bei
+      `FEATURE_LIMIT_TRIANGLES` = 200 000 aus (`scene/evaluate.py`), die
+      Automatik in `generate.py` dezimiert aber erst ab 500 000. Was dazwischen
+      liegt — und das ist bei TripoSG der Normalfall — behält seine Qualität
+      und verliert die Merkmale: kein Klick auf eine Bohrung, keine Passung,
+      nichts für den Agenten. Der Kommentar dort begründet die 500 000 mit
+      `agent.analysis.TRIANGLE_LIMIT`; das ist die Grenze des Steckbriefs, nicht
+      die der Erkennung.
+- [ ] **`decimate` zerlegt glatte Körper.** Vase 607 k → 200 k ergab 60 Teile
+      und `is_watertight=False`; das kantige Gehäuse überstand dieselbe Stufe
+      unversehrt. Die Reparaturkette holt die Teilzahl zurück auf 1, die
+      Wasserdichtheit nicht. Älter als der TripoSG-Wechsel, aber erst durch ihn
+      sichtbar geworden — und beide Punkte hängen zusammen: Wer die erste Grenze
+      anfasst, ohne die zweite zu lösen, tauscht wasserdicht gegen Merkmale.
+- [ ] **Der Erscheinungstermin steht zweimal je Startseite** — am Zähler
+      (`data-countdown`) und an der Umschaltung (`data-release`).
+      `test_the_two_dates_for_the_same_moment_agree` hält beide zusammen;
+      zusammenlegen war keine Arbeit für den Tag der Veröffentlichung.
+
+## Die zwei Historien zusammengeführt (20.08.2026)
+
+Achtzig Commits von hier gegen sechsunddreißig von oben, gemeinsame Basis
+`b0415d6`, dreiundachtzig Konfliktdateien. Wie sie aufgelöst wurden, steht in
+der Commit-Meldung des Merges; hier stehen die drei Tests, die **danach** rot
+waren. Zwei davon konnte vorher niemand sehen: Der Test stand auf der einen
+Seite, die Datei auf der anderen, und jede Seite war für sich grün.
+
+- [x] **Der Fortschrittsbalken der Rückmeldung hätte seine Zahl in die Füllung
+      geschrieben.** `support_dialog.py` kam von oben, die Regel dagegen von
+      hier (`e6a506c`): vier Balken in vier Dateien, geprüft an der Quelle.
+      Sein Bereich ist `(0, 0)`, Qt zeichnet dort keine Zahl — die Regel gilt
+      trotzdem, denn ein Balken, der später doch zählt, hätte sie stillschweigend
+      gerissen. `setTextVisible(False)`, ein Zeile, mit Begründung daneben.
+- [x] **Der Nachweis der Search Console fiel durch den Sprungtest.**
+      `google2f8f028be26a9b5e.html` ist eine Zeile Text unter einem
+      `.html`-Namen, weil Google ihn so verlangt: keine Kopfzeile, kein Inhalt,
+      nichts zu überspringen. Das Kriterium heißt jetzt „hat eine Kopfzeile" und
+      nicht „steht auf einer Ausnahmeliste" — an einer Liste fehlt irgendwann
+      eine. Gegenprobe gefahren: nimmt man `funktionen.html` den Sprung, ist der
+      Test wieder rot.
+- [x] **`tools/make_download.py` trug deutsche Bezeichner** — und das war **kein
+      Fund des Merges**, sondern ein roter Lauf, der schon oben stand: Der
+      Sprachtest sieht `tools/` seit dem 16.08. (`8a15cbc`), auf beiden Seiten,
+      und die Fassung von `origin/main` bringt neun Treffer. Umbenannt wurde der
+      ganze Satz und nicht die neun erkannten Stämme, sonst bliebe eine halb
+      übersetzte Datei stehen. Über die **Token** umbenannt, damit Kommentare
+      und Meldungen deutsch bleiben; `block` hieß an zwei Stellen zwei Dinge —
+      die Funktion, die die Verweise baut, und der Datenblock der Prüfsumme —
+      und heißt jetzt `links` und `chunk`.
+
+Was dabei auffiel und liegen bleibt: `Package.size` schreibt
+`f"{…:.0f} MB".replace(".", DECIMAL_MARK[…])`. Bei null Dezimalstellen gibt es
+nichts zu ersetzen, das Trennzeichen ist damit ohne Wirkung. Entweder eine
+Stelle mehr oder die Ersetzung weg — das ist eine Entscheidung über die Anzeige
+und gehört dem, der den Kasten gebaut hat.

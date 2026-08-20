@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Solidon3D — adapter les modèles 3D des autres, construire les vôtres, les rendre imprimables</title>
+<title>Solidon3D — adapter des modèles 3D et les rendre imprimables</title>
 <meta name="description" content="Solidon3D est une application de bureau pour l'impression 3D&nbsp;: adapter des modèles téléchargés, construire les vôtres, vérifier l'imprimabilité avant le slicing — en local, sans compte, sans abonnement.">
 <link rel="canonical" href="https://solidon3d.de/fr/">
 <link rel="alternate" hreflang="de" href="https://solidon3d.de/">
@@ -19,7 +19,7 @@
 <meta property="og:locale:alternate" content="de_DE">
 <meta property="og:locale:alternate" content="en_GB">
 <meta property="og:url" content="https://solidon3d.de/fr/">
-<meta property="og:title" content="Solidon3D — adapter les modèles 3D des autres, construire les vôtres, les rendre imprimables">
+<meta property="og:title" content="Solidon3D — adapter des modèles 3D et les rendre imprimables">
 <meta property="og:description" content="Application de bureau pour l'impression 3D&nbsp;: adapter les modèles des autres, construire les vôtres, vérifier l'imprimabilité — en local, sans compte, sans abonnement.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/fr/main-window.png">
 <meta property="og:image:alt" content="La fenêtre principale de Solidon3D&nbsp;: l'arbre des objets, la vue 3D et le rapport de contrôle côte à côte">
@@ -49,8 +49,105 @@
   }
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "@id": "https://solidon3d.de/fr/#questions",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Que se passe-t-il le 30 octobre ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "À partir du 31 octobre, la démo ne démarre plus. Elle le dit avant : la barre d'état affiche chaque jour le temps qu'il lui reste. Vos fichiers n'en sont pas affectés. Ils restent là où vous les avez enregistrés ; rien n'est supprimé, rien ne devient illisible. Un fichier de projet est une archive ZIP avec du JSON dedans et s'ouvre même sans Solidon3D — la version suivante le lit tel quel."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Pourquoi une démo à date de fin plutôt qu'une période d'essai ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Parce qu'elle peut ainsi être complète. Une version qui se change en simple visionneuse au bout de quatorze jours montre moins au deuxième projet qu'au premier. Celle-ci montre tout jusqu'au dernier jour — puis s'arrête, au lieu de survivre en demi-version que plus personne n'entretient."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Faut-il de l'expérience en CAO ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Non. La voie 1 se contente d'un clic et d'une phrase dans le chat, la voie 2 d'une description et de chiffres à tourner. Qui veut dessiner des esquisses sous contraintes le peut — sans y être obligé."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Suis-je obligé d'utiliser une IA ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Non. Le chat est une voie parmi quatre. Sans clé et sans Ollama, tout reste entièrement utilisable, hormis le chat — menus, menus contextuels, ligne de commande et les 85 opérations."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "L'IA calcule-t-elle ma géométrie ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Non, et c'est la phrase la plus importante de cette page. Le modèle de langage choisit des opérations et des paramètres — chaque géométrie est calculée par du code. Chaque proposition de l'agent est exactement une transaction, qu'un seul Annuler retire entièrement."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Puis-je piloter Solidon3D depuis Claude Code ou un autre outil d'IA ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Oui. Solidon3D embarque un serveur MCP : un programme comme Claude Code y appelle les mêmes opérations que celles des menus. Il est désactivé par défaut, n'accepte de connexions que depuis votre propre machine (127.0.0.1), ne prend de l'extérieur ni chemin de fichier ni code source — et chaque appel distant est une transaction de l'historique, qu'un seul Annuler retire entièrement."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Mes modèles partent-ils quelque part ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Seulement si vous utilisez le chat avec la clé API d'un fournisseur tiers — la fiche de la scène part alors chez ce fournisseur : les objets avec leurs cotes, les noms des caractéristiques, les paramètres et l'historique en abrégé. Pas de géométrie, pas de fichiers. Avec Ollama, même cela reste local. Sans le chat, rien ne quitte la machine : aucun compte, aucun stockage en ligne, aucune télémétrie. L'exception, c'est ce que vous envoyez vous-même : un retour au support, dont vous voyez le contenu au préalable dans un aperçu."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Quels formats Solidon3D lit-il et écrit-il ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "En lecture : STL, 3MF (y compris en assemblage), OBJ et GLB, plus STEP via le noyau B-Rep. En écriture : STL, 3MF — avec changements de couleur et disposition sur le plateau —, OBJ, PLY, GLB et STEP ; STEP apparaît dans le dialogue d'export dès qu'un corps peut le porter. GLB est le format pour montrer : les couleurs et le nom voyagent avec, et le destinataire fait tourner la pièce dans son navigateur. Un projet est un fichier ZIP avec project.json dedans : il s'ouvre même sans Solidon3D."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Ça tourne sur Mac ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Oui, en versions séparées pour Apple Silicon et pour Intel — un paquet compilé pour arm64 ne démarre pas sur un Mac Intel, et cela concerne toute machine d'avant 2020. Il n'est pas encore signé chez Apple, et Gatekeeper refuse de lancer d'un double-clic une application non signée venue du web : un clic droit sur l'application, choisir « Ouvrir », et ensuite elle démarre comme n'importe quelle autre. La notarisation viendra dès que le compte Apple sera en place."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Ça marche avec mon imprimante ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Seize profils sont fournis d'origine, dont Elegoo, Bambu Lab, Prusa, Creality, Anycubic et Sovol. Vous pouvez créer les vôtres — il faut le volume d'impression, la buse et la hauteur de couche. Pour les ajustements s'ajoute un calibrage, une seule fois."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Que se passe-t-il après la version 1.x ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Toutes les mises à jour 1.x sont comprises dans l'achat. Une version majeure ultérieure serait un nouvel achat — la version que vous avez achetée continue de tourner, elle ne cesse pas de fonctionner, et vos projets restent lisibles."
+      }
+    }
+  ]
+}
+</script>
 </head>
-<body>
+<body data-release="2026-08-20T18:00:00+02:00" data-download="">
 <a class="skip" href="#content">Aller au contenu</a>
 
 <header class="site">
@@ -98,17 +195,28 @@
         langage.</p>
 
         <div class="download">
-          <strong>Démo à partir du 20&nbsp;août 2026 — gratuite</strong>
+          <strong data-past-text="Démo — gratuite, sans compte" data-release-text="La démo est là — gratuite, sans compte">Démo à partir du 20&nbsp;août 2026, 18h00&nbsp;CEST — gratuite</strong>
+          <p class="countdown" data-countdown="2026-08-20T18:00:00+02:00"
+             data-template="Encore {rest}" aria-hidden="true" hidden></p>
           <p>Complète et sans clé&nbsp;: pas de filigrane, pas de blocage
           d'export, aucune fonction verrouillée. <b>Elle fonctionne jusqu'au
           30&nbsp;octobre 2026</b> et ne démarre plus ensuite — vos fichiers
           de projet n'en sont pas affectés.</p>
-          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20pr%C3%A9venez-moi%20quand%20la%20d%C3%A9mo%20sera%20l%C3%A0">
+          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20pr%C3%A9venez-moi%20quand%20la%20d%C3%A9mo%20sera%20l%C3%A0"
+             data-release-hide>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
             </svg>
             Prévenez-moi quand elle sera là
           </a>
+
+          <div class="dateien" data-files data-release-show hidden>
+            <!-- Von tools/make_download.py gefüllt. Steht hier nichts,
+                 bleibt der Kasten bei der Warteliste. -->
+          </div>
+          <p class="pruefhinweis" data-release-show hidden>Somme de contrôle à côté, pour vérifier que le fichier n'a pas été touché en chemin.</p>
+          <p class="pruefhinweis" data-release-show hidden>Windows affiche un avis bleu pour une application nouvelle et encore non signée : <i>Informations complémentaires</i> → <i>Exécuter quand même</i>. La signature suivra dès que le certificat sera en place.</p>
+
           <ul class="assure">
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -306,6 +414,19 @@
       <h2>Ce qui fait la différence</h2>
       <p class="sub">Six des douze fonctions, une phrase chacune —
       <a href="/fr/features.html">toutes en images sur la page des fonctions</a>.</p>
+      <div class="beleg">
+        <figure>
+          <img src="../handbuch/fr/report.png" width="460" height="300" loading="lazy"
+               alt="Le rapport avec quatre constats : le modèle est ouvert à trois endroits, 14 triangles pointent vers l'intérieur, une paroi est plus fine que deux largeurs d'extrusion, et le fichier n'indiquait pas son unité">
+          <figcaption><b>Le rapport.</b> Ce qui cloche à l'impression y figure avant que le trancheur n'y passe le temps — compté par erreur, avertissement et remarque.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/beleg-bausteine-fr.png" width="936" height="416" loading="lazy"
+               alt="Le catalogue de composants : logement d'écrou, filetage, trou fraisé, insert à chaud, goupille, ergot d'encliquetage, charnière souple et assemblage à clip, chacun avec un aperçu et ses cotes">
+          <figcaption><b>Dix-sept composants vérifiés.</b> Logement d'écrou, insert à chaud, charnière souple — les cotes viennent d'un tableau de pièces normalisées, pas d'une intuition.</figcaption>
+        </figure>
+      </div>
+
       <ul class="features">
         <li><b>Un agent IA qui ne devine rien.</b> Une phrase dans le chat
         devient une proposition qu'un seul Annuler retire entièrement. La
@@ -342,6 +463,30 @@
       tout tient sur votre plateau d'impression. C'est exactement là que
       Solidon3D commence — et ensuite, chaque chiffre peut encore
       changer.</p>
+      <ul class="schau tight">
+        <li><figure>
+          <img src="../bilder/schau-gargoyle.webp" width="720" height="720" loading="lazy"
+               alt="Une gargouille gothique sur un socle, ailes repliées et griffes">
+          <figcaption>Gargouille</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-lantern.webp" width="720" height="720" loading="lazy"
+               alt="Une lanterne octogonale aux panneaux ajourés en filigrane">
+          <figcaption>Lanterne</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-valve.webp" width="720" height="720" loading="lazy"
+               alt="Une vanne industrielle avec volant et brides boulonnées">
+          <figcaption>Vanne industrielle</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-skull.webp" width="720" height="720" loading="lazy"
+               alt="Un crâne de dragon aux cornes recourbées et rangées de dents">
+          <figcaption>Crâne de dragon</figcaption>
+        </figure></li>
+      </ul>
+      <p class="sub">Quatre d'entre eux à partir d'une seule phrase chacun, générés et vérifiés dans Solidon3D — tous fermés et d'un seul tenant, une vingtaine de secondes pièce. Le générateur tourne sur votre machine : sans compte, sans envoi, et le modèle derrière est sous licence MIT.</p>
+
       <a class="btn ghost" href="/fr/ai-models.html">Du générateur à l'impression</a>
     </div>
   </section>
@@ -388,11 +533,17 @@
           <p class="terms">Complète, sans clé, sans compte. La version
           complète suivra à <b>49&nbsp;€</b> au lieu de 79&nbsp;€ — en une
           fois, toutes les mises à jour 1.x comprises.</p>
-          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20pr%C3%A9venez-moi%20quand%20la%20d%C3%A9mo%20sera%20l%C3%A0">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20pr%C3%A9venez-moi%20quand%20la%20d%C3%A9mo%20sera%20l%C3%A0"
+             data-release-href data-release-download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
+                 data-release-hide>
               <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
             </svg>
-            Prévenez-moi quand elle sera là
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
+                 data-release-show hidden>
+              <path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/>
+            </svg>
+            <span data-release-text="Télécharger la démo">Prévenez-moi quand elle sera là</span>
           </a>
         </div>
         <div>
@@ -536,7 +687,9 @@
           caractéristiques, les paramètres et l'historique en abrégé. Pas de
           géométrie, pas de fichiers. Avec Ollama, même cela reste local.
           Sans le chat, rien ne quitte la machine&nbsp;: aucun compte, aucun
-          stockage en ligne, aucune télémétrie.</p>
+          stockage en ligne, aucune télémétrie. L'exception, c'est ce que
+          vous envoyez vous-même : un retour au support, dont vous voyez
+          le contenu au préalable dans un aperçu.</p>
         </details>
         <details>
           <summary>Quels formats Solidon3D lit-il et écrit-il&nbsp;?</summary>
@@ -583,7 +736,7 @@
     <div class="wrap">
       <div class="closing">
         <h2>La prochaine pièce qui s'ajuste</h2>
-        <p>La démo paraît le 20&nbsp;août 2026 et court jusqu'au
+        <p data-past-text="La démo court jusqu'au 30 octobre — gratuite et complète. Écrivez une ligne et vous aurez une réponse : c'est un humain qui répond.">La démo paraît le 20&nbsp;août 2026 et court jusqu'au
         30&nbsp;octobre — gratuite et complète. Écrivez une ligne et vous
         serez prévenu dès qu'elle sera là&nbsp;: c'est un humain qui
         répond.</p>
@@ -618,6 +771,8 @@
     <a href="/pt/">Português</a>
   </div>
 </footer>
+
+<script src="/site.js" defer></script>
 
 </body>
 </html>

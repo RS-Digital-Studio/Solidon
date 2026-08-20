@@ -2,7 +2,8 @@
 
 Eine rotierende Datei im Nutzerverzeichnis, sonst nichts. Die Linie zur
 verbotenen Telemetrie ist scharf: das Protokoll verlässt diesen Rechner nur,
-wenn der Nutzer es selbst an einen Fehlerbericht anhängt.
+wenn der Nutzer es selbst an eine Rückmeldung hängt und sie absendet
+(:mod:`app.core.support`). Kein Zeitgeber und kein Fehlerpfad schickt es.
 
 Stufen: ``debug`` nur mit gesetztem Schalter, ``info`` für Op-Läufe und
 Dateizugriffe, ``warning`` für Rückfallstufen und Befunde, ``error`` für

@@ -347,9 +347,10 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 text=_(
                     "Jetzt der Pinsel: die Figur anklicken, dann oben in der "
-                    "Werkzeugleiste auf Formen. Ziehen Sie ein paar Striche über den "
-                    "Körper, sehen Sie in der Leiste unten auf die Wandstärke — und "
-                    "beenden Sie mit Fertig."
+                    "Werkzeugleiste das sechste Zeichen — die Knöpfe dort tragen "
+                    "keine Beschriftung, der Name steht am Zeiger. Ziehen Sie ein "
+                    "paar Striche über den Körper, sehen Sie in der Leiste unten auf "
+                    "die Wandstärke — und beenden Sie mit Fertig."
                 ),
                 done=_op_present("sculpt_strokes"),
             ),
@@ -363,9 +364,10 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
             TourStep(
                 text=_(
-                    "Der Knopf daneben heißt Skelett und gehört zum selben Weg: zwei "
-                    "Klicks setzen einen Knochen, Fertig fragt danach nach den Winkeln. "
-                    "So bekommt eine Figur ihre Haltung, ohne dass sie neu gebaut wird."
+                    "Das Zeichen rechts daneben ist Skelett und gehört zum selben "
+                    "Weg: zwei Klicks setzen einen Knochen, Fertig fragt danach nach "
+                    "den Winkeln. So bekommt eine Figur ihre Haltung, ohne dass sie "
+                    "neu gebaut wird."
                 )
             ),
         ),

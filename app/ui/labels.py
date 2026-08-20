@@ -498,6 +498,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "material": _("Material"),
     "maximum": _("Höchstwert"),
     "measured": _("Gemessen"),
+    "megabytes": _("Megabyte"),
     "minimum": _("Mindestwert"),
     "minutes": _("Minuten"),
     "missing": _("Fehlt"),

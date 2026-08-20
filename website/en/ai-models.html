@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Make AI models printable — Solidon3D</title>
+<title>Make AI models printable: repair GLB and STL — Solidon3D</title>
 <meta name="description" content="A model from an AI generator is a surface, not a part. Solidon3D repairs it, checks wall thickness and overhangs, splits and pins it — before you slice.">
 <link rel="canonical" href="https://solidon3d.de/en/ai-models.html">
 <link rel="alternate" hreflang="de" href="https://solidon3d.de/ki-modelle.html">
@@ -17,8 +17,11 @@
 <meta property="og:site_name" content="Solidon3D">
 <meta property="og:locale" content="en_GB">
 <meta property="og:url" content="https://solidon3d.de/en/ai-models.html">
-<meta property="og:title" content="Make AI models printable — Solidon3D">
+<meta property="og:title" content="Make AI models printable: repair GLB and STL — Solidon3D">
 <meta property="og:description" content="A model from an AI generator is a surface, not a part. Solidon3D repairs it, checks wall thickness and overhangs, splits and pins it — before you slice.">
+<meta property="og:image" content="https://solidon3d.de/handbuch/en/report.png">
+<meta property="og:image:alt" content="The inspection report: zero errors, two warnings and two hints, among them “The model is open in three places” and “A wall is thinner than two extrusion widths”">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -104,6 +107,74 @@
       days, and that is fine — a closed mesh is still not a part that fits. The
       difference sits behind the repair: dimension, fit, layer analysis, and a
       history in which every number can still be changed later.</p>
+
+      <h3>If you have no generator at all</h3>
+      <p class="sub">Solidon3D brings the third way with it: a sentence or a picture becomes a body, and it lands in the same history as everything else. That is computed in a local <b>ComfyUI</b> — on your machine, without an account and without an upload.</p>
+      <p class="sub">The model behind it is <b>TripoSG</b> and carries the <b>MIT licence</b>. That is not a detail for lawyers: the most widespread model of its kind, Hunyuan3D, expressly excludes the European Union in its licence. Here the question does not arise.</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Measured</th><th>Result</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Closed and in one piece</td><td><span class="yes">✓ all six below</span></td></tr>
+          <tr><td>Open edges</td><td><span class="yes">✓ none</span></td></tr>
+          <tr><td>From a sentence, without a picture</td><td>around 20 seconds</td></tr>
+          <tr><td>From a picture of your own</td><td>around 13 seconds</td></tr>
+          <tr><td>Setup after installing ComfyUI</td><td>one command</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Six sentences, six bodies</h3>
+      <p class="sub">Every piece here is a single sentence that Solidon3D handed to the generator — no touching up, no second attempt, no picking one out of ten. They were chosen for what makes such models fail: thin protrusions, pierced walls, undercuts, fine repetition.</p>
+      <ul class="schau">
+        <li><figure>
+          <img src="../bilder/schau-gargoyle.webp" width="720" height="720" loading="lazy"
+               alt="A gothic gargoyle on a plinth, with folded wings, claws and a snarling face">
+          <figcaption><b>Gargoyle</b>Thin protrusions and undercuts</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-lantern.webp" width="720" height="720" loading="lazy"
+               alt="An octagonal lantern with pierced filigree panels and a ring to hang it by">
+          <figcaption><b>Lantern</b>Pierced wall</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-skull.webp" width="720" height="720" loading="lazy"
+               alt="A dragon skull with curved horns, eye sockets and rows of teeth">
+          <figcaption><b>Dragon skull</b>Cavities and fine teeth</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-hand.webp" width="720" height="720" loading="lazy"
+               alt="A mechanical robotic hand with articulated fingers and visible joints">
+          <figcaption><b>Robotic hand</b>Many separate limbs</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-knight.webp" width="720" height="720" loading="lazy"
+               alt="A chess knight: a carved horse head on a round base">
+          <figcaption><b>Chess knight</b>Soft transitions, clear silhouette</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-valve.webp" width="720" height="720" loading="lazy"
+               alt="An industrial valve with a hand wheel, bolted flanges and pipe connections">
+          <figcaption><b>Industrial valve</b>Round faces and repetition</figcaption>
+        </figure></li>
+      </ul>
+
+      <h3>And then the work begins</h3>
+      <p class="sub">The generator delivered a shape. What turns it into a printable part is three steps in Solidon3D — each in the history, each with a number that can still be changed later.</p>
+      <div class="weg">
+        <figure>
+          <img src="../bilder/weg-1-erzeugt.webp" width="720" height="720" loading="lazy"
+               alt="The generated gargoyle as a closed body, seen from the front left">
+          <figcaption><b>Generated and repaired.</b> Around 20 seconds, closed and in one piece afterwards. Brought to 80 mm that is <b>44.7 cm³</b> of material — printed solid.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/weg-2-schnitt.webp" width="720" height="720" loading="lazy"
+               alt="The same gargoyle cut open: an evenly thin wall, hollow inside, the cut face set off in colour">
+          <figcaption><b>Hollowed out, 2 mm wall.</b> What remains is <b>23.6 cm³</b> — <b>47 % less</b> filament and correspondingly less print time. The wall thickness does not come from a hunch but from the nozzle of this printer.</figcaption>
+        </figure>
+      </div>
+      <p class="footnote">After that comes what stands at the top of this page: report, overhangs, islands, support, best orientation — and if it does not fit the plate, split and pin it. Generating is the fastest part of the work. The rest is the part that decides the result.</p>
+
     </div>
   </section>
 

@@ -16,9 +16,9 @@ from PySide6.QtWidgets import QApplication
 
 from app.ui.first_run import FirstRunDialog, should_run
 from app.ui.main_window import MainWindow
-from app.ui.report_dialog import ErrorReportDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from app.ui.support_dialog import SupportDialog
 
 # --- external programs (§38) ---------------------------------------------------------
 
@@ -268,21 +268,123 @@ def test_nothing_is_sent(tmp_path: Path) -> None:
     assert "post" not in source
 
 
-def test_the_dialog_offers_the_attachment_and_writes_a_folder(
+def test_the_dialog_still_writes_a_folder(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    project = tmp_path / "projekt.p3d"
-    project.write_bytes(b"x")
-    monkeypatch.setattr(reports, "user_data_dir", lambda: tmp_path)
+    """§37.2 bleibt eingelöst, auch wenn es den Versand jetzt gibt.
 
-    dialog = ErrorReportDialog(summary="Fehler", error=ValueError("kaputt"), project=project)
-    dialog.with_project.setChecked(True)
-    dialog._write()
+    Der abgelegte Ordner ist kein Notausgang für einen gescheiterten Versand,
+    sondern ein Weg neben ihm — wer nichts aus der Hand geben will, nimmt ihn.
+    """
+    monkeypatch.setattr("app.core.report.user_data_dir", lambda: tmp_path)
+
+    dialog = SupportDialog(message="Der Deckel sitzt schief.", error=ValueError("kaputt"))
+    dialog.with_log.setChecked(False)
+    dialog._write_folder()
 
     assert dialog.written is not None and dialog.written.is_dir()
     text = (dialog.written / "bericht.txt").read_text(encoding="utf-8")
-    assert "kaputt" in text
-    assert "Geometrie" in text
+    assert "Der Deckel sitzt schief." in text
+    assert "kaputt" in text, "der Stapelabzug reist mit, sonst ist der Bericht die halbe Miete"
+
+
+# --- die Rückmeldung, die wirklich hinausgeht (§37.2) ---------------------------------
+
+
+def test_the_dialog_sends_what_it_showed(qt_app: QApplication) -> None:
+    """Was in der Vorschau steht, ist die Sendung — nicht ein Auszug davon."""
+    seen: dict[str, object] = {}
+
+    def sender(url: str, content_type: str, body: bytes) -> dict[str, object]:
+        seen["body"] = body
+        return {"ok": True, "reference": "S-1"}
+
+    dialog = SupportDialog(
+        message="Der Fasenwinkel fehlt.", screenshot=b"\x89PNGdaten", sender=sender
+    )
+    dialog.with_log.setChecked(False)
+    dialog._start()
+    assert dialog._worker is not None
+    dialog._worker.wait(5000)
+    qt_app.processEvents()
+
+    assert dialog.receipt is not None and dialog.receipt.reference == "S-1"
+    assert b"Der Fasenwinkel fehlt." in bytes(seen["body"])  # type: ignore[arg-type]
+    assert b"bildschirmfoto.png" in bytes(seen["body"])  # type: ignore[arg-type]
+
+
+def test_the_screenshot_is_only_attached_when_it_is_ticked(qt_app: QApplication) -> None:
+    """Ein Bild des Fensters geht nur mit, wenn jemand das Kästchen stehen
+    lässt — es zeigt, woran gerade gearbeitet wird."""
+    dialog = SupportDialog(message="x", screenshot=b"\x89PNGdaten")
+
+    assert dialog.with_shot.isChecked(), "wer meldet, will meistens zeigen"
+    dialog.with_shot.setChecked(False)
+
+    assert all(entry.name != "bildschirmfoto.png" for entry in dialog.ticket().attachments)
+
+
+def test_a_dialog_without_a_screenshot_does_not_offer_one(qt_app: QApplication) -> None:
+    dialog = SupportDialog(message="x")
+
+    assert not dialog.with_shot.isEnabled()
+    assert not dialog.with_shot.isChecked()
+
+
+def test_a_failed_send_offers_the_two_ways_without_network(qt_app: QApplication) -> None:
+    """Regel 17: kein „fehlgeschlagen", sondern zwei Wege, die ohne die
+    Leitung auskommen, die gerade nicht wollte."""
+
+    def sender(url: str, content_type: str, body: bytes) -> dict[str, object]:
+        raise OSError("Netz weg")
+
+    dialog = SupportDialog(message="x", sender=sender)
+    dialog.with_log.setChecked(False)
+    dialog._start()
+    assert dialog._worker is not None
+    dialog._worker.wait(5000)
+    qt_app.processEvents()
+
+    assert dialog.by_mail.isVisible() or not dialog.isVisible()
+    assert "Netz weg" in dialog.state.text()
+    assert dialog.save_folder.isEnabled(), "der abgelegte Ordner steht immer offen"
+
+
+def test_an_empty_message_cannot_be_sent(qt_app: QApplication) -> None:
+    """Kein toter Knopf: *Senden* gilt erst, wenn etwas dasteht."""
+    dialog = SupportDialog()
+
+    assert not dialog.send.isEnabled()
+    dialog.message.setPlainText("Etwas ist schief.")
+    assert dialog.send.isEnabled()
+
+
+def test_a_crash_can_be_sent_without_typing_anything(qt_app: QApplication) -> None:
+    """Der Stapelabzug ist der Bericht — der Knopf wartet nicht auf einen Satz."""
+    dialog = SupportDialog(kind="crash", error=ValueError("kaputt"))
+
+    assert dialog.send.isEnabled()
+
+
+def test_a_programme_error_arrives_as_a_crash_with_its_traceback(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§33.1: Ein Programmfehler bekommt den Dialog, der ihn melden kann —
+    samt Stapelabzug, den der Nutzer nicht abtippen soll."""
+    window = MainWindow(Session(), UiSettings())
+    opened: dict[str, SupportDialog] = {}
+    monkeypatch.setattr(SupportDialog, "exec", lambda self: opened.setdefault("dialog", self) and 0)
+
+    try:
+        raise ValueError("kaputt")
+    except ValueError as problem:
+        window.report_error(problem)
+
+    dialog = opened["dialog"]
+    assert dialog.ticket().kind == "crash"
+    assert "kaputt" in dialog.detail
+    assert "Traceback" in dialog.detail
+    window.close()
 
 
 # --- der Aktualisierungshinweis (§37.2) -----------------------------------------------
@@ -336,45 +438,39 @@ def test_nothing_is_downloaded() -> None:
 def test_the_report_says_where_it_went_and_stays_open(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Der Dialog nannte den Ablageort und schloss sich im gleichen Augenblick.
+    """Der Bericht nannte den Ablageort und schloss sich im gleichen Augenblick.
 
-    Der Pfad ging in die Vorschau, die nächste Zeile war ``accept()``. Die
-    Kopfzeile bittet aber darum, „den abgelegten Ordner" an den Support zu
-    senden — welcher das ist, konnte danach niemand mehr sehen. Auch der
-    Modul-Docstring versprach, der Dialog öffne den Ordner; getan hat er es
-    nie.
+    Das war der Fehler des abgelösten Berichtsfensters: Der Pfad ging in die
+    Vorschau, die nächste Zeile war ``accept()``. Die Bitte, „den abgelegten
+    Ordner" zu senden, zeigte damit auf etwas, das niemand mehr lesen konnte.
 
-    Geöffnet wird jetzt auf Knopfdruck und nicht von selbst: ein Fenster, das
-    sich nach einem Absturz ungefragt über die Anwendung legt, ist ein zweiter
-    Schreck.
+    Der Nachfolger löst beides anders und besser — die Zustandszeile nennt den
+    Ort, und der Ordner geht von selbst auf. Was bleibt, ist die Zusage: Ablegen
+    ist ein Weg neben dem Versand und nicht sein Ende, das Fenster bleibt offen.
     """
     from PySide6.QtCore import QUrl
 
-    from app.ui import report_dialog as module
+    from app.ui import support_dialog as module
 
-    monkeypatch.setattr(reports, "user_data_dir", lambda: tmp_path)
-    dialog = ErrorReportDialog(summary="Fehler", error=ValueError("kaputt"))
-    assert dialog.location.isHidden(), "vor dem Ablegen gibt es keinen Ort zu nennen"
-    assert dialog.reveal_button.isHidden(), "und nichts zu öffnen"
+    monkeypatch.setattr("app.core.report.user_data_dir", lambda: tmp_path)
+    opened: list[str] = []
+    monkeypatch.setattr(
+        module.QDesktopServices,
+        "openUrl",
+        staticmethod(lambda url: opened.append(url.toString())),
+    )
 
-    dialog._write()
+    dialog = SupportDialog(message="Der Deckel sitzt schief.", error=ValueError("kaputt"))
+    dialog.with_log.setChecked(False)
+    dialog._write_folder()
 
-    assert dialog.result() != ErrorReportDialog.DialogCode.Accepted, (
+    assert dialog.result() != SupportDialog.DialogCode.Accepted, (
         "der Dialog schließt sich, bevor der Ort gelesen werden kann"
     )
     assert dialog.written is not None
-    assert not dialog.location.isHidden(), "der Ablageort steht nirgends"
-    assert str(dialog.written) in dialog.location.text(), "genannt wird nicht der Ordner"
-    assert not dialog.reveal_button.isHidden(), "und niemand kann ihn öffnen"
-    assert not dialog.write_button.isEnabled(), "ein zweiter Druck legte einen zweiten Ordner an"
-
-    opened: list[str] = []
-    monkeypatch.setattr(
-        module.QDesktopServices, "openUrl", staticmethod(lambda url: opened.append(url.toString()))
-    )
-    dialog._reveal()
+    assert str(dialog.written) in dialog.state.text(), "genannt wird nicht der Ordner"
     assert opened == [QUrl.fromLocalFile(str(dialog.written)).toString()], (
-        "der Knopf zeigt nicht auf den abgelegten Ordner"
+        "der abgelegte Ordner geht nicht auf — eine Pfadzeile allein wird abgetippt"
     )
 
 

@@ -11,26 +11,39 @@ fertig ist. Der Graph ist eine Datendatei, kein Code — wer einen anderen
 Generator installiert hat, tauscht die Datei aus, statt Python zu flicken.
 
 Woran die mitgelieferten Graphen hängen, steht deshalb hier und nicht im Code:
-an der Knotensammlung ``ComfyUI-Hunyuan3d-2-1`` samt ihren beiden Gewichten
-(``hunyuan3d-dit-v2-1-fp16`` und die zugehörige VAE), an ``ComfyUI-RMBG`` fürs
-Freistellen, und ``text_to_mesh`` zusätzlich an einem SDXL-Modell. Letzteres
-ist kein Umweg, sondern die Sache selbst: Hunyuan3D kennt keinen Texteingang,
-Text wird erst zu einem Bild und das Bild zum Körper. Fehlt eines davon, sagt
-ComfyUI beim Abschicken, welcher Knoten fehlt — die Meldung reicht bis zum
-Nutzer durch. Über die HTTP-API muss dabei **jeder** Eingang gesetzt sein, auch
-ein als ``optional`` deklarierter: die Oberfläche schickt sie immer alle mit,
-und mancher Knoten liest sie ungeprüft.
+an der Knotensammlung ``ComfyUI-TripoSG-Solidon`` samt dem Modell ``TripoSG``
+unter ``models/triposg``, an ``ComfyUI-RMBG`` fürs Freistellen, und
+``text_to_mesh`` zusätzlich an einem SDXL-Modell. Letzteres ist kein Umweg,
+sondern die Sache selbst: TripoSG kennt keinen Texteingang, Text wird erst zu
+einem Bild und das Bild zum Körper. Fehlt eines davon, sagt ComfyUI beim
+Abschicken, welcher Knoten fehlt — die Meldung reicht bis zum Nutzer durch.
+Über die HTTP-API muss dabei **jeder** Eingang gesetzt sein, auch ein als
+``optional`` deklarierter: die Oberfläche schickt sie immer alle mit, und
+mancher Knoten liest sie ungeprüft.
 
-**Bei der Lizenz der Gewichte ist Vorsicht geboten, denn sie ist nicht
-unsere.** Hunyuan3D steht unter der Tencent Community License, und deren
-Geltungsbereich schließt die Europäische Union, das Vereinigte Königreich und
-Südkorea ausdrücklich aus. Solidon liefert keine Gewichte mit und lädt keine —
-der Nutzer installiert ComfyUI und seine Modelle selbst, und was er einsetzt,
-entscheidet er. Der mitgelieferte Graph nennt deshalb Rollen (``{model:shape}``)
-und keine Datei: wer ein anderes Modell mit derselben Rolle installiert, benutzt
-es ohne eine Zeile Code zu ändern. Frei lizenzierte Alternativen für dieselbe
-Aufgabe sind Step1X-3D (Apache-2.0) und TripoSG (MIT); fürs Freistellen ist
-INSPYRENET (MIT) voreingestellt, nachdem dort RMBG-2.0 (CC BY-NC) stand.
+**Warum TripoSG und nicht Hunyuan3D.** Die Lizenz der Gewichte ist nicht
+unsere, und sie entscheidet, wer die Anwendung benutzen darf. Hunyuan3D 2.1
+steht unter der Tencent Community License, deren Geltungsbereich die
+Europäische Union, das Vereinigte Königreich und Südkorea ausdrücklich
+ausnimmt — für eine Anwendung, die hier verkauft wird, ist das keine
+Fußnote, sondern ein Ausschluss. TripoSG (VAST-AI-Research) steht unter MIT,
+Quelltext wie Gewichte, und liefert Formen derselben Güte. Gemessen an vier
+Fällen vom glatten Drehkörper bis zur Figur mit dünnen Fortsätzen kam jedes
+Mal ein geschlossener Körper aus einem Stück heraus.
+
+Solidon liefert weiterhin keine Gewichte mit und lädt keine — der Nutzer
+installiert ComfyUI und seine Modelle selbst, und was er einsetzt, entscheidet
+er. Der mitgelieferte Graph nennt deshalb Rollen (``{model:shape}``) und keine
+Datei: wer ein anderes Modell mit derselben Rolle installiert, benutzt es ohne
+eine Zeile Code zu ändern. Weitere frei lizenzierte Kerne für dieselbe Aufgabe
+sind Step1X-3D (Apache-2.0) und TRELLIS (MIT); fürs Freistellen ist INSPYRENET
+(MIT) voreingestellt, nachdem dort RMBG-2.0 (CC BY-NC) stand.
+
+Die Zahlen im Graphen sind gemessen, nicht geraten: ``octree_depth`` steht auf
+8, weil 9 bei vierfacher Dreieckszahl und doppelter Laufzeit keinen sichtbaren
+Unterschied brachte; ``steps`` steht auf 50, weil bei 25 die dünnen Flächen
+sichtbar ausfransen. Zusammen sind das rund dreizehn Sekunden je Körper auf
+einer RTX 4080.
 
 Was herauskommt, wird nie geglaubt — Generatoren erzeugen Netze mit Löchern,
 losen Komponenten und umgedrehten Normalen als Normalfall. Die Reparaturkette,
@@ -109,7 +122,17 @@ MODEL_ROLES: Final[dict[str, ModelRole]] = {
         prefer=("juggernaut", "dreamshaper", "sd_xl", "sdxl", "xl"),
         avoid=("hunyuan", "3d", "vae", "refiner", "inpaint", "turbo"),
     ),
-    "shape": ModelRole(prefer=("hunyuan3d-dit", "hunyuan3d", "hunyuan"), avoid=("vae",)),
+    # TripoSG steht vorn, weil der mitgelieferte Graph es benutzt und weil es
+    # das einzige der drei ist, dessen Lizenz hier keine Frage aufwirft. Die
+    # Hunyuan-Muster bleiben stehen: wer sie installiert hat und einen eigenen
+    # Graphen fährt, soll nicht deshalb ins Leere greifen.
+    # ``scribble`` ist ausgeschlossen, weil es nicht dasselbe Modell in einer
+    # anderen Größe ist, sondern ein anderes: es erwartet eine Kritzelei als
+    # Eingang und macht aus einem Lichtbild Unsinn.
+    "shape": ModelRole(
+        prefer=("triposg", "tripo", "step1x", "hunyuan3d-dit", "hunyuan3d", "hunyuan"),
+        avoid=("vae", "scribble"),
+    ),
     "shape_vae": ModelRole(prefer=("hunyuan3d-vae", "hunyuan3d", "vae"), avoid=("dit",)),
 }
 
@@ -387,6 +410,23 @@ class ComfyBackend:
                 ),
                 values={"node": class_type},
             ) from problem
+
+        # Ein ComfyUI ohne diesen Knoten antwortet mit einem leeren Objekt,
+        # nicht mit einem Fehler. Wer das nicht unterscheidet, meldet gleich
+        # darauf „es fehlt die Modelldatei" — und schickt jemanden Gewichte
+        # suchen, dem in Wahrheit die Knotensammlung fehlt.
+        if class_type not in described:
+            raise GenerationFailed(
+                title=_("Die Mesh-Erzeugung konnte nicht starten."),
+                detail=_(
+                    "Dieses ComfyUI kennt den Knoten nicht, den der Ablauf "
+                    "benutzt. Die Knotensammlung fehlt — nicht das Modell. "
+                    "Einzurichten ist sie mit «python tools/setup_comfyui.py», "
+                    "danach ComfyUI neu starten."
+                ),
+                values={"node": class_type},
+                suggestions=(OPEN_SETTINGS, CANCEL),
+            )
 
         inputs = described.get(class_type, {}).get("input", {})
         for group in ("required", "optional"):

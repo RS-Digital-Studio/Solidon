@@ -4,12 +4,15 @@ Statische Seiten, **keine externen Ressourcen**. Alles in diesem Ordner wird
 unverändert hochgeladen; einen Build-Schritt gibt es nicht.
 
 Ein einziges Skript liegt dabei, `site.js`, und es kommt von hier — kein CDN,
-keine Bibliothek, keine Schriftart von außen, kein Zählpixel. Es tut genau
-eines: die Sprungliste der Funktionsseite markiert den Block, der gerade
-gelesen wird. Ohne das Skript bleibt sie eine gewöhnliche Sprungliste, und
-sonst ändert sich nichts. `tests/test_website.py` prüft nicht mehr auf „kein
-JavaScript", sondern auf den Teil, der die Zusage der Seite trägt: **nichts von
-außen**.
+keine Bibliothek, keine Schriftart von außen, kein Zählpixel. Es tut zwei
+Dinge, und beide sind Zugabe: die Sprungliste der Funktionsseite markiert den
+Block, der gerade gelesen wird, und der Download-Kasten der Startseite zählt
+die Zeit bis zur Demo herunter. Ohne das Skript bleibt die Liste eine
+gewöhnliche Sprungliste, und der Kasten nennt Tag und Uhrzeit im Klartext, wie
+er es ohnehin tut — der Zähler steht als `hidden` daneben und wird nur
+sichtbar, wenn ihn jemand füllt. `tests/test_website.py` prüft nicht mehr auf
+„kein JavaScript", sondern auf den Teil, der die Zusage der Seite trägt:
+**nichts von außen**.
 
 Bewegung entsteht ausschließlich aus CSS: Übergänge beim Zeigen und
 scroll-gesteuerte Zeitachsen (`animation-timeline: view()`) beim Lesen. Der
@@ -29,7 +32,7 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `en/index.html` | Startseite englisch |
 | `funktionen.html`, `en/features.html` | Funktionsseite — die zwölf Blöcke mit Bildern, dazu die Sprungliste |
 | `ki-modelle.html`, `en/ai-models.html` | Was ein Modell aus Meshy, Tripo oder Rodin noch braucht |
-| `site.js` | Markiert in der Sprungliste den Block, der gerade gelesen wird — das einzige Skript |
+| `site.js` | Markiert in der Sprungliste den gelesenen Block und zählt im Download-Kasten die Zeit bis zur Demo — das einzige Skript |
 | `handbuch.html`, `en/manual.html` | Handbuch — erzeugt von `tools/make_manual.py`, nie von Hand ändern |
 | `handbuch/` | Abbildungen des Handbuchs, je Sprache ein Ordner |
 | `icon.svg` | Anwendungssymbol als Favicon — erzeugt von `tools/make_icon.py` |
@@ -38,6 +41,35 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `eula.html`, `agb.html`, `widerruf.html` | Rechtstexte — erzeugt von `tools/make_legal.py` aus `EULA.md`, `AGB.md` und `WIDERRUF.md`, nie von Hand ändern |
 | `style.css` | Gestaltung, hell und dunkel über `prefers-color-scheme` |
 | `version.json` | Versionsdatei für den Update-Hinweis (`core/updates.py`) |
+| `robots.txt`, `sitemap.xml`, `llms.txt` | Was Suchmaschinen zuerst holen — erzeugt von `tools/make_seo.py`, nie von Hand ändern |
+| `.htaccess` | Eine Adresse je Seite, Caching, Kompression — von Hand |
+
+## Was Suchmaschinen sehen
+
+`tools/make_seo.py` erzeugt drei Dateien und einen Auszeichnungsblock, alle
+aus dem Bestand abgeleitet. Es läuft **nach** `make_manual.py` und
+`make_legal.py`, denn es liest deren Ergebnis:
+
+* **`sitemap.xml`** führt die 24 indexierbaren Seiten mit ihren
+  Sprachfassungen. Die Zuordnung kommt aus den `hreflang`-Angaben der Seiten
+  selbst — eine zweite Liste liefe beim nächsten Zusatz auseinander. Die fünf
+  Rechtstexte fehlen dort mit Absicht: sie tragen `noindex`, und eine Sitemap,
+  die sie trotzdem anbietet, sagt das Gegenteil dessen, was auf der Seite
+  steht. `tests/test_website.py` prüft beide Richtungen.
+* **`FAQPage`-Auszeichnung** in den sechs Startseiten, gelesen aus dem
+  `<div class="faq">`, das dort ohnehin steht. Damit können die elf Fragen als
+  Rich Result erscheinen, und eine KI-Suche zitiert lieber Ausgezeichnetes als
+  Erratenes. Die Sprungmarke des Abschnitts heißt je Sprache anders (`fragen`,
+  `questions`) und wird abgelesen, nicht angenommen.
+* **`llms.txt`** — dieselbe Übersicht für Sprachmodelle, die keine 24 Seiten
+  crawlen wollen.
+
+**Die Titel sind Suchanfragen, keine Etiketten.** „Funktionen — Solidon3D" war
+zutreffend und trug nichts: nach „Funktionen" sucht niemand, und der
+Markenname findet nur, wer ihn schon kennt — der ist im Umfeld von SolidWorks,
+Solid Edge und SolidPrint3D ohnehin schwer zu halten. Was in den Titeln steht,
+löst die jeweilige Seite auch ein; Begriffe, die auf der Seite nicht vorkommen,
+bleiben draußen.
 
 Die drei Rechtstexte tragen ihren Entwurfshinweis automatisch, solange ein
 Platzhalter darin steht — `tools/make_legal.py` setzt ihn, und er verschwindet

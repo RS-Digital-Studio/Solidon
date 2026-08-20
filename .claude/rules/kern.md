@@ -45,6 +45,14 @@ Ins Protokoll gehen Kennzahlen, nie Geometriedaten. Das Protokoll verlässt den
 Rechner nur, wenn der Nutzer es selbst anhängt (§33.2) — alles andere wäre die
 verbotene Telemetrie.
 
+**Es gibt genau einen Weg hinaus, und der heißt `support.send()`**
+(`app/core/support.py`). Die Grenze zur Telemetrie liegt beim Auslöser: Der
+Versand hängt an einem Knopf, vorher steht die vollständige Sendung in einer
+Vorschau, und `tests/test_support.py` zählt die Aufrufer — genau einer. Ein
+Zeitgeber, ein Fehlerpfad oder ein Startaufruf, der selbst sendet, ist ein
+Verstoß, gleich wie freundlich er begründet wird. `app/core/report.py`
+schreibt weiter nur einen Ordner und darf kein `urlopen` kennen.
+
 ## Auswertung
 
 `OpContext.scene` ist nur lesend. Ops erzeugen Objekte, sie ändern keine.

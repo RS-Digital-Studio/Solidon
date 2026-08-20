@@ -126,6 +126,42 @@ def _support_on_boolean(value: object) -> str:
     return "false" if str(value) == "none" else "true"
 
 
+def _positive_flag(value: object) -> str:
+    """Der Schalter zu einem Maß, das ohne ihn nicht gilt (CuraEngine).
+
+    ``retraction_hop`` ist dort ein Millimeterwert **und** ein Schalter, und
+    der Schalter steht auf ``false``. Ein Sprung von 0,6 mm war damit
+    geschrieben und wirkungslos: gemessen an zwei Läufen desselben Würfels,
+    null Z-Sprünge gegen fünf.
+    """
+    return "true" if float(value) > 0.0 else "false"  # type: ignore[arg-type]
+
+
+def _angle_from_horizontal(value: object) -> str:
+    """Stützwinkel in die Zählweise von PrusaSlicer und der Orca-Familie.
+
+    Solidon misst **gegen die Senkrechte** — 0° stützt jeden Überhang, 90°
+    keinen. Das ist Curas Zählweise. Die beiden anderen messen gegen die
+    **Horizontale** und drehen die Bedeutung damit um: PrusaSlicer stützt
+    „overhangs whose slope angle (90° = vertical) is above the given
+    threshold" nicht, Orca stützt, „whose slope angle is below the threshold".
+
+    Gemessen an einem Keil mit 30° Neigung zur Horizontalen — also 60° zur
+    Senkrechten: Prusa und Orca kippen zwischen 20 und 40, Cura zwischen 50
+    und 70. Beide haben recht, sie zählen nur von der anderen Seite. Wer
+    ihnen dieselbe Zahl schickt, kehrt an den Rändern die Absicht um: 20 heißt
+    in Solidon „stütze fast alles" und kam bei PrusaSlicer als „stütze fast
+    nichts" an.
+
+    Die Null am Rand ist abgefangen: Solidons 90° heißen „stütze nichts", eine
+    geschriebene 0 heißt bei beiden aber „such dir den Winkel selbst" —
+    PrusaSlicer nennt es automatische Erkennung, Orca fällt beim Baum auf 30
+    zurück. Aus der Absicht würde damit ihr Gegenteil, also steht dort eine 1:
+    gestützt wird nur, was flacher als ein Grad liegt, und das ist nichts.
+    """
+    return str(max(round(90.0 - float(value)), 1))  # type: ignore[arg-type]
+
+
 # --- PrusaSlicer und SuperSlicer ------------------------------------------------
 
 _PRUSA_INFILL: Final = {
@@ -179,7 +215,8 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("retraction.avoid_crossing_walls", "avoid_crossing_perimeters", _flag),
     ("support.style", "support_material", _support_on),
     ("support.style", "support_material_style", _mapped(_PRUSA_SUPPORT_STYLE, "grid")),
-    ("support.threshold_angle", "support_material_threshold", _integer),
+    ("support.placement", "support_material_buildplate_only", _mapped({"build_plate": "1"}, "0")),
+    ("support.threshold_angle", "support_material_threshold", _angle_from_horizontal),
     ("support.z_gap", "support_material_contact_distance", _number),
     ("support.xy_gap", "support_material_xy_spacing", _number),
     ("support.interface_layers", "support_material_interface_layers", _integer),
@@ -276,7 +313,7 @@ ORCA: Final[tuple[Row, ...]] = (
     ("support.style", "enable_support", _support_on),
     ("support.style", "support_type", _mapped(_ORCA_SUPPORT_TYPE, "normal(auto)")),
     ("support.placement", "support_on_build_plate_only", _mapped({"build_plate": "1"}, "0")),
-    ("support.threshold_angle", "support_threshold_angle", _integer),
+    ("support.threshold_angle", "support_threshold_angle", _angle_from_horizontal),
     ("support.z_gap", "support_top_z_distance", _number),
     ("support.xy_gap", "support_object_xy_distance", _number),
     ("support.interface_layers", "support_interface_top_layers", _integer),
@@ -316,6 +353,21 @@ _CURA_INFILL: Final = {
     "triangles": "triangles",
 }
 
+#: Wo CuraEngine die Naht ansetzt. Die vier Werte heißen dort ``back``
+#: („User Specified", also der Punkt aus ``z_seam_x``/``z_seam_y``),
+#: ``shortest``, ``random`` und ``sharpest_corner``.
+#:
+#: Für Solidons ``aligned`` gibt es kein genaues Gegenstück — Cura kennt keine
+#: Naht, die von Schicht zu Schicht auf derselben Kante bleibt. ``sharpest_corner``
+#: kommt der Absicht am nächsten: die Naht sitzt an einer Kante statt irgendwo,
+#: und sie sitzt in jeder Schicht an derselben.
+_CURA_SEAM: Final = {
+    "aligned": "sharpest_corner",
+    "nearest": "shortest",
+    "random": "random",
+    "rear": "back",
+}
+
 CURA: Final[tuple[Row, ...]] = (
     ("layers.layer_height", "layer_height", _number),
     ("layers.first_layer_height", "layer_height_0", _number),
@@ -324,13 +376,23 @@ CURA: Final[tuple[Row, ...]] = (
     ("shell.wall_count", "wall_line_count", _integer),
     ("shell.top_layers", "top_layers", _integer),
     ("shell.bottom_layers", "bottom_layers", _integer),
-    ("shell.outer_wall_first", "outer_inset_first", _boolean),
+    # ``inset_direction`` und nicht ``outer_inset_first``: den alten Namen
+    # kennt Cura 5 nicht mehr, und ein unbekannter ``-s``-Wert wird
+    # stillschweigend verworfen. Gemessen an einem Würfel: null von fünfzig
+    # Lagen begannen außen, mit dem richtigen Namen neunundvierzig.
+    ("shell.outer_wall_first", "inset_direction", _mapped({"True": "outside_in"}, "inside_out")),
+    ("shell.seam_position", "z_seam_type", _mapped(_CURA_SEAM, "sharpest_corner")),
     ("shell.ironing", "ironing_enabled", _boolean),
     # CuraEngine hat keinen umschaltbaren Wandgenerator und keine gesonderte
     # genaue Außenwand: es rechnet ohnehin mit variabler Bahnbreite. Was es
     # nicht kennt, bekommt keinen Eintrag — eine Zuordnung auf das
     # Nächstbeste wäre eine Einstellung, die woanders landet.
+    #
+    # Beide Brückenwege, Wand wie Fläche: Cura trennt sie, Solidon kennt eine
+    # Brückengeschwindigkeit. Wirksam werden sie erst mit
+    # ``bridge_settings_enabled`` — den setzt die Ableitungsstufe.
     ("speed.bridge", "bridge_wall_speed", _number),
+    ("speed.bridge", "bridge_skin_speed", _number),
     ("speed.acceleration", "acceleration_print", _number),
     ("speed.outer_wall_acceleration", "acceleration_wall_0", _number),
     ("infill.density", "infill_sparse_density", _percent),
@@ -340,11 +402,17 @@ CURA: Final[tuple[Row, ...]] = (
     ("temperature.nozzle_first_layer", "material_print_temperature_layer_0", _integer),
     ("temperature.bed", "material_bed_temperature", _integer),
     ("temperature.bed_first_layer", "material_bed_temperature_layer_0", _integer),
+    ("temperature.chamber", "build_volume_temperature", _integer),
     ("cooling.fan_speed", "cool_fan_speed", _percent),
+    ("cooling.bridge_fan_speed", "bridge_fan_speed", _percent),
     ("cooling.disable_first_layers", "cool_fan_full_layer", _integer),
     ("cooling.minimum_layer_time", "cool_min_layer_time", _integer),
     ("speed.outer_wall", "speed_wall_0", _number),
     ("speed.inner_wall", "speed_wall_x", _number),
+    # Curas Sammelgeschwindigkeit. Solidon hat keine — aber alles, was Cura
+    # nicht einzeln bekommt (Stützen, Prime Tower), rechnet daraus, und ohne
+    # sie bleibt es bei 60 mm/s aus der Definition.
+    ("speed.inner_wall", "speed_print", _number),
     ("speed.infill", "speed_infill", _number),
     ("speed.top_surface", "speed_topbottom", _number),
     ("speed.first_layer", "speed_layer_0", _number),
@@ -356,11 +424,17 @@ CURA: Final[tuple[Row, ...]] = (
     # `verify()` sah nichts, weil der Schlüssel nie geschrieben wurde.
     ("support.style", "support_structure", _mapped({"tree": "tree"}, "normal")),
     ("support.placement", "support_type", _mapped({"build_plate": "buildplate"}, "everywhere")),
+    # Hier **ohne** Umrechnung: Cura zählt gegen die Senkrechte, so wie
+    # Solidon. Die beiden anderen Familien drehen die Zählweise um, siehe
+    # :func:`_angle_from_horizontal`.
     ("support.threshold_angle", "support_angle", _integer),
     ("support.z_gap", "support_z_distance", _number),
     ("support.xy_gap", "support_xy_distance", _number),
     ("support.density", "support_infill_rate", _percent),
-    ("support.interface_layers", "support_interface_height", _integer),
+    # Curas Schnittstelle ist eine **Höhe**, keine Schichtzahl — und sie
+    # entsteht nur, wenn ``support_interface_enable`` sie einschaltet. Beides
+    # rechnet die Ableitungsstufe: ohne sie wurden aus zwei Schichten zwei
+    # Millimeter, das Zehnfache bei 0,2er Schichten.
     ("adhesion.kind", "adhesion_type", _mapped({"none": "none"}, "")),
     ("adhesion.skirt_loops", "skirt_line_count", _integer),
     ("adhesion.skirt_distance", "skirt_gap", _number),
@@ -369,13 +443,227 @@ CURA: Final[tuple[Row, ...]] = (
     ("retraction.length", "retraction_amount", _number),
     ("retraction.speed", "retraction_speed", _number),
     ("retraction.z_hop", "retraction_hop", _number),
+    ("retraction.z_hop", "retraction_hop_enabled", _positive_flag),
     # CuraEngine nennt dasselbe „Combing": der Kopf kämmt innerhalb des Teils
     # statt geradeaus zu fahren. ``noskin`` hält ihn zusätzlich von der
     # Oberfläche fern, wo eine Schleifspur sichtbar bliebe.
     ("retraction.avoid_crossing_walls", "retraction_combing", _mapped({"True": "noskin"}, "off")),
     ("filament.diameter", "material_diameter", _number),
     ("filament.flow_ratio", "material_flow", _percent),
+    ("filament.max_flow", "material_max_flowrate", _number),
 )
+
+#: Was ``CuraEngine`` aus einem geschriebenen Wert **nicht** selbst ableitet.
+#:
+#: In ``fdmprinter.def.json`` trägt jede abgeleitete Einstellung zweierlei:
+#: einen ``value``-Ausdruck und einen ``default_value``. Das Fenster wertet den
+#: Ausdruck aus, die Rechenmaschine dahinter nimmt den Vorgabewert — sie löst
+#: keine Vererbung auf (siehe :func:`app.core.export.handover._machine_keys`).
+#: Was Solidon schreibt, bleibt damit an seinem Schlüssel stehen und erreicht
+#: die nicht, aus denen gerechnet wird.
+#:
+#: Gemessen an einem 20-mm-Würfel, zweimal derselbe Lauf: 1100 mm Filament
+#: gegen 818, 753 Sekunden gegen 660. Der größte Posten war die Füllung —
+#: ``infill_line_distance`` blieb bei 2 mm, wo 5,6 gemeint waren.
+#:
+#: Hier stehen nur die **reinen Kopien**; was Cura rechnet, rechnet
+#: :func:`app.core.export.handover._cura_dependants` nach. Absichtlich nicht
+#: dabei: ``acceleration_travel`` (Cura leitet sie nur beim Spiralisieren aus
+#: der Druckbeschleunigung ab, sonst sind es feste 5000) und alles am Prime
+#: Tower, den ein Lauf mit einem Extruder nie baut.
+CURA_MIRRORED: Final[dict[str, tuple[str, ...]]] = {
+    "acceleration_print": (
+        "acceleration_flooring",
+        "acceleration_infill",
+        "acceleration_ironing",
+        "acceleration_layer_0",
+        "acceleration_print_layer_0",
+        "acceleration_roofing",
+        "acceleration_skirt_brim",
+        "acceleration_support",
+        "acceleration_support_bottom",
+        "acceleration_support_infill",
+        "acceleration_support_interface",
+        "acceleration_support_roof",
+        "acceleration_topbottom",
+        "acceleration_wall",
+        "acceleration_wall_x",
+        "acceleration_wall_x_flooring",
+        "acceleration_wall_x_roofing",
+        "raft_acceleration",
+        "raft_base_acceleration",
+        "raft_interface_acceleration",
+        "raft_surface_acceleration",
+    ),
+    "acceleration_wall_0": ("acceleration_wall_0_flooring", "acceleration_wall_0_roofing"),
+    "bottom_layers": ("initial_bottom_layers",),
+    "bridge_fan_speed": ("skin_support_fan_speed",),
+    "bridge_skin_speed": ("bridge_skin_speed_2", "bridge_skin_speed_3", "skin_support_speed"),
+    "cool_fan_speed": ("cool_fan_speed_max", "cool_fan_speed_min"),
+    "cool_min_layer_time": ("cool_min_layer_time_overhang",),
+    "inset_direction": ("initial_layer_inset_direction",),
+    "layer_height": (
+        "infill_sparse_thickness",
+        "raft_surface_thickness",
+        "support_infill_sparse_thickness",
+    ),
+    "line_width": (
+        "flooring_line_width",
+        "infill_line_width",
+        "raft_surface_line_spacing",
+        "raft_surface_line_width",
+        "roofing_line_width",
+        "skin_line_width",
+        "skirt_brim_line_width",
+        "support_bottom_line_width",
+        "support_interface_line_width",
+        "support_line_width",
+        "support_roof_line_width",
+        "wall_line_width",
+        "wall_line_width_0",
+        "wall_line_width_x",
+        "wall_transition_length",
+    ),
+    "material_flow": (
+        "flooring_material_flow",
+        "infill_material_flow",
+        "roofing_material_flow",
+        "skin_material_flow",
+        "skirt_brim_material_flow",
+        "support_bottom_material_flow",
+        "support_interface_material_flow",
+        "support_material_flow",
+        "support_roof_material_flow",
+        "wall_0_material_flow",
+        "wall_0_material_flow_flooring",
+        "wall_0_material_flow_roofing",
+        "wall_material_flow",
+        "wall_x_material_flow",
+        "wall_x_material_flow_flooring",
+        "wall_x_material_flow_roofing",
+    ),
+    # Ohne diesen bleibt die Mindesttemperatur bei 0 °C: Cura senkt bis dorthin
+    # ab, wenn eine Schicht die Mindestzeit unterschreitet.
+    "material_print_temperature": ("cool_min_temperature",),
+    "retraction_amount": ("retraction_extrusion_window",),
+    "retraction_hop": ("retraction_hop_after_extruder_switch_height",),
+    "retraction_speed": ("retraction_prime_speed", "retraction_retract_speed"),
+    "speed_layer_0": ("skirt_brim_speed", "speed_print_layer_0"),
+    "speed_print": ("speed_support", "speed_support_infill"),
+    "speed_topbottom": ("speed_flooring", "speed_roofing"),
+    "speed_wall_0": ("speed_wall_0_flooring", "speed_wall_0_roofing"),
+    "speed_wall_x": ("speed_wall_x_flooring", "speed_wall_x_roofing"),
+    "support_angle": ("seam_overhang_angle",),
+    "support_z_distance": ("support_bottom_distance", "support_top_distance"),
+    "machine_height": ("gantry_height",),
+    "min_wall_line_width": (
+        "min_bead_width",
+        "min_even_wall_line_width",
+        "min_odd_wall_line_width",
+    ),
+    "skin_preshrink": ("bottom_skin_preshrink", "top_skin_preshrink"),
+    "expand_skins_expand_distance": (
+        "bottom_skin_expand_distance",
+        "top_skin_expand_distance",
+    ),
+    "support_line_distance": ("support_initial_layer_line_distance",),
+    "support_interface_height": ("support_bottom_height", "support_roof_height"),
+}
+
+#: Dasselbe mit einem Faktor davor — Curas Formel, als Zahl statt als Satz.
+#:
+#: Die Reihenfolge trägt: ``raft_base_speed`` rechnet auf ``raft_speed``, und
+#: das steht darüber. Eine Abbildung wäre hier eine Falle, ein Tupel ist eine
+#: Reihenfolge.
+CURA_SCALED: Final[tuple[tuple[str, str, float], ...]] = (
+    ("retraction_min_travel", "line_width", 2.0),
+    ("support_z_seam_min_distance", "line_width", 2.0),
+    ("brim_inside_margin", "line_width", 4.0),
+    ("raft_interface_line_width", "line_width", 2.0),
+    ("infill_wipe_dist", "line_width", 0.25),
+    ("min_feature_size", "line_width", 0.25),
+    ("small_skin_width", "line_width", 2.0),
+    ("raft_base_line_width", "machine_nozzle_size", 2.0),
+    ("raft_base_line_spacing", "machine_nozzle_size", 4.0),
+    ("wall_0_wipe_dist", "machine_nozzle_size", 0.5),
+    ("support_xy_distance_overhang", "machine_nozzle_size", 0.5),
+    ("retraction_combing_avoid_distance", "machine_nozzle_size", 1.5),
+    ("wall_transition_filter_deviation", "machine_nozzle_size", 0.25),
+    ("raft_interface_thickness", "layer_height", 1.5),
+    ("raft_base_thickness", "layer_height_0", 1.2),
+    ("support_tree_tip_diameter", "support_line_width", 2.0),
+    ("speed_wall", "speed_print", 0.5),
+    ("raft_speed", "speed_print", 0.5),
+    ("raft_base_speed", "raft_speed", 0.75),
+    ("raft_interface_speed", "raft_speed", 0.75),
+    ("raft_surface_speed", "raft_speed", 1.0),
+    ("support_tree_angle_slow", "support_tree_angle", 2.0 / 3.0),
+)
+
+#: Was ``CuraEngine`` ableiten würde und trotzdem nicht geschrieben wird —
+#: mit dem Grund daneben, damit die Liste eine Entscheidung bleibt und nicht
+#: zu einer Sammelstelle für Vergessenes wird.
+#:
+#: ``tests/test_print_settings.py`` hält sie ehrlich: was in der Definition
+#: von einem geschriebenen Wert abhängt und weder gesetzt noch hier begründet
+#: ist, lässt den Lauf rot werden.
+CURA_UNTOUCHED: Final[dict[str, str]] = {
+    "acceleration_prime_tower": "Prime Tower — ein Lauf mit einem Extruder baut keinen.",
+    "prime_tower_base_height": "wie oben",
+    "prime_tower_base_size": "wie oben",
+    "prime_tower_brim_enable": "wie oben",
+    "prime_tower_flow": "wie oben",
+    "prime_tower_line_width": "wie oben",
+    "prime_tower_position_x": "wie oben",
+    "prime_tower_position_y": "wie oben",
+    "prime_tower_raft_base_line_spacing": "wie oben",
+    "speed_prime_tower": "wie oben",
+    "wipe_hop_amount": "Düse abstreifen zwischen den Schichten — steht auf aus.",
+    "wipe_hop_enable": "wie oben",
+    "wipe_retraction_amount": "wie oben",
+    "wipe_retraction_prime_speed": "wie oben",
+    "wipe_retraction_retract_speed": "wie oben",
+    "wipe_retraction_speed": "wie oben",
+    "material_break_preparation_temperature": "Stützmaterial zum Abbrechen — kennt Solidon nicht.",
+    "interlocking_beam_width": "Verzahnung zweier Materialien — braucht zwei Extruder.",
+    "multi_material_paint_depth": "wie oben",
+    "multi_material_paint_resolution": "wie oben",
+    "cross_infill_pocket_size": "Muster ``cross`` — bietet Solidon nicht an.",
+    "sub_div_rad_add": "Muster ``cubicsubdiv`` — bietet Solidon nicht an.",
+    "wall_thickness": "gilt nur beim Spiralisieren, und das schaltet Solidon nicht ein.",
+    "layer_start_x": "gilt nur mit ``layer_start_at_z_seam``, und das steht auf aus.",
+    "layer_start_y": "wie oben",
+    "build_fan_full_layer": "Gehäuselüfter — keine Einstellung in Solidon.",
+    "cool_fan_full_at_height": "nur Elternwert von ``cool_fan_full_layer``, das direkt kommt.",
+    "skin_outline_count": "wird 1 für jedes Muster, das Solidon anbietet — also die Vorgabe.",
+    "min_skin_width_for_expansion": "wird 0, solange der Öffnungswinkel bei 90° steht.",
+    "adhesion_extruder_nr": "Extrudernummer — bei einem Extruder ist die Vorgabe richtig.",
+    "raft_base_extruder_nr": "wie oben",
+    "raft_interface_extruder_nr": "wie oben",
+    "raft_surface_extruder_nr": "wie oben",
+    "skirt_brim_extruder_nr": "wie oben",
+    "raft_base_infill_overlap_mm": "die Überlappung dahinter steht auf 0, gerechnet bleibt 0.",
+    "raft_interface_infill_overlap_mm": "wie oben",
+    "raft_surface_infill_overlap_mm": "wie oben",
+    "acceleration_travel": "Cura leitet sie nur beim Spiralisieren ab; sonst sind es feste 5000.",
+    "zig_zaggify_infill": "wird falsch für jedes Muster, das Solidon anbietet — die Vorgabe.",
+}
+
+#: Wie oft ein Füllmuster seine Linien kreuzt. Aus derselben Formel wie
+#: ``infill_line_distance`` in der Cura-Definition — ein Gitter legt zwei
+#: Linienscharen übereinander, also darf jede den doppelten Abstand haben.
+CURA_INFILL_CROSSINGS: Final[dict[str, float]] = {
+    "grid": 2.0,
+    "trihexagon": 3.0,
+    "cubic": 3.0,
+    "triangles": 3.0,
+    "lines": 1.0,
+    "gyroid": 1.0,
+}
+
+#: Dasselbe für die Stützfüllung. Solidon schreibt ``support_pattern`` nicht,
+#: es bleibt bei Curas ``zigzag`` — einer Linienschar.
+CURA_SUPPORT_CROSSINGS: Final = 1.0
 
 #: Wie ein Material beim Slicer heißt. Fast immer die Solidon-Kennung in
 #: Großbuchstaben — nur wo die Schreibweisen auseinandergehen, steht ein

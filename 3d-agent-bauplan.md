@@ -1504,9 +1504,10 @@ Prosa. Eine Ausnahme ohne Vorschlag ist unfertig.
 
 ### 33.2 Protokoll
 Rotierende Datei im Nutzerverzeichnis, rein lokal. Format: Zeitstempel, Ebene,
-Modul, Nachricht, Op-Nummer wo zutreffend. Kein Versand — die Abgrenzung zur
-verbotenen Telemetrie ist: Das Protokoll verlässt den Rechner nur, wenn der
-Nutzer es selbst anhängt.
+Modul, Nachricht, Op-Nummer wo zutreffend. Kein Versand von sich aus — die
+Abgrenzung zur verbotenen Telemetrie ist: Das Protokoll verlässt den Rechner
+nur, wenn der Nutzer es selbst an eine Rückmeldung hängt und diese absendet
+(§37.2). Kein Zeitgeber, kein Fehlerpfad und kein Start schickt es.
 
 Ebenen: `debug` nur bei gesetztem Schalter, `info` für Op-Läufe und
 Dateizugriffe, `warning` für Rückfallstufen und Befunde, `error` für
@@ -1641,9 +1642,15 @@ G-Code-Slicer" liest sich besser als die Langfassung.
   Download-Seite verweisen.
 - **Übersetzbarkeit von Anfang an**; eine Prüfung schlägt bei unübersetzten
   Texten an.
-- **Fehlerberichte.** Keine Telemetrie. Ein Dialog legt Fehlertext,
-  Versionsangaben und auf Wunsch den Projektcontainer bereit — mit Hinweis,
-  dass Geometrie enthalten ist.
+- **Fehlerberichte und Rückmeldungen.** Keine Telemetrie. Ein Dialog stellt
+  Fehlertext, Versionsangaben und auf Wunsch Bildschirmfoto, Protokoll und den
+  Projektcontainer zusammen — mit Hinweis, dass Geometrie und Chat-Verlauf
+  enthalten sind — und **sendet sie auf Knopfdruck** an den Supportkanal.
+  Die Grenze zur verbotenen Telemetrie liegt nicht beim Versand, sondern beim
+  Auslöser: Es geht nichts von allein, nichts ungesehen (Vorschau vor dem
+  Senden) und nichts ohne Inhalt — ein geschriebener Satz oder, nach einem
+  Absturz, der Stapelabzug, der sich selbst trägt. Der Weg
+  ohne Netz bleibt derselbe Dialog — er legt den Bericht als Ordner ab.
 - **Doku und Beispielprojekte**: genau die vier Hauptwege aus §2.2. Sie sind
   gleichzeitig Doku, Abnahmeprüfung und Startbildschirm-Inhalt.
 - **Erwartungsmanagement.** Klar hinschreiben, was die Anwendung nicht ist —

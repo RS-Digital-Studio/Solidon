@@ -163,13 +163,26 @@ PATHS: Final[dict[str, str]] = {
     "step": ('<path d="M4 12h12.5" /><path d="M11.5 6.5 17 12l-5.5 5.5" />'),
     # --- Zeichenwerkzeuge ------------------------------------------------------
     #
-    # Hier tragen die Symbole **allein**, ohne Beschriftung — als einzige Stelle
-    # der Oberfläche. Der Grund ist nicht Platzmangel, sondern dass die Regel
-    # oben ihre Voraussetzung verliert: „Schnitt" und „Explosion" haben kein
-    # Bild, auf das sich die Welt geeinigt hat, Linie, Kreis und Bogen schon.
-    # Jedes CAD zeigt sie seit dreißig Jahren gleich, und wer je eines bedient
-    # hat, liest sie ohne Wort. Das Kürzel steht im Tooltip, wo es sich beim
-    # Verweilen von selbst zeigt.
+    # Hier tragen die Symbole **allein**, ohne Beschriftung. Der Grund ist nicht
+    # Platzmangel, sondern dass die Regel oben ihre Voraussetzung verliert:
+    # „Schnitt" und „Explosion" haben kein Bild, auf das sich die Welt geeinigt
+    # hat, Linie, Kreis und Bogen schon. Jedes CAD zeigt sie seit dreißig Jahren
+    # gleich, und wer je eines bedient hat, liest sie ohne Wort. Das Kürzel steht
+    # im Tooltip, wo es sich beim Verweilen von selbst zeigt.
+    #
+    # Die Werkzeugleiste über dem Fenster steht ebenfalls ohne Beschriftung,
+    # aber **nicht** aus demselben Grund — das trägt nur für drei ihrer sieben
+    # Knöpfe. Blatt, Ordner und Diskette sind so alt und so einheitlich wie
+    # Linie und Kreis; für „Modell einfügen", „Zeichnen", „Formen" und
+    # „Skelett" gibt es kein geeinigtes Bild, und geraten wird dort genauso.
+    # Was sie trägt, ist zweierlei: Sie sind wenige und stehen immer an
+    # derselben Stelle, und ihr Tooltip nennt Namen, Kürzel und Zweck in einem
+    # Satz (``main_window._button_tip``) — der Umweg über den Zeiger kostet
+    # einmal, und danach sitzt die Position.
+    #
+    # Die Werkzeugzeile unter dem Viewport bleibt beschriftet: dort steht
+    # „Schnitt", ihre acht Umschalter wechseln mit dem Zustand, und ein
+    # Werkzeug, das man sucht, ist kein Werkzeug mehr.
     #
     # Ein Punkt: kein Kreis, sondern ein Kreuz mit Mitte — ein gefüllter Kreis
     # sähe neben dem Kreiswerkzeug aus wie dessen kleiner Bruder.

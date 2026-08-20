@@ -189,3 +189,16 @@ def test_one_spelling_for_the_angle() -> None:
         if entry.unit == DEGREE_UNIT
     ]
     assert len(angles) > 20, f"nur {len(angles)} Winkelparameter — prüft dieser Test noch etwas?"
+
+
+def test_the_shared_placement_names_match_the_parts_library() -> None:
+    """Das Register erklärt die geteilten Ortsangaben der Bausteine einmal am
+    Kategoriekopf und filtert sie aus den Einzeltabellen — über eine eigene
+    Namensliste, weil es die Bausteinbibliothek nicht importieren darf.
+    Driftet eine der beiden Seiten, verschwinden Parameter aus dem Handbuch
+    oder stehen wieder doppelt.
+    """
+    from app.core.knowledge.parts.ops import _PLACEMENT
+    from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
+
+    assert tuple(name for name, _kind, _spec in _PLACEMENT) == PART_PLACEMENT_PARAMS

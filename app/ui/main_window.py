@@ -11,20 +11,19 @@ Kommandozeile, sobald sie deklariert ist (§10).
 
 from __future__ import annotations
 
-import platform
 import time
+import traceback
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QPoint, Qt, QThread, QTimer, QUrl, QUrlQuery, Signal, qVersion
+from PySide6.QtCore import QPoint, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
     QCloseEvent,
-    QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
     QKeySequence,
@@ -51,7 +50,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_NAME, APP_VERSION, PROJECT_SUFFIX, SUPPORT_ADDRESS
+from app.branding import APP_NAME, APP_VERSION, PROJECT_SUFFIX
 from app.core import activation, examples, manual, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
@@ -128,6 +127,7 @@ from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import total as estimate_total
+from app.core.support import KIND_CRASH, KIND_IDEA
 from app.core.tour import tour_for
 from app.core.types import (
     Bone,
@@ -195,7 +195,6 @@ from app.ui.panels import (
 from app.ui.pose_bar import PoseBar
 from app.ui.print_settings_dialog import PrintSettingsDialog, remembered_setup
 from app.ui.remote_server import RemoteServer, WindowBridge
-from app.ui.report_dialog import ErrorReportDialog
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
@@ -206,6 +205,7 @@ from app.ui.sketch_editor import SketchPanel, Surroundings
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
 from app.ui.style import NORMAL, TIGHT, make_primary
+from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
 from app.ui.tour import TourPanel
@@ -1302,21 +1302,24 @@ class MainWindow(QMainWindow):
         Datei und Hilfe bleiben — Öffnen, Beenden, Handbuch und Freischalten
         sind genau dort sinnvoll."""
         file_menu = self._menu(tr("Datei"))
-        self._add_action(
+        # Festgehalten, nicht weil das Menü sie bräuchte, sondern weil die
+        # Werkzeugleiste ihren Satz und ihr Kürzel übernimmt: derselbe Knopf
+        # soll nicht zwei Erklärungen haben, die auseinanderdriften.
+        self.new_action = self._add_action(
             file_menu,
             tr("Neu"),
             QKeySequence.StandardKey.New,
             self.action_new,
             tr("Zum Startbildschirm: leeres Projekt, ein Beispiel, oder zuletzt Geöffnetes."),
         )
-        self._add_action(
+        self.open_action = self._add_action(
             file_menu,
             tr("Öffnen …"),
             QKeySequence.StandardKey.Open,
             self.action_open,
             tr("Ein gespeichertes Projekt öffnen (.p3d)."),
         )
-        self._add_action(
+        self.save_action = self._add_action(
             file_menu,
             tr("Speichern"),
             QKeySequence.StandardKey.Save,
@@ -1771,17 +1774,10 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             help_menu,
-            tr("Fehlerbericht erstellen …"),
-            None,
-            self.action_report,
-            tr("Einen Ordner mit Protokoll und Umgebung anlegen. Verschickt wird nichts."),
-        )
-        self._add_action(
-            help_menu,
-            tr("Rückmeldung schreiben …"),
+            tr("Rückmeldung senden …"),
             None,
             self.action_feedback,
-            tr("Eine Mail an den Support vorbereiten — Fassung und System stehen schon drin."),
+            tr("Vorschlag, Fehler oder Frage an den Support — auf Wunsch mit Bild und Sitzung."),
         )
         help_menu.addSeparator()
         self._add_action(
@@ -1810,31 +1806,69 @@ class MainWindow(QMainWindow):
         toolbar = QToolBar(tr("Werkzeuge"), self)
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
-        # Zeichen neben der Beschriftung, nicht statt ihr (Regel 18) — vier
-        # gleich aussehende Textknöpfe sind dasselbe Problem, das die
-        # Werkzeugzeile unter dem Viewport längst gelöst hat.
-        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        for symbol, label, slot in (
-            ("new", tr("Neu"), self.action_new),
-            ("open", tr("Öffnen"), self.action_open),
-            ("save", tr("Speichern"), self.action_save),
-            ("import", tr("Modell einfügen"), self.action_import),
+        # Nur die Zeichen, die Wörter am Zeiger. Acht beschriftete Knöpfe
+        # brauchten 703 Pixel und drängten die Kopfzeile mit Projekt, Maßen,
+        # Drucker und Material an den rechten Rand; ohne Text sind es 310.
+        # Regel 18 verlangt eine zweite Kodierung neben der Farbe, nicht eine
+        # Beschriftung neben jedem Zeichen — und Blatt, Ordner und Diskette
+        # sind derselbe Fall wie Linie und Kreis im Skizzeneditor: Bilder, auf
+        # die sich die Welt geeinigt hat (``app/ui/icons.py``, Abschnitt
+        # Zeichenwerkzeuge). Der Name bleibt am ``QAction`` und damit im
+        # Barrierefreiheitsbaum.
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        # Vier der sieben haben ein Menüpendant; von ihm kommen Satz und
+        # Kürzel (``source``). Die drei anderen gibt es nur hier und tragen
+        # ihren Satz selbst.
+        for symbol, label, slot, source, own_hint in (
+            ("new", tr("Neu"), self.action_new, self.new_action, ""),
+            ("open", tr("Öffnen"), self.action_open, self.open_action, ""),
+            ("save", tr("Speichern"), self.action_save, self.save_action, ""),
+            ("import", tr("Modell einfügen"), self.action_import, self.import_action, ""),
             # Weg 2 aus §2.2 bekommt seinen vorgesehenen Platz: die
             # Hauptwege-Tabelle nennt für „neu konstruieren" ausdrücklich die
             # Werkzeugzeile — belegt war er nie, und das Zeichnen lag drei
             # Ebenen tief im Menü. Erst zeichnen, die Erzeugungsart kommt bei
             # „Fertig".
-            ("category.sketch", tr("Zeichnen"), self.action_sketch_free),
+            (
+                "category.sketch",
+                tr("Zeichnen"),
+                self.action_sketch_free,
+                None,
+                tr("Ein Profil zeichnen; was daraus wird, fragt der Dialog bei „Fertig“."),
+            ),
             # Und Weg 4 daneben. Beide lagen unter *Ändern → Netz* zwischen
             # Reparaturwerkzeugen, ohne Kürzel — die Hauptwege-Tabelle nennt
             # für „organisch formen" die Werkzeugzeile, und die untere ist mit
             # acht Umschaltern voll. Der Menüeintrag bleibt, wo er war: Palette
             # und Verlauf führen über ihn.
-            ("sculpt", tr("Formen"), self.action_sculpt_free),
-            ("armature", tr("Skelett"), self.action_armature_free),
+            (
+                "sculpt",
+                tr("Formen"),
+                self.action_sculpt_free,
+                None,
+                tr("Einen gewählten Körper mit dem Pinsel auf- und abtragen."),
+            ),
+            (
+                "armature",
+                tr("Skelett"),
+                self.action_armature_free,
+                None,
+                tr("Knochen in einen gewählten Körper setzen und ihn danach beugen."),
+            ),
         ):
             action = QAction(icon(symbol, toolbar), label, self)
             action.triggered.connect(slot)
+            # Ohne Beschriftung am Knopf ist der Tooltip die Stelle, an der
+            # Name, Kürzel und Zweck gelesen werden; dieselbe Angabe gehört in
+            # die Statusleiste (§2 C). Der ``statusTip`` ist zugleich das,
+            # woraus ``_lock_hint`` den eigenen Hinweis wiederherstellt — ohne
+            # ihn bliebe der Knopf nach dem Freischalten stumm.
+            tip = self._button_tip(label, source, own_hint)
+            action.setToolTip(tip)
+            action.setStatusTip(tip)
+            # Merkzettel für ``_with_name``: dieser Knopf zeigt seinen Namen
+            # nicht selbst.
+            action.setProperty("wordless", True)
             toolbar.addAction(action)
             if symbol == "import":
                 # Vier Knöpfe der Zeile lösen Transaktionen aus — nach Ablauf
@@ -1847,23 +1881,8 @@ class MainWindow(QMainWindow):
             if symbol == "armature":
                 self._toolbar_armature = action
 
-        for action, hint in (
-            (
-                self._toolbar_sculpt,
-                tr("Einen gewählten Körper mit dem Pinsel auf- und abtragen."),
-            ),
-            (
-                self._toolbar_armature,
-                tr("Knochen in einen gewählten Körper setzen und ihn danach beugen."),
-            ),
-        ):
-            # Der Satz sagt, was der erste Handgriff ist — dieselbe Zusage, die
-            # `test_interface_limits` für die untere Werkzeugzeile hält.
-            action.setStatusTip(hint)
-            action.setToolTip(hint)
-
-        # Rechts neben den vier Knöpfen stand tausend Pixel nichts. Dort steht
-        # jetzt, was das Projekt gerade ist und worauf es gedruckt wird —
+        # Rechts neben den sieben Knöpfen stand die halbe Leiste leer. Dort
+        # steht jetzt, was das Projekt gerade ist und worauf es gedruckt wird —
         # Angaben, die jede Toleranz im Stapel bestimmen (§12) und für die man
         # bisher einen Dialog öffnen musste.
         self.header = HeaderBar(toolbar)
@@ -2206,6 +2225,45 @@ class MainWindow(QMainWindow):
         # auch, und zwei Stellen mit derselben Auskunft driften.
         return kind_requirement(spec, kinds)
 
+    @staticmethod
+    def _button_tip(label: str, source: QAction | None, own_hint: str) -> str:
+        """Was am unbeschrifteten Knopf steht: Name, Kürzel, Zweck.
+
+        Der Zweck kommt aus dem Menüeintrag derselben Handlung, wenn es einen
+        gibt — er ist dort schon geschrieben und übersetzt, und zwei Sätze für
+        einen Knopf driften auseinander. Das Kürzel steht dabei: Es ist die
+        Stelle, an der man es nebenbei lernt, wie in der Werkzeugzeile unten
+        und im Skizzeneditor.
+        """
+        text = label
+        if source is not None:
+            key = source.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+            if key:
+                text = f"{label}  ({key})"
+        sentence = own_hint or (source.statusTip() if source is not None else "")
+        # Gedankenstrich hier, Doppelpunkt in ``_with_name``: jeder Trenner
+        # dort, wo der Satz dahinter ihn nicht schon selbst führt. „Zum
+        # Startbildschirm: leeres Projekt …" mit einem zweiten Doppelpunkt
+        # davor liest sich wie zwei Aufzählungen ineinander.
+        return f"{text} — {sentence}" if sentence else text
+
+    @staticmethod
+    def _with_name(action: QAction, reason: str) -> str:
+        """Der Grund, dem Namen des Knopfes vorangestellt — aber nur dort, wo
+        der Knopf ihn nicht selbst zeigt.
+
+        Die Werkzeugleiste über dem Fenster steht ohne Beschriftung; ihr
+        Tooltip ist die Stelle, an der ihr Name steht. Ein Grund, der ihn
+        überschreibt, lässt ein Bild und einen Satz zurück, die nichts
+        miteinander zu tun scheinen. Im Menü steht der Name daneben — dort
+        bleibt der Grund allein.
+
+        Getrennt wird mit Doppelpunkt und nicht mit Gedankenstrich: Der
+        Sperrgrund führt selbst einen, und zwei in einem Satz sagen nicht mehr,
+        welcher die Gliederung trägt.
+        """
+        return f"{action.text()}: {reason}" if action.property("wordless") else reason
+
     def _pick_hint(self, action: QAction, ready: bool, locked: bool) -> None:
         """Sagt am ausgegrauten Knopf, dass ihm die Auswahl fehlt.
 
@@ -2223,7 +2281,7 @@ class MainWindow(QMainWindow):
         if not ready:
             if stored is None:
                 action.setProperty("tip_before_pick", action.statusTip())
-            reason = tr("Dafür braucht es einen ausgewählten Körper.")
+            reason = self._with_name(action, tr("Dafür braucht es einen ausgewählten Körper."))
             action.setStatusTip(reason)
             action.setToolTip(reason)
         elif stored is not None:
@@ -2267,9 +2325,12 @@ class MainWindow(QMainWindow):
         if locked:
             if stored is None:
                 action.setProperty("tip_before_lock", action.statusTip())
-            reason = tr(
-                "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen "
-                "Lizenzschlüssel (Hilfe → Solidon freischalten …)."
+            reason = self._with_name(
+                action,
+                tr(
+                    "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen "
+                    "Lizenzschlüssel (Hilfe → Solidon freischalten …)."
+                ),
             )
             action.setStatusTip(reason)
             action.setToolTip(reason)
@@ -3108,15 +3169,6 @@ class MainWindow(QMainWindow):
         name = catalog.chosen()
         if name:
             self.run_operation(REGISTRY.get(part_op_name(name)))
-
-    def action_report(self) -> None:
-        """§37.2: ein Bericht lässt sich erstellen, ohne dass etwas schiefging."""
-        dialog = ErrorReportDialog(
-            summary=tr("Vom Nutzer angelegter Bericht."),
-            project=self.session.path,
-            parent=self,
-        )
-        dialog.exec()
 
     def action_calibrate(self) -> None:
         """§28.3: gemessene Werte ins Materialprofil, und alles folgt."""
@@ -5885,44 +5937,56 @@ class MainWindow(QMainWindow):
         self.announce(tr("Es wird nach einer neuen Fassung gesehen …"))
         self._check_for_updates()
 
-    def action_feedback(self) -> None:
-        """Eine vorbereitete Mail an den Support — geschickt wird sie vom
-        Nutzer, nicht von hier.
+    def action_feedback(self, kind: str = KIND_IDEA) -> None:
+        """Vorschlag, Fehler oder Frage — geschrieben, gesehen, gesendet (§37.2).
 
-        Dieselbe Haltung wie beim Fehlerbericht: die Anwendung legt etwas
-        bereit und verschickt nichts. Was drinsteht, sieht der Absender vorher
-        — Fassung, System und Qt-Fassung, damit die Antwort nicht mit drei
-        Rückfragen beginnt.
+        Vorher war das eine vorbereitete Mail: Solidon öffnete das
+        Mailprogramm, und ab da lag alles beim Nutzer — Anhänge suchen,
+        Bildschirmfoto selbst machen, Projektdatei finden. Der Weg endete
+        meistens genau dort. Jetzt hängen Bild, Sitzung und Protokoll schon
+        dran, und der Knopf schickt sie los.
+
+        Was das **nicht** ist: Telemetrie. Es geht nichts von allein, es geht
+        nichts unbesehen, und der abgelegte Ordner steht als Weg daneben.
         """
-        body = "\n".join(
-            (
-                "",
-                "",
-                "--",
-                f"{APP_NAME} {APP_VERSION}",
-                f"{platform.system()} {platform.release()}",
-                f"Qt {qVersion()}",
-            )
-        )
-        address = QUrl(f"mailto:{SUPPORT_ADDRESS}")
-        query = QUrlQuery()
-        query.addQueryItem("subject", f"{APP_NAME} {APP_VERSION} — {tr('Rückmeldung')}")
-        query.addQueryItem("body", body)
-        address.setQuery(query)
-        QDesktopServices.openUrl(address)
+        dialog = self._support_dialog(kind)
+        dialog.exec()
+        self._remember_contact(dialog)
 
     def report_error(self, error: BaseException, summary: str = "") -> None:
         """§33.1: ein Programmfehler bekommt ein Berichtsangebot, keinen
         Vorschlag.
+
+        Das Bildschirmfoto entsteht **vor** dem Dialog: eine Sekunde später
+        zeigte es den Fehlerdialog statt dessen, was darunter schiefging.
         """
-        dialog = ErrorReportDialog(
-            summary=summary or tr("Im Programm ist ein unerwarteter Fehler aufgetreten."),
-            detail=str(error),
-            error=error,
-            project=self.session.path,
-            parent=self,
+        dialog = self._support_dialog(
+            KIND_CRASH,
+            detail="\n".join(
+                filter(None, (summary, str(error), "".join(traceback.format_exception(error))))
+            ),
         )
         dialog.exec()
+        self._remember_contact(dialog)
+
+    def _support_dialog(self, kind: str, detail: str = "") -> SupportDialog:
+        """Der Rückmeldungsdialog mit allem, was dieses Fenster beisteuern kann."""
+        return SupportDialog(
+            kind,
+            detail=detail,
+            screenshot=window_shot(self),
+            session=self.session,
+            contact=self.settings.support_contact,
+            parent=self,
+        )
+
+    def _remember_contact(self, dialog: SupportDialog) -> None:
+        """Die Rückadresse überlebt den Dialog — sie zweimal zu tippen ist
+        einmal zu viel."""
+        address = dialog.contact.text().strip()
+        if address and address != self.settings.support_contact:
+            self.settings.support_contact = address
+            save_settings(self.settings)
 
     # --- window -----------------------------------------------------------------
 

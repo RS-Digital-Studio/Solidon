@@ -436,6 +436,21 @@ nav.lang a.cta:hover {
 
 .download b { color: var(--fg); }
 
+/* Der Zähler bis zur Demo. Er steht unter dem Termin, nicht an seiner Stelle:
+   der Satz darüber nennt Tag und Uhrzeit auch dann, wenn kein Skript läuft,
+   und dann bleibt dieser Absatz schlicht verborgen.
+
+   ``tabular-nums`` ist hier kein Feinschliff, sondern der Unterschied
+   zwischen einer Zeile und einem Zappeln: ohne das ändert jede wechselnde
+   Sekunde die Breite der Ziffer, und der halbe Kasten rückt im Sekundentakt
+   hin und her. */
+.download .countdown {
+  margin: 0.4rem 0 0;
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1817,3 +1832,178 @@ p.footnote {
   margin-top: 2.6rem;
   font-size: 1.25rem;
 }
+
+/* --- Schaustücke: die Galerie erzeugter Körper und der Weg dorthin ---------
+   Die Bilder sind freigestellt und tragen keinen eigenen Hintergrund, damit
+   sie im hellen wie im dunklen Modus auf dem Papier der Seite liegen. Ein
+   Rahmen würde diesen Zweck wieder aufheben — deshalb steht hier keiner. */
+
+.schau {
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1.75rem 1.5rem;
+}
+
+/* Sechs Stücke gehen in sechs, drei oder zwei Spalten glatt auf — in vier
+   oder fünf nicht, und dann steht das letzte allein da wie ein Nachzügler.
+   `auto-fit` kennt diesen Unterschied nicht und füllt die Zeile, so weit sie
+   reicht. Also werden die Teiler von sechs gesetzt, statt die Breite zu
+   deckeln: auf einem breiten Schirm stehen alle sechs nebeneinander. */
+@media (min-width: 58rem) {
+  .schau:not(.tight) { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 92rem) {
+  .schau:not(.tight) { grid-template-columns: repeat(6, 1fr); gap: 1.5rem 1.25rem; }
+}
+
+.schau figure { margin: 0; }
+
+.schau img {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* Ein leichter Schatten trägt den Körper, ohne ihm eine Fläche zu geben. */
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.16));
+}
+
+.schau figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+}
+
+.schau figcaption b {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Der Weg vom erzeugten Körper zum Teil: zwei Bilder nebeneinander, das
+   zweite aufgeschnitten. Nebeneinander und nicht untereinander, weil der
+   Vergleich die Aussage ist. */
+.weg {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1.5rem;
+  align-items: end;
+  margin-top: 2rem;
+}
+
+.weg figure { margin: 0; }
+
+.weg img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.16));
+}
+
+.weg figcaption {
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.weg figcaption b { color: var(--ink); }
+
+@media (prefers-color-scheme: dark) {
+  .schau img,
+  .weg img { filter: drop-shadow(0 6px 16px rgb(0 0 0 / 0.5)); }
+}
+
+/* Die gedrängte Fassung der Galerie: auf der Startseite steht sie als Beleg
+   neben dem Text, nicht als eigenes Kapitel. Kleinere Kacheln, knappere
+   Beschriftung, und vier davon passen auf eine Reihe. */
+.schau.tight {
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1.25rem 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.schau.tight figcaption {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* Belege im Funktionsabschnitt: zwei Bildschirmfotos neben sechs Sätzen.
+   Der Abschnitt trug bis dahin nur Text — die stärksten Argumente der Seite
+   ohne ein einziges Bild, das sie zeigt. */
+.beleg {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+  gap: 1.75rem;
+  margin: 2rem 0 2.5rem;
+  align-items: start;
+}
+
+.beleg figure {
+  margin: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  overflow: hidden;
+}
+
+.beleg img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.beleg figcaption {
+  padding: 0.85rem 1.1rem 1rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.beleg figcaption b { color: var(--ink); }
+
+/* Die Dateiliste im Download-Kasten. Sie erscheint erst, wenn
+   tools/make_download.py Pakete eingetragen hat — vorher steht dort die
+   Warteliste. */
+.dateien {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0.9rem;
+  align-items: flex-start;
+}
+
+.dateien .btn { margin: 0; }
+
+/* Die Prüfsumme steht unter ihrem Knopf und bricht um, statt den Kasten
+   aufzuspreizen: vierundsechzig Zeichen sind breiter als jede Schaltfläche. */
+.pruefsumme {
+  display: block;
+  margin: -0.15rem 0 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--muted);
+  word-break: break-all;
+  opacity: 0.85;
+}
+
+.pruefhinweis {
+  margin: 0.4rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* `hidden` muss stärker sein als jede Anzeigeart.
+   Das Attribut bringt vom Browser nur `display: none` mit, und diese Regel
+   verliert gegen jede Klasse, die selbst eine Anzeigeart setzt — `.btn` tut
+   das mit `inline-flex`. Der Wartelisten-Knopf blieb deshalb neben den
+   Ladeknöpfen stehen, obwohl er längst als versteckt markiert war: im DOM
+   verschwunden, auf dem Schirm noch da. */
+[hidden] { display: none !important; }

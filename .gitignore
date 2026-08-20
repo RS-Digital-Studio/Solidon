@@ -62,3 +62,9 @@ htmlcov/
 # nicht: die Marke, wann die Suite zuletzt lief, ist Sache dieser Maschine.
 /.claude/.state/
 /.claude/settings.local.json
+
+# Die Installationspakete für die Website. Sie entstehen im Bau, werden von
+# tools/make_download.py hierher kopiert und von dort hochgeladen — im
+# Repository haben ein paar hundert Megabyte je Fassung nichts verloren. Die
+# Verweise darauf stehen in den Seiten und sind versioniert, die Dateien nicht.
+website/dl/

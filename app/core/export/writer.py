@@ -588,6 +588,7 @@ def write_assembly(
             project_name,
             bed=bed,
             project_settings=_plate_settings(settings, profile, flavour, setup),
+            prusa_config=_plate_config(settings, profile, flavour),
             # Nur wo es mehrere Platten gibt. Ein Versatz auf einer einzelnen
             # wäre eine Verschiebung ohne Grund, und die Datei trüge eine
             # Matrix, die nichts sagt.
@@ -621,6 +622,27 @@ def _plate_settings(
 
     known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
     return handover.project_settings(settings, profile, known)
+
+
+def _plate_config(
+    settings: PrintSettings | None, profile: Profile, flavour: SlicerFlavour
+) -> dict[str, str]:
+    """Dasselbe für PrusaSlicer, der es als Textzeilen führt (§29).
+
+    Die Orca-Familie liest ihre Einstellungen aus einer JSON-Beilage, Prusa
+    aus ``Metadata/Slic3r_PE.config`` — dieselbe Sache, ein anderes Format.
+    Solange nur die eine geschrieben wurde, trug eine exportierte 3MF für
+    PrusaSlicer bloß Geometrie: geöffnet wurde sie mit dem Profil, das gerade
+    eingestellt war, und was Solidon über das Teil weiß, war weg.
+
+    Gemessen, nicht vermutet: eine 3MF mit dieser Beilage, ohne ``--load``
+    geslict, ergab sieben Wände und 15 Prozent Füllung — Solidons Werte.
+    """
+    if settings is None or flavour != "prusa":
+        return {}
+    from app.core.export import handover
+
+    return handover.values_for(settings, profile, flavour)
 
 
 def _cura_assembly(objects: Sequence[SceneObject], bed: tuple[float, float] | None) -> bytes:

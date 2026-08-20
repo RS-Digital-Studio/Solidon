@@ -76,6 +76,20 @@ SETTINGS_PATH = "Metadata/model_settings.config"
 #: Datei, die man druckt, von einer, die man erst noch einrichtet.
 PROJECT_SETTINGS_PATH = "Metadata/project_settings.config"
 
+#: Wo PrusaSlicer dasselbe führt — dieselbe Sache, ein anderes Format: eine
+#: Zeile ``; schlüssel = wert`` je Einstellung statt einer JSON-Abbildung.
+#:
+#: Er schreibt sie beim Konsolenexport selbst nicht mit, **liest** sie aber:
+#: eine 3MF mit dieser Beilage, ohne ``--load`` geslict, ergab Solidons Werte
+#: bis in die Wandzahl und die Fülldichte hinein. Ohne sie war eine
+#: exportierte Datei für PrusaSlicer bloß Geometrie.
+PRUSA_CONFIG_PATH = "Metadata/Slic3r_PE.config"
+
+#: Die erste Zeile jener Beilage. PrusaSlicer überspringt sie — bei ihm steht
+#: dort seine eigene Kennung —, und was ohne sie an erster Stelle stünde, wäre
+#: verloren, ohne dass es jemand merkt.
+PRUSA_CONFIG_HEADER = "; von Solidon geschrieben"
+
 #: Endungen, die ein Slicer in einem Teilnamen stehen lässt, weil das Teil aus
 #: einer Datei kam.
 NAME_SUFFIXES = (".stl", ".3mf", ".obj", ".step", ".stp")
@@ -165,6 +179,7 @@ def write_assembly(
     bed: tuple[float, float] | None = None,
     project_settings: Mapping[str, object] | None = None,
     stride: float = 0.0,
+    prusa_config: Mapping[str, str] | None = None,
 ) -> bytes:
     """Mehrere Körper als eine 3MF-Baugruppe (§20, §29).
 
@@ -194,6 +209,11 @@ def write_assembly(
     ist — die Geometrie stimmt dann, und alles andere ist Zufall. Gebaut wird
     die Abbildung nicht hier, sondern in ``handover``: sie zu kennen heißt, den
     Slicer zu kennen, und dieses Modul kennt nur das Format.
+
+    ``prusa_config`` ist dieselbe Sache für PrusaSlicer, der sie als
+    Textzeilen führt (:data:`PRUSA_CONFIG_PATH`). Zwei Parameter für einen
+    Zweck, weil es zwei Formate sind — und Formate sind das, was dieses Modul
+    kennt.
     """
     if not parts:
         raise ValueError("an assembly needs at least one part")
@@ -212,11 +232,21 @@ def write_assembly(
                 PROJECT_SETTINGS_PATH,
                 json.dumps(dict(project_settings), indent=4, ensure_ascii=False),
             )
+        if prusa_config:
+            # Die Kopfzeile ist kein Schmuck: PrusaSlicer überspringt die
+            # erste Zeile dieser Beilage — dort steht bei ihm selbst „generated
+            # by PrusaSlicer". Ohne sie fiel der alphabetisch erste Schlüssel
+            # heraus, und zwar lautlos: gemessen war es
+            # ``avoid_crossing_perimeters``, das als 1 in der Datei stand und
+            # als 0 im G-Code ankam.
+            lines = [PRUSA_CONFIG_HEADER]
+            lines += [f"; {key} = {value}" for key, value in sorted(prusa_config.items())]
+            container.writestr(PRUSA_CONFIG_PATH, "\n".join(lines) + "\n")
     _log.info(
         "wrote 3MF assembly: %d part(s), %d material(s), settings: %s",
         len(parts),
         len(materials),
-        "yes" if project_settings else "no",
+        "yes" if project_settings or prusa_config else "no",
     )
     return buffer.getvalue()
 

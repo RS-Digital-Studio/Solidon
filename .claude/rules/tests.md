@@ -19,6 +19,7 @@ Regelwerks.
 | `test_registry_consistency.py` | jede Op vollständig, Kürzel eindeutig |
 | `test_corpus.py` | Kennzahlen je Op gegen den Referenzkorpus |
 | `test_errors.py` | jede Ausnahme mit Handlungsvorschlag |
+| `test_support.py` | die Rückmeldung geht raus — und nur am Knopf (§37.2) |
 | `test_licences.py` | Abhängigkeiten gegen die Freigabeliste |
 | `test_performance.py` | Budget §31, Regressionsschwelle 25 % |
 | `test_way_one/two/three.py` | die drei Hauptwege Ende zu Ende |

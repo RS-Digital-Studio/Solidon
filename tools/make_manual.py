@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import re
+import struct
 import sys
 from pathlib import Path
 
@@ -347,6 +348,20 @@ DESCRIPTION = {
     "vem do mesmo registo que os menus.",
 }
 
+#: Der Titel der Seite. „Handbuch — Solidon3D" war zutreffend und trug
+#: nichts: nach „Handbuch" sucht niemand, und der Markenname allein findet
+#: nur, wer ihn schon kennt. Was hier steht, ist die Frage, die jemand
+#: eintippt, bevor er Solidon3D kennt — und das Handbuch beantwortet sie auf
+#: {pages} Kapiteln. Nicht über ``tr()``, aus demselben Grund wie ``COVER``.
+TITLE = {
+    "de": "Handbuch: 3D-Modelle für den Druck vorbereiten",
+    "en": "Manual: preparing 3D models for printing",
+    "es": "Manual: preparar modelos 3D para imprimir",
+    "fr": "Manuel : préparer des modèles 3D pour l'impression",
+    "it": "Manuale: preparare modelli 3D per la stampa",
+    "pt": "Manual: preparar modelos 3D para impressão",
+}
+
 #: Die Texte des Deckblatts, aus demselben Grund nicht über ``tr()``.
 COVER = {
     "de": ("Handbuch", "Konstruieren, Erzeugen und Bearbeiten für den 3D-Druck", "Version"),
@@ -363,12 +378,12 @@ COVER = {
 #: zur Startseite mit ihrer Preis-Sprungmarke. Nicht über ``tr()``, aus
 #: demselben Grund wie ``CONTENTS``.
 HEADER_NAV = {
-    "de": ("Inhalt", "Testen", "index.html#preis"),
-    "en": ("Contents", "Try it", "index.html#pricing"),
-    "es": ("Índice", "Probar", "index.html#pricing"),
-    "fr": ("Sommaire", "Essayer", "index.html#pricing"),
-    "it": ("Indice", "Prova", "index.html#pricing"),
-    "pt": ("Índice", "Experimentar", "index.html#pricing"),
+    "de": ("Inhalt", "Testen", "./#preis"),
+    "en": ("Contents", "Try it", "./#pricing"),
+    "es": ("Índice", "Probar", "./#pricing"),
+    "fr": ("Sommaire", "Essayer", "./#pricing"),
+    "it": ("Indice", "Prova", "./#pricing"),
+    "pt": ("Índice", "Experimentar", "./#pricing"),
 }
 
 #: Der Sprung an den Inhalt, die erste Sprungmarke jeder Seite (WCAG 2.4.1).
@@ -470,7 +485,7 @@ def _header(language: str) -> str:
     toc_label, cta_label, cta_target = HEADER_NAV.get(language, HEADER_NAV["de"])
     return (
         '<header class="site no-print"><div class="wrap">'
-        f'<a class="brand" href="index.html">{BRAND_MARK}Solidon<span>3D</span></a>'
+        f'<a class="brand" href="./">{BRAND_MARK}Solidon<span>3D</span></a>'
         '<nav class="lang">'
         f'<a href="#toc">{toc_label}</a>'
         f"{_switcher(language)}"
@@ -639,6 +654,57 @@ def _classify(html: str) -> str:
     return re.sub(r'<figure>(<(?:picture><source srcset|img src)="([^"]+)")', widen, html)
 
 
+def _picture_size(source: str) -> tuple[int, int] | None:
+    """Die Maße einer Abbildung, aus der Datei gelesen statt geschätzt.
+
+    Bei PNG stehen sie im IHDR-Block gleich hinter der Signatur, bei SVG im
+    ``viewBox``. Was sich nicht lesen lässt, bekommt keine Angabe — eine
+    falsche wäre schlimmer als keine, weil der Browser dann Platz in der
+    falschen Größe reserviert.
+    """
+    path = WEBSITE / source.removeprefix("../")
+    if not path.exists():
+        return None
+    if path.suffix == ".png":
+        width, height = struct.unpack(">II", path.read_bytes()[16:24])
+        return int(width), int(height)
+    box = re.search(
+        r'viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"',
+        path.read_text(encoding="utf-8")[:2000],
+    )
+    if box is None:
+        return None
+    return round(float(box.group(1))), round(float(box.group(2)))
+
+
+def _defer_offscreen_pictures(html: str) -> str:
+    """Gibt jeder Abbildung ihre Maße und lädt die unteren erst bei Bedarf.
+
+    Zwei Dinge, ein Durchgang, weil beide dasselbe ``<img>`` betreffen:
+
+    * ``width`` und ``height`` reservieren den Platz, bevor das Bild da ist.
+      Ohne sie rutscht beim Laden alles darunter — auf einer Seite mit über
+      zweihundert Abbildungen ist das kein Zucken, sondern ein Springen.
+    * ``loading="lazy"`` holt nur, was in Sichtweite kommt. **Außer der
+      ersten**: die steht oben, wird also sofort gebraucht, und ein
+      verzögertes erstes Bild verschlechtert genau die Messung, die dieser
+      Zusatz verbessern soll.
+    """
+    seen = 0
+
+    def extend(match: re.Match[str]) -> str:
+        nonlocal seen
+        seen += 1
+        tag, source = match.group(0), match.group(1)
+        extra = "" if seen == 1 else ' loading="lazy" decoding="async"'
+        size = _picture_size(source)
+        if size is not None and "width=" not in tag:
+            extra += f' width="{size[0]}" height="{size[1]}"'
+        return tag[:-1] + extra + ">"
+
+    return re.sub(r'<img src="([^"]+)"[^>]*>', extend, html)
+
+
 def page_html(language: str, prefix: str) -> str:
     body = _classify(
         manual.as_html(
@@ -655,7 +721,8 @@ def page_html(language: str, prefix: str) -> str:
         r'<figure class="screenshot"><div class="stage"><img \1></div>',
         body,
     )
-    title = f"{tr('Handbuch')} — {APP_NAME}"
+    body = _defer_offscreen_pictures(body)
+    title = f"{TITLE.get(language, TITLE['de'])} — {APP_NAME}"
     pages = len(manual.pages())
     description = DESCRIPTION[language].format(pages=pages)
     lede = LEDE.get(language, LEDE["de"]).format(pages=pages)
