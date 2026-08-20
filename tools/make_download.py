@@ -60,26 +60,63 @@ PLATFORMS: tuple[tuple[str, tuple[str, ...], dict[str, str]], ...] = (
     ),
     (
         "linux",
-        (".appimage", ".tar.gz", ".tar.xz"),
-        {
-            "de": "Linux (AppImage)",
-            "en": "Linux (AppImage)",
-            "es": "Linux (AppImage)",
-            "fr": "Linux (AppImage)",
-            "it": "Linux (AppImage)",
-            "pt": "Linux (AppImage)",
-        },
+        (".appimage", ".tar.gz", ".tar.xz", ".flatpak"),
+        dict.fromkeys(("de", "en", "es", "fr", "it", "pt"), "Linux"),
     ),
     (
         "macos",
-        (".dmg", ".pkg"),
+        (".dmg", ".pkg", ".zip"),
+        dict.fromkeys(("de", "en", "es", "fr", "it", "pt"), "macOS"),
+    ),
+)
+
+#: Woran der Dateiname sagt, welche der mehreren Dateien einer Plattform er
+#: ist — Architektur und Format. Die Reihenfolge ist die der Klammer hinter
+#: dem Plattformnamen: „macOS (Apple Silicon, Archiv)".
+#:
+#: Marken werden nicht übersetzt (AppImage, Flatpak, Apple Silicon, Intel);
+#: „Archiv" schon, denn das ist ein Wort und kein Name.
+VARIANT_MARKS: tuple[tuple[str, dict[str, str]], ...] = (
+    (
+        "arm64",
+        dict.fromkeys(("de", "en", "es", "fr", "it", "pt"), "Apple Silicon"),
+    ),
+    (
+        "x86_64.pkg",
+        dict.fromkeys(("de", "en", "es", "fr", "it", "pt"), "Intel"),
+    ),
+    (
+        "x86_64.zip",
+        dict.fromkeys(("de", "en", "es", "fr", "it", "pt"), "Intel"),
+    ),
+    (
+        ".appimage",
+        dict.fromkeys(("de", "en", "es", "fr", "it", "pt"), "AppImage"),
+    ),
+    (
+        ".flatpak",
+        dict.fromkeys(("de", "en", "es", "fr", "it", "pt"), "Flatpak"),
+    ),
+    (
+        ".tar.gz",
         {
-            "de": "macOS (Apple Silicon)",
-            "en": "macOS (Apple silicon)",
-            "es": "macOS (Apple Silicon)",
-            "fr": "macOS (Apple Silicon)",
-            "it": "macOS (Apple Silicon)",
-            "pt": "macOS (Apple Silicon)",
+            "de": "Archiv mit Installationsskript",
+            "en": "archive with install script",
+            "es": "archivo con script de instalación",
+            "fr": "archive avec script d'installation",
+            "it": "archivio con script di installazione",
+            "pt": "arquivo com script de instalação",
+        },
+    ),
+    (
+        ".zip",
+        {
+            "de": "Archiv",
+            "en": "archive",
+            "es": "archivo",
+            "fr": "archive",
+            "it": "archivio",
+            "pt": "arquivo",
         },
     ),
 )
@@ -139,16 +176,41 @@ def kind_of(path: Path) -> str:
     )
 
 
+def variant_of(name: str, language: str) -> str:
+    """Wie die Zeile heißt, wenn eine Plattform mehr als eine Datei hat.
+
+    **Eine Plattform, mehrere Wege.** Linux bekommt drei (AppImage, Archiv mit
+    Installationsskript, Flatpak), macOS zwei mal zwei (Installationspaket und
+    Archiv, je für Apple Silicon und Intel). Bis hierher ging nur eine Datei je
+    Plattform, und die zweite war ein Abbruch mit „es geht nur eine".
+
+    Die Plattform steht vorn und kommt aus :data:`PLATFORMS`; was hier
+    dazukommt, ist die Unterscheidung dahinter. Erkannt wird sie am Dateinamen,
+    denn dort steht sie ohnehin — die Bauwerkzeuge schreiben Architektur und
+    Format hinein.
+    """
+    name = name.lower()
+    marks: list[str] = []
+    for needle, label in VARIANT_MARKS:
+        if needle in name:
+            marks.append(label[language])
+    if not marks:
+        return ""
+    return " (" + ", ".join(marks) + ")"
+
+
 def read_packages(paths: list[Path]) -> list[Package]:
     """Kopieren, messen, Prüfsumme rechnen — in der Reihenfolge der Plattformen."""
     STORE.mkdir(parents=True, exist_ok=True)
-    found: dict[str, Package] = {}
+    found: list[Package] = []
+    seen: set[str] = set()
     for path in paths:
         if not path.is_file():
             raise SystemExit(f"{path} gibt es nicht.")
         kind = kind_of(path)
-        if kind in found:
-            raise SystemExit(f"Für {kind} sind zwei Dateien angegeben — es geht nur eine.")
+        if path.name in seen:
+            raise SystemExit(f"{path.name} ist zweimal angegeben.")
+        seen.add(path.name)
 
         target = STORE / path.name
         if not (target.exists() and target.stat().st_size == path.stat().st_size):
@@ -162,10 +224,15 @@ def read_packages(paths: list[Path]) -> list[Package]:
             while chunk := stream.read(1 << 20):
                 digest.update(chunk)
 
-        found[kind] = Package(kind, path.name, target.stat().st_size, digest.hexdigest())
-        print(f"  {kind:8s} {path.name}  {found[kind].size('de')}  {digest.hexdigest()[:16]}…")
+        package = Package(kind, path.name, target.stat().st_size, digest.hexdigest())
+        found.append(package)
+        print(f"  {kind:8s} {path.name}  {package.size('de')}  {digest.hexdigest()[:16]}…")
 
-    return [found[kind] for kind, _, _ in PLATFORMS if kind in found]
+    # Die Reihenfolge im Kasten ist die der Plattformen, und innerhalb einer
+    # Plattform die der übergebenen Dateien. Die erste ist zugleich das Ziel
+    # des Knopfes beim Preis — deshalb steht Windows in PLATFORMS vorn.
+    order = [kind for kind, _, _ in PLATFORMS]
+    return sorted(found, key=lambda package: order.index(package.kind))
 
 
 def links(packages: list[Package], language: str) -> str:
@@ -179,6 +246,7 @@ def links(packages: list[Package], language: str) -> str:
     rows = []
     for position, package in enumerate(packages):
         label = next(names[language] for kind, _, names in PLATFORMS if kind == package.kind)
+        label += variant_of(package.name, language)
         css_class = "btn" if position == 0 else "btn ghost"
         rows.append(
             f'\n            <a class="{css_class}" href="/dl/{package.name}" download>\n'

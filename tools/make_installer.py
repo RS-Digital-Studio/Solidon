@@ -13,6 +13,7 @@ packaging/solidon3d.spec) und ein installiertes Inno Setup 6.
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
@@ -28,6 +29,7 @@ from app.branding import (
     PROJECT_SUFFIX,
     WEBSITE_URL,
 )
+from app.core.activation import integrity
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = ROOT / "dist" / APP_NAME
@@ -58,6 +60,47 @@ def find_compiler() -> Path | None:
     return None
 
 
+def manifest_reason(manifest_file: Path | None = None) -> str:
+    """Warum das signierte Manifest nicht zu den Grenzdateien passt — leer,
+    wenn es passt.
+
+    **Das ist die zweite Art, ein Paket kaputt auszuliefern.** Das Manifest
+    entsteht beim Übersetzen des Prüfmoduls und deckt die vier Grenzdateien
+    aus §2 C. Wer danach eine davon ändert und nur PyInstaller neu laufen
+    lässt, baut ein Paket, das startet und in dem nichts geht:
+    ``integrity.intact()`` sagt nein, und damit sind Ändern, Exportieren,
+    Slicen und Chat gesperrt — genau so, wie es gegen einen Angreifer gedacht
+    ist.
+
+    Am 20.08.2026 ist das hier passiert. Von außen sah das Paket tadellos aus;
+    aufgefallen ist es erst im Protokoll einer Testinstallation („licence
+    boundary file does not match the manifest: core/export/handover.py"), und
+    zwar nachdem die Anwendung ein Projekt, das sie öffnen sollte, wortlos
+    nicht öffnete.
+
+    Verglichen werden Prüfsummen und keine Zeitstempel — dieselbe Rechnung,
+    die die Anwendung beim Start anstellt.
+    """
+    manifest_file = manifest_file or ROOT / "packaging" / "build" / "licence.manifest"
+    try:
+        signed = json.loads(manifest_file.read_text(encoding="utf-8"))["files"]
+    except (OSError, ValueError, KeyError):
+        return (
+            "Das signierte Manifest fehlt oder ist unlesbar — zuerst: "
+            "python tools/build_licence_module.py"
+        )
+    drifted = sorted(
+        name for name, digest in integrity.boundary_hashes().items() if signed.get(name) != digest
+    )
+    if not drifted:
+        return ""
+    return (
+        f"Das Manifest deckt diese Datei(en) nicht mehr: {', '.join(drifted)}.\n"
+        "Das Paket würde starten und wäre gesperrt. Zuerst: "
+        "python tools/build_licence_module.py, dann neu bauen."
+    )
+
+
 def stale_reason() -> str:
     """Warum dieser Bau nicht paketiert werden darf — leer, wenn er darf.
 
@@ -74,6 +117,10 @@ def stale_reason() -> str:
     )
     if newest > built:
         return "Der Bau ist älter als app/ — zuerst neu bauen: pyinstaller packaging/solidon3d.spec"
+
+    drift = manifest_reason()
+    if drift:
+        return drift
 
     leftovers = sorted(path.name for path in SOURCE_DIR.rglob("*.autosave"))
     if leftovers:

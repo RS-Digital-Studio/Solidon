@@ -728,3 +728,45 @@ def test_the_linux_installer_registers_the_type() -> None:
     # Und im Flatpak reist sie mit — dort trägt die Installation sie selbst ein.
     manifest = tool.flatpak_manifest()
     assert "/app/share/mime/packages/" in manifest
+
+
+def test_a_manifest_that_no_longer_covers_the_boundary_files_stops_the_build() -> None:
+    """Ein Paket, das startet und in dem nichts geht, darf nicht entstehen.
+
+    Das Manifest deckt die vier Grenzdateien aus §2 C und wird beim Übersetzen
+    des Prüfmoduls signiert. Ändert danach jemand eine davon und lässt nur
+    PyInstaller neu laufen, ist die Auslieferung gesperrt: Ändern, Exportieren,
+    Slicen und Chat — alles zu, und von außen sieht das Paket tadellos aus.
+
+    Genau das ist am 20.08.2026 passiert und erst im Protokoll einer
+    Testinstallation aufgefallen. Geprüft wird gegen ein Manifest mit einer
+    verstellten Prüfsumme; das echte muss zugleich sauber durchgehen, sonst
+    prüfte dieser Test nur seine eigene Attrappe.
+    """
+    import json
+
+    from tools import make_installer
+
+    real = ROOT / "packaging" / "build" / "licence.manifest"
+    if not real.is_file():
+        import pytest
+
+        pytest.skip("kein gebautes Prüfmodul — nichts zu vergleichen")
+
+    assert make_installer.manifest_reason(real) == "", (
+        "das eingecheckte Manifest passt nicht zu den Grenzdateien — "
+        "python tools/build_licence_module.py"
+    )
+
+    import tempfile
+
+    signed = json.loads(real.read_text(encoding="utf-8"))
+    name = next(iter(signed["files"]))
+    signed["files"][name] = "0" * 64
+    with tempfile.TemporaryDirectory() as scratch:
+        fake = Path(scratch) / "licence.manifest"
+        fake.write_text(json.dumps(signed), encoding="utf-8")
+        reason = make_installer.manifest_reason(fake)
+
+    assert name in reason, f"die verstellte Datei wird nicht genannt: {reason!r}"
+    assert "build_licence_module" in reason, "ohne den Weg zurück ist es eine Absage"
