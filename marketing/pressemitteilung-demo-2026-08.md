@@ -85,8 +85,8 @@ eigenen Rechner: keine Cloud, keine Datensammlung, kein Abo. Die KI
 arbeitet wahlweise auf dem eigenen Rechner oder über einen selbst
 hinterlegten Zugang zu einem Anbieter — und wer auf beides verzichtet,
 verliert nur den Chat; alles andere bleibt benutzbar. Nach der Demo
-erscheint Solidon3D als Einmalkauf zu 49 Euro (Einführungspreis, alle
-1.x-Updates enthalten).
+erscheint Solidon3D als Einmalkauf zu 69 Euro (Einführungspreis bis zum
+31. Januar 2027, danach 99 Euro; alle 1.x-Updates enthalten).
 
 ### Faktenblock
 
@@ -99,7 +99,7 @@ erscheint Solidon3D als Einmalkauf zu 49 Euro (Einführungspreis, alle
 | Formate | liest STL, 3MF, OBJ, GLB/GLTF, PLY, OFF, STEP, SVG, DXF — schreibt STL, 3MF, OBJ, PLY, GLB, STEP |
 | Slicer-Übergabe | PrusaSlicer, OrcaSlicer, Cura — mit fertigem Profil, und die entstandene Druckdatei wird zur Gegenprobe zurückgelesen |
 | KI | auf dem eigenen Rechner oder über einen selbst hinterlegten Zugang; von außen ansteuerbar, standardmäßig abgeschaltet |
-| Preis nach der Demo | 49 € Einmalkauf zur Einführung, später 79 €; kein Konto, kein Abo |
+| Preis nach der Demo | 69 € Einmalkauf, Einführungspreis bis 31.01.2027, danach 99 €; kein Konto, kein Abo |
 | Website | https://solidon3d.de (deutsch), https://solidon3d.de/en/ (englisch) |
 
 ### Pressematerial

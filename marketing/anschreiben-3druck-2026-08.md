@@ -155,8 +155,9 @@ ohne Wasserzeichen und ohne Exportsperre, lässt sich aber ab dem
 31. Oktober nicht mehr starten. Projektdateien bleiben davon unberührt;
 sie sind ZIP-Archive mit JSON darin.
 
-Nach der Demo soll Solidon3D 49 Euro als Einmalkauf kosten, später 79
-Euro. Kein Abo, kein Konto, alle 1.x-Aktualisierungen inbegriffen. Die
+Nach der Demo soll Solidon3D 69 Euro als Einmalkauf kosten — Einführungs-
+preis bis zum 31. Januar 2027, danach 99 Euro. Kein Abo, kein Konto, alle
+1.x-Aktualisierungen inbegriffen. Die
 Demo steht unter https://solidon3d.de bereit.
 
 ---
@@ -180,7 +181,7 @@ Geometrie: Er darf nur dieselben Arbeitsschritte auslösen wie die Menüs.
 
 Die Anwendung läuft lokal unter Windows, macOS und Linux, ohne Konto und
 ohne Cloud. Die Demo ist vollständig und bis zum 30. Oktober 2026
-kostenlos; danach kostet Solidon3D 49 Euro als Einmalkauf.
+kostenlos; danach kostet Solidon3D 69 Euro als Einmalkauf.
 https://solidon3d.de
 
 ---
@@ -196,7 +197,7 @@ https://solidon3d.de
 | Formate | liest STL, 3MF, OBJ, GLB/GLTF, PLY, OFF, STEP, SVG, DXF — schreibt STL, 3MF, OBJ, PLY, GLB, STEP |
 | Slicer-Übergabe | PrusaSlicer, OrcaSlicer, Cura — mit fertigem Profil, Druckdatei wird zur Gegenprobe zurückgelesen |
 | KI | auf dem eigenen Rechner oder über einen selbst hinterlegten Zugang; von außen ansteuerbar, standardmäßig abgeschaltet |
-| Preis nach der Demo | 49 € Einmalkauf zur Einführung, später 79 €; kein Konto, kein Abo |
+| Preis nach der Demo | 69 € Einmalkauf, Einführungspreis bis 31.01.2027, danach 99 €; kein Konto, kein Abo |
 | Hersteller | RS Digital, Amberg (Deutschland) |
 | Website | https://solidon3d.de (deutsch), https://solidon3d.de/en/ (englisch) |
 | Kontakt | support@solidon3d.de |
