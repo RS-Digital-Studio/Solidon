@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Final, cast
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtGui import QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QDialog,
     QLineEdit,
@@ -81,6 +81,29 @@ STEM_LENGTH: Final = 4
 #: „bohren" → „bohr" wirft zwei Zeichen weg, „skalieren" → „skalier" drei.
 #: Darüber ist es ein anderes Wort.
 STEM_CUT: Final = 3
+
+
+def native_key(shortcut: str) -> str:
+    """Eine Taste, wie sie auf der Tastatur heißt: „Strg+B", nicht „Ctrl+B".
+
+    Hier stand die Rohform — bei den Operationen die Deklaration aus dem
+    Register, bei den Fensterbefehlen ``action.shortcut().toString()`` ohne
+    ``NativeText``. Gemessen mit installiertem Qt-Katalog: fünf Operationen und
+    37 Fensterbefehle sprachen damit englisch, während das Menü daneben deutsch
+    sprach — dieselbe Handlung stand an zwei Stellen mit zwei verschiedenen
+    Tasten, „Del" hier und „Entf" dort.
+
+    Das ist nicht bloß unsauber: Die Palette ist laut §19.2 der Ort, an dem die
+    Kürzel nebenbei gelernt werden, und sie lehrte eine Schreibweise, die auf
+    keiner deutschen Tastatur steht. Derselbe Fehler war in der Kürzelübersicht
+    schon einmal behoben; hier lag er noch.
+
+    Eine Folge, die Qt nicht versteht, bleibt stehen, wie sie ist — sie
+    wegzuwerfen wäre schlimmer als sie englisch zu zeigen.
+    """
+    if not shortcut:
+        return ""
+    return QKeySequence(shortcut).toString(QKeySequence.SequenceFormat.NativeText) or shortcut
 
 
 def stem_of(word: str) -> str:
@@ -184,7 +207,7 @@ class CommandPalette(QDialog):
         for entry in found:
             label = str(entry.title)
             if entry.shortcut:
-                label = f"{label}\t{entry.shortcut}"
+                label = f"{label}\t{native_key(entry.shortcut)}"
             if not entry.available and entry.reason:
                 # Der Grund als zweite Zeile: das Ausgrauen allein wäre die
                 # halbe Antwort (Regel 18) — und über die Palette stand die

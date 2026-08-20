@@ -477,3 +477,59 @@ def test_the_palette_is_sorted_by_what_the_reader_reads() -> None:
     assert inside == sorted(inside, key=sort_key), "und innerhalb der Gruppe nach Titel"
     behind = [str(entry.title) for entry in with_feature[len(fits) :]]
     assert behind == sorted(behind, key=sort_key), "und dahinter genauso"
+
+
+def test_the_palette_writes_the_keys_the_way_the_keyboard_does(qt_app: object) -> None:
+    """Die Palette lehrte „Del", während das Menü daneben „Entf" sagte.
+
+    Bei den Operationen stand die Deklaration aus dem Register, bei den
+    Fensterbefehlen ``action.shortcut().toString()`` ohne ``NativeText``.
+    Gemessen mit installiertem Qt-Katalog: fünf Operationen und 37
+    Fensterbefehle sprachen englisch — dieselbe Handlung mit zwei verschiedenen
+    Tasten, je nachdem wo man hinsah.
+
+    Das ist keine Kosmetik: §19.2 macht die Palette zu dem Ort, an dem die
+    Kürzel nebenbei gelernt werden. Eine Schreibweise, die auf keiner deutschen
+    Tastatur steht, lehrt das Falsche.
+    """
+    from PySide6.QtGui import QKeySequence
+    from PySide6.QtWidgets import QApplication
+
+    from app.core.registry import PaletteEntry, palette_entries
+    from app.ui.app import install_qt_translations
+    from app.ui.command_palette import native_key
+
+    application = QApplication.instance()
+    assert application is not None
+    install_qt_translations(application, "de")
+    expected = QKeySequence("Del").toString(QKeySequence.SequenceFormat.NativeText)
+    if expected == "Del":
+        pytest.skip("ohne Qt-Katalog für Deutsch gibt es nichts zu übersetzen")
+
+    assert native_key("Ctrl+B") != "Ctrl+B", "die Umschreibung tut nichts"
+    assert native_key("") == "", "ohne Taste keine Taste"
+    assert native_key("Kein Kürzel") == "Kein Kürzel", (
+        "was Qt nicht versteht, bleibt stehen — wegwerfen wäre schlimmer"
+    )
+
+    # Beide Quellen der Palette: die Operationen aus dem Register und die
+    # Fensterbefehle, die als PaletteEntry danebengelegt werden.
+    entries = list(palette_entries())
+    entries.append(
+        PaletteEntry(
+            name="menu.0", title="Objekt entfernen", doc="", shortcut="Del", category="edit"
+        )
+    )
+    palette = CommandPalette(entries)
+    try:
+        keys = []
+        for row in range(palette.list.count()):
+            text = palette.list.item(row).text()
+            if "\t" in text:
+                keys.append(text.split("\t", 1)[1].split("\n")[0])
+        assert keys, "ohne Kürzel prüft dieser Test nichts"
+        english = sorted({key for key in keys if "Ctrl" in key or key in ("Del", "Esc")})
+        assert not english, f"die Palette spricht englisch: {english}"
+        assert expected in keys, "und die deutsche Taste steht nicht da"
+    finally:
+        palette.deleteLater()
