@@ -268,6 +268,24 @@ class PartCatalog(QDialog):
         if changed:
             self.list.doItemsLayout()
 
+    def showEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        """Die Überschriften stehen, sobald der Dialog steht.
+
+        Über den Resize-Filter allein geschieht das erst, wenn der Zeitgeber
+        drankommt — und bis dahin liegen die Gruppen für einen Moment
+        ineinander. Auf einem schnellen Rechner ist das ein Zucken, auf einem
+        langsamen der erste Eindruck, und in der CI unter Xvfb kam es so spät,
+        dass ``test_every_group_starts_its_own_row`` es nicht mehr sah: Die
+        Zeilen dort werden über einen echten X-Server zugestellt und nicht
+        wie bei ``offscreen`` sofort.
+
+        Hier synchron und ohne Umweg — die Breite steht, sobald das Fenster
+        steht. Was danach noch wandert (der Nutzer zieht das Fenster größer),
+        holt der Filter unten nach.
+        """
+        super().showEvent(event)
+        self._stretch_headings()
+
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
         if watched is self.list and event.type() == QEvent.Type.Resize:
             # Ein Filter sieht das Ereignis vor dem Ziel — der Viewport hat
