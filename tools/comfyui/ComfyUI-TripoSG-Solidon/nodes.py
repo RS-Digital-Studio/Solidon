@@ -186,6 +186,15 @@ class TripoSGLoader:
                 "image_encoder_dinov2/."
             )
 
+        # Der Platz für genau eine Pipeline. Wer die Genauigkeit wechselt,
+        # hätte sonst zwei davon im Grafikspeicher stehen — je rund vier
+        # Gigabyte, und daneben will noch ein SDXL-Modell wohnen. Auf einer
+        # Karte mit sechzehn Gigabyte ist das der Unterschied zwischen „läuft"
+        # und „bricht beim zweiten Auftrag ab".
+        if self._cache:
+            self._cache.clear()
+            mm.soft_empty_cache()
+
         pipeline = TripoSGPipeline.from_pretrained(str(path), torch_dtype=dtype)
         pipeline.to(mm.get_torch_device())
         self._cache[key] = pipeline

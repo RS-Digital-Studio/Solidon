@@ -1909,3 +1909,38 @@ p.footnote {
   font-size: 0.82rem;
   color: var(--muted);
 }
+
+/* Belege im Funktionsabschnitt: zwei Bildschirmfotos neben sechs Sätzen.
+   Der Abschnitt trug bis dahin nur Text — die stärksten Argumente der Seite
+   ohne ein einziges Bild, das sie zeigt. */
+.beleg {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+  gap: 1.75rem;
+  margin: 2rem 0 2.5rem;
+  align-items: start;
+}
+
+.beleg figure {
+  margin: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  overflow: hidden;
+}
+
+.beleg img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.beleg figcaption {
+  padding: 0.85rem 1.1rem 1rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.beleg figcaption b { color: var(--ink); }

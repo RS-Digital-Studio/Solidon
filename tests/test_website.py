@@ -653,3 +653,43 @@ def test_the_download_box_can_switch_from_waiting_to_loading(page: str) -> None:
     assert text.count("data-release-hide") == text.count("data-release-show") == 2, (
         f"{page}: die Symbole wechseln nicht paarweise mit den Knöpfen"
     )
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_the_two_dates_for_the_same_moment_agree(page: str) -> None:
+    """Derselbe Termin steht zweimal auf der Seite — er muss zweimal gleich sein.
+
+    Der Zähler trägt seinen Zieltermin selbst (``data-countdown`` am Absatz),
+    die Umschaltung von Warten auf Laden den ihren (``data-release`` am
+    ``<body>``). Beide meinen dieselbe Minute, und keiner von beiden weiß vom
+    anderen: Wer einen verschiebt und den anderen vergisst, bekommt eine Seite,
+    die den Download freigibt, während daneben noch etwas herunterzählt — oder
+    umgekehrt.
+
+    Zusammenlegen ließe sich das, aber nicht am Tag der Veröffentlichung. Bis
+    dahin hält dieser Test sie beisammen.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    am_body = re.search(r'<body[^>]*\sdata-release="([^"]+)"', text)
+    am_zaehler = re.search(r'data-countdown="([^"]+)"', text)
+    assert am_body and am_zaehler, f"{page}: einer der beiden Termine fehlt"
+    assert am_body.group(1) == am_zaehler.group(1), (
+        f"{page}: der Zähler zielt auf {am_zaehler.group(1)}, "
+        f"die Umschaltung auf {am_body.group(1)}"
+    )
+
+
+def test_all_six_languages_release_at_the_same_moment() -> None:
+    """Eine Sprachfassung, die eine Stunde früher umschaltet, ist ein Fehler.
+
+    Sechs Dateien tragen denselben Termin. Beim Verschieben wird erfahrungsgemäß
+    eine vergessen, und auffallen würde das erst an dem Abend, an dem es zählt.
+    """
+    termine = {
+        page: re.search(
+            r'<body[^>]*\sdata-release="([^"]+)"',
+            (WEBSITE / page).read_text(encoding="utf-8"),
+        ).group(1)  # type: ignore[union-attr]
+        for page in START_PAGES
+    }
+    assert len(set(termine.values())) == 1, f"verschiedene Termine: {termine}"
