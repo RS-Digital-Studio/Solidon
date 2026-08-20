@@ -20,7 +20,7 @@ if TYPE_CHECKING:  # das 3MF-Modul braucht MeshData, der Import geht also nur in
 import numpy as np
 import trimesh
 
-from app.core.errors import PROGRAMMING_ERRORS, GeometryError, ValidationError
+from app.core.errors import CANCEL, CHOOSE, PROGRAMMING_ERRORS, GeometryError, ValidationError
 from app.core.log import get_logger
 from app.core.types import BoundingBox, Mesh
 from app.i18n import _
@@ -137,6 +137,11 @@ def as_mesh_data(mesh: Mesh) -> MeshData:
     raise GeometryError(
         _("Diese Operation arbeitet nur auf Netzen."),
         detail=_("Das Objekt liegt in einer anderen Darstellung vor."),
+        # Auch hier nicht die Vorgabe: Netzreparatur macht aus einem exakten
+        # Körper kein Netz, und Stellen nennt dieser Fehler keine. Was hilft,
+        # ist eine andere Auswahl — der Körper, an dem die Operation arbeiten
+        # kann.
+        suggestions=(CHOOSE, CANCEL),
     )
 
 

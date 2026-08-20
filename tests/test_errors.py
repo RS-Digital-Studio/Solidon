@@ -156,3 +156,39 @@ def test_the_title_follows_the_constraint_not_the_class() -> None:
     # eigenen, und der ist immer genauer als beide Vorgaben.
     own = ValidationError(title="Dieses Profil gibt es nicht.", detail="…")
     assert str(own.title) == "Dieses Profil gibt es nicht."
+
+
+def test_a_suggestion_has_to_fit_the_error() -> None:
+    """„Reparieren und erneut versuchen" stand an Fehlern, wo es nichts zu
+    reparieren gibt.
+
+    ``GeometryError`` führt als Vorgabe „Reparieren und erneut versuchen" und
+    „Stellen zeigen". Beide haben einen Handler, erscheinen also als Knopf — und
+    an zwei Stellen taten beide nichts: Der Verrundungsradius steckt an einem
+    exakten B-Rep-Körper, an dem es nichts zu reparieren gibt, und „Diese
+    Operation arbeitet nur auf Netzen" wird durch Netzreparatur nicht wahr.
+    Regel 17 war damit optisch erfüllt und in der Sache verletzt.
+
+    Geprüft wird die Aussage und nicht die Stelle: Wo im Text vom Radius die
+    Rede ist, gehört „Eingabe korrigieren" dazu und nicht die Reparatur.
+    """
+    import pathlib
+
+    from app.core.brep import edit as brep_edit
+    from app.core.errors import CANCEL, CORRECT_INPUT, REPAIR_AND_RETRY
+    from app.core.geom import mesh as mesh_module
+
+    for module, needle in ((brep_edit, "Radius"), (mesh_module, "nur auf Netzen")):
+        source = pathlib.Path(module.__file__).read_text(encoding="utf-8")
+        assert needle in source, f"{module.__name__}: der Fehlertext ist fort"
+
+    # Der Radiusfehler, geworfen wie im Betrieb.
+    problem = GeometryError(
+        detail="Der Radius ist für diese Kanten zu groß.",
+        suggestions=(CORRECT_INPUT, CANCEL),
+        values={"size_mm": 4.0, "edges": 12},
+    )
+    ids = {action.id for action in problem.suggestions}
+    assert "correct_input" in ids, "die Antwort auf einen zu großen Radius ist ein kleinerer"
+    assert REPAIR_AND_RETRY.id not in ids, "an einem exakten Körper gibt es nichts zu reparieren"
+    assert "show_locations" not in ids, "und dieser Fehler nennt keine Stellen"

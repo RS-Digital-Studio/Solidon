@@ -175,6 +175,15 @@ def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> So
         if not builder.IsDone():
             raise GeometryError(
                 detail=_("Der Radius ist für diese Kanten zu groß."),
+                # **Nicht die Vorgabe des Geometriefehlers.** Die heißt
+                # „Reparieren und erneut versuchen" und „Stellen zeigen" — an
+                # einem exakten Körper gibt es nichts zu reparieren, und
+                # Stellen nennt dieser Fehler keine. Beide Handlungen haben
+                # einen Handler, erscheinen also als Knopf, und beide täten
+                # nichts: Regel 17 wäre optisch erfüllt und in der Sache
+                # verletzt. Die Antwort auf einen zu großen Radius ist ein
+                # kleinerer.
+                suggestions=(CORRECT_INPUT, CANCEL),
                 values={"size_mm": round(size, 3), "edges": edges},
             )
         shape = builder.Shape()
@@ -185,6 +194,7 @@ def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> So
     except Exception as problem:  # OpenCASCADE raises its own exception types
         raise GeometryError(
             detail=_("Der Radius ist für diese Kanten zu groß."),
+            suggestions=(CORRECT_INPUT, CANCEL),
             values={"size_mm": round(size, 3), "edges": edges},
         ) from problem
     _log.info("%s of %.2f mm on %d edge(s)", kind, size, edges)
