@@ -4790,11 +4790,17 @@ den Webserver und die Paketierung. Fünf Funde:
 - [ ] **Auf einem fremden Rechner installieren** (ohne Python, ohne venv, ohne
       OpenSCAD/Ollama/ComfyUI). Der Punkt, der erfahrungsgemäß mehr findet als
       alle Tests.
-- [ ] **Download-Kasten mit echter Datei und Prüfsumme**, dazu der Satz zur
-      SmartScreen-Warnung: die Demo geht unsigniert hinaus, weil Azure Trusted
-      Signing Nachweise braucht, die keine acht Tage dauern. 0.9.1 trägt sie
-      nach.
-- [ ] **Hochladen** — Website ohne `README.md`, `version.json` zuletzt.
+- [x] **Download-Kasten mit echter Datei und Prüfsumme** (20.08.2026), dazu der
+      Satz zur SmartScreen-Warnung: die Demo geht unsigniert hinaus, weil Azure
+      Trusted Signing Nachweise braucht, die keine acht Tage dauern. 0.9.1
+      trägt sie nach. Im Kasten steht `Solidon3D-Setup-0.1.1.exe` mit 173 MB
+      und SHA-256; solange Linux und macOS fehlen, sagt der Kasten das selbst —
+      `make_download.py` schreibt den Satz, und er verschwindet mit dem
+      nächsten Lauf, sobald alle drei übergeben werden.
+- [x] **Hochladen** (20.08.2026) — Website ohne `README.md` (das Werkzeug lässt
+      `.md` aus), `version.json` zuletzt. Gegengeprüft am Server: Datei 200 mit
+      172 901 454 Bytes, Prüfsumme der Seite gleich der Datei, `version.json`
+      auf 0.1.1, README 404.
 
 ---
 
