@@ -41,7 +41,7 @@ bekommt einen roten Lauf.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| Die Eingabefelder nehmen weiter Millimeter | Die Bedienverträge durchgesehen (20.08.2026) | den Umbau von Wert **und** Grenzen in beide Richtungen — ein Parameterausdruck darf dabei nicht angefasst werden |
+| Dreizehn Felder in den Leisten tragen weiter `mm` | Die Bedienverträge durchgesehen (20.08.2026) | denselben Umbau wie im Dialog, nur ohne Schema — eigene `QDoubleSpinBox` in sechs Leisten |
 | Ein Befund weiß nicht, zu welchem Objekt er gehört | Die Bedienverträge durchgesehen (20.08.2026) | die Auswertung, die Befunde mit den Kennungen ihrer Ausgaben anreichert — gilt dann für jede Operation |
 | Bedingte Wirkung gehört an den Parameter | Die Bedienverträge durchgesehen (20.08.2026) | eine Entscheidung über den Vertrag aus §10 — `ParamSpec` bekäme ein Feld, das alle vier Oberflächen lesen |
 
@@ -7253,23 +7253,46 @@ ist entprellt.
       Namen hinter dem Punkt melden dasselbe Problem, und wenn einer von ihnen
       eine Handlung trägt, müssen es alle. Ein vierter Melder wird damit rot
       statt still — der dritte war still.
-- [ ] **Die Eingabefelder nehmen weiter Millimeter, und sie sagen es.** Der
-      zweite Halbschritt der Anzeigeeinheit: 13 Felder tragen `mm` als Suffix
-      aus `DISPLAY_UNITS[0]` (Pinselradius, Formstärke, Schnittposition,
-      Scheibendicke, Fangweite, Versatz, Messfeld, Rasterweite, Zugleiste), und
-      jeder Operationsdialog schreibt `[mm]` aus dem Parameterschema. Das ist
-      **ehrlich** — die Einheit steht dabei — aber es ist nicht das, was §19.3
-      zusagt.
+- [x] **Die Operationsdialoge nehmen jetzt Zoll — und geben Millimeter.**
+      222 Parameter tragen `unit="mm"`, und jedes ihrer Felder schrieb `[mm]`
+      aus dem Schema und nahm Millimeter, gleich was eingestellt war. `ValueField`
+      rechnet jetzt an einer Stelle um: Grenzen, Nachkommastellen, Schrittweite
+      und Beschriftung folgen der Anzeigeeinheit, der Kern bekommt in jedem Fall
+      Millimeter (§11.1).
 
-      Der Umbau ist mehr als ein Suffix: Wert und Grenzen müssen in beide
-      Richtungen umgerechnet werden, `minimum`/`maximum` stehen in Millimetern,
-      und ein Parameterausdruck (`=@breite/2`, §13) darf dabei nicht angefasst
-      werden. Das ist ein eigener Schritt und keine Zeile.
+      Drei Dinge, die dabei nicht passieren durften. **Ein Winkel bleibt ein
+      Winkel** — 30 Parameter tragen „grad" oder „°", und umgerechnet wird
+      ausschließlich `unit="mm"`. **Ein Ausdruck bleibt wörtlich**: `=@breite/2`
+      in eine Zahl zu verwandeln hieße, die Bindung zu verlieren. Und die
+      **Schrittweite** ist `from_mm(1.0)` statt Qts Vorgabe 1.0 — ein ganzer
+      Zoll je Klick wäre ein Sprung über den Wertebereich einer Wandstärke.
 
-      Dazu die kleinere Hälfte: Analyse- und Schnittleiste folgen erst beim
-      nächsten Zeichnen, weil sie die Werte nicht halten, aus denen ihre Zeilen
-      entstehen. Der Viewport hält sie und frischt sofort auf
-      (`refresh_labels`).
+      **Der Fund kam aus dem eigenen Test, und er war der wichtigste dieser
+      Runde:** 40 mm sind 1,5748 Zoll, und aus 1,5748 Zoll werden 39,99992 mm.
+      Die Anzeige rundet auf ihre vier Stellen, und die Rückrechnung schriebe
+      diese Rundung als Wert fest. Wer im Verlauf eine Operation aufschlägt, sie
+      *ansieht* und bestätigt, hätte jedes Maß verschoben — beim Quader dreimal.
+      Das Feld merkt sich deshalb den Wert, mit dem es gefüllt wurde, und gibt
+      ihn unverändert zurück, solange die Anzeige ihn noch zeigt; verglichen
+      wird auf Anzeigegenauigkeit und nicht mit `==` (Regel 6). Geprüft wird das
+      über **jeden** Längenparameter jeder Operation, denn der Fehler hängt an
+      der Zahl: 40 trifft es, 25,4 nicht.
+
+      Auch in Zoll bleibt ein feines Feld fein: `decimals_for` ist jetzt
+      öffentlich, und die Stellenzahl der Einheit trägt die Feinheitsregel
+      obendrauf. Mit zwei Stellen wäre das Spiel aus einem Materialprofil nicht
+      eintippbar — ein Hundertstelmillimeter ist ein Vierteltausendstel Zoll.
+- [ ] **Dreizehn Felder in den Leisten tragen weiter `mm`.** Pinselradius,
+      Formradius und -stärke, Schnittposition, Scheibendicke, Fangweite,
+      Versatz, Messfeld, Rasterweite und die Zugleiste sind eigene
+      `QDoubleSpinBox` und kein `ValueField` — sie holen ihr Suffix aus
+      `DISPLAY_UNITS[0]`, also immer aus dem ersten Eintrag. Der Weg ist
+      derselbe wie im Dialog, nur ohne Schema: Wert, Grenzen und Schrittweite
+      umrechnen, Suffix aus `display_unit()`.
+
+      Ehrlich sind sie, solange das Suffix `mm` dasteht — falsch wäre erst, das
+      Kürzel allein zu tauschen. Deshalb steht es hier und nicht halb gebaut im
+      Code.
 - [ ] **Ein Befund weiß nicht, zu welchem Objekt er gehört.**
       `ingest.not_watertight` trägt keine `object_id`, und deshalb greift seine
       Handlung über `_object_of` auf die *Auswahl* zurück — eine Vermutung, die

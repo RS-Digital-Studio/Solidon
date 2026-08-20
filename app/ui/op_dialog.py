@@ -44,8 +44,9 @@ from app.core.errors import AppError
 from app.core.registry import OperationSpec, caveat_line
 from app.core.scene import expressions
 from app.core.types import ParamSpec
+from app.core.units import LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
-from app.ui.labels import choice_label
+from app.ui.labels import choice_label, display_unit
 from app.ui.style import TIGHT, make_primary, set_level
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
@@ -58,17 +59,36 @@ _FINE_BELOW = 1.0
 DIALOG_MARGIN = 16
 
 
-def _decimals_for(entry: ParamSpec) -> int:
+def shown_unit(entry: ParamSpec) -> LengthUnit | None:
+    """Die Einheit, in der dieses Feld angezeigt wird — oder ``None``.
+
+    ``None`` heißt: hier wird nicht umgerechnet. Das gilt für alles, was keine
+    Länge ist — 26 Parameter tragen „grad", vier ein „°", und ein Winkel in Zoll
+    wäre Unsinn. Umgerechnet wird ausschließlich ``unit="mm"`` (§19.3), und der
+    Kern bekommt in jedem Fall Millimeter zurück (§11.1).
+    """
+    return display_unit() if entry.unit == "mm" else None
+
+
+def _decimals_for(entry: ParamSpec, unit: LengthUnit | None = None) -> int:
     """Wie fein ein Feld sein muss, damit sein Wertebereich hineinpasst (§11.2).
 
     Zwei Stellen genügen für Längen und Winkel; Toleranzen und Spiele leben
     unter einem Millimeter, und dort ist die zweite Stelle die letzte, die noch
     etwas unterscheidet.
+
+    In Zoll sind es mehr, und zwar nicht aus Genauigkeitsliebe: Ein
+    Hundertstelmillimeter ist ein Vierteltausendstel Zoll, und mit zwei Stellen
+    wäre die Toleranz eines Materialprofils nicht eintippbar. Die Stellenzahl
+    je Einheit steht im Kern (``units.decimals_for``), die Feinheitsregel hier —
+    beides zusammen, sonst verliert ein feines Feld in Zoll genau die Stelle,
+    für die es fein ist.
     """
+    base = decimals_for(unit) if unit else 2
     bounds = [abs(value) for value in (entry.minimum, entry.maximum) if value]
     if bounds and max(bounds) <= _FINE_BELOW:
-        return 3
-    return 2
+        return base + 1
+    return base
 
 
 class ValueField(QWidget):
@@ -110,11 +130,29 @@ class ValueField(QWidget):
         super().__init__(parent)
         self._entry = entry
         self._parameter_values = dict(parameter_values or {})
+        self._shown = shown_unit(entry)
+        """In welcher Einheit dieses Feld spricht — ``None`` heißt Millimeter
+        wie der Kern, also ohne Umrechnung."""
+        self._core: float | None = None
+        """Der Wert, wie er hereinkam — genauer als seine eigene Anzeige.
+
+        40 mm sind 1,5748 Zoll, und aus 1,5748 Zoll werden 39,99992 mm. Ohne
+        dieses Feld verschöbe ein Dialog, den man in Zoll nur *ansieht*, jedes
+        Maß um den Rundungsfehler seiner Anzeige."""
 
         self.spin = QDoubleSpinBox(self)
-        self.spin.setDecimals(_decimals_for(entry))
-        self.spin.setMinimum(entry.minimum if entry.minimum is not None else -1_000_000.0)
-        self.spin.setMaximum(entry.maximum if entry.maximum is not None else 1_000_000.0)
+        self.spin.setDecimals(_decimals_for(entry, self._shown))
+        self.spin.setMinimum(
+            self._as_shown(entry.minimum) if entry.minimum is not None else -1_000_000.0
+        )
+        self.spin.setMaximum(
+            self._as_shown(entry.maximum) if entry.maximum is not None else 1_000_000.0
+        )
+        if self._shown is not None:
+            # Der Drehknopf bewegt sich um denselben **physischen** Betrag wie
+            # in Millimetern. Qts Vorgabe ist 1.0, und ein ganzer Zoll je Klick
+            # wäre ein Sprung über den ganzen Wertebereich einer Wandstärke.
+            self.spin.setSingleStep(from_mm(1.0, self._shown))
 
         self.text = QLineEdit(self)
         self.text.setPlaceholderText(tr("zum Beispiel =@breite / 2"))
@@ -155,6 +193,14 @@ class ValueField(QWidget):
 
     # --- Wert -------------------------------------------------------------------
 
+    def _as_shown(self, value_mm: float) -> float:
+        """Ein Kernwert, wie das Feld ihn zeigt."""
+        return from_mm(value_mm, self._shown) if self._shown else value_mm
+
+    def _as_core(self, shown: float) -> float:
+        """Was im Feld steht, wie der Kern es bekommt — immer Millimeter."""
+        return to_mm(shown, self._shown) if self._shown else shown
+
     def set_value(self, value: Any) -> None:
         """Trägt Zahl oder Ausdruck ein und stellt das Feld passend."""
         if expressions.is_expression(value):
@@ -164,7 +210,8 @@ class ValueField(QWidget):
             return
         if value is not None:
             try:
-                self.spin.setValue(float(value))
+                self._core = float(value)
+                self.spin.setValue(self._as_shown(float(value)))
             except (TypeError, ValueError):
                 # Ein Wert, der weder Zahl noch Ausdruck ist, gehört trotzdem
                 # gezeigt statt verschluckt — sonst stünde im Dialog etwas
@@ -181,8 +228,29 @@ class ValueField(QWidget):
         Stapel bekäme einen Parameter, den keine Auswertung lesen kann.
         """
         if self.toggle.isChecked() and (entered := self.text.text().strip()):
+            # Ein Ausdruck bleibt wörtlich. Ihn umzurechnen hieße, „=@breite/2"
+            # in eine Zahl zu verwandeln — die Bindung wäre weg, und §13 rechnet
+            # ohnehin in Millimetern.
             return entered
-        return float(self.spin.value())
+        shown = float(self.spin.value())
+        if self._core is not None and self._unchanged(shown):
+            # Angesehen, nicht angefasst: Dann gilt der Wert, der hereinkam.
+            # Die Rückrechnung würde hier nur die Rundung der Anzeige
+            # festschreiben — bei 40 mm in Zoll wären das 39,99992.
+            return self._core
+        return self._as_core(shown)
+
+    def _unchanged(self, shown: float) -> bool:
+        """Ob die Anzeige noch den Wert zeigt, der hereinkam.
+
+        Verglichen wird auf **Anzeigegenauigkeit** und nicht mit ``==``
+        (Regel 6): Der gemerkte Wert ist feiner als das Feld, und genau darum
+        geht es. Eine halbe letzte Stelle ist die Grenze — darüber hat jemand
+        gedreht.
+        """
+        assert self._core is not None
+        step = 10.0 ** -self.spin.decimals()
+        return abs(self._as_shown(self._core) - shown) < step / 2.0
 
     # --- Umschalten -------------------------------------------------------------
 
@@ -599,7 +667,11 @@ class OperationDialog(QDialog):
             self._watch(editor)
             label = f"{entry.title}"
             if entry.unit:
-                label = f"{label} [{entry.unit}]"
+                # Die Einheit, in der das Feld wirklich spricht: Bei „mm" ist
+                # das die eingestellte Anzeigeeinheit, sonst der Wert aus dem
+                # Schema. Ein Feld, das Zoll nimmt und „[mm]" darüber trägt,
+                # wäre die Umschaltung mit einer Lüge darin.
+                label = f"{label} [{shown_unit(entry) or entry.unit}]"
             # Ein eingetragener Wert gehört vor den Nutzer, auch wenn das Schema
             # ihn nach hinten legt: er ist der, der gerade entschieden wurde —
             # die angeklickte Fläche, die vorgewählte Position (§18.5).

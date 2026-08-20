@@ -957,3 +957,141 @@ def test_an_operation_without_a_caveat_shows_no_empty_warning(window: MainWindow
     assert dialog._caveat is not None, "das Label wird immer gebaut"
     assert not dialog._caveat.isVisibleTo(dialog), f"{spec.name}: leeres Warnfeld"
     assert not dialog._caveat.text()
+
+
+# --- Die Anzeigeeinheit im Zahlenfeld (§19.3, §11.1) ----------------------------
+
+
+def _length_param(spec: Any) -> Any:
+    """Der erste Parameter dieser Operation, der eine Länge ist."""
+    return next(entry for entry in spec.params.spec() if entry.unit == "mm")
+
+
+def test_a_field_in_inches_takes_inches_and_returns_millimetres(window: MainWindow) -> None:
+    """Der Kern bleibt bei Millimetern, das Feld spricht die Anzeigeeinheit.
+
+    Vorher trug jedes Feld „[mm]" aus dem Schema und nahm Millimeter, gleich
+    was eingestellt war — die Umschaltung erreichte die Anzeigen und hörte an
+    der Eingabe auf. Nur das Kürzel zu tauschen wäre schlimmer gewesen: „20,00
+    in" über einem Wert von 20 mm behauptet 20 Zoll.
+
+    Geprüft wird die ganze Kette: die Beschriftung, der eingetragene Wert, und
+    was ``values()`` an den Stapel gibt.
+    """
+    from app.ui.labels import set_display_unit
+
+    spec = REGISTRY.get("create_box")
+    entry = _length_param(spec)
+    default_mm = float(entry.default)
+    assert default_mm > 0.0, "der Test braucht eine Vorgabe größer als null"
+
+    set_display_unit("in")
+    dialog = OperationDialog(spec, {}, window)
+    field = dialog._editors[entry.name]
+
+    # Der gezeigte Wert ist umgerechnet …
+    assert field.spin.value() == pytest.approx(default_mm / 25.4, abs=1e-4)
+    # … und die Beschriftung sagt es. Sonst wäre die Zahl eine Behauptung.
+    label = dialog._rows[entry.name].labelForField(field)
+    assert label is not None and "[in]" in label.text(), label.text() if label else "kein Label"
+
+    # Was der Stapel bekommt, ist Millimeter (§11.1).
+    assert dialog.values()[entry.name] == pytest.approx(default_mm, abs=1e-6)
+
+    # Und ein getippter Zollwert kommt als Millimeter an.
+    field.spin.setValue(1.0)
+    assert dialog.values()[entry.name] == pytest.approx(25.4, abs=1e-6)
+
+
+def test_an_angle_stays_in_degrees(window: MainWindow) -> None:
+    """Umgerechnet wird, was eine Länge ist — und sonst nichts.
+
+    Dreißig Parameter tragen einen Winkel. „45 Zoll" wäre keine Umschaltung
+    mehr, sondern ein Fehler mit Einstellung.
+    """
+    from app.ui.labels import set_display_unit
+    from app.ui.op_dialog import shown_unit
+
+    spec = REGISTRY.get("pattern")
+    angle = next(entry for entry in spec.params.spec() if entry.name == "angle")
+    assert angle.unit in {"grad", "°"}, angle.unit
+
+    set_display_unit("in")
+    assert shown_unit(angle) is None, "ein Winkel wird nicht umgerechnet"
+
+    dialog = OperationDialog(spec, {}, window)
+    assert dialog.values()["angle"] == pytest.approx(float(angle.default), abs=1e-6)
+
+
+def test_an_expression_survives_the_unit(window: MainWindow) -> None:
+    """Ein Parameterausdruck bleibt wörtlich — in jeder Einheit.
+
+    „=@breite/2" umzurechnen hieße, die Bindung in eine Zahl zu verwandeln;
+    §13 rechnet ohnehin in Millimetern, und was hier steht, ist keine Zahl.
+    """
+    from app.ui.labels import set_display_unit
+
+    spec = REGISTRY.get("create_box")
+    entry = _length_param(spec)
+
+    set_display_unit("in")
+    dialog = OperationDialog(spec, {}, window, values={entry.name: "=@breite / 2"})
+
+    assert dialog.values()[entry.name] == "=@breite / 2"
+
+
+def test_a_fine_field_keeps_its_precision_in_inches(window: MainWindow) -> None:
+    """Ein Feld für Toleranzen braucht in Zoll mehr Stellen, nicht dieselben.
+
+    Ein Hundertstelmillimeter ist ein Vierteltausendstel Zoll. Mit zwei Stellen
+    wäre das Spiel aus einem Materialprofil nicht eintippbar — das Feld zeigte
+    eine Genauigkeit, die es nicht annimmt.
+    """
+    from app.core.units import decimals_for
+    from app.ui.labels import set_display_unit
+    from app.ui.op_dialog import _decimals_for
+
+    spec = REGISTRY.get("create_box")
+    entry = _length_param(spec)
+
+    set_display_unit("mm")
+    in_mm = _decimals_for(entry, "mm")
+    set_display_unit("in")
+    in_inches = _decimals_for(entry, "in")
+
+    assert in_mm == 2
+    assert in_inches == decimals_for("in") >= 4
+    assert in_inches > in_mm
+
+
+def test_looking_at_a_dialog_in_inches_changes_nothing(window: MainWindow) -> None:
+    """Ein Dialog, den man nur ansieht, verschiebt kein Maß.
+
+    Der Fund kam aus dem Test darüber: 40 mm sind 1,5748 Zoll, und aus 1,5748
+    Zoll werden 39,99992 mm. Die Anzeige rundet auf ihre vier Stellen, und die
+    Rückrechnung schriebe diese Rundung als Wert fest — wer im Verlauf eine
+    Operation aufschlägt, sie ansieht und bestätigt, hätte jedes ihrer Maße um
+    den Rundungsfehler verschoben. Bei drei Feldern eines Quaders dreimal.
+
+    Geprüft wird **jeder** Längenparameter jeder Operation, denn der Fehler
+    hängt an der Zahl: 40 trifft es, 25,4 nicht.
+    """
+    from app.ui.labels import set_display_unit
+
+    set_display_unit("in")
+    verschoben: list[str] = []
+    for spec in REGISTRY.all():
+        lengths = [entry for entry in spec.params.spec() if entry.unit == "mm"]
+        if not lengths:
+            continue
+        dialog = OperationDialog(spec, {}, window)
+        entered = dialog.values()
+        for entry in lengths:
+            if not isinstance(entry.default, (int, float)):
+                continue
+            back = entered.get(entry.name)
+            if isinstance(back, str):
+                continue  # ein Ausdruck, kein Maß
+            if abs(float(back) - float(entry.default)) > 1e-9:
+                verschoben.append(f"{spec.name}.{entry.name}: {entry.default} → {back}")
+    assert not verschoben, "Ansehen hat Maße verschoben:\n" + "\n".join(verschoben)

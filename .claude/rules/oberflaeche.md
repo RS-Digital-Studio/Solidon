@@ -121,6 +121,27 @@ Sonderfall im Aufbau. Das Feld wird **grau und begründet**, nicht unsichtbar �
 verschwinden darf nur, was die gewählte Variante gar nicht kennt; wer eine
 Zeile vermisst, sucht sie.
 
+**Von Hand gepflegt heißt gedriftet**, und hier war es gedriftet: Die Tabelle
+hatte einen Eintrag, während fünf Operationen bedingte Felder trugen — *Kopien
+in Reihe oder Kreis* allein sechs. `tests/test_operation_ui.py` liest deshalb
+den Quelltext jeder Operation und meldet jeden Parameter, dessen sämtliche
+Lesestellen in einem Zweig über einen Umschalter derselben Operation liegen.
+Zwei Regeln machen die Prüfung brauchbar statt abgeschaltet: **in genau einem
+Zweig** gelesen (was in beiden steht, wirkt immer), und **kein Aufruf, der den
+ganzen Parametersatz weitergibt** (dort endet der Blick von außen). Ohne die
+zweite meldete sie acht Funde, von denen sieben keine waren.
+
+Ein **Haken** als Umschalter braucht zwei Dinge, die eine Auswahl nicht
+braucht: einen typtreuen Vergleich — über `str()` hieße der gesuchte Wert
+„True", und weil `1 == True` ist, machte eine Anzahl von 1 einen Haken wahr —
+und einen eigenen Satz. „Wirkt nur, wenn „Gründlich suchen" auf „True" steht"
+ist die Bauart der Anwendung und nicht ihre Bedienung.
+
+Die Tabelle steht mit elf Einträgen **über ihrer eigenen Schwelle** („wächst
+die Liste über eine Handvoll hinaus, gehört die Abhängigkeit an den
+Parameter"). Der Umbau ins Schema ist fällig und in der Arbeitsliste; er
+betrifft `ParamSpec` und die vier Oberflächen, die es lesen.
+
 **Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat.** Der
 Skizzentext hat ihn seit je, die Stellung eines Skeletts bekam ihn spät:
 `kind="armature"` fiel auf ein Textfeld durch, und der kürzeste Weg zu einem
@@ -130,6 +151,17 @@ oder aus dem Wert der Operation), sonst bleibt das Textfeld als Rückfall. Die
 Winkel sind `ValueField`, denn §13 gilt für einen Winkel wie für eine Länge.
 Im **Schema** bleibt der Sammelparameter hinten (`tests/test_gesture_ops.py`);
 im Dialog steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
+
+**Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
+wann eine Operation die falsche Wahl ist. Zwölf Operationen tragen einen, und
+gelesen hat ihn lange allein die Handbuchreferenz — nicht der Dialog, in dem
+gerade jemand die Operation anwendet, nicht der Tooltip am Menüeintrag, nicht
+die Werkzeugliste des Agenten. `caveat_line()` (`app/core/registry/surfaces.py`)
+ist die eine Quelle und trägt das Wort davor: Ohne Vorwort liest sich die Grenze
+als Fortsetzung des `doc`-Satzes. Im Dialog ein **eigenes Label**, halbfett, mit
+dem Wort als zweiter Kodierung (Regel 18); im Tooltip unter dem Satz; beim
+Agenten in der Werkzeugbeschreibung. **Nicht in die Statuszeile** — die ist eine
+Zeile, und eine abgeschnittene Warnung ist schlimmer als keine.
 
 **Jede neue Funktion nennt ihren Hauptweg** (§2.2), bevor sie einen Platz
 bekommt:
@@ -146,6 +178,47 @@ bekommt:
 Kontextmenü, sondern auch die Befehlspalette
 (`palette_entries(for_feature=...)`). Es ist eine Reihenfolge, keine Auswahl —
 eine Palette, die aussortiert, wäre eine Betriebsart mit anderem Namen.
+
+**Und sortiert wird nach dem Titel, überall mit `i18n.sort_key`.** Die
+Menüleiste tat es (`by_category`), Palette und Kontextmenü gaben die Ordnung
+von `Registry.all()` weiter — die der internen englischen Bezeichner. Gelesen
+hat man dort „An Merkmal ausrichten", „Textur aufbringen", „Auf dem Bett
+anordnen". Nicht `str` und nicht `casefold`: 23 der 85 Titel tragen einen
+Umlaut, und „Überhangfächer" landet nach Codepunkt hinter allem anderen. Nicht
+zu verwechseln mit `command_palette.fold`, der **Suchfaltung** — dort wird „ä"
+zu „ae", weil jemand „aushoehlen" tippt; beim Sortieren zählt „ä" wie „a"
+(DIN 5007-1), damit „Ändern" zwischen „Analyse" und „Anordnen" steht. Zwei
+Aufgaben, zwei Tabellen, und der Kommentar an jeder sagt, welche.
+
+## Wie die Karten ihre Höhe teilen
+
+`OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`.
+Drei Zusagen, und alle drei sind schon gebrochen worden:
+
+* **Gerechnet wird nie mit den Höhen, die gerade gesetzt wurden.** Eine
+  Zuteilung, die ihr eigenes Ergebnis liest, bekommt beim nächsten Durchlauf
+  andere Zahlen und die Karte läuft auf und ab — bei einem einzigen Aufklappen
+  waren es 905 Geometriewechsel. Deshalb taugt `natural_height` **innerhalb**
+  der Zuteilung nicht: sie liest für ihre Rollbereiche die gelegten Höhen und
+  schwankte zwischen 389 und 1275 Pixeln. `extra_height` rechnet strukturell —
+  je Posten der Unterschied zwischen dem, was er als Ganzes wünscht, und dem,
+  was die Karten darin wünschen — und stand über Zuteilungen von 60 bis 900
+  Pixeln unverändert auf 217.
+* **Was nicht den Karten gehört, wird abgezogen.** Abschnittsköpfe,
+  Parameterleiste, Layoutabstände. Ungekürzt verteilt die Zuteilung mehr Höhe,
+  als die Zone hat: Der Objektbaum stand auf 500 Pixeln in einem Abschnitt von
+  121, das Elternwidget schnitt die Differenz weg, und weil der Baum von seiner
+  eigenen Höhe ausging, meldete sein Rollbalken dazu nichts. Zehn Zeilen waren
+  nicht abgeschnitten, sondern unerreichbar.
+* **Jede Karte nennt ihren Boden** (`RoomTaker.least_height`), und verteilt wird
+  nur, was darüber liegt. Sonst ist die Zuteilung eine Bitte: Der leere Verlauf
+  meldete vier Pixel Bedarf, bekam anteilig drei und setzte 112 durch. Der Boden
+  hat zwei Quellen, und beide zählen — `fit_to_rows` mit seinen drei
+  Mindestzeilen und der leere Zustand, dessen Höhe aus dem umbrochenen Satz
+  kommt (`fit_wrapped`) und nicht aus der Zeilenrechnung.
+
+`tests/test_overlay.py` hält alle drei: „settles on one answer",
+„moves a card once", „no card is pushed outside its section".
 
 ## Wartezeit
 
@@ -305,6 +378,22 @@ genau der einen Methode, die benutzt wird.
 
 - **Keine Bedeutung allein über Farbe** (Regel 18). Immer eine zweite
   Kodierung: Muster, Schraffur, Symbol, Beschriftung.
+- **Aber auch keine Bedeutung ohne Farbe, wo Farbe die Sache ist.** Ein
+  Materialslot ohne eigene Farbe bekam in der Ansicht die Körperfarbe — bei
+  zwei bemalten Slots zwei gleiche Einträge in derselben Tabelle, und das
+  Bemalen war im Bild folgenlos. `theme.slot_colour` gibt die Ersatzfarbe
+  (Okabe/Ito, sieben Einträge; Slot 0 ist das unbemalte Teil und bekommt
+  `None`); im **Dokument** steht sie nicht, denn keine Farbe zu haben ist ein
+  Zustand, den „Slot zuweisen" auflöst. Die Zahl daneben bleibt: Die
+  Pinselleiste zeigt Farbfeld **und** Name, „neu" für einen Slot, den der
+  gewählte Körper noch nicht hat.
+- **Dasselbe Problem bietet dieselben Handlungen**, gleich wer es meldet.
+  „Nicht geschlossen" meldet der Kern beim Einlesen, beim Exportieren und nach
+  jedem Zug des Agenten; zwei trugen ihre zwei Handlungen, der dritte nichts.
+  `FINDING_ACTIONS` (`app/ui/panels.py`) hält die Zuordnung, und
+  `tests/test_value_labels.py` prüft die **Familie**: Befunde mit demselben
+  Namen hinter dem Punkt melden dasselbe Problem, und trägt einer eine
+  Handlung, müssen es alle.
 - Differenzansicht in Blau/Orange als Vorgabe, nicht Rot/Grün.
 - Analysekarten mit wahrnehmungsgleicher Palette (Viridis-Art), kein
   Regenbogen — der erzeugt Kanten, wo keine sind.
@@ -312,6 +401,26 @@ genau der einen Methode, die benutzt wird.
   sie nebenbei. Undo und Redo gelten überall, auch im Chat.
 - HiDPI, skalierbare Schrift, Kontrast in hellem und dunklem Thema,
   Anzeigeeinheit zwischen Millimeter und Zoll umschaltbar.
+
+**Die Anzeigeeinheit ist ein Zustand, wie die Sprache einer ist**
+(`labels.set_display_unit`, `display_unit()`). Sie durch die Konstruktoren zu
+reichen war der Weg dorthin und hatte elf von vierzehn Ausgaben vergessen:
+`labels.length` rufen Funktionen **ohne Widget** — die Merkmalsbeschriftung
+entsteht in der Überlagerung, im Objektbaum und in der Statusleiste. Ein
+ausdrücklich übergebenes Argument gewinnt weiter; das ist kein zweites
+Verzeichnis, sondern ein Vorrang.
+
+Zwei Grenzen, und beide sind der Grund, warum der Umbau sicher ist. **Was in
+ein Eingabefeld geschrieben wird, bleibt in Millimetern**: `measured_expression`
+belegt das Maßfeld einer Skizzenbedingung vor, und dort wäre eine umgerechnete
+Zahl ein Datenfehler und kein Anzeigefehler. Und **ein Suffix allein zu
+tauschen ist falsch**: Ein Feld mit „in" über einem Wert von 20 mm behauptet
+20 Zoll. Eingabefelder umzustellen heißt Wert **und** Grenzen in beide
+Richtungen umzurechnen, ohne einen Parameterausdruck anzufassen — ein eigener
+Schritt.
+
+Wer den Zustand in einem Test setzt, bekommt ihn zurückgesetzt
+(`tests/conftest.py`); sonst nähme ein Test jeden folgenden mit.
 
 ## Tests
 

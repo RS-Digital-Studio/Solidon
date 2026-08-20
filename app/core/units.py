@@ -50,6 +50,18 @@ _UNIT_DECIMALS: Final[dict[LengthUnit, int]] = {"mm": 2, "cm": 3, "m": 5, "in": 
 DISPLAY_UNITS: Final[tuple[LengthUnit, ...]] = ("mm", "in")
 
 
+def decimals_for(unit: LengthUnit) -> int:
+    """Wie viele Nachkommastellen diese Einheit braucht, um EPS_DISPLAY zu zeigen.
+
+    Öffentlich, weil auch die Eingabefelder es wissen müssen: Ein Zahlenfeld in
+    Zoll mit zwei Stellen könnte die Toleranz eines Materialprofils nicht
+    aufnehmen — ein Hundertstelmillimeter ist ein Vierteltausendstel Zoll. Die
+    Anzeige und die Eingabe aus derselben Tabelle, sonst zeigt ein Feld eine
+    Stelle, die es nicht annimmt.
+    """
+    return _UNIT_DECIMALS[unit]
+
+
 def to_mm(value: float, unit: LengthUnit) -> float:
     """Rechnet eine ankommende Länge in die Kerneinheit um."""
     return value * UNIT_TO_MM[unit]
