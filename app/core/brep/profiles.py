@@ -410,6 +410,12 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     slab = Solid(BRepPrimAPI_MakeCylinder(major / 2.0 + 1.0, length).Shape())
     trimmed = _fuzzy_boolean("intersection", ridge_solid, slab)
     core = Solid(BRepPrimAPI_MakeCylinder(core_radius, length).Shape())
+    # Was in die Vereinigung geht, bevor sie etwas daraus macht. Ein Gang, der
+    # den Zuschnitt schon offen verlässt, ist durch kein Vernähen danach zu
+    # retten — und die Absage unten läse sich trotzdem, als läge es an der
+    # Vereinigung.
+    if not _is_sound_rod(trimmed):
+        _log.info("thread rod: the trimmed ridge is already unsound (%s)", _rod_state(trimmed))
     return _joined_rod(core, trimmed, major, pitch)
 
 
