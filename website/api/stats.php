@@ -8,7 +8,9 @@
  * einzelnen Besucher über den Tag hinaus. Was hier nicht steht, steht auch in
  * den Daten nicht.
  *
- * Aufruf: https://solidon3d.de/api/stats.php
+ * Aufruf: https://solidon3d.de/api/stats.php — das Anmeldefenster verlangt
+ * einen Benutzernamen, geprüft wird aber nur das Passwort. Was im Namensfeld
+ * steht, ist gleichgültig.
  *
  * **Einrichtung — ohne diesen Schritt bleibt die Seite zu.** Neben dieser
  * Datei muss `.stats-zugang.php` liegen und den Hash eines Passworts
@@ -88,7 +90,11 @@ function require_login(): void
         exit;
     }
 
-    $user = (string) ($_SERVER['PHP_AUTH_USER'] ?? '');
+    // **Der Benutzername zählt nicht.** Ein Anmeldefenster verlangt beide
+    // Felder, aber hier gibt es nur einen Leser — ein zweites Geheimnis, das
+    // niemand vergeben hat, wäre keine Sicherheit, sondern eine Stelle, an der
+    // man sich selbst aussperrt. Was im Namensfeld steht, ist gleichgültig;
+    // geprüft wird das Passwort.
     $password = (string) ($_SERVER['PHP_AUTH_PW'] ?? '');
 
     // Manche Server reichen den Authorization-Kopf nicht an PHP durch, sondern
@@ -98,7 +104,6 @@ function require_login(): void
         $header = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
         if (stripos($header, 'basic ') === 0) {
             $pair = explode(':', (string) base64_decode(substr($header, 6)), 2);
-            $user = $pair[0] ?? '';
             $password = $pair[1] ?? '';
         }
     }
