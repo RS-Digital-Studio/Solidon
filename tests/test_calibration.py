@@ -370,3 +370,78 @@ def test_a_quoted_material_title_survives_the_calibration_file(
 
     assert again["pla"]["title"] == 'PLA "matt"'
     (own_profiles / "materials.toml").unlink()
+
+
+def test_the_variants_report_progress_and_can_be_stopped(profile: Profile) -> None:
+    """§2.8: zwölf Auswertungen sind über zwei Sekunden.
+
+    Gerechnet wurde ohne Fortschritt und ohne Abbruch — der Dialog stand still,
+    bis der letzte Lauf durch war, und zwar im Qt-Hauptthread. Beides geht jetzt
+    durch: der gemeldete Anteil zählt über **alle** Läufe (ein Balken, der
+    viermal von null hochläuft, sagt weniger als keiner), und der Abbruch wirkt
+    zwischen den Läufen wie innerhalb eines Laufes.
+
+    Was bis zum Abbruch fertig war, kommt zurück: ein halber Satz ist kein
+    Kalibrierdruck, und wer abbricht, weiß das.
+    """
+    from app.core.scene.cancel import CancelSignal
+
+    project = project_with_parameter()
+    seen: list[float] = []
+
+    made = variants.build(
+        project.document,
+        profile,
+        parameter="spiel",
+        first=0.10,
+        step=0.05,
+        count=3,
+        sources=ProjectSources(project),
+        progress=lambda share, _text: seen.append(share),
+    )
+
+    assert len(made.variants) == 3
+    assert seen, "ohne Fortschritt sieht niemand, dass etwas läuft"
+    assert seen == sorted(seen), f"der Anteil läuft zurück: {seen}"
+    assert max(seen) <= 1.0 and max(seen) > 0.5, f"der Anteil kommt nicht an: {max(seen)}"
+
+    # Abgebrochen, bevor der erste Lauf beginnt: nichts wird gerechnet.
+    stop = CancelSignal()
+    stop.cancel()
+    nothing = variants.build(
+        project.document,
+        profile,
+        parameter="spiel",
+        first=0.10,
+        step=0.05,
+        count=3,
+        sources=ProjectSources(project),
+        cancelled=stop,
+    )
+    assert nothing.variants == [], "der Abbruch wurde nicht abgefragt"
+
+    # Und mitten drin: der zweite Lauf kommt nicht mehr.
+    late = CancelSignal()
+    counted = 0
+
+    def after_the_first(share: float, _text: str) -> None:
+        nonlocal counted
+        counted += 1
+        if share >= 1 / 3:
+            late.cancel()
+
+    partial = variants.build(
+        project.document,
+        profile,
+        parameter="spiel",
+        first=0.10,
+        step=0.05,
+        count=3,
+        sources=ProjectSources(project),
+        progress=after_the_first,
+        cancelled=late,
+    )
+    assert counted, "der Fortschritt kam nie an"
+    assert 0 < len(partial.variants) < 3, (
+        f"nach dem Abbruch stehen {len(partial.variants)} von 3 Varianten da"
+    )

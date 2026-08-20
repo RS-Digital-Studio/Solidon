@@ -26,10 +26,12 @@ from app.core.geom.transform import apply, translation
 from app.core.log import get_logger
 from app.core.scene.evaluate import evaluate
 from app.core.types import (
+    CancelToken,
     Document,
     Finding,
     ObjectId,
     Profile,
+    ProgressFn,
     Quality,
     Report,
     Scene,
@@ -39,6 +41,11 @@ from app.core.types import (
 from app.i18n import _, tr
 
 _log = get_logger(__name__)
+
+
+def _silent(fraction: float, text: str) -> None:
+    """Kein Fortschritt gewünscht — der Vorgabewert von ``build``."""
+
 
 #: Abstand zwischen zwei Varianten auf der Platte, in Millimetern.
 DEFAULT_GAP = 8.0
@@ -89,8 +96,26 @@ def build(
     gap: float = DEFAULT_GAP,
     quality: Quality = "draft",
     sources: SourceAccess | None = None,
+    progress: ProgressFn = _silent,
+    cancelled: CancelToken | None = None,
 ) -> VariantSet:
-    """Wertet denselben Stapel ``count``-mal mit gestuftem Parameter aus."""
+    """Wertet denselben Stapel ``count``-mal mit gestuftem Parameter aus.
+
+    ``progress`` und ``cancelled`` gehen an jede einzelne Auswertung durch und
+    tragen zusammen §2.8: Zwölf Auswertungen sind über zwei Sekunden, und über
+    zwei Sekunden gehören Fortschritt und ein Abbrechen dazu. Beides gab es
+    hier nicht — die Oberfläche stand still, bis der letzte Lauf durch war, und
+    zwar im Qt-Hauptthread.
+
+    Der Anteil, den ``progress`` meldet, ist der über alle Läufe: Lauf drei von
+    vier bei halber Kette meldet 0,625. Ein Balken, der viermal von null
+    hochläuft, sagt weniger als keiner.
+
+    Abgebrochen wird **zwischen** den Läufen und innerhalb eines Laufes: Die
+    Auswertung prüft den Token selbst, und die Prüfung hier davor spart den
+    Aufbau des nächsten Dokuments. Was bis dahin fertig war, kommt zurück —
+    ein halber Satz ist kein Kalibrierdruck, und wer abbricht, weiß das.
+    """
     if parameter not in document.parameters:
         raise ValidationError(
             field="parameter",
@@ -109,13 +134,27 @@ def build(
     offset = 0.0
 
     for index in range(count):
+        if cancelled is not None and cancelled.is_cancelled:
+            _log.info("variants cancelled after %d of %d", index, count)
+            break
         value = first + step * index
         working = copy.deepcopy(document)
         working.parameters[parameter] = dataclasses.replace(
             working.parameters[parameter], value=value, expression=""
         )
 
-        result = evaluate(working, profile, quality=quality, sources=sources)
+        def onward(share: float, text: str, done: int = index) -> None:
+            """Der Anteil über alle Läufe, nicht der des einzelnen."""
+            progress((done + max(0.0, min(1.0, share))) / count, text)
+
+        result = evaluate(
+            working,
+            profile,
+            quality=quality,
+            sources=sources,
+            progress=onward,
+            cancelled=cancelled,
+        )
         variant = Variant(value=value, complete=result.complete)
         variant.findings.extend(result.scene.report.findings)
 
