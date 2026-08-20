@@ -18,7 +18,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
-    QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -27,9 +26,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
-from app.core.units import DISPLAY_UNITS
 from app.i18n import tr
-from app.ui.labels import length
+from app.ui.labels import LengthSpin, length
 from app.ui.style import NORMAL, TIGHT
 from app.ui.tool_strip import BarComboBox
 
@@ -112,11 +110,12 @@ class SectionBar(QWidget):
         # suchende Bewegung, und dafür ist der Regler da — aber „schneide bei
         # 12,5" ist keine Suche, sondern eine Zahl, und die tippt man. Beides,
         # nicht eines von beiden (Konzept P15 §4, E2).
-        self.readout = QDoubleSpinBox(self)
-        self.readout.setDecimals(1)
-        self.readout.setSingleStep(1.0)
+        # Eine Länge, also in der Anzeigeeinheit (§19.3). Der **Regler** bleibt
+        # die Wahrheit über die Position und rechnet weiter in Zehntelmillimetern:
+        # Er hält den Bereich der Szene, und die kommt aus dem Kern.
+        self.readout = LengthSpin(self)
+        self.readout.set_step_mm(1.0)
         self.readout.setMinimumWidth(90)
-        self.readout.setSuffix(f" {DISPLAY_UNITS[0]}")
         self.readout.setKeyboardTracking(False)
         self.readout.valueChanged.connect(self._typed)
         self._syncing = False
@@ -125,13 +124,9 @@ class SectionBar(QWidget):
         self.as_slice = QCheckBox(tr("Scheibe"), self)
         self.as_slice.toggled.connect(self._emit)
 
-        self.thickness = QDoubleSpinBox(self)
-        self.thickness.setDecimals(2)
-        self.thickness.setRange(0.1, 500.0)
-        self.thickness.setValue(10.0)
-        # Ein Einheitenzeichen ist keine Übersetzung — es kommt aus der
-        # Einheitentabelle (§11.1).
-        self.thickness.setSuffix(f" {DISPLAY_UNITS[0]}")
+        self.thickness = LengthSpin(self)
+        self.thickness.set_range_mm(0.1, 500.0)
+        self.thickness.set_value_mm(10.0)
         self.thickness.valueChanged.connect(self._emit)
 
         self.warning = QLabel("", self)
@@ -172,15 +167,15 @@ class SectionBar(QWidget):
         axis = self.axis.currentData()
         low, high = self._ranges.get(axis, (-100.0, 100.0))
         margin = max(1.0, (high - low) * 0.05)
-        was = self.readout.value()
+        was = self.readout.value_mm()
         self.position.setMinimum(int((low - margin) * STEPS_PER_MM))
         self.position.setMaximum(int((high + margin) * STEPS_PER_MM))
-        self.readout.setRange(low - margin, high + margin)
+        self.readout.set_range_mm(low - margin, high + margin)
         # Die Achse zu wechseln heißt, an einer anderen Stelle zu schneiden —
         # der alte Wert gehörte zur alten Achse. In die Mitte, das ist die
         # Stelle, an der ein Schnitt am ehesten etwas zeigt.
         if not (low - margin <= was <= high + margin):
-            self.readout.setValue((low + high) / 2.0)
+            self.readout.set_value_mm((low + high) / 2.0)
 
     def plane(self) -> SectionPlane | None:
         axis = self.axis.currentData()
@@ -191,7 +186,7 @@ class SectionBar(QWidget):
         )
 
     def thickness_value(self) -> float | None:
-        return float(self.thickness.value()) if self.as_slice.isChecked() else None
+        return self.thickness.value_mm() if self.as_slice.isChecked() else None
 
     def show_capping_state(self, uncapped: bool) -> None:
         self.warning.setText(tr("Offenes Modell — Schnittfläche bleibt offen.") if uncapped else "")
@@ -215,21 +210,25 @@ class SectionBar(QWidget):
         self._update_enabled()
         if not self._syncing:
             self._syncing = True
-            self.readout.setValue(self.position.value() / STEPS_PER_MM)
+            self.readout.set_value_mm(self.position.value() / STEPS_PER_MM)
             self._syncing = False
         self._pending.start(SETTLE_MS)
 
-    def _typed(self, value: float) -> None:
+    def _typed(self, _value: float) -> None:
         """Eine getippte Höhe bewegt den Regler — und damit den Schnitt.
 
         Der Regler bleibt die Wahrheit über die Position: er hält den Bereich
         der Szene, und die Rundung auf Zehntelmillimeter ist seine. Das Feld
         ist ein zweiter Weg zu derselben Zahl, kein zweiter Zustand.
+
+        Gelesen wird deshalb ``value_mm`` und nicht das Argument des Signals:
+        Das trägt die **Anzeige**, und in Zoll wäre der Regler damit auf ein
+        Fünfundzwanzigstel der gemeinten Höhe gesprungen.
         """
         if self._syncing:
             return
         self._syncing = True
-        self.position.setValue(round(value * STEPS_PER_MM))
+        self.position.setValue(round(self.readout.value_mm() * STEPS_PER_MM))
         self._syncing = False
         self._pending.start(SETTLE_MS)
 

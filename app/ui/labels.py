@@ -14,6 +14,7 @@ from typing import Any
 
 from PySide6.QtCore import QLocale
 from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QDoubleSpinBox, QWidget
 
 from app.core import figures
 from app.core.activation import Activation
@@ -21,7 +22,14 @@ from app.core.errors import AppError
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import group_title as group_title
 from app.core.types import Feature, FeatureId
-from app.core.units import LengthUnit, format_length, format_volume
+from app.core.units import (
+    LengthUnit,
+    decimals_for,
+    format_length,
+    format_volume,
+    from_mm,
+    to_mm,
+)
 from app.i18n import TranslatableText, _, tr
 
 # Die Zuordnung Kategorie → Menü (MENU_GROUPS, group_title) lebt seit der
@@ -81,6 +89,110 @@ def set_display_unit(unit: LengthUnit) -> None:
 def display_unit() -> LengthUnit:
     """Die eingestellte Anzeigeeinheit."""
     return _DISPLAY_UNIT
+
+
+class LengthSpin(QDoubleSpinBox):
+    """Ein Zahlenfeld für eine Länge — außen die Anzeigeeinheit, innen Millimeter.
+
+    Die dreizehn Längenfelder der Leisten waren gewöhnliche ``QDoubleSpinBox``
+    mit ``setSuffix(f" {DISPLAY_UNITS[0]}")``, also fest auf Millimeter, und
+    ihre Leisten lasen ``value()`` und gaben es dem Kern. Nur das Suffix zu
+    tauschen wäre deshalb kein halber Schritt gewesen, sondern ein falscher:
+    „20,00 in" über einem Wert von 20 mm behauptet 20 Zoll.
+
+    Hier stehen beide Seiten zusammen. Wer eine Länge setzt oder liest, tut es
+    in **Millimetern** (``value_mm``, ``set_value_mm``, ``set_range_mm``) — was
+    im Feld steht, ist eine Anzeige. Damit ist die Umrechnung an einer Stelle
+    und nicht dreizehnmal, und eine Lesestelle, die sie vergisst, gibt es
+    nicht: ``value()`` heißt hier nicht mehr, was der Kern will.
+
+    **Der Rundungsschutz ist derselbe wie im Operationsdialog** und aus
+    demselben Grund: 40 mm sind 1,5748 Zoll, und zurückgerechnet 39,99992 mm.
+    Ein Feld, das nur angesehen wurde, gibt den Wert zurück, den es bekam.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._bounds_mm: tuple[float, float] = (0.0, 100.0)
+        self._step_mm = 1.0
+        self._value_mm: float | None = None
+        self._unit: LengthUnit = display_unit()
+        self._apply_unit()
+
+    # --- Setzen und lesen, immer in Millimetern ---------------------------------
+
+    def set_range_mm(self, minimum: float, maximum: float) -> None:
+        """Die Grenzen, wie der Kern sie kennt."""
+        self._bounds_mm = (minimum, maximum)
+        self._apply_unit()
+
+    def set_step_mm(self, step: float) -> None:
+        """Wie weit ein Klick auf den Drehknopf trägt — physisch, nicht als Zahl.
+
+        Ohne das wäre die Schrittweite in Zoll dieselbe *Zahl* und damit der
+        fünfundzwanzigfache Weg.
+        """
+        self._step_mm = step
+        self._apply_unit()
+
+    def set_value_mm(self, value: float) -> None:
+        self._value_mm = value
+        self.setValue(from_mm(value, self._unit))
+
+    def value_mm(self) -> float:
+        """Was im Feld steht, in Millimetern.
+
+        Unverändert heißt: der Wert, der hereinkam — nicht seine Anzeige
+        zurückgerechnet. Verglichen wird auf Anzeigegenauigkeit und nicht mit
+        ``==`` (Regel 6).
+        """
+        shown = float(self.value())
+        if self._value_mm is not None:
+            step = 10.0 ** -self.decimals()
+            if abs(from_mm(self._value_mm, self._unit) - shown) < step / 2.0:
+                return self._value_mm
+        return to_mm(shown, self._unit)
+
+    # --- Einheitenwechsel -------------------------------------------------------
+
+    def refresh_unit(self) -> None:
+        """Übernimmt die eingestellte Anzeigeeinheit (§19.3).
+
+        Der bisher gezeigte Wert wird mitgenommen, nicht die Zahl: Wer bei
+        6 mm Pinselradius auf Zoll umstellt, will 0,2362 in sehen und nicht
+        6 in.
+        """
+        if display_unit() == self._unit:
+            return
+        carried = self.value_mm()
+        self._apply_unit()
+        self.set_value_mm(carried)
+
+    def showEvent(self, event: Any) -> None:  # noqa: N802 - Qt-Name
+        """Beim Einblenden nachziehen.
+
+        Die Leisten leben, während der Einstellungsdialog offen ist; ohne diesen
+        Haken stünde eine Leiste, die man danach hervorholt, in der alten
+        Einheit. Das Fenster stößt offene Leisten zusätzlich an — beides, denn
+        eine Leiste, die auf einen Anstoß von außen wartet, ist eine, die
+        jemand vergessen kann.
+        """
+        self.refresh_unit()
+        super().showEvent(event)
+
+    def _apply_unit(self) -> None:
+        """Suffix, Stellenzahl, Grenzen und Schrittweite für die aktuelle Einheit."""
+        self._unit = display_unit()
+        low, high = (from_mm(value, self._unit) for value in self._bounds_mm)
+        # Erst die Feinheit, dann die Grenzen: Qt schneidet einen Wert auf die
+        # eingestellte Stellenzahl, und bei zwei Stellen wäre eine Untergrenze
+        # von 0,0039 Zoll eine von null.
+        self.setDecimals(decimals_for(self._unit))
+        self.setRange(low, high)
+        self.setSingleStep(from_mm(self._step_mm, self._unit))
+        # Ein Einheitenzeichen ist keine Übersetzung — es kommt aus der
+        # Einheitentabelle (§11.1).
+        self.setSuffix(f" {self._unit}")
 
 
 def length(value_mm: float, unit: LengthUnit | None = None, with_unit: bool = True) -> str:

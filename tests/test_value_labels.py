@@ -338,3 +338,102 @@ def test_the_same_problem_offers_the_same_actions(qt_app: object) -> None:
             uneven.append(f"{problem}: verschiedene Handlungen für dasselbe Problem")
 
     assert not uneven, "\n".join(uneven)
+
+
+# --- Längenfelder sprechen die Anzeigeeinheit (§19.3) ---------------------------
+
+
+def test_a_length_field_shows_the_unit_and_returns_millimetres(qt_app: object) -> None:
+    """Außen die Anzeigeeinheit, innen Millimeter.
+
+    Die dreizehn Längenfelder der Leisten waren gewöhnliche ``QDoubleSpinBox``
+    mit festem ``mm``-Suffix, und ihre Leisten gaben ``value()`` an den Kern.
+    Nur das Suffix zu tauschen wäre deshalb kein halber Schritt gewesen,
+    sondern ein falscher: „20,00 in" über einem Wert von 20 mm behauptet
+    20 Zoll.
+    """
+    from app.ui.labels import LengthSpin, set_display_unit
+
+    field = LengthSpin()
+    field.set_range_mm(0.1, 100.0)
+    field.set_value_mm(6.0)
+
+    assert field.suffix().strip() == "mm"
+    assert field.value_mm() == pytest.approx(6.0)
+
+    set_display_unit("in")
+    field.refresh_unit()
+
+    assert field.suffix().strip() == "in"
+    assert field.value() == pytest.approx(6.0 / 25.4, abs=1e-4), "der Wert wird mitgenommen"
+    assert field.value_mm() == pytest.approx(6.0), "der Kern bekommt Millimeter"
+    # Die Grenzen wandern mit, sonst wäre eine Untergrenze von 0,1 mm in Zoll
+    # eine von 0,1 in — dem Fünfundzwanzigfachen.
+    assert field.minimum() == pytest.approx(0.1 / 25.4, abs=1e-4)
+    assert field.maximum() == pytest.approx(100.0 / 25.4, abs=1e-3)
+    # Und die Feinheit: mit zwei Stellen wäre die Untergrenze auf null gerundet.
+    assert field.decimals() >= 4
+
+
+def test_a_length_field_keeps_its_value_across_the_unit(qt_app: object) -> None:
+    """Hin und zurück ändert nichts — derselbe Schutz wie im Operationsdialog.
+
+    40 mm sind 1,5748 Zoll, und aus 1,5748 Zoll werden 39,99992 mm. Ohne das
+    Gedächtnis für den Kernwert verschöbe jedes Umschalten jedes Maß.
+    """
+    from app.ui.labels import LengthSpin, set_display_unit
+
+    field = LengthSpin()
+    field.set_range_mm(0.0, 1000.0)
+    field.set_value_mm(40.0)
+
+    for unit in ("in", "mm", "in", "mm"):
+        set_display_unit(unit)
+        field.refresh_unit()
+        assert field.value_mm() == pytest.approx(40.0, abs=1e-9), unit
+
+
+def test_a_typed_value_is_read_in_the_shown_unit(qt_app: object) -> None:
+    """Wer in Zoll „1" tippt, meint 25,4 Millimeter."""
+    from app.ui.labels import LengthSpin, set_display_unit
+
+    set_display_unit("in")
+    field = LengthSpin()
+    field.set_range_mm(0.0, 1000.0)
+    field.setValue(1.0)
+
+    assert field.value_mm() == pytest.approx(25.4)
+
+
+def test_no_bar_nails_a_length_field_to_millimetres() -> None:
+    """Bauart-Prüfung: kein Längenfeld greift den ersten Eintrag der Tabelle.
+
+    Dreizehn taten es, und das war nicht Bequemlichkeit, sondern die
+    Umschaltung aus §19.3, die an der Eingabe aufhörte. ``DISPLAY_UNITS[0]``
+    ist der **erste Eintrag** und damit immer „mm" — wer so schreibt, meint die
+    Tabelle und nimmt die Einstellung.
+
+    Gelesen wird der **Syntaxbaum** und nicht der Text: Der Docstring von
+    ``LengthSpin`` nennt das alte Muster, um zu erklären, warum es weg ist. Eine
+    Textsuche fände genau die Erklärung.
+
+    Der Einstellungsdialog darf die Tabelle weiter lesen — er baut daraus die
+    Auswahl, und das ist ihr Zweck.
+    """
+    import app.ui
+
+    erlaubt = {"settings_dialog.py"}
+    schuldig: list[str] = []
+    for path in sorted(Path(app.ui.__file__).parent.glob("*.py")):
+        if path.name in erlaubt:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Subscript):
+                continue
+            target = node.value
+            if isinstance(target, ast.Name) and target.id == "DISPLAY_UNITS":
+                schuldig.append(f"{path.name}:{node.lineno}")
+    assert not schuldig, (
+        "Längenfeld auf Millimeter festgenagelt — LengthSpin nehmen:\n" + "\n".join(schuldig)
+    )

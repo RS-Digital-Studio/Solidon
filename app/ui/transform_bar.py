@@ -10,8 +10,8 @@ from __future__ import annotations
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QCheckBox, QDoubleSpinBox, QHBoxLayout, QLabel, QWidget
 
-from app.core.units import DISPLAY_UNITS
 from app.i18n import tr
+from app.ui.labels import LengthSpin
 from app.ui.style import NORMAL, TIGHT
 
 #: Sinnvolle Vorgaben: ein Millimeter Weg, fünfzehn Grad Drehung.
@@ -31,11 +31,12 @@ class TransformBar(QWidget):
         self.gizmo = QCheckBox(tr("Gizmo"), self)
         self.gizmo.toggled.connect(self.gizmoToggled)
 
-        self.grid = QDoubleSpinBox(self)
-        self.grid.setDecimals(2)
-        self.grid.setRange(0.0, 100.0)
-        self.grid.setValue(DEFAULT_GRID_STEP)
-        self.grid.setSuffix(f" {DISPLAY_UNITS[0]}")
+        # Der Rasterfang ist eine Länge, also folgt er der Anzeigeeinheit
+        # (§19.3). Der Winkelfang daneben nicht — ein Winkel in Zoll wäre keine
+        # Umschaltung, sondern ein Fehler mit Einstellung.
+        self.grid = LengthSpin(self)
+        self.grid.set_range_mm(0.0, 100.0)
+        self.grid.set_value_mm(DEFAULT_GRID_STEP)
         self.grid.valueChanged.connect(self._emit_snapping)
 
         self.angle = QDoubleSpinBox(self)
@@ -57,7 +58,7 @@ class TransformBar(QWidget):
         """Rasterschritt in Millimetern und Winkelschritt in Grad. Null heißt kein
         Einrasten.
         """
-        return float(self.grid.value()), float(self.angle.value())
+        return self.grid.value_mm(), float(self.angle.value())
 
     def _emit_snapping(self) -> None:
         grid, angle = self.steps()

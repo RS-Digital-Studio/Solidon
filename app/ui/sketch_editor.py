@@ -54,10 +54,10 @@ from app.core.types import (
     SketchElementKind,
     SolvedSketch,
 )
-from app.core.units import DISPLAY_UNITS, EPS_DISPLAY
+from app.core.units import EPS_DISPLAY
 from app.i18n import tr
 from app.ui import cursors, icons
-from app.ui.labels import length
+from app.ui.labels import LengthSpin, length
 from app.ui.palette import ROLES, text_colour
 
 #: Was eine widersprüchliche Bedingung in der Liste anschreibt.
@@ -1977,14 +1977,13 @@ class PointDialog(QDialog):
         #: er erkennen soll.
         self._touched: set[QDoubleSpinBox] = set()
 
-        self._across = QDoubleSpinBox(self)
-        self._up = QDoubleSpinBox(self)
+        # Koordinaten sind Längen und folgen der Anzeigeeinheit (§19.3); die
+        # Skizze rechnet in Millimetern weiter (§11.1).
+        self._across = LengthSpin(self)
+        self._up = LengthSpin(self)
         for box, value in ((self._across, point[0]), (self._up, point[1])):
-            box.setDecimals(2)
-            box.setRange(-10_000.0, 10_000.0)
-            # Ein Einheitenzeichen ist keine Übersetzung (§11.1).
-            box.setSuffix(f" {DISPLAY_UNITS[0]}")
-            box.setValue(value)
+            box.set_range_mm(-10_000.0, 10_000.0)
+            box.set_value_mm(value)
             # **Nach** dem Vorbelegen verbunden, sonst zählte das Vorbelegen
             # selbst als Eingabe.
             box.valueChanged.connect(lambda _value, field=box: self._touched.add(field))
@@ -2019,8 +2018,8 @@ class PointDialog(QDialog):
         dann bleibt die genaue Lage aus dem Dokument stehen.
         """
         return (
-            self._across.value() if self._across in self._touched else self._start[0],
-            self._up.value() if self._up in self._touched else self._start[1],
+            self._across.value_mm() if self._across in self._touched else self._start[0],
+            self._up.value_mm() if self._up in self._touched else self._start[1],
         )
 
 
@@ -2311,12 +2310,10 @@ class SketchPanel(QWidget):
         self.snap_toggle.setToolTip(
             tr("Klicks fallen auf die eingestellte Weite. Vorhandene Punkte fangen weiterhin vor.")
         )
-        self.snap_step = QDoubleSpinBox(self)
-        self.snap_step.setDecimals(2)
-        self.snap_step.setRange(0.05, 100.0)
-        self.snap_step.setSingleStep(0.5)
-        self.snap_step.setValue(self.canvas.snap_step)
-        self.snap_step.setSuffix(f" {DISPLAY_UNITS[0]}")
+        self.snap_step = LengthSpin(self)
+        self.snap_step.set_range_mm(0.05, 100.0)
+        self.snap_step.set_step_mm(0.5)
+        self.snap_step.set_value_mm(self.canvas.snap_step)
         self.snap_step.setToolTip(tr("Auf welche Weite ein Klick fällt."))
         self.snap_step.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.snap_step.setAccessibleName(tr("Raster"))
@@ -2334,13 +2331,9 @@ class SketchPanel(QWidget):
         # Die Ändern-Gruppe (E17). Trimmen und Verlängern sind Werkzeuge und
         # stehen bei den anderen; Versetzen und Spiegeln sind Handlungen auf
         # der Auswahl und brauchen je eine Angabe — den Abstand und die Achse.
-        self.offset_distance = QDoubleSpinBox(self)
-        self.offset_distance.setDecimals(2)
-        self.offset_distance.setRange(-1000.0, 1000.0)
-        self.offset_distance.setValue(2.0)
-        # Ein Einheitenzeichen ist keine Übersetzung — es kommt aus der
-        # Einheitentabelle (§11.1).
-        self.offset_distance.setSuffix(f" {DISPLAY_UNITS[0]}")
+        self.offset_distance = LengthSpin(self)
+        self.offset_distance.set_range_mm(-1000.0, 1000.0)
+        self.offset_distance.set_value_mm(2.0)
         self.offset_distance.setToolTip(tr("Um wie viel versetzt wird. Negativ ist nach innen."))
         self.offset_distance.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         # Ohne Namen liest ein Vorleser hier „Drehfeld, 2,00 mm" vor. Der
@@ -2352,7 +2345,7 @@ class SketchPanel(QWidget):
         offset_button.setToolTip(f"{tr('Versetzen')}  ({ACTION_KEYS['offset']})")
         offset_button.setAutoRaise(True)
         offset_button.clicked.connect(
-            lambda: self.canvas.offset_selected(self.offset_distance.value())
+            lambda: self.canvas.offset_selected(self.offset_distance.value_mm())
         )
 
         mirror_button = QToolButton(self)
@@ -2389,10 +2382,8 @@ class SketchPanel(QWidget):
         # fast immer; hier gab es dafür gar nichts. Das Feld ist nur dann
         # bedienbar, wenn ein Element angefangen ist — sonst hätte es nichts,
         # worauf es sich bezieht.
-        self.measure_field = QDoubleSpinBox(self)
-        self.measure_field.setDecimals(2)
-        self.measure_field.setRange(0.0, 10_000.0)
-        self.measure_field.setSuffix(f" {DISPLAY_UNITS[0]}")
+        self.measure_field = LengthSpin(self)
+        self.measure_field.set_range_mm(0.0, 10_000.0)
         self.measure_field.setKeyboardTracking(False)
         self.measure_field.setEnabled(False)
         self.measure_field.setToolTip(
@@ -2401,7 +2392,7 @@ class SketchPanel(QWidget):
         self.measure_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.measure_field.setAccessibleName(tr("Abstand"))
         self.measure_field.editingFinished.connect(
-            lambda: self.canvas.place_measured(self.measure_field.value())
+            lambda: self.canvas.place_measured(self.measure_field.value_mm())
         )
         self.canvas.measuringChanged.connect(self._show_pending_measure)
 
@@ -2597,7 +2588,7 @@ class SketchPanel(QWidget):
         offsetting = QShortcut(QKeySequence(ACTION_KEYS["offset"]), self)
         offsetting.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         offsetting.activated.connect(
-            lambda: self.canvas.offset_selected(self.offset_distance.value())
+            lambda: self.canvas.offset_selected(self.offset_distance.value_mm())
         )
 
         # Rückgängig gehört an das Panel und nicht an einen Rahmen darum: den
@@ -2671,7 +2662,7 @@ class SketchPanel(QWidget):
         """
         active = self.snap_toggle.isChecked()
         self.snap_step.setEnabled(active)
-        self.canvas.set_snapping(active, self.snap_step.value())
+        self.canvas.set_snapping(active, self.snap_step.value_mm())
 
     def constraint_offers(self) -> dict[SketchConstraintKind, bool]:
         """Welche Bedingung zur Auswahl passt — Kontextmenü und Knöpfe lesen
@@ -2769,7 +2760,7 @@ class SketchPanel(QWidget):
         """Das Feld folgt dem, was gerade gezeichnet wird."""
         self.measure_field.setEnabled(value > 0.0)
         blocked = self.measure_field.blockSignals(True)
-        self.measure_field.setValue(value)
+        self.measure_field.set_value_mm(value)
         self.measure_field.blockSignals(blocked)
 
     def _point_at(self, item: QListWidgetItem | None) -> None:

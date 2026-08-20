@@ -17,16 +17,14 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QWidget,
 )
 
-from app.core.units import DISPLAY_UNITS
 from app.i18n import TranslatableText, _, tr
-from app.ui.labels import choice_label
+from app.ui.labels import LengthSpin, choice_label
 from app.ui.style import NORMAL, TIGHT, make_primary
 
 #: Die sechs Werkzeuge in der Reihenfolge, in der man sie braucht: erst
@@ -72,17 +70,17 @@ class SculptBar(QWidget):
             )
         )
 
-        self.radius = QDoubleSpinBox(self)
-        self.radius.setRange(0.1, 100.0)
-        self.radius.setValue(6.0)
-        self.radius.setSuffix(f" {DISPLAY_UNITS[0]}")
+        # Radius und Stärke sind Längen und folgen der Anzeigeeinheit (§19.3);
+        # was der Kern bekommt, sind Millimeter.
+        self.radius = LengthSpin(self)
+        self.radius.set_range_mm(0.1, 100.0)
+        self.radius.set_value_mm(6.0)
         self.radius.setToolTip(tr("Wie weit der Pinsel greift."))
 
-        self.strength = QDoubleSpinBox(self)
-        self.strength.setRange(0.05, 10.0)
-        self.strength.setSingleStep(0.1)
-        self.strength.setValue(1.0)
-        self.strength.setSuffix(f" {DISPLAY_UNITS[0]}")
+        self.strength = LengthSpin(self)
+        self.strength.set_range_mm(0.05, 10.0)
+        self.strength.set_step_mm(0.1)
+        self.strength.set_value_mm(1.0)
         self.strength.setToolTip(tr("Wie weit ein einzelner Zug die Fläche verschiebt."))
 
         self.symmetry = QComboBox(self)
@@ -151,8 +149,8 @@ class SculptBar(QWidget):
         """Was der nächste Zug mitbekommt."""
         return {
             "tool": str(self.tool.currentData()),
-            "radius": float(self.radius.value()),
-            "strength": float(self.strength.value()),
+            "radius": self.radius.value_mm(),
+            "strength": self.strength.value_mm(),
             "cut": bool(self.cut.isChecked()),
         }
 

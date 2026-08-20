@@ -26,8 +26,8 @@ from PySide6.QtWidgets import (
 
 from app.core.geom.paint import EDGE_ANGLE, MAX_SLOTS
 from app.core.types import MaterialSlot
-from app.core.units import DISPLAY_UNITS
 from app.i18n import tr
+from app.ui.labels import LengthSpin
 from app.ui.style import NORMAL, TIGHT
 from app.ui.theme import slot_colour
 
@@ -76,10 +76,11 @@ class PaintBar(QWidget):
         self.slot_name = QLabel(self)
         self._slots: list[MaterialSlot] = []
 
-        self.radius = QDoubleSpinBox(self)
-        self.radius.setRange(0.1, 500.0)
-        self.radius.setValue(10.0)
-        self.radius.setSuffix(f" {DISPLAY_UNITS[0]}")
+        # Der Pinselradius ist eine Länge (§19.3); was der Kern bekommt, sind
+        # Millimeter — der Ring in der Szene zeichnet daraus sein Weltmaß.
+        self.radius = LengthSpin(self)
+        self.radius.set_range_mm(0.1, 500.0)
+        self.radius.set_value_mm(10.0)
 
         self.edge = QDoubleSpinBox(self)
         self.edge.setRange(1.0, 180.0)
@@ -114,7 +115,7 @@ class PaintBar(QWidget):
         """Woraus ein Strich besteht."""
         return {
             "slot": int(self.slot.value()),
-            "radius": float(self.radius.value()),
+            "radius": self.radius.value_mm(),
             "edge_angle": float(self.edge.value()),
         }
 

@@ -43,16 +43,19 @@ from app.core.perceive.maps import AnalysisMap
 from app.core.scene import EvaluationResult
 from app.core.types import Feature, FeatureId, LayerInfo, ObjectId, Profile, Vec3
 from app.core.units import (
-    DISPLAY_UNITS,
     EPS_DISPLAY,
     EPS_GEOM,
     EPS_MATCH_MINIMUM,
     EPS_MATCH_RELATIVE,
+    LengthUnit,
+    decimals_for,
+    from_mm,
+    to_mm,
 )
 from app.i18n import tr
 from app.ui import cursors
 from app.ui.icons import icon
-from app.ui.labels import feature_label
+from app.ui.labels import display_unit, feature_label
 from app.ui.palette import (
     DIFF_PALETTES,
     LAYER_WIDTHS,
@@ -989,6 +992,13 @@ class DragValueBar(QFrame):
         self.typing = False
         """Ob die Tastatur den Zug übernommen hat — dann folgt das Feld nicht
         mehr dem Zeiger."""
+        self._length_unit: LengthUnit | None = None
+        """In welcher Längeneinheit die Zahl gerade steht — ``None`` heißt: Es
+        ist keine Länge.
+
+        Dieses Feld zeigt drei Arten von Zahl: eine Strecke, einen Winkel und
+        einen Faktor. Ohne die Unterscheidung hätte die Rückrechnung aus einem
+        Winkel von 45 Grad eine Strecke von 1143 Millimetern gemacht."""
         self.value.textEdited.connect(self._took_over)
         self.set_theme("dark")
         self.hide()
@@ -1007,7 +1017,23 @@ class DragValueBar(QFrame):
         )
 
     def follow(self, label: str, amount: float, unit: str, decimals: int) -> None:
-        """Der Live-Wert des Zugs — solange niemand tippt."""
+        """Der Live-Wert des Zugs — solange niemand tippt.
+
+        Für alles, was **keine** Länge ist: Winkel und Skalierfaktor. Eine
+        Strecke geht über :meth:`follow_length`, damit die Anzeigeeinheit an
+        einer Stelle entschieden wird und nicht an drei Aufrufstellen.
+        """
+        self._length_unit = None
+        self._show(label, amount, unit, decimals)
+
+    def follow_length(self, label: str, amount_mm: float) -> None:
+        """Eine Strecke — in der Anzeigeeinheit gezeigt, in Millimetern gemeint
+        (§19.3, §11.1)."""
+        unit = display_unit()
+        self._length_unit = unit
+        self._show(label, from_mm(amount_mm, unit), unit, decimals_for(unit))
+
+    def _show(self, label: str, amount: float, unit: str, decimals: int) -> None:
         self.label.setText(label)
         self.unit.setText(unit)
         if not self.typing:
@@ -1018,11 +1044,17 @@ class DragValueBar(QFrame):
         self.place()
 
     def typed_value(self) -> float | None:
-        """Die getippte Zahl — oder nichts, wenn dort keine steht."""
+        """Die getippte Zahl in Kerneinheiten — oder nichts, wenn dort keine steht.
+
+        Bei einer Strecke also Millimeter, gleich was im Feld steht: Wer in Zoll
+        arbeitet und „1" tippt, meint 25,4 Millimeter. Winkel und Faktor gehen
+        unverändert durch.
+        """
         try:
-            return float(self.value.text().strip().replace(",", "."))
+            entered = float(self.value.text().strip().replace(",", "."))
         except ValueError:
             return None
+        return to_mm(entered, self._length_unit) if self._length_unit else entered
 
     def dismiss(self) -> None:
         """Der Zug ist vorbei — auf welche Art auch immer."""
@@ -3463,12 +3495,7 @@ class Viewport(QWidget):
             normal = face.params["normal"]
             self._drag_kind = "face"
             self._drag_normal = (float(normal[0]), float(normal[1]), float(normal[2]))
-            self.drag_bar.follow(
-                tr("Fläche"),
-                along_normal(steps.offset, self._drag_normal),
-                DISPLAY_UNITS[0],
-                2,
-            )
+            self.drag_bar.follow_length(tr("Fläche"), along_normal(steps.offset, self._drag_normal))
         elif steps.turns and steps.axis is not None:
             self._drag_kind = "turn"
             self._drag_axis = steps.axis
@@ -3478,7 +3505,7 @@ class Viewport(QWidget):
             dominant: Axis = ("x", "y", "z")[index]
             self._drag_kind = "move"
             self._drag_axis = dominant
-            self.drag_bar.follow(dominant.upper(), steps.offset[index], DISPLAY_UNITS[0], 2)
+            self.drag_bar.follow_length(dominant.upper(), steps.offset[index])
         # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
         # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
 

@@ -41,7 +41,6 @@ bekommt einen roten Lauf.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| Dreizehn Felder in den Leisten tragen weiter `mm` | Die Bedienverträge durchgesehen (20.08.2026) | denselben Umbau wie im Dialog, nur ohne Schema — eigene `QDoubleSpinBox` in sechs Leisten |
 | Ein Befund weiß nicht, zu welchem Objekt er gehört | Die Bedienverträge durchgesehen (20.08.2026) | die Auswertung, die Befunde mit den Kennungen ihrer Ausgaben anreichert — gilt dann für jede Operation |
 | Kein Test hält das Handbuch an seinem Erzeuger | Die Bedienverträge durchgesehen (20.08.2026) | einen Vergleich des Referenzteils der eingecheckten Seite gegen `documentation()` |
 
@@ -7282,17 +7281,44 @@ ist entprellt.
       öffentlich, und die Stellenzahl der Einheit trägt die Feinheitsregel
       obendrauf. Mit zwei Stellen wäre das Spiel aus einem Materialprofil nicht
       eintippbar — ein Hundertstelmillimeter ist ein Vierteltausendstel Zoll.
-- [ ] **Dreizehn Felder in den Leisten tragen weiter `mm`.** Pinselradius,
-      Formradius und -stärke, Schnittposition, Scheibendicke, Fangweite,
-      Versatz, Messfeld, Rasterweite und die Zugleiste sind eigene
-      `QDoubleSpinBox` und kein `ValueField` — sie holen ihr Suffix aus
-      `DISPLAY_UNITS[0]`, also immer aus dem ersten Eintrag. Der Weg ist
-      derselbe wie im Dialog, nur ohne Schema: Wert, Grenzen und Schrittweite
-      umrechnen, Suffix aus `display_unit()`.
+- [x] **Die dreizehn Felder der Leisten sprechen jetzt die Anzeigeeinheit.**
+      Pinselradius, Formradius und -stärke, Schnittposition, Scheibendicke,
+      Fangweite, Versatz, Messfeld, Rasterweite, Punktkoordinaten und die
+      Zugleiste holten ihr Suffix aus `DISPLAY_UNITS[0]` — dem **ersten
+      Eintrag** der Tabelle, also immer „mm".
 
-      Ehrlich sind sie, solange das Suffix `mm` dasteht — falsch wäre erst, das
-      Kürzel allein zu tauschen. Deshalb steht es hier und nicht halb gebaut im
-      Code.
+      **Der Aufwand lag nicht am Suffix, sondern an den Lesestellen.** Die
+      Leisten gaben `spin.value()` an den Kern; nur das Kürzel zu tauschen
+      hätte „20,00 in" über einen Wert von 20 mm geschrieben. `LengthSpin`
+      (`app/ui/labels.py`) stellt beide Seiten zusammen: Wer setzt oder liest,
+      tut es in Millimetern (`value_mm`, `set_value_mm`, `set_range_mm`), und
+      was im Feld steht, ist eine Anzeige. Damit ist die Umrechnung an einer
+      Stelle statt dreizehnmal — und eine Lesestelle, die sie vergisst, gibt es
+      nicht: `value()` heißt hier nicht mehr, was der Kern will.
+
+      Vier Feinheiten, jede aus einem eigenen Fehler:
+
+      * **Die Grenzen wandern mit.** Eine Untergrenze von 0,1 mm wäre als 0,1 in
+        das Fünfundzwanzigfache.
+      * **Die Feinheit auch.** Mit zwei Stellen wäre dieselbe Untergrenze in Zoll
+        auf null gerundet, und `setRange` **nach** `setDecimals` — Qt schneidet.
+      * **Die Schrittweite ist physisch**, nicht die gleiche Zahl: `from_mm(1.0)`
+        statt Qts Vorgabe, sonst trägt ein Klick den fünfundzwanzigfachen Weg.
+      * **Der Regler bleibt die Wahrheit.** In der Schnittleiste liest `_typed`
+        jetzt `value_mm()` und nicht das Argument des Signals — das trägt die
+        Anzeige, und in Zoll wäre der Regler auf ein Fünfundzwanzigstel der
+        gemeinten Höhe gesprungen.
+
+      Die Zugleiste zeigt drei Arten von Zahl im selben Feld — Strecke, Winkel,
+      Faktor —, also führt sie mit, welche gerade dasteht (`follow_length` neben
+      `follow`). Ohne die Unterscheidung hätte die Rückrechnung aus 45 Grad eine
+      Strecke von 1143 Millimetern gemacht.
+
+      Gehalten wird das von einer Bauart-Prüfung, die den **Syntaxbaum** liest
+      und nicht den Text: `DISPLAY_UNITS[0]` kommt in `app/ui/` nicht mehr vor,
+      außer im Einstellungsdialog, der aus der Tabelle die Auswahl baut. Der
+      Docstring von `LengthSpin` nennt das alte Muster, um zu erklären, warum es
+      weg ist — eine Textsuche fände genau die Erklärung.
 - [ ] **Ein Befund weiß nicht, zu welchem Objekt er gehört.**
       `ingest.not_watertight` trägt keine `object_id`, und deshalb greift seine
       Handlung über `_object_of` auf die *Auswahl* zurück — eine Vermutung, die
