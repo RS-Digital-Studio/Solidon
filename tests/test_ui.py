@@ -1681,7 +1681,12 @@ def test_the_first_body_gets_the_camera(window: MainWindow) -> None:
 def test_the_toolbar_buttons_carry_a_symbol_and_keep_their_words(
     window: MainWindow,
 ) -> None:
-    """Regel 18: vier gleich aussehende Textknöpfe sind vier Vermutungen."""
+    """Die Leiste zeigt nur Zeichen — das Wort darf deshalb nirgends fehlen.
+
+    Es steht an drei Stellen weiter: am ``QAction`` (und damit im
+    Barrierefreiheitsbaum), im Tooltip und in der Statusleiste. Ein Knopf, der
+    keines davon trägt, ist ein Bild, das man raten muss.
+    """
     from app.ui import icons
 
     for name in ("new", "open", "save", "import"):
@@ -1690,6 +1695,7 @@ def test_the_toolbar_buttons_carry_a_symbol_and_keep_their_words(
     from PySide6.QtWidgets import QWidgetAction
 
     toolbar = window.findChildren(QToolBar)[0]
+    assert toolbar.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
     for action in toolbar.actions():
         # Eingehängte Widgets sind keine Knöpfe: sie tragen ihre Beschriftung
         # selbst, und ein leerer ``text()`` ist bei ihnen kein Befund.
@@ -1697,6 +1703,8 @@ def test_the_toolbar_buttons_carry_a_symbol_and_keep_their_words(
             continue
         assert action.text(), "das Wort bleibt"
         assert not action.icon().isNull(), f"{action.text()} ohne Zeichen"
+        assert action.text() in action.toolTip(), f"{action.text()} ohne Namen am Zeiger"
+        assert action.text() in action.statusTip(), f"{action.text()} ohne Namen in der Zeile"
 
 
 # --- Die Aufräumrunde -----------------------------------------------------------

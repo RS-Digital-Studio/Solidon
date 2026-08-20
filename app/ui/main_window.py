@@ -1741,10 +1741,16 @@ class MainWindow(QMainWindow):
         toolbar = QToolBar(tr("Werkzeuge"), self)
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
-        # Zeichen neben der Beschriftung, nicht statt ihr (Regel 18) — vier
-        # gleich aussehende Textknöpfe sind dasselbe Problem, das die
-        # Werkzeugzeile unter dem Viewport längst gelöst hat.
-        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        # Nur die Zeichen, die Wörter am Zeiger. Acht beschriftete Knöpfe
+        # brauchten 703 Pixel und drängten die Kopfzeile mit Projekt, Maßen,
+        # Drucker und Material an den rechten Rand; ohne Text sind es 310.
+        # Regel 18 verlangt eine zweite Kodierung neben der Farbe, nicht eine
+        # Beschriftung neben jedem Zeichen — und Blatt, Ordner und Diskette
+        # sind derselbe Fall wie Linie und Kreis im Skizzeneditor: Bilder, auf
+        # die sich die Welt geeinigt hat (``app/ui/icons.py``, Abschnitt
+        # Zeichenwerkzeuge). Der Name bleibt am ``QAction`` und damit im
+        # Barrierefreiheitsbaum.
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         for symbol, label, slot in (
             ("new", tr("Neu"), self.action_new),
             ("open", tr("Öffnen"), self.action_open),
@@ -1766,6 +1772,16 @@ class MainWindow(QMainWindow):
         ):
             action = QAction(icon(symbol, toolbar), label, self)
             action.triggered.connect(slot)
+            # Ohne Beschriftung am Knopf ist der Tooltip die Stelle, an der
+            # der Name steht; dieselbe Angabe gehört in die Statusleiste
+            # (§2 C). Der ``statusTip`` ist zugleich das, woraus
+            # ``_lock_hint`` den eigenen Hinweis wiederherstellt — ohne ihn
+            # bliebe der Knopf nach dem Freischalten stumm.
+            action.setToolTip(label)
+            action.setStatusTip(label)
+            # Merkzettel für ``_with_name``: dieser Knopf zeigt seinen Namen
+            # nicht selbst.
+            action.setProperty("wordless", True)
             toolbar.addAction(action)
             if symbol == "import":
                 # Vier Knöpfe der Zeile lösen Transaktionen aus — nach Ablauf
@@ -1789,9 +1805,11 @@ class MainWindow(QMainWindow):
             ),
         ):
             # Der Satz sagt, was der erste Handgriff ist — dieselbe Zusage, die
-            # `test_interface_limits` für die untere Werkzeugzeile hält.
-            action.setStatusTip(hint)
-            action.setToolTip(hint)
+            # `test_interface_limits` für die untere Werkzeugzeile hält. Der
+            # Name steht davor, seit der Knopf ihn nicht mehr trägt.
+            tip = f"{action.text()} — {hint}"
+            action.setStatusTip(tip)
+            action.setToolTip(tip)
 
         # Rechts neben den vier Knöpfen stand tausend Pixel nichts. Dort steht
         # jetzt, was das Projekt gerade ist und worauf es gedruckt wird —
@@ -2112,6 +2130,19 @@ class MainWindow(QMainWindow):
             )
         return None
 
+    @staticmethod
+    def _with_name(action: QAction, reason: str) -> str:
+        """Der Grund, dem Namen des Knopfes vorangestellt — aber nur dort, wo
+        der Knopf ihn nicht selbst zeigt.
+
+        Die Werkzeugleiste über dem Fenster steht ohne Beschriftung; ihr
+        Tooltip ist die Stelle, an der ihr Name steht. Ein Grund, der ihn
+        überschreibt, lässt ein Bild und einen Satz zurück, die nichts
+        miteinander zu tun scheinen. Im Menü steht der Name daneben — dort
+        bleibt der Grund allein.
+        """
+        return f"{action.text()} — {reason}" if action.property("wordless") else reason
+
     def _pick_hint(self, action: QAction, ready: bool, locked: bool) -> None:
         """Sagt am ausgegrauten Knopf, dass ihm die Auswahl fehlt.
 
@@ -2129,7 +2160,7 @@ class MainWindow(QMainWindow):
         if not ready:
             if stored is None:
                 action.setProperty("tip_before_pick", action.statusTip())
-            reason = tr("Dafür braucht es einen ausgewählten Körper.")
+            reason = self._with_name(action, tr("Dafür braucht es einen ausgewählten Körper."))
             action.setStatusTip(reason)
             action.setToolTip(reason)
         elif stored is not None:
@@ -2148,9 +2179,12 @@ class MainWindow(QMainWindow):
         if locked:
             if stored is None:
                 action.setProperty("tip_before_lock", action.statusTip())
-            reason = tr(
-                "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen "
-                "Lizenzschlüssel (Hilfe → Solidon freischalten …)."
+            reason = self._with_name(
+                action,
+                tr(
+                    "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen "
+                    "Lizenzschlüssel (Hilfe → Solidon freischalten …)."
+                ),
             )
             action.setStatusTip(reason)
             action.setToolTip(reason)
