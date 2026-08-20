@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMenu,
     QPushButton,
+    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -118,7 +119,25 @@ DEFAULT_SNAP_MM = 1.0
 #: Wie eng die Rasterlinien im Bild höchstens stehen, in Bildpunkten. Darunter
 #: wird die nächstgröbere Stufe genommen — ein Raster, dessen Linien sich
 #: berühren, ist eine Fläche.
-MIN_GRID_PX = 7.0
+#:
+#: Zwanzig und nicht sieben, und der Wert entscheidet drei Dinge auf einmal.
+#:
+#: **Die Zahlen.** Beschriftet wird jede fünfte Linie, sie stehen also
+#: mindestens hundert Bildpunkte auseinander. Bei sieben waren das
+#: fünfunddreißig — auf einem bildschirmfüllenden Fenster stand unter der
+#: Zeichnung eine geschlossene Zahlenreihe im Abstand von zweieinhalb
+#: Millimetern.
+#:
+#: **Die Dichte.** Das Raster darüber war ein halber Millimeter fein für ein
+#: Rechteck von 120 — Millimeterpapier, auf dem die kräftige fünfte Linie
+#: zwischen ihren Nachbarn untergeht.
+#:
+#: **Die Gleichmäßigkeit.** Jede Linie wird auf einen ganzen Bildpunkt gelegt
+#: (:meth:`SketchCanvas._paint_grid`), und wenn ein Kästchen 14,4 Punkte breit
+#: ist, wechseln sich 14 und 15 ab: ein Raster, das sichtbar atmet. Der Fehler
+#: ist derselbe, sein Anteil aber halb so groß, sobald das Kästchen doppelt so
+#: breit ist.
+MIN_GRID_PX = 20.0
 
 #: Die Stufen, aus denen die Rasterweite gewählt wird. Millimeterschritte in
 #: der Folge 1, 2, 5, wie an jedem Maßband: dazwischen gibt es keine Weite, die
@@ -2210,12 +2229,17 @@ PLANE_FIELD_CHARS = 20
 #: „2,00 mm" heißen. Zwei solche Felder stehen in der Werkzeugzeile.
 TOOLBAR_FIELD_WIDTH = 120
 
-#: Wie viele Bedingungsknöpfe in eine Zeile passen.
+#: Wie viele Bedingungsknöpfe *mindestens* in eine Zeile kommen.
 #:
 #: Fünf, weil die zehn zusammen 1332 Bildpunkte brauchen und ein Laptopschirm
 #: sie nicht hat: Bei 1366 Fensterbreite bekam jeder Knopf 71 statt 146, bei
 #: 1024 noch 36 — alle zehn Beschriftungen abgeschnitten. Zwei Zeilen à fünf
 #: brauchen 754 und stehen auf jedem Schirm vollständig da.
+#:
+#: Wer Platz hat, bekommt mehr: :meth:`SketchPanel._fit_constraint_row` rechnet
+#: die Spalten aus der tatsächlichen Breite. Auf einem bildschirmfüllenden
+#: Fenster stehen alle zehn nebeneinander — zwei halbleere Zeilen sind dort
+#: kein Schutz mehr, sondern nur noch eine Zeile Höhe zu viel.
 CONSTRAINTS_PER_ROW = 5
 
 #: Kürzel, die kein Werkzeug wählen, sondern etwas tun.
@@ -2542,8 +2566,20 @@ class SketchPanel(QWidget):
         # an der Stelle, an der jemand *lernen* soll, was eine Bedingung ist.
         # Fünf je Zeile brauchen zusammen 754 Bildpunkte und stehen damit auch
         # auf einem 1024er Schirm vollständig da.
-        constraints_row = QGridLayout()
+        # Die Knopfreihe steckt in einem eigenen Kasten, und der gibt seine
+        # Breite nicht nach oben weiter. Ohne das wüchse die Mindestbreite des
+        # ganzen Bereichs mit der Zahl der Spalten: Ein Fenster, das einmal
+        # breit genug für alle zehn war, ließ sich hinterher nicht mehr schmal
+        # ziehen — gemessen 1007 statt 812 Bildpunkte. Was in eine Zeile passt,
+        # entscheidet :meth:`_fit_constraint_row`; wie schmal das Fenster werden
+        # darf, entscheiden die Zeichenfläche und die Werkzeugzeile.
+        constraints_box = QWidget(self)
+        constraints_box.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Minimum)
+        constraints_box.setMinimumWidth(1)
+        constraints_row = QGridLayout(constraints_box)
         constraints_row.setContentsMargins(0, 0, 0, 0)
+        self._constraints_row = constraints_row
+        self._constraint_columns = CONSTRAINTS_PER_ROW
         self._constraint_buttons: dict[SketchConstraintKind, QPushButton] = {}
         for position, kind in enumerate(_NEEDS):
             key = ACTION_KEYS.get(kind, "")
@@ -2605,7 +2641,7 @@ class SketchPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(tools)
         layout.addLayout(plane_row)
-        layout.addLayout(constraints_row)
+        layout.addWidget(constraints_box)
         layout.addLayout(middle, stretch=1)
         status_row = QHBoxLayout()
         status_row.addWidget(self.status, stretch=1)
@@ -2637,6 +2673,46 @@ class SketchPanel(QWidget):
         # das Layout bemisst die Fläche erst nach diesem Aufruf, und in mehreren
         # Durchgängen.
         self.canvas.fit_view()
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        super().resizeEvent(event)
+        self._fit_constraint_row()
+
+    def _fit_constraint_row(self) -> None:
+        """So viele Bedingungsknöpfe nebeneinander, wie die Breite hergibt.
+
+        Die feste Aufteilung in zwei Zeilen à fünf war für den kleinen Schirm
+        gedacht (:data:`CONSTRAINTS_PER_ROW`) und blieb auch dort stehen, wo
+        Platz für alle zehn war: Auf einem bildschirmfüllenden Fenster standen
+        fünf Knöpfe in einer Zeile, fünf in der nächsten, und daneben eineinhalb
+        Meter Leerraum.
+
+        Gerechnet wird mit dem breitesten Knopf und nicht mit der Summe: Die
+        Beschriftungen sind unterschiedlich lang, und wer mit dem Mittel rechnet,
+        bekommt eine Spaltenzahl, bei der das längste Wort abgeschnitten wird —
+        genau der Fehler, gegen den die feste Aufteilung einmal angetreten ist.
+        Die Schätzung fällt damit zu klein aus statt zu groß, und das ist die
+        Richtung, in der ein Fehler hier nichts kostet.
+
+        Eine Untergrenze gibt es nicht: Ist das Fenster so schmal, dass nur drei
+        nebeneinander passen, sind es eben vier Zeilen. Fünf abgeschnittene
+        Knöpfe wären das schlechtere von beidem.
+        """
+        buttons = list(self._constraint_buttons.values())
+        if not buttons:
+            return
+        widest = max(button.sizeHint().width() for button in buttons)
+        gap = max(self._constraints_row.horizontalSpacing(), 0)
+        fitting = (self.width() + gap) // (widest + gap)
+        columns = max(min(int(fitting), len(buttons)), 1)
+        if columns == self._constraint_columns:
+            return
+        self._constraints_row.setColumnStretch(self._constraint_columns, 0)
+        for position, button in enumerate(buttons):
+            self._constraints_row.removeWidget(button)
+            self._constraints_row.addWidget(button, position // columns, position % columns)
+        self._constraints_row.setColumnStretch(columns, 1)
+        self._constraint_columns = columns
 
     def set_surroundings(self, surroundings: Surroundings) -> None:
         """Bauraum, Zeichenebenen und Projektionsvorlagen auf einmal setzen."""

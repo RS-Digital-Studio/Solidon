@@ -606,6 +606,18 @@ Handbuchbild auf. Beim Schatten war es dieselbe Sorte Fehler: der Kommentar
 beschrieb, wohin er fallen sollte, und niemand hatte nachgesehen, wohin er
 fiel.
 
+**Ein Layout, das nur bei der geprüften Breite stimmt, ist ungeprüft.** Drei
+Fehler wurden am selben Tag sichtbar, und alle drei erst, als das Handbuch die
+Fenster bildschirmfüllend aufnahm statt in einem Kasten von 1180 Punkten: Der
+Bausteinkatalog legte seine Gruppen ineinander, weil der Kachelmodus seine
+Zeilen beim Einfügen rechnet und ein späteres `setSizeHint` nur speichert —
+`doItemsLayout()` nach einer echten Änderung. Die zehn Bedingungsknöpfe der
+Skizze blieben in zwei Zeilen à fünf, weil diese Aufteilung für den
+Laptopschirm gedacht war und seither überall galt. Und das Raster der
+Zeichenfläche war ein halber Millimeter fein, weil `MIN_GRID_PX` auf sieben
+stand — ein Wert, der bei kleinem Fenster nie auffiel. Wer eine Ansicht ändert,
+sieht sie bei **beiden** Enden an: der Mindestgröße und dem vollen Bildschirm.
+
 **pyvista-Widgets werden nie weiterbenutzt, immer frisch gebaut.** Das
 `AffineWidget3D` rechnet gegen die `user_matrix` seines Actors und merkt sie
 sich über Züge hinweg — ein stehen gelassener Griff wendet den vorigen Zug

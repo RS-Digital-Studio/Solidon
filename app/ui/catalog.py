@@ -77,7 +77,12 @@ DETAIL_WIDTH = 220
 #: mit Senkung" braucht zwei Zeilen —, und ihre Höhe von Bild plus vier
 #: Textzeilen. Wer sie schrumpft, schneidet Titel ab.
 CATALOG_MIN = (980, 640)
-CATALOG_MAX = (1560, 1000)
+#: Die Höhe steht höher als die Breite es verlangt, seit jede Gruppe ihre
+#: eigene Zeile bekommt (:meth:`PartCatalog._stretch_headings`): Sieben
+#: Überschriften mit je einer Kachelzeile darunter brauchen mehr Platz als
+#: siebzehn Kacheln am Stück, und ein Deckel von 1000 ließ ein Drittel davon
+#: unter der Kante.
+CATALOG_MAX = (1560, 1200)
 
 #: Wie viel vom freien Bildschirm der Katalog nimmt, wenn er darf.
 #:
@@ -90,8 +95,8 @@ CATALOG_SHARE = 0.8
 def catalog_size() -> tuple[int, int]:
     """Wie groß der Katalog aufgeht — nach dem Bildschirm, nicht nach einer Zahl.
 
-    Auf 1920x1080 kommen 1536 mal 864 heraus: sieben Kacheln je Zeile, vier
-    Zeilen, alle neunzehn auf einen Blick. Auf einem kleinen Bildschirm bleibt
+    Auf 1920x1080 kommen 1536 mal 864 heraus: sieben Kacheln je Zeile, und
+    die größte Gruppe steht damit in einer. Auf einem kleinen Bildschirm bleibt
     es bei den 980 mal 640 von vorher — kleiner darf er nicht werden, sonst
     passt die Detailspalte nicht mehr neben das Raster.
 
@@ -239,13 +244,29 @@ class PartCatalog(QDialog):
         Im Raster wäre sie sonst eine Kachel unter vielen, und die Gruppe
         begänne irgendwo in der Zeilenmitte. Die volle Breite erzwingt den
         Umbruch davor und danach — das ist die ganze Abschnittslogik.
+
+        **Und ein ``setSizeHint`` allein tut das nicht.** Der Kachelmodus
+        rechnet seine Zeilen einmal beim Einfügen und danach nicht mehr; eine
+        Breite, die hinterher kommt, wird gespeichert und nicht angewandt. Zu
+        sehen war es erst, als der Dialog breiter aufging: „Verbindungen",
+        „Einlegeteile" und „Mechanik" standen nebeneinander in der obersten
+        Zeile, jede über fremden Kacheln, und die Gruppen lagen ineinander.
+        ``doItemsLayout`` rechnet die Zeilen neu — aber nur, wenn sich wirklich
+        etwas geändert hat, sonst stößt jede Größenänderung ein Layout an, das
+        die Rollleiste ein- und ausblendet und sich damit selbst wieder ruft.
         """
         width = max(self.list.viewport().width() - 2 * self.list.spacing(), TILE_WIDTH)
         height = self.list.fontMetrics().height() + 10
+        changed = False
         for row in range(self.list.count()):
             item = self.list.item(row)
             if item is not None and item.data(Qt.ItemDataRole.UserRole) is None:
-                item.setSizeHint(QSize(width, height))
+                wanted = QSize(width, height)
+                if item.sizeHint() != wanted:
+                    item.setSizeHint(wanted)
+                    changed = True
+        if changed:
+            self.list.doItemsLayout()
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
         if watched is self.list and event.type() == QEvent.Type.Resize:
