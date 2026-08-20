@@ -321,3 +321,32 @@ def test_developer_notes_stay_off_the_public_server() -> None:
     assert upload.wanted(upload.LOCAL_ROOT / "index.html")
     assert upload.wanted(upload.LOCAL_ROOT / "bilder" / "schau-skull.webp")
     assert all(path.suffix != ".md" for path in upload.local_files())
+
+
+def test_raising_the_version_moves_both_places_and_nothing_else() -> None:
+    """``tools/bump_version.py`` bewegt die Fassung dort, wo sie steht.
+
+    Der Test darüber hält die beiden Orte zusammen; dieser hält das Werkzeug
+    daran, das sie bewegt. Beide Regeln stecken darin, und beide sind schon
+    einmal von Hand verletzt worden: Eine erhöhte Stelle setzt die dahinter auf
+    null, und in ``pyproject.toml`` wird **die erste** ``version =``-Zeile
+    getroffen — weiter unten stehen die Fassungen der Abhängigkeiten, und ein
+    Ersetzen über die ganze Datei nähme sie mit.
+
+    Geschrieben wird hier nichts: Geprüft wird die Rechnung und die Zusage,
+    dass ``--zeigen`` nur redet.
+    """
+    from app.branding import APP_VERSION
+    from tools import bump_version
+
+    assert bump_version.raised("0.1.1", "patch") == "0.1.2"
+    assert bump_version.raised("0.1.9", "patch") == "0.1.10", "keine Ziffernarithmetik"
+    assert bump_version.raised("0.1.1", "minor") == "0.2.0", "die Stelle dahinter fällt auf null"
+    assert bump_version.raised("0.9.7", "major") == "1.0.0", "beide dahinter fallen auf null"
+
+    # Und die Zeile, an der es ansetzt, gibt es noch — sonst hätte das Werkzeug
+    # beim nächsten Bau nichts zu erhöhen und sagte das erst dann.
+    assert bump_version.current() == APP_VERSION
+
+    project = bump_version.PROJECT.read_text(encoding="utf-8")
+    assert bump_version.PROJECT_LINE.search(project) is not None

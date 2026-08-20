@@ -35,6 +35,28 @@ python tools/check_env.py --freeze                              # constraints.tx
 ```
 
 
+**Vor dem Bau steigt die Fassung — ohne Rückfrage.**
+
+```
+.venv\Scripts\python.exe tools/bump_version.py            # 0.1.1 → 0.1.2
+.venv\Scripts\python.exe tools/bump_version.py --minor    # eine Entscheidung
+```
+
+Die letzte Stelle steigt mit **jedem ausgelieferten Bau** um eins; das ist die
+Zählregel aus `app/branding.py` und keine Ermessensfrage. Zwei Pakete mit
+derselben Nummer kann niemand auseinanderhalten — nicht der Über-Dialog, nicht
+der Update-Hinweis, nicht der Support vor einem Fehlerbericht. Die vorderen
+Stellen bewegen sich nur bei einer größeren Änderung, und *das* ist eine
+Entscheidung, die Robert trifft.
+
+Das Werkzeug fasst beide Orte an, die die Zahl tragen (`branding.py` und
+`pyproject.toml`; `tests/test_toolchain.py` hält sie zusammen).
+`website/version.json` bleibt liegen: Sie sagt, was **veröffentlicht** ist, und
+das stimmt erst, wenn die Pakete oben liegen — sie wird zuletzt hochgeladen.
+
+Erhöht wird **vor** dem Prüfmodul und dem Bau. Danach trägt der Bau eine
+Nummer, die es schon gab, und `make_installer.py` merkt davon nichts.
+
 **Ausgeliefert wird aus einem eigenen Arbeitsbaum, nicht aus diesem.** Ein
 Paketierlauf dauert eine Viertelstunde, und arbeitet in der Zeit jemand am
 Repository, packt er dessen halbfertigen Stand mit ein — `make_installer.py`
