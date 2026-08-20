@@ -71,6 +71,7 @@ zusammen. Weiteres:
 .venv\Scripts\python.exe tools/setup_comfyui.py                 # ComfyUI für Weg 3 einrichten: Knoten, TripoSG, 7,5 GB Gewichte
 .venv\Scripts\python.exe tools/build_slice_core.py              # Konturverkettung übersetzen (optional, 1,34× auf die Schichtanalyse)
 .venv\Scripts\python.exe tools/check_support.py                 # kommt eine Rückmeldung wirklich an? schickt eine echte Sendung
+.venv\Scripts\python.exe tools/upload_website.py --seit <commit> # Website hochladen (FTPS); Zugang in .webserver.json, nicht im Repository
 python tools/check_env.py                                       # stimmen die Fassungen? läuft auch ohne .venv
 python tools/check_env.py --install                             # sie stimmen machen (braucht Netz)
 python tools/check_env.py --outdated                            # was wäre neuer, und was verbietet eine Grenze
