@@ -1916,3 +1916,72 @@ def test_every_number_field_of_the_sketch_bar_says_what_it_is(qt_app: QApplicati
             assert field.maximumWidth() <= 200, f"{name} ist {field.maximumWidth()} breit"
     finally:
         panel.deleteLater()
+
+
+def test_home_has_exactly_one_owner_in_the_sketch_mode(qt_app: QApplication) -> None:
+    """Pos1 war im Skizzenmodus tot — derselbe Fall wie Escape.
+
+    Die Zeichenfläche hat die Taste für ihr Einpassen (``VIEW_KEYS['fit']``),
+    das Fenster hat sie fensterweit für „Alles einpassen". Zwei aktive Kürzel
+    auf einer Taste lassen Qt **keines** von beiden ausführen: gemessen sechs
+    Drücke mit Fokus auf dem Blatt, null Aufrufe von ``fit_view``, zwei
+    ``activatedAmbiguously``.
+
+    Versprochen wird die Taste zweimal — im Tooltip des Einpassen-Knopfes und im
+    Handbuch („*Einpassen* (`Pos1`) holt alles zurück ins Bild"). Wer sich
+    verzoomt hat und die genannte Taste drückt, blieb verzoomt.
+
+    Geprüft wird die Ursache und nicht der Handler: **ein** Besitzer der Taste,
+    solange die Skizze offen ist, und danach wieder das Fenster.
+    """
+    from PySide6.QtGui import QAction, QShortcut
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.show()
+
+        def owners() -> list[object]:
+            actions = [
+                action
+                for action in window.findChildren(QAction)
+                if action.shortcut().toString() == "Home" and action.isEnabled()
+            ]
+            keys = [
+                shortcut
+                for shortcut in window.findChildren(QShortcut)
+                if shortcut.key().toString() == "Home" and shortcut.isEnabled()
+            ]
+            return [*actions, *keys]
+
+        window._update_actions()
+        assert len(owners()) == 1, "ohne Skizze gehört Pos1 dem Fenster, und nur ihm"
+
+        window.start_sketch("sketch_extrude")
+        window._update_actions()
+        panel = window._sketch_panel
+        assert panel is not None
+        found = owners()
+        assert len(found) <= 1, (
+            f"{len(found)} Besitzer auf Pos1 — Qt führt dann keinen aus: "
+            f"{[type(entry.parent()).__name__ for entry in found]}"
+        )
+
+        window.finish_sketch(keep=False)
+        # Die Kürzel der Zeichenfläche sind ihre Kinder und gehen mit ihr — aber
+        # erst, wenn die zurückgestellten Löschungen abgearbeitet sind.
+        # ``processEvents`` allein tut das **nicht**: Das Panel lag danach noch
+        # da, unsichtbar, mit aktivem Kürzel, und der Test zählte zwei Besitzer
+        # für einen Zustand, den es im laufenden Programm nicht gibt.
+        from PySide6.QtCore import QEvent
+
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        QApplication.processEvents()
+        window._update_actions()
+        assert len(owners()) == 1, "nach der Skizze gehört sie wieder dem Fenster"
+    finally:
+        window.close()
+        window.deleteLater()

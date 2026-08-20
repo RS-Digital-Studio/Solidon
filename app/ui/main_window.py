@@ -738,14 +738,14 @@ class MainWindow(QMainWindow):
         """Ob die Szene schon einmal einen Körper hatte — der erste bekommt
         die Kamera."""
         self._op_actions: dict[str, QAction] = {}
+        """Die Menüeinträge der Operationen, damit sie sich ausgrauen lassen.
+        Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
+        etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten."""
         self._palette_actions: dict[str, QAction] = {}
         """Zu welcher Action ein Fensterbefehl der Palette gehört.
 
         Gefüllt von ``_menu_commands``, gelesen von ``_extra_availability`` —
         die Palette graut damit aus, was das Menü ausgraut."""
-        """Die Menüeinträge der Operationen, damit sie sich ausgrauen lassen.
-        Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
-        etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten."""
         self._display_actions: list[QAction] = []
         """Die Einträge unter *Ansicht → Darstellung*.
 
@@ -1530,12 +1530,23 @@ class MainWindow(QMainWindow):
 
         view_menu = self._menu(tr("Ansicht"))
         self._workspace_menus.append(view_menu)
-        self._add_action(
-            view_menu,
-            tr("Alles einpassen"),
-            "Home",
-            self.viewport.reset_camera,
-            tr("Rückt die Kamera so, dass die ganze Szene ins Bild passt."),
+        # **Gehört zu den Darstellungseinträgen**, obwohl er nicht in ihrem
+        # Untermenü steht: Er teilt ihr Problem. „Pos1" ist fensterweit
+        # gebunden, die Zeichenfläche hat dieselbe Taste für ihr Einpassen
+        # (``VIEW_KEYS['fit']``) — und zwei aktive Kürzel auf einer Taste
+        # lassen Qt **keines** von beiden feuern. Gemessen: sechs Drücke mit
+        # Fokus auf der Zeichenfläche, null Aufrufe von ``fit_view``, zwei
+        # ``activatedAmbiguously``. Versprochen wird die Taste zweimal, im
+        # Tooltip des Knopfes und im Handbuch — derselbe Fall wie bei Escape,
+        # und dieselbe Lösung: im Skizzenmodus gehört sie dem Blatt.
+        self._display_actions.append(
+            self._add_action(
+                view_menu,
+                tr("Alles einpassen"),
+                "Home",
+                self.viewport.reset_camera,
+                tr("Rückt die Kamera so, dass die ganze Szene ins Bild passt."),
+            )
         )
         self._add_action(
             view_menu,
