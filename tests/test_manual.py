@@ -106,6 +106,61 @@ def test_every_figure_of_the_website_page_is_there(language: str) -> None:
     assert not missing, f"{WEBSITE_PAGES[language].name} verweist ins Leere:\n" + "\n".join(missing)
 
 
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_the_website_page_carries_the_generated_reference(language: str) -> None:
+    """Der **erzeugte** Teil der Seite muss zum Register passen.
+
+    Der Test darüber prüft die Kapitel — die geschriebenen Seiten. Der
+    Referenzteil kommt aus einer anderen Quelle: ``documentation()`` baut ihn
+    aus dem Register, und jede Änderung dort veraltet die eingecheckte Seite
+    still. Genau das ist passiert: Elf Parameter bekamen eine Bedingung, und
+    ohne einen Lauf von ``tools/make_manual.py`` hätte keiner davon in der
+    Website gestanden, während der Dialog sie zeigte.
+
+    Aufgefallen wäre es niemandem — der Ändernde und der Prüfende waren
+    dieselbe Person, und das ist keine Absicherung, sondern ein Zufall.
+
+    Geprüft wird gegen das **Register** und nicht gegen die ganze Datei: Zeichen
+    für Zeichen zu vergleichen hieße, die Seite im Test noch einmal zu erzeugen,
+    und dann prüfte er sich selbst.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.registry.params import condition_text
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    page = WEBSITE_PAGES[language]
+    assert page.is_file(), f"{page.name} fehlt — tools/make_manual.py läuft nicht?"
+
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        html = page.read_text(encoding="utf-8")
+        missing: list[str] = []
+        for spec in REGISTRY.all():
+            if str(spec.title) not in html:
+                missing.append(f"{spec.name}: Titel")
+            # Der Vorbehalt selbst und nicht die ganze Zeile: Im Handbuch
+            # steht sein Vorwort halbfett, also als ``<strong>`` und nicht
+            # mit den Sternchen, die ``caveat_line`` setzt.
+            if spec.caveat and str(spec.caveat) not in html:
+                missing.append(f"{spec.name}: Vorbehalt")
+            schema = spec.params.spec()
+            for entry in schema:
+                condition = condition_text(entry, schema)
+                if condition and condition not in html:
+                    missing.append(f"{spec.name}.{entry.name}: {condition}")
+    finally:
+        set_language("de")
+
+    assert not missing, (
+        f"{page.name} ist älter als das Register:\n"
+        + "\n".join(missing[:20])
+        + (f"\n… und {len(missing) - 20} weitere" if len(missing) > 20 else "")
+        + "\n\nNeu erzeugen: .venv\\Scripts\\python.exe tools/make_manual.py"
+    )
+
+
 # --- was drinsteht ---------------------------------------------------------------
 
 

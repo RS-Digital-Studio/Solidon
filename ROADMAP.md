@@ -41,8 +41,6 @@ bekommt einen roten Lauf.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| Ein Befund weiß nicht, zu welchem Objekt er gehört | Die Bedienverträge durchgesehen (20.08.2026) | die Auswertung, die Befunde mit den Kennungen ihrer Ausgaben anreichert — gilt dann für jede Operation |
-| Kein Test hält das Handbuch an seinem Erzeuger | Die Bedienverträge durchgesehen (20.08.2026) | einen Vergleich des Referenzteils der eingecheckten Seite gegen `documentation()` |
 
 ---
 
@@ -7319,19 +7317,23 @@ ist entprellt.
       außer im Einstellungsdialog, der aus der Tabelle die Auswahl baut. Der
       Docstring von `LengthSpin` nennt das alte Muster, um zu erklären, warum es
       weg ist — eine Textsuche fände genau die Erklärung.
-- [ ] **Ein Befund weiß nicht, zu welchem Objekt er gehört.**
-      `ingest.not_watertight` trägt keine `object_id`, und deshalb greift seine
+- [x] **Ein Befund weiß jetzt, zu welchem Körper er gehört.**
+      `ingest.not_watertight` trug keine `object_id`, und deshalb griff seine
       Handlung über `_object_of` auf die *Auswahl* zurück — eine Vermutung, die
       bei einer 3MF-Baugruppe falsch ist. Der Loader kann sie nicht mitgeben:
-      Er arbeitet auf einem Netz, und die Objektkennungen vergibt der Stapel
-      (§11), also kennt auch die `load`-Operation sie noch nicht — ihre
-      Ausgaben tragen `id=""`.
+      Er arbeitet auf einem Netz, und die Kennungen vergibt der Stapel (§11),
+      also kennt auch die `load`-Operation sie noch nicht — ihre Ausgaben tragen
+      `id=""`.
 
-      Der Weg führt über die **Auswertung**: Sie kennt beide Seiten und könnte
-      die Befunde einer Operation mit den Kennungen ihrer Ausgaben anreichern.
-      Das gilt dann für jeden Befund jeder Operation und nicht nur für diesen —
-      dieselbe Sorte Fund wie bei `check_build_volume` in der Durchsicht davor,
-      nur eine Ebene tiefer.
+      Die **Auswertung** kennt beide Seiten und trägt sie nach, an derselben
+      Stelle, an der sie schon die `op_id` nachträgt. Das gilt damit für jeden
+      Befund jeder Operation und nicht nur für diesen.
+
+      **Eingetragen wird nur bei genau einer Ausgabe.** Bei mehreren gehört der
+      Befund zu einem der Körper, und zu welchem, weiß dort niemand — eine
+      Kennung einzusetzen wäre geraten, und die Handlung daran griffe den
+      falschen (Regel 21). Ein Befund, der seine Kennung selbst mitbringt,
+      behält sie.
 - [x] **Die bedingte Wirkung steht jetzt am Parameter** (`ParamSpec.depends_on`).
       `DEPENDENT_FIELDS` ist weg. Die Tabelle hatte mit elf Einträgen die
       Schwelle gerissen, die ihr eigener Kopf nannte — und damit ihre eigene
@@ -7362,16 +7364,23 @@ ist entprellt.
       Wer den Erzeuger ändert und `tools/make_manual.py` nicht laufen lässt,
       bekommt keinen roten Lauf — bemerkt habe ich es nur, weil ich es selbst
       war.
-- [ ] **Kein Test hält das erzeugte Handbuch an seinem Erzeuger.**
+- [x] **Der Referenzteil der eingecheckten Seite hält jetzt am Register.**
       `documentation()` zu ändern und `tools/make_manual.py` nicht laufen zu
-      lassen bleibt unbemerkt: Der Test daneben prüft die Sprungmarken der
-      eingecheckten Seite, nicht ihren Text. Bei dieser Runde ist es
-      aufgefallen, weil der Ändernde und der Prüfende dieselbe Person waren —
-      das ist keine Absicherung, sondern ein Zufall.
+      lassen blieb unbemerkt: Der Test daneben prüfte die Kapitel — die
+      *geschriebenen* Seiten — und die Sprungmarken, nicht den erzeugten Teil.
+      In dieser Runde ist es aufgefallen, weil der Ändernde und der Prüfende
+      dieselbe Person waren; das ist keine Absicherung, sondern ein Zufall.
 
-      Ein Weg wäre, den Referenzteil der eingecheckten Seite gegen
-      `documentation()` zu halten; die geschriebenen Kapitel bleiben außen vor,
-      denn die stehen in `app/core/manual.py` und nicht im Register.
+      `test_the_website_page_carries_the_generated_reference` liest jetzt jeden
+      Operationstitel, jeden Vorbehalt und jede Bedingung aus dem Register und
+      sucht sie in der Seite — für Deutsch und Englisch. Gegen das **Register**
+      und nicht gegen die ganze Datei: Zeichen für Zeichen zu vergleichen hieße,
+      die Seite im Test noch einmal zu erzeugen, und dann prüfte er sich selbst.
+
+      Gesucht wird der Vorbehalt **selbst** und nicht seine fertige Zeile: Im
+      Handbuch steht sein Vorwort halbfett, also als `<strong>` und nicht mit
+      den Sternchen, die `caveat_line` setzt. Gegengeprobt mit einem geänderten
+      `caveat` — der Test wird rot und nennt die Operation.
 
 > **Drei der vier offenen Punkte liegen in Dateien, die am 20.08. eine
 > parallele Sitzung in Arbeit hatte** (`surfaces.py` für den caveat,

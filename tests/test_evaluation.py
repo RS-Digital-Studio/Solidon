@@ -532,3 +532,66 @@ def test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping(
     assert not result.complete, "raten wäre schlimmer, aber die Auswertung gibt es weiter"
     codes = {finding.code for finding in result.scene.report.findings}
     assert any("Ambiguity" in code for code in codes), codes
+
+
+def test_a_finding_learns_which_body_it_belongs_to(
+    history: History, document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Wo die Operation die Kennung nicht kennt, trägt die Auswertung sie nach.
+
+    ``ingest.not_watertight`` ist der Fall, an dem es auffiel: Der Befund
+    entsteht im Loader, der auf einem Netz arbeitet, und die Kennungen vergibt
+    der Stapel (§11) — selbst die ``load``-Operation sieht sie nicht, ihre
+    Ausgaben tragen ``id=""``. Ohne Kennung fiel die Handlung am Befund
+    („Reparieren", „Stellen zeigen") über ``_object_of`` auf die *Auswahl*
+    zurück, also auf eine Vermutung.
+
+    Hier ist beides bekannt, und ``make_object`` gibt seinen Befund seit je
+    ohne Kennung zurück — wie die meisten.
+    """
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    result = evaluate(document, profile, registry=registry)
+
+    findings = result.scene.report.findings
+    assert findings, "ohne Befund prüft das hier nichts"
+    for entry in findings:
+        assert entry.object_id == "obj_1", entry.code
+        assert entry.object_id in result.scene.objects
+
+
+def test_a_finding_of_two_bodies_stays_silent_about_which(
+    history: History, document: Document, profile: Profile
+) -> None:
+    """Bei mehreren Ausgaben wird nicht geraten (Regel 21).
+
+    Eine Baugruppe kommt als mehrere Körper an, und der Befund gehört dann zu
+    einem davon — zu welchem, weiß hier niemand. Eine Kennung einzutragen wäre
+    eine Zuordnung, die sich nicht belegen lässt, und die Handlung daran griffe
+    den falschen Körper.
+    """
+    own = Registry()
+
+    @register_op(
+        name="two_with_a_finding",
+        title=_("Zwei mit Befund"),
+        category="scene",
+        params=EmptyParams,
+        consumes=0,
+        produces=2,
+        doc=_("Testfassung."),
+        registry=own,
+    )
+    def two(ctx: OpContext) -> OpResult:
+        body = SceneObject(id="", name="Teil", mesh=_mesh(10.0))
+        return OpResult(
+            outputs=[body, dataclasses.replace(body, name="Teil B")],
+            findings=[Finding(code="test.both", severity="warning", message=_("Zwei."))],
+        )
+
+    History(document, own).apply(_("Anlegen"), [OperationDraft(op="two_with_a_finding")])
+    result = evaluate(document, profile, registry=own)
+
+    assert len(result.scene.objects) == 2
+    entry = next(item for item in result.scene.report.findings if item.code == "test.both")
+    assert entry.object_id is None, "zu welchem der beiden? — das weiß hier niemand"
+    assert entry.op_id == 1, "die Operation steht trotzdem dabei"

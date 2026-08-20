@@ -293,9 +293,24 @@ def evaluate(
         if stopped_at is not None:
             break
 
+        # **Ein Befund gehört zu einem Körper, und er weiß es meist nicht.**
+        # ``ingest.not_watertight`` entsteht im Loader, der auf einem Netz
+        # arbeitet und keine Kennung kennt — die vergibt der Stapel (§11), und
+        # selbst die ``load``-Operation sieht sie nicht: ihre Ausgaben tragen
+        # ``id=""``. Ohne Kennung fiel die Handlung am Befund („Reparieren",
+        # „Stellen zeigen") über ``_object_of`` auf die *Auswahl* zurück, also
+        # auf eine Vermutung — bei einer 3MF-Baugruppe auf die falsche.
+        #
+        # Hier ist beides bekannt. Eingetragen wird nur bei **genau einer**
+        # Ausgabe: Bei mehreren wäre jede Zuordnung geraten, und Raten ist
+        # nicht die Aufgabe (Regel 21). Ein Befund, der seine Kennung selbst
+        # mitbringt, behält sie.
+        lone = operation.outputs[0] if len(operation.outputs) == 1 else None
         findings.extend(
             dataclasses.replace(
-                entry, op_id=entry.op_id if entry.op_id is not None else operation.id
+                entry,
+                op_id=entry.op_id if entry.op_id is not None else operation.id,
+                object_id=entry.object_id if entry.object_id is not None else lone,
             )
             for entry in result.findings
         )
