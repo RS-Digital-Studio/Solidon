@@ -35,7 +35,7 @@ bekommt einen roten Lauf.
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | eine gebaute Datei — hängt an der CI |
 | Download-Kasten mit Datei und Prüfsumme | Die Demo bis 30.10.2026 (12.08.2026) | dieselbe Datei |
 | Hochladen | Die Demo bis 30.10.2026 (12.08.2026) | den Stand nach dem Bau; live steht noch eine ältere `version.json` |
-| Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | `SetTransitionMode` oder das Gewinde als Rotationskörper |
+| Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | eine andere **Bauart** — alle sieben Griffe an `MakePipeShell` sind gemessen und widerlegt (20.08.), und ein Rotationskörper schraubt nicht |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
@@ -4916,6 +4916,37 @@ Vier Anläufe, alle gemessen, keiner erfolgreich:
         Volumen unter dem Kernvolumen**. Der Gang schneidet in den Kern, statt
         darauf zu liegen. Geometrisch unmöglich, und der bestehende Test hätte
         es durchgelassen.
+
+      **Und die restlichen fünf Griffe, gemessen am 20.08.2026.** Damit ist die
+      Klasse vollständig — `BRepOffsetAPI_MakePipeShell` hat genau diese
+      Einstellmöglichkeiten, und keine davon löst es:
+
+      - **`SetForceApproxC1(True)`** ist **schädlich**, und zwar auf dieselbe
+        stille Art wie `SetMode(gp_Ax2)`: Bei M6 und M10 fällt das Volumen auf
+        **exakt** das Kernvolumen (357,88 statt 422,26 mm³; 1568,81 statt
+        1826,13) — der Gang ist weg, und der Körper bleibt dabei wasserdicht.
+        M20 bleibt unverändert. Dass es auffällt, ist das Verdienst der
+        Schranke, die aus dem vorigen Fehlschlag entstanden ist.
+      - **`SetTolerance(1e-5)` und `SetTolerance(1e-7)`** sind wirkungslos:
+        dasselbe Volumen bis auf die zweite Dezimale.
+      - **`SetMaxDegree(11)` und `SetMaxSegments(60)`** ebenso, bis auf die
+        letzte gedruckte Stelle identisch.
+      - **`SetDiscreteMode()`** scheitert bei allen drei Größen mit
+        `StdFail_NotDone` in `MakeSolid`.
+      - **`SetLaw`** ist nicht anwendbar: Es skaliert das Profil entlang des
+        Spine, und ein Gewinde hat konstanten Querschnitt.
+
+      **Was daraus folgt, ist kein weiterer Griff.** Sieben Kandidaten aus
+      derselben Klasse sind durch, und die Klasse ist erschöpft — der nächste
+      Schritt ist eine andere Bauart und nicht eine andere Einstellung. Der
+      Vorschlag „das Gewinde als Rotationskörper" aus der Registerzeile ist
+      dabei keine Umsetzung, sondern eine Änderung am Sollverhalten: Ein
+      Rotationskörper ist ein Ringwulst und schraubt nicht. Was bliebe, wäre
+      der Gang als getrimmter Ausschnitt einer Schraubenfläche — und das ist
+      eine Entscheidung mit Ansage, keine Zeile.
+
+      Gemessen wurde wieder auf Windows, wo das Gewinde schließt: als
+      Regressionsprobe, nicht als Beweis für Linux.
 
 - [x] **Aus dem letzten Fehlschlag ist eine Schranke geworden.**
       `test_a_thread_holds_more_material_than_its_core` prüft, was der Test
