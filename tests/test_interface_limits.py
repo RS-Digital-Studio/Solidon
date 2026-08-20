@@ -430,6 +430,57 @@ def test_no_scheme_gives_the_same_key_to_two_things(window: MainWindow) -> None:
         )
 
 
+def test_the_navigation_keys_belong_to_the_list_with_the_focus(window: MainWindow) -> None:
+    """Pos1 im Objektbaum sprang die Kamera an, nicht die Liste.
+
+    „Alles einpassen" ist fensterweit auf Pos1 gebunden, und Qt fragt vor einem
+    Kürzel die Fokuskette: Wer das ``ShortcutOverride`` annimmt, bekommt den
+    Tastendruck. Listen und Bäume nehmen es für Pos1 nicht an — gemessen sechs
+    Drücke im Baum, sechsmal die Kamera, nie die Liste, obwohl Pos1 in jeder
+    Liste dieser Welt an den Anfang springt.
+
+    **Nur vier Tasten**, und das ist der Kern der Entscheidung: Der
+    naheliegende Fix — jede Sequenz ohne Zusatztaste gehört dem Bedienelement —
+    nähme den Ziffern der Darstellungsarten ihre Wirkung, sobald eine Liste den
+    Fokus hat, und das ist der Normalfall. Die Grenze verläuft zwischen
+    *Bewegen im Inhalt* und *Befehl an das Fenster*.
+    """
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+
+    from app.ui.shortcut_schemes import install_navigation_keys
+
+    # Der Filter hängt an der Anwendung und nicht am Fenster — einmal, nicht je
+    # Fenster: Je Fenster installiert wuchs die Kette mit jedem gebauten
+    # Fenster, und die Suite baut über zweihundert in einem Prozess.
+    keys = install_navigation_keys()
+    assert keys is not None, "ohne Anwendung gibt es keinen Filter"
+    assert keys is install_navigation_keys(), "und es bleibt bei einem"
+
+    def asked(widget: object, key: Qt.Key) -> bool:
+        event = QKeyEvent(QEvent.Type.ShortcutOverride, key, Qt.KeyboardModifier.NoModifier)
+        handled = keys.eventFilter(widget, event)
+        return bool(handled and event.isAccepted())
+
+    tree = window.object_tree.tree
+    tree.setFocus()
+    QApplication.processEvents()
+
+    assert asked(tree, Qt.Key.Key_Home), "Pos1 gehört der Liste, in der der Fokus steht"
+    assert asked(tree, Qt.Key.Key_End), "Ende genauso"
+    assert not asked(tree, Qt.Key.Key_1), (
+        "die Ziffern der Darstellungsarten bleiben Fensterbefehle — sonst wären sie "
+        "wirkungslos, sobald irgendeine Liste den Fokus hat"
+    )
+
+    window.viewport.setFocus()
+    QApplication.processEvents()
+    assert not asked(window.viewport, Qt.Key.Key_Home), (
+        "in der Ansicht gibt es keinen Inhalt, in dem Pos1 sich bewegen könnte — "
+        "dort bleibt es „Alles einpassen"
+    )
+
+
 def test_a_scheme_only_changes_what_it_names() -> None:
     """Eine Belegung ist eine Änderung an einzelnen Tasten, keine zweite Liste.
 

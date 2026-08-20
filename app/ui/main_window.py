@@ -201,7 +201,7 @@ from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import SettingsDialog
-from app.ui.shortcut_schemes import shortcut_for
+from app.ui.shortcut_schemes import install_navigation_keys, shortcut_for
 from app.ui.sketch_editor import SketchPanel, Surroundings
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
@@ -1177,6 +1177,16 @@ class MainWindow(QMainWindow):
         # meldet ihr Wachstum, weil ein QListWidget es nicht von selbst tut.
         self.report.contentGrew.connect(self.overlay.reflow)
         self.sketch_bar.installEventFilter(self.overlay)
+
+        # **Einmal für die ganze Anwendung, nicht je Fenster.** Das
+        # ``ShortcutOverride`` geht an das Bedienelement mit dem Fokus, nicht an
+        # das Fenster darüber — von dort aus ist es nicht zu sehen. Der Filter
+        # hängt deshalb an der Anwendung, und er hängt dort **einmal**: Je
+        # Fenster installiert, wuchs die Filterkette mit jedem gebauten Fenster,
+        # und jedes Ereignis lief durch alle. In der Suite, die über zweihundert
+        # Fenster in einem Prozess baut, blieb der Lauf bei 97 % stehen —
+        # gemessen, zweimal, nach zehn Minuten abgebrochen.
+        install_navigation_keys()
 
         # §2.8: eine Wartezeit gehört dorthin, wo hingesehen wird. Der Balken
         # unten rechts ist richtig, solange ein Modell im Bild steht — beim

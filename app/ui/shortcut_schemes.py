@@ -18,6 +18,15 @@ from __future__ import annotations
 
 from typing import Final
 
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Qt
+from PySide6.QtGui import QKeyEvent
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QAbstractSpinBox,
+    QLineEdit,
+    QPlainTextEdit,
+)
+
 from app.i18n import TranslatableText, _
 
 #: Der Fusion-nahe Satz: einzelne Buchstaben für das, was man dauernd tut.
@@ -55,3 +64,96 @@ def shortcut_for(name: str, declared: str | None, scheme: str) -> str | None:
     """
     table = SCHEMES.get(scheme, SCHEMES["default"])[1]
     return table.get(name, declared)
+
+
+#: Tasten, die dem Bedienelement mit dem Fokus gehören, nicht dem Fenster.
+#:
+#: Pos1 ist der Fall, an dem es auffiel: Als Menükürzel („Alles einpassen")
+#: fensterweit gebunden, feuert es auch dann, wenn der Fokus im Objektbaum oder
+#: im Verlauf steht — dort ist Pos1 die Taste, mit der jede Liste dieser Welt an
+#: ihren Anfang springt. Gemessen: sechs Drücke im Baum, sechsmal die Kamera,
+#: nie die Liste.
+#:
+#: **Nur die vier.** Der naheliegende Fix — jede Sequenz ohne Zusatztaste
+#: gehört dem Bedienelement — nähme den Ziffern 1 bis 6 ihre Wirkung, sobald
+#: eine Liste den Fokus hat, und das ist der Normalfall: Die Darstellungsarten
+#: sind Fensterbefehle und sollen es bleiben. Die Grenze verläuft zwischen
+#: *Bewegen im Inhalt* und *Befehl an das Fenster*, und dafür gibt es genau
+#: diese vier Tasten.
+NAVIGATION_KEYS: Final[frozenset[int]] = frozenset(
+    {
+        int(Qt.Key.Key_Home),
+        int(Qt.Key.Key_End),
+        int(Qt.Key.Key_PageUp),
+        int(Qt.Key.Key_PageDown),
+    }
+)
+
+
+def belongs_to_the_focus(key: int, widget: object) -> bool:
+    """Ob diese Taste jetzt dem Bedienelement gehört und nicht dem Fenster.
+
+    Zwei Bedingungen, beide nötig: die Taste bewegt sich im Inhalt (siehe
+    :data:`NAVIGATION_KEYS`), und im Fokus steht etwas, das einen Inhalt hat,
+    in dem man sich bewegen kann — eine Liste, ein Baum, ein Textfeld, ein
+    Zahlenfeld.
+
+    Als reine Funktion, damit die Regel prüfbar bleibt, ohne Tasten zu
+    simulieren: Was Qt aus einem Tastendruck macht, hängt an der Fensterhülle,
+    die Entscheidung darin nicht.
+    """
+    if int(key) not in NAVIGATION_KEYS:
+        return False
+    return isinstance(widget, (QAbstractItemView, QAbstractSpinBox, QLineEdit, QPlainTextEdit))
+
+
+class NavigationKeys(QObject):
+    """Der Filter, der die vier Tasten dem Fokus überlässt.
+
+    Ein eigenes Objekt und keine Methode am Fenster: Das ``ShortcutOverride``
+    geht an das Bedienelement mit dem Fokus, also muss der Filter an der
+    **Anwendung** hängen — und dort genau einmal. Je Fenster installiert wuchs
+    die Filterkette mit jedem gebauten Fenster, und jedes Ereignis der
+    Anwendung lief durch alle: In der Suite, die über zweihundert Fenster in
+    einem Prozess baut, blieb der Lauf bei 97 % stehen. Gemessen, zweimal, nach
+    zehn Minuten abgebrochen — kein Fehler, nur Sirup.
+    """
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
+        """Nimmt das ``ShortcutOverride`` an, wo die Taste dem Inhalt gehört.
+
+        Gefragt wird ``watched`` und nicht der Fokus der Anwendung: Das
+        Ereignis geht an das Bedienelement, das die Taste bekäme, und das ist
+        genau die Frage. Über den Fokus gefragt hinge die Antwort daran, ob das
+        Fenster gerade sichtbar ist — in der Suite ist es das nicht.
+        """
+        if (
+            event.type() == QEvent.Type.ShortcutOverride
+            and isinstance(event, QKeyEvent)
+            and belongs_to_the_focus(event.key(), watched)
+        ):
+            event.accept()
+            return True
+        handled: bool = super().eventFilter(watched, event)
+        return handled
+
+
+#: Der eine Filter der Anwendung. Ein zweiter täte dasselbe zweimal.
+_INSTALLED: NavigationKeys | None = None
+
+
+def install_navigation_keys() -> NavigationKeys | None:
+    """Hängt den Filter an die Anwendung — beim zweiten Aufruf nichts mehr.
+
+    Gibt ihn zurück, damit ein Test ihn fragen kann, ohne Tasten zu
+    simulieren: Was Qt aus einem Tastendruck macht, hängt an der Fensterhülle,
+    die Entscheidung darin nicht.
+    """
+    global _INSTALLED
+    application = QCoreApplication.instance()
+    if application is None:
+        return None
+    if _INSTALLED is None:
+        _INSTALLED = NavigationKeys(application)
+        application.installEventFilter(_INSTALLED)
+    return _INSTALLED
