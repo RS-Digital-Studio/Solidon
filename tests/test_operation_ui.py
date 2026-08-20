@@ -1203,3 +1203,58 @@ def test_both_ways_into_a_dialog_carry_the_feature_names(window: MainWindow) -> 
         f"{calls} Aufrufe von OperationDialog, aber "
         f"{source.count('features=self._feature_names(),')} übergeben die Merkmale"
     )
+
+
+def test_a_number_field_stays_as_wide_as_a_number(window: MainWindow) -> None:
+    """Zahlenfelder wuchsen auf die ganze Dialogbreite.
+
+    ``QFormLayout`` wächst nach Vorgabe mit, und die Breite des Dialogs kommt vom
+    umgebrochenen Beschreibungssatz. Gemessen am gezeigten Dialog:
+    ``decimate_mesh.triangles`` bekam 366 Pixel für einen Wunsch von 120,
+    ``smooth_mesh.iterations`` 342 für 60. Die Zahl klebte links, die Drehknöpfe
+    saßen dreihundert Pixel weiter rechts, dazwischen leere Fläche — in jedem
+    Operationsdialog.
+
+    Gedeckelt wird nur die Zahl. Aufklappmenüs und Textfelder wachsen weiter:
+    Dort *ist* die Breite der Inhalt („Bohrung 1 · Ø5,2 mm"), und ein Deckel
+    darauf schnitte ab. Deshalb kein ``FieldsStayAtSizeHint`` für das ganze
+    Formular — und deshalb prüft dieser Test beides.
+    """
+    from PySide6.QtWidgets import QComboBox, QSpinBox
+
+    from app.core.registry import REGISTRY
+    from app.ui.op_dialog import NUMBER_AIR, OperationDialog, ValueField
+
+    for name in ("decimate_mesh", "smooth_mesh"):
+        dialog = OperationDialog(REGISTRY.get(name), {"obj_1": "Halterung"}, window)
+        try:
+            dialog.show()
+            dialog.resize(dialog.sizeHint())
+            QApplication.processEvents()
+            boxes = dialog.findChildren(QSpinBox)
+            assert boxes, f"{name} hat kein Zahlenfeld — dieser Test prüft nichts"
+            for box in boxes:
+                assert box.width() <= box.sizeHint().width() + NUMBER_AIR, (
+                    f"{name}: {box.width()} px für einen Wunsch von {box.sizeHint().width()}"
+                )
+        finally:
+            dialog.deleteLater()
+
+    # Und das Gegenstück: was den Platz braucht, bekommt ihn weiter.
+    dialog = OperationDialog(REGISTRY.get("pattern"), {"obj_1": "Halterung"}, window)
+    try:
+        dialog.show()
+        dialog.resize(dialog.sizeHint())
+        QApplication.processEvents()
+        combos = dialog.findChildren(QComboBox)
+        assert combos, "ohne Aufklappmenü prüft die zweite Hälfte nichts"
+        assert max(box.width() for box in combos) > 200, (
+            "die Auswahl ist so schmal wie ein Zahlenfeld — dann wurde zu viel gedeckelt"
+        )
+        fields = dialog.findChildren(ValueField)
+        for field in fields:
+            assert field.spin.width() <= field.spin.sizeHint().width() + NUMBER_AIR, (
+                f"das Drehfeld wuchs auf {field.spin.width()} px"
+            )
+    finally:
+        dialog.deleteLater()

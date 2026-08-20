@@ -91,6 +91,13 @@ def _decimals_for(entry: ParamSpec, unit: LengthUnit | None = None) -> int:
     return base
 
 
+#: Wie viel Luft ein Zahlenfeld über seinen Wunsch hinaus bekommt.
+#:
+#: Zwei Ziffern breit, damit eine getippte Zahl nicht an der Kante klebt, wenn
+#: sie länger ist als das größte, was der Wertebereich hergibt.
+NUMBER_AIR = 24
+
+
 class ValueField(QWidget):
     """Ein Zahlenfeld, das auch einen Parameterausdruck tragen kann (§13).
 
@@ -153,6 +160,13 @@ class ValueField(QWidget):
             # in Millimetern. Qts Vorgabe ist 1.0, und ein ganzer Zoll je Klick
             # wäre ein Sprung über den ganzen Wertebereich einer Wandstärke.
             self.spin.setSingleStep(from_mm(1.0, self._shown))
+
+        # Auch hier der Deckel: Das Drehfeld hat die Größenrichtlinie
+        # ``Expanding`` und wuchs deshalb mit dem Dialog — 270 Pixel für einen
+        # Wunsch von 156, gemessen an *Kopien in Reihe oder Kreis*. Der
+        # Umschalter bleibt rechts stehen, damit die Felder untereinander eine
+        # Kante haben; gewachsen wäre allein die leere Fläche vor ihm.
+        self.spin.setMaximumWidth(self.spin.sizeHint().width() + NUMBER_AIR)
 
         self.text = QLineEdit(self)
         self.text.setPlaceholderText(tr("zum Beispiel =@breite / 2"))
@@ -543,6 +557,29 @@ def armature_bones(text: str) -> list[str]:
         return []
 
 
+def _kept_narrow(editor: QWidget) -> QWidget:
+    """Ein Zahlenfeld bleibt so breit, wie eine Zahl ist.
+
+    ``QFormLayout`` wächst nach Vorgabe mit (``AllNonFixedFieldsGrow``), und die
+    Breite des Dialogs kommt vom umgebrochenen Beschreibungssatz — 490 bis 624
+    Pixel. Gemessen am gezeigten Dialog: ``decimate_mesh.triangles`` bekam 366
+    Pixel für einen Wunsch von 120, ``slots_from_texture.filaments`` 366 für 48.
+    Die Zahl klebte links, die Drehknöpfe saßen dreihundert Pixel weiter rechts,
+    dazwischen leere Fläche — in jedem Operationsdialog.
+
+    Gedeckelt wird **nur die Zahl**. Aufklappmenüs, Textfelder und die
+    Objektauswahl wachsen weiter: Dort ist die Breite der Inhalt („Bohrung 1 ·
+    Ø5,2 mm"), und ein Deckel darauf würde abschneiden. Deshalb kein
+    ``FieldsStayAtSizeHint`` für das ganze Formular.
+
+    Gefragt wird die Wunschbreite und nicht die aktuelle: Vor dem ersten Legen
+    hat ein Widget seine Vorgabegröße, und ein Deckel daraus wäre eine andere
+    Zahl bei jedem Öffnen.
+    """
+    editor.setMaximumWidth(editor.sizeHint().width() + NUMBER_AIR)
+    return editor
+
+
 class OperationDialog(QDialog):
     """Ein Dialog für eine Operation, gebaut aus ihrem Schema."""
 
@@ -824,7 +861,7 @@ class OperationDialog(QDialog):
             spin.setMaximum(int(entry.maximum) if entry.maximum is not None else 1_000_000)
             if start is not None:
                 spin.setValue(int(start))
-            return spin
+            return _kept_narrow(spin)
         if entry.kind == "float":
             # Kein nacktes ``QDoubleSpinBox`` mehr: ein Maß darf an einem
             # Projektparameter hängen (§13), und ``float("=@breite")`` war der
