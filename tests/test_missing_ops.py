@@ -93,6 +93,66 @@ def test_decimation_keeps_the_shape_within_a_measured_bound(profile: Profile) ->
     assert result.findings[0].values["deviation_mm"] > 0.0, "it says what it cost"
 
 
+@pytest.mark.parametrize("target", [20_000, 8_000, 2_000])
+def test_decimation_does_not_tear_an_unwelded_body_apart(target: int) -> None:
+    """Der Fund „`decimate` zerlegt glatte Körper" — die Glätte war es nicht.
+
+    Quadrik-Dezimierung zieht Kanten zusammen. Wo keine Kante zwei Dreiecke
+    verbindet, weil jedes seine eigenen drei Punkte trägt, zieht sie das Netz
+    auseinander: **81 920 einzelne Dreiecke kamen als 12 450 Teile heraus,
+    nicht wasserdicht.** Gemessen an der Vase aus dem Erzeuger war es dasselbe
+    Bild (607 k → 200 k, 60 Teile) — und ein Modell aus dem Erzeuger ist genau
+    so ein Netz, wie es jedes frisch gelesene STL ist.
+
+    Über drei Ziele, weil ein einzelnes nichts über die Stufe darunter sagt:
+    Der Riss entsteht beim Zusammenziehen, und je weiter dezimiert wird, desto
+    mehr Kanten sind daran beteiligt.
+    """
+    ball = trimesh.creation.icosphere(subdivisions=6, radius=40.0)
+    # Eine Dreieckssuppe, wie sie aus einer STL-Datei kommt: kein Punkt geteilt.
+    loose = trimesh.Trimesh(
+        vertices=ball.vertices[ball.faces].reshape(-1, 3),
+        faces=np.arange(len(ball.faces) * 3).reshape(-1, 3),
+        process=False,
+    )
+    soup = MeshData.of(loose)
+    assert soup.component_count == soup.triangle_count, "die Suppe ist keine Suppe"
+
+    after = mesh_ops.decimate(soup, target)
+
+    assert after.triangle_count == target
+    assert after.is_watertight, f"bei {target} Dreiecken nicht mehr geschlossen"
+    assert after.component_count == 1, (
+        f"bei {target} Dreiecken in {after.component_count} Teile zerfallen"
+    )
+    # Eine Kugel von 40 mm Radius hat 268 cm³. Bleibt sie das, ist nicht bloß
+    # die Topologie heil, sondern auch die Form.
+    assert after.volume / 1000.0 == pytest.approx(268.0, abs=1.0)
+
+
+def test_a_welded_body_is_not_welded_again() -> None:
+    """Verschweißt wird nur, wo es nötig ist — es kostet vierzig Prozent.
+
+    Auf einem schon verschweißten Netz bewegt `merge_vertices` null Punkte und
+    kostet trotzdem 37 bis 43 Prozent der Vereinfachung obendrauf (gemessen:
+    103 ms zu 281 bei 328 k Dreiecken, 408 zu 951 bei 1,3 Mio.). `decimate`
+    läuft auch für die Anzeige im Viewport, und ein Zuschlag für nichts gehört
+    dort nicht hin.
+
+    Geprüft am Verhältnis, nicht an der Zeit: Eine Messung wäre auf einer
+    belasteten Maschine unbrauchbar, und die Frage ist ohnehin nicht „wie
+    schnell", sondern „wird überhaupt angefasst".
+    """
+    welded = MeshData.of(trimesh.creation.icosphere(subdivisions=5, radius=40.0))
+
+    assert len(welded.raw.vertices) < welded.triangle_count, (
+        "die Vorbedingung stimmt nicht — dieses Netz gilt als unverschweißt"
+    )
+    assert mesh_ops._welded_for_simplify(welded) is welded, (
+        "ein verschweißtes Netz wird noch einmal angefasst"
+    )
+
+
 def test_a_small_body_is_left_alone() -> None:
     small = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
 

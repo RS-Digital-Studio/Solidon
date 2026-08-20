@@ -26,6 +26,7 @@ from typing import Final
 
 from app.core.backends.mesh import GeneratedMesh, MeshBackend
 from app.core.log import get_logger
+from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.project import Project, embedded_source_path
 from app.core.types import ObjectId, Origin, ProgressFn, Source, SourceId, SourceOrigin
@@ -61,16 +62,28 @@ def _silent(fraction: float, text: str) -> None:
     del fraction, text
 
 
-#: Ab wie vielen Dreiecken ein erzeugtes Netz dezimiert wird. Die Zahl ist
-#: nicht frei gewählt: oberhalb davon steigt die Merkmalserkennung aus
-#: (``agent.analysis.TRIANGLE_LIMIT``), und ein Körper ohne Merkmale ist einer,
-#: an dem weder ein Klick noch der Agent etwas ansetzen kann.
-GENERATED_TRIANGLE_LIMIT: Final = 500_000
+#: Ab wie vielen Dreiecken ein erzeugtes Netz dezimiert wird: genau dort, wo
+#: die Merkmalserkennung aussteigt — **dieselbe Zahl**, nicht eine zweite
+#: daneben.
+#:
+#: Hier stand 500 000, begründet mit ``agent.analysis.TRIANGLE_LIMIT``. Das ist
+#: aber die Grenze des **Steckbriefs** und nicht die der **Erkennung**, und die
+#: liegt bei 200 000 (``scene.evaluate.FEATURE_LIMIT_TRIANGLES``). Was
+#: dazwischen lag, behielt seine Auflösung und verlor die Merkmale — kein Klick
+#: auf eine Bohrung, keine Passung, nichts für den Agenten. Bei TripoSG war das
+#: der Normalfall.
+#:
+#: Zusammen mit dem zweiten Fund war es eine Zwickmühle: Wer diese Grenze
+#: senkte, tauschte wasserdicht gegen Merkmale, weil ``decimate`` ein
+#: unverschweißtes Netz zerriss. Seit es vorher verschweißt
+#: (``geom.mesh_ops._welded_for_simplify``), gibt es nichts zu tauschen.
+GENERATED_TRIANGLE_LIMIT: Final = FEATURE_LIMIT_TRIANGLES
 
-#: Worauf dezimiert wird. Deutlich unter der Grenze, damit eine spätere
-#: Boolesche Operation nicht sofort wieder darüber landet — und immer noch fein
-#: genug, dass eine erzeugte Figur ihre Falten behält.
-GENERATED_TRIANGLE_TARGET: Final = 200_000
+#: Worauf dezimiert wird: drei Viertel der Grenze, damit eine spätere Boolesche
+#: Operation nicht sofort wieder darüber landet — und immer noch fein genug,
+#: dass eine erzeugte Figur ihre Falten behält. Als Anteil und nicht als eigene
+#: Zahl: Wer die Grenze verschiebt, verschiebt den Abstand mit.
+GENERATED_TRIANGLE_TARGET: Final = FEATURE_LIMIT_TRIANGLES * 3 // 4
 
 
 @dataclass(frozen=True, slots=True)

@@ -28,8 +28,6 @@ bekommt einen roten Lauf.
 | Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | die Entscheidung, ob `_chain` mit ausgeliefert wird; der kompilierte Kern steht und bringt 1,34× — oben liegt der Polygonaufbau in GEOS (446 von 1256 ms, profiliert am 20.08.), und der ist von Python aus nicht zu beschleunigen |
 | CI-Bauläufe und Signierung | P8 — Erste Veröffentlichung | einen CI-Dienst, der die Läufe fährt; die Signierung ein Zertifikat. AppImage und Flatpak stehen seit dem 20.08. |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
-| Die zwei Dreieckszahl-Grenzen zusammenbringen | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Entscheidung: Merkmale ab 200 000 oder wasserdicht bleiben — beides zugleich geht erst, wenn `decimate` sauber arbeitet |
-| `decimate` zerlegt glatte Körper | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Vereinfachung, die die Topologie hält; die Reparaturkette holt nur die Teilzahl zurück, nicht die Wasserdichtheit |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
@@ -42,12 +40,12 @@ bekommt einen roten Lauf.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| Objektnamen der Beispiele bleiben deutsch | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | ein Feld im Dateiformat, das einen Namen als übersetzbar ausweist — in der Aufnahme allein aufzulösen wäre schlimmer als der Zustand jetzt |
 | Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | eine Entscheidung, was aus der Zeile verschwindet — und einen Test, der sein Thema selbst setzt |
 | Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird — Kachelhöhe, Ablagefläche oder die Liste der zuletzt geöffneten Projekte; Umschichten ist ausgereizt |
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 | Benannte Merkmale überstehen keine Boolesche Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung darüber, wann ein benanntes Merkmal wirklich fort ist — vierzehn Ops geben `features={}` zurück, und `_with_features` liest die generierten nur aus der Ausgabe |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
+| Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
 
 ---
 
@@ -8245,20 +8243,45 @@ Kleingedrucktes, sondern ein Ausschluss.
 
 ### Was dabei aufgefallen ist und offen bleibt
 
-- [ ] **Zwei Grenzen widersprechen sich.** Die Merkmalserkennung steigt bei
-      `FEATURE_LIMIT_TRIANGLES` = 200 000 aus (`scene/evaluate.py`), die
-      Automatik in `generate.py` dezimiert aber erst ab 500 000. Was dazwischen
-      liegt — und das ist bei TripoSG der Normalfall — behält seine Qualität
-      und verliert die Merkmale: kein Klick auf eine Bohrung, keine Passung,
-      nichts für den Agenten. Der Kommentar dort begründet die 500 000 mit
-      `agent.analysis.TRIANGLE_LIMIT`; das ist die Grenze des Steckbriefs, nicht
-      die der Erkennung.
-- [ ] **`decimate` zerlegt glatte Körper.** Vase 607 k → 200 k ergab 60 Teile
-      und `is_watertight=False`; das kantige Gehäuse überstand dieselbe Stufe
-      unversehrt. Die Reparaturkette holt die Teilzahl zurück auf 1, die
-      Wasserdichtheit nicht. Älter als der TripoSG-Wechsel, aber erst durch ihn
-      sichtbar geworden — und beide Punkte hängen zusammen: Wer die erste Grenze
-      anfasst, ohne die zweite zu lösen, tauscht wasserdicht gegen Merkmale.
+- [x] **`decimate` zerlegte keine glatten Körper — sondern unverschweißte.**
+      Die Glätte war nie das Kennzeichen: Eine saubere Kugel dezimiert bis auf
+      2 000 Dreiecke hinunter wasserdicht und einteilig. Was zerreißt, ist ein
+      Netz ohne geteilte Kanten, und Quadrik-Dezimierung zieht genau Kanten
+      zusammen. Nachgebaut mit einer Dreieckssuppe aus 81 920 einzelnen
+      Dreiecken: **12 450 Teile, nicht wasserdicht.** Verschweißt kam dieselbe
+      Kugel auf jedes Ziel als ein geschlossenes Stück durch. Dass „das kantige
+      Gehäuse dieselbe Stufe unversehrt überstand", passt dazu — es war
+      verschweißt, die Vase aus dem Erzeuger nicht.
+
+      Über den ganzen Korpus gemessen ist das Verhältnis Punkt zu Dreieck der
+      Verräter: **jedes** frisch gelesene STL steht auf genau 3,00, ein
+      verschweißter Körper auf 0,50, und dazwischen liegt nichts. `decimate`
+      verschweißt deshalb, wenn es das sieht, und sonst nicht: Auf einem
+      sauberen Netz kostet `merge_vertices` 37 bis 43 Prozent der Vereinfachung
+      obendrauf und bewegt null Punkte (103 ms zu 281 bei 328 k, 408 zu 951 bei
+      1,3 Mio.) — und `decimate` läuft auch für die Anzeige im Viewport. Zwei
+      Längen zu vergleichen kostet nichts.
+- [x] **Die zwei Grenzen widersprechen sich nicht mehr**, und das ging erst
+      nach dem Punkt darüber. Die Merkmalserkennung steigt bei 200 000 aus
+      (`FEATURE_LIMIT_TRIANGLES`), die Automatik dezimierte erst ab 500 000 —
+      begründet mit `agent.analysis.TRIANGLE_LIMIT`, und das ist die Grenze des
+      *Steckbriefs*, nicht die der *Erkennung*. Was dazwischen lag, behielt
+      seine Auflösung und verlor die Merkmale; bei TripoSG war das der
+      Normalfall.
+
+      `GENERATED_TRIANGLE_LIMIT` **ist** jetzt `FEATURE_LIMIT_TRIANGLES` —
+      dieselbe Zahl und keine zweite daneben. Das Ziel steht auf drei Vierteln
+      davon, als Anteil und nicht als eigene Zahl, damit eine spätere Boolesche
+      Operation nicht sofort wieder darüber landet. Solange `decimate` riss,
+      war jede Senkung ein Tausch wasserdicht gegen Merkmale; jetzt gibt es
+      nichts zu tauschen, und der Test prüft beides an einem Körper.
+
+      Dabei fiel ein Dritter auf: Der Befund `perceive.too_large` stand danach
+      weiter im Bericht. Er stammt vom Laden, als das Netz noch 327 000 Dreiecke
+      hatte, und beschrieb einen Zustand, den der dritte Schritt derselben Kette
+      längst geändert hatte. Er steht jetzt in `SETTLED_BY` unter
+      `mesh.deviation` — gestrichen und nicht herabgestuft, denn es *ist* nicht
+      mehr zu fein, und ein Hinweis darauf wäre nicht milder, sondern falsch.
 - [x] **Der Erscheinungstermin steht jetzt einmal je Startseite.** Er stand am
       Zähler (`data-countdown`) und an der Umschaltung (`data-release` am
       `<body>`) — zwölf Stellen für einen Zeitpunkt, und ein Test hielt sie
@@ -8373,15 +8396,11 @@ Datei da, Alt-Text da, `width`/`height` gleich den Pixeln.
 
 ### Offen
 
-- [ ] **Die Objektnamen der Beispielprojekte bleiben deutsch.** Im englischen
-      Handbuchbild steht „Dose Lid": „Lid" kommt aus dem Katalog, „Dose" aus
-      dem Op-Parameter `name`, den `tools/make_examples.py` fest einträgt. Das
-      betrifft nicht nur das Bild — wer das Beispiel auf Spanisch öffnet, sieht
-      denselben deutschen Namen im Objektbaum. Nur in der Aufnahme aufzulösen
-      wäre schlimmer als der Zustand jetzt: Dann zeigte das Handbuch etwas
-      anderes als die Anwendung. Die saubere Stelle ist dieselbe wie bei den
-      Parametertiteln (`translate_parameter_titles`) — ein Feld im Dateiformat,
-      das einen Namen als übersetzbar ausweist.
+- [x] **Die Objektnamen der Beispielprojekte bleiben deutsch** — und was der
+      Weg dorthin wirklich kostet, steht im Durchgang vom 20.08. weiter unten.
+      Der Punkt zieht dorthin um: Die saubere Stelle ist das Dateiformat, aber
+      ein `TranslatableText` in `params` reicht bis in `operation_hash`, und das
+      macht daraus einen eigenen Schritt 8 → 9 mit Migration.
 - [x] **Der Prüfbericht nennt jetzt den Namen, den der Körper trug.** Der
       Befund des Aushöhlens zeigte auf ein Objekt, das nach `create_lid` nicht
       mehr existiert — aufgelöst wurde nur gegen die Endszene, und dort fehlt
@@ -8830,3 +8849,90 @@ jede Oberfläche zieht nach (Leitprinzip 3).
       das Spiel. Zwei Messungen mit dem Messschieber an einer 2020er und einer
       3030er Schiene würden den Punkt schließen — bis dahin ist die Feder gut
       gerechnet und nicht nachgemessen.
+
+## Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026)
+
+Fünf Punkte zu, und keiner davon war eine Entscheidung — genau darin lag die
+Auswahl. Von den vierundzwanzig hängen elf an etwas außerhalb des Codes
+(CI-Dienst, Apple-Zertifikat, DMARC-Eintrag, `support@`-Postfach, Geld für zwei
+Agenten-Suite-Läufe) oder sind ausdrücklich keine Entwicklungsaufgabe; sechs
+warten auf eine Entscheidung, die niemand anders treffen kann als der, dem die
+Anwendung gehört. Die fünf hier waren Arbeit.
+
+### Was dabei über das Vorgehen zu lernen war
+
+**Vier Wächter haben gemeldet, und alle vier zu Recht.** Der Baustein löste sie
+aus: der Zählwächter der Bibliothek (14 → 15), „jede Operation hat einen Test",
+die Umfangszeile der Pressemitteilung und die Zahlen der Website in sechs
+Sprachen. Keiner war Ballast, jeder hat auf etwas gezeigt, das wirklich
+nachzuziehen war — 85 Operationen sind 86, 17 Bausteine sind 18, an 27 Stellen
+plus Statistikblöcken, Anschreiben und den erzeugten Handbuchseiten.
+
+**Die Gegenprobe hat in diesem Durchgang zweimal mehr gefunden als der Test.**
+Beim ersten Mal war es die entartete Fläche in `tapered_bar`: Die Kappung
+herauszunehmen ließ alles grün, und das war das Signal — wer eine Absicherung
+baut, deren Wegfall nichts rot macht, hat eine unnötige Absicherung oder einen
+ungeprüften Fall. Beim zweiten Mal war es der hohle Wächter für die
+Katalognamen, der sechsmal die deutschen Namen maß. Die Regel dazu steht in
+`.claude/rules/tests.md` und hat sich wieder bezahlt.
+
+**Zwei Risiken sind gemessen und nicht durchdacht worden**, und beide hätten
+still zurückfallen können:
+
+- `SETTLED_BY` streicht „zu fein für die Merkmalserkennung", sobald eine
+  Dezimierung dahinter steht. Eine Dezimierung, die **nicht** unter die Grenze
+  bringt, hebt aber nichts auf. Nachgemessen an der ganzen Kette (1,3 Mio. →
+  400 000): Der Befund steht weiter da, weil die Auswertung nach jeder
+  Operation neu misst und der frische Befund keinen Heiler hinter sich hat.
+  Zwei Tests halten beide Seiten.
+- `object_names` entsteht in der Ausgabeschleife der Auswertung — und die läuft
+  auch bei einem **Cache-Treffer**, was der häufige Fall ist: Jede
+  Parameteränderung wertet neu aus, und alles über der geänderten Stelle liegt
+  fertig da. Gegenprobe mit einer Zuweisung nur beim echten Rechnen: Der zweite
+  Lauf kennt `{}` und der Bericht sagt wieder „obj_1", genau dann, wenn niemand
+  mehr hinsieht.
+
+**Und einmal lag der Fund selbst falsch.** „`decimate` zerlegt glatte Körper"
+stimmte in der Beobachtung und nicht in der Ursache: Eine saubere Kugel
+dezimiert bis auf 2 000 Dreiecke hinunter wasserdicht. Was zerreißt, ist ein
+unverschweißtes Netz, und dass „das kantige Gehäuse dieselbe Stufe unversehrt
+überstand", war der Hinweis darauf — es war verschweißt, die Vase aus dem
+Erzeuger nicht. Wer nach der Glätte gesucht hätte, hätte lange gesucht.
+
+### Der Regelcheck
+
+Gegen die zweiundzwanzig, nur die Regeln, die das Gebiet berühren:
+
+- **Regel 7 und 8** am neuen Baustein: Alle vier Maße kommen aus der Tabelle,
+  die Zahlen im Code sind ein Faktor (`2.0 * play`), eine Kappung
+  (`length / 3.0`) und Koordinaten. Keine Toleranz als Konstante.
+- **Regel 4** vollständig: Registereintrag, Schema, Geometrietest, Texte in
+  fünf Katalogen. Vorschaubild, `to_scad`, Menü, Handbuch, Agentenwerkzeug und
+  Kommandozeile kommen aus dem einen Eintrag (Leitprinzip 3).
+- **Regel 16** greift nicht: `core/generate.py` hat einen Aufrufer, und der ist
+  die Oberfläche, nicht die Agentenschicht. Die drei Transaktionen der Kette
+  sind Absicht und seit je geprüft; geändert hat sich nur, wann die dritte
+  auslöst.
+- **§20 auf dem neuen Pfad**: Seit `decimate` erst verschweißt, gibt es zwei
+  Wege durch die Funktion, und der Slot-Test fuhr nur den einen — seine Kugel
+  kommt aus `trimesh` und ist verschweißt, ein Netz aus einer Datei ist es nie.
+  Nachgemessen: 20 480 Slots in zwei Farben gehen hinein, 4 000 in zwei Farben
+  kommen heraus. Jetzt mit Test.
+- **Regel 21**: Zwei Fragen gestellt statt geraten — welche Bauart der Baustein
+  ist, und woher Stegdicke und Kammertiefe kommen.
+
+Kein Verstoß.
+
+### Was liegen bleibt, und warum
+
+- [ ] **Die Objektnamen der Beispielprojekte bleiben deutsch, und der Weg
+      dorthin ist teurer als er aussieht.** Die saubere Stelle ist das
+      Dateiformat, wie `title_translatable` es für Transaktionstitel vormacht —
+      soweit stimmt die Notiz von heute Morgen. Was sie nicht sagt: Ein
+      `TranslatableText` in `params` reicht bis in `operation_hash`. Der
+      Parametersatz geht durch `_canonical` in den Cache-Schlüssel, ein
+      Dataclass-Wert ist dort nicht darstellbar, und ein Schlüssel, der von der
+      Anzeigesprache abhinge, wäre schlimmer als ein deutscher Name. Dazu ein
+      Schritt 8 → 9 mit Migration, Beispieldatei der alten Fassung, den
+      Leseseiten in `make_examples.py` und neu erzeugten Beispielen. Machbar,
+      aber als eigener Durchgang und nicht neben fünf anderen Punkten.

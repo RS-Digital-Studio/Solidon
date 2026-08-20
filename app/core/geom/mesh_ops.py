@@ -24,6 +24,7 @@ import trimesh
 from app.core.errors import CANCEL, Action, NotManifoldError, ValidationError
 from app.core.geom.attributes import transfer
 from app.core.geom.mesh import MeshData, as_mesh_data, on_surface
+from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, Severity
@@ -100,9 +101,52 @@ def decimate(mesh: MeshData, target: int) -> MeshData:
     """
     if mesh.triangle_count <= max(target, DECIMATE_FLOOR):
         return mesh
-    reduced = mesh.raw.simplify_quadric_decimation(face_count=target)
+    source = _welded_for_simplify(mesh)
+    reduced = source.raw.simplify_quadric_decimation(face_count=target)
     _log.info("decimated %d to %d triangles", mesh.triangle_count, len(reduced.faces))
-    return transfer(mesh.replacing(reduced), [mesh], tolerance=math.inf)
+    return transfer(source.replacing(reduced), [mesh], tolerance=math.inf)
+
+
+#: Ab welchem Verhältnis Punkte zu Dreiecken ein Netz als unverschweißt gilt.
+#: Ein geschlossenes Dreiecksnetz hat etwa halb so viele Punkte wie Dreiecke;
+#: eine Dreieckssuppe, in der jedes Dreieck seine eigenen drei Punkte trägt,
+#: hat dreimal so viele. Gemessen über den ganzen Korpus: jedes frisch gelesene
+#: STL steht auf genau 3,00, ein verschweißter Körper auf 0,50 — dazwischen
+#: liegt nichts, und die Eins ist deshalb keine Grenze, an der etwas kippt.
+LOOSE_VERTEX_RATIO = 1.0
+
+
+def _welded_for_simplify(mesh: MeshData) -> MeshData:
+    """Verschweißt, falls nötig — die Vereinfachung verlangt geteilte Kanten.
+
+    Quadrik-Dezimierung zieht Kanten zusammen. Wo keine Kante zwei Dreiecke
+    verbindet, weil beide ihre eigenen Punkte tragen, zieht sie das Netz
+    auseinander statt es zu vereinfachen: **eine Kugel aus 81 920 einzelnen
+    Dreiecken kam als 12 450 Teile heraus, nicht wasserdicht.** Verschweißt
+    ging dieselbe Kugel auf jedes Ziel als ein wasserdichtes Stück durch, bis
+    hinunter zu 2 000 Dreiecken. Das ist der Fund „`decimate` zerlegt glatte
+    Körper" (Vase 607 k → 200 k, 60 Teile) — nicht die Glätte war das
+    Kennzeichen, sondern das unverschweißte Eingangsnetz, und ein Modell aus
+    dem Erzeuger ist genau das.
+
+    **Nur wenn nötig**, denn es ist nicht umsonst: Auf einem schon
+    verschweißten Netz kostet `merge_vertices` 37 bis 43 Prozent der
+    Vereinfachung obendrauf (103 ms zu 281 bei 328 k Dreiecken, 408 zu 951 bei
+    1,3 Mio.) und bewegt dabei null Punkte. `decimate` läuft auch für die
+    Anzeige im Viewport; ein Zuschlag von vierzig Prozent für nichts gehört
+    dort nicht hin. Das Verhältnis Punkte zu Dreiecken beantwortet die Frage
+    umsonst — es sind zwei Längen, keine Rechnung über die Geometrie.
+
+    Die Reparaturkette danach hätte den Schaden nicht geheilt: Sie holt die
+    Teilzahl zurück auf eins, die Wasserdichtheit nicht. Was zerrissen ist,
+    lässt sich nicht wieder zunähen, ohne zu erfinden — also wird es nicht
+    zerrissen.
+    """
+    if len(mesh.raw.vertices) <= mesh.triangle_count * LOOSE_VERTEX_RATIO:
+        return mesh
+    welded, gone = merge_vertices(mesh)
+    _log.info("welded %d vertices before simplifying", gone)
+    return welded
 
 
 def smooth(mesh: MeshData, iterations: int) -> MeshData:

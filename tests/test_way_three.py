@@ -289,3 +289,54 @@ def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -
     result = evaluated(project, profile)
     entry = result.scene.objects[generation.object_id]
     assert entry.mesh.triangle_count <= GENERATED_TRIANGLE_TARGET * 1.1
+
+
+def test_a_mesh_between_the_two_old_limits_keeps_its_features(
+    project: Project, profile: Profile
+) -> None:
+    """Die Zwickmühle aus zwei Grenzen, die sich widersprachen.
+
+    Die Merkmalserkennung steigt oberhalb von 200 000 Dreiecken aus, die
+    Automatik dezimierte aber erst ab 500 000 — begründet mit
+    ``agent.analysis.TRIANGLE_LIMIT``, was die Grenze des *Steckbriefs* ist und
+    nicht die der *Erkennung*. Was dazwischen lag, behielt seine Auflösung und
+    verlor die Merkmale: kein Klick auf eine Bohrung, keine Passung, nichts für
+    den Agenten. Bei TripoSG war das der Normalfall.
+
+    Aufgelöst werden konnte das erst, nachdem ``decimate`` ein unverschweißtes
+    Netz nicht mehr zerriss — vorher tauschte jede Senkung dieser Grenze
+    wasserdicht gegen Merkmale. Deshalb prüft dieser Test **beides** an einem
+    Körper: dass er dezimiert wird, dass er dabei geschlossen bleibt, und dass
+    am Ende Merkmale dastehen.
+    """
+    import trimesh
+
+    from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
+
+    # Genau der Bereich, der vorher durchfiel: über der Erkennungsgrenze,
+    # unter den alten 500 000.
+    mittel = trimesh.creation.icosphere(subdivisions=7, radius=30.0)
+    assert FEATURE_LIMIT_TRIANGLES < len(mittel.faces) < 500_000, (
+        f"{len(mittel.faces)} Dreiecke liegen nicht im Bereich, um den es geht"
+    )
+    payload = bytes(trimesh.exchange.export.export_mesh(mittel, None, file_type="ply"))
+
+    generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
+    generation = from_text(project, generator, "eine Vase", seed=7)
+
+    assert len(generation.transactions) == 3, "Laden, Reparieren, Dezimieren"
+
+    result = evaluated(project, profile)
+    entry = result.scene.objects[generation.object_id]
+
+    assert entry.mesh.triangle_count <= FEATURE_LIMIT_TRIANGLES, (
+        f"{entry.mesh.triangle_count} Dreiecke — über der Grenze der Erkennung"
+    )
+    assert entry.mesh.is_watertight, "beim Dezimieren aufgerissen"
+    assert entry.mesh.component_count == 1, (
+        f"beim Dezimieren in {entry.mesh.component_count} Teile zerfallen"
+    )
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert "perceive.too_large" not in codes, (
+        "die Erkennung steigt weiter aus — die Grenzen widersprechen sich noch"
+    )

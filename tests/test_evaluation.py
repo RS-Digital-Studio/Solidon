@@ -625,6 +625,61 @@ def test_a_warning_that_a_later_step_fixed_is_dropped() -> None:
     assert [entry.code for entry in kept] == ["repair.holes_filled"]
 
 
+def test_a_decimation_that_stays_too_large_does_not_settle_the_warning() -> None:
+    """Der Grenzfall des jüngsten Eintrags in ``SETTLED_BY``.
+
+    „Zu fein für die Merkmalserkennung" wird von ``mesh.deviation`` aufgehoben,
+    also von einer Dezimierung. Nur: Eine Dezimierung, die *nicht* unter die
+    Grenze bringt — von 1,3 Mio. auf 400 000 zum Beispiel —, hebt gar nichts
+    auf. Ein Streichen wäre dort ein falsches Versprechen: Der Körper hat immer
+    noch keine Merkmale, und der Bericht schwiege darüber.
+
+    Er tut es nicht, und der Grund liegt nicht in ``SETTLED_BY``, sondern in
+    der Auswertung: Sie prüft die Größe nach **jeder** Operation, also steht
+    nach dem Dezimieren ein *frischer* Befund da — und hinter dem kommt kein
+    Heiler mehr. Der alte wird gestrichen, der neue bleibt. An der ganzen Kette
+    nachgemessen (1,3 Mio. → 400 000: `perceive.too_large` steht weiter im
+    Bericht); hier steht der Mechanismus dahinter.
+    """
+    from app.core.scene.evaluate import _without_settled
+
+    kept = _without_settled(
+        [
+            _finding("perceive.too_large", "info", 1),
+            _finding("mesh.deviation", "info", 2),
+            # Nach dem Dezimieren gemessen und weiter zu fein
+            _finding("perceive.too_large", "info", 2),
+        ]
+    )
+
+    codes = [entry.code for entry in kept]
+    assert codes.count("perceive.too_large") == 1, (
+        f"der frische Befund muss stehen bleiben, der alte gehen: {codes}"
+    )
+    assert [entry.op_id for entry in kept if entry.code == "perceive.too_large"] == [2], (
+        "gestrichen wurde der falsche von beiden"
+    )
+
+
+def test_a_decimation_below_the_limit_settles_the_warning() -> None:
+    """Und der Normalfall: Wer unter die Grenze kommt, hat kein Thema mehr.
+
+    Die Kette des Erzeugers lädt, repariert und dezimiert in einem Zug. Ohne
+    diesen Eintrag stand am Ende „zu fein für die Merkmalserkennung" über einem
+    Körper, dessen Merkmale gerade erkannt worden waren.
+    """
+    from app.core.scene.evaluate import _without_settled
+
+    kept = _without_settled(
+        [
+            _finding("perceive.too_large", "info", 1),
+            _finding("mesh.deviation", "info", 3),
+        ]
+    )
+
+    assert [entry.code for entry in kept] == ["mesh.deviation"]
+
+
 def test_an_earlier_repair_does_not_settle_a_later_import() -> None:
     """**Später** ist die ganze Bedingung.
 
@@ -669,3 +724,66 @@ def test_findings_without_a_settling_partner_stay() -> None:
     ]
 
     assert _without_settled(findings) == findings
+
+
+def test_the_names_of_consumed_bodies_survive_a_cache_hit() -> None:
+    """``object_names`` muss auch dann stehen, wenn nichts gerechnet wurde.
+
+    Der zweite Lauf über denselben Stapel kommt aus dem Cache, und das ist der
+    **häufige** Fall — jede Parameteränderung wertet neu aus, und alles über der
+    geänderten Stelle liegt fertig da. Käme die Zuordnung nur beim echten
+    Rechnen zustande, stünde im Prüfbericht wieder „obj_1", und zwar genau dann,
+    wenn niemand mehr hinsieht.
+
+    Der Cache-Zweig führt in dieselbe Ausgabeschleife wie das Rechnen; dieser
+    Test hält das fest, damit ein Umbau dort nicht die Namen verliert.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene import History, OperationDraft, ResultCache
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    history = History(document)
+    history.apply(
+        "Dose",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 60.0, "depth": 40.0, "height": 30.0, "name": "Dose"},
+            )
+        ],
+    )
+    history.apply(
+        "Aushöhlen",
+        [
+            OperationDraft(
+                op="hollow_object",
+                inputs=(document.ops[-1].outputs[0],),
+                params={"wall": 3.0, "open_top": True},
+            )
+        ],
+    )
+    history.apply(
+        "Deckel",
+        [OperationDraft(op="create_lid", inputs=(document.ops[-1].outputs[0],), params={})],
+    )
+
+    profile = make_profile("centauri-carbon-2", "petg")
+    cache = ResultCache()
+    sources = ProjectSources(project)
+
+    first = evaluate(document, profile, sources=sources, cache=cache)
+    second = evaluate(document, profile, sources=sources, cache=cache)
+
+    assert "obj_1" not in second.scene.objects, "der Deckel hat obj_1 nicht ersetzt"
+    assert dict(second.object_names) == dict(first.object_names), (
+        f"der Cache-Lauf kennt andere Namen: {dict(second.object_names)} "
+        f"statt {dict(first.object_names)}"
+    )
+    assert second.object_names.get("obj_1") == "Dose", (
+        f"der verbrauchte Körper hat seinen Namen verloren: {dict(second.object_names)}"
+    )

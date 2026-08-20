@@ -14,6 +14,7 @@ import zipfile
 from io import BytesIO
 from xml.etree import ElementTree as ET
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -103,6 +104,38 @@ def test_slots_survive_the_decimation() -> None:
 
     reduced = decimate(two_tone, 5_000)
 
+    assert len(reduced.slots) == reduced.triangle_count, "jedes Dreieck trägt einen Slot"
+    assert used_slots(reduced) == (0, 1), "beide Farben sind noch da"
+    assert area_share(reduced, 1) == pytest.approx(0.5, abs=0.02), "der Äquator liegt, wo er lag"
+
+
+def test_slots_survive_the_decimation_of_an_unwelded_body() -> None:
+    """Derselbe Satz, aber über den Weg, der beim Verschweißen entlangführt.
+
+    Seit `decimate` ein unverschweißtes Netz zuerst verschweißt, gibt es zwei
+    Wege durch die Funktion, und der Test darüber fährt nur den einen: Seine
+    Kugel kommt aus `trimesh` und ist verschweißt. Ein Netz aus einer Datei ist
+    es nie — und §20 gilt auf beiden Wegen.
+
+    Die Stelle, an der es hätte brechen können, ist `replacing`: Sie lässt eine
+    Zuweisung fallen, deren Länge nicht mehr passt. Das Verschweißen ändert die
+    Punkte und nicht die Dreiecke, also passt sie — aber das ist eine Zusage
+    über `merge_vertices`, und Zusagen über fremde Funktionen gehören geprüft.
+    """
+    ball = trimesh.creation.icosphere(subdivisions=5)
+    # Eine Dreieckssuppe, wie sie aus einer STL kommt: kein Punkt geteilt.
+    loose = trimesh.Trimesh(
+        vertices=ball.vertices[ball.faces].reshape(-1, 3),
+        faces=np.arange(len(ball.faces) * 3).reshape(-1, 3),
+        process=False,
+    )
+    upper = tuple(int(centre[2] > 0.0) for centre in loose.triangles_center)
+    two_tone = MeshData(raw=loose, slots=upper)
+    assert two_tone.component_count == two_tone.triangle_count, "die Suppe ist keine Suppe"
+
+    reduced = decimate(two_tone, 5_000)
+
+    assert reduced.is_watertight, "beim Dezimieren aufgerissen"
     assert len(reduced.slots) == reduced.triangle_count, "jedes Dreieck trägt einen Slot"
     assert used_slots(reduced) == (0, 1), "beide Farben sind noch da"
     assert area_share(reduced, 1) == pytest.approx(0.5, abs=0.02), "der Äquator liegt, wo er lag"

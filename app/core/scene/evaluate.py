@@ -393,6 +393,30 @@ def evaluate(
 SETTLED_BY: Final[dict[str, frozenset[str]]] = {
     "ingest.not_watertight": frozenset({"repair.holes_filled"}),
     "ingest.small_components": frozenset({"repair.components_removed"}),
+    # „Zu fein für die Merkmalserkennung" beschreibt eine Zahl, und die
+    # Dezimierung ändert genau sie. Bei einem erzeugten Körper stehen beide
+    # Sätze im selben Bericht — die Kette lädt, repariert und dezimiert in einem
+    # Zug (``core/generate.py``) —, und der erste redet vom Zustand vor dem
+    # dritten Schritt. Gestrichen und nicht herabgestuft: Es *ist* nicht mehr zu
+    # fein, und ein Hinweis darauf wäre nicht milder, sondern falsch.
+    #
+    # Eine Dezimierung, die **nicht** unter die Grenze bringt, hebt trotzdem
+    # nichts auf: Die Auswertung misst nach jeder Operation, also steht danach
+    # ein frischer Befund da, und hinter dem kommt kein Heiler
+    # (``test_a_decimation_that_stays_too_large_does_not_settle_the_warning``).
+    "perceive.too_large": frozenset({"mesh.deviation"}),
+    # „Zu fein für die Merkmalserkennung" beschreibt eine Zahl, und die
+    # Dezimierung ändert genau sie. Bei einem erzeugten Körper stehen beide
+    # Sätze im selben Bericht — die Kette lädt, repariert und dezimiert in einem
+    # Zug (``core/generate.py``) —, und der erste redet vom Zustand vor dem
+    # dritten Schritt. Gestrichen und nicht herabgestuft: Es *ist* nicht mehr zu
+    # fein, und ein Hinweis darauf wäre nicht milder, sondern falsch.
+    # „Zu fein für die Merkmalserkennung" beschreibt eine Zahl, und die
+    # Dezimierung ändert genau sie. Bei einem erzeugten Körper stehen beide
+    # Sätze im selben Bericht — die Kette lädt, repariert und dezimiert in einem
+    # Zug (``core/generate.py``) —, und der erste redet vom Zustand vor dem
+    # dritten Schritt. Gestrichen und nicht herabgestuft: Es *ist* nicht mehr zu
+    # fein, und ein Hinweis darauf wäre nicht milder, sondern falsch.
 }
 
 
