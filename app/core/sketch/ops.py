@@ -28,6 +28,7 @@ from app.core.sketch.profile import Profile, profile_of, regions_of, shifted
 from app.core.sketch.serialize import sketch_from_text
 from app.core.sketch.solver import solve_sketch
 from app.core.types import BaseParams, OpContext, OpResult, PlaneFrame, SceneObject
+from app.core.units import DEGREE_UNIT
 from app.i18n import _
 
 #: Ein Satz, den drei Parameterschemata teilen — deshalb steht er einmal hier.
@@ -427,7 +428,7 @@ class SketchRevolveParams(BaseParams):
     angle: float = param(
         title=_("Winkel"),
         default=360.0,
-        unit="°",
+        unit=DEGREE_UNIT,
         minimum=1.0,
         maximum=360.0,
         placement="advanced",
@@ -506,7 +507,7 @@ class SketchSweepParams(BaseParams):
     bend_angle: float = param(
         title=_("Bogenwinkel"),
         default=90.0,
-        unit="°",
+        unit=DEGREE_UNIT,
         minimum=1.0,
         maximum=180.0,
         doc=_("Wie weit der Bogen führt — 90 Grad ist ein rechtwinkliger Rohrbogen."),

@@ -32,6 +32,7 @@ from app.core.knowledge.parts.build import bore, face, pin, result, subtract, un
 from app.core.knowledge.parts.registry import PartChange, register_part
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
+from app.core.units import DEGREE_UNIT
 from app.i18n import _
 
 FIRST_RELEASE = PartChange(
@@ -220,7 +221,7 @@ class OverhangFanParams(BaseParams):
     first: float = param(
         title=_("Kleinster Winkel"),
         default=20.0,
-        unit="grad",
+        unit=DEGREE_UNIT,
         minimum=5.0,
         maximum=80.0,
         doc=_("Die steilste Fläche, gemessen gegen die Senkrechte. Kleiner heißt steiler."),
@@ -228,7 +229,7 @@ class OverhangFanParams(BaseParams):
     step: float = param(
         title=_("Schrittweite"),
         default=10.0,
-        unit="grad",
+        unit=DEGREE_UNIT,
         minimum=2.0,
         maximum=30.0,
         doc=_("Um wie viel Grad jede Fläche flacher wird als die vorige."),

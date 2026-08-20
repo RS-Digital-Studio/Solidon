@@ -39,7 +39,7 @@ from app.core.knowledge.profiles import for_object, material
 from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
 from app.core.types import BaseParams, Finding, OpContext, OpResult
-from app.core.units import EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
 _AXES = tuple(AXIS_NORMALS)
@@ -305,7 +305,7 @@ class CountersinkParams(BaseParams):
     angle: float = param(
         title=_("Winkel"),
         default=90.0,
-        unit="grad",
+        unit=DEGREE_UNIT,
         minimum=30.0,
         maximum=170.0,
         doc=_("Voller Kopfwinkel — 90 Grad bei metrischen Senkschrauben."),

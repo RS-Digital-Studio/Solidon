@@ -27,6 +27,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data, on_surface
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, Severity
+from app.core.units import DEGREE_UNIT
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -694,7 +695,7 @@ class SubdivideParams(BaseParams):
     angle: float = param(
         title=_("Kantenwinkel"),
         default=52.5,
-        unit="°",
+        unit=DEGREE_UNIT,
         minimum=0.0,
         maximum=180.0,
         doc=_(

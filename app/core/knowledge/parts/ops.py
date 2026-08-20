@@ -40,6 +40,7 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
+from app.core.units import DEGREE_UNIT
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -113,7 +114,7 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
         param(
             title=_("Drehung"),
             default=0.0,
-            unit="grad",
+            unit=DEGREE_UNIT,
             minimum=-360.0,
             maximum=360.0,
             placement="advanced",

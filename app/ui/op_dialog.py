@@ -44,7 +44,7 @@ from app.core.errors import AppError
 from app.core.registry import OperationSpec, caveat_line
 from app.core.scene import expressions
 from app.core.types import ParamSpec
-from app.core.units import LengthUnit, decimals_for, from_mm, to_mm
+from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
 from app.ui.labels import choice_label, display_unit
 from app.ui.style import TIGHT, make_primary, set_level
@@ -452,7 +452,7 @@ class ArmatureField(QWidget):
                     kind="float",
                     title=axis,
                     default=0.0,
-                    unit="°",
+                    unit=DEGREE_UNIT,
                     minimum=-POSE_LIMIT,
                     maximum=POSE_LIMIT,
                 )

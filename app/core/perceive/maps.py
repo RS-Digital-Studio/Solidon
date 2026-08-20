@@ -42,6 +42,7 @@ from app.core.types import (
     SliceResult,
     Vec3,
 )
+from app.core.units import DEGREE_UNIT
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -387,7 +388,7 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
             kind="overhang",
             title=TITLES["overhang"],
             values=(),
-            unit="°",
+            unit=DEGREE_UNIT,
             low=0.0,
             high=0.0,
             threshold=limit,
@@ -400,7 +401,7 @@ def overhang_map(mesh: MeshData, limit: float = OVERHANG_LIMIT_DEGREES) -> Analy
         kind="overhang",
         title=TITLES["overhang"],
         values=tuple(float(value) for value in angles),
-        unit="°",
+        unit=DEGREE_UNIT,
         low=0.0,
         high=90.0,
         highlighted=tuple(int(index) for index in np.nonzero(angles > limit)[0]),
@@ -461,7 +462,7 @@ def curvature_map(mesh: MeshData) -> AnalysisMap:
         kind="curvature",
         title=TITLES["curvature"],
         values=tuple(float(value) for value in values),
-        unit="°",
+        unit=DEGREE_UNIT,
         low=0.0,
         high=float(values.max()) if len(values) else 0.0,
         note=_("Zum Gegenprüfen, was die Merkmalserkennung als Kante sieht."),

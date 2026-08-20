@@ -28,7 +28,7 @@ from app.core.geom.transform import (
 )
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, FeatureRef, Finding, OpContext, OpResult, Transform
-from app.core.units import EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
 _AXES = tuple(AXIS_VECTORS)
@@ -96,7 +96,7 @@ class RotateParams(BaseParams):
     angle: float = param(
         title=_("Winkel"),
         default=90.0,
-        unit="grad",
+        unit=DEGREE_UNIT,
         minimum=-360.0,
         maximum=360.0,
         doc=_("Drehwinkel gegen den Uhrzeigersinn, von der Achsspitze aus gesehen."),

@@ -29,7 +29,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Finding, MaterialSlot, OpContext, OpResult, Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -152,7 +152,7 @@ class PaintParams(BaseParams):
     edge_angle: float = param(
         title=_("Kantenwinkel"),
         default=EDGE_ANGLE,
-        unit="grad",
+        unit=DEGREE_UNIT,
         minimum=1.0,
         maximum=180.0,
         placement="advanced",

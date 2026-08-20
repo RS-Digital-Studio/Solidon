@@ -31,7 +31,7 @@ from app.core.geom.transform import apply, rotation, translation
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, MaterialSlot, OpContext, OpResult, SceneObject, Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -177,7 +177,7 @@ class LabelParams(BaseParams):
     angle: float = param(
         title=_("Drehung"),
         default=0.0,
-        unit="grad",
+        unit=DEGREE_UNIT,
         minimum=-360.0,
         maximum=360.0,
         placement="advanced",

@@ -70,6 +70,7 @@ from app.core.types import (
     SettingAdvice,
     SliceResult,
 )
+from app.core.units import DEGREE_UNIT
 from app.i18n import tr
 from app.ui.dialogs import show_error
 from app.ui.labels import by_title, colour_name
@@ -271,7 +272,7 @@ FIELDS: tuple[Field, ...] = (
         "infill.angle",
         tr("Füllwinkel"),
         "infill",
-        unit="°",
+        unit=DEGREE_UNIT,
         minimum=0.0,
         maximum=180.0,
         step=5.0,
@@ -477,7 +478,7 @@ FIELDS: tuple[Field, ...] = (
         "support.threshold_angle",
         tr("Ab Winkel"),
         "support",
-        unit="°",
+        unit=DEGREE_UNIT,
         minimum=0.0,
         maximum=90.0,
         step=5.0,

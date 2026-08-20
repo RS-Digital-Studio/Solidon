@@ -17,7 +17,7 @@ from app.core.errors import CORRECT_INPUT, SPLIT_MODEL, ValidationError
 from app.core.geom.mesh import as_mesh_data
 from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.types import BaseParams, OpContext, OpResult, SceneObject
-from app.core.units import EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _, tr
 
 
@@ -184,7 +184,7 @@ class PatternParams(BaseParams):
     angle: float = param(
         title=_("Winkel"),
         default=360.0,
-        unit="grad",
+        unit=DEGREE_UNIT,
         minimum=-360.0,
         maximum=360.0,
         doc=_(

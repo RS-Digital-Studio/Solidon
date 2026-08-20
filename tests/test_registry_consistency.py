@@ -157,3 +157,35 @@ def test_a_parameter_set_can_always_be_taken_apart(spec: OperationSpec) -> None:
     assert {entry.name for entry in entries} >= {entry.name for entry in spec.params.spec()}, (
         f"{spec.name}: das Schema nennt Parameter, die als Feld fehlen"
     )
+
+
+def test_one_spelling_for_the_angle() -> None:
+    """Sechsundzwanzig Winkel trugen „grad", vier trugen „°".
+
+    Im Dialog las sich das als „Winkel [grad]" in *Senken* und „Winkel [°]" in
+    *Formschräge anstellen* — zwei Schreibweisen derselben Einheit im selben
+    Produkt. „grad" ist obendrein ein roher deutscher Schlüssel: Er steht in
+    keinem Katalog, also stand er auch in der englischen Oberfläche so da.
+
+    Geprüft wird über das ganze Register, denn eine Vereinbarung hält nur bis
+    zum nächsten Winkelparameter. Erlaubt sind Millimeter und
+    :data:`DEGREE_UNIT`; wer eine dritte Einheit braucht, trägt sie hier ein und
+    entscheidet damit bewusst.
+    """
+    from app.core.units import DEGREE_UNIT
+
+    allowed = {"mm", DEGREE_UNIT}
+    found: dict[str, list[str]] = {}
+    for spec in registered():
+        for entry in spec.params.spec():
+            if entry.unit and entry.unit not in allowed:
+                found.setdefault(entry.unit, []).append(f"{spec.name}.{entry.name}")
+    assert not found, f"unbekannte Einheiten im Register: {found}"
+
+    angles = [
+        f"{spec.name}.{entry.name}"
+        for spec in registered()
+        for entry in spec.params.spec()
+        if entry.unit == DEGREE_UNIT
+    ]
+    assert len(angles) > 20, f"nur {len(angles)} Winkelparameter — prüft dieser Test noch etwas?"

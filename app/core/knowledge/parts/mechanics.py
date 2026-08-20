@@ -21,6 +21,7 @@ from app.core.knowledge.parts.build import bore, face, pin, result, subtract, un
 from app.core.knowledge.parts.registry import PartChange, register_part
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
+from app.core.units import DEGREE_UNIT
 from app.i18n import _
 
 FIRST_RELEASE = PartChange(
@@ -72,7 +73,7 @@ class SnapFitParams(BaseParams):
     lead_angle: float = param(
         title=_("Anlaufwinkel"),
         default=35.0,
-        unit="grad",
+        unit=DEGREE_UNIT,
         minimum=10.0,
         maximum=60.0,
         placement="advanced",

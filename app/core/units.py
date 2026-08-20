@@ -49,6 +49,19 @@ _UNIT_DECIMALS: Final[dict[LengthUnit, int]] = {"mm": 2, "cm": 3, "m": 5, "in": 
 #: Einheiten, die die Oberfläche anbietet (§19.3). Der Kern bleibt bei Millimetern.
 DISPLAY_UNITS: Final[tuple[LengthUnit, ...]] = ("mm", "in")
 
+#: Die Einheit eines Winkels, in jeder Sprache dieselbe.
+#:
+#: Sie stand als Zeichenkette in den Registereinträgen, und zwar in zwei
+#: Schreibweisen: 26 Parameter trugen ``"grad"``, vier ``"°"``. Im Dialog las
+#: sich das als „Winkel [grad]" hier und „Winkel [°]" dort — zwei Schreibweisen
+#: derselben Einheit im selben Produkt. „grad" ist obendrein ein roher deutscher
+#: Schlüssel, der in keinem Katalog steht und deshalb auch in der englischen
+#: Oberfläche so dastand.
+#:
+#: Als Konstante und nicht als Vereinbarung: Eine Vereinbarung hält, bis jemand
+#: den nächsten Winkelparameter schreibt.
+DEGREE_UNIT: Final = "°"
+
 
 def decimals_for(unit: LengthUnit) -> int:
     """Wie viele Nachkommastellen diese Einheit braucht, um EPS_DISPLAY zu zeigen.

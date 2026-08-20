@@ -23,6 +23,7 @@ from app.core.brep.kernel import Solid, require
 from app.core.errors import InternalError, NeedsSolidError, ValidationError
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
+from app.core.units import DEGREE_UNIT
 from app.i18n import _
 
 _CHOICES = edit.EDGE_CHOICES
@@ -299,7 +300,7 @@ class DraftParams(BaseParams):
     angle: float = param(
         title=_("Winkel"),
         default=2.0,
-        unit="°",
+        unit=DEGREE_UNIT,
         minimum=0.1,
         maximum=30.0,
         doc=_(
