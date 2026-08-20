@@ -43,7 +43,7 @@ bekommt einen roten Lauf.
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | D4 — ViewCube und Ansichtsleiste, wieder offen | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung: Würfel zurück, Leiste bauen oder beides lassen |
-| B1 — gehosteter Erzeugungsdienst als zweiter Weg | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung, nicht Code |
+| Die Rückfallebene ohne Grafikkarte (B1 im Erzeugen-Konzept) | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung über den Dienst — sie kostet Geld, nicht Tage |
 
 ---
 
@@ -6926,9 +6926,20 @@ Konzeptdateien und deshalb hier und nicht dort:
       beim PRO.
 - [ ] **D4 steht wieder offen** — ViewCube und Ansichtsleiste, siehe oben. Die
       sieben Kameravoreinstellungen liegen wieder allein im Menü.
-- [ ] **B1 aus dem Erzeugen-Konzept steht in keiner Arbeitsliste** — die
-      Frage, ob ein gehosteter Erzeugungsdienst als zweiter Weg neben ComfyUI
-      treten soll. Jetzt steht sie hier.
+- [ ] **Die Rückfallebene für Rechner ohne Grafikkarte steht in keiner
+      Arbeitsliste** — B1 im Erzeugen-Konzept: ein zweites Mesh-Backend gegen
+      einen gehosteten Dienst (dort fal.ai, 0,16 $ je Lauf), das ohne Umbau in
+      das `MeshBackend`-Protokoll passt. ComfyUI bleibt der erste Weg; das hier
+      ist der für Maschinen ohne 16 GB Grafikspeicher. Am Code geprüft
+      (19.08.2026): Es gibt `ComfyBackend` und eine Test-Attrappe, kein
+      gehostetes Backend — der Modulkopf von `backends/mesh.py` hat die
+      Schnittstelle dafür ausdrücklich vorbereitet.
+
+      **Vorsicht beim Zitieren:** „B1" bezeichnet in drei Konzepten drei
+      verschiedene Dinge — hier die Rückfallebene, in `konzept-sindricad.md`
+      die halbfertige Skizzenbedienung, in `konzept-meshy-hyper3d-2026-08.md`
+      die fehlende Vergleichstabelle zur Druckbarkeit. Wer ein Kürzel
+      übernimmt, nennt das Dokument dazu.
 
 **Was nicht belegbar war und deshalb offen blieb.** Die Durchsicht hat an
 neunzehn Stellen ausdrücklich nichts eingetragen: Messwerte, die einen
@@ -6945,5 +6956,35 @@ Rechercheur zu Claude Code hat auf diesem Weg drei richtige Aussagen der
 Bedienkonzepte für falsch erklärt — `argument-hint` etwa steht in sieben
 Skills dieses Projekts und funktioniert. Der Korrekturvermerk liegt bei der
 Vorarbeit.
+
+**Und eine zweite, die teurer war.** Nach der Durchsicht wurden vier Hebel
+vorgeschlagen, mit denen Solidon gegen die Mitbewerber wachsen sollte. **Drei
+davon waren erledigt**, und alle drei standen in demselben Dokument, aus dem
+sie abgeleitet wurden — nur nicht an derselben Stelle:
+
+- „Weg 1 zum Hauptversprechen machen" (Empfehlung in 2.3) — eingelöst, beide
+  Startseiten tragen ihn als `h1`.
+- „Höhenkarten als Textur" — die Op `displace_image` steht seit P16 im
+  Register. Gefunden auf dem Umweg über eine Stunde Doppelarbeit: Das Modul
+  war schon halb nachgebaut, samt derselben Begründung im Kopf.
+- „Ziehen und Ablegen sichtbarer machen" (Bedingung der Entscheidung vom
+  13.08.) — am selben Tag eingelöst, `c76b735`, auf beiden Startseiten und im
+  Startbildschirm.
+
+Teil 6 des Wettbewerbskonzepts führte alle drei als abgehakt: „Zahl
+richtiggestellt, Weg 1 nach vorn, Texturen mit Bild." Gelesen wurden die
+Empfehlungen im Fließtext, nicht die Statustabelle daneben — **genau der
+Fehler, den diese Durchsicht 168 Mal in anderen Dokumenten gefunden hat**, am
+selben Tag begangen von demjenigen, der ihn dokumentiert hat.
+
+Die Lehre ist keine über Sorgfalt, sondern über Reihenfolge: **Ein Vorschlag
+wird am Register geprüft, bevor er ausgesprochen wird, nicht danach.** Eine
+Empfehlung in einem Konzept ist ein Befund von damals; ob sie noch offen ist,
+weiß nur der Code.
+
+Das eigentliche Ergebnis dieser Runde steht damit auf der anderen Seite:
+**Solidon ist dem Wettbewerbsfeld gegenüber weiter, als jedes seiner Konzepte
+sagt.** Die Konzepte tragen ihre Befunde treu — ihre Erledigung tragen sie
+nicht.
 
 ---

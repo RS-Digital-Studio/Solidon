@@ -526,6 +526,20 @@ Vier Fragen, die dieses Dokument nicht beantworten kann. **Alle vier sind am
    > **Entschieden: auslassen** — und die Bedingung gilt: Ziehen und Ablegen
    > muss sichtbarer werden, auf der Website wie im Startbildschirm. Das ist
    > der einzige offene Arbeitspunkt aus diesem Teil.
+   >
+   > **Eingelöst am selben Tag** (nachgesehen am 19.08.2026). Commit `c76b735`
+   > vom 13.08.2026 trägt den Titel „Der Weg vom Modellkatalog war gebaut, und
+   > niemand hat ihn je erwähnt" und versorgt beide Orte: Im Startbildschirm
+   > steht unter der Ablagefläche „Auch ein Verweis aus dem Browser"
+   > (`app/ui/start_screen.py`), auf beiden Startseiten beginnt Weg 1 mit
+   > „Datei ablegen — oder den Verweis von MakerWorld, Printables oder
+   > Thingiverse gleich aus dem Browser ins Fenster ziehen, ohne Umweg über den
+   > Download-Ordner." Die Bedingung ist damit dem Wortlaut nach erfüllt.
+   >
+   > Was **nicht** geprüft ist: ob es damit sichtbar *genug* ist. Ein Satz ist
+   > keine Zeichnung, und die vier Wegekarten tragen sonst Vignetten. Das ist
+   > eine Gestaltungsfrage und kein offener Arbeitspunkt — sie gehört in einen
+   > Bedienlauf, nicht in diese Liste.
 
 4. **Wer schreibt über uns?** W1 ist kein Entwicklungspunkt. Solange er offen
    ist, arbeiten alle anderen Punkte für ein leeres Haus.
