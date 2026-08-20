@@ -848,15 +848,12 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   color: var(--muted);
 }
 
-/* Der Operationsdialog steht in seiner Aufnahme unter einem breiten leeren
-   Kopf — auf der Seite läse sich das als Fehler im Bild. Beschnitten wird
-   hier und nicht in der Datei: die stammt aus ``tools/make_figures.py`` und
-   wird beim nächsten Lauf neu erzeugt. */
-.stage img.crop-top {
-  aspect-ratio: 520 / 372;
-  object-fit: cover;
-  object-position: center bottom;
-}
+/* Hier stand ein Beschnitt für den Operationsdialog: Seine Aufnahme trug einen
+   breiten leeren Kopf, und `aspect-ratio` mit `object-fit: cover` schnitt ihn
+   auf der Seite weg. Der Kommentar sagte selbst, dass die Datei „beim nächsten
+   Lauf neu erzeugt" wird — der Lauf ist gelaufen (`fit_height=True`), und das
+   Bild ist 520 × 303 statt 520 × 460. Der Beschnitt hätte jetzt vom **richtigen**
+   Bild unten etwas abgeschnitten, also ist er weg. */
 
 /* ── Zeichnungen, die sich bewegen ─────────────────────────────────────── */
 
