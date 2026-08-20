@@ -125,6 +125,11 @@ class VariantsDialog(QDialog):
         # gebraucht wird. Ein Balken, der von Anfang an auf null steht, sagt
         # nichts und nimmt Platz.
         self.progress = QProgressBar(self)
+        # Die Zahl steht nicht auf der Füllung: Bei 45 Prozent liegt sie halb
+        # auf Bernstein und halb auf der Spur, ab 60 ganz auf Bernstein — mit
+        # 1,69 Kontrast. Dieselbe Begründung wie an den drei Balken daneben, und
+        # ``tests/test_style.py`` hält sie an allen vier.
+        self.progress.setTextVisible(False)
         self.progress.setRange(0, 100)
         self.progress.setVisible(False)
 
