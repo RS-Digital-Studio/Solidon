@@ -114,17 +114,8 @@ Code.
 
 ## Paketstruktur
 
-```
-app/
-  core/        # kein Qt, keine Fenster, keine Benutzerinteraktion
-    types.py errors.py units.py
-    registry/ scene/ geom/ sketch/ brep/ slice/ ingest/ perceive/
-    knowledge/ agent/ backends/ export/ activation/
-  ui/          # PySide6 — darf core benutzen, nie umgekehrt
-  cli/         # Kommandozeilen-Einstieg auf core
-  i18n/
-tests/data/    # Referenzkorpus
-```
+Was wo liegt und warum, steht in der Karte in `CLAUDE.md` — hier steht nur, was
+daraus folgt.
 
 Kommunikation aus dem Kern nach außen nur über den `OpContext`:
 `ctx.progress`, `ctx.ask`, `ctx.cancelled` — keine globalen Objekte, keine

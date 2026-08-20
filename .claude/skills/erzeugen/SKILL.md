@@ -1,0 +1,94 @@
+---
+name: erzeugen
+description: >
+  Erzeugt und liefert aus, was nicht Code ist: Bildschirmfotos, Handbuch,
+  Website-Bilder, SEO-Dateien, Symbol, Installationsdatei, Linux-Pakete,
+  Download-Kasten, ComfyUI-Einrichtung, Website-Upload — dazu Erstaufbau der
+  Umgebung und Fassungspflege über check_env. Benutzen, sobald eines dieser
+  Werkzeuge laufen soll, und bevor ein Paket gebaut wird.
+argument-hint: "[was erzeugt werden soll]"
+allowed-tools: Bash, Read, Edit, Grep, Glob
+---
+
+# Erzeugen und Ausliefern
+
+Alle Werkzeuge laufen über die virtuelle Umgebung, nie über das System-Python.
+Reihenfolge und Fallen stehen unter der Liste — sie sind kein Beiwerk.
+
+```
+.venv\Scripts\python.exe tools/make_figures.py                  # Bildschirmfotos fürs Handbuch — Fenster bildschirmfüllend, `--schirm N` wählt den Monitor
+.venv\Scripts\python.exe tools/make_web_images.py               # dieselben Fenster kleiner plus Bausteinband, für die Verkaufsseiten
+.venv\Scripts\python.exe tools/make_manual.py                   # Handbuch als Website und PDF
+.venv\Scripts\python.exe tools/make_icon.py                     # Anwendungssymbol rastern: ICO und Website-Favicon
+.venv\Scripts\python.exe tools/make_seo.py                      # robots.txt, sitemap.xml, llms.txt, FAQ-Auszeichnung — nach den beiden darüber
+.venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Solidon, braucht Inno Setup 6
+.venv\Scripts\python.exe tools/make_linux_packages.py --files   # Menüeintrag, Flatpak-Manifest, AppStream — läuft überall
+.venv\Scripts\python.exe tools/make_download.py <pakete>        # Pakete in den Download-Kasten aller sechs Sprachen, mit SHA-256; ohne Argument leert es ihn
+.venv\Scripts\python.exe tools/setup_comfyui.py                 # ComfyUI für Weg 3 einrichten: Knoten, TripoSG, 7,5 GB Gewichte
+.venv\Scripts\python.exe tools/build_slice_core.py              # Konturverkettung übersetzen (optional, 1,34× auf die Schichtanalyse)
+.venv\Scripts\python.exe tools/check_support.py                 # kommt eine Rückmeldung wirklich an? schickt eine echte Sendung
+.venv\Scripts\python.exe tools/upload_website.py --seit <commit> # Website hochladen (FTPS); Zugang in .webserver.json, nicht im Repository
+python tools/check_env.py                                       # stimmen die Fassungen? läuft auch ohne .venv
+python tools/check_env.py --install                             # sie stimmen machen (braucht Netz)
+python tools/check_env.py --outdated                            # was wäre neuer, und was verbietet eine Grenze
+python tools/check_env.py --freeze                              # constraints.txt neu schreiben — erst nach grüner Suite
+```
+
+
+**Ausgeliefert wird aus einem eigenen Arbeitsbaum, nicht aus diesem.** Ein
+Paketierlauf dauert eine Viertelstunde, und arbeitet in der Zeit jemand am
+Repository, packt er dessen halbfertigen Stand mit ein — `make_installer.py`
+merkt es und verweigert („Der Bau ist älter als app/"), aber dann fängt man
+von vorn an. Der Weg ohne dieses Rennen:
+
+```
+git worktree add ../solidon-release HEAD
+cd ..\solidon-release
+<Prüfmodul bauen>  &&  pyinstaller packaging/solidon3d.spec  &&  make_installer.py
+git worktree remove ../solidon-release
+```
+
+Das Prüfmodul (`build_licence_module.py`) gehört **in denselben Baum** und vor
+den Bau: Es signiert die vier Grenzdateien aus §2 C, und wer danach eine davon
+ändert, liefert ein Paket aus, das startet und in dem nichts geht. Seit dem
+20.08.2026 vergleicht `make_installer.py` die Prüfsummen und bricht ab; davor
+fiel es erst im Protokoll einer Testinstallation auf.
+
+`make_figures.py`, `make_web_images.py` und `make_manual.py` laufen **nicht**
+offscreen und dürfen es nicht: unter
+`QT_QPA_PLATFORM=offscreen` hat Qt auf dieser Maschine null Schriftfamilien,
+und jede Beschriftung in jedem Bild wird zu einem leeren Kästchen. Wer ein
+erzeugtes Bild prüft, prüft es aus demselben Grund unter der echten Plattform.
+
+**Handbuch und Website brauchen verschiedene Maße.** Das Handbuch zeigt die
+Fenster so, wie sie beim ersten Start aufgehen — bildschirmfüllend, hier 2560
+Punkte breit. Auf einer Verkaufsseite steht dasselbe Bild in einer Spalte von
+650 Punkten und ist damit auf ein Viertel gestaucht; gemessen wurden 25 Prozent
+beim Hauptfenster und 19 beim Skizzenmodus. Deshalb nimmt `make_web_images.py`
+dieselben Fenster ein zweites Mal auf, kleiner, und schneidet aus dem Katalog
+ein Band aus zwei Gruppen. Die Reihenfolge ist `make_figures` →
+`make_web_images` → `make_manual`; die `<img>`-Maße der von Hand gepflegten
+Seiten müssen danach den echten Dateien entsprechen.
+
+Erstaufbau: `python -m venv .venv` und
+`.venv\Scripts\python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"`.
+Das `-c` ist kein Beiwerk: ohne es zieht ein frischer Klon andere Fassungen als
+die CI, und die Suite wird rot, ohne dass eine Zeile Code sich geändert hat.
+Beides zusammen macht auch `python tools/check_env.py --install`.
+
+Arbeiten mehrere am selben Repository, genügt der gute Vorsatz nicht: Der
+Sitzungsstart-Hook gleicht die installierten Fassungen gegen `constraints.txt`
+ab und sagt, wenn etwas abweicht — samt Befehl. Er läuft dafür auch ohne
+`.venv`, sonst könnte er im frischen Klon nicht melden, dass sie fehlt.
+
+**Festgenagelt ist nicht gepflegt.** Der wöchentliche CI-Lauf „Neueste
+Fassungen" (montags, ohne `constraints.txt`) meldet, wenn eine neue Fassung
+etwas *bricht* — dass es überhaupt eine neuere *gäbe*, sagt er niemandem.
+Dafür ist `--outdated` da; es trennt, was gehen würde, von dem, was eine
+Grenze in `pyproject.toml` ausschließt — **dort steht seit dem 14.08.2026 keine
+mehr**, denn die letzte (`trimesh<5`) ist mit der Migration gefallen. Kommt eine
+neue dazu, ist sie eine Entscheidung und gehört begründet. Die nächste zeichnet
+sich schon ab, und sie liegt nicht in unserer Hand: `vtk 9.7.0` ist da, aber
+`pyvista` verlangt `vtk<9.7.0`. Steht der Satz länger als drei Monate, erinnert
+der Sitzungsstart-Hook daran. Der Weg zum neuen Stand ist immer derselbe:
+aktualisieren, **Suite fahren**, dann `--freeze` — nie umgekehrt.
