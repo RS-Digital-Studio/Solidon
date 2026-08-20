@@ -190,9 +190,40 @@ geladen und repariert — zwei Schritte, beide sichtbar, beide zurücknehmbar.
 Prompt und Startwert stehen in der Quelle, damit die Datei sagt, woher die
 Geometrie stammt.
 
+### Einrichten
+
+ComfyUI allein erzeugt noch nichts — es braucht die Knoten und das Modell dazu.
+Beides legt ein Werkzeug hin, nachdem ComfyUI installiert ist:
+
+```
+python tools/setup_comfyui.py
+```
+
+Es findet ComfyUI an den üblichen Stellen (sonst `--comfyui <pfad>`), legt die
+Knoten aus `tools/comfyui/` hinein, holt den TripoSG-Quelltext, richtet zwei
+Stellen darin, zieht drei Pakete nach und lädt die Gewichte — rund 7,5 GB, mit
+`--skip-weights` abwählbar. Danach ComfyUI neu starten. Für den Weg über **Text**
+kommt ein SDXL-Modell unter `models/checkpoints` dazu; für den Weg über ein
+**Bild** wird keines gebraucht.
+
+Fehlt die Knotensammlung, sagt Solidon das beim Erzeugen und nennt den Befehl —
+es schickt niemanden Gewichte suchen, dem die Knoten fehlen.
+
+### Welches Modell, und warum dieses
+
+Der mitgelieferte Ablauf benutzt **TripoSG**, das unter der MIT-Lizenz steht —
+Quelltext wie Gewichte. Das ist der Grund für die Wahl: Das verbreitetere
+Hunyuan3D nimmt in seiner Lizenz die Europäische Union ausdrücklich aus.
+
+Gemessen auf einer RTX 4080 braucht ein Körper rund 13 Sekunden und kommt mit
+300 000 bis 600 000 Dreiecken geschlossen und aus einem Stück heraus. Die
+Vorgaben im Ablauf sind nicht geraten: `octree_depth` steht auf 8, weil 9 bei
+vierfacher Dreieckszahl keinen sichtbaren Unterschied brachte, und `steps` auf
+50, weil dünne Flächen bei 25 sichtbar ausfransen.
+
 Welche Knoten benutzt werden, steht in `app/core/backends/data/text_to_mesh.json`
-und `image_to_mesh.json`. Die mitgelieferten Abläufe gehen von Hunyuan3D aus;
-mit einem anderen Generator wird die Datei ersetzt, nicht der Quelltext.
+und `image_to_mesh.json`. Die Dateien nennen Rollen und keine Dateinamen: mit
+einem anderen Generator wird die Datei ersetzt, nicht der Quelltext.
 
 ## Was ohne zweites Programm geht
 
