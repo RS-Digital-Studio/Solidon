@@ -1871,7 +1871,7 @@
   "Rechten Bereich zeigen": "Afficher le panneau de droite",
   "Rechts": "Droite",
   "Rechts im Prüfbericht steht, was die Kette gefunden und geschlossen hat — mit Herkunft: eine Schätzung wird nie als Messung ausgegeben.": "À droite, le rapport de contrôle indique ce que la chaîne a trouvé et fermé — avec l'origine : une estimation n'est jamais présentée comme une mesure.",
-  "Rechts im Prüfbericht steht, was die Reparatur am Anfang gefunden hat. Bei heruntergeladenen Modellen ist das die Regel, nicht die Ausnahme.": "À droite, le rapport de contrôle indique ce que la réparation a trouvé au début. Avec les modèles téléchargés, c'est la règle et non l'exception.",
+  "Rechts steht der Prüfbericht — hier drei Hinweise und keine Warnung: verschweißte Doppelpunkte vom Einlesen, „nichts zu reparieren\" für dieses Netz, und die Bohrung, die um die Materialtoleranz gewachsen ist. Bei heruntergeladenen Modellen steht dort öfter eine Warnung.": "À droite se trouve le rapport — ici trois remarques et aucun avertissement : des points doubles soudés à l’import, « rien à réparer » pour ce maillage, et le perçage agrandi de la tolérance du matériau. Avec les modèles téléchargés, un avertissement apparaît plus souvent.",
   "Rechtwinklig": "Perpendiculaire",
   "Referenzmaß": "Cote de référence",
   "Region": "Région",

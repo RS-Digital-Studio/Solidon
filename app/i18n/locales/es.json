@@ -1871,7 +1871,7 @@
   "Rechten Bereich zeigen": "Mostrar el panel derecho",
   "Rechts": "Derecha",
   "Rechts im Prüfbericht steht, was die Kette gefunden und geschlossen hat — mit Herkunft: eine Schätzung wird nie als Messung ausgegeben.": "A la derecha, el informe de comprobación lista lo que la cadena encontró y cerró — con procedencia: una estimación nunca se hace pasar por medición.",
-  "Rechts im Prüfbericht steht, was die Reparatur am Anfang gefunden hat. Bei heruntergeladenen Modellen ist das die Regel, nicht die Ausnahme.": "A la derecha, el informe de comprobación lista lo que la reparación encontró al principio. En modelos descargados eso es la regla, no la excepción.",
+  "Rechts steht der Prüfbericht — hier drei Hinweise und keine Warnung: verschweißte Doppelpunkte vom Einlesen, „nichts zu reparieren\" für dieses Netz, und die Bohrung, die um die Materialtoleranz gewachsen ist. Bei heruntergeladenen Modellen steht dort öfter eine Warnung.": "A la derecha está el informe: aquí tres avisos y ninguna advertencia: puntos duplicados soldados al importar, «nada que reparar» para esta malla, y el taladro que creció por la tolerancia del material. Con modelos descargados aparece más a menudo una advertencia.",
   "Rechtwinklig": "Perpendicular",
   "Referenzmaß": "Cota de referencia",
   "Region": "Región",

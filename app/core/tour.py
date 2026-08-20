@@ -202,10 +202,18 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
             TourStep(
                 shows="report",
+                # **Der Satz muss halten, was rechts wirklich steht.** Hier
+                # stand „was die Reparatur am Anfang gefunden hat" — und der
+                # Bericht dieses Beispiels sagt „An diesem Netz war nichts zu
+                # reparieren". Wer als Erstes einen Widerspruch zwischen
+                # Anleitung und Anwendung liest, glaubt danach keiner von
+                # beiden. Genannt wird deshalb, was dasteht: drei Hinweise,
+                # keine Warnung. ``tests/test_tour.py`` hält die Zahl fest.
                 text=_(
-                    "Rechts im Prüfbericht steht, was die Reparatur am Anfang gefunden "
-                    "hat. Bei heruntergeladenen Modellen ist das die Regel, nicht die "
-                    "Ausnahme."
+                    "Rechts steht der Prüfbericht — hier drei Hinweise und keine Warnung: "
+                    "verschweißte Doppelpunkte vom Einlesen, „nichts zu reparieren\" für "
+                    "dieses Netz, und die Bohrung, die um die Materialtoleranz gewachsen "
+                    "ist. Bei heruntergeladenen Modellen steht dort öfter eine Warnung."
                 ),
             ),
         ),

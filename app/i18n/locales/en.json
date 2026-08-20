@@ -1871,7 +1871,7 @@
   "Rechten Bereich zeigen": "Show the right panel",
   "Rechts": "Right",
   "Rechts im Prüfbericht steht, was die Kette gefunden und geschlossen hat — mit Herkunft: eine Schätzung wird nie als Messung ausgegeben.": "On the right, the report lists what the chain found and closed — with origin: an estimate is never passed off as a measurement.",
-  "Rechts im Prüfbericht steht, was die Reparatur am Anfang gefunden hat. Bei heruntergeladenen Modellen ist das die Regel, nicht die Ausnahme.": "On the right, the report lists what the repair found at the start. With downloaded models that is the rule, not the exception.",
+  "Rechts steht der Prüfbericht — hier drei Hinweise und keine Warnung: verschweißte Doppelpunkte vom Einlesen, „nichts zu reparieren\" für dieses Netz, und die Bohrung, die um die Materialtoleranz gewachsen ist. Bei heruntergeladenen Modellen steht dort öfter eine Warnung.": "On the right is the report — three notes here and no warning: duplicate points welded during import, \"nothing to repair\" for this mesh, and the hole that grew by the material tolerance. With downloaded models there is more often a warning.",
   "Rechtwinklig": "Perpendicular",
   "Referenzmaß": "Reference dimension",
   "Region": "Region",
