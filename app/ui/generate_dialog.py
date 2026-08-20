@@ -434,7 +434,21 @@ class GenerateDialog(QDialog):
         Schnittstelle aus §27 hat keinen Aufruf, sie zurückzunehmen, und einen
         zu erfinden, der lügt, wäre schlechter, als nichts zu sagen.
         """
+        self.wait_for_workers()
+        super().reject()
+
+    def wait_for_workers(self, timeout_ms: int = WAIT_MILLISECONDS) -> None:
+        """Kein Arbeiter überlebt diesen Dialog.
+
+        Derselbe Name wie am Hauptfenster, und aus demselben Grund: Es gibt
+        zwei Wege, einen Dialog loszuwerden — schließen und wegräumen. Der
+        zweite ist der Weg der Suite, und dort sucht die Aufräumhilfe
+        (``tests/conftest.py``) genau diesen Namen an jedem obersten Fenster.
+        Ein Dialog, der ihn nicht führt, bleibt unbeachtet, mit laufendem
+        Arbeiter — und ein Thread, der sein Fenster überlebt, nimmt den Prozess
+        mit.
+        """
         worker = self._worker
         if worker is not None and worker.isRunning():
-            worker.wait(WAIT_MILLISECONDS)
-        super().reject()
+            worker.wait(timeout_ms)
+        self._leash.wait_all()

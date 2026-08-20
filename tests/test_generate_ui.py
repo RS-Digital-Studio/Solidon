@@ -85,21 +85,80 @@ def test_the_missing_generator_comes_with_the_way_to_one(qt_app: QApplication) -
     Weg zu ComfyUI steht in der Liste der zusätzlichen Programme, und von hier
     führte nichts dorthin. Der Chat macht es an derselben Stelle richtig
     („Chat einrichten …" neben dem Hinweis).
+
+    **Ein gezeigter Dialog wird hier auch wieder geschlossen**, und das ist
+    keine Kosmetik: Ohne die beiden ``finally``-Zweige brachte dieser Test den
+    Prozess um — nicht sich selbst, sondern die *nächste* Datei. Gemessen,
+    dreimal von drei: ``pytest tests/test_generate_ui.py tests/test_way_three.py``
+    starb nach fünfzehn Sekunden mit einer Zugriffsverletzung im Teardown, und
+    mit diesem einen Test ausgenommen lief dasselbe Paar grün. Wer ein Fenster
+    zeigt und fallen lässt, hinterlässt eine Zustellung an ein Objekt, das der
+    Speicherbereiniger schon abgeräumt hat; das nächste ``processEvents`` liefert
+    sie aus. Das ist derselbe Absturz, den die Aufräumhilfe in
+    ``tests/conftest.py`` jagt — hier ist er in fünfzehn Sekunden reproduzierbar.
     """
     dialog = GenerateDialog(backend=ScriptedMeshBackend())
-    dialog.show()
-    qt_app.processEvents()
+    try:
+        dialog.show()
+        qt_app.processEvents()
 
-    assert dialog.setup.isVisibleTo(dialog), "ohne Generator steht der Weg dorthin da"
-    asked: list[bool] = []
-    dialog.setupRequested.connect(lambda: asked.append(True))
-    dialog.setup.click()
-    assert asked, "und der Knopf sagt es dem Fenster"
+        assert dialog.setup.isVisibleTo(dialog), "ohne Generator steht der Weg dorthin da"
+        asked: list[bool] = []
+        dialog.setupRequested.connect(lambda: asked.append(True))
+        dialog.setup.click()
+        assert asked, "und der Knopf sagt es dem Fenster"
+    finally:
+        dialog.wait_for_workers()
+        dialog.close()
+        dialog.deleteLater()
 
     ready = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
-    ready.show()
+    try:
+        ready.show()
+        qt_app.processEvents()
+        assert not ready.setup.isVisibleTo(ready), "wo nichts fehlt, steht auch kein Weg"
+    finally:
+        ready.wait_for_workers()
+        ready.close()
+        ready.deleteLater()
     qt_app.processEvents()
-    assert not ready.setup.isVisibleTo(ready), "wo nichts fehlt, steht auch kein Weg"
+
+
+def test_the_dialog_can_be_asked_to_let_go_of_its_worker(qt_app: QApplication) -> None:
+    """Es gibt zwei Wege, einen Dialog loszuwerden: schließen und wegräumen.
+
+    ``reject`` wartet seit je — das ist der erste Weg, und das Schließkreuz
+    führt über ihn. Der zweite ist der Weg der Suite: Dort wird ein Dialog
+    weggeräumt, und die Aufräumhilfe in ``tests/conftest.py`` sucht dafür
+    ``wait_for_workers`` an jedem obersten Fenster. Wer den Namen nicht führt,
+    bleibt unbeachtet, mit laufendem Arbeiter — und ein Thread, der sein
+    Fenster überlebt, nimmt den Prozess mit. Eine Generierung läuft Minuten.
+    """
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    try:
+        assert hasattr(dialog, "wait_for_workers"), "die Aufräumhilfe sucht diesen Namen"
+        dialog.wait_for_workers()  # ohne Arbeiter tut es nichts und wirft nicht
+
+        seen: list[int] = []
+        dialog._worker = _StubWorker(seen)  # type: ignore[assignment]
+        dialog.wait_for_workers()
+        assert seen, "auf einen laufenden Arbeiter wird gewartet"
+    finally:
+        dialog.deleteLater()
+
+
+class _StubWorker:
+    """Nur die zwei Methoden, die ``wait_for_workers`` wirklich ruft."""
+
+    def __init__(self, seen: list[int]) -> None:
+        self._seen = seen
+
+    def isRunning(self) -> bool:  # noqa: N802 — Qt gibt den Namen vor
+        return not self._seen
+
+    def wait(self, timeout_ms: int = 0) -> bool:
+        self._seen.append(timeout_ms)
+        return True
 
 
 def test_typing_does_not_ask_the_generator_again(qt_app: QApplication) -> None:

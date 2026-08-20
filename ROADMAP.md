@@ -42,8 +42,7 @@ bekommt einen roten Lauf.
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Die Bildschirmfotos des Handbuchs sind nicht eingecheckt | Die Bedienverträge durchgesehen (20.08.2026) | einen ruhigen Baum — dann `tools/make_manual.py` und alles zusammen einchecken |
-| Nackte Tasten gehören dem Fokus | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Regel, die Pos1 an die Liste gibt, ohne den Ziffern 1 bis 6 ihre Wirkung zu nehmen — der Viewport hat `NoFocus` und kann sie nicht halten |
-| Der Trennen-Bereich und seine 130 Punkte Totraum | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | die echte Plattform — offscreen rechnet Qt ohne Schriftfamilien andere Metriken und liefert das Gegenteil |
+| Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird — Kachelhöhe, Ablagefläche oder die Liste der zuletzt geöffneten Projekte; Umschichten ist ausgereizt |
 
 ---
 
@@ -7576,8 +7575,35 @@ offen** bleibt.
 
 ### Offen
 
-- [ ] **Nackte Tasten gehören dem Fokus — außer Entf, und das ist zu wenig
-      durchdacht.** `_BARE_KEYS` kennt genau `Del`, und die Begründung dafür
+- [ ] **Der Startbildschirm braucht ein Höhenbudget.** Drei Kachelspalten statt
+      zwei und schmalere Außenränder haben den Rollweg auf 1920x1080 von 198 auf
+      16 Pixel gebracht (`571422e`) — auf 1600x900 bleiben 156. Damit passt er
+      nicht überall ohne Rollen, und weiter kommt man nicht durch Umschichten:
+      Es fehlt eine Entscheidung darüber, **was kleiner wird**. Kandidaten,
+      gemessen: die Kachelhöhe (122 Pixel, davon 96 Vorschaubild), die
+      Ablagefläche (140) und „Zuletzt geöffnet" mit seiner Leerzeile. Jede
+      einzelne kostet etwas — die Vorschau ist der Grund, aus dem die Kacheln
+      erkennbar sind.
+
+### Behoben in der zweiten Runde — mit Messwert
+
+- [x] **Nackte Tasten gehören dem Fokus — vier von ihnen** (`23cc1ea`).
+      Entschieden ist es je Taste, so wie der Punkt es verlangte, und die Grenze
+      verläuft zwischen *Bewegen im Inhalt* und *Befehl an das Fenster*: Pos1,
+      Ende, Bild auf und Bild ab gehören dem Bedienelement mit dem Fokus, die
+      Ziffern der Darstellungsarten bleiben Fensterbefehle. Der Filter nimmt
+      dafür das `ShortcutOverride` an, das Qt vor jedem Kürzel an die Fokuskette
+      schickt — Listen und Bäume nehmen es für Pos1 nicht an, deshalb gewann
+      „Alles einpassen".
+
+      Zwei Messwerte aus dem Bau: Der Filter hängt an der **Anwendung** (vom
+      Fenster aus ist das Ereignis nicht zu sehen) und dort **einmal** — je
+      Fenster installiert wuchs die Kette mit jedem gebauten Fenster, und
+      `tests/test_ui.py` blieb bei 97 % stehen, zweimal, nach je zehn Minuten
+      abgebrochen. Mit einem Filter: 223 Tests in 3:16.
+
+      Der ursprüngliche Text des Punktes, zur Erinnerung, was daran nicht
+      trivial war: `_BARE_KEYS` kennt genau `Del`, und die Begründung dafür
       („Entf war fensterweit gebunden und löschte den Körper, auch wenn der
       Fokus im Verlauf lag") gilt wörtlich auch für `Pos1`: Gemessen mit Fokus
       im Objektbaum und in der Verlaufsliste feuert Pos1 beide Male den
@@ -7596,19 +7622,16 @@ offen** bleibt.
       Der zweite Teil desselben Funds ist behoben: Im **Skizzenmodus** war Pos1
       doppelt belegt und feuerte deshalb gar nicht (`3bf12fd`).
 
-- [ ] **Der Startbildschirm braucht ein Höhenbudget.** Drei Kachelspalten statt
-      zwei und schmalere Außenränder haben den Rollweg auf 1920x1080 von 198 auf
-      16 Pixel gebracht (`571422e`) — auf 1600x900 bleiben 156. Damit passt er
-      nicht überall ohne Rollen, und weiter kommt man nicht durch Umschichten:
-      Es fehlt eine Entscheidung darüber, **was kleiner wird**. Kandidaten,
-      gemessen: die Kachelhöhe (122 Pixel, davon 96 Vorschaubild), die
-      Ablagefläche (140) und „Zuletzt geöffnet" mit seiner Leerzeile. Jede
-      einzelne kostet etwas — die Vorschau ist der Grund, aus dem die Kacheln
-      erkennbar sind.
+- [x] **Der Trennen-Bereich hatte 109 Punkte Totraum, und der Satz darin war
+      null Punkte breit** (`b66987b`). Auf der echten Plattform gemessen, wie
+      der Punkt es verlangte: 1440 Bildpunkte Fensterbreite, Karte 685 breit.
+      Die Zustandszeile („Auf das Teil klicken — dort fängt die Trennlinie an.")
+      bekam in der Zeile mit den sechs Bedienelementen **null** Bildpunkte — die
+      anderen brauchten 670 —, weil ihre waagerechte Politik `Ignored` war. Die
+      hatte ihren Grund (sie schützte den Hauptknopf vor „etzt trenne"), ihr
+      Preis war größer: Ein umbrechender Text verlangt für die Breite null eine
+      Höhe von 160 Punkten, und daraus wurde der gemeldete Totraum.
 
-- [ ] **Der Trennen-Bereich hat laut Fund 130 Punkte Totraum.** Offscreen
-      gemessen kommt das Gegenteil heraus — die Leiste wünscht 146 Pixel und
-      bekommt 24 —, weil Qt dort ohne Schriftfamilien andere Metriken rechnet.
-      Dieser Fund braucht die echte Plattform, so wie die Abbildungen sie
-      brauchen; aus dem Offscreen-Lauf ist er nicht zu entscheiden.
-
+      Beides erledigt eine zweite Zeile. Nachher gemessen: Karte **132** statt
+      241, Leiste 59 statt 168, keine unsichtbare Beschriftung mehr — und die
+      anderen sieben Werkzeugkarten unverändert bei 81 bis 112.
