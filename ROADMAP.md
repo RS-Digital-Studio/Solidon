@@ -28,6 +28,9 @@ bekommt einen roten Lauf.
 | Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | die Entscheidung, ob `_chain` mit ausgeliefert wird; der kompilierte Kern steht und bringt 1,34× — was jetzt oben liegt, ist `_plane_segments` |
 | CI-Bauläufe, Signierung, AppImage/Flatpak | P8 — Erste Veröffentlichung | die beiden Linux-Formate; die Signierung braucht ein Zertifikat |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
+| Die zwei Dreieckszahl-Grenzen zusammenbringen | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Entscheidung: Merkmale ab 200 000 oder wasserdicht bleiben — beides zugleich geht erst, wenn `decimate` sauber arbeitet |
+| `decimate` zerlegt glatte Körper | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Vereinfachung, die die Topologie hält; die Reparaturkette holt nur die Teilzahl zurück, nicht die Wasserdichtheit |
+| Erscheinungstermin steht zweimal je Startseite | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | einen ruhigen Tag — bis dahin hält ein Test Zähler und Umschaltung zusammen |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | G-Code an die Maschine senden (B3) | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | eine Bauplanentscheidung, nicht auf Code |
@@ -583,8 +586,12 @@ Anmerkungen zu P9:
   einheitliches Grau zurück — Schreiben *und* Lesen der Materialgruppen liegen
   darum in `app/core/export/threemf.py`.
 * Die mitgelieferten ComfyUI-Arbeitsabläufe (`app/core/backends/data/*.json`)
-  sind ein Startpunkt für Hunyuan3D. Wer andere Knoten installiert hat, ersetzt
-  die Datei — Quelltext ist dafür nicht nötig.
+  laufen gegen **TripoSG** (MIT für Quelltext und Gewichte). Hunyuan3D lieferte
+  dieselbe Güte, aber seine Lizenz nimmt die Europäische Union ausdrücklich aus
+  — für eine Anwendung, die hier verkauft wird, ist das ein Ausschluss und
+  keine Fußnote. Die Knoten dazu stehen unter `tools/comfyui/` und werden mit
+  `python tools/setup_comfyui.py` eingerichtet. Wer andere Knoten installiert
+  hat, ersetzt die Datei — Quelltext ist dafür nicht nötig.
 
 ## P10 — Auto Split mit Verstiftung
 - [x] Trennebene über die Schichtanalyse suchen (§22.3), dann konvexe Zerlegung
@@ -6974,6 +6981,86 @@ eigene Konfigurationsdatei in der 3MF läse.
 Der 3MF-Weg zu ElegooSlicer wurde mitgeprüft und ist in Ordnung: geschrieben,
 geöffnet, gerechnet, und die Gegenprobe meldet keine Abweichung.
 
+### Behoben (20.08.2026)
+
+Alles aus der Durchsicht darüber, gemessen gegen dieselben drei Programme.
+
+**Der Stützwinkel wird umgerechnet.** `_angle_from_horizontal` schreibt
+PrusaSlicer und der Orca-Familie `90 − Wert`; Cura bekommt die Zahl wie sie
+ist. Derselbe Keil, alle drei nachgemessen: der Kipppunkt liegt jetzt bei
+allen zwischen 50 und 70, dort wo der Überhang steht.
+
+**Die Cura-Ableitungen sind vollständig.** Reine Kopien in `CURA_MIRRORED`,
+Faktoren in `CURA_SCALED`, Gerechnetes in `_cura_rated` — jede Zeile die
+Formel aus `fdmprinter.def.json`, nicht eine Meinung darüber. Aus 47
+geschriebenen Schlüsseln sind 224 geworden, und der 20-mm-Würfel braucht
+**809,8 mm Filament statt 1100,4** und 647 Sekunden statt 753. Der Lüfter
+fährt 60 Prozent, die Beschleunigung 8000, und die Außenwand kommt in
+neunundvierzig von fünfzig Lagen zuerst.
+
+Damit die Reihenfolge stimmt, kommen die drei Stufen jetzt an **einer** Stelle
+zusammen: `values_for` legt Zuordnung, Maschine und Ableitung übereinander.
+Vorher hätte die Ableitung auf einen Düsendurchmesser gerechnet, den sie noch
+nicht kannte.
+
+**Drei Cura-Schlüssel treffen jetzt.** `inset_direction` statt
+`outer_inset_first`, `retraction_hop_enabled` neben dem Sprung,
+`support_interface_height` als Millimeter aus Schichtzahl mal Schichthöhe —
+samt der Schalter, ohne die Cura gar keine Schnittstelle baut.
+
+**Mit Stützen läuft Cura wieder.** `support_z_seam_away_from_model` und
+`min_wall_line_width` stehen bei `roofing_layer_count`, wo diese Sorte
+hingehört. Beide Stützarten kommen durch: Gitter 220 Abschnitte, Baum 217.
+
+**Vier neue Zuordnungen**, alle in der Definition nachgeschlagen:
+`z_seam_type`, `build_volume_temperature`, `bridge_fan_speed` und
+`material_max_flowrate` — dazu `bridge_settings_enabled`, ohne den weder die
+Brückengeschwindigkeit noch der Brückenlüfter gelten, und `speed_print`, aus
+dem Cura alles ableitet, was Solidon nicht einzeln setzt.
+
+**PrusaSlicer bekommt die Stützplatzierung** (`support_material_buildplate_only`),
+und beide älteren Familien die **Stützdichte** als Linienabstand, den sie
+statt eines Anteils führen.
+
+**Die exportierte 3MF trägt ihre Einstellungen auch für PrusaSlicer.** Er
+schreibt `Metadata/Slic3r_PE.config` beim Konsolenexport selbst nicht mit,
+liest sie aber: ohne `--load` geslict kamen sieben Wände und 33 Prozent
+Füllung an. Eine Falle steckte darin — er **überspringt die erste Zeile**, und
+ohne Kopfzeile fiel `avoid_crossing_perimeters` lautlos heraus. Gefunden, weil
+die Gegenprobe danach genau diesen einen Wert meldete.
+
+**Die Lücke in der Gegenprobe ist zu.** Für Cura gibt es keine Konfiguration
+im G-Code, aber eine Definition neben dem Programm: `unknown_keys()` liest
+`fdmprinter.def.json` der **installierten** Fassung und meldet, was sie nicht
+kennt. Dieselbe Absicht wie `verify()`, aus der einzigen Quelle, die dieser
+Slicer hergibt.
+
+**Und die Tests, die das halten.** `test_every_setting_reaches_every_slicer`
+prüft alle sechsundfünfzig Einstellungen gegen alle drei Familien statt neun
+handverlesener; wo eine nicht ankommen kann, steht der Grund in `UNREACHABLE`.
+`test_every_cura_key_exists_in_the_definition` und
+`test_nothing_cura_derives_is_left_to_its_default` prüfen gegen eine echte
+Cura-Installation und überspringen, wo keine liegt. Beide wurden gegen die
+alten Fehler gehalten: sie schlagen an.
+
+Nebenbei: **die Schichtzahl fehlte bei PrusaSlicer**, weil er sie im Kopf
+nicht nennt — gezählt sind seine Wechselmarken dieselbe Auskunft. Das Gewicht
+bei Cura rechnete `grams()` schon immer aus dem Volumen, wenn der Kopf
+schweigt.
+
+Offen bleibt einer: **die 3MF für Cura gibt es weiterhin nicht** — sie liest
+nur sein Fenster, nicht die Rechenmaschine. Cura bekommt ein STL und seine
+Einstellungen über die Kommandozeile, und das bleibt so.
+
+**Ein bestehendes Projekt slict jetzt anders**, und das ist kein Versehen:
+Die Druckeinstellungen reisen in der Projektdatei mit (`print_settings` in
+`serialise.py`), und ein gespeicherter Stützwinkel kommt bei PrusaSlicer und
+der Orca-Familie ab jetzt als `90 − Wert` an statt als Wert. Das Format ändert
+sich nicht — die gespeicherte Zahl war immer gegen die Senkrechte gemeint, nur
+die Übersetzung war falsch. Wer seinen Wert am alten Verhalten ausgerichtet
+hat, richtet ihn einmal neu aus; wer ihn nach der Beschreibung eingestellt
+hat, bekommt endlich das, was dort steht.
+
 ## Die Werkzeugleiste zeigt nur noch Zeichen (20.08.2026)
 
 Auf Wunsch: die Leiste über dem Fenster trägt keine Beschriftungen mehr. Sieben
@@ -7010,3 +7097,110 @@ Bildschirmfotos aller sechs Sprachen samt Handbuchseiten und Website.
 Offen: Ob die Leiste auf Dauer bei sieben Knöpfen bleibt. Der zweite Grund
 („wenige, feste Stelle") trägt nicht beliebig weit; ein achter oder neunter
 Knopf nimmt ihn weg, und dann ist die Beschriftung wieder fällig.
+
+## Die Rückmeldung geht jetzt raus (20.08.2026)
+
+Auf Wunsch: Was der Nutzer meldet — Vorschlag, Fehler, Frage oder Absturz —
+geht aus dem Programm heraus an `support@solidon3d.de`, mit Bildschirmfoto,
+Protokoll und auf Wunsch der laufenden Sitzung. Vorher war der Weg ein Ordner
+im Nutzerverzeichnis und ein `mailto:` ohne Anhänge: drei Schritte, von denen
+jeder einzelne der letzte sein kann, und der dritte hieß „Projektdatei suchen".
+
+**Die Grenze zur verbotenen Telemetrie liegt beim Auslöser, nicht beim
+Versand.** Es geht nichts von allein, nichts ungesehen und nichts ohne Inhalt —
+ein geschriebener Satz, oder nach einem Absturz der Stapelabzug, der sich
+selbst trägt. `support.send()` hat genau einen Aufrufer,
+und der hängt an einem Knopf — `test_nothing_leaves_without_being_sent` liest
+die Quelle und zählt ihn. Bauplan §37.2 und §33.2 sind entsprechend
+nachgezogen, ebenso die Datenschutzerklärung: Was übertragen wird, steht dort
+Feld für Feld, samt Zweck, Rechtsgrundlage und Aufbewahrungsdauer.
+
+Was dabei zusammengelegt wurde: `ErrorReportDialog` und der Rückmeldungs-
+`mailto` sind ein Dialog geworden (`app/ui/support_dialog.py`). Zwei Fenster,
+die zu 80 % dasselbe taten, standen als zwei Einträge im Hilfe-Menü; jetzt ist
+es einer. Der abgelegte Ordner ist dabei kein Notausgang, sondern ein Knopf
+neben *Senden* — wer ohne Netz sitzt oder nichts aus der Hand geben will,
+nimmt ihn, und §37.2 bleibt vollständig eingelöst.
+
+Drei Dinge, die daran hingen:
+
+- **Ein Programmfehler darf nicht wie ein Bedienfehler aussehen** (§33.1). Der
+  zusammengelegte Dialog hätte den Satz „Das war ein Programmfehler, nicht Ihre
+  Schuld" mit dem alten Modul verloren; er steht jetzt als eigene Ansage über
+  `kind=crash`, samt eigenem Fenstertitel.
+- **Der Kern formatiert keine Platzhalter.** Der Grund eines gescheiterten
+  Versands steht in `values["reason"]`, nicht als `{reason}` im Satz — ein
+  Kernfehlertext wird nicht formatiert, sondern angezeigt.
+- **Der Trenner der Sendung wird nicht gewürfelt**, sondern aus ihrem Inhalt
+  gebildet (sha256) und gegen Kollision geprüft. Ein Zufallstrenner müsste
+  einen Startwert führen (Regel 9); die Frage stellt sich so gar nicht.
+
+Der Gegenpart liegt im Repository: `website/api/support.php` nimmt die Sendung
+an und reicht sie als Mail weiter. Er muss nach `httpdocs/api/` hochgeladen
+werden — bis dahin scheitert *Senden* und bietet die beiden Wege an, die ohne
+ihn gehen. Ein SMTP-Zugang im ausgelieferten Programm war die Alternative und
+wäre ein Postfachpasswort in einer .exe gewesen.
+
+Offen: Der Absender `noreply@solidon3d.de` muss auf dem Server existieren oder
+SPF-seitig zugelassen sein, sonst wirft der eigene Mailserver die Nachricht weg.
+
+## Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026)
+
+Die mitgelieferten ComfyUI-Abläufe liefen gegen Hunyuan3D 2.1. Dessen Formen
+waren gut, aber die Tencent Community License nimmt die Europäische Union
+ausdrücklich aus — für eine Anwendung, die hier verkauft wird, ist das kein
+Kleingedrucktes, sondern ein Ausschluss.
+
+- [x] **TripoSG statt Hunyuan3D**, MIT für Quelltext *und* Gewichte. Vier
+      Testkörper vom Drehkörper bis zur Figur mit dünnen Fortsätzen kamen
+      geschlossen und aus einem Stück heraus, in rund dreizehn Sekunden auf
+      einer RTX 4080.
+- [x] **Die Knoten liegen im Repository** (`tools/comfyui/`), weil die
+      vorhandenen seit über einem Jahr unangetastet sind.
+      `python tools/setup_comfyui.py` richtet sie ein: kopieren, TripoSG
+      klonen, zwei Stellen richten, drei Pakete nachziehen, 7,5 GB Gewichte
+      holen. Erkannt wird am Ergebnis, ob das schon geschehen ist — nicht am
+      eigenen Kommentar, sonst patcht der zweite Lauf eine von Hand geänderte
+      Datei zu Bruch.
+- [x] **Zwei Stellen im fremden Quelltext** mussten gerichtet werden: `diso`
+      ist eine CUDA-Erweiterung ohne Windows-Wheel und wird nur im
+      Flash-Decoder-Pfad gebraucht; der Fourier-Embedder gibt float32 zurück,
+      woran die nächste Linearschicht mit halben Gewichten abbrach.
+- [x] **`requirements.txt` von TripoSG darf nie ungefiltert laufen.** Sie
+      nagelt `numpy==1.22.3` fest und zieht `pymeshlab` (GPL, Regel 15). Das
+      Werkzeug installiert drei Pakete mit `--no-deps`.
+- [x] **Die Zahlen im Graphen sind gemessen, nicht geraten.** `octree_depth`
+      steht auf 8, weil 9 bei vierfacher Dreieckszahl keinen sichtbaren
+      Unterschied brachte; `steps` auf 50, weil bei 25 dünne Flächen ausfransen.
+- [x] **Fehlt die Knotensammlung, sagt Solidon das jetzt.** ComfyUI antwortet
+      auf einen unbekannten Knoten mit einem leeren Objekt statt mit einem
+      Fehler; die Meldung lautete darauf „es fehlt die Modelldatei" und schickte
+      Leute 7,5 GB suchen, denen die Knoten fehlten.
+- [x] **Zwei Dreiecke schlugen einen Körper von 1,57.** Beim Aufräumen wählte
+      `abs(part.volume) or len(part.faces)` die größte Komponente — und ein
+      offenes Fragment hat das Volumen 0,0, was für Python falsch ist. Der
+      Ausdruck fiel auf die Dreieckszahl zurück und verglich sie mit dem
+      *Volumen* der anderen. Das sah aus wie ein sporadischer Ausfall des
+      Generators und führte auf eine falsche Spur zur halben Rechengenauigkeit;
+      aufgeklärt hat es ein Lauf ohne den Aufräum-Knoten.
+
+### Was dabei aufgefallen ist und offen bleibt
+
+- [ ] **Zwei Grenzen widersprechen sich.** Die Merkmalserkennung steigt bei
+      `FEATURE_LIMIT_TRIANGLES` = 200 000 aus (`scene/evaluate.py`), die
+      Automatik in `generate.py` dezimiert aber erst ab 500 000. Was dazwischen
+      liegt — und das ist bei TripoSG der Normalfall — behält seine Qualität
+      und verliert die Merkmale: kein Klick auf eine Bohrung, keine Passung,
+      nichts für den Agenten. Der Kommentar dort begründet die 500 000 mit
+      `agent.analysis.TRIANGLE_LIMIT`; das ist die Grenze des Steckbriefs, nicht
+      die der Erkennung.
+- [ ] **`decimate` zerlegt glatte Körper.** Vase 607 k → 200 k ergab 60 Teile
+      und `is_watertight=False`; das kantige Gehäuse überstand dieselbe Stufe
+      unversehrt. Die Reparaturkette holt die Teilzahl zurück auf 1, die
+      Wasserdichtheit nicht. Älter als der TripoSG-Wechsel, aber erst durch ihn
+      sichtbar geworden — und beide Punkte hängen zusammen: Wer die erste Grenze
+      anfasst, ohne die zweite zu lösen, tauscht wasserdicht gegen Merkmale.
+- [ ] **Der Erscheinungstermin steht zweimal je Startseite** — am Zähler
+      (`data-countdown`) und an der Umschaltung (`data-release`).
+      `test_the_two_dates_for_the_same_moment_agree` hält beide zusammen;
+      zusammenlegen war keine Arbeit für den Tag der Veröffentlichung.

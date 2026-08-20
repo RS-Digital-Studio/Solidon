@@ -402,6 +402,34 @@ der Installer zeigt den EULA-Text · beide Sprachen.
 **Abnahme:** `tests/test_website.py` grün · beide Startseiten von Hand
 durchgeklickt · Download startet, Prüfsumme stimmt.
 
+**Stand 20.08.2026 — umgesetzt, mit einer Abweichung von Punkt 2.**
+
+Der Mailto verschwindet nicht aus der Datei, sondern zur Laufzeit: Der Kasten
+trägt beide Zustände, und `site.js` schaltet zum Termin um. Der Grund ist der
+Ablauf des Tages selbst — wer die Pakete erst am Nachmittag fertig hat, will
+nicht dieselbe Datei zweimal anfassen, und eine Seite, die um Punkt achtzehn
+Uhr auf ein Paket zeigt, das noch nicht liegt, ist schlechter als eine, die
+weiter um Nachricht bittet. Umgeschaltet wird nur, wenn im Kasten wirklich
+Verweise stehen.
+
+Eingetragen werden sie von **`tools/make_download.py`**: Es kopiert die Pakete
+nach `website/dl/`, rechnet Größe und SHA-256 und schreibt beides in alle
+**sechs** Sprachfassungen (das Konzept sprach von zweien — inzwischen sind es
+sechs). Ohne Argumente räumt es den Kasten wieder leer, falls ein Paket
+zurückgezogen werden muss.
+
+    python tools/make_download.py Releases/Solidon3D-0.1.0-Setup.exe \
+                                  Releases/Solidon3D-0.1.0-x86_64.AppImage
+
+Punkt 5 steht im Kasten, nicht in der FAQ: der Satz zur SmartScreen-Warnung
+und der zur Prüfsumme erscheinen zusammen mit den Dateien. Was noch fehlt, ist
+allein das, was ohne die fertigen Pakete nicht geht — sie selbst.
+
+Zwei Tests halten die Verdrahtung: `test_the_download_box_can_switch_from_
+waiting_to_loading` je Sprachfassung, und `test_the_two_dates_for_the_same_
+moment_agree`, weil der Termin zweimal auf der Seite steht — am Zähler und an
+der Umschaltung.
+
 ### D5 — Rückmeldeweg (S)
 
 Das Postfach steht. Was fehlt, ist der Weg aus der Anwendung dorthin.

@@ -108,7 +108,7 @@
       "name": "¿Mis modelos van a alguna parte?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Solo si usas el chat con una clave de API ajena — entonces la ficha de la escena va a ese proveedor: los objetos con sus cotas, los nombres de las características, los parámetros y el historial en versión breve. Ninguna geometría, ningún archivo. Con Ollama, también eso se queda en local. Sin chat, nada sale del ordenador: sin cuentas, sin almacenamiento en la red, sin telemetría."
+        "text": "Solo si usas el chat con una clave de API ajena — entonces la ficha de la escena va a ese proveedor: los objetos con sus cotas, los nombres de las características, los parámetros y el historial en versión breve. Ninguna geometría, ningún archivo. Con Ollama, también eso se queda en local. Sin chat, nada sale del ordenador: sin cuentas, sin almacenamiento en la red, sin telemetría. La excepción es lo que envías tú mismo: un comentario al soporte, cuyo contenido ves antes en una vista previa."
       }
     },
     {
@@ -201,17 +201,20 @@
           30 de octubre de 2026</b> y después ya no arranca — tus archivos
           de proyecto no se ven afectados.</p>
           <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20av%C3%ADsame%20cuando%20salga%20la%20demo"
-             data-release-href data-release-download>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
-                 data-release-hide>
+             data-release-hide>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
             </svg>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
-                 data-release-show hidden>
-              <path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/>
-            </svg>
-            <span data-release-text="Descargar la demo">Avísame cuando salga</span>
+            Avísame cuando salga
           </a>
+
+          <div class="dateien" data-files data-release-show hidden>
+            <!-- Von tools/make_download.py gefüllt. Steht hier nichts,
+                 bleibt der Kasten bei der Warteliste. -->
+          </div>
+          <p class="pruefhinweis" data-release-show hidden>Suma de verificación al lado, para poder comprobar que el archivo no se tocó por el camino.</p>
+          <p class="pruefhinweis" data-release-show hidden>Windows muestra un aviso azul con una aplicación nueva y aún sin firmar: <i>Más información</i> → <i>Ejecutar de todas formas</i>. La firma llegará en cuanto esté el certificado.</p>
+
           <ul class="assure">
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -680,7 +683,9 @@
           los nombres de las características, los parámetros y el historial
           en versión breve. Ninguna geometría, ningún archivo. Con Ollama,
           también eso se queda en local. Sin chat, nada sale del ordenador:
-          sin cuentas, sin almacenamiento en la red, sin telemetría.</p>
+          sin cuentas, sin almacenamiento en la red, sin telemetría. La
+          excepción es lo que envías tú mismo: un comentario al soporte,
+          cuyo contenido ves antes en una vista previa.</p>
         </details>
         <details>
           <summary>¿Qué formatos lee y escribe Solidon3D?</summary>

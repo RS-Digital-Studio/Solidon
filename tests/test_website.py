@@ -625,33 +625,37 @@ def test_the_download_box_can_switch_from_waiting_to_loading(page: str) -> None:
     nach dem Termin kam, fand keinen Download.
 
     Geprüft wird die Verdrahtung, nicht die Uhrzeit: Steht der Termin am
-    Dokument, ist die Stelle für die Datei da, und tragen beide Knöpfe einen
-    Text für danach? Eine Sprachfassung, in der eines davon fehlt, sieht
-    fehlerfrei aus und bleibt am Abend stehen.
+    Dokument, gibt es einen Kasten für die Dateien, verschwindet die Warteliste
+    und erscheint an ihrer Stelle etwas? Eine Sprachfassung, in der eines davon
+    fehlt, sieht fehlerfrei aus und bleibt am Abend stehen.
+
+    Ob wirklich Dateien eingetragen sind, prüft dieser Test **nicht** — sie
+    kommen erst am Tag der Veröffentlichung dazu (`tools/make_download.py`).
+    Ein leerer Kasten ist der richtige Zustand davor.
     """
     text = (WEBSITE / page).read_text(encoding="utf-8")
 
     assert re.search(r'<body[^>]*\sdata-release="[^"]+"', text), (
         f"{page}: am <body> steht kein Erscheinungstermin (data-release)"
     )
-    assert re.search(r'<body[^>]*\sdata-download="', text), (
-        f"{page}: am <body> fehlt die Stelle für die Datei (data-download)"
+    assert '<div class="dateien" data-files' in text, (
+        f"{page}: der Kasten für die Dateien fehlt — make_download.py findet "
+        "keine Stelle zum Eintragen"
     )
 
-    knoepfe = text.count("data-release-href")
-    assert knoepfe == 2, (
-        f"{page}: {knoepfe} umschaltende Knöpfe statt zwei — erwartet werden "
-        "der im Download-Kasten und der beim Preis. Der Kontaktweg im "
-        "Schlussabschnitt gehört ausdrücklich nicht dazu."
+    assert text.count("data-release-hide") >= 1, (
+        f"{page}: nichts verschwindet nach dem Erscheinen — die Warteliste bliebe stehen"
     )
+    assert text.count("data-release-show") >= 1, f"{page}: nichts erscheint nach dem Erscheinen"
 
-    for beschriftung in re.findall(r'data-release-text="([^"]*)"', text):
+    for beschriftung in re.findall(r'data-(?:release|past)-text="([^"]*)"', text):
         assert beschriftung.strip(), f"{page}: ein Text für danach ist leer"
 
-    # Symbol und Beschriftung wechseln zusammen: ein Knopf, der „laden" heißt
-    # und einen Briefumschlag trägt, ist auf halbem Weg stehengeblieben.
-    assert text.count("data-release-hide") == text.count("data-release-show") == 2, (
-        f"{page}: die Symbole wechseln nicht paarweise mit den Knöpfen"
+    # Der Kontaktweg im Schlussabschnitt trägt die Anschrift als Beschriftung
+    # und bleibt ein Kontaktweg — ein erster Entwurf hatte ihn mitverwandelt.
+    schluss = text[text.index('<div class="closing">') :]
+    assert "data-release-href" not in schluss.split("</div>")[0], (
+        f"{page}: der Kontaktweg im Schlussabschnitt würde zum Ladeknopf"
     )
 
 

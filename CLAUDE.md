@@ -66,7 +66,10 @@ zusammen. Weiteres:
 .venv\Scripts\python.exe tools/make_icon.py                     # Anwendungssymbol rastern: ICO und Website-Favicon
 .venv\Scripts\python.exe tools/make_seo.py                      # robots.txt, sitemap.xml, llms.txt, FAQ-Auszeichnung — nach den beiden darüber
 .venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Solidon, braucht Inno Setup 6
+.venv\Scripts\python.exe tools/make_download.py <pakete>        # Pakete in den Download-Kasten aller sechs Sprachen, mit SHA-256; ohne Argument leert es ihn
+.venv\Scripts\python.exe tools/setup_comfyui.py                 # ComfyUI für Weg 3 einrichten: Knoten, TripoSG, 7,5 GB Gewichte
 .venv\Scripts\python.exe tools/build_slice_core.py              # Konturverkettung übersetzen (optional, 1,34× auf die Schichtanalyse)
+.venv\Scripts\python.exe tools/check_support.py                 # kommt eine Rückmeldung wirklich an? schickt eine echte Sendung
 python tools/check_env.py                                       # stimmen die Fassungen? läuft auch ohne .venv
 python tools/check_env.py --install                             # sie stimmen machen (braucht Netz)
 python tools/check_env.py --outdated                            # was wäre neuer, und was verbietet eine Grenze
@@ -122,6 +125,8 @@ app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
   export/     STL/3MF/STEP, Plattenbelegung, Übergabe an den Slicer
               (handover.py ruft ihn, slicer_keys.py übersetzt die Namen)
   activation/ Freischaltung: Testlauf, Schlüssel, Demo-Frist (store.py)
+  report.py   Fehlerbericht als Ordner — schreibt, sendet nie
+  support.py  der einzige Weg hinaus: Rückmeldung an den Support, an einem Knopf
   manual.py   Handbuch: geschriebene Seiten, Referenz aus dem Register erzeugt
   figures.py  Abbildungskatalog — gezeichnet, gerendert, aufgenommen
   drawing.py  SVG ohne Qt: Maßlinien, Schemata, Netzprojektion
@@ -131,9 +136,16 @@ app/images/   Bildschirmfotos fürs Handbuch, je Sprache ein Ordner
 app/cli/      Kommandozeile auf core
 tests/        eine Datei je Testart, data/ ist der Referenzkorpus
 tools/        Hilfsprogramme, nicht Teil der Anwendung
+  comfyui/    die ComfyUI-Knoten für Weg 3 (TripoSG, MIT) — sie leben hier
+              und nicht in ComfyUI, damit sie mitversioniert sind;
+              tools/setup_comfyui.py legt sie hinüber
 website/      öffentliche Seiten; handbuch.html und en/manual.html erzeugt
               tools/make_manual.py, die Rechtstexte tools/make_legal.py,
               robots/sitemap/llms tools/make_seo.py — der Rest von Hand
+              api/support.php nimmt die Rückmeldungen an; muss nach
+              httpdocs/api/ hochgeladen werden, sonst scheitert das Senden
+              bilder/ Schaustücke und Belege der Verkaufsseiten
+              dl/ die Pakete, von tools/make_download.py angelegt
 3D Drucker/   physische Druckprojekte, eigene CLAUDE.md, nicht im Repository
 ```
 

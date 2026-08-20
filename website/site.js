@@ -161,7 +161,14 @@
   const page = document.body;
   const moment = Date.parse(page.dataset.release || "");
   if (Number.isNaN(moment)) return;
-  const file = (page.dataset.download || "").trim();
+
+  /* Ob es etwas zu laden gibt, steht nicht in einem Schalter, sondern im
+     Kasten selbst: Wenn dort ein Verweis auf eine Datei liegt, gibt es sie.
+     Ein Schalter wäre eine zweite Wahrheit neben der ersten, und die beiden
+     liefen irgendwann auseinander. Gefüllt wird der Kasten von
+     tools/make_download.py. */
+  const shelf = document.querySelector("[data-files]");
+  const ready = Boolean(shelf && shelf.querySelector("a[href]"));
 
   const arrive = () => {
     /* Zwei Bedingungen, und sie sind nicht dieselbe.
@@ -177,13 +184,15 @@
     }
     page.dataset.past = "true";
 
-    if (!file) return;
+    if (!ready) return;
 
-    /* Erst der Knopf, dann die Texte: Ein Knopf, der schon „Demo laden"
+    /* Erst die Verweise, dann die Texte: Ein Knopf, der schon „Demo laden"
        heißt, aber noch auf das Postfach zeigt, ist für den Bruchteil einer
-       Sekunde eine Lüge. */
+       Sekunde eine Lüge. Wohin er zeigt, sagt die erste Datei im Kasten —
+       auf einer Seite mit mehreren Paketen ist das die für Windows. */
+    const first = shelf.querySelector("a[href]");
     for (const link of document.querySelectorAll("[data-release-href]")) {
-      link.href = file;
+      link.href = first.getAttribute("href");
       if (link.hasAttribute("data-release-download")) link.setAttribute("download", "");
     }
     for (const node of document.querySelectorAll("[data-release-text]")) {
