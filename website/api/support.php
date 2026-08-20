@@ -190,7 +190,16 @@ foreach ($_FILES as $entry) {
     if (++$files > MAX_FILES) {
         break;
     }
-    $data = file_get_contents((string) $entry['tmp_name']);
+    // Erst fragen, ob die Datei wirklich aus diesem Upload stammt: `tmp_name`
+    // ist ein Pfad, und ein Pfad, den man ungeprüft liest, ist die Stelle, an
+    // der aus einem Formular ein Dateibetrachter wird. Über $_FILES kommt
+    // nichts anderes herein — aber diese Prüfung kostet eine Zeile und die
+    // Annahme, sie sei entbehrlich, hält nur so lange wie die Annahme.
+    $temporary = (string) ($entry['tmp_name'] ?? '');
+    if ($temporary === '' || !is_uploaded_file($temporary)) {
+        continue;
+    }
+    $data = file_get_contents($temporary);
     if ($data === false) {
         continue;
     }
@@ -203,9 +212,55 @@ foreach ($_FILES as $entry) {
 }
 $parts .= "--{$boundary}--\r\n";
 
-// Der Betreff wird kodiert, nicht gestutzt: Umlaute sind in einer Kopfzeile
-// nur als MIME-Wort zulässig, und „Fehler beim Prufen" wäre die Alternative.
-$encoded_subject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+/**
+ * Ein Betreff als MIME-Wörter nach RFC 2047.
+ *
+ * Umlaute sind in einer Kopfzeile nur kodiert zulässig — „Fehler beim Prufen"
+ * wäre die Alternative. Ein einzelnes Wort darf dabei 75 Zeichen nicht
+ * überschreiten; hier stand die ganze Zeile als eines, und bei 200 erlaubten
+ * Zeichen wurden daraus über 270. Die meisten Zusteller nehmen das hin, manche
+ * stutzen die Kopfzeile — und dann fehlt dem Posteingang der Betreff.
+ *
+ * Geschnitten wird an Zeichengrenzen, nicht an Bytegrenzen: ein halbes „ü"
+ * wäre nach der Kodierung kein „ü" mehr.
+ */
+function encode_subject(string $value): string
+{
+    // 75 minus '=?UTF-8?B?' und '?=' lässt 63 Zeichen Base64, also 45 Bytes
+    // Nutzlast — abgerundet auf ein Vielfaches von 3, damit keine Füllzeichen
+    // mitten in der Folge stehen.
+    $chunks = [];
+    $current = '';
+    $length = mb_strlen($value);
+    for ($index = 0; $index < $length; $index++) {
+        $character = mb_substr($value, $index, 1);
+        if (strlen($current . $character) > 45) {
+            $chunks[] = $current;
+            $current = '';
+        }
+        $current .= $character;
+    }
+    if ($current !== '') {
+        $chunks[] = $current;
+    }
+    if ($chunks === []) {
+        return '';
+    }
+
+    // Getrennt durch Zeilenumbruch und Leerzeichen: So verlangt es die Norm für
+    // mehrere Wörter in einer Kopfzeile, und so setzt der Leser sie wieder
+    // zusammen, ohne ein Leerzeichen dazwischen zu sehen.
+    // Als Fluchtfolge, nicht als echter Umbruch in der Quelle. Das ist kein
+    // Schönheitsgrund: Dieses Repository normalisiert Zeilenenden beim
+    // Einchecken auf LF, ein literales CRLF im String käme also als bloßes
+    // LF auf dem Server an — und eine Kopfzeilenfaltung ohne CR ist keine.
+    return implode("\r\n ", array_map(
+        static fn(string $part): string => '=?UTF-8?B?' . base64_encode($part) . '?=',
+        $chunks
+    ));
+}
+
+$encoded_subject = encode_subject($subject);
 
 $sent = @mail(RECIPIENT, $encoded_subject, $parts, implode("\r\n", $headers));
 if (!$sent) {
