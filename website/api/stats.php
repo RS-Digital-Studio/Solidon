@@ -415,6 +415,40 @@ $today = (new DateTimeImmutable('now', $zone))->format('Y-m-d');
 $today_pages = $per_day[$today]['p'] ?? 0;
 $today_downloads = $per_day[$today]['d'] ?? 0;
 
+/**
+ * Was im Download-Ordner liegt, mit Größe — Dateiname als Schlüssel.
+ *
+ * Die zweite Hälfte der Antwort auf „welche Fassungen sind draußen": Der
+ * Zähler kennt nur, was schon einmal geladen wurde. Ein Paket, das seit einer
+ * Stunde online ist und noch keinen Abruf hat, stünde sonst nirgends — und
+ * genau danach sieht man nach einer Veröffentlichung als Erstes.
+ */
+function available_files(): array
+{
+    $found = [];
+    foreach (glob(__DIR__ . '/../dl/*') ?: [] as $path) {
+        if (is_file($path)) {
+            $found[basename($path)] = (int) filesize($path);
+        }
+    }
+    ksort($found);
+
+    return $found;
+}
+
+/**
+ * Eine Dateigröße in ganzen Megabyte — dezimal gerechnet.
+ *
+ * Durch 1 000 000 und nicht durch 1 048 576, weil `tools/make_download.py`
+ * es so rechnet und der Download-Kasten die Zahl trägt. Beide Wege sind
+ * vertretbar; zwei verschiedene Zahlen für dieselbe Datei auf derselben
+ * Domain sind es nicht (165 gegen 173 MB, gemessen am 20.08.2026).
+ */
+function megabytes(int $bytes): string
+{
+    return number_format($bytes / 1000000, 0, ',', '.') . ' MB';
+}
+
 function e(string $text): string
 {
     return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -497,14 +531,33 @@ und geht keinen Besucher etwas an.)</p>
 </table>
 
 <h2>Downloads</h2>
-<?php $files = tally($rows, 'value', 'd'); ?>
-<?php if (!$files): ?>
-  <p class="leer">Noch keiner.</p>
+<?php
+$files = tally($rows, 'value', 'd');
+$present = available_files();
+// Erst die gezählten in ihrer Reihenfolge, dann was sonst im Ordner liegt.
+// `+` behält die linken Schlüssel, ergänzt also nur die Fassungen ohne Abruf.
+$listed = $files + array_map(static fn (int $size): int => 0, $present);
+?>
+<?php if (!$listed): ?>
+  <p class="leer">Der Ordner ist leer, und geladen wurde auch nichts.</p>
 <?php else: ?>
 <table>
-  <tr><th>Datei</th><th class="n">Downloads</th></tr>
-  <?php foreach ($files as $name => $count): ?>
-    <tr><td><?= e($name) ?></td><td class="n"><?= (int) $count ?></td></tr>
+  <tr><th>Datei</th><th class="n">Größe</th><th class="n">Downloads</th></tr>
+  <?php foreach ($listed as $name => $count): ?>
+    <tr>
+      <td>
+        <?php if (isset($present[$name])): ?>
+          <?php /* Der Link zeigt auf die Datei, nicht auf `count.php?f=`:
+                   Wer hier klickt, prüft die eigene Seite — und das darf die
+                   Zahl daneben nicht bewegen. */ ?>
+          <a href="/dl/<?= e(rawurlencode($name)) ?>"><?= e($name) ?></a>
+        <?php else: ?>
+          <?= e($name) ?> <span class="leer">nicht mehr im Ordner</span>
+        <?php endif; ?>
+      </td>
+      <td class="n"><?= isset($present[$name]) ? e(megabytes($present[$name])) : '—' ?></td>
+      <td class="n"><?= (int) $count ?></td>
+    </tr>
   <?php endforeach; ?>
 </table>
 <?php endif; ?>
