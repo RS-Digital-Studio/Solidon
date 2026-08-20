@@ -7573,6 +7573,12 @@ Fortsetzung von `.claude/.state/oberflaechen-durchsicht-2026-08-19/`. Behoben
 wurde Fund für Fund mit Test und Gegenprobe; hier steht nur, was **bewusst
 offen** bleibt.
 
+**Vollständig:** `oberflaechen-durchsicht-2026-08-20.md` im Wurzelverzeichnis
+sammelt alles Offene an einer Stelle — die drei Entscheidungen unten, die
+Demo-Punkte, die zwei Beispiele mit Warnungen, das Kürzelschema, die acht nie
+gelaufenen Gebiete, die zwei Funde, die sich als falsch erwiesen haben, und die
+Messgrenze des großen Stapels.
+
 ### Offen
 
 - [ ] **Der Startbildschirm braucht ein Höhenbudget.** Drei Kachelspalten statt
