@@ -44,10 +44,14 @@ Damit niemand das Falsche erwartet:
 * **Keine Cloud.** Kein Konto, keine Telemetrie, keine Projektablage im Netz.
   Ein Sprachmodell wird nur gefragt, wenn ein Schlüssel hinterlegt ist.
 
-**Support** läuft über einen Kanal: **support@solidon3d.de**. Ein
-Fehlerbericht entsteht im Programm unter *Hilfe → Fehlerbericht erstellen* und
-bleibt so lange auf dem Rechner, bis jemand ihn selbst an diese Adresse
-schickt. Für die Entwicklung bleiben daneben die Issues dieses Repositories.
+**Support** läuft über einen Kanal: **support@solidon3d.de**. Unter *Hilfe →
+Rückmeldung senden* geht ein Vorschlag, ein Fehler oder eine Frage direkt aus
+dem Programm dorthin — mit Bildschirmfoto, Protokoll und auf Wunsch der
+laufenden Sitzung, deren Container den Fehler exakt reproduziert (§16.2). Was
+mitgeht, steht vorher in der Vorschau; gesendet wird nur auf Knopfdruck, und
+wer nichts aus der Hand geben will, legt im selben Dialog nur einen Ordner auf
+dem eigenen Rechner ab. Telemetrie gibt es weiterhin keine. Für die
+Entwicklung bleiben daneben die Issues dieses Repositories.
 
 ---
 

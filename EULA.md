@@ -161,14 +161,19 @@ unterliegen ausschließlich ihren eigenen Lizenzen.
 ## 9. Keine Cloud, keine Telemetrie
 
 Solidon3D läuft vollständig auf Ihrem Rechner. Es gibt kein Nutzerkonto, keine
-Projektablage im Netz und keine Telemetrie. Zwei Verbindungen kann es geben,
-beide unter Ihrer Kontrolle und beide abschaltbar:
+Projektablage im Netz und keine Telemetrie. Drei Verbindungen kann es geben,
+alle drei unter Ihrer Kontrolle:
 
 * der **Update-Hinweis**, der eine Versionsdatei auf unserer Website abfragt —
   standardmäßig aus;
 * der **KI-Chat**, sofern Sie einen eigenen API-Schlüssel hinterlegen. Dann
   gehen Ihre Chat-Eingaben an den von Ihnen gewählten Anbieter, nach dessen
-  Bedingungen. Mit einem lokalen Modell verlässt nichts den Rechner.
+  Bedingungen. Mit einem lokalen Modell verlässt nichts den Rechner;
+* die **Rückmeldung an den Support**, die Sie unter „Hilfe → Rückmeldung
+  senden“ selbst absenden. Übertragen wird, was der Dialog vor dem Senden
+  anzeigt — Ihr Text und die Programmfassung, dazu nur die dort angehakten
+  Anhänge (Bildschirmfoto, Protokoll, laufende Sitzung). Von allein sendet
+  die Anwendung nichts.
 
 Näheres regelt die Datenschutzerklärung unter
 <https://solidon3d.de/datenschutz.html>.
