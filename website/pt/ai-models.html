@@ -112,6 +112,74 @@
       peça que sirva. A diferença está por trás da reparação: cota, ajuste,
       análise de camadas, e um histórico em que cada número ainda se pode
       mudar mais tarde.</p>
+
+      <h3>Se não tem nenhum gerador</h3>
+      <p class="sub">O Solidon3D traz consigo o terceiro caminho: uma frase ou uma imagem torna-se um corpo, e este entra no mesmo histórico que tudo o resto. O cálculo acontece num <b>ComfyUI</b> local — no seu computador, sem conta e sem carregamento.</p>
+      <p class="sub">O modelo por trás é o <b>TripoSG</b> e está sob a <b>licença MIT</b>. Não é um pormenor para juristas: o modelo mais divulgado deste género, o Hunyuan3D, exclui expressamente a União Europeia na sua licença. Aqui a questão não se coloca.</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Medido</th><th>Resultado</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Fechado e de uma só peça</td><td><span class="yes">✓ os seis abaixo</span></td></tr>
+          <tr><td>Arestas abertas</td><td><span class="yes">✓ nenhuma</span></td></tr>
+          <tr><td>A partir de uma frase, sem imagem</td><td>cerca de 20 segundos</td></tr>
+          <tr><td>A partir de uma imagem sua</td><td>cerca de 13 segundos</td></tr>
+          <tr><td>Preparação depois de instalar o ComfyUI</td><td>um comando</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Seis frases, seis corpos</h3>
+      <p class="sub">Cada peça aqui é uma única frase que o Solidon3D entregou ao gerador — sem retoques, sem segunda tentativa, sem escolher uma entre dez. Foram escolhidas por aquilo em que estes modelos falham: saliências finas, paredes vazadas, contra-saídas, repetição fina.</p>
+      <ul class="schau">
+        <li><figure>
+          <img src="../bilder/schau-gargoyle.webp" width="720" height="720" loading="lazy"
+               alt="Uma gárgula gótica sobre um pedestal, com asas recolhidas, garras e focinho rosnando">
+          <figcaption><b>Gárgula</b>Saliências finas e contra-saídas</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-lantern.webp" width="720" height="720" loading="lazy"
+               alt="Uma lanterna octogonal com painéis vazados e uma argola para pendurar">
+          <figcaption><b>Lanterna</b>Parede vazada</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-skull.webp" width="720" height="720" loading="lazy"
+               alt="Um crânio de dragão com cornos curvos, órbitas e fileiras de dentes">
+          <figcaption><b>Crânio de dragão</b>Cavidades e dentes finos</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-hand.webp" width="720" height="720" loading="lazy"
+               alt="Uma mão robótica mecânica com dedos articulados e juntas à vista">
+          <figcaption><b>Mão robótica</b>Muitos membros separados</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-knight.webp" width="720" height="720" loading="lazy"
+               alt="Um cavalo de xadrez: uma cabeça de cavalo esculpida sobre base redonda">
+          <figcaption><b>Cavalo de xadrez</b>Transições suaves, silhueta nítida</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-valve.webp" width="720" height="720" loading="lazy"
+               alt="Uma válvula industrial com volante, flanges aparafusadas e ligações de tubo">
+          <figcaption><b>Válvula industrial</b>Faces redondas e repetição</figcaption>
+        </figure></li>
+      </ul>
+
+      <h3>E é aí que o trabalho começa</h3>
+      <p class="sub">O gerador entregou uma forma. O que faz dela uma peça imprimível são três passos no Solidon3D — cada um no histórico, cada um com um número que ainda se pode mudar depois.</p>
+      <div class="weg">
+        <figure>
+          <img src="../bilder/weg-1-erzeugt.webp" width="720" height="720" loading="lazy"
+               alt="A gárgula gerada como corpo fechado, vista de três quartos">
+          <figcaption><b>Gerada e reparada.</b> Cerca de 20 segundos, depois fechada e de uma só peça. Levada a 80 mm são <b>44,7 cm³</b> de material — impressa maciça.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/weg-2-schnitt.webp" width="720" height="720" loading="lazy"
+               alt="A mesma gárgula cortada: uma parede fina e uniforme, oca por dentro, a superfície de corte realçada a cor">
+          <figcaption><b>Escavada, parede de 2 mm.</b> Sobram <b>23,6 cm³</b> — <b>menos 47 %</b> de filamento e, em consequência, menos tempo de impressão. A espessura da parede não vem do palpite, mas do bico desta impressora.</figcaption>
+        </figure>
+      </div>
+      <p class="footnote">Depois vem o que está no topo desta página: relatório, saliências, ilhas, suportes, melhor orientação — e se não couber na placa, dividir e encavilhar. Gerar é a parte mais rápida do trabalho. O resto é a que decide o resultado.</p>
+
     </div>
   </section>
 
