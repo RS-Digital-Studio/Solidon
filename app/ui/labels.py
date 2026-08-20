@@ -47,12 +47,54 @@ def localised(text: str) -> str:
     return text.replace(".", separator) if separator != "." else text
 
 
-def length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = True) -> str:
-    """Eine Länge, wie die Oberfläche sie schreibt."""
-    return localised(format_length(value_mm, unit, with_unit))
+#: Die Einheit, in der die Oberfläche Längen schreibt (§19.3).
+#:
+#: **Ein Zustand, wie die Sprache einer ist.** Die Einstellung gab es seit P0;
+#: gelesen hat sie dann die Statusleiste, der Objektbaum und die Kopfzeile —
+#: drei Stellen, weil drei sie durchgereicht bekamen. Die anderen elf
+#: Längenausgaben standen weiter auf der Vorgabe „mm": der ganze
+#: Skizzeneditor, die Analyseleiste, die Schnittleiste und die
+#: Merkmalsbeschriftungen. Wer auf Zoll stellte, las im selben Fenster beides,
+#: und im Skizzeneditor eine Zahl ohne Einheit dazu.
+#:
+#: Durch vierundzwanzig Konstruktoren zu reichen war der Weg dorthin, und er
+#: hätte beim nächsten Widget wieder eine Stelle vergessen — ``labels.length``
+#: rufen Funktionen ohne Widget (die Merkmalsbeschriftung steht in der
+#: Überlagerung, im Objektbaum und in der Statusleiste). Deshalb liegt die
+#: Einheit hier, wie ``QLocale`` für das Dezimaltrennzeichen daneben.
+#:
+#: **Ein ausdrücklich übergebenes Argument gewinnt.** Das ist kein zweites
+#: Verzeichnis, sondern ein Vorrang: Wer eine Einheit nennt, meint sie.
+_DISPLAY_UNIT: LengthUnit = "mm"
 
 
-def compact_length(value_mm: float, unit: LengthUnit = "mm") -> str:
+def set_display_unit(unit: LengthUnit) -> None:
+    """Stellt die Anzeigeeinheit für den ganzen Prozess (§19.3).
+
+    Der Kern bleibt bei Millimetern — hier wird nur geschrieben, nicht
+    gerechnet.
+    """
+    global _DISPLAY_UNIT
+    _DISPLAY_UNIT = unit
+
+
+def display_unit() -> LengthUnit:
+    """Die eingestellte Anzeigeeinheit."""
+    return _DISPLAY_UNIT
+
+
+def length(value_mm: float, unit: LengthUnit | None = None, with_unit: bool = True) -> str:
+    """Eine Länge, wie die Oberfläche sie schreibt.
+
+    Ohne ``unit`` gilt die eingestellte Anzeigeeinheit — siehe
+    :data:`_DISPLAY_UNIT`. Vorher stand hier „mm" als Vorgabe, und damit war
+    jede Ausgabe, die keine Einheit durchgereicht bekam, gegen die Einstellung
+    stumm.
+    """
+    return localised(format_length(value_mm, unit or _DISPLAY_UNIT, with_unit))
+
+
+def compact_length(value_mm: float, unit: LengthUnit | None = None) -> str:
     """Dieselbe Länge, ohne Nachkommastellen, die nichts sagen.
 
     „60,00" braucht Platz und trägt genau so viel Auskunft wie „60" — die
@@ -65,15 +107,15 @@ def compact_length(value_mm: float, unit: LengthUnit = "mm") -> str:
     :func:`length` — eine Anzeige, die zwischen zwei Schreibweisen springt,
     weil das Fenster schmaler wurde, ist schlimmer als eine lange.
     """
-    text = format_length(value_mm, unit, with_unit=False)
+    text = format_length(value_mm, unit or _DISPLAY_UNIT, with_unit=False)
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return localised(text or "0")
 
 
-def volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
+def volume(value_mm3: float, unit: LengthUnit | None = None) -> str:
     """Ein Volumen, wie die Oberfläche es schreibt."""
-    return localised(format_volume(value_mm3, unit))
+    return localised(format_volume(value_mm3, unit or _DISPLAY_UNIT))
 
 
 #: Grundfarben nach Farbton, in Grad. Die Grenze gilt bis zu diesem Wert.

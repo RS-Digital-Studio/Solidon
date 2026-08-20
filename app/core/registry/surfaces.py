@@ -223,6 +223,34 @@ def cli_commands(registry: Registry | None = None) -> tuple[CliCommand, ...]:
     return tuple(commands)
 
 
+def caveat_line(spec: OperationSpec, markup: bool = False) -> str:
+    """Wann diese Operation die falsche Wahl ist — als fertige Zeile, oder leer.
+
+    **Die Angabe gab es, und sie kam nur im Handbuch an.** Zwölf Operationen
+    tragen einen ``caveat`` („Nicht ohne Entlüftung, wenn im Slicer Stützen
+    entstehen"), und gelesen hat ihn allein :func:`documentation`. Der
+    Menüeintrag setzte ``doc`` als Tooltip, der Dialog zeigte ``doc`` als
+    Beschreibung, und der Agent bekam ``doc`` als Werkzeugbeschreibung — an
+    keiner dieser drei Stellen stand die Grenze, also an keiner, an der jemand
+    die Operation gerade wählt. Der Docstring des Feldes rechnet selbst mit der
+    Oberfläche: „dann steht neben jedem Menüeintrag eine Warnung".
+
+    Das Wort davor steht hier und nicht dreimal daneben — ``caveat`` ohne
+    Vorwort liest sich wie eine Fortsetzung des ``doc``-Satzes, und genau davor
+    warnt die Deklaration des Feldes.
+
+    ``markup`` setzt die Sternchen für das Handbuch. Ein Tooltip und ein
+    Systemprompt wollen keine, und ein Handbuch ohne wäre ein Absatz, den man
+    überliest.
+    """
+    if not spec.caveat:
+        return ""
+    label = str(_("Wann nicht"))
+    if markup:
+        return f"**{label}:** {spec.caveat}"
+    return f"{label}: {spec.caveat}"
+
+
 def tool_schemas(registry: Registry | None = None) -> tuple[dict[str, Any], ...]:
     """Werkzeugbeschreibungen für den Agenten (§26.2). Dasselbe Schema wie
     Dialog und Kommandozeile.
@@ -230,11 +258,21 @@ def tool_schemas(registry: Registry | None = None) -> tuple[dict[str, Any], ...]
     return tuple(
         {
             "name": spec.name,
-            "description": str(spec.doc) or str(spec.title),
+            # Die Grenze gehört dazu: Der Agent wählt aus derselben Auskunft,
+            # aus der ein Mensch wählt (§10, Leitprinzip 3). Ohne sie schlug er
+            # *Gitter füllen* für ein Teil vor, das dicht sein muss, und nichts
+            # in seiner Werkzeugliste sagte, dass das die falsche Wahl ist.
+            "description": _with_caveat(str(spec.doc) or str(spec.title), spec),
             "input_schema": json_schema(spec.params),
         }
         for spec in (registry or REGISTRY).all()
     )
+
+
+def _with_caveat(text: str, spec: OperationSpec) -> str:
+    """Beschreibung und Grenze in einem Absatz, getrennt durch eine Leerzeile."""
+    line = caveat_line(spec)
+    return f"{text}\n\n{line}" if line else text
 
 
 #: Welche Abbildung eine Kategorieseite eröffnet.
@@ -278,8 +316,10 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
                 lines.append("")
             if spec.caveat:
                 # Eigener Absatz mit eigenem Wort davor: In den doc-Satz
-                # gehängt liest sich eine Grenze wie ein Nachtrag.
-                lines.append(f"**{_('Wann nicht')}:** {spec.caveat}")
+                # gehängt liest sich eine Grenze wie ein Nachtrag. Das Wort
+                # kommt aus ``caveat_line`` — Dialog, Menü und Agent zeigen
+                # dasselbe, und ein zweites Vorwort daneben wäre eines zu viel.
+                lines.append(caveat_line(spec, markup=True))
                 lines.append("")
             facts = [
                 f"{_('Objekte')}: {spec.consumes} → {spec.produces}",

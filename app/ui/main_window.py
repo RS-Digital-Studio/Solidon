@@ -113,6 +113,7 @@ from app.core.registry import (
     TWIN_TOGGLES,
     OperationSpec,
     PaletteEntry,
+    caveat_line,
     menu_tree,
     palette_entries,
 )
@@ -164,7 +165,15 @@ from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
-from app.ui.labels import MENU_GROUPS, demo_line, feature_label, kind_requirement, length
+from app.ui.labels import (
+    MENU_GROUPS,
+    demo_line,
+    display_unit,
+    feature_label,
+    kind_requirement,
+    length,
+)
+from app.ui.labels import set_display_unit as set_length_unit
 from app.ui.leash import WorkerLeash
 from app.ui.loading import LoadingVeil, remaining_time
 from app.ui.manual_window import ManualWindow
@@ -1877,8 +1886,14 @@ class MainWindow(QMainWindow):
         if key:
             action.setShortcut(QKeySequence(key))
             self._scope_shortcut(action, key)
+        # Die Statuszeile bekommt den Satz, der Tooltip den Satz **und** die
+        # Grenze. Zwölf Operationen tragen einen ``caveat``, und gelesen hat
+        # ihn allein das Handbuch — also niemand in dem Augenblick, in dem er
+        # zählt. In die Statuszeile passt er nicht: die ist eine Zeile, und
+        # abgeschnitten wäre eine Warnung schlimmer als keine.
         action.setStatusTip(str(spec.doc))
-        action.setToolTip(str(spec.doc))
+        warning = caveat_line(spec)
+        action.setToolTip(f"{spec.doc}\n\n{warning}" if warning else str(spec.doc))
         action.triggered.connect(lambda _checked=False, entry=spec: self.launch_operation(entry))
         menu.addAction(action)
         return action
@@ -3080,13 +3095,36 @@ class MainWindow(QMainWindow):
     def set_display_unit(self, unit: str) -> None:
         """§19.3: Millimeter oder Zoll — in der Anzeige, nie im Kern.
 
-        Die Einstellung gab es seit P0 und niemanden, der sie las. Jetzt liest
-        sie, wer Längen zeigt: Statusleiste, Objektbaum und die Maße der
-        Auswahl.
+        Die Einstellung gab es seit P0 und niemanden, der sie las. Dann lasen
+        sie drei Stellen, und der Test dazu hieß trotzdem „reaches everything
+        that shows a length" — geprüft hat er zwei. Die übrigen elf
+        Längenausgaben standen auf der Vorgabe „mm": der ganze Skizzeneditor,
+        die Analyseleiste, die Schnittleiste und die Merkmalsbeschriftungen.
+        Wer auf Zoll stellte, las im selben Fenster beides.
+
+        Gesetzt wird deshalb der **Zustand** (``labels.set_display_unit``), dem
+        jede Ausgabe ohne ausdrückliche Einheit folgt. Hier bleibt, die
+        Ansichten neu zeichnen zu lassen: Ein Zustand wirkt erst, wenn etwas
+        ihn wieder liest.
+
+        **Die Kopfzeile hing dabei einen Schritt nach.** Sie liest die
+        Einstellung selbst, wurde aber nur bei Profil- oder Auswertungswechsel
+        neu geschrieben — und ``action_settings`` sagt zu, die Einheit wirke
+        sofort.
+
+        Analyse- und Schnittleiste folgen erst beim nächsten Zeichnen: Sie
+        halten die Werte nicht, aus denen ihre Zeilen entstehen, und ihnen
+        eine Datenhaltung dafür zu geben ist ein eigener Schritt. Das steht so
+        in der Arbeitsliste, statt hier als stille Lücke.
         """
+        set_length_unit(unit)  # type: ignore[arg-type]
         self.measurements.set_unit(unit)  # type: ignore[arg-type]
         self.object_tree.set_unit(unit)  # type: ignore[arg-type]
         self._on_selection(self.object_tree.selected())
+        self._update_header()
+        # Die Merkmalsbeschriftungen in der Überlagerung schreiben Längen ohne
+        # eigene Einheit; sie brauchen nur den Anstoß, es neu zu tun.
+        self.viewport.refresh_labels()
 
     def window_commands(self) -> dict[str, tuple[str, str, Any]]:
         """Was die Palette außer den Operationen kennen muss (§2.6, §19.2).
@@ -5098,6 +5136,10 @@ class MainWindow(QMainWindow):
             self.explode_bar.show_for(len(result.scene.objects), max(plates, default=0) + 1),
         )
         self.report.show_result(result, self.session.project.document)
+        # Ein Strich legt einen Slot an: Nach der Auswertung soll die
+        # Pinselleiste ihn kennen, sonst steht dort weiter „neu".
+        chosen = self.object_tree.selected_objects()
+        self._tell_the_brush_about_the_slots(chosen[0] if len(chosen) == 1 else None)
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_scene(result)
@@ -5164,11 +5206,18 @@ class MainWindow(QMainWindow):
         An beiden Stellen aufgerufen, an denen sich etwas davon ändert: das
         Profil hängt am Dokument (Drucker und Material stehen darin), das
         Außenmaß am Ergebnis der Auswertung.
+
+        Die Anzeigeeinheit kommt aus dem **Zustand** und nicht aus den
+        Einstellungen. Beides wäre dasselbe, solange nur ``_apply_settings``
+        sie setzt — und genau darauf hatte sich das verlassen: Ein Aufruf von
+        ``set_display_unit`` mit einer anderen Einheit als der gespeicherten
+        schrieb hier weiter die gespeicherte. Zwei Quellen für eine Angabe, und
+        die eine war die Persistenz und nicht die Wahrheit.
         """
         self.header.show_project(
             self.session.title,
             self.session.last_result,
-            self.settings.display_unit,  # type: ignore[arg-type]
+            display_unit(),
         )
         self.header.show_profile(self.session.profile)
         self._update_facts()
@@ -5445,12 +5494,28 @@ class MainWindow(QMainWindow):
         self._on_map_changed(self.analysis_bar.chosen())
         self._on_layer_changed(self.layer_bar.index())
         self._update_actions()
+        self._tell_the_brush_about_the_slots(object_id)
         described = describe_selection(self.session.last_result, object_id)
         if described is None:
             self.measurements.clear_selection()
             return
         name, size, volume = described
         self.measurements.show_object(name, size, volume)
+
+    def _tell_the_brush_about_the_slots(self, object_id: str | None) -> None:
+        """Die Pinselleiste nennt Farbe und Namen des Slots — beides gehört dem
+        Körper, nicht dem Werkzeug.
+
+        Ohne diesen Weg wüsste die Leiste nur ihre Nummer, und die sagt nicht,
+        was auf dem Teil landet. Ein Strich legt einen Slot an; nach der
+        Auswertung ruft ``_refresh_all`` denselben Pfad, damit „neu" danach
+        seinen Namen hat.
+        """
+        result = self.session.last_result
+        entry = None
+        if result is not None and object_id is not None:
+            entry = result.scene.objects.get(object_id)
+        self.paint_bar.set_slots(entry.material_slots if entry is not None else [])
 
     def action_add_parameter(self) -> None:
         """§13: ein Hauptmaß benennen — auch ohne den Agenten (§2.3)."""

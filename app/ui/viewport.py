@@ -63,7 +63,7 @@ from app.ui.palette import (
 )
 from app.ui.scale_widget import ScaleHandle
 from app.ui.style import ROOMY, TIGHT
-from app.ui.theme import THEMES, viewport_colours
+from app.ui.theme import THEMES, slot_colour, viewport_colours
 
 _log = get_logger(__name__)
 
@@ -1860,7 +1860,18 @@ class Viewport(QWidget):
         for index in range(highest + 1):
             slot = known.get(index)
             colour = slot.colour if slot is not None else None
-            table.append(_hex(colour) if colour is not None else self._object_colour)
+            if colour is not None:
+                table.append(_hex(colour))
+                continue
+            # **Ein Slot ohne eigene Farbe bekommt eine aus der Palette.** Hier
+            # stand die Körperfarbe, und damit war das ganze Bemalen im Bild
+            # folgenlos: Der Pinsel legt einen Slot mit ``colour=None`` an, zwei
+            # Striche in zwei Slots ergaben zwei gleiche Einträge in dieser
+            # Tabelle, und das Teil sah aus wie vorher. Dieselbe Lücke bei der
+            # Schrift und bei „Slot zuweisen" ohne Farbeingabe — drei der vier
+            # Stellen, die Slots anlegen. Der Docstring oben beschreibt das als
+            # behoben; behoben war es nur für Slots, die schon eine Farbe hatten.
+            table.append(slot_colour(index) or self._object_colour)
         if len(table) < 2:
             # Ein einziger Slot ist kein Mehrfarbdruck, sondern die Vorgabe.
             return {}
@@ -3270,6 +3281,18 @@ class Viewport(QWidget):
         )
 
     # --- direct manipulation (§18.11) -------------------------------------------
+
+    def refresh_labels(self) -> None:
+        """Zeichnet die Szene neu, damit ihre Beschriftungen die Anzeigeeinheit
+        übernehmen (§19.3).
+
+        Dasselbe Mittel, mit dem der Schichtaufbau und der Palettenwechsel
+        daneben arbeiten: Die Beschriftungen entstehen in ``show_scene``, und
+        das Ergebnis liegt hier. Ohne den Anstoß stünde am Merkmal weiter das
+        Maß in der alten Einheit — bis irgendwann etwas anderes ein Neuzeichnen
+        auslöst.
+        """
+        self.show_scene(self._result)
 
     def set_snapping(self, grid_step: float, angle_step: float) -> None:
         """Raster- und Winkeleinrasten für den Gizmo."""

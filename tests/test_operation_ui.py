@@ -25,7 +25,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMenu
 
 from app.core.errors import ValidationError
 from app.core.registry import REGISTRY
@@ -893,3 +893,67 @@ def test_a_dependent_field_behind_a_tick_says_which_tick(window: MainWindow) -> 
     hint = candidates.toolTip()
     assert "True" not in hint, f"Bauart statt Bedienung: {hint!r}"
     assert _title_of(spec, "thorough") in hint, hint
+
+
+# --- Wann eine Operation die falsche Wahl ist (§2.7) ----------------------------
+
+
+def _with_caveat() -> list[Any]:
+    """Die Operationen, die eine Grenze deklarieren."""
+    return [spec for spec in REGISTRY.all() if str(spec.caveat).strip()]
+
+
+def test_the_caveat_reaches_every_surface_that_offers_the_operation(window: MainWindow) -> None:
+    """Zwölf Grenzen, und gelesen hat sie allein das Handbuch.
+
+    ``caveat`` sagt, wann eine Operation die falsche Wahl ist („Nicht ohne
+    Entlüftung, wenn im Slicer Stützen entstehen"). Die einzige Lesestelle im
+    ganzen Programm war ``documentation()`` — nicht der Dialog, in dem gerade
+    jemand die Operation anwendet, nicht der Tooltip am Menüeintrag daneben,
+    und nicht die Werkzeugliste des Agenten. Der Docstring des Feldes rechnet
+    selbst mit der Oberfläche: „dann steht neben jedem Menüeintrag eine
+    Warnung".
+
+    Geprüft wird jede der drei Stellen, und zwar für **jede** Operation mit
+    Grenze: Eine Stichprobe wäre grün, sobald eine einzige durchkommt.
+    """
+    from app.core.registry import caveat_line, tool_schemas
+
+    specs = _with_caveat()
+    assert len(specs) >= 5, "die Prüfung braucht Operationen mit Grenze"
+
+    schemas = {entry["name"]: entry["description"] for entry in tool_schemas()}
+    for spec in specs:
+        line = caveat_line(spec)
+        assert str(spec.caveat) in line, spec.name
+        assert line != str(spec.caveat), f"{spec.name}: die Grenze braucht ihr Vorwort"
+
+        # Der Agent wählt aus derselben Auskunft wie ein Mensch (§10).
+        assert str(spec.caveat) in schemas[spec.name], f"{spec.name}: der Agent sieht sie nicht"
+
+        # Der Menüeintrag: im Tooltip, nicht in der Statuszeile — die ist eine
+        # Zeile, und abgeschnitten wäre eine Warnung schlimmer als keine.
+        action = window._operation_action(QMenu(window), spec)
+        assert str(spec.caveat) in action.toolTip(), f"{spec.name}: kein Tooltip"
+        assert str(spec.doc) in action.toolTip(), f"{spec.name}: der Satz fehlt daneben"
+
+        # Und der Dialog, in dem sie gerade angewendet wird.
+        dialog = OperationDialog(spec, {}, window)
+        assert dialog._caveat is not None, f"{spec.name}: kein Label"
+        assert str(spec.caveat) in dialog._caveat.text(), f"{spec.name}: leer"
+        assert dialog._caveat.isVisibleTo(dialog), f"{spec.name}: unsichtbar"
+
+
+def test_an_operation_without_a_caveat_shows_no_empty_warning(window: MainWindow) -> None:
+    """Wo keine Grenze ist, steht keine.
+
+    Ein Vorbehalt an jeder Operation wäre keiner mehr — das steht so in der
+    Deklaration des Feldes, und es gilt auch für ein leeres Label, das Platz
+    nimmt und nichts sagt.
+    """
+    spec = next(entry for entry in REGISTRY.all() if not str(entry.caveat).strip())
+    dialog = OperationDialog(spec, {}, window)
+
+    assert dialog._caveat is not None, "das Label wird immer gebaut"
+    assert not dialog._caveat.isVisibleTo(dialog), f"{spec.name}: leeres Warnfeld"
+    assert not dialog._caveat.text()

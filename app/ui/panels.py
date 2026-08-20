@@ -114,6 +114,16 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     "arrange.out_of_build_volume": (SPLIT_MODEL, SCALE_TO_FIT),
     "export.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
     "ingest.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+    # **Dritter Melder derselben Sache, und er stand ohne Menü da.** „Nicht
+    # geschlossen" meldet der Kern an drei Stellen: beim Einlesen, beim
+    # Exportieren und nach jedem Zug des Agenten (``agent.not_watertight``,
+    # ``app/core/agent/checks.py``). Zwei trugen die beiden Handlungen, der
+    # dritte nicht — wer über den Chat ein Objekt aufriss, bekam den Satz und
+    # sonst nichts, obwohl beide Handler gebaut und verdrahtet sind.
+    #
+    # Er ist dabei der einzige der drei, der seine Objektkennung mitbringt:
+    # ``_object_of`` muss hier nicht auf die Auswahl raten.
+    "agent.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
 }
 
 

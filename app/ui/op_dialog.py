@@ -41,7 +41,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.errors import AppError
-from app.core.registry import OperationSpec
+from app.core.registry import OperationSpec, caveat_line
 from app.core.scene import expressions
 from app.core.types import ParamSpec
 from app.i18n import tr
@@ -629,6 +629,7 @@ class OperationDialog(QDialog):
                 editor.setToolTip(str(entry.doc))
 
         layout = QVBoxLayout(self)
+        self._caveat: QLabel | None = None
         self._description: QLabel | None = None
         if spec.doc:
             description = QLabel(str(spec.doc), self)
@@ -645,6 +646,28 @@ class OperationDialog(QDialog):
             description.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             layout.addWidget(description)
             self._description = description
+
+        # **Die Grenze stand nur im Handbuch.** Zwölf Operationen tragen einen
+        # ``caveat``, und gelesen hat ihn allein die Handbuchreferenz — nicht
+        # der Dialog, in dem gerade jemand die Operation anwendet. Als eigenes
+        # Label und nicht an den ``doc``-Satz gehängt: Die Deklaration des
+        # Feldes begründet das selbst — in einen Satz gepackt liest sich die
+        # Einschränkung wie ein Nachtrag und wird überlesen.
+        #
+        # Das Wort „Wann nicht" davor ist die zweite Kodierung (Regel 18): Der
+        # Satz steht halbfett, aber die Aussage hängt nicht daran.
+        # Immer gebaut, sichtbar nur mit Inhalt: Ein Variantenwechsel *zu*
+        # einer Grenze hin hätte sonst nichts, woran er sie schreiben könnte.
+        warning = caveat_line(spec)
+        caveat = QLabel(warning, self)
+        caveat.setWordWrap(True)
+        set_level(caveat, "caption")
+        font = caveat.font()
+        font.setBold(True)
+        caveat.setFont(font)
+        caveat.setVisible(bool(warning))
+        self._caveat = caveat
+        layout.addWidget(caveat)
         layout.addLayout(front)
         # Der freie Platz sammelt sich hier, zwischen Feldern und Knöpfen, und
         # nicht mehr verteilt über alles.
@@ -922,6 +945,13 @@ class OperationDialog(QDialog):
                 form.setRowVisible(editor, name in allowed)
         if self._description is not None and spec.doc:
             self._description.setText(str(spec.doc))
+        if self._caveat is not None:
+            # Ein Zwilling hat seine eigene Grenze — oder keine. Stehen bleibt
+            # sonst die des anderen Rechenkerns, und das ist schlechter als
+            # keine Angabe.
+            warning = caveat_line(spec)
+            self._caveat.setText(warning)
+            self._caveat.setVisible(bool(warning))
         self.adjustSize()
 
     def place_beside(self, anchor: QWidget | None) -> None:

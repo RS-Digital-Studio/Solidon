@@ -1602,7 +1602,22 @@ def test_cancelling_the_question_keeps_the_window_open(window: MainWindow, monke
 
 
 def test_the_display_unit_reaches_everything_that_shows_a_length(window: MainWindow) -> None:
-    """§19.3: die Einstellung gab es seit P0 und niemanden, der sie las."""
+    """§19.3: die Einstellung gab es seit P0 und niemanden, der sie las.
+
+    **Der Name war eine Zusage, und der Test prüfte zwei Stellen.** Erreicht
+    wurden drei — Statusleiste, Objektbaum, Kopfzeile —, und die übrigen elf
+    Längenausgaben standen weiter auf der Vorgabe „mm": der ganze
+    Skizzeneditor, die Analyseleiste, die Schnittleiste und die
+    Merkmalsbeschriftungen. Wer auf Zoll stellte, las im selben Fenster beides.
+
+    Geprüft wird deshalb jetzt auch die freie Ausgabe — ``labels.length`` ohne
+    durchgereichte Einheit ist der Weg, den jene elf nehmen — und die
+    Kopfzeile, die als Einzige die Einstellung selbst las und trotzdem
+    hinterherhing: Sie wurde nur bei Profil- oder Auswertungswechsel neu
+    geschrieben.
+    """
+    from app.ui.labels import display_unit, length
+
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     window._on_scene(window.session.evaluate_now())
@@ -1610,6 +1625,8 @@ def test_the_display_unit_reaches_everything_that_shows_a_length(window: MainWin
 
     assert "20,00" in window.measurements.text()
     assert "cm³" in window.measurements.text()
+    assert "20" in window.header.bounds.text(), "die Kopfzeile zeigt das Außenmaß"
+    assert display_unit() == "mm", "die Vorgabe ist Millimeter"
 
     window.set_display_unit("in")
 
@@ -1618,6 +1635,15 @@ def test_the_display_unit_reaches_everything_that_shows_a_length(window: MainWin
     assert "0,7874" in window.measurements.text(), "20 mm sind 0,7874 Zoll"
     assert "in³" in window.measurements.text()
     assert "in" in window.object_tree.tree.topLevelItem(0).text(1)
+
+    # Die Kopfzeile hing einen Schritt nach: sie liest die Einstellung selbst,
+    # wurde aber nur bei Profil- oder Auswertungswechsel neu geschrieben.
+    assert "in" in window.header.bounds.text(), "die Kopfzeile folgt sofort"
+    assert "20,00" not in window.header.bounds.text(), "sonst steht dort noch Millimeter"
+
+    # Und der Weg der elf: eine Länge ohne durchgereichte Einheit.
+    assert display_unit() == "in"
+    assert length(20.0) == "0,7874 in", length(20.0)
 
 
 def test_the_settings_dialog_writes_every_value_back(qt_app: QApplication) -> None:

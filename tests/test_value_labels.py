@@ -263,3 +263,78 @@ def test_a_path_keeps_its_dots_and_a_number_gets_its_comma(qt_app: object) -> No
         assert localised_value(12.5) == "12,5"
     finally:
         QLocale.setDefault(before)
+
+
+def _finding_codes() -> dict[str, set[str]]:
+    """Jeder ``Finding(code=...)``, den ``app/core`` erzeugt, mit seinen Rängen.
+
+    Per AST und nicht per Textsuche, aus demselben Grund wie in
+    ``test_every_value_key_has_a_label``: Ein Befund entsteht als Aufruf, und
+    die Kennung steht als Literal darin.
+    """
+    import ast
+    from pathlib import Path
+
+    import app.core
+
+    found: dict[str, set[str]] = {}
+    for path in Path(app.core.__file__).parent.rglob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:  # pragma: no cover - nur bei kaputtem Baum
+            continue
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "Finding"
+            ):
+                continue
+            code = severity = None
+            for keyword in node.keywords:
+                if keyword.arg == "code" and isinstance(keyword.value, ast.Constant):
+                    code = keyword.value.value
+                if keyword.arg == "severity" and isinstance(keyword.value, ast.Constant):
+                    severity = keyword.value.value
+            if isinstance(code, str):
+                found.setdefault(code, set()).add(severity or "?")
+    return found
+
+
+def test_the_same_problem_offers_the_same_actions(qt_app: object) -> None:
+    """Wer den Befund meldet, ändert nicht, was dagegen hilft.
+
+    „Nicht geschlossen" meldet der Kern an drei Stellen — beim Einlesen, beim
+    Exportieren und nach jedem Zug des Agenten. Zwei trugen *Reparieren und
+    erneut versuchen* und *Stellen zeigen*, der dritte nichts: Wer über den
+    Chat ein Objekt aufriss, bekam den Satz und kein Menü, obwohl beide
+    Handler gebaut und verdrahtet sind.
+
+    Geprüft wird die **Familie** und nicht der Einzelfall: Befunde mit
+    demselben Namen hinter dem Punkt melden dasselbe Problem. Ein vierter
+    Melder wird damit rot statt still, und das ist der Sinn — der dritte war
+    still.
+    """
+    from app.ui.panels import FINDING_ACTIONS
+
+    families: dict[str, set[str]] = {}
+    for code in _finding_codes():
+        if "." not in code:
+            continue
+        families.setdefault(code.split(".", 1)[1], set()).add(code)
+
+    uneven: list[str] = []
+    for problem, codes in families.items():
+        offered = {code: FINDING_ACTIONS.get(code) for code in codes}
+        distinct = {actions for actions in offered.values() if actions is not None}
+        if not distinct:
+            continue  # kein Melder trägt eine Handlung — dann ist das die Aussage
+        without = sorted(code for code, actions in offered.items() if actions is None)
+        if without:
+            uneven.append(
+                f"{problem}: {', '.join(without)} ohne Handlung, die Geschwister haben eine"
+            )
+        if len(distinct) > 1:
+            uneven.append(f"{problem}: verschiedene Handlungen für dasselbe Problem")
+
+    assert not uneven, "\n".join(uneven)

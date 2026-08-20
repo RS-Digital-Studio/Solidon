@@ -41,9 +41,8 @@ bekommt einen roten Lauf.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| `caveat` erreicht nur das Handbuch | Die Bedienverträge durchgesehen (20.08.2026) | `surfaces.py`, das am 20.08. eine parallele Sitzung in Arbeit hatte — der Vorbehalt gehört in Dialog, Menü-Tooltip und `tool_schemas` |
-| Die Anzeigeeinheit erreicht drei von siebenundzwanzig Stellen | Die Bedienverträge durchgesehen (20.08.2026) | eine Entscheidung über den Ort: Prozesszustand neben der Sprache, oder die Einheit durch 24 Konstruktoren reichen |
-| `agent.not_watertight` trägt keine Handlung | Die Bedienverträge durchgesehen (20.08.2026) | `panels.py`, dieselbe parallele Sitzung; dazu die fehlende `object_id` an `ingest.not_watertight` |
+| Die Eingabefelder nehmen weiter Millimeter | Die Bedienverträge durchgesehen (20.08.2026) | den Umbau von Wert **und** Grenzen in beide Richtungen — ein Parameterausdruck darf dabei nicht angefasst werden |
+| Ein Befund weiß nicht, zu welchem Objekt er gehört | Die Bedienverträge durchgesehen (20.08.2026) | die Auswertung, die Befunde mit den Kennungen ihrer Ausgaben anreichert — gilt dann für jede Operation |
 | Bedingte Wirkung gehört an den Parameter | Die Bedienverträge durchgesehen (20.08.2026) | eine Entscheidung über den Vertrag aus §10 — `ParamSpec` bekäme ein Feld, das alle vier Oberflächen lesen |
 
 ---
@@ -7174,45 +7173,116 @@ ist entprellt.
 
 ### Offen
 
-- [ ] **`caveat` erreicht nur das Handbuch.** Zwölf Operationen tragen einen
+- [x] **`caveat` erreichte nur das Handbuch.** Zwölf Operationen tragen einen
       Vorbehalt („Nicht ohne Entlüftung, wenn im Slicer Stützen entstehen"),
-      und die einzige Lesestelle im ganzen Programm ist `documentation()` in
-      `app/core/registry/surfaces.py`. Der Menüeintrag setzt `spec.doc` als
-      Tooltip, der Dialog zeigt `spec.doc` als Beschreibung, `tool_schemas`
-      gibt dem Agenten `spec.doc` — an keiner dieser drei Stellen kommt der
-      Vorbehalt an, also nirgends dort, wo jemand die Operation gerade wählt.
-      Der Docstring des Feldes argumentiert selbst mit der Oberfläche („dann
-      steht neben jedem Menüeintrag eine Warnung"); er nimmt an, dass das Feld
-      dort ankommt.
-- [ ] **Die Anzeigeeinheit erreicht drei Anzeigen, und der Test, der das
-      Gegenteil behauptet, prüft zwei.** `test_the_display_unit_reaches_
-      everything_that_shows_a_length` prüft Statusleiste und Objektbaum. Es
-      folgen drei Stellen (dazu die Kopfzeile). Nicht folgen: **jeder
-      Operationsdialog** — die Beschriftung ist `[mm]` aus dem Parameterschema;
-      **13 Eingabefelder** mit fest `DISPLAY_UNITS[0]` (Pinselradius,
-      Formstärke, Schnittposition, Scheibendicke, Fangweite, Versatz, Messfeld,
-      Rasterweite, Zugleiste); **11 Textausgaben** über die Vorgabe
-      `unit="mm"` (ganzer Skizzeneditor, Analyseleiste, Schnittleiste,
-      Merkmalsbeschriftungen). Und die Kopfzeile hängt einen Schritt nach:
-      `set_display_unit` frischt sie nicht auf, obwohl `action_settings`
-      zusagt, die Einheit wirke sofort.
+      und die einzige Lesestelle im ganzen Programm war `documentation()`. Der
+      Menüeintrag setzte `spec.doc` als Tooltip, der Dialog zeigte `spec.doc`
+      als Beschreibung, `tool_schemas` gab dem Agenten `spec.doc` — an keiner
+      dieser drei Stellen kam der Vorbehalt an, also nirgends dort, wo jemand
+      die Operation gerade wählt. Der Docstring des Feldes argumentiert selbst
+      mit der Oberfläche („dann steht neben jedem Menüeintrag eine Warnung"):
+      Er nahm an, dass das Feld dort ankommt.
 
-      Wer auf Zoll stellt, liest im selben Fenster gleichzeitig Zoll und
-      Millimeter — im Skizzeneditor als Zahl ohne Einheit. Das ist schlechter
-      als gar keine Umschaltung, und §19.3 verlangt sie trotzdem: zu bauen ist
-      also die Umschaltung und nicht ihr Rückbau. Ein Weg wäre die
-      Anzeigeeinheit als Prozesszustand neben der Sprache, damit jede
-      `length()`-Ausgabe ihr folgt, statt sie durch 24 Konstruktoren zu
-      reichen.
-- [ ] **`agent.not_watertight` trägt keine Handlung.** Drei Befunde melden
+      `caveat_line()` ist jetzt die eine Quelle, und sie trägt auch das Wort
+      davor — `caveat` ohne Vorwort liest sich als Fortsetzung des
+      `doc`-Satzes, und genau davor warnt die Deklaration des Feldes. Drei
+      Verwendungen: das Handbuch mit Sternchen (`markup=True`, derselbe String
+      wie vorher), der Menü-Tooltip mit Leerzeile darunter, und der Dialog als
+      **eigenes Label** — halbfett, mit dem Wort als zweiter Kodierung
+      (Regel 18).
+
+      Die Statuszeile bekommt ihn **nicht**: Sie ist eine Zeile, und eine
+      abgeschnittene Warnung ist schlimmer als keine.
+
+      Der Agent bekommt ihn ebenfalls — er wählt aus derselben Auskunft wie ein
+      Mensch (§10, Leitprinzip 3). Ohne sie konnte er *Gitter füllen* für ein
+      Teil vorschlagen, das dicht sein muss, und nichts in seiner Werkzeugliste
+      sagte, dass das die falsche Wahl ist.
+
+      Ein Fund in der eigenen Umsetzung kam dabei heraus: Das Label zuerst nur
+      zu bauen, wenn es beim Öffnen etwas zu sagen hat, hätte einen
+      Variantenwechsel **zu** einer Grenze hin stumm gelassen — `switch_variant`
+      fände `None`. Es entsteht jetzt immer und ist sichtbar, wenn es Inhalt
+      hat.
+- [x] **Die Anzeigeeinheit erreichte drei Anzeigen — und der Test, der das
+      Gegenteil behauptete, prüfte zwei.** `test_the_display_unit_reaches_
+      everything_that_shows_a_length` prüfte Statusleiste und Objektbaum. Ein
+      Testname ist eine Zusage, und diese war die gefährlichste Art: Weil der
+      Test grün stand, sah der Vertrag erfüllt aus.
+
+      Elf Textausgaben standen weiter auf der Vorgabe `unit="mm"` — der ganze
+      Skizzeneditor, die Analyseleiste, die Schnittleiste und die
+      Merkmalsbeschriftungen. Wer auf Zoll stellte, las im selben Fenster
+      beides, im Skizzeneditor als Zahl ohne Einheit dazu.
+
+      **Die Einheit ist jetzt ein Zustand, wie die Sprache einer ist**
+      (`labels.set_display_unit`, `display_unit()`). Durch vierundzwanzig
+      Konstruktoren zu reichen war der Weg dorthin, und er hätte beim nächsten
+      Widget wieder eine Stelle vergessen: `labels.length` rufen Funktionen
+      **ohne Widget** — die Merkmalsbeschriftung entsteht in der Überlagerung,
+      im Objektbaum und in der Statusleiste. Ein ausdrücklich übergebenes
+      Argument gewinnt weiter; das ist kein zweites Verzeichnis, sondern ein
+      Vorrang.
+
+      **Die Kopfzeile hing einen Schritt nach**, und der Grund war eine zweite
+      Quelle: `_update_header` las `settings.display_unit` statt den Zustand.
+      Beides war dasselbe, solange nur `_apply_settings` es setzte — genau
+      darauf hatte es sich verlassen.
+
+      Zwei Dinge, die der Umbau **nicht** durfte und die ihn erst sicher
+      machten. `measured_expression` schreibt den Abstand zweier Punkte in ein
+      **Maßfeld** und formatiert selbst — dort wäre eine umgerechnete Zahl ein
+      Datenfehler und kein Anzeigefehler. Und die dreizehn Suffixe an
+      Eingabefeldern bleiben, wo sie sind: Nur das Kürzel zu tauschen, ohne den
+      Wert umzurechnen, hätte „20,00 in" an einen Wert von 20 mm geschrieben —
+      schlimmer als vorher.
+
+      Der Preis des Zustands steht in `tests/conftest.py`: Eine Fixture setzt
+      ihn nach jedem Test zurück, sonst nähme ein Test, der auf Zoll stellt,
+      jeden folgenden mit.
+- [x] **`agent.not_watertight` trug keine Handlung.** Drei Befunde melden
       dasselbe Problem; `export.not_watertight` und `ingest.not_watertight`
       tragen beide *Reparieren und erneut versuchen* und *Stellen zeigen*,
-      `agent.not_watertight` trägt die Objektkennung und kein Menü. Wer über
-      den Chat ein Objekt aufreißt, bekommt den Satz und sonst nichts.
-      Umgekehrt trägt `ingest.not_watertight` **keine** `object_id` — dort
-      greift die Handlung über `_object_of` auf die Auswahl zurück, also auf
-      eine Vermutung, die bei einer 3MF-Baugruppe falsch ist. Dieselbe Sorte
-      Fund wie bei `check_build_volume` in der Durchsicht davor.
+      `agent.not_watertight` trug die Objektkennung und kein Menü. Wer über den
+      Chat ein Objekt aufriss, bekam den Satz und sonst nichts — obwohl beide
+      Handler gebaut und verdrahtet sind. Er ist dabei der einzige der drei,
+      der seine Objektkennung mitbringt: `_object_of` muss hier nicht raten.
+
+      Geprüft wird jetzt die **Familie** und nicht der Einzelfall
+      (`test_the_same_problem_offers_the_same_actions`): Befunde mit demselben
+      Namen hinter dem Punkt melden dasselbe Problem, und wenn einer von ihnen
+      eine Handlung trägt, müssen es alle. Ein vierter Melder wird damit rot
+      statt still — der dritte war still.
+- [ ] **Die Eingabefelder nehmen weiter Millimeter, und sie sagen es.** Der
+      zweite Halbschritt der Anzeigeeinheit: 13 Felder tragen `mm` als Suffix
+      aus `DISPLAY_UNITS[0]` (Pinselradius, Formstärke, Schnittposition,
+      Scheibendicke, Fangweite, Versatz, Messfeld, Rasterweite, Zugleiste), und
+      jeder Operationsdialog schreibt `[mm]` aus dem Parameterschema. Das ist
+      **ehrlich** — die Einheit steht dabei — aber es ist nicht das, was §19.3
+      zusagt.
+
+      Der Umbau ist mehr als ein Suffix: Wert und Grenzen müssen in beide
+      Richtungen umgerechnet werden, `minimum`/`maximum` stehen in Millimetern,
+      und ein Parameterausdruck (`=@breite/2`, §13) darf dabei nicht angefasst
+      werden. Das ist ein eigener Schritt und keine Zeile.
+
+      Dazu die kleinere Hälfte: Analyse- und Schnittleiste folgen erst beim
+      nächsten Zeichnen, weil sie die Werte nicht halten, aus denen ihre Zeilen
+      entstehen. Der Viewport hält sie und frischt sofort auf
+      (`refresh_labels`).
+- [ ] **Ein Befund weiß nicht, zu welchem Objekt er gehört.**
+      `ingest.not_watertight` trägt keine `object_id`, und deshalb greift seine
+      Handlung über `_object_of` auf die *Auswahl* zurück — eine Vermutung, die
+      bei einer 3MF-Baugruppe falsch ist. Der Loader kann sie nicht mitgeben:
+      Er arbeitet auf einem Netz, und die Objektkennungen vergibt der Stapel
+      (§11), also kennt auch die `load`-Operation sie noch nicht — ihre
+      Ausgaben tragen `id=""`.
+
+      Der Weg führt über die **Auswertung**: Sie kennt beide Seiten und könnte
+      die Befunde einer Operation mit den Kennungen ihrer Ausgaben anreichern.
+      Das gilt dann für jeden Befund jeder Operation und nicht nur für diesen —
+      dieselbe Sorte Fund wie bei `check_build_volume` in der Durchsicht davor,
+      nur eine Ebene tiefer.
 - [ ] **Die bedingte Wirkung gehört an den Parameter, nicht in eine Tabelle
       der Oberfläche.** Siehe oben: `DEPENDENT_FIELDS` steht mit elf Einträgen
       über der Schwelle, die ihr eigener Kopf nennt. Betrifft `ParamSpec`,

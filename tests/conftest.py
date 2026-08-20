@@ -80,6 +80,29 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _the_display_unit_starts_at_millimetres() -> Iterator[None]:
+    """Die Anzeigeeinheit ist ein Prozesszustand, also gehört sie zurückgesetzt.
+
+    Sie liegt in ``app/ui/labels`` und nicht an jedem Widget, weil die
+    Merkmalsbeschriftung von drei Stellen ohne Widget geschrieben wird (§19.3).
+    Der Preis dafür steht hier: Ein Test, der auf Zoll stellt, würde sonst
+    jeden folgenden mitnehmen — und der fiele an einer Zahl um, die nichts mit
+    ihm zu tun hat.
+
+    Zentral und nicht im jeweiligen Test, aus demselben Grund wie die Fixture
+    darunter: es gibt neun ``window``-Fixtures, und das zehnte vergisst es.
+    Der Import liegt innen, damit die Fixture auch ohne PySide6 durchläuft —
+    ``labels`` zieht Qt.
+    """
+    yield
+    try:
+        from app.ui import labels
+    except ImportError:  # pragma: no cover - ohne PySide6 gibt es nichts zu räumen
+        return
+    labels.set_display_unit("mm")
+
+
+@pytest.fixture(autouse=True)
 def _no_worker_outlives_its_window() -> Iterator[None]:
     """Nach jedem Test warten die Fenster auf ihre Arbeiter.
 
