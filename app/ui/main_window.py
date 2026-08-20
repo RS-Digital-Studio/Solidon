@@ -4029,15 +4029,21 @@ class MainWindow(QMainWindow):
             return
         self.start_sketch("", text)
 
-    def palette_rows(self) -> list[PaletteEntry]:
+    def palette_rows(
+        self, commands: dict[str, tuple[str, str, Any]] | None = None
+    ) -> list[PaletteEntry]:
         """Was in der Palette steht — Operationen und Fensterbefehle.
 
         Getrennt von :meth:`action_command_palette`, weil dort ein modaler
         Dialog aufgeht: Was danach kommt, sieht keine Prüfung mehr, und was
         eine Prüfung nicht sieht, driftet. Die Kürzelfrage ist genau so
         entstanden.
+
+        Die Fensterbefehle kommen als Argument, wenn der Aufrufer sie ohnehin
+        braucht — er führt sie danach aus, und zweimal gebaut wären es zwei
+        Listen, von denen niemand garantiert, dass sie dieselbe ist.
         """
-        commands = self.window_commands()
+        commands = self.window_commands() if commands is None else commands
         extra = [
             PaletteEntry(
                 name=key,
@@ -4077,7 +4083,7 @@ class MainWindow(QMainWindow):
     def action_command_palette(self) -> None:
         """Eine Taste, alles — und die Kürzel lernen sich nebenbei (§2.6)."""
         commands = self.window_commands()
-        palette = CommandPalette(self.palette_rows(), parent=self)
+        palette = CommandPalette(self.palette_rows(commands), parent=self)
         if palette.exec() != CommandPalette.DialogCode.Accepted:
             return
         name = palette.chosen()
