@@ -738,6 +738,11 @@ class MainWindow(QMainWindow):
         """Ob die Szene schon einmal einen Körper hatte — der erste bekommt
         die Kamera."""
         self._op_actions: dict[str, QAction] = {}
+        self._palette_actions: dict[str, QAction] = {}
+        """Zu welcher Action ein Fensterbefehl der Palette gehört.
+
+        Gefüllt von ``_menu_commands``, gelesen von ``_extra_availability`` —
+        die Palette graut damit aus, was das Menü ausgraut."""
         """Die Menüeinträge der Operationen, damit sie sich ausgrauen lassen.
         Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
         etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten."""
@@ -2045,6 +2050,30 @@ class MainWindow(QMainWindow):
         self.auto_split_action.setEnabled(chosen >= 1 and not locked and not gesturing)
         self.variants_action.setEnabled(objects > 0 and not locked and not gesturing)
         self.export_action.setEnabled(objects > 0 and not locked and self._export_worker is None)
+
+        # Und jeder der fünf sagt, was ihm fehlt. Die Reihenfolge der Gründe
+        # ist die der Bedingungen darüber: Was zuerst zutrifft, wird genannt.
+        gesture_note = tr("Solange gezeichnet oder geformt wird, gilt die Taste dem Werkzeug.")
+        needs_body = tr("Dafür braucht es einen Körper in der Szene.")
+        self._say_why(
+            self.undo_action,
+            gesture_note if gesturing else tr("Es ist kein Schritt da, der zurückgehen könnte."),
+        )
+        self._say_why(
+            self.redo_action,
+            gesture_note
+            if gesturing
+            else tr("Es wurde nichts zurückgenommen, das wieder gelten könnte."),
+        )
+        self._say_why(
+            self.auto_split_action,
+            gesture_note if gesturing else tr("Dafür muss ein Körper ausgewählt sein."),
+        )
+        self._say_why(self.variants_action, gesture_note if gesturing else needs_body)
+        self._say_why(
+            self.export_action,
+            tr("Es wird gerade exportiert.") if self._export_worker is not None else needs_body,
+        )
         self.import_action.setEnabled(not locked)
         self.generate_action.setEnabled(not locked)
         self._toolbar_import.setEnabled(not locked)
@@ -2167,6 +2196,31 @@ class MainWindow(QMainWindow):
         elif stored is not None:
             action.setStatusTip(str(stored))
             action.setToolTip(str(stored))
+
+    def _say_why(self, action: QAction, reason: str) -> None:
+        """Schreibt den Grund einer Sperre an den Eintrag — und nimmt ihn zurück.
+
+        Gebaut wie ``_lock_hint`` und ``_kind_hint``, nur für die Befehle, die
+        nicht aus dem Register kommen: Exportieren, Rückgängig, Wiederholen,
+        Automatisch teilen und Varianten. Bei leerem Projekt sind genau diese
+        fünf gesperrt, und in Menü und Palette stand als Hinweis ihr
+        Beschreibungssatz — was sie täte, wenn sie könnte.
+
+        Der Grund gehört dorthin, wo die Bedingung steht, und nicht in eine
+        zweite Tabelle: Wer die Bedingung ändert und den Satz vergisst, hat ihn
+        eine Zeile weiter vor Augen.
+        """
+        stored = action.property("tip_before_why")
+        if reason and not action.isEnabled():
+            if stored is None:
+                action.setProperty("tip_before_why", action.statusTip())
+            action.setStatusTip(reason)
+            action.setToolTip(reason)
+            return
+        if stored is not None:
+            action.setStatusTip(str(stored))
+            action.setToolTip(str(stored))
+            action.setProperty("tip_before_why", None)
 
     def _lock_hint(self, action: QAction, locked: bool) -> None:
         """Schreibt den Grund der Sperre in den Hinweistext — und stellt den
@@ -3217,22 +3271,63 @@ class MainWindow(QMainWindow):
         Verlust der Arbeit, und *Befehlspalette* öffnete sich selbst.
         """
         vorhanden = {title for title, _shortcut, _slot in known.values()}
+        # Und wo dieselbe Handlung schon von Hand in der Tabelle steht, wird
+        # ihre Action **trotzdem** gemerkt: Exportieren, Rückgängig,
+        # Wiederholen und Automatisch teilen stehen dort mit einer gebundenen
+        # Methode, und eine Methode weiß nicht, ob sie darf. Vier der fünf
+        # gesperrten Befehle eines leeren Projekts sind genau diese vier — sie
+        # nur über die Menüschleife zu finden hätte einen von fünf erwischt.
+        nach_titel = {title: key for key, (title, _shortcut, _slot) in known.items()}
         ops = set(self._op_actions.values())
         gefunden: dict[str, Any] = {}
+        self._palette_actions.clear()
         for path, action in _menu_lines(self.menuBar()):
-            if action in ops or action.text() in vorhanden:
+            if action in ops:
+                continue
+            if action.text() in vorhanden:
+                self._palette_actions[nach_titel[action.text()]] = action
                 continue
             if action in (self._quit_action, self._palette_action):
                 continue
             # Der Weg steht im Titel: „Vorne" allein sagt in einer Liste aus
             # hundert Zeilen nichts, „Kamera: Vorne" schon.
             title = f"{path}: {action.text()}" if path else action.text()
-            gefunden[f"menu.{len(gefunden)}"] = (
+            key = f"menu.{len(gefunden)}"
+            gefunden[key] = (
                 title,
                 action.shortcut().toString(),
                 action.trigger,
             )
+            # **Und die Action wird gemerkt.** Sie ist die einzige Quelle
+            # dafür, ob dieser Befehl jetzt geht — die Operationen der Palette
+            # lesen sie längst (``_palette_availability``), die
+            # Fensterbefehle taten es nicht: Sie standen alle gleich da, und
+            # „Rückgängig" ohne Verlauf nahm den Klick an und tat nichts. Bei
+            # leerem Projekt sind das fünf von 54 (Exportieren, Rückgängig,
+            # Wiederholen, Varianten, Automatisch teilen).
+            #
+            # Als Tabelle daneben und nicht als vierter Wert im Tupel:
+            # ``window_commands`` hat sechs Aufrufstellen, die drei auspacken,
+            # und eine Signatur zu ändern, um eine Frage zu beantworten, ist
+            # der teurere Weg zum selben Ergebnis.
+            self._palette_actions[key] = action
         return gefunden
+
+    def _extra_availability(self, key: str) -> tuple[bool, str]:
+        """Ob ein Fensterbefehl jetzt ausführbar ist, und warum nicht.
+
+        Dieselbe Auskunft wie ``_palette_availability`` für die Operationen,
+        aus derselben Quelle: der Action, die auch das Menü ausgraut. Was von
+        Hand in ``window_commands`` steht und keine Action hat — Speichern,
+        das Handbuch, „Alles einpassen" — kann immer.
+        """
+        action = self._palette_actions.get(key)
+        if action is None or action.isEnabled():
+            return True, ""
+        hint = action.toolTip().strip()
+        if hint and hint != action.text().replace("&", "").strip():
+            return False, hint
+        return False, tr("Das geht gerade nicht.")
 
     def selected_feature_kind(self) -> str | None:
         """Die Art des gerade ausgewählten Merkmals — ``hole``, ``face`` und
@@ -3839,8 +3934,11 @@ class MainWindow(QMainWindow):
                 doc=title,
                 shortcut=shortcut,
                 category=key.split(".", 1)[0],
+                available=usable,
+                reason=reason,
             )
             for key, (title, shortcut, _slot) in commands.items()
+            for usable, reason in (self._extra_availability(key),)
         ]
         # Die Verfügbarkeit kommt aus derselben Quelle wie im Menü — den
         # QActions, die `_update_actions` pflegt. Vorher zeigte die Palette

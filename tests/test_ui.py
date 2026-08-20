@@ -3519,6 +3519,15 @@ def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> 
     Mit fester Stellenzahl brauchten Name und Maße dreihundertdreiundvierzig
     Pixel und bekamen zweihundertsechzig — die Spalte wurde abgeschnitten, und
     zwar bei jedem Projekt, nicht nur bei langen Namen.
+
+    **Gefragt wird die Karte, nicht Qt.** Der Test rief hier
+    ``resizeColumnToContents`` für beide Spalten und maß dann deren Summe — also
+    genau das, was die Karte gerade *nicht* tut: Sie teilt die Breite
+    (``_size_columns``), weil der Inhalt beider Spalten zusammen nun einmal
+    breiter sein kann als die Karte. Solange die Namensspalte auf ``Stretch``
+    stand, ging der Aufruf für sie ins Leere und die Summe stimmte zufällig; als
+    die Maßspalte ihren Deckel bekam, tat er es nicht mehr. Ein Test, der die
+    Einstellung überschreibt, die er prüfen soll, prüft sie nicht.
     """
     from PySide6.QtWidgets import QTreeWidgetItem
 
@@ -3526,12 +3535,16 @@ def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> 
     from app.ui.panels import ObjectTree
 
     tree = ObjectTree()
+    tree.resize(LEFT_WIDTH, 200)
     QTreeWidgetItem(tree.tree, ["Halter", "60 × 40 × 11 mm"])
-    tree.tree.resizeColumnToContents(0)
-    tree.tree.resizeColumnToContents(1)
+    tree._size_columns()
 
-    needed = tree.tree.columnWidth(0) + tree.tree.columnWidth(1)
+    header = tree.tree.header()
+    needed = header.sectionSize(0) + header.sectionSize(1)
     assert needed <= LEFT_WIDTH, f"{needed} Pixel bei {LEFT_WIDTH} verfügbaren"
+    assert header.sectionSize(0) > header.sectionSize(1), (
+        "der Name ist die Auskunft, das Maß die Beigabe"
+    )
 
 
 def test_the_object_tree_grows_with_its_content(qt_app: QApplication) -> None:

@@ -720,3 +720,46 @@ def test_the_shortcut_list_knows_every_key_the_window_holds(window: MainWindow) 
     assert from_menus == [name for name in menus if name in groups], (
         f"die Gruppen folgen nicht der Menüleiste: {from_menus} gegen {menus}"
     )
+
+
+def test_the_palette_greys_out_what_the_menu_greys_out(window: MainWindow) -> None:
+    """Die 60 Fensterbefehle der Palette standen alle gleich da.
+
+    Die Operationen lesen ihre Verfügbarkeit aus den Menü-Actions
+    (``_palette_availability``), die Fensterbefehle taten es nicht: „Rückgängig"
+    ohne Verlauf nahm den Klick an und tat nichts — ein ``trigger()`` auf eine
+    gesperrte Action ist ein Klick ins Leere. Bei leerem Projekt sind das fünf
+    von 60: Exportieren, Rückgängig, Wiederholen, Automatisch teilen, Varianten.
+
+    Vier davon stehen von Hand in ``window_commands`` und nicht in der
+    Menüschleife — sie nur dort zu suchen hätte einen von fünf erwischt.
+
+    Und der Grund gehört dazu (Regel 18, §2.7): Ausgrauen allein lässt den
+    Nutzer den Fehler bei sich suchen. Genannt wird, was fehlt — nicht, was der
+    Befehl täte, wenn er könnte.
+    """
+    window._update_actions()
+    commands = window.window_commands()
+    blocked = {
+        key: window._extra_availability(key)
+        for key in commands
+        if not window._extra_availability(key)[0]
+    }
+
+    assert blocked, "auf einem leeren Projekt muss etwas gesperrt sein"
+    for key, (_usable, reason) in blocked.items():
+        title = commands[key][0]
+        assert reason, f"{title} ist gesperrt und sagt nicht, warum"
+        assert reason != title, f"{title} nennt sich selbst als Grund"
+
+    # Die vier aus der Handtabelle sind dabei — sie waren der schwierige Teil.
+    titles = {commands[key][0] for key in blocked}
+    assert any("Rückgängig" in title for title in titles), (
+        f"Rückgängig ist ohne Verlauf gesperrt, die Palette sieht es nicht: {sorted(titles)}"
+    )
+
+    # Und was geht, sagt nichts: ein Grund an einem offenen Eintrag wäre eine
+    # Warnung ohne Anlass.
+    open_keys = [key for key in commands if window._extra_availability(key)[0]]
+    assert open_keys, "es kann nicht alles gesperrt sein"
+    assert all(not window._extra_availability(key)[1] for key in open_keys)

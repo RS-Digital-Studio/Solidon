@@ -1681,11 +1681,20 @@ def view_chrome(view: QAbstractItemView) -> int:
     Die zwei Pixel Luft am Ende sind nicht Zierde: ohne sie endet die letzte
     Zeile genau auf der Kante des Sichtfelds, und eine Zeile, die auf den
     Rahmen stößt, sieht abgeschnitten aus, auch wenn sie vollständig da ist.
+
+    **Gefragt wird die Wunschhöhe des Kopfes, nicht seine aktuelle.** Ein
+    Spaltenkopf, den Qt noch nicht gelegt hat, meldet 30 Pixel statt 16 —
+    gemessen an einem frisch gebauten Baum. Der Deckel wurde daraus berechnet,
+    also war der Objektbaum vierzehn Pixel höher als die zwölf Zeilen, die er
+    zeigen sollte. Aufgefallen ist das erst, als eine andere Änderung den Kopf
+    früher legte: Vorher lasen die Rechnung und der Test, der sie prüft,
+    denselben falschen Wert, und beide waren zufrieden. Die Wunschhöhe steht von
+    Anfang an fest.
     """
     header = 0
     if isinstance(view, QTreeWidget) and not view.isHeaderHidden():
         head = view.header()
-        header = head.height() if head is not None else 0
+        header = head.sizeHint().height() if head is not None else 0
     return header + 2 * view.frameWidth() + 2
 
 
