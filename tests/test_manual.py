@@ -523,6 +523,96 @@ def test_the_numbers_are_written_the_way_the_language_writes_them() -> None:
         set_language("de")
 
 
+#: Jede eingecheckte Handbuchseite, nicht nur die zwei mit Zahlenprüfung. Die
+#: französische versprach drei Kapitel, die es auf ihr nicht gab, und die
+#: italienische eines — monatelang, weil niemand über die deutsche und die
+#: englische hinaussah.
+MANUAL_PAGES = {
+    "de": "handbuch.html",
+    "en": "en/manual.html",
+    "es": "es/manual.html",
+    "fr": "fr/manual.html",
+    "it": "it/manual.html",
+    "pt": "pt/manual.html",
+}
+
+
+@pytest.mark.parametrize("language", sorted(MANUAL_PAGES))
+def test_no_manual_page_promises_a_chapter_it_cannot_reach(language: str) -> None:
+    """Jede Sprungmarke der eingecheckten Seite hat ihr Ziel.
+
+    Der Test daneben prüft den Erzeuger; dieser prüft die Datei, die
+    hochgeladen wird. Beides ist nötig: Eine Seite kann auch dadurch falsch
+    werden, dass jemand den Erzeuger repariert und ``tools/make_manual.py``
+    nicht laufen lässt.
+    """
+    import re
+
+    page = Path(__file__).parent.parent / "website" / MANUAL_PAGES[language]
+    assert page.is_file(), f"{MANUAL_PAGES[language]} fehlt — tools/make_manual.py läuft nicht?"
+    html = page.read_text(encoding="utf-8")
+    targets = set(re.findall(r'\bid="([^"]+)"', html))
+    dangling = sorted({ref for ref in re.findall(r'href="#([^"]+)"', html) if ref not in targets})
+
+    assert not dangling, (
+        f"{MANUAL_PAGES[language]} verweist ins Leere: {dangling}\n\n"
+        "Neu erzeugen: .venv\\Scripts\\python.exe tools/make_manual.py"
+    )
+
+
+def test_every_chapter_carries_its_own_heading() -> None:
+    """Auch die erzeugten. Vier Kapitel hatten keine — und damit keinen Anker.
+
+    Die vier Wissensseiten (Regeln, Profile, Fernsteuerwerkzeuge, Meldungen)
+    fingen mitten im Satz an: Im Verzeichnis der Website standen sie als
+    Kapitel 22 bis 25, im Text ging es hinter dem Wörterbuch ohne Überschrift
+    weiter mit „Diese Regeln liegen dem Agenten bei jeder Anfrage vor". Wer
+    einen der vier Einträge anklickte, blieb stehen, wo er war.
+    """
+    text = manual.as_markdown()
+    ohne = [str(page.title) for page in manual.pages() if f"## {page.title}" not in text]
+    assert not ohne, f"Kapitel ohne Überschrift: {ohne}"
+
+
+@pytest.mark.parametrize("language", ["de", "en", "fr"])
+def test_the_contents_lead_to_the_chapter_they_name(language: str) -> None:
+    """Jeder Eintrag des Verzeichnisses trifft sein Kapitel — und zwar dessen
+    Anfang.
+
+    Geprüft wird die Reihenfolge und nicht nur das Vorhandensein, denn genau
+    daran lag der Fehler: ``anchored`` nahm den ersten Treffer im ganzen Text,
+    und das Kapitel *Die Werkzeuge der Fernsteuerung* gliedert seine Werkzeuge
+    nach denselben fünfzehn Kategorien, die weiter unten die Referenzkapitel
+    sind. Alle fünfzehn Referenzanker saßen damit in Kapitel 24; das
+    Verzeichnis sprang ab Kapitel 26 mitten in die Fernsteuerung. Eine Prüfung
+    auf „ist der Anker da" hätte das durchgelassen.
+
+    Französisch steht dabei, weil dort der zweite Fehler saß: ``markup``
+    maskiert den Apostroph zu ``&#x27;``, und die Suche nach dem rohen Titel
+    fand „Ce qu'est Solidon" nie. Drei Kapitel ohne Anker, ohne eine rote
+    Zeile.
+    """
+    import re
+
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+    from tools.make_manual import _classify, anchored, contents
+
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        html = anchored(_classify(manual.as_html()))
+        wanted = re.findall(r'href="#(ref-[^"]+|[a-z-]+)"', contents(language))
+        got = re.findall(r'<h[1-6] id="([^"]+)"', html)
+    finally:
+        set_language("de")
+
+    assert wanted, "ein Verzeichnis ohne Einträge ist keines"
+    assert got == wanted, (
+        f"{language}: das Verzeichnis nennt {len(wanted)} Kapitel, die Anker im Text sind {got}"
+    )
+
+
 def test_the_knowledge_pages_stand_before_the_reference() -> None:
     """Wonach gerechnet wird, gehört vor die Liste dessen, was gerechnet werden
     kann."""

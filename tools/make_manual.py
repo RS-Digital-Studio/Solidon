@@ -548,23 +548,55 @@ def anchored(html: str) -> str:
     Die Ebene steht nicht fest: ``core.markup`` rückt Überschriften um eine
     Stufe nach unten, weil die Seite selbst das ``<h1>`` trägt. Ein Anker, der
     auf ``<h2>`` festgenagelt ist, greift dann ins Leere — und das
-    Inhaltsverzeichnis führt nirgendwohin, ohne dass es jemand sieht.
+    Inhaltsverzeichnis führt nirgendwohin, ohne dass es jemand sieht. Sie wird
+    darum gelernt und nicht gesetzt: Die erste gefundene Kapitelüberschrift
+    sagt, auf welcher Ebene die Kapitel stehen, und dabei bleibt es.
+
+    Zwei Dinge, die eine Suche nach dem Wortlaut allein falsch macht:
+
+    **Der Titel steht maskiert im HTML.** ``markup.inline`` schreibt aus einem
+    Apostroph ``&#x27;``; gegen den rohen Titel gehalten fand die Suche
+    „Ce qu'est Solidon" nie. Im französischen Handbuch verloren drei Kapitel
+    ihren Anker, im italienischen eines — beide ohne eine rote Zeile.
+
+    **Derselbe Wortlaut kommt zweimal vor.** Das Kapitel *Die Werkzeuge der
+    Fernsteuerung* gliedert seine Werkzeuge nach denselben fünfzehn Kategorien,
+    die weiter unten die Referenzkapitel sind. Die alte Fassung nahm den ersten
+    Treffer im ganzen Text: Alle fünfzehn Referenzanker saßen auf einem
+    Unterabschnitt der Fernsteuerung, und das Verzeichnis sprang ab Kapitel 26
+    mitten in Kapitel 24. Gesucht wird deshalb nur vorwärts — die Kapitel stehen
+    im Text in derselben Reihenfolge wie in ``manual.pages()`` — und nur auf der
+    Ebene der Kapitel.
     """
+    from app.core.markup import inline
+
+    pieces: list[str] = []
+    cursor = 0
+    level = ""
     for page in manual.pages():
-        # Erzeugte Kapitel bekommen zusätzlich eine Klasse: im Druck fängt
-        # der Referenzteil je Kapitel auf einem neuen Blatt an, die
-        # Einführung liest man am Stück (siehe ``@media print``).
-        css = ' class="chapter"' if page.generated else ""
-        anchor = _anchor(page)
-        pattern = re.compile(rf"<h([1-6])>{re.escape(str(page.title))}</h\1>")
-        html = pattern.sub(
-            lambda match, key=anchor, css=css: (  # type: ignore[misc]
-                f'<h{match.group(1)} id="{key}"{css}>{match.group(0)[4:-5]}</h{match.group(1)}>'
-            ),
-            html,
-            count=1,
-        )
-    return html
+        title = inline(str(page.title))
+        pattern = re.compile(rf"<h([1-6])>{re.escape(title)}</h\1>")
+        at = cursor
+        while True:
+            found = pattern.search(html, at)
+            if found is None:
+                break
+            if level and found.group(1) != level:
+                # Gleicher Wortlaut, tiefere Ebene: ein Unterabschnitt, nicht
+                # das Kapitel.
+                at = found.end()
+                continue
+            level = found.group(1)
+            # Erzeugte Kapitel bekommen zusätzlich eine Klasse: im Druck fängt
+            # der Referenzteil je Kapitel auf einem neuen Blatt an, die
+            # Einführung liest man am Stück (siehe ``@media print``).
+            css = ' class="chapter"' if page.generated else ""
+            pieces.append(html[cursor : found.start()])
+            pieces.append(f'<h{level} id="{_anchor(page)}"{css}>{title}</h{level}>')
+            cursor = found.end()
+            break
+    pieces.append(html[cursor:])
+    return "".join(pieces)
 
 
 def _classify(html: str) -> str:

@@ -1430,7 +1430,16 @@ def as_markdown(registry: Registry | None = None, *, with_figures: bool = False)
         # Über ``Page.text`` und nicht über ``page.body``: Die Kurzfassung
         # gehört zur Seite, und das Handbuchfenster liest dieselbe Methode.
         text = page.text() if with_figures else without_figures(page.text())
-        parts.append(text if page.generated else f"## {page.title}\n\n{text}")
+        # Jede Seite bekommt ihre Überschrift, auch die erzeugten. Die
+        # Referenzkapitel bringen sie mit — ``documentation`` schreibt
+        # ``## Kategorie`` —, die vier Wissensseiten nicht: sie fingen mitten
+        # im Satz an. Im Verzeichnis der Website standen sie als Kapitel 22
+        # bis 25, und wer eines anklickte, landete nirgends: Der Anker hängt
+        # an der Überschrift, und die gab es nicht. Entschieden wird am Text
+        # und nicht am Feld ``generated`` — sonst stünde über einem
+        # Referenzkapitel künftig zweimal dasselbe.
+        opens_with_title = text.startswith(f"## {page.title}")
+        parts.append(text if opens_with_title else f"## {page.title}\n\n{text}")
     return "\n\n".join(parts).rstrip() + "\n"
 
 
