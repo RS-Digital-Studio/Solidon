@@ -575,3 +575,87 @@ def test_dragging_paints_strokes_with_spacing(window: MainWindow) -> None:
 
     view._on_paint_drag(3, 0, True)
     assert len(window._sculpt_strokes) == 3, "ein frischer Ansatz beginnt ohne Altlast"
+
+
+# --- die Anzeigeeinheit endet nicht an der Leiste (§19.3) ------------------------
+
+
+def test_a_stroke_in_inches_still_reaches_the_core_in_millimetres(
+    window: MainWindow,
+) -> None:
+    """Was der Zug mitnimmt, sind Millimeter — auch wenn das Feld Zoll zeigt.
+
+    Sechs Stellen lasen die Leiste mit ``value()``, also dem Anzeigewert. In
+    Zoll lief damit ein Pinsel von 0,2 mm, wo 5 mm eingestellt waren, und das
+    ist kein Anzeigefehler: ``stroke_at`` schreibt Geometrie ins Dokument.
+
+    Gefallen ist es niemandem auf, weil kein Test die Leisten je in Zoll fuhr.
+    Dieser tut es.
+    """
+    from app.ui.labels import set_display_unit
+
+    object_id = with_a_body(window)
+    window.sculpt_bar.radius.set_value_mm(5.0)
+    window.sculpt_bar.strength.set_value_mm(1.0)
+
+    set_display_unit("in")
+    window.sculpt_bar.radius.refresh_unit()
+    window.sculpt_bar.strength.refresh_unit()
+    assert window.sculpt_bar.radius.value() == pytest.approx(5.0 / 25.4, abs=1e-4), (
+        "das Feld muss Zoll zeigen, sonst prüft der Test nichts"
+    )
+
+    window.start_sculpt(object_id)
+    window._on_sculpt((20.0, 0.0, 0.0))
+
+    stroke = window._sculpt_strokes[0]
+    assert stroke.radius == pytest.approx(5.0), "der Zug rechnet in Millimetern"
+    assert stroke.strength == pytest.approx(1.0)
+
+
+def test_the_brush_ring_follows_the_slider_in_millimetres(window: MainWindow) -> None:
+    """Der Ring ist ein Weltmaß und hängt am Signal, nicht am nächsten Zug.
+
+    ``valueChanged`` trägt die Zahl aus dem Feld; angeschlossen war es dort, und
+    in Zoll bekam der Ring ein Fünfundzwanzigstel des Pinsels. ``valueChangedMm``
+    trägt dieselbe Nachricht in der Einheit des Kerns.
+    """
+    from app.ui.labels import set_display_unit
+
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+
+    set_display_unit("in")
+    window.sculpt_bar.radius.refresh_unit()
+    window.sculpt_bar.radius.setValue(0.5)  # ein halber Zoll
+
+    assert window.viewport._brush_radius == pytest.approx(12.7), (
+        "der Ring bekam den Anzeigewert statt der Größe"
+    )
+
+
+def test_the_bar_answers_exactly_what_a_stroke_asks_for() -> None:
+    """Bauart-Prüfung: ``values()`` und ``stroke_at`` driften nicht auseinander.
+
+    Die Methode stand mit den richtigen Einheiten hier und hatte **keinen
+    Aufrufer**, während das Fenster dieselben vier Werte aus den Widgets neu
+    zusammenstellte — und dabei ``value()`` nahm. Zwei Wege zu derselben
+    Auskunft, und der benutzte war der falsche. Jetzt gibt es einen; dieser Test
+    hält ihn fest, damit der zweite nicht wiederkommt.
+    """
+    import inspect
+
+    from app.core.geom.sculpt import stroke_at
+    from app.ui.sculpt_bar import StrokeValues
+
+    accepted = {
+        name
+        for name, parameter in inspect.signature(stroke_at).parameters.items()
+        if parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    }
+    offered = set(StrokeValues.__annotations__)
+
+    assert offered <= accepted, f"die Leiste bietet, was der Zug nicht nimmt: {offered - accepted}"
+    # Und die Namen, die ein Zug zwingend braucht, sind dabei — sonst wäre das
+    # Auspacken ein TypeError beim ersten Klick und kein Typfehler beim Prüfen.
+    assert {"radius", "strength"} <= offered

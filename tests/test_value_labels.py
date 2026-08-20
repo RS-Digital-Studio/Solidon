@@ -455,3 +455,57 @@ def test_no_bar_nails_a_length_field_to_millimetres() -> None:
     assert not schuldig, (
         "Längenfeld auf Millimeter festgenagelt — LengthSpin nehmen:\n" + "\n".join(schuldig)
     )
+
+
+def test_switching_the_unit_says_nothing_in_between(qt_app: object) -> None:
+    """Ein Einheitenwechsel ist keine Wertänderung — und meldet keine.
+
+    ``_apply_unit`` legt die neue Spanne, während noch der Wert der alten
+    steht: Bei 10 mm klemmt Qt die 10 auf die Zolluntergrenze und feuert
+    damit. Ein Empfänger, der daraufhin ``value_mm()`` liest, bekam 99,9998 —
+    einen Wert, den niemand eingestellt hat, vor dem richtigen.
+
+    In Millimetern ändert sich hier nichts. Also darf nichts gemeldet werden,
+    weder roh noch umgerechnet.
+    """
+    from app.ui.labels import LengthSpin, set_display_unit
+
+    field = LengthSpin()
+    field.set_range_mm(0.0, 100.0)
+    field.set_value_mm(10.0)
+
+    raw: list[float] = []
+    millimetres: list[float] = []
+    field.valueChanged.connect(raw.append)
+    field.valueChangedMm.connect(millimetres.append)
+
+    set_display_unit("in")
+    field.refresh_unit()
+
+    assert raw == [], f"der Wechsel meldete Zwischenwerte: {raw}"
+    assert millimetres == [], f"der Wechsel meldete Zwischenwerte: {millimetres}"
+    assert field.value_mm() == pytest.approx(10.0), "und der Wert steht danach richtig"
+
+
+def test_a_length_field_announces_millimetres(qt_app: object) -> None:
+    """``valueChangedMm`` ist die Lesestelle, die ``valueChanged`` nicht sein kann.
+
+    Qts Signal trägt die Zahl aus dem Feld. Wer sie weitergibt, hat die
+    Umrechnung übersprungen, ohne ``value()`` geschrieben zu haben — genau so
+    kam der Pinselradius als 0,1969 in der Szene an, wo 5 mm gemeint waren.
+    """
+    from app.ui.labels import LengthSpin, set_display_unit
+
+    set_display_unit("in")
+    field = LengthSpin()
+    field.set_range_mm(0.0, 1000.0)
+
+    raw: list[float] = []
+    millimetres: list[float] = []
+    field.valueChanged.connect(raw.append)
+    field.valueChangedMm.connect(millimetres.append)
+
+    field.setValue(1.0)
+
+    assert raw == [pytest.approx(1.0)], "das rohe Signal trägt weiter die Anzeige"
+    assert millimetres == [pytest.approx(25.4)], "das andere trägt, was der Kern braucht"

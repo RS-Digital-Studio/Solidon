@@ -12,7 +12,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from PySide6.QtCore import QLocale
+from PySide6.QtCore import QLocale, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QDoubleSpinBox, QWidget
 
@@ -106,10 +106,21 @@ class LengthSpin(QDoubleSpinBox):
     und nicht dreizehnmal, und eine Lesestelle, die sie vergisst, gibt es
     nicht: ``value()`` heißt hier nicht mehr, was der Kern will.
 
+    **Eine gab es doch, und sie hieß ``valueChanged``.** Qts Signal trägt die
+    Zahl aus dem Feld, also einen Anzeigewert; wer sie weitergibt, hat die
+    Umrechnung übersprungen, ohne ``value()`` zu schreiben. Genau so kam der
+    Pinselradius als 0,1969 in der Szene an, wo 5 mm gemeint waren. Deshalb
+    gibt es ``valueChangedMm``: dieselbe Nachricht in der Einheit des Kerns.
+    Wer an einer Länge etwas ändern will, hängt sich dort an — ``valueChanged``
+    bleibt für alles, was den Wert fallen lässt und selbst ``value_mm()`` liest.
+
     **Der Rundungsschutz ist derselbe wie im Operationsdialog** und aus
     demselben Grund: 40 mm sind 1,5748 Zoll, und zurückgerechnet 39,99992 mm.
     Ein Feld, das nur angesehen wurde, gibt den Wert zurück, den es bekam.
     """
+
+    valueChangedMm = Signal(float)
+    """Der Wert hat sich geändert — in Millimetern, wie der Kern ihn braucht."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -118,6 +129,16 @@ class LengthSpin(QDoubleSpinBox):
         self._value_mm: float | None = None
         self._unit: LengthUnit = display_unit()
         self._apply_unit()
+        self.valueChanged.connect(self._announce_mm)
+
+    def _announce_mm(self, _shown: float) -> None:
+        """Sagt dieselbe Änderung noch einmal, in Millimetern.
+
+        Das Argument von ``valueChanged`` wird bewusst nicht benutzt: es ist
+        die Zahl aus dem Feld. Gefragt wird ``value_mm()``, damit der
+        Rundungsschutz greift — sonst käme aus 40 mm in Zoll 39,99992.
+        """
+        self.valueChangedMm.emit(self.value_mm())
 
     # --- Setzen und lesen, immer in Millimetern ---------------------------------
 
@@ -165,8 +186,19 @@ class LengthSpin(QDoubleSpinBox):
         if display_unit() == self._unit:
             return
         carried = self.value_mm()
-        self._apply_unit()
-        self.set_value_mm(carried)
+        # Stumm, und das ist keine Bequemlichkeit: ``_apply_unit`` legt die
+        # neue Spanne, während noch der Wert der alten steht. Bei 10 mm Raster
+        # klemmt Qt die 10 auf die Zolluntergrenze 3,937 und feuert damit —
+        # ein Empfänger, der daraufhin ``value_mm()`` liest, bekam 99,9998.
+        # In Millimetern ändert sich hier nichts, also gibt es nichts zu
+        # melden; wer die Anzeige nachziehen muss, tut das über
+        # ``refresh_labels`` und nicht über einen Wertwechsel.
+        was_blocked = self.blockSignals(True)
+        try:
+            self._apply_unit()
+            self.set_value_mm(carried)
+        finally:
+            self.blockSignals(was_blocked)
 
     def showEvent(self, event: Any) -> None:  # noqa: N802 - Qt-Name
         """Beim Einblenden nachziehen.

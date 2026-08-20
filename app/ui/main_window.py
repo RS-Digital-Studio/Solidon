@@ -1055,7 +1055,10 @@ class MainWindow(QMainWindow):
         self.sculpt_bar.refineRequested.connect(self.refine_for_sculpt)
         # Der Ring folgt dem Regler und nicht erst dem nächsten Zug: Wer den
         # Pinsel größer stellt, will vor dem Klicken sehen, was er greift.
-        self.sculpt_bar.radius.valueChanged.connect(self.viewport.set_brush_radius)
+        # ``valueChangedMm`` und nicht ``valueChanged``: Letzteres trägt die
+        # Zahl aus dem Feld, und in Zoll wäre der Ring ein Fünfundzwanzigstel
+        # des Pinsels.
+        self.sculpt_bar.radius.valueChangedMm.connect(self.viewport.set_brush_radius)
 
         # Der Skeletteditor, dieselbe Bauart: eine Leiste neben der
         # Werkzeugzeile, ein Zustand im Fenster, eine Operation am Ende.
@@ -3591,7 +3594,7 @@ class MainWindow(QMainWindow):
 
         self._sculpt_target = target
         self._sculpt_strokes = []
-        self.viewport.set_sculpting(True, float(self.sculpt_bar.radius.value()))
+        self.viewport.set_sculpting(True, self.sculpt_bar.radius.value_mm())
         self.tools.close_tool()
         self.tools.setVisible(False)
         self.sculpt_bar.setVisible(True)
@@ -3624,7 +3627,7 @@ class MainWindow(QMainWindow):
         das erkennt man am Ergebnis nicht, sondern nur an dieser Zeile.
         """
         edge = median_edge(mesh)
-        radius = float(self.sculpt_bar.radius.value())
+        radius = self.sculpt_bar.radius.value_mm()
         if radius >= edge * BRUSH_TO_EDGE:
             return ""
         return tr("Das Netz ist für diesen Pinsel zu grob — erst gleichmäßig vernetzen.")
@@ -3645,7 +3648,7 @@ class MainWindow(QMainWindow):
         """
         if self._sculpt_target is None:
             return
-        edge = float(self.sculpt_bar.radius.value()) / (BRUSH_TO_EDGE * 1.25)
+        edge = self.sculpt_bar.radius.value_mm() / (BRUSH_TO_EDGE * 1.25)
         # Der feinste Wert, den die Operation annimmt, steht in ihrem Schema
         # und nicht hier: der kleinste Pinsel (0,1 mm) rechnet sich sonst auf
         # eine Kante, die sie ablehnt — eine Sackgasse hinter einem Knopf, der
@@ -3684,10 +3687,12 @@ class MainWindow(QMainWindow):
             stroke_at(
                 mesh,
                 (float(point[0]), float(point[1]), float(point[2])),
-                radius=float(bar.radius.value()),
-                strength=float(bar.strength.value()),
-                tool=str(bar.tool.currentData()),
-                cut=bool(bar.cut.isChecked()),
+                # Über ``values()`` und nicht an den Widgets vorbei: Die
+                # Leiste kennt ihre Einheiten, ein Aufrufer nicht. Von Hand
+                # nachgebaut stand hier ``radius.value()``, und damit lief in
+                # Zoll ein Pinsel von 0,2 mm, wo 5 mm eingestellt waren —
+                # Geometrie ins Dokument, aus einem Anzeigewert.
+                **bar.values(),
             )
         )
         # Der Schalter gilt für **einen** Zug. Stehen zu bleiben hieße, dass

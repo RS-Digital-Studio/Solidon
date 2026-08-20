@@ -13,6 +13,8 @@ nicht angehoben.
 
 from __future__ import annotations
 
+from typing import TypedDict
+
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -26,6 +28,23 @@ from PySide6.QtWidgets import (
 from app.i18n import TranslatableText, _, tr
 from app.ui.labels import LengthSpin, choice_label
 from app.ui.style import NORMAL, TIGHT, make_primary
+
+
+class StrokeValues(TypedDict):
+    """Was ein Zug an :func:`app.core.geom.sculpt.stroke_at` mitbekommt.
+
+    Benannt und nicht ``dict[str, object]``, denn die Schlüssel sind ein
+    Vertrag mit der Operation und kein Wörterbuch. Ohne die Namen im Typ nimmt
+    mypy das Auspacken hin — und dann fällt nicht auf, wenn ein Aufrufer die
+    Werte daneben neu zusammenstellt. Genau so kam der Pinselradius als
+    Anzeigewert in die Geometrie: 0,2 mm, wo 5 mm eingestellt waren.
+    """
+
+    tool: str
+    radius: float
+    strength: float
+    cut: bool
+
 
 #: Die sechs Werkzeuge in der Reihenfolge, in der man sie braucht: erst
 #: auftragen und abtragen, dann die drei, die eine Form beruhigen, zuletzt das
@@ -145,8 +164,14 @@ class SculptBar(QWidget):
 
     # --- Ablesen ---------------------------------------------------------------
 
-    def values(self) -> dict[str, object]:
-        """Was der nächste Zug mitbekommt."""
+    def values(self) -> StrokeValues:
+        """Was der nächste Zug mitbekommt.
+
+        **Die einzige Lesestelle.** Sie war lange keine — die Methode stand
+        hier ohne Aufrufer, während das Fenster dieselben vier Werte aus den
+        Widgets neu zusammenstellte. Zwei Wege zu derselben Auskunft, und der
+        benutzte war der falsche.
+        """
         return {
             "tool": str(self.tool.currentData()),
             "radius": self.radius.value_mm(),
