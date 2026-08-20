@@ -44,7 +44,10 @@ bekommt einen roten Lauf.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| Die Bildschirmfotos des Handbuchs sind nicht eingecheckt | Die Bedienverträge durchgesehen (20.08.2026) | einen ruhigen Baum — dann `tools/make_manual.py` und alles zusammen einchecken |
+| Objektnamen der Beispiele bleiben deutsch | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | ein Feld im Dateiformat, das einen Namen als übersetzbar ausweist — in der Aufnahme allein aufzulösen wäre schlimmer als der Zustand jetzt |
+| Der Prüfbericht nennt `obj_1` statt eines Namens | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | eine Antwort darauf, wie ein Befund auf ein Objekt zeigt, das eine spätere Op ersetzt hat |
+| Französisch nennt zwei Katalogruppen fast gleich | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | zwei Wörter, die sich um mehr als einen Buchstaben unterscheiden |
+| Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | eine Entscheidung, was aus der Zeile verschwindet — und einen Test, der sein Thema selbst setzt |
 | Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird — Kachelhöhe, Ablagefläche oder die Liste der zuletzt geöffneten Projekte; Umschichten ist ausgereizt |
 
 ---
@@ -7599,15 +7602,17 @@ mit den Bedienverträgen nichts zu tun hat und alles mit demselben Muster:
       bleiben außen vor: `write_text` setzt unter Windows CRLF und unter Linux
       LF, was keine Aussage über das Bild ist.
 
-- [ ] **Die Bildschirmfotos des Handbuchs sind neu aufgenommen und nicht
+- [x] **Die Bildschirmfotos des Handbuchs sind neu aufgenommen und nicht
       eingecheckt.** Derselbe Lauf hat sie erneuert — sechs je Sprache, unter
       anderem mit dem neuen Vorbehalts-Label im Operationsdialog. Sie liegen
       ungesichert im Baum, weil am 20.08. eine parallele Sitzung an der
       Oberfläche arbeitete (Objektbaum, Palette, Druckdialog): Ein
       Bildschirmfoto von einer Baustelle zeigt die Baustelle.
 
-      Zu tun ist nichts weiter, als `tools/make_manual.py` noch einmal laufen zu
-      lassen, wenn der Baum ruhig ist — und dann alles zusammen einzuchecken.
+      Erledigt am 20.08. mit dem Auftrag „alle Bilder neu aufnehmen" — und zwar
+      gründlicher als hier gedacht: Aufgenommen wird seither bildschirmfüllend,
+      und die drei Layoutfehler, die dabei ans Licht kamen, stehen unter
+      „Alle Bilder neu aufgenommen".
 
 ## Die Oberflächendurchsicht, zweiter Teil (20.08.2026)
 
@@ -8218,3 +8223,91 @@ Was dabei auffiel und liegen bleibt: `Package.size` schreibt
 nichts zu ersetzen, das Trennzeichen ist damit ohne Wirkung. Entweder eine
 Stelle mehr oder die Ersetzung weg — das ist eine Entscheidung über die Anzeige
 und gehört dem, der den Kasten gebaut hat.
+
+## Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026)
+
+Der Auftrag hieß: Handbuchbilder neu aufnehmen, die Bilder der Website
+kontrollieren, alles über die Oberfläche verifizieren. Aufgenommen wurde
+zweimal, denn beim ersten Durchgang stand die Anwendung in einem Kasten von
+1180 mal 760 Punkten — eine Größe, in der sie bei niemandem steht.
+`app.py` ruft ohne gespeicherte Geometrie `showMaximized()`, und genau so
+gehört sie ins Handbuch. Aufgenommen wird jetzt auf dem zweiten Schirm
+(`--schirm N`, Vorgabe 1): Der primäre ist 21:9, und ein Fenster darauf ergibt
+ein Bild im Verhältnis 2,45:1, auf dem eine Handbuchseite nichts mehr lesbar
+zeigt.
+
+Beim Ansehen der großen Bilder fielen drei Dinge auf, die **nicht** die
+Aufnahme betrafen, sondern die Anwendung — sichtbar erst, weil das Fenster
+groß genug war:
+
+- [x] **Der Bausteinkatalog legte seine Gruppen ineinander.** „Verbindungen",
+      „Einlegeteile" und „Mechanik" standen nebeneinander in der obersten
+      Zeile, jede über den Kacheln einer fremden Gruppe. Die Überschriften
+      bekamen ihre volle Zeilenbreite korrekt zugewiesen — der Kachelmodus
+      rechnet seine Zeilen aber beim Einfügen und wendet ein späteres
+      `setSizeHint` nicht mehr an. `doItemsLayout()` nach einer echten
+      Änderung; `test_every_group_starts_its_own_row` prüft von nun an die
+      *Lage* und nicht den Hinweis darauf, denn der Hinweis stimmte.
+      `CATALOG_MAX` steht auf 1200 Punkten Höhe, weil sieben getrennte Gruppen
+      mehr Platz brauchen als siebzehn Kacheln am Stück.
+- [x] **Die zehn Bedingungsknöpfe der Skizze blieben in zwei Zeilen à fünf,**
+      auch wo Platz für alle zehn war. Die Aufteilung war für den Laptopschirm
+      gedacht und galt seither überall. `_fit_constraint_row` rechnet die
+      Spalten jetzt aus der Breite und dem breitesten Knopf; ab 1024 Punkten
+      (deutsch) beziehungsweise 1366 (französisch) steht die Reihe in einer
+      Zeile, darunter bricht sie um. Eine Untergrenze gibt es nicht —
+      abgeschnittene Beschriftungen sind das schlechtere von beidem.
+- [x] **Das Raster der Zeichenfläche war Millimeterpapier.** `MIN_GRID_PX`
+      stand auf sieben; auf einem bildschirmfüllenden Fenster hieß das ein
+      halber Millimeter Kästchenweite für ein Rechteck von 120 und eine
+      geschlossene Zahlenreihe im Abstand von zweieinhalb Millimetern. Der Wert
+      steht auf zwanzig und entscheidet drei Dinge auf einmal: die Dichte, den
+      Abstand der Zahlen (jede fünfte Linie, also mindestens hundert Punkte)
+      und die Gleichmäßigkeit — jede Linie liegt auf einem ganzen Bildpunkt,
+      und bei 14,4 Punkten Kästchenweite wechseln sich 14 und 15 ab.
+
+Für die Website hat dieselbe Größe die umgekehrte Wirkung: Gemessen im
+geladenen Browser stand das Hauptfenster auf der Startseite mit **25 Prozent**
+und der Skizzenmodus auf der Funktionsseite mit **19**. Man sah, dass es eine
+Oberfläche ist, und nicht mehr, welche. Deshalb gibt es
+`tools/make_web_images.py`: dieselben Fenster ein zweites Mal, kleiner
+(47 und 44 Prozent), und das Bausteinband aus zwei Gruppen, das bisher **von
+Hand montiert** war — mit abgeschnittener unterer Zeile und einem Streifen
+Rollbalken im Bild. Geschnitten wird nach den Kachelrechtecken, die die Liste
+selbst kennt, also in jeder Sprache richtig.
+
+Nebenbei: Der Prüfbericht wurde mit 460 Punkten Breite aufgenommen und auf der
+Seite mit 124 bis 131 Prozent wieder aufgeblasen — ein hochgerechnetes
+Bildschirmfoto. Er steht jetzt auf 620 mal 270, und die Höhe folgt dem Inhalt.
+Alle 318 Bildverweise der Website wurden gegen die echten Dateien gehalten:
+Datei da, Alt-Text da, `width`/`height` gleich den Pixeln.
+
+### Offen
+
+- [ ] **Die Objektnamen der Beispielprojekte bleiben deutsch.** Im englischen
+      Handbuchbild steht „Dose Lid": „Lid" kommt aus dem Katalog, „Dose" aus
+      dem Op-Parameter `name`, den `tools/make_examples.py` fest einträgt. Das
+      betrifft nicht nur das Bild — wer das Beispiel auf Spanisch öffnet, sieht
+      denselben deutschen Namen im Objektbaum. Nur in der Aufnahme aufzulösen
+      wäre schlimmer als der Zustand jetzt: Dann zeigte das Handbuch etwas
+      anderes als die Anwendung. Die saubere Stelle ist dieselbe wie bei den
+      Parametertiteln (`translate_parameter_titles`) — ein Feld im Dateiformat,
+      das einen Namen als übersetzbar ausweist.
+- [ ] **Der Prüfbericht nennt `obj_1` statt eines Namens.** Der Befund des
+      Aushöhlens zeigt auf ein Objekt, das nach `create_lid` nicht mehr
+      existiert; die Namensauflösung greift ins Leere und lässt die Kennung
+      stehen. Im Handbuchbild ist das in allen sechs Sprachen zu sehen.
+- [ ] **Französisch nennt zwei Katalogruppen fast gleich:** „Fixations" für
+      Verbindungen und „Fixation" für Befestigung. Im Bild stehen sie
+      untereinander, und der Unterschied ist ein Buchstabe.
+- [ ] **Die Werkzeugzeile der Skizze verlangt mit Stylesheet 1007 Bildpunkte.**
+      `test_the_constraint_buttons_stay_readable_on_a_laptop` fordert 900 und
+      ist trotzdem grün — weil er allein läuft, und dann steht kein Thema. Läuft
+      `test_ui.py` im selben Prozess davor, sind die achtzehn Knöpfe der Zeile
+      37 statt 28 Punkte breit, und die Summe reicht über einen 1024er Schirm
+      hinaus. Der Fund ist älter als der Bildlauf vom 20.08. und hat nichts mit
+      ihm zu tun; sichtbar wurde er, weil die Suite an diesem Tag zweimal am
+      Stück lief statt je Datei. Zu entscheiden ist, **was** aus der Zeile
+      verschwindet — die zweite Zahl, die Grundformen oder ein Kürzel-Menü —,
+      und der Test sollte danach sein Thema selbst setzen, sonst misst er
+      weiterhin etwas, das niemand sieht.

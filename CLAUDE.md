@@ -61,51 +61,13 @@ zusammen. Weiteres:
 .venv\Scripts\python.exe -m app.ui.app                          # Anwendung starten
 .venv\Scripts\python.exe -m app.cli.main --help                 # Kommandozeile
 .venv\Scripts\python.exe tools/run_agent_suite.py               # kostet Geld, kein Testlauf
-.venv\Scripts\python.exe tools/make_figures.py                  # Bildschirmfotos fürs Handbuch
-.venv\Scripts\python.exe tools/make_manual.py                   # Handbuch als Website und PDF
-.venv\Scripts\python.exe tools/make_icon.py                     # Anwendungssymbol rastern: ICO und Website-Favicon
-.venv\Scripts\python.exe tools/make_seo.py                      # robots.txt, sitemap.xml, llms.txt, FAQ-Auszeichnung — nach den beiden darüber
-.venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Solidon, braucht Inno Setup 6
-.venv\Scripts\python.exe tools/make_linux_packages.py --files   # Menüeintrag, Flatpak-Manifest, AppStream — läuft überall
-.venv\Scripts\python.exe tools/make_download.py <pakete>        # Pakete in den Download-Kasten aller sechs Sprachen, mit SHA-256; ohne Argument leert es ihn
-.venv\Scripts\python.exe tools/setup_comfyui.py                 # ComfyUI für Weg 3 einrichten: Knoten, TripoSG, 7,5 GB Gewichte
-.venv\Scripts\python.exe tools/build_slice_core.py              # Konturverkettung übersetzen (optional, 1,34× auf die Schichtanalyse)
-.venv\Scripts\python.exe tools/check_support.py                 # kommt eine Rückmeldung wirklich an? schickt eine echte Sendung
-.venv\Scripts\python.exe tools/upload_website.py --seit <commit> # Website hochladen (FTPS); Zugang in .webserver.json, nicht im Repository
-python tools/check_env.py                                       # stimmen die Fassungen? läuft auch ohne .venv
-python tools/check_env.py --install                             # sie stimmen machen (braucht Netz)
-python tools/check_env.py --outdated                            # was wäre neuer, und was verbietet eine Grenze
-python tools/check_env.py --freeze                              # constraints.txt neu schreiben — erst nach grüner Suite
 ```
 
-`make_figures.py` und `make_manual.py` laufen **nicht** offscreen und dürfen
-es nicht: unter
-`QT_QPA_PLATFORM=offscreen` hat Qt auf dieser Maschine null Schriftfamilien,
-und jede Beschriftung in jedem Bild wird zu einem leeren Kästchen. Wer ein
-erzeugtes Bild prüft, prüft es aus demselben Grund unter der echten Plattform.
-
-Erstaufbau: `python -m venv .venv` und
-`.venv\Scripts\python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"`.
-Das `-c` ist kein Beiwerk: ohne es zieht ein frischer Klon andere Fassungen als
-die CI, und die Suite wird rot, ohne dass eine Zeile Code sich geändert hat.
-Beides zusammen macht auch `python tools/check_env.py --install`.
-
-Arbeiten mehrere am selben Repository, genügt der gute Vorsatz nicht: Der
-Sitzungsstart-Hook gleicht die installierten Fassungen gegen `constraints.txt`
-ab und sagt, wenn etwas abweicht — samt Befehl. Er läuft dafür auch ohne
-`.venv`, sonst könnte er im frischen Klon nicht melden, dass sie fehlt.
-
-**Festgenagelt ist nicht gepflegt.** Der wöchentliche CI-Lauf „Neueste
-Fassungen" (montags, ohne `constraints.txt`) meldet, wenn eine neue Fassung
-etwas *bricht* — dass es überhaupt eine neuere *gäbe*, sagt er niemandem.
-Dafür ist `--outdated` da; es trennt, was gehen würde, von dem, was eine
-Grenze in `pyproject.toml` ausschließt — **dort steht seit dem 14.08.2026 keine
-mehr**, denn die letzte (`trimesh<5`) ist mit der Migration gefallen. Kommt eine
-neue dazu, ist sie eine Entscheidung und gehört begründet. Die nächste zeichnet
-sich schon ab, und sie liegt nicht in unserer Hand: `vtk 9.7.0` ist da, aber
-`pyvista` verlangt `vtk<9.7.0`. Steht der Satz länger als drei Monate, erinnert
-der Sitzungsstart-Hook daran. Der Weg zum neuen Stand ist immer derselbe:
-aktualisieren, **Suite fahren**, dann `--freeze` — nie umgekehrt.
+Was **nicht Code** erzeugt — Bildschirmfotos, Handbuch, Website-Bilder,
+SEO-Dateien, Symbol, Installationsdatei, Linux-Pakete, Download-Kasten,
+ComfyUI, Website-Upload — dazu Erstaufbau und Fassungspflege über
+`check_env.py`: `/erzeugen`. Dort stehen auch die Reihenfolge, der eigene
+Arbeitsbaum fürs Paketieren und die Falle mit den fehlenden Schriften.
 
 Qt-Tests brauchen kein Bild: `QT_QPA_PLATFORM=offscreen` setzt
 `tests/conftest.py` selbst. Dieselbe Datei biegt die Nutzerverzeichnisse in
@@ -150,7 +112,7 @@ website/      öffentliche Seiten; handbuch.html und en/manual.html erzeugt
               robots/sitemap/llms tools/make_seo.py — der Rest von Hand
               api/support.php nimmt die Rückmeldungen an; muss nach
               httpdocs/api/ hochgeladen werden, sonst scheitert das Senden
-              bilder/ Schaustücke und Belege der Verkaufsseiten
+              bilder/ Schaustücke von Hand, beleg-*.png von tools/make_web_images.py
               dl/ die Pakete, von tools/make_download.py angelegt
 3D Drucker/   physische Druckprojekte, eigene CLAUDE.md, nicht im Repository
 ```
@@ -175,12 +137,9 @@ Stand, und die ist der Blick, den es hier braucht.
 
 ## Arbeitsweise hier
 
-- **Kleine Schritte, Suite nach jedem.** Ein Schritt, der sie rot lässt, wird
-  nicht auf den nächsten gestapelt.
-- **Bei Geometrie zuerst der Test.** Erwartete Kennzahlen gegen eine Datei aus
-  `tests/data/`, dann die Umsetzung.
-- **Kein Revert.** Vorwärts fixen, keine Datei-Resets.
+Kleine Schritte, Test zuerst bei Geometrie, kein Revert, nie stillschweigend
+raten: das steht in `AGENTS.md` und gilt unverändert. Dazu kommt hier:
+
 - **Selbstständig committen**, in logischen Einheiten, mit `Co-Authored-By`.
-- **Nie stillschweigend raten.** Mehrdeutigkeit hält an und fragt (Regel 21).
 - **Nach Pattern-Änderungen**: die betroffene Regel in `.claude/rules/`
   nachziehen, `ROADMAP.md` fortschreiben, Bauplan nur mit Ansage ändern.

@@ -52,36 +52,89 @@ from app.i18n.catalog import available_languages, read_catalog
 
 #: Welches Beispielprojekt im Hauptfenster steht.
 #:
-#: Das Gehäuse und nicht die Halterung aus Weg 1. Beide zeigen dasselbe
+#: Die Dose mit Deckel und nicht die Halterung aus Weg 1. Beide zeigen dasselbe
 #: Fenster, aber nicht dasselbe Programm: die Halterung ist eine Platte mit
 #: fünf gebohrten Löchern, und der Objektbaum, die Parameterliste und der
-#: Verlauf stehen daneben fast leer. Das Gehäuse trägt drei benannte Maße,
-#: vier Bausteine — Mutternfalle, Heat-Set-Buchse, Schraubenloch,
-#: Kabeldurchführung — und ein Prüfstück daneben. Wer das Bild ansieht,
-#: soll sehen, was die Anwendung kann, und nicht, dass sie ein Loch bohren
-#: kann.
+#: Verlauf stehen daneben fast leer. Die Dose trägt vier benannte Maße, ist
+#: ausgehöhlt, hat Kabeldurchführung und Einpressbuchse in der Wand, eine
+#: Beschriftung und einen Deckel, der aus der Öffnung geschnitten ist. Wer das
+#: Bild ansieht, soll sehen, was die Anwendung kann, und nicht, dass sie ein
+#: Loch bohren kann.
 #:
 #: Die Befunde im Prüfbericht sind ohnehin gestellt (:func:`sample_findings`),
 #: das Projekt muss also keine mitbringen.
 EXAMPLE = "dose-mit-deckel.p3d"
 
-#: Wie groß die Fenster für die Aufnahme sind. Breiter als nötig wäre auf einer
-#: Handbuchseite nur kleiner zu sehen.
-WINDOW = (1180, 760)
-DIALOG = (520, 460)
-REPORT = (460, 300)
+#: Auf welchem Bildschirm aufgenommen wird — Index in ``QApplication.screens()``.
+#:
+#: Nicht der primäre, und das hat einen Grund: Der ist hier ein 21:9-Schirm mit
+#: 3413 Bildpunkten Breite, und ein Fenster darauf ergibt ein Bild im Verhältnis
+#: 2,45:1. Auf eine Handbuchseite gelegt wird daraus ein flacher Streifen, auf
+#: dem die Schrift nicht mehr lesbar ist. Der zweite Schirm ist 2560x1440 und
+#: liefert das Verhältnis, in dem Bildschirmfotos üblich sind.
+#:
+#: Gibt es ihn nicht, wird der erste genommen — ein Werkzeug, das an einem
+#: abgezogenen Monitor scheitert, taugt nichts. Überschreiben mit ``--schirm N``.
+SCREEN_INDEX = 1
 
-#: Der Skizzenmodus braucht Breite: links die Zeichenfläche, rechts die
-#: Bedingungsliste, und die Werkzeugzeile darüber hat vierzehn Knöpfe. Schmäler
-#: bricht die Bedingungszeile um, und das Bild zeigte einen Editor, der eng
-#: aussieht, obwohl er es nicht ist.
-SKETCH = (980, 620)
+#: Wie groß die *Fenster* für die Aufnahme sind: so groß wie das Fenster beim
+#: ersten Start aufgeht.
+#:
+#: Und das ist bildschirmfüllend — ``app.py`` ruft ohne gespeicherte Geometrie
+#: ``showMaximized()``. Ein Handbuch, das die Anwendung in einem 1180 Punkte
+#: breiten Kasten zeigt, zeigt eine Anwendung, die so bei niemandem steht: Der
+#: Viewport war darin ein Drittel des Bildes, und die drei Leisten daneben
+#: sahen aus, als nähmen sie den ganzen Platz. Kein Vollbild — das versteckt
+#: Menü- und Statusleiste, und beide gehören auf das Bild.
+#:
+#: ``None`` heißt „nimm die Arbeitsfläche des Zielschirms"; :func:`work_area`
+#: löst es auf, sobald es eine ``QApplication`` gibt.
+WINDOW: tuple[int, int] | None = None
+
+#: Ein Dialog ist kein Fenster: Er geht so groß auf, wie sein Inhalt ist, und
+#: bildschirmfüllend gibt es ihn nirgends. Die Höhe kommt ohnehin aus dem
+#: Inhalt (``fit_height``), die Breite bleibt gesetzt, damit alle Sprachen
+#: dasselbe Maß haben.
+DIALOG = (520, 460)
+
+#: Der Prüfbericht ist ein Ausschnitt der rechten Leiste und keine Ansicht für
+#: sich — auf Bildschirmbreite gezogen stünden vier Befunde in einer Fläche,
+#: die zu neun Zehnteln leer ist.
+#:
+#: 620 und nicht 460: Die Startseite und die Funktionsseite zeigen dieses Bild
+#: in einer Spalte von rund 600 Bildpunkten, und bei 460 Punkten Quelle hieß
+#: das **124 bis 131 Prozent** — ein hochgerechnetes Bildschirmfoto, also genau
+#: die weiche Schrift, die ein Bildschirmfoto nie haben sollte. Gemessen, nicht
+#: geschätzt: die Seite wurde geladen und ausgerechnet. Die Höhe folgt dem
+#: Inhalt und nicht dem Verhältnis — vier Befunde in einer Fläche von 400
+#: Punkten sind zur Hälfte leerer Grund.
+REPORT = (620, 270)
 
 
 #: Wie lange ein „Durchgang" beim Setzenlassen dauert, in Millisekunden.
 #: ``settle(app, 30)`` sind damit anderthalb Sekunden — genug für einen
 #: Bildaufbau, wenig genug, dass sechs Aufnahmen je Sprache erträglich bleiben.
 SETTLE_MS = 50
+
+
+def target_screen() -> Any:
+    """Der Bildschirm, auf dem aufgenommen wird (siehe :data:`SCREEN_INDEX`)."""
+    screens = QApplication.screens()
+    if not screens:
+        raise SystemExit("Kein Bildschirm — hier wird nichts aufgenommen")
+    return screens[SCREEN_INDEX] if len(screens) > SCREEN_INDEX else screens[0]
+
+
+def work_area() -> tuple[int, int]:
+    """Wie groß ein maximiertes Fenster auf dem Zielschirm wird.
+
+    ``availableGeometry`` und nicht ``geometry``: Die Taskleiste gehört nicht
+    ins Bild, und ein Fenster, das sich unter sie schiebt, gibt es nicht.
+    """
+    if WINDOW is not None:
+        return WINDOW
+    area = target_screen().availableGeometry()
+    return int(area.width()), int(area.height())
 
 
 def settle(app: QApplication, rounds: int = 12) -> None:
@@ -170,31 +223,56 @@ def release_viewport(window: Any) -> None:
 
 
 def prepared(
-    widget: QWidget, size: tuple[int, int], *, hidden: bool = True, fit_height: bool = False
+    widget: QWidget,
+    size: tuple[int, int] | None = None,
+    *,
+    hidden: bool = True,
+    fit_height: bool = False,
+    maximize: bool = True,
 ) -> QWidget:
     """Ein Fenster aufbauen — normalerweise, ohne es jemandem zu zeigen.
+
+    ``size=None`` heißt bildschirmfüllend (:func:`work_area`), und das ist der
+    Normalfall für alles, was in der Anwendung ein Fenster ist.
 
     ``hidden=False`` braucht das Hauptfenster: sein Viewport rendert über
     OpenGL, und OpenGL zeichnet nichts in ein Fenster, das nie auf dem
     Bildschirm war. Ohne das ist die Bildmitte auf dem Bild schwarz — also
-    ausgerechnet das Modell, um das es geht.
+    ausgerechnet das Modell, um das es geht. Ein sichtbares Fenster wird
+    außerdem **auf den Zielschirm gesetzt und maximiert** statt auf ein Maß
+    gezogen: Ein von Hand auf die Arbeitsfläche vergrößertes Fenster ist nicht
+    dasselbe wie ein maximiertes — Windows legt bei maximierten Fenstern einen
+    unsichtbaren Rahmen an, und ``grabWindow`` schneidet ihn mit ab.
+
+    ``maximize=False`` lässt ein sichtbares Fenster bei ``size``. Das braucht
+    ``tools/make_web_images.py``: Auf der Website steht dasselbe Fenster in
+    einer Spalte von 650 Bildpunkten, und ein bildschirmfüllendes Bild ist dort
+    auf ein Viertel gestaucht — man sieht, dass es eine Oberfläche ist, und
+    nicht mehr, welche.
 
     ``fit_height`` nimmt die Höhe vom Inhalt statt aus ``size``. Für einen
     Dialog ist das der Unterschied zwischen einem Bild und einem falschen Bild:
     er wächst mit seinen Feldern, und auf eine feste Höhe gezogen zeigt er
     Leerraum, den niemand je sieht.
     """
+    measured = size if size is not None else work_area()
     if hidden:
         widget.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     if fit_height:
-        widget.resize(size[0], widget.sizeHint().height())
+        widget.resize(measured[0], widget.sizeHint().height())
     else:
-        widget.resize(*size)
+        widget.resize(*measured)
+    if not hidden:
+        screen = target_screen()
+        widget.setScreen(screen)
+        widget.move(screen.availableGeometry().topLeft())
     widget.show()
+    if not hidden and maximize:
+        widget.showMaximized()
     if fit_height:
         # Nach dem Anzeigen noch einmal: erst dort kennt Qt die endgültigen
         # Schriftmaße, und ein umgebrochener Beschreibungssatz ändert die Höhe.
-        widget.resize(size[0], widget.sizeHint().height())
+        widget.resize(measured[0], widget.sizeHint().height())
     return widget
 
 
@@ -313,7 +391,7 @@ def take_all(app: QApplication, language: str) -> None:
     from app.core import examples
     from app.core.sketch import shapes
     from app.core.sketch.serialize import sketch_to_text
-    from app.ui.catalog import PartCatalog
+    from app.ui.catalog import PartCatalog, catalog_size
     from app.ui.main_window import MainWindow
     from app.ui.op_dialog import OperationDialog
     from app.ui.panels import ReportPanel
@@ -324,13 +402,13 @@ def take_all(app: QApplication, language: str) -> None:
 
     print(f"{language}:")
 
-    start = prepared(StartScreen(), WINDOW)
+    start = prepared(StartScreen())
     settle(app)
     shoot(start, "start-screen", language)
     start.close()
 
     session = Session()
-    window = prepared(MainWindow(session, UiSettings()), WINDOW, hidden=False)
+    window = prepared(MainWindow(session, UiSettings()), hidden=False)
     project = examples.directory() / EXAMPLE
     if not project.is_file():
         raise SystemExit(f"Beispielprojekt fehlt: {project}")
@@ -383,7 +461,10 @@ def take_all(app: QApplication, language: str) -> None:
     shoot(dialog, "op-dialog", language)
     dialog.close()
 
-    catalog = prepared(PartCatalog(), WINDOW)
+    # Der Katalog bestimmt seine Größe selbst (:func:`catalog.catalog_size`) —
+    # ein Anteil des Bildschirms, gedeckelt. Ihn hier auf ein Maß zu ziehen
+    # zeigte einen Dialog, den es so nicht gibt.
+    catalog = prepared(PartCatalog(), catalog_size())
     settle(app, 30)
     shoot(catalog, "catalog", language)
     catalog.close()
@@ -394,12 +475,15 @@ def take_all(app: QApplication, language: str) -> None:
     # Ein Kreis gehört dazu, weil eine Skizze aus Geraden allein nicht zeigt,
     # dass ein Kreis hier wirklich rund bleibt.
     #
-    # Die Maße sind groß gewählt, und beides hat einen Grund: die Zeichenfläche
+    # Die Zeichnung ist groß gewählt, und das hat einen Grund: die Zeichenfläche
     # bringt ihren Maßstab mit, und ein 40er Rechteck lag als Briefmarke in der
     # Bildmitte. Ein Lochkreis stand hier zuerst — vier Löcher von 4 mm, deren
     # acht Maßzahlen übereinanderlagen, und daneben eine Bedingungsliste aus
     # neun mal „Abstand 2,00".
-    sketch = prepared(SketchPanel(sketch_to_text(shapes.rectangle(120.0, 60.0))), SKETCH)
+    #
+    # Bildschirmfüllend wie das Hauptfenster: Der Skizzenmodus *ist* das
+    # Hauptfenster, er tauscht nur den Viewport gegen die Zeichenfläche.
+    sketch = prepared(SketchPanel(sketch_to_text(shapes.rectangle(120.0, 60.0))))
     sketch.canvas.insert_shape(shapes.circle(40.0))
     volume = session.profile.printer.build_volume
     sketch.set_bed((float(volume[0]), float(volume[1])))
@@ -410,7 +494,24 @@ def take_all(app: QApplication, language: str) -> None:
     window.close()
 
 
-def chosen_languages() -> tuple[str, ...]:
+def chosen_screen(arguments: list[str]) -> list[str]:
+    """``--schirm N`` aus den Argumenten nehmen und :data:`SCREEN_INDEX` setzen.
+
+    Gibt die übrigen Argumente zurück — die Sprachen. Wer nur einen Bildschirm
+    hat, braucht das nie; wer den Zielschirm wechselt, will ihn nicht im
+    Quelltext ändern müssen.
+    """
+    global SCREEN_INDEX
+    if "--schirm" not in arguments:
+        return arguments
+    position = arguments.index("--schirm")
+    if position + 1 >= len(arguments) or not arguments[position + 1].isdigit():
+        raise SystemExit("--schirm braucht eine Nummer, etwa: --schirm 1")
+    SCREEN_INDEX = int(arguments[position + 1])
+    return arguments[:position] + arguments[position + 2 :]
+
+
+def chosen_languages(wanted: tuple[str, ...]) -> tuple[str, ...]:
     """Welche Sprachen aufgenommen werden — alle, oder die genannten.
 
     Ohne Angabe alle. Mit Angabe nur diese: Eine Sprache, die dazukommt,
@@ -422,7 +523,6 @@ def chosen_languages() -> tuple[str, ...]:
         python tools/make_figures.py es fr it pt
     """
     available = available_languages()
-    wanted = tuple(sys.argv[1:])
     if not wanted:
         return available
     unknown = [language for language in wanted if language not in available]
@@ -442,9 +542,12 @@ def main() -> int:
     from app.ui.app import install_qt_translations
     from app.ui.theme import apply_theme
 
+    languages = tuple(chosen_screen(sys.argv[1:]))
     load_operations()
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
+    area = target_screen().availableGeometry()
+    print(f"Bildschirm {SCREEN_INDEX}: {target_screen().name()} — {area.width()}x{area.height()}\n")
     # **Mit dem Thema, nicht nur mit der Palette.** Ohne diese Zeile nahmen
     # die Bilder die Anwendung ohne ihr Stylesheet auf: Kacheln ohne Rahmen,
     # Knöpfe ohne Abstufung, der Titel in Fließtextgröße. Ein Handbuch, das
@@ -452,7 +555,7 @@ def main() -> int:
     # man ihm am ehesten glaubt.
     apply_theme(app, "dark")
     qt_translator = None
-    for language in chosen_languages():
+    for language in chosen_languages(languages):
         install_catalog(language, read_catalog(language))
         set_language(language)
         # Auch Qt selbst spricht die Sprache der Aufnahme — sonst zeigen die

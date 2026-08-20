@@ -212,8 +212,14 @@
           </a>
 
           <div class="dateien" data-files data-release-show hidden>
-            <!-- Von tools/make_download.py gefüllt. Steht hier nichts,
-                 bleibt der Kasten bei der Warteliste. -->
+            <a class="btn" href="/dl/Solidon3D-Setup-0.1.1.exe" download>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/>
+              </svg>
+              Windows 10/11 — 173 MB
+            </a>
+            <code class="pruefsumme">SHA-256 b14b6b854f85ad1e7bd04ad385a0abebe84080a10e49661ce3aaad77625a1da3</code>
+            <p class="pruefhinweis">Für Linux und macOS sind die Pakete noch im Bau. Eine Nachricht, sobald sie liegen: <a href="mailto:support@solidon3d.de">support@solidon3d.de</a></p>
           </div>
           <p class="pruefhinweis" data-release-show hidden>Prüfsumme daneben, damit sich nachrechnen lässt, dass die Datei unterwegs nicht angefasst wurde.</p>
           <p class="pruefhinweis" data-release-show hidden>Windows meldet bei einer neuen, noch unsignierten Anwendung einen blauen Hinweis: <i>Weitere Informationen</i> → <i>Trotzdem ausführen</i>. Die Signierung kommt, sobald das Zertifikat steht.</p>
@@ -246,7 +252,7 @@
       <div class="shot">
         <div class="stage">
           <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-          <img src="handbuch/de/main-window.png" width="1180" height="760" fetchpriority="high"
+          <img src="bilder/beleg-fenster.png" width="1400" height="860" fetchpriority="high"
                alt="Das Hauptfenster von Solidon3D: links der Objektbaum mit Parametern und Verlauf, in der Mitte die 3D-Ansicht, rechts der Prüfbericht">
         </div>
       </div>
@@ -416,15 +422,15 @@
 
       <div class="beleg">
         <figure>
-          <img src="handbuch/de/report.png" width="460" height="300" loading="lazy"
+          <img src="handbuch/de/report.png" width="620" height="270" loading="lazy"
                alt="Der Prüfbericht mit vier Befunden: das Modell ist an drei Stellen offen, 14 Dreiecke zeigen nach innen, eine Wand ist dünner als zwei Extrusionsbahnen, und die Einheit stand nicht in der Datei">
           <figcaption><b>Der Prüfbericht.</b> Was beim Drucken schiefgeht,
           steht da, bevor der Slicer die Zeit verbraucht — mit Zählung nach
           Fehler, Warnung und Hinweis.</figcaption>
         </figure>
         <figure>
-          <img src="bilder/beleg-bausteine.png" width="936" height="416" loading="lazy"
-               alt="Der Bausteinkatalog: Mutternfalle, Gewinde, Schraubenloch mit Senkung, Heat-Set-Einpressbuchse, Passstift, Rastnase, Filmscharnier und Schnappverbinder, jeder mit Vorschau und seinen Maßen">
+          <img src="bilder/beleg-bausteine.png" width="876" height="502" loading="lazy"
+               alt="Der Bausteinkatalog: Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Rastnase, Filmscharnier, Schnappverbinder für eine Naht und Schnappverbindung, jeder mit Vorschau und seinen Maßen">
           <figcaption><b>Siebzehn geprüfte Bausteine.</b> Mutternfalle,
           Heat-Set-Buchse, Filmscharnier — die Maße kommen aus einer
           Normteiltabelle, nicht aus dem Bauchgefühl.</figcaption>

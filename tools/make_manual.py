@@ -705,6 +705,29 @@ def _defer_offscreen_pictures(html: str) -> str:
     return re.sub(r'<img src="([^"]+)"[^>]*>', extend, html)
 
 
+def _staged(match: re.Match[str]) -> str:
+    """Ein Bildschirmfoto auf die Bühne stellen — höchstens so breit, wie es ist.
+
+    ``.stage img`` zieht jedes Bild auf die volle Breite der Bühne, und auf
+    einer Startseite ist das richtig: Dort steht ein Fenster in einer schmalen
+    Spalte. Im Handbuch ist die Spalte 1124 Bildpunkte breit, und derselbe Satz
+    blies den Prüfbericht auf **181 Prozent** auf, den Operationsdialog auf
+    **216** — hochgerechnete Bildschirmfotos mit weicher Schrift, und zwar
+    ausgerechnet die beiden, bei denen es auf die Beschriftung ankommt.
+
+    Begrenzt wird die ``figure`` und nicht das Bild: Sie zentriert bereits
+    (``margin: 2rem auto``), also rückt die Bühne mit. Dazu kommen das Polster
+    der Bühne (zweimal 0,55 rem) und ihr Rahmen. Wo sich die Größe nicht lesen
+    lässt, bleibt es beim alten Verhalten — eine falsche Schranke wäre
+    schlimmer als keine.
+    """
+    attributes = match.group(1)
+    source = re.search(r'src="([^"]+)"', attributes)
+    size = _picture_size(source.group(1)) if source else None
+    limit = f' style="max-width: calc({size[0]}px + 1.1rem + 2px)"' if size else ""
+    return f'<figure class="screenshot"{limit}><div class="stage"><img {attributes}></div>'
+
+
 def page_html(language: str, prefix: str) -> str:
     body = _classify(
         manual.as_html(
@@ -716,11 +739,7 @@ def page_html(language: str, prefix: str) -> str:
     # sie an ihrer Endung: nur Aufnahmen sind PNG, alles Gezeichnete und
     # Gerenderte reist als SVG und bleibt ohne Bühne — ein Schema auf
     # dunklem Grund hat seinen Grund schon selbst.
-    body = re.sub(
-        r'<figure><img (src="[^"]+\.png"[^>]*)>',
-        r'<figure class="screenshot"><div class="stage"><img \1></div>',
-        body,
-    )
+    body = re.sub(r'<figure><img (src="[^"]+\.png"[^>]*)>', _staged, body)
     body = _defer_offscreen_pictures(body)
     title = f"{TITLE.get(language, TITLE['de'])} — {APP_NAME}"
     pages = len(manual.pages())
