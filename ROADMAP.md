@@ -50,6 +50,7 @@ bekommt einen roten Lauf.
 | Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird — Kachelhöhe, Ablagefläche oder die Liste der zuletzt geöffneten Projekte; Umschichten ist ausgereizt |
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 | Benannte Merkmale überstehen keine Boolesche Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung darüber, wann ein benanntes Merkmal wirklich fort ist — vierzehn Ops geben `features={}` zurück, und `_with_features` liest die generierten nur aus der Ausgabe |
+| Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 
 ---
 
@@ -8715,3 +8716,89 @@ Prozess: nur `test_performance.py` rot, und dort nur der *relative* Teil.
 
       Nebenbei verdeckte der Parameter `table` in `_lookup` nun die neue
       Modulfunktion gleichen Namens; er heißt `entries`.
+
+## Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026)
+
+Der Durchgang oben hatte `profile_slot` als „Vorarbeit für einen Baustein, den
+es nicht gibt" notiert und den Punkt dann selbst zurückgenommen: §24.2 verlangt
+die Aluprofil-Nutmaße als *Nachschlagewert*, und als solcher waren sie
+erreichbar. Beides stimmt und beides zusammen war die halbe Auskunft — man
+konnte die Maße nachschlagen und nicht verbauen. Jetzt gibt es den Baustein.
+
+**Was er ist, war eine Entscheidung und keine Herleitung.** „Profilnut" lässt
+drei Bauarten offen: eine Feder am eigenen Teil, ein Nutenstein als eigener
+Körper, oder eine Rinne, in der das ganze Profil sitzt. Gewählt ist die erste.
+Sie nutzt genau die Maße, die die Tabelle beschreibt — Nutbreite für den Hals,
+Kerndurchmesser für den Kopf —, und sie ist die Bauart, mit der ein *in Solidon
+konstruiertes* Teil an eine Schiene kommt. Die Rinne hätte die Außenmaße
+gebraucht, die dort nicht als Zahlen stehen; der Nutenstein wäre ein gedrucktes
+Gewinde in einer Größe, in der es wenig trägt, neben einem Stahlteil für wenige
+Cent.
+
+**Zwei Maße kamen in die Tabelle, und sie sind die unsicheren.** Nutbreite und
+Kerndurchmesser standen seit der Erstbestückung da; eine Feder braucht dazu die
+**Stegdicke** (wie lang der Hals sein muss) und die **Kammertiefe** (wie hoch
+der Kopf werden darf). Beides sind Eigenschaften des gekauften Profils und keine
+Konstruktionsentscheidung, also gehören sie in die Tabelle und nicht als Vorgabe
+an einen Parameter. Eingetragen nach dem Verfahren, das der Kopf von
+`standards.toml` selbst festlegt — der gebräuchlichste Wert, die Streuung in
+`note` —, und die Streuung ist hier größer als bei den beiden alten: kein
+Katalog führt diese zwei, jeder zeichnet sie anders. Die Tabelle steht damit auf
+Version 2; kein bestehender Wert hat sich geändert.
+
+**Das Spiel kürzte sich in der Gesamttiefe weg.** Der erste Wurf rechnete den
+Hals als `lip + play` und den Kopf als `depth - play` — beides für sich
+richtig gedacht, zusammen null. Die Feder war exakt so hoch wie die Nut tief und
+stieß mit **null Luft** auf dem Nutgrund auf; ein gedruckter Kopf klemmt so,
+bevor er am Steg trägt, und tragen ist seine ganze Aufgabe. Gefunden hat es
+nicht die Suite, sondern eine Tabelle über alle drei Größen und drei Spielwerte,
+ausgedruckt und angesehen. Der Kopf zieht das Spiel jetzt zweimal ab, und
+`test_the_tongue_leaves_air_in_the_slot_it_is_made_for` prüft in beiden
+Richtungen gegen die Tabelle: in der Breite gegen den Kerndurchmesser, in der
+Tiefe gegen Steg plus Kammer, und übrig bleiben muss genau das Spiel. Das ist,
+was `bausteine.md` mit „eine Passung wird an der Differenz gemessen" meint.
+
+**Die entartete Fläche lag mitten im Bereich, nicht an seinem Ende.** Genau bei
+`taper == length / 2` fällt die Schulter des Umrisses auf null, und damit fallen
+an jedem Ende zwei Ecken aufeinander: bei Länge 6 und Schräge 3 kam ein Körper
+aus **fünf** Teilen heraus, der nicht wasserdicht war. Bei Schräge 2, 4 und 6
+derselben Länge ging es gut.
+
+Und das ist der eigentliche Fund: **der Bereichstest aus §24.3 hätte das nie
+gesehen.** Er nimmt Minimum, Maximum und Vorgabe jedes Parameters, und diese
+Stelle ist keines der drei. Aufgefallen ist sie erst an der *Gegenprobe* — die
+Kappung im Baustein herauszunehmen ließ alle Tests grün, und genau das war das
+Signal: Wer eine Absicherung baut, deren Wegfall nichts rot macht, hat entweder
+eine unnötige Absicherung oder einen ungeprüften Fall. Hier war es das Zweite.
+`shapes.tapered_bar` fängt den Fall jetzt selbst ab, wie `wedge` es für seinen
+tut, und `test_a_tapered_bar_holds_at_every_taper_not_just_at_the_corners`
+fährt in Zehntelschritten statt über Ecken.
+
+Die Kappung im Baustein bleibt, aber als das, was sie ist: eine Entscheidung
+über die Konstruktion. Eine Schräge über ein Drittel der Länge lässt keinen
+tragenden Mittelteil übrig, und geprüft wird das am Querschnitt in der Mitte —
+nicht am Volumen, das fiele auch, wenn die Schräge die Mitte auffräße.
+
+**Was nicht nötig war.** Der Bauplan bleibt unverändert: Die Erstbestückung in
+§24.1 ist ein historischer Satz von dreizehn, und der vierzehnte
+(`snap_connector`, 14.08.) steht dort auch nicht — §24.2 nennt die Nutmaße
+ohnehin. `LIBRARY_VERSION` bleibt auf 3, weil beide Vergleichsfunktionen nur
+*benutzte* Bausteine melden und ein neuer in keinem alten Projekt steckt. Der
+Zählwächter in `test_parts.py` ging von 14 auf 15, mit dem Anlass daneben — er
+ist dafür da, dass das auffällt.
+
+Dazu, ohne eigene Arbeit: Vorschaubild, `to_scad`, Menüeintrag, Handbuchseite,
+Werkzeug für den Agenten und Kommandozeilenbefehl. Ein Registereintrag, und
+jede Oberfläche zieht nach (Leitprinzip 3).
+
+### Was dabei auffiel und liegen bleibt
+
+- [ ] **Stegdicke und Kammertiefe sind an keinem echten Profil gemessen.** Sie
+      stehen als gebräuchlichste Katalogwerte in der Tabelle — 1,8 und 4,3 für
+      Nut 6, 2,0 und 5,5 für Nut 8 — und `note` nennt die Spanne, die die
+      Hersteller aufmachen (Steg 1,8–2,2, Kammer 4,2–6,0). Innerhalb dieser
+      Spanne liegt mehr als das Spiel, mit dem gerechnet wird: Wer eine Feder
+      druckt, die klemmt oder wackelt, ändert zuerst diese zwei Zahlen und nicht
+      das Spiel. Zwei Messungen mit dem Messschieber an einer 2020er und einer
+      3030er Schiene würden den Punkt schließen — bis dahin ist die Feder gut
+      gerechnet und nicht nachgemessen.

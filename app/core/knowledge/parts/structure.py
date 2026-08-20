@@ -1,10 +1,15 @@
-"""Bausteine, die etwas versteifen oder hindurchführen (Bauplan §24.1).
+"""Bausteine, die etwas versteifen, hindurchführen oder anbinden (Bauplan §24.1).
 
-Die letzten zwei der dreizehn: die Versteifungsrippe und die
-Kabeldurchführung mit Zugentlastung. Beides ist die Sorte Sache, die hundertmal
-von Hand gezeichnet und in der Hälfte der Fälle falsch wird — eine Rippe, die
-dicker ist als die Wand, die sie versteift, zeichnet sich durch; eine
+Die letzten zwei der dreizehn aus der Erstbestückung: die Versteifungsrippe und
+die Kabeldurchführung mit Zugentlastung. Beides ist die Sorte Sache, die
+hundertmal von Hand gezeichnet und in der Hälfte der Fälle falsch wird — eine
+Rippe, die dicker ist als die Wand, die sie versteift, zeichnet sich durch; eine
 Durchführung ohne Zugentlastung reißt den Draht aus der Lötstelle.
+
+Später dazugekommen ist die **Nutfeder für Aluprofil**. Sie schließt eine Lücke,
+die anders lag als die beiden: Die Nutmaße standen seit der Erstbestückung in der
+Normteiltabelle (§24.2), und gelesen hat sie kein Baustein — nachschlagen konnte
+man sie, verbauen nicht.
 """
 
 from __future__ import annotations
@@ -23,7 +28,17 @@ FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Erstbestückung der Bibliothek (§24.1)."
 )
 
+PROFILE_TONGUE_ADDED = PartChange(
+    version="1",
+    date="2026-08-20",
+    reason=(
+        "Die Aluprofil-Nutmaße lagen seit der Erstbestückung in der Tabelle, "
+        "ohne dass ein Baustein sie las (§24.2)."
+    ),
+)
+
 _TUBES = standards.tube_sizes()
+_PROFILES = standards.profile_sizes()
 
 #: Eine Rippe dicker als etwa zwei Drittel der Wand zeichnet sich auf der
 #: anderen Seite als Einfallstelle ab. Keine Druckregel, sondern eine aus dem
@@ -195,3 +210,117 @@ def cable_gland(raw: BaseParams) -> PartResult:
         )
 
     return result(union(*parts), *features)
+
+
+@op_params
+class ProfileTongueParams(BaseParams):
+    size: str = param(
+        title=_("Profil"),
+        default="2020",
+        choices=_PROFILES,
+        doc=_("Die Nutgröße der Schiene — bei den üblichen Profilen die Zahl im Namen."),
+    )
+    length: float = param(
+        title=_("Länge"),
+        default=20.0,
+        unit="mm",
+        minimum=6.0,
+        maximum=200.0,
+        doc=_("Wie weit die Feder in der Nut entlangläuft. Länger hält mehr."),
+    )
+    lead_in: float = param(
+        title=_("Einführschräge"),
+        default=1.5,
+        unit="mm",
+        minimum=0.0,
+        maximum=6.0,
+        doc=_(
+            "Die Enden laufen über diese Länge auf Halsbreite zu, damit sich die "
+            "Feder einschieben lässt statt an der ersten Kante zu klemmen."
+        ),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1.0,
+        placement="advanced",
+        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+    )
+    head: float = param(
+        title=_("Kopfhöhe"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=8.0,
+        placement="advanced",
+        doc=_(
+            "Null heißt: so hoch, dass der Kopf die Kammer ausfüllt und den "
+            "Nutgrund nicht berührt. Mehr als die Kammertiefe passt nicht hinein."
+        ),
+    )
+
+
+@register_part(
+    name="profile_tongue",
+    title=_("Nutfeder für Aluprofil"),
+    group="structure",
+    params=ProfileTongueParams,
+    features=["tongue"],
+    doc=_(
+        "Ein T-förmiger Fuß, der von der Stirnseite in die Nut einer Aluschiene "
+        "geschoben wird und dort hält. Hals und Kopf kommen aus der "
+        "Normteiltabelle. Zum Drucken liegt die Feder am besten mit der "
+        "Nutrichtung flach — steht sie senkrecht, ist die Schulter unter dem "
+        "Kopf ein Überhang."
+    ),
+    changes=[PROFILE_TONGUE_ADDED],
+)
+def profile_tongue(raw: BaseParams) -> PartResult:
+    params = cast(ProfileTongueParams, raw)
+    entry = standards.profile_slot(params.size)
+
+    # Alle vier Maße aus der Tabelle, keines im Code (§24.2). Das Spiel geht
+    # jeweils von der Feder ab, nie auf die Nut auf: Die Nut ist gegeben.
+    neck_width = entry.slot - params.play
+    head_width = entry.core - params.play
+    # Der Hals überbrückt den Steg. Das Spiel kommt hier *dazu*, damit der Kopf
+    # unter der Stegunterseite gleiten kann statt an ihr zu schleifen; unter
+    # Zug wandert die Feder um dieses Maß und trägt dann.
+    neck_height = entry.lip + params.play
+    # Zweimal das Spiel: einmal hat es der Hals nach unten verbraucht, einmal
+    # bleibt es als Luft über dem Nutgrund. Mit nur einem Abzug kürzte sich das
+    # Spiel in der Gesamttiefe weg — die Feder war genau `lip + depth` hoch und
+    # stieß mit null Luft auf, also klemmte der gedruckte Kopf, bevor er am
+    # Steg trug. Eine Passung wird an der Differenz gemessen und nicht daran,
+    # dass beide Hälften für sich stimmen.
+    head_height = params.head or entry.depth - 2.0 * params.play
+
+    # Die Schräge kann nicht länger sein als ein Drittel der Feder — bei 6 mm
+    # Länge und 6 mm Schräge bliebe nichts, was noch trägt. Gekappt und nicht
+    # abgelehnt: Der Bereichstest fährt genau diese Ecke, und eine Ausnahme
+    # dort wäre ein Baustein, der an seiner eigenen Grenze nicht baut.
+    lead_in = min(params.lead_in, params.length / 3.0)
+
+    # Der Hals reicht um OVERLAP in den Kopf hinein (§39). Er ist schmaler,
+    # also wächst dadurch keine Außenkante — es verschwindet nur die
+    # zusammenfallende Fläche zwischen beiden, an der eine Boolesche Operation
+    # bricht.
+    neck = shapes.box(neck_width, params.length, neck_height + shapes.OVERLAP)
+    head = shapes.tapered_bar(head_width, neck_width, params.length, head_height, lead_in)
+    body = union(neck, shapes.moved(head, (0.0, 0.0, neck_height)))
+
+    return result(
+        body,
+        # Die tragende Fläche: die Unterseite des Kopfes links und rechts des
+        # Halses, die sich gegen den Steg legt. Nach unten gerichtet, denn dort
+        # liegt das Material, das sie hält — die Fläche des eigenen Teils zeigt
+        # nach oben.
+        face(
+            "tongue_1",
+            (head_width - neck_width) * params.length,
+            (0.0, 0.0, neck_height),
+            (0.0, 0.0, -1.0),
+        ),
+    )

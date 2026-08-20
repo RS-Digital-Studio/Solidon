@@ -10,8 +10,10 @@ ist, und ein Baustein, der an seinen eigenen Grenzen scheitert, scheitert hier.
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import pytest
 
@@ -69,17 +71,25 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     diesem Satz — sie sind Werkzeuge für den Drucker, nicht für das Modell, und
     sie haben ihre eigene Gruppe im Katalog.
 
-    **Der vierzehnte steht nicht in der Erstbestückung**, und das ist eine
-    Ansage und kein Versehen: ``snap_connector`` ist am 14.08.2026 dazugekommen,
-    weil das Trennwerkzeug einen Verbinder brauchte, der einrastet. Die
-    ``snap_fit`` des Plans ist etwas anderes — ein Arm, den man an eine Wand
-    setzt; dieser hier ist ein Paar aus Arm und Tasche, bemaßt aus dem
-    Durchmesser, den eine Naht hergibt. Wer die Zahl hier ändert, ändert die
-    Bibliothek, und das soll auffallen.
+    **Zwei stehen nicht in der Erstbestückung**, und beide sind eine Ansage und
+    kein Versehen. Wer die Zahl hier ändert, ändert die Bibliothek, und das soll
+    auffallen.
+
+    ``snap_connector`` ist am 14.08.2026 dazugekommen, weil das Trennwerkzeug
+    einen Verbinder brauchte, der einrastet. Die ``snap_fit`` des Plans ist etwas
+    anderes — ein Arm, den man an eine Wand setzt; dieser hier ist ein Paar aus
+    Arm und Tasche, bemaßt aus dem Durchmesser, den eine Naht hergibt.
+
+    ``profile_tongue`` kam am 20.08.2026 dazu, und der Anlass lag nicht an einem
+    Werkzeug, sondern in der Tabelle: Die Aluprofil-Nutmaße stehen seit der
+    Erstbestückung in ``standards.toml``, weil §24.2 sie verlangt, und gelesen
+    hat sie kein Baustein. Nachschlagen konnte man sie, verbauen nicht. Die zwei
+    Maße, die eine Feder darüber hinaus braucht — Stegdicke und Kammertiefe —
+    sind mit ihr in die Tabelle gekommen; sie ist seither auf Version 2.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 14
+    assert len(building) == 15
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -536,3 +546,200 @@ def test_every_play_field_defaults_to_the_profile() -> None:
             f"{spec.name}: Vorgabe {play.default} statt Verweis ins Materialprofil"
         )
     assert checked >= 7, "die Prüfung muss die Bausteine mit Spiel wirklich sehen"
+
+
+@pytest.mark.parametrize("size", list(standards.profile_sizes()))
+@pytest.mark.parametrize("play", [0.0, 0.15, 0.3, 1.0])
+def test_the_tongue_leaves_air_in_the_slot_it_is_made_for(size: str, play: float) -> None:
+    """Eine Passung wird an der **Differenz** gemessen, nicht daran, dass beide
+    Hälften für sich stimmen.
+
+    Geprüft wird gegen die Nut, wie die Tabelle sie beschreibt: in der Breite
+    gegen den Kerndurchmesser, in der Tiefe gegen Steg plus Kammer. In beiden
+    Richtungen muss genau das Spiel übrig bleiben.
+
+    Die Tiefe ist der Fall, an dem es schiefging: Der Hals rechnete
+    ``lip + play`` und der Kopf ``depth - play``, und damit kürzte sich das
+    Spiel weg — die Feder war exakt so hoch wie die Nut tief und stieß mit null
+    Luft auf dem Nutgrund auf. Ein gedruckter Kopf klemmt so, bevor er am Steg
+    trägt, und gerade das soll er.
+    """
+    from app.core.knowledge.parts import PARTS
+
+    spec = PARTS.get("profile_tongue")
+    entry = standards.profile_slot(size)
+
+    body = spec.fn(spec.params(size=size, play=play, length=20.0)).mesh
+    width, _, height = (float(value) for value in body.bounds.size)
+
+    assert entry.core - width == pytest.approx(play, abs=1e-6), (
+        f"{size}: Kopf {width:.2f} in einer Kammer von {entry.core:.2f} — "
+        f"{entry.core - width:.2f} Luft statt {play:.2f}"
+    )
+    assert entry.lip + entry.depth - height == pytest.approx(play, abs=1e-6), (
+        f"{size}: Feder {height:.2f} hoch in einer Nut von "
+        f"{entry.lip + entry.depth:.2f} — {entry.lip + entry.depth - height:.2f} "
+        f"Luft über dem Nutgrund statt {play:.2f}"
+    )
+
+
+@pytest.mark.parametrize("size", list(standards.profile_sizes()))
+def test_the_tongue_reaches_behind_the_lip(size: str) -> None:
+    """Der Kopf muss hinter dem Steg sitzen, sonst hält die Feder nichts.
+
+    Gemessen am Querschnitt und nicht am Hüllquader: In Steghöhe darf die Feder
+    nur den Hals breit sein, darunter den Kopf. Ein Riegel, der über die ganze
+    Höhe Kopfbreite hat, hätte denselben Hüllquader und ließe sich nicht
+    einschieben.
+    """
+    from app.core.knowledge.parts import PARTS
+
+    spec = PARTS.get("profile_tongue")
+    entry = standards.profile_slot(size)
+    body = spec.fn(spec.params(size=size, play=0.15, length=20.0)).mesh
+
+    # Ein dünner Schnitt mitten durch den Steg und einer mitten durch die Kammer
+    plate = shapes.box(60.0, 60.0, 0.2)
+    through_lip = boolean("intersection", [body, shapes.moved(plate, (0.0, 0.0, entry.lip / 2.0))])
+    in_chamber = boolean(
+        "intersection",
+        [body, shapes.moved(plate, (0.0, 0.0, entry.lip + entry.depth / 2.0))],
+    )
+
+    neck = float(through_lip.mesh.bounds.size[0])
+    head = float(in_chamber.mesh.bounds.size[0])
+
+    assert neck == pytest.approx(entry.slot - 0.15, abs=0.01), (
+        f"{size}: im Steg {neck:.2f} breit, die Öffnung ist {entry.slot:.2f}"
+    )
+    assert head > neck + 1.0, (
+        f"{size}: der Kopf ({head:.2f}) ist nicht breiter als der Hals ({neck:.2f}) — "
+        "die Feder greift nicht hinter den Steg"
+    )
+
+
+def test_the_tongue_takes_every_dimension_from_the_table() -> None:
+    """§24.2, und die Regel dahinter: Normteilmaße stehen nie im Baustein.
+
+    Gemessen, indem die Tabelle verstellt wird — vier Maße, vier Wirkungen.
+    Eine Zahl, die der Baustein selbst mitbringt, fällt hier auf, weil sie sich
+    nicht mitbewegt.
+    """
+    from app.core.knowledge.parts import PARTS
+
+    spec = PARTS.get("profile_tongue")
+    before = spec.fn(spec.params(size="2020", play=0.0, length=20.0)).mesh.bounds.size
+    entry = standards.profile_slot("2020")
+    wider = dataclasses.replace(entry, slot=entry.slot + 1.0, core=entry.core + 2.0)
+    deeper = dataclasses.replace(entry, lip=entry.lip + 1.0, depth=entry.depth + 3.0)
+
+    with mock.patch.object(standards, "profile_slot", return_value=wider):
+        grown = spec.fn(spec.params(size="2020", play=0.0, length=20.0)).mesh.bounds.size
+    with mock.patch.object(standards, "profile_slot", return_value=deeper):
+        taller = spec.fn(spec.params(size="2020", play=0.0, length=20.0)).mesh.bounds.size
+
+    assert float(grown[0]) - float(before[0]) == pytest.approx(2.0, abs=1e-6), "core wirkt nicht"
+    assert float(taller[2]) - float(before[2]) == pytest.approx(4.0, abs=1e-6), (
+        "lip oder depth wirkt nicht"
+    )
+
+
+def test_the_lead_in_narrows_the_ends_and_leaves_a_middle_that_bears() -> None:
+    """Die Einführschräge nimmt Material an den Enden, nicht die ganze Feder.
+
+    Gekappt auf ein Drittel der Länge, und das ist eine Entscheidung über die
+    Konstruktion und nicht eine über die Robustheit: Ein Kopf ohne
+    volle-Breite-Mitte greift kaum noch hinter den Steg. Gemessen wird deshalb
+    am Querschnitt in der Mitte, nicht am Volumen — das fiele auch, wenn die
+    Schräge die Mitte auffräße.
+    """
+    from app.core.knowledge.parts import PARTS
+
+    spec = PARTS.get("profile_tongue")
+    entry = standards.profile_slot("2020")
+
+    straight = spec.fn(spec.params(size="2020", lead_in=0.0, length=20.0)).mesh
+    tapered = spec.fn(spec.params(size="2020", lead_in=4.0, length=20.0)).mesh
+
+    assert tapered.volume < straight.volume, "die Schräge nimmt nichts weg"
+    assert tapered.bounds.size[1] == pytest.approx(20.0, abs=1e-6), "die Länge hat sich geändert"
+
+    # Die kürzeste Feder mit der größten Schräge — dort greift die Kappung
+    plate = shapes.box(60.0, 0.2, 60.0)
+    extreme = spec.fn(spec.params(size="2020", lead_in=6.0, length=6.0, play=0.0)).mesh
+    middle = boolean("intersection", [extreme, plate])
+
+    assert float(middle.mesh.bounds.size[0]) == pytest.approx(entry.core, abs=0.01), (
+        f"in der Mitte nur {float(middle.mesh.bounds.size[0]):.2f} statt {entry.core:.2f} breit — "
+        "die Schräge hat den tragenden Teil aufgefressen"
+    )
+
+
+@pytest.mark.parametrize("length", [6.0, 6.6, 12.0])
+def test_a_tapered_bar_holds_at_every_taper_not_just_at_the_corners(length: float) -> None:
+    """Die entartete Fläche liegt **mitten** im Bereich, nicht an seinem Ende.
+
+    Genau auf ``taper == length / 2`` fällt die Schulter auf null, und damit
+    fallen an jedem Ende zwei Ecken des Umrisses aufeinander. Vor der Abfrage in
+    ``shapes.tapered_bar`` kam dort ein Körper aus fünf Teilen heraus, der nicht
+    wasserdicht war — bei Schräge 2, 4 und 6 derselben Länge ging es gut.
+
+    Deshalb fährt dieser Test in Zehntelschritten und nicht über Ecken: Der
+    Bereichstest aus §24.3 nimmt Minimum, Maximum und Vorgabe jedes Parameters,
+    und diese Stelle ist keines der drei. Ein Eckenraster hätte sie nie
+    gefunden, und gefunden hat sie erst die Gegenprobe.
+    """
+    for step in range(int(length * 10) + 1):
+        taper = step / 10.0
+        body = shapes.tapered_bar(10.6, 6.0, length, 4.3, taper)
+
+        assert body.is_watertight, f"Länge {length}, Schräge {taper} ist nicht wasserdicht"
+        assert body.component_count == 1, (
+            f"Länge {length}, Schräge {taper} fällt in {body.component_count} Teile"
+        )
+        assert body.volume > 0.0, f"Länge {length}, Schräge {taper} hat kein Volumen"
+
+
+def test_insert_profile_tongue_grows_a_tongue_on_a_real_body(profile: Profile) -> None:
+    """Der Weg des Nutzers: nicht die Bausteinfunktion, sondern die Operation.
+
+    Zwischen beiden liegt einiges — ``_part_values`` füllt das Spiel aus dem
+    Materialprofil, ``_anchor`` setzt die Feder an ein Merkmal, und die
+    Vereinigung mit dem Körper läuft über die Boolesche Rückfallkette. Ein
+    Baustein, der für sich rechnet und im Fenster nichts tut, ist die Sorte
+    Fehler, die drei Bausteine schon einmal hatten (§24.1, MOUTH_AT_ORIGIN).
+    """
+    project = project_with_plate()
+    sources = ProjectSources(project)
+    before = evaluate(project.document, profile, sources=sources).scene.objects["obj_1"]
+
+    History(project.document).apply(
+        "Nutfeder",
+        [
+            OperationDraft(
+                op="insert_profile_tongue",
+                inputs=("obj_1",),
+                params={"size": "2020", "length": 20.0, "z": 4.0},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=sources)
+    after = result.scene.objects["obj_1"]
+
+    assert result.complete, "die Auswertung hält an: " + " | ".join(
+        f"{f.code}: {f.message}" for f in result.scene.report.findings
+    )
+    assert "boolean.without_effect" not in {f.code for f in result.scene.report.findings}, (
+        "die Feder sitzt neben der Platte statt auf ihr"
+    )
+    assert after.mesh.volume > before.mesh.volume, "die Feder hat nichts angebaut"
+    assert after.mesh.is_watertight, "der Körper ist danach nicht mehr geschlossen"
+
+    grown = float(after.mesh.bounds.maximum[2] - before.mesh.bounds.maximum[2])
+    entry = standards.profile_slot("2020")
+    # Steg plus Kammer, abzüglich des Spiels aus dem Materialprofil — dieselbe
+    # Rechnung wie im Baustein, hier aber über die Operation gemessen.
+    expected = entry.lip + entry.depth - profile.material.clearance
+    assert grown == pytest.approx(expected, abs=0.05), (
+        f"die Feder steht {grown:.2f} mm über der Platte, erwartet {expected:.2f}"
+    )

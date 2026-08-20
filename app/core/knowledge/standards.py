@@ -93,8 +93,15 @@ class ProfileSlot:
 
     size: str
     slot: float
+    """Nutbreite außen — die Öffnung, durch die ein Hals muss."""
     core: float
+    """Kerndurchmesser der Nut — die Kammer, in der ein Kopf sitzt."""
+    lip: float
+    """Stegdicke: wie dick das Material an der Öffnung ist. Halslänge."""
+    depth: float
+    """Kammertiefe von der Innenseite des Stegs bis zum Nutgrund. Kopfhöhe."""
     screw: str
+    note: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,6 +243,10 @@ def insert_sizes() -> tuple[str, ...]:
 
 def magnet_sizes() -> tuple[str, ...]:
     return tuple(load().magnets)
+
+
+def profile_sizes() -> tuple[str, ...]:
+    return tuple(load().profiles)
 
 
 def tube_sizes() -> tuple[str, ...]:

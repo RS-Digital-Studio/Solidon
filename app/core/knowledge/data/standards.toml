@@ -12,7 +12,10 @@
 #
 # Alle Maße in Millimetern.
 
-version = "1"
+# Version 2 seit dem 20.08.2026: Die Aluprofil-Nutmaße tragen zwei Felder mehr
+# (`lip`, `depth`). Kein bestehender Wert hat sich geändert, alte Projekte
+# rechnen also unverändert — die Zahl sagt, dass die Tabelle mehr weiß.
+version = "2"
 
 # --- Metrische Schrauben --------------------------------------------------------
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
@@ -262,24 +265,43 @@ width = 5.0
 
 # --- Aluprofil-Nutmaße ----------------------------------------------------------
 # slot: Nutbreite außen · core: Kerndurchmesser der Nut · screw: passende Schraube
+# lip: Stegdicke — wie dick das Material an der Nutöffnung ist
+# depth: Kammertiefe — von der Innenseite des Stegs bis zum Nutgrund
+#
+# `lip` und `depth` kamen am 20.08.2026 dazu, für die Nutfeder. Sie sind die
+# zwei Maße, die eine Feder braucht und die außen niemand sieht: der Steg
+# bestimmt die Halslänge, die Kammer die Kopfhöhe. Nach dem Verfahren aus dem
+# Kopf dieser Datei stehen hier die gebräuchlichsten Werte, und `note` nennt
+# die Streuung — sie ist bei diesen beiden größer als bei Nutbreite und
+# Kerndurchmesser, weil kein Katalog sie führt und jeder sie anders zeichnet.
+# Wer eine Feder baut, die klemmt oder wackelt, prüft zuerst diese zwei.
 
 [[profiles]]
 size = "2020"
 slot = 6.0
 core = 10.6
+lip = 1.8
+depth = 4.3
 screw = "M5"
+note = "Nut 6; Steg 1,8–2,0 und Kammer 4,2–4,8 je Hersteller"
 
 [[profiles]]
 size = "3030"
 slot = 8.0
 core = 12.5
+lip = 2.0
+depth = 5.5
 screw = "M6"
+note = "Nut 8; Steg 2,0–2,2 und Kammer 5,0–6,0 je Hersteller"
 
 [[profiles]]
 size = "4040"
 slot = 8.0
 core = 12.5
+lip = 2.0
+depth = 5.5
 screw = "M8"
+note = "Nut 8 wie 3030 — die Außenmaße unterscheiden sich, die Nut nicht"
 
 # --- Schläuche und Rohre --------------------------------------------------------
 

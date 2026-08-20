@@ -110,6 +110,66 @@ def slot(width: float, length: float, height: float, *, segments: int = SEGMENTS
     return MeshData.of(body)
 
 
+def tapered_bar(
+    width: float, narrow: float, length: float, height: float, taper: float
+) -> MeshData:
+    """Ein Riegel, der an beiden Enden auf ``narrow`` zuläuft.
+
+    Die Form eines Nutensteins: in der Mitte volle Breite, an den Enden über
+    ``taper`` schmaler, damit er sich einschieben lässt statt an der ersten
+    Kante zu klemmen. In X liegt die Breite, in Y die Länge, auf Z = 0 stehend
+    — derselbe Rahmen wie bei :func:`box`.
+
+    Als extrudierter Umriss und nicht aus Kästen zusammengesetzt: eine
+    Vereinigung dreier Körper hätte zwei zusammenfallende Flächen darin, und
+    das ist der klassische Weg, eine Boolesche Operation zu brechen (§39).
+
+    Zwei Grenzfälle fängt die Funktion selbst ab, und beide sind dieselbe
+    Falle wie bei :func:`wedge` — zwei Ecken, die aufeinander fallen, machen
+    eine entartete Fläche, und ein Körper mit einer solchen ist nicht
+    wasserdicht (§24.3):
+
+    * **Keine Schräge** (``taper`` auf null, oder ``narrow`` nicht schmaler als
+      ``width``): dann ist es ein :func:`box`.
+    * **Schräge über die halbe Länge**: dann gibt es keine Schulter mehr, und
+      der Umriss hat sechs Ecken statt acht. Gemessen, bevor die Abfrage hier
+      stand: bei Länge 6 und Schräge 3 — genau auf der Kante — kam ein Körper
+      aus **fünf** Teilen heraus, der nicht wasserdicht war. Bei 4 und bei 6
+      ging es wieder gut, die Ecke liegt also nicht am Ende des Bereichs,
+      sondern mitten darin, und kein Eckenraster findet sie.
+    """
+    if taper <= 0.0 or narrow >= width:
+        return box(width, length, height)
+
+    half_wide, half_narrow = width / 2.0, narrow / 2.0
+    end, shoulder = length / 2.0, length / 2.0 - taper
+    if shoulder <= 0.0:
+        outline = np.array(
+            [
+                (-half_narrow, -end),
+                (half_narrow, -end),
+                (half_wide, 0.0),
+                (half_narrow, end),
+                (-half_narrow, end),
+                (-half_wide, 0.0),
+            ]
+        )
+    else:
+        outline = np.array(
+            [
+                (-half_narrow, -end),
+                (half_narrow, -end),
+                (half_wide, -shoulder),
+                (half_wide, shoulder),
+                (half_narrow, end),
+                (-half_narrow, end),
+                (-half_wide, shoulder),
+                (-half_wide, -shoulder),
+            ]
+        )
+    return MeshData.of(trimesh.creation.extrude_polygon(_polygon(outline), height=height))
+
+
 def _slot_outline(width: float, length: float, segments: int) -> np.ndarray:
     radius = width / 2.0
     offset = (length - width) / 2.0

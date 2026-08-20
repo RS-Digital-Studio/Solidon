@@ -274,6 +274,20 @@ def test_the_manual_finds_a_place_for_a_new_language(monkeypatch: pytest.MonkeyP
 SELF_NAMING = re.compile(r"^(M\d+(\.\d+)?|\d+x\d+|mm|cm|in|m|x|y|z|DejaVu .*|gyroid)$")
 
 
+def self_naming_sizes() -> frozenset[str]:
+    """Dasselbe, aber aus der Normteiltabelle statt aus einem Muster.
+
+    Ein Aluprofil heißt „2020", und zwar in jeder Sprache: Das ist sein
+    Querschnitt in Millimetern, zweimal hingeschrieben. Aus der Tabelle geholt
+    und nicht als ``\\d{4}`` ans Muster gehängt — dieses Muster ließe auch
+    Lagerbezeichnungen wie „6800" durch, ohne dass jemand das entschieden hat,
+    und eine neue Profilgröße ist hier von selbst dabei.
+    """
+    from app.core.knowledge import standards
+
+    return frozenset(standards.profile_sizes())
+
+
 def test_every_choice_has_a_name_someone_can_read() -> None:
     """Regel 20 gilt auch für Auswahlwerte.
 
@@ -288,12 +302,13 @@ def test_every_choice_has_a_name_someone_can_read() -> None:
     from app.ui.labels import choice_label
 
     load_operations()
+    sizes = self_naming_sizes()
     offenders = []
     for spec in REGISTRY.all():
         for entry in spec.params.spec():
             for choice in entry.choices or ():
                 value = str(choice)
-                if SELF_NAMING.match(value) or choice_label(value) != value:
+                if SELF_NAMING.match(value) or value in sizes or choice_label(value) != value:
                     continue
                 offenders.append(f"{spec.name}.{entry.name}: {value!r}")
 

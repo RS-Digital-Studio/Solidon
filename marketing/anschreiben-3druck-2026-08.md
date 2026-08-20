@@ -141,7 +141,7 @@ Modell, das auf dem eigenen Rechner läuft, wurden zuletzt 28 der 39
 Aufgaben gut gelöst; 98 Prozent der Befehle, die das Modell an die
 Anwendung schickte, waren auf Anhieb gültig. Wer keinen Schlüssel
 hinterlegt und kein lokales Modell betreibt, verliert nur den Chat — die
-85 Arbeitsschritte bleiben über Menüs und Kommandozeile erreichbar.
+86 Arbeitsschritte bleiben über Menüs und Kommandozeile erreichbar.
 
 ### Was es nicht ist
 
@@ -193,7 +193,7 @@ https://solidon3d.de
 | Demo | 20.08.–30.10.2026, kostenlos, vollständig, ohne Konto |
 | Plattformen | Windows 10/11, macOS, Linux |
 | Sprachen | Deutsch, Englisch, Spanisch, Französisch, Italienisch, Portugiesisch |
-| Umfang | 85 Arbeitsschritte, 17 geprüfte Bausteine, 40 Normteilmaße, 16 Druckerprofile, 9 Beispielprojekte |
+| Umfang | 86 Arbeitsschritte, 18 geprüfte Bausteine, 40 Normteilmaße, 16 Druckerprofile, 9 Beispielprojekte |
 | Formate | liest STL, 3MF, OBJ, GLB/GLTF, PLY, OFF, STEP, SVG, DXF — schreibt STL, 3MF, OBJ, PLY, GLB, STEP |
 | Slicer-Übergabe | PrusaSlicer, OrcaSlicer, Cura — mit fertigem Profil, Druckdatei wird zur Gegenprobe zurückgelesen |
 | KI | auf dem eigenen Rechner oder über einen selbst hinterlegten Zugang; von außen ansteuerbar, standardmäßig abgeschaltet |
