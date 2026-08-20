@@ -146,6 +146,14 @@ def boolean(
         # und die Handlung dazu ist eine andere als beim Kernversagen: nicht
         # reparieren, sondern nachrechnen.
         raise BooleanFailedError(
+            # **Eigener Titel, denn hier ist nichts gescheitert.** Der Vorgabetitel
+            # der Klasse heißt „Die boolesche Operation ist auf allen Stufen
+            # gescheitert." — und stand damit über einem Detailsatz, der das
+            # Gegenteil sagt: Die Rechnung ist sauber durchgelaufen, das Ergebnis
+            # ist leer, weil das Werkzeug den Körper deckt. Wer nur den Titel
+            # liest, sucht einen Netzfehler; die Antwort liegt bei den Maßen, und
+            # genau dorthin schicken die Vorschläge.
+            title=_("Es bleibt kein Körper übrig."),
             detail=_(
                 "Von dem Körper bleibt nichts übrig — das Werkzeug deckt ihn "
                 "vollständig ab. Prüfen Sie Maß und Lage."

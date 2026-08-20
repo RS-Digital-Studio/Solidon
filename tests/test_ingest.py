@@ -302,3 +302,38 @@ def test_a_mesh_survives_the_disk_cache_losslessly(tmp_path: Path) -> None:
 def test_the_hull_exports_binary_stl() -> None:
     payload = mesh_of("cube_clean.stl").to_stl()
     assert read_mesh(payload, ".stl").triangle_count == 12
+
+
+def test_the_most_common_finding_says_what_helps() -> None:
+    """„Das Modell ist nicht geschlossen." — und dann?
+
+    Es ist der häufigste Befund beim Einlesen eines heruntergeladenen Modells,
+    und er sagte nur, was nicht stimmt. Regel 17 verlangt die Handlung dazu, und
+    der Nachbar eine Zeile darüber im Quelltext nennt sie seit je („… hilft").
+
+    Genannt wird die **Operation**, nicht der Menüweg: Dort stand „Netz →
+    Dezimieren", und beides war falsch — das Menü heißt *Ändern*, die Operation
+    *Dreiecke verringern*. Ein Weg im Text driftet, sobald jemand eine Kategorie
+    verschiebt; ein Operationstitel ist derselbe String, den Menü, Palette und
+    Kontextmenü zeigen. Deshalb prüft dieser Test gegen das Register: Wer eine
+    Operation umbenennt, sieht hier, welcher Satz mitgeht.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.ingest import loader
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    source = Path(loader.__file__).read_text(encoding="utf-8")
+
+    for name in ("repair", "decimate_mesh"):
+        title = str(REGISTRY.get(name).title)
+        assert title in source, (
+            f"kein Befund nennt {title!r} — heisst die Operation noch so, "
+            "und steht der Satz noch dort?"
+        )
+    # Nur die Zeilen, die der Nutzer liest: Der Kommentar über dem Befund zitiert
+    # den alten, falschen Weg absichtlich — er ist die Begründung.
+    spoken = [line for line in source.splitlines() if not line.lstrip().startswith("#")]
+    assert not any("Netz → Dezimieren" in line for line in spoken), (
+        "der Menüweg im Text war falsch und driftet"
+    )

@@ -253,9 +253,15 @@ def normalise(
             Finding(
                 code="ingest.very_large",
                 severity="warning",
+                # Genannt wird die **Operation**, nicht der Menüweg: Hier stand
+                # „Netz → Dezimieren", und beides war falsch — das Menü heißt
+                # *Ändern*, die Operation *Dreiecke verringern*. Ein Weg im Text
+                # driftet, sobald jemand eine Kategorie verschiebt; ein
+                # Operationstitel ist derselbe String, den Menü, Palette und
+                # Kontextmenü zeigen, und die Palette findet ihn.
                 message=_(
                     "Dieses Modell ist sehr fein vernetzt. Analysekarten und "
-                    "Merkmalserkennung lehnen ab; „Netz → Dezimieren“ hilft."
+                    "Merkmalserkennung lehnen ab; „Dreiecke verringern“ hilft."
                 ),
                 values={"triangles": len(body.faces), "comfortable": HEAVY_TRIANGLES},
             )
@@ -266,7 +272,13 @@ def normalise(
             Finding(
                 code="ingest.not_watertight",
                 severity="warning",
-                message=_("Das Modell ist nicht geschlossen."),
+                # **Und was jetzt hilft** (§2.7, Regel 17). Das war der
+                # häufigste Befund beim Einlesen eines heruntergeladenen
+                # Modells, und er sagte nur, was nicht stimmt — der Nachbar
+                # eine Zeile darüber nennt seine Handlung seit je.
+                message=_(
+                    "Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen."
+                ),
                 values={"open_edges": _open_edge_count(body)},
             )
         )

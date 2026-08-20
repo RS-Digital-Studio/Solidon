@@ -308,6 +308,14 @@ def test_an_emptied_body_says_so_instead_of_blaming_the_solver() -> None:
     assert any(action.id == "correct_input" for action in caught.value.suggestions), (
         "die Handlung ist nachrechnen, nicht reparieren"
     )
+    # **Und der Titel dazu.** Er blieb der Vorgabetitel der Klasse — „Die
+    # boolesche Operation ist auf allen Stufen gescheitert." — und stand damit
+    # über einem Detailsatz, der das Gegenteil sagt. Der Dialog zeichnet den
+    # Titel groß und das Detail klein: Wer hinsieht, liest zuerst, der Kern sei
+    # gescheitert, und sucht einen Netzfehler statt einer falschen Zahl.
+    title = str(caught.value.title)
+    assert "gescheitert" not in title, f"der Titel widerspricht seinem eigenen Detail: {title!r}"
+    assert "kein Körper" in title, title
 
 
 def test_a_cancelled_chain_stops_before_the_first_stage() -> None:
