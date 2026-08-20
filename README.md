@@ -127,6 +127,24 @@ auf allen drei Plattformen grün ist. Die Windows-Signierung braucht ein
 Zertifikat als Repository-Secret — ohne das entsteht ein unsigniertes Paket
 statt eines Fehlers.
 
+Aus demselben Ordner entstehen unter Linux drei Formate. Das **tar.gz** ist der
+Bau selbst; das **AppImage** ist eine Datei, die ohne Installation läuft, und
+das **Flatpak** der Weg in die Software-Verwaltung mit Aktualisierung und
+Sandbox. Gebaut werden sie von `tools/make_linux_packages.py`, das die Werte aus
+`app/branding.py` liest und daraus Menüeintrag, Flatpak-Manifest und
+AppStream-Beschreibung schreibt:
+
+```
+python tools/make_linux_packages.py --files    # nur die Beschreibungen
+python tools/make_linux_packages.py            # beide Pakete, braucht Linux
+```
+
+`appimagetool` und `flatpak-builder` sind externe Programme und werden nicht
+mitgeliefert (§36). Das Flatpak läuft **ohne Netzberechtigung**: Ohne Netz gibt
+es kein Konto, keine Telemetrie und keine Frage danach — wer den Chat gegen
+einen Dienst fahren will, gibt die Berechtigung in der Software-Verwaltung
+dazu.
+
 OpenSCAD, Slicer, Ollama und ComfyUI werden **nicht** mitgeliefert, sondern
 konfiguriert (§36, §38). Beim ersten Start zeigt die Anwendung, welche davon
 gefunden wurden; Pflicht ist keines.

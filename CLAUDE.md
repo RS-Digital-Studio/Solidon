@@ -65,6 +65,7 @@ zusammen. Weiteres:
 .venv\Scripts\python.exe tools/make_manual.py                   # Handbuch als Website und PDF
 .venv\Scripts\python.exe tools/make_icon.py                     # Anwendungssymbol rastern: ICO und Website-Favicon
 .venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Solidon, braucht Inno Setup 6
+.venv\Scripts\python.exe tools/make_linux_packages.py --files   # Menüeintrag, Flatpak-Manifest, AppStream — läuft überall
 .venv\Scripts\python.exe tools/build_slice_core.py              # Konturverkettung übersetzen (optional, 1,34× auf die Schichtanalyse)
 python tools/check_env.py                                       # stimmen die Fassungen? läuft auch ohne .venv
 python tools/check_env.py --install                             # sie stimmen machen (braucht Netz)

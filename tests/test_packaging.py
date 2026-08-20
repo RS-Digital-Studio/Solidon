@@ -286,3 +286,126 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
         f"Diese Dateien bauen ein Fenster und laufen trotzdem im großen Stapel: {missed}. "
         "Das Suchmuster in .github/workflows/build.yml findet sie nicht."
     )
+
+
+# --- Die beiden Linux-Formate (§37.2) -------------------------------------------
+
+
+def test_the_linux_descriptions_are_the_ones_the_tool_writes() -> None:
+    """Die eingecheckten Beschreibungen sind die, die das Werkzeug heute schreibt.
+
+    Dieselbe Prüfung wie bei den Handbuchabbildungen, und aus demselben Grund:
+    Eine erzeugte Datei, die eingecheckt ist, veraltet still. Hier wäre der
+    Schaden größer als ein falsches Bild — eine Versionsnummer im Manifest, die
+    nicht zu `app/branding.py` passt, ergibt ein Paket, das außen neu aussieht
+    und innen alt ist. Genau das steht als Begründung schon in
+    ``tools/make_installer.py``.
+    """
+    from tools import make_linux_packages as tool
+
+    stale = []
+    for path, drawn in (
+        (tool.DESKTOP_FILE, tool.desktop_entry()),
+        (tool.FLATPAK_MANIFEST, tool.flatpak_manifest()),
+        (tool.METAINFO_FILE, tool.metainfo()),
+    ):
+        assert path.is_file(), f"{path.name} fehlt — tools/make_linux_packages.py --files"
+        if path.read_text(encoding="utf-8").replace("\r\n", "\n") != drawn:
+            stale.append(path.name)
+
+    assert not stale, (
+        "älter als app/branding.py: "
+        + ", ".join(stale)
+        + "\n\nNeu erzeugen: .venv\\Scripts\\python.exe tools/make_linux_packages.py --files"
+    )
+
+
+def test_the_desktop_entry_carries_what_a_launcher_needs() -> None:
+    """Ohne diese vier Zeilen ist der Menüeintrag kaputt, und zwar leise.
+
+    Ein fehlendes ``Exec`` startet nichts, ein fehlendes ``Icon`` zeigt ein
+    graues Feld, und ohne ``StartupWMClass`` steht in der Leiste neben dem
+    Starter ein zweites, namenloses Fenster.
+    """
+    from app.branding import APP_ID, APP_NAME
+    from tools import make_linux_packages as tool
+
+    entry = dict(
+        line.split("=", 1)
+        for line in tool.desktop_entry().splitlines()
+        if "=" in line and not line.startswith("[")
+    )
+
+    assert entry["Type"] == "Application"
+    assert entry["Name"] == APP_NAME
+    assert entry["Exec"].startswith(APP_NAME)
+    assert entry["Icon"] == APP_ID, "das Symbol heißt wie die Anwendungskennung"
+    assert entry["StartupWMClass"] == APP_NAME
+    assert entry["Terminal"] == "false", "eine Oberfläche öffnet kein Terminal"
+    # Die Kategorienliste endet auf ein Semikolon — die Freedesktop-Spezifikation
+    # verlangt es, und ohne es verschluckt mancher Starter den letzten Eintrag.
+    assert entry["Categories"].endswith(";")
+
+
+def test_the_flatpak_manifest_stays_inside_its_sandbox() -> None:
+    """Jede Berechtigung hat einen Grund, und Netz gehört nicht dazu.
+
+    ``--share=network`` wäre die bequemste Zeile und die falsche: Ohne Netz gibt
+    es kein Konto, keine Telemetrie und keine Frage danach — das ist die Zusage,
+    mit der die Anwendung antritt (§2.1). Wer den Chat gegen einen Dienst fahren
+    will, bekommt die Berechtigung über die Software-Verwaltung dazu.
+    """
+    from app.branding import APP_ID
+    from tools import make_linux_packages as tool
+
+    manifest = tool.flatpak_manifest()
+
+    assert f"id: {APP_ID}" in manifest
+    assert "--share=network" not in manifest, "das Paket verspricht, ohne Netz zu laufen"
+    # Der Viewport rechnet mit OpenGL, und der Schlüssel des Agenten liegt im
+    # Schlüsselbund — beides braucht seine Zeile.
+    assert "--device=dri" in manifest
+    assert "--talk-name=org.freedesktop.secrets" in manifest
+    # Und die Anwendung startet über ihren eigenen Namen, nicht über ein Skript.
+    assert "command: " in manifest
+
+
+def test_the_metainfo_is_well_formed_and_names_both_licences() -> None:
+    """AppStream ohne Metainfo heißt: ein Eintrag ohne Text.
+
+    Die zwei Lizenzfelder zu verwechseln ist der häufigste Fehler in diesen
+    Dateien — ``metadata_license`` gilt für die Beschreibung, ``project_license``
+    für das Programm. Ein Programm, das seine eigene Lizenz als CC0 ausweist,
+    verschenkt sich versehentlich.
+    """
+    import xml.etree.ElementTree as ET
+
+    from app.branding import APP_ID, APP_VERSION
+    from tools import make_linux_packages as tool
+
+    root = ET.fromstring(tool.metainfo())
+
+    assert root.tag == "component"
+    assert root.findtext("id") == APP_ID
+    assert root.findtext("metadata_license") == "CC0-1.0"
+    project = root.findtext("project_license") or ""
+    assert project and project != "CC0-1.0", "die Anwendung ist nicht gemeinfrei"
+    assert root.findtext("summary")
+    assert root.find("description") is not None
+    versions = [entry.get("version") for entry in root.iter("release")]
+    assert versions == [APP_VERSION], f"Version im Manifest: {versions}"
+
+
+def test_the_workflow_builds_both_linux_formats() -> None:
+    """Was das Werkzeug kann, muss die CI auch aufrufen.
+
+    Ein Paketierweg, den nur ein Mensch von Hand gehen kann, ist bei der
+    nächsten Veröffentlichung der Weg, den niemand geht.
+    """
+    workflow = (Path(__file__).parent.parent / ".github" / "workflows" / "build.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "make_linux_packages.py" in workflow, "die CI ruft das Werkzeug nicht"
+    assert ".AppImage" in workflow, "das AppImage wird nicht mitgenommen"
+    assert ".flatpak" in workflow, "das Flatpak wird nicht mitgenommen"

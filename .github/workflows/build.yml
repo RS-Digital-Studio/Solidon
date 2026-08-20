@@ -281,6 +281,38 @@ jobs:
           version=$(python -c "from app.branding import APP_VERSION; print(APP_VERSION)")
           tar -czf "dist/${name}-${version}-linux-x86_64.tar.gz" -C dist "${name}"
 
+      - name: Paketierwerkzeuge holen (Linux)
+        # appimagetool kommt als AppImage und wird selbst nicht installiert;
+        # flatpak-builder liegt in jeder Distribution. Beide sind externe
+        # Programme — Solidon liefert keines mit (§36).
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          sudo curl -fsSL -o /usr/local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/appimagetool
+          flatpak remote-add --if-not-exists --user flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub \
+            org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
+
+      - name: AppImage und Flatpak bauen (Linux)
+        # Ein Fehlschlag hält den Lauf nicht auf: Das tar.gz ist da, und ein
+        # fehlendes Linux-Paket ist kein Grund, die Setup-Datei für Windows
+        # wegzuwerfen. Was fehlt, sagt der Schritt — die Download-Seite nimmt
+        # nur, was hochgeladen wurde.
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        env:
+          # appimagetool ist selbst ein AppImage und braucht sonst FUSE 2, das
+          # Ubuntu seit 24.04 nicht mehr mitbringt. Mit dieser Variable packt
+          # es sich vorher aus, statt sich einzuhängen — der Fehler wäre sonst
+          # „dlopen(): error loading libfuse.so.2", und der sagt niemandem,
+          # dass eine Variable fehlt.
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: python tools/make_linux_packages.py
+
       - name: Bundle prüfen (macOS)
         # Der Bau bricht nicht ab, wenn BUNDLE ausbleibt — er liefert dann
         # stillschweigend einen Ordner. Auf einem Mac ist das kein Programm,
@@ -350,8 +382,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cd dist
-          for archive in *-linux-x86_64.tar.gz; do
-            sha256sum "$archive" | tee "$archive.sha256"
+          # Auch für die beiden Pakete, und mit ``|| true`` je Muster: Wer nur
+          # das tar.gz hat, weil ein Paketierschritt scheiterte, soll dessen
+          # Prüfsumme trotzdem bekommen.
+          for pattern in "*-linux-x86_64.tar.gz" "*.AppImage" "*.flatpak"; do
+            for archive in $pattern; do
+              test -f "$archive" || continue
+              sha256sum "$archive" | tee "$archive.sha256"
+            done
           done
 
       - name: Prüfsummen (macOS)
@@ -383,6 +421,14 @@ jobs:
           path: |
             dist/*-linux-x86_64.tar.gz
             dist/*-linux-x86_64.tar.gz.sha256
+            dist/*.AppImage
+            dist/*.AppImage.sha256
+            dist/*.flatpak
+            dist/*.flatpak.sha256
+          # Fehlt eines der Muster, warnt der Upload und lädt den Rest — ohne
+          # das bricht er ab, und dann wäre ein gescheiterter Paketierschritt
+          # der Grund, warum auch das tar.gz nicht ankommt.
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Archiv hochladen (macOS)

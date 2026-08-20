@@ -26,7 +26,7 @@ bekommt einen roten Lauf.
 | Punkt | steht unter | wartet auf |
 |---|---|---|
 | Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | die Entscheidung, ob `_chain` mit ausgeliefert wird; der kompilierte Kern steht und bringt 1,34× — oben liegt der Polygonaufbau in GEOS (446 von 1256 ms, profiliert am 20.08.), und der ist von Python aus nicht zu beschleunigen |
-| CI-Bauläufe, Signierung, AppImage/Flatpak | P8 — Erste Veröffentlichung | die beiden Linux-Formate; die Signierung braucht ein Zertifikat |
+| CI-Bauläufe und Signierung | P8 — Erste Veröffentlichung | einen CI-Dienst, der die Läufe fährt; die Signierung ein Zertifikat. AppImage und Flatpak stehen seit dem 20.08. |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
@@ -517,11 +517,53 @@ bekommt einen roten Lauf.
       Artefakt-Upload sonst die Ausführungsrechte verliert; Anwendung und
       Installer werden signiert, der Schritt überspringt sich ohne Zertifikat.
       **Ungeprüft**, weil dieses Repository noch nicht auf einem CI-Dienst
-      liegt; AppImage und Flatpak fehlen. Der Grund, der hier stand — es gebe
-      kein Anwendungssymbol —, gilt nicht mehr: `app/images/icon/solidon3d.svg`
-      ist die Quelle, `tools/make_icon.py` rastert daraus `packaging/solidon3d.ico`
-      und `website/icon.svg`, und Installer wie exe tragen es. Offen sind allein
-      die beiden Linux-Formate
+      liegt. Der Grund, der hier stand — es gebe kein Anwendungssymbol —, gilt
+      nicht mehr: `app/images/icon/solidon3d.svg` ist die Quelle,
+      `tools/make_icon.py` rastert daraus `packaging/solidon3d.ico` und
+      `website/icon.svg`, und Installer wie exe tragen es.
+
+      **Die beiden Linux-Formate stehen seit dem 20.08.2026.**
+      `tools/make_linux_packages.py` schreibt drei Beschreibungen und baut zwei
+      Pakete — und trägt, wie der Windows-Installer, keine eigenen Werte: Name,
+      Version, Hersteller und Kennung kommen aus `app/branding.py`. Eine zweite
+      Stelle mit einer Versionsnummer ist eine, die veraltet, und hier wollen
+      sie drei Dateien gleichzeitig.
+
+      * **AppImage** — eine Datei, die ohne Installation läuft, der kürzeste Weg
+        zu „ausprobieren". `AppRun` ist ein Skript und kein Symlink: PyInstaller
+        sucht relativ zum eigenen Ort, und ein Link von der Wurzel fände seine
+        Bibliotheken nicht.
+      * **Flatpak** — der Weg in die Software-Verwaltung, mit Aktualisierung und
+        Sandbox. Gebaut wird **um den fertigen PyInstaller-Ordner herum** und
+        nicht aus den Quellen: Die Anwendung bringt ihr Python schon mit, und
+        ein zweiter Bauweg wäre eine zweite Fassung, die auseinanderläuft.
+      * **AppStream-Metainfo** — ohne sie ist das Flatpak in GNOME Software ein
+        Eintrag ohne Text, und ein namenloses Programm installiert niemand. Die
+        beiden Lizenzfelder sind auseinandergehalten: `metadata_license` gilt für
+        die Beschreibung, `project_license` für das Programm. Sie zu verwechseln
+        heißt, sich versehentlich zu verschenken — der Test prüft es.
+
+      **Kein Netzzugang im Flatpak.** `--share=network` wäre die bequemste Zeile
+      und die falsche: Ohne Netz gibt es kein Konto, keine Telemetrie und keine
+      Frage danach, und genau das ist die Zusage aus §2.1. Was drin ist, hat je
+      einen Grund — Wayland und X11 für die Oberfläche, `dri` für den Viewport
+      (§18), `home` für die Modelle, `org.freedesktop.secrets` für den Schlüssel
+      des Agenten (§26).
+
+      Zwei Stolpersteine sind vorweggenommen, weil sie sonst als Fehlermeldung
+      ohne Absender erschienen wären: `appimagetool` ist selbst ein AppImage und
+      braucht FUSE 2, das Ubuntu seit 24.04 nicht mehr mitbringt —
+      `APPIMAGE_EXTRACT_AND_RUN=1` packt es vorher aus. Und der Upload steht auf
+      `if-no-files-found: warn`, sonst hielte ein gescheiterter Paketierschritt
+      das tar.gz zurück, das längst fertig ist.
+
+      **Geprüft ist, was von Windows aus prüfbar ist**, und das ist mehr als
+      nichts: `tests/test_packaging.py` hält die drei Beschreibungen an
+      `app/branding.py` (dieselbe Drift-Prüfung wie bei den Handbuchabbildungen),
+      liest die `.desktop`-Schlüssel, prüft die Metainfo als XML, verbietet die
+      Netzberechtigung und verlangt, dass die CI das Werkzeug auch aufruft. Der
+      **Bau** selbst braucht Linux und die beiden externen Programme — er bleibt
+      ungeprüft wie der übrige Workflow, und aus demselben Grund
 - [x] Erstinbetriebnahme (§38) — Sprache, Drucker, Material, externe Programme;
       überspringbar, nachholbar, endet beim ersten Import
 - [x] Fehlerberichtsdialog mit Container-Anhang — legt einen Ordner an,
