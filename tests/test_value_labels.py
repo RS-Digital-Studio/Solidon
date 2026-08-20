@@ -47,9 +47,16 @@ def keys_in_source() -> dict[str, str]:
     kein Wörterbuch. Genau so standen ``tool`` und ``exit_code`` als rohes
     Englisch im Tooltip jedes Fehlers eines externen Programms.
 
-    Was weiter nicht gesehen wird, ist ein ``values=dict(...)`` oder ein
-    Wörterbuch, das schrittweise gefüllt wird — dort greift die Sicherung in
-    ``value_label``, die Unbekanntes durchlässt, statt den Tooltip zu leeren.
+    **Und die Zuweisung an einen einzelnen Schlüssel.** ``values["shared"] =
+    format_volume(shared)`` steht in keinem Wörterbuch-Literal, also fiel sie
+    durch dasselbe Loch: ``shared`` und ``detail`` standen als rohes Englisch im
+    Tooltip, obwohl der Docstring darüber genau diese Sorte Fund als behoben
+    beschreibt. Die Lücke war im Satz danach sogar benannt — „ein Wörterbuch,
+    das schrittweise gefüllt wird" —, und benannt ist nicht geschlossen.
+
+    Was weiter nicht gesehen wird, ist ein ``values=dict(...)`` mit Namen als
+    Argumenten. Dort greift die Sicherung in ``value_label``, die Unbekanntes
+    durchlässt, statt den Tooltip zu leeren.
     """
     found: dict[str, str] = {}
 
@@ -88,6 +95,17 @@ def keys_in_source() -> dict[str, str]:
                 names = [entry.id for entry in node.targets if isinstance(entry, ast.Name)]
                 if "values" in names and isinstance(node.value, ast.Dict):
                     collect(node.value, path.name)
+                # ``values["shared"] = …`` — ein Schlüssel, den niemand als
+                # Literal schreibt und der genauso beim Nutzer landet.
+                for target in node.targets:
+                    if (
+                        isinstance(target, ast.Subscript)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "values"
+                        and isinstance(target.slice, ast.Constant)
+                        and isinstance(target.slice.value, str)
+                    ):
+                        found.setdefault(target.slice.value, path.name)
     return found
 
 
