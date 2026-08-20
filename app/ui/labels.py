@@ -8,6 +8,7 @@ Leitprinzip 5).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -186,6 +187,11 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "origin": _("Ursprung"),
     "bed": _("Druckbett"),
     "corner": _("Ecke"),
+    # Wie eine Kollision geprüft wurde: genau am Netz oder nur über die
+    # Hüllquader. Der Befund trug „exact" und „box" als rohes Englisch in
+    # den Tooltip — dieselbe Sorte Fund wie bei den Texturmustern.
+    "exact": _("Genau"),
+    "box": _("Über den Hüllquader"),
     "pin": _("Stift"),
     "bore": _("Bohrung"),
     "rectangle": _("Rechteck"),
@@ -244,6 +250,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "character": _("Zeichen"),
     "choice": _("Wahl"),
     "choices": _("Auswahl"),
+    "checked": _("Geprüft"),
     "clearance": _("Spiel"),
     "comfortable": _("Bequem"),
     "components": _("Komponenten"),
@@ -270,6 +277,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "file_version": _("Dateifassung"),
     "first_kind": _("Erste Art"),
     "fit": _("Passung"),
+    "excess": _("Überstand"),
     "footprint": _("Standfläche"),
     "formats": _("Formate"),
     "from": _("Von"),
@@ -287,6 +295,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "layer_height": _("Schichthöhe"),
     "layers": _("Schichten"),
     "limit": _("Grenze"),
+    "materials": _("Materialien"),
     "lost": _("Verloren"),
     "major": _("Hauptfassung"),
     "material": _("Material"),
@@ -408,14 +417,41 @@ def value_label(key: str) -> str:
     return str(name) if name is not None else key
 
 
+#: Was als Zahl durchgeht: Vorzeichen, Ziffern, höchstens ein Punkt, dahinter
+#: höchstens eine Einheit ohne Ziffern und ohne Punkt.
+#:
+#: Die Einheit darf nicht selbst Ziffern oder Punkte enthalten, sonst passte
+#: „1.2.3" als Zahl mit der Einheit „.3" — und eine Fassungsnummer wäre in der
+#: Anzeige zerschnitten.
+_NUMBER = re.compile(r"^[+-]?\d+(\.\d+)?(\s*[^\d.\s]+)?$")
+
+
+def localised_value(value: object) -> str:
+    """Ein Wert, wie er beim Nutzer steht: Zahlen mit Komma, alles andere heil.
+
+    **Hier stand :func:`localised` auf jedem Wert**, und das war eine
+    Textverfälschung: Die Funktion tauscht jeden Punkt gegen das
+    Dezimaltrennzeichen der Sprache, und Befunde tragen Pfade, Adressen und
+    Dateiendungen. In der deutschen Oberfläche stand damit
+    ``Pfad: sources/1_cube_clean,stl``, ``Adresse: https://example,com/x,stl``
+    und ``Endung: ,step`` — ein Pfad, den niemand benutzen kann, und eine
+    Adresse, die falsch ist.
+
+    Was keine Zahl ist, geht durch :func:`choice_label`: Ein Auswahlwert wie
+    ``exact`` bekommt dort seinen Namen, und alles Unbekannte kommt unverändert
+    durch. Zwei Wege, eine Zeile — und keiner davon fasst einen Pfad an.
+    """
+    text = str(value)
+    return localised(text) if _NUMBER.match(text) else choice_label(text)
+
+
 def value_line(key: str, value: object) -> str:
     """Eine Zeile „Beschriftung: Wert" für Tooltip und Einzelheiten.
 
-    Die Zahl geht durch :func:`localised`: Ein Komma steht in der Anzeige, wo
-    die Sprache eines will — die Einzelheiten eines Fehlers sind kein
-    Sonderfall (§13).
+    Die Zahl bekommt ihr Komma (§13), der Rest bleibt, wie er ist — siehe
+    :func:`localised_value`.
     """
-    return f"{value_label(key)}: {localised(str(value))}"
+    return f"{value_label(key)}: {localised_value(value)}"
 
 
 def kind_requirement(spec: Any, kinds: Sequence[str]) -> str | None:

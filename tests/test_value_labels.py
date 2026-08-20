@@ -29,23 +29,55 @@ def keys_in_source() -> dict[str, str]:
     """Jeden ``values={...}``-Schlüssel aus ``app/core``, mit seiner Datei.
 
     Per AST und nicht per Suchmuster: ``values={"a": 1}`` steht über mehrere
-    Zeilen, in Bedingungen, in Aufrufen von Aufrufen. Was **nicht** gesehen
-    wird, ist ein zusammengebautes ``values=dict(...)`` oder eine Variable —
-    dort greift die Sicherung in ``value_label``, die Unbekanntes durchlässt,
-    statt den Tooltip zu leeren.
+    Zeilen, in Bedingungen, in Aufrufen von Aufrufen.
+
+    **Gesehen wird auch die Variable.** Sie zu übergehen war eine Lücke mit
+    Folgen: Wer den Satz erst zusammenbaut —
+
+        values: dict[str, Any] = {"object": index, "excess": ...}
+        findings.append(Finding(..., values=values))
+
+    — kam hier nie vor, und genau so entstehen die längeren Befunde. Drei
+    Schlüssel standen dadurch als rohes Englisch beim Nutzer: ``excess``,
+    ``checked``, ``materials``. Gesucht wird deshalb jede Zuweisung an einen
+    Namen ``values`` mit einem Wörterbuch als Wert, mit und ohne Annotation.
+
+    Was weiter nicht gesehen wird, ist ein ``values=dict(...)`` oder ein
+    Wörterbuch, das schrittweise gefüllt wird — dort greift die Sicherung in
+    ``value_label``, die Unbekanntes durchlässt, statt den Tooltip zu leeren.
     """
     found: dict[str, str] = {}
+
+    def collect(node: ast.Dict, name: str) -> None:
+        # Auch die Wörterbücher **im** Wörterbuch: ``**({"materials": …} if …
+        # else {})`` trägt seinen Schlüssel in einem eigenen ``ast.Dict``, und
+        # in ``keys`` steht für einen ``**``-Verbund nur ``None``. Genau so
+        # blieb ``materials`` unbenannt.
+        for inner in ast.walk(node):
+            if not isinstance(inner, ast.Dict):
+                continue
+            for key in inner.keys:
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    found.setdefault(key.value, name)
+
     for path in sorted(CORE.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            for keyword in node.keywords:
-                if keyword.arg != "values" or not isinstance(keyword.value, ast.Dict):
-                    continue
-                for key in keyword.value.keys:
-                    if isinstance(key, ast.Constant) and isinstance(key.value, str):
-                        found.setdefault(key.value, path.name)
+            if isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if keyword.arg == "values" and isinstance(keyword.value, ast.Dict):
+                        collect(keyword.value, path.name)
+            elif isinstance(node, ast.AnnAssign):
+                if (
+                    isinstance(node.target, ast.Name)
+                    and node.target.id == "values"
+                    and isinstance(node.value, ast.Dict)
+                ):
+                    collect(node.value, path.name)
+            elif isinstance(node, ast.Assign):
+                names = [entry.id for entry in node.targets if isinstance(entry, ast.Name)]
+                if "values" in names and isinstance(node.value, ast.Dict):
+                    collect(node.value, path.name)
     return found
 
 
@@ -184,3 +216,40 @@ def test_the_estimate_reaches_the_status_bar_too() -> None:
     # Und vorher steht nichts da — geraten ist schlechter als geschwiegen.
     assert remaining_time(clock.monotonic() - 1.0, 0.25) == ""
     assert remaining_time(None, 0.25) == ""
+
+
+def test_a_path_keeps_its_dots_and_a_number_gets_its_comma(qt_app: object) -> None:
+    """Das Dezimaltrennzeichen gehört an Zahlen, nicht an Pfade.
+
+    ``localised`` tauscht **jeden** Punkt gegen das Trennzeichen der Sprache,
+    und es lag auf jedem Wert eines Befunds. Befunde tragen aber Pfade,
+    Adressen und Dateiendungen: In der deutschen Oberfläche stand
+    ``Pfad: sources/1_cube_clean,stl``, ``Adresse: https://example,com/x,stl``
+    und ``Endung: ,step`` — ein Pfad, den niemand benutzen kann, und eine
+    Adresse, die falsch ist.
+
+    Eine Fassungsnummer prüft die Grenze mit: „1.2.3" ist keine Zahl mit der
+    Einheit „.3", und genau daran scheitert die naive Prüfung „enthält Ziffern
+    und einen Punkt".
+    """
+    from PySide6.QtCore import QLocale
+
+    from app.ui.labels import localised_value
+
+    before = QLocale()
+    QLocale.setDefault(QLocale("de"))
+    try:
+        for text in (
+            "sources/1_cube_clean.stl",
+            "https://example.com/model.stl",
+            ".step",
+            "1.2.3",
+            "obj_1",
+        ):
+            assert localised_value(text) == text, f"{text!r} wurde angefasst"
+
+        assert localised_value("12.30") == "12,30"
+        assert localised_value("0.5 mm") == "0,5 mm"
+        assert localised_value(12.5) == "12,5"
+    finally:
+        QLocale.setDefault(before)

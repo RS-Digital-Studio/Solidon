@@ -59,7 +59,7 @@ from app.ui.labels import (
     group_title,
     kind_requirement,
     length,
-    localised,
+    localised_value,
     value_line,
     volume,
 )
@@ -229,7 +229,10 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
     Kennung stehen: „obj_2" ist weniger als „Klotz B", aber mehr als nichts.
     """
     extra = [
-        f"{localised(str(finding.values[key]))} {unit}".strip()
+        # Über ``localised_value``: Ein Befund trägt neben Zahlen auch Pfade,
+        # Adressen und Endungen, und ``localised`` tauschte dort jeden Punkt
+        # gegen ein Komma — „sources/1_cube_clean,stl".
+        f"{localised_value(finding.values[key])} {unit}".strip()
         for key, unit in _LINE_VALUES.items()
         if key in finding.values
     ]
