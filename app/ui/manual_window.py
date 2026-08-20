@@ -158,10 +158,12 @@ class ManualWindow(QMainWindow):
     def _show_current(self, row: int) -> None:
         if 0 <= row < len(self._visible):
             page = self._visible[row]
-            body = self._with_figures(page)
-            if not page.generated:
-                body = f"## {page.title}\n\n{body}"
-            self.text.setMarkdown(body)
+            # ``manual.titled`` und nicht ``if not page.generated``: Die vier
+            # Wissensseiten sind erzeugt und bringen doch keine Überschrift mit
+            # — über ihnen stand hier keine, und der Text fing mitten im Satz
+            # an. Dieselbe Regel gilt für das erzeugte Handbuch; sie steht
+            # deshalb im Kern und nicht zweimal.
+            self.text.setMarkdown(manual.titled(page, self._with_figures(page)))
             self.text.moveCursor(self.text.textCursor().MoveOperation.Start)
 
     # --- Abbildungen ------------------------------------------------------------------

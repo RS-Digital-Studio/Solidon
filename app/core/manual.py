@@ -1417,6 +1417,24 @@ def find(key: str, registry: Registry | None = None) -> Page | None:
     return None
 
 
+def titled(page: Page, text: str) -> str:
+    """Der Text einer Seite mit ihrer Überschrift — genau einmal.
+
+    Jede Seite bekommt eine, auch die erzeugten. Die Referenzkapitel bringen
+    sie mit (``documentation`` schreibt ``## Kategorie``), die vier
+    Wissensseiten nicht: sie fingen mitten im Satz an. Auf der Website standen
+    sie damit als Kapitel 22 bis 25 im Verzeichnis, und wer eines anklickte,
+    landete nirgends — der Anker hängt an der Überschrift, und die gab es
+    nicht. Im Handbuchfenster stand über denselben vier Seiten kein Titel.
+
+    Entschieden wird am Text und nicht am Feld ``generated``, sonst stünde über
+    einem Referenzkapitel zweimal dasselbe. Und die Regel steht hier und nicht
+    zweimal: Fenster und erzeugtes Handbuch hatten je ihre eigene, und nur eine
+    davon war je nachgezogen worden.
+    """
+    return text if text.startswith(f"## {page.title}") else f"## {page.title}\n\n{text}"
+
+
 def as_markdown(registry: Registry | None = None, *, with_figures: bool = False) -> str:
     """Das ganze Handbuch am Stück, für die Kommandozeile und zum Nachlesen.
 
@@ -1430,16 +1448,7 @@ def as_markdown(registry: Registry | None = None, *, with_figures: bool = False)
         # Über ``Page.text`` und nicht über ``page.body``: Die Kurzfassung
         # gehört zur Seite, und das Handbuchfenster liest dieselbe Methode.
         text = page.text() if with_figures else without_figures(page.text())
-        # Jede Seite bekommt ihre Überschrift, auch die erzeugten. Die
-        # Referenzkapitel bringen sie mit — ``documentation`` schreibt
-        # ``## Kategorie`` —, die vier Wissensseiten nicht: sie fingen mitten
-        # im Satz an. Im Verzeichnis der Website standen sie als Kapitel 22
-        # bis 25, und wer eines anklickte, landete nirgends: Der Anker hängt
-        # an der Überschrift, und die gab es nicht. Entschieden wird am Text
-        # und nicht am Feld ``generated`` — sonst stünde über einem
-        # Referenzkapitel künftig zweimal dasselbe.
-        opens_with_title = text.startswith(f"## {page.title}")
-        parts.append(text if opens_with_title else f"## {page.title}\n\n{text}")
+        parts.append(titled(page, text))
     return "\n\n".join(parts).rstrip() + "\n"
 
 

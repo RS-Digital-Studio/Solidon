@@ -399,6 +399,30 @@ def test_a_page_can_be_opened_by_name(qt_app: QApplication) -> None:
     assert "Material" in window.contents.currentItem().text()
 
 
+def test_a_generated_chapter_shows_its_title_in_the_window_too(qt_app: QApplication) -> None:
+    """Auch im Fenster steht über jeder Seite, welche es ist.
+
+    Das Fenster entschied am Feld ``generated``, und die vier Wissensseiten
+    sind erzeugt, bringen aber keine Überschrift mit: Wer „Wonach Solidon
+    urteilt" anklickte, las als erste Zeile „Diese Regeln liegen dem Agenten
+    bei jeder Anfrage vor" — ohne Titel, mitten im Satz. Beide Ausgaben nehmen
+    die Regel jetzt aus ``manual.titled``.
+    """
+    window = ManualWindow()
+
+    window.show_page("rules")
+    shown = window.text.toPlainText()
+
+    page = manual.find("rules")
+    assert page is not None
+    assert shown.startswith(str(page.title)), shown[:80]
+
+    window.show_page("holes")
+    reference = window.text.toPlainText()
+    assert reference.startswith(str(CATEGORIES["holes"])), reference[:80]
+    assert reference.count(str(CATEGORIES["holes"])) == 1, "und nicht zweimal"
+
+
 # --- Der erzeugte Referenzteil (Konzept Teil 7) ---------------------------------
 
 
