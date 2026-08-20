@@ -14,6 +14,7 @@ um eine Größenordnung schlagen sie trotzdem an.
 
 from __future__ import annotations
 
+import gc
 import json
 import time
 from collections.abc import Callable
@@ -76,7 +77,29 @@ def measure(name: str, work: Callable[[], Any]) -> float:
     ersetzt, bekommt einen dauerhaft roten Test, bis er die Marke verwirft.
     Genau dann soll jemand hinsehen — und die Marke fällt mit einer Begründung
     im Commit, nicht stillschweigend beim nächsten Lauf.
+
+    **Vor der Uhr wird aufgeräumt**, und das ist der Grund, warum der Absatz
+    oben von achtunddreißig Prozent sprechen konnte. Nachgemessen am
+    20.08.2026, je drei frische Prozesse mit den fünf großen Messungen davor:
+    ohne `collect` braucht der Löser 142, 139 und 151 ms, mit `collect` 126,
+    122 und 121 — und ein Aufwärmlauf davor ändert *nichts* (146, 149, 144).
+    Es sind also keine trägen Importe und keine erste kalte Runde, sondern der
+    **Müll der vorigen Tests**, den der Sammler während der Messung einholt:
+    Der Haufen ist nach einer Million Dreiecken gewachsen, die nächste
+    Generation-2-Sammlung läuft über alles, und sie fällt dem zur Last, der
+    gerade gemessen wird.
+
+    Aufgeräumt wird **vor** und nicht während: Was die gemessene Arbeit selbst
+    erzeugt, sammelt der Sammler weiter mitten in ihr ein und kostet sie auch
+    weiter Zeit — eine Prozedur, die Müll in Massen produziert, soll das
+    bezahlen. Weg ist nur die Rechnung des Vorgängers. Damit misst dieselbe
+    Rechnung dasselbe, egal was vor ihr lief, und genau darauf ruht der
+    Vergleich mit der Marke.
     """
+    # Kein `gc.disable()`: Das würde die Kosten der gemessenen Arbeit selbst
+    # verstecken und wäre Schönrechnen. Hier fällt nur weg, was ihr nicht
+    # gehört.
+    gc.collect()
     started = time.perf_counter()
     work()
     taken = time.perf_counter() - started
