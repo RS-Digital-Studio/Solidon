@@ -232,7 +232,7 @@ dieses Dokuments.
 | Parametrische Historie | Op-Stack, non-destruktiv (Leitprinzip 2), Undo auf Transaktionsebene |
 | Benannte Parameter | Projektparameter §13 mit **eigener Grammatik ohne `eval`** (Regel 10) |
 | Zwangsbedingungen | 9 Bedingungen, eigener 2D-Solver auf scipy, Vollbestimmtheit wird erkannt und benannt |
-| Texturen: 4 Muster (19.08.: **6 plus Höhenkarte**) | **8 Muster** — `rib`, `wave`, `knurl_straight`, `knurl_diamond`, `hexagon`, `dimple`, `voronoi`, `noise` |
+| Texturen: 4 Muster (19.08.: **6 plus Höhenkarte**) | **8 Muster** — `rib`, `wave`, `knurl_straight`, `knurl_diamond`, `hexagon`, `dimple`, `voronoi`, `noise` — **plus Höhenkarte** über die Op `displace_image` |
 | Mehrfarbe über 3MF | `assign_slot`, `paint_slot`, `slots_from_texture`, 3MF mit Farbgruppen (§29) |
 | Messen, Schnitt | beides vorhanden, dazu Explosions- und Analyseleisten |
 | Import STEP/BREP/STL/3MF/OBJ/GLB | dieselben **bis auf BREP**, plus PLY, OFF, GLTF, SVG, DXF |
@@ -306,12 +306,21 @@ gleichwertiger Substanz das teurere.
 > **„Doppelt so viele" gilt nicht mehr** (nachrecherchiert am 19.08.2026).
 > SindriCADs README nennt heute sechs benannte Muster — Rändel, Sechseck,
 > Rippe, Welle, Voronoi, Rauschen — **und dazu beliebige Graustufenbilder als
-> Höhenkarte**. Acht gegen sechs ist kein Vorsprung, den man vorzeigt, und
-> die Höhenkarte ist eine Gattung, die Solidon nicht hat. Der Befund selbst
-> wird dadurch nur schärfer: Wenn der Abstand in der Sache schrumpft, zählt
-> die Darstellung mehr, nicht weniger. Die facettierten Muster baut SindriCAD
-> als exakte Gitter — auch das ist ein Unterschied in der Art, nicht in der
-> Zahl.
+> Höhenkarte**. Acht gegen sechs ist kein Vorsprung, den man vorzeigt.
+>
+> **Die Höhenkarte haben wir aber auch** — und dieser Satz stand hier am
+> 19.08.2026 zunächst falsch. Die Op `displace_image` („Relief auflegen",
+> `app/core/geom/displace.py`) macht aus der Helligkeit eines Bildes eine Höhe
+> auf der Oberfläche; sie kam mit P16, Entscheidung G, und ihr Modulkopf
+> begründet die Trennung von `texture_ops` mit demselben Argument, das dort
+> steht: „hier *ist* das Höhenfeld der Zweck." Sie trägt einen ausdrücklichen
+> Vorbehalt — auf einem groben Netz zeigt sich kein Relief, erst gleichmäßig
+> vernetzen.
+>
+> Der Befund B2 bleibt dadurch unverändert richtig, und zwar erst recht: Wir
+> haben **mehr** als SindriCAD und zeigen es weniger. Die facettierten Muster
+> baut SindriCAD als exakte Gitter — auch das ist ein Unterschied in der Art,
+> nicht in der Zahl.
 
 ### B3 — Die letzte Meile zum Drucker fehlt
 
@@ -524,8 +533,9 @@ gibt es nicht; angekündigt hat der Entwickler sie am 09.08.
 
 **Eine Aussage dieses Dokuments trägt nicht mehr:** „doppelt so viele
 Texturmuster wie SindriCAD". Es sind acht gegen sechs, und SindriCAD nimmt
-zusätzlich beliebige Graustufenbilder als Höhenkarte — eine Gattung, die
-Solidon nicht hat. Der Befund B2 wird dadurch nicht schwächer, sondern
+zusätzlich beliebige Graustufenbilder als Höhenkarte. **Die haben wir auch**,
+über die Op `displace_image` aus P16 — dieser Satz stand hier zunächst falsch;
+der Vergleich lautet acht Muster plus Höhenkarte gegen sechs plus Höhenkarte. Der Befund B2 wird dadurch nicht schwächer, sondern
 dringlicher: Wenn der Abstand in der Sache schrumpft, zählt die Darstellung
 mehr.
 
