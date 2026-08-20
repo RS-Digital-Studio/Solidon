@@ -129,7 +129,14 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
     Requirement(
         id="comfyui",
         title="ComfyUI",
-        what_for=_("Mesh-Erzeugung aus Text oder Bild."),
+        # ComfyUI allein erzeugt noch nichts: Es braucht die Knoten und das
+        # Modell dazu. Dass der zweite Schritt existiert, gehört an die
+        # Stelle, an der jemand den ersten tut — sonst installiert er ComfyUI
+        # und findet den Menüeintrag weiterhin ausgegraut.
+        what_for=_(
+            "Mesh-Erzeugung aus Text oder Bild. Danach richtet "
+            "«python tools/setup_comfyui.py» die Knoten und das Modell ein."
+        ),
         kind="program",
         package="",
         url="https://www.comfy.org/download",
