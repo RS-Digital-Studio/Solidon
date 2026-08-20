@@ -68,3 +68,29 @@ liegt nicht im Repository — es wird bei Bedarf erzeugt.
 Deutsche Docstrings sind in `tests/` üblich und in Ordnung; die Sprachprüfung
 gilt den Bezeichnern in `app/`. Ein Test beschreibt, **was** er sicherstellt und
 **warum** — der Name allein reicht dafür selten.
+
+## Die Gegenprobe
+
+Ein neuer Test, der einen Fund festnagelt, wird **einmal ohne den Fix gefahren**.
+Bleibt er grün, prüft er etwas anderes als er behauptet — und das ist kein
+Randfall: an einem Tag hat diese Probe fünf Tests verworfen, die alle
+überzeugend aussahen.
+
+Die drei Weisen, auf denen sie danebengingen, sind alle dieselbe:
+
+* **Am Weg vorbei.** Der Test rief `_stop_or_close()` von Hand statt den Knopf
+  zu drücken — die Verbindung war nie geprüft, und ein
+  `rejected.connect(self.reject)` blieb unbemerkt. Wer eine Oberfläche prüft,
+  drückt, tippt und wählt; die Methode dahinter ist die zweite Zusicherung, nicht
+  die erste.
+* **Am Prüfobjekt vorbei.** Der Test baute den `QThread` selbst und startete ihn
+  selbst. Damit blieb er grün, als der Dialog von `start()` auf `run()` fiel —
+  also genau dann, als die Rechnung wieder im Hauptthread lief. Gebaut wird, was
+  die Anwendung baut.
+* **An der Aussage vorbei.** `str(op_id) in tooltip` war grün, weil „2" auch in
+  „2,40 mm" steht. Eine Teilzeichenkette, die zufällig vorkommt, ist keine
+  Prüfung — verglichen wird mit dem ganzen Satz.
+
+Und zweimal hat sie den *Fix* verworfen, nicht den Test: der Einzeiler traf die
+falsche von drei gleichen Codestellen, und ein Testfall löste den Fehler gar
+nicht aus. Beides wäre ohne sie eingecheckt worden.
