@@ -308,6 +308,7 @@ def test_the_linux_descriptions_are_the_ones_the_tool_writes() -> None:
         (tool.DESKTOP_FILE, tool.desktop_entry()),
         (tool.FLATPAK_MANIFEST, tool.flatpak_manifest()),
         (tool.METAINFO_FILE, tool.metainfo()),
+        (tool.INSTALL_SCRIPT, tool.install_script()),
     ):
         assert path.is_file(), f"{path.name} fehlt — tools/make_linux_packages.py --files"
         if path.read_text(encoding="utf-8").replace("\r\n", "\n") != drawn:
@@ -443,3 +444,170 @@ def test_the_flatpak_source_is_the_app_and_not_the_output_folder() -> None:
     # läge der Inhalt flach im Bauordner und ``cp -r <APP_NAME>/*`` griffe ins Leere.
     assert f"dest: {APP_NAME}" in manifest
     assert f"cp -r {APP_NAME}/*" in manifest, "Quelle und Kopierbefehl sind auseinandergelaufen"
+
+
+# --- Die zwei Fragen: Lizenzvertrag und Ort (§37.2) ------------------------------
+
+
+def test_the_windows_installer_asks_both_questions() -> None:
+    """Der Lizenzvertrag steht, und die Verzeichnisseite wird nicht übersprungen.
+
+    Beides ist eine Zeile, und beide Zeilen fehlen leise: Ohne ``LicenseFile``
+    installiert das Setup ohne einen gelesenen Vertrag, und ``DisableDirPage``
+    steht ohne Angabe auf ``auto`` — dann verschwindet die Ortswahl, sobald der
+    Installer eine frühere Installation findet. Wer seine Programme auf eine
+    zweite Platte legt, merkt das erst, wenn es zu spät ist.
+    """
+    script = INSTALLER_SCRIPT.read_text(encoding="utf-8")
+
+    assert "LicenseFile={#LicenseFile}" in script, "die Lizenzseite fehlt"
+    assert "DisableDirPage=no" in script, "die Verzeichnisseite darf nicht wegfallen"
+    assert "DisableDirPage=yes" not in script
+
+
+def test_the_windows_installer_speaks_every_language_the_application_does() -> None:
+    """Sechs Sprachen in der Anwendung, sechs im Installer.
+
+    Wer Solidon auf Portugiesisch benutzt, soll es nicht auf Englisch
+    installieren müssen — und die Kataloge dafür liefert Inno Setup selbst.
+    """
+    from app.i18n.catalog import available_languages
+
+    script = INSTALLER_SCRIPT.read_text(encoding="utf-8")
+    names = {
+        "de": "German",
+        "en": "Default",
+        "es": "Spanish",
+        "fr": "French",
+        "it": "Italian",
+        "pt": "Portuguese",
+    }
+
+    missing = [
+        code
+        for code in ({"de"} | set(available_languages()))
+        if names.get(code, "") and f"{names[code]}.isl" not in script
+    ]
+    assert not missing, f"im Installer fehlen diese Sprachen: {sorted(missing)}"
+
+
+def test_the_licence_the_installer_shows_is_the_agreement_and_not_the_notice() -> None:
+    """Auf der Lizenzseite steht der Endnutzer-Lizenzvertrag.
+
+    ``LICENSE`` ist eine Urheberrechtsnotiz und sagt dem Käufer nicht, was er
+    erwirbt. Der Vertrag steht in ``EULA.md``; ``tools/make_legal.py`` legt die
+    Textfassung daneben, weil Inno Setup und der macOS-Installer die Datei roh
+    anzeigen.
+    """
+    from tools import make_installer
+
+    licence = ROOT / "packaging" / "eula.txt"
+    assert licence.is_file(), "packaging/eula.txt fehlt — tools/make_legal.py"
+    assert make_installer._licence_file() == licence
+    assert "Lizenzvertrag" in licence.read_text(encoding="utf-8")[:400]
+
+
+def test_the_linux_installer_asks_before_it_writes_anything() -> None:
+    """Das Installationsskript fragt nach Zustimmung und nach dem Ort.
+
+    Ein Archiv, das man irgendwohin auspackt, beantwortet die erste Frage gar
+    nicht und die zweite ohne Vorschlag. Die Zustimmung darf dabei nicht
+    stillschweigend angenommen werden, wenn niemand antworten kann: ohne
+    Terminal und ohne ``--accept`` bricht es ab.
+    """
+    from tools import make_linux_packages as tool
+
+    script = tool.install_script()
+
+    assert script.startswith("#!/bin/sh"), "kein POSIX-Skript"
+    assert "eula.txt" in script, "der Lizenzvertrag wird nicht gezeigt"
+    assert "--accept" in script and "--prefix" in script
+    assert "--uninstall" in script, "es fehlt der Weg zurück"
+    assert "if [ ! -t 0 ]; then" in script, "ohne Terminal würde es einfach durchlaufen"
+    assert "uninstall.sh" in script, "die Installation hinterlässt keinen Weg zurück"
+
+
+def test_the_linux_archive_carries_what_the_installer_needs() -> None:
+    """Das Archiv trägt Skript, Lizenz, Menüeintrag und Symbol — nicht nur den Bau.
+
+    Der ``tar``-Aufruf, der in der CI stand, packte genau den Ordner aus
+    ``dist``. Wer ihn auspackte, hatte ein Programm ohne Menüeintrag, ohne
+    Symbol und ohne gelesenen Lizenzvertrag.
+    """
+    import inspect
+
+    from tools import make_linux_packages as tool
+
+    source = inspect.getsource(tool.build_tarball)
+
+    for needed in ("install.sh", "eula.txt", "icon.svg", "DESKTOP_FILE", "METAINFO_FILE"):
+        assert needed in source, f"das Archiv nimmt {needed} nicht mit"
+
+
+def test_the_macos_package_shows_the_licence_and_lets_the_place_be_chosen() -> None:
+    """Die ``.pkg`` stellt dieselben zwei Fragen wie die Setup-Datei.
+
+    ``license`` ist die Seite mit „Akzeptieren", ``domains`` die mit der Wahl
+    zwischen „für alle Benutzer", „nur für mich" und einem anderen Volume.
+    Ohne die zweite Zeile installiert macOS ohne zu fragen ins System.
+    """
+    import xml.etree.ElementTree as ET
+
+    from tools import make_macos_package as tool
+
+    root = ET.fromstring(tool.distribution("arm64"))
+
+    licence = root.find("license")
+    assert licence is not None and licence.get("file") == "eula.txt"
+
+    domains = root.find("domains")
+    assert domains is not None, "ohne <domains> gibt es keine Zielwahl"
+    assert domains.get("enable_localSystem") == "true"
+    assert domains.get("enable_currentUserHome") == "true"
+    assert domains.get("enable_anywhere") == "true"
+
+
+def test_the_macos_package_keeps_the_two_architectures_apart() -> None:
+    """Ein auf Apple Silicon gebautes Paket gehört nicht auf einen Intel-Mac.
+
+    Ohne ``hostArchitectures`` installiert es sich dort anstandslos und startet
+    dann nicht — und der Nutzer sucht den Fehler an seinem Rechner.
+    """
+    import xml.etree.ElementTree as ET
+
+    from tools import make_macos_package as tool
+
+    for architecture in ("arm64", "x86_64"):
+        root = ET.fromstring(tool.distribution(architecture))
+        options = root.find("options")
+        assert options is not None
+        assert options.get("hostArchitectures") == architecture
+
+
+def test_the_macos_description_is_the_one_the_tool_writes() -> None:
+    """Auch hier: eine erzeugte, eingecheckte Datei veraltet still.
+
+    Sie trägt die Versionsnummer — läuft sie gegen ``app/branding.py``,
+    installiert das Paket eine Fassung unter dem Namen einer anderen.
+    """
+    from tools import make_macos_package as tool
+
+    path = tool.DISTRIBUTION_FILE
+    assert path.is_file(), "macos-distribution.xml fehlt — tools/make_macos_package.py --files"
+    drawn = tool.distribution("arm64")
+    assert path.read_text(encoding="utf-8").replace("\r\n", "\n") == drawn, (
+        "älter als app/branding.py\n\nNeu erzeugen: "
+        ".venv\\Scripts\\python.exe tools/make_macos_package.py --files"
+    )
+
+
+def test_the_workflow_builds_the_macos_installer_package() -> None:
+    """Was das Werkzeug kann, muss die CI auch aufrufen — und hochladen.
+
+    Auf keinem Rechner hier läuft macOS; wenn die CI die ``.pkg`` nicht baut,
+    baut sie niemand.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "make_macos_package.py" in workflow, "die CI ruft das Werkzeug nicht"
+    assert "*-macos-*.pkg" in workflow, "die .pkg wird nicht hochgeladen"

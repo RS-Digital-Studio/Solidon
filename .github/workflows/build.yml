@@ -274,12 +274,14 @@ jobs:
 
       - name: Archiv packen (Linux)
         # Als tar.gz, nicht als roher Ordner: der Artefakt-Upload verliert die
-        # Ausführungsrechte, das Archiv behält sie.
+        # Ausführungsrechte, das Archiv behält sie — und das Archiv trägt jetzt
+        # ein `install.sh`, das ohne sie nicht startet.
+        #
+        # Der `tar`-Aufruf, der hier stand, packte genau den Bau. Wer ihn
+        # auspackte, hatte ein Programm ohne Menüeintrag, ohne Symbol und ohne
+        # gelesenen Lizenzvertrag; das Werkzeug legt beides daneben.
         if: runner.os == 'Linux'
-        run: |
-          name=$(python -c "from app.branding import APP_NAME; print(APP_NAME)")
-          version=$(python -c "from app.branding import APP_VERSION; print(APP_VERSION)")
-          tar -czf "dist/${name}-${version}-linux-x86_64.tar.gz" -C dist "${name}"
+        run: python tools/make_linux_packages.py --tarball
 
       - name: Paketierwerkzeuge holen (Linux)
         # appimagetool kommt als AppImage und wird selbst nicht installiert;
@@ -311,7 +313,7 @@ jobs:
           # „dlopen(): error loading libfuse.so.2", und der sagt niemandem,
           # dass eine Variable fehlt.
           APPIMAGE_EXTRACT_AND_RUN: '1'
-        run: python tools/make_linux_packages.py
+        run: python tools/make_linux_packages.py --appimage --flatpak
 
       - name: Bundle prüfen (macOS)
         # Der Bau bricht nicht ab, wenn BUNDLE ausbleibt — er liefert dann
@@ -365,6 +367,22 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent \
             "dist/${name}.app" "dist/${name}-${version}-macos-$(uname -m).zip"
 
+      - name: Installationspaket bauen (macOS)
+        # Das .zip daneben bleibt: es trägt die Signatur des Bundles unverändert
+        # und ist der kürzere Weg für alle, die ihn kennen. Die .pkg ist für die
+        # anderen — sie zeigt den Lizenzvertrag und lässt den Ort wählen, genau
+        # wie die Setup-Datei unter Windows.
+        #
+        # `APPLE_INSTALLER_IDENTITY` ist ein *anderes* Zertifikat als
+        # `APPLE_SIGN_IDENTITY`: „Developer ID Installer" signiert Pakete,
+        # „Developer ID Application" signiert Programme. Fehlt es, entsteht ein
+        # unsigniertes Paket — der Schlusstext des Installers erklärt dann den
+        # ersten Start.
+        if: runner.os == 'macOS'
+        env:
+          APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
+        run: python tools/make_macos_package.py --sign "${APPLE_INSTALLER_IDENTITY:-}"
+
       - name: Prüfsummen (Windows)
         # Sie stehen auf der Download-Seite neben der Datei — bei einem
         # unsignierten Paket ist das die einzige Möglichkeit, die Herkunft zu
@@ -397,7 +415,8 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           cd dist
-          for archive in *-macos-*.zip; do
+          for archive in *-macos-*.zip *-macos-*.pkg; do
+            test -f "$archive" || continue
             shasum -a 256 "$archive" | tee "$archive.sha256"
           done
 
@@ -440,8 +459,11 @@ jobs:
         with:
           name: solidon3d-macos-${{ runner.arch }}
           path: |
+            dist/*-macos-*.pkg
+            dist/*-macos-*.pkg.sha256
             dist/*-macos-*.zip
             dist/*-macos-*.zip.sha256
+          if-no-files-found: warn
           retention-days: 7
 
   latest:

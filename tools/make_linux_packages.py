@@ -29,6 +29,7 @@ import argparse
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -53,6 +54,11 @@ DESKTOP_FILE = PACKAGING / f"{DISTRIBUTION_NAME}.desktop"
 FLATPAK_MANIFEST = PACKAGING / f"{APP_ID}.yml"
 METAINFO_FILE = PACKAGING / f"{APP_ID}.metainfo.xml"
 
+#: Das Installationsskript, das im Archiv neben dem Bau liegt. Es ist der Teil,
+#: der auf Linux die beiden Fragen stellt, die der Windows-Installer stellt:
+#: den Lizenzvertrag und den Ort.
+INSTALL_SCRIPT = PACKAGING / "install.sh"
+
 #: Was der Eintrag im Menü sagt. Kurz, denn die Software-Verwaltung schneidet
 #: ab, und ohne Punkt am Ende — so hält es die Freedesktop-Empfehlung.
 SUMMARY = "3D-Modelle konstruieren, erzeugen und druckfertig machen"
@@ -61,6 +67,235 @@ SUMMARY = "3D-Modelle konstruieren, erzeugen und druckfertig machen"
 #: gesucht wird. ``Graphics`` ist die Hauptkategorie, die beiden anderen führen
 #: es in den Untermenüs der Arbeitsumgebungen.
 CATEGORIES = ("Graphics", "3DGraphics", "Engineering")
+
+#: Die Vorlage des Installationsskripts. Die Werte kommen über die Platzhalter
+#: aus :mod:`app.branding` herein — dieselbe Regel wie für alle anderen
+#: Beschreibungen hier. POSIX ``sh``, nicht Bash: das Skript läuft auch dort,
+#: wo ``/bin/sh`` ein Dash ist, und das ist auf Debian und Ubuntu der Normalfall.
+_INSTALL_TEMPLATE = r"""#!/bin/sh
+# Installiert @APP_NAME@ @VERSION@ — erzeugt von tools/make_linux_packages.py.
+# Von Hand geänderte Zeilen verliert der nächste Lauf.
+#
+#   ./install.sh                          fragt nach Lizenz und Ort
+#   ./install.sh --accept --prefix DIR    fragt nichts
+#   ./install.sh --uninstall              entfernt eine Installation wieder
+set -eu
+
+NAME="@APP_NAME@"
+SHORT="@SHORT_NAME@"
+VERSION="@VERSION@"
+IDENTIFIER="@IDENTIFIER@"
+WEBSITE="@WEBSITE@"
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+# Deutsch, wenn die Umgebung deutsch ist, sonst Englisch. Die Anwendung selbst
+# spricht sechs Sprachen; ein Installationsskript, das in jeder von ihnen
+# dieselben acht Sätze doppelt, liest sich schlechter, nicht besser.
+case "${LANG-}" in
+  de*) LANGUAGE=de ;;
+  *) LANGUAGE=en ;;
+esac
+
+say() {
+  if [ "$LANGUAGE" = de ]; then printf '%s\n' "$1"; else printf '%s\n' "$2"; fi
+}
+
+ask() {
+  if [ "$LANGUAGE" = de ]; then printf '%s' "$1"; else printf '%s' "$2"; fi
+}
+
+usage() {
+  say "Aufruf: ./install.sh [--prefix VERZEICHNIS] [--accept] [--uninstall]" \
+      "Usage: ./install.sh [--prefix DIRECTORY] [--accept] [--uninstall]"
+  say "  --prefix     wohin das Programm kommt" \
+      "  --prefix     where the program goes"
+  say "  --accept     dem Lizenzvertrag zustimmen, ohne ihn anzuzeigen" \
+      "  --accept     accept the licence agreement without showing it"
+  say "  --uninstall  entfernt eine Installation wieder" \
+      "  --uninstall  removes an installation again"
+}
+
+# Als root ins System, sonst ins Profil. Kein sudo, keine Empfehlung dazu: wer
+# es für alle installieren will, ruft es als root auf.
+if [ "$(id -u)" = 0 ]; then
+  DEFAULT_TARGET="/opt/$SHORT"
+  BIN_DIR="/usr/local/bin"
+  APP_DIR="/usr/share/applications"
+  ICON_DIR="/usr/share/icons/hicolor/scalable/apps"
+  META_DIR="/usr/share/metainfo"
+else
+  DEFAULT_TARGET="$HOME/.local/lib/$SHORT"
+  BIN_DIR="$HOME/.local/bin"
+  APP_DIR="$HOME/.local/share/applications"
+  ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+  META_DIR="$HOME/.local/share/metainfo"
+fi
+
+TARGET=""
+ACCEPTED=0
+MODE=install
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --prefix)
+      shift
+      if [ $# -eq 0 ]; then
+        say "--prefix ohne Verzeichnis." "--prefix without a directory."
+        exit 2
+      fi
+      TARGET="$1"
+      ;;
+    --prefix=*) TARGET="${1#--prefix=}" ;;
+    --accept|-y) ACCEPTED=1 ;;
+    --uninstall) MODE=uninstall ;;
+    -h|--help) usage; exit 0 ;;
+    *)
+      say "Unbekannte Angabe: $1" "Unknown option: $1"
+      usage
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+# Ein eingetipptes „~/…" expandiert die Shell nicht, wenn es aus `read` kommt —
+# hier von Hand, sonst entstünde ein Verzeichnis, das wörtlich „~" heißt.
+expand() {
+  case "$1" in
+    "~") printf '%s' "$HOME" ;;
+    "~/"*) printf '%s%s' "$HOME" "${1#\~}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+if [ "$MODE" = uninstall ]; then
+  if [ -z "$TARGET" ]; then TARGET="$DEFAULT_TARGET"; fi
+  TARGET=$(expand "$TARGET")
+  if [ -x "$TARGET/uninstall.sh" ]; then
+    exec "$TARGET/uninstall.sh"
+  fi
+  say "Dort liegt keine Installation: $TARGET" "No installation found there: $TARGET"
+  say "Den Ort mit --prefix angeben." "Name the location with --prefix."
+  exit 1
+fi
+
+if [ ! -d "$HERE/$NAME" ]; then
+  say "Im Archiv fehlt der Ordner $NAME — bitte vollständig auspacken." \
+      "The archive is missing the $NAME folder — please extract all of it."
+  exit 1
+fi
+
+say "$NAME $VERSION wird installiert." "Installing $NAME $VERSION."
+echo
+
+if [ "$ACCEPTED" -eq 0 ]; then
+  # Ohne Terminal fragt niemand und niemand antwortet. Eine Zustimmung
+  # anzunehmen, die keiner gegeben hat, ist der falsche Ausweg.
+  if [ ! -t 0 ]; then
+    say "Ohne Terminal kann niemand zustimmen — mit --accept aufrufen." \
+        "Nobody can agree without a terminal — call it with --accept."
+    exit 1
+  fi
+  if [ -f "$HERE/eula.txt" ]; then
+    say "Der Lizenzvertrag folgt. Er liegt auf Deutsch vor; verlassen mit q." \
+        "The licence agreement follows. It is in German; press q to leave it."
+    echo
+    if command -v less >/dev/null 2>&1; then
+      less "$HERE/eula.txt"
+    else
+      cat "$HERE/eula.txt"
+    fi
+    echo
+  fi
+  ask "Stimmen Sie dem Lizenzvertrag zu? [j/N] " \
+      "Do you accept the licence agreement? [y/N] "
+  read -r ANSWER
+  case "$ANSWER" in
+    j|J|ja|Ja|JA|y|Y|yes|Yes|YES) ;;
+    *)
+      say "Abgebrochen. Es wurde nichts installiert." "Cancelled. Nothing was installed."
+      exit 1
+      ;;
+  esac
+  echo
+fi
+
+if [ -z "$TARGET" ]; then
+  if [ -t 0 ]; then
+    ask "Wohin soll es? [$DEFAULT_TARGET] " "Where should it go? [$DEFAULT_TARGET] "
+    read -r ANSWER
+    if [ -n "$ANSWER" ]; then TARGET="$ANSWER"; else TARGET="$DEFAULT_TARGET"; fi
+  else
+    TARGET="$DEFAULT_TARGET"
+  fi
+fi
+TARGET=$(expand "$TARGET")
+case "$TARGET" in
+  /*) ;;
+  *) TARGET="$(pwd)/$TARGET" ;;
+esac
+
+if [ -e "$TARGET" ] && [ ! -d "$TARGET" ]; then
+  say "Dort liegt eine Datei, kein Verzeichnis: $TARGET" \
+      "That is a file, not a directory: $TARGET"
+  exit 1
+fi
+if [ -e "$TARGET/$NAME" ]; then
+  say "Eine vorhandene Fassung an dieser Stelle wird ersetzt." \
+      "An existing version in this place is being replaced."
+  rm -rf "$TARGET"
+fi
+
+mkdir -p "$TARGET" "$BIN_DIR" "$APP_DIR" "$ICON_DIR" "$META_DIR"
+cp -a "$HERE/$NAME/." "$TARGET/"
+chmod 755 "$TARGET/$NAME"
+
+# Der Starter ist ein Skript: der Bootloader sucht seine Bibliotheken neben
+# sich, und ein exec mit vollem Pfad stimmt auf jeder Distribution.
+cat > "$BIN_DIR/$NAME" <<LAUNCHER
+#!/bin/sh
+exec "$TARGET/$NAME" "\$@"
+LAUNCHER
+chmod 755 "$BIN_DIR/$NAME"
+ln -sf "$NAME" "$BIN_DIR/$SHORT"
+
+cp "$HERE/$SHORT.desktop" "$APP_DIR/$IDENTIFIER.desktop"
+cp "$HERE/icon.svg" "$ICON_DIR/$IDENTIFIER.svg"
+if [ -f "$HERE/$IDENTIFIER.metainfo.xml" ]; then
+  cp "$HERE/$IDENTIFIER.metainfo.xml" "$META_DIR/$IDENTIFIER.metainfo.xml"
+fi
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
+fi
+
+cat > "$TARGET/uninstall.sh" <<UNINSTALL
+#!/bin/sh
+# Entfernt $NAME wieder. Projektdateien und Einstellungen bleiben, wo sie sind.
+set -eu
+echo "$NAME wird entfernt / removing $NAME"
+rm -f "$BIN_DIR/$NAME" "$BIN_DIR/$SHORT"
+rm -f "$APP_DIR/$IDENTIFIER.desktop" "$ICON_DIR/$IDENTIFIER.svg"
+rm -f "$META_DIR/$IDENTIFIER.metainfo.xml"
+rm -rf "$TARGET"
+UNINSTALL
+chmod 755 "$TARGET/uninstall.sh"
+
+echo
+say "Fertig. $NAME liegt in $TARGET." "Done. $NAME is in $TARGET."
+say "Starten: $NAME — oder über das Anwendungsmenü." \
+    "Start it with: $NAME — or from the application menu."
+say "Entfernen: $TARGET/uninstall.sh" "Remove it with: $TARGET/uninstall.sh"
+say "Handbuch und Hilfe: $WEBSITE" "Manual and help: $WEBSITE"
+
+case ":${PATH-}:" in
+  *":$BIN_DIR:"*) ;;
+  *)
+    echo
+    say "Hinweis: $BIN_DIR liegt nicht im PATH — der Menüeintrag geht trotzdem." \
+        "Note: $BIN_DIR is not in PATH — the menu entry works regardless."
+    ;;
+esac
+"""
 
 
 def desktop_entry() -> str:
@@ -212,13 +447,99 @@ def metainfo() -> str:
     )
 
 
+def install_script() -> str:
+    """Das Installationsskript, das im Archiv neben dem Bau liegt.
+
+    **Es stellt auf Linux dieselben zwei Fragen wie der Windows-Installer**:
+    den Lizenzvertrag mit einer Zustimmung, die auch abgelehnt werden kann, und
+    den Ort. Ein Archiv, das man irgendwohin auspackt, beantwortet die erste
+    gar nicht und die zweite ohne Vorschlag — und der Menüeintrag fehlt danach
+    ebenfalls.
+
+    Es fragt nur, wenn ein Terminal da ist. ``--accept`` und ``--prefix``
+    machen denselben Lauf unbeaufsichtigt, für Paketbauer und für den, der es
+    über eine Verwaltung ausrollt; ohne Terminal und ohne ``--accept`` bricht
+    es ab, statt eine Zustimmung anzunehmen, die niemand gegeben hat.
+
+    Als root geht es nach ``/opt`` und ``/usr/share``, als Nutzer in dessen
+    Profil — ohne ``sudo`` zu verlangen und ohne es zu empfehlen. Beide Wege
+    hinterlassen ein ``uninstall.sh``, das alles wieder entfernt und die
+    Projektdateien in Ruhe lässt.
+
+    Der Starter ist ein Skript und kein Link auf die ausgelieferte Datei: der
+    Bootloader von PyInstaller sucht seine Bibliotheken neben sich, und ein
+    ``exec`` mit vollem Pfad ist der Weg, der auf jeder Distribution stimmt.
+    """
+    return (
+        _INSTALL_TEMPLATE.replace("@APP_NAME@", APP_NAME)
+        .replace("@SHORT_NAME@", DISTRIBUTION_NAME)
+        .replace("@VERSION@", APP_VERSION)
+        .replace("@IDENTIFIER@", APP_ID)
+        .replace("@WEBSITE@", WEBSITE_URL)
+    )
+
+
 def write_files() -> list[Path]:
-    """Schreibt alle drei Beschreibungen und gibt zurück, was entstanden ist."""
+    """Schreibt alle vier Beschreibungen und gibt zurück, was entstanden ist."""
     PACKAGING.mkdir(parents=True, exist_ok=True)
     DESKTOP_FILE.write_text(desktop_entry(), encoding="utf-8", newline="\n")
     FLATPAK_MANIFEST.write_text(flatpak_manifest(), encoding="utf-8", newline="\n")
     METAINFO_FILE.write_text(metainfo(), encoding="utf-8", newline="\n")
-    return [DESKTOP_FILE, FLATPAK_MANIFEST, METAINFO_FILE]
+    INSTALL_SCRIPT.write_text(install_script(), encoding="utf-8", newline="\n")
+    # Auf Windows ohne Wirkung, auf Linux der Unterschied zwischen „ausführbar"
+    # und „./install.sh: Permission denied". Das Archiv unten trägt das Recht
+    # dann weiter.
+    INSTALL_SCRIPT.chmod(0o755)
+    return [DESKTOP_FILE, FLATPAK_MANIFEST, METAINFO_FILE, INSTALL_SCRIPT]
+
+
+def build_tarball() -> int:
+    """Packt Bau, Installationsskript, Lizenz, Menüeintrag und Symbol in ein
+    Archiv.
+
+    **Das Archiv ist mehr als der Bau.** Vorher war es genau der Ordner aus
+    ``dist`` und sonst nichts — wer es auspackte, hatte ein Programm ohne
+    Menüeintrag, ohne Symbol, ohne gelesenen Lizenzvertrag und ohne einen Ort,
+    an dem es hingehört. Jetzt liegt daneben, was ``install.sh`` dafür braucht.
+
+    Als ``.tar.gz`` und nicht als ``.zip``: es trägt die Ausführungsrechte, und
+    ohne die startet weder das Skript noch das Programm darin.
+    """
+    if not (SOURCE_DIR / APP_NAME).is_file():
+        print(
+            f"Kein Bau unter {SOURCE_DIR} — zuerst: pyinstaller packaging/{DISTRIBUTION_NAME}.spec"
+        )
+        return 1
+    licence = PACKAGING / "eula.txt"
+    if not licence.is_file():
+        print("packaging/eula.txt fehlt — zuerst: python tools/make_legal.py")
+        return 1
+
+    stem = f"{APP_NAME}-{APP_VERSION}-linux-x86_64"
+    staging = OUTPUT_DIR / stem
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+
+    shutil.copytree(SOURCE_DIR, staging / APP_NAME, symlinks=True)
+    shutil.copyfile(INSTALL_SCRIPT, staging / "install.sh")
+    (staging / "install.sh").chmod(0o755)
+    shutil.copyfile(licence, staging / "eula.txt")
+    shutil.copyfile(DESKTOP_FILE, staging / DESKTOP_FILE.name)
+    shutil.copyfile(METAINFO_FILE, staging / METAINFO_FILE.name)
+    shutil.copyfile(
+        ROOT / "app" / "images" / "icon" / f"{DISTRIBUTION_NAME}.svg", staging / "icon.svg"
+    )
+
+    target = OUTPUT_DIR / f"{stem}.tar.gz"
+    target.unlink(missing_ok=True)
+    with tarfile.open(target, "w:gz") as archive:
+        # Ein Wurzelverzeichnis im Archiv, damit ein Auspacken im Downloadordner
+        # nicht dreihundert Dateien danebenlegt.
+        archive.add(staging, arcname=stem)
+    shutil.rmtree(staging)
+    print(f"Archiv → {target.relative_to(ROOT)}")
+    return 0
 
 
 def build_appimage() -> int:
@@ -310,6 +631,12 @@ def main() -> int:
         action="store_true",
         help="nur die Beschreibungen schreiben, nichts bauen (läuft überall)",
     )
+    # Die drei Formate einzeln, weil die CI sie an verschiedenen Stellen baut:
+    # das Archiv gilt als gesetzt, die beiden anderen dürfen scheitern, ohne
+    # es mitzunehmen. Ohne Angabe entstehen alle drei.
+    parser.add_argument("--tarball", action="store_true", help="nur das Archiv mit install.sh")
+    parser.add_argument("--appimage", action="store_true", help="nur das AppImage")
+    parser.add_argument("--flatpak", action="store_true", help="nur das Flatpak")
     arguments = parser.parse_args()
 
     for path in write_files():
@@ -328,9 +655,17 @@ def main() -> int:
         )
         return 1
 
-    # Beide Formate, und ein Fehlschlag des einen hält den anderen nicht auf:
-    # Wer nur appimagetool hat, soll sein AppImage bekommen.
-    return build_appimage() | build_flatpak()
+    chosen = arguments.tarball or arguments.appimage or arguments.flatpak
+    result = 0
+    # Ein Fehlschlag des einen hält die anderen nicht auf: Wer nur
+    # appimagetool hat, soll sein AppImage bekommen.
+    if arguments.tarball or not chosen:
+        result |= build_tarball()
+    if arguments.appimage or not chosen:
+        result |= build_appimage()
+    if arguments.flatpak or not chosen:
+        result |= build_flatpak()
+    return result
 
 
 if __name__ == "__main__":
