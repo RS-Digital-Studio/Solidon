@@ -6792,3 +6792,184 @@ und die Zahlenfelder der Skizzenleiste erklären sich über Tooltips. Fünf
 gemeldete Funde sind an der Gegenprüfung gestorben — darunter die Behauptung,
 der Startbildschirm trage einen veralteten Produktnamen: Die Domain heißt
 `solidon3d.de`, und „Solidon3D" ist der Name, nicht der Rest eines alten.
+
+## Die Slicer-Übergabe gegen die echten Slicer geprüft (20.08.2026)
+
+Alle drei Familien gegen die installierten Programme durchgemessen, nicht
+gegen die Erinnerung: PrusaSlicer 2.9.6, ElegooSlicer 1.5.3.4, CuraEngine
+5.13.0. Jede Behauptung unten hat einen Lauf hinter sich oder eine Zeile aus
+`fdmprinter.def.json` beziehungsweise der ausgeschriebenen Prusa-Vorgabe
+(`prusa-slicer-console --save`).
+
+Das Ergebnis fällt scharf auseinander. **PrusaSlicer nimmt 53 von 53
+geschriebenen Schlüsseln an, ElegooSlicer 56 von 56** — die Gegenprobe meldet
+bei beiden nichts, und das stimmt auch. **CuraEngine ist ein anderer Fall**,
+und der Grund steht am Ende dieses Abschnitts.
+
+### Der Stützwinkel misst in zwei Richtungen — und Solidon schreibt eine Zahl
+
+`SupportSettings.threshold_angle` ist dokumentiert als „Grad gegen die
+Senkrechte, ab dem gestützt wird". Das ist Curas Konvention. PrusaSlicer und
+die Orca-Familie messen **gegen die Horizontale**, und beide Tooltips sagen es
+wörtlich: „slope angle (90° = vertical) is above the given threshold" bei
+Prusa, „overhangs whose slope angle is below the threshold" bei Orca.
+
+Gemessen an einem eigens gebauten Keil, dessen Überhangfläche 30° zur
+Horizontalen steht — also 60° zur Senkrechten:
+
+| geschriebener Wert | PrusaSlicer | ElegooSlicer | CuraEngine |
+|---|---|---|---|
+| 20 | keine Stütze | 68 Abschnitte | 136 Abschnitte |
+| 40 | 260 Abschnitte | 236 Abschnitte | 136 Abschnitte |
+| 50 | 260 Abschnitte | 236 Abschnitte | 136 Abschnitte |
+| 70 | 260 Abschnitte | 236 Abschnitte | keine Stütze |
+
+Der Kipppunkt liegt bei Prusa und Orca zwischen 20 und 40 — dort, wo der
+Überhang 30 misst. Bei Cura zwischen 50 und 70 — dort, wo er 60 misst. Beide
+haben recht, sie messen nur verschieden. Solidon schickt allen dreien
+dieselbe Zahl. Für Prusa und Orca müsste sie `90 − Wert` lauten.
+
+Bei der Vorgabe 50 gegen 40 ist der Unterschied noch verzeihlich. An den
+Rändern kehrt er sich um: Wer 20 einstellt, meint „stütze fast alles" und
+bekommt von PrusaSlicer „stütze fast nichts".
+
+### CuraEngine löst keine Vererbung auf — und das kostet ein Drittel
+
+`_machine_keys` sagt es bereits: „Sie löst keine Vererbung auf — was das
+Fenster sonst aus Definition, Qualität, Material und Variante zusammenrechnet,
+muss ihr einzeln mitgegeben werden." Der Satz stimmt, aber die Folgerung wurde
+nur für drei Schlüssel gezogen (`roofing_layer_count`, `flooring_layer_count`,
+`acceleration_enabled`) und für einen vierten in `_cura_dependants`
+(`initial_layer_line_width_factor`). Sie gilt für zwölf weitere.
+
+In `fdmprinter.def.json` trägt jede abgeleitete Einstellung einen
+`value`-Ausdruck **und** einen `default_value`. Das Fenster wertet den
+Ausdruck aus, `CuraEngine` nimmt den Vorgabewert. Was Solidon schreibt, bleibt
+damit an seinem Schlüssel stehen und erreicht die Schlüssel nicht, aus denen
+gerechnet wird:
+
+| Solidon schreibt | erreicht **nicht** | die bleiben bei |
+|---|---|---|
+| `line_width=0.42` | `wall_line_width_0/x`, `skin_line_width`, `infill_line_width`, `skirt_brim_line_width`, `support_line_width`, `support_interface_line_width` | 0.4 |
+| `infill_sparse_density=15` | `infill_line_distance` | **2 mm** statt 5,6 |
+| `acceleration_print=8000` | 22 Feature-Beschleunigungen | 3000 |
+| `cool_fan_speed=60` | `cool_fan_speed_min/max` | 100 |
+| `material_flow=98` | sieben `*_material_flow` | 100 |
+| `retraction_speed=35` | `retraction_retract_speed`, `retraction_prime_speed` | 25 |
+| `speed_layer_0=20` | `speed_print_layer_0`, `skirt_brim_speed` | 30 |
+| `speed_topbottom=40` | `speed_roofing`, `speed_flooring`, `speed_ironing` | 25 |
+| `bottom_layers=4` | `initial_bottom_layers` | 6 |
+| `support_infill_rate=15` | `support_line_distance` | 2.66 |
+| `support_interface_height` | `support_roof_height`, `support_bottom_height` | 1 |
+
+Gemessen an einem 20-mm-Würfel, zweimal derselbe Lauf, einmal wie Solidon
+heute übergibt und einmal mit aufgelösten Werten:
+
+```
+                          Solidon heute    aufgeloest
+Filament                     1100,4 mm      817,6 mm     +34,6 %
+Druckzeit                       753 s         660 s      +14,1 %
+Luefter (M106)                    255      153 / 255
+Beschleunigung (M204)   3000/4000/5000   4000/5000/8000
+```
+
+Ein Drittel Material zu viel, und die Füllung ist der Hauptgrund: 2 mm
+Linienabstand statt 5,6 sind nicht 15 Prozent, sondern gut vierzig.
+
+### Drei Cura-Schlüssel treffen nichts
+
+**`outer_inset_first` gibt es in Cura 5.13 nicht.** Der Schalter heißt
+`inset_direction` mit `inside_out`/`outside_in`; der alte Name steht in keiner
+der 753 Einstellungen der Definition. Ein unbekannter `-s`-Wert wird
+stillschweigend verworfen. Gemessen: mit Solidons Übergabe beginnen **0 von 50
+Lagen** außen, mit `inset_direction=outside_in` **49 von 50**. „Außenwand
+zuerst" ist bei Cura folgenlos — und das ist die Einstellung, die `advise` bei
+Passungen setzt.
+
+**`retraction_hop` wirkt nicht ohne `retraction_hop_enabled`**, und dessen
+Vorgabe ist `false`. Gemessen: 0 Z-Sprünge gegen 5, sonst gleicher Lauf.
+
+**`support_interface_height` ist eine Höhe in Millimetern**, nicht eine
+Schichtzahl. Solidons `interface_layers=2` wird zu 2 mm — bei 0,2er Schichten
+das Zehnfache des Gemeinten. Orca (`support_interface_top_layers`) zählt
+Schichten, Cura misst.
+
+### Mit Stützen liefert CuraEngine gar nichts
+
+Zwei Einstellungen fehlen dem Extruder-Zug, und der Lauf endet, bevor eine
+Bahn entsteht:
+
+```
+style=grid   Rückgabewert 3221225477 (Access Violation), 444 Bytes ohne Bahn
+             [error] Trying to retrieve setting with no value given: support_z_seam_away_from_model
+style=tree   Rückgabewert 2, keine Datei
+             [error] ... : min_wall_line_width
+```
+
+Mit `support_z_seam_away_from_model=false` läuft `grid` durch (136
+Stützabschnitte), mit zusätzlich `min_wall_line_width` auch `tree`. Es ist
+derselbe Fall wie `roofing_layer_count` — nur trifft er jeden Druck mit
+Stützen, und Solidon fängt ihn nur als „Der Slicer hat das Modell nicht
+verarbeitet" ab.
+
+### Was Cura kennt und Solidon nicht schreibt
+
+`shell.seam_position` → `z_seam_type`, `temperature.chamber` →
+`build_volume_temperature`, `cooling.bridge_fan_speed` → `bridge_fan_speed`,
+`filament.max_flow` → `material_max_flowrate`. Die beiden Brückenwerte
+brauchen zusätzlich `bridge_settings_enabled=true` — ohne den gilt auch
+`speed.bridge` nicht, das Solidon bereits schreibt.
+
+Ohne Entsprechung und damit zu Recht ohne Eintrag: `wall_generator`,
+`precise_outer_wall`, `retraction.wipe`, `filament.density`, `filament.colour`,
+`filament.cost_per_kg`.
+
+### PrusaSlicer: zwei Lücken
+
+**`support.placement` erreicht PrusaSlicer nicht**, obwohl
+`support_material_buildplate_only` in seiner Vorgabedatei steht. Gemessen an
+demselben Keil: 260 Stützabschnitte wie Solidon übergibt, 234 mit dem Schalter.
+Wer „nur auf der Platte" einstellt, bekommt Stützen auf dem Modell.
+
+**`support.density` hat in keiner der beiden älteren Familien eine
+Entsprechung in Prozent.** PrusaSlicer führt `support_material_spacing`, Orca
+`support_base_pattern_spacing` — beides Abstände in Millimetern. Nur Cura
+kennt `support_infill_rate`. Der Wert ist damit für zwei von drei Slicern
+folgenlos, und der Dialog bietet ihn trotzdem an.
+
+### Warum das keiner gemerkt hat
+
+Die Gegenprobe in `verify()` liest die Konfiguration, die der Slicer als
+Kommentar in die Druckdatei schreibt. Das ist die richtige Idee, und sie trägt
+weit — aber nicht überall gleich weit:
+
+```
+Cura :  0 von 47 geschriebenen Schluesseln stehen im G-Code
+Prusa: 53 von 53
+Orca : 56 von 56
+```
+
+`CuraEngine` schreibt seine Einstellungen nicht in die Datei; das tut nur das
+Fenster. Der Mechanismus, der die Zuordnung selbst prüft, ist genau dort
+blind, wo die meisten Fehler sitzen. Was bei Cura hilft, ist kein
+Konfigurationskommentar, sondern die Definition daneben: `fdmprinter.def.json`
+liegt bei jeder Installation, nennt jeden gültigen Schlüssel, seine Einheit
+und seinen Vorgabewert — und hätte `outer_inset_first` beim ersten Lauf
+auffallen lassen.
+
+Auf der Testseite fehlt dieselbe Frage.
+`test_every_setting_in_a_table_actually_exists` prüft den Solidon-Pfad, nicht
+den Namen beim Slicer; `test_the_core_settings_reach_every_slicer` prüft neun
+von sechsundfünfzig Einstellungen, und keine der oben gefundenen ist unter den
+neun.
+
+### Nebenbei
+
+Der Rückweg misst je Slicer verschieden vollständig: bei Cura bleibt
+`filament_grams` leer, bei PrusaSlicer `layer_count`. Und eine exportierte 3MF
+trägt ihre Einstellungen nur für die Orca-Familie — für PrusaSlicer enthält
+sie `Metadata/model_settings.config` und sonst nichts, obwohl PrusaSlicer eine
+eigene Konfigurationsdatei in der 3MF läse.
+
+Der 3MF-Weg zu ElegooSlicer wurde mitgeprüft und ist in Ordnung: geschrieben,
+geöffnet, gerechnet, und die Gegenprobe meldet keine Abweichung.
