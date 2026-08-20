@@ -577,6 +577,34 @@ def bed_outline(width: float, depth: float) -> Any:
     )
 
 
+#: Wie viel Luft um das Eingepasste bleibt, als Anteil der Ausdehnung je Achse.
+#:
+#: ``reset_camera(bounds=…)`` passt **genau** ein. Ein 40 mm großer Quader
+#: berührte damit links und rechts den Bildrand, und von der Druckplatte war
+#: nichts mehr zu sehen — der Größenvergleich, für den sie in echter Größe
+#: dasteht, fiel weg. Zwölf Prozent sind so viel, dass ein Teil freisteht, und
+#: so wenig, dass es nicht in der Ferne liegt.
+CAMERA_MARGIN = 0.12
+
+
+def with_margin(
+    bounds: tuple[float, float, float, float, float, float], share: float = CAMERA_MARGIN
+) -> tuple[float, float, float, float, float, float]:
+    """Die Grenzen um ihre Mitte geweitet, im VTK-Format.
+
+    Als eigene Funktion, aus demselben Grund wie :func:`bed_scale`: offscreen
+    gibt es keinen Plotter, und was nur im Zeichnen steht, prüft niemand.
+
+    Eine Achse ohne Ausdehnung bleibt, wie sie ist — eine flache Skizze soll
+    nicht in die Tiefe wachsen, nur weil sie eingepasst wird.
+    """
+    widened: list[float] = []
+    for low, high in zip(bounds[0::2], bounds[1::2], strict=True):
+        air = (high - low) * share / 2.0
+        widened.extend((low - air, high + air))
+    return (widened[0], widened[1], widened[2], widened[3], widened[4], widened[5])
+
+
 def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, float], str]]:
     """Die Maßzahlen an der vorderen und linken Plattenkante (§18.6).
 
@@ -587,22 +615,41 @@ def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, floa
     Als eigene Funktion und nicht im Zeichnen versteckt: offscreen gibt es
     keinen Plotter, und eine Prüfung, die sich dort überspringt, prüft nie
     etwas.
+
+    **Die Zahlen tragen ihr Vorzeichen, und die Null steht in der Mitte ihrer
+    Kante.** Beides war falsch, und zusammen ergab es eine Skala, die sich selbst
+    widersprach: ``abs()`` nahm beiden Seiten das Vorzeichen, also lag dieselbe
+    „100" zweimal im Bild — und die einzige Null stand in der **Ecke** der
+    Platte, mit der Begründung, sie gehöre beiden Kanten. Der Nullpunkt der Szene
+    ist aber die Mitte der Platte, nicht ihre Ecke: bei 220 mm stand „0" bei
+    x = -110 und zehn Millimeter weiter „100". Jede Kante bekommt deshalb ihre
+    eigene Null.
+
+    Vorzeichenbehaftet und nicht als Abstand von der Mitte, weil die
+    Positionsfelder der Operationsdialoge es auch sind — wer „Position X = -40"
+    tippt, soll die -40 auf der Platte finden.
     """
     marks: list[tuple[tuple[float, float, float], str]] = []
     half_width, half_depth = width / 2.0, depth / 2.0
     step = BED_SCALE_STEP
-    position = step
-    while position <= half_width + EPS_GEOM:
-        for side in (-position, position):
-            marks.append(((side, -half_depth - BED_SCALE_GAP, 0.0), f"{abs(side):.0f}"))
-        position += step
-    position = step
-    while position <= half_depth + EPS_GEOM:
-        for side in (-position, position):
-            marks.append(((-half_width - BED_SCALE_GAP, side, 0.0), f"{abs(side):.0f}"))
-        position += step
-    # Der Nullpunkt einmal, nicht zweimal — er gehört beiden Kanten.
-    marks.append(((-half_width - BED_SCALE_GAP, -half_depth - BED_SCALE_GAP, 0.0), "0"))
+
+    def along(half: float) -> list[float]:
+        """Die Marken einer Kante: die Null, dann schrittweise nach beiden Seiten.
+
+        Eine Platte, die schmaler ist als ein Schritt, behält so ihre Null —
+        ohne sie stolpert VTK über eine leere Beschriftungsliste.
+        """
+        values = [0.0]
+        position = step
+        while position <= half + EPS_GEOM:
+            values.extend((-position, position))
+            position += step
+        return values
+
+    for value in along(half_width):
+        marks.append(((value, -half_depth - BED_SCALE_GAP, 0.0), f"{value:.0f}"))
+    for value in along(half_depth):
+        marks.append(((-half_width - BED_SCALE_GAP, value, 0.0), f"{value:.0f}"))
     return marks
 
 
@@ -1029,6 +1076,11 @@ class Viewport(QWidget):
         steht fest, wer auf wem steht — und damit, welche Fläche den Schatten
         auffängt."""
         self._bed_extent: tuple[float, float] | None = None
+        self._build_volume: tuple[float, float, float] | None = None
+        """Der Bauraum des geltenden Profils — Breite, Tiefe, Höhe.
+
+        Getrennt von :attr:`_bed_extent`, weil der Schattenschnitt nur die
+        Platte braucht und das Einpassen der leeren Szene die Höhe."""
         """Breite und Tiefe der Druckplatte, sobald ein Bauraum gezeigt wurde.
         Der Schatten wird an ihrer Kante geschnitten; ohne Bauraum gibt es
         nichts zu schneiden."""
@@ -1975,6 +2027,7 @@ class Viewport(QWidget):
         # Grund wie dort: dass ein Bauraum gilt, ist eine Aussage über die
         # Szene und nicht über VTK.
         self._bed_extent = (width, depth)
+        self._build_volume = (width, depth, height)
         if self.plotter is None:
             return
         import pyvista as pv
@@ -3472,15 +3525,21 @@ class Viewport(QWidget):
         einpassen" tat sichtbar nichts, weil schon eingepasst war.
 
         Ohne Körper bleibt der Bauraum das Maß — dann ist er das Einzige, was
-        es zu sehen gibt.
+        es zu sehen gibt. Gerechnet wird er hier selbst, statt ihn pyvista über
+        alle Aktoren suchen zu lassen: nur so bekommt auch die leere Szene ihre
+        Luft, und nur so hängt das Ergebnis nicht daran, welche Kulisse gerade
+        zusätzlich im Bild steht.
+
+        **Mit Luft** (:data:`CAMERA_MARGIN`). Genau eingepasst berührte ein
+        40 mm großer Quader links und rechts den Bildrand.
         """
         if self.plotter is None:
             return
-        bounds = self._object_bounds()
+        bounds = self._object_bounds() or self._volume_bounds()
         if bounds is None:
             self.plotter.reset_camera()
         else:
-            self.plotter.reset_camera(bounds=bounds)
+            self.plotter.reset_camera(bounds=with_margin(bounds))
         # **Ohne diese Zeile war das Einpassen wirkungslos.** pyvistas
         # ``reset_camera`` lässt ``camera_set`` auf False stehen, und der
         # nächste Zugriff auf ``plotter.camera`` — beim Rendern, beim
@@ -3518,6 +3577,19 @@ class Viewport(QWidget):
         if wanted != self._fitted_to:
             self.reset_camera()
             self._fitted_to = wanted  # type: ignore[assignment]
+
+    def _volume_bounds(self) -> tuple[float, float, float, float, float, float] | None:
+        """Der Bauraum als Hüllquader, oder nichts, solange kein Profil gilt.
+
+        Der Rückfall für die leere Szene. Ein Slicer zeigt dort denselben
+        Kasten — die Platte in seinem Boden, die Höhe darüber leer —, und das
+        ist die Gewohnheit, an der sich die Navigation ohnehin ausrichtet
+        (§2.9).
+        """
+        if self._build_volume is None:
+            return None
+        width, depth, height = self._build_volume
+        return (-width / 2.0, width / 2.0, -depth / 2.0, depth / 2.0, 0.0, height)
 
     def _object_bounds(self) -> tuple[float, float, float, float, float, float] | None:
         """Der Hüllquader über alle Körper, im Format von VTK, oder nichts."""

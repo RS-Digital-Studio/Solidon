@@ -1738,3 +1738,57 @@ def test_a_conflict_says_which_two_constraints(qt_app: QApplication) -> None:
         )
     finally:
         panel.deleteLater()
+
+
+def test_escape_has_exactly_one_owner_in_the_sketch_mode(qt_app: QApplication) -> None:
+    """Escape war im Skizzenmodus tot — und ein Test sah es nicht.
+
+    Zwei Kürzel lagen auf derselben Taste: das Fenster verlässt damit die
+    Skizze, der Editor wählte damit das Auswahlwerkzeug. Qt entscheidet die
+    Mehrdeutigkeit, bevor irgendein Code von uns läuft — es meldet
+    ``activatedAmbiguously`` und führt **keines** von beiden aus. Gemessen im
+    offenen Skizzenmodus: null Ausführungen, die Skizze blieb stehen, und das
+    ist die Taste, nach der jeder als Erstes greift.
+
+    Der Test daneben rief ``window._escape()`` direkt und war deshalb grün: Er
+    prüfte den Handler, nicht die Belegung. Geprüft wird hier die Ursache —
+    **ein** Besitzer der Taste —, denn sie ist unabhängig davon, welches Fenster
+    ein Testlauf gerade für das aktive hält.
+
+    Dazu die zwei Stufen: Wer eine Linie zieht, meint mit Escape das Werkzeug;
+    wer nur schaut, meint die Skizze.
+    """
+    from PySide6.QtGui import QShortcut
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.show()
+        window.start_sketch("sketch_extrude")
+        panel = window._sketch_panel
+        assert panel is not None
+
+        owners = [
+            shortcut
+            for shortcut in window.findChildren(QShortcut)
+            if shortcut.key().toString() == "Esc" and shortcut.isEnabled()
+        ]
+        assert len(owners) == 1, (
+            f"{len(owners)} Kürzel auf Escape — Qt führt dann keines aus: "
+            f"{[type(entry.parent()).__name__ for entry in owners]}"
+        )
+
+        panel.choose_tool("line")
+        assert panel.canvas.tool == "line"
+
+        window._escape()
+        assert panel.canvas.tool == "select", "Escape legt zuerst das Werkzeug ab"
+        assert window.sketching(), "und wirft die Zeichnung nicht gleich mit weg"
+
+        window._escape()
+        assert not window.sketching(), "beim zweiten Mal verlässt es die Skizze"
+    finally:
+        window.deleteLater()

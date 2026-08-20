@@ -43,11 +43,15 @@ from app.ui.style import NORMAL, TIGHT
 class StepLabel(QLabel):
     """Eine Schrittzeile, die umbricht oder mit Auslassung endet.
 
-    Nur der aktuelle Schritt steht in voller Länge da; die übrigen sind eine
-    Zeile. Qt schneidet eine zu lange Zeile stumpf ab — „…Transaktionen: Bode"
-    liest sich nicht wie eine Kürzung, sondern wie ein Fehler. Ein Widget, das
-    beides kann, hält die Entscheidung an einer Stelle: gekürzt wird beim
-    Zeichnen, also auch nach jeder Änderung der Spaltenbreite.
+    Qt schneidet eine zu lange Zeile stumpf ab — „…Transaktionen: Bode" liest
+    sich nicht wie eine Kürzung, sondern wie ein Fehler. Ein Widget, das beides
+    kann, hält die Entscheidung an einer Stelle: gekürzt wird beim Zeichnen,
+    also auch nach jeder Änderung der Spaltenbreite.
+
+    Welche der beiden Formen gilt, entscheidet nicht dieses Widget, sondern
+    :meth:`TourPanel._update_marks`. Dort stehen heute alle Schritte auf
+    Umbruch — die Kürzung machte vier von fünf unlesbar, während unter ihnen
+    Platz frei war. Sie bleibt, weil eine schmale Spalte sie wieder braucht.
     """
 
     def __init__(self, text: str, parent: QWidget | None = None) -> None:
@@ -355,9 +359,18 @@ class TourPanel(QWidget):
             body.setBold(index == self._current)
             text.setFont(body)
             text.setEnabled(index <= self._current)
-            # Nur der aktuelle Schritt bricht um; die anderen enden mit einer
-            # Auslassung auf ihrer Zeile.
-            text.set_wrapped(index == self._current)
+            # **Jeder Schritt bricht um.** Nur der aktuelle tat es, die übrigen
+            # endeten mit einer Auslassung auf ihrer Zeile — bei fünf Schritten
+            # waren vier davon unlesbar („Öffnen Sie den letzten Schritt
+            # „Bohrung setze…"), und unter ihnen standen hundertfünfzig
+            # Bildpunkte leer. Die Kürzung sparte Platz, den es nicht zu sparen
+            # gab. Der Schrittbereich liegt in einer ``QScrollArea``, eine lange
+            # Tour rollt also, statt die Knöpfe hinauszuschieben.
+            #
+            # ``StepLabel`` behält beide Fähigkeiten: eine schmale Spalte
+            # braucht die Auslassung weiter, und was sie kann, prüft
+            # ``tests/test_style.py`` am Widget.
+            text.set_wrapped(True)
             if index < self._current:
                 marker.setPixmap(self._mark("done"))
             elif index == self._current:

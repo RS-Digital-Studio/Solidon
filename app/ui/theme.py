@@ -30,6 +30,19 @@ Theme = Literal["dark", "light"]
 _SELECTION = "#f0a54a"
 _ON_SELECTION = "#1c2026"
 
+#: Derselbe Bernstein, gedrückt.
+#:
+#: Der Hauptknopf gab im **dunklen** Thema auf einen Klick nichts zurück, und
+#: das lag an einer geborgten Farbe: Die Regel dafür nahm ``accent_line``, und
+#: die *ist* im dunklen Thema :data:`_SELECTION` — gedrückt sah aus wie
+#: losgelassen. Im hellen fiel es nie auf, weil dort der abgedunkelte Ton
+#: steht. Der lauteste Knopf der Anwendung war also der einzige ohne Rückmeldung.
+#:
+#: Der Wert ist in beiden Themen derselbe, weil der Ruhezustand es auch ist:
+#: 1,78 Unterschied zum Bernstein — deutlich zu sehen —, und die dunkle Schrift
+#: darauf hält 4,47.
+_SELECTION_PRESSED = "#c37210"
+
 #: Die Kante, mit der ein *bleibender* Zustand markiert wird — der aktive
 #: Reiter, der offene Abschnitt.
 #:
@@ -58,17 +71,41 @@ _ACCENT_LINE: Final = {"dark": _SELECTION, "light": "#c37210"}
 #: Fenster steht dunkel gut und macht hell aus dem Weiß ein Grau. Hell arbeitet
 #: deshalb mit 1,22. Wer beide über einen Kamm schert, verdirbt eines von
 #: beiden.
+#:
+#: **``grid_minor`` und ``grid_major`` sind die Linien der Zeichenfläche.** Sie
+#: standen nicht hier, und das war der ganze Fehler: `sketch_editor` nahm
+#: ``palette.mid()`` mit Alpha 60 und 140 — eine Rolle, die diese Tabelle nie
+#: gesetzt hat. Was ankam, war Qts Vorgabe ``#282828``, in **beiden** Themen
+#: dieselbe. Gemischt über die Zeichenfläche ergab das im dunklen Thema 1,02
+#: und 1,05 Kontrast: ein Raster, das gezeichnet wird und das niemand sieht,
+#: während „Am Raster fangen" auf an steht. Im hellen Thema war die Hauptlinie
+#: mit 3,55 umgekehrt kräftiger als die Trennlinie des Themas selbst.
+#:
+#: Die Werte sind aus Zielkontrasten gegen ``base`` gerechnet und danach am Bild
+#: geprüft — und das Ansehen hat sie verschoben. Gerechnet standen beide Themen
+#: auf 1,35 und 2,0; hell sitzt das, dunkel war es weiter zu leise. Dieselbe
+#: Asymmetrie wie bei den Flächen oben, nur in der anderen Richtung: derselbe
+#: Kontrastwert liest sich auf dunklem Grund schwächer. Dunkel steht deshalb auf
+#: **1,60 und 2,59**, hell auf **1,35 und 2,0**.
+#:
+#: Gezeichnet wird das Raster **ohne Kantenglättung und auf halbe Pixel gelegt**
+#: (:meth:`SketchCanvas._paint_grid`). Eine geglättete Linie von einem Pixel
+#: liegt auf zwei Spalten, jede halb gemischt — aus 1,36 wurden gemessene 1,26,
+#: und die Zahlen hier wären wieder eine Schätzung.
 THEMES: dict[Theme, dict[str, str]] = {
     "dark": {
         "window": "#343a45",
         "base": "#1b1f25",
         "alternate": "#2c323b",
         "line": "#647182",
+        "grid_minor": "#39414b",
+        "grid_major": "#55606f",
         "text": "#e6e9ee",
         "disabled": "#7c848f",
         "muted": "#a8b0ba",
         "highlight": _SELECTION,
         "highlight_text": _ON_SELECTION,
+        "highlight_pressed": _SELECTION_PRESSED,
         "accent_line": _ACCENT_LINE["dark"],
         "tooltip": "#2c323c",
         "viewport_bottom": "#20242b",
@@ -83,11 +120,14 @@ THEMES: dict[Theme, dict[str, str]] = {
         "base": "#ffffff",
         "alternate": "#e8eaed",
         "line": "#9ea7b5",
+        "grid_minor": "#dbdee3",
+        "grid_major": "#b1b8c3",
         "text": "#1c2026",
         "disabled": "#8b929b",
         "muted": "#5d646d",
         "highlight": _SELECTION,
         "highlight_text": _ON_SELECTION,
+        "highlight_pressed": _SELECTION_PRESSED,
         "accent_line": _ACCENT_LINE["light"],
         # Weiß und nicht das Blassgelb, das Qt hier mitbringt: Der Hinweis
         # erscheint über Leisten und Knöpfen, also über ``window``, und hebt
@@ -130,6 +170,23 @@ def build_palette(theme: Theme) -> QPalette:
     # als Einziges sagt, wie ein Schlüssel aussieht. Dreizehn Felder tragen
     # ihre Auskunft dort.
     palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(colours["disabled"]))
+    # Die beiden Rasterrollen der Zeichenfläche. Qt nennt sie ``Midlight`` und
+    # ``Mid``; hier heißen sie nach ihrem Zweck, und die Zeichenfläche greift
+    # über die Palette darauf zu, statt eine eigene Konstante zu führen. Damit
+    # zieht ein Themenwechsel sie mit, wie jede andere Farbe auch.
+    palette.setColor(QPalette.ColorRole.Midlight, QColor(colours["grid_minor"]))
+    palette.setColor(QPalette.ColorRole.Mid, QColor(colours["grid_major"]))
+    # Der Akzent überlebte das Sperren. Gemessen an einem Regler und einem
+    # Fortschrittsbalken, je zweimal gerendert: 2638 Akzentpunkte bedienbar,
+    # 2638 gesperrt — pixelgleich, in beiden Themen. Fusion zeichnet die Rille
+    # des Reglers und den Balken mit ``Highlight``, und diese Rolle stand nur
+    # für die aktive Gruppe hier. Der gesperrte Schnittregler sah damit
+    # bedienbar aus, obwohl ``SectionBar`` ihn ohne Achse abschaltet — dasselbe
+    # Bild wie beim gesperrten Ankreuzfeld eine Zeile weiter unten, nur an der
+    # Fläche statt an der Schrift.
+    palette.setColor(
+        QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor(colours["disabled"])
+    )
     for role in (
         QPalette.ColorRole.Text,
         QPalette.ColorRole.ButtonText,

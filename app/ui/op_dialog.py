@@ -871,15 +871,28 @@ class OperationDialog(QDialog):
         zu Rand und Kante. Passt der Dialog dort nicht, bleibt er, wo Qt ihn
         hingesetzt hat — ein Dialog außerhalb des Bildschirms wäre schlimmer
         als einer in der Mitte.
+
+        **Gerechnet wird mit der Breite, die er wirklich bekommt.** ``sizeHint``
+        allein war zu klein: Der Dialog hat eine Mindestbreite von 380, und
+        seine Wunschbreite liegt je Operation zwischen 249 und 318 Bildpunkten
+        (gemessen). Um genau diese Differenz — 62 bis 131 Punkte — schob ihn
+        die Rechnung über die rechte Kante hinaus, also über den Rand des
+        Viewports, für den die ganze Methode da ist.
+
+        ``width()`` gilt nur, wenn er schon steht: vor dem Anzeigen trägt ein
+        Qt-Widget die Vorgabe 640 und nicht seine eigene Breite — damit läge der
+        Dialog plötzlich links der Bildmitte, also wieder über dem Modell.
         """
         if anchor is None:
             return
         area = anchor.rect()
-        size = self.sizeHint()
-        if size.width() + 2 * DIALOG_MARGIN > area.width():
+        width = (
+            self.width() if self.isVisible() else max(self.sizeHint().width(), self.minimumWidth())
+        )
+        if width + 2 * DIALOG_MARGIN > area.width():
             return
         corner = anchor.mapToGlobal(area.topRight())
-        self.move(corner.x() - size.width() - DIALOG_MARGIN, corner.y() + DIALOG_MARGIN)
+        self.move(corner.x() - width - DIALOG_MARGIN, corner.y() + DIALOG_MARGIN)
 
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""

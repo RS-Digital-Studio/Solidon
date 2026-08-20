@@ -393,3 +393,138 @@ def test_the_tab_bar_shows_where_the_keyboard_is() -> None:
     assert "QTabBar::tab:focus {" not in sheet, (
         "Ein Fokusrahmen an jedem Reiter markiert die ganze Leiste statt einer Stelle."
     )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_a_locked_progress_bar_gives_up_the_accent(theme: str, qt_app: object) -> None:
+    """Gesperrt heißt leiser — und geprüft wird das am Bild, nicht am Text.
+
+    Die Palette trug den gedämpften Akzent für die Disabled-Gruppe längst; der
+    Balken zeichnete trotzdem den vollen, weil ein Stylesheet gegen die Palette
+    gewinnt und ``QProgressBar::chunk`` keine gesperrte Regel hatte. Genau diese
+    Lücke findet keine Prüfung der Palettenwerte — nur ein Referenzvergleich:
+    dasselbe Widget zweimal gerendert, einmal bedienbar, einmal gesperrt, und
+    die bernsteinartigen Punkte gezählt. Vorher 2018 gegen 2018, pixelgleich.
+
+    Gesucht wird nach **Farbton**, nicht nach dem Hexwert: Fusion hellt und
+    dunkelt den Akzent beim Zeichnen ab, und eine Suche nach ``#f0a54a`` fand
+    deshalb null Punkte auf einem Balken, der sichtbar bernsteinfarben war.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QApplication, QProgressBar, QVBoxLayout, QWidget
+
+    from app.ui.theme import apply_theme
+
+    application = QApplication.instance()
+    assert application is not None
+    apply_theme(application, theme)  # type: ignore[arg-type]
+
+    def amber_pixels(enabled: bool) -> int:
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        bar = QProgressBar(host)
+        bar.setRange(0, 100)
+        bar.setValue(60)
+        bar.setEnabled(enabled)
+        layout.addWidget(bar)
+        host.resize(240, 50)
+        host.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        host.show()
+        image = host.grab().toImage()
+        found = 0
+        for y in range(image.height()):
+            for x in range(image.width()):
+                hue, saturation, value, _alpha = QColor(image.pixel(x, y)).getHsv()
+                if 20 <= hue <= 50 and saturation >= 60 and value >= 90:
+                    found += 1
+        host.close()
+        return found
+
+    usable = amber_pixels(True)
+    locked = amber_pixels(False)
+    # Das Thema gehört der Anwendung und nicht diesem Test: er hat sie
+    # umgeschaltet, also stellt er den Ausgangszustand wieder her. Sonst läuft
+    # der nächste Test in derselben Prozessinstanz im hellen Thema weiter, und
+    # welcher das ist, entscheidet die Sammelreihenfolge.
+    apply_theme(application, "dark")  # type: ignore[arg-type]
+
+    assert usable > 100, f"{theme}: der bedienbare Balken trägt keinen Akzent ({usable} Punkte)"
+    assert locked == 0, f"{theme}: der gesperrte Balken trägt ihn weiter ({locked} Punkte)"
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_the_primary_button_gives_way_when_pressed(theme: str, qt_app: object) -> None:
+    """Der lauteste Knopf der Anwendung war der einzige ohne Rückmeldung.
+
+    Die Regel dafür gab es — sie nahm nur ``accent_line``, und die *ist* im
+    dunklen Thema der Bernstein selbst: gedrückt sah aus wie losgelassen, im
+    voreingestellten Thema, auf jedem Hauptknopf. Im hellen fiel es nie auf,
+    weil dort der abgedunkelte Ton steht. Genau deshalb wird hier über **beide**
+    Themen geprüft und am Bild, nicht am Stylesheet-Text: dass eine Regel
+    dasteht, heißt nicht, dass sie etwas ändert.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QWidget
+
+    from app.ui.style import make_primary
+    from app.ui.theme import apply_theme
+
+    application = QApplication.instance()
+    assert application is not None
+    apply_theme(application, theme)  # type: ignore[arg-type]
+
+    def loudest_amber(pressed: bool) -> str | None:
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        button = make_primary(QPushButton("Bohrung setzen", host))
+        layout.addWidget(button)
+        host.resize(200, 50)
+        host.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        host.show()
+        if pressed:
+            button.setDown(True)
+        image = host.grab().toImage()
+        tally: dict[str, int] = {}
+        for y in range(image.height()):
+            for x in range(image.width()):
+                colour = QColor(image.pixel(x, y))
+                hue, saturation, _value, _alpha = colour.getHsv()
+                if 20 <= hue <= 50 and saturation >= 60:
+                    tally[colour.name()] = tally.get(colour.name(), 0) + 1
+        host.close()
+        return max(tally, key=lambda name: tally[name]) if tally else None
+
+    resting = loudest_amber(False)
+    pressed = loudest_amber(True)
+    apply_theme(application, "dark")  # type: ignore[arg-type]
+
+    assert resting, f"{theme}: der Hauptknopf trägt keinen Akzent"
+    assert pressed != resting, f"{theme}: gedrückt sieht aus wie losgelassen ({resting})"
+
+
+def test_no_progress_bar_prints_its_number_over_the_moving_edge() -> None:
+    """Die Zahl stand mittig, und der Rand der Füllung wanderte darunter durch.
+
+    Bei 45 % lag sie halb auf Bernstein und halb auf der Spur, ab 60 % ganz auf
+    Bernstein — mit 1,69 Kontrast, also unlesbar. Eine Farbe, die auf beiden
+    Gründen trägt, gibt es nicht, und eine dunklere Füllung nähme dem Balken
+    den Akzent: 4,5 Schriftkontrast kostet die Hälfte des Flächenkontrasts,
+    nachgerechnet. Der Prozentwert steht deshalb neben dem Balken.
+
+    Geprüft an der Quelle, weil die vier Balken in vier Dateien entstehen und
+    ein neuer sonst stillschweigend wieder eine Zahl mitbringt.
+    """
+    offenders = []
+    for path in sorted(UI.glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "QProgressBar(" not in source:
+            continue
+        if "setTextVisible(False)" not in source:
+            offenders.append(path.name)
+
+    assert not offenders, (
+        f"Diese Balken schreiben ihre Zahl über die Füllung: {offenders}. "
+        "setTextVisible(False), und der Prozentwert daneben."
+    )

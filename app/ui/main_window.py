@@ -897,6 +897,12 @@ class MainWindow(QMainWindow):
             self.section_bar,
             lambda: self.section_bar.axis.setCurrentIndex(0),
             symbol="section",
+            # Beim Öffnen waagerecht schneiden: „Kein Schnitt" mit gesperrtem
+            # Regler war der Zustand, in dem der Hinweis daneben zum Ziehen
+            # aufforderte. Z, weil eine Schicht so liegt, wie der Drucker sie
+            # legt — und weil es die Wandstärke zeigt, von der der Hinweis
+            # spricht.
+            start=lambda: self.section_bar.axis.setCurrentIndex(3),
             hint=tr(
                 "Ziehen Sie den Regler durch das Teil, oder tippen Sie eine Höhe. "
                 "Die Schnittfläche wird geschlossen gezeigt — so ist die Wandstärke "
@@ -909,6 +915,10 @@ class MainWindow(QMainWindow):
             self.measure_bar,
             lambda: self.measure_bar.mode.setCurrentIndex(0),
             symbol="measure",
+            # „Zwei Punkte im Bild anklicken" — dafür muss gemessen werden.
+            # Abstand ist die häufigere der beiden Arten und die, die der
+            # Hinweis zuerst nennt.
+            start=lambda: self.measure_bar.mode.setCurrentIndex(1),
             hint=tr(
                 "Zwei Punkte im Bild anklicken. Der Fang rastet auf Ecken und Kanten; "
                 "für die Wandstärke genügt ein Klick auf die Fläche."
@@ -920,6 +930,9 @@ class MainWindow(QMainWindow):
             self.transform_bar,
             lambda: self.transform_bar.gizmo.setChecked(False),
             symbol="move",
+            # „Am Griff im Bild ziehen" — und der Griff war aus. Wer ihn nicht
+            # will, klickt den Haken weg; wer das Werkzeug öffnet, will bewegen.
+            start=lambda: self.transform_bar.gizmo.setChecked(True),
             hint=tr(
                 "Am Griff im Bild ziehen, oder Werte eintippen. Jeder Zug wird ein "
                 "Schritt im Verlauf und ist einzeln zurücknehmbar."
@@ -1189,7 +1202,16 @@ class MainWindow(QMainWindow):
     def _build_status_bar(self) -> None:
         self.measurements = MeasurementLabel(self)
         self.status_message = QLabel("", self)
+        # **Keine Zahl im Balken.** Sie steht mittig, und der Rand der
+        # Füllung wandert darunter hindurch: bei 45 % lag sie halb auf
+        # Bernstein und halb auf der Spur, ab 60 % ganz auf Bernstein — mit
+        # 1,69 Kontrast, also unlesbar. Eine Farbe, die auf beiden Gründen
+        # trägt, gibt es nicht; eine dunklere Füllung nähme dem Balken den
+        # Akzent (gerechnet: 4,5 Schriftkontrast kostet die Hälfte des
+        # Flächenkontrasts). Der Prozentwert steht deshalb in der Zeile
+        # daneben, wo ein ruhiger Grund ist.
         self.progress = QProgressBar(self)
+        self.progress.setTextVisible(False)
         self.progress.setMaximumWidth(180)
         self.progress.setVisible(False)
         self.cancel_button = QPushButton(tr("Abbrechen"), self)
@@ -3217,6 +3239,12 @@ class MainWindow(QMainWindow):
         nichts Gerechnetes — die Skizze war noch keine Operation.
         """
         if self._sketch_panel is not None:
+            # Zwei Stufen: erst das Zeichenwerkzeug ablegen, dann die Skizze
+            # verlassen. Vorher lag auf dieser Taste auch ein Kürzel des
+            # Editors, und Qt führte deshalb **keines** von beiden aus — es
+            # meldete ``activatedAmbiguously`` und tat nichts.
+            if self._sketch_panel.drop_tool():
+                return
             self.finish_sketch(keep=False)
             return
         if self._armature_target is not None:
@@ -5215,7 +5243,14 @@ class MainWindow(QMainWindow):
         # leerem Bild; bei jeder langen Rechnung an einem geladenen Modell
         # stand hier Prozent ohne jede Zeitangabe.
         left_over = remaining_time(self._run_started, fraction)
-        self.status_message.setText(f"{text}  ·  {left_over}" if left_over else text)
+        # Der Prozentwert steht hier und nicht im Balken: dort wanderte der Rand
+        # der Füllung unter der Zahl hindurch, und ab 60 % war sie mit 1,69
+        # Kontrast auf Bernstein nicht mehr zu lesen. Hier hat sie einen ruhigen
+        # Grund — und steht neben dem Schritt, den sie meint.
+        parts = [text, f"{round(fraction * 100)} %"]
+        if left_over:
+            parts.append(left_over)
+        self.status_message.setText("  ·  ".join(parts))
 
     def _on_busy(self, busy: bool) -> None:
         # Agent und Trennebenensuche können gleichzeitig laufen; dann bleiben

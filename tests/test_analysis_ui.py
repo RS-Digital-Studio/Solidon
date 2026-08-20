@@ -831,27 +831,45 @@ def test_fitting_tells_pyvista_that_it_is_done(window: MainWindow) -> None:
     jeder Achsansicht) setzt die Kamera daraufhin selbst — diesmal über *alle*
     Aktoren. Der Bauraum gewann also jedes Mal, obwohl hier die Maße der Körper
     standen: „Alles einpassen" tat sichtbar nichts.
+
+    Eingepasst wird **mit Luft**: genau auf die Grenzen berührte ein 40 mm
+    großer Quader links und rechts den Bildrand.
     """
+    from app.ui.viewport import with_margin
+
     window.viewport.show_scene(window.session.last_result)
     plotter = _CameraPlotter()
     window.viewport.plotter = plotter
 
     window.viewport.reset_camera()
 
-    assert plotter.fitted_to == [window.viewport._object_bounds()], "auf die Körper"
+    bounds = window.viewport._object_bounds()
+    assert bounds is not None
+    assert plotter.fitted_to == [with_margin(bounds)], "auf die Körper, mit Luft darum"
     assert plotter.camera_set, "und danach fasst pyvista die Kamera nicht mehr an"
 
 
 def test_an_empty_scene_still_fits_on_something(window: MainWindow) -> None:
     """Ohne Körper bleibt der Bauraum das Maß — dann ist er das Einzige, was
-    es zu sehen gibt."""
+    es zu sehen gibt.
+
+    **Gerechnet wird er hier selbst**, statt ``reset_camera()`` ohne Grenzen zu
+    rufen und pyvista alle Aktoren suchen zu lassen. Zwei Gründe: nur so bekommt
+    auch die leere Szene ihre Luft, und nur so hängt das Ergebnis nicht daran,
+    welche Kulisse gerade zusätzlich im Bild steht. Ohne Grenzen rutschte die
+    Platte ins untere Drittel und teilweise hinter die Werkzeugzeile.
+    """
+    from app.ui.viewport import with_margin
+
     window.viewport.show_scene(None)
     plotter = _CameraPlotter()
     window.viewport.plotter = plotter
 
     window.viewport.reset_camera()
 
-    assert plotter.fitted_to == [None]
+    volume = window.viewport._volume_bounds()
+    assert volume is not None, "das Fenster hat ein Profil, also gilt ein Bauraum"
+    assert plotter.fitted_to == [with_margin(volume)]
     assert plotter.camera_set
 
 
@@ -879,7 +897,11 @@ def test_a_new_project_puts_the_build_volume_in_the_picture(window: MainWindow) 
     viewport._result = None
     viewport._fit_once_for(None)
 
-    assert plotter.fitted_to == [None], "die leere Szene passt auf den Bauraum ein"
+    from app.ui.viewport import with_margin
+
+    volume = viewport._volume_bounds()
+    assert volume is not None
+    assert plotter.fitted_to == [with_margin(volume)], "die leere Szene passt auf den Bauraum ein"
     assert viewport._bed_extent is not None, "der Bauraum gilt auch ohne Plotter"
     assert viewport._fitted_to == "bed"
 
@@ -1789,6 +1811,30 @@ def test_switching_it_off_clears_the_view(window: MainWindow) -> None:
 # --- Maßstab an der Druckplatte (Konzept P15 §7 Etappe 1) ----------------------
 
 
+def test_what_is_fitted_gets_air_around_it() -> None:
+    """``reset_camera(bounds=…)`` passt genau ein — und das war zu genau.
+
+    Ein 40 mm großer Quader berührte links und rechts den Bildrand, und von der
+    Druckplatte war nichts mehr zu sehen. Zwölf Prozent je Achse, um die Mitte
+    gelegt: die Mitte bleibt, wo sie war, und beide Seiten gewinnen gleich viel.
+
+    Eine Achse ohne Ausdehnung bleibt unberührt — eine flache Skizze soll nicht
+    in die Tiefe wachsen, nur weil jemand einpasst.
+    """
+    from app.ui.viewport import CAMERA_MARGIN, with_margin
+
+    wide = with_margin((-20.0, 20.0, -15.0, 15.0, 0.0, 10.0))
+    assert wide[0] == pytest.approx(-20.0 - 40.0 * CAMERA_MARGIN / 2.0)
+    assert wide[1] == pytest.approx(20.0 + 40.0 * CAMERA_MARGIN / 2.0)
+    # Die Mitte verschiebt sich nicht.
+    assert (wide[0] + wide[1]) / 2.0 == pytest.approx(0.0)
+    assert (wide[4] + wide[5]) / 2.0 == pytest.approx(5.0)
+
+    flat = with_margin((-10.0, 10.0, -10.0, 10.0, 3.0, 3.0))
+    assert flat[4] == pytest.approx(3.0)
+    assert flat[5] == pytest.approx(3.0)
+
+
 def test_the_bed_carries_numbers_not_just_lines() -> None:
     """Ein Raster ohne Zahlen sagt nur, dass es ein Raster gibt.
 
@@ -1806,13 +1852,44 @@ def test_the_bed_carries_numbers_not_just_lines() -> None:
 
     assert "50" in labels
     assert "100" in labels
-    assert labels.count("0") == 1, "der Nullpunkt gehört beiden Kanten, steht aber einmal da"
-    # 128 mm je Seite, alle 50 mm: 50 und 100 in beide Richtungen, je Achse
-    # vier Zahlen, dazu die Null.
-    assert len(marks) == 2 * 4 + 1
+    # 128 mm je Seite, alle 50 mm: Null, 50 und 100 in beide Richtungen — je
+    # Kante fünf Zahlen.
+    assert len(marks) == 2 * 5
 
-    steps = sorted({float(text) for text in labels if text != "0"})
-    assert steps == [BED_SCALE_STEP, 2 * BED_SCALE_STEP]
+    steps = sorted({float(text) for text in labels})
+    assert steps == [-2 * BED_SCALE_STEP, -BED_SCALE_STEP, 0.0, BED_SCALE_STEP, 2 * BED_SCALE_STEP]
+
+
+def test_the_bed_scale_signs_its_numbers_and_puts_zero_in_the_middle() -> None:
+    """Die Skala widersprach sich selbst.
+
+    ``abs()`` nahm beiden Seiten das Vorzeichen — dieselbe „100" lag zweimal im
+    Bild —, und die einzige Null stand in der **Ecke** der Platte, mit der
+    Begründung, sie gehöre beiden Kanten. Der Nullpunkt der Szene ist aber die
+    Mitte: bei 220 mm stand „0" bei x = -110 und zehn Millimeter weiter „100".
+    Ein Körper aus ``create_box`` steht in dieser Mitte, und „Position X = -40"
+    im Dialog meint dieselbe Achse.
+
+    Geprüft wird beides — dass die Null dort liegt, wo sie hingehört, und dass
+    die negative Seite ihr Vorzeichen behält.
+    """
+    from app.ui.viewport import bed_scale
+
+    marks = bed_scale(220.0, 220.0)
+    # Die Marken der Vorderkante liegen weiter vorn als seitlich, die der linken
+    # Kante umgekehrt — das trennt die beiden Kanten, ohne den Abstand zu kennen,
+    # mit dem sie vor der Platte stehen.
+    front = [(point, text) for point, text in marks if point[1] < point[0]]
+
+    zeros = [point for point, text in marks if text == "0"]
+    assert len(zeros) == 2, "jede Kante trägt ihre eigene Null"
+    for point in zeros:
+        assert abs(point[0]) < 1e-9 or abs(point[1]) < 1e-9, (
+            "die Null einer Kante liegt in ihrer Mitte, nicht in der Ecke"
+        )
+
+    assert "-100" in [text for _point, text in marks], "die negative Seite behält ihr Vorzeichen"
+    assert [text for _point, text in front].count("100") == 1, "keine Zahl steht zweimal je Kante"
 
 
 def test_a_small_bed_still_gets_a_scale() -> None:
@@ -1823,7 +1900,9 @@ def test_a_small_bed_still_gets_a_scale() -> None:
 
     marks = bed_scale(60.0, 60.0)
     assert marks
-    assert [text for _point, text in marks] == ["0"]
+    # Je Kante ihre Null, seit die Skala vorzeichenbehaftet ist — vorher war es
+    # eine einzige in der Ecke, und die lag am falschen Ort.
+    assert [text for _point, text in marks] == ["0", "0"]
 
 
 def test_a_shadow_falls_beside_the_body_not_under_it() -> None:

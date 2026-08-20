@@ -1532,10 +1532,14 @@ class SketchCanvas(QWidget):
 
     def _paint_grid(self, painter: QPainter) -> None:
         palette = self.palette()
-        minor = QColor(palette.mid().color())
-        minor.setAlpha(60)
-        major = QColor(palette.mid().color())
-        major.setAlpha(140)
+        # **Ohne Alpha.** Die beiden Farben stehen in ``theme.THEMES`` und sind
+        # dort gegen die Zeichenfläche gerechnet und am Bild geprüft, je Thema
+        # eigene Zahlen. Hier stand ``palette.mid()`` mit Alpha 60 und 140 —
+        # auf eine Rolle, die das Thema nie gesetzt hat. Angekommen ist Qts
+        # Vorgabe ``#282828``, und gemischt waren das 1,02 Kontrast: das Raster
+        # wurde gezeichnet und war unsichtbar, während der Fang darauf einrastet.
+        minor = palette.midlight().color()
+        major = palette.mid().color()
         left, top = self._to_world(QPointF(0, 0))
         right, bottom = self._to_world(QPointF(self.width(), self.height()))
         step = self.grid_step()
@@ -1543,18 +1547,28 @@ class SketchCanvas(QWidget):
         # ablesbar, was ein Kästchen bedeutet, wenn der Maßstab die Weite
         # wechselt.
         marked = step * 5.0
+        # **Das Raster wird ohne Kantenglättung gezeichnet, auf halbe Pixel
+        # gelegt.** Eine geglättete Linie von einem Pixel Breite liegt auf zwei
+        # Spalten, jede zur Hälfte gemischt: aus 1,36 Kontrast werden gemessene
+        # 1,26, und die Linie sieht weich aus, wo sie scharf sein soll. Die
+        # Kurven weiter unten brauchen die Glättung, das Raster nicht — es
+        # besteht nur aus waagerechten und senkrechten Geraden.
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         x = math.floor(left / step) * step
         while x <= right:
             screen = self._to_screen(x, 0.0)
             painter.setPen(QPen(major if _on_multiple(x, marked, step) else minor, 1.0))
-            painter.drawLine(QPointF(screen.x(), 0.0), QPointF(screen.x(), float(self.height())))
+            at = math.floor(screen.x()) + 0.5
+            painter.drawLine(QPointF(at, 0.0), QPointF(at, float(self.height())))
             x += step
         y = math.floor(bottom / step) * step
         while y <= top:
             screen = self._to_screen(0.0, y)
             painter.setPen(QPen(major if _on_multiple(y, marked, step) else minor, 1.0))
-            painter.drawLine(QPointF(0.0, screen.y()), QPointF(float(self.width()), screen.y()))
+            at = math.floor(screen.y()) + 0.5
+            painter.drawLine(QPointF(0.0, at), QPointF(float(self.width()), at))
             y += step
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         self._paint_scale(painter, step, left, right, bottom, top)
         self._paint_axes(painter)
 
@@ -2402,6 +2416,20 @@ class SketchPanel(QWidget):
         widerspruchsfrei halten.
         """
         for name, key in TOOL_KEYS.items():
+            if key == "Esc":
+                # **Escape bindet hier nicht.** Das Fenster hat dieselbe Taste
+                # („die Skizze verlassen"), und Qt entscheidet die
+                # Mehrdeutigkeit, bevor irgendein Code von uns läuft: Es meldet
+                # ``activatedAmbiguously`` und führt **keines** von beiden aus.
+                # Gemessen im offenen Skizzenmodus — Escape tat nichts, weder
+                # Werkzeug ablegen noch Skizze schließen, und das ist die Taste,
+                # nach der jeder als Erstes greift.
+                #
+                # Beides tut jetzt ``MainWindow._escape`` in zwei Stufen, über
+                # :meth:`drop_tool`. Der Eintrag bleibt in ``TOOL_KEYS``, weil
+                # er die Taste am Knopf anschreibt — sie stimmt, nur der Weg
+                # dahin führt über das Fenster.
+                continue
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(lambda chosen=name: self.choose_tool(chosen))
@@ -2451,6 +2479,19 @@ class SketchPanel(QWidget):
         index = self.plane_choice.findData(plane)
         if index >= 0:
             self.plane_choice.setCurrentIndex(index)
+
+    def drop_tool(self) -> bool:
+        """Legt ein laufendes Zeichenwerkzeug ab. ``True``, wenn eines lief.
+
+        Die erste Stufe von Escape: Wer eine Linie zieht und aussteigen will,
+        meint das Werkzeug und nicht die ganze Skizze. Lief keines, gibt diese
+        Methode ``False`` zurück, und das Fenster verlässt die Skizze — die
+        zweite Stufe.
+        """
+        if self.canvas.tool == "select":
+            return False
+        self.choose_tool("select")
+        return True
 
     def choose_tool(self, name: str) -> None:
         """Wählt ein Werkzeug — was ein Klick auf seinen Knopf tut.

@@ -137,7 +137,14 @@ class CommandPalette(QDialog):
     def __init__(self, entries: list[PaletteEntry] | None = None, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle(tr("Befehle"))
-        self.setMinimumWidth(520)
+        # Breite **und** Höhe. Nur die Breite stand hier, und ohne Höhe nimmt
+        # das Layout seine kleinste: 248 Bildpunkte, also sieben Zeilen von
+        # hundertfünfundvierzig. Die Palette ist der Weg, auf dem alles
+        # erreichbar sein soll (§19.2) — sieben Zeilen machen daraus eine
+        # Suchmaske, in der man tippen *muss*, statt eine Liste, in der man
+        # blättern *kann*. Ein Eintrag kann zwei Zeilen hoch sein (Titel plus
+        # Grund für das Ausgrauen), 480 zeigen also zwölf bis sechzehn.
+        self.setMinimumSize(520, 480)
         self._entries = entries if entries is not None else list(palette_entries())
 
         self.search = QLineEdit(self)

@@ -154,6 +154,78 @@ def test_a_border_is_actually_visible(theme: str) -> None:
 
 
 @pytest.mark.parametrize("theme", list(THEMES))
+def test_the_drawing_grid_is_visible_without_shouting(theme: str) -> None:
+    """Das Raster der Zeichenfläche wurde gezeichnet und war unsichtbar.
+
+    ``sketch_editor._paint_grid`` nahm ``palette.mid()`` mit Alpha 60 und 140 —
+    eine Rolle, die diese Tabelle nie gesetzt hat. Angekommen ist Qts Vorgabe
+    ``#282828``, in beiden Themen dieselbe, und gemischt waren das **1,02** und
+    **1,05** Kontrast gegen die dunkle Zeichenfläche. Gefangen wird darauf
+    trotzdem: „Am Raster fangen" steht auf an, mit einem Millimeter Weite.
+
+    Im hellen Thema war es der umgekehrte Fehler: 3,55 für die Hauptlinie, mehr
+    als die Trennlinienfarbe des Themas selbst mitbringt.
+
+    Geprüft wird deshalb nach oben **und** nach unten. Die Spanne ist weit genug
+    für die Asymmetrie zwischen den Themen — dunkel steht auf 1,60 und 2,59,
+    hell auf 1,35 und 2,0, weil derselbe Kontrastwert auf dunklem Grund
+    schwächer liest — und eng genug, dass ein Griff in die Tabelle hier
+    auffällt und nicht erst im Bild.
+    """
+    colours = THEMES[theme]  # type: ignore[index]
+    minor = contrast_ratio(colours["grid_minor"], colours["base"])
+    major = contrast_ratio(colours["grid_major"], colours["base"])
+    assert 1.3 <= minor <= 1.8, f"{theme}: Nebenlinie {minor:.2f} — unsichtbar oder zu laut"
+    assert 1.9 <= major <= 2.8, f"{theme}: Hauptlinie {major:.2f} — unsichtbar oder zu laut"
+    assert major > minor, "jede fünfte Linie soll kräftiger sein, nicht schwächer"
+
+
+def test_the_grid_reaches_the_canvas_through_the_palette() -> None:
+    """Und die Zeichenfläche muss die Farben auch bekommen.
+
+    Sie liest sie über ``Midlight`` und ``Mid``, nicht über eine eigene
+    Konstante — sonst zieht ein Themenwechsel sie nicht mit. Genau dieser Weg
+    war unterbrochen: die Rollen standen nicht in der Palette, und was nicht
+    gesetzt ist, kommt vom Betriebssystem.
+    """
+    from PySide6.QtGui import QPalette
+
+    from app.ui.theme import build_palette
+
+    for theme in THEMES:
+        palette = build_palette(theme)  # type: ignore[arg-type]
+        colours = THEMES[theme]  # type: ignore[index]
+        assert palette.color(QPalette.ColorRole.Midlight).name() == colours["grid_minor"]
+        assert palette.color(QPalette.ColorRole.Mid).name() == colours["grid_major"]
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_a_locked_surface_loses_the_accent_too(theme: str) -> None:
+    """Gesperrt ist ein Zustand, den man sehen muss — auch an einer Fläche.
+
+    Für die Schriftrollen stand das schon; ``Highlight`` fehlte. Fusion
+    zeichnet damit die Rille des Reglers und den Fortschrittsbalken, und beide
+    trugen gesperrt denselben vollen Bernstein: an einem Regler und einem
+    Balken je zweimal gerendert und die Punkte gezählt — **2638 bedienbar,
+    2638 gesperrt**, pixelgleich, in beiden Themen. Der Schnittregler ohne
+    gewählte Achse sah dadurch bedienbar aus, obwohl ``SectionBar`` ihn
+    abschaltet.
+    """
+    from PySide6.QtGui import QPalette
+
+    from app.ui.theme import build_palette
+
+    palette = build_palette(theme)  # type: ignore[arg-type]
+    locked = palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight).name()
+    usable = palette.color(QPalette.ColorGroup.Active, QPalette.ColorRole.Highlight).name()
+    assert locked != usable, "eine gesperrte Fläche trägt den Akzent weiter"
+    colours = THEMES[theme]  # type: ignore[index]
+    assert contrast_ratio(locked, colours["window"]) >= 1.5, (
+        "gesperrt heißt leiser, nicht unsichtbar"
+    )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
 def test_the_surfaces_stand_apart(theme: str) -> None:
     """Sieben Flächenrollen lagen in einem Helligkeitsband von 3,7 Punkten.
 
@@ -236,6 +308,25 @@ def test_the_palette_lists_every_operation(qt_app: object) -> None:
         for index in range(palette.list.count())
     }
     assert listed == {spec.name for spec in REGISTRY.all()}
+
+
+def test_the_palette_opens_big_enough_to_be_a_list(qt_app: object) -> None:
+    """Sieben Zeilen von hundertfünfundvierzig sind keine Liste.
+
+    Gesetzt war nur die Breite; ohne Höhe nimmt das Layout seine kleinste, und
+    das waren 248 Bildpunkte. Die Palette ist der Weg, auf dem **alles**
+    erreichbar sein soll (§19.2) — so war sie eine Suchmaske, in der man tippen
+    muss, statt einer Liste, in der man blättern kann.
+
+    Geprüft an der Mindesthöhe und nicht an der Zeilenzahl: wie viele Zeilen
+    hineinpassen, hängt an der Systemschriftgröße, und die gehört dem Nutzer.
+    """
+    palette = CommandPalette()
+
+    assert palette.minimumHeight() >= 400, (
+        f"die Palette öffnet {palette.minimumHeight()} Punkte hoch — zu wenig zum Blättern"
+    )
+    assert palette.list.count() >= len(REGISTRY.all()), "und sie hat wirklich etwas zu zeigen"
 
 
 def test_the_palette_shows_the_shortcut_so_it_gets_learned(qt_app: object) -> None:

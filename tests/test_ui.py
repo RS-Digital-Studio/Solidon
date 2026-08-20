@@ -523,6 +523,20 @@ def test_the_dialog_keeps_out_of_the_middle_of_the_view(qt_app: QApplication) ->
 
         assert dialog.x() > middle, "der Dialog steht rechts, nicht über der Mitte"
         assert dialog.y() >= anchor.mapToGlobal(anchor.rect().topLeft()).y()
+
+        # **Und er bleibt innerhalb der Kante.** Gerechnet wurde mit
+        # ``sizeHint``, gezeigt wird die Mindestbreite von 380: um die Differenz
+        # — je Operation 62 bis 131 Bildpunkte — schob die Rechnung ihn über
+        # genau den Rand hinaus, den sie einhalten sollte.
+        breadth = (
+            dialog.width()
+            if dialog.isVisible()
+            else max(dialog.sizeHint().width(), dialog.minimumWidth())
+        )
+        right_edge = anchor.mapToGlobal(anchor.rect().topRight()).x()
+        assert dialog.x() + breadth <= right_edge, (
+            f"der Dialog ragt {dialog.x() + breadth - right_edge} Punkte über die Kante"
+        )
     finally:
         dialog.deleteLater()
         anchor.deleteLater()
@@ -1433,6 +1447,32 @@ def test_only_actions_with_a_handler_are_offered(window: MainWindow) -> None:
     assert "repair_and_retry" in offered
     assert "show_locations" in offered
     assert "cancel" not in offered, "das Schließen ist kein Vorschlag, es steht ohnehin da"
+
+
+def test_closing_is_no_advice_either(window: MainWindow) -> None:
+    """Derselbe Satz gilt für den Text, und dort galt er nicht.
+
+    Jede Ausnahme in ``errors.py`` führt ``CANCEL`` unter ihren Vorschlägen, und
+    für keine gibt es einen Handler — ``unhandled_advice`` schrieb „Abbrechen"
+    also in **jeden** Fehlerdialog, als Rat, direkt über dem Abbrechen-Knopf.
+    Der Grundsatz stand längst daneben, bei den Knöpfen; nur der Textpfad hatte
+    ihn nicht übernommen.
+    """
+    from app.core.errors import CANCEL
+    from app.ui.dialogs import unhandled_advice
+
+    known = window.error_handlers()
+    for name, value in vars(errors).items():
+        if not isinstance(value, type) or not issubclass(value, errors.AppError):
+            continue
+        suggestions = getattr(value, "default_suggestions", ())
+        if CANCEL not in suggestions:
+            continue
+        error = errors.AppError.__new__(value)
+        object.__setattr__(error, "suggestions", list(suggestions))
+        assert str(CANCEL.label) not in unhandled_advice(error, known), (
+            f"{name} schreibt das Abbrechen als Ratschlag in den Text"
+        )
 
 
 def test_an_error_without_a_handler_still_offers_a_way_out(window: MainWindow) -> None:
@@ -4719,3 +4759,48 @@ def test_what_a_screen_reader_can_name(window: MainWindow) -> None:
         f"{len(nameless)} bedienbare Elemente haben für einen Bildschirmleser keinen "
         f"Namen: {nameless}. setAccessibleName() oder ein Label mit setBuddy()."
     )
+
+
+def test_the_open_tool_keeps_its_symbol_readable(qt_app: QApplication) -> None:
+    """Auf dem gedrückten Knopf widersprachen sich Symbol und Beschriftung.
+
+    Er trägt Bernstein, und das Stylesheet gibt der Beschriftung dort die dunkle
+    Schrift der Auswahl. Das **Symbol** kam weiter aus dem Thema, also hell:
+    1,58 Kontrast auf der Fläche, gemessen. Zwei Zeichen derselben Aussage in
+    entgegengesetzten Farben — und das hellere war das unlesbare.
+
+    Gemessen wird am ``QIcon`` und nicht am gerenderten Knopf: die Beschriftung
+    daneben streut Subpixel-Farben in jede Bildpunktzählung, und die sahen dem
+    Symbol zum Verwechseln ähnlich.
+    """
+    from PySide6.QtCore import QSize
+
+    from app.ui.theme import contrast_ratio
+
+    window = MainWindow(Session(), UiSettings())
+    button = window.tools._buttons["analysis"]
+
+    def dominant(icon: object) -> str:
+        image = icon.pixmap(QSize(24, 24)).toImage()  # type: ignore[attr-defined]
+        tally: dict[str, int] = {}
+        for y in range(image.height()):
+            for x in range(image.width()):
+                colour = image.pixelColor(x, y)
+                if colour.alpha() > 180:
+                    tally[colour.name()] = tally.get(colour.name(), 0) + 1
+        assert tally, "das Symbol zeichnet nichts"
+        return max(tally, key=lambda name: tally[name])
+
+    resting = dominant(button.icon())
+    window.tools.activate("analysis")
+    active = dominant(button.icon())
+    accent = window.palette().highlight().color().name()
+
+    assert active != resting, "das Symbol des offenen Werkzeugs sieht aus wie das der anderen"
+    ratio = contrast_ratio(active, accent)
+    assert ratio >= 4.5, f"Symbol {active} auf {accent}: {ratio:.2f} — auf dem Akzent unlesbar"
+
+    # Und zurück: was beim Öffnen umgefärbt wird, muss beim Schließen wieder
+    # dem Thema folgen — sonst bleibt ein dunkles Symbol auf dunklem Knopf.
+    window.tools.activate(None)
+    assert dominant(button.icon()) == resting

@@ -30,6 +30,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 from PySide6.QtCore import QEvent, QPoint, QRect, Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -43,6 +44,7 @@ from PySide6.QtWidgets import (
 
 from app.i18n import TranslatableText, tr
 from app.ui.icons import icon
+from app.ui.palette import ROLES, readable_on
 from app.ui.style import NORMAL, TIGHT
 
 
@@ -106,6 +108,20 @@ class Tool:
     """Was passiert, wenn das Werkzeug geschlossen wird. Ohne das bleibt die
     Ansichtsänderung stehen — richtig für alles, was nicht nur die Ansicht
     ändert."""
+    start: Callable[[], None] | None = None
+    """Was passiert, wenn das Werkzeug geöffnet wird.
+
+    Es gab nur ``reset``, und darum stand jede Leiste beim Aufklappen auf dem
+    Wert, den ihr Konstruktor gesetzt hatte — bei vier von acht war das „aus":
+    *Schnitt* zeigte „Kein Schnitt" mit gesperrtem Regler, *Messen* „Nicht
+    messen", *Bewegen* keinen Griff im Bild. Der Hinweis darüber sagte
+    unterdessen „Ziehen Sie den Regler durch das Teil" und „Zwei Punkte im Bild
+    anklicken". Ein Werkzeug, das man nach dem Öffnen erst einschalten muss,
+    ist eine Bedienstufe zu viel — und eine, die niemand erwartet, weil der
+    Knopf schon gedrückt ist.
+
+    *Analyse* bekommt bewusst keinen: eine Analysekarte kostet Rechenzeit, und
+    ihr Hinweis sagt „Karte wählen" — dort ist die leere Vorgabe die ehrliche."""
     shortcut: str = ""
     """Die Tastenfolge, die dieses Werkzeug holt.
 
@@ -163,9 +179,12 @@ class ToolStrip(QWidget):
         reset: Callable[[], None] | None = None,
         symbol: str = "",
         hint: TranslatableText | str = "",
+        start: Callable[[], None] | None = None,
     ) -> None:
         """Ein Werkzeug anmelden. Seine Leiste startet verborgen."""
-        tool = Tool(key=key, title=title, bar=bar, hint=hint, symbol=symbol, reset=reset)
+        tool = Tool(
+            key=key, title=title, bar=bar, hint=hint, symbol=symbol, reset=reset, start=start
+        )
         self._tools[key] = tool
 
         button = QToolButton(self)
@@ -186,6 +205,36 @@ class ToolStrip(QWidget):
 
         bar.setVisible(False)
         self._layout.addWidget(bar)
+
+    def _recolour(self, key: str, *, active: bool) -> None:
+        """Das Symbol des Umschalters folgt seiner Fläche.
+
+        Der gedrückte Knopf trägt Bernstein, und das Stylesheet setzt dort die
+        dunkle Schrift der Auswahl. Das **Symbol** kam weiter aus dem Thema, also
+        hell: 1,58 Kontrast auf dem Bernstein, gemessen — und daneben stand die
+        Beschriftung dunkel. Zwei Zeichen derselben Aussage in
+        entgegengesetzten Farben.
+
+        Qt fragt für einen gedrückten Knopf keinen eigenen Symbolmodus ab
+        (``QIcon.Mode.Selected`` gilt der markierten Zeile einer Liste), also
+        wird hier umgefärbt.
+
+        **Gerechnet, nicht erfragt.** Der erste Anlauf nahm
+        ``self.palette().highlightedText()`` — die idiomatische Rolle, und
+        trotzdem falsch: Solange kein Thema angewandt ist, liefert die Palette
+        die Systemfarben, und auf einem Windows-Standard ist das Weiß. Weiß auf
+        Bernstein bringt 2,06. Der Untergrund kommt aus dem Stylesheet, also aus
+        ``ROLES["select"]``; die Schrift darauf rechnet ``readable_on`` aus
+        genau dieser Farbe. Zwei Konstanten, kein Zustand dazwischen.
+        """
+        tool = self._tools.get(key)
+        button = self._buttons.get(key)
+        if tool is None or button is None or not tool.symbol:
+            return
+        if active:
+            button.setIcon(icon(tool.symbol, button, colour=QColor(readable_on(ROLES["select"]))))
+        else:
+            button.setIcon(icon(tool.symbol, button))
 
     def set_shortcut(self, key: str, sequence: str) -> None:
         """Merkt sich die Tastenfolge und schreibt sie in den Tooltip.
@@ -222,14 +271,22 @@ class ToolStrip(QWidget):
             tool = self._tools[previous]
             tool.bar.setVisible(False)
             self._buttons[previous].setChecked(False)
+            self._recolour(previous, active=False)
             if tool.reset is not None:
                 tool.reset()
         if key is not None:
             tool = self._tools[key]
             tool.bar.setVisible(True)
             self._buttons[key].setChecked(True)
+            self._recolour(key, active=True)
             self._hint.setText(str(tool.hint))
             self._hint.setVisible(bool(str(tool.hint)))
+            # Nach dem Sichtbarmachen, nicht davor: was hier geschaltet wird,
+            # löst Signale aus, und die treffen eine Leiste, die schon im Bild
+            # steht. Und nach ``_active``, damit ein Rückruf, der auf das aktive
+            # Werkzeug sieht, sich selbst findet.
+            if tool.start is not None:
+                tool.start()
         else:
             self._hint.clear()
             self._hint.setVisible(False)

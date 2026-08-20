@@ -202,6 +202,7 @@ def stylesheet(theme: Theme, base_point_size: int, arrows: dict[str, str] | None
     line = colours["line"]
     highlight = colours["highlight"]
     on_highlight = colours["highlight_text"]
+    highlight_pressed = colours["highlight_pressed"]
     accent_line = colours["accent_line"]
     hover = colours["alternate"]
     tooltip = colours["tooltip"]
@@ -247,8 +248,18 @@ QPushButton:default:hover {{ background: {highlight}; border-color: {text}; }}
 QPushButton:disabled {{ color: {disabled}; border-color: {line}; background: {window}; }}
 /* Der Hauptknopf gibt beim Drücken nach. Ohne eigene Regel gewann hier
    ``:default`` — es steht später und wiegt gleich schwer —, und der lauteste
-   Knopf der Anwendung war der einzige, der auf einen Klick nichts tat. */
-QPushButton:default:pressed {{ background: {accent_line}; border-color: {accent_line}; }}
+   Knopf der Anwendung war der einzige, der auf einen Klick nichts tat.
+
+   **Und die Regel allein genügte nicht.** Sie nahm ``accent_line``, und die
+   *ist* im dunklen Thema der Bernstein selbst: gedrückt sah aus wie
+   losgelassen, im voreingestellten Thema, auf jedem Hauptknopf. Im hellen
+   fiel es nie auf, weil dort der abgedunkelte Ton steht. Jetzt steht der
+   Druckzustand als eigene Farbe in der Themen-Tabelle — 1,78 Unterschied zum
+   Ruhezustand, dunkle Schrift darauf 4,47. */
+QPushButton:default:pressed {{
+    background: {highlight_pressed};
+    border-color: {highlight_pressed};
+}}
 /* Zwei Bildpunkte Rahmen statt einem, und der Innenabstand gibt den einen
    wieder her: sonst wandert die Beschriftung beim Durchtabben um einen Punkt,
    und ein Dialog zittert unter der Tabulatortaste. */
@@ -486,6 +497,14 @@ QProgressBar {{
     text-align: center;
 }}
 QProgressBar::chunk {{ background: {highlight}; border-radius: {SPACE}px; }}
+/* Gesperrt heißt leiser — und hier muss es dastehen, nicht in der Palette.
+   Ein Stylesheet gewinnt gegen sie: die Disabled-Gruppe trägt den gedämpften
+   Akzent, gezeichnet wurde trotzdem der volle. Gemessen an einem Balken,
+   zweimal gerendert: 2018 Akzentpunkte bedienbar, 2018 gesperrt. Beim Regler
+   nebenan hat die Palette gereicht, weil ihn kein Stylesheet anfasst — dort
+   sind es jetzt 404 gegen 0. */
+QProgressBar:disabled {{ color: {disabled}; }}
+QProgressBar::chunk:disabled {{ background: {disabled}; }}
 
 """
 

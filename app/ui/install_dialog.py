@@ -216,7 +216,16 @@ class InstallDialog(QDialog):
         self.details_button = QPushButton(tr("Details anzeigen"), self)
         self.details_button.setVisible(False)
         self.details_button.clicked.connect(self._show_details)
+        # **Keine Zahl im Balken.** Sie steht mittig, und der Rand der
+        # Füllung wandert darunter hindurch: bei 45 % lag sie halb auf
+        # Bernstein und halb auf der Spur, ab 60 % ganz auf Bernstein — mit
+        # 1,69 Kontrast, also unlesbar. Eine Farbe, die auf beiden Gründen
+        # trägt, gibt es nicht; eine dunklere Füllung nähme dem Balken den
+        # Akzent (gerechnet: 4,5 Schriftkontrast kostet die Hälfte des
+        # Flächenkontrasts). Der Prozentwert steht deshalb in der Zeile
+        # daneben, wo ein ruhiger Grund ist.
         self.progress = QProgressBar(self)
+        self.progress.setTextVisible(False)
         self.progress.setRange(0, 0)
         self.progress.setVisible(False)
 

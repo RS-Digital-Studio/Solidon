@@ -367,6 +367,13 @@ class ThemedIcon(QIconEngine):
         palette = QApplication.palette()
         if mode == QIcon.Mode.Disabled:
             return palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText)
+        if mode == QIcon.Mode.Selected:
+            # Auf der Auswahlfläche gilt die Schriftfarbe der Auswahl, nicht die
+            # des Fensters. Qt fragt diesen Modus für die markierte Zeile einer
+            # Liste oder eines Baums — dort liegt Bernstein, und ein helles
+            # Symbol darauf bringt 1,58 Kontrast. Die Beschriftung daneben ist
+            # längst dunkel; das Symbol widersprach ihr.
+            return palette.highlightedText().color()
         return palette.windowText().color()
 
     def paint(self, painter: QPainter, rect: QRect, mode: QIcon.Mode, state: QIcon.State) -> None:
