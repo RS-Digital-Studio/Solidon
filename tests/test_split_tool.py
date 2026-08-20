@@ -110,6 +110,36 @@ def test_the_connection_is_preselected(qt_app: QApplication) -> None:
     assert SplitBar().values()["pins"] > 0
 
 
+def test_the_state_sentence_gets_a_line_of_its_own(qt_app: QApplication) -> None:
+    """Der Satz, um den es in dieser Leiste geht, war nie zu sehen.
+
+    Gemessen am laufenden Fenster (echte Plattform, 1440 Bildpunkte breit): In
+    einer Zeile mit den sechs Bedienelementen bekam er **null** Bildpunkte
+    Breite — die anderen brauchten 670 von 685 —, denn seine waagerechte
+    Politik war ``Ignored``. Die hatte ihren Grund, sie schützte den Hauptknopf
+    vor „etzt trenne"; ihr Preis war größer: Ein umbrechender Text verlangt für
+    die Breite null eine Höhe von **160** Bildpunkten. Die Karte des
+    Trennwerkzeugs war damit 241 Punkte hoch, die der anderen sieben zwischen
+    81 und 112, und dazwischen lag ein leeres Band.
+
+    Geprüft wird an Zeilenhöhen und Anteilen, nicht an Bildpunkten: Die
+    Offscreen-Plattform rechnet mit einer Ersatzschrift, und ein Test gegen
+    feste Zahlen prüfte die Schriftfamilie des Bauservers.
+    """
+    bar = SplitBar()
+    bar.show()
+    qt_app.processEvents()
+
+    line = bar.state.fontMetrics().lineSpacing()
+    assert bar.state.width() >= bar.width() // 2, (
+        f"der Satz bekommt {bar.state.width()} von {bar.width()} Bildpunkten"
+    )
+    assert bar.state.height() <= 2 * line + 4, (
+        f"der Satz nimmt {bar.state.height()} Punkte für eine Zeile von {line}"
+    )
+    assert bar.apply.height() >= bar.apply.sizeHint().height(), "und der Hauptknopf gibt nicht nach"
+
+
 class FakeInteractor:
     """Nur das, was der Zeigerpfad des Viewports wirklich ruft."""
 

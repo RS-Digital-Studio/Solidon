@@ -21,8 +21,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QSpinBox,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -70,12 +70,16 @@ class SplitBar(QWidget):
 
         self.state = QLabel(state_text(0), self)
         self.state.setWordWrap(True)
-        # Der Satz gibt nach, die Knöpfe nicht. Ohne das nahm der umbrechende
-        # Text seine bevorzugte Breite und drückte den Hauptknopf zusammen, bis
-        # auf ihm „etzt trenne“ stand — gesehen im gerenderten Bild, nicht
-        # vermutet. Ein Knopf, dessen Beschriftung nicht hineinpasst, ist die
-        # deutlichste Art, eine Handlung unlesbar zu machen.
-        self.state.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        # **Hier stand ``Ignored`` als waagerechte Politik**, und sie hatte
+        # ihren Grund: In einer Zeile mit den Knöpfen nahm der umbrechende Text
+        # seine bevorzugte Breite und drückte den Hauptknopf zusammen, bis auf
+        # ihm „etzt trenne" stand. Der Preis war größer als der Gewinn — ein
+        # Satz, der nachgibt, bis nichts bleibt, gibt bis null nach: Gemessen
+        # bekam er bei 685 Bildpunkten Kartenbreite **null**, und als
+        # umbrechender Text verlangte er für null Breite **160** Bildpunkte
+        # Höhe. Beide Probleme kommen aus derselben Zeile, und die gibt es
+        # nicht mehr (siehe unten). Ohne Konkurrenz braucht er keine Politik,
+        # die ihn kleinredet.
 
         # Vorgewählt: siehe Modulkopf. Der Text sagt, was die Stifte tun, nicht
         # wie sie heißen — „Passstifte" ist das Wort für jemanden, der schon
@@ -130,15 +134,32 @@ class SplitBar(QWidget):
         self.clear.setEnabled(False)
         self.clear.clicked.connect(self.clearRequested)
 
-        layout = QHBoxLayout(self)
+        # **Der Satz steht auf seiner eigenen Zeile**, und zwar seit er
+        # gemessen wurde: In einer Zeile mit den sechs Bedienelementen bekam er
+        # bei 685 Bildpunkten Kartenbreite **null** davon — die anderen
+        # brauchten 670, und `Ignored` (siehe oben) heißt, dass er nachgibt, bis
+        # nichts bleibt. Zu sehen war er damit nie, und weil er umbricht,
+        # verlangte er für die Breite null eine Höhe von **160** Bildpunkten:
+        # Die Karte des Trennwerkzeugs war 241 Punkte hoch, die der anderen
+        # sieben Werkzeuge 81 bis 112, und dazwischen lag ein leeres Band.
+        #
+        # Beides erledigt eine zweite Zeile: Der Satz bekommt die ganze Breite
+        # und braucht eine Zeilenhöhe, die Knöpfe behalten ihre.
+        controls = QHBoxLayout()
+        controls.setContentsMargins(0, 0, 0, 0)
+        controls.addWidget(self.connect_halves)
+        controls.addWidget(self.count_label)
+        controls.addWidget(self.count)
+        controls.addWidget(self.shape)
+        controls.addStretch(1)
+        controls.addWidget(self.apply)
+        controls.addWidget(self.clear)
+
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
-        layout.addWidget(self.state, stretch=1)
-        layout.addWidget(self.connect_halves)
-        layout.addWidget(self.count_label)
-        layout.addWidget(self.count)
-        layout.addWidget(self.shape)
-        layout.addWidget(self.apply)
-        layout.addWidget(self.clear)
+        layout.setSpacing(TIGHT)
+        layout.addWidget(self.state)
+        layout.addLayout(controls)
 
     def _follow_connection(self, wanted: bool) -> None:
         """Die Stiftzahl gehört zum Haken und verschwindet mit ihm.
