@@ -137,3 +137,55 @@
   tick();
   if (!box.hidden) timer = setInterval(tick, calm ? 30000 : 1000);
 })();
+
+/* Der Wechsel vom Warten zum Laden.
+ *
+ * Um achtzehn Uhr blendete sich bisher nur der Zähler aus — die Überschrift
+ * nannte weiter einen Termin, der vorbei war, und der Knopf bot an, Bescheid
+ * zu geben, wenn da längst etwas zu laden war. Wer fünf Minuten nach dem
+ * Termin kam, fand keinen Download.
+ *
+ * Termin und Datei stehen am `<body>`, nicht hier: sechs Sprachfassungen
+ * tragen beides, und eine Adresse in einem gemeinsamen Skript wäre die
+ * siebte Stelle, an der sie sich ändern müsste.
+ *
+ * **Ohne Adresse geschieht nichts.** Das ist keine Vorsicht, sondern der
+ * Zweck: Eine Seite, die um Punkt achtzehn Uhr auf eine Datei zeigt, die noch
+ * nicht liegt, ist schlechter als eine, die weiter um Nachricht bittet. Wer
+ * die Datei erst zehn vor sechs hochlädt, trägt die Adresse ein, und der
+ * nächste Seitenaufruf schaltet um.
+ */
+(() => {
+  "use strict";
+
+  const page = document.body;
+  const moment = Date.parse(page.dataset.release || "");
+  const file = (page.dataset.download || "").trim();
+  if (Number.isNaN(moment) || !file) return;
+
+  const arrive = () => {
+    /* Erst der Knopf, dann die Texte: Ein Knopf, der schon „Demo laden"
+       heißt, aber noch auf das Postfach zeigt, ist für den Bruchteil einer
+       Sekunde eine Lüge. */
+    for (const link of document.querySelectorAll("[data-release-href]")) {
+      link.href = file;
+      if (link.hasAttribute("data-release-download")) link.setAttribute("download", "");
+    }
+    for (const node of document.querySelectorAll("[data-release-text]")) {
+      node.textContent = node.dataset.releaseText;
+    }
+    for (const node of document.querySelectorAll("[data-release-hide]")) node.hidden = true;
+    for (const node of document.querySelectorAll("[data-release-show]")) node.hidden = false;
+    page.dataset.released = "true";
+  };
+
+  const rest = moment - Date.now();
+  if (rest <= 0) {
+    arrive();
+    return;
+  }
+  /* Wer die Seite vorher offen hat, soll sie nicht neu laden müssen. Über
+     dem Bereich, den ein Zeitgeber sicher trägt (gut 24 Tage), wird nicht
+     gewartet — dann ist der Termin ohnehin keine Sitzung entfernt. */
+  if (rest < 2 ** 31 - 1) setTimeout(arrive, rest);
+})();

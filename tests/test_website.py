@@ -608,3 +608,48 @@ def test_the_preview_picture_exists(page: str) -> None:
     assert match is not None, f"{page} zeigt beim Teilen kein Bild"
     picture = WEBSITE / match.group(1).removeprefix("https://solidon3d.de/")
     assert picture.exists(), f"{page} verweist auf {match.group(1)}, die Datei fehlt"
+
+
+#: Die Startseiten aller sechs Sprachen. Sie tragen den Download-Kasten, und
+#: nur sie.
+START_PAGES = ("index.html", *(f"{code}/index.html" for code in ("en", "es", "fr", "it", "pt")))
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_the_download_box_can_switch_from_waiting_to_loading(page: str) -> None:
+    """Am Erscheinungstag muss der Kasten umschalten können, in jeder Sprache.
+
+    Vorher blendete sich um achtzehn Uhr allein der Zähler aus. Die
+    Überschrift nannte weiter einen Termin, der vorbei war, und der Knopf bot
+    an, Bescheid zu geben, wenn längst etwas zu laden war — wer fünf Minuten
+    nach dem Termin kam, fand keinen Download.
+
+    Geprüft wird die Verdrahtung, nicht die Uhrzeit: Steht der Termin am
+    Dokument, ist die Stelle für die Datei da, und tragen beide Knöpfe einen
+    Text für danach? Eine Sprachfassung, in der eines davon fehlt, sieht
+    fehlerfrei aus und bleibt am Abend stehen.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+
+    assert re.search(r'<body[^>]*\sdata-release="[^"]+"', text), (
+        f"{page}: am <body> steht kein Erscheinungstermin (data-release)"
+    )
+    assert re.search(r'<body[^>]*\sdata-download="', text), (
+        f"{page}: am <body> fehlt die Stelle für die Datei (data-download)"
+    )
+
+    knoepfe = text.count("data-release-href")
+    assert knoepfe == 2, (
+        f"{page}: {knoepfe} umschaltende Knöpfe statt zwei — erwartet werden "
+        "der im Download-Kasten und der beim Preis. Der Kontaktweg im "
+        "Schlussabschnitt gehört ausdrücklich nicht dazu."
+    )
+
+    for beschriftung in re.findall(r'data-release-text="([^"]*)"', text):
+        assert beschriftung.strip(), f"{page}: ein Text für danach ist leer"
+
+    # Symbol und Beschriftung wechseln zusammen: ein Knopf, der „laden" heißt
+    # und einen Briefumschlag trägt, ist auf halbem Weg stehengeblieben.
+    assert text.count("data-release-hide") == text.count("data-release-show") == 2, (
+        f"{page}: die Symbole wechseln nicht paarweise mit den Knöpfen"
+    )
