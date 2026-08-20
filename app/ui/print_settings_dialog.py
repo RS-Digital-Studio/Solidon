@@ -1165,8 +1165,15 @@ class PrintSettingsDialog(QDialog):
         self._profiles = found
         machines = slicer_profiles.machines(found)
         if not machines:
+            # Regel 17: Der Satz sagte, was fehlt, und hörte dort auf. Was hilft,
+            # ist eine Handlung — die Profile entstehen, wenn der Slicer einmal
+            # gelaufen ist und einen Drucker kennt.
             self.profile_note.setText(
-                tr("Keine Profile gefunden — ohne sie lehnt dieser Slicer den Auftrag ab.")
+                tr(
+                    "Keine Profile gefunden — ohne sie lehnt dieser Slicer den Auftrag ab. "
+                    "Öffnen Sie den Slicer einmal und legen Sie einen Drucker an; danach steht "
+                    "sein Profil hier."
+                )
             )
             return
 

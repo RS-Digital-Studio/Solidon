@@ -449,6 +449,26 @@ def test_slicing_without_a_scene_says_what_is_missing(dialog: PrintSettingsDialo
     assert dialog.state.text()
 
 
+def test_a_slicer_without_profiles_gets_a_way_out(dialog: PrintSettingsDialog) -> None:
+    """Regel 17: „Keine Profile gefunden — ohne sie lehnt dieser Slicer den
+    Auftrag ab." war die ganze Auskunft.
+
+    Ein Satz über den Zustand, und dann nichts. Wer einen Slicer gerade
+    installiert hat, hat genau diesen Zustand — die Profile entstehen erst,
+    wenn er einmal gelaufen ist und einen Drucker kennt. Das steht jetzt dabei.
+
+    Geprüft wird an der Zahl der Sätze und nicht am Wortlaut: ein Text, den
+    der Test buchstäblich mitliest, prüft sich selbst.
+    """
+    dialog._profiles_found([])
+
+    note = dialog.profile_note.text()
+    assert note, "ohne Profile bleibt der Hinweis vom Suchen stehen"
+    sentences = [part for part in note.replace("!", ".").split(".") if part.strip()]
+    assert len(sentences) >= 2, f"der Hinweis endet bei der Feststellung: {note!r}"
+    assert not dialog.machine_choice.isEnabled(), "und die Auswahl bleibt leer und gesperrt"
+
+
 def test_both_orca_profiles_are_asked_for_before_the_run(qt_app: QApplication) -> None:
     """Die Orca-Familie braucht zwei Profile, geprüft wurde nur eines.
 
