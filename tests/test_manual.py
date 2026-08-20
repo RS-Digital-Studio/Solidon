@@ -903,3 +903,71 @@ def test_the_start_screen_button_opens_the_chapter_it_names(qt_app: object) -> N
     finally:
         window.close()
         window.deleteLater()
+
+
+def test_a_figure_grows_back_when_the_column_does(qt_app: QApplication) -> None:
+    """Eine Abbildung, die für eine schmale Spalte verkleinert wurde, darf
+    nicht klein bleiben, wenn das Fenster aufgeht (§19.2).
+
+    Qt behält, was ``loadResource`` geliefert hat, im Dokument und fragt nie
+    wieder — ohne das Nachlegen in ``PageView._refit`` stand der
+    Startbildschirm bei 400 Punkten Spaltenbreite auf 374 und blieb dort, auch
+    bei 1600. Gemessen wird am Bild, das das **Dokument** hält, denn das ist
+    das, was gezeichnet wird.
+    """
+
+    window = ManualWindow()
+    try:
+        window.resize(700, 900)
+        window.show()
+        qt_app.processEvents()
+
+        view = window.text
+        opened = next(
+            (row for row in range(window.contents.count()) if _figures_on(window, row)), None
+        )
+        assert opened is not None, "keine Seite mit einer Abbildung gefunden"
+
+        narrow = dict(_document_widths(view))
+        assert narrow, "die Seite hat keine Abbildung im Dokument"
+
+        window.resize(1900, 900)
+        qt_app.processEvents()
+        # Der Zeitgeber bündelt den Zug am Fensterrand; hier wird er direkt
+        # ausgelöst, statt im Test zu warten.
+        view._refit()
+        qt_app.processEvents()
+
+        wide = dict(_document_widths(view))
+        grown = [key for key, width in wide.items() if width > narrow.get(key, 0)]
+        assert grown, (
+            "keine Abbildung ist mitgewachsen — "
+            f"schmal {sorted(narrow.items())}, breit {sorted(wide.items())}"
+        )
+        assert all(width <= view._column() for width in wide.values()), (
+            f"eine Abbildung ist breiter als die Spalte ({view._column()}): {sorted(wide.items())}"
+        )
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def _figures_on(window: ManualWindow, row: int) -> bool:
+    """Die Zeile aufschlagen und sagen, ob sie nach Abbildungen gefragt hat."""
+    window.contents.setCurrentRow(row)
+    QApplication.processEvents()
+    return bool(window.text._asked)
+
+
+def _document_widths(view: object) -> list[tuple[str, int]]:
+    """Was das Dokument je Abbildung wirklich hält, in logischen Punkten."""
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QImage, QTextDocument
+
+    document = view.document()  # type: ignore[attr-defined]
+    found = []
+    for key in sorted(view._asked):  # type: ignore[attr-defined]
+        held = document.resource(QTextDocument.ResourceType.ImageResource, QUrl(f"figure:{key}"))
+        if isinstance(held, QImage) and not held.isNull():
+            found.append((key, round(held.width() / (held.devicePixelRatio() or 1.0))))
+    return found

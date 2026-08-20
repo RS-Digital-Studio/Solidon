@@ -26,8 +26,15 @@ kaputtes Bildsymbol.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QByteArray, Qt, QUrl
-from PySide6.QtGui import QImage, QKeySequence, QPainter, QShortcut
+from PySide6.QtCore import QByteArray, Qt, QTimer, QUrl
+from PySide6.QtGui import (
+    QImage,
+    QKeySequence,
+    QPainter,
+    QResizeEvent,
+    QShortcut,
+    QTextDocument,
+)
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QLineEdit,
@@ -44,6 +51,11 @@ from app.branding import APP_NAME
 from app.core import drawing, figures, manual
 from app.i18n import get_language, tr
 
+#: Was der Textspalte neben der Abbildung bleibt — Innenabstand und Rollbalken.
+#: Ohne diesen Abzug läge eine Zeichnung genau auf der Kante und der
+#: Rollbalken schnitte ihren rechten Rand ab.
+COLUMN_MARGIN = 40
+
 
 class PageView(QTextBrowser):
     """Die Textspalte — und die Stelle, an der Abbildungen entstehen.
@@ -54,9 +66,28 @@ class PageView(QTextBrowser):
     — sonst rechnete das Öffnen des Handbuchs jedes Netz aus jedem Kapitel.
     """
 
+    #: Wie lange nach der letzten Größenänderung gewartet wird, bevor die
+    #: Abbildungen neu auf die Spalte gebracht werden. Ein Zug am Fensterrand
+    #: schickt hunderte Ereignisse, und jedes Nachlegen kostet ein Skalieren.
+    REFIT_DELAY_MS = 150
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._images: dict[tuple[str, drawing.Theme], QImage] = {}
+        # Gemerkt wird nur, was teuer ist — siehe :meth:`_source`.
+        self._drawings: dict[tuple[str, drawing.Theme], QImage] = {}
+        #: Die Schlüssel, nach denen die offene Seite gefragt hat. Nur die
+        #: werden nachgelegt; für die anderen wäre es Arbeit ohne Leser.
+        self._asked: set[str] = set()
+        self._column_width = 0
+        self._refit_timer = QTimer(self)
+        self._refit_timer.setSingleShot(True)
+        self._refit_timer.setInterval(self.REFIT_DELAY_MS)
+        self._refit_timer.timeout.connect(self._refit)
+
+    def setMarkdown(self, markdown: str) -> None:  # noqa: N802 — Qt gibt den Namen vor
+        """Eine neue Seite fragt nach ihren eigenen Abbildungen."""
+        self._asked.clear()
+        super().setMarkdown(markdown)
 
     def loadResource(  # noqa: N802 — Qt gibt den Namen vor
         self, kind: int, name: QUrl | str
@@ -68,23 +99,90 @@ class PageView(QTextBrowser):
         return self._image(url.path() or url.toString().removeprefix("figure:"))
 
     def _image(self, key: str) -> QImage | None:
-        """Eine Abbildung als Bild, gemerkt für das nächste Mal."""
-        theme: drawing.Theme = "dark" if self._dark() else "light"
-        cached = self._images.get((key, theme))
-        if cached is not None:
-            return cached
+        """Eine Abbildung, auf die Breite der Textspalte gebracht."""
+        source = self._source(key, self._theme())
+        if source is None:
+            return None
+        self._asked.add(key)
+        self._column_width = self._column()
+        return _fitted(source, self._column_width)
+
+    def _source(self, key: str, theme: drawing.Theme) -> QImage | None:
+        """Die Abbildung in ihrer natürlichen Größe.
+
+        Gemerkt wird nur, was teuer ist: das Rastern eines SVG. Ein
+        Bildschirmfoto kommt bei jedem Bedarf frisch von der Platte — die
+        sechs im Katalog wiegen entpackt zusammen 51 MB, drei davon je 14,
+        und wer sie behält, um sie später anders skalieren zu können, tauscht
+        ein Bildproblem gegen ein Speicherproblem. Von der Platte lesen
+        kostet Millisekunden und passiert je Seitenwechsel einmal, weil Qt
+        das Ergebnis selbst im Dokument behält.
+
+        Was hier zurückkommt, hängt **nicht** von der Spaltenbreite ab. Das
+        ist der Punkt: Die Breite kam früher im Cache-Schlüssel nicht vor,
+        steckte aber im gespeicherten Bild — womit ein einmal verkleinertes
+        Bild verkleinert blieb.
+        """
         figure = figures.find(key)
         if figure is None:
             return None
         if figure.kind == "shot":
-            image: QImage | None = QImage(str(figure.path(get_language())))
-        else:
-            image = _rendered(figures.svg(key, theme))
+            shot = QImage(str(figure.path(get_language())))
+            return None if shot.isNull() else shot
+        cached = self._drawings.get((key, theme))
+        if cached is not None:
+            return cached
+        image = _rendered(figures.svg(key, theme))
         if image is None or image.isNull():
             return None
-        image = _fitted(image, self.viewport().width() - 40)
-        self._images[(key, theme)] = image
+        self._drawings[(key, theme)] = image
         return image
+
+    def _column(self) -> int:
+        """Die Breite, auf die eine Abbildung passen muss."""
+        return self.viewport().width() - COLUMN_MARGIN
+
+    def _theme(self) -> drawing.Theme:
+        return "dark" if self._dark() else "light"
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 — Qt gibt den Namen vor
+        """Eine breitere Spalte verlangt größere Abbildungen (§19.2)."""
+        super().resizeEvent(event)
+        if self._asked and self._column() != self._column_width:
+            self._refit_timer.start()
+
+    def _refit(self) -> None:
+        """Die Abbildungen der offenen Seite auf die neue Spalte bringen.
+
+        Nachgelegt wird über ``addResource`` und nicht über ein neues
+        ``setMarkdown``: Das setzte die Leseposition auf den Seitenanfang
+        zurück, mitten im Lesen.
+
+        Dass es dieses Nachlegen überhaupt braucht, ist gemessen: Qt behält,
+        was ``loadResource`` geliefert hat, im Dokument und fragt nie wieder
+        — nach zwei Größenänderungen kamen null weitere Rufe an. Eine
+        Abbildung, die für eine schmale Spalte verkleinert wurde, blieb also
+        klein. Bei 400 Punkten Spaltenbreite stand der Startbildschirm auf
+        374 und blieb dort, auch als das Fenster auf 1600 aufging.
+        """
+        width = self._column()
+        if width == self._column_width:
+            return
+        self._column_width = width
+        theme = self._theme()
+        document = self.document()
+        for key in sorted(self._asked):
+            source = self._source(key, theme)
+            if source is None:
+                continue
+            document.addResource(
+                QTextDocument.ResourceType.ImageResource,
+                QUrl(f"figure:{key}"),
+                _fitted(source, width),
+            )
+        # Ohne das bleibt der Umbruch auf den alten Maßen stehen — das
+        # Dokument hätte die neuen Bilder und zeichnete die alten Kästen.
+        document.markContentsDirty(0, document.characterCount())
 
     def _dark(self) -> bool:
         """Ob gerade das dunkle Thema läuft — die Abbildung richtet sich danach."""
