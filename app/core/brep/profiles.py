@@ -459,6 +459,16 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
             continue
         if _is_sound_rod(coarse):
             return coarse
+        # **Auch die grobe Stufe wird genäht.** Das Vernähen stand bisher nur
+        # hinter der feinen Vereinigung, und damit fiel die gröbere durch,
+        # sobald sie eine Naht offen ließ — obwohl genau dafür der Schritt da
+        # ist. Auf dem Linux-Runner endete M6 mit einem Millimeter Steigung so:
+        # jede Stufe lieferte etwas, keine lieferte etwas Geschlossenes, und
+        # die Absage kam für ein Gewinde, das rechnerisch in Ordnung war.
+        mended = _sewn(coarse)
+        if _is_sound_rod(mended):
+            return mended
+        sewn = mended
     return _checked_rod(sewn, major, pitch)
 
 
