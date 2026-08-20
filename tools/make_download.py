@@ -324,7 +324,15 @@ def links(packages: list[Package], language: str) -> str:
         css_class = "btn" if position == 0 else "btn ghost"
 
         if len(mine) == 1:
-            rows.append(download_link(mine[0], language, system, css_class))
+            # Die Bauart steht auch dann dabei, wenn es nur eine gibt: Hinter
+            # „Linux" ein Flatpak zu finden, das erst eingerichtet sein will,
+            # ist eine Überraschung an der falschen Stelle. Bei Windows liefert
+            # `variant_of` nichts, und dann steht auch nichts da.
+            rows.append(
+                download_link(
+                    mine[0], language, system + variant_of(mine[0].name, language), css_class
+                )
+            )
             continue
 
         count = CHOICE_LABEL[language].format(count=len(mine))
